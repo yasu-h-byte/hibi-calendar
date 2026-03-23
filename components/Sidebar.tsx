@@ -27,7 +27,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     { label: '就業カレンダー', icon: '📅', href: '/calendar', section: 'メイン', roles: ['admin', 'approver', 'foreman'] },
   // マスタ
   { label: '月次集計', icon: '📊', external: `${DEMMEN_URL}?role=keiri`, section: 'マスタ', roles: ['admin', 'approver'] },
-  { label: '人員マスタ', icon: '👷', external: `${DEMMEN_URL}?role=admin#workers`, section: 'マスタ', roles: ['admin'] },
+  { label: '人員マスタ', icon: '👷', href: '/workers', section: 'マスタ', roles: ['admin'] },
   { label: '現場マスタ', icon: '🏗', external: `${DEMMEN_URL}?role=admin#sites`, section: 'マスタ', roles: ['admin'] },
   // 管理
   { label: '有給管理', icon: '🌴', external: `${DEMMEN_URL}?role=admin#leave`, section: '管理', roles: ['admin', 'approver'] },

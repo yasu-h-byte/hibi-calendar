@@ -32,10 +32,10 @@ service cloud.firestore {
     // ────────────────────────────────────────
     //  出面データ
     // ────────────────────────────────────────
-    // マスターデータ（main）：誰でも読み取りOK（カレンダーシステム用）、ロール持ちのみ書き込み
+    // マスターデータ（main）：新アプリ（パスワード認証）からも読み書き可能
     match /demmen/main {
       allow read: if true;
-      allow write: if hasRole();
+      allow write: if true;
     }
     // 請求額データ（billing_data）：ロール持ちのみ書き込み
     match /demmen/billing_data {
