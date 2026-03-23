@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
-import { getMainData, getAttData } from '@/lib/compute'
+import { getMainData, getAttData, getAssign } from '@/lib/compute'
 import { getApprovalForDay } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
 
@@ -22,11 +22,9 @@ export async function GET(request: NextRequest) {
     const site = main.sites.find(s => s.id === siteId)
     if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 })
 
-    // Get workers assigned to this site
-    const monthKey = `${siteId}_${ym}`
-    const massign = main.massign[monthKey]
-    const assign = main.assign[siteId]
-    const workerIds = massign?.workers || assign?.workers || []
+    // Get workers assigned to this site (with 12-month lookback)
+    const assignData = getAssign(main, siteId, ym)
+    const workerIds = assignData.workers
 
     // Get days in month
     const [y, m] = [parseInt(ym.substring(0, 4)), parseInt(ym.substring(4, 6))]
@@ -44,8 +42,9 @@ export async function GET(request: NextRequest) {
 
     // For months where massign has too many workers (pre-2026 bulk assignment),
     // filter to only those with actual attendance data
-    const currentAssignCount = assign?.workers?.length || 0
-    const useMassignFilter = massign && workerIds.length > currentAssignCount * 2
+    const currentAssignCount = main.assign[siteId]?.workers?.length || 0
+    const monthKey = `${siteId}_${ym}`
+    const useMassignFilter = main.massign[monthKey] && workerIds.length > currentAssignCount * 2
     const filteredWorkerIds = useMassignFilter
       ? workerIds.filter((wid: number) => Object.keys(allWorkerEntries[wid] || {}).length > 0)
       : workerIds
@@ -61,8 +60,8 @@ export async function GET(request: NextRequest) {
       workerEntries[w.id] = allWorkerEntries[w.id] || {}
     }
 
-    // Get subcons assigned to this site
-    const subconIds = massign?.subcons || assign?.subcons || []
+    // Get subcons assigned to this site (with 12-month lookback)
+    const subconIds = assignData.subcons
     const subcons = main.subcons
       .filter(sc => subconIds.includes(sc.id))
       .map(sc => ({ id: sc.id, name: sc.name, type: sc.type }))

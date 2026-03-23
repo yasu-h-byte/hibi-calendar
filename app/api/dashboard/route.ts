@@ -8,6 +8,8 @@ import {
   calcTobiEquiv,
   getSiteRates,
   getBillTotal,
+  getAvgRevenuePerEquiv,
+  getAssign,
   buildYMList,
   MainData,
   ComputeResult,
@@ -64,10 +66,8 @@ function computeTodayStatus(
     let tobi = 0
     let doko = 0
 
-    const monthKey = `${site.id}_${ym}`
-    const mAssign = main.massign[monthKey]
-    const dAssign = main.assign[site.id]
-    const workerIds = mAssign?.workers || dAssign?.workers || []
+    const assignData = getAssign(main, site.id, ym)
+    const workerIds = assignData.workers
 
     for (const wid of workerIds) {
       const key = `${site.id}_${wid}_${ym}_${String(day)}`
@@ -87,7 +87,7 @@ function computeTodayStatus(
 
     // Count subcons for today
     let gaichuCount = 0
-    const subconIds = mAssign?.subcons || dAssign?.subcons || []
+    const subconIds = assignData.subcons
     for (const scid of subconIds) {
       const key = `${site.id}_${scid}_${ym}_${String(day)}`
       const sdEntry = attSD[key]
@@ -103,11 +103,8 @@ function computeTodayStatus(
   // Absent workers: assigned but not working today
   const allAssignedWorkerIds = new Set<number>()
   for (const site of activeSites) {
-    const monthKey = `${site.id}_${ym}`
-    const mAssign = main.massign[monthKey]
-    const dAssign = main.assign[site.id]
-    const workerIds = mAssign?.workers || dAssign?.workers || []
-    for (const wid of workerIds) allAssignedWorkerIds.add(wid)
+    const siteAssign = getAssign(main, site.id, ym)
+    for (const wid of siteAssign.workers) allAssignedWorkerIds.add(wid)
   }
 
   for (const wid of Array.from(allAssignedWorkerIds)) {
@@ -196,13 +193,53 @@ export async function GET(request: NextRequest) {
 
     const filteredSites = main.sites.filter(s => !hiddenSiteIds.has(s.id))
 
-    // ═══ Billing totals per site across all months ═══
+    // ═══ Load extra att data for getAvgRevenuePerEquiv lookback (3 months before earliest month) ═══
+    const earliestYm = ymStrList.slice().sort()[0]
+    const lookbackYms: string[] = []
+    {
+      let ly = parseInt(earliestYm.slice(0, 4))
+      let lm = parseInt(earliestYm.slice(4, 6))
+      for (let i = 0; i < 3; i++) {
+        lm--
+        if (lm < 1) { lm = 12; ly-- }
+        const lStr = ymKey(ly, lm)
+        if (!ymStrList.includes(lStr)) lookbackYms.push(lStr)
+      }
+    }
+    const lookbackAtt = lookbackYms.length > 0 ? await getMultiMonthAttData(lookbackYms) : { d: {}, sd: {} }
+    // Merge lookback att with main att for getAvgRevenuePerEquiv
+    const allAttD = { ...mergedAtt.d, ...lookbackAtt.d }
+    const allAttSD = { ...mergedAtt.sd, ...lookbackAtt.sd }
+
+    // ═══ Billing totals per site across all months (with estimation) ═══
     const siteBillingMap = new Map<string, number>()
     let totalBilling = 0
+    let estMonths = 0
     for (const site of filteredSites) {
       let siteBill = 0
       for (const ymStr of ymStrList) {
-        siteBill += getBillTotal(main, site.id, ymStr)
+        const actualBill = getBillTotal(main, site.id, ymStr)
+        if (actualBill > 0) {
+          siteBill += actualBill
+        } else if (siteFilter === 'all' || site.id === siteFilter) {
+          // Estimate billing for months without invoice data
+          const avgRev = getAvgRevenuePerEquiv(
+            main, allAttD, allAttSD, ymStr,
+            siteFilter !== 'all' ? siteFilter : undefined,
+          )
+          if (avgRev !== null) {
+            const mY = parseInt(ymStr.slice(0, 4))
+            const mM = parseInt(ymStr.slice(4, 6))
+            const mTobiEq = calcTobiEquiv(
+              main, mergedAtt.d, mergedAtt.sd, [{ y: mY, m: mM }],
+              siteFilter !== 'all' ? siteFilter : undefined,
+            )
+            if (mTobiEq.equiv > 0) {
+              siteBill += avgRev * mTobiEq.equiv
+              estMonths++
+            }
+          }
+        }
       }
       siteBillingMap.set(site.id, siteBill)
       if (siteFilter === 'all' || site.id === siteFilter) {
@@ -319,6 +356,7 @@ export async function GET(request: NextRequest) {
       billingPerManDayRate: tobiEq.equiv > 0 && rates.tobiBase > 0
         ? ((totalBilling / tobiEq.equiv) / rates.tobiBase) * 100 : 0,
       otHours: totalOT,
+      estMonths,
       // Previous month comparison
       prevTotalManDays,
       prevBilling,
@@ -473,10 +511,8 @@ export async function GET(request: NextRequest) {
     let siteTrend: { ym: string; workerCount: number; cost: number; tobi: number; doko: number }[] | null = null
 
     if (siteFilter !== 'all') {
-      const monthKey = `${siteFilter}_${ym}`
-      const mAssign = main.massign[monthKey]
-      const dAssign = main.assign[siteFilter]
-      const workerIds = mAssign?.workers || dAssign?.workers || []
+      const siteAssignData = getAssign(main, siteFilter, ym)
+      const workerIds = siteAssignData.workers
 
       siteMembers = workerIds
         .map(wid => main.workers.find(w => w.id === wid && !w.retired))
@@ -484,10 +520,8 @@ export async function GET(request: NextRequest) {
         .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
       siteTrend = ymStrList.map(mStr => {
-        const mKey = `${siteFilter}_${mStr}`
-        const mA = main.massign[mKey]
-        const dA = main.assign[siteFilter]
-        const wids = mA?.workers || dA?.workers || []
+        const trendAssign = getAssign(main, siteFilter, mStr)
+        const wids = trendAssign.workers
 
         let tobi = 0
         let doko = 0

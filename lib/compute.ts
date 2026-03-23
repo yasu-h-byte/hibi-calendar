@@ -120,6 +120,40 @@ export function parseDKey(k: string): { sid: string; wid: string; ym: string; da
 }
 
 // ────────────────────────────────────────
+//  配置情報取得（旧アプリのgetAssignと同等）
+//  massignを最大12ヶ月遡って検索し、見つからなければ
+//  グローバルassignにフォールバック
+// ────────────────────────────────────────
+export function getAssign(
+  main: MainData,
+  siteId: string,
+  ym: string,
+): { workers: number[]; subcons: string[] } {
+  const mk = `${siteId}_${ym}`
+  if (main.massign[mk]) {
+    return {
+      workers: main.massign[mk].workers || [],
+      subcons: main.massign[mk].subcons || [],
+    }
+  }
+  let y = parseInt(ym.slice(0, 4))
+  let m = parseInt(ym.slice(4, 6))
+  for (let i = 0; i < 12; i++) {
+    m--
+    if (m < 1) { m = 12; y-- }
+    const pk = `${siteId}_${ymKey(y, m)}`
+    if (main.massign[pk]) {
+      return {
+        workers: main.massign[pk].workers || [],
+        subcons: main.massign[pk].subcons || [],
+      }
+    }
+  }
+  const a = main.assign[siteId]
+  return { workers: a?.workers || [], subcons: a?.subcons || [] }
+}
+
+// ────────────────────────────────────────
 //  外注の現場別単価取得（旧アプリのgetSubconRateと同等）
 // ────────────────────────────────────────
 export function getSubconRate(
@@ -430,6 +464,54 @@ export function compute(
 export function getBillTotal(main: MainData, siteId: string, ym: string): number {
   const arr = main.billing[`${siteId}_${ym}`]
   return arr ? arr.reduce((s, v) => s + (v || 0), 0) : 0
+}
+
+// ────────────────────────────────────────
+//  出面概算：過去N月の確定請求から1鳶換算人工あたり売上平均を算出
+//  （旧アプリのgetAvgRevenuePerEquivと同等）
+// ────────────────────────────────────────
+export function getAvgRevenuePerEquiv(
+  main: MainData,
+  attD: Record<string, AttendanceEntry>,
+  attSD: Record<string, { n: number; on: number }>,
+  baseYM: string,
+  siteId?: string,
+  months: number = 3,
+): number | null {
+  let sumBilling = 0
+  let sumEquiv = 0
+  let hasData = false
+
+  let y = parseInt(baseYM.slice(0, 4))
+  let m = parseInt(baseYM.slice(4, 6))
+
+  for (let i = 0; i < months; i++) {
+    m--
+    if (m < 1) { m = 12; y-- }
+    const mStr = ymKey(y, m)
+
+    // Check billing for this month
+    let mBill = 0
+    if (siteId) {
+      mBill = getBillTotal(main, siteId, mStr)
+    } else {
+      for (const site of main.sites) {
+        mBill += getBillTotal(main, site.id, mStr)
+      }
+    }
+    if (mBill <= 0) continue
+
+    // Calculate tobiEquiv for this month
+    const mTobiEq = calcTobiEquiv(main, attD, attSD, [{ y, m }], siteId)
+    if (mTobiEq.equiv <= 0) continue
+
+    sumBilling += mBill
+    sumEquiv += mTobiEq.equiv
+    hasData = true
+  }
+
+  if (!hasData || sumEquiv <= 0) return null
+  return sumBilling / sumEquiv
 }
 
 // ────────────────────────────────────────
