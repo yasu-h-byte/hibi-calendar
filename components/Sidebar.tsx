@@ -33,6 +33,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
   // 管理
   { label: '有給管理', icon: '🌴', href: '/leave', section: '管理', roles: ['admin', 'approver'] },
   { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin'] },
+  { label: '帳票出力', icon: '📑', href: '/export', section: '管理', roles: ['admin'] },
   ]
 }
 

@@ -24,11 +24,14 @@ export async function GET(request: NextRequest) {
     const att = await getAttData(ym)
     const result = computeMonthly(main, att.d, att.sd, ym)
 
+    const locked = !!(main.locks[ym])
+
     return NextResponse.json({
       workers: result.workers,
       subcons: result.subcons,
       sites: result.sites,
       totals: result.totals,
+      locked,
     })
   } catch (error) {
     console.error('Monthly API error:', error)

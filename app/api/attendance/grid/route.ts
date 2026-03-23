@@ -65,12 +65,26 @@ export async function GET(request: NextRequest) {
 
     const locked = !!(main.locks[ym])
 
+    // Foreman name
+    const foremanWorker = main.workers.find(w => w.id === site.foreman)
+    const foremanName = foremanWorker?.name || ''
+
+    // Approval status per day (from att doc approvals field)
+    const approvals: Record<number, boolean> = {}
+    for (let d = 1; d <= daysInMonth; d++) {
+      const approvalKey = `${siteId}_${ym}_${String(d).padStart(2, '0')}`
+      if (att.approvals?.[approvalKey]) {
+        approvals[d] = true
+      }
+    }
+
     return NextResponse.json({
-      site: { id: site.id, name: site.name },
+      site: { id: site.id, name: site.name, foreman: site.foreman, foremanName },
       year: y, month: m, daysInMonth, ym,
       workers, subcons,
       workerEntries, subconEntries,
       locked,
+      approvals,
       sites: main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name })),
     })
   } catch (error) {

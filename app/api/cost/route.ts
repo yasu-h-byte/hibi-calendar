@@ -42,17 +42,37 @@ export async function GET(request: NextRequest) {
     const att = await getAttData(ym)
     const result = computeMonthly(main, att.d, att.sd, ym)
 
-    const sites = result.sites.map(s => ({
-      id: s.id,
-      name: s.name,
-      billing: s.billing,
-      cost: s.cost,
-      subCost: s.subCost,
-      totalCost: s.cost + s.subCost,
-      profit: s.profit,
-      profitRate: s.profitRate,
-      workDays: s.workDays,
-      subWorkDays: s.subWorkDays,
+    // Calculate tobiEquiv per site: billing / tobiRate for the site
+    const rawSites = main.sites
+    const sites = result.sites.map(s => {
+      const rawSite = rawSites.find(rs => rs.id === s.id)
+      const tobiRate = rawSite?.tobiRate || 0
+      const tobiEquiv = tobiRate > 0 ? s.billing / tobiRate : 0
+      return {
+        id: s.id,
+        name: s.name,
+        billing: s.billing,
+        cost: s.cost,
+        subCost: s.subCost,
+        totalCost: s.cost + s.subCost,
+        profit: s.profit,
+        profitRate: s.profitRate,
+        workDays: s.workDays,
+        subWorkDays: s.subWorkDays,
+        tobiEquiv,
+      }
+    })
+
+    // Subcon cost details
+    const subconDetails = result.subcons.map(sc => ({
+      id: sc.id,
+      name: sc.name,
+      type: sc.type,
+      rate: sc.rate,
+      otRate: sc.otRate,
+      workDays: sc.workDays,
+      otCount: sc.otCount,
+      cost: sc.cost,
     }))
 
     const totalCost = result.totals.cost + result.totals.subCost
@@ -60,6 +80,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       sites,
+      subconDetails,
       totals: {
         billing: result.totals.billing,
         cost: result.totals.cost,

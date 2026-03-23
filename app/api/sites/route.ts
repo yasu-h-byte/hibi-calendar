@@ -15,6 +15,8 @@ interface RawSite {
   end?: string
   foreman?: number
   archived?: boolean
+  tobiRate?: number
+  dokoRate?: number
 }
 
 async function getMainDoc() {
@@ -44,6 +46,8 @@ export async function GET(request: NextRequest) {
       end: s.end || '',
       foreman: s.foreman || 0,
       archived: s.archived || false,
+      tobiRate: (s as unknown as Record<string, unknown>).tobiRate as number || 0,
+      dokoRate: (s as unknown as Record<string, unknown>).dokoRate as number || 0,
     }))
 
     const assign: Record<string, { workers: number[]; subcons: string[] }> = {}
@@ -88,7 +92,7 @@ export async function POST(request: NextRequest) {
     const sites = (data.sites || []) as RawSite[]
 
     if (action === 'add') {
-      const { name, start, end, foreman } = body
+      const { name, start, end, foreman, tobiRate, dokoRate } = body
       if (!name) {
         return NextResponse.json({ error: '現場名を入力してください' }, { status: 400 })
       }
@@ -101,6 +105,8 @@ export async function POST(request: NextRequest) {
         end: end || '',
         foreman: Number(foreman) || 0,
         archived: false,
+        tobiRate: Number(tobiRate) || 0,
+        dokoRate: Number(dokoRate) || 0,
       }
 
       await updateDoc(ref, { sites: [...sites, newSite] })
@@ -108,7 +114,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'update') {
-      const { id, name, start, end, foreman, archived } = body
+      const { id, name, start, end, foreman, archived, tobiRate, dokoRate } = body
       if (!id) {
         return NextResponse.json({ error: 'id required' }, { status: 400 })
       }
@@ -126,6 +132,8 @@ export async function POST(request: NextRequest) {
         ...(end !== undefined && { end }),
         ...(foreman !== undefined && { foreman: Number(foreman) }),
         ...(archived !== undefined && { archived: Boolean(archived) }),
+        ...(tobiRate !== undefined && { tobiRate: Number(tobiRate) }),
+        ...(dokoRate !== undefined && { dokoRate: Number(dokoRate) }),
       }
 
       await updateDoc(ref, { sites: updated })

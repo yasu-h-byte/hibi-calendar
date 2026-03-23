@@ -66,6 +66,7 @@ export async function getMainData(): Promise<MainData> {
 export async function getAttData(ym: string): Promise<{
   d: Record<string, AttendanceEntry>
   sd: Record<string, { n: number; on: number }>
+  approvals?: Record<string, boolean>
 }> {
   const docSnap = await getDoc(doc(db, 'demmen', `att_${ym}`))
   if (!docSnap.exists()) return { d: {}, sd: {} }
@@ -73,6 +74,7 @@ export async function getAttData(ym: string): Promise<{
   return {
     d: (data.d || {}) as Record<string, AttendanceEntry>,
     sd: (data.sd || {}) as Record<string, { n: number; on: number }>,
+    approvals: (data.approvals || undefined) as Record<string, boolean> | undefined,
   }
 }
 

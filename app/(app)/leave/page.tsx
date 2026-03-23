@@ -5,8 +5,10 @@ import { useEffect, useState, useCallback } from 'react'
 interface PLWorker {
   id: number; name: string; org: string; visa: string
   grantDays: number; carryOver: number; adjustment: number; used: number
-  total: number; remaining: number; rate: number
+  total: number; remaining: number; rate: number; grantMonth?: number
 }
+
+type OrgFilter = 'all' | 'hibi' | 'hfu'
 
 export default function LeavePage() {
   const [password, setPassword] = useState('')
@@ -15,6 +17,9 @@ export default function LeavePage() {
   const [editWorker, setEditWorker] = useState<PLWorker | null>(null)
   const [editForm, setEditForm] = useState({ grantDays: '', carryOver: '', adjustment: '' })
   const [saving, setSaving] = useState(false)
+  const [orgFilter, setOrgFilter] = useState<OrgFilter>('all')
+  const [showGrantModal, setShowGrantModal] = useState(false)
+  const [grantForm, setGrantForm] = useState({ workerId: '', grantDays: '10', grantMonth: '' })
   const [fy, setFy] = useState(() => {
     const now = new Date()
     const y = now.getFullYear()
@@ -43,10 +48,42 @@ export default function LeavePage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const eligible = workers.length
-  const totalRemaining = workers.reduce((s, w) => s + w.remaining, 0)
-  const totalUsed = workers.reduce((s, w) => s + w.used, 0)
-  const alertCount = workers.filter(w => w.remaining <= 3).length
+  const filteredWorkers = orgFilter === 'all'
+    ? workers
+    : workers.filter(w => orgFilter === 'hfu' ? w.org === 'hfu' : w.org !== 'hfu')
+
+  const eligible = filteredWorkers.length
+  const totalRemaining = filteredWorkers.reduce((s, w) => s + w.remaining, 0)
+  const totalUsed = filteredWorkers.reduce((s, w) => s + w.used, 0)
+  const alertCount = filteredWorkers.filter(w => w.remaining <= 3).length
+
+  const handleGrant = async () => {
+    if (!grantForm.workerId) { alert('対象者を選択してください'); return }
+    setSaving(true)
+    try {
+      await fetch('/api/leave', {
+        method: 'POST',
+        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'grant', workerId: Number(grantForm.workerId), fy, grantDays: grantForm.grantDays, grantMonth: grantForm.grantMonth }),
+      })
+      setShowGrantModal(false)
+      setGrantForm({ workerId: '', grantDays: '10', grantMonth: '' })
+      fetchData()
+    } finally { setSaving(false) }
+  }
+
+  const handleCarryOver = async () => {
+    if (!confirm('繰越自動計算を実行しますか？前年度の残日数を繰越に反映します。')) return
+    setSaving(true)
+    try {
+      await fetch('/api/leave', {
+        method: 'POST',
+        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'carryOver', fy }),
+      })
+      fetchData()
+    } finally { setSaving(false) }
+  }
 
   const fyOptions = []
   for (let y = 2024; y <= 2027; y++) fyOptions.push({ value: `${y}`, label: `${y}年度（${y}/10〜${y + 1}/9）` })
@@ -58,10 +95,32 @@ export default function LeavePage() {
           <h1 className="text-xl font-bold text-hibi-navy">有給管理</h1>
           <p className="text-sm text-gray-500 mt-1">有給休暇の付与・消化状況</p>
         </div>
-        <select value={fy} onChange={e => setFy(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-          {fyOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowGrantModal(true)}
+            className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">
+            + 有給付与
+          </button>
+          <button onClick={handleCarryOver} disabled={saving}
+            className="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition disabled:opacity-50">
+            繰越自動計算
+          </button>
+          <select value={fy} onChange={e => setFy(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            {fyOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Org filter tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        {([['all', '全員'], ['hibi', '日比建設'], ['hfu', 'HFU']] as [OrgFilter, string][]).map(([key, label]) => (
+          <button key={key} onClick={() => setOrgFilter(key)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+              orgFilter === key ? 'bg-white text-hibi-navy shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* KPI */}
@@ -91,6 +150,7 @@ export default function LeavePage() {
             <tr className="bg-gray-50 text-left text-gray-600">
               <th className="px-3 py-3">名前</th>
               <th className="px-3 py-3">所属</th>
+              <th className="px-3 py-3 text-center">発生月</th>
               <th className="px-3 py-3 text-right">付与</th>
               <th className="px-3 py-3 text-right">繰越</th>
               <th className="px-3 py-3 text-right">合計</th>
@@ -102,10 +162,10 @@ export default function LeavePage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
-            ) : workers.length === 0 ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
-            ) : workers.map(w => {
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+            ) : filteredWorkers.length === 0 ? (
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
+            ) : filteredWorkers.map(w => {
               const rate = w.total > 0 ? (w.used / w.total * 100) : 0
               return (
                 <tr key={w.id} className="border-t hover:bg-gray-50">
@@ -114,6 +174,9 @@ export default function LeavePage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${w.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                       {w.org === 'hfu' ? 'HFU' : '日比'}
                     </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-gray-600 text-xs">
+                    {w.grantMonth ? `${w.grantMonth}月` : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right">{w.grantDays}</td>
                   <td className="px-3 py-2.5 text-right">{w.carryOver}</td>
@@ -140,6 +203,46 @@ export default function LeavePage() {
           </tbody>
         </table>
       </div>
+
+      {/* Grant Modal */}
+      {showGrantModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowGrantModal(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy mb-4">有給付与</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">対象者</label>
+                <select value={grantForm.workerId} onChange={e => setGrantForm({ ...grantForm, workerId: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="">選択してください</option>
+                  {workers.map(w => <option key={w.id} value={w.id}>{w.name}（{w.org === 'hfu' ? 'HFU' : '日比'}）</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">付与日数</label>
+                <input type="number" value={grantForm.grantDays} onChange={e => setGrantForm({ ...grantForm, grantDays: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">発生月</label>
+                <select value={grantForm.grantMonth} onChange={e => setGrantForm({ ...grantForm, grantMonth: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="">未設定</option>
+                  {[10,11,12,1,2,3,4,5,6,7,8,9].map(m => <option key={m} value={m}>{m}月</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button onClick={handleGrant} disabled={saving}
+                className="flex-1 bg-green-600 text-white rounded-lg py-2.5 font-bold text-sm disabled:opacity-50">
+                {saving ? '処理中...' : '付与'}
+              </button>
+              <button onClick={() => setShowGrantModal(false)}
+                className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2.5 text-sm">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {editWorker && (

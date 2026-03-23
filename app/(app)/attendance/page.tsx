@@ -9,6 +9,8 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 interface SiteOption {
   id: string
   name: string
+  foreman?: number
+  foremanName?: string
 }
 
 interface Worker {
@@ -50,7 +52,30 @@ interface GridData {
   workerEntries: Record<string, Record<number, AttEntry>>
   subconEntries: Record<string, Record<number, SubconDayEntry>>
   locked: boolean
+  approvals: Record<number, boolean>
   sites: SiteOption[]
+}
+
+// ── Visa badge helper ──
+
+function visaBadge(visa: string): { label: string; cls: string } | null {
+  switch (visa) {
+    case 'jisshu': return { label: '実習', cls: 'bg-orange-100 text-orange-700' }
+    case 'tokutei': return { label: '特定', cls: 'bg-pink-100 text-pink-700' }
+    default: return null // 日本人 = no special badge, uses org badge
+  }
+}
+
+function orgBadgeCls(org: string, visa: string): string {
+  const v = visaBadge(visa)
+  if (v) return v.cls
+  return org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+}
+
+function orgBadgeLabel(org: string, visa: string): string {
+  const v = visaBadge(visa)
+  if (v) return v.label
+  return org === 'hfu' ? 'HFU' : '日比'
 }
 
 // ────────────────────────────────────────
@@ -455,6 +480,29 @@ export default function AttendanceGridPage() {
           </span>
         )}
 
+        {/* Organization count badges */}
+        {data && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+              日比建設 {data.workers.filter(w => w.org === 'hibi').length}名
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+              HFU {data.workers.filter(w => w.org === 'hfu').length}名
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+              外注 {data.subcons.length}社
+            </span>
+          </div>
+        )}
+
+        {/* 配置編集 button */}
+        <button
+          onClick={() => alert('配置編集画面は準備中です')}
+          className="text-xs px-3 py-1.5 border border-hibi-navy text-hibi-navy rounded-lg hover:bg-hibi-navy hover:text-white transition"
+        >
+          配置編集
+        </button>
+
         <div className="flex items-center gap-2 ml-auto">
           {/* Site selector */}
           <select
@@ -539,6 +587,51 @@ export default function AttendanceGridPage() {
               </thead>
 
               <tbody>
+                {/* ── Foreman row (yellow) ── */}
+                {data.site.foremanName && (
+                  <tr className="bg-yellow-50 border-b border-yellow-200">
+                    <td
+                      className="sticky left-0 z-10 bg-yellow-50 px-2 py-1 font-bold text-yellow-800 whitespace-nowrap text-[11px] border-r border-yellow-200"
+                      style={{ minWidth: 120 }}
+                    >
+                      職長: {data.site.foremanName}
+                    </td>
+                    <td className="sticky left-[120px] z-10 bg-yellow-50 px-1 py-1 text-center border-r border-yellow-200" style={{ minWidth: 48 }}>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-200 text-yellow-800">職長</span>
+                    </td>
+                    {days.map(d => (
+                      <td key={d.day} className={`px-0 py-1 border-l border-yellow-100 bg-yellow-50 text-center text-[10px] text-yellow-600`} style={{ minWidth: 48 }}>
+                        {/* placeholder: foreman presence can be derived from worker entries */}
+                      </td>
+                    ))}
+                    <td className="px-1 py-1 text-center border-l-2 border-yellow-200 bg-yellow-50" colSpan={2}></td>
+                  </tr>
+                )}
+
+                {/* ── Approval row (red/orange) ── */}
+                <tr className="bg-orange-50 border-b border-orange-200">
+                  <td
+                    className="sticky left-0 z-10 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px] border-r border-orange-200"
+                    style={{ minWidth: 120 }}
+                  >
+                    承認
+                  </td>
+                  <td className="sticky left-[120px] z-10 bg-orange-50 px-1 py-1 text-center border-r border-orange-200" style={{ minWidth: 48 }}></td>
+                  {days.map(d => {
+                    const approved = data.approvals?.[d.day]
+                    return (
+                      <td key={d.day} className="px-0 py-1 border-l border-orange-100 bg-orange-50 text-center" style={{ minWidth: 48 }}>
+                        {approved ? (
+                          <span className="text-green-600 text-[11px] font-bold" title="承認済">&#x2713;</span>
+                        ) : (
+                          <span className="text-orange-300 text-[11px]">-</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                  <td className="px-1 py-1 text-center border-l-2 border-orange-200 bg-orange-50" colSpan={2}></td>
+                </tr>
+
                 {/* ── Worker groups ── */}
                 {groupedWorkers.map(group => (
                   <>
@@ -570,17 +663,13 @@ export default function AttendanceGridPage() {
                             </div>
                           </td>
 
-                          {/* Org badge - sticky */}
+                          {/* Org badge - sticky (colored by visa) */}
                           <td
                             className="sticky left-[120px] z-10 bg-white group-hover:bg-gray-50 px-1 py-0.5 text-center border-r border-gray-200"
                             style={{ minWidth: 48 }}
                           >
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                              worker.org === 'hfu'
-                                ? 'bg-purple-100 text-purple-700'
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
-                              {worker.org === 'hfu' ? 'HFU' : '日比'}
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${orgBadgeCls(worker.org, worker.visa)}`}>
+                              {orgBadgeLabel(worker.org, worker.visa)}
                             </span>
                           </td>
 

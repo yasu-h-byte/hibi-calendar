@@ -9,6 +9,8 @@ interface SiteData {
   end: string
   foreman: number
   archived: boolean
+  tobiRate: number
+  dokoRate: number
 }
 
 interface SiteAssign {
@@ -29,6 +31,8 @@ const EMPTY_FORM = {
   end: '',
   foreman: '0',
   archived: false,
+  tobiRate: '',
+  dokoRate: '',
 }
 
 export default function SitesPage() {
@@ -88,6 +92,8 @@ export default function SitesPage() {
       end: s.end,
       foreman: String(s.foreman),
       archived: s.archived,
+      tobiRate: String(s.tobiRate || ''),
+      dokoRate: String(s.dokoRate || ''),
     })
     setShowModal(true)
   }
@@ -97,8 +103,8 @@ export default function SitesPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, start: form.start, end: form.end, foreman: form.foreman, archived: form.archived }
-        : { action: 'add', name: form.name, start: form.start, end: form.end, foreman: form.foreman }
+        ? { action: 'update', id: editId, name: form.name, start: form.start, end: form.end, foreman: form.foreman, archived: form.archived, tobiRate: form.tobiRate, dokoRate: form.dokoRate }
+        : { action: 'add', name: form.name, start: form.start, end: form.end, foreman: form.foreman, tobiRate: form.tobiRate, dokoRate: form.dokoRate }
       await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       setShowModal(false)
       fetchSites()
@@ -170,6 +176,8 @@ export default function SitesPage() {
               <th className="px-3 py-3">現場名</th>
               <th className="px-3 py-3">工期</th>
               <th className="px-3 py-3">職長</th>
+              <th className="px-3 py-3 text-right">鳶単価</th>
+              <th className="px-3 py-3 text-right">土工単価</th>
               <th className="px-3 py-3 text-center">自社人数</th>
               <th className="px-3 py-3 text-center">外注数</th>
               <th className="px-3 py-3 text-center">状態</th>
@@ -178,9 +186,9 @@ export default function SitesPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
             ) : sorted.map(s => {
               const siteAssign = assign[s.id]
               const workerCount = siteAssign ? siteAssign.workers.length : 0
@@ -200,6 +208,22 @@ export default function SitesPage() {
                           : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-gray-600">{getWorkerName(s.foreman)}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    {s.tobiRate ? (
+                      <div>
+                        <div className="font-medium">{`¥${s.tobiRate.toLocaleString()}`}</div>
+                        <div className="text-xs text-gray-400">{`85%: ¥${Math.round(s.tobiRate * 0.85).toLocaleString()}`}</div>
+                      </div>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    {s.dokoRate ? (
+                      <div>
+                        <div className="font-medium">{`¥${s.dokoRate.toLocaleString()}`}</div>
+                        <div className="text-xs text-gray-400">{`85%: ¥${Math.round(s.dokoRate * 0.85).toLocaleString()}`}</div>
+                      </div>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
                   <td className="px-3 py-2.5 text-center text-gray-600">{workerCount}</td>
                   <td className="px-3 py-2.5 text-center text-gray-600">{subconCount}</td>
                   <td className="px-3 py-2.5 text-center">
@@ -258,6 +282,29 @@ export default function SitesPage() {
                     type="date"
                     value={form.end}
                     onChange={e => setForm({ ...form, end: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">鳶単価（円）</label>
+                  <input
+                    type="number"
+                    value={form.tobiRate}
+                    onChange={e => setForm({ ...form, tobiRate: e.target.value })}
+                    placeholder="36000"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">土工単価（円）</label>
+                  <input
+                    type="number"
+                    value={form.dokoRate}
+                    onChange={e => setForm({ ...form, dokoRate: e.target.value })}
+                    placeholder="28000"
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                   />
                 </div>

@@ -17,6 +17,7 @@ interface WorkerMonthly {
   otMul: number
   sites: string[]
   workDays: number
+  halfDays?: number
   otHours: number
   plDays: number
   restDays: number
@@ -41,6 +42,7 @@ interface SubconMonthly {
 interface MonthlyData {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
+  locked: boolean
   totals: {
     workDays: number
     subWorkDays: number
@@ -106,6 +108,7 @@ export default function MonthlyPage() {
   const [data, setData] = useState<MonthlyData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [lockToggling, setLockToggling] = useState(false)
 
   // Worker sort
   const [workerSortKey, setWorkerSortKey] = useState<WorkerSortKey>('name')
@@ -154,6 +157,32 @@ export default function MonthlyPage() {
   }, [password, ym])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // ── Lock toggle ──
+
+  const handleToggleLock = useCallback(async () => {
+    if (!password || !data) return
+    const newLocked = !data.locked
+    const msg = newLocked ? `${ym} を月締めしますか？` : `${ym} の月締めを解除しますか？`
+    if (!confirm(msg)) return
+    setLockToggling(true)
+    try {
+      await fetch('/api/monthly/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ ym, locked: newLocked }),
+      })
+      fetchData()
+    } catch {
+      alert('エラーが発生しました')
+    } finally {
+      setLockToggling(false)
+    }
+  }, [password, data, ym, fetchData])
+
+  const handleExcelExport = useCallback(() => {
+    alert('Excel出力機能は準備中です')
+  }, [])
 
   // ── Worker filtering & sorting ──
 
@@ -258,23 +287,49 @@ export default function MonthlyPage() {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Header & controls */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-hibi-navy">月次集計</h1>
-          {data && (
-            <p className="text-sm text-gray-500 mt-1">
-              出勤延べ {data.totals.workDays}人日 / 外注 {data.totals.subWorkDays}人工 / 残業 {data.totals.otHours}h
-            </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-hibi-navy">月次集計</h1>
+            {data && (
+              <p className="text-sm text-gray-500 mt-1">
+                出勤延べ {data.totals.workDays}人日 / 外注 {data.totals.subWorkDays}人工 / 残業 {data.totals.otHours}h
+              </p>
+            )}
+          </div>
+          {data?.locked && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">
+              🔒 締め済
+            </span>
           )}
         </div>
-        <select
-          value={ym}
-          onChange={e => setYm(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-hibi-navy focus:outline-none"
-        >
-          {ymOptions.map(o => (
-            <option key={o.ym} value={o.ym}>{o.label}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleToggleLock}
+            disabled={lockToggling || !data}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+              data?.locked
+                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                : 'bg-red-100 text-red-700 hover:bg-red-200'
+            } disabled:opacity-50`}
+          >
+            {data?.locked ? '🔓 締め解除' : '🔒 月締め'}
+          </button>
+          <button
+            onClick={handleExcelExport}
+            className="px-3 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition"
+          >
+            📊 Excel出力
+          </button>
+          <select
+            value={ym}
+            onChange={e => setYm(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+          >
+            {ymOptions.map(o => (
+              <option key={o.ym} value={o.ym}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -325,6 +380,7 @@ export default function MonthlyPage() {
                 >
                   所属{sortArrow(workerSortKey === 'org', workerSortAsc)}
                 </th>
+                <th className="px-3 py-3 whitespace-nowrap">現場</th>
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('workDays')}
@@ -360,36 +416,64 @@ export default function MonthlyPage() {
             <tbody>
               {sortedWorkers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-gray-400">
+                  <td colSpan={8} className="px-3 py-8 text-center text-gray-400">
                     データがありません
                   </td>
                 </tr>
               ) : (
-                sortedWorkers.map(w => (
-                  <tr key={w.id} className="border-t hover:bg-gray-50">
-                    <td className="px-3 py-2.5 font-medium whitespace-nowrap">{w.name}</td>
-                    <td className="px-3 py-2.5">{orgBadge(w.org)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{w.workDays}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">
-                      {w.plDays > 0 ? w.plDays : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">
-                      {w.otHours > 0 ? w.otHours.toFixed(1) : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                      {formatYen(w.rate)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">
-                      {formatYen(Math.round(w.totalCost))}
-                    </td>
-                  </tr>
-                ))
+                sortedWorkers.map(w => {
+                  const halfDays = w.halfDays || 0
+                  const hasComplement = halfDays > 0
+                  return (
+                    <tr key={w.id} className="border-t hover:bg-gray-50">
+                      <td className="px-3 py-2.5 font-medium whitespace-nowrap">{w.name}</td>
+                      <td className="px-3 py-2.5">{orgBadge(w.org)}</td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                          {w.sites.map((s, i) => {
+                            const colors = [
+                              'bg-blue-100 text-blue-700',
+                              'bg-teal-100 text-teal-700',
+                              'bg-indigo-100 text-indigo-700',
+                              'bg-pink-100 text-pink-700',
+                              'bg-amber-100 text-amber-700',
+                            ]
+                            return (
+                              <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colors[i % colors.length]}`}>
+                                {s.length > 6 ? s.slice(0, 6) : s}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        <div>{w.workDays}</div>
+                        {hasComplement && (
+                          <div className="text-[10px] text-gray-400">うち補{(halfDays * 0.5).toFixed(1)}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {w.plDays > 0 ? w.plDays : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {w.otHours > 0 ? w.otHours.toFixed(1) : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
+                        {formatYen(w.rate)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-medium">
+                        {formatYen(Math.round(w.totalCost))}
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
             {sortedWorkers.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-hibi-navy bg-gray-50 font-bold text-hibi-navy">
                   <td className="px-3 py-3">合計 ({filteredWorkers.length}名)</td>
+                  <td className="px-3 py-3"></td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3 text-right tabular-nums">{workerTotals.workDays}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{workerTotals.plDays}</td>

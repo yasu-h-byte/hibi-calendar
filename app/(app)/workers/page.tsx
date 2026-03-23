@@ -15,6 +15,30 @@ interface WorkerExt extends Worker {
   retired?: string
 }
 
+interface PLWorkerData {
+  id: number
+  total: number
+  remaining: number
+}
+
+function getPlGrantMonth(hireDate?: string): string {
+  if (!hireDate) return '—'
+  const d = new Date(hireDate)
+  if (isNaN(d.getTime())) return '—'
+  const grantMonth = new Date(d.getFullYear(), d.getMonth() + 6, 1)
+  return `${grantMonth.getMonth() + 1}月`
+}
+
+function jobBadge(jobType?: string): { label: string; cls: string } {
+  switch (jobType) {
+    case 'yakuin': case '役員': return { label: '役員', cls: 'bg-red-100 text-red-700' }
+    case 'shokucho': case '職長': return { label: '職長', cls: 'bg-blue-100 text-blue-700' }
+    case 'tobi': case 'とび': return { label: 'とび', cls: 'bg-green-100 text-green-700' }
+    case 'doko': case '土工': return { label: '土工', cls: 'bg-gray-200 text-gray-600' }
+    default: return { label: jobType || '—', cls: 'bg-gray-100 text-gray-500' }
+  }
+}
+
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
   rate: '', otMul: '1.25', hireDate: '', retired: '',
@@ -32,6 +56,8 @@ export default function WorkersPage() {
   const [qrWorker, setQrWorker] = useState<WorkerExt | null>(null)
   const [sortKey, setSortKey] = useState<string>('id')
   const [sortAsc, setSortAsc] = useState(true)
+  const [plData, setPlData] = useState<Record<number, PLWorkerData>>({})
+  const [transferring, setTransferring] = useState<number | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
@@ -61,6 +87,45 @@ export default function WorkersPage() {
   }, [password])
 
   useEffect(() => { fetchWorkers() }, [fetchWorkers])
+
+  // Fetch PL data
+  const fetchPlData = useCallback(async () => {
+    if (!password) return
+    try {
+      const now = new Date()
+      // Determine current FY (Oct start): if month >= 10, FY = current year, else FY = last year
+      const fy = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1
+      const res = await fetch(`/api/leave?fy=${fy}`, { headers: { 'x-admin-password': password } })
+      if (res.ok) {
+        const json = await res.json()
+        const map: Record<number, PLWorkerData> = {}
+        for (const w of json.workers || []) {
+          map[w.id] = { id: w.id, total: w.total, remaining: w.remaining }
+        }
+        setPlData(map)
+      }
+    } catch { /* ignore */ }
+  }, [password])
+
+  useEffect(() => { fetchPlData() }, [fetchPlData])
+
+  // Transfer handler (toggle org between hibi/hfu)
+  const handleTransfer = async (w: WorkerExt) => {
+    const newOrg = w.company === 'HFU' ? 'hibi' : 'hfu'
+    const newLabel = newOrg === 'hfu' ? 'HFU' : '日比建設'
+    if (!confirm(`${w.name} を ${newLabel} に転籍しますか？`)) return
+    setTransferring(w.id)
+    try {
+      await fetch('/api/workers', {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ action: 'update', id: w.id, org: newOrg }),
+      })
+      fetchWorkers()
+    } finally {
+      setTransferring(null)
+    }
+  }
 
   const openAdd = () => {
     setEditId(null)
@@ -199,68 +264,100 @@ export default function WorkersPage() {
               <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('rate')}>
                 日額 {sortKey === 'rate' && (sortAsc ? '↑' : '↓')}
               </th>
+              <th className="px-3 py-3">有給発生月</th>
+              <th className="px-3 py-3">有給残</th>
               <th className="px-3 py-3">📱</th>
               <th className="px-3 py-3">操作</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
-            ) : sorted.map(w => (
-              <tr key={w.id} className={`border-t hover:bg-gray-50 ${w.retired ? 'opacity-45' : ''}`}>
-                <td className="px-3 py-2.5 text-gray-400">{w.id}</td>
-                <td className="px-3 py-2.5 font-medium">
-                  {w.name}
-                  {w.retired && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">退職</span>}
-                </td>
-                <td className="px-3 py-2.5">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    w.company === 'HFU' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                  }`}>
-                    {w.company === 'HFU' ? 'HFU' : '日比'}
-                  </span>
-                </td>
-                <td className="px-3 py-2.5 text-gray-600">{JOB_LABELS[w.jobType || ''] || w.jobType}</td>
-                <td className="px-3 py-2.5">
-                  {w.visaType && w.visaType !== 'none' && (
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+            ) : sorted.map(w => {
+              const pl = plData[w.id]
+              const jb = jobBadge(w.jobType)
+              return (
+                <tr key={w.id} className={`border-t hover:bg-gray-50 ${w.retired ? 'opacity-45' : ''}`}>
+                  <td className="px-3 py-2.5 text-gray-400">{w.id}</td>
+                  <td className="px-3 py-2.5 font-medium">
+                    {w.name}
+                    {w.retired && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">退職</span>}
+                  </td>
+                  <td className="px-3 py-2.5">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      w.visaType === 'jisshu' ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'
+                      w.company === 'HFU' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
                     }`}>
-                      {VISA_LABELS[w.visaType] || w.visaType}
+                      {w.company === 'HFU' ? 'HFU' : '日比'}
                     </span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5 text-gray-600">
-                  {w.rate ? `¥${w.rate.toLocaleString()}` : '—'}
-                </td>
-                <td className="px-3 py-2.5">
-                  {w.token ? (
-                    <div className="flex items-center gap-1">
-                      <span className="text-green-500 text-xs">✓</span>
-                      <button onClick={() => setQrWorker(w)} className="text-hibi-navy text-xs underline">QR</button>
-                    </div>
-                  ) : (
-                    <button onClick={() => handleGenToken(w.id)} className="text-gray-400 text-xs hover:text-hibi-navy">
-                      発行
-                    </button>
-                  )}
-                </td>
-                <td className="px-3 py-2.5">
-                  <div className="flex gap-1">
-                    <button onClick={() => openEdit(w)} className="text-hibi-navy text-xs underline hover:text-hibi-light">
-                      編集
-                    </button>
-                    {!w.retired && (
-                      <button onClick={() => handleDelete(w.id, w.name)} className="text-red-400 text-xs hover:text-red-600 ml-2">
-                        削除
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${jb.cls}`}>
+                      {jb.label}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {w.visaType && w.visaType !== 'none' && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        w.visaType === 'jisshu' ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'
+                      }`}>
+                        {VISA_LABELS[w.visaType] || w.visaType}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-gray-600">
+                    {w.rate ? `¥${w.rate.toLocaleString()}` : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-gray-500 text-sm">
+                    {getPlGrantMonth(w.hireDate)}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {pl ? (
+                      <span className={`text-sm font-medium ${pl.remaining <= 3 ? 'text-red-600' : 'text-green-600'}`}>
+                        {pl.remaining}日/{pl.total}日
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-sm">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {w.token ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-green-500 text-xs">✓</span>
+                        <button onClick={() => setQrWorker(w)} className="text-hibi-navy text-xs underline">QR</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => handleGenToken(w.id)} className="text-gray-400 text-xs hover:text-hibi-navy">
+                        発行
                       </button>
                     )}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex gap-1 items-center">
+                      <button onClick={() => openEdit(w)} className="text-hibi-navy text-xs underline hover:text-hibi-light">
+                        編集
+                      </button>
+                      {!w.retired && (
+                        <button
+                          onClick={() => handleTransfer(w)}
+                          disabled={transferring === w.id}
+                          className="text-amber-600 text-xs hover:text-amber-800 ml-1 disabled:opacity-50"
+                          title={`${w.company === 'HFU' ? '日比建設' : 'HFU'} に転籍`}
+                        >
+                          ⇄ 転籍
+                        </button>
+                      )}
+                      {!w.retired && (
+                        <button onClick={() => handleDelete(w.id, w.name)} className="text-red-400 text-xs hover:text-red-600 ml-2">
+                          削除
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
