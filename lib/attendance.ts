@@ -6,18 +6,28 @@ import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site } from '@/t
 //  日付ヘルパー
 // ────────────────────────────────────────
 
-const DOW_JP = ['にちようび', 'げつようび', 'かようび', 'すいようび', 'もくようび', 'きんようび', 'どようび']
+const DOW_HIRAGANA = ['にちようび', 'げつようび', 'かようび', 'すいようび', 'もくようび', 'きんようび', 'どようび']
+const DOW_KANJI = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日']
 const DOW_SHORT = ['日', '月', '火', '水', '木', '金', '土']
 
 export function ymKey(y: number, m: number): string {
   return `${y}${String(m).padStart(2, '0')}`
 }
 
+// ひらがな表記（スタッフ用）
 export function formatDateJP(date: Date): string {
   const m = date.getMonth() + 1
   const d = date.getDate()
-  const dow = DOW_JP[date.getDay()]
+  const dow = DOW_HIRAGANA[date.getDay()]
   return `${m}がつ ${d}にち（${dow}）`
+}
+
+// 漢字表記（職長・管理者用）
+export function formatDateKanji(date: Date): string {
+  const m = date.getMonth() + 1
+  const d = date.getDate()
+  const dow = DOW_KANJI[date.getDay()]
+  return `${m}月${d}日（${dow}）`
 }
 
 export function formatDateShort(date: Date): string {

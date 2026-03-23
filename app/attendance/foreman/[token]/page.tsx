@@ -15,8 +15,8 @@ interface ForemanData {
 }
 
 const STATUS_LABELS: Record<AttendanceStatus, string> = {
-  work: 'しゅっきん', overtime: 'ざんぎょう', rest: 'やすみ',
-  leave: 'ゆうきゅう', site_off: 'げんばやすみ', none: 'みにゅうりょく',
+  work: '出勤', overtime: '残業あり', rest: '休み',
+  leave: '有給', site_off: '現場休み', none: '未入力',
 }
 const STATUS_EMOJI: Record<AttendanceStatus, string> = {
   work: '🔨', overtime: '⏰', rest: '🏠', leave: '🌴', site_off: '🚧', none: '❓',
@@ -55,7 +55,7 @@ export default function ForemanAttendancePage() {
       setData(d)
       if (!dateISO) setDateISO(d.date.dateISO)
     } catch {
-      setError('つうしん エラー')
+      setError('通信エラー')
     } finally {
       setLoading(false)
     }
@@ -128,7 +128,7 @@ export default function ForemanAttendancePage() {
   if (loading && !data) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-hibi-navy text-lg">よみこみちゅう...</div>
+        <div className="text-hibi-navy text-lg">読み込み中...</div>
       </div>
     )
   }
@@ -151,7 +151,7 @@ export default function ForemanAttendancePage() {
       {/* Header */}
       <div className="bg-hibi-navy text-white px-4 py-4">
         <div className="max-w-lg mx-auto">
-          <div className="text-sm opacity-70">しょくちょう</div>
+          <div className="text-sm opacity-70">職長</div>
           <div className="text-xl font-bold">{data.foreman.name}</div>
           <div className="text-sm opacity-80 mt-1">{data.site.name}</div>
         </div>
@@ -164,7 +164,7 @@ export default function ForemanAttendancePage() {
             onClick={() => navDay(-1)}
             className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-bold active:bg-gray-200"
           >
-            ◀ まえ
+            ◀ 前日
           </button>
           <div className="text-center">
             <div className="text-base font-bold text-hibi-navy">{data.date.dateLabel}</div>
@@ -174,7 +174,7 @@ export default function ForemanAttendancePage() {
             disabled={isToday}
             className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-bold active:bg-gray-200 disabled:opacity-30"
           >
-            つぎ ▶
+            翌日 ▶
           </button>
         </div>
       </div>
@@ -184,15 +184,15 @@ export default function ForemanAttendancePage() {
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-blue-50 rounded-xl p-3 text-center">
             <div className="text-2xl font-bold text-blue-600">{data.summary.workCount}</div>
-            <div className="text-xs text-blue-500">しゅっきん</div>
+            <div className="text-xs text-blue-500">出勤</div>
           </div>
           <div className="bg-red-50 rounded-xl p-3 text-center">
             <div className="text-2xl font-bold text-red-400">{data.summary.noneCount}</div>
-            <div className="text-xs text-red-400">みにゅうりょく</div>
+            <div className="text-xs text-red-400">未入力</div>
           </div>
           <div className="bg-gray-50 rounded-xl p-3 text-center">
             <div className="text-2xl font-bold text-gray-600">{data.summary.totalCount}</div>
-            <div className="text-xs text-gray-500">ぜんいん</div>
+            <div className="text-xs text-gray-500">全員</div>
           </div>
         </div>
 
@@ -206,7 +206,7 @@ export default function ForemanAttendancePage() {
               : 'bg-hibi-navy text-white active:bg-hibi-light'
           } disabled:opacity-70`}
         >
-          {data.approved ? '✅ かくにんずみ' : '✅ このひを かくにん'}
+          {data.approved ? '✅ 確認済み' : '✅ この日を確認する'}
         </button>
 
         {/* Worker list */}
@@ -232,7 +232,7 @@ export default function ForemanAttendancePage() {
 
         {/* Past days */}
         <div className="bg-white rounded-xl shadow p-4">
-          <div className="text-sm text-gray-500 mb-2 font-bold">さいきん</div>
+          <div className="text-sm text-gray-500 mb-2 font-bold">過去の確認状況</div>
           {data.pastDays.map((pd, i) => (
             <div
               key={i}
@@ -243,7 +243,7 @@ export default function ForemanAttendancePage() {
               <span className={`text-xs px-2 py-1 rounded-full font-bold ${
                 pd.approved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
               }`}>
-                {pd.approved ? '✅ かくにんずみ' : '— みかくにん'}
+                {pd.approved ? '✅ 確認済み' : '— 未確認'}
               </span>
             </div>
           ))}
@@ -259,10 +259,10 @@ export default function ForemanAttendancePage() {
 
             <div className="grid grid-cols-2 gap-3 mb-4">
               {([
-                { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500' },
-                { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400' },
-                { choice: 'leave', emoji: '🌴', label: 'ゆうきゅう', color: 'bg-green-500' },
-                { choice: 'site_off', emoji: '🚧', label: 'げんばやすみ', color: 'bg-yellow-500' },
+                { choice: 'work', emoji: '🔨', label: '出勤', color: 'bg-blue-500' },
+                { choice: 'rest', emoji: '🏠', label: '休み', color: 'bg-gray-400' },
+                { choice: 'leave', emoji: '🌴', label: '有給', color: 'bg-green-500' },
+                { choice: 'site_off', emoji: '🚧', label: '現場休み', color: 'bg-yellow-500' },
               ] as const).map(btn => (
                 <button
                   key={btn.choice}
@@ -278,7 +278,7 @@ export default function ForemanAttendancePage() {
 
             {/* OT input for work */}
             <div className="bg-gray-50 rounded-xl p-3 mb-4">
-              <div className="text-xs text-gray-500 text-center mb-2">ざんぎょう（しゅっきんのとき）</div>
+              <div className="text-xs text-gray-500 text-center mb-2">残業時間（出勤の場合）</div>
               <div className="flex items-center justify-center gap-3">
                 <button
                   onClick={() => setEditOT(Math.max(0, editOT - 0.5))}
@@ -298,7 +298,7 @@ export default function ForemanAttendancePage() {
               onClick={() => setEditingWorker(null)}
               className="w-full bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
             >
-              やめる
+              閉じる
             </button>
           </div>
         </div>

@@ -10,7 +10,7 @@ import {
   getEntryStatus,
   ymKey,
   attKey,
-  formatDateJP,
+  formatDateKanji,
   formatDateShort,
 } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       site: { id: site.id, name: site.name },
       date: {
         year: y, month: m, day: d, ym,
-        dateLabel: formatDateJP(viewDate),
+        dateLabel: formatDateKanji(viewDate),
         dateISO: `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
       },
       workers,
