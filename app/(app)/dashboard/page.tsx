@@ -288,11 +288,33 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      {/* Header */}
+      {/* Header with period selector (matches old app layout) */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-hibi-navy dark:text-blue-300 dark:text-white">ダッシュボード</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{todayStr}</p>
+        <div className="flex items-center gap-4 flex-wrap">
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">ダッシュボード</h1>
+          {data && (
+            <div className="flex items-center gap-1">
+              {data.siteList?.map(s => (
+                <button key={s.id} onClick={() => setSiteFilter(s.id)}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition ${
+                    siteFilter === s.id ? 'bg-hibi-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+                  }`}>{s.id === 'all' ? '全社' : s.name.substring(0, 8) + (s.name.length > 8 ? '...' : '')}</button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {(['monthly','3months','6months','fiscal','yearly'] as const).map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
+              className={`px-3 py-1 rounded text-xs font-bold transition ${
+                period === p ? 'bg-hibi-navy text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300'
+              }`}>
+              {{ monthly: '月次', '3months': '3ヶ月', '6months': '6ヶ月', fiscal: '決算期', yearly: '年間' }[p]}
+            </button>
+          ))}
+          <button onClick={() => navigateMonth(-1)} className="px-2 py-1 text-sm text-gray-500 hover:text-hibi-navy dark:text-gray-400">◀</button>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[70px] text-center">{ymToLabel(ym)}</span>
+          <button onClick={() => navigateMonth(1)} className="px-2 py-1 text-sm text-gray-500 hover:text-hibi-navy dark:text-gray-400">▶</button>
         </div>
       </div>
 
@@ -315,7 +337,7 @@ export default function DashboardPage() {
                         <th className="px-3 py-2 text-left">現場</th>
                         <th className="px-3 py-2 text-right">鳶</th>
                         <th className="px-3 py-2 text-right">土工</th>
-                        <th className="px-3 py-2 text-right">外注</th>
+                        <th className="px-3 py-2 text-right">うち外注</th>
                         <th className="px-3 py-2 text-right">合計</th>
                       </tr>
                     </thead>
@@ -383,7 +405,7 @@ export default function DashboardPage() {
               value={data.kpi.billing === 0 ? '未入力' : formatYenFull(data.kpi.billing)}
               unit={data.kpi.billing === 0 ? '' : ''}
               sub={data.kpi.billing === 0 ? '' : `原価 ${formatYenFull(data.kpi.cost)}`}
-              sub2={data.kpi.billing === 0 ? '' : `粗利率 ${fmtNum(data.kpi.profitRate)}%`}
+              sub2={data.kpi.billing === 0 ? '' : `粗利${formatYenFull(data.kpi.profit)}(${fmtNum(data.kpi.profitRate)}%)`}
               valueColor={data.kpi.billing === 0 ? 'text-gray-400' : profitRateColor(data.kpi.profitRate)}
             />
             {/* 1人あたり労務費 */}
@@ -453,67 +475,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* ═══ 3. Period Selector + 4. Site Tabs ═══ */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 space-y-3">
-            {/* Period buttons */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => navigateMonth(-1)}
-                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg font-medium"
-              >
-                ◀ 前
-              </button>
-              {PERIOD_OPTIONS.map(po => (
-                <button
-                  key={po.key}
-                  onClick={() => setPeriod(po.key)}
-                  className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
-                    period === po.key
-                      ? 'bg-hibi-navy text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {po.label}
-                </button>
-              ))}
-              <button
-                onClick={() => navigateMonth(1)}
-                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg font-medium"
-              >
-                次 ▶
-              </button>
-              <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
-                {ymToLabel(ym)}
-              </span>
-            </div>
-
-            {/* Site tabs */}
-            <div className="flex items-center gap-1 flex-wrap">
-              <button
-                onClick={() => setSiteFilter('all')}
-                className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
-                  siteFilter === 'all'
-                    ? 'bg-hibi-navy text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400'
-                }`}
-              >
-                全社
-              </button>
-              {data.siteList.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => setSiteFilter(s.id)}
-                  className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
-                    siteFilter === s.id
-                      ? 'bg-hibi-navy text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400'
-                  }`}
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/* Period/Site tabs moved to header - this section removed */}
 
           {/* ═══ 4b. Site-specific views (member list, donut, trend) ═══ */}
           {siteFilter !== 'all' && data.siteMembers && data.siteMembers.length > 0 && (
