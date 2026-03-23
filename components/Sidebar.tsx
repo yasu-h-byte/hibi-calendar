@@ -37,6 +37,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
   { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin'] },
   { label: '帳票出力', icon: '📑', href: '/export', section: '管理', roles: ['admin'] },
   // システム
+  { label: 'ユーザー管理', icon: '👤', href: '/users', section: 'システム', roles: ['admin'] },
   { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
   { label: 'アクティビティ', icon: '📝', href: '/activity', section: 'システム', roles: ['admin'] },
   ]

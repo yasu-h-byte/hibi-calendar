@@ -5,7 +5,7 @@ import { fmtPct } from '@/lib/format'
 
 interface PLWorker {
   id: number; name: string; org: string; visa: string; hireDate: string
-  grantDays: number; carryOver: number; adjustment: number; used: number
+  grantDays: number; carryOver: number; adjustment: number; periodUsed: number; used: number
   total: number; remaining: number; rate: number; grantMonth?: number
   grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'
   legalPL: number
@@ -288,6 +288,7 @@ export default function LeavePage() {
               <th className="px-3 py-3 text-right">付与</th>
               <th className="px-3 py-3 text-right">繰越</th>
               <th className="px-3 py-3 text-right">合計</th>
+              <th className="px-3 py-3 text-right">調整</th>
               <th className="px-3 py-3 text-right">消化</th>
               <th className="px-3 py-3 text-right">残</th>
               <th className="px-3 py-3">期限</th>
@@ -297,9 +298,9 @@ export default function LeavePage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : filteredWorkers.length === 0 ? (
-              <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
             ) : filteredWorkers.map(w => {
               const rate = w.total > 0 ? (w.used / w.total * 100) : 0
               return (
@@ -316,6 +317,7 @@ export default function LeavePage() {
                   <td className="px-3 py-2.5 text-right tabular-nums">{w.grantDays}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{w.carryOver}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums font-medium">{w.total}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-500">{w.adjustment > 0 ? w.adjustment : '—'}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{w.used}</td>
                   <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${w.remaining <= 3 ? 'text-red-500' : 'text-green-600'}`}>
                     {w.remaining}

@@ -104,8 +104,9 @@ export async function POST(request: NextRequest) {
       for (const [wid, records] of Object.entries(plData)) {
         const prevRec = records.find(r => r.fy === prevFy)
         if (!prevRec) continue
-        const prevTotal = prevRec.grantDays + prevRec.carryOver + prevRec.adjustment
-        const prevUsed = plUsage[Number(wid)] || 0
+        const prevTotal = prevRec.grantDays + prevRec.carryOver  // adj is NOT part of total
+        const prevPeriodUsed = plUsage[Number(wid)] || 0
+        const prevUsed = prevRec.adjustment + prevPeriodUsed   // adj = pre-existing consumed
         const prevRemaining = Math.max(0, prevTotal - prevUsed)
 
         const curIdx = records.findIndex(r => r.fy === fy)
@@ -198,9 +199,10 @@ export async function GET(request: NextRequest) {
         const carryOver = fyRecord?.carryOver ?? fyRecord?.carry ?? 0
         const adjustment = fyRecord?.adjustment ?? fyRecord?.adj ?? 0
         const grantDate = fyRecord?.grantDate || ''
-        const total = grantDays + carryOver + adjustment
-        const used = plUsage[w.id] || 0
-        const remaining = total - used
+        const total = grantDays + carryOver  // adj is NOT added to total
+        const periodUsed = plUsage[w.id] || 0  // PL days from attendance data
+        const used = adjustment + periodUsed   // adj = pre-existing consumed days
+        const remaining = Math.max(0, total - used)
 
         // Expiry calculation: grantDate + 2 years - 1 day
         let expiryDate = ''
@@ -232,6 +234,7 @@ export async function GET(request: NextRequest) {
           grantDays,
           carryOver,
           adjustment,
+          periodUsed,
           used,
           total,
           remaining: expiryStatus === 'expired' ? 0 : remaining,
