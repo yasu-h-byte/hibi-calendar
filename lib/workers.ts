@@ -15,9 +15,10 @@ export async function getWorkers(): Promise<Worker[]> {
     id: w.id as number,
     name: w.name as string,
     nameVi: (w.nameVi as string) || '',
-    company: (w.company as string) || '日比',
-    visaType: (w.visaType as string) || '',
-    token: w.token as string,
+    company: (w.org as string) === 'hfu' ? 'HFU' : '日比',
+    visaType: (w.visa as string) || '',
+    token: (w.token as string) || '',
+    jobType: (w.job as string) || '',
   }))
 
   return workers
