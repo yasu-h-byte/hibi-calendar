@@ -488,6 +488,70 @@ export async function GET(request: NextRequest) {
       .filter(s => !s.archived)
       .map(s => ({ id: s.id, name: s.name }))
 
+    // Site-specific members and trend (when a specific site is selected)
+    let siteMembers: {
+      id: number; name: string; org: string; visa: string; job: string
+    }[] | null = null
+    let siteTrend: {
+      ym: string; workerCount: number; cost: number; tobi: number; doko: number
+    }[] | null = null
+
+    if (siteFilter !== 'all') {
+      // Get assigned workers for this site
+      const monthKey = `${siteFilter}_${ym}`
+      const mAssign = main.massign[monthKey]
+      const dAssign = main.assign[siteFilter]
+      const workerIds = mAssign?.workers || dAssign?.workers || []
+
+      siteMembers = workerIds
+        .map(wid => main.workers.find(w => w.id === wid && !w.retired))
+        .filter((w): w is typeof main.workers[0] => !!w)
+        .map(w => ({
+          id: w.id,
+          name: w.name,
+          org: w.org,
+          visa: w.visa,
+          job: w.job,
+        }))
+
+      // Site trend: monthly worker count & cost for each month in range
+      siteTrend = ymList.map(m => {
+        const mKey = `${siteFilter}_${m}`
+        const mA = main.massign[mKey]
+        const dA = main.assign[siteFilter]
+        const wids = mA?.workers || dA?.workers || []
+
+        let tobi = 0
+        let doko = 0
+        for (const wid of wids) {
+          const worker = main.workers.find(w => w.id === wid && !w.retired)
+          if (worker) {
+            const job = worker.job || ''
+            if (job === 'とび' || job === 'tobi' || job === '鳶') tobi++
+            else doko++
+          }
+        }
+
+        const mr = monthlyResults.find(r => r.ym === m)
+        let mCost = 0
+        if (mr) {
+          for (const site of mr.sites) {
+            if (site.id === siteFilter) {
+              mCost += site.cost + site.subCost
+            }
+          }
+        }
+
+        return {
+          ym: m,
+          workerCount: tobi + doko,
+          cost: mCost,
+          tobi,
+          doko,
+        }
+      }).sort((a, b) => a.ym.localeCompare(b.ym))
+    }
+
     return NextResponse.json({
       kpi,
       sites: sitesArray,
@@ -501,6 +565,8 @@ export async function GET(request: NextRequest) {
       ymList: ymList.sort(),
       period,
       selectedYm: ym,
+      siteMembers,
+      siteTrend,
     })
   } catch (error) {
     console.error('Dashboard API error:', error)

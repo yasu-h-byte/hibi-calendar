@@ -95,6 +95,22 @@ interface SiteOption {
   name: string
 }
 
+interface SiteMember {
+  id: number
+  name: string
+  org: string
+  visa: string
+  job: string
+}
+
+interface SiteTrendPoint {
+  ym: string
+  workerCount: number
+  cost: number
+  tobi: number
+  doko: number
+}
+
 interface DashboardData {
   kpi: KPI
   sites: SiteRow[]
@@ -108,6 +124,8 @@ interface DashboardData {
   ymList: string[]
   period: string
   selectedYm: string
+  siteMembers: SiteMember[] | null
+  siteTrend: SiteTrendPoint[] | null
 }
 
 // ─── Helpers ───
@@ -428,6 +446,28 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
+
+          {/* ═══ 4b. Site-specific views (member list, donut, trend) ═══ */}
+          {siteFilter !== 'all' && data.siteMembers && data.siteMembers.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Member list with donut */}
+              <Section title="メンバー一覧">
+                <SiteMemberList members={data.siteMembers} />
+              </Section>
+
+              {/* Donut chart: tobi vs doko */}
+              <Section title="職種構成">
+                <DonutChart members={data.siteMembers} />
+              </Section>
+            </div>
+          )}
+
+          {/* Site trend chart */}
+          {siteFilter !== 'all' && data.siteTrend && data.siteTrend.length > 1 && (
+            <Section title="月次推移（人数・原価）">
+              <SiteTrendChart data={data.siteTrend} />
+            </Section>
+          )}
 
           {/* ═══ 5. KPI Trend Line Chart (人工あたりKPI) ═══ */}
           {data.monthlyTrend.length > 1 && (
@@ -812,7 +852,7 @@ function KPICard({
   )
 }
 
-/** CSS-only line chart approximation using dots + connecting segments */
+/** Enhanced SVG line chart with baseline, color-coded dots, Y-axis labels */
 function CSSLineChart({
   data,
   baseline,
@@ -820,6 +860,8 @@ function CSSLineChart({
   data: MonthlyTrend[]
   baseline: number
 }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+
   if (data.length === 0) return null
 
   const allValues = [
@@ -831,86 +873,424 @@ function CSSLineChart({
   const maxVal = Math.max(...allValues, 1)
   const minVal = Math.min(...allValues.filter(v => v > 0), 0)
   const range = maxVal - minVal || 1
-  const chartHeight = 160
 
-  const getY = (val: number) => {
-    return chartHeight - ((val - minVal) / range) * chartHeight
-  }
+  const svgW = 600
+  const svgH = 200
+  const padL = 60
+  const padR = 16
+  const padT = 16
+  const padB = 32
+  const chartW = svgW - padL - padR
+  const chartH = svgH - padT - padB
 
-  const baselineY = getY(baseline)
-  const colWidth = data.length > 0 ? Math.max(100 / data.length, 8) : 10
+  const getX = (i: number) => padL + (data.length > 1 ? (i / (data.length - 1)) * chartW : chartW / 2)
+  const getY = (val: number) => padT + chartH - ((val - minVal) / range) * chartH
+
+  const makePath = (values: number[]) =>
+    values.map((v, i) => `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getY(v).toFixed(1)}`).join(' ')
+
+  const billingPath = makePath(data.map(d => d.billingPerManDay))
+  const costPath = makePath(data.map(d => d.costPerManDay))
+  const profitPath = makePath(data.map(d => d.profitPerManDay))
+
+  const baselineYPos = getY(baseline)
+
+  // Y-axis labels (5 ticks)
+  const yTicks = Array.from({ length: 5 }, (_, i) => {
+    const val = minVal + (range * i) / 4
+    return { val, y: getY(val) }
+  })
 
   return (
-    <div className="relative" style={{ height: `${chartHeight + 40}px` }}>
-      {/* Baseline dashed line */}
-      <div
-        className="absolute left-0 right-0 border-t-2 border-dashed border-gray-400"
-        style={{ top: `${baselineY}px` }}
-      >
-        <span className="absolute -top-4 right-0 text-[10px] text-gray-500">
-          基準 {baseline.toLocaleString()}
-        </span>
-      </div>
+    <div className="space-y-2">
+      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ maxHeight: '240px' }}>
+        {/* Y-axis labels */}
+        {yTicks.map((t, i) => (
+          <g key={i}>
+            <line x1={padL} y1={t.y} x2={svgW - padR} y2={t.y} stroke="#f0f0f0" strokeWidth="1" />
+            <text x={padL - 6} y={t.y + 4} textAnchor="end" className="text-[10px]" fill="#9ca3af" fontSize="10">
+              {`\u00A5${Math.round(t.val / 1000)}k`}
+            </text>
+          </g>
+        ))}
 
-      {/* Data points container */}
-      <div className="absolute inset-0 flex items-start" style={{ paddingTop: 0 }}>
-        {data.map((d, i) => {
-          const billingY = getY(d.billingPerManDay)
-          const costY = getY(d.costPerManDay)
-          const profitY = getY(d.profitPerManDay)
+        {/* Baseline dashed line */}
+        <line
+          x1={padL} y1={baselineYPos} x2={svgW - padR} y2={baselineYPos}
+          stroke="#6b7280" strokeWidth="1.5" strokeDasharray="6 4"
+        />
+        <text x={svgW - padR + 2} y={baselineYPos - 4} fill="#6b7280" fontSize="9" textAnchor="end">
+          {`\u00A5${(baseline / 1000).toFixed(1)}k`}
+        </text>
 
+        {/* Lines */}
+        <path d={billingPath} fill="none" stroke="#3b82f6" strokeWidth="2" />
+        <path d={costPath} fill="none" stroke="#fb923c" strokeWidth="2" />
+        <path d={profitPath} fill="none" stroke="#22c55e" strokeWidth="1.5" strokeDasharray="4 2" />
+
+        {/* Dots - billing (color-coded vs baseline) */}
+        {data.map((d, i) => (
+          <circle
+            key={`b-${i}`}
+            cx={getX(i)} cy={getY(d.billingPerManDay)} r={hoveredIndex === i ? 6 : 4}
+            fill={d.billingPerManDay >= baseline ? '#22c55e' : '#ef4444'}
+            stroke="white" strokeWidth="2"
+            className="transition-all duration-150 cursor-pointer"
+            onMouseEnter={() => setHoveredIndex(i)}
+            onMouseLeave={() => setHoveredIndex(null)}
+          />
+        ))}
+
+        {/* Dots - cost */}
+        {data.map((d, i) => (
+          <circle
+            key={`c-${i}`}
+            cx={getX(i)} cy={getY(d.costPerManDay)} r={3}
+            fill="#fb923c" stroke="white" strokeWidth="1.5"
+          />
+        ))}
+
+        {/* Dots - profit */}
+        {data.map((d, i) => (
+          <circle
+            key={`p-${i}`}
+            cx={getX(i)} cy={getY(d.profitPerManDay)} r={3}
+            fill="#22c55e" stroke="white" strokeWidth="1.5"
+          />
+        ))}
+
+        {/* X-axis labels */}
+        {data.map((d, i) => (
+          <text
+            key={`x-${i}`}
+            x={getX(i)} y={svgH - 4}
+            textAnchor="middle" fill="#9ca3af" fontSize="10"
+          >
+            {ymToShortLabel(d.ym)}
+          </text>
+        ))}
+
+        {/* Hover tooltip */}
+        {hoveredIndex !== null && (() => {
+          const d = data[hoveredIndex]
+          const tx = getX(hoveredIndex)
+          const ty = getY(d.billingPerManDay)
+          const tooltipX = tx > svgW / 2 ? tx - 110 : tx + 10
           return (
-            <div
-              key={d.ym}
-              className="flex flex-col items-center relative"
-              style={{ width: `${colWidth}%` }}
-            >
-              {/* Billing dot */}
-              <div
-                className="absolute w-2.5 h-2.5 rounded-full bg-blue-500 z-10"
-                style={{ top: `${billingY - 5}px` }}
-                title={`売上/人工 ${d.billingPerManDay.toLocaleString()}`}
-              />
-              {/* Cost dot */}
-              <div
-                className="absolute w-2.5 h-2.5 rounded-full bg-orange-400 z-10"
-                style={{ top: `${costY - 5}px` }}
-                title={`原価/人工 ${d.costPerManDay.toLocaleString()}`}
-              />
-              {/* Profit dot */}
-              <div
-                className="absolute w-2.5 h-2.5 rounded-full bg-green-500 z-10"
-                style={{ top: `${profitY - 5}px` }}
-                title={`差益/人工 ${d.profitPerManDay.toLocaleString()}`}
-              />
-              {/* Label */}
-              <div
-                className="absolute text-[10px] text-gray-500 text-center whitespace-nowrap"
-                style={{ top: `${chartHeight + 4}px` }}
-              >
-                {ymToShortLabel(d.ym)}
-              </div>
-            </div>
+            <g>
+              <rect x={tooltipX} y={Math.max(ty - 50, 4)} width="105" height="48" rx="4" fill="white" stroke="#e5e7eb" strokeWidth="1" />
+              <text x={tooltipX + 6} y={Math.max(ty - 50, 4) + 14} fill="#3b82f6" fontSize="10" fontWeight="600">
+                {`売上 \u00A5${Math.round(d.billingPerManDay).toLocaleString()}`}
+              </text>
+              <text x={tooltipX + 6} y={Math.max(ty - 50, 4) + 28} fill="#fb923c" fontSize="10">
+                {`原価 \u00A5${Math.round(d.costPerManDay).toLocaleString()}`}
+              </text>
+              <text x={tooltipX + 6} y={Math.max(ty - 50, 4) + 42} fill="#22c55e" fontSize="10">
+                {`差益 \u00A5${Math.round(d.profitPerManDay).toLocaleString()}`}
+              </text>
+            </g>
           )
-        })}
-      </div>
+        })()}
+      </svg>
 
       {/* Legend */}
-      <div
-        className="absolute left-0 flex items-center gap-4 text-xs text-gray-500"
-        style={{ top: `${chartHeight + 22}px` }}
-      >
+      <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" /> 売上/人工
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" /> 売上/人工 (緑=基準以上 赤=基準未満)
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-orange-400" /> 原価/人工
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" /> 差益/人工
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500 opacity-70" /> 差益/人工
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block w-4 border-t-2 border-dashed border-gray-400" /> 基準
+          <span className="inline-block w-5 border-t-2 border-dashed border-gray-500" /> 基準
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Site-specific components ───
+
+function jobLabel(job: string): string {
+  if (job === 'とび' || job === 'tobi' || job === '鳶') return '鳶'
+  if (job === 'doko' || job === '土工') return '土工'
+  if (job === '職長') return '職長'
+  if (job === '役員') return '役員'
+  return job || '他'
+}
+
+function jobBadgeColor(job: string): string {
+  const label = jobLabel(job)
+  if (label === '鳶') return 'bg-amber-100 text-amber-800'
+  if (label === '土工') return 'bg-stone-100 text-stone-700'
+  if (label === '職長') return 'bg-blue-100 text-blue-800'
+  if (label === '役員') return 'bg-purple-100 text-purple-800'
+  return 'bg-gray-100 text-gray-600'
+}
+
+function orgBadgeColor(org: string): string {
+  return org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'
+}
+
+function visaBadge(visa: string): string {
+  if (visa === 'jisshu') return '技能実習'
+  if (visa === 'tokutei') return '特定技能'
+  if (!visa || visa === 'none' || visa === '') return ''
+  return visa
+}
+
+/** Compact member cards grouped by org */
+function SiteMemberList({ members }: { members: SiteMember[] }) {
+  const hibi = members.filter(m => m.org !== 'hfu')
+  const hfu = members.filter(m => m.org === 'hfu')
+
+  const renderGroup = (label: string, workers: SiteMember[], badgeClass: string) => {
+    if (workers.length === 0) return null
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>{label}</span>
+          <span className="text-xs text-gray-400">{workers.length}名</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {workers.map(w => (
+            <div
+              key={w.id}
+              className="flex flex-col gap-1 p-2 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors"
+            >
+              <span className="font-medium text-sm text-hibi-navy truncate">{w.name}</span>
+              <div className="flex flex-wrap gap-1">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${jobBadgeColor(w.job)}`}>
+                  {jobLabel(w.job)}
+                </span>
+                {visaBadge(w.visa) && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-teal-100 text-teal-700">
+                    {visaBadge(w.visa)}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {renderGroup('日比建設', hibi, 'bg-sky-100 text-sky-700')}
+      {renderGroup('HFU', hfu, 'bg-purple-100 text-purple-700')}
+      {members.length === 0 && (
+        <p className="text-gray-400 text-sm text-center py-4">配置メンバーなし</p>
+      )}
+    </div>
+  )
+}
+
+/** SVG donut chart showing tobi vs doko breakdown */
+function DonutChart({ members }: { members: SiteMember[] }) {
+  const tobi = members.filter(m => {
+    const j = m.job || ''
+    return j === 'とび' || j === 'tobi' || j === '鳶'
+  }).length
+  const doko = members.length - tobi
+  const total = members.length
+
+  if (total === 0) return <p className="text-gray-400 text-sm text-center py-4">データなし</p>
+
+  const tobiPct = total > 0 ? tobi / total : 0
+  const circumference = 2 * Math.PI * 60 // radius=60
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width="180" height="180" viewBox="0 0 180 180">
+        {/* Background circle */}
+        <circle cx="90" cy="90" r="60" fill="none" stroke="#e5e7eb" strokeWidth="24" />
+
+        {/* Doko segment (bottom layer - full circle) */}
+        <circle
+          cx="90" cy="90" r="60" fill="none"
+          stroke="#78716c" strokeWidth="24"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset="0"
+          transform="rotate(-90 90 90)"
+          className="transition-all duration-500"
+        />
+
+        {/* Tobi segment (overlapping from start) */}
+        <circle
+          cx="90" cy="90" r="60" fill="none"
+          stroke="#f59e0b" strokeWidth="24"
+          strokeDasharray={`${tobiPct * circumference} ${circumference}`}
+          strokeDashoffset="0"
+          transform="rotate(-90 90 90)"
+          className="transition-all duration-500"
+        />
+
+        {/* Center text */}
+        <text x="90" y="84" textAnchor="middle" fontSize="28" fontWeight="bold" fill="#1e3a5f">
+          {total}
+        </text>
+        <text x="90" y="104" textAnchor="middle" fontSize="12" fill="#9ca3af">
+          名
+        </text>
+      </svg>
+
+      {/* Legend */}
+      <div className="flex items-center gap-6 mt-2">
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-full bg-amber-500" />
+          <span className="text-sm text-gray-700">鳶 <span className="font-bold">{tobi}</span>名</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-full bg-stone-500" />
+          <span className="text-sm text-gray-700">土工 <span className="font-bold">{doko}</span>名</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** SVG trend chart: worker count (dots+lines) and cost (bars) per month */
+function SiteTrendChart({ data }: { data: SiteTrendPoint[] }) {
+  const [hoveredI, setHoveredI] = useState<number | null>(null)
+
+  if (data.length === 0) return null
+
+  const maxWorkers = Math.max(...data.map(d => d.workerCount), 1)
+  const maxCost = Math.max(...data.map(d => d.cost), 1)
+
+  const svgW = 600
+  const svgH = 200
+  const padL = 48
+  const padR = 48
+  const padT = 16
+  const padB = 32
+  const chartW = svgW - padL - padR
+  const chartH = svgH - padT - padB
+
+  const getX = (i: number) => padL + (data.length > 1 ? (i / (data.length - 1)) * chartW : chartW / 2)
+  const getWorkerY = (v: number) => padT + chartH - (v / maxWorkers) * chartH
+  const getCostY = (v: number) => padT + chartH - (v / maxCost) * chartH
+
+  // Worker count line path
+  const workerPath = data.map((d, i) =>
+    `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getWorkerY(d.workerCount).toFixed(1)}`
+  ).join(' ')
+
+  // Cost line path
+  const costPath = data.map((d, i) =>
+    `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getCostY(d.cost).toFixed(1)}`
+  ).join(' ')
+
+  // Y-axis ticks for workers (left)
+  const workerTicks = Array.from({ length: 5 }, (_, i) => {
+    const val = (maxWorkers * i) / 4
+    return { val: Math.round(val), y: getWorkerY(val) }
+  })
+
+  // Y-axis ticks for cost (right)
+  const costTicks = Array.from({ length: 5 }, (_, i) => {
+    const val = (maxCost * i) / 4
+    return { val, y: getCostY(val) }
+  })
+
+  return (
+    <div className="space-y-2">
+      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ maxHeight: '240px' }}>
+        {/* Grid lines */}
+        {workerTicks.map((t, i) => (
+          <line key={i} x1={padL} y1={t.y} x2={svgW - padR} y2={t.y} stroke="#f0f0f0" strokeWidth="1" />
+        ))}
+
+        {/* Left Y-axis labels (worker count) */}
+        {workerTicks.map((t, i) => (
+          <text key={`wl-${i}`} x={padL - 6} y={t.y + 4} textAnchor="end" fill="#3b82f6" fontSize="10">
+            {t.val}
+          </text>
+        ))}
+        <text x={6} y={padT + chartH / 2} textAnchor="middle" fill="#3b82f6" fontSize="9" transform={`rotate(-90, 6, ${padT + chartH / 2})`}>
+          人数
+        </text>
+
+        {/* Right Y-axis labels (cost in 万) */}
+        {costTicks.map((t, i) => (
+          <text key={`cl-${i}`} x={svgW - padR + 6} y={t.y + 4} textAnchor="start" fill="#f59e0b" fontSize="10">
+            {Math.round(t.val / 10000)}万
+          </text>
+        ))}
+        <text x={svgW - 6} y={padT + chartH / 2} textAnchor="middle" fill="#f59e0b" fontSize="9" transform={`rotate(90, ${svgW - 6}, ${padT + chartH / 2})`}>
+          原価
+        </text>
+
+        {/* Cost line */}
+        <path d={costPath} fill="none" stroke="#f59e0b" strokeWidth="2" opacity="0.7" />
+
+        {/* Worker count line */}
+        <path d={workerPath} fill="none" stroke="#3b82f6" strokeWidth="2.5" />
+
+        {/* Worker dots */}
+        {data.map((d, i) => (
+          <circle
+            key={`wd-${i}`}
+            cx={getX(i)} cy={getWorkerY(d.workerCount)} r={hoveredI === i ? 6 : 4}
+            fill="#3b82f6" stroke="white" strokeWidth="2"
+            className="transition-all duration-150 cursor-pointer"
+            onMouseEnter={() => setHoveredI(i)}
+            onMouseLeave={() => setHoveredI(null)}
+          />
+        ))}
+
+        {/* Cost dots */}
+        {data.map((d, i) => (
+          <circle
+            key={`cd-${i}`}
+            cx={getX(i)} cy={getCostY(d.cost)} r={3}
+            fill="#f59e0b" stroke="white" strokeWidth="1.5"
+          />
+        ))}
+
+        {/* X-axis labels */}
+        {data.map((d, i) => (
+          <text key={`xl-${i}`} x={getX(i)} y={svgH - 4} textAnchor="middle" fill="#9ca3af" fontSize="10">
+            {ymToShortLabel(d.ym)}
+          </text>
+        ))}
+
+        {/* Hover tooltip */}
+        {hoveredI !== null && (() => {
+          const d = data[hoveredI]
+          const tx = getX(hoveredI)
+          const ty = getWorkerY(d.workerCount)
+          const tooltipX = tx > svgW / 2 ? tx - 115 : tx + 10
+          return (
+            <g>
+              <rect x={tooltipX} y={Math.max(ty - 60, 4)} width="110" height="55" rx="4" fill="white" stroke="#e5e7eb" strokeWidth="1" />
+              <text x={tooltipX + 6} y={Math.max(ty - 60, 4) + 14} fill="#3b82f6" fontSize="10" fontWeight="600">
+                {`人数: ${d.workerCount}名`}
+              </text>
+              <text x={tooltipX + 6} y={Math.max(ty - 60, 4) + 28} fill="#f59e0b" fontSize="10">
+                {`原価: ${formatMan(d.cost)}万`}
+              </text>
+              <text x={tooltipX + 6} y={Math.max(ty - 60, 4) + 42} fill="#f59e0b" fontSize="10">
+                {`鳶 ${d.tobi} / 土工 ${d.doko}`}
+              </text>
+            </g>
+          )
+        })()}
+      </svg>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" /> 人数
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500" /> 原価
         </span>
       </div>
     </div>
