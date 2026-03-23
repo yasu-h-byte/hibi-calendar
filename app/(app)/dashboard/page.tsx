@@ -294,11 +294,15 @@ export default function DashboardPage() {
           <h1 className="text-xl font-bold text-hibi-navy dark:text-white">ダッシュボード</h1>
           {data && (
             <div className="flex items-center gap-1">
-              {data.siteList?.map(s => (
+              <button onClick={() => setSiteFilter('all')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
+                  siteFilter === 'all' ? 'bg-hibi-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
+                }`}>全社</button>
+              {data.siteList?.filter(s => s.id !== 'all').map(s => (
                 <button key={s.id} onClick={() => setSiteFilter(s.id)}
-                  className={`px-3 py-1 rounded-full text-xs font-bold transition ${
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
                     siteFilter === s.id ? 'bg-hibi-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
-                  }`}>{s.id === 'all' ? '全社' : s.name.substring(0, 8) + (s.name.length > 8 ? '...' : '')}</button>
+                  }`}>{s.name.substring(0, 10) + (s.name.length > 10 ? '...' : '')}</button>
               ))}
             </div>
           )}
