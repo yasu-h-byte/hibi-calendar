@@ -8,16 +8,24 @@ function checkAuth(request: NextRequest): boolean {
 }
 
 /** Resolve tobiRate for a site at a given ym, considering period-aware rates */
-function resolveTobiRate(site: { tobiRate?: number; dokoRate?: number; rates?: { period: string; tobiRate: number; dokoRate: number }[] }, ym: string, defaultRates?: { tobiRate?: number; dokoRate?: number }): number {
+function resolveTobiRate(site: { tobiRate?: number; dokoRate?: number; rates?: { period?: string; date?: string; tobiRate: number; dokoRate: number }[] }, ym: string, defaultRates?: { tobiRate?: number; dokoRate?: number }): number {
   // Check period-aware rates first
   if (site.rates && site.rates.length > 0) {
-    // Find rate whose period covers ym (period format: "202401-202412" or just "202401")
-    for (const r of site.rates) {
-      const parts = r.period.split('-')
-      const start = parts[0]
-      const end = parts[1] || parts[0]
-      if (ym >= start && ym <= end) return r.tobiRate
+    // Sort by date descending, find the latest rate that applies
+    const sorted = [...site.rates]
+      .filter(r => r.tobiRate > 0)
+      .sort((a, b) => {
+        const dateA = a.date || a.period || ''
+        const dateB = b.date || b.period || ''
+        return dateB.localeCompare(dateA)
+      })
+    // Find latest rate whose date is <= ym (convert date "2025-10-01" to "202510" for comparison)
+    for (const r of sorted) {
+      const rDate = (r.date || r.period || '').replace(/-/g, '').substring(0, 6)
+      if (rDate && rDate <= ym) return r.tobiRate
     }
+    // If no date match, use the first rate with a value
+    if (sorted.length > 0) return sorted[0].tobiRate
   }
   // Fallback to site-level tobiRate
   if (site.tobiRate && site.tobiRate > 0) return site.tobiRate
