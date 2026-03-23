@@ -14,11 +14,17 @@ interface MenuItem {
 
 const DEMMEN_URL = 'https://dedura-kanri.web.app'
 
-const menuItems: MenuItem[] = [
-  // メイン
-  { label: 'ダッシュボード', icon: '📊', external: `${DEMMEN_URL}?role=admin`, section: 'メイン', roles: ['admin', 'approver'] },
-  { label: '出面入力', icon: '📋', external: `${DEMMEN_URL}?role=input`, section: 'メイン', roles: ['admin', 'approver', 'foreman'] },
-  { label: '就業カレンダー', icon: '📅', href: '/calendar', section: 'メイン', roles: ['admin', 'approver', 'foreman'] },
+function buildMenuItems(user: AuthUser): MenuItem[] {
+  // 職長はforeman画面へ、admin/approverは旧アプリへ
+  const attItem: MenuItem = user.role === 'foreman' && user.token
+    ? { label: '出面入力', icon: '📋', href: `/attendance/foreman/${user.token}`, section: 'メイン', roles: ['foreman'] }
+    : { label: '出面入力', icon: '📋', external: `${DEMMEN_URL}?role=input`, section: 'メイン', roles: ['admin', 'approver'] }
+
+  return [
+    // メイン
+    { label: 'ダッシュボード', icon: '📊', external: `${DEMMEN_URL}?role=admin`, section: 'メイン', roles: ['admin', 'approver'] },
+    attItem,
+    { label: '就業カレンダー', icon: '📅', href: '/calendar', section: 'メイン', roles: ['admin', 'approver', 'foreman'] },
   // マスタ
   { label: '月次集計', icon: '📊', external: `${DEMMEN_URL}?role=keiri`, section: 'マスタ', roles: ['admin', 'approver'] },
   { label: '人員マスタ', icon: '👷', external: `${DEMMEN_URL}?role=admin#workers`, section: 'マスタ', roles: ['admin'] },
@@ -26,12 +32,14 @@ const menuItems: MenuItem[] = [
   // 管理
   { label: '有給管理', icon: '🌴', external: `${DEMMEN_URL}?role=admin#leave`, section: '管理', roles: ['admin', 'approver'] },
   { label: '原価・収益', icon: '💰', external: `${DEMMEN_URL}?role=admin#cost`, section: '管理', roles: ['admin'] },
-]
+  ]
+}
 
 export default function Sidebar({ user, open, onClose }: { user: AuthUser; open: boolean; onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
 
+  const menuItems = buildMenuItems(user)
   const filteredItems = menuItems.filter(item => item.roles.includes(user.role))
 
   const sections = Array.from(new Set(filteredItems.map(i => i.section)))

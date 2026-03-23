@@ -23,5 +23,6 @@ export function buildAuthUser(worker: Worker, sites: Site[]): AuthUser {
     name: worker.name,
     role,
     foremanSites,
+    token: worker.token || undefined,
   }
 }

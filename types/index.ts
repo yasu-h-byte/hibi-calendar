@@ -66,4 +66,21 @@ export interface AuthUser {
   name: string
   role: UserRole
   foremanSites: string[] // site IDs where this user is foreman
+  token?: string
+}
+
+// 出面データ
+export interface AttendanceEntry {
+  w: number       // 1=出勤, 0=不在
+  o?: number      // 残業時間 (0.5〜8)
+  r?: number      // 1=休み
+  p?: number      // 1=有給
+  h?: number      // 1=現場休み
+  s?: string      // 'staff' | 'foreman'
+}
+
+export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_off' | 'none'
+
+export interface AttendanceApproval {
+  foreman?: { by: number; at: string }
 }

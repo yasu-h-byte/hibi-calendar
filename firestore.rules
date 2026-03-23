@@ -42,11 +42,10 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if hasRole();
     }
-    // 月別出面データ（att_YYYYMM）
+    // 月別出面データ（att_YYYYMM）— 新アプリ（トークン認証）からも読み書き可能
     match /demmen/{docId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated()
-        && docId.matches('att_[0-9]{6}');
+      allow read: if true;
+      allow write: if docId.matches('att_[0-9]{6}');
     }
 
     // ────────────────────────────────────────
@@ -78,6 +77,11 @@ service cloud.firestore {
 
     // 現場別カレンダー割当データ
     match /siteCalendar/{docId} {
+      allow read, write: if true;
+    }
+
+    // 出面承認データ（新アプリ用）
+    match /attendanceApprovals/{docId} {
       allow read, write: if true;
     }
   }
