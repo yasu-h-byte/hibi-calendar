@@ -144,7 +144,8 @@ export function computeMonthly(
   sites: SiteSummary[]
   totals: { workDays: number; subWorkDays: number; cost: number; subCost: number; billing: number; profit: number; otHours: number }
 } {
-  const activeSites = main.sites.filter(s => !s.archived)
+  // Include all sites (even archived) - they may have had activity in the selected period
+  const activeSites = main.sites
 
   // Worker monthly
   const workerMap = new Map<number, WorkerMonthly>()

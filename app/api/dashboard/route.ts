@@ -273,7 +273,8 @@ export async function GET(request: NextRequest) {
       cost: number; subCost: number; billing: number; profit: number
     }>()
 
-    for (const site of main.sites.filter(s => !s.archived)) {
+    // Include all sites (even archived) for historical data
+    for (const site of main.sites) {
       aggregatedSites.set(site.id, {
         id: site.id, name: site.name,
         workDays: 0, subWorkDays: 0, otHours: 0,
@@ -441,7 +442,7 @@ export async function GET(request: NextRequest) {
       const daysInMonth = new Date(y2, m2, 0).getDate()
       for (let d = 1; d <= daysInMonth; d++) {
         const daySites: { siteId: string; siteName: string; count: number }[] = []
-        for (const site of main.sites.filter(s => !s.archived)) {
+        for (const site of main.sites) {
           if (siteFilter !== 'all' && site.id !== siteFilter) continue
           let count = 0
           const monthKey = `${site.id}_${currentMonthYm}`
@@ -516,10 +517,9 @@ export async function GET(request: NextRequest) {
     }))
     const foreignWorkerRates = computeForeignWorkerRates(main, fwMonthlyResults, ymList)
 
-    // Site list for tab selector
+    // Site list for tab selector (include archived sites with label)
     const siteList = main.sites
-      .filter(s => !s.archived)
-      .map(s => ({ id: s.id, name: s.name }))
+      .map(s => ({ id: s.id, name: s.name + (s.archived ? '（終了）' : '') }))
 
     // Site-specific members and trend (when a specific site is selected)
     let siteMembers: {
@@ -741,7 +741,6 @@ export async function GET(request: NextRequest) {
       prevTotal: Math.round(prevTotalLabor),
       changeRate: prevTotalLabor > 0 ? ((currentTotalLabor - prevTotalLabor) / prevTotalLabor) * 100 : 0,
       sites: main.sites
-        .filter(s => !s.archived)
         .filter(s => siteFilter === 'all' || s.id === siteFilter)
         .map(s => {
           const cur = currentLaborBySite.get(s.id) || 0
