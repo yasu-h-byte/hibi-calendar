@@ -108,10 +108,12 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
         }`}
       >
         {/* Header - Logo */}
-        <div className="p-4 border-b border-white/10">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-full max-w-[160px] brightness-0 invert" />
-          <p className="text-xs text-white/60 mt-2">鳶事業部 管理システム</p>
+        <div className="px-4 pt-5 pb-4 border-b border-white/10">
+          <div className="bg-white rounded-lg p-3 inline-block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-[140px]" />
+          </div>
+          <p className="text-xs text-white/50 mt-2">鳶事業部 出面管理</p>
         </div>
 
         {/* User info */}
