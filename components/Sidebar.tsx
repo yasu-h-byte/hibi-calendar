@@ -22,16 +22,16 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
 
   return [
     // メイン
-    { label: 'ダッシュボード', icon: '📊', external: `${DEMMEN_URL}?role=admin`, section: 'メイン', roles: ['admin', 'approver'] },
+    { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: 'メイン', roles: ['admin', 'approver'] },
     attItem,
     { label: '就業カレンダー', icon: '📅', href: '/calendar', section: 'メイン', roles: ['admin', 'approver', 'foreman'] },
   // マスタ
-  { label: '月次集計', icon: '📊', external: `${DEMMEN_URL}?role=keiri`, section: 'マスタ', roles: ['admin', 'approver'] },
+  { label: '月次集計', icon: '📋', href: '/monthly', section: 'マスタ', roles: ['admin', 'approver'] },
   { label: '人員マスタ', icon: '👷', href: '/workers', section: 'マスタ', roles: ['admin'] },
-  { label: '現場マスタ', icon: '🏗', external: `${DEMMEN_URL}?role=admin#sites`, section: 'マスタ', roles: ['admin'] },
+  { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ', roles: ['admin'] },
   // 管理
-  { label: '有給管理', icon: '🌴', external: `${DEMMEN_URL}?role=admin#leave`, section: '管理', roles: ['admin', 'approver'] },
-  { label: '原価・収益', icon: '💰', external: `${DEMMEN_URL}?role=admin#cost`, section: '管理', roles: ['admin'] },
+  { label: '有給管理', icon: '🌴', href: '/leave', section: '管理', roles: ['admin', 'approver'] },
+  { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin'] },
   ]
 }
 
