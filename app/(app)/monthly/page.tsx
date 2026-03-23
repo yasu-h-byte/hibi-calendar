@@ -293,7 +293,7 @@ export default function MonthlyPage() {
             <h1 className="text-xl font-bold text-hibi-navy">月次集計</h1>
             {data && (
               <p className="text-sm text-gray-500 mt-1">
-                出勤延べ {data.totals.workDays}人日 / 外注 {data.totals.subWorkDays}人工 / 残業 {data.totals.otHours}h
+                出勤延べ {Number.isInteger(data.totals.workDays) ? data.totals.workDays : data.totals.workDays.toFixed(1)}人日 / 外注 {data.totals.subWorkDays}人工 / 残業 {data.totals.otHours}h
               </p>
             )}
           </div>

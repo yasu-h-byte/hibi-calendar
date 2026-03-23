@@ -112,19 +112,25 @@ interface DashboardData {
 
 // ─── Helpers ───
 
+// 小数点.0を除去（91.0→91, 267.4→267.4）
+function fmtNum(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
 function formatMan(value: number): string {
-  return (value / 10000).toFixed(1)
+  const v = value / 10000
+  return Number.isInteger(v) ? String(v) : v.toFixed(1)
 }
 
 function formatYen(value: number): string {
   if (Math.abs(value) >= 10000) {
-    return `${(value / 10000).toFixed(1)}万`
+    return `¥${formatMan(value)}万`
   }
-  return value.toLocaleString()
+  return `¥${value.toLocaleString()}`
 }
 
 function formatYenFull(value: number): string {
-  return `${(value / 10000).toFixed(0)}万`
+  return `¥${Math.round(value / 10000).toLocaleString()}万`
 }
 
 function profitRateColor(rate: number): string {
@@ -328,35 +334,35 @@ export default function DashboardPage() {
             {/* 総人工数 */}
             <KPICard
               title="総人工数"
-              value={data.kpi.totalManDays.toFixed(1)}
+              value={fmtNum(data.kpi.totalManDays)}
               unit="人工"
-              sub={`自社 ${data.kpi.inHouseManDays.toFixed(1)} / 外注 ${data.kpi.subconManDays.toFixed(1)}`}
-              sub2={`外注率 ${data.kpi.subconRate.toFixed(1)}%`}
+              sub={`自社 ${fmtNum(data.kpi.inHouseManDays)} / 外注 ${fmtNum(data.kpi.subconManDays)}`}
+              sub2={`外注率 ${fmtNum(data.kpi.subconRate)}%`}
             />
             {/* 概算売上 */}
             <KPICard
               title="概算売上"
-              value={formatMan(data.kpi.billing)}
-              unit="万円"
-              sub={`原価 ${formatMan(data.kpi.cost)}万`}
-              sub2={`粗利率 ${data.kpi.profitRate.toFixed(1)}%`}
+              value={formatYenFull(data.kpi.billing)}
+              unit=""
+              sub={`原価 ${formatYenFull(data.kpi.cost)}`}
+              sub2={`粗利率 ${fmtNum(data.kpi.profitRate)}%`}
               valueColor={profitRateColor(data.kpi.profitRate)}
             />
             {/* 1人あたり労務費 */}
             <KPICard
               title="1人あたり労務費"
-              value={data.kpi.laborCostPerPersonAll > 0 ? formatYen(data.kpi.laborCostPerPersonAll) : '-'}
-              unit="円"
-              sub={`外注込み ${data.kpi.laborCostPerPersonAll > 0 ? formatYen(data.kpi.laborCostPerPersonAll) : '-'}`}
-              sub2={`社員のみ ${data.kpi.laborCostPerPerson > 0 ? formatYen(data.kpi.laborCostPerPerson) : '-'}`}
+              value={data.kpi.laborCostPerPersonAll > 0 ? `¥${Math.round(data.kpi.laborCostPerPersonAll).toLocaleString()}` : '-'}
+              unit="/人工"
+              sub={`外注込み ¥${Math.round(data.kpi.laborCostPerPersonAll).toLocaleString()}`}
+              sub2={`社員のみ ¥${Math.round(data.kpi.laborCostPerPerson).toLocaleString()}`}
             />
             {/* 人工あたり売上 */}
             <KPICard
               title="人工あたり売上"
-              value={data.kpi.billingPerManDay > 0 ? formatYen(data.kpi.billingPerManDay) : '-'}
-              unit="円"
-              sub={`基準 \\${data.kpi.billingPerManDayBaseline.toLocaleString()}`}
-              sub2={`対比 ${data.kpi.billingPerManDayRate.toFixed(1)}%`}
+              value={data.kpi.billingPerManDay > 0 ? `¥${Math.round(data.kpi.billingPerManDay).toLocaleString()}` : '-'}
+              unit="/人工"
+              sub={`基準 ¥${data.kpi.billingPerManDayBaseline.toLocaleString()}`}
+              sub2={`対比 ${fmtNum(data.kpi.billingPerManDayRate)}%`}
               valueColor={data.kpi.billingPerManDayRate >= 100 ? 'text-green-600' : 'text-red-600'}
             />
           </div>
@@ -456,10 +462,10 @@ export default function DashboardPage() {
                     .map(site => (
                     <tr key={site.id} className="border-b border-gray-50 hover:bg-gray-50">
                       <td className="px-3 py-2 font-medium text-hibi-navy whitespace-nowrap">{site.name}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{site.inHouseWorkDays.toFixed(1)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{site.subconWorkDays.toFixed(1)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.inHouseWorkDays)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.subconWorkDays)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{site.subconRate.toFixed(1)}%</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{site.otHours.toFixed(1)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.otHours)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{formatMan(site.cost)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{formatMan(site.billing)}</td>
                       <td className={`px-3 py-2 text-right tabular-nums font-semibold ${profitRateColor(site.profitRate)}`}>
@@ -511,17 +517,17 @@ export default function DashboardPage() {
                           <div
                             className="h-full bg-blue-500 rounded-l"
                             style={{ width: `${maxVal > 0 ? (site.inHouseWorkDays / maxVal) * 100 : 0}%` }}
-                            title={`自社 ${site.inHouseWorkDays.toFixed(1)}`}
+                            title={`自社 ${fmtNum(site.inHouseWorkDays)}`}
                           />
                           <div
                             className="h-full bg-orange-400"
                             style={{ width: `${maxVal > 0 ? (site.subconWorkDays / maxVal) * 100 : 0}%` }}
-                            title={`外注 ${site.subconWorkDays.toFixed(1)}`}
+                            title={`外注 ${fmtNum(site.subconWorkDays)}`}
                           />
                         </div>
                         <div className="flex gap-3 text-xs text-gray-500">
-                          <span>自社 {site.inHouseWorkDays.toFixed(1)}</span>
-                          <span>外注 {site.subconWorkDays.toFixed(1)}</span>
+                          <span>自社 {fmtNum(site.inHouseWorkDays)}</span>
+                          <span>外注 {fmtNum(site.subconWorkDays)}</span>
                         </div>
                       </div>
                     )
