@@ -45,6 +45,19 @@ export interface PLRecord {
   used: number
 }
 
+/** Convert old billing format (single number) to new format (array) */
+function normalizeBilling(raw: Record<string, unknown>): Record<string, number[]> {
+  const result: Record<string, number[]> = {}
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === 'number') {
+      result[k] = [v]
+    } else if (Array.isArray(v)) {
+      result[k] = v as number[]
+    }
+  }
+  return result
+}
+
 export async function getMainData(): Promise<MainData> {
   const docSnap = await getDoc(doc(db, 'demmen', 'main'))
   if (!docSnap.exists()) throw new Error('Main doc not found')
@@ -55,7 +68,7 @@ export async function getMainData(): Promise<MainData> {
     subcons: (d.subcons || []) as RawSubcon[],
     assign: (d.assign || {}) as MainData['assign'],
     massign: (d.massign || {}) as Record<string, { workers?: number[]; subcons?: string[] }>,
-    billing: (d.billing || {}) as Record<string, number[]>,
+    billing: normalizeBilling((d.billing || {}) as Record<string, unknown>),
     workDays: (d.workDays || {}) as Record<string, number>,
     locks: (d.locks || {}) as Record<string, boolean>,
     plData: (d.plData || {}) as Record<string, PLRecord[]>,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
 
 async function getMainDoc() {
   const docRef = doc(db, 'demmen', 'main')
@@ -62,7 +62,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'No data found' }, { status: 404 })
       }
 
-      return NextResponse.json({ backup: result.data })
+      // Also export all att_YYYYMM documents (attendance data)
+      const attDocs: Record<string, Record<string, unknown>> = {}
+      const colRef = collection(db, 'demmen')
+      const colSnap = await getDocs(colRef)
+      for (const docSnap of colSnap.docs) {
+        if (docSnap.id.startsWith('att_')) {
+          attDocs[docSnap.id] = docSnap.data()
+        }
+      }
+
+      return NextResponse.json({
+        backup: {
+          ...result.data,
+          _attDocs: attDocs,
+        },
+      })
     }
 
     if (action === 'restore') {
@@ -76,8 +91,23 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'workers または sites フィールドが見つかりません。有効なバックアップファイルか確認してください' }, { status: 400 })
       }
 
+      // Separate attendance docs from main data
+      const attDocs = (data._attDocs || {}) as Record<string, Record<string, unknown>>
+      const mainData = { ...data }
+      delete mainData._attDocs
+
+      // Restore main document
       const docRef = doc(db, 'demmen', 'main')
-      await setDoc(docRef, data)
+      await setDoc(docRef, mainData)
+
+      // Restore attendance documents
+      for (const [attDocId, attDocData] of Object.entries(attDocs)) {
+        if (attDocId.startsWith('att_') && attDocData && typeof attDocData === 'object') {
+          const attDocRef = doc(db, 'demmen', attDocId)
+          await setDoc(attDocRef, attDocData)
+        }
+      }
+
       return NextResponse.json({ success: true })
     }
 

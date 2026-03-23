@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData } from '@/lib/compute'
+import { getApprovalForDay } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
 
 export async function GET(request: NextRequest) {
@@ -81,11 +82,17 @@ export async function GET(request: NextRequest) {
     const foremanWorker = main.workers.find(w => w.id === site.foreman)
     const foremanName = foremanWorker?.name || ''
 
-    // Approval status per day (from att doc approvals field)
+    // Approval status per day
+    // Check both the attendanceApprovals collection (new) and att doc approvals field (legacy)
     const approvals: Record<number, boolean> = {}
     for (let d = 1; d <= daysInMonth; d++) {
       const approvalKey = `${siteId}_${ym}_${String(d)}`
-      if (att.approvals?.[approvalKey]) {
+      // Check attendanceApprovals collection first (where foreman writes)
+      const collectionApproval = await getApprovalForDay(siteId, ym, d)
+      if (collectionApproval?.foreman) {
+        approvals[d] = true
+      } else if (att.approvals?.[approvalKey]) {
+        // Fallback: legacy approvals stored inside att_ document
         approvals[d] = true
       }
     }

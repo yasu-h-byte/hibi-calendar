@@ -12,6 +12,7 @@ interface BackupPreview {
   siteCount: number
   subconCount: number
   hasAttendance: boolean
+  attendanceMonths: number
   hasCalendars: boolean
   raw: Record<string, unknown>
 }
@@ -137,11 +138,14 @@ export default function SettingsPage() {
         const workers = Array.isArray(raw.workers) ? raw.workers : []
         const sites = Array.isArray(raw.sites) ? raw.sites : []
         const subcons = Array.isArray(raw.subcons) ? raw.subcons : []
+        const attDocs = (raw._attDocs || {}) as Record<string, unknown>
+        const attMonthCount = Object.keys(attDocs).filter(k => k.startsWith('att_')).length
         setImportPreview({
           workerCount: workers.length,
           siteCount: sites.length,
           subconCount: subcons.length,
-          hasAttendance: !!raw.attend,
+          hasAttendance: attMonthCount > 0 || !!raw.attend,
+          attendanceMonths: attMonthCount,
           hasCalendars: !!raw.calendars,
           raw,
         })
@@ -319,7 +323,9 @@ export default function SettingsPage() {
               <div className="text-gray-600 dark:text-gray-400">外注先数:</div>
               <div className="font-medium">{importPreview.subconCount}件</div>
               <div className="text-gray-600 dark:text-gray-400">出面データ:</div>
-              <div className="font-medium">{importPreview.hasAttendance ? 'あり' : 'なし'}</div>
+              <div className="font-medium">
+                {importPreview.hasAttendance ? `あり${importPreview.attendanceMonths > 0 ? `（${importPreview.attendanceMonths}ヶ月分）` : ''}` : 'なし'}
+              </div>
               <div className="text-gray-600 dark:text-gray-400">カレンダーデータ:</div>
               <div className="font-medium">{importPreview.hasCalendars ? 'あり' : 'なし'}</div>
             </div>
