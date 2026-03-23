@@ -101,7 +101,7 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
     let wPL = 0
 
     for (let d = 1; d <= numDays; d++) {
-      const dd = String(d).padStart(2, '0')
+      const dd = String(d)
       // Check all sites for this worker on this day
       let dayVal = '-'
       let dayOT = 0
@@ -204,7 +204,7 @@ export function generateHfuAttendance(data: HibiAttendanceData): XLSX.WorkBook {
     let wPL = 0
 
     for (let d = 1; d <= numDays; d++) {
-      const dd = String(d).padStart(2, '0')
+      const dd = String(d)
       let dayVal = '-'
       let dayOT = 0
       let isPL = false
@@ -282,7 +282,7 @@ export function generateSubconConfirmation(data: SubconConfirmationData): XLSX.W
   let totalON = 0
 
   for (let d = 1; d <= numDays; d++) {
-    const dd = String(d).padStart(2, '0')
+    const dd = String(d)
     let dayN = 0
     let dayON = 0
     const siteNames: string[] = []

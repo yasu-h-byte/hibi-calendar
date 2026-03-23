@@ -130,7 +130,7 @@ function computeTodayStatus(
     const workerIds = mAssign?.workers || dAssign?.workers || []
 
     for (const wid of workerIds) {
-      const key = `${site.id}_${wid}_${ym}_${String(day).padStart(2, '0')}`
+      const key = `${site.id}_${wid}_${ym}_${String(day)}`
       const entry = attD[key]
 
       if (entry && entry.w === 1) {
@@ -148,7 +148,7 @@ function computeTodayStatus(
     let gaichuCount = 0
     const subconIds = mAssign?.subcons || dAssign?.subcons || []
     for (const scid of subconIds) {
-      const key = `${site.id}_${scid}_${ym}_${String(day).padStart(2, '0')}`
+      const key = `${site.id}_${scid}_${ym}_${String(day)}`
       const sdEntry = attSD[key]
       if (sdEntry && sdEntry.n && sdEntry.n > 0) gaichuCount += sdEntry.n
     }
@@ -416,7 +416,7 @@ export async function GET(request: NextRequest) {
           const dAssign = main.assign[site.id]
           const workerIds = mAssign?.workers || dAssign?.workers || []
           for (const wid of workerIds) {
-            const key = `${site.id}_${wid}_${currentMonthYm}_${String(d).padStart(2, '0')}`
+            const key = `${site.id}_${wid}_${currentMonthYm}_${String(d)}`
             const entry = currentMonthAtt.d[key]
             if (entry && entry.w === 1) count++
           }

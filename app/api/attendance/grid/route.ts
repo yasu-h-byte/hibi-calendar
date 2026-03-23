@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     for (const w of workers) {
       workerEntries[w.id] = {}
       for (let d = 1; d <= daysInMonth; d++) {
-        const key = `${siteId}_${w.id}_${ym}_${String(d).padStart(2, '0')}`
+        const key = `${siteId}_${w.id}_${ym}_${String(d)}`
         if (att.d[key]) workerEntries[w.id][d] = att.d[key]
       }
     }
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     for (const sc of subcons) {
       subconEntries[sc.id] = {}
       for (let d = 1; d <= daysInMonth; d++) {
-        const key = `${siteId}_${sc.id}_${ym}_${String(d).padStart(2, '0')}`
+        const key = `${siteId}_${sc.id}_${ym}_${String(d)}`
         if (att.sd[key]) subconEntries[sc.id][d] = att.sd[key]
       }
     }
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     // Approval status per day (from att doc approvals field)
     const approvals: Record<number, boolean> = {}
     for (let d = 1; d <= daysInMonth; d++) {
-      const approvalKey = `${siteId}_${ym}_${String(d).padStart(2, '0')}`
+      const approvalKey = `${siteId}_${ym}_${String(d)}`
       if (att.approvals?.[approvalKey]) {
         approvals[d] = true
       }
@@ -154,12 +154,12 @@ export async function POST(request: NextRequest) {
     const docRef = doc(db, 'demmen', `att_${ym}`)
 
     if (workerId !== undefined && entry !== undefined) {
-      const key = `${siteId}_${workerId}_${ym}_${String(day).padStart(2, '0')}`
+      const key = `${siteId}_${workerId}_${ym}_${String(day)}`
       await setDoc(docRef, { d: { [key]: entry } }, { merge: true })
     }
 
     if (subconId !== undefined && subconEntry !== undefined) {
-      const key = `${siteId}_${subconId}_${ym}_${String(day).padStart(2, '0')}`
+      const key = `${siteId}_${subconId}_${ym}_${String(day)}`
       await setDoc(docRef, { sd: { [key]: subconEntry } }, { merge: true })
     }
 

@@ -38,7 +38,7 @@ export function formatDateShort(date: Date): string {
 }
 
 export function attKey(siteId: string, workerId: number, ym: string, day: number): string {
-  return `${siteId}_${workerId}_${ym}_${String(day).padStart(2, '0')}`
+  return `${siteId}_${workerId}_${ym}_${String(day)}`
 }
 
 // ────────────────────────────────────────
@@ -121,7 +121,7 @@ export async function getApprovalForDay(
   ym: string,
   day: number
 ): Promise<AttendanceApproval | null> {
-  const docId = `${siteId}_${ym}_${String(day).padStart(2, '0')}`
+  const docId = `${siteId}_${ym}_${String(day)}`
   const docRef = doc(db, 'attendanceApprovals', docId)
   const docSnap = await getDoc(docRef)
   if (!docSnap.exists()) return null
@@ -134,7 +134,7 @@ export async function setApprovalForDay(
   day: number,
   foremanId: number
 ): Promise<void> {
-  const docId = `${siteId}_${ym}_${String(day).padStart(2, '0')}`
+  const docId = `${siteId}_${ym}_${String(day)}`
   const docRef = doc(db, 'attendanceApprovals', docId)
   await setDoc(docRef, {
     foreman: { by: foremanId, at: new Date().toISOString() }
