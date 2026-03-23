@@ -24,10 +24,11 @@ export async function GET(request: NextRequest) {
   try {
     const main = await getMainData()
     const att = await getAttData(ym)
-    const result = computeMonthly(main, att.d, att.sd, ym)
+    const prescribedDays = main.workDays[ym] || 0
+    const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays)
 
     const locked = !!(main.locks[ym])
-    const workDays = main.workDays[ym] || 0
+    const workDays = prescribedDays
 
     // Site name map for frontend display
     const siteNames: Record<string, string> = {}
@@ -42,6 +43,7 @@ export async function GET(request: NextRequest) {
       totals: result.totals,
       locked,
       workDays,
+      prescribedDays,
       siteNames,
     })
   } catch (error) {

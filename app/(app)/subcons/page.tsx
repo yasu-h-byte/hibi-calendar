@@ -48,7 +48,10 @@ export default function SubconsPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const openAdd = () => { setEditId(null); setForm(EMPTY_FORM); setShowModal(true) }
+  const openAdd = () => {
+    if (subcons.length >= 20) { alert('外注先は最大20社までです'); return }
+    setEditId(null); setForm(EMPTY_FORM); setShowModal(true)
+  }
   const openEdit = (sc: Subcon) => {
     setEditId(sc.id)
     setForm({ name: sc.name, type: sc.type, rate: String(sc.rate || ''), otRate: String(sc.otRate || ''), note: sc.note || '' })

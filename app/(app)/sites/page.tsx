@@ -282,7 +282,7 @@ export default function SitesPage() {
   }
 
   const activeWorkers = workers.filter(w => !w.retired)
-  const foremanWorkers = workers.filter(w => !w.retired && (w.jobType === '職長' || w.jobType === 'とび'))
+  const foremanWorkers = workers.filter(w => !w.retired && (w.jobType === '職長' || w.jobType === '役員'))
 
   const isActive = (s: SiteData): boolean => {
     if (s.archived) return false

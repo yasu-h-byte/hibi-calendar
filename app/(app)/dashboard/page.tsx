@@ -380,11 +380,11 @@ export default function DashboardPage() {
             {/* 概算売上 */}
             <KPICard
               title="概算売上"
-              value={formatYenFull(data.kpi.billing)}
-              unit=""
-              sub={`原価 ${formatYenFull(data.kpi.cost)}`}
-              sub2={`粗利率 ${fmtNum(data.kpi.profitRate)}%`}
-              valueColor={profitRateColor(data.kpi.profitRate)}
+              value={data.kpi.billing === 0 ? '未入力' : formatYenFull(data.kpi.billing)}
+              unit={data.kpi.billing === 0 ? '' : ''}
+              sub={data.kpi.billing === 0 ? '' : `原価 ${formatYenFull(data.kpi.cost)}`}
+              sub2={data.kpi.billing === 0 ? '' : `粗利率 ${fmtNum(data.kpi.profitRate)}%`}
+              valueColor={data.kpi.billing === 0 ? 'text-gray-400' : profitRateColor(data.kpi.profitRate)}
             />
             {/* 1人あたり労務費 */}
             <KPICard

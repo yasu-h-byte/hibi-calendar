@@ -92,6 +92,7 @@ export interface WorkerMonthly {
   otMul: number
   sites: string[]
   workDays: number
+  actualWorkDays: number  // エントリ数（w>0の件数、0.6も1日としてカウント）
   compDays: number   // 0.6エントリの件数
   workAll: number    // workDays + compDays * 0.6
   otHours: number
@@ -102,6 +103,9 @@ export interface WorkerMonthly {
   cost: number
   otCost: number
   totalCost: number
+  absence: number       // 欠勤日数
+  absentCost: number    // 欠勤控除額
+  netPay: number        // 差引支給額
 }
 
 export interface SubconMonthly {
@@ -133,6 +137,7 @@ export function computeMonthly(
   attD: Record<string, AttendanceEntry>,
   attSD: Record<string, { n: number; on: number }>,
   ym: string,
+  prescribedDays: number = 0,
 ): {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
@@ -148,9 +153,10 @@ export function computeMonthly(
     workerMap.set(w.id, {
       id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
       rate: w.rate, otMul: w.otMul, sites: [],
-      workDays: 0, compDays: 0, workAll: 0, otHours: 0,
+      workDays: 0, actualWorkDays: 0, compDays: 0, workAll: 0, otHours: 0,
       plDays: 0, plUsed: 0, restDays: 0, siteOffDays: 0,
       cost: 0, otCost: 0, totalCost: 0,
+      absence: 0, absentCost: 0, netPay: 0,
     })
   }
 
@@ -187,6 +193,7 @@ export function computeMonthly(
 
     if (entry.w && entry.w > 0) {
       wm.workDays += entry.w
+      wm.actualWorkDays += 1  // 0.6も1日としてカウント
       if (entry.w === 0.6) wm.compDays += 1
       if (entry.o && entry.o > 0) wm.otHours += entry.o
       if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
@@ -230,6 +237,17 @@ export function computeMonthly(
     wm.otCost = wm.otHours * (wm.rate / 8) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
 
+    // Absence calculation
+    if (prescribedDays > 0) {
+      wm.absence = Math.max(0, prescribedDays - wm.actualWorkDays - wm.plUsed)
+      wm.absentCost = Math.round(wm.absence * wm.rate)
+      wm.netPay = wm.totalCost - wm.absentCost
+    } else {
+      wm.absence = 0
+      wm.absentCost = 0
+      wm.netPay = wm.totalCost
+    }
+
     // Add to site costs
     for (const sid of wm.sites) {
       const site = siteMap.get(sid)
@@ -267,6 +285,8 @@ export function computeMonthly(
     w.cost = r0(w.cost)
     w.otCost = r0(w.otCost)
     w.totalCost = r0(w.totalCost)
+    w.absentCost = r0(w.absentCost)
+    w.netPay = r0(w.netPay)
   })
 
   const subcons = Array.from(subconMap.values()).filter(sc => sc.workDays > 0)

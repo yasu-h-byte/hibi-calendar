@@ -201,6 +201,7 @@ export default function WorkersPage() {
     if (sortKey === 'id') cmp = a.id - b.id
     else if (sortKey === 'name') cmp = a.name.localeCompare(b.name)
     else if (sortKey === 'rate') cmp = (a.rate || 0) - (b.rate || 0)
+    else if (sortKey === 'jobType') cmp = (a.jobType || '').localeCompare(b.jobType || '')
     return sortAsc ? cmp : -cmp
   })
 
@@ -259,11 +260,14 @@ export default function WorkersPage() {
                 名前 {sortKey === 'name' && (sortAsc ? '↑' : '↓')}
               </th>
               <th className="px-3 py-3">所属</th>
-              <th className="px-3 py-3">職種</th>
+              <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('jobType')}>
+                職種 {sortKey === 'jobType' && (sortAsc ? '↑' : '↓')}
+              </th>
               <th className="px-3 py-3">在留資格</th>
               <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('rate')}>
                 日額 {sortKey === 'rate' && (sortAsc ? '↑' : '↓')}
               </th>
+              <th className="px-3 py-3">OT倍率</th>
               <th className="px-3 py-3">有給発生月</th>
               <th className="px-3 py-3">有給残</th>
               <th className="px-3 py-3">📱</th>
@@ -272,9 +276,9 @@ export default function WorkersPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
             ) : sorted.map(w => {
               const pl = plData[w.id]
               const jb = jobBadge(w.jobType)
@@ -283,7 +287,7 @@ export default function WorkersPage() {
                   <td className="px-3 py-2.5 text-gray-400">{w.id}</td>
                   <td className="px-3 py-2.5 font-medium">
                     {w.name}
-                    {w.retired && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">退職</span>}
+                    {w.retired && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">{w.retired && w.retired !== 'true' && w.retired.length >= 7 ? `退職 ${w.retired.slice(0, 7)}` : '退職'}</span>}
                   </td>
                   <td className="px-3 py-2.5">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -308,6 +312,9 @@ export default function WorkersPage() {
                   </td>
                   <td className="px-3 py-2.5 text-gray-600">
                     {w.rate ? `¥${w.rate.toLocaleString()}` : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-gray-500 text-sm">
+                    {w.otMul ? `×${w.otMul}` : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-gray-500 text-sm">
                     {getPlGrantMonth(w.hireDate)}

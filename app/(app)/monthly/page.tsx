@@ -17,6 +17,7 @@ interface WorkerMonthly {
   otMul: number
   sites: string[]
   workDays: number
+  actualWorkDays: number
   compDays: number
   workAll: number
   halfDays?: number
@@ -28,6 +29,9 @@ interface WorkerMonthly {
   cost: number
   otCost: number
   totalCost: number
+  absence: number
+  absentCost: number
+  netPay: number
 }
 
 interface SubconMonthly {
@@ -47,6 +51,7 @@ interface MonthlyData {
   subcons: SubconMonthly[]
   locked: boolean
   workDays: number
+  prescribedDays?: number
   siteNames?: Record<string, string>
   totals: {
     workDays: number
@@ -345,17 +350,20 @@ export default function MonthlyPage() {
   const showAbsenceColumns = isHfuTab && prescribedDaysNum > 0
 
   function calcAbsentDays(w: WorkerMonthly): number {
-    const absent = prescribedDaysNum - w.workAll - w.plUsed
+    // Use server-computed value if available, otherwise calculate locally
+    if (w.absence !== undefined) return w.absence
+    const absent = prescribedDaysNum - (w.actualWorkDays || 0) - w.plUsed
     return Math.max(0, Math.round(absent * 10) / 10)
   }
 
   function calcAbsentDeduction(w: WorkerMonthly): number {
+    if (w.absentCost !== undefined) return w.absentCost
     const absentDays = calcAbsentDays(w)
-    const dailyRate = w.rate
-    return Math.round(absentDays * dailyRate)
+    return Math.round(absentDays * w.rate)
   }
 
   function calcNetPay(w: WorkerMonthly): number {
+    if (w.netPay !== undefined) return w.netPay
     return w.totalCost - calcAbsentDeduction(w)
   }
 
