@@ -59,7 +59,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <div className="flex-1" />
+            <h2 className="text-hibi-navy dark:text-white font-bold text-lg flex-1">HIBI CONSTRUCTION</h2>
             {user.role === 'admin' && <NotificationBell />}
           </header>
 

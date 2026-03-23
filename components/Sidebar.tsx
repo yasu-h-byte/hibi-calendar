@@ -110,7 +110,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
         {/* Header - Logo */}
         <div className="p-4 border-b border-white/10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-full max-w-[160px]" />
+          <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-full max-w-[160px] brightness-0 invert" />
           <p className="text-xs text-white/60 mt-2">鳶事業部 管理システム</p>
         </div>
 
