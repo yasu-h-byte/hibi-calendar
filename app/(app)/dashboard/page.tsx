@@ -427,55 +427,12 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* ═══ Subcon Ratio Alert Banner ═══ */}
-          {data.subconAlert && data.subconAlert.level !== 'none' && (
-            <div className={`rounded-xl p-4 border-2 ${
-              data.subconAlert.level === 'red'
-                ? 'bg-red-50 border-red-300 text-red-800'
-                : 'bg-yellow-50 border-yellow-300 text-yellow-800'
-            }`}>
-              <div className="flex items-center gap-2 font-bold text-base mb-2">
-                <span className="text-xl">&#x26A0;</span>
-                <span>外注比率が{fmtNum(data.subconAlert.overallRate)}%です（目安: 50%以下）</span>
-              </div>
-              {data.subconAlert.sitesAbove50.length > 0 && (
-                <div className="mt-2">
-                  <div className="text-sm font-semibold mb-1">50%超の現場:</div>
-                  <div className="flex flex-wrap gap-2">
-                    {data.subconAlert.sitesAbove50.map(s => (
-                      <span key={s.id} className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                        s.rate > 60 ? 'bg-red-200 text-red-900' : 'bg-yellow-200 text-yellow-900'
-                      }`}>
-                        {s.name}: {fmtNum(s.rate)}%
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+          {/* ═══ 人工あたりKPIチャート（ファーストビュー重要指標）═══ */}
+          {data.monthlyTrend && data.monthlyTrend.length > 0 && (
+            <Section title={`人工あたり KPI${siteFilter === 'all' ? '全社' : ''}（${data.selectedYm ? ymToLabel(data.selectedYm).replace(/月$/, '') : ''}）`}>
+              <CSSLineChart data={data.monthlyTrend} baseline={data.kpi.billingPerManDayBaseline} forecast={data.forecast} />
+            </Section>
           )}
-
-          {/* ═══ Forecast Card ═══ */}
-          {data.forecast && (
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl shadow p-4 border border-indigo-100">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-sm font-bold text-indigo-700">予測</span>
-                <span className="text-xs text-indigo-500">（3ヶ月移動平均ベース）</span>
-              </div>
-              <div className="text-sm text-indigo-800">
-                <span className="font-semibold">来月予測 ({ymToLabel(data.forecast.nextYm)}):</span>
-                <span className="ml-2">
-                  売上 <span className="font-bold">{formatYenFull(data.forecast.predictedBilling)}</span>
-                  {' / '}原価 <span className="font-bold">{formatYenFull(data.forecast.predictedCost)}</span>
-                  {' / '}利益率 <span className={`font-bold ${profitRateColor(data.forecast.predictedProfitRate)}`}>
-                    {fmtNum(data.forecast.predictedProfitRate)}%
-                  </span>
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Period/Site tabs moved to header - this section removed */}
 
           {/* ═══ 4b. Site-specific views (member list, donut, trend) ═══ */}
           {siteFilter !== 'all' && data.siteMembers && data.siteMembers.length > 0 && (
@@ -499,16 +456,7 @@ export default function DashboardPage() {
             </Section>
           )}
 
-          {/* ═══ 5. KPI Trend Line Chart (人工あたりKPI) ═══ */}
-          {data.monthlyTrend.length > 1 && (
-            <Section title="人工あたりKPI推移">
-              <CSSLineChart
-                data={data.monthlyTrend}
-                baseline={data.kpi.billingPerManDayBaseline}
-                forecast={data.forecast}
-              />
-            </Section>
-          )}
+          {/* KPI Trend chart moved above (after KPI cards) */}
 
           {/* ═══ 6. Site Summary Table ═══ */}
           <Section title="現場別サマリー">
