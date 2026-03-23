@@ -15,10 +15,10 @@ interface MenuItem {
 const DEMMEN_URL = 'https://dedura-kanri.web.app'
 
 function buildMenuItems(user: AuthUser): MenuItem[] {
-  // 職長はforeman画面へ、admin/approverは旧アプリへ
+  // 職長はforeman画面へ、admin/approverはPC出面入力へ
   const attItem: MenuItem = user.role === 'foreman' && user.token
     ? { label: '出面入力', icon: '📋', href: `/attendance/foreman/${user.token}`, section: 'メイン', roles: ['foreman'] }
-    : { label: '出面入力', icon: '📋', external: `${DEMMEN_URL}?role=input`, section: 'メイン', roles: ['admin', 'approver'] }
+    : { label: '出面入力', icon: '📋', href: '/attendance', section: 'メイン', roles: ['admin', 'approver'] }
 
   return [
     // メイン
@@ -29,6 +29,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
   { label: '月次集計', icon: '📋', href: '/monthly', section: 'マスタ', roles: ['admin', 'approver'] },
   { label: '人員マスタ', icon: '👷', href: '/workers', section: 'マスタ', roles: ['admin'] },
   { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ', roles: ['admin'] },
+  { label: '外注先マスタ', icon: '🔧', href: '/subcons', section: 'マスタ', roles: ['admin'] },
   // 管理
   { label: '有給管理', icon: '🌴', href: '/leave', section: '管理', roles: ['admin', 'approver'] },
   { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin'] },

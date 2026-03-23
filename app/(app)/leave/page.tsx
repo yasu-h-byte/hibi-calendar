@@ -12,6 +12,9 @@ export default function LeavePage() {
   const [password, setPassword] = useState('')
   const [workers, setWorkers] = useState<PLWorker[]>([])
   const [loading, setLoading] = useState(true)
+  const [editWorker, setEditWorker] = useState<PLWorker | null>(null)
+  const [editForm, setEditForm] = useState({ grantDays: '', carryOver: '', adjustment: '' })
+  const [saving, setSaving] = useState(false)
   const [fy, setFy] = useState(() => {
     const now = new Date()
     const y = now.getFullYear()
@@ -94,13 +97,14 @@ export default function LeavePage() {
               <th className="px-3 py-3 text-right">消化</th>
               <th className="px-3 py-3 text-right">残</th>
               <th className="px-3 py-3">消化率</th>
+              <th className="px-3 py-3">操作</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : workers.length === 0 ? (
-              <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
             ) : workers.map(w => {
               const rate = w.total > 0 ? (w.used / w.total * 100) : 0
               return (
@@ -126,12 +130,59 @@ export default function LeavePage() {
                       <span className="text-xs text-gray-500">{rate.toFixed(0)}%</span>
                     </div>
                   </td>
+                  <td className="px-3 py-2.5">
+                    <button onClick={() => { setEditWorker(w); setEditForm({ grantDays: String(w.grantDays), carryOver: String(w.carryOver), adjustment: String(w.adjustment) }) }}
+                      className="text-hibi-navy text-xs underline">編集</button>
+                  </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
+
+      {/* Edit Modal */}
+      {editWorker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setEditWorker(null)}>
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy mb-4">{editWorker.name} - 有給編集</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">付与日数</label>
+                <input type="number" value={editForm.grantDays} onChange={e => setEditForm({ ...editForm, grantDays: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">繰越日数</label>
+                <input type="number" value={editForm.carryOver} onChange={e => setEditForm({ ...editForm, carryOver: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">調整</label>
+                <input type="number" value={editForm.adjustment} onChange={e => setEditForm({ ...editForm, adjustment: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button disabled={saving} onClick={async () => {
+                setSaving(true)
+                try {
+                  await fetch('/api/leave', {
+                    method: 'POST',
+                    headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ workerId: editWorker.id, fy, ...editForm }),
+                  })
+                  setEditWorker(null)
+                  fetchData()
+                } finally { setSaving(false) }
+              }} className="flex-1 bg-hibi-navy text-white rounded-lg py-2.5 font-bold text-sm disabled:opacity-50">
+                {saving ? '保存中...' : '保存'}
+              </button>
+              <button onClick={() => setEditWorker(null)} className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2.5 text-sm">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

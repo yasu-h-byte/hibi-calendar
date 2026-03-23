@@ -1,12 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/firebase'
+import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 
-export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('x-admin-password')
-  if (!process.env.ADMIN_PASSWORD || authHeader !== process.env.ADMIN_PASSWORD) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+function checkAuth(request: NextRequest): boolean {
+  return !!(process.env.ADMIN_PASSWORD && request.headers.get('x-admin-password') === process.env.ADMIN_PASSWORD)
+}
+
+export async function POST(request: NextRequest) {
+  if (!checkAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const { workerId, fy, grantDays, carryOver, adjustment } = await request.json()
+    const docRef = doc(db, 'demmen', 'main')
+    const snap = await getDoc(docRef)
+    if (!snap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const plData = (snap.data().plData || {}) as Record<string, { fy: string; grantDays: number; carryOver: number; adjustment: number }[]>
+    const key = String(workerId)
+    const records = plData[key] || []
+    const idx = records.findIndex(r => r.fy === fy)
+
+    const record = { fy, grantDays: Number(grantDays) || 0, carryOver: Number(carryOver) || 0, adjustment: Number(adjustment) || 0 }
+    if (idx >= 0) records[idx] = record
+    else records.push(record)
+
+    plData[key] = records
+    await updateDoc(docRef, { plData })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Leave POST error:', error)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
+}
+
+export async function GET(request: NextRequest) {
+  if (!checkAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const fy = request.nextUrl.searchParams.get('fy') || '2025'
   const fyStart = parseInt(fy)

@@ -112,7 +112,24 @@ export default function CostPage() {
                 {data.sites.map(s => (
                   <tr key={s.id} className="border-t hover:bg-gray-50">
                     <td className="px-3 py-2.5 font-medium">{s.name}</td>
-                    <td className="px-3 py-2.5 text-right">{fmtYen(s.billing)}</td>
+                    <td className="px-3 py-2.5 text-right">
+                      <input
+                        type="number"
+                        defaultValue={s.billing || ''}
+                        placeholder="0"
+                        onBlur={async (e) => {
+                          const val = Number(e.target.value) || 0
+                          if (val === s.billing) return
+                          await fetch('/api/cost', {
+                            method: 'POST',
+                            headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ siteId: s.id, ym, amount: val }),
+                          })
+                          fetchData()
+                        }}
+                        className="w-24 text-right border border-gray-200 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-hibi-navy focus:outline-none"
+                      />
+                    </td>
                     <td className="px-3 py-2.5 text-right">{fmtYen(s.cost)}</td>
                     <td className="px-3 py-2.5 text-right">{fmtYen(s.subCost)}</td>
                     <td className="px-3 py-2.5 text-right">{fmtYen(s.totalCost)}</td>
