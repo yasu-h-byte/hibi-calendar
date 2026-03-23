@@ -399,128 +399,82 @@ export default function DashboardPage() {
             )}
           </Section>
 
-          {/* ═══ 2. KPI Cards ═══ */}
+          {/* ═══ 2. KPI Cards (4-card grid) ═══ */}
           {(() => {
             const k = data.kpi
             const baseline = k.billingPerManDayBaseline
-            const bpmValue = k.billingPerManDay
-            const bpmPrev = k.prevBillingPerManDay
-            const bpmPct = bpmValue > 0 ? Math.min((bpmValue / baseline) * 100, 150) : 0
-            const bpmMoM = bpmPrev > 0 ? ((bpmValue - bpmPrev) / bpmPrev) * 100 : 0
-            const bpmBaselinePct = baseline > 0 ? (bpmValue / baseline) * 100 : 0
-            const isAboveBaseline = bpmValue >= baseline
-            const momManDays = k.prevTotalManDays > 0 ? ((k.totalManDays - k.prevTotalManDays) / k.prevTotalManDays) * 100 : 0
-            const momBilling = k.prevBilling > 0 ? ((k.billing - k.prevBilling) / k.prevBilling) * 100 : 0
-            const momProfitRate = k.prevProfitRate > 0 ? k.profitRate - k.prevProfitRate : 0
+            const bpmBaselinePct = baseline > 0 ? (k.billingPerManDay / baseline) * 100 : 0
+            const isAboveBaseline = k.billingPerManDay >= baseline
 
             return (
-              <div className="space-y-4">
-                {/* Primary KPI: 人工あたり売上 - full width */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-5">
-                  <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">人工あたり売上</div>
-                  <div className="flex items-baseline gap-2 mb-3">
-                    <span className={`text-3xl font-bold tabular-nums ${isAboveBaseline ? 'text-green-600' : 'text-red-600'}`}>
-                      {bpmValue > 0 ? `¥${Math.round(bpmValue).toLocaleString()}` : '-'}
-                    </span>
-                    <span className="text-sm text-gray-400">/人工</span>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* 総人工数 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">総人工数</div>
+                  <div className="text-2xl font-bold text-hibi-navy dark:text-white tabular-nums">
+                    {fmtNum(k.totalManDays)}
                   </div>
-                  {/* Progress bar */}
-                  <div className="relative h-4 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${isAboveBaseline ? 'bg-green-500' : 'bg-red-500'}`}
-                      style={{ width: `${Math.min(bpmPct / 1.5, 100)}%` }}
-                    />
-                    {/* Baseline marker */}
-                    <div
-                      className="absolute top-0 h-full w-0.5 bg-gray-600 dark:bg-gray-300"
-                      style={{ left: `${Math.min(100 / 1.5, 100)}%` }}
-                      title={`基準 ¥${baseline.toLocaleString()}`}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    <span>基準 ¥{baseline.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center gap-6 text-sm">
-                    {bpmPrev > 0 && (
-                      <span className="flex items-center gap-1">
-                        <span className="text-gray-500 dark:text-gray-400">前月比</span>
-                        <span className={`font-bold tabular-nums ${bpmMoM >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {bpmMoM >= 0 ? '+' : ''}{bpmMoM.toFixed(1)}%
-                          {bpmMoM >= 0 ? ' \u25B2' : ' \u25BC'}
-                        </span>
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <span className="text-gray-500 dark:text-gray-400">基準比</span>
-                      <span className={`font-bold tabular-nums ${bpmBaselinePct >= 100 ? 'text-green-600' : 'text-red-600'}`}>
-                        {bpmBaselinePct.toFixed(1)}%
-                      </span>
-                    </span>
+                  <div className="text-xs text-gray-400 dark:text-gray-500">人工</div>
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
+                    <div>自社{fmtNum(k.inHouseManDays)}/外注{fmtNum(k.subconManDays)}</div>
+                    <div>外注率 {fmtNum(k.subconRate)}%</div>
                   </div>
                 </div>
 
-                {/* Secondary KPIs: 3 cards in a row */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* 総人工数 */}
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                    <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">総人工数</div>
-                    <div className="text-2xl font-bold text-hibi-navy dark:text-white tabular-nums">
-                      {fmtNum(k.totalManDays)} <span className="text-sm text-gray-400 font-normal">人工</span>
-                    </div>
-                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                      自社{fmtNum(k.inHouseManDays)} / 外注{fmtNum(k.subconManDays)}
-                    </div>
-                    {k.prevTotalManDays > 0 && (
-                      <div className={`text-xs mt-2 font-bold tabular-nums ${momManDays >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        前月比 {momManDays >= 0 ? '+' : ''}{momManDays.toFixed(0)}%
-                        {momManDays >= 0 ? ' \u25B2' : ' \u25BC'}
-                      </div>
+                {/* 概算売上 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                  <div className="flex items-center gap-1 text-xs font-semibold mb-1">
+                    <span className="text-gray-500 dark:text-gray-400">概算売上</span>
+                    {k.billing > 0 && (
+                      <span className={`${k.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        ({k.profit >= 0 ? '+' : '-'})
+                      </span>
                     )}
                   </div>
-
-                  {/* 概算売上 */}
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                    <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">概算売上</div>
-                    <div className={`text-2xl font-bold tabular-nums ${k.billing === 0 ? 'text-gray-400' : 'text-hibi-navy dark:text-white'}`}>
-                      {k.billing === 0 ? '未入力' : `¥${Math.round(k.billing / 10000).toLocaleString()}`}
-                      {k.billing > 0 && <span className="text-sm text-gray-400 font-normal">万</span>}
+                  <div className={`text-2xl font-bold tabular-nums ${k.billing === 0 ? 'text-gray-400' : 'text-hibi-navy dark:text-white'}`}>
+                    {k.billing === 0 ? '未入力' : `¥${formatMan(k.billing)}`}
+                  </div>
+                  {k.billing > 0 && <div className="text-xs text-gray-400 dark:text-gray-500">万円</div>}
+                  {k.billing > 0 && (
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
+                      <div>原価¥{formatMan(k.cost)}万</div>
+                      <div className={k.profit >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        粗利¥{formatMan(k.profit)}万({fmtNum(k.profitRate)}%)
+                      </div>
                     </div>
-                    {k.billing > 0 && (
-                      <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                        原価 ¥{Math.round(k.cost / 10000).toLocaleString()}万
-                      </div>
-                    )}
-                    {k.prevBilling > 0 && k.billing > 0 && (
-                      <div className={`text-xs mt-2 font-bold tabular-nums ${momBilling >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        前月比 {momBilling >= 0 ? '+' : ''}{momBilling.toFixed(0)}%
-                        {momBilling >= 0 ? ' \u25B2' : ' \u25BC'}
-                      </div>
+                  )}
+                </div>
+
+                {/* 1人あたり労務費 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">1人あたり労務費</div>
+                  <div className="text-2xl font-bold text-hibi-navy dark:text-white tabular-nums">
+                    ¥{Math.round(k.laborCostPerPersonAll).toLocaleString()}
+                  </div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500">/人工</div>
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
+                    <div>外注込み ¥{Math.round(k.laborCostPerPersonAll).toLocaleString()}</div>
+                    <div>社員のみ ¥{Math.round(k.laborCostPerPerson).toLocaleString()}</div>
+                  </div>
+                </div>
+
+                {/* 人工あたり売上 */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                  <div className="flex items-center gap-1 text-xs font-semibold mb-1">
+                    <span className="text-gray-500 dark:text-gray-400">人工あたり売上</span>
+                    {k.billingPerManDay > 0 && (
+                      <span className={`${isAboveBaseline ? 'text-green-600' : 'text-red-600'}`}>
+                        ({isAboveBaseline ? '+' : '-'})
+                      </span>
                     )}
                   </div>
-
-                  {/* 粗利率 */}
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                    <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">粗利率</div>
-                    <div className={`text-2xl font-bold tabular-nums ${profitRateColor(k.profitRate)}`}>
-                      {k.billing > 0 ? `${fmtNum(k.profitRate)}` : '-'}
-                      {k.billing > 0 && <span className="text-sm font-normal">%</span>}
-                    </div>
-                    {k.billing > 0 && (
-                      <div className="mt-1.5">
-                        <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${k.profitRate > 15 ? 'bg-green-500' : k.profitRate > 0 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                            style={{ width: `${Math.min(Math.max(k.profitRate, 0), 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                    {k.prevProfitRate > 0 && k.billing > 0 && (
-                      <div className={`text-xs mt-2 font-bold tabular-nums ${momProfitRate >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        前月比 {momProfitRate >= 0 ? '+' : ''}{momProfitRate.toFixed(1)}pt
-                        {momProfitRate >= 0 ? ' \u25B2' : ' \u25BC'}
-                      </div>
-                    )}
+                  <div className={`text-2xl font-bold tabular-nums ${isAboveBaseline ? 'text-green-600' : 'text-red-600'}`}>
+                    {k.billingPerManDay > 0 ? `¥${Math.round(k.billingPerManDay).toLocaleString()}` : '-'}
+                  </div>
+                  <div className="text-xs text-gray-400 dark:text-gray-500">/人工</div>
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
+                    <div>基準¥{baseline.toLocaleString()}</div>
+                    <div>対比 {bpmBaselinePct.toFixed(1)}%</div>
                   </div>
                 </div>
               </div>
@@ -529,8 +483,14 @@ export default function DashboardPage() {
 
           {/* ═══ 人工あたりKPIチャート（ファーストビュー重要指標）═══ */}
           {data.monthlyTrend && data.monthlyTrend.length > 0 && (
-            <Section title={`人工あたり KPI${siteFilter === 'all' ? '全社' : ''}（${data.selectedYm ? ymToLabel(data.selectedYm).replace(/月$/, '') : ''}）`}>
-              <CSSLineChart data={data.monthlyTrend} baseline={data.kpi.billingPerManDayBaseline} forecast={data.forecast} />
+            <Section title={`人工あたり KPI${siteFilter === 'all' ? '全社' : ''}（${(() => {
+              const firstYm = data.monthlyTrend[0].ym
+              const m = parseInt(firstYm.slice(4, 6))
+              const y = parseInt(firstYm.slice(0, 4))
+              const fy = m >= 10 ? y : y - 1
+              return `${fy}年度`
+            })()}）`}>
+              <KPILineChart data={data.monthlyTrend} baseline={data.kpi.billingPerManDayBaseline} />
             </Section>
           )}
 
@@ -1077,52 +1037,59 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 
-/** Enhanced SVG line chart with baseline, color-coded dots, Y-axis labels, and forecast */
-function CSSLineChart({
+/** SVG line chart for 人工あたりKPI with value labels and MoM % changes */
+function KPILineChart({
   data,
   baseline,
-  forecast,
 }: {
   data: MonthlyTrend[]
   baseline: number
-  forecast?: Forecast | null
 }) {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
-
   if (data.length === 0) return null
 
-  // Calculate forecast per-man-day values from absolute forecast
-  const lastTrend = data[data.length - 1]
-  const avgManDays = data.length > 0 ? data.reduce((s, d) => s + d.manDays, 0) / data.length : 1
-  const forecastBillingPerManDay = forecast && avgManDays > 0 ? forecast.predictedBilling / avgManDays : 0
-  const forecastCostPerManDay = forecast && avgManDays > 0 ? forecast.predictedCost / avgManDays : 0
-  const forecastProfitPerManDay = forecastBillingPerManDay - forecastCostPerManDay
+  const COLORS = {
+    billing: '#2563EB',
+    cost: '#EA580C',
+    profit: '#16A34A',
+    baseline: '#DC2626',
+    grid: '#E5E7EB',
+  }
 
+  // Latest values for legend
+  const latest = data[data.length - 1]
+  const latestBilling = Math.round(latest.billingPerManDay)
+  const latestCost = Math.round(latest.costPerManDay)
+  const latestProfit = latestBilling - latestCost
+
+  // Chart dimensions
+  const svgW = 800
+  const svgH = 400
+  const padL = 70
+  const padR = 20
+  const padT = 50
+  const padB = 40
+  const chartW = svgW - padL - padR
+  const chartH = svgH - padT - padB
+
+  // Value range
   const allValues = [
     ...data.map(d => d.billingPerManDay),
     ...data.map(d => d.costPerManDay),
     ...data.map(d => d.profitPerManDay),
     baseline,
-    ...(forecast ? [forecastBillingPerManDay, forecastCostPerManDay, forecastProfitPerManDay] : []),
   ]
-  const maxVal = Math.max(...allValues, 1)
-  const minVal = Math.min(...allValues.filter(v => v > 0), 0)
-  const range = maxVal - minVal || 1
+  const rawMax = Math.max(...allValues, 1)
+  const rawMin = Math.min(...allValues.filter(v => v > 0), 0)
+  // Add 15% padding for labels
+  const range = rawMax - rawMin || 1
+  const maxVal = rawMax + range * 0.15
+  const minVal = Math.max(rawMin - range * 0.1, 0)
+  const yRange = maxVal - minVal || 1
 
-  // Extend chart width if forecast exists
-  const totalPoints = forecast ? data.length + 1 : data.length
-  const svgW = 600
-  const svgH = 200
-  const padL = 60
-  const padR = forecast ? 40 : 16
-  const padT = 16
-  const padB = 32
-  const chartW = svgW - padL - padR
-  const chartH = svgH - padT - padB
+  const getX = (i: number) => padL + (data.length > 1 ? (i / (data.length - 1)) * chartW : chartW / 2)
+  const getY = (val: number) => padT + chartH - ((val - minVal) / yRange) * chartH
 
-  const getX = (i: number) => padL + (totalPoints > 1 ? (i / (totalPoints - 1)) * chartW : chartW / 2)
-  const getY = (val: number) => padT + chartH - ((val - minVal) / range) * chartH
-
+  // Build smooth line paths
   const makePath = (values: number[]) =>
     values.map((v, i) => `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getY(v).toFixed(1)}`).join(' ')
 
@@ -1130,173 +1097,158 @@ function CSSLineChart({
   const costPath = makePath(data.map(d => d.costPerManDay))
   const profitPath = makePath(data.map(d => d.profitPerManDay))
 
-  const baselineYPos = getY(baseline)
-
-  // Y-axis labels (5 ticks)
-  const yTicks = Array.from({ length: 5 }, (_, i) => {
-    const val = minVal + (range * i) / 4
+  // Y-axis gridlines (5 ticks)
+  const yTickCount = 5
+  const yTicks = Array.from({ length: yTickCount + 1 }, (_, i) => {
+    const val = minVal + (yRange * i) / yTickCount
     return { val, y: getY(val) }
   })
 
+  const baselineY = getY(baseline)
+
+  // MoM % change helper
+  const momPct = (curr: number, prev: number) => {
+    if (prev === 0) return ''
+    const pct = ((curr - prev) / prev) * 100
+    return `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`
+  }
+
   return (
-    <div className="space-y-2">
-      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ maxHeight: '240px' }}>
-        {/* Y-axis labels */}
+    <div>
+      {/* Legend row */}
+      <div className="flex items-center justify-end gap-4 text-xs mb-2 flex-wrap">
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-5 h-0.5" style={{ backgroundColor: COLORS.billing }} />
+          <span className="text-gray-600 dark:text-gray-400">売上 ¥{latestBilling.toLocaleString()}</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-5 h-0.5" style={{ backgroundColor: COLORS.cost }} />
+          <span className="text-gray-600 dark:text-gray-400">原価 ¥{latestCost.toLocaleString()}</span>
+        </span>
+        <span className={`font-bold ${latestProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          差益 {latestProfit >= 0 ? '+' : ''}¥{latestProfit.toLocaleString()}
+        </span>
+      </div>
+
+      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ maxHeight: '400px' }} preserveAspectRatio="xMidYMid meet">
+        {/* Y-axis gridlines + labels */}
         {yTicks.map((t, i) => (
           <g key={i}>
-            <line x1={padL} y1={t.y} x2={svgW - padR} y2={t.y} stroke="#f0f0f0" strokeWidth="1" />
-            <text x={padL - 6} y={t.y + 4} textAnchor="end" className="text-[10px]" fill="#9ca3af" fontSize="10">
-              {`\u00A5${Math.round(t.val / 1000)}k`}
+            <line x1={padL} y1={t.y} x2={svgW - padR} y2={t.y} stroke={COLORS.grid} strokeWidth="1" />
+            <text x={padL - 8} y={t.y + 4} textAnchor="end" fill="#9ca3af" fontSize="11">
+              ¥{Math.round(t.val).toLocaleString()}
             </text>
           </g>
         ))}
 
         {/* Baseline dashed line */}
         <line
-          x1={padL} y1={baselineYPos} x2={svgW - padR} y2={baselineYPos}
-          stroke="#6b7280" strokeWidth="1.5" strokeDasharray="6 4"
+          x1={padL} y1={baselineY} x2={svgW - padR} y2={baselineY}
+          stroke={COLORS.baseline} strokeWidth="1.5" strokeDasharray="8 4"
         />
-        <text x={svgW - padR + 2} y={baselineYPos - 4} fill="#6b7280" fontSize="9" textAnchor="end">
-          {`\u00A5${(baseline / 1000).toFixed(1)}k`}
+        <text x={svgW - padR - 4} y={baselineY - 6} textAnchor="end" fill={COLORS.baseline} fontSize="10" fontWeight="600">
+          基準¥{baseline.toLocaleString()}
         </text>
 
         {/* Lines */}
-        <path d={billingPath} fill="none" stroke="#3b82f6" strokeWidth="2" />
-        <path d={costPath} fill="none" stroke="#fb923c" strokeWidth="2" />
-        <path d={profitPath} fill="none" stroke="#22c55e" strokeWidth="1.5" strokeDasharray="4 2" />
+        <path d={billingPath} fill="none" stroke={COLORS.billing} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={costPath} fill="none" stroke={COLORS.cost} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={profitPath} fill="none" stroke={COLORS.profit} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
 
-        {/* Dots - billing (color-coded vs baseline) */}
-        {data.map((d, i) => (
-          <circle
-            key={`b-${i}`}
-            cx={getX(i)} cy={getY(d.billingPerManDay)} r={hoveredIndex === i ? 6 : 4}
-            fill={d.billingPerManDay >= baseline ? '#22c55e' : '#ef4444'}
-            stroke="white" strokeWidth="2"
-            className="transition-all duration-150 cursor-pointer"
-            onMouseEnter={() => setHoveredIndex(i)}
-            onMouseLeave={() => setHoveredIndex(null)}
-          />
-        ))}
+        {/* Dots and value labels - billing */}
+        {data.map((d, i) => {
+          const x = getX(i)
+          const y = getY(d.billingPerManDay)
+          return (
+            <g key={`bl-${i}`}>
+              <circle cx={x} cy={y} r={4} fill={COLORS.billing} stroke="white" strokeWidth="2" />
+              <text x={x} y={y - 10} textAnchor="middle" fill={COLORS.billing} fontSize="9" fontWeight="600">
+                ¥{Math.round(d.billingPerManDay).toLocaleString()}
+              </text>
+              {/* MoM % between points */}
+              {i > 0 && (() => {
+                const pct = momPct(d.billingPerManDay, data[i - 1].billingPerManDay)
+                if (!pct) return null
+                const mx = (getX(i - 1) + x) / 2
+                const my = (getY(data[i - 1].billingPerManDay) + y) / 2
+                return (
+                  <text x={mx} y={my - 8} textAnchor="middle" fill={COLORS.billing} fontSize="8" opacity="0.7">
+                    {pct}
+                  </text>
+                )
+              })()}
+            </g>
+          )
+        })}
 
-        {/* Dots - cost */}
-        {data.map((d, i) => (
-          <circle
-            key={`c-${i}`}
-            cx={getX(i)} cy={getY(d.costPerManDay)} r={3}
-            fill="#fb923c" stroke="white" strokeWidth="1.5"
-          />
-        ))}
+        {/* Dots and value labels - cost */}
+        {data.map((d, i) => {
+          const x = getX(i)
+          const y = getY(d.costPerManDay)
+          return (
+            <g key={`cl-${i}`}>
+              <circle cx={x} cy={y} r={4} fill={COLORS.cost} stroke="white" strokeWidth="2" />
+              <text x={x} y={y + 16} textAnchor="middle" fill={COLORS.cost} fontSize="9" fontWeight="600">
+                ¥{Math.round(d.costPerManDay).toLocaleString()}
+              </text>
+              {i > 0 && (() => {
+                const pct = momPct(d.costPerManDay, data[i - 1].costPerManDay)
+                if (!pct) return null
+                const mx = (getX(i - 1) + x) / 2
+                const my = (getY(data[i - 1].costPerManDay) + y) / 2
+                return (
+                  <text x={mx} y={my + 16} textAnchor="middle" fill={COLORS.cost} fontSize="8" opacity="0.7">
+                    {pct}
+                  </text>
+                )
+              })()}
+            </g>
+          )
+        })}
 
-        {/* Dots - profit */}
-        {data.map((d, i) => (
-          <circle
-            key={`p-${i}`}
-            cx={getX(i)} cy={getY(d.profitPerManDay)} r={3}
-            fill="#22c55e" stroke="white" strokeWidth="1.5"
-          />
-        ))}
+        {/* Dots and value labels - profit */}
+        {data.map((d, i) => {
+          const x = getX(i)
+          const y = getY(d.profitPerManDay)
+          return (
+            <g key={`pl-${i}`}>
+              <circle cx={x} cy={y} r={3.5} fill={COLORS.profit} stroke="white" strokeWidth="1.5" />
+              {/* Only show profit value if it doesn't overlap too much */}
+              {(i === 0 || i === data.length - 1 || i % 2 === 0) && (
+                <text x={x + 8} y={y + 4} textAnchor="start" fill={COLORS.profit} fontSize="8" fontWeight="600">
+                  ¥{Math.round(d.profitPerManDay).toLocaleString()}
+                </text>
+              )}
+            </g>
+          )
+        })}
 
         {/* X-axis labels */}
         {data.map((d, i) => (
           <text
             key={`x-${i}`}
-            x={getX(i)} y={svgH - 4}
-            textAnchor="middle" fill="#9ca3af" fontSize="10"
+            x={getX(i)} y={svgH - 8}
+            textAnchor="middle" fill="#6b7280" fontSize="11"
           >
             {ymToShortLabel(d.ym)}
           </text>
         ))}
-
-        {/* Forecast dashed extension lines */}
-        {forecast && data.length > 0 && (() => {
-          const lastIdx = data.length - 1
-          const forecastIdx = data.length
-          const lastX = getX(lastIdx)
-          const forecastX = getX(forecastIdx)
-          return (
-            <g opacity="0.6">
-              {/* Dashed line from last billing to forecast billing */}
-              <line
-                x1={lastX} y1={getY(lastTrend.billingPerManDay)}
-                x2={forecastX} y2={getY(forecastBillingPerManDay)}
-                stroke="#3b82f6" strokeWidth="2" strokeDasharray="6 4"
-              />
-              {/* Dashed line from last cost to forecast cost */}
-              <line
-                x1={lastX} y1={getY(lastTrend.costPerManDay)}
-                x2={forecastX} y2={getY(forecastCostPerManDay)}
-                stroke="#fb923c" strokeWidth="2" strokeDasharray="6 4"
-              />
-              {/* Dashed line from last profit to forecast profit */}
-              <line
-                x1={lastX} y1={getY(lastTrend.profitPerManDay)}
-                x2={forecastX} y2={getY(forecastProfitPerManDay)}
-                stroke="#22c55e" strokeWidth="1.5" strokeDasharray="4 3"
-              />
-              {/* Forecast dots (hollow) */}
-              <circle cx={forecastX} cy={getY(forecastBillingPerManDay)} r={5}
-                fill="white" stroke="#3b82f6" strokeWidth="2" strokeDasharray="3 2" />
-              <circle cx={forecastX} cy={getY(forecastCostPerManDay)} r={4}
-                fill="white" stroke="#fb923c" strokeWidth="2" strokeDasharray="3 2" />
-              <circle cx={forecastX} cy={getY(forecastProfitPerManDay)} r={4}
-                fill="white" stroke="#22c55e" strokeWidth="2" strokeDasharray="3 2" />
-              {/* Forecast x-axis label */}
-              <text x={forecastX} y={svgH - 4} textAnchor="middle" fill="#818cf8" fontSize="10" fontStyle="italic">
-                {ymToShortLabel(forecast.nextYm)}(予)
-              </text>
-              {/* Vertical dashed separator */}
-              <line
-                x1={forecastX - (forecastX - lastX) / 2} y1={padT}
-                x2={forecastX - (forecastX - lastX) / 2} y2={padT + chartH}
-                stroke="#c7d2fe" strokeWidth="1" strokeDasharray="4 3"
-              />
-            </g>
-          )
-        })()}
-
-        {/* Hover tooltip */}
-        {hoveredIndex !== null && (() => {
-          const d = data[hoveredIndex]
-          const tx = getX(hoveredIndex)
-          const ty = getY(d.billingPerManDay)
-          const tooltipX = tx > svgW / 2 ? tx - 110 : tx + 10
-          return (
-            <g>
-              <rect x={tooltipX} y={Math.max(ty - 50, 4)} width="105" height="48" rx="4" fill="white" stroke="#e5e7eb" strokeWidth="1" />
-              <text x={tooltipX + 6} y={Math.max(ty - 50, 4) + 14} fill="#3b82f6" fontSize="10" fontWeight="600">
-                {`売上 \u00A5${Math.round(d.billingPerManDay).toLocaleString()}`}
-              </text>
-              <text x={tooltipX + 6} y={Math.max(ty - 50, 4) + 28} fill="#fb923c" fontSize="10">
-                {`原価 \u00A5${Math.round(d.costPerManDay).toLocaleString()}`}
-              </text>
-              <text x={tooltipX + 6} y={Math.max(ty - 50, 4) + 42} fill="#22c55e" fontSize="10">
-                {`差益 \u00A5${Math.round(d.profitPerManDay).toLocaleString()}`}
-              </text>
-            </g>
-          )
-        })()}
       </svg>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" /> 売上/人工 (緑=基準以上 赤=基準未満)
+      {/* Bottom legend */}
+      <div className="flex items-center gap-5 text-xs text-gray-500 dark:text-gray-400 mt-1 flex-wrap">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-4 h-0.5 rounded" style={{ backgroundColor: COLORS.billing }} /> 売上/人工
         </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-orange-400" /> 原価/人工
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-4 h-0.5 rounded" style={{ backgroundColor: COLORS.cost }} /> 原価/人工
         </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500 opacity-70" /> 差益/人工
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-4 h-0.5 rounded" style={{ backgroundColor: COLORS.profit }} /> 差益/人工
         </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-5 border-t-2 border-dashed border-gray-500" /> 基準
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-4 border-t-2 border-dashed" style={{ borderColor: COLORS.baseline }} /> 基準
         </span>
-        {forecast && (
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-5 border-t-2 border-dashed border-indigo-400" /> 予測
-          </span>
-        )}
       </div>
     </div>
   )
