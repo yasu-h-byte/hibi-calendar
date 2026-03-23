@@ -197,7 +197,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-2xl font-bold text-hibi-navy">管理者設定</h1>
+      <h1 className="text-2xl font-bold text-hibi-navy dark:text-white">管理者設定</h1>
 
       {/* Message toast */}
       {message && (
@@ -209,17 +209,17 @@ export default function SettingsPage() {
       )}
 
       {/* Default Rates Card */}
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="text-lg font-bold text-hibi-navy mb-4">デフォルト単価エディタ</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+        <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">デフォルト単価エディタ</h2>
 
         <div className="space-y-4">
           {/* Tobi Rate */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">鳶基本単価</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">鳶基本単価</label>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => adjustRate('tobiRate', -1000)}
-                className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-bold text-lg transition"
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg font-bold text-lg transition dark:text-white"
               >
                 −1000
               </button>
@@ -227,25 +227,25 @@ export default function SettingsPage() {
                 type="number"
                 value={rates.tobiRate}
                 onChange={e => setRates(prev => ({ ...prev, tobiRate: Number(e.target.value) || 0 }))}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-center text-lg font-bold"
+                className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center text-lg font-bold"
               />
               <button
                 onClick={() => adjustRate('tobiRate', 1000)}
-                className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-bold text-lg transition"
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg font-bold text-lg transition dark:text-white"
               >
                 +1000
               </button>
-              <span className="text-gray-500 text-sm">円</span>
+              <span className="text-gray-500 dark:text-gray-400 text-sm">円</span>
             </div>
           </div>
 
           {/* Doko Rate */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">土工基本単価</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">土工基本単価</label>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => adjustRate('dokoRate', -1000)}
-                className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-bold text-lg transition"
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg font-bold text-lg transition dark:text-white"
               >
                 −1000
               </button>
@@ -253,15 +253,15 @@ export default function SettingsPage() {
                 type="number"
                 value={rates.dokoRate}
                 onChange={e => setRates(prev => ({ ...prev, dokoRate: Number(e.target.value) || 0 }))}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-center text-lg font-bold"
+                className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center text-lg font-bold"
               />
               <button
                 onClick={() => adjustRate('dokoRate', 1000)}
-                className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-bold text-lg transition"
+                className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg font-bold text-lg transition dark:text-white"
               >
                 +1000
               </button>
-              <span className="text-gray-500 text-sm">円</span>
+              <span className="text-gray-500 dark:text-gray-400 text-sm">円</span>
             </div>
           </div>
         </div>
@@ -276,10 +276,10 @@ export default function SettingsPage() {
       </div>
 
       {/* Backup Card */}
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="text-lg font-bold text-hibi-navy mb-4">バックアップ</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+        <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">バックアップ</h2>
 
-        <p className="text-sm text-gray-600 mb-3">
+        <p className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-400 mb-3">
           現在のデータベース全体をJSONファイルとしてダウンロードします。
         </p>
 
@@ -293,10 +293,10 @@ export default function SettingsPage() {
       </div>
 
       {/* Restore Card */}
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="text-lg font-bold text-hibi-navy mb-4">リストア</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+        <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">リストア</h2>
 
-        <p className="text-sm text-gray-600 mb-3">
+        <p className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-400 mb-3">
           バックアップJSONファイルからデータを復元します。現在のデータは上書きされます。
         </p>
 
@@ -309,18 +309,18 @@ export default function SettingsPage() {
 
         {/* Preview */}
         {importPreview && (
-          <div className="mt-4 border border-gray-200 rounded-lg p-4 bg-gray-50">
-            <h3 className="font-medium text-gray-800 mb-2">インポートデータのプレビュー</h3>
+          <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-700">
+            <h3 className="font-medium text-gray-800 dark:text-gray-200 mb-2">インポートデータのプレビュー</h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="text-gray-600">作業員数:</div>
+              <div className="text-gray-600 dark:text-gray-400">作業員数:</div>
               <div className="font-medium">{importPreview.workerCount}名</div>
-              <div className="text-gray-600">現場数:</div>
+              <div className="text-gray-600 dark:text-gray-400">現場数:</div>
               <div className="font-medium">{importPreview.siteCount}件</div>
-              <div className="text-gray-600">外注先数:</div>
+              <div className="text-gray-600 dark:text-gray-400">外注先数:</div>
               <div className="font-medium">{importPreview.subconCount}件</div>
-              <div className="text-gray-600">出面データ:</div>
+              <div className="text-gray-600 dark:text-gray-400">出面データ:</div>
               <div className="font-medium">{importPreview.hasAttendance ? 'あり' : 'なし'}</div>
-              <div className="text-gray-600">カレンダーデータ:</div>
+              <div className="text-gray-600 dark:text-gray-400">カレンダーデータ:</div>
               <div className="font-medium">{importPreview.hasCalendars ? 'あり' : 'なし'}</div>
             </div>
 
@@ -339,7 +339,7 @@ export default function SettingsPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setShowConfirm(false)}
-                    className="flex-1 bg-gray-200 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-300 transition"
+                    className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 py-2.5 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition"
                   >
                     キャンセル
                   </button>

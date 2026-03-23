@@ -148,10 +148,10 @@ ${baseUrl}/calendar/public
 
   // Status badge
   const statusBadge = (status: CalendarStatus | null) => {
-    if (!status || status === 'draft') return <span className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">下書き</span>
-    if (status === 'submitted') return <span className="bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-0.5 rounded-full">承認待ち</span>
-    if (status === 'approved') return <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full">承認済み</span>
-    if (status === 'rejected') return <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">差し戻し</span>
+    if (!status || status === 'draft') return <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full">下書き</span>
+    if (status === 'submitted') return <span className="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 text-xs font-bold px-2 py-0.5 rounded-full">承認待ち</span>
+    if (status === 'approved') return <span className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold px-2 py-0.5 rounded-full">承認済み</span>
+    if (status === 'rejected') return <span className="bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-xs font-bold px-2 py-0.5 rounded-full">差し戻し</span>
     return null
   }
 
@@ -197,8 +197,8 @@ ${baseUrl}/calendar/public
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy">就業カレンダー</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">就業カレンダー</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {user.role === 'foreman' ? '担当現場のカレンダー管理' : '全現場のカレンダー管理'}
           </p>
         </div>
@@ -206,7 +206,7 @@ ${baseUrl}/calendar/public
           <select
             value={ym}
             onChange={e => setYm(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white"
           >
             {ymOptions.map(o => (
               <option key={o} value={o}>{o.replace('-', '年')}月</option>
@@ -227,29 +227,29 @@ ${baseUrl}/calendar/public
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl shadow p-4 text-center">
-          <div className="text-2xl font-bold text-hibi-navy">{visibleSites.length}</div>
-          <div className="text-xs text-gray-500">現場</div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+          <div className="text-2xl font-bold text-hibi-navy dark:text-blue-300">{visibleSites.length}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">現場</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
-          <div className="text-2xl font-bold text-yellow-600">{submittedCount}</div>
-          <div className="text-xs text-gray-500">承認待ち</div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{submittedCount}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">承認待ち</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
-          <div className="text-2xl font-bold text-green-600">{approvedCount}</div>
-          <div className="text-xs text-gray-500">承認済み</div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+          <div className="text-2xl font-bold text-green-600 dark:text-green-400">{approvedCount}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">承認済み</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
-          <div className="text-2xl font-bold text-blue-600">{signedWorkers}/{totalWorkers}</div>
-          <div className="text-xs text-gray-500">署名</div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{signedWorkers}/{totalWorkers}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">署名</div>
         </div>
       </div>
 
       {/* Site cards */}
       {loading ? (
-        <div className="text-center py-8 text-gray-400">読み込み中...</div>
+        <div className="text-center py-8 text-gray-400 dark:text-gray-500">読み込み中...</div>
       ) : visibleSites.length === 0 ? (
-        <div className="text-center py-8 text-gray-400">現場データがありません</div>
+        <div className="text-center py-8 text-gray-400 dark:text-gray-500">現場データがありません</div>
       ) : (
         <div className="space-y-4">
           {/* Show submitted sites first for approvers */}
@@ -264,19 +264,19 @@ ${baseUrl}/calendar/public
             const hasUnsaved = !!editingDays[site.siteId]
 
             return (
-              <div key={site.siteId} className="bg-white rounded-xl shadow overflow-hidden">
+              <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow overflow-hidden">
                 {/* Site header */}
                 <div
-                  className="p-4 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
+                  className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between"
                   onClick={() => setExpandedSite(isExpanded ? null : site.siteId)}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-hibi-navy">{site.siteName}</h3>
+                      <h3 className="font-bold text-hibi-navy dark:text-white">{site.siteName}</h3>
                       {statusBadge(site.status)}
                       {hasUnsaved && <span className="text-orange-500 text-xs">● 未保存</span>}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {signedCount}/{site.workers.length}名 署名済み
                     </div>
                     {site.rejectedReason && site.status === 'rejected' && (
@@ -293,7 +293,7 @@ ${baseUrl}/calendar/public
 
                 {/* Expanded content */}
                 {isExpanded && (
-                  <div className="border-t px-4 pb-4 space-y-4">
+                  <div className="border-t dark:border-gray-700 px-4 pb-4 space-y-4">
                     {/* Calendar editor */}
                     <div className="pt-4">
                       <CalendarEditor
@@ -306,7 +306,7 @@ ${baseUrl}/calendar/public
                     </div>
 
                     {/* Working hours note */}
-                    <div className="bg-blue-50 rounded-lg p-3 text-sm">
+                    <div className="bg-blue-50 dark:bg-blue-900/20 dark:text-blue-200 rounded-lg p-3 text-sm">
                       就業時間: 8:00〜17:00（休憩2時間）
                     </div>
 
@@ -352,10 +352,10 @@ ${baseUrl}/calendar/public
                     {/* Worker signature list */}
                     {site.workers.length > 0 && (
                       <div>
-                        <h4 className="text-sm font-bold text-gray-600 mb-2">署名状況</h4>
+                        <h4 className="text-sm font-bold text-gray-600 dark:text-gray-300 mb-2">署名状況</h4>
                         <div className="space-y-1">
                           {site.workers.map(w => (
-                            <div key={w.id} className="flex items-center justify-between text-sm py-1 border-b border-gray-100">
+                            <div key={w.id} className="flex items-center justify-between text-sm py-1 border-b border-gray-100 dark:border-gray-700 dark:text-gray-300">
                               <span>{w.name}</span>
                               {w.signed ? (
                                 <span className="text-green-600 text-xs">✓ {w.signedAt && new Date(w.signedAt).toLocaleDateString('ja-JP')}</span>
@@ -380,13 +380,13 @@ ${baseUrl}/calendar/public
       {/* Reject modal */}
       {rejectSiteId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setRejectSiteId(null)}>
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-4">差し戻し理由</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">差し戻し理由</h3>
             <textarea
               value={rejectReason}
               onChange={e => setRejectReason(e.target.value)}
               placeholder="理由を入力してください（任意）"
-              className="w-full border border-gray-300 rounded-lg p-3 mb-4 text-sm"
+              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg p-3 mb-4 text-sm"
               rows={3}
             />
             <div className="flex gap-2">
@@ -398,7 +398,7 @@ ${baseUrl}/calendar/public
               </button>
               <button
                 onClick={() => { setRejectSiteId(null); setRejectReason('') }}
-                className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2 text-sm hover:bg-gray-300 transition"
+                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2 text-sm hover:bg-gray-300 dark:hover:bg-gray-500 transition"
               >
                 キャンセル
               </button>

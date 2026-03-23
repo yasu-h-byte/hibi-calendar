@@ -218,8 +218,8 @@ export default function WorkersPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy">人員マスタ</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">人員マスタ</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             日比建設: {hibiCount}名 / HFU: {hfuCount}名 / 合計: {workers.length}名
           </p>
         </div>
@@ -239,7 +239,7 @@ export default function WorkersPage() {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              tab === t.key ? 'bg-hibi-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              tab === t.key ? 'bg-hibi-navy text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
             {t.label}
@@ -248,10 +248,10 @@ export default function WorkersPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 text-left text-gray-600">
+            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
               <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('id')}>
                 ID {sortKey === 'id' && (sortAsc ? '↑' : '↓')}
               </th>
@@ -279,7 +279,7 @@ export default function WorkersPage() {
               const pl = plData[w.id]
               const jb = jobBadge(w.jobType)
               return (
-                <tr key={w.id} className={`border-t hover:bg-gray-50 ${w.retired ? 'opacity-45' : ''}`}>
+                <tr key={w.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30 ${w.retired ? 'opacity-45' : ''}`}>
                   <td className="px-3 py-2.5 text-gray-400">{w.id}</td>
                   <td className="px-3 py-2.5 font-medium">
                     {w.name}
@@ -365,35 +365,35 @@ export default function WorkersPage() {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto animate-modalIn" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">
               {editId ? '社員編集' : '社員追加'}
             </h3>
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">名前 *</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">名前 *</label>
                 <input
                   value={form.name}
                   onChange={e => setForm({ ...form, name: e.target.value })}
                   placeholder="例：山田太郎"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">所属</label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">所属</label>
                   <select value={form.org} onChange={e => setForm({ ...form, org: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
                     <option value="hibi">日比建設</option>
                     <option value="hfu">HFU</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">職種</label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">職種</label>
                   <select value={form.job} onChange={e => setForm({ ...form, job: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
                     <option value="tobi">とび</option>
                     <option value="doko">土工</option>
                     <option value="shokucho">職長</option>
@@ -403,9 +403,9 @@ export default function WorkersPage() {
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 block mb-1">在留資格</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">在留資格</label>
                 <select value={form.visa} onChange={e => setForm({ ...form, visa: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
                   <option value="none">なし（日本人）</option>
                   <option value="jisshu">技能実習</option>
                   <option value="tokutei">特定技能</option>
@@ -414,29 +414,29 @@ export default function WorkersPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">日額単価（円）</label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">日額単価（円）</label>
                   <input type="number" value={form.rate} onChange={e => setForm({ ...form, rate: e.target.value })}
                     placeholder="25000"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">残業倍率</label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">残業倍率</label>
                   <input type="number" step="0.05" value={form.otMul} onChange={e => setForm({ ...form, otMul: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 block mb-1">入社日</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">入社日</label>
                 <input type="date" value={form.hireDate} onChange={e => setForm({ ...form, hireDate: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
               </div>
 
               {editId && (
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">退職日</label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">退職日</label>
                   <input type="date" value={form.retired} onChange={e => setForm({ ...form, retired: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                 </div>
               )}
             </div>
@@ -473,7 +473,7 @@ export default function WorkersPage() {
                 {saving ? '保存中...' : '保存'}
               </button>
               <button onClick={() => setShowModal(false)}
-                className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2.5 text-sm hover:bg-gray-300 transition">
+                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm hover:bg-gray-300 dark:hover:bg-gray-500 transition">
                 キャンセル
               </button>
             </div>
@@ -484,8 +484,8 @@ export default function WorkersPage() {
       {/* QR Modal */}
       {qrWorker && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setQrWorker(null)}>
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-2">{qrWorker.name}</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">{qrWorker.name}</h3>
             <p className="text-xs text-gray-500 mb-4 break-all">{baseUrl}/attendance/{qrWorker.token}</p>
             <div className="flex justify-center mb-4">
               <QRCodeSVG value={`${baseUrl}/attendance/${qrWorker.token}`} size={200} level="M" />
@@ -500,7 +500,7 @@ export default function WorkersPage() {
               >
                 URLコピー
               </button>
-              <button onClick={() => setQrWorker(null)} className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2 text-sm">
+              <button onClick={() => setQrWorker(null)} className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2 text-sm">
                 閉じる
               </button>
             </div>

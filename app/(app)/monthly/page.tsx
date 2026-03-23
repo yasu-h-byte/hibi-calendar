@@ -372,9 +372,9 @@ export default function MonthlyPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-xl font-bold text-hibi-navy">月次集計</h1>
+            <h1 className="text-xl font-bold text-hibi-navy dark:text-white">月次集計</h1>
             {data && (
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 出勤延べ {Number.isInteger(data.totals.workDays) ? data.totals.workDays : data.totals.workDays.toFixed(1)}人日 / 外注 {data.totals.subWorkDays}人工 / 残業 {data.totals.otHours}h
               </p>
             )}
@@ -414,7 +414,7 @@ export default function MonthlyPage() {
           <select
             value={ym}
             onChange={e => setYm(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none"
           >
             {ymOptions.map(o => (
               <option key={o.ym} value={o.ym}>{o.label}</option>
@@ -432,7 +432,7 @@ export default function MonthlyPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               tab === t.key
                 ? 'bg-hibi-navy text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
             {t.label}
@@ -441,8 +441,8 @@ export default function MonthlyPage() {
 
         {/* 所定日数 input - HFU tab only */}
         {isHfuTab && (
-          <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300">
-            <label className="text-sm text-gray-600 whitespace-nowrap">所定日数:</label>
+          <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600">
+            <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">所定日数:</label>
             <input
               type="number"
               value={prescribedDays}
@@ -451,7 +451,7 @@ export default function MonthlyPage() {
               min={0}
               max={31}
               step={1}
-              className="w-16 border border-gray-300 rounded px-2 py-1 text-sm text-center focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+              className="w-16 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-sm text-center focus:ring-2 focus:ring-hibi-navy focus:outline-none"
             />
             <button
               onClick={handleSaveWorkDays}
@@ -466,7 +466,7 @@ export default function MonthlyPage() {
 
       {/* Loading / Error */}
       {loading && (
-        <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center text-gray-400 dark:text-gray-500">
           読み込み中...
         </div>
       )}
@@ -479,10 +479,10 @@ export default function MonthlyPage() {
 
       {/* Worker Table (全体 / 日比建設 / HFU) */}
       {!loading && data && isWorkerTab && (
-        <div className="bg-white rounded-xl shadow overflow-x-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 text-left text-gray-600">
+              <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap"
                   onClick={() => toggleWorkerSort('name')}
@@ -550,7 +550,7 @@ export default function MonthlyPage() {
                   const absentDeduction = showAbsenceColumns ? calcAbsentDeduction(w) : 0
                   const netPay = showAbsenceColumns ? calcNetPay(w) : 0
                   return (
-                    <tr key={w.id} className="border-t hover:bg-gray-50">
+                    <tr key={w.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
                       <td className="px-3 py-2.5 font-medium whitespace-nowrap">{w.name}</td>
                       <td className="px-3 py-2.5">{orgBadge(w.org)}</td>
                       <td className="px-3 py-2.5">
@@ -609,7 +609,7 @@ export default function MonthlyPage() {
             </tbody>
             {sortedWorkers.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-hibi-navy bg-gray-50 font-bold text-hibi-navy">
+                <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy">
                   <td className="px-3 py-3">合計 ({filteredWorkers.length}名)</td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3"></td>
@@ -648,10 +648,10 @@ export default function MonthlyPage() {
 
       {/* Subcon Table (外注) */}
       {!loading && data && !isWorkerTab && (
-        <div className="bg-white rounded-xl shadow overflow-x-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 text-left text-gray-600">
+              <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap"
                   onClick={() => toggleSubconSort('name')}
@@ -699,7 +699,7 @@ export default function MonthlyPage() {
                 </tr>
               ) : (
                 sortedSubcons.map(sc => (
-                  <tr key={sc.id} className="border-t hover:bg-gray-50">
+                  <tr key={sc.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
                     <td className="px-3 py-2.5 font-medium whitespace-nowrap">{sc.name}</td>
                     <td className="px-3 py-2.5">
                       <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
@@ -722,7 +722,7 @@ export default function MonthlyPage() {
             </tbody>
             {sortedSubcons.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-hibi-navy bg-gray-50 font-bold text-hibi-navy">
+                <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy">
                   <td className="px-3 py-3">合計 ({data!.subcons.length}社)</td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3 text-right tabular-nums">{subconTotals.workDays}</td>

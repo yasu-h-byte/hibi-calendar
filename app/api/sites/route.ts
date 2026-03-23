@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { logActivity } from '@/lib/activity'
 
 function checkAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get('x-admin-password')
@@ -131,6 +132,7 @@ export async function POST(request: NextRequest) {
       }
 
       await updateDoc(ref, { sites: [...sites, newSite] })
+      await logActivity('admin', 'site.add', `${name} を追加`)
       return NextResponse.json({ success: true, site: newSite })
     }
 
@@ -170,6 +172,7 @@ export async function POST(request: NextRequest) {
       }
 
       await updateDoc(ref, updateData)
+      await logActivity('admin', 'site.update', `${id} を更新`)
       return NextResponse.json({ success: true })
     }
 
@@ -208,6 +211,7 @@ export async function POST(request: NextRequest) {
       }
 
       await updateDoc(ref, updateData)
+      await logActivity('admin', 'site.delete', `${id} を削除`)
       return NextResponse.json({ success: true })
     }
 

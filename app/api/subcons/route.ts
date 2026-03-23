@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { logActivity } from '@/lib/activity'
 
 function checkAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get('x-admin-password')
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
       const newSubcon = { id, name, type: type || '鳶業者', rate: Number(rate) || 0, otRate: Number(otRate) || 0, note: note || '' }
       subcons.push(newSubcon)
       await updateDoc(docRef, { subcons })
+      await logActivity('admin', 'subcon.add', `${name} を追加`)
       return NextResponse.json({ success: true, subcon: newSubcon })
     }
 
@@ -65,6 +67,7 @@ export async function POST(request: NextRequest) {
       if (updates.otRate !== undefined) updates.otRate = Number(updates.otRate)
       subcons[idx] = { ...subcons[idx], ...updates }
       await updateDoc(docRef, { subcons })
+      await logActivity('admin', 'subcon.update', `${id} を更新`)
       return NextResponse.json({ success: true })
     }
 
@@ -73,6 +76,7 @@ export async function POST(request: NextRequest) {
       const filtered = subcons.filter(s => s.id !== id)
       if (filtered.length === subcons.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
       await updateDoc(docRef, { subcons: filtered })
+      await logActivity('admin', 'subcon.delete', `${id} を削除`)
       return NextResponse.json({ success: true })
     }
 

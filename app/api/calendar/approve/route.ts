@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc } from 'firebase/firestore'
+import { logActivity } from '@/lib/activity'
 
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get('x-admin-password')
@@ -18,6 +19,7 @@ export async function POST(request: NextRequest) {
       approvedBy,
     })
 
+    await logActivity(String(approvedBy || 'admin'), 'calendar.approve', `${siteId} ${ym} を承認`)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Failed to approve:', error)

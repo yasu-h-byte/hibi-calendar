@@ -366,8 +366,8 @@ export default function SitesPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy">現場マスタ</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">現場マスタ</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             稼働中: {activeCount}件 / アーカイブ: {archivedCount}件 / 合計: {sites.length}件
           </p>
         </div>
@@ -390,10 +390,10 @@ export default function SitesPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 text-left text-gray-600">
+            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
               <th className="px-3 py-3">現場名</th>
               <th className="px-3 py-3">工期</th>
               <th className="px-3 py-3">職長</th>
@@ -418,7 +418,7 @@ export default function SitesPage() {
               const rate = getLatestRate(s)
 
               return (
-                <tr key={s.id} className={`border-t hover:bg-gray-50 ${s.archived ? 'opacity-45' : ''}`}>
+                <tr key={s.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${s.archived ? 'opacity-45' : ''}`}>
                   <td className="px-3 py-2.5 font-medium">{s.name}</td>
                   <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">
                     {s.start && s.end
@@ -472,50 +472,50 @@ export default function SitesPage() {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-modalIn" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">
               {editId ? '現場編集' : '現場追加'}
             </h3>
 
             <div className="space-y-4">
               {/* Basic info */}
               <div>
-                <label className="text-xs text-gray-500 block mb-1">現場名 *</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">現場名 *</label>
                 <input
                   value={form.name}
                   onChange={e => setForm({ ...form, name: e.target.value })}
                   placeholder="例：〇〇ビル新築工事"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">工期開始</label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">工期開始</label>
                   <input
                     type="date"
                     value={form.start}
                     onChange={e => setForm({ ...form, start: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 block mb-1">工期終了</label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">工期終了</label>
                   <input
                     type="date"
                     value={form.end}
                     onChange={e => setForm({ ...form, end: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-xs text-gray-500 block mb-1">職長</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">職長</label>
                 <select
                   value={form.foreman}
                   onChange={e => setForm({ ...form, foreman: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                 >
                   <option value="0">未設定</option>
                   {activeWorkers.map(w => (
@@ -785,7 +785,7 @@ export default function SitesPage() {
                 {saving ? '保存中...' : '保存'}
               </button>
               <button onClick={() => setShowModal(false)}
-                className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2.5 text-sm hover:bg-gray-300 transition">
+                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm hover:bg-gray-300 transition">
                 キャンセル
               </button>
               {editId && (

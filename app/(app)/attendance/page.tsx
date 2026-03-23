@@ -614,7 +614,7 @@ export default function AttendanceGridPage() {
     <div className="space-y-4">
       {/* ── Header ── */}
       <div className="flex items-center gap-4 flex-wrap">
-        <h1 className="text-xl font-bold text-hibi-navy flex items-center gap-2">
+        <h1 className="text-xl font-bold text-hibi-navy dark:text-white flex items-center gap-2">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -665,7 +665,7 @@ export default function AttendanceGridPage() {
               step="1"
               value={workDaysInput}
               onChange={e => handleWorkDaysChange(e.target.value)}
-              className="w-14 border border-gray-300 rounded px-1.5 py-1 text-center text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+              className="w-14 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-1.5 py-1 text-center text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
               placeholder="-"
             />
             <span className="text-gray-400">日</span>
@@ -694,7 +694,7 @@ export default function AttendanceGridPage() {
           <select
             value={siteId}
             onChange={e => setSiteId(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-hibi-navy focus:outline-none min-w-[180px]"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none min-w-[180px]"
           >
             {(data?.sites || []).map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
@@ -705,7 +705,7 @@ export default function AttendanceGridPage() {
           <select
             value={ym}
             onChange={e => setYm(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none"
           >
             {ymOptions.map(o => (
               <option key={o.ym} value={o.ym}>{o.label}</option>
@@ -716,7 +716,7 @@ export default function AttendanceGridPage() {
 
       {/* ── Loading / Error ── */}
       {loading && (
-        <div className="bg-white rounded-xl shadow p-12 text-center text-gray-400">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-12 text-center text-gray-400">
           <svg className="animate-spin h-6 w-6 mx-auto mb-2 text-hibi-navy" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -733,7 +733,7 @@ export default function AttendanceGridPage() {
 
       {/* ── Grid Table ── */}
       {!loading && data && (
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="text-xs border-collapse" style={{ minWidth: `${180 + days.length * 52 + 120}px` }}>
               <thead>
@@ -1102,7 +1102,7 @@ export default function AttendanceGridPage() {
           </div>
 
           {/* Legend */}
-          <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 flex items-center gap-4 text-[10px] text-gray-500 flex-wrap">
+          <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400 flex-wrap">
             <span className="flex items-center gap-1">
               <span className="inline-block w-3 h-3 rounded bg-amber-50 border border-amber-200" /> 今日
             </span>
@@ -1124,7 +1124,7 @@ export default function AttendanceGridPage() {
 
       {/* No data placeholder */}
       {!loading && !error && !data && !siteId && (
-        <div className="bg-white rounded-xl shadow p-12 text-center text-gray-400">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-12 text-center text-gray-400">
           現場を選択してください
         </div>
       )}
@@ -1192,7 +1192,7 @@ function AssignModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col"
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal header */}
@@ -1275,7 +1275,7 @@ function AssignModal({
         <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-200 bg-gray-50">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-100 transition"
+            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-100 transition"
           >
             キャンセル
           </button>

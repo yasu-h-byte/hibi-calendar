@@ -552,6 +552,179 @@ export async function GET(request: NextRequest) {
       }).sort((a, b) => a.ym.localeCompare(b.ym))
     }
 
+    // ═══ Cost Forecasting (3-month moving average) ═══
+    // Use the sorted monthly trend to compute forecast
+    const sortedTrend = [...monthlyTrend].sort((a, b) => a.ym.localeCompare(b.ym))
+    let forecast: {
+      nextYm: string
+      predictedBilling: number
+      predictedCost: number
+      predictedProfitRate: number
+      movingAvgBilling: number[]
+      movingAvgCost: number[]
+    } | null = null
+
+    if (sortedTrend.length >= 3) {
+      // Calculate 3-month moving averages for each point
+      const maBilling: number[] = []
+      const maCost: number[] = []
+      for (let i = 0; i < sortedTrend.length; i++) {
+        if (i < 2) {
+          maBilling.push(0)
+          maCost.push(0)
+        } else {
+          const mr0 = monthlyResults.find(r => r.ym === sortedTrend[i].ym)
+          const mr1 = monthlyResults.find(r => r.ym === sortedTrend[i - 1].ym)
+          const mr2 = monthlyResults.find(r => r.ym === sortedTrend[i - 2].ym)
+
+          let b0 = 0, b1 = 0, b2 = 0, c0 = 0, c1 = 0, c2 = 0
+          if (mr0) for (const s of mr0.sites) { if (siteFilter !== 'all' && s.id !== siteFilter) continue; b0 += s.billing; c0 += s.cost + s.subCost }
+          if (mr1) for (const s of mr1.sites) { if (siteFilter !== 'all' && s.id !== siteFilter) continue; b1 += s.billing; c1 += s.cost + s.subCost }
+          if (mr2) for (const s of mr2.sites) { if (siteFilter !== 'all' && s.id !== siteFilter) continue; b2 += s.billing; c2 += s.cost + s.subCost }
+
+          maBilling.push((b0 + b1 + b2) / 3)
+          maCost.push((c0 + c1 + c2) / 3)
+        }
+      }
+
+      // Predict next month: use trend from last two valid MA points
+      const lastMA_B = maBilling[maBilling.length - 1]
+      const lastMA_C = maCost[maCost.length - 1]
+
+      // Simple trend: average of last 3 months
+      const last3B = sortedTrend.slice(-3).reduce((s, t) => {
+        const mr = monthlyResults.find(r => r.ym === t.ym)
+        let b = 0; if (mr) for (const st of mr.sites) { if (siteFilter !== 'all' && st.id !== siteFilter) continue; b += st.billing }
+        return s + b
+      }, 0) / 3
+      const last3C = sortedTrend.slice(-3).reduce((s, t) => {
+        const mr = monthlyResults.find(r => r.ym === t.ym)
+        let c = 0; if (mr) for (const st of mr.sites) { if (siteFilter !== 'all' && st.id !== siteFilter) continue; c += st.cost + st.subCost }
+        return s + c
+      }, 0) / 3
+
+      // Trend direction from last 2 MA points
+      let predictedBilling = last3B
+      let predictedCost = last3C
+      if (maBilling.length >= 4 && maBilling[maBilling.length - 2] > 0) {
+        const trendB = lastMA_B / maBilling[maBilling.length - 2]
+        const trendC = lastMA_C / maCost[maCost.length - 2]
+        predictedBilling = lastMA_B * trendB
+        predictedCost = lastMA_C * trendC
+      }
+
+      // Next month YM
+      const lastYm = sortedTrend[sortedTrend.length - 1].ym
+      const ly = parseInt(lastYm.slice(0, 4))
+      const lm = parseInt(lastYm.slice(4, 6))
+      const nd = new Date(ly, lm, 1) // next month
+      const nextYm = ymKey(nd.getFullYear(), nd.getMonth() + 1)
+
+      const predictedProfit = predictedBilling - predictedCost
+      const predictedProfitRate = predictedBilling > 0 ? (predictedProfit / predictedBilling) * 100 : 0
+
+      forecast = {
+        nextYm,
+        predictedBilling: Math.round(predictedBilling),
+        predictedCost: Math.round(predictedCost),
+        predictedProfitRate: Math.round(predictedProfitRate * 10) / 10,
+        movingAvgBilling: maBilling,
+        movingAvgCost: maCost,
+      }
+    }
+
+    // ═══ Subcon Ratio Alert (per site) ═══
+    const subconAlert: {
+      overallRate: number
+      level: 'none' | 'yellow' | 'red'
+      sitesAbove50: { id: string; name: string; rate: number }[]
+    } = {
+      overallRate: subconRate,
+      level: subconRate > 60 ? 'red' : subconRate > 50 ? 'yellow' : 'none',
+      sitesAbove50: sitesArray
+        .filter(s => s.subconRate > 50 && (s.inHouseWorkDays + s.subconWorkDays) > 0)
+        .map(s => ({ id: s.id, name: s.name, rate: Math.round(s.subconRate * 10) / 10 }))
+        .sort((a, b) => b.rate - a.rate),
+    }
+
+    // ═══ YoY Labor Cost Comparison ═══
+    // Fetch same period last year
+    const prevYearYmList = ymList.map(m => {
+      const my = parseInt(m.slice(0, 4))
+      const mm = parseInt(m.slice(4, 6))
+      return ymKey(my - 1, mm)
+    })
+
+    const prevYearAttData = await Promise.all(
+      prevYearYmList.filter(m => !allAttData.find(a => a.ym === m)).map(async (m) => {
+        const att = await getAttData(m)
+        return { ym: m, d: att.d, sd: att.sd }
+      })
+    )
+    const allAttDataWithPrev = [...allAttData, ...prevYearAttData]
+
+    const prevYearResults = prevYearYmList.map(m => {
+      const att = allAttDataWithPrev.find(a => a.ym === m)
+      if (!att) return null
+      return { ym: m, ...computeMonthly(main, att.d, att.sd, m) }
+    })
+
+    // Current year total labor cost (by site)
+    const currentLaborBySite = new Map<string, number>()
+    let currentTotalLabor = 0
+    for (const mr of monthlyResults) {
+      for (const site of mr.sites) {
+        if (siteFilter !== 'all' && site.id !== siteFilter) continue
+        const c = site.cost + site.subCost
+        currentLaborBySite.set(site.id, (currentLaborBySite.get(site.id) || 0) + c)
+        currentTotalLabor += c
+      }
+    }
+
+    // Previous year total labor cost (by site)
+    const prevLaborBySite = new Map<string, number>()
+    let prevTotalLabor = 0
+    let hasPrevData = false
+    for (const mr of prevYearResults) {
+      if (!mr) continue
+      hasPrevData = true
+      for (const site of mr.sites) {
+        if (siteFilter !== 'all' && site.id !== siteFilter) continue
+        const c = site.cost + site.subCost
+        prevLaborBySite.set(site.id, (prevLaborBySite.get(site.id) || 0) + c)
+        prevTotalLabor += c
+      }
+    }
+
+    const yoyComparison: {
+      hasPrevData: boolean
+      currentTotal: number
+      prevTotal: number
+      changeRate: number
+      sites: { id: string; name: string; current: number; prev: number; changeRate: number }[]
+    } = {
+      hasPrevData,
+      currentTotal: Math.round(currentTotalLabor),
+      prevTotal: Math.round(prevTotalLabor),
+      changeRate: prevTotalLabor > 0 ? ((currentTotalLabor - prevTotalLabor) / prevTotalLabor) * 100 : 0,
+      sites: main.sites
+        .filter(s => !s.archived)
+        .filter(s => siteFilter === 'all' || s.id === siteFilter)
+        .map(s => {
+          const cur = currentLaborBySite.get(s.id) || 0
+          const prev = prevLaborBySite.get(s.id) || 0
+          return {
+            id: s.id,
+            name: s.name,
+            current: Math.round(cur),
+            prev: Math.round(prev),
+            changeRate: prev > 0 ? ((cur - prev) / prev) * 100 : 0,
+          }
+        })
+        .filter(s => s.current > 0 || s.prev > 0)
+        .sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate)),
+    }
+
     return NextResponse.json({
       kpi,
       sites: sitesArray,
@@ -567,6 +740,9 @@ export async function GET(request: NextRequest) {
       selectedYm: ym,
       siteMembers,
       siteTrend,
+      forecast,
+      subconAlert,
+      yoyComparison,
     })
   } catch (error) {
     console.error('Dashboard API error:', error)

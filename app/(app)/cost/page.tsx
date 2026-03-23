@@ -152,19 +152,19 @@ export default function CostPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold text-hibi-navy">原価・収益管理</h1>
+        <h1 className="text-xl font-bold text-hibi-navy dark:text-white">原価・収益管理</h1>
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
             {([['monthly', '月次'], ['3months', '3ヶ月'], ['6months', '6ヶ月'], ['fiscal', '決算期'], ['yearly', '年間']] as [PeriodType, string][]).map(([key, label]) => (
               <button key={key} onClick={() => setPeriod(key)}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition ${
-                  period === key ? 'bg-white text-hibi-navy shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  period === key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}>
                 {label}
               </button>
             ))}
           </div>
-          <select value={ym} onChange={e => setYm(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <select value={ym} onChange={e => setYm(e.target.value)} className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
             {ymOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
@@ -173,30 +173,30 @@ export default function CostPage() {
       {/* KPI */}
       {t && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-white rounded-xl shadow p-4 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
             <div className="text-2xl font-bold text-hibi-navy tabular-nums">{fmtYen(t.billing)}</div>
-            <div className="text-xs text-gray-500">総請求額</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">総請求額</div>
           </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
             <div className={`text-2xl font-bold tabular-nums ${profitColor(t.profitRate)}`}>{fmtYen(t.profit)}</div>
-            <div className="text-xs text-gray-500">粗利（{fmtRate(t.profitRate)}）</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">粗利（{fmtRate(t.profitRate)}）</div>
           </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
             <div className="text-2xl font-bold text-blue-600 tabular-nums">{fmtYen(t.cost)}</div>
-            <div className="text-xs text-gray-500">自社労務費</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">自社労務費</div>
           </div>
-          <div className="bg-white rounded-xl shadow p-4 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
             <div className="text-2xl font-bold text-orange-600 tabular-nums">{fmtYen(t.subCost)}</div>
-            <div className="text-xs text-gray-500">外注費</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">外注費</div>
           </div>
         </div>
       )}
 
       {/* Site profit table */}
-      <div className="bg-white rounded-xl shadow overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 text-left text-gray-600">
+            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
               <th className="px-3 py-3 whitespace-nowrap">現場</th>
               <th className="px-3 py-3 text-right whitespace-nowrap">
                 請求額
@@ -222,7 +222,7 @@ export default function CostPage() {
                 {data.sites.map(s => {
                   const totalWorkers = s.workDays + s.subWorkDays
                   return (
-                    <tr key={s.id} className="border-t hover:bg-gray-50 align-top">
+                    <tr key={s.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 align-top">
                       <td className="px-3 py-2.5 font-medium">{s.name}</td>
                       {/* Billing column with multiple rows */}
                       <td className="px-3 py-2 text-right">
@@ -249,7 +249,7 @@ export default function CostPage() {
                                             updated[ri] = v
                                             saveBilling(s.id, m, updated)
                                           }}
-                                          className="w-16 text-right border border-gray-200 rounded px-1 py-0.5 text-xs tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
+                                          className="w-16 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-1 py-0.5 text-xs tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
                                         />
                                         {rows.length > 1 && (
                                           <button onClick={() => { removeBillingRow(s.id, m, ri); const updated = [...rows]; updated.splice(ri, 1); saveBilling(s.id, m, updated.length > 0 ? updated : [0]) }}
@@ -288,7 +288,7 @@ export default function CostPage() {
                                           updated[ri] = v
                                           saveBilling(s.id, ym, updated)
                                         }}
-                                        className="w-24 text-right border border-gray-200 rounded px-2 py-1 text-sm tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
+                                        className="w-24 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-sm tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
                                       />
                                       {rows.length > 1 && (
                                         <button onClick={() => { removeBillingRow(s.id, ym, ri); const updated = [...rows]; updated.splice(ri, 1); saveBilling(s.id, ym, updated.length > 0 ? updated : [0]) }}
@@ -299,7 +299,7 @@ export default function CostPage() {
                                   <button onClick={() => addBillingRow(s.id, ym)}
                                     className="text-[11px] text-blue-400 hover:text-blue-600">+ 行追加</button>
                                   {rows.length > 1 && (
-                                    <div className="text-xs text-gray-500 tabular-nums border-t border-gray-100 pt-0.5">
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums border-t border-gray-100 pt-0.5">
                                       計: {fmtYen(rows.reduce((a, b) => a + b, 0))}
                                     </div>
                                   )}
@@ -340,7 +340,7 @@ export default function CostPage() {
                   )
                 })}
                 {t && (
-                  <tr className="border-t-2 border-hibi-navy bg-gray-50 font-bold">
+                  <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold">
                     <td className="px-3 py-2.5">合計</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(t.billing)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(t.cost)}</td>
@@ -367,8 +367,8 @@ export default function CostPage() {
 
       {/* Cost Bar Chart */}
       {data && data.sites.length > 0 && (
-        <div className="bg-white rounded-xl shadow p-4">
-          <h2 className="text-sm font-bold text-hibi-navy mb-3">現場別原価バーチャート</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+          <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-3">現場別原価バーチャート</h2>
           <div className="space-y-2">
             {data.sites
               .filter(s => s.cost > 0 || s.subCost > 0)
@@ -397,7 +397,7 @@ export default function CostPage() {
                         )}
                       </div>
                     </div>
-                    <div className="w-20 text-xs text-gray-600 tabular-nums text-right flex-shrink-0">{fmtYen(total)}</div>
+                    <div className="w-20 text-xs text-gray-600 dark:text-gray-400 tabular-nums text-right flex-shrink-0">{fmtYen(total)}</div>
                   </div>
                 )
               })}
@@ -405,11 +405,11 @@ export default function CostPage() {
           <div className="flex gap-4 mt-3 pt-2 border-t border-gray-100">
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-sm bg-blue-500" />
-              <span className="text-xs text-gray-600">自社人件費</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400">自社人件費</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-3 h-3 rounded-sm bg-orange-400" />
-              <span className="text-xs text-gray-600">外注費</span>
+              <span className="text-xs text-gray-600 dark:text-gray-400">外注費</span>
             </div>
           </div>
         </div>
@@ -417,13 +417,13 @@ export default function CostPage() {
 
       {/* Subcon cost detail table (enhanced) */}
       {data && data.subconDetails && (
-        <div className="bg-white rounded-xl shadow overflow-x-auto">
-          <div className="px-4 py-3 border-b bg-gray-50">
-            <h2 className="text-sm font-bold text-hibi-navy">外注先別原価明細</h2>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+          <div className="px-4 py-3 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
+            <h2 className="text-sm font-bold text-hibi-navy dark:text-white">外注先別原価明細</h2>
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 text-left text-gray-600">
+              <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
                 <th className="px-3 py-3 w-6"></th>
                 <th className="px-3 py-3">外注先</th>
                 <th className="px-3 py-3 text-right">人工単価</th>
@@ -441,7 +441,7 @@ export default function CostPage() {
                 const otCost = sc.otCount * sc.otRate
                 return (
                   <Fragment key={sc.id}>
-                    <tr className={`border-t hover:bg-gray-50 ${!hasWork ? 'opacity-50' : ''}`}>
+                    <tr className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${!hasWork ? 'opacity-50' : ''}`}>
                       <td className="px-3 py-2.5 text-center">
                         {hasWork && sc.siteBreakdown.length > 0 && (
                           <button onClick={() => toggleSubcon(sc.id)}
@@ -474,7 +474,7 @@ export default function CostPage() {
                     {isExpanded && sc.siteBreakdown.map(b => (
                       <tr key={`${sc.id}_${b.siteId}`} className="bg-blue-50/30 border-t border-gray-100">
                         <td className="px-3 py-1.5"></td>
-                        <td className="px-3 py-1.5 pl-8 text-xs text-gray-500">└ {b.siteName}</td>
+                        <td className="px-3 py-1.5 pl-8 text-xs text-gray-500 dark:text-gray-400">└ {b.siteName}</td>
                         <td className="px-3 py-1.5"></td>
                         <td className="px-3 py-1.5"></td>
                         <td className="px-3 py-1.5 text-right text-xs tabular-nums text-gray-600">{b.workDays}</td>
@@ -489,7 +489,7 @@ export default function CostPage() {
                 )
               })}
               {/* Grand total footer */}
-              <tr className="border-t-2 border-hibi-navy bg-gray-50 font-bold">
+              <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold">
                 <td className="px-3 py-2.5"></td>
                 <td className="px-3 py-2.5">合計</td>
                 <td className="px-3 py-2.5"></td>

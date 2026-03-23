@@ -7,6 +7,7 @@ import {
   generateWorkerToken,
   revokeWorkerToken,
 } from '@/lib/worker-crud'
+import { logActivity } from '@/lib/activity'
 
 function checkAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get('x-admin-password')
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
         otMul: Number(otMul) || 1.25,
         hireDate: hireDate || '',
       })
+      await logActivity('admin', 'worker.add', `${name} を追加`)
       return NextResponse.json({ success: true, worker })
     }
 
@@ -61,6 +63,7 @@ export async function POST(request: NextRequest) {
       if (updates.rate !== undefined) updates.rate = Number(updates.rate)
       if (updates.otMul !== undefined) updates.otMul = Number(updates.otMul)
       await updateWorker(id, updates)
+      await logActivity('admin', 'worker.update', `ID:${id} を更新`)
       return NextResponse.json({ success: true })
     }
 
@@ -68,6 +71,7 @@ export async function POST(request: NextRequest) {
       const { id } = body
       if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
       await deleteWorker(id)
+      await logActivity('admin', 'worker.delete', `ID:${id} を削除`)
       return NextResponse.json({ success: true })
     }
 

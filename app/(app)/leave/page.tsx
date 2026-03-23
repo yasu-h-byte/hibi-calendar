@@ -211,8 +211,8 @@ export default function LeavePage() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy">有給管理</h1>
-          <p className="text-sm text-gray-500 mt-1">有給休暇の付与・消化状況</p>
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">有給管理</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">有給休暇の付与・消化状況</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowGrantModal(true)}
@@ -231,11 +231,11 @@ export default function LeavePage() {
       </div>
 
       {/* Org filter tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
         {([['all', '全員'], ['hibi', '日比建設'], ['hfu', 'HFU']] as [OrgFilter, string][]).map(([key, label]) => (
           <button key={key} onClick={() => setOrgFilter(key)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
-              orgFilter === key ? 'bg-white text-hibi-navy shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              orgFilter === key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
             }`}>
             {label}
           </button>
@@ -244,31 +244,31 @@ export default function LeavePage() {
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
           <div className="text-2xl font-bold text-hibi-navy">{eligible}</div>
-          <div className="text-xs text-gray-500">対象人数</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">対象人数</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
           <div className="text-2xl font-bold text-blue-600">{totalRemaining}</div>
-          <div className="text-xs text-gray-500">有給残日数</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">有給残日数</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
           <div className="text-2xl font-bold text-green-600">{totalUsed}</div>
-          <div className="text-xs text-gray-500">消化日数</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">消化日数</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
           <div className={`text-2xl font-bold ${alertCount > 0 ? 'text-red-500' : 'text-green-600'}`}>{alertCount}</div>
-          <div className="text-xs text-gray-500">残3日以下</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">残3日以下</div>
         </div>
       </div>
 
       {/* Company-wide consumption rate bar */}
-      <div className="bg-white rounded-xl shadow p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-700">全社消化率</span>
-          <span className="text-sm font-bold text-gray-700">{companyRate.toFixed(1)}%（{totalUsed}/{totalTotal}日）</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">全社消化率</span>
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{companyRate.toFixed(1)}%（{totalUsed}/{totalTotal}日）</span>
         </div>
-        <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+        <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full bg-gradient-to-r ${rateBarColor(companyRate)} transition-all`}
             style={{ width: `${Math.min(100, companyRate)}%` }}
@@ -277,10 +277,10 @@ export default function LeavePage() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl shadow overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 text-left text-gray-600">
+            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
               <th className="px-3 py-3">名前</th>
               <th className="px-3 py-3">所属</th>
               <th className="px-3 py-3 text-center">発生月</th>
@@ -302,7 +302,7 @@ export default function LeavePage() {
             ) : filteredWorkers.map(w => {
               const rate = w.total > 0 ? (w.used / w.total * 100) : 0
               return (
-                <tr key={w.id} className="border-t hover:bg-gray-50">
+                <tr key={w.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
                   <td className="px-3 py-2.5 font-medium">{w.name}</td>
                   <td className="px-3 py-2.5">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${w.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -336,7 +336,7 @@ export default function LeavePage() {
                   {/* Improved rate bar */}
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="w-20 h-3 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="w-20 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full bg-gradient-to-r ${rateBarColor(rate)} transition-all`}
                           style={{ width: `${Math.min(100, rate)}%` }}
@@ -357,8 +357,8 @@ export default function LeavePage() {
       </div>
 
       {/* ── PL Calendar ── */}
-      <div className="bg-white rounded-xl shadow p-4">
-        <h2 className="text-base font-bold text-hibi-navy mb-3">PLカレンダー</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+        <h2 className="text-base font-bold text-hibi-navy dark:text-white mb-3">PLカレンダー</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {calendarMonths.map(({ year, month, label }) => {
             const daysInMonth = new Date(year, month, 0).getDate()
@@ -366,8 +366,8 @@ export default function LeavePage() {
             const ym = `${year}${String(month).padStart(2, '0')}`
 
             return (
-              <div key={ym} className="border border-gray-200 rounded-lg p-2">
-                <div className="text-xs font-bold text-center text-gray-700 mb-1">{label}</div>
+              <div key={ym} className="border border-gray-200 dark:border-gray-700 rounded-lg p-2">
+                <div className="text-xs font-bold text-center text-gray-700 dark:text-gray-300 mb-1">{label}</div>
                 {/* Day of week header */}
                 <div className="grid grid-cols-7 gap-px text-center">
                   {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
@@ -450,21 +450,21 @@ export default function LeavePage() {
       {/* Grant Modal */}
       {showGrantModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowGrantModal(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-4">有給付与</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">有給付与</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">対象者</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">対象者</label>
                 <select value={grantForm.workerId} onChange={e => setGrantForm({ ...grantForm, workerId: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
                   <option value="">選択してください</option>
                   {workers.map(w => <option key={w.id} value={w.id}>{w.name}（{w.org === 'hfu' ? 'HFU' : '日比'}）</option>)}
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">付与日</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">付与日</label>
                 <input type="date" value={grantForm.grantDate} onChange={e => setGrantForm({ ...grantForm, grantDate: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
               {/* Legal PL auto-calculation display */}
               {legalPLInfo && legalPLInfo.days > 0 && (
@@ -473,14 +473,14 @@ export default function LeavePage() {
                 </div>
               )}
               <div>
-                <label className="text-xs text-gray-500 block mb-1">付与日数</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">付与日数</label>
                 <input type="number" value={grantForm.grantDays} onChange={e => setGrantForm({ ...grantForm, grantDays: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">発生月</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">発生月</label>
                 <select value={grantForm.grantMonth} onChange={e => setGrantForm({ ...grantForm, grantMonth: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
                   <option value="">未設定</option>
                   {[10,11,12,1,2,3,4,5,6,7,8,9].map(m => <option key={m} value={m}>{m}月</option>)}
                 </select>
@@ -505,7 +505,7 @@ export default function LeavePage() {
                 {saving ? '処理中...' : '付与'}
               </button>
               <button onClick={() => { setShowGrantModal(false); setLegalPLInfo(null) }}
-                className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2.5 text-sm">キャンセル</button>
+                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm">キャンセル</button>
             </div>
           </div>
         </div>
@@ -514,23 +514,23 @@ export default function LeavePage() {
       {/* Edit Modal */}
       {editWorker && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setEditWorker(null)}>
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-4">{editWorker.name} - 有給編集</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">{editWorker.name} - 有給編集</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-500 block mb-1">付与日数</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">付与日数</label>
                 <input type="number" value={editForm.grantDays} onChange={e => setEditForm({ ...editForm, grantDays: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">繰越日数</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">繰越日数</label>
                 <input type="number" value={editForm.carryOver} onChange={e => setEditForm({ ...editForm, carryOver: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="text-xs text-gray-500 block mb-1">調整</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">調整</label>
                 <input type="number" value={editForm.adjustment} onChange={e => setEditForm({ ...editForm, adjustment: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
             </div>
             <div className="flex gap-2 mt-6">
@@ -548,7 +548,7 @@ export default function LeavePage() {
               }} className="flex-1 bg-hibi-navy text-white rounded-lg py-2.5 font-bold text-sm disabled:opacity-50">
                 {saving ? '保存中...' : '保存'}
               </button>
-              <button onClick={() => setEditWorker(null)} className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2.5 text-sm">キャンセル</button>
+              <button onClick={() => setEditWorker(null)} className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm">キャンセル</button>
             </div>
           </div>
         </div>

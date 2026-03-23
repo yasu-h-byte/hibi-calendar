@@ -184,12 +184,12 @@ export default function ExportPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-hibi-navy">帳票出力</h1>
-        <p className="text-sm text-gray-500 mt-1">各種帳票をExcel/PDF形式でダウンロードできます</p>
+        <h1 className="text-xl font-bold text-hibi-navy dark:text-white">帳票出力</h1>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">各種帳票をExcel/PDF形式でダウンロードできます</p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-red-700 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
@@ -199,17 +199,17 @@ export default function ExportPage() {
           const isDownloading = downloading === card.type
 
           return (
-            <div key={card.type} className="bg-white rounded-xl shadow p-5 flex flex-col">
+            <div key={card.type} className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-5 flex flex-col">
               <div className="text-3xl mb-3">{card.icon}</div>
-              <h3 className="font-bold text-hibi-navy text-sm mb-1">{card.title}</h3>
-              <p className="text-xs text-gray-500 mb-4 flex-1">{card.description}</p>
+              <h3 className="font-bold text-hibi-navy dark:text-white text-sm mb-1">{card.title}</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 flex-1">{card.description}</p>
 
               {card.needsYm && (
                 <div className="mb-3">
                   <select
                     value={selectedYm[card.type] || ''}
                     onChange={(e) => setSelectedYm(prev => ({ ...prev, [card.type]: e.target.value }))}
-                    className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-hibi-navy"
+                    className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-hibi-navy"
                   >
                     {ymOptions.map(opt => (
                       <option key={opt.ym} value={opt.ym}>{opt.label}</option>

@@ -111,6 +111,29 @@ interface SiteTrendPoint {
   doko: number
 }
 
+interface Forecast {
+  nextYm: string
+  predictedBilling: number
+  predictedCost: number
+  predictedProfitRate: number
+  movingAvgBilling: number[]
+  movingAvgCost: number[]
+}
+
+interface SubconAlert {
+  overallRate: number
+  level: 'none' | 'yellow' | 'red'
+  sitesAbove50: { id: string; name: string; rate: number }[]
+}
+
+interface YoYComparison {
+  hasPrevData: boolean
+  currentTotal: number
+  prevTotal: number
+  changeRate: number
+  sites: { id: string; name: string; current: number; prev: number; changeRate: number }[]
+}
+
 interface DashboardData {
   kpi: KPI
   sites: SiteRow[]
@@ -126,6 +149,9 @@ interface DashboardData {
   selectedYm: string
   siteMembers: SiteMember[] | null
   siteTrend: SiteTrendPoint[] | null
+  forecast: Forecast | null
+  subconAlert: SubconAlert | null
+  yoyComparison: YoYComparison | null
 }
 
 // ─── Helpers ───
@@ -173,12 +199,6 @@ function currentYm(): string {
   return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
-function rateColorClass(rate: number): string {
-  if (rate >= 90) return 'bg-green-100 text-green-800'
-  if (rate >= 70) return 'bg-yellow-100 text-yellow-800'
-  return 'bg-red-100 text-red-800'
-}
-
 const SITE_COLORS = [
   'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500',
   'bg-rose-500', 'bg-cyan-500', 'bg-orange-500', 'bg-indigo-500',
@@ -205,7 +225,7 @@ function HBar({ value, max, color, label }: { value: number; max: number; color:
       <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
-      {label && <span className="text-xs text-gray-600 w-12 text-right whitespace-nowrap">{label}</span>}
+      {label && <span className="text-xs text-gray-600 dark:text-gray-400 w-12 text-right whitespace-nowrap">{label}</span>}
     </div>
   )
 }
@@ -271,8 +291,8 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy">ダッシュボード</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{todayStr}</p>
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-blue-300 dark:text-white">ダッシュボード</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{todayStr}</p>
         </div>
       </div>
 
@@ -301,7 +321,7 @@ export default function DashboardPage() {
                     </thead>
                     <tbody>
                       {data.todayStatus.siteStatus.map((s) => (
-                        <tr key={s.siteId} className="border-b border-gray-100 hover:bg-gray-50">
+                        <tr key={s.siteId} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                           <td className="px-3 py-2 font-medium text-hibi-navy">{s.siteName}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{s.tobi}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{s.doko}</td>
@@ -310,7 +330,7 @@ export default function DashboardPage() {
                         </tr>
                       ))}
                       {/* Totals row */}
-                      <tr className="bg-gray-50 font-bold">
+                      <tr className="bg-gray-50 dark:bg-gray-700 font-bold">
                         <td className="px-3 py-2">合計</td>
                         <td className="px-3 py-2 text-right tabular-nums">
                           {data.todayStatus.siteStatus.reduce((s, r) => s + r.tobi, 0)}
@@ -331,7 +351,7 @@ export default function DashboardPage() {
                 {/* Absent workers badges */}
                 {data.todayStatus.absentWorkers.length > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-600">
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
                       休み {data.todayStatus.absentWorkers.length}名:
                     </span>
                     {data.todayStatus.absentWorkers.map(w => (
@@ -385,13 +405,61 @@ export default function DashboardPage() {
             />
           </div>
 
+          {/* ═══ Subcon Ratio Alert Banner ═══ */}
+          {data.subconAlert && data.subconAlert.level !== 'none' && (
+            <div className={`rounded-xl p-4 border-2 ${
+              data.subconAlert.level === 'red'
+                ? 'bg-red-50 border-red-300 text-red-800'
+                : 'bg-yellow-50 border-yellow-300 text-yellow-800'
+            }`}>
+              <div className="flex items-center gap-2 font-bold text-base mb-2">
+                <span className="text-xl">&#x26A0;</span>
+                <span>外注比率が{fmtNum(data.subconAlert.overallRate)}%です（目安: 50%以下）</span>
+              </div>
+              {data.subconAlert.sitesAbove50.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-sm font-semibold mb-1">50%超の現場:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {data.subconAlert.sitesAbove50.map(s => (
+                      <span key={s.id} className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                        s.rate > 60 ? 'bg-red-200 text-red-900' : 'bg-yellow-200 text-yellow-900'
+                      }`}>
+                        {s.name}: {fmtNum(s.rate)}%
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ Forecast Card ═══ */}
+          {data.forecast && (
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl shadow p-4 border border-indigo-100">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm font-bold text-indigo-700">予測</span>
+                <span className="text-xs text-indigo-500">（3ヶ月移動平均ベース）</span>
+              </div>
+              <div className="text-sm text-indigo-800">
+                <span className="font-semibold">来月予測 ({ymToLabel(data.forecast.nextYm)}):</span>
+                <span className="ml-2">
+                  売上 <span className="font-bold">{formatYenFull(data.forecast.predictedBilling)}</span>
+                  {' / '}原価 <span className="font-bold">{formatYenFull(data.forecast.predictedCost)}</span>
+                  {' / '}利益率 <span className={`font-bold ${profitRateColor(data.forecast.predictedProfitRate)}`}>
+                    {fmtNum(data.forecast.predictedProfitRate)}%
+                  </span>
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* ═══ 3. Period Selector + 4. Site Tabs ═══ */}
-          <div className="bg-white rounded-xl shadow p-4 space-y-3">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 space-y-3">
             {/* Period buttons */}
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => navigateMonth(-1)}
-                className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
+                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg font-medium"
               >
                 ◀ 前
               </button>
@@ -402,7 +470,7 @@ export default function DashboardPage() {
                   className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
                     period === po.key
                       ? 'bg-hibi-navy text-white'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                      : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   {po.label}
@@ -410,11 +478,11 @@ export default function DashboardPage() {
               ))}
               <button
                 onClick={() => navigateMonth(1)}
-                className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
+                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg font-medium"
               >
                 次 ▶
               </button>
-              <span className="ml-2 text-sm text-gray-500">
+              <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
                 {ymToLabel(ym)}
               </span>
             </div>
@@ -426,7 +494,7 @@ export default function DashboardPage() {
                 className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
                   siteFilter === 'all'
                     ? 'bg-hibi-navy text-white'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400'
                 }`}
               >
                 全社
@@ -438,7 +506,7 @@ export default function DashboardPage() {
                   className={`px-3 py-1 text-xs rounded-full font-medium transition-colors ${
                     siteFilter === s.id
                       ? 'bg-hibi-navy text-white'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                      : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400'
                   }`}
                 >
                   {s.name}
@@ -475,6 +543,7 @@ export default function DashboardPage() {
               <CSSLineChart
                 data={data.monthlyTrend}
                 baseline={data.kpi.billingPerManDayBaseline}
+                forecast={data.forecast}
               />
             </Section>
           )}
@@ -484,7 +553,7 @@ export default function DashboardPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 text-gray-600">
+                  <tr className="bg-gray-50 text-gray-600 dark:text-gray-400">
                     <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">現場</th>
                     <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">自社人工</th>
                     <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">外注人工</th>
@@ -500,7 +569,7 @@ export default function DashboardPage() {
                   {data.sites
                     .filter(s => s.billing > 0 || s.inHouseWorkDays > 0 || s.subconWorkDays > 0)
                     .map(site => (
-                    <tr key={site.id} className="border-b border-gray-50 hover:bg-gray-50">
+                    <tr key={site.id} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-3 py-2 font-medium text-hibi-navy whitespace-nowrap">{site.name}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.inHouseWorkDays)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.subconWorkDays)}</td>
@@ -552,7 +621,7 @@ export default function DashboardPage() {
                     )
                     return (
                       <div key={site.id} className="space-y-0.5">
-                        <div className="text-xs text-gray-600 font-medium truncate">{site.name}</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400 font-medium truncate">{site.name}</div>
                         <div className="flex items-center h-5 bg-gray-100 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-blue-500 rounded-l"
@@ -565,14 +634,14 @@ export default function DashboardPage() {
                             title={`外注 ${fmtNum(site.subconWorkDays)}`}
                           />
                         </div>
-                        <div className="flex gap-3 text-xs text-gray-500">
+                        <div className="flex gap-3 text-xs text-gray-500 dark:text-gray-400">
                           <span>自社 {fmtNum(site.inHouseWorkDays)}</span>
                           <span>外注 {fmtNum(site.subconWorkDays)}</span>
                         </div>
                       </div>
                     )
                   })}
-                  <div className="flex items-center gap-4 pt-2 text-xs text-gray-500 border-t">
+                  <div className="flex items-center gap-4 pt-2 text-xs text-gray-500 dark:text-gray-400 border-t">
                     <span className="flex items-center gap-1">
                       <span className="inline-block w-3 h-3 bg-blue-500 rounded" /> 自社
                     </span>
@@ -594,13 +663,13 @@ export default function DashboardPage() {
                     )
                     return (
                       <div key={site.id} className="space-y-0.5">
-                        <div className="text-xs text-gray-600 font-medium truncate">{site.name}</div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400 font-medium truncate">{site.name}</div>
                         <HBar value={site.billing} max={maxVal} color="bg-blue-500" label={`${formatMan(site.billing)}万`} />
                         <HBar value={site.cost} max={maxVal} color="bg-orange-400" label={`${formatMan(site.cost)}万`} />
                       </div>
                     )
                   })}
-                  <div className="flex items-center gap-4 pt-2 text-xs text-gray-500 border-t">
+                  <div className="flex items-center gap-4 pt-2 text-xs text-gray-500 dark:text-gray-400 border-t">
                     <span className="flex items-center gap-1">
                       <span className="inline-block w-3 h-3 bg-blue-500 rounded" /> 売上
                     </span>
@@ -648,7 +717,7 @@ export default function DashboardPage() {
                   })}
                 </div>
                 {/* Legend */}
-                <div className="flex items-center gap-3 pt-2 mt-2 text-xs text-gray-500 border-t flex-wrap">
+                <div className="flex items-center gap-3 pt-2 mt-2 text-xs text-gray-500 dark:text-gray-400 border-t flex-wrap">
                   {data.siteList.map((s, i) => (
                     <span key={s.id} className="flex items-center gap-1">
                       <span className={`inline-block w-3 h-3 rounded ${siteColor(i)}`} />
@@ -697,7 +766,7 @@ export default function DashboardPage() {
                     )
                   })}
                 </div>
-                <div className="flex items-center gap-4 pt-2 mt-2 text-xs text-gray-500 border-t">
+                <div className="flex items-center gap-4 pt-2 mt-2 text-xs text-gray-500 dark:text-gray-400 border-t">
                   <span className="flex items-center gap-1">
                     <span className="inline-block w-3 h-3 bg-blue-500 rounded" /> 累積売上
                   </span>
@@ -707,6 +776,96 @@ export default function DashboardPage() {
                   <span className="text-green-600 font-bold">数値=累積粗利</span>
                 </div>
               </div>
+            </Section>
+          )}
+
+          {/* ═══ Site Profitability Ranking ═══ */}
+          {data.sites.filter(s => s.billing > 0 || s.cost > 0).length > 0 && (
+            <SiteProfitRanking sites={data.sites} />
+          )}
+
+          {/* ═══ YoY Labor Cost Comparison ═══ */}
+          {data.yoyComparison && (
+            <Section title="人件費の対前年比較">
+              {data.yoyComparison.hasPrevData ? (
+                <div className="space-y-4">
+                  {/* Overall comparison */}
+                  <div className="flex items-center gap-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">当期合計</div>
+                    <div className="font-bold text-hibi-navy dark:text-blue-300">{formatYenFull(data.yoyComparison.currentTotal)}</div>
+                    <div className="text-sm text-gray-400">vs</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-400">前年 {formatYenFull(data.yoyComparison.prevTotal)}</div>
+                    <div className={`font-bold text-sm flex items-center gap-1 ${
+                      data.yoyComparison.changeRate > 0 ? 'text-red-600' : data.yoyComparison.changeRate < 0 ? 'text-green-600' : 'text-gray-600 dark:text-gray-400'
+                    }`}>
+                      {data.yoyComparison.changeRate > 0 ? '\u2191' : data.yoyComparison.changeRate < 0 ? '\u2193' : '\u2192'}
+                      {Math.abs(data.yoyComparison.changeRate).toFixed(1)}%
+                    </div>
+                  </div>
+                  {/* Per-site table */}
+                  {data.yoyComparison.sites.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 text-gray-600 dark:text-gray-400">
+                            <th className="text-left px-3 py-2 font-semibold">現場</th>
+                            <th className="text-right px-3 py-2 font-semibold">当期</th>
+                            <th className="text-right px-3 py-2 font-semibold">前年</th>
+                            <th className="text-right px-3 py-2 font-semibold">増減率</th>
+                            <th className="px-3 py-2 font-semibold w-32">対比</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.yoyComparison.sites.map(s => {
+                            const maxCost = Math.max(...data.yoyComparison!.sites.map(x => Math.max(x.current, x.prev)), 1)
+                            return (
+                              <tr key={s.id} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td className="px-3 py-2 font-medium text-hibi-navy whitespace-nowrap">{s.name}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">{formatYenFull(s.current)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-gray-500">
+                                  {s.prev > 0 ? formatYenFull(s.prev) : '-'}
+                                </td>
+                                <td className={`px-3 py-2 text-right tabular-nums font-semibold ${
+                                  s.prev === 0 ? 'text-gray-400' : s.changeRate > 0 ? 'text-red-600' : 'text-green-600'
+                                }`}>
+                                  {s.prev > 0 ? (
+                                    <>
+                                      {s.changeRate > 0 ? '\u2191' : '\u2193'}
+                                      {Math.abs(s.changeRate).toFixed(1)}%
+                                    </>
+                                  ) : 'NEW'}
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-1 h-4">
+                                    <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden relative">
+                                      <div className="h-full bg-blue-500 rounded-l absolute left-0 top-0"
+                                        style={{ width: `${(s.current / maxCost) * 100}%` }} />
+                                      {s.prev > 0 && (
+                                        <div className="h-0.5 bg-gray-400 absolute top-1/2 -translate-y-1/2"
+                                          style={{ width: `${(s.prev / maxCost) * 100}%`, left: 0 }} />
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 border-t pt-2">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-3 bg-blue-500 rounded" /> 当期
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-3 h-1 bg-gray-400 rounded" /> 前年
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-gray-400 text-sm py-4 text-center">前年データなし</p>
+              )}
             </Section>
           )}
 
@@ -729,7 +888,7 @@ export default function DashboardPage() {
                     {data.plAlert.map(row => (
                       <tr key={row.workerId} className="border-b border-gray-50 hover:bg-red-50/50">
                         <td className="px-3 py-2 font-medium">{row.name}</td>
-                        <td className="px-3 py-2 text-gray-600">{row.org}</td>
+                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{row.org}</td>
                         <td className={`px-3 py-2 text-right font-bold ${
                           row.remaining <= 0 ? 'text-red-600' : row.remaining <= 1 ? 'text-orange-600' : 'text-yellow-600'
                         }`}>
@@ -754,64 +913,137 @@ export default function DashboardPage() {
             </Section>
           )}
 
-          {/* ═══ 11. Foreign Worker Attendance Rate Table ═══ */}
+          {/* ═══ 11. Foreign Worker Attendance Rate (Enhanced) ═══ */}
           {data.foreignWorkerRates && data.foreignWorkerRates.length > 0 && (
-            <Section title="外国人社員勤怠率">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 text-gray-600">
-                      <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">名前</th>
-                      <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">所属</th>
-                      <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">資格</th>
-                      <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">平均</th>
-                      {data.ymList.map(m => (
-                        <th key={m} className="text-right px-2 py-2 font-semibold whitespace-nowrap text-xs">
-                          {ymToShortLabel(m)}
-                        </th>
+            <>
+              {/* Alert: workers below 90% */}
+              {(() => {
+                const lowWorkers = data.foreignWorkerRates.filter(fw => fw.avgRate < 90 && fw.avgRate > 0)
+                if (lowWorkers.length === 0) return null
+                return (
+                  <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+                    <div className="font-bold text-red-800 text-sm mb-2">
+                      出勤率90%未満の外国人社員 ({lowWorkers.length}名)
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {lowWorkers.sort((a, b) => a.avgRate - b.avgRate).map(fw => (
+                        <span key={fw.id} className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                          fw.avgRate < 80 ? 'bg-red-200 text-red-900' : 'bg-orange-200 text-orange-900'
+                        }`}>
+                          {fw.name}: {fw.avgRate.toFixed(0)}%
+                        </span>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.foreignWorkerRates.map(fw => (
-                      <tr key={fw.id} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="px-3 py-2 font-medium whitespace-nowrap">{fw.name}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${fw.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {fw.org === 'hfu' ? 'HFU' : '日比建設'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${fw.visa === 'jisshu' ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'}`}>
-                            {fw.visa === 'jisshu' ? '技能実習' : fw.visa === 'tokutei' ? '特定技能' : fw.visa}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${rateColorClass(fw.avgRate)}`}>
-                            {fw.avgRate.toFixed(0)}%
-                          </span>
-                        </td>
-                        {data.ymList.map(m => {
-                          const mr = fw.monthlyRates.find(r => r.ym === m)
-                          const rate = mr?.rate || 0
-                          return (
-                            <td key={m} className="px-2 py-2 text-right">
-                              {rate > 0 ? (
-                                <span className={`px-1 py-0.5 rounded text-[10px] font-medium ${rateColorClass(rate)}`}>
-                                  {rate.toFixed(0)}%
-                                </span>
-                              ) : (
-                                <span className="text-gray-300 text-xs">-</span>
-                              )}
-                            </td>
-                          )
-                        })}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              <Section title="外国人社員勤怠率分析">
+                {/* Overall average */}
+                {(() => {
+                  const validRates = data.foreignWorkerRates.filter(fw => fw.avgRate > 0)
+                  const overallAvg = validRates.length > 0
+                    ? validRates.reduce((s, fw) => s + fw.avgRate, 0) / validRates.length
+                    : 0
+                  return (
+                    <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">全体平均出勤率:</span>
+                      <span className={`text-lg font-bold px-2.5 py-0.5 rounded ${
+                        overallAvg >= 95 ? 'bg-green-100 text-green-800' :
+                        overallAvg >= 90 ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {overallAvg.toFixed(1)}%
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        ({overallAvg >= 95 ? '良好' : overallAvg >= 90 ? '要注意' : '要改善'})
+                      </span>
+                    </div>
+                  )
+                })()}
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-600 dark:text-gray-400">
+                        <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">名前</th>
+                        <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">所属</th>
+                        <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">資格</th>
+                        <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">平均</th>
+                        <th className="px-3 py-2 font-semibold whitespace-nowrap text-center w-24">推移</th>
+                        {data.ymList.map(m => (
+                          <th key={m} className="text-right px-2 py-2 font-semibold whitespace-nowrap text-xs">
+                            {ymToShortLabel(m)}
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Section>
+                    </thead>
+                    <tbody>
+                      {data.foreignWorkerRates.map(fw => (
+                        <tr key={fw.id} className={`border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
+                          fw.avgRate > 0 && fw.avgRate < 90 ? 'bg-red-50/30' : ''
+                        }`}>
+                          <td className="px-3 py-2 font-medium whitespace-nowrap">{fw.name}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${fw.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                              {fw.org === 'hfu' ? 'HFU' : '日比建設'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${fw.visa === 'jisshu' ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'}`}>
+                              {fw.visa === 'jisshu' ? '技能実習' : fw.visa === 'tokutei' ? '特定技能' : fw.visa}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${
+                              fw.avgRate >= 95 ? 'bg-green-100 text-green-800' :
+                              fw.avgRate >= 90 ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {fw.avgRate.toFixed(0)}%
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <MiniSparkline rates={fw.monthlyRates.filter(r => data.ymList.includes(r.ym)).sort((a, b) => a.ym.localeCompare(b.ym))} />
+                          </td>
+                          {data.ymList.map(m => {
+                            const mr = fw.monthlyRates.find(r => r.ym === m)
+                            const rate = mr?.rate || 0
+                            return (
+                              <td key={m} className="px-2 py-2 text-right">
+                                {rate > 0 ? (
+                                  <span className={`px-1 py-0.5 rounded text-[10px] font-medium ${
+                                    rate >= 95 ? 'bg-green-100 text-green-800' :
+                                    rate >= 90 ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-red-100 text-red-800'
+                                  }`}>
+                                    {rate.toFixed(0)}%
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300 text-xs">-</span>
+                                )}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mt-3 pt-2 border-t">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-3 h-3 bg-green-100 border border-green-300 rounded" /> 95%以上
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-3 h-3 bg-yellow-100 border border-yellow-300 rounded" /> 90-95%
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block w-3 h-3 bg-red-100 border border-red-300 rounded" /> 90%未満
+                  </span>
+                  <span className="text-gray-400 ml-2">出勤率 = 出勤日数 / 所定労働日数 x 100</span>
+                </div>
+              </Section>
+            </>
           )}
         </>
       ) : null}
@@ -823,9 +1055,9 @@ export default function DashboardPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl shadow overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 bg-white">
-        <h2 className="font-bold text-hibi-navy text-sm">{title}</h2>
+        <h2 className="font-bold text-hibi-navy dark:text-blue-300 text-sm">{title}</h2>
       </div>
       <div className="p-4">
         {children}
@@ -840,8 +1072,8 @@ function KPICard({
   title: string; value: string; unit: string; sub?: string; sub2?: string; valueColor?: string
 }) {
   return (
-    <div className="bg-white rounded-xl shadow p-4">
-      <div className="text-xs text-gray-500 mb-1">{title}</div>
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4">
+      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{title}</div>
       <div className={`text-2xl font-bold ${valueColor || 'text-hibi-navy'}`}>
         {value}
       </div>
@@ -852,38 +1084,50 @@ function KPICard({
   )
 }
 
-/** Enhanced SVG line chart with baseline, color-coded dots, Y-axis labels */
+/** Enhanced SVG line chart with baseline, color-coded dots, Y-axis labels, and forecast */
 function CSSLineChart({
   data,
   baseline,
+  forecast,
 }: {
   data: MonthlyTrend[]
   baseline: number
+  forecast?: Forecast | null
 }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
 
   if (data.length === 0) return null
+
+  // Calculate forecast per-man-day values from absolute forecast
+  const lastTrend = data[data.length - 1]
+  const avgManDays = data.length > 0 ? data.reduce((s, d) => s + d.manDays, 0) / data.length : 1
+  const forecastBillingPerManDay = forecast && avgManDays > 0 ? forecast.predictedBilling / avgManDays : 0
+  const forecastCostPerManDay = forecast && avgManDays > 0 ? forecast.predictedCost / avgManDays : 0
+  const forecastProfitPerManDay = forecastBillingPerManDay - forecastCostPerManDay
 
   const allValues = [
     ...data.map(d => d.billingPerManDay),
     ...data.map(d => d.costPerManDay),
     ...data.map(d => d.profitPerManDay),
     baseline,
+    ...(forecast ? [forecastBillingPerManDay, forecastCostPerManDay, forecastProfitPerManDay] : []),
   ]
   const maxVal = Math.max(...allValues, 1)
   const minVal = Math.min(...allValues.filter(v => v > 0), 0)
   const range = maxVal - minVal || 1
 
+  // Extend chart width if forecast exists
+  const totalPoints = forecast ? data.length + 1 : data.length
   const svgW = 600
   const svgH = 200
   const padL = 60
-  const padR = 16
+  const padR = forecast ? 40 : 16
   const padT = 16
   const padB = 32
   const chartW = svgW - padL - padR
   const chartH = svgH - padT - padB
 
-  const getX = (i: number) => padL + (data.length > 1 ? (i / (data.length - 1)) * chartW : chartW / 2)
+  const getX = (i: number) => padL + (totalPoints > 1 ? (i / (totalPoints - 1)) * chartW : chartW / 2)
   const getY = (val: number) => padT + chartH - ((val - minVal) / range) * chartH
 
   const makePath = (values: number[]) =>
@@ -970,6 +1214,53 @@ function CSSLineChart({
           </text>
         ))}
 
+        {/* Forecast dashed extension lines */}
+        {forecast && data.length > 0 && (() => {
+          const lastIdx = data.length - 1
+          const forecastIdx = data.length
+          const lastX = getX(lastIdx)
+          const forecastX = getX(forecastIdx)
+          return (
+            <g opacity="0.6">
+              {/* Dashed line from last billing to forecast billing */}
+              <line
+                x1={lastX} y1={getY(lastTrend.billingPerManDay)}
+                x2={forecastX} y2={getY(forecastBillingPerManDay)}
+                stroke="#3b82f6" strokeWidth="2" strokeDasharray="6 4"
+              />
+              {/* Dashed line from last cost to forecast cost */}
+              <line
+                x1={lastX} y1={getY(lastTrend.costPerManDay)}
+                x2={forecastX} y2={getY(forecastCostPerManDay)}
+                stroke="#fb923c" strokeWidth="2" strokeDasharray="6 4"
+              />
+              {/* Dashed line from last profit to forecast profit */}
+              <line
+                x1={lastX} y1={getY(lastTrend.profitPerManDay)}
+                x2={forecastX} y2={getY(forecastProfitPerManDay)}
+                stroke="#22c55e" strokeWidth="1.5" strokeDasharray="4 3"
+              />
+              {/* Forecast dots (hollow) */}
+              <circle cx={forecastX} cy={getY(forecastBillingPerManDay)} r={5}
+                fill="white" stroke="#3b82f6" strokeWidth="2" strokeDasharray="3 2" />
+              <circle cx={forecastX} cy={getY(forecastCostPerManDay)} r={4}
+                fill="white" stroke="#fb923c" strokeWidth="2" strokeDasharray="3 2" />
+              <circle cx={forecastX} cy={getY(forecastProfitPerManDay)} r={4}
+                fill="white" stroke="#22c55e" strokeWidth="2" strokeDasharray="3 2" />
+              {/* Forecast x-axis label */}
+              <text x={forecastX} y={svgH - 4} textAnchor="middle" fill="#818cf8" fontSize="10" fontStyle="italic">
+                {ymToShortLabel(forecast.nextYm)}(予)
+              </text>
+              {/* Vertical dashed separator */}
+              <line
+                x1={forecastX - (forecastX - lastX) / 2} y1={padT}
+                x2={forecastX - (forecastX - lastX) / 2} y2={padT + chartH}
+                stroke="#c7d2fe" strokeWidth="1" strokeDasharray="4 3"
+              />
+            </g>
+          )
+        })()}
+
         {/* Hover tooltip */}
         {hoveredIndex !== null && (() => {
           const d = data[hoveredIndex]
@@ -994,7 +1285,7 @@ function CSSLineChart({
       </svg>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
+      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
         <span className="flex items-center gap-1">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-green-500" />
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-500" /> 売上/人工 (緑=基準以上 赤=基準未満)
@@ -1008,6 +1299,11 @@ function CSSLineChart({
         <span className="flex items-center gap-1">
           <span className="inline-block w-5 border-t-2 border-dashed border-gray-500" /> 基準
         </span>
+        {forecast && (
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-5 border-t-2 border-dashed border-indigo-400" /> 予測
+          </span>
+        )}
       </div>
     </div>
   )
@@ -1029,7 +1325,7 @@ function jobBadgeColor(job: string): string {
   if (label === '土工') return 'bg-stone-100 text-stone-700'
   if (label === '職長') return 'bg-blue-100 text-blue-800'
   if (label === '役員') return 'bg-purple-100 text-purple-800'
-  return 'bg-gray-100 text-gray-600'
+  return 'bg-gray-100 text-gray-600 dark:text-gray-400'
 }
 
 function orgBadgeColor(org: string): string {
@@ -1152,6 +1448,121 @@ function DonutChart({ members }: { members: SiteMember[] }) {
         </div>
       </div>
     </div>
+  )
+}
+
+/** Mini sparkline for attendance rates */
+function MiniSparkline({ rates }: { rates: { ym: string; rate: number }[] }) {
+  if (rates.length === 0) return <span className="text-gray-300 text-xs">-</span>
+
+  const w = 80
+  const h = 24
+  const pad = 2
+  const chartW = w - pad * 2
+  const chartH = h - pad * 2
+
+  // Scale: 70-100% range for better visibility
+  const minR = 70
+  const maxR = 100
+  const range = maxR - minR
+
+  const getX = (i: number) => pad + (rates.length > 1 ? (i / (rates.length - 1)) * chartW : chartW / 2)
+  const getY = (v: number) => pad + chartH - ((Math.max(Math.min(v, maxR), minR) - minR) / range) * chartH
+
+  const path = rates.map((r, i) => `${i === 0 ? 'M' : 'L'}${getX(i).toFixed(1)},${getY(r.rate).toFixed(1)}`).join(' ')
+
+  // Line color based on latest rate
+  const latestRate = rates[rates.length - 1]?.rate || 0
+  const lineColor = latestRate >= 95 ? '#22c55e' : latestRate >= 90 ? '#eab308' : '#ef4444'
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="inline-block">
+      {/* 90% threshold line */}
+      <line x1={pad} y1={getY(90)} x2={w - pad} y2={getY(90)} stroke="#fecaca" strokeWidth="0.5" />
+      <path d={path} fill="none" stroke={lineColor} strokeWidth="1.5" />
+      {rates.map((r, i) => (
+        <circle key={i} cx={getX(i)} cy={getY(r.rate)} r={1.5} fill={lineColor} />
+      ))}
+    </svg>
+  )
+}
+
+/** Site profitability ranking with horizontal bar chart */
+function SiteProfitRanking({ sites }: { sites: SiteRow[] }) {
+  const [sortBy, setSortBy] = useState<'rate' | 'profit'>('rate')
+
+  const validSites = sites.filter(s => s.billing > 0 || s.cost > 0)
+  const sorted = [...validSites].sort((a, b) =>
+    sortBy === 'rate' ? b.profitRate - a.profitRate : b.profit - a.profit
+  )
+
+  const maxAbsProfit = Math.max(...sorted.map(s => Math.abs(s.profit)), 1)
+  const maxAbsRate = Math.max(...sorted.map(s => Math.abs(s.profitRate)), 1)
+
+  return (
+    <Section title="現場別利益率ランキング">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs text-gray-500 dark:text-gray-400">並び順:</span>
+        <button
+          onClick={() => setSortBy('rate')}
+          className={`px-2.5 py-1 text-xs rounded-full font-medium transition-colors ${
+            sortBy === 'rate' ? 'bg-hibi-navy text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400'
+          }`}
+        >
+          利益率順
+        </button>
+        <button
+          onClick={() => setSortBy('profit')}
+          className={`px-2.5 py-1 text-xs rounded-full font-medium transition-colors ${
+            sortBy === 'profit' ? 'bg-hibi-navy text-white' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-400'
+          }`}
+        >
+          利益額順
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        {sorted.map((site, idx) => {
+          const isPositive = sortBy === 'rate' ? site.profitRate >= 0 : site.profit >= 0
+          const barValue = sortBy === 'rate' ? Math.abs(site.profitRate) : Math.abs(site.profit)
+          const barMax = sortBy === 'rate' ? maxAbsRate : maxAbsProfit
+          const pct = barMax > 0 ? Math.min((barValue / barMax) * 100, 100) : 0
+
+          return (
+            <div key={site.id} className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-400 w-4 text-right">{idx + 1}</span>
+              <span className="text-xs font-medium text-hibi-navy w-24 truncate" title={site.name}>
+                {site.name}
+              </span>
+              <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    isPositive ? 'bg-green-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="flex items-center gap-2 w-36 justify-end">
+                <span className={`text-xs font-bold tabular-nums ${
+                  site.profitRate >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {site.profitRate.toFixed(1)}%
+                </span>
+                <span className={`text-xs tabular-nums ${
+                  site.profit >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
+                  {formatYen(site.profit)}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {sorted.length === 0 && (
+        <p className="text-gray-400 text-sm py-4 text-center">データなし</p>
+      )}
+    </Section>
   )
 }
 
@@ -1285,7 +1696,7 @@ function SiteTrendChart({ data }: { data: SiteTrendPoint[] }) {
       </svg>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-gray-500">
+      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
         <span className="flex items-center gap-1">
           <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500" /> 人数
         </span>
