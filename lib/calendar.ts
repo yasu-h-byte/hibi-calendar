@@ -1,4 +1,4 @@
-import { CalendarDay, CalendarPattern, DayType } from '@/types'
+import { CalendarDay, DayType } from '@/types'
 
 // 2026年日本の祝日
 const HOLIDAYS_2026: Record<string, { name: string; nameVi: string }> = {
@@ -22,93 +22,68 @@ const HOLIDAYS_2026: Record<string, { name: string; nameVi: string }> = {
   '2026-11-23': { name: '勤労感謝の日', nameVi: 'Ngày Cảm ơn Lao động' },
 }
 
-export const CALENDAR_PATTERNS: CalendarPattern[] = [
-  {
-    id: 'A',
-    name: 'パターンA（土曜出勤）',
-    nameVi: 'Mẫu A (Làm thứ 7)',
-    saturdayWork: true,
-    saturdayAlt: false,
-    holidayOff: true,
-  },
-  {
-    id: 'B',
-    name: 'パターンB（隔週土曜）',
-    nameVi: 'Mẫu B (Thứ 7 cách tuần)',
-    saturdayWork: false,
-    saturdayAlt: true,
-    holidayOff: true,
-  },
-  {
-    id: 'C',
-    name: 'パターンC（土日休み）',
-    nameVi: 'Mẫu C (Nghỉ thứ 7, CN)',
-    saturdayWork: false,
-    saturdayAlt: false,
-    holidayOff: true,
-  },
-]
-
-function formatDateKey(date: Date): string {
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+function formatDateKey(year: number, month: number, day: number): string {
+  const m = String(month).padStart(2, '0')
+  const d = String(day).padStart(2, '0')
+  return `${year}-${m}-${d}`
 }
 
-function isHoliday(date: Date): { name: string; nameVi: string } | null {
-  const key = formatDateKey(date)
-  return HOLIDAYS_2026[key] || null
+export function getHoliday(year: number, month: number, day: number): { name: string; nameVi: string } | null {
+  return HOLIDAYS_2026[formatDateKey(year, month, day)] || null
 }
 
-export function generateCalendar(year: number, month: number, pattern: CalendarPattern): CalendarDay[] {
-  const days: CalendarDay[] = []
+/**
+ * Generate default days for a month:
+ * - Weekdays = work
+ * - Sundays = off
+ * - Holidays = holiday
+ */
+export function generateDefaultDays(year: number, month: number): Record<string, DayType> {
+  const days: Record<string, DayType> = {}
   const daysInMonth = new Date(year, month, 0).getDate()
-  let saturdayCount = 0
 
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month - 1, d)
-    const dow = date.getDay() // 0=Sun, 6=Sat
-    const holiday = isHoliday(date)
+    const dow = date.getDay()
+    const holiday = getHoliday(year, month, d)
 
-    let dayType: DayType = 'work'
+    if (holiday) {
+      days[String(d)] = 'holiday'
+    } else if (dow === 0) {
+      days[String(d)] = 'off'
+    } else {
+      days[String(d)] = 'work'
+    }
+  }
+
+  return days
+}
+
+/**
+ * Build CalendarDay array from stored days record
+ */
+export function buildCalendarDays(year: number, month: number, days: Record<string, DayType>): CalendarDay[] {
+  const result: CalendarDay[] = []
+  const daysInMonth = new Date(year, month, 0).getDate()
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month - 1, d)
+    const dayType = days[String(d)] || 'work'
+    const holiday = getHoliday(year, month, d)
+
     let label = '出勤'
     let labelVi = 'Đi làm'
-
-    if (holiday && pattern.holidayOff) {
-      dayType = 'holiday'
-      label = holiday.name
-      labelVi = holiday.nameVi
-    } else if (dow === 0) {
-      dayType = 'off'
+    if (dayType === 'off') {
       label = '休み'
       labelVi = 'Nghỉ'
-    } else if (dow === 6) {
-      saturdayCount++
-      if (pattern.saturdayWork) {
-        dayType = 'work'
-        label = '出勤'
-        labelVi = 'Đi làm'
-      } else if (pattern.saturdayAlt) {
-        // 隔週：奇数回目は出勤、偶数回目は休み
-        if (saturdayCount % 2 === 1) {
-          dayType = 'work'
-          label = '出勤'
-          labelVi = 'Đi làm'
-        } else {
-          dayType = 'off'
-          label = '休み'
-          labelVi = 'Nghỉ'
-        }
-      } else {
-        dayType = 'off'
-        label = '休み'
-        labelVi = 'Nghỉ'
-      }
+    } else if (dayType === 'holiday') {
+      label = holiday?.name || '祝日'
+      labelVi = holiday?.nameVi || 'Nghỉ lễ'
     }
 
-    days.push({
+    result.push({
       date,
+      day: d,
       dayType,
       label,
       labelVi,
@@ -117,13 +92,13 @@ export function generateCalendar(year: number, month: number, pattern: CalendarP
     })
   }
 
-  return days
+  return result
 }
 
 export function getNextMonth(): { year: number; month: number; ym: string } {
   const now = new Date()
   let year = now.getFullYear()
-  let month = now.getMonth() + 2 // getMonth is 0-based, +2 for next month
+  let month = now.getMonth() + 2
   if (month > 12) {
     month = 1
     year++

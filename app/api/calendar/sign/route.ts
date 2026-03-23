@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { getWorkersForSite } from '@/lib/sites'
 
 function hashIP(ip: string): string {
-  // Simple hash for IP anonymization
   let hash = 0
   for (let i = 0; i < ip.length; i++) {
     const char = ip.charCodeAt(i)
@@ -15,41 +15,45 @@ function hashIP(ip: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { workerId, ym, token } = await request.json()
+    const { workerId, ym, siteId } = await request.json()
 
-    // Verify token
-    const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
-    if (!mainDoc.exists()) {
-      return NextResponse.json({ error: 'Data not found' }, { status: 404 })
+    if (!workerId || !ym || !siteId) {
+      return NextResponse.json({ error: 'workerId, ym, siteId required' }, { status: 400 })
     }
-    const workers = mainDoc.data().workers || []
-    const worker = workers.find((w: Record<string, unknown>) => w.token === token && w.id === workerId)
+
+    // Verify worker belongs to the site
+    const workers = await getWorkersForSite(siteId)
+    const worker = workers.find(w => w.id === workerId)
     if (!worker) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'Worker not found on this site' }, { status: 401 })
+    }
+
+    // Check if site calendar is approved
+    const calDocId = `${siteId}_${ym}`
+    const calDoc = await getDoc(doc(db, 'siteCalendar', calDocId))
+    if (!calDoc.exists()) {
+      return NextResponse.json({ error: 'Calendar not found' }, { status: 404 })
+    }
+    if (calDoc.data().status !== 'approved') {
+      return NextResponse.json({ error: 'Calendar not yet approved' }, { status: 403 })
     }
 
     // Check if already signed
-    const signDocId = `${workerId}_${ym}`
+    const signDocId = `${workerId}_${ym}_${siteId}`
     const existingSign = await getDoc(doc(db, 'calendarSign', signDocId))
     if (existingSign.exists()) {
       return NextResponse.json({ error: 'Already signed', signedAt: existingSign.data().signedAt }, { status: 409 })
     }
 
-    // Check if calendar is assigned
-    const assignDoc = await getDoc(doc(db, 'workerCalendar', signDocId))
-    if (!assignDoc.exists()) {
-      return NextResponse.json({ error: 'Calendar not assigned' }, { status: 404 })
-    }
-
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
-    const ipHash = hashIP(ip)
 
     await setDoc(doc(db, 'calendarSign', signDocId), {
       workerId,
       ym,
+      siteId,
       signedAt: new Date().toISOString(),
       method: 'tap',
-      ipHash,
+      ipHash: hashIP(ip),
     })
 
     return NextResponse.json({ success: true })

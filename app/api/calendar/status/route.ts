@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs } from 'firebase/firestore'
+import { getAllSitesWithWorkers } from '@/lib/sites'
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('x-admin-password')
@@ -16,25 +17,59 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get assignments
-    const assignQ = query(collection(db, 'workerCalendar'), where('ym', '==', ym))
-    const assignSnap = await getDocs(assignQ)
-    const assignments: Record<number, string> = {}
-    assignSnap.forEach(d => {
+    // Get site calendar data (days + status)
+    const siteCalQ = query(collection(db, 'siteCalendar'), where('ym', '==', ym))
+    const siteCalSnap = await getDocs(siteCalQ)
+    const siteCalendars: Record<string, {
+      days: Record<string, string>
+      status: string
+      submittedBy: number | null
+      approvedBy: number | null
+      rejectedReason: string | null
+    }> = {}
+    siteCalSnap.forEach(d => {
       const data = d.data()
-      assignments[data.workerId] = data.patternId
+      siteCalendars[data.siteId] = {
+        days: data.days || null,
+        status: data.status || 'draft',
+        submittedBy: data.submittedBy || null,
+        approvedBy: data.approvedBy || null,
+        rejectedReason: data.rejectedReason || null,
+      }
     })
 
     // Get signatures
     const signQ = query(collection(db, 'calendarSign'), where('ym', '==', ym))
     const signSnap = await getDocs(signQ)
-    const signatures: Record<number, string> = {}
+    const signaturesBySite: Record<string, string> = {}
     signSnap.forEach(d => {
       const data = d.data()
-      signatures[data.workerId] = data.signedAt
+      signaturesBySite[`${data.workerId}_${data.siteId}`] = data.signedAt
     })
 
-    return NextResponse.json({ assignments, signatures })
+    // Get all sites with workers
+    const sitesWithWorkers = await getAllSitesWithWorkers()
+
+    const sites = sitesWithWorkers.map(sw => {
+      const cal = siteCalendars[sw.site.id]
+      return {
+        siteId: sw.site.id,
+        siteName: sw.site.name,
+        days: cal?.days || null,
+        status: cal?.status || null,
+        submittedBy: cal?.submittedBy || null,
+        approvedBy: cal?.approvedBy || null,
+        rejectedReason: cal?.rejectedReason || null,
+        workers: sw.workers.map(w => ({
+          id: w.id,
+          name: w.name,
+          signed: !!signaturesBySite[`${w.id}_${sw.site.id}`],
+          signedAt: signaturesBySite[`${w.id}_${sw.site.id}`] || null,
+        })),
+      }
+    })
+
+    return NextResponse.json({ sites })
   } catch (error) {
     console.error('Failed to fetch status:', error)
     return NextResponse.json({ error: 'Failed to fetch status' }, { status: 500 })
