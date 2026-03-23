@@ -1,67 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getMainData, getAttData, computeMonthly, MainData } from '@/lib/compute'
+import {
+  compute,
+  getMainData,
+  getAttData,
+  getMultiMonthAttData,
+  calcTobiEquiv,
+  getSiteRates,
+  getBillTotal,
+  buildYMList,
+  MainData,
+  ComputeResult,
+} from '@/lib/compute'
+import { ymKey } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
 
 // --- Helpers ---
 
-function ymKey(y: number, m: number): string {
-  return `${y}${String(m).padStart(2, '0')}`
-}
-
-/** Get list of YYYYMM strings for a period type relative to a base month */
-function getYmRange(period: string, baseYm: string): string[] {
-  const y = parseInt(baseYm.slice(0, 4))
-  const m = parseInt(baseYm.slice(4, 6))
-
-  switch (period) {
-    case 'month':
-      return [baseYm]
-    case '3month': {
-      const result: string[] = []
-      for (let i = 0; i < 3; i++) {
-        const d = new Date(y, m - 1 - i, 1)
-        result.push(ymKey(d.getFullYear(), d.getMonth() + 1))
-      }
-      return result
-    }
-    case '6month': {
-      const result: string[] = []
-      for (let i = 0; i < 6; i++) {
-        const d = new Date(y, m - 1 - i, 1)
-        result.push(ymKey(d.getFullYear(), d.getMonth() + 1))
-      }
-      return result
-    }
-    case 'fy': {
-      // FY = Oct - Sep. If current month >= Oct, FY starts this year Oct.
-      // Otherwise FY starts last year Oct.
-      const fyStartYear = m >= 10 ? y : y - 1
-      const result: string[] = []
-      for (let i = 0; i < 12; i++) {
-        const d = new Date(fyStartYear, 9 + i, 1) // Oct = month 9 (0-indexed)
-        result.push(ymKey(d.getFullYear(), d.getMonth() + 1))
-      }
-      return result
-    }
-    case 'year': {
-      const result: string[] = []
-      for (let i = 0; i < 12; i++) {
-        const d = new Date(y, m - 1 - i, 1)
-        result.push(ymKey(d.getFullYear(), d.getMonth() + 1))
-      }
-      return result
-    }
-    default:
-      return [baseYm]
-  }
-}
-
 /** Compute PL alert for workers with remaining PL <= 3 */
-function computePLAlert(main: MainData): {
-  workerId: number; name: string; org: string; totalDays: number; usedDays: number; remaining: number; status: string
-}[] {
+function computePLAlert(main: MainData) {
   const alerts: {
-    workerId: number; name: string; org: string; totalDays: number; usedDays: number; remaining: number; status: string
+    workerId: number; name: string; org: string
+    totalDays: number; usedDays: number; remaining: number; status: string
   }[] = []
 
   for (const w of main.workers) {
@@ -69,34 +28,21 @@ function computePLAlert(main: MainData): {
     const records = main.plData[String(w.id)] || []
     if (records.length === 0) continue
 
-    // Use the latest PL record
     const latest = records[records.length - 1]
     const totalDays = latest.grantDays + latest.carryOver + latest.adjustment
     const usedDays = latest.used
     const remaining = totalDays - usedDays
 
     if (remaining <= 3) {
-      let status = ''
-      if (remaining <= 0) status = 'danger'
-      else if (remaining <= 1) status = 'warning'
-      else status = 'caution'
-
-      alerts.push({
-        workerId: w.id,
-        name: w.name,
-        org: w.org,
-        totalDays,
-        usedDays,
-        remaining,
-        status,
-      })
+      const status = remaining <= 0 ? 'danger' : remaining <= 1 ? 'warning' : 'caution'
+      alerts.push({ workerId: w.id, name: w.name, org: w.org, totalDays, usedDays, remaining, status })
     }
   }
 
   return alerts.sort((a, b) => a.remaining - b.remaining)
 }
 
-/** Today's attendance status: who is working at which site, who is off */
+/** Today's attendance status */
 function computeTodayStatus(
   main: MainData,
   attD: Record<string, AttendanceEntry>,
@@ -107,16 +53,9 @@ function computeTodayStatus(
 ) {
   const activeSites = main.sites.filter(s => !s.archived && !(excludeSiteIds?.has(s.id)))
 
-  // For each active site, count tobi/doko workers and track absent workers
   const siteStatus: {
-    siteId: string
-    siteName: string
-    tobi: number
-    doko: number
-    gaichuCount: number
-    total: number
+    siteId: string; siteName: string; tobi: number; doko: number; gaichuCount: number; total: number
   }[] = []
-
   const absentWorkers: { id: number; name: string }[] = []
   const workingWorkerIds = new Set<number>()
 
@@ -124,7 +63,6 @@ function computeTodayStatus(
     let tobi = 0
     let doko = 0
 
-    // Get assigned workers for this site (massign overrides assign)
     const monthKey = `${site.id}_${ym}`
     const mAssign = main.massign[monthKey]
     const dAssign = main.assign[site.id]
@@ -133,19 +71,20 @@ function computeTodayStatus(
     for (const wid of workerIds) {
       const key = `${site.id}_${wid}_${ym}_${String(day)}`
       const entry = attD[key]
-
       if (entry && entry.w === 1) {
         const worker = main.workers.find(w => w.id === wid)
         if (worker) {
           const job = worker.job || ''
-          if (job === 'とび' || job === 'tobi' || job === '鳶') tobi++
-          else doko++
+          // "鳶" = tobi / shokucho / yakuin
+          if (job === 'tobi' || job === 'shokucho' || job === 'yakuin') tobi++
+          else if (job === 'doko') doko++
+          else tobi++ // default to tobi for unknown jobs
           workingWorkerIds.add(wid)
         }
       }
     }
 
-    // Count subcons
+    // Count subcons for today
     let gaichuCount = 0
     const subconIds = mAssign?.subcons || dAssign?.subcons || []
     for (const scid of subconIds) {
@@ -156,18 +95,11 @@ function computeTodayStatus(
 
     const total = tobi + doko + gaichuCount
     if (workerIds.length > 0) {
-      siteStatus.push({
-        siteId: site.id,
-        siteName: site.name,
-        tobi,
-        doko,
-        gaichuCount,
-        total,
-      })
+      siteStatus.push({ siteId: site.id, siteName: site.name, tobi, doko, gaichuCount, total })
     }
   }
 
-  // Find absent workers (assigned to at least one site but not working today)
+  // Absent workers: assigned but not working today
   const allAssignedWorkerIds = new Set<number>()
   for (const site of activeSites) {
     const monthKey = `${site.id}_${ym}`
@@ -180,52 +112,43 @@ function computeTodayStatus(
   for (const wid of Array.from(allAssignedWorkerIds)) {
     if (!workingWorkerIds.has(wid)) {
       const worker = main.workers.find(w => w.id === wid && !w.retired)
-      if (worker) {
-        absentWorkers.push({ id: worker.id, name: worker.name })
-      }
+      if (worker) absentWorkers.push({ id: worker.id, name: worker.name })
     }
   }
 
   return { siteStatus, absentWorkers }
 }
 
-/** Compute foreign worker attendance rates per month */
+/** Foreign worker attendance rates */
 function computeForeignWorkerRates(
   main: MainData,
-  monthlyResults: { ym: string; workers: { id: number; workDays: number }[] }[],
-  ymList: string[],
+  c: ComputeResult,
+  ymList: { y: number; m: number }[],
 ) {
   const foreignWorkers = main.workers.filter(w =>
     !w.retired && w.visa && w.visa !== 'none' && w.visa !== ''
   )
 
   return foreignWorkers.map(fw => {
+    const ymStrings = ymList.map(x => ymKey(x.y, x.m))
     const monthlyRates: { ym: string; rate: number }[] = []
     let totalWork = 0
     let totalPossible = 0
 
-    for (const ym of ymList) {
-      const workDaysInMonth = main.workDays[ym] || 22
-      const result = monthlyResults.find(r => r.ym === ym)
-      const workerResult = result?.workers.find(w => w.id === fw.id)
-      const worked = workerResult?.workDays || 0
-
+    for (const ymStr of ymStrings) {
+      const workDaysInMonth = main.workDays[ymStr] || 22
+      const wData = c.workers[fw.id]
+      // Per-month work for this worker: approximate from total if single month
+      const worked = wData ? wData.work / ymStrings.length : 0
       const rate = workDaysInMonth > 0 ? (worked / workDaysInMonth) * 100 : 0
-      monthlyRates.push({ ym, rate })
+      monthlyRates.push({ ym: ymStr, rate })
       totalWork += worked
       totalPossible += workDaysInMonth
     }
 
     const avgRate = totalPossible > 0 ? (totalWork / totalPossible) * 100 : 0
 
-    return {
-      id: fw.id,
-      name: fw.name,
-      org: fw.org,
-      visa: fw.visa,
-      avgRate,
-      monthlyRates,
-    }
+    return { id: fw.id, name: fw.name, org: fw.org, visa: fw.visa, avgRate, monthlyRates }
   })
 }
 
@@ -245,145 +168,160 @@ export async function GET(request: NextRequest) {
   }
 
   const period = request.nextUrl.searchParams.get('period') || 'month'
-  const siteFilter = request.nextUrl.searchParams.get('site') || 'all' // 'all' or specific site ID
-
-  // Hidden site ID to exclude from all dashboard data
-  const HIDDEN_SITE_IDS = new Set(['yaesu_night'])
+  const siteFilter = request.nextUrl.searchParams.get('site') || 'all'
 
   try {
     const main = await getMainData()
+    const baseY = parseInt(ym.slice(0, 4))
+    const baseM = parseInt(ym.slice(4, 6))
 
-    // Filter out hidden sites from main data for dashboard purposes
-    const filteredSites = main.sites.filter(s => !HIDDEN_SITE_IDS.has(s.id))
+    // ═══ Build YM list for the selected period ═══
+    const ymListObj = buildYMList(period, baseY, baseM)
+    const ymStrList = ymListObj.map(x => ymKey(x.y, x.m))
 
-    // Determine months to aggregate
-    const ymList = getYmRange(period, ym)
+    // ═══ Load all months' attendance data at once ═══
+    const mergedAtt = await getMultiMonthAttData(ymStrList)
 
-    // Fetch attendance data for all months in range
-    const attDataList = await Promise.all(
-      ymList.map(async (m) => {
-        const att = await getAttData(m)
-        return { ym: m, d: att.d, sd: att.sd }
-      })
+    // ═══ Run compute() for the full period ═══
+    const c = compute(main, mergedAtt.d, mergedAtt.sd, ymListObj)
+
+    // ═══ Determine which sites to include ═══
+    // Exclude yaesu_night only if it has zero data
+    const HIDDEN_CANDIDATES = new Set(['yaesu_night'])
+    const hiddenSiteIds = new Set<string>()
+    for (const hid of HIDDEN_CANDIDATES) {
+      const sd = c.sites[hid]
+      if (!sd || (sd.work === 0 && sd.subWork === 0)) {
+        hiddenSiteIds.add(hid)
+      }
+    }
+
+    const filteredSites = main.sites.filter(s => !hiddenSiteIds.has(s.id))
+
+    // ═══ Billing totals per site across all months ═══
+    const siteBillingMap = new Map<string, number>()
+    let totalBilling = 0
+    for (const site of filteredSites) {
+      let siteBill = 0
+      for (const ymStr of ymStrList) {
+        siteBill += getBillTotal(main, site.id, ymStr)
+      }
+      siteBillingMap.set(site.id, siteBill)
+      if (siteFilter === 'all' || site.id === siteFilter) {
+        totalBilling += siteBill
+      }
+    }
+
+    // ═══ calcTobiEquiv for the period ═══
+    const tobiEq = calcTobiEquiv(
+      main, mergedAtt.d, mergedAtt.sd, ymListObj,
+      siteFilter !== 'all' ? siteFilter : undefined,
     )
 
-    // Compute monthly results for each month
-    const monthlyResults = attDataList.map(att => {
-      const result = computeMonthly(main, att.d, att.sd, att.ym)
-      return { ym: att.ym, ...result }
+    // ═══ getSiteRates for baseline ═══
+    const rates = getSiteRates(main, siteFilter !== 'all' ? siteFilter : undefined)
+
+    // ═══ Site summary table ═══
+    let sitesArray = filteredSites.map(s => {
+      const sd = c.sites[s.id] || { work: 0, ot: 0, otEq: 0, cost: 0, subWork: 0, subOT: 0, subOtEq: 0, subCost: 0 }
+      const inHouse = sd.work
+      const subcon = sd.subWork
+      const ot = sd.ot
+      const cost = sd.cost + sd.subCost
+      const billing = siteBillingMap.get(s.id) || 0
+      const profit = billing - cost
+      return {
+        id: s.id,
+        name: s.name,
+        inHouseWorkDays: inHouse,
+        subconWorkDays: subcon,
+        subconRate: (inHouse + subcon) > 0 ? (subcon / (inHouse + subcon)) * 100 : 0,
+        otHours: ot,
+        cost,
+        billing,
+        profit,
+        profitRate: billing > 0 ? (profit / billing) * 100 : 0,
+      }
     })
-
-    // Aggregate across months
-    const aggregatedSites = new Map<string, {
-      id: string; name: string;
-      workDays: number; subWorkDays: number; otHours: number;
-      cost: number; subCost: number; billing: number; profit: number
-    }>()
-
-    // Include all non-hidden sites (even archived) for historical data
-    for (const site of filteredSites) {
-      aggregatedSites.set(site.id, {
-        id: site.id, name: site.name,
-        workDays: 0, subWorkDays: 0, otHours: 0,
-        cost: 0, subCost: 0, billing: 0, profit: 0,
-      })
-    }
-
-    for (const mr of monthlyResults) {
-      for (const site of mr.sites) {
-        const agg = aggregatedSites.get(site.id)
-        if (agg) {
-          agg.workDays += site.workDays
-          agg.subWorkDays += site.subWorkDays
-          agg.cost += site.cost
-          agg.subCost += site.subCost
-          agg.billing += site.billing
-          agg.profit += site.profit
-        }
-      }
-      // Accumulate OT per site from workers
-      for (const w of mr.workers) {
-        for (const sid of w.sites) {
-          const agg = aggregatedSites.get(sid)
-          if (agg) agg.otHours += w.otHours / w.sites.length
-        }
-      }
-    }
-
-    // Build site summary with rates
-    let sitesArray = Array.from(aggregatedSites.values()).map(s => ({
-      id: s.id,
-      name: s.name,
-      inHouseWorkDays: s.workDays,
-      subconWorkDays: s.subWorkDays,
-      subconRate: (s.workDays + s.subWorkDays) > 0
-        ? (s.subWorkDays / (s.workDays + s.subWorkDays)) * 100 : 0,
-      otHours: s.otHours,
-      cost: s.cost + s.subCost,
-      billing: s.billing,
-      profit: s.profit,
-      profitRate: s.billing > 0 ? (s.profit / s.billing) * 100 : 0,
-    }))
 
     // Filter by site if needed
     if (siteFilter !== 'all') {
       sitesArray = sitesArray.filter(s => s.id === siteFilter)
     }
 
-    // Compute totals
-    const totalInHouse = sitesArray.reduce((s, r) => s + r.inHouseWorkDays, 0)
-    const totalSubcon = sitesArray.reduce((s, r) => s + r.subconWorkDays, 0)
-    const totalCost = sitesArray.reduce((s, r) => s + r.cost, 0)
-    const totalBilling = sitesArray.reduce((s, r) => s + r.billing, 0)
-    const totalProfit = sitesArray.reduce((s, r) => s + r.profit, 0)
-    const totalOtHours = sitesArray.reduce((s, r) => s + r.otHours, 0)
-    const totalWorkDays = totalInHouse + totalSubcon
-    const subconRate = totalWorkDays > 0 ? (totalSubcon / totalWorkDays) * 100 : 0
+    // ═══ Compute totals (site-filtered) ═══
+    let totalWork: number, totalSubWork: number, totalCost: number, totalSubCost: number,
+      totalOtEq: number, totalOT: number
+    if (siteFilter !== 'all') {
+      const sd = c.sites[siteFilter] || { work: 0, ot: 0, otEq: 0, cost: 0, subWork: 0, subOT: 0, subOtEq: 0, subCost: 0 }
+      totalWork = sd.work
+      totalSubWork = sd.subWork
+      totalCost = sd.cost
+      totalSubCost = sd.subCost
+      totalOtEq = sd.otEq
+      totalOT = sd.ot
+    } else {
+      totalWork = c.totalWork
+      totalSubWork = c.totalSubWork
+      totalCost = c.totalCost
+      totalSubCost = c.totalSubCost
+      totalOtEq = c.totalOtEq
+      totalOT = c.totalOT
+    }
+
+    const totalManDays = totalWork + totalSubWork
+    const totalAllCost = totalCost + totalSubCost
+    const totalProfit = totalBilling - totalAllCost
+    const subconRate = totalManDays > 0 ? (totalSubWork / totalManDays) * 100 : 0
 
     // ═══ Previous month KPI (for month-over-month comparison) ═══
-    // Compute KPI for the month immediately before the selected ym
-    const prevYmDate = new Date(parseInt(ym.slice(0, 4)), parseInt(ym.slice(4, 6)) - 2, 1)
+    const prevYmDate = new Date(baseY, baseM - 2, 1)
     const prevYm = ymKey(prevYmDate.getFullYear(), prevYmDate.getMonth() + 1)
     let prevTotalManDays = 0, prevBilling = 0, prevCost = 0, prevProfit = 0, prevBillingPerManDay = 0
     try {
       const prevAtt = await getAttData(prevYm)
-      const prevResult = computeMonthly(main, prevAtt.d, prevAtt.sd, prevYm)
-      let pInHouse = 0, pSubcon = 0, pCostTotal = 0, pBilling = 0
-      for (const site of prevResult.sites) {
-        if (HIDDEN_SITE_IDS.has(site.id)) continue
+      const prevC = compute(main, prevAtt.d, prevAtt.sd, [{ y: prevYmDate.getFullYear(), m: prevYmDate.getMonth() + 1 }])
+      let pWork = 0, pSubWork = 0, pCost = 0, pBill = 0
+      for (const site of filteredSites) {
         if (siteFilter !== 'all' && site.id !== siteFilter) continue
-        pInHouse += site.workDays
-        pSubcon += site.subWorkDays
-        pCostTotal += site.cost + site.subCost
-        pBilling += site.billing
+        const sd = prevC.sites[site.id]
+        if (!sd) continue
+        pWork += sd.work
+        pSubWork += sd.subWork
+        pCost += sd.cost + sd.subCost
+        pBill += getBillTotal(main, site.id, prevYm)
       }
-      prevTotalManDays = pInHouse + pSubcon
-      prevBilling = pBilling
-      prevCost = pCostTotal
-      prevProfit = pBilling - pCostTotal
-      prevBillingPerManDay = prevTotalManDays > 0 ? pBilling / prevTotalManDays : 0
+      prevTotalManDays = pWork + pSubWork
+      prevBilling = pBill
+      prevCost = pCost
+      prevProfit = pBill - pCost
+      prevBillingPerManDay = prevTotalManDays > 0 ? pBill / prevTotalManDays : 0
     } catch {
-      // No previous month data available
+      // No previous month data
     }
 
-    // KPI cards
+    // ═══ KPI cards ═══
     const kpi = {
-      totalManDays: totalWorkDays,
-      inHouseManDays: totalInHouse,
-      subconManDays: totalSubcon,
+      totalManDays,
+      inHouseManDays: totalWork,
+      subconManDays: totalSubWork,
       subconRate,
       billing: totalBilling,
-      cost: totalCost,
+      cost: totalAllCost,
       profit: totalProfit,
       profitRate: totalBilling > 0 ? (totalProfit / totalBilling) * 100 : 0,
-      laborCostPerPerson: totalInHouse > 0 ? totalCost / totalInHouse : 0,
-      laborCostPerPersonAll: totalWorkDays > 0 ? totalCost / totalWorkDays : 0,
-      billingPerManDay: totalWorkDays > 0 ? totalBilling / totalWorkDays : 0,
-      billingPerManDayBaseline: 32300,
-      billingPerManDayRate: totalWorkDays > 0
-        ? ((totalBilling / totalWorkDays) / 32300) * 100 : 0,
-      otHours: totalOtHours,
-      // Previous month comparison values
+      // 1人あたり労務費: in-house only = totalCost / totalWork
+      laborCostPerPerson: totalWork > 0 ? totalCost / totalWork : 0,
+      // 1人あたり労務費: all-inclusive = totalCost / (totalWork + totalOtEq)
+      laborCostPerPersonAll: (totalWork + totalOtEq) > 0 ? totalCost / (totalWork + totalOtEq) : 0,
+      // 人工あたり売上 = billing / tobiEquiv
+      billingPerManDay: tobiEq.equiv > 0 ? totalBilling / tobiEq.equiv : 0,
+      // 基準 = tobiBase from getSiteRates
+      billingPerManDayBaseline: rates.tobiBase,
+      billingPerManDayRate: tobiEq.equiv > 0 && rates.tobiBase > 0
+        ? ((totalBilling / tobiEq.equiv) / rates.tobiBase) * 100 : 0,
+      otHours: totalOT,
+      // Previous month comparison
       prevTotalManDays,
       prevBilling,
       prevCost,
@@ -391,151 +329,112 @@ export async function GET(request: NextRequest) {
       prevBillingPerManDay,
     }
 
-    // Monthly trend data (always FY: Oct ~ current month, regardless of period selector)
-    // This ensures the KPI chart always shows the full fiscal year trend
-    const fyStartMonth = parseInt(ym.slice(4, 6)) >= 10
-      ? parseInt(ym.slice(0, 4)) * 100 + 10
-      : (parseInt(ym.slice(0, 4)) - 1) * 100 + 10
-    const fyYmList: string[] = []
-    for (let m = fyStartMonth; ; ) {
-      const mStr = String(m).padStart(6, '0')
-      fyYmList.push(mStr)
-      if (mStr === ym) break
-      const yy = Math.floor(m / 100)
-      const mm = m % 100
-      m = mm >= 12 ? (yy + 1) * 100 + 1 : yy * 100 + mm + 1
-      if (fyYmList.length > 12) break // safety
-    }
+    // ═══ Monthly trend for 人工あたりKPI chart ═══
+    // Always FY: Oct ~ current month, regardless of period selector
+    const fyYmListObj = buildYMList('fy', baseY, baseM)
+    const fyYmStrList = fyYmListObj.map(x => ymKey(x.y, x.m))
 
-    // Fetch any FY months not already in attDataList
-    const fyAttPromises = fyYmList
-      .filter(m => !attDataList.find(a => a.ym === m))
-      .map(async m => {
-        try {
-          const att = await getAttData(m)
-          return { ...att, ym: m }
-        } catch {
-          return { d: {} as Record<string, AttendanceEntry>, sd: {} as Record<string, { n: number; on: number }>, ym: m }
-        }
-      })
-    const fyExtraAtt = await Promise.all(fyAttPromises)
-    const allFyAtt: { ym: string; d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }[] = [
-      ...attDataList,
-      ...fyExtraAtt,
-    ]
+    // Fetch FY months not already loaded
+    const missingFyMonths = fyYmStrList.filter(m => !ymStrList.includes(m))
+    const fyExtraAtt = missingFyMonths.length > 0 ? await getMultiMonthAttData(missingFyMonths) : { d: {}, sd: {} }
 
-    const monthlyTrend = fyYmList.map(m => {
-      const att = allFyAtt.find(a => a.ym === m)
-      if (!att) return { ym: m, billing: 0, cost: 0, profit: 0, manDays: 0, billingPerManDay: 0, costPerManDay: 0, profitPerManDay: 0, inHouseWorkDays: 0, subconWorkDays: 0 }
+    // We need per-month compute for trend, so load each month individually
+    const monthlyTrend = await Promise.all(fyYmStrList.map(async (mStr) => {
+      const mY = parseInt(mStr.slice(0, 4))
+      const mM = parseInt(mStr.slice(4, 6))
+      const ymObj = [{ y: mY, m: mM }]
 
-      const mr = computeMonthly(main, att.d, att.sd, m)
-      let mBilling = 0, mCost = 0, mProfit = 0, mWorkDays = 0, mSubDays = 0
-      for (const site of mr.sites) {
-        if (siteFilter !== 'all' && site.id !== siteFilter) continue
-        mBilling += site.billing
-        mCost += site.cost + site.subCost
-        mProfit += site.profit
-        mWorkDays += site.workDays
-        mSubDays += site.subWorkDays
+      let att: { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }
+      if (ymStrList.includes(mStr)) {
+        // Already loaded - but compute() merged data, so we need single-month att data
+        att = await getAttData(mStr)
+      } else {
+        att = await getAttData(mStr)
       }
+
+      const mc = compute(main, att.d, att.sd, ymObj)
+      const mTobiEq = calcTobiEquiv(
+        main, att.d, att.sd, ymObj,
+        siteFilter !== 'all' ? siteFilter : undefined,
+      )
+
+      let mBilling = 0, mCost = 0, mWorkDays = 0, mSubDays = 0
+      for (const site of filteredSites) {
+        if (siteFilter !== 'all' && site.id !== siteFilter) continue
+        const sd = mc.sites[site.id]
+        if (sd) {
+          mCost += sd.cost + sd.subCost
+          mWorkDays += sd.work
+          mSubDays += sd.subWork
+        }
+        mBilling += getBillTotal(main, site.id, mStr)
+      }
+
       const manDays = mWorkDays + mSubDays
+      const equiv = mTobiEq.equiv
       return {
-        ym: m,
+        ym: mStr,
         billing: mBilling,
         cost: mCost,
-        profit: mProfit,
+        profit: mBilling - mCost,
         manDays,
-        billingPerManDay: manDays > 0 ? mBilling / manDays : 0,
-        costPerManDay: manDays > 0 ? mCost / manDays : 0,
-        profitPerManDay: manDays > 0 ? mProfit / manDays : 0,
+        // Per-worker KPIs using tobiEquiv
+        billingPerManDay: equiv > 0 ? mBilling / equiv : 0,
+        costPerManDay: equiv > 0 ? mCost / equiv : 0,
+        profitPerManDay: equiv > 0 ? (mBilling - mCost) / equiv : 0,
         inHouseWorkDays: mWorkDays,
         subconWorkDays: mSubDays,
       }
-    })
+    }))
 
-    // Today's status
+    // ═══ Today's status ═══
     const now = new Date()
     const todayYm = ymKey(now.getFullYear(), now.getMonth() + 1)
     const todayDay = now.getDate()
-    const todayAttData = attDataList.find(a => a.ym === todayYm)
     let todayStatus = null
-    if (todayAttData) {
-      todayStatus = computeTodayStatus(main, todayAttData.d, todayAttData.sd, todayYm, todayDay, HIDDEN_SITE_IDS)
-    } else {
-      // Fetch today's data if not in range
-      try {
-        const todayAtt = await getAttData(todayYm)
-        todayStatus = computeTodayStatus(main, todayAtt.d, todayAtt.sd, todayYm, todayDay, HIDDEN_SITE_IDS)
-      } catch {
-        todayStatus = { siteStatus: [], absentWorkers: [] }
-      }
+    try {
+      const todayAtt = await getAttData(todayYm)
+      todayStatus = computeTodayStatus(main, todayAtt.d, todayAtt.sd, todayYm, todayDay, hiddenSiteIds)
+    } catch {
+      todayStatus = { siteStatus: [], absentWorkers: [] }
     }
 
-    // Daily attendance for current month (for daily bar chart)
-    const currentMonthYm = ym // Use selected month
-    const currentMonthAtt = attDataList.find(a => a.ym === currentMonthYm)
+    // ═══ Daily attendance from c.daily and c.dailySite ═══
+    const currentMonthYm = ym
+    const y2 = parseInt(currentMonthYm.slice(0, 4))
+    const m2 = parseInt(currentMonthYm.slice(4, 6))
+    const daysInMonth = new Date(y2, m2, 0).getDate()
     const dailyAttendance: { day: number; sites: { siteId: string; siteName: string; count: number }[] }[] = []
-    if (currentMonthAtt) {
-      const y2 = parseInt(currentMonthYm.slice(0, 4))
-      const m2 = parseInt(currentMonthYm.slice(4, 6))
-      const daysInMonth = new Date(y2, m2, 0).getDate()
-      for (let d = 1; d <= daysInMonth; d++) {
-        const daySites: { siteId: string; siteName: string; count: number }[] = []
-        for (const site of filteredSites) {
-          if (siteFilter !== 'all' && site.id !== siteFilter) continue
-          let count = 0
-          const monthKey = `${site.id}_${currentMonthYm}`
-          const mAssign = main.massign[monthKey]
-          const dAssign = main.assign[site.id]
-          const workerIds = mAssign?.workers || dAssign?.workers || []
-          for (const wid of workerIds) {
-            const key = `${site.id}_${wid}_${currentMonthYm}_${String(d)}`
-            const entry = currentMonthAtt.d[key]
-            if (entry && entry.w === 1) count++
-          }
-          if (count > 0) {
-            daySites.push({ siteId: site.id, siteName: site.name, count })
-          }
-        }
-        dailyAttendance.push({ day: d, sites: daySites })
-      }
-    }
 
-    // Cumulative FY data
-    const currentYear = parseInt(ym.slice(0, 4))
-    const currentMonth = parseInt(ym.slice(4, 6))
-    const fyStartYear = currentMonth >= 10 ? currentYear : currentYear - 1
-    const fyMonths: string[] = []
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(fyStartYear, 9 + i, 1) // Start from October
-      const fym = ymKey(d.getFullYear(), d.getMonth() + 1)
-      fyMonths.push(fym)
-    }
-
-    // Fetch FY months not already loaded
-    const missingMonths = fyMonths.filter(m => !attDataList.find(a => a.ym === m))
-    const extraAttData = await Promise.all(
-      missingMonths.map(async (m) => {
-        const att = await getAttData(m)
-        return { ym: m, d: att.d, sd: att.sd }
-      })
-    )
-    const allAttData = [...attDataList, ...extraAttData]
-
-    const cumulativeData = fyMonths.map(m => {
-      const att = allAttData.find(a => a.ym === m)
-      if (!att) return { ym: m, billing: 0, cost: 0, profit: 0, cumBilling: 0, cumCost: 0, cumProfit: 0 }
-      const result = computeMonthly(main, att.d, att.sd, m)
-      let mBilling = 0, mCost = 0
-      for (const site of result.sites) {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const daySites: { siteId: string; siteName: string; count: number }[] = []
+      for (const site of filteredSites) {
         if (siteFilter !== 'all' && site.id !== siteFilter) continue
-        mBilling += site.billing
-        mCost += site.cost + site.subCost
+        const dsKey = `${currentMonthYm}_${d}_${site.id}`
+        const count = c.dailySite[dsKey] || 0
+        if (count > 0) {
+          daySites.push({ siteId: site.id, siteName: site.name, count })
+        }
       }
-      return { ym: m, billing: mBilling, cost: mCost, profit: mBilling - mCost, cumBilling: 0, cumCost: 0, cumProfit: 0 }
+      dailyAttendance.push({ day: d, sites: daySites })
+    }
+
+    // ═══ Cumulative FY data ═══
+    const fyMonthsObj = buildYMList('fy', baseY, baseM)
+    const fyMonthsStr = fyMonthsObj.map(x => ymKey(x.y, x.m))
+
+    const cumulativeData = fyMonthsStr.map(mStr => {
+      // Find matching trend data
+      const trend = monthlyTrend.find(t => t.ym === mStr)
+      return {
+        ym: mStr,
+        billing: trend?.billing || 0,
+        cost: trend?.cost || 0,
+        profit: trend?.profit || 0,
+        cumBilling: 0, cumCost: 0, cumProfit: 0,
+      }
     })
 
-    // Calculate cumulative values
     let cumB = 0, cumC = 0, cumP = 0
     for (const cd of cumulativeData) {
       cumB += cd.billing
@@ -546,25 +445,24 @@ export async function GET(request: NextRequest) {
       cd.cumProfit = cumP
     }
 
-    // PL Alert
+    // ═══ PL Alert ═══
     const plAlert = computePLAlert(main)
 
-    // Foreign worker attendance rates
-    const fwMonthlyResults = monthlyResults.map(mr => ({
-      ym: mr.ym,
-      workers: mr.workers.map(w => ({ id: w.id, workDays: w.workDays })),
-    }))
-    const foreignWorkerRates = computeForeignWorkerRates(main, fwMonthlyResults, ymList)
+    // ═══ Foreign worker attendance rates ═══
+    const foreignWorkerRates = computeForeignWorkerRates(main, c, ymListObj)
 
-    // Site list for tab selector
-    // Include archived sites only if they have attendance data in the current period
+    // ═══ Site list for tab selector ═══
+    // Include archived sites only if they have data in the period
     const archivedSitesWithData = new Set<string>()
-    for (const mr of monthlyResults) {
-      for (const site of mr.sites) {
-        const siteInfo = filteredSites.find(s => s.id === site.id)
-        if (siteInfo?.archived && (site.workDays > 0 || site.subWorkDays > 0 || site.billing > 0)) {
+    for (const site of filteredSites) {
+      if (site.archived) {
+        const sd = c.sites[site.id]
+        if (sd && (sd.work > 0 || sd.subWork > 0)) {
           archivedSitesWithData.add(site.id)
         }
+        // Also check billing
+        const bill = siteBillingMap.get(site.id) || 0
+        if (bill > 0) archivedSitesWithData.add(site.id)
       }
     }
 
@@ -572,16 +470,11 @@ export async function GET(request: NextRequest) {
       .filter(s => !s.archived || archivedSitesWithData.has(s.id))
       .map(s => ({ id: s.id, name: s.name + (s.archived ? '（終了）' : '') }))
 
-    // Site-specific members and trend (when a specific site is selected)
-    let siteMembers: {
-      id: number; name: string; org: string; visa: string; job: string
-    }[] | null = null
-    let siteTrend: {
-      ym: string; workerCount: number; cost: number; tobi: number; doko: number
-    }[] | null = null
+    // ═══ Site-specific members and trend ═══
+    let siteMembers: { id: number; name: string; org: string; visa: string; job: string }[] | null = null
+    let siteTrend: { ym: string; workerCount: number; cost: number; tobi: number; doko: number }[] | null = null
 
     if (siteFilter !== 'all') {
-      // Get assigned workers for this site
       const monthKey = `${siteFilter}_${ym}`
       const mAssign = main.massign[monthKey]
       const dAssign = main.assign[siteFilter]
@@ -590,17 +483,10 @@ export async function GET(request: NextRequest) {
       siteMembers = workerIds
         .map(wid => main.workers.find(w => w.id === wid && !w.retired))
         .filter((w): w is typeof main.workers[0] => !!w)
-        .map(w => ({
-          id: w.id,
-          name: w.name,
-          org: w.org,
-          visa: w.visa,
-          job: w.job,
-        }))
+        .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
-      // Site trend: monthly worker count & cost for each month in range
-      siteTrend = ymList.map(m => {
-        const mKey = `${siteFilter}_${m}`
+      siteTrend = ymStrList.map(mStr => {
+        const mKey = `${siteFilter}_${mStr}`
         const mA = main.massign[mKey]
         const dA = main.assign[siteFilter]
         const wids = mA?.workers || dA?.workers || []
@@ -610,46 +496,26 @@ export async function GET(request: NextRequest) {
         for (const wid of wids) {
           const worker = main.workers.find(w => w.id === wid && !w.retired)
           if (worker) {
-            const job = worker.job || ''
-            if (job === 'とび' || job === 'tobi' || job === '鳶') tobi++
+            if (worker.job === 'tobi' || worker.job === 'shokucho' || worker.job === 'yakuin') tobi++
             else doko++
           }
         }
 
-        const mr = monthlyResults.find(r => r.ym === m)
-        let mCost = 0
-        if (mr) {
-          for (const site of mr.sites) {
-            if (site.id === siteFilter) {
-              mCost += site.cost + site.subCost
-            }
-          }
-        }
+        const trend = monthlyTrend.find(t => t.ym === mStr)
+        const mCost = trend?.cost || 0
 
-        return {
-          ym: m,
-          workerCount: tobi + doko,
-          cost: mCost,
-          tobi,
-          doko,
-        }
+        return { ym: mStr, workerCount: tobi + doko, cost: mCost, tobi, doko }
       }).sort((a, b) => a.ym.localeCompare(b.ym))
     }
 
     // ═══ Cost Forecasting (3-month moving average) ═══
-    // Use the sorted monthly trend to compute forecast
     const sortedTrend = [...monthlyTrend].sort((a, b) => a.ym.localeCompare(b.ym))
     let forecast: {
-      nextYm: string
-      predictedBilling: number
-      predictedCost: number
-      predictedProfitRate: number
-      movingAvgBilling: number[]
-      movingAvgCost: number[]
+      nextYm: string; predictedBilling: number; predictedCost: number
+      predictedProfitRate: number; movingAvgBilling: number[]; movingAvgCost: number[]
     } | null = null
 
     if (sortedTrend.length >= 3) {
-      // Calculate 3-month moving averages for each point
       const maBilling: number[] = []
       const maCost: number[] = []
       for (let i = 0; i < sortedTrend.length; i++) {
@@ -657,37 +523,23 @@ export async function GET(request: NextRequest) {
           maBilling.push(0)
           maCost.push(0)
         } else {
-          const mr0 = monthlyResults.find(r => r.ym === sortedTrend[i].ym)
-          const mr1 = monthlyResults.find(r => r.ym === sortedTrend[i - 1].ym)
-          const mr2 = monthlyResults.find(r => r.ym === sortedTrend[i - 2].ym)
-
-          let b0 = 0, b1 = 0, b2 = 0, c0 = 0, c1 = 0, c2 = 0
-          if (mr0) for (const s of mr0.sites) { if (siteFilter !== 'all' && s.id !== siteFilter) continue; b0 += s.billing; c0 += s.cost + s.subCost }
-          if (mr1) for (const s of mr1.sites) { if (siteFilter !== 'all' && s.id !== siteFilter) continue; b1 += s.billing; c1 += s.cost + s.subCost }
-          if (mr2) for (const s of mr2.sites) { if (siteFilter !== 'all' && s.id !== siteFilter) continue; b2 += s.billing; c2 += s.cost + s.subCost }
-
+          const b0 = sortedTrend[i].billing
+          const b1 = sortedTrend[i - 1].billing
+          const b2 = sortedTrend[i - 2].billing
+          const c0 = sortedTrend[i].cost
+          const c1 = sortedTrend[i - 1].cost
+          const c2 = sortedTrend[i - 2].cost
           maBilling.push((b0 + b1 + b2) / 3)
           maCost.push((c0 + c1 + c2) / 3)
         }
       }
 
-      // Predict next month: use trend from last two valid MA points
       const lastMA_B = maBilling[maBilling.length - 1]
       const lastMA_C = maCost[maCost.length - 1]
 
-      // Simple trend: average of last 3 months
-      const last3B = sortedTrend.slice(-3).reduce((s, t) => {
-        const mr = monthlyResults.find(r => r.ym === t.ym)
-        let b = 0; if (mr) for (const st of mr.sites) { if (siteFilter !== 'all' && st.id !== siteFilter) continue; b += st.billing }
-        return s + b
-      }, 0) / 3
-      const last3C = sortedTrend.slice(-3).reduce((s, t) => {
-        const mr = monthlyResults.find(r => r.ym === t.ym)
-        let c = 0; if (mr) for (const st of mr.sites) { if (siteFilter !== 'all' && st.id !== siteFilter) continue; c += st.cost + st.subCost }
-        return s + c
-      }, 0) / 3
+      const last3B = sortedTrend.slice(-3).reduce((s, t) => s + t.billing, 0) / 3
+      const last3C = sortedTrend.slice(-3).reduce((s, t) => s + t.cost, 0) / 3
 
-      // Trend direction from last 2 MA points
       let predictedBilling = last3B
       let predictedCost = last3C
       if (maBilling.length >= 4 && maBilling[maBilling.length - 2] > 0) {
@@ -697,11 +549,10 @@ export async function GET(request: NextRequest) {
         predictedCost = lastMA_C * trendC
       }
 
-      // Next month YM
       const lastYm = sortedTrend[sortedTrend.length - 1].ym
       const ly = parseInt(lastYm.slice(0, 4))
       const lm = parseInt(lastYm.slice(4, 6))
-      const nd = new Date(ly, lm, 1) // next month
+      const nd = new Date(ly, lm, 1)
       const nextYm = ymKey(nd.getFullYear(), nd.getMonth() + 1)
 
       const predictedProfit = predictedBilling - predictedCost
@@ -717,14 +568,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ═══ Subcon Ratio Alert (per site) ═══
-    const subconAlert: {
-      overallRate: number
-      level: 'none' | 'yellow' | 'red'
-      sitesAbove50: { id: string; name: string; rate: number }[]
-    } = {
+    // ═══ Subcon Ratio Alert ═══
+    const subconAlert = {
       overallRate: subconRate,
-      level: subconRate > 60 ? 'red' : subconRate > 50 ? 'yellow' : 'none',
+      level: (subconRate > 60 ? 'red' : subconRate > 50 ? 'yellow' : 'none') as 'none' | 'yellow' | 'red',
       sitesAbove50: sitesArray
         .filter(s => s.subconRate > 50 && (s.inHouseWorkDays + s.subconWorkDays) > 0)
         .map(s => ({ id: s.id, name: s.name, rate: Math.round(s.subconRate * 10) / 10 }))
@@ -732,61 +579,38 @@ export async function GET(request: NextRequest) {
     }
 
     // ═══ YoY Labor Cost Comparison ═══
-    // Fetch same period last year
-    const prevYearYmList = ymList.map(m => {
-      const my = parseInt(m.slice(0, 4))
-      const mm = parseInt(m.slice(4, 6))
+    const prevYearYmStrList = ymStrList.map(mStr => {
+      const my = parseInt(mStr.slice(0, 4))
+      const mm = parseInt(mStr.slice(4, 6))
       return ymKey(my - 1, mm)
     })
 
-    const prevYearAttData = await Promise.all(
-      prevYearYmList.filter(m => !allAttData.find(a => a.ym === m)).map(async (m) => {
-        const att = await getAttData(m)
-        return { ym: m, d: att.d, sd: att.sd }
-      })
-    )
-    const allAttDataWithPrev = [...allAttData, ...prevYearAttData]
+    const prevYearAtt = await getMultiMonthAttData(prevYearYmStrList)
+    const prevYearYmObj = prevYearYmStrList.map(m => ({ y: parseInt(m.slice(0, 4)), m: parseInt(m.slice(4, 6)) }))
+    const prevYearC = compute(main, prevYearAtt.d, prevYearAtt.sd, prevYearYmObj)
 
-    const prevYearResults = prevYearYmList.map(m => {
-      const att = allAttDataWithPrev.find(a => a.ym === m)
-      if (!att) return null
-      return { ym: m, ...computeMonthly(main, att.d, att.sd, m) }
-    })
-
-    // Current year total labor cost (by site)
-    const currentLaborBySite = new Map<string, number>()
     let currentTotalLabor = 0
-    for (const mr of monthlyResults) {
-      for (const site of mr.sites) {
-        if (siteFilter !== 'all' && site.id !== siteFilter) continue
-        const c = site.cost + site.subCost
-        currentLaborBySite.set(site.id, (currentLaborBySite.get(site.id) || 0) + c)
-        currentTotalLabor += c
-      }
-    }
-
-    // Previous year total labor cost (by site)
-    const prevLaborBySite = new Map<string, number>()
     let prevTotalLabor = 0
     let hasPrevData = false
-    for (const mr of prevYearResults) {
-      if (!mr) continue
-      hasPrevData = true
-      for (const site of mr.sites) {
-        if (siteFilter !== 'all' && site.id !== siteFilter) continue
-        const c = site.cost + site.subCost
-        prevLaborBySite.set(site.id, (prevLaborBySite.get(site.id) || 0) + c)
-        prevTotalLabor += c
-      }
+    const currentLaborBySite = new Map<string, number>()
+    const prevLaborBySite = new Map<string, number>()
+
+    for (const site of filteredSites) {
+      if (siteFilter !== 'all' && site.id !== siteFilter) continue
+
+      const sd = c.sites[site.id]
+      const cur = sd ? sd.cost + sd.subCost : 0
+      currentLaborBySite.set(site.id, cur)
+      currentTotalLabor += cur
+
+      const psd = prevYearC.sites[site.id]
+      const prev = psd ? psd.cost + psd.subCost : 0
+      if (prev > 0) hasPrevData = true
+      prevLaborBySite.set(site.id, prev)
+      prevTotalLabor += prev
     }
 
-    const yoyComparison: {
-      hasPrevData: boolean
-      currentTotal: number
-      prevTotal: number
-      changeRate: number
-      sites: { id: string; name: string; current: number; prev: number; changeRate: number }[]
-    } = {
+    const yoyComparison = {
       hasPrevData,
       currentTotal: Math.round(currentTotalLabor),
       prevTotal: Math.round(prevTotalLabor),
@@ -797,10 +621,8 @@ export async function GET(request: NextRequest) {
           const cur = currentLaborBySite.get(s.id) || 0
           const prev = prevLaborBySite.get(s.id) || 0
           return {
-            id: s.id,
-            name: s.name,
-            current: Math.round(cur),
-            prev: Math.round(prev),
+            id: s.id, name: s.name,
+            current: Math.round(cur), prev: Math.round(prev),
             changeRate: prev > 0 ? ((cur - prev) / prev) * 100 : 0,
           }
         })
@@ -818,7 +640,7 @@ export async function GET(request: NextRequest) {
       plAlert,
       foreignWorkerRates,
       siteList,
-      ymList: ymList.sort(),
+      ymList: ymStrList.sort(),
       period,
       selectedYm: ym,
       siteMembers,

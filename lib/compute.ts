@@ -612,7 +612,7 @@ export function computeMonthly(
 
     wm.workDays += workCount
     wm.actualWorkDays += 1
-    if (entry.w === 0.6) wm.compDays += 1
+    if (isComp) wm.compDays += 1
     if (entry.o && entry.o > 0 && !isComp) wm.otHours += entry.o
     if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
 
@@ -655,13 +655,13 @@ export function computeMonthly(
 
   // Calculate worker costs
   for (const wm of workerMap.values()) {
-    wm.workAll = wm.workDays
+    wm.workAll = wm.workDays + wm.compDays * 0.6  // 出勤日数（0.6含む）
     wm.cost = wm.workDays * wm.rate + (wm.compDays * 0.6 * wm.rate)  // 補償分も原価に含む
     wm.otCost = wm.otHours * (wm.rate / 8) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
 
     if (prescribedDays > 0) {
-      wm.absence = Math.max(0, prescribedDays - wm.actualWorkDays - wm.plUsed)
+      wm.absence = Math.max(0, prescribedDays - wm.workDays - wm.compDays - wm.plUsed)  // 0.6は1日出勤扱い
       wm.absentCost = Math.round(wm.absence * wm.rate)
       wm.netPay = wm.totalCost - wm.absentCost
     } else {
