@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { fmtPct } from '@/lib/format'
 
 interface PLWorker {
   id: number; name: string; org: string; visa: string; hireDate: string
@@ -266,7 +267,7 @@ export default function LeavePage() {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">全社消化率</span>
-          <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{companyRate.toFixed(1)}%（{totalUsed}/{totalTotal}日）</span>
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{fmtPct(companyRate)}（{totalUsed}/{totalTotal}日）</span>
         </div>
         <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
@@ -312,11 +313,11 @@ export default function LeavePage() {
                   <td className="px-3 py-2.5 text-center text-gray-600 text-xs">
                     {w.grantMonth ? `${w.grantMonth}月` : '—'}
                   </td>
-                  <td className="px-3 py-2.5 text-right">{w.grantDays}</td>
-                  <td className="px-3 py-2.5 text-right">{w.carryOver}</td>
-                  <td className="px-3 py-2.5 text-right font-medium">{w.total}</td>
-                  <td className="px-3 py-2.5 text-right">{w.used}</td>
-                  <td className={`px-3 py-2.5 text-right font-bold ${w.remaining <= 3 ? 'text-red-500' : 'text-green-600'}`}>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{w.grantDays}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{w.carryOver}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums font-medium">{w.total}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{w.used}</td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${w.remaining <= 3 ? 'text-red-500' : 'text-green-600'}`}>
                     {w.remaining}
                   </td>
                   {/* Expiry column */}

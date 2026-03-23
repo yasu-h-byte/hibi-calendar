@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, Fragment } from 'react'
+import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
 
 interface SiteProfit {
   id: string; name: string
@@ -72,15 +73,6 @@ export default function CostPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const fmtYen = (v: number) => {
-    const rounded = Math.round(v)
-    if (Math.abs(rounded) >= 10000) {
-      const man = rounded / 10000
-      return `¥${Number.isInteger(man) ? man : man.toFixed(1)}万`
-    }
-    return `¥${rounded.toLocaleString()}`
-  }
-  const fmtRate = (v: number) => `${Number.isInteger(v) ? v : v.toFixed(1)}%`
   const profitColor = (r: number) => r > 15 ? 'text-green-600' : r > 0 ? 'text-yellow-600' : 'text-red-600'
 
   const ymOptions: { value: string; label: string }[] = []
@@ -92,6 +84,16 @@ export default function CostPage() {
   }
 
   const ymLabel = (m: string) => `${parseInt(m.slice(4))}月`
+
+  // Period navigation (prev/next month)
+  const navigateMonth = (direction: -1 | 1) => {
+    const y = parseInt(ym.slice(0, 4))
+    const m = parseInt(ym.slice(4, 6))
+    const d = new Date(y, m - 1 + direction, 1)
+    setYm(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+
+  const ymDisplayLabel = `${parseInt(ym.slice(0, 4))}年${parseInt(ym.slice(4))}月`
 
   const isMultiMonth = period !== 'monthly'
   const ymRange = data?.ymRange || [ym]
@@ -164,6 +166,9 @@ export default function CostPage() {
               </button>
             ))}
           </div>
+          <button onClick={() => navigateMonth(-1)} className="px-2 py-1 text-sm text-gray-500 hover:text-hibi-navy dark:text-gray-400">◀前</button>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[80px] text-center">{ymDisplayLabel}</span>
+          <button onClick={() => navigateMonth(1)} className="px-2 py-1 text-sm text-gray-500 hover:text-hibi-navy dark:text-gray-400">次▶</button>
           <select value={ym} onChange={e => setYm(e.target.value)} className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
             {ymOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -174,19 +179,19 @@ export default function CostPage() {
       {t && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
-            <div className="text-2xl font-bold text-hibi-navy tabular-nums">{fmtYen(t.billing)}</div>
+            <div className="text-2xl font-bold text-hibi-navy tabular-nums">{fmtYenMan(t.billing)}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">総請求額</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
-            <div className={`text-2xl font-bold tabular-nums ${profitColor(t.profitRate)}`}>{fmtYen(t.profit)}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">粗利（{fmtRate(t.profitRate)}）</div>
+            <div className={`text-2xl font-bold tabular-nums ${profitColor(t.profitRate)}`}>{fmtYenMan(t.profit)}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">粗利（{fmtPct(t.profitRate)}）</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600 tabular-nums">{fmtYen(t.cost)}</div>
+            <div className="text-2xl font-bold text-blue-600 tabular-nums">{fmtYenMan(t.cost)}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">自社労務費</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
-            <div className="text-2xl font-bold text-orange-600 tabular-nums">{fmtYen(t.subCost)}</div>
+            <div className="text-2xl font-bold text-orange-600 tabular-nums">{fmtYenMan(t.subCost)}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">外注費</div>
           </div>
         </div>
@@ -313,22 +318,22 @@ export default function CostPage() {
                       <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(s.subCost)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(s.totalCost)}</td>
                       <td className={`px-3 py-2.5 text-right font-bold tabular-nums ${profitColor(s.profitRate)}`}>{fmtYen(s.profit)}</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(s.profitRate)}`}>{fmtRate(s.profitRate)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{s.workDays}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{s.subWorkDays}</td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(s.profitRate)}`}>{fmtPct(s.profitRate)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(s.workDays)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(s.subWorkDays)}</td>
                       {/* Improved tobiEquiv display */}
                       <td className="px-3 py-2 text-right">
                         {s.tobiRate > 0 ? (
                           <div>
                             <div className={`font-bold tabular-nums ${s.tobiEquiv > totalWorkers ? 'text-green-600' : totalWorkers > 0 ? 'text-red-600' : ''}`}>
-                              {s.tobiEquiv.toFixed(1)}人工
+                              {fmtNum(s.tobiEquiv)}人工
                             </div>
                             <div className="text-[10px] text-gray-400 tabular-nums">
-                              {fmtYen(s.billing)} ÷ ¥{s.tobiRate.toLocaleString()} = {s.tobiEquiv.toFixed(1)}
+                              {fmtYen(s.billing)} ÷ {fmtYen(s.tobiRate)} = {fmtNum(s.tobiEquiv)}
                             </div>
                             {totalWorkers > 0 && (
                               <div className="text-[10px] text-gray-500 tabular-nums">
-                                人工あたり ¥{Math.round(s.billing / totalWorkers).toLocaleString()}
+                                人工あたり {fmtYen(Math.round(s.billing / totalWorkers))}
                               </div>
                             )}
                           </div>
@@ -347,13 +352,13 @@ export default function CostPage() {
                     <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(t.subCost)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(t.totalCost)}</td>
                     <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(t.profitRate)}`}>{fmtYen(t.profit)}</td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(t.profitRate)}`}>{fmtRate(t.profitRate)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{t.workDays}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{t.subWorkDays}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(t.profitRate)}`}>{fmtPct(t.profitRate)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(t.workDays)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(t.subWorkDays)}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">
                       {(t.workDays + t.subWorkDays) > 0 ? (
                         <div className="text-[10px] text-gray-500">
-                          人工あたり ¥{Math.round(t.billing / (t.workDays + t.subWorkDays)).toLocaleString()}
+                          人工あたり {fmtYen(Math.round(t.billing / (t.workDays + t.subWorkDays)))}
                         </div>
                       ) : '—'}
                     </td>
@@ -397,7 +402,7 @@ export default function CostPage() {
                         )}
                       </div>
                     </div>
-                    <div className="w-20 text-xs text-gray-600 dark:text-gray-400 tabular-nums text-right flex-shrink-0">{fmtYen(total)}</div>
+                    <div className="w-24 text-xs text-gray-600 dark:text-gray-400 tabular-nums text-right flex-shrink-0">{fmtYen(total)}</div>
                   </div>
                 )
               })}
@@ -456,15 +461,15 @@ export default function CostPage() {
                         <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${sc.type === '鳶業者' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{sc.type}</span>
                         {!hasWork && <span className="ml-2 text-xs text-gray-400">稼働なし</span>}
                       </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{`¥${sc.rate.toLocaleString()}`}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{sc.otRate ? `¥${sc.otRate.toLocaleString()}/h` : '—'}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{sc.workDays}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{sc.otCount}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(sc.rate)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{sc.otRate ? `${fmtYen(sc.otRate)}/h` : '—'}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.workDays)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.otCount)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
                         {otCost > 0 ? (
                           <div>
                             <div>{fmtYen(otCost)}</div>
-                            <div className="text-[10px] text-gray-400">{sc.otCount} × ¥{sc.otRate.toLocaleString()}</div>
+                            <div className="text-[10px] text-gray-400">{fmtNum(sc.otCount)} × {fmtYen(sc.otRate)}</div>
                           </div>
                         ) : '—'}
                       </td>
@@ -477,8 +482,8 @@ export default function CostPage() {
                         <td className="px-3 py-1.5 pl-8 text-xs text-gray-500 dark:text-gray-400">└ {b.siteName}</td>
                         <td className="px-3 py-1.5"></td>
                         <td className="px-3 py-1.5"></td>
-                        <td className="px-3 py-1.5 text-right text-xs tabular-nums text-gray-600">{b.workDays}</td>
-                        <td className="px-3 py-1.5 text-right text-xs tabular-nums text-gray-600">{b.otCount}</td>
+                        <td className="px-3 py-1.5 text-right text-xs tabular-nums text-gray-600">{fmtNum(b.workDays)}</td>
+                        <td className="px-3 py-1.5 text-right text-xs tabular-nums text-gray-600">{fmtNum(b.otCount)}</td>
                         <td className="px-3 py-1.5 text-right text-xs tabular-nums text-gray-600">
                           {b.otCount > 0 ? fmtYen(b.otCount * sc.otRate) : '—'}
                         </td>
@@ -494,8 +499,8 @@ export default function CostPage() {
                 <td className="px-3 py-2.5">合計</td>
                 <td className="px-3 py-2.5"></td>
                 <td className="px-3 py-2.5"></td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{data.subconDetails.reduce((s, sc) => s + sc.workDays, 0)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{data.subconDetails.reduce((s, sc) => s + sc.otCount, 0)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data.subconDetails.reduce((s, sc) => s + sc.workDays, 0))}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data.subconDetails.reduce((s, sc) => s + sc.otCount, 0))}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
                   {fmtYen(data.subconDetails.reduce((s, sc) => s + sc.otCount * sc.otRate, 0))}
                 </td>
@@ -510,4 +515,3 @@ export default function CostPage() {
     </div>
   )
 }
-

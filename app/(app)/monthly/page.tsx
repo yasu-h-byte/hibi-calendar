@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { formatYen } from '@/lib/compute'
+import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
 
 // ────────────────────────────────────────
 //  Types
@@ -383,7 +383,7 @@ export default function MonthlyPage() {
             <h1 className="text-xl font-bold text-hibi-navy dark:text-white">月次集計</h1>
             {data && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                出勤延べ {Number.isInteger(data.totals.workDays) ? data.totals.workDays : data.totals.workDays.toFixed(1)}人日 / 外注 {data.totals.subWorkDays}人工 / 残業 {data.totals.otHours}h
+                出勤延べ {fmtNum(data.totals.workDays)}人日 / 外注 {fmtNum(data.totals.subWorkDays)}人工 / 残業 {fmtNum(data.totals.otHours)}h
               </p>
             )}
           </div>
@@ -580,7 +580,7 @@ export default function MonthlyPage() {
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
-                        <div>{Number.isInteger(w.workDays) ? w.workDays : w.workDays.toFixed(1)}</div>
+                        <div>{fmtNum(w.workDays)}</div>
                         {hasComp && (
                           <div className="text-[10px] text-gray-400">うち補0.6</div>
                         )}
@@ -589,13 +589,13 @@ export default function MonthlyPage() {
                         {w.plDays > 0 ? w.plDays : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
-                        {w.otHours > 0 ? w.otHours.toFixed(1) : '—'}
+                        {w.otHours > 0 ? fmtNum(w.otHours) : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                        {formatYen(w.rate)}
+                        {fmtYen(w.rate)}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-medium">
-                        {formatYen(Math.round(w.totalCost))}
+                        {fmtYen(Math.round(w.totalCost))}
                       </td>
                       {showAbsenceColumns && (
                         <>
@@ -603,10 +603,10 @@ export default function MonthlyPage() {
                             {absentDays > 0 ? absentDays : '—'}
                           </td>
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-red-50/50 ${absentDeduction > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                            {absentDeduction > 0 ? `-${formatYen(absentDeduction)}` : '—'}
+                            {absentDeduction > 0 ? `-${fmtYen(absentDeduction)}` : '—'}
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums bg-red-50/50 font-medium">
-                            {formatYen(netPay)}
+                            {fmtYen(netPay)}
                           </td>
                         </>
                       )}
@@ -621,12 +621,12 @@ export default function MonthlyPage() {
                   <td className="px-3 py-3">合計 ({filteredWorkers.length}名)</td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3 text-right tabular-nums">{Number.isInteger(workerTotals.workDays) ? workerTotals.workDays : workerTotals.workDays.toFixed(1)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{workerTotals.plDays}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{workerTotals.otHours.toFixed(1)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.workDays)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.plDays)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.otHours)}</td>
                   <td className="px-3 py-3 text-right">—</td>
                   <td className="px-3 py-3 text-right tabular-nums">
-                    {formatYen(Math.round(workerTotals.totalCost))}
+                    {fmtYen(Math.round(workerTotals.totalCost))}
                   </td>
                   {showAbsenceColumns && (
                     <>
@@ -639,11 +639,11 @@ export default function MonthlyPage() {
                       <td className="px-3 py-3 text-right tabular-nums bg-red-50/50 text-red-600">
                         {(() => {
                           const totalDeduction = filteredWorkers.reduce((s, w) => s + calcAbsentDeduction(w), 0)
-                          return totalDeduction > 0 ? `-${formatYen(totalDeduction)}` : '—'
+                          return totalDeduction > 0 ? `-${fmtYen(totalDeduction)}` : '—'
                         })()}
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums bg-red-50/50">
-                        {formatYen(filteredWorkers.reduce((s, w) => s + calcNetPay(w), 0))}
+                        {fmtYen(filteredWorkers.reduce((s, w) => s + calcNetPay(w), 0))}
                       </td>
                     </>
                   )}
@@ -719,10 +719,10 @@ export default function MonthlyPage() {
                       {sc.otCount > 0 ? sc.otCount : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                      {formatYen(sc.rate)}
+                      {fmtYen(sc.rate)}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-medium">
-                      {formatYen(Math.round(sc.cost))}
+                      {fmtYen(Math.round(sc.cost))}
                     </td>
                   </tr>
                 ))
@@ -737,7 +737,7 @@ export default function MonthlyPage() {
                   <td className="px-3 py-3 text-right tabular-nums">{subconTotals.otCount}</td>
                   <td className="px-3 py-3 text-right">—</td>
                   <td className="px-3 py-3 text-right tabular-nums">
-                    {formatYen(Math.round(subconTotals.cost))}
+                    {fmtYen(Math.round(subconTotals.cost))}
                   </td>
                 </tr>
               </tfoot>

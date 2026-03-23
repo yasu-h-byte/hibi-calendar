@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Worker } from '@/types'
+import { fmtYen } from '@/lib/format'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
 const VISA_LABELS: Record<string, string> = { none: '日本人', jisshu: '技能実習', tokutei: '特定技能' }
@@ -310,8 +311,8 @@ export default function WorkersPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 text-gray-600">
-                    {w.rate ? `¥${w.rate.toLocaleString()}` : '—'}
+                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
+                    {w.rate ? fmtYen(w.rate) : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-gray-500 text-sm">
                     {w.otMul ? `×${w.otMul}` : '—'}

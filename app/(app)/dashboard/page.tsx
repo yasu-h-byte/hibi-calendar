@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { fmtYen, fmtYenMan, fmtNum as fmtNumShared, fmtPct } from '@/lib/format'
 
 // ─── Types ───
 
@@ -162,25 +163,14 @@ interface DashboardData {
 
 // ─── Helpers ───
 
-// 小数点.0を除去（91.0→91, 267.4→267.4）
+// Use shared formatters from @/lib/format (imported above as fmtYen, fmtYenMan, fmtNumShared, fmtPct)
+// Local alias for backward compat within this file
 function fmtNum(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1)
-}
-
-function formatMan(value: number): string {
-  const v = value / 10000
-  return Number.isInteger(v) ? String(v) : v.toFixed(1)
-}
-
-function formatYen(value: number): string {
-  if (Math.abs(value) >= 10000) {
-    return `¥${formatMan(value)}万`
-  }
-  return `¥${value.toLocaleString()}`
+  return fmtNumShared(value)
 }
 
 function formatYenFull(value: number): string {
-  return `¥${Math.round(value / 10000).toLocaleString()}万`
+  return fmtYenMan(value)
 }
 
 function profitRateColor(rate: number): string {
@@ -417,7 +407,7 @@ export default function DashboardPage() {
                   <div className="text-xs text-gray-400 dark:text-gray-500">人工</div>
                   <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
                     <div>自社{fmtNum(k.inHouseManDays)}/外注{fmtNum(k.subconManDays)}</div>
-                    <div>外注率 {fmtNum(k.subconRate)}%</div>
+                    <div>外注率 {fmtPct(k.subconRate)}</div>
                   </div>
                 </div>
 
@@ -432,14 +422,14 @@ export default function DashboardPage() {
                     )}
                   </div>
                   <div className={`text-2xl font-bold tabular-nums ${k.billing === 0 ? 'text-gray-400' : 'text-hibi-navy dark:text-white'}`}>
-                    {k.billing === 0 ? '未入力' : `¥${formatMan(k.billing)}`}
+                    {k.billing === 0 ? '未入力' : fmtYenMan(k.billing)}
                   </div>
                   {k.billing > 0 && <div className="text-xs text-gray-400 dark:text-gray-500">万円</div>}
                   {k.billing > 0 && (
                     <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
-                      <div>原価¥{formatMan(k.cost)}万</div>
+                      <div>原価{fmtYenMan(k.cost)}</div>
                       <div className={k.profit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        粗利¥{formatMan(k.profit)}万({fmtNum(k.profitRate)}%)
+                        粗利{fmtYenMan(k.profit)}({fmtPct(k.profitRate)})
                       </div>
                     </div>
                   )}
@@ -449,12 +439,12 @@ export default function DashboardPage() {
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                   <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">1人あたり労務費</div>
                   <div className="text-2xl font-bold text-hibi-navy dark:text-white tabular-nums">
-                    ¥{Math.round(k.laborCostPerPersonAll).toLocaleString()}
+                    {fmtYen(k.laborCostPerPersonAll)}
                   </div>
                   <div className="text-xs text-gray-400 dark:text-gray-500">/人工</div>
                   <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
-                    <div>外注込み ¥{Math.round(k.laborCostPerPersonAll).toLocaleString()}</div>
-                    <div>社員のみ ¥{Math.round(k.laborCostPerPerson).toLocaleString()}</div>
+                    <div>外注込み {fmtYen(k.laborCostPerPersonAll)}</div>
+                    <div>社員のみ {fmtYen(k.laborCostPerPerson)}</div>
                   </div>
                 </div>
 
@@ -469,12 +459,12 @@ export default function DashboardPage() {
                     )}
                   </div>
                   <div className={`text-2xl font-bold tabular-nums ${isAboveBaseline ? 'text-green-600' : 'text-red-600'}`}>
-                    {k.billingPerManDay > 0 ? `¥${Math.round(k.billingPerManDay).toLocaleString()}` : '-'}
+                    {k.billingPerManDay > 0 ? fmtYen(k.billingPerManDay) : '-'}
                   </div>
                   <div className="text-xs text-gray-400 dark:text-gray-500">/人工</div>
                   <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
-                    <div>基準¥{baseline.toLocaleString()}</div>
-                    <div>対比 {bpmBaselinePct.toFixed(1)}%</div>
+                    <div>基準{fmtYen(baseline)}</div>
+                    <div>対比 {fmtPct(bpmBaselinePct)}</div>
                   </div>
                 </div>
               </div>
@@ -529,9 +519,9 @@ export default function DashboardPage() {
                     <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">外注人工</th>
                     <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">外注率</th>
                     <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">残業h</th>
-                    <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">原価(万)</th>
-                    <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">売上(万)</th>
-                    <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">粗利(万)</th>
+                    <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">原価</th>
+                    <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">売上</th>
+                    <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">粗利</th>
                     <th className="text-right px-3 py-2 font-semibold whitespace-nowrap">粗利率</th>
                   </tr>
                 </thead>
@@ -543,15 +533,15 @@ export default function DashboardPage() {
                       <td className="px-3 py-2 font-medium text-hibi-navy whitespace-nowrap">{site.name}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.inHouseWorkDays)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.subconWorkDays)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{site.subconRate.toFixed(1)}%</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtPct(site.subconRate)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.otHours)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{formatMan(site.cost)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{formatMan(site.billing)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtYen(site.cost)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtYen(site.billing)}</td>
                       <td className={`px-3 py-2 text-right tabular-nums font-semibold ${profitRateColor(site.profitRate)}`}>
-                        {formatMan(site.profit)}
+                        {fmtYen(site.profit)}
                       </td>
                       <td className={`px-3 py-2 text-right tabular-nums font-bold ${profitRateColor(site.profitRate)}`}>
-                        {site.profitRate.toFixed(1)}%
+                        {fmtPct(site.profitRate)}
                       </td>
                     </tr>
                   ))}
@@ -560,17 +550,17 @@ export default function DashboardPage() {
                   <tr className="bg-hibi-navy text-white font-semibold">
                     <td className="px-3 py-2">合計</td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {data.sites.reduce((s, r) => s + r.inHouseWorkDays, 0).toFixed(1)}
+                      {fmtNum(data.sites.reduce((s, r) => s + r.inHouseWorkDays, 0))}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {data.sites.reduce((s, r) => s + r.subconWorkDays, 0).toFixed(1)}
+                      {fmtNum(data.sites.reduce((s, r) => s + r.subconWorkDays, 0))}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums">{data.kpi.subconRate.toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{data.kpi.otHours.toFixed(1)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatMan(data.kpi.cost)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatMan(data.kpi.billing)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{formatMan(data.kpi.profit)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{data.kpi.profitRate.toFixed(1)}%</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtPct(data.kpi.subconRate)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtNum(data.kpi.otHours)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtYen(data.kpi.cost)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtYen(data.kpi.billing)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtYen(data.kpi.profit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtPct(data.kpi.profitRate)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -634,8 +624,8 @@ export default function DashboardPage() {
                     return (
                       <div key={site.id} className="space-y-0.5">
                         <div className="text-xs text-gray-600 dark:text-gray-400 font-medium truncate">{site.name}</div>
-                        <HBar value={site.billing} max={maxVal} color="bg-blue-500" label={`${formatMan(site.billing)}万`} />
-                        <HBar value={site.cost} max={maxVal} color="bg-orange-400" label={`${formatMan(site.cost)}万`} />
+                        <HBar value={site.billing} max={maxVal} color="bg-blue-500" label={fmtYenMan(site.billing)} />
+                        <HBar value={site.cost} max={maxVal} color="bg-orange-400" label={fmtYenMan(site.cost)} />
                       </div>
                     )
                   })}
@@ -769,7 +759,7 @@ export default function DashboardPage() {
                       data.yoyComparison.changeRate > 0 ? 'text-red-600' : data.yoyComparison.changeRate < 0 ? 'text-green-600' : 'text-gray-600 dark:text-gray-400'
                     }`}>
                       {data.yoyComparison.changeRate > 0 ? '\u2191' : data.yoyComparison.changeRate < 0 ? '\u2193' : '\u2192'}
-                      {Math.abs(data.yoyComparison.changeRate).toFixed(1)}%
+                      {fmtPct(Math.abs(data.yoyComparison.changeRate))}
                     </div>
                   </div>
                   {/* Per-site table */}
@@ -801,7 +791,7 @@ export default function DashboardPage() {
                                   {s.prev > 0 ? (
                                     <>
                                       {s.changeRate > 0 ? '\u2191' : '\u2193'}
-                                      {Math.abs(s.changeRate).toFixed(1)}%
+                                      {fmtPct(Math.abs(s.changeRate))}
                                     </>
                                   ) : 'NEW'}
                                 </td>
@@ -862,10 +852,10 @@ export default function DashboardPage() {
                         <td className={`px-3 py-2 text-right font-bold ${
                           row.remaining <= 0 ? 'text-red-600' : row.remaining <= 1 ? 'text-orange-600' : 'text-yellow-600'
                         }`}>
-                          {row.remaining.toFixed(1)}
+                          {fmtNum(row.remaining)}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{row.totalDays.toFixed(1)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{row.usedDays.toFixed(1)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.totalDays)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmtNum(row.usedDays)}</td>
                         <td className="px-3 py-2 text-center">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                             row.status === 'danger' ? 'bg-red-100 text-red-700' :
@@ -1119,14 +1109,14 @@ function KPILineChart({
       <div className="flex items-center justify-end gap-4 text-xs mb-2 flex-wrap">
         <span className="flex items-center gap-1">
           <span className="inline-block w-5 h-0.5" style={{ backgroundColor: COLORS.billing }} />
-          <span className="text-gray-600 dark:text-gray-400">売上 ¥{latestBilling.toLocaleString()}</span>
+          <span className="text-gray-600 dark:text-gray-400">売上 {fmtYen(latestBilling)}</span>
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-5 h-0.5" style={{ backgroundColor: COLORS.cost }} />
-          <span className="text-gray-600 dark:text-gray-400">原価 ¥{latestCost.toLocaleString()}</span>
+          <span className="text-gray-600 dark:text-gray-400">原価 {fmtYen(latestCost)}</span>
         </span>
         <span className={`font-bold ${latestProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-          差益 {latestProfit >= 0 ? '+' : ''}¥{latestProfit.toLocaleString()}
+          差益 {latestProfit >= 0 ? '+' : ''}{fmtYen(latestProfit)}
         </span>
       </div>
 
@@ -1136,7 +1126,7 @@ function KPILineChart({
           <g key={i}>
             <line x1={padL} y1={t.y} x2={svgW - padR} y2={t.y} stroke={COLORS.grid} strokeWidth="1" />
             <text x={padL - 8} y={t.y + 4} textAnchor="end" fill="#9ca3af" fontSize="11">
-              ¥{Math.round(t.val).toLocaleString()}
+              {fmtYen(t.val)}
             </text>
           </g>
         ))}
@@ -1147,7 +1137,7 @@ function KPILineChart({
           stroke={COLORS.baseline} strokeWidth="1.5" strokeDasharray="8 4"
         />
         <text x={svgW - padR - 4} y={baselineY - 6} textAnchor="end" fill={COLORS.baseline} fontSize="10" fontWeight="600">
-          基準¥{baseline.toLocaleString()}
+          基準{fmtYen(baseline)}
         </text>
 
         {/* Lines */}
@@ -1163,7 +1153,7 @@ function KPILineChart({
             <g key={`bl-${i}`}>
               <circle cx={x} cy={y} r={4} fill={COLORS.billing} stroke="white" strokeWidth="2" />
               <text x={x} y={y - 10} textAnchor="middle" fill={COLORS.billing} fontSize="9" fontWeight="600">
-                ¥{Math.round(d.billingPerManDay).toLocaleString()}
+                {fmtYen(d.billingPerManDay)}
               </text>
               {/* MoM % between points */}
               {i > 0 && (() => {
@@ -1189,7 +1179,7 @@ function KPILineChart({
             <g key={`cl-${i}`}>
               <circle cx={x} cy={y} r={4} fill={COLORS.cost} stroke="white" strokeWidth="2" />
               <text x={x} y={y + 16} textAnchor="middle" fill={COLORS.cost} fontSize="9" fontWeight="600">
-                ¥{Math.round(d.costPerManDay).toLocaleString()}
+                {fmtYen(d.costPerManDay)}
               </text>
               {i > 0 && (() => {
                 const pct = momPct(d.costPerManDay, data[i - 1].costPerManDay)
@@ -1216,7 +1206,7 @@ function KPILineChart({
               {/* Only show profit value if it doesn't overlap too much */}
               {(i === 0 || i === data.length - 1 || i % 2 === 0) && (
                 <text x={x + 8} y={y + 4} textAnchor="start" fill={COLORS.profit} fontSize="8" fontWeight="600">
-                  ¥{Math.round(d.profitPerManDay).toLocaleString()}
+                  {fmtYen(d.profitPerManDay)}
                 </text>
               )}
             </g>
@@ -1491,12 +1481,12 @@ function SiteProfitRanking({ sites }: { sites: SiteRow[] }) {
                 <span className={`text-xs font-bold tabular-nums ${
                   site.profitRate >= 0 ? 'text-green-600' : 'text-red-600'
                 }`}>
-                  {site.profitRate.toFixed(1)}%
+                  {fmtPct(site.profitRate)}
                 </span>
                 <span className={`text-xs tabular-nums ${
                   site.profit >= 0 ? 'text-green-600' : 'text-red-600'
                 }`}>
-                  {formatYen(site.profit)}
+                  {fmtYen(site.profit)}
                 </span>
               </div>
             </div>
@@ -1630,7 +1620,7 @@ function SiteTrendChart({ data }: { data: SiteTrendPoint[] }) {
                 {`人数: ${d.workerCount}名`}
               </text>
               <text x={tooltipX + 6} y={Math.max(ty - 60, 4) + 28} fill="#f59e0b" fontSize="10">
-                {`原価: ${formatMan(d.cost)}万`}
+                {`原価: ${fmtYenMan(d.cost)}`}
               </text>
               <text x={tooltipX + 6} y={Math.max(ty - 60, 4) + 42} fill="#f59e0b" fontSize="10">
                 {`鳶 ${d.tobi} / 土工 ${d.doko}`}

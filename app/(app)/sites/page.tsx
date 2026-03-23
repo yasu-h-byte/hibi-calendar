@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { fmtYen } from '@/lib/format'
 
 interface RatePeriod {
   from: string
@@ -430,19 +431,19 @@ export default function SitesPage() {
                           : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-gray-600">{getWorkerName(s.foreman)}</td>
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-3 py-2.5 text-right tabular-nums">
                     {rate?.tobiRate ? (
                       <div>
-                        <div className="font-medium">{`¥${rate.tobiRate.toLocaleString()}`}</div>
-                        <div className="text-xs text-gray-400">{`85%: ¥${Math.round(rate.tobiRate * 0.85).toLocaleString()}`}</div>
+                        <div className="font-medium">{fmtYen(rate.tobiRate)}</div>
+                        <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.tobiRate * 0.85))}</div>
                       </div>
                     ) : <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-right">
+                  <td className="px-3 py-2.5 text-right tabular-nums">
                     {rate?.dokoRate ? (
                       <div>
-                        <div className="font-medium">{`¥${rate.dokoRate.toLocaleString()}`}</div>
-                        <div className="text-xs text-gray-400">{`85%: ¥${Math.round(rate.dokoRate * 0.85).toLocaleString()}`}</div>
+                        <div className="font-medium">{fmtYen(rate.dokoRate)}</div>
+                        <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.dokoRate * 0.85))}</div>
                       </div>
                     ) : <span className="text-gray-300">—</span>}
                   </td>
