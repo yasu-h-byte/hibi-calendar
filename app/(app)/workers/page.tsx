@@ -443,8 +443,19 @@ export default function WorkersPage() {
               {editId && (
                 <div>
                   <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">退職日</label>
-                  <input type="date" value={form.retired} onChange={e => setForm({ ...form, retired: e.target.value })}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                  <div className="flex gap-2">
+                    <input type="date" value={form.retired} onChange={e => setForm({ ...form, retired: e.target.value })}
+                      className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                    {form.retired && (
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, retired: '' })}
+                        className="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition"
+                      >
+                        クリア
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

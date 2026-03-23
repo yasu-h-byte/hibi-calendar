@@ -486,13 +486,17 @@ export default function AttendanceGridPage() {
     const entries = workerEntries[workerId] || {}
     let wSum = 0
     let oSum = 0
+    let compSum = 0
+    let plSum = 0
     for (const e of Object.values(entries)) {
       if (e) {
         wSum += e.w || 0
         oSum += e.o || 0
+        if (e.w === 0.6) compSum += 0.6
+        if (e.p && e.p > 0) plSum += 1
       }
     }
-    return { wSum, oSum }
+    return { wSum, oSum, compSum, plSum }
   }, [workerEntries])
 
   // ── Computed: subcon totals ──
@@ -513,38 +517,49 @@ export default function AttendanceGridPage() {
   // ── Computed: footer summary rows ──
 
   const footerSums = useMemo(() => {
-    if (!data) return { tobi: {} as Record<number, number>, doko: {} as Record<number, number>, grand: {} as Record<number, number>, tobiTotal: 0, dokoTotal: 0, grandTotal: 0 }
+    if (!data) return { tobi: {} as Record<number, number>, doko: {} as Record<number, number>, grand: {} as Record<number, number>, tobiOt: {} as Record<number, number>, dokoOt: {} as Record<number, number>, grandOt: {} as Record<number, number>, tobiTotal: 0, dokoTotal: 0, grandTotal: 0, tobiOtTotal: 0, dokoOtTotal: 0, grandOtTotal: 0 }
 
     const tobi: Record<number, number> = {}
     const doko: Record<number, number> = {}
     const grand: Record<number, number> = {}
+    const tobiOt: Record<number, number> = {}
+    const dokoOt: Record<number, number> = {}
+    const grandOt: Record<number, number> = {}
     let tobiTotal = 0
     let dokoTotal = 0
     let grandTotal = 0
+    let tobiOtTotal = 0
+    let dokoOtTotal = 0
+    let grandOtTotal = 0
 
     for (let d = 1; d <= data.daysInMonth; d++) {
       let tobiDay = 0
       let dokoDay = 0
       let grandDay = 0
+      let tobiOtDay = 0
+      let dokoOtDay = 0
+      let grandOtDay = 0
 
       // Sum worker contributions by job type
       for (const w of data.workers) {
         const wId = String(w.id)
         const entry = workerEntries[wId]?.[d]
         if (entry && entry.w > 0 && !entry.p) {
-          // Only count work values (w), not 0.6 compensation for tobi/doko sums
           const workVal = entry.w
+          const otVal = entry.o || 0
           if (w.job === 'tobi') {
-            // For tobi/doko sums, exclude 0.6 compensation
             if (entry.w !== 0.6) {
               tobiDay += workVal
+              tobiOtDay += otVal
             }
           } else if (w.job === 'doko') {
             if (entry.w !== 0.6) {
               dokoDay += workVal
+              dokoOtDay += otVal
             }
           }
           grandDay += workVal
+          grandOtDay += otVal
         }
       }
 
@@ -554,18 +569,48 @@ export default function AttendanceGridPage() {
         if (entry && entry.n > 0) {
           grandDay += entry.n
         }
+        if (entry && entry.on > 0) {
+          grandOtDay += entry.on
+        }
       }
 
       tobi[d] = tobiDay
       doko[d] = dokoDay
       grand[d] = grandDay
+      tobiOt[d] = tobiOtDay
+      dokoOt[d] = dokoOtDay
+      grandOt[d] = grandOtDay
       tobiTotal += tobiDay
       dokoTotal += dokoDay
       grandTotal += grandDay
+      tobiOtTotal += tobiOtDay
+      dokoOtTotal += dokoOtDay
+      grandOtTotal += grandOtDay
     }
 
-    return { tobi, doko, grand, tobiTotal, dokoTotal, grandTotal }
+    return { tobi, doko, grand, tobiOt, dokoOt, grandOt, tobiTotal, dokoTotal, grandTotal, tobiOtTotal, dokoOtTotal, grandOtTotal }
   }, [data, workerEntries, subconEntries])
+
+  // ── Computed: Sunday validation warnings ──
+
+  const sundayWarnings = useMemo(() => {
+    if (!data) return []
+    const warnings: { workerName: string; day: number }[] = []
+    for (const w of data.workers) {
+      const wId = String(w.id)
+      const entries = workerEntries[wId] || {}
+      for (let d = 1; d <= data.daysInMonth; d++) {
+        const dow = getDow(data.year, data.month, d)
+        if (dow === 0) {
+          const entry = entries[d]
+          if (entry && entry.w > 0 && !entry.p) {
+            warnings.push({ workerName: w.name, day: d })
+          }
+        }
+      }
+    }
+    return warnings
+  }, [data, workerEntries])
 
   // ── Work dropdown value ──
 
@@ -728,6 +773,26 @@ export default function AttendanceGridPage() {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600 text-sm">
           {error}
+        </div>
+      )}
+
+      {/* ── Sunday validation warnings ── */}
+      {sundayWarnings.length > 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-xl px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 font-bold text-yellow-800 dark:text-yellow-300 mb-1">
+            <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            日曜出勤あり ({sundayWarnings.length}件)
+          </div>
+          <div className="text-yellow-700 dark:text-yellow-400 text-xs leading-relaxed">
+            {sundayWarnings.map((w, i) => (
+              <span key={i}>
+                {i > 0 && '、 '}
+                {w.workerName} ({w.day}日)
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -915,7 +980,15 @@ export default function AttendanceGridPage() {
 
                           {/* Totals */}
                           <td className="px-1 py-0.5 text-center font-bold text-hibi-navy tabular-nums border-l-2 border-gray-300 bg-gray-50">
-                            {totals.wSum > 0 ? totals.wSum : '-'}
+                            <div>{totals.wSum > 0 ? totals.wSum : '-'}</div>
+                            {(totals.compSum > 0 || totals.plSum > 0) && (
+                              <div className="text-[9px] font-normal text-gray-500 leading-tight">
+                                {[
+                                  totals.compSum > 0 ? `補${totals.compSum % 1 === 0 ? totals.compSum : totals.compSum.toFixed(1)}` : '',
+                                  totals.plSum > 0 ? `有${totals.plSum}` : '',
+                                ].filter(Boolean).join(' ')}
+                              </div>
+                            )}
                           </td>
                           <td className="px-1 py-0.5 text-center font-bold text-amber-700 tabular-nums border-l border-gray-200 bg-gray-50">
                             {totals.oSum > 0 ? totals.oSum : '-'}
@@ -1047,7 +1120,9 @@ export default function AttendanceGridPage() {
                   <td className="bg-[#1B2A4A] text-white px-1 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-[11px]" style={{ minWidth: 52 }}>
                     {footerSums.tobiTotal > 0 ? footerSums.tobiTotal : '-'}
                   </td>
-                  <td className="bg-[#1B2A4A] text-white px-1 py-1.5 border-l border-gray-600" style={{ minWidth: 52 }}></td>
+                  <td className="bg-[#1B2A4A] text-amber-300 px-1 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-[11px]" style={{ minWidth: 52 }}>
+                    {footerSums.tobiOtTotal > 0 ? footerSums.tobiOtTotal : '-'}
+                  </td>
                 </tr>
 
                 {/* Doko Total */}
@@ -1071,7 +1146,9 @@ export default function AttendanceGridPage() {
                   <td className="bg-[#243656] text-white px-1 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-[11px]" style={{ minWidth: 52 }}>
                     {footerSums.dokoTotal > 0 ? footerSums.dokoTotal : '-'}
                   </td>
-                  <td className="bg-[#243656] text-white px-1 py-1.5 border-l border-gray-600" style={{ minWidth: 52 }}></td>
+                  <td className="bg-[#243656] text-amber-300 px-1 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-[11px]" style={{ minWidth: 52 }}>
+                    {footerSums.dokoOtTotal > 0 ? footerSums.dokoOtTotal : '-'}
+                  </td>
                 </tr>
 
                 {/* Grand Total */}
@@ -1095,7 +1172,9 @@ export default function AttendanceGridPage() {
                   <td className="bg-[#0F1D36] text-amber-300 px-1 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-[11px]" style={{ minWidth: 52 }}>
                     {footerSums.grandTotal > 0 ? footerSums.grandTotal : '-'}
                   </td>
-                  <td className="bg-[#0F1D36] text-white px-1 py-1.5 border-l border-gray-600" style={{ minWidth: 52 }}></td>
+                  <td className="bg-[#0F1D36] text-amber-300 px-1 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-[11px]" style={{ minWidth: 52 }}>
+                    {footerSums.grandOtTotal > 0 ? footerSums.grandOtTotal : '-'}
+                  </td>
                 </tr>
               </tbody>
             </table>
