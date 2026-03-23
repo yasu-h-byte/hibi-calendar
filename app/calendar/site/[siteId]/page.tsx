@@ -159,7 +159,7 @@ export default function SiteCalendarPage() {
 
             <div className="bg-blue-50 rounded-xl p-4 text-sm">
               <div className="font-bold text-hibi-navy mb-1">就業時間 / Giờ làm việc</div>
-              <div>8:00〜16:30（休憩2時間）/ 8:00〜16:30（nghỉ 2 tiếng）</div>
+              <div>8:00〜17:00（休憩2時間）/ 8:00〜17:00（nghỉ 2 tiếng）</div>
             </div>
 
             <div className="bg-white rounded-xl shadow p-4">

@@ -307,7 +307,7 @@ ${baseUrl}/calendar/public
 
                     {/* Working hours note */}
                     <div className="bg-blue-50 rounded-lg p-3 text-sm">
-                      就業時間: 8:00〜16:30（休憩2時間）
+                      就業時間: 8:00〜17:00（休憩2時間）
                     </div>
 
                     {/* Action buttons */}
