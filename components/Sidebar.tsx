@@ -107,10 +107,11 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Header */}
+        {/* Header - Logo */}
         <div className="p-4 border-b border-white/10">
-          <h1 className="font-bold text-lg">HIBI CONSTRUCTION</h1>
-          <p className="text-xs text-white/60 mt-1">鳶事業部</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-full max-w-[160px]" />
+          <p className="text-xs text-white/60 mt-2">鳶事業部 管理システム</p>
         </div>
 
         {/* User info */}

@@ -189,12 +189,14 @@ export async function GET(request: NextRequest) {
     const workers = main.workers
       .filter(w => !w.retired && w.job !== 'yakuin')
       .map(w => {
-        const plRecords = (main.plData[String(w.id)] || []) as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }[]
-        const fyRecord = plRecords.find(r => r.fy === fy)
+        const plRecords = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
+        // fy比較: Firestoreでは数値(2025)、APIパラメータは文字列('2025')なので両方対応
+        const fyRecord = plRecords.find(r => String(r.fy) === String(fy))
 
-        const grantDays = fyRecord?.grantDays || 0
-        const carryOver = fyRecord?.carryOver || 0
-        const adjustment = fyRecord?.adjustment || 0
+        // 旧アプリのフィールド名(grant/carry/adj)と新アプリ(grantDays/carryOver/adjustment)の両方に対応
+        const grantDays = fyRecord?.grantDays ?? fyRecord?.grant ?? 0
+        const carryOver = fyRecord?.carryOver ?? fyRecord?.carry ?? 0
+        const adjustment = fyRecord?.adjustment ?? fyRecord?.adj ?? 0
         const grantDate = fyRecord?.grantDate || ''
         const total = grantDays + carryOver + adjustment
         const used = plUsage[w.id] || 0
