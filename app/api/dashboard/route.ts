@@ -351,11 +351,44 @@ export async function GET(request: NextRequest) {
       otHours: totalOtHours,
     }
 
-    // Monthly trend data (for charts)
-    const monthlyTrend = ymList.map(m => {
-      const mr = monthlyResults.find(r => r.ym === m)
-      if (!mr) return { ym: m, billing: 0, cost: 0, profit: 0, manDays: 0, billingPerManDay: 0 }
+    // Monthly trend data (always FY: Oct ~ current month, regardless of period selector)
+    // This ensures the KPI chart always shows the full fiscal year trend
+    const fyStartMonth = parseInt(ym.slice(4, 6)) >= 10
+      ? parseInt(ym.slice(0, 4)) * 100 + 10
+      : (parseInt(ym.slice(0, 4)) - 1) * 100 + 10
+    const fyYmList: string[] = []
+    for (let m = fyStartMonth; ; ) {
+      const mStr = String(m).padStart(6, '0')
+      fyYmList.push(mStr)
+      if (mStr === ym) break
+      const yy = Math.floor(m / 100)
+      const mm = m % 100
+      m = mm >= 12 ? (yy + 1) * 100 + 1 : yy * 100 + mm + 1
+      if (fyYmList.length > 12) break // safety
+    }
 
+    // Fetch any FY months not already in attDataList
+    const fyAttPromises = fyYmList
+      .filter(m => !attDataList.find(a => a.ym === m))
+      .map(async m => {
+        try {
+          const att = await getAttData(m)
+          return { ...att, ym: m }
+        } catch {
+          return { d: {} as Record<string, AttendanceEntry>, sd: {} as Record<string, { n: number; on: number }>, ym: m }
+        }
+      })
+    const fyExtraAtt = await Promise.all(fyAttPromises)
+    const allFyAtt: { ym: string; d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }[] = [
+      ...attDataList,
+      ...fyExtraAtt,
+    ]
+
+    const monthlyTrend = fyYmList.map(m => {
+      const att = allFyAtt.find(a => a.ym === m)
+      if (!att) return { ym: m, billing: 0, cost: 0, profit: 0, manDays: 0, billingPerManDay: 0, costPerManDay: 0, profitPerManDay: 0, inHouseWorkDays: 0, subconWorkDays: 0 }
+
+      const mr = computeMonthly(main, att.d, att.sd, m)
       let mBilling = 0, mCost = 0, mProfit = 0, mWorkDays = 0, mSubDays = 0
       for (const site of mr.sites) {
         if (siteFilter !== 'all' && site.id !== siteFilter) continue
@@ -378,7 +411,7 @@ export async function GET(request: NextRequest) {
         inHouseWorkDays: mWorkDays,
         subconWorkDays: mSubDays,
       }
-    }).sort((a, b) => a.ym.localeCompare(b.ym))
+    })
 
     // Today's status
     const now = new Date()
