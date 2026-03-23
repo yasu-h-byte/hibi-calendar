@@ -39,13 +39,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       site: { id: site.id, name: site.name },
       days: calData.days,
-      workers: workers.map(w => ({
-        id: w.id,
-        name: w.name,
-        nameVi: w.nameVi,
-        signed: !!sigs[w.id],
-        signedAt: sigs[w.id] || null,
-      })),
+      workers: workers
+        .filter(w => !!w.token) // 署名対象は実習生・特定技能生のみ
+        .map(w => ({
+          id: w.id,
+          name: w.name,
+          nameVi: w.nameVi,
+          signed: !!sigs[w.id],
+          signedAt: sigs[w.id] || null,
+        })),
     })
   } catch (error) {
     console.error('Failed to fetch site detail:', error)

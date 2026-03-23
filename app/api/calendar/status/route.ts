@@ -60,12 +60,14 @@ export async function GET(request: NextRequest) {
         submittedBy: cal?.submittedBy || null,
         approvedBy: cal?.approvedBy || null,
         rejectedReason: cal?.rejectedReason || null,
-        workers: sw.workers.map(w => ({
-          id: w.id,
-          name: w.name,
-          signed: !!signaturesBySite[`${w.id}_${sw.site.id}`],
-          signedAt: signaturesBySite[`${w.id}_${sw.site.id}`] || null,
-        })),
+        workers: sw.workers
+          .filter(w => !!w.token) // 署名対象は実習生・特定技能生（トークン持ち）のみ
+          .map(w => ({
+            id: w.id,
+            name: w.name,
+            signed: !!signaturesBySite[`${w.id}_${sw.site.id}`],
+            signedAt: signaturesBySite[`${w.id}_${sw.site.id}`] || null,
+          })),
       }
     })
 
