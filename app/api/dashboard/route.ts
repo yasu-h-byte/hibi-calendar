@@ -103,8 +103,9 @@ function computeTodayStatus(
   attSD: Record<string, { n: number; on: number }>,
   ym: string,
   day: number,
+  excludeSiteIds?: Set<string>,
 ) {
-  const activeSites = main.sites.filter(s => !s.archived)
+  const activeSites = main.sites.filter(s => !s.archived && !(excludeSiteIds?.has(s.id)))
 
   // For each active site, count tobi/doko workers and track absent workers
   const siteStatus: {
@@ -246,8 +247,14 @@ export async function GET(request: NextRequest) {
   const period = request.nextUrl.searchParams.get('period') || 'month'
   const siteFilter = request.nextUrl.searchParams.get('site') || 'all' // 'all' or specific site ID
 
+  // Hidden site ID to exclude from all dashboard data
+  const HIDDEN_SITE_IDS = new Set(['yaesu_night'])
+
   try {
     const main = await getMainData()
+
+    // Filter out hidden sites from main data for dashboard purposes
+    const filteredSites = main.sites.filter(s => !HIDDEN_SITE_IDS.has(s.id))
 
     // Determine months to aggregate
     const ymList = getYmRange(period, ym)
@@ -273,8 +280,8 @@ export async function GET(request: NextRequest) {
       cost: number; subCost: number; billing: number; profit: number
     }>()
 
-    // Include all sites (even archived) for historical data
-    for (const site of main.sites) {
+    // Include all non-hidden sites (even archived) for historical data
+    for (const site of filteredSites) {
       aggregatedSites.set(site.id, {
         id: site.id, name: site.name,
         workDays: 0, subWorkDays: 0, otHours: 0,
@@ -333,6 +340,32 @@ export async function GET(request: NextRequest) {
     const totalWorkDays = totalInHouse + totalSubcon
     const subconRate = totalWorkDays > 0 ? (totalSubcon / totalWorkDays) * 100 : 0
 
+    // ═══ Previous month KPI (for month-over-month comparison) ═══
+    // Compute KPI for the month immediately before the selected ym
+    const prevYmDate = new Date(parseInt(ym.slice(0, 4)), parseInt(ym.slice(4, 6)) - 2, 1)
+    const prevYm = ymKey(prevYmDate.getFullYear(), prevYmDate.getMonth() + 1)
+    let prevTotalManDays = 0, prevBilling = 0, prevCost = 0, prevProfit = 0, prevBillingPerManDay = 0
+    try {
+      const prevAtt = await getAttData(prevYm)
+      const prevResult = computeMonthly(main, prevAtt.d, prevAtt.sd, prevYm)
+      let pInHouse = 0, pSubcon = 0, pCostTotal = 0, pBilling = 0
+      for (const site of prevResult.sites) {
+        if (HIDDEN_SITE_IDS.has(site.id)) continue
+        if (siteFilter !== 'all' && site.id !== siteFilter) continue
+        pInHouse += site.workDays
+        pSubcon += site.subWorkDays
+        pCostTotal += site.cost + site.subCost
+        pBilling += site.billing
+      }
+      prevTotalManDays = pInHouse + pSubcon
+      prevBilling = pBilling
+      prevCost = pCostTotal
+      prevProfit = pBilling - pCostTotal
+      prevBillingPerManDay = prevTotalManDays > 0 ? pBilling / prevTotalManDays : 0
+    } catch {
+      // No previous month data available
+    }
+
     // KPI cards
     const kpi = {
       totalManDays: totalWorkDays,
@@ -350,6 +383,12 @@ export async function GET(request: NextRequest) {
       billingPerManDayRate: totalWorkDays > 0
         ? ((totalBilling / totalWorkDays) / 32300) * 100 : 0,
       otHours: totalOtHours,
+      // Previous month comparison values
+      prevTotalManDays,
+      prevBilling,
+      prevCost,
+      prevProfitRate: prevBilling > 0 ? (prevProfit / prevBilling) * 100 : 0,
+      prevBillingPerManDay,
     }
 
     // Monthly trend data (always FY: Oct ~ current month, regardless of period selector)
@@ -421,12 +460,12 @@ export async function GET(request: NextRequest) {
     const todayAttData = attDataList.find(a => a.ym === todayYm)
     let todayStatus = null
     if (todayAttData) {
-      todayStatus = computeTodayStatus(main, todayAttData.d, todayAttData.sd, todayYm, todayDay)
+      todayStatus = computeTodayStatus(main, todayAttData.d, todayAttData.sd, todayYm, todayDay, HIDDEN_SITE_IDS)
     } else {
       // Fetch today's data if not in range
       try {
         const todayAtt = await getAttData(todayYm)
-        todayStatus = computeTodayStatus(main, todayAtt.d, todayAtt.sd, todayYm, todayDay)
+        todayStatus = computeTodayStatus(main, todayAtt.d, todayAtt.sd, todayYm, todayDay, HIDDEN_SITE_IDS)
       } catch {
         todayStatus = { siteStatus: [], absentWorkers: [] }
       }
@@ -442,7 +481,7 @@ export async function GET(request: NextRequest) {
       const daysInMonth = new Date(y2, m2, 0).getDate()
       for (let d = 1; d <= daysInMonth; d++) {
         const daySites: { siteId: string; siteName: string; count: number }[] = []
-        for (const site of main.sites) {
+        for (const site of filteredSites) {
           if (siteFilter !== 'all' && site.id !== siteFilter) continue
           let count = 0
           const monthKey = `${site.id}_${currentMonthYm}`
@@ -517,8 +556,20 @@ export async function GET(request: NextRequest) {
     }))
     const foreignWorkerRates = computeForeignWorkerRates(main, fwMonthlyResults, ymList)
 
-    // Site list for tab selector (include archived sites with label)
-    const siteList = main.sites
+    // Site list for tab selector
+    // Include archived sites only if they have attendance data in the current period
+    const archivedSitesWithData = new Set<string>()
+    for (const mr of monthlyResults) {
+      for (const site of mr.sites) {
+        const siteInfo = filteredSites.find(s => s.id === site.id)
+        if (siteInfo?.archived && (site.workDays > 0 || site.subWorkDays > 0 || site.billing > 0)) {
+          archivedSitesWithData.add(site.id)
+        }
+      }
+    }
+
+    const siteList = filteredSites
+      .filter(s => !s.archived || archivedSitesWithData.has(s.id))
       .map(s => ({ id: s.id, name: s.name + (s.archived ? '（終了）' : '') }))
 
     // Site-specific members and trend (when a specific site is selected)
@@ -740,7 +791,7 @@ export async function GET(request: NextRequest) {
       currentTotal: Math.round(currentTotalLabor),
       prevTotal: Math.round(prevTotalLabor),
       changeRate: prevTotalLabor > 0 ? ((currentTotalLabor - prevTotalLabor) / prevTotalLabor) * 100 : 0,
-      sites: main.sites
+      sites: filteredSites
         .filter(s => siteFilter === 'all' || s.id === siteFilter)
         .map(s => {
           const cur = currentLaborBySite.get(s.id) || 0

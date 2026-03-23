@@ -19,6 +19,12 @@ interface KPI {
   billingPerManDayBaseline: number
   billingPerManDayRate: number
   otHours: number
+  // Previous month comparison values
+  prevTotalManDays: number
+  prevBilling: number
+  prevCost: number
+  prevProfitRate: number
+  prevBillingPerManDay: number
 }
 
 interface SiteRow {
@@ -394,42 +400,132 @@ export default function DashboardPage() {
           </Section>
 
           {/* ═══ 2. KPI Cards ═══ */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* 総人工数 */}
-            <KPICard
-              title="総人工数"
-              value={fmtNum(data.kpi.totalManDays)}
-              unit="人工"
-              sub={`自社 ${fmtNum(data.kpi.inHouseManDays)} / 外注 ${fmtNum(data.kpi.subconManDays)}`}
-              sub2={`外注率 ${fmtNum(data.kpi.subconRate)}%`}
-            />
-            {/* 概算売上 */}
-            <KPICard
-              title="概算売上"
-              value={data.kpi.billing === 0 ? '未入力' : formatYenFull(data.kpi.billing)}
-              unit={data.kpi.billing === 0 ? '' : ''}
-              sub={data.kpi.billing === 0 ? '' : `原価 ${formatYenFull(data.kpi.cost)}`}
-              sub2={data.kpi.billing === 0 ? '' : `粗利${formatYenFull(data.kpi.profit)}(${fmtNum(data.kpi.profitRate)}%)`}
-              valueColor={data.kpi.billing === 0 ? 'text-gray-400' : profitRateColor(data.kpi.profitRate)}
-            />
-            {/* 1人あたり労務費 */}
-            <KPICard
-              title="1人あたり労務費"
-              value={data.kpi.laborCostPerPersonAll > 0 ? `¥${Math.round(data.kpi.laborCostPerPersonAll).toLocaleString()}` : '-'}
-              unit="/人工"
-              sub={`外注込み ¥${Math.round(data.kpi.laborCostPerPersonAll).toLocaleString()}`}
-              sub2={`社員のみ ¥${Math.round(data.kpi.laborCostPerPerson).toLocaleString()}`}
-            />
-            {/* 人工あたり売上 */}
-            <KPICard
-              title="人工あたり売上"
-              value={data.kpi.billingPerManDay > 0 ? `¥${Math.round(data.kpi.billingPerManDay).toLocaleString()}` : '-'}
-              unit="/人工"
-              sub={`基準 ¥${data.kpi.billingPerManDayBaseline.toLocaleString()}`}
-              sub2={`対比 ${fmtNum(data.kpi.billingPerManDayRate)}%`}
-              valueColor={data.kpi.billingPerManDayRate >= 100 ? 'text-green-600' : 'text-red-600'}
-            />
-          </div>
+          {(() => {
+            const k = data.kpi
+            const baseline = k.billingPerManDayBaseline
+            const bpmValue = k.billingPerManDay
+            const bpmPrev = k.prevBillingPerManDay
+            const bpmPct = bpmValue > 0 ? Math.min((bpmValue / baseline) * 100, 150) : 0
+            const bpmMoM = bpmPrev > 0 ? ((bpmValue - bpmPrev) / bpmPrev) * 100 : 0
+            const bpmBaselinePct = baseline > 0 ? (bpmValue / baseline) * 100 : 0
+            const isAboveBaseline = bpmValue >= baseline
+            const momManDays = k.prevTotalManDays > 0 ? ((k.totalManDays - k.prevTotalManDays) / k.prevTotalManDays) * 100 : 0
+            const momBilling = k.prevBilling > 0 ? ((k.billing - k.prevBilling) / k.prevBilling) * 100 : 0
+            const momProfitRate = k.prevProfitRate > 0 ? k.profitRate - k.prevProfitRate : 0
+
+            return (
+              <div className="space-y-4">
+                {/* Primary KPI: 人工あたり売上 - full width */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-5">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">人工あたり売上</div>
+                  <div className="flex items-baseline gap-2 mb-3">
+                    <span className={`text-3xl font-bold tabular-nums ${isAboveBaseline ? 'text-green-600' : 'text-red-600'}`}>
+                      {bpmValue > 0 ? `¥${Math.round(bpmValue).toLocaleString()}` : '-'}
+                    </span>
+                    <span className="text-sm text-gray-400">/人工</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="relative h-4 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${isAboveBaseline ? 'bg-green-500' : 'bg-red-500'}`}
+                      style={{ width: `${Math.min(bpmPct / 1.5, 100)}%` }}
+                    />
+                    {/* Baseline marker */}
+                    <div
+                      className="absolute top-0 h-full w-0.5 bg-gray-600 dark:bg-gray-300"
+                      style={{ left: `${Math.min(100 / 1.5, 100)}%` }}
+                      title={`基準 ¥${baseline.toLocaleString()}`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 mb-2">
+                    <span>基準 ¥{baseline.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center gap-6 text-sm">
+                    {bpmPrev > 0 && (
+                      <span className="flex items-center gap-1">
+                        <span className="text-gray-500 dark:text-gray-400">前月比</span>
+                        <span className={`font-bold tabular-nums ${bpmMoM >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {bpmMoM >= 0 ? '+' : ''}{bpmMoM.toFixed(1)}%
+                          {bpmMoM >= 0 ? ' \u25B2' : ' \u25BC'}
+                        </span>
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <span className="text-gray-500 dark:text-gray-400">基準比</span>
+                      <span className={`font-bold tabular-nums ${bpmBaselinePct >= 100 ? 'text-green-600' : 'text-red-600'}`}>
+                        {bpmBaselinePct.toFixed(1)}%
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Secondary KPIs: 3 cards in a row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* 総人工数 */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">総人工数</div>
+                    <div className="text-2xl font-bold text-hibi-navy dark:text-white tabular-nums">
+                      {fmtNum(k.totalManDays)} <span className="text-sm text-gray-400 font-normal">人工</span>
+                    </div>
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                      自社{fmtNum(k.inHouseManDays)} / 外注{fmtNum(k.subconManDays)}
+                    </div>
+                    {k.prevTotalManDays > 0 && (
+                      <div className={`text-xs mt-2 font-bold tabular-nums ${momManDays >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        前月比 {momManDays >= 0 ? '+' : ''}{momManDays.toFixed(0)}%
+                        {momManDays >= 0 ? ' \u25B2' : ' \u25BC'}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 概算売上 */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">概算売上</div>
+                    <div className={`text-2xl font-bold tabular-nums ${k.billing === 0 ? 'text-gray-400' : 'text-hibi-navy dark:text-white'}`}>
+                      {k.billing === 0 ? '未入力' : `¥${Math.round(k.billing / 10000).toLocaleString()}`}
+                      {k.billing > 0 && <span className="text-sm text-gray-400 font-normal">万</span>}
+                    </div>
+                    {k.billing > 0 && (
+                      <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                        原価 ¥{Math.round(k.cost / 10000).toLocaleString()}万
+                      </div>
+                    )}
+                    {k.prevBilling > 0 && k.billing > 0 && (
+                      <div className={`text-xs mt-2 font-bold tabular-nums ${momBilling >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        前月比 {momBilling >= 0 ? '+' : ''}{momBilling.toFixed(0)}%
+                        {momBilling >= 0 ? ' \u25B2' : ' \u25BC'}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 粗利率 */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">粗利率</div>
+                    <div className={`text-2xl font-bold tabular-nums ${profitRateColor(k.profitRate)}`}>
+                      {k.billing > 0 ? `${fmtNum(k.profitRate)}` : '-'}
+                      {k.billing > 0 && <span className="text-sm font-normal">%</span>}
+                    </div>
+                    {k.billing > 0 && (
+                      <div className="mt-1.5">
+                        <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${k.profitRate > 15 ? 'bg-green-500' : k.profitRate > 0 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                            style={{ width: `${Math.min(Math.max(k.profitRate, 0), 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {k.prevProfitRate > 0 && k.billing > 0 && (
+                      <div className={`text-xs mt-2 font-bold tabular-nums ${momProfitRate >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        前月比 {momProfitRate >= 0 ? '+' : ''}{momProfitRate.toFixed(1)}pt
+                        {momProfitRate >= 0 ? ' \u25B2' : ' \u25BC'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* ═══ 人工あたりKPIチャート（ファーストビュー重要指標）═══ */}
           {data.monthlyTrend && data.monthlyTrend.length > 0 && (
@@ -980,23 +1076,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function KPICard({
-  title, value, unit, sub, sub2, valueColor,
-}: {
-  title: string; value: string; unit: string; sub?: string; sub2?: string; valueColor?: string
-}) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4">
-      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{title}</div>
-      <div className={`text-2xl font-bold ${valueColor || 'text-hibi-navy'}`}>
-        {value}
-      </div>
-      <div className="text-xs text-gray-400">{unit}</div>
-      {sub && <div className="text-[11px] text-gray-500 mt-1.5">{sub}</div>}
-      {sub2 && <div className="text-[11px] text-gray-500">{sub2}</div>}
-    </div>
-  )
-}
 
 /** Enhanced SVG line chart with baseline, color-coded dots, Y-axis labels, and forecast */
 function CSSLineChart({
