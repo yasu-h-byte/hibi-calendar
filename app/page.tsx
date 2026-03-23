@@ -27,6 +27,12 @@ export default function LoginPage() {
         return
       }
       const data = await res.json()
+      // Super admin: 名前選択なしで直接ログイン
+      if (data.superAdmin) {
+        localStorage.setItem('hibi_auth', JSON.stringify({ password, user: data.user }))
+        router.push('/dashboard')
+        return
+      }
       setWorkers(data.workers)
       setStep('select')
     } catch {

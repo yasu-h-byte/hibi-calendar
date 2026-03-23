@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData } from '@/lib/compute'
 import { AttendanceEntry } from '@/types'
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('x-admin-password')
-  if (!process.env.ADMIN_PASSWORD || authHeader !== process.env.ADMIN_PASSWORD) {
+  if (!checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -116,8 +116,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get('x-admin-password')
-  if (!process.env.ADMIN_PASSWORD || authHeader !== process.env.ADMIN_PASSWORD) {
+  if (!checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

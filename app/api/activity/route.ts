@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkApiAuth } from '@/lib/auth'
 import { getActivityLog } from '@/lib/activity'
 
-function checkAuth(request: NextRequest): boolean {
-  return !!(process.env.ADMIN_PASSWORD && request.headers.get('x-admin-password') === process.env.ADMIN_PASSWORD)
-}
-
 export async function GET(request: NextRequest) {
-  if (!checkAuth(request)) {
+  if (!checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

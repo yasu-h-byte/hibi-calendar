@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
-
-function checkAuth(request: NextRequest): boolean {
-  return !!(process.env.ADMIN_PASSWORD && request.headers.get('x-admin-password') === process.env.ADMIN_PASSWORD)
-}
 
 interface Notification {
   id: string
@@ -17,7 +14,7 @@ interface Notification {
 }
 
 export async function GET(request: NextRequest) {
-  if (!checkAuth(request)) {
+  if (!checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import {
@@ -12,10 +13,6 @@ import {
 } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 
-function checkAuth(request: NextRequest): boolean {
-  return !!(process.env.ADMIN_PASSWORD && request.headers.get('x-admin-password') === process.env.ADMIN_PASSWORD)
-}
-
 /** Map frontend period param to compute buildYMList mode */
 function toMode(period: string): string {
   switch (period) {
@@ -28,7 +25,7 @@ function toMode(period: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  if (!checkAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const { siteId, ym, amounts } = await request.json()
     if (!siteId || !ym) return NextResponse.json({ error: 'siteId and ym required' }, { status: 400 })
@@ -52,7 +49,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!checkAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const ym = request.nextUrl.searchParams.get('ym')
   const period = request.nextUrl.searchParams.get('period') || 'monthly'

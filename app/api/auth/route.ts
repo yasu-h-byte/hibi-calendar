@@ -6,6 +6,18 @@ import { buildAuthUser } from '@/lib/auth'
 export async function POST(request: NextRequest) {
   const { password, workerId } = await request.json()
   const adminPassword = process.env.ADMIN_PASSWORD
+  const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD
+
+  // Super admin login: パスワードだけで直接管理者としてログイン
+  if (superAdminPassword && password === superAdminPassword) {
+    const user = {
+      workerId: 0,
+      name: '日比靖仁',
+      role: 'admin' as const,
+      foremanSites: [],
+    }
+    return NextResponse.json({ user, superAdmin: true })
+  }
 
   if (!adminPassword || password !== adminPassword) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -15,6 +27,7 @@ export async function POST(request: NextRequest) {
     // Return worker list for selection
     const workers = await getWorkers()
     const staffList = workers
+      .filter(w => !w.retired)
       .filter(w => !w.token || (w.jobType && ['役員', '職長', 'yakuin', 'shokucho'].includes(w.jobType)))
       .map(w => ({ id: w.id, name: w.name }))
     return NextResponse.json({ workers: staffList })

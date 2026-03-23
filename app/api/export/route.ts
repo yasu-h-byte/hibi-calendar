@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
 import {
   generateHibiAttendance,
@@ -9,14 +10,8 @@ import {
   workbookToBuffer,
 } from '@/lib/export'
 
-function checkAuth(request: NextRequest): boolean {
-  const authHeader = request.headers.get('x-admin-password')
-  const adminPassword = process.env.ADMIN_PASSWORD
-  return !!(adminPassword && authHeader === adminPassword)
-}
-
 export async function GET(request: NextRequest) {
-  if (!checkAuth(request)) {
+  if (!checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

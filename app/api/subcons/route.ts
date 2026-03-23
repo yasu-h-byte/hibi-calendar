@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
 
-function checkAuth(request: NextRequest): boolean {
-  const authHeader = request.headers.get('x-admin-password')
-  return !!(process.env.ADMIN_PASSWORD && authHeader === process.env.ADMIN_PASSWORD)
-}
-
 export async function GET(request: NextRequest) {
-  if (!checkAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const snap = await getDoc(doc(db, 'demmen', 'main'))
     if (!snap.exists()) return NextResponse.json({ subcons: [], siteAssign: {}, sites: [] })
@@ -38,7 +34,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!checkAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const body = await request.json()
     const { action } = body

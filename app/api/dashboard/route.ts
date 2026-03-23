@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkApiAuth } from '@/lib/auth'
 import {
   compute,
   getMainData,
@@ -155,10 +156,7 @@ function computeForeignWorkerRates(
 // --- Main handler ---
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('x-admin-password')
-  const adminPassword = process.env.ADMIN_PASSWORD
-
-  if (!adminPassword || authHeader !== adminPassword) {
+  if (!checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

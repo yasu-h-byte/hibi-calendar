@@ -1,4 +1,17 @@
 import { AuthUser, UserRole, Site, Worker } from '@/types'
+import { NextRequest } from 'next/server'
+
+/**
+ * API認証チェック（共通）
+ * ADMIN_PASSWORDまたはSUPER_ADMIN_PASSWORDのどちらかに一致すればOK
+ */
+export function checkApiAuth(request: NextRequest): boolean {
+  const authHeader = request.headers.get('x-admin-password')
+  if (!authHeader) return false
+  const adminPw = process.env.ADMIN_PASSWORD
+  const superPw = process.env.SUPER_ADMIN_PASSWORD
+  return (!!adminPw && authHeader === adminPw) || (!!superPw && authHeader === superPw)
+}
 
 const APPROVER_ID = 1 // 日比政仁
 

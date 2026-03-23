@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
-
-function checkAuth(request: NextRequest): boolean {
-  const authHeader = request.headers.get('x-admin-password')
-  const adminPassword = process.env.ADMIN_PASSWORD
-  return !!(adminPassword && authHeader === adminPassword)
-}
 
 async function getMainDoc() {
   const docRef = doc(db, 'demmen', 'main')
@@ -17,7 +12,7 @@ async function getMainDoc() {
 
 // GET: return defaultRates from demmen/main
 export async function GET(request: NextRequest) {
-  if (!checkAuth(request)) {
+  if (!checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -36,7 +31,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!checkAuth(request)) {
+  if (!checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
