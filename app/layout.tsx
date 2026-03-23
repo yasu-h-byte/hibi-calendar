@@ -2,8 +2,14 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'HIBI CONSTRUCTION - 就業カレンダー',
-  description: '就業カレンダー確認・署名システム',
+  title: 'HIBI CONSTRUCTION - 管理システム',
+  description: 'HIBI CONSTRUCTION 鳶事業部 管理システム',
+  openGraph: {
+    title: 'HIBI CONSTRUCTION',
+    description: '鳶事業部 管理システム',
+    siteName: 'HIBI CONSTRUCTION',
+    type: 'website',
+  },
 }
 
 export default function RootLayout({

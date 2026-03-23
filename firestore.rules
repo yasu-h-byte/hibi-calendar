@@ -1,0 +1,84 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ────────────────────────────────────────
+    //  ヘルパー関数
+    // ────────────────────────────────────────
+    function isAdmin() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/app_config/user_roles).data[request.auth.uid] == 'admin';
+    }
+    function hasRole() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/app_config/user_roles).data[request.auth.uid] in ['admin','foreman','keiri'];
+    }
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // ────────────────────────────────────────
+    //  ユーザー管理・ロール設定
+    // ────────────────────────────────────────
+    match /app_config/user_registry {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    match /app_config/{document} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // ────────────────────────────────────────
+    //  出面データ
+    // ────────────────────────────────────────
+    // マスターデータ（main）：誰でも読み取りOK（カレンダーシステム用）、ロール持ちのみ書き込み
+    match /demmen/main {
+      allow read: if true;
+      allow write: if hasRole();
+    }
+    // 請求額データ（billing_data）：ロール持ちのみ書き込み
+    match /demmen/billing_data {
+      allow read: if isAuthenticated();
+      allow write: if hasRole();
+    }
+    // 月別出面データ（att_YYYYMM）
+    match /demmen/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+        && docId.matches('att_[0-9]{6}');
+    }
+
+    // ────────────────────────────────────────
+    //  ログイン履歴
+    // ────────────────────────────────────────
+    match /login_logs/{logId} {
+      allow create: if isAuthenticated();
+      allow read: if isAdmin();
+    }
+
+    // ────────────────────────────────────────
+    //  就業カレンダーシステム
+    // ────────────────────────────────────────
+    // カレンダー割当データ
+    match /workerCalendar/{docId} {
+      allow read, write: if true;
+    }
+
+    // カレンダー署名データ
+    match /calendarSign/{docId} {
+      allow read, write: if true;
+    }
+
+    // カレンダーパターン定義
+    match /calendarPatterns/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 現場別カレンダー割当データ
+    match /siteCalendar/{docId} {
+      allow read, write: if true;
+    }
+  }
+}
