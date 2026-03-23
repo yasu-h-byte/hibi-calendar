@@ -54,6 +54,8 @@ interface GridData {
   locked: boolean
   approvals: Record<number, boolean>
   sites: SiteOption[]
+  workDays: number | null
+  allWorkers: Worker[]
 }
 
 // ── Visa badge helper ──
@@ -136,6 +138,18 @@ function dayTextColor(dow: number): string {
 }
 
 // ────────────────────────────────────────
+//  Debounce hook
+// ────────────────────────────────────────
+
+interface PendingSave {
+  type: 'worker' | 'subcon'
+  id: string
+  day: number
+  entry: AttEntry | null
+  subconEntry?: SubconDayEntry | null
+}
+
+// ────────────────────────────────────────
 //  Component
 // ────────────────────────────────────────
 
@@ -146,13 +160,25 @@ export default function AttendanceGridPage() {
   const [data, setData] = useState<GridData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [saving, setSaving] = useState<string | null>(null)
+
+  // Save status: null | 'saving' | 'saved'
+  const [saveStatus, setSaveStatus] = useState<null | 'saving' | 'saved'>(null)
+  const saveStatusTimer = useRef<NodeJS.Timeout | null>(null)
 
   // Local state for entries (for instant UI updates)
   const [workerEntries, setWorkerEntries] = useState<Record<string, Record<number, AttEntry | null>>>({})
   const [subconEntries, setSubconEntries] = useState<Record<string, Record<number, SubconDayEntry | null>>>({})
 
-  const saveTimer = useRef<NodeJS.Timeout | null>(null)
+  // workDays input
+  const [workDaysInput, setWorkDaysInput] = useState<string>('')
+
+  // Assignment modal
+  const [showAssignModal, setShowAssignModal] = useState(false)
+
+  // Debounce queue
+  const pendingSaves = useRef<Map<string, PendingSave>>(new Map())
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null)
+
   const ymOptions = useMemo(() => getYmOptions(14), [])
 
   // Read auth
@@ -185,6 +211,7 @@ export default function AttendanceGridPage() {
       setData(json)
       setWorkerEntries(json.workerEntries)
       setSubconEntries(json.subconEntries)
+      setWorkDaysInput(json.workDays != null ? String(json.workDays) : '')
     } catch {
       setError('通信エラーが発生しました')
       setData(null)
@@ -224,65 +251,66 @@ export default function AttendanceGridPage() {
     loadSites()
   }, [password, siteId])
 
-  // ── Save helpers ──
+  // ── Debounced save flush ──
 
-  const saveWorkerEntry = useCallback(async (
-    workerId: number | string,
-    day: number,
-    entry: AttEntry | null,
-  ) => {
-    if (!password || !data) return
-    setSaving(`w-${workerId}-${day}`)
+  const flushSaves = useCallback(async () => {
+    if (!password || !data || pendingSaves.current.size === 0) return
+
+    setSaveStatus('saving')
+
+    const saves = Array.from(pendingSaves.current.values())
+    pendingSaves.current.clear()
+
     try {
-      await fetch('/api/attendance/grid', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
-        },
-        body: JSON.stringify({
+      // Send all pending saves
+      const promises = saves.map(s => {
+        const body: Record<string, unknown> = {
           siteId: data.site.id,
           ym: data.ym,
-          workerId,
-          day,
-          entry,
-        }),
+          day: s.day,
+        }
+        if (s.type === 'worker') {
+          body.workerId = s.id
+          body.entry = s.entry
+        } else {
+          body.subconId = s.id
+          body.subconEntry = s.subconEntry
+        }
+        return fetch('/api/attendance/grid', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-password': password,
+          },
+          body: JSON.stringify(body),
+        })
       })
+      await Promise.all(promises)
+
+      setSaveStatus('saved')
+      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+      saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
     } catch (e) {
       console.error('Save error:', e)
-    } finally {
-      setSaving(null)
+      setSaveStatus(null)
     }
   }, [password, data])
 
-  const saveSubconEntry = useCallback(async (
-    subconId: string,
-    day: number,
-    subconEntry: SubconDayEntry | null,
-  ) => {
-    if (!password || !data) return
-    setSaving(`s-${subconId}-${day}`)
-    try {
-      await fetch('/api/attendance/grid', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
-        },
-        body: JSON.stringify({
-          siteId: data.site.id,
-          ym: data.ym,
-          subconId,
-          day,
-          subconEntry,
-        }),
-      })
-    } catch (e) {
-      console.error('Save error:', e)
-    } finally {
-      setSaving(null)
+  const scheduleSave = useCallback((key: string, save: PendingSave) => {
+    pendingSaves.current.set(key, save)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => {
+      flushSaves()
+    }, 1000)
+  }, [flushSaves])
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
     }
-  }, [password, data])
+  }, [])
 
   // ── Worker cell handlers ──
 
@@ -297,6 +325,8 @@ export default function AttendanceGridPage() {
         entry = { w: 1, o: 0 }
       } else if (value === '0.5') {
         entry = { w: 0.5, o: 0 }
+      } else if (value === '0.6') {
+        entry = { w: 0.6 }
       } else if (value === 'P') {
         entry = { w: 0, p: 1 }
       }
@@ -313,10 +343,13 @@ export default function AttendanceGridPage() {
     let entry: AttEntry | null = null
     if (value === '1') entry = { w: 1, o: 0 }
     else if (value === '0.5') entry = { w: 0.5, o: 0 }
+    else if (value === '0.6') entry = { w: 0.6 }
     else if (value === 'P') entry = { w: 0, p: 1 }
 
-    saveWorkerEntry(workerId, day, entry)
-  }, [saveWorkerEntry])
+    scheduleSave(`w-${workerId}-${day}`, {
+      type: 'worker', id: workerId, day, entry,
+    })
+  }, [scheduleSave])
 
   const handleOtChange = useCallback((workerId: string, day: number, otValue: string) => {
     const ot = parseFloat(otValue) || 0
@@ -335,9 +368,12 @@ export default function AttendanceGridPage() {
     // Get current entry to preserve w value
     const current = workerEntries[workerId]?.[day]
     if (current && current.w > 0) {
-      saveWorkerEntry(workerId, day, { ...current, o: ot })
+      const updated = { ...current, o: ot }
+      scheduleSave(`w-${workerId}-${day}`, {
+        type: 'worker', id: workerId, day, entry: updated,
+      })
     }
-  }, [saveWorkerEntry, workerEntries])
+  }, [scheduleSave, workerEntries])
 
   // ── Subcon cell handlers ──
 
@@ -359,12 +395,11 @@ export default function AttendanceGridPage() {
 
     const existing = subconEntries[subconId]?.[day]
     const on = existing?.on ?? 0
-    if (n > 0 || on > 0) {
-      saveSubconEntry(subconId, day, { n, on })
-    } else {
-      saveSubconEntry(subconId, day, null)
-    }
-  }, [saveSubconEntry, subconEntries])
+    const subconEntry = (n > 0 || on > 0) ? { n, on } : null
+    scheduleSave(`s-${subconId}-${day}`, {
+      type: 'subcon', id: subconId, day, entry: null, subconEntry,
+    })
+  }, [scheduleSave, subconEntries])
 
   const handleSubconOnChange = useCallback((subconId: string, day: number, value: string) => {
     const on = parseFloat(value) || 0
@@ -384,12 +419,43 @@ export default function AttendanceGridPage() {
 
     const existing = subconEntries[subconId]?.[day]
     const n = existing?.n ?? 0
-    if (on > 0 || n > 0) {
-      saveSubconEntry(subconId, day, { n, on })
-    } else {
-      saveSubconEntry(subconId, day, null)
-    }
-  }, [saveSubconEntry, subconEntries])
+    const subconEntry = (on > 0 || n > 0) ? { n, on } : null
+    scheduleSave(`s-${subconId}-${day}`, {
+      type: 'subcon', id: subconId, day, entry: null, subconEntry,
+    })
+  }, [scheduleSave, subconEntries])
+
+  // ── Save workDays ──
+
+  const workDaysTimer = useRef<NodeJS.Timeout | null>(null)
+  const handleWorkDaysChange = useCallback((value: string) => {
+    setWorkDaysInput(value)
+    if (workDaysTimer.current) clearTimeout(workDaysTimer.current)
+    workDaysTimer.current = setTimeout(async () => {
+      if (!password || !data) return
+      setSaveStatus('saving')
+      try {
+        await fetch('/api/attendance/grid', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-password': password,
+          },
+          body: JSON.stringify({
+            action: 'saveWorkDays',
+            ym: data.ym,
+            value: parseFloat(value) || 0,
+          }),
+        })
+        setSaveStatus('saved')
+        if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+        saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
+      } catch (e) {
+        console.error('Save workDays error:', e)
+        setSaveStatus(null)
+      }
+    }, 1000)
+  }, [password, data])
 
   // ── Computed: grouped workers ──
 
@@ -444,6 +510,63 @@ export default function AttendanceGridPage() {
     return { nSum, onSum }
   }, [subconEntries])
 
+  // ── Computed: footer summary rows ──
+
+  const footerSums = useMemo(() => {
+    if (!data) return { tobi: {} as Record<number, number>, doko: {} as Record<number, number>, grand: {} as Record<number, number>, tobiTotal: 0, dokoTotal: 0, grandTotal: 0 }
+
+    const tobi: Record<number, number> = {}
+    const doko: Record<number, number> = {}
+    const grand: Record<number, number> = {}
+    let tobiTotal = 0
+    let dokoTotal = 0
+    let grandTotal = 0
+
+    for (let d = 1; d <= data.daysInMonth; d++) {
+      let tobiDay = 0
+      let dokoDay = 0
+      let grandDay = 0
+
+      // Sum worker contributions by job type
+      for (const w of data.workers) {
+        const wId = String(w.id)
+        const entry = workerEntries[wId]?.[d]
+        if (entry && entry.w > 0 && !entry.p) {
+          // Only count work values (w), not 0.6 compensation for tobi/doko sums
+          const workVal = entry.w
+          if (w.job === 'tobi') {
+            // For tobi/doko sums, exclude 0.6 compensation
+            if (entry.w !== 0.6) {
+              tobiDay += workVal
+            }
+          } else if (w.job === 'doko') {
+            if (entry.w !== 0.6) {
+              dokoDay += workVal
+            }
+          }
+          grandDay += workVal
+        }
+      }
+
+      // Add subcon counts to grand total
+      for (const sc of data.subcons) {
+        const entry = subconEntries[sc.id]?.[d]
+        if (entry && entry.n > 0) {
+          grandDay += entry.n
+        }
+      }
+
+      tobi[d] = tobiDay
+      doko[d] = dokoDay
+      grand[d] = grandDay
+      tobiTotal += tobiDay
+      dokoTotal += dokoDay
+      grandTotal += grandDay
+    }
+
+    return { tobi, doko, grand, tobiTotal, dokoTotal, grandTotal }
+  }, [data, workerEntries, subconEntries])
+
   // ── Work dropdown value ──
 
   function getWorkValue(entry: AttEntry | null | undefined): string {
@@ -451,8 +574,39 @@ export default function AttendanceGridPage() {
     if (entry.p && entry.p > 0) return 'P'
     if (entry.w === 1) return '1'
     if (entry.w === 0.5) return '0.5'
+    if (entry.w === 0.6) return '0.6'
     return ''
   }
+
+  // ── Assignment modal handlers ──
+
+  const handleSaveAssign = useCallback(async (workerIds: number[]) => {
+    if (!password || !data) return
+    setSaveStatus('saving')
+    try {
+      await fetch('/api/attendance/grid', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': password,
+        },
+        body: JSON.stringify({
+          action: 'saveAssign',
+          siteId: data.site.id,
+          workerIds,
+        }),
+      })
+      setSaveStatus('saved')
+      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+      saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
+      setShowAssignModal(false)
+      // Refresh grid
+      fetchData()
+    } catch (e) {
+      console.error('Save assign error:', e)
+      setSaveStatus(null)
+    }
+  }, [password, data, fetchData])
 
   // ── Render ──
 
@@ -494,11 +648,46 @@ export default function AttendanceGridPage() {
 
         {/* 配置編集 button */}
         <button
-          onClick={() => alert('配置編集画面は準備中です')}
+          onClick={() => setShowAssignModal(true)}
           className="text-xs px-3 py-1.5 border border-hibi-navy text-hibi-navy rounded-lg hover:bg-hibi-navy hover:text-white transition"
         >
           配置編集
         </button>
+
+        {/* 所定日数 input */}
+        {data && (
+          <div className="flex items-center gap-1.5 text-xs">
+            <label className="text-gray-600 font-medium whitespace-nowrap">所定日数:</label>
+            <input
+              type="number"
+              min="0"
+              max="31"
+              step="1"
+              value={workDaysInput}
+              onChange={e => handleWorkDaysChange(e.target.value)}
+              className="w-14 border border-gray-300 rounded px-1.5 py-1 text-center text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+              placeholder="-"
+            />
+            <span className="text-gray-400">日</span>
+          </div>
+        )}
+
+        {/* Save status indicator */}
+        {saveStatus && (
+          <span className={`text-xs flex items-center gap-1 ${saveStatus === 'saving' ? 'text-hibi-navy' : 'text-green-600'}`}>
+            {saveStatus === 'saving' ? (
+              <>
+                <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                保存中...
+              </>
+            ) : (
+              <>&#x2713; 保存済み</>
+            )}
+          </span>
+        )}
 
         <div className="flex items-center gap-2 ml-auto">
           {/* Site selector */}
@@ -675,7 +864,7 @@ export default function AttendanceGridPage() {
                             const entry = entries[d.day] || null
                             const workVal = getWorkValue(entry)
                             const otVal = entry?.o || 0
-                            const canOt = entry && entry.w > 0
+                            const canOt = entry && entry.w > 0 && entry.w !== 0.6
 
                             return (
                               <td
@@ -693,6 +882,7 @@ export default function AttendanceGridPage() {
                                       ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
                                       ${workVal === '1' ? 'text-green-700 font-bold' : ''}
                                       ${workVal === '0.5' ? 'text-yellow-700 font-bold' : ''}
+                                      ${workVal === '0.6' ? 'text-purple-600 font-bold' : ''}
                                       ${workVal === 'P' ? 'text-purple-600 font-bold' : ''}
                                       ${workVal === '' ? 'text-gray-300' : ''}
                                     `}
@@ -700,6 +890,7 @@ export default function AttendanceGridPage() {
                                     <option value="">-</option>
                                     <option value="1">1</option>
                                     <option value="0.5">0.5</option>
+                                    <option value="0.6">補</option>
                                     <option value="P">P</option>
                                   </select>
 
@@ -833,6 +1024,79 @@ export default function AttendanceGridPage() {
                     })}
                   </>
                 )}
+
+                {/* ── Footer summary rows ── */}
+                {/* Tobi Total */}
+                <tr className="border-t-2 border-[#1B2A4A]">
+                  <td
+                    className="sticky left-0 z-10 bg-[#1B2A4A] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px] border-r border-gray-600"
+                    style={{ minWidth: 120 }}
+                  >
+                    鳶 合計
+                  </td>
+                  <td className="sticky left-[120px] z-10 bg-[#1B2A4A] text-white px-1 py-1.5 text-center border-r border-gray-600" style={{ minWidth: 48 }}></td>
+                  {days.map(d => (
+                    <td
+                      key={d.day}
+                      className="bg-[#1B2A4A] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
+                      style={{ minWidth: 48 }}
+                    >
+                      {footerSums.tobi[d.day] > 0 ? footerSums.tobi[d.day] : '-'}
+                    </td>
+                  ))}
+                  <td className="bg-[#1B2A4A] text-white px-1 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-[11px]" style={{ minWidth: 52 }}>
+                    {footerSums.tobiTotal > 0 ? footerSums.tobiTotal : '-'}
+                  </td>
+                  <td className="bg-[#1B2A4A] text-white px-1 py-1.5 border-l border-gray-600" style={{ minWidth: 52 }}></td>
+                </tr>
+
+                {/* Doko Total */}
+                <tr>
+                  <td
+                    className="sticky left-0 z-10 bg-[#243656] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px] border-r border-gray-600"
+                    style={{ minWidth: 120 }}
+                  >
+                    土工 合計
+                  </td>
+                  <td className="sticky left-[120px] z-10 bg-[#243656] text-white px-1 py-1.5 text-center border-r border-gray-600" style={{ minWidth: 48 }}></td>
+                  {days.map(d => (
+                    <td
+                      key={d.day}
+                      className="bg-[#243656] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
+                      style={{ minWidth: 48 }}
+                    >
+                      {footerSums.doko[d.day] > 0 ? footerSums.doko[d.day] : '-'}
+                    </td>
+                  ))}
+                  <td className="bg-[#243656] text-white px-1 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-[11px]" style={{ minWidth: 52 }}>
+                    {footerSums.dokoTotal > 0 ? footerSums.dokoTotal : '-'}
+                  </td>
+                  <td className="bg-[#243656] text-white px-1 py-1.5 border-l border-gray-600" style={{ minWidth: 52 }}></td>
+                </tr>
+
+                {/* Grand Total */}
+                <tr>
+                  <td
+                    className="sticky left-0 z-10 bg-[#0F1D36] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px] border-r border-gray-600"
+                    style={{ minWidth: 120 }}
+                  >
+                    総合計
+                  </td>
+                  <td className="sticky left-[120px] z-10 bg-[#0F1D36] text-white px-1 py-1.5 text-center border-r border-gray-600" style={{ minWidth: 48 }}></td>
+                  {days.map(d => (
+                    <td
+                      key={d.day}
+                      className="bg-[#0F1D36] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
+                      style={{ minWidth: 48 }}
+                    >
+                      {footerSums.grand[d.day] > 0 ? footerSums.grand[d.day] : '-'}
+                    </td>
+                  ))}
+                  <td className="bg-[#0F1D36] text-amber-300 px-1 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-[11px]" style={{ minWidth: 52 }}>
+                    {footerSums.grandTotal > 0 ? footerSums.grandTotal : '-'}
+                  </td>
+                  <td className="bg-[#0F1D36] text-white px-1 py-1.5 border-l border-gray-600" style={{ minWidth: 52 }}></td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -851,17 +1115,9 @@ export default function AttendanceGridPage() {
             <span className="mx-2 border-l border-gray-300 h-3" />
             <span><strong className="text-green-700">1</strong> = 出勤</span>
             <span><strong className="text-yellow-700">0.5</strong> = 半日</span>
+            <span><strong className="text-purple-600">補</strong> = 0.6補償</span>
             <span><strong className="text-purple-600">P</strong> = 有給</span>
             <span className="text-amber-700">下段 = 残業h</span>
-            {saving && (
-              <span className="ml-auto text-hibi-navy flex items-center gap-1">
-                <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                保存中...
-              </span>
-            )}
           </div>
         </div>
       )}
@@ -872,6 +1128,165 @@ export default function AttendanceGridPage() {
           現場を選択してください
         </div>
       )}
+
+      {/* ── Assignment Modal ── */}
+      {showAssignModal && data && (
+        <AssignModal
+          siteName={data.site.name}
+          currentWorkerIds={data.workers.map(w => w.id)}
+          allWorkers={data.allWorkers || []}
+          onSave={handleSaveAssign}
+          onClose={() => setShowAssignModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ────────────────────────────────────────
+//  Assignment Modal Component
+// ────────────────────────────────────────
+
+function AssignModal({
+  siteName,
+  currentWorkerIds,
+  allWorkers,
+  onSave,
+  onClose,
+}: {
+  siteName: string
+  currentWorkerIds: number[]
+  allWorkers: Worker[]
+  onSave: (workerIds: number[]) => void
+  onClose: () => void
+}) {
+  const [assignedIds, setAssignedIds] = useState<Set<number>>(new Set(currentWorkerIds))
+  const [search, setSearch] = useState('')
+
+  const unassigned = useMemo(() => {
+    return allWorkers
+      .filter(w => !assignedIds.has(w.id))
+      .filter(w => !search || w.name.includes(search))
+  }, [allWorkers, assignedIds, search])
+
+  const assigned = useMemo(() => {
+    return allWorkers.filter(w => assignedIds.has(w.id))
+  }, [allWorkers, assignedIds])
+
+  const addWorker = (id: number) => {
+    setAssignedIds(prev => new Set([...prev, id]))
+  }
+
+  const removeWorker = (id: number) => {
+    setAssignedIds(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
+  const handleSave = () => {
+    onSave(Array.from(assignedIds))
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-bold text-hibi-navy">{siteName} 配置編集</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+
+        {/* Modal body */}
+        <div className="flex flex-1 min-h-0">
+          {/* Left: Unassigned workers */}
+          <div className="flex-1 border-r border-gray-200 flex flex-col">
+            <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+              <div className="text-xs font-bold text-gray-600 mb-1">未配置の作業員</div>
+              <input
+                type="text"
+                placeholder="名前で検索..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+              {unassigned.length === 0 && (
+                <div className="text-center text-gray-400 text-xs py-4">該当なし</div>
+              )}
+              {unassigned.map(w => (
+                <button
+                  key={w.id}
+                  onClick={() => addWorker(w.id)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-blue-50 rounded transition"
+                >
+                  <span className="text-green-600 text-lg leading-none">+</span>
+                  <span className="font-medium text-gray-800">{w.name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${orgBadgeCls(w.org, w.visa)}`}>
+                    {orgBadgeLabel(w.org, w.visa)}
+                  </span>
+                  {w.job && (
+                    <span className="text-[10px] text-gray-400">
+                      {w.job === 'tobi' ? '鳶' : w.job === 'doko' ? '土工' : w.job}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: Assigned workers */}
+          <div className="flex-1 flex flex-col">
+            <div className="px-4 py-2 bg-blue-50 border-b border-gray-200">
+              <div className="text-xs font-bold text-hibi-navy">配置済み ({assigned.length}名)</div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+              {assigned.length === 0 && (
+                <div className="text-center text-gray-400 text-xs py-4">作業員が配置されていません</div>
+              )}
+              {assigned.map(w => (
+                <div
+                  key={w.id}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white rounded border border-gray-100"
+                >
+                  <span className="font-medium text-gray-800 flex-1">{w.name}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${orgBadgeCls(w.org, w.visa)}`}>
+                    {orgBadgeLabel(w.org, w.visa)}
+                  </span>
+                  <button
+                    onClick={() => removeWorker(w.id)}
+                    className="text-red-400 hover:text-red-600 text-lg leading-none ml-1"
+                    title="配置解除"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Modal footer */}
+        <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-200 bg-gray-50">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-100 transition"
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 text-sm text-white bg-hibi-navy rounded-lg hover:bg-[#243656] transition font-medium"
+          >
+            保存
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,14 +1,83 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 
 interface PLWorker {
-  id: number; name: string; org: string; visa: string
+  id: number; name: string; org: string; visa: string; hireDate: string
   grantDays: number; carryOver: number; adjustment: number; used: number
   total: number; remaining: number; rate: number; grantMonth?: number
+  grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'
+  legalPL: number
 }
 
 type OrgFilter = 'all' | 'hibi' | 'hfu'
+
+/** 法定有給付与日数を計算（フロントエンド版） */
+function calcLegalPL(hireDate: string, grantDate: string): { days: number; years: number; months: number; label: string } {
+  if (!hireDate || !grantDate) return { days: 0, years: 0, months: 0, label: '' }
+  const hire = new Date(hireDate)
+  const grant = new Date(grantDate)
+  if (isNaN(hire.getTime()) || isNaN(grant.getTime())) return { days: 0, years: 0, months: 0, label: '' }
+
+  const diffMs = grant.getTime() - hire.getTime()
+  const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000)
+  const years = Math.floor(diffYears)
+  const months = Math.floor((diffYears - years) * 12)
+
+  let days = 0
+  if (diffYears < 0.5) days = 0
+  else if (diffYears < 1.5) days = 10
+  else if (diffYears < 2.5) days = 11
+  else if (diffYears < 3.5) days = 12
+  else if (diffYears < 4.5) days = 14
+  else if (diffYears < 5.5) days = 16
+  else if (diffYears < 6.5) days = 18
+  else days = 20
+
+  const label = `入社日 ${hireDate} → ${years}年${months}月 → 法定${days}日`
+  return { days, years, months, label }
+}
+
+/** 消化率のバー色を決定 */
+function rateBarColor(rate: number): string {
+  if (rate <= 50) return 'from-green-400 to-green-500'
+  if (rate <= 80) return 'from-yellow-400 to-yellow-500'
+  return 'from-red-400 to-red-500'
+}
+
+/** 日本の祝日（簡易版 - 固定日のみ） */
+function getJPHolidays(year: number): Set<string> {
+  const holidays = new Set<string>()
+  const add = (m: number, d: number) => {
+    holidays.add(`${year}${String(m).padStart(2, '0')}${String(d).padStart(2, '0')}`)
+  }
+  add(1, 1)   // 元日
+  add(2, 11)  // 建国記念の日
+  add(2, 23)  // 天皇誕生日
+  add(4, 29)  // 昭和の日
+  add(5, 3)   // 憲法記念日
+  add(5, 4)   // みどりの日
+  add(5, 5)   // こどもの日
+  add(8, 11)  // 山の日
+  add(11, 3)  // 文化の日
+  add(11, 23) // 勤労感謝の日
+  // 成人の日（1月第2月曜）
+  for (let d = 8; d <= 14; d++) { if (new Date(year, 0, d).getDay() === 1) { add(1, d); break } }
+  // 春分の日（概算）
+  add(3, year % 4 === 0 ? 20 : 21)
+  // 海の日（7月第3月曜）
+  let count = 0
+  for (let d = 1; d <= 31; d++) { if (new Date(year, 6, d).getDay() === 1) { count++; if (count === 3) { add(7, d); break } } }
+  // 敬老の日（9月第3月曜）
+  count = 0
+  for (let d = 1; d <= 30; d++) { if (new Date(year, 8, d).getDay() === 1) { count++; if (count === 3) { add(9, d); break } } }
+  // 秋分の日（概算）
+  add(9, year % 4 === 0 ? 22 : 23)
+  // スポーツの日（10月第2月曜）
+  count = 0
+  for (let d = 1; d <= 31; d++) { if (new Date(year, 9, d).getDay() === 1) { count++; if (count === 2) { add(10, d); break } } }
+  return holidays
+}
 
 export default function LeavePage() {
   const [password, setPassword] = useState('')
@@ -19,7 +88,11 @@ export default function LeavePage() {
   const [saving, setSaving] = useState(false)
   const [orgFilter, setOrgFilter] = useState<OrgFilter>('all')
   const [showGrantModal, setShowGrantModal] = useState(false)
-  const [grantForm, setGrantForm] = useState({ workerId: '', grantDays: '10', grantMonth: '' })
+  const [grantForm, setGrantForm] = useState({ workerId: '', grantDays: '10', grantMonth: '', grantDate: '' })
+  const [legalPLInfo, setLegalPLInfo] = useState<{ days: number; label: string } | null>(null)
+  const [plCalendar, setPlCalendar] = useState<Record<string, number[]>>({})
+  const [workerNames, setWorkerNames] = useState<Record<number, string>>({})
+  const [calendarTooltip, setCalendarTooltip] = useState<{ dateKey: string; x: number; y: number } | null>(null)
   const [fy, setFy] = useState(() => {
     const now = new Date()
     const y = now.getFullYear()
@@ -36,10 +109,12 @@ export default function LeavePage() {
     if (!password) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/leave?fy=${fy}`, { headers: { 'x-admin-password': password } })
+      const res = await fetch(`/api/leave?fy=${fy}&calendar=true`, { headers: { 'x-admin-password': password } })
       if (res.ok) {
         const data = await res.json()
         setWorkers(data.workers || [])
+        setPlCalendar(data.plCalendar || {})
+        setWorkerNames(data.workerNames || {})
       }
     } finally {
       setLoading(false)
@@ -48,6 +123,24 @@ export default function LeavePage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
+  // Update legal PL when worker selected in grant modal
+  useEffect(() => {
+    if (grantForm.workerId) {
+      const w = workers.find(w => w.id === Number(grantForm.workerId))
+      if (w?.hireDate) {
+        const grantDate = grantForm.grantDate || new Date().toISOString().split('T')[0]
+        const info = calcLegalPL(w.hireDate, grantDate)
+        setLegalPLInfo(info)
+        setGrantForm(prev => ({ ...prev, grantDays: String(info.days) }))
+      } else {
+        setLegalPLInfo(null)
+      }
+    } else {
+      setLegalPLInfo(null)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grantForm.workerId, grantForm.grantDate])
+
   const filteredWorkers = orgFilter === 'all'
     ? workers
     : workers.filter(w => orgFilter === 'hfu' ? w.org === 'hfu' : w.org !== 'hfu')
@@ -55,7 +148,9 @@ export default function LeavePage() {
   const eligible = filteredWorkers.length
   const totalRemaining = filteredWorkers.reduce((s, w) => s + w.remaining, 0)
   const totalUsed = filteredWorkers.reduce((s, w) => s + w.used, 0)
+  const totalTotal = filteredWorkers.reduce((s, w) => s + w.total, 0)
   const alertCount = filteredWorkers.filter(w => w.remaining <= 3).length
+  const companyRate = totalTotal > 0 ? (totalUsed / totalTotal * 100) : 0
 
   const handleGrant = async () => {
     if (!grantForm.workerId) { alert('対象者を選択してください'); return }
@@ -64,10 +159,18 @@ export default function LeavePage() {
       await fetch('/api/leave', {
         method: 'POST',
         headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'grant', workerId: Number(grantForm.workerId), fy, grantDays: grantForm.grantDays, grantMonth: grantForm.grantMonth }),
+        body: JSON.stringify({
+          action: 'grant',
+          workerId: Number(grantForm.workerId),
+          fy,
+          grantDays: grantForm.grantDays,
+          grantMonth: grantForm.grantMonth,
+          grantDate: grantForm.grantDate,
+        }),
       })
       setShowGrantModal(false)
-      setGrantForm({ workerId: '', grantDays: '10', grantMonth: '' })
+      setGrantForm({ workerId: '', grantDays: '10', grantMonth: '', grantDate: '' })
+      setLegalPLInfo(null)
       fetchData()
     } finally { setSaving(false) }
   }
@@ -87,6 +190,22 @@ export default function LeavePage() {
 
   const fyOptions = []
   for (let y = 2024; y <= 2027; y++) fyOptions.push({ value: `${y}`, label: `${y}年度（${y}/10〜${y + 1}/9）` })
+
+  // ── PL Calendar data ──
+  const fyStart = parseInt(fy)
+  const calendarMonths = useMemo(() => {
+    const months: { year: number; month: number; label: string }[] = []
+    for (let m = 10; m <= 12; m++) months.push({ year: fyStart, month: m, label: `${fyStart}年${m}月` })
+    for (let m = 1; m <= 9; m++) months.push({ year: fyStart + 1, month: m, label: `${fyStart + 1}年${m}月` })
+    return months
+  }, [fyStart])
+
+  const holidays = useMemo(() => {
+    const set = new Set<string>()
+    getJPHolidays(fyStart).forEach(h => set.add(h))
+    getJPHolidays(fyStart + 1).forEach(h => set.add(h))
+    return set
+  }, [fyStart])
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -143,6 +262,20 @@ export default function LeavePage() {
         </div>
       </div>
 
+      {/* Company-wide consumption rate bar */}
+      <div className="bg-white rounded-xl shadow p-4">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-700">全社消化率</span>
+          <span className="text-sm font-bold text-gray-700">{companyRate.toFixed(1)}%（{totalUsed}/{totalTotal}日）</span>
+        </div>
+        <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full bg-gradient-to-r ${rateBarColor(companyRate)} transition-all`}
+            style={{ width: `${Math.min(100, companyRate)}%` }}
+          />
+        </div>
+      </div>
+
       {/* Table */}
       <div className="bg-white rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
@@ -156,15 +289,16 @@ export default function LeavePage() {
               <th className="px-3 py-3 text-right">合計</th>
               <th className="px-3 py-3 text-right">消化</th>
               <th className="px-3 py-3 text-right">残</th>
+              <th className="px-3 py-3">期限</th>
               <th className="px-3 py-3">消化率</th>
               <th className="px-3 py-3">操作</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : filteredWorkers.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
+              <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
             ) : filteredWorkers.map(w => {
               const rate = w.total > 0 ? (w.used / w.total * 100) : 0
               return (
@@ -185,12 +319,30 @@ export default function LeavePage() {
                   <td className={`px-3 py-2.5 text-right font-bold ${w.remaining <= 3 ? 'text-red-500' : 'text-green-600'}`}>
                     {w.remaining}
                   </td>
+                  {/* Expiry column */}
+                  <td className="px-3 py-2.5">
+                    {w.expiryDate ? (
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                        w.expiryStatus === 'expired'
+                          ? 'bg-red-100 text-red-700 font-bold'
+                          : w.expiryStatus === 'warning'
+                            ? 'bg-orange-100 text-orange-700'
+                            : 'text-gray-500'
+                      }`}>
+                        {w.expiryStatus === 'expired' ? '期限切れ' : w.expiryDate}
+                      </span>
+                    ) : <span className="text-xs text-gray-300">—</span>}
+                  </td>
+                  {/* Improved rate bar */}
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, rate)}%` }} />
+                      <div className="w-20 h-3 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${rateBarColor(rate)} transition-all`}
+                          style={{ width: `${Math.min(100, rate)}%` }}
+                        />
                       </div>
-                      <span className="text-xs text-gray-500">{rate.toFixed(0)}%</span>
+                      <span className="text-xs text-gray-600 font-medium min-w-[2.5rem]">{rate.toFixed(0)}%</span>
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
@@ -203,6 +355,97 @@ export default function LeavePage() {
           </tbody>
         </table>
       </div>
+
+      {/* ── PL Calendar ── */}
+      <div className="bg-white rounded-xl shadow p-4">
+        <h2 className="text-base font-bold text-hibi-navy mb-3">PLカレンダー</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {calendarMonths.map(({ year, month, label }) => {
+            const daysInMonth = new Date(year, month, 0).getDate()
+            const firstDow = new Date(year, month - 1, 1).getDay() // 0=Sun
+            const ym = `${year}${String(month).padStart(2, '0')}`
+
+            return (
+              <div key={ym} className="border border-gray-200 rounded-lg p-2">
+                <div className="text-xs font-bold text-center text-gray-700 mb-1">{label}</div>
+                {/* Day of week header */}
+                <div className="grid grid-cols-7 gap-px text-center">
+                  {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
+                    <div key={d} className={`text-[9px] font-medium h-4 leading-4 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>{d}</div>
+                  ))}
+                  {/* Empty cells before first day */}
+                  {Array.from({ length: firstDow }).map((_, i) => (
+                    <div key={`e${i}`} className="h-6" />
+                  ))}
+                  {/* Day cells */}
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1
+                    const dateKey = `${ym}${String(day).padStart(2, '0')}`
+                    const dow = new Date(year, month - 1, day).getDay()
+                    const isHoliday = holidays.has(dateKey)
+                    const plWorkers = plCalendar[dateKey] || []
+                    const hasPL = plWorkers.length > 0
+
+                    let bgClass = ''
+                    if (hasPL) bgClass = 'bg-yellow-200'
+                    else if (dow === 0 || isHoliday) bgClass = 'bg-red-50'
+                    else if (dow === 6) bgClass = 'bg-blue-50'
+
+                    const textClass = isHoliday ? 'text-red-500' : dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : 'text-gray-700'
+
+                    return (
+                      <div
+                        key={day}
+                        className={`h-6 w-full flex items-center justify-center relative cursor-default rounded-sm ${bgClass}`}
+                        onMouseEnter={(e) => {
+                          if (hasPL) {
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            setCalendarTooltip({ dateKey, x: rect.left + rect.width / 2, y: rect.top })
+                          }
+                        }}
+                        onMouseLeave={() => setCalendarTooltip(null)}
+                        onClick={() => {
+                          if (hasPL) {
+                            setCalendarTooltip(prev =>
+                              prev?.dateKey === dateKey ? null : { dateKey, x: 0, y: 0 }
+                            )
+                          }
+                        }}
+                      >
+                        <span className={`text-[10px] leading-none ${textClass}`}>{day}</span>
+                        {hasPL && (
+                          <span className="absolute -top-0.5 -right-0.5 bg-orange-500 text-white text-[7px] rounded-full w-3 h-3 flex items-center justify-center font-bold leading-none">
+                            {plWorkers.length}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Calendar tooltip */}
+      {calendarTooltip && plCalendar[calendarTooltip.dateKey] && (
+        <div
+          className="fixed z-50 bg-gray-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg pointer-events-none"
+          style={{
+            left: calendarTooltip.x > 0 ? `${calendarTooltip.x}px` : '50%',
+            top: calendarTooltip.x > 0 ? `${calendarTooltip.y - 8}px` : '50%',
+            transform: calendarTooltip.x > 0 ? 'translate(-50%, -100%)' : 'translate(-50%, -50%)',
+          }}
+        >
+          <div className="font-bold mb-1">
+            {calendarTooltip.dateKey.replace(/(\d{4})(\d{2})(\d{2})/, '$1/$2/$3')} 有給取得
+          </div>
+          {plCalendar[calendarTooltip.dateKey].map(wid => (
+            <div key={wid}>{workerNames[wid] || `ID:${wid}`}</div>
+          ))}
+        </div>
+      )}
 
       {/* Grant Modal */}
       {showGrantModal && (
@@ -219,6 +462,17 @@ export default function LeavePage() {
                 </select>
               </div>
               <div>
+                <label className="text-xs text-gray-500 block mb-1">付与日</label>
+                <input type="date" value={grantForm.grantDate} onChange={e => setGrantForm({ ...grantForm, grantDate: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              {/* Legal PL auto-calculation display */}
+              {legalPLInfo && legalPLInfo.days > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                  <div className="text-xs text-blue-700">{legalPLInfo.label}</div>
+                </div>
+              )}
+              <div>
                 <label className="text-xs text-gray-500 block mb-1">付与日数</label>
                 <input type="number" value={grantForm.grantDays} onChange={e => setGrantForm({ ...grantForm, grantDays: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
@@ -231,13 +485,26 @@ export default function LeavePage() {
                   {[10,11,12,1,2,3,4,5,6,7,8,9].map(m => <option key={m} value={m}>{m}月</option>)}
                 </select>
               </div>
+              {/* Expiry preview */}
+              {grantForm.grantDate && (
+                <div className="text-xs text-gray-500">
+                  有効期限: {(() => {
+                    const gd = new Date(grantForm.grantDate)
+                    if (isNaN(gd.getTime())) return '—'
+                    const exp = new Date(gd)
+                    exp.setFullYear(exp.getFullYear() + 2)
+                    exp.setDate(exp.getDate() - 1)
+                    return `${exp.getFullYear()}/${String(exp.getMonth() + 1).padStart(2, '0')}/${String(exp.getDate()).padStart(2, '0')}`
+                  })()}
+                </div>
+              )}
             </div>
             <div className="flex gap-2 mt-6">
               <button onClick={handleGrant} disabled={saving}
                 className="flex-1 bg-green-600 text-white rounded-lg py-2.5 font-bold text-sm disabled:opacity-50">
                 {saving ? '処理中...' : '付与'}
               </button>
-              <button onClick={() => setShowGrantModal(false)}
+              <button onClick={() => { setShowGrantModal(false); setLegalPLInfo(null) }}
                 className="flex-1 bg-gray-200 text-gray-700 rounded-lg py-2.5 text-sm">キャンセル</button>
             </div>
           </div>

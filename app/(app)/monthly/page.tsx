@@ -17,9 +17,12 @@ interface WorkerMonthly {
   otMul: number
   sites: string[]
   workDays: number
+  compDays: number
+  workAll: number
   halfDays?: number
   otHours: number
   plDays: number
+  plUsed: number
   restDays: number
   siteOffDays: number
   cost: number
@@ -43,6 +46,7 @@ interface MonthlyData {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
   locked: boolean
+  workDays: number
   siteNames?: Record<string, string>
   totals: {
     workDays: number
@@ -111,6 +115,10 @@ export default function MonthlyPage() {
   const [error, setError] = useState('')
   const [lockToggling, setLockToggling] = useState(false)
 
+  // 所定日数
+  const [prescribedDays, setPrescribedDays] = useState<string>('')
+  const [savingWorkDays, setSavingWorkDays] = useState(false)
+
   // Worker sort
   const [workerSortKey, setWorkerSortKey] = useState<WorkerSortKey>('name')
   const [workerSortAsc, setWorkerSortAsc] = useState(true)
@@ -149,6 +157,7 @@ export default function MonthlyPage() {
       }
       const json: MonthlyData = await res.json()
       setData(json)
+      setPrescribedDays(json.workDays ? String(json.workDays) : '')
     } catch (e) {
       setError('通信エラーが発生しました')
       setData(null)
@@ -182,8 +191,57 @@ export default function MonthlyPage() {
   }, [password, data, ym, fetchData])
 
   const handleExcelExport = useCallback(() => {
-    alert('Excel出力機能は準備中です')
+    alert('Excel出力は準備中です。Batch 2で実装予定です。')
   }, [])
+
+  // ── 所定日数の保存 ──
+
+  const handleSaveWorkDays = useCallback(async () => {
+    if (!password) return
+    setSavingWorkDays(true)
+    try {
+      await fetch('/api/monthly', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'setWorkDays', ym, value: Number(prescribedDays) || 0 }),
+      })
+      fetchData()
+    } catch {
+      alert('保存に失敗しました')
+    } finally {
+      setSavingWorkDays(false)
+    }
+  }, [password, ym, prescribedDays, fetchData])
+
+  // ── 前月コピー ──
+
+  const handleCopyPrevMonth = useCallback(async () => {
+    if (!password) return
+    if (!confirm('前月のデータをコピーしますか？既存データは上書きされます')) return
+    try {
+      const res = await fetch('/api/monthly', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'copyPrevMonth', ym }),
+      })
+      if (!res.ok) {
+        const json = await res.json()
+        alert(json.error || 'コピーに失敗しました')
+        return
+      }
+      const json = await res.json()
+      alert(`${json.copiedEntries}件のデータをコピーしました`)
+      fetchData()
+    } catch {
+      alert('コピーに失敗しました')
+    }
+  }, [password, ym, fetchData])
+
+  // Check if current month has data
+  const hasCurrentData = useMemo(() => {
+    if (!data) return false
+    return data.workers.length > 0 || data.subcons.length > 0
+  }, [data])
 
   // ── Worker filtering & sorting ──
 
@@ -280,9 +338,33 @@ export default function MonthlyPage() {
     )
   }
 
+  // ── Absence calculation ──
+
+  const isHfuTab = tab === 'hfu'
+  const prescribedDaysNum = Number(prescribedDays) || 0
+  const showAbsenceColumns = isHfuTab && prescribedDaysNum > 0
+
+  function calcAbsentDays(w: WorkerMonthly): number {
+    const absent = prescribedDaysNum - w.workAll - w.plUsed
+    return Math.max(0, Math.round(absent * 10) / 10)
+  }
+
+  function calcAbsentDeduction(w: WorkerMonthly): number {
+    const absentDays = calcAbsentDays(w)
+    const dailyRate = w.rate
+    return Math.round(absentDays * dailyRate)
+  }
+
+  function calcNetPay(w: WorkerMonthly): number {
+    return w.totalCost - calcAbsentDeduction(w)
+  }
+
   // ── Render ──
 
   const isWorkerTab = tab !== 'subcon'
+
+  // Dynamic column count for empty state
+  const workerColCount = 8 + (showAbsenceColumns ? 3 : 0)
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -304,6 +386,14 @@ export default function MonthlyPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopyPrevMonth}
+            disabled={hasCurrentData}
+            className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            title={hasCurrentData ? '既にデータが存在します' : '前月の出勤データをコピー'}
+          >
+            📋 前月コピー
+          </button>
           <button
             onClick={handleToggleLock}
             disabled={lockToggling || !data}
@@ -334,7 +424,7 @@ export default function MonthlyPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         {TABS.map(t => (
           <button
             key={t.key}
@@ -348,6 +438,30 @@ export default function MonthlyPage() {
             {t.label}
           </button>
         ))}
+
+        {/* 所定日数 input - HFU tab only */}
+        {isHfuTab && (
+          <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300">
+            <label className="text-sm text-gray-600 whitespace-nowrap">所定日数:</label>
+            <input
+              type="number"
+              value={prescribedDays}
+              onChange={e => setPrescribedDays(e.target.value)}
+              placeholder="—"
+              min={0}
+              max={31}
+              step={1}
+              className="w-16 border border-gray-300 rounded px-2 py-1 text-sm text-center focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+            />
+            <button
+              onClick={handleSaveWorkDays}
+              disabled={savingWorkDays}
+              className="px-2 py-1 text-xs rounded bg-hibi-navy text-white hover:bg-blue-800 transition disabled:opacity-50"
+            >
+              {savingWorkDays ? '...' : '保存'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Loading / Error */}
@@ -412,19 +526,29 @@ export default function MonthlyPage() {
                 >
                   概算労務費{sortArrow(workerSortKey === 'totalCost', workerSortAsc)}
                 </th>
+                {showAbsenceColumns && (
+                  <>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700">欠勤日数</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700">欠勤控除</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700">差引支給</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
               {sortedWorkers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-gray-400">
+                  <td colSpan={workerColCount} className="px-3 py-8 text-center text-gray-400">
                     データがありません
                   </td>
                 </tr>
               ) : (
                 sortedWorkers.map(w => {
-                  const halfDays = w.halfDays || 0
-                  const hasComplement = halfDays > 0
+                  const compDays = w.compDays || 0
+                  const hasComp = compDays > 0
+                  const absentDays = showAbsenceColumns ? calcAbsentDays(w) : 0
+                  const absentDeduction = showAbsenceColumns ? calcAbsentDeduction(w) : 0
+                  const netPay = showAbsenceColumns ? calcNetPay(w) : 0
                   return (
                     <tr key={w.id} className="border-t hover:bg-gray-50">
                       <td className="px-3 py-2.5 font-medium whitespace-nowrap">{w.name}</td>
@@ -448,9 +572,9 @@ export default function MonthlyPage() {
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
-                        <div>{w.workDays}</div>
-                        {hasComplement && (
-                          <div className="text-[10px] text-gray-400">うち補{(halfDays * 0.5).toFixed(1)}</div>
+                        <div>{Number.isInteger(w.workDays) ? w.workDays : w.workDays.toFixed(1)}</div>
+                        {hasComp && (
+                          <div className="text-[10px] text-gray-400">うち補0.6</div>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
@@ -465,6 +589,19 @@ export default function MonthlyPage() {
                       <td className="px-3 py-2.5 text-right tabular-nums font-medium">
                         {formatYen(Math.round(w.totalCost))}
                       </td>
+                      {showAbsenceColumns && (
+                        <>
+                          <td className={`px-3 py-2.5 text-right tabular-nums bg-red-50/50 ${absentDays > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
+                            {absentDays > 0 ? absentDays : '—'}
+                          </td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums bg-red-50/50 ${absentDeduction > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                            {absentDeduction > 0 ? `-${formatYen(absentDeduction)}` : '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums bg-red-50/50 font-medium">
+                            {formatYen(netPay)}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   )
                 })
@@ -476,13 +613,32 @@ export default function MonthlyPage() {
                   <td className="px-3 py-3">合計 ({filteredWorkers.length}名)</td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3 text-right tabular-nums">{workerTotals.workDays}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{Number.isInteger(workerTotals.workDays) ? workerTotals.workDays : workerTotals.workDays.toFixed(1)}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{workerTotals.plDays}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{workerTotals.otHours.toFixed(1)}</td>
                   <td className="px-3 py-3 text-right">—</td>
                   <td className="px-3 py-3 text-right tabular-nums">
                     {formatYen(Math.round(workerTotals.totalCost))}
                   </td>
+                  {showAbsenceColumns && (
+                    <>
+                      <td className="px-3 py-3 text-right tabular-nums bg-red-50/50">
+                        {(() => {
+                          const totalAbsent = filteredWorkers.reduce((s, w) => s + calcAbsentDays(w), 0)
+                          return totalAbsent > 0 ? Math.round(totalAbsent * 10) / 10 : '—'
+                        })()}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums bg-red-50/50 text-red-600">
+                        {(() => {
+                          const totalDeduction = filteredWorkers.reduce((s, w) => s + calcAbsentDeduction(w), 0)
+                          return totalDeduction > 0 ? `-${formatYen(totalDeduction)}` : '—'
+                        })()}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums bg-red-50/50">
+                        {formatYen(filteredWorkers.reduce((s, w) => s + calcNetPay(w), 0))}
+                      </td>
+                    </>
+                  )}
                 </tr>
               </tfoot>
             )}

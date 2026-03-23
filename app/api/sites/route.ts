@@ -8,6 +8,12 @@ function checkAuth(request: NextRequest): boolean {
   return !!(adminPassword && authHeader === adminPassword)
 }
 
+interface RatePeriod {
+  from: string
+  tobiRate: number
+  dokoRate: number
+}
+
 interface RawSite {
   id: string
   name: string
@@ -17,6 +23,7 @@ interface RawSite {
   archived?: boolean
   tobiRate?: number
   dokoRate?: number
+  rates?: RatePeriod[]
 }
 
 async function getMainDoc() {
@@ -34,7 +41,7 @@ export async function GET(request: NextRequest) {
   try {
     const result = await getMainDoc()
     if (!result) {
-      return NextResponse.json({ sites: [], assign: {}, workers: [] })
+      return NextResponse.json({ sites: [], assign: {}, workers: [], subcons: [], mforeman: {} })
     }
 
     const { data } = result
@@ -46,16 +53,18 @@ export async function GET(request: NextRequest) {
       end: s.end || '',
       foreman: s.foreman || 0,
       archived: s.archived || false,
-      tobiRate: (s as unknown as Record<string, unknown>).tobiRate as number || 0,
-      dokoRate: (s as unknown as Record<string, unknown>).dokoRate as number || 0,
+      tobiRate: s.tobiRate || 0,
+      dokoRate: s.dokoRate || 0,
+      rates: s.rates || [],
     }))
 
-    const assign: Record<string, { workers: number[]; subcons: string[] }> = {}
+    const assign: Record<string, { workers: number[]; subcons: string[]; subconRates?: Record<string, { rate: number; otRate: number }> }> = {}
     if (data.assign) {
       for (const [siteId, val] of Object.entries(data.assign as Record<string, Record<string, unknown>>)) {
         assign[siteId] = {
           workers: (val.workers as number[]) || [],
           subcons: (val.subcons as string[]) || [],
+          subconRates: (val.subconRates as Record<string, { rate: number; otRate: number }>) || undefined,
         }
       }
     }
@@ -67,7 +76,18 @@ export async function GET(request: NextRequest) {
       retired: (w.retired as string) || '',
     }))
 
-    return NextResponse.json({ sites, assign, workers })
+    const subcons = ((data.subcons || []) as Record<string, unknown>[]).map(sc => ({
+      id: sc.id as string,
+      name: sc.name as string,
+      type: (sc.type as string) || '',
+      rate: (sc.rate as number) || 0,
+      otRate: (sc.otRate as number) || 0,
+    }))
+
+    // mforeman: entries like { siteId_ym: { wid: workerId } }
+    const mforeman = (data.mforeman || {}) as Record<string, { wid: number }>
+
+    return NextResponse.json({ sites, assign, workers, subcons, mforeman })
   } catch (error) {
     console.error('Failed to fetch sites:', error)
     return NextResponse.json({ error: 'Failed to fetch sites' }, { status: 500 })
@@ -107,6 +127,7 @@ export async function POST(request: NextRequest) {
         archived: false,
         tobiRate: Number(tobiRate) || 0,
         dokoRate: Number(dokoRate) || 0,
+        rates: [],
       }
 
       await updateDoc(ref, { sites: [...sites, newSite] })
@@ -114,7 +135,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'update') {
-      const { id, name, start, end, foreman, archived, tobiRate, dokoRate } = body
+      const { id, name, start, end, foreman, archived, tobiRate, dokoRate, rates, subconRates } = body
       if (!id) {
         return NextResponse.json({ error: 'id required' }, { status: 400 })
       }
@@ -134,9 +155,83 @@ export async function POST(request: NextRequest) {
         ...(archived !== undefined && { archived: Boolean(archived) }),
         ...(tobiRate !== undefined && { tobiRate: Number(tobiRate) }),
         ...(dokoRate !== undefined && { dokoRate: Number(dokoRate) }),
+        ...(rates !== undefined && { rates }),
       }
 
-      await updateDoc(ref, { sites: updated })
+      const updateData: Record<string, unknown> = { sites: updated }
+
+      // Save subconRates to assign[siteId].subconRates
+      if (subconRates !== undefined) {
+        const assign = (data.assign || {}) as Record<string, Record<string, unknown>>
+        const siteAssign = assign[id] || { workers: [], subcons: [] }
+        siteAssign.subconRates = subconRates
+        assign[id] = siteAssign
+        updateData.assign = assign
+      }
+
+      await updateDoc(ref, updateData)
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'delete') {
+      const { id } = body
+      if (!id) {
+        return NextResponse.json({ error: 'id required' }, { status: 400 })
+      }
+
+      // Remove from sites array
+      const filtered = sites.filter(s => s.id !== id)
+      if (filtered.length === sites.length) {
+        return NextResponse.json({ error: 'Site not found' }, { status: 404 })
+      }
+
+      const updateData: Record<string, unknown> = { sites: filtered }
+
+      // Remove assign entry
+      const assign = (data.assign || {}) as Record<string, Record<string, unknown>>
+      if (assign[id]) {
+        delete assign[id]
+        updateData.assign = assign
+      }
+
+      // Remove mforeman entries for this site
+      const mforeman = (data.mforeman || {}) as Record<string, unknown>
+      let mforemanChanged = false
+      for (const key of Object.keys(mforeman)) {
+        if (key.startsWith(id + '_')) {
+          delete mforeman[key]
+          mforemanChanged = true
+        }
+      }
+      if (mforemanChanged) {
+        updateData.mforeman = mforeman
+      }
+
+      await updateDoc(ref, updateData)
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'setDeputy') {
+      const { siteId, ym, workerId } = body
+      if (!siteId || !ym) {
+        return NextResponse.json({ error: 'siteId and ym required' }, { status: 400 })
+      }
+      const mforeman = (data.mforeman || {}) as Record<string, { wid: number }>
+      const key = `${siteId}_${ym}`
+      mforeman[key] = { wid: Number(workerId) }
+      await updateDoc(ref, { mforeman })
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'removeDeputy') {
+      const { siteId, ym } = body
+      if (!siteId || !ym) {
+        return NextResponse.json({ error: 'siteId and ym required' }, { status: 400 })
+      }
+      const mforeman = (data.mforeman || {}) as Record<string, { wid: number }>
+      const key = `${siteId}_${ym}`
+      delete mforeman[key]
+      await updateDoc(ref, { mforeman })
       return NextResponse.json({ success: true })
     }
 

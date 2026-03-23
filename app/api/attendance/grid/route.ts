@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMainData, getAttData } from '@/lib/compute'
-import { ymKey } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
 
 export async function GET(request: NextRequest) {
@@ -78,6 +77,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // workDays for this month
+    const workDaysValue = main.workDays[ym] ?? null
+
+    // All active workers (for assignment modal)
+    const allWorkers = main.workers
+      .filter(w => !w.retired)
+      .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
+
     return NextResponse.json({
       site: { id: site.id, name: site.name, foreman: site.foreman, foremanName },
       year: y, month: m, daysInMonth, ym,
@@ -85,6 +92,8 @@ export async function GET(request: NextRequest) {
       workerEntries, subconEntries,
       locked,
       approvals,
+      workDays: workDaysValue,
+      allWorkers,
       sites: main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name })),
     })
   } catch (error) {
@@ -100,14 +109,48 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { siteId, ym, workerId, day, entry, subconId, subconEntry } = await request.json()
+    const body = await request.json()
+    const { action } = body
+
+    const { doc, setDoc, getDoc } = await import('firebase/firestore')
+    const { db } = await import('@/lib/firebase')
+
+    // Action: save workDays
+    if (action === 'saveWorkDays') {
+      const { ym, value } = body
+      if (!ym) return NextResponse.json({ error: 'ym required' }, { status: 400 })
+      const docRef = doc(db, 'demmen', 'main')
+      await setDoc(docRef, { workDays: { [ym]: value } }, { merge: true })
+      return NextResponse.json({ success: true })
+    }
+
+    // Action: save assignments
+    if (action === 'saveAssign') {
+      const { siteId, workerIds } = body
+      if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 })
+      const docRef = doc(db, 'demmen', 'main')
+      // Read current assign to preserve subcons
+      const snap = await getDoc(docRef)
+      const current = snap.exists() ? snap.data() : {}
+      const currentAssign = (current.assign || {})[siteId] || {}
+      await setDoc(docRef, {
+        assign: {
+          [siteId]: {
+            ...currentAssign,
+            workers: workerIds || [],
+          }
+        }
+      }, { merge: true })
+      return NextResponse.json({ success: true })
+    }
+
+    // Default: save attendance entry
+    const { siteId, ym, workerId, day, entry, subconId, subconEntry } = body
 
     if (!siteId || !ym || !day) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     }
 
-    const { doc, setDoc } = await import('firebase/firestore')
-    const { db } = await import('@/lib/firebase')
     const docRef = doc(db, 'demmen', `att_${ym}`)
 
     if (workerId !== undefined && entry !== undefined) {

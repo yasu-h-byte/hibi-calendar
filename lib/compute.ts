@@ -92,8 +92,11 @@ export interface WorkerMonthly {
   otMul: number
   sites: string[]
   workDays: number
+  compDays: number   // 0.6エントリの件数
+  workAll: number    // workDays + compDays * 0.6
   otHours: number
   plDays: number
+  plUsed: number     // 有給使用日数（plDaysと同値、明示用）
   restDays: number
   siteOffDays: number
   cost: number
@@ -145,7 +148,8 @@ export function computeMonthly(
     workerMap.set(w.id, {
       id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
       rate: w.rate, otMul: w.otMul, sites: [],
-      workDays: 0, otHours: 0, plDays: 0, restDays: 0, siteOffDays: 0,
+      workDays: 0, compDays: 0, workAll: 0, otHours: 0,
+      plDays: 0, plUsed: 0, restDays: 0, siteOffDays: 0,
       cost: 0, otCost: 0, totalCost: 0,
     })
   }
@@ -183,13 +187,14 @@ export function computeMonthly(
 
     if (entry.w && entry.w > 0) {
       wm.workDays += entry.w
+      if (entry.w === 0.6) wm.compDays += 1
       if (entry.o && entry.o > 0) wm.otHours += entry.o
       if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
 
       const site = siteMap.get(siteId)
       if (site) site.workDays += entry.w
     }
-    if (entry.p) wm.plDays += 1
+    if (entry.p) { wm.plDays += 1; wm.plUsed += 1 }
     if (entry.r) wm.restDays += 1
     if (entry.h) wm.siteOffDays += 1
   }
@@ -216,8 +221,11 @@ export function computeMonthly(
     }
   }
 
-  // Calculate costs
+  // Calculate workAll and costs
   Array.from(workerMap.values()).forEach(wm => {
+    // workDays already sums all entry.w (including 0.6 entries)
+    // workAll = workDays (total effective work value)
+    wm.workAll = wm.workDays
     wm.cost = wm.workDays * wm.rate
     wm.otCost = wm.otHours * (wm.rate / 8) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
@@ -254,6 +262,7 @@ export function computeMonthly(
   const workers = Array.from(workerMap.values()).filter(w => w.workDays > 0 || w.plDays > 0)
   workers.forEach(w => {
     w.workDays = r1(w.workDays)
+    w.workAll = r1(w.workAll)
     w.otHours = r1(w.otHours)
     w.cost = r0(w.cost)
     w.otCost = r0(w.otCost)
