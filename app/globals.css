@@ -37,3 +37,20 @@
     background-color: rgba(55, 65, 81, 0.5);
   }
 }
+
+/* Force number inputs to center-align text (browser default is left) */
+input[type="number"] {
+  text-align: center;
+  -moz-appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Force select dropdowns to center-align text */
+select.text-center {
+  text-align: center;
+  text-align-last: center;
+}

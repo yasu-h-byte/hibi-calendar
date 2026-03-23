@@ -27,31 +27,44 @@ export async function GET(request: NextRequest) {
     const assign = main.assign[siteId]
     const workerIds = massign?.workers || assign?.workers || []
 
+    // Get days in month
+    const [y, m] = [parseInt(ym.substring(0, 4)), parseInt(ym.substring(4, 6))]
+    const daysInMonth = new Date(y, m, 0).getDate()
+
+    // Build attendance grid first (to check who has data)
+    const allWorkerEntries: Record<number, Record<number, AttendanceEntry>> = {}
+    for (const wid of workerIds) {
+      allWorkerEntries[wid] = {}
+      for (let d = 1; d <= daysInMonth; d++) {
+        const key = `${siteId}_${wid}_${ym}_${String(d)}`
+        if (att.d[key]) allWorkerEntries[wid][d] = att.d[key]
+      }
+    }
+
+    // For months where massign has too many workers (pre-2026 bulk assignment),
+    // filter to only those with actual attendance data
+    const currentAssignCount = assign?.workers?.length || 0
+    const useMassignFilter = massign && workerIds.length > currentAssignCount * 2
+    const filteredWorkerIds = useMassignFilter
+      ? workerIds.filter((wid: number) => Object.keys(allWorkerEntries[wid] || {}).length > 0)
+      : workerIds
+
     const workers = main.workers
-      .filter(w => workerIds.includes(w.id))
+      .filter(w => filteredWorkerIds.includes(w.id))
       .map(w => ({
         id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
       }))
+
+    const workerEntries: Record<string, Record<number, AttendanceEntry>> = {}
+    for (const w of workers) {
+      workerEntries[w.id] = allWorkerEntries[w.id] || {}
+    }
 
     // Get subcons assigned to this site
     const subconIds = massign?.subcons || assign?.subcons || []
     const subcons = main.subcons
       .filter(sc => subconIds.includes(sc.id))
       .map(sc => ({ id: sc.id, name: sc.name, type: sc.type }))
-
-    // Get days in month
-    const [y, m] = [parseInt(ym.substring(0, 4)), parseInt(ym.substring(4, 6))]
-    const daysInMonth = new Date(y, m, 0).getDate()
-
-    // Build attendance grid
-    const workerEntries: Record<string, Record<number, AttendanceEntry>> = {}
-    for (const w of workers) {
-      workerEntries[w.id] = {}
-      for (let d = 1; d <= daysInMonth; d++) {
-        const key = `${siteId}_${w.id}_${ym}_${String(d)}`
-        if (att.d[key]) workerEntries[w.id][d] = att.d[key]
-      }
-    }
 
     const subconEntries: Record<string, Record<number, { n: number; on: number }>> = {}
     for (const sc of subcons) {
