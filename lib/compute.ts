@@ -247,18 +247,43 @@ export function computeMonthly(
     site.profitRate = site.billing > 0 ? (site.profit / site.billing) * 100 : 0
   })
 
+  // Round all floating point values to avoid JavaScript precision issues
+  const r1 = (v: number) => Math.round(v * 10) / 10
+  const r0 = (v: number) => Math.round(v)
+
   const workers = Array.from(workerMap.values()).filter(w => w.workDays > 0 || w.plDays > 0)
+  workers.forEach(w => {
+    w.workDays = r1(w.workDays)
+    w.otHours = r1(w.otHours)
+    w.cost = r0(w.cost)
+    w.otCost = r0(w.otCost)
+    w.totalCost = r0(w.totalCost)
+  })
+
   const subcons = Array.from(subconMap.values()).filter(sc => sc.workDays > 0)
+  subcons.forEach(sc => {
+    sc.workDays = r1(sc.workDays)
+    sc.cost = r0(sc.cost)
+  })
+
   const sites = Array.from(siteMap.values())
+  sites.forEach(s => {
+    s.workDays = r1(s.workDays)
+    s.subWorkDays = r1(s.subWorkDays)
+    s.cost = r0(s.cost)
+    s.subCost = r0(s.subCost)
+    s.profit = r0(s.profit)
+    s.profitRate = r1(s.profitRate)
+  })
 
   const totals = {
-    workDays: workers.reduce((s, w) => s + w.workDays, 0),
-    subWorkDays: subcons.reduce((s, sc) => s + sc.workDays, 0),
-    cost: workers.reduce((s, w) => s + w.totalCost, 0),
-    subCost: subcons.reduce((s, sc) => s + sc.cost, 0),
-    billing: sites.reduce((s, st) => s + st.billing, 0),
-    profit: sites.reduce((s, st) => s + st.profit, 0),
-    otHours: workers.reduce((s, w) => s + w.otHours, 0),
+    workDays: r1(workers.reduce((s, w) => s + w.workDays, 0)),
+    subWorkDays: r1(subcons.reduce((s, sc) => s + sc.workDays, 0)),
+    cost: r0(workers.reduce((s, w) => s + w.totalCost, 0)),
+    subCost: r0(subcons.reduce((s, sc) => s + sc.cost, 0)),
+    billing: r0(sites.reduce((s, st) => s + st.billing, 0)),
+    profit: r0(sites.reduce((s, st) => s + st.profit, 0)),
+    otHours: r1(workers.reduce((s, w) => s + w.otHours, 0)),
   }
 
   return { workers, subcons, sites, totals }

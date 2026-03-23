@@ -26,12 +26,19 @@ export async function GET(request: NextRequest) {
 
     const locked = !!(main.locks[ym])
 
+    // Site name map for frontend display
+    const siteNames: Record<string, string> = {}
+    for (const s of main.sites) {
+      siteNames[s.id] = s.name
+    }
+
     return NextResponse.json({
       workers: result.workers,
       subcons: result.subcons,
       sites: result.sites,
       totals: result.totals,
       locked,
+      siteNames,
     })
   } catch (error) {
     console.error('Monthly API error:', error)

@@ -43,6 +43,7 @@ interface MonthlyData {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
   locked: boolean
+  siteNames?: Record<string, string>
   totals: {
     workDays: number
     subWorkDays: number
@@ -440,7 +441,7 @@ export default function MonthlyPage() {
                             ]
                             return (
                               <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colors[i % colors.length]}`}>
-                                {s.length > 6 ? s.slice(0, 6) : s}
+                                {(() => { const nm = data?.siteNames?.[s] || s; return nm.length > 6 ? nm.slice(0, 6) : nm })()}
                               </span>
                             )
                           })}

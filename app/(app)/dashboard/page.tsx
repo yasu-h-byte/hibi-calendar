@@ -730,8 +730,16 @@ export default function DashboardPage() {
                     {data.foreignWorkerRates.map(fw => (
                       <tr key={fw.id} className="border-b border-gray-50 hover:bg-gray-50">
                         <td className="px-3 py-2 font-medium whitespace-nowrap">{fw.name}</td>
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{fw.org}</td>
-                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">{fw.visa}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${fw.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {fw.org === 'hfu' ? 'HFU' : '日比建設'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${fw.visa === 'jisshu' ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'}`}>
+                            {fw.visa === 'jisshu' ? '技能実習' : fw.visa === 'tokutei' ? '特定技能' : fw.visa}
+                          </span>
+                        </td>
                         <td className="px-3 py-2 text-right">
                           <span className={`px-1.5 py-0.5 rounded text-xs font-bold ${rateColorClass(fw.avgRate)}`}>
                             {fw.avgRate.toFixed(0)}%

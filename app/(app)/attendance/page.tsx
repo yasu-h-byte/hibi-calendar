@@ -202,30 +202,27 @@ export default function AttendanceGridPage() {
     }
   }, [data, siteId])
 
-  // Initial site load: fetch with a temporary siteId to get sites list
+  // Initial site load: fetch site list from sites API
   useEffect(() => {
     if (!password || siteId) return
     const loadSites = async () => {
       setLoading(true)
       try {
-        // Fetch with a dummy site to get the sites list - the API returns sites regardless
-        const res = await fetch(`/api/attendance/grid?siteId=__list__&ym=${ym}`, {
+        const res = await fetch('/api/sites', {
           headers: { 'x-admin-password': password },
         })
         if (res.ok) {
           const json = await res.json()
-          if (json.sites && json.sites.length > 0) {
-            setSiteId(json.sites[0].id)
+          const activeSites = (json.sites || []).filter((s: { archived?: boolean }) => !s.archived)
+          if (activeSites.length > 0) {
+            setSiteId(activeSites[0].id)
           }
-        } else {
-          // Try fetching sites from a different approach - use first available site
-          // Fall through to let main fetch handle it
         }
       } catch { /* ignore */ }
       setLoading(false)
     }
     loadSites()
-  }, [password, ym, siteId])
+  }, [password, siteId])
 
   // ── Save helpers ──
 

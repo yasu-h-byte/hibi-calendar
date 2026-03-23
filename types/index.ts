@@ -6,6 +6,10 @@ export interface Worker {
   visaType: string
   token: string
   jobType?: string // '役員' | '職長' | 'とび' | '土工'
+  rate?: number
+  otMul?: number
+  hireDate?: string
+  retired?: string
 }
 
 export interface Site {
