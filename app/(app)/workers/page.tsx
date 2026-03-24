@@ -7,7 +7,7 @@ import { fmtYen } from '@/lib/format'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
 const VISA_LABELS: Record<string, string> = { none: '日本人', jisshu: '技能実習', tokutei: '特定技能' }
-const JOB_LABELS: Record<string, string> = { yakuin: '役員', shokucho: '職長', tobi: 'とび', doko: '土工' }
+const JOB_LABELS: Record<string, string> = { yakuin: '役員', shokucho: '職長', tobi: 'とび', doko: '土工', jimu: '事務' }
 
 interface WorkerExt extends Worker {
   rate?: number
@@ -36,6 +36,7 @@ function jobBadge(jobType?: string): { label: string; cls: string } {
     case 'shokucho': case '職長': return { label: '職長', cls: 'bg-blue-100 text-blue-700' }
     case 'tobi': case 'とび': return { label: 'とび', cls: 'bg-green-100 text-green-700' }
     case 'doko': case '土工': return { label: '土工', cls: 'bg-gray-200 text-gray-600' }
+    case 'jimu': case '事務': return { label: '事務', cls: 'bg-purple-100 text-purple-700' }
     default: return { label: jobType || '—', cls: 'bg-gray-100 text-gray-500' }
   }
 }
@@ -406,6 +407,7 @@ export default function WorkersPage() {
                     <option value="doko">土工</option>
                     <option value="shokucho">職長</option>
                     <option value="yakuin">役員</option>
+                    <option value="jimu">事務</option>
                   </select>
                 </div>
               </div>

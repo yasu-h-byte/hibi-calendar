@@ -15,6 +15,7 @@ interface UserWorker {
 const ROLE_BADGES: Record<string, { label: string; cls: string }> = {
   yakuin: { label: '役員（admin）', cls: 'bg-red-100 text-red-700' },
   shokucho: { label: '職長（foreman）', cls: 'bg-blue-100 text-blue-700' },
+  jimu: { label: '事務（jimu）', cls: 'bg-purple-100 text-purple-700' },
 }
 
 function roleBadge(jobType: string) {
@@ -43,7 +44,7 @@ export default function UsersPage() {
         const data = await res.json()
         const all: UserWorker[] = data.workers || []
         // Only show workers who can log in (yakuin or shokucho)
-        setWorkers(all.filter(w => ['yakuin', 'shokucho'].includes(w.jobType) && !w.retired))
+        setWorkers(all.filter(w => ['yakuin', 'shokucho', 'jimu'].includes(w.jobType) && !w.retired))
       }
     } finally {
       setLoading(false)

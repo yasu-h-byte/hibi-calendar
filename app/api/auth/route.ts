@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const workers = await getWorkers()
     const staffList = workers
       .filter(w => !w.retired)
-      .filter(w => w.jobType && ['yakuin', 'shokucho'].includes(w.jobType))
+      .filter(w => w.jobType && ['yakuin', 'shokucho', 'jimu'].includes(w.jobType))
       .map(w => ({ id: w.id, name: w.name }))
     return NextResponse.json({ workers: staffList })
   }

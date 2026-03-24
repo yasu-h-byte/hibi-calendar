@@ -24,18 +24,18 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
 
   return [
     // メイン
-    { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: 'メイン', roles: ['admin', 'approver'] },
+    { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: 'メイン', roles: ['admin', 'approver', 'jimu'] },
     attItem,
     { label: '就業カレンダー', icon: '📅', href: '/calendar', section: 'メイン', roles: ['admin', 'approver', 'foreman'] },
   // マスタ
-  { label: '月次集計', icon: '📋', href: '/monthly', section: 'マスタ', roles: ['admin', 'approver'] },
-  { label: '人員マスタ', icon: '👷', href: '/workers', section: 'マスタ', roles: ['admin'] },
-  { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ', roles: ['admin'] },
-  { label: '外注先マスタ', icon: '🔧', href: '/subcons', section: 'マスタ', roles: ['admin'] },
+  { label: '月次集計', icon: '📋', href: '/monthly', section: 'マスタ', roles: ['admin', 'approver', 'jimu'] },
+  { label: '人員マスタ', icon: '👷', href: '/workers', section: 'マスタ', roles: ['admin', 'jimu'] },
+  { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ', roles: ['admin', 'jimu'] },
+  { label: '外注先マスタ', icon: '🔧', href: '/subcons', section: 'マスタ', roles: ['admin', 'jimu'] },
   // 管理
-  { label: '有給管理', icon: '🌴', href: '/leave', section: '管理', roles: ['admin', 'approver'] },
-  { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin'] },
-  { label: '帳票出力', icon: '📑', href: '/export', section: '管理', roles: ['admin'] },
+  { label: '有給管理', icon: '🌴', href: '/leave', section: '管理', roles: ['admin', 'approver', 'jimu'] },
+  { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin', 'jimu'] },
+  { label: '帳票出力', icon: '📑', href: '/export', section: '管理', roles: ['admin', 'jimu'] },
   // システム
   { label: 'ユーザー管理', icon: '👤', href: '/users', section: 'システム', roles: ['admin'] },
   { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },

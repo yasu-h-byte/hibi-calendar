@@ -63,7 +63,7 @@ export interface CalendarDay {
   holidayNameVi?: string
 }
 
-export type UserRole = 'admin' | 'approver' | 'foreman'
+export type UserRole = 'admin' | 'approver' | 'foreman' | 'jimu'
 
 export interface AuthUser {
   workerId: number

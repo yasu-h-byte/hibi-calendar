@@ -30,6 +30,17 @@ export function determineRole(workerId: number, sites: Site[]): { role: UserRole
 }
 
 export function buildAuthUser(worker: Worker, sites: Site[]): AuthUser {
+  // 事務ロールはjobTypeで直接判定
+  if (worker.jobType === 'jimu') {
+    return {
+      workerId: worker.id,
+      name: worker.name,
+      role: 'jimu',
+      foremanSites: [],
+      token: worker.token || undefined,
+    }
+  }
+
   const { role, foremanSites } = determineRole(worker.id, sites)
   return {
     workerId: worker.id,
