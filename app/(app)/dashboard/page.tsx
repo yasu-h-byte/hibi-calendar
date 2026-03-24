@@ -17,11 +17,14 @@ interface KPI {
   laborCostPerPerson: number
   laborCostPerPersonAll: number
   billingPerManDay: number
+  perW: number
+  perWEst: number
   billingPerManDayBaseline: number
   billingPerManDayRate: number
   otHours: number
   estMonths: number
   // Previous month comparison values
+  pctWork: number
   prevTotalManDays: number
   prevBilling: number
   prevCost: number
@@ -47,7 +50,8 @@ interface TodaySiteStatus {
   siteName: string
   tobi: number
   doko: number
-  gaichuCount: number
+  subTobi: number
+  subDoko: number
   total: number
 }
 
@@ -338,7 +342,8 @@ export default function DashboardPage() {
                         <th className="px-3 py-2 text-left">現場</th>
                         <th className="px-3 py-2 text-right">鳶</th>
                         <th className="px-3 py-2 text-right">土工</th>
-                        <th className="px-3 py-2 text-right">うち外注</th>
+                        <th className="px-3 py-2 text-right">外注鳶</th>
+                        <th className="px-3 py-2 text-right">外注土工</th>
                         <th className="px-3 py-2 text-right">合計</th>
                       </tr>
                     </thead>
@@ -348,7 +353,8 @@ export default function DashboardPage() {
                           <td className="px-3 py-2 font-medium text-hibi-navy">{s.siteName}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{s.tobi}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{s.doko}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{s.gaichuCount}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{s.subTobi}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{s.subDoko}</td>
                           <td className="px-3 py-2 text-right tabular-nums font-bold">{s.total}</td>
                         </tr>
                       ))}
@@ -362,7 +368,10 @@ export default function DashboardPage() {
                           {data.todayStatus.siteStatus.reduce((s, r) => s + r.doko, 0)}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">
-                          {data.todayStatus.siteStatus.reduce((s, r) => s + r.gaichuCount, 0)}
+                          {data.todayStatus.siteStatus.reduce((s, r) => s + r.subTobi, 0)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {data.todayStatus.siteStatus.reduce((s, r) => s + r.subDoko, 0)}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">
                           {data.todayStatus.siteStatus.reduce((s, r) => s + r.total, 0)}
@@ -401,7 +410,14 @@ export default function DashboardPage() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* 総人工数 */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                  <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">総人工数</div>
+                  <div className="flex items-center gap-1 text-xs font-semibold mb-1">
+                    <span className="text-gray-500 dark:text-gray-400">総人工数</span>
+                    {k.prevTotalManDays > 0 && k.pctWork !== 0 && (
+                      <span className={`text-[10px] font-bold ${k.pctWork > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {k.pctWork > 0 ? '▲' : '▼'}{Math.abs(Math.round(k.pctWork))}%
+                      </span>
+                    )}
+                  </div>
                   <div className="text-2xl font-bold text-hibi-navy dark:text-white tabular-nums">
                     {fmtNum(k.totalManDays)}
                   </div>
@@ -456,6 +472,9 @@ export default function DashboardPage() {
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                   <div className="flex items-center gap-1 text-xs font-semibold mb-1">
                     <span className="text-gray-500 dark:text-gray-400">人工あたり売上</span>
+                    {k.estMonths > 0 && (
+                      <span className="text-orange-500 text-[10px] font-medium">概算含</span>
+                    )}
                     {k.billingPerManDay > 0 && (
                       <span className={`${isAboveBaseline ? 'text-green-600' : 'text-red-600'}`}>
                         ({isAboveBaseline ? '+' : '-'})
@@ -463,12 +482,17 @@ export default function DashboardPage() {
                     )}
                   </div>
                   <div className={`text-2xl font-bold tabular-nums ${isAboveBaseline ? 'text-green-600' : 'text-red-600'}`}>
-                    {k.billingPerManDay > 0 ? fmtYen(k.billingPerManDay) : '-'}
+                    {(() => {
+                      const displayValue = k.estMonths > 0 ? k.perWEst : k.perW
+                      return displayValue > 0 ? fmtYen(displayValue) : '-'
+                    })()}
                   </div>
                   <div className="text-xs text-gray-400 dark:text-gray-500">/人工</div>
                   <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-2 space-y-0.5">
-                    <div>基準{fmtYen(baseline)}</div>
-                    <div>対比 {fmtPct(bpmBaselinePct)}</div>
+                    {k.estMonths > 0 && k.perW > 0 && (
+                      <div>確定{fmtYen(k.perW)}</div>
+                    )}
+                    <div>基準{fmtYen(baseline)} {fmtPct(bpmBaselinePct)}</div>
                   </div>
                 </div>
               </div>
@@ -539,10 +563,10 @@ export default function DashboardPage() {
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.subconWorkDays)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtPct(site.subconRate)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(site.otHours)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{fmtYen(site.cost)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{fmtYen(site.billing)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtYenMan(site.cost)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtYenMan(site.billing)}</td>
                       <td className={`px-3 py-2 text-right tabular-nums font-semibold ${profitRateColor(site.profitRate)}`}>
-                        {fmtYen(site.profit)}
+                        {fmtYenMan(site.profit)}
                       </td>
                       <td className={`px-3 py-2 text-right tabular-nums font-bold ${profitRateColor(site.profitRate)}`}>
                         {fmtPct(site.profitRate)}
@@ -561,9 +585,9 @@ export default function DashboardPage() {
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{fmtPct(data.kpi.subconRate)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{fmtNum(data.kpi.otHours)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtYen(data.kpi.cost)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtYen(data.kpi.billing)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{fmtYen(data.kpi.profit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtYenMan(data.kpi.cost)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtYenMan(data.kpi.billing)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtYenMan(data.kpi.profit)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{fmtPct(data.kpi.profitRate)}</td>
                   </tr>
                 </tfoot>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, Fragment } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
 
 interface SiteProfit {
@@ -8,7 +8,7 @@ interface SiteProfit {
   billing: number; billingByMonth: Record<string, number[]>
   cost: number; subCost: number; totalCost: number
   profit: number; profitRate: number; workDays: number; subWorkDays: number
-  tobiEquiv: number; tobiRate: number
+  tobiEquiv: number; tobiRate: number; tobiBase: number
 }
 
 interface SubconSiteBreakdown {
@@ -41,8 +41,6 @@ export default function CostPage() {
   })
   // Local billing edits: siteId_ym -> number[]
   const [billingEdits, setBillingEdits] = useState<Record<string, number[]>>({})
-  // Expanded subcon rows
-  const [expandedSubcons, setExpandedSubcons] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
@@ -139,15 +137,6 @@ export default function CostPage() {
   }
 
   const t = data?.totals
-  const toggleSubcon = (id: string) => {
-    setExpandedSubcons(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
   // Max total cost for bar chart scaling
   const maxCost = data ? Math.max(...data.sites.map(s => s.cost + s.subCost), 1) : 1
 
@@ -212,16 +201,15 @@ export default function CostPage() {
               <th className="px-3 py-3 text-right whitespace-nowrap">原価計</th>
               <th className="px-3 py-3 text-right whitespace-nowrap">粗利</th>
               <th className="px-3 py-3 text-right whitespace-nowrap">粗利率</th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">自社人工</th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">外注人工</th>
               <th className="px-3 py-3 text-right whitespace-nowrap">鳶換算人工</th>
+              <th className="px-3 py-3 text-right whitespace-nowrap">人工あたり売上</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : !data || data.sites.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
             ) : (
               <>
                 {data.sites.map(s => {
@@ -319,27 +307,20 @@ export default function CostPage() {
                       <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(s.totalCost)}</td>
                       <td className={`px-3 py-2.5 text-right font-bold tabular-nums ${profitColor(s.profitRate)}`}>{fmtYen(s.profit)}</td>
                       <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(s.profitRate)}`}>{fmtPct(s.profitRate)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(s.workDays)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(s.subWorkDays)}</td>
-                      {/* Improved tobiEquiv display */}
-                      <td className="px-3 py-2 text-right">
-                        {s.tobiRate > 0 ? (
-                          <div>
-                            <div className={`font-bold tabular-nums ${s.tobiEquiv > totalWorkers ? 'text-green-600' : totalWorkers > 0 ? 'text-red-600' : ''}`}>
-                              {fmtNum(s.tobiEquiv)}人工
-                            </div>
-                            <div className="text-[10px] text-gray-400 tabular-nums">
-                              {fmtYen(s.billing)} ÷ {fmtYen(s.tobiRate)} = {fmtNum(s.tobiEquiv)}
-                            </div>
-                            {totalWorkers > 0 && (
-                              <div className="text-[10px] text-gray-500 tabular-nums">
-                                人工あたり {fmtYen(Math.round(s.billing / totalWorkers))}
-                              </div>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {s.tobiEquiv > 0 ? fmtNum(s.tobiEquiv) : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">
+                        {totalWorkers > 0 ? (
+                          <span>
+                            {fmtYen(Math.round(s.billing / totalWorkers))}
+                            {s.tobiBase > 0 && (
+                              <span className={`ml-1 text-xs font-medium ${Math.round(s.billing / totalWorkers) >= s.tobiBase ? 'text-blue-600' : 'text-red-600'}`}>
+                                {Math.round(s.billing / totalWorkers / s.tobiBase * 100)}%
+                              </span>
                             )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">単価未設定</span>
-                        )}
+                          </span>
+                        ) : '—'}
                       </td>
                     </tr>
                   )
@@ -353,14 +334,11 @@ export default function CostPage() {
                     <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(t.totalCost)}</td>
                     <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(t.profitRate)}`}>{fmtYen(t.profit)}</td>
                     <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(t.profitRate)}`}>{fmtPct(t.profitRate)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(t.workDays)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(t.subWorkDays)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">—</td>
                     <td className="px-3 py-2.5 text-right tabular-nums">
-                      {(t.workDays + t.subWorkDays) > 0 ? (
-                        <div className="text-[10px] text-gray-500">
-                          人工あたり {fmtYen(Math.round(t.billing / (t.workDays + t.subWorkDays)))}
-                        </div>
-                      ) : '—'}
+                      {(t.workDays + t.subWorkDays) > 0
+                        ? fmtYen(Math.round(t.billing / (t.workDays + t.subWorkDays)))
+                        : '—'}
                     </td>
                   </tr>
                 )}
@@ -420,7 +398,7 @@ export default function CostPage() {
         </div>
       )}
 
-      {/* Subcon cost detail table (enhanced) */}
+      {/* Subcon cost detail table */}
       {data && data.subconDetails && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
           <div className="px-4 py-3 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
@@ -429,81 +407,39 @@ export default function CostPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
-                <th className="px-3 py-3 w-6"></th>
                 <th className="px-3 py-3">外注先</th>
                 <th className="px-3 py-3 text-right">人工単価</th>
                 <th className="px-3 py-3 text-right">残業単価</th>
                 <th className="px-3 py-3 text-right">人工数</th>
                 <th className="px-3 py-3 text-right">残業人数</th>
-                <th className="px-3 py-3 text-right">残業費</th>
                 <th className="px-3 py-3 text-right">合計金額</th>
               </tr>
             </thead>
             <tbody>
               {data.subconDetails.map(sc => {
                 const hasWork = sc.workDays > 0
-                const isExpanded = expandedSubcons.has(sc.id)
-                const otCost = sc.otCount * sc.otRate
                 return (
-                  <Fragment key={sc.id}>
-                    <tr className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${!hasWork ? 'opacity-50' : ''}`}>
-                      <td className="px-3 py-2.5 text-center">
-                        {hasWork && sc.siteBreakdown.length > 0 && (
-                          <button onClick={() => toggleSubcon(sc.id)}
-                            className="text-gray-400 hover:text-gray-700 text-xs transition-transform"
-                            style={{ display: 'inline-block', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
-                            ▶
-                          </button>
-                        )}
-                      </td>
-                      <td className={`px-3 py-2.5 font-medium ${!hasWork ? 'italic text-gray-400' : ''}`}>
-                        {sc.name}
-                        <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${sc.type === '鳶業者' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{sc.type}</span>
-                        {!hasWork && <span className="ml-2 text-xs text-gray-400">稼働なし</span>}
-                      </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(sc.rate)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{sc.otRate ? `${fmtYen(sc.otRate)}/h` : '—'}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.workDays)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.otCount)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">
-                        {otCost > 0 ? (
-                          <div>
-                            <div>{fmtYen(otCost)}</div>
-                            <div className="text-[10px] text-gray-400">{fmtNum(sc.otCount)} × {fmtYen(sc.otRate)}</div>
-                          </div>
-                        ) : '—'}
-                      </td>
-                      <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmtYen(sc.cost)}</td>
-                    </tr>
-                    {/* Expanded site breakdown */}
-                    {isExpanded && sc.siteBreakdown.map(b => (
-                      <tr key={`${sc.id}_${b.siteId}`} className="bg-blue-50/30 border-t border-gray-100">
-                        <td className="px-3 py-1.5"></td>
-                        <td className="px-3 py-1.5 pl-8 text-xs text-gray-500 dark:text-gray-400">└ {b.siteName}</td>
-                        <td className="px-3 py-1.5"></td>
-                        <td className="px-3 py-1.5"></td>
-                        <td className="px-3 py-1.5 text-right text-xs tabular-nums text-gray-600">{fmtNum(b.workDays)}</td>
-                        <td className="px-3 py-1.5 text-right text-xs tabular-nums text-gray-600">{fmtNum(b.otCount)}</td>
-                        <td className="px-3 py-1.5 text-right text-xs tabular-nums text-gray-600">
-                          {b.otCount > 0 ? fmtYen(b.otCount * sc.otRate) : '—'}
-                        </td>
-                        <td className="px-3 py-1.5 text-right text-xs font-medium tabular-nums text-gray-600">{fmtYen(b.cost)}</td>
-                      </tr>
-                    ))}
-                  </Fragment>
+                  <tr key={sc.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${!hasWork ? 'opacity-50' : ''}`}>
+                    <td className={`px-3 py-2.5 font-medium ${!hasWork ? 'italic text-gray-400' : ''}`}>
+                      {sc.name}
+                      <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${sc.type === '鳶業者' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{sc.type}</span>
+                      {!hasWork && <span className="ml-2 text-xs text-gray-400">稼働なし</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(sc.rate)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{sc.otRate ? fmtYen(sc.otRate) : '—'}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.workDays)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.otCount)}</td>
+                    <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmtYen(sc.cost)}</td>
+                  </tr>
                 )
               })}
               {/* Grand total footer */}
               <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold">
-                <td className="px-3 py-2.5"></td>
                 <td className="px-3 py-2.5">合計</td>
                 <td className="px-3 py-2.5"></td>
                 <td className="px-3 py-2.5"></td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data.subconDetails.reduce((s, sc) => s + sc.workDays, 0))}</td>
                 <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data.subconDetails.reduce((s, sc) => s + sc.otCount, 0))}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">
-                  {fmtYen(data.subconDetails.reduce((s, sc) => s + sc.otCount * sc.otRate, 0))}
-                </td>
                 <td className="px-3 py-2.5 text-right tabular-nums">
                   {fmtYen(data.subconDetails.reduce((s, sc) => s + sc.cost, 0))}
                 </td>

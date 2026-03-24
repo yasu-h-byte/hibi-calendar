@@ -190,6 +190,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
           >
             ログアウト
           </button>
+          <div className="text-xs text-white/30 text-center mt-2">v2.0</div>
         </div>
       </aside>
     </>

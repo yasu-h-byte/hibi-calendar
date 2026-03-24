@@ -667,16 +667,17 @@ export default function MonthlyPage() {
                   外注先{sortArrow(subconSortKey === 'name', subconSortAsc)}
                 </th>
                 <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap"
-                  onClick={() => toggleSubconSort('type')}
+                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
+                  onClick={() => toggleSubconSort('rate')}
                 >
-                  区分{sortArrow(subconSortKey === 'type', subconSortAsc)}
+                  人工単価{sortArrow(subconSortKey === 'rate', subconSortAsc)}
                 </th>
+                <th className="px-3 py-3 whitespace-nowrap text-right">残業単価</th>
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleSubconSort('workDays')}
                 >
-                  人工計{sortArrow(subconSortKey === 'workDays', subconSortAsc)}
+                  人工数{sortArrow(subconSortKey === 'workDays', subconSortAsc)}
                 </th>
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
@@ -686,15 +687,9 @@ export default function MonthlyPage() {
                 </th>
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
-                  onClick={() => toggleSubconSort('rate')}
-                >
-                  単価{sortArrow(subconSortKey === 'rate', subconSortAsc)}
-                </th>
-                <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleSubconSort('cost')}
                 >
-                  金額{sortArrow(subconSortKey === 'cost', subconSortAsc)}
+                  合計金額{sortArrow(subconSortKey === 'cost', subconSortAsc)}
                 </th>
               </tr>
             </thead>
@@ -708,18 +703,21 @@ export default function MonthlyPage() {
               ) : (
                 sortedSubcons.map(sc => (
                   <tr key={sc.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
-                    <td className="px-3 py-2.5 font-medium whitespace-nowrap">{sc.name}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    <td className="px-3 py-2.5 font-medium whitespace-nowrap">
+                      {sc.name}
+                      <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${sc.type === 'tobi' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
                         {TYPE_LABELS[sc.type] || sc.type}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{sc.workDays}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">
-                      {sc.otCount > 0 ? sc.otCount : '—'}
-                    </td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
                       {fmtYen(sc.rate)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
+                      {sc.otRate > 0 ? fmtYen(sc.otRate) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.workDays)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">
+                      {sc.otCount > 0 ? fmtNum(sc.otCount) : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-medium">
                       {fmtYen(Math.round(sc.cost))}
@@ -733,9 +731,9 @@ export default function MonthlyPage() {
                 <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy">
                   <td className="px-3 py-3">合計 ({data!.subcons.length}社)</td>
                   <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3 text-right tabular-nums">{subconTotals.workDays}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{subconTotals.otCount}</td>
-                  <td className="px-3 py-3 text-right">—</td>
+                  <td className="px-3 py-3"></td>
+                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(subconTotals.workDays)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(subconTotals.otCount)}</td>
                   <td className="px-3 py-3 text-right tabular-nums">
                     {fmtYen(Math.round(subconTotals.cost))}
                   </td>

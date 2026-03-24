@@ -57,7 +57,7 @@ function computeTodayStatus(
   const activeSites = main.sites.filter(s => !s.archived && !(excludeSiteIds?.has(s.id)))
 
   const siteStatus: {
-    siteId: string; siteName: string; tobi: number; doko: number; gaichuCount: number; total: number
+    siteId: string; siteName: string; tobi: number; doko: number; subTobi: number; subDoko: number; total: number
   }[] = []
   const absentWorkers: { id: number; name: string }[] = []
   const workingWorkerIds = new Set<number>()
@@ -85,18 +85,26 @@ function computeTodayStatus(
       }
     }
 
-    // Count subcons for today
-    let gaichuCount = 0
+    // Count subcons for today, split by type
+    let subTobi = 0
+    let subDoko = 0
     const subconIds = assignData.subcons
     for (const scid of subconIds) {
       const key = `${site.id}_${scid}_${ym}_${String(day)}`
       const sdEntry = attSD[key]
-      if (sdEntry && sdEntry.n && sdEntry.n > 0) gaichuCount += sdEntry.n
+      if (sdEntry && sdEntry.n && sdEntry.n > 0) {
+        const sc = main.subcons.find(x => x.id === scid)
+        if (sc && sc.type === '土工業者') {
+          subDoko += sdEntry.n
+        } else {
+          subTobi += sdEntry.n
+        }
+      }
     }
 
-    const total = tobi + doko + gaichuCount
+    const total = tobi + doko + subTobi + subDoko
     if (workerIds.length > 0) {
-      siteStatus.push({ siteId: site.id, siteName: site.name, tobi, doko, gaichuCount, total })
+      siteStatus.push({ siteId: site.id, siteName: site.name, tobi, doko, subTobi, subDoko, total })
     }
   }
 
@@ -214,13 +222,16 @@ export async function GET(request: NextRequest) {
     // ═══ Billing totals per site across all months (with estimation) ═══
     const siteBillingMap = new Map<string, number>()
     let totalBilling = 0
+    let totalBillingConfirmed = 0
     let estMonths = 0
     for (const site of filteredSites) {
       let siteBill = 0
+      let siteBillConfirmed = 0
       for (const ymStr of ymStrList) {
         const actualBill = getBillTotal(main, site.id, ymStr)
         if (actualBill > 0) {
           siteBill += actualBill
+          siteBillConfirmed += actualBill
         } else if (siteFilter === 'all' || site.id === siteFilter) {
           // Estimate billing for months without invoice data
           const avgRev = getAvgRevenuePerEquiv(
@@ -244,6 +255,7 @@ export async function GET(request: NextRequest) {
       siteBillingMap.set(site.id, siteBill)
       if (siteFilter === 'all' || site.id === siteFilter) {
         totalBilling += siteBill
+        totalBillingConfirmed += siteBillConfirmed
       }
     }
 
@@ -336,6 +348,15 @@ export async function GET(request: NextRequest) {
     }
 
     // ═══ KPI cards ═══
+    // perWEst = all billing (incl estimation) / all equiv
+    const perWEst = tobiEq.equiv > 0 ? totalBilling / tobiEq.equiv : 0
+    // perW = confirmed billing only / all equiv
+    const perW = tobiEq.equiv > 0 ? totalBillingConfirmed / tobiEq.equiv : 0
+
+    // pctWork = month-over-month change in totalManDays
+    const pctWork = prevTotalManDays > 0
+      ? ((totalManDays - prevTotalManDays) / prevTotalManDays) * 100 : 0
+
     const kpi = {
       totalManDays,
       inHouseManDays: totalWork,
@@ -349,15 +370,20 @@ export async function GET(request: NextRequest) {
       laborCostPerPerson: totalWork > 0 ? totalCost / totalWork : 0,
       // 1人あたり労務費: all-inclusive = totalCost / (totalWork + totalOtEq)
       laborCostPerPersonAll: (totalWork + totalOtEq) > 0 ? totalCost / (totalWork + totalOtEq) : 0,
-      // 人工あたり売上 = billing / tobiEquiv
-      billingPerManDay: tobiEq.equiv > 0 ? totalBilling / tobiEq.equiv : 0,
+      // 人工あたり売上 = billing / tobiEquiv (概算含む)
+      billingPerManDay: perWEst,
+      // 人工あたり売上（確定のみ）
+      perW,
+      // 人工あたり売上（概算含む）
+      perWEst,
       // 基準 = tobiBase from getSiteRates
       billingPerManDayBaseline: rates.tobiBase,
       billingPerManDayRate: tobiEq.equiv > 0 && rates.tobiBase > 0
-        ? ((totalBilling / tobiEq.equiv) / rates.tobiBase) * 100 : 0,
+        ? (perWEst / rates.tobiBase) * 100 : 0,
       otHours: totalOT,
       estMonths,
       // Previous month comparison
+      pctWork,
       prevTotalManDays,
       prevBilling,
       prevCost,
