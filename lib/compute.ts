@@ -11,8 +11,8 @@ export interface MainData {
   workers: RawWorker[]
   sites: RawSite[]
   subcons: RawSubcon[]
-  assign: Record<string, { workers?: number[]; subcons?: string[]; subconRates?: Record<string, { rate?: number; otRate?: number }> }>
-  massign: Record<string, { workers?: number[]; subcons?: string[] }>
+  assign: Record<string, { workers?: number[]; subcons?: string[]; dispatch?: number[]; subconRates?: Record<string, { rate?: number; otRate?: number }> }>
+  massign: Record<string, { workers?: number[]; subcons?: string[]; dispatch?: number[] }>
   billing: Record<string, number[]>
   workDays: Record<string, number>
   locks: Record<string, boolean>
@@ -128,12 +128,13 @@ export function getAssign(
   main: MainData,
   siteId: string,
   ym: string,
-): { workers: number[]; subcons: string[] } {
+): { workers: number[]; subcons: string[]; dispatch: number[] } {
   const mk = `${siteId}_${ym}`
   if (main.massign[mk]) {
     return {
       workers: main.massign[mk].workers || [],
       subcons: main.massign[mk].subcons || [],
+      dispatch: main.massign[mk].dispatch || main.assign[siteId]?.dispatch || [],
     }
   }
   let y = parseInt(ym.slice(0, 4))
@@ -146,11 +147,18 @@ export function getAssign(
       return {
         workers: main.massign[pk].workers || [],
         subcons: main.massign[pk].subcons || [],
+        dispatch: main.massign[pk].dispatch || main.assign[siteId]?.dispatch || [],
       }
     }
   }
   const a = main.assign[siteId]
-  return { workers: a?.workers || [], subcons: a?.subcons || [] }
+  return { workers: a?.workers || [], subcons: a?.subcons || [], dispatch: a?.dispatch || [] }
+}
+
+// 出向判定: 指定社員が指定現場で出向扱いかチェック
+export function isDispatched(main: MainData, workerId: number, siteId: string, ym: string): boolean {
+  const assign = getAssign(main, siteId, ym)
+  return assign.dispatch.includes(workerId)
 }
 
 // ────────────────────────────────────────
@@ -239,6 +247,17 @@ export function calcTobiEquiv(
   // 月別に集計（期間別レート適用のため）
   const monthly: Record<string, { tw: number; dw: number; toe: number; doe: number }> = {}
 
+  // 出向者リスト（全現場分をキャッシュ）
+  const dispatchCache: Record<string, number[]> = {}
+  function getDispatchList(sid: string, ym: string): number[] {
+    const ck = `${sid}_${ym}`
+    if (!(ck in dispatchCache)) {
+      const a = getAssign(main, sid, ym)
+      dispatchCache[ck] = a.dispatch
+    }
+    return dispatchCache[ck]
+  }
+
   // 個人
   for (const [k, v] of Object.entries(attD)) {
     const pk = parseDKey(k)
@@ -247,6 +266,9 @@ export function calcTobiEquiv(
     if (v.p || !v.w) continue
     const w = main.workers.find(x => x.id === parseInt(pk.wid))
     if (!w) continue
+    // 出向者: 鳶換算人工から除外
+    const dispList = getDispatchList(pk.sid, pk.ym)
+    if (dispList.includes(w.id)) continue
     // 休業補償(0.6): 外国人の会社都合休業 → 鳶換算から除外
     const isComp = (v.w === 0.6 && w.visa !== 'none')
     if (isComp) continue
