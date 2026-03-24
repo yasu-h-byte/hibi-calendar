@@ -226,15 +226,22 @@ export default function UsersPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col className="w-40" />
+              <col className="w-20" />
+              <col className="w-20" />
+              <col className="w-20" />
+              <col className="w-20" />
+            </colgroup>
             <thead>
-              <tr className="border-b dark:border-gray-700">
-                <th className="text-left px-3 py-2 text-gray-600 dark:text-gray-400 w-32">メニュー</th>
-                <th className="text-center px-3 py-2 w-16">
+              <tr className="border-b-2 dark:border-gray-600">
+                <th className="text-left px-3 py-3 text-gray-600 dark:text-gray-400">メニュー</th>
+                <th className="text-center px-3 py-3">
                   <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">admin</span>
                 </th>
                 {CONFIGURABLE_ROLES.map(r => (
-                  <th key={r.id} className="text-center px-3 py-2 w-24">
+                  <th key={r.id} className="text-center px-3 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       r.id === 'approver' ? 'bg-orange-100 text-orange-700' :
                       r.id === 'foreman' ? 'bg-blue-100 text-blue-700' :
@@ -246,20 +253,20 @@ export default function UsersPage() {
             </thead>
             <tbody>
               {Object.entries(sections).map(([section, menus]) => (
-                <tbody key={section}>
-                  <tr>
-                    <td colSpan={2 + CONFIGURABLE_ROLES.length} className="px-3 pt-3 pb-1 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                <>
+                  <tr key={`section-${section}`}>
+                    <td colSpan={2 + CONFIGURABLE_ROLES.length} className="px-3 pt-4 pb-1 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
                       {section}
                     </td>
                   </tr>
                   {menus.map(menu => (
                     <tr key={menu.id} className="border-t dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-300">{menu.label}</td>
-                      <td className="text-center px-3 py-2">
-                        <input type="checkbox" checked disabled className="w-4 h-4 accent-red-600 cursor-not-allowed" />
+                      <td className="px-3 py-2.5 text-gray-700 dark:text-gray-300">{menu.label}</td>
+                      <td className="text-center px-3 py-2.5">
+                        <input type="checkbox" checked disabled className="w-4 h-4 accent-red-600 cursor-not-allowed opacity-50" />
                       </td>
                       {CONFIGURABLE_ROLES.map(r => (
-                        <td key={r.id} className="text-center px-3 py-2">
+                        <td key={r.id} className="text-center px-3 py-2.5">
                           <input
                             type="checkbox"
                             checked={(permissions[r.id] || []).includes(menu.id)}
@@ -270,7 +277,7 @@ export default function UsersPage() {
                       ))}
                     </tr>
                   ))}
-                </tbody>
+                </>
               ))}
             </tbody>
           </table>
