@@ -376,10 +376,10 @@ export async function GET(request: NextRequest) {
       cost: totalAllCost,
       profit: totalProfit,
       profitRate: totalBilling > 0 ? (totalProfit / totalBilling) * 100 : 0,
-      // 1人あたり労務費: in-house only = totalCost / totalWork
+      // 1人あたり労務費: 社員のみ = 自社コスト / 自社人工
       laborCostPerPerson: totalWork > 0 ? totalCost / totalWork : 0,
-      // 1人あたり労務費: all-inclusive = totalCost / (totalWork + totalOtEq)
-      laborCostPerPersonAll: (totalWork + totalOtEq) > 0 ? totalCost / (totalWork + totalOtEq) : 0,
+      // 1人あたり労務費: 外注込み = (自社コスト+外注コスト) / (自社人工+外注人工)
+      laborCostPerPersonAll: totalManDays > 0 ? totalAllCost / totalManDays : 0,
       // 人工あたり売上 = billing / tobiEquiv (概算含む)
       billingPerManDay: perWEst,
       // 人工あたり売上（確定のみ）
