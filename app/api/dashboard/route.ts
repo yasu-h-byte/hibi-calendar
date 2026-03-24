@@ -431,8 +431,11 @@ export async function GET(request: NextRequest) {
       )
 
       let mBilling = 0, mCost = 0, mWorkDays = 0, mSubDays = 0
-      for (const site of filteredSites) {
-        if (siteFilter !== 'all' && site.id !== siteFilter) continue
+      // KPIチャートは全サイト（アーカイブ含む）のデータを含める
+      const trendSites = siteFilter !== 'all'
+        ? main.sites.filter(s => s.id === siteFilter)
+        : main.sites.filter(s => s.id !== 'yaesu_night') // 夜勤のみ除外
+      for (const site of trendSites) {
         const sd = mc.sites[site.id]
         if (sd) {
           mCost += sd.cost + sd.subCost
