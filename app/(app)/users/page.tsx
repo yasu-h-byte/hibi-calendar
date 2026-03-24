@@ -31,7 +31,7 @@ const ALL_MENUS = [
 
 // Configurable roles (admin always has full access)
 const CONFIGURABLE_ROLES = [
-  { id: 'approver', label: '承認者（事業責任者）' },
+  { id: 'approver', label: '役員' },
   { id: 'foreman', label: '職長' },
   { id: 'jimu', label: '事務' },
 ]
