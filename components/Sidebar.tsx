@@ -162,12 +162,12 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
         }`}
       >
         {/* Header - Logo */}
-        <div className="px-4 pt-5 pb-4 border-b border-white/10">
-          <div className="bg-white rounded-lg p-3 inline-block">
+        <div className="px-3 pt-4 pb-3 border-b border-white/10">
+          <div className="bg-white rounded-lg p-2.5 flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-[140px]" />
+            <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-full" />
           </div>
-          <p className="text-xs text-white/50 mt-2">鳶事業部 出面管理</p>
+          <p className="text-[11px] text-white/50 mt-2 text-center">鳶事業部 出面管理</p>
         </div>
 
         {/* User info */}

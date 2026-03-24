@@ -1,11 +1,11 @@
+import { checkApiAuth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
 
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get('x-admin-password')
-  if (!process.env.ADMIN_PASSWORD || authHeader !== process.env.ADMIN_PASSWORD) {
+  if (!checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
