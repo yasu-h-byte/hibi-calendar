@@ -30,6 +30,8 @@ const ACTION_LABELS: Record<string, string> = {
   'subcon.update': '外注先更新',
   'subcon.delete': '外注先削除',
   'settings.update': '設定変更',
+  'rates.default': 'デフォルト単価変更',
+  'rates.site': '現場単価変更',
 }
 
 const ACTION_ICONS: Record<string, string> = {
@@ -41,6 +43,7 @@ const ACTION_ICONS: Record<string, string> = {
   'leave': '\uD83C\uDF34',
   'subcon': '\uD83D\uDD27',
   'settings': '\u2699\uFE0F',
+  'rates': '\uD83D\uDCB0',
 }
 
 function getActionIcon(action: string): string {

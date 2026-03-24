@@ -662,6 +662,26 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => b.rate - a.rate),
     }
 
+    // ═══ Subcon Analysis ═══
+    const subconAnalysis = main.subcons
+      .map(sc => {
+        const data = c.subcons[sc.id]
+        if (!data || data.work <= 0) return null
+        // Use per-subcon rate from compute (may vary by site, so recalc from cost)
+        return {
+          id: sc.id,
+          name: sc.name,
+          type: sc.type,
+          workDays: Math.round(data.work * 10) / 10,
+          otCount: Math.round(data.ot * 10) / 10,
+          cost: Math.round(data.cost),
+          rate: sc.rate,
+          otRate: sc.otRate,
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => b.cost - a.cost)
+
     // ═══ YoY Labor Cost Comparison ═══
     const prevYearYmStrList = ymStrList.map(mStr => {
       const my = parseInt(mStr.slice(0, 4))
@@ -732,6 +752,7 @@ export async function GET(request: NextRequest) {
       forecast,
       subconAlert,
       yoyComparison,
+      subconAnalysis,
     })
   } catch (error) {
     console.error('Dashboard API error:', error)

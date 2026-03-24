@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
+import { logActivity } from '@/lib/activity'
 
 async function getMainDoc() {
   const docRef = doc(db, 'demmen', 'main')
@@ -69,7 +70,9 @@ export async function POST(request: NextRequest) {
       }
 
       const data = docSnap.data()
+      const oldRates = (data.defaultRates as { tobiRate: number; dokoRate: number }) || { tobiRate: 0, dokoRate: 0 }
       await setDoc(docRef, { ...data, defaultRates: { tobiRate, dokoRate } })
+      await logActivity('admin', 'rates.default', `鳶 ¥${oldRates.tobiRate}→¥${tobiRate}, 土工 ¥${oldRates.dokoRate}→¥${dokoRate}`)
       return NextResponse.json({ success: true })
     }
 

@@ -167,6 +167,16 @@ export async function POST(request: NextRequest) {
       }
 
       await updateDoc(ref, updateData)
+
+      // Log rate changes if rates array was updated
+      if (rates !== undefined) {
+        const siteName = updated[idx].name || id
+        const latestRate = Array.isArray(rates) && rates.length > 0 ? rates[rates.length - 1] : null
+        if (latestRate) {
+          await logActivity('admin', 'rates.site', `${siteName} 単価変更: 鳶¥${latestRate.tobiRate} 土工¥${latestRate.dokoRate}`)
+        }
+      }
+
       await logActivity('admin', 'site.update', `${id} を更新`)
       return NextResponse.json({ success: true })
     }

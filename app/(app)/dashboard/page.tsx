@@ -146,6 +146,17 @@ interface YoYComparison {
   sites: { id: string; name: string; current: number; prev: number; changeRate: number }[]
 }
 
+interface SubconAnalysisRow {
+  id: string
+  name: string
+  type: string
+  workDays: number
+  otCount: number
+  cost: number
+  rate: number
+  otRate: number
+}
+
 interface DashboardData {
   kpi: KPI
   sites: SiteRow[]
@@ -164,6 +175,7 @@ interface DashboardData {
   forecast: Forecast | null
   subconAlert: SubconAlert | null
   yoyComparison: YoYComparison | null
+  subconAnalysis: SubconAnalysisRow[]
 }
 
 // ─── Helpers ───
@@ -765,6 +777,73 @@ export default function DashboardPage() {
                   </span>
                   <span className="text-green-600 font-bold">数値=累積粗利</span>
                 </div>
+              </div>
+            </Section>
+          )}
+
+          {/* ═══ Subcon Cost Analysis ═══ */}
+          {data.subconAnalysis && data.subconAnalysis.length > 0 && (
+            <Section title="外注先別コスト分析">
+              {/* Horizontal bar chart */}
+              <div className="space-y-1.5 mb-4">
+                {data.subconAnalysis.map(sc => {
+                  const maxCost = data.subconAnalysis[0].cost || 1
+                  const pct = Math.min((sc.cost / maxCost) * 100, 100)
+                  const barColor = sc.type === '鳶業者' ? 'bg-blue-500' : 'bg-amber-500'
+                  return (
+                    <div key={sc.id} className="flex items-center gap-2">
+                      <span className="text-xs text-gray-700 dark:text-gray-300 w-20 truncate shrink-0" title={sc.name}>{sc.name}</span>
+                      <div className="flex-1 bg-gray-100 dark:bg-gray-700 rounded-full h-4 overflow-hidden">
+                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs text-gray-600 dark:text-gray-400 w-16 text-right shrink-0 whitespace-nowrap">{fmtYenMan(sc.cost)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mb-3">
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-blue-500 rounded" /> 鳶業者</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 bg-amber-500 rounded" /> 土工業者</span>
+              </div>
+              {/* Compact table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
+                      <th className="text-left py-1 pr-2">外注先</th>
+                      <th className="text-left py-1 pr-2">区分</th>
+                      <th className="text-right py-1 pr-2">人工数</th>
+                      <th className="text-right py-1 pr-2">残業</th>
+                      <th className="text-right py-1 pr-2">単価</th>
+                      <th className="text-right py-1">合計金額</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.subconAnalysis.map(sc => (
+                      <tr key={sc.id} className="border-b border-gray-100 dark:border-gray-700">
+                        <td className="py-1 pr-2 text-gray-800 dark:text-gray-200">{sc.name}</td>
+                        <td className="py-1 pr-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                            sc.type === '鳶業者' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                          }`}>{sc.type}</span>
+                        </td>
+                        <td className="py-1 pr-2 text-right text-gray-700 dark:text-gray-300">{fmtNum(sc.workDays)}</td>
+                        <td className="py-1 pr-2 text-right text-gray-700 dark:text-gray-300">{fmtNum(sc.otCount)}</td>
+                        <td className="py-1 pr-2 text-right text-gray-700 dark:text-gray-300">{fmtYen(sc.rate)}</td>
+                        <td className="py-1 text-right font-medium text-gray-800 dark:text-gray-200">{fmtYen(sc.cost)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-gray-300 dark:border-gray-500 font-bold text-gray-800 dark:text-gray-200">
+                      <td className="py-1 pr-2" colSpan={2}>合計</td>
+                      <td className="py-1 pr-2 text-right">{fmtNum(data.subconAnalysis.reduce((s, sc) => s + sc.workDays, 0))}</td>
+                      <td className="py-1 pr-2 text-right">{fmtNum(data.subconAnalysis.reduce((s, sc) => s + sc.otCount, 0))}</td>
+                      <td className="py-1 pr-2"></td>
+                      <td className="py-1 text-right">{fmtYen(data.subconAnalysis.reduce((s, sc) => s + sc.cost, 0))}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </Section>
           )}
