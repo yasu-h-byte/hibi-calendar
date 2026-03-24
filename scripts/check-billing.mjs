@@ -12,18 +12,36 @@ const app = initializeApp({
 const db = getFirestore(app);
 
 const snap = await getDoc(doc(db, 'demmen', 'main'));
-const billing = snap.data().billing || {};
-
-console.log('=== Billing data ===');
-const keys = Object.keys(billing).sort();
-keys.forEach(k => console.log(`  ${k}: ${JSON.stringify(billing[k])}`));
-console.log(`\nTotal entries: ${keys.length}`);
-
-// Also check what the old app might use differently
 const data = snap.data();
-// Check if there's a different billing field
-const topKeys = Object.keys(data);
-const billingRelated = topKeys.filter(k => k.toLowerCase().includes('bill') || k.toLowerCase().includes('uriage') || k.toLowerCase().includes('seikyu'));
-console.log('\nBilling-related top keys:', billingRelated);
+const billing = data.billing || {};
+
+// Show all billing entries
+console.log('=== All billing entries ===');
+const keys = Object.keys(billing).sort();
+for (const k of keys) {
+  const val = billing[k];
+  console.log(`${k}: ${JSON.stringify(val)} (type: ${typeof val}, isArray: ${Array.isArray(val)})`);
+}
+
+// Calculate total billing for 202603 (March 2026)
+console.log('\n=== March 2026 billing ===');
+const sites = ['sasazuka', 'ihi', 'yaesu', 'yaesu_night'];
+let total = 0;
+for (const s of sites) {
+  const key = `${s}_202603`;
+  const val = billing[key];
+  if (val) {
+    const sum = Array.isArray(val) ? val.reduce((a, b) => a + b, 0) : (typeof val === 'number' ? val : 0);
+    console.log(`${key}: ${JSON.stringify(val)} → sum=${sum}`);
+    total += sum;
+  }
+}
+console.log(`Total: ${total}`);
+
+// Check defaultRates
+const dr = data.defaultRates || {};
+console.log('\n=== defaultRates ===');
+console.log(JSON.stringify(dr));
+console.log(`tobiBase = ${dr.tobiRate} * 0.85 = ${Math.round(dr.tobiRate * 0.85)}`);
 
 process.exit(0);
