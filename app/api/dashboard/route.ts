@@ -358,10 +358,23 @@ export async function GET(request: NextRequest) {
     }
 
     // ═══ KPI cards ═══
+    // 確定月のみのtobiEquivを計算（旧アプリのbilledEquivと同じ）
+    const confirmedYmList = ymStrList.filter(ymStr => {
+      let hasBill = false
+      for (const site of main.sites) {
+        if (getBillTotal(main, site.id, ymStr) > 0) { hasBill = true; break }
+      }
+      return hasBill
+    })
+    const confirmedYmObj = confirmedYmList.map(s => ({ y: parseInt(s.slice(0, 4)), m: parseInt(s.slice(4, 6)) }))
+    const billedEquiv = confirmedYmObj.length > 0
+      ? calcTobiEquiv(main, mergedAtt.d, mergedAtt.sd, confirmedYmObj, siteFilter !== 'all' ? siteFilter : undefined)
+      : tobiEq
+
     // perWEst = all billing (incl estimation) / all equiv
     const perWEst = tobiEq.equiv > 0 ? totalBilling / tobiEq.equiv : 0
-    // perW = confirmed billing only / all equiv
-    const perW = tobiEq.equiv > 0 ? totalBillingConfirmed / tobiEq.equiv : 0
+    // perW = confirmed billing only / confirmed equiv（旧アプリと同じ）
+    const perW = billedEquiv.equiv > 0 ? totalBillingConfirmed / billedEquiv.equiv : 0
 
     // pctWork = month-over-month change in totalManDays
     const pctWork = prevTotalManDays > 0

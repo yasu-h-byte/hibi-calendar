@@ -428,10 +428,12 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* 概算売上 */}
+                {/* 売上 */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                   <div className="flex items-center gap-1 text-xs font-semibold mb-1">
-                    <span className="text-gray-500 dark:text-gray-400">概算売上</span>
+                    <span className="text-gray-500 dark:text-gray-400">
+                      {k.estMonths > 0 ? '概算売上' : '確定売上'}
+                    </span>
                     {k.estMonths > 0 && (
                       <span className="text-orange-500 text-[10px] font-medium">出面概算{k.estMonths}ヶ月含</span>
                     )}
