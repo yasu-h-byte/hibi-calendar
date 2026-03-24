@@ -63,17 +63,70 @@ function MoonIcon() {
   )
 }
 
+// Menu ID mapping for permission check
+const MENU_ID_MAP: Record<string, string> = {
+  '/dashboard': 'dashboard',
+  '/attendance': 'attendance',
+  '/calendar': 'calendar',
+  '/monthly': 'monthly',
+  '/workers': 'workers',
+  '/sites': 'sites',
+  '/subcons': 'subcons',
+  '/leave': 'leave',
+  '/cost': 'cost',
+  '/export': 'export',
+  '/users': 'users',
+  '/settings': 'settings',
+  '/activity': 'activity',
+}
+
 export default function Sidebar({ user, open, onClose }: { user: AuthUser; open: boolean; onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const [theme, setThemeState] = useState<Theme>('light')
+  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]> | null>(null)
 
   useEffect(() => {
     setThemeState(initTheme())
+    // Load role permissions from localStorage (set during login or settings save)
+    try {
+      const stored = localStorage.getItem('hibi_role_permissions')
+      if (stored) setRolePermissions(JSON.parse(stored))
+    } catch { /* ignore */ }
+    // Also fetch from API to get latest
+    const auth = localStorage.getItem('hibi_auth')
+    if (auth) {
+      const { password } = JSON.parse(auth)
+      fetch('/api/settings?action=getPermissions', { headers: { 'x-admin-password': password } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.rolePermissions && Object.keys(data.rolePermissions).length > 0) {
+            setRolePermissions(data.rolePermissions)
+            localStorage.setItem('hibi_role_permissions', JSON.stringify(data.rolePermissions))
+          }
+        })
+        .catch(() => {})
+    }
   }, [])
 
   const menuItems = buildMenuItems(user)
-  const filteredItems = menuItems.filter(item => item.roles.includes(user.role))
+
+  // Apply permission filtering
+  const filteredItems = menuItems.filter(item => {
+    // admin always sees everything
+    if (user.role === 'admin') return true
+    // Use static role list as default, override with Firestore permissions if available
+    const perms = rolePermissions?.[user.role]
+    if (perms) {
+      const menuId = item.href ? MENU_ID_MAP[item.href] : null
+      if (menuId) return perms.includes(menuId)
+      // For foreman attendance with token URL, check 'attendance'
+      if (item.href?.startsWith('/attendance/foreman/')) return perms.includes('attendance')
+      return false
+    }
+    // Fallback to hardcoded roles
+    return item.roles.includes(user.role)
+  })
 
   const sections = Array.from(new Set(filteredItems.map(i => i.section)))
 

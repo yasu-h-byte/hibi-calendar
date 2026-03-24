@@ -17,9 +17,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const action = request.nextUrl.searchParams.get('action')
     const result = await getMainDoc()
     if (!result) {
       return NextResponse.json({ defaultRates: { tobiRate: 0, dokoRate: 0 } })
+    }
+
+    if (action === 'getPermissions') {
+      const rolePermissions = (result.data.rolePermissions as Record<string, string[]>) || {}
+      return NextResponse.json({ rolePermissions })
     }
 
     const defaultRates = (result.data.defaultRates as { tobiRate: number; dokoRate: number }) || { tobiRate: 0, dokoRate: 0 }
@@ -38,6 +44,17 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { action } = body
+
+    if (action === 'savePermissions') {
+      const { rolePermissions } = body
+      if (!rolePermissions || typeof rolePermissions !== 'object') {
+        return NextResponse.json({ error: 'rolePermissions required' }, { status: 400 })
+      }
+      const docRef = doc(db, 'demmen', 'main')
+      const { updateDoc } = await import('firebase/firestore')
+      await updateDoc(docRef, { rolePermissions })
+      return NextResponse.json({ success: true })
+    }
 
     if (action === 'saveDefaultRates') {
       const { tobiRate, dokoRate } = body
