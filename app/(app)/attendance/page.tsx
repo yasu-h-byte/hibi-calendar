@@ -11,6 +11,7 @@ interface SiteOption {
   name: string
   foreman?: number
   foremanName?: string
+  foremanNote?: string
 }
 
 interface Worker {
@@ -845,7 +846,7 @@ export default function AttendanceGridPage() {
                       className="sticky left-0 z-10 bg-yellow-50 px-2 py-1 font-bold text-yellow-800 whitespace-nowrap text-[11px] border-r border-yellow-200"
                       style={{ minWidth: 120 }}
                     >
-                      職長: {data.site.foremanName}
+                      職長: {data.site.foremanName}{data.site.foremanNote ? <span className="text-[9px] text-yellow-600 ml-1">({data.site.foremanNote})</span> : ''}
                     </td>
                     <td className="sticky left-[120px] z-10 bg-yellow-50 px-1 py-1 text-center border-r border-yellow-200" style={{ minWidth: 48 }}>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-200 text-yellow-800">職長</span>

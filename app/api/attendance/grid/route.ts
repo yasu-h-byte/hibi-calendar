@@ -77,9 +77,13 @@ export async function GET(request: NextRequest) {
 
     const locked = !!(main.locks[ym])
 
-    // Foreman name
-    const foremanWorker = main.workers.find(w => w.id === site.foreman)
+    // Foreman name (check mforeman for monthly override)
+    const mfKey = `${siteId}_${ym}`
+    const mf = main.mforeman?.[mfKey]
+    const effectiveForeman = mf?.foreman ?? mf?.wid ?? site.foreman
+    const foremanWorker = main.workers.find(w => w.id === effectiveForeman)
     const foremanName = foremanWorker?.name || ''
+    const foremanNote = mf?.note || ''
 
     // Approval status per day
     // Check both the attendanceApprovals collection (new) and att doc approvals field (legacy)
@@ -105,7 +109,7 @@ export async function GET(request: NextRequest) {
       .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
     return NextResponse.json({
-      site: { id: site.id, name: site.name, foreman: site.foreman, foremanName },
+      site: { id: site.id, name: site.name, foreman: effectiveForeman, foremanName, foremanNote },
       year: y, month: m, daysInMonth, ym,
       workers, subcons,
       workerEntries, subconEntries,

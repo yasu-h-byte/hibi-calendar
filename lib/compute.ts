@@ -18,6 +18,7 @@ export interface MainData {
   locks: Record<string, boolean>
   plData: Record<string, PLRecord[]>
   defaultRates: { tobiRate?: number; dokoRate?: number }
+  mforeman: Record<string, { foreman?: number; wid?: number; note?: string }>
 }
 
 export interface RawWorker {
@@ -73,6 +74,7 @@ export async function getMainData(): Promise<MainData> {
     locks: (d.locks || {}) as Record<string, boolean>,
     plData: (d.plData || {}) as Record<string, PLRecord[]>,
     defaultRates: (d.defaultRates || {}) as { tobiRate?: number; dokoRate?: number },
+    mforeman: (d.mforeman || {}) as Record<string, { foreman?: number; wid?: number; note?: string }>,
   }
 }
 
