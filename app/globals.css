@@ -54,3 +54,11 @@ select.text-center {
   text-align: center;
   text-align-last: center;
 }
+
+/* Attendance grid: prevent select from expanding cell width */
+.table-fixed select,
+.table-fixed input[type="number"] {
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
