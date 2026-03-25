@@ -501,6 +501,10 @@ export default function AttendanceGridPage() {
         if (e.p && e.p > 0) plSum += 1
       }
     }
+    // 浮動小数点誤差を丸める（0.6 * 12 = 7.199... → 7.2）
+    wSum = Math.round(wSum * 10) / 10
+    oSum = Math.round(oSum * 10) / 10
+    compSum = Math.round(compSum * 10) / 10
     return { wSum, oSum, compSum, plSum }
   }, [workerEntries])
 
@@ -516,6 +520,9 @@ export default function AttendanceGridPage() {
         onSum += e.on || 0
       }
     }
+    // 浮動小数点誤差を丸める
+    nSum = Math.round(nSum * 10) / 10
+    onSum = Math.round(onSum * 10) / 10
     return { nSum, onSum }
   }, [subconEntries])
 
@@ -593,7 +600,13 @@ export default function AttendanceGridPage() {
       grandOtTotal += grandOtDay
     }
 
-    return { tobi, doko, grand, tobiOt, dokoOt, grandOt, tobiTotal, dokoTotal, grandTotal, tobiOtTotal, dokoOtTotal, grandOtTotal }
+    // 浮動小数点誤差を丸める
+    const r = (n: number) => Math.round(n * 10) / 10
+    return {
+      tobi, doko, grand, tobiOt, dokoOt, grandOt,
+      tobiTotal: r(tobiTotal), dokoTotal: r(dokoTotal), grandTotal: r(grandTotal),
+      tobiOtTotal: r(tobiOtTotal), dokoOtTotal: r(dokoOtTotal), grandOtTotal: r(grandOtTotal),
+    }
   }, [data, workerEntries, subconEntries])
 
   // ── Computed: Sunday validation warnings ──
