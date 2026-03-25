@@ -125,37 +125,81 @@ function computeTodayStatus(
   return { siteStatus, absentWorkers }
 }
 
-/** Foreign worker attendance rates */
-function computeForeignWorkerRates(
+/** Foreign worker attendance rates - 常に過去6ヶ月分を参照、平均を下回る人のみ返す */
+async function computeForeignWorkerRates(
   main: MainData,
-  c: ComputeResult,
-  ymList: { y: number; m: number }[],
+  baseYm: string, // YYYYMM
 ) {
   const foreignWorkers = main.workers.filter(w =>
     !w.retired && w.visa && w.visa !== 'none' && w.visa !== ''
   )
 
-  return foreignWorkers.map(fw => {
-    const ymStrings = ymList.map(x => ymKey(x.y, x.m))
-    const monthlyRates: { ym: string; rate: number }[] = []
+  // 常に過去6ヶ月分のデータを使用
+  const sixMonthList: string[] = []
+  let ty = parseInt(baseYm.slice(0, 4))
+  let tm = parseInt(baseYm.slice(4, 6))
+  for (let i = 0; i < 6; i++) {
+    sixMonthList.push(ymKey(ty, tm))
+    tm--
+    if (tm < 1) { tm = 12; ty-- }
+  }
+  sixMonthList.reverse()
+
+  // 各月のattデータを読み込み
+  const monthAttData: Record<string, Record<string, { w?: number; o?: number; p?: number }>> = {}
+  for (const ym of sixMonthList) {
+    try {
+      const att = await getAttData(ym)
+      monthAttData[ym] = att.d
+    } catch { monthAttData[ym] = {} }
+  }
+
+  // 各社員の月別出勤率を計算
+  const allRates = foreignWorkers.map(fw => {
+    const monthlyRates: { ym: string; rate: number; worked: number; possible: number }[] = []
     let totalWork = 0
     let totalPossible = 0
 
-    for (const ymStr of ymStrings) {
-      const workDaysInMonth = main.workDays[ymStr] || 22
-      const wData = c.workers[fw.id]
-      // Per-month work for this worker: approximate from total if single month
-      const worked = wData ? wData.work / ymStrings.length : 0
+    for (const ym of sixMonthList) {
+      const workDaysInMonth = main.workDays[ym] || 22
+      const d = monthAttData[ym] || {}
+
+      // この社員の当月出勤日数を直接カウント
+      let worked = 0
+      for (const [k, v] of Object.entries(d)) {
+        const parts = k.split('_')
+        const wid = parseInt(parts[parts.length - 3])
+        const entryYm = parts[parts.length - 2]
+        if (wid !== fw.id || entryYm !== ym) continue
+        if (v.p) continue // 有給はカウントしない
+        if (v.w && v.w > 0) {
+          const isComp = (v.w === 0.6 && fw.visa !== 'none')
+          if (!isComp) worked += v.w
+        }
+      }
+
       const rate = workDaysInMonth > 0 ? (worked / workDaysInMonth) * 100 : 0
-      monthlyRates.push({ ym: ymStr, rate })
+      monthlyRates.push({ ym, rate, worked, possible: workDaysInMonth })
       totalWork += worked
       totalPossible += workDaysInMonth
     }
 
     const avgRate = totalPossible > 0 ? (totalWork / totalPossible) * 100 : 0
-
     return { id: fw.id, name: fw.name, org: fw.org, visa: fw.visa, avgRate, monthlyRates }
   })
+
+  // 全体平均を計算
+  const ratesWithData = allRates.filter(r => r.avgRate > 0)
+  const groupAvg = ratesWithData.length > 0
+    ? ratesWithData.reduce((s, r) => s + r.avgRate, 0) / ratesWithData.length
+    : 0
+
+  // 平均を下回る人のみ返す
+  const belowAvg = allRates
+    .filter(r => r.avgRate > 0 && r.avgRate < groupAvg)
+    .sort((a, b) => a.avgRate - b.avgRate) // 低い順
+
+  return { workers: belowAvg, groupAvg, totalWorkers: ratesWithData.length }
 }
 
 // --- Main handler ---
@@ -538,7 +582,7 @@ export async function GET(request: NextRequest) {
     const plAlert = computePLAlert(main)
 
     // ═══ Foreign worker attendance rates ═══
-    const foreignWorkerRates = computeForeignWorkerRates(main, c, ymListObj)
+    const foreignWorkerRates = await computeForeignWorkerRates(main, ym)
 
     // ═══ Site list for tab selector ═══
     // Include archived sites only if they have data in the period

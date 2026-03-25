@@ -165,7 +165,7 @@ interface DashboardData {
   dailyAttendance: DailyAttendance[]
   cumulativeData: CumulativeData[]
   plAlert: PLAlertRow[]
-  foreignWorkerRates: ForeignWorkerRate[]
+  foreignWorkerRates: { workers: ForeignWorkerRate[]; groupAvg: number; totalWorkers: number }
   siteList: SiteOption[]
   ymList: string[]
   period: string
@@ -982,54 +982,23 @@ export default function DashboardPage() {
             </Section>
           )}
 
-          {/* ═══ 11. Foreign Worker Attendance Rate (Enhanced) ═══ */}
-          {data.foreignWorkerRates && data.foreignWorkerRates.length > 0 && (
+          {/* ═══ 11. Foreign Worker Attendance Rate ═══ */}
+          {data.foreignWorkerRates && data.foreignWorkerRates.workers.length > 0 && (
             <>
-              {/* Alert: workers below 90% */}
-              {(() => {
-                const lowWorkers = data.foreignWorkerRates.filter(fw => fw.avgRate < 90 && fw.avgRate > 0)
-                if (lowWorkers.length === 0) return null
-                return (
-                  <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
-                    <div className="font-bold text-red-800 text-sm mb-2">
-                      出勤率90%未満の外国人社員 ({lowWorkers.length}名)
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {lowWorkers.sort((a, b) => a.avgRate - b.avgRate).map(fw => (
-                        <span key={fw.id} className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                          fw.avgRate < 80 ? 'bg-red-200 text-red-900' : 'bg-orange-200 text-orange-900'
-                        }`}>
-                          {fw.name}: {fw.avgRate.toFixed(0)}%
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })()}
-
-              <Section title="外国人社員勤怠率分析">
-                {/* Overall average */}
-                {(() => {
-                  const validRates = data.foreignWorkerRates.filter(fw => fw.avgRate > 0)
-                  const overallAvg = validRates.length > 0
-                    ? validRates.reduce((s, fw) => s + fw.avgRate, 0) / validRates.length
-                    : 0
-                  return (
-                    <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">全体平均出勤率:</span>
-                      <span className={`text-lg font-bold px-2.5 py-0.5 rounded ${
-                        overallAvg >= 95 ? 'bg-green-100 text-green-800' :
-                        overallAvg >= 90 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {overallAvg.toFixed(1)}%
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        ({overallAvg >= 95 ? '良好' : overallAvg >= 90 ? '要注意' : '要改善'})
-                      </span>
-                    </div>
-                  )
-                })()}
+              <Section title="出勤率: 平均を下回る外国人社員">
+                <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">6ヶ月平均出勤率:</span>
+                  <span className={`text-lg font-bold px-2.5 py-0.5 rounded ${
+                    data.foreignWorkerRates.groupAvg >= 95 ? 'bg-green-100 text-green-800' :
+                    data.foreignWorkerRates.groupAvg >= 90 ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {data.foreignWorkerRates.groupAvg.toFixed(1)}%
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    （{data.foreignWorkerRates.totalWorkers}名中 {data.foreignWorkerRates.workers.length}名が平均以下）
+                  </span>
+                </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1048,10 +1017,8 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {data.foreignWorkerRates.map(fw => (
-                        <tr key={fw.id} className={`border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${
-                          fw.avgRate > 0 && fw.avgRate < 90 ? 'bg-red-50/30' : ''
-                        }`}>
+                      {data.foreignWorkerRates.workers.map(fw => (
+                        <tr key={fw.id} className="border-b border-gray-50 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 bg-orange-50/30">
                           <td className="px-3 py-2 font-medium whitespace-nowrap">{fw.name}</td>
                           <td className="px-3 py-2 whitespace-nowrap">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${fw.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
