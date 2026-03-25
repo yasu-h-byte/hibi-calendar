@@ -56,7 +56,9 @@ interface GridData {
   approvals: Record<number, boolean>
   sites: SiteOption[]
   workDays: number | null
+  siteWorkDays: number | null
   allWorkers: Worker[]
+  foremanOverride: { name: string; note: string } | null
 }
 
 // ── Visa badge helper ──
@@ -212,7 +214,9 @@ export default function AttendanceGridPage() {
       setData(json)
       setWorkerEntries(json.workerEntries)
       setSubconEntries(json.subconEntries)
-      setWorkDaysInput(json.workDays != null ? String(json.workDays) : '')
+      // Use siteWorkDays (from approved calendar) if workDays is not manually set
+      const effectiveWorkDays = json.workDays ?? json.siteWorkDays
+      setWorkDaysInput(effectiveWorkDays != null ? String(effectiveWorkDays) : '')
     } catch {
       setError('通信エラーが発生しました')
       setData(null)
@@ -715,6 +719,11 @@ export default function AttendanceGridPage() {
               placeholder="-"
             />
             <span className="text-gray-400">日</span>
+            {data.siteWorkDays != null && (
+              <span className="text-green-600 dark:text-green-400 whitespace-nowrap" title="就業カレンダーから自動算出">
+                (カレンダー: {data.siteWorkDays}日)
+              </span>
+            )}
           </div>
         )}
 
@@ -846,7 +855,7 @@ export default function AttendanceGridPage() {
                       className="sticky left-0 z-10 bg-yellow-50 px-2 py-1 font-bold text-yellow-800 whitespace-nowrap text-[11px] border-r border-yellow-200"
                       style={{ minWidth: 120 }}
                     >
-                      職長: {data.site.foremanName}{data.site.foremanNote ? <span className="text-[9px] text-yellow-600 ml-1">({data.site.foremanNote})</span> : ''}
+                      職長: {data.site.foremanName}{data.site.foremanNote ? <span className="text-[9px] text-gray-500 ml-1">({data.site.foremanNote})</span> : ''}
                     </td>
                     <td className="sticky left-[120px] z-10 bg-yellow-50 px-1 py-1 text-center border-r border-yellow-200" style={{ minWidth: 48 }}>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-200 text-yellow-800">職長</span>

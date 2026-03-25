@@ -1154,11 +1154,15 @@ function KPILineChart({
     grid: '#E5E7EB',
   }
 
-  // Latest values for legend
-  const latest = data[data.length - 1]
-  const latestBilling = Math.round(latest.billingPerManDay)
-  const latestCost = Math.round(latest.costPerManDay)
-  const latestProfit = latestBilling - latestCost
+  // Average values for legend (across all active months in the chart)
+  const activeData = data.filter(d => d.billingPerManDay > 0 || d.costPerManDay > 0 || d.profitPerManDay > 0)
+  const avgBilling = activeData.length > 0
+    ? Math.round(activeData.reduce((s, d) => s + d.billingPerManDay, 0) / activeData.length)
+    : 0
+  const avgCost = activeData.length > 0
+    ? Math.round(activeData.reduce((s, d) => s + d.costPerManDay, 0) / activeData.length)
+    : 0
+  const avgProfit = avgBilling - avgCost
 
   // Chart dimensions
   const svgW = 800
@@ -1218,14 +1222,14 @@ function KPILineChart({
       <div className="flex items-center justify-end gap-4 text-xs mb-2 flex-wrap">
         <span className="flex items-center gap-1">
           <span className="inline-block w-5 h-0.5" style={{ backgroundColor: COLORS.billing }} />
-          <span className="text-gray-600 dark:text-gray-400">売上 {fmtYen(latestBilling)}</span>
+          <span className="text-gray-600 dark:text-gray-400">売上 {fmtYen(avgBilling)}</span>
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block w-5 h-0.5" style={{ backgroundColor: COLORS.cost }} />
-          <span className="text-gray-600 dark:text-gray-400">原価 {fmtYen(latestCost)}</span>
+          <span className="text-gray-600 dark:text-gray-400">原価 {fmtYen(avgCost)}</span>
         </span>
-        <span className={`font-bold ${latestProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-          差益 {latestProfit >= 0 ? '+' : ''}{fmtYen(latestProfit)}
+        <span className={`font-bold ${avgProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          差益 {avgProfit >= 0 ? '+' : ''}{fmtYen(avgProfit)}
         </span>
       </div>
 

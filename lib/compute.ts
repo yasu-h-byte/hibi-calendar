@@ -15,6 +15,7 @@ export interface MainData {
   massign: Record<string, { workers?: number[]; subcons?: string[]; dispatch?: number[] }>
   billing: Record<string, number[]>
   workDays: Record<string, number>
+  siteWorkDays: Record<string, Record<string, number>> // { YYYYMM: { siteId: count } }
   locks: Record<string, boolean>
   plData: Record<string, PLRecord[]>
   defaultRates: { tobiRate?: number; dokoRate?: number }
@@ -71,6 +72,7 @@ export async function getMainData(): Promise<MainData> {
     massign: (d.massign || {}) as Record<string, { workers?: number[]; subcons?: string[] }>,
     billing: normalizeBilling((d.billing || {}) as Record<string, unknown>),
     workDays: (d.workDays || {}) as Record<string, number>,
+    siteWorkDays: (d.siteWorkDays || {}) as Record<string, Record<string, number>>,
     locks: (d.locks || {}) as Record<string, boolean>,
     plData: (d.plData || {}) as Record<string, PLRecord[]>,
     defaultRates: (d.defaultRates || {}) as { tobiRate?: number; dokoRate?: number },

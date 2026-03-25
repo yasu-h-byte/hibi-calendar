@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import CalendarEditor from '@/components/CalendarEditor'
 import { AuthUser, DayType, CalendarStatus } from '@/types'
 import { getNextMonth, generateDefaultDays } from '@/lib/calendar'
@@ -14,6 +14,25 @@ interface SiteCalendarData {
   approvedBy: number | null
   rejectedReason: string | null
   workers: { id: number; name: string; signed: boolean; signedAt: string | null }[]
+}
+
+function DaySummary({ days }: { days: Record<string, DayType> }) {
+  const counts = useMemo(() => {
+    const values = Object.values(days)
+    return {
+      work: values.filter(d => d === 'work').length,
+      off: values.filter(d => d === 'off').length,
+      holiday: values.filter(d => d === 'holiday').length,
+    }
+  }, [days])
+
+  return (
+    <div className="flex items-center gap-4 text-sm bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2">
+      <span className="text-blue-600 dark:text-blue-400 font-medium">出勤日数: {counts.work}日</span>
+      <span className="text-gray-500 dark:text-gray-400">休日: {counts.off}日</span>
+      <span className="text-red-500 dark:text-red-400">祝日: {counts.holiday}日</span>
+    </div>
+  )
 }
 
 export default function CalendarManagePage() {
@@ -304,6 +323,9 @@ ${baseUrl}/calendar/public
                         readOnly={!canEdit(site)}
                       />
                     </div>
+
+                    {/* Day-type summary */}
+                    <DaySummary days={days} />
 
                     {/* Working hours note */}
                     <div className="bg-blue-50 dark:bg-blue-900/20 dark:text-blue-200 rounded-lg p-3 text-sm">

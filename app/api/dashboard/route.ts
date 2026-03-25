@@ -466,6 +466,7 @@ export async function GET(request: NextRequest) {
         cost: mCost,
         profit: mBilling - mCost,
         manDays,
+        equiv,
         // Per-worker KPIs using tobiEquiv
         billingPerManDay: equiv > 0 ? mBilling / equiv : 0,
         costPerManDay: equiv > 0 ? mCost / equiv : 0,
@@ -734,10 +735,13 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => Math.abs(b.changeRate) - Math.abs(a.changeRate)),
     }
 
+    // Filter monthlyTrend: exclude months with no actual work data (equiv === 0)
+    const filteredMonthlyTrend = monthlyTrend.filter(t => t.equiv > 0)
+
     return NextResponse.json({
       kpi,
       sites: sitesArray,
-      monthlyTrend,
+      monthlyTrend: filteredMonthlyTrend,
       todayStatus,
       dailyAttendance,
       cumulativeData,

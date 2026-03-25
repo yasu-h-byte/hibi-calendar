@@ -103,19 +103,30 @@ export async function GET(request: NextRequest) {
     // workDays for this month
     const workDaysValue = main.workDays[ym] ?? null
 
+    // Per-site workDays from approved calendars
+    const siteWorkDaysForMonth = main.siteWorkDays[ym] ?? {}
+    const siteWorkDaysValue = siteWorkDaysForMonth[siteId] ?? null
+
     // All active workers (for assignment modal)
     const allWorkers = main.workers
       .filter(w => !w.retired)
       .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
+    // foremanOverride: non-null only when mforeman actually overrides the default
+    const foremanOverride = mf
+      ? { name: foremanWorker?.name || '', note: mf.note || '' }
+      : null
+
     return NextResponse.json({
       site: { id: site.id, name: site.name, foreman: effectiveForeman, foremanName, foremanNote },
+      foremanOverride,
       year: y, month: m, daysInMonth, ym,
       workers, subcons,
       workerEntries, subconEntries,
       locked,
       approvals,
       workDays: workDaysValue,
+      siteWorkDays: siteWorkDaysValue,
       allWorkers,
       sites: main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name })),
     })
