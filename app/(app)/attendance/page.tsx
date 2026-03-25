@@ -1061,7 +1061,7 @@ export default function AttendanceGridPage() {
                                 style={{ minWidth: 48 }}
                               >
                                 <div className="flex flex-col">
-                                  {/* People count */}
+                                  {/* People count - 大きめ */}
                                   <input
                                     type="number"
                                     step="1"
@@ -1070,13 +1070,13 @@ export default function AttendanceGridPage() {
                                     placeholder="-"
                                     onChange={e => handleSubconNChange(sc.id, d.day, e.target.value)}
                                     disabled={isLocked}
-                                    className={`w-full text-center text-[11px] py-0.5 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none tabular-nums
+                                    className={`w-full text-center text-sm font-bold py-1 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none tabular-nums
                                       ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
-                                      ${nVal > 0 ? 'text-green-700 font-bold' : 'text-gray-300'}
+                                      ${nVal > 0 ? 'text-green-700' : 'text-gray-300 font-normal'}
                                     `}
                                   />
 
-                                  {/* OT people count */}
+                                  {/* OT people count - 小さめ */}
                                   <input
                                     type="number"
                                     step="1"
@@ -1085,7 +1085,7 @@ export default function AttendanceGridPage() {
                                     placeholder=""
                                     onChange={e => handleSubconOnChange(sc.id, d.day, e.target.value)}
                                     disabled={isLocked}
-                                    className={`w-full text-center text-[10px] py-0.5 bg-transparent border-0 focus:ring-1 focus:ring-amber-400 focus:outline-none tabular-nums
+                                    className={`w-full text-center text-[10px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-amber-400 focus:outline-none tabular-nums
                                       ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
                                       ${onVal > 0 ? 'text-amber-700' : 'opacity-30'}
                                     `}
