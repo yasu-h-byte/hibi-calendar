@@ -948,18 +948,18 @@ export default function AttendanceGridPage() {
                                 style={{ minWidth: 48 }}
                               >
                                 <div className="flex flex-col">
-                                  {/* Work dropdown */}
+                                  {/* Work dropdown - 大きめ */}
                                   <select
                                     value={workVal}
                                     onChange={e => handleWorkChange(wId, d.day, e.target.value)}
                                     disabled={isLocked}
-                                    className={`w-full text-center text-[11px] py-0.5 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
+                                    className={`w-full text-center text-sm font-bold py-1 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
                                       ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
-                                      ${workVal === '1' ? 'text-green-700 font-bold' : ''}
-                                      ${workVal === '0.5' ? 'text-yellow-700 font-bold' : ''}
-                                      ${workVal === '0.6' ? 'text-purple-600 font-bold' : ''}
-                                      ${workVal === 'P' ? 'text-purple-600 font-bold' : ''}
-                                      ${workVal === '' ? 'text-gray-300' : ''}
+                                      ${workVal === '1' ? 'text-green-700' : ''}
+                                      ${workVal === '0.5' ? 'text-yellow-700' : ''}
+                                      ${workVal === '0.6' ? 'text-purple-600' : ''}
+                                      ${workVal === 'P' ? 'text-purple-600' : ''}
+                                      ${workVal === '' ? 'text-gray-300 font-normal' : ''}
                                     `}
                                   >
                                     <option value="">-</option>
@@ -969,7 +969,7 @@ export default function AttendanceGridPage() {
                                     <option value="P">P</option>
                                   </select>
 
-                                  {/* OT input */}
+                                  {/* OT input - 小さめ */}
                                   <input
                                     type="number"
                                     step="0.5"
@@ -979,8 +979,8 @@ export default function AttendanceGridPage() {
                                     placeholder=""
                                     onChange={e => handleOtChange(wId, d.day, e.target.value)}
                                     disabled={isLocked || !canOt}
-                                    className={`w-full text-center text-[10px] py-0.5 bg-transparent border-0 focus:ring-1 focus:ring-amber-400 focus:outline-none tabular-nums
-                                      ${!canOt || isLocked ? 'opacity-30 cursor-not-allowed' : 'text-amber-700'}
+                                    className={`w-full text-center text-[10px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-amber-400 focus:outline-none tabular-nums
+                                      ${!canOt || isLocked ? 'opacity-20 cursor-not-allowed' : 'text-amber-600'}
                                     `}
                                   />
                                 </div>
