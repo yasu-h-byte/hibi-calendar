@@ -61,6 +61,7 @@ export default function SitesPage() {
   const [assign, setAssign] = useState<Record<string, SiteAssign>>({})
   const [workers, setWorkers] = useState<WorkerMinimal[]>([])
   const [subcons, setSubcons] = useState<SubconMinimal[]>([])
+  const [defaultRates, setDefaultRates] = useState<{ tobiRate: number; dokoRate: number }>({ tobiRate: 38000, dokoRate: 30000 })
   const [mforeman, setMforeman] = useState<Record<string, MforemanEntry>>({})
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true)
@@ -101,6 +102,7 @@ export default function SitesPage() {
         setWorkers(data.workers || [])
         setSubcons(data.subcons || [])
         setMforeman(data.mforeman || {})
+        if (data.defaultRates) setDefaultRates(data.defaultRates)
       }
     } finally {
       setLoading(false)
@@ -303,16 +305,17 @@ export default function SitesPage() {
   const activeCount = sites.filter(s => isActive(s)).length
   const archivedCount = sites.filter(s => s.archived).length
 
-  // Get the latest rate from the rates array
-  const getLatestRate = (s: SiteData): { tobiRate: number; dokoRate: number } | null => {
+  // Get the latest rate from the rates array, fallback to default rates
+  const getLatestRate = (s: SiteData): { tobiRate: number; dokoRate: number; isDefault: boolean } => {
     if (s.rates && s.rates.length > 0) {
       const sorted = [...s.rates].sort((a, b) => b.from.localeCompare(a.from))
-      return { tobiRate: sorted[0].tobiRate, dokoRate: sorted[0].dokoRate }
+      return { tobiRate: sorted[0].tobiRate, dokoRate: sorted[0].dokoRate, isDefault: false }
     }
     if (s.tobiRate || s.dokoRate) {
-      return { tobiRate: s.tobiRate, dokoRate: s.dokoRate }
+      return { tobiRate: s.tobiRate, dokoRate: s.dokoRate, isDefault: false }
     }
-    return null
+    // デフォルト単価にフォールバック
+    return { tobiRate: defaultRates.tobiRate || 38000, dokoRate: defaultRates.dokoRate || 30000, isDefault: true }
   }
 
   // Rate period helpers
@@ -432,20 +435,18 @@ export default function SitesPage() {
                   </td>
                   <td className="px-3 py-2.5 text-gray-600">{getWorkerName(s.foreman)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">
-                    {rate?.tobiRate ? (
-                      <div>
-                        <div className="font-medium">{fmtYen(rate.tobiRate)}</div>
-                        <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.tobiRate * 0.85))}</div>
-                      </div>
-                    ) : <span className="text-gray-300">—</span>}
+                    <div>
+                      <div className={`font-medium ${rate.isDefault ? 'text-gray-400' : ''}`}>{fmtYen(rate.tobiRate)}</div>
+                      <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.tobiRate * 0.85))}</div>
+                      {rate.isDefault && <div className="text-[10px] text-gray-300">デフォルト</div>}
+                    </div>
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">
-                    {rate?.dokoRate ? (
-                      <div>
-                        <div className="font-medium">{fmtYen(rate.dokoRate)}</div>
-                        <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.dokoRate * 0.85))}</div>
-                      </div>
-                    ) : <span className="text-gray-300">—</span>}
+                    <div>
+                      <div className={`font-medium ${rate.isDefault ? 'text-gray-400' : ''}`}>{fmtYen(rate.dokoRate)}</div>
+                      <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.dokoRate * 0.85))}</div>
+                      {rate.isDefault && <div className="text-[10px] text-gray-300">デフォルト</div>}
+                    </div>
                   </td>
                   <td className="px-3 py-2.5 text-center text-gray-600">{workerCount}</td>
                   <td className="px-3 py-2.5 text-center text-gray-600">{subconCount}</td>

@@ -83,7 +83,9 @@ export async function GET(request: NextRequest) {
     // mforeman: entries like { siteId_ym: { wid: workerId } }
     const mforeman = (data.mforeman || {}) as Record<string, { wid: number }>
 
-    return NextResponse.json({ sites, assign, workers, subcons, mforeman })
+    const defaultRates = (data.defaultRates || { tobiRate: 38000, dokoRate: 30000 }) as { tobiRate: number; dokoRate: number }
+
+    return NextResponse.json({ sites, assign, workers, subcons, mforeman, defaultRates })
   } catch (error) {
     console.error('Failed to fetch sites:', error)
     return NextResponse.json({ error: 'Failed to fetch sites' }, { status: 500 })
