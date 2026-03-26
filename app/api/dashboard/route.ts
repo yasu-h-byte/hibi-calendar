@@ -236,7 +236,8 @@ async function computeForeignWorkerRates(
 
       const adjustedPossible = Math.max(0, workDaysInMonth - excludedDaysInMonth)
       const isFullyExcluded = adjustedPossible === 0
-      const rate = adjustedPossible > 0 ? (worked / adjustedPossible) * 100 : 0
+      const rawRate = adjustedPossible > 0 ? (worked / adjustedPossible) * 100 : 0
+      const rate = Math.min(rawRate, 100) // 土曜出勤等で100%超にならないようキャップ
 
       monthlyRates.push({ ym, rate, worked, possible: adjustedPossible, excluded: isFullyExcluded })
       if (!isFullyExcluded) {
@@ -245,7 +246,7 @@ async function computeForeignWorkerRates(
       }
     }
 
-    const avgRate = totalPossible > 0 ? (totalWork / totalPossible) * 100 : 0
+    const avgRate = Math.min(totalPossible > 0 ? (totalWork / totalPossible) * 100 : 0, 100)
     return { id: fw.id, name: fw.name, org: fw.org, visa: fw.visa, avgRate, monthlyRates }
   })
 
