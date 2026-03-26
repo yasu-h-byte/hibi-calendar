@@ -154,9 +154,51 @@ async function computeForeignWorkerRates(
     } catch { monthAttData[ym] = {} }
   }
 
-  // 各社員の月別出勤率を計算
+  // 各社員の日別出勤データを構築し、連続30日以上の無出勤期間を除外
   const allRates = foreignWorkers.map(fw => {
-    const monthlyRates: { ym: string; rate: number; worked: number; possible: number }[] = []
+    // 6ヶ月分の全日について出勤有無を日付順に構築
+    const dailyWork: { date: string; ym: string; day: number; worked: boolean }[] = []
+    for (const ym of sixMonthList) {
+      const y = parseInt(ym.slice(0, 4))
+      const m = parseInt(ym.slice(4, 6))
+      const dim = new Date(y, m, 0).getDate()
+      const d = monthAttData[ym] || {}
+
+      for (let day = 1; day <= dim; day++) {
+        let worked = false
+        for (const [k, v] of Object.entries(d)) {
+          const parts = k.split('_')
+          const wid = parseInt(parts[parts.length - 3])
+          const entryYm = parts[parts.length - 2]
+          const entryDay = parseInt(parts[parts.length - 1])
+          if (wid !== fw.id || entryYm !== ym || entryDay !== day) continue
+          if (v.p) continue
+          if (v.w && v.w > 0) {
+            const isComp = (v.w === 0.6 && fw.visa !== 'none')
+            if (!isComp) worked = true
+          }
+        }
+        dailyWork.push({ date: `${ym}${String(day).padStart(2, '0')}`, ym, day, worked })
+      }
+    }
+
+    // 連続無出勤30日以上の期間を検出
+    const excludedDates = new Set<string>()
+    let streakStart = 0
+    for (let i = 0; i <= dailyWork.length; i++) {
+      if (i === dailyWork.length || dailyWork[i].worked) {
+        const streakLen = i - streakStart
+        if (streakLen >= 30) {
+          for (let j = streakStart; j < i; j++) {
+            excludedDates.add(dailyWork[j].date)
+          }
+        }
+        streakStart = i + 1
+      }
+    }
+
+    // 月別の出勤率を計算（除外日を除く）
+    const monthlyRates: { ym: string; rate: number; worked: number; possible: number; excluded: boolean }[] = []
     let totalWork = 0
     let totalPossible = 0
 
@@ -164,24 +206,43 @@ async function computeForeignWorkerRates(
       const workDaysInMonth = main.workDays[ym] || 22
       const d = monthAttData[ym] || {}
 
-      // この社員の当月出勤日数を直接カウント
       let worked = 0
+      let excludedDaysInMonth = 0
+      const y = parseInt(ym.slice(0, 4))
+      const m = parseInt(ym.slice(4, 6))
+      const dim = new Date(y, m, 0).getDate()
+
+      // 出勤カウント
       for (const [k, v] of Object.entries(d)) {
         const parts = k.split('_')
         const wid = parseInt(parts[parts.length - 3])
         const entryYm = parts[parts.length - 2]
         if (wid !== fw.id || entryYm !== ym) continue
-        if (v.p) continue // 有給はカウントしない
+        if (v.p) continue
         if (v.w && v.w > 0) {
           const isComp = (v.w === 0.6 && fw.visa !== 'none')
           if (!isComp) worked += v.w
         }
       }
 
-      const rate = workDaysInMonth > 0 ? (worked / workDaysInMonth) * 100 : 0
-      monthlyRates.push({ ym, rate, worked, possible: workDaysInMonth })
-      totalWork += worked
-      totalPossible += workDaysInMonth
+      // この月の除外日数（営業日のみカウント）
+      for (let day = 1; day <= dim; day++) {
+        const dateKey = `${ym}${String(day).padStart(2, '0')}`
+        if (excludedDates.has(dateKey)) {
+          const dow = new Date(y, m - 1, day).getDay()
+          if (dow !== 0 && dow !== 6) excludedDaysInMonth++
+        }
+      }
+
+      const adjustedPossible = Math.max(0, workDaysInMonth - excludedDaysInMonth)
+      const isFullyExcluded = adjustedPossible === 0
+      const rate = adjustedPossible > 0 ? (worked / adjustedPossible) * 100 : 0
+
+      monthlyRates.push({ ym, rate, worked, possible: adjustedPossible, excluded: isFullyExcluded })
+      if (!isFullyExcluded) {
+        totalWork += worked
+        totalPossible += adjustedPossible
+      }
     }
 
     const avgRate = totalPossible > 0 ? (totalWork / totalPossible) * 100 : 0
