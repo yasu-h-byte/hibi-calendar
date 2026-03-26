@@ -278,6 +278,7 @@ export default function MonthlyPage() {
   const workerTotals = useMemo(() => {
     return {
       workDays: filteredWorkers.reduce((s, w) => s + w.workDays, 0),
+      workAll: filteredWorkers.reduce((s, w) => s + (w.workAll || w.workDays), 0),
       plDays: filteredWorkers.reduce((s, w) => s + w.plDays, 0),
       otHours: filteredWorkers.reduce((s, w) => s + w.otHours, 0),
       totalCost: filteredWorkers.reduce((s, w) => s + w.totalCost, 0),
@@ -580,9 +581,9 @@ export default function MonthlyPage() {
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
-                        <div>{fmtNum(w.workDays)}</div>
+                        <div>{w.workAll % 1 !== 0 ? w.workAll.toFixed(1) : w.workAll}</div>
                         {hasComp && (
-                          <div className="text-[10px] text-gray-400">うち補0.6</div>
+                          <div className="text-[10px] text-gray-400">うち補{(compDays * 0.6).toFixed(1)}</div>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
@@ -621,7 +622,7 @@ export default function MonthlyPage() {
                   <td className="px-3 py-3">合計 ({filteredWorkers.length}名)</td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.workDays)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{workerTotals.workAll % 1 !== 0 ? workerTotals.workAll.toFixed(1) : workerTotals.workAll}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.plDays)}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.otHours)}</td>
                   <td className="px-3 py-3 text-right">—</td>
