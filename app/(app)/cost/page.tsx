@@ -41,6 +41,7 @@ export default function CostPage() {
   })
   // Local billing edits: siteId_ym -> number[]
   const [billingEdits, setBillingEdits] = useState<Record<string, number[]>>({})
+  const [expandedBilling, setExpandedBilling] = useState<string | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
@@ -220,47 +221,30 @@ export default function CostPage() {
                       {/* Billing column with multiple rows */}
                       <td className="px-3 py-2 text-right">
                         {isMultiMonth ? (
-                          /* Multi-month: show each month inline */
-                          <div className="space-y-1">
-                            <div className="flex gap-1 justify-end flex-wrap">
-                              {ymRange.slice(0, 6).map(m => {
-                                const key = `${s.id}_${m}`
-                                const rows = billingEdits[key] || [0]
-                                return (
-                                  <div key={m} className="text-center">
-                                    <div className="text-[10px] text-gray-400 mb-0.5">{ymLabel(m)}</div>
-                                    {rows.map((val, ri) => (
-                                      <div key={ri} className="flex items-center gap-0.5 mb-0.5">
-                                        <input
-                                          type="text"
-                                          defaultValue={val ? val.toLocaleString() : ''}
-                                          placeholder="0"
-                                          onFocus={(e) => { e.target.value = String(Number(e.target.value.replace(/,/g, '')) || '') }}
-                                          onBlur={(e) => {
-                                            const v = Number(e.target.value.replace(/,/g, '')) || 0
-                                            e.target.value = v ? v.toLocaleString() : ''
-                                            updateBillingRow(s.id, m, ri, v)
-                                            const updated = [...rows]
-                                            updated[ri] = v
-                                            saveBilling(s.id, m, updated)
-                                          }}
-                                          className="w-24 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-1.5 py-0.5 text-xs tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
-                                        />
-                                        {rows.length > 1 && (
-                                          <button onClick={() => { removeBillingRow(s.id, m, ri); const updated = [...rows]; updated.splice(ri, 1); saveBilling(s.id, m, updated.length > 0 ? updated : [0]) }}
-                                            className="text-gray-300 hover:text-red-400 text-xs leading-none">×</button>
-                                        )}
-                                      </div>
-                                    ))}
-                                    <button onClick={() => addBillingRow(s.id, m)}
-                                      className="text-[10px] text-blue-400 hover:text-blue-600">+ 行追加</button>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                            <div className="text-xs font-bold tabular-nums border-t border-gray-100 pt-1">
-                              合計: {fmtYen(s.billing)}
-                            </div>
+                          /* Multi-month: show total, click to expand monthly detail */
+                          <div>
+                            <button
+                              onClick={() => setExpandedBilling(prev => prev === s.id ? null : s.id)}
+                              className="text-right w-full font-bold tabular-nums hover:text-hibi-navy transition"
+                            >
+                              {fmtYen(s.billing)}
+                              <span className="text-[10px] text-gray-400 ml-1">{expandedBilling === s.id ? '▲' : '▼'}</span>
+                            </button>
+                            {expandedBilling === s.id && (
+                              <div className="mt-2 border-t border-gray-100 dark:border-gray-700 pt-2 space-y-1">
+                                {ymRange.map(m => {
+                                  const key = `${s.id}_${m}`
+                                  const rows = billingEdits[key] || [0]
+                                  const monthTotal = rows.reduce((a: number, b: number) => a + b, 0)
+                                  return (
+                                    <div key={m} className="flex items-center justify-between text-xs">
+                                      <span className="text-gray-500 w-8">{ymLabel(m)}</span>
+                                      <span className="tabular-nums">{monthTotal > 0 ? fmtYen(monthTotal) : '—'}</span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           /* Single month: show billing rows with add/remove */
