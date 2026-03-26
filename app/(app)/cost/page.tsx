@@ -232,17 +232,19 @@ export default function CostPage() {
                                     {rows.map((val, ri) => (
                                       <div key={ri} className="flex items-center gap-0.5 mb-0.5">
                                         <input
-                                          type="number"
-                                          defaultValue={val || ''}
+                                          type="text"
+                                          defaultValue={val ? val.toLocaleString() : ''}
                                           placeholder="0"
+                                          onFocus={(e) => { e.target.value = String(Number(e.target.value.replace(/,/g, '')) || '') }}
                                           onBlur={(e) => {
-                                            const v = Number(e.target.value) || 0
+                                            const v = Number(e.target.value.replace(/,/g, '')) || 0
+                                            e.target.value = v ? v.toLocaleString() : ''
                                             updateBillingRow(s.id, m, ri, v)
                                             const updated = [...rows]
                                             updated[ri] = v
                                             saveBilling(s.id, m, updated)
                                           }}
-                                          className="w-16 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-1 py-0.5 text-xs tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
+                                          className="w-24 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-1.5 py-0.5 text-xs tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
                                         />
                                         {rows.length > 1 && (
                                           <button onClick={() => { removeBillingRow(s.id, m, ri); const updated = [...rows]; updated.splice(ri, 1); saveBilling(s.id, m, updated.length > 0 ? updated : [0]) }}
@@ -271,17 +273,19 @@ export default function CostPage() {
                                   {rows.map((val, ri) => (
                                     <div key={ri} className="flex items-center justify-end gap-1">
                                       <input
-                                        type="number"
-                                        defaultValue={val || ''}
+                                        type="text"
+                                        defaultValue={val ? val.toLocaleString() : ''}
                                         placeholder="0"
+                                        onFocus={(e) => { e.target.value = String(Number(e.target.value.replace(/,/g, '')) || '') }}
                                         onBlur={(e) => {
-                                          const v = Number(e.target.value) || 0
+                                          const v = Number(e.target.value.replace(/,/g, '')) || 0
+                                          e.target.value = v ? v.toLocaleString() : ''
                                           updateBillingRow(s.id, ym, ri, v)
                                           const updated = [...rows]
                                           updated[ri] = v
                                           saveBilling(s.id, ym, updated)
                                         }}
-                                        className="w-24 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-sm tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
+                                        className="w-28 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-sm tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
                                       />
                                       {rows.length > 1 && (
                                         <button onClick={() => { removeBillingRow(s.id, ym, ri); const updated = [...rows]; updated.splice(ri, 1); saveBilling(s.id, ym, updated.length > 0 ? updated : [0]) }}
@@ -311,12 +315,12 @@ export default function CostPage() {
                         {s.tobiEquiv > 0 ? fmtNum(s.tobiEquiv) : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
-                        {totalWorkers > 0 ? (
+                        {s.tobiEquiv > 0 ? (
                           <span>
-                            {fmtYen(Math.round(s.billing / totalWorkers))}
+                            {fmtYen(Math.round(s.billing / s.tobiEquiv))}
                             {s.tobiBase > 0 && (
-                              <span className={`ml-1 text-xs font-medium ${Math.round(s.billing / totalWorkers) >= s.tobiBase ? 'text-blue-600' : 'text-red-600'}`}>
-                                {Math.round(s.billing / totalWorkers / s.tobiBase * 100)}%
+                              <span className={`ml-1 text-xs font-medium ${Math.round(s.billing / s.tobiEquiv) >= s.tobiBase ? 'text-blue-600' : 'text-red-600'}`}>
+                                {Math.round(s.billing / s.tobiEquiv / s.tobiBase * 100)}%
                               </span>
                             )}
                           </span>
