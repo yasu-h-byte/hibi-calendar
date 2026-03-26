@@ -842,7 +842,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Filter monthlyTrend: exclude months with no actual work data (equiv === 0)
-    const filteredMonthlyTrend = monthlyTrend.filter(t => t.equiv > 0)
+    // Also exclude months with no confirmed billing (billing === 0)
+    const filteredMonthlyTrend = monthlyTrend.filter(t => t.equiv > 0 && t.billing > 0)
 
     return NextResponse.json({
       kpi,

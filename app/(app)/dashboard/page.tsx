@@ -1165,7 +1165,11 @@ function KPILineChart({
 
   const billingPath = makePath(data.map(d => d.billingPerManDay))
   const costPath = makePath(data.map(d => d.costPerManDay))
-  const profitPath = makePath(data.map(d => d.profitPerManDay))
+
+  // Bar width for profit bars
+  const barW = 30
+  // Zero line Y position for profit bars, clamped to chart area
+  const zeroY = Math.min(getY(0), padT + chartH)
 
   // Y-axis gridlines (5 ticks)
   const yTickCount = 5
@@ -1220,10 +1224,30 @@ function KPILineChart({
           基準{fmtYen(baseline)}
         </text>
 
+        {/* Profit bars (drawn first so lines render on top) */}
+        {data.map((d, i) => {
+          const x = getX(i)
+          const val = d.profitPerManDay
+          const barTop = val >= 0 ? getY(val) : zeroY
+          const barBottom = val >= 0 ? zeroY : getY(val)
+          const h = barBottom - barTop
+          return (
+            <rect
+              key={`bar-${i}`}
+              x={x - barW / 2}
+              y={barTop}
+              width={barW}
+              height={Math.max(h, 1)}
+              fill={val >= 0 ? COLORS.profit : '#DC2626'}
+              opacity={0.7}
+              rx={2}
+            />
+          )
+        })}
+
         {/* Lines */}
         <path d={billingPath} fill="none" stroke={COLORS.billing} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
         <path d={costPath} fill="none" stroke={COLORS.cost} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-        <path d={profitPath} fill="none" stroke={COLORS.profit} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
 
         {/* Dots and value labels - billing */}
         {data.map((d, i) => {
@@ -1276,17 +1300,23 @@ function KPILineChart({
           )
         })}
 
-        {/* Dots and value labels - profit */}
+        {/* Value labels on profit bars */}
         {data.map((d, i) => {
           const x = getX(i)
-          const y = getY(d.profitPerManDay)
+          const val = d.profitPerManDay
+          const barTop = val >= 0 ? getY(val) : zeroY
           return (
             <g key={`pl-${i}`}>
-              <circle cx={x} cy={y} r={3.5} fill={COLORS.profit} stroke="white" strokeWidth="1.5" />
-              {/* Only show profit value if it doesn't overlap too much */}
               {(i === 0 || i === data.length - 1 || i % 2 === 0) && (
-                <text x={x + 8} y={y + 4} textAnchor="start" fill={COLORS.profit} fontSize="8" fontWeight="600">
-                  {fmtYen(d.profitPerManDay)}
+                <text
+                  x={x}
+                  y={barTop - 4}
+                  textAnchor="middle"
+                  fill={val >= 0 ? COLORS.profit : '#DC2626'}
+                  fontSize="8"
+                  fontWeight="600"
+                >
+                  {fmtYen(val)}
                 </text>
               )}
             </g>
@@ -1314,7 +1344,7 @@ function KPILineChart({
           <span className="inline-block w-4 h-0.5 rounded" style={{ backgroundColor: COLORS.cost }} /> 原価/人工
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-0.5 rounded" style={{ backgroundColor: COLORS.profit }} /> 差益/人工
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS.profit, opacity: 0.7 }} /> 差益/人工
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-4 border-t-2 border-dashed" style={{ borderColor: COLORS.baseline }} /> 基準
