@@ -25,6 +25,7 @@ export interface MainData {
 export interface RawWorker {
   id: number; name: string; org: string; visa: string; job: string
   rate: number; otMul: number; hireDate: string; retired?: string; token: string
+  salary?: number
 }
 
 export interface RawSite {
@@ -617,11 +618,13 @@ export interface WorkerMonthly {
   job: string
   rate: number
   otMul: number
+  salary?: number
   sites: string[]
   workDays: number
   actualWorkDays: number
   compDays: number
   workAll: number
+  halfDays?: number
   otHours: number
   plDays: number
   plUsed: number
@@ -633,6 +636,13 @@ export interface WorkerMonthly {
   absence: number
   absentCost: number
   netPay: number
+  // 月給制 salary calc fields
+  prescribedHours?: number
+  actualWorkHours?: number
+  legalOtHours?: number
+  otAllowance?: number
+  absentDeduction?: number
+  salaryNetPay?: number
 }
 
 export interface SubconMonthly {
@@ -679,7 +689,7 @@ export function computeMonthly(
     if (w.retired) continue
     workerMap.set(w.id, {
       id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
-      rate: w.rate, otMul: w.otMul, sites: [],
+      rate: w.rate, otMul: w.otMul, salary: w.salary, sites: [],
       workDays: 0, actualWorkDays: 0, compDays: 0, workAll: 0, otHours: 0,
       plDays: 0, plUsed: 0, restDays: 0, siteOffDays: 0,
       cost: 0, otCost: 0, totalCost: 0,
@@ -781,7 +791,35 @@ export function computeMonthly(
     wm.otCost = wm.otHours * (wm.rate / 8) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
 
-    if (prescribedDays > 0) {
+    if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && prescribedDays > 0) {
+      // 月給制の外国人: salary-based calculation
+      const prescribedH = prescribedDays * 7
+      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
+      const legalOt = Math.max(0, actualWorkH - prescribedH)
+      const hourlyRate = wm.salary / prescribedH
+      const otAllowance = Math.round(hourlyRate * 1.25 * legalOt)
+      const absentDays = Math.max(0, prescribedDays - wm.actualWorkDays - wm.plUsed)
+      const absentDeduction = Math.round(wm.salary / prescribedDays * absentDays)
+      const salaryNet = wm.salary - absentDeduction + otAllowance
+
+      wm.prescribedHours = prescribedH
+      wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
+      wm.legalOtHours = Math.round(legalOt * 10) / 10
+      wm.otAllowance = otAllowance
+      wm.absentDeduction = absentDeduction
+      wm.salaryNetPay = salaryNet
+
+      // Also set legacy absence fields
+      wm.absence = absentDays
+      wm.absentCost = absentDeduction
+      wm.netPay = salaryNet
+    } else if (wm.visa === 'none') {
+      // 日給月給制の日本人: daily-rate based
+      // 基本給 = 日額(rate) × 実出勤日数
+      // 残業手当 = (日額 ÷ 7h) × otMul × 残業時間
+      // 支給額 = 基本給 + 残業手当
+      wm.netPay = wm.totalCost
+    } else if (prescribedDays > 0) {
       wm.absence = Math.max(0, prescribedDays - wm.workDays - wm.compDays - wm.plUsed)  // 0.6は1日出勤扱い
       wm.absentCost = Math.round(wm.absence * wm.rate)
       wm.netPay = wm.totalCost - wm.absentCost

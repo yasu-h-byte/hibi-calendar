@@ -42,6 +42,8 @@ interface SubconDayEntry {
   on: number
 }
 
+type DayType = 'work' | 'off' | 'holiday'
+
 interface GridData {
   site: SiteOption
   year: number
@@ -59,6 +61,7 @@ interface GridData {
   siteWorkDays: number | null
   allWorkers: Worker[]
   foremanOverride: { name: string; note: string } | null
+  calendarDays: Record<string, DayType> | null
 }
 
 // ── Visa badge helper ──
@@ -630,6 +633,26 @@ export default function AttendanceGridPage() {
     return warnings
   }, [data, workerEntries])
 
+  // Holiday work warnings (calendar off/holiday days with attendance)
+  const holidayWorkWarnings = useMemo(() => {
+    if (!data || !data.calendarDays) return []
+    const warnings: { workerName: string; day: number; dayType: string }[] = []
+    for (const w of data.workers) {
+      const wId = String(w.id)
+      const entries = workerEntries[wId] || {}
+      for (let d = 1; d <= data.daysInMonth; d++) {
+        const calDay = data.calendarDays![String(d)]
+        if (calDay && (calDay === 'off' || calDay === 'holiday')) {
+          const entry = entries[d]
+          if (entry && entry.w > 0 && !entry.p) {
+            warnings.push({ workerName: w.name, day: d, dayType: calDay === 'holiday' ? '祝日' : '休日' })
+          }
+        }
+      }
+    }
+    return warnings
+  }, [data, workerEntries])
+
   // ── Work dropdown value ──
 
   function getWorkValue(entry: AttEntry | null | undefined): string {
@@ -819,6 +842,26 @@ export default function AttendanceGridPage() {
         </div>
       )}
 
+      {/* ── Holiday work warnings ── */}
+      {holidayWorkWarnings.length > 0 && (
+        <div className="bg-orange-50 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-xl px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 font-bold text-orange-800 dark:text-orange-300 mb-1">
+            <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            休日出勤あり ({holidayWorkWarnings.length}件)
+          </div>
+          <div className="text-orange-700 dark:text-orange-400 text-xs leading-relaxed">
+            {holidayWorkWarnings.map((w, i) => (
+              <span key={i}>
+                {i > 0 && ', '}
+                {w.workerName} ({w.day}日/{w.dayType})
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Grid Table ── */}
       {!loading && data && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
@@ -953,13 +996,19 @@ export default function AttendanceGridPage() {
                             const workVal = getWorkValue(entry)
                             const otVal = entry?.o || 0
                             const canOt = entry && entry.w > 0 && entry.w !== 0.6
+                            // 休日出勤判定: カレンダーがoff/holidayなのに出勤あり
+                            const calDay = data.calendarDays?.[String(d.day)]
+                            const isHolidayWork = calDay && (calDay === 'off' || calDay === 'holiday') && entry && entry.w > 0 && !entry.p
 
                             return (
                               <td
                                 key={d.day}
-                                className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)}`}
+                                className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)} ${isHolidayWork ? 'relative' : ''}`}
                                 style={{ width: 48, minWidth: 48, maxWidth: 48 }}
                               >
+                                {isHolidayWork && (
+                                  <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
+                                )}
                                 <div className="flex flex-col">
                                   {/* Work dropdown - 大きめ */}
                                   <select

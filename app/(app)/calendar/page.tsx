@@ -16,7 +16,7 @@ interface SiteCalendarData {
   workers: { id: number; name: string; signed: boolean; signedAt: string | null }[]
 }
 
-function DaySummary({ days }: { days: Record<string, DayType> }) {
+function DaySummary({ days, year, month }: { days: Record<string, DayType>; year: number; month: number }) {
   const counts = useMemo(() => {
     const values = Object.values(days)
     return {
@@ -26,11 +26,37 @@ function DaySummary({ days }: { days: Record<string, DayType> }) {
     }
   }, [days])
 
+  const legalLimit = useMemo(() => {
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const limitHours = daysInMonth * 40 / 7
+    const maxDays = Math.floor(limitHours / 7)
+    const prescribedHours = counts.work * 7
+    const exceeds = prescribedHours > limitHours
+    return { daysInMonth, limitHours, maxDays, prescribedHours, exceeds }
+  }, [year, month, counts.work])
+
   return (
-    <div className="flex items-center gap-4 text-sm bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2">
-      <span className="text-blue-600 dark:text-blue-400 font-medium">出勤日数: {counts.work}日</span>
-      <span className="text-gray-500 dark:text-gray-400">休日: {counts.off}日</span>
-      <span className="text-red-500 dark:text-red-400">祝日: {counts.holiday}日</span>
+    <div className="space-y-1">
+      <div className="flex items-center gap-4 text-sm bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2">
+        <span className="text-blue-600 dark:text-blue-400 font-medium">出勤日数: {counts.work}日</span>
+        <span className="text-gray-500 dark:text-gray-400">休日: {counts.off}日</span>
+        <span className="text-red-500 dark:text-red-400">祝日: {counts.holiday}日</span>
+      </div>
+      <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg ${
+        legalLimit.exceeds
+          ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-bold'
+          : 'bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400'
+      }`}>
+        {legalLimit.exceeds && (
+          <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+        )}
+        <span>
+          出勤{counts.work}日 ({legalLimit.prescribedHours}h) / 上限{legalLimit.maxDays}日 ({(Math.round(legalLimit.limitHours * 10) / 10).toFixed(1)}h)
+        </span>
+        {legalLimit.exceeds && <span>- 法定上限超過！</span>}
+      </div>
     </div>
   )
 }
@@ -122,11 +148,16 @@ export default function CalendarManagePage() {
 
   const handleApprove = async (siteId: string) => {
     if (!user || !confirm('このカレンダーを承認しますか？')) return
-    await fetch('/api/calendar/approve', {
+    const res = await fetch('/api/calendar/approve', {
       method: 'POST',
       headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
       body: JSON.stringify({ siteId, ym, approvedBy: user.workerId }),
     })
+    if (!res.ok) {
+      const data = await res.json()
+      alert(data.error || '承認に失敗しました')
+      return
+    }
     fetchData()
   }
 
@@ -325,7 +356,7 @@ ${baseUrl}/calendar/public
                     </div>
 
                     {/* Day-type summary */}
-                    <DaySummary days={days} />
+                    <DaySummary days={days} year={y} month={m} />
 
                     {/* Working hours note */}
                     <div className="bg-blue-50 dark:bg-blue-900/20 dark:text-blue-200 rounded-lg p-3 text-sm">

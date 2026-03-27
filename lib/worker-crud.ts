@@ -12,6 +12,7 @@ export interface WorkerData {
   hireDate: string
   retired?: string
   token: string
+  salary?: number
 }
 
 function generateToken(): string {

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, getAssign } from '@/lib/compute'
 import { getApprovalForDay } from '@/lib/attendance'
-import { AttendanceEntry } from '@/types'
+import { AttendanceEntry, DayType } from '@/types'
+import { db } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 
 export async function GET(request: NextRequest) {
   if (!checkApiAuth(request)) {
@@ -107,6 +109,14 @@ export async function GET(request: NextRequest) {
     const siteWorkDaysForMonth = main.siteWorkDays[ym] ?? {}
     const siteWorkDaysValue = siteWorkDaysForMonth[siteId] ?? null
 
+    // Load approved site calendar for holiday work detection
+    const calYm = `${String(y)}-${String(m).padStart(2, '0')}`
+    const calDocId = `${siteId}_${calYm}`
+    const calSnap = await getDoc(doc(db, 'siteCalendar', calDocId))
+    const calData = calSnap.exists() ? calSnap.data() : null
+    const calendarDays: Record<string, DayType> | null =
+      calData?.status === 'approved' && calData?.days ? calData.days as Record<string, DayType> : null
+
     // All active workers (for assignment modal)
     const allWorkers = main.workers
       .filter(w => !w.retired)
@@ -129,6 +139,7 @@ export async function GET(request: NextRequest) {
       siteWorkDays: siteWorkDaysValue,
       allWorkers,
       sites: main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name })),
+      calendarDays,
     })
   } catch (error) {
     console.error('Grid GET error:', error)

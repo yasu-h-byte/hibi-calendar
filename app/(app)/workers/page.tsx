@@ -14,6 +14,7 @@ interface WorkerExt extends Worker {
   otMul?: number
   hireDate?: string
   retired?: string
+  salary?: number
 }
 
 interface PLWorkerData {
@@ -43,7 +44,7 @@ function jobBadge(jobType?: string): { label: string; cls: string } {
 
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
-  rate: '', otMul: '1.25', hireDate: '', retired: '',
+  rate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
 }
 
 export default function WorkersPage() {
@@ -146,6 +147,7 @@ export default function WorkersPage() {
       otMul: String(w.otMul || 1.25),
       hireDate: w.hireDate || '',
       retired: w.retired || '',
+      salary: String(w.salary || ''),
     })
     setShowModal(true)
   }
@@ -155,8 +157,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, otMul: form.otMul, hireDate: form.hireDate }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined }
       await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       setShowModal(false)
       fetchWorkers()
@@ -270,6 +272,7 @@ export default function WorkersPage() {
                 日額 {sortKey === 'rate' && (sortAsc ? '↑' : '↓')}
               </th>
               <th className="px-3 py-3">OT倍率</th>
+              <th className="px-3 py-3">月給</th>
               <th className="px-3 py-3">有給発生月</th>
               <th className="px-3 py-3">有給残</th>
               <th className="px-3 py-3">📱</th>
@@ -278,9 +281,9 @@ export default function WorkersPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={11} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
             ) : sorted.map(w => {
               const pl = plData[w.id]
               const jb = jobBadge(w.jobType)
@@ -317,6 +320,9 @@ export default function WorkersPage() {
                   </td>
                   <td className="px-3 py-2.5 text-gray-500 text-sm">
                     {w.otMul ? `×${w.otMul}` : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
+                    {w.visaType && w.visaType !== 'none' && w.salary ? fmtYen(w.salary) : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-gray-500 text-sm">
                     {getPlGrantMonth(w.hireDate)}
@@ -435,6 +441,15 @@ export default function WorkersPage() {
                     className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                 </div>
               </div>
+
+              {form.visa !== 'none' && (
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">月給（円）※月給制の外国人のみ</label>
+                  <input type="number" value={form.salary} onChange={e => setForm({ ...form, salary: e.target.value })}
+                    placeholder="200000"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                </div>
+              )}
 
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">入社日</label>

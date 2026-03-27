@@ -23,6 +23,7 @@ export async function getWorkers(): Promise<Worker[]> {
     otMul: (w.otMul as number) || 1.25,
     hireDate: (w.hireDate as string) || '',
     retired: (w.retired as string) || '',
+    salary: (w.salary as number) || undefined,
   }))
 
   return workers

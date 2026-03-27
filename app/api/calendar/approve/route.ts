@@ -19,6 +19,21 @@ export async function POST(request: NextRequest) {
     const calData = calSnap.exists() ? calSnap.data() : null
     const days: Record<string, DayType> | null = calData?.days || null
 
+    // 法定上限チェック（1ヶ月単位の変形労働時間制）
+    if (days) {
+      const workDayCount = Object.values(days).filter(d => d === 'work').length
+      const [checkY, checkM] = ym.split('-').map(Number)
+      const daysInMonth = new Date(checkY, checkM, 0).getDate()
+      const legalLimitHours = daysInMonth * 40 / 7
+      const prescribedHours = workDayCount * 7
+      if (prescribedHours > legalLimitHours) {
+        const maxDays = Math.floor(legalLimitHours / 7)
+        return NextResponse.json({
+          error: `所定時間${prescribedHours}hが法定上限${(Math.round(legalLimitHours * 10) / 10).toFixed(1)}h（暦日${daysInMonth}日×40÷7）を超えています。出勤日数を${maxDays}日以下にしてください。`,
+        }, { status: 400 })
+      }
+    }
+
     await updateDoc(doc(db, 'siteCalendar', docId), {
       status: 'approved',
       approvedAt: new Date().toISOString(),

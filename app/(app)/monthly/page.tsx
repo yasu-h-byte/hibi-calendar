@@ -15,6 +15,7 @@ interface WorkerMonthly {
   job: string
   rate: number
   otMul: number
+  salary?: number
   sites: string[]
   workDays: number
   actualWorkDays: number
@@ -32,6 +33,13 @@ interface WorkerMonthly {
   absence: number
   absentCost: number
   netPay: number
+  // Salary calc fields
+  prescribedHours?: number
+  actualWorkHours?: number
+  legalOtHours?: number
+  otAllowance?: number
+  absentDeduction?: number
+  salaryNetPay?: number
 }
 
 interface SubconMonthly {
@@ -349,6 +357,7 @@ export default function MonthlyPage() {
   const isHfuTab = tab === 'hfu'
   const prescribedDaysNum = Number(prescribedDays) || 0
   const showAbsenceColumns = isHfuTab && prescribedDaysNum > 0
+  const showSalaryColumns = isHfuTab && prescribedDaysNum > 0
 
   function calcAbsentDays(w: WorkerMonthly): number {
     // Use server-computed value if available, otherwise calculate locally
@@ -373,7 +382,7 @@ export default function MonthlyPage() {
   const isWorkerTab = tab !== 'subcon'
 
   // Dynamic column count for empty state
-  const workerColCount = 8 + (showAbsenceColumns ? 3 : 0)
+  const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + (showSalaryColumns ? 6 : 0)
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -542,6 +551,16 @@ export default function MonthlyPage() {
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700">差引支給</th>
                   </>
                 )}
+                {showSalaryColumns && (
+                  <>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">所定時間</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">実労働時間</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">法定残業h</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">残業手当</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">欠勤控除</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">差引支給額</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -611,6 +630,28 @@ export default function MonthlyPage() {
                           </td>
                         </>
                       )}
+                      {showSalaryColumns && (
+                        <>
+                          <td className="px-3 py-2.5 text-right tabular-nums bg-green-50/50 text-gray-600">
+                            {w.prescribedHours != null ? `${w.prescribedHours}h` : '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums bg-green-50/50 text-gray-600">
+                            {w.actualWorkHours != null ? `${w.actualWorkHours}h` : '—'}
+                          </td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.legalOtHours || 0) > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                            {(w.legalOtHours || 0) > 0 ? `${w.legalOtHours}h` : '—'}
+                          </td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.otAllowance || 0) > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                            {(w.otAllowance || 0) > 0 ? fmtYen(w.otAllowance!) : '—'}
+                          </td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.absentDeduction || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                            {(w.absentDeduction || 0) > 0 ? `-${fmtYen(w.absentDeduction!)}` : '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums bg-green-50/50 font-medium">
+                            {w.salaryNetPay != null ? fmtYen(w.salaryNetPay) : '—'}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   )
                 })
@@ -645,6 +686,33 @@ export default function MonthlyPage() {
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums bg-red-50/50">
                         {fmtYen(filteredWorkers.reduce((s, w) => s + calcNetPay(w), 0))}
+                      </td>
+                    </>
+                  )}
+                  {showSalaryColumns && (
+                    <>
+                      <td className="px-3 py-3 bg-green-50/50"></td>
+                      <td className="px-3 py-3 bg-green-50/50"></td>
+                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                        {(() => {
+                          const totalLegalOt = filteredWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0)
+                          return totalLegalOt > 0 ? `${Math.round(totalLegalOt * 10) / 10}h` : '—'
+                        })()}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                        {(() => {
+                          const totalOtAllow = filteredWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0)
+                          return totalOtAllow > 0 ? fmtYen(totalOtAllow) : '—'
+                        })()}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50 text-red-600">
+                        {(() => {
+                          const totalAbsDed = filteredWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0)
+                          return totalAbsDed > 0 ? `-${fmtYen(totalAbsDed)}` : '—'
+                        })()}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                        {fmtYen(filteredWorkers.reduce((s, w) => s + (w.salaryNetPay || 0), 0))}
                       </td>
                     </>
                   )}

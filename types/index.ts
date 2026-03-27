@@ -10,6 +10,7 @@ export interface Worker {
   otMul?: number
   hireDate?: string
   retired?: string
+  salary?: number
 }
 
 export interface Site {
