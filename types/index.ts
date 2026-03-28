@@ -7,6 +7,7 @@ export interface Worker {
   token: string
   jobType?: string // '役員' | '職長' | 'とび' | '土工'
   rate?: number
+  hourlyRate?: number
   otMul?: number
   hireDate?: string
   retired?: string

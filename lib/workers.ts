@@ -20,6 +20,7 @@ export async function getWorkers(): Promise<Worker[]> {
     token: (w.token as string) || '',
     jobType: (w.job as string) || '',
     rate: (w.rate as number) || 0,
+    hourlyRate: (w.hourlyRate as number) || undefined,
     otMul: (w.otMul as number) || 1.25,
     hireDate: (w.hireDate as string) || '',
     retired: (w.retired as string) || '',

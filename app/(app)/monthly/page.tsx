@@ -14,6 +14,7 @@ interface WorkerMonthly {
   visa: string
   job: string
   rate: number
+  hourlyRate?: number
   otMul: number
   salary?: number
   sites: string[]
@@ -33,10 +34,12 @@ interface WorkerMonthly {
   absence: number
   absentCost: number
   netPay: number
-  // Salary calc fields
+  // Salary calc fields (variable working hours system)
   prescribedHours?: number
   actualWorkHours?: number
   legalOtHours?: number
+  dailyOtHours?: number
+  basePay?: number
   otAllowance?: number
   absentDeduction?: number
   salaryNetPay?: number
@@ -357,7 +360,8 @@ export default function MonthlyPage() {
   const isHfuTab = tab === 'hfu'
   const prescribedDaysNum = Number(prescribedDays) || 0
   const showAbsenceColumns = isHfuTab && prescribedDaysNum > 0
-  const showSalaryColumns = isHfuTab && prescribedDaysNum > 0
+  // Show salary columns for all tabs (visible for all workers)
+  const showSalaryColumns = true
 
   function calcAbsentDays(w: WorkerMonthly): number {
     // Use server-computed value if available, otherwise calculate locally
@@ -382,7 +386,7 @@ export default function MonthlyPage() {
   const isWorkerTab = tab !== 'subcon'
 
   // Dynamic column count for empty state
-  const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + (showSalaryColumns ? 6 : 0)
+  const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + 4
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -457,8 +461,8 @@ export default function MonthlyPage() {
           </button>
         ))}
 
-        {/* 所定日数 input - HFU tab only */}
-        {isHfuTab && (
+        {/* 所定日数 input */}
+        {isWorkerTab && (
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600">
             <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">所定日数:</label>
             <input
@@ -553,12 +557,10 @@ export default function MonthlyPage() {
                 )}
                 {showSalaryColumns && (
                   <>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">所定時間</th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">実労働時間</th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">法定残業h</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">基本給</th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">残業手当</th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">欠勤控除</th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">差引支給額</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">支給額合計</th>
                   </>
                 )}
               </tr>
@@ -633,22 +635,16 @@ export default function MonthlyPage() {
                       {showSalaryColumns && (
                         <>
                           <td className="px-3 py-2.5 text-right tabular-nums bg-green-50/50 text-gray-600">
-                            {w.prescribedHours != null ? `${w.prescribedHours}h` : '—'}
-                          </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums bg-green-50/50 text-gray-600">
-                            {w.actualWorkHours != null ? `${w.actualWorkHours}h` : '—'}
-                          </td>
-                          <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.legalOtHours || 0) > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
-                            {(w.legalOtHours || 0) > 0 ? `${w.legalOtHours}h` : '—'}
+                            {w.basePay != null && w.basePay > 0 ? fmtYen(w.basePay) : '—'}
                           </td>
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.otAllowance || 0) > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
                             {(w.otAllowance || 0) > 0 ? fmtYen(w.otAllowance!) : '—'}
                           </td>
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.absentDeduction || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                            {(w.absentDeduction || 0) > 0 ? `-${fmtYen(w.absentDeduction!)}` : '—'}
+                            {w.visa !== 'none' && (w.absentDeduction || 0) > 0 ? `-${fmtYen(w.absentDeduction!)}` : '—'}
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums bg-green-50/50 font-medium">
-                            {w.salaryNetPay != null ? fmtYen(w.salaryNetPay) : '—'}
+                            {w.salaryNetPay != null && w.salaryNetPay > 0 ? fmtYen(w.salaryNetPay) : '—'}
                           </td>
                         </>
                       )}
@@ -691,13 +687,8 @@ export default function MonthlyPage() {
                   )}
                   {showSalaryColumns && (
                     <>
-                      <td className="px-3 py-3 bg-green-50/50"></td>
-                      <td className="px-3 py-3 bg-green-50/50"></td>
                       <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
-                        {(() => {
-                          const totalLegalOt = filteredWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0)
-                          return totalLegalOt > 0 ? `${Math.round(totalLegalOt * 10) / 10}h` : '—'
-                        })()}
+                        {fmtYen(filteredWorkers.reduce((s, w) => s + (w.basePay || 0), 0))}
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
                         {(() => {

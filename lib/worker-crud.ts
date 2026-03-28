@@ -8,6 +8,7 @@ export interface WorkerData {
   visa: string     // 'none' | 'jisshu' | 'tokutei'
   job: string      // 'yakuin' | 'shokucho' | 'tobi' | 'doko'
   rate: number
+  hourlyRate?: number
   otMul: number
   hireDate: string
   retired?: string

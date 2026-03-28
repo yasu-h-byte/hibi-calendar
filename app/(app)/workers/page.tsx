@@ -11,6 +11,7 @@ const JOB_LABELS: Record<string, string> = { yakuin: '役員', shokucho: '職長
 
 interface WorkerExt extends Worker {
   rate?: number
+  hourlyRate?: number
   otMul?: number
   hireDate?: string
   retired?: string
@@ -44,7 +45,7 @@ function jobBadge(jobType?: string): { label: string; cls: string } {
 
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
-  rate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
+  rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
 }
 
 export default function WorkersPage() {
@@ -144,6 +145,7 @@ export default function WorkersPage() {
       visa: w.visaType || 'none',
       job: w.jobType || 'tobi',
       rate: String(w.rate || ''),
+      hourlyRate: String(w.hourlyRate || ''),
       otMul: String(w.otMul || 1.25),
       hireDate: w.hireDate || '',
       retired: w.retired || '',
@@ -157,8 +159,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined }
       await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       setShowModal(false)
       fetchWorkers()
@@ -272,6 +274,7 @@ export default function WorkersPage() {
                 日額 {sortKey === 'rate' && (sortAsc ? '↑' : '↓')}
               </th>
               <th className="px-3 py-3">OT倍率</th>
+              <th className="px-3 py-3">時給</th>
               <th className="px-3 py-3">月給</th>
               <th className="px-3 py-3">有給発生月</th>
               <th className="px-3 py-3">有給残</th>
@@ -281,9 +284,9 @@ export default function WorkersPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+              <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
             ) : sorted.map(w => {
               const pl = plData[w.id]
               const jb = jobBadge(w.jobType)
@@ -322,7 +325,20 @@ export default function WorkersPage() {
                     {w.otMul ? `×${w.otMul}` : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                    {w.visaType && w.visaType !== 'none' && w.salary ? fmtYen(w.salary) : '—'}
+                    {w.visaType && w.visaType !== 'none' && w.hourlyRate ? (
+                      <div>
+                        <div>{fmtYen(w.hourlyRate)}</div>
+                        <div className="text-[10px] text-gray-400">日給{fmtYen(w.hourlyRate * 7)}</div>
+                      </div>
+                    ) : '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
+                    {w.visaType && w.visaType !== 'none' && w.hourlyRate ? (
+                      <div>
+                        <div>{fmtYen(w.hourlyRate * 168)}</div>
+                        <div className="text-[10px] text-gray-400">168h基準</div>
+                      </div>
+                    ) : w.visaType && w.visaType !== 'none' && w.salary ? fmtYen(w.salary) : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-gray-500 text-sm">
                     {getPlGrantMonth(w.hireDate)}
@@ -442,6 +458,19 @@ export default function WorkersPage() {
                 </div>
               </div>
 
+              {form.visa !== 'none' && (
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">時給（円）※月給制の外国人</label>
+                  <input type="number" value={form.hourlyRate} onChange={e => setForm({ ...form, hourlyRate: e.target.value })}
+                    placeholder="1200"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                  {form.hourlyRate && Number(form.hourlyRate) > 0 && (
+                    <div className="text-xs text-gray-400 mt-1">
+                      日給 = {fmtYen(Number(form.hourlyRate) * 7)} / 月給目安 = {fmtYen(Number(form.hourlyRate) * 168)}
+                    </div>
+                  )}
+                </div>
+              )}
               {form.visa !== 'none' && (
                 <div>
                   <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">月給（円）※月給制の外国人のみ</label>

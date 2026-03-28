@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, otMul, hireDate, salary } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, salary } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
         rate: Number(rate) || 0,
         otMul: Number(otMul) || 1.25,
         hireDate: hireDate || '',
+      }
+      if (hourlyRate !== undefined && hourlyRate !== '' && Number(hourlyRate) > 0) {
+        (workerData as Record<string, unknown>).hourlyRate = Number(hourlyRate)
       }
       if (salary !== undefined && salary !== '' && Number(salary) > 0) {
         (workerData as Record<string, unknown>).salary = Number(salary)
@@ -60,6 +63,7 @@ export async function POST(request: NextRequest) {
       if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
       delete updates.action
       if (updates.rate !== undefined) updates.rate = Number(updates.rate)
+      if (updates.hourlyRate !== undefined) updates.hourlyRate = Number(updates.hourlyRate) || 0
       if (updates.otMul !== undefined) updates.otMul = Number(updates.otMul)
       if (updates.salary !== undefined) updates.salary = Number(updates.salary) || 0
       await updateWorker(id, updates)
