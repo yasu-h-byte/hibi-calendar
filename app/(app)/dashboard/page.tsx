@@ -1026,8 +1026,8 @@ export default function DashboardPage() {
                             </span>
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${fw.visa === 'jisshu' ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'}`}>
-                              {fw.visa === 'jisshu' ? '技能実習' : fw.visa === 'tokutei' ? '特定技能' : fw.visa}
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${fw.visa.startsWith('jisshu') ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'}`}>
+                              {visaBadge(fw.visa)}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -1378,8 +1378,14 @@ function orgBadgeColor(org: string): string {
 }
 
 function visaBadge(visa: string): string {
-  if (visa === 'jisshu') return '技能実習'
-  if (visa === 'tokutei') return '特定技能'
+  if (visa.startsWith('jisshu')) {
+    const n = visa.replace('jisshu', '')
+    return n ? `実習${n}号` : '技能実習'
+  }
+  if (visa.startsWith('tokutei')) {
+    const n = visa.replace('tokutei', '')
+    return n ? `特定${n}号` : '特定技能'
+  }
   if (!visa || visa === 'none' || visa === '') return ''
   return visa
 }

@@ -5,7 +5,7 @@ export interface WorkerData {
   id: number
   name: string
   org: string      // 'hibi' | 'hfu'
-  visa: string     // 'none' | 'jisshu' | 'tokutei'
+  visa: string     // 'none' | 'jisshu1' | 'jisshu2' | 'jisshu3' | 'tokutei1' | 'tokutei2'
   job: string      // 'yakuin' | 'shokucho' | 'tobi' | 'doko'
   rate: number
   hourlyRate?: number

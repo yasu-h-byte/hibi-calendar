@@ -6,7 +6,16 @@ import { Worker } from '@/types'
 import { fmtYen } from '@/lib/format'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
-const VISA_LABELS: Record<string, string> = { none: '日本人', jisshu: '技能実習', tokutei: '特定技能' }
+const VISA_LABELS: Record<string, string> = {
+  none: '日本人',
+  jisshu1: '実習1号', jisshu2: '実習2号', jisshu3: '実習3号',
+  tokutei1: '特定1号', tokutei2: '特定2号',
+  // 旧データ互換
+  jisshu: '技能実習', tokutei: '特定技能',
+}
+const isGaikoku = (v: string) => v !== 'none' && v !== ''
+const isJisshu = (v: string) => v.startsWith('jisshu')
+const isTokutei = (v: string) => v.startsWith('tokutei')
 const JOB_LABELS: Record<string, string> = { yakuin: '役員', shokucho: '職長', tobi: 'とび', doko: '土工', jimu: '事務' }
 
 interface WorkerExt extends Worker {
@@ -310,9 +319,9 @@ export default function WorkersPage() {
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
-                    {w.visaType && w.visaType !== 'none' && (
+                    {w.visaType && isGaikoku(w.visaType) && (
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        w.visaType === 'jisshu' ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'
+                        isJisshu(w.visaType) ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'
                       }`}>
                         {VISA_LABELS[w.visaType] || w.visaType}
                       </span>
@@ -325,7 +334,7 @@ export default function WorkersPage() {
                     {w.otMul ? `×${w.otMul}` : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                    {w.visaType && w.visaType !== 'none' && w.hourlyRate ? (
+                    {w.visaType && isGaikoku(w.visaType) && w.hourlyRate ? (
                       <div>
                         <div>{fmtYen(w.hourlyRate)}</div>
                         <div className="text-[10px] text-gray-400">日給{fmtYen(w.hourlyRate * 7)}</div>
@@ -333,12 +342,12 @@ export default function WorkersPage() {
                     ) : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                    {w.visaType && w.visaType !== 'none' && w.hourlyRate ? (
+                    {w.visaType && isGaikoku(w.visaType) && w.hourlyRate ? (
                       <div>
                         <div>{fmtYen(w.hourlyRate * 168)}</div>
                         <div className="text-[10px] text-gray-400">168h基準</div>
                       </div>
-                    ) : w.visaType && w.visaType !== 'none' && w.salary ? fmtYen(w.salary) : '—'}
+                    ) : w.visaType && isGaikoku(w.visaType) && w.salary ? fmtYen(w.salary) : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-gray-500 text-sm">
                     {getPlGrantMonth(w.hireDate)}
@@ -439,8 +448,15 @@ export default function WorkersPage() {
                     <select value={form.visa} onChange={e => setForm({ ...form, visa: e.target.value })}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
                       <option value="none">なし（日本人）</option>
-                      <option value="jisshu">技能実習</option>
-                      <option value="tokutei">特定技能</option>
+                      <optgroup label="技能実習">
+                        <option value="jisshu1">実習1号</option>
+                        <option value="jisshu2">実習2号</option>
+                        <option value="jisshu3">実習3号</option>
+                      </optgroup>
+                      <optgroup label="特定技能">
+                        <option value="tokutei1">特定1号</option>
+                        <option value="tokutei2">特定2号</option>
+                      </optgroup>
                     </select>
                   </div>
                 </div>
@@ -472,7 +488,7 @@ export default function WorkersPage() {
               <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-3 bg-blue-50/30 dark:bg-blue-900/10">
                 <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">単価・給与</h4>
 
-                {form.visa !== 'none' ? (
+                {isGaikoku(form.visa) ? (
                   <>
                     {/* 外国人: 時給ベース */}
                     <div>

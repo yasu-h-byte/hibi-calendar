@@ -67,11 +67,15 @@ interface GridData {
 // ── Visa badge helper ──
 
 function visaBadge(visa: string): { label: string; cls: string } | null {
-  switch (visa) {
-    case 'jisshu': return { label: '実習', cls: 'bg-orange-100 text-orange-700' }
-    case 'tokutei': return { label: '特定', cls: 'bg-pink-100 text-pink-700' }
-    default: return null // 日本人 = no special badge, uses org badge
+  if (visa.startsWith('jisshu')) {
+    const num = visa.replace('jisshu', '')
+    return { label: num ? `実習${num}号` : '実習', cls: 'bg-orange-100 text-orange-700' }
   }
+  if (visa.startsWith('tokutei')) {
+    const num = visa.replace('tokutei', '')
+    return { label: num ? `特定${num}号` : '特定', cls: 'bg-pink-100 text-pink-700' }
+  }
+  return null // 日本人 = no special badge, uses org badge
 }
 
 function orgBadgeCls(org: string, visa: string): string {
