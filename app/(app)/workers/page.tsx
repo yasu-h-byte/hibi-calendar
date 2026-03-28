@@ -640,13 +640,13 @@ export default function WorkersPage() {
                         <div>
                           <label className="text-xs text-gray-400 block mb-1">時給換算（参考）</label>
                           <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
-                            ¥{Math.round(Number(form.rate) / 8).toLocaleString()}
+                            ¥{Math.round(Number(form.rate) / 7).toLocaleString()}
                           </div>
                         </div>
                         <div>
                           <label className="text-xs text-gray-400 block mb-1">残業単価（参考）</label>
                           <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
-                            ¥{Math.round(Number(form.rate) / 8 * Number(form.otMul || 1.25)).toLocaleString()}
+                            ¥{Math.round(Number(form.rate) / 7 * Number(form.otMul || 1.25)).toLocaleString()}
                           </div>
                         </div>
                       </div>
