@@ -40,6 +40,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
   { label: 'ユーザー管理', icon: '👤', href: '/users', section: 'システム', roles: ['admin'] },
   { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
   { label: 'アクティビティ', icon: '📝', href: '/activity', section: 'システム', roles: ['admin'] },
+  { label: '運用ガイド', icon: '📖', href: '/guide', section: 'システム', roles: ['admin', 'approver', 'jimu', 'foreman'] },
   ]
 }
 
@@ -78,6 +79,7 @@ const MENU_ID_MAP: Record<string, string> = {
   '/users': 'users',
   '/settings': 'settings',
   '/activity': 'activity',
+  '/guide': 'guide',
 }
 
 export default function Sidebar({ user, open, onClose }: { user: AuthUser; open: boolean; onClose: () => void }) {
