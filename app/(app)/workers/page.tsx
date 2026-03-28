@@ -205,13 +205,22 @@ export default function WorkersPage() {
   }
 
   // Filter & sort
+  const activeWorkers = workers.filter(w => !w.retired)
+  const retiredWorkers = workers.filter(w => !!w.retired)
   const filtered = workers.filter(w => {
-    if (tab === 'hibi') return w.company !== 'HFU'
-    if (tab === 'hfu') return w.company === 'HFU'
-    return true
+    if (tab === 'retired') return !!w.retired
+    if (tab === 'hibi') return w.company !== 'HFU' && !w.retired
+    if (tab === 'hfu') return w.company === 'HFU' && !w.retired
+    return !w.retired // 「全員」タブでも退職者は非表示
   })
 
   const sorted = [...filtered].sort((a, b) => {
+    // 退職者は常に末尾（「退職者」タブ以外）
+    if (tab !== 'retired') {
+      const aR = a.retired ? 1 : 0
+      const bR = b.retired ? 1 : 0
+      if (aR !== bR) return aR - bR
+    }
     let cmp = 0
     if (sortKey === 'id') cmp = a.id - b.id
     else if (sortKey === 'name') cmp = a.name.localeCompare(b.name)
@@ -225,8 +234,8 @@ export default function WorkersPage() {
     else { setSortKey(key); setSortAsc(true) }
   }
 
-  const hibiCount = workers.filter(w => w.company !== 'HFU').length
-  const hfuCount = workers.filter(w => w.company === 'HFU').length
+  const hibiCount = activeWorkers.filter(w => w.company !== 'HFU').length
+  const hfuCount = activeWorkers.filter(w => w.company === 'HFU').length
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
 
   return (
@@ -236,7 +245,7 @@ export default function WorkersPage() {
         <div>
           <h1 className="text-xl font-bold text-hibi-navy dark:text-white">人員マスタ</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            日比建設: {hibiCount}名 / HFU: {hfuCount}名 / 合計: {workers.length}名
+            在籍: {activeWorkers.length}名（日比 {hibiCount} / HFU {hfuCount}）{retiredWorkers.length > 0 && ` / 退職: ${retiredWorkers.length}名`}
           </p>
         </div>
         <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">
@@ -250,6 +259,7 @@ export default function WorkersPage() {
           { key: 'all', label: '全員' },
           { key: 'hibi', label: '日比建設' },
           { key: 'hfu', label: 'HFU' },
+          ...(retiredWorkers.length > 0 ? [{ key: 'retired', label: `退職者 (${retiredWorkers.length})` }] : []),
         ].map(t => (
           <button
             key={t.key}
