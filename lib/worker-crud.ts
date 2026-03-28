@@ -14,6 +14,7 @@ export interface WorkerData {
   retired?: string
   token: string
   salary?: number
+  visaExpiry?: string // 在留期限 YYYY-MM-DD
 }
 
 function generateToken(): string {

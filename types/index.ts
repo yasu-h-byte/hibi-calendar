@@ -12,6 +12,7 @@ export interface Worker {
   hireDate?: string
   retired?: string
   salary?: number
+  visaExpiry?: string // 在留期限 YYYY-MM-DD
 }
 
 export interface Site {

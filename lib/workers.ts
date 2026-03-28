@@ -25,6 +25,7 @@ export async function getWorkers(): Promise<Worker[]> {
     hireDate: (w.hireDate as string) || '',
     retired: (w.retired as string) || '',
     salary: (w.salary as number) || undefined,
+    visaExpiry: (w.visaExpiry as string) || '',
   }))
 
   return workers

@@ -55,6 +55,20 @@ function jobBadge(jobType?: string): { label: string; cls: string } {
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
+  visaExpiry: '',
+}
+
+function visaExpiryStatus(expiry: string): { label: string; cls: string; priority: number } | null {
+  if (!expiry) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const exp = new Date(expiry + 'T00:00:00')
+  const diff = Math.floor((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (diff < 0) return { label: '期限切れ', cls: 'bg-red-600 text-white', priority: 0 }
+  if (diff <= 30) return { label: `残${diff}日`, cls: 'bg-red-100 text-red-700 animate-pulse', priority: 1 }
+  if (diff <= 90) return { label: `残${diff}日`, cls: 'bg-orange-100 text-orange-700', priority: 2 }
+  if (diff <= 180) return { label: `残${Math.floor(diff / 30)}ヶ月`, cls: 'bg-yellow-100 text-yellow-700', priority: 3 }
+  return null
 }
 
 export default function WorkersPage() {
@@ -159,6 +173,7 @@ export default function WorkersPage() {
       hireDate: w.hireDate || '',
       retired: w.retired || '',
       salary: String(w.salary || ''),
+      visaExpiry: w.visaExpiry || '',
     })
     setShowModal(true)
   }
@@ -168,8 +183,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined }
       await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       setShowModal(false)
       fetchWorkers()
@@ -273,6 +288,33 @@ export default function WorkersPage() {
         ))}
       </div>
 
+      {/* Visa expiry alerts */}
+      {(() => {
+        const alerts = activeWorkers
+          .filter(w => w.visaExpiry && isGaikoku(w.visaType || ''))
+          .map(w => ({ ...w, status: visaExpiryStatus(w.visaExpiry!) }))
+          .filter(w => w.status)
+          .sort((a, b) => a.status!.priority - b.status!.priority)
+        if (alerts.length === 0) return null
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-red-500">
+            <h3 className="text-sm font-bold text-red-700 dark:text-red-400 mb-2">在留期限アラート</h3>
+            <div className="flex flex-wrap gap-2">
+              {alerts.map(w => (
+                <button key={w.id} onClick={() => openEdit(w)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition text-sm">
+                  <span className="font-medium">{w.name}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${w.status!.cls}`}>
+                    {w.status!.label}
+                  </span>
+                  <span className="text-xs text-gray-400">{w.visaExpiry}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
@@ -289,6 +331,7 @@ export default function WorkersPage() {
                 職種 {sortKey === 'jobType' && (sortAsc ? '↑' : '↓')}
               </th>
               <th className="px-3 py-3">在留資格</th>
+              <th className="px-3 py-3">在留期限</th>
               <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('rate')}>
                 日額 {sortKey === 'rate' && (sortAsc ? '↑' : '↓')}
               </th>
@@ -303,9 +346,9 @@ export default function WorkersPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={14} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+              <tr><td colSpan={14} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
             ) : sorted.map(w => {
               const pl = plData[w.id]
               const jb = jobBadge(w.jobType)
@@ -336,6 +379,16 @@ export default function WorkersPage() {
                         {VISA_LABELS[w.visaType] || w.visaType}
                       </span>
                     )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {w.visaExpiry && isGaikoku(w.visaType || '') ? (() => {
+                      const s = visaExpiryStatus(w.visaExpiry!)
+                      return s ? (
+                        <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${s.cls}`}>{s.label}</span>
+                      ) : (
+                        <span className="text-xs text-gray-400">{w.visaExpiry}</span>
+                      )
+                    })() : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
                     {w.rate ? fmtYen(w.rate) : '—'}
@@ -493,6 +546,31 @@ export default function WorkersPage() {
                   )}
                 </div>
               </div>
+
+              {/* ── 在留期限（外国人のみ） ── */}
+              {isGaikoku(form.visa) && (
+                <div className="border border-orange-200 dark:border-orange-800 rounded-lg p-3 space-y-2 bg-orange-50/30 dark:bg-orange-900/10">
+                  <h4 className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wide">在留情報</h4>
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">在留期限</label>
+                    <input type="date" value={form.visaExpiry} onChange={e => setForm({ ...form, visaExpiry: e.target.value })}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none" />
+                    {form.visaExpiry && (() => {
+                      const s = visaExpiryStatus(form.visaExpiry)
+                      return s ? (
+                        <div className={`mt-1.5 text-xs font-bold px-2 py-1 rounded ${s.cls}`}>
+                          {s.priority === 0 ? '在留期限が切れています' :
+                           s.priority === 1 ? `在留期限まで${s.label} — 更新手続きが必要です` :
+                           s.priority === 2 ? `在留期限まで${s.label}` :
+                           `在留期限まで${s.label}`}
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-xs text-green-600">在留期限まで余裕があります</div>
+                      )
+                    })()}
+                  </div>
+                </div>
+              )}
 
               {/* ── 単価・給与 ── */}
               <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-3 bg-blue-50/30 dark:bg-blue-900/10">
