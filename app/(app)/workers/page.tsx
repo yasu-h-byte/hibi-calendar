@@ -401,117 +401,157 @@ export default function WorkersPage() {
               {editId ? '社員編集' : '社員追加'}
             </h3>
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">名前 *</label>
-                <input
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  placeholder="例：山田太郎"
-                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-4">
+              {/* ── 基本情報 ── */}
+              <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-3">
+                <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">基本情報</h4>
                 <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">所属</label>
-                  <select value={form.org} onChange={e => setForm({ ...form, org: e.target.value })}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
-                    <option value="hibi">日比建設</option>
-                    <option value="hfu">HFU</option>
-                  </select>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">名前 *</label>
+                  <input
+                    value={form.name}
+                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    placeholder="例：山田太郎"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                  />
                 </div>
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">職種</label>
-                  <select value={form.job} onChange={e => setForm({ ...form, job: e.target.value })}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
-                    <option value="tobi">とび</option>
-                    <option value="doko">土工</option>
-                    <option value="shokucho">職長</option>
-                    <option value="yakuin">役員</option>
-                    <option value="jimu">事務</option>
-                  </select>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">所属</label>
+                    <select value={form.org} onChange={e => setForm({ ...form, org: e.target.value })}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
+                      <option value="hibi">日比建設</option>
+                      <option value="hfu">HFU</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">職種</label>
+                    <select value={form.job} onChange={e => setForm({ ...form, job: e.target.value })}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
+                      <option value="tobi">とび</option>
+                      <option value="doko">土工</option>
+                      <option value="shokucho">職長</option>
+                      <option value="yakuin">役員</option>
+                      <option value="jimu">事務</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">在留資格</label>
+                    <select value={form.visa} onChange={e => setForm({ ...form, visa: e.target.value })}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
+                      <option value="none">なし（日本人）</option>
+                      <option value="jisshu">技能実習</option>
+                      <option value="tokutei">特定技能</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">在留資格</label>
-                <select value={form.visa} onChange={e => setForm({ ...form, visa: e.target.value })}
-                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
-                  <option value="none">なし（日本人）</option>
-                  <option value="jisshu">技能実習</option>
-                  <option value="tokutei">特定技能</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">日額単価（円）</label>
-                  <input type="text" inputMode="numeric"
-                    value={form.rate ? Number(form.rate).toLocaleString() : ''}
-                    onChange={e => setForm({ ...form, rate: e.target.value.replace(/[^0-9]/g, '') })}
-                    placeholder="25,000"
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">残業倍率</label>
-                  <input type="number" step="0.05" value={form.otMul} onChange={e => setForm({ ...form, otMul: e.target.value })}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
-                </div>
-              </div>
-
-              {form.visa !== 'none' && (
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">時給（円）※月給制の外国人</label>
-                  <input type="text" inputMode="numeric"
-                    value={form.hourlyRate ? Number(form.hourlyRate).toLocaleString() : ''}
-                    onChange={e => setForm({ ...form, hourlyRate: e.target.value.replace(/[^0-9]/g, '') })}
-                    placeholder="1,200"
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
-                  {form.hourlyRate && Number(form.hourlyRate) > 0 && (
-                    <div className="text-xs text-gray-400 mt-1">
-                      日給 = ¥{(Number(form.hourlyRate) * 7).toLocaleString()} / 月給目安 = ¥{(Number(form.hourlyRate) * 168).toLocaleString()}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">入社日</label>
+                    <input type="date" value={form.hireDate} onChange={e => setForm({ ...form, hireDate: e.target.value })}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                  </div>
+                  {editId && (
+                    <div>
+                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">退職日</label>
+                      <div className="flex gap-2">
+                        <input type="date" value={form.retired} onChange={e => setForm({ ...form, retired: e.target.value })}
+                          className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                        {form.retired && (
+                          <button type="button" onClick={() => setForm({ ...form, retired: '' })}
+                            className="px-2 py-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 transition">
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
-              {form.visa !== 'none' && (
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">月給目安（自動計算）</label>
-                  <div className="w-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
-                    {form.hourlyRate && Number(form.hourlyRate) > 0
-                      ? `¥${Math.round(Number(form.hourlyRate) * 168).toLocaleString()}（時給×168h）`
-                      : form.salary && Number(form.salary) > 0
-                        ? `¥${Number(form.salary).toLocaleString()}（手入力値）`
-                        : '時給を入力すると自動計算されます'}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">入社日</label>
-                <input type="date" value={form.hireDate} onChange={e => setForm({ ...form, hireDate: e.target.value })}
-                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
               </div>
 
-              {editId && (
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">退職日</label>
-                  <div className="flex gap-2">
-                    <input type="date" value={form.retired} onChange={e => setForm({ ...form, retired: e.target.value })}
-                      className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
-                    {form.retired && (
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, retired: '' })}
-                        className="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition"
-                      >
-                        クリア
-                      </button>
+              {/* ── 単価・給与 ── */}
+              <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-3 bg-blue-50/30 dark:bg-blue-900/10">
+                <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">単価・給与</h4>
+
+                {form.visa !== 'none' ? (
+                  <>
+                    {/* 外国人: 時給ベース */}
+                    <div>
+                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">時給（円）</label>
+                      <input type="text" inputMode="numeric"
+                        value={form.hourlyRate ? Number(form.hourlyRate).toLocaleString() : ''}
+                        onChange={e => {
+                          const hr = e.target.value.replace(/[^0-9]/g, '')
+                          const autoRate = hr ? String(Math.round(Number(hr) * 7)) : ''
+                          setForm({ ...form, hourlyRate: hr, rate: autoRate })
+                        }}
+                        placeholder="1,538"
+                        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-400 block mb-1">日額（自動）</label>
+                        <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                          {form.hourlyRate && Number(form.hourlyRate) > 0
+                            ? `¥${(Number(form.hourlyRate) * 7).toLocaleString()}`
+                            : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 block mb-1">月給目安（自動）</label>
+                        <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                          {form.hourlyRate && Number(form.hourlyRate) > 0
+                            ? `¥${Math.round(Number(form.hourlyRate) * 168).toLocaleString()}`
+                            : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 block mb-1">残業単価（自動）</label>
+                        <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                          {form.hourlyRate && Number(form.hourlyRate) > 0
+                            ? `¥${Math.round(Number(form.hourlyRate) * 1.25).toLocaleString()}`
+                            : '—'}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-400">※ 時給を入力すると日額・月給・残業単価が自動計算されます</p>
+                  </>
+                ) : (
+                  <>
+                    {/* 日本人: 日額ベース */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">日額単価（円）</label>
+                        <input type="text" inputMode="numeric"
+                          value={form.rate ? Number(form.rate).toLocaleString() : ''}
+                          onChange={e => setForm({ ...form, rate: e.target.value.replace(/[^0-9]/g, '') })}
+                          placeholder="25,000"
+                          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">残業倍率</label>
+                        <input type="number" step="0.05" value={form.otMul} onChange={e => setForm({ ...form, otMul: e.target.value })}
+                          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                      </div>
+                    </div>
+                    {form.rate && Number(form.rate) > 0 && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">時給換算（参考）</label>
+                          <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                            ¥{Math.round(Number(form.rate) / 8).toLocaleString()}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">残業単価（参考）</label>
+                          <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                            ¥{Math.round(Number(form.rate) / 8 * Number(form.otMul || 1.25)).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
                     )}
-                  </div>
-                </div>
-              )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Token management (edit only) */}
