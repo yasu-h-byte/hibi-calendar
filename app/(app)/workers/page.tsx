@@ -447,36 +447,44 @@ export default function WorkersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">日額単価（円）</label>
-                  <input type="number" value={form.rate} onChange={e => setForm({ ...form, rate: e.target.value })}
-                    placeholder="25000"
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                  <input type="text" inputMode="numeric"
+                    value={form.rate ? Number(form.rate).toLocaleString() : ''}
+                    onChange={e => setForm({ ...form, rate: e.target.value.replace(/[^0-9]/g, '') })}
+                    placeholder="25,000"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">残業倍率</label>
                   <input type="number" step="0.05" value={form.otMul} onChange={e => setForm({ ...form, otMul: e.target.value })}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                 </div>
               </div>
 
               {form.visa !== 'none' && (
                 <div>
                   <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">時給（円）※月給制の外国人</label>
-                  <input type="number" value={form.hourlyRate} onChange={e => setForm({ ...form, hourlyRate: e.target.value })}
-                    placeholder="1200"
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                  <input type="text" inputMode="numeric"
+                    value={form.hourlyRate ? Number(form.hourlyRate).toLocaleString() : ''}
+                    onChange={e => setForm({ ...form, hourlyRate: e.target.value.replace(/[^0-9]/g, '') })}
+                    placeholder="1,200"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                   {form.hourlyRate && Number(form.hourlyRate) > 0 && (
                     <div className="text-xs text-gray-400 mt-1">
-                      日給 = {fmtYen(Number(form.hourlyRate) * 7)} / 月給目安 = {fmtYen(Number(form.hourlyRate) * 168)}
+                      日給 = ¥{(Number(form.hourlyRate) * 7).toLocaleString()} / 月給目安 = ¥{(Number(form.hourlyRate) * 168).toLocaleString()}
                     </div>
                   )}
                 </div>
               )}
               {form.visa !== 'none' && (
                 <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">月給（円）※月給制の外国人のみ</label>
-                  <input type="number" value={form.salary} onChange={e => setForm({ ...form, salary: e.target.value })}
-                    placeholder="200000"
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">月給目安（自動計算）</label>
+                  <div className="w-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                    {form.hourlyRate && Number(form.hourlyRate) > 0
+                      ? `¥${Math.round(Number(form.hourlyRate) * 168).toLocaleString()}（時給×168h）`
+                      : form.salary && Number(form.salary) > 0
+                        ? `¥${Number(form.salary).toLocaleString()}（手入力値）`
+                        : '時給を入力すると自動計算されます'}
+                  </div>
                 </div>
               )}
 
