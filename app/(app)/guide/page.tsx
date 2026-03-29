@@ -392,7 +392,7 @@ export default function GuidePage() {
             <h4 className="font-bold text-green-700 dark:text-green-400 mb-3">日給月給制スタッフ（日本人）</h4>
             <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300 font-mono bg-white dark:bg-gray-800 rounded-lg p-3">
               <p><span className="text-gray-400">(1)</span> 基本給 = <span className="font-bold">日額 &times; 実出勤日数</span></p>
-              <p><span className="text-gray-400">(2)</span> 残業手当 = (日額 &divide; 7h) &times; 1.25 &times; 残業h</p>
+              <p><span className="text-gray-400">(2)</span> 残業手当 = (日額 &divide; 8h) &times; 1.25 &times; 残業h</p>
               <p className="pt-1 border-t dark:border-gray-700"><span className="text-gray-400">(3)</span> <span className="font-bold text-green-600 dark:text-green-400">支給額 = (1) + (2)</span></p>
             </div>
             <div className="mt-3">
@@ -401,9 +401,9 @@ export default function GuidePage() {
                 headers={['項目', '計算', '金額']}
                 rows={[
                   ['基本給', '23,000 \u00d7 24日', '552,000円'],
-                  ['時間単価', '23,000 \u00f7 7h', '3,286円/h'],
-                  ['残業手当', '3,286 \u00d7 1.25 \u00d7 10h', '41,071円'],
-                  ['支給額', '', '593,071円'],
+                  ['時間単価', '23,000 \u00f7 8h', '2,875円/h'],
+                  ['残業手当', '2,875 \u00d7 1.25 \u00d7 10h', '35,938円'],
+                  ['支給額', '', '587,938円'],
                 ]}
               />
             </div>

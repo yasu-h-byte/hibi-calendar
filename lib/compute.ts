@@ -181,7 +181,7 @@ export function getSubconRate(
   if (!a || !a.subconRates || !a.subconRates[scid]) return base
   const ov = a.subconRates[scid]
   const r = ov.rate || base.rate
-  const o = ov.otRate || (r ? Math.round(r / 7 * 1.25) : base.otRate)
+  const o = ov.otRate || (r ? Math.round(r / 8 * 1.25) : base.otRate)
   return { rate: r, otRate: o }
 }
 
@@ -277,7 +277,7 @@ export function calcTobiEquiv(
     // 休業補償(0.6): 外国人の会社都合休業 → 鳶換算から除外
     const isComp = (v.w === 0.6 && w.visa !== 'none')
     if (isComp) continue
-    const stdH = 7 // 変形労働時間制: 全員7h
+    const stdH = w.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h（変形労働時間制）
     const oe = (v.o || 0) / stdH
     if (!monthly[pk.ym]) monthly[pk.ym] = { tw: 0, dw: 0, toe: 0, doe: 0 }
     if (w.job === 'doko') {
@@ -294,7 +294,7 @@ export function calcTobiEquiv(
     if (siteId && pk.sid !== siteId) continue
     const sc = main.subcons.find(x => x.id === pk.wid)
     if (!sc) continue
-    const soe = v.on / 7 // 変形労働時間制: 7h換算
+    const soe = v.on / 8 // 外注は8h換算
     if (!monthly[pk.ym]) monthly[pk.ym] = { tw: 0, dw: 0, toe: 0, doe: 0 }
     if (sc.type === '土工業者') {
       monthly[pk.ym].dw += v.n; monthly[pk.ym].doe += soe; dokoWork += v.n; dokoOtEq += soe
@@ -391,10 +391,11 @@ export function compute(
 
     // 休業補償(0.6): 外国人の会社都合休業 → 原価のみ計上、人工数には含めない
     const isComp = (v.w === 0.6 && w.visa !== 'none')
-    const otCost = (v.o || 0) * (w.rate / 7) * w.otMul // 変形労働時間制: 7h基準
+    const otDivisor = w.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
+    const otCost = (v.o || 0) * (w.rate / otDivisor) * w.otMul
     const cost = v.w * w.rate + otCost
     const workCount = isComp ? 0 : v.w  // 休業補償は人工0
-    const stdH = 7 // 変形労働時間制: 全員7h
+    const stdH = w.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h（変形労働時間制）
     const oe = isComp ? 0 : (v.o || 0) / stdH  // 残業→人工換算
 
     result.totalWork += workCount
@@ -447,7 +448,7 @@ export function compute(
     // ★ 現場別単価を使用（旧アプリのgetSubconRateと同等）
     const scR = getSubconRate(main, scid, sid)
     const cost = v.n * scR.rate + v.on * scR.otRate
-    const soe = v.on / 7  // 変形労働時間制: 7h換算
+    const soe = v.on / 8  // 外注は8h換算
 
     result.totalSubWork += v.n
     result.totalSubOT += v.on
@@ -751,7 +752,8 @@ export function computeMonthly(
     if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
 
     // ★ サイト別コストは直接エントリごとに加算
-    const otCost = (isComp ? 0 : (entry.o || 0)) * (wm.rate / 7) * wm.otMul // 変形労働時間制: 7h基準
+    const otDiv = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
+    const otCost = (isComp ? 0 : (entry.o || 0)) * (wm.rate / otDiv) * wm.otMul
     const entryCost = entry.w * wm.rate + otCost
     const site = siteMap.get(siteId)
     if (site) {
@@ -791,7 +793,8 @@ export function computeMonthly(
   for (const wm of workerMap.values()) {
     wm.workAll = wm.workDays + wm.compDays * 0.6  // 出勤日数（0.6含む）
     wm.cost = wm.workDays * wm.rate + (wm.compDays * 0.6 * wm.rate)  // 補償分も原価に含む
-    wm.otCost = wm.otHours * (wm.rate / 7) * wm.otMul // 変形労働時間制: 7h基準
+    const otDiv2 = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
+    wm.otCost = wm.otHours * (wm.rate / otDiv2) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
 
     if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && prescribedDays > 0) {
@@ -846,10 +849,10 @@ export function computeMonthly(
     } else if (wm.visa === 'none') {
       // 日給月給制の日本人: daily-rate based
       // 基本給 = 日額(rate) × 実出勤日数
-      // 残業手当 = (日額 ÷ 7h) × otMul × 残業時間（変形労働時間制）
+      // 残業手当 = (日額 ÷ 8h) × otMul × 残業時間
       // 支給額 = 基本給 + 残業手当
       const basePay = Math.round(wm.workDays * wm.rate + (wm.compDays * 0.6 * wm.rate))
-      const otPay = Math.round(wm.otHours * (wm.rate / 7) * wm.otMul)
+      const otPay = Math.round(wm.otHours * (wm.rate / 8) * wm.otMul)
       wm.basePay = basePay
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.otAllowance = otPay
