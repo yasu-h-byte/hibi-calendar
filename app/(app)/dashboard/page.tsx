@@ -229,6 +229,90 @@ const PERIOD_OPTIONS = [
   { key: 'year', label: '年間' },
 ]
 
+// ─── Monthly Checklist (compact for dashboard) ───
+
+function getNextYm(): string {
+  const now = new Date()
+  const y = now.getDate() >= 15 ? (now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear()) : now.getFullYear()
+  const m = now.getDate() >= 15 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : now.getMonth() + 1
+  return `${y}${String(m).padStart(2, '0')}`
+}
+
+function MonthlyChecklist({ password }: { password: string }) {
+  const [status, setStatus] = useState<{
+    calCreated: number; calTotal: number
+    calApproved: number
+    signed: number; signTotal: number; unsigned: string[]
+  } | null>(null)
+
+  useEffect(() => {
+    if (!password) return
+    const ym = getNextYm()
+    fetch(`/api/calendar/status?ym=${ym}`, {
+      headers: { 'x-admin-password': password },
+    }).then(r => r.ok ? r.json() : null).then(data => {
+      if (!data?.sites) return
+      const sites = data.sites.filter((s: { siteId: string }) => s.siteId)
+      const total = sites.length
+      const created = sites.filter((s: { days: unknown }) => s.days).length
+      const approved = sites.filter((s: { status: string }) => s.status === 'approved').length
+      let signTotal = 0, signDone = 0
+      const unsigned: string[] = []
+      for (const s of sites) {
+        for (const w of (s.workers || [])) {
+          signTotal++
+          if (w.signed) signDone++
+          else unsigned.push(w.name)
+        }
+      }
+      setStatus({ calCreated: created, calTotal: total, calApproved: approved, signed: signDone, signTotal, unsigned })
+    }).catch(() => {})
+  }, [password])
+
+  if (!status || status.calTotal === 0) return null
+
+  const allDone = status.calCreated >= status.calTotal &&
+    status.calApproved >= status.calTotal &&
+    status.signed >= status.signTotal
+  if (allDone) return null // 全て完了なら非表示
+
+  const now = new Date()
+  const day = now.getDate()
+  const nextYm = getNextYm()
+  const ymLabel = `${nextYm.slice(0, 4)}年${parseInt(nextYm.slice(4))}月`
+  const urgent = day >= 25 && status.calCreated < status.calTotal
+
+  return (
+    <div className={`rounded-xl p-4 ${urgent ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'}`}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className={`text-sm font-bold ${urgent ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
+          {ymLabel} カレンダー準備
+        </h3>
+        <a href="/calendar" className="text-xs px-2.5 py-1 bg-hibi-navy text-white rounded-lg hover:bg-hibi-light transition">
+          カレンダーへ
+        </a>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <StepBadge label="作成" done={status.calCreated >= status.calTotal} detail={`${status.calCreated}/${status.calTotal}`} />
+        <StepBadge label="承認" done={status.calApproved >= status.calTotal} detail={`${status.calApproved}/${status.calTotal}`} />
+        <StepBadge label="署名" done={status.signed >= status.signTotal} detail={`${status.signed}/${status.signTotal}`}
+          extra={status.unsigned.length > 0 ? `未: ${status.unsigned.slice(0, 3).join('、')}${status.unsigned.length > 3 ? `他${status.unsigned.length - 3}名` : ''}` : undefined} />
+      </div>
+    </div>
+  )
+}
+
+function StepBadge({ label, done, detail, extra }: { label: string; done: boolean; detail: string; extra?: string }) {
+  return (
+    <div className={`rounded-lg p-2.5 text-center ${done ? 'bg-green-100 dark:bg-green-900/30' : 'bg-white dark:bg-gray-800'}`}>
+      <div className="text-lg mb-0.5">{done ? '\u2705' : '\u2B1C'}</div>
+      <div className={`text-xs font-bold ${done ? 'text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>{label}</div>
+      <div className="text-[10px] text-gray-400">{detail}</div>
+      {extra && <div className="text-[10px] text-red-500 mt-0.5 truncate">{extra}</div>}
+    </div>
+  )
+}
+
 // ─── CSS Bar Chart Components ───
 
 function HBar({ value, max, color, label }: { value: number; max: number; color: string; label?: string }) {
@@ -343,6 +427,9 @@ export default function DashboardPage() {
         <div className="text-center py-12 text-gray-400">読み込み中...</div>
       ) : data ? (
         <>
+          {/* ═══ 0. Monthly Checklist ═══ */}
+          <MonthlyChecklist password={password} />
+
           {/* ═══ 1. Today's Status Table ═══ */}
           <Section title={`本日の稼働状況 (${todayStr})`}>
             {data.todayStatus && data.todayStatus.siteStatus.length > 0 ? (

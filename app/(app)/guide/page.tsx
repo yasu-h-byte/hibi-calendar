@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
 
 // ── アコーディオンセクション ──
@@ -53,175 +53,6 @@ function T({ headers, rows }: { headers: string[]; rows: (string | number)[][] }
   )
 }
 
-// ── 月次チェックリスト ──
-interface MonthlyStatus {
-  calendarCreated: { done: boolean; total: number; created: number }
-  calendarApproved: { done: boolean; total: number; approved: number }
-  signaturesDone: { done: boolean; total: number; signed: number; unsigned: string[] }
-}
-
-function getNextYm(): string {
-  const now = new Date()
-  const y = now.getDate() >= 15 ? (now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear()) : now.getFullYear()
-  const m = now.getDate() >= 15 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : now.getMonth() + 1
-  return `${y}${String(m).padStart(2, '0')}`
-}
-
-function getCurrentYm(): string {
-  const now = new Date()
-  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
-}
-
-function MonthlyChecklist() {
-  const [status, setStatus] = useState<MonthlyStatus | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [targetYm, setTargetYm] = useState<'next' | 'current'>('next')
-
-  const ym = targetYm === 'next' ? getNextYm() : getCurrentYm()
-  const ymLabel = `${ym.slice(0, 4)}年${parseInt(ym.slice(4))}月`
-
-  const fetchStatus = useCallback(async () => {
-    setLoading(true)
-    try {
-      const stored = localStorage.getItem('hibi_auth')
-      if (!stored) return
-      const { password } = JSON.parse(stored)
-      const res = await fetch(`/api/calendar/status?ym=${ym}`, {
-        headers: { 'x-admin-password': password },
-      })
-      if (!res.ok) return
-      const data = await res.json()
-      const sites = data.sites || []
-
-      const activeSites = sites.filter((s: { siteId: string }) => s.siteId)
-      const total = activeSites.length
-      const created = activeSites.filter((s: { days: unknown }) => s.days).length
-      const approved = activeSites.filter((s: { status: string }) => s.status === 'approved').length
-
-      let signTotal = 0, signDone = 0
-      const unsigned: string[] = []
-      for (const s of activeSites) {
-        for (const w of (s.workers || [])) {
-          signTotal++
-          if (w.signed) signDone++
-          else unsigned.push(`${w.name}（${s.siteName}）`)
-        }
-      }
-
-      setStatus({
-        calendarCreated: { done: created >= total && total > 0, total, created },
-        calendarApproved: { done: approved >= total && total > 0, total, approved },
-        signaturesDone: { done: signDone >= signTotal && signTotal > 0, total: signTotal, signed: signDone, unsigned },
-      })
-    } catch { /* ignore */ }
-    finally { setLoading(false) }
-  }, [ym])
-
-  useEffect(() => { fetchStatus() }, [fetchStatus])
-
-  const now = new Date()
-  const dayOfMonth = now.getDate()
-  const calWarning = targetYm === 'next' && dayOfMonth >= 25 ? 'red' : targetYm === 'next' && dayOfMonth >= 20 ? 'yellow' : null
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-bold text-hibi-navy dark:text-white flex items-center gap-2">
-          <span className="text-xl">&#9745;</span> 月次チェックリスト
-        </h2>
-        <div className="flex gap-1 text-xs">
-          <button onClick={() => setTargetYm('next')}
-            className={`px-3 py-1.5 rounded-lg transition ${targetYm === 'next' ? 'bg-hibi-navy text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
-            翌月
-          </button>
-          <button onClick={() => setTargetYm('current')}
-            className={`px-3 py-1.5 rounded-lg transition ${targetYm === 'current' ? 'bg-hibi-navy text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'}`}>
-            当月
-          </button>
-        </div>
-      </div>
-
-      <p className="text-sm text-gray-500 dark:text-gray-400">{ymLabel}の進捗状況</p>
-
-      {loading ? (
-        <div className="text-sm text-gray-400 py-4 text-center">読み込み中...</div>
-      ) : !status ? (
-        <div className="text-sm text-gray-400 py-4 text-center">ステータスを取得できませんでした</div>
-      ) : (
-        <div className="space-y-3">
-          {/* Step 1: カレンダー作成 */}
-          <CheckItem
-            label="就業カレンダー作成"
-            done={status.calendarCreated.done}
-            detail={`${status.calendarCreated.created} / ${status.calendarCreated.total} 現場`}
-            href="/calendar"
-            warning={!status.calendarCreated.done && calWarning === 'red' ? 'red' : !status.calendarCreated.done && calWarning === 'yellow' ? 'yellow' : undefined}
-            warningText={calWarning === 'red' ? '25日を過ぎています！至急作成してください' : calWarning === 'yellow' ? '20日を過ぎました。そろそろ作成しましょう' : undefined}
-          />
-
-          {/* Step 2: 承認 */}
-          <CheckItem
-            label="カレンダー承認"
-            done={status.calendarApproved.done}
-            detail={`${status.calendarApproved.approved} / ${status.calendarApproved.total} 現場`}
-            href="/calendar"
-          />
-
-          {/* Step 3: 署名 */}
-          <CheckItem
-            label="スタッフ署名"
-            done={status.signaturesDone.done}
-            detail={`${status.signaturesDone.signed} / ${status.signaturesDone.total} 名`}
-            href="/calendar"
-            extraContent={status.signaturesDone.unsigned.length > 0 ? (
-              <div className="mt-1 text-xs text-red-500">
-                未署名: {status.signaturesDone.unsigned.join('、')}
-              </div>
-            ) : undefined}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CheckItem({ label, done, detail, href, warning, warningText, extraContent }: {
-  label: string; done: boolean; detail: string; href: string
-  warning?: 'red' | 'yellow'; warningText?: string; extraContent?: React.ReactNode
-}) {
-  return (
-    <div className={`flex items-start gap-3 p-3 rounded-lg ${
-      done ? 'bg-green-50 dark:bg-green-900/20' :
-      warning === 'red' ? 'bg-red-50 dark:bg-red-900/20' :
-      warning === 'yellow' ? 'bg-yellow-50 dark:bg-yellow-900/20' :
-      'bg-gray-50 dark:bg-gray-700/30'
-    }`}>
-      <span className={`mt-0.5 text-lg ${done ? 'text-green-600' : 'text-gray-300 dark:text-gray-600'}`}>
-        {done ? '\u2705' : '\u2B1C'}
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-medium ${done ? 'text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
-            {label}
-          </span>
-          <span className="text-xs text-gray-400">{detail}</span>
-        </div>
-        {warningText && (
-          <div className={`text-xs mt-0.5 font-bold ${warning === 'red' ? 'text-red-600' : 'text-yellow-600'}`}>
-            {warningText}
-          </div>
-        )}
-        {extraContent}
-      </div>
-      {!done && (
-        <a href={href} className="text-xs px-2 py-1 bg-hibi-navy text-white rounded hover:bg-hibi-light transition whitespace-nowrap">
-          対応する
-        </a>
-      )}
-    </div>
-  )
-}
-
 // ── メインページ ──
 export default function GuidePage() {
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -242,8 +73,14 @@ export default function GuidePage() {
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">変形労働時間制の制度設計とシステム運用の手引き</p>
       </div>
 
-      {/* 月次チェックリスト（管理者のみ） */}
-      {isAdmin && <MonthlyChecklist />}
+      {/* 月次チェックリストはダッシュボードに移動 */}
+      {isAdmin && (
+        <a href="/dashboard" className="block bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition">
+          <p className="text-sm text-blue-700 dark:text-blue-400 font-medium">
+            月次チェックリストはダッシュボードに表示されています →
+          </p>
+        </a>
+      )}
 
       {/* ── セクション 1: 制度概要 ── */}
       <Section title="変形労働時間制とは" icon="&#128214;" defaultOpen>
