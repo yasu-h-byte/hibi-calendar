@@ -185,9 +185,16 @@ export default function WorkersPage() {
       const body = editId
         ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined }
         : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined }
-      await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+      const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
+        alert(`保存エラー: ${err.error || res.statusText}`)
+        return
+      }
       setShowModal(false)
       fetchWorkers()
+    } catch (e) {
+      alert(`通信エラー: ${e instanceof Error ? e.message : '不明なエラー'}`)
     } finally {
       setSaving(false)
     }

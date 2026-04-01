@@ -65,10 +65,16 @@ export async function POST(request: NextRequest) {
       const { id, ...updates } = body
       if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
       delete updates.action
-      if (updates.rate !== undefined) updates.rate = Number(updates.rate)
-      if (updates.hourlyRate !== undefined) updates.hourlyRate = Number(updates.hourlyRate) || 0
-      if (updates.otMul !== undefined) updates.otMul = Number(updates.otMul)
-      if (updates.salary !== undefined) updates.salary = Number(updates.salary) || 0
+      if (updates.rate !== undefined) updates.rate = Number(updates.rate) || 0
+      if (updates.hourlyRate !== undefined) {
+        const hr = Number(updates.hourlyRate)
+        updates.hourlyRate = hr > 0 ? hr : 0
+      }
+      if (updates.otMul !== undefined) updates.otMul = Number(updates.otMul) || 1.25
+      if (updates.salary !== undefined) {
+        const sal = Number(updates.salary)
+        updates.salary = sal > 0 ? sal : 0
+      }
       await updateWorker(id, updates)
       await logActivity('admin', 'worker.update', `ID:${id} を更新`)
       return NextResponse.json({ success: true })
