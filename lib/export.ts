@@ -472,6 +472,287 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
 }
 
 // ────────────────────────────────────────
+//  6. 月次集計Excel
+// ────────────────────────────────────────
+
+export interface MonthlyExcelData {
+  ym: string
+  workers: WorkerMonthly[]
+  subcons: SubconMonthly[]
+  siteNames: Record<string, string>
+  prescribedDays: number
+}
+
+export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
+  const { ym, workers, subcons, siteNames, prescribedDays } = data
+  const wb = XLSX.utils.book_new()
+
+  // ── Sheet 1: 月次集計一覧 ──
+
+  const hibiWorkers = workers.filter(w => w.org === '日比' || w.org === 'hibi')
+  const hfuWorkers = workers.filter(w => w.org === 'HFU' || w.org === 'hfu')
+  const showAbsence = prescribedDays > 0
+
+  const s1Title = [`月次集計一覧 ${ymLabel(ym)}`]
+  const s1Rows: (string | number | null)[][] = [s1Title]
+
+  // -- Workers section --
+  const wHeaders: string[] = [
+    '名前', '所属', '現場', '出勤日数', '有給', '残業(h)', '日額単価', '概算労務費',
+  ]
+  if (showAbsence) {
+    wHeaders.push('欠勤日数', '欠勤控除', '差引支給')
+  }
+  wHeaders.push('基本給', '残業手当', '欠勤控除', '支給額合計')
+  s1Rows.push(wHeaders)
+
+  // Group: 日比建設
+  if (hibiWorkers.length > 0) {
+    const groupRow: (string | number | null)[] = ['【日比建設】']
+    for (let i = 1; i < wHeaders.length; i++) groupRow.push(null)
+    s1Rows.push(groupRow)
+    for (const w of hibiWorkers) {
+      s1Rows.push(buildWorkerRow(w, siteNames, showAbsence))
+    }
+  }
+
+  // Group: HFU
+  if (hfuWorkers.length > 0) {
+    const groupRow: (string | number | null)[] = ['【HFU】']
+    for (let i = 1; i < wHeaders.length; i++) groupRow.push(null)
+    s1Rows.push(groupRow)
+    for (const w of hfuWorkers) {
+      s1Rows.push(buildWorkerRow(w, siteNames, showAbsence))
+    }
+  }
+
+  // Worker totals
+  const wTotals: (string | number | null)[] = [
+    '合計', '', '',
+    workers.reduce((s, w) => s + (w.workAll || w.workDays), 0),
+    workers.reduce((s, w) => s + w.plDays, 0),
+    workers.reduce((s, w) => s + w.otHours, 0),
+    null,
+    workers.reduce((s, w) => s + w.totalCost, 0),
+  ]
+  if (showAbsence) {
+    wTotals.push(
+      workers.reduce((s, w) => s + (w.absence || 0), 0),
+      workers.reduce((s, w) => s + (w.absentCost || 0), 0),
+      workers.reduce((s, w) => s + (w.netPay || 0), 0),
+    )
+  }
+  wTotals.push(
+    workers.reduce((s, w) => s + (w.basePay || 0), 0),
+    workers.reduce((s, w) => s + (w.otAllowance || 0), 0),
+    workers.reduce((s, w) => s + (w.absentDeduction || 0), 0),
+    workers.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
+  )
+  s1Rows.push(wTotals)
+
+  // -- Blank row --
+  s1Rows.push([])
+
+  // -- Subcon section --
+  const scHeaders = ['外注先', '区分', '現場', '人工', '残業', '単価', '金額']
+  s1Rows.push(scHeaders)
+
+  for (const sc of subcons) {
+    const siteList = sc.sites.map(sid => siteNames[sid] || sid).join(', ')
+    s1Rows.push([
+      sc.name, sc.type, siteList,
+      sc.workDays, sc.otCount, sc.rate, sc.cost,
+    ])
+  }
+
+  const scTotals: (string | number | null)[] = [
+    '合計', '', '',
+    subcons.reduce((s, sc) => s + sc.workDays, 0),
+    subcons.reduce((s, sc) => s + sc.otCount, 0),
+    null,
+    subcons.reduce((s, sc) => s + sc.cost, 0),
+  ]
+  s1Rows.push(scTotals)
+
+  const ws1 = XLSX.utils.aoa_to_sheet(s1Rows)
+
+  // Merge title row
+  ws1['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: wHeaders.length - 1 } }]
+
+  // Column widths for sheet 1
+  const s1Widths = [12, 8, 16, 10, 6, 10, 12, 14]
+  if (showAbsence) s1Widths.push(10, 12, 14)
+  s1Widths.push(12, 12, 12, 14)
+  setColWidths(ws1, s1Widths)
+
+  XLSX.utils.book_append_sheet(wb, ws1, '月次集計')
+
+  // ── Sheet 2: 給与計算詳細 ──
+
+  const s2Title = [`給与計算詳細 ${ymLabel(ym)}`]
+  const s2Rows: (string | number | null)[][] = [s2Title]
+
+  // Foreign workers (hourlyRate-based)
+  const foreignWorkers = workers.filter(w => w.visa !== 'none' && w.hourlyRate && w.hourlyRate > 0)
+  if (foreignWorkers.length > 0) {
+    s2Rows.push([])
+    const fHeaders = [
+      '名前', '時給', '所定日数', '所定時間',
+      '実出勤日数', '実労働時間', '法定残業時間',
+      '基本給', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+    ]
+    s2Rows.push(fHeaders)
+
+    for (const w of foreignWorkers) {
+      s2Rows.push([
+        w.name,
+        w.hourlyRate || 0,
+        prescribedDays,
+        w.prescribedHours || (prescribedDays * 7),
+        w.actualWorkDays || 0,
+        w.actualWorkHours || 0,
+        w.legalOtHours || 0,
+        w.basePay || 0,
+        w.otAllowance || 0,
+        w.absence || 0,
+        w.absentDeduction || 0,
+        w.salaryNetPay || 0,
+      ])
+    }
+
+    // Foreign worker totals
+    s2Rows.push([
+      '合計', null, null, null,
+      foreignWorkers.reduce((s, w) => s + (w.actualWorkDays || 0), 0),
+      null,
+      foreignWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0),
+      foreignWorkers.reduce((s, w) => s + (w.basePay || 0), 0),
+      foreignWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0),
+      foreignWorkers.reduce((s, w) => s + (w.absence || 0), 0),
+      foreignWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0),
+      foreignWorkers.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
+    ])
+
+  }
+
+  // Salary-based foreign workers (salary field, no hourlyRate)
+  const salaryForeignWorkers = workers.filter(w => w.visa !== 'none' && !w.hourlyRate && w.salary && w.salary > 0)
+  if (salaryForeignWorkers.length > 0) {
+    s2Rows.push([])
+    const sfHeaders = [
+      '名前', '月給', '所定日数', '所定時間',
+      '実出勤日数', '実労働時間', '法定残業時間',
+      '基本給', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+    ]
+    s2Rows.push(sfHeaders)
+
+    for (const w of salaryForeignWorkers) {
+      s2Rows.push([
+        w.name,
+        w.salary || 0,
+        prescribedDays,
+        w.prescribedHours || (prescribedDays * 7),
+        w.actualWorkDays || 0,
+        w.actualWorkHours || 0,
+        w.legalOtHours || 0,
+        w.basePay || 0,
+        w.otAllowance || 0,
+        w.absence || 0,
+        w.absentDeduction || 0,
+        w.salaryNetPay || 0,
+      ])
+    }
+
+    s2Rows.push([
+      '合計', null, null, null,
+      salaryForeignWorkers.reduce((s, w) => s + (w.actualWorkDays || 0), 0),
+      null,
+      salaryForeignWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0),
+      salaryForeignWorkers.reduce((s, w) => s + (w.basePay || 0), 0),
+      salaryForeignWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0),
+      salaryForeignWorkers.reduce((s, w) => s + (w.absence || 0), 0),
+      salaryForeignWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0),
+      salaryForeignWorkers.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
+    ])
+  }
+
+  // Japanese workers (daily-rate based)
+  const japaneseWorkers = workers.filter(w => w.visa === 'none')
+  if (japaneseWorkers.length > 0) {
+    s2Rows.push([])
+    const jHeaders = [
+      '名前', '日額', '実出勤日数', '基本給', '残業時間', '残業手当', '支給額合計',
+    ]
+    s2Rows.push(jHeaders)
+
+    for (const w of japaneseWorkers) {
+      s2Rows.push([
+        w.name,
+        w.rate,
+        w.workDays,
+        w.basePay || 0,
+        w.dailyOtHours || w.otHours || 0,
+        w.otAllowance || 0,
+        w.salaryNetPay || 0,
+      ])
+    }
+
+    s2Rows.push([
+      '合計', null,
+      japaneseWorkers.reduce((s, w) => s + w.workDays, 0),
+      japaneseWorkers.reduce((s, w) => s + (w.basePay || 0), 0),
+      japaneseWorkers.reduce((s, w) => s + (w.dailyOtHours || w.otHours || 0), 0),
+      japaneseWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0),
+      japaneseWorkers.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
+    ])
+  }
+
+  const ws2 = XLSX.utils.aoa_to_sheet(s2Rows)
+
+  // Merge title
+  ws2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 11 } }]
+
+  // Column widths for sheet 2
+  setColWidths(ws2, [12, 10, 10, 10, 10, 10, 10, 12, 12, 10, 12, 14])
+
+  XLSX.utils.book_append_sheet(wb, ws2, '給与計算詳細')
+
+  return wb
+}
+
+function buildWorkerRow(
+  w: WorkerMonthly,
+  siteNames: Record<string, string>,
+  showAbsence: boolean,
+): (string | number | null)[] {
+  const siteList = w.sites.map(sid => siteNames[sid] || sid).join(', ')
+  const row: (string | number | null)[] = [
+    w.name,
+    w.org === 'hfu' || w.org === 'HFU' ? 'HFU' : '日比',
+    siteList,
+    w.workAll || w.workDays,
+    w.plDays || 0,
+    w.otHours || 0,
+    w.rate,
+    Math.round(w.totalCost),
+  ]
+  if (showAbsence) {
+    row.push(
+      w.absence || 0,
+      w.absentCost || 0,
+      w.netPay || 0,
+    )
+  }
+  row.push(
+    w.basePay || 0,
+    w.otAllowance || 0,
+    w.absentDeduction || 0,
+    w.salaryNetPay || 0,
+  )
+  return row
+}
+
+// ────────────────────────────────────────
 //  Workbook → Buffer
 // ────────────────────────────────────────
 

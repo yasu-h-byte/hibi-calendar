@@ -206,9 +206,31 @@ export default function MonthlyPage() {
     }
   }, [password, data, ym, fetchData])
 
-  const handleExcelExport = useCallback(() => {
-    alert('Excel出力は準備中です。Batch 2で実装予定です。')
-  }, [])
+  const handleExcelExport = useCallback(async () => {
+    if (!password || !ym) return
+    try {
+      const pd = Number(prescribedDays) || 0
+      const res = await fetch(
+        `/api/export?type=monthlyExcel&ym=${ym}&prescribedDays=${pd}`,
+        { headers: { 'x-admin-password': password } },
+      )
+      if (!res.ok) {
+        alert('Excel出力に失敗しました')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `月次集計_${ym}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      alert('Excel出力に失敗しました')
+    }
+  }, [password, ym, prescribedDays])
 
   // ── 所定日数の保存 ──
 

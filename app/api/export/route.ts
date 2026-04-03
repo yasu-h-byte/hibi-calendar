@@ -7,6 +7,7 @@ import {
   generateSubconConfirmation,
   generateBukakeReport,
   generatePLLedger,
+  generateMonthlyExcel,
   workbookToBuffer,
 } from '@/lib/export'
 
@@ -162,8 +163,26 @@ export async function GET(request: NextRequest) {
         })
       }
 
+      case 'monthlyExcel': {
+        const prescribedDays = Number(searchParams.get('prescribedDays')) || 0
+        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays)
+        const monthSiteNames: Record<string, string> = {}
+        for (const s of main.sites) monthSiteNames[s.id] = s.name
+
+        const wb = generateMonthlyExcel({
+          ym: ymStr,
+          workers: monthlyResult.workers,
+          subcons: monthlyResult.subcons,
+          siteNames: monthSiteNames,
+          prescribedDays,
+        })
+        buffer = workbookToBuffer(wb)
+        filename = `月次集計_${ymStr}.xlsx`
+        break
+      }
+
       default:
-        return NextResponse.json({ error: 'Unknown type. Valid: hibi, hfu, subcon, bukake, monthly, pl' }, { status: 400 })
+        return NextResponse.json({ error: 'Unknown type. Valid: hibi, hfu, subcon, bukake, monthly, monthlyExcel, pl' }, { status: 400 })
     }
 
     // Return xlsx binary
