@@ -619,7 +619,7 @@ export default function MonthlyPage() {
                             ]
                             return (
                               <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colors[i % colors.length]}`}>
-                                {(() => { const nm = data?.siteNames?.[s] || s; return nm.length > 6 ? nm.slice(0, 6) : nm })()}
+                                {(() => { const nm = data?.siteNames?.[s] || s; return nm.slice(0, 3) })()}
                               </span>
                             )
                           })}
