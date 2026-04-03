@@ -210,8 +210,9 @@ export default function MonthlyPage() {
     if (!password || !ym) return
     try {
       const pd = Number(prescribedDays) || 0
+      const orgFilter = tab === 'hibi' ? 'hibi' : tab === 'hfu' ? 'hfu' : tab === 'subcon' ? 'subcon' : 'all'
       const res = await fetch(
-        `/api/export?type=monthlyExcel&ym=${ym}&prescribedDays=${pd}`,
+        `/api/export?type=monthlyExcel&ym=${ym}&prescribedDays=${pd}&org=${orgFilter}`,
         { headers: { 'x-admin-password': password } },
       )
       if (!res.ok) {
@@ -222,7 +223,8 @@ export default function MonthlyPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `月次集計_${ym}.xlsx`
+      const tabLabel = orgFilter === 'hfu' ? '_HFU' : orgFilter === 'hibi' ? '_日比建設' : orgFilter === 'subcon' ? '_外注' : ''
+      a.download = `月次集計${tabLabel}_${ym}.xlsx`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -230,7 +232,7 @@ export default function MonthlyPage() {
     } catch {
       alert('Excel出力に失敗しました')
     }
-  }, [password, ym, prescribedDays])
+  }, [password, ym, prescribedDays, tab])
 
   // ── 所定日数の保存 ──
 

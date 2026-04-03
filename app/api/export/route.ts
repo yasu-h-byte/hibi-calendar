@@ -165,19 +165,33 @@ export async function GET(request: NextRequest) {
 
       case 'monthlyExcel': {
         const prescribedDays = Number(searchParams.get('prescribedDays')) || 0
+        const orgFilter = searchParams.get('org') || 'all'
         const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays)
         const monthSiteNames: Record<string, string> = {}
         for (const s of main.sites) monthSiteNames[s.id] = s.name
 
+        let filteredWorkers = monthlyResult.workers
+        let filteredSubcons = monthlyResult.subcons
+        if (orgFilter === 'hibi') {
+          filteredWorkers = monthlyResult.workers.filter((w: { org: string }) => w.org === 'hibi')
+          filteredSubcons = []
+        } else if (orgFilter === 'hfu') {
+          filteredWorkers = monthlyResult.workers.filter((w: { org: string }) => w.org === 'hfu')
+          filteredSubcons = []
+        } else if (orgFilter === 'subcon') {
+          filteredWorkers = []
+        }
+
+        const tabLabel = orgFilter === 'hfu' ? '_HFU' : orgFilter === 'hibi' ? '_日比建設' : orgFilter === 'subcon' ? '_外注' : ''
         const wb = generateMonthlyExcel({
           ym: ymStr,
-          workers: monthlyResult.workers,
-          subcons: monthlyResult.subcons,
+          workers: filteredWorkers,
+          subcons: filteredSubcons,
           siteNames: monthSiteNames,
           prescribedDays,
         })
         buffer = workbookToBuffer(wb)
-        filename = `月次集計_${ymStr}.xlsx`
+        filename = `月次集計${tabLabel}_${ymStr}.xlsx`
         break
       }
 
