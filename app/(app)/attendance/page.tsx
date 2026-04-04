@@ -876,7 +876,7 @@ export default function AttendanceGridPage() {
                 <tr className="border-b border-gray-200">
                   <th
                     className="sticky left-0 z-20 bg-[#1B2A4A] text-white px-2 py-1.5 text-left font-medium whitespace-nowrap"
-                    style={{ minWidth: 220 }}
+                    style={{ width: 220, minWidth: 220, maxWidth: 220 }}
                   >
                     名前
                   </th>
@@ -913,7 +913,7 @@ export default function AttendanceGridPage() {
                   <tr className="bg-yellow-50 border-b border-yellow-200">
                     <td
                       className="sticky left-0 z-20 bg-yellow-50 px-2 py-1 font-bold text-yellow-800 whitespace-nowrap text-[11px] border-r border-yellow-200"
-                      style={{ minWidth: 220 }}
+                      style={{ width: 220, minWidth: 220, maxWidth: 220 }}
                     >
                       職長: {data.site.foremanName}{data.site.foremanNote ? <span className="text-[9px] text-gray-500 ml-1">({data.site.foremanNote})</span> : ''}
                     </td>
@@ -933,7 +933,7 @@ export default function AttendanceGridPage() {
                 <tr className="bg-orange-50 border-b border-orange-200">
                   <td
                     className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px] border-r border-orange-200"
-                    style={{ minWidth: 220 }}
+                    style={{ width: 220, minWidth: 220, maxWidth: 220 }}
                   >
                     承認
                   </td>
@@ -976,8 +976,8 @@ export default function AttendanceGridPage() {
                         <tr key={worker.id} className="border-t border-gray-100 hover:bg-gray-50/50 group">
                           {/* Worker name - sticky */}
                           <td
-                            className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium whitespace-nowrap text-gray-800 border-r border-gray-100"
-                            style={{ minWidth: 220 }}
+                            className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 border-r border-gray-100 text-xs"
+                            style={{ width: 220, minWidth: 220, maxWidth: 220 }}
                           >
                             {worker.name}
                           </td>
@@ -1102,8 +1102,8 @@ export default function AttendanceGridPage() {
                         <tr key={sc.id} className="border-t border-gray-100 hover:bg-gray-50/50 group">
                           {/* Subcon name - sticky */}
                           <td
-                            className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium whitespace-nowrap text-gray-800 border-r border-gray-100"
-                            style={{ minWidth: 220 }}
+                            className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 border-r border-gray-100 text-xs"
+                            style={{ width: 220, minWidth: 220, maxWidth: 220 }}
                           >
 {sc.name}
                           </td>
@@ -1183,7 +1183,7 @@ export default function AttendanceGridPage() {
                 <tr className="border-t-2 border-[#1B2A4A]">
                   <td
                     className="sticky left-0 z-20 bg-[#1B2A4A] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px] border-r border-gray-600"
-                    style={{ minWidth: 220 }}
+                    style={{ width: 220, minWidth: 220, maxWidth: 220 }}
                   >
                     鳶 合計
                   </td>
@@ -1209,7 +1209,7 @@ export default function AttendanceGridPage() {
                 <tr>
                   <td
                     className="sticky left-0 z-20 bg-[#243656] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px] border-r border-gray-600"
-                    style={{ minWidth: 220 }}
+                    style={{ width: 220, minWidth: 220, maxWidth: 220 }}
                   >
                     土工 合計
                   </td>
@@ -1235,7 +1235,7 @@ export default function AttendanceGridPage() {
                 <tr>
                   <td
                     className="sticky left-0 z-20 bg-[#0F1D36] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px] border-r border-gray-600"
-                    style={{ minWidth: 220 }}
+                    style={{ width: 220, minWidth: 220, maxWidth: 220 }}
                   >
                     総合計
                   </td>
