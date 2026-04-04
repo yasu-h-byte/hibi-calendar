@@ -283,6 +283,48 @@ Chon cong truong -> Chon ten -> Xem lich -> Ky
                   <div className="bg-blue-50 dark:bg-blue-900/20 dark:text-blue-200 rounded-lg p-3 text-sm">
                     就業時間: 8:00〜17:00（休憩2時間）
                   </div>
+
+                  {/* Per-site confirm button */}
+                  {!isApproved && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`${site.siteName} のカレンダーを確定しますか？`)) return
+                        setSaving(true)
+                        try {
+                          const res = await fetch('/api/calendar/bulk-confirm', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                            body: JSON.stringify({
+                              ym,
+                              sites: [{ siteId: site.siteId, days }],
+                              approvedBy: user?.workerId || 0,
+                            }),
+                          })
+                          if (!res.ok) {
+                            const data = await res.json()
+                            alert(data.error || '確定に失敗しました')
+                          } else {
+                            setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
+                            fetchData()
+                          }
+                        } catch { alert('確定に失敗しました') }
+                        finally { setSaving(false) }
+                      }}
+                      disabled={saving || (() => {
+                        const workCount = Object.values(days).filter(d => d === 'work').length
+                        const daysInMonth = new Date(y, m, 0).getDate()
+                        return workCount * 7 > daysInMonth * 40 / 7
+                      })()}
+                      className="w-full bg-hibi-navy text-white py-2.5 rounded-lg text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
+                    >
+                      {saving ? '確定中...' : `${site.siteName} を確定する`}
+                    </button>
+                  )}
+                  {isApproved && (
+                    <div className="text-center text-green-600 dark:text-green-400 text-sm font-bold py-2">
+                      ✅ 確定済み
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -290,15 +332,15 @@ Chon cong truong -> Chon ten -> Xem lich -> Ky
         </div>
       )}
 
-      {/* Bulk confirm button */}
-      {!loading && visibleSites.length > 0 && user.role !== 'foreman' && (
+      {/* Bulk confirm button (admin only, when multiple unconfirmed sites exist) */}
+      {!loading && visibleSites.length > 1 && !allApproved && user.role !== 'foreman' && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
           <button
             onClick={() => setShowConfirmDialog(true)}
-            disabled={saving || hasLegalExceed || allApproved}
+            disabled={saving || hasLegalExceed}
             className="w-full bg-green-600 text-white py-3 rounded-lg text-base font-bold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? '確定中...' : allApproved ? '全現場 確定済み' : '全現場を保存・確定する'}
+            {saving ? '確定中...' : '未確定の全現場をまとめて確定する'}
           </button>
           {hasLegalExceed && (
             <p className="text-red-500 text-xs mt-2 text-center">法定上限を超過している現場があります。出勤日数を修正してください。</p>
