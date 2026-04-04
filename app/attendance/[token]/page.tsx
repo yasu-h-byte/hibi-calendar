@@ -152,6 +152,7 @@ export default function StaffAttendancePage() {
       } else {
         const d = await res.json()
         const msg = d.error === 'Already requested' ? 'Already requested / Da gui roi'
+          : d.error === 'No remaining leave' ? 'ゆうきゅう の こり 0 にち です / Khong con ngay phep'
           : d.error === 'Date must be in the future' ? 'Select a future date / Chon ngay trong tuong lai'
           : d.error || 'Error'
         setLeaveError(msg)
