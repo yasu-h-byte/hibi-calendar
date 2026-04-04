@@ -15,48 +15,69 @@ function hashIP(ip: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const { workerId, ym, siteId } = await request.json()
+    const body = await request.json()
+    const { workerId, ym } = body
 
-    if (!workerId || !ym || !siteId) {
-      return NextResponse.json({ error: 'workerId, ym, siteId required' }, { status: 400 })
-    }
+    // Support both single siteId and bulk siteIds
+    const siteIds: string[] = body.siteIds || (body.siteId ? [body.siteId] : [])
 
-    // Verify worker belongs to the site
-    const workers = await getWorkersForSite(siteId)
-    const worker = workers.find(w => w.id === workerId)
-    if (!worker) {
-      return NextResponse.json({ error: 'Worker not found on this site' }, { status: 401 })
-    }
-
-    // Check if site calendar is approved
-    const calDocId = `${siteId}_${ym}`
-    const calDoc = await getDoc(doc(db, 'siteCalendar', calDocId))
-    if (!calDoc.exists()) {
-      return NextResponse.json({ error: 'Calendar not found' }, { status: 404 })
-    }
-    if (calDoc.data().status !== 'approved') {
-      return NextResponse.json({ error: 'Calendar not yet approved' }, { status: 403 })
-    }
-
-    // Check if already signed
-    const signDocId = `${workerId}_${ym}_${siteId}`
-    const existingSign = await getDoc(doc(db, 'calendarSign', signDocId))
-    if (existingSign.exists()) {
-      return NextResponse.json({ error: 'Already signed', signedAt: existingSign.data().signedAt }, { status: 409 })
+    if (!workerId || !ym || siteIds.length === 0) {
+      return NextResponse.json({ error: 'workerId, ym, siteId(s) required' }, { status: 400 })
     }
 
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+    const ipHash = hashIP(ip)
+    const signedAt = new Date().toISOString()
 
-    await setDoc(doc(db, 'calendarSign', signDocId), {
-      workerId,
-      ym,
-      siteId,
-      signedAt: new Date().toISOString(),
-      method: 'tap',
-      ipHash: hashIP(ip),
-    })
+    const results: { siteId: string; success: boolean; error?: string; signedAt?: string }[] = []
 
-    return NextResponse.json({ success: true })
+    for (const siteId of siteIds) {
+      // Verify worker belongs to the site
+      const workers = await getWorkersForSite(siteId)
+      const worker = workers.find(w => w.id === workerId)
+      if (!worker) {
+        results.push({ siteId, success: false, error: 'Worker not found on this site' })
+        continue
+      }
+
+      // Check if site calendar is approved
+      const calDocId = `${siteId}_${ym}`
+      const calDoc = await getDoc(doc(db, 'siteCalendar', calDocId))
+      if (!calDoc.exists() || calDoc.data().status !== 'approved') {
+        results.push({ siteId, success: false, error: 'Calendar not approved' })
+        continue
+      }
+
+      // Check if already signed
+      const signDocId = `${workerId}_${ym}_${siteId}`
+      const existingSign = await getDoc(doc(db, 'calendarSign', signDocId))
+      if (existingSign.exists()) {
+        results.push({ siteId, success: true, signedAt: existingSign.data().signedAt })
+        continue
+      }
+
+      await setDoc(doc(db, 'calendarSign', signDocId), {
+        workerId,
+        ym,
+        siteId,
+        signedAt,
+        method: 'tap',
+        ipHash,
+      })
+
+      results.push({ siteId, success: true, signedAt })
+    }
+
+    // For single-site backwards compatibility
+    if (siteIds.length === 1) {
+      const r = results[0]
+      if (!r.success) {
+        return NextResponse.json({ error: r.error }, { status: 400 })
+      }
+      return NextResponse.json({ success: true, signedAt: r.signedAt })
+    }
+
+    return NextResponse.json({ success: true, results })
   } catch (error) {
     console.error('Failed to sign:', error)
     return NextResponse.json({ error: 'Failed to sign' }, { status: 500 })

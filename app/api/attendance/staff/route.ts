@@ -11,6 +11,7 @@ import {
   formatDateJP,
   formatDateShort,
 } from '@/lib/attendance'
+import { getSites } from '@/lib/sites'
 import { AttendanceEntry } from '@/types'
 
 export async function GET(request: NextRequest) {
@@ -27,13 +28,33 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const allSites = await getStaffSites(worker.id)
-    if (allSites.length === 0) {
+    const assignedSites = await getStaffSites(worker.id)
+    if (assignedSites.length === 0 && !siteIdParam) {
       return NextResponse.json({ error: 'No site assigned' }, { status: 404 })
     }
 
-    const siteId = siteIdParam || allSites[0].id
-    const site = allSites.find(s => s.id === siteId) || allSites[0]
+    // Get all active (non-archived) sites for the dropdown
+    const allActiveSites = await getSites()
+
+    // Build availableSites: all active sites, with primary flag for assigned ones
+    const assignedIds = new Set(assignedSites.map(s => s.id))
+    const availableSites = allActiveSites.map(s => ({
+      id: s.id,
+      name: s.name,
+      primary: assignedIds.has(s.id),
+    }))
+    // Sort: assigned sites first, then alphabetically
+    availableSites.sort((a, b) => {
+      if (a.primary && !b.primary) return -1
+      if (!a.primary && b.primary) return 1
+      return a.name.localeCompare(b.name, 'ja')
+    })
+
+    const siteId = siteIdParam || (assignedSites.length > 0 ? assignedSites[0].id : allActiveSites[0]?.id)
+    const site = availableSites.find(s => s.id === siteId) || availableSites[0]
+    if (!site) {
+      return NextResponse.json({ error: 'No sites available' }, { status: 404 })
+    }
 
     const now = new Date()
     const y = now.getFullYear()
@@ -86,7 +107,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       worker: { id: worker.id, name: worker.name, nameVi: worker.nameVi },
       site: { id: site.id, name: site.name },
-      allSites,
+      allSites: assignedSites,
+      availableSites,
       today: {
         year: y, month: m, day: d, ym,
         dateLabel: formatDateJP(now),
@@ -115,10 +137,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    // Check site assignment
-    const allSites = await getStaffSites(worker.id)
-    if (!allSites.find(s => s.id === siteId)) {
-      return NextResponse.json({ error: 'Not assigned to this site' }, { status: 403 })
+    // Check site exists and is active
+    const allActiveSites = await getSites()
+    if (!allActiveSites.find(s => s.id === siteId)) {
+      return NextResponse.json({ error: 'Site not found or archived' }, { status: 403 })
     }
 
     // Check approval lock

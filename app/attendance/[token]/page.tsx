@@ -5,11 +5,13 @@ import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus } from '@/types'
 
 interface SiteInfo { id: string; name: string }
+interface AvailableSite { id: string; name: string; primary: boolean }
 
 interface StaffData {
   worker: { id: number; name: string; nameVi?: string }
   site: SiteInfo
   allSites: SiteInfo[]
+  availableSites?: AvailableSite[]
   today: { year: number; month: number; day: number; ym: string; dateLabel: string }
   currentEntry: AttendanceEntry | null
   currentStatus: AttendanceStatus
@@ -45,7 +47,6 @@ export default function StaffAttendancePage() {
   const [error, setError] = useState<string | null>(null)
   const [showOT, setShowOT] = useState(false)
   const [otHours, setOtHours] = useState(1.0)
-  const [showSiteSwitch, setShowSiteSwitch] = useState(false)
   const [editingPast, setEditingPast] = useState<number | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
@@ -179,14 +180,26 @@ export default function StaffAttendancePage() {
       <div className="bg-hibi-navy text-white px-4 py-4">
         <div className="max-w-lg mx-auto">
           <div className="text-xl font-bold">{data.worker.name} さん</div>
-          <div
-            className={`text-sm opacity-80 mt-1 ${data.allSites.length > 1 ? 'underline cursor-pointer' : ''}`}
-            onClick={() => data.allSites.length > 1 && setShowSiteSwitch(true)}
-          >
-            {data.site.name}
-            {data.allSites.length > 1 && ' ▼'}
-          </div>
           <div className="text-sm opacity-60 mt-1">{data.today.dateLabel}</div>
+        </div>
+      </div>
+
+      {/* Site selector dropdown */}
+      <div className="bg-white border-b px-4 py-3">
+        <div className="max-w-lg mx-auto">
+          <label className="text-xs text-gray-500 block mb-1">げんば / Công trường</label>
+          <select
+            value={data.site.id}
+            onChange={(e) => { setSiteId(e.target.value); setLoading(true) }}
+            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-base text-hibi-navy font-bold appearance-none"
+            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%23666' stroke-width='2'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
+          >
+            {(data.availableSites || data.allSites.map(s => ({ ...s, primary: true }))).map(s => (
+              <option key={s.id} value={s.id}>
+                {s.primary ? '\u2605 ' : ''}{s.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -312,32 +325,6 @@ export default function StaffAttendancePage() {
           まいにち いれてね！
         </div>
       </div>
-
-      {/* Site switch modal */}
-      {showSiteSwitch && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowSiteSwitch(false)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-4 text-center">
-              げんばを えらんでください
-            </h3>
-            <div className="space-y-2">
-              {data.allSites.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => { setSiteId(s.id); setShowSiteSwitch(false); setLoading(true) }}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-base transition ${
-                    s.id === data.site.id
-                      ? 'bg-hibi-navy text-white'
-                      : 'bg-gray-100 text-gray-700 active:bg-gray-200'
-                  }`}
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Past day edit modal */}
       {editingPast !== null && data.pastDays[editingPast] && (
