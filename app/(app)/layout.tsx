@@ -47,7 +47,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Sidebar user={user} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/* Main content */}
-        <div className="lg:ml-64">
+        <div className="lg:ml-52">
           {/* Mobile hamburger button */}
           <button
             onClick={() => setSidebarOpen(true)}

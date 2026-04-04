@@ -162,17 +162,16 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
       )}
 
       <aside
-        className={`fixed top-0 left-0 h-full w-64 bg-hibi-navy dark:bg-gray-950 text-white z-50 transform transition-transform duration-200 lg:translate-x-0 flex flex-col ${
+        className={`fixed top-0 left-0 h-full w-52 bg-hibi-navy dark:bg-gray-950 text-white z-50 transform transition-transform duration-200 lg:translate-x-0 flex flex-col ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Header - Logo */}
-        <div className="px-3 pt-4 pb-3 border-b border-white/10">
-          <div className="bg-white rounded-lg p-2.5 flex items-center justify-center">
+        <div className="px-3 pt-3 pb-2 border-b border-white/10">
+          <div className="bg-white rounded-lg p-1.5 flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-full" />
+            <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-full max-w-[160px]" />
           </div>
-          <p className="text-[11px] text-white/50 mt-2 text-center">鳶事業部 出面管理</p>
         </div>
 
         {/* User info */}
@@ -190,7 +189,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
         <nav className="flex-1 overflow-y-auto py-2">
           {sections.map(section => (
             <div key={section}>
-              <div className="px-4 py-2 text-xs text-white/40 uppercase tracking-wider">
+              <div className="px-3 py-1.5 text-[10px] text-white/40 uppercase tracking-wider">
                 {section}
               </div>
               {filteredItems
@@ -202,7 +201,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
                     <button
                       key={item.label}
                       onClick={() => handleClick(item)}
-                      className={`w-full text-left px-4 py-2.5 flex items-center gap-3 text-sm transition ${
+                      className={`w-full text-left px-3 py-2 flex items-center gap-2.5 text-[13px] transition ${
                         isActive
                           ? 'bg-white/20 text-white font-medium'
                           : 'text-white/80 hover:bg-white/10'
