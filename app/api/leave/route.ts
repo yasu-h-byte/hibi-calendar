@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
+import { checkAndGrantPL } from '@/lib/leave-auto'
 
 /** 法定有給付与日数を計算 */
 function calcLegalPL(hireDate: string, grantDate: string): number {
@@ -163,7 +164,14 @@ export async function GET(request: NextRequest) {
   const fyStart = parseInt(fy)
 
   try {
-    const main = await getMainData()
+    let main = await getMainData()
+
+    // Auto-grant PL for eligible workers whose grant date has arrived
+    const autoGranted = await checkAndGrantPL(main)
+    if (autoGranted.length > 0) {
+      // Re-read main data to get updated plData
+      main = await getMainData()
+    }
 
     // FY months: Oct of fyStart to Sep of fyStart+1
     const fyMonths: string[] = []
@@ -267,6 +275,14 @@ export async function GET(request: NextRequest) {
     if (calendarMode) {
       response.plCalendar = plCalendar
       response.workerNames = workerNames
+    }
+
+    if (autoGranted.length > 0) {
+      response.autoGranted = autoGranted.map(g => ({
+        name: g.name,
+        days: g.days,
+        grantDate: g.grantDate,
+      }))
     }
 
     return NextResponse.json(response)

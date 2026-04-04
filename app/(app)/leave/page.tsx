@@ -105,6 +105,8 @@ export default function LeavePage() {
   const [calendarTooltip, setCalendarTooltip] = useState<{ dateKey: string; x: number; y: number } | null>(null)
   const [editingGrantMonth, setEditingGrantMonth] = useState<number | null>(null) // workerId being edited
   const [grantMonthSaving, setGrantMonthSaving] = useState(false)
+  const [autoGranted, setAutoGranted] = useState<{ name: string; days: number; grantDate: string }[]>([])
+  const [autoGrantDismissed, setAutoGrantDismissed] = useState(false)
   const [fy, setFy] = useState(() => {
     const now = new Date()
     const y = now.getFullYear()
@@ -127,6 +129,10 @@ export default function LeavePage() {
         setWorkers(data.workers || [])
         setPlCalendar(data.plCalendar || {})
         setWorkerNames(data.workerNames || {})
+        if (data.autoGranted && data.autoGranted.length > 0) {
+          setAutoGranted(data.autoGranted)
+          setAutoGrantDismissed(false)
+        }
       }
     } finally {
       setLoading(false)
@@ -279,6 +285,22 @@ export default function LeavePage() {
           </button>
         ))}
       </div>
+
+      {/* Auto-granted banner */}
+      {autoGranted.length > 0 && !autoGrantDismissed && (
+        <div className="bg-green-50 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-green-600 text-lg">&#10003;</span>
+            <span className="text-green-800 dark:text-green-200 text-sm font-medium">
+              自動付与: {autoGranted.map(g => `${g.name} ${g.days}日`).join('、')}
+            </span>
+          </div>
+          <button onClick={() => setAutoGrantDismissed(true)}
+            className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200 text-sm">
+            &#x2715;
+          </button>
+        </div>
+      )}
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

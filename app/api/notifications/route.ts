@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs } from 'firebase/firestore'
 import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
+import { getUpcomingGrants } from '@/lib/leave-auto'
 
 interface Notification {
   id: string
@@ -164,6 +165,29 @@ export async function GET(request: NextRequest) {
       }
     } catch (e) {
       console.error('Attendance check error:', e)
+    }
+
+    // 5. Upcoming PL grant dates (within 7 days)
+    try {
+      const upcoming = getUpcomingGrants(main, 7)
+      if (upcoming.length > 0) {
+        const details = upcoming
+          .map(u => {
+            const m = u.grantDate.getMonth() + 1
+            const d = u.grantDate.getDate()
+            return `${u.name} (${m}/${d}) ${u.days}日`
+          })
+          .join('、')
+        notifications.push({
+          id: 'upcoming-pl-grant',
+          icon: '\uD83C\uDF34',
+          message: `有給発生予定: ${details}`,
+          type: 'info',
+          count: upcoming.length,
+        })
+      }
+    } catch (e) {
+      console.error('Upcoming PL grant check error:', e)
     }
 
     return NextResponse.json({ notifications })
