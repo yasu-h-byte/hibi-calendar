@@ -215,12 +215,13 @@ export default function StaffAttendancePage() {
         ) : (
           <>
             {/* 4 Buttons */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {([
                 { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' },
                 { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400 hover:bg-gray-500 active:bg-gray-600' },
                 { choice: 'leave', emoji: '🌴', label: 'ゆうきゅう', color: 'bg-green-500 hover:bg-green-600 active:bg-green-700' },
-                { choice: 'site_off', emoji: '🚧', label: 'げんばやすみ', color: 'bg-yellow-500 hover:bg-yellow-600 active:bg-yellow-700' },
+                // site_off（げんばやすみ）は変形労働時間制導入により非表示
+                // 過去データの表示・集計には影響なし
               ] as const).map(btn => {
                 const isActive = (
                   (btn.choice === 'work' && (currentStatus === 'work' || currentStatus === 'overtime')) ||

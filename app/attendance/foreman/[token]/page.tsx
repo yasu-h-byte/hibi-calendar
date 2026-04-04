@@ -257,12 +257,12 @@ export default function ForemanAttendancePage() {
             <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center">{editingWorker.name}</h3>
             <p className="text-sm text-gray-500 mb-4 text-center">{data.date.dateLabel}</p>
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-3 gap-3 mb-4">
               {([
                 { choice: 'work', emoji: '🔨', label: '出勤', color: 'bg-blue-500' },
                 { choice: 'rest', emoji: '🏠', label: '休み', color: 'bg-gray-400' },
                 { choice: 'leave', emoji: '🌴', label: '有給', color: 'bg-green-500' },
-                { choice: 'site_off', emoji: '🚧', label: '現場休み', color: 'bg-yellow-500' },
+                // site_off（現場休み）は変形労働時間制導入により非表示
               ] as const).map(btn => (
                 <button
                   key={btn.choice}
