@@ -100,7 +100,7 @@ export default function NotificationBell() {
       {/* Dropdown panel */}
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-50 overflow-hidden"
+          className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-[100] overflow-hidden"
           style={{ animation: 'notifSlideIn 0.15s ease-out' }}
         >
           {/* Header */}
@@ -121,11 +121,11 @@ export default function NotificationBell() {
               visibleNotifications.map(n => (
                 <div
                   key={n.id}
-                  className={`px-4 py-3 border-l-4 border-b border-gray-50 flex items-start gap-3 transition-colors duration-150 hover:bg-gray-50 ${typeColor(n.type)}`}
+                  className={`px-3 py-2.5 border-l-4 border-b border-gray-50 flex items-start gap-2 transition-colors duration-150 hover:bg-gray-50 ${typeColor(n.type)}`}
                 >
-                  <span className="text-lg flex-shrink-0 mt-0.5">{n.icon}</span>
+                  <span className="text-sm flex-shrink-0 mt-0.5">{n.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-800 dark:text-gray-200 leading-snug">{n.message}</p>
+                    <p className="text-xs text-gray-800 dark:text-gray-200 leading-snug">{n.message}</p>
                     {n.count !== undefined && n.count > 0 && (
                       <span className="inline-block mt-1 text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
                         {n.count}件
