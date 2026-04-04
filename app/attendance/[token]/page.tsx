@@ -334,12 +334,12 @@ export default function StaffAttendancePage() {
               {data.pastDays[editingPast].date}
             </h3>
             <p className="text-sm text-gray-500 mb-4 text-center">なおす</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {([
                 { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500' },
                 { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400' },
                 { choice: 'leave', emoji: '🌴', label: 'ゆうきゅう', color: 'bg-green-500' },
-                { choice: 'site_off', emoji: '🚧', label: 'げんばやすみ', color: 'bg-yellow-500' },
+                // site_off（げんばやすみ）は変形労働時間制導入により非表示
               ] as const).map(btn => (
                 <button
                   key={btn.choice}
