@@ -68,12 +68,10 @@ export default function CalendarManagePage() {
   const [sites, setSites] = useState<SiteCalendarData[]>([])
   const [ym, setYm] = useState(defaultYm)
   const [loading, setLoading] = useState(true)
-  const [expandedSite, setExpandedSite] = useState<string | null>(null)
   const [editingDays, setEditingDays] = useState<Record<string, Record<string, DayType>>>({})
-  const [saving, setSaving] = useState<string | null>(null)
-  const [rejectSiteId, setRejectSiteId] = useState<string | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
+  const [saving, setSaving] = useState(false)
   const [copiedMsg, setCopiedMsg] = useState(false)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   const [y, m] = ym.split('-').map(Number)
 
@@ -108,6 +106,11 @@ export default function CalendarManagePage() {
     fetchData()
   }, [fetchData])
 
+  // Reset editingDays when ym changes
+  useEffect(() => {
+    setEditingDays({})
+  }, [ym])
+
   const getEditDays = (siteId: string, currentDays: Record<string, DayType> | null) => {
     if (editingDays[siteId]) return editingDays[siteId]
     return currentDays || generateDefaultDays(y, m)
@@ -117,71 +120,48 @@ export default function CalendarManagePage() {
     setEditingDays(prev => ({ ...prev, [siteId]: days }))
   }
 
-  const handleSave = async (siteId: string) => {
-    const days = editingDays[siteId]
-    if (!days || !user) return
-    setSaving(siteId)
+  const handleBulkConfirm = async () => {
+    if (!user) return
+    setSaving(true)
+    setShowConfirmDialog(false)
     try {
-      await fetch('/api/calendar/save-days', {
+      // Build the payload with current days for each site
+      const payload = visibleSites.map(site => ({
+        siteId: site.siteId,
+        days: getEditDays(site.siteId, site.days),
+      }))
+
+      const res = await fetch('/api/calendar/bulk-confirm', {
         method: 'POST',
         headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteId, ym, days, updatedBy: user.workerId }),
+        body: JSON.stringify({ ym, sites: payload, approvedBy: user.workerId }),
       })
-      setEditingDays(prev => { const n = { ...prev }; delete n[siteId]; return n })
+
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || '確定に失敗しました')
+        return
+      }
+
+      setEditingDays({})
       fetchData()
+    } catch (error) {
+      console.error('Failed to bulk confirm:', error)
+      alert('確定に失敗しました')
     } finally {
-      setSaving(null)
+      setSaving(false)
     }
-  }
-
-  const handleSubmit = async (siteId: string) => {
-    if (!user || !confirm('このカレンダーを提出しますか？')) return
-    // Save first if there are unsaved changes
-    if (editingDays[siteId]) await handleSave(siteId)
-    await fetch('/api/calendar/submit', {
-      method: 'POST',
-      headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ siteId, ym, submittedBy: user.workerId }),
-    })
-    fetchData()
-  }
-
-  const handleApprove = async (siteId: string) => {
-    if (!user || !confirm('このカレンダーを承認しますか？')) return
-    const res = await fetch('/api/calendar/approve', {
-      method: 'POST',
-      headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ siteId, ym, approvedBy: user.workerId }),
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      alert(data.error || '承認に失敗しました')
-      return
-    }
-    fetchData()
-  }
-
-  const handleReject = async () => {
-    if (!user || !rejectSiteId) return
-    await fetch('/api/calendar/reject', {
-      method: 'POST',
-      headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ siteId: rejectSiteId, ym, rejectedBy: user.workerId, reason: rejectReason }),
-    })
-    setRejectSiteId(null)
-    setRejectReason('')
-    fetchData()
   }
 
   const copyMessage = () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const msg = `📅 Lịch làm việc tháng ${m}/${y}
+    const msg = `Lich lam viec thang ${m}/${y}
 HIBI CONSTRUCTION
 
-Vui lòng xác nhận và ký:
+Vui long xac nhan va ky:
 ${baseUrl}/calendar/public
 
-👆 Chọn công trường → Chọn tên → Xem lịch → Ký
+Chon cong truong -> Chon ten -> Xem lich -> Ky
 
 就業カレンダー ${y}年${m}月
 上のリンクから現場を選んで署名してください`
@@ -196,34 +176,12 @@ ${baseUrl}/calendar/public
     ? sites.filter(s => user.foremanSites.includes(s.siteId))
     : sites
 
-  // Status badge
-  const statusBadge = (status: CalendarStatus | null) => {
-    if (!status || status === 'draft') return <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full">下書き</span>
-    if (status === 'submitted') return <span className="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 text-xs font-bold px-2 py-0.5 rounded-full">承認待ち</span>
-    if (status === 'approved') return <span className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold px-2 py-0.5 rounded-full">承認済み</span>
-    if (status === 'rejected') return <span className="bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 text-xs font-bold px-2 py-0.5 rounded-full">差し戻し</span>
-    return null
-  }
-
-  const canEdit = (site: SiteCalendarData) => {
-    if (!user) return false
-    if (site.status === 'approved') return false
-    if (site.status === 'submitted' && user.role === 'foreman') return false
-    if (user.role === 'foreman' && !user.foremanSites.includes(site.siteId)) return false
-    return true
-  }
-
-  const canSubmit = (site: SiteCalendarData) => {
-    if (!user) return false
-    if (site.status === 'submitted' || site.status === 'approved') return false
-    if (user.role === 'foreman') return user.foremanSites.includes(site.siteId)
-    return user.role === 'admin'
-  }
-
-  const canApprove = (site: SiteCalendarData) => {
-    if (!user) return false
-    if (site.status !== 'submitted') return false
-    return user.role === 'approver' || user.role === 'admin'
+  // Status badge (simplified: only 未作成 or 確定済み)
+  const statusBadge = (site: SiteCalendarData) => {
+    if (site.status === 'approved') {
+      return <span className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold px-2 py-0.5 rounded-full">確定済み</span>
+    }
+    return <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full">未作成</span>
   }
 
   // Ym options
@@ -234,11 +192,23 @@ ${baseUrl}/calendar/public
     ymOptions.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
-  // Summary
-  const approvedCount = visibleSites.filter(s => s.status === 'approved').length
-  const submittedCount = visibleSites.filter(s => s.status === 'submitted').length
+  // Signature summary
   const totalWorkers = visibleSites.reduce((sum, s) => sum + s.workers.length, 0)
   const signedWorkers = visibleSites.reduce((sum, s) => sum + s.workers.filter(w => w.signed).length, 0)
+  const unsignedWorkers = visibleSites.flatMap(s =>
+    s.workers.filter(w => !w.signed).map(w => ({ name: w.name, siteName: s.siteName }))
+  )
+
+  // Check if any site has legal limit exceeded
+  const hasLegalExceed = visibleSites.some(site => {
+    const days = getEditDays(site.siteId, site.days)
+    const workCount = Object.values(days).filter(d => d === 'work').length
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const limitHours = daysInMonth * 40 / 7
+    return workCount * 7 > limitHours
+  })
+
+  const allApproved = visibleSites.length > 0 && visibleSites.every(s => s.status === 'approved')
 
   if (!user) return null
 
@@ -275,182 +245,125 @@ ${baseUrl}/calendar/public
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
-          <div className="text-2xl font-bold text-hibi-navy dark:text-blue-300">{visibleSites.length}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">現場</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
-          <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{submittedCount}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">承認待ち</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400">{approvedCount}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">承認済み</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
-          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{signedWorkers}/{totalWorkers}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">署名</div>
-        </div>
-      </div>
-
-      {/* Site cards */}
+      {/* Site calendars - all expanded */}
       {loading ? (
         <div className="text-center py-8 text-gray-400 dark:text-gray-500">読み込み中...</div>
       ) : visibleSites.length === 0 ? (
         <div className="text-center py-8 text-gray-400 dark:text-gray-500">現場データがありません</div>
       ) : (
-        <div className="space-y-4">
-          {/* Show submitted sites first for approvers */}
-          {[...visibleSites].sort((a, b) => {
-            if (a.status === 'submitted' && b.status !== 'submitted') return -1
-            if (b.status === 'submitted' && a.status !== 'submitted') return 1
-            return 0
-          }).map(site => {
-            const isExpanded = expandedSite === site.siteId
-            const signedCount = site.workers.filter(w => w.signed).length
+        <div className="space-y-6">
+          {visibleSites.map(site => {
             const days = getEditDays(site.siteId, site.days)
-            const hasUnsaved = !!editingDays[site.siteId]
+            const isApproved = site.status === 'approved'
 
             return (
-              <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow overflow-hidden">
+              <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
                 {/* Site header */}
-                <div
-                  className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center justify-between"
-                  onClick={() => setExpandedSite(isExpanded ? null : site.siteId)}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-hibi-navy dark:text-white">{site.siteName}</h3>
-                      {statusBadge(site.status)}
-                      {hasUnsaved && <span className="text-orange-500 text-xs">● 未保存</span>}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {signedCount}/{site.workers.length}名 署名済み
-                    </div>
-                    {site.rejectedReason && site.status === 'rejected' && (
-                      <div className="text-xs text-red-500 mt-1">差し戻し理由: {site.rejectedReason}</div>
-                    )}
+                <div className="p-4 border-b dark:border-gray-700 flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-hibi-navy dark:text-white">{site.siteName}</h3>
+                    {statusBadge(site)}
                   </div>
-                  <svg
-                    className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
                 </div>
 
-                {/* Expanded content */}
-                {isExpanded && (
-                  <div className="border-t dark:border-gray-700 px-4 pb-4 space-y-4">
-                    {/* Calendar editor */}
-                    <div className="pt-4">
-                      <CalendarEditor
-                        year={y}
-                        month={m}
-                        days={days}
-                        onChange={d => handleDaysChange(site.siteId, d)}
-                        readOnly={!canEdit(site)}
-                      />
-                    </div>
+                {/* Calendar editor */}
+                <div className="px-4 pt-4">
+                  <CalendarEditor
+                    year={y}
+                    month={m}
+                    days={days}
+                    onChange={d => handleDaysChange(site.siteId, d)}
+                    readOnly={isApproved}
+                  />
+                </div>
 
-                    {/* Day-type summary */}
-                    <DaySummary days={days} year={y} month={m} />
-
-                    {/* Working hours note */}
-                    <div className="bg-blue-50 dark:bg-blue-900/20 dark:text-blue-200 rounded-lg p-3 text-sm">
-                      就業時間: 8:00〜17:00（休憩2時間）
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex flex-wrap gap-2">
-                      {canEdit(site) && (
-                        <>
-                          <button
-                            onClick={() => handleSave(site.siteId)}
-                            disabled={!hasUnsaved || saving === site.siteId}
-                            className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition disabled:opacity-50"
-                          >
-                            {saving === site.siteId ? '保存中...' : '保存'}
-                          </button>
-                          {canSubmit(site) && (
-                            <button
-                              onClick={() => handleSubmit(site.siteId)}
-                              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 transition"
-                            >
-                              提出する
-                            </button>
-                          )}
-                        </>
-                      )}
-                      {canApprove(site) && (
-                        <>
-                          <button
-                            onClick={() => handleApprove(site.siteId)}
-                            className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-green-700 transition"
-                          >
-                            承認
-                          </button>
-                          <button
-                            onClick={() => setRejectSiteId(site.siteId)}
-                            className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-600 transition"
-                          >
-                            差し戻し
-                          </button>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Worker signature list */}
-                    {site.workers.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-bold text-gray-600 dark:text-gray-300 mb-2">署名状況</h4>
-                        <div className="space-y-1">
-                          {site.workers.map(w => (
-                            <div key={w.id} className="flex items-center justify-between text-sm py-1 border-b border-gray-100 dark:border-gray-700 dark:text-gray-300">
-                              <span>{w.name}</span>
-                              {w.signed ? (
-                                <span className="text-green-600 text-xs">✓ {w.signedAt && new Date(w.signedAt).toLocaleDateString('ja-JP')}</span>
-                              ) : site.status === 'approved' ? (
-                                <span className="text-yellow-600 text-xs">未署名</span>
-                              ) : (
-                                <span className="text-gray-400 text-xs">—</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                {/* Day-type summary + legal limit */}
+                <div className="px-4 pb-4 pt-2 space-y-2">
+                  <DaySummary days={days} year={y} month={m} />
+                  <div className="bg-blue-50 dark:bg-blue-900/20 dark:text-blue-200 rounded-lg p-3 text-sm">
+                    就業時間: 8:00〜17:00（休憩2時間）
                   </div>
-                )}
+                </div>
               </div>
             )
           })}
         </div>
       )}
 
-      {/* Reject modal */}
-      {rejectSiteId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setRejectSiteId(null)}>
+      {/* Bulk confirm button */}
+      {!loading && visibleSites.length > 0 && user.role !== 'foreman' && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+          <button
+            onClick={() => setShowConfirmDialog(true)}
+            disabled={saving || hasLegalExceed || allApproved}
+            className="w-full bg-green-600 text-white py-3 rounded-lg text-base font-bold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? '確定中...' : allApproved ? '全現場 確定済み' : '全現場を保存・確定する'}
+          </button>
+          {hasLegalExceed && (
+            <p className="text-red-500 text-xs mt-2 text-center">法定上限を超過している現場があります。出勤日数を修正してください。</p>
+          )}
+        </div>
+      )}
+
+      {/* Signature status summary */}
+      {!loading && visibleSites.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 space-y-3">
+          <h3 className="font-bold text-hibi-navy dark:text-white">署名状況</h3>
+          <div className="text-sm text-gray-700 dark:text-gray-300">
+            署名状況: <span className="font-bold">{signedWorkers}/{totalWorkers}名</span> 署名済み
+          </div>
+          {unsignedWorkers.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">未署名者:</p>
+              <div className="flex flex-wrap gap-1">
+                {unsignedWorkers.map((w, i) => (
+                  <span key={i} className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 text-xs px-2 py-0.5 rounded-full">
+                    {w.name}（{w.siteName}）
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          <a
+            href="/calendar/public"
+            target="_blank"
+            className="inline-block text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
+          >
+            署名ページを開く
+          </a>
+        </div>
+      )}
+
+      {/* Confirmation dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowConfirmDialog(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">差し戻し理由</h3>
-            <textarea
-              value={rejectReason}
-              onChange={e => setRejectReason(e.target.value)}
-              placeholder="理由を入力してください（任意）"
-              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg p-3 mb-4 text-sm"
-              rows={3}
-            />
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-3">確認</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+              {visibleSites.length}現場のカレンダーを保存・確定します。確定後は署名受付が開始されます。
+            </p>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-4 space-y-1">
+              {visibleSites.map(site => {
+                const days = getEditDays(site.siteId, site.days)
+                const workCount = Object.values(days).filter(d => d === 'work').length
+                return (
+                  <div key={site.siteId} className="flex justify-between">
+                    <span>{site.siteName}</span>
+                    <span>出勤{workCount}日</span>
+                  </div>
+                )
+              })}
+            </div>
             <div className="flex gap-2">
               <button
-                onClick={handleReject}
-                className="flex-1 bg-red-500 text-white rounded-lg py-2 text-sm hover:bg-red-600 transition"
+                onClick={handleBulkConfirm}
+                className="flex-1 bg-green-600 text-white rounded-lg py-2 text-sm font-bold hover:bg-green-700 transition"
               >
-                差し戻す
+                確定する
               </button>
               <button
-                onClick={() => { setRejectSiteId(null); setRejectReason('') }}
+                onClick={() => setShowConfirmDialog(false)}
                 className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2 text-sm hover:bg-gray-300 dark:hover:bg-gray-500 transition"
               >
                 キャンセル
