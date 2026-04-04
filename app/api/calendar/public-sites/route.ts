@@ -49,8 +49,16 @@ export async function GET(request: Request) {
         days: approvedCalendars[sw.site.id] || {},
       }))
 
-    // Build foreign workers list (workers with tokens) across all approved sites
-    // Deduplicate workers across sites
+    // Build foreign workers list: ALL foreign workers × ALL approved sites
+    // (全員が全現場のカレンダーに署名する方式)
+    const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
+    const allWorkers = mainDoc.exists() ? (mainDoc.data().workers || []) : []
+    const foreignWorkers = allWorkers.filter((w: Record<string, unknown>) =>
+      w.token && w.visa && w.visa !== 'none' && !w.retired
+    )
+
+    const approvedSiteList = sitesWithWorkers.filter(sw => approvedSites.has(sw.site.id))
+
     const workerMap = new Map<number, {
       id: number
       name: string
@@ -59,27 +67,23 @@ export async function GET(request: Request) {
       sites: { siteId: string; siteName: string; signed: boolean; signedAt: string | null }[]
     }>()
 
-    for (const sw of sitesWithWorkers) {
-      if (!approvedSites.has(sw.site.id)) continue
-      for (const w of sw.workers) {
-        if (!w.token) continue // only foreign workers with tokens
-        if (!workerMap.has(w.id)) {
-          workerMap.set(w.id, {
-            id: w.id,
-            name: w.name,
-            nameVi: w.nameVi || '',
-            token: w.token,
-            sites: [],
-          })
-        }
-        const sigKey = `${w.id}_${sw.site.id}`
-        workerMap.get(w.id)!.sites.push({
-          siteId: sw.site.id,
-          siteName: sw.site.name,
-          signed: !!sigs[sigKey],
-          signedAt: sigs[sigKey] && sigs[sigKey] !== 'true' ? sigs[sigKey] : null,
-        })
-      }
+    for (const w of foreignWorkers) {
+      const wId = w.id as number
+      workerMap.set(wId, {
+        id: wId,
+        name: w.name as string,
+        nameVi: (w.nameVi as string) || '',
+        token: w.token as string,
+        sites: approvedSiteList.map(sw => {
+          const sigKey = `${wId}_${sw.site.id}`
+          return {
+            siteId: sw.site.id,
+            siteName: sw.site.name,
+            signed: !!sigs[sigKey],
+            signedAt: sigs[sigKey] && sigs[sigKey] !== 'true' ? sigs[sigKey] : null,
+          }
+        }),
+      })
     }
 
     const workers = Array.from(workerMap.values()).map(w => ({

@@ -32,14 +32,7 @@ export async function POST(request: NextRequest) {
     const results: { siteId: string; success: boolean; error?: string; signedAt?: string }[] = []
 
     for (const siteId of siteIds) {
-      // Verify worker belongs to the site
-      const workers = await getWorkersForSite(siteId)
-      const worker = workers.find(w => w.id === workerId)
-      if (!worker) {
-        results.push({ siteId, success: false, error: 'Worker not found on this site' })
-        continue
-      }
-
+      // 全現場署名方式: 配置チェックは行わず、外国人スタッフであれば署名可能
       // Check if site calendar is approved
       const calDocId = `${siteId}_${ym}`
       const calDoc = await getDoc(doc(db, 'siteCalendar', calDocId))
