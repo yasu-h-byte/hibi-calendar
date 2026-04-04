@@ -4,7 +4,6 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
-import { checkAndGrantPL } from '@/lib/leave-auto'
 
 /** 法定有給付与日数を計算 */
 function calcLegalPL(hireDate: string, grantDate: string): number {
@@ -168,14 +167,14 @@ export async function GET(request: NextRequest) {
   if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const calendarMode = request.nextUrl.searchParams.get('calendar') === 'true'
+  const debugMode = request.nextUrl.searchParams.get('debug') === 'true'
 
   try {
-    let main = await getMainData()
+    const main = await getMainData()
 
-    // Auto-grant PL for eligible workers whose grant date has arrived
-    const autoGranted = await checkAndGrantPL(main)
-    if (autoGranted.length > 0) {
-      main = await getMainData()
+    // デバッグモード: 生のplDataを返す
+    if (debugMode) {
+      return NextResponse.json({ plData: main.plData })
     }
 
     // 全期間の出面データからPL消化を集計（付与日から1年間はスタッフごとに異なるため、広めに取得）
@@ -335,14 +334,6 @@ export async function GET(request: NextRequest) {
     if (calendarMode) {
       response.plCalendar = plCalendar
       response.workerNames = workerNames
-    }
-
-    if (autoGranted.length > 0) {
-      response.autoGranted = autoGranted.map(g => ({
-        name: g.name,
-        days: g.days,
-        grantDate: g.grantDate,
-      }))
     }
 
     return NextResponse.json(response)
