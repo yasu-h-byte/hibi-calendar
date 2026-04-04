@@ -171,6 +171,14 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
   for (const w of eligible) {
     const wKey = String(w.id)
     const records = plData[wKey] || []
+
+    // 旧アプリのデータ（grantDateなし）を持つスタッフはスキップ
+    // 管理画面から手動で付与・更新する
+    const hasOldRecords = records.some(r =>
+      ((r.grant && r.grant > 0) || (r.adj != null) || (r.carry != null)) && !r.grantDate
+    )
+    if (hasOldRecords) continue
+
     const grantMonth = (w as unknown as { grantMonth?: number }).grantMonth
 
     const nextGrant = calcNextGrantDate(w.hireDate, grantMonth, records)

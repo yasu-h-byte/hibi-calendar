@@ -91,11 +91,18 @@ export async function POST(request: NextRequest) {
       const wKey = String(worker.id)
       const plRecords = (main.plData[wKey] || []) as { fy: string | number; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
 
-      // 最新のレコードを使用（付与日数が入っているもの）
-      const recordsWithGrant = plRecords.filter(r =>
-        (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
+      // レコード選択: 旧アプリのレコード（grant/adj/carry）があればそちらを優先
+      const oldRecords = plRecords.filter(r =>
+        (r.grant != null || r.adj != null || r.carry != null) &&
+        ((r.grant && r.grant > 0) || (r.grantDays && r.grantDays > 0))
       )
-      const fyRecord = recordsWithGrant.length > 0 ? recordsWithGrant[recordsWithGrant.length - 1] : null
+      const newRecords = plRecords.filter(r =>
+        r.grant == null && r.adj == null && r.carry == null &&
+        r.grantDays && r.grantDays > 0
+      )
+      const fyRecord = oldRecords.length > 0
+        ? oldRecords[oldRecords.length - 1]
+        : (newRecords.length > 0 ? newRecords[newRecords.length - 1] : null)
 
       if (fyRecord) {
         const isOldRecord = fyRecord.grant != null || fyRecord.adj != null || fyRecord.carry != null
