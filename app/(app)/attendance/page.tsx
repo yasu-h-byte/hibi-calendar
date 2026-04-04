@@ -1003,15 +1003,23 @@ export default function AttendanceGridPage() {
                             // 休日出勤判定: カレンダーがoff/holidayなのに出勤あり
                             const calDay = data.calendarDays?.[String(d.day)]
                             const isHolidayWork = calDay && (calDay === 'off' || calDay === 'holiday') && entry && entry.w > 0 && !entry.p
+                            // Input source indicator
+                            const source = entry?.s
 
                             return (
                               <td
                                 key={d.day}
-                                className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)} ${isHolidayWork ? 'relative' : ''}`}
+                                className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day)}`}
                                 style={{ width: 48, minWidth: 48, maxWidth: 48 }}
                               >
                                 {isHolidayWork && (
                                   <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
+                                )}
+                                {source === 'staff' && !isHolidayWork && (
+                                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-blue-400" title="スタッフ入力" />
+                                )}
+                                {source === 'foreman' && !isHolidayWork && (
+                                  <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-orange-400" title="職長入力" />
                                 )}
                                 <div className="flex flex-col">
                                   {/* Work dropdown - 大きめ */}

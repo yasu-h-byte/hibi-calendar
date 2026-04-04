@@ -199,7 +199,9 @@ export async function POST(request: NextRequest) {
 
     if (workerId !== undefined && entry !== undefined) {
       const key = `${siteId}_${workerId}_${ym}_${String(day)}`
-      await setDoc(docRef, { d: { [key]: entry } }, { merge: true })
+      // Add source tracking: admin input from PC grid
+      const entryWithSource = entry ? { ...entry, s: 'admin' } : entry
+      await setDoc(docRef, { d: { [key]: entryWithSource } }, { merge: true })
     }
 
     if (subconId !== undefined && subconEntry !== undefined) {

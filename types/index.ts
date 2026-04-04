@@ -83,7 +83,7 @@ export interface AttendanceEntry {
   r?: number      // 1=休み
   p?: number      // 1=有給
   h?: number      // 1=現場休み
-  s?: string      // 'staff' | 'foreman'
+  s?: string      // 'staff' | 'foreman' | 'admin'
 }
 
 export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_off' | 'none'

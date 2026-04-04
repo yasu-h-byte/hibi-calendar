@@ -139,20 +139,20 @@ export async function POST(request: NextRequest) {
       const { workerId, year, month, day, choice, overtimeHours } = body
       const ym = ymKey(year, month)
 
-      // Build entry (foreman edits don't have s:'staff')
+      // Build entry with s:'foreman' source tracking
       let entry: AttendanceEntry
       switch (choice) {
         case 'work':
-          entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)) }
+          entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)), s: 'foreman' }
           break
         case 'rest':
-          entry = { w: 0, r: 1 }
+          entry = { w: 0, r: 1, s: 'foreman' }
           break
         case 'leave':
-          entry = { w: 0, p: 1 }
+          entry = { w: 0, p: 1, s: 'foreman' }
           break
         case 'site_off':
-          entry = { w: 0, h: 1 }
+          entry = { w: 0, h: 1, s: 'foreman' }
           break
         default:
           return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
