@@ -20,6 +20,7 @@ interface StaffData {
     date: string; year: number; month: number; day: number
     entry: AttendanceEntry | null; status: AttendanceStatus
     locked: boolean; dayOffset: number
+    siteName?: string
   }[]
 }
 
@@ -394,10 +395,10 @@ export default function StaffAttendancePage() {
           </>
         )}
 
-        {/* Past 3 days */}
+        {/* Past 5 days */}
         <div className="bg-white rounded-xl shadow p-4">
-          <div className="text-sm text-gray-500 mb-3 font-bold">さいきん</div>
-          <div className="space-y-2">
+          <div className="text-sm text-gray-500 mb-3 font-bold">さいきん 5にち</div>
+          <div className="space-y-1.5">
             {data.pastDays.map((pd, i) => (
               <div
                 key={i}
@@ -406,8 +407,13 @@ export default function StaffAttendancePage() {
                 }`}
                 onClick={() => !pd.locked && setEditingPast(i)}
               >
-                <span className="text-sm text-gray-600">{pd.date}</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm text-gray-600 whitespace-nowrap">{pd.date}</span>
+                  {pd.siteName && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 truncate">{pd.siteName}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
                   <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[pd.status]}`}>
                     {STATUS_EMOJI[pd.status]} {STATUS_LABELS[pd.status]}
                     {pd.status === 'overtime' && pd.entry?.o ? ` +${pd.entry.o}h` : ''}

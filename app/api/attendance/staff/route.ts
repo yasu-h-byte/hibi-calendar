@@ -12,6 +12,8 @@ import {
   formatDateShort,
 } from '@/lib/attendance'
 import { getSites } from '@/lib/sites'
+import { db } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 import { AttendanceEntry } from '@/types'
 
 export async function GET(request: NextRequest) {
@@ -69,9 +71,17 @@ export async function GET(request: NextRequest) {
     const todayKey = attKey(siteId, worker.id, ym, d)
     const currentEntry = attData[todayKey] || null
 
-    // Past 3 days
+    // Past 5 days (with site name)
     const pastDays = []
-    for (let off = 1; off <= 3; off++) {
+    // Build site name lookup
+    const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
+    const siteNames: Record<string, string> = {}
+    if (mainDoc.exists()) {
+      const sites = mainDoc.data().sites || []
+      for (const s of sites) siteNames[s.id] = (s.name as string || '').slice(0, 3)
+    }
+
+    for (let off = 1; off <= 5; off++) {
       const pd = new Date(y, m - 1, d - off)
       const pym = ymKey(pd.getFullYear(), pd.getMonth() + 1)
       const pDay = pd.getDate()
@@ -82,11 +92,26 @@ export async function GET(request: NextRequest) {
         pAttData = await getAttendanceDoc(pym)
       }
 
+      // Check current site first, then check all sites for this day
       const pk = attKey(siteId, worker.id, pym, pDay)
-      const entry = pAttData[pk] || null
-      const status = getEntryStatus(entry)
+      let entry = pAttData[pk] || null
+      let entrySiteId = siteId
 
-      const approval = await getApprovalForDay(siteId, pym, pDay)
+      // If no entry on current site, check other sites
+      if (!entry) {
+        for (const sid of Object.keys(siteNames)) {
+          if (sid === siteId) continue
+          const altKey = attKey(sid, worker.id, pym, pDay)
+          if (pAttData[altKey]) {
+            entry = pAttData[altKey]
+            entrySiteId = sid
+            break
+          }
+        }
+      }
+
+      const status = getEntryStatus(entry)
+      const approval = await getApprovalForDay(entrySiteId, pym, pDay)
       const locked = !!(approval?.foreman)
 
       pastDays.push({
@@ -98,6 +123,7 @@ export async function GET(request: NextRequest) {
         status,
         locked,
         dayOffset: off,
+        siteName: siteNames[entrySiteId] || '',
       })
     }
 
