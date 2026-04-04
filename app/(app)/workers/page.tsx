@@ -42,7 +42,7 @@ function jobBadge(jobType?: string): { label: string; cls: string } {
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
-  visaExpiry: '',
+  visaExpiry: '', memo: '',
 }
 
 function visaExpiryStatus(expiry: string): { label: string; cls: string; priority: number } | null {
@@ -139,6 +139,7 @@ export default function WorkersPage() {
       retired: w.retired || '',
       salary: String(w.salary || ''),
       visaExpiry: w.visaExpiry || '',
+      memo: (w as unknown as { memo?: string }).memo || '',
     })
     setShowModal(true)
   }
@@ -148,8 +149,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -330,6 +331,14 @@ export default function WorkersPage() {
                   <td className="px-3 py-2.5 font-medium">
                     {w.name}
                     {w.retired && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">{w.retired && w.retired !== 'true' && w.retired.length >= 7 ? `退職 ${w.retired.slice(0, 7)}` : '退職'}</span>}
+                    {(w as unknown as { memo?: string }).memo && (
+                      <span className="ml-1.5 relative group cursor-default" title={(w as unknown as { memo?: string }).memo}>
+                        <span className="text-xs text-orange-400">&#128221;</span>
+                        <span className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block bg-gray-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-pre-wrap max-w-xs">
+                          {(w as unknown as { memo?: string }).memo}
+                        </span>
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2.5">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -528,6 +537,13 @@ export default function WorkersPage() {
                         <div className="mt-1 text-xs text-green-600">在留期限まで余裕があります</div>
                       )
                     })()}
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">メモ</label>
+                    <textarea value={form.memo} onChange={e => setForm({ ...form, memo: e.target.value })}
+                      placeholder="一時帰国予定、退職予定、更新方針など"
+                      rows={3}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none resize-none" />
                   </div>
                 </div>
               )}

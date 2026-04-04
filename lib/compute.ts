@@ -25,7 +25,7 @@ export interface MainData {
 export interface RawWorker {
   id: number; name: string; org: string; visa: string; job: string
   rate: number; hourlyRate?: number; otMul: number; hireDate: string; retired?: string; token: string
-  salary?: number
+  salary?: number; memo?: string
 }
 
 export interface RawSite {
