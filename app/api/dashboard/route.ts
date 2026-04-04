@@ -32,9 +32,14 @@ function computePLAlert(main: MainData) {
     if (records.length === 0) continue
 
     const latest = records[records.length - 1]
-    const totalDays = latest.grantDays + latest.carryOver + latest.adjustment
-    const usedDays = latest.used
-    const remaining = totalDays - usedDays
+    // 旧フィールド対応 + adjustment は消化側
+    const isOld = latest.grant != null || latest.adj != null || latest.carry != null
+    const grantDays = isOld ? (latest.grant ?? latest.grantDays ?? 0) : (latest.grantDays ?? 0)
+    const carryOver = isOld ? (latest.carry ?? 0) : (latest.carryOver ?? 0)
+    const adjustment = Math.max(latest.adjustment ?? 0, latest.adj ?? 0)
+    const totalDays = grantDays + carryOver
+    const usedDays = adjustment + (latest.used || 0)
+    const remaining = Math.max(0, totalDays - usedDays)
 
     if (remaining <= 3) {
       const status = remaining <= 0 ? 'danger' : remaining <= 1 ? 'warning' : 'caution'

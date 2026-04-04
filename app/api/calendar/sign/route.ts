@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { getWorkersForSite } from '@/lib/sites'
+import { getMainData } from '@/lib/compute'
 
 function hashIP(ip: string): string {
   let hash = 0
@@ -23,6 +24,13 @@ export async function POST(request: NextRequest) {
 
     if (!workerId || !ym || siteIds.length === 0) {
       return NextResponse.json({ error: 'workerId, ym, siteId(s) required' }, { status: 400 })
+    }
+
+    // workerIdの存在確認（なりすまし防止）
+    const main = await getMainData()
+    const worker = main.workers.find(w => w.id === Number(workerId))
+    if (!worker) {
+      return NextResponse.json({ error: 'Invalid worker' }, { status: 401 })
     }
 
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'

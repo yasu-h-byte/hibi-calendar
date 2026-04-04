@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
         grantDays: Number(grantDays) || 0,
         carryOver: 0,
         adjustment: 0,
+        used: 0,
       }
       if (idx >= 0) {
         records[idx] = { ...records[idx], ...record }
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
     const records = plData[key] || []
     const idx = records.findIndex(r => r.fy === fy)
 
-    const record = { fy, grantDays: Number(grantDays) || 0, carryOver: Number(carryOver) || 0, adjustment: Number(adjustment) || 0 }
+    const record = { fy, grantDays: Number(grantDays) || 0, carryOver: Number(carryOver) || 0, adjustment: Number(adjustment) || 0, used: 0 }
     if (idx >= 0) records[idx] = { ...records[idx], ...record }
     else records.push(record)
 
