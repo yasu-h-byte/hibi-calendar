@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     if (action === 'carryOver') {
       const { fy } = body
       const prevFy = String(Number(fy) - 1)
-      const plData = (snap.data().plData || {}) as Record<string, { fy: string; grantDays: number; carryOver: number; adjustment: number }[]>
+      const plData = (snap.data().plData || {}) as Record<string, { fy: string; grantDays: number; carryOver: number; adjustment: number; grant?: number; carry?: number; adj?: number }[]>
 
       // Calculate previous FY PL usage
       const prevFyStart = parseInt(prevFy)
@@ -119,9 +119,14 @@ export async function POST(request: NextRequest) {
       for (const [wid, records] of Object.entries(plData)) {
         const prevRec = records.find(r => r.fy === prevFy)
         if (!prevRec) continue
-        const prevTotal = prevRec.grantDays + prevRec.carryOver  // adj is NOT part of total
+        // 旧フィールド(grant/carry/adj)のいずれかが存在すれば旧レコードと判定
+        const isPrevOld = prevRec.grant != null || prevRec.adj != null || prevRec.carry != null
+        const prevGrant = isPrevOld ? (prevRec.grant ?? prevRec.grantDays ?? 0) : (prevRec.grantDays || 0)
+        const prevCarry = isPrevOld ? (prevRec.carry ?? 0) : (prevRec.carryOver || 0)
+        const prevAdj = Math.max(prevRec.adjustment || 0, prevRec.adj || 0)
+        const prevTotal = prevGrant + prevCarry
         const prevPeriodUsed = plUsage[Number(wid)] || 0
-        const prevUsed = prevRec.adjustment + prevPeriodUsed   // adj = pre-existing consumed
+        const prevUsed = prevAdj + prevPeriodUsed
         const prevRemaining = Math.max(0, prevTotal - prevUsed)
 
         const curIdx = records.findIndex(r => r.fy === fy)
@@ -216,10 +221,13 @@ export async function GET(request: NextRequest) {
         // fy比較: Firestoreでは数値(2025)、APIパラメータは文字列('2025')なので両方対応
         const fyRecord = plRecords.find(r => String(r.fy) === String(fy))
 
-        // 旧アプリのフィールド名(grant/carry/adj)と新アプリ(grantDays/carryOver/adjustment)の両方に対応
-        // adjustment/adj は 0 も有効値なので、存在チェックで判定
-        const grantDays = (fyRecord?.grantDays != null && fyRecord.grantDays > 0) ? fyRecord.grantDays : (fyRecord?.grant ?? 0)
-        const carryOver = (fyRecord?.carryOver != null && fyRecord.carryOver > 0) ? fyRecord.carryOver : (fyRecord?.carry ?? 0)
+        // 旧アプリ(grant/carry/adj)と新アプリ(grantDays/carryOver/adjustment)の両方に対応
+        // 旧フィールドが存在する場合はそちらが元データなので優先する
+        // ただし旧アプリは値が0のときフィールド自体を省略する場合があるため、
+        // adjが存在する＝旧アプリのレコードと判定し、carry未定義でも0とみなす
+        const isOldRecord = fyRecord?.grant != null || fyRecord?.adj != null || fyRecord?.carry != null
+        const grantDays = isOldRecord ? (fyRecord?.grant ?? fyRecord?.grantDays ?? 0) : (fyRecord?.grantDays ?? 0)
+        const carryOver = isOldRecord ? (fyRecord?.carry ?? 0) : (fyRecord?.carryOver ?? 0)
         // adj（旧）とadjustment（新）が両方存在する場合、大きい方を使う（旧データの方が正確な場合がある）
         const adjustment = Math.max(fyRecord?.adjustment ?? 0, fyRecord?.adj ?? 0)
         const grantDate = fyRecord?.grantDate || ''
