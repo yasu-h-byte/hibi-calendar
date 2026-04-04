@@ -11,6 +11,15 @@ interface PLWorker {
   legalPL: number
 }
 
+/** hireDate + 6ヶ月 → 発生月を計算 */
+function calcGrantMonthFromHire(hireDate: string): number | null {
+  if (!hireDate) return null
+  const d = new Date(hireDate)
+  if (isNaN(d.getTime())) return null
+  const grantDate = new Date(d.getFullYear(), d.getMonth() + 6, 1)
+  return grantDate.getMonth() + 1 // 1-12
+}
+
 type OrgFilter = 'all' | 'hibi' | 'hfu'
 
 /** 法定有給付与日数を計算（フロントエンド版） */
@@ -90,10 +99,12 @@ export default function LeavePage() {
   const [orgFilter, setOrgFilter] = useState<OrgFilter>('all')
   const [showGrantModal, setShowGrantModal] = useState(false)
   const [grantForm, setGrantForm] = useState({ workerId: '', grantDays: '10', grantMonth: '', grantDate: '' })
-  const [legalPLInfo, setLegalPLInfo] = useState<{ days: number; label: string } | null>(null)
+  const [legalPLInfo, setLegalPLInfo] = useState<{ days: number; years: number; months: number; label: string } | null>(null)
   const [plCalendar, setPlCalendar] = useState<Record<string, number[]>>({})
   const [workerNames, setWorkerNames] = useState<Record<number, string>>({})
   const [calendarTooltip, setCalendarTooltip] = useState<{ dateKey: string; x: number; y: number } | null>(null)
+  const [editingGrantMonth, setEditingGrantMonth] = useState<number | null>(null) // workerId being edited
+  const [grantMonthSaving, setGrantMonthSaving] = useState(false)
   const [fy, setFy] = useState(() => {
     const now = new Date()
     const y = now.getFullYear()
@@ -124,7 +135,7 @@ export default function LeavePage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // Update legal PL when worker selected in grant modal
+  // Update legal PL and auto-fill grant month when worker selected in grant modal
   useEffect(() => {
     if (grantForm.workerId) {
       const w = workers.find(w => w.id === Number(grantForm.workerId))
@@ -132,7 +143,16 @@ export default function LeavePage() {
         const grantDate = grantForm.grantDate || new Date().toISOString().split('T')[0]
         const info = calcLegalPL(w.hireDate, grantDate)
         setLegalPLInfo(info)
-        setGrantForm(prev => ({ ...prev, grantDays: String(info.days) }))
+        // Auto-fill grant days from legal calculation
+        setGrantForm(prev => {
+          const updates: Partial<typeof prev> = { grantDays: String(info.days) }
+          // Auto-fill grant month from worker's grantMonth or calculated from hireDate
+          if (!prev.grantMonth) {
+            const autoMonth = w.grantMonth || calcGrantMonthFromHire(w.hireDate)
+            if (autoMonth) updates.grantMonth = String(autoMonth)
+          }
+          return { ...prev, ...updates }
+        })
       } else {
         setLegalPLInfo(null)
       }
@@ -174,6 +194,23 @@ export default function LeavePage() {
       setLegalPLInfo(null)
       fetchData()
     } finally { setSaving(false) }
+  }
+
+  const handleGrantMonthUpdate = async (workerId: number, newMonth: string) => {
+    setGrantMonthSaving(true)
+    try {
+      await fetch('/api/leave', {
+        method: 'POST',
+        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateGrantMonth',
+          workerId,
+          grantMonth: newMonth || null,
+        }),
+      })
+      setEditingGrantMonth(null)
+      fetchData()
+    } finally { setGrantMonthSaving(false) }
   }
 
   const handleCarryOver = async () => {
@@ -284,6 +321,7 @@ export default function LeavePage() {
             <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
               <th className="px-3 py-3">名前</th>
               <th className="px-3 py-3">所属</th>
+              <th className="px-3 py-3">入社日</th>
               <th className="px-3 py-3 text-center">発生月</th>
               <th className="px-3 py-3 text-right">付与</th>
               <th className="px-3 py-3 text-right">繰越</th>
@@ -298,9 +336,9 @@ export default function LeavePage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : filteredWorkers.length === 0 ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
+              <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
             ) : filteredWorkers.map(w => {
               const rate = w.total > 0 ? (w.used / w.total * 100) : 0
               return (
@@ -311,8 +349,34 @@ export default function LeavePage() {
                       {w.org === 'hfu' ? 'HFU' : '日比'}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-center text-gray-600 text-xs">
-                    {w.grantMonth ? `${w.grantMonth}月` : '—'}
+                  <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                    {w.hireDate || '—'}
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-xs">
+                    {editingGrantMonth === w.id ? (
+                      <select
+                        autoFocus
+                        disabled={grantMonthSaving}
+                        defaultValue={w.grantMonth ?? ''}
+                        onChange={e => handleGrantMonthUpdate(w.id, e.target.value)}
+                        onBlur={() => setEditingGrantMonth(null)}
+                        className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-1 py-0.5 text-xs"
+                      >
+                        <option value="">未設定</option>
+                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{m}月</option>)}
+                      </select>
+                    ) : (
+                      <button
+                        onClick={() => setEditingGrantMonth(w.id)}
+                        className="text-gray-600 dark:text-gray-400 hover:text-hibi-navy hover:underline cursor-pointer"
+                        title="クリックで変更"
+                      >
+                        {w.grantMonth ? `${w.grantMonth}月` : (() => {
+                          const calc = calcGrantMonthFromHire(w.hireDate)
+                          return calc ? <span className="text-gray-400 italic">{calc}月</span> : '—'
+                        })()}
+                      </button>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{w.grantDays}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{w.carryOver}</td>
@@ -470,11 +534,22 @@ export default function LeavePage() {
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
               {/* Legal PL auto-calculation display */}
-              {legalPLInfo && legalPLInfo.days > 0 && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                  <div className="text-xs text-blue-700">{legalPLInfo.label}</div>
-                </div>
-              )}
+              {grantForm.workerId && (() => {
+                const w = workers.find(w => w.id === Number(grantForm.workerId))
+                if (!w) return null
+                const autoMonth = w.grantMonth || calcGrantMonthFromHire(w.hireDate)
+                return (
+                  <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2 space-y-1">
+                    <div className="text-xs font-bold text-blue-800 dark:text-blue-300">自動計算プレビュー</div>
+                    <div className="text-xs text-blue-700 dark:text-blue-400">
+                      {w.name}: 入社{w.hireDate || '不明'}
+                      {autoMonth ? ` → 発生月${autoMonth}月` : ''}
+                      {legalPLInfo && legalPLInfo.years !== undefined ? ` → 勤続${legalPLInfo.years}年${legalPLInfo.months}月` : ''}
+                      {legalPLInfo && legalPLInfo.days > 0 ? ` → 法定${legalPLInfo.days}日` : ''}
+                    </div>
+                  </div>
+                )
+              })()}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">付与日数</label>
                 <input type="number" value={grantForm.grantDays} onChange={e => setGrantForm({ ...grantForm, grantDays: e.target.value })}

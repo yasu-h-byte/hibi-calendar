@@ -27,19 +27,6 @@ interface WorkerExt extends Worker {
   salary?: number
 }
 
-interface PLWorkerData {
-  id: number
-  total: number
-  remaining: number
-}
-
-function getPlGrantMonth(hireDate?: string): string {
-  if (!hireDate) return '—'
-  const d = new Date(hireDate)
-  if (isNaN(d.getTime())) return '—'
-  const grantMonth = new Date(d.getFullYear(), d.getMonth() + 6, 1)
-  return `${grantMonth.getMonth() + 1}月`
-}
 
 function jobBadge(jobType?: string): { label: string; cls: string } {
   switch (jobType) {
@@ -83,7 +70,6 @@ export default function WorkersPage() {
   const [qrWorker, setQrWorker] = useState<WorkerExt | null>(null)
   const [sortKey, setSortKey] = useState<string>('id')
   const [sortAsc, setSortAsc] = useState(true)
-  const [plData, setPlData] = useState<Record<number, PLWorkerData>>({})
   const [transferring, setTransferring] = useState<number | null>(null)
 
   useEffect(() => {
@@ -114,27 +100,6 @@ export default function WorkersPage() {
   }, [password])
 
   useEffect(() => { fetchWorkers() }, [fetchWorkers])
-
-  // Fetch PL data
-  const fetchPlData = useCallback(async () => {
-    if (!password) return
-    try {
-      const now = new Date()
-      // Determine current FY (Oct start): if month >= 10, FY = current year, else FY = last year
-      const fy = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1
-      const res = await fetch(`/api/leave?fy=${fy}`, { headers: { 'x-admin-password': password } })
-      if (res.ok) {
-        const json = await res.json()
-        const map: Record<number, PLWorkerData> = {}
-        for (const w of json.workers || []) {
-          map[w.id] = { id: w.id, total: w.total, remaining: w.remaining }
-        }
-        setPlData(map)
-      }
-    } catch { /* ignore */ }
-  }, [password])
-
-  useEffect(() => { fetchPlData() }, [fetchPlData])
 
   // Transfer handler (toggle org between hibi/hfu)
   const handleTransfer = async (w: WorkerExt) => {
@@ -270,9 +235,14 @@ export default function WorkersPage() {
             在籍: {activeWorkers.length}名（日比 {hibiCount} / HFU {hfuCount}）{retiredWorkers.length > 0 && ` / 退職: ${retiredWorkers.length}名`}
           </p>
         </div>
-        <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">
-          + 新規追加
-        </button>
+        <div className="flex items-center gap-2">
+          <a href="/leave" className="text-hibi-navy dark:text-blue-400 text-sm underline hover:text-hibi-light transition">
+            有給管理
+          </a>
+          <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">
+            + 新規追加
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -343,19 +313,16 @@ export default function WorkersPage() {
                 単価 {sortKey === 'rate' && (sortAsc ? '↑' : '↓')}
               </th>
               <th className="px-3 py-3">月給目安</th>
-              <th className="px-3 py-3">有給発生月</th>
-              <th className="px-3 py-3">有給残</th>
               <th className="px-3 py-3">📱</th>
               <th className="px-3 py-3">操作</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
             ) : sorted.map(w => {
-              const pl = plData[w.id]
               const jb = jobBadge(w.jobType)
               return (
                 <tr key={w.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30 ${w.retired ? 'opacity-45' : ''}`}>
@@ -416,18 +383,6 @@ export default function WorkersPage() {
                     {w.visaType && isGaikoku(w.visaType) && w.hourlyRate ? (
                       fmtYen(w.hourlyRate * 168)
                     ) : w.visaType && isGaikoku(w.visaType) && w.salary ? fmtYen(w.salary) : '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-gray-500 text-sm">
-                    {getPlGrantMonth(w.hireDate)}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {pl ? (
-                      <span className={`text-sm font-medium ${pl.remaining <= 3 ? 'text-red-600' : 'text-green-600'}`}>
-                        {pl.remaining}日/{pl.total}日
-                      </span>
-                    ) : (
-                      <span className="text-gray-300 text-sm">—</span>
-                    )}
                   </td>
                   <td className="px-3 py-2.5">
                     {w.token ? (

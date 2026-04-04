@@ -35,6 +35,20 @@ export async function POST(request: NextRequest) {
     const snap = await getDoc(docRef)
     if (!snap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    if (action === 'updateGrantMonth') {
+      const { workerId, grantMonth } = body
+      const workers = (snap.data().workers || []) as { id: number; grantMonth?: number }[]
+      const wIdx = workers.findIndex(w => w.id === Number(workerId))
+      if (wIdx < 0) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
+      if (grantMonth === null || grantMonth === '' || grantMonth === undefined) {
+        delete workers[wIdx].grantMonth
+      } else {
+        workers[wIdx].grantMonth = Number(grantMonth)
+      }
+      await updateDoc(docRef, { workers })
+      return NextResponse.json({ success: true })
+    }
+
     if (action === 'grant') {
       const { workerId, fy, grantDays, grantMonth, grantDate } = body
       const plData = (snap.data().plData || {}) as Record<string, { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }[]>
@@ -246,7 +260,7 @@ export async function GET(request: NextRequest) {
           legalPL,
         }
       })
-      .filter(w => w.total > 0 || w.used > 0)
+      // Show all eligible workers (including those with no PL data yet)
 
     const response: Record<string, unknown> = { workers }
 
