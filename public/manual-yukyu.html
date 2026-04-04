@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>有給データ移行マニュアル - HIBI CONSTRUCTION</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; }
+  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; }
+  h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; }
+  h3 { color: #444; }
+  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: #1B2A4A; color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .highlight { background: #ffe0e0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+  img { max-width: 100%; }
+  @media print { body { font-size: 12px; } }
+</style>
+</head>
+<body>
+
+<h1>有給データ移行マニュアル</h1>
+<p>HIBI CONSTRUCTION 就業管理システム<br>
+作成日: 2026年4月4日</p>
+
+<div class="box box-warn">
+<strong>目的：</strong>旧スプレッドシートで管理していた有給休暇データを、新システムに移行する作業手順です。
+</div>
+
+<h2>1. 作業の全体像</h2>
+
+<table>
+<tr><th>対象期間</th><th>入力方法</th><th>入力先</th></tr>
+<tr><td>2025年2月以前</td><td>消化日数の<strong>合計</strong>を入力</td><td>有給管理画面 →「編集」→「調整」欄</td></tr>
+<tr><td>2025年3月〜現在</td><td>有給を取った<strong>日付</strong>に「P」を入力</td><td>出面入力画面</td></tr>
+</table>
+
+<div class="box box-ok">
+<strong>ポイント：</strong>2025年3月以降は、出面入力画面で「P」を入れるだけで、有給管理画面に自動で反映されます。「調整」欄への入力は不要です。
+</div>
+
+<h2>2. 作業A: 2025年2月以前の消化日数を入力</h2>
+
+<h3>手順</h3>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">サイドバーの<strong>「有給・休み管理」</strong>を開く</div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">対象スタッフの行の右にある<strong>「編集」</strong>ボタンを押す</div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text"><strong>「調整」</strong>欄に、2025年2月までの有給消化日数の合計を入力する<br>
+  <span style="color: #888; font-size: 13px;">※ 例: スプレッドシートで5日消化していた場合 → 「5」と入力</span></div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text"><strong>「保存」</strong>を押す</div>
+</div>
+
+<div class="box box-warn">
+<strong>注意：</strong>「付与日数」と「繰越」は変更しないでください。自動計算されています。「調整」欄のみ入力します。
+</div>
+
+<h2>3. 作業B: 2025年3月以降の有給取得日を入力</h2>
+
+<h3>手順</h3>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">サイドバーの<strong>「出面入力」</strong>を開く</div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">右上の<strong>年月セレクタ</strong>で対象月（例: 2025年3月）を選ぶ</div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">右上の<strong>現場セレクタ</strong>で、スタッフが配置されていた現場を選ぶ<br>
+  <span style="color: #888; font-size: 13px;">※ 終了した現場は「終了現場」チェックボックスをONにすると表示されます</span></div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">有給を取得した日のセルをクリックし、<span class="highlight">P</span> を入力する<br>
+  <span style="color: #888; font-size: 13px;">※ Pは半角大文字です。入力するとセルが緑色になります</span></div>
+</div>
+
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">他の月・他の現場も同様に繰り返す</div>
+</div>
+
+<div class="box box-ok">
+<strong>確認方法：</strong>入力後、「有給・休み管理」画面を開くと、消化日数に自動反映されています。
+</div>
+
+<h2>4. 入力が必要なスタッフ一覧</h2>
+
+<h3>日比建設</h3>
+<p>旧スプレッドシートの有給消化データをもとに、各スタッフの消化日数を入力してください。</p>
+
+<h3>HFU（日比が対応）</h3>
+<table>
+<tr><th>名前</th><th>2月以前の消化（調整欄）</th><th>3月以降</th></tr>
+<tr><td>ラン ヴァン グエン</td><td>2日</td><td>出面で「P」入力</td></tr>
+<tr><td>ラン コン ラップ</td><td>12日</td><td>出面で「P」入力</td></tr>
+<tr><td>ファン スアン ハウ</td><td>5日</td><td>出面で「P」入力</td></tr>
+<tr><td>ルオン ヴァオ クオック</td><td>3日</td><td>出面で「P」入力</td></tr>
+<tr><td>ホー チョン ゴック</td><td>2日</td><td>出面で「P」入力</td></tr>
+<tr><td>グエン ミン サン</td><td>11日</td><td>出面で「P」入力</td></tr>
+</table>
+
+<h2>5. よくある質問</h2>
+
+<h3>Q: 「P」を入力したのに有給管理画面に反映されない</h3>
+<p>A: 有給管理画面をリロードしてください。出面データからリアルタイムで集計されます。</p>
+
+<h3>Q: 間違えて「P」を入力した場合</h3>
+<p>A: 出面入力画面で該当セルをクリックし、値を削除（空欄に）してください。</p>
+
+<h3>Q: 終了した現場が出面入力画面に出てこない</h3>
+<p>A: 現場セレクタの右にある「終了現場」チェックボックスをONにしてください。</p>
+
+<h3>Q: 有給管理台帳をExcelで出力したい</h3>
+<p>A: サイドバーの「帳票出力」→「有給管理台帳」からダウンロードできます。取得日一覧もシート2に含まれます。</p>
+
+</body>
+</html>
