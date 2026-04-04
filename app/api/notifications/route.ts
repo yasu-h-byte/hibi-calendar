@@ -109,17 +109,19 @@ export async function GET(request: NextRequest) {
       console.error('PL check error:', e)
     }
 
-    // 3. Monthly lock status
+    // 3. Monthly lock status（前月が未締めの場合のみ警告。当月は進行中なので対象外）
     try {
-      const isLocked = main.locks[currentYm]
-      if (!isLocked) {
-        const y = parseInt(currentYm.slice(0, 4))
-        const m = parseInt(currentYm.slice(4, 6))
+      const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const prevYm = ymKey(prevDate.getFullYear(), prevDate.getMonth() + 1)
+      const isPrevLocked = main.locks[prevYm]
+      if (!isPrevLocked) {
+        const y = prevDate.getFullYear()
+        const m = prevDate.getMonth() + 1
         notifications.push({
           id: 'month-unlocked',
           icon: '\uD83D\uDD13',
-          message: `月締め未完了: ${y}年${m}月はまだ締められていません`,
-          type: 'info',
+          message: `月締め未完了: ${y}年${m}月がまだ締められていません`,
+          type: 'warning',
         })
       }
     } catch (e) {
