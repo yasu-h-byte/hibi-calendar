@@ -959,11 +959,15 @@ export default function AttendanceGridPage() {
                     {/* Group header */}
                     <tr key={`group-${group.org}`} className="bg-gray-50">
                       <td
-                        colSpan={2 + days.length + 2}
-                        className="sticky left-0 z-20 px-2 py-1 font-bold text-[11px] text-hibi-navy border-t-2 border-hibi-navy"
+                        className="sticky left-0 z-20 bg-gray-50 px-2 py-1 font-bold text-[11px] text-hibi-navy border-t-2 border-hibi-navy"
+                        style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                       >
                         {group.label} ({group.workers.length}名)
                       </td>
+                      <td className="sticky left-[150px] z-20 bg-gray-50 border-t-2 border-hibi-navy" style={{ width: 48, minWidth: 48, maxWidth: 48 }} />
+                      {days.map(d => <td key={d.day} className="border-t-2 border-hibi-navy bg-gray-50" />)}
+                      <td className="border-t-2 border-hibi-navy bg-gray-50" />
+                      <td className="border-t-2 border-hibi-navy bg-gray-50" />
                     </tr>
 
                     {group.workers.map(worker => {
@@ -976,7 +980,7 @@ export default function AttendanceGridPage() {
                         <tr key={worker.id} className="border-t border-gray-100 hover:bg-gray-50/50 group">
                           {/* Worker name - sticky */}
                           <td
-                            className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 border-r border-gray-100 text-xs"
+                            className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 text-xs"
                             style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                           >
                             {worker.name}
@@ -1086,11 +1090,15 @@ export default function AttendanceGridPage() {
                   <>
                     <tr className="bg-amber-50">
                       <td
-                        colSpan={2 + days.length + 2}
-                        className="sticky left-0 z-20 px-2 py-1 font-bold text-[11px] text-amber-800 border-t-2 border-amber-400"
+                        className="sticky left-0 z-20 bg-amber-50 px-2 py-1 font-bold text-[11px] text-amber-800 border-t-2 border-amber-400"
+                        style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                       >
                         外注 ({data.subcons.length}社)
                       </td>
+                      <td className="sticky left-[150px] z-20 bg-amber-50 border-t-2 border-amber-400" style={{ width: 48, minWidth: 48, maxWidth: 48 }} />
+                      {days.map(d => <td key={d.day} className="border-t-2 border-amber-400 bg-amber-50" />)}
+                      <td className="border-t-2 border-amber-400 bg-amber-50" />
+                      <td className="border-t-2 border-amber-400 bg-amber-50" />
                     </tr>
 
                     {data.subcons.map(sc => {
@@ -1102,7 +1110,7 @@ export default function AttendanceGridPage() {
                         <tr key={sc.id} className="border-t border-gray-100 hover:bg-gray-50/50 group">
                           {/* Subcon name - sticky */}
                           <td
-                            className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 border-r border-gray-100 text-xs"
+                            className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 text-xs"
                             style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                           >
 {sc.name}
