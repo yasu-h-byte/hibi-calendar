@@ -92,8 +92,8 @@ export async function POST(request: NextRequest) {
       const plRecords = (main.plData[wKey] || []) as { fy: string | number; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
 
       // 年度を判定（10月始まり: 10-12月→その年、1-9月→前年）
-      // 付与年ベース: そのまま年を使用
-      const fyNum = year
+      // 年度を判定（10月始まり: 10-12月→その年、1-9月→前年）
+      const fyNum = month >= 10 ? year : year - 1
       const fy = String(fyNum)
       const fyRecord = plRecords.find(r => String(r.fy) === fy)
 
@@ -105,9 +105,10 @@ export async function POST(request: NextRequest) {
         const adjustment = Math.max(fyRecord.adjustment ?? 0, fyRecord.adj ?? 0)
         const total = grantDays + carryOver
 
-        // 付与年内の出面データからPL消化日数を集計（1月〜12月）
+        // 年度内の出面データからPL消化日数を集計
         const fyMonths: string[] = []
-        for (let m = 1; m <= 12; m++) fyMonths.push(ymKey(fyNum, m))
+        for (let m = 10; m <= 12; m++) fyMonths.push(ymKey(fyNum, m))
+        for (let m = 1; m <= 9; m++) fyMonths.push(ymKey(fyNum + 1, m))
 
         let periodUsed = 0
         for (const fym of fyMonths) {
