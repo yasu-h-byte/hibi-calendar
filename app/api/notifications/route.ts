@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs } from 'firebase/firestore'
 import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 
@@ -27,24 +27,34 @@ export async function GET(request: NextRequest) {
     const main = await getMainData()
     const activeWorkers = main.workers.filter(w => !w.retired)
 
-    // 1. Calendar unsigned workers
+    // 1. Calendar unsigned workers (batch query instead of N+1 reads)
     try {
       const activeSites = main.sites.filter(s => !s.archived)
-      let unsignedCount = 0
 
+      // Collect all expected worker×site combinations
+      const expectedSignIds = new Set<string>()
       for (const site of activeSites) {
-        // Get assigned workers for this site
         const monthKey = `${site.id}_${currentYm}`
         const mAssign = main.massign[monthKey]
         const dAssign = main.assign[site.id]
         const workerIds = mAssign?.workers || dAssign?.workers || []
 
         for (const wid of workerIds) {
-          const signDocId = `${wid}_${currentYm}_${site.id}`
-          const signSnap = await getDoc(doc(db, 'calendarSign', signDocId))
-          if (!signSnap.exists()) {
-            unsignedCount++
-          }
+          expectedSignIds.add(`${wid}_${currentYm}_${site.id}`)
+        }
+      }
+
+      // Single Firestore query to get ALL signatures for this month
+      const signQuery = query(collection(db, 'calendarSign'), where('ym', '==', currentYm))
+      const signSnaps = await getDocs(signQuery)
+      const existingSignIds = new Set<string>()
+      signSnaps.forEach(snap => existingSignIds.add(snap.id))
+
+      // Count unsigned by checking in memory
+      let unsignedCount = 0
+      for (const id of expectedSignIds) {
+        if (!existingSignIds.has(id)) {
+          unsignedCount++
         }
       }
 

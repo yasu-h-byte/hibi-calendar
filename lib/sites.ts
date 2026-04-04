@@ -31,20 +31,6 @@ export async function getSites(): Promise<Site[]> {
     .filter(s => !s.archived)
 }
 
-export async function getSiteAssignments(): Promise<Record<string, SiteAssign>> {
-  const data = await getMainDoc()
-  if (!data.assign) return {}
-
-  const result: Record<string, SiteAssign> = {}
-  for (const [siteId, val] of Object.entries(data.assign)) {
-    result[siteId] = {
-      workers: (val.workers as number[]) || [],
-      subcons: (val.subcons as string[]) || [],
-    }
-  }
-  return result
-}
-
 export async function getSiteById(siteId: string): Promise<Site | null> {
   const sites = await getSites()
   return sites.find(s => s.id === siteId) || null

@@ -100,14 +100,18 @@ export async function getAttData(ym: string): Promise<{
 export async function getMultiMonthAttData(ymList: string[]): Promise<{
   d: Record<string, AttendanceEntry>
   sd: Record<string, { n: number; on: number }>
+  perMonth: Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>
 }> {
   const merged = { d: {} as Record<string, AttendanceEntry>, sd: {} as Record<string, { n: number; on: number }> }
-  for (const ym of ymList) {
-    const att = await getAttData(ym)
+  const perMonth = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>()
+  const results = await Promise.all(ymList.map(ym => getAttData(ym)))
+  for (let i = 0; i < ymList.length; i++) {
+    const att = results[i]
     Object.assign(merged.d, att.d)
     Object.assign(merged.sd, att.sd)
+    perMonth.set(ymList[i], { d: att.d, sd: att.sd })
   }
-  return merged
+  return { ...merged, perMonth }
 }
 
 // ────────────────────────────────────────
@@ -917,17 +921,6 @@ export function computeMonthly(
 // ────────────────────────────────────────
 //  ヘルパー
 // ────────────────────────────────────────
-
-export function formatCurrency(value: number): string {
-  if (Math.abs(value) >= 10000) {
-    return `¥${(value / 10000).toFixed(1)}万`
-  }
-  return `¥${value.toLocaleString()}`
-}
-
-export function formatYen(value: number): string {
-  return `¥${value.toLocaleString()}`
-}
 
 export function isLocked(locks: Record<string, boolean>, ym: string): boolean {
   return !!locks[ym]

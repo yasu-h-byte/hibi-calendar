@@ -171,7 +171,7 @@ export default function GuidePage() {
       <Section title="毎月の運用サイクル" icon="&#128260;">
         <div className="mt-3 space-y-0">
           {[
-            { step: '1', label: '元請からカレンダー入手', when: '20日頃', icon: '\uD83D\uDCE5' },
+            { step: '1', label: '元請から次月工程表を入手', when: '20日頃', icon: '\uD83D\uDCE5' },
             { step: '2', label: '職長がシステムに入力', when: '〜25日', icon: '\u270F\uFE0F', detail: '出勤日/休日/祝日を設定。法定上限チェック（自動）' },
             { step: '3', label: '社長（政仁さん）が承認', when: '〜月末', icon: '\u2705', detail: '所定日数・所定時間が確定' },
             { step: '4', label: 'Messengerでリンク送信', when: '承認後', icon: '\uD83D\uDCE8', detail: 'スタッフがカレンダーを確認・署名。署名後ロック' },

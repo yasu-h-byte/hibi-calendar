@@ -129,6 +129,7 @@ function computeTodayStatus(
 async function computeForeignWorkerRates(
   main: MainData,
   baseYm: string, // YYYYMM
+  cachedAtt?: Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>,
 ) {
   const foreignWorkers = main.workers.filter(w =>
     !w.retired && w.visa && w.visa !== 'none' && w.visa !== ''
@@ -145,13 +146,19 @@ async function computeForeignWorkerRates(
   }
   sixMonthList.reverse()
 
-  // 各月のattデータを読み込み
+  // 各月のattデータを読み込み（キャッシュ優先、未キャッシュ分は並列読み込み）
   const monthAttData: Record<string, Record<string, { w?: number; o?: number; p?: number }>> = {}
+  const uncachedMonths = sixMonthList.filter(ym => !cachedAtt?.has(ym))
+  const uncachedResults = await Promise.all(
+    uncachedMonths.map(ym => getAttData(ym).then(att => ({ ym, d: att.d })).catch(() => ({ ym, d: {} as Record<string, AttendanceEntry> })))
+  )
+  for (const { ym, d } of uncachedResults) {
+    monthAttData[ym] = d
+  }
   for (const ym of sixMonthList) {
-    try {
-      const att = await getAttData(ym)
-      monthAttData[ym] = att.d
-    } catch { monthAttData[ym] = {} }
+    if (cachedAtt?.has(ym)) {
+      monthAttData[ym] = cachedAtt.get(ym)!.d
+    }
   }
 
   // 各社員の日別出勤データを構築し、連続30日以上の無出勤期間を除外
@@ -328,7 +335,7 @@ export async function GET(request: NextRequest) {
         if (!ymStrList.includes(lStr)) lookbackYms.push(lStr)
       }
     }
-    const lookbackAtt = lookbackYms.length > 0 ? await getMultiMonthAttData(lookbackYms) : { d: {}, sd: {} }
+    const lookbackAtt = lookbackYms.length > 0 ? await getMultiMonthAttData(lookbackYms) : { d: {}, sd: {}, perMonth: new Map() as Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }> }
     // Merge lookback att with main att for getAvgRevenuePerEquiv
     const allAttD = { ...mergedAtt.d, ...lookbackAtt.d }
     const allAttSD = { ...mergedAtt.sd, ...lookbackAtt.sd }
@@ -442,7 +449,8 @@ export async function GET(request: NextRequest) {
     const prevYm = ymKey(prevYmDate.getFullYear(), prevYmDate.getMonth() + 1)
     let prevTotalManDays = 0, prevBilling = 0, prevCost = 0, prevProfit = 0, prevBillingPerManDay = 0
     try {
-      const prevAtt = await getAttData(prevYm)
+      const cachedPrev = mergedAtt.perMonth.get(prevYm) || lookbackAtt.perMonth.get(prevYm)
+      const prevAtt = cachedPrev || await getAttData(prevYm)
       const prevC = compute(main, prevAtt.d, prevAtt.sd, [{ y: prevYmDate.getFullYear(), m: prevYmDate.getMonth() + 1 }])
       let pWork = 0, pSubWork = 0, pCost = 0, pBill = 0
       for (const site of filteredSites) {
@@ -527,21 +535,23 @@ export async function GET(request: NextRequest) {
 
     // Fetch FY months not already loaded
     const missingFyMonths = fyYmStrList.filter(m => !ymStrList.includes(m))
-    const fyExtraAtt = missingFyMonths.length > 0 ? await getMultiMonthAttData(missingFyMonths) : { d: {}, sd: {} }
+    const fyExtraAtt = missingFyMonths.length > 0 ? await getMultiMonthAttData(missingFyMonths) : { d: {}, sd: {}, perMonth: new Map() }
 
-    // We need per-month compute for trend, so load each month individually
+    // Build a combined per-month cache from all loaded data
+    const attCache = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>()
+    for (const [k, v] of mergedAtt.perMonth) attCache.set(k, v)
+    for (const [k, v] of fyExtraAtt.perMonth) attCache.set(k, v)
+    for (const [k, v] of lookbackAtt.perMonth) attCache.set(k, v)
+
+    // We need per-month compute for trend, use cached per-month data
     const monthlyTrend = await Promise.all(fyYmStrList.map(async (mStr) => {
       const mY = parseInt(mStr.slice(0, 4))
       const mM = parseInt(mStr.slice(4, 6))
       const ymObj = [{ y: mY, m: mM }]
 
-      let att: { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }
-      if (ymStrList.includes(mStr)) {
-        // Already loaded - but compute() merged data, so we need single-month att data
-        att = await getAttData(mStr)
-      } else {
-        att = await getAttData(mStr)
-      }
+      // Use cached per-month data instead of re-reading from Firestore
+      const cached = attCache.get(mStr)
+      const att = cached || await getAttData(mStr)
 
       const mc = compute(main, att.d, att.sd, ymObj)
       const mTobiEq = calcTobiEquiv(
@@ -588,7 +598,8 @@ export async function GET(request: NextRequest) {
     const todayDay = now.getDate()
     let todayStatus = null
     try {
-      const todayAtt = await getAttData(todayYm)
+      const cachedToday = attCache.get(todayYm)
+      const todayAtt = cachedToday || await getAttData(todayYm)
       todayStatus = computeTodayStatus(main, todayAtt.d, todayAtt.sd, todayYm, todayDay, hiddenSiteIds)
     } catch {
       todayStatus = { siteStatus: [], absentWorkers: [] }
@@ -644,7 +655,7 @@ export async function GET(request: NextRequest) {
     const plAlert = computePLAlert(main)
 
     // ═══ Foreign worker attendance rates ═══
-    const foreignWorkerRates = await computeForeignWorkerRates(main, ym)
+    const foreignWorkerRates = await computeForeignWorkerRates(main, ym, attCache)
 
     // ═══ Site list for tab selector ═══
     // Include archived sites only if they have data in the period
