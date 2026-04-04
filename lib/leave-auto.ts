@@ -96,13 +96,13 @@ export function calcNextGrantDate(
       d.getDate() === currentGrant.getDate()
     )
 
-    // Also check by FY (the year of the grant date)
-    const grantFy = String(currentGrant.getFullYear())
-    const fyAlreadyGranted = existingRecords.some(
-      r => String(r.fy) === grantFy && ((r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0))
+    // 同じ年（付与日の年）に既に付与されているかチェック
+    const grantYear = currentGrant.getFullYear()
+    const yearAlreadyGranted = existingGrantDates.some(d =>
+      d.getFullYear() === grantYear
     )
 
-    if (!alreadyGranted && !fyAlreadyGranted) {
+    if (!alreadyGranted && !yearAlreadyGranted) {
       return currentGrant
     }
 
@@ -168,6 +168,24 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
   const plData = { ...main.plData } as Record<string, PLRecord[]>
   let hasChanges = false
 
+  // クリーンアップ: FYが付与年のまま保存された不正レコードを削除
+  // （例: 2026年4月付与がfy=2026で保存されたが、正しくはfy=2025）
+  for (const [wKey, records] of Object.entries(plData)) {
+    const cleaned = records.filter(r => {
+      if (!r.grantDate) return true
+      const gd = new Date(r.grantDate)
+      if (isNaN(gd.getTime())) return true
+      const gm = gd.getMonth() + 1
+      const correctFy = gm >= 10 ? gd.getFullYear() : gd.getFullYear() - 1
+      if (String(r.fy) !== String(correctFy) && String(r.fy) === String(gd.getFullYear()) && gm < 10) {
+        hasChanges = true
+        return false // 不正なFYのレコードを削除
+      }
+      return true
+    })
+    plData[wKey] = cleaned
+  }
+
   for (const w of eligible) {
     const wKey = String(w.id)
     const records = plData[wKey] || []
@@ -184,7 +202,9 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
       const carry = calcCarryOver(records)
 
       const grantDateStr = `${nextGrant.getFullYear()}-${String(nextGrant.getMonth() + 1).padStart(2, '0')}-${String(nextGrant.getDate()).padStart(2, '0')}`
-      const fy = String(nextGrant.getFullYear())
+      // FYは10月始まり年度: 10-12月→その年、1-9月→前年
+      const grantM = nextGrant.getMonth() + 1
+      const fy = String(grantM >= 10 ? nextGrant.getFullYear() : nextGrant.getFullYear() - 1)
 
       const newRecord: PLRecord = {
         fy,
@@ -195,10 +215,9 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
         used: 0,
       }
 
-      // Double-check: don't grant if there's already a record for this FY with grant data
-      // Support both old format (grant) and new format (grantDays)
-      const existingFy = records.find(r => String(r.fy) === fy && ((r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)))
-      if (existingFy) continue
+      // 同じ付与日が既にあればスキップ（FYではなく付与日でチェック）
+      const existingGrant = records.find(r => r.grantDate === grantDateStr)
+      if (existingGrant) continue
 
       // Add new record (don't overwrite existing records)
       records.push(newRecord)

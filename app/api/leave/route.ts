@@ -221,8 +221,9 @@ export async function GET(request: NextRequest) {
       .filter(w => !w.retired && w.job !== 'yakuin')
       .map(w => {
         const plRecords = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
-        // fy比較: Firestoreでは数値(2025)、APIパラメータは文字列('2025')なので両方対応
-        const fyRecord = plRecords.find(r => String(r.fy) === String(fy))
+        // fy比較: 同じFYに複数レコードがある場合は最新（最後）を使用
+        const fyRecords = plRecords.filter(r => String(r.fy) === String(fy))
+        const fyRecord = fyRecords.length > 0 ? fyRecords[fyRecords.length - 1] : undefined
 
         // 旧アプリ(grant/carry/adj)と新アプリ(grantDays/carryOver/adjustment)の両方に対応
         // 旧フィールドが存在する場合はそちらが元データなので優先する
