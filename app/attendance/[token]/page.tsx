@@ -223,47 +223,12 @@ export default function StaffAttendancePage() {
     if (choice === 'work') {
       submitEntry('work', showOT ? otHours : 0)
     } else if (choice === 'leave') {
-      // 有給は申請フローに変更（当日分）
+      // 有給は申請モーダルを開く
       setShowOT(false)
-      submitLeaveForToday()
+      setShowLeaveModal(true)
     } else {
       setShowOT(false)
       submitEntry(choice)
-    }
-  }
-
-  const submitLeaveForToday = async () => {
-    if (!data || saving) return
-    setSaving(true)
-    setSuccessMsg(null)
-    try {
-      const today = new Date()
-      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-      const res = await fetch('/api/leave-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'request',
-          token,
-          date: dateStr,
-          siteId: data.site.id,
-          reason: '',
-        }),
-      })
-      if (res.ok) {
-        setSuccessMsg('しんせい OK')
-        setTimeout(() => setSuccessMsg(null), 2000)
-      } else {
-        const d = await res.json()
-        const msg = d.error === 'Already requested' ? 'しんせいずみ' : d.error || 'エラー'
-        setError(msg)
-        setTimeout(() => setError(null), 3000)
-      }
-    } catch {
-      setError('つうしん エラー')
-      setTimeout(() => setError(null), 3000)
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -453,15 +418,6 @@ export default function StaffAttendancePage() {
             ))}
           </div>
         </div>
-
-        {/* Leave request button */}
-        <button
-          onClick={() => setShowLeaveModal(true)}
-          className="w-full bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-xl py-4 text-center transition active:scale-95 font-bold text-base"
-        >
-          <span className="text-xl mr-2">🌴</span>
-          ゆうきゅう しんせい / Xin nghi phep
-        </button>
 
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 py-2">
