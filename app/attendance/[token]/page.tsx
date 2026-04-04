@@ -36,6 +36,15 @@ const STATUS_COLORS: Record<AttendanceStatus, string> = {
   site_off: 'bg-yellow-100 text-yellow-700', none: 'bg-red-50 text-red-400',
 }
 
+interface LeaveRequestData {
+  id: string
+  date: string
+  status: 'pending' | 'approved' | 'rejected'
+  reason: string
+  rejectedReason?: string
+  requestedAt: string
+}
+
 export default function StaffAttendancePage() {
   const params = useParams()
   const token = params.token as string
@@ -49,6 +58,13 @@ export default function StaffAttendancePage() {
   const [otHours, setOtHours] = useState(1.0)
   const [editingPast, setEditingPast] = useState<number | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [showLeaveModal, setShowLeaveModal] = useState(false)
+  const [leaveDate, setLeaveDate] = useState('')
+  const [leaveReason, setLeaveReason] = useState('')
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequestData[]>([])
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false)
+  const [leaveError, setLeaveError] = useState<string | null>(null)
+  const [leaveSuccess, setLeaveSuccess] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -81,6 +97,86 @@ export default function StaffAttendancePage() {
   }, [token, siteId])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Fetch leave requests when modal opens
+  const fetchLeaveRequests = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/leave-request?token=${token}`)
+      if (res.ok) {
+        const d = await res.json()
+        setLeaveRequests(d.requests || [])
+      }
+    } catch { /* ignore */ }
+  }, [token])
+
+  useEffect(() => {
+    if (showLeaveModal) {
+      fetchLeaveRequests()
+      // Set default date to tomorrow
+      const tomorrow = new Date()
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      const y = tomorrow.getFullYear()
+      const m = String(tomorrow.getMonth() + 1).padStart(2, '0')
+      const d = String(tomorrow.getDate()).padStart(2, '0')
+      setLeaveDate(`${y}-${m}-${d}`)
+      setLeaveReason('')
+      setLeaveError(null)
+      setLeaveSuccess(null)
+    }
+  }, [showLeaveModal, fetchLeaveRequests])
+
+  const submitLeaveRequest = async () => {
+    if (!data || leaveSubmitting || !leaveDate) return
+    setLeaveSubmitting(true)
+    setLeaveError(null)
+    setLeaveSuccess(null)
+    try {
+      const res = await fetch('/api/leave-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request',
+          token,
+          date: leaveDate,
+          siteId: data.site.id,
+          reason: leaveReason,
+        }),
+      })
+      if (res.ok) {
+        setLeaveSuccess('OK')
+        setLeaveDate('')
+        setLeaveReason('')
+        fetchLeaveRequests()
+        setTimeout(() => setLeaveSuccess(null), 2000)
+      } else {
+        const d = await res.json()
+        const msg = d.error === 'Already requested' ? 'Already requested / Da gui roi'
+          : d.error === 'Date must be in the future' ? 'Select a future date / Chon ngay trong tuong lai'
+          : d.error || 'Error'
+        setLeaveError(msg)
+        setTimeout(() => setLeaveError(null), 3000)
+      }
+    } catch {
+      setLeaveError('Error')
+      setTimeout(() => setLeaveError(null), 3000)
+    } finally {
+      setLeaveSubmitting(false)
+    }
+  }
+
+  const getMinDate = () => {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const y = tomorrow.getFullYear()
+    const m = String(tomorrow.getMonth() + 1).padStart(2, '0')
+    const d = String(tomorrow.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  const formatLeaveDate = (dateStr: string) => {
+    const [, m, d] = dateStr.split('-')
+    return `${parseInt(m)}/${parseInt(d)}`
+  }
 
   const submitEntry = async (
     choice: string,
@@ -320,6 +416,15 @@ export default function StaffAttendancePage() {
           </div>
         </div>
 
+        {/* Leave request button */}
+        <button
+          onClick={() => setShowLeaveModal(true)}
+          className="w-full bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-xl py-4 text-center transition active:scale-95 font-bold text-base"
+        >
+          <span className="text-xl mr-2">🌴</span>
+          ゆうきゅう しんせい / Xin nghi phep
+        </button>
+
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 py-2">
           まいにち いれてね！
@@ -359,6 +464,110 @@ export default function StaffAttendancePage() {
               className="w-full mt-3 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
             >
               やめる
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Leave request modal */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowLeaveModal(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy mb-4 text-center">
+              ゆうきゅう しんせい / Xin nghi phep
+            </h3>
+
+            {leaveSuccess && (
+              <div className="bg-green-100 text-green-700 rounded-xl p-3 text-center font-bold mb-3 animate-pulse">
+                しんせい しました / Da gui don
+              </div>
+            )}
+            {leaveError && (
+              <div className="bg-red-100 text-red-600 rounded-xl p-3 text-center text-sm mb-3">
+                {leaveError}
+              </div>
+            )}
+
+            {/* Date picker */}
+            <div className="mb-4">
+              <label className="text-sm text-gray-600 block mb-1">
+                ひにち をえらんでください / Chon ngay nghi
+              </label>
+              <input
+                type="date"
+                value={leaveDate}
+                min={getMinDate()}
+                onChange={e => setLeaveDate(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                あした いこう / Tu ngay mai tro di
+              </p>
+            </div>
+
+            {/* Reason */}
+            <div className="mb-4">
+              <label className="text-sm text-gray-600 block mb-1">
+                りゆう（にんい）/ Ly do (tuy chon)
+              </label>
+              <input
+                type="text"
+                value={leaveReason}
+                onChange={e => setLeaveReason(e.target.value)}
+                placeholder="つういん、よてい など"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
+              />
+            </div>
+
+            {/* Submit */}
+            <button
+              onClick={submitLeaveRequest}
+              disabled={leaveSubmitting || !leaveDate}
+              className="w-full bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
+            >
+              {leaveSubmitting ? '...' : 'しんせい する / Gui don'}
+            </button>
+
+            {/* Request history */}
+            {leaveRequests.length > 0 && (
+              <div className="mt-6">
+                <div className="text-sm text-gray-500 font-bold mb-2">
+                  しんせい りれき / Lich su don
+                </div>
+                <div className="space-y-2">
+                  {leaveRequests.map(req => (
+                    <div key={req.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
+                      <span className="text-sm text-gray-700 font-medium">
+                        {formatLeaveDate(req.date)}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {req.status === 'approved' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-bold">
+                            OK / Da duyet
+                          </span>
+                        )}
+                        {req.status === 'pending' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
+                            まち / Dang cho
+                          </span>
+                        )}
+                        {req.status === 'rejected' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold" title={req.rejectedReason || ''}>
+                            NG / Tu choi
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowLeaveModal(false)}
+              className="w-full mt-4 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
+            >
+              とじる / Dong
             </button>
           </div>
         </div>

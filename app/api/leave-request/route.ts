@@ -1,0 +1,233 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { checkApiAuth } from '@/lib/auth'
+import { db } from '@/lib/firebase'
+import { doc, getDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore'
+import { getWorkerByToken } from '@/lib/workers'
+import { getStaffSites, ymKey, attKey, setAttendanceEntry } from '@/lib/attendance'
+
+interface LeaveRequest {
+  workerId: number
+  workerName: string
+  date: string          // YYYY-MM-DD
+  ym: string            // YYYYMM
+  day: number           // day of month
+  siteId: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedAt: string
+  reviewedAt?: string
+  reviewedBy?: number
+  rejectedReason?: string
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { action } = body
+
+    // ── Staff: submit leave request ──
+    if (action === 'request') {
+      const { token, date, siteId, reason } = body
+
+      if (!token || !date) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      }
+
+      const worker = await getWorkerByToken(token)
+      if (!worker) {
+        return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      }
+
+      // Only foreign workers can request
+      if (!worker.visaType || worker.visaType === 'none') {
+        return NextResponse.json({ error: 'Not eligible' }, { status: 403 })
+      }
+
+      // Validate date is at least next day (JST)
+      const now = new Date()
+      // Convert to JST for date comparison
+      const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      const todayStr = `${jstNow.getFullYear()}-${String(jstNow.getMonth() + 1).padStart(2, '0')}-${String(jstNow.getDate()).padStart(2, '0')}`
+
+      if (date <= todayStr) {
+        return NextResponse.json({ error: 'Date must be in the future' }, { status: 400 })
+      }
+
+      // Parse date
+      const [yearStr, monthStr, dayStr] = date.split('-')
+      const year = parseInt(yearStr)
+      const month = parseInt(monthStr)
+      const day = parseInt(dayStr)
+      const ym = ymKey(year, month)
+
+      // Determine siteId: use provided or first assigned site
+      let resolvedSiteId = siteId
+      if (!resolvedSiteId) {
+        const sites = await getStaffSites(worker.id)
+        if (sites.length > 0) {
+          resolvedSiteId = sites[0].id
+        } else {
+          return NextResponse.json({ error: 'No site assigned' }, { status: 400 })
+        }
+      }
+
+      // Check for duplicate
+      const docId = `${worker.id}_${date.replace(/-/g, '')}`
+      const docRef = doc(db, 'leaveRequests', docId)
+      const existing = await getDoc(docRef)
+      if (existing.exists()) {
+        const data = existing.data() as LeaveRequest
+        if (data.status !== 'rejected') {
+          return NextResponse.json({ error: 'Already requested' }, { status: 409 })
+        }
+        // If rejected, allow re-request
+      }
+
+      const leaveReq: LeaveRequest = {
+        workerId: worker.id,
+        workerName: worker.name,
+        date,
+        ym,
+        day,
+        siteId: resolvedSiteId,
+        reason: reason || '',
+        status: 'pending',
+        requestedAt: new Date().toISOString(),
+      }
+
+      await setDoc(docRef, leaveReq)
+      return NextResponse.json({ success: true, id: docId })
+    }
+
+    // ── Admin: approve leave request ──
+    if (action === 'approve') {
+      if (!checkApiAuth(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const { requestId, approvedBy } = body
+      if (!requestId) {
+        return NextResponse.json({ error: 'Missing requestId' }, { status: 400 })
+      }
+
+      const docRef = doc(db, 'leaveRequests', requestId)
+      const snap = await getDoc(docRef)
+      if (!snap.exists()) {
+        return NextResponse.json({ error: 'Request not found' }, { status: 404 })
+      }
+
+      const data = snap.data() as LeaveRequest
+      if (data.status !== 'pending') {
+        return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+      }
+
+      // Update status
+      await setDoc(docRef, {
+        ...data,
+        status: 'approved',
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: approvedBy || 0,
+      })
+
+      // Write attendance: { w: 0, p: 1 }
+      await setAttendanceEntry(data.siteId, data.workerId, data.ym, data.day, { w: 0, p: 1 })
+
+      return NextResponse.json({ success: true })
+    }
+
+    // ── Admin: reject leave request ──
+    if (action === 'reject') {
+      if (!checkApiAuth(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const { requestId, rejectedBy, reason } = body
+      if (!requestId) {
+        return NextResponse.json({ error: 'Missing requestId' }, { status: 400 })
+      }
+
+      const docRef = doc(db, 'leaveRequests', requestId)
+      const snap = await getDoc(docRef)
+      if (!snap.exists()) {
+        return NextResponse.json({ error: 'Request not found' }, { status: 404 })
+      }
+
+      const data = snap.data() as LeaveRequest
+      if (data.status !== 'pending') {
+        return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+      }
+
+      await setDoc(docRef, {
+        ...data,
+        status: 'rejected',
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: rejectedBy || 0,
+        rejectedReason: reason || '',
+      })
+
+      return NextResponse.json({ success: true })
+    }
+
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+  } catch (error) {
+    console.error('Leave request POST error:', error)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const token = request.nextUrl.searchParams.get('token')
+    const ym = request.nextUrl.searchParams.get('ym')
+
+    // Staff: get own requests by token
+    if (token) {
+      const worker = await getWorkerByToken(token)
+      if (!worker) {
+        return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      }
+
+      const q = query(
+        collection(db, 'leaveRequests'),
+        where('workerId', '==', worker.id)
+      )
+      const snap = await getDocs(q)
+      const requests: (LeaveRequest & { id: string })[] = []
+      snap.forEach(d => {
+        requests.push({ id: d.id, ...(d.data() as LeaveRequest) })
+      })
+
+      // Sort by date descending
+      requests.sort((a, b) => b.date.localeCompare(a.date))
+
+      return NextResponse.json({ requests })
+    }
+
+    // Admin: get all requests for a month
+    if (checkApiAuth(request)) {
+      const q = ym
+        ? query(collection(db, 'leaveRequests'), where('ym', '==', ym))
+        : query(collection(db, 'leaveRequests'))
+
+      const snap = await getDocs(q)
+      const requests: (LeaveRequest & { id: string })[] = []
+      snap.forEach(d => {
+        requests.push({ id: d.id, ...(d.data() as LeaveRequest) })
+      })
+
+      // Sort: pending first, then by date
+      requests.sort((a, b) => {
+        if (a.status === 'pending' && b.status !== 'pending') return -1
+        if (a.status !== 'pending' && b.status === 'pending') return 1
+        return b.date.localeCompare(a.date)
+      })
+
+      return NextResponse.json({ requests })
+    }
+
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  } catch (error) {
+    console.error('Leave request GET error:', error)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
