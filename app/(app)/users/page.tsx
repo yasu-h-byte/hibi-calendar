@@ -133,6 +133,7 @@ export default function UsersPage() {
       <div>
         <h1 className="text-xl font-bold text-hibi-navy dark:text-white">ユーザー管理</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">ログインユーザー・ロール別権限の管理</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">※ ロールは人員マスタの職種で決まります（役員→管理者、職長→職長、事務→事務）。変更するには人員マスタで職種を変更してください。</p>
       </div>
 
       {/* Summary */}
@@ -187,6 +188,7 @@ export default function UsersPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>
                       {badge.label}
                     </span>
+                    <a href="/workers" className="ml-2 text-[10px] text-blue-500 hover:underline">変更</a>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 font-mono">
                     {hasToken ? `${w.token.substring(0, 8)}...` : '—'}
