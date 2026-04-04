@@ -170,6 +170,8 @@ export default function AttendanceGridPage() {
   const [data, setData] = useState<GridData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
+  const [allSites, setAllSites] = useState<{ id: string; name: string; archived?: boolean }[]>([])
 
   // Save status: null | 'saving' | 'saved'
   const [saveStatus, setSaveStatus] = useState<null | 'saving' | 'saved'>(null)
@@ -189,7 +191,7 @@ export default function AttendanceGridPage() {
   const pendingSaves = useRef<Map<string, PendingSave>>(new Map())
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
 
-  const ymOptions = useMemo(() => getYmOptions(14), [])
+  const ymOptions = useMemo(() => getYmOptions(26), []) // 2024年4月まで遡れるように拡張
 
   // Read auth
   useEffect(() => {
@@ -252,7 +254,9 @@ export default function AttendanceGridPage() {
         })
         if (res.ok) {
           const json = await res.json()
-          const activeSites = (json.sites || []).filter((s: { archived?: boolean }) => !s.archived)
+          const sites = json.sites || []
+          setAllSites(sites)
+          const activeSites = sites.filter((s: { archived?: boolean }) => !s.archived)
           if (activeSites.length > 0) {
             setSiteId(activeSites[0].id)
           }
@@ -791,10 +795,14 @@ export default function AttendanceGridPage() {
             onChange={e => setSiteId(e.target.value)}
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none min-w-[180px]"
           >
-            {(data?.sites || []).map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+            {(data?.sites || allSites).filter(s => showArchived || !(s as { archived?: boolean }).archived).map(s => (
+              <option key={s.id} value={s.id}>{s.name}{(s as { archived?: boolean }).archived ? '（終了）' : ''}</option>
             ))}
           </select>
+          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer whitespace-nowrap">
+            <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} className="rounded" />
+            終了現場
+          </label>
 
           {/* Year/Month selector */}
           <select

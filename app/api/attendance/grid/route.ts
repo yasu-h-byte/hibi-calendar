@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
       workDays: workDaysValue,
       siteWorkDays: siteWorkDaysValue,
       allWorkers,
-      sites: main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name })),
+      sites: main.sites.map(s => ({ id: s.id, name: s.name, archived: s.archived })),
       calendarDays,
     })
   } catch (error) {
