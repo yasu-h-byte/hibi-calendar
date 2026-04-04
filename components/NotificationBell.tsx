@@ -13,7 +13,6 @@ interface Notification {
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -41,7 +40,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications()
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000) // refresh every 5 min
+    const interval = setInterval(fetchNotifications, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [fetchNotifications])
 
@@ -58,17 +57,6 @@ export default function NotificationBell() {
     }
   }, [open])
 
-  const visibleNotifications = notifications.filter(n => !dismissed.has(n.id))
-  const unreadCount = visibleNotifications.length
-
-  const handleDismiss = (id: string) => {
-    setDismissed(prev => new Set(prev).add(id))
-  }
-
-  const handleMarkAllRead = () => {
-    setDismissed(new Set(notifications.map(n => n.id)))
-  }
-
   const typeColor = (type: string) => {
     switch (type) {
       case 'error': return 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
@@ -81,8 +69,8 @@ export default function NotificationBell() {
     <div className="relative" ref={panelRef}>
       {/* Bell button */}
       <button
-        onClick={() => setOpen(prev => !prev)}
-        className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
+        onClick={() => { setOpen(prev => !prev); if (!open) fetchNotifications() }}
+        className="relative p-2 rounded-lg hover:bg-white/10 transition-colors duration-150"
         aria-label="通知"
       >
         <span className="text-xl" role="img" aria-label="bell">
@@ -90,9 +78,9 @@ export default function NotificationBell() {
         </span>
 
         {/* Badge */}
-        {unreadCount > 0 && (
+        {notifications.length > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 text-xs font-bold text-white bg-red-500 rounded-full shadow-sm">
-            {unreadCount}
+            {notifications.length}
           </span>
         )}
       </button>
@@ -104,59 +92,41 @@ export default function NotificationBell() {
           style={{ animation: 'notifSlideIn 0.15s ease-out' }}
         >
           {/* Header */}
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-700">
+          <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-700">
             <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-200">通知</h3>
             {loading && (
-              <span className="text-xs text-gray-400">更新中...</span>
+              <span className="text-[10px] text-gray-400">更新中...</span>
+            )}
+            {!loading && notifications.length === 0 && (
+              <span className="text-[10px] text-green-500 font-medium">問題なし</span>
             )}
           </div>
 
           {/* Notification list */}
           <div className="max-h-80 overflow-y-auto">
-            {visibleNotifications.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-gray-400">
-                通知はありません
+            {notifications.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-gray-400">
+                対応が必要な項目はありません
               </div>
             ) : (
-              visibleNotifications.map(n => (
+              notifications.map(n => (
                 <div
                   key={n.id}
-                  className={`px-3 py-2.5 border-l-4 border-b border-gray-50 flex items-start gap-2 transition-colors duration-150 hover:bg-gray-50 ${typeColor(n.type)}`}
+                  className={`px-3 py-2.5 border-l-4 border-b border-gray-50 flex items-start gap-2 ${typeColor(n.type)}`}
                 >
                   <span className="text-sm flex-shrink-0 mt-0.5">{n.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-gray-800 dark:text-gray-200 leading-snug">{n.message}</p>
                     {n.count !== undefined && n.count > 0 && (
-                      <span className="inline-block mt-1 text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+                      <span className="inline-block mt-1 text-[10px] text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
                         {n.count}件
                       </span>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleDismiss(n.id)}
-                    className="flex-shrink-0 text-gray-300 hover:text-gray-500 transition-colors p-0.5"
-                    aria-label="閉じる"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
                 </div>
               ))
             )}
           </div>
-
-          {/* Footer */}
-          {visibleNotifications.length > 0 && (
-            <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
-              <button
-                onClick={handleMarkAllRead}
-                className="w-full text-center text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
-              >
-                すべて既読
-              </button>
-            </div>
-          )}
         </div>
       )}
 
