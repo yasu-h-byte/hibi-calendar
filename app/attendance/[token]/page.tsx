@@ -226,8 +226,7 @@ export default function StaffAttendancePage() {
                 const isActive = (
                   (btn.choice === 'work' && (currentStatus === 'work' || currentStatus === 'overtime')) ||
                   (btn.choice === 'rest' && currentStatus === 'rest') ||
-                  (btn.choice === 'leave' && currentStatus === 'leave') ||
-                  (btn.choice === 'site_off' && currentStatus === 'site_off')
+                  (btn.choice === 'leave' && currentStatus === 'leave')
                 )
                 return (
                   <button
