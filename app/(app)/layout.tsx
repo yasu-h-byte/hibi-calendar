@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
-import NotificationBell from '@/components/NotificationBell'
 import { ToastProvider } from '@/components/Toast'
 import { AuthUser } from '@/types'
 import { initTheme } from '@/lib/theme'
@@ -49,19 +48,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Main content */}
         <div className="lg:ml-64">
-          {/* Top bar */}
-          <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center gap-3 sticky top-0 z-30">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-hibi-navy dark:text-gray-200"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-            <div className="flex-1" />
-            {user.role === 'admin' && <NotificationBell />}
-          </header>
+          {/* Mobile hamburger button */}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="lg:hidden fixed top-3 left-3 z-40 bg-hibi-navy text-white p-2 rounded-lg shadow-lg"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
 
           <main className="p-4 lg:p-6">
             <div className="animate-fadeIn">

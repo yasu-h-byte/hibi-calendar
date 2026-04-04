@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
 import { initTheme, toggleTheme, type Theme } from '@/lib/theme'
+import NotificationBell from './NotificationBell'
 
 interface MenuItem {
   label: string
@@ -175,11 +176,14 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
         </div>
 
         {/* User info */}
-        <div className="px-4 py-3 border-b border-white/10 bg-white/5">
-          <div className="text-sm font-medium">{user.name}</div>
-          <div className="text-xs text-white/50 mt-0.5">
-            {user.role === 'approver' ? '事業責任者' : user.role === 'foreman' ? '職長' : '管理者'}
+        <div className="px-4 py-3 border-b border-white/10 bg-white/5 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">{user.name}</div>
+            <div className="text-xs text-white/50 mt-0.5">
+              {user.role === 'approver' ? '事業責任者' : user.role === 'foreman' ? '職長' : '管理者'}
+            </div>
           </div>
+          {user.role === 'admin' && <NotificationBell />}
         </div>
 
         {/* Menu */}
