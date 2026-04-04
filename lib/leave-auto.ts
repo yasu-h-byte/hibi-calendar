@@ -168,24 +168,6 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
   const plData = { ...main.plData } as Record<string, PLRecord[]>
   let hasChanges = false
 
-  // クリーンアップ: FYが付与年のまま保存された不正レコードを削除
-  // （例: 2026年4月付与がfy=2026で保存されたが、正しくはfy=2025）
-  for (const [wKey, records] of Object.entries(plData)) {
-    const cleaned = records.filter(r => {
-      if (!r.grantDate) return true
-      const gd = new Date(r.grantDate)
-      if (isNaN(gd.getTime())) return true
-      const gm = gd.getMonth() + 1
-      const correctFy = gm >= 10 ? gd.getFullYear() : gd.getFullYear() - 1
-      if (String(r.fy) !== String(correctFy) && String(r.fy) === String(gd.getFullYear()) && gm < 10) {
-        hasChanges = true
-        return false // 不正なFYのレコードを削除
-      }
-      return true
-    })
-    plData[wKey] = cleaned
-  }
-
   for (const w of eligible) {
     const wKey = String(w.id)
     const records = plData[wKey] || []
@@ -202,9 +184,7 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
       const carry = calcCarryOver(records)
 
       const grantDateStr = `${nextGrant.getFullYear()}-${String(nextGrant.getMonth() + 1).padStart(2, '0')}-${String(nextGrant.getDate()).padStart(2, '0')}`
-      // FYは10月始まり年度: 10-12月→その年、1-9月→前年
-      const grantM = nextGrant.getMonth() + 1
-      const fy = String(grantM >= 10 ? nextGrant.getFullYear() : nextGrant.getFullYear() - 1)
+      const fy = String(nextGrant.getFullYear())
 
       const newRecord: PLRecord = {
         fy,

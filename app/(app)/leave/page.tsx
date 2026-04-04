@@ -109,12 +109,7 @@ export default function LeavePage() {
   const [grantMonthSaving, setGrantMonthSaving] = useState(false)
   const [autoGranted, setAutoGranted] = useState<{ name: string; days: number; grantDate: string }[]>([])
   const [autoGrantDismissed, setAutoGrantDismissed] = useState(false)
-  const [fy, setFy] = useState(() => {
-    const now = new Date()
-    const y = now.getFullYear()
-    const m = now.getMonth() + 1
-    return m >= 10 ? `${y}` : `${y - 1}`
-  })
+  // FYセレクタ廃止: 常に各スタッフの最新付与レコードを表示
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
@@ -125,7 +120,7 @@ export default function LeavePage() {
     if (!password) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/leave?fy=${fy}&calendar=true`, { headers: { 'x-admin-password': password } })
+      const res = await fetch(`/api/leave?calendar=true`, { headers: { 'x-admin-password': password } })
       if (res.ok) {
         const data = await res.json()
         setWorkers(data.workers || [])
@@ -139,7 +134,7 @@ export default function LeavePage() {
     } finally {
       setLoading(false)
     }
-  }, [password, fy])
+  }, [password])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -192,7 +187,7 @@ export default function LeavePage() {
         body: JSON.stringify({
           action: 'grant',
           workerId: Number(grantForm.workerId),
-          fy,
+          fy: grantForm.grantDate ? grantForm.grantDate.slice(0, 4) : String(new Date().getFullYear()),
           grantDays: grantForm.grantDays,
           grantMonth: grantForm.grantMonth,
           grantDate: grantForm.grantDate,
@@ -229,30 +224,27 @@ export default function LeavePage() {
       await fetch('/api/leave', {
         method: 'POST',
         headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'carryOver', fy }),
+        body: JSON.stringify({ action: 'carryOver', fy: String(new Date().getFullYear()) }),
       })
       fetchData()
     } finally { setSaving(false) }
   }
 
-  const fyOptions = []
-  for (let y = 2024; y <= 2027; y++) fyOptions.push({ value: `${y}`, label: `${y}年度（${y}/10〜${y + 1}/9）` })
+  // PLカレンダーは直近1年を表示
 
-  // ── PL Calendar data ──
-  const fyStart = parseInt(fy)
+  // ── PL Calendar data ── 直近1年を表示
+  const calendarYear = new Date().getFullYear()
   const calendarMonths = useMemo(() => {
     const months: { year: number; month: number; label: string }[] = []
-    for (let m = 10; m <= 12; m++) months.push({ year: fyStart, month: m, label: `${fyStart}年${m}月` })
-    for (let m = 1; m <= 9; m++) months.push({ year: fyStart + 1, month: m, label: `${fyStart + 1}年${m}月` })
+    for (let m = 1; m <= 12; m++) months.push({ year: calendarYear, month: m, label: `${calendarYear}年${m}月` })
     return months
-  }, [fyStart])
+  }, [calendarYear])
 
   const holidays = useMemo(() => {
     const set = new Set<string>()
-    getJPHolidays(fyStart).forEach(h => set.add(h))
-    getJPHolidays(fyStart + 1).forEach(h => set.add(h))
+    getJPHolidays(calendarYear).forEach(h => set.add(h))
     return set
-  }, [fyStart])
+  }, [calendarYear])
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -270,10 +262,6 @@ export default function LeavePage() {
             className="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition disabled:opacity-50">
             繰越自動計算
           </button>
-          <select value={fy} onChange={e => setFy(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-            {fyOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
         </div>
       </div>
 
@@ -671,7 +659,7 @@ export default function LeavePage() {
                   await fetch('/api/leave', {
                     method: 'POST',
                     headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ workerId: editWorker.id, fy, ...editForm }),
+                    body: JSON.stringify({ workerId: editWorker.id, fy: editWorker.grantDate ? editWorker.grantDate.slice(0, 4) : String(new Date().getFullYear()), ...editForm }),
                   })
                   setEditWorker(null)
                   fetchData()

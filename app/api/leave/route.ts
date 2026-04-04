@@ -167,9 +167,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const fy = request.nextUrl.searchParams.get('fy') || '2025'
   const calendarMode = request.nextUrl.searchParams.get('calendar') === 'true'
-  const fyStart = parseInt(fy)
 
   try {
     let main = await getMainData()
@@ -177,53 +175,38 @@ export async function GET(request: NextRequest) {
     // Auto-grant PL for eligible workers whose grant date has arrived
     const autoGranted = await checkAndGrantPL(main)
     if (autoGranted.length > 0) {
-      // Re-read main data to get updated plData
       main = await getMainData()
     }
 
-    // FY months: Oct of fyStart to Sep of fyStart+1
-    const fyMonths: string[] = []
-    for (let m = 10; m <= 12; m++) fyMonths.push(ymKey(fyStart, m))
-    for (let m = 1; m <= 9; m++) fyMonths.push(ymKey(fyStart + 1, m))
-
-    // Load attendance data for all FY months to count PL usage
-    const allAtt: Record<string, Record<string, unknown>> = {}
-    for (const ym of fyMonths) {
-      const att = await getAttData(ym)
-      Object.assign(allAtt, att.d)
+    // 全期間の出面データからPL消化を集計（付与日から1年間はスタッフごとに異なるため、広めに取得）
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const allMonths: string[] = []
+    // 過去2年 + 今年分をカバー
+    for (let y = currentYear - 2; y <= currentYear; y++) {
+      for (let m = 1; m <= 12; m++) allMonths.push(ymKey(y, m))
     }
 
-    // Count PL usage per worker and build calendar data
-    const plUsage: Record<number, number> = {}
-    const plCalendar: Record<string, number[]> = {} // YYYYMMDD -> [workerIds]
-
-    for (const [key, entry] of Object.entries(allAtt)) {
-      const e = entry as { p?: number }
-      if (e.p && e.p === 1) {
-        const parts = key.split('_')
-        const wid = parseInt(parts[1])
-        const entryYm = parts[2]
-        const entryDay = parts[3]
-        plUsage[wid] = (plUsage[wid] || 0) + 1
-
-        const dateKey = `${entryYm}${entryDay}`
-        if (!plCalendar[dateKey]) plCalendar[dateKey] = []
-        if (!plCalendar[dateKey].includes(wid)) plCalendar[dateKey].push(wid)
-      }
+    const allAtt: Record<string, Record<string, unknown>> = {}
+    for (const ym of allMonths) {
+      const att = await getAttData(ym)
+      Object.assign(allAtt, att.d)
     }
 
     // Worker name map for calendar tooltips
     const workerNames: Record<number, string> = {}
     main.workers.forEach(w => { workerNames[w.id] = w.name })
 
-    // Build worker PL data
+    // Build worker PL data — 各スタッフの最新レコードを使用
     const workers = main.workers
       .filter(w => !w.retired && w.job !== 'yakuin')
       .map(w => {
         const plRecords = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
-        // fy比較: 同じFYに複数レコードがある場合は最新（最後）を使用
-        const fyRecords = plRecords.filter(r => String(r.fy) === String(fy))
-        const fyRecord = fyRecords.length > 0 ? fyRecords[fyRecords.length - 1] : undefined
+        // 最新のレコードを使用（付与日数が入っているもの）
+        const recordsWithGrant = plRecords.filter(r =>
+          (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
+        )
+        const fyRecord = recordsWithGrant.length > 0 ? recordsWithGrant[recordsWithGrant.length - 1] : (plRecords.length > 0 ? plRecords[plRecords.length - 1] : undefined)
 
         // 旧アプリ(grant/carry/adj)と新アプリ(grantDays/carryOver/adjustment)の両方に対応
         // 旧フィールドが存在する場合はそちらが元データなので優先する
@@ -235,9 +218,33 @@ export async function GET(request: NextRequest) {
         // adj（旧）とadjustment（新）が両方存在する場合、大きい方を使う（旧データの方が正確な場合がある）
         const adjustment = Math.max(fyRecord?.adjustment ?? 0, fyRecord?.adj ?? 0)
         const grantDate = fyRecord?.grantDate || ''
-        const total = grantDays + carryOver  // adj is NOT added to total
-        const periodUsed = plUsage[w.id] || 0  // PL days from attendance data
-        const used = adjustment + periodUsed   // adj = pre-existing consumed days
+        const total = grantDays + carryOver
+
+        // 付与日から1年間のPL消化日数を集計
+        let periodUsed = 0
+        const plCalendarLocal: string[] = []
+        if (grantDate) {
+          const gd = new Date(grantDate)
+          const gdEnd = new Date(gd)
+          gdEnd.setFullYear(gdEnd.getFullYear() + 1)
+          for (const [key, entry] of Object.entries(allAtt)) {
+            const e = entry as { p?: number }
+            if (e.p === 1) {
+              const parts = key.split('_')
+              const wid = parseInt(parts[1])
+              if (wid === w.id) {
+                const entryYm = parts[2]
+                const entryDay = parts[3]
+                const entryDate = new Date(parseInt(entryYm.slice(0, 4)), parseInt(entryYm.slice(4, 6)) - 1, parseInt(entryDay))
+                if (entryDate >= gd && entryDate < gdEnd) {
+                  periodUsed++
+                  plCalendarLocal.push(`${entryYm}${entryDay}`)
+                }
+              }
+            }
+          }
+        }
+        const used = adjustment + periodUsed
         const remaining = Math.max(0, total - used)
 
         // Expiry calculation: grantDate + 2 years - 1 day
@@ -299,6 +306,19 @@ export async function GET(request: NextRequest) {
         }
       })
       // Show all eligible workers (including those with no PL data yet)
+
+    // PLカレンダーデータを出面から構築
+    const plCalendar: Record<string, number[]> = {}
+    for (const [key, entry] of Object.entries(allAtt)) {
+      const e = entry as { p?: number }
+      if (e.p === 1) {
+        const parts = key.split('_')
+        const wid = parseInt(parts[1])
+        const dateKey = `${parts[2]}${parts[3]}`
+        if (!plCalendar[dateKey]) plCalendar[dateKey] = []
+        if (!plCalendar[dateKey].includes(wid)) plCalendar[dateKey].push(wid)
+      }
+    }
 
     const response: Record<string, unknown> = { workers }
 

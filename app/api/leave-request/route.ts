@@ -86,43 +86,59 @@ export async function POST(request: NextRequest) {
       }
 
       // ── 有給残日数チェック ──
-      // 承認済み申請（pending含む）と出面データから消化済み日数を計算し、残日数が0なら申請不可
+      // 各スタッフの最新PLレコードから残日数を計算
       const main = await getMainData()
       const wKey = String(worker.id)
-      const plRecords = (main.plData[wKey] || []) as { fy: string | number; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
+      const plRecords = (main.plData[wKey] || []) as { fy: string | number; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
 
-      // 年度を判定（10月始まり: 10-12月→その年、1-9月→前年）
-      // 年度を判定（10月始まり: 10-12月→その年、1-9月→前年）
-      const fyNum = month >= 10 ? year : year - 1
-      const fy = String(fyNum)
-      const fyRecord = plRecords.find(r => String(r.fy) === fy)
+      // 最新のレコードを使用（付与日数が入っているもの）
+      const recordsWithGrant = plRecords.filter(r =>
+        (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
+      )
+      const fyRecord = recordsWithGrant.length > 0 ? recordsWithGrant[recordsWithGrant.length - 1] : null
 
       if (fyRecord) {
-        // 旧フィールド判定
         const isOldRecord = fyRecord.grant != null || fyRecord.adj != null || fyRecord.carry != null
         const grantDays = isOldRecord ? (fyRecord.grant ?? fyRecord.grantDays ?? 0) : (fyRecord.grantDays ?? 0)
         const carryOver = isOldRecord ? (fyRecord.carry ?? 0) : (fyRecord.carryOver ?? 0)
         const adjustment = Math.max(fyRecord.adjustment ?? 0, fyRecord.adj ?? 0)
         const total = grantDays + carryOver
 
-        // 年度内の出面データからPL消化日数を集計
-        const fyMonths: string[] = []
-        for (let m = 10; m <= 12; m++) fyMonths.push(ymKey(fyNum, m))
-        for (let m = 1; m <= 9; m++) fyMonths.push(ymKey(fyNum + 1, m))
-
+        // 付与日から1年間の出面データからPL消化日数を集計
         let periodUsed = 0
-        for (const fym of fyMonths) {
-          const att = await getAttData(fym)
-          for (const [key, entry] of Object.entries(att.d)) {
-            const e = entry as { p?: number }
-            if (e.p === 1) {
-              const wid = parseInt(key.split('_')[1])
-              if (wid === worker.id) periodUsed++
+        const grantDate = fyRecord.grantDate ? new Date(fyRecord.grantDate) : null
+        if (grantDate && !isNaN(grantDate.getTime())) {
+          const gdEnd = new Date(grantDate)
+          gdEnd.setFullYear(gdEnd.getFullYear() + 1)
+          const startYm = ymKey(grantDate.getFullYear(), grantDate.getMonth() + 1)
+          const endYm = ymKey(gdEnd.getFullYear(), gdEnd.getMonth() + 1)
+
+          // 付与日から1年間の月をカバー
+          const checkMonths: string[] = []
+          let cur = new Date(grantDate.getFullYear(), grantDate.getMonth(), 1)
+          while (ymKey(cur.getFullYear(), cur.getMonth() + 1) <= endYm) {
+            checkMonths.push(ymKey(cur.getFullYear(), cur.getMonth() + 1))
+            cur.setMonth(cur.getMonth() + 1)
+          }
+
+          for (const fym of checkMonths) {
+            const att = await getAttData(fym)
+            for (const [key, entry] of Object.entries(att.d)) {
+              const e = entry as { p?: number }
+              if (e.p === 1) {
+                const wid = parseInt(key.split('_')[1])
+                if (wid === worker.id) {
+                  const entryYm = key.split('_')[2]
+                  const entryDay = key.split('_')[3]
+                  const entryDate = new Date(parseInt(entryYm.slice(0, 4)), parseInt(entryYm.slice(4, 6)) - 1, parseInt(entryDay))
+                  if (entryDate >= grantDate && entryDate < gdEnd) periodUsed++
+                }
+              }
             }
           }
         }
 
-        // pending の申請もカウント（まだ出面に反映されていないが、承認予定）
+        // pending の申請もカウント
         const pendingQ = query(
           collection(db, 'leaveRequests'),
           where('workerId', '==', worker.id),
@@ -138,7 +154,6 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'No remaining leave' }, { status: 400 })
         }
       } else {
-        // PLレコードがない＝有給が付与されていない
         return NextResponse.json({ error: 'No remaining leave' }, { status: 400 })
       }
 
