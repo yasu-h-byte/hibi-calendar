@@ -257,9 +257,20 @@ export async function GET(request: NextRequest) {
         // Legal PL calculation info
         const legalPL = w.hireDate ? calcLegalPL(w.hireDate, grantDate || new Date().toISOString().split('T')[0]) : 0
 
-        // 年5日取得義務チェック（年10日以上付与の労働者が対象）
-        // periodUsed = 当年度の出面ベース消化日数（adjustmentは前年度分なので含めない）
-        const fiveDayShortfall = grantDays >= 10 ? Math.max(0, 5 - periodUsed) : 0
+        // 年5日取得義務チェック
+        // 条件: 外国人 + 年10日以上付与 + 有効期限まで残り3ヶ月以内 + 5日未満消化
+        let fiveDayShortfall = 0
+        const isGaikoku = w.visa && w.visa !== 'none'
+        if (isGaikoku && grantDays >= 10 && periodUsed < 5) {
+          if (expiryDate) {
+            const exp = new Date(expiryDate)
+            const now = new Date()
+            const diffDays = Math.floor((exp.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+            if (diffDays <= 90) {  // 残り3ヶ月（90日）以内
+              fiveDayShortfall = 5 - periodUsed
+            }
+          }
+        }
 
         return {
           id: w.id,
