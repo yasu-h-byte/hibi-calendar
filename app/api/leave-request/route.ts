@@ -49,8 +49,9 @@ export async function POST(request: NextRequest) {
       const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
       const todayStr = `${jstNow.getFullYear()}-${String(jstNow.getMonth() + 1).padStart(2, '0')}-${String(jstNow.getDate()).padStart(2, '0')}`
 
-      if (date <= todayStr) {
-        return NextResponse.json({ error: 'Date must be in the future' }, { status: 400 })
+      // 過去日は不可。当日と未来日はOK（当日有給申請に対応）
+      if (date < todayStr) {
+        return NextResponse.json({ error: 'Date must be today or future' }, { status: 400 })
       }
 
       // Parse date

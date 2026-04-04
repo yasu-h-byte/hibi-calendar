@@ -165,11 +165,10 @@ export default function StaffAttendancePage() {
   }
 
   const getMinDate = () => {
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const y = tomorrow.getFullYear()
-    const m = String(tomorrow.getMonth() + 1).padStart(2, '0')
-    const d = String(tomorrow.getDate()).padStart(2, '0')
+    const today = new Date()
+    const y = today.getFullYear()
+    const m = String(today.getMonth() + 1).padStart(2, '0')
+    const d = String(today.getDate()).padStart(2, '0')
     return `${y}-${m}-${d}`
   }
 
@@ -223,9 +222,48 @@ export default function StaffAttendancePage() {
   const handleChoice = (choice: string) => {
     if (choice === 'work') {
       submitEntry('work', showOT ? otHours : 0)
+    } else if (choice === 'leave') {
+      // 有給は申請フローに変更（当日分）
+      setShowOT(false)
+      submitLeaveForToday()
     } else {
       setShowOT(false)
       submitEntry(choice)
+    }
+  }
+
+  const submitLeaveForToday = async () => {
+    if (!data || saving) return
+    setSaving(true)
+    setSuccessMsg(null)
+    try {
+      const today = new Date()
+      const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      const res = await fetch('/api/leave-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request',
+          token,
+          date: dateStr,
+          siteId: data.site.id,
+          reason: '',
+        }),
+      })
+      if (res.ok) {
+        setSuccessMsg('しんせい OK')
+        setTimeout(() => setSuccessMsg(null), 2000)
+      } else {
+        const d = await res.json()
+        const msg = d.error === 'Already requested' ? 'しんせいずみ' : d.error || 'エラー'
+        setError(msg)
+        setTimeout(() => setError(null), 3000)
+      }
+    } catch {
+      setError('つうしん エラー')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -328,7 +366,7 @@ export default function StaffAttendancePage() {
               {([
                 { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' },
                 { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400 hover:bg-gray-500 active:bg-gray-600' },
-                { choice: 'leave', emoji: '🌴', label: 'ゆうきゅう', color: 'bg-green-500 hover:bg-green-600 active:bg-green-700' },
+                { choice: 'leave', emoji: '🌴', label: 'ゆうきゅう\nしんせい', color: 'bg-green-500 hover:bg-green-600 active:bg-green-700' },
                 // site_off（げんばやすみ）は変形労働時間制導入により非表示
                 // 過去データの表示・集計には影響なし
               ] as const).map(btn => {
@@ -347,7 +385,7 @@ export default function StaffAttendancePage() {
                     }`}
                   >
                     <div className="text-3xl mb-1">{btn.emoji}</div>
-                    <div className="text-base font-bold">{btn.label}</div>
+                    <div className="text-sm font-bold whitespace-pre-line leading-tight">{btn.label}</div>
                   </button>
                 )
               })}
@@ -439,12 +477,12 @@ export default function StaffAttendancePage() {
               {data.pastDays[editingPast].date}
             </h3>
             <p className="text-sm text-gray-500 mb-4 text-center">なおす</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               {([
                 { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500' },
                 { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400' },
-                { choice: 'leave', emoji: '🌴', label: 'ゆうきゅう', color: 'bg-green-500' },
-                // site_off（げんばやすみ）は変形労働時間制導入により非表示
+                // 有給は申請フロー経由のため過去日の直接入力は不可
+                // 管理者がPC出面入力画面から修正する
               ] as const).map(btn => (
                 <button
                   key={btn.choice}
