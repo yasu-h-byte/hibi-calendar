@@ -40,12 +40,16 @@ export interface RawSubcon {
 }
 
 export interface PLRecord {
-  fy: string
+  fy: string | number
   grantDate: string
   grantDays: number
   carryOver: number
   adjustment: number
   used: number
+  // Legacy fields from old app
+  grant?: number
+  carry?: number
+  adj?: number
 }
 
 /** Convert old billing format (single number) to new format (array) */

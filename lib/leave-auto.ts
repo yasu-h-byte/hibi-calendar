@@ -79,7 +79,7 @@ export function calcNextGrantDate(
 
   // Find all existing grant dates to determine what has already been granted
   const existingGrantDates = existingRecords
-    .filter(r => r.grantDate && r.grantDays > 0)
+    .filter(r => r.grantDate && ((r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)))
     .map(r => new Date(r.grantDate))
     .filter(d => !isNaN(d.getTime()))
 
@@ -127,14 +127,15 @@ function calcCarryOver(existingRecords: PLRecord[]): number {
 
   // Find the most recent record by fy (descending)
   const sorted = [...existingRecords]
-    .filter(r => r.grantDays > 0)
+    .filter(r => (r.grantDays || 0) > 0 || (r.grant || 0) > 0)
     .sort((a, b) => Number(b.fy) - Number(a.fy))
 
   if (sorted.length === 0) return 0
 
   const prev = sorted[0]
-  const prevTotal = (prev.grantDays || 0) + (prev.carryOver || 0)
-  const prevUsed = (prev.adjustment || 0) + (prev.used || 0)
+  // Support both old format (grant/carry/adj) and new format (grantDays/carryOver/adjustment)
+  const prevTotal = (prev.grantDays || prev.grant || 0) + (prev.carryOver || prev.carry || 0)
+  const prevUsed = (prev.adjustment || prev.adj || 0) + (prev.used || 0)
   const prevRemaining = Math.max(0, prevTotal - prevUsed)
 
   return Math.min(prevRemaining, 20)
@@ -192,18 +193,13 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
         used: 0,
       }
 
-      // Double-check: don't grant if there's already a record for this FY with grantDays > 0
-      const existingFy = records.find(r => String(r.fy) === fy && r.grantDays > 0)
+      // Double-check: don't grant if there's already a record for this FY with grant data
+      // Support both old format (grant) and new format (grantDays)
+      const existingFy = records.find(r => String(r.fy) === fy && ((r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)))
       if (existingFy) continue
 
-      // Add to existing records or create new
-      const fyIdx = records.findIndex(r => String(r.fy) === fy)
-      if (fyIdx >= 0) {
-        // There's a record for this FY but with 0 grantDays (e.g. carry-over only)
-        records[fyIdx] = { ...records[fyIdx], ...newRecord, carryOver: records[fyIdx].carryOver || carry }
-      } else {
-        records.push(newRecord)
-      }
+      // Add new record (don't overwrite existing records)
+      records.push(newRecord)
 
       plData[wKey] = records
       hasChanges = true

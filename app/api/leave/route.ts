@@ -217,9 +217,11 @@ export async function GET(request: NextRequest) {
         const fyRecord = plRecords.find(r => String(r.fy) === String(fy))
 
         // 旧アプリのフィールド名(grant/carry/adj)と新アプリ(grantDays/carryOver/adjustment)の両方に対応
-        const grantDays = fyRecord?.grantDays ?? fyRecord?.grant ?? 0
-        const carryOver = fyRecord?.carryOver ?? fyRecord?.carry ?? 0
-        const adjustment = fyRecord?.adjustment ?? fyRecord?.adj ?? 0
+        // adjustment/adj は 0 も有効値なので、存在チェックで判定
+        const grantDays = (fyRecord?.grantDays != null && fyRecord.grantDays > 0) ? fyRecord.grantDays : (fyRecord?.grant ?? 0)
+        const carryOver = (fyRecord?.carryOver != null && fyRecord.carryOver > 0) ? fyRecord.carryOver : (fyRecord?.carry ?? 0)
+        // adj（旧）とadjustment（新）が両方存在する場合、大きい方を使う（旧データの方が正確な場合がある）
+        const adjustment = Math.max(fyRecord?.adjustment ?? 0, fyRecord?.adj ?? 0)
         const grantDate = fyRecord?.grantDate || ''
         const total = grantDays + carryOver  // adj is NOT added to total
         const periodUsed = plUsage[w.id] || 0  // PL days from attendance data
