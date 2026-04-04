@@ -138,9 +138,20 @@ export async function GET(request: NextRequest) {
       }
 
       case 'pl': {
+        // 過去2年分の出面データからPL取得日を収集
+        const now = new Date()
+        const plAttData: Record<string, Record<string, unknown>> = {}
+        for (let y = now.getFullYear() - 2; y <= now.getFullYear(); y++) {
+          for (let m = 1; m <= 12; m++) {
+            const attYm = `${y}${String(m).padStart(2, '0')}`
+            const att = await getAttData(attYm)
+            if (att.d) Object.assign(plAttData, att.d)
+          }
+        }
         const wb = generatePLLedger({
           workers: main.workers,
           plData: main.plData,
+          attData: plAttData,
         })
         buffer = workbookToBuffer(wb)
         filename = '有給管理台帳.xlsx'

@@ -421,61 +421,122 @@ export function generateBukakeReport(data: BukakeData): XLSX.WorkBook {
 export interface PLLedgerData {
   workers: RawWorker[]
   plData: Record<string, PLRecord[]>
+  attData?: Record<string, Record<string, unknown>>
 }
 
 export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
-  const { workers, plData } = data
+  const { workers, plData, attData } = data
   const wb = XLSX.utils.book_new()
 
-  const titleRow = ['有給管理台帳']
+  // ── シート1: 有給管理台帳（サマリー） ──
+  const titleRow = ['年次有給休暇管理簿']
   const headers = [
-    '名前', '所属', '入社日', '年度',
-    '付与日', '付与日数', '繰越日数', '調整',
-    '使用日数', '残日数',
+    '名前', '所属', '入社日',
+    '基準日（付与日）', '付与日数', '繰越日数',
+    '取得日数', '残日数', '有効期限',
   ]
 
   const rows: (string | number)[][] = [titleRow, headers]
-
   const activeWorkers = workers.filter(w => !w.retired)
+
+  // 出面データからPL取得日を集計
+  const plDates: Record<number, string[]> = {} // workerId -> ['2025/04/15', ...]
+  if (attData) {
+    for (const [key, entry] of Object.entries(attData)) {
+      const e = entry as { p?: number }
+      if (e.p === 1) {
+        const parts = key.split('_')
+        const wid = parseInt(parts[1])
+        const ym = parts[2]
+        const day = parts[3]
+        const dateStr = `${ym.slice(0, 4)}/${ym.slice(4, 6)}/${day.padStart(2, '0')}`
+        if (!plDates[wid]) plDates[wid] = []
+        plDates[wid].push(dateStr)
+      }
+    }
+    // 日付順にソート
+    for (const wid of Object.keys(plDates)) {
+      plDates[Number(wid)].sort()
+    }
+  }
 
   for (const w of activeWorkers) {
     const records = plData[String(w.id)] || []
     if (records.length === 0) {
-      rows.push([w.name, w.org, w.hireDate || '', '-', '-', 0, 0, 0, 0, 0])
+      rows.push([w.name, w.org, w.hireDate || '', '-', 0, 0, 0, 0, '-'])
       continue
     }
 
-    for (let i = 0; i < records.length; i++) {
-      const r = records[i]
-      // 旧フィールド対応
-      const grantDays = (r.grant != null || r.adj != null || r.carry != null)
-        ? (r.grant ?? r.grantDays ?? 0) : (r.grantDays ?? 0)
-      const carryOver = (r.grant != null || r.adj != null || r.carry != null)
-        ? (r.carry ?? 0) : (r.carryOver ?? 0)
-      const adjustment = Math.max(r.adjustment ?? 0, r.adj ?? 0)
-      const total = grantDays + carryOver
-      const used = adjustment + (r.used || 0)
-      const remaining = Math.max(0, total - used)
-      rows.push([
+    // 最新のレコードを使用
+    const recordsWithGrant = records.filter(r =>
+      (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
+    )
+    const r = recordsWithGrant.length > 0 ? recordsWithGrant[recordsWithGrant.length - 1] : records[records.length - 1]
+
+    const grantDays = r.grantDays ?? r.grant ?? 0
+    const carryOver = r.carryOver ?? r.carry ?? 0
+    const adjustment = Math.max(r.adjustment ?? 0, r.adj ?? 0)
+    const total = grantDays + carryOver
+
+    // 出面からの取得日数
+    let periodUsed = 0
+    if (r.grantDate) {
+      const gd = new Date(r.grantDate)
+      const gdEnd = new Date(gd)
+      gdEnd.setFullYear(gdEnd.getFullYear() + 1)
+      const wDates = plDates[w.id] || []
+      periodUsed = wDates.filter(d => {
+        const pd = new Date(d.replace(/\//g, '-'))
+        return pd >= gd && pd < gdEnd
+      }).length
+    }
+
+    const used = adjustment + periodUsed
+    const remaining = Math.max(0, total - used)
+
+    // 有効期限
+    let expiry = '-'
+    if (r.grantDate) {
+      const gd = new Date(r.grantDate)
+      const exp = new Date(gd)
+      exp.setFullYear(exp.getFullYear() + 2)
+      exp.setDate(exp.getDate() - 1)
+      expiry = `${exp.getFullYear()}/${String(exp.getMonth() + 1).padStart(2, '0')}/${String(exp.getDate()).padStart(2, '0')}`
+    }
+
+    rows.push([
+      w.name, w.org, w.hireDate || '',
+      r.grantDate || '-', grantDays, carryOver,
+      used, remaining, expiry,
+    ])
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }]
+  setColWidths(ws, [14, 6, 12, 12, 8, 8, 8, 8, 12])
+  XLSX.utils.book_append_sheet(wb, ws, '管理簿')
+
+  // ── シート2: 取得日一覧 ──
+  const dateHeaders = ['名前', '所属', '取得日']
+  const dateRows: (string | number)[][] = [['取得日一覧'], dateHeaders]
+
+  for (const w of activeWorkers) {
+    const wDates = plDates[w.id] || []
+    if (wDates.length === 0) continue
+    for (let i = 0; i < wDates.length; i++) {
+      dateRows.push([
         i === 0 ? w.name : '',
         i === 0 ? w.org : '',
-        i === 0 ? (w.hireDate || '') : '',
-        r.fy,
-        r.grantDate || '',
-        grantDays,
-        carryOver,
-        adjustment,
-        used,
-        remaining,
+        wDates[i],
       ])
     }
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(rows)
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 9 } }]
-  setColWidths(ws, [12, 6, 12, 8, 12, 8, 8, 6, 8, 8])
+  const ws2 = XLSX.utils.aoa_to_sheet(dateRows)
+  ws2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }]
+  setColWidths(ws2, [14, 6, 12])
+  XLSX.utils.book_append_sheet(wb, ws2, '取得日一覧')
 
-  XLSX.utils.book_append_sheet(wb, ws, '有給管理台帳')
   return wb
 }
 
