@@ -110,10 +110,8 @@ export default function LeavePage() {
   const [autoGranted, setAutoGranted] = useState<{ name: string; days: number; grantDate: string }[]>([])
   const [autoGrantDismissed, setAutoGrantDismissed] = useState(false)
   const [fy, setFy] = useState(() => {
-    const now = new Date()
-    const y = now.getFullYear()
-    const m = now.getMonth() + 1
-    return m >= 10 ? `${y}` : `${y - 1}`
+    // 付与年ベース: 現在の年をデフォルト表示
+    return `${new Date().getFullYear()}`
   })
 
   useEffect(() => {
@@ -236,14 +234,13 @@ export default function LeavePage() {
   }
 
   const fyOptions = []
-  for (let y = 2024; y <= 2027; y++) fyOptions.push({ value: `${y}`, label: `${y}年度（${y}/10〜${y + 1}/9）` })
+  for (let y = 2024; y <= 2027; y++) fyOptions.push({ value: `${y}`, label: `${y}年 付与分` })
 
   // ── PL Calendar data ──
   const fyStart = parseInt(fy)
   const calendarMonths = useMemo(() => {
     const months: { year: number; month: number; label: string }[] = []
-    for (let m = 10; m <= 12; m++) months.push({ year: fyStart, month: m, label: `${fyStart}年${m}月` })
-    for (let m = 1; m <= 9; m++) months.push({ year: fyStart + 1, month: m, label: `${fyStart + 1}年${m}月` })
+    for (let m = 1; m <= 12; m++) months.push({ year: fyStart, month: m, label: `${fyStart}年${m}月` })
     return months
   }, [fyStart])
 

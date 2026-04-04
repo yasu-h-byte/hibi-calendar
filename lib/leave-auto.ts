@@ -99,7 +99,7 @@ export function calcNextGrantDate(
     // Also check by FY (the year of the grant date)
     const grantFy = String(currentGrant.getFullYear())
     const fyAlreadyGranted = existingRecords.some(
-      r => String(r.fy) === grantFy && r.grantDays > 0
+      r => String(r.fy) === grantFy && ((r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0))
     )
 
     if (!alreadyGranted && !fyAlreadyGranted) {

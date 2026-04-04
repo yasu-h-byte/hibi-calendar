@@ -181,10 +181,9 @@ export async function GET(request: NextRequest) {
       main = await getMainData()
     }
 
-    // FY months: Oct of fyStart to Sep of fyStart+1
+    // 付与年ベース: 1月〜12月の出面データを取得
     const fyMonths: string[] = []
-    for (let m = 10; m <= 12; m++) fyMonths.push(ymKey(fyStart, m))
-    for (let m = 1; m <= 9; m++) fyMonths.push(ymKey(fyStart + 1, m))
+    for (let m = 1; m <= 12; m++) fyMonths.push(ymKey(fyStart, m))
 
     // Load attendance data for all FY months to count PL usage
     const allAtt: Record<string, Record<string, unknown>> = {}
