@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
         const prevTotal = prevGrant + prevCarry
         const prevPeriodUsed = plUsage[Number(wid)] || 0
         const prevUsed = prevAdj + prevPeriodUsed
-        const prevRemaining = Math.max(0, prevTotal - prevUsed)
+        const prevRemaining = Math.min(20, Math.max(0, prevTotal - prevUsed))  // 繰越上限20日
 
         const curIdx = records.findIndex(r => r.fy === fy)
         if (curIdx >= 0) {
@@ -257,6 +257,10 @@ export async function GET(request: NextRequest) {
         // Legal PL calculation info
         const legalPL = w.hireDate ? calcLegalPL(w.hireDate, grantDate || new Date().toISOString().split('T')[0]) : 0
 
+        // 年5日取得義務チェック（年10日以上付与の労働者が対象）
+        // periodUsed = 当年度の出面ベース消化日数（adjustmentは前年度分なので含めない）
+        const fiveDayShortfall = grantDays >= 10 ? Math.max(0, 5 - periodUsed) : 0
+
         return {
           id: w.id,
           name: w.name,
@@ -276,6 +280,7 @@ export async function GET(request: NextRequest) {
           expiryDate,
           expiryStatus,
           legalPL,
+          fiveDayShortfall,
         }
       })
       // Show all eligible workers (including those with no PL data yet)

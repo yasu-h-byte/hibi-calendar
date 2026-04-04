@@ -447,17 +447,25 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
 
     for (let i = 0; i < records.length; i++) {
       const r = records[i]
-      const remaining = r.grantDays + r.carryOver + r.adjustment - r.used
+      // 旧フィールド対応
+      const grantDays = (r.grant != null || r.adj != null || r.carry != null)
+        ? (r.grant ?? r.grantDays ?? 0) : (r.grantDays ?? 0)
+      const carryOver = (r.grant != null || r.adj != null || r.carry != null)
+        ? (r.carry ?? 0) : (r.carryOver ?? 0)
+      const adjustment = Math.max(r.adjustment ?? 0, r.adj ?? 0)
+      const total = grantDays + carryOver
+      const used = adjustment + (r.used || 0)
+      const remaining = Math.max(0, total - used)
       rows.push([
         i === 0 ? w.name : '',
         i === 0 ? w.org : '',
         i === 0 ? (w.hireDate || '') : '',
         r.fy,
-        r.grantDate,
-        r.grantDays,
-        r.carryOver,
-        r.adjustment,
-        r.used,
+        r.grantDate || '',
+        grantDays,
+        carryOver,
+        adjustment,
+        used,
         remaining,
       ])
     }

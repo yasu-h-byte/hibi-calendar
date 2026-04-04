@@ -8,7 +8,7 @@ interface PLWorker {
   grantDays: number; carryOver: number; adjustment: number; periodUsed: number; used: number
   total: number; remaining: number; rate: number; grantMonth?: number
   grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'
-  legalPL: number
+  legalPL: number; fiveDayShortfall: number
 }
 
 /** hireDate + 6ヶ月 → 発生月を計算 */
@@ -177,6 +177,7 @@ export default function LeavePage() {
   const totalUsed = filteredWorkers.reduce((s, w) => s + w.used, 0)
   const totalTotal = filteredWorkers.reduce((s, w) => s + w.total, 0)
   const alertCount = filteredWorkers.filter(w => w.remaining <= 3).length
+  const fiveDayAlertCount = filteredWorkers.filter(w => w.fiveDayShortfall > 0).length
   const companyRate = totalTotal > 0 ? (totalUsed / totalTotal * 100) : 0
 
   const handleGrant = async () => {
@@ -303,7 +304,7 @@ export default function LeavePage() {
       )}
 
       {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
           <div className="text-2xl font-bold text-hibi-navy">{eligible}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400">対象人数</div>
@@ -320,7 +321,30 @@ export default function LeavePage() {
           <div className={`text-2xl font-bold ${alertCount > 0 ? 'text-red-500' : 'text-green-600'}`}>{alertCount}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400">残3日以下</div>
         </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+          <div className={`text-2xl font-bold ${fiveDayAlertCount > 0 ? 'text-red-500' : 'text-green-600'}`}>{fiveDayAlertCount}</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">年5日未達</div>
+        </div>
       </div>
+
+      {/* 年5日取得義務 警告 */}
+      {fiveDayAlertCount > 0 && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+          <div className="text-sm font-bold text-red-700 dark:text-red-400 mb-2">
+            年5日取得義務（労基法第39条第7項）
+          </div>
+          <div className="text-xs text-red-600 dark:text-red-400 mb-2">
+            年10日以上付与された労働者は、付与日から1年以内に5日以上取得させる義務があります。
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {filteredWorkers.filter(w => w.fiveDayShortfall > 0).map(w => (
+              <span key={w.id} className="text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 px-2 py-1 rounded-full">
+                {w.name}（あと{w.fiveDayShortfall}日）
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Company-wide consumption rate bar */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
@@ -432,6 +456,11 @@ export default function LeavePage() {
                         />
                       </div>
                       <span className="text-xs text-gray-600 font-medium min-w-[2.5rem]">{rate.toFixed(0)}%</span>
+                      {w.fiveDayShortfall > 0 && (
+                        <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap" title="年5日取得義務未達">
+                          5日未達
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
