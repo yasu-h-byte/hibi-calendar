@@ -20,17 +20,19 @@ function calcLegalPLDays(hireDate: string, grantDate: Date): number {
   const hire = new Date(hireDate)
   if (isNaN(hire.getTime())) return 0
 
-  const diffMs = grantDate.getTime() - hire.getTime()
-  const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000)
+  // 月数ベースで計算（浮動小数点誤差を回避）
+  const diffMonths = (grantDate.getFullYear() - hire.getFullYear()) * 12
+    + (grantDate.getMonth() - hire.getMonth())
+    + (grantDate.getDate() >= hire.getDate() ? 0 : -1)
 
-  if (diffYears < 0.5) return 0
-  if (diffYears < 1.5) return 10
-  if (diffYears < 2.5) return 11
-  if (diffYears < 3.5) return 12
-  if (diffYears < 4.5) return 14
-  if (diffYears < 5.5) return 16
-  if (diffYears < 6.5) return 18
-  return 20
+  if (diffMonths < 6) return 0    // 0.5年未満
+  if (diffMonths < 18) return 10   // 0.5年〜1.5年未満
+  if (diffMonths < 30) return 11   // 1.5年〜2.5年未満
+  if (diffMonths < 42) return 12   // 2.5年〜3.5年未満
+  if (diffMonths < 54) return 14   // 3.5年〜4.5年未満
+  if (diffMonths < 66) return 16   // 4.5年〜5.5年未満
+  if (diffMonths < 78) return 18   // 5.5年〜6.5年未満
+  return 20                         // 6.5年以上
 }
 
 /**

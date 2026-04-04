@@ -13,16 +13,18 @@ function calcLegalPL(hireDate: string, grantDate: string): number {
   const grant = new Date(grantDate)
   if (isNaN(hire.getTime()) || isNaN(grant.getTime())) return 0
 
-  const diffMs = grant.getTime() - hire.getTime()
-  const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000)
+  // 月数ベースで計算（浮動小数点誤差を回避）
+  const diffMonths = (grant.getFullYear() - hire.getFullYear()) * 12
+    + (grant.getMonth() - hire.getMonth())
+    + (grant.getDate() >= hire.getDate() ? 0 : -1)
 
-  if (diffYears < 0.5) return 0
-  if (diffYears < 1.5) return 10
-  if (diffYears < 2.5) return 11
-  if (diffYears < 3.5) return 12
-  if (diffYears < 4.5) return 14
-  if (diffYears < 5.5) return 16
-  if (diffYears < 6.5) return 18
+  if (diffMonths < 6) return 0
+  if (diffMonths < 18) return 10
+  if (diffMonths < 30) return 11
+  if (diffMonths < 42) return 12
+  if (diffMonths < 54) return 14
+  if (diffMonths < 66) return 16
+  if (diffMonths < 78) return 18
   return 20
 }
 

@@ -29,22 +29,24 @@ function calcLegalPL(hireDate: string, grantDate: string): { days: number; years
   const grant = new Date(grantDate)
   if (isNaN(hire.getTime()) || isNaN(grant.getTime())) return { days: 0, years: 0, months: 0, label: '' }
 
-  const diffMs = grant.getTime() - hire.getTime()
-  const diffYears = diffMs / (365.25 * 24 * 60 * 60 * 1000)
-  const years = Math.floor(diffYears)
-  const months = Math.floor((diffYears - years) * 12)
+  // 月数ベースで計算（浮動小数点誤差を回避）
+  const diffMonths = (grant.getFullYear() - hire.getFullYear()) * 12
+    + (grant.getMonth() - hire.getMonth())
+    + (grant.getDate() >= hire.getDate() ? 0 : -1)
+  const years = Math.floor(diffMonths / 12)
+  const months = diffMonths % 12
 
   let days = 0
-  if (diffYears < 0.5) days = 0
-  else if (diffYears < 1.5) days = 10
-  else if (diffYears < 2.5) days = 11
-  else if (diffYears < 3.5) days = 12
-  else if (diffYears < 4.5) days = 14
-  else if (diffYears < 5.5) days = 16
-  else if (diffYears < 6.5) days = 18
+  if (diffMonths < 6) days = 0
+  else if (diffMonths < 18) days = 10
+  else if (diffMonths < 30) days = 11
+  else if (diffMonths < 42) days = 12
+  else if (diffMonths < 54) days = 14
+  else if (diffMonths < 66) days = 16
+  else if (diffMonths < 78) days = 18
   else days = 20
 
-  const label = `入社日 ${hireDate} → ${years}年${months}月 → 法定${days}日`
+  const label = `入社日 ${hireDate} → ${years}年${months}ヶ月 → 法定${days}日`
   return { days, years, months, label }
 }
 
