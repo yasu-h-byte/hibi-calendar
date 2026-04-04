@@ -127,12 +127,6 @@ export default function LeavePage() {
         setPlCalendar(data.plCalendar || {})
         setWorkerNames(data.workerNames || {})
       }
-      // デバッグ: 生のplDataをコンソールに出力
-      const debugRes = await fetch(`/api/leave?debug=true`, { headers: { 'x-admin-password': password } })
-      if (debugRes.ok) {
-        const debugData = await debugRes.json()
-        console.log('=== PL Raw Data ===', JSON.stringify(debugData.plData, null, 2))
-      }
     } finally {
       setLoading(false)
     }

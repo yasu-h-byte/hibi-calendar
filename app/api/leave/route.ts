@@ -202,20 +202,13 @@ export async function GET(request: NextRequest) {
       .map(w => {
         const plRecords = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
 
-        // レコード選択: 旧アプリのレコード（grant/adj/carry）があればそちらを優先
-        // auto-grantが作った新レコードは旧データより信頼性が低い場合がある
-        const oldRecords = plRecords.filter(r =>
-          (r.grant != null || r.adj != null || r.carry != null) &&
-          ((r.grant && r.grant > 0) || (r.grantDays && r.grantDays > 0))
+        // 最新のレコード（付与日数があるもの）を使用
+        const recordsWithGrant = plRecords.filter(r =>
+          (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
         )
-        const newRecords = plRecords.filter(r =>
-          r.grant == null && r.adj == null && r.carry == null &&
-          r.grantDays && r.grantDays > 0
-        )
-        // 旧レコードがあればその最新、なければ新レコードの最新
-        const fyRecord = oldRecords.length > 0
-          ? oldRecords[oldRecords.length - 1]
-          : (newRecords.length > 0 ? newRecords[newRecords.length - 1] : (plRecords.length > 0 ? plRecords[plRecords.length - 1] : undefined))
+        const fyRecord = recordsWithGrant.length > 0
+          ? recordsWithGrant[recordsWithGrant.length - 1]
+          : (plRecords.length > 0 ? plRecords[plRecords.length - 1] : undefined)
 
         // 旧アプリ(grant/carry/adj)と新アプリ(grantDays/carryOver/adjustment)の両方に対応
         // 旧フィールドが存在する場合はそちらが元データなので優先する
