@@ -77,7 +77,7 @@ function computeTodayStatus(
     for (const wid of workerIds) {
       const key = `${site.id}_${wid}_${ym}_${String(day)}`
       const entry = attD[key]
-      if (entry && entry.w === 1) {
+      if (entry && entry.w > 0) {
         const worker = main.workers.find(w => w.id === wid)
         if (worker) {
           const job = worker.job || ''
