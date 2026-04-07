@@ -570,7 +570,7 @@ export default function AttendanceGridPage() {
         if (entry && entry.w > 0 && !entry.p) {
           const workVal = entry.w
           const otVal = entry.o || 0
-          if (w.job === 'tobi') {
+          if (w.job === 'tobi' || w.job === 'shokucho') {
             if (entry.w !== 0.6) {
               tobiDay += workVal
               tobiOtDay += otVal
