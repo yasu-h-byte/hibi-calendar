@@ -586,10 +586,19 @@ export default function AttendanceGridPage() {
         }
       }
 
-      // Add subcon counts to grand total
+      // Add subcon counts to tobi/doko/grand totals
       for (const sc of data.subcons) {
         const entry = subconEntries[sc.id]?.[d]
         if (entry && entry.n > 0) {
+          const isTobi = sc.type === 'tobi' || sc.type === '鳶業者' || sc.type === '鳶'
+          const isDoko = sc.type === 'doko' || sc.type === '土工業者' || sc.type === '土工'
+          if (isTobi) {
+            tobiDay += entry.n
+            tobiOtDay += entry.on || 0
+          } else if (isDoko) {
+            dokoDay += entry.n
+            dokoOtDay += entry.on || 0
+          }
           grandDay += entry.n
         }
         if (entry && entry.on > 0) {
