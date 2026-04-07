@@ -180,6 +180,17 @@ export async function GET(request: NextRequest) {
     // 5. Upcoming / overdue PL grant dates (30 days ahead, 30 days past)
     try {
       const upcoming = getUpcomingGrants(main, 30)
+
+      // 出面データから正しい繰越を計算するため、全期間のattデータを取得
+      const currentYear = now.getFullYear()
+      const allAttForPL: Record<string, Record<string, unknown>> = {}
+      for (let y = currentYear - 2; y <= currentYear; y++) {
+        for (let m = 1; m <= 12; m++) {
+          const att = await getAttData(ymKey(y, m))
+          Object.assign(allAttForPL, att.d)
+        }
+      }
+
       for (const u of upcoming) {
         const m = u.grantDate.getMonth() + 1
         const d = u.grantDate.getDate()
@@ -187,20 +198,62 @@ export async function GET(request: NextRequest) {
         const isPast = u.grantDate <= now
         const dateStr = `${y}/${m}/${d}`
 
+        // 前回レコードから正しい繰越を計算（出面のPを含む）
+        const wRecords = (main.plData[String(u.workerId)] || []) as { grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number; fy?: string | number }[]
+        const recordsWithGrant = wRecords.filter(r => (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0))
+        // 同じFYに複数ある場合はadjが最大のものを採用
+        let prevRecord = null as typeof recordsWithGrant[0] | null
+        if (recordsWithGrant.length > 0) {
+          const maxFy = Math.max(...recordsWithGrant.map(r => Number(r.fy)))
+          const sameFy = recordsWithGrant.filter(r => Number(r.fy) === maxFy)
+          prevRecord = sameFy.reduce((best, r) => {
+            const bestAdj = Math.max(best.adjustment || 0, best.adj || 0)
+            const rAdj = Math.max(r.adjustment || 0, r.adj || 0)
+            return rAdj > bestAdj ? r : best
+          })
+        }
+
+        let realCarryOver = u.carryOver // フォールバック
+        if (prevRecord && prevRecord.grantDate) {
+          const gd = new Date(prevRecord.grantDate)
+          const gdEnd = new Date(gd)
+          gdEnd.setFullYear(gdEnd.getFullYear() + 1)
+          // 出面からP消化を集計
+          let periodUsed = 0
+          const { parseDKey } = await import('@/lib/compute')
+          for (const [key, entry] of Object.entries(allAttForPL)) {
+            const e = entry as { p?: number }
+            if (e.p === 1) {
+              const pk = parseDKey(key)
+              if (parseInt(pk.wid) === u.workerId) {
+                const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
+                if (entryDate >= gd && entryDate < gdEnd) periodUsed++
+              }
+            }
+          }
+          const prevGrant = prevRecord.grantDays || prevRecord.grant || 0
+          const prevCarry = prevRecord.carryOver || prevRecord.carry || 0
+          const prevAdj = Math.max(prevRecord.adjustment || 0, prevRecord.adj || 0)
+          const prevTotal = prevGrant + prevCarry
+          const prevUsed = prevAdj + periodUsed
+          realCarryOver = Math.min(20, Math.max(0, prevTotal - prevUsed))
+        }
+
+        const realTotal = u.days + realCarryOver
         const grantDateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
         notifications.push({
           id: `pl-grant-${u.workerId}`,
           icon: isPast ? '\u26A0\uFE0F' : '\uD83C\uDF34',
           message: isPast
-            ? `${u.name}の有給付与が未処理です（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${u.carryOver}日（前回残）\n→ 合計: ${u.total}日`
-            : `${u.name}の有給付与日が近づいています（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${u.carryOver}日（前回残）\n→ 合計: ${u.total}日`,
+            ? `${u.name}の有給付与が未処理です（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${realCarryOver}日（前回残）\n→ 合計: ${realTotal}日`
+            : `${u.name}の有給付与日が近づいています（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${realCarryOver}日（前回残）\n→ 合計: ${realTotal}日`,
           type: isPast ? 'warning' : 'info',
           action: isPast ? {
             type: 'pl-grant',
             workerId: u.workerId,
             grantDate: grantDateStr,
             grantDays: u.days,
-            carryOver: u.carryOver,
+            carryOver: realCarryOver,
             label: `${u.days}日付与する`,
           } : undefined,
         })
