@@ -564,22 +564,20 @@ export default function AttendanceGridPage() {
       let grandOtDay = 0
 
       // Sum worker contributions by job type
+      // 補償(0.6)は外国人の場合は人工数に含めない（compute()と同じルール）
       for (const w of data.workers) {
         const wId = String(w.id)
         const entry = workerEntries[wId]?.[d]
         if (entry && entry.w > 0 && !entry.p) {
-          const workVal = entry.w
-          const otVal = entry.o || 0
+          const isComp = entry.w === 0.6 && w.visa !== 'none'
+          const workVal = isComp ? 0 : entry.w
+          const otVal = isComp ? 0 : (entry.o || 0)
           if (w.job === 'tobi' || w.job === 'shokucho' || w.job === 'yakuin') {
-            if (entry.w !== 0.6) {
-              tobiDay += workVal
-              tobiOtDay += otVal
-            }
+            tobiDay += workVal
+            tobiOtDay += otVal
           } else if (w.job === 'doko') {
-            if (entry.w !== 0.6) {
-              dokoDay += workVal
-              dokoOtDay += otVal
-            }
+            dokoDay += workVal
+            dokoOtDay += otVal
           }
           grandDay += workVal
           grandOtDay += otVal
