@@ -12,6 +12,14 @@ interface Notification {
   message: string
   type: 'warning' | 'error' | 'info'
   count?: number
+  action?: {
+    type: string
+    workerId: number
+    grantDate: string
+    grantDays: number
+    carryOver: number
+    label: string
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -179,6 +187,7 @@ export async function GET(request: NextRequest) {
         const isPast = u.grantDate <= now
         const dateStr = `${y}/${m}/${d}`
 
+        const grantDateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
         notifications.push({
           id: `pl-grant-${u.workerId}`,
           icon: isPast ? '\u26A0\uFE0F' : '\uD83C\uDF34',
@@ -186,6 +195,14 @@ export async function GET(request: NextRequest) {
             ? `${u.name}の有給付与が未処理です（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${u.carryOver}日（前回残）\n→ 合計: ${u.total}日`
             : `${u.name}の有給付与日が近づいています（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${u.carryOver}日（前回残）\n→ 合計: ${u.total}日`,
           type: isPast ? 'warning' : 'info',
+          action: isPast ? {
+            type: 'pl-grant',
+            workerId: u.workerId,
+            grantDate: grantDateStr,
+            grantDays: u.days,
+            carryOver: u.carryOver,
+            label: `${u.days}日付与する`,
+          } : undefined,
         })
       }
     } catch (e) {

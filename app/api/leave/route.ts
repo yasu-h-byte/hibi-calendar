@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'grant') {
-      const { workerId, fy, grantDays, grantMonth, grantDate } = body
+      const { workerId, fy, grantDays, grantMonth, grantDate, carryOver: bodyCarryOver } = body
       const plData = (snap.data().plData || {}) as Record<string, { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }[]>
       const key = String(workerId)
       const records = plData[key] || []
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
         fy,
         grantDate: grantDate || '',
         grantDays: Number(grantDays) || 0,
-        carryOver: 0,
+        carryOver: bodyCarryOver != null ? Number(bodyCarryOver) : 0,
         adjustment: 0,
         used: 0,
       }
