@@ -1,26 +1,26 @@
 'use client'
 
 export default function DocsPage() {
-  interface DocItem { title: string; desc: string; url: string; icon: string; badge?: string; internal?: boolean }
+  interface DocItem { title: string; desc: string; url: string; icon: string; badge?: string; internal?: boolean; updated: string }
   const docs: { category: string; items: DocItem[] }[] = [
     {
       category: '説明会資料',
       items: [
-        { title: '給与制度説明会（2026/4/19）', desc: 'ベトナム人スタッフ向け・日越二言語', url: '/briefing-20260419.html', icon: '🎤', badge: '日本語+ベトナム語' },
+        { title: '給与制度説明会（2026/4/19）', desc: 'ベトナム人スタッフ向け・日越二言語', url: '/briefing-20260419.html', icon: '🎤', badge: '日本語+ベトナム語', updated: '2026-04-08' },
       ],
     },
     {
       category: '業務マニュアル',
       items: [
-        { title: '奥寺さん向けマニュアル', desc: '有給管理・月次集計・給与計算・帳票出力', url: '/manual-okudera.html', icon: '📘' },
-        { title: '政仁さん向けマニュアル', desc: '出面入力・承認・就業カレンダー', url: '/manual-masahito.html', icon: '📗' },
-        { title: '有給データ移行手順', desc: '旧スプレッドシートからの有給データ移行', url: '/manual-yukyu.html', icon: '📙' },
+        { title: '奥寺さん向けマニュアル', desc: '有給管理・月次集計・給与計算・帳票出力', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-08' },
+        { title: '政仁さん向けマニュアル', desc: '出面入力・承認・就業カレンダー', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-08' },
+        { title: '有給データ移行手順', desc: '旧スプレッドシートからの有給データ移行', url: '/manual-yukyu.html', icon: '📙', updated: '2026-04-08' },
       ],
     },
     {
       category: 'システムガイド',
       items: [
-        { title: '運用ガイド', desc: '変形労働時間制の制度設計とシステム運用の手引き', url: '/guide', icon: '📖', internal: true },
+        { title: '運用ガイド', desc: '変形労働時間制の制度設計とシステム運用の手引き', url: '/guide', icon: '📖', internal: true, updated: '2026-04-08' },
       ],
     },
   ]
@@ -57,6 +57,7 @@ export default function DocsPage() {
                       )}
                     </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{item.desc}</p>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">最終更新: {item.updated}</p>
                   </div>
                 </div>
               </a>
