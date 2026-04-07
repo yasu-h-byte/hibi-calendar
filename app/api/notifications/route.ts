@@ -201,15 +201,15 @@ export async function GET(request: NextRequest) {
         // 前回レコードから正しい繰越を計算（出面のPを含む）
         const wRecords = (main.plData[String(u.workerId)] || []) as { grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number; fy?: string | number }[]
         const recordsWithGrant = wRecords.filter(r => (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0))
-        // 同じFYに複数ある場合はadjが最大のものを採用
+        // 同じFYに複数ある場合はgrantDateが最も新しいものを採用（正しいレコード）
         let prevRecord = null as typeof recordsWithGrant[0] | null
         if (recordsWithGrant.length > 0) {
           const maxFy = Math.max(...recordsWithGrant.map(r => Number(r.fy)))
           const sameFy = recordsWithGrant.filter(r => Number(r.fy) === maxFy)
           prevRecord = sameFy.reduce((best, r) => {
-            const bestAdj = Math.max(best.adjustment || 0, best.adj || 0)
-            const rAdj = Math.max(r.adjustment || 0, r.adj || 0)
-            return rAdj > bestAdj ? r : best
+            const bestDate = best.grantDate || ''
+            const rDate = r.grantDate || ''
+            return rDate > bestDate ? r : best
           })
         }
 

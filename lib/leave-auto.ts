@@ -146,12 +146,12 @@ function calcCarryOver(existingRecords: PLRecord[]): number {
 
   // 最新FYを特定
   const maxFy = Math.max(...withGrant.map(r => Number(r.fy)))
-  // 同じFYに複数レコードがある場合、adjustmentが最大のもの（実データ）を採用
+  // 同じFYに複数レコードがある場合、grantDateが最も新しいもの（正しいレコード）を採用
   const sameFy = withGrant.filter(r => Number(r.fy) === maxFy)
   const prev = sameFy.reduce((best, r) => {
-    const bestAdj = (best.adjustment || best.adj || 0)
-    const rAdj = (r.adjustment || r.adj || 0)
-    return rAdj > bestAdj ? r : best
+    const bestDate = best.grantDate || ''
+    const rDate = r.grantDate || ''
+    return rDate > bestDate ? r : best
   })
 
   const prevTotal = (prev.grantDays || prev.grant || 0) + (prev.carryOver || prev.carry || 0)
