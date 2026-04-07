@@ -298,6 +298,7 @@ export function calcTobiEquiv(
 
   // 外注
   for (const [k, v] of Object.entries(attSD)) {
+    if (!v) continue
     const pk = parseDKey(k)
     if (!ymSet.has(pk.ym)) continue
     if (siteId && pk.sid !== siteId) continue
@@ -445,6 +446,7 @@ export function compute(
 
   // ─── 外注の出面データ処理 ───
   for (const [k, v] of Object.entries(attSD)) {
+    if (!v) continue
     const pk = parseDKey(k)
     const sid = pk.sid
     const scid = pk.wid
@@ -732,6 +734,7 @@ export function computeMonthly(
 
   // Process attendance data
   for (const [key, entry] of Object.entries(attD)) {
+    if (!entry) continue
     const pk = parseDKey(key)
     const siteId = pk.sid
     const wid = parseInt(pk.wid)
@@ -775,6 +778,7 @@ export function computeMonthly(
 
   // Process subcon data
   for (const [key, entry] of Object.entries(attSD)) {
+    if (!entry) continue
     const pk = parseDKey(key)
     const siteId = pk.sid
     const scid = pk.wid
