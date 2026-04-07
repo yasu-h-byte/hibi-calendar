@@ -222,9 +222,10 @@ export async function GET(request: NextRequest) {
         const grantDate = fyRecord?.grantDate || ''
         const total = grantDays + carryOver
 
-        // 付与日から1年間のPL消化日数を集計
+        // 付与日から1年間のPL消化日数を集計（月別内訳付き）
         let periodUsed = 0
         const plCalendarLocal: string[] = []
+        const monthlyUsage: Record<string, number> = {} // YYYYMM -> count
         if (grantDate) {
           const gd = new Date(grantDate)
           const gdEnd = new Date(gd)
@@ -241,6 +242,7 @@ export async function GET(request: NextRequest) {
                 if (entryDate >= gd && entryDate < gdEnd) {
                   periodUsed++
                   plCalendarLocal.push(`${entryYm}${entryDay}`)
+                  monthlyUsage[entryYm] = (monthlyUsage[entryYm] || 0) + 1
                 }
               }
             }
@@ -305,6 +307,7 @@ export async function GET(request: NextRequest) {
           expiryStatus,
           legalPL,
           fiveDayShortfall,
+          monthlyUsage,
         }
       })
       // Show all eligible workers (including those with no PL data yet)

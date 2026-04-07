@@ -9,6 +9,7 @@ interface PLWorker {
   total: number; remaining: number; rate: number; grantMonth?: number
   grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'
   legalPL: number; fiveDayShortfall: number
+  monthlyUsage: Record<string, number>
 }
 
 /** hireDate + 6ヶ月 → 発生月を計算 */
@@ -459,6 +460,58 @@ export default function LeavePage() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Monthly Usage Table ── */}
+      {(() => {
+        // 全ワーカーのmonthlyUsageからユニークな月を収集
+        const allMonths = new Set<string>()
+        filteredWorkers.forEach(w => {
+          if (w.monthlyUsage) Object.keys(w.monthlyUsage).forEach(m => allMonths.add(m))
+        })
+        const months = [...allMonths].sort()
+        const workersWithUsage = filteredWorkers.filter(w => w.monthlyUsage && Object.keys(w.monthlyUsage).length > 0)
+        if (months.length === 0 || workersWithUsage.length === 0) return null
+
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <h2 className="text-base font-bold text-hibi-navy dark:text-white mb-3">月別 有給取得日数</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 dark:bg-gray-700">
+                    <th className="px-3 py-2 text-left font-medium text-gray-600 dark:text-gray-300 border-b sticky left-0 bg-gray-50 dark:bg-gray-700 z-10">名前</th>
+                    {months.map(m => (
+                      <th key={m} className="px-2 py-2 text-center font-medium text-gray-600 dark:text-gray-300 border-b whitespace-nowrap">
+                        {m.slice(0, 4)}/{m.slice(4)}月
+                      </th>
+                    ))}
+                    <th className="px-3 py-2 text-center font-bold text-gray-700 dark:text-gray-200 border-b border-l-2 border-gray-300">計</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workersWithUsage.map(w => {
+                    const total = Object.values(w.monthlyUsage).reduce((s, n) => s + n, 0)
+                    return (
+                      <tr key={w.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <td className="px-3 py-2 font-medium whitespace-nowrap sticky left-0 bg-white dark:bg-gray-800 z-10">{w.name}</td>
+                        {months.map(m => {
+                          const val = w.monthlyUsage[m] || 0
+                          return (
+                            <td key={m} className={`px-2 py-2 text-center tabular-nums ${val > 0 ? 'font-bold text-green-700' : 'text-gray-300'}`}>
+                              {val > 0 ? val : '-'}
+                            </td>
+                          )
+                        })}
+                        <td className="px-3 py-2 text-center font-bold tabular-nums border-l-2 border-gray-300 text-hibi-navy">{total}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── PL Calendar ── */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
