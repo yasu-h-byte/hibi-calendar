@@ -140,15 +140,20 @@ export function calcNextGrantDate(
 function calcCarryOver(existingRecords: PLRecord[]): number {
   if (existingRecords.length === 0) return 0
 
-  // Find the most recent record by fy (descending)
-  const sorted = [...existingRecords]
-    .filter(r => (r.grantDays || 0) > 0 || (r.grant || 0) > 0)
-    .sort((a, b) => Number(b.fy) - Number(a.fy))
+  // Find the most recent FY with grant data
+  const withGrant = existingRecords.filter(r => (r.grantDays || 0) > 0 || (r.grant || 0) > 0)
+  if (withGrant.length === 0) return 0
 
-  if (sorted.length === 0) return 0
+  // 最新FYを特定
+  const maxFy = Math.max(...withGrant.map(r => Number(r.fy)))
+  // 同じFYに複数レコードがある場合、adjustmentが最大のもの（実データ）を採用
+  const sameFy = withGrant.filter(r => Number(r.fy) === maxFy)
+  const prev = sameFy.reduce((best, r) => {
+    const bestAdj = (best.adjustment || best.adj || 0)
+    const rAdj = (r.adjustment || r.adj || 0)
+    return rAdj > bestAdj ? r : best
+  })
 
-  const prev = sorted[0]
-  // Support both old format (grant/carry/adj) and new format (grantDays/carryOver/adjustment)
   const prevTotal = (prev.grantDays || prev.grant || 0) + (prev.carryOver || prev.carry || 0)
   const prevUsed = (prev.adjustment || prev.adj || 0) + (prev.used || 0)
   const prevRemaining = Math.max(0, prevTotal - prevUsed)
