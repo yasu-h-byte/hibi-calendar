@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
-import { getMainData, getAttData } from '@/lib/compute'
+import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 
 /** 法定有給付与日数を計算 */
@@ -233,16 +233,14 @@ export async function GET(request: NextRequest) {
           for (const [key, entry] of Object.entries(allAtt)) {
             const e = entry as { p?: number }
             if (e.p === 1) {
-              const parts = key.split('_')
-              const wid = parseInt(parts[1])
+              const pk = parseDKey(key)
+              const wid = parseInt(pk.wid)
               if (wid === w.id) {
-                const entryYm = parts[2]
-                const entryDay = parts[3]
-                const entryDate = new Date(parseInt(entryYm.slice(0, 4)), parseInt(entryYm.slice(4, 6)) - 1, parseInt(entryDay))
+                const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
                 if (entryDate >= gd && entryDate < gdEnd) {
                   periodUsed++
-                  plCalendarLocal.push(`${entryYm}${entryDay}`)
-                  monthlyUsage[entryYm] = (monthlyUsage[entryYm] || 0) + 1
+                  plCalendarLocal.push(`${pk.ym}${pk.day}`)
+                  monthlyUsage[pk.ym] = (monthlyUsage[pk.ym] || 0) + 1
                 }
               }
             }
@@ -317,9 +315,9 @@ export async function GET(request: NextRequest) {
     for (const [key, entry] of Object.entries(allAtt)) {
       const e = entry as { p?: number }
       if (e.p === 1) {
-        const parts = key.split('_')
-        const wid = parseInt(parts[1])
-        const dateKey = `${parts[2]}${parts[3]}`
+        const pk = parseDKey(key)
+        const wid = parseInt(pk.wid)
+        const dateKey = `${pk.ym}${pk.day}`
         if (!plCalendar[dateKey]) plCalendar[dateKey] = []
         if (!plCalendar[dateKey].includes(wid)) plCalendar[dateKey].push(wid)
       }
