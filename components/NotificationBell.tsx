@@ -116,7 +116,7 @@ export default function NotificationBell() {
                 >
                   <span className="text-sm flex-shrink-0 mt-0.5">{n.icon}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-800 dark:text-gray-200 leading-snug">{n.message}</p>
+                    <p className="text-xs text-gray-800 dark:text-gray-200 leading-snug whitespace-pre-line">{n.message}</p>
                     {n.count !== undefined && n.count > 0 && (
                       <span className="inline-block mt-1 text-[10px] text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
                         {n.count}件

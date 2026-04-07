@@ -169,23 +169,23 @@ export async function GET(request: NextRequest) {
       console.error('Attendance check error:', e)
     }
 
-    // 5. Upcoming PL grant dates (within 7 days)
+    // 5. Upcoming / overdue PL grant dates (30 days ahead, 30 days past)
     try {
-      const upcoming = getUpcomingGrants(main, 7)
-      if (upcoming.length > 0) {
-        const details = upcoming
-          .map(u => {
-            const m = u.grantDate.getMonth() + 1
-            const d = u.grantDate.getDate()
-            return `${u.name} (${m}/${d}) ${u.days}日`
-          })
-          .join('、')
+      const upcoming = getUpcomingGrants(main, 30)
+      for (const u of upcoming) {
+        const m = u.grantDate.getMonth() + 1
+        const d = u.grantDate.getDate()
+        const y = u.grantDate.getFullYear()
+        const isPast = u.grantDate <= now
+        const dateStr = `${y}/${m}/${d}`
+
         notifications.push({
-          id: 'upcoming-pl-grant',
-          icon: '\uD83C\uDF34',
-          message: `有給発生予定: ${details}`,
-          type: 'info',
-          count: upcoming.length,
+          id: `pl-grant-${u.workerId}`,
+          icon: isPast ? '\u26A0\uFE0F' : '\uD83C\uDF34',
+          message: isPast
+            ? `${u.name}の有給付与が未処理です（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${u.carryOver}日（前回残）\n→ 合計: ${u.total}日`
+            : `${u.name}の有給付与日が近づいています（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${u.carryOver}日（前回残）\n→ 合計: ${u.total}日`,
+          type: isPast ? 'warning' : 'info',
         })
       }
     } catch (e) {

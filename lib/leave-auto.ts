@@ -236,12 +236,22 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
  * Get upcoming PL grant dates within the next N days.
  * Used for dashboard notifications.
  */
+export interface UpcomingGrant {
+  workerId: number
+  name: string
+  grantDate: Date
+  days: number
+  carryOver: number
+  total: number
+  yearsOfService: string
+}
+
 export function getUpcomingGrants(
   main: MainData,
   withinDays: number = 7
-): { workerId: number; name: string; grantDate: Date; days: number }[] {
+): UpcomingGrant[] {
   const today = getJSTDate()
-  const upcoming: { workerId: number; name: string; grantDate: Date; days: number }[] = []
+  const upcoming: UpcomingGrant[] = []
 
   const eligible = main.workers.filter(
     (w: RawWorker) => !w.retired && w.job !== 'yakuin' && w.hireDate
@@ -258,17 +268,32 @@ export function getUpcomingGrants(
     const diffMs = nextGrant.getTime() - today.getTime()
     const diffDays = Math.ceil(diffMs / (24 * 60 * 60 * 1000))
 
-    // Only include future grants within the specified window
-    if (diffDays >= 0 && diffDays <= withinDays) {
+    // 過去の付与日（まだ付与されていない分）も含む: diffDays >= -30
+    // 未来30日以内も含む
+    if (diffDays >= -30 && diffDays <= withinDays) {
       const legalDays = calcLegalPLDays(w.hireDate, nextGrant)
-      if (legalDays > 0) {
-        upcoming.push({
-          workerId: w.id,
-          name: w.name,
-          grantDate: nextGrant,
-          days: legalDays,
-        })
-      }
+      if (legalDays <= 0) continue
+
+      // 繰越計算: 前回レコードの残日数
+      const carryOver = Math.min(20, calcCarryOver(records))
+
+      // 勤続年数
+      const hire = new Date(w.hireDate)
+      const diffMonths = (nextGrant.getFullYear() - hire.getFullYear()) * 12
+        + (nextGrant.getMonth() - hire.getMonth())
+      const years = Math.floor(diffMonths / 12)
+      const months = diffMonths % 12
+      const yearsOfService = `${years}年${months}ヶ月`
+
+      upcoming.push({
+        workerId: w.id,
+        name: w.name,
+        grantDate: nextGrant,
+        days: legalDays,
+        carryOver,
+        total: legalDays + carryOver,
+        yearsOfService,
+      })
     }
   }
 
