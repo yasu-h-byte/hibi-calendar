@@ -86,9 +86,22 @@ export function calcNextGrantDate(
     .filter(d => !isNaN(d.getTime()))
 
   // Iterate through possible grant dates starting from the first
+  const today = getJSTDate()
   let currentGrant = effectiveFirstGrant
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    // 1年以上前の付与日はスキップ（レコードがなくても付与済みとみなす）
+    const oneYearAgo = new Date(today)
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+    if (currentGrant < oneYearAgo) {
+      currentGrant = new Date(
+        currentGrant.getFullYear() + 1,
+        grantMonthIdx,
+        grantDay
+      )
+      continue
+    }
+
     // Check if this grant date has already been granted
     const alreadyGranted = existingGrantDates.some(d =>
       d.getFullYear() === currentGrant.getFullYear() &&
