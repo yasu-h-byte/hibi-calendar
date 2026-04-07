@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Monthly API error:', error)
-    return NextResponse.json({ error: 'Failed to compute monthly data' }, { status: 500 })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: 'Failed to compute monthly data', detail: errMsg }, { status: 500 })
   }
 }
 

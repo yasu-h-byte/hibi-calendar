@@ -883,6 +883,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Dashboard API error:', error)
-    return NextResponse.json({ error: 'Failed to compute dashboard data' }, { status: 500 })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: 'Failed to compute dashboard data', detail: errMsg }, { status: 500 })
   }
 }
