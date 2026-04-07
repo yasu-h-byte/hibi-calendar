@@ -111,6 +111,7 @@ export async function POST(request: NextRequest) {
 
       const plUsage: Record<number, number> = {}
       for (const [key, entry] of Object.entries(allAtt)) {
+        if (!entry) continue
         const e = entry as { p?: number }
         if (e.p && e.p === 1) {
           const wid = parseInt(key.split('_')[1])
@@ -231,6 +232,7 @@ export async function GET(request: NextRequest) {
           const gdEnd = new Date(gd)
           gdEnd.setFullYear(gdEnd.getFullYear() + 1)
           for (const [key, entry] of Object.entries(allAtt)) {
+            if (!entry) continue
             const e = entry as { p?: number }
             if (e.p === 1) {
               const pk = parseDKey(key)
@@ -313,6 +315,7 @@ export async function GET(request: NextRequest) {
     // PLカレンダーデータを出面から構築
     const plCalendar: Record<string, number[]> = {}
     for (const [key, entry] of Object.entries(allAtt)) {
+      if (!entry) continue
       const e = entry as { p?: number }
       if (e.p === 1) {
         const pk = parseDKey(key)
@@ -333,6 +336,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response)
   } catch (error) {
     console.error('Leave API error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: 'Server error', detail: errMsg }, { status: 500 })
   }
 }
