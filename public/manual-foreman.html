@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>業務マニュアル（職長向け） - HIBI CONSTRUCTION</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; }
+  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: #1B2A4A; color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .highlight { background: #ffe0e0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+  .toc { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: #1B2A4A; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+</style>
+</head>
+<body>
+
+<h1>HIBI CONSTRUCTION 就業管理システム<br>業務マニュアル</h1>
+<p>対象: 職長（大川愛志さん・白戸寛之さん）<br>
+作成日: 2026年4月8日<br>
+システムURL: <code>https://hibi-calendar.vercel.app</code></p>
+
+<div class="toc">
+<strong>目次</strong>
+<ol>
+  <li><a href="#sec1">ログイン</a></li>
+  <li><a href="#sec2">職長の役割</a></li>
+  <li><a href="#sec3">就業カレンダーの作成・提出</a></li>
+  <li><a href="#sec4">出面の確認・修正</a></li>
+  <li><a href="#sec5">毎日・毎月のルーティン</a></li>
+</ol>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec1">1. ログイン</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">ブラウザで <code>https://hibi-calendar.vercel.app</code> を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text"><strong>管理者パスワード</strong>を入力して「ログイン」を押す</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">名前の一覧から<strong>自分の名前</strong>を選択する</div>
+</div>
+
+<div class="box">
+<strong>職長でログインすると：</strong>自分が担当する現場のみ表示されます。出面入力と就業カレンダーの2画面が使えます。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec2">2. 職長の役割</h2>
+
+<div class="box box-ok">
+<table>
+<tr><th>作業</th><th>内容</th><th>頻度</th></tr>
+<tr><td><strong>就業カレンダーの作成・提出</strong></td><td>翌月の出勤日/休日を設定して提出</td><td>毎月1回</td></tr>
+<tr><td><strong>出面の確認・修正</strong></td><td>スタッフの出勤入力を確認し、必要に応じて修正</td><td>毎日</td></tr>
+</table>
+</div>
+
+<div class="box box-warn">
+<strong>職長ではできないこと：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>カレンダーの最終承認（政仁さんの担当）</li>
+  <li>月次集計・月締め（奥寺さんの担当）</li>
+  <li>有給管理・マスタ管理（管理者の担当）</li>
+</ul>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec3">3. 就業カレンダーの作成・提出</h2>
+
+<p>毎月、元請から翌月の工程表が届いたら、就業カレンダーを作成して提出します。</p>
+
+<h3>3-1. 流れ</h3>
+
+<div class="box">
+<table>
+<tr><th>ステップ</th><th>誰が</th><th>やること</th><th>システム上の状態</th></tr>
+<tr><td><strong>1</strong></td><td><strong>職長</strong></td><td>カレンダーに出勤日/休日を設定</td><td>未作成</td></tr>
+<tr><td><strong>2</strong></td><td><strong>職長</strong></td><td>「提出する」ボタンを押す</td><td>提出済み（承認待ち）</td></tr>
+<tr><td>3</td><td>政仁さん</td><td>内容を確認して「承認する」</td><td>承認済み</td></tr>
+<tr><td>4</td><td>管理者</td><td>Messengerでスタッフに署名リンクを送信</td><td>署名完了</td></tr>
+</table>
+</div>
+
+<h3>3-2. カレンダーの作成手順</h3>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">サイドバー →<strong>「就業カレンダー」</strong>を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">右上の<strong>年月セレクタ</strong>で翌月を選ぶ</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">カレンダーの日付をクリックして<strong>出勤/休日/祝日</strong>を切り替える<br>
+  <span style="color:#888; font-size:13px;">緑=出勤、グレー=休日、赤=祝日</span></div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">所定日数と法定上限を確認（画面に自動表示）</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text"><strong>「○○を提出する」</strong>ボタンを押す</div>
+</div>
+
+<div class="box box-red">
+<strong>重要：法定上限を超えるカレンダーは提出できません。</strong><br>
+例えば31日の月では所定日数25日（175時間）が上限です。超えている場合は休日を追加してください。
+</div>
+
+<div class="box box-warn">
+<strong>提出後は編集できません。</strong>修正が必要な場合は政仁さんまたは管理者に連絡してください。
+</div>
+
+<h3>3-3. カレンダー設定のポイント</h3>
+
+<table>
+<tr><th>日</th><th>設定</th><th>説明</th></tr>
+<tr><td>平日（月〜金）</td><td>出勤</td><td>元請の工程表に従う</td></tr>
+<tr><td>土曜</td><td>現場に合わせて出勤/休み</td><td>元請の工程表に従う</td></tr>
+<tr><td>日曜</td><td>休み</td><td>原則休み</td></tr>
+<tr><td>祝日</td><td>現場に合わせて出勤/休み</td><td>元請の工程表に従う</td></tr>
+</table>
+
+<!-- ================================================ -->
+<h2 id="sec4">4. 出面の確認・修正</h2>
+
+<p>5月からは、ベトナム人スタッフがスマホから毎日出勤を入力します。職長はその内容を確認し、必要に応じて修正します。</p>
+
+<h3>4-1. PC画面での確認</h3>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">サイドバー →<strong>「出面入力」</strong>を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">自分の現場が表示される（職長は担当現場のみ）</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">各スタッフの出勤状況を確認<br>
+  <span style="color:#888; font-size:13px;">日付ヘッダーは固定されているので、下にスクロールしても日付が見えます</span></div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">間違いがあればセルをクリックして修正</div>
+</div>
+
+<h3>4-2. 入力する値</h3>
+
+<table>
+<tr><th>入力値</th><th>意味</th><th>使い方</th></tr>
+<tr><td><strong>1</strong></td><td>出勤（1日）</td><td>通常の出勤日</td></tr>
+<tr><td><strong>0.5</strong></td><td>半日</td><td>半日だけ出勤した場合</td></tr>
+<tr><td><strong>P</strong></td><td>有給休暇</td><td>有給を取得した日</td></tr>
+<tr><td><strong>補</strong></td><td>休業補償（0.6）</td><td>会社都合の休業日</td></tr>
+<tr><td><strong>下段の数字</strong></td><td>残業時間</td><td>0.5h単位で入力（例: 1.5）</td></tr>
+</table>
+
+<div class="box box-ok">
+<strong>保存は自動です。</strong>セルに入力するだけで自動保存されます。
+</div>
+
+<h3>4-3. 外注先の入力</h3>
+
+<p>外注先は会社単位で人数を入力します。例：4人出勤なら <strong>4</strong> と入力。</p>
+
+<!-- ================================================ -->
+<h2 id="sec5">5. 毎日・毎月のルーティン</h2>
+
+<h3>毎日のルーティン</h3>
+
+<div class="box">
+<table>
+<tr><th>タイミング</th><th>作業</th><th>所要時間</th></tr>
+<tr><td><strong>朝 or 夕方</strong></td><td>出面入力画面でスタッフの出勤状況を確認<br>必要に応じて修正</td><td>5〜10分</td></tr>
+</table>
+</div>
+
+<h3>毎月のルーティン</h3>
+
+<div class="box">
+<table>
+<tr><th>タイミング</th><th>作業</th></tr>
+<tr><td>20日頃</td><td>元請から翌月工程表を入手</td></tr>
+<tr><td>〜25日</td><td>就業カレンダーを作成して<strong>提出</strong></td></tr>
+<tr><td>月末</td><td>政仁さんの承認を確認</td></tr>
+</table>
+</div>
+
+<hr>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-08</p>
+
+</body>
+</html>

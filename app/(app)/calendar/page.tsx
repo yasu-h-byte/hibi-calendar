@@ -179,7 +179,10 @@ Chon cong truong -> Chon ten -> Xem lich -> Ky
   // Status badge (simplified: only 未作成 or 確定済み)
   const statusBadge = (site: SiteCalendarData) => {
     if (site.status === 'approved') {
-      return <span className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold px-2 py-0.5 rounded-full">確定済み</span>
+      return <span className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold px-2 py-0.5 rounded-full">承認済み</span>
+    }
+    if (site.status === 'submitted') {
+      return <span className="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 text-xs font-bold px-2 py-0.5 rounded-full">提出済み（承認待ち）</span>
     }
     return <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full">未作成</span>
   }
@@ -255,6 +258,8 @@ Chon cong truong -> Chon ten -> Xem lich -> Ky
           {visibleSites.map(site => {
             const days = getEditDays(site.siteId, site.days)
             const isApproved = site.status === 'approved'
+            const isSubmitted = site.status === 'submitted'
+            const isReadOnly = isApproved || (isSubmitted && user.role === 'foreman')
 
             return (
               <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
@@ -273,7 +278,7 @@ Chon cong truong -> Chon ten -> Xem lich -> Ky
                     month={m}
                     days={days}
                     onChange={d => handleDaysChange(site.siteId, d)}
-                    readOnly={isApproved}
+                    readOnly={isReadOnly}
                   />
                 </div>
 
@@ -284,47 +289,134 @@ Chon cong truong -> Chon ten -> Xem lich -> Ky
                     就業時間: 8:00〜17:00（休憩2時間）
                   </div>
 
-                  {/* Per-site confirm button */}
-                  {!isApproved && (
-                    <button
-                      onClick={async () => {
-                        if (!confirm(`${site.siteName} のカレンダーを確定しますか？`)) return
-                        setSaving(true)
-                        try {
-                          const res = await fetch('/api/calendar/bulk-confirm', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                            body: JSON.stringify({
-                              ym,
-                              sites: [{ siteId: site.siteId, days }],
-                              approvedBy: user?.workerId || 0,
-                            }),
-                          })
-                          if (!res.ok) {
-                            const data = await res.json()
-                            alert(data.error || '確定に失敗しました')
-                          } else {
-                            setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
-                            fetchData()
-                          }
-                        } catch { alert('確定に失敗しました') }
-                        finally { setSaving(false) }
-                      }}
-                      disabled={saving || (() => {
-                        const workCount = Object.values(days).filter(d => d === 'work').length
-                        const daysInMonth = new Date(y, m, 0).getDate()
-                        return workCount * 7 > daysInMonth * 40 / 7
-                      })()}
-                      className="w-full bg-hibi-navy text-white py-2.5 rounded-lg text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
-                    >
-                      {saving ? '確定中...' : `${site.siteName} を確定する`}
-                    </button>
-                  )}
-                  {isApproved && (
-                    <div className="text-center text-green-600 dark:text-green-400 text-sm font-bold py-2">
-                      ✅ 確定済み
-                    </div>
-                  )}
+                  {/* Per-site action buttons — role-based */}
+                  {(() => {
+                    const isSubmitted = site.status === 'submitted'
+                    const canSubmit = !isApproved && !isSubmitted  // 職長: まだ提出していない
+                    const canApprove = isSubmitted && (user.role === 'admin' || user.role === 'approver')  // 上長: 提出済みを承認
+                    const canForceApprove = !isApproved && !isSubmitted && (user.role === 'admin')  // 管理者: 直接承認
+
+                    const exceedsLimit = (() => {
+                      const workCount = Object.values(days).filter(d => d === 'work').length
+                      const daysInMonth = new Date(y, m, 0).getDate()
+                      return workCount * 7 > daysInMonth * 40 / 7
+                    })()
+
+                    return (
+                      <>
+                        {/* 職長: 提出ボタン */}
+                        {canSubmit && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`${site.siteName} のカレンダーを提出しますか？`)) return
+                              setSaving(true)
+                              try {
+                                // まず日付を保存
+                                await fetch('/api/calendar/save-days', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                  body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0 }),
+                                })
+                                // 提出
+                                const res = await fetch('/api/calendar/submit', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                  body: JSON.stringify({ siteId: site.siteId, ym, submittedBy: user?.workerId || 0 }),
+                                })
+                                if (!res.ok) {
+                                  const data = await res.json()
+                                  alert(data.error || '提出に失敗しました')
+                                } else {
+                                  setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
+                                  fetchData()
+                                }
+                              } catch { alert('提出に失敗しました') }
+                              finally { setSaving(false) }
+                            }}
+                            disabled={saving || exceedsLimit}
+                            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition disabled:opacity-50"
+                          >
+                            {saving ? '提出中...' : `📋 ${site.siteName} を提出する`}
+                          </button>
+                        )}
+
+                        {/* 提出済み表示（職長向け） */}
+                        {isSubmitted && user.role === 'foreman' && (
+                          <div className="text-center text-yellow-600 dark:text-yellow-400 text-sm font-bold py-2">
+                            📋 提出済み — 承認待ち
+                          </div>
+                        )}
+
+                        {/* approver/admin: 承認ボタン */}
+                        {canApprove && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`${site.siteName} のカレンダーを承認しますか？`)) return
+                              setSaving(true)
+                              try {
+                                const res = await fetch('/api/calendar/approve', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                  body: JSON.stringify({ siteId: site.siteId, ym, approvedBy: user?.workerId || 0 }),
+                                })
+                                if (!res.ok) {
+                                  const data = await res.json()
+                                  alert(data.error || '承認に失敗しました')
+                                } else {
+                                  fetchData()
+                                }
+                              } catch { alert('承認に失敗しました') }
+                              finally { setSaving(false) }
+                            }}
+                            disabled={saving}
+                            className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition disabled:opacity-50"
+                          >
+                            {saving ? '承認中...' : `✅ ${site.siteName} を承認する`}
+                          </button>
+                        )}
+
+                        {/* admin: 直接確定ボタン（提出を飛ばして承認） */}
+                        {canForceApprove && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`${site.siteName} のカレンダーを直接承認しますか？（提出を省略）`)) return
+                              setSaving(true)
+                              try {
+                                const res = await fetch('/api/calendar/bulk-confirm', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                  body: JSON.stringify({
+                                    ym,
+                                    sites: [{ siteId: site.siteId, days }],
+                                    approvedBy: user?.workerId || 0,
+                                  }),
+                                })
+                                if (!res.ok) {
+                                  const data = await res.json()
+                                  alert(data.error || '確定に失敗しました')
+                                } else {
+                                  setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
+                                  fetchData()
+                                }
+                              } catch { alert('確定に失敗しました') }
+                              finally { setSaving(false) }
+                            }}
+                            disabled={saving || exceedsLimit}
+                            className="w-full bg-gray-500 text-white py-2 rounded-lg text-xs hover:bg-gray-600 transition disabled:opacity-50"
+                          >
+                            {saving ? '確定中...' : '管理者: 直接承認'}
+                          </button>
+                        )}
+
+                        {/* 承認済み */}
+                        {isApproved && (
+                          <div className="text-center text-green-600 dark:text-green-400 text-sm font-bold py-2">
+                            ✅ 承認済み
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()}
                 </div>
               </div>
             )
