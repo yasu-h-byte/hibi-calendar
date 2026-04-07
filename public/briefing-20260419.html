@@ -5,178 +5,268 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>給与制度説明会 / Buổi giải thích chế độ lương - 2026年4月19日</title>
 <style>
-  @page { size: A4; margin: 15mm; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.7; }
-  h1 { text-align: center; font-size: 22px; border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; margin-bottom: 5px; }
-  .subtitle { text-align: center; font-size: 14px; color: #666; margin-bottom: 30px; }
-  h2 { font-size: 18px; color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 10px; margin-top: 30px; }
-  .vi { color: #2563EB; font-style: italic; }
-  .section { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 12px; padding: 20px; margin: 20px 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 860px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
+  h1 { text-align: center; font-size: 24px; border-bottom: 3px solid #1B2A4A; padding-bottom: 12px; margin-bottom: 5px; }
+  .subtitle { text-align: center; font-size: 15px; color: #666; margin-bottom: 30px; }
+  h2 { font-size: 20px; color: white; background: #1B2A4A; padding: 10px 16px; border-radius: 8px; margin-top: 40px; }
+  h3 { font-size: 16px; color: #1B2A4A; margin-top: 24px; border-bottom: 2px solid #e0e0e0; padding-bottom: 4px; }
+  .vi { color: #2563EB; }
+  .section { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 12px; padding: 24px; margin: 20px 0; }
   .compare { display: flex; gap: 16px; margin: 16px 0; }
-  .compare > div { flex: 1; border-radius: 10px; padding: 16px; }
+  .compare > div { flex: 1; border-radius: 10px; padding: 20px; }
   .before { background: #fee2e2; border: 2px solid #fca5a5; }
   .after { background: #dcfce7; border: 2px solid #86efac; }
-  .before h3 { color: #dc2626; margin: 0 0 8px; font-size: 16px; }
-  .after h3 { color: #16a34a; margin: 0 0 8px; font-size: 16px; }
-  .big-num { font-size: 28px; font-weight: bold; text-align: center; margin: 10px 0; }
-  .calc { background: #f0f0f0; border-radius: 8px; padding: 12px; margin: 12px 0; font-family: monospace; font-size: 14px; line-height: 2; }
-  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
-  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: center; }
+  .before h4 { color: #dc2626; margin: 0 0 10px; font-size: 18px; }
+  .after h4 { color: #16a34a; margin: 0 0 10px; font-size: 18px; }
+  .calc { background: #f8f8f8; border: 1px solid #ddd; border-radius: 10px; padding: 20px; margin: 16px 0; font-size: 15px; line-height: 2.2; }
+  .calc-title { font-weight: bold; font-size: 16px; color: #1B2A4A; margin-bottom: 8px; }
+  .calc-result { font-size: 22px; font-weight: bold; color: #16a34a; text-align: center; margin: 12px 0; padding: 10px; background: #dcfce7; border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 10px 12px; text-align: center; }
   th { background: #1B2A4A; color: white; }
-  .emoji { font-size: 40px; text-align: center; margin: 10px 0; }
-  .phone { display: flex; gap: 12px; justify-content: center; margin: 16px 0; }
-  .phone-btn { border-radius: 12px; padding: 14px 24px; font-size: 16px; font-weight: bold; color: white; text-align: center; min-width: 120px; }
+  .emoji { font-size: 48px; text-align: center; margin: 12px 0; }
+  .phone { display: flex; gap: 16px; justify-content: center; margin: 20px 0; flex-wrap: wrap; }
+  .phone-btn { border-radius: 16px; padding: 20px 28px; font-size: 18px; font-weight: bold; color: white; text-align: center; min-width: 130px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
   .btn-work { background: #2563EB; }
   .btn-rest { background: #6B7280; }
   .btn-leave { background: #16a34a; }
-  .point { background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 12px; margin: 12px 0; }
-  .point-title { font-weight: bold; color: #92400e; }
-  .schedule { background: #f0fdf4; border-radius: 8px; padding: 12px; }
-  .schedule-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #e0e0e0; }
-  .schedule-time { font-weight: bold; width: 60px; font-size: 14px; }
-  .schedule-label { flex: 1; }
-  @media print {
-    body { font-size: 12px; padding: 0; }
-    .section { break-inside: avoid; }
-    .compare { break-inside: avoid; }
-  }
-  @media (max-width: 600px) {
-    .compare { flex-direction: column; }
-  }
+  .point { background: #fef3c7; border: 2px solid #fbbf24; border-radius: 10px; padding: 16px; margin: 16px 0; }
+  .point-title { font-weight: bold; color: #92400e; font-size: 15px; }
+  .good { background: #f0fdf4; border: 2px solid #86efac; border-radius: 10px; padding: 16px; margin: 16px 0; }
+  .good-title { font-weight: bold; color: #16a34a; font-size: 15px; }
+  .schedule { background: #f0fdf4; border-radius: 10px; padding: 16px; }
+  .schedule-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #d0e0d0; font-size: 15px; }
+  .schedule-time { font-weight: bold; width: 60px; font-size: 16px; color: #1B2A4A; }
+  .schedule-bar { height: 8px; border-radius: 4px; flex: 1; }
+  .bar-work { background: #3b82f6; }
+  .bar-rest { background: #fbbf24; }
+  .step-flow { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0; flex-wrap: wrap; }
+  .step-box { background: white; border: 2px solid #1B2A4A; border-radius: 10px; padding: 12px 16px; text-align: center; min-width: 120px; }
+  .step-arrow { font-size: 24px; color: #1B2A4A; }
+  .qa { margin: 12px 0; }
+  .qa-q { font-weight: bold; font-size: 15px; color: #1B2A4A; margin: 16px 0 4px; }
+  .qa-a { padding-left: 16px; border-left: 3px solid #3b82f6; margin: 0 0 0 8px; }
+  @media print { body { font-size: 13px; padding: 0; } .section { break-inside: avoid; } }
+  @media (max-width: 600px) { .compare { flex-direction: column; } .step-flow { flex-direction: column; } .step-arrow { transform: rotate(90deg); } }
 </style>
 </head>
 <body>
 
-<h1>給与制度の変更について</h1>
+<h1>給与制度の変更について<br><span class="vi" style="font-size: 18px;">Về việc thay đổi chế độ lương</span></h1>
 <p class="subtitle">
-  Về việc thay đổi chế độ lương<br>
   2026年4月19日 / Ngày 19 tháng 4 năm 2026<br>
-  株式会社日比建設 / HFU
+  株式会社日比建設 / エイチエフユナイテッド株式会社
 </p>
 
-<!-- ===== 1. なぜ変わるのか ===== -->
+<!-- ===== 1 ===== -->
 <h2>1. なぜ変わるのか / Tại sao thay đổi?</h2>
 
 <div class="section">
   <div class="emoji">🎯</div>
-  <p style="text-align: center; font-size: 16px; font-weight: bold;">
-    みなさんの給与をもっと公平にするためです
-  </p>
-  <p style="text-align: center;" class="vi">
-    Để trả lương công bằng hơn cho tất cả mọi người
+  <p style="text-align: center; font-size: 18px; font-weight: bold;">
+    みなさんの給与をもっと公平にするためです<br>
+    <span class="vi">Để trả lương công bằng hơn cho tất cả mọi người</span>
   </p>
 
-  <div class="point">
-    <p class="point-title">ポイント / Điểm chính:</p>
+  <div class="good">
+    <p class="good-title">✅ 良くなること / Điều tốt hơn:</p>
     <p>
-      働いた時間に応じて正確に給与が計算されます。<br>
+      <strong>1.</strong> 働いた時間に応じて正確に給与が計算されます。<br>
       <span class="vi">Lương sẽ được tính chính xác theo số giờ làm việc.</span>
     </p>
     <p>
-      現場ごとに休みの日が違っても、不公平になりません。<br>
+      <strong>2.</strong> 現場ごとに休みの日が違っても、不公平になりません。<br>
       <span class="vi">Dù ngày nghỉ khác nhau giữa các công trường, lương vẫn công bằng.</span>
+    </p>
+    <p>
+      <strong>3.</strong> 土曜日に出勤しても「残業」ではなく「通常の給与」になります。<br>
+      <span class="vi">Làm thứ 7 sẽ được tính lương bình thường, không phải tăng ca.</span>
+    </p>
+  </div>
+
+  <div class="point">
+    <p class="point-title">⚠ 大事なこと / Điều quan trọng:</p>
+    <p>
+      <strong>時給は変わりません。</strong>今までと同じ時給です。<br>
+      <span class="vi"><strong>Lương theo giờ không thay đổi.</strong> Vẫn giữ nguyên như trước.</span>
     </p>
   </div>
 </div>
 
-<!-- ===== 2. 何が変わるのか ===== -->
+<!-- ===== 2 ===== -->
 <h2>2. 何が変わるのか / Thay đổi gì?</h2>
 
 <div class="section">
   <div class="compare">
     <div class="before">
-      <h3>❌ 今まで / Trước đây</h3>
-      <ul style="font-size: 14px; padding-left: 20px;">
-        <li>1日 6時間40分<br><span class="vi">6 giờ 40 phút/ngày</span></li>
-        <li>休憩 2時間20分<br><span class="vi">Nghỉ 2 giờ 20 phút</span></li>
-        <li>土曜出勤 → 全部残業<br><span class="vi">Làm thứ 7 → Tất cả tính tăng ca</span></li>
-      </ul>
+      <h4>❌ 今まで / Trước đây</h4>
+      <p><strong>1日の労働時間 / Giờ làm:</strong><br>6時間40分 / 6 giờ 40 phút</p>
+      <p><strong>休憩 / Nghỉ:</strong><br>2時間20分 / 2 giờ 20 phút</p>
+      <p><strong>土曜出勤 / Làm thứ 7:</strong><br>全部残業扱い → 割増<br><span class="vi">Tất cả tính tăng ca → Thêm tiền</span></p>
     </div>
     <div class="after">
-      <h3>✅ 5月から / Từ tháng 5</h3>
-      <ul style="font-size: 14px; padding-left: 20px;">
-        <li>1日 <strong>7時間</strong><br><span class="vi"><strong>7 giờ</strong>/ngày</span></li>
-        <li>休憩 <strong>2時間</strong><br><span class="vi">Nghỉ <strong>2 giờ</strong></span></li>
-        <li>土曜出勤 → <strong>通常の給与</strong><br><span class="vi">Làm thứ 7 → <strong>Lương bình thường</strong></span></li>
-      </ul>
+      <h4>✅ 5月から / Từ tháng 5</h4>
+      <p><strong>1日の労働時間 / Giờ làm:</strong><br><strong style="font-size: 20px;">7時間</strong> / <strong>7 giờ</strong></p>
+      <p><strong>休憩 / Nghỉ:</strong><br><strong style="font-size: 20px;">2時間</strong> / <strong>2 giờ</strong></p>
+      <p><strong>土曜出勤 / Làm thứ 7:</strong><br>通常の給与 → 割増なし<br><span class="vi">Lương bình thường → Không thêm tiền</span></p>
     </div>
   </div>
 
+  <h3>1日のスケジュール / Lịch trình 1 ngày</h3>
+
   <div class="schedule">
-    <p style="font-weight: bold; margin: 0 0 8px;">1日のスケジュール / Lịch trình 1 ngày:</p>
     <div class="schedule-row">
       <span class="schedule-time">8:00</span>
-      <span class="schedule-label">🔨 始業 / Bắt đầu làm việc</span>
+      <span>🔨 <strong>始業</strong> / Bắt đầu làm việc</span>
     </div>
     <div class="schedule-row">
+      <span class="schedule-time" style="color:#888;">〜10:00</span>
+      <span>作業（2時間） / Làm việc (2 giờ)</span>
+    </div>
+    <div class="schedule-row" style="background: #fef3c7;">
       <span class="schedule-time">10:00</span>
-      <span class="schedule-label">☕ 休憩 30分 / Nghỉ 30 phút</span>
+      <span>☕ <strong>休憩 30分</strong> / Nghỉ 30 phút</span>
     </div>
     <div class="schedule-row">
+      <span class="schedule-time" style="color:#888;">〜12:00</span>
+      <span>作業（1時間30分） / Làm việc (1 giờ 30 phút)</span>
+    </div>
+    <div class="schedule-row" style="background: #fef3c7;">
       <span class="schedule-time">12:00</span>
-      <span class="schedule-label">🍱 昼休み 60分 / Nghỉ trưa 60 phút</span>
+      <span>🍱 <strong>昼休み 60分</strong> / Nghỉ trưa 60 phút</span>
     </div>
     <div class="schedule-row">
+      <span class="schedule-time" style="color:#888;">〜15:00</span>
+      <span>作業（2時間） / Làm việc (2 giờ)</span>
+    </div>
+    <div class="schedule-row" style="background: #fef3c7;">
       <span class="schedule-time">15:00</span>
-      <span class="schedule-label">☕ 休憩 30分 / Nghỉ 30 phút</span>
+      <span>☕ <strong>休憩 30分</strong> / Nghỉ 30 phút</span>
+    </div>
+    <div class="schedule-row">
+      <span class="schedule-time" style="color:#888;">〜17:00</span>
+      <span>作業（1時間30分） / Làm việc (1 giờ 30 phút)</span>
     </div>
     <div class="schedule-row" style="border-bottom: none;">
       <span class="schedule-time">17:00</span>
-      <span class="schedule-label">🏠 終業 / Kết thúc làm việc</span>
+      <span>🏠 <strong>終業</strong> / Kết thúc làm việc</span>
     </div>
   </div>
+
+  <div style="text-align: center; margin-top: 12px; font-size: 14px; color: #666;">
+    作業 2h + 1.5h + 2h + 1.5h = <strong style="color: #1B2A4A; font-size: 18px;">7時間</strong>
+    休憩 30m + 60m + 30m = <strong style="color: #1B2A4A; font-size: 18px;">2時間</strong>
+  </div>
 </div>
 
-<!-- ===== 3. 給与の計算 ===== -->
-<h2>3. 給与の計算例 / Ví dụ tính lương</h2>
+<!-- ===== 3 ===== -->
+<h2>3. 給与の計算 / Cách tính lương</h2>
 
 <div class="section">
-  <p style="font-weight: bold;">
-    例：時給 1,425円 × 24日の月 / Ví dụ: 1.425 yên/giờ × tháng 24 ngày
-  </p>
 
+  <h3>計算式 / Công thức</h3>
   <div class="calc">
-    <strong>基本給 / Lương cơ bản:</strong><br>
-    1,425円 × 7時間 × 24日 = <strong style="font-size: 18px;">239,400円</strong><br><br>
-    <strong>残業 / Tăng ca:</strong><br>
-    1,425円 × 1.25 × 残業時間<br>
-    例: 10時間の残業 → 17,813円<br><br>
-    <strong>支給額 / Tổng lương:</strong><br>
-    239,400 + 17,813 = <strong style="font-size: 18px;">257,213円</strong>
+    <div class="calc-title">基本給 / Lương cơ bản</div>
+    <div style="text-align: center; font-size: 18px;">
+      時給 × <strong>7時間</strong> × 所定日数 = 基本給<br>
+      <span class="vi">Lương giờ × <strong>7 giờ</strong> × Số ngày quy định = Lương cơ bản</span>
+    </div>
+  </div>
+  <div class="calc">
+    <div class="calc-title">残業手当 / Phụ cấp tăng ca</div>
+    <div style="text-align: center; font-size: 18px;">
+      時給 × <strong>1.25</strong> × 残業時間 = 残業手当<br>
+      <span class="vi">Lương giờ × <strong>1.25</strong> × Giờ tăng ca = Phụ cấp tăng ca</span>
+    </div>
   </div>
 
-  <div class="point">
-    <p class="point-title">大事なこと / Điều quan trọng:</p>
+  <h3>計算例 ① 実習生（時給 1,425円）/ Ví dụ ① Thực tập sinh (1.425 yên/giờ)</h3>
+
+  <div class="compare">
+    <div style="flex:1; background: #f8f8f8; border-radius: 10px; padding: 16px; border: 1px solid #ddd;">
+      <p style="font-weight: bold; text-align: center;">22日の月<br><span class="vi">Tháng 22 ngày</span></p>
+      <p>基本給: 1,425 × 7h × 22日</p>
+      <div class="calc-result">219,450円</div>
+    </div>
+    <div style="flex:1; background: #f8f8f8; border-radius: 10px; padding: 16px; border: 1px solid #ddd;">
+      <p style="font-weight: bold; text-align: center;">25日の月<br><span class="vi">Tháng 25 ngày</span></p>
+      <p>基本給: 1,425 × 7h × 25日</p>
+      <div class="calc-result">249,375円</div>
+    </div>
+  </div>
+
+  <div class="good">
+    <p class="good-title">✅ 公平なポイント / Điểm công bằng:</p>
     <p>
-      時給は変わりません。今までと同じ時給です。<br>
-      <span class="vi">Lương theo giờ không thay đổi. Vẫn giữ nguyên.</span>
+      所定日数が多い月 → 基本給が多い。少ない月 → 基本給が少ない。<br>
+      <strong>働いた分だけ正確に給与が支払われます。</strong><br>
+      <span class="vi">Tháng nhiều ngày → Lương cao hơn. Tháng ít ngày → Lương thấp hơn.<br>
+      <strong>Lương được trả chính xác theo số ngày làm việc.</strong></span>
+    </p>
+  </div>
+
+  <h3>計算例 ② 特定技能（時給 2,558円）/ Ví dụ ② Tokutei (2.558 yên/giờ)</h3>
+
+  <div class="calc">
+    <p><strong>24日の月、残業15時間の場合 / Tháng 24 ngày, tăng ca 15 giờ:</strong></p>
+    <p>基本給: 2,558 × 7h × 24日 = <strong>429,744円</strong></p>
+    <p>残業: 2,558 × 1.25 × 15h = <strong>47,963円</strong></p>
+    <div class="calc-result">支給額: 477,707円 / Tổng lương: 477.707 yên</div>
+  </div>
+
+  <h3>残業の計算方法 / Cách tính tăng ca</h3>
+
+  <div class="point">
+    <p class="point-title">⚠ ここが大事！/ Điểm quan trọng!</p>
+    <p>
+      <strong>今まで：</strong>1日8時間を超えたら残業<br>
+      <span class="vi">Trước đây: Quá 8 giờ/ngày → Tăng ca</span>
     </p>
     <p>
-      残業は月の合計で計算します（1日8時間超ではありません）。<br>
-      <span class="vi">Tăng ca được tính theo tổng tháng (không phải theo ngày).</span>
+      <strong>5月から：</strong>月の合計で所定時間を超えたら残業<br>
+      <span class="vi">Từ tháng 5: Tổng tháng vượt quá giờ quy định → Tăng ca</span>
+    </p>
+    <p style="margin-top: 12px;">
+      例 / Ví dụ: 所定24日 → 所定時間 = 24日 × 7h = <strong>168時間</strong><br>
+      実際に180時間働いた → 残業 = 180 - 168 = <strong>12時間</strong><br>
+      <span class="vi">Quy định 24 ngày → Giờ quy định = 24 × 7 = <strong>168 giờ</strong><br>
+      Thực tế làm 180 giờ → Tăng ca = 180 - 168 = <strong>12 giờ</strong></span>
+    </p>
+  </div>
+
+  <h3>欠勤した場合 / Trường hợp vắng mặt</h3>
+
+  <div class="calc">
+    <p><strong>所定24日のうち22日しか出勤しなかった場合:</strong><br>
+    <span class="vi">Quy định 24 ngày nhưng chỉ đi làm 22 ngày:</span></p>
+    <p>欠勤控除 / Trừ vắng mặt: 時給 × 7h × 2日 = 1,425 × 7 × 2 = <strong>19,950円</strong></p>
+    <p style="font-size: 13px; color: #666;">
+      ※ 有給を使った日は欠勤になりません / Ngày dùng phép năm không bị tính vắng mặt
     </p>
   </div>
 </div>
 
-<!-- ===== 4. 毎月のカレンダー ===== -->
+<!-- ===== 4 ===== -->
 <h2>4. 毎月のカレンダー / Lịch hàng tháng</h2>
 
 <div class="section">
-  <p>
-    毎月、出勤日と休日のカレンダーを作ります。<br>
-    <span class="vi">Mỗi tháng sẽ lập lịch ngày làm và ngày nghỉ.</span>
+  <p style="font-size: 16px;">
+    毎月、会社がカレンダーを作ります。<strong>出勤する日</strong>と<strong>休みの日</strong>が決まります。<br>
+    <span class="vi">Mỗi tháng, công ty sẽ lập lịch. Xác định <strong>ngày đi làm</strong> và <strong>ngày nghỉ</strong>.</span>
   </p>
 
+  <h3>カレンダーの例 / Ví dụ lịch</h3>
+
   <table>
-    <tr><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th style="color: #3b82f6;">土</th><th style="color: #ef4444;">日</th></tr>
+    <tr><th>月<br>T2</th><th>火<br>T3</th><th>水<br>T4</th><th>木<br>T5</th><th>金<br>T6</th><th style="color: #3b82f6;">土<br>T7</th><th style="color: #ef4444;">日<br>CN</th></tr>
     <tr>
+      <td style="background: #dcfce7;">出勤<br><span class="vi" style="font-size:11px;">Đi làm</span></td>
       <td style="background: #dcfce7;">出勤</td>
       <td style="background: #dcfce7;">出勤</td>
       <td style="background: #dcfce7;">出勤</td>
       <td style="background: #dcfce7;">出勤</td>
-      <td style="background: #dcfce7;">出勤</td>
-      <td style="background: #dcfce7;">出勤</td>
-      <td style="background: #fee2e2;">休み</td>
+      <td style="background: #dcfce7;">出勤<br><span style="font-size:11px; color:#16a34a;">★通常給与</span></td>
+      <td style="background: #fee2e2;">休み<br><span class="vi" style="font-size:11px;">Nghỉ</span></td>
     </tr>
     <tr>
       <td style="background: #dcfce7;">出勤</td>
@@ -189,83 +279,199 @@
     </tr>
   </table>
 
-  <p>
-    カレンダーに「出勤」と書いてある日に働く → <strong>通常の給与</strong><br>
-    <span class="vi">Làm vào ngày ghi "đi làm" → <strong>Lương bình thường</strong></span>
-  </p>
-  <p>
-    カレンダーに「休み」と書いてある日は休む → <strong>給与なし（通常の休日）</strong><br>
-    <span class="vi">Ngày ghi "nghỉ" thì nghỉ → <strong>Không lương (ngày nghỉ bình thường)</strong></span>
+  <p style="font-size: 14px;">
+    ★ カレンダーで「出勤」の土曜日 → <strong>通常の給与（割増なし）</strong><br>
+    <span class="vi">★ Thứ 7 ghi "đi làm" → <strong>Lương bình thường (không thêm tiền)</strong></span>
   </p>
 
+  <h3>署名の流れ / Quy trình ký xác nhận</h3>
+
+  <div class="step-flow">
+    <div class="step-box">
+      📋<br>会社がカレンダーを作成<br><span class="vi" style="font-size: 12px;">Công ty lập lịch</span>
+    </div>
+    <span class="step-arrow">→</span>
+    <div class="step-box">
+      📱<br>スマホでカレンダーを確認<br><span class="vi" style="font-size: 12px;">Xem lịch trên ĐT</span>
+    </div>
+    <span class="step-arrow">→</span>
+    <div class="step-box">
+      ✅<br>「確認しました」をタップ<br><span class="vi" style="font-size: 12px;">Nhấn "Đã xác nhận"</span>
+    </div>
+  </div>
+
   <div class="point">
-    <p class="point-title">署名が必要です / Cần ký xác nhận:</p>
+    <p class="point-title">⚠ 毎月、必ず署名してください / Mỗi tháng nhất định phải ký</p>
     <p>
-      毎月、スマホでカレンダーを確認して署名してください。<br>
-      <span class="vi">Mỗi tháng, hãy xác nhận lịch trên điện thoại và ký.</span>
+      Messengerでリンクが届きます。届いたらすぐに確認して署名してください。<br>
+      <span class="vi">Link sẽ được gửi qua Messenger. Khi nhận được, hãy xác nhận và ký ngay.</span>
     </p>
   </div>
 </div>
 
-<!-- ===== 5. スマホの使い方 ===== -->
+<!-- ===== 5 ===== -->
 <h2>5. スマホの使い方 / Cách dùng điện thoại</h2>
 
 <div class="section">
-  <p style="font-weight: bold; text-align: center;">
-    毎日スマホで出勤・休みを入力します<br>
-    <span class="vi">Mỗi ngày nhập đi làm/nghỉ trên điện thoại</span>
+  <p style="font-size: 16px; text-align: center; font-weight: bold;">
+    毎日、スマホで出勤・休みを入力します<br>
+    <span class="vi">Mỗi ngày, nhập đi làm/nghỉ trên điện thoại</span>
   </p>
+
+  <h3>3つのボタン / 3 nút chính</h3>
 
   <div class="phone">
     <div class="phone-btn btn-work">
-      🔨<br>しゅっきん<br><span style="font-size: 12px;">Đi làm</span>
+      🔨<br>しゅっきん<br><span style="font-size: 13px;">Đi làm</span>
     </div>
     <div class="phone-btn btn-rest">
-      🏠<br>やすみ<br><span style="font-size: 12px;">Nghỉ</span>
+      🏠<br>やすみ<br><span style="font-size: 13px;">Nghỉ</span>
     </div>
     <div class="phone-btn btn-leave">
-      🌴<br>ゆうきゅう<br><span style="font-size: 12px;">Nghỉ phép</span>
+      🌴<br>ゆうきゅう<br>しんせい<br><span style="font-size: 13px;">Xin nghỉ phép</span>
     </div>
   </div>
 
   <table>
-    <tr><th>ボタン / Nút</th><th>いつ押す？/ Khi nào nhấn?</th></tr>
-    <tr><td style="color: #2563EB; font-weight: bold;">しゅっきん</td><td>出勤した日 / Ngày đi làm</td></tr>
-    <tr><td style="color: #6B7280; font-weight: bold;">やすみ</td><td>休みの日 / Ngày nghỉ</td></tr>
-    <tr><td style="color: #16a34a; font-weight: bold;">ゆうきゅう しんせい</td><td>有給を使いたい日 / Ngày muốn dùng phép năm</td></tr>
+    <tr><th style="width: 30%;">ボタン / Nút</th><th>いつ押す？ / Khi nào nhấn?</th><th>説明 / Giải thích</th></tr>
+    <tr>
+      <td style="color: #2563EB; font-weight: bold; font-size: 16px;">しゅっきん</td>
+      <td>出勤した日<br><span class="vi">Ngày đi làm</span></td>
+      <td>残業がある場合は時間も入力できます<br><span class="vi">Có thể nhập giờ tăng ca</span></td>
+    </tr>
+    <tr>
+      <td style="color: #6B7280; font-weight: bold; font-size: 16px;">やすみ</td>
+      <td>休みの日<br><span class="vi">Ngày nghỉ</span></td>
+      <td>カレンダーで「休み」の日に押す<br><span class="vi">Nhấn vào ngày "nghỉ" trong lịch</span></td>
+    </tr>
+    <tr>
+      <td style="color: #16a34a; font-weight: bold; font-size: 16px;">ゆうきゅう しんせい</td>
+      <td>有給を取りたい日<br><span class="vi">Ngày muốn nghỉ phép</span></td>
+      <td>申請後、上司が承認します<br><span class="vi">Sau khi xin, quản lý sẽ duyệt</span></td>
+    </tr>
   </table>
 
-  <div class="point">
-    <p class="point-title">大事 / Quan trọng:</p>
+  <h3>入力のタイミング / Thời điểm nhập</h3>
+
+  <div class="good">
     <p>
-      有給の残りが0日の場合、申請できません。<br>
-      <span class="vi">Nếu còn 0 ngày phép, không thể xin nghỉ phép.</span>
+      <strong>朝、現場に着いたら「しゅっきん」を押してください。</strong><br>
+      <span class="vi"><strong>Khi đến công trường buổi sáng, hãy nhấn "しゅっきん".</strong></span>
+    </p>
+    <p>
+      過去5日分は修正できます。押し忘れても大丈夫です。<br>
+      <span class="vi">Có thể sửa 5 ngày trước. Quên nhấn cũng không sao.</span>
     </p>
   </div>
 </div>
 
-<!-- ===== 6. 有給休暇 ===== -->
+<!-- ===== 6 ===== -->
 <h2>6. 有給休暇 / Nghỉ phép có lương</h2>
 
 <div class="section">
-  <p>
-    有給休暇は法律で決まっています。<br>
-    <span class="vi">Nghỉ phép có lương được quy định bởi pháp luật.</span>
+  <p style="font-size: 16px;">
+    有給休暇は日本の法律で決まっています。<strong>会社が勝手に減らすことはできません。</strong><br>
+    <span class="vi">Nghỉ phép có lương được quy định bởi pháp luật Nhật Bản. <strong>Công ty không thể tự ý giảm.</strong></span>
   </p>
+
+  <h3>付与日数 / Số ngày được cấp</h3>
 
   <table>
-    <tr><th>勤続 / Thâm niên</th><th>0.5年</th><th>1.5年</th><th>2.5年</th><th>3.5年</th><th>4.5年</th></tr>
-    <tr><td style="font-weight: bold;">日数 / Số ngày</td><td>10</td><td>11</td><td>12</td><td>14</td><td>16</td></tr>
+    <tr>
+      <th>勤続年数<br><span style="font-weight: normal;">Thâm niên</span></th>
+      <th>6ヶ月<br>6 tháng</th>
+      <th>1年半<br>1,5 năm</th>
+      <th>2年半<br>2,5 năm</th>
+      <th>3年半<br>3,5 năm</th>
+      <th>4年半<br>4,5 năm</th>
+      <th>5年半<br>5,5 năm</th>
+      <th>6年半〜<br>6,5 năm〜</th>
+    </tr>
+    <tr>
+      <td style="font-weight: bold;">日数<br>Số ngày</td>
+      <td><strong>10</strong></td>
+      <td><strong>11</strong></td>
+      <td><strong>12</strong></td>
+      <td><strong>14</strong></td>
+      <td><strong>16</strong></td>
+      <td><strong>18</strong></td>
+      <td><strong>20</strong></td>
+    </tr>
   </table>
 
-  <p>
-    使わなかった有給は翌年に繰り越せます（最大20日）。<br>
-    <span class="vi">Ngày phép chưa dùng được chuyển sang năm sau (tối đa 20 ngày).</span>
-  </p>
-  <p>
-    有効期限は2年間です。<br>
-    <span class="vi">Thời hạn hiệu lực là 2 năm.</span>
-  </p>
+  <div class="compare">
+    <div style="flex:1; background: #eff6ff; border-radius: 10px; padding: 16px; border: 1px solid #bfdbfe;">
+      <p style="font-weight: bold; color: #1d4ed8;">繰越 / Chuyển sang năm sau</p>
+      <p>使わなかった有給は翌年に繰り越せます。<br>最大 <strong>20日</strong>まで。<br>
+      <span class="vi">Phép chưa dùng được chuyển sang năm sau.<br>Tối đa <strong>20 ngày</strong>.</span></p>
+    </div>
+    <div style="flex:1; background: #fef2f2; border-radius: 10px; padding: 16px; border: 1px solid #fecaca;">
+      <p style="font-weight: bold; color: #dc2626;">有効期限 / Thời hạn</p>
+      <p>付与日から <strong>2年間</strong> 有効です。<br>2年を過ぎると消えます。<br>
+      <span class="vi">Có hiệu lực <strong>2 năm</strong> kể từ ngày cấp.<br>Quá 2 năm sẽ mất.</span></p>
+    </div>
+  </div>
+
+  <div class="point">
+    <p class="point-title">⚠ 年5日は必ず取得してください / Nhất định phải nghỉ ít nhất 5 ngày/năm</p>
+    <p>
+      10日以上付与された人は、1年以内に<strong>5日以上</strong>有給を取る義務があります。これは法律で決まっています。<br>
+      <span class="vi">Người được cấp từ 10 ngày trở lên <strong>bắt buộc phải nghỉ ít nhất 5 ngày</strong> trong 1 năm. Đây là quy định của pháp luật.</span>
+    </p>
+  </div>
+</div>
+
+<!-- ===== 7 ===== -->
+<h2>7. よくある質問 / Câu hỏi thường gặp</h2>
+
+<div class="section">
+  <div class="qa">
+    <p class="qa-q">Q: 給与は減りますか？ / Lương có giảm không?</p>
+    <div class="qa-a">
+      <p>いいえ。時給は変わりません。同じ日数・時間働けば、同じ給与です。<br>
+      <span class="vi">Không. Lương giờ không đổi. Nếu làm cùng số ngày/giờ, lương vẫn như cũ.</span></p>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="qa-q">Q: 土曜日に出勤しても残業代がつかないの？ / Làm thứ 7 không có tiền tăng ca?</p>
+    <div class="qa-a">
+      <p>カレンダーで「出勤」と決めた土曜日は通常の給与です。その分、月の所定時間が増えるので基本給が増えます。<br>
+      <span class="vi">Thứ 7 được lập lịch "đi làm" sẽ tính lương bình thường. Vì giờ quy định tháng tăng nên lương cơ bản cũng tăng.</span></p>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="qa-q">Q: 残業はどうなりますか？ / Tăng ca thì sao?</p>
+    <div class="qa-a">
+      <p>月の合計で所定時間（例：168時間）を超えた分が残業になります。残業代は時給 × 1.25 です。<br>
+      <span class="vi">Phần vượt quá giờ quy định tháng (ví dụ: 168 giờ) sẽ tính tăng ca. Tiền tăng ca = Lương giờ × 1.25.</span></p>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="qa-q">Q: スマホの入力を忘れたら？ / Quên nhập trên điện thoại thì sao?</p>
+    <div class="qa-a">
+      <p>過去5日分は修正できます。忘れても後から入力できるので安心してください。<br>
+      <span class="vi">Có thể sửa 5 ngày trước. Quên cũng có thể nhập sau, nên đừng lo.</span></p>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="qa-q">Q: 有給を使いたいときは？ / Khi muốn nghỉ phép?</p>
+    <div class="qa-a">
+      <p>スマホの「ゆうきゅう しんせい」ボタンを押して申請してください。上司が承認すれば有給になります。<br>
+      <span class="vi">Nhấn nút "ゆうきゅう しんせい" trên điện thoại để xin. Quản lý duyệt thì sẽ được nghỉ phép.</span></p>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="qa-q">Q: いつから変わりますか？ / Khi nào bắt đầu thay đổi?</p>
+    <div class="qa-a">
+      <p><strong>2026年5月1日から</strong>です。4月中にカレンダーの署名を行います。<br>
+      <span class="vi"><strong>Từ ngày 1 tháng 5 năm 2026.</strong> Trong tháng 4 sẽ ký xác nhận lịch.</span></p>
+    </div>
+  </div>
 </div>
 
 <!-- ===== まとめ ===== -->
@@ -273,45 +479,49 @@
 
 <div class="section" style="background: #f0fdf4; border-color: #86efac;">
   <div class="emoji">✅</div>
-  <table>
-    <tr><th style="width: 50%;">変わること / Thay đổi</th><th>変わらないこと / Không đổi</th></tr>
-    <tr>
-      <td style="text-align: left;">
-        ・1日の労働時間: 6h40m → <strong>7h</strong><br>
-        <span class="vi">Giờ làm: 6h40 → <strong>7h</strong></span><br><br>
-        ・休憩: 2h20m → <strong>2h</strong><br>
-        <span class="vi">Nghỉ: 2h20 → <strong>2h</strong></span><br><br>
-        ・残業計算が月合計に<br>
-        <span class="vi">Tăng ca tính theo tổng tháng</span><br><br>
-        ・毎日スマホで入力<br>
-        <span class="vi">Nhập hàng ngày bằng ĐT</span>
-      </td>
-      <td style="text-align: left;">
-        ・時給は同じ<br>
-        <span class="vi">Lương giờ không đổi</span><br><br>
-        ・有給休暇は同じ<br>
-        <span class="vi">Nghỉ phép giữ nguyên</span><br><br>
-        ・始業 8:00 / 終業 17:00<br>
-        <span class="vi">Giờ bắt đầu/kết thúc</span><br><br>
-        ・社会保険は同じ<br>
-        <span class="vi">Bảo hiểm xã hội giữ nguyên</span>
-      </td>
-    </tr>
-  </table>
+  <div class="compare">
+    <div style="flex:1; background: white; border-radius: 10px; padding: 16px; border: 2px solid #1B2A4A;">
+      <h4 style="color: #1B2A4A; margin: 0 0 12px; text-align: center;">変わること / Thay đổi</h4>
+      <p>📐 1日の労働時間: 6h40m → <strong>7h</strong><br>
+      <span class="vi">Giờ làm: 6h40 → <strong>7h</strong></span></p>
+      <p>☕ 休憩: 2h20m → <strong>2h</strong><br>
+      <span class="vi">Nghỉ: 2h20 → <strong>2h</strong></span></p>
+      <p>🧮 残業計算が月合計に<br>
+      <span class="vi">Tăng ca tính theo tổng tháng</span></p>
+      <p>📱 毎日スマホで入力<br>
+      <span class="vi">Nhập hàng ngày bằng ĐT</span></p>
+      <p>📋 毎月カレンダーに署名<br>
+      <span class="vi">Ký lịch hàng tháng</span></p>
+    </div>
+    <div style="flex:1; background: white; border-radius: 10px; padding: 16px; border: 2px solid #16a34a;">
+      <h4 style="color: #16a34a; margin: 0 0 12px; text-align: center;">変わらないこと / Không đổi</h4>
+      <p>💰 時給は同じ<br>
+      <span class="vi">Lương giờ không đổi</span></p>
+      <p>🌴 有給休暇は同じ<br>
+      <span class="vi">Nghỉ phép giữ nguyên</span></p>
+      <p>⏰ 始業 8:00 / 終業 17:00<br>
+      <span class="vi">Giờ bắt đầu/kết thúc</span></p>
+      <p>🏥 社会保険は同じ<br>
+      <span class="vi">Bảo hiểm XH giữ nguyên</span></p>
+      <p>🏠 寮・住居は同じ<br>
+      <span class="vi">Ký túc xá giữ nguyên</span></p>
+    </div>
+  </div>
 </div>
 
-<div style="text-align: center; margin-top: 20px; padding: 15px; background: #fef3c7; border-radius: 8px;">
-  <p style="font-size: 16px; font-weight: bold; margin: 0;">
-    質問がありますか？ / Bạn có câu hỏi nào không?
+<div style="text-align: center; margin-top: 30px; padding: 20px; background: #fef3c7; border-radius: 12px; border: 2px solid #fbbf24;">
+  <p style="font-size: 20px; font-weight: bold; margin: 0;">
+    質問がありますか？<br>
+    <span class="vi">Bạn có câu hỏi nào không?</span>
   </p>
-  <p style="font-size: 14px; color: #666; margin: 8px 0 0;">
-    チイさんに通訳してもらいます / Chi sẽ phiên dịch giúp
+  <p style="font-size: 15px; color: #666; margin: 10px 0 0;">
+    チイさんが通訳します / Chi sẽ phiên dịch giúp
   </p>
 </div>
 
-<hr style="margin-top: 30px; border: none; border-top: 1px solid #ddd;">
-<p style="text-align: center; color: #999; font-size: 11px;">
-  HIBI CONSTRUCTION / HFU — 2026年4月19日 説明会資料
+<hr style="margin-top: 40px; border: none; border-top: 1px solid #ddd;">
+<p style="text-align: center; color: #999; font-size: 12px;">
+  HIBI CONSTRUCTION / HFU — 2026年4月19日 給与制度説明会資料
 </p>
 
 </body>
