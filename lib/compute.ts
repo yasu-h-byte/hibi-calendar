@@ -273,6 +273,7 @@ export function calcTobiEquiv(
 
   // 個人
   for (const [k, v] of Object.entries(attD)) {
+    if (!v) continue
     const pk = parseDKey(k)
     if (!ymSet.has(pk.ym)) continue
     if (siteId && pk.sid !== siteId) continue
@@ -371,6 +372,7 @@ export function compute(
 
   // ─── 個人の出面データ処理 ───
   for (const [k, v] of Object.entries(attD)) {
+    if (!v) continue
     const pk = parseDKey(k)
     const sid = pk.sid
     const wid = parseInt(pk.wid)

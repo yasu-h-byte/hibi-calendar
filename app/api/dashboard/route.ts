@@ -179,14 +179,16 @@ async function computeForeignWorkerRates(
       for (let day = 1; day <= dim; day++) {
         let worked = false
         for (const [k, v] of Object.entries(d)) {
+          if (!v) continue
           const parts = k.split('_')
           const wid = parseInt(parts[parts.length - 3])
           const entryYm = parts[parts.length - 2]
           const entryDay = parseInt(parts[parts.length - 1])
           if (wid !== fw.id || entryYm !== ym || entryDay !== day) continue
-          if (v.p) continue
-          if (v.w && v.w > 0) {
-            const isComp = (v.w === 0.6 && fw.visa !== 'none')
+          if ((v as Record<string, unknown>).p) continue
+          const vw = (v as Record<string, unknown>).w as number
+          if (vw && vw > 0) {
+            const isComp = (vw === 0.6 && fw.visa !== 'none')
             if (!isComp) worked = true
           }
         }
@@ -226,14 +228,16 @@ async function computeForeignWorkerRates(
 
       // 出勤カウント
       for (const [k, v] of Object.entries(d)) {
+        if (!v) continue
         const parts = k.split('_')
         const wid = parseInt(parts[parts.length - 3])
         const entryYm = parts[parts.length - 2]
         if (wid !== fw.id || entryYm !== ym) continue
-        if (v.p) continue
-        if (v.w && v.w > 0) {
-          const isComp = (v.w === 0.6 && fw.visa !== 'none')
-          if (!isComp) worked += v.w
+        if ((v as Record<string, unknown>).p) continue
+        const vw = (v as Record<string, unknown>).w as number
+        if (vw && vw > 0) {
+          const isComp = (vw === 0.6 && fw.visa !== 'none')
+          if (!isComp) worked += vw
         }
       }
 
