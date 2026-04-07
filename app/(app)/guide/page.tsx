@@ -290,7 +290,8 @@ export default function GuidePage() {
       <Section title="有給休暇の管理" icon="&#127796;">
         <div className="mt-3 space-y-4">
           <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
-            <p>有給休暇は法定通り自動付与され、申請→承認のワークフローで消化を管理します。</p>
+            <p>有給休暇は通知ベースで付与（管理者がワンクリックで確認・実行）し、申請→承認のワークフローで消化を管理します。
+            常に最新の有給レコードが表示され、年度セレクタはありません。月別消化テーブルで取得状況を一覧できます。</p>
           </div>
 
           {/* 法定付与日数 */}
@@ -309,11 +310,12 @@ export default function GuidePage() {
             <p className="text-xs font-bold text-gray-500">有給の運用フロー</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-                <p className="font-bold text-blue-700 dark:text-blue-400 text-xs mb-1">自動付与</p>
+                <p className="font-bold text-blue-700 dark:text-blue-400 text-xs mb-1">付与（通知ベース）</p>
                 <ul className="list-disc ml-4 text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
-                  <li>入社日から6ヶ月後に初回付与</li>
-                  <li>以降は毎年自動で法定日数を付与</li>
-                  <li>前年の残日数を自動繰越（上限20日）</li>
+                  <li>入社日から6ヶ月後に初回付与、以降毎年</li>
+                  <li>付与時期が来ると通知ベルにアラート表示</li>
+                  <li>通知からワンクリックで付与を実行（手動確認）</li>
+                  <li>前年の残日数を繰越（上限20日、出面Pデータ含む）</li>
                   <li>有効期限は付与日から2年間</li>
                 </ul>
               </div>
@@ -350,7 +352,7 @@ export default function GuidePage() {
             },
             {
               num: '2', title: '出面入力', color: 'green',
-              items: ['現場ごとのグリッド入力（日比建設/HFU/外注）', '出勤・半日・補償・有給・残業の記録', '配置編集（スタッフの現場割り当て）'],
+              items: ['現場ごとのグリッド入力（日比建設/HFU/外注）', '出勤・半日・補償・有給・残業の記録', '日付ヘッダー固定（スクロール時も表示）', '「終了現場を表示」チェックボックス', '配置編集（スタッフの現場割り当て）'],
             },
             {
               num: '3', title: '月次集計', color: 'purple',
@@ -362,7 +364,7 @@ export default function GuidePage() {
             },
             {
               num: '5', title: '有給・休み管理', color: 'green',
-              items: ['付与日数・繰越・消化の一覧', '年5日取得義務アラート', 'PLカレンダー（誰がいつ取得したか）', '有給申請の承認/却下'],
+              items: ['付与日数・繰越・消化の一覧（常に最新レコードを表示）', '年5日取得義務アラート', '月別消化テーブル', '通知ベルからワンクリック付与', '有給申請の承認/却下'],
             },
             {
               num: '6', title: '原価・収益管理', color: 'purple',

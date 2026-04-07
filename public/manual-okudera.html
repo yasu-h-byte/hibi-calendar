@@ -175,14 +175,19 @@
 <strong>保存は自動です。</strong>セルに入力するだけで自動保存されます。保存ボタンを押す必要はありません。
 </div>
 
+<div class="box box-ok">
+<strong>日付ヘッダーが固定表示になりました。</strong>スクロールしても日付行が画面上部に固定されるため、どの日付のセルかを見失いません。
+</div>
+
 <h3>操作手順</h3>
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text">右上の<strong>現場セレクタ</strong>で現場を選ぶ</div>
+  <div class="step-text">右上の<strong>現場セレクタ</strong>で現場を選ぶ<br>
+  <span style="color:#888; font-size:13px;">※ 終了した現場は「終了現場を表示」チェックボックスをONにすると表示されます</span></div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">右上の<strong>年月セレクタ</strong>で月を選ぶ</div>
+  <div class="step-text">右上の<strong>年月セレクタ</strong>で月を選ぶ（過去26ヶ月分まで選択可能）</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
@@ -314,12 +319,17 @@
 <!-- ================================================ -->
 <h2 id="sec7">7. 有給管理（通常運用）</h2>
 
+<div class="box">
+<strong>画面の特徴：</strong>年度セレクタはありません。各スタッフの<strong>最新の有給レコード</strong>が常に表示されます。
+画面下部に<strong>月別消化テーブル</strong>があり、月ごとの有給取得状況を一覧できます。
+</div>
+
 <h3>7-1. 有給管理画面の見方</h3>
 
 <table>
 <tr><th>列</th><th>意味</th></tr>
 <tr><td>付与日数</td><td>今回付与された有給日数（法定に基づく）</td></tr>
-<tr><td>繰越</td><td>前回の付与期間から持ち越した日数（上限20日）</td></tr>
+<tr><td>繰越</td><td>前回の付与期間から持ち越した日数（上限20日、出面Pデータ含む）</td></tr>
 <tr><td>合計</td><td>付与 + 繰越 = 使える総日数</td></tr>
 <tr><td>調整</td><td>旧データから移行した消化済み日数（初回のみ手入力）</td></tr>
 <tr><td>消化</td><td>出面データから自動集計された消化日数</td></tr>
@@ -327,7 +337,28 @@
 <tr><td>有効期限</td><td>付与日から2年間。期限切れは赤で表示</td></tr>
 </table>
 
-<h3>7-2. 有給申請の承認</h3>
+<h3>7-2. 有給の付与（通知ベース）</h3>
+
+<p>有給の付与時期が来ると、ヘッダーの<strong>通知ベル</strong>にアラートが表示されます。</p>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">ヘッダー右上の<strong>ベルアイコン</strong>を確認（バッジが表示されている場合は未処理の通知あり）</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">通知を開くと「有給付与」のアラートが表示される</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text"><strong>「付与する」</strong>ボタンをワンクリックで付与を実行</div>
+</div>
+
+<div class="box box-warn">
+<strong>自動付与は廃止されました。</strong>付与は必ず通知からの手動確認で行います。これにより、付与内容を事前に確認してから実行できます。
+</div>
+
+<h3>7-3. 有給申請の承認</h3>
 
 <div class="step">
   <div class="step-num">1</div>
@@ -350,7 +381,7 @@
 <strong>残日数が0のスタッフは申請できません。</strong>スマホ画面で「ゆうきゅう の こり 0 にち です」と表示されます。
 </div>
 
-<h3>7-3. 有給管理台帳の出力</h3>
+<h3>7-4. 有給管理台帳の出力</h3>
 
 <p>帳票出力画面から「有給管理台帳」をダウンロードできます（Excel形式）。</p>
 <p>監査対応用に、シート1「管理簿」とシート2「取得日一覧」が含まれます。</p>
