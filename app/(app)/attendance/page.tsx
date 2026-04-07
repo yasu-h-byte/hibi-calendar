@@ -886,17 +886,17 @@ export default function AttendanceGridPage() {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 120}px` }}>
-              <thead>
+              <thead className="sticky top-0 z-30">
                 {/* Day number row */}
                 <tr className="border-b border-gray-200">
                   <th
-                    className="sticky left-0 z-20 bg-[#1B2A4A] text-white px-2 py-1.5 text-left font-medium whitespace-nowrap"
+                    className="sticky left-0 z-40 bg-[#1B2A4A] text-white px-2 py-1.5 text-left font-medium whitespace-nowrap"
                     style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                   >
                     名前
                   </th>
                   <th
-                    className="sticky left-[150px] z-20 bg-[#1B2A4A] text-white px-1 py-1.5 text-center font-medium"
+                    className="sticky left-[150px] z-40 bg-[#1B2A4A] text-white px-1 py-1.5 text-center font-medium"
                     style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                   >
                     所属
