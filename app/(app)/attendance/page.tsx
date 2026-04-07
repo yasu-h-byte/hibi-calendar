@@ -884,7 +884,7 @@ export default function AttendanceGridPage() {
       {/* ── Grid Table ── */}
       {!loading && data && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
             <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 120}px` }}>
               <thead className="sticky top-0 z-30">
                 {/* Day number row */}
