@@ -1082,18 +1082,18 @@ export default function AttendanceGridPage() {
                           })}
 
                           {/* Totals */}
-                          <td className="px-1 py-0.5 text-center font-bold text-hibi-navy tabular-nums border-l-2 border-gray-300 bg-gray-50">
-                            <div>{totals.wSum > 0 ? totals.wSum : '-'}</div>
+                          <td className="px-1 py-0.5 text-center font-bold text-hibi-navy tabular-nums border-l-2 border-gray-300 bg-gray-50 text-[11px] whitespace-nowrap" style={{ minWidth: 52 }}>
+                            {totals.wSum > 0 ? totals.wSum : '-'}
                             {(totals.compSum > 0 || totals.plSum > 0) && (
-                              <div className="text-[9px] font-normal text-gray-500 leading-tight">
+                              <span className="text-[9px] font-normal text-gray-400 ml-0.5">
                                 {[
-                                  totals.compSum > 0 ? `補${totals.compSum % 1 === 0 ? totals.compSum : totals.compSum.toFixed(1)}` : '',
+                                  totals.compSum > 0 ? `補${Math.round(totals.compSum * 10) / 10}` : '',
                                   totals.plSum > 0 ? `有${totals.plSum}` : '',
                                 ].filter(Boolean).join(' ')}
-                              </div>
+                              </span>
                             )}
                           </td>
-                          <td className="px-1 py-0.5 text-center font-bold text-amber-700 tabular-nums border-l border-gray-200 bg-gray-50">
+                          <td className="px-1 py-0.5 text-center font-bold text-amber-700 tabular-nums border-l border-gray-200 bg-gray-50 text-[11px]" style={{ minWidth: 52 }}>
                             {totals.oSum > 0 ? totals.oSum : '-'}
                           </td>
                         </tr>
@@ -1219,7 +1219,7 @@ export default function AttendanceGridPage() {
                       className="bg-[#1B2A4A] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
                       style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                     >
-                      {footerSums.tobi[d.day] > 0 ? footerSums.tobi[d.day] : '-'}
+                      {footerSums.tobi[d.day] > 0 ? Math.round(footerSums.tobi[d.day] * 10) / 10 : '-'}
                     </td>
                   ))}
                   <td className="bg-[#1B2A4A] text-white px-1 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-[11px]" style={{ minWidth: 52 }}>
@@ -1245,7 +1245,7 @@ export default function AttendanceGridPage() {
                       className="bg-[#243656] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
                       style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                     >
-                      {footerSums.doko[d.day] > 0 ? footerSums.doko[d.day] : '-'}
+                      {footerSums.doko[d.day] > 0 ? Math.round(footerSums.doko[d.day] * 10) / 10 : '-'}
                     </td>
                   ))}
                   <td className="bg-[#243656] text-white px-1 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-[11px]" style={{ minWidth: 52 }}>
@@ -1271,7 +1271,7 @@ export default function AttendanceGridPage() {
                       className="bg-[#0F1D36] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
                       style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                     >
-                      {footerSums.grand[d.day] > 0 ? footerSums.grand[d.day] : '-'}
+                      {footerSums.grand[d.day] > 0 ? Math.round(footerSums.grand[d.day] * 10) / 10 : '-'}
                     </td>
                   ))}
                   <td className="bg-[#0F1D36] text-amber-300 px-1 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-[11px]" style={{ minWidth: 52 }}>
