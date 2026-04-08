@@ -693,6 +693,7 @@ export function computeMonthly(
   attSD: Record<string, { n: number; on: number }>,
   ym: string,
   prescribedDays: number = 0,
+  siteWorkDaysMap?: Record<string, number>,  // siteId -> workDays (from calendar)
 ): {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
@@ -811,9 +812,19 @@ export function computeMonthly(
     wm.otCost = wm.otHours * (wm.rate / otDiv2) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
 
-    if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && prescribedDays > 0) {
+    // スタッフごとの所定日数: カレンダー(siteWorkDaysMap)があればそちらを優先
+    let workerPrescribedDays = prescribedDays
+    if (siteWorkDaysMap && wm.sites.length > 0) {
+      // スタッフが配置されている現場の所定日数の最大値を採用
+      const siteDays = wm.sites.map(sid => siteWorkDaysMap[sid] || 0).filter(d => d > 0)
+      if (siteDays.length > 0) {
+        workerPrescribedDays = Math.max(...siteDays)
+      }
+    }
+
+    if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0) {
       // 月給制の外国人（時給ベース）: variable working hours system
-      const prescribedH = prescribedDays * 7
+      const prescribedH = workerPrescribedDays * 7
       const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
       const legalOt = Math.max(0, actualWorkH - prescribedH)
       const basePay = Math.round(wm.hourlyRate * prescribedH)
@@ -835,16 +846,16 @@ export function computeMonthly(
       wm.absence = absentDays
       wm.absentCost = absentDeduction
       wm.netPay = salaryNet
-    } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && prescribedDays > 0) {
+    } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && workerPrescribedDays > 0) {
       // 月給制の外国人（旧salary方式、hourlyRate未設定）: salary-based calculation
-      const prescribedH = prescribedDays * 7
+      const prescribedH = workerPrescribedDays * 7
       const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
       const legalOt = Math.max(0, actualWorkH - prescribedH)
       const hourlyRate = wm.salary / prescribedH
       const basePay = wm.salary
       const otAllowance = Math.round(hourlyRate * 1.25 * legalOt)
-      const absentDays = Math.max(0, prescribedDays - wm.actualWorkDays - wm.plUsed)
-      const absentDeduction = Math.round(wm.salary / prescribedDays * absentDays)
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed)
+      const absentDeduction = Math.round(wm.salary / workerPrescribedDays * absentDays)
       const salaryNet = basePay - absentDeduction + otAllowance
 
       wm.prescribedHours = prescribedH
@@ -872,8 +883,8 @@ export function computeMonthly(
       wm.otAllowance = otPay
       wm.salaryNetPay = basePay + otPay
       wm.netPay = wm.totalCost
-    } else if (prescribedDays > 0) {
-      wm.absence = Math.max(0, prescribedDays - wm.workDays - wm.compDays - wm.plUsed)  // 0.6は1日出勤扱い
+    } else if (workerPrescribedDays > 0) {
+      wm.absence = Math.max(0, workerPrescribedDays - wm.workDays - wm.compDays - wm.plUsed)  // 0.6は1日出勤扱い
       wm.absentCost = Math.round(wm.absence * wm.rate)
       wm.netPay = wm.totalCost - wm.absentCost
     } else {

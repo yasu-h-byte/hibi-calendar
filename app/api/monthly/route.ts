@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
     const main = await getMainData()
     const att = await getAttData(ym)
     const prescribedDays = main.workDays[ym] || 0
-    const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays)
+    // カレンダーから現場別所定日数を取得（5月以降は手入力不要）
+    const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}
+    const hasCalendarData = Object.keys(siteWorkDaysMap).length > 0
+    const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined)
 
     const locked = !!(main.locks[ym])
     const workDays = prescribedDays
@@ -40,6 +43,8 @@ export async function GET(request: NextRequest) {
       workDays,
       prescribedDays,
       siteNames,
+      hasCalendarData,
+      siteWorkDays: siteWorkDaysMap,
     })
   } catch (error) {
     console.error('Monthly API error:', error)

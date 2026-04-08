@@ -63,6 +63,8 @@ interface MonthlyData {
   locked: boolean
   workDays: number
   prescribedDays?: number
+  hasCalendarData?: boolean
+  siteWorkDays?: Record<string, number>
   siteNames?: Record<string, string>
   totals: {
     workDays: number
@@ -485,8 +487,13 @@ export default function MonthlyPage() {
           </button>
         ))}
 
-        {/* 所定日数 input */}
-        {isWorkerTab && (
+        {/* 所定日数: カレンダーデータがある月は自動取得、ない月は手入力 */}
+        {isWorkerTab && data?.hasCalendarData && (
+          <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600">
+            <span className="text-xs text-green-600 dark:text-green-400 font-medium whitespace-nowrap">📅 所定日数: カレンダーから自動取得</span>
+          </div>
+        )}
+        {isWorkerTab && !data?.hasCalendarData && (
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600">
             <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">所定日数:</label>
             <input
