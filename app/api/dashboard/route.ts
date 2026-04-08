@@ -353,42 +353,38 @@ export async function GET(request: NextRequest) {
     const allAttSD = { ...mergedAtt.sd, ...lookbackAtt.sd }
 
     // ═══ Billing totals per site across all months (with estimation) ═══
-    // 旧アプリと同じロジック: サイト別avgRev → 全社avgRev → tobiBase の順でフォールバック
+    // 現場ごとに「実売上があればそちら、なければ概算」で計算
+    // → 売上データが入力されるたびに概算から実数字に置き換わり、精度が上がる
     const siteBillingMap = new Map<string, number>()
     let totalBilling = 0
     let totalBillingConfirmed = 0
     let estMonths = 0
     const estMonthSet = new Set<string>()
     for (const ymStr of ymStrList) {
-      // Check if ANY site has billing for this month
-      let monthHasBilling = false
-      for (const site of filteredSites) {
-        if (getBillTotal(main, site.id, ymStr) > 0) {
-          monthHasBilling = true
-          break
-        }
-      }
       for (const site of filteredSites) {
         if (siteFilter !== 'all' && site.id !== siteFilter) continue
         const actualBill = getBillTotal(main, site.id, ymStr)
         if (actualBill > 0) {
+          // 実売上データあり → そのまま使用
           siteBillingMap.set(site.id, (siteBillingMap.get(site.id) || 0) + actualBill)
           totalBilling += actualBill
           totalBillingConfirmed += actualBill
-        } else if (!monthHasBilling) {
-          // No billing for ANY site this month → estimate per site (旧アプリ同様)
+        } else {
+          // 実売上なし → 鳶換算人工 × 平均単価で概算
           const mY = parseInt(ymStr.slice(0, 4))
           const mM = parseInt(ymStr.slice(4, 6))
           const te = calcTobiEquiv(main, mergedAtt.d, mergedAtt.sd, [{ y: mY, m: mM }], site.id)
-          // Try site-specific avg first, then company-wide, then tobiBase
-          const avgSite = getAvgRevenuePerEquiv(main, allAttD, allAttSD, ymStr, site.id)
-          const avgAll = avgSite === null ? getAvgRevenuePerEquiv(main, allAttD, allAttSD, ymStr) : null
-          const rates = getSiteRates(main, site.id, ymStr)
-          const unitPrice = avgSite || avgAll || rates.tobiBase
-          const estimated = Math.round(te.equiv * unitPrice)
-          siteBillingMap.set(site.id, (siteBillingMap.get(site.id) || 0) + estimated)
-          totalBilling += estimated
-          estMonthSet.add(ymStr)
+          if (te.equiv > 0) {
+            // 出面データがある場合のみ概算（出面もなければ0）
+            const avgSite = getAvgRevenuePerEquiv(main, allAttD, allAttSD, ymStr, site.id)
+            const avgAll = avgSite === null ? getAvgRevenuePerEquiv(main, allAttD, allAttSD, ymStr) : null
+            const rates = getSiteRates(main, site.id, ymStr)
+            const unitPrice = avgSite || avgAll || rates.tobiBase
+            const estimated = Math.round(te.equiv * unitPrice)
+            siteBillingMap.set(site.id, (siteBillingMap.get(site.id) || 0) + estimated)
+            totalBilling += estimated
+            estMonthSet.add(ymStr)
+          }
         }
       }
     }
