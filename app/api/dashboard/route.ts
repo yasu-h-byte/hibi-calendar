@@ -130,7 +130,7 @@ function computeTodayStatus(
   return { siteStatus, absentWorkers }
 }
 
-/** Foreign worker attendance rates - 常に過去6ヶ月分を参照、平均を下回る人のみ返す */
+/** Foreign worker attendance rates - 進行月を除外し過去6ヶ月分を参照、平均を下回る人のみ返す */
 async function computeForeignWorkerRates(
   main: MainData,
   baseYm: string, // YYYYMM
@@ -140,10 +140,13 @@ async function computeForeignWorkerRates(
     !w.retired && w.visa && w.visa !== 'none' && w.visa !== ''
   )
 
-  // 常に過去6ヶ月分のデータを使用
+  // 進行月を除外し、過去6ヶ月分（確定済みの月のみ）を使用
   const sixMonthList: string[] = []
   let ty = parseInt(baseYm.slice(0, 4))
   let tm = parseInt(baseYm.slice(4, 6))
+  // 進行月をスキップして前月から開始
+  tm--
+  if (tm < 1) { tm = 12; ty-- }
   for (let i = 0; i < 6; i++) {
     sixMonthList.push(ymKey(ty, tm))
     tm--
