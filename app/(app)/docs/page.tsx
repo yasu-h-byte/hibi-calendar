@@ -16,6 +16,7 @@ export default function DocsPage() {
         { title: '政仁さん向けマニュアル', desc: '出面入力・承認・就業カレンダー', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-08' },
         { title: '職長向けマニュアル', desc: 'カレンダー作成・提出・出面確認', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-08' },
         { title: '有給データ移行手順', desc: '旧スプレッドシートからの有給データ移行', url: '/manual-yukyu.html', icon: '📙', updated: '2026-04-08' },
+        { title: 'QRコードカード（印刷用）', desc: '全スタッフの出勤入力用QRコード。印刷して配布', url: '/qr-cards.html', icon: '📱', updated: '2026-04-08' },
       ],
     },
     {

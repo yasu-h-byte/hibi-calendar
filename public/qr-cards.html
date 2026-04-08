@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出勤入力用QRコード - HIBI CONSTRUCTION</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+  @page { size: A4; margin: 10mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 10px; background: #f5f5f5; }
+  h1 { text-align: center; font-size: 18px; color: #1B2A4A; margin: 10px 0; }
+  .subtitle { text-align: center; font-size: 12px; color: #999; margin-bottom: 15px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 800px; margin: 0 auto; }
+  .card { background: white; border: 2px solid #1B2A4A; border-radius: 12px; padding: 16px; text-align: center; break-inside: avoid; }
+  .card-org { font-size: 10px; font-weight: bold; color: white; display: inline-block; padding: 2px 8px; border-radius: 10px; margin-bottom: 8px; }
+  .org-hibi { background: #3b82f6; }
+  .org-hfu { background: #8b5cf6; }
+  .card-name { font-size: 16px; font-weight: bold; color: #1B2A4A; margin: 6px 0 2px; }
+  .card-visa { font-size: 10px; color: #888; margin-bottom: 10px; }
+  .qr-container { display: flex; justify-content: center; margin: 8px 0; }
+  .card-url { font-size: 8px; color: #aaa; word-break: break-all; margin-top: 8px; }
+  .card-instruction { font-size: 10px; color: #666; margin-top: 6px; line-height: 1.4; }
+  .card-instruction .vi { color: #2563EB; }
+  .no-print { text-align: center; margin: 20px 0; }
+  .no-print button { background: #1B2A4A; color: white; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+  .no-print button:hover { background: #2d4a7a; }
+  .back-link { text-align: center; margin: 10px 0; }
+  .back-link a { color: #1B2A4A; text-decoration: none; font-size: 13px; }
+  @media print {
+    body { background: white; padding: 0; }
+    .no-print { display: none; }
+    .back-link { display: none; }
+    .grid { gap: 8px; }
+    .card { border-width: 1.5px; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="back-link"><a href="/docs">&larr; システムに戻る</a></div>
+
+<h1>出勤入力用QRコード</h1>
+<p class="subtitle">スマホのカメラで読み取ると、出勤入力画面が開きます<br>Quét mã QR bằng camera điện thoại để mở trang nhập chấm công</p>
+
+<div class="no-print">
+  <button onclick="window.print()">🖨 印刷する</button>
+</div>
+
+<div class="grid" id="cards"></div>
+
+<script>
+const BASE_URL = 'https://hibi-calendar.vercel.app/attendance/';
+const VISA_LABELS = {
+  'tokutei1': '特定1号', 'tokutei2': '特定2号', 'tokutei': '特定技能',
+  'jisshu1': '実習1号', 'jisshu2': '実習2号', 'jisshu3': '実習3号', 'jisshu': '技能実習',
+};
+
+const workers = [
+  // HFU
+  { id: 201, name: 'ラン ヴァン グエン', token: 'zbrvi5ba', org: 'HFU', visa: 'jisshu3' },
+  { id: 202, name: 'ラン コン ラップ', token: 'xp712c43', org: 'HFU', visa: 'jisshu3' },
+  { id: 203, name: 'ファン スアン ハウ', token: 'kyl6y96w', org: 'HFU', visa: 'jisshu3' },
+  { id: 204, name: 'ルオン バオ クオック', token: 'jnvrvbue', org: 'HFU', visa: 'jisshu2' },
+  { id: 205, name: 'ホー チョン ゴック', token: 'gfz8h73j', org: 'HFU', visa: 'jisshu2' },
+  { id: 206, name: 'グエン ミン サン', token: '3luxikkx', org: 'HFU', visa: 'jisshu2' },
+  // 日比建設
+  { id: 101, name: 'グエン タイン フウ', token: 'jp4rx6y7', org: '日比', visa: 'tokutei2' },
+  { id: 102, name: 'グエン ミン トゥアン', token: 'abosk3bz', org: '日比', visa: 'tokutei2' },
+  { id: 103, name: 'ファン ヴァン ファン', token: '9qo8idem', org: '日比', visa: 'tokutei1' },
+  { id: 104, name: 'ズオン ヴァン フン', token: '5xkvnblh', org: '日比', visa: 'tokutei1' },
+  { id: 105, name: 'グエン ドゥック アイン', token: 'bqv312ie', org: '日比', visa: 'tokutei1' },
+  { id: 106, name: 'グエン ヴァン タン', token: 'oxoam4uw', org: '日比', visa: 'tokutei1' },
+  { id: 107, name: 'モン ヴァン ケン', token: 'hfxq6cxr', org: '日比', visa: 'jisshu3' },
+  { id: 109, name: 'ヴゥ ドゥック リン', token: 'yd5hjlmm', org: '日比', visa: 'tokutei1' },
+  { id: 110, name: 'グエン スアン ビン', token: 'hlfr616r', org: '日比', visa: 'tokutei1' },
+];
+
+const container = document.getElementById('cards');
+
+workers.forEach(w => {
+  const url = BASE_URL + w.token;
+
+  // Generate QR code
+  const qr = qrcode(0, 'M');
+  qr.addData(url);
+  qr.make();
+  const qrImg = qr.createImgTag(4, 0);
+
+  const visaLabel = VISA_LABELS[w.visa] || w.visa;
+  const orgClass = w.org === 'HFU' ? 'org-hfu' : 'org-hibi';
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <span class="card-org ${orgClass}">${w.org === 'HFU' ? 'HFU' : '日比建設'}</span>
+    <div class="card-name">${w.name}</div>
+    <div class="card-visa">${visaLabel}</div>
+    <div class="qr-container">${qrImg}</div>
+    <div class="card-instruction">
+      カメラで読み取ってください<br>
+      <span class="vi">Quét bằng camera điện thoại</span>
+    </div>
+  `;
+  container.appendChild(card);
+});
+</script>
+
+<div class="no-print" style="margin-top: 20px;">
+  <p style="text-align: center; color: #999; font-size: 12px;">
+    HIBI CONSTRUCTION — QRコードカード<br>
+    印刷してハサミで切り、各スタッフに配布してください
+  </p>
+</div>
+
+</body>
+</html>
