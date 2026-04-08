@@ -463,7 +463,7 @@ export async function GET(request: NextRequest) {
       const prevAtt = cachedPrev || await getAttData(prevYm)
 
       // 前月同日比: 前月の1日〜当日の日付までの出面データのみ集計
-      const sameDayLimit = today // 当月の日付（例: 8日なら8）
+      const sameDayLimit = new Date().getDate() // 当月の日付（例: 8日なら8）
       const filteredPrevD: Record<string, AttendanceEntry> = {}
       const filteredPrevSD: Record<string, { n: number; on: number }> = {}
       for (const [k, v] of Object.entries(prevAtt.d)) {
