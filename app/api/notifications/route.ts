@@ -12,6 +12,7 @@ interface Notification {
   message: string
   type: 'warning' | 'error' | 'info'
   count?: number
+  messengerText?: string
   action?: {
     type: string
     workerId: number
@@ -68,12 +69,24 @@ export async function GET(request: NextRequest) {
       }
 
       if (unsignedCount > 0) {
+        // 未署名のスタッフ名を取得
+        const unsignedNames: string[] = []
+        for (const id of expectedSignIds) {
+          if (!existingSignIds.has(id)) {
+            const wid = parseInt(id.split('_')[0])
+            const w = activeWorkers.find(x => x.id === wid)
+            if (w && !unsignedNames.includes(w.name)) unsignedNames.push(w.name)
+          }
+        }
+        const ymLabel = `${currentYm.slice(0, 4)}年${parseInt(currentYm.slice(4, 6))}月`
+        const calUrl = 'https://hibi-calendar.vercel.app/calendar/public'
         notifications.push({
           id: 'unsigned-calendar',
           icon: '\uD83D\uDCC5',
           message: `就業カレンダー未署名: ${unsignedCount}件の署名が未完了です`,
           type: 'warning',
           count: unsignedCount,
+          messengerText: `📋 ${ymLabel}の就業カレンダーが確定しました。\n以下のリンクから確認して署名してください。\n${calUrl}\n\nĐã xác nhận lịch làm việc tháng ${parseInt(currentYm.slice(4, 6))}. Vui lòng xác nhận và ký tại link trên.\n\n未署名 / Chưa ký: ${unsignedNames.join(', ')}`,
         })
       }
     } catch (e) {
@@ -166,12 +179,14 @@ export async function GET(request: NextRequest) {
       )
 
       if (noEntryWorkers.length > 0) {
+        const noEntryNames = noEntryWorkers.map(w => w.name)
         notifications.push({
           id: 'no-attendance',
           icon: '\u274C',
           message: `出面未入力: 本日${noEntryWorkers.length}名の出面が未入力です`,
           type: 'error',
           count: noEntryWorkers.length,
+          messengerText: `⚠️ 本日の出面がまだ入力されていません。\nスマホから入力をお願いします。\n\nHôm nay chưa nhập chấm công. Vui lòng nhập trên điện thoại.\n\n未入力 / Chưa nhập: ${noEntryNames.join(', ')}`,
         })
       }
     } catch (e) {

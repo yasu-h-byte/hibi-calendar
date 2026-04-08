@@ -13,6 +13,7 @@ interface NotificationAction {
 
 interface Notification {
   id: string
+  messengerText?: string
   icon: string
   message: string
   type: 'warning' | 'error' | 'info'
@@ -25,6 +26,7 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [acting, setActing] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
   const getPassword = () => {
@@ -165,15 +167,33 @@ export default function NotificationBell() {
                       )}
                     </div>
                   </div>
-                  {n.action && (
-                    <button
-                      onClick={() => handleAction(n)}
-                      disabled={acting === n.id}
-                      className="mt-2 w-full text-center text-xs font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg py-1.5 transition"
-                    >
-                      {acting === n.id ? '処理中...' : `✓ ${n.action.label}`}
-                    </button>
-                  )}
+                  <div className="mt-2 flex gap-2">
+                    {n.action && (
+                      <button
+                        onClick={() => handleAction(n)}
+                        disabled={acting === n.id}
+                        className="flex-1 text-center text-xs font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg py-1.5 transition"
+                      >
+                        {acting === n.id ? '処理中...' : `✓ ${n.action.label}`}
+                      </button>
+                    )}
+                    {n.messengerText && (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(n.messengerText!)
+                          setCopiedId(n.id)
+                          setTimeout(() => setCopiedId(null), 2000)
+                        }}
+                        className={`${n.action ? '' : 'flex-1'} text-center text-xs font-bold rounded-lg py-1.5 transition ${
+                          copiedId === n.id
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                        }`}
+                      >
+                        {copiedId === n.id ? '✓ コピー済み' : '📋 Messenger用コピー'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))
             )}
