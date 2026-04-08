@@ -775,32 +775,43 @@ export default function DashboardPage() {
           {data.dailyAttendance && data.dailyAttendance.length > 0 && (
             <Section title="日別稼働人数">
               <div className="overflow-x-auto">
-                <div className="flex items-end gap-0.5" style={{ minWidth: `${data.dailyAttendance.length * 24}px`, height: '180px' }}>
+                {/* Bar chart */}
+                <div className="flex items-end gap-0.5" style={{ minWidth: `${data.dailyAttendance.length * 24}px`, height: '150px' }}>
                   {data.dailyAttendance.map((da) => {
-                    const totalCount = da.sites.reduce((s, st) => s + st.count, 0)
                     const maxDaily = Math.max(
                       ...data.dailyAttendance.map(d => d.sites.reduce((s, st) => s + st.count, 0)),
                       1
                     )
                     return (
-                      <div key={da.day} className="flex flex-col items-center" style={{ width: '22px' }}>
-                        <div className="flex-1 flex flex-col justify-end w-full" style={{ height: '150px' }}>
-                          {da.sites.map((st) => {
-                            const segPct = maxDaily > 0 ? (st.count / maxDaily) * 150 : 0
-                            return (
-                              <div
-                                key={st.siteId}
-                                className={`w-full ${siteColor(data.siteList.findIndex(s => s.id === st.siteId))}`}
-                                style={{ height: `${segPct}px` }}
-                                title={`${st.siteName}: ${st.count}名`}
-                              />
-                            )
-                          })}
-                        </div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">{da.day}</div>
-                        {totalCount > 0 && (
-                          <div className="text-[9px] text-gray-400">{totalCount}</div>
-                        )}
+                      <div key={da.day} className="flex flex-col justify-end" style={{ width: '22px', height: '150px' }}>
+                        {da.sites.map((st) => {
+                          const segPct = maxDaily > 0 ? (st.count / maxDaily) * 140 : 0
+                          return (
+                            <div
+                              key={st.siteId}
+                              className={`w-full ${siteColor(data.siteList.findIndex(s => s.id === st.siteId))}`}
+                              style={{ height: `${segPct}px` }}
+                              title={`${st.siteName}: ${st.count}名`}
+                            />
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+                {/* Day labels */}
+                <div className="flex gap-0.5" style={{ minWidth: `${data.dailyAttendance.length * 24}px` }}>
+                  {data.dailyAttendance.map((da) => (
+                    <div key={da.day} className="text-[10px] text-gray-500 text-center" style={{ width: '22px' }}>{da.day}</div>
+                  ))}
+                </div>
+                {/* Count labels */}
+                <div className="flex gap-0.5" style={{ minWidth: `${data.dailyAttendance.length * 24}px` }}>
+                  {data.dailyAttendance.map((da) => {
+                    const totalCount = da.sites.reduce((s, st) => s + st.count, 0)
+                    return (
+                      <div key={da.day} className="text-[9px] text-gray-400 text-center" style={{ width: '22px' }}>
+                        {totalCount > 0 ? totalCount : ''}
                       </div>
                     )
                   })}
