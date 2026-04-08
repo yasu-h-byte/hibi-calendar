@@ -199,13 +199,13 @@ async function computeForeignWorkerRates(
       }
     }
 
-    // 連続無出勤30日以上の期間を検出
+    // 連続無出勤14日以上の期間を検出（一時帰国等）
     const excludedDates = new Set<string>()
     let streakStart = 0
     for (let i = 0; i <= dailyWork.length; i++) {
       if (i === dailyWork.length || dailyWork[i].worked) {
         const streakLen = i - streakStart
-        if (streakLen >= 30) {
+        if (streakLen >= 14) {
           for (let j = streakStart; j < i; j++) {
             excludedDates.add(dailyWork[j].date)
           }
