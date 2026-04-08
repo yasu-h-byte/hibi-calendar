@@ -174,6 +174,7 @@ export default function AttendanceGridPage() {
   const [error, setError] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [allSites, setAllSites] = useState<{ id: string; name: string; archived?: boolean }[]>([])
+  const [localApprovals, setLocalApprovals] = useState<Record<number, boolean>>({})
 
   // Save status: null | 'saving' | 'saved'
   const [saveStatus, setSaveStatus] = useState<null | 'saving' | 'saved'>(null)
@@ -229,6 +230,7 @@ export default function AttendanceGridPage() {
       setData(json)
       setWorkerEntries(json.workerEntries)
       setSubconEntries(json.subconEntries)
+      setLocalApprovals(json.approvals || {})
       // Use siteWorkDays (from approved calendar) if workDays is not manually set
       const effectiveWorkDays = json.workDays ?? json.siteWorkDays
       setWorkDaysInput(effectiveWorkDays != null ? String(effectiveWorkDays) : '')
@@ -950,38 +952,61 @@ export default function AttendanceGridPage() {
                   </tr>
                 )}
 
-                {/* ── Approval row (red/orange) — admin/approver can click to approve ── */}
+                {/* ── Approval row — admin/approver can click to approve (optimistic UI) ── */}
                 <tr className="bg-orange-50 border-b border-orange-200">
                   <td
                     className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px]"
                     style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                   >
                     承認
+                    {(userRole === 'admin' || userRole === 'approver') && (() => {
+                      const unapprovedDays = days.filter(d => !localApprovals[d.day])
+                      return unapprovedDays.length > 0 ? (
+                        <button
+                          onClick={async () => {
+                            // 楽観的UI: 全日を即座に承認表示
+                            const updated = { ...localApprovals }
+                            for (const d of unapprovedDays) updated[d.day] = true
+                            setLocalApprovals(updated)
+                            // バックグラウンドで全日を承認
+                            for (const d of unapprovedDays) {
+                              fetch('/api/attendance/grid', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                body: JSON.stringify({ action: 'approve', siteId, ym, day: d.day, approvedBy: userId }),
+                              }).catch(() => {})
+                            }
+                          }}
+                          className="ml-2 text-[9px] bg-green-600 text-white px-1.5 py-0.5 rounded hover:bg-green-700 transition"
+                        >
+                          一括承認
+                        </button>
+                      ) : (
+                        <span className="ml-2 text-[9px] text-green-600">全承認済</span>
+                      )
+                    })()}
                   </td>
                   <td className="sticky left-[150px] z-20 bg-orange-50 px-1 py-1 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
                   {days.map(d => {
-                    const approved = data.approvals?.[d.day]
+                    const approved = localApprovals[d.day]
                     const canApprove = userRole === 'admin' || userRole === 'approver'
                     return (
                       <td
                         key={d.day}
                         className={`px-0 py-1 border-l border-orange-100 bg-orange-50 text-center ${canApprove ? 'cursor-pointer hover:bg-orange-100' : ''}`}
                         style={{ width: 56, minWidth: 56, maxWidth: 56 }}
-                        onClick={canApprove ? async () => {
-                          try {
-                            await fetch('/api/attendance/grid', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                              body: JSON.stringify({
-                                action: approved ? 'unapprove' : 'approve',
-                                siteId,
-                                ym,
-                                day: d.day,
-                                approvedBy: userId,
-                              }),
-                            })
-                            fetchData()
-                          } catch { /* ignore */ }
+                        onClick={canApprove ? () => {
+                          // 楽観的UI: 即座にトグル
+                          setLocalApprovals(prev => ({ ...prev, [d.day]: !prev[d.day] }))
+                          // バックグラウンドでAPI
+                          fetch('/api/attendance/grid', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                            body: JSON.stringify({
+                              action: approved ? 'unapprove' : 'approve',
+                              siteId, ym, day: d.day, approvedBy: userId,
+                            }),
+                          }).catch(() => {})
                         } : undefined}
                         title={canApprove ? (approved ? 'クリックで承認解除' : 'クリックで承認') : ''}
                       >
