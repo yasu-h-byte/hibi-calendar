@@ -96,6 +96,7 @@ export default function LeavePage() {
   const [password, setPassword] = useState('')
   const [workers, setWorkers] = useState<PLWorker[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [editWorker, setEditWorker] = useState<PLWorker | null>(null)
   const [editForm, setEditForm] = useState({ grantDays: '', carryOver: '', adjustment: '' })
   const [saving, setSaving] = useState(false)
@@ -120,6 +121,7 @@ export default function LeavePage() {
   const fetchData = useCallback(async () => {
     if (!password) return
     setLoading(true)
+    setError('')
     try {
       const res = await fetch(`/api/leave?calendar=true`, { headers: { 'x-admin-password': password } })
       if (res.ok) {
@@ -127,7 +129,11 @@ export default function LeavePage() {
         setWorkers(data.workers || [])
         setPlCalendar(data.plCalendar || {})
         setWorkerNames(data.workerNames || {})
+      } else {
+        setError('データの取得に失敗しました')
       }
+    } catch {
+      setError('通信エラーが発生しました')
     } finally {
       setLoading(false)
     }
@@ -242,6 +248,9 @@ export default function LeavePage() {
     getJPHolidays(calendarYear).forEach(h => set.add(h))
     return set
   }, [calendarYear])
+
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="text-gray-400">読み込み中...</div></div>
+  if (error) return <div className="max-w-5xl mx-auto py-10"><div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center text-red-700">{error}</div></div>
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">

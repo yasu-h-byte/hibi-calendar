@@ -68,6 +68,7 @@ export default function CalendarManagePage() {
   const [sites, setSites] = useState<SiteCalendarData[]>([])
   const [ym, setYm] = useState(defaultYm)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [editingDays, setEditingDays] = useState<Record<string, Record<string, DayType>>>({})
   const [saving, setSaving] = useState(false)
   const [copiedMsg, setCopiedMsg] = useState(false)
@@ -87,6 +88,7 @@ export default function CalendarManagePage() {
   const fetchData = useCallback(async () => {
     if (!password) return
     setLoading(true)
+    setError('')
     try {
       const res = await fetch(`/api/calendar/status?ym=${ym}`, {
         headers: { 'x-admin-password': password },
@@ -94,9 +96,12 @@ export default function CalendarManagePage() {
       if (res.ok) {
         const data = await res.json()
         setSites(data.sites || [])
+      } else {
+        setError('データの取得に失敗しました')
       }
-    } catch (error) {
-      console.error('Failed to fetch:', error)
+    } catch (err) {
+      console.error('Failed to fetch:', err)
+      setError('通信エラーが発生しました')
     } finally {
       setLoading(false)
     }
@@ -251,6 +256,8 @@ Chon cong truong -> Chon ten -> Xem lich -> Ky
       {/* Site calendars - all expanded */}
       {loading ? (
         <div className="text-center py-8 text-gray-400 dark:text-gray-500">読み込み中...</div>
+      ) : error ? (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center text-red-700">{error}</div>
       ) : visibleSites.length === 0 ? (
         <div className="text-center py-8 text-gray-400 dark:text-gray-500">現場データがありません</div>
       ) : (

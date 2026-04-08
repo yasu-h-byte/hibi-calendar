@@ -197,7 +197,7 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
     )
     if (hasOldRecords) continue
 
-    const grantMonth = (w as unknown as { grantMonth?: number }).grantMonth
+    const grantMonth = w.grantMonth
 
     const nextGrant = calcNextGrantDate(w.hireDate, grantMonth, records)
     if (!nextGrant) continue
@@ -278,7 +278,7 @@ export function getUpcomingGrants(
   for (const w of eligible) {
     const wKey = String(w.id)
     const records = (main.plData[wKey] || []) as PLRecord[]
-    const grantMonth = (w as unknown as { grantMonth?: number }).grantMonth
+    const grantMonth = w.grantMonth
 
     const nextGrant = calcNextGrantDate(w.hireDate, grantMonth, records)
     if (!nextGrant) continue

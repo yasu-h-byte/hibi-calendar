@@ -114,7 +114,8 @@ export async function POST(request: NextRequest) {
         if (!entry) continue
         const e = entry as { p?: number }
         if (e.p && e.p === 1) {
-          const wid = parseInt(key.split('_')[1])
+          const pk = parseDKey(key)
+          const wid = parseInt(pk.wid)
           plUsage[wid] = (plUsage[wid] || 0) + 1
         }
       }

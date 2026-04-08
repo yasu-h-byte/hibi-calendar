@@ -4,7 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore'
 import { getWorkerByToken } from '@/lib/workers'
 import { getStaffSites, ymKey, attKey, setAttendanceEntry } from '@/lib/attendance'
-import { getMainData, getAttData } from '@/lib/compute'
+import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 
 interface LeaveRequest {
   workerId: number
@@ -125,13 +125,12 @@ export async function POST(request: NextRequest) {
           for (const fym of checkMonths) {
             const att = await getAttData(fym)
             for (const [key, entry] of Object.entries(att.d)) {
+              if (!entry) continue
               const e = entry as { p?: number }
               if (e.p === 1) {
-                const wid = parseInt(key.split('_')[1])
-                if (wid === worker.id) {
-                  const entryYm = key.split('_')[2]
-                  const entryDay = key.split('_')[3]
-                  const entryDate = new Date(parseInt(entryYm.slice(0, 4)), parseInt(entryYm.slice(4, 6)) - 1, parseInt(entryDay))
+                const pk = parseDKey(key)
+                if (parseInt(pk.wid) === worker.id) {
+                  const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
                   if (entryDate >= grantDate && entryDate < gdEnd) periodUsed++
                 }
               }

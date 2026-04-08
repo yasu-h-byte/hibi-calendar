@@ -25,7 +25,7 @@ export interface MainData {
 export interface RawWorker {
   id: number; name: string; org: string; visa: string; job: string
   rate: number; hourlyRate?: number; otMul: number; hireDate: string; retired?: string; token: string
-  salary?: number; memo?: string
+  salary?: number; memo?: string; grantMonth?: number
 }
 
 export interface RawSite {
@@ -829,7 +829,7 @@ export function computeMonthly(
       const legalOt = Math.max(0, actualWorkH - prescribedH)
       const basePay = Math.round(wm.hourlyRate * prescribedH)
       const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
-      const absentDays = Math.max(0, prescribedDays - wm.actualWorkDays - wm.plUsed)
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed)
       const absentDeduction = Math.round(wm.hourlyRate * 7 * absentDays)
       const salaryNet = basePay - absentDeduction + otAllowance
 

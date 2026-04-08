@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs } from 'firebase/firestore'
-import { getMainData, getAttData } from '@/lib/compute'
+import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
 
@@ -152,10 +152,11 @@ export async function GET(request: NextRequest) {
 
       const workersWithEntry = new Set<number>()
       for (const [key, entry] of Object.entries(att.d)) {
-        const parts = key.split('_')
-        const day = parseInt(parts[3])
-        const wid = parseInt(parts[1])
-        if (day === today && entry.w !== undefined) {
+        if (!entry) continue
+        const pk = parseDKey(key)
+        const day = parseInt(pk.day)
+        const wid = parseInt(pk.wid)
+        if (day === today && (entry as unknown as Record<string, unknown>).w !== undefined) {
           workersWithEntry.add(wid)
         }
       }
@@ -220,7 +221,6 @@ export async function GET(request: NextRequest) {
           gdEnd.setFullYear(gdEnd.getFullYear() + 1)
           // 出面からP消化を集計
           let periodUsed = 0
-          const { parseDKey } = await import('@/lib/compute')
           for (const [key, entry] of Object.entries(allAttForPL)) {
             const e = entry as { p?: number }
             if (e.p === 1) {
