@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, getAssign } from '@/lib/compute'
-import { getApprovalForDay } from '@/lib/attendance'
+import { getApprovalForDay, setApprovalForDay } from '@/lib/attendance'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from 'firebase/firestore'
@@ -185,6 +185,23 @@ export async function POST(request: NextRequest) {
           }
         }
       }, { merge: true })
+      return NextResponse.json({ success: true })
+    }
+
+    // Action: approve/unapprove a day
+    if (action === 'approve') {
+      const { siteId, ym, day, approvedBy } = body
+      if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      await setApprovalForDay(siteId, ym, day, approvedBy || 0)
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'unapprove') {
+      const { siteId, ym, day } = body
+      if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      const { deleteDoc } = await import('firebase/firestore')
+      const approvalDocRef = doc(db, 'attendanceApprovals', `${siteId}_${ym}_${String(day)}`)
+      await deleteDoc(approvalDocRef)
       return NextResponse.json({ success: true })
     }
 

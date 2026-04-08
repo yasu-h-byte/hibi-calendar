@@ -165,6 +165,8 @@ interface PendingSave {
 
 export default function AttendanceGridPage() {
   const [password, setPassword] = useState('')
+  const [userRole, setUserRole] = useState('')
+  const [userId, setUserId] = useState(0)
   const [ym, setYm] = useState(currentYm)
   const [siteId, setSiteId] = useState('')
   const [data, setData] = useState<GridData | null>(null)
@@ -198,8 +200,12 @@ export default function AttendanceGridPage() {
     const stored = localStorage.getItem('hibi_auth')
     if (stored) {
       try {
-        const { password: pw } = JSON.parse(stored)
+        const { password: pw, user } = JSON.parse(stored)
         setPassword(pw)
+        if (user) {
+          setUserRole(user.role || '')
+          setUserId(user.workerId || 0)
+        }
       } catch { /* ignore */ }
     }
   }, [])
@@ -944,7 +950,7 @@ export default function AttendanceGridPage() {
                   </tr>
                 )}
 
-                {/* ── Approval row (red/orange) ── */}
+                {/* ── Approval row (red/orange) — admin/approver can click to approve ── */}
                 <tr className="bg-orange-50 border-b border-orange-200">
                   <td
                     className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px]"
@@ -955,12 +961,34 @@ export default function AttendanceGridPage() {
                   <td className="sticky left-[150px] z-20 bg-orange-50 px-1 py-1 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
                   {days.map(d => {
                     const approved = data.approvals?.[d.day]
+                    const canApprove = userRole === 'admin' || userRole === 'approver'
                     return (
-                      <td key={d.day} className="px-0 py-1 border-l border-orange-100 bg-orange-50 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}>
+                      <td
+                        key={d.day}
+                        className={`px-0 py-1 border-l border-orange-100 bg-orange-50 text-center ${canApprove ? 'cursor-pointer hover:bg-orange-100' : ''}`}
+                        style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                        onClick={canApprove ? async () => {
+                          try {
+                            await fetch('/api/attendance/grid', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                              body: JSON.stringify({
+                                action: approved ? 'unapprove' : 'approve',
+                                siteId,
+                                ym,
+                                day: d.day,
+                                approvedBy: userId,
+                              }),
+                            })
+                            fetchData()
+                          } catch { /* ignore */ }
+                        } : undefined}
+                        title={canApprove ? (approved ? 'クリックで承認解除' : 'クリックで承認') : ''}
+                      >
                         {approved ? (
-                          <span className="text-green-600 text-[11px] font-bold" title="承認済">&#x2713;</span>
+                          <span className="text-green-600 text-[11px] font-bold">&#x2713;</span>
                         ) : (
-                          <span className="text-orange-300 text-[11px]">-</span>
+                          <span className={`text-[11px] ${canApprove ? 'text-orange-400' : 'text-orange-300'}`}>-</span>
                         )}
                       </td>
                     )
