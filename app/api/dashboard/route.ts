@@ -13,6 +13,7 @@ import {
   buildYMList,
   MainData,
   ComputeResult,
+  parseDKey,
 } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
@@ -452,14 +453,35 @@ export async function GET(request: NextRequest) {
     const totalProfit = totalBilling - totalAllCost
     const subconRate = totalManDays > 0 ? (totalSubWork / totalManDays) * 100 : 0
 
-    // ═══ Previous month KPI (for month-over-month comparison) ═══
+    // ═══ Previous month same-day comparison (前月同日比) ═══
+    // 当月8日なら、前月1〜8日の人工数と比較（進捗ペースの比較）
     const prevYmDate = new Date(baseY, baseM - 2, 1)
     const prevYm = ymKey(prevYmDate.getFullYear(), prevYmDate.getMonth() + 1)
     let prevTotalManDays = 0, prevBilling = 0, prevCost = 0, prevProfit = 0, prevBillingPerManDay = 0
     try {
       const cachedPrev = mergedAtt.perMonth.get(prevYm) || lookbackAtt.perMonth.get(prevYm)
       const prevAtt = cachedPrev || await getAttData(prevYm)
-      const prevC = compute(main, prevAtt.d, prevAtt.sd, [{ y: prevYmDate.getFullYear(), m: prevYmDate.getMonth() + 1 }])
+
+      // 前月同日比: 前月の1日〜当日の日付までの出面データのみ集計
+      const sameDayLimit = today // 当月の日付（例: 8日なら8）
+      const filteredPrevD: Record<string, AttendanceEntry> = {}
+      const filteredPrevSD: Record<string, { n: number; on: number }> = {}
+      for (const [k, v] of Object.entries(prevAtt.d)) {
+        if (!v) continue
+        const pk = parseDKey(k)
+        if (parseInt(pk.day) <= sameDayLimit) {
+          filteredPrevD[k] = v
+        }
+      }
+      for (const [k, v] of Object.entries(prevAtt.sd)) {
+        if (!v) continue
+        const pk = parseDKey(k)
+        if (parseInt(pk.day) <= sameDayLimit) {
+          filteredPrevSD[k] = v
+        }
+      }
+
+      const prevC = compute(main, filteredPrevD, filteredPrevSD, [{ y: prevYmDate.getFullYear(), m: prevYmDate.getMonth() + 1 }])
       let pWork = 0, pSubWork = 0, pCost = 0, pBill = 0
       for (const site of filteredSites) {
         if (siteFilter !== 'all' && site.id !== siteFilter) continue

@@ -512,7 +512,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-1 text-xs font-semibold mb-1">
                     <span className="text-gray-500 dark:text-gray-400">総人工数</span>
                     {k.prevTotalManDays > 0 && k.pctWork !== 0 && (
-                      <span className={`text-[10px] font-bold ${k.pctWork > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <span className={`text-[10px] font-bold ${k.pctWork > 0 ? 'text-green-600' : 'text-red-600'}`} title="前月同日比">
                         {k.pctWork > 0 ? '▲' : '▼'}{Math.abs(Math.round(k.pctWork))}%
                       </span>
                     )}
