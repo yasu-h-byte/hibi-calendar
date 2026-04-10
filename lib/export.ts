@@ -31,7 +31,7 @@ function dayLabel(ym: string, day: number): string {
   const y = parseInt(ym.slice(0, 4))
   const m = parseInt(ym.slice(4, 6))
   const d = new Date(y, m - 1, day)
-  return `${day}日(${DOW_SHORT[d.getDay()]})`
+  return `${day}(${DOW_SHORT[d.getDay()]})`
 }
 
 function isSunday(ym: string, day: number): boolean {
@@ -90,11 +90,11 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
   let totalWork = 0
   let totalOT = 0
   let totalPL = 0
+  const dailyWorkTotals: number[] = new Array(numDays).fill(0)
+  const dailyOTTotals: number[] = new Array(numDays).fill(0)
 
   for (const w of hibiWorkers) {
-    // 出勤行
     const workRow: (string | number)[] = [w.name, '出勤']
-    // 残業行
     const otRow: (string | number)[] = ['', '残業h']
 
     let wWork = 0
@@ -129,6 +129,11 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
         wWork += dayWork
       }
 
+      if (typeof dayWork === 'number' && dayWork > 0) {
+        dailyWorkTotals[d - 1] += dayWork
+      }
+      dailyOTTotals[d - 1] += dayOT
+
       wOT += dayOT
       workRow.push(dayWork || '')
       otRow.push(dayOT > 0 ? dayOT : '')
@@ -145,12 +150,12 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
     rows.push(otRow)
   }
 
-  // Footer totals
+  // Footer: 日ごとの縦計
   const footerWork: (string | number)[] = ['合計', '出勤']
   const footerOT: (string | number)[] = ['', '残業h']
-  for (let d = 1; d <= numDays; d++) {
-    footerWork.push('')
-    footerOT.push('')
+  for (let d = 0; d < numDays; d++) {
+    footerWork.push(dailyWorkTotals[d] > 0 ? Math.round(dailyWorkTotals[d] * 10) / 10 : '')
+    footerOT.push(dailyOTTotals[d] > 0 ? Math.round(dailyOTTotals[d] * 10) / 10 : '')
   }
   footerWork.push(Math.round(totalWork * 10) / 10)
   footerOT.push(Math.round(totalOT * 10) / 10)
@@ -195,6 +200,8 @@ export function generateHfuAttendance(data: HibiAttendanceData): XLSX.WorkBook {
   let totalWork = 0
   let totalOT = 0
   let totalPL = 0
+  const dailyWorkTotals: number[] = new Array(numDays).fill(0)
+  const dailyOTTotals: number[] = new Array(numDays).fill(0)
 
   for (const w of hfuWorkers) {
     const workRow: (string | number)[] = [w.name, '出勤']
@@ -227,8 +234,10 @@ export function generateHfuAttendance(data: HibiAttendanceData): XLSX.WorkBook {
         wPL += 1
       } else if (typeof dayWork === 'number' && dayWork > 0) {
         wWork += dayWork
+        dailyWorkTotals[d - 1] += dayWork
       }
 
+      dailyOTTotals[d - 1] += dayOT
       wOT += dayOT
       workRow.push(dayWork || '')
       otRow.push(dayOT > 0 ? dayOT : '')
@@ -246,9 +255,9 @@ export function generateHfuAttendance(data: HibiAttendanceData): XLSX.WorkBook {
 
   const footerWork: (string | number)[] = ['合計', '出勤']
   const footerOT: (string | number)[] = ['', '残業h']
-  for (let d = 1; d <= numDays; d++) {
-    footerWork.push('')
-    footerOT.push('')
+  for (let d = 0; d < numDays; d++) {
+    footerWork.push(dailyWorkTotals[d] > 0 ? Math.round(dailyWorkTotals[d] * 10) / 10 : '')
+    footerOT.push(dailyOTTotals[d] > 0 ? Math.round(dailyOTTotals[d] * 10) / 10 : '')
   }
   footerWork.push(Math.round(totalWork * 10) / 10)
   footerOT.push(Math.round(totalOT * 10) / 10)
