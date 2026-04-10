@@ -12,6 +12,7 @@ interface ExportCard {
   format: 'Excel出力' | 'PDF出力'
   type: ExportType
   needsYm: boolean
+  needsOrg?: boolean
 }
 
 const EXPORT_CARDS: ExportCard[] = [
@@ -149,7 +150,7 @@ export default function ExportPage() {
         // Excel download
         const params = new URLSearchParams({ type: card.type })
         if (card.needsYm && ym) params.set('ym', ym)
-        if ((card as { needsOrg?: boolean }).needsOrg) params.set('org', selectedOrg[card.type] || 'all')
+        if (card.needsOrg) params.set('org', selectedOrg[card.type] || 'all')
 
         const res = await fetch(`/api/export?${params}`, {
           headers: { 'x-admin-password': password },
@@ -220,7 +221,7 @@ export default function ExportPage() {
                   </select>
                 </div>
               )}
-              {(card as { needsOrg?: boolean }).needsOrg && (
+              {card.needsOrg && (
                 <div className="mb-3">
                   <select
                     value={selectedOrg[card.type] || 'all'}
