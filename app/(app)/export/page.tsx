@@ -58,10 +58,11 @@ const EXPORT_CARDS: ExportCard[] = [
   {
     icon: '🌴',
     title: '有給管理台帳',
-    description: '全社員の有給付与・消化・残日数をExcel形式で出力します。労務管理・監査対応に利用できます。',
+    description: '有給付与・消化・残日数をExcel形式で出力。会社別に出力可能。',
     format: 'Excel出力',
     type: 'pl',
     needsYm: false,
+    needsOrg: true,
   },
 ]
 
@@ -90,6 +91,7 @@ export default function ExportPage() {
   const [selectedYm, setSelectedYm] = useState<Record<string, string>>({})
   const [downloading, setDownloading] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [selectedOrg, setSelectedOrg] = useState<Record<string, string>>({ pl: 'all' })
 
   const ymOptions = useMemo(() => getYmOptions(12), [])
 
@@ -147,6 +149,7 @@ export default function ExportPage() {
         // Excel download
         const params = new URLSearchParams({ type: card.type })
         if (card.needsYm && ym) params.set('ym', ym)
+        if ((card as { needsOrg?: boolean }).needsOrg) params.set('org', selectedOrg[card.type] || 'all')
 
         const res = await fetch(`/api/export?${params}`, {
           headers: { 'x-admin-password': password },
@@ -214,6 +217,19 @@ export default function ExportPage() {
                     {ymOptions.map(opt => (
                       <option key={opt.ym} value={opt.ym}>{opt.label}</option>
                     ))}
+                  </select>
+                </div>
+              )}
+              {(card as { needsOrg?: boolean }).needsOrg && (
+                <div className="mb-3">
+                  <select
+                    value={selectedOrg[card.type] || 'all'}
+                    onChange={(e) => setSelectedOrg(prev => ({ ...prev, [card.type]: e.target.value }))}
+                    className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-hibi-navy"
+                  >
+                    <option value="all">全社</option>
+                    <option value="hibi">日比建設</option>
+                    <option value="hfu">HFU</option>
                   </select>
                 </div>
               )}

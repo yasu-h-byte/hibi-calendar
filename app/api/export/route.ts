@@ -148,13 +148,16 @@ export async function GET(request: NextRequest) {
             if (att.d) Object.assign(plAttData, att.d)
           }
         }
+        const plOrg = request.nextUrl.searchParams.get('org') || 'all'
         const wb = generatePLLedger({
           workers: main.workers,
           plData: main.plData,
           attData: plAttData,
+          org: plOrg,
         })
+        const orgLabel = plOrg === 'hfu' ? '_HFU' : plOrg === 'hibi' ? '_日比建設' : ''
         buffer = workbookToBuffer(wb)
-        filename = '有給管理台帳.xlsx'
+        filename = `有給管理台帳${orgLabel}.xlsx`
         break
       }
 

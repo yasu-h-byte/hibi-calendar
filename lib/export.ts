@@ -6,6 +6,7 @@ import {
   SubconMonthly,
   SiteSummary,
   PLRecord,
+  parseDKey,
 } from './compute'
 import { AttendanceEntry } from '@/types'
 
@@ -442,14 +443,19 @@ export interface PLLedgerData {
   workers: RawWorker[]
   plData: Record<string, PLRecord[]>
   attData?: Record<string, Record<string, unknown>>
+  org?: string // 'hibi' | 'hfu' | 'all'
 }
 
 export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
-  const { workers, plData, attData } = data
+  const { workers, plData, attData, org } = data
   const wb = XLSX.utils.book_new()
 
+  // 会社フィルタ
+  const orgFilter = org || 'all'
+  const orgLabel = orgFilter === 'hfu' ? 'HFU' : orgFilter === 'hibi' ? '日比建設' : '全社'
+
   // ── シート1: 有給管理台帳（サマリー） ──
-  const titleRow = ['年次有給休暇管理簿']
+  const titleRow = [`年次有給休暇管理簿（${orgLabel}）`]
   const headers = [
     '名前', '所属', '入社日',
     '基準日（付与日）', '付与日数', '繰越日数',
@@ -457,19 +463,23 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
   ]
 
   const rows: (string | number)[][] = [titleRow, headers]
-  const activeWorkers = workers.filter(w => !w.retired)
+  const activeWorkers = workers.filter(w => {
+    if (w.retired) return false
+    if (orgFilter === 'hibi') return w.org === 'hibi' || w.org === '日比'
+    if (orgFilter === 'hfu') return w.org === 'hfu' || w.org === 'HFU'
+    return true
+  })
 
   // 出面データからPL取得日を集計
   const plDates: Record<number, string[]> = {} // workerId -> ['2025/04/15', ...]
   if (attData) {
     for (const [key, entry] of Object.entries(attData)) {
+      if (!entry) continue
       const e = entry as { p?: number }
       if (e.p === 1) {
-        const parts = key.split('_')
-        const wid = parseInt(parts[1])
-        const ym = parts[2]
-        const day = parts[3]
-        const dateStr = `${ym.slice(0, 4)}/${ym.slice(4, 6)}/${day.padStart(2, '0')}`
+        const pk = parseDKey(key)
+        const wid = parseInt(pk.wid)
+        const dateStr = `${pk.ym.slice(0, 4)}/${pk.ym.slice(4, 6)}/${pk.day.padStart(2, '0')}`
         if (!plDates[wid]) plDates[wid] = []
         plDates[wid].push(dateStr)
       }
