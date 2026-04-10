@@ -76,7 +76,7 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
   const wb = XLSX.utils.book_new()
 
   // Filter to 日比 workers only (non-retired)
-  const hibiWorkers = workers.filter(w => w.org === '日比' && !w.retired)
+  const hibiWorkers = workers.filter(w => (w.org === '日比' || w.org === 'hibi') && !w.retired)
 
   // Build header row
   const headers = ['名前', '所属']
@@ -182,7 +182,7 @@ export function generateHfuAttendance(data: HibiAttendanceData): XLSX.WorkBook {
   const wb = XLSX.utils.book_new()
 
   // Filter to HFU workers only
-  const hfuWorkers = workers.filter(w => w.org === 'HFU' && !w.retired)
+  const hfuWorkers = workers.filter(w => (w.org === 'HFU' || w.org === 'hfu') && !w.retired)
 
   const headers = ['名前', 'ビザ']
   for (let d = 1; d <= numDays; d++) {
