@@ -71,23 +71,20 @@ export interface HibiAttendanceData {
 }
 
 export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook {
-  const { ym, workers, attD, sites, assign, massign } = data
+  const { ym, workers, attD, sites } = data
   const numDays = daysInMonth(ym)
   const wb = XLSX.utils.book_new()
 
-  // Filter to 日比 workers only (non-retired)
   const hibiWorkers = workers.filter(w => (w.org === '日比' || w.org === 'hibi') && !w.retired)
 
-  // Build header row
-  const headers = ['名前', '所属']
+  // Header rows
+  const headers = ['名前', '区分']
   for (let d = 1; d <= numDays; d++) {
     headers.push(dayLabel(ym, d))
   }
-  headers.push('合計', '残業(h)', '有給')
+  headers.push('合計')
 
-  // Title row
   const titleRow = [`日比建設 出面一覧 ${ymLabel(ym)}`]
-
   const rows: (string | number)[][] = [titleRow, headers]
 
   let totalWork = 0
@@ -95,16 +92,19 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
   let totalPL = 0
 
   for (const w of hibiWorkers) {
-    const row: (string | number)[] = [w.name, w.org]
+    // 出勤行
+    const workRow: (string | number)[] = [w.name, '出勤']
+    // 残業行
+    const otRow: (string | number)[] = ['', '残業h']
+
     let wWork = 0
     let wOT = 0
     let wPL = 0
 
     for (let d = 1; d <= numDays; d++) {
       const dd = String(d)
-      // Check all sites for this worker on this day
-      let dayVal = '-'
-      let dayOT = 0
+      let dayWork: string | number = ''
+      let dayOT: number = 0
       let isPL = false
 
       for (const site of sites) {
@@ -116,56 +116,56 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
           isPL = true
           break
         }
-        if (entry.w === 1) {
-          dayVal = '\u25CF' // ●
+        if (entry.w && entry.w > 0) {
+          dayWork = entry.w // 1, 0.5, 0.6 をそのまま数値で表示
           if (entry.o && entry.o > 0) dayOT += entry.o
-        } else if (entry.w === 0.5) {
-          dayVal = '\u25B3' // △
-        } else if (entry.w === 0.6) {
-          dayVal = '\u25B3' // △ for compressed day
         }
       }
 
       if (isPL) {
-        dayVal = '\u6709' // 有
+        dayWork = '有'
         wPL += 1
+      } else if (typeof dayWork === 'number' && dayWork > 0) {
+        wWork += dayWork
       }
 
-      if (dayVal === '\u25CF') wWork += 1
-      else if (dayVal === '\u25B3') wWork += 0.5
-
       wOT += dayOT
-      row.push(dayVal)
+      workRow.push(dayWork || '')
+      otRow.push(dayOT > 0 ? dayOT : '')
     }
 
-    row.push(wWork || '-')
-    row.push(wOT || '-')
-    row.push(wPL || '-')
+    workRow.push(wWork > 0 ? Math.round(wWork * 10) / 10 : '')
+    otRow.push(wOT > 0 ? Math.round(wOT * 10) / 10 : '')
 
     totalWork += wWork
     totalOT += wOT
     totalPL += wPL
 
-    rows.push(row)
+    rows.push(workRow)
+    rows.push(otRow)
   }
 
-  // Footer totals row
-  const footerRow: (string | number)[] = ['合計', '']
+  // Footer totals
+  const footerWork: (string | number)[] = ['合計', '出勤']
+  const footerOT: (string | number)[] = ['', '残業h']
   for (let d = 1; d <= numDays; d++) {
-    footerRow.push('')
+    footerWork.push('')
+    footerOT.push('')
   }
-  footerRow.push(totalWork, totalOT, totalPL)
-  rows.push(footerRow)
+  footerWork.push(Math.round(totalWork * 10) / 10)
+  footerOT.push(Math.round(totalOT * 10) / 10)
+  rows.push(footerWork)
+  rows.push(footerOT)
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
 
   // Merge title row
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 4 } }]
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 2 } }]
 
   // Column widths
-  const colWidths = [12, 6]
+  const colWidths = [14, 6]
   for (let d = 0; d < numDays; d++) colWidths.push(7)
-  colWidths.push(6, 8, 5)
+  colWidths.push(6)
   setColWidths(ws, colWidths)
 
   XLSX.utils.book_append_sheet(wb, ws, '出面一覧')
@@ -181,14 +181,13 @@ export function generateHfuAttendance(data: HibiAttendanceData): XLSX.WorkBook {
   const numDays = daysInMonth(ym)
   const wb = XLSX.utils.book_new()
 
-  // Filter to HFU workers only
   const hfuWorkers = workers.filter(w => (w.org === 'HFU' || w.org === 'hfu') && !w.retired)
 
-  const headers = ['名前', 'ビザ']
+  const headers = ['名前', '区分']
   for (let d = 1; d <= numDays; d++) {
     headers.push(dayLabel(ym, d))
   }
-  headers.push('合計', '残業(h)', '有給')
+  headers.push('合計')
 
   const titleRow = [`HFU 出面一覧 ${ymLabel(ym)}`]
   const rows: (string | number)[][] = [titleRow, headers]
@@ -198,15 +197,17 @@ export function generateHfuAttendance(data: HibiAttendanceData): XLSX.WorkBook {
   let totalPL = 0
 
   for (const w of hfuWorkers) {
-    const row: (string | number)[] = [w.name, w.visa]
+    const workRow: (string | number)[] = [w.name, '出勤']
+    const otRow: (string | number)[] = ['', '残業h']
+
     let wWork = 0
     let wOT = 0
     let wPL = 0
 
     for (let d = 1; d <= numDays; d++) {
       const dd = String(d)
-      let dayVal = '-'
-      let dayOT = 0
+      let dayWork: string | number = ''
+      let dayOT: number = 0
       let isPL = false
 
       for (const site of sites) {
@@ -215,41 +216,51 @@ export function generateHfuAttendance(data: HibiAttendanceData): XLSX.WorkBook {
         if (!entry) continue
 
         if (entry.p) { isPL = true; break }
-        if (entry.w === 1) {
-          dayVal = '\u25CF'
+        if (entry.w && entry.w > 0) {
+          dayWork = entry.w
           if (entry.o && entry.o > 0) dayOT += entry.o
-        } else if (entry.w === 0.5 || entry.w === 0.6) {
-          dayVal = '\u25B3'
         }
       }
 
-      if (isPL) { dayVal = '\u6709'; wPL += 1 }
-      if (dayVal === '\u25CF') wWork += 1
-      else if (dayVal === '\u25B3') wWork += 0.5
+      if (isPL) {
+        dayWork = '有'
+        wPL += 1
+      } else if (typeof dayWork === 'number' && dayWork > 0) {
+        wWork += dayWork
+      }
+
       wOT += dayOT
-      row.push(dayVal)
+      workRow.push(dayWork || '')
+      otRow.push(dayOT > 0 ? dayOT : '')
     }
 
-    row.push(wWork || '-')
-    row.push(wOT || '-')
-    row.push(wPL || '-')
+    workRow.push(wWork > 0 ? Math.round(wWork * 10) / 10 : '')
+    otRow.push(wOT > 0 ? Math.round(wOT * 10) / 10 : '')
+
     totalWork += wWork
     totalOT += wOT
     totalPL += wPL
-    rows.push(row)
+    rows.push(workRow)
+    rows.push(otRow)
   }
 
-  const footerRow: (string | number)[] = ['合計', '']
-  for (let d = 1; d <= numDays; d++) footerRow.push('')
-  footerRow.push(totalWork, totalOT, totalPL)
-  rows.push(footerRow)
+  const footerWork: (string | number)[] = ['合計', '出勤']
+  const footerOT: (string | number)[] = ['', '残業h']
+  for (let d = 1; d <= numDays; d++) {
+    footerWork.push('')
+    footerOT.push('')
+  }
+  footerWork.push(Math.round(totalWork * 10) / 10)
+  footerOT.push(Math.round(totalOT * 10) / 10)
+  rows.push(footerWork)
+  rows.push(footerOT)
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 4 } }]
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 2 } }]
 
-  const colWidths = [12, 8]
+  const colWidths = [14, 6]
   for (let d = 0; d < numDays; d++) colWidths.push(7)
-  colWidths.push(6, 8, 5)
+  colWidths.push(6)
   setColWidths(ws, colWidths)
 
   XLSX.utils.book_append_sheet(wb, ws, '出面一覧')
