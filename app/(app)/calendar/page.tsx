@@ -176,9 +176,9 @@ Chon cong truong -> Chon ten -> Xem lich -> Ky
     })
   }
 
-  // Filter sites based on role
+  // 全ロールで全現場を表示（職長も全現場のカレンダーを見れる）
   const visibleSites = user?.role === 'foreman'
-    ? sites.filter(s => user.foremanSites.includes(s.siteId))
+    ? sites
     : sites
 
   // Status badge (simplified: only 未作成 or 確定済み)
