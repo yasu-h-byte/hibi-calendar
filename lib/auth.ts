@@ -41,6 +41,18 @@ export function buildAuthUser(worker: Worker, sites: Site[]): AuthUser {
     }
   }
 
+  // 職長ロールはjobTypeでも判定（アーカイブ済み現場の職長に対応）
+  if (worker.jobType === 'shokucho') {
+    const foremanSites = sites.filter(s => s.foreman === worker.id).map(s => s.id)
+    return {
+      workerId: worker.id,
+      name: worker.name,
+      role: 'foreman',
+      foremanSites,
+      token: worker.token || undefined,
+    }
+  }
+
   const { role, foremanSites } = determineRole(worker.id, sites)
   return {
     workerId: worker.id,
