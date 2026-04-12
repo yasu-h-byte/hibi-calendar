@@ -320,6 +320,11 @@ export default function SettingsPage() {
     }))
   }
 
+  /** 数値をカンマ区切り文字列に変換 */
+  const fmt = (n: number) => n.toLocaleString('ja-JP')
+  /** カンマ区切り文字列を数値に変換 */
+  const parseRate = (s: string) => Number(s.replace(/,/g, '')) || 0
+
   if (loading && password) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -388,9 +393,10 @@ export default function SettingsPage() {
                     −1000
                   </button>
                   <input
-                    type="number"
-                    value={rates.tobiRate}
-                    onChange={e => setRates(prev => ({ ...prev, tobiRate: Number(e.target.value) || 0 }))}
+                    type="text"
+                    inputMode="numeric"
+                    value={fmt(rates.tobiRate)}
+                    onChange={e => setRates(prev => ({ ...prev, tobiRate: parseRate(e.target.value) }))}
                     className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center text-lg font-bold"
                   />
                   <button
@@ -414,9 +420,10 @@ export default function SettingsPage() {
                     −1000
                   </button>
                   <input
-                    type="number"
-                    value={rates.dokoRate}
-                    onChange={e => setRates(prev => ({ ...prev, dokoRate: Number(e.target.value) || 0 }))}
+                    type="text"
+                    inputMode="numeric"
+                    value={fmt(rates.dokoRate)}
+                    onChange={e => setRates(prev => ({ ...prev, dokoRate: parseRate(e.target.value) }))}
                     className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center text-lg font-bold"
                   />
                   <button
