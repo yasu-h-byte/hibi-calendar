@@ -277,38 +277,77 @@ function MonthlyChecklist({ password }: { password: string }) {
   if (allDone) return null // 全て完了なら非表示
 
   const now = new Date()
-  const day = now.getDate()
   const nextYm = getNextYm()
   const ymLabel = `${nextYm.slice(0, 4)}年${parseInt(nextYm.slice(4))}月`
-  const urgent = day >= 25 && status.calCreated < status.calTotal
+
+  const step1Done = status.calCreated >= status.calTotal && status.calTotal > 0
+  const step2Done = status.calApproved >= status.calTotal && status.calTotal > 0
+  const step3Done = status.signed >= status.signTotal && status.signTotal > 0
+  const allDone = step1Done && step2Done && step3Done
+
+  // 次のアクションを判定
+  const nextAction = !step1Done ? { label: 'カレンダーを作成', href: '/calendar' }
+    : !step2Done ? { label: '承認する', href: '/calendar' }
+    : !step3Done ? { label: '署名を依頼', href: '/calendar' }
+    : null
+
+  // 全完了 → 最小表示
+  if (allDone) {
+    return (
+      <div className="rounded-xl px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 flex items-center justify-between">
+        <span className="text-sm font-medium text-green-700 dark:text-green-400">
+          ✅ {ymLabel} カレンダー準備完了
+        </span>
+        <a href="/calendar" className="text-xs text-green-600 hover:underline">確認 →</a>
+      </div>
+    )
+  }
 
   return (
-    <div className={`rounded-xl p-4 ${urgent ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800'}`}>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className={`text-sm font-bold ${urgent ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
-          {ymLabel} カレンダー準備
-        </h3>
-        <a href="/calendar" className="text-xs px-2.5 py-1 bg-hibi-navy text-white rounded-lg hover:bg-hibi-light transition">
-          カレンダーへ
-        </a>
+    <div className="rounded-xl px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-bold text-hibi-navy dark:text-white">📅 {ymLabel} カレンダー</span>
+        {nextAction && (
+          <a href={nextAction.href} className="text-xs px-3 py-1 bg-hibi-navy text-white rounded-lg hover:bg-hibi-light transition">
+            {nextAction.label} →
+          </a>
+        )}
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        <StepBadge label="作成" done={status.calCreated >= status.calTotal} detail={`${status.calCreated}/${status.calTotal}`} />
-        <StepBadge label="承認" done={status.calApproved >= status.calTotal} detail={`${status.calApproved}/${status.calTotal}`} />
-        <StepBadge label="署名" done={status.signed >= status.signTotal} detail={`${status.signed}/${status.signTotal}`}
-          extra={status.unsigned.length > 0 ? `未: ${status.unsigned.slice(0, 3).join('、')}${status.unsigned.length > 3 ? `他${status.unsigned.length - 3}名` : ''}` : undefined} />
+      {/* プログレスバー */}
+      <div className="flex items-center gap-1 mb-1.5">
+        <div className="flex-1 flex items-center gap-0.5">
+          <div className={`h-2 rounded-l-full flex-1 ${step1Done ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600'}`} />
+          <div className={`h-2 flex-1 ${step2Done ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600'}`} />
+          <div className={`h-2 rounded-r-full flex-1 ${step3Done ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600'}`} />
+        </div>
       </div>
-    </div>
-  )
-}
-
-function StepBadge({ label, done, detail, extra }: { label: string; done: boolean; detail: string; extra?: string }) {
-  return (
-    <div className={`rounded-lg p-2.5 text-center ${done ? 'bg-green-100 dark:bg-green-900/30' : 'bg-white dark:bg-gray-800'}`}>
-      <div className="text-lg mb-0.5">{done ? '\u2705' : '\u2B1C'}</div>
-      <div className={`text-xs font-bold ${done ? 'text-green-700 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>{label}</div>
-      <div className="text-[10px] text-gray-400">{detail}</div>
-      {extra && <div className="text-[10px] text-red-500 mt-0.5 truncate">{extra}</div>}
+      {/* ステップラベル */}
+      <div className="flex items-center text-[11px] text-gray-500 dark:text-gray-400">
+        <span className={`flex-1 ${step1Done ? 'text-green-600 font-bold' : ''}`}>
+          {step1Done ? '✓' : ''} 作成 {status.calCreated}/{status.calTotal}
+        </span>
+        <span className="px-1">→</span>
+        <span className={`flex-1 ${step2Done ? 'text-green-600 font-bold' : ''}`}>
+          {step2Done ? '✓' : ''} 承認 {status.calApproved}/{status.calTotal}
+        </span>
+        <span className="px-1">→</span>
+        <span className={`flex-1 ${step3Done ? 'text-green-600 font-bold' : ''}`}>
+          {step3Done ? '✓' : ''} 署名 {status.signed}/{status.signTotal}
+        </span>
+      </div>
+      {/* 未署名者（折りたたみ） */}
+      {status.unsigned.length > 0 && (
+        <details className="mt-2">
+          <summary className="text-[10px] text-red-500 cursor-pointer hover:text-red-700">
+            未署名 {status.unsigned.length}名
+          </summary>
+          <div className="text-[10px] text-red-400 mt-1 flex flex-wrap gap-1">
+            {status.unsigned.map((name, i) => (
+              <span key={i} className="bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded">{name}</span>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   )
 }
