@@ -200,7 +200,7 @@ export async function GET(request: NextRequest) {
 
     // Build worker PL data — 各スタッフの最新レコードを使用
     const workers = main.workers
-      .filter(w => !w.retired && w.job !== 'yakuin')
+      .filter(w => !w.retired && w.job !== 'yakuin' && w.job !== 'jimu')
       .map(w => {
         const plRecords = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
 
