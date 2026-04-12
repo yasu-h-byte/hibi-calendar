@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
-import { initTheme, toggleTheme, type Theme } from '@/lib/theme'
+import { initTheme, toggleTheme, type Theme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
 import NotificationBell from './NotificationBell'
 
 interface MenuItem {
@@ -85,14 +85,26 @@ const MENU_ID_MAP: Record<string, string> = {
   '/docs': 'docs',
 }
 
+/** Text size icon (Aa) */
+function TextSizeIcon() {
+  return (
+    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+      <text x="2" y="18" fontSize="16" fontWeight="bold" fontFamily="sans-serif">A</text>
+      <text x="14" y="18" fontSize="11" fontWeight="bold" fontFamily="sans-serif">a</text>
+    </svg>
+  )
+}
+
 export default function Sidebar({ user, open, onClose }: { user: AuthUser; open: boolean; onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const [theme, setThemeState] = useState<Theme>('light')
+  const [fontSize, setFontSizeState] = useState<FontSize>('normal')
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]> | null>(null)
 
   useEffect(() => {
     setThemeState(initTheme())
+    setFontSizeState(getFontSize())
     // Load role permissions from localStorage (set during login or settings save)
     try {
       const stored = localStorage.getItem('hibi_role_permissions')
@@ -152,6 +164,11 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
   const handleToggleTheme = () => {
     const next = toggleTheme()
     setThemeState(next)
+  }
+
+  const handleToggleFontSize = () => {
+    const next = toggleFontSize()
+    setFontSizeState(next)
   }
 
   return (
@@ -239,6 +256,29 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
               <div
                 className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
                   theme === 'dark' ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </div>
+          </button>
+
+          {/* Font size toggle */}
+          <button
+            onClick={handleToggleFontSize}
+            className="w-full flex items-center justify-between px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition"
+          >
+            <div className="flex items-center gap-2 text-sm text-white/70">
+              <TextSizeIcon />
+              <span>大きい文字</span>
+            </div>
+            {/* Toggle switch */}
+            <div
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                fontSize === 'large' ? 'bg-blue-500' : 'bg-white/20'
+              }`}
+            >
+              <div
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  fontSize === 'large' ? 'translate-x-5' : 'translate-x-0.5'
                 }`}
               />
             </div>
