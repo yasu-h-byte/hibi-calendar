@@ -111,7 +111,15 @@ export default function LeavePage() {
   const [grantMonthSaving, setGrantMonthSaving] = useState(false)
   const [autoGranted, setAutoGranted] = useState<{ name: string; days: number; grantDate: string }[]>([])
   const [autoGrantDismissed, setAutoGrantDismissed] = useState(false)
-  // FYセレクタ廃止: 常に各スタッフの最新付与レコードを表示
+  // タブ管理
+  const [activeTab, setActiveTab] = useState<'list' | 'requests' | 'monthly' | 'calendar'>('list')
+  // 申請管理
+  const [leaveRequests, setLeaveRequests] = useState<{ id: string; workerId: number; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; reviewedAt?: string; rejectedReason?: string }[]>([])
+  const [sites, setSites] = useState<{ id: string; name: string }[]>([])
+  const [processingReq, setProcessingReq] = useState<string | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [reqFilter, setReqFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
@@ -123,7 +131,11 @@ export default function LeavePage() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/leave?calendar=true`, { headers: { 'x-admin-password': password } })
+      const [res, reqRes, siteRes] = await Promise.all([
+        fetch(`/api/leave?calendar=true`, { headers: { 'x-admin-password': password } }),
+        fetch('/api/leave-request', { headers: { 'x-admin-password': password } }),
+        fetch('/api/sites', { headers: { 'x-admin-password': password } }),
+      ])
       if (res.ok) {
         const data = await res.json()
         setWorkers(data.workers || [])
@@ -131,6 +143,14 @@ export default function LeavePage() {
         setWorkerNames(data.workerNames || {})
       } else {
         setError('データの取得に失敗しました')
+      }
+      if (reqRes.ok) {
+        const d = await reqRes.json()
+        setLeaveRequests(d.requests || [])
+      }
+      if (siteRes.ok) {
+        const d = await siteRes.json()
+        setSites(d.sites || [])
       }
     } catch {
       setError('通信エラーが発生しました')
@@ -271,17 +291,136 @@ export default function LeavePage() {
         </div>
       </div>
 
-      {/* Org filter tabs */}
-      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
-        {([['all', '全員'], ['hibi', '日比建設'], ['hfu', 'HFU']] as [OrgFilter, string][]).map(([key, label]) => (
-          <button key={key} onClick={() => setOrgFilter(key)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
-              orgFilter === key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-            }`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Main tabs */}
+      {(() => {
+        const pendingCount = leaveRequests.filter(r => r.status === 'pending').length
+        return (
+          <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
+            {([
+              { key: 'list' as const, label: '一覧' },
+              { key: 'requests' as const, label: '申請', badge: pendingCount },
+              { key: 'monthly' as const, label: '月別' },
+              { key: 'calendar' as const, label: 'カレンダー' },
+            ]).map(tab => (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-1 ${
+                  activeTab === tab.key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}>
+                {tab.label}
+                {tab.badge ? <span className="bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5">{tab.badge}</span> : null}
+              </button>
+            ))}
+          </div>
+        )
+      })()}
+
+      {/* Org filter (一覧タブのみ) */}
+      {activeTab === 'list' && (
+        <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
+          {([['all', '全員'], ['hibi', '日比建設'], ['hfu', 'HFU']] as [OrgFilter, string][]).map(([key, label]) => (
+            <button key={key} onClick={() => setOrgFilter(key)}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+                orgFilter === key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── 申請タブ ── */}
+      {activeTab === 'requests' && (() => {
+        const filtered = reqFilter === 'all' ? leaveRequests
+          : leaveRequests.filter(r => r.status === reqFilter)
+        const getSiteName = (siteId: string) => sites.find(s => s.id === siteId)?.name || siteId
+        const fmtDate = (d: string) => { const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}` }
+        const fmtTs = (ts: string) => { const d = new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }
+        const handleApprove = async (id: string) => {
+          setProcessingReq(id)
+          try {
+            const stored = localStorage.getItem('hibi_auth')
+            const { user } = stored ? JSON.parse(stored) : { user: null }
+            await fetch('/api/leave-request', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+              body: JSON.stringify({ action: 'approve', requestId: id, approvedBy: user?.workerId || 0 }),
+            })
+            fetchData()
+          } catch {} finally { setProcessingReq(null) }
+        }
+        const handleReject = async (id: string) => {
+          setProcessingReq(id)
+          try {
+            const stored = localStorage.getItem('hibi_auth')
+            const { user } = stored ? JSON.parse(stored) : { user: null }
+            await fetch('/api/leave-request', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+              body: JSON.stringify({ action: 'reject', requestId: id, rejectedBy: user?.workerId || 0, reason: rejectReason }),
+            })
+            setRejectingId(null); setRejectReason(''); fetchData()
+          } catch {} finally { setProcessingReq(null) }
+        }
+        return (
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              {(['all','pending','approved','rejected'] as const).map(key => (
+                <button key={key} onClick={() => setReqFilter(key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${reqFilter === key ? 'bg-hibi-navy text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100'}`}>
+                  {key === 'all' ? 'すべて' : key === 'pending' ? '承認待ち' : key === 'approved' ? '承認済み' : '却下'}
+                  {key === 'pending' && leaveRequests.filter(r => r.status === 'pending').length > 0 && (
+                    <span className="ml-1 bg-red-500 text-white text-[10px] rounded-full px-1.5">{leaveRequests.filter(r => r.status === 'pending').length}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            {filtered.length === 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400">申請はありません</div>
+            ) : (
+              <div className="space-y-3">
+                {filtered.map(req => (
+                  <div key={req.id} className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-4 ${req.status === 'pending' ? 'border-yellow-300' : 'border-gray-200 dark:border-gray-700'}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <span className="font-bold text-hibi-navy dark:text-white">{req.workerName}</span>
+                          <span className="text-gray-600 dark:text-gray-300 font-medium">{fmtDate(req.date)}</span>
+                          <span className="text-xs text-gray-400">{getSiteName(req.siteId)}</span>
+                        </div>
+                        {req.reason && <div className="text-xs text-gray-500 mb-1">理由: {req.reason}</div>}
+                        <div className="text-[10px] text-gray-400">申請: {fmtTs(req.requestedAt)}{req.reviewedAt ? ` / 処理: ${fmtTs(req.reviewedAt)}` : ''}</div>
+                        {req.status === 'rejected' && req.rejectedReason && <div className="text-[10px] text-red-500 mt-1">却下理由: {req.rejectedReason}</div>}
+                      </div>
+                      <div className="flex items-center gap-2 ml-4">
+                        {req.status === 'pending' && (
+                          <>
+                            <button onClick={() => handleApprove(req.id)} disabled={processingReq === req.id}
+                              className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">承認</button>
+                            <button onClick={() => rejectingId === req.id ? handleReject(req.id) : (setRejectingId(req.id), setRejectReason(''))}
+                              disabled={processingReq === req.id}
+                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                          </>
+                        )}
+                        {req.status === 'approved' && <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">承認済</span>}
+                        {req.status === 'rejected' && <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold">却下</span>}
+                      </div>
+                    </div>
+                    {rejectingId === req.id && (
+                      <div className="mt-3 flex items-center gap-2 border-t pt-3">
+                        <input type="text" value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="却下理由（任意）"
+                          className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-3 py-1.5 text-sm" />
+                        <button onClick={() => handleReject(req.id)} className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold">却下する</button>
+                        <button onClick={() => setRejectingId(null)} className="px-2 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs">取消</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ── 一覧タブ ── */}
+      {activeTab === 'list' && (<>
 
       {/* Auto-granted banner */}
       {autoGranted.length > 0 && !autoGrantDismissed && (
@@ -470,8 +609,10 @@ export default function LeavePage() {
         </table>
       </div>
 
-      {/* ── Monthly Usage Table ── */}
-      {(() => {
+      </>)}
+
+      {/* ── 月別タブ ── */}
+      {activeTab === 'monthly' && (() => {
         // 全ワーカーのmonthlyUsageからユニークな月を収集
         const allMonths = new Set<string>()
         filteredWorkers.forEach(w => {
@@ -522,7 +663,8 @@ export default function LeavePage() {
         )
       })()}
 
-      {/* ── PL Calendar ── */}
+      {/* ── カレンダータブ ── */}
+      {activeTab === 'calendar' && (
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
         <h2 className="text-base font-bold text-hibi-navy dark:text-white mb-3">PLカレンダー</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -593,6 +735,8 @@ export default function LeavePage() {
           })}
         </div>
       </div>
+
+      )}
 
       {/* Calendar tooltip */}
       {calendarTooltip && plCalendar[calendarTooltip.dateKey] && (
