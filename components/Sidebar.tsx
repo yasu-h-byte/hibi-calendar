@@ -40,7 +40,6 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
   // システム
   { label: 'ユーザー管理', icon: '👤', href: '/users', section: 'システム', roles: ['admin'] },
   { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
-  { label: 'アクティビティ', icon: '📝', href: '/activity', section: 'システム', roles: ['admin'] },
   { label: '資料一覧', icon: '📁', href: '/docs', section: 'システム', roles: ['admin', 'approver', 'jimu', 'foreman'] },
   ]
 }
@@ -80,7 +79,6 @@ const MENU_ID_MAP: Record<string, string> = {
   '/export': 'export',
   '/users': 'users',
   '/settings': 'settings',
-  '/activity': 'activity',
   '/guide': 'guide',
   '/docs': 'docs',
 }

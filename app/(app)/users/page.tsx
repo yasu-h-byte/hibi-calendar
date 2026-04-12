@@ -26,7 +26,6 @@ const ALL_MENUS = [
   { id: 'export', label: '帳票出力', section: '管理' },
   { id: 'users', label: 'ユーザー管理', section: 'システム' },
   { id: 'settings', label: '管理者設定', section: 'システム' },
-  { id: 'activity', label: 'アクティビティ', section: 'システム' },
 ]
 
 // Configurable roles (admin always has full access)
