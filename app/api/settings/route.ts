@@ -29,6 +29,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ rolePermissions })
     }
 
+    if (action === 'getUserPasswords') {
+      const userPasswords = (result.data.userPasswords as Record<string, string>) || {}
+      return NextResponse.json({ userPasswords })
+    }
+
     const defaultRates = (result.data.defaultRates as { tobiRate: number; dokoRate: number }) || { tobiRate: 0, dokoRate: 0 }
     return NextResponse.json({ defaultRates })
   } catch (error) {
@@ -54,6 +59,18 @@ export async function POST(request: NextRequest) {
       const docRef = doc(db, 'demmen', 'main')
       const { updateDoc } = await import('firebase/firestore')
       await updateDoc(docRef, { rolePermissions })
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'saveUserPasswords') {
+      const { userPasswords } = body
+      if (!userPasswords || typeof userPasswords !== 'object') {
+        return NextResponse.json({ error: 'userPasswords required' }, { status: 400 })
+      }
+      const docRef = doc(db, 'demmen', 'main')
+      const { updateDoc } = await import('firebase/firestore')
+      await updateDoc(docRef, { userPasswords })
+      await logActivity('admin', 'settings.userPasswords', '個人パスワードを更新')
       return NextResponse.json({ success: true })
     }
 

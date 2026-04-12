@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSites } from '@/lib/sites'
 import { getWorkers } from '@/lib/workers'
 import { buildAuthUser } from '@/lib/auth'
+import { db } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 
 export async function POST(request: NextRequest) {
   const { password, workerId } = await request.json()
@@ -19,16 +21,36 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ user, superAdmin: true })
   }
 
+  // 個人パスワードチェック（役員・事務は個別パスワードで直接ログイン）
+  if (!workerId) {
+    const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+    const mainData = mainSnap.exists() ? mainSnap.data() : {}
+    const userPasswords = (mainData.userPasswords || {}) as Record<string, string>
+
+    // 入力されたパスワードが個人パスワードにマッチするか
+    for (const [wid, pw] of Object.entries(userPasswords)) {
+      if (pw && password === pw) {
+        const [workers, sites] = await Promise.all([getWorkers(), getSites()])
+        const worker = workers.find(w => w.id === Number(wid))
+        if (worker) {
+          const authUser = buildAuthUser(worker, sites)
+          return NextResponse.json({ user: authUser, directLogin: true })
+        }
+      }
+    }
+  }
+
+  // 共通パスワードチェック
   if (!adminPassword || password !== adminPassword) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   if (!workerId) {
-    // Return worker list for selection
+    // 名前選択リスト: 職長のみ表示（役員・事務は個別パスワードでログイン）
     const workers = await getWorkers()
     const staffList = workers
       .filter(w => !w.retired)
-      .filter(w => w.jobType && ['yakuin', 'shokucho', 'jimu'].includes(w.jobType))
+      .filter(w => w.jobType === 'shokucho')
       .map(w => ({ id: w.id, name: w.name }))
     return NextResponse.json({ workers: staffList })
   }

@@ -26,6 +26,11 @@ export default function SettingsPage() {
   // Default rates
   const [rates, setRates] = useState<DefaultRates>({ tobiRate: 0, dokoRate: 0 })
 
+  // User passwords
+  const [userPasswords, setUserPasswords] = useState<Record<string, string>>({})
+  const [pwWorkers, setPwWorkers] = useState<{ id: number; name: string; jobType: string }[]>([])
+  const [savingPw, setSavingPw] = useState(false)
+
   // Backup/Restore
   const [exporting, setExporting] = useState(false)
   const [importPreview, setImportPreview] = useState<BackupPreview | null>(null)
@@ -64,9 +69,31 @@ export default function SettingsPage() {
     }
   }, [password])
 
+  const fetchUserPasswords = useCallback(async () => {
+    if (!password) return
+    try {
+      const [pwRes, wRes] = await Promise.all([
+        fetch('/api/settings?action=getUserPasswords', { headers: { 'x-admin-password': password } }),
+        fetch('/api/workers', { headers: { 'x-admin-password': password } }),
+      ])
+      if (pwRes.ok) {
+        const data = await pwRes.json()
+        setUserPasswords(data.userPasswords || {})
+      }
+      if (wRes.ok) {
+        const data = await wRes.json()
+        setPwWorkers(
+          (data.workers || [])
+            .filter((w: { retired?: string; jobType?: string }) => !w.retired && (w.jobType === 'yakuin' || w.jobType === 'jimu'))
+            .map((w: { id: number; name: string; jobType: string }) => ({ id: w.id, name: w.name, jobType: w.jobType }))
+        )
+      }
+    } catch { /* ignore */ }
+  }, [password])
+
   useEffect(() => {
-    if (password) fetchRates()
-  }, [password, fetchRates])
+    if (password) { fetchRates(); fetchUserPasswords() }
+  }, [password, fetchRates, fetchUserPasswords])
 
   const handleSaveRates = async () => {
     setSaving(true)
@@ -277,6 +304,52 @@ export default function SettingsPage() {
         >
           {saving ? '保存中...' : '保存'}
         </button>
+      </div>
+
+      {/* User Passwords Card */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+        <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">個人パスワード設定</h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+          役員・事務スタッフの個人ログインパスワード。設定すると名前選択なしで直接ログインできます。
+        </p>
+        <div className="space-y-3">
+          {pwWorkers.map(w => (
+            <div key={w.id} className="flex items-center gap-3">
+              <span className="text-sm font-medium w-28">{w.name}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${w.jobType === 'yakuin' ? 'bg-red-100 text-red-700' : 'bg-purple-100 text-purple-700'}`}>
+                {w.jobType === 'yakuin' ? '役員' : '事務'}
+              </span>
+              <input
+                type="text"
+                value={userPasswords[String(w.id)] || ''}
+                onChange={e => setUserPasswords(prev => ({ ...prev, [String(w.id)]: e.target.value }))}
+                placeholder="パスワード未設定"
+                className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+              />
+            </div>
+          ))}
+        </div>
+        {pwWorkers.length > 0 && (
+          <button
+            onClick={async () => {
+              setSavingPw(true)
+              try {
+                const res = await fetch('/api/settings', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                  body: JSON.stringify({ action: 'saveUserPasswords', userPasswords }),
+                })
+                if (res.ok) showMessage('success', '個人パスワードを保存しました')
+                else showMessage('error', '保存に失敗しました')
+              } catch { showMessage('error', 'エラーが発生しました') }
+              finally { setSavingPw(false) }
+            }}
+            disabled={savingPw}
+            className="mt-4 bg-hibi-navy text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
+          >
+            {savingPw ? '保存中...' : '保存'}
+          </button>
+        )}
       </div>
 
       {/* Backup Card */}
