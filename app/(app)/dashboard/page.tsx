@@ -415,7 +415,8 @@ export default function DashboardPage() {
   }
 
   const today = new Date()
-  const todayStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`
+  const dowJa = ['日', '月', '火', '水', '木', '金', '土']
+  const todayStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日(${dowJa[today.getDay()]})`
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
