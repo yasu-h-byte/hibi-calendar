@@ -271,11 +271,6 @@ function MonthlyChecklist({ password }: { password: string }) {
 
   if (!status || status.calTotal === 0) return null
 
-  const allDone = status.calCreated >= status.calTotal &&
-    status.calApproved >= status.calTotal &&
-    status.signed >= status.signTotal
-  if (allDone) return null // 全て完了なら非表示
-
   const now = new Date()
   const nextYm = getNextYm()
   const ymLabel = `${nextYm.slice(0, 4)}年${parseInt(nextYm.slice(4))}月`
