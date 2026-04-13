@@ -152,27 +152,27 @@ export default function ForemanAttendancePage() {
       <div className="bg-hibi-navy text-white px-4 py-4">
         <div className="max-w-lg mx-auto">
           <div className="text-sm opacity-70">職長</div>
-          <div className="text-xl font-bold">{data.foreman.name}</div>
-          <div className="text-sm opacity-80 mt-1">{data.site.name}</div>
+          <div className="text-lg sm:text-xl font-bold truncate">{data.foreman.name}</div>
+          <div className="text-sm opacity-80 mt-1 truncate">{data.site.name}</div>
         </div>
       </div>
 
       {/* Date nav */}
-      <div className="bg-white border-b px-4 py-3">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+      <div className="bg-white border-b px-3 py-3">
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-2">
           <button
             onClick={() => navDay(-1)}
-            className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-bold active:bg-gray-200"
+            className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-bold active:bg-gray-200 shrink-0"
           >
             ◀ 前日
           </button>
-          <div className="text-center">
-            <div className="text-base font-bold text-hibi-navy">{data.date.dateLabel}</div>
+          <div className="text-center min-w-0">
+            <div className="text-sm sm:text-base font-bold text-hibi-navy truncate">{data.date.dateLabel}</div>
           </div>
           <button
             onClick={() => navDay(1)}
             disabled={isToday}
-            className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-bold active:bg-gray-200 disabled:opacity-30"
+            className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-bold active:bg-gray-200 disabled:opacity-30 shrink-0"
           >
             翌日 ▶
           </button>
@@ -217,11 +217,11 @@ export default function ForemanAttendancePage() {
             data.workers.map(w => (
               <div
                 key={w.id}
-                className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
+                className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
                 onClick={() => { setEditingWorker({ id: w.id, name: w.name }); setEditOT(w.entry?.o || 0) }}
               >
-                <span className="text-sm font-medium text-gray-800">{w.name}</span>
-                <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[w.status]}`}>
+                <span className="text-sm font-medium text-gray-800 truncate min-w-0">{w.name}</span>
+                <span className={`text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 ${STATUS_COLORS[w.status]}`}>
                   {STATUS_EMOJI[w.status]} {STATUS_LABELS[w.status]}
                   {w.status === 'overtime' && w.entry?.o ? ` +${w.entry.o}h` : ''}
                 </span>
@@ -236,11 +236,11 @@ export default function ForemanAttendancePage() {
           {data.pastDays.map((pd, i) => (
             <div
               key={i}
-              className="flex items-center justify-between py-2 cursor-pointer"
+              className="flex items-center justify-between gap-2 py-2 cursor-pointer"
               onClick={() => setDateISO(pd.dateISO)}
             >
-              <span className="text-sm text-gray-600">{pd.date}</span>
-              <span className={`text-xs px-2 py-1 rounded-full font-bold ${
+              <span className="text-sm text-gray-600 truncate min-w-0">{pd.date}</span>
+              <span className={`text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 ${
                 pd.approved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
               }`}>
                 {pd.approved ? '✅ 確認済み' : '— 未確認'}
@@ -253,11 +253,11 @@ export default function ForemanAttendancePage() {
       {/* Edit worker modal */}
       {editingWorker && (
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setEditingWorker(null)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center">{editingWorker.name}</h3>
+          <div className="bg-white rounded-t-2xl w-full max-w-lg px-4 sm:px-6 pt-5 pb-[env(safe-area-inset-bottom,8px)]" onClick={e => e.stopPropagation()} style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}>
+            <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center truncate">{editingWorker.name}</h3>
             <p className="text-sm text-gray-500 mb-4 text-center">{data.date.dateLabel}</p>
 
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
               {([
                 { choice: 'work', emoji: '🔨', label: '出勤', color: 'bg-blue-500' },
                 { choice: 'rest', emoji: '🏠', label: '休み', color: 'bg-gray-400' },
@@ -268,10 +268,10 @@ export default function ForemanAttendancePage() {
                   key={btn.choice}
                   onClick={() => handleEdit(btn.choice)}
                   disabled={saving}
-                  className={`${btn.color} text-white rounded-xl py-4 text-center active:scale-95 disabled:opacity-50`}
+                  className={`${btn.color} text-white rounded-xl py-3 sm:py-4 text-center active:scale-95 disabled:opacity-50`}
                 >
-                  <div className="text-2xl mb-1">{btn.emoji}</div>
-                  <div className="text-sm font-bold">{btn.label}</div>
+                  <div className="text-xl sm:text-2xl mb-1">{btn.emoji}</div>
+                  <div className="text-xs sm:text-sm font-bold">{btn.label}</div>
                 </button>
               ))}
             </div>
