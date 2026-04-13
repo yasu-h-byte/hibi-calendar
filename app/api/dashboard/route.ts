@@ -681,6 +681,9 @@ export async function GET(request: NextRequest) {
       cd.cumProfit = cumP
     }
 
+    // 請求が入っている月のみ表示（売上0の月は累積が横ばいになり実態を反映しないため除外）
+    const cumulativeDataFiltered = cumulativeData.filter(cd => cd.billing > 0)
+
     // ═══ PL Alert ═══
     const plAlert = computePLAlert(main)
 
@@ -892,7 +895,7 @@ export async function GET(request: NextRequest) {
       monthlyTrend: filteredMonthlyTrend,
       todayStatus,
       dailyAttendance,
-      cumulativeData,
+      cumulativeData: cumulativeDataFiltered,
       plAlert,
       foreignWorkerRates,
       siteList,
