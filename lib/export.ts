@@ -602,7 +602,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   if (showAbsence) {
     wHeaders.push('欠勤日数', '欠勤控除', '差引支給')
   }
-  wHeaders.push('基本給', '残業手当', '欠勤控除', '支給額合計')
+  wHeaders.push('基本給', '追加所定手当', '残業手当', '欠勤控除', '支給額合計')
   s1Rows.push(wHeaders)
 
   // Group: 日比建設
@@ -696,9 +696,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   if (foreignWorkers.length > 0) {
     s2Rows.push([])
     const fHeaders = [
-      '名前', '時給', '所定日数', '所定時間',
+      '名前', '時給', 'ベース日数', '法定上限(h)',
       '実出勤日数', '実労働時間', '法定残業時間',
-      '基本給', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+      '基本給（固定）', '追加所定手当', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
     ]
     s2Rows.push(fHeaders)
 
@@ -707,11 +707,12 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         w.name,
         w.hourlyRate || 0,
         prescribedDays,
-        w.prescribedHours || (prescribedDays * 7),
+        w.legalLimit || 0,
         w.actualWorkDays || 0,
         w.actualWorkHours || 0,
         w.legalOtHours || 0,
-        w.basePay || 0,
+        w.fixedBasePay || w.basePay || 0,
+        w.additionalAllowance || 0,
         w.otAllowance || 0,
         w.absence || 0,
         w.absentDeduction || 0,
@@ -725,7 +726,8 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       foreignWorkers.reduce((s, w) => s + (w.actualWorkDays || 0), 0),
       null,
       foreignWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0),
-      foreignWorkers.reduce((s, w) => s + (w.basePay || 0), 0),
+      foreignWorkers.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
+      foreignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.absence || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0),
@@ -739,9 +741,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   if (salaryForeignWorkers.length > 0) {
     s2Rows.push([])
     const sfHeaders = [
-      '名前', '月給', '所定日数', '所定時間',
+      '名前', '月給', 'ベース日数', '法定上限(h)',
       '実出勤日数', '実労働時間', '法定残業時間',
-      '基本給', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+      '基本給（固定）', '追加所定手当', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
     ]
     s2Rows.push(sfHeaders)
 
@@ -750,11 +752,12 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         w.name,
         w.salary || 0,
         prescribedDays,
-        w.prescribedHours || (prescribedDays * 7),
+        w.legalLimit || 0,
         w.actualWorkDays || 0,
         w.actualWorkHours || 0,
         w.legalOtHours || 0,
-        w.basePay || 0,
+        w.fixedBasePay || w.basePay || 0,
+        w.additionalAllowance || 0,
         w.otAllowance || 0,
         w.absence || 0,
         w.absentDeduction || 0,
@@ -767,7 +770,8 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       salaryForeignWorkers.reduce((s, w) => s + (w.actualWorkDays || 0), 0),
       null,
       salaryForeignWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0),
-      salaryForeignWorkers.reduce((s, w) => s + (w.basePay || 0), 0),
+      salaryForeignWorkers.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
+      salaryForeignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.absence || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0),
@@ -843,7 +847,8 @@ function buildWorkerRow(
     )
   }
   row.push(
-    w.basePay || 0,
+    w.fixedBasePay || w.basePay || 0,
+    w.additionalAllowance || 0,
     w.otAllowance || 0,
     w.absentDeduction || 0,
     w.salaryNetPay || 0,

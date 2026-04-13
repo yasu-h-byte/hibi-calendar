@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react'
 interface DefaultRates {
   tobiRate: number
   dokoRate: number
+  baseDays: number
 }
 
 interface BackupPreview {
@@ -89,7 +90,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('settings')
 
   // Default rates
-  const [rates, setRates] = useState<DefaultRates>({ tobiRate: 0, dokoRate: 0 })
+  const [rates, setRates] = useState<DefaultRates>({ tobiRate: 0, dokoRate: 0, baseDays: 20 })
 
   // User passwords
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({})
@@ -134,7 +135,7 @@ export default function SettingsPage() {
       })
       if (!res.ok) throw new Error('Unauthorized')
       const data = await res.json()
-      setRates(data.defaultRates || { tobiRate: 0, dokoRate: 0 })
+      setRates({ tobiRate: 0, dokoRate: 0, baseDays: 20, ...data.defaultRates })
     } catch {
       showMessage('error', '設定の読み込みに失敗しました')
     } finally {
@@ -210,6 +211,7 @@ export default function SettingsPage() {
           action: 'saveDefaultRates',
           tobiRate: rates.tobiRate,
           dokoRate: rates.dokoRate,
+          baseDays: rates.baseDays,
         }),
       })
       if (!res.ok) throw new Error('Save failed')
@@ -313,10 +315,10 @@ export default function SettingsPage() {
     }
   }
 
-  const adjustRate = (field: 'tobiRate' | 'dokoRate', delta: number) => {
+  const adjustRate = (field: 'tobiRate' | 'dokoRate' | 'baseDays', delta: number) => {
     setRates(prev => ({
       ...prev,
-      [field]: Math.max(0, prev[field] + delta),
+      [field]: Math.max(field === 'baseDays' ? 1 : 0, prev[field] + delta),
     }))
   }
 
@@ -433,6 +435,36 @@ export default function SettingsPage() {
                     +1000
                   </button>
                   <span className="text-gray-500 dark:text-gray-400 text-sm">円</span>
+                </div>
+              </div>
+
+              {/* Base Days */}
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">基本給ベース日数（外国人・3層構造）</label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  基本給（固定）= 時給 × ベース日数 × 7h。この日数を超えた出勤分は追加所定手当として支給。
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => adjustRate('baseDays', -1)}
+                    className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg font-bold text-lg transition dark:text-white"
+                  >
+                    −1
+                  </button>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={rates.baseDays}
+                    onChange={e => setRates(prev => ({ ...prev, baseDays: Math.max(1, Number(e.target.value.replace(/\D/g, '')) || 1) }))}
+                    className="w-20 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center text-lg font-bold"
+                  />
+                  <button
+                    onClick={() => adjustRate('baseDays', 1)}
+                    className="px-3 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-lg font-bold text-lg transition dark:text-white"
+                  >
+                    +1
+                  </button>
+                  <span className="text-gray-500 dark:text-gray-400 text-sm">日</span>
                 </div>
               </div>
             </div>

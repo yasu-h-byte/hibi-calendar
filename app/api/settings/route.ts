@@ -34,8 +34,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ userPasswords })
     }
 
-    const defaultRates = (result.data.defaultRates as { tobiRate: number; dokoRate: number }) || { tobiRate: 0, dokoRate: 0 }
-    return NextResponse.json({ defaultRates })
+    const defaultRates = (result.data.defaultRates as { tobiRate: number; dokoRate: number; baseDays?: number }) || { tobiRate: 0, dokoRate: 0 }
+    return NextResponse.json({ defaultRates: { ...defaultRates, baseDays: defaultRates.baseDays ?? 20 } })
   } catch (error) {
     console.error('Settings GET error:', error)
     return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 })
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'saveDefaultRates') {
-      const { tobiRate, dokoRate } = body
+      const { tobiRate, dokoRate, baseDays } = body
       if (typeof tobiRate !== 'number' || typeof dokoRate !== 'number') {
         return NextResponse.json({ error: '単価は数値で入力してください' }, { status: 400 })
       }
@@ -87,9 +87,10 @@ export async function POST(request: NextRequest) {
       }
 
       const data = docSnap.data()
-      const oldRates = (data.defaultRates as { tobiRate: number; dokoRate: number }) || { tobiRate: 0, dokoRate: 0 }
-      await setDoc(docRef, { ...data, defaultRates: { tobiRate, dokoRate } })
-      await logActivity('admin', 'rates.default', `鳶 ¥${oldRates.tobiRate}→¥${tobiRate}, 土工 ¥${oldRates.dokoRate}→¥${dokoRate}`)
+      const oldRates = (data.defaultRates as { tobiRate: number; dokoRate: number; baseDays?: number }) || { tobiRate: 0, dokoRate: 0 }
+      const newBaseDays = typeof baseDays === 'number' ? baseDays : (oldRates.baseDays ?? 20)
+      await setDoc(docRef, { ...data, defaultRates: { tobiRate, dokoRate, baseDays: newBaseDays } })
+      await logActivity('admin', 'rates.default', `鳶 ¥${oldRates.tobiRate}→¥${tobiRate}, 土工 ¥${oldRates.dokoRate}→¥${dokoRate}, ベース日数 ${oldRates.baseDays ?? 20}→${newBaseDays}`)
       return NextResponse.json({ success: true })
     }
 

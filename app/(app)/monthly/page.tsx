@@ -43,6 +43,10 @@ interface WorkerMonthly {
   otAllowance?: number
   absentDeduction?: number
   salaryNetPay?: number
+  // 3層構造 fields
+  fixedBasePay?: number
+  additionalAllowance?: number
+  legalLimit?: number
 }
 
 interface SubconMonthly {
@@ -412,7 +416,7 @@ export default function MonthlyPage() {
   const isWorkerTab = tab !== 'subcon'
 
   // Dynamic column count for empty state
-  const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + 4
+  const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + 5  // +5: 基本給, 追加所定, 残業, 欠勤控除, 支給額
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -589,6 +593,7 @@ export default function MonthlyPage() {
                 {showSalaryColumns && (
                   <>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">基本給</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">追加所定</th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">残業手当</th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">欠勤控除</th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">支給額合計</th>
@@ -666,7 +671,10 @@ export default function MonthlyPage() {
                       {showSalaryColumns && (
                         <>
                           <td className="px-3 py-2.5 text-right tabular-nums bg-green-50/50 text-gray-600">
-                            {w.basePay != null && w.basePay > 0 ? fmtYen(w.basePay) : '—'}
+                            {w.fixedBasePay != null && w.fixedBasePay > 0 ? fmtYen(w.fixedBasePay) : w.basePay != null && w.basePay > 0 ? fmtYen(w.basePay) : '—'}
+                          </td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.additionalAllowance || 0) > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                            {w.visa !== 'none' && (w.additionalAllowance || 0) > 0 ? fmtYen(w.additionalAllowance!) : '—'}
                           </td>
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.otAllowance || 0) > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
                             {(w.otAllowance || 0) > 0 ? fmtYen(w.otAllowance!) : '—'}
@@ -719,7 +727,13 @@ export default function MonthlyPage() {
                   {showSalaryColumns && (
                     <>
                       <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
-                        {fmtYen(filteredWorkers.reduce((s, w) => s + (w.basePay || 0), 0))}
+                        {fmtYen(filteredWorkers.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0))}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                        {(() => {
+                          const totalAddAllow = filteredWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0)
+                          return totalAddAllow > 0 ? fmtYen(totalAddAllow) : '—'
+                        })()}
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
                         {(() => {

@@ -659,6 +659,10 @@ export interface WorkerMonthly {
   otAllowance?: number
   absentDeduction?: number
   salaryNetPay?: number
+  // 3層構造 fields (A+X案: 2026年5月〜)
+  fixedBasePay?: number        // 基本給（固定）= 時給 × ベース日数 × 7h
+  additionalAllowance?: number // 追加所定手当 = 時給 × MAX(0, 実出勤日数 − ベース日数) × 7h
+  legalLimit?: number          // 法定上限時間 = 暦日数 × 40 ÷ 7
 }
 
 export interface SubconMonthly {
@@ -694,6 +698,7 @@ export function computeMonthly(
   ym: string,
   prescribedDays: number = 0,
   siteWorkDaysMap?: Record<string, number>,  // siteId -> workDays (from calendar)
+  baseDays: number = 20,  // 3層構造の基本給ベース日数（管理者設定）
 ): {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
@@ -822,52 +827,80 @@ export function computeMonthly(
       }
     }
 
-    if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0) {
-      // 月給制の外国人（時給ベース）: variable working hours system
-      const prescribedH = workerPrescribedDays * 7
-      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
-      const legalOt = Math.max(0, actualWorkH - prescribedH)
-      const basePay = Math.round(wm.hourlyRate * prescribedH)
-      const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
-      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed)
-      const absentDeduction = Math.round(wm.hourlyRate * 7 * absentDays)
-      const salaryNet = basePay - absentDeduction + otAllowance
+    if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0) {
+      // ── 3層構造（A+X案）: 基本給固定 + 追加所定手当 + 残業手当（法定上限基準） ──
+      const ymY = parseInt(ym.slice(0, 4))
+      const ymM = parseInt(ym.slice(4, 6))
+      const calendarDays = new Date(ymY, ymM, 0).getDate()  // 暦日数
+      const legalLimitH = calendarDays * 40 / 7              // 法定上限時間
 
-      wm.prescribedHours = prescribedH
+      // 基本給（固定）= 時給 × ベース日数 × 7h
+      const fixedBase = Math.round(wm.hourlyRate * baseDays * 7)
+
+      // 追加所定手当 = 時給 × MAX(0, 実出勤日数 − ベース日数) × 7h
+      const additionalDays = Math.max(0, wm.actualWorkDays - baseDays)
+      const additionalAllow = Math.round(wm.hourlyRate * additionalDays * 7)
+
+      // 残業手当 = 時給 × 1.25 × MAX(0, 実労働時間 − 法定上限)
+      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
+      const legalOt = Math.max(0, actualWorkH - legalLimitH)
+      const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
+
+      // 欠勤控除 = 時給 × 7h × MAX(0, ベース日数 − 実出勤日数 − 有給日数)
+      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed)
+      const absentDeduction = Math.round(wm.hourlyRate * 7 * absentDays)
+
+      // 支給額 = 基本給 − 欠勤控除 + 追加所定手当 + 残業手当
+      const salaryNet = fixedBase - absentDeduction + additionalAllow + otAllowance
+
+      wm.fixedBasePay = fixedBase
+      wm.additionalAllowance = additionalAllow
+      wm.legalLimit = Math.round(legalLimitH * 10) / 10
+      wm.prescribedHours = baseDays * 7
       wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
       wm.legalOtHours = Math.round(legalOt * 10) / 10
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
-      wm.basePay = basePay
+      wm.basePay = fixedBase  // legacy: UI互換のため
       wm.otAllowance = otAllowance
       wm.absentDeduction = absentDeduction
       wm.salaryNetPay = salaryNet
 
-      // Also set legacy absence fields
       wm.absence = absentDays
       wm.absentCost = absentDeduction
       wm.netPay = salaryNet
-    } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && workerPrescribedDays > 0) {
-      // 月給制の外国人（旧salary方式、hourlyRate未設定）: salary-based calculation
-      const prescribedH = workerPrescribedDays * 7
-      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
-      const legalOt = Math.max(0, actualWorkH - prescribedH)
-      const hourlyRate = wm.salary / prescribedH
-      const basePay = wm.salary
-      const otAllowance = Math.round(hourlyRate * 1.25 * legalOt)
-      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed)
-      const absentDeduction = Math.round(wm.salary / workerPrescribedDays * absentDays)
-      const salaryNet = basePay - absentDeduction + otAllowance
+    } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0) {
+      // ── 3層構造（salary方式: hourlyRate未設定、旧salary値から時給を逆算） ──
+      const ymY = parseInt(ym.slice(0, 4))
+      const ymM = parseInt(ym.slice(4, 6))
+      const calendarDays = new Date(ymY, ymM, 0).getDate()
+      const legalLimitH = calendarDays * 40 / 7
+      const derivedHourlyRate = wm.salary / (baseDays * 7)  // 月給からベース時給を逆算
 
-      wm.prescribedHours = prescribedH
+      const fixedBase = wm.salary  // 月給固定
+      const additionalDays = Math.max(0, wm.actualWorkDays - baseDays)
+      const additionalAllow = Math.round(derivedHourlyRate * additionalDays * 7)
+
+      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
+      const legalOt = Math.max(0, actualWorkH - legalLimitH)
+      const otAllowance = Math.round(derivedHourlyRate * 1.25 * legalOt)
+
+      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed)
+      const absentDeduction = Math.round(derivedHourlyRate * 7 * absentDays)
+
+      const salaryNet = fixedBase - absentDeduction + additionalAllow + otAllowance
+
+      wm.fixedBasePay = fixedBase
+      wm.additionalAllowance = additionalAllow
+      wm.legalLimit = Math.round(legalLimitH * 10) / 10
+      wm.prescribedHours = baseDays * 7
       wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
       wm.legalOtHours = Math.round(legalOt * 10) / 10
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
-      wm.basePay = basePay
+      wm.basePay = fixedBase
       wm.otAllowance = otAllowance
       wm.absentDeduction = absentDeduction
       wm.salaryNetPay = salaryNet
 
-      // Also set legacy absence fields
       wm.absence = absentDays
       wm.absentCost = absentDeduction
       wm.netPay = salaryNet

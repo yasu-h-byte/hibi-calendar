@@ -23,7 +23,9 @@ export async function GET(request: NextRequest) {
     // カレンダーから現場別所定日数を取得（5月以降は手入力不要）
     const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}
     const hasCalendarData = Object.keys(siteWorkDaysMap).length > 0
-    const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined)
+    // 3層構造のベース日数（管理者設定）
+    const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
+    const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays)
 
     const locked = !!(main.locks[ym])
     const workDays = prescribedDays

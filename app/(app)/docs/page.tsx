@@ -6,7 +6,7 @@ export default function DocsPage() {
     {
       category: '説明会資料',
       items: [
-        { title: '給与制度説明会（2026/4/19）', desc: 'ベトナム人スタッフ向け・日越二言語', url: '/briefing-20260419.html', icon: '🎤', badge: '日本語+ベトナム語', updated: '2026-04-08' },
+        { title: '給与制度説明会（2026/4/19）', desc: '3層構造（基本給固定+追加所定手当+残業手当）の説明・日越二言語', url: '/briefing-20260419.html', icon: '🎤', badge: '日本語+ベトナム語', updated: '2026-04-13' },
       ],
     },
     {

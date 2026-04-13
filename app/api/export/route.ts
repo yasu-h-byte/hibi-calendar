@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
     }
 
     const activeSites = main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name }))
+    const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
 
     let buffer: Buffer
     let filename: string
@@ -120,7 +121,7 @@ export async function GET(request: NextRequest) {
       }
 
       case 'bukake': {
-        const result = computeMonthly(main, attD, attSD, ymStr)
+        const result = computeMonthly(main, attD, attSD, ymStr, 0, undefined, baseDays)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -164,7 +165,7 @@ export async function GET(request: NextRequest) {
 
       case 'monthly': {
         // Monthly report: return JSON data for client-side print rendering
-        const result = computeMonthly(main, attD, attSD, ymStr)
+        const result = computeMonthly(main, attD, attSD, ymStr, 0, undefined, baseDays)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -181,7 +182,7 @@ export async function GET(request: NextRequest) {
       case 'monthlyExcel': {
         const prescribedDays = Number(searchParams.get('prescribedDays')) || 0
         const orgFilter = searchParams.get('org') || 'all'
-        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays)
+        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays, undefined, baseDays)
         const monthSiteNames: Record<string, string> = {}
         for (const s of main.sites) monthSiteNames[s.id] = s.name
 
