@@ -30,7 +30,22 @@ interface SiteInfo {
 }
 
 export default function PublicCalendarPage() {
-  const { year, month, ym } = getNextMonth()
+  const nextMonth = getNextMonth()
+
+  // URLパラメータから対象月を取得（なければ翌月をデフォルト）
+  const [ymParam, setYmParam] = useState<string | null>(null)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const qym = params.get('ym')
+    if (qym && /^\d{4}-\d{2}$/.test(qym)) {
+      setYmParam(qym)
+    }
+  }, [])
+
+  const ym = ymParam || nextMonth.ym
+  const year = parseInt(ym.slice(0, 4))
+  const month = parseInt(ym.slice(5, 7))
+
   const [workers, setWorkers] = useState<WorkerInfo[]>([])
   const [sites, setSites] = useState<SiteInfo[]>([])
   const [loading, setLoading] = useState(true)

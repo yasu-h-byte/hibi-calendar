@@ -160,16 +160,15 @@ export default function CalendarManagePage() {
 
   const copyMessage = () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const msg = `Lich lam viec thang ${m}/${y}
-HIBI CONSTRUCTION
-
-Vui long xac nhan va ky:
-${baseUrl}/calendar/public
-
-Chon cong truong -> Chon ten -> Xem lich -> Ky
-
+    const calUrl = `${baseUrl}/calendar/public?ym=${ym}`
+    const msg = `HIBI CONSTRUCTION
+Lich lam viec thang ${m}/${y}
 就業カレンダー ${y}年${m}月
-上のリンクから現場を選んで署名してください`
+
+${calUrl}
+
+Chon ten -> Xem lich -> Ky
+名前を選んで → カレンダー確認 → 署名`
     navigator.clipboard.writeText(msg).then(() => {
       setCopiedMsg(true)
       setTimeout(() => setCopiedMsg(false), 2000)

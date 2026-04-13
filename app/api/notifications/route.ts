@@ -79,14 +79,15 @@ export async function GET(request: NextRequest) {
           }
         }
         const ymLabel = `${currentYm.slice(0, 4)}年${parseInt(currentYm.slice(4, 6))}月`
-        const calUrl = 'https://hibi-calendar.vercel.app/calendar/public'
+        const calYm = `${currentYm.slice(0, 4)}-${currentYm.slice(4, 6)}`
+        const calUrl = `https://hibi-calendar.vercel.app/calendar/public?ym=${calYm}`
         notifications.push({
           id: 'unsigned-calendar',
           icon: '\uD83D\uDCC5',
           message: `就業カレンダー未署名: ${unsignedCount}件の署名が未完了です`,
           type: 'warning',
           count: unsignedCount,
-          messengerText: `📋 ${ymLabel}の就業カレンダーが確定しました。\n以下のリンクから確認して署名してください。\n${calUrl}\n\nĐã xác nhận lịch làm việc tháng ${parseInt(currentYm.slice(4, 6))}. Vui lòng xác nhận và ký tại link trên.\n\n未署名 / Chưa ký: ${unsignedNames.join(', ')}`,
+          messengerText: `HIBI CONSTRUCTION\n就業カレンダー ${ymLabel}\nLịch làm việc tháng ${parseInt(currentYm.slice(4, 6))}\n\n${calUrl}\n\n名前を選んで → カレンダー確認 → 署名\nChọn tên → Xem lịch → Ký\n\n未署名 / Chưa ký:\n${unsignedNames.join(', ')}`,
         })
       }
     } catch (e) {
