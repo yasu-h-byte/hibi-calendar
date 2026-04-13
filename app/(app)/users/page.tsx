@@ -56,7 +56,7 @@ export default function UsersPage() {
   const [workers, setWorkers] = useState<UserWorker[]>([])
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true)
-  const [permissions, setPermissions] = useState<Record<string, string[]>>(DEFAULT_PERMISSIONS)
+  const [permissions, setPermissions] = useState<Record<string, string[]> | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -85,7 +85,11 @@ export default function UsersPage() {
         const data = await permRes.json()
         if (data.rolePermissions && Object.keys(data.rolePermissions).length > 0) {
           setPermissions(data.rolePermissions)
+        } else {
+          setPermissions(DEFAULT_PERMISSIONS)
         }
+      } else {
+        setPermissions(DEFAULT_PERMISSIONS)
       }
     } finally {
       setLoading(false)
@@ -96,6 +100,7 @@ export default function UsersPage() {
 
   const togglePermission = (roleId: string, menuId: string) => {
     setPermissions(prev => {
+      if (!prev) return prev
       const current = prev[roleId] || []
       const next = current.includes(menuId)
         ? current.filter(m => m !== menuId)
@@ -215,7 +220,7 @@ export default function UsersPage() {
           </div>
           <button
             onClick={savePermissions}
-            disabled={saving}
+            disabled={saving || !permissions}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
               saved
                 ? 'bg-green-100 text-green-700'
@@ -270,7 +275,7 @@ export default function UsersPage() {
                         <td key={r.id} className="text-center px-3 py-2.5">
                           <input
                             type="checkbox"
-                            checked={(permissions[r.id] || []).includes(menu.id)}
+                            checked={permissions ? (permissions[r.id] || []).includes(menu.id) : false}
                             onChange={() => togglePermission(r.id, menu.id)}
                             className="w-4 h-4 accent-hibi-navy cursor-pointer"
                           />
