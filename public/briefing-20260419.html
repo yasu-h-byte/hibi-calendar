@@ -46,78 +46,63 @@
   .qa { margin: 12px 0; }
   .qa-q { font-weight: bold; font-size: 15px; color: #1B2A4A; margin: 16px 0 4px; }
   .qa-a { padding-left: 16px; border-left: 3px solid #3b82f6; margin: 0 0 0 8px; }
+
+  /* 3-tier salary diagram */
+  .tier-stack { display: flex; flex-direction: column; gap: 0; margin: 20px auto; max-width: 520px; }
+  .tier-box { padding: 18px 20px; text-align: center; font-size: 15px; line-height: 1.6; }
+  .tier-3 { background: #fde68a; border: 2px solid #f59e0b; border-radius: 12px 12px 0 0; }
+  .tier-2 { background: #bfdbfe; border: 2px solid #3b82f6; border-top: none; }
+  .tier-1 { background: #bbf7d0; border: 2px solid #22c55e; border-top: none; border-radius: 0 0 12px 12px; }
+  .tier-label { font-weight: bold; font-size: 17px; }
+  .tier-formula { font-size: 14px; margin-top: 4px; }
+  .tier-note { font-size: 13px; color: #555; margin-top: 2px; }
+
   @media print { body { font-size: 13px; padding: 0; } .section { break-inside: avoid; } }
-  @media (max-width: 600px) { .compare { flex-direction: column; } .step-flow { flex-direction: column; } .step-arrow { transform: rotate(90deg); } }
+  @media (max-width: 600px) { .compare { flex-direction: column; } .step-flow { flex-direction: column; } .step-arrow { transform: rotate(90deg); } .tier-stack { max-width: 100%; } }
 </style>
 </head>
 <body>
-<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">&larr; システムに戻る</a></div>
 
-<h1>給与制度の変更について<br><span class="vi" style="font-size: 18px;">Về việc thay đổi chế độ lương</span></h1>
+<h1>給与制度説明会<br><span class="vi" style="font-size: 18px;">Buổi giải thích chế độ lương</span></h1>
 <p class="subtitle">
   2026年4月19日 / Ngày 19 tháng 4 năm 2026<br>
   株式会社日比建設 / エイチエフユナイテッド株式会社
 </p>
 
-<!-- ===== 1 ===== -->
+<!-- ===== 1. なぜ変わるのか ===== -->
 <h2>1. なぜ変わるのか / Tại sao thay đổi?</h2>
 
 <div class="section">
   <div class="emoji">🎯</div>
   <p style="text-align: center; font-size: 18px; font-weight: bold;">
-    みなさんの給与をもっと公平にするためです<br>
-    <span class="vi">Để trả lương công bằng hơn cho tất cả mọi người</span>
+    みなさんの給与をもっと分かりやすく・公平にするためです<br>
+    <span class="vi">Để lương của mọi người dễ hiểu hơn và công bằng hơn</span>
   </p>
 
   <div class="section" style="background: #fff; border: 2px solid #1B2A4A; margin: 16px 0;">
     <h3 style="margin: 0 0 12px; color: #1B2A4A; font-size: 17px; border: none; padding: 0;">3つの理由 / 3 lý do thay đổi</h3>
 
     <p style="margin: 12px 0;">
-      <strong style="font-size: 16px;">① 月ごとの不公平をなくす</strong><br>
-      今までは、稼働日数が20日の月も25日の月も、<strong>同じ固定月給</strong>を払っていました。<br>
-      つまり、20日の月は1日あたりの時給が高く、25日の月は時給が低くなっていました。<br>
-      これは月によって実質的な時給がバラついている状態で、<strong>公平ではありません</strong>。<br>
-      新しい制度では、<strong>毎月の時給が同じ</strong>になり、働いた時間に正確に比例した給与になります。<br>
-      <span class="vi">Trước đây, dù tháng làm 20 ngày hay 25 ngày, đều trả <strong>cùng một mức lương cố định</strong>.<br>
-      Nghĩa là tháng 20 ngày thì lương giờ cao hơn, tháng 25 ngày thì lương giờ thấp hơn.<br>
-      Điều này có nghĩa là lương theo giờ thực tế thay đổi mỗi tháng, <strong>không công bằng</strong>.<br>
-      Với chế độ mới, <strong>lương theo giờ luôn giống nhau</strong> mỗi tháng, lương tỷ lệ chính xác với thời gian làm việc.</span>
+      <strong style="font-size: 16px;">① 給与の仕組みを分かりやすくする</strong><br>
+      今までは「時給 &times; 所定時間」で計算していましたが、月によって所定時間が変わるため、<strong>毎月いくらもらえるか分かりにくい</strong>状態でした。<br>
+      新しい制度では、<strong>3つの層</strong>（基本給 + 追加所定手当 + 残業手当）に分けて、それぞれの計算がはっきり分かるようにします。<br>
+      <span class="vi">Trước đây tính theo "lương giờ &times; giờ quy định", nhưng giờ quy định thay đổi mỗi tháng nên <strong>khó hiểu mỗi tháng nhận bao nhiêu</strong>.<br>
+      Chế độ mới chia thành <strong>3 tầng</strong> (Lương cơ bản + Phụ cấp ngày thêm + Phụ cấp tăng ca), mỗi phần tính rõ ràng.</span>
     </p>
 
     <p style="margin: 12px 0;">
-      <strong style="font-size: 16px;">② 建設業界全体の変化に対応する</strong><br>
-      建設業界では「4週8閉所」（4週間で8日休み＝週2日休み）を目指して動いています。<br>
+      <strong style="font-size: 16px;">② 最低保証で安心</strong><br>
+      新しい制度では、<strong>毎月20日分の基本給が必ず保証</strong>されます。暇な月でも、20日分は必ずもらえます。<br>
+      <span class="vi">Với chế độ mới, <strong>lương cơ bản 20 ngày luôn được đảm bảo</strong> mỗi tháng. Dù tháng ít việc, vẫn nhận đủ 20 ngày.</span>
+    </p>
+
+    <p style="margin: 12px 0;">
+      <strong style="font-size: 16px;">③ 建設業界全体の変化に対応する</strong><br>
+      建設業界では「4週8閉所」（4週間で8日休み＝週2日休み）を目指しています。<br>
       今後、<strong>土曜日の休みが増えていきます</strong>。新しい制度はその変化にスムーズに対応できます。<br>
       <span class="vi">Ngành xây dựng đang hướng tới "4 tuần 8 ngày nghỉ" (nghỉ 2 ngày/tuần).<br>
-      Trong tương lai, <strong>số ngày nghỉ thứ 7 sẽ tăng lên</strong>. Chế độ mới có thể thích ứng dễ dàng với sự thay đổi này.</span>
-    </p>
-
-    <p style="margin: 12px 0;">
-      <strong style="font-size: 16px;">③ 全員にとって公平公正なルールにする</strong><br>
-      以上の理由をしっかりと踏まえた上で、<strong>全員にとって公平で公正なルール</strong>に変更します。<br>
-      特定の人が得をしたり損をしたりすることはありません。<br>
-      <span class="vi">Dựa trên các lý do trên, chúng tôi thay đổi sang <strong>quy tắc công bằng cho tất cả mọi người</strong>.<br>
-      Không có ai được lợi hay bị thiệt hơn người khác.</span>
-    </p>
-  </div>
-
-  <div class="good">
-    <p class="good-title">✅ 具体的に良くなること / Cụ thể điều tốt hơn:</p>
-    <p>
-      <strong>1.</strong> 働いた時間に応じて正確に給与が計算されます。<br>
-      <span class="vi">Lương sẽ được tính chính xác theo số giờ làm việc.</span>
-    </p>
-    <p>
-      <strong>2.</strong> 現場ごとに休みの日が違っても、不公平になりません。<br>
-      <span class="vi">Dù ngày nghỉ khác nhau giữa các công trường, lương vẫn công bằng.</span>
-    </p>
-    <p>
-      <strong>3.</strong> 土曜日に出勤しても「残業」ではなく「通常の給与」になります。<br>
-      <span class="vi">Làm thứ 7 sẽ được tính lương bình thường, không phải tăng ca.</span>
-    </p>
-    <p>
-      <strong>4.</strong> 土曜休みが増えても、給与の仕組みが変わりません。<br>
-      <span class="vi">Dù nghỉ thứ 7 nhiều hơn, cơ chế lương vẫn không thay đổi.</span>
+      Trong tương lai, <strong>số ngày nghỉ thứ 7 sẽ tăng lên</strong>. Chế độ mới thích ứng được với sự thay đổi này.</span>
     </p>
   </div>
 
@@ -130,26 +115,68 @@
   </div>
 </div>
 
-<!-- ===== 2 ===== -->
-<h2>2. 何が変わるのか / Thay đổi gì?</h2>
+<!-- ===== 2. 何が変わるのか - 3層構造 ===== -->
+<h2>2. 何が変わるのか：3層構造 / Thay đổi gì: Cấu trúc 3 tầng</h2>
 
 <div class="section">
+
+  <h3>新しい給与の3つの層 / 3 tầng lương mới</h3>
+
+  <div class="tier-stack">
+    <div class="tier-box tier-3">
+      <div class="tier-label">③ 残業手当 / Phụ cấp tăng ca</div>
+      <div class="tier-formula">時給 &times; <strong>1.25</strong> &times; 法定超過時間<br>
+      <span class="vi">Lương giờ &times; <strong>1.25</strong> &times; Giờ vượt giới hạn pháp luật</span></div>
+      <div class="tier-note">法定上限を超えた分だけ / Chỉ phần vượt quá giới hạn pháp luật</div>
+    </div>
+    <div class="tier-box tier-2">
+      <div class="tier-label">② 追加所定手当 / Phụ cấp ngày thêm</div>
+      <div class="tier-formula">時給 &times; (実出勤日数 &minus; 20日) &times; 7h<br>
+      <span class="vi">Lương giờ &times; (Số ngày đi làm &minus; 20) &times; 7h</span></div>
+      <div class="tier-note">20日を超えた分・割増なし / Phần vượt 20 ngày, không nhân hệ số</div>
+    </div>
+    <div class="tier-box tier-1">
+      <div class="tier-label">① 基本給（固定）/ Lương cơ bản (cố định)</div>
+      <div class="tier-formula">時給 &times; 20日 &times; 7h = <strong>毎月同じ額</strong><br>
+      <span class="vi">Lương giờ &times; 20 ngày &times; 7h = <strong>Mỗi tháng giống nhau</strong></span></div>
+      <div class="tier-note">最低保証・必ずもらえる / Đảm bảo tối thiểu, luôn được nhận</div>
+    </div>
+  </div>
+
+  <div class="good">
+    <p class="good-title">✅ ポイント / Điểm chính:</p>
+    <p>
+      <strong>① 基本給は毎月固定</strong>です。忙しくても暇でも20日分は必ずもらえます。<br>
+      <span class="vi"><strong>① Lương cơ bản cố định mỗi tháng.</strong> Dù bận hay rảnh, luôn nhận đủ 20 ngày.</span>
+    </p>
+    <p>
+      <strong>② 20日を超えて働いた分</strong>は追加で手当がつきます（割増なし・同じ時給）。<br>
+      <span class="vi"><strong>② Ngày làm vượt quá 20 ngày</strong> sẽ được nhận thêm phụ cấp (cùng mức lương giờ, không nhân hệ số).</span>
+    </p>
+    <p>
+      <strong>③ 残業は法定上限を超えた分</strong>だけ、1.25倍で支払われます。<br>
+      <span class="vi"><strong>③ Tăng ca chỉ tính phần vượt giới hạn pháp luật</strong>, nhân 1,25 lần.</span>
+    </p>
+  </div>
+
+  <h3>今までとの比較 / So sánh với trước đây</h3>
+
   <div class="compare">
     <div class="before">
       <h4>❌ 今まで / Trước đây</h4>
-      <p><strong>給与 / Lương:</strong><br>毎月同じ固定月給<br><span class="vi">Mỗi tháng cùng lương cố định</span><br>
-      <span style="font-size: 13px; color: #dc2626;">→ 月によって実質時給がバラバラ<br><span class="vi">→ Lương giờ thực tế khác nhau mỗi tháng</span></span></p>
-      <p><strong>1日の労働時間 / Giờ làm:</strong><br>6時間40分 / 6 giờ 40 phút</p>
-      <p><strong>休憩 / Nghỉ:</strong><br>2時間20分 / 2 giờ 20 phút</p>
-      <p><strong>土曜出勤 / Làm thứ 7:</strong><br>全部残業扱い → 割増<br><span class="vi">Tất cả tính tăng ca → Thêm tiền</span></p>
+      <p><strong>給与 / Lương:</strong><br>時給 &times; 所定時間<br><span class="vi">Lương giờ &times; Giờ quy định</span><br>
+      <span style="font-size: 13px; color: #dc2626;">&rarr; 毎月金額が変わって分かりにくい<br><span class="vi">&rarr; Số tiền thay đổi mỗi tháng, khó hiểu</span></span></p>
+      <p><strong>最低保証 / Bảo đảm:</strong><br>なし<br><span class="vi">Không có</span></p>
+      <p><strong>土曜出勤 / Làm thứ 7:</strong><br>全部残業扱い &rarr; 割増<br><span class="vi">Tất cả tính tăng ca &rarr; Nhân hệ số</span></p>
+      <p><strong>残業基準 / Tăng ca:</strong><br>所定時間を超えたら<br><span class="vi">Vượt giờ quy định</span></p>
     </div>
     <div class="after">
       <h4>✅ 5月から / Từ tháng 5</h4>
-      <p><strong>給与 / Lương:</strong><br>時給 × 働いた時間<br><span class="vi">Lương giờ × Giờ làm việc</span><br>
-      <span style="font-size: 13px; color: #16a34a;">→ 毎月の時給がいつも同じ<br><span class="vi">→ Lương giờ luôn giống nhau mỗi tháng</span></span></p>
-      <p><strong>1日の労働時間 / Giờ làm:</strong><br><strong style="font-size: 20px;">7時間</strong> / <strong>7 giờ</strong></p>
-      <p><strong>休憩 / Nghỉ:</strong><br><strong style="font-size: 20px;">2時間</strong> / <strong>2 giờ</strong></p>
-      <p><strong>土曜出勤 / Làm thứ 7:</strong><br>通常の給与 → 割増なし<br><span class="vi">Lương bình thường → Không thêm tiền</span></p>
+      <p><strong>給与 / Lương:</strong><br>3層構造で明確<br><span class="vi">3 tầng rõ ràng</span><br>
+      <span style="font-size: 13px; color: #16a34a;">&rarr; 基本給は毎月同じ＋αで分かりやすい<br><span class="vi">&rarr; Lương cơ bản cố định + thêm, dễ hiểu</span></span></p>
+      <p><strong>最低保証 / Bảo đảm:</strong><br><strong style="font-size: 18px;">20日分を保証</strong><br><span class="vi"><strong>Đảm bảo 20 ngày</strong></span></p>
+      <p><strong>土曜出勤 / Làm thứ 7:</strong><br>通常の給与 &rarr; 割増なし<br><span class="vi">Lương bình thường &rarr; Không nhân hệ số</span></p>
+      <p><strong>残業基準 / Tăng ca:</strong><br>法定上限を超えたら<br><span class="vi">Vượt giới hạn pháp luật</span></p>
     </div>
   </div>
 
@@ -166,7 +193,7 @@
     </div>
     <div class="schedule-row" style="background: #fef3c7;">
       <span class="schedule-time">10:00</span>
-      <span>☕ <strong>休憩 30分</strong> / Nghỉ 30 phút</span>
+      <span>☕ <strong>休憩 30分</strong> / Nghỉ giải lao 30 phút</span>
     </div>
     <div class="schedule-row">
       <span class="schedule-time" style="color:#888;">〜12:00</span>
@@ -182,7 +209,7 @@
     </div>
     <div class="schedule-row" style="background: #fef3c7;">
       <span class="schedule-time">15:00</span>
-      <span>☕ <strong>休憩 30分</strong> / Nghỉ 30 phút</span>
+      <span>☕ <strong>休憩 30分</strong> / Nghỉ giải lao 30 phút</span>
     </div>
     <div class="schedule-row">
       <span class="schedule-time" style="color:#888;">〜17:00</span>
@@ -195,123 +222,139 @@
   </div>
 
   <div style="text-align: center; margin-top: 12px; font-size: 14px; color: #666;">
-    作業 2h + 1.5h + 2h + 1.5h = <strong style="color: #1B2A4A; font-size: 18px;">7時間</strong>
+    作業 2h + 1.5h + 2h + 1.5h = <strong style="color: #1B2A4A; font-size: 18px;">7時間</strong> &emsp;
     休憩 30m + 60m + 30m = <strong style="color: #1B2A4A; font-size: 18px;">2時間</strong>
   </div>
 </div>
 
-<!-- ===== 3 ===== -->
-<h2>3. 給与の計算 / Cách tính lương</h2>
+<!-- ===== 3. 計算例 ===== -->
+<h2>3. 給与の計算例 / Ví dụ tính lương</h2>
 
 <div class="section">
 
   <h3>計算式 / Công thức</h3>
-  <div class="calc">
-    <div class="calc-title">基本給 / Lương cơ bản</div>
-    <div style="text-align: center; font-size: 18px;">
-      時給 × <strong>7時間</strong> × 所定日数 = 基本給<br>
-      <span class="vi">Lương giờ × <strong>7 giờ</strong> × Số ngày quy định = Lương cơ bản</span>
-    </div>
-  </div>
-  <div class="calc">
-    <div class="calc-title">残業手当 / Phụ cấp tăng ca</div>
-    <div style="text-align: center; font-size: 18px;">
-      時給 × <strong>1.25</strong> × 残業時間 = 残業手当<br>
-      <span class="vi">Lương giờ × <strong>1.25</strong> × Giờ tăng ca = Phụ cấp tăng ca</span>
-    </div>
-  </div>
 
-  <h3>計算例 ① 時給 1,500円の場合 / Ví dụ ① Trường hợp 1.500 yên/giờ</h3>
-
-  <div class="compare">
-    <div style="flex:1; background: #f8f8f8; border-radius: 10px; padding: 16px; border: 1px solid #ddd;">
-      <p style="font-weight: bold; text-align: center;">22日の月<br><span class="vi">Tháng 22 ngày</span></p>
-      <p>基本給: 1,500 × 7h × 22日</p>
-      <div class="calc-result">231,000円</div>
+  <div class="tier-stack" style="margin-bottom: 24px;">
+    <div class="tier-box tier-3" style="padding: 12px 16px;">
+      <div style="font-size: 15px;"><strong>③ 残業手当</strong> = 時給 &times; 1.25 &times; MAX(0, 実労働時間 &minus; 法定上限)</div>
+      <div style="font-size: 13px;" class="vi"><strong>③ Phụ cấp tăng ca</strong> = Lương giờ &times; 1,25 &times; MAX(0, Giờ thực tế &minus; Giới hạn pháp luật)</div>
     </div>
-    <div style="flex:1; background: #f8f8f8; border-radius: 10px; padding: 16px; border: 1px solid #ddd;">
-      <p style="font-weight: bold; text-align: center;">25日の月<br><span class="vi">Tháng 25 ngày</span></p>
-      <p>基本給: 1,500 × 7h × 25日</p>
-      <div class="calc-result">262,500円</div>
+    <div class="tier-box tier-2" style="padding: 12px 16px;">
+      <div style="font-size: 15px;"><strong>② 追加所定手当</strong> = 時給 &times; MAX(0, 実出勤日数 &minus; 20日) &times; 7h</div>
+      <div style="font-size: 13px;" class="vi"><strong>② Phụ cấp ngày thêm</strong> = Lương giờ &times; MAX(0, Ngày đi làm &minus; 20) &times; 7h</div>
+    </div>
+    <div class="tier-box tier-1" style="padding: 12px 16px;">
+      <div style="font-size: 15px;"><strong>① 基本給（固定）</strong> = 時給 &times; 20日 &times; 7h</div>
+      <div style="font-size: 13px;" class="vi"><strong>① Lương cơ bản (cố định)</strong> = Lương giờ &times; 20 ngày &times; 7h</div>
     </div>
   </div>
 
   <div class="point">
-    <p class="point-title">⚠ 今までの問題 / Vấn đề trước đây:</p>
+    <p class="point-title">⚠ 法定上限の計算 / Cách tính giới hạn pháp luật:</p>
     <p>
-      今までは22日でも25日でも<strong>同じ固定月給</strong>でした。例えば月給231,000円の場合：<br>
-      <span class="vi">Trước đây, dù 22 ngày hay 25 ngày đều trả <strong>cùng lương cố định</strong>. Ví dụ lương 231.000 yên:</span>
+      法定上限 = その月の暦日数 &times; 40 &divide; 7<br>
+      <span class="vi">Giới hạn pháp luật = Số ngày lịch của tháng &times; 40 &divide; 7</span>
     </p>
-    <table>
-      <tr><th></th><th>22日の月 / Tháng 22 ngày</th><th>25日の月 / Tháng 25 ngày</th></tr>
-      <tr><td>固定月給<br><span class="vi">Lương cố định</span></td><td>231,000円</td><td>231,000円</td></tr>
-      <tr><td>実質時給<br><span class="vi">Lương giờ thực tế</span></td><td style="color: #16a34a; font-weight: bold;">231,000 ÷ 22 ÷ 7 = <strong>1,500円</strong></td><td style="color: #dc2626; font-weight: bold;">231,000 ÷ 25 ÷ 7 = <strong>1,320円</strong></td></tr>
-    </table>
-    <p>
-      同じ仕事をしているのに、月によって時給が<strong>1,500円になったり1,320円になったり</strong>していました。<br>
-      <span class="vi">Cùng một công việc nhưng lương giờ lúc <strong>1.500 yên, lúc 1.320 yên</strong> tùy tháng.</span>
+    <p style="font-size: 14px;">
+      例 / Ví dụ: 5月（31日）→ 31 &times; 40 &divide; 7 = <strong>177.1時間</strong><br>
+      例 / Ví dụ: 6月（30日）→ 30 &times; 40 &divide; 7 = <strong>171.4時間</strong>
     </p>
   </div>
 
-  <div class="good">
-    <p class="good-title">✅ 新制度ではこうなります / Chế độ mới như sau:</p>
-    <p>
-      時給は<strong>毎月いつも同じ1,500円</strong>。所定日数に応じて月給が変わります。<br>
-      22日の月は231,000円、25日の月は262,500円。<strong>時給は常に1,500円で一定です。</strong><br>
-      <span class="vi">Lương giờ <strong>luôn là 1.500 yên mỗi tháng</strong>. Lương tháng thay đổi theo số ngày.<br>
-      Tháng 22 ngày: 231.000 yên, tháng 25 ngày: 262.500 yên. <strong>Lương giờ luôn cố định 1.500 yên.</strong></span>
-    </p>
-  </div>
-
-  <h3>計算例 ② 時給 2,000円の場合 / Ví dụ ② Trường hợp 2.000 yên/giờ</h3>
+  <!-- 計算例① -->
+  <h3>計算例 ① 忙しい月 / Ví dụ ① Tháng bận</h3>
+  <p style="font-size: 14px; color: #666;">時給 2,558円 / 24日出勤 / 残業あり / Lương giờ 2.558 yên, đi làm 24 ngày, có tăng ca</p>
 
   <div class="calc">
-    <p><strong>24日の月、残業15時間の場合 / Tháng 24 ngày, tăng ca 15 giờ:</strong></p>
-    <p>基本給: 2,000 × 7h × 24日 = <strong>336,000円</strong></p>
-    <p>残業: 2,000 × 1.25 × 15h = <strong>37,500円</strong></p>
-    <div class="calc-result">支給額: 373,500円 / Tổng lương: 373.500 yên</div>
+    <p style="font-size: 14px; color: #555; margin-bottom: 8px;">
+      5月（31日）: 法定上限 = 31 &times; 40 &divide; 7 = <strong>177.1h</strong><br>
+      実労働時間 = 24日 &times; 7h + 残業 = 168h + 12h = <strong>180h</strong>
+    </p>
+
+    <div class="tier-stack" style="margin: 12px auto;">
+      <div class="tier-box tier-3" style="padding: 10px 16px;">
+        <strong>③ 残業手当 / Phụ cấp tăng ca</strong><br>
+        2,558 &times; 1.25 &times; (180 &minus; 177.1) = 2,558 &times; 1.25 &times; 2.9h<br>
+        = <strong>9,272円</strong>
+      </div>
+      <div class="tier-box tier-2" style="padding: 10px 16px;">
+        <strong>② 追加所定手当 / Phụ cấp ngày thêm</strong><br>
+        2,558 &times; (24 &minus; 20) &times; 7h = 2,558 &times; 4 &times; 7<br>
+        = <strong>71,624円</strong>
+      </div>
+      <div class="tier-box tier-1" style="padding: 10px 16px;">
+        <strong>① 基本給（固定）/ Lương cơ bản</strong><br>
+        2,558 &times; 20日 &times; 7h<br>
+        = <strong>358,120円</strong>
+      </div>
+    </div>
+
+    <div class="calc-result">
+      合計 / Tổng cộng: 358,120 + 71,624 + 9,272 = <strong>439,016円</strong>
+    </div>
   </div>
 
-  <h3>残業の計算方法 / Cách tính tăng ca</h3>
+  <!-- 計算例② -->
+  <h3>計算例 ② GWで休みが多い月 / Ví dụ ② Tháng nghỉ nhiều (Golden Week)</h3>
+  <p style="font-size: 14px; color: #666;">時給 2,558円 / 20日出勤 / 残業なし / Lương giờ 2.558 yên, đi làm 20 ngày, không tăng ca</p>
 
-  <div class="point">
-    <p class="point-title">⚠ ここが大事！/ Điểm quan trọng!</p>
-    <p>
-      <strong>今まで：</strong>1日8時間を超えたら残業<br>
-      <span class="vi">Trước đây: Quá 8 giờ/ngày → Tăng ca</span>
-    </p>
-    <p>
-      <strong>5月から：</strong>月の合計で所定時間を超えたら残業<br>
-      <span class="vi">Từ tháng 5: Tổng tháng vượt quá giờ quy định → Tăng ca</span>
-    </p>
-    <p style="margin-top: 12px;">
-      例 / Ví dụ: 所定24日 → 所定時間 = 24日 × 7h = <strong>168時間</strong><br>
-      実際に180時間働いた → 残業 = 180 - 168 = <strong>12時間</strong><br>
-      <span class="vi">Quy định 24 ngày → Giờ quy định = 24 × 7 = <strong>168 giờ</strong><br>
-      Thực tế làm 180 giờ → Tăng ca = 180 - 168 = <strong>12 giờ</strong></span>
-    </p>
+  <div class="calc">
+    <div class="tier-stack" style="margin: 12px auto;">
+      <div class="tier-box tier-3" style="padding: 10px 16px; opacity: 0.4;">
+        <strong>③ 残業手当</strong>: なし / Không có = <strong>0円</strong>
+      </div>
+      <div class="tier-box tier-2" style="padding: 10px 16px; opacity: 0.4;">
+        <strong>② 追加所定手当</strong>: 20 &minus; 20 = 0日 &rarr; なし / Không có = <strong>0円</strong>
+      </div>
+      <div class="tier-box tier-1" style="padding: 10px 16px;">
+        <strong>① 基本給（固定）/ Lương cơ bản</strong><br>
+        2,558 &times; 20日 &times; 7h = <strong>358,120円</strong>
+      </div>
+    </div>
+
+    <div class="calc-result">
+      合計 / Tổng cộng: <strong>358,120円（最低保証 / Mức tối thiểu được đảm bảo）</strong>
+    </div>
+
+    <div class="good" style="margin-top: 12px;">
+      <p class="good-title">✅ 安心ポイント / Yên tâm:</p>
+      <p>
+        休みが多い月でも、<strong>基本給358,120円は必ずもらえます</strong>。<br>
+        <span class="vi">Dù tháng nghỉ nhiều, <strong>lương cơ bản 358.120 yên luôn được đảm bảo</strong>.</span>
+      </p>
+    </div>
   </div>
 
   <h3>欠勤した場合 / Trường hợp vắng mặt</h3>
 
   <div class="calc">
-    <p><strong>所定24日のうち22日しか出勤しなかった場合:</strong><br>
-    <span class="vi">Quy định 24 ngày nhưng chỉ đi làm 22 ngày:</span></p>
-    <p>欠勤控除 / Trừ vắng mặt: 時給 × 7h × 2日 = 1,500 × 7 × 2 = <strong>21,000円</strong></p>
+    <p><strong>20日未満しか出勤しなかった場合（有給なし）:</strong><br>
+    <span class="vi">Trường hợp đi làm ít hơn 20 ngày (không có phép năm):</span></p>
+    <p>欠勤控除 / Trừ vắng mặt: 時給 &times; 7h &times; (20日 &minus; 実出勤日数)</p>
+    <p>例 / Ví dụ: 18日出勤 &rarr; 2,558 &times; 7 &times; 2 = <strong>35,812円を控除</strong><br>
+    <span class="vi">Ví dụ: Đi làm 18 ngày &rarr; Trừ <strong>35.812 yên</strong></span></p>
     <p style="font-size: 13px; color: #666;">
       ※ 有給を使った日は欠勤になりません / Ngày dùng phép năm không bị tính vắng mặt
     </p>
   </div>
 </div>
 
-<!-- ===== 4 ===== -->
-<h2>4. 毎月のカレンダー / Lịch hàng tháng</h2>
+<!-- ===== 4. 毎月のカレンダー ===== -->
+<h2>4. 毎月のカレンダー（現場ごと） / Lịch hàng tháng (theo công trường)</h2>
 
 <div class="section">
   <p style="font-size: 16px;">
-    毎月、会社がカレンダーを作ります。<strong>出勤する日</strong>と<strong>休みの日</strong>が決まります。<br>
-    <span class="vi">Mỗi tháng, công ty sẽ lập lịch. Xác định <strong>ngày đi làm</strong> và <strong>ngày nghỉ</strong>.</span>
+    毎月、<strong>現場ごとに</strong>カレンダーを作ります。「出勤する日」と「休みの日」が決まります。<br>
+    <span class="vi">Mỗi tháng, lịch được lập <strong>riêng cho từng công trường</strong>. Xác định "ngày đi làm" và "ngày nghỉ".</span>
   </p>
+
+  <div class="point">
+    <p class="point-title">⚠ 変形労働時間制 / Chế độ giờ làm linh hoạt:</p>
+    <p>
+      1ヶ月単位の変形労働時間制を使います。月のカレンダーで出勤日を決めて、その範囲で柔軟にスケジュールを組みます。<br>
+      <span class="vi">Áp dụng chế độ giờ làm linh hoạt theo đơn vị 1 tháng. Lịch tháng quyết định ngày đi làm, trong phạm vi đó sắp xếp lịch linh hoạt.</span>
+    </p>
+  </div>
 
   <h3>カレンダーの例 / Ví dụ lịch</h3>
 
@@ -332,14 +375,16 @@
       <td style="background: #dcfce7;">出勤</td>
       <td style="background: #dcfce7;">出勤</td>
       <td style="background: #dcfce7;">出勤</td>
-      <td style="background: #fee2e2;">休み</td>
+      <td style="background: #fee2e2;">休み<br><span class="vi" style="font-size:11px;">Nghỉ</span></td>
       <td style="background: #fee2e2;">休み</td>
     </tr>
   </table>
 
   <p style="font-size: 14px;">
-    ★ カレンダーで「出勤」の土曜日 → <strong>通常の給与（割増なし）</strong><br>
-    <span class="vi">★ Thứ 7 ghi "đi làm" → <strong>Lương bình thường (không thêm tiền)</strong></span>
+    ★ カレンダーで「出勤」の土曜日 &rarr; <strong>通常の給与（割増なし）</strong><br>
+    <span class="vi">★ Thứ 7 ghi "đi làm" trong lịch &rarr; <strong>Lương bình thường (không nhân hệ số)</strong></span><br>
+    ★ 0.6の補償はもうありません &rarr; カレンダーで決まった通りです<br>
+    <span class="vi">★ Không còn bồi thường 0.6 &rarr; Theo đúng lịch đã định</span>
   </p>
 
   <h3>署名の流れ / Quy trình ký xác nhận</h3>
@@ -348,11 +393,11 @@
     <div class="step-box">
       📋<br>会社がカレンダーを作成<br><span class="vi" style="font-size: 12px;">Công ty lập lịch</span>
     </div>
-    <span class="step-arrow">→</span>
+    <span class="step-arrow">&rarr;</span>
     <div class="step-box">
-      📱<br>スマホでカレンダーを確認<br><span class="vi" style="font-size: 12px;">Xem lịch trên ĐT</span>
+      📱<br>スマホでカレンダーを確認<br><span class="vi" style="font-size: 12px;">Xem lịch trên điện thoại</span>
     </div>
-    <span class="step-arrow">→</span>
+    <span class="step-arrow">&rarr;</span>
     <div class="step-box">
       ✅<br>「確認しました」をタップ<br><span class="vi" style="font-size: 12px;">Nhấn "Đã xác nhận"</span>
     </div>
@@ -367,13 +412,13 @@
   </div>
 </div>
 
-<!-- ===== 5 ===== -->
+<!-- ===== 5. スマホの使い方 ===== -->
 <h2>5. スマホの使い方 / Cách dùng điện thoại</h2>
 
 <div class="section">
   <p style="font-size: 16px; text-align: center; font-weight: bold;">
-    毎日、スマホで出勤・休みを入力します<br>
-    <span class="vi">Mỗi ngày, nhập đi làm/nghỉ trên điện thoại</span>
+    毎日、スマホで出勤・休みを入力します（今までと同じです）<br>
+    <span class="vi">Mỗi ngày, nhập đi làm/nghỉ trên điện thoại (giống như trước)</span>
   </p>
 
   <h3>3つのボタン / 3 nút chính</h3>
@@ -395,7 +440,7 @@
     <tr>
       <td style="color: #2563EB; font-weight: bold; font-size: 16px;">しゅっきん</td>
       <td>出勤した日<br><span class="vi">Ngày đi làm</span></td>
-      <td>残業がある場合は時間も入力できます<br><span class="vi">Có thể nhập giờ tăng ca</span></td>
+      <td>残業がある場合は時間も入力できます<br><span class="vi">Có thể nhập giờ tăng ca nếu có</span></td>
     </tr>
     <tr>
       <td style="color: #6B7280; font-weight: bold; font-size: 16px;">やすみ</td>
@@ -409,8 +454,6 @@
     </tr>
   </table>
 
-  <h3>入力のタイミング / Thời điểm nhập</h3>
-
   <div class="good">
     <p>
       <strong>朝、現場に着いたら「しゅっきん」を押してください。</strong><br>
@@ -423,13 +466,13 @@
   </div>
 </div>
 
-<!-- ===== 6 ===== -->
+<!-- ===== 6. 有給休暇 ===== -->
 <h2>6. 有給休暇 / Nghỉ phép có lương</h2>
 
 <div class="section">
   <p style="font-size: 16px;">
-    有給休暇は日本の法律で決まっています。<strong>会社が勝手に減らすことはできません。</strong><br>
-    <span class="vi">Nghỉ phép có lương được quy định bởi pháp luật Nhật Bản. <strong>Công ty không thể tự ý giảm.</strong></span>
+    有給休暇は今までと<strong>同じ</strong>です。新しい給与制度とは別です。<br>
+    <span class="vi">Nghỉ phép có lương <strong>giống như trước</strong>. Tách biệt với chế độ lương mới.</span>
   </p>
 
   <h3>付与日数 / Số ngày được cấp</h3>
@@ -479,39 +522,51 @@
   </div>
 </div>
 
-<!-- ===== 7 ===== -->
+<!-- ===== 7. よくある質問 ===== -->
 <h2>7. よくある質問 / Câu hỏi thường gặp</h2>
 
 <div class="section">
   <div class="qa">
     <p class="qa-q">Q: 給与は減りますか？ / Lương có giảm không?</p>
     <div class="qa-a">
-      <p>いいえ。時給は変わりません。今までは月によって実質時給がバラついていましたが、新制度では<strong>毎月同じ時給</strong>で計算されます。同じ日数・時間働けば、同じ給与です。<br>
-      <span class="vi">Không. Lương giờ không đổi. Trước đây lương giờ thực tế thay đổi mỗi tháng, nhưng chế độ mới <strong>tính cùng lương giờ mỗi tháng</strong>. Làm cùng số ngày/giờ thì lương giống nhau.</span></p>
+      <p>いいえ。基本給は毎月20日分が<strong>最低保証</strong>されます。時給も変わりません。20日以上働けば追加手当がつくので、今までと同じかそれ以上になります。<br>
+      <span class="vi">Không. Lương cơ bản <strong>đảm bảo tối thiểu 20 ngày</strong> mỗi tháng. Lương giờ cũng không đổi. Làm trên 20 ngày sẽ được thêm phụ cấp, nên bằng hoặc hơn trước.</span></p>
     </div>
   </div>
 
   <div class="qa">
-    <p class="qa-q">Q: 稼働日数が少ない月は給与が減るの？ / Tháng ít ngày làm thì lương giảm?</p>
+    <p class="qa-q">Q: 20日を超えて働いたらどうなりますか？ / Làm hơn 20 ngày thì sao?</p>
     <div class="qa-a">
-      <p>はい、稼働日数が少ない月は基本給が減ります。しかし時給は同じです。今までの固定月給では、稼働日数が少ない月は「実質時給が高い」、多い月は「実質時給が低い」という不公平がありました。新制度では<strong>いつも同じ時給</strong>で公平です。<br>
-      <span class="vi">Đúng, tháng ít ngày thì lương cơ bản giảm. Nhưng lương giờ vẫn giống nhau. Trước đây với lương cố định, tháng ít ngày thì "lương giờ thực tế cao", tháng nhiều ngày thì "lương giờ thấp" - không công bằng. Chế độ mới <strong>luôn cùng lương giờ</strong>, công bằng.</span></p>
+      <p>20日を超えた分は<strong>追加所定手当</strong>として、同じ時給で支払われます。割増はありませんが、基本給にプラスされます。<br>
+      例: 24日出勤 &rarr; 4日分 &times; 時給 &times; 7h が追加されます。<br>
+      <span class="vi">Phần vượt 20 ngày sẽ được trả thêm dưới dạng <strong>phụ cấp ngày thêm</strong>, cùng mức lương giờ. Không nhân hệ số, nhưng được cộng thêm vào lương cơ bản.<br>
+      Ví dụ: Đi làm 24 ngày &rarr; Thêm 4 ngày &times; Lương giờ &times; 7h.</span></p>
+    </div>
+  </div>
+
+  <div class="qa">
+    <p class="qa-q">Q: 残業はいつから発生しますか？ / Tăng ca bắt đầu từ khi nào?</p>
+    <div class="qa-a">
+      <p>月の実労働時間が<strong>法定上限</strong>（暦日数 &times; 40 &divide; 7）を超えた分が残業です。1日8時間ではなく、月の合計で判定します。<br>
+      例: 5月（31日） &rarr; 法定上限 = 177.1時間。これを超えた分だけ1.25倍になります。<br>
+      <span class="vi">Phần giờ làm thực tế vượt <strong>giới hạn pháp luật</strong> (số ngày lịch &times; 40 &divide; 7) là tăng ca. Không tính theo ngày 8 giờ, mà tính theo tổng tháng.<br>
+      Ví dụ: Tháng 5 (31 ngày) &rarr; Giới hạn = 177,1 giờ. Chỉ phần vượt quá mới nhân 1,25.</span></p>
     </div>
   </div>
 
   <div class="qa">
     <p class="qa-q">Q: 土曜日に出勤しても残業代がつかないの？ / Làm thứ 7 không có tiền tăng ca?</p>
     <div class="qa-a">
-      <p>カレンダーで「出勤」と決めた土曜日は通常の給与です。その分、月の所定日数が増えるので<strong>基本給が増えます</strong>。土曜出勤が多い月は基本給が高くなり、少ない月は低くなります。時給はいつも同じです。<br>
-      <span class="vi">Thứ 7 được lập lịch "đi làm" sẽ tính lương bình thường. Vì số ngày quy định tháng tăng nên <strong>lương cơ bản cũng tăng</strong>. Tháng nhiều thứ 7 đi làm thì lương cao hơn, ít thì thấp hơn. Lương giờ luôn giống nhau.</span></p>
+      <p>カレンダーで「出勤」と決めた土曜日は<strong>通常の給与</strong>です。その分、月の出勤日数が増えるので<strong>追加所定手当として基本給に加算</strong>されます。法定上限を超えた場合のみ残業手当が発生します。<br>
+      <span class="vi">Thứ 7 được lập lịch "đi làm" sẽ tính <strong>lương bình thường</strong>. Vì số ngày đi làm trong tháng tăng nên <strong>được cộng thêm vào dưới dạng phụ cấp ngày thêm</strong>. Chỉ khi vượt giới hạn pháp luật mới có phụ cấp tăng ca.</span></p>
     </div>
   </div>
 
   <div class="qa">
-    <p class="qa-q">Q: 残業はどうなりますか？ / Tăng ca thì sao?</p>
+    <p class="qa-q">Q: 有給はどうなりますか？ / Nghỉ phép có thay đổi không?</p>
     <div class="qa-a">
-      <p>月の合計で所定時間（例：168時間）を超えた分が残業になります。残業代は時給 × 1.25 です。<br>
-      <span class="vi">Phần vượt quá giờ quy định tháng (ví dụ: 168 giờ) sẽ tính tăng ca. Tiền tăng ca = Lương giờ × 1.25.</span></p>
+      <p>有給休暇は<strong>今までと同じ</strong>です。新しい給与制度とは関係なく、法律通りに付与・取得できます。有給を取った日は欠勤になりません。<br>
+      <span class="vi">Nghỉ phép có lương <strong>giống như trước</strong>. Không liên quan đến chế độ lương mới, vẫn được cấp và sử dụng theo pháp luật. Ngày nghỉ phép không bị tính vắng mặt.</span></p>
     </div>
   </div>
 
@@ -524,14 +579,6 @@
   </div>
 
   <div class="qa">
-    <p class="qa-q">Q: 有給を使いたいときは？ / Khi muốn nghỉ phép?</p>
-    <div class="qa-a">
-      <p>スマホの「ゆうきゅう しんせい」ボタンを押して申請してください。上司が承認すれば有給になります。<br>
-      <span class="vi">Nhấn nút "ゆうきゅう しんせい" trên điện thoại để xin. Quản lý duyệt thì sẽ được nghỉ phép.</span></p>
-    </div>
-  </div>
-
-  <div class="qa">
     <p class="qa-q">Q: いつから変わりますか？ / Khi nào bắt đầu thay đổi?</p>
     <div class="qa-a">
       <p><strong>2026年5月1日から</strong>です。4月中にカレンダーの署名を行います。<br>
@@ -540,42 +587,70 @@
   </div>
 </div>
 
-<!-- ===== まとめ ===== -->
-<h2>まとめ / Tóm tắt</h2>
+<!-- ===== 8. まとめ ===== -->
+<h2>8. まとめ / Tóm tắt</h2>
 
 <div class="section" style="background: #f0fdf4; border-color: #86efac;">
-  <div class="emoji">✅</div>
-  <div class="compare">
-    <div style="flex:1; background: white; border-radius: 10px; padding: 16px; border: 2px solid #1B2A4A;">
-      <h4 style="color: #1B2A4A; margin: 0 0 12px; text-align: center;">変わること / Thay đổi</h4>
-      <p>💰 固定月給 → <strong>時給×働いた時間</strong><br>
-      <span class="vi">Lương cố định → <strong>Lương giờ × Giờ làm</strong></span><br>
-      <span style="font-size: 12px; color: #666;">毎月の時給が一定に / Lương giờ luôn cố định</span></p>
-      <p>📐 1日の労働時間: 6h40m → <strong>7h</strong><br>
-      <span class="vi">Giờ làm: 6h40 → <strong>7h</strong></span></p>
-      <p>☕ 休憩: 2h20m → <strong>2h</strong><br>
-      <span class="vi">Nghỉ: 2h20 → <strong>2h</strong></span></p>
-      <p>🧮 残業計算が月合計に<br>
-      <span class="vi">Tăng ca tính theo tổng tháng</span></p>
-      <p>📱 毎日スマホで入力<br>
-      <span class="vi">Nhập hàng ngày bằng ĐT</span></p>
-      <p>📋 毎月カレンダーに署名<br>
-      <span class="vi">Ký lịch hàng tháng</span></p>
-    </div>
-    <div style="flex:1; background: white; border-radius: 10px; padding: 16px; border: 2px solid #16a34a;">
-      <h4 style="color: #16a34a; margin: 0 0 12px; text-align: center;">変わらないこと / Không đổi</h4>
-      <p>💰 時給は同じ<br>
-      <span class="vi">Lương giờ không đổi</span></p>
-      <p>🌴 有給休暇は同じ<br>
-      <span class="vi">Nghỉ phép giữ nguyên</span></p>
-      <p>⏰ 始業 8:00 / 終業 17:00<br>
-      <span class="vi">Giờ bắt đầu/kết thúc</span></p>
-      <p>🏥 社会保険は同じ<br>
-      <span class="vi">Bảo hiểm XH giữ nguyên</span></p>
-      <p>🏠 寮・住居は同じ<br>
-      <span class="vi">Ký túc xá giữ nguyên</span></p>
-    </div>
-  </div>
+
+  <h3 style="border: none; margin-top: 0; text-align: center;">変わること vs 変わらないこと / Thay đổi vs Không đổi</h3>
+
+  <table>
+    <tr>
+      <th style="width: 35%;">項目 / Hạng mục</th>
+      <th style="width: 30%;">今まで / Trước đây</th>
+      <th style="width: 35%;">5月から / Từ tháng 5</th>
+    </tr>
+    <tr>
+      <td style="font-weight: bold; text-align: left;">💰 給与構造<br><span class="vi">Cấu trúc lương</span></td>
+      <td style="background: #fee2e2;">時給 &times; 所定時間<br><span class="vi">Lương giờ &times; Giờ quy định</span></td>
+      <td style="background: #dcfce7;"><strong>3層構造</strong><br><span class="vi"><strong>3 tầng</strong></span></td>
+    </tr>
+    <tr>
+      <td style="font-weight: bold; text-align: left;">🛡 最低保証<br><span class="vi">Bảo đảm tối thiểu</span></td>
+      <td style="background: #fee2e2;">なし<br><span class="vi">Không có</span></td>
+      <td style="background: #dcfce7;"><strong>20日分を保証</strong><br><span class="vi"><strong>Đảm bảo 20 ngày</strong></span></td>
+    </tr>
+    <tr>
+      <td style="font-weight: bold; text-align: left;">🧮 残業の基準<br><span class="vi">Tiêu chuẩn tăng ca</span></td>
+      <td style="background: #fee2e2;">所定時間超<br><span class="vi">Vượt giờ quy định</span></td>
+      <td style="background: #dcfce7;"><strong>法定上限超</strong><br><span class="vi"><strong>Vượt giới hạn PL</strong></span></td>
+    </tr>
+    <tr>
+      <td style="font-weight: bold; text-align: left;">📅 土曜出勤<br><span class="vi">Làm thứ 7</span></td>
+      <td style="background: #fee2e2;">残業扱い<br><span class="vi">Tính tăng ca</span></td>
+      <td style="background: #dcfce7;"><strong>通常給与</strong><br><span class="vi"><strong>Lương bình thường</strong></span></td>
+    </tr>
+    <tr>
+      <td style="font-weight: bold; text-align: left;">⏰ 労働時間<br><span class="vi">Giờ làm</span></td>
+      <td style="background: #fee2e2;">6h40m / ngày</td>
+      <td style="background: #dcfce7;"><strong>7h</strong> / ngày</td>
+    </tr>
+    <tr>
+      <td style="font-weight: bold; text-align: left;">☕ 休憩<br><span class="vi">Nghỉ giải lao</span></td>
+      <td style="background: #fee2e2;">2h20m</td>
+      <td style="background: #dcfce7;"><strong>2h</strong></td>
+    </tr>
+    <tr style="background: #f0f9ff;">
+      <td style="font-weight: bold; text-align: left;">💰 時給<br><span class="vi">Lương giờ</span></td>
+      <td colspan="2" style="background: #eff6ff; font-weight: bold; font-size: 16px;">変わりません / Không đổi</td>
+    </tr>
+    <tr style="background: #f0f9ff;">
+      <td style="font-weight: bold; text-align: left;">🌴 有給休暇<br><span class="vi">Nghỉ phép</span></td>
+      <td colspan="2" style="background: #eff6ff; font-weight: bold;">変わりません / Không đổi</td>
+    </tr>
+    <tr style="background: #f0f9ff;">
+      <td style="font-weight: bold; text-align: left;">⏰ 勤務時間帯<br><span class="vi">Giờ làm việc</span></td>
+      <td colspan="2" style="background: #eff6ff; font-weight: bold;">8:00 〜 17:00</td>
+    </tr>
+    <tr style="background: #f0f9ff;">
+      <td style="font-weight: bold; text-align: left;">🏥 社会保険<br><span class="vi">Bảo hiểm XH</span></td>
+      <td colspan="2" style="background: #eff6ff; font-weight: bold;">変わりません / Không đổi</td>
+    </tr>
+    <tr style="background: #f0f9ff;">
+      <td style="font-weight: bold; text-align: left;">🏠 寮・住居<br><span class="vi">Ký túc xá</span></td>
+      <td colspan="2" style="background: #eff6ff; font-weight: bold;">変わりません / Không đổi</td>
+    </tr>
+  </table>
 </div>
 
 <div style="text-align: center; margin-top: 30px; padding: 20px; background: #fef3c7; border-radius: 12px; border: 2px solid #fbbf24;">
@@ -591,7 +666,7 @@
 <hr style="margin-top: 40px; border: none; border-top: 1px solid #ddd;">
 <p style="text-align: center; color: #999; font-size: 12px;">
   HIBI CONSTRUCTION / HFU — 2026年4月19日 給与制度説明会資料<br>
-  最終更新: 2026-04-08
+  最終更新: 2026-04-13
 </p>
 
 </body>
