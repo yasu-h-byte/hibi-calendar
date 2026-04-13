@@ -216,14 +216,26 @@ export async function POST(request: NextRequest) {
 
     if (workerId !== undefined && entry !== undefined) {
       const key = `${siteId}_${workerId}_${ym}_${String(day)}`
-      // Add source tracking: admin input from PC grid
-      const entryWithSource = entry ? { ...entry, s: 'admin' } : entry
-      await setDoc(docRef, { d: { [key]: entryWithSource } }, { merge: true })
+      if (entry && typeof entry === 'object') {
+        // 有効なエントリ: ソース情報を付与して保存
+        const entryWithSource = { ...entry, s: 'admin' }
+        await setDoc(docRef, { d: { [key]: entryWithSource } }, { merge: true })
+      } else {
+        // nullまたは無効なエントリ: フィールドを削除
+        const { deleteField } = await import('firebase/firestore')
+        const { updateDoc } = await import('firebase/firestore')
+        await updateDoc(docRef, { [`d.${key}`]: deleteField() })
+      }
     }
 
     if (subconId !== undefined && subconEntry !== undefined) {
       const key = `${siteId}_${subconId}_${ym}_${String(day)}`
-      await setDoc(docRef, { sd: { [key]: subconEntry } }, { merge: true })
+      if (subconEntry && typeof subconEntry === 'object') {
+        await setDoc(docRef, { sd: { [key]: subconEntry } }, { merge: true })
+      } else {
+        const { deleteField, updateDoc } = await import('firebase/firestore')
+        await updateDoc(docRef, { [`sd.${key}`]: deleteField() })
+      }
     }
 
     return NextResponse.json({ success: true })

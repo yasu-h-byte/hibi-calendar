@@ -48,6 +48,12 @@ export async function checkApiAuth(request: NextRequest): Promise<boolean> {
   return false
 }
 
+/** パスワード変更時にキャッシュをクリアする */
+export function clearPasswordCache(): void {
+  cachedUserPasswords = null
+  cacheTimestamp = 0
+}
+
 const APPROVER_ID = 1 // 日比政仁
 
 export function determineRole(workerId: number, sites: Site[]): { role: UserRole; foremanSites: string[] } {

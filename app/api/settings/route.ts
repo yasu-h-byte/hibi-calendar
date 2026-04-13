@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, clearPasswordCache } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
       const docRef = doc(db, 'demmen', 'main')
       const { updateDoc } = await import('firebase/firestore')
       await updateDoc(docRef, { userPasswords })
+      clearPasswordCache()  // キャッシュを即時無効化して新パスワードを即座に有効にする
       await logActivity('admin', 'settings.userPasswords', '個人パスワードを更新')
       return NextResponse.json({ success: true })
     }
@@ -88,7 +89,8 @@ export async function POST(request: NextRequest) {
 
       const data = docSnap.data()
       const oldRates = (data.defaultRates as { tobiRate: number; dokoRate: number; baseDays?: number }) || { tobiRate: 0, dokoRate: 0 }
-      const newBaseDays = typeof baseDays === 'number' ? baseDays : (oldRates.baseDays ?? 20)
+      let newBaseDays = typeof baseDays === 'number' ? baseDays : (oldRates.baseDays ?? 20)
+      if (newBaseDays < 1 || newBaseDays > 31) newBaseDays = 20  // 安全なデフォルトに戻す
       await setDoc(docRef, { ...data, defaultRates: { tobiRate, dokoRate, baseDays: newBaseDays } })
       await logActivity('admin', 'rates.default', `鳶 ¥${oldRates.tobiRate}→¥${tobiRate}, 土工 ¥${oldRates.dokoRate}→¥${dokoRate}, ベース日数 ${oldRates.baseDays ?? 20}→${newBaseDays}`)
       return NextResponse.json({ success: true })

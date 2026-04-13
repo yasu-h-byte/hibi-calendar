@@ -160,7 +160,6 @@ export default function ExportPage() {
         if (card.needsYm && ym) params.set('ym', ym)
         if (card.needsOrg) params.set('org', selectedOrg[card.type] || 'all')
 
-        console.log('Export request:', `/api/export?${params.toString()}`)
         const res = await fetch(`/api/export?${params}`, {
           headers: { 'x-admin-password': password },
         })

@@ -765,7 +765,7 @@ export function computeMonthly(
     const workCount = isComp ? 0 : entry.w  // 補償は人工0
 
     wm.workDays += workCount
-    wm.actualWorkDays += 1
+    if (!isComp) wm.actualWorkDays += 1  // 0.6補償は実出勤にカウントしない
     if (isComp) wm.compDays += 1
     if (entry.o && entry.o > 0 && !isComp) wm.otHours += entry.o
     if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
@@ -846,8 +846,9 @@ export function computeMonthly(
       const legalOt = Math.max(0, actualWorkH - legalLimitH)
       const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
 
-      // 欠勤控除 = 時給 × 7h × MAX(0, ベース日数 − 実出勤日数 − 有給日数)
-      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed)
+      // 欠勤控除 = 時給 × 7h × MAX(0, ベース日数 − 実出勤日数 − 有給日数 − 補償日数)
+      // ※ 0.6補償は会社都合のため欠勤扱いしない
+      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed - wm.compDays)
       const absentDeduction = Math.round(wm.hourlyRate * 7 * absentDays)
 
       // 支給額 = 基本給 − 欠勤控除 + 追加所定手当 + 残業手当
@@ -884,7 +885,8 @@ export function computeMonthly(
       const legalOt = Math.max(0, actualWorkH - legalLimitH)
       const otAllowance = Math.round(derivedHourlyRate * 1.25 * legalOt)
 
-      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed)
+      // ※ 0.6補償は会社都合のため欠勤扱いしない
+      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed - wm.compDays)
       const absentDeduction = Math.round(derivedHourlyRate * 7 * absentDays)
 
       const salaryNet = fixedBase - absentDeduction + additionalAllow + otAllowance

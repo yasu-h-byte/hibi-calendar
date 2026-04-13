@@ -642,7 +642,8 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     )
   }
   wTotals.push(
-    workers.reduce((s, w) => s + (w.basePay || 0), 0),
+    workers.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
+    workers.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
     workers.reduce((s, w) => s + (w.otAllowance || 0), 0),
     workers.reduce((s, w) => s + (w.absentDeduction || 0), 0),
     workers.reduce((s, w) => s + (w.salaryNetPay || 0), 0),

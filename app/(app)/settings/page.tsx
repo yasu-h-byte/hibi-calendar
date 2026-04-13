@@ -316,10 +316,12 @@ export default function SettingsPage() {
   }
 
   const adjustRate = (field: 'tobiRate' | 'dokoRate' | 'baseDays', delta: number) => {
-    setRates(prev => ({
-      ...prev,
-      [field]: Math.max(field === 'baseDays' ? 1 : 0, prev[field] + delta),
-    }))
+    setRates(prev => {
+      let val = prev[field] + delta
+      if (field === 'baseDays') val = Math.min(31, Math.max(1, val))
+      else val = Math.max(0, val)
+      return { ...prev, [field]: val }
+    })
   }
 
   /** 数値をカンマ区切り文字列に変換 */
@@ -455,7 +457,7 @@ export default function SettingsPage() {
                     type="text"
                     inputMode="numeric"
                     value={rates.baseDays}
-                    onChange={e => setRates(prev => ({ ...prev, baseDays: Math.max(1, Number(e.target.value.replace(/\D/g, '')) || 1) }))}
+                    onChange={e => setRates(prev => ({ ...prev, baseDays: Math.min(31, Math.max(1, Number(e.target.value.replace(/\D/g, '')) || 1)) }))}
                     className="w-20 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-center text-lg font-bold"
                   />
                   <button
