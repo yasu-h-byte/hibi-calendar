@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { getYmOptions } from '@/lib/compute'
 
-type ExportType = 'hibi' | 'hfu' | 'subcon' | 'bukake' | 'monthly' | 'pl'
+type ExportType = 'hibi' | 'hfu' | 'perSite' | 'subcon' | 'bukake' | 'monthly' | 'pl'
 
 interface ExportCard {
   icon: string
@@ -30,6 +30,14 @@ const EXPORT_CARDS: ExportCard[] = [
     description: 'HFU所属の実習生・特定技能生の出面データをExcel形式で出力します。管理団体への報告に利用できます。',
     format: 'Excel出力',
     type: 'hfu',
+    needsYm: true,
+  },
+  {
+    icon: '🏗',
+    title: '現場別 出面一覧',
+    description: '現場ごとにシートを分け、日比建設・HFUのセクション別で出面データを出力します。社内給与計算用。',
+    format: 'Excel出力',
+    type: 'perSite',
     needsYm: true,
   },
   {

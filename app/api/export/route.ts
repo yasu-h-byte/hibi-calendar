@@ -8,6 +8,7 @@ import {
   generateBukakeReport,
   generatePLLedger,
   generateMonthlyExcel,
+  generatePerSiteAttendance,
   workbookToBuffer,
 } from '@/lib/export'
 
@@ -209,8 +210,23 @@ export async function GET(request: NextRequest) {
         break
       }
 
+      case 'perSite': {
+        const allSites = main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name }))
+        const wb = generatePerSiteAttendance({
+          ym: ymStr,
+          workers: main.workers,
+          attD,
+          sites: allSites,
+          assign: main.assign,
+          massign: main.massign,
+        })
+        buffer = workbookToBuffer(wb)
+        filename = `現場別出面一覧_${ymStr}.xlsx`
+        break
+      }
+
       default:
-        return NextResponse.json({ error: 'Unknown type. Valid: hibi, hfu, subcon, bukake, monthly, monthlyExcel, pl' }, { status: 400 })
+        return NextResponse.json({ error: 'Unknown type' }, { status: 400 })
     }
 
     // Return xlsx binary

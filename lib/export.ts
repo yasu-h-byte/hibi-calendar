@@ -852,6 +852,164 @@ function buildWorkerRow(
 }
 
 // ────────────────────────────────────────
+//  現場別出面一覧
+// ────────────────────────────────────────
+
+export interface PerSiteAttendanceData {
+  ym: string
+  workers: RawWorker[]
+  attD: Record<string, AttendanceEntry>
+  sites: { id: string; name: string; archived?: boolean }[]
+  assign: Record<string, { workers?: number[]; subcons?: string[] }>
+  massign: Record<string, { workers?: number[]; subcons?: string[] }>
+}
+
+export function generatePerSiteAttendance(data: PerSiteAttendanceData): XLSX.WorkBook {
+  const { ym, workers, attD, sites } = data
+  const numDays = daysInMonth(ym)
+  const wb = XLSX.utils.book_new()
+
+  // 日付ヘッダー
+  const dayHeaders: string[] = []
+  for (let d = 1; d <= numDays; d++) {
+    dayHeaders.push(dayLabel(ym, d))
+  }
+
+  // ワーカーマップ
+  const workerMap = new Map(workers.map(w => [w.id, w]))
+
+  // 各現場の出勤データを集計
+  const siteWorkerData = new Map<string, Set<number>>()
+  for (const key of Object.keys(attD)) {
+    const pk = parseDKey(key)
+    if (!pk || pk.ym !== ym) continue
+    const entry = attD[key]
+    if (!entry) continue
+    if (!siteWorkerData.has(pk.sid)) siteWorkerData.set(pk.sid, new Set())
+    siteWorkerData.get(pk.sid)!.add(Number(pk.wid))
+  }
+
+  // アクティブな現場のみ（出勤データがある現場のみシートを生成）
+  const activeSites = sites.filter(s => siteWorkerData.has(s.id))
+
+  for (const site of activeSites) {
+    const siteWorkerIds = siteWorkerData.get(site.id) || new Set()
+
+    // 日比建設ワーカーとHFUワーカーに分ける（退職者除く）
+    const hibiWorkers = Array.from(siteWorkerIds)
+      .map(id => workerMap.get(id))
+      .filter((w): w is RawWorker => !!w && !w.retired && (w.org === '日比' || w.org === 'hibi'))
+    const hfuWorkers = Array.from(siteWorkerIds)
+      .map(id => workerMap.get(id))
+      .filter((w): w is RawWorker => !!w && !w.retired && (w.org === 'HFU' || w.org === 'hfu'))
+
+    if (hibiWorkers.length === 0 && hfuWorkers.length === 0) continue
+
+    const rows: (string | number)[][] = []
+
+    // タイトル行
+    rows.push([`${site.name}　出面一覧　${ymLabel(ym)}`])
+
+    // セクション出力関数
+    const appendSection = (sectionLabel: string, sectionWorkers: RawWorker[]) => {
+      if (sectionWorkers.length === 0) return
+
+      // 空行 + セクション見出し
+      rows.push([])
+      rows.push([`【${sectionLabel}】${sectionWorkers.length}名`])
+
+      // ヘッダー
+      const headerRow = ['名前', '区分', ...dayHeaders, '合計']
+      rows.push(headerRow)
+
+      let secWork = 0
+      let secOT = 0
+      const secDailyWork: number[] = new Array(numDays).fill(0)
+      const secDailyOT: number[] = new Array(numDays).fill(0)
+
+      for (const w of sectionWorkers) {
+        const workRow: (string | number)[] = [w.name, '出勤']
+        const otRow: (string | number)[] = ['', '残業h']
+
+        let wWork = 0
+        let wOT = 0
+
+        for (let d = 1; d <= numDays; d++) {
+          const dd = String(d)
+          const key = `${site.id}_${w.id}_${ym}_${dd}`
+          const entry = attD[key]
+
+          let dayWork: string | number = ''
+          let dayOT = 0
+
+          if (entry) {
+            if (entry.p) {
+              dayWork = '有'
+            } else if (entry.w && entry.w > 0) {
+              dayWork = entry.w
+              wWork += entry.w
+              secDailyWork[d - 1] += entry.w
+              if (entry.o && entry.o > 0) {
+                dayOT = entry.o
+              }
+            }
+            if (entry.o && entry.o > 0) {
+              dayOT = entry.o
+              wOT += dayOT
+              secDailyOT[d - 1] += dayOT
+            }
+          }
+
+          workRow.push(dayWork || '')
+          otRow.push(dayOT > 0 ? dayOT : '')
+        }
+
+        workRow.push(wWork > 0 ? Math.round(wWork * 10) / 10 : '')
+        otRow.push(wOT > 0 ? Math.round(wOT * 10) / 10 : '')
+
+        secWork += wWork
+        secOT += wOT
+
+        rows.push(workRow)
+        rows.push(otRow)
+      }
+
+      // セクション小計
+      const footerWork: (string | number)[] = ['小計', '出勤']
+      const footerOT: (string | number)[] = ['', '残業h']
+      for (let d = 0; d < numDays; d++) {
+        footerWork.push(secDailyWork[d] > 0 ? Math.round(secDailyWork[d] * 10) / 10 : '')
+        footerOT.push(secDailyOT[d] > 0 ? Math.round(secDailyOT[d] * 10) / 10 : '')
+      }
+      footerWork.push(Math.round(secWork * 10) / 10)
+      footerOT.push(Math.round(secOT * 10) / 10)
+      rows.push(footerWork)
+      rows.push(footerOT)
+    }
+
+    appendSection('日比建設', hibiWorkers)
+    appendSection('HFU', hfuWorkers)
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+
+    // タイトル行マージ
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 2 } }]
+
+    // 列幅
+    const colWidths = [14, 6]
+    for (let d = 0; d < numDays; d++) colWidths.push(7)
+    colWidths.push(6)
+    setColWidths(ws, colWidths)
+
+    // シート名（31文字制限）
+    const sheetName = site.name.slice(0, 31)
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+  }
+
+  return wb
+}
+
+// ────────────────────────────────────────
 //  Workbook → Buffer
 // ────────────────────────────────────────
 
