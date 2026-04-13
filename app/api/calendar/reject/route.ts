@@ -4,7 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, updateDoc } from 'firebase/firestore'
 
 export async function POST(request: NextRequest) {
-  if (!checkApiAuth(request)) {
+  if (!await checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

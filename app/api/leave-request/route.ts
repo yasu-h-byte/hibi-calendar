@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
 
     // ── Admin: approve leave request ──
     if (action === 'approve') {
-      if (!checkApiAuth(request)) {
+      if (!await checkApiAuth(request)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
 
     // ── Admin: reject leave request ──
     if (action === 'reject') {
-      if (!checkApiAuth(request)) {
+      if (!await checkApiAuth(request)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
@@ -278,7 +278,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Admin: get all requests for a month
-    if (checkApiAuth(request)) {
+    if (await checkApiAuth(request)) {
       const q = ym
         ? query(collection(db, 'leaveRequests'), where('ym', '==', ym))
         : query(collection(db, 'leaveRequests'))

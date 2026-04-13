@@ -28,7 +28,7 @@ function calcLegalPL(hireDate: string, grantDate: string): number {
 }
 
 export async function POST(request: NextRequest) {
-  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const body = await request.json()
     const { action } = body
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const calendarMode = request.nextUrl.searchParams.get('calendar') === 'true'
   const debugMode = request.nextUrl.searchParams.get('debug') === 'true'

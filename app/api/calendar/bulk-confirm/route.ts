@@ -6,7 +6,7 @@ import { logActivity } from '@/lib/activity'
 import { DayType } from '@/types'
 
 export async function POST(request: NextRequest) {
-  if (!checkApiAuth(request)) {
+  if (!await checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

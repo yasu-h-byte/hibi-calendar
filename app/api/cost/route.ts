@@ -25,7 +25,7 @@ function toMode(period: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const { siteId, ym, amounts } = await request.json()
     if (!siteId || !ym) return NextResponse.json({ error: 'siteId and ym required' }, { status: 400 })
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const ym = request.nextUrl.searchParams.get('ym')
   const period = request.nextUrl.searchParams.get('period') || 'monthly'

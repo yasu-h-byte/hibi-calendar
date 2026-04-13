@@ -1,16 +1,51 @@
 import { AuthUser, UserRole, Site, Worker } from '@/types'
 import { NextRequest } from 'next/server'
+import { db } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
+
+// 個人パスワードのキャッシュ（APIリクエストごとにFirestore読み取りを避ける）
+let cachedUserPasswords: Record<string, string> | null = null
+let cacheTimestamp = 0
+const CACHE_TTL = 60_000 // 1分
+
+async function getUserPasswords(): Promise<Record<string, string>> {
+  const now = Date.now()
+  if (cachedUserPasswords && now - cacheTimestamp < CACHE_TTL) {
+    return cachedUserPasswords
+  }
+  try {
+    const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+    const mainData = mainSnap.exists() ? mainSnap.data() : {}
+    cachedUserPasswords = (mainData.userPasswords || {}) as Record<string, string>
+    cacheTimestamp = now
+    return cachedUserPasswords
+  } catch {
+    return cachedUserPasswords || {}
+  }
+}
 
 /**
  * API認証チェック（共通）
- * ADMIN_PASSWORDまたはSUPER_ADMIN_PASSWORDのどちらかに一致すればOK
+ * ADMIN_PASSWORD、SUPER_ADMIN_PASSWORD、または個人パスワードのいずれかに一致すればOK
  */
-export function checkApiAuth(request: NextRequest): boolean {
+export async function checkApiAuth(request: NextRequest): Promise<boolean> {
   const authHeader = request.headers.get('x-admin-password')
   if (!authHeader) return false
+
+  // 管理者パスワードチェック（高速）
   const adminPw = process.env.ADMIN_PASSWORD
   const superPw = process.env.SUPER_ADMIN_PASSWORD
-  return (!!adminPw && authHeader === adminPw) || (!!superPw && authHeader === superPw)
+  if ((!!adminPw && authHeader === adminPw) || (!!superPw && authHeader === superPw)) {
+    return true
+  }
+
+  // 個人パスワードチェック（役員・事務）
+  const userPasswords = await getUserPasswords()
+  for (const pw of Object.values(userPasswords)) {
+    if (pw && authHeader === pw) return true
+  }
+
+  return false
 }
 
 const APPROVER_ID = 1 // 日比政仁

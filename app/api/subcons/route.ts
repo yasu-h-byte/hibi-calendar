@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
 
 export async function GET(request: NextRequest) {
-  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const snap = await getDoc(doc(db, 'demmen', 'main'))
     if (!snap.exists()) return NextResponse.json({ subcons: [], siteAssign: {}, sites: [] })
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const body = await request.json()
     const { action } = body
