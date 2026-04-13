@@ -722,8 +722,8 @@ export default function AttendanceGridPage() {
   return (
     <div className="space-y-4">
       {/* ── Header ── */}
-      <div className="flex items-center gap-4 flex-wrap">
-        <h1 className="text-xl font-bold text-hibi-navy dark:text-white flex items-center gap-2">
+      <div className="flex items-center gap-3 flex-wrap">
+        <h1 className="text-lg sm:text-xl font-bold text-hibi-navy dark:text-white flex items-center gap-2">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -803,12 +803,12 @@ export default function AttendanceGridPage() {
           </span>
         )}
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto sm:ml-auto">
           {/* Site selector */}
           <select
             value={siteId}
             onChange={e => setSiteId(e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none min-w-[180px]"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none flex-1 min-w-0 sm:min-w-[180px]"
           >
             {(data?.sites || allSites).filter(s => showArchived || !(s as { archived?: boolean }).archived).map(s => (
               <option key={s.id} value={s.id}>{s.name}{(s as { archived?: boolean }).archived ? '（終了）' : ''}</option>
@@ -823,7 +823,7 @@ export default function AttendanceGridPage() {
           <select
             value={ym}
             onChange={e => setYm(e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none shrink-0"
           >
             {ymOptions.map(o => (
               <option key={o.ym} value={o.ym}>{o.label}</option>
@@ -891,7 +891,7 @@ export default function AttendanceGridPage() {
 
       {/* ── Grid Table ── */}
       {!loading && data && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
           <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
             <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 120}px` }}>
               <thead className="sticky top-0 z-30">
