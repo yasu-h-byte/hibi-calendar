@@ -14,7 +14,7 @@ export default function DocsPage() {
       items: [
         { title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・有給管理・帳票出力', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-12' },
         { title: '政仁さん向けマニュアル', desc: '出面入力・承認・就業カレンダー・現場マスタ・原価収益', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-12' },
-        { title: '職長向けマニュアル', desc: 'ダッシュボード・カレンダー作成・出面確認・現場マスタ', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-12' },
+        { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成（5月本格運用対応）', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-13' },
         { title: '有給データ移行手順', desc: '旧スプレッドシートからの有給データ移行', url: '/manual-yukyu.html', icon: '📙', updated: '2026-04-08' },
         { title: 'QRコードカード（印刷用）', desc: '全スタッフの出勤入力用QRコード。印刷して配布', url: '/qr-cards.html', icon: '📱', updated: '2026-04-08' },
       ],
