@@ -200,40 +200,68 @@ export default function GuidePage() {
       {/* ── セクション 5: 給与計算 ── */}
       <Section title="給与計算" icon="&#128176;">
         <div className="mt-3 space-y-4">
-          {/* 時給制（外国人） */}
+          {/* 3層構造（外国人） */}
           <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4 bg-blue-50/30 dark:bg-blue-900/10">
-            <h4 className="font-bold text-blue-700 dark:text-blue-400 mb-3">月給制スタッフ（ベトナム人・時給ベース）</h4>
-            <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300 font-mono bg-white dark:bg-gray-800 rounded-lg p-3">
-              <p><span className="text-gray-400">(1)</span> 基本給 = <span className="font-bold">時給 &times; 所定時間（所定日数 &times; 7h）</span></p>
-              <p><span className="text-gray-400">(2)</span> 欠勤控除 = 時給 &times; 7h &times; 欠勤日数</p>
-              <p><span className="text-gray-400">(3)</span> 残業手当 = 時給 &times; 1.25 &times; 法定残業h</p>
-              <p><span className="text-gray-400">(4)</span> 法定残業 = 実労働時間 − 所定時間（月168hを超えた分）</p>
-              <p className="pt-1 border-t dark:border-gray-700"><span className="text-gray-400">(5)</span> <span className="font-bold text-blue-600 dark:text-blue-400">支給額 = (1) - (2) + (3)</span></p>
+            <h4 className="font-bold text-blue-700 dark:text-blue-400 mb-3">3層構造（ベトナム人スタッフ）— 2026年5月〜</h4>
+
+            {/* 3層のビジュアル */}
+            <div className="space-y-1 mb-3">
+              <div className="bg-green-100 dark:bg-green-800/30 border border-green-300 dark:border-green-700 rounded-lg px-3 py-2 text-sm">
+                <span className="font-bold text-green-700 dark:text-green-400">① 基本給（固定）</span>
+                <span className="text-gray-600 dark:text-gray-400 ml-2">= 時給 &times; 20日 &times; 7h — 毎月同額</span>
+              </div>
+              <div className="bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 rounded-lg px-3 py-2 text-sm">
+                <span className="font-bold text-blue-700 dark:text-blue-400">② 追加所定手当</span>
+                <span className="text-gray-600 dark:text-gray-400 ml-2">= 時給 &times; (出勤日数 − 20日) &times; 7h — 割増なし</span>
+              </div>
+              <div className="bg-yellow-100 dark:bg-yellow-800/30 border border-yellow-300 dark:border-yellow-700 rounded-lg px-3 py-2 text-sm">
+                <span className="font-bold text-yellow-700 dark:text-yellow-400">③ 残業手当</span>
+                <span className="text-gray-600 dark:text-gray-400 ml-2">= 時給 &times; 1.25 &times; 法定超過時間</span>
+              </div>
             </div>
+
+            <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300 font-mono bg-white dark:bg-gray-800 rounded-lg p-3">
+              <p><span className="text-gray-400">(1)</span> 基本給 = <span className="font-bold">時給 &times; ベース日数(20日) &times; 7h</span></p>
+              <p><span className="text-gray-400">(2)</span> 追加所定手当 = 時給 &times; MAX(0, 実出勤日数 − 20日) &times; 7h</p>
+              <p><span className="text-gray-400">(3)</span> 法定上限 = 暦日数 &times; 40 &divide; 7</p>
+              <p><span className="text-gray-400">(4)</span> 残業手当 = 時給 &times; 1.25 &times; MAX(0, 実労働時間 − 法定上限)</p>
+              <p><span className="text-gray-400">(5)</span> 欠勤控除 = 時給 &times; 7h &times; MAX(0, 20日 − 実出勤日数 − 有給日数)</p>
+              <p className="pt-1 border-t dark:border-gray-700"><span className="text-gray-400">(6)</span> <span className="font-bold text-blue-600 dark:text-blue-400">支給額 = (1) − (5) + (2) + (4)</span></p>
+            </div>
+
             <div className="mt-3">
-              <p className="text-xs font-bold text-gray-500 mb-1">計算例：フウさん（時給2,558円 / 所定24日）</p>
+              <p className="text-xs font-bold text-gray-500 mb-1">計算例：時給2,558円 / 30日月 / 23日出勤（有給1日）/ 残業36h</p>
               <T
                 headers={['項目', '計算', '金額']}
                 rows={[
-                  ['基本給', '2,558 \u00d7 168h（24日\u00d77h）', '429,744円'],
-                  ['欠勤控除', 'なし（0日）', '0円'],
-                  ['法定残業', '(24日\u00d77h + 36h) - 168h = 36h', '36h'],
-                  ['残業手当', '2,558 \u00d7 1.25 \u00d7 36h', '115,110円'],
-                  ['支給額', '', '544,854円'],
+                  ['基本給（固定）', '2,558 \u00d7 20日 \u00d7 7h', '358,120円'],
+                  ['追加所定手当', '2,558 \u00d7 (23日−20日) \u00d7 7h', '53,718円'],
+                  ['法定上限', '30日 \u00d7 40 \u00f7 7', '171.4h'],
+                  ['実労働時間', '23日\u00d77h + 36h', '197h'],
+                  ['法定残業', '197h − 171.4h', '25.6h'],
+                  ['残業手当', '2,558 \u00d7 1.25 \u00d7 25.6h', '81,856円'],
+                  ['欠勤控除', 'MAX(0, 20−23−1) = 0日', '0円'],
+                  ['支給額', '358,120 + 53,718 + 81,856', '493,694円'],
                 ]}
               />
+            </div>
+
+            <div className="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+              <p>※ 実出勤日数に有給（P）は含めない</p>
+              <p>※ ベース日数（20日）は管理者設定で変更可能</p>
+              <p>※ 残業判定は法定上限基準（所定時間ではなく暦日数から算出）</p>
             </div>
           </div>
 
           {/* 日給月給制（日本人） */}
           <div className="border border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50/30 dark:bg-green-900/10">
-            <h4 className="font-bold text-green-700 dark:text-green-400 mb-3">日給月給制スタッフ（日本人）</h4>
+            <h4 className="font-bold text-green-700 dark:text-green-400 mb-3">日給月給制スタッフ（日本人）— 変更なし</h4>
             <div className="space-y-1 text-sm text-gray-700 dark:text-gray-300 font-mono bg-white dark:bg-gray-800 rounded-lg p-3">
               <p><span className="text-gray-400">(1)</span> 基本給 = <span className="font-bold">日額 &times; 実出勤日数</span></p>
               <p><span className="text-gray-400">(2)</span> 残業手当 = (日額 &divide; 8h) &times; 1.25 &times; 残業h</p>
               <p className="pt-1 border-t dark:border-gray-700"><span className="text-gray-400">(3)</span> <span className="font-bold text-green-600 dark:text-green-400">支給額 = (1) + (2)</span></p>
             </div>
-            <p className="text-xs text-gray-400 mt-2">※ 日本人スタッフの残業単価は日額÷8時間で計算します（外国人は時給÷7時間）</p>
+            <p className="text-xs text-gray-400 mt-2">※ 日本人スタッフの残業単価は日額÷8時間で計算します</p>
           </div>
         </div>
       </Section>
@@ -356,7 +384,7 @@ export default function GuidePage() {
             },
             {
               num: '3', title: '月次集計', color: 'purple',
-              items: ['全スタッフの月間実績（出勤日数・残業・有給・欠勤）', '給与自動計算（月給制/日給月給制）', '月締め機能でデータ確定'],
+              items: ['全スタッフの月間実績（出勤日数・残業・有給・欠勤）', '3層構造の給与自動計算（基本給固定/追加所定手当/残業手当/欠勤控除/支給額）', '日本人は従来の日給月給制で計算', '月締め機能でデータ確定'],
             },
             {
               num: '4', title: '就業カレンダー', color: 'blue',

@@ -22,7 +22,7 @@ export default function DocsPage() {
     {
       category: 'システムガイド',
       items: [
-        { title: '運用ガイド', desc: '変形労働時間制の制度設計とシステム運用の手引き', url: '/guide', icon: '📖', internal: true, updated: '2026-04-08' },
+        { title: '運用ガイド', desc: '3層構造の給与計算・変形労働時間制の制度設計とシステム運用の手引き', url: '/guide', icon: '📖', internal: true, updated: '2026-04-13' },
       ],
     },
   ]
