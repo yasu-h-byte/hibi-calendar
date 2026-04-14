@@ -353,6 +353,30 @@ Chon ten -> Xem lich -> Ky
                           </div>
                         )}
 
+                        {/* approver/admin: 提出取消しボタン */}
+                        {isSubmitted && user.role !== 'foreman' && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm(`${site.siteName} の提出を取消しますか？\n職長が再編集できるようになります。`)) return
+                              setSaving(true)
+                              try {
+                                const res = await fetch('/api/calendar/revert', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                  body: JSON.stringify({ siteId: site.siteId, ym, action: 'unsubmit', revertedBy: user?.workerId || 0 }),
+                                })
+                                if (res.ok) { fetchData() }
+                                else { const d = await res.json(); alert(d.error || '取消しに失敗しました') }
+                              } catch { alert('取消しに失敗しました') }
+                              finally { setSaving(false) }
+                            }}
+                            disabled={saving}
+                            className="w-full text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 py-2 rounded-lg text-xs hover:bg-yellow-100 transition disabled:opacity-50"
+                          >
+                            ↩ 提出を取消す（職長に差戻し）
+                          </button>
+                        )}
+
                         {/* approver/admin: 承認ボタン */}
                         {canApprove && (
                           <button
@@ -416,8 +440,33 @@ Chon ten -> Xem lich -> Ky
 
                         {/* 承認済み */}
                         {isApproved && (
-                          <div className="text-center text-green-600 dark:text-green-400 text-sm font-bold py-2">
-                            ✅ 承認済み
+                          <div className="space-y-2">
+                            <div className="text-center text-green-600 dark:text-green-400 text-sm font-bold py-2">
+                              ✅ 承認済み
+                            </div>
+                            {/* approver/admin: 承認取消しボタン */}
+                            {user.role !== 'foreman' && (
+                              <button
+                                onClick={async () => {
+                                  if (!confirm(`${site.siteName} の承認を取消しますか？\n署名データも削除され、再承認後に再署名が必要になります。`)) return
+                                  setSaving(true)
+                                  try {
+                                    const res = await fetch('/api/calendar/revert', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                      body: JSON.stringify({ siteId: site.siteId, ym, action: 'unapprove', revertedBy: user?.workerId || 0 }),
+                                    })
+                                    if (res.ok) { fetchData() }
+                                    else { const d = await res.json(); alert(d.error || '取消しに失敗しました') }
+                                  } catch { alert('取消しに失敗しました') }
+                                  finally { setSaving(false) }
+                                }}
+                                disabled={saving}
+                                className="w-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 py-2 rounded-lg text-xs hover:bg-red-100 transition disabled:opacity-50"
+                              >
+                                ↩ 承認を取消す
+                              </button>
+                            )}
                           </div>
                         )}
                       </>
