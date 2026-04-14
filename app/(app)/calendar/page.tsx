@@ -340,7 +340,7 @@ Chon ten -> Xem lich -> Ky
                               finally { setSaving(false) }
                             }}
                             disabled={saving || exceedsLimit}
-                            className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-blue-700 transition disabled:opacity-50"
+                            className="w-full bg-blue-600 text-white py-4 rounded-lg text-base font-bold hover:bg-blue-700 transition disabled:opacity-50 min-h-[48px]"
                           >
                             {saving ? '提出中...' : `📋 ${site.siteName} を提出する`}
                           </button>
@@ -375,7 +375,7 @@ Chon ten -> Xem lich -> Ky
                               finally { setSaving(false) }
                             }}
                             disabled={saving}
-                            className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 transition disabled:opacity-50"
+                            className="w-full bg-green-600 text-white py-4 rounded-lg text-base font-bold hover:bg-green-700 transition disabled:opacity-50 min-h-[48px]"
                           >
                             {saving ? '承認中...' : `✅ ${site.siteName} を承認する`}
                           </button>
@@ -408,7 +408,7 @@ Chon ten -> Xem lich -> Ky
                               finally { setSaving(false) }
                             }}
                             disabled={saving || exceedsLimit}
-                            className="w-full bg-gray-500 text-white py-2 rounded-lg text-xs hover:bg-gray-600 transition disabled:opacity-50"
+                            className="w-full bg-gray-500 text-white py-3 rounded-lg text-sm hover:bg-gray-600 transition disabled:opacity-50 min-h-[44px]"
                           >
                             {saving ? '確定中...' : '管理者: 直接承認'}
                           </button>

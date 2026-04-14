@@ -58,7 +58,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </svg>
           </button>
 
-          <main className="pt-14 px-4 pb-4 lg:pt-6 lg:px-6 lg:pb-6">
+          <main className="pt-14 px-4 pb-20 lg:pt-6 lg:px-6 lg:pb-6">
             <div className="animate-fadeIn">
               {children}
             </div>
