@@ -232,10 +232,10 @@ const PERIOD_OPTIONS = [
 // ─── Monthly Checklist (compact for dashboard) ───
 
 function getNextYm(): string {
+  // カレンダー準備は常に翌月分を表示
   const now = new Date()
-  const y = now.getDate() >= 15 ? (now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear()) : now.getFullYear()
-  const m = now.getDate() >= 15 ? (now.getMonth() === 11 ? 1 : now.getMonth() + 2) : now.getMonth() + 1
-  return `${y}${String(m).padStart(2, '0')}`
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  return `${next.getFullYear()}${String(next.getMonth() + 1).padStart(2, '0')}`
 }
 
 function MonthlyChecklist({ password }: { password: string }) {
