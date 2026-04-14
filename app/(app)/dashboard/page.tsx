@@ -176,10 +176,6 @@ interface DashboardData {
   subconAlert: SubconAlert | null
   yoyComparison: YoYComparison | null
   subconAnalysis: SubconAnalysisRow[]
-  homeLeaveSchedule?: {
-    current: { id: string; workerId: number; workerName: string; startDate: string; endDate: string; reason: string }[]
-    upcoming: { id: string; workerId: number; workerName: string; startDate: string; endDate: string; reason: string }[]
-  }
 }
 
 // ─── Helpers ───
@@ -468,49 +464,6 @@ export default function DashboardPage() {
         <>
           {/* ═══ 0. Monthly Checklist ═══ */}
           <MonthlyChecklist password={password} />
-
-          {/* ═══ 0.5. Home Leave Schedule ═══ */}
-          {data.homeLeaveSchedule && (data.homeLeaveSchedule.current.length > 0 || data.homeLeaveSchedule.upcoming.length > 0) && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-              <h3 className="text-sm font-bold text-hibi-navy dark:text-white mb-3 flex items-center gap-2">
-                ✈️ 帰国スケジュール
-              </h3>
-              <div className="space-y-2">
-                {data.homeLeaveSchedule.current.map(h => {
-                  const end = new Date(h.endDate)
-                  const today = new Date()
-                  const daysLeft = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-                  return (
-                    <div key={h.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-800/30 px-2 py-0.5 rounded-full">帰国中</span>
-                        <span className="text-sm font-medium">{h.workerName}</span>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {daysLeft > 0 ? `あと${daysLeft}日で復帰（${h.endDate.slice(5)}）` : '復帰予定日超過'}
-                      </span>
-                    </div>
-                  )
-                })}
-                {data.homeLeaveSchedule.upcoming.map(h => {
-                  const start = new Date(h.startDate)
-                  const today = new Date()
-                  const daysUntil = Math.ceil((start.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-                  return (
-                    <div key={h.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-400">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-800/30 px-2 py-0.5 rounded-full">予定</span>
-                        <span className="text-sm font-medium">{h.workerName}</span>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        {h.startDate.slice(5)}〜{h.endDate.slice(5)}（{daysUntil}日後に出発）
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
 
           {/* ═══ 1. Today's Status Table ═══ */}
           <Section title={`本日の稼働状況 (${todayStr})`}>
