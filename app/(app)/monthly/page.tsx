@@ -65,6 +65,8 @@ interface MonthlyData {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
   locked: boolean
+  lockedHibi: boolean
+  lockedHfu: boolean
   workDays: number
   prescribedDays?: number
   hasCalendarData?: boolean
@@ -192,17 +194,19 @@ export default function MonthlyPage() {
 
   // ── Lock toggle ──
 
-  const handleToggleLock = useCallback(async () => {
+  const handleToggleLock = useCallback(async (org: 'hibi' | 'hfu') => {
     if (!password || !data) return
-    const newLocked = !data.locked
-    const msg = newLocked ? `${ym} を月締めしますか？` : `${ym} の月締めを解除しますか？`
+    const isCurrentlyLocked = org === 'hibi' ? data.lockedHibi : data.lockedHfu
+    const newLocked = !isCurrentlyLocked
+    const orgLabel = org === 'hibi' ? '日比建設' : 'HFU'
+    const msg = newLocked ? `${ym} の${orgLabel}を月締めしますか？` : `${ym} の${orgLabel}の月締めを解除しますか？`
     if (!confirm(msg)) return
     setLockToggling(true)
     try {
       await fetch('/api/monthly/lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ ym, locked: newLocked }),
+        body: JSON.stringify({ ym, locked: newLocked, org }),
       })
       fetchData()
     } catch {
@@ -431,11 +435,18 @@ export default function MonthlyPage() {
               </p>
             )}
           </div>
-          {data?.locked && (
-            <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">
-              🔒 締め済
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {data?.lockedHibi && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">
+                🔒 日比 締め済
+              </span>
+            )}
+            {data?.lockedHfu && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">
+                🔒 HFU 締め済
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -447,15 +458,26 @@ export default function MonthlyPage() {
             📋 前月コピー
           </button>
           <button
-            onClick={handleToggleLock}
+            onClick={() => handleToggleLock('hibi')}
             disabled={lockToggling || !data}
-            className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
-              data?.locked
+            className={`px-2.5 py-2 rounded-lg text-xs font-medium transition ${
+              data?.lockedHibi
                 ? 'bg-green-100 text-green-700 hover:bg-green-200'
                 : 'bg-red-100 text-red-700 hover:bg-red-200'
             } disabled:opacity-50`}
           >
-            {data?.locked ? '🔓 締め解除' : '🔒 月締め'}
+            {data?.lockedHibi ? '🔓 日比 解除' : '🔒 日比 締め'}
+          </button>
+          <button
+            onClick={() => handleToggleLock('hfu')}
+            disabled={lockToggling || !data}
+            className={`px-2.5 py-2 rounded-lg text-xs font-medium transition ${
+              data?.lockedHfu
+                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                : 'bg-red-100 text-red-700 hover:bg-red-200'
+            } disabled:opacity-50`}
+          >
+            {data?.lockedHfu ? '🔓 HFU 解除' : '🔒 HFU 締め'}
           </button>
           <button
             onClick={handleExcelExport}

@@ -77,7 +77,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const locked = !!(main.locks[ym])
+    // 組織別ロック状態（後方互換: 旧 locks[ym] もチェック）
+    const lockedLegacy = !!(main.locks[ym])
+    const lockedHibi = !!(main.locks[`${ym}_hibi`]) || lockedLegacy
+    const lockedHfu = !!(main.locks[`${ym}_hfu`]) || lockedLegacy
+    const locked = lockedHibi && lockedHfu
 
     // Foreman name (check mforeman for monthly override)
     const mfKey = `${siteId}_${ym}`
@@ -134,6 +138,8 @@ export async function GET(request: NextRequest) {
       workers, subcons,
       workerEntries, subconEntries,
       locked,
+      lockedHibi,
+      lockedHfu,
       approvals,
       workDays: workDaysValue,
       siteWorkDays: siteWorkDaysValue,

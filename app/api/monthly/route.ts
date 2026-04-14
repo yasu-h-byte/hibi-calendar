@@ -27,7 +27,11 @@ export async function GET(request: NextRequest) {
     const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
     const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays)
 
-    const locked = !!(main.locks[ym])
+    // 組織別ロック状態（後方互換: 旧 locks[ym] もチェック）
+    const lockedLegacy = !!(main.locks[ym])
+    const lockedHibi = !!(main.locks[`${ym}_hibi`]) || lockedLegacy
+    const lockedHfu = !!(main.locks[`${ym}_hfu`]) || lockedLegacy
+    const locked = lockedHibi && lockedHfu  // 両方締めていれば全体locked
     const workDays = prescribedDays
 
     // Site name map for frontend display
@@ -42,6 +46,8 @@ export async function GET(request: NextRequest) {
       sites: result.sites,
       totals: result.totals,
       locked,
+      lockedHibi,
+      lockedHfu,
       workDays,
       prescribedDays,
       siteNames,

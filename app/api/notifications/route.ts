@@ -132,18 +132,32 @@ export async function GET(request: NextRequest) {
       console.error('PL check error:', e)
     }
 
-    // 3. Monthly lock status（前月が未締めの場合のみ警告。当月は進行中なので対象外）
+    // 3. Monthly lock status（前月が未締めの場合のみ警告。組織別にチェック）
     try {
       const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       const prevYm = ymKey(prevDate.getFullYear(), prevDate.getMonth() + 1)
-      const isPrevLocked = main.locks[prevYm]
-      if (!isPrevLocked) {
-        const y = prevDate.getFullYear()
-        const m = prevDate.getMonth() + 1
+      const y = prevDate.getFullYear()
+      const m = prevDate.getMonth() + 1
+
+      // 後方互換: 旧形式 locks[prevYm] があれば全組織ロック済み
+      const legacyLocked = !!main.locks[prevYm]
+
+      const isHibiLocked = !!(main.locks[`${prevYm}_hibi`]) || legacyLocked
+      const isHfuLocked = !!(main.locks[`${prevYm}_hfu`]) || legacyLocked
+
+      if (!isHibiLocked) {
         notifications.push({
-          id: 'month-unlocked',
-          icon: '\uD83D\uDD13',
-          message: `月締め未完了: ${y}年${m}月がまだ締められていません`,
+          id: 'month-unlocked-hibi',
+          icon: '🔓',
+          message: `月締め未完了: ${y}年${m}月の日比建設がまだ締められていません`,
+          type: 'warning',
+        })
+      }
+      if (!isHfuLocked) {
+        notifications.push({
+          id: 'month-unlocked-hfu',
+          icon: '🔓',
+          message: `月締め未完了: ${y}年${m}月のHFUがまだ締められていません`,
           type: 'warning',
         })
       }
@@ -344,7 +358,7 @@ export async function GET(request: NextRequest) {
     const filtered = notifications.filter(n => {
       if (role === 'admin') return true
       if (role === 'approver') {
-        return ['unsigned-calendar', 'calendar-deadline', 'no-attendance', 'month-unlocked'].includes(n.id) || n.id.startsWith('pl-grant')
+        return ['unsigned-calendar', 'calendar-deadline', 'no-attendance', 'month-unlocked-hibi', 'month-unlocked-hfu'].includes(n.id) || n.id.startsWith('pl-grant')
       }
       if (role === 'foreman') {
         return n.id === 'calendar-deadline'

@@ -982,6 +982,15 @@ export function isLocked(locks: Record<string, boolean>, ym: string): boolean {
   return !!locks[ym]
 }
 
+/** 組織別ロック判定（後方互換: 旧 locks[ym] もチェック） */
+export function isLockedForOrg(locks: Record<string, boolean>, ym: string, org: 'hibi' | 'hfu'): boolean {
+  // 新形式: locks["202603_hibi"] or locks["202603_hfu"]
+  if (locks[`${ym}_${org}`]) return true
+  // 旧形式: locks["202603"] = true（全組織ロック扱い）
+  if (locks[ym]) return true
+  return false
+}
+
 export function getYmOptions(count: number = 6): { ym: string; label: string }[] {
   const result: { ym: string; label: string }[] = []
   const now = new Date()
