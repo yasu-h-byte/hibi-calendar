@@ -4,10 +4,11 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   Worker,
   ABCGrade,
-  EvaluationStatus,
+  EvaluationSessionStatus,
   EvaluationRank,
   EvaluationScores,
   EvaluationMetrics,
+  EvaluationReview,
   Evaluation,
   AuthUser,
 } from '@/types'
@@ -107,7 +108,7 @@ function yearsFromDate(dateStr: string): number {
 }
 
 function nextEvalDate(hireDate: string, evaluations: Evaluation[]): string {
-  if (!hireDate) return '—'
+  if (!hireDate) return '--'
   const hire = new Date(hireDate)
   const approvedYears = evaluations
     .filter(e => e.status === 'approved')
@@ -126,16 +127,57 @@ function nextEvalDate(hireDate: string, evaluations: Evaluation[]): string {
   return d.toISOString().slice(0, 10)
 }
 
-function statusLabel(s: EvaluationStatus | undefined): { text: string; cls: string } {
+function sessionStatusLabel(s: EvaluationSessionStatus, reviews: EvaluationReview[], evaluatorIds: number[]): { text: string; cls: string } {
   switch (s) {
-    case 'draft': return { text: '下書き', cls: 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200' }
-    case 'submitted': return { text: '提出済み', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200' }
-    case 'approved': return { text: '承認済み', cls: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200' }
-    default: return { text: '未評価', cls: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' }
+    case 'collecting': {
+      const count = reviews.length
+      const total = evaluatorIds.length
+      return {
+        text: `収集中 (${count}/${total}提出)`,
+        cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200',
+      }
+    }
+    case 'reviewing':
+      return { text: '最終確認中', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200' }
+    case 'approved':
+      return { text: '承認済み', cls: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200' }
+    default:
+      return { text: '不明', cls: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' }
   }
 }
 
-type TabId = 'list' | 'input' | 'history'
+import { EVALUATION_CATEGORIES } from '@/lib/evaluation-criteria'
+
+// All 9 evaluation items in flat list for comparison table (generated from criteria definitions)
+const EVAL_ITEMS = EVALUATION_CATEGORIES.flatMap(cat =>
+  cat.criteria.map(c => ({ category: cat.key, key: c.key, label: c.label, A: c.A, B: c.B, C: c.C }))
+)
+
+// Category-level descriptions for section headers
+const CATEGORY_INFO = Object.fromEntries(
+  EVALUATION_CATEGORIES.map(c => [c.key, { label: c.label, icon: c.icon, color: c.color, weightLabel: c.weightLabel }])
+)
+
+function getScoreValue(scores: EvaluationScores, category: string, key: string): ABCGrade {
+  const cat = scores[category as keyof EvaluationScores]
+  return (cat as Record<string, ABCGrade>)[key]
+}
+
+function setScoreValue(scores: EvaluationScores, category: string, key: string, value: ABCGrade): EvaluationScores {
+  const copy = JSON.parse(JSON.stringify(scores)) as EvaluationScores
+  const cat = copy[category as keyof EvaluationScores] as Record<string, ABCGrade>
+  cat[key] = value
+  return copy
+}
+
+const EVALUATOR_COLORS = [
+  { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-700 dark:text-blue-300', header: 'bg-blue-500' },
+  { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-700 dark:text-green-300', header: 'bg-green-500' },
+  { bg: 'bg-orange-100 dark:bg-orange-900', text: 'text-orange-700 dark:text-orange-300', header: 'bg-orange-500' },
+  { bg: 'bg-purple-100 dark:bg-purple-900', text: 'text-purple-700 dark:text-purple-300', header: 'bg-purple-500' },
+]
+
+type TabId = 'list' | 'review' | 'approve'
 
 const EMPTY_SCORES: EvaluationScores = {
   japanese: { understanding: 'B' as ABCGrade, reporting: 'B' as ABCGrade, safety: 'B' as ABCGrade },
@@ -146,22 +188,31 @@ const EMPTY_SCORES: EvaluationScores = {
 // ── Main Component ──
 
 export default function EvaluationPage() {
-  const [tab, setTab] = useState<TabId>('list')
+  const [activeTab, setActiveTab] = useState<TabId>('list')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [workers, setWorkers] = useState<Worker[]>([])
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
 
-  // Input tab state
+  // Review tab state
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null)
-  const [scores, setScores] = useState<EvaluationScores>(JSON.parse(JSON.stringify(EMPTY_SCORES)))
-  const [comment, setComment] = useState('')
-  const [metrics, setMetrics] = useState<EvaluationMetrics | null>(null)
-  const [existingEval, setExistingEval] = useState<Evaluation | null>(null)
+  const [myReview, setMyReview] = useState<EvaluationScores>(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+  const [myComment, setMyComment] = useState('')
+  const [hasSubmitted, setHasSubmitted] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
 
-  // History tab state
-  const [historyWorkerId, setHistoryWorkerId] = useState<number | null>(null)
+  // Approve tab state
+  const [approveSessionId, setApproveSessionId] = useState<string | null>(null)
+  const [finalScores, setFinalScores] = useState<EvaluationScores>(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+  const [finalComment, setFinalComment] = useState('')
+
+  // Create session modal
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createWorkerId, setCreateWorkerId] = useState<number | null>(null)
+  const [createEvaluatorIds, setCreateEvaluatorIds] = useState<number[]>([])
+
+  const isAdmin = authUser?.role === 'admin' || authUser?.role === 'approver'
 
   const getAuth = () => {
     try {
@@ -185,7 +236,6 @@ export default function EvaluationPage() {
       if (wRes.ok) {
         const d = await wRes.json()
         const all: Worker[] = d.workers || []
-        // 外国人のみ（visaTypeがnone以外）
         setWorkers(all.filter(w => w.visaType && w.visaType !== 'none' && !w.retired))
       }
       if (eRes.ok) {
@@ -198,161 +248,266 @@ export default function EvaluationPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // ── Foreign workers only ──
-  const foreignWorkers = workers
-
-  // ── Input tab: load worker data ──
-  const selectedWorker = foreignWorkers.find(w => w.id === selectedWorkerId)
-  const workerEvals = evaluations.filter(e => e.workerId === selectedWorkerId)
-
-  const loadWorkerEval = useCallback(async (wId: number) => {
-    const { password } = getAuth()
-    try {
-      const res = await fetch(`/api/evaluation?workerId=${wId}`, {
-        headers: { 'x-admin-password': password },
-      })
-      if (res.ok) {
-        const d = await res.json()
-        const evals: Evaluation[] = d.evaluations || []
-        const latest = evals.find(e => e.status === 'draft' || e.status === 'submitted')
-        if (latest) {
-          setScores(latest.scores)
-          setComment(latest.comment)
-          setMetrics(latest.metrics)
-          setExistingEval(latest)
-        } else {
-          setScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
-          setComment('')
-          setMetrics(d.metrics || null)
-          setExistingEval(null)
-        }
-      }
-    } catch { /* ignore */ }
-  }, [])
-
+  // ── Review tab: load current user's review for selected worker ──
   useEffect(() => {
-    if (selectedWorkerId) loadWorkerEval(selectedWorkerId)
-  }, [selectedWorkerId, loadWorkerEval])
+    if (!selectedWorkerId || !authUser) {
+      setHasSubmitted(false)
+      setIsEditing(false)
+      setMyReview(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+      setMyComment('')
+      return
+    }
+    const session = evaluations.find(
+      e => e.workerId === selectedWorkerId &&
+        e.evaluatorIds.includes(authUser.workerId) &&
+        e.status !== 'approved'
+    )
+    if (!session) {
+      setHasSubmitted(false)
+      setIsEditing(false)
+      setMyReview(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+      setMyComment('')
+      return
+    }
+    const myExisting = session.reviews.find(r => r.evaluatorId === authUser.workerId)
+    if (myExisting) {
+      setMyReview(JSON.parse(JSON.stringify(myExisting.scores)))
+      setMyComment(myExisting.comment)
+      setHasSubmitted(true)
+      setIsEditing(false)
+    } else {
+      setMyReview(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+      setMyComment('')
+      setHasSubmitted(false)
+      setIsEditing(false)
+    }
+  }, [selectedWorkerId, authUser, evaluations])
 
-  // ── Score calculation ──
-  const calc = calculateManualScore(scores)
-  const bonus = metrics?.attendanceBonus ?? 0
-  const totalScore = calc.total + bonus
-  const rank = calculateRank(totalScore)
-  const years = selectedWorker?.hireDate ? yearsFromDate(selectedWorker.hireDate) : 1
-  const raiseAmount = getRaiseAmount(rank, years)
+  // Workers with active sessions where current user is an evaluator
+  const reviewableWorkers = workers.filter(w =>
+    evaluations.some(
+      e => e.workerId === w.id &&
+        e.status !== 'approved' &&
+        authUser &&
+        e.evaluatorIds.includes(authUser.workerId)
+    )
+  )
 
-  // ── Save / Submit ──
-  const handleSave = async (status: EvaluationStatus) => {
-    if (!selectedWorkerId || !authUser) return
+  // Get session for selected worker in review tab
+  const reviewSession = selectedWorkerId && authUser
+    ? evaluations.find(
+      e => e.workerId === selectedWorkerId &&
+        e.evaluatorIds.includes(authUser.workerId) &&
+        e.status !== 'approved'
+    )
+    : null
+
+  // Foremen list for session creation (jobType === '職長')
+  const foremen = workers.filter(w => w.jobType === '職長')
+  // All workers eligible to be evaluators (foremen + admin)
+  const allPossibleEvaluators = [
+    ...foremen,
+    ...workers.filter(w => !foremen.some(f => f.id === w.id) && w.id === authUser?.workerId),
+  ]
+
+  // ── Submit my review ──
+  const handleSubmitReview = async () => {
+    if (!reviewSession || !authUser) return
     setSaving(true)
     const { password } = getAuth()
     try {
-      const body = {
-        workerId: selectedWorkerId,
-        scores,
-        comment,
-        status,
-        evaluatorId: authUser.workerId,
-        evaluatorName: authUser.name,
-      }
-      const method = existingEval ? 'PUT' : 'POST'
-      const url = existingEval
-        ? `/api/evaluation?id=${existingEval.id}`
-        : '/api/evaluation'
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
-        },
-        body: JSON.stringify(body),
-      })
-      if (res.ok) {
-        await fetchData()
-        if (selectedWorkerId) await loadWorkerEval(selectedWorkerId)
-      }
-    } catch { /* ignore */ }
-    setSaving(false)
-  }
-
-  const handleApprove = async () => {
-    if (!existingEval || !authUser) return
-    setSaving(true)
-    const { password } = getAuth()
-    try {
-      const res = await fetch(`/api/evaluation?id=${existingEval.id}`, {
-        method: 'PUT',
+      const res = await fetch('/api/evaluation', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-admin-password': password,
         },
         body: JSON.stringify({
-          status: 'approved',
-          approvedBy: authUser.workerId,
-          raiseAmount,
+          action: 'submitReview',
+          evaluationId: reviewSession.id,
+          evaluatorId: authUser.workerId,
+          evaluatorName: authUser.name,
+          scores: myReview,
+          comment: myComment,
         }),
       })
       if (res.ok) {
         await fetchData()
-        if (selectedWorkerId) await loadWorkerEval(selectedWorkerId)
       }
     } catch { /* ignore */ }
     setSaving(false)
   }
 
-  // ── History tab data ──
-  const historyWorkerEvals = evaluations
-    .filter(e => e.workerId === historyWorkerId)
-    .sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))
+  // ── Create evaluation session ──
+  const handleCreateSession = async () => {
+    if (!createWorkerId || createEvaluatorIds.length === 0) return
+    setSaving(true)
+    const { password } = getAuth()
+    try {
+      const worker = workers.find(w => w.id === createWorkerId)
+      const res = await fetch('/api/evaluation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': password,
+        },
+        body: JSON.stringify({
+          action: 'create',
+          workerId: createWorkerId,
+          workerName: worker?.name || '',
+          evaluationDate: new Date().toISOString().slice(0, 10),
+          evaluatorIds: createEvaluatorIds,
+        }),
+      })
+      if (res.ok) {
+        setShowCreateModal(false)
+        setCreateWorkerId(null)
+        setCreateEvaluatorIds([])
+        await fetchData()
+      }
+    } catch { /* ignore */ }
+    setSaving(false)
+  }
+
+  // ── Approve with final scores ──
+  const handleApprove = async () => {
+    if (!approveSessionId || !authUser) return
+    const session = evaluations.find(e => e.id === approveSessionId)
+    if (!session) return
+
+    const calc = calculateManualScore(finalScores)
+    const bonus = session.metrics?.attendanceBonus ?? 0
+    const totalScore = calc.total + bonus
+    const rank = calculateRank(totalScore)
+    const worker = workers.find(w => w.id === session.workerId)
+    const years = worker?.hireDate ? yearsFromDate(worker.hireDate) : 1
+    const raiseAmount = getRaiseAmount(rank, years)
+
+    setSaving(true)
+    const { password } = getAuth()
+    try {
+      const res = await fetch('/api/evaluation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': password,
+        },
+        body: JSON.stringify({
+          action: 'approve',
+          evaluationId: approveSessionId,
+          approvedBy: authUser.workerId,
+          finalScores,
+          finalComment,
+          manualScore: calc.total,
+          totalScore,
+          rank,
+          raiseAmount,
+        }),
+      })
+      if (res.ok) {
+        setApproveSessionId(null)
+        await fetchData()
+      }
+    } catch { /* ignore */ }
+    setSaving(false)
+  }
+
+  // ── Score preview for review tab ──
+  const reviewCalc = calculateManualScore(myReview)
 
   // ── ABC Radio Button ──
   function ABCRadio({
     value,
     onChange,
     label,
+    disabled,
+    descA,
+    descB,
+    descC,
   }: {
     value: ABCGrade
     onChange: (v: ABCGrade) => void
     label: string
+    disabled?: boolean
+    descA?: string
+    descB?: string
+    descC?: string
   }) {
     const grades: ABCGrade[] = ['A', 'B', 'C']
-    const disabled = existingEval?.status === 'approved'
+    const descs = { A: descA, B: descB, C: descC }
+    const [showDesc, setShowDesc] = useState(false)
     return (
-      <div className="flex items-center justify-between py-2">
-        <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
-        <div className="flex gap-2">
-          {grades.map(g => {
-            const active = value === g
-            let cls = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-            if (active && g === 'A') cls = 'bg-green-500 text-white'
-            if (active && g === 'B') cls = 'bg-yellow-500 text-white'
-            if (active && g === 'C') cls = 'bg-red-400 text-white'
-            return (
-              <button
-                key={g}
-                type="button"
-                disabled={disabled}
-                onClick={() => onChange(g)}
-                className={`w-10 h-10 rounded-lg font-bold text-sm transition-all ${cls} ${
-                  disabled ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-80 cursor-pointer'
-                }`}
-              >
-                {g}
+      <div className="py-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
+            {descA && (
+              <button type="button" onClick={() => setShowDesc(!showDesc)}
+                className="text-gray-400 hover:text-blue-500 transition text-xs" title="評価基準を表示">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </button>
-            )
-          })}
+            )}
+          </div>
+          <div className="flex gap-2">
+            {grades.map(g => {
+              const active = value === g
+              let cls = 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+              if (active && g === 'A') cls = 'bg-green-500 text-white'
+              if (active && g === 'B') cls = 'bg-yellow-500 text-white'
+              if (active && g === 'C') cls = 'bg-red-400 text-white'
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onChange(g)}
+                  className={`w-10 h-10 rounded-lg font-bold text-sm transition-all ${cls} ${
+                    disabled ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-80 cursor-pointer'
+                  }`}
+                >
+                  {g}
+                </button>
+              )
+            })}
+          </div>
         </div>
+        {showDesc && descA && (
+          <div className="mt-2 space-y-1 text-xs bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            {grades.map(g => (
+              <div key={g} className="flex gap-2">
+                <span className={`font-bold w-5 shrink-0 ${g === 'A' ? 'text-green-600' : g === 'B' ? 'text-yellow-600' : 'text-red-500'}`}>{g}:</span>
+                <span className="text-gray-600 dark:text-gray-400">{descs[g]}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     )
   }
 
+  // ── Grade badge (small, for comparison table) ──
+  function GradeBadge({ grade }: { grade: ABCGrade }) {
+    let cls = 'bg-gray-200 text-gray-700 dark:bg-gray-600 dark:text-gray-200'
+    if (grade === 'A') cls = 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+    if (grade === 'B') cls = 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
+    if (grade === 'C') cls = 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+    return (
+      <span className={`inline-block w-8 h-8 rounded-lg text-center leading-8 font-bold text-sm ${cls}`}>
+        {grade}
+      </span>
+    )
+  }
+
   // ── Tabs ──
-  const tabs: { id: TabId; label: string }[] = [
+  const tabs: { id: TabId; label: string; adminOnly?: boolean }[] = [
     { id: 'list', label: '一覧' },
-    { id: 'input', label: '評価入力' },
-    { id: 'history', label: '履歴' },
+    { id: 'review', label: '評価入力' },
+    { id: 'approve', label: '承認', adminOnly: true },
   ]
+
+  const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin)
 
   if (loading) {
     return (
@@ -363,17 +518,17 @@ export default function EvaluationPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-6xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">評価管理</h1>
 
       {/* Tab Bar */}
       <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
-        {tabs.map(t => (
+        {visibleTabs.map(t => (
           <button
             key={t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => setActiveTab(t.id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === t.id
+              activeTab === t.id
                 ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
@@ -383,97 +538,213 @@ export default function EvaluationPage() {
         ))}
       </div>
 
-      {/* ─── Tab 1: 一覧 ─── */}
-      {tab === 'list' && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">名前</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">在留資格</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">入社日</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">勤続年数</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ステータス</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">時給</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">次回評価日</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {foreignWorkers
-                  .map(w => {
-                    const wEvals = evaluations.filter(e => e.workerId === w.id)
-                    const latest = wEvals.sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))[0]
-                    const nextDate = nextEvalDate(w.hireDate || '', wEvals)
-                    const isOverdue = nextDate !== '—' && nextDate <= new Date().toISOString().slice(0, 10)
-                    return { worker: w, latest, nextDate, isOverdue }
-                  })
-                  .sort((a, b) => {
-                    // Overdue first, then by next date ascending
-                    if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1
-                    return a.nextDate.localeCompare(b.nextDate)
-                  })
-                  .map(({ worker: w, latest, nextDate, isOverdue }) => {
-                    const st = statusLabel(latest?.status)
-                    const yrs = w.hireDate ? yearsFromDate(w.hireDate) : 0
-                    return (
-                      <tr key={w.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
-                        <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{w.name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
-                          {VISA_LABELS[w.visaType] || w.visaType}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{w.hireDate || '—'}</td>
-                        <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300">
-                          {yrs > 0 ? `${yrs}年` : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>
-                            {st.text}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-600 dark:text-gray-300">
-                          {w.hourlyRate ? fmtYen(w.hourlyRate) : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <span className={isOverdue ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-600 dark:text-gray-300'}>
-                            {nextDate}
-                          </span>
-                          {isOverdue && (
-                            <span className="ml-1 inline-block px-1.5 py-0.5 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 text-xs rounded-full font-bold">
-                              期限超過
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedWorkerId(w.id)
-                              setTab('input')
-                            }}
-                            className="px-3 py-1 text-xs font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                          >
-                            {latest?.status === 'submitted' || latest?.status === 'approved' ? '確認する' : '評価する'}
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                {foreignWorkers.length === 0 && (
+      {/* ═══════════════════════════════════════ */}
+      {/* Tab 1: 一覧 (List)                      */}
+      {/* ═══════════════════════════════════════ */}
+      {activeTab === 'list' && (
+        <div className="space-y-4">
+          {/* Create session button (admin only) */}
+          {isAdmin && (
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+              >
+                評価セッション作成
+              </button>
+            </div>
+          )}
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-900">
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
-                      外国人スタッフが登録されていません
-                    </td>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">名前</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">在留資格</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">入社日</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">勤続年数</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ステータス</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ランク</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">次回評価日</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {workers
+                    .map(w => {
+                      const wEvals = evaluations.filter(e => e.workerId === w.id)
+                      const latest = wEvals.sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))[0]
+                      const nextDate = nextEvalDate(w.hireDate || '', wEvals)
+                      const isOverdue = nextDate !== '--' && nextDate <= new Date().toISOString().slice(0, 10)
+                      return { worker: w, latest, nextDate, isOverdue }
+                    })
+                    .sort((a, b) => {
+                      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1
+                      return a.nextDate.localeCompare(b.nextDate)
+                    })
+                    .map(({ worker: w, latest, nextDate, isOverdue }) => {
+                      const st = latest
+                        ? sessionStatusLabel(latest.status, latest.reviews || [], latest.evaluatorIds || [])
+                        : { text: '未評価', cls: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' }
+                      const yrs = w.hireDate ? yearsFromDate(w.hireDate) : 0
+                      return (
+                        <tr key={w.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{w.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                            {VISA_LABELS[w.visaType] || w.visaType}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{w.hireDate || '--'}</td>
+                          <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300">
+                            {yrs > 0 ? `${yrs}年` : '--'}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>
+                              {st.text}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {latest?.rank ? (
+                              <span className={`font-bold ${rankColor(latest.rank)}`}>{latest.rank}</span>
+                            ) : '--'}
+                          </td>
+                          <td className="px-4 py-3 text-sm">
+                            <span className={isOverdue ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-600 dark:text-gray-300'}>
+                              {nextDate}
+                            </span>
+                            {isOverdue && (
+                              <span className="ml-1 inline-block px-1.5 py-0.5 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 text-xs rounded-full font-bold">
+                                期限超過
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {latest && latest.status !== 'approved' && authUser && latest.evaluatorIds.includes(authUser.workerId) && (
+                              <button
+                                onClick={() => {
+                                  setSelectedWorkerId(w.id)
+                                  setActiveTab('review')
+                                }}
+                                className="px-3 py-1 text-xs font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                              >
+                                評価入力
+                              </button>
+                            )}
+                            {latest && latest.status === 'reviewing' && isAdmin && (
+                              <button
+                                onClick={() => {
+                                  setApproveSessionId(latest.id)
+                                  setFinalScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+                                  setFinalComment('')
+                                  setActiveTab('approve')
+                                }}
+                                className="px-3 py-1 text-xs font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors ml-1"
+                              >
+                                承認へ
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  {workers.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
+                        外国人スタッフが登録されていません
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {/* Create Session Modal */}
+          {showCreateModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full mx-4 p-6">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">評価セッション作成</h2>
+
+                {/* Worker selector */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    対象スタッフ
+                  </label>
+                  <select
+                    value={createWorkerId ?? ''}
+                    onChange={e => setCreateWorkerId(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                  >
+                    <option value="">選択してください</option>
+                    {workers.map(w => (
+                      <option key={w.id} value={w.id}>
+                        {w.name} ({VISA_LABELS[w.visaType] || w.visaType})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Evaluator checkboxes */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    評価者を選択（3名の職長 + 政仁さん）
+                  </label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {allPossibleEvaluators.map(w => (
+                      <label key={w.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={createEvaluatorIds.includes(w.id)}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setCreateEvaluatorIds(prev => [...prev, w.id])
+                            } else {
+                              setCreateEvaluatorIds(prev => prev.filter(id => id !== w.id))
+                            }
+                          }}
+                          className="rounded border-gray-300 dark:border-gray-600"
+                        />
+                        {w.name}
+                        {w.jobType === '職長' && (
+                          <span className="text-xs text-blue-600 dark:text-blue-400">(職長)</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    選択済み: {createEvaluatorIds.length}名
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setShowCreateModal(false)
+                      setCreateWorkerId(null)
+                      setCreateEvaluatorIds([])
+                    }}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    onClick={handleCreateSession}
+                    disabled={!createWorkerId || createEvaluatorIds.length === 0 || saving}
+                    className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
+                  >
+                    {saving ? '作成中...' : '作成する'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ─── Tab 2: 評価入力 ─── */}
-      {tab === 'input' && (
+      {/* ═══════════════════════════════════════ */}
+      {/* Tab 2: 評価入力 (My Review)              */}
+      {/* ═══════════════════════════════════════ */}
+      {activeTab === 'review' && (
         <div className="space-y-6">
           {/* Worker selector */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
@@ -486,256 +757,576 @@ export default function EvaluationPage() {
               className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
             >
               <option value="">選択してください</option>
-              {foreignWorkers.map(w => (
+              {reviewableWorkers.map(w => (
                 <option key={w.id} value={w.id}>
-                  {w.name}（{VISA_LABELS[w.visaType] || w.visaType}）
+                  {w.name} ({VISA_LABELS[w.visaType] || w.visaType})
                 </option>
               ))}
             </select>
+            {reviewableWorkers.length === 0 && (
+              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                あなたが評価者として割り当てられたセッションがありません
+              </p>
+            )}
           </div>
 
-          {selectedWorker && (
+          {selectedWorkerId && reviewSession && (
             <>
-              {/* Worker info card */}
+              {/* Worker info */}
+              {(() => {
+                const sw = workers.find(w => w.id === selectedWorkerId)
+                if (!sw) return null
+                const years = sw.hireDate ? yearsFromDate(sw.hireDate) : 1
+                return (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">スタッフ情報</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs">名前</span>
+                        <span className="font-medium text-gray-900 dark:text-white">{sw.name}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs">在留資格</span>
+                        <span className="text-gray-900 dark:text-white">{VISA_LABELS[sw.visaType] || sw.visaType}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs">入社日</span>
+                        <span className="text-gray-900 dark:text-white">{sw.hireDate || '--'}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs">勤続年数</span>
+                        <span className="text-gray-900 dark:text-white">{years}年</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 dark:text-gray-400 block text-xs">現在の時給</span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {sw.hourlyRate ? fmtYen(sw.hourlyRate) : '--'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Session status */}
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">スタッフ情報</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
+                <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-gray-500 dark:text-gray-400 block text-xs">名前</span>
-                    <span className="font-medium text-gray-900 dark:text-white">{selectedWorker.name}</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">セッション状況: </span>
+                    {(() => {
+                      const st = sessionStatusLabel(
+                        reviewSession.status,
+                        reviewSession.reviews || [],
+                        reviewSession.evaluatorIds || [],
+                      )
+                      return (
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>
+                          {st.text}
+                        </span>
+                      )
+                    })()}
                   </div>
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400 block text-xs">在留資格</span>
-                    <span className="text-gray-900 dark:text-white">{VISA_LABELS[selectedWorker.visaType] || selectedWorker.visaType}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400 block text-xs">入社日</span>
-                    <span className="text-gray-900 dark:text-white">{selectedWorker.hireDate || '—'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400 block text-xs">勤続年数</span>
-                    <span className="text-gray-900 dark:text-white">{years}年</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-500 dark:text-gray-400 block text-xs">現在の時給</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {selectedWorker.hourlyRate ? fmtYen(selectedWorker.hourlyRate) : '—'}
-                    </span>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    評価者: {reviewSession.evaluatorIds.length}名
                   </div>
                 </div>
               </div>
 
-              {/* Attendance metrics card */}
-              {metrics && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                  <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">出勤実績（過去1年）</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs">出勤率</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{metrics.attendanceRate.toFixed(1)}%</span>
+              {/* If not submitted or editing: show ABC input form */}
+              {(!hasSubmitted || isEditing) && (
+                <>
+                  {/* Attendance metrics */}
+                  {reviewSession.metrics && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                      <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">出勤実績（過去1年）</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400 block text-xs">出勤率</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{reviewSession.metrics.attendanceRate.toFixed(1)}%</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400 block text-xs">残業平均</span>
+                          <span className="text-gray-900 dark:text-white">{reviewSession.metrics.overtimeAvg.toFixed(1)}h/月</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400 block text-xs">有給取得</span>
+                          <span className="text-gray-900 dark:text-white">{reviewSession.metrics.plUsage}日</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 dark:text-gray-400 block text-xs">出勤率ボーナス</span>
+                          <span className="font-bold text-blue-600 dark:text-blue-400">+{reviewSession.metrics.attendanceBonus}点</span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs">残業平均</span>
-                      <span className="text-gray-900 dark:text-white">{metrics.overtimeAvg.toFixed(1)}h/月</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs">有給取得</span>
-                      <span className="text-gray-900 dark:text-white">{metrics.plUsage}日</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs">出勤率ボーナス</span>
-                      <span className="font-bold text-blue-600 dark:text-blue-400">+{metrics.attendanceBonus}点</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                  )}
 
-              {/* Evaluation sections */}
-              <div className="space-y-4">
-                {/* 日本語能力 */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-                  <div className="bg-blue-500 px-4 py-2">
-                    <h3 className="text-white font-bold text-sm flex items-center gap-2">
-                      <span>&#x1F5E3;</span> 日本語能力
-                      <span className="text-blue-200 text-xs font-normal">（重み ×1.0）</span>
-                    </h3>
+                  {/* ABC sections — generated from EVALUATION_CATEGORIES */}
+                  <div className="space-y-4">
+                    {EVALUATION_CATEGORIES.map(cat => {
+                      const bgColor = cat.color === 'blue' ? 'bg-blue-500' : cat.color === 'green' ? 'bg-green-500' : 'bg-orange-500'
+                      const catScores = myReview[cat.key]
+                      return (
+                        <div key={cat.key} className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+                          <div className={`${bgColor} px-4 py-2`}>
+                            <h3 className="text-white font-bold text-sm">
+                              {cat.icon} {cat.label} (重み {cat.weightLabel}{cat.key === 'attitude' ? ' — 最重要' : ''})
+                            </h3>
+                          </div>
+                          <div className="px-4 py-2 divide-y divide-gray-100 dark:divide-gray-700">
+                            {cat.criteria.map(c => (
+                              <ABCRadio
+                                key={c.key}
+                                label={c.label}
+                                value={(catScores as Record<string, ABCGrade>)[c.key]}
+                                onChange={v => setMyReview(prev => ({
+                                  ...prev,
+                                  [cat.key]: { ...prev[cat.key], [c.key]: v }
+                                }))}
+                                descA={c.A}
+                                descB={c.B}
+                                descC={c.C}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
-                  <div className="px-4 py-2 divide-y divide-gray-100 dark:divide-gray-700">
-                    <ABCRadio
-                      label="指示理解"
-                      value={scores.japanese.understanding}
-                      onChange={v => setScores(prev => ({
-                        ...prev,
-                        japanese: { ...prev.japanese, understanding: v },
-                      }))}
-                    />
-                    <ABCRadio
-                      label="報告・連絡"
-                      value={scores.japanese.reporting}
-                      onChange={v => setScores(prev => ({
-                        ...prev,
-                        japanese: { ...prev.japanese, reporting: v },
-                      }))}
-                    />
-                    <ABCRadio
-                      label="安全用語"
-                      value={scores.japanese.safety}
-                      onChange={v => setScores(prev => ({
-                        ...prev,
-                        japanese: { ...prev.japanese, safety: v },
-                      }))}
-                    />
-                  </div>
-                </div>
 
-                {/* 勤務態度 */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-                  <div className="bg-green-500 px-4 py-2">
-                    <h3 className="text-white font-bold text-sm flex items-center gap-2">
-                      <span>&#x1F4BC;</span> 勤務態度
-                      <span className="text-green-200 text-xs font-normal">（重み ×1.5 ★最重要）</span>
-                    </h3>
-                  </div>
-                  <div className="px-4 py-2 divide-y divide-gray-100 dark:divide-gray-700">
-                    <ABCRadio
-                      label="時間厳守"
-                      value={scores.attitude.punctuality}
-                      onChange={v => setScores(prev => ({
-                        ...prev,
-                        attitude: { ...prev.attitude, punctuality: v },
-                      }))}
-                    />
-                    <ABCRadio
-                      label="安全意識"
-                      value={scores.attitude.safetyAwareness}
-                      onChange={v => setScores(prev => ({
-                        ...prev,
-                        attitude: { ...prev.attitude, safetyAwareness: v },
-                      }))}
-                    />
-                    <ABCRadio
-                      label="協調性"
-                      value={scores.attitude.teamwork}
-                      onChange={v => setScores(prev => ({
-                        ...prev,
-                        attitude: { ...prev.attitude, teamwork: v },
-                      }))}
+                  {/* Comment */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      コメント
+                    </label>
+                    <textarea
+                      value={myComment}
+                      onChange={e => setMyComment(e.target.value)}
+                      rows={3}
+                      className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                      placeholder="評価に関するコメントを入力..."
                     />
                   </div>
-                </div>
 
-                {/* 職業能力 */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-                  <div className="bg-orange-500 px-4 py-2">
-                    <h3 className="text-white font-bold text-sm flex items-center gap-2">
-                      <span>&#x1F528;</span> 職業能力
-                      <span className="text-orange-200 text-xs font-normal">（重み ×1.2）</span>
-                    </h3>
-                  </div>
-                  <div className="px-4 py-2 divide-y divide-gray-100 dark:divide-gray-700">
-                    <ABCRadio
-                      label="技能レベル"
-                      value={scores.skill.level}
-                      onChange={v => setScores(prev => ({
-                        ...prev,
-                        skill: { ...prev.skill, level: v },
-                      }))}
-                    />
-                    <ABCRadio
-                      label="作業速度・品質"
-                      value={scores.skill.speed}
-                      onChange={v => setScores(prev => ({
-                        ...prev,
-                        skill: { ...prev.skill, speed: v },
-                      }))}
-                    />
-                    <ABCRadio
-                      label="段取り・準備"
-                      value={scores.skill.planning}
-                      onChange={v => setScores(prev => ({
-                        ...prev,
-                        skill: { ...prev.skill, planning: v },
-                      }))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Comment */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  コメント
-                </label>
-                <textarea
-                  value={comment}
-                  onChange={e => setComment(e.target.value)}
-                  disabled={existingEval?.status === 'approved'}
-                  rows={3}
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white disabled:opacity-60"
-                  placeholder="評価に関するコメントを入力..."
-                />
-              </div>
-
-              {/* Score preview */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">スコアプレビュー</h3>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                    <span>日本語: {calc.japanese}点 ×1.0</span>
-                    <span className="font-medium">= {calc.japaneseW.toFixed(1)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                    <span>勤務態度: {calc.attitude}点 ×1.5</span>
-                    <span className="font-medium">= {calc.attitudeW.toFixed(1)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                    <span>職業能力: {calc.skill}点 ×1.2</span>
-                    <span className="font-medium">= {calc.skillW.toFixed(1)}</span>
-                  </div>
-                  <div className="flex justify-between text-blue-600 dark:text-blue-400">
-                    <span>出勤率ボーナス</span>
-                    <span className="font-medium">+{bonus}点</span>
-                  </div>
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
-                    <div className="flex justify-between text-gray-900 dark:text-white font-bold">
-                      <span>合計: {totalScore.toFixed(1)}点</span>
-                      <span className={`text-lg ${rankColor(rank)}`}>ランク: {rank}</span>
-                    </div>
-                    <div className="flex justify-between mt-1">
-                      <span className="text-gray-500 dark:text-gray-400 text-xs">
-                        {years}年目テーブル適用
-                      </span>
-                      <span className="font-bold text-green-600 dark:text-green-400">
-                        推奨昇給: +{raiseAmount}円/h
-                      </span>
+                  {/* Score preview */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">スコアプレビュー</h3>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                        <span>日本語: {reviewCalc.japanese}点 x1.0</span>
+                        <span className="font-medium">= {reviewCalc.japaneseW.toFixed(1)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                        <span>勤務態度: {reviewCalc.attitude}点 x1.5</span>
+                        <span className="font-medium">= {reviewCalc.attitudeW.toFixed(1)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                        <span>職業能力: {reviewCalc.skill}点 x1.2</span>
+                        <span className="font-medium">= {reviewCalc.skillW.toFixed(1)}</span>
+                      </div>
+                      <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+                        <div className="flex justify-between text-gray-900 dark:text-white font-bold">
+                          <span>手動合計: {reviewCalc.total.toFixed(1)}点</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Action buttons */}
-              <div className="flex gap-3 justify-end">
-                {existingEval?.status !== 'approved' && (
-                  <>
+                  {/* Submit button */}
+                  <div className="flex gap-3 justify-end">
+                    {isEditing && (
+                      <button
+                        onClick={() => setIsEditing(false)}
+                        className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        キャンセル
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleSave('draft')}
-                      disabled={saving}
-                      className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-                    >
-                      {saving ? '保存中...' : '下書き保存'}
-                    </button>
-                    <button
-                      onClick={() => handleSave('submitted')}
+                      onClick={handleSubmitReview}
                       disabled={saving}
                       className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
                     >
-                      {saving ? '送信中...' : '提出する'}
+                      {saving ? '送信中...' : isEditing ? '再提出する' : '提出する'}
                     </button>
-                  </>
-                )}
-                {existingEval?.status === 'submitted' &&
-                  authUser &&
-                  (authUser.role === 'admin' || authUser.role === 'approver') && (
+                  </div>
+                </>
+              )}
+
+              {/* If submitted and not editing: show read-only view */}
+              {hasSubmitted && !isEditing && (
+                <div className="space-y-4">
+                  <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-green-700 dark:text-green-300 font-medium">
+                        評価を提出済みです
+                      </p>
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="px-3 py-1 text-xs font-medium rounded-lg border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50"
+                      >
+                        修正する
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* My submitted review (read-only) */}
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">自分の評価</h3>
+                    <div className="space-y-2">
+                      {EVAL_ITEMS.map(item => (
+                        <div key={`${item.category}_${item.key}`} className="flex items-center justify-between py-1">
+                          <span className="text-sm text-gray-600 dark:text-gray-300">{item.label}</span>
+                          <GradeBadge grade={getScoreValue(myReview, item.category, item.key)} />
+                        </div>
+                      ))}
+                    </div>
+                    {myComment && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">コメント:</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{myComment}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Other evaluators' reviews (only visible after submitting own) */}
+                  {reviewSession.reviews.filter(r => r.evaluatorId !== authUser?.workerId).length > 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                      <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">他の評価者の結果</h3>
+                      <div className="space-y-4">
+                        {reviewSession.reviews
+                          .filter(r => r.evaluatorId !== authUser?.workerId)
+                          .map((review, idx) => (
+                            <div key={review.evaluatorId} className={`rounded-lg p-3 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].bg}`}>
+                              <p className={`text-sm font-medium mb-2 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].text}`}>
+                                {review.evaluatorName}
+                              </p>
+                              <div className="space-y-1">
+                                {EVAL_ITEMS.map(item => (
+                                  <div key={`${review.evaluatorId}_${item.category}_${item.key}`} className="flex items-center justify-between py-0.5">
+                                    <span className="text-xs text-gray-600 dark:text-gray-300">{item.label}</span>
+                                    <GradeBadge grade={getScoreValue(review.scores, item.category, item.key)} />
+                                  </div>
+                                ))}
+                              </div>
+                              {review.comment && (
+                                <p className="mt-2 text-xs text-gray-600 dark:text-gray-400 border-t border-gray-200 dark:border-gray-600 pt-2">
+                                  {review.comment}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pending evaluators */}
+                  {(() => {
+                    const submittedIds = (reviewSession.reviews || []).map(r => r.evaluatorId)
+                    const pending = reviewSession.evaluatorIds.filter(id => !submittedIds.includes(id))
+                    if (pending.length === 0) return null
+                    return (
+                      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">未提出の評価者</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {pending.map(id => {
+                            const w = workers.find(w2 => w2.id === id)
+                            return (
+                              <span key={id} className="inline-block px-2 py-1 rounded-full text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                {w?.name || `ID:${id}`}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+            </>
+          )}
+
+          {!selectedWorkerId && (
+            <div className="text-center py-12 text-gray-400 dark:text-gray-500">
+              対象スタッフを選択してください
+            </div>
+          )}
+
+          {selectedWorkerId && !reviewSession && (
+            <div className="text-center py-12 text-gray-400 dark:text-gray-500">
+              このスタッフのアクティブな評価セッションがありません
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════ */}
+      {/* Tab 3: 承認 (Approval) - admin only      */}
+      {/* ═══════════════════════════════════════ */}
+      {activeTab === 'approve' && isAdmin && (
+        <div className="space-y-6">
+          {/* Sessions in reviewing status */}
+          {!approveSessionId && (
+            <>
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white">最終確認待ち</h2>
+              {evaluations.filter(e => e.status === 'reviewing').length === 0 ? (
+                <div className="text-center py-12 text-gray-400 dark:text-gray-500">
+                  全員提出済みの評価セッションがありません
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {evaluations
+                    .filter(e => e.status === 'reviewing')
+                    .map(session => (
+                      <div key={session.id} className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-white">{session.workerName}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            評価日: {session.evaluationDate} / {session.reviews.length}名が提出
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setApproveSessionId(session.id)
+                            // Pre-fill finalScores from majority vote or first review
+                            if (session.reviews.length > 0) {
+                              // Use majority vote for each item
+                              const majority = JSON.parse(JSON.stringify(EMPTY_SCORES)) as EvaluationScores
+                              for (const item of EVAL_ITEMS) {
+                                const grades = session.reviews.map(r => getScoreValue(r.scores, item.category, item.key))
+                                const counts: Record<ABCGrade, number> = { A: 0, B: 0, C: 0 }
+                                for (const g of grades) counts[g]++
+                                const best = (['A', 'B', 'C'] as ABCGrade[]).sort((a, b) => counts[b] - counts[a])[0]
+                                const cat = majority[item.category as keyof EvaluationScores] as Record<string, ABCGrade>
+                                cat[item.key] = best
+                              }
+                              setFinalScores(majority)
+                            } else {
+                              setFinalScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+                            }
+                            setFinalComment('')
+                          }}
+                          className="px-4 py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors"
+                        >
+                          確認・承認
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Approval detail view */}
+          {approveSessionId && (() => {
+            const session = evaluations.find(e => e.id === approveSessionId)
+            if (!session) return null
+            const worker = workers.find(w => w.id === session.workerId)
+            const years = worker?.hireDate ? yearsFromDate(worker.hireDate) : 1
+
+            // Calculate final score preview
+            const finalCalc = calculateManualScore(finalScores)
+            const bonus = session.metrics?.attendanceBonus ?? 0
+            const totalScore = finalCalc.total + bonus
+            const rank = calculateRank(totalScore)
+            const raiseAmount = getRaiseAmount(rank, years)
+
+            return (
+              <div className="space-y-6">
+                {/* Back button */}
+                <button
+                  onClick={() => setApproveSessionId(null)}
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  &larr; 一覧に戻る
+                </button>
+
+                {/* Worker info */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                    {session.workerName} の評価
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs">在留資格</span>
+                      <span className="text-gray-900 dark:text-white">{VISA_LABELS[worker?.visaType || ''] || worker?.visaType}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs">入社日</span>
+                      <span className="text-gray-900 dark:text-white">{worker?.hireDate || '--'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs">勤続年数</span>
+                      <span className="text-gray-900 dark:text-white">{years}年</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 dark:text-gray-400 block text-xs">現在の時給</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {worker?.hourlyRate ? fmtYen(worker.hourlyRate) : '--'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comparison table */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900">
+                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">評価者比較</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead>
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 w-32">
+                            項目
+                          </th>
+                          {session.reviews.map((review, idx) => (
+                            <th
+                              key={review.evaluatorId}
+                              className={`px-3 py-3 text-center text-xs font-medium text-white border-b border-gray-200 dark:border-gray-700 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].header}`}
+                            >
+                              {review.evaluatorName}
+                            </th>
+                          ))}
+                          <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 w-1">
+                          </th>
+                          <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/30 min-w-[140px]">
+                            最終評価
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {EVAL_ITEMS.map((item, rowIdx) => {
+                          const allGrades = session.reviews.map(r => getScoreValue(r.scores, item.category, item.key))
+                          const allSame = allGrades.length > 0 && allGrades.every(g => g === allGrades[0])
+                          const rowBg = rowIdx % 2 === 0 ? '' : 'bg-gray-50/50 dark:bg-gray-750/50'
+                          return (
+                            <tr key={`${item.category}_${item.key}`} className={rowBg}>
+                              <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-700">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`inline-block w-2 h-2 rounded-full ${allSame ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                                  {item.label}
+                                </div>
+                              </td>
+                              {session.reviews.map(review => (
+                                <td key={review.evaluatorId} className="px-3 py-2 text-center border-b border-gray-100 dark:border-gray-700">
+                                  <GradeBadge grade={getScoreValue(review.scores, item.category, item.key)} />
+                                </td>
+                              ))}
+                              <td className="border-b border-gray-100 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 w-1"></td>
+                              <td className="px-3 py-2 text-center border-b border-gray-100 dark:border-gray-700 bg-indigo-50/50 dark:bg-indigo-900/20">
+                                <div className="flex gap-1 justify-center">
+                                  {(['A', 'B', 'C'] as ABCGrade[]).map(g => {
+                                    const current = getScoreValue(finalScores, item.category, item.key)
+                                    const active = current === g
+                                    let cls = 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                                    if (active && g === 'A') cls = 'bg-green-500 text-white'
+                                    if (active && g === 'B') cls = 'bg-yellow-500 text-white'
+                                    if (active && g === 'C') cls = 'bg-red-400 text-white'
+                                    return (
+                                      <button
+                                        key={g}
+                                        onClick={() => setFinalScores(prev => setScoreValue(prev, item.category, item.key, g))}
+                                        className={`w-8 h-8 rounded-lg font-bold text-xs transition-all ${cls} hover:opacity-80 cursor-pointer`}
+                                      >
+                                        {g}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Legend */}
+                  <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex gap-4 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-green-400" /> 全員一致
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-yellow-400" /> 意見分かれ
+                    </span>
+                  </div>
+                </div>
+
+                {/* Evaluator comments */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                  <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">評価者コメント</h3>
+                  <div className="space-y-3">
+                    {session.reviews.map((review, idx) => (
+                      <div key={review.evaluatorId} className={`rounded-lg p-3 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].bg}`}>
+                        <p className={`text-xs font-medium ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].text}`}>
+                          {review.evaluatorName}
+                        </p>
+                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                          {review.comment || '(コメントなし)'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Final comment */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    最終コメント（政仁さん）
+                  </label>
+                  <textarea
+                    value={finalComment}
+                    onChange={e => setFinalComment(e.target.value)}
+                    rows={3}
+                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                    placeholder="最終評価コメントを入力..."
+                  />
+                </div>
+
+                {/* Score preview */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                  <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">最終スコアプレビュー</h3>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                      <span>日本語: {finalCalc.japanese}点 x1.0</span>
+                      <span className="font-medium">= {finalCalc.japaneseW.toFixed(1)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                      <span>勤務態度: {finalCalc.attitude}点 x1.5</span>
+                      <span className="font-medium">= {finalCalc.attitudeW.toFixed(1)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                      <span>職業能力: {finalCalc.skill}点 x1.2</span>
+                      <span className="font-medium">= {finalCalc.skillW.toFixed(1)}</span>
+                    </div>
+                    <div className="flex justify-between text-blue-600 dark:text-blue-400">
+                      <span>出勤率ボーナス</span>
+                      <span className="font-medium">+{bonus}点</span>
+                    </div>
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
+                      <div className="flex justify-between text-gray-900 dark:text-white font-bold">
+                        <span>合計: {totalScore.toFixed(1)}点</span>
+                        <span className={`text-lg ${rankColor(rank)}`}>ランク: {rank}</span>
+                      </div>
+                      <div className="flex justify-between mt-1">
+                        <span className="text-gray-500 dark:text-gray-400 text-xs">
+                          {years}年目テーブル適用
+                        </span>
+                        <span className="font-bold text-green-600 dark:text-green-400">
+                          推奨昇給: +{raiseAmount}円/h
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Approve button */}
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setApproveSessionId(null)}
+                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    戻る
+                  </button>
                   <button
                     onClick={handleApprove}
                     disabled={saving}
@@ -743,173 +1334,10 @@ export default function EvaluationPage() {
                   >
                     {saving ? '承認中...' : '承認する'}
                   </button>
-                )}
-                {existingEval?.status === 'approved' && (
-                  <span className="px-4 py-2 text-sm font-medium text-green-600 dark:text-green-400">
-                    承認済み
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-
-          {!selectedWorkerId && (
-            <div className="text-center py-12 text-gray-400 dark:text-gray-500">
-              スタッフを選択してください
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ─── Tab 3: 履歴 ─── */}
-      {tab === 'history' && (
-        <div className="space-y-6">
-          {/* Worker selector */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              対象スタッフ
-            </label>
-            <select
-              value={historyWorkerId ?? ''}
-              onChange={e => setHistoryWorkerId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
-            >
-              <option value="">選択してください</option>
-              {foreignWorkers.map(w => (
-                <option key={w.id} value={w.id}>
-                  {w.name}（{VISA_LABELS[w.visaType] || w.visaType}）
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {historyWorkerId && historyWorkerEvals.length > 0 && (
-            <>
-              {/* History table */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-900">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">評価日</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">評価者</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">スコア</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ランク</th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">昇給額</th>
-                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ステータス</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {historyWorkerEvals.map(ev => {
-                        const st = statusLabel(ev.status)
-                        return (
-                          <tr key={ev.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
-                            <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{ev.evaluationDate}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{ev.evaluatorName}</td>
-                            <td className="px-4 py-3 text-sm text-center font-medium text-gray-900 dark:text-white">
-                              {ev.totalScore.toFixed(1)}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`font-bold ${rankColor(ev.rank)}`}>{ev.rank}</span>
-                            </td>
-                            <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-white">
-                              {ev.raiseAmount != null ? `+${ev.raiseAmount}円/h` : '—'}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>
-                                {st.text}
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
                 </div>
               </div>
-
-              {/* Hourly rate transition */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">時給推移</h3>
-                {(() => {
-                  const hw = foreignWorkers.find(w => w.id === historyWorkerId)
-                  const approved = historyWorkerEvals
-                    .filter(e => e.status === 'approved' && e.raiseAmount != null)
-                    .sort((a, b) => a.evaluationDate.localeCompare(b.evaluationDate))
-                  if (approved.length === 0) {
-                    return (
-                      <p className="text-sm text-gray-400 dark:text-gray-500">
-                        承認済みの評価がまだありません
-                      </p>
-                    )
-                  }
-                  // Build rate timeline
-                  const baseRate = hw?.hourlyRate ?? 0
-                  let currentRate = baseRate
-                  // Walk backwards to find original rate
-                  const totalRaises = approved.reduce((sum, e) => sum + (e.raiseAmount || 0), 0)
-                  const startRate = baseRate - totalRaises
-                  currentRate = startRate
-
-                  const timeline: { date: string; rate: number; raise: number; rank: EvaluationRank }[] = [
-                    { date: hw?.hireDate || '入社時', rate: startRate, raise: 0, rank: 'B' as EvaluationRank },
-                  ]
-                  for (const ev of approved) {
-                    currentRate += ev.raiseAmount || 0
-                    timeline.push({
-                      date: ev.evaluationDate,
-                      rate: currentRate,
-                      raise: ev.raiseAmount || 0,
-                      rank: ev.rank,
-                    })
-                  }
-
-                  const maxRate = Math.max(...timeline.map(t => t.rate))
-                  const minRate = Math.min(...timeline.map(t => t.rate))
-                  const range = maxRate - minRate || 1
-
-                  return (
-                    <div className="space-y-2">
-                      {timeline.map((t, i) => (
-                        <div key={i} className="flex items-center gap-3 text-sm">
-                          <span className="w-24 text-gray-500 dark:text-gray-400 text-xs shrink-0">{t.date}</span>
-                          <div className="flex-1 relative h-6">
-                            <div
-                              className="absolute top-0 left-0 h-6 rounded-r bg-blue-400 dark:bg-blue-600 transition-all"
-                              style={{
-                                width: `${Math.max(10, ((t.rate - minRate) / range) * 100)}%`,
-                              }}
-                            />
-                            <span className="absolute left-2 top-0 h-6 flex items-center text-xs font-medium text-white z-10">
-                              {fmtYen(t.rate)}
-                              {t.raise > 0 && (
-                                <span className="ml-1 text-green-200">+{t.raise}円</span>
-                              )}
-                            </span>
-                          </div>
-                          {i > 0 && (
-                            <span className={`text-xs font-bold ${rankColor(t.rank)}`}>{t.rank}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )
-                })()}
-              </div>
-            </>
-          )}
-
-          {historyWorkerId && historyWorkerEvals.length === 0 && (
-            <div className="text-center py-12 text-gray-400 dark:text-gray-500">
-              評価履歴がありません
-            </div>
-          )}
-
-          {!historyWorkerId && (
-            <div className="text-center py-12 text-gray-400 dark:text-gray-500">
-              スタッフを選択してください
-            </div>
-          )}
+            )
+          })()}
         </div>
       )}
     </div>

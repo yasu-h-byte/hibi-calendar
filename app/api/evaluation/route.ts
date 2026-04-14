@@ -4,7 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { logActivity } from '@/lib/activity'
-import { ABCGrade, EvaluationScores, EvaluationWeights, EvaluationRank, RaiseTableRow } from '@/types'
+import { EvaluationScores, EvaluationWeights, RaiseTableRow, EvaluationReview } from '@/types'
 
 // ────────────────────────────────────────
 //  デフォルト設定
@@ -21,12 +21,15 @@ const DEFAULT_RAISE_TABLE: RaiseTableRow[] = [
   { year: 6, S: 40, A: 30, B: 15, C: 0 },
 ]
 
+/** 政仁さんのワーカーID */
+const APPROVER_WORKER_ID = 1
+
 // ────────────────────────────────────────
-//  ヘルパー
+//  スコア計算ヘルパー
 // ────────────────────────────────────────
 
 /** ABC → 数値変換 */
-function gradeToNum(g: ABCGrade): number {
+function gradeToNum(g: 'A' | 'B' | 'C'): number {
   switch (g) {
     case 'A': return 3
     case 'B': return 2
@@ -34,25 +37,8 @@ function gradeToNum(g: ABCGrade): number {
   }
 }
 
-/** 出席率からボーナス算出 */
-function calcAttendanceBonus(rate: number): number {
-  if (rate >= 98) return 3
-  if (rate >= 95) return 2
-  if (rate >= 90) return 1
-  return 0
-}
-
-/** 合計スコアからランク算出 */
-function calcRank(totalScore: number): EvaluationRank {
-  if (totalScore >= 30) return 'S'
-  if (totalScore >= 25) return 'A'
-  if (totalScore >= 20) return 'B'
-  if (totalScore >= 15) return 'C'
-  return 'D'
-}
-
 /** 重み付き手動スコア算出 */
-function calcManualScore(scores: EvaluationScores, weights: EvaluationWeights): number {
+function calcWeightedScore(scores: EvaluationScores, weights: EvaluationWeights): number {
   const japaneseSum =
     gradeToNum(scores.japanese.understanding) +
     gradeToNum(scores.japanese.reporting) +
@@ -71,6 +57,37 @@ function calcManualScore(scores: EvaluationScores, weights: EvaluationWeights): 
   return japaneseSum * weights.japanese + attitudeSum * weights.attitude + skillSum * weights.skill
 }
 
+/** 出席率からボーナス算出 */
+function calcAttendanceBonus(rate: number): number {
+  if (rate >= 98) return 3
+  if (rate >= 95) return 2
+  if (rate >= 90) return 1
+  return 0
+}
+
+/** 合計スコアからランク算出 */
+function calcRank(totalScore: number): 'S' | 'A' | 'B' | 'C' | 'D' {
+  if (totalScore >= 30) return 'S'
+  if (totalScore >= 25) return 'A'
+  if (totalScore >= 20) return 'B'
+  if (totalScore >= 15) return 'C'
+  return 'D'
+}
+
+/** 昇給テーブルから昇給額を取得 */
+function getRaiseAmount(
+  rank: 'S' | 'A' | 'B' | 'C' | 'D',
+  yearsFromHire: number,
+  raiseTable: RaiseTableRow[],
+): number {
+  if (rank === 'D') return 0
+  const maxYear = Math.max(...raiseTable.map(r => r.year))
+  const yearKey = Math.min(yearsFromHire, maxYear)
+  const row = raiseTable.find(r => r.year === yearKey)
+  if (!row) return 0
+  return row[rank] ?? 0
+}
+
 /** 入社日からの年数算出 */
 function calcYearsFromHire(hireDate: string): number {
   if (!hireDate) return 1
@@ -79,24 +96,6 @@ function calcYearsFromHire(hireDate: string): number {
   const diffMs = now.getTime() - hire.getTime()
   const years = Math.floor(diffMs / (365.25 * 24 * 60 * 60 * 1000))
   return Math.max(1, years)
-}
-
-/** 昇給テーブルから昇給額を取得 */
-function lookupRaiseAmount(
-  yearsFromHire: number,
-  rank: EvaluationRank,
-  raiseTable: RaiseTableRow[],
-): number {
-  // ランクDは昇給なし
-  if (rank === 'D') return 0
-
-  // 年数に対応する行を探す（最大年数を超えたら最後の行を使用）
-  const maxYear = Math.max(...raiseTable.map(r => r.year))
-  const yearKey = Math.min(yearsFromHire, maxYear)
-  const row = raiseTable.find(r => r.year === yearKey)
-  if (!row) return 0
-
-  return row[rank] ?? 0
 }
 
 /** 過去12ヶ月のYMキーリスト生成 */
@@ -140,6 +139,7 @@ async function calcAttendanceMetrics(
   attendanceRate: number
   overtimeAvg: number
   plUsage: number
+  attendanceBonus: number
 }> {
   const ymList = getPast12MonthsYM()
   const attResults = await Promise.all(ymList.map(ym => getAttData(ym)))
@@ -153,20 +153,19 @@ async function calcAttendanceMetrics(
     const ym = ymList[i]
     const att = attResults[i]
 
-    // 所定労働日数
     const prescribed = workDays[ym] || 0
     totalPrescribed += prescribed
 
-    // 当該ワーカーの出面を集計
     for (const [key, entry] of Object.entries(att.d)) {
       if (!entry) continue
       const pk = parseDKey(key)
       if (pk.wid !== String(workerId)) continue
       if (pk.ym !== ym) continue
 
-      if (entry.w > 0) totalWorkDays++
-      if (entry.p) totalPlDays++
-      if (entry.o) totalOT += entry.o
+      const e = entry as { w: number; p?: boolean; o?: number }
+      if (e.w > 0) totalWorkDays++
+      if (e.p) totalPlDays++
+      if (e.o) totalOT += e.o
     }
   }
 
@@ -178,15 +177,13 @@ async function calcAttendanceMetrics(
     ? Math.round((totalOT / ymList.length) * 100) / 100
     : 0
 
-  return {
-    attendanceRate,
-    overtimeAvg,
-    plUsage: totalPlDays,
-  }
+  const attendanceBonus = calcAttendanceBonus(attendanceRate)
+
+  return { attendanceRate, overtimeAvg, plUsage: totalPlDays, attendanceBonus }
 }
 
 // ────────────────────────────────────────
-//  GET: 評価一覧 + ワーカーリスト + 設定
+//  GET: 評価一覧 + ワーカーリスト + 設定 + 評価者情報
 // ────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -208,8 +205,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // 外国人ワーカーリスト（hireDate付き）
+    // ワーカーデータ取得
     const mainData = await getMainData()
+
+    // 外国人ワーカーリスト（評価対象）
     const foreignWorkers = mainData.workers
       .filter(w => w.visa !== 'none' && !w.retired)
       .map(w => ({
@@ -221,12 +220,22 @@ export async function GET(request: NextRequest) {
         hireDate: w.hireDate,
       }))
 
+    // 評価者リスト（職長 + 政仁さん）
+    const evaluators = mainData.workers
+      .filter(w => !w.retired && (w.job === 'shokucho' || w.id === APPROVER_WORKER_ID))
+      .map(w => ({
+        id: w.id,
+        name: w.name,
+        job: w.job,
+      }))
+
     // 評価設定
     const settings = await getEvaluationSettings()
 
     return NextResponse.json({
       evaluations,
       workers: foreignWorkers,
+      evaluators,
       settings,
     })
   } catch (error) {
@@ -236,7 +245,7 @@ export async function GET(request: NextRequest) {
 }
 
 // ────────────────────────────────────────
-//  POST: 評価の保存・提出・承認・設定保存
+//  POST: 評価セッション作成・レビュー提出・承認・設定保存
 // ────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -248,18 +257,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { action } = body
 
-    // ── 下書き保存 ──
-    if (action === 'save') {
-      const { workerId, evaluatorId, evaluatorName, scores, comment } = body as {
+    // ── セッション作成 ──
+    if (action === 'create') {
+      const { workerId, workerName, evaluationDate, evaluatorIds: providedEvaluatorIds } = body as {
         workerId: number
-        evaluatorId: number
-        evaluatorName: string
-        scores: EvaluationScores
-        comment: string
+        workerName: string
+        evaluationDate: string
+        evaluatorIds?: number[]
       }
 
-      if (!workerId || !evaluatorId || !scores) {
-        return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
+      if (!workerId || !workerName || !evaluationDate) {
+        return NextResponse.json({ error: 'workerId, workerName, evaluationDate は必須です' }, { status: 400 })
       }
 
       // ワーカー情報取得
@@ -269,52 +277,43 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'ワーカーが見つかりません' }, { status: 404 })
       }
 
+      // evaluatorIds: 指定がなければ全職長 + 政仁さん
+      let evaluatorIds = providedEvaluatorIds
+      if (!evaluatorIds || evaluatorIds.length === 0) {
+        const shokuchoIds = mainData.workers
+          .filter(w => !w.retired && w.job === 'shokucho')
+          .map(w => w.id)
+        evaluatorIds = Array.from(new Set([...shokuchoIds, APPROVER_WORKER_ID]))
+      }
+
       // 出席指標を自動算出
-      const metrics = await calcAttendanceMetrics(workerId, mainData.workDays)
-      const attendanceBonus = calcAttendanceBonus(metrics.attendanceRate)
+      const metricsRaw = await calcAttendanceMetrics(workerId, mainData.workDays)
+      const metrics = {
+        attendanceRate: metricsRaw.attendanceRate,
+        overtimeAvg: metricsRaw.overtimeAvg,
+        plUsage: metricsRaw.plUsage,
+        attendanceBonus: metricsRaw.attendanceBonus,
+      }
 
-      // 評価設定取得
-      const settings = await getEvaluationSettings()
-
-      // 重み付きスコア算出
-      const manualScore = calcManualScore(scores, settings.weights)
-      const totalScore = manualScore + attendanceBonus
-      const rank = calcRank(totalScore)
-
-      // 入社年数・昇給額
       const yearsFromHire = calcYearsFromHire(worker.hireDate)
-      const raiseAmount = lookupRaiseAmount(yearsFromHire, rank, settings.raiseTable)
-
-      const evaluationDate = new Date().toISOString().split('T')[0]
       const evaluationId = `${workerId}_${evaluationDate}`
       const now = new Date().toISOString()
 
       const evaluationData = {
         workerId,
-        workerName: worker.name,
+        workerName,
         evaluationDate,
-        evaluatorId,
-        evaluatorName,
-        status: 'draft' as const,
-        scores,
-        comment: comment || '',
-        metrics: {
-          attendanceRate: metrics.attendanceRate,
-          overtimeAvg: metrics.overtimeAvg,
-          plUsage: metrics.plUsage,
-          attendanceBonus,
-        },
-        manualScore,
-        totalScore,
-        rank,
+        status: 'collecting' as const,
+        evaluatorIds,
+        reviews: [] as EvaluationReview[],
+        metrics,
         yearsFromHire,
-        raiseAmount,
         createdAt: now,
         updatedAt: now,
       }
 
       await setDoc(doc(db, 'evaluations', evaluationId), evaluationData)
-      await logActivity(String(evaluatorId), 'evaluation.save', `${worker.name} の評価を下書き保存`)
+      await logActivity('admin', 'evaluation.create', `${workerName} の評価セッションを作成`)
 
       return NextResponse.json({
         success: true,
@@ -322,74 +321,132 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // ── 提出（職長 → 事業責任者へ） ──
-    if (action === 'submit') {
-      const { evaluationId } = body as { evaluationId: string }
+    // ── 個別レビュー提出 ──
+    if (action === 'submitReview') {
+      const { evaluationId, evaluatorId, evaluatorName, scores, comment } = body as {
+        evaluationId: string
+        evaluatorId: number
+        evaluatorName: string
+        scores: EvaluationScores
+        comment: string
+      }
 
-      if (!evaluationId) {
-        return NextResponse.json({ error: 'evaluationId は必須です' }, { status: 400 })
+      if (!evaluationId || !evaluatorId || !evaluatorName || !scores) {
+        return NextResponse.json({ error: 'evaluationId, evaluatorId, evaluatorName, scores は必須です' }, { status: 400 })
       }
 
       const evalRef = doc(db, 'evaluations', evaluationId)
       const evalSnap = await getDoc(evalRef)
       if (!evalSnap.exists()) {
-        return NextResponse.json({ error: '評価が見つかりません' }, { status: 404 })
+        return NextResponse.json({ error: '評価セッションが見つかりません' }, { status: 404 })
       }
 
       const current = evalSnap.data()
-      if (current.status !== 'draft') {
-        return NextResponse.json({ error: '下書き状態の評価のみ提出できます' }, { status: 400 })
+      if (current.status !== 'collecting') {
+        return NextResponse.json({ error: '収集中の評価セッションのみレビューを提出できます' }, { status: 400 })
       }
+
+      // evaluatorIds に含まれるか確認
+      const evaluatorIds = current.evaluatorIds as number[]
+      if (!evaluatorIds.includes(evaluatorId)) {
+        return NextResponse.json({ error: 'この評価者は評価予定者リストに含まれていません' }, { status: 403 })
+      }
+
+      // reviews配列を更新（既存なら上書き、なければ追加）
+      const reviews = (current.reviews || []) as EvaluationReview[]
+      const existingIdx = reviews.findIndex(r => r.evaluatorId === evaluatorId)
+      const newReview: EvaluationReview = {
+        evaluatorId,
+        evaluatorName,
+        scores,
+        comment: comment || '',
+        submittedAt: new Date().toISOString(),
+      }
+
+      if (existingIdx >= 0) {
+        reviews[existingIdx] = newReview
+      } else {
+        reviews.push(newReview)
+      }
+
+      // 全評価者が提出済みか判定
+      const submittedIds = new Set(reviews.map(r => r.evaluatorId))
+      const allSubmitted = evaluatorIds.every(id => submittedIds.has(id))
+      const newStatus = allSubmitted ? 'reviewing' : 'collecting'
 
       await updateDoc(evalRef, {
-        status: 'submitted',
+        reviews,
+        status: newStatus,
         updatedAt: new Date().toISOString(),
       })
+
       await logActivity(
-        String(current.evaluatorId),
-        'evaluation.submit',
-        `${current.workerName} の評価を提出`,
+        String(evaluatorId),
+        'evaluation.submitReview',
+        `${current.workerName} の個別評価を提出`,
       )
 
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, status: newStatus })
     }
 
-    // ── 承認（事業責任者） ──
+    // ── 承認（政仁さんが最終スコアを確定） ──
     if (action === 'approve') {
-      const { evaluationId, approvedBy } = body as {
+      const { evaluationId, approvedBy, finalScores, finalComment } = body as {
         evaluationId: string
         approvedBy: number
+        finalScores: EvaluationScores
+        finalComment?: string
       }
 
-      if (!evaluationId || !approvedBy) {
-        return NextResponse.json({ error: 'evaluationId と approvedBy は必須です' }, { status: 400 })
+      if (!evaluationId || !approvedBy || !finalScores) {
+        return NextResponse.json({ error: 'evaluationId, approvedBy, finalScores は必須です' }, { status: 400 })
       }
 
       const evalRef = doc(db, 'evaluations', evaluationId)
       const evalSnap = await getDoc(evalRef)
       if (!evalSnap.exists()) {
-        return NextResponse.json({ error: '評価が見つかりません' }, { status: 404 })
+        return NextResponse.json({ error: '評価セッションが見つかりません' }, { status: 404 })
       }
 
       const current = evalSnap.data()
-      if (current.status !== 'submitted') {
-        return NextResponse.json({ error: '提出済みの評価のみ承認できます' }, { status: 400 })
+      if (current.status !== 'reviewing') {
+        return NextResponse.json({ error: 'レビュー中の評価セッションのみ承認できます' }, { status: 400 })
       }
+
+      // 評価設定取得
+      const settings = await getEvaluationSettings()
+
+      // finalScores から重み付きスコア算出
+      const manualScore = calcWeightedScore(finalScores, settings.weights)
+      const attendanceBonus = (current.metrics as { attendanceBonus: number }).attendanceBonus
+      const totalScore = manualScore + attendanceBonus
+      const rank = calcRank(totalScore)
+
+      // 昇給額
+      const yearsFromHire = current.yearsFromHire as number
+      const raiseAmount = getRaiseAmount(rank, yearsFromHire, settings.raiseTable)
 
       const now = new Date().toISOString()
       await updateDoc(evalRef, {
         status: 'approved',
+        finalScores,
+        finalComment: finalComment || '',
+        manualScore,
+        totalScore,
+        rank,
+        raiseAmount,
         approvedBy,
         approvedAt: now,
         updatedAt: now,
       })
+
       await logActivity(
         String(approvedBy),
         'evaluation.approve',
-        `${current.workerName} の評価を承認`,
+        `${current.workerName} の評価を承認（ランク: ${rank}）`,
       )
 
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, rank, totalScore, raiseAmount })
     }
 
     // ── 設定保存（重み + 昇給テーブル） ──
@@ -403,7 +460,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'weights と raiseTable は必須です' }, { status: 400 })
       }
 
-      // バリデーション
       if (weights.japanese <= 0 || weights.attitude <= 0 || weights.skill <= 0) {
         return NextResponse.json({ error: '重みは正の数である必要があります' }, { status: 400 })
       }

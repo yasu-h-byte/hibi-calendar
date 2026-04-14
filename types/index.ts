@@ -96,6 +96,7 @@ export interface AttendanceApproval {
 
 export type ABCGrade = 'A' | 'B' | 'C'
 export type EvaluationStatus = 'draft' | 'submitted' | 'approved'
+export type EvaluationSessionStatus = 'collecting' | 'reviewing' | 'approved'
 export type EvaluationRank = 'S' | 'A' | 'B' | 'C' | 'D'
 
 export interface EvaluationScores {
@@ -111,32 +112,69 @@ export interface EvaluationMetrics {
   attendanceBonus: number  // 0-3
 }
 
+/** 個別評価者のレビュー */
+export interface EvaluationReview {
+  evaluatorId: number
+  evaluatorName: string
+  scores: EvaluationScores
+  comment: string
+  submittedAt: string
+}
+
+/** 評価セッション（1スタッフ×1評価期間、複数評価者対応） */
 export interface Evaluation {
   id: string                    // workerId_evaluationDate
   workerId: number
   workerName: string
   evaluationDate: string        // YYYY-MM-DD (入社日基準の評価日)
-  evaluatorId: number           // 職長ID
-  evaluatorName: string
-  status: EvaluationStatus
+  status: EvaluationSessionStatus  // collecting → reviewing → approved
 
-  scores: EvaluationScores
-  comment: string
+  // 複数評価者の個別レビュー
+  reviews: EvaluationReview[]
+  // 評価予定者リスト（全員提出するまで collecting）
+  evaluatorIds: number[]
+
+  // 政仁さんの最終評価（承認時に確定）
+  finalScores?: EvaluationScores
+  finalComment?: string
 
   // 自動集計
   metrics: EvaluationMetrics
 
-  // スコア計算結果
-  manualScore: number           // 重み付き（最大33.3）
-  totalScore: number            // manualScore + attendanceBonus（最大36.3）
-  rank: EvaluationRank
+  // 最終スコア計算結果（承認後に確定）
+  manualScore?: number           // 重み付き（最大33.3）
+  totalScore?: number            // manualScore + attendanceBonus（最大36.3）
+  rank?: EvaluationRank
 
-  // 承認後
+  // 承認
   approvedBy?: number
   approvedAt?: string
   yearsFromHire: number
   raiseAmount?: number          // 昇給額（円/h）
 
+  createdAt: string
+  updatedAt: string
+}
+
+/** 後方互換: 旧形式の単一評価者Evaluation */
+export interface EvaluationLegacy {
+  id: string
+  workerId: number
+  workerName: string
+  evaluationDate: string
+  evaluatorId: number
+  evaluatorName: string
+  status: EvaluationStatus
+  scores: EvaluationScores
+  comment: string
+  metrics: EvaluationMetrics
+  manualScore: number
+  totalScore: number
+  rank: EvaluationRank
+  approvedBy?: number
+  approvedAt?: string
+  yearsFromHire: number
+  raiseAmount?: number
   createdAt: string
   updatedAt: string
 }
