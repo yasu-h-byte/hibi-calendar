@@ -17,6 +17,8 @@ import {
 } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
+import { db } from '@/lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
 
 // --- Helpers ---
 
@@ -890,7 +892,10 @@ export async function GET(request: NextRequest) {
     const filteredMonthlyTrend = monthlyTrend.filter(t => t.equiv > 0 && t.billing > 0)
 
     // ── Home leave schedule ──
-    const homeLeaves = ((main as unknown as Record<string, unknown>).homeLeaves || []) as Array<{
+    // getMainData() は homeLeaves をマッピングしていないので、Firestore から直接取得
+    const mainDocSnap = await getDoc(doc(db, 'demmen', 'main'))
+    const mainRawData = mainDocSnap.exists() ? mainDocSnap.data() : {}
+    const homeLeaves = (mainRawData.homeLeaves || []) as Array<{
       id: string; workerId: number; workerName: string; startDate: string; endDate: string; reason: string; note?: string
     }>
     const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
