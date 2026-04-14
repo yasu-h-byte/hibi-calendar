@@ -209,7 +209,38 @@ export async function GET(request: NextRequest) {
       console.error('Attendance check error:', e)
     }
 
-    // 5. Upcoming / overdue PL grant dates (30 days ahead, 30 days past)
+    // 5. Evaluation due notifications (入社日基準の評価時期アラート)
+    try {
+      const foreignWorkers = activeWorkers.filter(w => w.visa && w.visa !== 'none')
+      for (const w of foreignWorkers) {
+        if (!w.hireDate) continue
+        const hire = new Date(w.hireDate)
+        if (isNaN(hire.getTime())) continue
+
+        // 次の評価日を計算（入社日から1年ごと）
+        const yearsSinceHire = Math.floor((now.getTime() - hire.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
+        const nextEvalDate = new Date(hire)
+        nextEvalDate.setFullYear(hire.getFullYear() + yearsSinceHire + 1)
+
+        const daysUntilEval = Math.floor((nextEvalDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+
+        if (daysUntilEval <= 30 && daysUntilEval >= -30) {
+          const isOverdue = daysUntilEval < 0
+          notifications.push({
+            id: `evaluation-due-${w.id}`,
+            icon: isOverdue ? '🔴' : '📋',
+            message: isOverdue
+              ? `${w.name}の評価が${Math.abs(daysUntilEval)}日超過しています`
+              : `${w.name}の評価時期が${daysUntilEval}日後に到来します`,
+            type: isOverdue ? 'error' : 'info',
+          })
+        }
+      }
+    } catch (e) {
+      console.error('Evaluation notification error:', e)
+    }
+
+    // 6. Upcoming / overdue PL grant dates (30 days ahead, 30 days past)
     try {
       const upcoming = getUpcomingGrants(main, 30)
 
@@ -358,7 +389,7 @@ export async function GET(request: NextRequest) {
     const filtered = notifications.filter(n => {
       if (role === 'admin') return true
       if (role === 'approver') {
-        return ['unsigned-calendar', 'calendar-deadline', 'no-attendance', 'month-unlocked-hibi', 'month-unlocked-hfu'].includes(n.id) || n.id.startsWith('pl-grant')
+        return ['unsigned-calendar', 'calendar-deadline', 'no-attendance', 'month-unlocked-hibi', 'month-unlocked-hfu'].includes(n.id) || n.id.startsWith('pl-grant') || n.id.startsWith('evaluation-due')
       }
       if (role === 'foreman') {
         return n.id === 'calendar-deadline'

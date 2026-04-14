@@ -35,6 +35,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
   { label: '外注先マスタ', icon: '🔧', href: '/subcons', section: 'マスタ', roles: ['admin', 'jimu'] },
   // 管理
   { label: '有給管理', icon: '🌴', href: '/leave', section: '管理', roles: ['admin', 'approver', 'jimu'] },
+  { label: '評価管理', icon: '📋', href: '/evaluation', section: '管理', roles: ['admin', 'approver'] },
   { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin', 'jimu'] },
   { label: '帳票出力', icon: '📑', href: '/export', section: '管理', roles: ['admin', 'jimu'] },
   // システム
@@ -75,6 +76,7 @@ const MENU_ID_MAP: Record<string, string> = {
   '/subcons': 'subcons',
   '/leave': 'leave',
   '/leave-requests': 'leave-requests',
+  '/evaluation': 'evaluation',
   '/cost': 'cost',
   '/export': 'export',
   '/users': 'users',

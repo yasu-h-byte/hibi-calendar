@@ -91,3 +91,66 @@ export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_of
 export interface AttendanceApproval {
   foreman?: { by: number; at: string }
 }
+
+// ── HR Evaluation ──
+
+export type ABCGrade = 'A' | 'B' | 'C'
+export type EvaluationStatus = 'draft' | 'submitted' | 'approved'
+export type EvaluationRank = 'S' | 'A' | 'B' | 'C' | 'D'
+
+export interface EvaluationScores {
+  japanese: { understanding: ABCGrade; reporting: ABCGrade; safety: ABCGrade }
+  attitude: { punctuality: ABCGrade; safetyAwareness: ABCGrade; teamwork: ABCGrade }
+  skill: { level: ABCGrade; speed: ABCGrade; planning: ABCGrade }
+}
+
+export interface EvaluationMetrics {
+  attendanceRate: number
+  overtimeAvg: number
+  plUsage: number
+  attendanceBonus: number  // 0-3
+}
+
+export interface Evaluation {
+  id: string                    // workerId_evaluationDate
+  workerId: number
+  workerName: string
+  evaluationDate: string        // YYYY-MM-DD (入社日基準の評価日)
+  evaluatorId: number           // 職長ID
+  evaluatorName: string
+  status: EvaluationStatus
+
+  scores: EvaluationScores
+  comment: string
+
+  // 自動集計
+  metrics: EvaluationMetrics
+
+  // スコア計算結果
+  manualScore: number           // 重み付き（最大33.3）
+  totalScore: number            // manualScore + attendanceBonus（最大36.3）
+  rank: EvaluationRank
+
+  // 承認後
+  approvedBy?: number
+  approvedAt?: string
+  yearsFromHire: number
+  raiseAmount?: number          // 昇給額（円/h）
+
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EvaluationWeights {
+  japanese: number    // default 1.0
+  attitude: number    // default 1.5
+  skill: number       // default 1.2
+}
+
+export interface RaiseTableRow {
+  year: number        // 1〜6（6=6年目以降）
+  S: number
+  A: number
+  B: number
+  C: number
+}

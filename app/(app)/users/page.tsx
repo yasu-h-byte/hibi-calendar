@@ -22,6 +22,7 @@ const ALL_MENUS = [
   { id: 'sites', label: '現場マスタ', section: 'マスタ' },
   { id: 'subcons', label: '外注先マスタ', section: 'マスタ' },
   { id: 'leave', label: '有給管理', section: '管理' },
+  { id: 'evaluation', label: '評価管理', section: '管理' },
   { id: 'cost', label: '原価・収益', section: '管理' },
   { id: 'export', label: '帳票出力', section: '管理' },
   { id: 'users', label: 'ユーザー管理', section: 'システム' },
