@@ -29,7 +29,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     attItem,
     { label: '就業カレンダー', icon: '📅', href: '/calendar', section: 'メイン', roles: ['admin', 'approver', 'foreman'] },
   // マスタ
-  { label: '月次集計', icon: '📋', href: '/monthly', section: 'マスタ', roles: ['admin', 'approver', 'jimu'] },
+  { label: '月次集計・帳票', icon: '📋', href: '/monthly', section: 'マスタ', roles: ['admin', 'approver', 'jimu'] },
   { label: '人員マスタ', icon: '👷', href: '/workers', section: 'マスタ', roles: ['admin', 'jimu'] },
   { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ', roles: ['admin', 'jimu'] },
   { label: '外注先マスタ', icon: '🔧', href: '/subcons', section: 'マスタ', roles: ['admin', 'jimu'] },
@@ -37,9 +37,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
   { label: '有給管理', icon: '🌴', href: '/leave', section: '管理', roles: ['admin', 'approver', 'jimu'] },
   { label: '評価管理', icon: '📋', href: '/evaluation', section: '管理', roles: ['admin', 'approver'] },
   { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin', 'jimu'] },
-  { label: '帳票出力', icon: '📑', href: '/export', section: '管理', roles: ['admin', 'jimu'] },
   // システム
-  { label: 'ユーザー管理', icon: '👤', href: '/users', section: 'システム', roles: ['admin'] },
   { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
   { label: '資料一覧', icon: '📁', href: '/docs', section: 'システム', roles: ['admin', 'approver', 'jimu', 'foreman'] },
   ]
@@ -78,8 +76,6 @@ const MENU_ID_MAP: Record<string, string> = {
   '/leave-requests': 'leave-requests',
   '/evaluation': 'evaluation',
   '/cost': 'cost',
-  '/export': 'export',
-  '/users': 'users',
   '/settings': 'settings',
   '/guide': 'guide',
   '/docs': 'docs',
