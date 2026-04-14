@@ -341,11 +341,19 @@ export default function EvaluationPage() {
 
   // ── Create evaluation session ──
   const handleCreateSession = async () => {
-    if (!createWorkerId || createEvaluatorIds.length === 0) return
+    if (!createWorkerId || createEvaluatorIds.length === 0) {
+      alert('対象スタッフと評価者を選択してください')
+      return
+    }
     setSaving(true)
     const { password } = getAuth()
     try {
       const worker = workers.find(w => w.id === createWorkerId)
+      if (!worker) {
+        alert('スタッフが見つかりません')
+        setSaving(false)
+        return
+      }
       const res = await fetch('/api/evaluation', {
         method: 'POST',
         headers: {
@@ -355,7 +363,7 @@ export default function EvaluationPage() {
         body: JSON.stringify({
           action: 'create',
           workerId: createWorkerId,
-          workerName: worker?.name || '',
+          workerName: worker.name,
           evaluationDate: new Date().toISOString().slice(0, 10),
           evaluatorIds: createEvaluatorIds,
         }),
@@ -365,8 +373,13 @@ export default function EvaluationPage() {
         setCreateWorkerId(null)
         setCreateEvaluatorIds([])
         await fetchData()
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+        alert(`作成に失敗しました: ${err.error || res.statusText}`)
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      alert(`エラーが発生しました: ${e instanceof Error ? e.message : String(e)}`)
+    }
     setSaving(false)
   }
 
@@ -688,7 +701,7 @@ export default function EvaluationPage() {
                 {/* Evaluator checkboxes */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    評価者を選択（3名の職長 + 政仁さん）
+                    評価者を選択
                   </label>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {allPossibleEvaluators.map(w => (
