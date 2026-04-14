@@ -93,9 +93,15 @@ export default function HomeLeavePage() {
       }
       if (wRes.ok) {
         const d = await wRes.json()
-        const foreignWorkers = (d.workers || []).filter(
-          (w: Worker) => w.visa && w.visa !== 'none' && !w.retired
-        )
+        // APIは visaType フィールドで返すため、visa にマッピング
+        const foreignWorkers = (d.workers || [])
+          .map((w: Record<string, unknown>) => ({
+            id: w.id as number,
+            name: w.name as string,
+            visa: (w.visaType || w.visa || '') as string,
+            retired: (w.retired || '') as string,
+          }))
+          .filter((w: Worker) => w.visa && w.visa !== 'none' && !w.retired)
         setWorkers(foreignWorkers)
       }
     } catch { /* ignore */ }
