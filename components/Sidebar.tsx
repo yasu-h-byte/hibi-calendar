@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
-import { initTheme, toggleTheme, type Theme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
+import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
 import NotificationBell from './NotificationBell'
 
 interface MenuItem {
@@ -43,26 +43,6 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
   ]
 }
 
-/** Sun icon for light mode */
-function SunIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-    </svg>
-  )
-}
-
-/** Moon icon for dark mode */
-function MoonIcon() {
-  return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-    </svg>
-  )
-}
-
 // Menu ID mapping for permission check
 const MENU_ID_MAP: Record<string, string> = {
   '/dashboard': 'dashboard',
@@ -94,12 +74,11 @@ function TextSizeIcon() {
 export default function Sidebar({ user, open, onClose }: { user: AuthUser; open: boolean; onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
-  const [theme, setThemeState] = useState<Theme>('light')
   const [fontSize, setFontSizeState] = useState<FontSize>('normal')
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]> | null>(null)
 
   useEffect(() => {
-    setThemeState(initTheme())
+    initTheme()
     setFontSizeState(getFontSize())
     // Load role permissions from localStorage (set during login or settings save)
     try {
@@ -155,11 +134,6 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
   const handleLogout = () => {
     localStorage.removeItem('hibi_auth')
     router.push('/')
-  }
-
-  const handleToggleTheme = () => {
-    const next = toggleTheme()
-    setThemeState(next)
   }
 
   const handleToggleFontSize = () => {
@@ -232,31 +206,8 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
           ))}
         </nav>
 
-        {/* Theme toggle + Logout */}
+        {/* Font size + Logout */}
         <div className="p-4 border-t border-white/10 space-y-3">
-          {/* Dark mode toggle */}
-          <button
-            onClick={handleToggleTheme}
-            className="w-full flex items-center justify-between px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition"
-          >
-            <div className="flex items-center gap-2 text-sm text-white/70">
-              {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
-              <span>{theme === 'dark' ? 'ダークモード' : 'ライトモード'}</span>
-            </div>
-            {/* Toggle switch */}
-            <div
-              className={`relative w-10 h-5 rounded-full transition-colors ${
-                theme === 'dark' ? 'bg-blue-500' : 'bg-white/20'
-              }`}
-            >
-              <div
-                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                  theme === 'dark' ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              />
-            </div>
-          </button>
-
           {/* Font size toggle */}
           <button
             onClick={handleToggleFontSize}

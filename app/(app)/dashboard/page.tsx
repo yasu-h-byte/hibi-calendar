@@ -232,10 +232,10 @@ const PERIOD_OPTIONS = [
 // ─── Monthly Checklist (compact for dashboard) ───
 
 function getNextYm(): string {
-  // カレンダー準備は常に翌月分を表示
+  // カレンダー準備は常に翌月分を表示（YYYY-MM形式 — siteCalendarのym形式と一致させる）
   const now = new Date()
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-  return `${next.getFullYear()}${String(next.getMonth() + 1).padStart(2, '0')}`
+  return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`
 }
 
 function MonthlyChecklist({ password }: { password: string }) {
