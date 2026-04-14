@@ -194,6 +194,7 @@ export default function EvaluationPage() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [workers, setWorkers] = useState<Worker[]>([])
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
+  const [apiEvaluators, setApiEvaluators] = useState<{ id: number; name: string; job: string }[]>([])
 
   // Review tab state
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null)
@@ -241,6 +242,7 @@ export default function EvaluationPage() {
       if (eRes.ok) {
         const d = await eRes.json()
         setEvaluations(d.evaluations || [])
+        if (d.evaluators) setApiEvaluators(d.evaluators)
       }
     } catch { /* ignore */ }
     setLoading(false)
@@ -302,13 +304,12 @@ export default function EvaluationPage() {
     )
     : null
 
-  // Foremen list for session creation (jobType === '職長')
-  const foremen = workers.filter(w => w.jobType === '職長')
-  // All workers eligible to be evaluators (foremen + admin)
-  const allPossibleEvaluators = [
-    ...foremen,
-    ...workers.filter(w => !foremen.some(f => f.id === w.id) && w.id === authUser?.workerId),
-  ]
+  // All workers eligible to be evaluators (from API: shokucho + approver + admin)
+  const allPossibleEvaluators = apiEvaluators.map(e => ({
+    id: e.id,
+    name: e.name,
+    jobType: e.job === 'shokucho' ? '職長' : e.job === 'yakuin' ? '役員' : e.job,
+  }))
 
   // ── Submit my review ──
   const handleSubmitReview = async () => {
@@ -547,7 +548,7 @@ export default function EvaluationPage() {
           {isAdmin && (
             <div className="flex justify-end">
               <button
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => { setShowCreateModal(true); setCreateEvaluatorIds(apiEvaluators.map(e => e.id)) }}
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
               >
                 評価セッション作成
@@ -705,9 +706,9 @@ export default function EvaluationPage() {
                           className="rounded border-gray-300 dark:border-gray-600"
                         />
                         {w.name}
-                        {w.jobType === '職長' && (
-                          <span className="text-xs text-blue-600 dark:text-blue-400">(職長)</span>
-                        )}
+                        <span className="text-xs text-gray-400">
+                          ({w.jobType})
+                        </span>
                       </label>
                     ))}
                   </div>

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>評価管理マニュアル - HIBI CONSTRUCTION</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; }
+  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: #1B2A4A; color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .toc { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: #1B2A4A; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  .grade-a { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+  .grade-b { background: #fef9c3; color: #854d0e; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+  .grade-c { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+  @media print { body { font-size: 13px; padding: 0; } }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>HIBI CONSTRUCTION 就業管理システム<br>評価管理マニュアル</h1>
+<p>対象: 管理者・事業責任者（政仁さん）・職長<br>
+最終更新: 2026年4月14日<br>
+システムURL: <code>https://hibi-calendar.vercel.app</code></p>
+
+<div class="toc">
+<strong>目次</strong>
+<ol>
+  <li><a href="#sec1">評価管理画面へのアクセス</a></li>
+  <li><a href="#sec2">評価の全体フロー</a></li>
+  <li><a href="#sec3">評価セッションの作成（管理者）</a></li>
+  <li><a href="#sec4">評価の入力・提出（職長・政仁さん・管理者）</a></li>
+  <li><a href="#sec5">評価の承認（政仁さん・管理者）</a></li>
+  <li><a href="#sec6">評価基準（ABC判定の目安）</a></li>
+  <li><a href="#sec7">スコア計算と昇給テーブル</a></li>
+  <li><a href="#sec8">よくある質問</a></li>
+</ol>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec1">1. 評価管理画面へのアクセス</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text"><code>https://hibi-calendar.vercel.app</code> にログイン</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">左のサイドバーを開く（スマホはハンバーガーメニュー ☰）</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text"><strong>「管理」セクション</strong>の中の<strong>「📋 評価管理」</strong>をクリック</div>
+</div>
+
+<div class="box">
+<strong>直接URLでもアクセスできます：</strong><br>
+<code>https://hibi-calendar.vercel.app/evaluation</code>
+</div>
+
+<div class="box box-warn">
+<strong>表示されない場合：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>サイドバーを下にスクロールしてみてください（「管理」セクションは画面下部にあります）</li>
+  <li>admin または approver でログインしていることを確認してください</li>
+  <li>ブラウザを更新（リロード）してみてください</li>
+</ul>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec2">2. 評価の全体フロー</h2>
+
+<div class="box box-ok">
+<table>
+<tr><th>ステップ</th><th>誰が</th><th>やること</th><th>画面のタブ</th></tr>
+<tr><td><strong>①</strong></td><td><strong>管理者</strong></td><td>評価セッションを作成（対象スタッフと評価者を選択）</td><td>一覧タブ</td></tr>
+<tr><td><strong>②</strong></td><td><strong>職長A</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
+<tr><td><strong>③</strong></td><td><strong>職長B</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
+<tr><td><strong>④</strong></td><td><strong>職長C</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
+<tr><td><strong>⑤</strong></td><td><strong>政仁さん</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
+<tr><td><strong>⑥</strong></td><td><strong>管理者</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
+<tr><td colspan="4" style="text-align:center; background:#e6f4ea; font-weight:bold;">↓ 全員の提出が完了すると、自動的に「最終確認中」に進む ↓</td></tr>
+<tr><td><strong>⑦</strong></td><td><strong>政仁さん/管理者</strong></td><td>全員の評価を横並びで比較し、最終ABCを決定 → 承認</td><td>承認タブ</td></tr>
+</table>
+</div>
+
+<div class="box box-warn">
+<strong>バイアス防止：</strong>各評価者は<strong>自分が提出するまで他の人の評価を見ることができません。</strong><br>
+提出後に初めて他の評価者の結果が表示されます。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec3">3. 評価セッションの作成（管理者）</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">評価管理画面の<strong>「一覧」タブ</strong>を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text"><strong>「評価セッション作成」</strong>ボタンをクリック</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">対象スタッフを選択（ベトナム人スタッフが一覧表示されます）</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">評価者を選択（チェックボックスで選択。デフォルトは職長3名+政仁さん+靖仁さんの5名）</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text"><strong>「作成」</strong>ボタンで評価セッションが開始されます</div>
+</div>
+
+<div class="box">
+<strong>評価タイミング：</strong>年1回、各スタッフの入社日基準。入社日の1ヶ月前に通知ベルにアラートが表示されます。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec4">4. 評価の入力・提出（職長・政仁さん・管理者）</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">評価管理画面の<strong>「評価入力」タブ</strong>を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">上部のドロップダウンから<strong>評価対象のスタッフ</strong>を選択<br>
+  <span style="color:#888; font-size:13px;">※ 自分が評価者に指定されているスタッフのみ表示されます</span></div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">3つの評価カテゴリ（日本語能力・勤務態度・職業能力）について、各項目の<strong>A/B/C</strong>を選択<br>
+  <span style="color:#888; font-size:13px;">※ 各項目の横の ℹ️ アイコンをクリックすると、ABCの具体的な判定基準が表示されます</span></div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text"><strong>コメント</strong>を記入（任意）</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">画面下部のスコアプレビューを確認し、<strong>「提出する」</strong>ボタンを押す</div>
+</div>
+
+<div class="box box-ok">
+<strong>提出後にできること：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>自分の評価を修正</strong>したい場合は「修正する」ボタンで再編集可能</li>
+  <li><strong>他の評価者の結果</strong>を閲覧可能（提出前は見えません）</li>
+</ul>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec5">5. 評価の承認（政仁さん・管理者）</h2>
+
+<p>全評価者の提出が完了すると、<strong>「承認」タブ</strong>に対象スタッフが表示されます。</p>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text"><strong>「承認」タブ</strong>を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">比較表が表示される：各評価者の回答が<strong>横並び</strong>で確認できます<br>
+  <span style="color:#888; font-size:13px;">● 緑 = 全員一致、● 黄 = 意見が分かれている項目</span></div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">各項目の<strong>最終ABC</strong>を決定する（A/B/Cボタンをクリック）</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text"><strong>最終コメント</strong>を記入</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">スコア・ランク・昇給額のプレビューを確認し、<strong>「承認する」</strong>ボタンを押す</div>
+</div>
+
+<div class="box">
+<strong>承認すると：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>最終スコア・ランク・昇給額が確定します</li>
+  <li>評価履歴として保存されます</li>
+  <li>昇給額は人員マスタの時給に手動で反映してください</li>
+</ul>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec6">6. 評価基準（ABC判定の目安）</h2>
+
+<h3>🗣 日本語能力（重み ×1.0）</h3>
+
+<table>
+<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
+<tr>
+  <td><strong>指示理解</strong></td>
+  <td>一度で正確に理解し、確認の質問もできる</td>
+  <td>概ね理解するが、たまに聞き返しが必要</td>
+  <td>繰り返し説明が必要。複雑な指示は通じにくい</td>
+</tr>
+<tr>
+  <td><strong>報告・連絡</strong></td>
+  <td>自分から日本語で報告・連絡ができる。問題発生時も的確に伝えられる</td>
+  <td>聞かれれば答えられるが、自発的な報告は少ない</td>
+  <td>通訳が必要な場面が多い。報告が遅れることがある</td>
+</tr>
+<tr>
+  <td><strong>安全用語</strong></td>
+  <td>危険予知・安全指示を理解し、他のスタッフにも伝達できる</td>
+  <td>基本的な安全用語（危ない・止まれ等）は理解</td>
+  <td>安全に関する指示の理解が不十分</td>
+</tr>
+</table>
+
+<h3>💼 勤務態度（重み ×1.5 — 最重要）</h3>
+
+<table>
+<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
+<tr>
+  <td><strong>時間厳守</strong></td>
+  <td>無遅刻・無欠勤。始業前に準備を済ませている</td>
+  <td>年1〜2回の遅刻程度。基本的には時間を守る</td>
+  <td>遅刻・無断欠勤が目立つ</td>
+</tr>
+<tr>
+  <td><strong>安全意識</strong></td>
+  <td>安全帯の着用を自ら徹底。周囲の安全にも気を配る</td>
+  <td>注意すれば守る。基本的なルールは理解</td>
+  <td>繰り返し注意が必要。不安全行動がある</td>
+</tr>
+<tr>
+  <td><strong>協調性</strong></td>
+  <td>他のスタッフと積極的に協力し、後輩の面倒も見る</td>
+  <td>与えられた仕事を問題なくこなす</td>
+  <td>単独行動が多い。チームワークに課題</td>
+</tr>
+</table>
+
+<h3>🔨 職業能力（重み ×1.2）</h3>
+
+<table>
+<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
+<tr>
+  <td><strong>技能レベル</strong></td>
+  <td>一人で任せられる作業が多い</td>
+  <td>指示を受ければ一通りの作業ができる</td>
+  <td>常に監督が必要。ミスが多い</td>
+</tr>
+<tr>
+  <td><strong>作業速度・品質</strong></td>
+  <td>日本人と同等以上。手直し不要</td>
+  <td>概ね問題なし。時々確認が必要</td>
+  <td>改善が必要。手直しが頻繁</td>
+</tr>
+<tr>
+  <td><strong>段取り・準備</strong></td>
+  <td>次の工程を予測して自ら準備できる</td>
+  <td>言われれば段取りできる</td>
+  <td>段取りの意識が低い。指示待ち</td>
+</tr>
+</table>
+
+<!-- ================================================ -->
+<h2 id="sec7">7. スコア計算と昇給テーブル</h2>
+
+<h3>スコア計算</h3>
+
+<div class="box">
+<strong>各項目:</strong> A=3点、B=2点、C=1点<br><br>
+<strong>重み付きスコア:</strong><br>
+日本語能力（3項目の合計）× 1.0<br>
++ 勤務態度（3項目の合計）× 1.5<br>
++ 職業能力（3項目の合計）× 1.2<br>
+= 手動スコア（最大 33.3点）<br><br>
+<strong>出勤率ボーナス:</strong> 98%以上→+3点 / 95%以上→+2点 / 90%以上→+1点<br><br>
+<strong>総合スコア</strong> = 手動スコア + 出勤率ボーナス（最大 36.3点）
+</div>
+
+<h3>総合ランク</h3>
+
+<table>
+<tr><th>ランク</th><th>スコア</th><th>意味</th></tr>
+<tr><td><strong>S</strong></td><td>30点以上</td><td>極めて優秀</td></tr>
+<tr><td><strong>A</strong></td><td>25〜29.9点</td><td>優秀</td></tr>
+<tr><td><strong>B</strong></td><td>20〜24.9点</td><td>標準</td></tr>
+<tr><td><strong>C</strong></td><td>15〜19.9点</td><td>改善必要（昇給なし）</td></tr>
+<tr><td><strong>D</strong></td><td>15点未満</td><td>面談実施</td></tr>
+</table>
+
+<h3>昇給テーブル（入社年数で逓減）</h3>
+
+<table>
+<tr><th>入社からの年数</th><th>Sランク</th><th>Aランク</th><th>Bランク</th><th>Cランク</th></tr>
+<tr><td>1年目</td><td>+150円/h</td><td>+100円/h</td><td>+60円/h</td><td>±0円</td></tr>
+<tr><td>2年目</td><td>+120円/h</td><td>+80円/h</td><td>+50円/h</td><td>±0円</td></tr>
+<tr><td>3年目</td><td>+100円/h</td><td>+60円/h</td><td>+40円/h</td><td>±0円</td></tr>
+<tr><td>4年目</td><td>+80円/h</td><td>+50円/h</td><td>+30円/h</td><td>±0円</td></tr>
+<tr><td>5年目</td><td>+60円/h</td><td>+40円/h</td><td>+20円/h</td><td>±0円</td></tr>
+<tr><td>6年目以降</td><td>+40円/h</td><td>+30円/h</td><td>+15円/h</td><td>±0円</td></tr>
+</table>
+
+<!-- ================================================ -->
+<h2 id="sec8">8. よくある質問</h2>
+
+<table>
+<tr><th>質問</th><th>回答</th></tr>
+<tr><td>評価入力タブにスタッフが表示されない</td><td>あなたが評価者に指定されていない可能性があります。管理者に確認してください。</td></tr>
+<tr><td>他の評価者の結果が見えない</td><td>自分が提出するまで、他の人の評価は非表示です（バイアス防止のため）。先に自分の評価を提出してください。</td></tr>
+<tr><td>提出した後に修正したい</td><td>「修正する」ボタンで再編集・再提出できます。</td></tr>
+<tr><td>承認タブに何も表示されない</td><td>全員の提出が完了するまで承認画面には表示されません。「一覧」タブで提出状況を確認してください。</td></tr>
+<tr><td>昇給額はどう反映される？</td><td>評価承認後、管理者が人員マスタの時給を手動で更新します。</td></tr>
+<tr><td>評価の頻度は？</td><td>年1回、各スタッフの入社日基準です。入社日の1ヶ月前に通知が届きます。</td></tr>
+</table>
+
+<hr>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-14</p>
+
+</body>
+</html>
