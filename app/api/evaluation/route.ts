@@ -23,6 +23,8 @@ const DEFAULT_RAISE_TABLE: RaiseTableRow[] = [
 
 /** 政仁さんのワーカーID */
 const APPROVER_WORKER_ID = 1
+/** 靖仁さん（admin）のワーカーID — super admin は workerIdが0 */
+const ADMIN_WORKER_ID = 0
 
 // ────────────────────────────────────────
 //  スコア計算ヘルパー
@@ -220,7 +222,7 @@ export async function GET(request: NextRequest) {
         hireDate: w.hireDate,
       }))
 
-    // 評価者リスト（職長 + 政仁さん）
+    // 評価者リスト（職長 + 政仁さん + 靖仁さん）
     const evaluators = mainData.workers
       .filter(w => !w.retired && (w.job === 'shokucho' || w.id === APPROVER_WORKER_ID))
       .map(w => ({
@@ -228,6 +230,10 @@ export async function GET(request: NextRequest) {
         name: w.name,
         job: w.job,
       }))
+    // super admin（靖仁さん、workerIdが0）はワーカーリストにいないので明示的に追加
+    if (!evaluators.find(e => e.id === ADMIN_WORKER_ID)) {
+      evaluators.push({ id: ADMIN_WORKER_ID, name: '日比靖仁', job: 'admin' })
+    }
 
     // 評価設定
     const settings = await getEvaluationSettings()
@@ -277,13 +283,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'ワーカーが見つかりません' }, { status: 404 })
       }
 
-      // evaluatorIds: 指定がなければ全職長 + 政仁さん
+      // evaluatorIds: 指定がなければ全職長 + 政仁さん + 靖仁さん
       let evaluatorIds = providedEvaluatorIds
       if (!evaluatorIds || evaluatorIds.length === 0) {
         const shokuchoIds = mainData.workers
           .filter(w => !w.retired && w.job === 'shokucho')
           .map(w => w.id)
-        evaluatorIds = Array.from(new Set([...shokuchoIds, APPROVER_WORKER_ID]))
+        evaluatorIds = Array.from(new Set([...shokuchoIds, APPROVER_WORKER_ID, ADMIN_WORKER_ID]))
       }
 
       // 出席指標を自動算出
