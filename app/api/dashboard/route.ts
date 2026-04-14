@@ -889,6 +889,16 @@ export async function GET(request: NextRequest) {
     // Also exclude months with no confirmed billing (billing === 0)
     const filteredMonthlyTrend = monthlyTrend.filter(t => t.equiv > 0 && t.billing > 0)
 
+    // ── Home leave schedule ──
+    const homeLeaves = ((main as unknown as Record<string, unknown>).homeLeaves || []) as Array<{
+      id: string; workerId: number; workerName: string; startDate: string; endDate: string; reason: string; note?: string
+    }>
+    const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const homeLeaveSchedule = {
+      current: homeLeaves.filter(h => h.startDate <= todayISO && todayISO <= h.endDate),
+      upcoming: homeLeaves.filter(h => h.startDate > todayISO).sort((a, b) => a.startDate.localeCompare(b.startDate)).slice(0, 5),
+    }
+
     return NextResponse.json({
       kpi,
       sites: sitesArray,
@@ -908,6 +918,7 @@ export async function GET(request: NextRequest) {
       subconAlert,
       yoyComparison,
       subconAnalysis,
+      homeLeaveSchedule,
     })
   } catch (error) {
     console.error('Dashboard API error:', error)
