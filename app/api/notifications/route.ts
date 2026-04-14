@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     const currentYm = ymKey(now.getFullYear(), now.getMonth() + 1)
     const today = now.getDate()
+    const role = request.nextUrl.searchParams.get('role') || 'admin'
     const notifications: Notification[] = []
 
     const main = await getMainData()
@@ -278,7 +279,81 @@ export async function GET(request: NextRequest) {
       console.error('Upcoming PL grant check error:', e)
     }
 
-    return NextResponse.json({ notifications })
+    // ── Calendar deadline alert (25日過ぎて翌月カレンダーが未作成・未提出・未承認) ──
+    try {
+      if (today >= 25) {
+        // 翌月のymを計算
+        let nextY = now.getFullYear()
+        let nextM = now.getMonth() + 2  // 0-indexed + 2 = next month
+        if (nextM > 12) { nextM = 1; nextY++ }
+        const nextYm = `${nextY}${String(nextM).padStart(2, '0')}`
+
+        const activeSites = main.sites.filter(s => !s.archived)
+        const calQ = query(
+          collection(db, 'siteCalendar'),
+          where('ym', '==', nextYm)
+        )
+        const calSnap = await getDocs(calQ)
+        const calMap = new Map<string, string>()  // siteId -> status
+        calSnap.forEach(d => {
+          const data = d.data()
+          calMap.set(data.siteId, data.status || 'draft')
+        })
+
+        const notCreated: string[] = []
+        const notSubmitted: string[] = []
+        const notApproved: string[] = []
+
+        for (const site of activeSites) {
+          const status = calMap.get(site.id)
+          if (!status) {
+            notCreated.push(site.name)
+          } else if (status === 'draft') {
+            notSubmitted.push(site.name)
+          } else if (status === 'submitted') {
+            notApproved.push(site.name)
+          }
+          // 'approved' = OK
+        }
+
+        const issues: string[] = []
+        if (notCreated.length > 0) issues.push(`未作成: ${notCreated.join('、')}`)
+        if (notSubmitted.length > 0) issues.push(`未提出: ${notSubmitted.join('、')}`)
+        if (notApproved.length > 0) issues.push(`未承認: ${notApproved.join('、')}`)
+
+        if (issues.length > 0) {
+          const totalIssues = notCreated.length + notSubmitted.length + notApproved.length
+          notifications.push({
+            id: 'calendar-deadline',
+            icon: '⚠️',
+            message: `${nextY}年${nextM}月のカレンダー: ${totalIssues}件の現場が未完了です`,
+            type: 'error',
+            count: totalIssues,
+            messengerText: issues.join('\n'),
+          })
+        }
+      }
+    } catch (e) {
+      console.error('Calendar deadline check error:', e)
+    }
+
+    // ── ロール別フィルタ ──
+    // admin: 全通知を表示
+    // approver: カレンダー系 + 署名系（PL付与アクションは除く）
+    // foreman: カレンダー期限アラートのみ
+    const filtered = notifications.filter(n => {
+      if (role === 'admin') return true
+      if (role === 'approver') {
+        return ['unsigned-calendar', 'calendar-deadline', 'no-attendance', 'month-unlocked'].includes(n.id) || n.id.startsWith('pl-grant')
+      }
+      if (role === 'foreman') {
+        return n.id === 'calendar-deadline'
+      }
+      // jimu: カレンダー署名系のみ
+      return ['unsigned-calendar', 'calendar-deadline'].includes(n.id)
+    })
+
+    return NextResponse.json({ notifications: filtered })
   } catch (error) {
     console.error('Notifications API error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

@@ -197,7 +197,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
               {user.role === 'approver' ? '事業責任者' : user.role === 'foreman' ? '職長' : '管理者'}
             </div>
           </div>
-          {user.role === 'admin' && <NotificationBell />}
+          <NotificationBell role={user.role} />
         </div>
 
         {/* Menu */}

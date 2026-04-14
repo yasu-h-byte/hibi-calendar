@@ -21,7 +21,7 @@ interface Notification {
   action?: NotificationAction
 }
 
-export default function NotificationBell() {
+export default function NotificationBell({ role }: { role: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -41,7 +41,7 @@ export default function NotificationBell() {
 
     setLoading(true)
     try {
-      const res = await fetch('/api/notifications', {
+      const res = await fetch(`/api/notifications?role=${role}`, {
         headers: { 'x-admin-password': password },
       })
       if (res.ok) {
@@ -53,7 +53,7 @@ export default function NotificationBell() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [role])
 
   useEffect(() => {
     fetchNotifications()
