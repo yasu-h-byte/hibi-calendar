@@ -15,6 +15,7 @@ export interface WorkerData {
   token: string
   salary?: number
   visaExpiry?: string // 在留期限 YYYY-MM-DD
+  dispatchTo?: string // 出向先名（空なら通常勤務、値あり=出向中）
 }
 
 function generateToken(): string {

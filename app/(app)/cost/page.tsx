@@ -5,10 +5,11 @@ import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
 
 interface SiteProfit {
   id: string; name: string
-  billing: number; billingByMonth: Record<string, number[]>
-  cost: number; subCost: number; totalCost: number
+  billing: number; billingRaw?: number; billingByMonth: Record<string, number[]>
+  cost: number; costRaw?: number; subCost: number; totalCost: number
   profit: number; profitRate: number; workDays: number; subWorkDays: number
   tobiEquiv: number; tobiRate: number; tobiBase: number
+  dispatchDeduction?: number
 }
 
 interface SubconSiteBreakdown {
@@ -25,7 +26,7 @@ interface CostData {
   sites: SiteProfit[]
   subconDetails: SubconCostDetail[]
   ymRange: string[]
-  totals: { billing: number; cost: number; subCost: number; totalCost: number; profit: number; profitRate: number; workDays: number; subWorkDays: number; otHours: number }
+  totals: { billing: number; cost: number; subCost: number; totalCost: number; profit: number; profitRate: number; workDays: number; subWorkDays: number; otHours: number; dispatchDeduction?: number; billingRaw?: number; costRaw?: number }
 }
 
 type PeriodType = 'monthly' | '3months' | '6months' | 'fiscal' | 'yearly'
@@ -165,12 +166,20 @@ export default function CostPage() {
         </div>
       </div>
 
+      {/* 出向控除バナー */}
+      {t && t.dispatchDeduction && t.dispatchDeduction > 0 && (
+        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl px-4 py-3 text-xs text-purple-700 dark:text-purple-300">
+          🔁 出向中スタッフの人件費 <span className="font-bold">{fmtYen(t.dispatchDeduction)}</span> を売上・人件費の両方から差し引いています（粗利は変わりません）。
+          {t.billingRaw && <span className="ml-2 text-gray-500">（控除前: 売上 {fmtYen(t.billingRaw)} / 人件費 {fmtYen(t.costRaw || 0)}）</span>}
+        </div>
+      )}
+
       {/* KPI */}
       {t && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
             <div className="text-2xl font-bold text-hibi-navy tabular-nums">{fmtYenMan(t.billing)}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">総請求額</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">総請求額{t.dispatchDeduction && t.dispatchDeduction > 0 ? '（出向控除済）' : ''}</div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
             <div className={`text-2xl font-bold tabular-nums ${profitColor(t.profitRate)}`}>{fmtYenMan(t.profit)}</div>
@@ -217,7 +226,17 @@ export default function CostPage() {
                   const totalWorkers = s.workDays + s.subWorkDays
                   return (
                     <tr key={s.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 align-top">
-                      <td className="px-3 py-2.5 font-medium">{s.name}</td>
+                      <td className="px-3 py-2.5 font-medium">
+                        {s.name}
+                        {s.dispatchDeduction && s.dispatchDeduction > 0 && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold"
+                            title={`出向控除: -${fmtYen(s.dispatchDeduction)}（売上・人件費から同額差引）`}
+                          >
+                            🔁 -{fmtYen(s.dispatchDeduction)}
+                          </span>
+                        )}
+                      </td>
                       {/* Billing column with multiple rows */}
                       <td className="px-3 py-2 text-right">
                         {isMultiMonth ? (

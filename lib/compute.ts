@@ -26,6 +26,7 @@ export interface RawWorker {
   id: number; name: string; org: string; visa: string; job: string
   rate: number; hourlyRate?: number; otMul: number; hireDate: string; retired?: string; token: string
   salary?: number; memo?: string; grantMonth?: number
+  dispatchTo?: string  // 出向先名（空なら通常勤務）
 }
 
 export interface RawSite {
@@ -169,9 +170,19 @@ export function getAssign(
 }
 
 // 出向判定: 指定社員が指定現場で出向扱いかチェック
+//   1) ワーカー自身の dispatchTo が設定されていれば、全現場で出向扱い
+//   2) 現場ごとの dispatch 配列に含まれていれば出向扱い
 export function isDispatched(main: MainData, workerId: number, siteId: string, ym: string): boolean {
+  const w = main.workers.find(x => x.id === workerId)
+  if (w?.dispatchTo) return true
   const assign = getAssign(main, siteId, ym)
   return assign.dispatch.includes(workerId)
+}
+
+// ワーカーが常時出向中（dispatchTo が設定されている）かを判定
+export function isWorkerDispatched(main: MainData, workerId: number): boolean {
+  const w = main.workers.find(x => x.id === workerId)
+  return !!(w?.dispatchTo)
 }
 
 // ────────────────────────────────────────
@@ -333,11 +344,11 @@ export function calcTobiEquiv(
 // ────────────────────────────────────────
 
 export interface ComputeResult {
-  sites: Record<string, { work: number; ot: number; otEq: number; cost: number; subWork: number; subOT: number; subOtEq: number; subCost: number }>
+  sites: Record<string, { work: number; ot: number; otEq: number; cost: number; subWork: number; subOT: number; subOtEq: number; subCost: number; dispatchDeduction: number }>
   daily: Record<string, number>  // key: ym_day
   dailySite: Record<string, number>  // key: ym_day_siteId
   monthly: Record<string, number>  // key: ym
-  workers: Record<number, { work: number; ot: number; cost: number; plUsed: number; compDays: number; sites: string[] }>
+  workers: Record<number, { work: number; ot: number; cost: number; plUsed: number; compDays: number; sites: string[]; isDispatched?: boolean; dispatchTo?: string; dispatchDeduction?: number }>
   subcons: Record<string, { work: number; ot: number; cost: number; sites: string[] }>
   siteWorkers: Record<string, { work: number; ot: number; cost: number; plUsed: number }>
   siteSubcons: Record<string, { work: number; ot: number; cost: number }>
@@ -349,6 +360,7 @@ export interface ComputeResult {
   totalSubOT: number
   totalSubOtEq: number
   totalSubCost: number
+  totalDispatchDeduction: number
 }
 
 export function compute(
@@ -364,11 +376,12 @@ export function compute(
     workers: {}, subcons: {}, siteWorkers: {}, siteSubcons: {},
     totalWork: 0, totalOT: 0, totalOtEq: 0, totalCost: 0,
     totalSubWork: 0, totalSubOT: 0, totalSubOtEq: 0, totalSubCost: 0,
+    totalDispatchDeduction: 0,
   }
 
   // サイトの初期化
   main.sites.forEach(s => {
-    result.sites[s.id] = { work: 0, ot: 0, otEq: 0, cost: 0, subWork: 0, subOT: 0, subOtEq: 0, subCost: 0 }
+    result.sites[s.id] = { work: 0, ot: 0, otEq: 0, cost: 0, subWork: 0, subOT: 0, subOtEq: 0, subCost: 0, dispatchDeduction: 0 }
   })
 
   // ─── 個人の出面データ処理 ───
@@ -389,7 +402,7 @@ export function compute(
     // 有給: 人工としてはカウントしないがworker集計に有給日数を記録
     if (v.p) {
       if (!result.workers[w.id]) {
-        result.workers[w.id] = { work: 0, ot: 0, cost: 0, plUsed: 0, compDays: 0, sites: [] }
+        result.workers[w.id] = { work: 0, ot: 0, cost: 0, plUsed: 0, compDays: 0, sites: [], isDispatched: !!w.dispatchTo, dispatchTo: w.dispatchTo || '', dispatchDeduction: 0 }
       }
       result.workers[w.id].plUsed = (result.workers[w.id].plUsed || 0) + 1
       if (!result.workers[w.id].sites.includes(sid)) result.workers[w.id].sites.push(sid)
@@ -429,13 +442,20 @@ export function compute(
     result.monthly[entryYm] = (result.monthly[entryYm] || 0) + workCount
 
     if (!result.workers[w.id]) {
-      result.workers[w.id] = { work: 0, ot: 0, cost: 0, plUsed: 0, compDays: 0, sites: [] }
+      result.workers[w.id] = { work: 0, ot: 0, cost: 0, plUsed: 0, compDays: 0, sites: [], isDispatched: !!w.dispatchTo, dispatchTo: w.dispatchTo || '', dispatchDeduction: 0 }
     }
     result.workers[w.id].work += workCount
     result.workers[w.id].ot += (isComp ? 0 : (v.o || 0))
     result.workers[w.id].cost += cost
     if (!result.workers[w.id].sites.includes(sid)) result.workers[w.id].sites.push(sid)
     if (isComp) result.workers[w.id].compDays = (result.workers[w.id].compDays || 0) + 1
+
+    // 出向者: 控除額をワーカー・サイト・全体で集計
+    if (w.dispatchTo) {
+      result.workers[w.id].dispatchDeduction = (result.workers[w.id].dispatchDeduction || 0) + cost
+      if (result.sites[sid]) result.sites[sid].dispatchDeduction += cost
+      result.totalDispatchDeduction += cost
+    }
 
     // 現場×個人
     if (!result.siteWorkers[swk]) result.siteWorkers[swk] = { work: 0, ot: 0, cost: 0, plUsed: 0 }
@@ -650,6 +670,10 @@ export interface WorkerMonthly {
   absence: number
   absentCost: number
   netPay: number
+  // 出向情報
+  isDispatched?: boolean         // 常時出向中（Worker.dispatchTo が設定済み）
+  dispatchTo?: string            // 出向先名
+  dispatchDeduction?: number     // 出向控除額（実出勤×日額＋残業 = totalCost と同等）
   // Salary calc fields (variable working hours system)
   prescribedHours?: number
   actualWorkHours?: number
@@ -689,6 +713,7 @@ export interface SiteSummary {
   billing: number
   profit: number
   profitRate: number
+  dispatchDeduction?: number  // 出向控除額（売上・人件費から同額を差引）
 }
 
 export function computeMonthly(
@@ -716,6 +741,9 @@ export function computeMonthly(
       plDays: 0, plUsed: 0, restDays: 0, siteOffDays: 0,
       cost: 0, otCost: 0, totalCost: 0,
       absence: 0, absentCost: 0, netPay: 0,
+      isDispatched: !!w.dispatchTo,
+      dispatchTo: w.dispatchTo || '',
+      dispatchDeduction: 0,
     })
   }
 
@@ -779,6 +807,10 @@ export function computeMonthly(
       site.workDays += workCount
       site.otHours += (isComp ? 0 : (entry.o || 0))
       site.cost += entryCost
+      // 出向者の人件費はサイトの出向控除額に積む（後段で売上・人件費から差引）
+      if (wm.isDispatched) {
+        site.dispatchDeduction = (site.dispatchDeduction || 0) + entryCost
+      }
     }
   }
 
@@ -816,6 +848,10 @@ export function computeMonthly(
     const otDiv2 = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
     wm.otCost = wm.otHours * (wm.rate / otDiv2) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
+    // 出向者: 控除額 = totalCost（人件費・売上から同額差引）
+    if (wm.isDispatched) {
+      wm.dispatchDeduction = wm.totalCost
+    }
 
     // スタッフごとの所定日数: カレンダー(siteWorkDaysMap)があればそちらを優先
     let workerPrescribedDays = prescribedDays
@@ -933,10 +969,15 @@ export function computeMonthly(
   }
 
   // Billing & profit
+  // 出向者の人件費は売上からも同額差引（粗利は変わらず、KPIから出向影響を除外）
   for (const site of siteMap.values()) {
     const billingKey = `${site.id}_${ym}`
     const billings = main.billing[billingKey] || []
     site.billing = billings.reduce((sum, v) => sum + (v || 0), 0)
+    const dd = site.dispatchDeduction || 0
+    // 表示値: cost と billing は調整後（出向控除済み）の値とする
+    site.cost = Math.max(0, site.cost - dd)
+    site.billing = Math.max(0, site.billing - dd)
     site.profit = site.billing - site.cost - site.subCost
     site.profitRate = site.billing > 0 ? (site.profit / site.billing) * 100 : 0
   }
@@ -950,6 +991,7 @@ export function computeMonthly(
     w.workDays = r1(w.workDays); w.workAll = r1(w.workAll); w.otHours = r1(w.otHours)
     w.cost = r0(w.cost); w.otCost = r0(w.otCost); w.totalCost = r0(w.totalCost)
     w.absentCost = r0(w.absentCost); w.netPay = r0(w.netPay)
+    if (w.dispatchDeduction !== undefined) w.dispatchDeduction = r0(w.dispatchDeduction)
   })
 
   const subcons = Array.from(subconMap.values()).filter(sc => sc.workDays > 0)
@@ -959,14 +1001,18 @@ export function computeMonthly(
   sites.forEach(s => {
     s.workDays = r1(s.workDays); s.subWorkDays = r1(s.subWorkDays); s.otHours = r1(s.otHours)
     s.cost = r0(s.cost); s.subCost = r0(s.subCost); s.profit = r0(s.profit); s.profitRate = r1(s.profitRate)
+    if (s.dispatchDeduction !== undefined) s.dispatchDeduction = r0(s.dispatchDeduction)
   })
 
+  // 合計人件費は出向控除を引いた値（KPI整合のため）
+  const totalDispatchDeduction = workers.reduce((s, w) => s + (w.dispatchDeduction || 0), 0)
+  const rawTotalCost = workers.reduce((s, w) => s + w.totalCost, 0)
   const totals = {
     workDays: r1(workers.reduce((s, w) => s + w.workDays, 0)),
     subWorkDays: r1(subcons.reduce((s, sc) => s + sc.workDays, 0)),
-    cost: r0(workers.reduce((s, w) => s + w.totalCost, 0)),
+    cost: r0(rawTotalCost - totalDispatchDeduction),  // 出向控除済み
     subCost: r0(subcons.reduce((s, sc) => s + sc.cost, 0)),
-    billing: r0(sites.reduce((s, st) => s + st.billing, 0)),
+    billing: r0(sites.reduce((s, st) => s + st.billing, 0)),  // sites.billing は既に控除済み
     profit: r0(sites.reduce((s, st) => s + st.profit, 0)),
     otHours: r1(workers.reduce((s, w) => s + w.otHours, 0)),
   }

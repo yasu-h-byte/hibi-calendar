@@ -25,6 +25,7 @@ interface WorkerExt extends Worker {
   hireDate?: string
   retired?: string
   salary?: number
+  dispatchTo?: string
 }
 
 
@@ -42,7 +43,7 @@ function jobBadge(jobType?: string): { label: string; cls: string } {
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
-  visaExpiry: '', memo: '',
+  visaExpiry: '', memo: '', dispatchTo: '',
 }
 
 function visaExpiryStatus(expiry: string): { label: string; cls: string; priority: number } | null {
@@ -140,6 +141,7 @@ export default function WorkersPage() {
       salary: String(w.salary || ''),
       visaExpiry: w.visaExpiry || '',
       memo: (w as unknown as { memo?: string }).memo || '',
+      dispatchTo: w.dispatchTo || '',
     })
     setShowModal(true)
   }
@@ -149,8 +151,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '' }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -330,6 +332,14 @@ export default function WorkersPage() {
                   <td className="px-3 py-2.5 text-gray-400">{w.id}</td>
                   <td className="px-3 py-2.5 font-medium">
                     {w.name}
+                    {w.dispatchTo && (
+                      <span
+                        className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold"
+                        title={`出向先: ${w.dispatchTo}`}
+                      >
+                        🔁 出向中
+                      </span>
+                    )}
                     {w.retired && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">{w.retired && w.retired !== 'true' && w.retired.length >= 7 ? `退職 ${w.retired.slice(0, 7)}` : '退職'}</span>}
                     {(w as unknown as { memo?: string }).memo && (
                       <span className="ml-1.5 relative group cursor-default" title={(w as unknown as { memo?: string }).memo}>
@@ -631,6 +641,23 @@ export default function WorkersPage() {
                     )}
                   </>
                 )}
+              </div>
+
+              {/* ── 出向情報 ── */}
+              <div className="border border-purple-200 dark:border-purple-800 rounded-lg p-3 space-y-2 bg-purple-50/30 dark:bg-purple-900/10">
+                <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide">🔁 出向情報</h4>
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">出向先（空欄なら通常勤務）</label>
+                  <input
+                    value={form.dispatchTo}
+                    onChange={e => setForm({ ...form, dispatchTo: e.target.value })}
+                    placeholder="例：山岡建設工業"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  />
+                  <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                    ※ 入力すると、人件費・売上の両方から実給与額（実出勤×日額＋残業）が自動で差し引かれます（粗利は変わりません）。
+                  </p>
+                </div>
               </div>
             </div>
 

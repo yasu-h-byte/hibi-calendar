@@ -48,6 +48,10 @@ interface WorkerMonthly {
   fixedBasePay?: number
   additionalAllowance?: number
   legalLimit?: number
+  // 出向情報
+  isDispatched?: boolean
+  dispatchTo?: string
+  dispatchDeduction?: number
 }
 
 interface SubconMonthly {
@@ -507,12 +511,16 @@ export default function MonthlyPage() {
   }, [filteredWorkers, workerSortKey, workerSortAsc])
 
   const workerTotals = useMemo(() => {
+    const dispatchDeduction = filteredWorkers.reduce((s, w) => s + (w.dispatchDeduction || 0), 0)
+    const totalCostRaw = filteredWorkers.reduce((s, w) => s + w.totalCost, 0)
     return {
       workDays: filteredWorkers.reduce((s, w) => s + w.workDays, 0),
       workAll: filteredWorkers.reduce((s, w) => s + (w.workAll || w.workDays), 0),
       plDays: filteredWorkers.reduce((s, w) => s + w.plDays, 0),
       otHours: filteredWorkers.reduce((s, w) => s + w.otHours, 0),
-      totalCost: filteredWorkers.reduce((s, w) => s + w.totalCost, 0),
+      totalCost: totalCostRaw - dispatchDeduction,  // 出向控除済み
+      totalCostRaw,                                   // 出向控除前
+      dispatchDeduction,
     }
   }, [filteredWorkers])
 
@@ -929,8 +937,18 @@ export default function MonthlyPage() {
                   const absentDeduction = showAbsenceColumns ? calcAbsentDeduction(w) : 0
                   const netPay = showAbsenceColumns ? calcNetPay(w) : 0
                   return (
-                    <tr key={w.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
-                      <td className="px-3 py-2.5 font-medium whitespace-nowrap">{w.name}</td>
+                    <tr key={w.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30 ${w.isDispatched ? 'bg-purple-50/30' : ''}`}>
+                      <td className="px-3 py-2.5 font-medium whitespace-nowrap">
+                        {w.name}
+                        {w.isDispatched && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            title={`出向先: ${w.dispatchTo || ''}`}
+                          >
+                            🔁 出向中
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5">{orgBadge(w.org)}</td>
                       <td className="px-3 py-2.5">
                         <div className="flex flex-wrap gap-1">
@@ -966,7 +984,15 @@ export default function MonthlyPage() {
                         {fmtYen(w.rate)}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-medium">
-                        {fmtYen(Math.round(w.totalCost))}
+                        {w.isDispatched ? (
+                          <div>
+                            <div className="text-purple-600 line-through text-xs text-gray-400">{fmtYen(Math.round(w.totalCost))}</div>
+                            <div className="text-purple-700 font-bold">出向控除</div>
+                            <div className="text-[10px] text-purple-500">-{fmtYen(Math.round(w.dispatchDeduction || w.totalCost))}</div>
+                          </div>
+                        ) : (
+                          fmtYen(Math.round(w.totalCost))
+                        )}
                       </td>
                       {showAbsenceColumns && (
                         <>
@@ -1016,7 +1042,16 @@ export default function MonthlyPage() {
                   <td className="px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.otHours)}</td>
                   <td className="px-3 py-3 text-right">—</td>
                   <td className="px-3 py-3 text-right tabular-nums">
-                    {fmtYen(Math.round(workerTotals.totalCost))}
+                    {workerTotals.dispatchDeduction > 0 ? (
+                      <div>
+                        <div>{fmtYen(Math.round(workerTotals.totalCost))}</div>
+                        <div className="text-[10px] text-purple-600 font-normal">
+                          出向控除 -{fmtYen(Math.round(workerTotals.dispatchDeduction))}
+                        </div>
+                      </div>
+                    ) : (
+                      fmtYen(Math.round(workerTotals.totalCost))
+                    )}
                   </td>
                   {showAbsenceColumns && (
                     <>

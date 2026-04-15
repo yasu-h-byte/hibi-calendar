@@ -84,19 +84,22 @@ export async function GET(request: NextRequest) {
 
     // Build per-site data
     const sites = allSites.map(rawSite => {
-      const sd = c.sites[rawSite.id] || { work: 0, ot: 0, otEq: 0, cost: 0, subWork: 0, subOT: 0, subOtEq: 0, subCost: 0 }
+      const sd = c.sites[rawSite.id] || { work: 0, ot: 0, otEq: 0, cost: 0, subWork: 0, subOT: 0, subOtEq: 0, subCost: 0, dispatchDeduction: 0 }
 
       // Billing: sum across months using getBillTotal
-      let billing = 0
+      let billingRaw = 0
       const billingByMonth: Record<string, number[]> = {}
       for (const m of ymRange) {
         const billingKey = `${rawSite.id}_${m}`
         const billingArr = main.billing[billingKey] || []
         billingByMonth[m] = billingArr
-        billing += getBillTotal(main, rawSite.id, m)
+        billingRaw += getBillTotal(main, rawSite.id, m)
       }
 
-      const cost = sd.cost
+      // 出向控除: 売上・人件費から同額を差引（粗利は変わらない）
+      const dispatchDeduction = sd.dispatchDeduction || 0
+      const billing = Math.max(0, billingRaw - dispatchDeduction)
+      const cost = Math.max(0, sd.cost - dispatchDeduction)
       const subCost = sd.subCost
       const totalCost = cost + subCost
       const profit = billing - totalCost
@@ -111,8 +114,11 @@ export async function GET(request: NextRequest) {
         id: rawSite.id,
         name: rawSite.name,
         billing,
+        billingRaw: Math.round(billingRaw),
         billingByMonth,
         cost: Math.round(cost),
+        costRaw: Math.round(sd.cost),
+        dispatchDeduction: Math.round(dispatchDeduction),
         subCost: Math.round(subCost),
         totalCost: Math.round(totalCost),
         profit: Math.round(profit),
@@ -161,9 +167,10 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Totals
+    // Totals（出向控除済み）
+    const totalDispatchDeduction = c.totalDispatchDeduction || 0
     const totalBilling = sites.reduce((s, st) => s + st.billing, 0)
-    const totalCost = Math.round(c.totalCost)
+    const totalCost = Math.max(0, Math.round(c.totalCost - totalDispatchDeduction))
     const totalSubCost = Math.round(c.totalSubCost)
     const allCost = totalCost + totalSubCost
     const totalProfit = totalBilling - allCost
@@ -191,6 +198,10 @@ export async function GET(request: NextRequest) {
         tobiEquiv: Math.round(tobiCost.equiv * 10) / 10,
         tobiBase: tobiCost.tobiBase,
         perWorker: totalPerW,
+        // 出向控除（明細用）
+        dispatchDeduction: Math.round(totalDispatchDeduction),
+        billingRaw: Math.round(totalBilling + totalDispatchDeduction),
+        costRaw: Math.round(totalCost + totalDispatchDeduction),
       },
     })
   } catch (error) {

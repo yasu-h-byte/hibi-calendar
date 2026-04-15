@@ -625,14 +625,15 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     }
   }
 
-  // Worker totals
+  // Worker totals（出向控除済みの労務費を集計）
+  const totalDispatchDeduction = workers.reduce((s, w) => s + (w.dispatchDeduction || 0), 0)
   const wTotals: (string | number | null)[] = [
-    '合計', '', '',
+    totalDispatchDeduction > 0 ? `合計（出向控除 -${totalDispatchDeduction.toLocaleString()}円含む）` : '合計', '', '',
     workers.reduce((s, w) => s + (w.workAll || w.workDays), 0),
     workers.reduce((s, w) => s + w.plDays, 0),
     workers.reduce((s, w) => s + w.otHours, 0),
     null,
-    workers.reduce((s, w) => s + w.totalCost, 0),
+    workers.reduce((s, w) => s + w.totalCost, 0) - totalDispatchDeduction,
   ]
   if (showAbsence) {
     wTotals.push(
@@ -830,15 +831,19 @@ function buildWorkerRow(
   showAbsence: boolean,
 ): (string | number | null)[] {
   const siteList = w.sites.map(sid => siteNames[sid] || sid).join(', ')
+  // 出向中スタッフは名前に🔁マークを付け、概算労務費は出向控除額（マイナス）として表示
+  const nameWithDispatch = w.isDispatched
+    ? `🔁 ${w.name}（出向: ${w.dispatchTo || ''}）`
+    : w.name
   const row: (string | number | null)[] = [
-    w.name,
+    nameWithDispatch,
     w.org === 'hfu' || w.org === 'HFU' ? 'HFU' : '日比',
     siteList,
     w.workAll || w.workDays,
     w.plDays || 0,
     w.otHours || 0,
     w.rate,
-    Math.round(w.totalCost),
+    w.isDispatched ? -Math.round(w.dispatchDeduction || w.totalCost) : Math.round(w.totalCost),
   ]
   if (showAbsence) {
     row.push(
