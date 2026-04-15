@@ -193,11 +193,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  let stage = 'init'
   try {
     const { searchParams } = new URL(request.url)
     const workerId = searchParams.get('workerId')
 
     // 評価データ取得
+    stage = 'get-evaluations'
     const evalSnap = await getDocs(collection(db, 'evaluations'))
     let evaluations = evalSnap.docs.map(d => ({ id: d.id, ...d.data() }))
 
@@ -208,27 +210,30 @@ export async function GET(request: NextRequest) {
     }
 
     // ワーカーデータ取得
+    stage = 'get-main-data'
     const mainData = await getMainData()
 
     // 外国人ワーカーリスト（評価対象）
-    const foreignWorkers = mainData.workers
-      .filter(w => w.visa !== 'none' && !w.retired)
+    stage = 'build-foreign-workers'
+    const foreignWorkers = (mainData.workers || [])
+      .filter(w => w && w.visa !== 'none' && !w.retired)
       .map(w => ({
         id: w.id,
-        name: w.name,
-        org: w.org,
-        visa: w.visa,
-        job: w.job,
-        hireDate: w.hireDate,
+        name: w.name || '',
+        org: w.org || '',
+        visa: w.visa || '',
+        job: w.job || '',
+        hireDate: w.hireDate || '',
       }))
 
     // 評価者リスト（職長 + 政仁さん + 靖仁さん）
-    const evaluators = mainData.workers
-      .filter(w => !w.retired && (w.job === 'shokucho' || w.id === APPROVER_WORKER_ID))
+    stage = 'build-evaluators'
+    const evaluators: { id: number; name: string; job: string }[] = (mainData.workers || [])
+      .filter(w => w && !w.retired && (w.job === 'shokucho' || w.id === APPROVER_WORKER_ID))
       .map(w => ({
         id: w.id,
-        name: w.name,
-        job: w.job,
+        name: w.name || '',
+        job: w.job || '',
       }))
     // super admin（靖仁さん、workerIdが0）はワーカーリストにいないので明示的に追加
     if (!evaluators.find(e => e.id === ADMIN_WORKER_ID)) {
@@ -236,8 +241,10 @@ export async function GET(request: NextRequest) {
     }
 
     // 評価設定
+    stage = 'get-settings'
     const settings = await getEvaluationSettings()
 
+    stage = 'response'
     return NextResponse.json({
       evaluations,
       workers: foreignWorkers,
@@ -245,10 +252,10 @@ export async function GET(request: NextRequest) {
       settings,
     })
   } catch (error) {
-    console.error('Evaluation GET error:', error)
+    console.error(`Evaluation GET error at stage [${stage}]:`, error)
     const errMsg = error instanceof Error ? error.message : String(error)
     const errStack = error instanceof Error ? error.stack : undefined
-    return NextResponse.json({ error: 'Failed to fetch evaluations', detail: errMsg, stack: errStack }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to fetch evaluations', stage, detail: errMsg, stack: errStack }, { status: 500 })
   }
 }
 
