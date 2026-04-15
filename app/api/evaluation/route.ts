@@ -246,7 +246,9 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Evaluation GET error:', error)
-    return NextResponse.json({ error: 'Failed to fetch evaluations' }, { status: 500 })
+    const errMsg = error instanceof Error ? error.message : String(error)
+    const errStack = error instanceof Error ? error.stack : undefined
+    return NextResponse.json({ error: 'Failed to fetch evaluations', detail: errMsg, stack: errStack }, { status: 500 })
   }
 }
 

@@ -243,8 +243,14 @@ export default function EvaluationPage() {
         const d = await eRes.json()
         setEvaluations(d.evaluations || [])
         if (d.evaluators) setApiEvaluators(d.evaluators)
+      } else {
+        // エラー詳細をコンソールに出力（デバッグ用）
+        const errData = await eRes.json().catch(() => ({}))
+        console.error('Evaluation API error:', eRes.status, errData)
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error('Evaluation fetch exception:', e)
+    }
     setLoading(false)
   }, [])
 
