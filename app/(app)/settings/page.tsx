@@ -131,7 +131,22 @@ function formatTimestamp(ts: string): string {
   return `${m}/${day} ${h}:${min}`
 }
 
-type Tab = 'settings' | 'activity' | 'users'
+type Tab = 'settings' | 'activity' | 'users' | 'announcements'
+
+interface Announcement {
+  id: string
+  title: string
+  content: string
+  category: 'new' | 'fix' | 'info'
+  publishedAt: string
+  publishedBy: string
+}
+
+const ANN_CATEGORIES = [
+  { value: 'new', label: '🆕 新機能', cls: 'bg-blue-100 text-blue-700' },
+  { value: 'fix', label: '🔧 不具合修正', cls: 'bg-green-100 text-green-700' },
+  { value: 'info', label: '📢 お知らせ', cls: 'bg-gray-100 text-gray-700' },
+] as const
 
 export default function SettingsPage() {
   const [password, setPassword] = useState('')
@@ -161,6 +176,15 @@ export default function SettingsPage() {
   const [endDate, setEndDate] = useState('')
   const [filterUser, setFilterUser] = useState('')
   const [filterAction, setFilterAction] = useState('')
+
+  // Announcements
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [annLoading, setAnnLoading] = useState(false)
+  const [annEditId, setAnnEditId] = useState<string | null>(null)
+  const [annForm, setAnnForm] = useState<{ title: string; content: string; category: 'new' | 'fix' | 'info' }>({
+    title: '', content: '', category: 'new',
+  })
+  const [annSaving, setAnnSaving] = useState(false)
 
   // Users
   const [userWorkers, setUserWorkers] = useState<UserWorker[]>([])
@@ -315,6 +339,83 @@ export default function SettingsPage() {
   useEffect(() => {
     if (activeTab === 'users' && password) fetchUsers()
   }, [activeTab, fetchUsers, password])
+
+  // ── Announcements ──
+  const fetchAnnouncements = useCallback(async () => {
+    if (!password) return
+    setAnnLoading(true)
+    try {
+      const res = await fetch('/api/announcements', {
+        headers: { 'x-admin-password': password },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setAnnouncements(data.announcements || [])
+      }
+    } finally {
+      setAnnLoading(false)
+    }
+  }, [password])
+
+  useEffect(() => {
+    if (activeTab === 'announcements' && password) fetchAnnouncements()
+  }, [activeTab, fetchAnnouncements, password])
+
+  const handleSaveAnnouncement = async () => {
+    if (!annForm.title.trim() || !annForm.content.trim()) {
+      showMessage('error', 'タイトルと本文を入力してください')
+      return
+    }
+    setAnnSaving(true)
+    try {
+      const userStored = localStorage.getItem('hibi_auth')
+      const publishedBy = userStored ? (JSON.parse(userStored).user?.name || '管理者') : '管理者'
+      const body = annEditId
+        ? { action: 'update', id: annEditId, ...annForm }
+        : { action: 'add', ...annForm, publishedBy }
+      const res = await fetch('/api/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        showMessage('success', annEditId ? 'お知らせを更新しました' : 'お知らせを投稿しました')
+        setAnnEditId(null)
+        setAnnForm({ title: '', content: '', category: 'new' })
+        await fetchAnnouncements()
+      } else {
+        showMessage('error', '保存に失敗しました')
+      }
+    } catch {
+      showMessage('error', 'エラーが発生しました')
+    }
+    setAnnSaving(false)
+  }
+
+  const handleDeleteAnnouncement = async (id: string, title: string) => {
+    if (!confirm(`「${title}」を削除しますか？`)) return
+    const res = await fetch('/api/announcements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ action: 'delete', id }),
+    })
+    if (res.ok) {
+      showMessage('success', '削除しました')
+      await fetchAnnouncements()
+    } else {
+      showMessage('error', '削除に失敗しました')
+    }
+  }
+
+  const handleEditAnnouncement = (a: Announcement) => {
+    setAnnEditId(a.id)
+    setAnnForm({ title: a.title, content: a.content, category: a.category })
+  }
+
+  const handleCancelAnnouncementEdit = () => {
+    setAnnEditId(null)
+    setAnnForm({ title: '', content: '', category: 'new' })
+  }
 
   const handleSaveRates = async () => {
     setSaving(true)
@@ -501,6 +602,16 @@ export default function SettingsPage() {
           }`}
         >
           👤 ユーザー
+        </button>
+        <button
+          onClick={() => setActiveTab('announcements')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition ${
+            activeTab === 'announcements'
+              ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          📢 お知らせ
         </button>
       </div>
 
@@ -1008,6 +1119,119 @@ export default function SettingsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Announcements Tab ===== */}
+      {activeTab === 'announcements' && (
+        <div className="max-w-3xl space-y-4">
+          {/* 投稿フォーム */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-5">
+            <h2 className="text-base font-bold text-hibi-navy dark:text-white mb-3">
+              {annEditId ? '✏️ お知らせを編集' : '📝 新しいお知らせを投稿'}
+            </h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">カテゴリ</label>
+                <div className="flex gap-2">
+                  {ANN_CATEGORIES.map(c => (
+                    <button
+                      key={c.value}
+                      onClick={() => setAnnForm(f => ({ ...f, category: c.value }))}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                        annForm.category === c.value
+                          ? c.cls + ' ring-2 ring-offset-1 ring-hibi-navy'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">タイトル</label>
+                <input
+                  type="text"
+                  value={annForm.title}
+                  onChange={e => setAnnForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="例: 外注先の現場別単価設定が可能になりました"
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">本文</label>
+                <textarea
+                  value={annForm.content}
+                  onChange={e => setAnnForm(f => ({ ...f, content: e.target.value }))}
+                  placeholder="本文を入力（改行対応）"
+                  rows={4}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveAnnouncement}
+                  disabled={annSaving || !annForm.title.trim() || !annForm.content.trim()}
+                  className="bg-hibi-navy text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
+                >
+                  {annSaving ? '保存中...' : annEditId ? '更新する' : '投稿する'}
+                </button>
+                {annEditId && (
+                  <button
+                    onClick={handleCancelAnnouncementEdit}
+                    className="bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2 text-sm hover:bg-gray-300 dark:hover:bg-gray-500 transition"
+                  >
+                    キャンセル
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* お知らせ一覧 */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-5">
+            <h2 className="text-base font-bold text-hibi-navy dark:text-white mb-3">投稿済み一覧</h2>
+            {annLoading ? (
+              <div className="text-center py-6 text-gray-400 text-sm">読み込み中...</div>
+            ) : announcements.length === 0 ? (
+              <div className="text-center py-6 text-gray-400 text-sm">お知らせはありません</div>
+            ) : (
+              <div className="space-y-3">
+                {announcements.map(a => {
+                  const cat = ANN_CATEGORIES.find(c => c.value === a.category)
+                  const date = new Date(a.publishedAt)
+                  const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+                  return (
+                    <div key={a.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cat?.cls || 'bg-gray-100 text-gray-700'}`}>
+                          {cat?.label || a.category}
+                        </span>
+                        <span className="text-xs text-gray-400">{dateStr} / {a.publishedBy}</span>
+                      </div>
+                      <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-1">{a.title}</h3>
+                      <p className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{a.content}</p>
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => handleEditAnnouncement(a)}
+                          className="text-xs text-hibi-navy dark:text-blue-400 hover:underline"
+                        >
+                          編集
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAnnouncement(a.id, a.title)}
+                          className="text-xs text-red-500 hover:underline"
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

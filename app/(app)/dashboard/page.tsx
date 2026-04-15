@@ -238,6 +238,76 @@ function getNextYm(): string {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`
 }
 
+// ─── Announcements (dashboard top banner) ───
+
+interface DashboardAnnouncement {
+  id: string
+  title: string
+  content: string
+  category: 'new' | 'fix' | 'info'
+  publishedAt: string
+  publishedBy: string
+}
+
+function formatRelativeTime(iso: string): string {
+  const now = new Date()
+  const then = new Date(iso)
+  const diffMs = now.getTime() - then.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'たった今'
+  if (diffMin < 60) return `${diffMin}分前`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}時間前`
+  const diffDay = Math.floor(diffHr / 24)
+  if (diffDay === 1) return '昨日'
+  if (diffDay < 7) return `${diffDay}日前`
+  return `${then.getMonth() + 1}/${then.getDate()}`
+}
+
+function AnnouncementsCard({ password }: { password: string }) {
+  const [items, setItems] = useState<DashboardAnnouncement[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!password) return
+    fetch('/api/announcements', { headers: { 'x-admin-password': password } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setItems((data.announcements || []).slice(0, 3)) })
+      .finally(() => setLoaded(true))
+  }, [password])
+
+  if (!loaded || items.length === 0) return null
+
+  const catStyle: Record<string, { label: string; cls: string }> = {
+    new: { label: '🆕 新機能', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
+    fix: { label: '🔧 修正', cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+    info: { label: '📢 お知らせ', cls: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-hibi-navy">
+      <h3 className="text-sm font-bold text-hibi-navy dark:text-white mb-3 flex items-center gap-2">
+        📢 お知らせ
+      </h3>
+      <div className="divide-y divide-gray-100 dark:divide-gray-700">
+        {items.map(a => {
+          const c = catStyle[a.category] || catStyle.info
+          return (
+            <div key={a.id} className="py-2.5 first:pt-0 last:pb-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${c.cls}`}>{c.label}</span>
+                <span className="text-[11px] text-gray-400">{formatRelativeTime(a.publishedAt)}</span>
+              </div>
+              <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-0.5">{a.title}</h4>
+              <p className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap line-clamp-3">{a.content}</p>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function MonthlyChecklist({ password }: { password: string }) {
   const [status, setStatus] = useState<{
     calCreated: number; calTotal: number
@@ -462,7 +532,10 @@ export default function DashboardPage() {
         <div className="text-center py-12 text-gray-400">読み込み中...</div>
       ) : data ? (
         <>
-          {/* ═══ 0. Monthly Checklist ═══ */}
+          {/* ═══ 0. Announcements ═══ */}
+          <AnnouncementsCard password={password} />
+
+          {/* ═══ 0.5. Monthly Checklist ═══ */}
           <MonthlyChecklist password={password} />
 
           {/* ═══ 1. Today's Status Table ═══ */}
