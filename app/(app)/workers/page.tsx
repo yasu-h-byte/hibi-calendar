@@ -40,6 +40,8 @@ function jobBadge(jobType?: string): { label: string; cls: string } {
   }
 }
 
+const DEFAULT_DISPATCH_TO = '山岡建設工業'
+
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
@@ -646,18 +648,22 @@ export default function WorkersPage() {
               {/* ── 出向情報 ── */}
               <div className="border border-purple-200 dark:border-purple-800 rounded-lg p-3 space-y-2 bg-purple-50/30 dark:bg-purple-900/10">
                 <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide">🔁 出向情報</h4>
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">出向先（空欄なら通常勤務）</label>
-                  <input
-                    value={form.dispatchTo}
-                    onChange={e => setForm({ ...form, dispatchTo: e.target.value })}
-                    placeholder="例：山岡建設工業"
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                  />
-                  <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
-                    ※ 入力すると、人件費・売上の両方から実給与額（実出勤×日額＋残業）が自動で差し引かれます（粗利は変わりません）。
-                  </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, dispatchTo: form.dispatchTo ? '' : DEFAULT_DISPATCH_TO })}
+                    className={`flex-1 px-3 py-2 rounded-lg text-sm font-bold transition ${
+                      form.dispatchTo
+                        ? 'bg-purple-600 text-white hover:bg-purple-700'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {form.dispatchTo ? `🔁 ${form.dispatchTo} へ出向中` : '通常勤務（出向なし）'}
+                  </button>
                 </div>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                  ※ 出向中にすると、人件費・売上の両方から実給与額（実出勤×日額＋残業）が自動で差し引かれます（粗利は変わりません）。
+                </p>
               </div>
             </div>
 
