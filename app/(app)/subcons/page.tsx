@@ -16,11 +16,13 @@ export default function SubconsPage() {
   const [password, setPassword] = useState('')
   const [subcons, setSubcons] = useState<Subcon[]>([])
   const [subconSites, setSubconSites] = useState<Record<string, string[]>>({})
+  const [subconRates, setSubconRates] = useState<Record<string, Record<string, { rate?: number; otRate?: number }>>>({})
   const [sites, setSites] = useState<SiteMinimal[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [siteRateForm, setSiteRateForm] = useState<Record<string, string>>({}) // siteId -> rate string
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -41,6 +43,7 @@ export default function SubconsPage() {
         const data = await res.json()
         setSubcons(data.subcons || [])
         setSubconSites(data.subconSites || {})
+        setSubconRates(data.subconRates || {})
         setSites(data.sites || [])
       }
     } finally { setLoading(false) }
@@ -50,11 +53,18 @@ export default function SubconsPage() {
 
   const openAdd = () => {
     if (subcons.length >= 20) { alert('外注先は最大20社までです'); return }
-    setEditId(null); setForm(EMPTY_FORM); setShowModal(true)
+    setEditId(null); setForm(EMPTY_FORM); setSiteRateForm({}); setShowModal(true)
   }
   const openEdit = (sc: Subcon) => {
     setEditId(sc.id)
     setForm({ name: sc.name, type: sc.type, rate: String(sc.rate || ''), otRate: String(sc.otRate || ''), note: sc.note || '' })
+    // 現在の現場別単価を初期値にセット
+    const rateMap: Record<string, string> = {}
+    const existingRates = subconRates[sc.id] || {}
+    for (const [siteId, rateOv] of Object.entries(existingRates)) {
+      if (rateOv.rate) rateMap[siteId] = String(rateOv.rate)
+    }
+    setSiteRateForm(rateMap)
     setShowModal(true)
   }
 
@@ -65,7 +75,28 @@ export default function SubconsPage() {
       const body = editId
         ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note }
         : { action: 'add', ...form }
-      await fetch('/api/subcons', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+      const res = await fetch('/api/subcons', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+      if (!res.ok) { alert('保存に失敗しました'); setSaving(false); return }
+
+      // 編集モードで現場別単価が入力されている場合、updateSiteRates を呼ぶ
+      if (editId) {
+        // 現在の現場別単価と比較して、差分があれば更新
+        const siteRatesPayload: Record<string, number | null> = {}
+        const assignedSites = subconSites[editId] || []
+        for (const siteId of assignedSites) {
+          const inputVal = siteRateForm[siteId]
+          const numVal = inputVal ? Number(inputVal) : 0
+          siteRatesPayload[siteId] = numVal > 0 ? numVal : null
+        }
+        if (Object.keys(siteRatesPayload).length > 0) {
+          await fetch('/api/subcons', {
+            method: 'POST',
+            headers: headers(),
+            body: JSON.stringify({ action: 'updateSiteRates', subconId: editId, siteRates: siteRatesPayload }),
+          })
+        }
+      }
+
       setShowModal(false); fetchData()
     } finally { setSaving(false) }
   }
@@ -86,6 +117,7 @@ export default function SubconsPage() {
 
   const renderSubconRow = (sc: Subcon) => {
     const assignedSites = subconSites[sc.id] || []
+    const siteRateMap = subconRates[sc.id] || {}
     return (
       <tr key={sc.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
         <td className="px-3 py-2.5 font-medium">{sc.name}</td>
@@ -93,11 +125,19 @@ export default function SubconsPage() {
         <td className="px-3 py-2.5 text-right">{sc.otRate ? `¥${sc.otRate.toLocaleString()}/h` : '—'}</td>
         <td className="px-3 py-2.5">
           <div className="flex flex-wrap gap-1">
-            {assignedSites.length > 0 ? assignedSites.map(siteId => (
-              <span key={siteId} className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-                {getSiteName(siteId)}
-              </span>
-            )) : <span className="text-xs text-gray-300">未配置</span>}
+            {assignedSites.length > 0 ? assignedSites.map(siteId => {
+              const override = siteRateMap[siteId]?.rate
+              const hasOverride = !!override && override > 0
+              return (
+                <span
+                  key={siteId}
+                  className={`text-xs px-1.5 py-0.5 rounded ${hasOverride ? 'bg-orange-100 text-orange-700' : 'bg-indigo-100 text-indigo-700'}`}
+                  title={hasOverride ? `現場別単価: ¥${override.toLocaleString()}` : '基本単価'}
+                >
+                  {getSiteName(siteId)}{hasOverride && ` (¥${override.toLocaleString()})`}
+                </span>
+              )
+            }) : <span className="text-xs text-gray-300">未配置</span>}
           </div>
         </td>
         <td className="px-3 py-2.5 text-gray-500 text-xs">{sc.note}</td>
@@ -196,6 +236,43 @@ export default function SubconsPage() {
                 <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
               </div>
+
+              {/* 現場別単価（編集モード＆配置あり時のみ） */}
+              {editId && (subconSites[editId] || []).length > 0 && (
+                <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold text-hibi-navy dark:text-blue-300">
+                      🏗 現場別単価（任意）
+                    </label>
+                    <span className="text-[10px] text-gray-400">
+                      基本単価: ¥{(Number(form.rate) || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2">
+                    空欄の場合は基本単価を使用します。残業単価は基本単価×1.25で自動計算。
+                  </p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {(subconSites[editId] || []).map(siteId => {
+                      const siteName = sites.find(s => s.id === siteId)?.name || siteId
+                      return (
+                        <div key={siteId} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate" title={siteName}>
+                            {siteName}
+                          </span>
+                          <input
+                            type="number"
+                            value={siteRateForm[siteId] || ''}
+                            onChange={e => setSiteRateForm(prev => ({ ...prev, [siteId]: e.target.value }))}
+                            placeholder={`基本: ${(Number(form.rate) || 0).toLocaleString()}`}
+                            className="w-28 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm text-right focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                          />
+                          <span className="text-xs text-gray-400">円</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex gap-2 mt-6">
               <button onClick={handleSave} disabled={saving}

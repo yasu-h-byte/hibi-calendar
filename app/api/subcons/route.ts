@@ -11,22 +11,34 @@ export async function GET(request: NextRequest) {
     if (!snap.exists()) return NextResponse.json({ subcons: [], siteAssign: {}, sites: [] })
     const data = snap.data()
 
-    // Build subcon -> sites assignment map
-    const assign = (data.assign || {}) as Record<string, { workers?: number[]; subcons?: string[] }>
+    // Build subcon -> sites assignment map and per-site rate override map
+    const assign = (data.assign || {}) as Record<string, {
+      workers?: number[]
+      subcons?: string[]
+      subconRates?: Record<string, { rate?: number; otRate?: number }>
+    }>
     const sites = ((data.sites || []) as { id: string; name: string; archived?: boolean }[])
       .filter(s => !s.archived)
       .map(s => ({ id: s.id, name: s.name }))
 
     const subconSites: Record<string, string[]> = {}
+    const subconRates: Record<string, Record<string, { rate?: number; otRate?: number }>> = {}
     for (const [siteId, val] of Object.entries(assign)) {
       const subs = (val.subcons || []) as string[]
       for (const scId of subs) {
         if (!subconSites[scId]) subconSites[scId] = []
         subconSites[scId].push(siteId)
       }
+      // per-site rate overrides
+      if (val.subconRates) {
+        for (const [scId, rateOv] of Object.entries(val.subconRates)) {
+          if (!subconRates[scId]) subconRates[scId] = {}
+          subconRates[scId][siteId] = rateOv
+        }
+      }
     }
 
-    return NextResponse.json({ subcons: data.subcons || [], subconSites, sites })
+    return NextResponse.json({ subcons: data.subcons || [], subconSites, subconRates, sites })
   } catch (error) {
     console.error('Subcons GET error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -64,6 +76,47 @@ export async function POST(request: NextRequest) {
       subcons[idx] = { ...subcons[idx], ...updates }
       await updateDoc(docRef, { subcons })
       await logActivity('admin', 'subcon.update', `${id} を更新`)
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'updateSiteRates') {
+      const { subconId, siteRates } = body as {
+        subconId: string
+        siteRates: Record<string, number | null>
+      }
+      if (!subconId || !siteRates || typeof siteRates !== 'object') {
+        return NextResponse.json({ error: 'subconId and siteRates required' }, { status: 400 })
+      }
+
+      const assign = (snap.data().assign || {}) as Record<string, {
+        workers?: number[]
+        subcons?: string[]
+        subconRates?: Record<string, { rate?: number; otRate?: number }>
+      }>
+
+      // 各現場について、単価を設定 or 削除
+      for (const [siteId, rate] of Object.entries(siteRates)) {
+        if (!assign[siteId]) assign[siteId] = {}
+        const currentRates = assign[siteId].subconRates || {}
+
+        if (rate === null || rate === 0 || !rate) {
+          // 削除: その現場・外注先のoverrideを消す
+          delete currentRates[subconId]
+        } else {
+          // 設定: 日次単価のみ（otRateは設定せず getSubconRate 側で自動計算）
+          currentRates[subconId] = { rate: Number(rate) }
+        }
+
+        // subconRatesが空になったらフィールドごと削除して綺麗に
+        if (Object.keys(currentRates).length === 0) {
+          delete assign[siteId].subconRates
+        } else {
+          assign[siteId].subconRates = currentRates
+        }
+      }
+
+      await updateDoc(docRef, { assign })
+      await logActivity('admin', 'subcon.updateSiteRates', `${subconId} の現場別単価を更新`)
       return NextResponse.json({ success: true })
     }
 
