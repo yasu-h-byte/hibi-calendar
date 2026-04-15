@@ -27,6 +27,7 @@ export async function getWorkers(): Promise<Worker[]> {
     salary: (w.salary as number) || undefined,
     visaExpiry: (w.visaExpiry as string) || '',
     dispatchTo: (w.dispatchTo as string) || '',
+    dispatchFrom: (w.dispatchFrom as string) || '',
   }))
 
   return workers

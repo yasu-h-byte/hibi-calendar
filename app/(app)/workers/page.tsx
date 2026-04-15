@@ -26,6 +26,7 @@ interface WorkerExt extends Worker {
   retired?: string
   salary?: number
   dispatchTo?: string
+  dispatchFrom?: string
 }
 
 
@@ -45,7 +46,12 @@ const DEFAULT_DISPATCH_TO = '山岡建設工業'
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
-  visaExpiry: '', memo: '', dispatchTo: '',
+  visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '',
+}
+
+function currentYmDash(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 function visaExpiryStatus(expiry: string): { label: string; cls: string; priority: number } | null {
@@ -144,6 +150,7 @@ export default function WorkersPage() {
       visaExpiry: w.visaExpiry || '',
       memo: (w as unknown as { memo?: string }).memo || '',
       dispatchTo: w.dispatchTo || '',
+      dispatchFrom: w.dispatchFrom || '',
     })
     setShowModal(true)
   }
@@ -153,8 +160,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '' }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '' }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -337,9 +344,9 @@ export default function WorkersPage() {
                     {w.dispatchTo && (
                       <span
                         className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold"
-                        title={`出向先: ${w.dispatchTo}`}
+                        title={`出向先: ${w.dispatchTo}${w.dispatchFrom ? ` / 開始: ${w.dispatchFrom}` : ''}`}
                       >
-                        🔁 出向中
+                        🔁 出向中{w.dispatchFrom && ` (${w.dispatchFrom}〜)`}
                       </span>
                     )}
                     {w.retired && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">{w.retired && w.retired !== 'true' && w.retired.length >= 7 ? `退職 ${w.retired.slice(0, 7)}` : '退職'}</span>}
@@ -651,7 +658,15 @@ export default function WorkersPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setForm({ ...form, dispatchTo: form.dispatchTo ? '' : DEFAULT_DISPATCH_TO })}
+                    onClick={() => {
+                      if (form.dispatchTo) {
+                        // 解除
+                        setForm({ ...form, dispatchTo: '', dispatchFrom: '' })
+                      } else {
+                        // 出向開始: 開始月は当月をデフォルト
+                        setForm({ ...form, dispatchTo: DEFAULT_DISPATCH_TO, dispatchFrom: form.dispatchFrom || currentYmDash() })
+                      }
+                    }}
                     className={`flex-1 px-3 py-2 rounded-lg text-sm font-bold transition ${
                       form.dispatchTo
                         ? 'bg-purple-600 text-white hover:bg-purple-700'
@@ -661,8 +676,22 @@ export default function WorkersPage() {
                     {form.dispatchTo ? `🔁 ${form.dispatchTo} へ出向中` : '通常勤務（出向なし）'}
                   </button>
                 </div>
+                {form.dispatchTo && (
+                  <div className="pt-1">
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">出向開始月</label>
+                    <input
+                      type="month"
+                      value={form.dispatchFrom}
+                      onChange={e => setForm({ ...form, dispatchFrom: e.target.value })}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    />
+                    <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                      ※ この月以降の月次集計・原価で出向控除が適用されます。空欄の場合は全期間が対象になります。
+                    </p>
+                  </div>
+                )}
                 <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                  ※ 出向中にすると、人件費・売上の両方から実給与額（実出勤×日額＋残業）が自動で差し引かれます（粗利は変わりません）。
+                  ※ 出向中にすると、開始月以降の人件費・売上の両方から実給与額（実出勤×日額＋残業）が自動で差し引かれます（粗利は変わりません）。
                 </p>
               </div>
             </div>

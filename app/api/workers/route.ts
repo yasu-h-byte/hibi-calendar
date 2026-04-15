@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, salary, visaExpiry, dispatchTo } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, salary, visaExpiry, dispatchTo, dispatchFrom } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
       if (dispatchTo && String(dispatchTo).trim()) {
         (workerData as Record<string, unknown>).dispatchTo = String(dispatchTo).trim()
       }
+      if (dispatchFrom && String(dispatchFrom).trim()) {
+        (workerData as Record<string, unknown>).dispatchFrom = String(dispatchFrom).trim()
+      }
       const worker = await addWorker(workerData)
       await logActivity('admin', 'worker.add', `${name} を追加`)
       return NextResponse.json({ success: true, worker })
@@ -80,6 +83,9 @@ export async function POST(request: NextRequest) {
       }
       if (updates.dispatchTo !== undefined) {
         updates.dispatchTo = String(updates.dispatchTo || '').trim()
+      }
+      if (updates.dispatchFrom !== undefined) {
+        updates.dispatchFrom = String(updates.dispatchFrom || '').trim()
       }
       await updateWorker(id, updates)
       await logActivity('admin', 'worker.update', `ID:${id} を更新`)

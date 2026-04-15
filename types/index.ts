@@ -14,6 +14,7 @@ export interface Worker {
   salary?: number
   visaExpiry?: string // 在留期限 YYYY-MM-DD
   dispatchTo?: string // 出向先名（空なら通常勤務、値あり=出向中）
+  dispatchFrom?: string // 出向開始月 YYYY-MM（空なら全期間出向扱い）
 }
 
 export interface Site {

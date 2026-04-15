@@ -27,6 +27,7 @@ export interface RawWorker {
   rate: number; hourlyRate?: number; otMul: number; hireDate: string; retired?: string; token: string
   salary?: number; memo?: string; grantMonth?: number
   dispatchTo?: string  // 出向先名（空なら通常勤務）
+  dispatchFrom?: string  // 出向開始月 YYYY-MM（空なら全期間出向扱い）
 }
 
 export interface RawSite {
@@ -169,20 +170,32 @@ export function getAssign(
   return { workers: a?.workers || [], subcons: a?.subcons || [], dispatch: a?.dispatch || [] }
 }
 
-// 出向判定: 指定社員が指定現場で出向扱いかチェック
-//   1) ワーカー自身の dispatchTo が設定されていれば、全現場で出向扱い
+// 指定YM時点でワーカーが出向中かを判定
+//   - dispatchTo が空 → 出向していない
+//   - dispatchFrom が空 → 全期間出向扱い（後方互換）
+//   - dispatchFrom が設定済み → ym >= dispatchFrom のときのみ出向扱い
+// ym は YYYYMM 形式、dispatchFrom は YYYY-MM 形式
+export function isDispatchedAt(w: RawWorker | undefined, ym: string): boolean {
+  if (!w?.dispatchTo) return false
+  if (!w.dispatchFrom) return true
+  const fromYm = w.dispatchFrom.replace(/-/g, '')  // YYYY-MM → YYYYMM
+  return ym >= fromYm
+}
+
+// 出向判定: 指定社員が指定現場・指定YMで出向扱いかチェック
+//   1) ワーカー自身の dispatchTo（開始月以降）→ 全現場で出向扱い
 //   2) 現場ごとの dispatch 配列に含まれていれば出向扱い
 export function isDispatched(main: MainData, workerId: number, siteId: string, ym: string): boolean {
   const w = main.workers.find(x => x.id === workerId)
-  if (w?.dispatchTo) return true
+  if (isDispatchedAt(w, ym)) return true
   const assign = getAssign(main, siteId, ym)
   return assign.dispatch.includes(workerId)
 }
 
-// ワーカーが常時出向中（dispatchTo が設定されている）かを判定
-export function isWorkerDispatched(main: MainData, workerId: number): boolean {
+// ワーカーが指定YM時点で常時出向中かを判定
+export function isWorkerDispatched(main: MainData, workerId: number, ym: string): boolean {
   const w = main.workers.find(x => x.id === workerId)
-  return !!(w?.dispatchTo)
+  return isDispatchedAt(w, ym)
 }
 
 // ────────────────────────────────────────
@@ -399,10 +412,15 @@ export function compute(
 
     const swk = `${sid}_${w.id}`
 
+    // この社員がこの月時点で出向中か（dispatchFrom 以降のみ true）
+    const dispatchedThisYm = isDispatchedAt(w, entryYm)
+
     // 有給: 人工としてはカウントしないがworker集計に有給日数を記録
     if (v.p) {
       if (!result.workers[w.id]) {
-        result.workers[w.id] = { work: 0, ot: 0, cost: 0, plUsed: 0, compDays: 0, sites: [], isDispatched: !!w.dispatchTo, dispatchTo: w.dispatchTo || '', dispatchDeduction: 0 }
+        result.workers[w.id] = { work: 0, ot: 0, cost: 0, plUsed: 0, compDays: 0, sites: [], isDispatched: dispatchedThisYm, dispatchTo: w.dispatchTo || '', dispatchDeduction: 0 }
+      } else if (dispatchedThisYm && !result.workers[w.id].isDispatched) {
+        result.workers[w.id].isDispatched = true
       }
       result.workers[w.id].plUsed = (result.workers[w.id].plUsed || 0) + 1
       if (!result.workers[w.id].sites.includes(sid)) result.workers[w.id].sites.push(sid)
@@ -442,7 +460,9 @@ export function compute(
     result.monthly[entryYm] = (result.monthly[entryYm] || 0) + workCount
 
     if (!result.workers[w.id]) {
-      result.workers[w.id] = { work: 0, ot: 0, cost: 0, plUsed: 0, compDays: 0, sites: [], isDispatched: !!w.dispatchTo, dispatchTo: w.dispatchTo || '', dispatchDeduction: 0 }
+      result.workers[w.id] = { work: 0, ot: 0, cost: 0, plUsed: 0, compDays: 0, sites: [], isDispatched: dispatchedThisYm, dispatchTo: w.dispatchTo || '', dispatchDeduction: 0 }
+    } else if (dispatchedThisYm && !result.workers[w.id].isDispatched) {
+      result.workers[w.id].isDispatched = true
     }
     result.workers[w.id].work += workCount
     result.workers[w.id].ot += (isComp ? 0 : (v.o || 0))
@@ -450,8 +470,8 @@ export function compute(
     if (!result.workers[w.id].sites.includes(sid)) result.workers[w.id].sites.push(sid)
     if (isComp) result.workers[w.id].compDays = (result.workers[w.id].compDays || 0) + 1
 
-    // 出向者: 控除額をワーカー・サイト・全体で集計
-    if (w.dispatchTo) {
+    // 出向者: 控除額をワーカー・サイト・全体で集計（dispatchFrom 以降のみ）
+    if (dispatchedThisYm) {
       result.workers[w.id].dispatchDeduction = (result.workers[w.id].dispatchDeduction || 0) + cost
       if (result.sites[sid]) result.sites[sid].dispatchDeduction += cost
       result.totalDispatchDeduction += cost
@@ -731,9 +751,11 @@ export function computeMonthly(
   totals: { workDays: number; subWorkDays: number; cost: number; subCost: number; billing: number; profit: number; otHours: number }
 } {
   // Worker monthly map
+  // ★ この月時点で出向中かどうかを ym で判定（dispatchFrom 以降のみ true）
   const workerMap = new Map<number, WorkerMonthly>()
   for (const w of main.workers) {
     if (w.retired) continue
+    const dispatchedThisMonth = isDispatchedAt(w, ym)
     workerMap.set(w.id, {
       id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
       rate: w.rate, hourlyRate: w.hourlyRate, otMul: w.otMul, salary: w.salary, sites: [],
@@ -741,8 +763,8 @@ export function computeMonthly(
       plDays: 0, plUsed: 0, restDays: 0, siteOffDays: 0,
       cost: 0, otCost: 0, totalCost: 0,
       absence: 0, absentCost: 0, netPay: 0,
-      isDispatched: !!w.dispatchTo,
-      dispatchTo: w.dispatchTo || '',
+      isDispatched: dispatchedThisMonth,
+      dispatchTo: dispatchedThisMonth ? (w.dispatchTo || '') : '',
       dispatchDeduction: 0,
     })
   }
