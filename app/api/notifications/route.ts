@@ -165,51 +165,7 @@ export async function GET(request: NextRequest) {
       console.error('Lock check error:', e)
     }
 
-    // 4. Today's attendance not entered
-    try {
-      const att = await getAttData(currentYm)
-      const activeSites = main.sites.filter(s => !s.archived)
-
-      const assignedWorkerIds = new Set<number>()
-      for (const site of activeSites) {
-        const monthKey = `${site.id}_${currentYm}`
-        const mAssign = main.massign[monthKey]
-        const dAssign = main.assign[site.id]
-        const workerIds = mAssign?.workers || dAssign?.workers || []
-        for (const wid of workerIds) assignedWorkerIds.add(wid)
-      }
-
-      const workersWithEntry = new Set<number>()
-      for (const [key, entry] of Object.entries(att.d)) {
-        if (!entry) continue
-        const pk = parseDKey(key)
-        const day = parseInt(pk.day)
-        const wid = parseInt(pk.wid)
-        if (day === today && (entry as unknown as Record<string, unknown>).w !== undefined) {
-          workersWithEntry.add(wid)
-        }
-      }
-
-      const noEntryWorkers = activeWorkers.filter(
-        w => assignedWorkerIds.has(w.id) && !workersWithEntry.has(w.id)
-      )
-
-      if (noEntryWorkers.length > 0) {
-        const noEntryNames = noEntryWorkers.map(w => w.name)
-        notifications.push({
-          id: 'no-attendance',
-          icon: '\u274C',
-          message: `出面未入力: 本日${noEntryWorkers.length}名の出面が未入力です`,
-          type: 'error',
-          count: noEntryWorkers.length,
-          messengerText: `⚠️ 本日の出面がまだ入力されていません。\nスマホから入力をお願いします。\n\nHôm nay chưa nhập chấm công. Vui lòng nhập trên điện thoại.\n\n未入力 / Chưa nhập: ${noEntryNames.join(', ')}`,
-        })
-      }
-    } catch (e) {
-      console.error('Attendance check error:', e)
-    }
-
-    // 5. Evaluation due notifications (入社日基準の評価時期アラート)
+// 5. Evaluation due notifications (入社日基準の評価時期アラート)
     try {
       const foreignWorkers = activeWorkers.filter(w => w.visa && w.visa !== 'none')
       for (const w of foreignWorkers) {
@@ -389,7 +345,7 @@ export async function GET(request: NextRequest) {
     const filtered = notifications.filter(n => {
       if (role === 'admin') return true
       if (role === 'approver') {
-        return ['unsigned-calendar', 'calendar-deadline', 'no-attendance', 'month-unlocked-hibi', 'month-unlocked-hfu'].includes(n.id) || n.id.startsWith('pl-grant') || n.id.startsWith('evaluation-due')
+        return ['unsigned-calendar', 'calendar-deadline', 'month-unlocked-hibi', 'month-unlocked-hfu'].includes(n.id) || n.id.startsWith('pl-grant') || n.id.startsWith('evaluation-due')
       }
       if (role === 'foreman') {
         return n.id === 'calendar-deadline'
