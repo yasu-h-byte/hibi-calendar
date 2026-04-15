@@ -36,7 +36,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
   // 管理
   { label: '有給管理', icon: '🌴', href: '/leave', section: '管理', roles: ['admin', 'approver', 'jimu'] },
   { label: '評価管理', icon: '📋', href: '/evaluation', section: '管理', roles: ['admin', 'approver'] },
-  { label: '帰国・休暇', icon: '✈️', href: '/home-leave', section: '管理', roles: ['admin', 'approver', 'jimu'] },
+  { label: '帰国・休暇情報', icon: '✈️', href: '/home-leave', section: '管理', roles: ['admin', 'approver', 'jimu'] },
   { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin', 'jimu'] },
   // システム
   { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
