@@ -354,19 +354,23 @@ export default function EvaluationPage() {
         setSaving(false)
         return
       }
+      // 評価者が空の場合は evaluatorIds を送らず、APIのデフォルト動作（職長+政仁+靖仁）に任せる
+      const requestBody: Record<string, unknown> = {
+        action: 'create',
+        workerId: createWorkerId,
+        workerName: worker.name,
+        evaluationDate: new Date().toISOString().slice(0, 10),
+      }
+      if (createEvaluatorIds.length > 0) {
+        requestBody.evaluatorIds = createEvaluatorIds
+      }
       const res = await fetch('/api/evaluation', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-admin-password': password,
         },
-        body: JSON.stringify({
-          action: 'create',
-          workerId: createWorkerId,
-          workerName: worker.name,
-          evaluationDate: new Date().toISOString().slice(0, 10),
-          evaluatorIds: createEvaluatorIds,
-        }),
+        body: JSON.stringify(requestBody),
       })
       if (res.ok) {
         setShowCreateModal(false)
@@ -561,7 +565,20 @@ export default function EvaluationPage() {
           {isAdmin && (
             <div className="flex justify-end">
               <button
-                onClick={() => { setShowCreateModal(true); setCreateEvaluatorIds(apiEvaluators.map(e => e.id)) }}
+                onClick={async () => {
+                  // 最新の評価者リストを取得してからモーダルを開く
+                  const { password } = getAuth()
+                  try {
+                    const res = await fetch('/api/evaluation', { headers: { 'x-admin-password': password } })
+                    if (res.ok) {
+                      const d = await res.json()
+                      const evals = d.evaluators || []
+                      setApiEvaluators(evals)
+                      setCreateEvaluatorIds(evals.map((e: { id: number }) => e.id))
+                    }
+                  } catch { /* ignore */ }
+                  setShowCreateModal(true)
+                }}
                 className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
               >
                 評価セッション作成
@@ -743,7 +760,7 @@ export default function EvaluationPage() {
                   </button>
                   <button
                     onClick={handleCreateSession}
-                    disabled={!createWorkerId || createEvaluatorIds.length === 0 || saving}
+                    disabled={!createWorkerId || saving}
                     className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
                   >
                     {saving ? '作成中...' : '作成する'}
