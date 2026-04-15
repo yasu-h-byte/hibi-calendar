@@ -84,5 +84,19 @@ service cloud.firestore {
     match /attendanceApprovals/{docId} {
       allow read, write: if true;
     }
+
+    // ────────────────────────────────────────
+    //  HR評価データ
+    // ────────────────────────────────────────
+    match /evaluations/{docId} {
+      allow read, write: if true;
+    }
+
+    // ────────────────────────────────────────
+    //  アクティビティログ
+    // ────────────────────────────────────────
+    match /activityLog/{docId} {
+      allow read, write: if true;
+    }
   }
 }
