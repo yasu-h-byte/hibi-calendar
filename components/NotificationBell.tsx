@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { fetchWithAuth, postJson } from '@/lib/api-client'
+import { getAuthPasswordSync } from '@/lib/hooks/useAuthPassword'
 
 interface NotificationAction {
   type: string
@@ -29,21 +31,12 @@ export default function NotificationBell({ role }: { role: string }) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
-  const getPassword = () => {
-    const stored = localStorage.getItem('hibi_auth')
-    if (!stored) return null
-    try { return JSON.parse(stored).password } catch { return null }
-  }
-
   const fetchNotifications = useCallback(async () => {
-    const password = getPassword()
-    if (!password) return
+    if (!getAuthPasswordSync()) return
 
     setLoading(true)
     try {
-      const res = await fetch(`/api/notifications?role=${role}`, {
-        headers: { 'x-admin-password': password },
-      })
+      const res = await fetchWithAuth(`/api/notifications?role=${role}`)
       if (res.ok) {
         const data = await res.json()
         setNotifications(data.notifications || [])
@@ -75,8 +68,7 @@ export default function NotificationBell({ role }: { role: string }) {
 
   const handleAction = async (n: Notification) => {
     if (!n.action || acting) return
-    const password = getPassword()
-    if (!password) return
+    if (!getAuthPasswordSync()) return
 
     const a = n.action
     if (!confirm(`${a.grantDays}日を付与し、繰越${a.carryOver}日を設定します。よろしいですか？`)) return
@@ -84,17 +76,13 @@ export default function NotificationBell({ role }: { role: string }) {
     setActing(n.id)
     try {
       const fy = a.grantDate.slice(0, 4)
-      const res = await fetch('/api/leave', {
-        method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'grant',
-          workerId: a.workerId,
-          fy,
-          grantDays: a.grantDays,
-          grantDate: a.grantDate,
-          carryOver: a.carryOver,
-        }),
+      const res = await postJson('/api/leave', {
+        action: 'grant',
+        workerId: a.workerId,
+        fy,
+        grantDays: a.grantDays,
+        grantDate: a.grantDate,
+        carryOver: a.carryOver,
       })
       if (res.ok) {
         // 成功 → 通知を再取得

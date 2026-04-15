@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth, postJson } from '@/lib/api-client'
 
 interface Subcon {
   id: string; name: string; type: string; rate: number; otRate: number; note: string
@@ -13,7 +15,7 @@ interface SiteMinimal {
 const EMPTY_FORM = { name: '', type: '鳶業者', rate: '', otRate: '', note: '' }
 
 export default function SubconsPage() {
-  const [password, setPassword] = useState('')
+  const { ready } = useAuthPassword()
   const [subcons, setSubcons] = useState<Subcon[]>([])
   const [subconSites, setSubconSites] = useState<Record<string, string[]>>({})
   const [subconRates, setSubconRates] = useState<Record<string, Record<string, { rate?: number; otRate?: number }>>>({})
@@ -25,20 +27,11 @@ export default function SubconsPage() {
   const [siteRateForm, setSiteRateForm] = useState<Record<string, string>>({}) // siteId -> rate string
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    const stored = localStorage.getItem('hibi_auth')
-    if (stored) setPassword(JSON.parse(stored).password)
-  }, [])
-
-  const headers = useCallback(() => ({
-    'x-admin-password': password, 'Content-Type': 'application/json',
-  }), [password])
-
   const fetchData = useCallback(async () => {
-    if (!password) return
+    if (!ready) return
     setLoading(true)
     try {
-      const res = await fetch('/api/subcons', { headers: { 'x-admin-password': password } })
+      const res = await fetchWithAuth('/api/subcons')
       if (res.ok) {
         const data = await res.json()
         setSubcons(data.subcons || [])
@@ -47,7 +40,7 @@ export default function SubconsPage() {
         setSites(data.sites || [])
       }
     } finally { setLoading(false) }
-  }, [password])
+  }, [ready])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -75,12 +68,11 @@ export default function SubconsPage() {
       const body = editId
         ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note }
         : { action: 'add', ...form }
-      const res = await fetch('/api/subcons', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+      const res = await postJson('/api/subcons', body)
       if (!res.ok) { alert('保存に失敗しました'); setSaving(false); return }
 
       // 編集モードで現場別単価が入力されている場合、updateSiteRates を呼ぶ
       if (editId) {
-        // 現在の現場別単価と比較して、差分があれば更新
         const siteRatesPayload: Record<string, number | null> = {}
         const assignedSites = subconSites[editId] || []
         for (const siteId of assignedSites) {
@@ -89,10 +81,8 @@ export default function SubconsPage() {
           siteRatesPayload[siteId] = numVal > 0 ? numVal : null
         }
         if (Object.keys(siteRatesPayload).length > 0) {
-          await fetch('/api/subcons', {
-            method: 'POST',
-            headers: headers(),
-            body: JSON.stringify({ action: 'updateSiteRates', subconId: editId, siteRates: siteRatesPayload }),
+          await postJson('/api/subcons', {
+            action: 'updateSiteRates', subconId: editId, siteRates: siteRatesPayload,
           })
         }
       }
@@ -103,7 +93,7 @@ export default function SubconsPage() {
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`${name} を削除しますか？`)) return
-    await fetch('/api/subcons', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'delete', id }) })
+    await postJson('/api/subcons', { action: 'delete', id })
     fetchData()
   }
 

@@ -1,6 +1,10 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
+import { fetchWithAuth, postJson } from '@/lib/api-client'
+import { daysBetween, todayIso } from '@/lib/date-utils'
+import { LoadingState } from '@/components/ui'
 
 interface HomeLeave {
   id: string
@@ -22,36 +26,9 @@ interface Worker {
 
 const REASONS = ['一時帰国', 'ビザ更新帰国', 'その他'] as const
 
-function getAuthPassword(): string {
-  try {
-    const stored = localStorage.getItem('hibi_auth')
-    if (stored) {
-      const { password } = JSON.parse(stored)
-      return password
-    }
-  } catch { /* ignore */ }
-  return ''
-}
-
-function daysBetween(a: string, b: string): number {
-  const da = new Date(a + 'T00:00:00')
-  const db = new Date(b + 'T00:00:00')
-  return Math.ceil((db.getTime() - da.getTime()) / (1000 * 60 * 60 * 24))
-}
-
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00')
-  return `${d.getMonth() + 1}/${d.getDate()}`
-}
-
 function formatDateFull(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00')
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
-}
-
-function todayStr(): string {
-  const d = new Date()
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
 }
 
 export default function HomeLeavePage() {
@@ -78,14 +55,14 @@ export default function HomeLeavePage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  const pw = getAuthPassword()
+  const { ready } = useAuthPassword()
 
   const fetchData = useCallback(async () => {
+    if (!ready) return
     try {
-      const headers = { 'x-admin-password': pw }
       const [hlRes, wRes] = await Promise.all([
-        fetch('/api/home-leave', { headers }),
-        fetch('/api/workers', { headers }),
+        fetchWithAuth('/api/home-leave'),
+        fetchWithAuth('/api/workers'),
       ])
       if (hlRes.ok) {
         const d = await hlRes.json()
@@ -106,11 +83,11 @@ export default function HomeLeavePage() {
       }
     } catch { /* ignore */ }
     setLoading(false)
-  }, [pw])
+  }, [ready])
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const today = todayStr()
+  const today = todayIso()
 
   const currentLeaves = homeLeaves
     .filter(h => h.startDate <= today && today <= h.endDate)
@@ -138,30 +115,21 @@ export default function HomeLeavePage() {
     if (!worker) return
 
     setSaving(true)
-    try {
-      const res = await fetch('/api/home-leave', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
-        body: JSON.stringify({
-          action: 'add',
-          workerId: worker.id,
-          workerName: worker.name,
-          startDate: formStartDate,
-          endDate: formEndDate,
-          reason: formReason,
-          note: formNote || undefined,
-        }),
-      })
-      if (res.ok) {
-        resetForm()
-        setFormOpen(false)
-        await fetchData()
-      } else {
-        const err = await res.json()
-        alert(err.error || 'エラーが発生しました')
-      }
-    } catch {
-      alert('エラーが発生しました')
+    const res = await postJson('/api/home-leave', {
+      action: 'add',
+      workerId: worker.id,
+      workerName: worker.name,
+      startDate: formStartDate,
+      endDate: formEndDate,
+      reason: formReason,
+      note: formNote || undefined,
+    })
+    if (res.ok) {
+      resetForm()
+      setFormOpen(false)
+      await fetchData()
+    } else {
+      alert(res.error || 'エラーが発生しました')
     }
     setSaving(false)
   }
@@ -180,52 +148,37 @@ export default function HomeLeavePage() {
 
   const handleUpdate = async (id: string) => {
     setSaving(true)
-    try {
-      const res = await fetch('/api/home-leave', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
-        body: JSON.stringify({
-          action: 'update',
-          id,
-          startDate: editStartDate,
-          endDate: editEndDate,
-          reason: editReason,
-          note: editNote || undefined,
-        }),
-      })
-      if (res.ok) {
-        setEditingId(null)
-        await fetchData()
-      } else {
-        const err = await res.json()
-        alert(err.error || 'エラーが発生しました')
-      }
-    } catch {
-      alert('エラーが発生しました')
+    const res = await postJson('/api/home-leave', {
+      action: 'update',
+      id,
+      startDate: editStartDate,
+      endDate: editEndDate,
+      reason: editReason,
+      note: editNote || undefined,
+    })
+    if (res.ok) {
+      setEditingId(null)
+      await fetchData()
+    } else {
+      alert(res.error || 'エラーが発生しました')
     }
     setSaving(false)
   }
 
   const handleDelete = async (id: string) => {
     setSaving(true)
-    try {
-      const res = await fetch('/api/home-leave', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
-        body: JSON.stringify({ action: 'delete', id }),
-      })
-      if (res.ok) {
-        setDeleteConfirm(null)
-        await fetchData()
-      }
-    } catch { /* ignore */ }
+    const res = await postJson('/api/home-leave', { action: 'delete', id })
+    if (res.ok) {
+      setDeleteConfirm(null)
+      await fetchData()
+    }
     setSaving(false)
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-gray-500 dark:text-gray-400">読み込み中...</div>
+        <LoadingState />
       </div>
     )
   }
