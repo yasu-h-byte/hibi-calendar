@@ -338,6 +338,79 @@ export async function GET(request: NextRequest) {
       console.error('Calendar deadline check error:', e)
     }
 
+    // 7. 在留期限アラート（90日以内）
+    try {
+      const foreignWorkers = activeWorkers.filter(w => w.visa && w.visa !== 'none' && w.visa !== '')
+      const todayDate = new Date()
+      todayDate.setHours(0, 0, 0, 0)
+      const visaAlerts: string[] = []
+      for (const w of foreignWorkers) {
+        const expiry = (w as unknown as { visaExpiry?: string }).visaExpiry
+        if (!expiry) continue
+        const exp = new Date(expiry + 'T00:00:00')
+        const diff = Math.floor((exp.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
+        if (diff <= 90 && diff >= 0) {
+          visaAlerts.push(`${w.name}（残${diff}日）`)
+        } else if (diff < 0) {
+          visaAlerts.push(`${w.name}（期限切れ）`)
+        }
+      }
+      if (visaAlerts.length > 0) {
+        notifications.push({
+          id: 'visa-expiry',
+          icon: '🛂',
+          message: `在留期限: ${visaAlerts.join('、')}`,
+          type: visaAlerts.some(a => a.includes('期限切れ')) ? 'error' : 'warning',
+          count: visaAlerts.length,
+        })
+      }
+    } catch (e) {
+      console.error('Visa expiry check error:', e)
+    }
+
+    // 8. 承認待ち有給申請
+    try {
+      const lrQuery = query(collection(db, 'leaveRequests'), where('status', '==', 'pending'))
+      const lrSnaps = await getDocs(lrQuery)
+      if (lrSnaps.size > 0) {
+        notifications.push({
+          id: 'pending-leave-requests',
+          icon: '📝',
+          message: `有給承認待ち: ${lrSnaps.size}件`,
+          type: 'info',
+          count: lrSnaps.size,
+        })
+      }
+    } catch (e) {
+      console.error('Leave request check error:', e)
+    }
+
+    // 9. お知らせ（最新1件のみ）
+    try {
+      const annSnap = await getDocs(collection(db, 'announcements'))
+      const anns: { title: string; publishedAt: string }[] = []
+      annSnap.forEach(d => {
+        const data = d.data()
+        if (data.publishedAt) anns.push({ title: data.title, publishedAt: data.publishedAt })
+      })
+      anns.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+      const recent = anns[0]
+      if (recent) {
+        const pubDate = new Date(recent.publishedAt)
+        const daysSince = Math.floor((now.getTime() - pubDate.getTime()) / (1000 * 60 * 60 * 24))
+        if (daysSince <= 7) {
+          notifications.push({
+            id: 'announcement',
+            icon: '📢',
+            message: `お知らせ: ${recent.title}`,
+            type: 'info',
+          })
+        }
+      }
+    } catch (e) {
+      console.error('Announcement check error:', e)
+    }
+
     // ── ロール別フィルタ ──
     // admin: 全通知を表示
     // approver: カレンダー系 + 署名系（PL付与アクションは除く）
