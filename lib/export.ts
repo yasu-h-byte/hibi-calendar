@@ -182,98 +182,215 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
 //  2. HFU向け出面一覧
 // ────────────────────────────────────────
 
-export function generateHfuAttendance(data: HibiAttendanceData): XLSX.WorkBook {
-  const { ym, workers, attD, sites } = data
+/**
+ * HFU向け出面一覧（キャシュモ向け: 時間ベース変換付き）
+ *
+ * Sheet 1: 出面一覧（従来形式: 出勤1/残業h — 入力確認用）
+ * Sheet 2: 勤務時間一覧（時間変換済み: 実労働h/所定h/週番号/法定上限 — 給与計算用）
+ */
+export interface HfuAttendanceExportData extends HibiAttendanceData {
+  /** カレンダーの日ごとの種別（siteId → { "1": "work", "2": "off", ... }） */
+  calendarDays?: Record<string, Record<string, string>>
+}
+
+export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkBook {
+  const { ym, workers, attD, sites, calendarDays } = data
   const numDays = daysInMonth(ym)
   const wb = XLSX.utils.book_new()
 
   const hfuWorkers = workers.filter(w => (w.org === 'HFU' || w.org === 'hfu') && !w.retired)
 
-  const headers = ['名前', '区分']
-  for (let d = 1; d <= numDays; d++) {
-    headers.push(dayLabel(ym, d))
-  }
-  headers.push('合計')
+  // ── Sheet 1: 従来形式（出面確認用） ──
+  {
+    const headers = ['名前', '区分']
+    for (let d = 1; d <= numDays; d++) headers.push(dayLabel(ym, d))
+    headers.push('合計')
 
-  const titleRow = [`HFU 出面一覧 ${ymLabel(ym)}`]
-  const rows: (string | number)[][] = [titleRow, headers]
+    const titleRow = [`HFU 出面一覧 ${ymLabel(ym)}`]
+    const rows: (string | number)[][] = [titleRow, headers]
 
-  let totalWork = 0
-  let totalOT = 0
-  let totalPL = 0
-  const dailyWorkTotals: number[] = new Array(numDays).fill(0)
-  const dailyOTTotals: number[] = new Array(numDays).fill(0)
+    let totalWork = 0, totalOT = 0
+    const dailyWorkTotals: number[] = new Array(numDays).fill(0)
+    const dailyOTTotals: number[] = new Array(numDays).fill(0)
 
-  for (const w of hfuWorkers) {
-    const workRow: (string | number)[] = [w.name, '出勤']
-    const otRow: (string | number)[] = ['', '残業h']
+    for (const w of hfuWorkers) {
+      const workRow: (string | number)[] = [w.name, '出勤']
+      const otRow: (string | number)[] = ['', '残業h']
+      let wWork = 0, wOT = 0
 
-    let wWork = 0
-    let wOT = 0
-    let wPL = 0
+      for (let d = 1; d <= numDays; d++) {
+        const dd = String(d)
+        let dayWork: string | number = ''
+        let dayOT = 0
+        let isPL = false
 
-    for (let d = 1; d <= numDays; d++) {
-      const dd = String(d)
-      let dayWork: string | number = ''
-      let dayOT: number = 0
-      let isPL = false
-
-      for (const site of sites) {
-        const key = `${site.id}_${w.id}_${ym}_${dd}`
-        const entry = attD[key]
-        if (!entry) continue
-
-        if (entry.p) { isPL = true; break }
-        if (entry.w && entry.w > 0) {
-          dayWork = entry.w
-          if (entry.o && entry.o > 0) dayOT += entry.o
+        for (const site of sites) {
+          const key = `${site.id}_${w.id}_${ym}_${dd}`
+          const entry = attD[key]
+          if (!entry) continue
+          if (entry.p) { isPL = true; break }
+          if (entry.w && entry.w > 0) {
+            dayWork = entry.w
+            if (entry.o && entry.o > 0) dayOT += entry.o
+          }
         }
+
+        if (isPL) { dayWork = '有' }
+        else if (typeof dayWork === 'number' && dayWork > 0) { wWork += dayWork; dailyWorkTotals[d - 1] += dayWork }
+        dailyOTTotals[d - 1] += dayOT; wOT += dayOT
+        workRow.push(dayWork || ''); otRow.push(dayOT > 0 ? dayOT : '')
       }
 
-      if (isPL) {
-        dayWork = '有'
-        wPL += 1
-      } else if (typeof dayWork === 'number' && dayWork > 0) {
-        wWork += dayWork
-        dailyWorkTotals[d - 1] += dayWork
-      }
-
-      dailyOTTotals[d - 1] += dayOT
-      wOT += dayOT
-      workRow.push(dayWork || '')
-      otRow.push(dayOT > 0 ? dayOT : '')
+      workRow.push(wWork > 0 ? Math.round(wWork * 10) / 10 : '')
+      otRow.push(wOT > 0 ? Math.round(wOT * 10) / 10 : '')
+      totalWork += wWork; totalOT += wOT
+      rows.push(workRow); rows.push(otRow)
     }
 
-    workRow.push(wWork > 0 ? Math.round(wWork * 10) / 10 : '')
-    otRow.push(wOT > 0 ? Math.round(wOT * 10) / 10 : '')
+    const footerWork: (string | number)[] = ['合計', '出勤']
+    const footerOT: (string | number)[] = ['', '残業h']
+    for (let d = 0; d < numDays; d++) {
+      footerWork.push(dailyWorkTotals[d] > 0 ? Math.round(dailyWorkTotals[d] * 10) / 10 : '')
+      footerOT.push(dailyOTTotals[d] > 0 ? Math.round(dailyOTTotals[d] * 10) / 10 : '')
+    }
+    footerWork.push(Math.round(totalWork * 10) / 10)
+    footerOT.push(Math.round(totalOT * 10) / 10)
+    rows.push(footerWork); rows.push(footerOT)
 
-    totalWork += wWork
-    totalOT += wOT
-    totalPL += wPL
-    rows.push(workRow)
-    rows.push(otRow)
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 2 } }]
+    const colWidths = [14, 6]; for (let d = 0; d < numDays; d++) colWidths.push(7); colWidths.push(6)
+    setColWidths(ws, colWidths)
+    XLSX.utils.book_append_sheet(wb, ws, '出面一覧')
   }
 
-  const footerWork: (string | number)[] = ['合計', '出勤']
-  const footerOT: (string | number)[] = ['', '残業h']
-  for (let d = 0; d < numDays; d++) {
-    footerWork.push(dailyWorkTotals[d] > 0 ? Math.round(dailyWorkTotals[d] * 10) / 10 : '')
-    footerOT.push(dailyOTTotals[d] > 0 ? Math.round(dailyOTTotals[d] * 10) / 10 : '')
+  // ── Sheet 2: 勤務時間一覧（キャシュモ向け: 時間変換済み） ──
+  {
+    const ymY = parseInt(ym.slice(0, 4))
+    const ymM = parseInt(ym.slice(4, 6))
+    const calDays = new Date(ymY, ymM, 0).getDate()
+    const legalLimit = Math.round(calDays * 40 / 7 * 10) / 10
+
+    // 週番号: 月の1日を含む週をW1とし、日曜始まりで区切る
+    const weekNums: number[] = []
+    for (let d = 1; d <= numDays; d++) {
+      const dt = new Date(ymY, ymM - 1, d)
+      // 月初の日曜からの経過週を計算
+      const firstDay = new Date(ymY, ymM - 1, 1)
+      const firstDow = firstDay.getDay() // 0=日
+      const dayOffset = (d - 1) + firstDow
+      weekNums.push(Math.floor(dayOffset / 7) + 1)
+    }
+
+    // 所定時間: カレンダーから取得。複数現場の場合は最初に見つかったものを使用
+    const prescribedHours: number[] = []
+    for (let d = 1; d <= numDays; d++) {
+      let isWorkDay = false
+      if (calendarDays) {
+        for (const siteId of Object.keys(calendarDays)) {
+          const dayType = calendarDays[siteId]?.[String(d)]
+          if (dayType === 'work') { isWorkDay = true; break }
+        }
+      }
+      prescribedHours.push(isWorkDay ? 7 : 0)
+    }
+    const totalPrescribed = prescribedHours.reduce((s, h) => s + h, 0)
+
+    const headers = ['名前', '区分']
+    for (let d = 1; d <= numDays; d++) headers.push(dayLabel(ym, d))
+    headers.push('合計', '法定上限')
+
+    const titleRow = [`HFU 勤務時間一覧 ${ymLabel(ym)}（変形労働時間制）`]
+    const rows: (string | number)[][] = [titleRow, headers]
+
+    // 所定時間行
+    const prescRow: (string | number)[] = ['', '所定(h)']
+    for (let d = 0; d < numDays; d++) prescRow.push(prescribedHours[d] > 0 ? prescribedHours[d] : '')
+    prescRow.push(totalPrescribed, legalLimit)
+    rows.push(prescRow)
+
+    // 週番号行
+    const weekRow: (string | number)[] = ['', '週']
+    for (let d = 0; d < numDays; d++) weekRow.push(`W${weekNums[d]}`)
+    weekRow.push('', '')
+    rows.push(weekRow)
+
+    // 空行
+    rows.push([])
+
+    // 各ワーカー
+    for (const w of hfuWorkers) {
+      const hoursRow: (string | number)[] = [w.name, '実労働(h)']
+      const otRow: (string | number)[] = ['', 'うち残業(h)']
+      const statusRow: (string | number)[] = ['', '出欠']
+
+      let totalHours = 0
+      let totalOT = 0
+      let plCount = 0
+
+      for (let d = 1; d <= numDays; d++) {
+        const dd = String(d)
+        let dayHours = 0
+        let dayOT = 0
+        let status = ''
+        let isPL = false
+
+        for (const site of sites) {
+          const key = `${site.id}_${w.id}_${ym}_${dd}`
+          const entry = attD[key]
+          if (!entry) continue
+          if (entry.p) { isPL = true; break }
+          if (entry.w && entry.w > 0) {
+            // w=1 → 7h勤務、w=0.6 → 4.2h（補償）
+            dayHours = entry.w === 0.6 ? Math.round(7 * 0.6 * 10) / 10 : 7
+            dayOT = entry.o || 0
+            status = entry.w === 0.6 ? '補' : dayOT > 0 ? '出+残' : '出'
+          }
+        }
+
+        if (isPL) {
+          status = '有給'
+          plCount++
+          hoursRow.push('')
+          otRow.push('')
+        } else if (dayHours > 0) {
+          const actualH = Math.round((dayHours + dayOT) * 10) / 10
+          hoursRow.push(actualH)
+          otRow.push(dayOT > 0 ? dayOT : '')
+          totalHours += actualH
+          totalOT += dayOT
+        } else {
+          hoursRow.push('')
+          otRow.push('')
+        }
+        statusRow.push(status)
+      }
+
+      hoursRow.push(Math.round(totalHours * 10) / 10, '')
+      otRow.push(totalOT > 0 ? Math.round(totalOT * 10) / 10 : '', '')
+      statusRow.push(plCount > 0 ? `有給${plCount}日` : '', '')
+
+      rows.push(hoursRow)
+      rows.push(otRow)
+      rows.push(statusRow)
+      rows.push([]) // ワーカー間の空行
+    }
+
+    // 備考行
+    rows.push([])
+    rows.push(['【計算方法】'])
+    rows.push(['', '1日の所定: 7時間（8:00-17:00、休憩2時間）'])
+    rows.push(['', '法定上限: 暦日数 × 40 ÷ 7 =', legalLimit, 'h'])
+    rows.push(['', '残業判定: 1日単位(8h超) → 1週単位(40h超) → 1ヶ月単位(法定上限超) の3段階'])
+    rows.push(['', '※ 「実労働(h)」= 所定7h + 残業h で変換済み。「うち残業(h)」は出面入力の残業欄の値。'])
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 3 } }]
+    const colWidths = [14, 10]; for (let d = 0; d < numDays; d++) colWidths.push(7); colWidths.push(8, 8)
+    setColWidths(ws, colWidths)
+    XLSX.utils.book_append_sheet(wb, ws, '勤務時間一覧')
   }
-  footerWork.push(Math.round(totalWork * 10) / 10)
-  footerOT.push(Math.round(totalOT * 10) / 10)
-  rows.push(footerWork)
-  rows.push(footerOT)
 
-  const ws = XLSX.utils.aoa_to_sheet(rows)
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 2 } }]
-
-  const colWidths = [14, 6]
-  for (let d = 0; d < numDays; d++) colWidths.push(7)
-  colWidths.push(6)
-  setColWidths(ws, colWidths)
-
-  XLSX.utils.book_append_sheet(wb, ws, '出面一覧')
   return wb
 }
 

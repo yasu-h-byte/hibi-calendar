@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
+import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import {
   generateHibiAttendance,
   generateHfuAttendance,
@@ -67,6 +68,13 @@ export async function GET(request: NextRequest) {
       }
 
       case 'hfu': {
+        // カレンダーデータを取得（所定日/休日の判定に使用）
+        const ym7 = `${ymStr.slice(0, 4)}-${ymStr.slice(4, 6)}`
+        const calendars = await getMonthlyCalendars(ym7)
+        const calendarDaysMap: Record<string, Record<string, string>> = {}
+        for (const cal of calendars) {
+          if (cal.days) calendarDaysMap[cal.siteId] = cal.days
+        }
         const wb = generateHfuAttendance({
           ym: ymStr,
           workers: main.workers,
@@ -74,6 +82,7 @@ export async function GET(request: NextRequest) {
           sites: activeSites,
           assign: main.assign,
           massign: main.massign,
+          calendarDays: calendarDaysMap,
         })
         buffer = workbookToBuffer(wb)
         filename = `HFU_出面一覧_${ymStr}.xlsx`
