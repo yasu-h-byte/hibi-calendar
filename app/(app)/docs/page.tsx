@@ -12,10 +12,10 @@ export default function DocsPage() {
     {
       category: '業務マニュアル',
       items: [
-        { title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・有給管理・帳票出力', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-12' },
-        { title: '政仁さん向けマニュアル', desc: '出面入力・承認・就業カレンダー・現場マスタ・原価収益', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-12' },
-        { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成（5月本格運用対応）', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-13' },
-        { title: '評価管理マニュアル', desc: '複数評価者による評価の入力・承認・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-04-14' },
+        { title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・有給管理・帳票出力', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-16' },
+        { title: '政仁さん向けマニュアル', desc: '出面入力・承認・就業カレンダー・現場マスタ・原価収益・出向管理', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-16' },
+        { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成・通知ベル', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-16' },
+        { title: '評価管理マニュアル', desc: '複数評価者による評価の入力・承認・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-04-16' },
         { title: '有給データ移行手順', desc: '旧スプレッドシートからの有給データ移行', url: '/manual-yukyu.html', icon: '📙', updated: '2026-04-08' },
         { title: 'QRコードカード（印刷用）', desc: '全スタッフの出勤入力用QRコード。印刷して配布', url: '/qr-cards.html', icon: '📱', updated: '2026-04-08' },
       ],
@@ -23,7 +23,7 @@ export default function DocsPage() {
     {
       category: 'システムガイド',
       items: [
-        { title: '運用ガイド', desc: '3層構造の給与計算・変形労働時間制の制度設計とシステム運用の手引き', url: '/guide', icon: '📖', internal: true, updated: '2026-04-13' },
+        { title: '運用ガイド', desc: '3層構造の給与計算・変形労働時間制・出向・Excel出力・通知ベルの手引き', url: '/guide', icon: '📖', internal: true, updated: '2026-04-16' },
       ],
     },
   ]

@@ -22,7 +22,27 @@
 | siteWorkDays | map | 現場別月別所定日数 |
 | locks | map | 月締め状態 |
 | defaultRates | map | デフォルト単価 |
+| mforeman | map | 月別代理職長 |
 | nextWorkerId | number | 次のワーカーID |
+
+#### RawWorker フィールド（workers 配列の各要素）
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| id | number | ワーカーID |
+| name | string | 名前 |
+| org | string | 所属（hibi / hfu） |
+| visa | string | 在留資格（none / jisshu1〜3 / tokutei1〜2） |
+| job | string | 職種（yakuin / shokucho / tobi / doko / jimu） |
+| rate | number | 日額単価 |
+| hourlyRate | number? | 時給（外国人用） |
+| otMul | number | 残業倍率（デフォルト1.25） |
+| hireDate | string | 入社日（YYYY-MM-DD） |
+| retired | string? | 退職日（YYYY-MM-DD） |
+| salary | number? | 月給 |
+| visaExpiry | string? | 在留期限（YYYY-MM-DD） |
+| dispatchTo | string? | 出向先名（空=通常勤務、値あり=出向中） |
+| dispatchFrom | string? | 出向開始月（YYYY-MM、空=全期間出向扱い） |
 
 ### demmen/att_YYYYMM
 月別出面データ。
@@ -50,6 +70,12 @@
 
 ### activityLog/{auto}
 アクティビティログ。
+
+### announcements/{auto}
+お知らせ（ダッシュボード表示用）。
+
+### evaluations/{workerId_evaluationDate}
+評価データ（複数評価者対応）。
 
 ## ロール判定
 - workerId === 1 → approver（政仁さん、ハードコード）

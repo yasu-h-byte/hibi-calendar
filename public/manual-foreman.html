@@ -82,7 +82,7 @@
 <div class="box">
 <strong>ログインすると使える画面：</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li><strong>ダッシュボード</strong> — 本日の稼働状況・カレンダー準備の確認</li>
+  <li><strong>ダッシュボード</strong> — お知らせ・本日の稼働状況・今月サマリー・日別チャート</li>
   <li><strong>出面入力</strong> — 全現場のスタッフの出勤・残業を入力・確認</li>
   <li><strong>就業カレンダー</strong> — 翌月の出勤日/休日を設定して提出</li>
   <li><strong>現場マスタ</strong> — 現場情報の確認</li>
@@ -327,14 +327,27 @@
 
 <table>
 <tr><th>項目</th><th>内容</th></tr>
+<tr><td><strong>お知らせ</strong></td><td>カレンダー準備状況・月締め状況などの通知</td></tr>
 <tr><td><strong>本日の稼働状況</strong></td><td>今日の出勤人数・現場別の配置状況</td></tr>
-<tr><td><strong>カレンダー準備</strong></td><td>各現場の翌月カレンダーの作成・提出・承認の進捗</td></tr>
-<tr><td><strong>出勤率</strong></td><td>ベトナム人スタッフの出勤率（直近の傾向）</td></tr>
+<tr><td><strong>今月サマリー</strong></td><td>人工数・売上の月間集計</td></tr>
+<tr><td><strong>日別稼働人数チャート</strong></td><td>日ごとの稼働人数の推移グラフ</td></tr>
 </table>
 
 <h3>6-2. 現場マスタ・外注先マスタ</h3>
 
 <p>サイドバーから「現場マスタ」「外注先マスタ」を開くと、現場情報（名称・工期・単価）や外注先情報を確認できます。</p>
+
+<h3>6-3. 通知ベル</h3>
+
+<p>ヘッダー右上の<strong>ベルアイコン</strong>に通知が届きます。職長に関係する主な通知は以下のとおりです。</p>
+
+<table>
+<tr><th>通知</th><th>意味</th></tr>
+<tr><td>在留期限アラート</td><td>スタッフの在留期限が近づいている（180日/90日/30日/期限切れ）</td></tr>
+<tr><td>有給承認待ち</td><td>スタッフからの有給申請が未処理</td></tr>
+<tr><td>お知らせ</td><td>システムからの重要なお知らせ（カレンダー準備状況・月締め状況など）</td></tr>
+<tr><td>就業カレンダー未署名</td><td>スタッフがまだカレンダーに署名していない</td></tr>
+</table>
 
 <!-- ================================================ -->
 <h2 id="sec7">7. 毎日・毎月のルーティン</h2>
@@ -344,7 +357,7 @@
 <div class="box">
 <table>
 <tr><th>タイミング</th><th>作業</th><th>画面</th><th>所要時間</th></tr>
-<tr><td><strong>朝（現場到着後）</strong></td><td>① ダッシュボードで今日の出勤予定を確認<br>② 出面入力画面で日本人社員・外注先の出勤を入力</td><td>ダッシュボード<br>出面入力</td><td>5〜10分</td></tr>
+<tr><td><strong>朝（現場到着後）</strong></td><td>① ダッシュボードで今日の稼働状況を確認<br>② 出面入力画面で日本人社員・外注先の出勤を入力</td><td>ダッシュボード<br>出面入力</td><td>5〜10分</td></tr>
 <tr><td><strong>夕方（作業終了後）</strong></td><td>① ベトナム人スタッフのスマホ入力を確認・修正<br>② 残業があれば残業時間を入力<br>③ スマホ画面で<strong>「✅ この日を確認する」</strong>を押す</td><td>スマホ職長画面<br>or 出面入力</td><td>5〜10分</td></tr>
 </table>
 </div>
@@ -379,7 +392,7 @@
 </div>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-13</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-16</p>
 
 </body>
 </html>
