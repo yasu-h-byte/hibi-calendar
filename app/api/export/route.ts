@@ -53,29 +53,16 @@ export async function GET(request: NextRequest) {
     let filename: string
 
     switch (type) {
-      case 'hibi': {
-        const wb = generateHibiAttendance({
-          ym: ymStr,
-          workers: main.workers,
-          attD,
-          sites: activeSites,
-          assign: main.assign,
-          massign: main.massign,
-        })
-        buffer = workbookToBuffer(wb)
-        filename = `日比建設_出面一覧_${ymStr}.xlsx`
-        break
-      }
-
+      case 'hibi':
       case 'hfu': {
-        // カレンダーデータを取得（所定日/休日の判定に使用）
+        // カレンダーデータを取得（所定日/休日の判定に使用 — 両方で共通）
         const ym7 = `${ymStr.slice(0, 4)}-${ymStr.slice(4, 6)}`
         const calendars = await getMonthlyCalendars(ym7)
         const calendarDaysMap: Record<string, Record<string, string>> = {}
         for (const cal of calendars) {
           if (cal.days) calendarDaysMap[cal.siteId] = cal.days
         }
-        const wb = generateHfuAttendance({
+        const exportData = {
           ym: ymStr,
           workers: main.workers,
           attD,
@@ -83,9 +70,16 @@ export async function GET(request: NextRequest) {
           assign: main.assign,
           massign: main.massign,
           calendarDays: calendarDaysMap,
-        })
-        buffer = workbookToBuffer(wb)
-        filename = `HFU_出面一覧_${ymStr}.xlsx`
+        }
+        if (type === 'hibi') {
+          const wb = generateHibiAttendance(exportData)
+          buffer = workbookToBuffer(wb)
+          filename = `日比建設_出面一覧_${ymStr}.xlsx`
+        } else {
+          const wb = generateHfuAttendance(exportData)
+          buffer = workbookToBuffer(wb)
+          filename = `HFU_出面一覧_${ymStr}.xlsx`
+        }
         break
       }
 
