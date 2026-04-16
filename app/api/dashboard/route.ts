@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
+import { db } from '@/lib/firebase'
+import { collection, query, where, getDocs } from 'firebase/firestore'
 import {
   compute,
   getMainData,
@@ -905,6 +907,67 @@ export async function GET(request: NextRequest) {
     // Also exclude months with no confirmed billing (billing === 0)
     const filteredMonthlyTrend = monthlyTrend.filter(t => t.equiv > 0 && t.billing > 0)
 
+    // ═══ Action Items (要対応まとめ) ═══
+    // 1. Visa expiry within 90 days
+    const todayDate = new Date()
+    todayDate.setHours(0, 0, 0, 0)
+    const visaExpiryItems: { name: string; daysLeft: number; expiry: string }[] = []
+    for (const w of main.workers) {
+      if (w.retired) continue
+      if (!w.visa || w.visa === 'none' || w.visa === '') continue
+      const expiry = w.visaExpiry
+      if (!expiry) continue
+      const expiryDate = new Date(expiry)
+      if (isNaN(expiryDate.getTime())) continue
+      const daysLeft = Math.ceil((expiryDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysLeft <= 90) {
+        visaExpiryItems.push({ name: w.name, daysLeft, expiry })
+      }
+    }
+    visaExpiryItems.sort((a, b) => a.daysLeft - b.daysLeft)
+
+    // 2. PL 5-day shortfall (法定5日義務)
+    // Use plAlert already computed - check workers with fiveDayShortfall from leave API logic
+    // For simplicity, count workers with grantDays >= 10 and used < 5
+    let plShortfallCount = 0
+    for (const w of main.workers) {
+      if (w.retired) continue
+      const records = main.plData[String(w.id)] || []
+      if (records.length === 0) continue
+      const latest = records[records.length - 1]
+      const isOld = latest.grant != null || latest.adj != null || latest.carry != null
+      const grantDays = isOld ? (latest.grant ?? latest.grantDays ?? 0) : (latest.grantDays ?? 0)
+      if (grantDays < 10) continue // 5日義務は年10日以上付与者のみ
+      const used = (latest.used || 0) + Math.max(latest.adjustment ?? 0, latest.adj ?? 0)
+      if (used < 5) plShortfallCount++
+    }
+
+    // 3. Pending leave requests
+    let pendingLeaveCount = 0
+    try {
+      const pendingQ = query(
+        collection(db, 'leaveRequests'),
+        where('status', '==', 'pending')
+      )
+      const pendingSnap = await getDocs(pendingQ)
+      pendingLeaveCount = pendingSnap.size
+    } catch {
+      // ignore - collection may not exist yet
+    }
+
+    // 4. Calendar progress — calendarProgress is provided as {pending, total}
+    // The dashboard frontend already fetches calendar status via MonthlyChecklist
+    // Here we just provide a placeholder; the frontend will use its own data
+    const calPending = 0
+    const calTotal = 0
+
+    const actionItems = {
+      visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },
+      plShortfall: { count: plShortfallCount },
+      pendingLeaveRequests: { count: pendingLeaveCount },
+      calendarProgress: { pending: calPending, total: calTotal },
+    }
+
     return NextResponse.json({
       kpi,
       sites: sitesArray,
@@ -924,6 +987,7 @@ export async function GET(request: NextRequest) {
       subconAlert,
       yoyComparison,
       subconAnalysis,
+      actionItems,
     })
   } catch (error) {
     console.error('Dashboard API error:', error)

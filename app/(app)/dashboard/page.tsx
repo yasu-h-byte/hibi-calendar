@@ -157,6 +157,13 @@ interface SubconAnalysisRow {
   otRate: number
 }
 
+interface ActionItems {
+  visaExpiry: { count: number; items: { name: string; daysLeft: number; expiry: string }[] }
+  plShortfall: { count: number }
+  pendingLeaveRequests: { count: number }
+  calendarProgress: { pending: number; total: number }
+}
+
 interface DashboardData {
   kpi: KPI
   sites: SiteRow[]
@@ -176,6 +183,7 @@ interface DashboardData {
   subconAlert: SubconAlert | null
   yoyComparison: YoYComparison | null
   subconAnalysis: SubconAnalysisRow[]
+  actionItems?: ActionItems
 }
 
 // ─── Helpers ───
@@ -417,6 +425,78 @@ function MonthlyChecklist({ password }: { password: string }) {
   )
 }
 
+// ─── Action Items Card ───
+
+function ActionItemsCard({ actionItems, calendarPending, calendarTotal }: {
+  actionItems: ActionItems
+  calendarPending: number
+  calendarTotal: number
+}) {
+  // Use calendarPending/calendarTotal from MonthlyChecklist if available, otherwise API data
+  const calPending = calendarPending > 0 ? calendarPending : actionItems.calendarProgress.pending
+  const calTotal = calendarTotal > 0 ? calendarTotal : actionItems.calendarProgress.total
+
+  const items: { label: string; count: number; href: string }[] = []
+
+  if (actionItems.visaExpiry.count > 0) {
+    items.push({ label: `在留期限 ${actionItems.visaExpiry.count}名`, count: actionItems.visaExpiry.count, href: '/workers' })
+  }
+  if (actionItems.plShortfall.count > 0) {
+    items.push({ label: `5日有給義務 ${actionItems.plShortfall.count}名`, count: actionItems.plShortfall.count, href: '/leave' })
+  }
+  if (actionItems.pendingLeaveRequests.count > 0) {
+    items.push({ label: `有給承認待ち ${actionItems.pendingLeaveRequests.count}件`, count: actionItems.pendingLeaveRequests.count, href: '/leave' })
+  }
+  if (calPending > 0 && calTotal > 0) {
+    const notDone = calTotal - (calTotal - calPending)
+    if (notDone > 0) {
+      items.push({ label: `カレンダー未提出 ${notDone}件`, count: notDone, href: '/calendar' })
+    }
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="rounded-xl px-4 py-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-center">
+        <span className="text-sm text-gray-500 dark:text-gray-400">対応が必要な項目はありません</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl px-4 py-3 bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-800/50 shadow-sm">
+      <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-2 flex items-center gap-1.5">
+        <span className="text-orange-500">&#9889;</span> 要対応
+      </h3>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item, i) => (
+          <a key={i} href={item.href}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800/50 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition">
+            <span className="bg-orange-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">{item.count}</span>
+            {item.label.replace(/ \d+[名件]$/, '')}
+            <span className="text-orange-400">&#8250;</span>
+          </a>
+        ))}
+      </div>
+      {/* Visa expiry details */}
+      {actionItems.visaExpiry.items.length > 0 && (
+        <details className="mt-2">
+          <summary className="text-[10px] text-orange-600 dark:text-orange-400 cursor-pointer hover:text-orange-800">
+            在留期限の詳細
+          </summary>
+          <div className="text-[10px] text-gray-600 dark:text-gray-400 mt-1 space-y-0.5">
+            {actionItems.visaExpiry.items.map((v, i) => (
+              <div key={i} className={`flex gap-2 ${v.daysLeft <= 30 ? 'text-red-600 font-bold' : v.daysLeft <= 60 ? 'text-orange-600' : 'text-gray-600 dark:text-gray-400'}`}>
+                <span>{v.name}</span>
+                <span>残{v.daysLeft}日（{v.expiry}）</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
+
 // ─── CSS Bar Chart Components ───
 
 function HBar({ value, max, color, label }: { value: number; max: number; color: string; label?: string }) {
@@ -537,6 +617,11 @@ export default function DashboardPage() {
 
           {/* ═══ 0.5. Monthly Checklist ═══ */}
           <MonthlyChecklist password={password} />
+
+          {/* ═══ 0.7. Action Items ═══ */}
+          {data.actionItems && (
+            <ActionItemsCard actionItems={data.actionItems} calendarPending={0} calendarTotal={0} />
+          )}
 
           {/* ═══ 1. Today's Status Table ═══ */}
           <Section title={`本日の稼働状況 (${todayStr})`}>

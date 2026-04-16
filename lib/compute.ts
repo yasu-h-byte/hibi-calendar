@@ -26,6 +26,7 @@ export interface RawWorker {
   id: number; name: string; org: string; visa: string; job: string
   rate: number; hourlyRate?: number; otMul: number; hireDate: string; retired?: string; token: string
   salary?: number; memo?: string; grantMonth?: number
+  visaExpiry?: string  // 在留期限 YYYY-MM-DD
   dispatchTo?: string  // 出向先名（空なら通常勤務）
   dispatchFrom?: string  // 出向開始月 YYYY-MM（空なら全期間出向扱い）
 }

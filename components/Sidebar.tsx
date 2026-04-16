@@ -24,23 +24,25 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     : { label: '出面入力', icon: '📋', href: '/attendance', section: 'メイン', roles: ['admin', 'approver'] }
 
   return [
-    // メイン
-    { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: 'メイン', roles: ['admin', 'approver', 'jimu'] },
-    attItem,
-    { label: '就業カレンダー', icon: '📅', href: '/calendar', section: 'メイン', roles: ['admin', 'approver', 'foreman'] },
-  // マスタ
-  { label: '月次集計・帳票', icon: '📋', href: '/monthly', section: 'マスタ', roles: ['admin', 'approver', 'jimu'] },
-  { label: '人員マスタ', icon: '👷', href: '/workers', section: 'マスタ', roles: ['admin', 'jimu'] },
-  { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ', roles: ['admin', 'jimu'] },
-  { label: '外注先マスタ', icon: '🔧', href: '/subcons', section: 'マスタ', roles: ['admin', 'jimu'] },
-  // 管理
-  { label: '有給管理', icon: '🌴', href: '/leave', section: '管理', roles: ['admin', 'approver', 'jimu'] },
-  { label: '評価管理', icon: '📋', href: '/evaluation', section: '管理', roles: ['admin', 'approver'] },
-  { label: '帰国・休暇情報', icon: '✈️', href: '/home-leave', section: '管理', roles: ['admin', 'approver', 'jimu'] },
-  { label: '原価・収益', icon: '💰', href: '/cost', section: '管理', roles: ['admin', 'jimu'] },
-  // システム
-  { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
-  { label: '資料一覧', icon: '📁', href: '/docs', section: 'システム', roles: ['admin', 'approver', 'jimu', 'foreman'] },
+    // ホーム
+    { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: 'ホーム', roles: ['admin', 'approver', 'jimu'] },
+    // 日常業務
+    { ...attItem, section: '日常業務' },
+    { label: '就業カレンダー', icon: '📅', href: '/calendar', section: '日常業務', roles: ['admin', 'approver', 'foreman'] },
+    // 集計・分析
+    { label: '月次集計・帳票', icon: '📋', href: '/monthly', section: '集計・分析', roles: ['admin', 'approver', 'jimu'] },
+    { label: '原価・収益管理', icon: '💰', href: '/cost', section: '集計・分析', roles: ['admin', 'jimu'] },
+    // 人事・労務
+    { label: '人員マスタ', icon: '👷', href: '/workers', section: '人事・労務', roles: ['admin', 'jimu'] },
+    { label: '有給管理', icon: '🌴', href: '/leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
+    { label: '評価管理', icon: '📋', href: '/evaluation', section: '人事・労務', roles: ['admin', 'approver'] },
+    { label: '帰国・休暇情報', icon: '✈️', href: '/home-leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
+    // 現場・外注
+    { label: '現場マスタ', icon: '🏗', href: '/sites', section: '現場・外注', roles: ['admin', 'jimu'] },
+    { label: '外注先マスタ', icon: '🔧', href: '/subcons', section: '現場・外注', roles: ['admin', 'jimu'] },
+    // システム
+    { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
+    { label: '資料一覧', icon: '📁', href: '/docs', section: 'システム', roles: ['admin', 'approver', 'jimu', 'foreman'] },
   ]
 }
 
@@ -54,7 +56,7 @@ const MENU_ID_MAP: Record<string, string> = {
   '/sites': 'sites',
   '/subcons': 'subcons',
   '/leave': 'leave',
-  '/leave-requests': 'leave-requests',
+  // '/leave-requests': removed (merged into /leave)
   '/evaluation': 'evaluation',
   '/home-leave': 'home-leave',
   '/cost': 'cost',
