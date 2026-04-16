@@ -285,9 +285,7 @@ function ActionItemsCard({ items }: { items?: ActionItems }) {
   if (items.visaExpiry.count > 0) {
     alerts.push({ label: '在留期限（90日以内）', count: items.visaExpiry.count, href: '/workers', icon: '🛂', color: 'text-red-600' })
   }
-  if (items.plShortfall.count > 0) {
-    alerts.push({ label: '5日有給義務未達', count: items.plShortfall.count, href: '/leave', icon: '🌴', color: 'text-orange-600' })
-  }
+  // 有給に関するアラートは有給管理ページで一元管理するため、ここでは非表示
   if (items.pendingLeaveRequests.count > 0) {
     alerts.push({ label: '有給承認待ち', count: items.pendingLeaveRequests.count, href: '/leave', icon: '📝', color: 'text-blue-600' })
   }
