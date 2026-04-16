@@ -734,7 +734,7 @@ export interface SiteSummary {
   billing: number
   profit: number
   profitRate: number
-  dispatchDeduction?: number  // 出向控除額（売上・人件費から同額を差引）
+  dispatchDeduction?: number  // 出向控除額（人件費から差引、売上は既に控除済みの値が入力されている）
 }
 
 export function computeMonthly(
@@ -871,7 +871,7 @@ export function computeMonthly(
     const otDiv2 = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
     wm.otCost = wm.otHours * (wm.rate / otDiv2) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
-    // 出向者: 控除額 = totalCost（人件費・売上から同額差引）
+    // 出向者: 控除額 = totalCost（人件費から差引）
     if (wm.isDispatched) {
       wm.dispatchDeduction = wm.totalCost
     }
@@ -992,15 +992,14 @@ export function computeMonthly(
   }
 
   // Billing & profit
-  // 出向者の人件費は売上からも同額差引（粗利は変わらず、KPIから出向影響を除外）
+  // 出向者の人件費のみ差引（売上は既に控除済みの値が入力されているためそのまま）
   for (const site of siteMap.values()) {
     const billingKey = `${site.id}_${ym}`
     const billings = main.billing[billingKey] || []
     site.billing = billings.reduce((sum, v) => sum + (v || 0), 0)
     const dd = site.dispatchDeduction || 0
-    // 表示値: cost と billing は調整後（出向控除済み）の値とする
+    // 人件費のみ出向控除（売上はそのまま → 粗利は増える方向）
     site.cost = Math.max(0, site.cost - dd)
-    site.billing = Math.max(0, site.billing - dd)
     site.profit = site.billing - site.cost - site.subCost
     site.profitRate = site.billing > 0 ? (site.profit / site.billing) * 100 : 0
   }

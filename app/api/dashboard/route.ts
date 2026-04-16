@@ -408,10 +408,10 @@ export async function GET(request: NextRequest) {
       const inHouse = sd.work
       const subcon = sd.subWork
       const ot = sd.ot
-      // 出向控除: 売上・人件費から同額を差引（粗利は変わらない）
+      // 出向控除: 人件費のみ差引（売上は既に控除済みの値が入力されている）
       const dd = sd.dispatchDeduction || 0
       const cost = Math.max(0, sd.cost - dd) + sd.subCost
-      const billing = Math.max(0, (siteBillingMap.get(s.id) || 0) - dd)
+      const billing = siteBillingMap.get(s.id) || 0
       const profit = billing - cost
       return {
         id: s.id,
@@ -456,11 +456,10 @@ export async function GET(request: NextRequest) {
     }
 
     const totalManDays = totalWork + totalSubWork
-    // 出向控除: 売上・人件費から同額を差引（粗利は変わらない）
+    // 出向控除: 人件費のみ差引（売上は既に控除済みの値が入力されている）
     const adjTotalCost = Math.max(0, totalCost - totalDispatchDeduction)
-    const adjTotalBilling = Math.max(0, totalBilling - totalDispatchDeduction)
     const totalAllCost = adjTotalCost + totalSubCost
-    const totalProfit = adjTotalBilling - totalAllCost
+    const totalProfit = totalBilling - totalAllCost
     const subconRate = totalManDays > 0 ? (totalSubWork / totalManDays) * 100 : 0
 
     // ═══ Previous month same-day comparison (前月同日比) ═══
@@ -525,11 +524,9 @@ export async function GET(request: NextRequest) {
       ? calcTobiEquiv(main, mergedAtt.d, mergedAtt.sd, confirmedYmObj, siteFilter !== 'all' ? siteFilter : undefined)
       : tobiEq
 
-    // perWEst = all billing (incl estimation) / all equiv
-    const perWEst = tobiEq.equiv > 0 ? adjTotalBilling / tobiEq.equiv : 0
-    // perW = confirmed billing only / confirmed equiv（旧アプリと同じ）
-    const adjTotalBillingConfirmed = Math.max(0, totalBillingConfirmed - totalDispatchDeduction)
-    const perW = billedEquiv.equiv > 0 ? adjTotalBillingConfirmed / billedEquiv.equiv : 0
+    // 売上はそのまま（出向控除は人件費のみ）
+    const perWEst = tobiEq.equiv > 0 ? totalBilling / tobiEq.equiv : 0
+    const perW = billedEquiv.equiv > 0 ? totalBillingConfirmed / billedEquiv.equiv : 0
 
     // pctWork = month-over-month change in totalManDays
     const pctWork = prevTotalManDays > 0
@@ -540,13 +537,11 @@ export async function GET(request: NextRequest) {
       inHouseManDays: totalWork,
       subconManDays: totalSubWork,
       subconRate,
-      billing: adjTotalBilling,
-      billingRaw: totalBilling,
+      billing: totalBilling,
       cost: totalAllCost,
-      costRaw: totalCost + totalSubCost,
       dispatchDeduction: totalDispatchDeduction,
       profit: totalProfit,
-      profitRate: adjTotalBilling > 0 ? (totalProfit / adjTotalBilling) * 100 : 0,
+      profitRate: totalBilling > 0 ? (totalProfit / totalBilling) * 100 : 0,
       // 1人あたり労務費: 社員のみ = 自社コスト（出向控除済） / 自社人工
       laborCostPerPerson: totalWork > 0 ? adjTotalCost / totalWork : 0,
       // 1人あたり労務費: 外注込み = (自社コスト+外注コスト) / (自社人工+外注人工)
@@ -618,8 +613,7 @@ export async function GET(request: NextRequest) {
         }
         mBilling += getBillTotal(main, site.id, mStr)
       }
-      // 出向控除: 売上・人件費から同額を差引（粗利は変わらない）
-      mBilling = Math.max(0, mBilling - mDispatchDeduction)
+      // 出向控除: 人件費のみ差引（売上はそのまま）
       mCost = Math.max(0, mCost - mDispatchDeduction)
 
       const manDays = mWorkDays + mSubDays

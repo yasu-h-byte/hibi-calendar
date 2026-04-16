@@ -302,7 +302,7 @@ export default function CostPage() {
       {/* 出向控除バナー */}
       {t && t.dispatchDeduction && t.dispatchDeduction > 0 && (
         <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl px-4 py-3 text-xs text-purple-700 dark:text-purple-300">
-          出向中スタッフの人件費 <span className="font-bold">{fmtYen(t.dispatchDeduction)}</span> を売上・人件費の両方から差し引いています（粗利は変わりません）。
+          出向中スタッフの人件費 <span className="font-bold">{fmtYen(t.dispatchDeduction)}</span> を人件費から差し引いています（売上は既に控除済みの値が入力されています）。
           {t.billingRaw && <span className="ml-2 text-gray-500">（控除前: 売上 {fmtYen(t.billingRaw)} / 人件費 {fmtYen(t.costRaw || 0)}）</span>}
         </div>
       )}
@@ -469,7 +469,7 @@ export default function CostPage() {
                         {s.dispatchDeduction && s.dispatchDeduction > 0 && (
                           <span
                             className="ml-1.5 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold"
-                            title={`出向控除: -${fmtYen(s.dispatchDeduction)}（売上・人件費から同額差引）`}
+                            title={`出向控除: -${fmtYen(s.dispatchDeduction)}（人件費から差引）`}
                           >
                             -{fmtYen(s.dispatchDeduction)}
                           </span>

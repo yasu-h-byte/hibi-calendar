@@ -154,9 +154,9 @@ export async function GET(request: NextRequest) {
         billingRaw += getBillTotal(main, rawSite.id, m)
       }
 
-      // 出向控除: 売上・人件費から同額を差引（粗利は変わらない）
+      // 出向控除: 人件費のみ差引（売上は既に控除済みの値が入力されているためそのまま）
       const dispatchDeduction = sd.dispatchDeduction || 0
-      const billing = Math.max(0, (siteBillingMap.get(rawSite.id) || billingRaw) - dispatchDeduction)
+      const billing = siteBillingMap.get(rawSite.id) || billingRaw
       const cost = Math.max(0, sd.cost - dispatchDeduction)
       const subCost = sd.subCost
       const totalCost = cost + subCost
@@ -247,14 +247,14 @@ export async function GET(request: NextRequest) {
 
     const totalManDays = totalWork + totalSubWork
     const adjTotalCost = Math.max(0, totalCostVal - totalDispatchDeduction)
-    const adjTotalBilling = Math.max(0, totalBillingAll - totalDispatchDeduction)
+    // 売上はそのまま（既に控除済みの値が入力されている）
     const totalAllCost = adjTotalCost + totalSubCostVal
-    const totalProfit = adjTotalBilling - totalAllCost
+    const totalProfit = totalBillingAll - totalAllCost
     const subconRate = totalManDays > 0 ? (totalSubWork / totalManDays) * 100 : 0
 
     // Global tobi equiv for KPI
     const tobiCost = calcTobiEquiv(main, att.d, att.sd, ymList, siteFilter !== 'all' ? siteFilter : undefined)
-    const totalPerW = tobiCost.equiv > 0 ? Math.round(adjTotalBilling / tobiCost.equiv) : 0
+    const totalPerW = tobiCost.equiv > 0 ? Math.round(totalBillingAll / tobiCost.equiv) : 0
 
     // ═══ Previous month same-day comparison (前月同日比) ═══
     const prevYmDate = new Date(baseY, baseM - 2, 1)
@@ -311,9 +311,9 @@ export async function GET(request: NextRequest) {
     const billedEquiv = confirmedYmObj.length > 0
       ? calcTobiEquiv(main, att.d, att.sd, confirmedYmObj, siteFilter !== 'all' ? siteFilter : undefined)
       : tobiCost
-    const perWEst = tobiCost.equiv > 0 ? adjTotalBilling / tobiCost.equiv : 0
-    const adjTotalBillingConfirmed = Math.max(0, totalBillingConfirmed - totalDispatchDeduction)
-    const perW = billedEquiv.equiv > 0 ? adjTotalBillingConfirmed / billedEquiv.equiv : 0
+    // 売上はそのまま使用（dispatch deduction は人件費のみに適用）
+    const perWEst = tobiCost.equiv > 0 ? totalBillingAll / tobiCost.equiv : 0
+    const perW = billedEquiv.equiv > 0 ? totalBillingConfirmed / billedEquiv.equiv : 0
     const pctWork = prevTotalManDays > 0 ? ((totalManDays - prevTotalManDays) / prevTotalManDays) * 100 : 0
 
     const kpiExtended = {
@@ -321,11 +321,11 @@ export async function GET(request: NextRequest) {
       inHouseManDays: totalWork,
       subconManDays: totalSubWork,
       subconRate,
-      billing: adjTotalBilling,
+      billing: totalBillingAll,
       billingRaw: totalBillingAll,
       cost: totalAllCost,
       profit: totalProfit,
-      profitRate: adjTotalBilling > 0 ? (totalProfit / adjTotalBilling) * 100 : 0,
+      profitRate: totalBillingAll > 0 ? (totalProfit / totalBillingAll) * 100 : 0,
       perW,
       perWEst,
       billingPerManDay: perWEst,
@@ -382,7 +382,7 @@ export async function GET(request: NextRequest) {
         }
         mBilling += getBillTotal(main, site.id, mStr)
       }
-      mBilling = Math.max(0, mBilling - mDispatchDeduction)
+      // 売上はそのまま（出向控除は人件費のみ）
       mCostVal = Math.max(0, mCostVal - mDispatchDeduction)
 
       const manDays = mWorkDays + mSubDays
@@ -489,7 +489,7 @@ export async function GET(request: NextRequest) {
         subCost: Math.round(totalSubCostVal),
         totalCost: Math.round(totalAllCost),
         profit: Math.round(totalProfit),
-        profitRate: adjTotalBilling > 0 ? Math.round((totalProfit / adjTotalBilling) * 1000) / 10 : 0,
+        profitRate: totalBillingAll > 0 ? Math.round((totalProfit / totalBillingAll) * 1000) / 10 : 0,
         workDays: Math.round(sites.reduce((s, st) => s + st.workDays, 0) * 10) / 10,
         subWorkDays: Math.round(sites.reduce((s, st) => s + st.subWorkDays, 0) * 10) / 10,
         otHours: Math.round(totalOT * 10) / 10,

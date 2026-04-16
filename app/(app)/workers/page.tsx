@@ -691,7 +691,7 @@ export default function WorkersPage() {
                   </div>
                 )}
                 <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                  ※ 出向中にすると、開始月以降の人件費・売上の両方から実給与額（実出勤×日額＋残業）が自動で差し引かれます（粗利は変わりません）。
+                  ※ 出向中にすると、開始月以降の人件費から実給与額（実出勤×日額＋残業）が自動で差し引かれます。
                 </p>
               </div>
             </div>
