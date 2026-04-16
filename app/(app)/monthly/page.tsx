@@ -858,7 +858,7 @@ export default function MonthlyPage() {
       {/* Worker Table (全体 / 日比建設 / HFU) */}
       {!loading && data && isWorkerTab && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[1400px]">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
                 <th
