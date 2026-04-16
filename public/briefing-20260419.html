@@ -176,7 +176,7 @@
       <span style="font-size: 13px; color: #16a34a;">&rarr; 基本給は毎月同じ＋αで分かりやすい<br><span class="vi">&rarr; Lương cơ bản cố định + thêm, dễ hiểu</span></span></p>
       <p><strong>最低保証 / Bảo đảm:</strong><br><strong style="font-size: 18px;">20日分を保証</strong><br><span class="vi"><strong>Đảm bảo 20 ngày</strong></span></p>
       <p><strong>土曜出勤 / Làm thứ 7:</strong><br>通常の給与 &rarr; 割増なし<br><span class="vi">Lương bình thường &rarr; Không nhân hệ số</span></p>
-      <p><strong>残業基準 / Tăng ca:</strong><br>法定上限を超えたら<br><span class="vi">Vượt giới hạn pháp luật</span></p>
+      <p><strong>残業基準 / Tăng ca:</strong><br>3段階判定（日8h超→週40h超→月法定超）<br><span class="vi">3 bước (Ngày&gt;8h→Tuần&gt;40h→Tháng&gt;PL)</span></p>
     </div>
   </div>
 
@@ -255,10 +255,82 @@
       法定上限 = その月の暦日数 &times; 40 &divide; 7<br>
       <span class="vi">Giới hạn pháp luật = Số ngày lịch của tháng &times; 40 &divide; 7</span>
     </p>
-    <p style="font-size: 14px;">
-      例 / Ví dụ: 5月（31日）→ 31 &times; 40 &divide; 7 = <strong>177.1時間</strong><br>
-      例 / Ví dụ: 6月（30日）→ 30 &times; 40 &divide; 7 = <strong>171.4時間</strong>
+    <table style="font-size: 14px;">
+      <tr><th>月</th><th>暦日数</th><th>法定上限</th><th>7hで最大日数</th></tr>
+      <tr><td>2月（28日）</td><td>28</td><td><strong>160.0h</strong></td><td>22日</td></tr>
+      <tr><td>4月（30日）</td><td>30</td><td><strong>171.4h</strong></td><td>24日</td></tr>
+      <tr><td>5月（31日）</td><td>31</td><td><strong>177.1h</strong></td><td>25日</td></tr>
+    </table>
+  </div>
+
+  <h3>残業の3段階判定（重要）/ Cách tính tăng ca 3 bước (Quan trọng)</h3>
+
+  <div class="section" style="background: #fff7ed; border-color: #fdba74;">
+    <p style="font-size: 15px;">
+      変形労働時間制では、残業かどうかを<strong>3段階</strong>で判定します。<br>
+      <span class="vi">Trong chế độ giờ làm linh hoạt, tăng ca được xác định qua <strong>3 bước</strong>.</span>
     </p>
+
+    <div style="margin: 16px 0;">
+      <div style="background: #fee2e2; border: 2px solid #fca5a5; border-radius: 10px; padding: 16px; margin-bottom: 8px;">
+        <strong style="font-size: 16px;">第1段階：1日単位 / Bước 1: Theo ngày</strong><br>
+        1日の所定が8時間以下の場合（御社は7h）、<strong>1日8時間を超えた分</strong>が残業です。<br>
+        <span class="vi">Khi quy định ngày dưới 8 giờ (công ty là 7h), <strong>phần vượt 8 giờ/ngày</strong> là tăng ca.</span><br>
+        <span style="font-size: 13px; color: #666;">
+          例: 17時以降に2時間働いた → 実労働9h → <strong>8hを超えた1h分が残業</strong>（最初の1hは法定内）<br>
+          <span class="vi">VD: Làm thêm 2h sau 17h → Thực tế 9h → <strong>1h vượt 8h là tăng ca</strong> (1h đầu không tính)</span>
+        </span>
+      </div>
+      <div style="text-align: center; font-size: 20px;">⬇</div>
+      <div style="background: #fef3c7; border: 2px solid #fbbf24; border-radius: 10px; padding: 16px; margin-bottom: 8px;">
+        <strong style="font-size: 16px;">第2段階：1週単位 / Bước 2: Theo tuần</strong><br>
+        週の所定が40時間以下の場合（御社は通常35h=5日&times;7h）、<strong>週40時間を超えた分</strong>が残業です。<br>
+        ただし、第1段階で既にカウントした分は除きます。<br>
+        <span class="vi">Khi quy định tuần dưới 40 giờ (công ty thường 35h), <strong>phần vượt 40h/tuần</strong> là tăng ca.<br>
+        Tuy nhiên, phần đã tính ở bước 1 sẽ được trừ ra.</span>
+      </div>
+      <div style="text-align: center; font-size: 20px;">⬇</div>
+      <div style="background: #dcfce7; border: 2px solid #86efac; border-radius: 10px; padding: 16px;">
+        <strong style="font-size: 16px;">第3段階：1ヶ月単位 / Bước 3: Theo tháng</strong><br>
+        月の実労働時間が<strong>法定上限（暦日数&times;40&divide;7）を超えた分</strong>が残業です。<br>
+        ただし、第1・第2段階で既にカウントした分は除きます。<br>
+        <span class="vi">Giờ làm thực tế trong tháng <strong>vượt giới hạn pháp luật</strong> là tăng ca.<br>
+        Tuy nhiên, phần đã tính ở bước 1 và 2 sẽ được trừ ra.</span>
+      </div>
+    </div>
+
+    <div class="point">
+      <p class="point-title">⚠ 具体例 / Ví dụ cụ thể:</p>
+      <p style="font-size: 14px;">
+        ある日、17時以降に2時間の残業をした場合（現場で2時間残業と記録）:<br>
+        <span class="vi">Một ngày, làm thêm 2 giờ sau 17h (ghi 2 giờ tăng ca ở công trường):</span>
+      </p>
+      <table style="font-size: 14px;">
+        <tr><th>区分</th><th>時間</th><th>割増</th><th>説明</th></tr>
+        <tr>
+          <td>所定内</td>
+          <td>7h (8:00-17:00)</td>
+          <td>なし</td>
+          <td>基本給 or 追加所定手当に含まれる<br><span class="vi">Nằm trong lương cơ bản hoặc phụ cấp ngày thêm</span></td>
+        </tr>
+        <tr>
+          <td style="background: #eff6ff;">法定内残業</td>
+          <td style="background: #eff6ff;">1h (17:00-18:00)</td>
+          <td style="background: #eff6ff;"><strong>なし</strong></td>
+          <td style="background: #eff6ff;">所定7hを超えるが、1日8h以内なので割増不要<br><span class="vi">Vượt 7h quy định nhưng dưới 8h/ngày, không nhân hệ số</span></td>
+        </tr>
+        <tr>
+          <td style="background: #fef2f2;">法定外残業</td>
+          <td style="background: #fef2f2;">1h (18:00-19:00)</td>
+          <td style="background: #fef2f2;"><strong>&times;1.25</strong></td>
+          <td style="background: #fef2f2;">1日8hを超えた部分 → 25%割増<br><span class="vi">Phần vượt 8h/ngày → Nhân 1,25</span></td>
+        </tr>
+      </table>
+      <p style="font-size: 13px; color: #555; margin-top: 8px;">
+        つまり、「残業2時間」のうち<strong>割増がつくのは1時間だけ</strong>です。<br>
+        <span class="vi">Tức là, trong "2 giờ tăng ca", <strong>chỉ 1 giờ được nhân hệ số</strong>.</span>
+      </p>
+    </div>
   </div>
 
   <!-- 計算例① -->
@@ -547,18 +619,30 @@
   <div class="qa">
     <p class="qa-q">Q: 残業はいつから発生しますか？ / Tăng ca bắt đầu từ khi nào?</p>
     <div class="qa-a">
-      <p>月の実労働時間が<strong>法定上限</strong>（暦日数 &times; 40 &divide; 7）を超えた分が残業です。1日8時間ではなく、月の合計で判定します。<br>
-      例: 5月（31日） &rarr; 法定上限 = 177.1時間。これを超えた分だけ1.25倍になります。<br>
-      <span class="vi">Phần giờ làm thực tế vượt <strong>giới hạn pháp luật</strong> (số ngày lịch &times; 40 &divide; 7) là tăng ca. Không tính theo ngày 8 giờ, mà tính theo tổng tháng.<br>
-      Ví dụ: Tháng 5 (31 ngày) &rarr; Giới hạn = 177,1 giờ. Chỉ phần vượt quá mới nhân 1,25.</span></p>
+      <p>残業は<strong>3段階</strong>で判定されます（上記「残業の3段階判定」参照）:<br>
+      <span class="vi">Tăng ca được tính qua <strong>3 bước</strong> (xem phần "Cách tính tăng ca 3 bước" ở trên):</span></p>
+      <p>
+        ① <strong>1日8時間を超えた分</strong>（17時以降2h残業したら、うち1hだけ割増）<br>
+        <span class="vi">① <strong>Phần vượt 8h/ngày</strong> (Làm thêm 2h sau 17h, chỉ 1h nhân hệ số)</span><br>
+        ② <strong>週40時間を超えた分</strong>（①で計上済みの分は除く）<br>
+        <span class="vi">② <strong>Phần vượt 40h/tuần</strong> (trừ phần đã tính ở ①)</span><br>
+        ③ <strong>月の法定上限を超えた分</strong>（①②で計上済みの分は除く）<br>
+        <span class="vi">③ <strong>Phần vượt giới hạn pháp luật/tháng</strong> (trừ phần đã tính ở ① và ②)</span>
+      </p>
+      <p>いずれも<strong>1.25倍</strong>の割増賃金が発生します。<br>
+      <span class="vi">Tất cả đều tính <strong>nhân 1,25</strong> lần.</span></p>
     </div>
   </div>
 
   <div class="qa">
     <p class="qa-q">Q: 土曜日に出勤しても残業代がつかないの？ / Làm thứ 7 không có tiền tăng ca?</p>
     <div class="qa-a">
-      <p>カレンダーで「出勤」と決めた土曜日は<strong>通常の給与</strong>です。その分、月の出勤日数が増えるので<strong>追加所定手当として基本給に加算</strong>されます。法定上限を超えた場合のみ残業手当が発生します。<br>
-      <span class="vi">Thứ 7 được lập lịch "đi làm" sẽ tính <strong>lương bình thường</strong>. Vì số ngày đi làm trong tháng tăng nên <strong>được cộng thêm vào dưới dạng phụ cấp ngày thêm</strong>. Chỉ khi vượt giới hạn pháp luật mới có phụ cấp tăng ca.</span></p>
+      <p>カレンダーで「出勤」と決めた土曜日は<strong>通常の給与</strong>です（② 追加所定手当として加算）。<br>
+      ただし、その週の合計が<strong>40時間を超えた場合</strong>は、超えた分が残業手当（1.25倍）になります。<br>
+      例: 月〜金 35h + 土 7h = 42h → <strong>2h分が残業</strong>（第2段階の週単位判定）<br>
+      <span class="vi">Thứ 7 được lập lịch "đi làm" sẽ tính <strong>lương bình thường</strong> (② phụ cấp ngày thêm).<br>
+      Tuy nhiên, nếu tổng tuần <strong>vượt 40 giờ</strong>, phần vượt là tăng ca (nhân 1,25).<br>
+      VD: T2-T6 35h + T7 7h = 42h → <strong>2h là tăng ca</strong> (Bước 2 theo tuần)</span></p>
     </div>
   </div>
 
@@ -613,7 +697,7 @@
     <tr>
       <td style="font-weight: bold; text-align: left;">🧮 残業の基準<br><span class="vi">Tiêu chuẩn tăng ca</span></td>
       <td style="background: #fee2e2;">所定時間超<br><span class="vi">Vượt giờ quy định</span></td>
-      <td style="background: #dcfce7;"><strong>法定上限超</strong><br><span class="vi"><strong>Vượt giới hạn PL</strong></span></td>
+      <td style="background: #dcfce7;"><strong>3段階判定</strong><br><span style="font-size: 12px;">日8h超→週40h超→月法定超</span><br><span class="vi" style="font-size: 12px;">Ngày&gt;8h→Tuần&gt;40h→Tháng&gt;PL</span></td>
     </tr>
     <tr>
       <td style="font-weight: bold; text-align: left;">📅 土曜出勤<br><span class="vi">Làm thứ 7</span></td>
@@ -666,7 +750,7 @@
 <hr style="margin-top: 40px; border: none; border-top: 1px solid #ddd;">
 <p style="text-align: center; color: #999; font-size: 12px;">
   HIBI CONSTRUCTION / HFU — 2026年4月19日 給与制度説明会資料<br>
-  最終更新: 2026-04-13
+  最終更新: 2026-04-16
 </p>
 
 </body>
