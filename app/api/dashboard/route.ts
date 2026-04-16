@@ -962,25 +962,22 @@ export async function GET(request: NextRequest) {
       calendarProgress: { pending: calPending, total: calTotal },
     }
 
+    // ダッシュボードは「今の状況と要対応」に特化（詳細分析は原価・収益管理ページへ）
     return NextResponse.json({
-      kpi,
-      sites: sitesArray,
-      monthlyTrend: filteredMonthlyTrend,
+      summary: {
+        totalManDays: kpi.totalManDays,
+        billing: kpi.billing,
+        prevTotalManDays: kpi.prevTotalManDays,
+        pctWork: kpi.pctWork,
+      },
       todayStatus,
       dailyAttendance,
-      cumulativeData: cumulativeDataFiltered,
       plAlert,
       foreignWorkerRates,
       siteList,
       ymList: ymStrList.sort(),
       period,
       selectedYm: ym,
-      siteMembers,
-      siteTrend,
-      forecast,
-      subconAlert,
-      yoyComparison,
-      subconAnalysis,
       actionItems,
     })
   } catch (error) {
