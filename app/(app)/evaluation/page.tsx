@@ -107,24 +107,35 @@ function yearsFromDate(dateStr: string): number {
   return Math.max(1, y)
 }
 
+/**
+ * 次回評価日の計算:
+ * - システムで一度も評価していない → 入社日の次の記念日（アラート対象外）
+ * - 評価済み → 最後の承認済み評価日から1年後
+ */
 function nextEvalDate(hireDate: string, evaluations: Evaluation[]): string {
+  const approved = evaluations.filter(e => e.status === 'approved')
+  if (approved.length > 0) {
+    // 最新の承認済み評価日から1年後
+    const latestDate = approved
+      .map(e => e.evaluationDate)
+      .sort((a, b) => b.localeCompare(a))[0]
+    const d = new Date(latestDate)
+    d.setFullYear(d.getFullYear() + 1)
+    return d.toISOString().slice(0, 10)
+  }
+  // 未評価: 入社日の次の記念日を表示（アラートは出さない）
   if (!hireDate) return '--'
   const hire = new Date(hireDate)
-  const approvedYears = evaluations
-    .filter(e => e.status === 'approved')
-    .map(e => e.yearsFromHire)
   const currentYears = yearsFromDate(hireDate)
-  for (let y = 1; y <= currentYears + 1; y++) {
-    if (!approvedYears.includes(y)) {
-      const d = new Date(hire)
-      d.setFullYear(d.getFullYear() + y)
-      return d.toISOString().slice(0, 10)
-    }
-  }
-  const nextY = currentYears + 1
+  const nextY = Math.max(1, currentYears + 1)
   const d = new Date(hire)
   d.setFullYear(d.getFullYear() + nextY)
   return d.toISOString().slice(0, 10)
+}
+
+/** システムで評価済みかどうか */
+function hasBeenEvaluated(evaluations: Evaluation[]): boolean {
+  return evaluations.some(e => e.status === 'approved')
 }
 
 function sessionStatusLabel(s: EvaluationSessionStatus, reviews: EvaluationReview[], evaluatorIds: number[]): { text: string; cls: string } {
@@ -613,7 +624,9 @@ export default function EvaluationPage() {
                       const wEvals = evaluations.filter(e => e.workerId === w.id)
                       const latest = wEvals.sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))[0]
                       const nextDate = nextEvalDate(w.hireDate || '', wEvals)
-                      const isOverdue = nextDate !== '--' && nextDate <= new Date().toISOString().slice(0, 10)
+                      // アラートは「システムで評価済み＆1年経過」の場合のみ
+                      const evaluated = hasBeenEvaluated(wEvals)
+                      const isOverdue = evaluated && nextDate !== '--' && nextDate <= new Date().toISOString().slice(0, 10)
                       return { worker: w, latest, nextDate, isOverdue }
                     })
                     .sort((a, b) => {
