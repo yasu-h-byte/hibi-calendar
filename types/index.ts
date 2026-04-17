@@ -80,12 +80,54 @@ export interface AuthUser {
 
 // 出面データ
 export interface AttendanceEntry {
-  w: number       // 1=出勤, 0=不在
-  o?: number      // 残業時間 (0.5〜8)
+  w: number       // 1=出勤, 0=不在 (レガシー: 202604以前)
+  o?: number      // 残業時間 (0.5〜8) (レガシー: 202604以前)
   r?: number      // 1=休み
   p?: number      // 1=有給
   h?: number      // 1=現場休み
   s?: string      // 'staff' | 'foreman' | 'admin'
+  // ── 時間ベース入力（202605〜）──
+  st?: string     // 始業時間 "HH:MM" (例: "08:00")
+  et?: string     // 終業時間 "HH:MM" (例: "17:00", "19:30")
+  b1?: number     // 午前休憩（10:00-10:30）: 1=取得, 0=未取得
+  b2?: number     // 昼休み（12:00-13:00）: 1=取得, 0=未取得
+  b3?: number     // 午後休憩（15:00-15:30）: 1=取得, 0=未取得
+}
+
+/** 時間ベース入力かどうかを判定（202605以降のデータ） */
+export function isTimeBasedEntry(entry: AttendanceEntry): boolean {
+  return !!(entry.st && entry.et)
+}
+
+/** 時間文字列 "HH:MM" を分に変換 */
+export function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+
+/** 時間ベースエントリの実労働時間（h）を計算 */
+export function calcActualHours(entry: AttendanceEntry): number {
+  if (!entry.st || !entry.et) return entry.w === 0.6 ? 4.2 : (entry.w || 0) * 7
+  const start = timeToMinutes(entry.st)
+  const end = timeToMinutes(entry.et)
+  let totalMinutes = end - start
+  // 休憩を引く（取得した分のみ）
+  if (entry.b1) totalMinutes -= 30  // 10:00-10:30
+  if (entry.b2) totalMinutes -= 60  // 12:00-13:00
+  if (entry.b3) totalMinutes -= 30  // 15:00-15:30
+  return Math.max(0, Math.round(totalMinutes / 60 * 10) / 10)
+}
+
+/** 時間ベースエントリの残業時間（所定7hを超えた分）を計算 */
+export function calcOvertimeHours(entry: AttendanceEntry): number {
+  if (!entry.st || !entry.et) return entry.o || 0
+  const actual = calcActualHours(entry)
+  return Math.max(0, Math.round((actual - 7) * 10) / 10)
+}
+
+/** YMが時間ベース入力対象月かどうか（202605以降） */
+export function isTimeBasedMonth(ym: string): boolean {
+  return ym >= '202605'
 }
 
 export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_off' | 'none'

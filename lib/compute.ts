@@ -1150,9 +1150,24 @@ export function calculateOvertimeSummary(
       if (!entry) continue
       if (entry.p) { isPaidLeave = true; break }
       if (entry.w && entry.w > 0) {
-        actual = entry.w === 0.6 ? Math.round(7 * 0.6 * 10) / 10 : 7
-        overtime = entry.o || 0
-        actual += overtime
+        if (entry.st && entry.et) {
+          // 時間ベース入力（202605〜）: 始業/終業/休憩から正確に計算
+          const stParts = entry.st.split(':').map(Number)
+          const etParts = entry.et.split(':').map(Number)
+          const startMin = stParts[0] * 60 + (stParts[1] || 0)
+          const endMin = etParts[0] * 60 + (etParts[1] || 0)
+          let totalMin = endMin - startMin
+          if (entry.b1) totalMin -= 30
+          if (entry.b2) totalMin -= 60
+          if (entry.b3) totalMin -= 30
+          actual = Math.max(0, Math.round(totalMin / 60 * 10) / 10)
+          overtime = Math.max(0, Math.round((actual - 7) * 10) / 10)
+        } else {
+          // レガシー入力（202604以前）: 出勤=7h + 残業h
+          actual = entry.w === 0.6 ? Math.round(7 * 0.6 * 10) / 10 : 7
+          overtime = entry.o || 0
+          actual += overtime
+        }
       }
     }
 

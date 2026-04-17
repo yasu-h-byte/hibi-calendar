@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { isTimeBasedMonth, calcActualHours } from '@/types'
 
 // ────────────────────────────────────────
 //  Types
@@ -35,6 +36,12 @@ interface AttEntry {
   p?: number
   h?: number
   s?: string
+  // 時間ベース入力（202605〜）
+  st?: string   // 始業 "HH:MM"
+  et?: string   // 終業 "HH:MM"
+  b1?: number   // 午前休憩 1/0
+  b2?: number   // 昼休み 1/0
+  b3?: number   // 午後休憩 1/0
 }
 
 interface SubconDayEntry {
@@ -195,6 +202,28 @@ export default function AttendanceGridPage() {
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
 
   const ymOptions = useMemo(() => getYmOptions(26), []) // 2024年4月まで遡れるように拡張
+
+  // 時間ベース入力モード（202605〜）
+  const useTimeBased = isTimeBasedMonth(ym)
+
+  // 時間選択肢を生成
+  const startTimeOptions = useMemo(() => {
+    const opts: string[] = []
+    for (let h = 6; h <= 12; h++) {
+      opts.push(`${String(h).padStart(2, '0')}:00`)
+      if (h < 12) opts.push(`${String(h).padStart(2, '0')}:30`)
+    }
+    return opts
+  }, [])
+
+  const endTimeOptions = useMemo(() => {
+    const opts: string[] = []
+    for (let h = 15; h <= 23; h++) {
+      opts.push(`${String(h).padStart(2, '0')}:00`)
+      if (h < 23) opts.push(`${String(h).padStart(2, '0')}:30`)
+    }
+    return opts
+  }, [])
 
   // Read auth
   useEffect(() => {
@@ -399,6 +428,127 @@ export default function AttendanceGridPage() {
     }
   }, [scheduleSave, workerEntries])
 
+  // ── Time-based cell handlers (202605〜) ──
+
+  /** 時間ベース: 特殊ステータス変更（P/R/H/出勤/クリア） */
+  const handleTimeStatusChange = useCallback((workerId: string, day: number, value: string) => {
+    setWorkerEntries(prev => {
+      const next = { ...prev }
+      if (!next[workerId]) next[workerId] = {}
+      const entries = { ...next[workerId] }
+
+      let entry: AttEntry | null = null
+      if (value === 'P') {
+        entry = { w: 0, p: 1, s: 'admin' }
+      } else if (value === 'R') {
+        entry = { w: 0, r: 1, s: 'admin' }
+      } else if (value === 'H') {
+        entry = { w: 0, h: 1, s: 'admin' }
+      } else if (value === 'W') {
+        // 出勤: デフォルト時間で初期化
+        entry = { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
+      }
+
+      if (entry) {
+        entries[day] = entry
+      } else {
+        delete entries[day]
+      }
+      next[workerId] = entries
+      return next
+    })
+
+    let entry: AttEntry | null = null
+    if (value === 'P') entry = { w: 0, p: 1, s: 'admin' }
+    else if (value === 'R') entry = { w: 0, r: 1, s: 'admin' }
+    else if (value === 'H') entry = { w: 0, h: 1, s: 'admin' }
+    else if (value === 'W') entry = { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
+
+    scheduleSave(`w-${workerId}-${day}`, {
+      type: 'worker', id: workerId, day, entry,
+    })
+  }, [scheduleSave])
+
+  /** 時間ベース: 始業時間変更 */
+  const handleStartTimeChange = useCallback((workerId: string, day: number, st: string) => {
+    setWorkerEntries(prev => {
+      const next = { ...prev }
+      if (!next[workerId]) next[workerId] = {}
+      const entries = { ...next[workerId] }
+      const existing = entries[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
+      const updated = { ...existing, st, s: 'admin' }
+      // 残業時間を再計算
+      const actual = calcActualHours(updated as Parameters<typeof calcActualHours>[0])
+      const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
+      updated.o = otH > 0 ? otH : undefined
+      entries[day] = updated
+      next[workerId] = entries
+      return next
+    })
+
+    // For save: get current entry and apply
+    const current = workerEntries[workerId]?.[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
+    const updated = { ...current, st, s: 'admin' }
+    const actual = calcActualHours(updated as Parameters<typeof calcActualHours>[0])
+    const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
+    if (otH > 0) updated.o = otH; else delete updated.o
+    scheduleSave(`w-${workerId}-${day}`, {
+      type: 'worker', id: workerId, day, entry: updated,
+    })
+  }, [scheduleSave, workerEntries])
+
+  /** 時間ベース: 終業時間変更 */
+  const handleEndTimeChange = useCallback((workerId: string, day: number, et: string) => {
+    setWorkerEntries(prev => {
+      const next = { ...prev }
+      if (!next[workerId]) next[workerId] = {}
+      const entries = { ...next[workerId] }
+      const existing = entries[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
+      const updated = { ...existing, et, s: 'admin' }
+      const actual = calcActualHours(updated as Parameters<typeof calcActualHours>[0])
+      const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
+      updated.o = otH > 0 ? otH : undefined
+      entries[day] = updated
+      next[workerId] = entries
+      return next
+    })
+
+    const current = workerEntries[workerId]?.[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
+    const updated = { ...current, et, s: 'admin' }
+    const actual = calcActualHours(updated as Parameters<typeof calcActualHours>[0])
+    const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
+    if (otH > 0) updated.o = otH; else delete updated.o
+    scheduleSave(`w-${workerId}-${day}`, {
+      type: 'worker', id: workerId, day, entry: updated,
+    })
+  }, [scheduleSave, workerEntries])
+
+  /** 時間ベース: 休憩チェック変更 */
+  const handleBreakChange = useCallback((workerId: string, day: number, breakKey: 'b1' | 'b2' | 'b3', checked: boolean) => {
+    setWorkerEntries(prev => {
+      const next = { ...prev }
+      if (!next[workerId]) next[workerId] = {}
+      const entries = { ...next[workerId] }
+      const existing = entries[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
+      const updated = { ...existing, [breakKey]: checked ? 1 : 0, s: 'admin' }
+      const actual = calcActualHours(updated as Parameters<typeof calcActualHours>[0])
+      const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
+      updated.o = otH > 0 ? otH : undefined
+      entries[day] = updated
+      next[workerId] = entries
+      return next
+    })
+
+    const current = workerEntries[workerId]?.[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
+    const updated = { ...current, [breakKey]: checked ? 1 : 0, s: 'admin' }
+    const actual = calcActualHours(updated as Parameters<typeof calcActualHours>[0])
+    const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
+    if (otH > 0) updated.o = otH; else delete updated.o
+    scheduleSave(`w-${workerId}-${day}`, {
+      type: 'worker', id: workerId, day, entry: updated,
+    })
+  }, [scheduleSave, workerEntries])
+
   // ── Subcon cell handlers ──
 
   const handleSubconNChange = useCallback((subconId: string, day: number, value: string) => {
@@ -512,20 +662,29 @@ export default function AttendanceGridPage() {
     let oSum = 0
     let compSum = 0
     let plSum = 0
+    let actualHoursSum = 0
     for (const e of Object.values(entries)) {
       if (e) {
         wSum += e.w || 0
-        oSum += e.o || 0
-        if (e.w === 0.6) compSum += 0.6
         if (e.p && e.p > 0) plSum += 1
+        if (useTimeBased && e.st && e.et) {
+          const ah = calcActualHours(e as Parameters<typeof calcActualHours>[0])
+          actualHoursSum += ah
+          const ot = Math.max(0, ah - 7)
+          oSum += ot
+        } else {
+          oSum += e.o || 0
+          if (e.w === 0.6) compSum += 0.6
+        }
       }
     }
     // 浮動小数点誤差を丸める（0.6 * 12 = 7.199... → 7.2）
     wSum = Math.round(wSum * 10) / 10
     oSum = Math.round(oSum * 10) / 10
     compSum = Math.round(compSum * 10) / 10
-    return { wSum, oSum, compSum, plSum }
-  }, [workerEntries])
+    actualHoursSum = Math.round(actualHoursSum * 10) / 10
+    return { wSum, oSum, compSum, plSum, actualHoursSum }
+  }, [workerEntries, useTimeBased])
 
   // ── Computed: subcon totals ──
 
@@ -684,6 +843,17 @@ export default function AttendanceGridPage() {
     if (entry.w === 1) return '1'
     if (entry.w === 0.5) return '0.5'
     if (entry.w === 0.6) return '0.6'
+    return ''
+  }
+
+  // ── Time-based status helper ──
+
+  function getTimeStatusValue(entry: AttEntry | null | undefined): string {
+    if (!entry) return ''
+    if (entry.p && entry.p > 0) return 'P'
+    if (entry.r && entry.r > 0) return 'R'
+    if (entry.h && entry.h > 0) return 'H'
+    if (entry.w > 0) return 'W'
     return ''
   }
 
@@ -893,7 +1063,7 @@ export default function AttendanceGridPage() {
       {!loading && data && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
           <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
-            <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 120}px` }}>
+            <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * (useTimeBased ? 90 : 48) + (useTimeBased ? 160 : 120)}px` }}>
               <thead className="sticky top-0 z-30">
                 {/* Day number row */}
                 <tr className="border-b border-gray-200">
@@ -909,22 +1079,25 @@ export default function AttendanceGridPage() {
                   >
                     所属
                   </th>
-                  {days.map(d => (
+                  {days.map(d => {
+                    const colW = useTimeBased ? 96 : 56
+                    return (
                     <th
                       key={d.day}
                       className={`px-0 py-1 text-center font-bold ${dayHeaderBg(data.year, data.month, d.day)} ${dayTextColor(d.dow)} border-l border-gray-200`}
-                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                      style={{ width: colW, minWidth: colW, maxWidth: colW }}
                     >
                       <div className="leading-tight">
                         <div className="text-[11px]">{d.day}</div>
                         <div className="text-[9px] opacity-70">{d.label}</div>
                       </div>
                     </th>
-                  ))}
-                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l-2 border-gray-400" style={{ width: 64, minWidth: 64 }}>
-                    人工計
+                    )
+                  })}
+                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l-2 border-gray-400" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
+                    {useTimeBased ? '実h計' : '人工計'}
                   </th>
-                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l border-gray-600" style={{ width: 56, minWidth: 56 }}>
+                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l border-gray-600" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
                     残業h
                   </th>
                 </tr>
@@ -943,11 +1116,14 @@ export default function AttendanceGridPage() {
                     <td className="sticky left-[150px] z-20 bg-yellow-50 px-1 py-1 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-200 text-yellow-800">職長</span>
                     </td>
-                    {days.map(d => (
-                      <td key={d.day} className={`px-0 py-1 border-l border-yellow-100 bg-yellow-50 text-center text-[10px] text-yellow-600`} style={{ width: 56, minWidth: 56, maxWidth: 56 }}>
+                    {days.map(d => {
+                      const colW = useTimeBased ? 96 : 56
+                      return (
+                      <td key={d.day} className={`px-0 py-1 border-l border-yellow-100 bg-yellow-50 text-center text-[10px] text-yellow-600`} style={{ width: colW, minWidth: colW, maxWidth: colW }}>
                         {/* placeholder: foreman presence can be derived from worker entries */}
                       </td>
-                    ))}
+                      )
+                    })}
                     <td className="px-1 py-1 text-center border-l-2 border-yellow-200 bg-yellow-50" colSpan={2}></td>
                   </tr>
                 )}
@@ -990,11 +1166,12 @@ export default function AttendanceGridPage() {
                   {days.map(d => {
                     const approved = localApprovals[d.day]
                     const canApprove = userRole === 'admin' || userRole === 'approver'
+                    const colW = useTimeBased ? 96 : 56
                     return (
                       <td
                         key={d.day}
                         className={`px-0 py-1 border-l border-orange-100 bg-orange-50 text-center ${canApprove ? 'cursor-pointer hover:bg-orange-100' : ''}`}
-                        style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                        style={{ width: colW, minWidth: colW, maxWidth: colW }}
                         onClick={canApprove ? () => {
                           // 楽観的UI: 即座にトグル
                           setLocalApprovals(prev => ({ ...prev, [d.day]: !prev[d.day] }))
@@ -1033,7 +1210,7 @@ export default function AttendanceGridPage() {
                         {group.label} ({group.workers.length}名)
                       </td>
                       <td className="sticky left-[150px] z-20 bg-gray-50 border-t-2 border-hibi-navy" style={{ width: 56, minWidth: 56, maxWidth: 56 }} />
-                      {days.map(d => <td key={d.day} className="border-t-2 border-hibi-navy bg-gray-50" />)}
+                      {days.map(d => <td key={d.day} className="border-t-2 border-hibi-navy bg-gray-50" style={useTimeBased ? { width: 96, minWidth: 96 } : undefined} />)}
                       <td className="border-t-2 border-hibi-navy bg-gray-50" />
                       <td className="border-t-2 border-hibi-navy bg-gray-50" />
                     </tr>
@@ -1067,20 +1244,121 @@ export default function AttendanceGridPage() {
                           {/* Day cells */}
                           {days.map(d => {
                             const entry = entries[d.day] || null
-                            const workVal = getWorkValue(entry)
-                            const otVal = entry?.o || 0
-                            const canOt = entry && entry.w > 0 && entry.w !== 0.6
                             // 休日出勤判定: カレンダーがoff/holidayなのに出勤あり
                             const calDay = data.calendarDays?.[String(d.day)]
                             const isHolidayWork = calDay && (calDay === 'off' || calDay === 'holiday') && entry && entry.w > 0 && !entry.p
                             // Input source indicator
                             const source = entry?.s
+                            const colW = useTimeBased ? 96 : 56
+
+                            // ── 時間ベースモード（202605〜）──
+                            if (useTimeBased) {
+                              const statusVal = getTimeStatusValue(entry)
+                              const isWorking = statusVal === 'W'
+                              const st = entry?.st || '08:00'
+                              const et = entry?.et || '17:00'
+                              const b1 = entry?.b1 ?? 1
+                              const b2 = entry?.b2 ?? 1
+                              const b3 = entry?.b3 ?? 1
+                              // 実時間計算
+                              const actualH = isWorking && entry?.st && entry?.et
+                                ? calcActualHours(entry as Parameters<typeof calcActualHours>[0])
+                                : 0
+
+                              return (
+                                <td
+                                  key={d.day}
+                                  className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day)}`}
+                                  style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                                >
+                                  {isHolidayWork && (
+                                    <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
+                                  )}
+                                  {source === 'staff' && !isHolidayWork && (
+                                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-blue-400" title="スタッフ入力" />
+                                  )}
+                                  {source === 'foreman' && !isHolidayWork && (
+                                    <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-orange-400" title="職長入力" />
+                                  )}
+                                  <div className="flex flex-col items-center">
+                                    {/* ステータス選択 */}
+                                    <select
+                                      value={statusVal}
+                                      onChange={e => handleTimeStatusChange(wId, d.day, e.target.value)}
+                                      disabled={isLocked}
+                                      className={`w-full text-center text-[10px] font-bold py-0.5 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
+                                        ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
+                                        ${statusVal === 'W' ? 'text-green-700' : ''}
+                                        ${statusVal === 'P' ? 'text-purple-600' : ''}
+                                        ${statusVal === 'R' ? 'text-red-500' : ''}
+                                        ${statusVal === 'H' ? 'text-gray-500' : ''}
+                                        ${statusVal === '' ? 'text-gray-300 font-normal' : ''}
+                                      `}
+                                    >
+                                      <option value="">-</option>
+                                      <option value="W">出勤</option>
+                                      <option value="P">有給</option>
+                                      <option value="R">休</option>
+                                      <option value="H">現休</option>
+                                    </select>
+
+                                    {isWorking ? (
+                                      <>
+                                        {/* 始業・終業 */}
+                                        <div className="flex items-center gap-0 w-full">
+                                          <select
+                                            value={st}
+                                            onChange={e => handleStartTimeChange(wId, d.day, e.target.value)}
+                                            disabled={isLocked}
+                                            className="w-1/2 text-center text-[9px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
+                                          >
+                                            {startTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                          </select>
+                                          <select
+                                            value={et}
+                                            onChange={e => handleEndTimeChange(wId, d.day, e.target.value)}
+                                            disabled={isLocked}
+                                            className="w-1/2 text-center text-[9px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
+                                          >
+                                            {endTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                          </select>
+                                        </div>
+                                        {/* 休憩チェック + 実時間 */}
+                                        <div className="flex items-center justify-center gap-0.5 w-full px-0.5">
+                                          <label className="flex items-center cursor-pointer" title="午前(10:00-10:30)">
+                                            <input type="checkbox" checked={b1 === 1} onChange={e => handleBreakChange(wId, d.day, 'b1', e.target.checked)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
+                                          </label>
+                                          <label className="flex items-center cursor-pointer" title="昼(12:00-13:00)">
+                                            <input type="checkbox" checked={b2 === 1} onChange={e => handleBreakChange(wId, d.day, 'b2', e.target.checked)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
+                                          </label>
+                                          <label className="flex items-center cursor-pointer" title="午後(15:00-15:30)">
+                                            <input type="checkbox" checked={b3 === 1} onChange={e => handleBreakChange(wId, d.day, 'b3', e.target.checked)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
+                                          </label>
+                                          <span className={`text-[9px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                            {actualH.toFixed(1)}h
+                                          </span>
+                                        </div>
+                                      </>
+                                    ) : statusVal !== '' ? (
+                                      <div className="text-[10px] text-center py-1 font-medium text-gray-400">
+                                        {statusVal === 'P' ? '有給' : statusVal === 'R' ? '休' : '現休'}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              )
+                            }
+
+                            // ── レガシーモード（〜202604） ──
+                            const workVal = getWorkValue(entry)
+                            const otVal = entry?.o || 0
+                            const canOt = entry && entry.w > 0 && entry.w !== 0.6
 
                             return (
                               <td
                                 key={d.day}
                                 className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day)}`}
-                                style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                                style={{ width: colW, minWidth: colW, maxWidth: colW }}
                               >
                                 {isHolidayWork && (
                                   <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
@@ -1132,20 +1410,33 @@ export default function AttendanceGridPage() {
                             )
                           })}
 
-                          {/* Totals - 人工計 */}
-                          <td className="px-2 py-1 text-center font-bold text-hibi-navy tabular-nums border-l-2 border-gray-300 bg-gray-50" style={{ width: 64, minWidth: 64 }}>
-                            <div className="text-sm">{totals.wSum > 0 ? totals.wSum : '-'}</div>
-                            {(totals.compSum > 0 || totals.plSum > 0) && (
-                              <div className="text-[9px] font-normal text-gray-400 leading-tight">
-                                {[
-                                  totals.compSum > 0 ? `補${Math.round(totals.compSum * 10) / 10}` : '',
-                                  totals.plSum > 0 ? `有${totals.plSum}` : '',
-                                ].filter(Boolean).join(' ')}
-                              </div>
+                          {/* Totals - 人工計/実h計 */}
+                          <td className="px-2 py-1 text-center font-bold text-hibi-navy tabular-nums border-l-2 border-gray-300 bg-gray-50" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
+                            {useTimeBased ? (
+                              <>
+                                <div className="text-sm">{totals.actualHoursSum > 0 ? totals.actualHoursSum : '-'}</div>
+                                {totals.plSum > 0 && (
+                                  <div className="text-[9px] font-normal text-gray-400 leading-tight">
+                                    有{totals.plSum}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-sm">{totals.wSum > 0 ? totals.wSum : '-'}</div>
+                                {(totals.compSum > 0 || totals.plSum > 0) && (
+                                  <div className="text-[9px] font-normal text-gray-400 leading-tight">
+                                    {[
+                                      totals.compSum > 0 ? `補${Math.round(totals.compSum * 10) / 10}` : '',
+                                      totals.plSum > 0 ? `有${totals.plSum}` : '',
+                                    ].filter(Boolean).join(' ')}
+                                  </div>
+                                )}
+                              </>
                             )}
                           </td>
                           {/* Totals - 残業計 */}
-                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: 56, minWidth: 56 }}>
+                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
                             <div className="text-sm">{totals.oSum > 0 ? totals.oSum : '-'}</div>
                           </td>
                         </tr>
@@ -1165,7 +1456,7 @@ export default function AttendanceGridPage() {
                         外注 ({data.subcons.length}社)
                       </td>
                       <td className="sticky left-[150px] z-20 bg-amber-50 border-t-2 border-amber-400" style={{ width: 56, minWidth: 56, maxWidth: 56 }} />
-                      {days.map(d => <td key={d.day} className="border-t-2 border-amber-400 bg-amber-50" />)}
+                      {days.map(d => <td key={d.day} className="border-t-2 border-amber-400 bg-amber-50" style={useTimeBased ? { width: 96, minWidth: 96 } : undefined} />)}
                       <td className="border-t-2 border-amber-400 bg-amber-50" />
                       <td className="border-t-2 border-amber-400 bg-amber-50" />
                     </tr>
@@ -1200,12 +1491,13 @@ export default function AttendanceGridPage() {
                             const entry = entries[d.day] || null
                             const nVal = entry?.n ?? 0
                             const onVal = entry?.on ?? 0
+                            const colW = useTimeBased ? 96 : 56
 
                             return (
                               <td
                                 key={d.day}
                                 className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)}`}
-                                style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                                style={{ width: colW, minWidth: colW, maxWidth: colW }}
                               >
                                 <div className="flex flex-col">
                                   {/* People count - 大きめ */}
@@ -1266,19 +1558,22 @@ export default function AttendanceGridPage() {
                     鳶 合計
                   </td>
                   <td className="sticky left-[150px] z-20 bg-[#1B2A4A] text-white px-1 py-1.5 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
-                  {days.map(d => (
+                  {days.map(d => {
+                    const colW = useTimeBased ? 96 : 56
+                    return (
                     <td
                       key={d.day}
                       className="bg-[#1B2A4A] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
-                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                      style={{ width: colW, minWidth: colW, maxWidth: colW }}
                     >
                       {footerSums.tobi[d.day] > 0 ? Math.round(footerSums.tobi[d.day] * 10) / 10 : '-'}
                     </td>
-                  ))}
-                  <td className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
+                    )
+                  })}
+                  <td className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
                     {footerSums.tobiTotal > 0 ? footerSums.tobiTotal : '-'}
                   </td>
-                  <td className="bg-[#1B2A4A] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: 56, minWidth: 56 }}>
+                  <td className="bg-[#1B2A4A] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
                     {footerSums.tobiOtTotal > 0 ? footerSums.tobiOtTotal : '-'}
                   </td>
                 </tr>
@@ -1292,19 +1587,22 @@ export default function AttendanceGridPage() {
                     土工 合計
                   </td>
                   <td className="sticky left-[150px] z-20 bg-[#243656] text-white px-1 py-1.5 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
-                  {days.map(d => (
+                  {days.map(d => {
+                    const colW = useTimeBased ? 96 : 56
+                    return (
                     <td
                       key={d.day}
                       className="bg-[#243656] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
-                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                      style={{ width: colW, minWidth: colW, maxWidth: colW }}
                     >
                       {footerSums.doko[d.day] > 0 ? Math.round(footerSums.doko[d.day] * 10) / 10 : '-'}
                     </td>
-                  ))}
-                  <td className="bg-[#243656] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
+                    )
+                  })}
+                  <td className="bg-[#243656] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
                     {footerSums.dokoTotal > 0 ? footerSums.dokoTotal : '-'}
                   </td>
-                  <td className="bg-[#243656] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: 56, minWidth: 56 }}>
+                  <td className="bg-[#243656] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
                     {footerSums.dokoOtTotal > 0 ? footerSums.dokoOtTotal : '-'}
                   </td>
                 </tr>
@@ -1318,19 +1616,22 @@ export default function AttendanceGridPage() {
                     総合計
                   </td>
                   <td className="sticky left-[150px] z-20 bg-[#0F1D36] text-white px-1 py-1.5 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
-                  {days.map(d => (
+                  {days.map(d => {
+                    const colW = useTimeBased ? 96 : 56
+                    return (
                     <td
                       key={d.day}
                       className="bg-[#0F1D36] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
-                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                      style={{ width: colW, minWidth: colW, maxWidth: colW }}
                     >
                       {footerSums.grand[d.day] > 0 ? Math.round(footerSums.grand[d.day] * 10) / 10 : '-'}
                     </td>
-                  ))}
-                  <td className="bg-[#0F1D36] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
+                    )
+                  })}
+                  <td className="bg-[#0F1D36] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
                     {footerSums.grandTotal > 0 ? footerSums.grandTotal : '-'}
                   </td>
-                  <td className="bg-[#0F1D36] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: 56, minWidth: 56 }}>
+                  <td className="bg-[#0F1D36] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
                     {footerSums.grandOtTotal > 0 ? footerSums.grandOtTotal : '-'}
                   </td>
                 </tr>
@@ -1350,11 +1651,24 @@ export default function AttendanceGridPage() {
               <span className="inline-block w-3 h-3 rounded bg-blue-50 border border-blue-200" /> 土曜
             </span>
             <span className="mx-2 border-l border-gray-300 h-3" />
-            <span><strong className="text-green-700">1</strong> = 出勤</span>
-            <span><strong className="text-yellow-700">0.5</strong> = 半日</span>
-            <span><strong className="text-purple-600">補</strong> = 0.6補償</span>
-            <span><strong className="text-purple-600">P</strong> = 有給</span>
-            <span className="text-amber-700">下段 = 残業h</span>
+            {useTimeBased ? (
+              <>
+                <span><strong className="text-green-700">出勤</strong> = 時間入力</span>
+                <span><strong className="text-purple-600">有給</strong> = P</span>
+                <span><strong className="text-red-500">休</strong> = 休み</span>
+                <span><strong className="text-gray-500">現休</strong> = 現場休み</span>
+                <span>休憩: 午前30分/昼60分/午後30分</span>
+                <span className="text-amber-600">7h超=残業</span>
+              </>
+            ) : (
+              <>
+                <span><strong className="text-green-700">1</strong> = 出勤</span>
+                <span><strong className="text-yellow-700">0.5</strong> = 半日</span>
+                <span><strong className="text-purple-600">補</strong> = 0.6補償</span>
+                <span><strong className="text-purple-600">P</strong> = 有給</span>
+                <span className="text-amber-700">下段 = 残業h</span>
+              </>
+            )}
           </div>
         </div>
       )}

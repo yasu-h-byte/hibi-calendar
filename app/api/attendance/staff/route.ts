@@ -152,7 +152,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { token, siteId, year, month, day, choice, overtimeHours } = await request.json()
+    const { token, siteId, year, month, day, choice, overtimeHours,
+            startTime, endTime, break1, break2, break3 } = await request.json()
 
     if (!token || !siteId || !year || !month || !day || !choice) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
@@ -178,9 +179,34 @@ export async function POST(request: NextRequest) {
 
     // Build entry
     let entry: AttendanceEntry
+    const isTimeBased = !!(startTime && endTime) // 時間ベース入力（202605〜）
     switch (choice) {
       case 'work':
-        entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)), s: 'staff' }
+        if (isTimeBased) {
+          // 時間ベース入力: 始業/終業/休憩から実労働を算出
+          entry = {
+            w: 1,
+            st: String(startTime),
+            et: String(endTime),
+            b1: break1 ? 1 : 0,
+            b2: break2 ? 1 : 0,
+            b3: break3 ? 1 : 0,
+            s: 'staff',
+          }
+          // 後方互換: o フィールドにも残業時間を入れる（既存の集計ロジック用）
+          const startMin = parseInt(String(startTime).split(':')[0]) * 60 + parseInt(String(startTime).split(':')[1] || '0')
+          const endMin = parseInt(String(endTime).split(':')[0]) * 60 + parseInt(String(endTime).split(':')[1] || '0')
+          let actualMin = endMin - startMin
+          if (entry.b1) actualMin -= 30
+          if (entry.b2) actualMin -= 60
+          if (entry.b3) actualMin -= 30
+          const actualH = Math.max(0, actualMin / 60)
+          const otH = Math.max(0, Math.round((actualH - 7) * 10) / 10)
+          if (otH > 0) entry.o = otH
+        } else {
+          // レガシー入力（202604以前）
+          entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)), s: 'staff' }
+        }
         break
       case 'rest':
         entry = { w: 0, r: 1, s: 'staff' }

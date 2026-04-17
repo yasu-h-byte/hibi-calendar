@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { AttendanceEntry, AttendanceStatus } from '@/types'
+import { AttendanceEntry, AttendanceStatus, isTimeBasedMonth, isTimeBasedEntry } from '@/types'
 
 interface SiteInfo { id: string; name: string }
 interface AvailableSite { id: string; name: string; primary: boolean }
@@ -67,6 +67,20 @@ export default function StaffAttendancePage() {
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const [leaveSuccess, setLeaveSuccess] = useState<string | null>(null)
 
+  // Time-based input state (202605~)
+  const [startTime, setStartTime] = useState('08:00')
+  const [endTime, setEndTime] = useState('17:00')
+  const [break1, setBreak1] = useState(true)  // 10:00-10:30
+  const [break2, setBreak2] = useState(true)  // 12:00-13:00
+  const [break3, setBreak3] = useState(true)  // 15:00-15:30
+
+  // Time-based input for past day editing
+  const [pastStartTime, setPastStartTime] = useState('08:00')
+  const [pastEndTime, setPastEndTime] = useState('17:00')
+  const [pastBreak1, setPastBreak1] = useState(true)
+  const [pastBreak2, setPastBreak2] = useState(true)
+  const [pastBreak3, setPastBreak3] = useState(true)
+
   const fetchData = useCallback(async () => {
     try {
       const url = siteId
@@ -90,6 +104,21 @@ export default function StaffAttendancePage() {
         setShowOT(false)
         setOtHours(1.0)
       }
+
+      // Restore time-based state from current entry
+      if (d.currentEntry && isTimeBasedEntry(d.currentEntry)) {
+        setStartTime(d.currentEntry.st || '08:00')
+        setEndTime(d.currentEntry.et || '17:00')
+        setBreak1(d.currentEntry.b1 === 1)
+        setBreak2(d.currentEntry.b2 === 1)
+        setBreak3(d.currentEntry.b3 === 1)
+      } else {
+        setStartTime('08:00')
+        setEndTime('17:00')
+        setBreak1(true)
+        setBreak2(true)
+        setBreak3(true)
+      }
     } catch {
       setError('つうしん エラー')
     } finally {
@@ -109,6 +138,26 @@ export default function StaffAttendancePage() {
       }
     } catch { /* ignore */ }
   }, [token])
+
+  // Initialize past day time state when edit modal opens
+  useEffect(() => {
+    if (editingPast !== null && data?.pastDays[editingPast]) {
+      const pd = data.pastDays[editingPast]
+      if (pd.entry && isTimeBasedEntry(pd.entry)) {
+        setPastStartTime(pd.entry.st || '08:00')
+        setPastEndTime(pd.entry.et || '17:00')
+        setPastBreak1(pd.entry.b1 === 1)
+        setPastBreak2(pd.entry.b2 === 1)
+        setPastBreak3(pd.entry.b3 === 1)
+      } else {
+        setPastStartTime('08:00')
+        setPastEndTime('17:00')
+        setPastBreak1(true)
+        setPastBreak2(true)
+        setPastBreak3(true)
+      }
+    }
+  }, [editingPast, data])
 
   useEffect(() => {
     if (showLeaveModal) {
@@ -221,6 +270,59 @@ export default function StaffAttendancePage() {
     }
   }
 
+  const handleTimeBasedSubmit = async (
+    choice: string,
+    year?: number,
+    month?: number,
+    day?: number,
+    overrideStartTime?: string,
+    overrideEndTime?: string,
+    overrideBreak1?: boolean,
+    overrideBreak2?: boolean,
+    overrideBreak3?: boolean,
+  ) => {
+    if (!data || saving) return
+    setSaving(true)
+    setSuccessMsg(null)
+    const body: Record<string, unknown> = {
+      token,
+      siteId: data.site.id,
+      year: year || data.today.year,
+      month: month || data.today.month,
+      day: day || data.today.day,
+      choice,
+    }
+    if (choice === 'work') {
+      body.startTime = overrideStartTime ?? startTime
+      body.endTime = overrideEndTime ?? endTime
+      body.break1 = (overrideBreak1 ?? break1) ? 1 : 0
+      body.break2 = (overrideBreak2 ?? break2) ? 1 : 0
+      body.break3 = (overrideBreak3 ?? break3) ? 1 : 0
+    }
+    try {
+      const res = await fetch('/api/attendance/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        setSuccessMsg('✓')
+        setTimeout(() => setSuccessMsg(null), 1500)
+        setEditingPast(null)
+        fetchData()
+      } else {
+        const d = await res.json()
+        setError(d.error || 'エラー')
+        setTimeout(() => setError(null), 3000)
+      }
+    } catch {
+      setError('つうしん エラー')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleChoice = (choice: string) => {
     if (choice === 'work') {
       submitEntry('work', showOT ? otHours : 0)
@@ -274,6 +376,8 @@ export default function StaffAttendancePage() {
   if (!data) return null
 
   const currentStatus = data.currentStatus
+  const currentYm = data.today.ym
+  const useTimeBased = isTimeBasedMonth(currentYm)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -324,11 +428,116 @@ export default function StaffAttendancePage() {
             <div className="text-green-600 text-sm mt-1">
               {STATUS_EMOJI[currentStatus]} {STATUS_LABELS[currentStatus]}
               {currentStatus === 'overtime' && data.currentEntry?.o ? ` +${data.currentEntry.o}h` : ''}
+              {data.currentEntry?.st && data.currentEntry?.et && (
+                <span className="block text-xs mt-0.5">{data.currentEntry.st}〜{data.currentEntry.et}</span>
+              )}
+            </div>
+          </div>
+        ) : useTimeBased ? (
+          /* Time-based input (202605~) */
+          <div className="space-y-4">
+            {/* Start/End time pickers */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white rounded-xl shadow p-4 text-center">
+                <p className="text-xs text-gray-500 mb-1">始業 / Bat dau</p>
+                <select value={startTime} onChange={e => setStartTime(e.target.value)}
+                  className="text-2xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
+                  {Array.from({length: 13}, (_, i) => {
+                    const h = 6 + Math.floor(i / 2)
+                    const m = i % 2 === 0 ? '00' : '30'
+                    const val = `${String(h).padStart(2,'0')}:${m}`
+                    return <option key={val} value={val}>{val}</option>
+                  })}
+                </select>
+              </div>
+              <div className="bg-white rounded-xl shadow p-4 text-center">
+                <p className="text-xs text-gray-500 mb-1">終業 / Ket thuc</p>
+                <select value={endTime} onChange={e => setEndTime(e.target.value)}
+                  className="text-2xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
+                  {Array.from({length: 17}, (_, i) => {
+                    const h = 15 + Math.floor(i / 2)
+                    const m = i % 2 === 0 ? '00' : '30'
+                    const val = `${String(h).padStart(2,'0')}:${m}`
+                    return <option key={val} value={val}>{val}</option>
+                  })}
+                </select>
+              </div>
+            </div>
+
+            {/* Break checkboxes */}
+            <div className="bg-white rounded-xl shadow p-4">
+              <p className="text-xs text-gray-500 mb-2">休憩 / Nghi giai lao</p>
+              <div className="space-y-2">
+                {[
+                  { id: 'b1', label: '10:00〜10:30（30分）', checked: break1, set: setBreak1 },
+                  { id: 'b2', label: '12:00〜13:00（60分）', checked: break2, set: setBreak2 },
+                  { id: 'b3', label: '15:00〜15:30（30分）', checked: break3, set: setBreak3 },
+                ].map(b => (
+                  <label key={b.id} className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={b.checked} onChange={e => b.set(e.target.checked)}
+                      className="w-5 h-5 rounded text-hibi-navy" />
+                    <span className={`text-sm ${b.checked ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
+                      {b.label}
+                      {!b.checked && ' ← 未取得'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Actual hours display */}
+            <div className="bg-blue-50 rounded-xl p-4 text-center">
+              <p className="text-xs text-gray-500">実労働時間 / Gio lam thuc te</p>
+              <p className="text-3xl font-bold text-hibi-navy">
+                {(() => {
+                  const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
+                  const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
+                  let mins = end - start
+                  if (break1) mins -= 30
+                  if (break2) mins -= 60
+                  if (break3) mins -= 30
+                  const hours = Math.max(0, mins / 60)
+                  return `${Math.floor(hours)}時間${Math.round((hours % 1) * 60)}分`
+                })()}
+              </p>
+              {(() => {
+                const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
+                const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
+                let mins = end - start
+                if (break1) mins -= 30
+                if (break2) mins -= 60
+                if (break3) mins -= 30
+                const ot = Math.max(0, mins / 60 - 7)
+                return ot > 0 ? <p className="text-sm text-orange-600 mt-1">うち所定外: {ot.toFixed(1)}h</p> : null
+              })()}
+            </div>
+
+            {/* Submit button */}
+            <button
+              onClick={() => handleTimeBasedSubmit('work')}
+              disabled={saving}
+              className="w-full bg-hibi-navy text-white rounded-2xl py-4 text-lg font-bold active:bg-hibi-light transition disabled:opacity-50"
+            >
+              出勤登録 / Xac nhan di lam
+            </button>
+
+            {/* Rest / Leave buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => handleTimeBasedSubmit('rest')}
+                disabled={saving}
+                className="bg-gray-200 text-gray-700 rounded-2xl py-3 text-base font-bold active:bg-gray-300 transition disabled:opacity-50">
+                休み / Nghi
+              </button>
+              <button onClick={() => setShowLeaveModal(true)}
+                disabled={saving}
+                className="bg-green-100 text-green-700 rounded-2xl py-3 text-base font-bold active:bg-green-200 transition disabled:opacity-50">
+                有給申請 / Xin phep
+              </button>
             </div>
           </div>
         ) : (
           <>
-            {/* 4 Buttons */}
+            {/* 4 Buttons (legacy: ~202604) */}
             <div className="grid grid-cols-3 gap-3">
               {([
                 { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' },
@@ -415,10 +624,16 @@ export default function StaffAttendancePage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[pd.status]}`}>
-                    {STATUS_EMOJI[pd.status]} {STATUS_LABELS[pd.status]}
-                    {pd.status === 'overtime' && pd.entry?.o ? ` +${pd.entry.o}h` : ''}
-                  </span>
+                  {pd.entry?.st && pd.entry?.et ? (
+                    <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[pd.status]}`}>
+                      {STATUS_EMOJI[pd.status]} {pd.entry.st}〜{pd.entry.et}
+                    </span>
+                  ) : (
+                    <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[pd.status]}`}>
+                      {STATUS_EMOJI[pd.status]} {STATUS_LABELS[pd.status]}
+                      {pd.status === 'overtime' && pd.entry?.o ? ` +${pd.entry.o}h` : ''}
+                    </span>
+                  )}
                   {pd.locked && <span className="text-xs">🔒</span>}
                 </div>
               </div>
@@ -433,42 +648,116 @@ export default function StaffAttendancePage() {
       </div>
 
       {/* Past day edit modal */}
-      {editingPast !== null && data.pastDays[editingPast] && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setEditingPast(null)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center">
-              {data.pastDays[editingPast].date}
-            </h3>
-            <p className="text-sm text-gray-500 mb-4 text-center">なおす</p>
-            <div className="grid grid-cols-2 gap-3">
-              {([
-                { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500' },
-                { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400' },
-                // 有給は申請フロー経由のため過去日の直接入力は不可
-                // 管理者がPC出面入力画面から修正する
-              ] as const).map(btn => (
-                <button
-                  key={btn.choice}
-                  onClick={() => {
-                    const pd = data.pastDays[editingPast!]
-                    submitEntry(btn.choice, 0, pd.year, pd.month, pd.day)
-                  }}
-                  className={`${btn.color} text-white rounded-xl py-4 text-center active:scale-95`}
-                >
-                  <div className="text-2xl mb-1">{btn.emoji}</div>
-                  <div className="text-sm font-bold">{btn.label}</div>
-                </button>
-              ))}
+      {editingPast !== null && data.pastDays[editingPast] && (() => {
+        const pd = data.pastDays[editingPast]
+        const pastYm = `${pd.year}${String(pd.month).padStart(2, '0')}`
+        const pastTimeBased = isTimeBasedMonth(pastYm)
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setEditingPast(null)}>
+            <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center">
+                {pd.date}
+              </h3>
+              <p className="text-sm text-gray-500 mb-4 text-center">なおす</p>
+
+              {pastTimeBased ? (
+                <div className="space-y-4">
+                  {/* Start/End time pickers */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                      <p className="text-xs text-gray-500 mb-1">始業</p>
+                      <select value={pastStartTime} onChange={e => setPastStartTime(e.target.value)}
+                        className="text-xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
+                        {Array.from({length: 13}, (_, i) => {
+                          const h = 6 + Math.floor(i / 2)
+                          const m = i % 2 === 0 ? '00' : '30'
+                          const val = `${String(h).padStart(2,'0')}:${m}`
+                          return <option key={val} value={val}>{val}</option>
+                        })}
+                      </select>
+                    </div>
+                    <div className="bg-gray-50 rounded-xl p-3 text-center">
+                      <p className="text-xs text-gray-500 mb-1">終業</p>
+                      <select value={pastEndTime} onChange={e => setPastEndTime(e.target.value)}
+                        className="text-xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
+                        {Array.from({length: 17}, (_, i) => {
+                          const h = 15 + Math.floor(i / 2)
+                          const m = i % 2 === 0 ? '00' : '30'
+                          const val = `${String(h).padStart(2,'0')}:${m}`
+                          return <option key={val} value={val}>{val}</option>
+                        })}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Break checkboxes */}
+                  <div className="bg-gray-50 rounded-xl p-3">
+                    <p className="text-xs text-gray-500 mb-2">休憩</p>
+                    <div className="space-y-2">
+                      {[
+                        { id: 'pb1', label: '10:00〜10:30（30分）', checked: pastBreak1, set: setPastBreak1 },
+                        { id: 'pb2', label: '12:00〜13:00（60分）', checked: pastBreak2, set: setPastBreak2 },
+                        { id: 'pb3', label: '15:00〜15:30（30分）', checked: pastBreak3, set: setPastBreak3 },
+                      ].map(b => (
+                        <label key={b.id} className="flex items-center gap-3 cursor-pointer">
+                          <input type="checkbox" checked={b.checked} onChange={e => b.set(e.target.checked)}
+                            className="w-5 h-5 rounded text-hibi-navy" />
+                          <span className={`text-sm ${b.checked ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
+                            {b.label}{!b.checked && ' ← 未取得'}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Submit work with times */}
+                  <button
+                    onClick={() => handleTimeBasedSubmit('work', pd.year, pd.month, pd.day, pastStartTime, pastEndTime, pastBreak1, pastBreak2, pastBreak3)}
+                    disabled={saving}
+                    className="w-full bg-hibi-navy text-white rounded-xl py-3 font-bold active:scale-95 disabled:opacity-50"
+                  >
+                    出勤登録
+                  </button>
+
+                  {/* Rest button */}
+                  <button
+                    onClick={() => handleTimeBasedSubmit('rest', pd.year, pd.month, pd.day)}
+                    disabled={saving}
+                    className="w-full bg-gray-200 text-gray-700 rounded-xl py-3 font-bold active:scale-95 disabled:opacity-50"
+                  >
+                    休み / Nghi
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500' },
+                    { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400' },
+                    // 有給は申請フロー経由のため過去日の直接入力は不可
+                    // 管理者がPC出面入力画面から修正する
+                  ] as const).map(btn => (
+                    <button
+                      key={btn.choice}
+                      onClick={() => submitEntry(btn.choice, 0, pd.year, pd.month, pd.day)}
+                      className={`${btn.color} text-white rounded-xl py-4 text-center active:scale-95`}
+                    >
+                      <div className="text-2xl mb-1">{btn.emoji}</div>
+                      <div className="text-sm font-bold">{btn.label}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => setEditingPast(null)}
+                className="w-full mt-3 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
+              >
+                やめる
+              </button>
             </div>
-            <button
-              onClick={() => setEditingPast(null)}
-              className="w-full mt-3 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
-            >
-              やめる
-            </button>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Leave request modal */}
       {showLeaveModal && (
