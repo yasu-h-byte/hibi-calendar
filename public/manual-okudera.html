@@ -130,7 +130,7 @@
 <strong>注意：</strong>「付与日数」と「繰越」は変更しないでください。「調整」欄のみ入力します。
 </div>
 
-<h3>3-2. 2025年3月以降の有給取得日 → 出面に「P」入力</h3>
+<h3>3-2. 2025年3月以降の有給取得日 → 出面に「有」入力</h3>
 
 <div class="step">
   <div class="step-num">1</div>
@@ -147,11 +147,11 @@
 </div>
 <div class="step">
   <div class="step-num">4</div>
-  <div class="step-text">有給を取った日のセルに <span class="highlight">P</span>（半角大文字）を入力</div>
+  <div class="step-text">有給を取った日のセルのドロップダウンから<span class="highlight">有</span>を選択</div>
 </div>
 
 <div class="box box-ok">
-入力した「P」は有給管理画面の消化日数に自動で反映されます。
+入力した「有」は有給管理画面の消化日数に自動で反映されます。
 </div>
 
 <!-- ================================================ -->
@@ -172,7 +172,6 @@
 <tr><td><strong>1</strong></td><td>出勤（1日）</td><td>緑</td><td>通常の出勤日（日本人社員）</td></tr>
 <tr><td><strong>0.5</strong></td><td>半日</td><td>黄</td><td>半日だけ出勤した場合（日本人社員）</td></tr>
 <tr><td><strong>有</strong></td><td>有給休暇</td><td>紫</td><td>有給を取得した日</td></tr>
-<tr><td><strong>補</strong></td><td>休業補償（0.6）</td><td>紫</td><td>会社都合の休業日</td></tr>
 <tr><td><strong>下段の数字</strong></td><td>残業時間</td><td>オレンジ</td><td>0.5h単位で入力（例: 1.5）— 日本人社員のみ</td></tr>
 <tr><td><strong>空欄</strong></td><td>休み / 未入力</td><td>—</td><td>何も入力しない</td></tr>
 </table>
@@ -197,7 +196,7 @@
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">各スタッフの行で、出勤した日に <strong>1</strong>、有給の日に <strong>P</strong> を入力</div>
+  <div class="step-text">各スタッフの行で、出勤した日に <strong>1</strong>、有給の日に <strong>有</strong> を入力</div>
 </div>
 <div class="step">
   <div class="step-num">4</div>
@@ -323,7 +322,7 @@
 <tr><td>出勤日数が合っているか</td><td>出面入力画面の合計欄と一致しているか</td></tr>
 <tr><td>所定日数が正しいか</td><td>就業カレンダーの稼働日数と一致しているか</td></tr>
 <tr><td>残業時間が正しいか</td><td>出面入力の残業時間合計と一致しているか</td></tr>
-<tr><td>有給が消化にカウントされているか</td><td>出面で「P」を入力した日数が反映されているか</td></tr>
+<tr><td>有給が消化にカウントされているか</td><td>出面で「有」を入力した日数が反映されているか</td></tr>
 <tr><td>欠勤日数が正しいか</td><td>所定日数 &minus; 出勤日数 &minus; 有給日数 = 欠勤日数</td></tr>
 </table>
 
@@ -369,27 +368,34 @@
 <strong>自動付与は廃止されました。</strong>付与は必ず通知からの手動確認で行います。これにより、付与内容を事前に確認してから実行できます。
 </div>
 
-<h3>7-3. 有給申請の承認</h3>
+<h3>7-3. 有給申請の承認（2段階承認）</h3>
+
+<div class="box">
+<strong>承認フロー（2段階）：</strong>
+<table>
+<tr><th>段階</th><th>誰が</th><th>やること</th><th>フィルタ名</th></tr>
+<tr><td><strong>第1段階</strong></td><td>職長</td><td>申請内容を確認 →「職長承認」</td><td>職長待ち</td></tr>
+<tr style="background:#e6f4ea;"><td><strong>第2段階</strong></td><td><strong>奥寺さん / 政仁さん</strong></td><td>職長承認済みの申請を「最終承認」</td><td>最終承認待ち</td></tr>
+</table>
+<p style="font-size:13px; color:#888;">※ 最終承認すると出面に自動で「有」が入力されます。手動入力は不要です。</p>
+</div>
 
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text">サイドバー →<strong>「有給・休み管理」</strong>を開く</div>
+  <div class="step-text">サイドバー →<strong>「有給管理」</strong>→<strong>「申請」タブ</strong>を開く</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">画面上部の<strong>「申請」タブ</strong>を選択する（未処理件数がバッジで表示されます）</div>
+  <div class="step-text">フィルタで<strong>「最終承認待ち」</strong>を選択（職長承認済みの申請が表示される）</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">「承認待ち」のスタッフからの申請が表示される</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">内容を確認して<strong>「承認」</strong>または<strong>「却下」</strong>を押す</div>
+  <div class="step-text">内容を確認して<strong>「最終承認」</strong>ボタンを押す</div>
 </div>
 
-<div class="box box-ok">
-承認すると、出面データに自動で「P」が入力されます。手動で出面を入力する必要はありません。
+<div class="box box-warn">
+<strong>ベトナム人スタッフの有給申請は原則3日前まで</strong>です。（日本人社員には適用されません）<br>
+却下する場合は「却下」ボタンを押し、理由を入力してください。
 </div>
 
 <div class="box">
@@ -400,6 +406,43 @@
 
 <p>帳票出力画面から「有給管理台帳」をダウンロードできます（Excel形式）。</p>
 <p>監査対応用に、シート1「管理簿」とシート2「取得日一覧」が含まれます。</p>
+
+<h3>7-5. 過去の有給データ移行（日比建設分）</h3>
+
+<div class="box box-red">
+<strong>重要：この作業が必要です。</strong><br>
+旧スプレッドシートで管理していた日比建設スタッフの有給取得データを、新システムの出面に反映する必要があります。<br>
+靖仁さんがHFU分で同様の作業を完了済みです。日比建設分は奥寺さんの担当です。
+</div>
+
+<h4>作業の流れ</h4>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">旧スプレッドシートを開き、各スタッフの<strong>有給取得日</strong>を確認する</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">出面入力画面で該当する年月・現場を選択する</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">有給を取った日のセルに<strong>「有」</strong>を入力する（自動保存）</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">有給管理画面で<strong>消化日数が正しく反映されているか</strong>確認する</div>
+</div>
+
+<div class="box box-ok">
+<strong>ポイント：</strong>
+<ul style="margin: 4px 0 0; padding-left: 20px;">
+  <li>2025年2月以前の分は「調整」欄に合計日数を入力（セクション3参照）</li>
+  <li>2025年3月以降の分は出面に「有」を1日ずつ入力</li>
+  <li>終了した現場の出面を入力する場合は「終了現場を表示」チェックをONに</li>
+  <li>入力した「有」は有給管理画面の消化日数に自動で反映されます</li>
+</ul>
+</div>
 
 <!-- ================================================ -->
 <h2 id="sec8">8. 帳票出力</h2>
@@ -458,6 +501,12 @@
 <p>サイドバー →<strong>「外注先マスタ」</strong>で、外注先の会社名・職種・単価などを確認できます。</p>
 
 <div class="box box-warn">
+<strong>外注先の現場別単価について：</strong><br>
+外注先は基本単価のほかに、現場ごとに異なる単価を設定できます。<br>
+現場マスタの編集画面 →「外注先」セクションで設定します。<strong>単価変更時は速やかに反映してください。</strong>
+</div>
+
+<div class="box box-warn">
 <strong>人員マスタについて：</strong>社員情報の追加・編集・退職処理は管理者（靖仁さん）が担当します。変更が必要な場合は管理者に連絡してください。
 </div>
 
@@ -506,7 +555,7 @@
 </div>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-17</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-18</p>
 
 </body>
 </html>
