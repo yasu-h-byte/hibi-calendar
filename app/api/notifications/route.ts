@@ -165,18 +165,33 @@ export async function GET(request: NextRequest) {
       console.error('Lock check error:', e)
     }
 
-// 5. Evaluation due notifications (入社日基準の評価時期アラート)
+// 5. Evaluation due notifications
+    // 評価済みの人のみアラート（未評価の人にはアラートを出さない）
+    // 前回の評価（承認済み）から1年経過した人のみ対象
     try {
       const foreignWorkers = activeWorkers.filter(w => w.visa && w.visa !== 'none')
-      for (const w of foreignWorkers) {
-        if (!w.hireDate) continue
-        const hire = new Date(w.hireDate)
-        if (isNaN(hire.getTime())) continue
+      // evaluationsコレクションから承認済み評価を取得
+      const evalQuery = query(collection(db, 'evaluations'), where('status', '==', 'approved'))
+      const evalSnaps = await getDocs(evalQuery)
+      const approvedEvals: Record<number, string> = {} // workerId → 最新の evaluationDate
+      evalSnaps.forEach(snap => {
+        const data = snap.data()
+        const wid = data.workerId as number
+        const evalDate = data.evaluationDate as string
+        if (!approvedEvals[wid] || evalDate > approvedEvals[wid]) {
+          approvedEvals[wid] = evalDate
+        }
+      })
 
-        // 次の評価日を計算（入社日から1年ごと）
-        const yearsSinceHire = Math.floor((now.getTime() - hire.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
-        const nextEvalDate = new Date(hire)
-        nextEvalDate.setFullYear(hire.getFullYear() + yearsSinceHire + 1)
+      for (const w of foreignWorkers) {
+        // システムで評価済みの人のみ対象
+        const lastEvalDate = approvedEvals[w.id]
+        if (!lastEvalDate) continue // 未評価 → アラートなし
+
+        // 最新評価日から1年後が次回評価日
+        const lastEval = new Date(lastEvalDate)
+        const nextEvalDate = new Date(lastEval)
+        nextEvalDate.setFullYear(nextEvalDate.getFullYear() + 1)
 
         const daysUntilEval = Math.floor((nextEvalDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
 
