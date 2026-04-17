@@ -623,16 +623,61 @@
 
 <div class="section">
   <p style="font-size: 16px; text-align: center; font-weight: bold;">
-    毎日、スマホで出勤・休みを入力します（今までと同じです）<br>
-    <span class="vi">Mỗi ngày, nhập đi làm/nghỉ trên điện thoại (giống như trước)</span>
+    毎日、スマホで出勤・休みを入力します<br>
+    <span class="vi">Mỗi ngày, nhập đi làm/nghỉ trên điện thoại</span>
   </p>
 
-  <h3>3つのボタン / 3 nút chính</h3>
+  <div class="point">
+    <p class="point-title">⚠ 5月からスマホ画面が新しくなります / Từ tháng 5, màn hình điện thoại sẽ đổi mới</p>
+    <p>
+      今までの「しゅっきん＋残業ステッパー」から、<strong>開始時刻・終了時刻・休憩チェックボックス</strong>の入力に変わります。<br>
+      <span class="vi">Thay vì "Đi làm + bước tăng ca" như trước, sẽ đổi thành nhập <strong>giờ bắt đầu / giờ kết thúc / checkbox nghỉ giải lao</strong>.</span>
+    </p>
+  </div>
+
+  <h3>新しい出勤登録（5月〜）/ Đăng ký đi làm mới (từ tháng 5)</h3>
+
+  <table>
+    <tr><th style="width: 30%;">項目 / Hạng mục</th><th>説明 / Giải thích</th></tr>
+    <tr>
+      <td style="font-weight: bold;">開始時刻<br><span class="vi">Giờ bắt đầu</span></td>
+      <td>初期値: <strong>8:00</strong>（変更可能）<br><span class="vi">Mặc định: <strong>8:00</strong> (có thể thay đổi)</span></td>
+    </tr>
+    <tr>
+      <td style="font-weight: bold;">終了時刻<br><span class="vi">Giờ kết thúc</span></td>
+      <td>初期値: <strong>17:00</strong>（残業がある日は変更する。例: 19:00）<br><span class="vi">Mặc định: <strong>17:00</strong> (ngày tăng ca thì đổi. VD: 19:00)</span></td>
+    </tr>
+    <tr>
+      <td style="font-weight: bold;">休憩チェックボックス<br><span class="vi">Checkbox nghỉ giải lao</span></td>
+      <td>
+        ☑ <strong>午前 10:00〜10:30</strong>（初期値: ON）<br>
+        ☑ <strong>午後 15:00〜15:30</strong>（初期値: ON）<br>
+        <span style="font-size: 13px; color: #666;">※ 昼休み（12:00〜13:00）は常に控除されるため、チェック不要<br>
+        <span class="vi">※ Nghỉ trưa (12:00-13:00) luôn được trừ, không cần tick</span></span>
+      </td>
+    </tr>
+    <tr>
+      <td style="color: #2563EB; font-weight: bold; font-size: 16px;">出勤登録ボタン<br><span class="vi" style="font-size: 13px;">Nút đăng ký đi làm</span></td>
+      <td>時刻と休憩を確認したら押す → 実労働時間がリアルタイム表示されます<br><span class="vi">Xác nhận giờ và nghỉ giải lao rồi nhấn → Giờ làm thực tế hiển thị ngay</span></td>
+    </tr>
+  </table>
+
+  <div class="good">
+    <p class="good-title">✅ 通常の日（残業なし）/ Ngày bình thường (không tăng ca):</p>
+    <p>
+      そのまま<strong>「出勤登録」</strong>を押すだけ！ 8:00〜17:00、休憩ON → 実労働7時間<br>
+      <span class="vi">Chỉ cần nhấn <strong>"Đăng ký đi làm"</strong>! 8:00-17:00, nghỉ giải lao ON → 7 giờ làm thực tế</span>
+    </p>
+    <p class="good-title" style="margin-top: 8px;">✅ 残業の日 / Ngày tăng ca:</p>
+    <p>
+      終了時刻を変更する（例: 19:00）→「出勤登録」を押す<br>
+      <span class="vi">Đổi giờ kết thúc (VD: 19:00) → Nhấn "Đăng ký đi làm"</span>
+    </p>
+  </div>
+
+  <h3>休み・有給ボタン / Nút nghỉ và nghỉ phép</h3>
 
   <div class="phone">
-    <div class="phone-btn btn-work">
-      🔨<br>しゅっきん<br><span style="font-size: 13px;">Đi làm</span>
-    </div>
     <div class="phone-btn btn-rest">
       🏠<br>やすみ<br><span style="font-size: 13px;">Nghỉ</span>
     </div>
@@ -643,11 +688,6 @@
 
   <table>
     <tr><th style="width: 30%;">ボタン / Nút</th><th>いつ押す？ / Khi nào nhấn?</th><th>説明 / Giải thích</th></tr>
-    <tr>
-      <td style="color: #2563EB; font-weight: bold; font-size: 16px;">しゅっきん</td>
-      <td>出勤した日<br><span class="vi">Ngày đi làm</span></td>
-      <td>残業がある場合は時間も入力できます<br><span class="vi">Có thể nhập giờ tăng ca nếu có</span></td>
-    </tr>
     <tr>
       <td style="color: #6B7280; font-weight: bold; font-size: 16px;">やすみ</td>
       <td>休みの日<br><span class="vi">Ngày nghỉ</span></td>
@@ -661,10 +701,6 @@
   </table>
 
   <div class="good">
-    <p>
-      <strong>朝、現場に着いたら「しゅっきん」を押してください。</strong><br>
-      <span class="vi"><strong>Khi đến công trường buổi sáng, hãy nhấn "しゅっきん".</strong></span>
-    </p>
     <p>
       過去5日分は修正できます。押し忘れても大丈夫です。<br>
       <span class="vi">Có thể sửa 5 ngày trước. Quên nhấn cũng không sao.</span>
@@ -884,7 +920,7 @@
 <hr style="margin-top: 40px; border: none; border-top: 1px solid #ddd;">
 <p style="text-align: center; color: #999; font-size: 12px;">
   HIBI CONSTRUCTION / HFU — 2026年4月19日 給与制度説明会資料<br>
-  最終更新: 2026-04-16
+  最終更新: 2026-04-17
 </p>
 
 </body>

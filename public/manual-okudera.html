@@ -89,14 +89,19 @@
 
 <table>
 <tr><th>メニュー名</th><th>用途</th><th>使用頻度</th></tr>
-<tr><td>ダッシュボード</td><td>本日の稼働状況・カレンダー準備の確認</td><td>確認用</td></tr>
+<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">ホーム</td></tr>
+<tr><td>ダッシュボード</td><td>お知らせ・本日の稼働状況・今月サマリー・日別チャート<br><span style="color:#888; font-size:12px;">※ 原価・収益の詳細分析は「原価・収益管理」に移動しました</span></td><td>確認用</td></tr>
+<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">日常業務</td></tr>
 <tr><td><strong>出面入力</strong></td><td>日々の出勤・残業・有給を入力・確認</td><td><strong>毎日</strong></td></tr>
 <tr><td>就業カレンダー</td><td>各現場の就業カレンダーの確認</td><td>確認用</td></tr>
+<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">集計・分析</td></tr>
 <tr><td><strong>月次集計</strong></td><td>日比建設分の出勤集計・給与計算・月締め<br><span style="color:#888; font-size:12px;">※ HFU分は靖仁さんが担当</span></td><td><strong>毎月</strong></td></tr>
+<tr><td><strong>帳票出力</strong></td><td>出面表・給与・有給台帳のExcel/PDF出力</td><td><strong>毎月</strong></td></tr>
+<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">人事・労務</td></tr>
+<tr><td><strong>有給・休み管理</strong></td><td>有給の付与・消化・残日数の管理<br><span style="color:#888; font-size:12px;">※ 有給申請の承認/却下は「申請」タブから行います</span></td><td><strong>毎月</strong></td></tr>
+<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">現場・外注</td></tr>
 <tr><td>現場マスタ</td><td>現場情報・単価の確認</td><td>随時</td></tr>
 <tr><td>外注先マスタ</td><td>外注先の情報確認</td><td>随時</td></tr>
-<tr><td><strong>有給・休み管理</strong></td><td>有給の付与・消化・残日数の管理<br><span style="color:#888; font-size:12px;">※ 有給申請の承認/却下は「申請」タブから行います</span></td><td><strong>毎月</strong></td></tr>
-<tr><td><strong>帳票出力</strong></td><td>出面表・給与・有給台帳のExcel/PDF出力</td><td><strong>毎月</strong></td></tr>
 </table>
 
 <!-- ================================================ -->
@@ -156,13 +161,19 @@
 
 <h3>入力値の一覧</h3>
 
+<div class="box box-warn">
+<strong>5月〜 外国人スタッフの入力方式が変わります：</strong><br>
+外国人スタッフ（ベトナム人）はPC画面でも<strong>時刻ベース入力</strong>になります。セルには出勤区分（出/有/休/現）＋ 開始時刻・終了時刻 ＋ 休憩チェックボックス（午前10:00-10:30 / 午後15:00-15:30）を入力します。昼休み（12:00-13:00）は常に控除され、チェック不要です。<br>
+<strong>日本人社員</strong>は従来形式（1/0.5/有 ＋ 残業時間入力）のままです。
+</div>
+
 <table>
 <tr><th>入力値</th><th>意味</th><th>色</th><th>使い方</th></tr>
-<tr><td><strong>1</strong></td><td>出勤（1日）</td><td>緑</td><td>通常の出勤日</td></tr>
-<tr><td><strong>0.5</strong></td><td>半日</td><td>黄</td><td>半日だけ出勤した場合</td></tr>
-<tr><td><strong>P</strong></td><td>有給休暇</td><td>紫</td><td>有給を取得した日</td></tr>
+<tr><td><strong>1</strong></td><td>出勤（1日）</td><td>緑</td><td>通常の出勤日（日本人社員）</td></tr>
+<tr><td><strong>0.5</strong></td><td>半日</td><td>黄</td><td>半日だけ出勤した場合（日本人社員）</td></tr>
+<tr><td><strong>有</strong></td><td>有給休暇</td><td>紫</td><td>有給を取得した日</td></tr>
 <tr><td><strong>補</strong></td><td>休業補償（0.6）</td><td>紫</td><td>会社都合の休業日</td></tr>
-<tr><td><strong>下段の数字</strong></td><td>残業時間</td><td>オレンジ</td><td>0.5h単位で入力（例: 1.5）</td></tr>
+<tr><td><strong>下段の数字</strong></td><td>残業時間</td><td>オレンジ</td><td>0.5h単位で入力（例: 1.5）— 日本人社員のみ</td></tr>
 <tr><td><strong>空欄</strong></td><td>休み / 未入力</td><td>—</td><td>何も入力しない</td></tr>
 </table>
 
@@ -264,44 +275,44 @@
 
 <div class="box box-warn">
 <strong>変形労働時間制のポイント：</strong><br>
-残業は「1日8時間を超えた分」ではなく、<strong>月の合計で所定時間を超えた分</strong>が残業になります。<br>
-所定時間は就業カレンダーの所定日数から自動計算されます（所定日数 &times; 7時間）。
+2026年5月から<strong>3層構造</strong>の給与計算（① 基本給固定20日分 + ② 追加所定手当 + ③ 残業手当）に変更。<br>
+残業は<strong>3段階判定</strong>（日8h超 → 週40h超 → 月法定上限超）で計算されます。<br>
+出面Excelの「勤怠サマリー」シートに3段階判定の結果が自動出力されます。
 </div>
 
 <div class="formula">
-<strong>所定時間</strong> = 所定日数 &times; 7時間<br>
-<strong>基本給</strong> = 時給 &times; 所定時間<br>
-<strong>法定残業</strong> = MAX(0, 実労働時間 &minus; 所定時間)<br>
-<strong>残業手当</strong> = 時給 &times; 1.25 &times; 法定残業時間<br>
-<strong>欠勤控除</strong> = 時給 &times; 7時間 &times; 欠勤日数<br>
+<strong>① 基本給（固定）</strong> = 時給 &times; 20日 &times; 7時間<br>
+<strong>② 追加所定手当</strong> = 時給 &times; MAX(0, 実出勤日数 &minus; 20日) &times; 7時間<br>
+<strong>③ 法定外労働時間</strong> = 3段階判定（日8h超 + 週40h超 + 月法定上限超）<br>
+<strong>③ 残業手当</strong> = 時給 &times; 1.25 &times; 法定外労働時間<br>
+<strong>欠勤控除</strong> = 時給 &times; 7時間 &times; MAX(0, 20日 &minus; 実出勤日数 &minus; 有給日数)<br>
 <hr style="border-top: 1px solid #999;">
-<strong>支給額</strong> = 基本給 &minus; 欠勤控除 + 残業手当
+<strong>支給額</strong> = ① &minus; 欠勤控除 + ② + ③
 </div>
 
 <div class="box">
-<strong>計算例：フウさん（時給 2,558円 / 所定24日 / 実出勤24日 / 残業36h）</strong>
+<strong>計算例：フウさん（時給 2,000円 / 所定24日 / 実出勤24日 / 残業12h）</strong>
 <table>
 <tr><th>項目</th><th>計算</th><th>金額</th></tr>
-<tr><td>所定時間</td><td>24日 &times; 7h</td><td>168時間</td></tr>
-<tr><td>基本給</td><td>2,558 &times; 168h</td><td>429,744円</td></tr>
-<tr><td>実労働時間</td><td>24日 &times; 7h + 36h</td><td>204時間</td></tr>
-<tr><td>法定残業</td><td>204h &minus; 168h</td><td>36時間</td></tr>
-<tr><td>残業手当</td><td>2,558 &times; 1.25 &times; 36h</td><td>115,110円</td></tr>
-<tr><td>欠勤控除</td><td>0日</td><td>0円</td></tr>
-<tr><td><strong>支給額</strong></td><td></td><td><strong>544,854円</strong></td></tr>
+<tr><td>基本給（固定）</td><td>2,000 &times; 20日 &times; 7h</td><td>280,000円</td></tr>
+<tr><td>追加所定手当</td><td>2,000 &times; (24日 &minus; 20日) &times; 7h</td><td>56,000円</td></tr>
+<tr><td>法定外労働時間</td><td>3段階判定（システム自動計算）</td><td>例: 7.3h</td></tr>
+<tr><td>残業手当</td><td>2,000 &times; 1.25 &times; 7.3h</td><td>18,250円</td></tr>
+<tr><td>欠勤控除</td><td>MAX(0, 20 &minus; 24 &minus; 0) = 0日</td><td>0円</td></tr>
+<tr><td><strong>支給額</strong></td><td>280,000 + 56,000 + 18,250</td><td><strong>354,250円</strong></td></tr>
 </table>
 </div>
 
 <div class="box">
-<strong>欠勤がある場合の例：（所定24日に対し22日しか出勤しなかった場合）</strong>
+<strong>欠勤がある場合の例：（18日しか出勤しなかった場合、有給0日）</strong>
 <table>
 <tr><th>項目</th><th>計算</th><th>金額</th></tr>
-<tr><td>基本給</td><td>2,558 &times; 168h</td><td>429,744円</td></tr>
-<tr><td>欠勤日数</td><td>24日 &minus; 22日 &minus; 有給0日</td><td>2日</td></tr>
-<tr><td>欠勤控除</td><td>2,558 &times; 7h &times; 2日</td><td>35,812円</td></tr>
-<tr><td><strong>支給額</strong></td><td>429,744 &minus; 35,812 + 残業手当</td><td><strong>393,932円 + 残業</strong></td></tr>
+<tr><td>基本給（固定）</td><td>2,000 &times; 20日 &times; 7h</td><td>280,000円</td></tr>
+<tr><td>欠勤日数</td><td>MAX(0, 20日 &minus; 18日 &minus; 0日)</td><td>2日</td></tr>
+<tr><td>欠勤控除</td><td>2,000 &times; 7h &times; 2日</td><td>28,000円</td></tr>
+<tr><td><strong>支給額</strong></td><td>280,000 &minus; 28,000 + 残業手当</td><td><strong>252,000円 + 残業</strong></td></tr>
 </table>
-<p style="font-size:13px; color:#888;">※ 有給取得日は欠勤にカウントされません。</p>
+<p style="font-size:13px; color:#888;">※ 有給取得日は欠勤にカウントされません。20日以上出勤した場合は追加所定手当が加算されます。</p>
 </div>
 
 <!-- 6-3 確認ポイント -->
@@ -397,8 +408,8 @@
 
 <table>
 <tr><th>帳票名</th><th>形式</th><th>用途</th></tr>
-<tr><td>日比建設向け出面一覧</td><td>Excel</td><td>日比建設社員の出面表</td></tr>
-<tr><td>HFU向け出面一覧</td><td>Excel</td><td>ベトナム人スタッフの出面表</td></tr>
+<tr><td>日比建設向け出面一覧</td><td>Excel</td><td>日比建設社員の出面表<br><span style="color:#888; font-size:12px;">※ 3シート構成：Sheet1=出面一覧、Sheet2=勤務時間一覧、Sheet3=勤怠サマリー（3段階残業判定）</span></td></tr>
+<tr><td>HFU向け出面一覧</td><td>Excel</td><td>ベトナム人スタッフの出面表<br><span style="color:#888; font-size:12px;">※ 3シート構成：Sheet1=出面一覧、Sheet2=勤務時間一覧、Sheet3=勤怠サマリー（3段階残業判定）</span></td></tr>
 <tr><td>外注先向け出面確認書</td><td>Excel</td><td>外注先への確認用</td></tr>
 <tr><td>歩掛管理表</td><td>Excel</td><td>現場別の人工数管理</td></tr>
 <tr><td>月次レポート</td><td>PDF</td><td>売上・原価・利益のサマリー</td></tr>
@@ -416,6 +427,13 @@
 <div class="step">
   <div class="step-num">3</div>
   <div class="step-text">ダウンロードボタンを押す → ファイルが自動ダウンロードされる</div>
+</div>
+
+<div class="box box-ok">
+<strong>出面Excelの3シート構成について：</strong>日比建設向け・HFU向け出面Excelは外国人スタッフがいる場合3シート構成になっています。<br>
+<strong>Sheet1「出面一覧」</strong>：従来の出面表形式（社内確認用）。<br>
+<strong>Sheet2「勤務時間一覧」</strong>：出面データを時間に変換した一覧（日次の実労働時間・所定時間・週番号）。<br>
+<strong>Sheet3「勤怠サマリー」</strong>：3段階残業判定の結果（個人別月次集計）。所定労働時間/日数、実労働時間/日数、法定外労働時間（日/週/月の内訳付き）、基本給（固定）など。
 </div>
 
 <!-- ================================================ -->
@@ -452,7 +470,7 @@
 
 <table>
 <tr><th>ステップ</th><th>誰が</th><th>やること</th></tr>
-<tr><td>1</td><td>実習生・特定技能</td><td>スマホから毎日「しゅっきん」「やすみ」を入力</td></tr>
+<tr><td>1</td><td>実習生・特定技能</td><td>スマホから毎日、開始時刻・終了時刻・休憩を入力して出勤登録（5月〜新形式）</td></tr>
 <tr><td>2</td><td>政仁さん</td><td>PC画面で出面を確認し、必要に応じて修正・承認</td></tr>
 <tr><td>3</td><td><strong>奥寺さん</strong></td><td>月次集計の「日比建設」タブで給与計算をチェック → 月締め</td></tr>
 <tr><td>4</td><td>靖仁さん</td><td>月次集計の「HFU」タブで給与計算をチェック</td></tr>
@@ -488,7 +506,7 @@
 </div>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-12</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-17</p>
 
 </body>
 </html>

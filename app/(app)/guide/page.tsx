@@ -186,7 +186,7 @@ export default function GuidePage() {
             { step: '2', label: '管理者がシステムに入力', when: '〜25日', icon: '\u270F\uFE0F', detail: '就業カレンダー画面で現場ごとに出勤日/休日/祝日を設定' },
             { step: '3', label: '事業責任者が承認', when: '〜月末', icon: '\u2705', detail: '所定日数・所定時間が確定。法定上限チェック（自動）' },
             { step: '4', label: 'Messengerでリンク送信', when: '承認後', icon: '\uD83D\uDCE8', detail: 'スタッフがスマホでカレンダーを確認し、全現場一括で署名' },
-            { step: '5', label: 'カレンダー通りに勤務開始', when: '翌月1日〜', icon: '\uD83D\uDC77', detail: 'スタッフは毎日スマホで出勤/休みを入力' },
+            { step: '5', label: 'カレンダー通りに勤務開始', when: '翌月1日〜', icon: '\uD83D\uDC77', detail: 'スタッフは毎日スマホで開始/終了時刻・休憩を入力して出勤登録（5月〜新形式）' },
             { step: '6', label: '月次集計・月締め', when: '翌月5日頃', icon: '\uD83D\uDCCA', detail: '出面データから給与を自動計算。月締めで確定。出面Excelの「勤怠サマリー」シートに3段階残業判定の結果が自動出力される（HFU→キャシュモ、日比建設→社内で給与計算に使用）' },
           ].map((s, i) => (
             <div key={i} className="flex gap-3">
@@ -318,10 +318,23 @@ export default function GuidePage() {
           {/* PC画面 */}
           <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4 bg-blue-50/30 dark:bg-blue-900/10">
             <h4 className="font-bold text-blue-700 dark:text-blue-400 mb-2">PC画面（管理者向け）</h4>
+            <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg p-3 mb-2">
+              <p className="text-xs font-bold text-orange-700 dark:text-orange-400 mb-1">5月〜 外国人スタッフの入力方式が変わります</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">外国人スタッフは時刻ベース入力（出/有/休/現 + 開始/終了時刻 + 休憩チェック2つ）に変更。日本人社員は従来形式のまま。</p>
+            </div>
+            <p className="text-xs font-bold text-gray-500 mb-1">日本人社員（従来形式）</p>
+            <ul className="list-disc ml-5 text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <li>入力値：<span className="font-bold">1</span>=出勤、<span className="font-bold">0.5</span>=半日、<span className="text-green-600 font-bold">補</span>=0.6補償、<span className="text-green-600 font-bold">有</span>=有給</li>
+              <li>残業は各セルの下段に時間数を入力</li>
+            </ul>
+            <p className="text-xs font-bold text-gray-500 mt-2 mb-1">外国人スタッフ（5月〜時刻ベース）</p>
+            <ul className="list-disc ml-5 text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <li>セルに出勤区分（出/有/休/現）+ 開始時刻・終了時刻を入力</li>
+              <li>休憩チェックボックス2つ：午前10:00-10:30 / 午後15:00-15:30（昼休み12:00-13:00は常に控除）</li>
+            </ul>
+            <p className="text-xs font-bold text-gray-500 mt-2 mb-1">共通</p>
             <ul className="list-disc ml-5 text-sm text-gray-600 dark:text-gray-400 space-y-1">
               <li>現場を選択し、月のグリッドで一括入力</li>
-              <li>入力値：<span className="font-bold">1</span>=出勤、<span className="font-bold">0.5</span>=半日、<span className="text-green-600 font-bold">補</span>=0.6補償、<span className="text-green-600 font-bold">P</span>=有給</li>
-              <li>残業は各セルの下段に時間数を入力</li>
               <li>日比建設・HFU・外注がグループ別に表示</li>
               <li>配置編集ボタンでスタッフの配置変更が可能</li>
             </ul>
@@ -329,10 +342,12 @@ export default function GuidePage() {
 
           {/* スマホ画面 */}
           <div className="border border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50/30 dark:bg-green-900/10">
-            <h4 className="font-bold text-green-700 dark:text-green-400 mb-2">スマホ画面（スタッフ向け）</h4>
+            <h4 className="font-bold text-green-700 dark:text-green-400 mb-2">スマホ画面（スタッフ向け）— 5月〜新形式</h4>
             <ul className="list-disc ml-5 text-sm text-gray-600 dark:text-gray-400 space-y-1">
               <li>トークンURLでアクセス（ログイン不要）</li>
-              <li><span className="font-bold">しゅっきん</span>ボタンで出勤登録、残業時間も設定可能</li>
+              <li><span className="font-bold">出勤登録</span>：開始時刻（初期値8:00）・終了時刻（初期値17:00）を設定し、休憩チェックボックス2つ（午前10:00-10:30 / 午後15:00-15:30）を確認して登録。昼休み（12:00-13:00）は常に控除</li>
+              <li>通常の日はそのまま「出勤登録」を押すだけ（実労働7時間）。残業日は終了時刻を変更</li>
+              <li>実労働時間がリアルタイム表示される</li>
               <li><span className="font-bold">やすみ</span>ボタンで休み登録</li>
               <li><span className="font-bold">有給申請</span>ボタンで有給休暇を申請（残日数チェックあり）</li>
               <li>過去5日分の入力履歴を確認・修正可能</li>
@@ -408,7 +423,7 @@ export default function GuidePage() {
             },
             {
               num: '2', title: '出面入力', color: 'green',
-              items: ['現場ごとのグリッド入力（日比建設/HFU/外注）', '出勤・半日・補償・有給・残業の記録', '日付ヘッダー固定（スクロール時も表示）', '「終了現場を表示」チェックボックス', '配置編集（スタッフの現場割り当て）'],
+              items: ['現場ごとのグリッド入力（日比建設/HFU/外注）', '外国人スタッフ: 時刻ベース入力（出/有/休/現 + 開始/終了 + 休憩チェック2つ）— 5月〜', '日本人社員: 従来形式（1/0.5/有 + 残業時間）', '日付ヘッダー固定（スクロール時も表示）', '「終了現場を表示」チェックボックス', '配置編集（スタッフの現場割り当て）'],
             },
             {
               num: '3', title: '月次集計', color: 'purple',
@@ -520,7 +535,7 @@ export default function GuidePage() {
               ['スタッフ画面', '日本語 + ベトナム語の二言語表示'],
               ['署名', '就業カレンダーの全現場一括署名（タイムスタンプ記録）'],
               ['有給休暇', '法定日数を自動付与、残日数チェック付きの申請フロー'],
-              ['出面入力', 'スマホから毎日出勤/休み/有給を入力'],
+              ['出面入力', 'スマホから開始/終了時刻・休憩を入力して出勤登録（5月〜新形式）'],
               ['帳票出力', '出面表・月次集計・有給管理台帳のExcel出力（出面Excelは3シート構成: 出面一覧+勤務時間一覧+勤怠サマリー）'],
             ]}
           />
