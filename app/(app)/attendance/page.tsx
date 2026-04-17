@@ -936,8 +936,8 @@ export default function AttendanceGridPage() {
           配置編集
         </button>
 
-        {/* 所定日数 input */}
-        {data && (
+        {/* 所定日数 input（5月以降はカレンダーで確定するため非表示） */}
+        {data && !useTimeBased && (
           <div className="flex items-center gap-1.5 text-xs">
             <label className="text-gray-600 font-medium whitespace-nowrap">所定日数:</label>
             <input
