@@ -114,12 +114,12 @@ export default function LeavePage() {
   // タブ管理
   const [activeTab, setActiveTab] = useState<'list' | 'requests' | 'monthly' | 'calendar'>('list')
   // 申請管理
-  const [leaveRequests, setLeaveRequests] = useState<{ id: string; workerId: number; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; reviewedAt?: string; rejectedReason?: string }[]>([])
+  const [leaveRequests, setLeaveRequests] = useState<{ id: string; workerId: number; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; foremanApprovedBy?: number; reviewedAt?: string; rejectedReason?: string }[]>([])
   const [sites, setSites] = useState<{ id: string; name: string }[]>([])
   const [processingReq, setProcessingReq] = useState<string | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [reqFilter, setReqFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
+  const [reqFilter, setReqFilter] = useState<'all' | 'pending' | 'foreman_approved' | 'approved' | 'rejected'>('all')
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
@@ -335,6 +335,18 @@ export default function LeavePage() {
         const getSiteName = (siteId: string) => sites.find(s => s.id === siteId)?.name || siteId
         const fmtDate = (d: string) => { const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}` }
         const fmtTs = (ts: string) => { const d = new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }
+        const handleForemanApprove = async (id: string) => {
+          setProcessingReq(id)
+          try {
+            const stored = localStorage.getItem('hibi_auth')
+            const { user } = stored ? JSON.parse(stored) : { user: null }
+            await fetch('/api/leave-request', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+              body: JSON.stringify({ action: 'foreman_approve', requestId: id, foremanId: user?.workerId || 0 }),
+            })
+            fetchData()
+          } catch {} finally { setProcessingReq(null) }
+        }
         const handleApprove = async (id: string) => {
           setProcessingReq(id)
           try {
@@ -361,13 +373,16 @@ export default function LeavePage() {
         }
         return (
           <div className="space-y-4">
-            <div className="flex gap-2">
-              {(['all','pending','approved','rejected'] as const).map(key => (
+            <div className="flex gap-2 flex-wrap">
+              {(['all','pending','foreman_approved','approved','rejected'] as const).map(key => (
                 <button key={key} onClick={() => setReqFilter(key)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${reqFilter === key ? 'bg-hibi-navy text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100'}`}>
-                  {key === 'all' ? 'すべて' : key === 'pending' ? '承認待ち' : key === 'approved' ? '承認済み' : '却下'}
+                  {key === 'all' ? 'すべて' : key === 'pending' ? '職長待ち' : key === 'foreman_approved' ? '最終承認待ち' : key === 'approved' ? '承認済み' : '却下'}
                   {key === 'pending' && leaveRequests.filter(r => r.status === 'pending').length > 0 && (
                     <span className="ml-1 bg-red-500 text-white text-[10px] rounded-full px-1.5">{leaveRequests.filter(r => r.status === 'pending').length}</span>
+                  )}
+                  {key === 'foreman_approved' && leaveRequests.filter(r => r.status === 'foreman_approved').length > 0 && (
+                    <span className="ml-1 bg-orange-500 text-white text-[10px] rounded-full px-1.5">{leaveRequests.filter(r => r.status === 'foreman_approved').length}</span>
                   )}
                 </button>
               ))}
@@ -377,7 +392,7 @@ export default function LeavePage() {
             ) : (
               <div className="space-y-3">
                 {filtered.map(req => (
-                  <div key={req.id} className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-4 ${req.status === 'pending' ? 'border-yellow-300' : 'border-gray-200 dark:border-gray-700'}`}>
+                  <div key={req.id} className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border p-4 ${req.status === 'pending' ? 'border-yellow-300' : req.status === 'foreman_approved' ? 'border-blue-300' : 'border-gray-200 dark:border-gray-700'}`}>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-1">
@@ -386,14 +401,28 @@ export default function LeavePage() {
                           <span className="text-xs text-gray-400">{getSiteName(req.siteId)}</span>
                         </div>
                         {req.reason && <div className="text-xs text-gray-500 mb-1">理由: {req.reason}</div>}
-                        <div className="text-[10px] text-gray-400">申請: {fmtTs(req.requestedAt)}{req.reviewedAt ? ` / 処理: ${fmtTs(req.reviewedAt)}` : ''}</div>
+                        <div className="text-[10px] text-gray-400">
+                          申請: {fmtTs(req.requestedAt)}
+                          {req.foremanApprovedAt && ` / 職長承認: ${fmtTs(req.foremanApprovedAt)}`}
+                          {req.reviewedAt ? ` / 最終承認: ${fmtTs(req.reviewedAt)}` : ''}
+                        </div>
                         {req.status === 'rejected' && req.rejectedReason && <div className="text-[10px] text-red-500 mt-1">却下理由: {req.rejectedReason}</div>}
                       </div>
                       <div className="flex items-center gap-2 ml-4">
                         {req.status === 'pending' && (
                           <>
+                            <button onClick={() => handleForemanApprove(req.id)} disabled={processingReq === req.id}
+                              className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                            <button onClick={() => rejectingId === req.id ? handleReject(req.id) : (setRejectingId(req.id), setRejectReason(''))}
+                              disabled={processingReq === req.id}
+                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                          </>
+                        )}
+                        {req.status === 'foreman_approved' && (
+                          <>
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">職長済</span>
                             <button onClick={() => handleApprove(req.id)} disabled={processingReq === req.id}
-                              className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">承認</button>
+                              className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
                             <button onClick={() => rejectingId === req.id ? handleReject(req.id) : (setRejectingId(req.id), setRejectReason(''))}
                               disabled={processingReq === req.id}
                               className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>

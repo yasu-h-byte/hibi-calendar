@@ -14,8 +14,12 @@ interface LeaveRequest {
   day: number           // day of month
   siteId: string
   reason: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected'
   requestedAt: string
+  // 職長承認
+  foremanApprovedAt?: string
+  foremanApprovedBy?: number
+  // 最終承認（事業責任者）
   reviewedAt?: string
   reviewedBy?: number
   rejectedReason?: string
@@ -173,7 +177,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, id: docId })
     }
 
-    // ── Admin: approve leave request ──
+    // ── 職長: 有給申請を承認（第1段階） ──
+    if (action === 'foreman_approve') {
+      // 職長はトークン認証またはadmin認証
+      const { requestId, foremanId, token } = body
+      if (!requestId) {
+        return NextResponse.json({ error: 'Missing requestId' }, { status: 400 })
+      }
+
+      // 認証: トークンまたは管理者パスワード
+      let authWorkerId = foremanId || 0
+      if (token) {
+        const worker = await getWorkerByToken(token)
+        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+        authWorkerId = worker.id
+      } else if (!await checkApiAuth(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const docRef = doc(db, 'leaveRequests', requestId)
+      const snap = await getDoc(docRef)
+      if (!snap.exists()) {
+        return NextResponse.json({ error: 'Request not found' }, { status: 404 })
+      }
+
+      const data = snap.data() as LeaveRequest
+      if (data.status !== 'pending') {
+        return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+      }
+
+      await setDoc(docRef, {
+        ...data,
+        status: 'foreman_approved',
+        foremanApprovedAt: new Date().toISOString(),
+        foremanApprovedBy: authWorkerId,
+      })
+
+      return NextResponse.json({ success: true })
+    }
+
+    // ── 事業責任者: 最終承認（第2段階） ──
     if (action === 'approve') {
       if (!await checkApiAuth(request)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -191,8 +234,11 @@ export async function POST(request: NextRequest) {
       }
 
       const data = snap.data() as LeaveRequest
-      if (data.status !== 'pending') {
-        return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+      if (data.status !== 'foreman_approved') {
+        // 後方互換: pending から直接承認も許可（管理者権限）
+        if (data.status !== 'pending') {
+          return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+        }
       }
 
       // Update status
@@ -209,15 +255,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
-    // ── Admin: reject leave request ──
+    // ── 却下（職長 or 管理者） ──
     if (action === 'reject') {
-      if (!await checkApiAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-
-      const { requestId, rejectedBy, reason } = body
+      // 職長もadminも却下可能
+      const { requestId, rejectedBy, reason, token: rejectToken } = body
       if (!requestId) {
         return NextResponse.json({ error: 'Missing requestId' }, { status: 400 })
+      }
+
+      let authWorkerId = rejectedBy || 0
+      if (rejectToken) {
+        const worker = await getWorkerByToken(rejectToken)
+        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+        authWorkerId = worker.id
+      } else if (!await checkApiAuth(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
       const docRef = doc(db, 'leaveRequests', requestId)
@@ -227,7 +279,7 @@ export async function POST(request: NextRequest) {
       }
 
       const data = snap.data() as LeaveRequest
-      if (data.status !== 'pending') {
+      if (data.status === 'approved' || data.status === 'rejected') {
         return NextResponse.json({ error: 'Already processed' }, { status: 409 })
       }
 
@@ -235,7 +287,7 @@ export async function POST(request: NextRequest) {
         ...data,
         status: 'rejected',
         reviewedAt: new Date().toISOString(),
-        reviewedBy: rejectedBy || 0,
+        reviewedBy: authWorkerId,
         rejectedReason: reason || '',
       })
 
