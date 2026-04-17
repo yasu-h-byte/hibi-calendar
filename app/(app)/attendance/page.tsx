@@ -1376,7 +1376,6 @@ export default function AttendanceGridPage() {
                                       ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
                                       ${workVal === '1' ? 'text-green-700' : ''}
                                       ${workVal === '0.5' ? 'text-yellow-700' : ''}
-                                      ${workVal === '0.6' ? 'text-purple-600' : ''}
                                       ${workVal === 'P' ? 'text-purple-600' : ''}
                                       ${workVal === '' ? 'text-gray-300 font-normal' : ''}
                                     `}
@@ -1384,8 +1383,7 @@ export default function AttendanceGridPage() {
                                     <option value="">-</option>
                                     <option value="1">1</option>
                                     <option value="0.5">0.5</option>
-                                    <option value="0.6">.6</option>
-                                    <option value="P">P</option>
+                                    <option value="P">有</option>
                                   </select>
 
                                   {/* OT input - 小さめ */}
@@ -1627,8 +1625,7 @@ export default function AttendanceGridPage() {
             <span className="mx-2 border-l border-gray-300 h-3" />
             <span><strong className="text-green-700">1</strong> = 出勤</span>
             <span><strong className="text-yellow-700">0.5</strong> = 半日</span>
-            <span><strong className="text-purple-600">補</strong> = 0.6補償</span>
-            <span><strong className="text-purple-600">P</strong> = 有給</span>
+            <span><strong className="text-purple-600">有</strong> = 有給</span>
             <span className="text-amber-700">下段 = 残業h</span>
             {useTimeBased && data && data.workers.some(w => w.visa && w.visa !== 'none' && w.visa !== '') && (
               <>
