@@ -25,8 +25,8 @@ interface StaffData {
 }
 
 const STATUS_LABELS: Record<AttendanceStatus, string> = {
-  work: 'しゅっきん', overtime: 'しゅっきん', rest: 'やすみ',
-  leave: 'ゆうきゅう', site_off: 'げんばやすみ', none: 'みにゅうりょく',
+  work: '出勤', overtime: '出勤', rest: '休み',
+  leave: '有給', site_off: '現場休み', none: '未入力',
 }
 const STATUS_EMOJI: Record<AttendanceStatus, string> = {
   work: '🔨', overtime: '🔨', rest: '🏠', leave: '🌴', site_off: '🚧', none: '—',
@@ -539,7 +539,7 @@ export default function StaffAttendancePage() {
             {/* 4 Buttons (legacy: ~202604) */}
             <div className="grid grid-cols-3 gap-3">
               {([
-                { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' },
+                { choice: 'work', emoji: '🔨', label: '出勤 / Đi làm', color: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' },
                 { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400 hover:bg-gray-500 active:bg-gray-600' },
                 { choice: 'leave', emoji: '🌴', label: 'ゆうきゅう\nしんせい', color: 'bg-green-500 hover:bg-green-600 active:bg-green-700' },
                 // site_off（げんばやすみ）は変形労働時間制導入により非表示
@@ -606,7 +606,7 @@ export default function StaffAttendancePage() {
 
         {/* Past 5 days */}
         <div className="bg-white rounded-xl shadow p-4">
-          <div className="text-sm text-gray-500 mb-3 font-bold">さいきん 5にち</div>
+          <div className="text-sm text-gray-500 mb-3 font-bold">最近5日 / 5 ngày gần đây</div>
           <div className="space-y-1.5">
             {data.pastDays.map((pd, i) => (
               <div
@@ -625,12 +625,25 @@ export default function StaffAttendancePage() {
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {pd.entry?.st && pd.entry?.et ? (
                     <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[pd.status]}`}>
-                      {STATUS_EMOJI[pd.status]} {pd.entry.st}〜{pd.entry.et}
+                      {pd.entry.st}〜{pd.entry.et}
+                      {(() => {
+                        const s = parseInt(pd.entry.st.split(':')[0]) * 60 + parseInt(pd.entry.st.split(':')[1] || '0')
+                        const e = parseInt(pd.entry.et.split(':')[0]) * 60 + parseInt(pd.entry.et.split(':')[1] || '0')
+                        let m = e - s - 60
+                        if (pd.entry.b1) m -= 30
+                        if (pd.entry.b3) m -= 30
+                        const h = Math.max(0, Math.round(m / 6) / 10)
+                        return ` (${h}h)`
+                      })()}
+                    </span>
+                  ) : pd.status === 'none' ? (
+                    <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[pd.status]}`}>
+                      — 未入力
                     </span>
                   ) : (
                     <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[pd.status]}`}>
                       {STATUS_EMOJI[pd.status]} {STATUS_LABELS[pd.status]}
-                      {pd.status === 'overtime' && pd.entry?.o ? ` +${pd.entry.o}h` : ''}
+                      {(pd.status === 'work' || pd.status === 'overtime') && pd.entry?.o ? ` +${pd.entry.o}h` : ''}
                     </span>
                   )}
                   {pd.locked && <span className="text-xs">🔒</span>}
@@ -642,7 +655,7 @@ export default function StaffAttendancePage() {
 
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 py-2">
-          まいにち いれてね！
+          毎日入力してください / Hãy nhập mỗi ngày
         </div>
       </div>
 
@@ -729,7 +742,7 @@ export default function StaffAttendancePage() {
               ) : (
                 <div className="grid grid-cols-2 gap-3">
                   {([
-                    { choice: 'work', emoji: '🔨', label: 'しゅっきん', color: 'bg-blue-500' },
+                    { choice: 'work', emoji: '🔨', label: '出勤', color: 'bg-blue-500' },
                     { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400' },
                     // 有給は申請フロー経由のため過去日の直接入力は不可
                     // 管理者がPC出面入力画面から修正する
