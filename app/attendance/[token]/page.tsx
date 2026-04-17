@@ -71,14 +71,14 @@ export default function StaffAttendancePage() {
   const [startTime, setStartTime] = useState('08:00')
   const [endTime, setEndTime] = useState('17:00')
   const [break1, setBreak1] = useState(true)  // 10:00-10:30
-  const [break2, setBreak2] = useState(true)  // 12:00-13:00
+  const break2 = true  // 12:00-13:00 昼休憩は必ず取得（固定）
   const [break3, setBreak3] = useState(true)  // 15:00-15:30
 
   // Time-based input for past day editing
   const [pastStartTime, setPastStartTime] = useState('08:00')
   const [pastEndTime, setPastEndTime] = useState('17:00')
   const [pastBreak1, setPastBreak1] = useState(true)
-  const [pastBreak2, setPastBreak2] = useState(true)
+  const pastBreak2 = true  // 昼休憩は必ず取得（固定）
   const [pastBreak3, setPastBreak3] = useState(true)
 
   const fetchData = useCallback(async () => {
@@ -110,13 +110,13 @@ export default function StaffAttendancePage() {
         setStartTime(d.currentEntry.st || '08:00')
         setEndTime(d.currentEntry.et || '17:00')
         setBreak1(d.currentEntry.b1 === 1)
-        setBreak2(d.currentEntry.b2 === 1)
+        // break2 is always true (lunch break is mandatory)
         setBreak3(d.currentEntry.b3 === 1)
       } else {
         setStartTime('08:00')
         setEndTime('17:00')
         setBreak1(true)
-        setBreak2(true)
+        // break2 is always true
         setBreak3(true)
       }
     } catch {
@@ -147,13 +147,13 @@ export default function StaffAttendancePage() {
         setPastStartTime(pd.entry.st || '08:00')
         setPastEndTime(pd.entry.et || '17:00')
         setPastBreak1(pd.entry.b1 === 1)
-        setPastBreak2(pd.entry.b2 === 1)
+        // pastBreak2 is always true
         setPastBreak3(pd.entry.b3 === 1)
       } else {
         setPastStartTime('08:00')
         setPastEndTime('17:00')
         setPastBreak1(true)
-        setPastBreak2(true)
+        // pastBreak2 is always true
         setPastBreak3(true)
       }
     }
@@ -466,11 +466,25 @@ export default function StaffAttendancePage() {
 
             {/* Break checkboxes */}
             <div className="bg-white rounded-xl shadow p-4">
-              <p className="text-xs text-gray-500 mb-2">休憩 / Nghi giai lao</p>
+              <p className="text-xs text-gray-500 mb-2">休憩 / Nghỉ giải lao</p>
               <div className="space-y-2">
                 {[
                   { id: 'b1', label: '10:00〜10:30（30分）', checked: break1, set: setBreak1 },
-                  { id: 'b2', label: '12:00〜13:00（60分）', checked: break2, set: setBreak2 },
+                ].map(b => (
+                  <label key={b.id} className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={b.checked} onChange={e => b.set(e.target.checked)}
+                      className="w-5 h-5 rounded text-hibi-navy" />
+                    <span className={`text-sm ${b.checked ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
+                      {b.label}
+                      {!b.checked && ' ← 未取得 / Không nghỉ'}
+                    </span>
+                  </label>
+                ))}
+                <div className="flex items-center gap-3 opacity-60">
+                  <span className="w-5 h-5 flex items-center justify-center text-green-600">✓</span>
+                  <span className="text-sm text-gray-500">12:00〜13:00（60分）— 必ず取得</span>
+                </div>
+                {[
                   { id: 'b3', label: '15:00〜15:30（30分）', checked: break3, set: setBreak3 },
                 ].map(b => (
                   <label key={b.id} className="flex items-center gap-3 cursor-pointer">
@@ -478,7 +492,7 @@ export default function StaffAttendancePage() {
                       className="w-5 h-5 rounded text-hibi-navy" />
                     <span className={`text-sm ${b.checked ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
                       {b.label}
-                      {!b.checked && ' ← 未取得'}
+                      {!b.checked && ' ← 未取得 / Không nghỉ'}
                     </span>
                   </label>
                 ))}
@@ -696,7 +710,6 @@ export default function StaffAttendancePage() {
                     <div className="space-y-2">
                       {[
                         { id: 'pb1', label: '10:00〜10:30（30分）', checked: pastBreak1, set: setPastBreak1 },
-                        { id: 'pb2', label: '12:00〜13:00（60分）', checked: pastBreak2, set: setPastBreak2 },
                         { id: 'pb3', label: '15:00〜15:30（30分）', checked: pastBreak3, set: setPastBreak3 },
                       ].map(b => (
                         <label key={b.id} className="flex items-center gap-3 cursor-pointer">

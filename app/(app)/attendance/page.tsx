@@ -1325,9 +1325,6 @@ export default function AttendanceGridPage() {
                                           <label className="flex items-center cursor-pointer" title="午前(10:00-10:30)">
                                             <input type="checkbox" checked={b1 === 1} onChange={e => handleBreakChange(wId, d.day, 'b1', e.target.checked)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
                                           </label>
-                                          <label className="flex items-center cursor-pointer" title="昼(12:00-13:00)">
-                                            <input type="checkbox" checked={b2 === 1} onChange={e => handleBreakChange(wId, d.day, 'b2', e.target.checked)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
-                                          </label>
                                           <label className="flex items-center cursor-pointer" title="午後(15:00-15:30)">
                                             <input type="checkbox" checked={b3 === 1} onChange={e => handleBreakChange(wId, d.day, 'b3', e.target.checked)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
                                           </label>
@@ -1632,7 +1629,7 @@ export default function AttendanceGridPage() {
                 <span className="mx-2 border-l border-gray-300 h-3" />
                 <span className="text-orange-600 font-medium">外国人:</span>
                 <span><strong className="text-green-700">出</strong> = 時間入力</span>
-                <span>休憩: 午前30分/昼60分/午後30分</span>
+                <span>休憩: ☐午前30分 / 昼60分(固定) / ☐午後30分</span>
                 <span className="text-amber-600">7h超=残業</span>
               </>
             )}
