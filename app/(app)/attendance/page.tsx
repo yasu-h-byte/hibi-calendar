@@ -1629,7 +1629,7 @@ export default function AttendanceGridPage() {
                 <span className="mx-2 border-l border-gray-300 h-3" />
                 <span className="text-orange-600 font-medium">外国人:</span>
                 <span><strong className="text-green-700">出</strong> = 時間入力</span>
-                <span>休憩: ☐午前30分 / 昼60分(固定) / ☐午後30分</span>
+                <span>休憩: ☐午前30分 / ☐午後30分（昼60分は固定）</span>
                 <span className="text-amber-600">7h超=残業</span>
               </>
             )}

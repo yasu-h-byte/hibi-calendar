@@ -470,21 +470,6 @@ export default function StaffAttendancePage() {
               <div className="space-y-2">
                 {[
                   { id: 'b1', label: '10:00〜10:30（30分）', checked: break1, set: setBreak1 },
-                ].map(b => (
-                  <label key={b.id} className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" checked={b.checked} onChange={e => b.set(e.target.checked)}
-                      className="w-5 h-5 rounded text-hibi-navy" />
-                    <span className={`text-sm ${b.checked ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
-                      {b.label}
-                      {!b.checked && ' ← 未取得 / Không nghỉ'}
-                    </span>
-                  </label>
-                ))}
-                <div className="flex items-center gap-3 opacity-60">
-                  <span className="w-5 h-5 flex items-center justify-center text-green-600">✓</span>
-                  <span className="text-sm text-gray-500">12:00〜13:00（60分）— 必ず取得</span>
-                </div>
-                {[
                   { id: 'b3', label: '15:00〜15:30（30分）', checked: break3, set: setBreak3 },
                 ].map(b => (
                   <label key={b.id} className="flex items-center gap-3 cursor-pointer">
