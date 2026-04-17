@@ -91,13 +91,25 @@ export default function GuidePage() {
             </div>
             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
               <p className="font-bold text-blue-600 dark:text-blue-400 mb-1">変形労働時間制（1ヶ月単位）</p>
-              <p>月の合計で法定上限以内なら、1日8時間を超えても残業にならない</p>
+              <p>月の合計で法定上限以内なら、特定の日や週が8時間・40時間を超えてもOK</p>
             </div>
           </div>
           <p className="text-gray-500 dark:text-gray-400">
             忙しい週と暇な週を平均化できる制度。カレンダーで出勤/休日を事前に決めるため、
             <span className="font-bold text-hibi-navy dark:text-blue-300">会社都合の休業（0.6補償）が発生しなくなる</span>のが最大のメリット。
           </p>
+          <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+            <p className="font-bold text-orange-700 dark:text-orange-400 mb-1">残業の判定（3段階）</p>
+            <p>変形労働時間制では、残業かどうかを<span className="font-bold">日→週→月の3段階</span>で判定します。</p>
+            <div className="mt-2 space-y-1 text-xs">
+              <p><span className="font-bold text-red-600">第1段階（日単位）:</span> 所定8h以下の日は<span className="font-bold">8hを超えた分</span>。所定8h超の日はその所定を超えた分</p>
+              <p><span className="font-bold text-yellow-700">第2段階（週単位）:</span> 所定40h以下の週は<span className="font-bold">40hを超えた分</span>（第1段階分を除く）</p>
+              <p><span className="font-bold text-blue-600">第3段階（月単位）:</span> <span className="font-bold">法定上限（暦日数&times;40&divide;7）を超えた分</span>（第1・2段階分を除く）</p>
+            </div>
+            <p className="text-xs text-orange-600 dark:text-orange-400 mt-2 font-bold">
+              この3段階判定はシステムが自動計算し、出面Excelの「勤怠サマリー」シートに出力されます。
+            </p>
+          </div>
         </div>
       </Section>
 
@@ -175,7 +187,7 @@ export default function GuidePage() {
             { step: '3', label: '事業責任者が承認', when: '〜月末', icon: '\u2705', detail: '所定日数・所定時間が確定。法定上限チェック（自動）' },
             { step: '4', label: 'Messengerでリンク送信', when: '承認後', icon: '\uD83D\uDCE8', detail: 'スタッフがスマホでカレンダーを確認し、全現場一括で署名' },
             { step: '5', label: 'カレンダー通りに勤務開始', when: '翌月1日〜', icon: '\uD83D\uDC77', detail: 'スタッフは毎日スマホで出勤/休みを入力' },
-            { step: '6', label: '月次集計・月締め', when: '翌月5日頃', icon: '\uD83D\uDCCA', detail: '出面データから給与を自動計算。月締めで確定' },
+            { step: '6', label: '月次集計・月締め', when: '翌月5日頃', icon: '\uD83D\uDCCA', detail: '出面データから給与を自動計算。月締めで確定。出面Excelの「勤怠サマリー」シートに3段階残業判定の結果が自動出力される（HFU→キャシュモ、日比建設→社内で給与計算に使用）' },
           ].map((s, i) => (
             <div key={i} className="flex gap-3">
               <div className="flex flex-col items-center">
@@ -224,32 +236,48 @@ export default function GuidePage() {
               <p><span className="text-gray-400">(1)</span> 基本給 = <span className="font-bold">時給 &times; ベース日数(20日) &times; 7h</span></p>
               <p><span className="text-gray-400">(2)</span> 追加所定手当 = 時給 &times; MAX(0, 実出勤日数 − 20日) &times; 7h</p>
               <p><span className="text-gray-400">(3)</span> 法定上限 = 暦日数 &times; 40 &divide; 7</p>
-              <p><span className="text-gray-400">(4)</span> 残業手当 = 時給 &times; 1.25 &times; MAX(0, 実労働時間 − 法定上限)</p>
-              <p><span className="text-gray-400">(5)</span> 欠勤控除 = 時給 &times; 7h &times; MAX(0, 20日 − 実出勤日数 − 有給日数)</p>
-              <p className="pt-1 border-t dark:border-gray-700"><span className="text-gray-400">(6)</span> <span className="font-bold text-blue-600 dark:text-blue-400">支給額 = (1) − (5) + (2) + (4)</span></p>
+              <p><span className="text-gray-400">(4)</span> 法定外労働時間 = 3段階判定（日8h超 + 週40h超 + 月法定上限超）</p>
+              <p><span className="text-gray-400">(5)</span> 残業手当 = 時給 &times; 1.25 &times; 法定外労働時間</p>
+              <p><span className="text-gray-400">(6)</span> 欠勤控除 = 時給 &times; 7h &times; MAX(0, 20日 − 実出勤日数 − 有給日数)</p>
+              <p className="pt-1 border-t dark:border-gray-700"><span className="text-gray-400">(7)</span> <span className="font-bold text-blue-600 dark:text-blue-400">支給額 = (1) − (6) + (2) + (5)</span></p>
+            </div>
+
+            <div className="mt-3 bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+              <p className="text-xs font-bold text-orange-700 dark:text-orange-400 mb-1">残業の3段階判定（例: ある日の残業2h）</p>
+              <T
+                headers={['区分', '時間', '割増', '説明']}
+                rows={[
+                  ['所定内', '7h (8:00-17:00)', 'なし', '基本給 or 追加所定手当に含まれる'],
+                  ['法定内残業', '1h (17:00-18:00)', 'なし', '所定7h超だが1日8h以内 → 割増不要'],
+                  ['法定外残業', '1h (18:00-19:00)', '×1.25', '1日8h超 → 25%割増'],
+                ]}
+              />
+              <p className="text-xs text-gray-500 mt-1">※ 「残業2h」のうち割増がつくのは1hだけ。システムが自動計算します。</p>
             </div>
 
             <div className="mt-3">
-              <p className="text-xs font-bold text-gray-500 mb-1">計算例：時給2,558円 / 30日月 / 23日出勤（有給1日）/ 残業36h</p>
+              <p className="text-xs font-bold text-gray-500 mb-1">計算例：時給2,000円 / 31日月 / 24日出勤 / 出面の残業合計12h</p>
               <T
                 headers={['項目', '計算', '金額']}
                 rows={[
-                  ['基本給（固定）', '2,558 \u00d7 20日 \u00d7 7h', '358,120円'],
-                  ['追加所定手当', '2,558 \u00d7 (23日−20日) \u00d7 7h', '53,718円'],
-                  ['法定上限', '30日 \u00d7 40 \u00f7 7', '171.4h'],
-                  ['実労働時間', '23日\u00d77h + 36h', '197h'],
-                  ['法定残業', '197h − 171.4h', '25.6h'],
-                  ['残業手当', '2,558 \u00d7 1.25 \u00d7 25.6h', '81,856円'],
-                  ['欠勤控除', 'MAX(0, 20−23−1) = 0日', '0円'],
-                  ['支給額', '358,120 + 53,718 + 81,856', '493,694円'],
+                  ['基本給（固定）', '2,000 \u00d7 20日 \u00d7 7h', '280,000円'],
+                  ['追加所定手当', '2,000 \u00d7 (24日−20日) \u00d7 7h', '56,000円'],
+                  ['法定上限', '31日 \u00d7 40 \u00f7 7', '177.1h'],
+                  ['法定外労働時間', '3段階判定（システム自動計算）', '例: 7.3h'],
+                  ['残業手当', '2,000 \u00d7 1.25 \u00d7 7.3h', '18,250円'],
+                  ['欠勤控除', 'MAX(0, 20−24−0) = 0日', '0円'],
+                  ['支給額', '280,000 + 56,000 + 18,250', '354,250円'],
                 ]}
               />
+              <p className="text-xs text-gray-400 mt-1">※ 法定外労働時間はシステムが日次・週次・月次で自動判定します。出面Excelの「勤怠サマリー」に内訳が記載されます。</p>
             </div>
 
             <div className="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-400">
               <p>※ 実出勤日数に有給（P）は含めない</p>
               <p>※ ベース日数（20日）は管理者設定で変更可能</p>
-              <p>※ 残業判定は法定上限基準（所定時間ではなく暦日数から算出）</p>
+              <p>※ 法定外労働時間 = 日8h超 + 週40h超 + 月法定上限超（3段階判定をシステムが自動計算）</p>
+              <p>※ 法定休日（日曜）の労働は別枠（&times;1.35）で集計</p>
+              <p>※ 給与計算の分担: HFU → キャシュモ / 日比建設 → 社内</p>
             </div>
           </div>
 
@@ -376,7 +404,7 @@ export default function GuidePage() {
           {[
             {
               num: '1', title: 'ダッシュボード', color: 'blue',
-              items: ['月間サマリー（鳶/土工の人工数、売上、原価、利益率）', '現場別人工数グラフ', '日別稼働人数グラフ', '外国人稼働率', '通知（署名未完了・月締め・出面未入力）'],
+              items: ['お知らせ（カレンダー準備・月締め状況など）', '本日の稼働状況（現場別配置）', '今月サマリー（人工数+売上）', '日別稼働人数チャート', '※ 原価・収益・KPIの詳細チャートは「原価・収益管理」に移動'],
             },
             {
               num: '2', title: '出面入力', color: 'green',
@@ -396,7 +424,7 @@ export default function GuidePage() {
             },
             {
               num: '6', title: '原価・収益管理', color: 'purple',
-              items: ['現場ごとの売上・原価・利益率', '外注費を含む原価計算'],
+              items: ['現場ごとの売上・原価・利益率', '外注費を含む原価計算', 'KPI推移チャート・累積推移・前年同月比（ダッシュボードから移動）'],
             },
           ].map((s, i) => (
             <div key={i} className={`border-l-4 ${
@@ -436,7 +464,51 @@ export default function GuidePage() {
         </div>
       </Section>
 
-      {/* ── セクション 11: 外国人管理 ── */}
+      {/* ── セクション 11: 出向・Excel出力・通知 ── */}
+      <Section title="出向・Excel出力・通知ベル" icon="&#128276;">
+        <div className="mt-3 space-y-4">
+          {/* 出向 */}
+          <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4 bg-blue-50/30 dark:bg-blue-900/10">
+            <h4 className="font-bold text-blue-700 dark:text-blue-400 mb-2">出向（dispatch）機能</h4>
+            <ul className="list-disc ml-5 text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <li>人員マスタでスタッフに「出向先」と「開始月」を設定可能</li>
+              <li>出向設定されたスタッフは、開始月以降の労務費が自動的に控除される</li>
+              <li>サイドバーの「人事・労務」セクション → 人員マスタから設定</li>
+            </ul>
+          </div>
+
+          {/* Excel 3シート */}
+          <div className="border border-green-200 dark:border-green-800 rounded-lg p-4 bg-green-50/30 dark:bg-green-900/10">
+            <h4 className="font-bold text-green-700 dark:text-green-400 mb-2">出面Excel（3シート構成）</h4>
+            <ul className="list-disc ml-5 text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <li>HFU向け・日比建設向け出面Excelは外国人スタッフがいる場合3シート構成</li>
+              <li><span className="font-bold">Sheet1「出面一覧」</span>：従来の出面表形式（社内確認用）</li>
+              <li><span className="font-bold">Sheet2「勤務時間一覧」</span>：出面データを時間に変換（日次の実労働h / 所定h / 週番号）</li>
+              <li><span className="font-bold">Sheet3「勤怠サマリー」</span>：3段階残業判定の結果（個人別月次集計）</li>
+            </ul>
+            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              <p className="font-bold mb-1">勤怠サマリーの出力項目:</p>
+              <p>所定労働時間/日数、実労働時間/日数、所定外労働時間、法定外労働時間（日/週/月の内訳付き）、法定休日労働時間、所定休日労働時間、基本給（固定）</p>
+              <p className="mt-1">給与計算の分担: HFU → キャシュモ / 日比建設 → 社内</p>
+            </div>
+          </div>
+
+          {/* 通知ベル */}
+          <div className="border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 bg-yellow-50/30 dark:bg-yellow-900/10">
+            <h4 className="font-bold text-yellow-700 dark:text-yellow-400 mb-2">通知ベルの項目</h4>
+            <ul className="list-disc ml-5 text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <li>就業カレンダー未署名・未承認</li>
+              <li>有給付与アラート</li>
+              <li>月締め未完了</li>
+              <li>在留期限アラート（180日/90日/30日/期限切れ）</li>
+              <li>有給承認待ち（スタッフからの申請が未処理）</li>
+              <li>お知らせ（システムからの重要通知）</li>
+            </ul>
+          </div>
+        </div>
+      </Section>
+
+      {/* ── セクション 12: 外国人管理 ── */}
       <Section title="外国人スタッフの管理項目" icon="&#127468;">
         <div className="mt-3">
           <T
@@ -449,7 +521,7 @@ export default function GuidePage() {
               ['署名', '就業カレンダーの全現場一括署名（タイムスタンプ記録）'],
               ['有給休暇', '法定日数を自動付与、残日数チェック付きの申請フロー'],
               ['出面入力', 'スマホから毎日出勤/休み/有給を入力'],
-              ['帳票出力', '出面表・月次集計・有給管理台帳のExcel出力'],
+              ['帳票出力', '出面表・月次集計・有給管理台帳のExcel出力（出面Excelは3シート構成: 出面一覧+勤務時間一覧+勤怠サマリー）'],
             ]}
           />
         </div>
