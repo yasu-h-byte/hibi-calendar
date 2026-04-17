@@ -6,24 +6,24 @@ export default function DocsPage() {
     {
       category: '説明会資料',
       items: [
-        { title: '給与制度説明会（2026/4/19）', desc: '3層構造（基本給固定+追加所定手当+残業手当）の説明・日越二言語', url: '/briefing-20260419.html', icon: '🎤', badge: '日本語+ベトナム語', updated: '2026-04-13' },
+        { title: '給与制度説明会（2026/4/19）', desc: '3層構造・残業3段階判定・スマホ入力・カレンダー署名の説明・日越二言語', url: '/briefing-20260419.html', icon: '🎤', badge: '日本語+ベトナム語', updated: '2026-04-18' },
       ],
     },
     {
       category: '業務マニュアル',
       items: [
-        { title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・有給管理・帳票出力', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-16' },
-        { title: '政仁さん向けマニュアル', desc: '出面入力・承認・就業カレンダー・現場マスタ・原価収益・出向管理', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-16' },
-        { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成・通知ベル', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-16' },
-        { title: '評価管理マニュアル', desc: '複数評価者による評価の入力・承認・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-04-16' },
-        { title: '有給データ移行手順', desc: '旧スプレッドシートからの有給データ移行', url: '/manual-yukyu.html', icon: '📙', updated: '2026-04-08' },
+        { title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・有給管理（2段階承認）・有給データ移行・帳票出力', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-18' },
+        { title: '政仁さん向けマニュアル', desc: '出面入力・承認・就業カレンダー・有給2段階承認・原価収益・出向・外注先単価', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-18' },
+        { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成・有給の職長承認・外注先単価・通知ベル', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-18' },
+        { title: '評価管理マニュアル', desc: '複数評価者による評価の入力・承認・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-04-18' },
+        { title: '有給データ移行手順', desc: '旧スプレッドシートからの有給データ移行（出面に「有」を入力）', url: '/manual-yukyu.html', icon: '📙', updated: '2026-04-18' },
         { title: 'QRコードカード（印刷用）', desc: '全スタッフの出勤入力用QRコード。印刷して配布', url: '/qr-cards.html', icon: '📱', updated: '2026-04-08' },
       ],
     },
     {
       category: 'システムガイド',
       items: [
-        { title: '運用ガイド', desc: '3層構造の給与計算・変形労働時間制・出向・Excel出力・通知ベルの手引き', url: '/guide', icon: '📖', internal: true, updated: '2026-04-16' },
+        { title: '運用ガイド', desc: '変形労働時間制・3段階残業判定・3層構造給与・時間ベース入力・Excel出力・通知ベル', url: '/guide', icon: '📖', internal: true, updated: '2026-04-18' },
       ],
     },
   ]
