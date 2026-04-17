@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
           assign: main.assign,
           massign: main.massign,
           calendarDays: calendarDaysMap,
+          baseDays,
         }
         if (type === 'hibi') {
           const wb = generateHibiAttendance(exportData)

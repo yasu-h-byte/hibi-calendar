@@ -7,6 +7,7 @@ import {
   SiteSummary,
   PLRecord,
   parseDKey,
+  calculateOvertimeSummary,
 } from './compute'
 import { AttendanceEntry } from '@/types'
 
@@ -197,6 +198,81 @@ function appendTimeSheet(
   XLSX.utils.book_append_sheet(wb, ws, sheetName)
 }
 
+/**
+ * 勤怠サマリーシートを追加（キャシュモ向け: 3段階残業判定の結果）
+ * 個人別に月次の所定時間/実労働/法定外/休日労働/基本給を出力
+ */
+function appendOvertimeSummarySheet(
+  wb: XLSX.WorkBook,
+  sheetName: string,
+  titlePrefix: string,
+  ym: string,
+  foreignWorkers: RawWorker[],
+  attD: Record<string, AttendanceEntry>,
+  sites: { id: string; name: string }[],
+  calendarDays: Record<string, Record<string, string>>,
+  baseDays: number = 20,
+) {
+  const ymY = parseInt(ym.slice(0, 4))
+  const ymM = parseInt(ym.slice(4, 6))
+  const calDays = new Date(ymY, ymM, 0).getDate()
+  const legalLimit = Math.round(calDays * 40 / 7 * 10) / 10
+
+  const titleRow = [`${titlePrefix} 勤怠サマリー ${ymLabel(ym)}（1か月単位の変形労働時間制）`]
+  const headers = [
+    '名前', '時間給',
+    '所定労働時間', '所定労働日数',
+    '実労働時間', '実労働日数',
+    '所定外労働時間', '法定外労働時間',
+    '(内訳)日単位', '(内訳)週単位', '(内訳)月単位',
+    '法定休日労働時間', '所定休日労働時間',
+    '基本給(固定)',
+  ]
+  const rows: (string | number)[][] = [titleRow, headers]
+
+  for (const w of foreignWorkers) {
+    const hr = w.hourlyRate || 0
+    const summary = calculateOvertimeSummary(ym, w.id, hr, baseDays, attD, sites, calendarDays)
+
+    rows.push([
+      w.name,
+      hr,
+      summary.prescribedHours,
+      summary.prescribedDays,
+      summary.actualHours,
+      summary.actualDays,
+      summary.nonStatutoryOT,
+      summary.statutoryOT,
+      summary.dailyStatutoryOT,
+      summary.weeklyStatutoryOT,
+      summary.monthlyStatutoryOT,
+      summary.legalHolidayHours,
+      summary.prescribedHolidayHours,
+      summary.fixedBasePay,
+    ])
+  }
+
+  // 空行 + 説明
+  rows.push([])
+  rows.push(['【算出根拠】'])
+  rows.push(['', `法定上限: ${calDays}日 × 40 ÷ 7 = ${legalLimit}h`])
+  rows.push(['', '法定休日: 日曜日'])
+  rows.push(['', `ベース日数: ${baseDays}日`])
+  rows.push(['', `基本給(固定) = 時間給 × ${baseDays}日 × 7h`])
+  rows.push([])
+  rows.push(['【残業3段階判定】'])
+  rows.push(['', '第1段階（日単位）: 所定8h以下の日は8hを超えた分、所定8h超の日はその所定を超えた分'])
+  rows.push(['', '第2段階（週単位）: 所定40h以下の週は40hを超えた分（第1段階分を除く）'])
+  rows.push(['', `第3段階（月単位）: 法定上限(${legalLimit}h)を超えた分（第1・2段階分を除く）`])
+  rows.push(['', '法定外労働時間 = 第1段階 + 第2段階 + 第3段階'])
+  rows.push(['', '所定外労働時間 = 所定時間を超えた全ての時間（法定内・法定外の両方を含む）'])
+
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 13 } }]
+  setColWidths(ws, [14, 8, 10, 10, 10, 10, 10, 10, 8, 8, 8, 10, 10, 12])
+  XLSX.utils.book_append_sheet(wb, ws, sheetName)
+}
+
 export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook {
   const { ym, workers, attD, sites } = data
   const numDays = daysInMonth(ym)
@@ -304,8 +380,11 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
 
   // ── Sheet 2: 勤務時間一覧（日比建設所属の外国人スタッフのみ） ──
   const hibiForeignWorkers = hibiWorkers.filter(w => w.visa && w.visa !== 'none' && w.visa !== '')
-  if (hibiForeignWorkers.length > 0) {
+  if (hibiForeignWorkers.length > 0 && data.calendarDays) {
     appendTimeSheet(wb, '勤務時間一覧', '日比建設', ym, hibiForeignWorkers, attD, sites, data.calendarDays)
+    // ── Sheet 3: 勤怠サマリー（キャシュモ向け: 3段階残業判定の結果） ──
+    const bd = (data as { baseDays?: number }).baseDays || 20
+    appendOvertimeSummarySheet(wb, '勤怠サマリー', '日比建設', ym, hibiForeignWorkers, attD, sites, data.calendarDays, bd)
   }
 
   return wb
@@ -324,6 +403,8 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
 export interface HfuAttendanceExportData extends HibiAttendanceData {
   /** カレンダーの日ごとの種別（siteId → { "1": "work", "2": "off", ... }） */
   calendarDays?: Record<string, Record<string, string>>
+  /** ベース日数（3層構造の基本給計算用、デフォルト20） */
+  baseDays?: number
 }
 
 export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkBook {
@@ -399,6 +480,12 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
 
   // ── Sheet 2: 勤務時間一覧（キャシュモ向け: 時間変換済み） ──
   appendTimeSheet(wb, '勤務時間一覧', 'HFU', ym, hfuWorkers, attD, sites, calendarDays)
+
+  // ── Sheet 3: 勤怠サマリー（キャシュモ向け: 3段階残業判定の結果） ──
+  if (calendarDays) {
+    const bd = (data as { baseDays?: number }).baseDays || 20
+    appendOvertimeSummarySheet(wb, '勤怠サマリー', 'HFU', ym, hfuWorkers, attD, sites, calendarDays, bd)
+  }
 
   return wb
 }
