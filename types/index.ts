@@ -125,9 +125,9 @@ export function calcOvertimeHours(entry: AttendanceEntry): number {
   return Math.max(0, Math.round((actual - 7) * 10) / 10)
 }
 
-/** YMが時間ベース入力対象月かどうか（202605以降） */
+/** YMが時間ベース入力対象月かどうか（202604以降 = 新UI適用） */
 export function isTimeBasedMonth(ym: string): boolean {
-  return ym >= '202605'
+  return ym >= '202604'
 }
 
 export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_off' | 'none'
