@@ -658,6 +658,9 @@ export default function AttendanceGridPage() {
 
   const workerTotals = useCallback((workerId: string) => {
     const entries = workerEntries[workerId] || {}
+    // 外国人のみ時間ベース計算（202605〜かつvisaあり）
+    const worker = data?.workers.find(w => String(w.id) === workerId)
+    const isWorkerTimeBased = useTimeBased && !!worker?.visa && worker.visa !== 'none' && worker.visa !== ''
     let wSum = 0
     let oSum = 0
     let compSum = 0
@@ -667,7 +670,7 @@ export default function AttendanceGridPage() {
       if (e) {
         wSum += e.w || 0
         if (e.p && e.p > 0) plSum += 1
-        if (useTimeBased && e.st && e.et) {
+        if (isWorkerTimeBased && e.st && e.et) {
           const ah = calcActualHours(e as Parameters<typeof calcActualHours>[0])
           actualHoursSum += ah
           const ot = Math.max(0, ah - 7)
@@ -684,7 +687,7 @@ export default function AttendanceGridPage() {
     compSum = Math.round(compSum * 10) / 10
     actualHoursSum = Math.round(actualHoursSum * 10) / 10
     return { wSum, oSum, compSum, plSum, actualHoursSum }
-  }, [workerEntries, useTimeBased])
+  }, [workerEntries, useTimeBased, data])
 
   // ── Computed: subcon totals ──
 
@@ -1063,7 +1066,7 @@ export default function AttendanceGridPage() {
       {!loading && data && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
           <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
-            <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * (useTimeBased ? 90 : 48) + (useTimeBased ? 160 : 120)}px` }}>
+            <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 120}px` }}>
               <thead className="sticky top-0 z-30">
                 {/* Day number row */}
                 <tr className="border-b border-gray-200">
@@ -1079,25 +1082,22 @@ export default function AttendanceGridPage() {
                   >
                     所属
                   </th>
-                  {days.map(d => {
-                    const colW = useTimeBased ? 96 : 56
-                    return (
+                  {days.map(d => (
                     <th
                       key={d.day}
                       className={`px-0 py-1 text-center font-bold ${dayHeaderBg(data.year, data.month, d.day)} ${dayTextColor(d.dow)} border-l border-gray-200`}
-                      style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                     >
                       <div className="leading-tight">
                         <div className="text-[11px]">{d.day}</div>
                         <div className="text-[9px] opacity-70">{d.label}</div>
                       </div>
                     </th>
-                    )
-                  })}
-                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l-2 border-gray-400" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
-                    {useTimeBased ? '実h計' : '人工計'}
+                  ))}
+                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l-2 border-gray-400" style={{ width: 64, minWidth: 64 }}>
+                    人工計
                   </th>
-                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l border-gray-600" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
+                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l border-gray-600" style={{ width: 56, minWidth: 56 }}>
                     残業h
                   </th>
                 </tr>
@@ -1116,14 +1116,11 @@ export default function AttendanceGridPage() {
                     <td className="sticky left-[150px] z-20 bg-yellow-50 px-1 py-1 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-200 text-yellow-800">職長</span>
                     </td>
-                    {days.map(d => {
-                      const colW = useTimeBased ? 96 : 56
-                      return (
-                      <td key={d.day} className={`px-0 py-1 border-l border-yellow-100 bg-yellow-50 text-center text-[10px] text-yellow-600`} style={{ width: colW, minWidth: colW, maxWidth: colW }}>
+                    {days.map(d => (
+                      <td key={d.day} className={`px-0 py-1 border-l border-yellow-100 bg-yellow-50 text-center text-[10px] text-yellow-600`} style={{ width: 56, minWidth: 56, maxWidth: 56 }}>
                         {/* placeholder: foreman presence can be derived from worker entries */}
                       </td>
-                      )
-                    })}
+                    ))}
                     <td className="px-1 py-1 text-center border-l-2 border-yellow-200 bg-yellow-50" colSpan={2}></td>
                   </tr>
                 )}
@@ -1166,12 +1163,11 @@ export default function AttendanceGridPage() {
                   {days.map(d => {
                     const approved = localApprovals[d.day]
                     const canApprove = userRole === 'admin' || userRole === 'approver'
-                    const colW = useTimeBased ? 96 : 56
                     return (
                       <td
                         key={d.day}
                         className={`px-0 py-1 border-l border-orange-100 bg-orange-50 text-center ${canApprove ? 'cursor-pointer hover:bg-orange-100' : ''}`}
-                        style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                        style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                         onClick={canApprove ? () => {
                           // 楽観的UI: 即座にトグル
                           setLocalApprovals(prev => ({ ...prev, [d.day]: !prev[d.day] }))
@@ -1210,7 +1206,7 @@ export default function AttendanceGridPage() {
                         {group.label} ({group.workers.length}名)
                       </td>
                       <td className="sticky left-[150px] z-20 bg-gray-50 border-t-2 border-hibi-navy" style={{ width: 56, minWidth: 56, maxWidth: 56 }} />
-                      {days.map(d => <td key={d.day} className="border-t-2 border-hibi-navy bg-gray-50" style={useTimeBased ? { width: 96, minWidth: 96 } : undefined} />)}
+                      {days.map(d => <td key={d.day} className="border-t-2 border-hibi-navy bg-gray-50" />)}
                       <td className="border-t-2 border-hibi-navy bg-gray-50" />
                       <td className="border-t-2 border-hibi-navy bg-gray-50" />
                     </tr>
@@ -1249,10 +1245,11 @@ export default function AttendanceGridPage() {
                             const isHolidayWork = calDay && (calDay === 'off' || calDay === 'holiday') && entry && entry.w > 0 && !entry.p
                             // Input source indicator
                             const source = entry?.s
-                            const colW = useTimeBased ? 96 : 56
+                            // 外国人のみ時間ベース（202605〜かつvisaあり）
+                            const isWorkerTimeBased = useTimeBased && !!worker.visa && worker.visa !== 'none' && worker.visa !== ''
 
-                            // ── 時間ベースモード（202605〜）──
-                            if (useTimeBased) {
+                            // ── 時間ベースモード（外国人 + 202605〜）──
+                            if (isWorkerTimeBased) {
                               const statusVal = getTimeStatusValue(entry)
                               const isWorking = statusVal === 'W'
                               const st = entry?.st || '08:00'
@@ -1269,7 +1266,7 @@ export default function AttendanceGridPage() {
                                 <td
                                   key={d.day}
                                   className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day)}`}
-                                  style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                                  style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                                 >
                                   {isHolidayWork && (
                                     <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
@@ -1296,10 +1293,10 @@ export default function AttendanceGridPage() {
                                       `}
                                     >
                                       <option value="">-</option>
-                                      <option value="W">出勤</option>
-                                      <option value="P">有給</option>
+                                      <option value="W">出</option>
+                                      <option value="P">有</option>
                                       <option value="R">休</option>
-                                      <option value="H">現休</option>
+                                      <option value="H">現</option>
                                     </select>
 
                                     {isWorking ? (
@@ -1310,17 +1307,17 @@ export default function AttendanceGridPage() {
                                             value={st}
                                             onChange={e => handleStartTimeChange(wId, d.day, e.target.value)}
                                             disabled={isLocked}
-                                            className="w-1/2 text-center text-[9px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
+                                            className="w-1/2 text-center text-[8px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
                                           >
-                                            {startTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                            {startTimeOptions.map(t => <option key={t} value={t}>{t.replace(':00', '').replace(':30', ':3')}</option>)}
                                           </select>
                                           <select
                                             value={et}
                                             onChange={e => handleEndTimeChange(wId, d.day, e.target.value)}
                                             disabled={isLocked}
-                                            className="w-1/2 text-center text-[9px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
+                                            className="w-1/2 text-center text-[8px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
                                           >
-                                            {endTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                                            {endTimeOptions.map(t => <option key={t} value={t}>{t.replace(':00', '').replace(':30', ':3')}</option>)}
                                           </select>
                                         </div>
                                         {/* 休憩チェック + 実時間 */}
@@ -1334,13 +1331,13 @@ export default function AttendanceGridPage() {
                                           <label className="flex items-center cursor-pointer" title="午後(15:00-15:30)">
                                             <input type="checkbox" checked={b3 === 1} onChange={e => handleBreakChange(wId, d.day, 'b3', e.target.checked)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
                                           </label>
-                                          <span className={`text-[9px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
-                                            {actualH.toFixed(1)}h
+                                          <span className={`text-[8px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                            {actualH.toFixed(1)}
                                           </span>
                                         </div>
                                       </>
                                     ) : statusVal !== '' ? (
-                                      <div className="text-[10px] text-center py-1 font-medium text-gray-400">
+                                      <div className="text-[9px] text-center py-0.5 font-medium text-gray-400">
                                         {statusVal === 'P' ? '有給' : statusVal === 'R' ? '休' : '現休'}
                                       </div>
                                     ) : null}
@@ -1349,7 +1346,7 @@ export default function AttendanceGridPage() {
                               )
                             }
 
-                            // ── レガシーモード（〜202604） ──
+                            // ── レガシーモード（日本人 or 〜202604） ──
                             const workVal = getWorkValue(entry)
                             const otVal = entry?.o || 0
                             const canOt = entry && entry.w > 0 && entry.w !== 0.6
@@ -1358,7 +1355,7 @@ export default function AttendanceGridPage() {
                               <td
                                 key={d.day}
                                 className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day)}`}
-                                style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                                style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                               >
                                 {isHolidayWork && (
                                   <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
@@ -1410,33 +1407,20 @@ export default function AttendanceGridPage() {
                             )
                           })}
 
-                          {/* Totals - 人工計/実h計 */}
-                          <td className="px-2 py-1 text-center font-bold text-hibi-navy tabular-nums border-l-2 border-gray-300 bg-gray-50" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
-                            {useTimeBased ? (
-                              <>
-                                <div className="text-sm">{totals.actualHoursSum > 0 ? totals.actualHoursSum : '-'}</div>
-                                {totals.plSum > 0 && (
-                                  <div className="text-[9px] font-normal text-gray-400 leading-tight">
-                                    有{totals.plSum}
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                <div className="text-sm">{totals.wSum > 0 ? totals.wSum : '-'}</div>
-                                {(totals.compSum > 0 || totals.plSum > 0) && (
-                                  <div className="text-[9px] font-normal text-gray-400 leading-tight">
-                                    {[
-                                      totals.compSum > 0 ? `補${Math.round(totals.compSum * 10) / 10}` : '',
-                                      totals.plSum > 0 ? `有${totals.plSum}` : '',
-                                    ].filter(Boolean).join(' ')}
-                                  </div>
-                                )}
-                              </>
+                          {/* Totals - 人工計 */}
+                          <td className="px-2 py-1 text-center font-bold text-hibi-navy tabular-nums border-l-2 border-gray-300 bg-gray-50" style={{ width: 64, minWidth: 64 }}>
+                            <div className="text-sm">{totals.wSum > 0 ? totals.wSum : '-'}</div>
+                            {(totals.compSum > 0 || totals.plSum > 0) && (
+                              <div className="text-[9px] font-normal text-gray-400 leading-tight">
+                                {[
+                                  totals.compSum > 0 ? `補${Math.round(totals.compSum * 10) / 10}` : '',
+                                  totals.plSum > 0 ? `有${totals.plSum}` : '',
+                                ].filter(Boolean).join(' ')}
+                              </div>
                             )}
                           </td>
                           {/* Totals - 残業計 */}
-                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
+                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: 56, minWidth: 56 }}>
                             <div className="text-sm">{totals.oSum > 0 ? totals.oSum : '-'}</div>
                           </td>
                         </tr>
@@ -1456,7 +1440,7 @@ export default function AttendanceGridPage() {
                         外注 ({data.subcons.length}社)
                       </td>
                       <td className="sticky left-[150px] z-20 bg-amber-50 border-t-2 border-amber-400" style={{ width: 56, minWidth: 56, maxWidth: 56 }} />
-                      {days.map(d => <td key={d.day} className="border-t-2 border-amber-400 bg-amber-50" style={useTimeBased ? { width: 96, minWidth: 96 } : undefined} />)}
+                      {days.map(d => <td key={d.day} className="border-t-2 border-amber-400 bg-amber-50" />)}
                       <td className="border-t-2 border-amber-400 bg-amber-50" />
                       <td className="border-t-2 border-amber-400 bg-amber-50" />
                     </tr>
@@ -1491,13 +1475,12 @@ export default function AttendanceGridPage() {
                             const entry = entries[d.day] || null
                             const nVal = entry?.n ?? 0
                             const onVal = entry?.on ?? 0
-                            const colW = useTimeBased ? 96 : 56
 
                             return (
                               <td
                                 key={d.day}
                                 className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)}`}
-                                style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                                style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                               >
                                 <div className="flex flex-col">
                                   {/* People count - 大きめ */}
@@ -1558,22 +1541,19 @@ export default function AttendanceGridPage() {
                     鳶 合計
                   </td>
                   <td className="sticky left-[150px] z-20 bg-[#1B2A4A] text-white px-1 py-1.5 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
-                  {days.map(d => {
-                    const colW = useTimeBased ? 96 : 56
-                    return (
+                  {days.map(d => (
                     <td
                       key={d.day}
                       className="bg-[#1B2A4A] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
-                      style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                     >
                       {footerSums.tobi[d.day] > 0 ? Math.round(footerSums.tobi[d.day] * 10) / 10 : '-'}
                     </td>
-                    )
-                  })}
-                  <td className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
+                  ))}
+                  <td className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
                     {footerSums.tobiTotal > 0 ? footerSums.tobiTotal : '-'}
                   </td>
-                  <td className="bg-[#1B2A4A] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
+                  <td className="bg-[#1B2A4A] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: 56, minWidth: 56 }}>
                     {footerSums.tobiOtTotal > 0 ? footerSums.tobiOtTotal : '-'}
                   </td>
                 </tr>
@@ -1587,22 +1567,19 @@ export default function AttendanceGridPage() {
                     土工 合計
                   </td>
                   <td className="sticky left-[150px] z-20 bg-[#243656] text-white px-1 py-1.5 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
-                  {days.map(d => {
-                    const colW = useTimeBased ? 96 : 56
-                    return (
+                  {days.map(d => (
                     <td
                       key={d.day}
                       className="bg-[#243656] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
-                      style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                     >
                       {footerSums.doko[d.day] > 0 ? Math.round(footerSums.doko[d.day] * 10) / 10 : '-'}
                     </td>
-                    )
-                  })}
-                  <td className="bg-[#243656] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
+                  ))}
+                  <td className="bg-[#243656] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
                     {footerSums.dokoTotal > 0 ? footerSums.dokoTotal : '-'}
                   </td>
-                  <td className="bg-[#243656] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
+                  <td className="bg-[#243656] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: 56, minWidth: 56 }}>
                     {footerSums.dokoOtTotal > 0 ? footerSums.dokoOtTotal : '-'}
                   </td>
                 </tr>
@@ -1616,22 +1593,19 @@ export default function AttendanceGridPage() {
                     総合計
                   </td>
                   <td className="sticky left-[150px] z-20 bg-[#0F1D36] text-white px-1 py-1.5 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
-                  {days.map(d => {
-                    const colW = useTimeBased ? 96 : 56
-                    return (
+                  {days.map(d => (
                     <td
                       key={d.day}
                       className="bg-[#0F1D36] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
-                      style={{ width: colW, minWidth: colW, maxWidth: colW }}
+                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                     >
                       {footerSums.grand[d.day] > 0 ? Math.round(footerSums.grand[d.day] * 10) / 10 : '-'}
                     </td>
-                    )
-                  })}
-                  <td className="bg-[#0F1D36] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: useTimeBased ? 80 : 64, minWidth: useTimeBased ? 80 : 64 }}>
+                  ))}
+                  <td className="bg-[#0F1D36] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
                     {footerSums.grandTotal > 0 ? footerSums.grandTotal : '-'}
                   </td>
-                  <td className="bg-[#0F1D36] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: useTimeBased ? 64 : 56, minWidth: useTimeBased ? 64 : 56 }}>
+                  <td className="bg-[#0F1D36] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: 56, minWidth: 56 }}>
                     {footerSums.grandOtTotal > 0 ? footerSums.grandOtTotal : '-'}
                   </td>
                 </tr>
@@ -1651,22 +1625,18 @@ export default function AttendanceGridPage() {
               <span className="inline-block w-3 h-3 rounded bg-blue-50 border border-blue-200" /> 土曜
             </span>
             <span className="mx-2 border-l border-gray-300 h-3" />
-            {useTimeBased ? (
+            <span><strong className="text-green-700">1</strong> = 出勤</span>
+            <span><strong className="text-yellow-700">0.5</strong> = 半日</span>
+            <span><strong className="text-purple-600">補</strong> = 0.6補償</span>
+            <span><strong className="text-purple-600">P</strong> = 有給</span>
+            <span className="text-amber-700">下段 = 残業h</span>
+            {useTimeBased && data && data.workers.some(w => w.visa && w.visa !== 'none' && w.visa !== '') && (
               <>
-                <span><strong className="text-green-700">出勤</strong> = 時間入力</span>
-                <span><strong className="text-purple-600">有給</strong> = P</span>
-                <span><strong className="text-red-500">休</strong> = 休み</span>
-                <span><strong className="text-gray-500">現休</strong> = 現場休み</span>
+                <span className="mx-2 border-l border-gray-300 h-3" />
+                <span className="text-orange-600 font-medium">外国人:</span>
+                <span><strong className="text-green-700">出</strong> = 時間入力</span>
                 <span>休憩: 午前30分/昼60分/午後30分</span>
                 <span className="text-amber-600">7h超=残業</span>
-              </>
-            ) : (
-              <>
-                <span><strong className="text-green-700">1</strong> = 出勤</span>
-                <span><strong className="text-yellow-700">0.5</strong> = 半日</span>
-                <span><strong className="text-purple-600">補</strong> = 0.6補償</span>
-                <span><strong className="text-purple-600">P</strong> = 有給</span>
-                <span className="text-amber-700">下段 = 残業h</span>
               </>
             )}
           </div>
