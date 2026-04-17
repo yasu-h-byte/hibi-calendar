@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { AttendanceEntry, AttendanceStatus, isTimeBasedMonth, isTimeBasedEntry } from '@/types'
+import { AttendanceEntry, AttendanceStatus, isTimeBasedMobile, isTimeBasedEntry } from '@/types'
 
 interface SiteInfo { id: string; name: string }
 interface AvailableSite { id: string; name: string; primary: boolean }
@@ -377,7 +377,7 @@ export default function StaffAttendancePage() {
 
   const currentStatus = data.currentStatus
   const currentYm = data.today.ym
-  const useTimeBased = isTimeBasedMonth(currentYm)
+  const useTimeBased = isTimeBasedMobile(currentYm)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -650,7 +650,7 @@ export default function StaffAttendancePage() {
       {editingPast !== null && data.pastDays[editingPast] && (() => {
         const pd = data.pastDays[editingPast]
         const pastYm = `${pd.year}${String(pd.month).padStart(2, '0')}`
-        const pastTimeBased = isTimeBasedMonth(pastYm)
+        const pastTimeBased = isTimeBasedMobile(pastYm)
         return (
           <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setEditingPast(null)}>
             <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>

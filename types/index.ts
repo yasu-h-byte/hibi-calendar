@@ -125,8 +125,13 @@ export function calcOvertimeHours(entry: AttendanceEntry): number {
   return Math.max(0, Math.round((actual - 7) * 10) / 10)
 }
 
-/** YMが時間ベース入力対象月かどうか（新UI適用） */
+/** PC出面入力が時間ベースかどうか（5月以降） */
 export function isTimeBasedMonth(ym: string): boolean {
+  return ym >= '202605'
+}
+
+/** スマホ入力が時間ベースかどうか（説明会確認のため即時有効） */
+export function isTimeBasedMobile(ym: string): boolean {
   return ym >= '202604'
 }
 
