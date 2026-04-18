@@ -43,8 +43,17 @@ interface LeaveRequestItem {
   foremanApprovedAt?: string
 }
 
+interface AbsenceReport {
+  workerName: string
+  date: string
+  reason: string
+  reasonLabel: string
+  note?: string
+}
+
 interface ActionItems {
   pendingLeaveRequests: { count: number; items: LeaveRequestItem[] }
+  absenceReports?: AbsenceReport[]
 }
 
 interface DashboardData {
@@ -133,12 +142,19 @@ function AnnouncementsCard({ password }: { password: string }) {
   )
 }
 
-// ─── Leave Approval Card ───
+// ─── Attendance Request Card (有給申請 + 欠勤届) ───
 
-function LeaveApprovalCard({ items, password, onUpdate }: { items: LeaveRequestItem[]; password: string; onUpdate: () => void }) {
+function AttendanceRequestCard({ leaveItems, absenceReports, password, onUpdate }: {
+  leaveItems: LeaveRequestItem[]
+  absenceReports: AbsenceReport[]
+  password: string
+  onUpdate: () => void
+}) {
   const [processing, setProcessing] = useState<string | null>(null)
 
-  if (items.length === 0) return null
+  const hasLeave = leaveItems.length > 0
+  const hasAbsence = absenceReports.length > 0
+  if (!hasLeave && !hasAbsence) return null
 
   const handleAction = async (id: string, action: string) => {
     setProcessing(id)
@@ -160,22 +176,24 @@ function LeaveApprovalCard({ items, password, onUpdate }: { items: LeaveRequestI
   }
 
   const fmtDate = (d: string) => { const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}` }
+  const todayStr = (() => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}` })()
 
-  const pending = items.filter(i => i.status === 'pending')
-  const foremanApproved = items.filter(i => i.status === 'foreman_approved')
+  const pending = leaveItems.filter(i => i.status === 'pending')
+  const foremanApproved = leaveItems.filter(i => i.status === 'foreman_approved')
+  const todayAbsence = absenceReports.filter(a => a.date === todayStr)
+  const pastAbsence = absenceReports.filter(a => a.date !== todayStr)
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-green-400">
-      <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
-        🌴 有給申請
-        <span className="text-xs px-2 py-0.5 bg-red-500 text-white rounded-full">{items.length}件</span>
-      </h3>
-      <div className="space-y-2">
-        {pending.length > 0 && (
-          <div>
-            <p className="text-[10px] text-gray-400 font-bold mb-1">職長承認待ち</p>
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-blue-400">
+      <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">📋 勤怠申請</h3>
+
+      {/* 有給申請 */}
+      {hasLeave && (
+        <div className="mb-3">
+          <p className="text-[10px] text-green-600 font-bold mb-1.5 flex items-center gap-1">🌴 有給申請（{leaveItems.length}件）</p>
+          <div className="space-y-1">
             {pending.map(req => (
-              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg mb-1">
+              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
                 <div className="min-w-0">
                   <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
                   <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
@@ -189,13 +207,8 @@ function LeaveApprovalCard({ items, password, onUpdate }: { items: LeaveRequestI
                 </div>
               </div>
             ))}
-          </div>
-        )}
-        {foremanApproved.length > 0 && (
-          <div>
-            <p className="text-[10px] text-gray-400 font-bold mb-1">最終承認待ち（職長承認済み）</p>
             {foremanApproved.map(req => (
-              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-1">
+              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <div className="min-w-0">
                   <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
                   <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
@@ -210,8 +223,44 @@ function LeaveApprovalCard({ items, password, onUpdate }: { items: LeaveRequestI
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* 欠勤届 */}
+      {hasAbsence && (
+        <div>
+          {hasLeave && <hr className="my-2 border-gray-100 dark:border-gray-700" />}
+          {todayAbsence.length > 0 && (
+            <div className="mb-2">
+              <p className="text-[10px] text-red-500 font-bold mb-1.5">🏠 本日の欠勤届</p>
+              <div className="space-y-1">
+                {todayAbsence.map((a, i) => (
+                  <div key={i} className="flex items-center justify-between py-1.5 px-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                    <span className="font-bold text-sm text-hibi-navy dark:text-white">{a.workerName}</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      {a.reasonLabel}{a.note ? `（${a.note}）` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {pastAbsence.length > 0 && (
+            <div>
+              <p className="text-[10px] text-gray-400 font-bold mb-1.5">📅 過去7日の欠勤</p>
+              <div className="space-y-0.5">
+                {pastAbsence.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2 py-1 px-3 text-xs text-gray-500">
+                    <span className="tabular-nums">{fmtDate(a.date)}</span>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">{a.workerName}</span>
+                    <span className="text-gray-400">{a.reasonLabel}{a.note ? `（${a.note}）` : ''}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -300,14 +349,13 @@ export default function DashboardPage() {
           {/* ═══ お知らせ ═══ */}
           <AnnouncementsCard password={password} />
 
-          {/* ═══ 有給申請の承認 ═══ */}
-          {data.actionItems?.pendingLeaveRequests?.items && data.actionItems.pendingLeaveRequests.items.length > 0 && (
-            <LeaveApprovalCard
-              items={data.actionItems.pendingLeaveRequests.items}
-              password={password}
-              onUpdate={fetchData}
-            />
-          )}
+          {/* ═══ 勤怠申請（有給＋欠勤届） ═══ */}
+          <AttendanceRequestCard
+            leaveItems={data.actionItems?.pendingLeaveRequests?.items || []}
+            absenceReports={data.actionItems?.absenceReports || []}
+            password={password}
+            onUpdate={fetchData}
+          />
 
           {/* ═══ 1. Today's Status Table ═══ */}
           <Section title={`本日の稼働状況 (${todayStr})`}>

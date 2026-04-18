@@ -975,11 +975,57 @@ export async function GET(request: NextRequest) {
       leaveRequestItems.sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))
     } catch { /* ignore */ }
 
+    // 6. 欠勤届データ（過去7日 + 本日）
+    const absenceReports: { workerName: string; date: string; reason: string; reasonLabel: string; note?: string }[] = []
+    const reasonLabels: Record<string, string> = {
+      sick: '体調不良', hospital: '通院', personal: '私用',
+      family: '家族の事情', homeCountry: '帰国関連', other: 'その他',
+    }
+    try {
+      const todayDate = new Date()
+      const sevenDaysAgo = new Date(todayDate)
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+
+      // 過去7日分の月をカバー
+      const monthsToCheck = new Set<string>()
+      for (let i = 0; i <= 7; i++) {
+        const d = new Date(todayDate)
+        d.setDate(d.getDate() - i)
+        monthsToCheck.add(ymKey(d.getFullYear(), d.getMonth() + 1))
+      }
+
+      for (const checkYm of monthsToCheck) {
+        const attDoc = await getAttData(checkYm)
+        for (const [key, entry] of Object.entries(attDoc.d)) {
+          if (!entry || !entry.r || entry.r !== 1 || !entry.rReason) continue
+          const pk = parseDKey(key)
+          // 日付チェック（過去7日 + 本日）
+          const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
+          if (entryDate < sevenDaysAgo || entryDate > todayDate) continue
+
+          const wid = parseInt(pk.wid)
+          const worker = main.workers.find(w => w.id === wid)
+          if (!worker) continue
+
+          const dateStr = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, '0')}-${String(entryDate.getDate()).padStart(2, '0')}`
+          absenceReports.push({
+            workerName: worker.name,
+            date: dateStr,
+            reason: entry.rReason,
+            reasonLabel: reasonLabels[entry.rReason] || entry.rReason,
+            note: entry.rNote,
+          })
+        }
+      }
+      absenceReports.sort((a, b) => b.date.localeCompare(a.date)) // 新しい順
+    } catch { /* ignore */ }
+
     const actionItems = {
       visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },
       plShortfall: { count: plShortfallCount },
       pendingLeaveRequests: { count: pendingLeaveCount, items: leaveRequestItems },
       calendarProgress: { pending: calPending, total: calTotal },
+      absenceReports,
     }
 
     // ダッシュボードは「今の状況と要対応」に特化（詳細分析は原価・収益管理ページへ）
