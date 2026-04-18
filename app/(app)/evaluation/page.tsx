@@ -85,18 +85,19 @@ const VISA_LABELS: Record<string, string> = {
   jisshu: '技能実習', tokutei: '特定技能',
 }
 
-// 昇給テーブル（1,300円スタート → 9年で S:2,500 A:2,230 B:1,960 C:1,690 到達）
+// 昇給テーブル（1,300円スタート → 10年目で S:2,700 A:2,380 B:2,060 C:1,740 到達）
 // D評価は現在時給の1%（法定最低限の昇給義務）
+// 各ランク間の10年目差は均等（約320円）
 const RAISE_TABLE: { year: number; S: number; A: number; B: number; C: number }[] = [
-  { year: 1, S: 200, A: 150, B: 110, C: 70 },
-  { year: 2, S: 180, A: 140, B: 100, C: 60 },
-  { year: 3, S: 160, A: 130, B: 90, C: 55 },
-  { year: 4, S: 150, A: 120, B: 80, C: 50 },
-  { year: 5, S: 140, A: 110, B: 70, C: 45 },
-  { year: 6, S: 120, A: 100, B: 65, C: 40 },
-  { year: 7, S: 100, A: 80, B: 55, C: 30 },
-  { year: 8, S: 80, A: 60, B: 50, C: 25 },
-  { year: 9, S: 70, A: 40, B: 40, C: 15 },
+  { year: 1, S: 220, A: 170, B: 120, C: 80 },
+  { year: 2, S: 200, A: 160, B: 110, C: 65 },
+  { year: 3, S: 180, A: 140, B: 100, C: 55 },
+  { year: 4, S: 170, A: 130, B: 90, C: 50 },
+  { year: 5, S: 160, A: 120, B: 80, C: 50 },
+  { year: 6, S: 140, A: 110, B: 75, C: 45 },
+  { year: 7, S: 120, A: 90, B: 65, C: 35 },
+  { year: 8, S: 110, A: 80, B: 60, C: 30 },
+  { year: 9, S: 100, A: 80, B: 60, C: 30 },
 ]
 
 function getRaiseAmount(rank: EvaluationRank, yearsFromHire: number, currentHourlyRate?: number): number {
