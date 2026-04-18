@@ -949,16 +949,36 @@ export async function GET(request: NextRequest) {
       // ignore - collection may not exist yet
     }
 
-    // 4. Calendar progress — calendarProgress is provided as {pending, total}
-    // The dashboard frontend already fetches calendar status via MonthlyChecklist
-    // Here we just provide a placeholder; the frontend will use its own data
+    // 4. Calendar progress — placeholder
     const calPending = 0
     const calTotal = 0
+
+    // 5. 有給申請一覧（pending + foreman_approved）をダッシュボードに返す
+    const leaveRequestItems: { id: string; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string }[] = []
+    try {
+      const allLrSnap = await getDocs(collection(db, 'leaveRequests'))
+      allLrSnap.forEach(d => {
+        const data = d.data()
+        if (data.status === 'pending' || data.status === 'foreman_approved') {
+          leaveRequestItems.push({
+            id: d.id,
+            workerName: data.workerName || '',
+            date: data.date || '',
+            siteId: data.siteId || '',
+            reason: data.reason || '',
+            status: data.status,
+            requestedAt: data.requestedAt || '',
+            foremanApprovedAt: data.foremanApprovedAt,
+          })
+        }
+      })
+      leaveRequestItems.sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))
+    } catch { /* ignore */ }
 
     const actionItems = {
       visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },
       plShortfall: { count: plShortfallCount },
-      pendingLeaveRequests: { count: pendingLeaveCount },
+      pendingLeaveRequests: { count: pendingLeaveCount, items: leaveRequestItems },
       calendarProgress: { pending: calPending, total: calTotal },
     }
 

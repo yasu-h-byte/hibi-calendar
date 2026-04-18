@@ -32,12 +32,28 @@ interface SiteOption {
   name: string
 }
 
+interface LeaveRequestItem {
+  id: string
+  workerName: string
+  date: string
+  siteId: string
+  reason: string
+  status: string
+  requestedAt: string
+  foremanApprovedAt?: string
+}
+
+interface ActionItems {
+  pendingLeaveRequests: { count: number; items: LeaveRequestItem[] }
+}
+
 interface DashboardData {
   summary: DashboardSummary
   todayStatus: { siteStatus: TodaySiteStatus[]; absentWorkers: { id: number; name: string }[] }
   dailyAttendance: DailyAttendance[]
   siteList: SiteOption[]
   selectedYm: string
+  actionItems?: ActionItems
 }
 
 // ─── Helpers ───
@@ -112,6 +128,89 @@ function AnnouncementsCard({ password }: { password: string }) {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Leave Approval Card ───
+
+function LeaveApprovalCard({ items, password, onUpdate }: { items: LeaveRequestItem[]; password: string; onUpdate: () => void }) {
+  const [processing, setProcessing] = useState<string | null>(null)
+
+  if (items.length === 0) return null
+
+  const handleAction = async (id: string, action: string) => {
+    setProcessing(id)
+    try {
+      const stored = localStorage.getItem('hibi_auth')
+      const user = stored ? JSON.parse(stored).user : null
+      await fetch('/api/leave-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({
+          action,
+          requestId: id,
+          ...(action === 'foreman_approve' ? { foremanId: user?.workerId || 0 } : { approvedBy: user?.workerId || 0 }),
+        }),
+      })
+      onUpdate()
+    } catch { /* ignore */ }
+    finally { setProcessing(null) }
+  }
+
+  const fmtDate = (d: string) => { const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}` }
+
+  const pending = items.filter(i => i.status === 'pending')
+  const foremanApproved = items.filter(i => i.status === 'foreman_approved')
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-green-400">
+      <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
+        🌴 有給申請
+        <span className="text-xs px-2 py-0.5 bg-red-500 text-white rounded-full">{items.length}件</span>
+      </h3>
+      <div className="space-y-2">
+        {pending.length > 0 && (
+          <div>
+            <p className="text-[10px] text-gray-400 font-bold mb-1">職長承認待ち</p>
+            {pending.map(req => (
+              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg mb-1">
+                <div className="min-w-0">
+                  <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
+                  <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
+                  {req.reason && <span className="text-gray-400 text-xs ml-2">{req.reason}</span>}
+                </div>
+                <div className="flex gap-1.5 flex-shrink-0 ml-2">
+                  <button onClick={() => handleAction(req.id, 'foreman_approve')} disabled={processing === req.id}
+                    className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                  <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
+                    className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {foremanApproved.length > 0 && (
+          <div>
+            <p className="text-[10px] text-gray-400 font-bold mb-1">最終承認待ち（職長承認済み）</p>
+            {foremanApproved.map(req => (
+              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-1">
+                <div className="min-w-0">
+                  <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
+                  <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
+                  <span className="text-[10px] text-blue-600 ml-2">職長済</span>
+                </div>
+                <div className="flex gap-1.5 flex-shrink-0 ml-2">
+                  <button onClick={() => handleAction(req.id, 'approve')} disabled={processing === req.id}
+                    className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
+                  <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
+                    className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -200,6 +299,15 @@ export default function DashboardPage() {
         <>
           {/* ═══ お知らせ ═══ */}
           <AnnouncementsCard password={password} />
+
+          {/* ═══ 有給申請の承認 ═══ */}
+          {data.actionItems?.pendingLeaveRequests?.items && data.actionItems.pendingLeaveRequests.items.length > 0 && (
+            <LeaveApprovalCard
+              items={data.actionItems.pendingLeaveRequests.items}
+              password={password}
+              onUpdate={fetchData}
+            />
+          )}
 
           {/* ═══ 1. Today's Status Table ═══ */}
           <Section title={`本日の稼働状況 (${todayStr})`}>

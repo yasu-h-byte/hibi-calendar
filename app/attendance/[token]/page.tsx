@@ -40,7 +40,7 @@ const STATUS_COLORS: Record<AttendanceStatus, string> = {
 interface LeaveRequestData {
   id: string
   date: string
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected'
   reason: string
   rejectedReason?: string
   requestedAt: string
@@ -604,6 +604,30 @@ export default function StaffAttendancePage() {
           </>
         )}
 
+        {/* Leave request status (visible on main screen) */}
+        {leaveRequests.length > 0 && leaveRequests.some(r => r.status === 'pending' || r.status === 'foreman_approved') && (
+          <div className="bg-white rounded-xl shadow p-4">
+            <div className="text-sm text-gray-500 mb-2 font-bold">有給申請の状況 / Trạng thái nghỉ phép</div>
+            <div className="space-y-1.5">
+              {leaveRequests.filter(r => r.status === 'pending' || r.status === 'foreman_approved').map(req => (
+                <div key={req.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${req.status === 'pending' ? 'bg-yellow-50' : 'bg-blue-50'}`}>
+                  <span className="text-sm font-medium text-gray-700">{formatLeaveDate(req.date)}</span>
+                  {req.status === 'pending' && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
+                      ⏳ 承認待ち / Đang chờ
+                    </span>
+                  )}
+                  {req.status === 'foreman_approved' && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
+                      🔵 職長済 / Đốc công đã duyệt
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Past 5 days */}
         <div className="bg-white rounded-xl shadow p-4">
           <div className="text-sm text-gray-500 mb-3 font-bold">最近5日 / 5 ngày gần đây</div>
@@ -833,7 +857,7 @@ export default function StaffAttendancePage() {
             {leaveRequests.length > 0 && (
               <div className="mt-6">
                 <div className="text-sm text-gray-500 font-bold mb-2">
-                  しんせい りれき / Lich su don
+                  申請の状況 / Trạng thái đơn
                 </div>
                 <div className="space-y-2">
                   {leaveRequests.map(req => (
@@ -844,17 +868,22 @@ export default function StaffAttendancePage() {
                       <div className="flex items-center gap-2">
                         {req.status === 'approved' && (
                           <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-bold">
-                            OK / Da duyet
+                            ✅ 承認済 / Đã duyệt
+                          </span>
+                        )}
+                        {req.status === 'foreman_approved' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
+                            🔵 職長済 / Đốc công đã duyệt
                           </span>
                         )}
                         {req.status === 'pending' && (
                           <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
-                            まち / Dang cho
+                            ⏳ 承認待ち / Đang chờ
                           </span>
                         )}
                         {req.status === 'rejected' && (
                           <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold" title={req.rejectedReason || ''}>
-                            NG / Tu choi
+                            ❌ 却下 / Từ chối
                           </span>
                         )}
                       </div>
