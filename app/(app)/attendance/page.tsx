@@ -35,6 +35,7 @@ interface AttEntry {
   r?: number
   p?: number
   h?: number
+  hk?: number   // 1=帰国中
   s?: string
   // 時間ベース入力（202605〜）
   st?: string   // 始業 "HH:MM"
@@ -50,6 +51,15 @@ interface SubconDayEntry {
 }
 
 type DayType = 'work' | 'off' | 'holiday'
+
+interface HomeLeaveInfo {
+  workerId: number
+  workerName: string
+  startDate: string
+  endDate: string
+  reason: string
+  status: string
+}
 
 interface GridData {
   site: SiteOption
@@ -69,6 +79,7 @@ interface GridData {
   allWorkers: Worker[]
   foremanOverride: { name: string; note: string } | null
   calendarDays: Record<string, DayType> | null
+  homeLeaves?: HomeLeaveInfo[]
 }
 
 // ── Visa badge helper ──
@@ -842,6 +853,7 @@ export default function AttendanceGridPage() {
 
   function getWorkValue(entry: AttEntry | null | undefined): string {
     if (!entry) return ''
+    if (entry.hk && entry.hk > 0) return 'HK'
     if (entry.p && entry.p > 0) return 'P'
     if (entry.w === 1) return '1'
     if (entry.w === 0.5) return '0.5'
@@ -853,6 +865,7 @@ export default function AttendanceGridPage() {
 
   function getTimeStatusValue(entry: AttEntry | null | undefined): string {
     if (!entry) return ''
+    if (entry.hk && entry.hk > 0) return 'HK'
     if (entry.p && entry.p > 0) return 'P'
     if (entry.r && entry.r > 0) return 'R'
     if (entry.h && entry.h > 0) return 'H'
@@ -1062,6 +1075,37 @@ export default function AttendanceGridPage() {
         </div>
       )}
 
+      {/* ── Home leave banner ── */}
+      {data?.homeLeaves && data.homeLeaves.length > 0 && (
+        <div className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 font-bold text-cyan-800 mb-1">
+            ✈️ 帰国予定・帰国中 ({data.homeLeaves.length}件)
+          </div>
+          <div className="space-y-1">
+            {data.homeLeaves.map((hl, i) => {
+              const now = new Date().toISOString().slice(0, 10)
+              const isCurrent = hl.startDate <= now && hl.endDate >= now
+              const isFuture = hl.startDate > now
+              return (
+                <div key={i} className="flex items-center gap-2 text-xs text-cyan-700">
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    isCurrent ? 'bg-cyan-200 text-cyan-800' : isFuture ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {isCurrent ? '帰国中' : isFuture ? '予定' : '済'}
+                  </span>
+                  <span className="font-medium">{hl.workerName}</span>
+                  <span>{hl.startDate.slice(5)} 〜 {hl.endDate.slice(5)}</span>
+                  <span className="text-cyan-500">({hl.reason})</span>
+                  {hl.status === 'foreman_approved' && (
+                    <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded">職長済・最終承認待ち</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Grid Table ── */}
       {!loading && data && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
@@ -1251,6 +1295,21 @@ export default function AttendanceGridPage() {
                             // ── 時間ベースモード（外国人 + 202605〜）──
                             if (isWorkerTimeBased) {
                               const statusVal = getTimeStatusValue(entry)
+
+                              // 帰国中: 特別表示
+                              if (statusVal === 'HK') {
+                                return (
+                                  <td key={d.day}
+                                    className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)}`}
+                                    style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                                  >
+                                    <div className="flex items-center justify-center h-full py-2">
+                                      <span className="text-[10px] font-bold text-cyan-600 bg-cyan-50 px-1.5 py-0.5 rounded">✈帰国</span>
+                                    </div>
+                                  </td>
+                                )
+                              }
+
                               const isWorking = statusVal === 'W'
                               const st = entry?.st || '08:00'
                               const et = entry?.et || '17:00'
@@ -1345,6 +1404,21 @@ export default function AttendanceGridPage() {
 
                             // ── レガシーモード（日本人 or 〜202604） ──
                             const workVal = getWorkValue(entry)
+
+                            // 帰国中: 特別表示
+                            if (workVal === 'HK') {
+                              return (
+                                <td key={d.day}
+                                  className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)}`}
+                                  style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                                >
+                                  <div className="flex items-center justify-center h-full py-2">
+                                    <span className="text-[10px] font-bold text-cyan-600 bg-cyan-50 px-1.5 py-0.5 rounded">✈帰国</span>
+                                  </div>
+                                </td>
+                              )
+                            }
+
                             const otVal = entry?.o || 0
                             const canOt = entry && entry.w > 0 && entry.w !== 0.6
 

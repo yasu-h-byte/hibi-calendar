@@ -4,7 +4,7 @@ import { getMainData, getAttData, getAssign } from '@/lib/compute'
 import { getApprovalForDay, setApprovalForDay } from '@/lib/attendance'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, getDocs, collection, query, where } from 'firebase/firestore'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -131,6 +131,26 @@ export async function GET(request: NextRequest) {
       ? { name: foremanWorker?.name || '', note: mf.note || '' }
       : null
 
+    // 帰国情報: 承認済み・職長承認済みの帰国申請で、対象月と重なるもの
+    const monthStart = `${String(y)}-${String(m).padStart(2, '0')}-01`
+    const monthEnd = `${String(y)}-${String(m).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+    const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
+    const homeLeaves: { workerId: number; workerName: string; startDate: string; endDate: string; reason: string; status: string }[] = []
+    hlSnap.forEach(d => {
+      const hl = d.data()
+      if (hl.status !== 'approved' && hl.status !== 'foreman_approved') return
+      // 期間が対象月と重なるかチェック
+      if (hl.endDate < monthStart || hl.startDate > monthEnd) return
+      homeLeaves.push({
+        workerId: hl.workerId,
+        workerName: hl.workerName,
+        startDate: hl.startDate,
+        endDate: hl.endDate,
+        reason: hl.reason || '一時帰国',
+        status: hl.status,
+      })
+    })
+
     return NextResponse.json({
       site: { id: site.id, name: site.name, foreman: effectiveForeman, foremanName, foremanNote },
       foremanOverride,
@@ -146,6 +166,7 @@ export async function GET(request: NextRequest) {
       allWorkers,
       sites: main.sites.map(s => ({ id: s.id, name: s.name, archived: s.archived })),
       calendarDays,
+      homeLeaves,
     })
   } catch (error) {
     console.error('Grid GET error:', error)
