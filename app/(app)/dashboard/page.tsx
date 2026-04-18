@@ -203,7 +203,7 @@ export default function DashboardPage() {
 
           {/* ═══ 1. Today's Status Table ═══ */}
           <Section title={`本日の稼働状況 (${todayStr})`}>
-            {data.todayStatus && data.todayStatus.siteStatus.length > 0 ? (
+            {data.todayStatus && data.todayStatus.siteStatus.length > 0 && data.todayStatus.siteStatus.some(s => s.total > 0) ? (
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -263,7 +263,10 @@ export default function DashboardPage() {
                 )}
               </>
             ) : (
-              <p className="text-gray-400 text-sm py-4 text-center">本日の出勤データなし</p>
+              <div className="py-6 text-center">
+                <p className="text-gray-400 text-sm">本日の出面はまだ入力されていません</p>
+                <p className="text-gray-300 text-xs mt-1">出面入力画面で入力するとここに反映されます</p>
+              </div>
             )}
           </Section>
 
