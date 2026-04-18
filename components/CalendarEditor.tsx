@@ -82,26 +82,26 @@ export default function CalendarEditor({ year, month, days, onChange, readOnly }
           // シンプルに「出勤」か「休み」の2択（祝日も出勤/休みとして表示）
           const isWork = dayType === 'work'
           const bg = isWork
-            ? 'bg-blue-500 text-white border-blue-600 dark:border-blue-400'
-            : 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border-gray-300 dark:border-gray-600'
+            ? 'bg-blue-400 text-white border-blue-500 dark:border-blue-300'
+            : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-600'
 
           return (
             <button
               key={i}
               onClick={() => toggleDay(d)}
               disabled={readOnly}
-              className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs border ${bg} ${
+              className={`aspect-square rounded-lg flex flex-col items-center justify-center border-2 ${bg} ${
                 readOnly ? 'cursor-default' : 'cursor-pointer hover:opacity-80 active:scale-95'
               } transition-all`}
             >
-              <div className={`font-bold text-sm ${dow === 0 && !isWork ? 'text-red-400' : dow === 6 && isWork ? 'text-white' : ''}`}>
+              <div className={`font-bold text-2xl ${dow === 0 && !isWork ? 'text-red-400' : dow === 6 && isWork ? 'text-white' : ''}`}>
                 {d}
               </div>
-              <div className="text-[9px]">
+              <div className="text-sm font-medium">
                 {isWork ? '出勤' : '休み'}
               </div>
               {holiday && (
-                <div className={`text-[7px] leading-tight truncate w-full px-0.5 text-center ${isWork ? 'text-white/70' : 'text-gray-400'}`}>
+                <div className={`text-[9px] leading-tight truncate w-full px-0.5 text-center ${isWork ? 'text-white/80' : 'text-gray-400'}`}>
                   {holiday.name}
                 </div>
               )}
@@ -113,7 +113,7 @@ export default function CalendarEditor({ year, month, days, onChange, readOnly }
       {/* Legend */}
       <div className="mt-3 flex gap-4 justify-center text-xs text-gray-500 dark:text-gray-400">
         <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-blue-500" />
+          <div className="w-3 h-3 rounded bg-blue-400" />
           <span>出勤</span>
         </div>
         <div className="flex items-center gap-1">
