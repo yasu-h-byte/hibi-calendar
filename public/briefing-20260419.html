@@ -10,7 +10,7 @@
   .subtitle { text-align: center; font-size: 15px; color: #666; margin-bottom: 30px; }
   h2 { font-size: 20px; color: white; background: #1B2A4A; padding: 10px 16px; border-radius: 8px; margin-top: 40px; }
   h3 { font-size: 16px; color: #1B2A4A; margin-top: 24px; border-bottom: 2px solid #e0e0e0; padding-bottom: 4px; }
-  .vi { color: #2563EB; }
+  .vi { color: #2563EB; font-size: 0.95em; }
   .section { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 12px; padding: 24px; margin: 20px 0; }
   .compare { display: flex; gap: 16px; margin: 16px 0; }
   .compare > div { flex: 1; border-radius: 10px; padding: 20px; }
@@ -93,7 +93,46 @@
     /* スマホモックアップを印刷用に調整 */
     [style*="border-radius: 20px"] { break-inside: avoid; }
   }
-  @media (max-width: 600px) { .compare { flex-direction: column; } .step-flow { flex-direction: column; } .step-arrow { transform: rotate(90deg); } .tier-stack { max-width: 100%; } }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 14px; line-height: 1.7; }
+    h1 { font-size: 20px; padding-bottom: 8px; }
+    .subtitle { font-size: 13px; margin-bottom: 20px; }
+    h2 { font-size: 17px; padding: 8px 12px; margin-top: 28px; }
+    h3 { font-size: 15px; margin-top: 18px; }
+    .section { padding: 14px; margin: 12px 0; }
+    .compare { flex-direction: column; gap: 10px; }
+    .compare > div { padding: 14px; }
+    .before h4, .after h4 { font-size: 16px; }
+    .calc { padding: 14px; font-size: 14px; line-height: 1.9; }
+    .calc-result { font-size: 18px; padding: 8px; }
+    table { font-size: 12px; }
+    th, td { padding: 6px 8px; }
+    .emoji { font-size: 32px; margin: 8px 0; }
+    .point, .good { padding: 12px; margin: 10px 0; }
+    .point-title, .good-title { font-size: 14px; }
+    .tier-stack { max-width: 100%; }
+    .tier-box { padding: 12px 14px; font-size: 13px; }
+    .tier-label { font-size: 15px; }
+    .tier-formula { font-size: 12px; }
+    .tier-note { font-size: 11px; }
+    .step-flow { flex-direction: column; gap: 6px; }
+    .step-arrow { transform: rotate(90deg); font-size: 18px; }
+    .step-box { min-width: auto; width: 100%; padding: 10px 14px; font-size: 13px; }
+    .schedule-row { font-size: 13px; gap: 8px; padding: 6px 0; }
+    .schedule-time { font-size: 14px; width: 50px; }
+    .phone-btn { padding: 14px 20px; font-size: 15px; min-width: 110px; }
+    .qa-q { font-size: 14px; }
+    .qa-a { font-size: 13px; padding-left: 12px; }
+    /* スマホモックアップを幅に合わせる */
+    [style*="max-width: 320px"] { max-width: 100% !important; }
+    [style*="max-width: 360px"] { max-width: 100% !important; }
+    /* 比較表のテキスト調整 */
+    .before p, .after p { font-size: 13px; }
+    /* テーブルの横スクロール防止 */
+    table { display: block; overflow-x: auto; }
+    /* ナビリンクを非表示 */
+    a[href="/docs"] { display: none; }
+  }
 </style>
 </head>
 <body>
