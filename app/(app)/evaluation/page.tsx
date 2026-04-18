@@ -38,7 +38,8 @@ function calculateManualScore(scores: EvaluationScores): {
   const att =
     gradeToScore(scores.attitude.punctuality) +
     gradeToScore(scores.attitude.safetyAwareness) +
-    gradeToScore(scores.attitude.teamwork)
+    gradeToScore(scores.attitude.teamwork) +
+    gradeToScore(scores.attitude.compliance || 'B')
   const sk =
     gradeToScore(scores.skill.level) +
     gradeToScore(scores.skill.speed) +
@@ -57,11 +58,13 @@ function calculateManualScore(scores: EvaluationScores): {
   }
 }
 
+// 満点37.8（日本語9×1.0 + 勤務態度12×1.5 + 職業能力9×1.2）
+// + 皆勤ボーナス最大3 → 最大40.8
 function calculateRank(totalScore: number): EvaluationRank {
-  if (totalScore >= 29) return 'S'
-  if (totalScore >= 24) return 'A'
-  if (totalScore >= 18) return 'B'
-  if (totalScore >= 12) return 'C'
+  if (totalScore >= 33) return 'S'    // 87%+
+  if (totalScore >= 27) return 'A'    // 71%+
+  if (totalScore >= 21) return 'B'    // 55%+
+  if (totalScore >= 14) return 'C'    // 37%+
   return 'D'
 }
 
@@ -82,18 +85,27 @@ const VISA_LABELS: Record<string, string> = {
   jisshu: '技能実習', tokutei: '特定技能',
 }
 
+// 昇給テーブル（1,300円スタート → 9年で S:2,500 A:2,230 B:1,960 C:1,690 到達）
+// D評価は現在時給の1%（法定最低限の昇給義務）
 const RAISE_TABLE: { year: number; S: number; A: number; B: number; C: number }[] = [
-  { year: 1, S: 150, A: 100, B: 60, C: 0 },
-  { year: 2, S: 120, A: 80, B: 50, C: 0 },
-  { year: 3, S: 100, A: 60, B: 40, C: 0 },
-  { year: 4, S: 80, A: 50, B: 30, C: 0 },
-  { year: 5, S: 60, A: 40, B: 20, C: 0 },
-  { year: 6, S: 40, A: 30, B: 15, C: 0 },
+  { year: 1, S: 200, A: 150, B: 110, C: 70 },
+  { year: 2, S: 180, A: 140, B: 100, C: 60 },
+  { year: 3, S: 160, A: 130, B: 90, C: 55 },
+  { year: 4, S: 150, A: 120, B: 80, C: 50 },
+  { year: 5, S: 140, A: 110, B: 70, C: 45 },
+  { year: 6, S: 120, A: 100, B: 65, C: 40 },
+  { year: 7, S: 100, A: 80, B: 55, C: 30 },
+  { year: 8, S: 80, A: 60, B: 50, C: 25 },
+  { year: 9, S: 70, A: 40, B: 40, C: 15 },
 ]
 
-function getRaiseAmount(rank: EvaluationRank, yearsFromHire: number): number {
-  if (rank === 'D') return 0
-  const row = RAISE_TABLE.find(r => r.year === Math.min(yearsFromHire, 6)) || RAISE_TABLE[5]
+function getRaiseAmount(rank: EvaluationRank, yearsFromHire: number, currentHourlyRate?: number): number {
+  if (rank === 'D') {
+    // D評価: 現在時給の1%（最低昇給義務）
+    const rate = currentHourlyRate || 1300
+    return Math.ceil(rate * 0.01)
+  }
+  const row = RAISE_TABLE.find(r => r.year === Math.min(yearsFromHire, 9)) || RAISE_TABLE[8]
   return row[rank as 'S' | 'A' | 'B' | 'C']
 }
 
@@ -192,7 +204,7 @@ type TabId = 'list' | 'review' | 'approve'
 
 const EMPTY_SCORES: EvaluationScores = {
   japanese: { understanding: 'B' as ABCGrade, reporting: 'B' as ABCGrade, safety: 'B' as ABCGrade },
-  attitude: { punctuality: 'B' as ABCGrade, safetyAwareness: 'B' as ABCGrade, teamwork: 'B' as ABCGrade },
+  attitude: { punctuality: 'B' as ABCGrade, safetyAwareness: 'B' as ABCGrade, teamwork: 'B' as ABCGrade, compliance: 'B' as ABCGrade },
   skill: { level: 'B' as ABCGrade, speed: 'B' as ABCGrade, planning: 'B' as ABCGrade },
 }
 
@@ -416,7 +428,7 @@ export default function EvaluationPage() {
     const rank = calculateRank(totalScore)
     const worker = workers.find(w => w.id === session.workerId)
     const years = worker?.hireDate ? yearsFromDate(worker.hireDate) : 1
-    const raiseAmount = getRaiseAmount(rank, years)
+    const raiseAmount = getRaiseAmount(rank, years, worker?.hourlyRate)
 
     setSaving(true)
     const { password } = getAuth()
@@ -1178,7 +1190,7 @@ export default function EvaluationPage() {
             const bonus = session.metrics?.attendanceBonus ?? 0
             const totalScore = finalCalc.total + bonus
             const rank = calculateRank(totalScore)
-            const raiseAmount = getRaiseAmount(rank, years)
+            const raiseAmount = getRaiseAmount(rank, years, worker?.hourlyRate)
 
             return (
               <div className="space-y-6">

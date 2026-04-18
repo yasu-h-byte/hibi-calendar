@@ -153,7 +153,7 @@ export type EvaluationRank = 'S' | 'A' | 'B' | 'C' | 'D'
 
 export interface EvaluationScores {
   japanese: { understanding: ABCGrade; reporting: ABCGrade; safety: ABCGrade }
-  attitude: { punctuality: ABCGrade; safetyAwareness: ABCGrade; teamwork: ABCGrade }
+  attitude: { punctuality: ABCGrade; safetyAwareness: ABCGrade; teamwork: ABCGrade; compliance: ABCGrade }
   skill: { level: ABCGrade; speed: ABCGrade; planning: ABCGrade }
 }
 
