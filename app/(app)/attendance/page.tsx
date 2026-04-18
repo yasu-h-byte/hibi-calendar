@@ -186,7 +186,16 @@ export default function AttendanceGridPage() {
   const [userRole, setUserRole] = useState('')
   const [userId, setUserId] = useState(0)
   const [ym, setYm] = useState(currentYm)
-  const [siteId, setSiteId] = useState('')
+  const [siteId, _setSiteId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('att_lastSiteId') || ''
+    }
+    return ''
+  })
+  const setSiteId = useCallback((id: string) => {
+    _setSiteId(id)
+    if (id) localStorage.setItem('att_lastSiteId', id)
+  }, [])
   const [data, setData] = useState<GridData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -289,11 +298,13 @@ export default function AttendanceGridPage() {
     if (data && data.sites.length > 0 && !siteId) {
       setSiteId(data.sites[0].id)
     }
-  }, [data, siteId])
+  }, [data, siteId, setSiteId])
 
   // Initial site load: fetch site list from sites API
+  const sitesLoaded = useRef(false)
   useEffect(() => {
-    if (!password || siteId) return
+    if (!password || sitesLoaded.current) return
+    sitesLoaded.current = true
     const loadSites = async () => {
       setLoading(true)
       try {
@@ -304,16 +315,19 @@ export default function AttendanceGridPage() {
           const json = await res.json()
           const sites = json.sites || []
           setAllSites(sites)
-          const activeSites = sites.filter((s: { archived?: boolean }) => !s.archived)
-          if (activeSites.length > 0) {
-            setSiteId(activeSites[0].id)
+          // siteId が空、または保存値がサイトリストに存在しない場合のみデフォルト設定
+          if (!siteId || !sites.some((s: { id: string }) => s.id === siteId)) {
+            const activeSites = sites.filter((s: { archived?: boolean }) => !s.archived)
+            if (activeSites.length > 0) {
+              setSiteId(activeSites[0].id)
+            }
           }
         }
       } catch { /* ignore */ }
       setLoading(false)
     }
     loadSites()
-  }, [password, siteId])
+  }, [password, siteId, setSiteId])
 
   // ── Debounced save flush ──
 
