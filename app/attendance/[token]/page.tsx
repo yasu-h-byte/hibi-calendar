@@ -69,7 +69,8 @@ export default function StaffAttendancePage() {
   const [editingPast, setEditingPast] = useState<number | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [showLeaveModal, setShowLeaveModal] = useState(false)
-  const [leaveDate, setLeaveDate] = useState('')
+  const [leaveDateFrom, setLeaveDateFrom] = useState('')
+  const [leaveDateTo, setLeaveDateTo] = useState('')
   const [leaveReason, setLeaveReason] = useState('')
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequestData[]>([])
   const [leaveSubmitting, setLeaveSubmitting] = useState(false)
@@ -176,13 +177,14 @@ export default function StaffAttendancePage() {
   useEffect(() => {
     if (showLeaveModal) {
       fetchLeaveRequests()
-      // Set default date to tomorrow
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      const y = tomorrow.getFullYear()
-      const m = String(tomorrow.getMonth() + 1).padStart(2, '0')
-      const d = String(tomorrow.getDate()).padStart(2, '0')
-      setLeaveDate(`${y}-${m}-${d}`)
+      // Set default date to 5 days from now
+      const minD = new Date()
+      minD.setDate(minD.getDate() + 5)
+      const y = minD.getFullYear()
+      const m = String(minD.getMonth() + 1).padStart(2, '0')
+      const d = String(minD.getDate()).padStart(2, '0')
+      setLeaveDateFrom(`${y}-${m}-${d}`)
+      setLeaveDateTo(`${y}-${m}-${d}`)
       setLeaveReason('')
       setLeaveError(null)
       setLeaveSuccess(null)
@@ -190,34 +192,60 @@ export default function StaffAttendancePage() {
   }, [showLeaveModal, fetchLeaveRequests])
 
   const submitLeaveRequest = async () => {
-    if (!data || leaveSubmitting || !leaveDate) return
+    if (!data || leaveSubmitting || !leaveDateFrom) return
     setLeaveSubmitting(true)
     setLeaveError(null)
     setLeaveSuccess(null)
     try {
-      const res = await fetch('/api/leave-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'request',
-          token,
-          date: leaveDate,
-          siteId: data.site.id,
-          reason: leaveReason,
-        }),
-      })
-      if (res.ok) {
-        setLeaveSuccess('OK')
-        setLeaveDate('')
+      // Build list of dates (from ~ to)
+      const dates: string[] = []
+      const from = new Date(leaveDateFrom + 'T00:00:00')
+      const to = leaveDateTo ? new Date(leaveDateTo + 'T00:00:00') : from
+      const current = new Date(from)
+      while (current <= to) {
+        const dow = current.getDay()
+        if (dow !== 0) { // 日曜を除く
+          dates.push(`${current.getFullYear()}-${String(current.getMonth()+1).padStart(2,'0')}-${String(current.getDate()).padStart(2,'0')}`)
+        }
+        current.setDate(current.getDate() + 1)
+      }
+      if (dates.length === 0) { setLeaveError('日付を選択してください'); setLeaveSubmitting(false); return }
+
+      // Submit each date
+      let successCount = 0
+      let lastError = ''
+      for (const date of dates) {
+        const res = await fetch('/api/leave-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'request',
+            token,
+            date,
+            siteId: data.site.id,
+            reason: leaveReason,
+          }),
+        })
+        if (res.ok) {
+          successCount++
+        } else {
+          const d = await res.json()
+          lastError = d.error || 'Error'
+        }
+      }
+
+      if (successCount > 0) {
+        setLeaveSuccess(`${successCount}日分の申請完了 / Đã gửi ${successCount} ngày`)
+        setLeaveDateFrom('')
+        setLeaveDateTo('')
         setLeaveReason('')
         fetchLeaveRequests()
-        setTimeout(() => setLeaveSuccess(null), 2000)
-      } else {
-        const d = await res.json()
-        const msg = d.error === 'Already requested' ? 'Already requested / Da gui roi'
-          : d.error === 'No remaining leave' ? 'ゆうきゅう の こり 0 にち です / Khong con ngay phep'
-          : d.error === 'Date must be in the future' ? 'Select a future date / Chon ngay trong tuong lai'
-          : d.error || 'Error'
+        setTimeout(() => setLeaveSuccess(null), 3000)
+      }
+      if (lastError && successCount < dates.length) {
+        const msg = lastError === 'Already requested' ? '一部は申請済みです / Một số đã gửi rồi'
+          : lastError === 'No remaining leave' ? '有給の残りがありません / Không còn ngày phép'
+          : lastError
         setLeaveError(msg)
         setTimeout(() => setLeaveError(null), 3000)
       }
@@ -230,10 +258,11 @@ export default function StaffAttendancePage() {
   }
 
   const getMinDate = () => {
-    const today = new Date()
-    const y = today.getFullYear()
-    const m = String(today.getMonth() + 1).padStart(2, '0')
-    const d = String(today.getDate()).padStart(2, '0')
+    const minD = new Date()
+    minD.setDate(minD.getDate() + 5)
+    const y = minD.getFullYear()
+    const m = String(minD.getMonth() + 1).padStart(2, '0')
+    const d = String(minD.getDate()).padStart(2, '0')
     return `${y}-${m}-${d}`
   }
 
@@ -996,7 +1025,7 @@ export default function StaffAttendancePage() {
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowLeaveModal(false)}>
           <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-hibi-navy mb-4 text-center">
-              ゆうきゅう しんせい / Xin nghi phep
+              有給申請 / Xin nghỉ phép
             </h3>
 
             {leaveSuccess && (
@@ -1010,27 +1039,57 @@ export default function StaffAttendancePage() {
               </div>
             )}
 
-            {/* Date picker */}
+            {/* Date picker (range) */}
             <div className="mb-4">
-              <label className="text-sm text-gray-600 block mb-1">
-                ひにち をえらんでください / Chon ngay nghi
+              <label className="text-sm text-gray-600 font-bold block mb-2">
+                日にちを選んでください / Chọn ngày nghỉ
               </label>
-              <input
-                type="date"
-                value={leaveDate}
-                min={getMinDate()}
-                onChange={e => setLeaveDate(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
-              />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">開始日 / Từ ngày</label>
+                  <input
+                    type="date"
+                    value={leaveDateFrom}
+                    min={getMinDate()}
+                    onChange={e => {
+                      setLeaveDateFrom(e.target.value)
+                      if (!leaveDateTo || e.target.value > leaveDateTo) setLeaveDateTo(e.target.value)
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">終了日 / Đến ngày</label>
+                  <input
+                    type="date"
+                    value={leaveDateTo}
+                    min={leaveDateFrom || getMinDate()}
+                    onChange={e => setLeaveDateTo(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
+                  />
+                </div>
+              </div>
+              {leaveDateFrom && leaveDateTo && leaveDateFrom !== leaveDateTo && (
+                <p className="text-xs text-blue-600 mt-2 font-bold">
+                  {(() => {
+                    const from = new Date(leaveDateFrom + 'T00:00:00')
+                    const to = new Date(leaveDateTo + 'T00:00:00')
+                    let count = 0
+                    const c = new Date(from)
+                    while (c <= to) { if (c.getDay() !== 0) count++; c.setDate(c.getDate() + 1) }
+                    return `${count}日分の申請になります / Sẽ gửi ${count} ngày`
+                  })()}
+                </p>
+              )}
               <p className="text-xs text-gray-400 mt-1">
-                あした いこう / Tu ngay mai tro di
+                ※ 5日前から選べます / Chọn được từ 5 ngày trước
               </p>
             </div>
 
             {/* Reason */}
             <div className="mb-4">
               <label className="text-sm text-gray-600 block mb-1">
-                りゆう（にんい）/ Ly do (tuy chon)
+                理由（任意）/ Lý do (tùy chọn)
               </label>
               <input
                 type="text"
@@ -1044,10 +1103,10 @@ export default function StaffAttendancePage() {
             {/* Submit */}
             <button
               onClick={submitLeaveRequest}
-              disabled={leaveSubmitting || !leaveDate}
+              disabled={leaveSubmitting || !leaveDateFrom}
               className="w-full bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
             >
-              {leaveSubmitting ? '...' : 'しんせい する / Gui don'}
+              {leaveSubmitting ? '送信中...' : '有給を申請する / Gửi đơn nghỉ phép'}
             </button>
 
             {/* Request history */}
