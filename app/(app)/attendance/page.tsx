@@ -145,21 +145,23 @@ function isToday(year: number, month: number, day: number): boolean {
 
 function dayColBg(year: number, month: number, day: number, calDayType?: DayType | null): string {
   if (isToday(year, month, day)) return 'bg-amber-50'
-  // カレンダーで休み/祝日の日はグレー背景（出勤日との区別）
-  if (calDayType === 'off' || calDayType === 'holiday') return 'bg-gray-50'
   const dow = getDow(year, month, day)
+  // 日曜・土曜は曜日色を常に優先
   if (dow === 0) return 'bg-red-50'
   if (dow === 6) return 'bg-blue-50'
+  // 平日でカレンダー休日 → グレー
+  if (calDayType === 'off' || calDayType === 'holiday') return 'bg-gray-100/60'
   return ''
 }
 
 function dayHeaderBg(year: number, month: number, day: number, calDayType?: DayType | null): string {
   if (isToday(year, month, day)) return 'bg-amber-100'
-  // カレンダーで休みの日はヘッダーもグレー系
-  if (calDayType === 'off' || calDayType === 'holiday') return 'bg-gray-200'
   const dow = getDow(year, month, day)
+  // 日曜・土曜は曜日色を常に優先
   if (dow === 0) return 'bg-red-100'
   if (dow === 6) return 'bg-blue-100'
+  // 平日でカレンダー休日 → グレー濃
+  if (calDayType === 'off' || calDayType === 'holiday') return 'bg-gray-200'
   return 'bg-gray-100'
 }
 
@@ -1147,16 +1149,21 @@ export default function AttendanceGridPage() {
                   {days.map(d => {
                     const calDayType = data.calendarDays?.[String(d.day)]
                     const isCalOff = calDayType === 'off' || calDayType === 'holiday'
+                    const isSunday = d.dow === 0
+                    // 平日の休みだけ文字色をグレーに（日曜・土曜は曜日色維持）
+                    const isWeekdayOff = isCalOff && d.dow !== 0 && d.dow !== 6
+                    // 「休」マーク: 日曜以外でカレンダー休日の場合（土曜含む）
+                    const showOffMark = isCalOff && !isSunday && data.calendarDays
                     return (
                     <th
                       key={d.day}
-                      className={`px-0 py-1 text-center font-bold ${dayHeaderBg(data.year, data.month, d.day, calDayType)} ${isCalOff ? 'text-gray-400' : dayTextColor(d.dow)} border-l border-gray-200`}
+                      className={`px-0 py-1 text-center font-bold ${dayHeaderBg(data.year, data.month, d.day, calDayType)} ${isWeekdayOff ? 'text-gray-400' : dayTextColor(d.dow)} border-l border-gray-200`}
                       style={{ width: 56, minWidth: 56, maxWidth: 56 }}
-                      title={isCalOff ? 'カレンダー休日' : 'カレンダー出勤日'}
+                      title={isCalOff ? 'カレンダー休日' : data.calendarDays ? 'カレンダー出勤日' : ''}
                     >
                       <div className="leading-tight">
                         <div className="text-[11px]">{d.day}</div>
-                        <div className="text-[9px] opacity-70">{d.label}{isCalOff && data.calendarDays ? ' 休' : ''}</div>
+                        <div className="text-[9px] opacity-70">{d.label}{showOffMark ? ' 休' : ''}</div>
                       </div>
                     </th>
                     )
