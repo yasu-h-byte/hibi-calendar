@@ -37,7 +37,7 @@
 <h1>HIBI CONSTRUCTION 就業管理システム<br>評価管理マニュアル</h1>
 <p>対象: 管理者・事業責任者（政仁さん）・職長<br>
 作成日: 2026年4月14日<br>
-最終更新: 2026年4月18日<br>
+最終更新: 2026年4月19日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <div class="toc">
@@ -153,6 +153,7 @@
 <div class="step">
   <div class="step-num">3</div>
   <div class="step-text">3つの評価カテゴリ（日本語能力・勤務態度・職業能力）について、各項目の<strong>A/B/C</strong>を選択<br>
+  <span style="color:#888; font-size:13px;">※ 勤務態度は4項目（指示遵守を含む）、他は3項目ずつ、計10項目です</span><br>
   <span style="color:#888; font-size:13px;">※ 各項目の横の ℹ️ アイコンをクリックすると、ABCの具体的な判定基準が表示されます</span></div>
 </div>
 <div class="step">
@@ -211,7 +212,13 @@
 <!-- ================================================ -->
 <h2 id="sec6">6. 評価基準（ABC判定の目安）</h2>
 
-<h3>🗣 日本語能力（重み ×1.0）</h3>
+<div class="box">
+<strong>評価項目の構成：</strong>全10項目（日本語3 + 勤務態度<strong>4</strong> + 職業能力3）<br>
+勤務態度が4項目かつ重み×1.5のため、<strong>スコアの約半分（48%）</strong>を占めます。<br>
+真面目に取り組む姿勢が最も重視される設計です。
+</div>
+
+<h3>🗣 日本語能力（3項目 × 重み ×1.0 = 24%）</h3>
 
 <table>
 <tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
@@ -235,7 +242,7 @@
 </tr>
 </table>
 
-<h3>💼 勤務態度（重み ×1.5 — 最重要）</h3>
+<h3>💼 勤務態度（4項目 × 重み ×1.5 = 48% — 最重要）</h3>
 
 <table>
 <tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
@@ -257,9 +264,15 @@
   <td>与えられた仕事を問題なくこなす</td>
   <td>単独行動が多い。チームワークに課題</td>
 </tr>
+<tr style="background: #f0f4ff;">
+  <td><strong>指示遵守</strong><br><span style="color:#888; font-size:11px;">NEW</span></td>
+  <td>職長や先輩社員の指示を正確に守り、自己判断で勝手に変えない。不明点は必ず確認する</td>
+  <td>基本的に指示は守るが、たまに自己判断で省略・変更することがある</td>
+  <td>指示を守らないことが目立つ。自分のやり方で勝手に進めてしまうことがある</td>
+</tr>
 </table>
 
-<h3>🔨 職業能力（重み ×1.2）</h3>
+<h3>🔨 職業能力（3項目 × 重み ×1.2 = 28%）</h3>
 
 <table>
 <tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
@@ -291,36 +304,54 @@
 <div class="box">
 <strong>各項目:</strong> A=3点、B=2点、C=1点<br><br>
 <strong>重み付きスコア:</strong><br>
-日本語能力（3項目の合計）× 1.0<br>
-+ 勤務態度（3項目の合計）× 1.5<br>
-+ 職業能力（3項目の合計）× 1.2<br>
-= 手動スコア（最大 33.3点）<br><br>
+日本語能力（3項目の合計）× 1.0 = 最大 9.0点<br>
++ 勤務態度（<strong>4項目</strong>の合計）× 1.5 = 最大 <strong>18.0点</strong><br>
++ 職業能力（3項目の合計）× 1.2 = 最大 10.8点<br>
+= 手動スコア（最大 <strong>37.8点</strong>）<br><br>
 <strong>出勤率ボーナス:</strong> 98%以上→+3点 / 95%以上→+2点 / 90%以上→+1点<br><br>
-<strong>総合スコア</strong> = 手動スコア + 出勤率ボーナス（最大 36.3点）
+<strong>総合スコア</strong> = 手動スコア + 出勤率ボーナス（最大 <strong>40.8点</strong>）
+</div>
+
+<div class="box box-warn">
+<strong>勤務態度の配点が約半分（48%）を占めます。</strong><br>
+技能がまだ発展途上の実習生でも、勤務態度がしっかりしていれば高評価（A〜S）を取ることができます。「真面目にやる人が報われる」仕組みです。
 </div>
 
 <h3>総合ランク</h3>
 
 <table>
 <tr><th>ランク</th><th>スコア</th><th>意味</th></tr>
-<tr><td><strong>S</strong></td><td>30点以上</td><td>極めて優秀</td></tr>
-<tr><td><strong>A</strong></td><td>25〜29.9点</td><td>優秀</td></tr>
-<tr><td><strong>B</strong></td><td>20〜24.9点</td><td>標準</td></tr>
-<tr><td><strong>C</strong></td><td>15〜19.9点</td><td>改善必要（昇給なし）</td></tr>
-<tr><td><strong>D</strong></td><td>15点未満</td><td>面談実施</td></tr>
+<tr><td><strong style="color:#9333ea;">S</strong></td><td>33点以上</td><td>極めて優秀</td></tr>
+<tr><td><strong style="color:#2563eb;">A</strong></td><td>27〜32.9点</td><td>優秀</td></tr>
+<tr><td><strong style="color:#16a34a;">B</strong></td><td>21〜26.9点</td><td>標準</td></tr>
+<tr><td><strong style="color:#ca8a04;">C</strong></td><td>14〜20.9点</td><td>改善必要</td></tr>
+<tr><td><strong style="color:#dc2626;">D</strong></td><td>14点未満</td><td>面談実施</td></tr>
 </table>
 
-<h3>昇給テーブル（入社年数で逓減）</h3>
+<h3>昇給テーブル（1,300円スタート → 9年で到達目安）</h3>
+
+<div class="box box-ok">
+<strong>設計思想：</strong>各ランクの到達時給が<strong>等間隔（約270円差）</strong>になるよう設計。<br>
+S:2,500円 / A:2,230円 / B:1,960円 / C:1,690円 / D:1,420円（9年後）
+</div>
 
 <table>
-<tr><th>入社からの年数</th><th>Sランク</th><th>Aランク</th><th>Bランク</th><th>Cランク</th></tr>
-<tr><td>1年目</td><td>+150円/h</td><td>+100円/h</td><td>+60円/h</td><td>±0円</td></tr>
-<tr><td>2年目</td><td>+120円/h</td><td>+80円/h</td><td>+50円/h</td><td>±0円</td></tr>
-<tr><td>3年目</td><td>+100円/h</td><td>+60円/h</td><td>+40円/h</td><td>±0円</td></tr>
-<tr><td>4年目</td><td>+80円/h</td><td>+50円/h</td><td>+30円/h</td><td>±0円</td></tr>
-<tr><td>5年目</td><td>+60円/h</td><td>+40円/h</td><td>+20円/h</td><td>±0円</td></tr>
-<tr><td>6年目以降</td><td>+40円/h</td><td>+30円/h</td><td>+15円/h</td><td>±0円</td></tr>
+<tr><th>入社からの年数</th><th style="color:#9333ea;">S</th><th style="color:#2563eb;">A</th><th style="color:#16a34a;">B</th><th style="color:#ca8a04;">C</th><th style="color:#dc2626;">D</th></tr>
+<tr><td>1年目</td><td>+200円</td><td>+150円</td><td>+110円</td><td>+70円</td><td>1%</td></tr>
+<tr><td>2年目</td><td>+180円</td><td>+140円</td><td>+100円</td><td>+60円</td><td>1%</td></tr>
+<tr><td>3年目</td><td>+160円</td><td>+130円</td><td>+90円</td><td>+55円</td><td>1%</td></tr>
+<tr><td>4年目</td><td>+150円</td><td>+120円</td><td>+80円</td><td>+50円</td><td>1%</td></tr>
+<tr><td>5年目</td><td>+140円</td><td>+110円</td><td>+70円</td><td>+45円</td><td>1%</td></tr>
+<tr><td>6年目</td><td>+120円</td><td>+100円</td><td>+65円</td><td>+40円</td><td>1%</td></tr>
+<tr><td>7年目</td><td>+100円</td><td>+80円</td><td>+55円</td><td>+30円</td><td>1%</td></tr>
+<tr><td>8年目</td><td>+80円</td><td>+60円</td><td>+50円</td><td>+25円</td><td>1%</td></tr>
+<tr><td>9年目以降</td><td>+70円</td><td>+40円</td><td>+40円</td><td>+15円</td><td>1%</td></tr>
 </table>
+
+<div class="box">
+<strong>D評価について：</strong>D評価は現在の時給の<strong>1%</strong>を昇給額とします（技能実習制度の最低昇給義務に対応）。<br>
+例：時給1,300円の場合 → +13円/h
+</div>
 
 <!-- ================================================ -->
 <h2 id="sec8">8. よくある質問</h2>
@@ -333,10 +364,11 @@
 <tr><td>承認タブに何も表示されない</td><td>全員の提出が完了するまで承認画面には表示されません。「一覧」タブで提出状況を確認してください。</td></tr>
 <tr><td>昇給額はどう反映される？</td><td>評価承認後、管理者が人員マスタの時給を手動で更新します。</td></tr>
 <tr><td>評価の頻度は？</td><td>年1回、各スタッフの入社日基準です。入社日の1ヶ月前に通知が届きます。</td></tr>
+<tr><td>旧データとの互換性は？</td><td>「指示遵守」項目がない旧評価データはB（標準）として計算されます。</td></tr>
 </table>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-18</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-19</p>
 
 </body>
 </html>
