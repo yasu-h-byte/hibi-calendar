@@ -263,7 +263,7 @@ export default function StaffAttendancePage() {
       } else {
         const d = await res.json()
         const msg = d.error === 'Already requested' ? '申請済みです / Đã gửi rồi'
-          : d.error === 'Start date must be at least 60 days ahead' ? '2ヶ月以上先の日付を選んでください / Chọn ngày ít nhất 2 tháng sau'
+          : d.error === 'Start date must be at least 90 days ahead' ? '原則3ヶ月以上先の日付を選んでください / Chọn ngày ít nhất 3 tháng sau'
           : d.error || 'Error'
         setHlError(msg)
         setTimeout(() => setHlError(null), 3000)
@@ -278,7 +278,7 @@ export default function StaffAttendancePage() {
 
   const getHlMinDate = () => {
     const minD = new Date()
-    minD.setDate(minD.getDate() + 60)
+    minD.setDate(minD.getDate() + 90)
     return `${minD.getFullYear()}-${String(minD.getMonth() + 1).padStart(2, '0')}-${String(minD.getDate()).padStart(2, '0')}`
   }
 
@@ -1344,7 +1344,8 @@ export default function StaffAttendancePage() {
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                ※ 出発日は2ヶ月先以降のみ選択できます / Chỉ chọn được ngày đi từ 2 tháng sau
+                ※ 原則3ヶ月前までに申請してください / Nguyên tắc nộp đơn trước 3 tháng<br/>
+                <span style={{ fontSize: 11, color: '#999' }}>（緊急の場合は会社に相談してください / Trường hợp khẩn cấp hãy liên hệ công ty）</span>
               </p>
             </div>
 
