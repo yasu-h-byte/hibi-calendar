@@ -263,7 +263,7 @@ export default function StaffAttendancePage() {
       } else {
         const d = await res.json()
         const msg = d.error === 'Already requested' ? '申請済みです / Đã gửi rồi'
-          : d.error === 'Start date must be at least 7 days ahead' ? '7日以上先の日付を選んでください / Chọn ngày ít nhất 7 ngày sau'
+          : d.error === 'Start date must be at least 60 days ahead' ? '2ヶ月以上先の日付を選んでください / Chọn ngày ít nhất 2 tháng sau'
           : d.error || 'Error'
         setHlError(msg)
         setTimeout(() => setHlError(null), 3000)
@@ -278,7 +278,7 @@ export default function StaffAttendancePage() {
 
   const getHlMinDate = () => {
     const minD = new Date()
-    minD.setDate(minD.getDate() + 7)
+    minD.setDate(minD.getDate() + 60)
     return `${minD.getFullYear()}-${String(minD.getMonth() + 1).padStart(2, '0')}-${String(minD.getDate()).padStart(2, '0')}`
   }
 
@@ -855,11 +855,11 @@ export default function StaffAttendancePage() {
           </div>
         </div>
 
-        {/* Home long leave link */}
-        <div className="text-center py-2">
+        {/* Home long leave button */}
+        <div className="text-center py-3">
           <button onClick={() => setShowHomeLongLeaveModal(true)}
-            className="text-xs text-gray-400 underline">
-            帰国申請 / Xin về nước
+            className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 transition border border-purple-200">
+            ✈️ 帰国申請 / Xin về nước
           </button>
         </div>
 
@@ -1313,7 +1313,7 @@ export default function StaffAttendancePage() {
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                ※ 7日以上先の日付を選んでください / Chọn ngày ít nhất 7 ngày sau
+                ※ 2ヶ月以上先の日付を選んでください / Chọn ngày ít nhất 2 tháng sau
               </p>
             </div>
 

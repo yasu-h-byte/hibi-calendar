@@ -49,15 +49,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Start date must be before end date' }, { status: 400 })
       }
 
-      // Validate dates are at least 7 days in the future (JST)
+      // Validate dates are at least 60 days (2 months) in the future (JST)
       const now = new Date()
       const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
       const minDate = new Date(jstNow)
-      minDate.setDate(minDate.getDate() + 7)
+      minDate.setDate(minDate.getDate() + 60)
       const minDateStr = `${minDate.getFullYear()}-${String(minDate.getMonth() + 1).padStart(2, '0')}-${String(minDate.getDate()).padStart(2, '0')}`
 
       if (startDate < minDateStr) {
-        return NextResponse.json({ error: 'Start date must be at least 7 days ahead' }, { status: 400 })
+        return NextResponse.json({ error: 'Start date must be at least 60 days ahead' }, { status: 400 })
       }
 
       // Check for duplicate
