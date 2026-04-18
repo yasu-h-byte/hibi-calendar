@@ -857,7 +857,16 @@ export default function StaffAttendancePage() {
 
         {/* Home long leave button */}
         <div className="text-center py-3">
-          <button onClick={() => setShowHomeLongLeaveModal(true)}
+          <button onClick={() => {
+              const min = getHlMinDate()
+              if (!hlStartDate || hlStartDate < min) {
+                setHlStartDate(min)
+                const d = new Date(min + 'T00:00:00')
+                d.setDate(d.getDate() + 14)
+                setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+              }
+              setShowHomeLongLeaveModal(true)
+            }}
             className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 transition border border-purple-200">
             ✈️ 帰国申請 / Xin về nước
           </button>
