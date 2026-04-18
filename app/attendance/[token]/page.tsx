@@ -37,6 +37,15 @@ const STATUS_COLORS: Record<AttendanceStatus, string> = {
   site_off: 'bg-yellow-100 text-yellow-700', none: 'bg-red-50 text-red-400',
 }
 
+const REST_REASONS = [
+  { value: 'sick', label: '体調不良', vi: 'Bị ốm' },
+  { value: 'hospital', label: '通院', vi: 'Đi khám bệnh' },
+  { value: 'personal', label: '私用', vi: 'Việc riêng' },
+  { value: 'family', label: '家族の事情', vi: 'Việc gia đình' },
+  { value: 'homeCountry', label: '帰国関連', vi: 'Liên quan về nước' },
+  { value: 'other', label: 'その他', vi: 'Khác' },
+]
+
 interface LeaveRequestData {
   id: string
   date: string
@@ -66,6 +75,11 @@ export default function StaffAttendancePage() {
   const [leaveSubmitting, setLeaveSubmitting] = useState(false)
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const [leaveSuccess, setLeaveSuccess] = useState<string | null>(null)
+
+  // Absence report modal state
+  const [showRestModal, setShowRestModal] = useState(false)
+  const [restReason, setRestReason] = useState('sick')
+  const [restNote, setRestNote] = useState('')
 
   // Time-based input state (202605~)
   const [startTime, setStartTime] = useState('08:00')
@@ -330,9 +344,53 @@ export default function StaffAttendancePage() {
       // 有給は申請モーダルを開く
       setShowOT(false)
       setShowLeaveModal(true)
+    } else if (choice === 'rest') {
+      // 欠勤届モーダルを開く
+      setShowOT(false)
+      setShowRestModal(true)
     } else {
       setShowOT(false)
       submitEntry(choice)
+    }
+  }
+
+  const handleRestSubmit = async () => {
+    if (!data || saving) return
+    setSaving(true)
+    setSuccessMsg(null)
+    const body: Record<string, unknown> = {
+      token,
+      siteId: data.site.id,
+      year: data.today.year,
+      month: data.today.month,
+      day: data.today.day,
+      choice: 'rest',
+      restReason,
+      restNote: restReason === 'other' ? restNote : undefined,
+    }
+    try {
+      const res = await fetch('/api/attendance/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        setShowRestModal(false)
+        setRestReason('sick')
+        setRestNote('')
+        setSuccessMsg('✓')
+        setTimeout(() => setSuccessMsg(null), 1500)
+        fetchData()
+      } else {
+        const d = await res.json()
+        setError(d.error || 'エラー')
+        setTimeout(() => setError(null), 3000)
+      }
+    } catch {
+      setError('つうしん エラー')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -522,10 +580,10 @@ export default function StaffAttendancePage() {
 
             {/* Rest / Leave buttons */}
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => handleTimeBasedSubmit('rest')}
+              <button onClick={() => setShowRestModal(true)}
                 disabled={saving}
                 className="bg-gray-200 text-gray-700 rounded-2xl py-3 text-base font-bold active:bg-gray-300 transition disabled:opacity-50">
-                休み / Nghi
+                欠勤届 / Xin nghi
               </button>
               <button onClick={() => setShowLeaveModal(true)}
                 disabled={saving}
@@ -540,7 +598,7 @@ export default function StaffAttendancePage() {
             <div className="grid grid-cols-3 gap-3">
               {([
                 { choice: 'work', emoji: '🔨', label: '出勤 / Đi làm', color: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' },
-                { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400 hover:bg-gray-500 active:bg-gray-600' },
+                { choice: 'rest', emoji: '🏠', label: '欠勤届\nXin nghi', color: 'bg-gray-400 hover:bg-gray-500 active:bg-gray-600' },
                 { choice: 'leave', emoji: '🌴', label: 'ゆうきゅう\nしんせい', color: 'bg-green-500 hover:bg-green-600 active:bg-green-700' },
                 // site_off（げんばやすみ）は変形労働時間制導入により非表示
                 // 過去データの表示・集計には影響なし
@@ -764,7 +822,41 @@ export default function StaffAttendancePage() {
 
                   {/* Rest button */}
                   <button
-                    onClick={() => handleTimeBasedSubmit('rest', pd.year, pd.month, pd.day)}
+                    onClick={async () => {
+                      if (!data || saving) return
+                      setSaving(true)
+                      setSuccessMsg(null)
+                      try {
+                        const res = await fetch('/api/attendance/staff', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            token,
+                            siteId: data.site.id,
+                            year: pd.year,
+                            month: pd.month,
+                            day: pd.day,
+                            choice: 'rest',
+                            restReason: 'personal',
+                          }),
+                        })
+                        if (res.ok) {
+                          setSuccessMsg('✓')
+                          setTimeout(() => setSuccessMsg(null), 1500)
+                          setEditingPast(null)
+                          fetchData()
+                        } else {
+                          const d = await res.json()
+                          setError(d.error || 'エラー')
+                          setTimeout(() => setError(null), 3000)
+                        }
+                      } catch {
+                        setError('つうしん エラー')
+                        setTimeout(() => setError(null), 3000)
+                      } finally {
+                        setSaving(false)
+                      }
+                    }}
                     disabled={saving}
                     className="w-full bg-gray-200 text-gray-700 rounded-xl py-3 font-bold active:scale-95 disabled:opacity-50"
                   >
@@ -781,7 +873,46 @@ export default function StaffAttendancePage() {
                   ] as const).map(btn => (
                     <button
                       key={btn.choice}
-                      onClick={() => submitEntry(btn.choice, 0, pd.year, pd.month, pd.day)}
+                      onClick={async () => {
+                        if (btn.choice === 'rest') {
+                          // 過去日の休みはrestReason='personal'をデフォルト送信
+                          if (!data || saving) return
+                          setSaving(true)
+                          setSuccessMsg(null)
+                          try {
+                            const res = await fetch('/api/attendance/staff', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                token,
+                                siteId: data.site.id,
+                                year: pd.year,
+                                month: pd.month,
+                                day: pd.day,
+                                choice: 'rest',
+                                restReason: 'personal',
+                              }),
+                            })
+                            if (res.ok) {
+                              setSuccessMsg('✓')
+                              setTimeout(() => setSuccessMsg(null), 1500)
+                              setEditingPast(null)
+                              fetchData()
+                            } else {
+                              const d = await res.json()
+                              setError(d.error || 'エラー')
+                              setTimeout(() => setError(null), 3000)
+                            }
+                          } catch {
+                            setError('つうしん エラー')
+                            setTimeout(() => setError(null), 3000)
+                          } finally {
+                            setSaving(false)
+                          }
+                        } else {
+                          submitEntry(btn.choice, 0, pd.year, pd.month, pd.day)
+                        }
+                      }}
                       className={`${btn.color} text-white rounded-xl py-4 text-center active:scale-95`}
                     >
                       <div className="text-2xl mb-1">{btn.emoji}</div>
@@ -801,6 +932,64 @@ export default function StaffAttendancePage() {
           </div>
         )
       })()}
+
+      {/* Absence report modal */}
+      {showRestModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowRestModal(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center">
+              欠勤届 / Đơn xin nghỉ
+            </h3>
+            <p className="text-xs text-gray-400 text-center mb-4">
+              出勤日に休む場合の届出です / Đơn nghỉ khi ngày đi làm
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-gray-600 font-bold block mb-2">
+                  理由 / Lý do
+                </label>
+                <div className="space-y-2">
+                  {REST_REASONS.map(r => (
+                    <label key={r.value} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition ${
+                      restReason === r.value ? 'bg-hibi-navy text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                    }`}>
+                      <input type="radio" name="restReason" value={r.value}
+                        checked={restReason === r.value}
+                        onChange={() => setRestReason(r.value)}
+                        className="hidden" />
+                      <span className="font-medium">{r.label}</span>
+                      <span className={`text-sm ${restReason === r.value ? 'text-white/70' : 'text-gray-400'}`}>/ {r.vi}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {restReason === 'other' && (
+                <div>
+                  <label className="text-sm text-gray-600 font-bold block mb-1">
+                    補足 / Chi tiết
+                  </label>
+                  <input type="text" value={restNote} onChange={e => setRestNote(e.target.value)}
+                    placeholder="理由を入力 / Nhập lý do"
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                </div>
+              )}
+
+              <button onClick={handleRestSubmit}
+                disabled={saving}
+                className="w-full bg-gray-700 text-white rounded-2xl py-4 text-base font-bold active:bg-gray-800 transition disabled:opacity-50">
+                欠勤届を提出 / Gửi đơn xin nghỉ
+              </button>
+
+              <button onClick={() => setShowRestModal(false)}
+                className="w-full bg-gray-200 text-gray-600 rounded-xl py-3 text-sm">
+                戻る / Quay lại
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Leave request modal */}
       {showLeaveModal && (

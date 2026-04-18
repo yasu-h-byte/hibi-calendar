@@ -82,7 +82,9 @@ export interface AuthUser {
 export interface AttendanceEntry {
   w: number       // 1=出勤, 0=不在 (レガシー: 202604以前)
   o?: number      // 残業時間 (0.5〜8) (レガシー: 202604以前)
-  r?: number      // 1=休み
+  r?: number      // 1=欠勤（出勤日に休む場合）
+  rReason?: string // 欠勤理由（'sick' | 'hospital' | 'personal' | 'family' | 'homeCountry' | 'other'）
+  rNote?: string   // 補足（「その他」の場合のみ）
   p?: number      // 1=有給
   h?: number      // 1=現場休み
   s?: string      // 'staff' | 'foreman' | 'admin'

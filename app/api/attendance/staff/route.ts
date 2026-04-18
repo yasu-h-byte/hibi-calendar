@@ -153,7 +153,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { token, siteId, year, month, day, choice, overtimeHours,
-            startTime, endTime, break1, break2, break3 } = await request.json()
+            startTime, endTime, break1, break2, break3,
+            restReason, restNote } = await request.json()
 
     if (!token || !siteId || !year || !month || !day || !choice) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
@@ -208,9 +209,17 @@ export async function POST(request: NextRequest) {
           entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)), s: 'staff' }
         }
         break
-      case 'rest':
-        entry = { w: 0, r: 1, s: 'staff' }
+      case 'rest': {
+        const restEntry: AttendanceEntry = { w: 0, r: 1, s: 'staff' }
+        if (restReason && String(restReason).trim()) {
+          restEntry.rReason = String(restReason).trim()
+        }
+        if (restNote && String(restNote).trim()) {
+          restEntry.rNote = String(restNote).trim()
+        }
+        entry = restEntry
         break
+      }
       case 'leave':
         entry = { w: 0, p: 1, s: 'staff' }
         break
