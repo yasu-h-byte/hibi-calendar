@@ -20,15 +20,17 @@ function gradeToScore(g: ABCGrade): number {
   return g === 'A' ? 3 : g === 'B' ? 2 : 1
 }
 
-const WEIGHTS = { japanese: 1.0, attitude: 1.5, skill: 1.2 }
+const WEIGHTS = { japanese: 1.0, attitude: 1.5, skill: 1.0, living: 1.0 }
 
 function calculateManualScore(scores: EvaluationScores): {
   japanese: number
   attitude: number
   skill: number
+  living: number
   japaneseW: number
   attitudeW: number
   skillW: number
+  livingW: number
   total: number
 } {
   const jp =
@@ -44,27 +46,34 @@ function calculateManualScore(scores: EvaluationScores): {
     gradeToScore(scores.skill.level) +
     gradeToScore(scores.skill.speed) +
     gradeToScore(scores.skill.planning)
+  const lv =
+    gradeToScore(scores.living?.neighborCare || 'B') +
+    gradeToScore(scores.living?.ruleCompliance || 'B') +
+    gradeToScore(scores.living?.cleanliness || 'B')
   const jpW = jp * WEIGHTS.japanese
   const attW = att * WEIGHTS.attitude
   const skW = sk * WEIGHTS.skill
+  const lvW = lv * WEIGHTS.living
   return {
     japanese: jp,
     attitude: att,
     skill: sk,
+    living: lv,
     japaneseW: jpW,
     attitudeW: attW,
     skillW: skW,
-    total: jpW + attW + skW,
+    livingW: lvW,
+    total: jpW + attW + skW + lvW,
   }
 }
 
-// 満点37.8（日本語9×1.0 + 勤務態度12×1.5 + 職業能力9×1.2）
-// + 皆勤ボーナス最大3 → 最大40.8
+// 満点45.0（日本語9×1.0 + 勤務態度12×1.5 + 職業能力9×1.0 + 生活態度9×1.0）
+// + 皆勤ボーナス最大3 → 最大48.0
 function calculateRank(totalScore: number): EvaluationRank {
-  if (totalScore >= 33) return 'S'    // 87%+
-  if (totalScore >= 27) return 'A'    // 71%+
-  if (totalScore >= 21) return 'B'    // 55%+
-  if (totalScore >= 14) return 'C'    // 37%+
+  if (totalScore >= 39) return 'S'    // 81%+
+  if (totalScore >= 32) return 'A'    // 67%+
+  if (totalScore >= 25) return 'B'    // 52%+
+  if (totalScore >= 17) return 'C'    // 35%+
   return 'D'
 }
 
@@ -207,6 +216,7 @@ const EMPTY_SCORES: EvaluationScores = {
   japanese: { understanding: 'B' as ABCGrade, reporting: 'B' as ABCGrade, safety: 'B' as ABCGrade },
   attitude: { punctuality: 'B' as ABCGrade, safetyAwareness: 'B' as ABCGrade, teamwork: 'B' as ABCGrade, compliance: 'B' as ABCGrade },
   skill: { level: 'B' as ABCGrade, speed: 'B' as ABCGrade, planning: 'B' as ABCGrade },
+  living: { neighborCare: 'B' as ABCGrade, ruleCompliance: 'B' as ABCGrade, cleanliness: 'B' as ABCGrade },
 }
 
 // ── Main Component ──
@@ -238,6 +248,7 @@ export default function EvaluationPage() {
   const [createEvaluatorIds, setCreateEvaluatorIds] = useState<number[]>([])
 
   const isAdmin = authUser?.role === 'admin' || authUser?.role === 'approver'
+  const isAdminOnly = authUser?.role === 'admin' // 生活態度の入力はadminのみ
 
   const getAuth = () => {
     try {
@@ -925,8 +936,8 @@ export default function EvaluationPage() {
 
                   {/* ABC sections — generated from EVALUATION_CATEGORIES */}
                   <div className="space-y-4">
-                    {EVALUATION_CATEGORIES.map(cat => {
-                      const bgColor = cat.color === 'blue' ? 'bg-blue-500' : cat.color === 'green' ? 'bg-green-500' : 'bg-orange-500'
+                    {EVALUATION_CATEGORIES.filter(cat => cat.key !== 'living' || isAdminOnly).map(cat => {
+                      const bgColor = cat.color === 'blue' ? 'bg-blue-500' : cat.color === 'green' ? 'bg-green-500' : cat.color === 'teal' ? 'bg-teal-500' : 'bg-orange-500'
                       const catScores = myReview[cat.key]
                       return (
                         <div key={cat.key} className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
@@ -983,8 +994,12 @@ export default function EvaluationPage() {
                         <span className="font-medium">= {reviewCalc.attitudeW.toFixed(1)}</span>
                       </div>
                       <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                        <span>職業能力: {reviewCalc.skill}点 x1.2</span>
+                        <span>職業能力: {reviewCalc.skill}点 x1.0</span>
                         <span className="font-medium">= {reviewCalc.skillW.toFixed(1)}</span>
+                      </div>
+                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                        <span>生活態度: {reviewCalc.living}点 x1.0</span>
+                        <span className="font-medium">= {reviewCalc.livingW.toFixed(1)}</span>
                       </div>
                       <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
                         <div className="flex justify-between text-gray-900 dark:text-white font-bold">
@@ -1358,8 +1373,12 @@ export default function EvaluationPage() {
                       <span className="font-medium">= {finalCalc.attitudeW.toFixed(1)}</span>
                     </div>
                     <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                      <span>職業能力: {finalCalc.skill}点 x1.2</span>
+                      <span>職業能力: {finalCalc.skill}点 x1.0</span>
                       <span className="font-medium">= {finalCalc.skillW.toFixed(1)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                      <span>生活態度: {finalCalc.living}点 x1.0</span>
+                      <span className="font-medium">= {finalCalc.livingW.toFixed(1)}</span>
                     </div>
                     <div className="flex justify-between text-blue-600 dark:text-blue-400">
                       <span>出勤率ボーナス</span>

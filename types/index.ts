@@ -155,6 +155,7 @@ export interface EvaluationScores {
   japanese: { understanding: ABCGrade; reporting: ABCGrade; safety: ABCGrade }
   attitude: { punctuality: ABCGrade; safetyAwareness: ABCGrade; teamwork: ABCGrade; compliance: ABCGrade }
   skill: { level: ABCGrade; speed: ABCGrade; planning: ABCGrade }
+  living: { neighborCare: ABCGrade; ruleCompliance: ABCGrade; cleanliness: ABCGrade }
 }
 
 export interface EvaluationMetrics {

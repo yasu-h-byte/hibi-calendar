@@ -12,7 +12,7 @@ export interface CriterionDescription {
 }
 
 export interface CategoryDefinition {
-  key: 'japanese' | 'attitude' | 'skill'
+  key: 'japanese' | 'attitude' | 'skill' | 'living'
   label: string
   icon: string
   color: string         // Tailwind色クラスの接頭辞（例: 'blue', 'green', 'orange'）
@@ -93,7 +93,7 @@ export const EVALUATION_CATEGORIES: CategoryDefinition[] = [
     label: '職業能力',
     icon: '🔨',
     color: 'orange',
-    weightLabel: '×1.2',
+    weightLabel: '×1.0',
     criteria: [
       {
         key: 'level',
@@ -115,6 +115,36 @@ export const EVALUATION_CATEGORIES: CategoryDefinition[] = [
         A: '次の工程を予測して自ら材料・道具を準備できる。段取りが良い',
         B: '言われれば段取りできる。基本的な準備はできる',
         C: '段取りの意識が低い。指示待ちになることが多い',
+      },
+    ],
+  },
+  {
+    key: 'living',
+    label: '生活態度',
+    icon: '🏠',
+    color: 'teal',
+    weightLabel: '×1.0',
+    criteria: [
+      {
+        key: 'neighborCare',
+        label: '近隣配慮',
+        A: '近隣からの苦情ゼロ。騒音・駐車等に自ら配慮し、他のスタッフにも注意できる',
+        B: '基本的なルールは守る。年1〜2回注意を受ける程度',
+        C: '近隣からの苦情がある。騒音・マナー違反を繰り返し注意される',
+      },
+      {
+        key: 'ruleCompliance',
+        label: 'ルール遵守',
+        A: 'ゴミ出し・分別・当番など寮のルールを率先して守る。他のスタッフにも声かけできる',
+        B: '言われれば守る。基本的なルールは理解している',
+        C: 'ルールを守らないことが多い。繰り返し注意が必要',
+      },
+      {
+        key: 'cleanliness',
+        label: '住環境維持',
+        A: '部屋・共用部をいつもきれいに保つ。整理整頓が行き届いている',
+        B: '普通の清潔さは保っている。時々散らかっていることがある',
+        C: '部屋や共用部が不衛生。清掃を怠ることが多い',
       },
     ],
   },
