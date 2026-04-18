@@ -143,16 +143,20 @@ function isToday(year: number, month: number, day: number): boolean {
   return now.getFullYear() === year && now.getMonth() + 1 === month && now.getDate() === day
 }
 
-function dayColBg(year: number, month: number, day: number): string {
+function dayColBg(year: number, month: number, day: number, calDayType?: DayType | null): string {
   if (isToday(year, month, day)) return 'bg-amber-50'
+  // カレンダーで休み/祝日の日はグレー背景（出勤日との区別）
+  if (calDayType === 'off' || calDayType === 'holiday') return 'bg-gray-50'
   const dow = getDow(year, month, day)
   if (dow === 0) return 'bg-red-50'
   if (dow === 6) return 'bg-blue-50'
   return ''
 }
 
-function dayHeaderBg(year: number, month: number, day: number): string {
+function dayHeaderBg(year: number, month: number, day: number, calDayType?: DayType | null): string {
   if (isToday(year, month, day)) return 'bg-amber-100'
+  // カレンダーで休みの日はヘッダーもグレー系
+  if (calDayType === 'off' || calDayType === 'holiday') return 'bg-gray-200'
   const dow = getDow(year, month, day)
   if (dow === 0) return 'bg-red-100'
   if (dow === 6) return 'bg-blue-100'
@@ -1140,18 +1144,23 @@ export default function AttendanceGridPage() {
                   >
                     所属
                   </th>
-                  {days.map(d => (
+                  {days.map(d => {
+                    const calDayType = data.calendarDays?.[String(d.day)]
+                    const isCalOff = calDayType === 'off' || calDayType === 'holiday'
+                    return (
                     <th
                       key={d.day}
-                      className={`px-0 py-1 text-center font-bold ${dayHeaderBg(data.year, data.month, d.day)} ${dayTextColor(d.dow)} border-l border-gray-200`}
+                      className={`px-0 py-1 text-center font-bold ${dayHeaderBg(data.year, data.month, d.day, calDayType)} ${isCalOff ? 'text-gray-400' : dayTextColor(d.dow)} border-l border-gray-200`}
                       style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                      title={isCalOff ? 'カレンダー休日' : 'カレンダー出勤日'}
                     >
                       <div className="leading-tight">
                         <div className="text-[11px]">{d.day}</div>
-                        <div className="text-[9px] opacity-70">{d.label}</div>
+                        <div className="text-[9px] opacity-70">{d.label}{isCalOff && data.calendarDays ? ' 休' : ''}</div>
                       </div>
                     </th>
-                  ))}
+                    )
+                  })}
                   <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l-2 border-gray-400" style={{ width: 64, minWidth: 64 }}>
                     人工計
                   </th>
@@ -1324,7 +1333,7 @@ export default function AttendanceGridPage() {
                               if (statusVal === 'HK') {
                                 return (
                                   <td key={d.day}
-                                    className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)}`}
+                                    className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
                                     style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                                   >
                                     <div className="flex items-center justify-center h-full py-2">
@@ -1348,7 +1357,7 @@ export default function AttendanceGridPage() {
                               return (
                                 <td
                                   key={d.day}
-                                  className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day)}`}
+                                  className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
                                   style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                                 >
                                   {isHolidayWork && (
@@ -1433,7 +1442,7 @@ export default function AttendanceGridPage() {
                             if (workVal === 'HK') {
                               return (
                                 <td key={d.day}
-                                  className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)}`}
+                                  className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
                                   style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                                 >
                                   <div className="flex items-center justify-center h-full py-2">
@@ -1449,7 +1458,7 @@ export default function AttendanceGridPage() {
                             return (
                               <td
                                 key={d.day}
-                                className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day)}`}
+                                className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
                                 style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                               >
                                 {isHolidayWork && (
@@ -1572,7 +1581,7 @@ export default function AttendanceGridPage() {
                             return (
                               <td
                                 key={d.day}
-                                className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day)}`}
+                                className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
                                 style={{ width: 56, minWidth: 56, maxWidth: 56 }}
                               >
                                 <div className="flex flex-col">
