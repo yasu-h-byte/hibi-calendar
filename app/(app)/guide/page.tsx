@@ -183,7 +183,7 @@ export default function GuidePage() {
         <div className="mt-3 space-y-0">
           {[
             { step: '1', label: '元請から次月工程表を入手', when: '20日頃', icon: '\uD83D\uDCE5' },
-            { step: '2', label: '管理者がシステムに入力', when: '〜25日', icon: '\u270F\uFE0F', detail: '就業カレンダー画面で現場ごとに出勤日/休日/祝日を設定' },
+            { step: '2', label: '管理者がシステムに入力', when: '〜25日', icon: '\u270F\uFE0F', detail: '就業カレンダー画面で現場ごとに出勤日/休みを設定（青=出勤、グレー=休み）' },
             { step: '3', label: '事業責任者が承認', when: '〜月末', icon: '\u2705', detail: '所定日数・所定時間が確定。法定上限チェック（自動）' },
             { step: '4', label: 'Messengerでリンク送信', when: '承認後', icon: '\uD83D\uDCE8', detail: 'スタッフがスマホでカレンダーを確認し、全現場一括で署名' },
             { step: '5', label: 'カレンダー通りに勤務開始', when: '翌月1日〜', icon: '\uD83D\uDC77', detail: 'スタッフは毎日スマホで開始/終了時刻・休憩を入力して出勤登録（5月〜新形式）' },
@@ -432,7 +432,7 @@ export default function GuidePage() {
             },
             {
               num: '4', title: '就業カレンダー', color: 'blue',
-              items: ['現場ごとに出勤日/休日/祝日を設定', '法定上限チェック（自動）', '確定 → スタッフ署名のワークフロー'],
+              items: ['現場ごとに出勤日/休みを設定（青=出勤、グレー=休み。日曜・祝日は日付が赤文字）', '法定上限チェック（自動）', '確定 → スタッフ署名のワークフロー'],
             },
             {
               num: '5', title: '有給・休み管理', color: 'green',
