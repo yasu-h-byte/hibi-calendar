@@ -348,8 +348,8 @@ export default function GuidePage() {
               <li><span className="font-bold">出勤登録</span>：開始時刻（初期値8:00）・終了時刻（初期値17:00）を設定し、休憩チェックボックス2つ（午前10:00-10:30 / 午後15:00-15:30）を確認して登録。昼休み（12:00-13:00）は常に控除</li>
               <li>通常の日はそのまま「出勤登録」を押すだけ（実労働7時間）。残業日は終了時刻を変更</li>
               <li>実労働時間がリアルタイム表示される</li>
-              <li><span className="font-bold">やすみ</span>ボタンで休み登録</li>
-              <li><span className="font-bold">有給申請</span>ボタンで有給休暇を申請（残日数チェックあり）</li>
+              <li><span className="font-bold">欠勤届</span>ボタンでカレンダーの出勤日に休む場合に理由を選択して提出（体調不良/通院/私用/家族の事情/帰国関連/その他）。カレンダーの休日は何もしなくてOK</li>
+              <li><span className="font-bold">有給申請</span>ボタンで有給休暇を申請（残日数チェックあり）。5日先以降の日付のみ選択可能。開始日〜終了日の範囲指定で連続休暇を一括申請できる（日曜は自動除外）</li>
               <li>過去5日分の入力履歴を確認・修正可能</li>
               <li>日本語とベトナム語の二言語表示</li>
             </ul>
@@ -393,9 +393,10 @@ export default function GuidePage() {
               <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
                 <p className="font-bold text-green-700 dark:text-green-400 text-xs mb-1">申請・消化</p>
                 <ul className="list-disc ml-4 text-xs text-gray-600 dark:text-gray-400 space-y-0.5">
-                  <li>スタッフがスマホから有給申請</li>
+                  <li>スタッフがスマホから有給申請（5日先以降の日付のみ選択可能）</li>
+                  <li>連続休暇は開始日〜終了日の範囲指定で一括申請（日曜は自動除外）</li>
                   <li>残日数0の場合は申請不可</li>
-                  <li>管理者が有給申請画面で承認/却下</li>
+                  <li>管理者がダッシュボード「勤怠申請」カードまたは有給申請画面で承認/却下</li>
                   <li>承認すると出面データに自動反映</li>
                 </ul>
               </div>
@@ -419,7 +420,7 @@ export default function GuidePage() {
           {[
             {
               num: '1', title: 'ダッシュボード', color: 'blue',
-              items: ['お知らせ（カレンダー準備・月締め状況など）', '本日の稼働状況（現場別配置）', '今月サマリー（人工数+売上）', '日別稼働人数チャート', '※ 原価・収益・KPIの詳細チャートは「原価・収益管理」に移動'],
+              items: ['お知らせ（カレンダー準備・月締め状況など）', '勤怠申請カード（有給申請の承認・本日の欠勤届＋過去7日の欠勤を表示）', '本日の稼働状況（現場別配置）', '今月サマリー（人工数+売上）', '日別稼働人数チャート', '※ 原価・収益・KPIの詳細チャートは「原価・収益管理」に移動'],
             },
             {
               num: '2', title: '出面入力', color: 'green',
