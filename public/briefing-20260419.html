@@ -57,7 +57,42 @@
   .tier-formula { font-size: 14px; margin-top: 4px; }
   .tier-note { font-size: 13px; color: #555; margin-top: 2px; }
 
-  @media print { body { font-size: 13px; padding: 0; } .section { break-inside: avoid; } }
+  @media print {
+    body { font-size: 11px; padding: 0; margin: 0; max-width: 100%; line-height: 1.5; }
+    @page { size: A4; margin: 15mm 12mm; }
+    h1 { font-size: 20px; margin-top: 0; }
+    h2 { font-size: 16px; margin-top: 20px; padding: 6px 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    h3 { font-size: 13px; margin-top: 14px; }
+    .section { padding: 12px; margin: 10px 0; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .compare { gap: 8px; }
+    .compare > div { padding: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .calc { padding: 10px; line-height: 1.8; }
+    .calc-result { font-size: 16px; padding: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    table { font-size: 11px; }
+    th, td { padding: 4px 6px; }
+    th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .emoji { font-size: 28px; margin: 6px 0; }
+    .point, .good { padding: 8px; margin: 8px 0; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tier-box { padding: 8px 12px; font-size: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tier-label { font-size: 13px; }
+    .tier-formula { font-size: 11px; }
+    .tier-note { font-size: 10px; }
+    .schedule-row { padding: 3px 0; font-size: 12px; }
+    .step-flow { gap: 4px; }
+    .step-box { padding: 6px 8px; min-width: 90px; font-size: 11px; }
+    .step-arrow { font-size: 16px; }
+    .qa-q { font-size: 12px; }
+    .qa-a { font-size: 11px; }
+    .phone-btn { padding: 8px 16px; font-size: 13px; min-width: 100px; box-shadow: none; }
+    .vi { color: #2563EB !important; }
+    /* 印刷時に非表示にする要素 */
+    a[href="/docs"] { display: none; }
+    /* 各セクションの改ページ制御 */
+    h2 { break-after: avoid; }
+    .box-warn, .box-ok, .box-red { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    /* スマホモックアップを印刷用に調整 */
+    [style*="border-radius: 20px"] { break-inside: avoid; }
+  }
   @media (max-width: 600px) { .compare { flex-direction: column; } .step-flow { flex-direction: column; } .step-arrow { transform: rotate(90deg); } .tier-stack { max-width: 100%; } }
 </style>
 </head>
