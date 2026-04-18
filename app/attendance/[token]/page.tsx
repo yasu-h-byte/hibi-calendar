@@ -282,6 +282,22 @@ export default function StaffAttendancePage() {
     return `${minD.getFullYear()}-${String(minD.getMonth() + 1).padStart(2, '0')}-${String(minD.getDate()).padStart(2, '0')}`
   }
 
+  // 帰国申請用の日付選択肢を生成（minDateから180日間）
+  const getHlDateOptions = (minDateStr?: string) => {
+    const min = minDateStr || getHlMinDate()
+    const start = new Date(min + 'T00:00:00')
+    const options: { value: string; label: string }[] = []
+    const dowLabel = ['日', '月', '火', '水', '木', '金', '土']
+    for (let i = 0; i < 180; i++) {
+      const d = new Date(start)
+      d.setDate(d.getDate() + i)
+      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const label = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${dowLabel[d.getDay()]}）`
+      options.push({ value: val, label })
+    }
+    return options
+  }
+
   const submitLeaveRequest = async () => {
     if (!data || leaveSubmitting || !leaveDateFrom) return
     setLeaveSubmitting(true)
@@ -1295,18 +1311,10 @@ export default function StaffAttendancePage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">出発日 / Ngày đi</label>
-                  <input
-                    type="date"
+                  <select
                     value={hlStartDate}
-                    min={getHlMinDate()}
                     onChange={e => {
                       const val = e.target.value
-                      const minDate = getHlMinDate()
-                      if (val < minDate) {
-                        setHlStartDate(minDate)
-                        setHlError('2ヶ月以上先の日付を選んでください / Chọn ngày ít nhất 2 tháng sau')
-                        return
-                      }
                       setHlError(null)
                       setHlStartDate(val)
                       if (!hlEndDate || val >= hlEndDate) {
@@ -1315,22 +1323,28 @@ export default function StaffAttendancePage() {
                         setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
                       }
                     }}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base bg-white"
+                  >
+                    {getHlDateOptions().map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">帰国日 / Ngày về</label>
-                  <input
-                    type="date"
+                  <select
                     value={hlEndDate}
-                    min={hlStartDate || getHlMinDate()}
                     onChange={e => setHlEndDate(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
-                  />
+                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base bg-white"
+                  >
+                    {hlStartDate && getHlDateOptions(hlStartDate).slice(1).map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                ※ 2ヶ月以上先の日付を選んでください / Chọn ngày ít nhất 2 tháng sau
+                ※ 出発日は2ヶ月先以降のみ選択できます / Chỉ chọn được ngày đi từ 2 tháng sau
               </p>
             </div>
 
