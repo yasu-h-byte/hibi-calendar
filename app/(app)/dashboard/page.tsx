@@ -51,9 +51,21 @@ interface AbsenceReport {
   note?: string
 }
 
+interface HomeLongLeaveItem {
+  id: string
+  workerName: string
+  startDate: string
+  endDate: string
+  reason: string
+  status: string
+  requestedAt: string
+  foremanApprovedAt?: string
+}
+
 interface ActionItems {
   pendingLeaveRequests: { count: number; items: LeaveRequestItem[] }
   absenceReports?: AbsenceReport[]
+  homeLongLeaveRequests?: HomeLongLeaveItem[]
 }
 
 interface DashboardData {
@@ -144,9 +156,10 @@ function AnnouncementsCard({ password }: { password: string }) {
 
 // ─── Attendance Request Card (有給申請 + 欠勤届) ───
 
-function AttendanceRequestCard({ leaveItems, absenceReports, password, onUpdate }: {
+function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems, password, onUpdate }: {
   leaveItems: LeaveRequestItem[]
   absenceReports: AbsenceReport[]
+  homeLongLeaveItems: HomeLongLeaveItem[]
   password: string
   onUpdate: () => void
 }) {
@@ -154,14 +167,15 @@ function AttendanceRequestCard({ leaveItems, absenceReports, password, onUpdate 
 
   const hasLeave = leaveItems.length > 0
   const hasAbsence = absenceReports.length > 0
-  if (!hasLeave && !hasAbsence) return null
+  const hasHomeLongLeave = homeLongLeaveItems.length > 0
+  if (!hasLeave && !hasAbsence && !hasHomeLongLeave) return null
 
-  const handleAction = async (id: string, action: string) => {
+  const handleAction = async (id: string, action: string, apiPath: string = '/api/leave-request') => {
     setProcessing(id)
     try {
       const stored = localStorage.getItem('hibi_auth')
       const user = stored ? JSON.parse(stored).user : null
-      await fetch('/api/leave-request', {
+      await fetch(apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({
@@ -182,6 +196,9 @@ function AttendanceRequestCard({ leaveItems, absenceReports, password, onUpdate 
   const foremanApproved = leaveItems.filter(i => i.status === 'foreman_approved')
   const todayAbsence = absenceReports.filter(a => a.date === todayStr)
   const pastAbsence = absenceReports.filter(a => a.date !== todayStr)
+
+  const hlPending = homeLongLeaveItems.filter(i => i.status === 'pending')
+  const hlForemanApproved = homeLongLeaveItems.filter(i => i.status === 'foreman_approved')
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-blue-400">
@@ -226,10 +243,50 @@ function AttendanceRequestCard({ leaveItems, absenceReports, password, onUpdate 
         </div>
       )}
 
+      {/* 帰国申請 */}
+      {hasHomeLongLeave && (
+        <div className="mb-3">
+          {hasLeave && <hr className="my-2 border-gray-100 dark:border-gray-700" />}
+          <p className="text-[10px] text-purple-600 font-bold mb-1.5">✈️ 帰国申請（{homeLongLeaveItems.length}件）</p>
+          <div className="space-y-1">
+            {hlPending.map(req => (
+              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                <div className="min-w-0">
+                  <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
+                  <span className="text-gray-500 text-sm ml-2">{fmtDate(req.startDate)}〜{fmtDate(req.endDate)}</span>
+                  <span className="text-gray-400 text-xs ml-2">{req.reason}</span>
+                </div>
+                <div className="flex gap-1.5 flex-shrink-0 ml-2">
+                  <button onClick={() => handleAction(req.id, 'foreman_approve', '/api/home-long-leave')} disabled={processing === req.id}
+                    className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                  <button onClick={() => handleAction(req.id, 'reject', '/api/home-long-leave')} disabled={processing === req.id}
+                    className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                </div>
+              </div>
+            ))}
+            {hlForemanApproved.map(req => (
+              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <div className="min-w-0">
+                  <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
+                  <span className="text-gray-500 text-sm ml-2">{fmtDate(req.startDate)}〜{fmtDate(req.endDate)}</span>
+                  <span className="text-[10px] text-blue-600 ml-2">職長済</span>
+                </div>
+                <div className="flex gap-1.5 flex-shrink-0 ml-2">
+                  <button onClick={() => handleAction(req.id, 'approve', '/api/home-long-leave')} disabled={processing === req.id}
+                    className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
+                  <button onClick={() => handleAction(req.id, 'reject', '/api/home-long-leave')} disabled={processing === req.id}
+                    className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 欠勤届 */}
       {hasAbsence && (
         <div>
-          {hasLeave && <hr className="my-2 border-gray-100 dark:border-gray-700" />}
+          {(hasLeave || hasHomeLongLeave) && <hr className="my-2 border-gray-100 dark:border-gray-700" />}
           {todayAbsence.length > 0 && (
             <div className="mb-2">
               <p className="text-[10px] text-red-500 font-bold mb-1.5">🏠 本日の欠勤届</p>
@@ -349,10 +406,11 @@ export default function DashboardPage() {
           {/* ═══ お知らせ ═══ */}
           <AnnouncementsCard password={password} />
 
-          {/* ═══ 勤怠申請（有給＋欠勤届） ═══ */}
+          {/* ═══ 勤怠申請（有給＋帰国＋欠勤届） ═══ */}
           <AttendanceRequestCard
             leaveItems={data.actionItems?.pendingLeaveRequests?.items || []}
             absenceReports={data.actionItems?.absenceReports || []}
+            homeLongLeaveItems={data.actionItems?.homeLongLeaveRequests || []}
             password={password}
             onUpdate={fetchData}
           />

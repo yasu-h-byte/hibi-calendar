@@ -1020,12 +1020,35 @@ export async function GET(request: NextRequest) {
       absenceReports.sort((a, b) => b.date.localeCompare(a.date)) // 新しい順
     } catch { /* ignore */ }
 
+    // 7. 帰国申請一覧（pending + foreman_approved）
+    const homeLongLeaveItems: { id: string; workerName: string; startDate: string; endDate: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string }[] = []
+    try {
+      const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
+      hlSnap.forEach(d => {
+        const data = d.data()
+        if (data.status === 'pending' || data.status === 'foreman_approved') {
+          homeLongLeaveItems.push({
+            id: d.id,
+            workerName: data.workerName || '',
+            startDate: data.startDate || '',
+            endDate: data.endDate || '',
+            reason: data.reason || '',
+            status: data.status,
+            requestedAt: data.requestedAt || '',
+            foremanApprovedAt: data.foremanApprovedAt,
+          })
+        }
+      })
+      homeLongLeaveItems.sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))
+    } catch { /* ignore */ }
+
     const actionItems = {
       visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },
       plShortfall: { count: plShortfallCount },
       pendingLeaveRequests: { count: pendingLeaveCount, items: leaveRequestItems },
       calendarProgress: { pending: calPending, total: calTotal },
       absenceReports,
+      homeLongLeaveRequests: homeLongLeaveItems,
     }
 
     // ダッシュボードは「今の状況と要対応」に特化（詳細分析は原価・収益管理ページへ）

@@ -77,6 +77,17 @@ export default function StaffAttendancePage() {
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const [leaveSuccess, setLeaveSuccess] = useState<string | null>(null)
 
+  // Home long leave modal state
+  const [showHomeLongLeaveModal, setShowHomeLongLeaveModal] = useState(false)
+  const [hlStartDate, setHlStartDate] = useState('')
+  const [hlEndDate, setHlEndDate] = useState('')
+  const [hlReason, setHlReason] = useState('一時帰国')
+  const [hlNote, setHlNote] = useState('')
+  const [hlRequests, setHlRequests] = useState<{id:string;startDate:string;endDate:string;reason:string;status:string}[]>([])
+  const [hlSubmitting, setHlSubmitting] = useState(false)
+  const [hlError, setHlError] = useState<string | null>(null)
+  const [hlSuccess, setHlSuccess] = useState<string | null>(null)
+
   // Absence report modal state
   const [showRestModal, setShowRestModal] = useState(false)
   const [restReason, setRestReason] = useState('sick')
@@ -190,6 +201,86 @@ export default function StaffAttendancePage() {
       setLeaveSuccess(null)
     }
   }, [showLeaveModal, fetchLeaveRequests])
+
+  // Fetch home long leave requests when modal opens
+  const fetchHlRequests = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/home-long-leave?token=${token}`)
+      if (res.ok) {
+        const d = await res.json()
+        setHlRequests(d.requests || [])
+      }
+    } catch { /* ignore */ }
+  }, [token])
+
+  useEffect(() => {
+    if (showHomeLongLeaveModal) {
+      fetchHlRequests()
+      // Set default start date to 14 days from now
+      const minD = new Date()
+      minD.setDate(minD.getDate() + 14)
+      const y = minD.getFullYear()
+      const m = String(minD.getMonth() + 1).padStart(2, '0')
+      const d = String(minD.getDate()).padStart(2, '0')
+      setHlStartDate(`${y}-${m}-${d}`)
+      // Set default end date to 28 days from now
+      const endD = new Date()
+      endD.setDate(endD.getDate() + 28)
+      setHlEndDate(`${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, '0')}-${String(endD.getDate()).padStart(2, '0')}`)
+      setHlReason('一時帰国')
+      setHlNote('')
+      setHlError(null)
+      setHlSuccess(null)
+    }
+  }, [showHomeLongLeaveModal, fetchHlRequests])
+
+  const submitHomeLongLeave = async () => {
+    if (!data || hlSubmitting || !hlStartDate || !hlEndDate) return
+    setHlSubmitting(true)
+    setHlError(null)
+    setHlSuccess(null)
+    try {
+      const res = await fetch('/api/home-long-leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request',
+          token,
+          startDate: hlStartDate,
+          endDate: hlEndDate,
+          reason: hlReason,
+          note: hlNote || undefined,
+        }),
+      })
+      if (res.ok) {
+        setHlSuccess('申請完了 / Đã gửi đơn')
+        setHlStartDate('')
+        setHlEndDate('')
+        setHlReason('一時帰国')
+        setHlNote('')
+        fetchHlRequests()
+        setTimeout(() => setHlSuccess(null), 3000)
+      } else {
+        const d = await res.json()
+        const msg = d.error === 'Already requested' ? '申請済みです / Đã gửi rồi'
+          : d.error === 'Start date must be at least 7 days ahead' ? '7日以上先の日付を選んでください / Chọn ngày ít nhất 7 ngày sau'
+          : d.error || 'Error'
+        setHlError(msg)
+        setTimeout(() => setHlError(null), 3000)
+      }
+    } catch {
+      setHlError('Error')
+      setTimeout(() => setHlError(null), 3000)
+    } finally {
+      setHlSubmitting(false)
+    }
+  }
+
+  const getHlMinDate = () => {
+    const minD = new Date()
+    minD.setDate(minD.getDate() + 7)
+    return `${minD.getFullYear()}-${String(minD.getMonth() + 1).padStart(2, '0')}-${String(minD.getDate()).padStart(2, '0')}`
+  }
 
   const submitLeaveRequest = async () => {
     if (!data || leaveSubmitting || !leaveDateFrom) return
@@ -764,6 +855,14 @@ export default function StaffAttendancePage() {
           </div>
         </div>
 
+        {/* Home long leave link */}
+        <div className="text-center py-2">
+          <button onClick={() => setShowHomeLongLeaveModal(true)}
+            className="text-xs text-gray-400 underline">
+            帰国申請 / Xin về nước
+          </button>
+        </div>
+
         {/* Guide link */}
         <div className="text-center py-3">
           <a href="/briefing-20260419.html" target="_blank" rel="noopener noreferrer"
@@ -1021,6 +1120,7 @@ export default function StaffAttendancePage() {
       )}
 
       {/* Leave request modal */}
+      {/* Leave Request Modal */}
       {showLeaveModal && (
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowLeaveModal(false)}>
           <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -1151,6 +1251,168 @@ export default function StaffAttendancePage() {
 
             <button
               onClick={() => setShowLeaveModal(false)}
+              className="w-full mt-4 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
+            >
+              とじる / Dong
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Home Long Leave Modal */}
+      {showHomeLongLeaveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowHomeLongLeaveModal(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy mb-4 text-center">
+              帰国申請 / Xin về nước
+            </h3>
+
+            {hlSuccess && (
+              <div className="bg-green-100 text-green-700 rounded-xl p-3 text-center font-bold mb-3 animate-pulse">
+                {hlSuccess}
+              </div>
+            )}
+            {hlError && (
+              <div className="bg-red-100 text-red-600 rounded-xl p-3 text-center text-sm mb-3">
+                {hlError}
+              </div>
+            )}
+
+            {/* Date range picker */}
+            <div className="mb-4">
+              <label className="text-sm text-gray-600 font-bold block mb-2">
+                きかんを えらんで ください / Chọn thời gian
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">出発日 / Ngày đi</label>
+                  <input
+                    type="date"
+                    value={hlStartDate}
+                    min={getHlMinDate()}
+                    onChange={e => {
+                      setHlStartDate(e.target.value)
+                      if (!hlEndDate || e.target.value >= hlEndDate) {
+                        const d = new Date(e.target.value + 'T00:00:00')
+                        d.setDate(d.getDate() + 14)
+                        setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+                      }
+                    }}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">帰国日 / Ngày về</label>
+                  <input
+                    type="date"
+                    value={hlEndDate}
+                    min={hlStartDate || getHlMinDate()}
+                    onChange={e => setHlEndDate(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                ※ 7日以上先の日付を選んでください / Chọn ngày ít nhất 7 ngày sau
+              </p>
+            </div>
+
+            {/* Reason radio buttons */}
+            <div className="mb-4">
+              <label className="text-sm text-gray-600 font-bold block mb-2">
+                りゆう / Lý do
+              </label>
+              <div className="space-y-2">
+                {[
+                  { value: '一時帰国', label: '一時帰国', vi: 'Về nước tạm thời' },
+                  { value: 'ビザ更新帰国', label: 'ビザ更新帰国', vi: 'Về nước gia hạn visa' },
+                  { value: 'その他', label: 'その他', vi: 'Khác' },
+                ].map(opt => (
+                  <label key={opt.value} className="flex items-center gap-3 cursor-pointer py-1.5 px-3 rounded-lg hover:bg-gray-50">
+                    <input
+                      type="radio"
+                      name="hlReason"
+                      value={opt.value}
+                      checked={hlReason === opt.value}
+                      onChange={e => setHlReason(e.target.value)}
+                      className="w-5 h-5 text-purple-600"
+                    />
+                    <span className="text-sm text-gray-700">{opt.label} / {opt.vi}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Note */}
+            <div className="mb-4">
+              <label className="text-sm text-gray-600 block mb-1">
+                びこう（にんい）/ Ghi chú (tùy chọn)
+              </label>
+              <input
+                type="text"
+                value={hlNote}
+                onChange={e => setHlNote(e.target.value)}
+                placeholder="ひこうき の よてい など"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
+              />
+            </div>
+
+            {/* Submit */}
+            <button
+              onClick={submitHomeLongLeave}
+              disabled={hlSubmitting || !hlStartDate || !hlEndDate}
+              className="w-full bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
+            >
+              {hlSubmitting ? '送信中...' : '帰国を申請する / Gửi đơn xin về nước'}
+            </button>
+
+            {/* Request history */}
+            {hlRequests.length > 0 && (
+              <div className="mt-6">
+                <div className="text-sm text-gray-500 font-bold mb-2">
+                  申請の状況 / Trạng thái đơn
+                </div>
+                <div className="space-y-2">
+                  {hlRequests.map(req => (
+                    <div key={req.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
+                      <div className="min-w-0">
+                        <span className="text-sm text-gray-700 font-medium">
+                          {(() => { const [,m,d] = req.startDate.split('-'); return `${parseInt(m)}/${parseInt(d)}` })()}
+                          〜
+                          {(() => { const [,m,d] = req.endDate.split('-'); return `${parseInt(m)}/${parseInt(d)}` })()}
+                        </span>
+                        <span className="text-xs text-gray-400 ml-2">{req.reason}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {req.status === 'approved' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-bold">
+                            承認済 / Đã duyệt
+                          </span>
+                        )}
+                        {req.status === 'foreman_approved' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
+                            職長済 / Đốc công đã duyệt
+                          </span>
+                        )}
+                        {req.status === 'pending' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
+                            承認待ち / Đang chờ
+                          </span>
+                        )}
+                        {req.status === 'rejected' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold">
+                            却下 / Từ chối
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowHomeLongLeaveModal(false)}
               className="w-full mt-4 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
             >
               とじる / Dong
