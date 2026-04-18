@@ -888,7 +888,7 @@ export default function StaffAttendancePage() {
               <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center">
                 {pd.date}
               </h3>
-              <p className="text-sm text-gray-500 mb-4 text-center">なおす</p>
+              <p className="text-sm text-gray-500 mb-4 text-center">修正</p>
 
               {pastTimeBased ? (
                 <div className="space-y-4">
@@ -1142,7 +1142,7 @@ export default function StaffAttendancePage() {
             {/* Date picker (range) */}
             <div className="mb-4">
               <label className="text-sm text-gray-600 font-bold block mb-2">
-                日にちを選んでください / Chọn ngày nghỉ
+                日付を選んでください / Chọn ngày nghỉ
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1195,7 +1195,7 @@ export default function StaffAttendancePage() {
                 type="text"
                 value={leaveReason}
                 onChange={e => setLeaveReason(e.target.value)}
-                placeholder="つういん、よてい など"
+                placeholder="通院、予定など"
                 className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
               />
             </div>
@@ -1253,7 +1253,7 @@ export default function StaffAttendancePage() {
               onClick={() => setShowLeaveModal(false)}
               className="w-full mt-4 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
             >
-              とじる / Dong
+              閉じる / Đóng
             </button>
           </div>
         </div>
@@ -1281,7 +1281,7 @@ export default function StaffAttendancePage() {
             {/* Date range picker */}
             <div className="mb-4">
               <label className="text-sm text-gray-600 font-bold block mb-2">
-                きかんを えらんで ください / Chọn thời gian
+                期間を選んでください / Chọn thời gian
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1291,9 +1291,17 @@ export default function StaffAttendancePage() {
                     value={hlStartDate}
                     min={getHlMinDate()}
                     onChange={e => {
-                      setHlStartDate(e.target.value)
-                      if (!hlEndDate || e.target.value >= hlEndDate) {
-                        const d = new Date(e.target.value + 'T00:00:00')
+                      const val = e.target.value
+                      const minDate = getHlMinDate()
+                      if (val < minDate) {
+                        setHlStartDate(minDate)
+                        setHlError('2ヶ月以上先の日付を選んでください / Chọn ngày ít nhất 2 tháng sau')
+                        return
+                      }
+                      setHlError(null)
+                      setHlStartDate(val)
+                      if (!hlEndDate || val >= hlEndDate) {
+                        const d = new Date(val + 'T00:00:00')
                         d.setDate(d.getDate() + 14)
                         setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
                       }
@@ -1320,7 +1328,7 @@ export default function StaffAttendancePage() {
             {/* Reason radio buttons */}
             <div className="mb-4">
               <label className="text-sm text-gray-600 font-bold block mb-2">
-                りゆう / Lý do
+                理由 / Lý do
               </label>
               <div className="space-y-2">
                 {[
@@ -1346,13 +1354,13 @@ export default function StaffAttendancePage() {
             {/* Note */}
             <div className="mb-4">
               <label className="text-sm text-gray-600 block mb-1">
-                びこう（にんい）/ Ghi chú (tùy chọn)
+                備考（任意）/ Ghi chú (tùy chọn)
               </label>
               <input
                 type="text"
                 value={hlNote}
                 onChange={e => setHlNote(e.target.value)}
-                placeholder="ひこうき の よてい など"
+                placeholder="飛行機の予定など"
                 className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
               />
             </div>
@@ -1360,7 +1368,7 @@ export default function StaffAttendancePage() {
             {/* Submit */}
             <button
               onClick={submitHomeLongLeave}
-              disabled={hlSubmitting || !hlStartDate || !hlEndDate}
+              disabled={hlSubmitting || !hlStartDate || !hlEndDate || hlStartDate < getHlMinDate()}
               className="w-full bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
             >
               {hlSubmitting ? '送信中...' : '帰国を申請する / Gửi đơn xin về nước'}
@@ -1415,7 +1423,7 @@ export default function StaffAttendancePage() {
               onClick={() => setShowHomeLongLeaveModal(false)}
               className="w-full mt-4 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
             >
-              とじる / Dong
+              閉じる / Đóng
             </button>
           </div>
         </div>
