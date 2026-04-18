@@ -173,25 +173,23 @@ export default function SiteCalendarPage() {
               <div className="grid grid-cols-7 gap-1">
                 {gridCells.map((cell, i) => {
                   if (!cell) return <div key={i} className="aspect-square" />
-                  let bg = 'bg-blue-100 text-blue-800'
-                  if (cell.dayType === 'off') bg = 'bg-gray-100 text-gray-500'
-                  if (cell.dayType === 'holiday') bg = 'bg-red-100 text-red-600'
+                  // シンプルに「出勤」か「休み」の2択（祝日も休みとして表示）
+                  const isWork = cell.dayType === 'work'
+                  const bg = isWork ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-400'
                   return (
                     <div key={i} className={`aspect-square rounded-lg flex flex-col items-center justify-center ${bg} text-xs`}>
                       <div className="font-bold text-sm">{cell.day}</div>
-                      {cell.dayType === 'holiday' ? (
-                        <div className="text-[8px] leading-tight text-center truncate w-full px-0.5">{cell.holidayName}</div>
-                      ) : (
-                        <div className="text-[9px]">{cell.labelVi}</div>
+                      <div className="text-[9px]">{isWork ? '出勤' : '休み'}</div>
+                      {cell.dayType === 'holiday' && cell.holidayName && (
+                        <div className={`text-[7px] leading-tight text-center truncate w-full px-0.5 ${isWork ? 'text-white/70' : 'text-gray-400'}`}>{cell.holidayName}</div>
                       )}
                     </div>
                   )
                 })}
               </div>
               <div className="mt-3 flex gap-4 justify-center text-xs">
-                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-blue-100" /><span>出勤 / Đi làm</span></div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-gray-100" /><span>休み / Nghỉ</span></div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-100" /><span>祝日 / Nghỉ lễ</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-blue-500" /><span>出勤 / Đi làm</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-gray-200 border border-gray-300" /><span>休み / Nghỉ</span></div>
               </div>
             </div>
 
