@@ -131,16 +131,22 @@ export async function GET(request: NextRequest) {
       ? { name: foremanWorker?.name || '', note: mf.note || '' }
       : null
 
-    // 帰国情報: 承認済み・職長承認済みの帰国申請で、対象月と重なるもの
+    // 帰国情報: 2つのソースから統合
+    // ① homeLongLeave コレクション（スマホ申請: 承認済み・職長承認済み）
+    // ② demmen/main の homeLeaves 配列（管理者手動登録: すべて承認済み扱い）
     const monthStart = `${String(y)}-${String(m).padStart(2, '0')}-01`
     const monthEnd = `${String(y)}-${String(m).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
     const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
     const homeLeaves: { workerId: number; workerName: string; startDate: string; endDate: string; reason: string; status: string }[] = []
+    const seenKeys = new Set<string>()
+
+    // ① スマホ申請（homeLongLeaveコレクション）
     hlSnap.forEach(d => {
       const hl = d.data()
       if (hl.status !== 'approved' && hl.status !== 'foreman_approved') return
-      // 期間が対象月と重なるかチェック
       if (hl.endDate < monthStart || hl.startDate > monthEnd) return
+      const key = `${hl.workerId}_${hl.startDate}`
+      seenKeys.add(key)
       homeLeaves.push({
         workerId: hl.workerId,
         workerName: hl.workerName,
@@ -150,6 +156,24 @@ export async function GET(request: NextRequest) {
         status: hl.status,
       })
     })
+
+    // ② 手動登録（demmen/main の homeLeaves 配列）
+    const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+    const manualHomeLeaves: { id?: string; workerId: number; workerName: string; startDate: string; endDate: string; reason?: string }[] =
+      mainSnap.exists() ? (mainSnap.data().homeLeaves || []) : []
+    for (const mhl of manualHomeLeaves) {
+      if (mhl.endDate < monthStart || mhl.startDate > monthEnd) continue
+      const key = `${mhl.workerId}_${mhl.startDate}`
+      if (seenKeys.has(key)) continue // 重複除外
+      homeLeaves.push({
+        workerId: mhl.workerId,
+        workerName: mhl.workerName,
+        startDate: mhl.startDate,
+        endDate: mhl.endDate,
+        reason: mhl.reason || '一時帰国',
+        status: 'approved', // 手動登録は承認済み扱い
+      })
+    }
 
     return NextResponse.json({
       site: { id: site.id, name: site.name, foreman: effectiveForeman, foremanName, foremanNote },

@@ -1283,10 +1283,20 @@ export default function AttendanceGridPage() {
 
                           {/* Day cells */}
                           {days.map(d => {
-                            const entry = entries[d.day] || null
+                            let entry = entries[d.day] || null
+                            // 帰国判定: homeLeaves の期間に含まれるか（出面に hk がない場合も対応）
+                            if (!entry?.hk && data.homeLeaves?.length) {
+                              const dateStr = `${data.year}-${String(data.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`
+                              const isOnLeave = data.homeLeaves.some(hl =>
+                                String(hl.workerId) === wId && hl.status === 'approved' && dateStr >= hl.startDate && dateStr <= hl.endDate
+                              )
+                              if (isOnLeave) {
+                                entry = { ...(entry || { w: 0 }), hk: 1 }
+                              }
+                            }
                             // 休日出勤判定: カレンダーがoff/holidayなのに出勤あり
                             const calDay = data.calendarDays?.[String(d.day)]
-                            const isHolidayWork = calDay && (calDay === 'off' || calDay === 'holiday') && entry && entry.w > 0 && !entry.p
+                            const isHolidayWork = calDay && (calDay === 'off' || calDay === 'holiday') && entry && entry.w > 0 && !entry.p && !entry.hk
                             // Input source indicator
                             const source = entry?.s
                             // 外国人のみ時間ベース（202605〜かつvisaあり）
