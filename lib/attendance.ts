@@ -14,12 +14,12 @@ export function ymKey(y: number, m: number): string {
   return `${y}${String(m).padStart(2, '0')}`
 }
 
-// ひらがな表記（スタッフ用）
+// 漢字 + 短い曜日（スタッフ用）
 export function formatDateJP(date: Date): string {
   const m = date.getMonth() + 1
   const d = date.getDate()
-  const dow = DOW_HIRAGANA[date.getDay()]
-  return `${m}がつ ${d}にち（${dow}）`
+  const dow = DOW_SHORT[date.getDay()]
+  return `${m}月${d}日（${dow}）`
 }
 
 // 漢字表記（職長・管理者用）
