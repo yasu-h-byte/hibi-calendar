@@ -677,6 +677,14 @@ export default function StaffAttendancePage() {
           </div>
         </div>
 
+        {/* Guide link */}
+        <div className="text-center py-3">
+          <a href="/briefing-20260419.html" target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-xl text-sm font-medium hover:bg-blue-100 transition">
+            📖 給与・勤怠ガイド / Hướng dẫn lương & chấm công
+          </a>
+        </div>
+
         {/* Footer */}
         <div className="text-center text-sm text-gray-400 py-2">
           毎日入力してください / Hãy nhập mỗi ngày
