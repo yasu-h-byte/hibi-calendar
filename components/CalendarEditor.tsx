@@ -94,7 +94,7 @@ export default function CalendarEditor({ year, month, days, onChange, readOnly }
                 readOnly ? 'cursor-default' : 'cursor-pointer hover:opacity-80 active:scale-95'
               } transition-all`}
             >
-              <div className={`font-bold text-2xl ${dow === 0 && !isWork ? 'text-red-400' : dow === 6 && isWork ? 'text-white' : ''}`}>
+              <div className={`font-bold text-2xl ${(dow === 0 || holiday) ? (isWork ? 'text-red-200' : 'text-red-400') : ''}`}>
                 {d}
               </div>
               <div className="text-sm font-medium">

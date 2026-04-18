@@ -150,7 +150,7 @@ export default function PublicCalendarPage() {
             const bg = isWork ? 'bg-blue-400 text-white border-blue-500' : 'bg-gray-100 text-gray-400 border-gray-200'
             return (
               <div key={i} className={`aspect-square rounded-lg flex flex-col items-center justify-center ${bg} border-2`}>
-                <div className="font-bold text-xl">{cell.day}</div>
+                <div className={`font-bold text-xl ${(new Date(parseInt(ym.slice(0,4)), parseInt(ym.slice(5,7))-1, cell.day).getDay() === 0 || cell.dayType === 'holiday') ? (isWork ? 'text-red-200' : 'text-red-400') : ''}`}>{cell.day}</div>
                 <div className="text-xs font-medium">{isWork ? 'Đi làm' : 'Nghỉ'}</div>
                 {cell.dayType === 'holiday' && cell.holidayName && (
                   <div className={`text-[8px] leading-tight text-center truncate w-full px-0.5 ${isWork ? 'text-white/80' : 'text-gray-400'}`}>{cell.holidayName}</div>
