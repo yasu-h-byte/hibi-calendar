@@ -130,6 +130,44 @@ export async function GET(request: NextRequest) {
     // Today's approval
     const todayApproval = await getApprovalForDay(siteId, ym, d)
 
+    // 道具代残額
+    let toolBudgetRemaining: number | null = null
+    try {
+      const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
+      if (tbSnap.exists()) {
+        const tbData = tbSnap.data()
+        const tbM = now.getMonth() + 1
+        const tbFy = String(tbM >= 10 ? now.getFullYear() : now.getFullYear() - 1)
+        const tbKey = `${worker.id}_${tbFy}`
+        const tbRecord = tbData.records?.[tbKey]
+        if (tbRecord) {
+          const tbUsed = (tbRecord.purchases || []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
+          toolBudgetRemaining = tbRecord.budget - tbUsed
+        } else {
+          // レコードなし → デフォルト予算額を返す
+          toolBudgetRemaining = tbData.budgetByVisa?.[worker.visaType] ?? tbData.defaultBudget ?? 30000
+        }
+      }
+    } catch { /* ignore */ }
+
+    // 有給残日数
+    let plRemaining: number | null = null
+    try {
+      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+      if (mainSnap.exists()) {
+        const plData: Record<string, { grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number }[]> = mainSnap.data().plData || {}
+        const plRecords = plData[String(worker.id)] || []
+        if (plRecords.length > 0) {
+          const latest = plRecords[plRecords.length - 1]
+          const grant = latest.grantDays ?? latest.grant ?? 0
+          const carry = latest.carryOver ?? latest.carry ?? 0
+          const adj = latest.adjustment ?? latest.adj ?? 0
+          const used = latest.used ?? 0
+          plRemaining = grant + carry - adj - used
+        }
+      }
+    } catch { /* ignore */ }
+
     return NextResponse.json({
       worker: { id: worker.id, name: worker.name, nameVi: worker.nameVi },
       site: { id: site.id, name: site.name },
@@ -143,6 +181,8 @@ export async function GET(request: NextRequest) {
       currentStatus: getEntryStatus(currentEntry),
       todayLocked: !!(todayApproval?.foreman),
       pastDays,
+      toolBudgetRemaining,
+      plRemaining,
     })
   } catch (error) {
     console.error('Staff GET error:', error)

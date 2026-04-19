@@ -16,6 +16,8 @@ interface StaffData {
   currentEntry: AttendanceEntry | null
   currentStatus: AttendanceStatus
   todayLocked: boolean
+  toolBudgetRemaining: number | null
+  plRemaining: number | null
   pastDays: {
     date: string; year: number; month: number; day: number
     entry: AttendanceEntry | null; status: AttendanceStatus
@@ -819,6 +821,26 @@ export default function StaffAttendancePage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Info cards: PL remaining + Tool budget */}
+        {(data.plRemaining !== null || data.toolBudgetRemaining !== null) && (
+          <div className="grid grid-cols-2 gap-3">
+            {data.plRemaining !== null && (
+              <div className="bg-white rounded-xl shadow p-4 text-center">
+                <div className="text-xs text-gray-400 mb-1">🌴 有給残り / Nghỉ phép còn</div>
+                <div className="text-2xl font-bold text-green-600">{data.plRemaining}<span className="text-sm font-normal text-gray-400 ml-1">日</span></div>
+                <div className="text-[11px] text-gray-400">{data.plRemaining} ngày</div>
+              </div>
+            )}
+            {data.toolBudgetRemaining !== null && (
+              <div className="bg-white rounded-xl shadow p-4 text-center">
+                <div className="text-xs text-gray-400 mb-1">🔧 道具代残り / Tiền dụng cụ còn</div>
+                <div className="text-2xl font-bold text-blue-600">¥{data.toolBudgetRemaining.toLocaleString()}</div>
+                <div className="text-[11px] text-gray-400">{data.toolBudgetRemaining.toLocaleString()} yên</div>
+              </div>
+            )}
           </div>
         )}
 

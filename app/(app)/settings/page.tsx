@@ -51,6 +51,7 @@ const ALL_MENUS = [
   { id: 'leave', label: '有給管理', section: '人事・労務' },
   { id: 'evaluation', label: '評価管理', section: '人事・労務' },
   { id: 'home-leave', label: '帰国・休暇情報', section: '人事・労務' },
+  { id: 'tool-budget', label: '道具代管理', section: '人事・労務' },
   // 現場・外注
   { id: 'sites', label: '現場マスタ', section: '現場・外注' },
   { id: 'subcons', label: '外注先マスタ', section: '現場・外注' },
@@ -70,7 +71,7 @@ const CONFIGURABLE_ROLES = [
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   approver: ['dashboard', 'attendance', 'calendar', 'monthly', 'leave', 'evaluation', 'home-leave', 'sites', 'subcons', 'cost', 'docs'],
   foreman: ['attendance', 'calendar', 'docs'],
-  jimu: ['dashboard', 'monthly', 'workers', 'sites', 'subcons', 'leave', 'home-leave', 'cost', 'docs'],
+  jimu: ['dashboard', 'monthly', 'workers', 'sites', 'subcons', 'leave', 'home-leave', 'tool-budget', 'cost', 'docs'],
 }
 
 const ROLE_BADGES: Record<string, { label: string; cls: string }> = {
