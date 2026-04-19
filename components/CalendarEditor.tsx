@@ -29,7 +29,10 @@ export default function CalendarEditor({ year, month, days, onChange, readOnly }
     if (readOnly) return
     const key = String(d)
     const current = days[key] || 'work'
-    const next: DayType = current === 'work' ? 'off' : 'work'
+    const isHoliday = !!getHoliday(year, month, d)
+    // 出勤 ↔ 休み をトグル。祝日の場合は 'holiday' を使う
+    const restType: DayType = isHoliday ? 'holiday' : 'off'
+    const next: DayType = current === 'work' ? restType : 'work'
     onChange({ ...days, [key]: next })
   }
 
