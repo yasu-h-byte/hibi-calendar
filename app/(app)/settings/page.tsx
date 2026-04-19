@@ -38,19 +38,25 @@ interface UserWorker {
 
 // All menu items that can be controlled
 const ALL_MENUS = [
-  { id: 'dashboard', label: 'ダッシュボード', section: 'メイン' },
-  { id: 'attendance', label: '出面入力', section: 'メイン' },
-  { id: 'calendar', label: '就業カレンダー', section: 'メイン' },
-  { id: 'monthly', label: '月次集計', section: 'マスタ' },
-  { id: 'workers', label: '人員マスタ', section: 'マスタ' },
-  { id: 'sites', label: '現場マスタ', section: 'マスタ' },
-  { id: 'subcons', label: '外注先マスタ', section: 'マスタ' },
-  { id: 'leave', label: '有給管理', section: '管理' },
-  { id: 'evaluation', label: '評価管理', section: '管理' },
-  { id: 'cost', label: '原価・収益', section: '管理' },
-  { id: 'export', label: '帳票出力', section: '管理' },
-  { id: 'users', label: 'ユーザー管理', section: 'システム' },
+  // ホーム
+  { id: 'dashboard', label: 'ダッシュボード', section: 'ホーム' },
+  // 日常業務
+  { id: 'attendance', label: '出面入力', section: '日常業務' },
+  { id: 'calendar', label: '就業カレンダー', section: '日常業務' },
+  // 集計・分析
+  { id: 'monthly', label: '月次集計・帳票', section: '集計・分析' },
+  { id: 'cost', label: '原価・収益管理', section: '集計・分析' },
+  // 人事・労務
+  { id: 'workers', label: '人員マスタ', section: '人事・労務' },
+  { id: 'leave', label: '有給管理', section: '人事・労務' },
+  { id: 'evaluation', label: '評価管理', section: '人事・労務' },
+  { id: 'home-leave', label: '帰国・休暇情報', section: '人事・労務' },
+  // 現場・外注
+  { id: 'sites', label: '現場マスタ', section: '現場・外注' },
+  { id: 'subcons', label: '外注先マスタ', section: '現場・外注' },
+  // システム
   { id: 'settings', label: '管理者設定', section: 'システム' },
+  { id: 'docs', label: '資料一覧', section: 'システム' },
 ]
 
 // Configurable roles (admin always has full access)
@@ -62,9 +68,9 @@ const CONFIGURABLE_ROLES = [
 
 // Default permissions (used when no Firestore data exists)
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  approver: ['dashboard', 'attendance', 'calendar', 'monthly', 'leave'],
-  foreman: ['attendance', 'calendar'],
-  jimu: ['dashboard', 'monthly', 'workers', 'sites', 'subcons', 'leave', 'cost', 'export'],
+  approver: ['dashboard', 'attendance', 'calendar', 'monthly', 'leave', 'evaluation', 'home-leave', 'sites', 'subcons', 'cost', 'docs'],
+  foreman: ['attendance', 'calendar', 'docs'],
+  jimu: ['dashboard', 'monthly', 'workers', 'sites', 'subcons', 'leave', 'home-leave', 'cost', 'docs'],
 }
 
 const ROLE_BADGES: Record<string, { label: string; cls: string }> = {
