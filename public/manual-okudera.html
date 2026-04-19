@@ -106,13 +106,30 @@
 </table>
 
 <!-- ================================================ -->
-<h2 id="sec3">3. 有給データ移行（初回のみ）</h2>
+<h2 id="sec3">3. 有給データ移行（日比建設分 — 奥寺さん担当）</h2>
 
-<div class="box box-warn">
-<strong>この作業は初回のみです。</strong>旧スプレッドシートの有給データを新システムに移行します。
+<div class="box box-red">
+<strong>重要：この作業が完了するまで、日比建設スタッフの有給残日数が正しく表示されません。</strong><br>
+旧スプレッドシートの有給取得データを新システムに移行する必要があります。<br>
+HFU分は靖仁さんが完了済みです。<strong>日比建設分は奥寺さんの担当</strong>です。
 </div>
 
-<h3>3-1. 2025年2月以前の消化分 →「調整」に入力</h3>
+<div class="box box-ok">
+<strong>作業の全体像（2ステップ）：</strong>
+<table>
+<tr><th>ステップ</th><th>対象期間</th><th>やること</th><th>入力先</th></tr>
+<tr><td><strong>A</strong></td><td>2025年2月以前</td><td>スプレッドシートの消化合計を入力</td><td>有給管理 →「調整」欄</td></tr>
+<tr><td><strong>B</strong></td><td>2025年3月〜2026年4月</td><td>有給を取った日を1日ずつ入力</td><td>出面入力 →「有」入力</td></tr>
+</table>
+</div>
+
+<h3>ステップA: 2025年2月以前の消化分 →「調整」に入力</h3>
+
+<p>旧スプレッドシートで管理していた<strong>2025年2月以前</strong>の有給消化日数を、まとめて1つの数字で入力します。</p>
+
+<div class="box box-warn">
+<strong>準備：</strong>旧スプレッドシートを開き、各スタッフの「2025年2月までに消化した有給日数の合計」をメモしてください。
+</div>
 
 <div class="step">
   <div class="step-num">1</div>
@@ -120,18 +137,42 @@
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">対象スタッフの右にある<strong>「編集」</strong>を押す</div>
+  <div class="step-text">日比建設のスタッフ一覧から、対象スタッフの右にある<strong>「編集」</strong>ボタンを押す</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text"><strong>「調整」</strong>欄に、2025年2月までのスプレッドシートでの消化日数合計を入力 →「保存」</div>
+  <div class="step-text"><strong>「調整」</strong>欄に、スプレッドシートでの消化日数合計を入力する<br>
+  <span style="color:#888; font-size:13px;">例: スプレッドシートで5日消化済みなら「5」と入力</span></div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text"><strong>「保存」</strong>ボタンを押す</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">「残日数」が正しいか確認する<br>
+  <span style="color:#888; font-size:13px;">残日数 = 付与 + 繰越 − 調整 − 消化 で計算されます</span></div>
+</div>
+<div class="step">
+  <div class="step-num">6</div>
+  <div class="step-text">全スタッフについて②〜⑤を繰り返す</div>
 </div>
 
 <div class="box box-red">
-<strong>注意：</strong>「付与日数」と「繰越」は変更しないでください。「調整」欄のみ入力します。
+<strong>注意：</strong>
+<ul style="margin: 4px 0 0; padding-left: 20px;">
+  <li>「付与日数」と「繰越」は<strong>変更しないでください</strong>。「調整」欄のみ入力します</li>
+  <li>「消化」は出面の「有」から自動計算されるため、直接編集できません</li>
+</ul>
 </div>
 
-<h3>3-2. 2025年3月以降の有給取得日 → 出面に「有」入力</h3>
+<h3>ステップB: 2025年3月〜2026年4月の有給取得日 → 出面に「有」入力</h3>
+
+<p>2025年3月以降は、有給を取った<strong>具体的な日付</strong>を出面入力画面から1日ずつ入力します。</p>
+
+<div class="box box-warn">
+<strong>準備：</strong>旧スプレッドシートで、各スタッフが<strong>2025年3月〜2026年4月</strong>に有給を取った日付を確認してください。
+</div>
 
 <div class="step">
   <div class="step-num">1</div>
@@ -139,20 +180,55 @@
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">右上の年月セレクタで<strong>対象月</strong>を選ぶ（例: 2025年3月）</div>
+  <div class="step-text">右上の<strong>年月セレクタ</strong>で対象月を選ぶ（例: 2025年3月）</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">現場セレクタでスタッフが配置されていた現場を選ぶ<br>
-  <span style="color:#888; font-size:13px;">※ 終了した現場は「終了現場」チェックボックスをONにすると表示されます</span></div>
+  <div class="step-text"><strong>現場セレクタ</strong>でスタッフが配置されていた現場を選ぶ<br>
+  <span style="color:#888; font-size:13px;">※ 終了した現場は「終了現場を表示」チェックボックスをONにすると表示されます</span></div>
 </div>
 <div class="step">
   <div class="step-num">4</div>
-  <div class="step-text">有給を取った日のセルのドロップダウンから<span class="highlight">有</span>を選択</div>
+  <div class="step-text">有給を取った日のセルで、ドロップダウンから<span class="highlight">有</span>を選択する（自動保存）</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">その月の全スタッフの有給を入力したら、次の月に進む（年月セレクタを変更）</div>
+</div>
+<div class="step">
+  <div class="step-num">6</div>
+  <div class="step-text">2025年3月〜2026年4月まで、月ごとに繰り返す</div>
 </div>
 
 <div class="box box-ok">
-入力した「有」は有給管理画面の消化日数に自動で反映されます。
+<strong>入力のコツ：</strong>
+<ul style="margin: 4px 0 0; padding-left: 20px;">
+  <li>月ごとにまとめて作業すると効率的です（年月セレクタで月を切り替え）</li>
+  <li>入力した「有」は<strong>有給管理画面の消化日数に自動で反映</strong>されます</li>
+  <li>現場が変わったスタッフは、その時期に配置されていた現場を選んでください</li>
+  <li>現場がわからない場合は、靖仁さんに確認してください</li>
+</ul>
+</div>
+
+<h3>完了確認</h3>
+
+<p>ステップA・Bの両方が完了したら、以下を確認してください。</p>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">サイドバー →<strong>「有給・休み管理」</strong>を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">各スタッフの<strong>「残日数」</strong>が旧スプレッドシートと一致しているか確認する</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">一致しない場合は、「調整」の数字 or 出面の「有」入力漏れを確認する</div>
+</div>
+
+<div class="box box-ok">
+<strong>完了したら靖仁さんに報告してください。</strong>確認後、スタッフのスマホ画面に有給残日数が表示されるようになります。
 </div>
 
 <!-- ================================================ -->
@@ -443,39 +519,9 @@
 
 <h3>7-6. 過去の有給データ移行（日比建設分）</h3>
 
-<div class="box box-red">
-<strong>重要：この作業が必要です。</strong><br>
-旧スプレッドシートで管理していた日比建設スタッフの有給取得データを、新システムの出面に反映する必要があります。<br>
-靖仁さんがHFU分で同様の作業を完了済みです。日比建設分は奥寺さんの担当です。
-</div>
-
-<h4>作業の流れ</h4>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">旧スプレッドシートを開き、各スタッフの<strong>有給取得日</strong>を確認する</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">出面入力画面で該当する年月・現場を選択する</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">有給を取った日のセルに<strong>「有」</strong>を入力する（自動保存）</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">有給管理画面で<strong>消化日数が正しく反映されているか</strong>確認する</div>
-</div>
-
-<div class="box box-ok">
-<strong>ポイント：</strong>
-<ul style="margin: 4px 0 0; padding-left: 20px;">
-  <li>2025年2月以前の分は「調整」欄に合計日数を入力（セクション3参照）</li>
-  <li>2025年3月以降の分は出面に「有」を1日ずつ入力</li>
-  <li>終了した現場の出面を入力する場合は「終了現場を表示」チェックをONに</li>
-  <li>入力した「有」は有給管理画面の消化日数に自動で反映されます</li>
-</ul>
+<div class="box box-warn">
+詳しい手順は<strong><a href="#sec3">セクション3「有給データ移行」</a></strong>を参照してください。<br>
+ステップA（調整入力）とステップB（出面に「有」入力）の2段階で作業します。
 </div>
 
 <!-- ================================================ -->
