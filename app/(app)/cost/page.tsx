@@ -817,8 +817,8 @@ function KPILineChart({
           x1={padL} y1={baselineY} x2={svgW - padR} y2={baselineY}
           stroke={COLORS.baseline} strokeWidth="1.5" strokeDasharray="8 4"
         />
-        <text x={svgW - padR - 4} y={baselineY - 6} textAnchor="end" fill={COLORS.baseline} fontSize="10" fontWeight="600">
-          基準{fmtYen(baseline)}
+        <text x={padL + 4} y={baselineY - 6} textAnchor="start" fill={COLORS.baseline} fontSize="10" fontWeight="600">
+          基準 {fmtYen(baseline)}
         </text>
 
         {data.map((d, i) => {
@@ -846,48 +846,33 @@ function KPILineChart({
 
         {data.map((d, i) => {
           const x = getX(i)
-          const y = getY(d.billingPerManDay)
+          const bY = getY(d.billingPerManDay)
+          const cY = getY(d.costPerManDay)
+          // 売上と原価が近い場合にオフセットを広げる
+          const tooClose = Math.abs(bY - cY) < 30
+          const bLabelY = tooClose ? Math.min(bY, cY) - 14 : bY - 10
           return (
             <g key={`bl-${i}`}>
-              <circle cx={x} cy={y} r={4} fill={COLORS.billing} stroke="white" strokeWidth="2" />
-              <text x={x} y={y - 10} textAnchor="middle" fill={COLORS.billing} fontSize="9" fontWeight="600">
+              <circle cx={x} cy={bY} r={4} fill={COLORS.billing} stroke="white" strokeWidth="2" />
+              <text x={x} y={bLabelY} textAnchor="middle" fill={COLORS.billing} fontSize="9" fontWeight="600">
                 {fmtYen(d.billingPerManDay)}
               </text>
-              {i > 0 && (() => {
-                const pct = momPct(d.billingPerManDay, data[i - 1].billingPerManDay)
-                if (!pct) return null
-                const mx = (getX(i - 1) + x) / 2
-                const my = (getY(data[i - 1].billingPerManDay) + y) / 2
-                return (
-                  <text x={mx} y={my - 8} textAnchor="middle" fill={COLORS.billing} fontSize="8" opacity="0.7">
-                    {pct}
-                  </text>
-                )
-              })()}
             </g>
           )
         })}
 
         {data.map((d, i) => {
           const x = getX(i)
-          const y = getY(d.costPerManDay)
+          const bY = getY(d.billingPerManDay)
+          const cY = getY(d.costPerManDay)
+          const tooClose = Math.abs(bY - cY) < 30
+          const cLabelY = tooClose ? Math.max(bY, cY) + 20 : cY + 16
           return (
             <g key={`cl-${i}`}>
-              <circle cx={x} cy={y} r={4} fill={COLORS.cost} stroke="white" strokeWidth="2" />
-              <text x={x} y={y + 16} textAnchor="middle" fill={COLORS.cost} fontSize="9" fontWeight="600">
+              <circle cx={x} cy={cY} r={4} fill={COLORS.cost} stroke="white" strokeWidth="2" />
+              <text x={x} y={cLabelY} textAnchor="middle" fill={COLORS.cost} fontSize="9" fontWeight="600">
                 {fmtYen(d.costPerManDay)}
               </text>
-              {i > 0 && (() => {
-                const pct = momPct(d.costPerManDay, data[i - 1].costPerManDay)
-                if (!pct) return null
-                const mx = (getX(i - 1) + x) / 2
-                const my = (getY(data[i - 1].costPerManDay) + y) / 2
-                return (
-                  <text x={mx} y={my + 16} textAnchor="middle" fill={COLORS.cost} fontSize="8" opacity="0.7">
-                    {pct}
-                  </text>
-                )
-              })()}
             </g>
           )
         })}
@@ -896,12 +881,15 @@ function KPILineChart({
           const x = getX(i)
           const val = d.profitPerManDay
           const barTop = val >= 0 ? getY(val) : zeroY
+          const cY = getY(d.costPerManDay)
+          // 差益ラベルが原価ラベルと重ならないよう調整
+          const profitLabelY = Math.abs(barTop - cY) < 25 ? barTop - 16 : barTop - 4
           return (
             <g key={`pl-${i}`}>
               {(i === 0 || i === data.length - 1 || i % 2 === 0) && (
                 <text
                   x={x}
-                  y={barTop - 4}
+                  y={profitLabelY}
                   textAnchor="middle"
                   fill={val >= 0 ? COLORS.profit : '#DC2626'}
                   fontSize="8"
