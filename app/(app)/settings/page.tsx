@@ -38,9 +38,8 @@ interface UserWorker {
 
 // All menu items that can be controlled
 const ALL_MENUS = [
-  // ホーム
-  { id: 'dashboard', label: 'ダッシュボード', section: 'ホーム' },
   // 日常業務
+  { id: 'dashboard', label: 'ダッシュボード', section: '日常業務' },
   { id: 'attendance', label: '出面入力', section: '日常業務' },
   { id: 'calendar', label: '就業カレンダー', section: '日常業務' },
   // 集計・分析

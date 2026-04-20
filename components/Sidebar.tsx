@@ -24,9 +24,8 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     : { label: '出面入力', icon: '📋', href: '/attendance', section: 'メイン', roles: ['admin', 'approver'] }
 
   return [
-    // ホーム
-    { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: 'ホーム', roles: ['admin', 'approver', 'jimu'] },
     // 日常業務
+    { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: '日常業務', roles: ['admin', 'approver', 'jimu'] },
     { ...attItem, section: '日常業務' },
     { label: '就業カレンダー', icon: '📅', href: '/calendar', section: '日常業務', roles: ['admin', 'approver', 'foreman'] },
     // 集計・分析
