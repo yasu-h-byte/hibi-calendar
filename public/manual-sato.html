@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>道具代管理マニュアル（佐藤さん向け） - HIBI CONSTRUCTION</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; }
+  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: #1B2A4A; color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .toc { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: #1B2A4A; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  @media print { body { font-size: 13px; padding: 0; } }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>HIBI CONSTRUCTION 就業管理システム<br>道具代管理マニュアル</h1>
+<p>対象: 佐藤今日子さん（道具代管理担当）<br>
+作成日: 2026年4月20日<br>
+最終更新: 2026年4月20日<br>
+システムURL: <code>https://hibi-calendar.vercel.app</code></p>
+
+<div class="toc">
+<strong>目次</strong>
+<ol>
+  <li><a href="#sec1">ログイン</a></li>
+  <li><a href="#sec2">道具代補助の仕組み</a></li>
+  <li><a href="#sec3">道具代管理画面の使い方</a></li>
+  <li><a href="#sec4">購入の登録手順</a></li>
+  <li><a href="#sec5">今年度の既存データ登録</a></li>
+  <li><a href="#sec6">年度切り替え</a></li>
+  <li><a href="#sec7">よくある質問</a></li>
+</ol>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec1">1. ログイン</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">ブラウザで <code>https://hibi-calendar.vercel.app</code> を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text"><strong>個人パスワード</strong>を入力して「ログイン」を押す</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">ダッシュボードが表示されればログイン完了</div>
+</div>
+
+<div class="box">
+<strong>パスワードについて：</strong>佐藤さん専用の個人パスワードが割り当てられています。靖仁さんから共有されます。一度ログインすると、同じブラウザでは次回から入力不要です。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec2">2. 道具代補助の仕組み</h2>
+
+<div class="box box-ok">
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td><strong>対象者</strong></td><td>現場スタッフ全員（日本人社員 + ベトナム人スタッフ）<br><span style="color:#888; font-size:13px;">※ 事務職は対象外です</span></td></tr>
+<tr><td><strong>年間予算</strong></td><td>1人あたり <strong>30,000円</strong>（デフォルト）<br><span style="color:#888; font-size:13px;">※ ロール（役員/職長/とび/土工）や在留資格によって異なる場合があります</span></td></tr>
+<tr><td><strong>年度</strong></td><td><strong>10月〜翌年9月</strong></td></tr>
+<tr><td><strong>対象品目</strong></td><td>仕事に使う道具（安全帯、工具、保護具など）</td></tr>
+<tr><td><strong>運用の流れ</strong></td><td>スタッフが道具を購入 → 領収書を佐藤さんに提出 → 佐藤さんがシステムに金額を登録</td></tr>
+</table>
+</div>
+
+<div class="box box-warn">
+<strong>残額はスタッフのスマホ画面に表示されます。</strong><br>
+佐藤さんがシステムに購入を登録すると、そのスタッフのスマホ画面の残額がリアルタイムで更新されます。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec3">3. 道具代管理画面の使い方</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">サイドバーの<strong>「人事・労務」</strong>セクションを開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text"><strong>「🔧 道具代管理」</strong>をクリック</div>
+</div>
+
+<h3>3-1. 画面の見方</h3>
+
+<table>
+<tr><th>エリア</th><th>内容</th></tr>
+<tr><td><strong>年度セレクタ</strong></td><td>左上のドロップダウンで対象年度を切り替え</td></tr>
+<tr><td><strong>サマリー（3つのカード）</strong></td><td>対象人数 / 使用済み合計 / 残額合計</td></tr>
+<tr><td><strong>スタッフ一覧テーブル</strong></td><td>スタッフごとの予算・使用済・残額を表示<br>日本人社員と外国人スタッフでセクション分け</td></tr>
+</table>
+
+<h3>3-2. テーブルの列</h3>
+
+<table>
+<tr><th>列</th><th>意味</th></tr>
+<tr><td><strong>スタッフ</strong></td><td>名前</td></tr>
+<tr><td><strong>区分</strong></td><td>日本人: ロール名（役員/職長/とび/土工）<br>外国人: 在留資格（実習1号/特定1号 等）</td></tr>
+<tr><td><strong>予算</strong></td><td>年間の上限額（デフォルト: ¥30,000）</td></tr>
+<tr><td><strong>使用済</strong></td><td>今年度に登録済みの購入合計額</td></tr>
+<tr><td><strong>残額</strong></td><td>予算 − 使用済 = あといくら使えるか</td></tr>
+<tr><td><strong>操作</strong></td><td>「登録」ボタン → 新しい購入を追加</td></tr>
+</table>
+
+<div class="box box-ok">
+<strong>スタッフ名をクリック</strong>すると、そのスタッフの購入履歴が展開表示されます。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec4">4. 購入の登録手順</h2>
+
+<p>スタッフから領収書を受け取ったら、以下の手順で登録します。</p>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">道具代管理画面を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">対象スタッフの行にある<strong>「登録」</strong>ボタンをクリック</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">登録フォームが表示されるので、以下を入力：
+  <table style="margin-top: 8px;">
+  <tr><th>項目</th><th>入力内容</th><th>例</th></tr>
+  <tr><td><strong>日付</strong></td><td>領収書の日付</td><td>2026-05-15</td></tr>
+  <tr><td><strong>品名</strong></td><td>購入した道具の名前</td><td>安全帯</td></tr>
+  <tr><td><strong>金額（円）</strong></td><td>領収書の金額（税込）</td><td>3500</td></tr>
+  </table>
+  </div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text"><strong>「保存」</strong>ボタンを押す</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">テーブルの使用済・残額が自動で更新されることを確認</div>
+</div>
+
+<div class="box box-warn">
+<strong>予算を超える登録はシステム上可能ですが、</strong>残額がマイナスになります。<br>
+予算オーバーの場合はスタッフに伝えて、追加購入を控えるよう案内してください。
+</div>
+
+<h3>登録の削除</h3>
+
+<p>間違って登録した場合は、以下の手順で削除できます。</p>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">スタッフ名をクリックして購入履歴を展開</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">削除したい行の右にある<strong>「削除」</strong>をクリック</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">確認ダイアログで「OK」を押す</div>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec5">5. 今年度の既存データ登録</h2>
+
+<div class="box box-red">
+<strong>初回作業：</strong>今年度（2025年10月〜）で既に使っている道具代がある場合は、最初にまとめて登録してください。
+</div>
+
+<h3>手順</h3>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">手元の台帳や記録から、今年度の<strong>各スタッフの購入実績</strong>を確認する</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">道具代管理画面の年度セレクタが<strong>「2025年度」</strong>になっていることを確認</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">各スタッフの「登録」ボタンから、購入1件ずつ登録する<br>
+  <span style="color:#888; font-size:13px;">※ 品名は「過去分まとめ」など簡易な記載でもOKです</span></div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">全スタッフの登録が完了したら、サマリーの使用済合計が台帳と一致するか確認</div>
+</div>
+
+<div class="box box-ok">
+<strong>ポイント：</strong>
+<ul style="margin: 4px 0 0; padding-left: 20px;">
+  <li>1件1件登録するのが理想ですが、過去分は「品名: まとめ入力、金額: 合計額」でもOK</li>
+  <li>登録後、スタッフのスマホに正しい残額が表示されるようになります</li>
+</ul>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec6">6. 年度切り替え（10月に実施）</h2>
+
+<p>毎年10月に新年度が始まります。年度切り替え時の作業は以下の通りです。</p>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">道具代管理画面を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">年度セレクタで<strong>新しい年度</strong>を選択する（例: 2026年度）</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text"><strong>「年度初期化」</strong>ボタンをクリック</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">確認ダイアログで「OK」を押す</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">全スタッフに新年度の予算（¥30,000）が割り当てられたことを確認</div>
+</div>
+
+<div class="box">
+<strong>年度切り替えのポイント：</strong>
+<ul style="margin: 4px 0 0; padding-left: 20px;">
+  <li>前年度のデータは消えません。年度セレクタで前年度を選べば閲覧できます</li>
+  <li>新年度は全スタッフ ¥0 使用済（予算全額残り）からスタートします</li>
+  <li>10月以降に新しく入社したスタッフも自動的に含まれます</li>
+</ul>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec7">7. よくある質問</h2>
+
+<table>
+<tr><th>質問</th><th>回答</th></tr>
+<tr><td>道具代管理画面が見つからない</td><td>サイドバーの「人事・労務」セクションにあります。下にスクロールしてください。</td></tr>
+<tr><td>スタッフが表示されない</td><td>「年度初期化」ボタンを押して、当該年度の予算を作成してください。</td></tr>
+<tr><td>予算を超えて登録できる？</td><td>登録自体は可能です。残額がマイナス表示になります。</td></tr>
+<tr><td>金額を間違えて登録した</td><td>購入履歴を展開 →「削除」→ 正しい金額で再登録してください。</td></tr>
+<tr><td>スタッフごとに予算額を変えたい</td><td>管理者（靖仁さん）に連絡してください。ロール別・在留資格別の予算設定が可能です。</td></tr>
+<tr><td>退職したスタッフはどうなる？</td><td>退職処理されたスタッフは自動的に一覧から非表示になります。</td></tr>
+<tr><td>前年度の履歴を見たい</td><td>年度セレクタで前年度を選択すれば閲覧できます。</td></tr>
+</table>
+
+<hr>
+
+<h2>毎月のルーティン</h2>
+
+<div class="box">
+<table>
+<tr><th>タイミング</th><th>作業</th></tr>
+<tr><td><strong>領収書受領時</strong></td><td>道具代管理画面で購入を登録</td></tr>
+<tr><td><strong>月末</strong></td><td>残額が少ないスタッフがいないか確認</td></tr>
+<tr><td><strong>9月末</strong></td><td>年度終了。全スタッフの使用状況を確認</td></tr>
+<tr><td><strong>10月初旬</strong></td><td>新年度の「年度初期化」を実施</td></tr>
+</table>
+</div>
+
+<hr>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-20</p>
+
+</body>
+</html>
