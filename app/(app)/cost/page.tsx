@@ -813,14 +813,13 @@ function KPILineChart({
           </g>
         ))}
 
+        {/* 基準線 */}
         <line
           x1={padL} y1={baselineY} x2={svgW - padR} y2={baselineY}
           stroke={COLORS.baseline} strokeWidth="1.5" strokeDasharray="8 4"
         />
-        <text x={padL + 4} y={baselineY - 6} textAnchor="start" fill={COLORS.baseline} fontSize="10" fontWeight="600">
-          基準 {fmtYen(baseline)}
-        </text>
 
+        {/* 差益バー */}
         {data.map((d, i) => {
           const x = getX(i)
           const val = d.profitPerManDay
@@ -841,61 +840,68 @@ function KPILineChart({
           )
         })}
 
+        {/* 折れ線 */}
         <path d={billingPath} fill="none" stroke={COLORS.billing} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
         <path d={costPath} fill="none" stroke={COLORS.cost} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
 
+        {/* 全ラベルを衝突回避しながら描画 */}
         {data.map((d, i) => {
           const x = getX(i)
           const bY = getY(d.billingPerManDay)
           const cY = getY(d.costPerManDay)
-          // 売上と原価が近い場合にオフセットを広げる
-          const tooClose = Math.abs(bY - cY) < 30
-          const bLabelY = tooClose ? Math.min(bY, cY) - 14 : bY - 10
+          const pVal = d.profitPerManDay
+          const pBarTop = pVal >= 0 ? getY(pVal) : zeroY
+
+          // ラベル候補Y（初期位置）
+          let bLabelY = bY - 12       // 売上: ドットの上
+          let cLabelY = cY + 18       // 原価: ドットの下
+          let pLabelY = pBarTop - 6   // 差益: バーの上
+
+          // 基準線との衝突回避（売上ラベルが基準線と重なる場合）
+          if (Math.abs(bLabelY - baselineY) < 14) {
+            bLabelY = baselineY - 18
+          }
+
+          // 売上と原価ラベルの衝突回避
+          const MIN_GAP = 16
+          if (cLabelY - bLabelY < MIN_GAP) {
+            // 売上を上に、原価を下に押す
+            const mid = (bLabelY + cLabelY) / 2
+            bLabelY = mid - MIN_GAP / 2
+            cLabelY = mid + MIN_GAP / 2
+          }
+
+          // 原価ラベルと差益ラベルの衝突回避
+          if (Math.abs(cLabelY - pLabelY) < MIN_GAP) {
+            pLabelY = cLabelY + MIN_GAP
+          }
+
+          // 差益バーの下に原価ラベルが入り込む場合
+          if (cLabelY < pBarTop + 8 && cLabelY > pBarTop - 20) {
+            cLabelY = pBarTop + 22
+          }
+
+          const showProfit = i === 0 || i === data.length - 1 || i % 2 === 0
+
           return (
-            <g key={`bl-${i}`}>
+            <g key={`labels-${i}`}>
+              {/* 売上ドット+ラベル */}
               <circle cx={x} cy={bY} r={4} fill={COLORS.billing} stroke="white" strokeWidth="2" />
               <text x={x} y={bLabelY} textAnchor="middle" fill={COLORS.billing} fontSize="9" fontWeight="600">
                 {fmtYen(d.billingPerManDay)}
               </text>
-            </g>
-          )
-        })}
 
-        {data.map((d, i) => {
-          const x = getX(i)
-          const bY = getY(d.billingPerManDay)
-          const cY = getY(d.costPerManDay)
-          const tooClose = Math.abs(bY - cY) < 30
-          const cLabelY = tooClose ? Math.max(bY, cY) + 20 : cY + 16
-          return (
-            <g key={`cl-${i}`}>
+              {/* 原価ドット+ラベル */}
               <circle cx={x} cy={cY} r={4} fill={COLORS.cost} stroke="white" strokeWidth="2" />
               <text x={x} y={cLabelY} textAnchor="middle" fill={COLORS.cost} fontSize="9" fontWeight="600">
                 {fmtYen(d.costPerManDay)}
               </text>
-            </g>
-          )
-        })}
 
-        {data.map((d, i) => {
-          const x = getX(i)
-          const val = d.profitPerManDay
-          const barTop = val >= 0 ? getY(val) : zeroY
-          const cY = getY(d.costPerManDay)
-          // 差益ラベルが原価ラベルと重ならないよう調整
-          const profitLabelY = Math.abs(barTop - cY) < 25 ? barTop - 16 : barTop - 4
-          return (
-            <g key={`pl-${i}`}>
-              {(i === 0 || i === data.length - 1 || i % 2 === 0) && (
-                <text
-                  x={x}
-                  y={profitLabelY}
-                  textAnchor="middle"
-                  fill={val >= 0 ? COLORS.profit : '#DC2626'}
-                  fontSize="8"
-                  fontWeight="600"
-                >
-                  {fmtYen(val)}
+              {/* 差益ラベル */}
+              {showProfit && (
+                <text x={x} y={pLabelY} textAnchor="middle"
+                  fill={pVal >= 0 ? COLORS.profit : '#DC2626'} fontSize="8" fontWeight="600">
+                  {fmtYen(pVal)}
                 </text>
               )}
             </g>
