@@ -144,8 +144,16 @@ export async function GET(request: NextRequest) {
           const tbUsed = (tbRecord.purchases || []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
           toolBudgetRemaining = tbRecord.budget - tbUsed
         } else {
-          // レコードなし → デフォルト予算額を返す
-          toolBudgetRemaining = tbData.budgetByVisa?.[worker.visaType] ?? tbData.defaultBudget ?? 30000
+          // レコードなし → 在留資格別 or ロール別 or デフォルト予算額を返す
+          const visa = worker.visaType
+          const job = worker.jobType
+          if (visa && visa !== 'none' && tbData.budgetByVisa?.[visa]) {
+            toolBudgetRemaining = tbData.budgetByVisa[visa]
+          } else if (job && tbData.budgetByRole?.[job]) {
+            toolBudgetRemaining = tbData.budgetByRole[job]
+          } else {
+            toolBudgetRemaining = tbData.defaultBudget ?? 30000
+          }
         }
       }
     } catch { /* ignore */ }

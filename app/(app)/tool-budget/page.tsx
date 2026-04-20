@@ -14,22 +14,35 @@ interface WorkerBudget {
   workerId: number
   workerName: string
   visa: string
+  job: string
+  org: string
   budget: number
   used: number
   remaining: number
   purchases: Purchase[]
 }
 
-function visaLabel(visa: string): string {
-  if (visa.startsWith('jisshu')) {
-    const n = visa.replace('jisshu', '')
-    return n ? `実習${n}号` : '実習'
+function workerBadge(w: WorkerBudget): { label: string; cls: string } {
+  if (w.visa && w.visa !== 'none') {
+    if (w.visa.startsWith('jisshu')) {
+      const n = w.visa.replace('jisshu', '')
+      return { label: n ? `実習${n}号` : '実習', cls: 'bg-orange-100 text-orange-700' }
+    }
+    if (w.visa.startsWith('tokutei')) {
+      const n = w.visa.replace('tokutei', '')
+      return { label: n ? `特定${n}号` : '特定', cls: 'bg-pink-100 text-pink-700' }
+    }
+    return { label: w.visa, cls: 'bg-gray-100 text-gray-600' }
   }
-  if (visa.startsWith('tokutei')) {
-    const n = visa.replace('tokutei', '')
-    return n ? `特定${n}号` : '特定'
-  }
-  return visa
+  // 日本人: ロール表示
+  const jobLabels: Record<string, string> = { '役員': '役員', '職長': '職長', 'とび': 'とび', '土工': '土工' }
+  const label = jobLabels[w.job] || w.job || (w.org === 'hfu' ? 'HFU' : '日比')
+  const cls = w.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+  return { label, cls }
+}
+
+function isJapanese(w: WorkerBudget): boolean {
+  return !w.visa || w.visa === 'none' || w.visa === ''
 }
 
 function fyLabel(fy: string): string {
@@ -199,7 +212,7 @@ export default function ToolBudgetPage() {
             <thead>
               <tr className="bg-hibi-navy text-white">
                 <th className="text-left px-4 py-2">スタッフ</th>
-                <th className="text-center px-2 py-2 w-20">在留資格</th>
+                <th className="text-center px-2 py-2 w-20">区分</th>
                 <th className="text-right px-3 py-2 w-24">予算</th>
                 <th className="text-right px-3 py-2 w-24">使用済</th>
                 <th className="text-right px-3 py-2 w-24">残額</th>
@@ -207,14 +220,43 @@ export default function ToolBudgetPage() {
               </tr>
             </thead>
             <tbody>
-              {workers.map(w => {
+              {/* 日本人セクション */}
+              {workers.filter(isJapanese).length > 0 && (
+                <tr><td colSpan={6} className="bg-blue-50 px-4 py-1.5 text-xs font-bold text-blue-800 border-b">日本人社員（{workers.filter(isJapanese).length}名）</td></tr>
+              )}
+              {workers.filter(isJapanese).map(w => {
                 const isExpanded = expandedWorker === w.workerId
-                const pct = w.budget > 0 ? Math.min(100, (w.used / w.budget) * 100) : 0
                 return (
                   <tr key={w.workerId} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedWorker(isExpanded ? null : w.workerId)}>
                     <td className="px-4 py-3 font-medium">{w.workerName}</td>
                     <td className="text-center px-2">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">{visaLabel(w.visa)}</span>
+                      {(() => { const b = workerBadge(w); return <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${b.cls}`}>{b.label}</span> })()}
+                    </td>
+                    <td className="text-right px-3 tabular-nums">¥{w.budget.toLocaleString()}</td>
+                    <td className="text-right px-3 tabular-nums text-orange-600">¥{w.used.toLocaleString()}</td>
+                    <td className="text-right px-3 tabular-nums font-bold text-green-600">¥{w.remaining.toLocaleString()}</td>
+                    <td className="text-center px-2">
+                      <button
+                        onClick={e => { e.stopPropagation(); setAddingFor(addingFor === w.workerId ? null : w.workerId); setExpandedWorker(w.workerId) }}
+                        className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 transition"
+                      >
+                        登録
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+              {/* 外国人セクション */}
+              {workers.filter(w => !isJapanese(w)).length > 0 && (
+                <tr><td colSpan={6} className="bg-orange-50 px-4 py-1.5 text-xs font-bold text-orange-800 border-b">外国人スタッフ（{workers.filter(w => !isJapanese(w)).length}名）</td></tr>
+              )}
+              {workers.filter(w => !isJapanese(w)).map(w => {
+                const isExpanded = expandedWorker === w.workerId
+                return (
+                  <tr key={w.workerId} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedWorker(isExpanded ? null : w.workerId)}>
+                    <td className="px-4 py-3 font-medium">{w.workerName}</td>
+                    <td className="text-center px-2">
+                      {(() => { const b = workerBadge(w); return <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${b.cls}`}>{b.label}</span> })()}
                     </td>
                     <td className="text-right px-3 tabular-nums">¥{w.budget.toLocaleString()}</td>
                     <td className="text-right px-3 tabular-nums text-orange-600">¥{w.used.toLocaleString()}</td>

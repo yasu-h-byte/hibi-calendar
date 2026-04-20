@@ -30,7 +30,8 @@ interface ToolBudgetRecord {
 
 interface ToolBudgetData {
   defaultBudget: number
-  budgetByVisa?: Record<string, number>
+  budgetByVisa?: Record<string, number>   // 在留資格別予算（外国人）
+  budgetByRole?: Record<string, number>   // ロール別予算（日本人: 役員/職長/とび/土工）
   records: Record<string, ToolBudgetRecord>
 }
 
@@ -43,8 +44,16 @@ async function getToolBudgetData(): Promise<ToolBudgetData> {
   return {
     defaultBudget: data.defaultBudget ?? 30000,
     budgetByVisa: data.budgetByVisa || {},
+    budgetByRole: data.budgetByRole || {},
     records: data.records || {},
   }
+}
+
+// 予算額を解決: 個別設定 > 在留資格別 > ロール別 > デフォルト
+function resolveBudget(tbData: ToolBudgetData, visa?: string, jobType?: string): number {
+  if (visa && visa !== 'none' && tbData.budgetByVisa?.[visa]) return tbData.budgetByVisa[visa]
+  if (jobType && tbData.budgetByRole?.[jobType]) return tbData.budgetByRole[jobType]
+  return tbData.defaultBudget || 30000
 }
 
 async function saveToolBudgetData(data: ToolBudgetData): Promise<void> {
@@ -66,8 +75,7 @@ export async function GET(request: NextRequest) {
       const record = tbData.records[key]
 
       if (!record) {
-        // レコードなし → 予算の在留資格別デフォルト or 全体デフォルト
-        const budget = (tbData.budgetByVisa?.[worker.visaType] ?? tbData.defaultBudget) || 30000
+        const budget = resolveBudget(tbData, worker.visaType, worker.jobType)
         return NextResponse.json({ budget, used: 0, remaining: budget, purchases: [] })
       }
 
@@ -88,22 +96,24 @@ export async function GET(request: NextRequest) {
     const fy = request.nextUrl.searchParams.get('fy') || getCurrentFy()
     const tbData = await getToolBudgetData()
 
-    // 対象スタッフ一覧（外国人のみ）
+    // 対象スタッフ一覧（退職者以外の全員）
     const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-    const workers: { id: number; name: string; visa: string; retired?: string }[] =
+    const workers: { id: number; name: string; visa: string; job?: string; org?: string; retired?: string }[] =
       mainSnap.exists() ? (mainSnap.data().workers || []) : []
-    const foreignWorkers = workers.filter(w => w.visa && w.visa !== 'none' && !w.retired)
+    const activeWorkers = workers.filter(w => !w.retired)
 
-    const result = foreignWorkers.map(w => {
+    const result = activeWorkers.map(w => {
       const key = `${w.id}_${fy}`
       const record = tbData.records[key]
-      const budget = record?.budget ?? ((tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000)
+      const budget = record?.budget ?? resolveBudget(tbData, w.visa, w.job)
       const purchases = record?.purchases || []
       const used = purchases.reduce((sum: number, p: Purchase) => sum + p.amount, 0)
       return {
         workerId: w.id,
         workerName: w.name,
-        visa: w.visa,
+        visa: w.visa || '',
+        job: w.job || '',
+        org: w.org || '',
         budget,
         used,
         remaining: budget - used,
@@ -116,6 +126,7 @@ export async function GET(request: NextRequest) {
       currentFy: getCurrentFy(),
       defaultBudget: tbData.defaultBudget,
       budgetByVisa: tbData.budgetByVisa || {},
+      budgetByRole: tbData.budgetByRole || {},
       workers: result,
     })
   } catch (error) {
@@ -198,12 +209,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
-    // デフォルト予算 / 在留資格別予算の設定
+    // デフォルト予算 / 在留資格別・ロール別予算の設定
     if (action === 'setDefaultBudget') {
-      const { defaultBudget, budgetByVisa } = body
+      const { defaultBudget, budgetByVisa, budgetByRole } = body
       const tbData = await getToolBudgetData()
       if (defaultBudget !== undefined) tbData.defaultBudget = Number(defaultBudget)
       if (budgetByVisa) tbData.budgetByVisa = budgetByVisa
+      if (budgetByRole) tbData.budgetByRole = budgetByRole
       await saveToolBudgetData(tbData)
       return NextResponse.json({ success: true })
     }
@@ -215,22 +227,22 @@ export async function POST(request: NextRequest) {
 
       const tbData = await getToolBudgetData()
 
-      // 対象スタッフ取得
+      // 対象スタッフ取得（退職者以外の全員）
       const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-      const workers: { id: number; visa: string; retired?: string }[] =
+      const workers: { id: number; visa: string; job?: string; retired?: string }[] =
         mainSnap.exists() ? (mainSnap.data().workers || []) : []
-      const foreignWorkers = workers.filter(w => w.visa && w.visa !== 'none' && !w.retired)
+      const activeWorkers = workers.filter(w => !w.retired)
 
-      for (const w of foreignWorkers) {
+      for (const w of activeWorkers) {
         const key = `${w.id}_${fy}`
         if (!tbData.records[key]) {
-          const budget = (tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000
+          const budget = resolveBudget(tbData, w.visa, w.job)
           tbData.records[key] = { workerId: w.id, fy, budget, purchases: [] }
         }
       }
 
       await saveToolBudgetData(tbData)
-      return NextResponse.json({ success: true, count: foreignWorkers.length })
+      return NextResponse.json({ success: true, count: activeWorkers.length })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
