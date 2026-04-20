@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
     const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
     const workers: { id: number; name: string; visa: string; job?: string; org?: string; retired?: string }[] =
       mainSnap.exists() ? (mainSnap.data().workers || []) : []
-    const activeWorkers = workers.filter(w => !w.retired && w.job !== 'jimu')
+    const activeWorkers = workers.filter(w => !w.retired && w.job !== 'jimu' && w.job !== '役員')
 
     const result = activeWorkers.map(w => {
       const key = `${w.id}_${fy}`
@@ -231,7 +231,7 @@ export async function POST(request: NextRequest) {
       const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
       const workers: { id: number; visa: string; job?: string; retired?: string }[] =
         mainSnap.exists() ? (mainSnap.data().workers || []) : []
-      const activeWorkers = workers.filter(w => !w.retired && w.job !== 'jimu')
+      const activeWorkers = workers.filter(w => !w.retired && w.job !== 'jimu' && w.job !== '役員')
 
       for (const w of activeWorkers) {
         const key = `${w.id}_${fy}`

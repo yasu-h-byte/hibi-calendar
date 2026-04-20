@@ -220,14 +220,17 @@ export default function ToolBudgetPage() {
               </tr>
             </thead>
             <tbody>
-              {/* 日本人セクション */}
-              {workers.filter(isJapanese).length > 0 && (
-                <tr><td colSpan={6} className="bg-blue-50 px-4 py-1.5 text-xs font-bold text-blue-800 border-b">日本人社員（{workers.filter(isJapanese).length}名）</td></tr>
-              )}
-              {workers.filter(isJapanese).map(w => {
-                const isExpanded = expandedWorker === w.workerId
-                return (
-                  <tr key={w.workerId} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedWorker(isExpanded ? null : w.workerId)}>
+              {/* 会社ごとにセクション分け */}
+              {[
+                { key: 'hibi', label: '日比建設', bg: 'bg-blue-50', text: 'text-blue-800' },
+                { key: 'hfu', label: 'HFU', bg: 'bg-purple-50', text: 'text-purple-800' },
+              ].map(company => {
+                const companyWorkers = workers.filter(w => (w.org === company.key) || (company.key === 'hibi' && w.org !== 'hfu'))
+                if (companyWorkers.length === 0) return null
+                return [
+                  <tr key={`sec-${company.key}`}><td colSpan={6} className={`${company.bg} px-4 py-1.5 text-xs font-bold ${company.text} border-b`}>{company.label}（{companyWorkers.length}名）</td></tr>,
+                  ...companyWorkers.map(w => (
+                    <tr key={w.workerId} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedWorker(expandedWorker === w.workerId ? null : w.workerId)}>
                     <td className="px-4 py-3 font-medium">{w.workerName}</td>
                     <td className="text-center px-2">
                       {(() => { const b = workerBadge(w); return <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${b.cls}`}>{b.label}</span> })()}
@@ -244,33 +247,8 @@ export default function ToolBudgetPage() {
                       </button>
                     </td>
                   </tr>
-                )
-              })}
-              {/* 外国人セクション */}
-              {workers.filter(w => !isJapanese(w)).length > 0 && (
-                <tr><td colSpan={6} className="bg-orange-50 px-4 py-1.5 text-xs font-bold text-orange-800 border-b">外国人スタッフ（{workers.filter(w => !isJapanese(w)).length}名）</td></tr>
-              )}
-              {workers.filter(w => !isJapanese(w)).map(w => {
-                const isExpanded = expandedWorker === w.workerId
-                return (
-                  <tr key={w.workerId} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedWorker(isExpanded ? null : w.workerId)}>
-                    <td className="px-4 py-3 font-medium">{w.workerName}</td>
-                    <td className="text-center px-2">
-                      {(() => { const b = workerBadge(w); return <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${b.cls}`}>{b.label}</span> })()}
-                    </td>
-                    <td className="text-right px-3 tabular-nums">¥{w.budget.toLocaleString()}</td>
-                    <td className="text-right px-3 tabular-nums text-orange-600">¥{w.used.toLocaleString()}</td>
-                    <td className="text-right px-3 tabular-nums font-bold text-green-600">¥{w.remaining.toLocaleString()}</td>
-                    <td className="text-center px-2">
-                      <button
-                        onClick={e => { e.stopPropagation(); setAddingFor(addingFor === w.workerId ? null : w.workerId); setExpandedWorker(w.workerId) }}
-                        className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 transition"
-                      >
-                        登録
-                      </button>
-                    </td>
-                  </tr>
-                )
+                  ))
+                ]
               })}
             </tbody>
           </table>
