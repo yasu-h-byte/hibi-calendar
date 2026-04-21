@@ -39,46 +39,82 @@ export async function GET(request: NextRequest) {
     const main = await getMainData()
     const activeWorkers = main.workers.filter(w => !w.retired)
 
-    // 1. Calendar unsigned workers (batch query instead of N+1 reads)
+    // 1. Calendar unsigned workers (承認済みカレンダーのみ、現月＋翌月をチェック)
     try {
       const activeSites = main.sites.filter(s => !s.archived)
 
-      // 帰国情報（当該月の全期間帰国中は署名対象から除外）
+      // 帰国情報
       const homeLeaves = await getAllActiveHomeLeaves()
 
       // 署名対象のスタッフ = 退職していない + トークン所持（実習生・特定技能）
       const signEligibleWorkers = activeWorkers.filter(w => !!w.token)
       const eligibleWorkerIdSet = new Set(signEligibleWorkers.map(w => w.id))
 
-      // Collect all expected worker×site combinations
-      const expectedSignIds = new Set<string>()
-      const expectedUnsignedWorkerIds = new Set<number>()
-      for (const site of activeSites) {
-        const monthKey = `${site.id}_${currentYm}`
-        const mAssign = main.massign[monthKey]
-        const dAssign = main.assign[site.id]
-        const workerIds = mAssign?.workers || dAssign?.workers || []
+      // チェック対象: 現月 + 翌月（翌月カレンダーを月末に署名するため）
+      let nextY = now.getFullYear()
+      let nextM = now.getMonth() + 2
+      if (nextM > 12) { nextM = 1; nextY++ }
+      const nextYm = ymKey(nextY, nextM)
+      const ymsToCheck = [currentYm, nextYm]
 
-        for (const wid of workerIds) {
-          // 退職者・日本人（トークンなし）を除外
-          if (!eligibleWorkerIdSet.has(wid)) continue
-          // 当該月の全期間帰国中のスタッフは除外
-          if (isFullMonthHomeLeave(wid, currentYm, homeLeaves)) continue
-          expectedSignIds.add(`${wid}_${currentYm}_${site.id}`)
-        }
+      // 各月の承認済みカレンダーを一括取得
+      const approvedCalendarsByYm: Record<string, Set<string>> = {}
+      for (const ym of ymsToCheck) {
+        const calYm = `${ym.slice(0, 4)}-${ym.slice(4, 6)}`
+        const calQuery = query(
+          collection(db, 'siteCalendar'),
+          where('ym', '==', calYm),
+          where('status', '==', 'approved'),
+        )
+        const calSnaps = await getDocs(calQuery)
+        const approvedSet = new Set<string>()
+        calSnaps.forEach(snap => {
+          const data = snap.data()
+          if (data.siteId) approvedSet.add(data.siteId as string)
+        })
+        approvedCalendarsByYm[ym] = approvedSet
       }
 
-      // Single Firestore query to get ALL signatures for this month
-      const signQuery = query(collection(db, 'calendarSign'), where('ym', '==', currentYm))
-      const signSnaps = await getDocs(signQuery)
-      const existingSignIds = new Set<string>()
-      signSnaps.forEach(snap => existingSignIds.add(snap.id))
+      // 各月の署名状況を一括取得
+      const signaturesByYm: Record<string, Set<string>> = {}
+      for (const ym of ymsToCheck) {
+        const signQuery = query(collection(db, 'calendarSign'), where('ym', '==', ym))
+        const signSnaps = await getDocs(signQuery)
+        const existing = new Set<string>()
+        signSnaps.forEach(snap => existing.add(snap.id))
+        signaturesByYm[ym] = existing
+      }
 
-      // 未署名のユニークなワーカーIDを集計（件数ではなく人数）
-      for (const id of expectedSignIds) {
-        if (!existingSignIds.has(id)) {
-          const wid = parseInt(id.split('_')[0])
-          expectedUnsignedWorkerIds.add(wid)
+      // 未署名集計: (worker, ym) のユニーク集合
+      const expectedUnsignedWorkerIds = new Set<number>()
+      const unsignedByYm: Record<string, Set<number>> = {}
+
+      for (const ym of ymsToCheck) {
+        const approvedSites = approvedCalendarsByYm[ym]
+        const existingSignIds = signaturesByYm[ym]
+        unsignedByYm[ym] = new Set<number>()
+
+        // 承認済みカレンダーがない月はスキップ
+        if (approvedSites.size === 0) continue
+
+        for (const site of activeSites) {
+          // 承認済みカレンダーがある現場のみチェック
+          if (!approvedSites.has(site.id)) continue
+
+          const monthKey = `${site.id}_${ym}`
+          const mAssign = main.massign[monthKey]
+          const dAssign = main.assign[site.id]
+          const workerIds = mAssign?.workers || dAssign?.workers || []
+
+          for (const wid of workerIds) {
+            if (!eligibleWorkerIdSet.has(wid)) continue
+            if (isFullMonthHomeLeave(wid, ym, homeLeaves)) continue
+            const signId = `${wid}_${ym}_${site.id}`
+            if (!existingSignIds.has(signId)) {
+              expectedUnsignedWorkerIds.add(wid)
+              unsignedByYm[ym].add(wid)
+            }
+          }
         }
       }
 
@@ -88,8 +124,10 @@ export async function GET(request: NextRequest) {
           const w = activeWorkers.find(x => x.id === wid)
           if (w) unsignedNames.push(w.name)
         }
-        const ymLabel = `${currentYm.slice(0, 4)}年${parseInt(currentYm.slice(4, 6))}月`
-        const calYm = `${currentYm.slice(0, 4)}-${currentYm.slice(4, 6)}`
+        // Messengerテキストは未署名が多い方の月を対象にする（翌月優先）
+        const targetYm = unsignedByYm[nextYm].size > 0 ? nextYm : currentYm
+        const ymLabel = `${targetYm.slice(0, 4)}年${parseInt(targetYm.slice(4, 6))}月`
+        const calYm = `${targetYm.slice(0, 4)}-${targetYm.slice(4, 6)}`
         const calUrl = `https://hibi-calendar.vercel.app/calendar/public?ym=${calYm}`
         const unsignedCount = expectedUnsignedWorkerIds.size
         notifications.push({
@@ -98,7 +136,7 @@ export async function GET(request: NextRequest) {
           message: `就業カレンダー未署名: ${unsignedCount}名が未完了です`,
           type: 'warning',
           count: unsignedCount,
-          messengerText: `HIBI CONSTRUCTION\n就業カレンダー ${ymLabel}\nLịch làm việc tháng ${parseInt(currentYm.slice(4, 6))}\n\n${calUrl}\n\n名前を選んで → カレンダー確認 → 署名\nChọn tên → Xem lịch → Ký\n\n未署名 / Chưa ký:\n${unsignedNames.join(', ')}`,
+          messengerText: `HIBI CONSTRUCTION\n就業カレンダー ${ymLabel}\nLịch làm việc tháng ${parseInt(targetYm.slice(4, 6))}\n\n${calUrl}\n\n名前を選んで → カレンダー確認 → 署名\nChọn tên → Xem lịch → Ký\n\n未署名 / Chưa ký:\n${unsignedNames.join(', ')}`,
         })
       }
     } catch (e) {
