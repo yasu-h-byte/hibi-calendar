@@ -807,6 +807,8 @@ export function computeMonthly(
       if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
       continue
     }
+    // ★ 帰国中は実出勤にも欠勤にもカウントしない
+    if (entry.hk) continue
     if (entry.r) { wm.restDays += 1; continue }
     if (entry.h) { wm.siteOffDays += 1; continue }
     if (!entry.w) continue

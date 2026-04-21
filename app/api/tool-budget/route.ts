@@ -14,6 +14,18 @@ interface Period {
   index: number  // 1 = 1年目, 2 = 2年目, ...
 }
 
+// 年数を加算する際、2/29 → 2/28 に正規化（うるう年問題回避）
+function addYears(date: Date, years: number): Date {
+  const d = new Date(date)
+  const origMonth = d.getMonth()
+  d.setFullYear(d.getFullYear() + years)
+  // setFullYearで翌月に繰り上がった場合（例: 2/29 → 3/1）、月末に戻す
+  if (d.getMonth() !== origMonth) {
+    d.setDate(0)
+  }
+  return d
+}
+
 function getCurrentPeriod(hireDate: string, refDate: Date = new Date()): Period | null {
   if (!hireDate) return null
   const hire = new Date(hireDate + 'T00:00:00')
@@ -23,14 +35,12 @@ function getCurrentPeriod(hireDate: string, refDate: Date = new Date()): Period 
   let start = new Date(hire)
   let index = 1
   while (true) {
-    const next = new Date(start)
-    next.setFullYear(next.getFullYear() + 1)
+    const next = addYears(start, 1)
     if (next > refDate) break
     start = next
     index++
   }
-  const end = new Date(start)
-  end.setFullYear(end.getFullYear() + 1)
+  const end = addYears(start, 1)
   end.setDate(end.getDate() - 1)
 
   return {
@@ -44,10 +54,8 @@ function getPeriodByIndex(hireDate: string, index: number): Period | null {
   if (!hireDate || index < 1) return null
   const hire = new Date(hireDate + 'T00:00:00')
   if (isNaN(hire.getTime())) return null
-  const start = new Date(hire)
-  start.setFullYear(start.getFullYear() + (index - 1))
-  const end = new Date(start)
-  end.setFullYear(end.getFullYear() + 1)
+  const start = addYears(hire, index - 1)
+  const end = addYears(start, 1)
   end.setDate(end.getDate() - 1)
   return {
     start: start.toISOString().slice(0, 10),
@@ -293,10 +301,25 @@ export async function POST(request: NextRequest) {
 
       const tbData = await getToolBudgetData()
       const key = `${workerId}_${periodStart}`
-      if (tbData.records[key]) {
+
+      // レコード未作成の場合は初期化してから予算を設定
+      if (!tbData.records[key]) {
+        const start = new Date(periodStart + 'T00:00:00')
+        const end = new Date(start)
+        end.setFullYear(end.getFullYear() + 1)
+        end.setDate(end.getDate() - 1)
+        tbData.records[key] = {
+          workerId: Number(workerId),
+          periodStart,
+          periodEnd: end.toISOString().slice(0, 10),
+          periodIndex: 1,
+          budget: Number(budget),
+          purchases: [],
+        }
+      } else {
         tbData.records[key].budget = Number(budget)
-        await saveToolBudgetData(tbData)
       }
+      await saveToolBudgetData(tbData)
       return NextResponse.json({ success: true })
     }
 

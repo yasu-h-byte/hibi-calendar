@@ -3,6 +3,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { getWorkersForSite } from '@/lib/sites'
 import { getMainData } from '@/lib/compute'
+import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
 
 function hashIP(ip: string): string {
   let hash = 0
@@ -26,11 +27,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'workerId, ym, siteId(s) required' }, { status: 400 })
     }
 
-    // workerIdの存在確認（なりすまし防止）
+    // workerIdの存在確認（なりすまし防止）+ 退職者チェック
     const main = await getMainData()
     const worker = main.workers.find(w => w.id === Number(workerId))
-    if (!worker) {
+    if (!worker || worker.retired) {
       return NextResponse.json({ error: 'Invalid worker' }, { status: 401 })
+    }
+
+    // 当該月の全期間が帰国中のスタッフは署名不要
+    const homeLeaves = await getAllActiveHomeLeaves()
+    if (isFullMonthHomeLeave(Number(workerId), normalizeYm(ym), homeLeaves)) {
+      return NextResponse.json({ error: 'Sign not required for full-month home leave' }, { status: 400 })
     }
 
     const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'

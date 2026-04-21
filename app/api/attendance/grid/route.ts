@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       : workerIds
 
     const workers = main.workers
-      .filter(w => filteredWorkerIds.includes(w.id))
+      .filter(w => filteredWorkerIds.includes(w.id) && !w.retired)
       .map(w => ({
         id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
       }))

@@ -146,15 +146,21 @@ export async function GET(request: NextRequest) {
           if (anchor) {
             const anchorDate = new Date(anchor + 'T00:00:00')
             if (!isNaN(anchorDate.getTime())) {
+              // 年加算のヘルパー（うるう年 2/29 → 2/28 に正規化）
+              const addYears = (d: Date, y: number): Date => {
+                const r = new Date(d)
+                const m = r.getMonth()
+                r.setFullYear(r.getFullYear() + y)
+                if (r.getMonth() !== m) r.setDate(0)
+                return r
+              }
               let periodStart = new Date(anchorDate)
               while (true) {
-                const next = new Date(periodStart)
-                next.setFullYear(next.getFullYear() + 1)
+                const next = addYears(periodStart, 1)
                 if (next > now) break
                 periodStart = next
               }
-              const periodEnd = new Date(periodStart)
-              periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+              const periodEnd = addYears(periodStart, 1)
               periodEnd.setDate(periodEnd.getDate() - 1)
               const periodStartStr = periodStart.toISOString().slice(0, 10)
               toolBudgetPeriodEnd = periodEnd.toISOString().slice(0, 10)
