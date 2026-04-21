@@ -364,6 +364,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (error) {
     console.error('Tool budget POST error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    return NextResponse.json({ error: 'Server error', detail: msg }, { status: 500 })
   }
 }
