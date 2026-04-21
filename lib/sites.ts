@@ -62,14 +62,16 @@ export async function getAllSitesWithWorkers(): Promise<
   const data = await getMainDoc()
   if (!data.sites || !data.assign || !data.workers) return []
 
-  const allWorkers = (data.workers as Record<string, unknown>[]).map(w => ({
-    id: w.id as number,
-    name: w.name as string,
-    nameVi: (w.nameVi as string) || '',
-    company: (w.org as string) === 'hfu' ? 'HFU' : '日比',
-    visaType: (w.visa as string) || '',
-    token: (w.token as string) || '',
-  }))
+  const allWorkers = (data.workers as Record<string, unknown>[])
+    .filter(w => !w.retired) // 退職者を除外
+    .map(w => ({
+      id: w.id as number,
+      name: w.name as string,
+      nameVi: (w.nameVi as string) || '',
+      company: (w.org as string) === 'hfu' ? 'HFU' : '日比',
+      visaType: (w.visa as string) || '',
+      token: (w.token as string) || '',
+    }))
 
   const workerMap = new Map(allWorkers.map(w => [w.id, w]))
 

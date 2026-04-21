@@ -46,8 +46,13 @@ export async function GET(request: NextRequest) {
       // 帰国情報（当該月の全期間帰国中は署名対象から除外）
       const homeLeaves = await getAllActiveHomeLeaves()
 
+      // 署名対象のスタッフ = 退職していない + トークン所持（実習生・特定技能）
+      const signEligibleWorkers = activeWorkers.filter(w => !!w.token)
+      const eligibleWorkerIdSet = new Set(signEligibleWorkers.map(w => w.id))
+
       // Collect all expected worker×site combinations
       const expectedSignIds = new Set<string>()
+      const expectedUnsignedWorkerIds = new Set<number>()
       for (const site of activeSites) {
         const monthKey = `${site.id}_${currentYm}`
         const mAssign = main.massign[monthKey]
@@ -55,6 +60,8 @@ export async function GET(request: NextRequest) {
         const workerIds = mAssign?.workers || dAssign?.workers || []
 
         for (const wid of workerIds) {
+          // 退職者・日本人（トークンなし）を除外
+          if (!eligibleWorkerIdSet.has(wid)) continue
           // 当該月の全期間帰国中のスタッフは除外
           if (isFullMonthHomeLeave(wid, currentYm, homeLeaves)) continue
           expectedSignIds.add(`${wid}_${currentYm}_${site.id}`)
@@ -67,31 +74,28 @@ export async function GET(request: NextRequest) {
       const existingSignIds = new Set<string>()
       signSnaps.forEach(snap => existingSignIds.add(snap.id))
 
-      // Count unsigned by checking in memory
-      let unsignedCount = 0
+      // 未署名のユニークなワーカーIDを集計（件数ではなく人数）
       for (const id of expectedSignIds) {
         if (!existingSignIds.has(id)) {
-          unsignedCount++
+          const wid = parseInt(id.split('_')[0])
+          expectedUnsignedWorkerIds.add(wid)
         }
       }
 
-      if (unsignedCount > 0) {
-        // 未署名のスタッフ名を取得
+      if (expectedUnsignedWorkerIds.size > 0) {
         const unsignedNames: string[] = []
-        for (const id of expectedSignIds) {
-          if (!existingSignIds.has(id)) {
-            const wid = parseInt(id.split('_')[0])
-            const w = activeWorkers.find(x => x.id === wid)
-            if (w && !unsignedNames.includes(w.name)) unsignedNames.push(w.name)
-          }
+        for (const wid of expectedUnsignedWorkerIds) {
+          const w = activeWorkers.find(x => x.id === wid)
+          if (w) unsignedNames.push(w.name)
         }
         const ymLabel = `${currentYm.slice(0, 4)}年${parseInt(currentYm.slice(4, 6))}月`
         const calYm = `${currentYm.slice(0, 4)}-${currentYm.slice(4, 6)}`
         const calUrl = `https://hibi-calendar.vercel.app/calendar/public?ym=${calYm}`
+        const unsignedCount = expectedUnsignedWorkerIds.size
         notifications.push({
           id: 'unsigned-calendar',
           icon: '\uD83D\uDCC5',
-          message: `就業カレンダー未署名: ${unsignedCount}件の署名が未完了です`,
+          message: `就業カレンダー未署名: ${unsignedCount}名が未完了です`,
           type: 'warning',
           count: unsignedCount,
           messengerText: `HIBI CONSTRUCTION\n就業カレンダー ${ymLabel}\nLịch làm việc tháng ${parseInt(currentYm.slice(4, 6))}\n\n${calUrl}\n\n名前を選んで → カレンダー確認 → 署名\nChọn tên → Xem lịch → Ký\n\n未署名 / Chưa ký:\n${unsignedNames.join(', ')}`,
