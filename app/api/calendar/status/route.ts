@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs } from 'firebase/firestore'
 import { getAllSitesWithWorkers } from '@/lib/sites'
+import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
 
 export async function GET(request: NextRequest) {
 
@@ -49,6 +50,10 @@ export async function GET(request: NextRequest) {
     // Get all sites with workers
     const sitesWithWorkers = await getAllSitesWithWorkers()
 
+    // 帰国情報を取得（当該月の全期間が帰国中のスタッフは署名対象から除外）
+    const homeLeaves = await getAllActiveHomeLeaves()
+    const ymKey = normalizeYm(ym)
+
     const sites = sitesWithWorkers.map(sw => {
       const cal = siteCalendars[sw.site.id]
       return {
@@ -61,6 +66,7 @@ export async function GET(request: NextRequest) {
         rejectedReason: cal?.rejectedReason || null,
         workers: sw.workers
           .filter(w => !!w.token) // 署名対象は実習生・特定技能生（トークン持ち）のみ
+          .filter(w => !isFullMonthHomeLeave(w.id, ymKey, homeLeaves)) // 月全期間帰国中は除外
           .map(w => ({
             id: w.id,
             name: w.name,

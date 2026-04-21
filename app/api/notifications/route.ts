@@ -5,6 +5,7 @@ import { collection, query, where, getDocs } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
+import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
 
 interface Notification {
   id: string
@@ -42,6 +43,9 @@ export async function GET(request: NextRequest) {
     try {
       const activeSites = main.sites.filter(s => !s.archived)
 
+      // 帰国情報（当該月の全期間帰国中は署名対象から除外）
+      const homeLeaves = await getAllActiveHomeLeaves()
+
       // Collect all expected worker×site combinations
       const expectedSignIds = new Set<string>()
       for (const site of activeSites) {
@@ -51,6 +55,8 @@ export async function GET(request: NextRequest) {
         const workerIds = mAssign?.workers || dAssign?.workers || []
 
         for (const wid of workerIds) {
+          // 当該月の全期間帰国中のスタッフは除外
+          if (isFullMonthHomeLeave(wid, currentYm, homeLeaves)) continue
           expectedSignIds.add(`${wid}_${currentYm}_${site.id}`)
         }
       }

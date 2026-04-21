@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { getAllSitesWithWorkers } from '@/lib/sites'
+import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -38,16 +39,23 @@ export async function GET(request: Request) {
       sigs[`${data.workerId}_${data.siteId}`] = data.signedAt || 'true'
     })
 
+    // 帰国情報（当該月の全期間帰国中のスタッフは署名対象から除外）
+    const homeLeaves = await getAllActiveHomeLeaves()
+    const ymKey = normalizeYm(ym)
+
     // Build site list (backwards compatible)
     const sites = sitesWithWorkers
       .filter(sw => approvedSites.has(sw.site.id))
-      .map(sw => ({
-        id: sw.site.id,
-        name: sw.site.name,
-        workerCount: sw.workers.filter(w => !!w.token).length,
-        signedCount: sw.workers.filter(w => !!w.token && sigs[`${w.id}_${sw.site.id}`]).length,
-        days: approvedCalendars[sw.site.id] || {},
-      }))
+      .map(sw => {
+        const eligibleWorkers = sw.workers.filter(w => !!w.token && !isFullMonthHomeLeave(w.id, ymKey, homeLeaves))
+        return {
+          id: sw.site.id,
+          name: sw.site.name,
+          workerCount: eligibleWorkers.length,
+          signedCount: eligibleWorkers.filter(w => sigs[`${w.id}_${sw.site.id}`]).length,
+          days: approvedCalendars[sw.site.id] || {},
+        }
+      })
 
     // Build foreign workers list: ALL foreign workers × ALL approved sites
     // (全員が全現場のカレンダーに署名する方式)
@@ -55,6 +63,9 @@ export async function GET(request: Request) {
     const allWorkers = mainDoc.exists() ? (mainDoc.data().workers || []) : []
     const foreignWorkers = allWorkers.filter((w: Record<string, unknown>) =>
       w.token && w.visa && w.visa !== 'none' && !w.retired
+    ).filter((w: Record<string, unknown>) =>
+      // 当該月の全期間帰国中のスタッフは一覧からも除外
+      !isFullMonthHomeLeave(w.id as number, ymKey, homeLeaves)
     )
 
     const approvedSiteList = sitesWithWorkers.filter(sw => approvedSites.has(sw.site.id))
