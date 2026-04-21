@@ -4,18 +4,61 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { getWorkerByToken } from '@/lib/workers'
 
-// 年度ヘルパー: 10月〜翌9月
-function getCurrentFy(): string {
-  const now = new Date()
-  const m = now.getMonth() + 1 // 1-12
-  const y = now.getFullYear()
-  // 10月〜12月 → 当年度、1月〜9月 → 前年度
-  return String(m >= 10 ? y : y - 1)
+// ────────────────────────────────────────
+// 各スタッフ個別の期間計算（入社日ベース、1年サイクル）
+// ────────────────────────────────────────
+
+interface Period {
+  start: string  // YYYY-MM-DD
+  end: string    // YYYY-MM-DD
+  index: number  // 1 = 1年目, 2 = 2年目, ...
+}
+
+function getCurrentPeriod(hireDate: string, refDate: Date = new Date()): Period | null {
+  if (!hireDate) return null
+  const hire = new Date(hireDate + 'T00:00:00')
+  if (isNaN(hire.getTime())) return null
+
+  // 入社日から1年ごとの期間を計算し、refDateが含まれる期間を返す
+  let start = new Date(hire)
+  let index = 1
+  while (true) {
+    const next = new Date(start)
+    next.setFullYear(next.getFullYear() + 1)
+    if (next > refDate) break
+    start = next
+    index++
+  }
+  const end = new Date(start)
+  end.setFullYear(end.getFullYear() + 1)
+  end.setDate(end.getDate() - 1)
+
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+    index,
+  }
+}
+
+function getPeriodByIndex(hireDate: string, index: number): Period | null {
+  if (!hireDate || index < 1) return null
+  const hire = new Date(hireDate + 'T00:00:00')
+  if (isNaN(hire.getTime())) return null
+  const start = new Date(hire)
+  start.setFullYear(start.getFullYear() + (index - 1))
+  const end = new Date(start)
+  end.setFullYear(end.getFullYear() + 1)
+  end.setDate(end.getDate() - 1)
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
+    index,
+  }
 }
 
 interface Purchase {
   id: string
-  date: string      // YYYY-MM-DD
+  date: string
   amount: number
   item: string
   registeredAt: string
@@ -23,15 +66,16 @@ interface Purchase {
 
 interface ToolBudgetRecord {
   workerId: number
-  fy: string
+  periodStart: string  // 期間開始日（入社日基準）
+  periodEnd: string
+  periodIndex: number
   budget: number
   purchases: Purchase[]
 }
 
 interface ToolBudgetData {
   defaultBudget: number
-  budgetByVisa?: Record<string, number>   // 在留資格別予算（外国人）
-  budgetByRole?: Record<string, number>   // ロール別予算（日本人: 役員/職長/とび/土工）
+  budgetByVisa?: Record<string, number>
   records: Record<string, ToolBudgetRecord>
 }
 
@@ -44,20 +88,21 @@ async function getToolBudgetData(): Promise<ToolBudgetData> {
   return {
     defaultBudget: data.defaultBudget ?? 30000,
     budgetByVisa: data.budgetByVisa || {},
-    budgetByRole: data.budgetByRole || {},
     records: data.records || {},
   }
 }
 
-// 予算額を解決: 個別設定 > 在留資格別 > ロール別 > デフォルト
-function resolveBudget(tbData: ToolBudgetData, visa?: string, jobType?: string): number {
-  if (visa && visa !== 'none' && tbData.budgetByVisa?.[visa]) return tbData.budgetByVisa[visa]
-  if (jobType && tbData.budgetByRole?.[jobType]) return tbData.budgetByRole[jobType]
-  return tbData.defaultBudget || 30000
-}
-
 async function saveToolBudgetData(data: ToolBudgetData): Promise<void> {
   await setDoc(doc(db, 'demmen', 'toolBudget'), data)
+}
+
+// 対象: 技能実習生・特定技能のみ（日本人・事務・役員・退職は除外）
+function isForeignActiveWorker(w: { visa?: string; retired?: string; job?: string }): boolean {
+  if (w.retired) return false
+  if (!w.visa) return false
+  if (w.visa === 'none') return false
+  // visaが jisshu* or tokutei* のみ対象
+  return w.visa.startsWith('jisshu') || w.visa.startsWith('tokutei')
 }
 
 export async function GET(request: NextRequest) {
@@ -68,52 +113,71 @@ export async function GET(request: NextRequest) {
     if (token) {
       const worker = await getWorkerByToken(token)
       if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-
-      const tbData = await getToolBudgetData()
-      const fy = request.nextUrl.searchParams.get('fy') || getCurrentFy()
-      const key = `${worker.id}_${fy}`
-      const record = tbData.records[key]
-
-      if (!record) {
-        const budget = resolveBudget(tbData, worker.visaType, worker.jobType)
-        return NextResponse.json({ budget, used: 0, remaining: budget, purchases: [] })
+      if (!isForeignActiveWorker({ visa: worker.visaType, retired: worker.retired })) {
+        return NextResponse.json({ error: 'Not eligible' }, { status: 403 })
       }
 
-      const used = record.purchases.reduce((sum, p) => sum + p.amount, 0)
+      const period = getCurrentPeriod(worker.hireDate || '')
+      if (!period) return NextResponse.json({ error: 'Invalid hireDate' }, { status: 400 })
+
+      const tbData = await getToolBudgetData()
+      const key = `${worker.id}_${period.start}`
+      const record = tbData.records[key]
+
+      const budget = record?.budget ?? ((tbData.budgetByVisa?.[worker.visaType] ?? tbData.defaultBudget) || 30000)
+      const purchases = record?.purchases || []
+      const used = purchases.reduce((sum, p) => sum + p.amount, 0)
+
       return NextResponse.json({
-        budget: record.budget,
+        budget,
         used,
-        remaining: record.budget - used,
-        purchases: record.purchases,
+        remaining: budget - used,
+        purchases,
+        period,
       })
     }
 
-    // 管理者/事務: 全スタッフ一覧
+    // 管理者/事務: 全外国人スタッフ一覧
     if (!await checkApiAuth(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const fy = request.nextUrl.searchParams.get('fy') || getCurrentFy()
     const tbData = await getToolBudgetData()
 
-    // 対象スタッフ一覧（退職者・事務を除く）
+    // 対象スタッフ取得
     const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-    const workers: { id: number; name: string; visa: string; job?: string; org?: string; retired?: string }[] =
+    const workers: { id: number; name: string; visa: string; job?: string; org?: string; retired?: string; hireDate?: string }[] =
       mainSnap.exists() ? (mainSnap.data().workers || []) : []
-    const activeWorkers = workers.filter(w => !w.retired && w.job !== 'jimu' && w.job !== '役員')
+    const targetWorkers = workers.filter(isForeignActiveWorker)
 
-    const result = activeWorkers.map(w => {
-      const key = `${w.id}_${fy}`
+    const result = targetWorkers.map(w => {
+      const period = getCurrentPeriod(w.hireDate || '')
+      if (!period) {
+        return {
+          workerId: w.id,
+          workerName: w.name,
+          visa: w.visa,
+          org: w.org || 'hibi',
+          hireDate: w.hireDate,
+          period: null,
+          budget: 0,
+          used: 0,
+          remaining: 0,
+          purchases: [],
+        }
+      }
+      const key = `${w.id}_${period.start}`
       const record = tbData.records[key]
-      const budget = record?.budget ?? resolveBudget(tbData, w.visa, w.job)
+      const budget = record?.budget ?? ((tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000)
       const purchases = record?.purchases || []
       const used = purchases.reduce((sum: number, p: Purchase) => sum + p.amount, 0)
       return {
         workerId: w.id,
         workerName: w.name,
-        visa: w.visa || '',
-        job: w.job || '',
-        org: w.org || '',
+        visa: w.visa,
+        org: w.org || 'hibi',
+        hireDate: w.hireDate,
+        period,
         budget,
         used,
         remaining: budget - used,
@@ -122,11 +186,8 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.json({
-      fy,
-      currentFy: getCurrentFy(),
       defaultBudget: tbData.defaultBudget,
       budgetByVisa: tbData.budgetByVisa || {},
-      budgetByRole: tbData.budgetByRole || {},
       workers: result,
     })
   } catch (error) {
@@ -146,19 +207,35 @@ export async function POST(request: NextRequest) {
 
     // 購入登録
     if (action === 'addPurchase') {
-      const { workerId, fy, date, amount, item, budget } = body
-      if (!workerId || !fy || !date || !amount) {
+      const { workerId, periodStart, date, amount, item } = body
+      if (!workerId || !periodStart || !date || !amount) {
         return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       }
 
+      // worker情報から期間を検証
+      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+      const workers = mainSnap.exists() ? (mainSnap.data().workers || []) : []
+      const w = workers.find((wk: { id: number }) => wk.id === workerId)
+      if (!w) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
+
       const tbData = await getToolBudgetData()
-      const key = `${workerId}_${fy}`
+      const key = `${workerId}_${periodStart}`
 
       if (!tbData.records[key]) {
+        // 新規作成: periodStartから1年後を計算
+        const start = new Date(periodStart + 'T00:00:00')
+        const end = new Date(start)
+        end.setFullYear(end.getFullYear() + 1)
+        end.setDate(end.getDate() - 1)
+        const hireDate = w.hireDate || periodStart
+        const period = getCurrentPeriod(hireDate, start)
+        const budget = (tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000
         tbData.records[key] = {
           workerId,
-          fy,
-          budget: budget || tbData.defaultBudget,
+          periodStart,
+          periodEnd: end.toISOString().slice(0, 10),
+          periodIndex: period?.index || 1,
+          budget,
           purchases: [],
         }
       }
@@ -177,13 +254,13 @@ export async function POST(request: NextRequest) {
 
     // 購入削除
     if (action === 'deletePurchase') {
-      const { workerId, fy, purchaseId } = body
-      if (!workerId || !fy || !purchaseId) {
+      const { workerId, periodStart, purchaseId } = body
+      if (!workerId || !periodStart || !purchaseId) {
         return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       }
 
       const tbData = await getToolBudgetData()
-      const key = `${workerId}_${fy}`
+      const key = `${workerId}_${periodStart}`
       if (tbData.records[key]) {
         tbData.records[key].purchases = tbData.records[key].purchases.filter(p => p.id !== purchaseId)
         await saveToolBudgetData(tbData)
@@ -191,58 +268,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
-    // 予算額変更（個別）
+    // 個別予算変更
     if (action === 'setBudget') {
-      const { workerId, fy, budget } = body
-      if (!workerId || !fy || budget === undefined) {
+      const { workerId, periodStart, budget } = body
+      if (!workerId || !periodStart || budget === undefined) {
         return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       }
 
       const tbData = await getToolBudgetData()
-      const key = `${workerId}_${fy}`
-      if (!tbData.records[key]) {
-        tbData.records[key] = { workerId, fy, budget: Number(budget), purchases: [] }
-      } else {
+      const key = `${workerId}_${periodStart}`
+      if (tbData.records[key]) {
         tbData.records[key].budget = Number(budget)
+        await saveToolBudgetData(tbData)
       }
-      await saveToolBudgetData(tbData)
       return NextResponse.json({ success: true })
     }
 
-    // デフォルト予算 / 在留資格別・ロール別予算の設定
+    // デフォルト予算設定
     if (action === 'setDefaultBudget') {
-      const { defaultBudget, budgetByVisa, budgetByRole } = body
+      const { defaultBudget, budgetByVisa } = body
       const tbData = await getToolBudgetData()
       if (defaultBudget !== undefined) tbData.defaultBudget = Number(defaultBudget)
       if (budgetByVisa) tbData.budgetByVisa = budgetByVisa
-      if (budgetByRole) tbData.budgetByRole = budgetByRole
       await saveToolBudgetData(tbData)
       return NextResponse.json({ success: true })
     }
 
-    // 年度リセット（新年度作成）
-    if (action === 'resetFy') {
-      const { fy } = body
-      if (!fy) return NextResponse.json({ error: 'Missing fy' }, { status: 400 })
-
-      const tbData = await getToolBudgetData()
-
-      // 対象スタッフ取得（退職者・事務を除く）
-      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-      const workers: { id: number; visa: string; job?: string; retired?: string }[] =
-        mainSnap.exists() ? (mainSnap.data().workers || []) : []
-      const activeWorkers = workers.filter(w => !w.retired && w.job !== 'jimu' && w.job !== '役員')
-
-      for (const w of activeWorkers) {
-        const key = `${w.id}_${fy}`
-        if (!tbData.records[key]) {
-          const budget = resolveBudget(tbData, w.visa, w.job)
-          tbData.records[key] = { workerId: w.id, fy, budget, purchases: [] }
-        }
+    // 特定期間の取得（履歴閲覧）
+    if (action === 'getPeriod') {
+      const { workerId, periodIndex } = body
+      if (!workerId || !periodIndex) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       }
 
-      await saveToolBudgetData(tbData)
-      return NextResponse.json({ success: true, count: activeWorkers.length })
+      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+      const workers = mainSnap.exists() ? (mainSnap.data().workers || []) : []
+      const w = workers.find((wk: { id: number }) => wk.id === workerId)
+      if (!w || !w.hireDate) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
+
+      const period = getPeriodByIndex(w.hireDate, Number(periodIndex))
+      if (!period) return NextResponse.json({ error: 'Invalid period' }, { status: 400 })
+
+      const tbData = await getToolBudgetData()
+      const key = `${workerId}_${period.start}`
+      const record = tbData.records[key]
+      const budget = record?.budget ?? ((tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000)
+      const purchases = record?.purchases || []
+      const used = purchases.reduce((sum: number, p: Purchase) => sum + p.amount, 0)
+
+      return NextResponse.json({
+        period,
+        budget,
+        used,
+        remaining: budget - used,
+        purchases,
+      })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })

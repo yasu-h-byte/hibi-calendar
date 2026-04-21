@@ -10,61 +10,49 @@ interface Purchase {
   registeredAt: string
 }
 
+interface Period {
+  start: string
+  end: string
+  index: number
+}
+
 interface WorkerBudget {
   workerId: number
   workerName: string
   visa: string
-  job: string
   org: string
+  hireDate?: string
+  period: Period | null
   budget: number
   used: number
   remaining: number
   purchases: Purchase[]
 }
 
-function workerBadge(w: WorkerBudget): { label: string; cls: string } {
-  if (w.visa && w.visa !== 'none') {
-    if (w.visa.startsWith('jisshu')) {
-      const n = w.visa.replace('jisshu', '')
-      return { label: n ? `実習${n}号` : '実習', cls: 'bg-orange-100 text-orange-700' }
-    }
-    if (w.visa.startsWith('tokutei')) {
-      const n = w.visa.replace('tokutei', '')
-      return { label: n ? `特定${n}号` : '特定', cls: 'bg-pink-100 text-pink-700' }
-    }
-    return { label: w.visa, cls: 'bg-gray-100 text-gray-600' }
+function visaLabel(visa: string): string {
+  if (visa.startsWith('jisshu')) {
+    const n = visa.replace('jisshu', '')
+    return n ? `実習${n}号` : '実習'
   }
-  // 日本人: ロール表示
-  const jobLabels: Record<string, string> = { '役員': '役員', '職長': '職長', 'とび': 'とび', '土工': '土工' }
-  const label = jobLabels[w.job] || w.job || (w.org === 'hfu' ? 'HFU' : '日比')
-  const cls = w.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-  return { label, cls }
-}
-
-function isJapanese(w: WorkerBudget): boolean {
-  return !w.visa || w.visa === 'none' || w.visa === ''
-}
-
-function fyLabel(fy: string): string {
-  return `${fy}年度（${fy}年10月〜${Number(fy) + 1}年9月）`
-}
-
-function getFyOptions(): { fy: string; label: string }[] {
-  const now = new Date()
-  const m = now.getMonth() + 1
-  const y = now.getFullYear()
-  const currentFy = m >= 10 ? y : y - 1
-  const options = []
-  for (let i = -2; i <= 1; i++) {
-    const fy = String(currentFy + i)
-    options.push({ fy, label: fyLabel(fy) })
+  if (visa.startsWith('tokutei')) {
+    const n = visa.replace('tokutei', '')
+    return n ? `特定${n}号` : '特定'
   }
-  return options
+  return visa
+}
+
+function formatPeriod(p: Period | null): string {
+  if (!p) return '期間未設定'
+  return `${p.start.slice(5).replace('-', '/')} 〜 ${p.end.slice(5).replace('-', '/')}`
+}
+
+function formatPeriodFull(p: Period | null): string {
+  if (!p) return ''
+  return `${p.start} 〜 ${p.end}`
 }
 
 export default function ToolBudgetPage() {
   const [password, setPassword] = useState('')
-  const [fy, setFy] = useState('')
   const [workers, setWorkers] = useState<WorkerBudget[]>([])
   const [loading, setLoading] = useState(false)
   const [expandedWorker, setExpandedWorker] = useState<number | null>(null)
@@ -90,22 +78,20 @@ export default function ToolBudgetPage() {
     if (!password) return
     setLoading(true)
     try {
-      const params = fy ? `?fy=${fy}` : ''
-      const res = await fetch(`/api/tool-budget${params}`, {
+      const res = await fetch('/api/tool-budget', {
         headers: { 'x-admin-password': password },
       })
       if (res.ok) {
         const data = await res.json()
         setWorkers(data.workers || [])
-        if (!fy) setFy(data.currentFy || '')
       }
     } catch { /* ignore */ }
     setLoading(false)
-  }, [password, fy])
+  }, [password])
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const handleAddPurchase = async (workerId: number) => {
+  const handleAddPurchase = async (workerId: number, periodStart: string) => {
     if (!newDate || !newAmount || saving) return
     setSaving(true)
     try {
@@ -115,7 +101,7 @@ export default function ToolBudgetPage() {
         body: JSON.stringify({
           action: 'addPurchase',
           workerId,
-          fy,
+          periodStart,
           date: newDate,
           amount: Number(newAmount),
           item: newItem,
@@ -132,33 +118,26 @@ export default function ToolBudgetPage() {
     setSaving(false)
   }
 
-  const handleDeletePurchase = async (workerId: number, purchaseId: string) => {
+  const handleDeletePurchase = async (workerId: number, periodStart: string, purchaseId: string) => {
     if (!confirm('この購入記録を削除しますか？')) return
     try {
       await fetch('/api/tool-budget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'deletePurchase', workerId, fy, purchaseId }),
+        body: JSON.stringify({ action: 'deletePurchase', workerId, periodStart, purchaseId }),
       })
       fetchData()
     } catch { /* ignore */ }
   }
 
-  const handleResetFy = async () => {
-    if (!confirm(`${fyLabel(fy)} の予算を全スタッフ分作成します。よろしいですか？`)) return
-    try {
-      await fetch('/api/tool-budget', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'resetFy', fy }),
-      })
-      fetchData()
-    } catch { /* ignore */ }
-  }
-
-  const fyOptions = getFyOptions()
   const totalBudget = workers.reduce((s, w) => s + w.budget, 0)
   const totalUsed = workers.reduce((s, w) => s + w.used, 0)
+
+  // 会社ごとにグループ化
+  const companyGroups = [
+    { key: 'hibi', label: '日比建設', bg: 'bg-blue-50', text: 'text-blue-800' },
+    { key: 'hfu', label: 'HFU', bg: 'bg-purple-50', text: 'text-purple-800' },
+  ]
 
   return (
     <div className="space-y-4">
@@ -166,21 +145,9 @@ export default function ToolBudgetPage() {
         <h1 className="text-lg font-bold text-hibi-navy flex items-center gap-2">
           🔧 道具代管理
         </h1>
-        <select
-          value={fy}
-          onChange={e => setFy(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-        >
-          {fyOptions.map(o => (
-            <option key={o.fy} value={o.fy}>{o.label}</option>
-          ))}
-        </select>
-        <button
-          onClick={handleResetFy}
-          className="text-xs bg-hibi-navy text-white px-3 py-1.5 rounded-lg hover:bg-hibi-light transition"
-        >
-          年度初期化
-        </button>
+        <span className="text-xs text-gray-500">
+          技能実習生・特定技能が対象（入社日から1年サイクル）
+        </span>
       </div>
 
       {/* サマリー */}
@@ -203,8 +170,8 @@ export default function ToolBudgetPage() {
         <div className="text-center py-8 text-gray-400">読み込み中...</div>
       ) : workers.length === 0 ? (
         <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">
-          <p>この年度のデータがありません。</p>
-          <p className="text-sm mt-2">「年度初期化」ボタンで全スタッフの予算を作成してください。</p>
+          <p>対象スタッフがいません。</p>
+          <p className="text-sm mt-2">技能実習生・特定技能のスタッフが登録されているか、人員マスタをご確認ください。</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow overflow-hidden">
@@ -212,7 +179,8 @@ export default function ToolBudgetPage() {
             <thead>
               <tr className="bg-hibi-navy text-white">
                 <th className="text-left px-4 py-2">スタッフ</th>
-                <th className="text-center px-2 py-2 w-20">区分</th>
+                <th className="text-center px-2 py-2 w-20">在留資格</th>
+                <th className="text-center px-2 py-2 w-44">現在の期間</th>
                 <th className="text-right px-3 py-2 w-24">予算</th>
                 <th className="text-right px-3 py-2 w-24">使用済</th>
                 <th className="text-right px-3 py-2 w-24">残額</th>
@@ -220,34 +188,42 @@ export default function ToolBudgetPage() {
               </tr>
             </thead>
             <tbody>
-              {/* 会社ごとにセクション分け */}
-              {[
-                { key: 'hibi', label: '日比建設', bg: 'bg-blue-50', text: 'text-blue-800' },
-                { key: 'hfu', label: 'HFU', bg: 'bg-purple-50', text: 'text-purple-800' },
-              ].map(company => {
-                const companyWorkers = workers.filter(w => (w.org === company.key) || (company.key === 'hibi' && w.org !== 'hfu'))
+              {companyGroups.map(company => {
+                const companyWorkers = workers.filter(w => w.org === company.key)
                 if (companyWorkers.length === 0) return null
                 return [
-                  <tr key={`sec-${company.key}`}><td colSpan={6} className={`${company.bg} px-4 py-1.5 text-xs font-bold ${company.text} border-b`}>{company.label}（{companyWorkers.length}名）</td></tr>,
+                  <tr key={`sec-${company.key}`}>
+                    <td colSpan={7} className={`${company.bg} px-4 py-1.5 text-xs font-bold ${company.text} border-b`}>
+                      {company.label}（{companyWorkers.length}名）
+                    </td>
+                  </tr>,
                   ...companyWorkers.map(w => (
-                    <tr key={w.workerId} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedWorker(expandedWorker === w.workerId ? null : w.workerId)}>
-                    <td className="px-4 py-3 font-medium">{w.workerName}</td>
-                    <td className="text-center px-2">
-                      {(() => { const b = workerBadge(w); return <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${b.cls}`}>{b.label}</span> })()}
-                    </td>
-                    <td className="text-right px-3 tabular-nums">¥{w.budget.toLocaleString()}</td>
-                    <td className="text-right px-3 tabular-nums text-orange-600">¥{w.used.toLocaleString()}</td>
-                    <td className="text-right px-3 tabular-nums font-bold text-green-600">¥{w.remaining.toLocaleString()}</td>
-                    <td className="text-center px-2">
-                      <button
-                        onClick={e => { e.stopPropagation(); setAddingFor(addingFor === w.workerId ? null : w.workerId); setExpandedWorker(w.workerId) }}
-                        className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 transition"
-                      >
-                        登録
-                      </button>
-                    </td>
-                  </tr>
-                  ))
+                    <tr key={w.workerId} className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                      onClick={() => setExpandedWorker(expandedWorker === w.workerId ? null : w.workerId)}>
+                      <td className="px-4 py-3 font-medium">{w.workerName}</td>
+                      <td className="text-center px-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">
+                          {visaLabel(w.visa)}
+                        </span>
+                      </td>
+                      <td className="text-center px-2 tabular-nums">
+                        <div className="text-xs">{formatPeriod(w.period)}</div>
+                        {w.period && <div className="text-[10px] text-gray-400">{w.period.index}年目</div>}
+                      </td>
+                      <td className="text-right px-3 tabular-nums">¥{w.budget.toLocaleString()}</td>
+                      <td className="text-right px-3 tabular-nums text-orange-600">¥{w.used.toLocaleString()}</td>
+                      <td className="text-right px-3 tabular-nums font-bold text-green-600">¥{w.remaining.toLocaleString()}</td>
+                      <td className="text-center px-2">
+                        <button
+                          onClick={e => { e.stopPropagation(); setAddingFor(addingFor === w.workerId ? null : w.workerId); setExpandedWorker(w.workerId) }}
+                          className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 transition"
+                          disabled={!w.period}
+                        >
+                          登録
+                        </button>
+                      </td>
+                    </tr>
+                  )),
                 ]
               })}
             </tbody>
@@ -259,7 +235,15 @@ export default function ToolBudgetPage() {
             if (!w) return null
             return (
               <div className="border-t-2 border-hibi-navy bg-gray-50 p-4">
-                <h3 className="font-bold text-sm text-hibi-navy mb-3">{w.workerName} の購入履歴</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-sm text-hibi-navy">{w.workerName} の購入履歴</h3>
+                  {w.period && (
+                    <span className="text-xs text-gray-500">
+                      期間: {formatPeriodFull(w.period)}（{w.period.index}年目）
+                      {w.hireDate && <span className="ml-2 text-gray-400">入社: {w.hireDate}</span>}
+                    </span>
+                  )}
+                </div>
 
                 {w.purchases.length === 0 ? (
                   <p className="text-sm text-gray-400 mb-3">購入記録なし</p>
@@ -281,7 +265,7 @@ export default function ToolBudgetPage() {
                           <td className="py-1.5 px-2 text-right tabular-nums">¥{p.amount.toLocaleString()}</td>
                           <td className="py-1.5 px-2 text-center">
                             <button
-                              onClick={() => handleDeletePurchase(w.workerId, p.id)}
+                              onClick={() => w.period && handleDeletePurchase(w.workerId, w.period.start, p.id)}
                               className="text-[10px] text-red-500 hover:text-red-700"
                             >
                               削除
@@ -294,13 +278,14 @@ export default function ToolBudgetPage() {
                 )}
 
                 {/* 登録フォーム */}
-                {addingFor === w.workerId && (
+                {addingFor === w.workerId && w.period && (
                   <div className="bg-white rounded-lg p-3 border border-gray-200">
                     <div className="text-xs font-bold text-gray-600 mb-2">新しい購入を登録</div>
                     <div className="flex gap-2 items-end flex-wrap">
                       <div>
                         <label className="text-[10px] text-gray-400 block">日付</label>
                         <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+                          min={w.period.start} max={w.period.end}
                           className="border border-gray-300 rounded px-2 py-1.5 text-sm w-36" />
                       </div>
                       <div>
@@ -316,7 +301,7 @@ export default function ToolBudgetPage() {
                           className="border border-gray-300 rounded px-2 py-1.5 text-sm w-28" />
                       </div>
                       <button
-                        onClick={() => handleAddPurchase(w.workerId)}
+                        onClick={() => w.period && handleAddPurchase(w.workerId, w.period.start)}
                         disabled={saving || !newDate || !newAmount}
                         className="bg-hibi-navy text-white px-4 py-1.5 rounded text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
                       >

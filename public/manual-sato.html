@@ -77,12 +77,18 @@
 <div class="box box-ok">
 <table>
 <tr><th>項目</th><th>内容</th></tr>
-<tr><td><strong>対象者</strong></td><td>現場スタッフ全員（日本人社員 + ベトナム人スタッフ）<br><span style="color:#888; font-size:13px;">※ 事務職は対象外です</span></td></tr>
-<tr><td><strong>年間予算</strong></td><td>1人あたり <strong>30,000円</strong>（デフォルト）<br><span style="color:#888; font-size:13px;">※ ロール（役員/職長/とび/土工）や在留資格によって異なる場合があります</span></td></tr>
-<tr><td><strong>年度</strong></td><td><strong>10月〜翌年9月</strong></td></tr>
+<tr><td><strong>対象者</strong></td><td><strong>技能実習生・特定技能</strong>のスタッフのみ<br><span style="color:#888; font-size:13px;">※ 日本人社員・事務・役員・退職者は対象外（試験運用のため一旦外国人のみ）</span></td></tr>
+<tr><td><strong>年間予算</strong></td><td>1人あたり <strong>30,000円</strong>（デフォルト）<br><span style="color:#888; font-size:13px;">※ 在留資格によって異なる場合があります</span></td></tr>
+<tr><td><strong>期間</strong></td><td><strong>各スタッフの入社日から1年サイクル</strong><br><span style="color:#888; font-size:13px;">例: 入社日 2025-03-15 → 1年目: 2025-03-15〜2026-03-14、2年目: 2026-03-15〜2027-03-14</span></td></tr>
 <tr><td><strong>対象品目</strong></td><td>仕事に使う道具（安全帯、工具、保護具など）</td></tr>
 <tr><td><strong>運用の流れ</strong></td><td>スタッフが道具を購入 → 領収書を佐藤さんに提出 → 佐藤さんがシステムに金額を登録</td></tr>
 </table>
+</div>
+
+<div class="box box-warn">
+<strong>期間は入社日を基準に自動計算されます。</strong><br>
+全員で統一された年度（例: 10月〜9月）ではなく、<strong>各スタッフごとに入社日から1年ずつ</strong>の期間が設定されます。<br>
+1年経過すると自動的に翌期間に切り替わり、予算もリセットされます（年度初期化ボタンは不要）。
 </div>
 
 <div class="box box-warn">
@@ -106,9 +112,8 @@
 
 <table>
 <tr><th>エリア</th><th>内容</th></tr>
-<tr><td><strong>年度セレクタ</strong></td><td>左上のドロップダウンで対象年度を切り替え</td></tr>
 <tr><td><strong>サマリー（3つのカード）</strong></td><td>対象人数 / 使用済み合計 / 残額合計</td></tr>
-<tr><td><strong>スタッフ一覧テーブル</strong></td><td>スタッフごとの予算・使用済・残額を表示<br>日本人社員と外国人スタッフでセクション分け</td></tr>
+<tr><td><strong>スタッフ一覧テーブル</strong></td><td>会社ごと（日比建設 / HFU）にセクション分けして表示</td></tr>
 </table>
 
 <h3>3-2. テーブルの列</h3>
@@ -116,9 +121,10 @@
 <table>
 <tr><th>列</th><th>意味</th></tr>
 <tr><td><strong>スタッフ</strong></td><td>名前</td></tr>
-<tr><td><strong>区分</strong></td><td>日本人: ロール名（役員/職長/とび/土工）<br>外国人: 在留資格（実習1号/特定1号 等）</td></tr>
-<tr><td><strong>予算</strong></td><td>年間の上限額（デフォルト: ¥30,000）</td></tr>
-<tr><td><strong>使用済</strong></td><td>今年度に登録済みの購入合計額</td></tr>
+<tr><td><strong>在留資格</strong></td><td>実習1号/実習2号/特定1号/特定2号 など</td></tr>
+<tr><td><strong>現在の期間</strong></td><td>そのスタッフの現在の1年サイクル（例: 3/15 〜 3/14、2年目）</td></tr>
+<tr><td><strong>予算</strong></td><td>期間中の上限額（デフォルト: ¥30,000）</td></tr>
+<tr><td><strong>使用済</strong></td><td>現在の期間に登録済みの購入合計額</td></tr>
 <tr><td><strong>残額</strong></td><td>予算 − 使用済 = あといくら使えるか</td></tr>
 <tr><td><strong>操作</strong></td><td>「登録」ボタン → 新しい購入を追加</td></tr>
 </table>
@@ -218,37 +224,28 @@
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec6">6. 年度切り替え（10月に実施）</h2>
+<h2 id="sec6">6. 期間切り替え（自動）</h2>
 
-<p>毎年10月に新年度が始まります。年度切り替え時の作業は以下の通りです。</p>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">道具代管理画面を開く</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">年度セレクタで<strong>新しい年度</strong>を選択する（例: 2026年度）</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text"><strong>「年度初期化」</strong>ボタンをクリック</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">確認ダイアログで「OK」を押す</div>
-</div>
-<div class="step">
-  <div class="step-num">5</div>
-  <div class="step-text">全スタッフに新年度の予算（¥30,000）が割り当てられたことを確認</div>
+<div class="box box-ok">
+<strong>期間切り替えは完全自動です。</strong>年度初期化の作業は不要です。<br>
+各スタッフの入社日から1年経過すると、自動的に翌期間に切り替わり、予算がリセットされます。
 </div>
 
-<div class="box">
-<strong>年度切り替えのポイント：</strong>
+<h3>例: 入社日が 2025年3月15日 のスタッフ</h3>
+
+<table>
+<tr><th>期間</th><th>対象日</th><th>予算</th></tr>
+<tr><td>1年目</td><td>2025-03-15 〜 2026-03-14</td><td>¥30,000</td></tr>
+<tr><td>2年目</td><td>2026-03-15 〜 2027-03-14</td><td>¥30,000（自動リセット）</td></tr>
+<tr><td>3年目</td><td>2027-03-15 〜 2028-03-14</td><td>¥30,000（自動リセット）</td></tr>
+</table>
+
+<div class="box box-warn">
+<strong>注意：</strong>
 <ul style="margin: 4px 0 0; padding-left: 20px;">
-  <li>前年度のデータは消えません。年度セレクタで前年度を選べば閲覧できます</li>
-  <li>新年度は全スタッフ ¥0 使用済（予算全額残り）からスタートします</li>
-  <li>10月以降に新しく入社したスタッフも自動的に含まれます</li>
+  <li>新入社員は人員マスタに<strong>正確な入社日</strong>を登録してください（入社日が期間の起点になります）</li>
+  <li>入社日が登録されていないと、道具代管理画面に「期間未設定」と表示されます</li>
+  <li>前期間（1年目）のデータも残っています（今後履歴閲覧機能を追加予定）</li>
 </ul>
 </div>
 
@@ -258,12 +255,13 @@
 <table>
 <tr><th>質問</th><th>回答</th></tr>
 <tr><td>道具代管理画面が見つからない</td><td>サイドバーの「人事・労務」セクションにあります。下にスクロールしてください。</td></tr>
-<tr><td>スタッフが表示されない</td><td>「年度初期化」ボタンを押して、当該年度の予算を作成してください。</td></tr>
+<tr><td>スタッフに「期間未設定」と表示される</td><td>人員マスタで入社日（hireDate）が登録されていません。靖仁さんに連絡してください。</td></tr>
 <tr><td>予算を超えて登録できる？</td><td>登録自体は可能です。残額がマイナス表示になります。</td></tr>
 <tr><td>金額を間違えて登録した</td><td>購入履歴を展開 →「削除」→ 正しい金額で再登録してください。</td></tr>
-<tr><td>スタッフごとに予算額を変えたい</td><td>管理者（靖仁さん）に連絡してください。ロール別・在留資格別の予算設定が可能です。</td></tr>
+<tr><td>スタッフごとに予算額を変えたい</td><td>管理者（靖仁さん）に連絡してください。在留資格別の予算設定が可能です。</td></tr>
 <tr><td>退職したスタッフはどうなる？</td><td>退職処理されたスタッフは自動的に一覧から非表示になります。</td></tr>
-<tr><td>前年度の履歴を見たい</td><td>年度セレクタで前年度を選択すれば閲覧できます。</td></tr>
+<tr><td>期間が切り替わるタイミングは？</td><td>各スタッフの入社日記念日（1年ごと）に自動切り替わります。佐藤さんの作業は不要です。</td></tr>
+<tr><td>日本人も対象にしたい</td><td>現在は試験運用のため外国人のみ。将来的に対応予定です。</td></tr>
 </table>
 
 <hr>
@@ -275,9 +273,12 @@
 <tr><th>タイミング</th><th>作業</th></tr>
 <tr><td><strong>領収書受領時</strong></td><td>道具代管理画面で購入を登録</td></tr>
 <tr><td><strong>月末</strong></td><td>残額が少ないスタッフがいないか確認</td></tr>
-<tr><td><strong>9月末</strong></td><td>年度終了。全スタッフの使用状況を確認</td></tr>
-<tr><td><strong>10月初旬</strong></td><td>新年度の「年度初期化」を実施</td></tr>
+<tr><td><strong>期間末近く</strong></td><td>各スタッフの「現在の期間」の終了日が近いスタッフに、道具購入の案内</td></tr>
 </table>
+</div>
+
+<div class="box">
+<strong>期間切り替え時の作業は不要です。</strong>入社日から1年経過すると自動で翌期間に切り替わります。
 </div>
 
 <hr>
