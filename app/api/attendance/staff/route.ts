@@ -130,18 +130,20 @@ export async function GET(request: NextRequest) {
     // Today's approval
     const todayApproval = await getApprovalForDay(siteId, ym, d)
 
-    // 道具代残額（技能実習生・特定技能のみ、佐藤さんが手動設定した期間起点から1年サイクル）
+    // 道具代情報（技能実習生・特定技能のみ、佐藤さんが手動設定した期間起点から1年サイクル）
+    // 5月以降のみ表示（4月はデータ整備期間のため未表示）
     let toolBudgetRemaining: number | null = null
+    let toolBudgetPeriodEnd: string | null = null
+    const displayToolBudget = now.getFullYear() > 2026 || (now.getFullYear() === 2026 && now.getMonth() + 1 >= 5)
     try {
       const visa = worker.visaType
       const isForeign = visa && (visa.startsWith('jisshu') || visa.startsWith('tokutei'))
-      if (isForeign) {
+      if (isForeign && displayToolBudget) {
         const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
         if (tbSnap.exists()) {
           const tbData = tbSnap.data()
           const anchor = tbData.periodAnchors?.[String(worker.id)]
           if (anchor) {
-            // 期間設定済 → 現在の期間を計算
             const anchorDate = new Date(anchor + 'T00:00:00')
             if (!isNaN(anchorDate.getTime())) {
               let periodStart = new Date(anchorDate)
@@ -151,7 +153,12 @@ export async function GET(request: NextRequest) {
                 if (next > now) break
                 periodStart = next
               }
+              const periodEnd = new Date(periodStart)
+              periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+              periodEnd.setDate(periodEnd.getDate() - 1)
               const periodStartStr = periodStart.toISOString().slice(0, 10)
+              toolBudgetPeriodEnd = periodEnd.toISOString().slice(0, 10)
+
               const tbKey = `${worker.id}_${periodStartStr}`
               const tbRecord = tbData.records?.[tbKey]
               if (tbRecord) {
@@ -162,25 +169,27 @@ export async function GET(request: NextRequest) {
               }
             }
           }
-          // 期間未設定 → toolBudgetRemainingはnullのまま（表示しない）
         }
       }
     } catch { /* ignore */ }
 
-    // 有給残日数
+    // 有給残日数（5月以降のみ表示。4月はデータ整備期間）
     let plRemaining: number | null = null
+    const displayPl = now.getFullYear() > 2026 || (now.getFullYear() === 2026 && now.getMonth() + 1 >= 5)
     try {
-      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-      if (mainSnap.exists()) {
-        const plData: Record<string, { grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number }[]> = mainSnap.data().plData || {}
-        const plRecords = plData[String(worker.id)] || []
-        if (plRecords.length > 0) {
-          const latest = plRecords[plRecords.length - 1]
-          const grant = latest.grantDays ?? latest.grant ?? 0
-          const carry = latest.carryOver ?? latest.carry ?? 0
-          const adj = latest.adjustment ?? latest.adj ?? 0
-          const used = latest.used ?? 0
-          plRemaining = grant + carry - adj - used
+      if (displayPl) {
+        const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+        if (mainSnap.exists()) {
+          const plData: Record<string, { grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number }[]> = mainSnap.data().plData || {}
+          const plRecords = plData[String(worker.id)] || []
+          if (plRecords.length > 0) {
+            const latest = plRecords[plRecords.length - 1]
+            const grant = latest.grantDays ?? latest.grant ?? 0
+            const carry = latest.carryOver ?? latest.carry ?? 0
+            const adj = latest.adjustment ?? latest.adj ?? 0
+            const used = latest.used ?? 0
+            plRemaining = grant + carry - adj - used
+          }
         }
       }
     } catch { /* ignore */ }
@@ -199,6 +208,7 @@ export async function GET(request: NextRequest) {
       todayLocked: !!(todayApproval?.foreman),
       pastDays,
       toolBudgetRemaining,
+      toolBudgetPeriodEnd,
       plRemaining,
     })
   } catch (error) {

@@ -17,6 +17,7 @@ interface StaffData {
   currentStatus: AttendanceStatus
   todayLocked: boolean
   toolBudgetRemaining: number | null
+  toolBudgetPeriodEnd: string | null
   plRemaining: number | null
   pastDays: {
     date: string; year: number; month: number; day: number
@@ -838,7 +839,11 @@ export default function StaffAttendancePage() {
               <div className="bg-white rounded-xl shadow p-4 text-center">
                 <div className="text-xs text-gray-400 mb-1">🔧 道具代残り / Tiền dụng cụ còn</div>
                 <div className="text-2xl font-bold text-blue-600">¥{data.toolBudgetRemaining.toLocaleString()}</div>
-                <div className="text-[11px] text-gray-400">{data.toolBudgetRemaining.toLocaleString()} yên</div>
+                {data.toolBudgetPeriodEnd && (
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    {data.toolBudgetPeriodEnd.slice(5).replace('-', '/')}まで / đến {data.toolBudgetPeriodEnd.slice(5).replace('-', '/')}
+                  </div>
+                )}
               </div>
             )}
           </div>

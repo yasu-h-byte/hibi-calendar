@@ -35,7 +35,7 @@
 <h1>HIBI CONSTRUCTION 就業管理システム<br>道具代管理マニュアル</h1>
 <p>対象: 佐藤今日子さん（道具代管理担当）<br>
 作成日: 2026年4月20日<br>
-最終更新: 2026年4月20日<br>
+最終更新: 2026年4月21日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <div class="toc">
@@ -92,8 +92,9 @@
 </div>
 
 <div class="box box-warn">
-<strong>残額はスタッフのスマホ画面に表示されます。</strong><br>
-佐藤さんがシステムに購入を登録すると、そのスタッフのスマホ画面の残額がリアルタイムで更新されます。
+<strong>残額はスタッフのスマホ画面に表示されます（2026年5月以降）。</strong><br>
+佐藤さんがシステムに購入を登録すると、そのスタッフのスマホ画面の残額がリアルタイムで更新されます。<br>
+<span style="color:#888; font-size:13px;">※ 4月中はデータ整備期間のため、スマホには表示されません。5月1日から表示が始まります。</span>
 </div>
 
 <!-- ================================================ -->
@@ -108,11 +109,11 @@
   <div class="step-text"><strong>「🔧 道具代管理」</strong>をクリック</div>
 </div>
 
-<h3>3-1. 画面の見方</h3>
+<h3>3-1. 一覧画面の見方</h3>
 
 <table>
 <tr><th>エリア</th><th>内容</th></tr>
-<tr><td><strong>サマリー（3つのカード）</strong></td><td>対象人数 / 使用済み合計 / 残額合計</td></tr>
+<tr><td><strong>サマリーカード（4つ）</strong></td><td>対象人数 / 期間設定済 / 使用済合計 / 残額合計</td></tr>
 <tr><td><strong>スタッフ一覧テーブル</strong></td><td>会社ごと（日比建設 / HFU）にセクション分けして表示</td></tr>
 </table>
 
@@ -120,106 +121,154 @@
 
 <table>
 <tr><th>列</th><th>意味</th></tr>
-<tr><td><strong>スタッフ</strong></td><td>名前</td></tr>
-<tr><td><strong>在留資格</strong></td><td>実習1号/実習2号/特定1号/特定2号 など</td></tr>
-<tr><td><strong>現在の期間</strong></td><td>そのスタッフの現在の1年サイクル（例: 3/15 〜 3/14、2年目）</td></tr>
+<tr><td><strong>スタッフ</strong></td><td>名前（クリックで管理モーダルが開きます）</td></tr>
+<tr><td><strong>在留資格</strong></td><td>実習1号/実習2号/特定1号/特定2号</td></tr>
+<tr><td><strong>現在の期間</strong></td><td>起点日を設定するとここに期間が表示されます<br><span style="color:#888; font-size:13px;">未設定の場合は「未設定」（灰色）</span></td></tr>
 <tr><td><strong>予算</strong></td><td>期間中の上限額（デフォルト: ¥30,000）</td></tr>
 <tr><td><strong>使用済</strong></td><td>現在の期間に登録済みの購入合計額</td></tr>
 <tr><td><strong>残額</strong></td><td>予算 − 使用済 = あといくら使えるか</td></tr>
-<tr><td><strong>操作</strong></td><td>「登録」ボタン → 新しい購入を追加</td></tr>
+<tr><td><strong>操作</strong></td><td><strong>設定</strong>（期間未設定）/ <strong>管理</strong>（設定済み）ボタン</td></tr>
 </table>
 
 <div class="box box-ok">
-<strong>スタッフ名をクリック</strong>すると、そのスタッフの購入履歴が展開表示されます。
+<strong>スタッフ名または操作ボタンをクリック</strong>すると、そのスタッフ専用の<strong>管理モーダル</strong>が開きます。<br>
+1つのモーダルですべての操作（期間設定・予算変更・既存分まとめ登録・購入登録・履歴確認）ができます。
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec4">4. 購入の登録手順</h2>
+<h2 id="sec4">4. 管理モーダルの使い方</h2>
 
-<p>スタッフから領収書を受け取ったら、以下の手順で登録します。</p>
+<p>スタッフ名をクリックすると、そのスタッフ専用のモーダルが開きます。モーダル内は5つのセクションに分かれています。</p>
+
+<h3>① 期間の起点日</h3>
+
+<p><strong>最初に必ず設定</strong>してください。起点日を設定するまで、予算管理ができません。</p>
 
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text">道具代管理画面を開く</div>
+  <div class="step-text">日付入力欄をクリックしてカレンダーから<strong>起点日</strong>を選ぶ<br>
+  <span style="color:#888; font-size:13px;">通常は入社日、または道具代補助を開始した日を指定</span></div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">対象スタッフの行にある<strong>「登録」</strong>ボタンをクリック</div>
+  <div class="step-text"><strong>「保存」</strong>ボタンをクリック</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">登録フォームが表示されるので、以下を入力：
-  <table style="margin-top: 8px;">
-  <tr><th>項目</th><th>入力内容</th><th>例</th></tr>
-  <tr><td><strong>日付</strong></td><td>領収書の日付</td><td>2026-05-15</td></tr>
-  <tr><td><strong>品名</strong></td><td>購入した道具の名前</td><td>安全帯</td></tr>
-  <tr><td><strong>金額（円）</strong></td><td>領収書の金額（税込）</td><td>3500</td></tr>
-  </table>
-  </div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text"><strong>「保存」</strong>ボタンを押す</div>
-</div>
-<div class="step">
-  <div class="step-num">5</div>
-  <div class="step-text">テーブルの使用済・残額が自動で更新されることを確認</div>
+  <div class="step-text">「✓ 保存しました」と表示され、期間が自動計算される<br>
+  <span style="color:#888; font-size:13px;">例: 起点日 5/14 → 現在の期間 5/14〜翌5/13</span></div>
 </div>
 
 <div class="box box-warn">
-<strong>予算を超える登録はシステム上可能ですが、</strong>残額がマイナスになります。<br>
-予算オーバーの場合はスタッフに伝えて、追加購入を控えるよう案内してください。
+<strong>起点日は一度設定すれば、1年ごとに自動で次の期間に切り替わります。</strong>佐藤さんが毎年設定し直す必要はありません。
 </div>
 
-<h3>登録の削除</h3>
+<h3>② 予算と使用状況</h3>
 
-<p>間違って登録した場合は、以下の手順で削除できます。</p>
+<table>
+<tr><th>表示</th><th>内容</th></tr>
+<tr><td><strong>進捗バー</strong></td><td>使用率を色で表示（青=80%未満、橙=80%以上、赤=100%超）</td></tr>
+<tr><td><strong>使用済 / 残額</strong></td><td>金額がリアルタイム表示</td></tr>
+<tr><td><strong>予算額の個別変更</strong></td><td>デフォルト¥30,000から変更可能（数字入力 → 「予算変更」ボタン）</td></tr>
+</table>
+
+<h3>③ 既存使用分のまとめ登録（初回のみ）</h3>
+
+<div class="box box-ok">
+<strong>購入履歴が0件のときだけ</strong>表示される黄色のセクションです。<br>
+現在の期間ですでに使った道具代がある場合、合計金額を1回でまとめて登録できます。
+</div>
 
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text">スタッフ名をクリックして購入履歴を展開</div>
+  <div class="step-text"><strong>日付</strong>: 通常は期間起点日のまま（変更も可）</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">削除したい行の右にある<strong>「削除」</strong>をクリック</div>
+  <div class="step-text"><strong>摘要</strong>: 「既存使用分」（変更も可）</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">確認ダイアログで「OK」を押す</div>
+  <div class="step-text"><strong>合計金額</strong>: 既に使った合計金額を入力（例: 8500）</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text"><strong>「まとめて計上」</strong>ボタンをクリック</div>
+</div>
+
+<h3>④ 購入履歴</h3>
+
+<p>登録済みの購入が日付の新しい順に表示されます。右の「削除」ボタンから誤登録を削除できます。</p>
+
+<h3>⑤ 新しい購入を登録</h3>
+
+<p>スタッフから領収書を受け取ったら、このセクションから1件ずつ登録します。</p>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text"><strong>購入日</strong>: 領収書の日付</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text"><strong>品名</strong>: 安全帯、工具セット など</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text"><strong>金額</strong>: 領収書の金額（税込）</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text"><strong>「+ 追加」</strong>ボタンをクリック → 購入履歴に即反映</div>
+</div>
+
+<div class="box box-warn">
+<strong>予算を超える登録はシステム上可能ですが、</strong>残額がマイナス表示になります。<br>
+予算オーバーの場合はスタッフに伝えて、追加購入を控えるよう案内してください。
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec5">5. 今年度の既存データ登録</h2>
+<h2 id="sec5">5. 今期すでに使っている分の初回登録（まとめて計上）</h2>
 
 <div class="box box-red">
 <strong>初回作業：</strong>今年度（2025年10月〜）で既に使っている道具代がある場合は、最初にまとめて登録してください。
 </div>
 
-<h3>手順</h3>
+<div class="box box-red">
+<strong>初期設定で大事なポイント：</strong><br>
+各スタッフについて、<strong>まず期間の起点日を設定</strong>してください。起点日を設定するまで購入登録ができません。
+</div>
+
+<h3>手順（スタッフごとに）</h3>
 
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text">手元の台帳や記録から、今年度の<strong>各スタッフの購入実績</strong>を確認する</div>
+  <div class="step-text">道具代管理画面でスタッフ名をクリック → 管理モーダルが開く</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">道具代管理画面の年度セレクタが<strong>「2025年度」</strong>になっていることを確認</div>
+  <div class="step-text">モーダル上部の<strong>「① 期間の起点日」</strong>に日付を入力して「保存」<br>
+  <span style="color:#888; font-size:13px;">例: 入社日が2025年5月14日なら「2025-05-14」または道具代補助を開始した日</span></div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">各スタッフの「登録」ボタンから、購入1件ずつ登録する<br>
-  <span style="color:#888; font-size:13px;">※ 品名は「過去分まとめ」など簡易な記載でもOKです</span></div>
+  <div class="step-text">手元の台帳で、その期間中に<strong>既に使った合計金額</strong>を確認</div>
 </div>
 <div class="step">
   <div class="step-num">4</div>
-  <div class="step-text">全スタッフの登録が完了したら、サマリーの使用済合計が台帳と一致するか確認</div>
+  <div class="step-text">モーダルの<strong>「③ 既存使用分のまとめ登録」</strong>に合計金額を入力 → 「まとめて計上」<br>
+  <span style="color:#888; font-size:13px;">※ 1件1件登録でも可、でもまとめが楽です</span></div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">「閉じる」で次のスタッフへ。全スタッフ完了まで繰り返す</div>
 </div>
 
 <div class="box box-ok">
 <strong>ポイント：</strong>
 <ul style="margin: 4px 0 0; padding-left: 20px;">
-  <li>1件1件登録するのが理想ですが、過去分は「品名: まとめ入力、金額: 合計額」でもOK</li>
-  <li>登録後、スタッフのスマホに正しい残額が表示されるようになります</li>
+  <li>まとめ登録の摘要は「既存使用分」がデフォルト（変更可）</li>
+  <li>登録後、一覧画面の「使用済」「残額」が自動更新されます</li>
+  <li>全員完了後、サマリーカード「期間設定済 15/15」になれば初期設定完了</li>
 </ul>
 </div>
 
@@ -227,25 +276,25 @@
 <h2 id="sec6">6. 期間切り替え（自動）</h2>
 
 <div class="box box-ok">
-<strong>期間切り替えは完全自動です。</strong>年度初期化の作業は不要です。<br>
-各スタッフの入社日から1年経過すると、自動的に翌期間に切り替わり、予算がリセットされます。
+<strong>期間切り替えは完全自動です。</strong>毎年の初期化作業は不要です。<br>
+起点日から1年経過すると、自動的に翌期間に切り替わり、予算が30,000円にリセットされます。
 </div>
 
-<h3>例: 入社日が 2025年3月15日 のスタッフ</h3>
+<h3>例: 起点日を 2025年5月14日 に設定したスタッフ</h3>
 
 <table>
 <tr><th>期間</th><th>対象日</th><th>予算</th></tr>
-<tr><td>1年目</td><td>2025-03-15 〜 2026-03-14</td><td>¥30,000</td></tr>
-<tr><td>2年目</td><td>2026-03-15 〜 2027-03-14</td><td>¥30,000（自動リセット）</td></tr>
-<tr><td>3年目</td><td>2027-03-15 〜 2028-03-14</td><td>¥30,000（自動リセット）</td></tr>
+<tr><td>1年目</td><td>2025-05-14 〜 2026-05-13</td><td>¥30,000</td></tr>
+<tr><td>2年目</td><td>2026-05-14 〜 2027-05-13</td><td>¥30,000（自動リセット）</td></tr>
+<tr><td>3年目</td><td>2027-05-14 〜 2028-05-13</td><td>¥30,000（自動リセット）</td></tr>
 </table>
 
 <div class="box box-warn">
 <strong>注意：</strong>
 <ul style="margin: 4px 0 0; padding-left: 20px;">
-  <li>新入社員は人員マスタに<strong>正確な入社日</strong>を登録してください（入社日が期間の起点になります）</li>
-  <li>入社日が登録されていないと、道具代管理画面に「期間未設定」と表示されます</li>
-  <li>前期間（1年目）のデータも残っています（今後履歴閲覧機能を追加予定）</li>
+  <li>新しく入社したスタッフも、佐藤さんが起点日を設定してから管理開始です</li>
+  <li>起点日が未設定のスタッフは、一覧で「現在の期間: 未設定」と表示されます</li>
+  <li>前期間のデータも残っています（今後履歴閲覧機能を追加予定）</li>
 </ul>
 </div>
 
@@ -254,13 +303,15 @@
 
 <table>
 <tr><th>質問</th><th>回答</th></tr>
-<tr><td>道具代管理画面が見つからない</td><td>サイドバーの「人事・労務」セクションにあります。下にスクロールしてください。</td></tr>
-<tr><td>スタッフに「期間未設定」と表示される</td><td>人員マスタで入社日（hireDate）が登録されていません。靖仁さんに連絡してください。</td></tr>
+<tr><td>道具代管理画面が見つからない</td><td>サイドバーの「人事・労務」セクションにあります。</td></tr>
+<tr><td>スタッフに「期間未設定」と表示される</td><td>管理モーダルを開いて「① 期間の起点日」を設定してください。</td></tr>
+<tr><td>起点日は何を入れればいい？</td><td>通常は入社日、または道具代補助を開始した日を指定します。</td></tr>
 <tr><td>予算を超えて登録できる？</td><td>登録自体は可能です。残額がマイナス表示になります。</td></tr>
-<tr><td>金額を間違えて登録した</td><td>購入履歴を展開 →「削除」→ 正しい金額で再登録してください。</td></tr>
-<tr><td>スタッフごとに予算額を変えたい</td><td>管理者（靖仁さん）に連絡してください。在留資格別の予算設定が可能です。</td></tr>
+<tr><td>金額を間違えて登録した</td><td>モーダルの「④ 購入履歴」で該当行の「削除」→ 再登録してください。</td></tr>
+<tr><td>スタッフごとに予算額を変えたい</td><td>モーダルの「② 予算と使用状況」で個別に変更できます。</td></tr>
 <tr><td>退職したスタッフはどうなる？</td><td>退職処理されたスタッフは自動的に一覧から非表示になります。</td></tr>
-<tr><td>期間が切り替わるタイミングは？</td><td>各スタッフの入社日記念日（1年ごと）に自動切り替わります。佐藤さんの作業は不要です。</td></tr>
+<tr><td>期間が切り替わるタイミングは？</td><td>起点日記念日（1年ごと）に自動切り替わります。佐藤さんの作業は不要です。</td></tr>
+<tr><td>スマホに残額が表示されるのはいつから？</td><td><strong>2026年5月以降</strong>です。4月はデータ整備期間のため表示されません。</td></tr>
 <tr><td>日本人も対象にしたい</td><td>現在は試験運用のため外国人のみ。将来的に対応予定です。</td></tr>
 </table>
 
