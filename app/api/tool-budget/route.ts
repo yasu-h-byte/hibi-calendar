@@ -76,6 +76,7 @@ interface ToolBudgetRecord {
 interface ToolBudgetData {
   defaultBudget: number
   budgetByVisa?: Record<string, number>
+  periodAnchors?: Record<string, string>  // workerId(string) -> 期間起点日 YYYY-MM-DD
   records: Record<string, ToolBudgetRecord>
 }
 
@@ -88,6 +89,7 @@ async function getToolBudgetData(): Promise<ToolBudgetData> {
   return {
     defaultBudget: data.defaultBudget ?? 30000,
     budgetByVisa: data.budgetByVisa || {},
+    periodAnchors: data.periodAnchors || {},
     records: data.records || {},
   }
 }
@@ -117,10 +119,17 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Not eligible' }, { status: 403 })
       }
 
-      const period = getCurrentPeriod(worker.hireDate || '')
-      if (!period) return NextResponse.json({ error: 'Invalid hireDate' }, { status: 400 })
-
       const tbData = await getToolBudgetData()
+      const anchor = tbData.periodAnchors?.[String(worker.id)]
+      if (!anchor) {
+        // 期間未設定 → 初期値として予算のみ返す
+        const budget = (tbData.budgetByVisa?.[worker.visaType] ?? tbData.defaultBudget) || 30000
+        return NextResponse.json({ budget, used: 0, remaining: budget, purchases: [], period: null })
+      }
+
+      const period = getCurrentPeriod(anchor)
+      if (!period) return NextResponse.json({ error: 'Invalid anchor' }, { status: 400 })
+
       const key = `${worker.id}_${period.start}`
       const record = tbData.records[key]
 
@@ -151,24 +160,30 @@ export async function GET(request: NextRequest) {
     const targetWorkers = workers.filter(isForeignActiveWorker)
 
     const result = targetWorkers.map(w => {
-      const period = getCurrentPeriod(w.hireDate || '')
-      if (!period) {
+      const anchor = tbData.periodAnchors?.[String(w.id)]
+      const defaultBudget = (tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000
+
+      if (!anchor) {
+        // 期間未設定 → 予算のみ表示（登録不可）
         return {
           workerId: w.id,
           workerName: w.name,
           visa: w.visa,
           org: w.org || 'hibi',
           hireDate: w.hireDate,
+          periodAnchor: null,
           period: null,
-          budget: 0,
+          budget: defaultBudget,
           used: 0,
-          remaining: 0,
+          remaining: defaultBudget,
           purchases: [],
         }
       }
-      const key = `${w.id}_${period.start}`
-      const record = tbData.records[key]
-      const budget = record?.budget ?? ((tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000)
+
+      const period = getCurrentPeriod(anchor)
+      const key = period ? `${w.id}_${period.start}` : ''
+      const record = key ? tbData.records[key] : null
+      const budget = record?.budget ?? defaultBudget
       const purchases = record?.purchases || []
       const used = purchases.reduce((sum: number, p: Purchase) => sum + p.amount, 0)
       return {
@@ -177,6 +192,7 @@ export async function GET(request: NextRequest) {
         visa: w.visa,
         org: w.org || 'hibi',
         hireDate: w.hireDate,
+        periodAnchor: anchor,
         period,
         budget,
         used,
@@ -281,6 +297,26 @@ export async function POST(request: NextRequest) {
         tbData.records[key].budget = Number(budget)
         await saveToolBudgetData(tbData)
       }
+      return NextResponse.json({ success: true })
+    }
+
+    // 期間起点日の設定（佐藤さんが手動設定）
+    if (action === 'setPeriodAnchor') {
+      const { workerId, anchor } = body
+      if (!workerId) {
+        return NextResponse.json({ error: 'Missing workerId' }, { status: 400 })
+      }
+
+      const tbData = await getToolBudgetData()
+      if (!tbData.periodAnchors) tbData.periodAnchors = {}
+
+      if (anchor === null || anchor === '') {
+        delete tbData.periodAnchors[String(workerId)]
+      } else {
+        tbData.periodAnchors[String(workerId)] = anchor
+      }
+
+      await saveToolBudgetData(tbData)
       return NextResponse.json({ success: true })
     }
 

@@ -130,39 +130,39 @@ export async function GET(request: NextRequest) {
     // Today's approval
     const todayApproval = await getApprovalForDay(siteId, ym, d)
 
-    // 道具代残額（技能実習生・特定技能のみ、入社日から1年サイクル）
+    // 道具代残額（技能実習生・特定技能のみ、佐藤さんが手動設定した期間起点から1年サイクル）
     let toolBudgetRemaining: number | null = null
     try {
       const visa = worker.visaType
       const isForeign = visa && (visa.startsWith('jisshu') || visa.startsWith('tokutei'))
-      if (isForeign && worker.hireDate) {
-        // 入社日から現在の期間を計算
-        const hire = new Date(worker.hireDate + 'T00:00:00')
-        if (!isNaN(hire.getTime())) {
-          let periodStart = new Date(hire)
-          while (true) {
-            const next = new Date(periodStart)
-            next.setFullYear(next.getFullYear() + 1)
-            if (next > now) break
-            periodStart = next
-          }
-          const periodStartStr = periodStart.toISOString().slice(0, 10)
-
-          const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
-          if (tbSnap.exists()) {
-            const tbData = tbSnap.data()
-            const tbKey = `${worker.id}_${periodStartStr}`
-            const tbRecord = tbData.records?.[tbKey]
-            if (tbRecord) {
-              const tbUsed = (tbRecord.purchases || []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-              toolBudgetRemaining = tbRecord.budget - tbUsed
-            } else {
-              // レコードなし → 在留資格別 or デフォルト予算額
-              toolBudgetRemaining = tbData.budgetByVisa?.[visa] ?? tbData.defaultBudget ?? 30000
+      if (isForeign) {
+        const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
+        if (tbSnap.exists()) {
+          const tbData = tbSnap.data()
+          const anchor = tbData.periodAnchors?.[String(worker.id)]
+          if (anchor) {
+            // 期間設定済 → 現在の期間を計算
+            const anchorDate = new Date(anchor + 'T00:00:00')
+            if (!isNaN(anchorDate.getTime())) {
+              let periodStart = new Date(anchorDate)
+              while (true) {
+                const next = new Date(periodStart)
+                next.setFullYear(next.getFullYear() + 1)
+                if (next > now) break
+                periodStart = next
+              }
+              const periodStartStr = periodStart.toISOString().slice(0, 10)
+              const tbKey = `${worker.id}_${periodStartStr}`
+              const tbRecord = tbData.records?.[tbKey]
+              if (tbRecord) {
+                const tbUsed = (tbRecord.purchases || []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
+                toolBudgetRemaining = tbRecord.budget - tbUsed
+              } else {
+                toolBudgetRemaining = tbData.budgetByVisa?.[visa] ?? tbData.defaultBudget ?? 30000
+              }
             }
-          } else {
-            toolBudgetRemaining = 30000
           }
+          // 期間未設定 → toolBudgetRemainingはnullのまま（表示しない）
         }
       }
     } catch { /* ignore */ }

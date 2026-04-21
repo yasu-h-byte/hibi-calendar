@@ -22,6 +22,7 @@ interface WorkerBudget {
   visa: string
   org: string
   hireDate?: string
+  periodAnchor?: string | null
   period: Period | null
   budget: number
   used: number
@@ -118,6 +119,17 @@ export default function ToolBudgetPage() {
     setSaving(false)
   }
 
+  const handleSetAnchor = async (workerId: number, anchor: string) => {
+    try {
+      await fetch('/api/tool-budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'setPeriodAnchor', workerId, anchor }),
+      })
+      fetchData()
+    } catch { /* ignore */ }
+  }
+
   const handleDeletePurchase = async (workerId: number, periodStart: string, purchaseId: string) => {
     if (!confirm('この購入記録を削除しますか？')) return
     try {
@@ -208,7 +220,6 @@ export default function ToolBudgetPage() {
                       </td>
                       <td className="text-center px-2 tabular-nums">
                         <div className="text-xs">{formatPeriod(w.period)}</div>
-                        {w.period && <div className="text-[10px] text-gray-400">{w.period.index}年目</div>}
                       </td>
                       <td className="text-right px-3 tabular-nums">¥{w.budget.toLocaleString()}</td>
                       <td className="text-right px-3 tabular-nums text-orange-600">¥{w.used.toLocaleString()}</td>
@@ -217,9 +228,8 @@ export default function ToolBudgetPage() {
                         <button
                           onClick={e => { e.stopPropagation(); setAddingFor(addingFor === w.workerId ? null : w.workerId); setExpandedWorker(w.workerId) }}
                           className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded hover:bg-blue-100 transition"
-                          disabled={!w.period}
                         >
-                          登録
+                          {w.period ? '登録' : '期間設定'}
                         </button>
                       </td>
                     </tr>
@@ -229,20 +239,52 @@ export default function ToolBudgetPage() {
             </tbody>
           </table>
 
-          {/* 展開エリア: 購入履歴 + 登録フォーム */}
+          {/* 展開エリア: 期間設定 + 購入履歴 + 登録フォーム */}
           {expandedWorker && (() => {
             const w = workers.find(w => w.workerId === expandedWorker)
             if (!w) return null
             return (
               <div className="border-t-2 border-hibi-navy bg-gray-50 p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-sm text-hibi-navy">{w.workerName} の購入履歴</h3>
+                  <h3 className="font-bold text-sm text-hibi-navy">{w.workerName} の道具代</h3>
                   {w.period && (
                     <span className="text-xs text-gray-500">
-                      期間: {formatPeriodFull(w.period)}（{w.period.index}年目）
-                      {w.hireDate && <span className="ml-2 text-gray-400">入社: {w.hireDate}</span>}
+                      期間: {formatPeriodFull(w.period)}
                     </span>
                   )}
+                </div>
+
+                {/* 期間設定UI */}
+                <div className="bg-white rounded-lg p-3 border border-gray-200 mb-3">
+                  <div className="text-xs font-bold text-gray-600 mb-2">
+                    {w.periodAnchor ? '期間起点日（変更する場合）' : '期間起点日を設定してください'}
+                  </div>
+                  <div className="flex gap-2 items-end flex-wrap">
+                    <div>
+                      <label className="text-[10px] text-gray-400 block">起点日</label>
+                      <input
+                        type="date"
+                        defaultValue={w.periodAnchor || ''}
+                        onBlur={e => {
+                          const val = e.target.value
+                          if (val && val !== w.periodAnchor) {
+                            handleSetAnchor(w.workerId, val)
+                          }
+                        }}
+                        className="border border-gray-300 rounded px-2 py-1.5 text-sm w-40" />
+                    </div>
+                    <span className="text-xs text-gray-400 pb-2">
+                      ※ 起点日から1年ずつのサイクルになります（例: 5/14起点 → 5/14〜翌5/13）
+                    </span>
+                    {w.periodAnchor && (
+                      <button
+                        onClick={() => { if (confirm('期間設定をクリアしますか？')) handleSetAnchor(w.workerId, '') }}
+                        className="text-xs text-gray-400 hover:text-red-500 pb-2 ml-auto"
+                      >
+                        クリア
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {w.purchases.length === 0 ? (
