@@ -181,12 +181,13 @@ export async function GET(request: NextRequest) {
 
     // 有給残日数（5月以降のみ表示。4月はデータ整備期間）
     let plRemaining: number | null = null
+    let plExpiryDate: string | null = null  // 現在の付与分の有効期限（付与日+2年）
     const displayPl = now.getFullYear() > 2026 || (now.getFullYear() === 2026 && now.getMonth() + 1 >= 5)
     try {
       if (displayPl) {
         const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
         if (mainSnap.exists()) {
-          const plData: Record<string, { grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number }[]> = mainSnap.data().plData || {}
+          const plData: Record<string, { grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number }[]> = mainSnap.data().plData || {}
           const plRecords = plData[String(worker.id)] || []
           if (plRecords.length > 0) {
             const latest = plRecords[plRecords.length - 1]
@@ -195,6 +196,19 @@ export async function GET(request: NextRequest) {
             const adj = latest.adjustment ?? latest.adj ?? 0
             const used = latest.used ?? 0
             plRemaining = grant + carry - adj - used
+
+            // 有効期限 = 付与日 + 2年（うるう年 2/29 → 2/28 に正規化）
+            if (latest.grantDate) {
+              const grantDate = new Date(latest.grantDate + 'T00:00:00')
+              if (!isNaN(grantDate.getTime())) {
+                const expiry = new Date(grantDate)
+                const origMonth = expiry.getMonth()
+                expiry.setFullYear(expiry.getFullYear() + 2)
+                if (expiry.getMonth() !== origMonth) expiry.setDate(0)
+                expiry.setDate(expiry.getDate() - 1) // 付与日 + 2年 - 1日
+                plExpiryDate = expiry.toISOString().slice(0, 10)
+              }
+            }
           }
         }
       }
@@ -216,6 +230,7 @@ export async function GET(request: NextRequest) {
       toolBudgetRemaining,
       toolBudgetPeriodEnd,
       plRemaining,
+      plExpiryDate,
     })
   } catch (error) {
     console.error('Staff GET error:', error)
