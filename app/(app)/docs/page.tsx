@@ -10,6 +10,12 @@ export default function DocsPage() {
       ],
     },
     {
+      category: 'スタッフ向け（ベトナム人）',
+      items: [
+        { title: 'スタッフ向けマニュアル', desc: '出勤登録・欠勤届・有給申請・帰国申請・有給残数・道具代残金・過去5日修正の使い方', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-04-21' },
+      ],
+    },
+    {
       category: '業務マニュアル',
       items: [
         { title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・有給管理（2段階承認）・有給データ移行・帳票出力', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-18' },
