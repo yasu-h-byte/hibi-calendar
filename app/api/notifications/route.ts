@@ -51,19 +51,21 @@ export async function GET(request: NextRequest) {
       const eligibleWorkerIdSet = new Set(signEligibleWorkers.map(w => w.id))
 
       // チェック対象: 現月 + 翌月（翌月カレンダーを月末に署名するため）
+      // 注意: siteCalendar と calendarSign の ym はダッシュあり形式 "YYYY-MM"
+      //       massign のキーはダッシュなし形式 "YYYYMM"
       let nextY = now.getFullYear()
       let nextM = now.getMonth() + 2
       if (nextM > 12) { nextM = 1; nextY++ }
       const nextYm = ymKey(nextY, nextM)
       const ymsToCheck = [currentYm, nextYm]
+      const calYmOf = (ym: string) => `${ym.slice(0, 4)}-${ym.slice(4, 6)}`
 
       // 各月の承認済みカレンダーを一括取得
       const approvedCalendarsByYm: Record<string, Set<string>> = {}
       for (const ym of ymsToCheck) {
-        const calYm = `${ym.slice(0, 4)}-${ym.slice(4, 6)}`
         const calQuery = query(
           collection(db, 'siteCalendar'),
-          where('ym', '==', calYm),
+          where('ym', '==', calYmOf(ym)),
           where('status', '==', 'approved'),
         )
         const calSnaps = await getDocs(calQuery)
@@ -75,17 +77,18 @@ export async function GET(request: NextRequest) {
         approvedCalendarsByYm[ym] = approvedSet
       }
 
-      // 各月の署名状況を一括取得
+      // 各月の署名状況を一括取得（calendarSignのymはダッシュあり形式）
       const signaturesByYm: Record<string, Set<string>> = {}
       for (const ym of ymsToCheck) {
-        const signQuery = query(collection(db, 'calendarSign'), where('ym', '==', ym))
+        const signQuery = query(collection(db, 'calendarSign'), where('ym', '==', calYmOf(ym)))
         const signSnaps = await getDocs(signQuery)
         const existing = new Set<string>()
+        // ドキュメントIDは ${workerId}_${ym-with-dash}_${siteId} 形式
         signSnaps.forEach(snap => existing.add(snap.id))
         signaturesByYm[ym] = existing
       }
 
-      // 未署名集計: (worker, ym) のユニーク集合
+      // 未署名集計
       const expectedUnsignedWorkerIds = new Set<number>()
       const unsignedByYm: Record<string, Set<number>> = {}
 
@@ -94,11 +97,9 @@ export async function GET(request: NextRequest) {
         const existingSignIds = signaturesByYm[ym]
         unsignedByYm[ym] = new Set<number>()
 
-        // 承認済みカレンダーがない月はスキップ
         if (approvedSites.size === 0) continue
 
         for (const site of activeSites) {
-          // 承認済みカレンダーがある現場のみチェック
           if (!approvedSites.has(site.id)) continue
 
           const monthKey = `${site.id}_${ym}`
@@ -109,7 +110,8 @@ export async function GET(request: NextRequest) {
           for (const wid of workerIds) {
             if (!eligibleWorkerIdSet.has(wid)) continue
             if (isFullMonthHomeLeave(wid, ym, homeLeaves)) continue
-            const signId = `${wid}_${ym}_${site.id}`
+            // calendarSignのドキュメントIDはダッシュあり形式
+            const signId = `${wid}_${calYmOf(ym)}_${site.id}`
             if (!existingSignIds.has(signId)) {
               expectedUnsignedWorkerIds.add(wid)
               unsignedByYm[ym].add(wid)
