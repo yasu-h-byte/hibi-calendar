@@ -42,10 +42,17 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if hasRole();
     }
-    // 月別出面データ（att_YYYYMM）— 新アプリ（トークン認証）からも読み書き可能
+    // 月別出面データ（att_YYYYMM）+ 道具代補助（toolBudget）— 新アプリ（トークン認証）からも読み書き可能
     match /demmen/{docId} {
       allow read: if true;
-      allow write: if docId.matches('att_[0-9]{6}');
+      allow write: if docId.matches('att_[0-9]{6}') || docId == 'toolBudget';
+    }
+
+    // ────────────────────────────────────────
+    //  長期休暇（帰国）申請
+    // ────────────────────────────────────────
+    match /homeLongLeave/{docId} {
+      allow read, write: if true;
     }
 
     // ────────────────────────────────────────
