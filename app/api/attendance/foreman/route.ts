@@ -14,6 +14,7 @@ import {
   formatDateShort,
 } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
+import { recordAccess, getRequestIp } from '@/lib/accessLog'
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
@@ -33,6 +34,15 @@ export async function GET(request: NextRequest) {
     if (!site) {
       return NextResponse.json({ error: 'Not a foreman' }, { status: 403 })
     }
+
+    // アクセスログ記録
+    recordAccess({
+      workerId: foreman.id,
+      workerName: foreman.name,
+      role: 'foreman',
+      org: foreman.company === 'HFU' ? 'hfu' : 'hibi',
+      ip: getRequestIp(request),
+    }).catch(() => {})
 
     // Parse date (default: today)
     let viewDate: Date

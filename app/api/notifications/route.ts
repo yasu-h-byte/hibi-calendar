@@ -6,6 +6,7 @@ import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
+import { getWorkerLastAccessMap } from '@/lib/accessLog'
 
 interface Notification {
   id: string
@@ -474,6 +475,52 @@ export async function GET(request: NextRequest) {
       }
     } catch (e) {
       console.error('Announcement check error:', e)
+    }
+
+    // N. 長期未アクセスアラート（admin向け、3日以上アクセスなしのスタッフ/職長）
+    try {
+      if (role === 'admin') {
+        const homeLeaves = await getAllActiveHomeLeaves()
+        const accessMap = await getWorkerLastAccessMap(30)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const todayJst = new Date(today.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+        todayJst.setHours(0, 0, 0, 0)
+
+        const inactiveNames: { name: string; lastAccess: string | null; days: number | null }[] = []
+        for (const w of activeWorkers) {
+          // スタッフ・職長のみ対象（事務・役員は毎日使うわけではないので除外）
+          const isTargetRole = !!w.token && (w.job === 'shokucho' || (w.visa && w.visa !== 'none'))
+          if (!isTargetRole) continue
+
+          // 帰国中のスタッフは除外
+          const currentYmStr = `${todayJst.getFullYear()}${String(todayJst.getMonth() + 1).padStart(2, '0')}`
+          if (isFullMonthHomeLeave(w.id, currentYmStr, homeLeaves)) continue
+
+          const access = accessMap.get(w.id)
+          if (!access || !access.lastAccessDate) {
+            inactiveNames.push({ name: w.name, lastAccess: null, days: null })
+            continue
+          }
+          const lastDate = new Date(access.lastAccessDate + 'T00:00:00')
+          const daysGap = Math.floor((todayJst.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24))
+          if (daysGap >= 3) {
+            inactiveNames.push({ name: w.name, lastAccess: access.lastAccessDate, days: daysGap })
+          }
+        }
+
+        if (inactiveNames.length > 0) {
+          notifications.push({
+            id: 'inactive-access',
+            icon: '\uD83D\uDD10',
+            message: `3日以上アクセスがないスタッフ: ${inactiveNames.length}名`,
+            type: 'info',
+            count: inactiveNames.length,
+          })
+        }
+      }
+    } catch (e) {
+      console.error('Access inactivity check error:', e)
     }
 
     // ── ロール別フィルタ ──

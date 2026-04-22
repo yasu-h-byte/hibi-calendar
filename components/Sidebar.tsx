@@ -42,6 +42,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     { label: '外注先マスタ', icon: '🔧', href: '/subcons', section: '現場・外注', roles: ['admin', 'jimu'] },
     // システム
     { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
+    { label: 'アクセス履歴', icon: '🔐', href: '/access-log', section: 'システム', roles: ['admin'] },
     { label: '資料一覧', icon: '📁', href: '/docs', section: 'システム', roles: ['admin', 'approver', 'jimu', 'foreman'] },
   ]
 }
@@ -60,6 +61,7 @@ const MENU_ID_MAP: Record<string, string> = {
   '/evaluation': 'evaluation',
   '/home-leave': 'home-leave',
   '/tool-budget': 'tool-budget',
+  '/access-log': 'access-log',
   '/cost': 'cost',
   '/settings': 'settings',
   '/guide': 'guide',

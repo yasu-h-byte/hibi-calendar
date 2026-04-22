@@ -4,6 +4,7 @@ import { getWorkers } from '@/lib/workers'
 import { buildAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from 'firebase/firestore'
+import { recordAccess, getRequestIp, AccessRole } from '@/lib/accessLog'
 
 export async function POST(request: NextRequest) {
   const { password, workerId } = await request.json()
@@ -18,6 +19,13 @@ export async function POST(request: NextRequest) {
       role: 'admin' as const,
       foremanSites: [],
     }
+    recordAccess({
+      workerId: 0,
+      workerName: user.name,
+      role: 'admin',
+      org: 'hibi',
+      ip: getRequestIp(request),
+    }).catch(() => {})
     return NextResponse.json({ user, superAdmin: true })
   }
 
@@ -34,6 +42,13 @@ export async function POST(request: NextRequest) {
         const worker = workers.find(w => w.id === Number(wid))
         if (worker) {
           const authUser = buildAuthUser(worker, sites)
+          recordAccess({
+            workerId: worker.id,
+            workerName: worker.name,
+            role: authUser.role as AccessRole,
+            org: worker.company === 'HFU' ? 'hfu' : 'hibi',
+            ip: getRequestIp(request),
+          }).catch(() => {})
           return NextResponse.json({ user: authUser, directLogin: true })
         }
       }
@@ -63,5 +78,12 @@ export async function POST(request: NextRequest) {
   }
 
   const authUser = buildAuthUser(worker, sites)
+  recordAccess({
+    workerId: worker.id,
+    workerName: worker.name,
+    role: authUser.role as AccessRole,
+    org: worker.company === 'HFU' ? 'hfu' : 'hibi',
+    ip: getRequestIp(request),
+  }).catch(() => {})
   return NextResponse.json({ user: authUser })
 }

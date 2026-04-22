@@ -105,5 +105,12 @@ service cloud.firestore {
     match /activityLog/{docId} {
       allow read, write: if true;
     }
+
+    // ────────────────────────────────────────
+    //  アクセスログ
+    // ────────────────────────────────────────
+    match /accessLog/{docId} {
+      allow read, write: if true;
+    }
   }
 }

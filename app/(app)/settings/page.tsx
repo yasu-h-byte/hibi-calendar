@@ -56,6 +56,7 @@ const ALL_MENUS = [
   { id: 'subcons', label: '外注先マスタ', section: '現場・外注' },
   // システム
   { id: 'settings', label: '管理者設定', section: 'システム' },
+  { id: 'access-log', label: 'アクセス履歴', section: 'システム' },
   { id: 'docs', label: '資料一覧', section: 'システム' },
 ]
 

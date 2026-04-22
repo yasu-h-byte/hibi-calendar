@@ -15,6 +15,7 @@ import { getSites } from '@/lib/sites'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { AttendanceEntry } from '@/types'
+import { recordAccess, getRequestIp } from '@/lib/accessLog'
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
@@ -29,6 +30,15 @@ export async function GET(request: NextRequest) {
     if (!worker) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
+
+    // アクセスログ記録（失敗しても処理は続行）
+    recordAccess({
+      workerId: worker.id,
+      workerName: worker.name,
+      role: 'staff',
+      org: worker.company === 'HFU' ? 'hfu' : 'hibi',
+      ip: getRequestIp(request),
+    }).catch(() => {})
 
     const assignedSites = await getStaffSites(worker.id)
     if (assignedSites.length === 0 && !siteIdParam) {
