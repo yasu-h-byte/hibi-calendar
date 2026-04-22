@@ -385,6 +385,136 @@ export default function CostPage() {
         </Section>
       )}
 
+      {/* ═══ Monthly Revenue Trend Chart ═══ */}
+      {data && data.monthlyTrend && data.monthlyTrend.length > 1 && (
+        <Section title={`月次推移（売上・原価・粗利）${siteFilter === 'all' ? '（全現場）' : ''}`}>
+          <div className="overflow-x-auto">
+            {/* Bar chart */}
+            <div className="flex items-end gap-2" style={{ minWidth: `${data.monthlyTrend.length * 70}px`, height: '260px' }}>
+              {data.monthlyTrend.map((m) => {
+                const maxVal = Math.max(
+                  ...data.monthlyTrend.map(t => Math.max(t.billing, t.cost, Math.abs(t.profit))),
+                  1
+                )
+                const billingH = (m.billing / maxVal) * 180
+                const costH = (m.cost / maxVal) * 180
+                const profitH = (Math.abs(m.profit) / maxVal) * 180
+                const profitRate = m.billing > 0 ? (m.profit / m.billing) * 100 : 0
+
+                return (
+                  <div key={m.ym} className="flex flex-col items-center flex-1" style={{ minWidth: '64px' }}>
+                    {/* 数値ラベル */}
+                    <div className="text-[9px] text-gray-400 text-center whitespace-nowrap">
+                      売{fmtYenMan(m.billing)}
+                    </div>
+                    {/* 3本バー */}
+                    <div className="flex items-end gap-0.5" style={{ height: '180px' }}>
+                      <div
+                        className="w-4 bg-blue-500 rounded-t"
+                        style={{ height: `${billingH}px` }}
+                        title={`売上 ${fmtYen(m.billing)}`}
+                      />
+                      <div
+                        className="w-4 bg-orange-400 rounded-t"
+                        style={{ height: `${costH}px` }}
+                        title={`原価 ${fmtYen(m.cost)}`}
+                      />
+                      <div
+                        className={`w-4 ${m.profit >= 0 ? 'bg-green-500' : 'bg-red-500'} rounded-t`}
+                        style={{ height: `${profitH}px` }}
+                        title={`粗利 ${fmtYen(m.profit)}`}
+                      />
+                    </div>
+                    {/* 粗利 + 粗利率 */}
+                    <div className={`text-[10px] font-bold text-center mt-1 whitespace-nowrap ${m.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {m.profit >= 0 ? '+' : ''}{fmtYenMan(m.profit)}
+                    </div>
+                    <div className="text-[9px] text-gray-400 text-center whitespace-nowrap">
+                      {profitRate.toFixed(1)}%
+                    </div>
+                    <div className="text-[11px] text-gray-600 font-medium mt-1">{ymToShortLabel(m.ym)}</div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* 凡例 */}
+            <div className="flex items-center gap-4 pt-2 mt-2 text-xs text-gray-500 dark:text-gray-400 border-t flex-wrap">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 bg-blue-500 rounded" /> 売上
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 bg-orange-400 rounded" /> 原価
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 bg-green-500 rounded" /> 粗利（黒字）
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 bg-red-500 rounded" /> 粗利（赤字）
+              </span>
+            </div>
+          </div>
+
+          {/* 月別数値テーブル */}
+          <div className="overflow-x-auto mt-4">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                  <th className="px-2 py-1.5 text-left">月</th>
+                  <th className="px-2 py-1.5 text-right">売上</th>
+                  <th className="px-2 py-1.5 text-right">原価</th>
+                  <th className="px-2 py-1.5 text-right">粗利</th>
+                  <th className="px-2 py-1.5 text-right">粗利率</th>
+                  <th className="px-2 py-1.5 text-right">鳶換算人工</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.monthlyTrend.map(m => {
+                  const profitRate = m.billing > 0 ? (m.profit / m.billing) * 100 : 0
+                  return (
+                    <tr key={m.ym} className="border-t dark:border-gray-700">
+                      <td className="px-2 py-1.5 font-medium">{ymToShortLabel(m.ym)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{fmtYen(m.billing)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-orange-600">{fmtYen(m.cost)}</td>
+                      <td className={`px-2 py-1.5 text-right tabular-nums font-bold ${m.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {m.profit >= 0 ? '+' : ''}{fmtYen(m.profit)}
+                      </td>
+                      <td className={`px-2 py-1.5 text-right tabular-nums ${m.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {profitRate.toFixed(1)}%
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-gray-600">{m.equiv.toFixed(1)}</td>
+                    </tr>
+                  )
+                })}
+                {/* 合計行 */}
+                {(() => {
+                  const tot = data.monthlyTrend.reduce((acc, m) => ({
+                    billing: acc.billing + m.billing,
+                    cost: acc.cost + m.cost,
+                    profit: acc.profit + m.profit,
+                    equiv: acc.equiv + m.equiv,
+                  }), { billing: 0, cost: 0, profit: 0, equiv: 0 })
+                  const totRate = tot.billing > 0 ? (tot.profit / tot.billing) * 100 : 0
+                  return (
+                    <tr className="border-t-2 border-hibi-navy bg-gray-50 dark:bg-gray-700 font-bold">
+                      <td className="px-2 py-2">合計</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{fmtYen(tot.billing)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-orange-600">{fmtYen(tot.cost)}</td>
+                      <td className={`px-2 py-2 text-right tabular-nums ${tot.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {tot.profit >= 0 ? '+' : ''}{fmtYen(tot.profit)}
+                      </td>
+                      <td className={`px-2 py-2 text-right tabular-nums ${tot.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {totRate.toFixed(1)}%
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums text-gray-700">{tot.equiv.toFixed(1)}</td>
+                    </tr>
+                  )
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
       {/* ═══ Cumulative FY Chart ═══ */}
       {data && data.cumulativeData && data.cumulativeData.length > 0 && (
         <Section title="累積推移（決算期）">
