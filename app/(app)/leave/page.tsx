@@ -837,26 +837,61 @@ export default function LeavePage() {
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{w.grantDays}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">
-                    {(!w.visa || w.visa === 'none') ? <span className="text-gray-300" title="日本人社員は期末買取制で繰越なし">—</span> : w.carryOver}
+                    {(!w.visa || w.visa === 'none') ? (
+                      <span className="text-gray-300" title="日本人社員は期末買取制で繰越なし">—</span>
+                    ) : (w.carryOver ?? 0) === 0 ? (
+                      <span className="text-gray-400">0</span>
+                    ) : (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="font-medium">{w.carryOver}</span>
+                        {(w.carryOverRemaining ?? 0) !== w.carryOver && (
+                          <span className="text-[9px] text-gray-500">
+                            残 {w.carryOverRemaining ?? 0}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums font-medium">{w.total}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-500">{w.adjustment > 0 ? w.adjustment : '—'}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{w.used}</td>
                   <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${w.remaining <= 3 ? 'text-red-500' : 'text-green-600'}`}>
-                    {w.remaining}
+                    <div className="flex flex-col items-end gap-0">
+                      <span>{w.remaining}</span>
+                      {/* Phase 8: FIFO内訳（繰越+当期の両方に値がある場合のみ表示） */}
+                      {(w.carryOverRemaining ?? 0) > 0 && (w.grantRemaining ?? 0) > 0 && (
+                        <span className="text-[9px] text-gray-400 font-normal">
+                          繰越{w.carryOverRemaining}+当期{w.grantRemaining}
+                        </span>
+                      )}
+                    </div>
                   </td>
-                  {/* Expiry column */}
+                  {/* Expiry column - Phase 8: 繰越時効と当期時効を2段表示 */}
                   <td className="px-3 py-2.5">
                     {w.expiryDate ? (
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${
-                        w.expiryStatus === 'expired'
-                          ? 'bg-red-100 text-red-700 font-bold'
-                          : w.expiryStatus === 'warning'
-                            ? 'bg-orange-100 text-orange-700'
-                            : 'text-gray-500'
-                      }`}>
-                        {w.expiryStatus === 'expired' ? '期限切れ' : w.expiryDate}
-                      </span>
+                      <div className="flex flex-col gap-0.5 items-start">
+                        {/* 繰越分の時効（carryOverRemainingがあれば表示） */}
+                        {(w.carryOverRemaining ?? 0) > 0 && w.carryOverExpiryDate && (
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 ${
+                            w.carryOverExpiryStatus === 'expired' ? 'bg-red-100 text-red-700 font-bold'
+                            : w.carryOverExpiryStatus === 'warning' ? 'bg-orange-100 text-orange-700 font-bold'
+                            : 'bg-blue-50 text-blue-700'
+                          }`} title="繰越分の時効">
+                            {w.carryOverExpiryStatus === 'warning' && '⏰'}
+                            繰越 {w.carryOverExpiryDate.slice(5).replace('/', '/')}
+                          </span>
+                        )}
+                        {/* 当期付与分の時効 */}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          w.expiryStatus === 'expired' ? 'bg-red-100 text-red-700 font-bold'
+                          : w.expiryStatus === 'warning' ? 'bg-orange-100 text-orange-700'
+                          : 'text-gray-500'
+                        }`} title="当期付与分の時効">
+                          {w.expiryStatus === 'expired' ? '期限切れ'
+                           : (w.carryOverRemaining ?? 0) > 0 ? `当期 ${w.expiryDate.slice(5)}`
+                           : w.expiryDate}
+                        </span>
+                      </div>
                     ) : <span className="text-xs text-gray-300">—</span>}
                   </td>
                   {/* Improved rate bar */}
