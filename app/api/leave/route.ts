@@ -234,13 +234,39 @@ export async function GET(request: NextRequest) {
         let grantDate = fyRecord?.grantDate || ''
         let inferredFromDefault = false
 
-        // 日本人社員（visa='none'）でgrantDate未設定の場合、決算期サイクルをデフォルト適用
-        // 10月1日〜翌9月30日の1年サイクル → 直近の10/1を起点にする
+        // 日本人社員（visa='none'）でgrantDate未設定の場合、決算期サイクル(10/1〜9/30)をデフォルト適用
+        // ただし「Pエントリがある期」を優先して選ぶ（過去のデータを失わないため）
         if (!grantDate && (!w.visa || w.visa === 'none')) {
           const now = new Date()
-          const m = now.getMonth() + 1 // 1-12
-          const startYear = m >= 10 ? now.getFullYear() : now.getFullYear() - 1
-          grantDate = `${startYear}-10-01`
+          const m = now.getMonth() + 1
+          const currentFyStartYear = m >= 10 ? now.getFullYear() : now.getFullYear() - 1
+
+          // この社員のPエントリが存在するFYを判定
+          // FY = (10/1 起点の年度) → 各PエントリのFY開始年を求める
+          const fyCandidates = new Set<number>()
+          for (const [key, entry] of Object.entries(allAtt)) {
+            if (!entry) continue
+            const e = entry as { p?: number | boolean }
+            if (!e.p) continue
+            const pk = parseDKey(key)
+            if (parseInt(pk.wid) !== w.id) continue
+            const ey = parseInt(pk.ym.slice(0, 4))
+            const em = parseInt(pk.ym.slice(4, 6))
+            const fyStart = em >= 10 ? ey : ey - 1
+            fyCandidates.add(fyStart)
+          }
+
+          // 直近のFYを選ぶ（Pエントリがあれば最新FY、なければ当期）
+          let selectedFyStart = currentFyStartYear
+          if (fyCandidates.size > 0) {
+            // 当期にPがあれば当期、なければ直近のあるFYを選ぶ
+            if (fyCandidates.has(currentFyStartYear)) {
+              selectedFyStart = currentFyStartYear
+            } else {
+              selectedFyStart = Math.max(...Array.from(fyCandidates))
+            }
+          }
+          grantDate = `${selectedFyStart}-10-01`
           inferredFromDefault = true
         }
 
