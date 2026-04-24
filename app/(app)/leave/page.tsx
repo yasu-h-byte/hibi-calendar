@@ -772,154 +772,177 @@ export default function LeavePage() {
       </div>
 
       {/* Table */}
+      {/* === リデザイン: 8列構成・固定行高・ステータスドット === */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
-              <th className="px-3 py-3">名前</th>
-              <th className="px-3 py-3">所属</th>
-              <th className="px-3 py-3">入社日</th>
-              <th className="px-3 py-3 text-center">発生月</th>
-              <th className="px-3 py-3 text-right">付与</th>
-              <th className="px-3 py-3 text-right">繰越</th>
-              <th className="px-3 py-3 text-right">合計</th>
-              <th className="px-3 py-3 text-right">調整</th>
-              <th className="px-3 py-3 text-right">消化</th>
-              <th className="px-3 py-3 text-right">残</th>
-              <th className="px-3 py-3">期限</th>
-              <th className="px-3 py-3">消化率</th>
-              <th className="px-3 py-3">操作</th>
+            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
+              <th className="px-3 py-3 font-semibold" style={{ width: '2%' }}></th>
+              <th className="px-3 py-3 font-semibold">スタッフ</th>
+              <th className="px-3 py-3 font-semibold text-right">付与</th>
+              <th className="px-3 py-3 font-semibold">消化</th>
+              <th className="px-3 py-3 font-semibold text-right">残日数</th>
+              <th className="px-3 py-3 font-semibold">時効</th>
+              <th className="px-3 py-3 font-semibold">警告</th>
+              <th className="px-3 py-3 font-semibold text-right">操作</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">読み込み中...</td></tr>
             ) : filteredWorkers.length === 0 ? (
-              <tr><td colSpan={13} className="px-3 py-8 text-center text-gray-400">対象者がいません</td></tr>
+              <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">対象者がいません</td></tr>
             ) : filteredWorkers.map(w => {
               const rate = w.total > 0 ? (w.used / w.total * 100) : 0
+              const hasCarryOver = (w.carryOverRemaining ?? 0) > 0 && !!w.carryOverExpiryDate
+              // ── 総合ステータス判定 (🟢 ok / 🟡 注意 / 🔴 警告) ──
+              let statusColor = 'bg-emerald-500'
+              let statusLabel = '正常'
+              if (w.expiryStatus === 'expired' || w.carryOverExpiryStatus === 'expired' || w.fiveDayShortfall > 0) {
+                statusColor = 'bg-red-500'
+                statusLabel = '要対応'
+              } else if (w.remaining <= 3 || w.carryOverExpiryStatus === 'warning' || w.expiryStatus === 'warning') {
+                statusColor = 'bg-amber-500'
+                statusLabel = '注意'
+              }
+              const visaLabel = !w.visa || w.visa === 'none' ? '' :
+                w.visa === 'jisshu1' ? '実習1号' : w.visa === 'jisshu2' ? '実習2号' :
+                w.visa === 'tokutei1' ? '特定1号' : w.visa === 'tokutei2' ? '特定2号' : w.visa
               return (
-                <tr key={w.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
-                  <td className="px-3 py-2.5 font-medium">{w.name}</td>
-                  <td className="px-3 py-2.5">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${w.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {w.org === 'hfu' ? 'HFU' : '日比'}
-                    </span>
+                <tr key={w.id}
+                  className="border-t border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer transition"
+                  onClick={() => { setEditWorker(w); setEditForm({ grantDays: String(w.grantDays), carryOver: String(w.carryOver), adjustment: String(w.adjustment), grantDate: w.grantDate || '' }) }}
+                  style={{ height: '64px' }}
+                >
+                  {/* Status dot */}
+                  <td className="pl-3 pr-0">
+                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${statusColor}`} title={statusLabel}></span>
                   </td>
-                  <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                    {w.hireDate || '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-center text-xs">
-                    {editingGrantMonth === w.id ? (
-                      <select
-                        autoFocus
-                        disabled={grantMonthSaving}
-                        defaultValue={w.grantMonth ?? ''}
-                        onChange={e => handleGrantMonthUpdate(w.id, e.target.value)}
-                        onBlur={() => setEditingGrantMonth(null)}
-                        className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-1 py-0.5 text-xs"
-                      >
-                        <option value="">未設定</option>
-                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{m}月</option>)}
-                      </select>
-                    ) : (
-                      <button
-                        onClick={() => setEditingGrantMonth(w.id)}
-                        className="text-gray-600 dark:text-gray-400 hover:text-hibi-navy hover:underline cursor-pointer"
-                        title="クリックで変更"
-                      >
-                        {w.grantMonth ? `${w.grantMonth}月` : (() => {
-                          const calc = calcGrantMonthFromHire(w.hireDate)
-                          return calc ? <span className="text-gray-400 italic">{calc}月</span> : '—'
-                        })()}
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{w.grantDays}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
-                    {(!w.visa || w.visa === 'none') ? (
-                      <span className="text-gray-300" title="日本人社員は期末買取制で繰越なし">—</span>
-                    ) : (w.carryOver ?? 0) === 0 ? (
-                      <span className="text-gray-400">0</span>
-                    ) : (
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="font-medium">{w.carryOver}</span>
-                        {(w.carryOverRemaining ?? 0) !== w.carryOver && (
-                          <span className="text-[9px] text-gray-500">
-                            残 {w.carryOverRemaining ?? 0}
-                          </span>
+                  {/* スタッフ: 名前 + 所属/ビザ + 入社日 (必要最小限) */}
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">{w.name}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${w.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {w.org === 'hfu' ? 'HFU' : '日比'}
+                        </span>
+                        {visaLabel && (
+                          <span className="text-[10px] text-gray-500">{visaLabel}</span>
                         )}
                       </div>
-                    )}
+                      <div className="text-[10px] text-gray-400">
+                        {w.grantDate ? `付与日 ${w.grantDate}` : '付与日未設定'}
+                        {w.inferredFromDefault && <span className="ml-1 text-blue-500">💡推定</span>}
+                      </div>
+                    </div>
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-medium">{w.total}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-500">{w.adjustment > 0 ? w.adjustment : '—'}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{w.used}</td>
-                  <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${w.remaining <= 3 ? 'text-red-500' : 'text-green-600'}`}>
-                    <div className="flex flex-col items-end gap-0">
-                      <span>{w.remaining}</span>
-                      {/* Phase 8: FIFO内訳（繰越+当期の両方に値がある場合のみ表示） */}
-                      {(w.carryOverRemaining ?? 0) > 0 && (w.grantRemaining ?? 0) > 0 && (
-                        <span className="text-[9px] text-gray-400 font-normal">
-                          繰越{w.carryOverRemaining}+当期{w.grantRemaining}
+                  {/* 付与: 付与日数 + 繰越を並列表示 */}
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-sm font-medium">
+                        {w.grantDays}<span className="text-[10px] text-gray-400 ml-0.5">日</span>
+                      </span>
+                      {hasCarryOver && (
+                        <span className="text-[10px] text-blue-600">
+                          + 繰越 {w.carryOverRemaining}
+                        </span>
+                      )}
+                      {w.adjustment > 0 && (
+                        <span className="text-[10px] text-gray-400" title="調整日数">
+                          調整 {w.adjustment}
                         </span>
                       )}
                     </div>
                   </td>
-                  {/* Expiry column - Phase 8: 繰越時効と当期時効を2段表示 */}
-                  <td className="px-3 py-2.5">
-                    {w.expiryDate ? (
-                      <div className="flex flex-col gap-0.5 items-start">
-                        {/* 繰越分の時効（carryOverRemainingがあれば表示） */}
-                        {(w.carryOverRemaining ?? 0) > 0 && w.carryOverExpiryDate && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 ${
-                            w.carryOverExpiryStatus === 'expired' ? 'bg-red-100 text-red-700 font-bold'
-                            : w.carryOverExpiryStatus === 'warning' ? 'bg-orange-100 text-orange-700 font-bold'
-                            : 'bg-blue-50 text-blue-700'
-                          }`} title="繰越分の時効">
-                            {w.carryOverExpiryStatus === 'warning' && '⏰'}
-                            繰越 {w.carryOverExpiryDate.slice(5).replace('/', '/')}
-                          </span>
-                        )}
-                        {/* 当期付与分の時効 */}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          w.expiryStatus === 'expired' ? 'bg-red-100 text-red-700 font-bold'
-                          : w.expiryStatus === 'warning' ? 'bg-orange-100 text-orange-700'
-                          : 'text-gray-500'
-                        }`} title="当期付与分の時効">
-                          {w.expiryStatus === 'expired' ? '期限切れ'
-                           : (w.carryOverRemaining ?? 0) > 0 ? `当期 ${w.expiryDate.slice(5)}`
-                           : w.expiryDate}
-                        </span>
-                      </div>
-                    ) : <span className="text-xs text-gray-300">—</span>}
-                  </td>
-                  {/* Improved rate bar */}
-                  <td className="px-3 py-2.5">
+                  {/* 消化: バー + 数値 */}
+                  <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-20 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full bg-gradient-to-r ${rateBarColor(rate)} transition-all`}
                           style={{ width: `${Math.min(100, rate)}%` }}
                         />
                       </div>
-                      <span className="text-xs text-gray-600 font-medium min-w-[2.5rem]">{rate.toFixed(0)}%</span>
+                      <div className="text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap tabular-nums">
+                        <span className="font-medium">{w.used}</span><span className="text-gray-400">/{w.total}</span>
+                      </div>
+                    </div>
+                  </td>
+                  {/* 残日数: 大きく表示 */}
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    <span className={`text-2xl font-bold ${w.remaining <= 3 ? 'text-red-500' : w.remaining <= 5 ? 'text-amber-500' : 'text-gray-800 dark:text-gray-100'}`}>
+                      {w.remaining}
+                    </span>
+                    <span className="text-[10px] text-gray-400 ml-0.5">日</span>
+                  </td>
+                  {/* 時効: 固定2行（繰越時効 / 当期時効） */}
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-0.5">
+                      {hasCarryOver ? (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap w-fit ${
+                          w.carryOverExpiryStatus === 'expired' ? 'bg-red-100 text-red-700 font-bold'
+                          : w.carryOverExpiryStatus === 'warning' ? 'bg-orange-100 text-orange-700 font-bold'
+                          : 'bg-blue-50 text-blue-700'
+                        }`} title={`繰越分${w.carryOverRemaining}日の時効日`}>
+                          {w.carryOverExpiryStatus === 'warning' && <span>⏰</span>}
+                          <span className="font-medium">繰越</span>
+                          <span className="tabular-nums">{w.carryOverExpiryDate}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-300">—</span>
+                      )}
+                      {w.expiryDate ? (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap w-fit ${
+                          w.expiryStatus === 'expired' ? 'bg-red-100 text-red-700 font-bold'
+                          : w.expiryStatus === 'warning' ? 'bg-orange-100 text-orange-700'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                        }`} title={`当期付与分${w.grantRemaining ?? w.remaining}日の時効日`}>
+                          <span className="font-medium">{hasCarryOver ? '当期' : '期限'}</span>
+                          <span className="tabular-nums">{w.expiryStatus === 'expired' ? '切れ' : w.expiryDate}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-300">—</span>
+                      )}
+                    </div>
+                  </td>
+                  {/* 警告: 年5日未達 等 */}
+                  <td className="px-3 py-2">
+                    <div className="flex flex-wrap gap-1">
                       {w.fiveDayShortfall > 0 && (
-                        <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap" title="年5日取得義務未達">
+                        <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold" title="年5日取得義務未達">
                           5日未達
+                        </span>
+                      )}
+                      {w.expiryStatus === 'expired' && (
+                        <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">
+                          期限切れ
+                        </span>
+                      )}
+                      {w.carryOverExpiryStatus === 'warning' && (
+                        <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold" title="繰越分の時効間近">
+                          繰越3ヶ月
                         </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2.5">
-                    <button onClick={() => { setEditWorker(w); setEditForm({ grantDays: String(w.grantDays), carryOver: String(w.carryOver), adjustment: String(w.adjustment), grantDate: w.grantDate || '' }) }}
-                      className="text-hibi-navy text-xs underline">編集</button>
+                  {/* 操作 */}
+                  <td className="px-3 py-2 text-right">
+                    <button onClick={e => {
+                      e.stopPropagation()
+                      setEditWorker(w); setEditForm({ grantDays: String(w.grantDays), carryOver: String(w.carryOver), adjustment: String(w.adjustment), grantDate: w.grantDate || '' })
+                    }} className="text-hibi-navy dark:text-blue-400 text-xs hover:underline px-2 py-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/30">編集</button>
                   </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
+      </div>
+      <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-4 pl-1">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>正常</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>注意（残≤5日/時効3ヶ月以内）</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>要対応（期限切れ/年5日未達）</span>
+        <span className="ml-auto text-gray-400">行をクリックで編集</span>
       </div>
 
       </>)}
