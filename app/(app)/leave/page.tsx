@@ -779,19 +779,18 @@ export default function LeavePage() {
             <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
               <th className="px-3 py-3 font-semibold" style={{ width: '2%' }}></th>
               <th className="px-3 py-3 font-semibold">スタッフ</th>
-              <th className="px-3 py-3 font-semibold text-right">付与</th>
+              <th className="px-3 py-3 font-semibold">有給の内訳</th>
               <th className="px-3 py-3 font-semibold">消化</th>
               <th className="px-3 py-3 font-semibold text-right">残日数</th>
-              <th className="px-3 py-3 font-semibold">時効</th>
               <th className="px-3 py-3 font-semibold">警告</th>
               <th className="px-3 py-3 font-semibold text-right">操作</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400">読み込み中...</td></tr>
             ) : filteredWorkers.length === 0 ? (
-              <tr><td colSpan={8} className="px-3 py-10 text-center text-gray-400">対象者がいません</td></tr>
+              <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400">対象者がいません</td></tr>
             ) : filteredWorkers.map(w => {
               const rate = w.total > 0 ? (w.used / w.total * 100) : 0
               const hasCarryOver = (w.carryOverRemaining ?? 0) > 0 && !!w.carryOverExpiryDate
@@ -806,13 +805,17 @@ export default function LeavePage() {
                 statusLabel = '注意'
               }
               const visaLabel = !w.visa || w.visa === 'none' ? '' :
-                w.visa === 'jisshu1' ? '実習1号' : w.visa === 'jisshu2' ? '実習2号' :
-                w.visa === 'tokutei1' ? '特定1号' : w.visa === 'tokutei2' ? '特定2号' : w.visa
+                w.visa === 'jisshu1' ? '実習1号' :
+                w.visa === 'jisshu2' ? '実習2号' :
+                w.visa === 'jisshu3' ? '実習3号' :
+                w.visa === 'tokutei1' ? '特定1号' :
+                w.visa === 'tokutei2' ? '特定2号' :
+                w.visa === 'tokutei3' ? '特定3号' :
+                w.visa
               return (
                 <tr key={w.id}
                   className="border-t border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer transition"
                   onClick={() => { setEditWorker(w); setEditForm({ grantDays: String(w.grantDays), carryOver: String(w.carryOver), adjustment: String(w.adjustment), grantDate: w.grantDate || '' }) }}
-                  style={{ height: '64px' }}
                 >
                   {/* Status dot */}
                   <td className="pl-3 pr-0">
@@ -836,21 +839,56 @@ export default function LeavePage() {
                       </div>
                     </div>
                   </td>
-                  {/* 付与: 付与日数 + 繰越を並列表示 */}
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span className="text-sm font-medium">
-                        {w.grantDays}<span className="text-[10px] text-gray-400 ml-0.5">日</span>
-                      </span>
+                  {/* 有給の内訳: バケット毎に [ラベル | 日数 | 時効] を1行で表示 (FIFO 順: 繰越 → 当期) */}
+                  <td className="px-3 py-2">
+                    <div className="flex flex-col gap-1">
+                      {/* 繰越バケット（あれば表示） */}
                       {hasCarryOver && (
-                        <span className="text-[10px] text-blue-600">
-                          + 繰越 {w.carryOverRemaining}
-                        </span>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={`px-1.5 py-0.5 rounded font-medium text-[10px] whitespace-nowrap ${
+                            w.carryOverExpiryStatus === 'expired' ? 'bg-red-100 text-red-700'
+                            : w.carryOverExpiryStatus === 'warning' ? 'bg-orange-100 text-orange-700'
+                            : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {w.carryOverExpiryStatus === 'warning' && '⏰ '}繰越
+                          </span>
+                          <span className="tabular-nums font-medium text-gray-700 dark:text-gray-200 min-w-[32px] text-right">
+                            {w.carryOverRemaining}<span className="text-[10px] text-gray-400 ml-0.5">日</span>
+                          </span>
+                          <span className={`text-[10px] tabular-nums ${
+                            w.carryOverExpiryStatus === 'warning' ? 'text-orange-600 font-semibold' : 'text-gray-400'
+                          }`}>
+                            〜{w.carryOverExpiryDate}
+                          </span>
+                        </div>
                       )}
+                      {/* 当期バケット */}
+                      {w.grantDays > 0 && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={`px-1.5 py-0.5 rounded font-medium text-[10px] whitespace-nowrap ${
+                            w.expiryStatus === 'expired' ? 'bg-red-100 text-red-700'
+                            : w.expiryStatus === 'warning' ? 'bg-orange-100 text-orange-700'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                          }`}>
+                            当期
+                          </span>
+                          <span className="tabular-nums font-medium text-gray-700 dark:text-gray-200 min-w-[32px] text-right">
+                            {w.grantRemaining ?? w.grantDays}<span className="text-[10px] text-gray-400 ml-0.5">日</span>
+                          </span>
+                          <span className={`text-[10px] tabular-nums ${
+                            w.expiryStatus === 'expired' ? 'text-red-600 font-semibold'
+                            : w.expiryStatus === 'warning' ? 'text-orange-600 font-semibold'
+                            : 'text-gray-400'
+                          }`}>
+                            〜{w.expiryStatus === 'expired' ? '期限切れ' : w.expiryDate}
+                          </span>
+                        </div>
+                      )}
+                      {/* 調整がある場合のみ副次情報として */}
                       {w.adjustment > 0 && (
-                        <span className="text-[10px] text-gray-400" title="調整日数">
-                          調整 {w.adjustment}
-                        </span>
+                        <div className="text-[10px] text-gray-400">
+                          調整 {w.adjustment}日
+                        </div>
                       )}
                     </div>
                   </td>
@@ -874,36 +912,6 @@ export default function LeavePage() {
                       {w.remaining}
                     </span>
                     <span className="text-[10px] text-gray-400 ml-0.5">日</span>
-                  </td>
-                  {/* 時効: 固定2行（繰越時効 / 当期時効） */}
-                  <td className="px-3 py-2">
-                    <div className="flex flex-col gap-0.5">
-                      {hasCarryOver ? (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap w-fit ${
-                          w.carryOverExpiryStatus === 'expired' ? 'bg-red-100 text-red-700 font-bold'
-                          : w.carryOverExpiryStatus === 'warning' ? 'bg-orange-100 text-orange-700 font-bold'
-                          : 'bg-blue-50 text-blue-700'
-                        }`} title={`繰越分${w.carryOverRemaining}日の時効日`}>
-                          {w.carryOverExpiryStatus === 'warning' && <span>⏰</span>}
-                          <span className="font-medium">繰越</span>
-                          <span className="tabular-nums">{w.carryOverExpiryDate}</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-gray-300">—</span>
-                      )}
-                      {w.expiryDate ? (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 whitespace-nowrap w-fit ${
-                          w.expiryStatus === 'expired' ? 'bg-red-100 text-red-700 font-bold'
-                          : w.expiryStatus === 'warning' ? 'bg-orange-100 text-orange-700'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                        }`} title={`当期付与分${w.grantRemaining ?? w.remaining}日の時効日`}>
-                          <span className="font-medium">{hasCarryOver ? '当期' : '期限'}</span>
-                          <span className="tabular-nums">{w.expiryStatus === 'expired' ? '切れ' : w.expiryDate}</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-gray-300">—</span>
-                      )}
-                    </div>
                   </td>
                   {/* 警告: 年5日未達 等 */}
                   <td className="px-3 py-2">
