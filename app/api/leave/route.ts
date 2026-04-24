@@ -225,29 +225,30 @@ export async function GET(request: NextRequest) {
         const total = grantDays + carryOver
 
         // 付与日から1年間のPL消化日数を集計（月別内訳付き）
+        // grantDateが空の場合: 全期間のPエントリを集計（移行データ整備中の対策）
         let periodUsed = 0
         const plCalendarLocal: string[] = []
         const monthlyUsage: Record<string, number> = {} // YYYYMM -> count
-        if (grantDate) {
-          const gd = new Date(grantDate)
-          const gdEnd = new Date(gd)
-          gdEnd.setFullYear(gdEnd.getFullYear() + 1)
-          for (const [key, entry] of Object.entries(allAtt)) {
-            if (!entry) continue
-            const e = entry as { p?: number }
-            if (e.p === 1) {
-              const pk = parseDKey(key)
-              const wid = parseInt(pk.wid)
-              if (wid === w.id) {
-                const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-                if (entryDate >= gd && entryDate < gdEnd) {
-                  periodUsed++
-                  plCalendarLocal.push(`${pk.ym}${pk.day}`)
-                  monthlyUsage[pk.ym] = (monthlyUsage[pk.ym] || 0) + 1
-                }
-              }
-            }
-          }
+
+        const hasPeriod = !!grantDate
+        const gd = hasPeriod ? new Date(grantDate) : null
+        const gdEnd = hasPeriod ? new Date(gd!) : null
+        if (gdEnd) gdEnd.setFullYear(gdEnd.getFullYear() + 1)
+
+        for (const [key, entry] of Object.entries(allAtt)) {
+          if (!entry) continue
+          const e = entry as { p?: number | boolean }
+          // 旧データ互換: e.p === 1 だけでなく truthy な値をすべて有給として扱う
+          if (!e.p) continue
+          const pk = parseDKey(key)
+          const wid = parseInt(pk.wid)
+          if (wid !== w.id) continue
+          const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
+          // grantDateがある場合のみ期間で絞り込み、ない場合は全期間集計
+          if (hasPeriod && (entryDate < gd! || entryDate >= gdEnd!)) continue
+          periodUsed++
+          plCalendarLocal.push(`${pk.ym}${pk.day}`)
+          monthlyUsage[pk.ym] = (monthlyUsage[pk.ym] || 0) + 1
         }
         const used = adjustment + periodUsed
         const remaining = Math.max(0, total - used)
