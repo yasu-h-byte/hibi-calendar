@@ -3,7 +3,7 @@ import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
-import { ymKey } from '@/lib/attendance'
+import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 
 /**
  * 前期残日数から新FY付与時の carryOver 値を計算する共通ヘルパー
@@ -111,6 +111,64 @@ export async function POST(request: NextRequest) {
       const now = new Date()
       const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
       return jst.toISOString().slice(0, 10)
+    }
+
+    if (action === 'designateLeaves') {
+      // Phase 5: 時季指定（年5日取得義務への対応）
+      // 管理者が指定日に P を自動入力し、PLRecord の designatedLeaves に履歴記録
+      const { workerId, dates, siteId, note } = body as {
+        workerId: number
+        dates: string[]          // ["2026-05-01", "2026-05-02", ...]
+        siteId: string           // 出面書き込み先の現場ID
+        note?: string
+      }
+      if (!workerId || !Array.isArray(dates) || dates.length === 0 || !siteId) {
+        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+      }
+
+      const data = snap.data()
+      const plData = (data.plData || {}) as Record<string, Record<string, unknown>[]>
+      const wRecords = plData[String(workerId)] || []
+
+      // 対象FYレコード: 最新の付与レコード
+      const granted = wRecords
+        .filter(r => r.grantDate && ((r.grantDays as number | undefined) ?? 0) > 0)
+        .slice()
+        .sort((a, b) => new Date(a.grantDate as string).getTime() - new Date(b.grantDate as string).getTime())
+      const targetRec = granted[granted.length - 1]
+      if (!targetRec) {
+        return NextResponse.json({ error: 'No granted record found for worker' }, { status: 404 })
+      }
+
+      // 出面に P を書き込み
+      type DesignatedEntry = { date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string }
+      const history = (targetRec.designatedLeaves as DesignatedEntry[] | undefined) ?? []
+      const written: string[] = []
+
+      for (const dateStr of dates) {
+        const d = new Date(dateStr)
+        if (isNaN(d.getTime())) continue
+        const ym = ymKey(d.getFullYear(), d.getMonth() + 1)
+        const day = d.getDate()
+        // 出面書き込み: { w: 0, p: 1 }
+        await setAttendanceEntry(siteId, workerId, ym, day, { w: 0, p: 1 })
+        history.push({
+          date: dateStr,
+          designatedAt: nowIso,
+          designatedBy: actor,
+          note,
+          siteId,
+        })
+        written.push(dateStr)
+      }
+
+      targetRec.designatedLeaves = history
+      targetRec.lastEditedAt = nowIso
+      targetRec.lastEditedBy = actor
+
+      plData[String(workerId)] = wRecords
+      await updateDoc(docRef, { plData })
+      return NextResponse.json({ success: true, written })
     }
 
     if (action === 'processExpiry') {

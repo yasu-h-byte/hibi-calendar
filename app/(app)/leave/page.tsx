@@ -127,6 +127,13 @@ export default function LeavePage() {
   const [pendingModal, setPendingModal] = useState(false)
   const [pendingForm, setPendingForm] = useState<Record<number, { grantDate: string; grantDays: string; include: boolean }>>({})
   const [pendingExecuting, setPendingExecuting] = useState(false)
+
+  // 時季指定（Phase 5）
+  const [designateWorker, setDesignateWorker] = useState<PLWorker | null>(null)
+  const [designateDates, setDesignateDates] = useState<string[]>([])
+  const [designateSiteId, setDesignateSiteId] = useState<string>('')
+  const [designateNote, setDesignateNote] = useState<string>('')
+  const [designateSubmitting, setDesignateSubmitting] = useState(false)
   // 申請管理
   const [leaveRequests, setLeaveRequests] = useState<{ id: string; workerId: number; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; foremanApprovedBy?: number; reviewedAt?: string; rejectedReason?: string }[]>([])
   const [sites, setSites] = useState<{ id: string; name: string }[]>([])
@@ -396,6 +403,46 @@ export default function LeavePage() {
           </button>
         </div>
       </div>
+
+      {/* 年5日未達アラートバナー (Phase 5) */}
+      {(() => {
+        const shortfallWorkers = workers.filter(w => w.fiveDayShortfall > 0)
+        if (shortfallWorkers.length === 0) return null
+        return (
+          <div className="w-full bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/30 dark:to-pink-900/30 border border-red-300 dark:border-red-700 rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="text-2xl">⚠️</div>
+              <div>
+                <div className="text-sm font-bold text-red-900 dark:text-red-200">
+                  年5日取得義務 未達: {shortfallWorkers.length}名
+                </div>
+                <div className="text-xs text-red-700 dark:text-red-300 mt-0.5">
+                  法定義務として会社が時季指定する必要があります。
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1 mt-3">
+              {shortfallWorkers.map(w => (
+                <div key={w.id} className="flex items-center justify-between gap-2 text-xs bg-white/80 dark:bg-gray-800/80 rounded px-2 py-1.5">
+                  <div>
+                    <span className="font-medium">{w.name}</span>
+                    <span className="text-gray-500 ml-2">消化 {w.periodUsed}日 / 義務5日 → あと {w.fiveDayShortfall}日</span>
+                    <span className="text-gray-400 ml-2">期限: {w.expiryDate}</span>
+                  </div>
+                  <button onClick={() => {
+                    setDesignateWorker(w)
+                    setDesignateDates([])
+                    setDesignateSiteId(sites[0]?.id || '')
+                    setDesignateNote('')
+                  }} className="bg-red-500 text-white px-2.5 py-1 rounded text-[10px] font-bold hover:bg-red-600">
+                    時季指定する
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 未付与検知バナー */}
       {pendingGrants.length > 0 && (
@@ -1125,6 +1172,97 @@ export default function LeavePage() {
                 {saving ? '保存中...' : '保存'}
               </button>
               <button onClick={() => setEditWorker(null)} className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 時季指定モーダル (Phase 5) */}
+      {designateWorker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !designateSubmitting && setDesignateWorker(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-5 animate-modalIn" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-2 mb-4">
+              <div className="text-2xl">🗓</div>
+              <div>
+                <h3 className="text-lg font-bold text-hibi-navy dark:text-white">時季指定</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {designateWorker.name}さん / 消化 {designateWorker.periodUsed}日 → あと {designateWorker.fiveDayShortfall}日義務
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">指定日（複数可）</label>
+                <div className="space-y-1">
+                  {designateDates.map((d, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <input type="date" value={d}
+                        onChange={e => setDesignateDates(prev => prev.map((x, j) => j === i ? e.target.value : x))}
+                        className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-sm" />
+                      <button onClick={() => setDesignateDates(prev => prev.filter((_, j) => j !== i))}
+                        className="text-red-500 text-sm">×</button>
+                    </div>
+                  ))}
+                  <button onClick={() => setDesignateDates(prev => [...prev, ''])}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                    + 日付を追加
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">対象現場</label>
+                <select value={designateSiteId} onChange={e => setDesignateSiteId(e.target.value)}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm">
+                  <option value="">-- 選択してください --</option>
+                  {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">出面にPを記録する現場（当日の所属現場）</p>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">備考（任意）</label>
+                <input type="text" value={designateNote} onChange={e => setDesignateNote(e.target.value)}
+                  placeholder="例: 年5日取得義務対応"
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm" />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button
+                disabled={designateSubmitting || designateDates.filter(d => !!d).length === 0 || !designateSiteId}
+                onClick={async () => {
+                  const validDates = designateDates.filter(d => !!d)
+                  if (!confirm(`${designateWorker.name}さんに以下の日を時季指定しますか？\n${validDates.join('\n')}\n\n出面にPが自動入力され、時季指定履歴が記録されます。`)) return
+                  setDesignateSubmitting(true)
+                  try {
+                    const res = await fetch('/api/leave', {
+                      method: 'POST',
+                      headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'designateLeaves',
+                        workerId: designateWorker.id,
+                        dates: validDates,
+                        siteId: designateSiteId,
+                        note: designateNote,
+                      }),
+                    })
+                    if (res.ok) {
+                      setDesignateWorker(null)
+                      fetchData()
+                    } else {
+                      alert('時季指定に失敗しました')
+                    }
+                  } finally { setDesignateSubmitting(false) }
+                }}
+                className="flex-1 bg-red-600 text-white rounded-lg py-2 font-bold text-sm disabled:opacity-50">
+                {designateSubmitting ? '処理中...' : '時季指定する'}
+              </button>
+              <button disabled={designateSubmitting} onClick={() => setDesignateWorker(null)}
+                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2 text-sm disabled:opacity-50">
+                キャンセル
+              </button>
             </div>
           </div>
         </div>
