@@ -280,6 +280,37 @@ export default function LeavePage() {
     } finally { setSaving(false) }
   }
 
+  const handleMigrate = async () => {
+    if (!confirm('データ正規化を実行しますか？\n\n以下を一括修復します:\n・旧フィールド(grant/carry/adj)を新フィールドに昇格\n・fy型ブレをString統一\n・grantDate欠落の自動補完\n・同一fy重複レコードの集約\n・期限切れレコードの自動アーカイブ\n\n冪等な処理なので何度実行しても安全です。')) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/leave', {
+        method: 'POST',
+        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'migrate' }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const s = data.stats
+        const msg =
+          `✅ データ正規化完了\n\n` +
+          `処理ワーカー数: ${s.workersProcessed}\n` +
+          `処理レコード数: ${s.recordsProcessed}\n` +
+          `旧フィールド昇格: ${s.legacyFieldsUpgraded}\n` +
+          `fy型正規化: ${s.fyNormalized}\n` +
+          `grantDate補完: ${s.grantDatesInferred}\n` +
+          `重複レコード集約: ${s.duplicatesMerged}\n` +
+          `期限切れアーカイブ: ${s.recordsArchived}\n\n` +
+          (s.mismatches.length > 0 ? `⚠️ fy/grantDate年ズレ: ${s.mismatches.length}件\n${s.mismatches.slice(0,5).map((m: {name:string;fy:string;grantDate:string}) => `  - ${m.name}: fy=${m.fy}, grantDate=${m.grantDate}`).join('\n')}${s.mismatches.length > 5 ? `\n  ... ほか${s.mismatches.length - 5}件` : ''}\n\n` : '') +
+          (s.warnings.length > 0 ? `⚠️ 警告: ${s.warnings.length}件\n${s.warnings.slice(0,5).map((w: {name:string;note:string}) => `  - ${w.name}: ${w.note}`).join('\n')}${s.warnings.length > 5 ? `\n  ... ほか${s.warnings.length - 5}件` : ''}\n` : '')
+        alert(msg)
+        fetchData()
+      } else {
+        alert('データ正規化に失敗しました')
+      }
+    } finally { setSaving(false) }
+  }
+
   // PLカレンダーは直近1年を表示
 
   // ── PL Calendar data ── 直近1年を表示
@@ -314,6 +345,11 @@ export default function LeavePage() {
           <button onClick={handleCarryOver} disabled={saving}
             className="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition disabled:opacity-50">
             繰越自動計算
+          </button>
+          <button onClick={handleMigrate} disabled={saving}
+            className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 transition disabled:opacity-50"
+            title="旧データ移行整理: grantDate補完・fy型統一・重複集約・アーカイブ">
+            🔧 データ正規化
           </button>
         </div>
       </div>

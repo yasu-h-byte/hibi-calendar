@@ -108,6 +108,175 @@ export async function POST(request: NextRequest) {
       return jst.toISOString().slice(0, 10)
     }
 
+    if (action === 'migrate') {
+      // Phase 1 データ正規化マイグレーション
+      // 冪等な処理 — 何度実行しても結果は同じ
+      const data = snap.data()
+      type Worker = { id: number; name: string; retired?: boolean; job?: string; visa?: string; hireDate?: string }
+      type PLRecFull = {
+        fy: string | number
+        grantDate?: string
+        grantDays?: number
+        carryOver?: number
+        adjustment?: number
+        used?: number
+        expiry?: string
+        _archived?: boolean
+        grant?: number
+        carry?: number
+        adj?: number
+      }
+      const workers = (data.workers || []) as Worker[]
+      const plData = (data.plData || {}) as Record<string, PLRecFull[]>
+      const today = todayJST()
+
+      const stats = {
+        workersProcessed: 0,
+        recordsProcessed: 0,
+        legacyFieldsUpgraded: 0,
+        fyNormalized: 0,
+        grantDatesInferred: 0,
+        duplicatesMerged: 0,
+        recordsArchived: 0,
+        mismatches: [] as { workerId: number; name: string; fy: string; grantDate: string; note: string }[],
+        warnings: [] as { workerId: number; name: string; note: string }[],
+      }
+
+      for (const [wid, origRecords] of Object.entries(plData)) {
+        const workerId = Number(wid)
+        const worker = workers.find(w => w.id === workerId)
+        const workerName = worker?.name || `id=${wid}`
+        const isJp = !worker?.visa || worker.visa === 'none'
+        let records = [...origRecords] as PLRecFull[]
+        stats.workersProcessed++
+        stats.recordsProcessed += records.length
+
+        // STEP 1: 旧フィールド昇格 & fy正規化
+        records = records.map(r => {
+          const clean = { ...r } as Record<string, unknown>
+          let upgraded = false
+          if (clean.grant !== undefined && (clean.grantDays === undefined || clean.grantDays === null)) {
+            clean.grantDays = clean.grant
+            upgraded = true
+          }
+          if (clean.carry !== undefined && (clean.carryOver === undefined || clean.carryOver === null)) {
+            clean.carryOver = clean.carry
+            upgraded = true
+          }
+          if (clean.adj !== undefined && (clean.adjustment === undefined || clean.adjustment === null)) {
+            clean.adjustment = clean.adj
+            upgraded = true
+          }
+          if (clean.grant !== undefined || clean.carry !== undefined || clean.adj !== undefined) {
+            delete clean.grant
+            delete clean.carry
+            delete clean.adj
+          }
+          if (upgraded) stats.legacyFieldsUpgraded++
+          // fy正規化
+          if (clean.fy !== undefined && typeof clean.fy !== 'string') {
+            clean.fy = String(clean.fy)
+            stats.fyNormalized++
+          }
+          return clean as PLRecFull
+        })
+
+        // STEP 2: grantDate欠落の補完
+        //   日本人: fy があれば ${fy}-10-01 を補完
+        //   外国人: 同一fyの他レコードにgrantDateがあれば採用、なければwarning
+        for (let i = 0; i < records.length; i++) {
+          const r = records[i]
+          if (r.grantDate) continue
+          if (!(r.grantDays && r.grantDays > 0)) continue  // 空データは補完せずスキップ
+          const fyStr = String(r.fy || '')
+          if (!fyStr) {
+            stats.warnings.push({ workerId, name: workerName, note: 'grantDate/fyともに欠落したレコードあり (補完不可)' })
+            continue
+          }
+          if (isJp) {
+            r.grantDate = `${fyStr}-10-01`
+            stats.grantDatesInferred++
+          } else {
+            // 外国人: 他の同一fyレコードから補完可能か
+            const sibling = records.find(x => String(x.fy) === fyStr && x.grantDate)
+            if (sibling && sibling.grantDate) {
+              r.grantDate = sibling.grantDate
+              stats.grantDatesInferred++
+            } else {
+              stats.warnings.push({ workerId, name: workerName, note: `外国人 fy=${fyStr} のgrantDate欠落 (推定不可、管理画面で設定が必要)` })
+            }
+          }
+        }
+
+        // STEP 3: 同一fyの重複集約
+        //   戦略: 最新の grantDate を持つレコードを「真」とし、古い重複は捨てる
+        //   (古いレコードから max値をマージすると、legacy値の混入で二重計上が発生する)
+        const fyGroups = new Map<string, PLRecFull[]>()
+        for (const r of records) {
+          const k = String(r.fy ?? '')
+          if (!fyGroups.has(k)) fyGroups.set(k, [])
+          fyGroups.get(k)!.push(r)
+        }
+        const merged: PLRecFull[] = []
+        for (const [, group] of fyGroups) {
+          if (group.length === 1) {
+            merged.push(group[0])
+            continue
+          }
+          stats.duplicatesMerged += group.length - 1
+          // 並び順の優先度:
+          //  1. grantDays > 0 を優先（空データより本物のレコードを選ぶ）
+          //  2. grantDate が新しい方を優先（最新の編集を「真」とする）
+          //  3. grantDays が大きい方を優先（タイブレイク）
+          const sorted = group.slice().sort((a, b) => {
+            const gdA = a.grantDays ?? 0
+            const gdB = b.grantDays ?? 0
+            if ((gdA > 0) !== (gdB > 0)) return gdB - gdA
+            const dateA = a.grantDate ? new Date(a.grantDate).getTime() : 0
+            const dateB = b.grantDate ? new Date(b.grantDate).getTime() : 0
+            if (dateB !== dateA) return dateB - dateA
+            return gdB - gdA
+          })
+          merged.push(sorted[0])  // 他のレコードは捨てる (最新のものが真)
+        }
+        records = merged
+
+        // STEP 4: fy と grantDate の年ズレ検出 (警告のみ)
+        for (const r of records) {
+          if (!r.grantDate) continue
+          const gdYear = r.grantDate.slice(0, 4)
+          const fyStr = String(r.fy ?? '')
+          if (!fyStr) continue
+          if (gdYear !== fyStr) {
+            stats.mismatches.push({ workerId, name: workerName, fy: fyStr, grantDate: r.grantDate, note: `fy=${fyStr} だがgrantDate=${r.grantDate}` })
+          }
+        }
+
+        // STEP 5: 期限切れレコードのアーカイブ
+        //   grantDate+2年 < today なら _archived: true
+        //   表示ロジックは _archived を除外
+        for (const r of records) {
+          if (r._archived) continue
+          if (!r.grantDate) continue
+          const gd = new Date(r.grantDate)
+          if (isNaN(gd.getTime())) continue
+          const exp = new Date(gd)
+          exp.setFullYear(exp.getFullYear() + 2)
+          exp.setDate(exp.getDate() - 1)
+          const expStr = exp.toISOString().slice(0, 10)
+          if (expStr < today) {
+            r._archived = true
+            stats.recordsArchived++
+          }
+        }
+
+        plData[wid] = records
+      }
+
+      await updateDoc(docRef, { plData })
+      return NextResponse.json({ success: true, stats })
+    }
+
     if (action === 'getPendingGrants') {
       // 付与時期を迎えているが未付与のワーカー一覧を返す（半自動付与用）
       const data = snap.data()
@@ -636,7 +805,9 @@ export async function GET(request: NextRequest) {
     const workers = main.workers
       .filter(w => !w.retired && w.job !== 'yakuin' && w.job !== 'jimu')
       .map(w => {
-        const plRecords = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
+        const plRecordsRaw = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number; _archived?: boolean }[]
+        // アーカイブ済みレコードは表示対象から除外（期限切れで2年以上経過）
+        const plRecords = plRecordsRaw.filter(r => !r._archived)
 
         // 現在FYを判定
         // - 日本人社員（職長・とび等）: 全員「10/1起点」（決算期サイクル統一）
