@@ -1241,3 +1241,231 @@ export function workbookToBuffer(wb: XLSX.WorkBook): Buffer {
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' })
   return Buffer.from(buf)
 }
+
+// ────────────────────────────────────────
+//  有給管理簿 (Phase 7)
+//  労基法施行規則24条の7準拠
+// ────────────────────────────────────────
+
+export interface LeaveLedgerWorker {
+  id: number
+  name: string
+  org: string
+  visa: string
+  hireDate?: string
+  retired?: boolean
+}
+
+export interface LeaveLedgerRecord {
+  fy: string | number
+  grantDate?: string
+  grantDays?: number
+  carryOver?: number
+  adjustment?: number
+  expiredDays?: number
+  expiredAt?: string
+  buyoutDays?: number
+  buyoutHistory?: Array<{ at: string; days: number; amount?: number; reason?: string }>
+  designatedLeaves?: Array<{ date: string; note?: string }>
+  method?: string
+  grantedAt?: string
+  grantedBy?: number | string
+  _archived?: boolean
+}
+
+export interface LeaveLedgerData {
+  workers: LeaveLedgerWorker[]
+  plData: Record<string, LeaveLedgerRecord[]>
+  allAtt: Record<string, AttendanceEntry>  // 全期間の出面データ
+}
+
+export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
+  const { workers, plData, allAtt } = data
+  const wb = XLSX.utils.book_new()
+
+  const fmtDate = (iso?: string): string => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return iso
+    return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  const fmtExpiry = (grantDate?: string): string => {
+    if (!grantDate) return ''
+    const gd = new Date(grantDate)
+    if (isNaN(gd.getTime())) return ''
+    const exp = new Date(gd)
+    exp.setFullYear(exp.getFullYear() + 2)
+    exp.setDate(exp.getDate() - 1)
+    return fmtDate(exp.toISOString())
+  }
+
+  // periodUsed 計算（grantDate..+1年 のPエントリ）
+  const countPeriodUsed = (workerId: number, grantDate?: string): number => {
+    if (!grantDate) return 0
+    const gd = new Date(grantDate)
+    if (isNaN(gd.getTime())) return 0
+    const end = new Date(gd); end.setFullYear(end.getFullYear() + 1)
+    let count = 0
+    for (const [key, entry] of Object.entries(allAtt)) {
+      if (!entry) continue
+      const e = entry as { p?: number | boolean }
+      if (!e.p) continue
+      const pk = parseDKey(key)
+      if (parseInt(pk.wid) !== workerId) continue
+      const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
+      if (d >= gd && d < end) count++
+    }
+    return count
+  }
+
+  // ─── シート1: 管理簿 ───
+  const ledgerRows: unknown[][] = []
+  ledgerRows.push(['有給休暇管理簿'])
+  ledgerRows.push([`作成日: ${fmtDate(new Date().toISOString())}`])
+  ledgerRows.push([])
+  ledgerRows.push([
+    'ID', '氏名', '区分', 'ビザ', '入社日',
+    'FY', '基準日(付与日)', '付与日数', '繰越日数', '調整',
+    '取得日数', '残日数', '失効日数', '買取日数',
+    '有効期限', 'ステータス', '付与方法',
+  ])
+
+  const visaLabel = (v: string): string => {
+    if (!v || v === 'none') return '日本人'
+    if (v === 'jisshu1') return '実習1号'
+    if (v === 'jisshu2') return '実習2号'
+    if (v === 'tokutei1') return '特定1号'
+    if (v === 'tokutei2') return '特定2号'
+    return v
+  }
+
+  const methodLabel = (m?: string): string => {
+    if (!m) return ''
+    if (m === 'manual') return '手動'
+    if (m === 'auto-pending') return '半自動'
+    if (m === 'migration') return 'マイグレ'
+    if (m === 'legacy') return '旧データ'
+    return m
+  }
+
+  for (const w of workers) {
+    if (w.retired) continue
+    const records = plData[String(w.id)] || []
+    // 付与日でソート
+    const sorted = records.slice().sort((a, b) => {
+      const da = a.grantDate ? new Date(a.grantDate).getTime() : 0
+      const db = b.grantDate ? new Date(b.grantDate).getTime() : 0
+      return da - db
+    })
+    for (const r of sorted) {
+      const periodUsed = countPeriodUsed(w.id, r.grantDate)
+      const grantDays = r.grantDays ?? 0
+      const carryOver = r.carryOver ?? 0
+      const adjustment = r.adjustment ?? 0
+      const used = adjustment + periodUsed
+      const remaining = Math.max(0, grantDays + carryOver - used)
+      const status = r._archived ? 'アーカイブ' : (r.expiredAt ? '失効済' : (r.grantDate && new Date(r.grantDate).getTime() + 2 * 365 * 86400000 < Date.now() ? '期限切れ' : '有効'))
+      ledgerRows.push([
+        w.id, w.name, w.org || '', visaLabel(w.visa), w.hireDate || '',
+        String(r.fy ?? ''), r.grantDate || '', grantDays, carryOver, adjustment,
+        used, remaining, r.expiredDays ?? '', r.buyoutDays ?? '',
+        fmtExpiry(r.grantDate), status, methodLabel(r.method),
+      ])
+    }
+  }
+
+  const ws1 = XLSX.utils.aoa_to_sheet(ledgerRows)
+  setColWidths(ws1, [5, 14, 6, 8, 11, 6, 12, 8, 8, 6, 8, 7, 8, 8, 12, 10, 8])
+  XLSX.utils.book_append_sheet(wb, ws1, '管理簿')
+
+  // ─── シート2: 取得日一覧 ───
+  const consumptionRows: unknown[][] = []
+  consumptionRows.push(['有給取得日一覧'])
+  consumptionRows.push([`作成日: ${fmtDate(new Date().toISOString())}`])
+  consumptionRows.push([])
+  consumptionRows.push(['ID', '氏名', '取得日', 'ビザ', '備考'])
+
+  type Entry = { workerId: number; name: string; visa: string; date: string; note: string }
+  const entries: Entry[] = []
+  for (const [key, entry] of Object.entries(allAtt)) {
+    if (!entry) continue
+    const e = entry as { p?: number | boolean }
+    if (!e.p) continue
+    const pk = parseDKey(key)
+    const wid = parseInt(pk.wid)
+    const w = workers.find(x => x.id === wid)
+    if (!w) continue
+    const dateStr = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
+
+    // designatedLeaves に該当するか判定
+    let note = ''
+    for (const r of (plData[String(wid)] || [])) {
+      const designated = r.designatedLeaves || []
+      const found = designated.find(d => d.date === dateStr)
+      if (found) {
+        note = `時季指定${found.note ? `: ${found.note}` : ''}`
+        break
+      }
+    }
+    entries.push({ workerId: wid, name: w.name, visa: w.visa, date: dateStr, note })
+  }
+  entries.sort((a, b) => a.date.localeCompare(b.date) || a.workerId - b.workerId)
+  for (const e of entries) {
+    consumptionRows.push([e.workerId, e.name, e.date, visaLabel(e.visa), e.note])
+  }
+
+  const ws2 = XLSX.utils.aoa_to_sheet(consumptionRows)
+  setColWidths(ws2, [5, 14, 12, 8, 20])
+  XLSX.utils.book_append_sheet(wb, ws2, '取得日一覧')
+
+  // ─── シート3: 買取記録 ───
+  const buyoutRows: unknown[][] = []
+  buyoutRows.push(['有給買取記録'])
+  buyoutRows.push([`作成日: ${fmtDate(new Date().toISOString())}`])
+  buyoutRows.push([])
+  buyoutRows.push(['ID', '氏名', 'FY', '買取日', '日数', '金額(¥)', '理由'])
+
+  for (const w of workers) {
+    const records = plData[String(w.id)] || []
+    for (const r of records) {
+      const history = r.buyoutHistory || []
+      for (const h of history) {
+        const reasonLabel = h.reason === 'year-end' ? '期末買取' : h.reason === 'retirement' ? '退職時清算' : h.reason || ''
+        buyoutRows.push([
+          w.id, w.name, String(r.fy ?? ''), fmtDate(h.at),
+          h.days, h.amount ?? '', reasonLabel,
+        ])
+      }
+    }
+  }
+
+  const ws3 = XLSX.utils.aoa_to_sheet(buyoutRows)
+  setColWidths(ws3, [5, 14, 6, 12, 6, 10, 14])
+  XLSX.utils.book_append_sheet(wb, ws3, '買取記録')
+
+  // ─── シート4: 時季指定記録 ───
+  const designRows: unknown[][] = []
+  designRows.push(['時季指定記録 (年5日取得義務対応)'])
+  designRows.push([`作成日: ${fmtDate(new Date().toISOString())}`])
+  designRows.push([])
+  designRows.push(['ID', '氏名', 'FY', '指定日', '指定日時', '備考'])
+
+  for (const w of workers) {
+    const records = plData[String(w.id)] || []
+    for (const r of records) {
+      const designated = r.designatedLeaves || []
+      for (const d of designated) {
+        designRows.push([
+          w.id, w.name, String(r.fy ?? ''), d.date, '', d.note || '',
+        ])
+      }
+    }
+  }
+
+  const ws4 = XLSX.utils.aoa_to_sheet(designRows)
+  setColWidths(ws4, [5, 14, 6, 12, 20, 20])
+  XLSX.utils.book_append_sheet(wb, ws4, '時季指定')
+
+  return wb
+}

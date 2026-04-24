@@ -411,6 +411,23 @@ export default function LeavePage() {
             title="時効(2年)を迎えた有給を失効として記録（通常は月1回Cronで自動実行）">
             ⏳ 時効処理
           </button>
+          <button onClick={async () => {
+            const res = await fetch('/api/leave/export-ledger', {
+              headers: { 'x-admin-password': password },
+            })
+            if (!res.ok) { alert('管理簿の出力に失敗しました'); return }
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `有給管理簿_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`
+            a.click()
+            URL.revokeObjectURL(url)
+          }} disabled={saving}
+            className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50"
+            title="労基法施行規則24条の7準拠の有給管理簿をExcelで出力">
+            📊 管理簿出力
+          </button>
         </div>
       </div>
 
