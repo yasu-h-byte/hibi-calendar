@@ -65,6 +65,8 @@ export async function POST(request: NextRequest) {
         fy: string
         legalDays: number
         reason: string
+        needsAttention: boolean  // hireDate未登録など、手動確認が必要なフラグ
+        attentionNote?: string
       }
       const pending: PendingGrant[] = []
 
@@ -84,9 +86,20 @@ export async function POST(request: NextRequest) {
         return `在籍 ${y}年${m}ヶ月`
       }
 
-      // レコードが「付与済み」とみなせるか
-      const hasGrantForFy = (records: PLRecord[], fy: string): boolean =>
-        records.some(r => String(r.fy) === fy && ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0))
+      // 「付与日近傍（±7日）に既存の付与レコードがあるか」で判定
+      // fy一致だと、過去のバグで fy='2026' なのに grantDate が '2025-04-23' のような
+      // 不整合レコードに対して誤って「付与済み」と判定してしまう問題を回避
+      const hasGrantNear = (records: PLRecord[], targetDate: string): boolean => {
+        const target = new Date(targetDate).getTime()
+        if (isNaN(target)) return false
+        return records.some(r => {
+          if (!((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)) return false
+          if (!r.grantDate) return false
+          const d = new Date(r.grantDate).getTime()
+          if (isNaN(d)) return false
+          return Math.abs(d - target) <= 7 * 86400000
+        })
+      }
 
       for (const w of workers) {
         if (w.retired) continue
@@ -103,9 +116,10 @@ export async function POST(request: NextRequest) {
           const expectedFy = String(currentFyStart)
           const expectedGrantDate = `${currentFyStart}-10-01`
 
-          // その付与日が今日以前（= 既に過ぎている付与タイミング）で、対応FYレコードが未作成
-          if (expectedGrantDate <= today && !hasGrantForFy(records, expectedFy)) {
-            const legalDays = w.hireDate ? calcLegalPL(w.hireDate, expectedGrantDate) : 10
+          // 付与日近傍に既存レコードが無ければ対象
+          if (expectedGrantDate <= today && !hasGrantNear(records, expectedGrantDate)) {
+            const hasHire = !!w.hireDate
+            const legalDays = hasHire ? calcLegalPL(w.hireDate!, expectedGrantDate) : 10
             pending.push({
               workerId: w.id,
               name: w.name,
@@ -116,6 +130,8 @@ export async function POST(request: NextRequest) {
               fy: expectedFy,
               legalDays,
               reason: `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`,
+              needsAttention: !hasHire,
+              attentionNote: !hasHire ? '入社日未登録のため法定日数(10日)はデフォルト値です' : undefined,
             })
           }
         } else {
@@ -146,6 +162,7 @@ export async function POST(request: NextRequest) {
                     fy: String(firstGrant.getFullYear()),
                     legalDays,
                     reason: '初回付与（入社6ヶ月経過）',
+                    needsAttention: false,
                   })
                 }
               }
@@ -159,22 +176,23 @@ export async function POST(request: NextRequest) {
           nextGrant.setFullYear(nextGrant.getFullYear() + 1)
           const nextGrantStr = nextGrant.toISOString().slice(0, 10)
 
-          if (nextGrantStr <= today) {
+          if (nextGrantStr <= today && !hasGrantNear(records, nextGrantStr)) {
             const nextFy = String(nextGrant.getFullYear())
-            if (!hasGrantForFy(records, nextFy)) {
-              const legalDays = w.hireDate ? calcLegalPL(w.hireDate, nextGrantStr) : 10
-              pending.push({
-                workerId: w.id,
-                name: w.name,
-                visa: w.visa || '',
-                hireDate: w.hireDate || '',
-                tenureText: tenureTextOf(w.hireDate || '', nextGrantStr),
-                nextGrantDate: nextGrantStr,
-                fy: nextFy,
-                legalDays,
-                reason: `前回付与(${lastRec.grantDate})から1年経過`,
-              })
-            }
+            const hasHire = !!w.hireDate
+            const legalDays = hasHire ? calcLegalPL(w.hireDate!, nextGrantStr) : 10
+            pending.push({
+              workerId: w.id,
+              name: w.name,
+              visa: w.visa || '',
+              hireDate: w.hireDate || '',
+              tenureText: tenureTextOf(w.hireDate || '', nextGrantStr),
+              nextGrantDate: nextGrantStr,
+              fy: nextFy,
+              legalDays,
+              reason: `前回付与(${lastRec.grantDate})から1年経過`,
+              needsAttention: !hasHire,
+              attentionNote: !hasHire ? '入社日未登録のため法定日数(10日)はデフォルト値です' : undefined,
+            })
           }
         }
       }

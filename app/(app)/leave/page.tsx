@@ -115,7 +115,7 @@ export default function LeavePage() {
   const [activeTab, setActiveTab] = useState<'list' | 'requests' | 'monthly' | 'calendar'>('list')
 
   // 半自動付与（未付与検知）
-  type PendingGrant = { workerId: number; name: string; visa: string; hireDate: string; tenureText: string; nextGrantDate: string; fy: string; legalDays: number; reason: string }
+  type PendingGrant = { workerId: number; name: string; visa: string; hireDate: string; tenureText: string; nextGrantDate: string; fy: string; legalDays: number; reason: string; needsAttention?: boolean; attentionNote?: string }
   const [pendingGrants, setPendingGrants] = useState<PendingGrant[]>([])
   const [pendingModal, setPendingModal] = useState(false)
   const [pendingForm, setPendingForm] = useState<Record<number, { grantDate: string; grantDays: string; include: boolean }>>({})
@@ -168,13 +168,13 @@ export default function LeavePage() {
         const d = await pendRes.json()
         const list = (d.pending || []) as PendingGrant[]
         setPendingGrants(list)
-        // フォーム初期値を作成（デフォルトで全員対象にチェック）
+        // フォーム初期値: 注意フラグが立っているワーカーは「デフォルト外す」（管理者に確認を促す）
         const form: Record<number, { grantDate: string; grantDays: string; include: boolean }> = {}
         list.forEach(p => {
           form[p.workerId] = {
             grantDate: p.nextGrantDate,
             grantDays: String(p.legalDays || 10),
-            include: true,
+            include: !p.needsAttention,
           }
         })
         setPendingForm(form)
@@ -1027,13 +1027,25 @@ export default function LeavePage() {
                 const isJp = !p.visa || p.visa === 'none'
                 const visaLabel = isJp ? '日本人' : (p.visa === 'jisshu1' ? '実習1号' : p.visa === 'jisshu2' ? '実習2号' : p.visa === 'tokutei1' ? '特定1号' : p.visa === 'tokutei2' ? '特定2号' : p.visa)
                 return (
-                  <div key={p.workerId} className={`border rounded-lg p-3 ${f.include ? 'border-amber-300 bg-amber-50/50 dark:bg-amber-900/10' : 'border-gray-200 bg-gray-50 dark:bg-gray-900/50 opacity-60'}`}>
+                  <div key={p.workerId} className={`border rounded-lg p-3 ${
+                    f.include
+                      ? (p.needsAttention ? 'border-red-300 bg-red-50/50 dark:bg-red-900/10' : 'border-amber-300 bg-amber-50/50 dark:bg-amber-900/10')
+                      : 'border-gray-200 bg-gray-50 dark:bg-gray-900/50 opacity-60'
+                  }`}>
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div>
-                        <div className="font-bold text-sm text-hibi-navy dark:text-white">{p.name}</div>
+                        <div className="font-bold text-sm text-hibi-navy dark:text-white flex items-center gap-1.5">
+                          {p.name}
+                          {p.needsAttention && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-md font-normal">⚠️ 要確認</span>}
+                        </div>
                         <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
                           {visaLabel} | {p.tenureText} | {p.reason}
                         </div>
+                        {p.attentionNote && (
+                          <div className="text-[10px] text-red-600 dark:text-red-400 mt-1">
+                            ⚠️ {p.attentionNote}
+                          </div>
+                        )}
                       </div>
                       <label className="flex items-center gap-1 text-xs cursor-pointer">
                         <input type="checkbox" checked={f.include}
