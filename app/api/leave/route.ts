@@ -112,8 +112,8 @@ export async function POST(request: NextRequest) {
       const plUsage: Record<number, number> = {}
       for (const [key, entry] of Object.entries(allAtt)) {
         if (!entry) continue
-        const e = entry as { p?: number }
-        if (e.p && e.p === 1) {
+        const e = entry as { p?: number | boolean }
+        if (e.p) {  // 旧データ互換: truthy判定
           const pk = parseDKey(key)
           const wid = parseInt(pk.wid)
           plUsage[wid] = (plUsage[wid] || 0) + 1
@@ -146,15 +146,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Default: edit PL record
-    const { workerId, fy, grantDays, carryOver, adjustment } = body
+    const { workerId, fy, grantDays, carryOver, adjustment, grantDate } = body
     const plData = (snap.data().plData || {}) as Record<string, { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }[]>
     const key = String(workerId)
     const records = plData[key] || []
     const idx = records.findIndex(r => r.fy === fy)
 
-    const record = { fy, grantDays: Number(grantDays) || 0, carryOver: Number(carryOver) || 0, adjustment: Number(adjustment) || 0, used: 0 }
+    const record: Record<string, unknown> = {
+      fy,
+      grantDays: Number(grantDays) || 0,
+      carryOver: Number(carryOver) || 0,
+      adjustment: Number(adjustment) || 0,
+      used: 0,
+    }
+    // grantDate が指定されたら更新（空文字の場合はクリア）
+    if (grantDate !== undefined) {
+      record.grantDate = grantDate || ''
+    }
     if (idx >= 0) records[idx] = { ...records[idx], ...record }
-    else records.push(record)
+    else records.push(record as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number })
 
     plData[key] = records
     await updateDoc(docRef, { plData })

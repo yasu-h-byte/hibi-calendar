@@ -98,7 +98,7 @@ export default function LeavePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editWorker, setEditWorker] = useState<PLWorker | null>(null)
-  const [editForm, setEditForm] = useState({ grantDays: '', carryOver: '', adjustment: '' })
+  const [editForm, setEditForm] = useState({ grantDays: '', carryOver: '', adjustment: '', grantDate: '' })
   const [saving, setSaving] = useState(false)
   const [orgFilter, setOrgFilter] = useState<OrgFilter>('all')
   const [showGrantModal, setShowGrantModal] = useState(false)
@@ -628,7 +628,7 @@ export default function LeavePage() {
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
-                    <button onClick={() => { setEditWorker(w); setEditForm({ grantDays: String(w.grantDays), carryOver: String(w.carryOver), adjustment: String(w.adjustment) }) }}
+                    <button onClick={() => { setEditWorker(w); setEditForm({ grantDays: String(w.grantDays), carryOver: String(w.carryOver), adjustment: String(w.adjustment), grantDate: w.grantDate || '' }) }}
                       className="text-hibi-navy text-xs underline">編集</button>
                   </td>
                 </tr>
@@ -868,6 +868,29 @@ export default function LeavePage() {
             <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">{editWorker.name} - 有給編集</h3>
             <div className="space-y-3">
               <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                  付与日（有給サイクルの開始日）
+                </label>
+                <input type="date" value={editForm.grantDate}
+                  onChange={e => setEditForm({ ...editForm, grantDate: e.target.value })}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                <p className="text-[10px] text-gray-400 mt-1">
+                  この日付から1年間を「現在の有給期間」として扱います。<br/>
+                  入社日が不明な日本人社員は、現在の有給サイクルの開始日を入力してください。
+                </p>
+                {editForm.grantDate && (() => {
+                  const gd = new Date(editForm.grantDate)
+                  const end = new Date(gd); end.setFullYear(end.getFullYear() + 1); end.setDate(end.getDate() - 1)
+                  const expiry = new Date(gd); expiry.setFullYear(expiry.getFullYear() + 2); expiry.setDate(expiry.getDate() - 1)
+                  const fmt = (d: Date) => `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+                  return (
+                    <div className="text-[10px] text-gray-500 mt-1">
+                      期間: {fmt(gd)} 〜 {fmt(end)} / 有効期限: {fmt(expiry)}
+                    </div>
+                  )
+                })()}
+              </div>
+              <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">付与日数</label>
                 <input type="number" value={editForm.grantDays} onChange={e => setEditForm({ ...editForm, grantDays: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
@@ -878,7 +901,9 @@ export default function LeavePage() {
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
               <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">調整</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                  調整（過去の消化分など、カレンダー外で計上したい日数）
+                </label>
                 <input type="number" value={editForm.adjustment} onChange={e => setEditForm({ ...editForm, adjustment: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
