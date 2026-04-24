@@ -55,8 +55,43 @@ export async function POST(request: NextRequest) {
       const { workerId, fy, grantDays, grantMonth, grantDate, carryOver: bodyCarryOver } = body
       const plData = (snap.data().plData || {}) as Record<string, { fy: string | number; grantDate?: string; grantDays: number; carryOver: number; adjustment: number; grant?: number; carry?: number; adj?: number }[]>
       const key = String(workerId)
-      const records = plData[key] || []
-      // fy は旧データで number 型の場合があるため、文字列比較に正規化
+      let records = plData[key] || []
+
+      // === 旧アプリ互換フィールドの一括クリーンアップ & 重複FY集約 ===
+      records = records.map(r => {
+        const clean = { ...r } as Record<string, unknown>
+        if (clean.grant !== undefined && (clean.grantDays === undefined || clean.grantDays === null)) {
+          clean.grantDays = clean.grant
+        }
+        if (clean.carry !== undefined && (clean.carryOver === undefined || clean.carryOver === null)) {
+          clean.carryOver = clean.carry
+        }
+        if (clean.adj !== undefined && (clean.adjustment === undefined || clean.adjustment === null)) {
+          clean.adjustment = clean.adj
+        }
+        delete clean.grant
+        delete clean.carry
+        delete clean.adj
+        if (clean.fy !== undefined) clean.fy = String(clean.fy)
+        return clean as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+      })
+      // 同じfyで重複があれば集約
+      type PLRec = { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+      const fyMap = new Map<string, PLRec>()
+      for (const rRaw of records) {
+        const r = rRaw as PLRec
+        const k = String(r.fy)
+        const existing = fyMap.get(k)
+        if (!existing) {
+          fyMap.set(k, r)
+        } else {
+          const winner = r.grantDays >= existing.grantDays ? r : existing
+          const loser = r.grantDays >= existing.grantDays ? existing : r
+          fyMap.set(k, { ...loser, ...winner, grantDate: winner.grantDate || loser.grantDate || '' })
+        }
+      }
+      records = Array.from(fyMap.values())
+
       const idx = records.findIndex(r => String(r.fy) === String(fy))
 
       const record = {
@@ -68,12 +103,7 @@ export async function POST(request: NextRequest) {
         used: 0,
       }
       if (idx >= 0) {
-        const merged = { ...records[idx], ...record } as Record<string, unknown>
-        // 旧アプリの互換フィールドを削除（GET側のmax値復活を防ぐ）
-        delete merged.grant
-        delete merged.carry
-        delete merged.adj
-        records[idx] = merged as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+        records[idx] = { ...records[idx], ...record } as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
       } else {
         records.push(record)
       }
@@ -166,8 +196,50 @@ export async function POST(request: NextRequest) {
     const { workerId, fy, grantDays, carryOver, adjustment, grantDate } = body
     const plData = (snap.data().plData || {}) as Record<string, { fy: string | number; grantDate?: string; grantDays: number; carryOver: number; adjustment: number; grant?: number; carry?: number; adj?: number }[]>
     const key = String(workerId)
-    const records = plData[key] || []
-    // fy は旧データで number 型の場合があるため、文字列比較に正規化
+    let records = plData[key] || []
+
+    // === 旧アプリ互換フィールドの一括クリーンアップ & 重複FYの集約 ===
+    // すべてのレコードで grant→grantDays / carry→carryOver / adj→adjustment に昇格し、
+    // 旧フィールドを削除する。また fy も String に正規化する。
+    records = records.map(r => {
+      const clean = { ...r } as Record<string, unknown>
+      if (clean.grant !== undefined && (clean.grantDays === undefined || clean.grantDays === null)) {
+        clean.grantDays = clean.grant
+      }
+      if (clean.carry !== undefined && (clean.carryOver === undefined || clean.carryOver === null)) {
+        clean.carryOver = clean.carry
+      }
+      if (clean.adj !== undefined && (clean.adjustment === undefined || clean.adjustment === null)) {
+        clean.adjustment = clean.adj
+      }
+      delete clean.grant
+      delete clean.carry
+      delete clean.adj
+      if (clean.fy !== undefined) clean.fy = String(clean.fy)
+      return clean as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+    })
+
+    // 同じfyで重複レコードがあれば集約（過去のfy型ブレバグで発生した重複の修復）
+    type PLRec2 = { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+    const fyMap2 = new Map<string, PLRec2>()
+    for (const rRaw of records) {
+      const r = rRaw as PLRec2
+      const k = String(r.fy)
+      const existing = fyMap2.get(k)
+      if (!existing) {
+        fyMap2.set(k, r)
+      } else {
+        const winner = r.grantDays >= existing.grantDays ? r : existing
+        const loser = r.grantDays >= existing.grantDays ? existing : r
+        fyMap2.set(k, {
+          ...loser,
+          ...winner,
+          grantDate: winner.grantDate || loser.grantDate || '',
+        })
+      }
+    }
+    records = Array.from(fyMap2.values())
+
     const idx = records.findIndex(r => String(r.fy) === String(fy))
 
     const record: Record<string, unknown> = {
@@ -182,13 +254,7 @@ export async function POST(request: NextRequest) {
       record.grantDate = grantDate || ''
     }
     if (idx >= 0) {
-      const merged = { ...records[idx], ...record } as Record<string, unknown>
-      // 旧アプリの互換フィールド（grant/carry/adj）を明示的に削除
-      // これがないと GET 側の Math.max(adjustment, adj) 等で旧値が復活してしまう
-      delete merged.grant
-      delete merged.carry
-      delete merged.adj
-      records[idx] = merged as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+      records[idx] = { ...records[idx], ...record } as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
     } else {
       records.push(record as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number })
     }
