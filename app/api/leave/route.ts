@@ -150,18 +150,22 @@ export async function POST(request: NextRequest) {
         return `在籍 ${y}年${m}ヶ月`
       }
 
-      // 「付与日近傍（±7日）に既存の付与レコードがあるか」で判定
-      // fy一致だと、過去のバグで fy='2026' なのに grantDate が '2025-04-23' のような
-      // 不整合レコードに対して誤って「付与済み」と判定してしまう問題を回避
-      const hasGrantNear = (records: PLRecord[], targetDate: string): boolean => {
-        const target = new Date(targetDate).getTime()
-        if (isNaN(target)) return false
+      // 「付与判定」: 以下のいずれかで「付与済み」とみなす
+      //   (a) 付与日近傍（±7日）に既存レコードあり → 通常パターン
+      //   (b) grantDateが欠落していても fy が一致する → 「本田文人」のような移行期データに対応
+      // (a)単独だと grantDate 欠落レコードを見逃し、(b)単独だと fy 不整合データで誤スキップ。
+      // 両条件のOR合成が最適解。
+      const hasGrantForExpected = (records: PLRecord[], expectedFy: string, expectedGrantDate: string): boolean => {
+        const target = new Date(expectedGrantDate).getTime()
         return records.some(r => {
           if (!((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)) return false
-          if (!r.grantDate) return false
-          const d = new Date(r.grantDate).getTime()
-          if (isNaN(d)) return false
-          return Math.abs(d - target) <= 7 * 86400000
+          if (r.grantDate) {
+            const d = new Date(r.grantDate).getTime()
+            if (isNaN(d) || isNaN(target)) return false
+            return Math.abs(d - target) <= 7 * 86400000
+          }
+          // grantDate 欠落 → fy一致で判定
+          return String(r.fy) === expectedFy
         })
       }
 
@@ -180,8 +184,8 @@ export async function POST(request: NextRequest) {
           const expectedFy = String(currentFyStart)
           const expectedGrantDate = `${currentFyStart}-10-01`
 
-          // 付与日近傍に既存レコードが無ければ対象
-          if (expectedGrantDate <= today && !hasGrantNear(records, expectedGrantDate)) {
+          // 付与判定に引っかからなければ対象
+          if (expectedGrantDate <= today && !hasGrantForExpected(records, expectedFy, expectedGrantDate)) {
             const hasHire = !!w.hireDate
             const legalDays = hasHire ? calcLegalPL(w.hireDate!, expectedGrantDate) : 10
             pending.push({
@@ -240,8 +244,9 @@ export async function POST(request: NextRequest) {
           nextGrant.setFullYear(nextGrant.getFullYear() + 1)
           const nextGrantStr = nextGrant.toISOString().slice(0, 10)
 
-          if (nextGrantStr <= today && !hasGrantNear(records, nextGrantStr)) {
-            const nextFy = String(nextGrant.getFullYear())
+          const nextFyForCheck = String(nextGrant.getFullYear())
+          if (nextGrantStr <= today && !hasGrantForExpected(records, nextFyForCheck, nextGrantStr)) {
+            const nextFy = nextFyForCheck
             const hasHire = !!w.hireDate
             const legalDays = hasHire ? calcLegalPL(w.hireDate!, nextGrantStr) : 10
             pending.push({
