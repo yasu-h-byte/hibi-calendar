@@ -211,6 +211,20 @@ export async function POST(request: NextRequest) {
 
       const plData = (snap.data().plData || {}) as Record<string, { fy: string | number; grantDate?: string; grantDays?: number; carryOver?: number; adjustment?: number; grant?: number; carry?: number; adj?: number }[]>
 
+      // 付与日近傍(±7日)に既存付与があるかチェック（二重付与防止用）
+      type PLRec = { fy: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number }
+      const hasGrantNear = (records: PLRec[], targetDate: string): boolean => {
+        const target = new Date(targetDate).getTime()
+        if (isNaN(target)) return false
+        return records.some(r => {
+          if (!((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)) return false
+          if (!r.grantDate) return false
+          const d = new Date(r.grantDate).getTime()
+          if (isNaN(d)) return false
+          return Math.abs(d - target) <= 7 * 86400000
+        })
+      }
+
       let granted = 0
       for (const g of grants) {
         const key = String(g.workerId)
@@ -229,8 +243,14 @@ export async function POST(request: NextRequest) {
           return clean as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
         })
 
-        // 既にその fy のレコードがあればスキップ（安全策）
-        const existsIdx = records.findIndex(r => String(r.fy) === String(g.fy))
+        // 「付与日近傍」に既存レコードがあればスキップ（真の二重付与防止）
+        // fy一致だけで判定すると、不整合レコード { fy:"2026", grantDate:"2025-04-23" }
+        // のようなデータで誤スキップが発生するため、grantDate値ベースで判定する
+        if (hasGrantNear(records, g.grantDate)) {
+          plData[key] = records  // cleanup結果は反映
+          continue
+        }
+
         const newRec = {
           fy: String(g.fy),
           grantDate: g.grantDate,
@@ -239,16 +259,7 @@ export async function POST(request: NextRequest) {
           adjustment: 0,
           used: 0,
         }
-        if (existsIdx >= 0) {
-          const existing = records[existsIdx] as { grantDays?: number; grant?: number }
-          if (((existing.grantDays ?? 0) > 0) || ((existing.grant ?? 0) > 0)) {
-            // 既に付与済み → スキップ
-            continue
-          }
-          records[existsIdx] = { ...records[existsIdx], ...newRec }
-        } else {
-          records.push(newRec)
-        }
+        records.push(newRec)
         plData[key] = records
         granted++
       }
