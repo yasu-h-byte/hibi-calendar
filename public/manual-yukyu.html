@@ -111,6 +111,7 @@
   <li><a href="#normal-flow">通常の運用フロー（付与・消化・繰越）</a></li>
   <li><a href="#five-day">年5日取得義務の時季指定</a></li>
   <li><a href="#buyout">期末買取・退職時清算</a></li>
+  <li><a href="#fifo">繰越分と当期付与分の管理（重要）</a></li>
   <li><a href="#expiry">時効処理（2年失効）</a></li>
   <li><a href="#ledger">有給管理簿のExcel出力</a></li>
   <li><a href="#irregular">イレギュラー対応：帰国期間中の有給事後計上</a></li>
@@ -430,7 +431,64 @@
 
 <hr>
 
-<h2 id="expiry">7. 時効処理（2年失効）</h2>
+<h2 id="fifo">7. 繰越分と当期付与分の管理（重要）</h2>
+
+<div class="box box-info">
+<strong>労働基準法の考え方：</strong>有給は付与から2年で時効消滅します。1年ごとに付与されるので、常に「繰越分（前期）」と「当期付与分」の2世代が並行保有されている状態になります。
+</div>
+
+<h3>例：ルオンさんの場合</h3>
+
+<table>
+  <tr><th>レコード</th><th>付与日</th><th>付与日数</th><th>時効日</th></tr>
+  <tr><td>繰越分（前期）</td><td>2025-04-23</td><td>11日</td><td><strong>2027-04-22</strong></td></tr>
+  <tr><td>当期付与分</td><td>2026-04-23</td><td>12日</td><td><strong>2028-04-22</strong></td></tr>
+</table>
+
+<div class="box box-warn">
+<strong>重要：</strong>同じスタッフが時効の異なる2つの有給を並行保有しています。<br>
+→ 繰越分（1日）が<strong>2027-04-22に先に時効</strong>を迎える<br>
+→ 当期分（12日）は<strong>2028-04-22まで有効</strong>
+</div>
+
+<h3>FIFO 消費ルール</h3>
+
+<p>有給を取得したときは、<strong>古い付与分（繰越分）から先に消費</strong>されます（FIFO: First In, First Out）。これは労働者有利のルールで、時効間近の有給を先に使うことで失効リスクを減らす効果があります。</p>
+
+<h3>管理画面での内訳表示</h3>
+
+<div class="ui-frame">
+  <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 12px;">
+    <div style="font-size: 12px; font-weight: bold; color: #1e40af; margin-bottom: 6px;">📊 残日数の内訳（FIFO：繰越分から先に消費）</div>
+    <div style="font-size: 12px; color: #ea580c; font-weight: bold;">⏰ 繰越分: <strong>1日</strong> <span style="font-size: 10px; font-weight: normal;">（時効: 2027/04/22）← 時効間近・優先消化推奨</span></div>
+    <div style="font-size: 12px; color: #1e40af;">当期付与: <strong>12日</strong> <span style="font-size: 10px;">（時効: 2028/04/22）</span></div>
+    <div style="font-size: 10px; color: #666; padding-top: 4px; border-top: 1px solid #bfdbfe; margin-top: 4px;">合計残: 13日</div>
+  </div>
+</div>
+
+<h3>繰越時効アラート</h3>
+
+<p>繰越分の時効まで残り3ヶ月以内のスタッフがいると、画面上部にバナーが表示されます。</p>
+
+<div class="banner" style="background: linear-gradient(to right, #fff7ed, #fefce8); border: 1px solid #fdba74;">
+  <div style="font-size: 22px;">⏰</div>
+  <div>
+    <div class="banner-title" style="color: #9a3412;">繰越分の時効が近づいています: 1名</div>
+    <div class="banner-sub" style="color: #7c2d12;">繰越分は先に消費される設計です。時効までに取得させることを推奨。</div>
+  </div>
+</div>
+
+<h3>スマホ画面にも同じ内訳が表示される</h3>
+
+<p>スタッフのスマホ出面画面の「🌴 有給残り」カードにも、繰越分・当期分の内訳が表示されます。時効間近の繰越分はオレンジ色でハイライトされ、スタッフ自身が「先に繰越分を使おう」と判断できます。</p>
+
+<div class="box box-ok">
+<strong>これで労働基準法の「時効2年」の考え方に完全準拠した管理ができます。</strong>
+</div>
+
+<hr>
+
+<h2 id="expiry">8. 時効処理（2年失効）</h2>
 
 <p>有給は付与日から2年で時効消滅します。システムが<strong>月1回（毎月1日 JST 9:00）</strong>自動で実行し、失効日数を記録します。</p>
 

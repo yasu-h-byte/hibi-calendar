@@ -1254,6 +1254,53 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        // ═════════════════════════════════════════════════════════════
+        // Phase 8: FIFO 内訳計算（繰越分と当期付与分を別々に追跡）
+        // ═════════════════════════════════════════════════════════════
+        // 消化 (used) は「繰越分」→「当期付与分」の順に消費される (FIFO)
+        // 繰越分は前期の付与日から2年で時効、当期分は当期の付与日から2年で時効
+        // これにより期限の異なる2つのバケットを正確に表示できる
+        const totalUsedForBreakdown = used  // = adjustment + periodUsed
+        const fromCarryOver = Math.min(totalUsedForBreakdown, carryOver)
+        const fromGrant = Math.max(0, totalUsedForBreakdown - carryOver)
+        const carryOverRemainingRaw = Math.max(0, carryOver - fromCarryOver)
+        const grantRemainingRaw = Math.max(0, grantDays - fromGrant)
+
+        // 繰越分の時効日: 前期レコード(grantDate)の +2年 -1日
+        // plRecordsRaw から「現行より古い grantDate を持つレコード」のうち最新を選ぶ
+        // (archived なレコードも含むが、そこに到達する前に時効済みなら 0 表示されるため問題なし)
+        let carryOverExpiryDate = ''
+        let carryOverExpiryStatus: 'ok' | 'warning' | 'expired' = 'ok'
+        let carryOverSourceGrantDate = ''
+        if (grantDate && carryOver > 0) {
+          const curTime = new Date(grantDate).getTime()
+          const prevCandidates = plRecordsRaw
+            .filter(r => r.grantDate)
+            .map(r => ({ rec: r, time: new Date(r.grantDate as string).getTime() }))
+            .filter(x => !isNaN(x.time) && x.time < curTime)
+            .sort((a, b) => a.time - b.time)
+          const prevRec = prevCandidates[prevCandidates.length - 1]
+          if (prevRec && prevRec.rec.grantDate) {
+            carryOverSourceGrantDate = prevRec.rec.grantDate
+            const prevGd = new Date(prevRec.rec.grantDate)
+            const prevExp = new Date(prevGd)
+            prevExp.setFullYear(prevExp.getFullYear() + 2)
+            prevExp.setDate(prevExp.getDate() - 1)
+            carryOverExpiryDate = `${prevExp.getFullYear()}/${String(prevExp.getMonth() + 1).padStart(2, '0')}/${String(prevExp.getDate()).padStart(2, '0')}`
+            const nowT = Date.now()
+            const diffDays = Math.floor((prevExp.getTime() - nowT) / (24 * 60 * 60 * 1000))
+            if (diffDays < 0) carryOverExpiryStatus = 'expired'
+            else if (diffDays <= 90) carryOverExpiryStatus = 'warning'
+          }
+        }
+        // 繰越分が時効済みの場合は残 0 とする（実務上消費できないため）
+        const carryOverRemaining = carryOverExpiryStatus === 'expired' ? 0 : carryOverRemainingRaw
+        const grantRemaining = expiryStatus === 'expired' ? 0 : grantRemainingRaw
+
+        // 当期付与分の時効日（既存のexpiryDateと同じ）
+        const grantExpiryDate = expiryDate
+        const grantExpiryStatus = expiryStatus
+
         return {
           id: w.id,
           name: w.name,
@@ -1288,6 +1335,14 @@ export async function GET(request: NextRequest) {
           // Phase 6: 買取記録
           buyoutDays: (fyRecord as { buyoutDays?: number } | undefined)?.buyoutDays,
           buyoutHistory: (fyRecord as { buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }> } | undefined)?.buyoutHistory,
+          // Phase 8: FIFO内訳（繰越分と当期付与分の別々管理）
+          carryOverRemaining,
+          carryOverExpiryDate,
+          carryOverExpiryStatus,
+          carryOverSourceGrantDate,
+          grantRemaining,
+          grantExpiryDate,
+          grantExpiryStatus,
         }
       })
       // Show all eligible workers (including those with no PL data yet)

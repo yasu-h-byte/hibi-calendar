@@ -20,6 +20,12 @@ interface StaffData {
   toolBudgetPeriodEnd: string | null
   plRemaining: number | null
   plExpiryDate: string | null
+  // Phase 8: FIFO内訳
+  plCarryOverRemaining?: number | null
+  plCarryOverExpiryDate?: string | null
+  plCarryOverExpiryStatus?: 'ok' | 'warning' | 'expired' | null
+  plGrantRemaining?: number | null
+  plGrantExpiryDate?: string | null
   pastDays: {
     date: string; year: number; month: number; day: number
     entry: AttendanceEntry | null; status: AttendanceStatus
@@ -833,9 +839,34 @@ export default function StaffAttendancePage() {
               <div className="bg-white rounded-xl shadow p-4 text-center">
                 <div className="text-xs text-gray-400 mb-1">🌴 有給残り / Nghỉ phép còn</div>
                 <div className="text-2xl font-bold text-green-600">{data.plRemaining}<span className="text-sm font-normal text-gray-400 ml-1">日</span></div>
-                {data.plExpiryDate ? (
+                {/* Phase 8: FIFO内訳表示（繰越分と当期付与分） */}
+                {((data.plCarryOverRemaining ?? 0) > 0 || (data.plGrantRemaining ?? 0) > 0) ? (
+                  <div className="text-[10px] text-gray-500 mt-1 space-y-0.5">
+                    {(data.plCarryOverRemaining ?? 0) > 0 && (
+                      <div className={data.plCarryOverExpiryStatus === 'warning' ? 'text-orange-600 font-bold' : ''}>
+                        {data.plCarryOverExpiryStatus === 'warning' && '⏰ '}
+                        繰越 / Chuyển sang: <strong>{data.plCarryOverRemaining}日</strong>
+                        {data.plCarryOverExpiryDate && (
+                          <div className="text-[9px]">
+                            〜{data.plCarryOverExpiryDate.replace(/-/g, '/')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {(data.plGrantRemaining ?? 0) > 0 && (
+                      <div>
+                        当期 / Hiện tại: <strong>{data.plGrantRemaining}日</strong>
+                        {data.plGrantExpiryDate && (
+                          <div className="text-[9px]">
+                            〜{data.plGrantExpiryDate.replace(/-/g, '/')}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : data.plExpiryDate ? (
                   <div className="text-[11px] text-gray-500 mt-1">
-                    {data.plExpiryDate.slice(0, 7).replace('-', '/')}まで / đến {data.plExpiryDate.slice(0, 7).replace('-', '/')}
+                    〜{data.plExpiryDate.replace(/-/g, '/')}まで
                   </div>
                 ) : (
                   <div className="text-[11px] text-gray-400">{data.plRemaining} ngày</div>

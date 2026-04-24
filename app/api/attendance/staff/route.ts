@@ -16,6 +16,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { AttendanceEntry } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
+import { getAttData, parseDKey } from '@/lib/compute'
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
@@ -190,24 +191,69 @@ export async function GET(request: NextRequest) {
     } catch { /* ignore */ }
 
     // 有給残日数（5月以降のみ表示。4月はデータ整備期間）
+    // Phase 8: FIFO内訳（繰越分・当期付与分の別々表示）
     let plRemaining: number | null = null
-    let plExpiryDate: string | null = null  // 現在の付与分の有効期限（付与日+2年）
+    let plExpiryDate: string | null = null  // 当期付与分の有効期限（従来フィールド、後方互換）
+    let plCarryOverRemaining: number | null = null
+    let plCarryOverExpiryDate: string | null = null
+    let plCarryOverExpiryStatus: 'ok' | 'warning' | 'expired' | null = null
+    let plGrantRemaining: number | null = null
+    let plGrantExpiryDate: string | null = null
     const displayPl = now.getFullYear() > 2026 || (now.getFullYear() === 2026 && now.getMonth() + 1 >= 5)
     try {
       if (displayPl) {
         const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
         if (mainSnap.exists()) {
-          const plData: Record<string, { grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number }[]> = mainSnap.data().plData || {}
-          const plRecords = plData[String(worker.id)] || []
+          const plData: Record<string, { fy?: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number; _archived?: boolean }[]> = mainSnap.data().plData || {}
+          const plRecordsRaw = plData[String(worker.id)] || []
+          const plRecords = plRecordsRaw.filter(r => !r._archived)
+
           if (plRecords.length > 0) {
-            const latest = plRecords[plRecords.length - 1]
+            // 最新の付与レコードを特定（grantDate最大・grantDays>0）
+            const granted = plRecords
+              .filter(r => r.grantDate && ((r.grantDays ?? r.grant ?? 0) > 0))
+              .slice()
+              .sort((a, b) => new Date(a.grantDate as string).getTime() - new Date(b.grantDate as string).getTime())
+            const latest = granted[granted.length - 1] || plRecords[plRecords.length - 1]
             const grant = latest.grantDays ?? latest.grant ?? 0
             const carry = latest.carryOver ?? latest.carry ?? 0
             const adj = latest.adjustment ?? latest.adj ?? 0
-            const used = latest.used ?? 0
-            plRemaining = grant + carry - adj - used
 
-            // 有効期限 = 付与日 + 2年（うるう年 2/29 → 2/28 に正規化）
+            // periodUsed を出面から動的計算（grantDate..+1年の範囲内のPエントリ数）
+            let periodUsed = 0
+            if (latest.grantDate) {
+              const gdStart = new Date(latest.grantDate + 'T00:00:00')
+              if (!isNaN(gdStart.getTime())) {
+                const gdEnd = new Date(gdStart); gdEnd.setFullYear(gdEnd.getFullYear() + 1)
+                // 出面データは過去2年+当年で十分
+                const attEntries: Record<string, Record<string, unknown>> = {}
+                for (let yy = now.getFullYear() - 2; yy <= now.getFullYear(); yy++) {
+                  for (let mm = 1; mm <= 12; mm++) {
+                    const att = await getAttData(ymKey(yy, mm))
+                    Object.assign(attEntries, att.d)
+                  }
+                }
+                for (const [key, entry] of Object.entries(attEntries)) {
+                  if (!entry) continue
+                  const e = entry as { p?: number | boolean }
+                  if (!e.p) continue
+                  const pk = parseDKey(key)
+                  if (parseInt(pk.wid) !== worker.id) continue
+                  const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
+                  if (d >= gdStart && d < gdEnd) periodUsed++
+                }
+              }
+            }
+            const totalUsed = adj + periodUsed
+
+            // FIFO 内訳: 繰越分→当期付与分の順に消費
+            const fromCarryOver = Math.min(totalUsed, carry)
+            const fromGrant = Math.max(0, totalUsed - carry)
+            plCarryOverRemaining = Math.max(0, carry - fromCarryOver)
+            plGrantRemaining = Math.max(0, grant - fromGrant)
+            plRemaining = plCarryOverRemaining + plGrantRemaining
+
+            // 当期付与分の時効 = 付与日 + 2年 - 1日
             if (latest.grantDate) {
               const grantDate = new Date(latest.grantDate + 'T00:00:00')
               if (!isNaN(grantDate.getTime())) {
@@ -215,8 +261,35 @@ export async function GET(request: NextRequest) {
                 const origMonth = expiry.getMonth()
                 expiry.setFullYear(expiry.getFullYear() + 2)
                 if (expiry.getMonth() !== origMonth) expiry.setDate(0)
-                expiry.setDate(expiry.getDate() - 1) // 付与日 + 2年 - 1日
+                expiry.setDate(expiry.getDate() - 1)
                 plExpiryDate = expiry.toISOString().slice(0, 10)
+                plGrantExpiryDate = plExpiryDate
+              }
+            }
+
+            // 繰越分の時効 = 前期レコード.grantDate + 2年 - 1日
+            if (plCarryOverRemaining > 0 && latest.grantDate) {
+              const curTime = new Date(latest.grantDate + 'T00:00:00').getTime()
+              const prevCandidates = plRecordsRaw
+                .filter(r => r.grantDate)
+                .map(r => ({ rec: r, time: new Date(r.grantDate as string + 'T00:00:00').getTime() }))
+                .filter(x => !isNaN(x.time) && x.time < curTime)
+                .sort((a, b) => a.time - b.time)
+              const prev = prevCandidates[prevCandidates.length - 1]
+              if (prev && prev.rec.grantDate) {
+                const prevGd = new Date(prev.rec.grantDate + 'T00:00:00')
+                const prevExp = new Date(prevGd)
+                const origM = prevExp.getMonth()
+                prevExp.setFullYear(prevExp.getFullYear() + 2)
+                if (prevExp.getMonth() !== origM) prevExp.setDate(0)
+                prevExp.setDate(prevExp.getDate() - 1)
+                plCarryOverExpiryDate = prevExp.toISOString().slice(0, 10)
+                const nowT = Date.now()
+                const diffDays = Math.floor((prevExp.getTime() - nowT) / (24 * 60 * 60 * 1000))
+                if (diffDays < 0) plCarryOverExpiryStatus = 'expired'
+                else if (diffDays <= 90) plCarryOverExpiryStatus = 'warning'
+                else plCarryOverExpiryStatus = 'ok'
+                if (plCarryOverExpiryStatus === 'expired') plCarryOverRemaining = 0
               }
             }
           }
@@ -241,6 +314,12 @@ export async function GET(request: NextRequest) {
       toolBudgetPeriodEnd,
       plRemaining,
       plExpiryDate,
+      // Phase 8: FIFO内訳
+      plCarryOverRemaining,
+      plCarryOverExpiryDate,
+      plCarryOverExpiryStatus,
+      plGrantRemaining,
+      plGrantExpiryDate,
     })
   } catch (error) {
     console.error('Staff GET error:', error)

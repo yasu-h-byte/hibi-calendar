@@ -22,6 +22,14 @@ interface PLWorker {
   // Phase 6: 買取
   buyoutDays?: number
   buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }>
+  // Phase 8: FIFO内訳
+  carryOverRemaining?: number
+  carryOverExpiryDate?: string
+  carryOverExpiryStatus?: 'ok' | 'warning' | 'expired'
+  carryOverSourceGrantDate?: string
+  grantRemaining?: number
+  grantExpiryDate?: string
+  grantExpiryStatus?: 'ok' | 'warning' | 'expired'
 }
 
 /** hireDate + 6ヶ月 → 発生月を計算 */
@@ -432,6 +440,39 @@ export default function LeavePage() {
           </button>
         </div>
       </div>
+
+      {/* 繰越時効間近アラート (Phase 8) */}
+      {(() => {
+        const expiringCarryOver = workers.filter(w =>
+          (w.carryOverRemaining ?? 0) > 0 && w.carryOverExpiryStatus === 'warning'
+        )
+        if (expiringCarryOver.length === 0) return null
+        return (
+          <div className="w-full bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/30 dark:to-yellow-900/30 border border-orange-300 dark:border-orange-700 rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="text-2xl">⏰</div>
+              <div>
+                <div className="text-sm font-bold text-orange-900 dark:text-orange-200">
+                  繰越分の時効が近づいています: {expiringCarryOver.length}名
+                </div>
+                <div className="text-xs text-orange-700 dark:text-orange-300 mt-0.5">
+                  繰越分は先に消費される設計です。時効までに取得させることを推奨。
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1 mt-3">
+              {expiringCarryOver.map(w => (
+                <div key={w.id} className="flex items-center justify-between gap-2 text-xs bg-white/80 dark:bg-gray-800/80 rounded px-2 py-1.5">
+                  <div>
+                    <span className="font-medium">{w.name}</span>
+                    <span className="text-gray-500 ml-2">繰越残 {w.carryOverRemaining}日 / 時効 {w.carryOverExpiryDate}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 年5日未達アラートバナー (Phase 5) */}
       {(() => {
@@ -1098,10 +1139,39 @@ export default function LeavePage() {
                   const fmt = (d: Date) => `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
                   return (
                     <div className="text-[10px] text-gray-500 mt-1">
-                      期間: {fmt(gd)} 〜 {fmt(end)} / 有効期限: {fmt(expiry)}
+                      期間: {fmt(gd)} 〜 {fmt(end)} / 当期付与の有効期限: {fmt(expiry)}
                     </div>
                   )
                 })()}
+
+                {/* Phase 8: FIFO内訳表示 */}
+                {((editWorker.carryOverRemaining ?? 0) > 0 || (editWorker.grantRemaining ?? 0) > 0) && (
+                  <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700/50">
+                    <div className="text-[11px] font-bold text-blue-800 dark:text-blue-200 mb-1">
+                      📊 残日数の内訳（FIFO：繰越分から先に消費）
+                    </div>
+                    <div className="space-y-1">
+                      {(editWorker.carryOverRemaining ?? 0) > 0 && (
+                        <div className={`text-[11px] ${editWorker.carryOverExpiryStatus === 'warning' ? 'text-orange-700 dark:text-orange-300 font-bold' : editWorker.carryOverExpiryStatus === 'expired' ? 'text-red-700 dark:text-red-300 font-bold' : 'text-blue-700 dark:text-blue-300'}`}>
+                          {editWorker.carryOverExpiryStatus === 'warning' && '⏰ '}
+                          {editWorker.carryOverExpiryStatus === 'expired' && '❌ '}
+                          繰越分: <strong>{editWorker.carryOverRemaining}日</strong>
+                          {editWorker.carryOverExpiryDate && <span className="ml-1 text-[10px]">（時効: {editWorker.carryOverExpiryDate}）</span>}
+                          {editWorker.carryOverExpiryStatus === 'warning' && <span className="ml-1 text-[10px]">← 時効間近・優先消化推奨</span>}
+                        </div>
+                      )}
+                      {(editWorker.grantRemaining ?? 0) > 0 && (
+                        <div className="text-[11px] text-blue-700 dark:text-blue-300">
+                          当期付与: <strong>{editWorker.grantRemaining}日</strong>
+                          {editWorker.grantExpiryDate && <span className="ml-1 text-[10px]">（時効: {editWorker.grantExpiryDate}）</span>}
+                        </div>
+                      )}
+                      <div className="text-[10px] text-gray-500 dark:text-gray-400 pt-1 border-t border-blue-200 dark:border-blue-700/30">
+                        合計残: {(editWorker.carryOverRemaining ?? 0) + (editWorker.grantRemaining ?? 0)}日
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">付与日数</label>
