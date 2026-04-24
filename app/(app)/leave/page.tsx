@@ -589,7 +589,9 @@ export default function LeavePage() {
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{w.grantDays}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{w.carryOver}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    {(!w.visa || w.visa === 'none') ? <span className="text-gray-300" title="日本人社員は期末買取制で繰越なし">—</span> : w.carryOver}
+                  </td>
                   <td className="px-3 py-2.5 text-right tabular-nums font-medium">{w.total}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-500">{w.adjustment > 0 ? w.adjustment : '—'}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{w.used}</td>
@@ -900,11 +902,28 @@ export default function LeavePage() {
                 <input type="number" value={editForm.grantDays} onChange={e => setEditForm({ ...editForm, grantDays: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
-              <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">繰越日数</label>
-                <input type="number" value={editForm.carryOver} onChange={e => setEditForm({ ...editForm, carryOver: e.target.value })}
-                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-              </div>
+              {(() => {
+                const isJp = !editWorker.visa || editWorker.visa === 'none'
+                if (isJp) {
+                  return (
+                    <div>
+                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">繰越日数</label>
+                      <input type="number" value="0" disabled
+                        className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-400 rounded-lg px-3 py-2 text-sm cursor-not-allowed" />
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        💼 日本人社員は期末買取制のため繰越なし（強制0）
+                      </p>
+                    </div>
+                  )
+                }
+                return (
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">繰越日数</label>
+                    <input type="number" value={editForm.carryOver} onChange={e => setEditForm({ ...editForm, carryOver: e.target.value })}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                )
+              })()}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
                   調整（過去の消化分など、カレンダー外で計上したい日数）
@@ -917,10 +936,13 @@ export default function LeavePage() {
               <button disabled={saving} onClick={async () => {
                 setSaving(true)
                 try {
+                  // 日本人社員は繰越強制0
+                  const isJp = !editWorker.visa || editWorker.visa === 'none'
+                  const payload = { ...editForm, ...(isJp ? { carryOver: '0' } : {}) }
                   await fetch('/api/leave', {
                     method: 'POST',
                     headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ workerId: editWorker.id, fy: editWorker.grantDate ? editWorker.grantDate.slice(0, 4) : String(new Date().getFullYear()), ...editForm }),
+                    body: JSON.stringify({ workerId: editWorker.id, fy: editWorker.grantDate ? editWorker.grantDate.slice(0, 4) : String(new Date().getFullYear()), ...payload }),
                   })
                   setEditWorker(null)
                   fetchData()

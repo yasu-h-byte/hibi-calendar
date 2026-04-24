@@ -120,7 +120,18 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // workersデータを取得（日本人判定用）
+      const mainData = snap.data()
+      const workersList = (mainData.workers || []) as { id: number; visa?: string }[]
+      const isJapanese = (wid: number) => {
+        const w = workersList.find(x => x.id === wid)
+        return !w?.visa || w.visa === 'none'
+      }
+
       for (const [wid, records] of Object.entries(plData)) {
+        // 日本人社員は期末買取制のため繰越なし → スキップ
+        if (isJapanese(Number(wid))) continue
+
         const prevRec = records.find(r => r.fy === prevFy)
         if (!prevRec) continue
         // 旧フィールド(grant/carry/adj)のいずれかが存在すれば旧レコードと判定
@@ -228,7 +239,10 @@ export async function GET(request: NextRequest) {
         // adjが存在する＝旧アプリのレコードと判定し、carry未定義でも0とみなす
         const isOldRecord = fyRecord?.grant != null || fyRecord?.adj != null || fyRecord?.carry != null
         const grantDays = isOldRecord ? (fyRecord?.grant ?? fyRecord?.grantDays ?? 0) : (fyRecord?.grantDays ?? 0)
-        const carryOver = isOldRecord ? (fyRecord?.carry ?? 0) : (fyRecord?.carryOver ?? 0)
+        const rawCarryOver = isOldRecord ? (fyRecord?.carry ?? 0) : (fyRecord?.carryOver ?? 0)
+        // 日本人社員は期末買取制のため繰越なし（強制0）
+        const isJapanese = !w.visa || w.visa === 'none'
+        const carryOver = isJapanese ? 0 : rawCarryOver
         // adj（旧）とadjustment（新）が両方存在する場合、大きい方を使う（旧データの方が正確な場合がある）
         const adjustment = Math.max(fyRecord?.adjustment ?? 0, fyRecord?.adj ?? 0)
         let grantDate = fyRecord?.grantDate || ''
