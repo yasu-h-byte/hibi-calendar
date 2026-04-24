@@ -17,6 +17,11 @@ interface PLWorker {
   lastEditedAt?: string
   lastEditedBy?: number | string
   adjustmentHistory?: Array<{ at: string; by: number | string; field: string; before: string; after: string }>
+  // Phase 5: 時季指定
+  designatedLeaves?: Array<{ date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string }>
+  // Phase 6: 買取
+  buyoutDays?: number
+  buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }>
 }
 
 /** hireDate + 6ヶ月 → 発生月を計算 */
@@ -134,6 +139,11 @@ export default function LeavePage() {
   const [designateSiteId, setDesignateSiteId] = useState<string>('')
   const [designateNote, setDesignateNote] = useState<string>('')
   const [designateSubmitting, setDesignateSubmitting] = useState(false)
+
+  // 買取記録（Phase 6）
+  const [buyoutWorker, setBuyoutWorker] = useState<PLWorker | null>(null)
+  const [buyoutForm, setBuyoutForm] = useState({ days: '', amount: '', reason: 'year-end' as 'year-end' | 'retirement' | 'other' })
+  const [buyoutSubmitting, setBuyoutSubmitting] = useState(false)
   // 申請管理
   const [leaveRequests, setLeaveRequests] = useState<{ id: string; workerId: number; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; foremanApprovedBy?: number; reviewedAt?: string; rejectedReason?: string }[]>([])
   const [sites, setSites] = useState<{ id: string; name: string }[]>([])
@@ -1107,6 +1117,34 @@ export default function LeavePage() {
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
 
+              {/* 買取記録ボタン (Phase 6) */}
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => {
+                  setBuyoutWorker(editWorker)
+                  setBuyoutForm({ days: '', amount: '', reason: (!editWorker.visa || editWorker.visa === 'none') ? 'year-end' : 'retirement' })
+                }} className="flex-1 bg-amber-500 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-amber-600">
+                  💰 買取を記録
+                </button>
+              </div>
+
+              {/* 買取履歴 */}
+              {editWorker.buyoutHistory && editWorker.buyoutHistory.length > 0 && (
+                <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700/50">
+                  <div className="text-[10px] font-bold text-amber-800 dark:text-amber-200 mb-1">
+                    💰 買取記録（累計 {editWorker.buyoutDays || 0}日）
+                  </div>
+                  <div className="space-y-0.5 max-h-20 overflow-auto">
+                    {editWorker.buyoutHistory.slice().reverse().map((h, i) => (
+                      <div key={i} className="text-[10px] text-amber-700 dark:text-amber-300">
+                        {new Date(h.at).toLocaleDateString('ja-JP')}: {h.days}日
+                        {h.amount ? ` (¥${h.amount.toLocaleString()})` : ''}
+                        {h.reason === 'year-end' ? ' 期末買取' : h.reason === 'retirement' ? ' 退職清算' : ''}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 監査情報セクション */}
               {(editWorker.grantedAt || editWorker.method || (editWorker.adjustmentHistory && editWorker.adjustmentHistory.length > 0)) && (
                 <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -1172,6 +1210,93 @@ export default function LeavePage() {
                 {saving ? '保存中...' : '保存'}
               </button>
               <button onClick={() => setEditWorker(null)} className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm">キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 買取記録モーダル (Phase 6) */}
+      {buyoutWorker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !buyoutSubmitting && setBuyoutWorker(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-5 animate-modalIn" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-2 mb-4">
+              <div className="text-2xl">💰</div>
+              <div>
+                <h3 className="text-lg font-bold text-hibi-navy dark:text-white">有給買取記録</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {buyoutWorker.name}さん / 現在残 {buyoutWorker.remaining}日
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">買取理由</label>
+                <select value={buyoutForm.reason} onChange={e => setBuyoutForm(prev => ({ ...prev, reason: e.target.value as 'year-end' | 'retirement' | 'other' }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm">
+                  <option value="year-end">期末買取（9/30時点）</option>
+                  <option value="retirement">退職時清算</option>
+                  <option value="other">その他</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">買取日数</label>
+                <input type="number" value={buyoutForm.days} onChange={e => setBuyoutForm(prev => ({ ...prev, days: e.target.value }))}
+                  placeholder="例: 5"
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm" />
+                <p className="text-[10px] text-gray-400 mt-1">※残日数の範囲内で指定</p>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">買取金額（任意、¥）</label>
+                <input type="number" value={buyoutForm.amount} onChange={e => setBuyoutForm(prev => ({ ...prev, amount: e.target.value }))}
+                  placeholder="例: 50000"
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm" />
+              </div>
+            </div>
+
+            <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-[10px] text-amber-700 dark:text-amber-300">
+              ℹ️ 買取記録はこのレコードの buyoutHistory に追記されます。残日数の表示には影響しないため、別途「調整」欄で消化計上する運用です。
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button
+                disabled={buyoutSubmitting || !buyoutForm.days || Number(buyoutForm.days) <= 0}
+                onClick={async () => {
+                  const days = Number(buyoutForm.days)
+                  if (!confirm(`${buyoutWorker.name}さんの有給 ${days}日を買取記録しますか？\n理由: ${buyoutForm.reason === 'year-end' ? '期末買取' : buyoutForm.reason === 'retirement' ? '退職時清算' : 'その他'}${buyoutForm.amount ? `\n金額: ¥${Number(buyoutForm.amount).toLocaleString()}` : ''}`)) return
+                  setBuyoutSubmitting(true)
+                  try {
+                    const currentFy = buyoutWorker.grantDate ? buyoutWorker.grantDate.slice(0, 4) : String(new Date().getFullYear())
+                    const res = await fetch('/api/leave', {
+                      method: 'POST',
+                      headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        action: 'recordBuyout',
+                        workerId: buyoutWorker.id,
+                        fy: currentFy,
+                        days,
+                        amount: buyoutForm.amount ? Number(buyoutForm.amount) : undefined,
+                        reason: buyoutForm.reason,
+                      }),
+                    })
+                    if (res.ok) {
+                      setBuyoutWorker(null)
+                      setEditWorker(null)
+                      fetchData()
+                    } else {
+                      alert('買取記録に失敗しました')
+                    }
+                  } finally { setBuyoutSubmitting(false) }
+                }}
+                className="flex-1 bg-amber-600 text-white rounded-lg py-2 font-bold text-sm disabled:opacity-50">
+                {buyoutSubmitting ? '処理中...' : '買取を記録する'}
+              </button>
+              <button disabled={buyoutSubmitting} onClick={() => setBuyoutWorker(null)}
+                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2 text-sm disabled:opacity-50">
+                キャンセル
+              </button>
             </div>
           </div>
         </div>

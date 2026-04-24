@@ -113,6 +113,51 @@ export async function POST(request: NextRequest) {
       return jst.toISOString().slice(0, 10)
     }
 
+    if (action === 'recordBuyout') {
+      // Phase 6: 買取記録（日本人期末買取 or 退職時清算）
+      const { workerId, fy, days, amount, reason, at } = body as {
+        workerId: number
+        fy: string
+        days: number
+        amount?: number
+        reason?: 'year-end' | 'retirement' | 'other'
+        at?: string  // ISO date (optional, default: today)
+      }
+      if (!workerId || !fy || !days || days < 0) {
+        return NextResponse.json({ error: 'Missing or invalid fields' }, { status: 400 })
+      }
+
+      const data = snap.data()
+      const plData = (data.plData || {}) as Record<string, Record<string, unknown>[]>
+      const wRecords = plData[String(workerId)] || []
+      const idx = wRecords.findIndex(r => String(r.fy) === String(fy))
+      if (idx < 0) {
+        return NextResponse.json({ error: 'Record not found for this fy' }, { status: 404 })
+      }
+
+      const rec = wRecords[idx]
+      // 買取記録を追加 (累積可能にする: buyoutHistory 配列で管理)
+      type BuyoutEntry = { at: string; by: number | string; days: number; amount?: number; reason?: string }
+      const history = (rec.buyoutHistory as BuyoutEntry[] | undefined) ?? []
+      history.push({
+        at: at || nowIso,
+        by: actor,
+        days,
+        amount,
+        reason,
+      })
+      rec.buyoutHistory = history
+      // 累計買取日数を `buyoutDays` に更新（最新の集計値）
+      const totalBuyout = history.reduce((sum, h) => sum + h.days, 0)
+      rec.buyoutDays = totalBuyout
+      rec.lastEditedAt = nowIso
+      rec.lastEditedBy = actor
+
+      plData[String(workerId)] = wRecords
+      await updateDoc(docRef, { plData })
+      return NextResponse.json({ success: true, totalBuyout })
+    }
+
     if (action === 'designateLeaves') {
       // Phase 5: 時季指定（年5日取得義務への対応）
       // 管理者が指定日に P を自動入力し、PLRecord の designatedLeaves に履歴記録
@@ -1231,6 +1276,11 @@ export async function GET(request: NextRequest) {
           lastEditedAt: (fyRecord as { lastEditedAt?: string } | undefined)?.lastEditedAt,
           lastEditedBy: (fyRecord as { lastEditedBy?: number | string } | undefined)?.lastEditedBy,
           adjustmentHistory: (fyRecord as { adjustmentHistory?: Array<{ at: string; by: number | string; field: string; before: string; after: string }> } | undefined)?.adjustmentHistory,
+          // Phase 5: 時季指定履歴
+          designatedLeaves: (fyRecord as { designatedLeaves?: Array<{ date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string }> } | undefined)?.designatedLeaves,
+          // Phase 6: 買取記録
+          buyoutDays: (fyRecord as { buyoutDays?: number } | undefined)?.buyoutDays,
+          buyoutHistory: (fyRecord as { buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }> } | undefined)?.buyoutHistory,
         }
       })
       // Show all eligible workers (including those with no PL data yet)
