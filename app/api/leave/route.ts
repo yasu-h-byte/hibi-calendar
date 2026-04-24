@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
@@ -92,7 +92,9 @@ function calcLegalPL(hireDate: string, grantDate: string): number {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const authResult = await getApiAuthUser(request)
+  if (!authResult.authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const actor = authResult.actor  // number | 'admin' | 'super-admin'
   try {
     const body = await request.json()
     const { action } = body
@@ -100,6 +102,9 @@ export async function POST(request: NextRequest) {
     const docRef = doc(db, 'demmen', 'main')
     const snap = await getDoc(docRef)
     if (!snap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // 現在時刻 (ISO) と 操作者識別子
+    const nowIso = new Date().toISOString()
 
     // 本日のJST日付を YYYY-MM-DD で返す（Vercelサーバーは UTC のため補正）
     const todayJST = () => {
@@ -267,6 +272,14 @@ export async function POST(request: NextRequest) {
           if (expStr < today) {
             r._archived = true
             stats.recordsArchived++
+          }
+        }
+
+        // STEP 6: method が未設定なレコードに 'legacy' を付与（監査用）
+        for (const r of records) {
+          const rr = r as Record<string, unknown>
+          if (rr.method === undefined) {
+            rr.method = 'legacy'
           }
         }
 
@@ -519,6 +532,10 @@ export async function POST(request: NextRequest) {
           carryOver: carryOverVal,
           adjustment: 0,
           used: 0,
+          // 監査情報
+          grantedAt: nowIso,
+          grantedBy: actor,
+          method: 'auto-pending' as const,
         }
         records.push(newRec)
         plData[key] = records
@@ -613,9 +630,24 @@ export async function POST(request: NextRequest) {
         carryOver: carryOverVal,
         adjustment: 0,
         used: 0,
+        // 監査情報
+        grantedAt: nowIso,
+        grantedBy: actor,
+        method: 'manual' as const,
       }
       if (idx >= 0) {
-        records[idx] = { ...records[idx], ...record } as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+        // 既存レコードの更新: 初回grantedAtは残す、method='manual-edit'に
+        const existing = records[idx] as { grantedAt?: string; grantedBy?: number | string; method?: string }
+        const merged = {
+          ...records[idx],
+          ...record,
+          grantedAt: existing.grantedAt || nowIso,  // 初回付与時刻を保持
+          grantedBy: existing.grantedBy || actor,
+          method: existing.method || 'manual',
+          lastEditedAt: nowIso,
+          lastEditedBy: actor,
+        }
+        records[idx] = merged as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
       } else {
         records.push(record)
       }
@@ -754,9 +786,45 @@ export async function POST(request: NextRequest) {
       record.grantDate = grantDate || ''
     }
     if (idx >= 0) {
-      records[idx] = { ...records[idx], ...record } as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+      // 既存レコードの編集: 値変更を adjustmentHistory に記録
+      const existing = records[idx] as Record<string, unknown>
+      type HistoryEntry = { at: string; by: number | string; field: string; before: string | number; after: string | number }
+      const history = (existing.adjustmentHistory as HistoryEntry[] | undefined) ?? []
+      const trackFields: Array<{ key: 'grantDays' | 'carryOver' | 'adjustment' | 'grantDate'; before: unknown; after: unknown }> = [
+        { key: 'grantDays', before: existing.grantDays ?? 0, after: record.grantDays },
+        { key: 'carryOver', before: existing.carryOver ?? 0, after: record.carryOver },
+        { key: 'adjustment', before: existing.adjustment ?? 0, after: record.adjustment },
+      ]
+      if (grantDate !== undefined) {
+        trackFields.push({ key: 'grantDate', before: (existing.grantDate as string) ?? '', after: record.grantDate })
+      }
+      for (const t of trackFields) {
+        if (t.before !== t.after) {
+          history.push({
+            at: nowIso,
+            by: actor,
+            field: t.key,
+            before: String(t.before ?? ''),
+            after: String(t.after ?? ''),
+          })
+        }
+      }
+      const merged: Record<string, unknown> = {
+        ...existing,
+        ...record,
+        lastEditedAt: nowIso,
+        lastEditedBy: actor,
+      }
+      if (history.length > 0) merged.adjustmentHistory = history
+      records[idx] = merged as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
     } else {
-      records.push(record as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number })
+      // 新規レコード: 監査情報も付与
+      records.push({
+        ...(record as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }),
+        grantedAt: nowIso,
+        grantedBy: actor,
+        method: 'manual',
+      } as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number })
     }
 
     plData[key] = records
@@ -986,6 +1054,13 @@ export async function GET(request: NextRequest) {
           legalPL,
           fiveDayShortfall,
           monthlyUsage,
+          // 監査情報: 現在表示中レコードのみ
+          grantedAt: (fyRecord as { grantedAt?: string } | undefined)?.grantedAt,
+          grantedBy: (fyRecord as { grantedBy?: number | string } | undefined)?.grantedBy,
+          method: (fyRecord as { method?: string } | undefined)?.method,
+          lastEditedAt: (fyRecord as { lastEditedAt?: string } | undefined)?.lastEditedAt,
+          lastEditedBy: (fyRecord as { lastEditedBy?: number | string } | undefined)?.lastEditedBy,
+          adjustmentHistory: (fyRecord as { adjustmentHistory?: Array<{ at: string; by: number | string; field: string; before: string; after: string }> } | undefined)?.adjustmentHistory,
         }
       })
       // Show all eligible workers (including those with no PL data yet)

@@ -10,6 +10,13 @@ interface PLWorker {
   grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'; inferredFromDefault?: boolean
   legalPL: number; fiveDayShortfall: number
   monthlyUsage: Record<string, number>
+  // 監査情報
+  grantedAt?: string
+  grantedBy?: number | string
+  method?: string
+  lastEditedAt?: string
+  lastEditedBy?: number | string
+  adjustmentHistory?: Array<{ at: string; by: number | string; field: string; before: string; after: string }>
 }
 
 /** hireDate + 6ヶ月 → 発生月を計算 */
@@ -1016,6 +1023,52 @@ export default function LeavePage() {
                 <input type="number" value={editForm.adjustment} onChange={e => setEditForm({ ...editForm, adjustment: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
+
+              {/* 監査情報セクション */}
+              {(editWorker.grantedAt || editWorker.method || (editWorker.adjustmentHistory && editWorker.adjustmentHistory.length > 0)) && (
+                <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <div className="text-[11px] font-bold text-gray-600 dark:text-gray-400 mb-2">📋 監査情報</div>
+                  {editWorker.method && (
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                      付与方法: <span className="font-medium">{
+                        editWorker.method === 'manual' ? '手動付与' :
+                        editWorker.method === 'auto-pending' ? '半自動付与' :
+                        editWorker.method === 'migration' ? 'データ正規化' :
+                        editWorker.method === 'legacy' ? '旧データ' :
+                        editWorker.method
+                      }</span>
+                    </div>
+                  )}
+                  {editWorker.grantedAt && (
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                      付与日時: {new Date(editWorker.grantedAt).toLocaleString('ja-JP')}
+                      {editWorker.grantedBy !== undefined && ` / 操作者: ${editWorker.grantedBy === 'super-admin' ? '日比靖仁' : editWorker.grantedBy === 'admin' ? '管理者' : `ID ${editWorker.grantedBy}`}`}
+                    </div>
+                  )}
+                  {editWorker.lastEditedAt && editWorker.lastEditedAt !== editWorker.grantedAt && (
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                      最終編集: {new Date(editWorker.lastEditedAt).toLocaleString('ja-JP')}
+                      {editWorker.lastEditedBy !== undefined && ` / ${editWorker.lastEditedBy === 'super-admin' ? '日比靖仁' : editWorker.lastEditedBy === 'admin' ? '管理者' : `ID ${editWorker.lastEditedBy}`}`}
+                    </div>
+                  )}
+                  {editWorker.adjustmentHistory && editWorker.adjustmentHistory.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="text-[10px] text-gray-600 dark:text-gray-400 cursor-pointer font-medium">変更履歴 ({editWorker.adjustmentHistory.length}件)</summary>
+                      <div className="mt-1 space-y-1 max-h-32 overflow-auto">
+                        {editWorker.adjustmentHistory.slice().reverse().map((h, i) => (
+                          <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1">
+                            <span className="text-gray-400">{new Date(h.at).toLocaleString('ja-JP')}</span>
+                            {' '}
+                            <span className="font-medium">{h.field}</span>: {h.before} → {h.after}
+                            {' '}
+                            <span className="text-gray-400">({h.by === 'super-admin' ? '日比靖仁' : h.by === 'admin' ? '管理者' : `ID ${h.by}`})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex gap-2 mt-6">
               <button disabled={saving} onClick={async () => {

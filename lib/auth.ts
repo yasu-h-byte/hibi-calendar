@@ -54,6 +54,43 @@ export function clearPasswordCache(): void {
   cacheTimestamp = 0
 }
 
+/**
+ * 認証 + 操作者の識別子取得（監査ログ用）
+ * - super-admin: 日比靖仁 (workerId=0)
+ * - admin: 共通管理者パスワード → 識別不可のため 'admin' 文字列
+ * - personal: 個人パスワード → workerId (number)
+ */
+export type ApiAuthResult =
+  | { authorized: true; actor: number | 'admin' | 'super-admin' }
+  | { authorized: false }
+
+export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResult> {
+  const authHeader = request.headers.get('x-admin-password')
+  if (!authHeader) return { authorized: false }
+
+  // スーパー管理者: 日比靖仁
+  const superPw = process.env.SUPER_ADMIN_PASSWORD
+  if (superPw && authHeader === superPw) {
+    return { authorized: true, actor: 'super-admin' }
+  }
+
+  // 共通管理者パスワード（誰か特定不可）
+  const adminPw = process.env.ADMIN_PASSWORD
+  if (adminPw && authHeader === adminPw) {
+    return { authorized: true, actor: 'admin' }
+  }
+
+  // 個人パスワード
+  const userPasswords = await getUserPasswords()
+  for (const [wid, pw] of Object.entries(userPasswords)) {
+    if (pw && authHeader === pw) {
+      return { authorized: true, actor: Number(wid) }
+    }
+  }
+
+  return { authorized: false }
+}
+
 const APPROVER_ID = 1 // 日比政仁
 
 export function determineRole(workerId: number, sites: Site[]): { role: UserRole; foremanSites: string[] } {
