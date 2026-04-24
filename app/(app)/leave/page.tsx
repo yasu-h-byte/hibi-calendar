@@ -7,7 +7,7 @@ interface PLWorker {
   id: number; name: string; org: string; visa: string; hireDate: string
   grantDays: number; carryOver: number; adjustment: number; periodUsed: number; used: number
   total: number; remaining: number; rate: number; grantMonth?: number
-  grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'
+  grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'; inferredFromDefault?: boolean
   legalPL: number; fiveDayShortfall: number
   monthlyUsage: Record<string, number>
 }
@@ -874,9 +874,14 @@ export default function LeavePage() {
                 <input type="date" value={editForm.grantDate}
                   onChange={e => setEditForm({ ...editForm, grantDate: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                {editWorker.inferredFromDefault && (
+                  <p className="text-[10px] text-blue-600 mt-1">
+                    💡 日本人社員のデフォルト「10/1〜9/30」を自動適用中。明示的に保存すると確定します。
+                  </p>
+                )}
                 <p className="text-[10px] text-gray-400 mt-1">
-                  この日付から1年間を「現在の有給期間」として扱います。<br/>
-                  入社日が不明な日本人社員は、現在の有給サイクルの開始日を入力してください。
+                  日本人社員は決算期に合わせて毎年10/1付与（10/1〜9/30）がデフォルトです。<br/>
+                  個別に変更したい場合のみ日付を選び直してください。
                 </p>
                 {editForm.grantDate && (() => {
                   const gd = new Date(editForm.grantDate)

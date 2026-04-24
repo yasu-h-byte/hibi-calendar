@@ -231,7 +231,19 @@ export async function GET(request: NextRequest) {
         const carryOver = isOldRecord ? (fyRecord?.carry ?? 0) : (fyRecord?.carryOver ?? 0)
         // adj（旧）とadjustment（新）が両方存在する場合、大きい方を使う（旧データの方が正確な場合がある）
         const adjustment = Math.max(fyRecord?.adjustment ?? 0, fyRecord?.adj ?? 0)
-        const grantDate = fyRecord?.grantDate || ''
+        let grantDate = fyRecord?.grantDate || ''
+        let inferredFromDefault = false
+
+        // 日本人社員（visa='none'）でgrantDate未設定の場合、決算期サイクルをデフォルト適用
+        // 10月1日〜翌9月30日の1年サイクル → 直近の10/1を起点にする
+        if (!grantDate && (!w.visa || w.visa === 'none')) {
+          const now = new Date()
+          const m = now.getMonth() + 1 // 1-12
+          const startYear = m >= 10 ? now.getFullYear() : now.getFullYear() - 1
+          grantDate = `${startYear}-10-01`
+          inferredFromDefault = true
+        }
+
         const total = grantDays + carryOver
 
         // 付与日から1年間のPL消化日数を集計（月別内訳付き）
@@ -315,6 +327,7 @@ export async function GET(request: NextRequest) {
           rate: total > 0 ? (used / total) * 100 : 0,
           grantMonth: (w as unknown as { grantMonth?: number }).grantMonth,
           grantDate,
+          inferredFromDefault,
           expiryDate,
           expiryStatus,
           legalPL,
@@ -324,15 +337,16 @@ export async function GET(request: NextRequest) {
       })
       // Show all eligible workers (including those with no PL data yet)
 
-    // PLカレンダーデータを出面から構築
+    // PLカレンダーデータを出面から構築（旧データ互換: truthy判定）
+    // dateKeyを YYYYMMDD 形式で統一（日が1桁の場合の重複問題を回避）
     const plCalendar: Record<string, number[]> = {}
     for (const [key, entry] of Object.entries(allAtt)) {
       if (!entry) continue
-      const e = entry as { p?: number }
-      if (e.p === 1) {
+      const e = entry as { p?: number | boolean }
+      if (e.p) {
         const pk = parseDKey(key)
         const wid = parseInt(pk.wid)
-        const dateKey = `${pk.ym}${pk.day}`
+        const dateKey = `${pk.ym}${String(pk.day).padStart(2, '0')}`
         if (!plCalendar[dateKey]) plCalendar[dateKey] = []
         if (!plCalendar[dateKey].includes(wid)) plCalendar[dateKey].push(wid)
       }
