@@ -37,6 +37,208 @@ export async function POST(request: NextRequest) {
     const snap = await getDoc(docRef)
     if (!snap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    // 本日のJST日付を YYYY-MM-DD で返す（Vercelサーバーは UTC のため補正）
+    const todayJST = () => {
+      const now = new Date()
+      const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+      return jst.toISOString().slice(0, 10)
+    }
+
+    if (action === 'getPendingGrants') {
+      // 付与時期を迎えているが未付与のワーカー一覧を返す（半自動付与用）
+      const data = snap.data()
+      type Worker = { id: number; name: string; retired?: boolean; job?: string; visa?: string; hireDate?: string }
+      type PLRecord = { fy: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number }
+      const workers = (data.workers || []) as Worker[]
+      const plData = (data.plData || {}) as Record<string, PLRecord[]>
+
+      const today = todayJST()
+      const todayDate = new Date(today)
+
+      type PendingGrant = {
+        workerId: number
+        name: string
+        visa: string
+        hireDate: string
+        tenureText: string
+        nextGrantDate: string
+        fy: string
+        legalDays: number
+        reason: string
+      }
+      const pending: PendingGrant[] = []
+
+      // 在籍月数テキスト
+      const tenureTextOf = (hireDate: string, at: string): string => {
+        if (!hireDate) return '入社日未登録'
+        const h = new Date(hireDate)
+        const a = new Date(at)
+        if (isNaN(h.getTime()) || isNaN(a.getTime())) return '入社日未登録'
+        let months = (a.getFullYear() - h.getFullYear()) * 12 + (a.getMonth() - h.getMonth())
+        if (a.getDate() < h.getDate()) months -= 1
+        if (months < 0) return '入社前'
+        const y = Math.floor(months / 12)
+        const m = months % 12
+        if (y === 0) return `在籍 ${m}ヶ月`
+        if (m === 0) return `在籍 ${y}年`
+        return `在籍 ${y}年${m}ヶ月`
+      }
+
+      // レコードが「付与済み」とみなせるか
+      const hasGrantForFy = (records: PLRecord[], fy: string): boolean =>
+        records.some(r => String(r.fy) === fy && ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0))
+
+      for (const w of workers) {
+        if (w.retired) continue
+        if (w.job === 'yakuin' || w.job === 'jimu') continue
+
+        const records = plData[String(w.id)] || []
+        const isJp = !w.visa || w.visa === 'none'
+
+        if (isJp) {
+          // 日本人: 10/1起点
+          const y = todayDate.getFullYear()
+          const m = todayDate.getMonth() + 1
+          const currentFyStart = m >= 10 ? y : y - 1
+          const expectedFy = String(currentFyStart)
+          const expectedGrantDate = `${currentFyStart}-10-01`
+
+          // その付与日が今日以前（= 既に過ぎている付与タイミング）で、対応FYレコードが未作成
+          if (expectedGrantDate <= today && !hasGrantForFy(records, expectedFy)) {
+            const legalDays = w.hireDate ? calcLegalPL(w.hireDate, expectedGrantDate) : 10
+            pending.push({
+              workerId: w.id,
+              name: w.name,
+              visa: w.visa || 'none',
+              hireDate: w.hireDate || '',
+              tenureText: tenureTextOf(w.hireDate || '', expectedGrantDate),
+              nextGrantDate: expectedGrantDate,
+              fy: expectedFy,
+              legalDays,
+              reason: `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`,
+            })
+          }
+        } else {
+          // 外国人: 最新 grantDate + 1年
+          const withGrant = records
+            .filter(r => r.grantDate && ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0))
+            .slice()
+            .sort((a, b) => new Date(a.grantDate!).getTime() - new Date(b.grantDate!).getTime())
+          const lastRec = withGrant[withGrant.length - 1]
+
+          if (!lastRec) {
+            // 初回付与候補: hireDate + 6ヶ月
+            if (w.hireDate) {
+              const hire = new Date(w.hireDate)
+              if (!isNaN(hire.getTime())) {
+                const firstGrant = new Date(hire)
+                firstGrant.setMonth(firstGrant.getMonth() + 6)
+                const firstGrantStr = firstGrant.toISOString().slice(0, 10)
+                if (firstGrantStr <= today) {
+                  const legalDays = calcLegalPL(w.hireDate, firstGrantStr)
+                  pending.push({
+                    workerId: w.id,
+                    name: w.name,
+                    visa: w.visa || '',
+                    hireDate: w.hireDate,
+                    tenureText: tenureTextOf(w.hireDate, firstGrantStr),
+                    nextGrantDate: firstGrantStr,
+                    fy: String(firstGrant.getFullYear()),
+                    legalDays,
+                    reason: '初回付与（入社6ヶ月経過）',
+                  })
+                }
+              }
+            }
+            continue
+          }
+
+          const lastGrant = new Date(lastRec.grantDate!)
+          if (isNaN(lastGrant.getTime())) continue
+          const nextGrant = new Date(lastGrant)
+          nextGrant.setFullYear(nextGrant.getFullYear() + 1)
+          const nextGrantStr = nextGrant.toISOString().slice(0, 10)
+
+          if (nextGrantStr <= today) {
+            const nextFy = String(nextGrant.getFullYear())
+            if (!hasGrantForFy(records, nextFy)) {
+              const legalDays = w.hireDate ? calcLegalPL(w.hireDate, nextGrantStr) : 10
+              pending.push({
+                workerId: w.id,
+                name: w.name,
+                visa: w.visa || '',
+                hireDate: w.hireDate || '',
+                tenureText: tenureTextOf(w.hireDate || '', nextGrantStr),
+                nextGrantDate: nextGrantStr,
+                fy: nextFy,
+                legalDays,
+                reason: `前回付与(${lastRec.grantDate})から1年経過`,
+              })
+            }
+          }
+        }
+      }
+
+      return NextResponse.json({ pending })
+    }
+
+    if (action === 'executePendingGrants') {
+      // 一括付与実行
+      const { grants } = body as {
+        grants: { workerId: number; fy: string; grantDate: string; grantDays: number }[]
+      }
+      if (!Array.isArray(grants) || grants.length === 0) {
+        return NextResponse.json({ error: 'No grants to execute' }, { status: 400 })
+      }
+
+      const plData = (snap.data().plData || {}) as Record<string, { fy: string | number; grantDate?: string; grantDays?: number; carryOver?: number; adjustment?: number; grant?: number; carry?: number; adj?: number }[]>
+
+      let granted = 0
+      for (const g of grants) {
+        const key = String(g.workerId)
+        let records = plData[key] || []
+
+        // 旧互換フィールドのクリーンアップ & fy正規化
+        records = records.map(r => {
+          const clean = { ...r } as Record<string, unknown>
+          if (clean.grant !== undefined && (clean.grantDays === undefined || clean.grantDays === null)) clean.grantDays = clean.grant
+          if (clean.carry !== undefined && (clean.carryOver === undefined || clean.carryOver === null)) clean.carryOver = clean.carry
+          if (clean.adj !== undefined && (clean.adjustment === undefined || clean.adjustment === null)) clean.adjustment = clean.adj
+          delete clean.grant
+          delete clean.carry
+          delete clean.adj
+          if (clean.fy !== undefined) clean.fy = String(clean.fy)
+          return clean as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+        })
+
+        // 既にその fy のレコードがあればスキップ（安全策）
+        const existsIdx = records.findIndex(r => String(r.fy) === String(g.fy))
+        const newRec = {
+          fy: String(g.fy),
+          grantDate: g.grantDate,
+          grantDays: Number(g.grantDays) || 0,
+          carryOver: 0,
+          adjustment: 0,
+          used: 0,
+        }
+        if (existsIdx >= 0) {
+          const existing = records[existsIdx] as { grantDays?: number; grant?: number }
+          if (((existing.grantDays ?? 0) > 0) || ((existing.grant ?? 0) > 0)) {
+            // 既に付与済み → スキップ
+            continue
+          }
+          records[existsIdx] = { ...records[existsIdx], ...newRec }
+        } else {
+          records.push(newRec)
+        }
+        plData[key] = records
+        granted++
+      }
+
+      await updateDoc(docRef, { plData })
+      return NextResponse.json({ success: true, granted })
+    }
+
     if (action === 'updateGrantMonth') {
       const { workerId, grantMonth } = body
       const workers = (snap.data().workers || []) as { id: number; grantMonth?: number }[]
