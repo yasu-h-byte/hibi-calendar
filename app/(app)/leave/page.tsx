@@ -821,17 +821,26 @@ export default function LeavePage() {
                   <td className="pl-3 pr-0">
                     <span className={`inline-block w-2.5 h-2.5 rounded-full ${statusColor}`} title={statusLabel}></span>
                   </td>
-                  {/* スタッフ: 名前 + 所属/ビザ + 入社日 (必要最小限) */}
+                  {/* スタッフ: 固定幅カラムで各要素を縦方向に揃える */}
                   <td className="px-3 py-2">
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-900 dark:text-gray-100">{w.name}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${w.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {w.org === 'hfu' ? 'HFU' : '日比'}
-                        </span>
-                        {visaLabel && (
-                          <span className="text-[10px] text-gray-500">{visaLabel}</span>
-                        )}
+                        {/* 名前: 固定幅160px */}
+                        <div className="w-[160px] flex-shrink-0 truncate" title={w.name}>
+                          <span className="font-semibold text-gray-900 dark:text-gray-100">{w.name}</span>
+                        </div>
+                        {/* 所属バッジ: 固定幅48px */}
+                        <div className="w-[44px] flex-shrink-0">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${w.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {w.org === 'hfu' ? 'HFU' : '日比'}
+                          </span>
+                        </div>
+                        {/* ビザ: 固定幅72px */}
+                        <div className="w-[72px] flex-shrink-0">
+                          {visaLabel && (
+                            <span className="text-[10px] text-gray-500">{visaLabel}</span>
+                          )}
+                        </div>
                       </div>
                       <div className="text-[10px] text-gray-400">
                         {w.grantDate ? `付与日 ${w.grantDate}` : '付与日未設定'}
