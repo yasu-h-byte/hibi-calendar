@@ -287,20 +287,45 @@ export default function LeavePage() {
     } finally { setSaving(false) }
   }
 
-  const handleMigrate = async () => {
-    if (!confirm('データ正規化を実行しますか？\n\n以下を一括修復します:\n・旧フィールド(grant/carry/adj)を新フィールドに昇格\n・fy型ブレをString統一\n・grantDate欠落の自動補完\n・同一fy重複レコードの集約\n・期限切れレコードの自動アーカイブ\n\n冪等な処理なので何度実行しても安全です。')) return
+  const handleProcessExpiry = async () => {
+    if (!confirm('時効処理を実行しますか？\n\n付与日から2年を過ぎた有給を「失効」として記録します。\n通常は月1回Vercel Cronで自動実行されますが、ここから手動実行も可能です。')) return
     setSaving(true)
     try {
       const res = await fetch('/api/leave', {
         method: 'POST',
         headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'migrate' }),
+        body: JSON.stringify({ action: 'processExpiry' }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const msg = data.processed === 0
+          ? '✅ 時効処理を実行しました\n\n該当する失効レコードはありませんでした。'
+          : `✅ 時効処理を実行しました\n\n${data.processed}件を失効として記録:\n${(data.expired || []).slice(0, 10).map((e: {workerName:string;fy:string;grantDate:string;expiredDays:number}) => `  - ${e.workerName} FY${e.fy} (${e.grantDate}~): ${e.expiredDays}日失効`).join('\n')}${data.expired.length > 10 ? `\n  ... ほか${data.expired.length - 10}件` : ''}`
+        alert(msg)
+        fetchData()
+      } else {
+        alert('時効処理に失敗しました')
+      }
+    } finally { setSaving(false) }
+  }
+
+  const handleMigrate = async (autoFix: boolean = false) => {
+    const confirmMsg = autoFix
+      ? 'データ正規化（+ fy/grantDate不整合の自動修正）を実行しますか？\n\nfy と grantDate の年が一致しないレコードについて、grantDate の年に fy を合わせて修正します。'
+      : 'データ正規化を実行しますか？\n\n以下を一括修復します:\n・旧フィールド(grant/carry/adj)を新フィールドに昇格\n・fy型ブレをString統一\n・grantDate欠落の自動補完\n・同一fy重複レコードの集約\n・期限切れレコードの自動アーカイブ\n\n冪等な処理なので何度実行しても安全です。\n\nfy/grantDate年ズレは警告のみです。'
+    if (!confirm(confirmMsg)) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/leave', {
+        method: 'POST',
+        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'migrate', autoFixMismatches: autoFix }),
       })
       if (res.ok) {
         const data = await res.json()
         const s = data.stats
         const msg =
-          `✅ データ正規化完了\n\n` +
+          `✅ データ正規化完了${autoFix ? '（自動修正モード）' : ''}\n\n` +
           `処理ワーカー数: ${s.workersProcessed}\n` +
           `処理レコード数: ${s.recordsProcessed}\n` +
           `旧フィールド昇格: ${s.legacyFieldsUpgraded}\n` +
@@ -308,7 +333,7 @@ export default function LeavePage() {
           `grantDate補完: ${s.grantDatesInferred}\n` +
           `重複レコード集約: ${s.duplicatesMerged}\n` +
           `期限切れアーカイブ: ${s.recordsArchived}\n\n` +
-          (s.mismatches.length > 0 ? `⚠️ fy/grantDate年ズレ: ${s.mismatches.length}件\n${s.mismatches.slice(0,5).map((m: {name:string;fy:string;grantDate:string}) => `  - ${m.name}: fy=${m.fy}, grantDate=${m.grantDate}`).join('\n')}${s.mismatches.length > 5 ? `\n  ... ほか${s.mismatches.length - 5}件` : ''}\n\n` : '') +
+          (s.mismatches.length > 0 ? `${autoFix ? '🔧 fy自動修正' : '⚠️ fy/grantDate年ズレ'}: ${s.mismatches.length}件\n${s.mismatches.slice(0,5).map((m: {name:string;fy:string;grantDate:string}) => `  - ${m.name}: fy=${m.fy}, grantDate=${m.grantDate}`).join('\n')}${s.mismatches.length > 5 ? `\n  ... ほか${s.mismatches.length - 5}件` : ''}\n\n` : '') +
           (s.warnings.length > 0 ? `⚠️ 警告: ${s.warnings.length}件\n${s.warnings.slice(0,5).map((w: {name:string;note:string}) => `  - ${w.name}: ${w.note}`).join('\n')}${s.warnings.length > 5 ? `\n  ... ほか${s.warnings.length - 5}件` : ''}\n` : '')
         alert(msg)
         fetchData()
@@ -353,10 +378,20 @@ export default function LeavePage() {
             className="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition disabled:opacity-50">
             繰越自動計算
           </button>
-          <button onClick={handleMigrate} disabled={saving}
+          <button onClick={() => handleMigrate(false)} disabled={saving}
             className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 transition disabled:opacity-50"
             title="旧データ移行整理: grantDate補完・fy型統一・重複集約・アーカイブ">
             🔧 データ正規化
+          </button>
+          <button onClick={() => handleMigrate(true)} disabled={saving}
+            className="bg-purple-700 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-800 transition disabled:opacity-50"
+            title="fy/grantDate年ズレも自動修正（grantDateの年にfyを合わせる）">
+            🔧 自動修正
+          </button>
+          <button onClick={handleProcessExpiry} disabled={saving}
+            className="bg-gray-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-700 transition disabled:opacity-50"
+            title="時効(2年)を迎えた有給を失効として記録（通常は月1回Cronで自動実行）">
+            ⏳ 時効処理
           </button>
         </div>
       </div>

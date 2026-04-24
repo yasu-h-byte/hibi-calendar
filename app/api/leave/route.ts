@@ -113,9 +113,89 @@ export async function POST(request: NextRequest) {
       return jst.toISOString().slice(0, 10)
     }
 
+    if (action === 'processExpiry') {
+      // Phase 3: 時効（2年）処理を実行
+      // grantDate + 2年 - 1日 < today のレコードで、まだ失効処理されていないものに
+      // expiredDays / expiredAt / expiredBy / _archived を記録する
+      const data = snap.data()
+      const plData = (data.plData || {}) as Record<string, Record<string, unknown>[]>
+      const today = todayJST()
+      const todayDate = new Date(today)
+
+      // 出面データをロード（残日数計算用）
+      const allAtt: Record<string, Record<string, unknown>> = {}
+      for (const ym of relevantAttMonths()) {
+        const att = await getAttData(ym)
+        Object.assign(allAtt, att.d)
+      }
+
+      const expiredList: { workerId: number; workerName: string; fy: string; grantDate: string; expiredDays: number }[] = []
+      const workersArr = (data.workers || []) as { id: number; name: string }[]
+      const nameOf = (wid: number) => workersArr.find(w => w.id === wid)?.name || `id=${wid}`
+
+      for (const [wid, records] of Object.entries(plData)) {
+        const workerId = Number(wid)
+        for (const r of records) {
+          // 既に処理済みはスキップ
+          if (r._archived || r.expiredAt) continue
+          if (!r.grantDate) continue
+          const gd = new Date(r.grantDate as string)
+          if (isNaN(gd.getTime())) continue
+          // 有効期限 = grantDate + 2年 - 1日
+          const exp = new Date(gd)
+          exp.setFullYear(exp.getFullYear() + 2)
+          exp.setDate(exp.getDate() - 1)
+          if (exp >= todayDate) continue  // まだ期限内
+
+          // 期限切れ → 残日数計算
+          // 残 = grantDays + carryOver - adjustment - (付与期間内のP消化)
+          const grantDays = (r.grantDays as number | undefined) ?? 0
+          const carryOver = (r.carryOver as number | undefined) ?? 0
+          const adjustment = (r.adjustment as number | undefined) ?? 0
+          const periodStart = gd
+          const periodEnd = new Date(gd)
+          periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+          let periodUsed = 0
+          for (const [key, entry] of Object.entries(allAtt)) {
+            if (!entry) continue
+            const e = entry as { p?: number | boolean }
+            if (!e.p) continue
+            const pk = parseDKey(key)
+            if (parseInt(pk.wid) !== workerId) continue
+            const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
+            if (d >= periodStart && d < periodEnd) periodUsed++
+          }
+          const expiredDays = Math.max(0, grantDays + carryOver - adjustment - periodUsed)
+
+          r.expiredDays = expiredDays
+          r.expiredAt = nowIso
+          r.expiredBy = actor
+          r._archived = true
+
+          expiredList.push({
+            workerId,
+            workerName: nameOf(workerId),
+            fy: String(r.fy ?? ''),
+            grantDate: r.grantDate as string,
+            expiredDays,
+          })
+        }
+      }
+
+      await updateDoc(docRef, { plData })
+      return NextResponse.json({
+        success: true,
+        processed: expiredList.length,
+        expired: expiredList,
+      })
+    }
+
     if (action === 'migrate') {
       // Phase 1 データ正規化マイグレーション
       // 冪等な処理 — 何度実行しても結果は同じ
+      // body.autoFixMismatches: true で、fy と grantDate の年ズレを自動修正
+      //   (fy を grantDate の年に合わせる。grantDate を認定データとして扱う)
+      const autoFixMismatches = body.autoFixMismatches === true
       const data = snap.data()
       type Worker = { id: number; name: string; retired?: boolean; job?: string; visa?: string; hireDate?: string }
       type PLRecFull = {
@@ -246,15 +326,47 @@ export async function POST(request: NextRequest) {
         }
         records = merged
 
-        // STEP 4: fy と grantDate の年ズレ検出 (警告のみ)
+        // STEP 4: fy と grantDate の年ズレ検出・修正
         for (const r of records) {
           if (!r.grantDate) continue
           const gdYear = r.grantDate.slice(0, 4)
           const fyStr = String(r.fy ?? '')
           if (!fyStr) continue
           if (gdYear !== fyStr) {
-            stats.mismatches.push({ workerId, name: workerName, fy: fyStr, grantDate: r.grantDate, note: `fy=${fyStr} だがgrantDate=${r.grantDate}` })
+            stats.mismatches.push({ workerId, name: workerName, fy: fyStr, grantDate: r.grantDate, note: `fy=${fyStr} だがgrantDate=${r.grantDate}${autoFixMismatches ? ' → fy=' + gdYear + 'に自動修正' : ''}` })
+            if (autoFixMismatches) {
+              r.fy = gdYear
+            }
           }
+        }
+
+        // STEP 4.5: fy修正後に再度重複が発生していないかチェック・集約
+        if (autoFixMismatches) {
+          const fyGroups2 = new Map<string, PLRecFull[]>()
+          for (const r of records) {
+            const k = String(r.fy ?? '')
+            if (!fyGroups2.has(k)) fyGroups2.set(k, [])
+            fyGroups2.get(k)!.push(r)
+          }
+          const merged2: PLRecFull[] = []
+          for (const [, group] of fyGroups2) {
+            if (group.length === 1) {
+              merged2.push(group[0])
+              continue
+            }
+            stats.duplicatesMerged += group.length - 1
+            const sorted = group.slice().sort((a, b) => {
+              const gdA = a.grantDays ?? 0
+              const gdB = b.grantDays ?? 0
+              if ((gdA > 0) !== (gdB > 0)) return gdB - gdA
+              const dateA = a.grantDate ? new Date(a.grantDate).getTime() : 0
+              const dateB = b.grantDate ? new Date(b.grantDate).getTime() : 0
+              if (dateB !== dateA) return dateB - dateA
+              return gdB - gdA
+            })
+            merged2.push(sorted[0])
+          }
+          records = merged2
         }
 
         // STEP 5: 期限切れレコードのアーカイブ
