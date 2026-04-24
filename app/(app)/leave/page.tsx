@@ -275,7 +275,7 @@ export default function LeavePage() {
   }
 
   const handleCarryOver = async () => {
-    if (!confirm('繰越自動計算を実行しますか？前年度の残日数を繰越に反映します。')) return
+    if (!confirm('繰越再計算を実行しますか？\n\n※通常は付与時に自動計算されるため、このボタンは基本不要です。\n旧データで繰越値が古いままになっている場合の修復用です。\n\n全スタッフの最新付与レコードに対して、前期残日数から繰越を再計算します。')) return
     setSaving(true)
     try {
       await fetch('/api/leave', {
@@ -375,8 +375,9 @@ export default function LeavePage() {
             + 有給付与
           </button>
           <button onClick={handleCarryOver} disabled={saving}
-            className="bg-orange-500 text-white px-3 py-2 rounded-lg text-sm hover:bg-orange-600 transition disabled:opacity-50">
-            繰越自動計算
+            className="bg-gray-400 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-500 transition disabled:opacity-50"
+            title="通常は付与時に自動計算されます。過去データの修復・再計算用">
+            ⟲ 繰越再計算
           </button>
           <button onClick={() => handleMigrate(false)} disabled={saving}
             className="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-purple-700 transition disabled:opacity-50"
