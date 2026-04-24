@@ -159,13 +159,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'designateLeaves') {
-      // Phase 5: 時季指定（年5日取得義務への対応）
+      // Phase 5: 時季指定（年5日取得義務）または管理者による手動P入力
       // 管理者が指定日に P を自動入力し、PLRecord の designatedLeaves に履歴記録
-      const { workerId, dates, siteId, note } = body as {
+      const { workerId, dates, siteId, note, overwriteHomeLeave, kind } = body as {
         workerId: number
         dates: string[]          // ["2026-05-01", "2026-05-02", ...]
         siteId: string           // 出面書き込み先の現場ID
         note?: string
+        overwriteHomeLeave?: boolean  // 帰国マーカー(hk)を削除してPに置き換えるか
+        kind?: 'designation' | 'manual-entry'  // 時季指定 or 管理者手動入力 (区別用)
       }
       if (!workerId || !Array.isArray(dates) || dates.length === 0 || !siteId) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -186,23 +188,28 @@ export async function POST(request: NextRequest) {
       }
 
       // 出面に P を書き込み
-      type DesignatedEntry = { date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string }
+      type DesignatedEntry = { date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string; kind?: string; overwroteHomeLeave?: boolean }
       const history = (targetRec.designatedLeaves as DesignatedEntry[] | undefined) ?? []
       const written: string[] = []
+
+      // 帰国期間の上書きが必要な場合、hk フィールドを削除してから書き込み
+      const setOptions = overwriteHomeLeave ? { deleteFields: ['hk'] } : {}
 
       for (const dateStr of dates) {
         const d = new Date(dateStr)
         if (isNaN(d.getTime())) continue
         const ym = ymKey(d.getFullYear(), d.getMonth() + 1)
         const day = d.getDate()
-        // 出面書き込み: { w: 0, p: 1 }
-        await setAttendanceEntry(siteId, workerId, ym, day, { w: 0, p: 1 })
+        // 出面書き込み: { w: 0, p: 1 } (overwriteHomeLeave時はhkを削除)
+        await setAttendanceEntry(siteId, workerId, ym, day, { w: 0, p: 1 }, setOptions)
         history.push({
           date: dateStr,
           designatedAt: nowIso,
           designatedBy: actor,
           note,
           siteId,
+          kind: kind || 'designation',
+          overwroteHomeLeave: overwriteHomeLeave === true,
         })
         written.push(dateStr)
       }

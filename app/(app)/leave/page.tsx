@@ -133,11 +133,13 @@ export default function LeavePage() {
   const [pendingForm, setPendingForm] = useState<Record<number, { grantDate: string; grantDays: string; include: boolean }>>({})
   const [pendingExecuting, setPendingExecuting] = useState(false)
 
-  // 時季指定（Phase 5）
+  // 時季指定（Phase 5）/ 管理者手動P入力（案B）
   const [designateWorker, setDesignateWorker] = useState<PLWorker | null>(null)
+  const [designateKind, setDesignateKind] = useState<'designation' | 'manual-entry'>('designation')
   const [designateDates, setDesignateDates] = useState<string[]>([])
   const [designateSiteId, setDesignateSiteId] = useState<string>('')
   const [designateNote, setDesignateNote] = useState<string>('')
+  const [designateOverwriteHomeLeave, setDesignateOverwriteHomeLeave] = useState(false)
   const [designateSubmitting, setDesignateSubmitting] = useState(false)
 
   // 買取記録（Phase 6）
@@ -458,9 +460,11 @@ export default function LeavePage() {
                   </div>
                   <button onClick={() => {
                     setDesignateWorker(w)
+                    setDesignateKind('designation')
                     setDesignateDates([])
                     setDesignateSiteId(sites[0]?.id || '')
-                    setDesignateNote('')
+                    setDesignateNote('年5日取得義務対応')
+                    setDesignateOverwriteHomeLeave(false)
                   }} className="bg-red-500 text-white px-2.5 py-1 rounded text-[10px] font-bold hover:bg-red-600">
                     時季指定する
                   </button>
@@ -1134,8 +1138,19 @@ export default function LeavePage() {
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
               </div>
 
-              {/* 買取記録ボタン (Phase 6) */}
+              {/* 操作ボタン (Phase 5/6/B) */}
               <div className="mt-2 flex gap-2">
+                <button type="button" onClick={() => {
+                  setDesignateWorker(editWorker)
+                  setDesignateKind('manual-entry')
+                  setDesignateDates([''])
+                  setDesignateSiteId(sites[0]?.id || '')
+                  setDesignateNote('帰国期間中の有給申請を後から計上')
+                  setDesignateOverwriteHomeLeave(true)  // デフォルトON（このボタンは主に帰国期間中対応）
+                }} className="flex-1 bg-indigo-500 text-white rounded-lg py-1.5 text-xs font-medium hover:bg-indigo-600"
+                  title="帰国期間中などにPを後から入力する場合">
+                  🗓 有給日を直接入力
+                </button>
                 <button type="button" onClick={() => {
                   setBuyoutWorker(editWorker)
                   setBuyoutForm({ days: '', amount: '', reason: (!editWorker.visa || editWorker.visa === 'none') ? 'year-end' : 'retirement' })
@@ -1319,17 +1334,27 @@ export default function LeavePage() {
         </div>
       )}
 
-      {/* 時季指定モーダル (Phase 5) */}
+      {/* 時季指定モーダル / 管理者手動P入力 */}
       {designateWorker && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !designateSubmitting && setDesignateWorker(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-5 animate-modalIn" onClick={e => e.stopPropagation()}>
             <div className="flex items-start gap-2 mb-4">
               <div className="text-2xl">🗓</div>
               <div>
-                <h3 className="text-lg font-bold text-hibi-navy dark:text-white">時季指定</h3>
+                <h3 className="text-lg font-bold text-hibi-navy dark:text-white">
+                  {designateKind === 'designation' ? '時季指定' : '有給日を直接入力'}
+                </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {designateWorker.name}さん / 消化 {designateWorker.periodUsed}日 → あと {designateWorker.fiveDayShortfall}日義務
+                  {designateWorker.name}さん
+                  {designateKind === 'designation'
+                    ? ` / 消化 ${designateWorker.periodUsed}日 → あと ${designateWorker.fiveDayShortfall}日義務`
+                    : ` / 残 ${designateWorker.remaining}日`}
                 </p>
+                {designateKind === 'manual-entry' && (
+                  <p className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-1">
+                    ※ 出面に P を直接書き込みます。管理者の手動計上として監査ログに記録されます。
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1366,8 +1391,21 @@ export default function LeavePage() {
               <div>
                 <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">備考（任意）</label>
                 <input type="text" value={designateNote} onChange={e => setDesignateNote(e.target.value)}
-                  placeholder="例: 年5日取得義務対応"
+                  placeholder={designateKind === 'designation' ? '例: 年5日取得義務対応' : '例: 帰国期間中の有給申請を後から計上'}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm" />
+              </div>
+
+              {/* 帰国期間上書きチェック */}
+              <div className="flex items-start gap-2 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded border border-indigo-200 dark:border-indigo-700/50">
+                <input type="checkbox" id="overwrite-hk" checked={designateOverwriteHomeLeave}
+                  onChange={e => setDesignateOverwriteHomeLeave(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 cursor-pointer" />
+                <label htmlFor="overwrite-hk" className="text-[11px] text-indigo-800 dark:text-indigo-200 cursor-pointer">
+                  <span className="font-bold">帰国期間(✈️)を上書きする</span>
+                  <div className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-0.5">
+                    既存の帰国マーカーを削除して Pを書き込みます。帰国中でも事前に有給申請があった日を計上する場合に使用。
+                  </div>
+                </label>
               </div>
             </div>
 
@@ -1376,7 +1414,9 @@ export default function LeavePage() {
                 disabled={designateSubmitting || designateDates.filter(d => !!d).length === 0 || !designateSiteId}
                 onClick={async () => {
                   const validDates = designateDates.filter(d => !!d)
-                  if (!confirm(`${designateWorker.name}さんに以下の日を時季指定しますか？\n${validDates.join('\n')}\n\n出面にPが自動入力され、時季指定履歴が記録されます。`)) return
+                  const label = designateKind === 'designation' ? '時季指定' : '有給として記録'
+                  const msg = `${designateWorker.name}さんに以下の日を${label}しますか？\n${validDates.join('\n')}\n\n出面にPが自動入力され、履歴が記録されます。${designateOverwriteHomeLeave ? '\n\n⚠️ 既存の帰国マーカーは削除されます。' : ''}`
+                  if (!confirm(msg)) return
                   setDesignateSubmitting(true)
                   try {
                     const res = await fetch('/api/leave', {
@@ -1388,18 +1428,21 @@ export default function LeavePage() {
                         dates: validDates,
                         siteId: designateSiteId,
                         note: designateNote,
+                        kind: designateKind,
+                        overwriteHomeLeave: designateOverwriteHomeLeave,
                       }),
                     })
                     if (res.ok) {
                       setDesignateWorker(null)
+                      setEditWorker(null)
                       fetchData()
                     } else {
-                      alert('時季指定に失敗しました')
+                      alert('処理に失敗しました')
                     }
                   } finally { setDesignateSubmitting(false) }
                 }}
-                className="flex-1 bg-red-600 text-white rounded-lg py-2 font-bold text-sm disabled:opacity-50">
-                {designateSubmitting ? '処理中...' : '時季指定する'}
+                className={`flex-1 text-white rounded-lg py-2 font-bold text-sm disabled:opacity-50 ${designateKind === 'designation' ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                {designateSubmitting ? '処理中...' : (designateKind === 'designation' ? '時季指定する' : '有給を記録する')}
               </button>
               <button disabled={designateSubmitting} onClick={() => setDesignateWorker(null)}
                 className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2 text-sm disabled:opacity-50">

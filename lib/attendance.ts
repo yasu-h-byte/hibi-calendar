@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, deleteField } from 'firebase/firestore'
 import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site } from '@/types'
 
 // ────────────────────────────────────────
@@ -104,12 +104,23 @@ export async function setAttendanceEntry(
   workerId: number,
   ym: string,
   day: number,
-  entry: AttendanceEntry
+  entry: AttendanceEntry,
+  options: { deleteFields?: string[] } = {}
 ): Promise<void> {
   const key = attKey(siteId, workerId, ym, day)
   const docRef = doc(db, 'demmen', `att_${ym}`)
-  // setDoc with merge + dot-notation field path for atomic single-key update
-  await setDoc(docRef, { d: { [key]: entry } }, { merge: true })
+  if (options.deleteFields && options.deleteFields.length > 0) {
+    // 指定フィールドを deleteField() で削除しつつ entry を書き込み
+    // Firestore の merge:true は map を recursive にマージするため、
+    // 既存の hk などを消すには明示的に deleteField() を指定する必要がある
+    const writeEntry: Record<string, unknown> = { ...entry }
+    for (const f of options.deleteFields) {
+      writeEntry[f] = deleteField()
+    }
+    await setDoc(docRef, { d: { [key]: writeEntry } }, { merge: true })
+  } else {
+    await setDoc(docRef, { d: { [key]: entry } }, { merge: true })
+  }
 }
 
 // ────────────────────────────────────────
