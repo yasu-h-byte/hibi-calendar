@@ -301,19 +301,49 @@ export async function GET(request: NextRequest) {
     const workerNames: Record<number, string> = {}
     main.workers.forEach(w => { workerNames[w.id] = w.name })
 
-    // Build worker PL data — 各スタッフの最新レコードを使用
+    // Build worker PL data — 現在FYに該当するレコードを優先して使用
     const workers = main.workers
       .filter(w => !w.retired && w.job !== 'yakuin' && w.job !== 'jimu')
       .map(w => {
         const plRecords = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
 
-        // 最新のレコード（付与日数があるもの）を使用
-        const recordsWithGrant = plRecords.filter(r =>
-          (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
-        )
-        const fyRecord = recordsWithGrant.length > 0
-          ? recordsWithGrant[recordsWithGrant.length - 1]
-          : (plRecords.length > 0 ? plRecords[plRecords.length - 1] : undefined)
+        // 現在FYを判定
+        // - 日本人社員: 10/1起点 (m>=10なら当年、それ未満なら前年)
+        // - 外国人: 各レコードのgrantDate..+1年に「今日」が含まれるもの
+        const isJp = !w.visa || w.visa === 'none'
+        const nowY = now.getFullYear()
+        const nowM = now.getMonth() + 1
+        let targetFy: string | null = null
+        if (isJp) {
+          targetFy = String(nowM >= 10 ? nowY : nowY - 1)
+        } else {
+          // 外国人: grantDate..+1y に「今日」を含むレコードがあればそのfy
+          const activeRec = plRecords.find(r => {
+            if (!r.grantDate) return false
+            const gd = new Date(r.grantDate)
+            if (isNaN(gd.getTime())) return false
+            const end = new Date(gd); end.setFullYear(end.getFullYear() + 1)
+            return now >= gd && now < end
+          })
+          if (activeRec) targetFy = String(activeRec.fy)
+        }
+
+        // targetFy に一致するレコードのうち「最後のもの」を採用（push順で最新）
+        let fyRecord: typeof plRecords[number] | undefined
+        if (targetFy !== null) {
+          const matching = plRecords.filter(r => String(r.fy) === targetFy)
+          if (matching.length > 0) fyRecord = matching[matching.length - 1]
+        }
+
+        // フォールバック: 付与日数があるレコードの最後、なければplRecordsの最後
+        if (!fyRecord) {
+          const recordsWithGrant = plRecords.filter(r =>
+            (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
+          )
+          fyRecord = recordsWithGrant.length > 0
+            ? recordsWithGrant[recordsWithGrant.length - 1]
+            : (plRecords.length > 0 ? plRecords[plRecords.length - 1] : undefined)
+        }
 
         // 旧アプリ(grant/carry/adj)と新アプリ(grantDays/carryOver/adjustment)の両方に対応
         // 旧フィールドが存在する場合はそちらが元データなので優先する
