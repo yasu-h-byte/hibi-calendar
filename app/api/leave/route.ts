@@ -5,6 +5,70 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 
+/**
+ * 前期残日数から新FY付与時の carryOver 値を計算する共通ヘルパー
+ * - 日本人（visa='none'）: 常に 0（期末買取制）
+ * - 外国人: 前期（new grantDate より前で最新の grantDate を持つレコード）から
+ *   grantDays + carryOver - adjustment - periodUsed を計算し、0〜20 で丸める
+ */
+type PLRecLite = { fy: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number }
+function calcCarryOverForWorker(
+  workerId: number,
+  newGrantDate: string,
+  records: PLRecLite[],
+  allAtt: Record<string, Record<string, unknown>>,
+  isJapanese: boolean,
+): number {
+  if (isJapanese) return 0
+  const newGrantTime = new Date(newGrantDate).getTime()
+  if (isNaN(newGrantTime)) return 0
+
+  const prevRecs = records
+    .filter(r => r.grantDate && ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0))
+    .filter(r => {
+      const t = new Date(r.grantDate!).getTime()
+      return !isNaN(t) && t < newGrantTime
+    })
+    .sort((a, b) => new Date(a.grantDate!).getTime() - new Date(b.grantDate!).getTime())
+  const prevRec = prevRecs[prevRecs.length - 1]
+  if (!prevRec) return 0
+
+  const prevStart = new Date(prevRec.grantDate!)
+  const prevEnd = new Date(prevStart)
+  prevEnd.setFullYear(prevEnd.getFullYear() + 1)
+
+  let periodUsed = 0
+  for (const [key, entry] of Object.entries(allAtt)) {
+    if (!entry) continue
+    const e = entry as { p?: number | boolean }
+    if (!e.p) continue
+    const pk = parseDKey(key)
+    if (parseInt(pk.wid) !== workerId) continue
+    const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
+    if (d >= prevStart && d < prevEnd) periodUsed++
+  }
+
+  const prevGrant = prevRec.grantDays ?? prevRec.grant ?? 0
+  const prevCarry = prevRec.carryOver ?? prevRec.carry ?? 0
+  const prevAdj = prevRec.adjustment ?? prevRec.adj ?? 0
+  const remaining = prevGrant + prevCarry - prevAdj - periodUsed
+  return Math.max(0, Math.min(20, remaining))
+}
+
+/**
+ * 付与期間を内包するのに必要な月群（YYYYMM）を返す
+ * 過去2年分の出面データを読めば、任意の前期を完全にカバーできる
+ */
+function relevantAttMonths(): string[] {
+  const now = new Date()
+  const y = now.getFullYear()
+  const out: string[] = []
+  for (let yy = y - 2; yy <= y; yy++) {
+    for (let mm = 1; mm <= 12; mm++) out.push(ymKey(yy, mm))
+  }
+  return out
+}
+
 /** 法定有給付与日数を計算 */
 function calcLegalPL(hireDate: string, grantDate: string): number {
   if (!hireDate || !grantDate) return 0
@@ -210,6 +274,11 @@ export async function POST(request: NextRequest) {
       }
 
       const plData = (snap.data().plData || {}) as Record<string, { fy: string | number; grantDate?: string; grantDays?: number; carryOver?: number; adjustment?: number; grant?: number; carry?: number; adj?: number }[]>
+      const workersArr = ((snap.data().workers || []) as { id: number; visa?: string }[])
+      const isJpOf = (id: number) => {
+        const w = workersArr.find(x => x.id === id)
+        return !w?.visa || w.visa === 'none'
+      }
 
       // 付与日近傍(±7日)に既存付与があるかチェック（二重付与防止用）
       type PLRec = { fy: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number }
@@ -223,6 +292,17 @@ export async function POST(request: NextRequest) {
           if (isNaN(d)) return false
           return Math.abs(d - target) <= 7 * 86400000
         })
+      }
+
+      // 外国人の繰越計算用: 出面データを事前に一括ロード
+      const needsAttLoad = grants.some(g => !isJpOf(g.workerId))
+      const allAtt: Record<string, Record<string, unknown>> = {}
+      if (needsAttLoad) {
+        const months = relevantAttMonths()
+        for (const ym of months) {
+          const att = await getAttData(ym)
+          Object.assign(allAtt, att.d)
+        }
       }
 
       let granted = 0
@@ -244,18 +324,25 @@ export async function POST(request: NextRequest) {
         })
 
         // 「付与日近傍」に既存レコードがあればスキップ（真の二重付与防止）
-        // fy一致だけで判定すると、不整合レコード { fy:"2026", grantDate:"2025-04-23" }
-        // のようなデータで誤スキップが発生するため、grantDate値ベースで判定する
         if (hasGrantNear(records, g.grantDate)) {
-          plData[key] = records  // cleanup結果は反映
+          plData[key] = records
           continue
         }
+
+        // 繰越を前期残日数から自動計算（外国人のみ）
+        const carryOverVal = calcCarryOverForWorker(
+          g.workerId,
+          g.grantDate,
+          records,
+          allAtt,
+          isJpOf(g.workerId),
+        )
 
         const newRec = {
           fy: String(g.fy),
           grantDate: g.grantDate,
           grantDays: Number(g.grantDays) || 0,
-          carryOver: 0,
+          carryOver: carryOverVal,
           adjustment: 0,
           used: 0,
         }
@@ -325,11 +412,31 @@ export async function POST(request: NextRequest) {
 
       const idx = records.findIndex(r => String(r.fy) === String(fy))
 
+      // 繰越: ユーザーが明示的に指定している場合はそれを優先。
+      // 未指定の場合は前期残日数から自動計算（日本人は強制0）
+      const workersArrG = ((snap.data().workers || []) as { id: number; visa?: string }[])
+      const workerG = workersArrG.find(x => x.id === Number(workerId))
+      const isJpG = !workerG?.visa || workerG.visa === 'none'
+      let carryOverVal: number
+      if (bodyCarryOver != null) {
+        carryOverVal = Number(bodyCarryOver) || 0
+      } else if (grantDate) {
+        // 自動計算には出面データが必要
+        const allAttG: Record<string, Record<string, unknown>> = {}
+        for (const ym of relevantAttMonths()) {
+          const att = await getAttData(ym)
+          Object.assign(allAttG, att.d)
+        }
+        carryOverVal = calcCarryOverForWorker(Number(workerId), grantDate, records, allAttG, isJpG)
+      } else {
+        carryOverVal = 0
+      }
+
       const record = {
         fy: String(fy),
         grantDate: grantDate || '',
         grantDays: Number(grantDays) || 0,
-        carryOver: bodyCarryOver != null ? Number(bodyCarryOver) : 0,
+        carryOver: carryOverVal,
         adjustment: 0,
         used: 0,
       }
@@ -360,67 +467,55 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'carryOver') {
-      const { fy } = body
-      const prevFy = String(Number(fy) - 1)
-      const plData = (snap.data().plData || {}) as Record<string, { fy: string; grantDays: number; carryOver: number; adjustment: number; grant?: number; carry?: number; adj?: number }[]>
-
-      // Calculate previous FY PL usage
-      const prevFyStart = parseInt(prevFy)
-      const prevFyMonths: string[] = []
-      for (let m = 10; m <= 12; m++) prevFyMonths.push(ymKey(prevFyStart, m))
-      for (let m = 1; m <= 9; m++) prevFyMonths.push(ymKey(prevFyStart + 1, m))
-
-      const allAtt: Record<string, Record<string, unknown>> = {}
-      for (const ym of prevFyMonths) {
-        const att = await getAttData(ym)
-        Object.assign(allAtt, att.d)
-      }
-
-      const plUsage: Record<number, number> = {}
-      for (const [key, entry] of Object.entries(allAtt)) {
-        if (!entry) continue
-        const e = entry as { p?: number | boolean }
-        if (e.p) {  // 旧データ互換: truthy判定
-          const pk = parseDKey(key)
-          const wid = parseInt(pk.wid)
-          plUsage[wid] = (plUsage[wid] || 0) + 1
-        }
-      }
-
-      // workersデータを取得（日本人判定用）
-      const mainData = snap.data()
-      const workersList = (mainData.workers || []) as { id: number; visa?: string }[]
-      const isJapanese = (wid: number) => {
+      // 「繰越自動計算」ボタン — 全ワーカーの「最新付与レコード」の繰越値を再計算する。
+      // ワーカーごとに異なるサイクル（日本人=10/1、外国人=各grantDate）に対応。
+      // 以前は10/1アンカー固定で計算していたため、4/23や7/1サイクルの外国人で
+      // 前期期間が誤計算される問題があった。
+      const plData = (snap.data().plData || {}) as Record<string, PLRecLite[]>
+      const workersList = ((snap.data().workers || []) as { id: number; visa?: string }[])
+      const isJapaneseOf = (wid: number) => {
         const w = workersList.find(x => x.id === wid)
         return !w?.visa || w.visa === 'none'
       }
 
+      // 出面データを一括ロード
+      const allAtt: Record<string, Record<string, unknown>> = {}
+      for (const ym of relevantAttMonths()) {
+        const att = await getAttData(ym)
+        Object.assign(allAtt, att.d)
+      }
+
+      let updated = 0
       for (const [wid, records] of Object.entries(plData)) {
-        // 日本人社員は期末買取制のため繰越なし → スキップ
-        if (isJapanese(Number(wid))) continue
+        const workerId = Number(wid)
+        // 日本人社員は期末買取制のため繰越なし → 強制0
+        const isJp = isJapaneseOf(workerId)
 
-        const prevRec = records.find(r => r.fy === prevFy)
-        if (!prevRec) continue
-        // 旧フィールド(grant/carry/adj)のいずれかが存在すれば旧レコードと判定
-        const isPrevOld = prevRec.grant != null || prevRec.adj != null || prevRec.carry != null
-        const prevGrant = isPrevOld ? (prevRec.grant ?? prevRec.grantDays ?? 0) : (prevRec.grantDays || 0)
-        const prevCarry = isPrevOld ? (prevRec.carry ?? 0) : (prevRec.carryOver || 0)
-        const prevAdj = Math.max(prevRec.adjustment || 0, prevRec.adj || 0)
-        const prevTotal = prevGrant + prevCarry
-        const prevPeriodUsed = plUsage[Number(wid)] || 0
-        const prevUsed = prevAdj + prevPeriodUsed
-        const prevRemaining = Math.min(20, Math.max(0, prevTotal - prevUsed))  // 繰越上限20日
+        // 最新付与レコード（grantDate最大 かつ grantDays>0）を特定
+        const granted = records
+          .filter(r => r.grantDate && ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0))
+          .slice()
+          .sort((a, b) => new Date(a.grantDate!).getTime() - new Date(b.grantDate!).getTime())
+        const latest = granted[granted.length - 1]
+        if (!latest) continue
 
-        const curIdx = records.findIndex(r => r.fy === fy)
-        if (curIdx >= 0) {
-          records[curIdx].carryOver = prevRemaining
-        } else {
-          records.push({ fy, grantDays: 0, carryOver: prevRemaining, adjustment: 0 })
+        const newCarry = calcCarryOverForWorker(workerId, latest.grantDate!, records, allAtt, isJp)
+
+        // 最新レコードの carryOver を更新
+        const idx = records.findIndex(r => r === latest)
+        if (idx >= 0) {
+          const before = (records[idx].carryOver ?? records[idx].carry ?? 0)
+          if (before !== newCarry) {
+            (records[idx] as { carryOver: number }).carryOver = newCarry
+            // 旧フィールドも掃除しておく
+            delete (records[idx] as Record<string, unknown>).carry
+            updated++
+          }
         }
       }
 
       await updateDoc(docRef, { plData })
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, updated })
     }
 
     // Default: edit PL record
