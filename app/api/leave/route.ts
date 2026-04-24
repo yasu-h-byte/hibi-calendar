@@ -53,13 +53,14 @@ export async function POST(request: NextRequest) {
 
     if (action === 'grant') {
       const { workerId, fy, grantDays, grantMonth, grantDate, carryOver: bodyCarryOver } = body
-      const plData = (snap.data().plData || {}) as Record<string, { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }[]>
+      const plData = (snap.data().plData || {}) as Record<string, { fy: string | number; grantDate?: string; grantDays: number; carryOver: number; adjustment: number; grant?: number; carry?: number; adj?: number }[]>
       const key = String(workerId)
       const records = plData[key] || []
-      const idx = records.findIndex(r => r.fy === fy)
+      // fy は旧データで number 型の場合があるため、文字列比較に正規化
+      const idx = records.findIndex(r => String(r.fy) === String(fy))
 
       const record = {
-        fy,
+        fy: String(fy),
         grantDate: grantDate || '',
         grantDays: Number(grantDays) || 0,
         carryOver: bodyCarryOver != null ? Number(bodyCarryOver) : 0,
@@ -67,7 +68,12 @@ export async function POST(request: NextRequest) {
         used: 0,
       }
       if (idx >= 0) {
-        records[idx] = { ...records[idx], ...record }
+        const merged = { ...records[idx], ...record } as Record<string, unknown>
+        // 旧アプリの互換フィールドを削除（GET側のmax値復活を防ぐ）
+        delete merged.grant
+        delete merged.carry
+        delete merged.adj
+        records[idx] = merged as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
       } else {
         records.push(record)
       }
@@ -158,13 +164,14 @@ export async function POST(request: NextRequest) {
 
     // Default: edit PL record
     const { workerId, fy, grantDays, carryOver, adjustment, grantDate } = body
-    const plData = (snap.data().plData || {}) as Record<string, { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }[]>
+    const plData = (snap.data().plData || {}) as Record<string, { fy: string | number; grantDate?: string; grantDays: number; carryOver: number; adjustment: number; grant?: number; carry?: number; adj?: number }[]>
     const key = String(workerId)
     const records = plData[key] || []
-    const idx = records.findIndex(r => r.fy === fy)
+    // fy は旧データで number 型の場合があるため、文字列比較に正規化
+    const idx = records.findIndex(r => String(r.fy) === String(fy))
 
     const record: Record<string, unknown> = {
-      fy,
+      fy: String(fy),
       grantDays: Number(grantDays) || 0,
       carryOver: Number(carryOver) || 0,
       adjustment: Number(adjustment) || 0,
@@ -174,8 +181,17 @@ export async function POST(request: NextRequest) {
     if (grantDate !== undefined) {
       record.grantDate = grantDate || ''
     }
-    if (idx >= 0) records[idx] = { ...records[idx], ...record }
-    else records.push(record as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number })
+    if (idx >= 0) {
+      const merged = { ...records[idx], ...record } as Record<string, unknown>
+      // 旧アプリの互換フィールド（grant/carry/adj）を明示的に削除
+      // これがないと GET 側の Math.max(adjustment, adj) 等で旧値が復活してしまう
+      delete merged.grant
+      delete merged.carry
+      delete merged.adj
+      records[idx] = merged as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number }
+    } else {
+      records.push(record as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number })
+    }
 
     plData[key] = records
     await updateDoc(docRef, { plData })
