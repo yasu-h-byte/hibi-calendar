@@ -308,31 +308,34 @@ export async function GET(request: NextRequest) {
         const plRecords = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
 
         // 現在FYを判定
-        // 1. plRecordsに grantDate がある場合はそのアンカー月/日を採用
-        //    (白戸=4月サイクル、入江=7月サイクル、倉本=10月サイクル等、個別対応)
-        // 2. grantDate が全く無い日本人はデフォルトで10/1アンカー
-        // 3. 今日がアンカー以降なら「今年」が現在FY、未満なら「前年」が現在FY
+        // - 日本人社員（職長・とび等）: 全員「10/1起点」（決算期サイクル統一）
+        // - 外国人（実習生・特定技能）: 個別の grantDate..+1年 に今日が含まれるレコードのfy
         const isJp = !w.visa || w.visa === 'none'
         const nowY = now.getFullYear()
+        const nowM = now.getMonth() + 1
 
-        let anchorMonth = 10
-        let anchorDay = 1
-        const recWithGrantDate = plRecords.find(r => r.grantDate && !isNaN(new Date(r.grantDate).getTime()))
-        if (recWithGrantDate && recWithGrantDate.grantDate) {
-          const gd = new Date(recWithGrantDate.grantDate)
-          anchorMonth = gd.getMonth() + 1
-          anchorDay = gd.getDate()
+        let targetFy: string | null = null
+        if (isJp) {
+          // 日本人は全員 10/1 起点で統一
+          targetFy = String(nowM >= 10 ? nowY : nowY - 1)
+        } else {
+          // 外国人: grantDate..+1y に今日を含むレコードのfyを使用
+          const activeRec = plRecords.find(r => {
+            if (!r.grantDate) return false
+            const gd = new Date(r.grantDate)
+            if (isNaN(gd.getTime())) return false
+            const end = new Date(gd); end.setFullYear(end.getFullYear() + 1)
+            return now >= gd && now < end
+          })
+          if (activeRec) targetFy = String(activeRec.fy)
         }
-
-        // 今日 vs 今年のアンカー日
-        const thisYearAnchor = new Date(nowY, anchorMonth - 1, anchorDay)
-        const currentFyStart = now >= thisYearAnchor ? nowY : nowY - 1
-        const targetFy = String(currentFyStart)
 
         // targetFy に一致するレコードのうち「最後のもの」を採用（push順で最新）
         let fyRecord: typeof plRecords[number] | undefined
-        const matching = plRecords.filter(r => String(r.fy) === targetFy)
-        if (matching.length > 0) fyRecord = matching[matching.length - 1]
+        if (targetFy !== null) {
+          const matching = plRecords.filter(r => String(r.fy) === targetFy)
+          if (matching.length > 0) fyRecord = matching[matching.length - 1]
+        }
 
         // フォールバック: 付与日数があるレコードの最後、なければplRecordsの最後
         if (!fyRecord) {
@@ -359,11 +362,13 @@ export async function GET(request: NextRequest) {
         let grantDate = fyRecord?.grantDate || ''
         let inferredFromDefault = false
 
-        // 日本人社員（visa='none'）でgrantDate未設定の場合、アンカー月/日でデフォルト適用
-        // （上で検出したアンカー月/日を使う。デフォルトは10/1）
+        // 日本人社員（visa='none'）でgrantDate未設定の場合、決算期サイクル(10/1起点)をデフォルト適用
         // ただし「Pエントリがある期」を優先して選ぶ（過去のデータを失わないため）
         if (!grantDate && (!w.visa || w.visa === 'none')) {
-          // アンカー基準でPエントリのFYを判定
+          const m = now.getMonth() + 1
+          const currentFyStartYear = m >= 10 ? now.getFullYear() : now.getFullYear() - 1
+
+          // 10/1起点でPエントリのFYを判定
           const fyCandidates = new Set<number>()
           for (const [key, entry] of Object.entries(allAtt)) {
             if (!entry) continue
@@ -373,25 +378,20 @@ export async function GET(request: NextRequest) {
             if (parseInt(pk.wid) !== w.id) continue
             const ey = parseInt(pk.ym.slice(0, 4))
             const em = parseInt(pk.ym.slice(4, 6))
-            const ed = parseInt(pk.day)
-            // FY境界: アンカー月/日を跨いだかどうか
-            const afterAnchor = em > anchorMonth || (em === anchorMonth && ed >= anchorDay)
-            const fyStart = afterAnchor ? ey : ey - 1
+            const fyStart = em >= 10 ? ey : ey - 1
             fyCandidates.add(fyStart)
           }
 
           // 直近のFYを選ぶ（Pエントリがあれば最新FY、なければ当期）
-          let selectedFyStart = currentFyStart
+          let selectedFyStart = currentFyStartYear
           if (fyCandidates.size > 0) {
-            if (fyCandidates.has(currentFyStart)) {
-              selectedFyStart = currentFyStart
+            if (fyCandidates.has(currentFyStartYear)) {
+              selectedFyStart = currentFyStartYear
             } else {
               selectedFyStart = Math.max(...Array.from(fyCandidates))
             }
           }
-          const mm = String(anchorMonth).padStart(2, '0')
-          const dd = String(anchorDay).padStart(2, '0')
-          grantDate = `${selectedFyStart}-${mm}-${dd}`
+          grantDate = `${selectedFyStart}-10-01`
           inferredFromDefault = true
         }
 
