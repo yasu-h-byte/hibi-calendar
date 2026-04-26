@@ -353,12 +353,14 @@ export async function GET(request: NextRequest) {
         let nextY = now.getFullYear()
         let nextM = now.getMonth() + 2  // 0-indexed + 2 = next month
         if (nextM > 12) { nextM = 1; nextY++ }
-        const nextYm = `${nextY}${String(nextM).padStart(2, '0')}`
+        // siteCalendar の ym フィールドは「YYYY-MM」形式で保存されているため、
+        // ダッシュあり形式でクエリする必要がある（過去のバグ修正）
+        const nextYmDashed = `${nextY}-${String(nextM).padStart(2, '0')}`
 
         const activeSites = main.sites.filter(s => !s.archived)
         const calQ = query(
           collection(db, 'siteCalendar'),
-          where('ym', '==', nextYm)
+          where('ym', '==', nextYmDashed)
         )
         const calSnap = await getDocs(calQ)
         const calMap = new Map<string, string>()  // siteId -> status
