@@ -66,6 +66,14 @@ interface ActionItems {
   pendingLeaveRequests: { count: number; items: LeaveRequestItem[] }
   absenceReports?: AbsenceReport[]
   homeLongLeaveRequests?: HomeLongLeaveItem[]
+  // 5月運用対応で追加
+  homeLeaveCurrentCount?: number
+  homeLeaveUpcomingCount?: number
+  pendingHomeLeaveApprovalCount?: number
+  pendingGrantsCount?: number
+  carryOverExpiringCount?: number
+  plShortfall?: { count: number }
+  visaExpiry?: { count: number; items: { name: string; daysLeft: number; expiry: string }[] }
 }
 
 interface DashboardData {
@@ -403,6 +411,102 @@ export default function DashboardPage() {
         <div className="text-center py-12 text-gray-400">読み込み中...</div>
       ) : data ? (
         <>
+          {/* ═══ 🚨 要対応アラート ═══ */}
+          {(() => {
+            const ai = data.actionItems
+            if (!ai) return null
+            const alerts: { icon: string; label: string; count: number; href: string; color: string }[] = []
+            if ((ai.plShortfall?.count ?? 0) > 0) {
+              alerts.push({ icon: '⚠️', label: '年5日未達', count: ai.plShortfall!.count, href: '/leave', color: 'bg-red-100 text-red-700' })
+            }
+            if ((ai.pendingGrantsCount ?? 0) > 0) {
+              alerts.push({ icon: '🌴', label: '有給付与時期', count: ai.pendingGrantsCount!, href: '/leave', color: 'bg-amber-100 text-amber-700' })
+            }
+            if ((ai.carryOverExpiringCount ?? 0) > 0) {
+              alerts.push({ icon: '⏰', label: '繰越時効間近', count: ai.carryOverExpiringCount!, href: '/leave', color: 'bg-orange-100 text-orange-700' })
+            }
+            if ((ai.pendingLeaveRequests?.count ?? 0) > 0) {
+              alerts.push({ icon: '📝', label: '有給申請', count: ai.pendingLeaveRequests.count, href: '/leave?tab=requests', color: 'bg-blue-100 text-blue-700' })
+            }
+            if ((ai.pendingHomeLeaveApprovalCount ?? 0) > 0) {
+              alerts.push({ icon: '✈️', label: '帰国申請', count: ai.pendingHomeLeaveApprovalCount!, href: '/leave?tab=homeleave', color: 'bg-cyan-100 text-cyan-700' })
+            }
+            if ((ai.visaExpiry?.count ?? 0) > 0) {
+              alerts.push({ icon: '🛂', label: 'ビザ期限90日以内', count: ai.visaExpiry!.count, href: '/workers', color: 'bg-rose-100 text-rose-700' })
+            }
+            if (alerts.length === 0) return null
+            return (
+              <div className="bg-gradient-to-r from-red-50 to-amber-50 dark:from-red-900/20 dark:to-amber-900/20 border border-red-200 dark:border-red-700/50 rounded-xl p-4">
+                <div className="flex items-center gap-2 font-bold text-red-900 dark:text-red-200 mb-3">
+                  <span className="text-lg">🚨</span>
+                  <span>要対応アラート ({alerts.length}件)</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {alerts.map(a => (
+                    <a key={a.label} href={a.href}
+                      className={`block ${a.color} rounded-lg px-3 py-2 hover:shadow-md transition`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-lg">{a.icon}</span>
+                        <span className="text-xs font-medium">{a.label}</span>
+                      </div>
+                      <div className="text-lg font-bold mt-0.5">{a.count}<span className="text-xs font-normal ml-0.5">件</span></div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* ═══ 🌴 休暇状況サマリー ═══ */}
+          {(() => {
+            const ai = data.actionItems
+            if (!ai) return null
+            const cur = ai.homeLeaveCurrentCount ?? 0
+            const up = ai.homeLeaveUpcomingCount ?? 0
+            const pendG = ai.pendingGrantsCount ?? 0
+            const carryExp = ai.carryOverExpiringCount ?? 0
+            const shortfall = ai.plShortfall?.count ?? 0
+            // どれかある時のみ表示
+            if (cur === 0 && up === 0 && pendG === 0 && carryExp === 0 && shortfall === 0) return null
+            return (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-lg">🌴</span>
+                  <h3 className="text-sm font-bold text-hibi-navy dark:text-white">休暇状況</h3>
+                  <a href="/leave" className="ml-auto text-xs text-blue-600 hover:underline">休暇管理を開く →</a>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-lg p-3">
+                    <div className="text-[10px] text-cyan-700 dark:text-cyan-300 font-medium">帰国中</div>
+                    <div className="text-2xl font-bold text-cyan-900 dark:text-cyan-200 mt-0.5">{cur}<span className="text-xs ml-0.5 font-normal">名</span></div>
+                  </div>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                    <div className="text-[10px] text-blue-700 dark:text-blue-300 font-medium">帰国予定（6ヶ月先まで）</div>
+                    <div className="text-2xl font-bold text-blue-900 dark:text-blue-200 mt-0.5">{up}<span className="text-xs ml-0.5 font-normal">件</span></div>
+                  </div>
+                  <div className={`rounded-lg p-3 ${pendG > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/30'}`}>
+                    <div className={`text-[10px] font-medium ${pendG > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500'}`}>付与時期到来</div>
+                    <div className={`text-2xl font-bold mt-0.5 ${pendG > 0 ? 'text-amber-900 dark:text-amber-200' : 'text-gray-400'}`}>
+                      {pendG}<span className="text-xs ml-0.5 font-normal">名</span>
+                    </div>
+                  </div>
+                  <div className={`rounded-lg p-3 ${carryExp > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-gray-50 dark:bg-gray-700/30'}`}>
+                    <div className={`text-[10px] font-medium ${carryExp > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-gray-500'}`}>繰越時効間近</div>
+                    <div className={`text-2xl font-bold mt-0.5 ${carryExp > 0 ? 'text-orange-900 dark:text-orange-200' : 'text-gray-400'}`}>
+                      {carryExp}<span className="text-xs ml-0.5 font-normal">名</span>
+                    </div>
+                  </div>
+                  <div className={`rounded-lg p-3 ${shortfall > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/30'}`}>
+                    <div className={`text-[10px] font-medium ${shortfall > 0 ? 'text-red-700 dark:text-red-300' : 'text-gray-500'}`}>年5日義務未達</div>
+                    <div className={`text-2xl font-bold mt-0.5 ${shortfall > 0 ? 'text-red-900 dark:text-red-200' : 'text-gray-400'}`}>
+                      {shortfall}<span className="text-xs ml-0.5 font-normal">名</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
           {/* ═══ お知らせ ═══ */}
           <AnnouncementsCard password={password} />
 

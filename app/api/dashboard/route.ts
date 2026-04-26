@@ -1042,6 +1042,108 @@ export async function GET(request: NextRequest) {
       homeLongLeaveItems.sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))
     } catch { /* ignore */ }
 
+    // 8. 帰国情報（現在帰国中・予定）
+    let homeLeaveCurrentCount = 0
+    let homeLeaveUpcomingCount = 0
+    let pendingHomeLeaveApprovalCount = 0
+    try {
+      const todayIso = new Date().toISOString().slice(0, 10)
+      const futureLimit = new Date()
+      futureLimit.setMonth(futureLimit.getMonth() + 6)
+      const futureIso = futureLimit.toISOString().slice(0, 10)
+
+      const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
+      hlSnap.forEach(d => {
+        const data = d.data()
+        if (data.status === 'approved' || data.status === 'foreman_approved') {
+          if (data.startDate <= todayIso && data.endDate >= todayIso) homeLeaveCurrentCount++
+          else if (data.startDate > todayIso && data.startDate <= futureIso) homeLeaveUpcomingCount++
+        }
+        if (data.status === 'pending' || data.status === 'foreman_approved') {
+          pendingHomeLeaveApprovalCount++
+        }
+      })
+      // 手動登録の帰国も数える (demmen/main.homeLeaves)
+      const manualHL = (main as unknown as { homeLeaves?: { startDate: string; endDate: string }[] }).homeLeaves || []
+      for (const mhl of manualHL) {
+        if (!mhl.startDate || !mhl.endDate) continue
+        if (mhl.startDate <= todayIso && mhl.endDate >= todayIso) homeLeaveCurrentCount++
+        else if (mhl.startDate > todayIso && mhl.startDate <= futureIso) homeLeaveUpcomingCount++
+      }
+    } catch { /* ignore */ }
+
+    // 9. 半自動付与対象者カウント（休暇管理API のロジック簡易版を再現）
+    let pendingGrantsCount = 0
+    let carryOverExpiringCount = 0
+    try {
+      const todayD = new Date()
+      todayD.setHours(0, 0, 0, 0)
+      const todayIsoP = todayD.toISOString().slice(0, 10)
+      const m = todayD.getMonth() + 1
+      const y = todayD.getFullYear()
+
+      for (const w of main.workers) {
+        if (w.retired) continue
+        if (w.job === 'yakuin' || w.job === 'jimu') continue
+
+        const records = main.plData[String(w.id)] || []
+        const isJp = !w.visa || w.visa === 'none'
+
+        // 付与時期チェック
+        if (isJp) {
+          // 日本人: 当期FY (10/1起点)
+          const curFy = m >= 10 ? y : y - 1
+          const expDate = `${curFy}-10-01`
+          if (expDate <= todayIsoP) {
+            const hasGrant = records.some(r =>
+              ((r.grantDays as number | undefined) ?? (r.grant as number | undefined) ?? 0) > 0 &&
+              (
+                (r.grantDate && Math.abs(new Date(r.grantDate as string).getTime() - new Date(expDate).getTime()) <= 7 * 24 * 60 * 60 * 1000) ||
+                (!r.grantDate && String(r.fy ?? '') === String(curFy))
+              )
+            )
+            if (!hasGrant) pendingGrantsCount++
+          }
+        } else {
+          // 外国人: 最新grantDate+1年
+          const granted = records.filter(r => r.grantDate && (((r.grantDays as number | undefined) ?? 0) > 0 || ((r.grant as number | undefined) ?? 0) > 0))
+            .sort((a, b) => new Date(a.grantDate as string).getTime() - new Date(b.grantDate as string).getTime())
+          const latest = granted[granted.length - 1]
+          if (latest && latest.grantDate) {
+            const lastT = new Date(latest.grantDate as string).getTime()
+            const nextT = lastT + 365 * 24 * 60 * 60 * 1000
+            const nextIso = new Date(nextT).toISOString().slice(0, 10)
+            if (nextIso <= todayIsoP) {
+              const hasGrant = records.some(r => {
+                if (!r.grantDate) return false
+                if (!(((r.grantDays as number | undefined) ?? 0) > 0 || ((r.grant as number | undefined) ?? 0) > 0)) return false
+                return Math.abs(new Date(r.grantDate as string).getTime() - nextT) <= 7 * 24 * 60 * 60 * 1000
+              })
+              if (!hasGrant) pendingGrantsCount++
+            }
+          }
+        }
+
+        // 繰越時効チェック (前期grantDate+2年が3ヶ月以内)
+        const sortedRecords = records
+          .filter(r => r.grantDate && (((r.grantDays as number | undefined) ?? 0) > 0 || ((r.grant as number | undefined) ?? 0) > 0))
+          .sort((a, b) => new Date(a.grantDate as string).getTime() - new Date(b.grantDate as string).getTime())
+        if (sortedRecords.length >= 2) {
+          const prev = sortedRecords[sortedRecords.length - 2]
+          const cur = sortedRecords[sortedRecords.length - 1]
+          const prevExp = new Date(prev.grantDate as string)
+          prevExp.setFullYear(prevExp.getFullYear() + 2)
+          prevExp.setDate(prevExp.getDate() - 1)
+          const diffDays = Math.floor((prevExp.getTime() - todayD.getTime()) / (24 * 60 * 60 * 1000))
+          if (diffDays >= 0 && diffDays <= 90) {
+            // 前期に未消化の繰越が残っているか簡易チェック
+            const curCarry = (cur.carryOver as number | undefined) ?? (cur.carry as number | undefined) ?? 0
+            if (curCarry > 0) carryOverExpiringCount++
+          }
+        }
+      }
+    } catch { /* ignore */ }
+
     const actionItems = {
       visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },
       plShortfall: { count: plShortfallCount },
@@ -1049,6 +1151,12 @@ export async function GET(request: NextRequest) {
       calendarProgress: { pending: calPending, total: calTotal },
       absenceReports,
       homeLongLeaveRequests: homeLongLeaveItems,
+      // 新規追加（5月運用対応）
+      homeLeaveCurrentCount,
+      homeLeaveUpcomingCount,
+      pendingHomeLeaveApprovalCount,
+      pendingGrantsCount,
+      carryOverExpiringCount,
     }
 
     // ダッシュボードは「今の状況と要対応」に特化（詳細分析は原価・収益管理ページへ）
