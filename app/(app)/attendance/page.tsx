@@ -413,6 +413,9 @@ export default function AttendanceGridPage() {
         entry = { w: 0.6 }
       } else if (value === 'P') {
         entry = { w: 0, p: 1 }
+      } else if (value === 'E') {
+        // 試験（実習生年次試験など。現場出勤にはカウントしないが給与計算では出勤と同等扱い）
+        entry = { w: 0, exam: 1 } as AttEntry
       }
 
       if (entry) {
@@ -429,6 +432,7 @@ export default function AttendanceGridPage() {
     else if (value === '0.5') entry = { w: 0.5, o: 0 }
     else if (value === '0.6') entry = { w: 0.6 }
     else if (value === 'P') entry = { w: 0, p: 1 }
+    else if (value === 'E') entry = { w: 0, exam: 1 } as AttEntry
 
     scheduleSave(`w-${workerId}-${day}`, {
       type: 'worker', id: workerId, day, entry,
@@ -879,6 +883,7 @@ export default function AttendanceGridPage() {
     if (!entry) return ''
     if (entry.hk && entry.hk > 0) return 'HK'
     if (entry.p && entry.p > 0) return 'P'
+    if ((entry as { exam?: number }).exam && (entry as { exam?: number }).exam! > 0) return 'E'
     if (entry.w === 1) return '1'
     if (entry.w === 0.5) return '0.5'
     if (entry.w === 0.6) return '0.6'
@@ -1495,6 +1500,7 @@ export default function AttendanceGridPage() {
                                       ${workVal === '1' ? 'text-green-700' : ''}
                                       ${workVal === '0.5' ? 'text-yellow-700' : ''}
                                       ${workVal === 'P' ? 'text-purple-600' : ''}
+                                      ${workVal === 'E' ? 'text-indigo-600' : ''}
                                       ${workVal === '' ? 'text-gray-300 font-normal' : ''}
                                     `}
                                   >
@@ -1502,6 +1508,7 @@ export default function AttendanceGridPage() {
                                     <option value="1">1</option>
                                     <option value="0.5">0.5</option>
                                     <option value="P">有</option>
+                                    <option value="E">試</option>
                                   </select>
 
                                   {/* OT input - 小さめ */}
