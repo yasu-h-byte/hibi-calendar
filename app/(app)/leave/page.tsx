@@ -426,7 +426,7 @@ export default function LeavePage() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">有給管理</h1>
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">🌴 休暇管理</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">有給休暇の付与・消化状況</p>
         </div>
         <div className="flex items-center gap-2">

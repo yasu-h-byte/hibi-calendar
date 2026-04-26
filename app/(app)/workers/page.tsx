@@ -249,7 +249,7 @@ export default function WorkersPage() {
         </div>
         <div className="flex items-center gap-2">
           <a href="/leave" className="text-hibi-navy dark:text-blue-400 text-sm underline hover:text-hibi-light transition">
-            有給管理
+            休暇管理
           </a>
           <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">
             + 新規追加

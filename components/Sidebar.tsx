@@ -33,9 +33,9 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     { label: '原価・収益管理', icon: '💰', href: '/cost', section: '集計・分析', roles: ['admin', 'jimu'] },
     // 人事・労務
     { label: '人員マスタ', icon: '👷', href: '/workers', section: '人事・労務', roles: ['admin', 'jimu'] },
-    { label: '有給管理', icon: '🌴', href: '/leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
+    { label: '休暇管理', icon: '🌴', href: '/leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
     { label: '評価管理', icon: '📋', href: '/evaluation', section: '人事・労務', roles: ['admin', 'approver'] },
-    // 「帰国・休暇情報」は「有給管理 → 帰国情報タブ」に統合
+    // 「帰国・休暇情報」は「休暇管理 → 帰国情報タブ」に統合
     { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人事・労務', roles: ['admin', 'jimu'] },
     // 現場・外注
     { label: '現場マスタ', icon: '🏗', href: '/sites', section: '現場・外注', roles: ['admin', 'jimu'] },

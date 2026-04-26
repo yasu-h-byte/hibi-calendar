@@ -47,7 +47,7 @@ const ALL_MENUS = [
   { id: 'cost', label: '原価・収益管理', section: '集計・分析' },
   // 人事・労務
   { id: 'workers', label: '人員マスタ', section: '人事・労務' },
-  { id: 'leave', label: '有給管理（帰国情報含む）', section: '人事・労務' },
+  { id: 'leave', label: '休暇管理（有給・帰国情報）', section: '人事・労務' },
   { id: 'evaluation', label: '評価管理', section: '人事・労務' },
   { id: 'tool-budget', label: '道具代管理', section: '人事・労務' },
   // 現場・外注

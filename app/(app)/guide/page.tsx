@@ -357,8 +357,8 @@ export default function GuidePage() {
         </div>
       </Section>
 
-      {/* ── セクション 8: 有給管理 ── */}
-      <Section title="有給休暇の管理" icon="&#127796;">
+      {/* ── セクション 8: 休暇管理（有給・帰国） ── */}
+      <Section title="休暇の管理（有給・帰国）" icon="&#127796;">
         <div className="mt-3 space-y-4">
           <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
             <p>有給休暇は通知ベースで付与（管理者がワンクリックで確認・実行）し、申請→承認のワークフローで消化を管理します。
@@ -408,7 +408,7 @@ export default function GuidePage() {
             <p className="text-xs font-bold text-red-700 dark:text-red-400 mb-1">年5日取得義務（2019年法改正）</p>
             <p className="text-xs text-gray-600 dark:text-gray-400">
               年10日以上付与された労働者には、付与日から1年以内に5日以上取得させる義務があります。
-              有効期限まで残り3ヶ月の時点で未達の場合、有給管理画面にアラートが表示されます。
+              有効期限まで残り3ヶ月の時点で未達の場合、休暇管理画面にアラートが表示されます。
             </p>
           </div>
         </div>
