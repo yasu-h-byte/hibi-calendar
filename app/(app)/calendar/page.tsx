@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import CalendarEditor from '@/components/CalendarEditor'
 import { AuthUser, DayType, CalendarStatus } from '@/types'
-import { getNextMonth, generateDefaultDays } from '@/lib/calendar'
+import { getNextMonth, generateDefaultDays, getHoliday } from '@/lib/calendar'
 
 interface SiteCalendarData {
   siteId: string
@@ -17,30 +17,57 @@ interface SiteCalendarData {
 }
 
 function DaySummary({ days, year, month }: { days: Record<string, DayType>; year: number; month: number }) {
-  const counts = useMemo(() => {
-    const values = Object.values(days)
-    return {
-      work: values.filter(d => d === 'work').length,
-      off: values.filter(d => d === 'off').length,
-      holiday: values.filter(d => d === 'holiday').length,
+  // 実データの 'off'/'holiday' 状態に依存せず、暦と祝日カレンダーから真の分類を導出
+  // （データ不整合があっても表示が正しくなる：祝日に登録された日は必ず祝日カウント）
+  const breakdown = useMemo(() => {
+    const daysInMonth = new Date(year, month, 0).getDate()
+    let work = 0
+    let restSunday = 0   // 日曜（祝日でない）
+    let restHoliday = 0  // 祝日（曜日問わず）
+    let restOther = 0    // その他（土曜任意休み等）
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayType = days[String(d)] || 'work'
+      if (dayType === 'work') {
+        work++
+        continue
+      }
+      // 休み: jpn祝日カレンダー → 日曜 → その他 の優先順
+      const isJpnHoliday = !!getHoliday(year, month, d)
+      const dow = new Date(year, month - 1, d).getDay()
+      if (isJpnHoliday) restHoliday++
+      else if (dow === 0) restSunday++
+      else restOther++
     }
-  }, [days])
+    const restTotal = restSunday + restHoliday + restOther
+    return { work, restTotal, restSunday, restHoliday, restOther }
+  }, [days, year, month])
 
   const legalLimit = useMemo(() => {
     const daysInMonth = new Date(year, month, 0).getDate()
     const limitHours = daysInMonth * 40 / 7
     const maxDays = Math.floor(limitHours / 7)
-    const prescribedHours = counts.work * 7
+    const prescribedHours = breakdown.work * 7
     const exceeds = prescribedHours > limitHours
     return { daysInMonth, limitHours, maxDays, prescribedHours, exceeds }
-  }, [year, month, counts.work])
+  }, [year, month, breakdown.work])
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-4 text-sm bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2">
-        <span className="text-blue-600 dark:text-blue-400 font-medium">出勤日数: {counts.work}日</span>
-        <span className="text-gray-500 dark:text-gray-400">休日: {counts.off}日</span>
-        <span className="text-red-500 dark:text-red-400">祝日: {counts.holiday}日</span>
+      {/* メイン: 出勤 / 休み の合計 */}
+      <div className="flex items-center gap-4 text-sm bg-gray-50 dark:bg-gray-700/50 rounded-lg px-3 py-2 flex-wrap">
+        <span className="text-blue-600 dark:text-blue-400 font-medium">出勤 {breakdown.work}日</span>
+        <span className="text-gray-500 dark:text-gray-400">休み {breakdown.restTotal}日</span>
+        {breakdown.restTotal > 0 && (
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+            （内訳：
+            {breakdown.restSunday > 0 && <span>日曜 {breakdown.restSunday}日</span>}
+            {breakdown.restSunday > 0 && (breakdown.restHoliday > 0 || breakdown.restOther > 0) && ' / '}
+            {breakdown.restHoliday > 0 && <span className="text-red-500 dark:text-red-400">祝日 {breakdown.restHoliday}日</span>}
+            {breakdown.restHoliday > 0 && breakdown.restOther > 0 && ' / '}
+            {breakdown.restOther > 0 && <span>その他 {breakdown.restOther}日</span>}
+            ）
+          </span>
+        )}
       </div>
       <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg ${
         legalLimit.exceeds
@@ -53,7 +80,7 @@ function DaySummary({ days, year, month }: { days: Record<string, DayType>; year
           </svg>
         )}
         <span>
-          出勤{counts.work}日 ({legalLimit.prescribedHours}h) / 上限{legalLimit.maxDays}日 ({(Math.round(legalLimit.limitHours * 10) / 10).toFixed(1)}h)
+          出勤{breakdown.work}日 ({legalLimit.prescribedHours}h) / 上限{legalLimit.maxDays}日 ({(Math.round(legalLimit.limitHours * 10) / 10).toFixed(1)}h)
         </span>
         {legalLimit.exceeds && <span>- 法定上限超過！</span>}
       </div>
