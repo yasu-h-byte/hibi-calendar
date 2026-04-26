@@ -411,52 +411,6 @@ export default function DashboardPage() {
         <div className="text-center py-12 text-gray-400">読み込み中...</div>
       ) : data ? (
         <>
-          {/* ═══ 🚨 要対応アラート ═══ */}
-          {(() => {
-            const ai = data.actionItems
-            if (!ai) return null
-            const alerts: { icon: string; label: string; count: number; href: string; color: string }[] = []
-            if ((ai.plShortfall?.count ?? 0) > 0) {
-              alerts.push({ icon: '⚠️', label: '年5日未達', count: ai.plShortfall!.count, href: '/leave', color: 'bg-red-100 text-red-700' })
-            }
-            if ((ai.pendingGrantsCount ?? 0) > 0) {
-              alerts.push({ icon: '🌴', label: '有給付与時期', count: ai.pendingGrantsCount!, href: '/leave', color: 'bg-amber-100 text-amber-700' })
-            }
-            if ((ai.carryOverExpiringCount ?? 0) > 0) {
-              alerts.push({ icon: '⏰', label: '繰越時効間近', count: ai.carryOverExpiringCount!, href: '/leave', color: 'bg-orange-100 text-orange-700' })
-            }
-            if ((ai.pendingLeaveRequests?.count ?? 0) > 0) {
-              alerts.push({ icon: '📝', label: '有給申請', count: ai.pendingLeaveRequests.count, href: '/leave?tab=requests', color: 'bg-blue-100 text-blue-700' })
-            }
-            if ((ai.pendingHomeLeaveApprovalCount ?? 0) > 0) {
-              alerts.push({ icon: '✈️', label: '帰国申請', count: ai.pendingHomeLeaveApprovalCount!, href: '/leave?tab=homeleave', color: 'bg-cyan-100 text-cyan-700' })
-            }
-            if ((ai.visaExpiry?.count ?? 0) > 0) {
-              alerts.push({ icon: '🛂', label: 'ビザ期限90日以内', count: ai.visaExpiry!.count, href: '/workers', color: 'bg-rose-100 text-rose-700' })
-            }
-            if (alerts.length === 0) return null
-            return (
-              <div className="bg-gradient-to-r from-red-50 to-amber-50 dark:from-red-900/20 dark:to-amber-900/20 border border-red-200 dark:border-red-700/50 rounded-xl p-4">
-                <div className="flex items-center gap-2 font-bold text-red-900 dark:text-red-200 mb-3">
-                  <span className="text-lg">🚨</span>
-                  <span>要対応アラート ({alerts.length}件)</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                  {alerts.map(a => (
-                    <a key={a.label} href={a.href}
-                      className={`block ${a.color} rounded-lg px-3 py-2 hover:shadow-md transition`}>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-lg">{a.icon}</span>
-                        <span className="text-xs font-medium">{a.label}</span>
-                      </div>
-                      <div className="text-lg font-bold mt-0.5">{a.count}<span className="text-xs font-normal ml-0.5">件</span></div>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
-
           {/* ═══ 🌴 休暇状況サマリー ═══ */}
           {(() => {
             const ai = data.actionItems

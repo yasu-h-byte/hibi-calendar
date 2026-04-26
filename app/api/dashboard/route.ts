@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore'
 import {
   compute,
   getMainData,
@@ -1043,19 +1043,30 @@ export async function GET(request: NextRequest) {
     } catch { /* ignore */ }
 
     // 8. 帰国情報（現在帰国中・予定）
+    // 重要: 2つのソースから集計
+    //   ① homeLongLeave コレクション（スマホ申請）
+    //   ② demmen/main.homeLeaves 配列（管理者手動登録）
     let homeLeaveCurrentCount = 0
     let homeLeaveUpcomingCount = 0
     let pendingHomeLeaveApprovalCount = 0
     try {
-      const todayIso = new Date().toISOString().slice(0, 10)
-      const futureLimit = new Date()
+      // JST基準で今日の日付を計算（Vercelサーバーは UTC のため補正）
+      const nowUtc = new Date()
+      const jst = new Date(nowUtc.getTime() + 9 * 60 * 60 * 1000)
+      const todayIso = jst.toISOString().slice(0, 10)
+      const futureLimit = new Date(jst)
       futureLimit.setMonth(futureLimit.getMonth() + 6)
       const futureIso = futureLimit.toISOString().slice(0, 10)
+      const seenKeys = new Set<string>()
 
+      // ① homeLongLeave コレクション（スマホ申請）
       const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
       hlSnap.forEach(d => {
         const data = d.data()
+        if (!data.startDate || !data.endDate) return
+        const key = `${data.workerId}_${data.startDate}`
         if (data.status === 'approved' || data.status === 'foreman_approved') {
+          seenKeys.add(key)
           if (data.startDate <= todayIso && data.endDate >= todayIso) homeLeaveCurrentCount++
           else if (data.startDate > todayIso && data.startDate <= futureIso) homeLeaveUpcomingCount++
         }
@@ -1063,13 +1074,21 @@ export async function GET(request: NextRequest) {
           pendingHomeLeaveApprovalCount++
         }
       })
-      // 手動登録の帰国も数える (demmen/main.homeLeaves)
-      const manualHL = (main as unknown as { homeLeaves?: { startDate: string; endDate: string }[] }).homeLeaves || []
-      for (const mhl of manualHL) {
-        if (!mhl.startDate || !mhl.endDate) continue
-        if (mhl.startDate <= todayIso && mhl.endDate >= todayIso) homeLeaveCurrentCount++
-        else if (mhl.startDate > todayIso && mhl.startDate <= futureIso) homeLeaveUpcomingCount++
-      }
+      // ② demmen/main.homeLeaves 配列（手動登録）
+      // MainData 型に含まれないため、直接 Firestore から取得する
+      try {
+        const mainDocSnap = await getDoc(doc(db, 'demmen', 'main'))
+        if (mainDocSnap.exists()) {
+          const manualHL = (mainDocSnap.data().homeLeaves || []) as { workerId: number; startDate: string; endDate: string }[]
+          for (const mhl of manualHL) {
+            if (!mhl.startDate || !mhl.endDate) continue
+            const key = `${mhl.workerId}_${mhl.startDate}`
+            if (seenKeys.has(key)) continue  // homeLongLeave と重複なら無視
+            if (mhl.startDate <= todayIso && mhl.endDate >= todayIso) homeLeaveCurrentCount++
+            else if (mhl.startDate > todayIso && mhl.startDate <= futureIso) homeLeaveUpcomingCount++
+          }
+        }
+      } catch { /* ignore */ }
     } catch { /* ignore */ }
 
     // 9. 半自動付与対象者カウント（休暇管理API のロジック簡易版を再現）
