@@ -88,6 +88,7 @@ export interface AttendanceEntry {
   rNote?: string   // 補足（「その他」の場合のみ）
   p?: number      // 1=有給
   h?: number      // 1=現場休み
+  exam?: number   // 1=試験（実習生の年次試験など。現場出勤にはカウントしないが、給与計算では出勤と同等扱い）
   s?: string      // 'staff' | 'foreman' | 'admin'
   // ── 時間ベース入力（202605〜）──
   st?: string     // 始業時間 "HH:MM" (例: "08:00")

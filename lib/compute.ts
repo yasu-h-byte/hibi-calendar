@@ -430,6 +430,10 @@ export function compute(
       continue  // ★ 有給は人工にカウントしない → 即continue
     }
 
+    // 試験: 人工にも原価にもカウントしない（compute() レベルでは無視）。
+    //   給与計算上の扱い (欠勤控除から除外) は computeMonthly() の examDays で別途処理
+    if (v.exam) continue
+
     if (!v.w) continue
 
     // 休業補償(0.6): 外国人の会社都合休業 → 原価のみ計上、人工数には含めない
@@ -685,6 +689,7 @@ export interface WorkerMonthly {
   plUsed: number
   restDays: number
   siteOffDays: number
+  examDays: number     // 試験日数（給与計算では欠勤控除対象から除外、原価には計上しない）
   cost: number
   otCost: number
   totalCost: number
@@ -761,7 +766,7 @@ export function computeMonthly(
       id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
       rate: w.rate, hourlyRate: w.hourlyRate, otMul: w.otMul, salary: w.salary, sites: [],
       workDays: 0, actualWorkDays: 0, compDays: 0, workAll: 0, otHours: 0,
-      plDays: 0, plUsed: 0, restDays: 0, siteOffDays: 0,
+      plDays: 0, plUsed: 0, restDays: 0, siteOffDays: 0, examDays: 0,
       cost: 0, otCost: 0, totalCost: 0,
       absence: 0, absentCost: 0, netPay: 0,
       isDispatched: dispatchedThisMonth,
@@ -804,6 +809,12 @@ export function computeMonthly(
     if (entry.p) {
       wm.plDays += 1
       wm.plUsed += 1
+      if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
+      continue
+    }
+    // ★ 試験は人工にカウントしないが、給与計算では出勤と同等扱い (examDays として集計)
+    if (entry.exam) {
+      wm.examDays += 1
       if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
       continue
     }
@@ -907,9 +918,9 @@ export function computeMonthly(
       const legalOt = Math.max(0, actualWorkH - legalLimitH)
       const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
 
-      // 欠勤控除 = 時給 × 7h × MAX(0, ベース日数 − 実出勤日数 − 有給日数 − 補償日数)
-      // ※ 0.6補償は会社都合のため欠勤扱いしない
-      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed - wm.compDays)
+      // 欠勤控除 = 時給 × 7h × MAX(0, ベース日数 − 実出勤日数 − 有給 − 補償 − 試験)
+      // ※ 0.6補償・試験(exam)は会社都合扱いのため欠勤扱いしない
+      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed - wm.compDays - wm.examDays)
       const absentDeduction = Math.round(wm.hourlyRate * 7 * absentDays)
 
       // 支給額 = 基本給 − 欠勤控除 + 追加所定手当 + 残業手当
@@ -946,8 +957,8 @@ export function computeMonthly(
       const legalOt = Math.max(0, actualWorkH - legalLimitH)
       const otAllowance = Math.round(derivedHourlyRate * 1.25 * legalOt)
 
-      // ※ 0.6補償は会社都合のため欠勤扱いしない
-      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed - wm.compDays)
+      // ※ 0.6補償・試験(exam)は会社都合扱いのため欠勤扱いしない
+      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed - wm.compDays - wm.examDays)
       const absentDeduction = Math.round(derivedHourlyRate * 7 * absentDays)
 
       const salaryNet = fixedBase - absentDeduction + additionalAllow + otAllowance
@@ -980,7 +991,7 @@ export function computeMonthly(
       wm.salaryNetPay = basePay + otPay
       wm.netPay = wm.totalCost
     } else if (workerPrescribedDays > 0) {
-      wm.absence = Math.max(0, workerPrescribedDays - wm.workDays - wm.compDays - wm.plUsed)  // 0.6は1日出勤扱い
+      wm.absence = Math.max(0, workerPrescribedDays - wm.workDays - wm.compDays - wm.plUsed - wm.examDays)  // 0.6は1日出勤扱い、試験も給与計算上は出勤扱い
       wm.absentCost = Math.round(wm.absence * wm.rate)
       wm.netPay = wm.totalCost - wm.absentCost
     } else {

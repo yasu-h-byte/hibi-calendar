@@ -471,6 +471,9 @@ export default function AttendanceGridPage() {
       let entry: AttEntry | null = null
       if (value === 'P') {
         entry = { w: 0, p: 1, s: 'admin' }
+      } else if (value === 'E') {
+        // 試験: 実習生の年次試験など。現場出勤にはカウントしないが給与計算では出勤と同等扱い
+        entry = { w: 0, exam: 1, s: 'admin' } as AttEntry
       } else if (value === 'R') {
         entry = { w: 0, r: 1, s: 'admin' }
       } else if (value === 'H') {
@@ -491,6 +494,7 @@ export default function AttendanceGridPage() {
 
     let entry: AttEntry | null = null
     if (value === 'P') entry = { w: 0, p: 1, s: 'admin' }
+    else if (value === 'E') entry = { w: 0, exam: 1, s: 'admin' } as AttEntry
     else if (value === 'R') entry = { w: 0, r: 1, s: 'admin' }
     else if (value === 'H') entry = { w: 0, h: 1, s: 'admin' }
     else if (value === 'W') entry = { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
@@ -887,6 +891,7 @@ export default function AttendanceGridPage() {
     if (!entry) return ''
     if (entry.hk && entry.hk > 0) return 'HK'
     if (entry.p && entry.p > 0) return 'P'
+    if ((entry as { exam?: number }).exam && (entry as { exam?: number }).exam! > 0) return 'E'
     if (entry.r && entry.r > 0) return 'R'
     if (entry.h && entry.h > 0) return 'H'
     if (entry.w > 0) return 'W'
@@ -1386,6 +1391,7 @@ export default function AttendanceGridPage() {
                                         ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
                                         ${statusVal === 'W' ? 'text-green-700' : ''}
                                         ${statusVal === 'P' ? 'text-purple-600' : ''}
+                                        ${statusVal === 'E' ? 'text-indigo-600' : ''}
                                         ${statusVal === 'R' ? 'text-red-500' : ''}
                                         ${statusVal === 'H' ? 'text-gray-500' : ''}
                                         ${statusVal === '' ? 'text-gray-300 font-normal' : ''}
@@ -1394,6 +1400,7 @@ export default function AttendanceGridPage() {
                                       <option value="">-</option>
                                       <option value="W">出</option>
                                       <option value="P">有</option>
+                                      <option value="E">試</option>
                                       <option value="R">休</option>
                                       <option value="H">現</option>
                                     </select>
@@ -1434,7 +1441,7 @@ export default function AttendanceGridPage() {
                                       </>
                                     ) : statusVal !== '' ? (
                                       <div className="text-[9px] text-center py-0.5 font-medium text-gray-400">
-                                        {statusVal === 'P' ? '有給' : statusVal === 'R' ? '休' : '現休'}
+                                        {statusVal === 'P' ? '有給' : statusVal === 'E' ? '試験' : statusVal === 'R' ? '休' : '現休'}
                                       </div>
                                     ) : null}
                                   </div>
