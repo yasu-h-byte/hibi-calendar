@@ -398,6 +398,34 @@ export default function AttendanceGridPage() {
 
   // ── Worker cell handlers ──
 
+  // Excel風キーボードナビゲーション: Enter で同じ日付列の次の人のステータスにジャンプ
+  const focusNextWorkerStatus = useCallback((day: number, currentWorkerId: string, shiftKey: boolean) => {
+    // 同じ日付列のステータスセル一覧を取得（disabled は自動的にスキップ）
+    const cells = Array.from(
+      document.querySelectorAll(`[data-att-status][data-att-day="${day}"]:not([disabled])`)
+    ) as HTMLSelectElement[]
+    const currentIdx = cells.findIndex(c => c.dataset.attRow === currentWorkerId)
+    if (currentIdx < 0) {
+      // フォールバック: 最初のセルへ
+      cells[0]?.focus()
+      return
+    }
+    const target = shiftKey ? cells[currentIdx - 1] : cells[currentIdx + 1]
+    if (target) {
+      target.focus()
+      // セル全体が画面内に入るようにスクロール調整
+      target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+    }
+  }, [])
+
+  // 任意のキーボードイベントから呼び出すヘルパー
+  const handleAttCellKeyDown = useCallback((e: React.KeyboardEvent, day: number, workerId: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      focusNextWorkerStatus(day, workerId, e.shiftKey)
+    }
+  }, [focusNextWorkerStatus])
+
   const handleWorkChange = useCallback((workerId: string, day: number, value: string) => {
     setWorkerEntries(prev => {
       const next = { ...prev }
@@ -1391,6 +1419,10 @@ export default function AttendanceGridPage() {
                                     <select
                                       value={statusVal}
                                       onChange={e => handleTimeStatusChange(wId, d.day, e.target.value)}
+                                      onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)}
+                                      data-att-status="1"
+                                      data-att-day={d.day}
+                                      data-att-row={wId}
                                       disabled={isLocked}
                                       className={`w-full text-center text-[10px] font-bold py-0.5 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
                                         ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
@@ -1417,6 +1449,7 @@ export default function AttendanceGridPage() {
                                           <select
                                             value={st}
                                             onChange={e => handleStartTimeChange(wId, d.day, e.target.value)}
+                                            onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)}
                                             disabled={isLocked}
                                             className="w-1/2 text-center text-[8px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
                                           >
@@ -1425,6 +1458,7 @@ export default function AttendanceGridPage() {
                                           <select
                                             value={et}
                                             onChange={e => handleEndTimeChange(wId, d.day, e.target.value)}
+                                            onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)}
                                             disabled={isLocked}
                                             className="w-1/2 text-center text-[8px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
                                           >
@@ -1434,10 +1468,10 @@ export default function AttendanceGridPage() {
                                         {/* 休憩チェック + 実時間 */}
                                         <div className="flex items-center justify-center gap-0.5 w-full px-0.5">
                                           <label className="flex items-center cursor-pointer" title="午前(10:00-10:30)">
-                                            <input type="checkbox" checked={b1 === 1} onChange={e => handleBreakChange(wId, d.day, 'b1', e.target.checked)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
+                                            <input type="checkbox" checked={b1 === 1} onChange={e => handleBreakChange(wId, d.day, 'b1', e.target.checked)} onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
                                           </label>
                                           <label className="flex items-center cursor-pointer" title="午後(15:00-15:30)">
-                                            <input type="checkbox" checked={b3 === 1} onChange={e => handleBreakChange(wId, d.day, 'b3', e.target.checked)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
+                                            <input type="checkbox" checked={b3 === 1} onChange={e => handleBreakChange(wId, d.day, 'b3', e.target.checked)} onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
                                           </label>
                                           <span className={`text-[8px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
                                             {actualH.toFixed(1)}
@@ -1494,6 +1528,10 @@ export default function AttendanceGridPage() {
                                   <select
                                     value={workVal}
                                     onChange={e => handleWorkChange(wId, d.day, e.target.value)}
+                                    onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)}
+                                    data-att-status="1"
+                                    data-att-day={d.day}
+                                    data-att-row={wId}
                                     disabled={isLocked}
                                     className={`w-full text-center text-sm font-bold py-1 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
                                       ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
@@ -1520,6 +1558,7 @@ export default function AttendanceGridPage() {
                                     value={canOt && otVal > 0 ? otVal : ''}
                                     placeholder=""
                                     onChange={e => handleOtChange(wId, d.day, e.target.value)}
+                                    onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)}
                                     disabled={isLocked || !canOt}
                                     className={`w-full text-center text-[10px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-amber-400 focus:outline-none tabular-nums
                                       ${!canOt || isLocked ? 'opacity-20 cursor-not-allowed' : 'text-amber-600'}
