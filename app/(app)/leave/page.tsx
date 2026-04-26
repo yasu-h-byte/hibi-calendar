@@ -132,7 +132,25 @@ export default function LeavePage() {
   const [autoGranted, setAutoGranted] = useState<{ name: string; days: number; grantDate: string }[]>([])
   const [autoGrantDismissed, setAutoGrantDismissed] = useState(false)
   // タブ管理
-  const [activeTab, setActiveTab] = useState<'list' | 'requests' | 'monthly' | 'calendar'>('list')
+  const [activeTab, setActiveTab] = useState<'list' | 'requests' | 'monthly' | 'calendar' | 'homeleave'>('list')
+
+  // 帰国情報（旧 home-leave ページから統合）
+  type HomeLeave = { id: string; workerId: number; workerName: string; startDate: string; endDate: string; reason: string; note?: string; createdAt: string }
+  const [homeLeaves, setHomeLeaves] = useState<HomeLeave[]>([])
+  const [hlSaving, setHlSaving] = useState(false)
+  const [hlFormOpen, setHlFormOpen] = useState(false)
+  const [hlShowPast, setHlShowPast] = useState(false)
+  const [hlFormWorkerId, setHlFormWorkerId] = useState<number | ''>('')
+  const [hlFormStart, setHlFormStart] = useState('')
+  const [hlFormEnd, setHlFormEnd] = useState('')
+  const [hlFormReason, setHlFormReason] = useState<string>('一時帰国')
+  const [hlFormNote, setHlFormNote] = useState('')
+  const [hlEditingId, setHlEditingId] = useState<string | null>(null)
+  const [hlEditStart, setHlEditStart] = useState('')
+  const [hlEditEnd, setHlEditEnd] = useState('')
+  const [hlEditReason, setHlEditReason] = useState('')
+  const [hlEditNote, setHlEditNote] = useState('')
+  const [hlDeleteConfirm, setHlDeleteConfirm] = useState<string | null>(null)
 
   // 半自動付与（未付与検知）
   type PendingGrant = { workerId: number; name: string; visa: string; hireDate: string; tenureText: string; nextGrantDate: string; fy: string; legalDays: number; reason: string; needsAttention?: boolean; attentionNote?: string }
@@ -167,12 +185,22 @@ export default function LeavePage() {
     if (stored) setPassword(JSON.parse(stored).password)
   }, [])
 
+  // ?tab=homeleave などURLパラメータでタブ初期表示を制御
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get('tab')
+    if (tab === 'list' || tab === 'requests' || tab === 'monthly' || tab === 'calendar' || tab === 'homeleave') {
+      setActiveTab(tab)
+    }
+  }, [])
+
   const fetchData = useCallback(async () => {
     if (!password) return
     setLoading(true)
     setError('')
     try {
-      const [res, reqRes, siteRes, pendRes] = await Promise.all([
+      const [res, reqRes, siteRes, pendRes, hlRes] = await Promise.all([
         fetch(`/api/leave?calendar=true`, { headers: { 'x-admin-password': password } }),
         fetch('/api/leave-request', { headers: { 'x-admin-password': password } }),
         fetch('/api/sites', { headers: { 'x-admin-password': password } }),
@@ -181,7 +209,12 @@ export default function LeavePage() {
           headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'getPendingGrants' }),
         }),
+        fetch('/api/home-leave', { headers: { 'x-admin-password': password } }),
       ])
+      if (hlRes.ok) {
+        const d = await hlRes.json()
+        setHomeLeaves(d.homeLeaves || [])
+      }
       if (res.ok) {
         const data = await res.json()
         setWorkers(data.workers || [])
@@ -548,6 +581,7 @@ export default function LeavePage() {
               { key: 'requests' as const, label: '申請', badge: pendingCount },
               { key: 'monthly' as const, label: '月別' },
               { key: 'calendar' as const, label: 'カレンダー' },
+              { key: 'homeleave' as const, label: '✈️ 帰国情報' },
             ]).map(tab => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-1 ${
@@ -1109,6 +1143,311 @@ export default function LeavePage() {
           ))}
         </div>
       )}
+
+      {/* ── 帰国情報タブ (旧 home-leave ページから統合) ── */}
+      {activeTab === 'homeleave' && (() => {
+        // 計算ヘルパー
+        const today = new Date().toISOString().slice(0, 10)
+        const fmt = (s: string) => {
+          const d = new Date(s + 'T00:00:00')
+          return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
+        }
+        const daysBetween = (s: string, e: string) => {
+          const sd = new Date(s + 'T00:00:00')
+          const ed = new Date(e + 'T00:00:00')
+          return Math.ceil((ed.getTime() - sd.getTime()) / (24 * 60 * 60 * 1000)) + 1
+        }
+        const currentLeaves = homeLeaves.filter(h => h.startDate <= today && h.endDate >= today)
+          .sort((a, b) => a.endDate.localeCompare(b.endDate))
+        const upcomingLeaves = homeLeaves.filter(h => h.startDate > today)
+          .sort((a, b) => a.startDate.localeCompare(b.startDate))
+        const pastLeaves = homeLeaves.filter(h => h.endDate < today)
+          .sort((a, b) => b.endDate.localeCompare(a.endDate))
+
+        // 操作ハンドラ
+        const handleHlAdd = async () => {
+          if (!hlFormWorkerId || !hlFormStart || !hlFormEnd) return
+          setHlSaving(true)
+          try {
+            const w = workers.find(w => w.id === Number(hlFormWorkerId))
+            const res = await fetch('/api/home-leave', {
+              method: 'POST',
+              headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'create',
+                workerId: Number(hlFormWorkerId),
+                workerName: w?.name || '',
+                startDate: hlFormStart,
+                endDate: hlFormEnd,
+                reason: hlFormReason,
+                note: hlFormNote,
+              }),
+            })
+            if (res.ok) {
+              setHlFormOpen(false)
+              setHlFormWorkerId('')
+              setHlFormStart('')
+              setHlFormEnd('')
+              setHlFormReason('一時帰国')
+              setHlFormNote('')
+              fetchData()
+            }
+          } finally { setHlSaving(false) }
+        }
+        const startHlEdit = (h: HomeLeave) => {
+          setHlEditingId(h.id)
+          setHlEditStart(h.startDate)
+          setHlEditEnd(h.endDate)
+          setHlEditReason(h.reason)
+          setHlEditNote(h.note || '')
+        }
+        const cancelHlEdit = () => {
+          setHlEditingId(null)
+        }
+        const handleHlUpdate = async (id: string) => {
+          setHlSaving(true)
+          try {
+            const res = await fetch('/api/home-leave', {
+              method: 'POST',
+              headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'update',
+                id,
+                startDate: hlEditStart,
+                endDate: hlEditEnd,
+                reason: hlEditReason,
+                note: hlEditNote,
+              }),
+            })
+            if (res.ok) {
+              cancelHlEdit()
+              fetchData()
+            }
+          } finally { setHlSaving(false) }
+        }
+        const handleHlDelete = async (id: string) => {
+          setHlSaving(true)
+          try {
+            const res = await fetch('/api/home-leave', {
+              method: 'POST',
+              headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'delete', id }),
+            })
+            if (res.ok) {
+              setHlDeleteConfirm(null)
+              fetchData()
+            }
+          } finally { setHlSaving(false) }
+        }
+
+        const renderHlCard = (h: HomeLeave, section: 'current' | 'upcoming') => {
+          const totalDays = daysBetween(h.startDate, h.endDate)
+          const dayMs = 24 * 60 * 60 * 1000
+          const todayD = new Date(today + 'T00:00:00')
+          const startD = new Date(h.startDate + 'T00:00:00')
+          const endD = new Date(h.endDate + 'T00:00:00')
+          const daysRemaining = Math.ceil((endD.getTime() - todayD.getTime()) / dayMs)
+          const daysUntilDeparture = Math.ceil((startD.getTime() - todayD.getTime()) / dayMs)
+
+          if (hlEditingId === h.id) {
+            return (
+              <div key={h.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-blue-300 dark:border-blue-600">
+                <div className="font-semibold mb-3 text-gray-900 dark:text-white">{h.workerName}</div>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">出発日</label>
+                    <input type="date" value={hlEditStart} onChange={e => setHlEditStart(e.target.value)}
+                      className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">帰国日</label>
+                    <input type="date" value={hlEditEnd} onChange={e => setHlEditEnd(e.target.value)}
+                      className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-500 mb-1">理由</label>
+                  <select value={hlEditReason} onChange={e => setHlEditReason(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    {['一時帰国', 'ビザ更新帰国', 'その他'].map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-xs text-gray-500 mb-1">備考</label>
+                  <textarea value={hlEditNote} onChange={e => setHlEditNote(e.target.value)} rows={2}
+                    className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => handleHlUpdate(h.id)} disabled={hlSaving}
+                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">保存</button>
+                  <button onClick={cancelHlEdit}
+                    className="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded">キャンセル</button>
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div key={h.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-semibold text-gray-900 dark:text-white">{h.workerName}</div>
+                {section === 'current' && (
+                  <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full">
+                    帰国まで {daysRemaining}日
+                  </span>
+                )}
+                {section === 'upcoming' && (
+                  <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
+                    出発まで {daysUntilDeparture}日
+                  </span>
+                )}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                <div>{fmt(h.startDate)} 〜 {fmt(h.endDate)} <span className="text-gray-400 ml-2">({totalDays}日間)</span></div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {h.reason}{h.note && <span className="ml-2">- {h.note}</span>}
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button onClick={() => startHlEdit(h)}
+                  className="px-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200">編集</button>
+                {hlDeleteConfirm === h.id ? (
+                  <div className="flex gap-1">
+                    <button onClick={() => handleHlDelete(h.id)} disabled={hlSaving}
+                      className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">削除する</button>
+                    <button onClick={() => setHlDeleteConfirm(null)}
+                      className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded">やめる</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setHlDeleteConfirm(h.id)}
+                    className="px-3 py-1 text-xs bg-red-50 dark:bg-red-900/20 text-red-600 rounded hover:bg-red-100">削除</button>
+                )}
+              </div>
+            </div>
+          )
+        }
+
+        return (
+          <div className="space-y-6 max-w-2xl">
+            {/* 新規登録 */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow">
+              <button onClick={() => setHlFormOpen(!hlFormOpen)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left">
+                <span className="font-medium text-gray-900 dark:text-white">＋ 新規登録</span>
+                <span className="text-gray-400 text-lg">{hlFormOpen ? '−' : '＋'}</span>
+              </button>
+              {hlFormOpen && (
+                <div className="px-4 pb-4 space-y-3 border-t border-gray-100 dark:border-gray-700 pt-3">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">スタッフ</label>
+                    <select value={hlFormWorkerId}
+                      onChange={e => setHlFormWorkerId(e.target.value ? Number(e.target.value) : '')}
+                      className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                      <option value="">選択してください</option>
+                      {workers.filter(w => w.visa && w.visa !== 'none').map(w => (
+                        <option key={w.id} value={w.id}>{w.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">出発日</label>
+                      <input type="date" value={hlFormStart} onChange={e => setHlFormStart(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">帰国日</label>
+                      <input type="date" value={hlFormEnd} onChange={e => setHlFormEnd(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">理由</label>
+                    <select value={hlFormReason} onChange={e => setHlFormReason(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                      {['一時帰国', 'ビザ更新帰国', 'その他'].map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">備考</label>
+                    <textarea value={hlFormNote} onChange={e => setHlFormNote(e.target.value)} rows={2} placeholder="任意"
+                      className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                  </div>
+                  <button onClick={handleHlAdd}
+                    disabled={hlSaving || !hlFormWorkerId || !hlFormStart || !hlFormEnd}
+                    className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
+                    {hlSaving ? '登録中...' : '登録する'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 現在帰国中 */}
+            <div>
+              <div className="border-l-4 border-red-500 pl-3 mb-3">
+                <h2 className="font-bold text-gray-900 dark:text-white">
+                  現在帰国中
+                  {currentLeaves.length > 0 && (
+                    <span className="ml-2 text-sm font-normal text-red-600">({currentLeaves.length}名)</span>
+                  )}
+                </h2>
+              </div>
+              {currentLeaves.length === 0 ? (
+                <div className="text-sm text-gray-400 pl-7">現在帰国中のスタッフはいません</div>
+              ) : (
+                <div className="space-y-3">{currentLeaves.map(h => renderHlCard(h, 'current'))}</div>
+              )}
+            </div>
+
+            {/* 帰国予定 */}
+            <div>
+              <div className="border-l-4 border-blue-500 pl-3 mb-3">
+                <h2 className="font-bold text-gray-900 dark:text-white">
+                  帰国予定
+                  {upcomingLeaves.length > 0 && (
+                    <span className="ml-2 text-sm font-normal text-blue-600">({upcomingLeaves.length}件)</span>
+                  )}
+                </h2>
+              </div>
+              {upcomingLeaves.length === 0 ? (
+                <div className="text-sm text-gray-400 pl-7">帰国予定はありません</div>
+              ) : (
+                <div className="space-y-3">{upcomingLeaves.map(h => renderHlCard(h, 'upcoming'))}</div>
+              )}
+            </div>
+
+            {/* 過去履歴 */}
+            <div>
+              <div className="border-l-4 border-gray-300 pl-3 mb-3">
+                <button onClick={() => setHlShowPast(!hlShowPast)}
+                  className="font-bold text-gray-600 dark:text-gray-400 flex items-center gap-2">
+                  過去の帰国履歴
+                  {pastLeaves.length > 0 && <span className="text-sm font-normal">({pastLeaves.length}件)</span>}
+                  <span className="text-sm">{hlShowPast ? '▲' : '▼'}</span>
+                </button>
+              </div>
+              {hlShowPast && (pastLeaves.length === 0 ? (
+                <div className="text-sm text-gray-400 pl-7">過去の帰国履歴はありません</div>
+              ) : (
+                <div className="space-y-2">
+                  {pastLeaves.map(h => (
+                    <div key={h.id} className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-700 dark:text-gray-300">{h.workerName}</span>
+                        <span className="text-xs text-gray-400">{h.reason}</span>
+                      </div>
+                      <div className="text-sm text-gray-500 mt-1">
+                        {fmt(h.startDate)} 〜 {fmt(h.endDate)} <span className="ml-2">({daysBetween(h.startDate, h.endDate)}日間)</span>
+                      </div>
+                      {h.note && <div className="text-xs text-gray-400 mt-1">{h.note}</div>}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Grant Modal */}
       {showGrantModal && (

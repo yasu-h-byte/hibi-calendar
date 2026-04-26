@@ -47,9 +47,8 @@ const ALL_MENUS = [
   { id: 'cost', label: '原価・収益管理', section: '集計・分析' },
   // 人事・労務
   { id: 'workers', label: '人員マスタ', section: '人事・労務' },
-  { id: 'leave', label: '有給管理', section: '人事・労務' },
+  { id: 'leave', label: '有給管理（帰国情報含む）', section: '人事・労務' },
   { id: 'evaluation', label: '評価管理', section: '人事・労務' },
-  { id: 'home-leave', label: '帰国・休暇情報', section: '人事・労務' },
   { id: 'tool-budget', label: '道具代管理', section: '人事・労務' },
   // 現場・外注
   { id: 'sites', label: '現場マスタ', section: '現場・外注' },
@@ -69,9 +68,9 @@ const CONFIGURABLE_ROLES = [
 
 // Default permissions (used when no Firestore data exists)
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  approver: ['dashboard', 'attendance', 'calendar', 'monthly', 'leave', 'evaluation', 'home-leave', 'sites', 'subcons', 'cost', 'docs'],
+  approver: ['dashboard', 'attendance', 'calendar', 'monthly', 'leave', 'evaluation', 'sites', 'subcons', 'cost', 'docs'],
   foreman: ['attendance', 'calendar', 'docs'],
-  jimu: ['dashboard', 'monthly', 'workers', 'sites', 'subcons', 'leave', 'home-leave', 'tool-budget', 'cost', 'docs'],
+  jimu: ['dashboard', 'monthly', 'workers', 'sites', 'subcons', 'leave', 'tool-budget', 'cost', 'docs'],
 }
 
 const ROLE_BADGES: Record<string, { label: string; cls: string }> = {

@@ -35,7 +35,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     { label: '人員マスタ', icon: '👷', href: '/workers', section: '人事・労務', roles: ['admin', 'jimu'] },
     { label: '有給管理', icon: '🌴', href: '/leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
     { label: '評価管理', icon: '📋', href: '/evaluation', section: '人事・労務', roles: ['admin', 'approver'] },
-    { label: '帰国・休暇情報', icon: '✈️', href: '/home-leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
+    // 「帰国・休暇情報」は「有給管理 → 帰国情報タブ」に統合
     { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人事・労務', roles: ['admin', 'jimu'] },
     // 現場・外注
     { label: '現場マスタ', icon: '🏗', href: '/sites', section: '現場・外注', roles: ['admin', 'jimu'] },
@@ -59,7 +59,7 @@ const MENU_ID_MAP: Record<string, string> = {
   '/leave': 'leave',
   // '/leave-requests': removed (merged into /leave)
   '/evaluation': 'evaluation',
-  '/home-leave': 'home-leave',
+  // '/home-leave' は廃止（/leave?tab=homeleave に統合）
   '/tool-budget': 'tool-budget',
   '/access-log': 'access-log',
   '/cost': 'cost',
