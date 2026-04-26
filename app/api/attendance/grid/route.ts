@@ -132,10 +132,27 @@ export async function GET(request: NextRequest) {
       : null
 
     // 帰国情報: 2つのソースから統合
+    // 表示対象:
+    //   ① 当月と帰国期間が重なるもの (帰国中扱い)
+    //   ② 当月以降に予定されているもの (帰国予定扱い、最大6ヶ月先まで)
     const monthStart = `${String(y)}-${String(m).padStart(2, '0')}-01`
     const monthEnd = `${String(y)}-${String(m).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+    // 6ヶ月先を計算（YYYY-MM-DD）
+    const horizonDate = new Date(y, m - 1 + 6, daysInMonth)
+    const horizonEnd = `${horizonDate.getFullYear()}-${String(horizonDate.getMonth() + 1).padStart(2, '0')}-${String(horizonDate.getDate()).padStart(2, '0')}`
     const homeLeaves: { workerId: number; workerName: string; startDate: string; endDate: string; reason: string; status: string }[] = []
     const seenKeys = new Set<string>()
+
+    // 表示対象判定:
+    //   - 既に終了したものは除外 (endDate < monthStart)
+    //   - 6ヶ月以上先に始まるものは除外 (startDate > horizonEnd)
+    //   - それ以外（当月重なり or 直近の予定）は表示
+    const isInScope = (startDate: string, endDate: string) => {
+      if (!startDate || !endDate) return false
+      if (endDate < monthStart) return false
+      if (startDate > horizonEnd) return false
+      return true
+    }
 
     try {
       // ① スマホ申請（homeLongLeaveコレクション）
@@ -143,7 +160,7 @@ export async function GET(request: NextRequest) {
       hlSnap.forEach(d => {
         const hl = d.data()
         if (hl.status !== 'approved' && hl.status !== 'foreman_approved') return
-        if (hl.endDate < monthStart || hl.startDate > monthEnd) return
+        if (!isInScope(hl.startDate, hl.endDate)) return
         const key = `${hl.workerId}_${hl.startDate}`
         seenKeys.add(key)
         homeLeaves.push({
@@ -156,7 +173,6 @@ export async function GET(request: NextRequest) {
         })
       })
     } catch (e) {
-      // homeLongLeave コレクションが存在しない場合は無視
       console.warn('homeLongLeave fetch skipped:', e)
     }
 
@@ -167,8 +183,7 @@ export async function GET(request: NextRequest) {
         const manualHomeLeaves: { id?: string; workerId: number; workerName: string; startDate: string; endDate: string; reason?: string }[] =
           mainDocSnap.data().homeLeaves || []
         for (const mhl of manualHomeLeaves) {
-          if (!mhl.startDate || !mhl.endDate) continue
-          if (mhl.endDate < monthStart || mhl.startDate > monthEnd) continue
+          if (!isInScope(mhl.startDate, mhl.endDate)) continue
           const key = `${mhl.workerId}_${mhl.startDate}`
           if (seenKeys.has(key)) continue
           homeLeaves.push({
@@ -184,6 +199,9 @@ export async function GET(request: NextRequest) {
     } catch (e) {
       console.warn('homeLeaves from main fetch skipped:', e)
     }
+
+    // 開始日順にソート（帰国中→予定の順で見やすく）
+    homeLeaves.sort((a, b) => a.startDate.localeCompare(b.startDate))
 
     return NextResponse.json({
       site: { id: site.id, name: site.name, foreman: effectiveForeman, foremanName, foremanNote },

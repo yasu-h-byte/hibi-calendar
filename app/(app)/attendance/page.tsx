@@ -1134,35 +1134,61 @@ export default function AttendanceGridPage() {
       )}
 
       {/* ── Home leave banner ── */}
-      {data?.homeLeaves && data.homeLeaves.length > 0 && (
-        <div className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm">
-          <div className="flex items-center gap-2 font-bold text-cyan-800 mb-1">
-            ✈️ 帰国予定・帰国中 ({data.homeLeaves.length}件)
+      {data?.homeLeaves && data.homeLeaves.length > 0 && (() => {
+        const now = new Date().toISOString().slice(0, 10)
+        const currentCount = data.homeLeaves.filter(hl => hl.startDate <= now && hl.endDate >= now).length
+        const futureCount = data.homeLeaves.filter(hl => hl.startDate > now).length
+        return (
+          <div className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm">
+            <div className="flex items-center gap-2 font-bold text-cyan-800 mb-2 flex-wrap">
+              <span>✈️ 帰国情報</span>
+              {currentCount > 0 && (
+                <span className="text-xs bg-cyan-200 text-cyan-900 px-1.5 py-0.5 rounded-full">
+                  帰国中 {currentCount}名
+                </span>
+              )}
+              {futureCount > 0 && (
+                <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
+                  予定 {futureCount}名
+                </span>
+              )}
+            </div>
+            <div className="space-y-1">
+              {data.homeLeaves.map((hl, i) => {
+                const isCurrent = hl.startDate <= now && hl.endDate >= now
+                const isFuture = hl.startDate > now
+                // 帰国までの日数（予定の場合のみ）
+                let daysUntilStart = 0
+                if (isFuture) {
+                  const start = new Date(hl.startDate + 'T00:00:00')
+                  const today = new Date(now + 'T00:00:00')
+                  daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+                }
+                return (
+                  <div key={i} className="flex items-center gap-2 text-xs text-cyan-700 flex-wrap">
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      isCurrent ? 'bg-cyan-200 text-cyan-800' : isFuture ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {isCurrent ? '帰国中' : isFuture ? '予定' : '済'}
+                    </span>
+                    <span className="font-medium">{hl.workerName}</span>
+                    <span>{hl.startDate.slice(5)} 〜 {hl.endDate.slice(5)}</span>
+                    <span className="text-cyan-500">({hl.reason})</span>
+                    {isFuture && daysUntilStart > 0 && (
+                      <span className="text-[10px] text-blue-600">
+                        {daysUntilStart === 1 ? '明日から' : `あと${daysUntilStart}日`}
+                      </span>
+                    )}
+                    {hl.status === 'foreman_approved' && (
+                      <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded">職長済・最終承認待ち</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
-          <div className="space-y-1">
-            {data.homeLeaves.map((hl, i) => {
-              const now = new Date().toISOString().slice(0, 10)
-              const isCurrent = hl.startDate <= now && hl.endDate >= now
-              const isFuture = hl.startDate > now
-              return (
-                <div key={i} className="flex items-center gap-2 text-xs text-cyan-700">
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    isCurrent ? 'bg-cyan-200 text-cyan-800' : isFuture ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {isCurrent ? '帰国中' : isFuture ? '予定' : '済'}
-                  </span>
-                  <span className="font-medium">{hl.workerName}</span>
-                  <span>{hl.startDate.slice(5)} 〜 {hl.endDate.slice(5)}</span>
-                  <span className="text-cyan-500">({hl.reason})</span>
-                  {hl.status === 'foreman_approved' && (
-                    <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded">職長済・最終承認待ち</span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Grid Table ── */}
       {!loading && data && (
