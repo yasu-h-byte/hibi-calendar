@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ロール別やることチェックリスト - HIBI CONSTRUCTION</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Segoe UI', sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.7; }
+  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 24px; }
+  h2 { color: #1B2A4A; border-left: 5px solid #1B2A4A; padding-left: 14px; margin-top: 44px; font-size: 20px; }
+  h3 { color: #333; margin-top: 28px; font-size: 16px; }
+  h4 { color: #555; margin-top: 16px; font-size: 14px; }
+  .role-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 22px; margin: 16px 0; }
+  .role-card.admin { border-left: 5px solid #dc2626; }
+  .role-card.approver { border-left: 5px solid #ea580c; }
+  .role-card.foreman { border-left: 5px solid #2563eb; }
+  .role-card.jimu { border-left: 5px solid #7c3aed; }
+  .role-card.staff { border-left: 5px solid #16a34a; }
+  .role-title { font-size: 17px; font-weight: bold; color: #1B2A4A; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .role-sub { font-size: 12px; color: #888; margin-bottom: 12px; }
+  .freq { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-right: 6px; }
+  .freq.daily { background: #fef3c7; color: #92400e; }
+  .freq.weekly { background: #dbeafe; color: #1e40af; }
+  .freq.monthly { background: #fce7f3; color: #9f1239; }
+  .freq.yearly { background: #f3e8ff; color: #6b21a8; }
+  .task { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; margin: 8px 0; }
+  .task-title { font-weight: 600; color: #1B2A4A; font-size: 14px; }
+  .task-detail { font-size: 12px; color: #666; margin-top: 4px; }
+  .task-link { font-size: 11px; color: #2563eb; margin-top: 4px; display: inline-block; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 4px; vertical-align: middle; }
+  .tag-new { background: #dcfce7; color: #166534; }
+  .tag-must { background: #fee2e2; color: #991b1b; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
+  th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+  th { background: #1B2A4A; color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-tip { background: #e0f7e9; border: 1px solid #80c080; }
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 20px; }
+  .toc ol { margin: 6px 0; padding-left: 20px; }
+  .toc a { color: #2563eb; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .home-link { background: #1B2A4A; color: white; padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 13px; display: inline-block; }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" class="home-link">← 資料一覧に戻る</a></div>
+
+<h1>✅ ロール別やることチェックリスト</h1>
+<p>HIBI CONSTRUCTION 出面管理システム<br>
+最終更新: 2026年4月26日</p>
+
+<div class="box">
+  <strong>このページは：</strong>各ロールが「日次・月次・年次で何をすべきか」を1ページに集約したものです。<br>
+  <strong>使い方：</strong>朝・月初・年初の業務開始時にチェックリストとして使ってください。詳しい操作方法は各マニュアルを参照。
+</div>
+
+<div class="toc">
+  <h3 style="margin-top:0">📋 目次</h3>
+  <ol>
+    <li><a href="#admin">日比靖仁さん（管理者・admin）</a></li>
+    <li><a href="#approver">日比政仁さん（事業責任者・approver）</a></li>
+    <li><a href="#foreman">職長（foreman）</a></li>
+    <li><a href="#jimu">事務（奥寺さん・佐藤さん）</a></li>
+    <li><a href="#staff">スタッフ（実習生・特定技能）</a></li>
+    <li><a href="#month-cycle">月次運用サイクル全体図</a></li>
+  </ol>
+</div>
+
+<hr>
+
+<h2 id="admin">1. 日比靖仁さん（管理者・admin）</h2>
+
+<div class="role-card admin">
+  <div class="role-title">🔴 管理者（システム最高権限）</div>
+  <div class="role-sub">役割：システム設定・スーパー操作・最終承認</div>
+
+  <h4><span class="freq daily">毎日</span></h4>
+  <div class="task">
+    <div class="task-title">📊 ダッシュボードで全体状況を確認</div>
+    <div class="task-detail">要対応アラート・今日の稼働・休暇状況・進捗をチェック</div>
+  </div>
+  <div class="task">
+    <div class="task-title">🔔 通知ベルでアラート対応</div>
+    <div class="task-detail">未署名カレンダー・期限切れ間近・申請の滞留などを監視</div>
+  </div>
+
+  <h4><span class="freq monthly">毎月</span></h4>
+  <div class="task">
+    <div class="task-title">🌴 休暇管理「半自動付与」<span class="tag tag-must">必須</span></div>
+    <div class="task-detail">バナー「N名に有給付与の時期が来ています」が出たら、内容を確認しワンクリック付与</div>
+    <div class="task-link">→ <a href="/manual-yukyu.html#normal-flow">休暇管理マニュアル §4</a></div>
+  </div>
+  <div class="task">
+    <div class="task-title">⏳ 時効処理（自動）</div>
+    <div class="task-detail">毎月1日 9:00 JST に Vercel Cron で自動実行。手動実行ボタンもあり。</div>
+  </div>
+
+  <h4><span class="freq monthly">月初（10/1）</span></h4>
+  <div class="task">
+    <div class="task-title">💰 日本人スタッフの期末買取記録<span class="tag tag-must">9/30</span></div>
+    <div class="task-detail">9月末残日数を「💰買取を記録」モーダルで「期末買取」として入力</div>
+    <div class="task-link">→ <a href="/manual-yukyu.html#buyout">休暇管理マニュアル §6</a></div>
+  </div>
+
+  <h4><span class="freq yearly">年次・必要時</span></h4>
+  <div class="task">
+    <div class="task-title">📊 有給管理簿Excel出力（労基法監査対応）</div>
+    <div class="task-detail">年次監査・労基署提出時に「📊管理簿出力」ボタンから生成</div>
+  </div>
+  <div class="task">
+    <div class="task-title">⚙️ 管理者設定・アクセス履歴の確認</div>
+    <div class="task-detail">退職処理・新規採用時の設定変更</div>
+  </div>
+</div>
+
+<hr>
+
+<h2 id="approver">2. 日比政仁さん（事業責任者・approver）</h2>
+
+<div class="role-card approver">
+  <div class="role-title">🟠 役員（事業責任者）</div>
+  <div class="role-sub">役割：最終承認・原価管理・経営判断</div>
+
+  <h4><span class="freq daily">毎日</span></h4>
+  <div class="task">
+    <div class="task-title">📊 ダッシュボードで稼働状況把握</div>
+    <div class="task-detail">本日の現場別人員配置と欠勤者を確認</div>
+  </div>
+  <div class="task">
+    <div class="task-title">✅ 出面の最終承認</div>
+    <div class="task-detail">職長承認済の出面を最終承認（ロック）</div>
+  </div>
+  <div class="task">
+    <div class="task-title">🌴 休暇申請の最終承認</div>
+    <div class="task-detail">職長承認後の有給申請・帰国申請を承認</div>
+    <div class="task-link">→ <a href="/manual-masahito.html">政仁さんマニュアル</a></div>
+  </div>
+
+  <h4><span class="freq monthly">毎月</span></h4>
+  <div class="task">
+    <div class="task-title">📅 翌月カレンダーの承認</div>
+    <div class="task-detail">職長が作成→提出した翌月就業カレンダーを承認</div>
+  </div>
+  <div class="task">
+    <div class="task-title">💰 原価・収益の確認</div>
+    <div class="task-detail">月締め後、原価収益管理ページで現場別の利益率を確認</div>
+  </div>
+
+  <h4><span class="freq yearly">年次</span></h4>
+  <div class="task">
+    <div class="task-title">📋 評価の最終承認</div>
+    <div class="task-detail">職長が入力した評価を確認・最終承認、昇給を決定</div>
+    <div class="task-link">→ <a href="/manual-evaluation.html">評価管理マニュアル</a></div>
+  </div>
+</div>
+
+<hr>
+
+<h2 id="foreman">3. 職長（foreman）</h2>
+
+<div class="role-card foreman">
+  <div class="role-title">🔵 職長（現場責任者）</div>
+  <div class="role-sub">役割：現場運営・出面の第1段階承認・カレンダー作成</div>
+
+  <h4><span class="freq daily">毎日</span></h4>
+  <div class="task">
+    <div class="task-title">⏰ スマホで自分の出勤入力</div>
+    <div class="task-detail">始業・終業時刻、休憩、残業を入力</div>
+  </div>
+  <div class="task">
+    <div class="task-title">✅ 担当現場の出面確認・職長承認</div>
+    <div class="task-detail">スタッフの入力を確認、間違いがあれば修正、職長承認で次工程へ</div>
+  </div>
+
+  <h4><span class="freq weekly">適宜</span></h4>
+  <div class="task">
+    <div class="task-title">🌴 休暇申請の職長承認（第1段階）</div>
+    <div class="task-detail">スタッフからの有給申請・帰国申請を確認 → 職長承認</div>
+  </div>
+
+  <h4><span class="freq monthly">前月25日まで</span></h4>
+  <div class="task">
+    <div class="task-title">📅 翌月の就業カレンダー作成・提出<span class="tag tag-must">期限厳守</span></div>
+    <div class="task-detail">担当現場の翌月稼働日を設定し、政仁さんに提出</div>
+    <div class="task-link">→ <a href="/manual-foreman.html">職長マニュアル</a></div>
+  </div>
+
+  <h4><span class="freq yearly">年次</span></h4>
+  <div class="task">
+    <div class="task-title">📋 評価の入力（第1段階）</div>
+    <div class="task-detail">担当スタッフの10項目評価を入力</div>
+  </div>
+</div>
+
+<hr>
+
+<h2 id="jimu">4. 事務（奥寺さん・佐藤さん）</h2>
+
+<div class="role-card jimu">
+  <div class="role-title">🟣 事務（奥寺さん）</div>
+  <div class="role-sub">役割：給与計算・帳票出力・各種データ管理</div>
+
+  <h4><span class="freq daily">毎日</span></h4>
+  <div class="task">
+    <div class="task-title">📋 出面入力の補助・修正</div>
+    <div class="task-detail">スタッフが入力できなかった分を代理入力、過去日の修正</div>
+  </div>
+  <div class="task">
+    <div class="task-title">🌴 休暇管理の状況確認</div>
+    <div class="task-detail">「年5日未達」「繰越時効間近」などのアラートに対応</div>
+  </div>
+
+  <h4><span class="freq monthly">月次（5日〜10日目安）</span></h4>
+  <div class="task">
+    <div class="task-title">📊 月次集計・給与計算<span class="tag tag-must">必須</span></div>
+    <div class="task-detail">前月の出面を月次集計画面で確認、給与額を確定</div>
+    <div class="task-link">→ <a href="/manual-okudera.html">奥寺さんマニュアル</a></div>
+  </div>
+  <div class="task">
+    <div class="task-title">📤 帳票Excel出力</div>
+    <div class="task-detail">出面表・給与明細・有給管理台帳をダウンロード</div>
+  </div>
+  <div class="task">
+    <div class="task-title">📅 月締めロック</div>
+    <div class="task-detail">月締め完了後、出面をロックして変更不可に</div>
+  </div>
+
+  <h4><span class="freq daily">必要時</span></h4>
+  <div class="task">
+    <div class="task-title">🛡 試験ステータス入力<span class="tag tag-new">新機能</span></div>
+    <div class="task-detail">実習生の年次試験日に、出面ドロップダウンから「試」を選択</div>
+  </div>
+  <div class="task">
+    <div class="task-title">⌨️ キーボードナビ活用<span class="tag tag-new">新機能</span></div>
+    <div class="task-detail">出面入力でEnterキーで次の人にジャンプ、効率化</div>
+  </div>
+</div>
+
+<div class="role-card jimu">
+  <div class="role-title">🟣 事務（佐藤さん・道具代担当）</div>
+  <div class="role-sub">役割：道具代補助の管理</div>
+
+  <h4><span class="freq monthly">必要時</span></h4>
+  <div class="task">
+    <div class="task-title">🔧 道具代補助の購入登録</div>
+    <div class="task-detail">スタッフから領収書を受け取り、システムに購入記録を登録</div>
+    <div class="task-link">→ <a href="/manual-sato.html">佐藤さんマニュアル</a></div>
+  </div>
+  <div class="task">
+    <div class="task-title">📅 年度切り替え（10月）</div>
+    <div class="task-detail">年度予算3万円を新しい期間に設定</div>
+  </div>
+</div>
+
+<hr>
+
+<h2 id="staff">5. スタッフ（実習生・特定技能）</h2>
+
+<div class="role-card staff">
+  <div class="role-title">🟢 スタッフ</div>
+  <div class="role-sub">役割：自己出勤入力・各種申請</div>
+
+  <h4><span class="freq daily">毎日</span></h4>
+  <div class="task">
+    <div class="task-title">⏰ スマホで出勤登録</div>
+    <div class="task-detail">QRコードまたはURLからスマホアプリを開き、その日の始業・終業時刻と休憩を入力</div>
+    <div class="task-link">→ <a href="/staff-manual-vi.html">スタッフ向けマニュアル</a></div>
+  </div>
+
+  <h4><span class="freq weekly">必要時</span></h4>
+  <div class="task">
+    <div class="task-title">🌴 有給申請（事前）</div>
+    <div class="task-detail">休みたい日の前に「ゆうきゅうしんせい」ボタンから申請</div>
+  </div>
+  <div class="task">
+    <div class="task-title">🤒 欠勤届</div>
+    <div class="task-detail">急な体調不良などで休む場合は「欠勤届」から理由を選択</div>
+  </div>
+  <div class="task">
+    <div class="task-title">✈️ 帰国申請（3ヶ月前）</div>
+    <div class="task-detail">一時帰国・ビザ更新で帰国する場合は最低3ヶ月前に申請</div>
+  </div>
+
+  <h4><span class="freq monthly">毎月</span></h4>
+  <div class="task">
+    <div class="task-title">📅 就業カレンダー署名</div>
+    <div class="task-detail">毎月の翌月予定が来たら確認・署名</div>
+  </div>
+  <div class="task">
+    <div class="task-title">📊 残数確認（5月以降）</div>
+    <div class="task-detail">スマホ画面で「有給残り」「道具代残り」を随時確認</div>
+  </div>
+</div>
+
+<hr>
+
+<h2 id="month-cycle">6. 月次運用サイクル全体図</h2>
+
+<table>
+  <tr>
+    <th>タイミング</th>
+    <th>担当</th>
+    <th>アクション</th>
+  </tr>
+  <tr>
+    <td>前月25日まで</td>
+    <td>職長</td>
+    <td>翌月就業カレンダー作成・提出</td>
+  </tr>
+  <tr>
+    <td>前月25日〜末</td>
+    <td>政仁さん</td>
+    <td>翌月カレンダー承認</td>
+  </tr>
+  <tr>
+    <td>当月1日〜末</td>
+    <td>スタッフ</td>
+    <td>毎日スマホで出勤入力</td>
+  </tr>
+  <tr>
+    <td>当月1日〜末</td>
+    <td>職長</td>
+    <td>担当現場の出面を毎日確認・職長承認</td>
+  </tr>
+  <tr>
+    <td>当月1日〜末</td>
+    <td>政仁さん</td>
+    <td>職長承認後の出面を最終承認、休暇申請の最終承認</td>
+  </tr>
+  <tr>
+    <td>翌月1日〜10日</td>
+    <td>奥寺さん</td>
+    <td>月次集計・給与計算・帳票出力</td>
+  </tr>
+  <tr>
+    <td>翌月10日</td>
+    <td>奥寺さん</td>
+    <td>月締めロック</td>
+  </tr>
+  <tr>
+    <td>毎月1日 9:00</td>
+    <td>システム</td>
+    <td>有給時効処理（自動）</td>
+  </tr>
+  <tr>
+    <td>10月1日</td>
+    <td>管理者</td>
+    <td>日本人スタッフの新FY付与（半自動）、9月末買取記録</td>
+  </tr>
+  <tr>
+    <td>各人の付与日</td>
+    <td>管理者</td>
+    <td>外国人スタッフの新FY付与（半自動）</td>
+  </tr>
+  <tr>
+    <td>年1回（実習生）</td>
+    <td>事務</td>
+    <td>試験日に出面で「試」ステータス入力</td>
+  </tr>
+</table>
+
+<div class="box box-tip">
+  <strong>💡 ポイント：</strong>赤いアラートが出たら必ず対応、緑のメッセージは正常稼働の合図。月初の数日でその月のリズムが決まります。
+</div>
+
+<hr>
+<p style="text-align:center; color:#999; font-size:12px;">最終更新: 2026-04-26 / Phase 1〜8 + 案B 対応版</p>
+
+</body>
+</html>
