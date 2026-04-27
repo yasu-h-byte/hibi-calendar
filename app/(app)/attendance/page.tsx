@@ -1572,7 +1572,7 @@ export default function AttendanceGridPage() {
                                     <option value="">-</option>
                                     <option value="1">1</option>
                                     <option value="0.5">0.5</option>
-                                    <option value="0.6">0.6 (休業補償)</option>
+                                    <option value="0.6">0.6補</option>
                                     <option value="P">有</option>
                                     <option value="E">試</option>
                                   </select>
