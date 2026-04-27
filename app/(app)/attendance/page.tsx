@@ -1563,6 +1563,7 @@ export default function AttendanceGridPage() {
                                       ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
                                       ${workVal === '1' ? 'text-green-700' : ''}
                                       ${workVal === '0.5' ? 'text-yellow-700' : ''}
+                                      ${workVal === '0.6' ? 'text-orange-600' : ''}
                                       ${workVal === 'P' ? 'text-purple-600' : ''}
                                       ${workVal === 'E' ? 'text-indigo-600' : ''}
                                       ${workVal === '' ? 'text-gray-300 font-normal' : ''}
@@ -1571,6 +1572,7 @@ export default function AttendanceGridPage() {
                                     <option value="">-</option>
                                     <option value="1">1</option>
                                     <option value="0.5">0.5</option>
+                                    <option value="0.6">0.6 (休業補償)</option>
                                     <option value="P">有</option>
                                     <option value="E">試</option>
                                   </select>
