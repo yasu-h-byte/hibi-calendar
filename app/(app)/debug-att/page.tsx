@@ -2,6 +2,25 @@
 
 import { useState } from 'react'
 
+interface RepairPlan {
+  date: string
+  day: number
+  oldKey: string
+  oldEntry: Record<string, unknown> | null
+  newKey: string
+  newEntryBefore: Record<string, unknown> | null
+  action: 'move' | 'skip-new-exists' | 'no-old-data'
+  note?: string
+}
+
+interface RepairResult {
+  dryRun?: boolean
+  success?: boolean
+  plans: RepairPlan[]
+  historyUpdates: { fyIdx: number; entryIdx: number; date: string; from: string; to: string }[]
+  attUpdatesCount?: number
+}
+
 interface AttEntry {
   w?: number
   p?: number
@@ -51,6 +70,58 @@ export default function DebugAttPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<InspectResult | null>(null)
+
+  // 修復ツール用
+  const [repairWorkerId, setRepairWorkerId] = useState('')
+  const [repairOldSiteId, setRepairOldSiteId] = useState('sasazuka')
+  const [repairNewSiteId, setRepairNewSiteId] = useState('ihi')
+  const [repairDates, setRepairDates] = useState('2026-03-07,2026-03-09,2026-03-10,2026-03-11,2026-03-12,2026-03-13,2026-03-14,2026-03-16')
+  const [repairLoading, setRepairLoading] = useState(false)
+  const [repairResult, setRepairResult] = useState<RepairResult | null>(null)
+  const [repairError, setRepairError] = useState<string | null>(null)
+  const [skipIfNewExists, setSkipIfNewExists] = useState(true)
+
+  const handleRepair = async (dryRun: boolean) => {
+    setRepairLoading(true)
+    setRepairError(null)
+    setRepairResult(null)
+    try {
+      const auth = localStorage.getItem('hibi_auth')
+      if (!auth) {
+        setRepairError('ログイン情報が見つかりません。')
+        return
+      }
+      const { password } = JSON.parse(auth)
+      const dates = repairDates.split(',').map(s => s.trim()).filter(Boolean)
+      const res = await fetch('/api/debug/repair-att-site', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': password,
+        },
+        body: JSON.stringify({
+          workerId: Number(repairWorkerId),
+          ym,
+          dates,
+          oldSiteId: repairOldSiteId,
+          newSiteId: repairNewSiteId,
+          skipIfNewExists,
+          dryRun,
+        }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        setRepairError(`エラー (${res.status}): ${JSON.stringify(errData)}`)
+        return
+      }
+      const data: RepairResult = await res.json()
+      setRepairResult(data)
+    } catch (e) {
+      setRepairError(`通信エラー: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setRepairLoading(false)
+    }
+  }
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -282,6 +353,166 @@ export default function DebugAttPage() {
           </details>
         </div>
       )}
+
+      {/* 修復ツール */}
+      <div className="mt-12 border-t-2 border-red-200 pt-6">
+        <h2 className="text-lg font-bold text-red-700 mb-2">🩹 出面データ現場移し替えツール</h2>
+        <p className="text-sm text-gray-600 mb-4">
+          誤った現場に書き込まれた有給データを、正しい現場に移し替えます。
+          <strong className="text-red-600">必ず先に「ドライラン」で結果プレビューを確認してから実行してください。</strong>
+        </p>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                スタッフID（数値）
+              </label>
+              <input
+                type="text"
+                value={repairWorkerId}
+                onChange={e => setRepairWorkerId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                placeholder="例: 109"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                対象月（上の検索と同じ年月を使用）
+              </label>
+              <input
+                type="text"
+                value={ym}
+                disabled
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                誤って書かれた現場ID（移動元）
+              </label>
+              <input
+                type="text"
+                value={repairOldSiteId}
+                onChange={e => setRepairOldSiteId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                placeholder="例: sasazuka"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                正しい現場ID（移動先）
+              </label>
+              <input
+                type="text"
+                value={repairNewSiteId}
+                onChange={e => setRepairNewSiteId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                placeholder="例: ihi"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              対象日付（YYYY-MM-DD形式・カンマ区切り）
+            </label>
+            <textarea
+              value={repairDates}
+              onChange={e => setRepairDates(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono"
+              rows={3}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="skipIfNewExists"
+              checked={skipIfNewExists}
+              onChange={e => setSkipIfNewExists(e.target.checked)}
+              className="rounded"
+            />
+            <label htmlFor="skipIfNewExists" className="text-sm text-gray-700">
+              移動先にすでに有給データがある日は、移動元のみ削除（重複防止・推奨ON）
+            </label>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => handleRepair(true)}
+              disabled={repairLoading || !repairWorkerId}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {repairLoading ? '確認中…' : '👀 ドライラン（プレビューのみ）'}
+            </button>
+            <button
+              onClick={() => {
+                if (confirm(`本当に修復を実行しますか？\n\n対象: workerId=${repairWorkerId}, ${repairOldSiteId} → ${repairNewSiteId}\n${repairDates.split(',').length}日分`)) {
+                  handleRepair(false)
+                }
+              }}
+              disabled={repairLoading || !repairWorkerId}
+              className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50"
+            >
+              {repairLoading ? '実行中…' : '⚠️ 本番実行'}
+            </button>
+          </div>
+        </div>
+
+        {repairError && (
+          <div className="mt-3 bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+            {repairError}
+          </div>
+        )}
+
+        {repairResult && (
+          <div className="mt-4 bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+            <h3 className="font-bold">
+              {repairResult.dryRun ? '👀 ドライラン結果（変更なし）' : '✅ 修復実行完了'}
+            </h3>
+            <div>
+              <h4 className="text-sm font-medium mb-1">出面データの変更計画</h4>
+              <table className="min-w-full text-xs border border-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-2 py-1 border text-left">日付</th>
+                    <th className="px-2 py-1 border text-left">アクション</th>
+                    <th className="px-2 py-1 border text-left">移動元データ</th>
+                    <th className="px-2 py-1 border text-left">移動先(変更前)</th>
+                    <th className="px-2 py-1 border text-left">備考</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {repairResult.plans.map(p => (
+                    <tr key={p.date} className={
+                      p.action === 'move' ? 'bg-green-50'
+                      : p.action === 'skip-new-exists' ? 'bg-yellow-50'
+                      : 'bg-gray-50'
+                    }>
+                      <td className="px-2 py-1 border font-mono">{p.date}</td>
+                      <td className="px-2 py-1 border font-mono">{p.action}</td>
+                      <td className="px-2 py-1 border font-mono">{p.oldEntry ? JSON.stringify(p.oldEntry) : '(なし)'}</td>
+                      <td className="px-2 py-1 border font-mono">{p.newEntryBefore ? JSON.stringify(p.newEntryBefore) : '(なし)'}</td>
+                      <td className="px-2 py-1 border text-xs">{p.note ?? ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div>
+              <h4 className="text-sm font-medium mb-1">履歴の siteId 更新計画</h4>
+              <p className="text-xs text-gray-500">
+                {repairResult.historyUpdates.length}件の履歴を {repairOldSiteId} → {repairNewSiteId} に更新
+              </p>
+            </div>
+            <details>
+              <summary className="cursor-pointer text-sm">生レスポンス</summary>
+              <pre className="mt-2 text-xs overflow-x-auto whitespace-pre-wrap break-all bg-gray-50 p-2 rounded">
+                {JSON.stringify(repairResult, null, 2)}
+              </pre>
+            </details>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
