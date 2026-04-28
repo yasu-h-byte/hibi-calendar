@@ -909,9 +909,12 @@ export default function AttendanceGridPage() {
 
   function getWorkValue(entry: AttEntry | null | undefined): string {
     if (!entry) return ''
-    if (entry.hk && entry.hk > 0) return 'HK'
+    // ★ 優先順: P/E/R/H > HK
+    //   帰国期間中の有給事後計上で p:1 + hk:1 の状態が一時的に発生しうるため、
+    //   明示的なステータス（有給など）を帰国マーカーより優先表示する。
     if (entry.p && entry.p > 0) return 'P'
     if ((entry as { exam?: number }).exam && (entry as { exam?: number }).exam! > 0) return 'E'
+    if (entry.hk && entry.hk > 0) return 'HK'
     if (entry.w === 1) return '1'
     if (entry.w === 0.5) return '0.5'
     if (entry.w === 0.6) return '0.6'
@@ -922,11 +925,12 @@ export default function AttendanceGridPage() {
 
   function getTimeStatusValue(entry: AttEntry | null | undefined): string {
     if (!entry) return ''
-    if (entry.hk && entry.hk > 0) return 'HK'
+    // ★ 優先順: P/E/R/H > HK（帰国期間中の有給事後計上対応）
     if (entry.p && entry.p > 0) return 'P'
     if ((entry as { exam?: number }).exam && (entry as { exam?: number }).exam! > 0) return 'E'
     if (entry.r && entry.r > 0) return 'R'
     if (entry.h && entry.h > 0) return 'H'
+    if (entry.hk && entry.hk > 0) return 'HK'
     if (entry.w > 0) return 'W'
     return ''
   }

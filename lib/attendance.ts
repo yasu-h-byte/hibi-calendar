@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, getDoc, setDoc, deleteField } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, deleteField } from 'firebase/firestore'
 import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site } from '@/types'
 
 // ────────────────────────────────────────
@@ -110,14 +110,24 @@ export async function setAttendanceEntry(
   const key = attKey(siteId, workerId, ym, day)
   const docRef = doc(db, 'demmen', `att_${ym}`)
   if (options.deleteFields && options.deleteFields.length > 0) {
-    // 指定フィールドを deleteField() で削除しつつ entry を書き込み
-    // Firestore の merge:true は map を recursive にマージするため、
-    // 既存の hk などを消すには明示的に deleteField() を指定する必要がある
-    const writeEntry: Record<string, unknown> = { ...entry }
+    // ★ deleteField() は updateDoc + dot-notation でなければ入れ子内のフィールドを
+    //   確実に削除できない（setDoc + merge では入れ子マップ内の deleteField が
+    //   効かないケースがある）。よって updateDoc 経由で削除する。
+    //   updateDoc はドキュメント未存在だと失敗するため、先に setDoc で空マージして
+    //   ドキュメントを保証する。
+    await setDoc(docRef, { d: {} }, { merge: true })
+    const updates: Record<string, unknown> = {}
+    // 削除対象フィールドを deleteField で消す
     for (const f of options.deleteFields) {
-      writeEntry[f] = deleteField()
+      updates[`d.${key}.${f}`] = deleteField()
     }
-    await setDoc(docRef, { d: { [key]: writeEntry } }, { merge: true })
+    // 新しい値を書き込み（dot-notation で各フィールドごとに上書き）
+    for (const [k, v] of Object.entries(entry)) {
+      if (v !== undefined) {
+        updates[`d.${key}.${k}`] = v
+      }
+    }
+    await updateDoc(docRef, updates)
   } else {
     await setDoc(docRef, { d: { [key]: entry } }, { merge: true })
   }
