@@ -18,7 +18,7 @@ interface PLWorker {
   lastEditedBy?: number | string
   adjustmentHistory?: Array<{ at: string; by: number | string; field: string; before: string; after: string }>
   // Phase 5: 時季指定
-  designatedLeaves?: Array<{ date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string }>
+  designatedLeaves?: Array<{ date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string; kind?: string; overwroteHomeLeave?: boolean }>
   // Phase 6: 買取
   buyoutDays?: number
   buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }>
@@ -1642,6 +1642,33 @@ export default function LeavePage() {
                   💰 買取を記録
                 </button>
               </div>
+
+              {/* 時季指定 / 手動有給入力履歴 */}
+              {editWorker.designatedLeaves && editWorker.designatedLeaves.length > 0 && (
+                <div className="mt-2 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-700/50">
+                  <div className="text-[10px] font-bold text-indigo-800 dark:text-indigo-200 mb-1">
+                    🗓 有給日 直接入力 / 時季指定 履歴（累計 {editWorker.designatedLeaves.length}日）
+                  </div>
+                  <div className="space-y-0.5 max-h-32 overflow-auto">
+                    {editWorker.designatedLeaves.slice().reverse().map((h, i) => (
+                      <div key={i} className="text-[10px] text-indigo-700 dark:text-indigo-300 flex flex-wrap gap-1">
+                        <span className="font-medium tabular-nums">{h.date}</span>
+                        <span className="text-indigo-500">
+                          ({h.kind === 'manual-entry' ? '手動入力' : '時季指定'})
+                        </span>
+                        {h.overwroteHomeLeave && (
+                          <span className="text-[9px] bg-cyan-100 text-cyan-700 px-1 rounded">✈帰国期間上書き</span>
+                        )}
+                        {h.note && <span className="text-indigo-400">- {h.note}</span>}
+                        <span className="text-indigo-400 ml-auto">
+                          {new Date(h.designatedAt).toLocaleDateString('ja-JP')}{' '}
+                          {h.designatedBy === 'super-admin' ? '日比靖仁' : h.designatedBy === 'admin' ? '管理者' : `ID ${h.designatedBy}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 買取履歴 */}
               {editWorker.buyoutHistory && editWorker.buyoutHistory.length > 0 && (

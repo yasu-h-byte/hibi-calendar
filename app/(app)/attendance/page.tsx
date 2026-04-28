@@ -1379,7 +1379,16 @@ export default function AttendanceGridPage() {
                           {days.map(d => {
                             let entry = entries[d.day] || null
                             // 帰国判定: homeLeaves の期間に含まれるか（出面に hk がない場合も対応）
-                            if (!entry?.hk && data.homeLeaves?.length) {
+                            // ★ 明示的な他ステータス（有給P・欠勤R・現場休みH・試験Exam・出勤w>0）が
+                            //   ある場合は帰国マーカーを上書きしない。
+                            //   これにより「帰国期間中の有給事後計上」(p:1書き込み) が正しく
+                            //   有給として表示される。
+                            const hasExplicitStatus = entry && (
+                              entry.p || entry.r || entry.h ||
+                              (entry as { exam?: number }).exam ||
+                              (entry.w !== undefined && entry.w > 0)
+                            )
+                            if (!entry?.hk && !hasExplicitStatus && data.homeLeaves?.length) {
                               const dateStr = `${data.year}-${String(data.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`
                               const isOnLeave = data.homeLeaves.some(hl =>
                                 String(hl.workerId) === wId && hl.status === 'approved' && dateStr >= hl.startDate && dateStr <= hl.endDate
