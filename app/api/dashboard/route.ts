@@ -131,7 +131,7 @@ function computeTodayStatus(
   // 今日帰国中のワーカーIDを集める（main.homeLeaves + 引数の extraHomeLeaveWorkerIds をマージ）
   const todayDateStr = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
   const homeLeaveWorkerIds = new Set<number>(extraHomeLeaveWorkerIds || [])
-  const homeLeaves = ((main as unknown as { homeLeaves?: { workerId: number; startDate: string; endDate: string }[] }).homeLeaves) || []
+  const homeLeaves = main.homeLeaves || []
   for (const hl of homeLeaves) {
     if (hl.startDate <= todayDateStr && todayDateStr <= hl.endDate) {
       homeLeaveWorkerIds.add(hl.workerId)

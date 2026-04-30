@@ -20,6 +20,7 @@ export interface MainData {
   plData: Record<string, PLRecord[]>
   defaultRates: { tobiRate?: number; dokoRate?: number }
   mforeman: Record<string, { foreman?: number; wid?: number; note?: string }>
+  homeLeaves?: { id?: string; workerId: number; workerName?: string; startDate: string; endDate: string; reason?: string; note?: string }[]
 }
 
 export interface RawWorker {
@@ -91,6 +92,7 @@ export async function getMainData(): Promise<MainData> {
     plData: (d.plData || {}) as Record<string, PLRecord[]>,
     defaultRates: (d.defaultRates || {}) as { tobiRate?: number; dokoRate?: number },
     mforeman: (d.mforeman || {}) as Record<string, { foreman?: number; wid?: number; note?: string }>,
+    homeLeaves: (d.homeLeaves || []) as MainData['homeLeaves'],
   }
 }
 
