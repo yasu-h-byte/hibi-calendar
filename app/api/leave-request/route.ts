@@ -80,15 +80,17 @@ export async function POST(request: NextRequest) {
       }
 
       // Check for duplicate
+      // 却下 (rejected) または 取り消し (cancelled) されたものは上から再申請OK。
+      // それ以外（pending / foreman_approved / approved）は重複として弾く
       const docId = `${worker.id}_${date.replace(/-/g, '')}`
       const docRef = doc(db, 'leaveRequests', docId)
       const existing = await getDoc(docRef)
       if (existing.exists()) {
         const data = existing.data() as LeaveRequest
-        if (data.status !== 'rejected') {
+        if (data.status !== 'rejected' && data.status !== 'cancelled') {
           return NextResponse.json({ error: 'Already requested' }, { status: 409 })
         }
-        // If rejected, allow re-request
+        // rejected または cancelled は新しい申請で上書き許可
       }
 
       // ── 有給残日数チェック ──
