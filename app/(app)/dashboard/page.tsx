@@ -175,21 +175,31 @@ function PendingRequestsBanner({ leaveItems, homeLongLeaveItems, userRole }: {
   const hlPending = homeLongLeaveItems.filter(i => i.status === 'pending').length
   const hlForemanApproved = homeLongLeaveItems.filter(i => i.status === 'foreman_approved').length
 
-  // 「あなたの番」= ロールに応じて自分が対応すべき件数
-  const isForemanOnly = userRole === 'foreman'
-  const isFinalApprover = userRole === 'admin' || userRole === 'approver'
+  // ロール判定
+  const isForemanOnly = userRole === 'foreman'  // 職長: pending のみ表示
+  const isAdminLike = userRole === 'admin' || userRole === 'approver'  // 管理者: 全件＋内訳表示
 
-  // 職長 → pending のみ。最終承認者 → 両方（foreman_approved + pending、ただし foreman_approved 強調）
-  const myLeaveCount = isForemanOnly ? leavePending : (leaveForemanApproved + leavePending)
-  const myHlCount = isForemanOnly ? hlPending : (hlForemanApproved + hlPending)
-  const myTotal = myLeaveCount + myHlCount
+  // バナーカウント
+  const leaveTotal = isForemanOnly ? leavePending : (leavePending + leaveForemanApproved)
+  const hlTotal = isForemanOnly ? hlPending : (hlPending + hlForemanApproved)
+  const total = leaveTotal + hlTotal
 
-  // 全くなければバナー非表示
-  if (myTotal === 0) return null
+  if (total === 0) return null
 
   const scrollToCard = () => {
     document.getElementById('attendance-request-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  // 内訳表示用のヘルパー
+  const breakdown = (pending: number, foreman: number) => {
+    if (!isAdminLike) return null
+    const parts: string[] = []
+    if (pending > 0) parts.push(`職長待ち${pending}`)
+    if (foreman > 0) parts.push(`最終承認待ち${foreman}`)
+    return parts.length > 0 ? parts.join(' / ') : null
+  }
+
+  const headerLabel = isForemanOnly ? 'あなたの対応待ち' : '申請の対応状況'
 
   return (
     <button
@@ -200,26 +210,30 @@ function PendingRequestsBanner({ leaveItems, homeLongLeaveItems, userRole }: {
         <div className="flex items-center gap-3">
           <div className="text-3xl animate-bounce">📥</div>
           <div className="text-left">
-            <div className="text-xs opacity-90 font-medium">あなたの対応待ち</div>
-            <div className="text-2xl font-bold leading-tight">{myTotal}件</div>
+            <div className="text-xs opacity-90 font-medium">{headerLabel}</div>
+            <div className="text-2xl font-bold leading-tight">{total}件</div>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          {myLeaveCount > 0 && (
+          {leaveTotal > 0 && (
             <div className="text-center">
               <div className="text-xs opacity-90">🌴 有給申請</div>
-              <div className="text-lg font-bold">{myLeaveCount}件</div>
-              {!isForemanOnly && leaveForemanApproved > 0 && (
-                <div className="text-[10px] opacity-80">最終承認待ち {leaveForemanApproved}件</div>
+              <div className="text-lg font-bold">{leaveTotal}件</div>
+              {breakdown(leavePending, leaveForemanApproved) && (
+                <div className="text-[10px] opacity-90 mt-0.5 whitespace-nowrap">
+                  {breakdown(leavePending, leaveForemanApproved)}
+                </div>
               )}
             </div>
           )}
-          {myHlCount > 0 && (
+          {hlTotal > 0 && (
             <div className="text-center">
               <div className="text-xs opacity-90">✈️ 帰国申請</div>
-              <div className="text-lg font-bold">{myHlCount}件</div>
-              {!isForemanOnly && hlForemanApproved > 0 && (
-                <div className="text-[10px] opacity-80">最終承認待ち {hlForemanApproved}件</div>
+              <div className="text-lg font-bold">{hlTotal}件</div>
+              {breakdown(hlPending, hlForemanApproved) && (
+                <div className="text-[10px] opacity-90 mt-0.5 whitespace-nowrap">
+                  {breakdown(hlPending, hlForemanApproved)}
+                </div>
               )}
             </div>
           )}
@@ -292,6 +306,10 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
       {hasLeave && (
         <div className="mb-3">
           <p className="text-[10px] text-green-600 font-bold mb-1.5 flex items-center gap-1">🌴 有給申請（{leaveItems.length}件）</p>
+          {/* 内訳サブ見出し（管理者・承認者のみ表示。職長は pending のみなので不要） */}
+          {canFinalApprove && pending.length > 0 && (
+            <p className="text-[10px] text-yellow-700 dark:text-yellow-400 font-medium mb-1 ml-1">⏳ 職長承認待ち（{pending.length}件）</p>
+          )}
           <div className="space-y-1">
             {pending.map(req => (
               <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
@@ -310,6 +328,10 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                 </div>
               </div>
             ))}
+            {/* 最終承認待ちサブ見出し（管理者向け、件数があるときのみ） */}
+            {canFinalApprove && foremanApproved.length > 0 && pending.length > 0 && (
+              <p className="text-[10px] text-blue-700 dark:text-blue-400 font-medium mt-2 mb-1 ml-1">⏳ 最終承認待ち（{foremanApproved.length}件）</p>
+            )}
             {foremanApproved.map(req => (
               <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <div className="min-w-0">
@@ -340,6 +362,9 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
         <div className="mb-3">
           {hasLeave && <hr className="my-2 border-gray-100 dark:border-gray-700" />}
           <p className="text-[10px] text-purple-600 font-bold mb-1.5">✈️ 帰国申請（{homeLongLeaveItems.length}件）</p>
+          {canFinalApprove && hlPending.length > 0 && (
+            <p className="text-[10px] text-yellow-700 dark:text-yellow-400 font-medium mb-1 ml-1">⏳ 職長承認待ち（{hlPending.length}件）</p>
+          )}
           <div className="space-y-1">
             {hlPending.map(req => (
               <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
@@ -358,6 +383,10 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                 </div>
               </div>
             ))}
+            {/* 最終承認待ちサブ見出し（管理者向け、件数があるときのみ） */}
+            {canFinalApprove && hlForemanApproved.length > 0 && hlPending.length > 0 && (
+              <p className="text-[10px] text-blue-700 dark:text-blue-400 font-medium mt-2 mb-1 ml-1">⏳ 最終承認待ち（{hlForemanApproved.length}件）</p>
+            )}
             {hlForemanApproved.map(req => (
               <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <div className="min-w-0">
