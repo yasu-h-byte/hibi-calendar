@@ -44,12 +44,22 @@ function visaLabel(visa: string): string {
 
 function formatPeriod(p: Period | null): string {
   if (!p) return '期間未設定'
-  return `${p.start.slice(5).replace('-', '/')} 〜 ${p.end.slice(5).replace('-', '/')}`
+  // 例: '2025-10-06' → '2025/10/6'（年付き・ゼロパディングなし）
+  const fmt = (d: string) => {
+    const [y, m, day] = d.split('-')
+    return `${y}/${parseInt(m, 10)}/${parseInt(day, 10)}`
+  }
+  return `${fmt(p.start)} 〜 ${fmt(p.end)}`
 }
 
 function formatPeriodFull(p: Period | null): string {
   if (!p) return ''
-  return `${p.start} 〜 ${p.end}`
+  // 例: '2025-10-06' → '2025年10月6日'
+  const fmt = (d: string) => {
+    const [y, m, day] = d.split('-')
+    return `${y}年${parseInt(m, 10)}月${parseInt(day, 10)}日`
+  }
+  return `${fmt(p.start)} 〜 ${fmt(p.end)}`
 }
 
 export default function ToolBudgetPage() {
@@ -141,7 +151,7 @@ export default function ToolBudgetPage() {
               <tr className="bg-hibi-navy text-white">
                 <th className="text-left px-4 py-2">スタッフ</th>
                 <th className="text-center px-2 py-2 w-20">在留資格</th>
-                <th className="text-center px-2 py-2 w-44">現在の期間</th>
+                <th className="text-center px-2 py-2 w-52">現在の期間</th>
                 <th className="text-right px-3 py-2 w-24">予算</th>
                 <th className="text-right px-3 py-2 w-24">使用済</th>
                 <th className="text-right px-3 py-2 w-24">残額</th>
