@@ -172,20 +172,15 @@ export default function StaffAttendancePage() {
       if (d.currentEntry && isTimeBasedEntry(d.currentEntry)) {
         setStartTime(d.currentEntry.st || ws.startTime)
         setEndTime(d.currentEntry.et || ws.endTime)
-        // 既存エントリのフラグを優先、ただしmandatory or 無効の場合はその設定を強制
-        setBreak1(ws.morningBreak.enabled
-          ? (ws.morningBreak.mandatory ? true : d.currentEntry.b1 === 1)
-          : false)
-        setBreak2(ws.lunchBreak.enabled
-          ? (ws.lunchBreak.mandatory ? true : (d.currentEntry as { b2?: number }).b2 === 1)
-          : false)
-        setBreak3(ws.afternoonBreak.enabled
-          ? (ws.afternoonBreak.mandatory ? true : d.currentEntry.b3 === 1)
-          : false)
+        // 午前・午後は既存エントリのチェック状態を復元（無効な現場ならfalse）
+        setBreak1(ws.morningBreak.enabled ? d.currentEntry.b1 === 1 : false)
+        setBreak3(ws.afternoonBreak.enabled ? d.currentEntry.b3 === 1 : false)
+        // 昼休憩はUIに表示しない: enabledなら必ず取得扱い
+        setBreak2(ws.lunchBreak.enabled)
       } else {
         setStartTime(ws.startTime)
         setEndTime(ws.endTime)
-        // 初期値: 有効な休憩はチェック済み（任意のものも初期チェック）
+        // 初期値: 有効な休憩はチェック済み
         setBreak1(ws.morningBreak.enabled)
         setBreak2(ws.lunchBreak.enabled)
         setBreak3(ws.afternoonBreak.enabled)
@@ -218,15 +213,10 @@ export default function StaffAttendancePage() {
       if (pd.entry && isTimeBasedEntry(pd.entry)) {
         setPastStartTime(pd.entry.st || ws.startTime)
         setPastEndTime(pd.entry.et || ws.endTime)
-        setPastBreak1(ws.morningBreak.enabled
-          ? (ws.morningBreak.mandatory ? true : pd.entry.b1 === 1)
-          : false)
-        setPastBreak2(ws.lunchBreak.enabled
-          ? (ws.lunchBreak.mandatory ? true : (pd.entry as { b2?: number }).b2 === 1)
-          : false)
-        setPastBreak3(ws.afternoonBreak.enabled
-          ? (ws.afternoonBreak.mandatory ? true : pd.entry.b3 === 1)
-          : false)
+        setPastBreak1(ws.morningBreak.enabled ? pd.entry.b1 === 1 : false)
+        setPastBreak3(ws.afternoonBreak.enabled ? pd.entry.b3 === 1 : false)
+        // 昼休憩はUIに表示しない: enabledなら必ず取得扱い
+        setPastBreak2(ws.lunchBreak.enabled)
       } else {
         setPastStartTime(ws.startTime)
         setPastEndTime(ws.endTime)
@@ -711,38 +701,31 @@ export default function StaffAttendancePage() {
               </div>
             </div>
 
-            {/* Break checkboxes (現場の休憩構成に応じて動的生成) */}
-            <div className="bg-white rounded-xl shadow p-4">
-              <p className="text-xs text-gray-500 mb-2">休憩 / Nghỉ giải lao</p>
-              <div className="space-y-2">
-                {[
-                  { id: 'b1', cfg: workSchedule.morningBreak,   label: '午前休憩', labelVi: 'Nghỉ sáng',  checked: break1, set: setBreak1 },
-                  { id: 'b2', cfg: workSchedule.lunchBreak,     label: '昼休憩',   labelVi: 'Nghỉ trưa',  checked: break2, set: setBreak2 },
-                  { id: 'b3', cfg: workSchedule.afternoonBreak, label: '午後休憩', labelVi: 'Nghỉ chiều', checked: break3, set: setBreak3 },
-                ].filter(b => b.cfg.enabled).map(b => (
-                  <label
-                    key={b.id}
-                    className={`flex items-center gap-3 ${b.cfg.mandatory ? 'cursor-default' : 'cursor-pointer'}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={b.cfg.mandatory ? true : b.checked}
-                      disabled={b.cfg.mandatory}
-                      onChange={e => b.set(e.target.checked)}
-                      className="w-5 h-5 rounded text-hibi-navy"
-                    />
-                    <span className={`text-sm ${(b.cfg.mandatory || b.checked) ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
-                      {b.label}（{b.cfg.minutes}分）/ {b.labelVi} ({b.cfg.minutes} phút)
-                      {b.cfg.mandatory && <span className="text-[10px] text-gray-400 ml-1">※必須 / Bắt buộc</span>}
-                      {!b.cfg.mandatory && !b.checked && ' ← 未取得 / Không nghỉ'}
-                    </span>
-                  </label>
-                ))}
-                {!workSchedule.morningBreak.enabled && !workSchedule.lunchBreak.enabled && !workSchedule.afternoonBreak.enabled && (
-                  <p className="text-xs text-gray-400">この現場では休憩が設定されていません / Không có giờ nghỉ tại công trường này</p>
-                )}
+            {/* Break checkboxes (午前・午後のみ表示。昼休憩は内部的に処理) */}
+            {(workSchedule.morningBreak.enabled || workSchedule.afternoonBreak.enabled) && (
+              <div className="bg-white rounded-xl shadow p-4">
+                <p className="text-xs text-gray-500 mb-2">休憩 / Nghỉ giải lao</p>
+                <div className="space-y-2">
+                  {[
+                    { id: 'b1', cfg: workSchedule.morningBreak,   label: '午前休憩', labelVi: 'Nghỉ sáng',  checked: break1, set: setBreak1 },
+                    { id: 'b3', cfg: workSchedule.afternoonBreak, label: '午後休憩', labelVi: 'Nghỉ chiều', checked: break3, set: setBreak3 },
+                  ].filter(b => b.cfg.enabled).map(b => (
+                    <label key={b.id} className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={b.checked}
+                        onChange={e => b.set(e.target.checked)}
+                        className="w-5 h-5 rounded text-hibi-navy"
+                      />
+                      <span className={`text-sm ${b.checked ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
+                        {b.label}（{b.cfg.minutes}分）/ {b.labelVi} ({b.cfg.minutes} phút)
+                        {!b.checked && ' ← 未取得 / Không nghỉ'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Actual hours display */}
             <div className="bg-blue-50 rounded-xl p-4 text-center">
@@ -752,9 +735,10 @@ export default function StaffAttendancePage() {
                   const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
                   const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
                   let mins = end - start
-                  if (workSchedule.morningBreak.enabled   && (workSchedule.morningBreak.mandatory   || break1)) mins -= workSchedule.morningBreak.minutes
-                  if (workSchedule.lunchBreak.enabled     && (workSchedule.lunchBreak.mandatory     || break2)) mins -= workSchedule.lunchBreak.minutes
-                  if (workSchedule.afternoonBreak.enabled && (workSchedule.afternoonBreak.mandatory || break3)) mins -= workSchedule.afternoonBreak.minutes
+                  // 午前・午後はチェック状態に応じて、昼はenabledなら必ず差し引く
+                  if (workSchedule.morningBreak.enabled   && break1) mins -= workSchedule.morningBreak.minutes
+                  if (workSchedule.lunchBreak.enabled)               mins -= workSchedule.lunchBreak.minutes
+                  if (workSchedule.afternoonBreak.enabled && break3) mins -= workSchedule.afternoonBreak.minutes
                   const hours = Math.max(0, mins / 60)
                   return `${Math.floor(hours)}時間${Math.round((hours % 1) * 60)}分`
                 })()}
@@ -1075,35 +1059,30 @@ export default function StaffAttendancePage() {
                     </div>
                   </div>
 
-                  {/* Break checkboxes (現場の休憩構成に応じて動的生成) */}
-                  <div className="bg-gray-50 rounded-xl p-3">
-                    <p className="text-xs text-gray-500 mb-2">休憩</p>
-                    <div className="space-y-2">
-                      {[
-                        { id: 'pb1', cfg: workSchedule.morningBreak,   label: '午前休憩', checked: pastBreak1, set: setPastBreak1 },
-                        { id: 'pb2', cfg: workSchedule.lunchBreak,     label: '昼休憩',   checked: pastBreak2, set: setPastBreak2 },
-                        { id: 'pb3', cfg: workSchedule.afternoonBreak, label: '午後休憩', checked: pastBreak3, set: setPastBreak3 },
-                      ].filter(b => b.cfg.enabled).map(b => (
-                        <label
-                          key={b.id}
-                          className={`flex items-center gap-3 ${b.cfg.mandatory ? 'cursor-default' : 'cursor-pointer'}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={b.cfg.mandatory ? true : b.checked}
-                            disabled={b.cfg.mandatory}
-                            onChange={e => b.set(e.target.checked)}
-                            className="w-5 h-5 rounded text-hibi-navy"
-                          />
-                          <span className={`text-sm ${(b.cfg.mandatory || b.checked) ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
-                            {b.label}（{b.cfg.minutes}分）
-                            {b.cfg.mandatory && <span className="text-[10px] text-gray-400 ml-1">※必須</span>}
-                            {!b.cfg.mandatory && !b.checked && ' ← 未取得'}
-                          </span>
-                        </label>
-                      ))}
+                  {/* Break checkboxes (午前・午後のみ表示。昼休憩は内部的に処理) */}
+                  {(workSchedule.morningBreak.enabled || workSchedule.afternoonBreak.enabled) && (
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-xs text-gray-500 mb-2">休憩</p>
+                      <div className="space-y-2">
+                        {[
+                          { id: 'pb1', cfg: workSchedule.morningBreak,   label: '午前休憩', checked: pastBreak1, set: setPastBreak1 },
+                          { id: 'pb3', cfg: workSchedule.afternoonBreak, label: '午後休憩', checked: pastBreak3, set: setPastBreak3 },
+                        ].filter(b => b.cfg.enabled).map(b => (
+                          <label key={b.id} className="flex items-center gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={b.checked}
+                              onChange={e => b.set(e.target.checked)}
+                              className="w-5 h-5 rounded text-hibi-navy"
+                            />
+                            <span className={`text-sm ${b.checked ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
+                              {b.label}（{b.cfg.minutes}分）{!b.checked && ' ← 未取得'}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Submit work with times */}
                   <button
