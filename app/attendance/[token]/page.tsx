@@ -83,7 +83,7 @@ const REST_REASONS = [
 interface LeaveRequestData {
   id: string
   date: string
-  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected'
+  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled'
   reason: string
   rejectedReason?: string
   requestedAt: string
@@ -207,6 +207,26 @@ export default function StaffAttendancePage() {
       }
     } catch { /* ignore */ }
   }, [token])
+
+  // 有給申請の取り消し（pendingのみ可能）
+  const cancelLeaveRequest = async (requestId: string) => {
+    if (!confirm('この申請を取り消してよろしいですか？\nĐơn này có chắc chắn hủy không?')) return
+    try {
+      const res = await fetch('/api/leave-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel', requestId, token }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        alert(errData.error || '取り消しに失敗しました / Hủy thất bại')
+        return
+      }
+      fetchLeaveRequests()
+    } catch {
+      alert('つうしん エラー / Lỗi kết nối')
+    }
+  }
 
   // Initialize past day time state when edit modal opens
   useEffect(() => {
@@ -858,16 +878,26 @@ export default function StaffAttendancePage() {
               {leaveRequests.filter(r => r.status === 'pending' || r.status === 'foreman_approved').map(req => (
                 <div key={req.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${req.status === 'pending' ? 'bg-yellow-50' : 'bg-blue-50'}`}>
                   <span className="text-sm font-medium text-gray-700">{formatLeaveDate(req.date)}</span>
-                  {req.status === 'pending' && (
-                    <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
-                      ⏳ 承認待ち / Đang chờ
-                    </span>
-                  )}
-                  {req.status === 'foreman_approved' && (
-                    <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
-                      🔵 職長済 / Đốc công đã duyệt
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {req.status === 'pending' && (
+                      <>
+                        <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
+                          ⏳ 承認待ち / Đang chờ
+                        </span>
+                        <button
+                          onClick={() => cancelLeaveRequest(req.id)}
+                          className="text-xs px-2 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 active:scale-95"
+                        >
+                          取り消し / Hủy
+                        </button>
+                      </>
+                    )}
+                    {req.status === 'foreman_approved' && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
+                        🔵 職長済 / Đốc công đã duyệt
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1360,7 +1390,7 @@ export default function StaffAttendancePage() {
                 </div>
                 <div className="space-y-2">
                   {leaveRequests.map(req => (
-                    <div key={req.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
+                    <div key={req.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${req.status === 'cancelled' ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
                       <span className="text-sm text-gray-700 font-medium">
                         {formatLeaveDate(req.date)}
                       </span>
@@ -1376,13 +1406,26 @@ export default function StaffAttendancePage() {
                           </span>
                         )}
                         {req.status === 'pending' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
-                            ⏳ 承認待ち / Đang chờ
-                          </span>
+                          <>
+                            <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
+                              ⏳ 承認待ち / Đang chờ
+                            </span>
+                            <button
+                              onClick={() => cancelLeaveRequest(req.id)}
+                              className="text-xs px-2 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 active:scale-95"
+                            >
+                              取り消し / Hủy
+                            </button>
+                          </>
                         )}
                         {req.status === 'rejected' && (
                           <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold" title={req.rejectedReason || ''}>
                             ❌ 却下 / Từ chối
+                          </span>
+                        )}
+                        {req.status === 'cancelled' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-500 font-medium">
+                            🚫 取り消し済 / Đã hủy
                           </span>
                         )}
                       </div>

@@ -14,7 +14,7 @@ interface LeaveRequest {
   day: number           // day of month
   siteId: string
   reason: string
-  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected'
+  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled'
   requestedAt: string
   // 職長承認
   foremanApprovedAt?: string
@@ -23,6 +23,8 @@ interface LeaveRequest {
   reviewedAt?: string
   reviewedBy?: number
   rejectedReason?: string
+  // スタッフによる取り消し
+  cancelledAt?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -289,6 +291,46 @@ export async function POST(request: NextRequest) {
         reviewedAt: new Date().toISOString(),
         reviewedBy: authWorkerId,
         rejectedReason: reason || '',
+      })
+
+      return NextResponse.json({ success: true })
+    }
+
+    // ── Staff: 自分の申請を取り消す（pending のみ可能） ──
+    if (action === 'cancel') {
+      const { requestId, token } = body
+      if (!requestId || !token) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      }
+
+      // token で本人認証
+      const worker = await getWorkerByToken(token)
+      if (!worker) {
+        return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      }
+
+      const docRef = doc(db, 'leaveRequests', requestId)
+      const snap = await getDoc(docRef)
+      if (!snap.exists()) {
+        return NextResponse.json({ error: 'Request not found' }, { status: 404 })
+      }
+
+      const data = snap.data() as LeaveRequest
+      // 本人の申請のみ取り消し可能
+      if (data.workerId !== worker.id) {
+        return NextResponse.json({ error: 'Not your request' }, { status: 403 })
+      }
+      // pending のみ取り消し可能（職長承認後は取り消し不可）
+      if (data.status !== 'pending') {
+        return NextResponse.json({
+          error: '職長が承認した後は取り消しできません。会社に連絡してください。',
+        }, { status: 409 })
+      }
+
+      await setDoc(docRef, {
+        ...data,
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString(),
       })
 
       return NextResponse.json({ success: true })

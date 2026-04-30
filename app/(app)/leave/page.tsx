@@ -178,7 +178,7 @@ export default function LeavePage() {
   const [processingReq, setProcessingReq] = useState<string | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [reqFilter, setReqFilter] = useState<'all' | 'pending' | 'foreman_approved' | 'approved' | 'rejected'>('all')
+  const [reqFilter, setReqFilter] = useState<'all' | 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled'>('all')
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
@@ -655,10 +655,10 @@ export default function LeavePage() {
         return (
           <div className="space-y-4">
             <div className="flex gap-2 flex-wrap">
-              {(['all','pending','foreman_approved','approved','rejected'] as const).map(key => (
+              {(['all','pending','foreman_approved','approved','rejected','cancelled'] as const).map(key => (
                 <button key={key} onClick={() => setReqFilter(key)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${reqFilter === key ? 'bg-hibi-navy text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100'}`}>
-                  {key === 'all' ? 'すべて' : key === 'pending' ? '職長待ち' : key === 'foreman_approved' ? '最終承認待ち' : key === 'approved' ? '承認済み' : '却下'}
+                  {key === 'all' ? 'すべて' : key === 'pending' ? '職長待ち' : key === 'foreman_approved' ? '最終承認待ち' : key === 'approved' ? '承認済み' : key === 'cancelled' ? '取り消し' : '却下'}
                   {key === 'pending' && leaveRequests.filter(r => r.status === 'pending').length > 0 && (
                     <span className="ml-1 bg-red-500 text-white text-[10px] rounded-full px-1.5">{leaveRequests.filter(r => r.status === 'pending').length}</span>
                   )}
@@ -711,6 +711,7 @@ export default function LeavePage() {
                         )}
                         {req.status === 'approved' && <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">承認済</span>}
                         {req.status === 'rejected' && <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold">却下</span>}
+                        {req.status === 'cancelled' && <span className="px-2 py-1 bg-gray-200 text-gray-600 rounded-full text-xs font-bold">取り消し</span>}
                       </div>
                     </div>
                     {rejectingId === req.id && (
