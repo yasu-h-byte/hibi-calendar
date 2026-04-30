@@ -26,7 +26,7 @@
 | mforeman | map | 月別代理職長 |
 | nextWorkerId | number | 次のワーカーID |
 
-#### MainData.homeLeaves（2026-04-30 追加）
+#### MainData.homeLeaves
 
 ```typescript
 homeLeaves?: {
@@ -67,9 +67,9 @@ homeLeaves?: {
 |-----------|-----|------|
 | id | string | 現場ID |
 | name | string | 現場名 |
-| workSchedule | map? | 現場別勤務時間（2026-04-30 追加、後述） |
+| workSchedule | map? | 現場別勤務時間（後述） |
 
-##### Site.workSchedule（2026-04-30 追加）
+##### Site.workSchedule
 
 ```typescript
 workSchedule?: {
@@ -115,12 +115,12 @@ workSchedule?: {
 | createdAt | string | 申請日時 |
 | approvedBy | string? | 承認者 |
 | approvedAt | string? | 承認日時 |
-| cancelledAt | string? | 取り消し日時（2026-04-30 追加） |
+| cancelledAt | string? | 取り消し日時 |
 
 - ドキュメントIDは `{workerId}_{date}` の固定キー（重複排除）
 - `status=cancelled` または `status=rejected` のレコードは同じ日付で再申請時に上書きされる
 - 重複チェック条件: `status !== 'rejected' && status !== 'cancelled'` の既存レコードがあるときのみエラー
-- **Firestoreルール**: `allow read, write: if true`（2026-04-30 追加。それまではルール定義漏れがあった）
+- **Firestoreルール**: `allow read, write: if true`
 
 ### homeLongLeave/{auto}
 帰国（長期休暇）申請。`leaveRequests` 同様に `status` に `cancelled` を含む。スタッフは pending のみスマホから取り消し可能。
@@ -140,10 +140,3 @@ workSchedule?: {
 - 現場のforemanに設定 → foreman
 - それ以外 → admin
 
-## 変更履歴
-
-### 2026-04-30
-- `MainData.homeLeaves` を追加（本日の稼働状況の休みリスト除外用）
-- `Site.workSchedule` を追加（現場別の始業・終業・休憩設定）
-- `leaveRequests` / `homeLongLeave` の status に `cancelled` を追加
-- `leaveRequests` の Firestoreルールが未定義だった件を修正（`allow read, write: if true`）

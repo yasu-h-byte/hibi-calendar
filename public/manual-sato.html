@@ -35,7 +35,7 @@
 <h1>HIBI CONSTRUCTION 就業管理システム<br>道具代管理マニュアル</h1>
 <p>対象: 佐藤今日子さん（道具代管理担当）<br>
 作成日: 2026年4月20日<br>
-最終更新: 2026年4月21日<br>
+最終更新: 2026年4月30日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <div class="toc">
@@ -123,7 +123,7 @@
 <tr><th>列</th><th>意味</th></tr>
 <tr><td><strong>スタッフ</strong></td><td>名前（クリックで管理モーダルが開きます）</td></tr>
 <tr><td><strong>在留資格</strong></td><td>実習1号/実習2号/特定1号/特定2号</td></tr>
-<tr><td><strong>現在の期間</strong></td><td>起点日を設定するとここに期間が表示されます<br><span style="color:#888; font-size:13px;">未設定の場合は「未設定」（灰色）</span></td></tr>
+<tr><td><strong>現在の期間</strong></td><td>起点日を設定すると <strong>「2026/1/13 〜 2027/1/12」</strong> のように西暦付きで開始日と終了日が表示されます<br><span style="color:#888; font-size:13px;">未設定の場合は「未設定」（灰色）</span></td></tr>
 <tr><td><strong>予算</strong></td><td>期間中の上限額（デフォルト: ¥30,000）</td></tr>
 <tr><td><strong>使用済</strong></td><td>現在の期間に登録済みの購入合計額</td></tr>
 <tr><td><strong>残額</strong></td><td>予算 − 使用済 = あといくら使えるか</td></tr>
@@ -156,7 +156,16 @@
 <div class="step">
   <div class="step-num">3</div>
   <div class="step-text">「✓ 保存しました」と表示され、期間が自動計算される<br>
-  <span style="color:#888; font-size:13px;">例: 起点日 5/14 → 現在の期間 5/14〜翌5/13</span></div>
+  <span style="color:#888; font-size:13px;">例: 起点日 2026年1月13日 → モーダル内表示「2026年1月13日 〜 2027年1月12日」、一覧テーブル表示「2026/1/13 〜 2027/1/12」</span></div>
+</div>
+
+<div class="box box-ok">
+<strong>期間表記は2か所で表示形式が違います：</strong>
+<ul style="margin: 4px 0 0; padding-left: 20px;">
+  <li><strong>一覧テーブルの「現在の期間」列</strong>：<code>2026/1/13 〜 2027/1/12</code>（コンパクト）</li>
+  <li><strong>モーダル内</strong>：<code>2026年1月13日 〜 2027年1月12日</code>（フル日本語）</li>
+</ul>
+どちらも開始日と終了日の両方が西暦付きで表示されるため、ぱっと見で期間が分かります。
 </div>
 
 <div class="box box-warn">
@@ -333,7 +342,7 @@
 </div>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-20</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-30</p>
 
 </body>
 </html>

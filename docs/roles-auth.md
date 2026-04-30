@@ -59,5 +59,3 @@
 - admin / approver: 職長待ち・最終承認待ちの両方が自分の対応対象（最終承認は admin / approver のみが押せるため）
 - foreman: 自分の対応待ちは pending（職長待ち）分のみ。foreman_approved 分は参考表示
 
-## 変更履歴
-- 2026-04-30: 承認権限のロール制御セクションを追加。/api/notifications に帰国申請の通知を新規追加し、職長待ち / 最終承認待ちの内訳表示を導入

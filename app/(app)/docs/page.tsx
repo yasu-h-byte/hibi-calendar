@@ -7,7 +7,7 @@ export default function DocsPage() {
       category: '🎯 ロール別チェックリスト',
       description: 'まずはここから。日次・月次でやることをロール別に整理',
       items: [
-        { title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-04-26' },
+        { title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-04-30' },
       ],
     },
     {
@@ -15,9 +15,9 @@ export default function DocsPage() {
       description: '各ロールごとの操作マニュアル。日々の作業はここを参照',
       items: [
         { title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・帳票出力（事務担当）', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-26' },
-        { title: '政仁さん向けマニュアル', desc: '出面承認・就業カレンダー・原価収益（役員担当）', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-26' },
-        { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成（職長担当）', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-26' },
-        { title: '休暇管理マニュアル', desc: '有給・帰国・時季指定・期末買取・時効処理など休暇関連の全機能', url: '/manual-yukyu.html', icon: '🌴', updated: '2026-04-26' },
+        { title: '政仁さん向けマニュアル', desc: '出面承認・就業カレンダー・原価収益（役員担当）', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-30' },
+        { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成（職長担当）', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-30' },
+        { title: '休暇管理マニュアル', desc: '有給・帰国・時季指定・期末買取・時効処理など休暇関連の全機能', url: '/manual-yukyu.html', icon: '🌴', updated: '2026-04-30' },
         { title: '評価管理マニュアル', desc: '複数評価者による評価入力・承認・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-04-19' },
         { title: '道具代管理マニュアル（佐藤さん向け）', desc: '道具代補助の購入登録・残額管理・年度切り替え', url: '/manual-sato.html', icon: '🔧', updated: '2026-04-20' },
       ],
@@ -26,7 +26,7 @@ export default function DocsPage() {
       category: '👷 スタッフ向け（ベトナム人）',
       description: 'スタッフ自身が読むマニュアル。日越二言語',
       items: [
-        { title: 'スタッフ向けマニュアル', desc: '出勤登録・欠勤届・有給申請・帰国申請・残数確認の使い方', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-04-21' },
+        { title: 'スタッフ向けマニュアル', desc: '出勤登録・欠勤届・有給申請・帰国申請・残数確認の使い方', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-04-30' },
         { title: 'QRコードカード（印刷用）', desc: '全スタッフの出勤入力用QRコード', url: '/qr-cards.html', icon: '📱', updated: '2026-04-08' },
       ],
     },
