@@ -142,15 +142,14 @@ export async function GET(request: NextRequest) {
     const todayApproval = await getApprovalForDay(siteId, ym, d)
 
     // 道具代情報（技能実習生・特定技能のみ、佐藤さんが手動設定した期間起点から1年サイクル）
-    // 5月以降のみ表示（4月はデータ整備期間のため未表示）
+    // 2026-04-30 運用開始: データ整備完了に伴いガード撤廃（データが無ければ自然に非表示）
     let toolBudgetRemaining: number | null = null
     let toolBudgetPeriodStart: string | null = null
     let toolBudgetPeriodEnd: string | null = null
-    const displayToolBudget = now.getFullYear() > 2026 || (now.getFullYear() === 2026 && now.getMonth() + 1 >= 5)
     try {
       const visa = worker.visaType
       const isForeign = visa && (visa.startsWith('jisshu') || visa.startsWith('tokutei'))
-      if (isForeign && displayToolBudget) {
+      if (isForeign) {
         const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
         if (tbSnap.exists()) {
           const tbData = tbSnap.data()
@@ -192,7 +191,8 @@ export async function GET(request: NextRequest) {
       }
     } catch { /* ignore */ }
 
-    // 有給残日数（5月以降のみ表示。4月はデータ整備期間）
+    // 有給残日数
+    // 2026-04-30 運用開始: データ整備完了に伴いガード撤廃（plRecordsが無ければ自然にnullで非表示）
     // Phase 8: FIFO内訳（繰越分・当期付与分の別々表示）
     let plRemaining: number | null = null
     let plExpiryDate: string | null = null  // 当期付与分の有効期限（従来フィールド、後方互換）
@@ -201,11 +201,9 @@ export async function GET(request: NextRequest) {
     let plCarryOverExpiryStatus: 'ok' | 'warning' | 'expired' | null = null
     let plGrantRemaining: number | null = null
     let plGrantExpiryDate: string | null = null
-    const displayPl = now.getFullYear() > 2026 || (now.getFullYear() === 2026 && now.getMonth() + 1 >= 5)
     try {
-      if (displayPl) {
-        const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-        if (mainSnap.exists()) {
+      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+      if (mainSnap.exists()) {
           const plData: Record<string, { fy?: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number; _archived?: boolean }[]> = mainSnap.data().plData || {}
           const plRecordsRaw = plData[String(worker.id)] || []
           const plRecords = plRecordsRaw.filter(r => !r._archived)
@@ -296,7 +294,6 @@ export async function GET(request: NextRequest) {
             }
           }
         }
-      }
     } catch { /* ignore */ }
 
     return NextResponse.json({
