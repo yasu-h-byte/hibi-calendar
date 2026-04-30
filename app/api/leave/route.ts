@@ -1139,18 +1139,16 @@ export async function GET(request: NextRequest) {
             : (plRecords.length > 0 ? plRecords[plRecords.length - 1] : undefined)
         }
 
-        // 旧アプリ(grant/carry/adj)と新アプリ(grantDays/carryOver/adjustment)の両方に対応
-        // 旧フィールドが存在する場合はそちらが元データなので優先する
-        // ただし旧アプリは値が0のときフィールド自体を省略する場合があるため、
-        // adjが存在する＝旧アプリのレコードと判定し、carry未定義でも0とみなす
-        const isOldRecord = fyRecord?.grant != null || fyRecord?.adj != null || fyRecord?.carry != null
-        const grantDays = isOldRecord ? (fyRecord?.grant ?? fyRecord?.grantDays ?? 0) : (fyRecord?.grantDays ?? 0)
-        const rawCarryOver = isOldRecord ? (fyRecord?.carry ?? 0) : (fyRecord?.carryOver ?? 0)
+        // 新フィールド優先、なければ旧フィールドにフォールバック
+        // （旧データから新フォーマットに移行する過渡期で、両フィールドが混在することがある。
+        //  以前は「旧フィールドがあれば旧形式」と判定していたが、これだと新フィールドに
+        //  正しい値があっても旧フィールド未定義で 0 扱いになる致命的バグがあった）
+        const grantDays   = fyRecord?.grantDays  ?? fyRecord?.grant  ?? 0
+        const rawCarryOver = fyRecord?.carryOver ?? fyRecord?.carry  ?? 0
+        const adjustment  = fyRecord?.adjustment ?? fyRecord?.adj    ?? 0
         // 日本人社員は期末買取制のため繰越なし（強制0）
         const isJapanese = !w.visa || w.visa === 'none'
         const carryOver = isJapanese ? 0 : rawCarryOver
-        // adj（旧）とadjustment（新）が両方存在する場合、大きい方を使う（旧データの方が正確な場合がある）
-        const adjustment = Math.max(fyRecord?.adjustment ?? 0, fyRecord?.adj ?? 0)
         let grantDate = fyRecord?.grantDate || ''
         let inferredFromDefault = false
 
