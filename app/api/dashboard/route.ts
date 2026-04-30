@@ -117,17 +117,38 @@ function computeTodayStatus(
   }
 
   // Absent workers: assigned but not working today
+  // 帰国中（main.homeLeaves 期間内 or 出面の hk:1）のスタッフは除外
   const allAssignedWorkerIds = new Set<number>()
   for (const site of activeSites) {
     const siteAssign = getAssign(main, site.id, ym)
     for (const wid of siteAssign.workers) allAssignedWorkerIds.add(wid)
   }
 
-  for (const wid of Array.from(allAssignedWorkerIds)) {
-    if (!workingWorkerIds.has(wid)) {
-      const worker = main.workers.find(w => w.id === wid && !w.retired)
-      if (worker) absentWorkers.push({ id: worker.id, name: worker.name })
+  // 今日帰国中のワーカーIDを集める
+  const todayDateStr = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+  const homeLeaveWorkerIds = new Set<number>()
+  const homeLeaves = ((main as unknown as { homeLeaves?: { workerId: number; startDate: string; endDate: string }[] }).homeLeaves) || []
+  for (const hl of homeLeaves) {
+    if (hl.startDate <= todayDateStr && todayDateStr <= hl.endDate) {
+      homeLeaveWorkerIds.add(hl.workerId)
     }
+  }
+
+  for (const wid of Array.from(allAssignedWorkerIds)) {
+    if (workingWorkerIds.has(wid)) continue
+    if (homeLeaveWorkerIds.has(wid)) continue  // 帰国中は休みリストから除外
+
+    // 出面エントリに hk:1 があれば帰国中扱いで除外（保険）
+    let isHomeLeaveByEntry = false
+    for (const site of activeSites) {
+      const key = `${site.id}_${wid}_${ym}_${String(day)}`
+      const entry = attD[key] as { hk?: number } | undefined
+      if (entry && entry.hk === 1) { isHomeLeaveByEntry = true; break }
+    }
+    if (isHomeLeaveByEntry) continue
+
+    const worker = main.workers.find(w => w.id === wid && !w.retired)
+    if (worker) absentWorkers.push({ id: worker.id, name: worker.name })
   }
 
   return { siteStatus, absentWorkers }
