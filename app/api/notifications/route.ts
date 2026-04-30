@@ -436,21 +436,56 @@ export async function GET(request: NextRequest) {
       console.error('Visa expiry check error:', e)
     }
 
-    // 8. 承認待ち有給申請
+    // 8. 承認待ち有給申請（職長承認待ち + 最終承認待ち の両方をカウント）
     try {
-      const lrQuery = query(collection(db, 'leaveRequests'), where('status', '==', 'pending'))
-      const lrSnaps = await getDocs(lrQuery)
-      if (lrSnaps.size > 0) {
+      const [lrPendingSnaps, lrForemanSnaps] = await Promise.all([
+        getDocs(query(collection(db, 'leaveRequests'), where('status', '==', 'pending'))),
+        getDocs(query(collection(db, 'leaveRequests'), where('status', '==', 'foreman_approved'))),
+      ])
+      const total = lrPendingSnaps.size + lrForemanSnaps.size
+      if (total > 0) {
+        const detail =
+          lrPendingSnaps.size > 0 && lrForemanSnaps.size > 0
+            ? `（職長待ち${lrPendingSnaps.size} / 最終承認待ち${lrForemanSnaps.size}）`
+            : lrPendingSnaps.size > 0
+              ? `（職長承認待ち）`
+              : `（最終承認待ち）`
         notifications.push({
           id: 'pending-leave-requests',
           icon: '📝',
-          message: `有給承認待ち: ${lrSnaps.size}件`,
+          message: `有給申請 ${total}件 ${detail}`,
           type: 'info',
-          count: lrSnaps.size,
+          count: total,
         })
       }
     } catch (e) {
       console.error('Leave request check error:', e)
+    }
+
+    // 8b. 承認待ち帰国申請（職長承認待ち + 最終承認待ち の両方）
+    try {
+      const [hlPendingSnaps, hlForemanSnaps] = await Promise.all([
+        getDocs(query(collection(db, 'homeLongLeave'), where('status', '==', 'pending'))),
+        getDocs(query(collection(db, 'homeLongLeave'), where('status', '==', 'foreman_approved'))),
+      ])
+      const total = hlPendingSnaps.size + hlForemanSnaps.size
+      if (total > 0) {
+        const detail =
+          hlPendingSnaps.size > 0 && hlForemanSnaps.size > 0
+            ? `（職長待ち${hlPendingSnaps.size} / 最終承認待ち${hlForemanSnaps.size}）`
+            : hlPendingSnaps.size > 0
+              ? `（職長承認待ち）`
+              : `（最終承認待ち）`
+        notifications.push({
+          id: 'pending-home-long-leave',
+          icon: '✈️',
+          message: `帰国申請 ${total}件 ${detail}`,
+          type: 'info',
+          count: total,
+        })
+      }
+    } catch (e) {
+      console.error('Home long leave request check error:', e)
     }
 
     // 9. お知らせ（最新1件のみ）

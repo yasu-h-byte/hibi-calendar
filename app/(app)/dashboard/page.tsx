@@ -162,16 +162,92 @@ function AnnouncementsCard({ password }: { password: string }) {
   )
 }
 
+// ─── 申請バナー (ダッシュボード上部・対応待ちを目立つ場所に表示) ───
+
+function PendingRequestsBanner({ leaveItems, homeLongLeaveItems, userRole }: {
+  leaveItems: LeaveRequestItem[]
+  homeLongLeaveItems: HomeLongLeaveItem[]
+  userRole: string
+}) {
+  // 集計
+  const leavePending = leaveItems.filter(i => i.status === 'pending').length
+  const leaveForemanApproved = leaveItems.filter(i => i.status === 'foreman_approved').length
+  const hlPending = homeLongLeaveItems.filter(i => i.status === 'pending').length
+  const hlForemanApproved = homeLongLeaveItems.filter(i => i.status === 'foreman_approved').length
+
+  // 「あなたの番」= ロールに応じて自分が対応すべき件数
+  const isForemanOnly = userRole === 'foreman'
+  const isFinalApprover = userRole === 'admin' || userRole === 'approver'
+
+  // 職長 → pending のみ。最終承認者 → 両方（foreman_approved + pending、ただし foreman_approved 強調）
+  const myLeaveCount = isForemanOnly ? leavePending : (leaveForemanApproved + leavePending)
+  const myHlCount = isForemanOnly ? hlPending : (hlForemanApproved + hlPending)
+  const myTotal = myLeaveCount + myHlCount
+
+  // 全くなければバナー非表示
+  if (myTotal === 0) return null
+
+  const scrollToCard = () => {
+    document.getElementById('attendance-request-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  return (
+    <button
+      onClick={scrollToCard}
+      className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl shadow-lg p-4 hover:shadow-xl active:scale-[0.99] transition-all"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="text-3xl animate-bounce">📥</div>
+          <div className="text-left">
+            <div className="text-xs opacity-90 font-medium">あなたの対応待ち</div>
+            <div className="text-2xl font-bold leading-tight">{myTotal}件</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          {myLeaveCount > 0 && (
+            <div className="text-center">
+              <div className="text-xs opacity-90">🌴 有給申請</div>
+              <div className="text-lg font-bold">{myLeaveCount}件</div>
+              {!isForemanOnly && leaveForemanApproved > 0 && (
+                <div className="text-[10px] opacity-80">最終承認待ち {leaveForemanApproved}件</div>
+              )}
+            </div>
+          )}
+          {myHlCount > 0 && (
+            <div className="text-center">
+              <div className="text-xs opacity-90">✈️ 帰国申請</div>
+              <div className="text-lg font-bold">{myHlCount}件</div>
+              {!isForemanOnly && hlForemanApproved > 0 && (
+                <div className="text-[10px] opacity-80">最終承認待ち {hlForemanApproved}件</div>
+              )}
+            </div>
+          )}
+          <div className="text-2xl">↓</div>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 // ─── Attendance Request Card (有給申請 + 欠勤届) ───
 
-function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems, password, onUpdate }: {
+function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems, password, userRole, onUpdate }: {
   leaveItems: LeaveRequestItem[]
   absenceReports: AbsenceReport[]
   homeLongLeaveItems: HomeLongLeaveItem[]
   password: string
+  userRole: string  // 'admin' | 'approver' | 'foreman' | 'jimu'
   onUpdate: () => void
 }) {
   const [processing, setProcessing] = useState<string | null>(null)
+
+  // 権限制御:
+  //   - 職長承認: admin / approver / foreman が押せる
+  //   - 最終承認: admin / approver のみ（事業責任者）
+  //   - 却下: 全員可（ただし最終承認後の却下は実質意味なし）
+  const canForemanApprove = userRole === 'admin' || userRole === 'approver' || userRole === 'foreman'
+  const canFinalApprove = userRole === 'admin' || userRole === 'approver'
 
   const hasLeave = leaveItems.length > 0
   const hasAbsence = absenceReports.length > 0
@@ -209,7 +285,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
   const hlForemanApproved = homeLongLeaveItems.filter(i => i.status === 'foreman_approved')
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-blue-400">
+    <div id="attendance-request-card" className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-blue-400 scroll-mt-4">
       <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">📋 勤怠申請</h3>
 
       {/* 有給申請 */}
@@ -225,8 +301,10 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                   {req.reason && <span className="text-gray-400 text-xs ml-2">{req.reason}</span>}
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  <button onClick={() => handleAction(req.id, 'foreman_approve')} disabled={processing === req.id}
-                    className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                  {canForemanApprove && (
+                    <button onClick={() => handleAction(req.id, 'foreman_approve')} disabled={processing === req.id}
+                      className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                  )}
                   <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
                     className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
                 </div>
@@ -240,10 +318,16 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                   <span className="text-[10px] text-blue-600 ml-2">職長済</span>
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  <button onClick={() => handleAction(req.id, 'approve')} disabled={processing === req.id}
-                    className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
-                  <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
-                    className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                  {canFinalApprove ? (
+                    <>
+                      <button onClick={() => handleAction(req.id, 'approve')} disabled={processing === req.id}
+                        className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
+                      <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
+                        className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-gray-500">最終承認待ち</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -265,8 +349,10 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                   <span className="text-gray-400 text-xs ml-2">{req.reason}</span>
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  <button onClick={() => handleAction(req.id, 'foreman_approve', '/api/home-long-leave')} disabled={processing === req.id}
-                    className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                  {canForemanApprove && (
+                    <button onClick={() => handleAction(req.id, 'foreman_approve', '/api/home-long-leave')} disabled={processing === req.id}
+                      className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                  )}
                   <button onClick={() => handleAction(req.id, 'reject', '/api/home-long-leave')} disabled={processing === req.id}
                     className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
                 </div>
@@ -280,10 +366,16 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                   <span className="text-[10px] text-blue-600 ml-2">職長済</span>
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  <button onClick={() => handleAction(req.id, 'approve', '/api/home-long-leave')} disabled={processing === req.id}
-                    className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
-                  <button onClick={() => handleAction(req.id, 'reject', '/api/home-long-leave')} disabled={processing === req.id}
-                    className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                  {canFinalApprove ? (
+                    <>
+                      <button onClick={() => handleAction(req.id, 'approve', '/api/home-long-leave')} disabled={processing === req.id}
+                        className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
+                      <button onClick={() => handleAction(req.id, 'reject', '/api/home-long-leave')} disabled={processing === req.id}
+                        className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                    </>
+                  ) : (
+                    <span className="text-[10px] text-gray-500">最終承認待ち</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -334,6 +426,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
 
 export default function DashboardPage() {
   const [password, setPassword] = useState('')
+  const [userRole, setUserRole] = useState<string>('')
   const [ym, setYm] = useState(currentYm)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -342,8 +435,9 @@ export default function DashboardPage() {
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
     if (stored) {
-      const { password: pw } = JSON.parse(stored)
+      const { password: pw, user } = JSON.parse(stored)
       setPassword(pw)
+      setUserRole(user?.role || '')
     }
   }, [])
 
@@ -411,6 +505,13 @@ export default function DashboardPage() {
         <div className="text-center py-12 text-gray-400">読み込み中...</div>
       ) : data ? (
         <>
+          {/* ═══ 📥 申請バナー（最上部・対応待ちがある時のみ表示） ═══ */}
+          <PendingRequestsBanner
+            leaveItems={data.actionItems?.pendingLeaveRequests?.items || []}
+            homeLongLeaveItems={data.actionItems?.homeLongLeaveRequests || []}
+            userRole={userRole}
+          />
+
           {/* ═══ 🌴 休暇状況サマリー ═══ */}
           {(() => {
             const ai = data.actionItems
@@ -470,6 +571,7 @@ export default function DashboardPage() {
             absenceReports={data.actionItems?.absenceReports || []}
             homeLongLeaveItems={data.actionItems?.homeLongLeaveRequests || []}
             password={password}
+            userRole={userRole}
             onUpdate={fetchData}
           />
 
