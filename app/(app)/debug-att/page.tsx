@@ -45,6 +45,7 @@ interface DesignatedLeave {
 interface PLRecLite {
   fy: string | number
   grantDate?: string
+  periodEnd?: string | null
   // 新フィールド
   grantDays?: number
   carryOver?: number
@@ -53,6 +54,9 @@ interface PLRecLite {
   grant?: number
   carry?: number
   adj?: number
+  // 計算結果
+  periodUsed?: number
+  remaining?: number
   _archived?: boolean
   grantedAt?: string
   grantedBy?: number | string
@@ -312,34 +316,38 @@ export default function DebugAttPage() {
                         <thead className="bg-gray-50">
                           <tr>
                             <th className="px-2 py-1 border text-left">FY</th>
-                            <th className="px-2 py-1 border text-left">付与日</th>
-                            <th className="px-2 py-1 border text-center">grantDays<br/>(新)</th>
-                            <th className="px-2 py-1 border text-center bg-blue-50">carryOver<br/>(新)</th>
-                            <th className="px-2 py-1 border text-center">adjustment<br/>(新)</th>
+                            <th className="px-2 py-1 border text-left">期間</th>
+                            <th className="px-2 py-1 border text-center">付与<br/>(grantDays)</th>
+                            <th className="px-2 py-1 border text-center bg-blue-50">繰越<br/>(carryOver)</th>
+                            <th className="px-2 py-1 border text-center">調整</th>
+                            <th className="px-2 py-1 border text-center bg-green-50">消化<br/>(出面のP)</th>
+                            <th className="px-2 py-1 border text-center bg-green-100 font-bold">残</th>
                             <th className="px-2 py-1 border text-center bg-yellow-50">grant<br/>(旧)</th>
                             <th className="px-2 py-1 border text-center bg-yellow-50">carry<br/>(旧)</th>
                             <th className="px-2 py-1 border text-center bg-yellow-50">adj<br/>(旧)</th>
-                            <th className="px-2 py-1 border text-center">履歴</th>
                             <th className="px-2 py-1 border text-center">archived</th>
                           </tr>
                         </thead>
                         <tbody>
                           {pl.map((r, i) => {
                             // 表示判定: PC側ロジックで何が使われるか視覚化
-                            const grantDaysUsed = r.grantDays ?? r.grant ?? 0
                             const carryOverUsed = r.carryOver ?? r.carry ?? 0
                             const isCarryZero = carryOverUsed === 0
+                            const periodLabel = r.grantDate
+                              ? `${r.grantDate}\n〜${r.periodEnd ? r.periodEnd.replace(/-(\d+)-(\d+)$/, (_, m, d) => `-${parseInt(m)}-${parseInt(d)}`) : '?'}`
+                              : '-'
                             return (
                               <tr key={i} className={r._archived ? 'bg-gray-100 opacity-60' : (isCarryZero ? 'bg-orange-50' : '')}>
                                 <td className="px-2 py-1 border font-mono">{String(r.fy)}</td>
-                                <td className="px-2 py-1 border font-mono">{r.grantDate ?? '-'}</td>
+                                <td className="px-2 py-1 border font-mono whitespace-pre text-[10px]">{periodLabel}</td>
                                 <td className="px-2 py-1 border text-center font-mono">{r.grantDays ?? '—'}</td>
                                 <td className="px-2 py-1 border text-center font-mono bg-blue-50 font-bold">{r.carryOver ?? '—'}</td>
                                 <td className="px-2 py-1 border text-center font-mono">{r.adjustment ?? '—'}</td>
+                                <td className="px-2 py-1 border text-center font-mono bg-green-50 font-bold">{r.periodUsed ?? '—'}</td>
+                                <td className="px-2 py-1 border text-center font-mono bg-green-100 font-bold">{r.remaining ?? '—'}</td>
                                 <td className="px-2 py-1 border text-center font-mono bg-yellow-50">{r.grant ?? '—'}</td>
-                                <td className="px-2 py-1 border text-center font-mono bg-yellow-50 font-bold">{r.carry ?? '—'}</td>
+                                <td className="px-2 py-1 border text-center font-mono bg-yellow-50">{r.carry ?? '—'}</td>
                                 <td className="px-2 py-1 border text-center font-mono bg-yellow-50">{r.adj ?? '—'}</td>
-                                <td className="px-2 py-1 border text-center">{r.designatedLeavesCount}</td>
                                 <td className="px-2 py-1 border text-center text-gray-500">{r._archived ? '✓' : ''}</td>
                               </tr>
                             )
@@ -347,8 +355,9 @@ export default function DebugAttPage() {
                         </tbody>
                       </table>
                       <p className="text-xs text-gray-500 mt-2">
-                        💡 オレンジ行は <strong>繰越が 0 と判定される</strong> レコードです。<br/>
-                        💡 PC画面では「<strong>carryOver</strong> (青) を最優先、未定義なら <strong>carry</strong> (黄) を使用」が新ロジック。
+                        💡 <strong>消化</strong>（緑）= 付与日〜+1年 の期間中に出面で <code>P</code> がついた日数<br/>
+                        💡 <strong>残</strong>（濃緑）= 付与 + 繰越 − 調整 − 消化<br/>
+                        💡 前期（archived 又はFY古い行）の「残」が、今期の繰越に引き継がれているか確認できます
                       </p>
                       {/* 履歴展開（任意） */}
                       {pl.some(r => r.designatedLeaves && r.designatedLeaves.length > 0) && (

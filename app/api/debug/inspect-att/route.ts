@@ -72,27 +72,82 @@ export async function POST(request: NextRequest) {
     ;(result as Record<string, unknown>)[`att_${w.id}`] = entries
 
     // 3. PLRecord 全体（旧フィールド grant/carry/adj も含めて）
+    // + 各レコードの期間（grantDate〜+1年）の P 消化数も計算
     const plData = (mainData.plData || {}) as Record<string, Record<string, unknown>[]>
     const wRecords = plData[String(w.id)] || []
-    ;(result as Record<string, unknown>)[`pl_${w.id}`] = wRecords.map(r => ({
-      fy: r.fy,
-      grantDate: r.grantDate,
-      // 新フィールド（現行）
-      grantDays: r.grantDays,
-      carryOver: r.carryOver,
-      adjustment: r.adjustment,
-      // 旧フィールド（移行時に残ったまま？）
-      grant: r.grant,
-      carry: r.carry,
-      adj: r.adj,
-      // メタ
-      _archived: r._archived,
-      grantedAt: r.grantedAt,
-      grantedBy: r.grantedBy,
-      method: r.method,
-      designatedLeavesCount: Array.isArray(r.designatedLeaves) ? (r.designatedLeaves as unknown[]).length : 0,
-      designatedLeaves: r.designatedLeaves,
-    }))
+
+    // 過去3年分の出面データを取得（前期や前々期も対応）
+    const allAttForWorker: { date: Date; count: number }[] = []
+    const now = new Date()
+    for (let yy = now.getFullYear() - 3; yy <= now.getFullYear() + 1; yy++) {
+      for (let mm = 1; mm <= 12; mm++) {
+        const yymm = `${yy}${String(mm).padStart(2, '0')}`
+        const attSnap2 = await getDoc(doc(db, 'demmen', `att_${yymm}`))
+        if (!attSnap2.exists()) continue
+        const data2 = (attSnap2.data().d || {}) as Record<string, Record<string, unknown>>
+        for (const [key, val] of Object.entries(data2)) {
+          if (!val) continue
+          const e = val as { p?: number | boolean }
+          if (!e.p) continue
+          // siteId_workerId_ym_day
+          const parts = key.split('_')
+          const ymIdx = parts.indexOf(yymm)
+          if (ymIdx <= 0) continue
+          const widFromKey = parts[ymIdx - 1]
+          if (widFromKey !== String(w.id)) continue
+          const day = parseInt(parts[parts.length - 1])
+          allAttForWorker.push({
+            date: new Date(yy, mm - 1, day),
+            count: 1,
+          })
+        }
+      }
+    }
+
+    // 各 PLRecord について、期間内の P 消化数を計算
+    const plWithUsage = wRecords.map(r => {
+      const grantDate = r.grantDate as string | undefined
+      let periodUsed = 0
+      let periodEndStr: string | null = null
+      if (grantDate) {
+        const gdStart = new Date(grantDate + 'T00:00:00')
+        if (!isNaN(gdStart.getTime())) {
+          const gdEnd = new Date(gdStart)
+          gdEnd.setFullYear(gdEnd.getFullYear() + 1)
+          periodUsed = allAttForWorker.filter(a => a.date >= gdStart && a.date < gdEnd).length
+          periodEndStr = `${gdEnd.getFullYear()}-${String(gdEnd.getMonth() + 1).padStart(2, '0')}-${String(gdEnd.getDate()).padStart(2, '0')}`
+        }
+      }
+      // 残日数 = 付与 + 繰越 - 調整 - 消化
+      const grantDays = (r.grantDays as number | undefined) ?? (r.grant as number | undefined) ?? 0
+      const carryOver = (r.carryOver as number | undefined) ?? (r.carry as number | undefined) ?? 0
+      const adjustment = (r.adjustment as number | undefined) ?? (r.adj as number | undefined) ?? 0
+      const remaining = Math.max(0, grantDays + carryOver - adjustment - periodUsed)
+      return {
+        fy: r.fy,
+        grantDate: r.grantDate,
+        periodEnd: periodEndStr,
+        // 新フィールド（現行）
+        grantDays: r.grantDays,
+        carryOver: r.carryOver,
+        adjustment: r.adjustment,
+        // 旧フィールド（移行時に残ったまま？）
+        grant: r.grant,
+        carry: r.carry,
+        adj: r.adj,
+        // 計算結果
+        periodUsed,
+        remaining,
+        // メタ
+        _archived: r._archived,
+        grantedAt: r.grantedAt,
+        grantedBy: r.grantedBy,
+        method: r.method,
+        designatedLeavesCount: Array.isArray(r.designatedLeaves) ? (r.designatedLeaves as unknown[]).length : 0,
+        designatedLeaves: r.designatedLeaves,
+      }
+    })
+    ;(result as Record<string, unknown>)[`pl_${w.id}`] = plWithUsage
   }
 
   // 4. homeLeaves情報
