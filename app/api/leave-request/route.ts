@@ -340,13 +340,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (error) {
     console.error('Leave request POST error:', error)
-    // 一時的にエラー詳細を返す（原因特定後に削除する）
-    const detail = error instanceof Error
-      ? `${error.message}${error.stack ? '\n' + error.stack.split('\n').slice(0, 3).join('\n') : ''}`
-      : String(error)
-    return NextResponse.json({
-      error: `Server error: ${detail.slice(0, 500)}`,
-    }, { status: 500 })
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
 
