@@ -61,6 +61,7 @@ function computeTodayStatus(
   ym: string,
   day: number,
   excludeSiteIds?: Set<string>,
+  extraHomeLeaveWorkerIds?: Set<number>,  // 呼び出し側でhomeLongLeaveコレクションから集めたIDも渡せる
 ) {
   const activeSites = main.sites.filter(s => !s.archived && !(excludeSiteIds?.has(s.id)))
 
@@ -124,9 +125,9 @@ function computeTodayStatus(
     for (const wid of siteAssign.workers) allAssignedWorkerIds.add(wid)
   }
 
-  // 今日帰国中のワーカーIDを集める
+  // 今日帰国中のワーカーIDを集める（main.homeLeaves + 引数の extraHomeLeaveWorkerIds をマージ）
   const todayDateStr = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-  const homeLeaveWorkerIds = new Set<number>()
+  const homeLeaveWorkerIds = new Set<number>(extraHomeLeaveWorkerIds || [])
   const homeLeaves = ((main as unknown as { homeLeaves?: { workerId: number; startDate: string; endDate: string }[] }).homeLeaves) || []
   for (const hl of homeLeaves) {
     if (hl.startDate <= todayDateStr && todayDateStr <= hl.endDate) {
@@ -663,7 +664,24 @@ export async function GET(request: NextRequest) {
     try {
       const cachedToday = attCache.get(todayYm)
       const todayAtt = cachedToday || await getAttData(todayYm)
-      todayStatus = computeTodayStatus(main, todayAtt.d, todayAtt.sd, todayYm, todayDay, hiddenSiteIds)
+
+      // homeLongLeave コレクションから approved & 今日期間内のワーカーIDを集める
+      // (main.homeLeaves に追記漏れがあるケースの保険)
+      const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const hlOnLeaveWorkerIds = new Set<number>()
+      try {
+        const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
+        hlSnap.forEach(d => {
+          const v = d.data() as { workerId?: number; status?: string; startDate?: string; endDate?: string }
+          if (v.status === 'approved' && v.startDate && v.endDate
+              && v.startDate <= todayDateStr && todayDateStr <= v.endDate
+              && typeof v.workerId === 'number') {
+            hlOnLeaveWorkerIds.add(v.workerId)
+          }
+        })
+      } catch { /* ignore */ }
+
+      todayStatus = computeTodayStatus(main, todayAtt.d, todayAtt.sd, todayYm, todayDay, hiddenSiteIds, hlOnLeaveWorkerIds)
     } catch {
       todayStatus = { siteStatus: [], absentWorkers: [] }
     }
