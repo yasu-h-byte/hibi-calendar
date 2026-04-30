@@ -1187,11 +1187,10 @@ export async function GET(request: NextRequest) {
 
         const total = grantDays + carryOver
 
-        // 付与日から1年間のPL消化日数を集計（月別内訳付き）
-        // grantDateが空の場合: 全期間のPエントリを集計（移行データ整備中の対策）
+        // 付与日から1年間のPL消化日数を集計（残日数計算用）+ 月別内訳は全期間
         let periodUsed = 0
         const plCalendarLocal: string[] = []
-        const monthlyUsage: Record<string, number> = {} // YYYYMM -> count
+        const monthlyUsage: Record<string, number> = {} // YYYYMM -> count（全期間）
 
         const hasPeriod = !!grantDate
         const gd = hasPeriod ? new Date(grantDate) : null
@@ -1207,11 +1206,14 @@ export async function GET(request: NextRequest) {
           const wid = parseInt(pk.wid)
           if (wid !== w.id) continue
           const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-          // grantDateがある場合のみ期間で絞り込み、ない場合は全期間集計
+
+          // monthlyUsage と plCalendarLocal は全期間集計（月別タブやPLカレンダー表示用）
+          monthlyUsage[pk.ym] = (monthlyUsage[pk.ym] || 0) + 1
+          plCalendarLocal.push(`${pk.ym}${pk.day}`)
+
+          // periodUsed は当期（grantDate〜+1年）のみカウント（残日数計算用）
           if (hasPeriod && (entryDate < gd! || entryDate >= gdEnd!)) continue
           periodUsed++
-          plCalendarLocal.push(`${pk.ym}${pk.day}`)
-          monthlyUsage[pk.ym] = (monthlyUsage[pk.ym] || 0) + 1
         }
         const used = adjustment + periodUsed
         const remaining = Math.max(0, total - used)
