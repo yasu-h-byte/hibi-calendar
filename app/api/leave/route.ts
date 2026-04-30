@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
-import { getMainData, getAttData, parseDKey } from '@/lib/compute'
+import { getMainData, getAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 
 /**
@@ -1091,9 +1091,15 @@ export async function GET(request: NextRequest) {
     const workerNames: Record<number, string> = {}
     main.workers.forEach(w => { workerNames[w.id] = w.name })
 
+    // 出向中の判定用に現在のYM
+    const nowForDispatch = new Date()
+    const currentYm = ymKey(nowForDispatch.getFullYear(), nowForDispatch.getMonth() + 1)
+
     // Build worker PL data — 現在FYに該当するレコードを優先して使用
+    // 出向中スタッフは出向先で有給管理されるため、ここでは除外
     const workers = main.workers
       .filter(w => !w.retired && w.job !== 'yakuin' && w.job !== 'jimu')
+      .filter(w => !isDispatchedAt(w, currentYm))
       .map(w => {
         const plRecordsRaw = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number; _archived?: boolean }[]
         // アーカイブ済みレコードは表示対象から除外（期限切れで2年以上経過）
