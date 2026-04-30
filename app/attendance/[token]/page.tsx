@@ -988,13 +988,15 @@ export default function StaffAttendancePage() {
         {/* Home long leave button */}
         <div className="text-center py-3">
           <button onClick={() => {
+              // モーダルを開くたびにデフォルト値を再初期化
+              // （前回開いた時の値が残ったままになる不具合を回避）
               const min = getHlMinDate()
-              if (!hlStartDate || hlStartDate < min) {
-                setHlStartDate(min)
-                const d = new Date(min + 'T00:00:00')
-                d.setDate(d.getDate() + 14)
-                setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
-              }
+              setHlStartDate(min)
+              const d = new Date(min + 'T00:00:00')
+              d.setDate(d.getDate() + 7)  // 1週間後
+              setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+              setHlReason('一時帰国')
+              setHlError(null)
               setShowHomeLongLeaveModal(true)
             }}
             className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 transition border border-purple-200">
@@ -1437,11 +1439,11 @@ export default function StaffAttendancePage() {
                       const val = e.target.value
                       setHlError(null)
                       setHlStartDate(val)
-                      if (!hlEndDate || val >= hlEndDate) {
-                        const d = new Date(val + 'T00:00:00')
-                        d.setDate(d.getDate() + 14)
-                        setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
-                      }
+                      // 出発日を変えたら帰国日も連動して +7日 に再計算
+                      // （ユーザーが帰国日を手動で長くしたい場合は、出発日確定後に変更）
+                      const d = new Date(val + 'T00:00:00')
+                      d.setDate(d.getDate() + 7)
+                      setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
                     }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base bg-white"
                   >
