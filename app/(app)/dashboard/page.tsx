@@ -396,6 +396,7 @@ export default function DashboardPage() {
       const params = new URLSearchParams({ ym, period: 'month', site: 'all' })
       const res = await fetch(`/api/dashboard?${params}`, {
         headers: { 'x-admin-password': password },
+        cache: 'no-store',  // 常に最新を取得
       })
       if (!res.ok) {
         setError('データの取得に失敗しました')

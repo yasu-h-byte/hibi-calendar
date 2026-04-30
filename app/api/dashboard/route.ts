@@ -20,6 +20,9 @@ import {
 import { ymKey } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
 
+// このルートは Firestore の最新データに依存するため、常に動的に実行する
+export const dynamic = 'force-dynamic'
+
 // --- Helpers ---
 
 /** Compute PL alert for workers with remaining PL <= 3 */
