@@ -95,20 +95,21 @@ export async function POST(request: NextRequest) {
       // 各スタッフの最新PLレコードから残日数を計算
       const main = await getMainData()
       const wKey = String(worker.id)
-      const plRecords = (main.plData[wKey] || []) as { fy: string | number; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number }[]
+      const plRecords = (main.plData[wKey] || []) as { fy: string | number; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number; _archived?: boolean }[]
 
-      // 最新のレコード（付与日数があるもの）を使用
+      // 最新のレコード（付与日数があるもの、archivedは除外）
+      // 新フィールド優先・旧フィールドにフォールバック
       const recordsWithGrant = plRecords.filter(r =>
-        (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
+        !r._archived && ((r.grantDays ?? r.grant ?? 0) > 0)
       )
       const fyRecord = recordsWithGrant.length > 0
         ? recordsWithGrant[recordsWithGrant.length - 1] : null
 
       if (fyRecord) {
-        const isOldRecord = fyRecord.grant != null || fyRecord.adj != null || fyRecord.carry != null
-        const grantDays = isOldRecord ? (fyRecord.grant ?? fyRecord.grantDays ?? 0) : (fyRecord.grantDays ?? 0)
-        const carryOver = isOldRecord ? (fyRecord.carry ?? 0) : (fyRecord.carryOver ?? 0)
-        const adjustment = Math.max(fyRecord.adjustment ?? 0, fyRecord.adj ?? 0)
+        // 新優先・旧フォールバック（GET側と統一）
+        const grantDays   = fyRecord.grantDays  ?? fyRecord.grant  ?? 0
+        const carryOver   = fyRecord.carryOver  ?? fyRecord.carry  ?? 0
+        const adjustment  = fyRecord.adjustment ?? fyRecord.adj    ?? 0
         const total = grantDays + carryOver
 
         // 付与日から1年間の出面データからPL消化日数を集計
@@ -339,7 +340,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (error) {
     console.error('Leave request POST error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    // 一時的にエラー詳細を返す（原因特定後に削除する）
+    const detail = error instanceof Error
+      ? `${error.message}${error.stack ? '\n' + error.stack.split('\n').slice(0, 3).join('\n') : ''}`
+      : String(error)
+    return NextResponse.json({
+      error: `Server error: ${detail.slice(0, 500)}`,
+    }, { status: 500 })
   }
 }
 
