@@ -17,6 +17,30 @@ export interface Worker {
   dispatchFrom?: string // 出向開始月 YYYY-MM（空なら全期間出向扱い）
 }
 
+/** 現場の勤務時間設定（始業・終業・休憩構成） */
+export interface SiteBreak {
+  enabled: boolean      // この休憩を運用する現場か（false=スマホ画面で非表示）
+  minutes: number       // 休憩時間（分）
+  mandatory: boolean    // true=必ず取得（スタッフ画面で変更不可）/ false=任意
+}
+
+export interface SiteWorkSchedule {
+  startTime: string             // 始業時刻 'HH:MM' (例: '08:00', '07:30')
+  endTime: string               // 終業時刻 'HH:MM' (例: '17:00', '17:30')
+  morningBreak: SiteBreak       // 午前休憩
+  lunchBreak: SiteBreak         // 昼休憩
+  afternoonBreak: SiteBreak     // 午後休憩
+}
+
+/** 既存現場用のデフォルト勤務時間（workSchedule未設定の場合に補完される値） */
+export const DEFAULT_WORK_SCHEDULE: SiteWorkSchedule = {
+  startTime: '08:00',
+  endTime: '17:00',
+  morningBreak:   { enabled: true, minutes: 30, mandatory: false },
+  lunchBreak:     { enabled: true, minutes: 60, mandatory: true },
+  afternoonBreak: { enabled: true, minutes: 30, mandatory: false },
+}
+
 export interface Site {
   id: string
   name: string
@@ -24,6 +48,7 @@ export interface Site {
   end: string
   foreman: number
   archived: boolean
+  workSchedule?: SiteWorkSchedule  // 未設定なら DEFAULT_WORK_SCHEDULE が適用される
 }
 
 export interface SiteAssign {

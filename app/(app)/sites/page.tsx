@@ -9,6 +9,28 @@ interface RatePeriod {
   dokoRate: number
 }
 
+interface SiteBreakConfig {
+  enabled: boolean
+  minutes: number
+  mandatory: boolean
+}
+
+interface SiteWorkScheduleConfig {
+  startTime: string
+  endTime: string
+  morningBreak: SiteBreakConfig
+  lunchBreak: SiteBreakConfig
+  afternoonBreak: SiteBreakConfig
+}
+
+const DEFAULT_WORK_SCHEDULE: SiteWorkScheduleConfig = {
+  startTime: '08:00',
+  endTime: '17:00',
+  morningBreak:   { enabled: true, minutes: 30, mandatory: false },
+  lunchBreak:     { enabled: true, minutes: 60, mandatory: true },
+  afternoonBreak: { enabled: true, minutes: 30, mandatory: false },
+}
+
 interface SiteData {
   id: string
   name: string
@@ -19,6 +41,7 @@ interface SiteData {
   tobiRate: number
   dokoRate: number
   rates: RatePeriod[]
+  workSchedule?: SiteWorkScheduleConfig | null
 }
 
 interface SiteAssign {
@@ -75,6 +98,7 @@ export default function SitesPage() {
   const [formRates, setFormRates] = useState<RatePeriod[]>([])
   const [formSubconRates, setFormSubconRates] = useState<Record<string, { rate: string; otRate: string }>>({})
   const [formDeputies, setFormDeputies] = useState<{ ym: string; wid: string }[]>([])
+  const [formWorkSchedule, setFormWorkSchedule] = useState<SiteWorkScheduleConfig>(DEFAULT_WORK_SCHEDULE)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   useEffect(() => {
@@ -117,6 +141,7 @@ export default function SitesPage() {
     setFormRates([])
     setFormSubconRates({})
     setFormDeputies([])
+    setFormWorkSchedule(DEFAULT_WORK_SCHEDULE)
     setShowDeleteConfirm(false)
     setShowModal(true)
   }
@@ -132,6 +157,8 @@ export default function SitesPage() {
       tobiRate: String(s.tobiRate || ''),
       dokoRate: String(s.dokoRate || ''),
     })
+    // Load workSchedule (未設定ならデフォルト)
+    setFormWorkSchedule(s.workSchedule || DEFAULT_WORK_SCHEDULE)
     // Load rates
     setFormRates(s.rates && s.rates.length > 0 ? [...s.rates] : [])
 
@@ -201,6 +228,7 @@ export default function SitesPage() {
             dokoRate: latestDokoRate,
             rates: formRates,
             subconRates,
+            workSchedule: formWorkSchedule,
           }
         : {
             action: 'add',
@@ -537,6 +565,119 @@ export default function SitesPage() {
                     />
                     アーカイブ（非表示にする）
                   </label>
+                </div>
+              )}
+
+              {/* ── 勤務時間設定 ── */}
+              {editId && (
+                <div className="border-2 border-blue-300 rounded-xl p-4 space-y-3">
+                  <h4 className="text-sm font-bold text-blue-700">⏰ 勤務時間設定</h4>
+                  <p className="text-xs text-gray-500">
+                    現場ごとの始業・終業時刻と休憩構成。スマホ画面のデフォルト値として使われます。
+                  </p>
+
+                  {/* 始業・終業 */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">始業時刻</label>
+                      <input
+                        type="time"
+                        value={formWorkSchedule.startTime}
+                        onChange={e => setFormWorkSchedule({ ...formWorkSchedule, startTime: e.target.value })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">終業時刻</label>
+                      <input
+                        type="time"
+                        value={formWorkSchedule.endTime}
+                        onChange={e => setFormWorkSchedule({ ...formWorkSchedule, endTime: e.target.value })}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 休憩構成 */}
+                  <div className="space-y-2 pt-2">
+                    <div className="text-xs font-medium text-gray-700">休憩構成</div>
+                    {([
+                      { key: 'morningBreak',   label: '午前休憩' },
+                      { key: 'lunchBreak',     label: '昼休憩' },
+                      { key: 'afternoonBreak', label: '午後休憩' },
+                    ] as const).map(b => {
+                      const cfg = formWorkSchedule[b.key]
+                      return (
+                        <div key={b.key} className="bg-blue-50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="flex items-center gap-2 text-sm cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={cfg.enabled}
+                                onChange={e => setFormWorkSchedule({
+                                  ...formWorkSchedule,
+                                  [b.key]: { ...cfg, enabled: e.target.checked },
+                                })}
+                                className="rounded text-blue-600"
+                              />
+                              <span className="font-medium">{b.label}を運用する</span>
+                            </label>
+                          </div>
+                          {cfg.enabled && (
+                            <div className="grid grid-cols-2 gap-2 ml-6">
+                              <div>
+                                <label className="text-[10px] text-gray-500 block mb-0.5">時間（分）</label>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={5}
+                                  value={cfg.minutes}
+                                  onChange={e => setFormWorkSchedule({
+                                    ...formWorkSchedule,
+                                    [b.key]: { ...cfg, minutes: Number(e.target.value) || 0 },
+                                  })}
+                                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm"
+                                />
+                              </div>
+                              <div className="flex items-end">
+                                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={cfg.mandatory}
+                                    onChange={e => setFormWorkSchedule({
+                                      ...formWorkSchedule,
+                                      [b.key]: { ...cfg, mandatory: e.target.checked },
+                                    })}
+                                    className="rounded text-blue-600"
+                                  />
+                                  必ず取得（変更不可）
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* 実働時間プレビュー */}
+                  {formWorkSchedule.startTime && formWorkSchedule.endTime && (() => {
+                    const [sH, sM] = formWorkSchedule.startTime.split(':').map(Number)
+                    const [eH, eM] = formWorkSchedule.endTime.split(':').map(Number)
+                    let mins = (eH * 60 + eM) - (sH * 60 + sM)
+                    let breakMins = 0
+                    if (formWorkSchedule.morningBreak.enabled && formWorkSchedule.morningBreak.mandatory) breakMins += formWorkSchedule.morningBreak.minutes
+                    if (formWorkSchedule.lunchBreak.enabled && formWorkSchedule.lunchBreak.mandatory) breakMins += formWorkSchedule.lunchBreak.minutes
+                    if (formWorkSchedule.afternoonBreak.enabled && formWorkSchedule.afternoonBreak.mandatory) breakMins += formWorkSchedule.afternoonBreak.minutes
+                    mins -= breakMins
+                    if (isNaN(mins) || mins < 0) return null
+                    const hours = mins / 60
+                    return (
+                      <div className="text-xs text-gray-600 bg-white rounded p-2 border border-blue-200">
+                        💡 必須休憩のみ取得した場合の所定労働時間: <strong>{Math.floor(hours)}時間{Math.round((hours % 1) * 60)}分</strong>
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
 

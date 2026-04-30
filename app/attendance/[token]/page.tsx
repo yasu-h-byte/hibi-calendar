@@ -4,7 +4,27 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus, isTimeBasedMobile, isTimeBasedEntry } from '@/types'
 
-interface SiteInfo { id: string; name: string }
+interface SiteBreakConfig {
+  enabled: boolean
+  minutes: number
+  mandatory: boolean
+}
+interface SiteWorkScheduleConfig {
+  startTime: string
+  endTime: string
+  morningBreak: SiteBreakConfig
+  lunchBreak: SiteBreakConfig
+  afternoonBreak: SiteBreakConfig
+}
+const DEFAULT_WORK_SCHEDULE: SiteWorkScheduleConfig = {
+  startTime: '08:00',
+  endTime: '17:00',
+  morningBreak:   { enabled: true, minutes: 30, mandatory: false },
+  lunchBreak:     { enabled: true, minutes: 60, mandatory: true },
+  afternoonBreak: { enabled: true, minutes: 30, mandatory: false },
+}
+
+interface SiteInfo { id: string; name: string; workSchedule?: SiteWorkScheduleConfig | null }
 interface AvailableSite { id: string; name: string; primary: boolean }
 
 interface StaffData {
@@ -104,18 +124,22 @@ export default function StaffAttendancePage() {
   const [restReason, setRestReason] = useState('sick')
   const [restNote, setRestNote] = useState('')
 
+  // 現場の勤務時間設定（API経由で取得、未設定なら DEFAULT_WORK_SCHEDULE）
+  const workSchedule: SiteWorkScheduleConfig = data?.site?.workSchedule || DEFAULT_WORK_SCHEDULE
+
   // Time-based input state (202605~)
-  const [startTime, setStartTime] = useState('08:00')
-  const [endTime, setEndTime] = useState('17:00')
-  const [break1, setBreak1] = useState(true)  // 10:00-10:30
-  const break2 = true  // 12:00-13:00 昼休憩は必ず取得（固定）
-  const [break3, setBreak3] = useState(true)  // 15:00-15:30
+  const [startTime, setStartTime] = useState(workSchedule.startTime)
+  const [endTime, setEndTime] = useState(workSchedule.endTime)
+  // 休憩のチェック状態（mandatory:true の場合は常にtrue扱い）
+  const [break1, setBreak1] = useState(true)  // 午前休憩
+  const [break2, setBreak2] = useState(true)  // 昼休憩
+  const [break3, setBreak3] = useState(true)  // 午後休憩
 
   // Time-based input for past day editing
-  const [pastStartTime, setPastStartTime] = useState('08:00')
-  const [pastEndTime, setPastEndTime] = useState('17:00')
+  const [pastStartTime, setPastStartTime] = useState(workSchedule.startTime)
+  const [pastEndTime, setPastEndTime] = useState(workSchedule.endTime)
   const [pastBreak1, setPastBreak1] = useState(true)
-  const pastBreak2 = true  // 昼休憩は必ず取得（固定）
+  const [pastBreak2, setPastBreak2] = useState(true)
   const [pastBreak3, setPastBreak3] = useState(true)
 
   const fetchData = useCallback(async () => {
@@ -143,18 +167,28 @@ export default function StaffAttendancePage() {
       }
 
       // Restore time-based state from current entry
+      // 現場の勤務時間設定をデフォルトとして使用（未設定ならDEFAULT_WORK_SCHEDULE）
+      const ws: SiteWorkScheduleConfig = d.site?.workSchedule || DEFAULT_WORK_SCHEDULE
       if (d.currentEntry && isTimeBasedEntry(d.currentEntry)) {
-        setStartTime(d.currentEntry.st || '08:00')
-        setEndTime(d.currentEntry.et || '17:00')
-        setBreak1(d.currentEntry.b1 === 1)
-        // break2 is always true (lunch break is mandatory)
-        setBreak3(d.currentEntry.b3 === 1)
+        setStartTime(d.currentEntry.st || ws.startTime)
+        setEndTime(d.currentEntry.et || ws.endTime)
+        // 既存エントリのフラグを優先、ただしmandatory or 無効の場合はその設定を強制
+        setBreak1(ws.morningBreak.enabled
+          ? (ws.morningBreak.mandatory ? true : d.currentEntry.b1 === 1)
+          : false)
+        setBreak2(ws.lunchBreak.enabled
+          ? (ws.lunchBreak.mandatory ? true : (d.currentEntry as { b2?: number }).b2 === 1)
+          : false)
+        setBreak3(ws.afternoonBreak.enabled
+          ? (ws.afternoonBreak.mandatory ? true : d.currentEntry.b3 === 1)
+          : false)
       } else {
-        setStartTime('08:00')
-        setEndTime('17:00')
-        setBreak1(true)
-        // break2 is always true
-        setBreak3(true)
+        setStartTime(ws.startTime)
+        setEndTime(ws.endTime)
+        // 初期値: 有効な休憩はチェック済み（任意のものも初期チェック）
+        setBreak1(ws.morningBreak.enabled)
+        setBreak2(ws.lunchBreak.enabled)
+        setBreak3(ws.afternoonBreak.enabled)
       }
     } catch {
       setError('つうしん エラー')
@@ -180,18 +214,25 @@ export default function StaffAttendancePage() {
   useEffect(() => {
     if (editingPast !== null && data?.pastDays[editingPast]) {
       const pd = data.pastDays[editingPast]
+      const ws: SiteWorkScheduleConfig = data.site?.workSchedule || DEFAULT_WORK_SCHEDULE
       if (pd.entry && isTimeBasedEntry(pd.entry)) {
-        setPastStartTime(pd.entry.st || '08:00')
-        setPastEndTime(pd.entry.et || '17:00')
-        setPastBreak1(pd.entry.b1 === 1)
-        // pastBreak2 is always true
-        setPastBreak3(pd.entry.b3 === 1)
+        setPastStartTime(pd.entry.st || ws.startTime)
+        setPastEndTime(pd.entry.et || ws.endTime)
+        setPastBreak1(ws.morningBreak.enabled
+          ? (ws.morningBreak.mandatory ? true : pd.entry.b1 === 1)
+          : false)
+        setPastBreak2(ws.lunchBreak.enabled
+          ? (ws.lunchBreak.mandatory ? true : (pd.entry as { b2?: number }).b2 === 1)
+          : false)
+        setPastBreak3(ws.afternoonBreak.enabled
+          ? (ws.afternoonBreak.mandatory ? true : pd.entry.b3 === 1)
+          : false)
       } else {
-        setPastStartTime('08:00')
-        setPastEndTime('17:00')
-        setPastBreak1(true)
-        // pastBreak2 is always true
-        setPastBreak3(true)
+        setPastStartTime(ws.startTime)
+        setPastEndTime(ws.endTime)
+        setPastBreak1(ws.morningBreak.enabled)
+        setPastBreak2(ws.lunchBreak.enabled)
+        setPastBreak3(ws.afternoonBreak.enabled)
       }
     }
   }, [editingPast, data])
@@ -647,8 +688,9 @@ export default function StaffAttendancePage() {
                 <p className="text-xs text-gray-500 mb-1">始業 / Bat dau</p>
                 <select value={startTime} onChange={e => setStartTime(e.target.value)}
                   className="text-2xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
-                  {Array.from({length: 13}, (_, i) => {
-                    const h = 6 + Math.floor(i / 2)
+                  {/* 5:00〜13:00 30分刻み (現場ごとの始業時刻に対応) */}
+                  {Array.from({length: 17}, (_, i) => {
+                    const h = 5 + Math.floor(i / 2)
                     const m = i % 2 === 0 ? '00' : '30'
                     const val = `${String(h).padStart(2,'0')}:${m}`
                     return <option key={val} value={val}>{val}</option>
@@ -669,23 +711,36 @@ export default function StaffAttendancePage() {
               </div>
             </div>
 
-            {/* Break checkboxes */}
+            {/* Break checkboxes (現場の休憩構成に応じて動的生成) */}
             <div className="bg-white rounded-xl shadow p-4">
               <p className="text-xs text-gray-500 mb-2">休憩 / Nghỉ giải lao</p>
               <div className="space-y-2">
                 {[
-                  { id: 'b1', label: '10:00〜10:30（30分）', checked: break1, set: setBreak1 },
-                  { id: 'b3', label: '15:00〜15:30（30分）', checked: break3, set: setBreak3 },
-                ].map(b => (
-                  <label key={b.id} className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" checked={b.checked} onChange={e => b.set(e.target.checked)}
-                      className="w-5 h-5 rounded text-hibi-navy" />
-                    <span className={`text-sm ${b.checked ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
-                      {b.label}
-                      {!b.checked && ' ← 未取得 / Không nghỉ'}
+                  { id: 'b1', cfg: workSchedule.morningBreak,   label: '午前休憩', labelVi: 'Nghỉ sáng',  checked: break1, set: setBreak1 },
+                  { id: 'b2', cfg: workSchedule.lunchBreak,     label: '昼休憩',   labelVi: 'Nghỉ trưa',  checked: break2, set: setBreak2 },
+                  { id: 'b3', cfg: workSchedule.afternoonBreak, label: '午後休憩', labelVi: 'Nghỉ chiều', checked: break3, set: setBreak3 },
+                ].filter(b => b.cfg.enabled).map(b => (
+                  <label
+                    key={b.id}
+                    className={`flex items-center gap-3 ${b.cfg.mandatory ? 'cursor-default' : 'cursor-pointer'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={b.cfg.mandatory ? true : b.checked}
+                      disabled={b.cfg.mandatory}
+                      onChange={e => b.set(e.target.checked)}
+                      className="w-5 h-5 rounded text-hibi-navy"
+                    />
+                    <span className={`text-sm ${(b.cfg.mandatory || b.checked) ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
+                      {b.label}（{b.cfg.minutes}分）/ {b.labelVi} ({b.cfg.minutes} phút)
+                      {b.cfg.mandatory && <span className="text-[10px] text-gray-400 ml-1">※必須 / Bắt buộc</span>}
+                      {!b.cfg.mandatory && !b.checked && ' ← 未取得 / Không nghỉ'}
                     </span>
                   </label>
                 ))}
+                {!workSchedule.morningBreak.enabled && !workSchedule.lunchBreak.enabled && !workSchedule.afternoonBreak.enabled && (
+                  <p className="text-xs text-gray-400">この現場では休憩が設定されていません / Không có giờ nghỉ tại công trường này</p>
+                )}
               </div>
             </div>
 
@@ -697,9 +752,9 @@ export default function StaffAttendancePage() {
                   const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
                   const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
                   let mins = end - start
-                  if (break1) mins -= 30
-                  if (break2) mins -= 60
-                  if (break3) mins -= 30
+                  if (workSchedule.morningBreak.enabled   && (workSchedule.morningBreak.mandatory   || break1)) mins -= workSchedule.morningBreak.minutes
+                  if (workSchedule.lunchBreak.enabled     && (workSchedule.lunchBreak.mandatory     || break2)) mins -= workSchedule.lunchBreak.minutes
+                  if (workSchedule.afternoonBreak.enabled && (workSchedule.afternoonBreak.mandatory || break3)) mins -= workSchedule.afternoonBreak.minutes
                   const hours = Math.max(0, mins / 60)
                   return `${Math.floor(hours)}時間${Math.round((hours % 1) * 60)}分`
                 })()}
@@ -708,9 +763,9 @@ export default function StaffAttendancePage() {
                 const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
                 const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
                 let mins = end - start
-                if (break1) mins -= 30
-                if (break2) mins -= 60
-                if (break3) mins -= 30
+                if (workSchedule.morningBreak.enabled   && (workSchedule.morningBreak.mandatory   || break1)) mins -= workSchedule.morningBreak.minutes
+                if (workSchedule.lunchBreak.enabled     && (workSchedule.lunchBreak.mandatory     || break2)) mins -= workSchedule.lunchBreak.minutes
+                if (workSchedule.afternoonBreak.enabled && (workSchedule.afternoonBreak.mandatory || break3)) mins -= workSchedule.afternoonBreak.minutes
                 const ot = Math.max(0, mins / 60 - 7)
                 return ot > 0 ? <p className="text-sm text-orange-600 mt-1">うち所定外: {ot.toFixed(1)}h</p> : null
               })()}
@@ -998,8 +1053,8 @@ export default function StaffAttendancePage() {
                       <p className="text-xs text-gray-500 mb-1">始業</p>
                       <select value={pastStartTime} onChange={e => setPastStartTime(e.target.value)}
                         className="text-xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
-                        {Array.from({length: 13}, (_, i) => {
-                          const h = 6 + Math.floor(i / 2)
+                        {Array.from({length: 17}, (_, i) => {
+                          const h = 5 + Math.floor(i / 2)
                           const m = i % 2 === 0 ? '00' : '30'
                           const val = `${String(h).padStart(2,'0')}:${m}`
                           return <option key={val} value={val}>{val}</option>
@@ -1020,19 +1075,30 @@ export default function StaffAttendancePage() {
                     </div>
                   </div>
 
-                  {/* Break checkboxes */}
+                  {/* Break checkboxes (現場の休憩構成に応じて動的生成) */}
                   <div className="bg-gray-50 rounded-xl p-3">
                     <p className="text-xs text-gray-500 mb-2">休憩</p>
                     <div className="space-y-2">
                       {[
-                        { id: 'pb1', label: '10:00〜10:30（30分）', checked: pastBreak1, set: setPastBreak1 },
-                        { id: 'pb3', label: '15:00〜15:30（30分）', checked: pastBreak3, set: setPastBreak3 },
-                      ].map(b => (
-                        <label key={b.id} className="flex items-center gap-3 cursor-pointer">
-                          <input type="checkbox" checked={b.checked} onChange={e => b.set(e.target.checked)}
-                            className="w-5 h-5 rounded text-hibi-navy" />
-                          <span className={`text-sm ${b.checked ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
-                            {b.label}{!b.checked && ' ← 未取得'}
+                        { id: 'pb1', cfg: workSchedule.morningBreak,   label: '午前休憩', checked: pastBreak1, set: setPastBreak1 },
+                        { id: 'pb2', cfg: workSchedule.lunchBreak,     label: '昼休憩',   checked: pastBreak2, set: setPastBreak2 },
+                        { id: 'pb3', cfg: workSchedule.afternoonBreak, label: '午後休憩', checked: pastBreak3, set: setPastBreak3 },
+                      ].filter(b => b.cfg.enabled).map(b => (
+                        <label
+                          key={b.id}
+                          className={`flex items-center gap-3 ${b.cfg.mandatory ? 'cursor-default' : 'cursor-pointer'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={b.cfg.mandatory ? true : b.checked}
+                            disabled={b.cfg.mandatory}
+                            onChange={e => b.set(e.target.checked)}
+                            className="w-5 h-5 rounded text-hibi-navy"
+                          />
+                          <span className={`text-sm ${(b.cfg.mandatory || b.checked) ? 'text-gray-700' : 'text-red-500 font-bold'}`}>
+                            {b.label}（{b.cfg.minutes}分）
+                            {b.cfg.mandatory && <span className="text-[10px] text-gray-400 ml-1">※必須</span>}
+                            {!b.cfg.mandatory && !b.checked && ' ← 未取得'}
                           </span>
                         </label>
                       ))}

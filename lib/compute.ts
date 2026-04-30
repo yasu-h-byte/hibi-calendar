@@ -36,6 +36,12 @@ export interface RawSite {
   foreman: number; archived: boolean
   tobiRate?: number; dokoRate?: number
   rates?: { from: string; tobiRate: number; dokoRate: number }[]
+  workSchedule?: {
+    startTime?: string; endTime?: string
+    morningBreak?: { enabled?: boolean; minutes?: number; mandatory?: boolean }
+    lunchBreak?: { enabled?: boolean; minutes?: number; mandatory?: boolean }
+    afternoonBreak?: { enabled?: boolean; minutes?: number; mandatory?: boolean }
+  }
 }
 
 export interface RawSubcon {
@@ -1121,7 +1127,7 @@ export function calculateOvertimeSummary(
   hourlyRate: number,
   baseDays: number,
   attD: Record<string, AttendanceEntry>,
-  sites: { id: string; name: string }[],
+  sites: { id: string; name: string; workSchedule?: RawSite['workSchedule'] }[],
   calendarDays: Record<string, Record<string, string>>,
 ): OvertimeSummary {
   const ymY = parseInt(ym.slice(0, 4))
@@ -1165,14 +1171,19 @@ export function calculateOvertimeSummary(
       if (entry.w && entry.w > 0) {
         if (entry.st && entry.et) {
           // 時間ベース入力（202605〜）: 始業/終業/休憩から正確に計算
+          // 休憩時間は現場の workSchedule に従う（未設定なら 30/60/30 デフォルト）
           const stParts = entry.st.split(':').map(Number)
           const etParts = entry.et.split(':').map(Number)
           const startMin = stParts[0] * 60 + (stParts[1] || 0)
           const endMin = etParts[0] * 60 + (etParts[1] || 0)
           let totalMin = endMin - startMin
-          if (entry.b1) totalMin -= 30
-          if (entry.b2) totalMin -= 60
-          if (entry.b3) totalMin -= 30
+          const ws = site.workSchedule
+          const morningMin   = ws?.morningBreak?.enabled === false   ? 0 : (ws?.morningBreak?.minutes   ?? 30)
+          const lunchMin     = ws?.lunchBreak?.enabled === false     ? 0 : (ws?.lunchBreak?.minutes     ?? 60)
+          const afternoonMin = ws?.afternoonBreak?.enabled === false ? 0 : (ws?.afternoonBreak?.minutes ?? 30)
+          if (entry.b1) totalMin -= morningMin
+          if (entry.b2) totalMin -= lunchMin
+          if (entry.b3) totalMin -= afternoonMin
           actual = Math.max(0, Math.round(totalMin / 60 * 10) / 10)
           overtime = Math.max(0, Math.round((actual - 7) * 10) / 10)
         } else {

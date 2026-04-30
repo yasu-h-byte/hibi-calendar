@@ -84,12 +84,18 @@ export async function GET(request: NextRequest) {
 
     // Past 5 days (with site name)
     const pastDays = []
-    // Build site name lookup
+    // Build site name lookup + 現在現場の workSchedule 取得
     const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
     const siteNames: Record<string, string> = {}
+    let currentSiteWorkSchedule: unknown = null
     if (mainDoc.exists()) {
       const sites = mainDoc.data().sites || []
-      for (const s of sites) siteNames[s.id] = (s.name as string || '').slice(0, 3)
+      for (const s of sites) {
+        siteNames[s.id] = (s.name as string || '').slice(0, 3)
+        if (s.id === siteId) {
+          currentSiteWorkSchedule = s.workSchedule || null
+        }
+      }
     }
 
     for (let off = 1; off <= 5; off++) {
@@ -298,7 +304,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       worker: { id: worker.id, name: worker.name, nameVi: worker.nameVi },
-      site: { id: site.id, name: site.name },
+      site: { id: site.id, name: site.name, workSchedule: currentSiteWorkSchedule },
       allSites: assignedSites,
       availableSites,
       today: {
@@ -342,11 +348,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    // Check site exists and is active
+    // Check site exists and is active + 現場の勤務時間設定を取得
     const allActiveSites = await getSites()
     if (!allActiveSites.find(s => s.id === siteId)) {
       return NextResponse.json({ error: 'Site not found or archived' }, { status: 403 })
     }
+    // workSchedule を取得（残業計算用）
+    type SiteBreakRaw = { enabled?: boolean; minutes?: number; mandatory?: boolean }
+    type SiteWorkScheduleRaw = {
+      startTime?: string; endTime?: string
+      morningBreak?: SiteBreakRaw; lunchBreak?: SiteBreakRaw; afternoonBreak?: SiteBreakRaw
+    }
+    let siteWorkSchedule: SiteWorkScheduleRaw | null = null
+    try {
+      const mainSnapForWS = await getDoc(doc(db, 'demmen', 'main'))
+      if (mainSnapForWS.exists()) {
+        const allSites = (mainSnapForWS.data().sites || []) as { id: string; workSchedule?: SiteWorkScheduleRaw }[]
+        const found = allSites.find(s => s.id === siteId)
+        siteWorkSchedule = found?.workSchedule || null
+      }
+    } catch { /* ignore */ }
+    // デフォルト休憩分数（workSchedule未設定時に使用）
+    const wsMorning   = siteWorkSchedule?.morningBreak   ?? { enabled: true, minutes: 30, mandatory: false }
+    const wsLunch     = siteWorkSchedule?.lunchBreak     ?? { enabled: true, minutes: 60, mandatory: true }
+    const wsAfternoon = siteWorkSchedule?.afternoonBreak ?? { enabled: true, minutes: 30, mandatory: false }
 
     // Check approval lock
     const ym = ymKey(year, month)
@@ -372,12 +397,13 @@ export async function POST(request: NextRequest) {
             s: 'staff',
           }
           // 後方互換: o フィールドにも残業時間を入れる（既存の集計ロジック用）
+          // 休憩時間は現場の workSchedule に従う
           const startMin = parseInt(String(startTime).split(':')[0]) * 60 + parseInt(String(startTime).split(':')[1] || '0')
           const endMin = parseInt(String(endTime).split(':')[0]) * 60 + parseInt(String(endTime).split(':')[1] || '0')
           let actualMin = endMin - startMin
-          if (entry.b1) actualMin -= 30
-          if (entry.b2) actualMin -= 60
-          if (entry.b3) actualMin -= 30
+          if (entry.b1 && wsMorning.enabled)   actualMin -= wsMorning.minutes   ?? 30
+          if (entry.b2 && wsLunch.enabled)     actualMin -= wsLunch.minutes     ?? 60
+          if (entry.b3 && wsAfternoon.enabled) actualMin -= wsAfternoon.minutes ?? 30
           const actualH = Math.max(0, actualMin / 60)
           const otH = Math.max(0, Math.round((actualH - 7) * 10) / 10)
           if (otH > 0) entry.o = otH

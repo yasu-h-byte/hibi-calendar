@@ -10,6 +10,20 @@ interface RatePeriod {
   dokoRate: number
 }
 
+interface SiteBreakRaw {
+  enabled?: boolean
+  minutes?: number
+  mandatory?: boolean
+}
+
+interface SiteWorkScheduleRaw {
+  startTime?: string
+  endTime?: string
+  morningBreak?: SiteBreakRaw
+  lunchBreak?: SiteBreakRaw
+  afternoonBreak?: SiteBreakRaw
+}
+
 interface RawSite {
   id: string
   name: string
@@ -20,6 +34,7 @@ interface RawSite {
   tobiRate?: number
   dokoRate?: number
   rates?: RatePeriod[]
+  workSchedule?: SiteWorkScheduleRaw | null
 }
 
 async function getMainDoc() {
@@ -52,6 +67,7 @@ export async function GET(request: NextRequest) {
       tobiRate: s.tobiRate || 0,
       dokoRate: s.dokoRate || 0,
       rates: s.rates || [],
+      workSchedule: s.workSchedule || null,  // 未設定はnull (クライアント側でDEFAULTを補完)
     }))
 
     const assign: Record<string, { workers: number[]; subcons: string[]; subconRates?: Record<string, { rate: number; otRate: number }> }> = {}
@@ -134,7 +150,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'update') {
-      const { id, name, start, end, foreman, archived, tobiRate, dokoRate, rates, subconRates } = body
+      const { id, name, start, end, foreman, archived, tobiRate, dokoRate, rates, subconRates, workSchedule } = body
       if (!id) {
         return NextResponse.json({ error: 'id required' }, { status: 400 })
       }
@@ -155,6 +171,7 @@ export async function POST(request: NextRequest) {
         ...(tobiRate !== undefined && { tobiRate: Number(tobiRate) }),
         ...(dokoRate !== undefined && { dokoRate: Number(dokoRate) }),
         ...(rates !== undefined && { rates }),
+        ...(workSchedule !== undefined && { workSchedule: workSchedule as SiteWorkScheduleRaw | null }),
       }
 
       const updateData: Record<string, unknown> = { sites: updated }
