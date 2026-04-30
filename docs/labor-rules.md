@@ -13,7 +13,7 @@
 | 現場 | 始業 | 終業 | 拘束 | 備考 |
 |------|------|------|------|------|
 | デフォルト | 8:00 | 17:00 | 9h | 所定 7h |
-| IHI現場 | 7:30 | 17:30 | 10h | 所定 8h |
+| IHI現場 | 7:30 | 16:30 | 9h | 所定 7h |
 
 - `lib/compute.ts` の月次集計と `types/index.ts` の `calcActualHours` / `calcOvertimeHours` が連動
 - 詳細フィールド定義は [docs/attendance.md](attendance.md) と [docs/firestore.md](firestore.md) を参照

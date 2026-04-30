@@ -74,14 +74,14 @@ homeLeaves?: {
 ```typescript
 workSchedule?: {
   startTime: string                                            // 例: '07:30'
-  endTime: string                                              // 例: '17:30'
+  endTime: string                                              // 例: '16:30'
   morningBreak:   { enabled: boolean; minutes: number; mandatory: boolean }
   lunchBreak:     { enabled: boolean; minutes: number; mandatory: boolean }
   afternoonBreak: { enabled: boolean; minutes: number; mandatory: boolean }
 }
 ```
 
-未設定の現場は従来通り 8:00〜17:00、午前30分・昼60分・午後30分のデフォルト。IHI現場は 7:30〜17:30 で設定済み。`lib/compute.ts` の月次集計、`types/index.ts` の `calcActualHours` / `calcOvertimeHours` がこの値を参照する。
+未設定の現場は従来通り 8:00〜17:00、午前30分・昼60分・午後30分のデフォルト。IHI現場は 7:30〜16:30 で設定済み。`lib/compute.ts` の月次集計、`types/index.ts` の `calcActualHours` / `calcOvertimeHours` がこの値を参照する。
 
 ### demmen/att_YYYYMM
 月別出面データ。
