@@ -189,7 +189,7 @@ export default function StaffAttendancePage() {
         setBreak3(ws.afternoonBreak.enabled)
       }
     } catch {
-      setError('つうしん エラー')
+      setError('つうしん エラー / Lỗi kết nối')
     } finally {
       setLoading(false)
     }
@@ -454,7 +454,7 @@ export default function StaffAttendancePage() {
         setTimeout(() => setError(null), 3000)
       }
     } catch {
-      setError('つうしん エラー')
+      setError('つうしん エラー / Lỗi kết nối')
       setTimeout(() => setError(null), 3000)
     } finally {
       setSaving(false)
@@ -507,7 +507,7 @@ export default function StaffAttendancePage() {
         setTimeout(() => setError(null), 3000)
       }
     } catch {
-      setError('つうしん エラー')
+      setError('つうしん エラー / Lỗi kết nối')
       setTimeout(() => setError(null), 3000)
     } finally {
       setSaving(false)
@@ -564,7 +564,7 @@ export default function StaffAttendancePage() {
         setTimeout(() => setError(null), 3000)
       }
     } catch {
-      setError('つうしん エラー')
+      setError('つうしん エラー / Lỗi kết nối')
       setTimeout(() => setError(null), 3000)
     } finally {
       setSaving(false)
@@ -592,7 +592,7 @@ export default function StaffAttendancePage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-hibi-navy text-lg">よみこみちゅう...</div>
+        <div className="text-hibi-navy text-lg">よみこみちゅう... / Đang tải...</div>
       </div>
     )
   }
@@ -601,7 +601,7 @@ export default function StaffAttendancePage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <div className="bg-white rounded-xl shadow p-6 text-center max-w-sm w-full">
-          <div className="text-red-500 text-lg font-bold mb-2">エラー</div>
+          <div className="text-red-500 text-lg font-bold mb-2">エラー / Lỗi</div>
           <div className="text-gray-700">{error}</div>
         </div>
       </div>
@@ -620,6 +620,9 @@ export default function StaffAttendancePage() {
       <div className="bg-hibi-navy text-white px-4 py-4">
         <div className="max-w-lg mx-auto">
           <div className="text-xl font-bold">{data.worker.name} さん</div>
+          {data.worker.nameVi && (
+            <div className="text-sm opacity-80">{data.worker.nameVi}</div>
+          )}
           <div className="text-sm opacity-60 mt-1">{data.today.dateLabel}</div>
         </div>
       </div>
@@ -826,7 +829,7 @@ export default function StaffAttendancePage() {
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => stepOT(-0.5)}
-                        className="w-11 h-11 bg-gray-200 rounded-lg text-xl font-bold active:bg-gray-300"
+                        className="w-14 h-14 bg-gray-200 rounded-lg text-2xl font-bold active:bg-gray-300"
                       >
                         −
                       </button>
@@ -835,7 +838,7 @@ export default function StaffAttendancePage() {
                       </span>
                       <button
                         onClick={() => stepOT(0.5)}
-                        className="w-11 h-11 bg-gray-200 rounded-lg text-xl font-bold active:bg-gray-300"
+                        className="w-14 h-14 bg-gray-200 rounded-lg text-2xl font-bold active:bg-gray-300"
                       >
                         ＋
                       </button>
@@ -1114,7 +1117,7 @@ export default function StaffAttendancePage() {
                           setTimeout(() => setError(null), 3000)
                         }
                       } catch {
-                        setError('つうしん エラー')
+                        setError('つうしん エラー / Lỗi kết nối')
                         setTimeout(() => setError(null), 3000)
                       } finally {
                         setSaving(false)
@@ -1167,7 +1170,7 @@ export default function StaffAttendancePage() {
                               setTimeout(() => setError(null), 3000)
                             }
                           } catch {
-                            setError('つうしん エラー')
+                            setError('つうしん エラー / Lỗi kết nối')
                             setTimeout(() => setError(null), 3000)
                           } finally {
                             setSaving(false)
@@ -1187,9 +1190,9 @@ export default function StaffAttendancePage() {
 
               <button
                 onClick={() => setEditingPast(null)}
-                className="w-full mt-3 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
+                className="w-full mt-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl py-3 text-sm font-medium active:bg-gray-200"
               >
-                やめる
+                やめる / Hủy
               </button>
             </div>
           </div>
@@ -1341,7 +1344,12 @@ export default function StaffAttendancePage() {
               disabled={leaveSubmitting || !leaveDateFrom}
               className="w-full bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
             >
-              {leaveSubmitting ? '送信中...' : '有給を申請する / Gửi đơn nghỉ phép'}
+              {leaveSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  そうしんちゅう / Đang gửi...
+                </span>
+              ) : '有給を申請する / Gửi đơn nghỉ phép'}
             </button>
 
             {/* Request history */}
@@ -1505,7 +1513,12 @@ export default function StaffAttendancePage() {
               disabled={hlSubmitting || !hlStartDate || !hlEndDate || hlStartDate < getHlMinDate()}
               className="w-full bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
             >
-              {hlSubmitting ? '送信中...' : '帰国を申請する / Gửi đơn xin về nước'}
+              {hlSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  そうしんちゅう / Đang gửi...
+                </span>
+              ) : '帰国を申請する / Gửi đơn xin về nước'}
             </button>
 
             {/* Request history */}
