@@ -258,16 +258,12 @@ export default function StaffAttendancePage() {
   useEffect(() => {
     if (showHomeLongLeaveModal) {
       fetchHlRequests()
-      // Set default start date to 14 days from now
-      const minD = new Date()
-      minD.setDate(minD.getDate() + 14)
-      const y = minD.getFullYear()
-      const m = String(minD.getMonth() + 1).padStart(2, '0')
-      const d = String(minD.getDate()).padStart(2, '0')
-      setHlStartDate(`${y}-${m}-${d}`)
-      // Set default end date to 28 days from now
-      const endD = new Date()
-      endD.setDate(endD.getDate() + 28)
+      // 出発日 = 最短申請日 (今日 + 90日)
+      const min = getHlMinDate()
+      setHlStartDate(min)
+      // 帰国日 = 出発日 + 7日（1週間後）
+      const endD = new Date(min + 'T00:00:00')
+      endD.setDate(endD.getDate() + 7)
       setHlEndDate(`${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, '0')}-${String(endD.getDate()).padStart(2, '0')}`)
       setHlReason('一時帰国')
       setHlNote('')
@@ -987,18 +983,7 @@ export default function StaffAttendancePage() {
 
         {/* Home long leave button */}
         <div className="text-center py-3">
-          <button onClick={() => {
-              // モーダルを開くたびにデフォルト値を再初期化
-              // （前回開いた時の値が残ったままになる不具合を回避）
-              const min = getHlMinDate()
-              setHlStartDate(min)
-              const d = new Date(min + 'T00:00:00')
-              d.setDate(d.getDate() + 7)  // 1週間後
-              setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
-              setHlReason('一時帰国')
-              setHlError(null)
-              setShowHomeLongLeaveModal(true)
-            }}
+          <button onClick={() => setShowHomeLongLeaveModal(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 transition border border-purple-200">
             ✈️ 帰国申請 / Xin về nước
           </button>
