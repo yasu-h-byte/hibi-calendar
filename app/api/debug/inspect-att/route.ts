@@ -71,13 +71,25 @@ export async function POST(request: NextRequest) {
     }
     ;(result as Record<string, unknown>)[`att_${w.id}`] = entries
 
-    // 3. PLRecord の designatedLeaves
+    // 3. PLRecord 全体（旧フィールド grant/carry/adj も含めて）
     const plData = (mainData.plData || {}) as Record<string, Record<string, unknown>[]>
     const wRecords = plData[String(w.id)] || []
     ;(result as Record<string, unknown>)[`pl_${w.id}`] = wRecords.map(r => ({
       fy: r.fy,
       grantDate: r.grantDate,
+      // 新フィールド（現行）
       grantDays: r.grantDays,
+      carryOver: r.carryOver,
+      adjustment: r.adjustment,
+      // 旧フィールド（移行時に残ったまま？）
+      grant: r.grant,
+      carry: r.carry,
+      adj: r.adj,
+      // メタ
+      _archived: r._archived,
+      grantedAt: r.grantedAt,
+      grantedBy: r.grantedBy,
+      method: r.method,
       designatedLeavesCount: Array.isArray(r.designatedLeaves) ? (r.designatedLeaves as unknown[]).length : 0,
       designatedLeaves: r.designatedLeaves,
     }))

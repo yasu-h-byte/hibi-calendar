@@ -45,7 +45,18 @@ interface DesignatedLeave {
 interface PLRecLite {
   fy: string | number
   grantDate?: string
+  // 新フィールド
   grantDays?: number
+  carryOver?: number
+  adjustment?: number
+  // 旧フィールド
+  grant?: number
+  carry?: number
+  adj?: number
+  _archived?: boolean
+  grantedAt?: string
+  grantedBy?: number | string
+  method?: string
   designatedLeavesCount: number
   designatedLeaves?: DesignatedLeave[]
 }
@@ -292,34 +303,70 @@ export default function DebugAttPage() {
 
                 {/* 有給レコード */}
                 <div>
-                  <h3 className="font-bold text-sm mb-2">🌴 有給レコードと履歴</h3>
+                  <h3 className="font-bold text-sm mb-2">🌴 有給レコード（生データ）</h3>
                   {pl.length === 0 ? (
                     <p className="text-sm text-gray-500">有給レコードはありません。</p>
                   ) : (
-                    <div className="space-y-2">
-                      {pl.map((r, i) => (
-                        <div key={i} className="border border-gray-200 rounded p-2 text-xs">
-                          <div className="font-mono">
-                            FY: {String(r.fy)} / 付与日: {r.grantDate ?? '-'} / 付与日数: {r.grantDays ?? '-'} /
-                            履歴件数: {r.designatedLeavesCount}
-                          </div>
-                          {r.designatedLeaves && r.designatedLeaves.length > 0 && (
-                            <details className="mt-1">
-                              <summary className="cursor-pointer text-blue-600">履歴を表示</summary>
-                              <ul className="mt-1 ml-4 list-disc">
-                                {r.designatedLeaves.map((dl, j) => (
-                                  <li key={j} className="font-mono">
-                                    {dl.date} ({dl.kind ?? '-'})
-                                    {dl.overwroteHomeLeave && ' ✈帰国期間上書き'}
-                                    — siteId: <span className="text-gray-500">{dl.siteId}</span>
-                                    {dl.note && <span className="text-gray-500"> note: {dl.note}</span>}
-                                  </li>
-                                ))}
-                              </ul>
-                            </details>
-                          )}
-                        </div>
-                      ))}
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-xs border border-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-2 py-1 border text-left">FY</th>
+                            <th className="px-2 py-1 border text-left">付与日</th>
+                            <th className="px-2 py-1 border text-center">grantDays<br/>(新)</th>
+                            <th className="px-2 py-1 border text-center bg-blue-50">carryOver<br/>(新)</th>
+                            <th className="px-2 py-1 border text-center">adjustment<br/>(新)</th>
+                            <th className="px-2 py-1 border text-center bg-yellow-50">grant<br/>(旧)</th>
+                            <th className="px-2 py-1 border text-center bg-yellow-50">carry<br/>(旧)</th>
+                            <th className="px-2 py-1 border text-center bg-yellow-50">adj<br/>(旧)</th>
+                            <th className="px-2 py-1 border text-center">履歴</th>
+                            <th className="px-2 py-1 border text-center">archived</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pl.map((r, i) => {
+                            // 表示判定: PC側ロジックで何が使われるか視覚化
+                            const grantDaysUsed = r.grantDays ?? r.grant ?? 0
+                            const carryOverUsed = r.carryOver ?? r.carry ?? 0
+                            const isCarryZero = carryOverUsed === 0
+                            return (
+                              <tr key={i} className={r._archived ? 'bg-gray-100 opacity-60' : (isCarryZero ? 'bg-orange-50' : '')}>
+                                <td className="px-2 py-1 border font-mono">{String(r.fy)}</td>
+                                <td className="px-2 py-1 border font-mono">{r.grantDate ?? '-'}</td>
+                                <td className="px-2 py-1 border text-center font-mono">{r.grantDays ?? '—'}</td>
+                                <td className="px-2 py-1 border text-center font-mono bg-blue-50 font-bold">{r.carryOver ?? '—'}</td>
+                                <td className="px-2 py-1 border text-center font-mono">{r.adjustment ?? '—'}</td>
+                                <td className="px-2 py-1 border text-center font-mono bg-yellow-50">{r.grant ?? '—'}</td>
+                                <td className="px-2 py-1 border text-center font-mono bg-yellow-50 font-bold">{r.carry ?? '—'}</td>
+                                <td className="px-2 py-1 border text-center font-mono bg-yellow-50">{r.adj ?? '—'}</td>
+                                <td className="px-2 py-1 border text-center">{r.designatedLeavesCount}</td>
+                                <td className="px-2 py-1 border text-center text-gray-500">{r._archived ? '✓' : ''}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                      <p className="text-xs text-gray-500 mt-2">
+                        💡 オレンジ行は <strong>繰越が 0 と判定される</strong> レコードです。<br/>
+                        💡 PC画面では「<strong>carryOver</strong> (青) を最優先、未定義なら <strong>carry</strong> (黄) を使用」が新ロジック。
+                      </p>
+                      {/* 履歴展開（任意） */}
+                      {pl.some(r => r.designatedLeaves && r.designatedLeaves.length > 0) && (
+                        <details className="mt-3">
+                          <summary className="cursor-pointer text-sm text-blue-600">時季指定履歴を表示</summary>
+                          <ul className="mt-1 ml-4 list-disc text-xs">
+                            {pl.flatMap((r, i) =>
+                              (r.designatedLeaves || []).map((dl, j) => (
+                                <li key={`${i}-${j}`} className="font-mono">
+                                  FY {String(r.fy)} / {dl.date} ({dl.kind ?? '-'})
+                                  {dl.overwroteHomeLeave && ' ✈帰国期間上書き'}
+                                  — siteId: <span className="text-gray-500">{dl.siteId}</span>
+                                </li>
+                              ))
+                            )}
+                          </ul>
+                        </details>
+                      )}
                     </div>
                   )}
                 </div>
