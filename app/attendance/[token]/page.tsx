@@ -278,6 +278,26 @@ export default function StaffAttendancePage() {
     } catch { /* ignore */ }
   }, [token])
 
+  // 帰国申請の取り消し（pendingのみ可能）
+  const cancelHomeLongLeave = async (requestId: string) => {
+    if (!confirm('この帰国申請を取り消してよろしいですか？\nĐơn xin về nước này có chắc chắn hủy không?')) return
+    try {
+      const res = await fetch('/api/home-long-leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel', requestId, token }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        alert(errData.error || '取り消しに失敗しました / Hủy thất bại')
+        return
+      }
+      fetchHlRequests()
+    } catch {
+      alert('つうしん エラー / Lỗi kết nối')
+    }
+  }
+
   useEffect(() => {
     if (showHomeLongLeaveModal) {
       fetchHlRequests()
@@ -1572,7 +1592,7 @@ export default function StaffAttendancePage() {
                 </div>
                 <div className="space-y-2">
                   {hlRequests.map(req => (
-                    <div key={req.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50">
+                    <div key={req.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${req.status === 'cancelled' ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
                       <div className="min-w-0">
                         <span className="text-sm text-gray-700 font-medium">
                           {(() => { const [,m,d] = req.startDate.split('-'); return `${parseInt(m)}/${parseInt(d)}` })()}
@@ -1593,13 +1613,26 @@ export default function StaffAttendancePage() {
                           </span>
                         )}
                         {req.status === 'pending' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
-                            承認待ち / Đang chờ
-                          </span>
+                          <>
+                            <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
+                              承認待ち / Đang chờ
+                            </span>
+                            <button
+                              onClick={() => cancelHomeLongLeave(req.id)}
+                              className="text-xs px-2 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 active:scale-95"
+                            >
+                              取り消し / Hủy
+                            </button>
+                          </>
                         )}
                         {req.status === 'rejected' && (
                           <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold">
                             却下 / Từ chối
+                          </span>
+                        )}
+                        {req.status === 'cancelled' && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-500 font-medium">
+                            取り消し済 / Đã hủy
                           </span>
                         )}
                       </div>

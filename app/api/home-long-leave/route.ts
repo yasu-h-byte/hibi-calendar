@@ -12,13 +12,14 @@ interface HomeLongLeave {
   endDate: string      // YYYY-MM-DD
   reason: string       // '一時帰国' | 'ビザ更新帰国' | 'その他'
   note?: string
-  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected'
+  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled'
   requestedAt: string
   foremanApprovedAt?: string
   foremanApprovedBy?: number
   reviewedAt?: string
   reviewedBy?: number
   rejectedReason?: string
+  cancelledAt?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -61,15 +62,16 @@ export async function POST(request: NextRequest) {
       }
 
       // Check for duplicate
+      // 却下 (rejected) または 取り消し (cancelled) されたものは再申請OK
       const docId = `${worker.id}_${startDate}`
       const docRef = doc(db, 'homeLongLeave', docId)
       const existing = await getDoc(docRef)
       if (existing.exists()) {
         const data = existing.data() as HomeLongLeave
-        if (data.status !== 'rejected') {
+        if (data.status !== 'rejected' && data.status !== 'cancelled') {
           return NextResponse.json({ error: 'Already requested' }, { status: 409 })
         }
-        // If rejected, allow re-request
+        // rejected または cancelled は新しい申請で上書き許可
       }
 
       const leaveReq: HomeLongLeave = {
@@ -242,6 +244,41 @@ export async function POST(request: NextRequest) {
         reviewedAt: new Date().toISOString(),
         reviewedBy: authWorkerId,
         rejectedReason: reason || '',
+      })
+
+      return NextResponse.json({ success: true })
+    }
+
+    // ── Staff: 自分の帰国申請を取り消す（pending のみ可能） ──
+    if (action === 'cancel') {
+      const { requestId, token } = body
+      if (!requestId || !token) {
+        return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      }
+      const worker = await getWorkerByToken(token)
+      if (!worker) {
+        return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      }
+
+      const docRef = doc(db, 'homeLongLeave', requestId)
+      const snap = await getDoc(docRef)
+      if (!snap.exists()) {
+        return NextResponse.json({ error: 'Request not found' }, { status: 404 })
+      }
+      const data = snap.data() as HomeLongLeave
+      if (data.workerId !== worker.id) {
+        return NextResponse.json({ error: 'Not your request' }, { status: 403 })
+      }
+      if (data.status !== 'pending') {
+        return NextResponse.json({
+          error: '職長が承認した後は取り消しできません。会社に連絡してください。',
+        }, { status: 409 })
+      }
+
+      await setDoc(docRef, {
+        ...data,
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString(),
       })
 
       return NextResponse.json({ success: true })

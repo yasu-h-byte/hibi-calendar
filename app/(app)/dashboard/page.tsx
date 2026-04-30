@@ -162,88 +162,6 @@ function AnnouncementsCard({ password }: { password: string }) {
   )
 }
 
-// ─── 申請バナー (ダッシュボード上部・対応待ちを目立つ場所に表示) ───
-
-function PendingRequestsBanner({ leaveItems, homeLongLeaveItems, userRole }: {
-  leaveItems: LeaveRequestItem[]
-  homeLongLeaveItems: HomeLongLeaveItem[]
-  userRole: string
-}) {
-  // 集計
-  const leavePending = leaveItems.filter(i => i.status === 'pending').length
-  const leaveForemanApproved = leaveItems.filter(i => i.status === 'foreman_approved').length
-  const hlPending = homeLongLeaveItems.filter(i => i.status === 'pending').length
-  const hlForemanApproved = homeLongLeaveItems.filter(i => i.status === 'foreman_approved').length
-
-  // ロール判定
-  const isForemanOnly = userRole === 'foreman'  // 職長: pending のみ表示
-  const isAdminLike = userRole === 'admin' || userRole === 'approver'  // 管理者: 全件＋内訳表示
-
-  // バナーカウント
-  const leaveTotal = isForemanOnly ? leavePending : (leavePending + leaveForemanApproved)
-  const hlTotal = isForemanOnly ? hlPending : (hlPending + hlForemanApproved)
-  const total = leaveTotal + hlTotal
-
-  if (total === 0) return null
-
-  const scrollToCard = () => {
-    document.getElementById('attendance-request-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  // 内訳表示用のヘルパー
-  const breakdown = (pending: number, foreman: number) => {
-    if (!isAdminLike) return null
-    const parts: string[] = []
-    if (pending > 0) parts.push(`職長待ち${pending}`)
-    if (foreman > 0) parts.push(`最終承認待ち${foreman}`)
-    return parts.length > 0 ? parts.join(' / ') : null
-  }
-
-  const headerLabel = isForemanOnly ? 'あなたの対応待ち' : '申請の対応状況'
-
-  return (
-    <button
-      onClick={scrollToCard}
-      className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white rounded-xl shadow-lg p-4 hover:shadow-xl active:scale-[0.99] transition-all"
-    >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="text-3xl animate-bounce">📥</div>
-          <div className="text-left">
-            <div className="text-xs opacity-90 font-medium">{headerLabel}</div>
-            <div className="text-2xl font-bold leading-tight">{total}件</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          {leaveTotal > 0 && (
-            <div className="text-center">
-              <div className="text-xs opacity-90">🌴 有給申請</div>
-              <div className="text-lg font-bold">{leaveTotal}件</div>
-              {breakdown(leavePending, leaveForemanApproved) && (
-                <div className="text-[10px] opacity-90 mt-0.5 whitespace-nowrap">
-                  {breakdown(leavePending, leaveForemanApproved)}
-                </div>
-              )}
-            </div>
-          )}
-          {hlTotal > 0 && (
-            <div className="text-center">
-              <div className="text-xs opacity-90">✈️ 帰国申請</div>
-              <div className="text-lg font-bold">{hlTotal}件</div>
-              {breakdown(hlPending, hlForemanApproved) && (
-                <div className="text-[10px] opacity-90 mt-0.5 whitespace-nowrap">
-                  {breakdown(hlPending, hlForemanApproved)}
-                </div>
-              )}
-            </div>
-          )}
-          <div className="text-2xl">↓</div>
-        </div>
-      </div>
-    </button>
-  )
-}
-
 // ─── Attendance Request Card (有給申請 + 欠勤届) ───
 
 function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems, password, userRole, onUpdate }: {
@@ -299,7 +217,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
   const hlForemanApproved = homeLongLeaveItems.filter(i => i.status === 'foreman_approved')
 
   return (
-    <div id="attendance-request-card" className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-blue-400 scroll-mt-4">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-blue-400">
       <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">📋 勤怠申請</h3>
 
       {/* 有給申請 */}
@@ -534,11 +452,14 @@ export default function DashboardPage() {
         <div className="text-center py-12 text-gray-400">読み込み中...</div>
       ) : data ? (
         <>
-          {/* ═══ 📥 申請バナー（最上部・対応待ちがある時のみ表示） ═══ */}
-          <PendingRequestsBanner
+          {/* ═══ 勤怠申請（有給＋帰国＋欠勤届）— 対応待ちがある時のみ最上部に表示 ═══ */}
+          <AttendanceRequestCard
             leaveItems={data.actionItems?.pendingLeaveRequests?.items || []}
+            absenceReports={data.actionItems?.absenceReports || []}
             homeLongLeaveItems={data.actionItems?.homeLongLeaveRequests || []}
+            password={password}
             userRole={userRole}
+            onUpdate={fetchData}
           />
 
           {/* ═══ 🌴 休暇状況サマリー ═══ */}
@@ -593,16 +514,6 @@ export default function DashboardPage() {
 
           {/* ═══ お知らせ ═══ */}
           <AnnouncementsCard password={password} />
-
-          {/* ═══ 勤怠申請（有給＋帰国＋欠勤届） ═══ */}
-          <AttendanceRequestCard
-            leaveItems={data.actionItems?.pendingLeaveRequests?.items || []}
-            absenceReports={data.actionItems?.absenceReports || []}
-            homeLongLeaveItems={data.actionItems?.homeLongLeaveRequests || []}
-            password={password}
-            userRole={userRole}
-            onUpdate={fetchData}
-          />
 
           {/* ═══ 1. Today's Status Table ═══ */}
           <Section title={`本日の稼働状況 (${todayStr})`}>
