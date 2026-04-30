@@ -90,7 +90,7 @@
 <h1>🌴 休暇管理マニュアル（有給・帰国 統合版）</h1>
 <p>HIBI CONSTRUCTION 就業管理システム<br>
 作成日: 2026年4月4日<br>
-最終更新: 2026年4月24日（Phase 1〜7 + 案B 対応）</p>
+最終更新: 2026年4月30日（取り消し機能・月別タブ刷新・出向除外 対応）</p>
 
 <div class="box box-info">
   <strong>このマニュアルで扱う内容：</strong>
@@ -100,6 +100,16 @@
     <li>付与・消化・繰越・買取・時効処理の各種機能</li>
     <li>監査対応（有給管理簿Excel出力）</li>
     <li>イレギュラー対応：帰国期間中の有給事後計上（リンさんの件）</li>
+  </ul>
+</div>
+
+<div class="box box-warn">
+  <strong>📅 2026-04-30 主な更新内容：</strong>
+  <ul style="margin: 8px 0;">
+    <li><strong>取り消し機能</strong>: スタッフが pending の有給申請を自分のスマホから取り消し可能に。取り消し済み・却下済みの日は同じ日付で再申請OK（履歴は最新のみ残る）。職長承認後は取り消し不可。</li>
+    <li><strong>月別有給取得タブの刷新</strong>: 会社別に表が分割（日比建設 [青バッジ] / HFU [紫バッジ]）。全期間で月別取得を集計し、有給が付与されているスタッフは消化0でも表示。</li>
+    <li><strong>出向中スタッフの自動除外</strong>: 人員マスタで <code>dispatchTo</code> + <code>dispatchFrom</code> 以降は有給管理ページに表示されません（出向先で管理されるため）。</li>
+    <li><strong>繰越バグ修正</strong>: 「日比建設で繰越が0表示される」問題を解決。既存データに反映するには <span class="btn btn-gray">⟲ 繰越再計算</span> を1度押してください。</li>
   </ul>
 </div>
 
@@ -151,6 +161,11 @@
     <span style="background: white; padding: 4px 14px; border-radius: 6px; font-weight: bold;">全員</span>
     <span style="color: #666; padding: 4px 14px;">日比建設</span>
     <span style="color: #666; padding: 4px 14px;">HFU</span>
+  </div>
+
+  <div style="font-size: 11px; color: #666; margin-top: 4px;">
+    ※ 「月別」タブは会社別に表が分かれて表示されます（<span class="tag tag-hibi">日比建設</span> 青バッジ / <span class="tag tag-hfu">HFU</span> 紫バッジ）。<br>
+    ※ 出向中スタッフ（dispatchTo 設定済み）は全タブから自動除外されます。
   </div>
 
   <div class="card-grid">
@@ -326,16 +341,38 @@
 
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">職長が「職長承認」（第1段階）</div>
+  <div class="step-text">職長が「職長承認」（第1段階）<br>
+  <span style="color:#888; font-size:12px;">※ admin / approver / foreman が押せます</span></div>
 </div>
 
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">管理者（政仁さん）が最終承認（第2段階）→ 出面に P が自動入力</div>
+  <div class="step-text">管理者（政仁さん）が「最終承認」（第2段階）→ 出面に P が自動入力<br>
+  <span style="color:#888; font-size:12px;">※ admin / approver のみ押せます。職長画面では「最終承認待ち」と表示されるだけで、ボタンは出ません</span></div>
 </div>
 
 <div class="box box-warn">
 <strong>スマホからの直接P入力は禁止：</strong>スタッフは必ず「ゆうきゅうしんせい」ボタン経由で申請する必要があります。
+</div>
+
+<h3>取り消し：スタッフが自分のスマホから pending の申請を取り消す</h3>
+
+<div class="box box-info">
+  <strong>2026-04-30 追加機能</strong><br>
+  スタッフは自分のスマホから、まだ職長承認されていない（pending の）有給申請を「取り消し / Hủy」ボタンで取り消せるようになりました。
+</div>
+
+<table>
+  <tr><th>ステータス</th><th>取り消し可否</th><th>同じ日付で再申請</th></tr>
+  <tr><td>pending（職長承認待ち）</td><td><strong>可</strong>（スタッフ本人が取り消し）</td><td>—</td></tr>
+  <tr><td>cancelled（取り消し済み）</td><td>—</td><td><strong>可</strong>（履歴は薄く表示、最新のみ残る）</td></tr>
+  <tr><td>rejected（却下）</td><td>—</td><td><strong>可</strong>（同様に再申請可能）</td></tr>
+  <tr><td>foreman_approved（職長承認後）</td><td><strong>不可</strong>（「会社に連絡」と表示）</td><td>—</td></tr>
+  <tr><td>approved（最終承認済み）</td><td><strong>不可</strong></td><td>—</td></tr>
+</table>
+
+<div class="box box-warn">
+<strong>運用上の注意：</strong>職長承認後の取り消しはスマホからはできません。スタッフから「取り消したい」と相談があったら、管理者が休暇管理画面で却下処理してください。
 </div>
 
 <hr>
@@ -684,6 +721,16 @@
 
 <h3>Q: 繰越がおかしい</h3>
 <p>A: 「⟲ 繰越再計算」ボタンを押してください。全スタッフの最新付与レコードに対して前期残日数から再計算します。ただし、通常は付与時に自動計算されるのでこのボタンは不要です。</p>
+<p>※ 2026-04-30 修正: 「日比建設のスタッフで繰越が0表示される」バグは GET /api/leave のロジックを「新フィールド優先・旧フォールバック」に統一して解決済み。既存データに反映するには「⟲ 繰越再計算」を1度押してください。</p>
+
+<h3>Q: スタッフが間違えて有給申請を出してしまった</h3>
+<p>A: 職長承認前（pending）であれば、スタッフ自身がスマホ画面の「取り消し / Hủy」ボタンで取り消せます。取り消し済みの日は同じ日付で再申請可能です（履歴は最新のみ残る）。職長承認後は取り消し不可になるため、管理者が休暇管理画面で却下処理してください。</p>
+
+<h3>Q: 出向中スタッフの有給はどうなる？</h3>
+<p>A: 人員マスタで <code>dispatchTo</code>（出向先）と <code>dispatchFrom</code>（出向開始日）を設定すると、出向開始日以降は有給管理ページの全タブから自動的に除外されます。出向先で管理されることが前提です。</p>
+
+<h3>Q: 月別タブで日比建設とHFUを混ぜて見たい</h3>
+<p>A: 月別タブは会社別に表が分かれた仕様になっており、混ぜての表示はできません。各表は会社バッジ（日比建設=青 / HFU=紫）で識別できます。全期間で月別取得を集計するため、有給が付与されているスタッフは消化0でも一覧に表示されます。</p>
 
 <h3>Q: 退職したスタッフの有給処理</h3>
 <p>A: 編集モーダルで「💰 買取を記録」→ 理由「退職時清算」を選んで記録してください。</p>
@@ -695,7 +742,7 @@
 <p>A: <a href="#irregular">「9. イレギュラー対応：帰国期間中の有給事後計上」</a>の手順で対応してください。</p>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">最終更新: 2026-04-24 / Phase 1〜7 + 案B 対応版</p>
+<p style="text-align:center; color:#999; font-size:12px;">最終更新: 2026-04-30 / 取り消し機能・月別タブ刷新・出向除外 対応版</p>
 
 </body>
 </html>

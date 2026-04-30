@@ -17,6 +17,7 @@
 | assign | map | 現場→スタッフ配置 |
 | massign | map | 月別配置（レガシー） |
 | plData | map | 有給データ（workerId → PLRecord[]） |
+| homeLeaves | array | 帰国期間レコード（後述） |
 | billing | map | 売上データ |
 | workDays | map | 月別所定日数 |
 | siteWorkDays | map | 現場別月別所定日数 |
@@ -24,6 +25,22 @@
 | defaultRates | map | デフォルト単価 |
 | mforeman | map | 月別代理職長 |
 | nextWorkerId | number | 次のワーカーID |
+
+#### MainData.homeLeaves（2026-04-30 追加）
+
+```typescript
+homeLeaves?: {
+  id?: string
+  workerId: number
+  workerName?: string
+  startDate: string   // YYYY-MM-DD
+  endDate: string     // YYYY-MM-DD
+  reason?: string
+  note?: string
+}[]
+```
+
+「本日の稼働状況」の休みリストから帰国中スタッフを除外する用途で参照。判定は `main.homeLeaves` と `homeLongLeave` コレクションの両方を OR で参照する（過渡期の二重管理）。
 
 #### RawWorker フィールド（workers 配列の各要素）
 
@@ -43,6 +60,28 @@
 | visaExpiry | string? | 在留期限（YYYY-MM-DD） |
 | dispatchTo | string? | 出向先名（空=通常勤務、値あり=出向中） |
 | dispatchFrom | string? | 出向開始月（YYYY-MM、空=全期間出向扱い） |
+
+#### RawSite フィールド（sites 配列の各要素・主要項目）
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| id | string | 現場ID |
+| name | string | 現場名 |
+| workSchedule | map? | 現場別勤務時間（2026-04-30 追加、後述） |
+
+##### Site.workSchedule（2026-04-30 追加）
+
+```typescript
+workSchedule?: {
+  startTime: string                                            // 例: '07:30'
+  endTime: string                                              // 例: '17:30'
+  morningBreak:   { enabled: boolean; minutes: number; mandatory: boolean }
+  lunchBreak:     { enabled: boolean; minutes: number; mandatory: boolean }
+  afternoonBreak: { enabled: boolean; minutes: number; mandatory: boolean }
+}
+```
+
+未設定の現場は従来通り 8:00〜17:00、午前30分・昼60分・午後30分のデフォルト。IHI現場は 7:30〜17:30 で設定済み。`lib/compute.ts` の月次集計、`types/index.ts` の `calcActualHours` / `calcOvertimeHours` がこの値を参照する。
 
 ### demmen/att_YYYYMM
 月別出面データ。
@@ -68,6 +107,24 @@
 ### leaveRequests/{workerId}_{date}
 有給申請。
 
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| workerId | number | 申請者ID |
+| date | string | 取得希望日（YYYY-MM-DD） |
+| status | string | `pending` / `approved` / `rejected` / `cancelled` |
+| createdAt | string | 申請日時 |
+| approvedBy | string? | 承認者 |
+| approvedAt | string? | 承認日時 |
+| cancelledAt | string? | 取り消し日時（2026-04-30 追加） |
+
+- ドキュメントIDは `{workerId}_{date}` の固定キー（重複排除）
+- `status=cancelled` または `status=rejected` のレコードは同じ日付で再申請時に上書きされる
+- 重複チェック条件: `status !== 'rejected' && status !== 'cancelled'` の既存レコードがあるときのみエラー
+- **Firestoreルール**: `allow read, write: if true`（2026-04-30 追加。それまではルール定義漏れがあった）
+
+### homeLongLeave/{auto}
+帰国（長期休暇）申請。`leaveRequests` 同様に `status` に `cancelled` を含む。スタッフは pending のみスマホから取り消し可能。
+
 ### activityLog/{auto}
 アクティビティログ。
 
@@ -82,3 +139,11 @@
 - jobType === 'jimu' → jimu
 - 現場のforemanに設定 → foreman
 - それ以外 → admin
+
+## 変更履歴
+
+### 2026-04-30
+- `MainData.homeLeaves` を追加（本日の稼働状況の休みリスト除外用）
+- `Site.workSchedule` を追加（現場別の始業・終業・休憩設定）
+- `leaveRequests` / `homeLongLeave` の status に `cancelled` を追加
+- `leaveRequests` の Firestoreルールが未定義だった件を修正（`allow read, write: if true`）
