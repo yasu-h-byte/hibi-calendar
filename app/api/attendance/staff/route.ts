@@ -144,6 +144,7 @@ export async function GET(request: NextRequest) {
     // 道具代情報（技能実習生・特定技能のみ、佐藤さんが手動設定した期間起点から1年サイクル）
     // 5月以降のみ表示（4月はデータ整備期間のため未表示）
     let toolBudgetRemaining: number | null = null
+    let toolBudgetPeriodStart: string | null = null
     let toolBudgetPeriodEnd: string | null = null
     const displayToolBudget = now.getFullYear() > 2026 || (now.getFullYear() === 2026 && now.getMonth() + 1 >= 5)
     try {
@@ -174,6 +175,7 @@ export async function GET(request: NextRequest) {
               const periodEnd = addYears(periodStart, 1)
               periodEnd.setDate(periodEnd.getDate() - 1)
               const periodStartStr = periodStart.toISOString().slice(0, 10)
+              toolBudgetPeriodStart = periodStartStr
               toolBudgetPeriodEnd = periodEnd.toISOString().slice(0, 10)
 
               const tbKey = `${worker.id}_${periodStartStr}`
@@ -311,6 +313,7 @@ export async function GET(request: NextRequest) {
       todayLocked: !!(todayApproval?.foreman),
       pastDays,
       toolBudgetRemaining,
+      toolBudgetPeriodStart,
       toolBudgetPeriodEnd,
       plRemaining,
       plExpiryDate,
