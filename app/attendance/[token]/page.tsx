@@ -57,15 +57,18 @@ interface StaffData {
 
 const STATUS_LABELS: Record<AttendanceStatus, string> = {
   work: '出勤', overtime: '出勤', rest: '休み',
-  leave: '有給', site_off: '現場休み', none: '未入力',
+  leave: '有給', site_off: '現場休み', home_leave: '帰国中', exam: '試験', none: '未入力',
 }
 const STATUS_EMOJI: Record<AttendanceStatus, string> = {
-  work: '🔨', overtime: '🔨', rest: '🏠', leave: '🌴', site_off: '🚧', none: '—',
+  work: '🔨', overtime: '🔨', rest: '🏠', leave: '🌴', site_off: '🚧',
+  home_leave: '✈️', exam: '📝', none: '—',
 }
 const STATUS_COLORS: Record<AttendanceStatus, string> = {
   work: 'bg-blue-100 text-blue-700', overtime: 'bg-orange-100 text-orange-700',
   rest: 'bg-gray-200 text-gray-600', leave: 'bg-green-100 text-green-700',
-  site_off: 'bg-yellow-100 text-yellow-700', none: 'bg-red-50 text-red-400',
+  site_off: 'bg-yellow-100 text-yellow-700',
+  home_leave: 'bg-cyan-100 text-cyan-700', exam: 'bg-purple-100 text-purple-700',
+  none: 'bg-red-50 text-red-400',
 }
 
 const REST_REASONS = [

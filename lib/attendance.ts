@@ -45,11 +45,21 @@ export function attKey(siteId: string, workerId: number, ym: string, day: number
 //  出面ステータス判定
 // ────────────────────────────────────────
 
+/**
+ * 出面エントリのステータス判定。
+ * 優先順位: P(有給) > E(試験) > R(休み) > H(現場休み) > HK(帰国中) > 残業 > 出勤 > 未入力
+ *
+ * 注意: lib/compute.ts の月次集計では hk が r/h より先に continue するが、
+ * UI 表示用のこの関数では「ユーザーが明示的に選んだステータス（r/h）」を優先表示する。
+ * 給与・人工計算には影響しない（compute.ts 側のロジックが正）。
+ */
 export function getEntryStatus(entry: AttendanceEntry | null | undefined): AttendanceStatus {
   if (!entry) return 'none'
   if (entry.p && entry.p === 1) return 'leave'
+  if (entry.exam && entry.exam === 1) return 'exam'
   if (entry.r && entry.r === 1) return 'rest'
   if (entry.h && entry.h === 1) return 'site_off'
+  if (entry.hk && entry.hk === 1) return 'home_leave'
   if (entry.w === 1 && entry.o && entry.o > 0) return 'overtime'
   if (entry.w === 1) return 'work'
   return 'none'
@@ -62,6 +72,8 @@ export function getStatusLabel(status: AttendanceStatus): string {
     case 'rest': return 'やすみ'
     case 'leave': return 'ゆうきゅう'
     case 'site_off': return 'げんばやすみ'
+    case 'home_leave': return 'きこくちゅう'
+    case 'exam': return 'しけん'
     case 'none': return 'みにゅうりょく'
   }
 }
@@ -73,6 +85,8 @@ export function getStatusEmoji(status: AttendanceStatus): string {
     case 'rest': return '🏠'
     case 'leave': return '🌴'
     case 'site_off': return '🚧'
+    case 'home_leave': return '✈️'
+    case 'exam': return '📝'
     case 'none': return '—'
   }
 }
@@ -84,6 +98,8 @@ export function getStatusColor(status: AttendanceStatus): string {
     case 'rest': return 'bg-gray-100 text-gray-500'
     case 'leave': return 'bg-green-100 text-green-700'
     case 'site_off': return 'bg-yellow-100 text-yellow-700'
+    case 'home_leave': return 'bg-cyan-100 text-cyan-700'
+    case 'exam': return 'bg-purple-100 text-purple-700'
     case 'none': return 'bg-red-50 text-red-400'
   }
 }

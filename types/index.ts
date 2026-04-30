@@ -134,23 +134,35 @@ export function timeToMinutes(time: string): number {
   return h * 60 + (m || 0)
 }
 
-/** 時間ベースエントリの実労働時間（h）を計算 */
-export function calcActualHours(entry: AttendanceEntry): number {
+/**
+ * 時間ベースエントリの実労働時間（h）を計算
+ * @param entry 出面エントリ
+ * @param workSchedule 現場の勤務時間設定（未指定なら 30/60/30 分のデフォルト休憩）
+ */
+export function calcActualHours(entry: AttendanceEntry, workSchedule?: SiteWorkSchedule): number {
   if (!entry.st || !entry.et) return entry.w === 0.6 ? 4.2 : (entry.w || 0) * 7
   const start = timeToMinutes(entry.st)
   const end = timeToMinutes(entry.et)
   let totalMinutes = end - start
-  // 休憩を引く（取得した分のみ）
-  if (entry.b1) totalMinutes -= 30  // 10:00-10:30
-  if (entry.b2) totalMinutes -= 60  // 12:00-13:00
-  if (entry.b3) totalMinutes -= 30  // 15:00-15:30
+  // 休憩を引く（取得した分のみ）— 現場の workSchedule に従う
+  const ws = workSchedule
+  const morningMin   = ws?.morningBreak?.enabled === false   ? 0 : (ws?.morningBreak?.minutes   ?? 30)
+  const lunchMin     = ws?.lunchBreak?.enabled === false     ? 0 : (ws?.lunchBreak?.minutes     ?? 60)
+  const afternoonMin = ws?.afternoonBreak?.enabled === false ? 0 : (ws?.afternoonBreak?.minutes ?? 30)
+  if (entry.b1) totalMinutes -= morningMin
+  if (entry.b2) totalMinutes -= lunchMin
+  if (entry.b3) totalMinutes -= afternoonMin
   return Math.max(0, Math.round(totalMinutes / 60 * 10) / 10)
 }
 
-/** 時間ベースエントリの残業時間（所定7hを超えた分）を計算 */
-export function calcOvertimeHours(entry: AttendanceEntry): number {
+/**
+ * 時間ベースエントリの残業時間（所定7hを超えた分）を計算
+ * @param entry 出面エントリ
+ * @param workSchedule 現場の勤務時間設定
+ */
+export function calcOvertimeHours(entry: AttendanceEntry, workSchedule?: SiteWorkSchedule): number {
   if (!entry.st || !entry.et) return entry.o || 0
-  const actual = calcActualHours(entry)
+  const actual = calcActualHours(entry, workSchedule)
   return Math.max(0, Math.round((actual - 7) * 10) / 10)
 }
 
@@ -164,7 +176,7 @@ export function isTimeBasedMobile(ym: string): boolean {
   return ym >= '202604'
 }
 
-export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_off' | 'none'
+export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_off' | 'home_leave' | 'exam' | 'none'
 
 export interface AttendanceApproval {
   foreman?: { by: number; at: string }
