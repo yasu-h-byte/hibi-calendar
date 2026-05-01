@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出面の見方ガイド（職長向け） - HIBI CONSTRUCTION</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; }
+  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: #1B2A4A; color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .cell-mock { display: inline-block; border: 1px solid #c0c0c0; border-radius: 4px; padding: 4px 6px; background: #fff; min-width: 80px; vertical-align: middle; font-size: 12px; line-height: 1.4; text-align: center; position: relative; }
+  .cell-mock .status { font-weight: bold; color: #16a34a; }
+  .cell-mock .times { color: #555; }
+  .cell-mock .breaks { color: #666; }
+  .cell-mock .hours { color: #888; font-weight: bold; }
+  .blue-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #60a5fa; vertical-align: middle; margin-right: 4px; }
+  .orange-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #fb923c; vertical-align: middle; margin-right: 4px; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  @media print { body { font-size: 13px; padding: 0; } }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>出面の見方ガイド（職長向け）</h1>
+<p>対象: 職長（大川愛志さん・白戸寛之さん・日比大介さん）<br>
+最終更新: 2026年5月2日<br>
+システムURL: <code>https://hibi-calendar.vercel.app/attendance</code></p>
+
+<div class="box">
+<strong>このページの目的</strong>：
+ベトナム人スタッフ（実習生・特定技能）が <strong>毎日スマホから入力した出勤データ</strong> を、
+PC画面でどう読み取るか、職長として確認するときのポイントを解説します。
+</div>
+
+<h2>1. セル内の表示（時間ベース入力）</h2>
+
+<p>2026年5月以降、ベトナム人スタッフは <strong>始業時刻・終業時刻・休憩</strong> を細かく入力します。
+PC画面の各日のマスは、次の4段で構成されています。</p>
+
+<div class="box">
+<div class="cell-mock">
+  <div class="status">出</div>
+  <div class="times">07:30　16:30</div>
+  <div class="breaks">☑ ☑ <span class="hours">8.0</span></div>
+</div>
+<p style="margin: 8px 0 0; font-size: 13px;">
+↑ こんな見た目のセルが、各日に並びます（76px幅）。
+</p>
+</div>
+
+<table>
+<tr><th>段</th><th>表示</th><th>意味</th></tr>
+<tr>
+  <td><strong>1段目</strong></td>
+  <td>「出」「有」「試」「休」「現」「-」</td>
+  <td>その日のステータス（出勤・有給・試験・休み・現場休み・未入力）</td>
+</tr>
+<tr>
+  <td><strong>2段目</strong></td>
+  <td>例: <code>07:30　16:30</code></td>
+  <td><strong>始業時刻 と 終業時刻</strong>（左が始業、右が終業）</td>
+</tr>
+<tr>
+  <td><strong>3段目</strong></td>
+  <td>☑ ☑ <code>8.0</code></td>
+  <td><strong>休憩のチェック</strong>（左から午前・午後）と<strong>実労働時間</strong></td>
+</tr>
+</table>
+
+<h2>2. 始業・終業時刻の読み方</h2>
+
+<div class="box">
+<strong>例：<code>07:30　16:30</code></strong><br>
+左の数字 = <strong>始業時刻（その日に仕事を始めた時間）</strong><br>
+右の数字 = <strong>終業時刻（その日に仕事を終えた時間）</strong>
+</div>
+
+<table>
+<tr><th>表示</th><th>始業</th><th>終業</th><th>備考</th></tr>
+<tr><td><code>08:00　17:00</code></td><td>8時</td><td>17時</td><td>標準的な日比建設の現場</td></tr>
+<tr><td><code>07:30　16:30</code></td><td>7時30分</td><td>16時30分</td><td>IHI現場（早朝開始）</td></tr>
+<tr><td><code>08:00　19:00</code></td><td>8時</td><td>19時</td><td>残業あり（実労働10時間）</td></tr>
+</table>
+
+<div class="box box-warn">
+<strong>⚠️ もし時刻がおかしい場合は</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>スタッフの入力ミスの可能性 → 本人に確認</li>
+  <li>明らかに違う時刻なら、職長が直接 PC で修正できる（プルダウンから選択）</li>
+</ul>
+</div>
+
+<h2>3. 休憩チェックボックスの見方</h2>
+
+<p>3段目の <code>☑ ☑</code> または <code>☐ ☐</code> の2つの四角は <strong>休憩を取ったかどうか</strong> を表します。</p>
+
+<table>
+<tr><th>左のチェック</th><th>右のチェック</th><th>意味</th></tr>
+<tr>
+  <td>☑（チェックあり）</td><td>☑（チェックあり）</td>
+  <td><strong>午前休憩・午後休憩 両方取得</strong>（標準）<br>会社共通: 午前30分（10:00-10:30）、午後30分（15:00-15:30）</td>
+</tr>
+<tr>
+  <td>☑（チェックあり）</td><td>☐（チェックなし）</td>
+  <td>午前休憩のみ取得、午後は取らずに継続作業</td>
+</tr>
+<tr>
+  <td>☐（チェックなし）</td><td>☑（チェックあり）</td>
+  <td>午前休憩は取らず、午後だけ取得</td>
+</tr>
+<tr>
+  <td>☐（チェックなし）</td><td>☐（チェックなし）</td>
+  <td>午前・午後とも取らずに作業（実労働時間が長くなる）</td>
+</tr>
+</table>
+
+<div class="box box-ok">
+<strong>💡 昼休憩（12:00-13:00、60分）</strong>は <strong>必ず取得</strong> の前提なので、画面には表示されません。
+休憩の入力欄は「午前」と「午後」の2つだけです。
+</div>
+
+<h2>4. 実労働時間（合計）の見方</h2>
+
+<p>3段目の右側に表示される <code>8.0</code> や <code>9.5</code> などの数字が <strong>実労働時間（時間単位）</strong> です。</p>
+
+<div class="box">
+<strong>計算式：</strong><br>
+実労働時間 ＝ <strong>終業 − 始業 − 取得した休憩の合計</strong>
+</div>
+
+<h3>計算例</h3>
+
+<table>
+<tr><th>始業</th><th>終業</th><th>午前☑</th><th>午後☑</th><th>計算</th><th>実労働</th></tr>
+<tr>
+  <td>08:00</td><td>17:00</td><td>☑(30分)</td><td>☑(30分)</td>
+  <td>9時間 − 60分（昼必須）− 30分 − 30分</td>
+  <td><strong>7.0</strong> 時間</td>
+</tr>
+<tr>
+  <td>07:30</td><td>16:30</td><td>☑</td><td>☑</td>
+  <td>9時間 − 60分 − 30分 − 30分</td>
+  <td><strong>7.0</strong> 時間</td>
+</tr>
+<tr>
+  <td>08:00</td><td>19:00</td><td>☑</td><td>☑</td>
+  <td>11時間 − 60分 − 30分 − 30分</td>
+  <td><strong>9.0</strong> 時間（残業 2.0h）</td>
+</tr>
+<tr>
+  <td>08:00</td><td>17:00</td><td>☐</td><td>☐</td>
+  <td>9時間 − 60分（昼のみ）</td>
+  <td><strong>8.0</strong> 時間（残業 1.0h）</td>
+</tr>
+</table>
+
+<div class="box box-warn">
+<strong>所定実労働時間は 7時間／日</strong> です。<br>
+実労働が <strong>7時間を超えた分が残業時間</strong> として給与計算に反映されます。
+セル右下に色付き数字（オレンジ系）で表示される場合は、その日が残業ありです。
+</div>
+
+<h2>5. 青いドット・オレンジドットの意味</h2>
+
+<p>セルの右上に小さなドットが表示されることがあります。これは <strong>誰がその出面データを入力したか</strong> を示しています。</p>
+
+<table>
+<tr><th>マーク</th><th>意味</th></tr>
+<tr>
+  <td><span class="blue-dot"></span><strong>青ドット</strong></td>
+  <td><strong>スタッフ本人がスマホから入力</strong>（自己申告）</td>
+</tr>
+<tr>
+  <td><span class="orange-dot"></span><strong>オレンジドット</strong></td>
+  <td><strong>職長がスマホから入力／代入力</strong></td>
+</tr>
+<tr>
+  <td>（ドットなし）</td>
+  <td>管理者が PC から入力、もしくは自動マーク（帰国期間中など）</td>
+</tr>
+</table>
+
+<div class="box box-ok">
+<strong>💡 職長がチェックすべきポイント</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>青ドット</strong>のセル → スタッフが自分でスマホ入力した。時刻や休憩の入力に誤りがないか確認</li>
+  <li><strong>オレンジドット</strong>のセル → 職長自身が入力した記録（自分の作業履歴の確認用）</li>
+  <li><strong>ドットなしのセル</strong> → 管理者（政仁さん・奥寺さん）が PC で直接入力したケース。通常は手を加えない</li>
+</ul>
+</div>
+
+<h2>6. 確認・承認の流れ</h2>
+
+<div class="box">
+<strong>3段階の承認フロー：</strong>
+<table>
+<tr><th>段階</th><th>誰が</th><th>やること</th></tr>
+<tr><td><strong>第1段階</strong></td><td>実習生・特定技能</td><td>スマホで毎日入力（→ <span class="blue-dot"></span>青ドット）</td></tr>
+<tr style="background: #e6f4ea;"><td><strong>第2段階</strong></td><td><strong>職長</strong></td><td>内容を確認 → 「✅ この日を確認する」</td></tr>
+<tr><td><strong>第3段階</strong></td><td>政仁さん</td><td>PC画面で最終承認</td></tr>
+</table>
+</div>
+
+<h3>職長が確認すべき項目</h3>
+<ol>
+  <li><strong>始業・終業時刻が現実と合っているか</strong>（朝7:30 開始の現場で 8:00 入力があれば修正）</li>
+  <li><strong>休憩のチェックが正しいか</strong>（普段取っているのに取っていない記録は要確認）</li>
+  <li><strong>残業時間が妥当か</strong>（実労働 7h 超は残業扱い）</li>
+  <li><strong>明らかな入力ミスがあれば職長が直接修正可能</strong>（プルダウンで時刻を選び直す）</li>
+</ol>
+
+<div class="box box-red">
+<strong>⚠️ 一度承認した日も、職長は修正できます。</strong><br>
+ただし政仁さんが最終承認した日は変更不可（必要なら政仁さんに依頼）。
+</div>
+
+<h2>7. 困ったときは</h2>
+
+<table>
+<tr><th>こんな時</th><th>対応</th></tr>
+<tr>
+  <td>スタッフが入力していない（セルが「-」のまま）</td>
+  <td>本人に入力を依頼。当日入力できなかった場合は職長が代入力可</td>
+</tr>
+<tr>
+  <td>時刻が明らかにおかしい</td>
+  <td>プルダウンで正しい時刻に修正</td>
+</tr>
+<tr>
+  <td>休憩のチェックが現実と違う</td>
+  <td>職長がチェックを入れ直す</td>
+</tr>
+<tr>
+  <td>セルの色が赤や黄色</td>
+  <td>休日に出勤しているなど特殊なケース。詳細は休日出勤マークなどを確認</td>
+</tr>
+</table>
+
+<hr>
+
+<div style="text-align: center; color: #888; font-size: 13px; margin-top: 40px;">
+  <p>関連資料：
+    <a href="/manual-foreman.html">職長向けマニュアル</a> ／
+    <a href="/manual-checklist.html">ロール別チェックリスト</a> ／
+    <a href="/docs">資料一覧に戻る</a>
+  </p>
+</div>
+
+</body>
+</html>
