@@ -1467,7 +1467,7 @@ export default function AttendanceGridPage() {
                                       data-att-day={d.day}
                                       data-att-row={wId}
                                       disabled={isLocked}
-                                      className={`w-full text-center text-[10px] font-bold py-0.5 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
+                                      className={`w-full text-center text-xs font-bold py-0.5 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
                                         ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
                                         ${statusVal === 'W' ? 'text-green-700' : ''}
                                         ${statusVal === 'P' ? 'text-purple-600' : ''}
@@ -1487,42 +1487,42 @@ export default function AttendanceGridPage() {
 
                                     {isWorking ? (
                                       <>
-                                        {/* 始業・終業 */}
+                                        {/* 始業・終業（時刻フル表示） */}
                                         <div className="flex items-center gap-0 w-full">
                                           <select
                                             value={st}
                                             onChange={e => handleStartTimeChange(wId, d.day, e.target.value)}
                                             onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)}
                                             disabled={isLocked}
-                                            className="w-1/2 text-center text-[8px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
+                                            className="w-1/2 text-center text-[11px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700 tabular-nums"
                                           >
-                                            {startTimeOptions.map(t => <option key={t} value={t}>{t.replace(':00', '').replace(':30', ':3')}</option>)}
+                                            {startTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                                           </select>
                                           <select
                                             value={et}
                                             onChange={e => handleEndTimeChange(wId, d.day, e.target.value)}
                                             onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)}
                                             disabled={isLocked}
-                                            className="w-1/2 text-center text-[8px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700"
+                                            className="w-1/2 text-center text-[11px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700 tabular-nums"
                                           >
-                                            {endTimeOptions.map(t => <option key={t} value={t}>{t.replace(':00', '').replace(':30', ':3')}</option>)}
+                                            {endTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                                           </select>
                                         </div>
                                         {/* 休憩チェック + 実時間 */}
-                                        <div className="flex items-center justify-center gap-0.5 w-full px-0.5">
+                                        <div className="flex items-center justify-center gap-1 w-full px-0.5">
                                           <label className="flex items-center cursor-pointer" title="午前(10:00-10:30)">
-                                            <input type="checkbox" checked={b1 === 1} onChange={e => handleBreakChange(wId, d.day, 'b1', e.target.checked)} onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
+                                            <input type="checkbox" checked={b1 === 1} onChange={e => handleBreakChange(wId, d.day, 'b1', e.target.checked)} onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)} disabled={isLocked} className="w-3 h-3 rounded" />
                                           </label>
                                           <label className="flex items-center cursor-pointer" title="午後(15:00-15:30)">
-                                            <input type="checkbox" checked={b3 === 1} onChange={e => handleBreakChange(wId, d.day, 'b3', e.target.checked)} onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)} disabled={isLocked} className="w-2.5 h-2.5 rounded" />
+                                            <input type="checkbox" checked={b3 === 1} onChange={e => handleBreakChange(wId, d.day, 'b3', e.target.checked)} onKeyDown={e => handleAttCellKeyDown(e, d.day, wId)} disabled={isLocked} className="w-3 h-3 rounded" />
                                           </label>
-                                          <span className={`text-[8px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
+                                          <span className={`text-[10px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
                                             {actualH.toFixed(1)}
                                           </span>
                                         </div>
                                       </>
                                     ) : statusVal !== '' ? (
-                                      <div className="text-[9px] text-center py-0.5 font-medium text-gray-400">
+                                      <div className="text-[11px] text-center py-0.5 font-medium text-gray-400">
                                         {statusVal === 'P' ? '有給' : statusVal === 'E' ? '試験' : statusVal === 'R' ? '休' : '現休'}
                                       </div>
                                     ) : null}
