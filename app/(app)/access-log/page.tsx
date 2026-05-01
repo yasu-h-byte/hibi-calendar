@@ -7,26 +7,32 @@ interface AccessRow {
   workerName: string
   role: 'admin' | 'approver' | 'foreman' | 'jimu' | 'staff'
   currentRole: 'admin' | 'approver' | 'foreman' | 'jimu' | 'staff'
+  jobType: string
+  visa: string
   org: string
   lastAccessDate: string | null
   lastAccessAt: string | null
   accessCountLast7Days: number
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: '管理者',
-  approver: '役員',
-  foreman: '職長',
-  jimu: '事務',
-  staff: 'スタッフ',
-}
-
-const ROLE_COLORS: Record<string, string> = {
-  admin: 'bg-red-100 text-red-700',
-  approver: 'bg-blue-100 text-blue-700',
-  foreman: 'bg-yellow-100 text-yellow-700',
-  jimu: 'bg-purple-100 text-purple-700',
-  staff: 'bg-orange-100 text-orange-700',
+/**
+ * 人員マスタの jobType をそのまま表示するためのラベル・色定義
+ * （人員マスタのバッジ表示と一致）
+ */
+function jobTypeBadge(row: AccessRow): { label: string; cls: string } {
+  // workerId=0 の社長は「管理者」（人員マスタに無いケース）
+  if (row.workerId === 0) return { label: '管理者', cls: 'bg-red-100 text-red-700' }
+  switch (row.jobType) {
+    case 'yakuin':   return { label: '役員', cls: 'bg-red-100 text-red-700' }
+    case 'shokucho': return { label: '職長', cls: 'bg-blue-100 text-blue-700' }
+    case 'tobi':     return { label: 'とび', cls: 'bg-green-100 text-green-700' }
+    case 'doko':     return { label: '土工', cls: 'bg-gray-200 text-gray-600' }
+    case 'jimu':     return { label: '事務', cls: 'bg-purple-100 text-purple-700' }
+    default:
+      // 在留資格ありなら外国人スタッフ
+      if (row.visa && row.visa !== 'none') return { label: 'スタッフ', cls: 'bg-orange-100 text-orange-700' }
+      return { label: '—', cls: 'bg-gray-100 text-gray-500' }
+  }
 }
 
 function formatDateTime(iso: string | null): string {
@@ -64,7 +70,7 @@ export default function AccessLogPage() {
   const [rows, setRows] = useState<AccessRow[]>([])
   const [loading, setLoading] = useState(false)
   const [days, setDays] = useState(30)
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'approver' | 'foreman' | 'jimu' | 'staff'>('all')
+  const [jobFilter, setJobFilter] = useState<'all' | 'yakuin' | 'shokucho' | 'tobi' | 'doko' | 'jimu' | 'staff' | 'admin'>('all')
 
   useEffect(() => {
     try {
@@ -93,7 +99,12 @@ export default function AccessLogPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const filtered = rows.filter(r => roleFilter === 'all' || r.currentRole === roleFilter)
+  const filtered = rows.filter(r => {
+    if (jobFilter === 'all') return true
+    if (jobFilter === 'admin') return r.workerId === 0
+    if (jobFilter === 'staff') return r.jobType !== 'yakuin' && r.jobType !== 'shokucho' && r.jobType !== 'tobi' && r.jobType !== 'doko' && r.jobType !== 'jimu' && r.workerId !== 0 && r.visa && r.visa !== 'none'
+    return r.jobType === jobFilter
+  })
 
   // ソート: アクセスが新しい順（時刻まで含む）、未アクセスは最後
   filtered.sort((a, b) => {
@@ -127,16 +138,18 @@ export default function AccessLogPage() {
           <option value={90}>直近90日</option>
         </select>
         <select
-          value={roleFilter}
-          onChange={e => setRoleFilter(e.target.value as typeof roleFilter)}
+          value={jobFilter}
+          onChange={e => setJobFilter(e.target.value as typeof jobFilter)}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
         >
-          <option value="all">全ロール</option>
-          <option value="staff">スタッフ</option>
-          <option value="foreman">職長</option>
-          <option value="approver">役員</option>
-          <option value="jimu">事務</option>
+          <option value="all">全職種</option>
           <option value="admin">管理者</option>
+          <option value="yakuin">役員</option>
+          <option value="shokucho">職長</option>
+          <option value="tobi">とび</option>
+          <option value="doko">土工</option>
+          <option value="jimu">事務</option>
+          <option value="staff">スタッフ（外国人）</option>
         </select>
       </div>
 
@@ -172,7 +185,7 @@ export default function AccessLogPage() {
             <thead>
               <tr className="bg-hibi-navy text-white">
                 <th className="text-left px-4 py-2">スタッフ</th>
-                <th className="text-center px-2 py-2 w-24">ロール</th>
+                <th className="text-center px-2 py-2 w-24">職種</th>
                 <th className="text-center px-2 py-2 w-20">会社</th>
                 <th className="text-center px-2 py-2 w-32">最終アクセス</th>
                 <th className="text-center px-2 py-2 w-28">状態</th>
@@ -182,12 +195,13 @@ export default function AccessLogPage() {
             <tbody>
               {filtered.map(r => {
                 const badge = statusBadge(r.lastAccessDate)
+                const jobBadgeData = jobTypeBadge(r)
                 return (
                   <tr key={r.workerId} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium">{r.workerName}</td>
                     <td className="text-center px-2">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${ROLE_COLORS[r.currentRole] || 'bg-gray-100'}`}>
-                        {ROLE_LABELS[r.currentRole] || r.currentRole}
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${jobBadgeData.cls}`}>
+                        {jobBadgeData.label}
                       </span>
                     </td>
                     <td className="text-center px-2 text-xs text-gray-500">

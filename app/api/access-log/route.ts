@@ -14,13 +14,12 @@ interface WorkerEntry {
 }
 
 function determineRoleFromJob(w: WorkerEntry): AccessRole {
-  // workerId=0: 社長（スーパー管理者）/ workerId=1: 政仁さん（事業責任者）
+  // 認証ロール用（accessLog の role フィールドに保存される値）
   if (w.id === 0) return 'admin'
   if (w.id === 1) return 'approver'
   if (w.jobType === 'shokucho') return 'foreman'
   if (w.jobType === 'yakuin') return 'approver'
   if (w.jobType === 'jimu') return 'jimu'
-  // 在留資格があるならスタッフ。それ以外は管理者扱い（鳶・土工等で在留資格なし=日本人）
   if (w.visa && w.visa !== 'none') return 'staff'
   return 'staff'
 }
@@ -54,7 +53,8 @@ export async function GET(request: NextRequest) {
     }
 
     // summary モード（デフォルト）: 各スタッフ1行、最終アクセス情報
-    const rows: (WorkerLastAccess & { currentRole: AccessRole })[] = activeWorkers.map(w => {
+    type Row = WorkerLastAccess & { currentRole: AccessRole; jobType: string; visa: string }
+    const rows: Row[] = activeWorkers.map(w => {
       const access = accessMap.get(w.id)
       const role = determineRoleFromJob(w)
       return {
@@ -62,6 +62,8 @@ export async function GET(request: NextRequest) {
         workerName: w.name,
         role: access?.role ?? role,
         currentRole: role,
+        jobType: w.jobType || '',
+        visa: w.visa || 'none',
         org: w.org || 'hibi',
         lastAccessDate: access?.lastAccessDate ?? null,
         lastAccessAt: access?.lastAccessAt ?? null,
@@ -79,6 +81,8 @@ export async function GET(request: NextRequest) {
           workerName: access.workerName,
           role: access.role,
           currentRole: access.role,
+          jobType: '',
+          visa: 'none',
           org: access.org,
           lastAccessDate: access.lastAccessDate,
           lastAccessAt: access.lastAccessAt,
