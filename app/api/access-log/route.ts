@@ -14,9 +14,13 @@ interface WorkerEntry {
 }
 
 function determineRoleFromJob(w: WorkerEntry): AccessRole {
+  // workerId=0: 社長（スーパー管理者）/ workerId=1: 政仁さん（事業責任者）
+  if (w.id === 0) return 'admin'
+  if (w.id === 1) return 'approver'
   if (w.jobType === 'shokucho') return 'foreman'
   if (w.jobType === 'yakuin') return 'approver'
   if (w.jobType === 'jimu') return 'jimu'
+  // 在留資格があるならスタッフ。それ以外は管理者扱い（鳶・土工等で在留資格なし=日本人）
   if (w.visa && w.visa !== 'none') return 'staff'
   return 'staff'
 }
@@ -62,6 +66,24 @@ export async function GET(request: NextRequest) {
         lastAccessDate: access?.lastAccessDate ?? null,
         lastAccessAt: access?.lastAccessAt ?? null,
         accessCountLast7Days: access?.accessCountLast7Days ?? 0,
+      }
+    })
+
+    // 人員マスタに存在しない workerId（例: workerId=0 のスーパー管理者「日比靖仁」）も
+    // accessMap にあれば追加で行として表示する
+    const seenIds = new Set(activeWorkers.map(w => w.id))
+    accessMap.forEach((access, wid) => {
+      if (!seenIds.has(wid)) {
+        rows.push({
+          workerId: wid,
+          workerName: access.workerName,
+          role: access.role,
+          currentRole: access.role,
+          org: access.org,
+          lastAccessDate: access.lastAccessDate,
+          lastAccessAt: access.lastAccessAt,
+          accessCountLast7Days: access.accessCountLast7Days,
+        })
       }
     })
 

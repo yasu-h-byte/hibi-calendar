@@ -95,12 +95,12 @@ export default function AccessLogPage() {
 
   const filtered = rows.filter(r => roleFilter === 'all' || r.currentRole === roleFilter)
 
-  // ソート: アクセスが新しい順、未アクセスは最後
+  // ソート: アクセスが新しい順（時刻まで含む）、未アクセスは最後
   filtered.sort((a, b) => {
-    if (!a.lastAccessDate && !b.lastAccessDate) return a.workerName.localeCompare(b.workerName)
-    if (!a.lastAccessDate) return 1
-    if (!b.lastAccessDate) return -1
-    return b.lastAccessDate.localeCompare(a.lastAccessDate)
+    if (!a.lastAccessAt && !b.lastAccessAt) return a.workerName.localeCompare(b.workerName)
+    if (!a.lastAccessAt) return 1
+    if (!b.lastAccessAt) return -1
+    return b.lastAccessAt.localeCompare(a.lastAccessAt)
   })
 
   // 統計
