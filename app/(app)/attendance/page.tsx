@@ -232,6 +232,10 @@ export default function AttendanceGridPage() {
   // 時間ベース入力モード（202605〜）
   const useTimeBased = isTimeBasedMonth(ym)
 
+  // 1日あたりのセル幅（px）
+  // 時間ベース入力月は始業・終業・休憩など情報が多いため広めに
+  const cellWidth = useTimeBased ? 76 : 56
+
   // 時間選択肢を生成
   const startTimeOptions = useMemo(() => {
     const opts: string[] = []
@@ -1210,7 +1214,7 @@ export default function AttendanceGridPage() {
                   </th>
                   <th
                     className="sticky left-[150px] z-40 bg-[#1B2A4A] text-white px-1 py-1.5 text-center font-medium"
-                    style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                    style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                   >
                     所属
                   </th>
@@ -1226,7 +1230,7 @@ export default function AttendanceGridPage() {
                     <th
                       key={d.day}
                       className={`px-0 py-1 text-center font-bold ${dayHeaderBg(data.year, data.month, d.day, calDayType)} ${isWeekdayOff ? 'text-gray-400' : dayTextColor(d.dow)} border-l border-gray-200`}
-                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                      style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                       title={isCalOff ? 'カレンダー休日' : data.calendarDays ? 'カレンダー出勤日' : ''}
                     >
                       <div className="leading-tight">
@@ -1239,7 +1243,7 @@ export default function AttendanceGridPage() {
                   <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l-2 border-gray-400" style={{ width: 64, minWidth: 64 }}>
                     人工計
                   </th>
-                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l border-gray-600" style={{ width: 56, minWidth: 56 }}>
+                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l border-gray-600" style={{ width: cellWidth, minWidth: cellWidth }}>
                     残業h
                   </th>
                 </tr>
@@ -1255,11 +1259,11 @@ export default function AttendanceGridPage() {
                     >
                       職長: {data.site.foremanName}{data.site.foremanNote ? <span className="text-[9px] text-gray-500 ml-1">({data.site.foremanNote})</span> : ''}
                     </td>
-                    <td className="sticky left-[150px] z-20 bg-yellow-50 px-1 py-1 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}>
+                    <td className="sticky left-[150px] z-20 bg-yellow-50 px-1 py-1 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-200 text-yellow-800">職長</span>
                     </td>
                     {days.map(d => (
-                      <td key={d.day} className={`px-0 py-1 border-l border-yellow-100 bg-yellow-50 text-center text-[10px] text-yellow-600`} style={{ width: 56, minWidth: 56, maxWidth: 56 }}>
+                      <td key={d.day} className={`px-0 py-1 border-l border-yellow-100 bg-yellow-50 text-center text-[10px] text-yellow-600`} style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}>
                         {/* placeholder: foreman presence can be derived from worker entries */}
                       </td>
                     ))}
@@ -1301,7 +1305,7 @@ export default function AttendanceGridPage() {
                       )
                     })()}
                   </td>
-                  <td className="sticky left-[150px] z-20 bg-orange-50 px-1 py-1 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
+                  <td className="sticky left-[150px] z-20 bg-orange-50 px-1 py-1 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
                   {days.map(d => {
                     const approved = localApprovals[d.day]
                     const canApprove = userRole === 'admin' || userRole === 'approver'
@@ -1309,7 +1313,7 @@ export default function AttendanceGridPage() {
                       <td
                         key={d.day}
                         className={`px-0 py-1 border-l border-orange-100 bg-orange-50 text-center ${canApprove ? 'cursor-pointer hover:bg-orange-100' : ''}`}
-                        style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                        style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                         onClick={canApprove ? () => {
                           // 楽観的UI: 即座にトグル
                           setLocalApprovals(prev => ({ ...prev, [d.day]: !prev[d.day] }))
@@ -1347,7 +1351,7 @@ export default function AttendanceGridPage() {
                       >
                         {group.label} ({group.workers.length}名)
                       </td>
-                      <td className="sticky left-[150px] z-20 bg-gray-50 border-t-2 border-hibi-navy" style={{ width: 56, minWidth: 56, maxWidth: 56 }} />
+                      <td className="sticky left-[150px] z-20 bg-gray-50 border-t-2 border-hibi-navy" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }} />
                       {days.map(d => <td key={d.day} className="border-t-2 border-hibi-navy bg-gray-50" />)}
                       <td className="border-t-2 border-hibi-navy bg-gray-50" />
                       <td className="border-t-2 border-hibi-navy bg-gray-50" />
@@ -1372,7 +1376,7 @@ export default function AttendanceGridPage() {
                           {/* Org badge - sticky (colored by visa) */}
                           <td
                             className="sticky left-[150px] z-20 bg-white group-hover:bg-gray-50 px-1 py-0.5 text-center"
-                            style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                            style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                           >
                             <span className={`text-[10px] px-1 py-0.5 rounded-full font-medium whitespace-nowrap ${orgBadgeCls(worker.org, worker.visa)}`}>
                               {orgBadgeLabel(worker.org, worker.visa)}
@@ -1418,7 +1422,7 @@ export default function AttendanceGridPage() {
                                 return (
                                   <td key={d.day}
                                     className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
-                                    style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                                    style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                                   >
                                     <div className="flex items-center justify-center h-full py-2">
                                       <span className="text-[10px] font-bold text-cyan-600 bg-cyan-50 px-1.5 py-0.5 rounded">✈帰国</span>
@@ -1442,7 +1446,7 @@ export default function AttendanceGridPage() {
                                 <td
                                   key={d.day}
                                   className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
-                                  style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                                  style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                                 >
                                   {isHolidayWork && (
                                     <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
@@ -1535,7 +1539,7 @@ export default function AttendanceGridPage() {
                               return (
                                 <td key={d.day}
                                   className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
-                                  style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                                  style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                                 >
                                   <div className="flex items-center justify-center h-full py-2">
                                     <span className="text-[10px] font-bold text-cyan-600 bg-cyan-50 px-1.5 py-0.5 rounded">✈帰国</span>
@@ -1551,7 +1555,7 @@ export default function AttendanceGridPage() {
                               <td
                                 key={d.day}
                                 className={`px-0 py-0 border-l border-gray-100 relative ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
-                                style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                                style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                               >
                                 {isHolidayWork && (
                                   <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
@@ -1623,7 +1627,7 @@ export default function AttendanceGridPage() {
                             )}
                           </td>
                           {/* Totals - 残業計 */}
-                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: 56, minWidth: 56 }}>
+                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: cellWidth, minWidth: cellWidth }}>
                             <div className="text-sm">{totals.oSum > 0 ? totals.oSum : '-'}</div>
                           </td>
                         </tr>
@@ -1642,7 +1646,7 @@ export default function AttendanceGridPage() {
                       >
                         外注 ({data.subcons.length}社)
                       </td>
-                      <td className="sticky left-[150px] z-20 bg-amber-50 border-t-2 border-amber-400" style={{ width: 56, minWidth: 56, maxWidth: 56 }} />
+                      <td className="sticky left-[150px] z-20 bg-amber-50 border-t-2 border-amber-400" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }} />
                       {days.map(d => <td key={d.day} className="border-t-2 border-amber-400 bg-amber-50" />)}
                       <td className="border-t-2 border-amber-400 bg-amber-50" />
                       <td className="border-t-2 border-amber-400 bg-amber-50" />
@@ -1666,7 +1670,7 @@ export default function AttendanceGridPage() {
                           {/* Type badge - sticky */}
                           <td
                             className="sticky left-[150px] z-20 bg-white group-hover:bg-gray-50 px-1 py-0.5 text-center"
-                            style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                            style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                           >
                             <span className="text-[10px] px-1 py-0.5 rounded-full font-medium whitespace-nowrap bg-amber-100 text-amber-700">
                               {sc.type === 'tobi' || sc.type === '鳶業者' ? '鳶' : sc.type === 'doko' || sc.type === '土工業者' ? '土工' : sc.type}
@@ -1683,7 +1687,7 @@ export default function AttendanceGridPage() {
                               <td
                                 key={d.day}
                                 className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
-                                style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                                style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                               >
                                 <div className="flex flex-col">
                                   {/* People count - 大きめ */}
@@ -1725,7 +1729,7 @@ export default function AttendanceGridPage() {
                             <div className="text-sm">{totals.nSum > 0 ? totals.nSum : '-'}</div>
                           </td>
                           {/* Totals - 残業計 */}
-                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: 56, minWidth: 56 }}>
+                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: cellWidth, minWidth: cellWidth }}>
                             <div className="text-sm">{totals.onSum > 0 ? totals.onSum : '-'}</div>
                           </td>
                         </tr>
@@ -1743,12 +1747,12 @@ export default function AttendanceGridPage() {
                   >
                     鳶 合計
                   </td>
-                  <td className="sticky left-[150px] z-20 bg-[#1B2A4A] text-white px-1 py-1.5 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
+                  <td className="sticky left-[150px] z-20 bg-[#1B2A4A] text-white px-1 py-1.5 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
                   {days.map(d => (
                     <td
                       key={d.day}
                       className="bg-[#1B2A4A] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
-                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                      style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                     >
                       {footerSums.tobi[d.day] > 0 ? Math.round(footerSums.tobi[d.day] * 10) / 10 : '-'}
                     </td>
@@ -1756,7 +1760,7 @@ export default function AttendanceGridPage() {
                   <td className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
                     {footerSums.tobiTotal > 0 ? footerSums.tobiTotal : '-'}
                   </td>
-                  <td className="bg-[#1B2A4A] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: 56, minWidth: 56 }}>
+                  <td className="bg-[#1B2A4A] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: cellWidth, minWidth: cellWidth }}>
                     {footerSums.tobiOtTotal > 0 ? footerSums.tobiOtTotal : '-'}
                   </td>
                 </tr>
@@ -1769,12 +1773,12 @@ export default function AttendanceGridPage() {
                   >
                     土工 合計
                   </td>
-                  <td className="sticky left-[150px] z-20 bg-[#243656] text-white px-1 py-1.5 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
+                  <td className="sticky left-[150px] z-20 bg-[#243656] text-white px-1 py-1.5 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
                   {days.map(d => (
                     <td
                       key={d.day}
                       className="bg-[#243656] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
-                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                      style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                     >
                       {footerSums.doko[d.day] > 0 ? Math.round(footerSums.doko[d.day] * 10) / 10 : '-'}
                     </td>
@@ -1782,7 +1786,7 @@ export default function AttendanceGridPage() {
                   <td className="bg-[#243656] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
                     {footerSums.dokoTotal > 0 ? footerSums.dokoTotal : '-'}
                   </td>
-                  <td className="bg-[#243656] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: 56, minWidth: 56 }}>
+                  <td className="bg-[#243656] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: cellWidth, minWidth: cellWidth }}>
                     {footerSums.dokoOtTotal > 0 ? footerSums.dokoOtTotal : '-'}
                   </td>
                 </tr>
@@ -1795,12 +1799,12 @@ export default function AttendanceGridPage() {
                   >
                     総合計
                   </td>
-                  <td className="sticky left-[150px] z-20 bg-[#0F1D36] text-white px-1 py-1.5 text-center" style={{ width: 56, minWidth: 56, maxWidth: 56 }}></td>
+                  <td className="sticky left-[150px] z-20 bg-[#0F1D36] text-white px-1 py-1.5 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
                   {days.map(d => (
                     <td
                       key={d.day}
                       className="bg-[#0F1D36] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
-                      style={{ width: 56, minWidth: 56, maxWidth: 56 }}
+                      style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                     >
                       {footerSums.grand[d.day] > 0 ? Math.round(footerSums.grand[d.day] * 10) / 10 : '-'}
                     </td>
@@ -1808,7 +1812,7 @@ export default function AttendanceGridPage() {
                   <td className="bg-[#0F1D36] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
                     {footerSums.grandTotal > 0 ? footerSums.grandTotal : '-'}
                   </td>
-                  <td className="bg-[#0F1D36] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: 56, minWidth: 56 }}>
+                  <td className="bg-[#0F1D36] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: cellWidth, minWidth: cellWidth }}>
                     {footerSums.grandOtTotal > 0 ? footerSums.grandOtTotal : '-'}
                   </td>
                 </tr>
