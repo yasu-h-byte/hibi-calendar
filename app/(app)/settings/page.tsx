@@ -246,7 +246,10 @@ export default function SettingsPage() {
         const data = await wRes.json()
         setPwWorkers(
           (data.workers || [])
-            .filter((w: { retired?: string; jobType?: string }) => !w.retired && (w.jobType === 'yakuin' || w.jobType === 'jimu'))
+            // 個人パスワードでログインする対象: 役員(yakuin) / 事務(jimu) / 事業責任者=approver(workerId=1, 政仁さん)
+            .filter((w: { id?: number; retired?: string; jobType?: string }) =>
+              !w.retired && (w.jobType === 'yakuin' || w.jobType === 'jimu' || w.id === 1)
+            )
             .map((w: { id: number; name: string; jobType: string }) => ({ id: w.id, name: w.name, jobType: w.jobType }))
         )
       }
@@ -739,11 +742,20 @@ export default function SettingsPage() {
               役員・事務スタッフの個人ログインパスワード。設定すると名前選択なしで直接ログインできます。
             </p>
             <div className="space-y-3">
-              {pwWorkers.map(w => (
+              {pwWorkers.map(w => {
+                // 政仁さん（workerId=1）は事業責任者ロール
+                const isApprover = w.id === 1
+                const badgeClass = isApprover
+                  ? 'bg-orange-100 text-orange-700'
+                  : w.jobType === 'yakuin'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-purple-100 text-purple-700'
+                const badgeLabel = isApprover ? '事業責任者' : w.jobType === 'yakuin' ? '役員' : '事務'
+                return (
                 <div key={w.id} className="flex items-center gap-3">
                   <span className="text-sm font-medium w-28">{w.name}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${w.jobType === 'yakuin' ? 'bg-red-100 text-red-700' : 'bg-purple-100 text-purple-700'}`}>
-                    {w.jobType === 'yakuin' ? '役員' : '事務'}
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${badgeClass}`}>
+                    {badgeLabel}
                   </span>
                   <input
                     type="text"
@@ -753,7 +765,8 @@ export default function SettingsPage() {
                     className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                   />
                 </div>
-              ))}
+                )
+              })}
             </div>
             {pwWorkers.length > 0 && (
               <button
