@@ -23,8 +23,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       return
     }
     try {
-      const { user } = JSON.parse(stored)
-      setUser(user)
+      const parsed = JSON.parse(stored)
+      setUser(parsed.user)
+
+      // ハートビート: 管理画面マウント時にアクセス記録を更新
+      // 既存の同日レコードがあれば accessCount を増やすだけ（負荷小）
+      const password = parsed.password
+      if (password && parsed.user) {
+        fetch('/api/heartbeat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-password': password,
+          },
+          body: JSON.stringify({
+            workerId: parsed.user.workerId,
+            workerName: parsed.user.name,
+            role: parsed.user.role,
+          }),
+        }).catch(() => { /* ignore */ })
+      }
     } catch {
       router.push('/')
     }
