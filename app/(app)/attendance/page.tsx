@@ -191,6 +191,7 @@ export default function AttendanceGridPage() {
   const [password, setPassword] = useState('')
   const [userRole, setUserRole] = useState('')
   const [userId, setUserId] = useState(0)
+  const [userForemanSites, setUserForemanSites] = useState<string[]>([])
   const [ym, setYm] = useState(currentYm)
   const [siteId, _setSiteId] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -265,6 +266,7 @@ export default function AttendanceGridPage() {
         if (user) {
           setUserRole(user.role || '')
           setUserId(user.workerId || 0)
+          setUserForemanSites(user.foremanSites || [])
         }
       } catch { /* ignore */ }
     }
@@ -1278,7 +1280,7 @@ export default function AttendanceGridPage() {
                     style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                   >
                     承認
-                    {(userRole === 'admin' || userRole === 'approver') && (() => {
+                    {(userRole === 'admin' || userRole === 'approver' || (userRole === 'foreman' && userForemanSites.includes(siteId))) && (() => {
                       const unapprovedDays = days.filter(d => !localApprovals[d.day])
                       return unapprovedDays.length > 0 ? (
                         <button
@@ -1309,6 +1311,7 @@ export default function AttendanceGridPage() {
                   {days.map(d => {
                     const approved = localApprovals[d.day]
                     const canApprove = userRole === 'admin' || userRole === 'approver'
+                      || (userRole === 'foreman' && userForemanSites.includes(siteId))
                     return (
                       <td
                         key={d.day}
