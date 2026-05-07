@@ -3,6 +3,10 @@
     {
       "path": "/api/leave/cron-expiry",
       "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/backup/snapshot",
+      "schedule": "0 17 * * *"
     }
   ]
 }

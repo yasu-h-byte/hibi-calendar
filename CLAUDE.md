@@ -48,3 +48,50 @@
 - 一時的な回避策（ワークアラウンド）ではなく、構造的な解決を優先する
 - データ構造やロジックの設計に問題がある場合は、パッチではなく設計を見直す
 - 修正後は「この修正で同種の問題が二度と起きないか」を検証する
+
+### Firestore 書き込みの安全ルール（必読）
+
+**2026-05-07 に att_202605 の出面データが全消失する事故が発生した。** 同種の事故を絶対に二度と起こさないため、以下のルールを厳守すること。
+
+#### 禁止パターン
+
+```ts
+// ❌ 絶対禁止 — 既存の d フィールド全体が空マップに置換される
+await setDoc(ref, { d: {} }, { merge: true })
+
+// ❌ 同上 — 子値に空マップ {} を渡す書き込みは全て危険
+await setDoc(ref, { d: {}, sd: existing }, { merge: true })
+```
+
+`setDoc(ref, data, { merge: true })` の `merge:true` は **「言及されていない他の top-level field」だけ** を保護する。`data` 内で明示された field の VALUE は **置換** される。子値に `{}` を渡すと、その field の中身が空になる。
+
+#### 推奨パターン
+
+```ts
+// ✅ ドキュメント存在保証だけ
+import { ensureDocExists } from '@/lib/firestore-safe'
+await ensureDocExists(ref)
+
+// ✅ 単一エントリの追加・更新（既存キーは保持）
+await setDoc(ref, { d: { [key]: entry } }, { merge: true })  // 子値が非空なら安全
+
+// ✅ 特定フィールドの削除
+await updateDoc(ref, { [`d.${key}.${field}`]: deleteField() })
+
+// ✅ 特定 worker の plData だけ更新
+await updateDoc(ref, { [`plData.${workerId}`]: records })
+```
+
+#### 検証
+
+- コミット前に `npm run lint:firestore` を実行（危険パターンを検出）
+- 実機検証は `npm run diagnose:firestore` で `demmen/att_900001` テスト doc を使った挙動確認
+
+#### 多層防御
+
+1. **コードレベル**: `lib/firestore-safe.ts` の helper 経由で書き込む
+2. **lint レベル**: `scripts/lint-firestore-safety.mjs` が危険パターンを検出
+3. **サーバレベル**: `firestore.rules` の `notWipingMap()` が「非空マップ→空マップ」書き込みを拒否
+4. **バックアップ**: `app/api/backup/snapshot` が日次で `backups` コレクションへスナップショット保存（PITR 代替）
+
+復元: `/api/backup/restore` (admin only)。

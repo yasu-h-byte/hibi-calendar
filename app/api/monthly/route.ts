@@ -101,7 +101,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '前月のデータが見つかりません' }, { status: 404 })
       }
       const prevData = prevDocSnap.data()
-      const prevD = prevData.d || {}
+      const prevD = (prevData.d || {}) as Record<string, unknown>
+
+      // Safety: 前月データが空なら何もしない（誤操作で当月を消すのを防ぐ）
+      if (Object.keys(prevD).length === 0) {
+        return NextResponse.json({ error: '前月のデータが空のためコピーをスキップしました' }, { status: 400 })
+      }
 
       // Rewrite keys: replace prevYm with ym in attendance keys
       const newD: Record<string, unknown> = {}
@@ -111,16 +116,32 @@ export async function POST(request: NextRequest) {
         newD[newKey] = value
       }
 
-      // Write to current month doc (merge with existing sd)
+      // ⚠️ 安全対策（2026-05-07 事故を受けて改修）:
+      //   旧コードは setDoc(curDocRef, { d: newD, sd: {} }) または
+      //   updateDoc(curDocRef, { d: newD }) で d 全体を一気に置換していた。
+      //   既存データを残しつつ前月データを「重ね書き」する方式に変更。
+      //   (1) 当月docの存在を保証 (sd は触らない)
+      //   (2) dot-notation で newD の各キーを 1 件ずつ書き込み
+      //   これにより当月に既に手入力された (newDにないキーの) データは保持される。
+      //   かつ Firestore の罠 ({field: {}} で field 全消失) を完全に回避できる。
+      const { ensureDocExists } = await import('@/lib/firestore-safe')
       const curDocRef = doc(db, 'demmen', `att_${ym}`)
-      const curDocSnap = await getDoc(curDocRef)
-      if (curDocSnap.exists()) {
-        await updateDoc(curDocRef, { d: newD })
-      } else {
-        await setDoc(curDocRef, { d: newD, sd: {} })
+      await ensureDocExists(curDocRef)
+
+      // 大量キーの書き込みは Firestore の updateDoc 上限 (約500フィールド/呼出) に
+      // 引っかかる可能性があるため、500件ごとに分割して書き込む
+      const newKeys = Object.keys(newD)
+      const CHUNK = 400
+      for (let i = 0; i < newKeys.length; i += CHUNK) {
+        const chunk = newKeys.slice(i, i + CHUNK)
+        const updates: Record<string, unknown> = {}
+        for (const k of chunk) {
+          updates[`d.${k}`] = newD[k]
+        }
+        await updateDoc(curDocRef, updates)
       }
 
-      return NextResponse.json({ success: true, copiedEntries: Object.keys(newD).length })
+      return NextResponse.json({ success: true, copiedEntries: newKeys.length })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })

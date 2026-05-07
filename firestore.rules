@@ -32,10 +32,29 @@ service cloud.firestore {
     // ────────────────────────────────────────
     //  出面データ
     // ────────────────────────────────────────
+
+    // ヘルパー: 既存マップフィールドが「非空 → 空」に書き換えられていないか
+    // (2026-05-07 事故対策。setDoc({field:{}}, {merge:true}) のような罠を server 側で拒否する)
+    function notWipingMap(fieldName) {
+      return !(fieldName in resource.data)
+          || resource.data[fieldName].size() == 0
+          || !(fieldName in request.resource.data)
+          || request.resource.data[fieldName].size() > 0;
+    }
+
     // マスターデータ（main）：新アプリ（パスワード認証）からも読み書き可能
+    // 重要マップ (workers, sites, plData, homeLeaves, subcons) を空に置換する書き込みは拒否。
     match /demmen/main {
       allow read: if true;
-      allow write: if true;
+      allow create: if true;
+      allow delete: if false;  // main ドキュメント自体の削除を禁止
+      allow update: if notWipingMap('workers')
+                 && notWipingMap('sites')
+                 && notWipingMap('plData')
+                 && notWipingMap('homeLeaves')
+                 && notWipingMap('subcons')
+                 && notWipingMap('assign')
+                 && notWipingMap('mforeman');
     }
     // 請求額データ（billing_data）：ロール持ちのみ書き込み
     match /demmen/billing_data {
@@ -43,9 +62,15 @@ service cloud.firestore {
       allow write: if hasRole();
     }
     // 月別出面データ（att_YYYYMM）+ 道具代補助（toolBudget）— 新アプリ（トークン認証）からも読み書き可能
+    // 既存の d / sd マップを空に置換する書き込みは拒否（2026-05-07 事故と同種の事故防止）
     match /demmen/{docId} {
       allow read: if true;
-      allow write: if docId.matches('att_[0-9]{6}') || docId == 'toolBudget';
+      allow create: if docId.matches('att_[0-9]{6}') || docId == 'toolBudget';
+      // delete は禁止（過去に att_ を delete するコードはなく、誤操作・攻撃を防ぐ）
+      allow delete: if false;
+      allow update: if (docId.matches('att_[0-9]{6}') || docId == 'toolBudget')
+                 && notWipingMap('d')
+                 && notWipingMap('sd');
     }
 
     // ────────────────────────────────────────
@@ -117,6 +142,14 @@ service cloud.firestore {
     //  アクセスログ
     // ────────────────────────────────────────
     match /accessLog/{docId} {
+      allow read, write: if true;
+    }
+
+    // ────────────────────────────────────────
+    //  バックアップスナップショット (PITR 代替)
+    //  /api/backup/snapshot から日次で書き込まれる
+    // ────────────────────────────────────────
+    match /backups/{docId} {
       allow read, write: if true;
     }
   }

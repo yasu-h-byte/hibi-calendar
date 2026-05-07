@@ -146,9 +146,11 @@ export async function POST(request: NextRequest) {
     if (!attSnap.exists()) {
       // ドキュメント未存在ならまず空で作る
       await updateDoc(attRef, updates).catch(async () => {
-        // ドキュメント未存在の場合は setDoc が必要だが、ここでは起こらないはず
-        const { setDoc } = await import('firebase/firestore')
-        await setDoc(attRef, { d: {} }, { merge: true })
+        // ドキュメント未存在の場合のみフォールバック（ここでは起こらないはず）。
+        // ⚠️ 直接 setDoc({ d: {} }, { merge: true }) を書くと既存データ全消失の罠あり。
+        //   必ず ensureDocExists を使うこと（lib/firestore-safe.ts 参照）。
+        const { ensureDocExists } = await import('@/lib/firestore-safe')
+        await ensureDocExists(attRef)
         await updateDoc(attRef, updates)
       })
     } else {

@@ -1,6 +1,7 @@
 import { db } from './firebase'
 import { doc, getDoc, setDoc, updateDoc, deleteField } from 'firebase/firestore'
 import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site } from '@/types'
+import { ensureDocExists } from './firestore-safe'
 
 // ────────────────────────────────────────
 //  日付ヘルパー
@@ -126,12 +127,13 @@ export async function setAttendanceEntry(
   const key = attKey(siteId, workerId, ym, day)
   const docRef = doc(db, 'demmen', `att_${ym}`)
   if (options.deleteFields && options.deleteFields.length > 0) {
-    // ★ deleteField() は updateDoc + dot-notation でなければ入れ子内のフィールドを
-    //   確実に削除できない（setDoc + merge では入れ子マップ内の deleteField が
-    //   効かないケースがある）。よって updateDoc 経由で削除する。
-    //   updateDoc はドキュメント未存在だと失敗するため、先に setDoc で空マージして
-    //   ドキュメントを保証する。
-    await setDoc(docRef, { d: {} }, { merge: true })
+    // deleteField() は updateDoc + dot-notation でないと入れ子内のフィールドを確実に
+    // 削除できない。updateDoc はドキュメント未存在だと失敗するため、先に空マージで
+    // ドキュメント存在を保証する。
+    //
+    // ⚠️ ensureDocExists を使うこと（直接 setDoc で `{ d: {} }` を渡すと既存データを
+    //   全消失させる罠がある — 詳細は lib/firestore-safe.ts のコメント参照）。
+    await ensureDocExists(docRef)
     const updates: Record<string, unknown> = {}
     // 削除対象フィールドを deleteField で消す
     for (const f of options.deleteFields) {

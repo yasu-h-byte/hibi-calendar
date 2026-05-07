@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "lint:firestore": "node scripts/lint-firestore-safety.mjs",
+    "diagnose:firestore": "node scripts/diagnose-merge-empty-map.mjs"
   },
   "dependencies": {
     "firebase": "^11.0.0",

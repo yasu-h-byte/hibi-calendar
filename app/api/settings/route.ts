@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, clearPasswordCache } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
 
 async function getMainDoc() {
@@ -91,7 +91,10 @@ export async function POST(request: NextRequest) {
       const oldRates = (data.defaultRates as { tobiRate: number; dokoRate: number; baseDays?: number }) || { tobiRate: 0, dokoRate: 0 }
       let newBaseDays = typeof baseDays === 'number' ? baseDays : (oldRates.baseDays ?? 20)
       if (newBaseDays < 1 || newBaseDays > 31) newBaseDays = 20  // 安全なデフォルトに戻す
-      await setDoc(docRef, { ...data, defaultRates: { tobiRate, dokoRate, baseDays: newBaseDays } })
+      // ⚠️ 旧コードは setDoc(docRef, { ...data, defaultRates: ... }) で demmen/main を全置換していた。
+      //   read→write の間に他リクエスト（出面承認・有給更新等）が走ると、その変更を上書きで失う race
+      //   condition があった。defaultRates のみピンポイント更新に変更（2026-05-07 修正）。
+      await updateDoc(docRef, { defaultRates: { tobiRate, dokoRate, baseDays: newBaseDays } })
       await logActivity('admin', 'rates.default', `鳶 ¥${oldRates.tobiRate}→¥${tobiRate}, 土工 ¥${oldRates.dokoRate}→¥${dokoRate}, ベース日数 ${oldRates.baseDays ?? 20}→${newBaseDays}`)
       return NextResponse.json({ success: true })
     }
