@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { fmtYenMan, fmtNum as fmtNumShared } from '@/lib/format'
+import EvaluationCard from '@/components/EvaluationCard'
+import { AuthUser } from '@/types'
 
 // ─── Types ───
 
@@ -388,6 +390,7 @@ export default function DashboardPage() {
   const [password, setPassword] = useState('')
   const [userRole, setUserRole] = useState<string>('')
   const [userForemanSites, setUserForemanSites] = useState<string[]>([])
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [ym, setYm] = useState(currentYm)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -400,6 +403,7 @@ export default function DashboardPage() {
       setPassword(pw)
       setUserRole(user?.role || '')
       setUserForemanSites(user?.foremanSites || [])
+      if (user) setAuthUser(user as AuthUser)
     }
   }, [])
 
@@ -531,6 +535,9 @@ export default function DashboardPage() {
 
           {/* ═══ お知らせ ═══ */}
           <AnnouncementsCard password={password} />
+
+          {/* ═══ 評価管理（進行中セッション） ═══ */}
+          {authUser && <EvaluationCard user={authUser} />}
 
           {/* ═══ 1. Today's Status Table ═══ */}
           <Section title={`本日の稼働状況 (${todayStr})`}>

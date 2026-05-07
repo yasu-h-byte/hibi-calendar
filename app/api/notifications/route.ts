@@ -35,6 +35,8 @@ export async function GET(request: NextRequest) {
     const currentYm = ymKey(now.getFullYear(), now.getMonth() + 1)
     const today = now.getDate()
     const role = request.nextUrl.searchParams.get('role') || 'admin'
+    const workerIdParam = request.nextUrl.searchParams.get('workerId')
+    const requesterWorkerId = workerIdParam ? Number(workerIdParam) : null
     const notifications: Notification[] = []
 
     const main = await getMainData()
@@ -260,6 +262,51 @@ export async function GET(request: NextRequest) {
       }
     } catch (e) {
       console.error('Evaluation notification error:', e)
+    }
+
+    // 5b. Evaluation session task notifications
+    //   (a) status='collecting' で自分が evaluatorIds に含まれ、まだ submit してないもの
+    //       → 「あなたが評価入力する番です」（職長・政仁・靖仁 各自向け）
+    //   (b) status='reviewing' のセッション
+    //       → 「最終承認待ち」（admin/approver のみ）
+    try {
+      const sessQuery = query(
+        collection(db, 'evaluations'),
+        where('status', 'in', ['collecting', 'reviewing']),
+      )
+      const sessSnaps = await getDocs(sessQuery)
+      sessSnaps.forEach(snap => {
+        const data = snap.data()
+        const status = data.status as 'collecting' | 'reviewing'
+        const workerName = (data.workerName as string) || '対象者不明'
+        const evaluatorIds = (data.evaluatorIds || []) as number[]
+        const reviews = (data.reviews || []) as { evaluatorId: number }[]
+        const submittedSet = new Set(reviews.map(r => r.evaluatorId))
+        const totalCount = evaluatorIds.length
+        const submittedCount = evaluatorIds.filter(id => submittedSet.has(id)).length
+
+        if (status === 'collecting') {
+          // 自分が評価予定者で、まだ提出していない場合
+          if (requesterWorkerId && evaluatorIds.includes(requesterWorkerId) && !submittedSet.has(requesterWorkerId)) {
+            notifications.push({
+              id: `evaluation-todo-${snap.id}`,
+              icon: '📝',
+              message: `${workerName} の評価入力をお願いします（提出 ${submittedCount}/${totalCount}名）`,
+              type: 'info',
+            })
+          }
+        } else if (status === 'reviewing') {
+          // 全員提出済 → admin/approver に最終承認待ち通知
+          notifications.push({
+            id: `evaluation-pending-approval-${snap.id}`,
+            icon: '⚖️',
+            message: `${workerName} の評価が最終承認待ちです（${submittedCount}/${totalCount}名提出済）`,
+            type: 'warning',
+          })
+        }
+      })
+    } catch (e) {
+      console.error('Evaluation session notification error:', e)
     }
 
     // 6. Upcoming / overdue PL grant dates (30 days ahead, 30 days past)
@@ -562,15 +609,20 @@ export async function GET(request: NextRequest) {
 
     // ── ロール別フィルタ ──
     // admin: 全通知を表示
-    // approver: カレンダー系 + 署名系（PL付与アクションは除く）
-    // foreman: カレンダー期限アラートのみ
+    // approver: カレンダー系 + 署名系（PL付与アクションは除く）+ 評価関連
+    // foreman: カレンダー期限アラート + 自分宛の評価入力依頼
     const filtered = notifications.filter(n => {
       if (role === 'admin') return true
       if (role === 'approver') {
-        return ['unsigned-calendar', 'calendar-deadline', 'month-unlocked-hibi', 'month-unlocked-hfu'].includes(n.id) || n.id.startsWith('pl-grant') || n.id.startsWith('evaluation-due')
+        return ['unsigned-calendar', 'calendar-deadline', 'month-unlocked-hibi', 'month-unlocked-hfu'].includes(n.id)
+            || n.id.startsWith('pl-grant')
+            || n.id.startsWith('evaluation-due')
+            || n.id.startsWith('evaluation-todo-')
+            || n.id.startsWith('evaluation-pending-approval-')
       }
       if (role === 'foreman') {
-        return n.id === 'calendar-deadline'
+        // 自分宛の評価入力依頼 + カレンダー期限のみ
+        return n.id === 'calendar-deadline' || n.id.startsWith('evaluation-todo-')
       }
       // jimu: カレンダー署名系のみ
       return ['unsigned-calendar', 'calendar-deadline'].includes(n.id)

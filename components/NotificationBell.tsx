@@ -23,7 +23,7 @@ interface Notification {
   action?: NotificationAction
 }
 
-export default function NotificationBell({ role }: { role: string }) {
+export default function NotificationBell({ role, workerId }: { role: string; workerId?: number }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -36,7 +36,8 @@ export default function NotificationBell({ role }: { role: string }) {
 
     setLoading(true)
     try {
-      const res = await fetchWithAuth(`/api/notifications?role=${role}`)
+      const widParam = workerId ? `&workerId=${workerId}` : ''
+      const res = await fetchWithAuth(`/api/notifications?role=${role}${widParam}`)
       if (res.ok) {
         const data = await res.json()
         setNotifications(data.notifications || [])
@@ -46,7 +47,7 @@ export default function NotificationBell({ role }: { role: string }) {
     } finally {
       setLoading(false)
     }
-  }, [role])
+  }, [role, workerId])
 
   useEffect(() => {
     fetchNotifications()
