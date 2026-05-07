@@ -150,7 +150,8 @@ export default function StaffAttendancePage() {
       const url = siteId
         ? `/api/attendance/staff?token=${token}&siteId=${siteId}`
         : `/api/attendance/staff?token=${token}`
-      const res = await fetch(url)
+      // ブラウザ・CDN のキャッシュを無効化して常に最新を取得
+      const res = await fetch(url, { cache: 'no-store' })
       if (!res.ok) {
         const d = await res.json()
         setError(d.error || 'エラー')
