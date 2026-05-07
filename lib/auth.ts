@@ -119,6 +119,19 @@ export function buildAuthUser(worker: Worker, sites: Site[]): AuthUser {
     }
   }
 
+  // 役員ロールはjobTypeで直接判定。ただし政仁さん（APPROVER_ID=1）は事業責任者ロール
+  // 役員が現場の foreman として登録されていても admin として扱う
+  if (worker.jobType === 'yakuin') {
+    const foremanSites = sites.filter(s => s.foreman === worker.id).map(s => s.id)
+    return {
+      workerId: worker.id,
+      name: worker.name,
+      role: worker.id === APPROVER_ID ? 'approver' : 'admin',
+      foremanSites,
+      token: worker.token || undefined,
+    }
+  }
+
   // 職長ロールはjobTypeでも判定（アーカイブ済み現場の職長に対応）
   if (worker.jobType === 'shokucho') {
     const foremanSites = sites.filter(s => s.foreman === worker.id).map(s => s.id)
