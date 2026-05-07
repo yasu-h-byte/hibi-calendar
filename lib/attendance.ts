@@ -149,6 +149,27 @@ export async function setAttendanceEntry(
   }
 }
 
+/**
+ * 出面エントリを完全に削除（未入力状態に戻す）
+ * - att_YYYYMM ドキュメントの d[key] フィールドごと deleteField() で削除
+ * - ドキュメント未存在時は何もしない
+ */
+export async function clearAttendanceEntry(
+  siteId: string,
+  workerId: number,
+  ym: string,
+  day: number,
+): Promise<void> {
+  const key = attKey(siteId, workerId, ym, day)
+  const docRef = doc(db, 'demmen', `att_${ym}`)
+  // ドキュメント存在保証（既に存在していれば実質no-op）
+  await setDoc(docRef, { d: {} }, { merge: true })
+  // d[key] 全体を削除
+  await updateDoc(docRef, {
+    [`d.${key}`]: deleteField(),
+  })
+}
+
 // ────────────────────────────────────────
 //  Firestore読み書き: attendanceApprovals
 // ────────────────────────────────────────
