@@ -483,55 +483,7 @@ export default function DashboardPage() {
             onUpdate={fetchData}
           />
 
-          {/* ═══ 🌴 休暇状況サマリー ═══ */}
-          {(() => {
-            const ai = data.actionItems
-            if (!ai) return null
-            const cur = ai.homeLeaveCurrentCount ?? 0
-            const up = ai.homeLeaveUpcomingCount ?? 0
-            const pendG = ai.pendingGrantsCount ?? 0
-            const carryExp = ai.carryOverExpiringCount ?? 0
-            const shortfall = ai.plShortfall?.count ?? 0
-            // どれかある時のみ表示
-            if (cur === 0 && up === 0 && pendG === 0 && carryExp === 0 && shortfall === 0) return null
-            return (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">🌴</span>
-                  <h3 className="text-sm font-bold text-hibi-navy dark:text-white">休暇状況</h3>
-                  <a href="/leave" className="ml-auto text-xs text-blue-600 hover:underline">休暇管理を開く →</a>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                  <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-lg p-3">
-                    <div className="text-[10px] text-cyan-700 dark:text-cyan-300 font-medium">帰国中</div>
-                    <div className="text-2xl font-bold text-cyan-900 dark:text-cyan-200 mt-0.5">{cur}<span className="text-xs ml-0.5 font-normal">名</span></div>
-                  </div>
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-                    <div className="text-[10px] text-blue-700 dark:text-blue-300 font-medium">帰国予定（6ヶ月先まで）</div>
-                    <div className="text-2xl font-bold text-blue-900 dark:text-blue-200 mt-0.5">{up}<span className="text-xs ml-0.5 font-normal">件</span></div>
-                  </div>
-                  <div className={`rounded-lg p-3 ${pendG > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-50 dark:bg-gray-700/30'}`}>
-                    <div className={`text-[10px] font-medium ${pendG > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500'}`}>付与時期到来</div>
-                    <div className={`text-2xl font-bold mt-0.5 ${pendG > 0 ? 'text-amber-900 dark:text-amber-200' : 'text-gray-400'}`}>
-                      {pendG}<span className="text-xs ml-0.5 font-normal">名</span>
-                    </div>
-                  </div>
-                  <div className={`rounded-lg p-3 ${carryExp > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-gray-50 dark:bg-gray-700/30'}`}>
-                    <div className={`text-[10px] font-medium ${carryExp > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-gray-500'}`}>繰越時効間近</div>
-                    <div className={`text-2xl font-bold mt-0.5 ${carryExp > 0 ? 'text-orange-900 dark:text-orange-200' : 'text-gray-400'}`}>
-                      {carryExp}<span className="text-xs ml-0.5 font-normal">名</span>
-                    </div>
-                  </div>
-                  <div className={`rounded-lg p-3 ${shortfall > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/30'}`}>
-                    <div className={`text-[10px] font-medium ${shortfall > 0 ? 'text-red-700 dark:text-red-300' : 'text-gray-500'}`}>年5日義務未達</div>
-                    <div className={`text-2xl font-bold mt-0.5 ${shortfall > 0 ? 'text-red-900 dark:text-red-200' : 'text-gray-400'}`}>
-                      {shortfall}<span className="text-xs ml-0.5 font-normal">名</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
+          {/* 🌴 休暇状況サマリーは出面入力画面に統合済みのためダッシュボードからは撤去 (2026-05-07) */}
 
           {/* ═══ お知らせ ═══ */}
           <AnnouncementsCard password={password} />
