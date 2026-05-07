@@ -164,22 +164,34 @@ function AnnouncementsCard({ password }: { password: string }) {
 
 // ─── Attendance Request Card (有給申請 + 欠勤届) ───
 
-function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems, password, userRole, onUpdate }: {
+function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems, password, userRole, userForemanSites, onUpdate }: {
   leaveItems: LeaveRequestItem[]
   absenceReports: AbsenceReport[]
   homeLongLeaveItems: HomeLongLeaveItem[]
   password: string
   userRole: string  // 'admin' | 'approver' | 'foreman' | 'jimu'
+  userForemanSites: string[]  // 職長の場合、担当現場のIDリスト
   onUpdate: () => void
 }) {
   const [processing, setProcessing] = useState<string | null>(null)
 
   // 権限制御:
-  //   - 職長承認: admin / approver / foreman が押せる
+  //   - 職長承認: admin / approver は全件、foreman は自分の担当現場のみ
   //   - 最終承認: admin / approver のみ（事業責任者）
   //   - 却下: 全員可（ただし最終承認後の却下は実質意味なし）
-  const canForemanApprove = userRole === 'admin' || userRole === 'approver' || userRole === 'foreman'
-  const canFinalApprove = userRole === 'admin' || userRole === 'approver'
+  const isAdminLike = userRole === 'admin' || userRole === 'approver'
+  const isForeman = userRole === 'foreman'
+  const canFinalApprove = isAdminLike
+
+  // siteId ベースで「この申請に対して職長承認できるか」を判定
+  // - admin/approver: 常に true
+  // - foreman: req.siteId が user.foremanSites に含まれる
+  // - その他: false
+  const canForemanApproveFor = (siteId?: string): boolean => {
+    if (isAdminLike) return true
+    if (isForeman && siteId && userForemanSites.includes(siteId)) return true
+    return false
+  }
 
   const hasLeave = leaveItems.length > 0
   const hasAbsence = absenceReports.length > 0
@@ -237,7 +249,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                   {req.reason && <span className="text-gray-400 text-xs ml-2">{req.reason}</span>}
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  {canForemanApprove && (
+                  {canForemanApproveFor((req as { siteId?: string }).siteId) && (
                     <button onClick={() => handleAction(req.id, 'foreman_approve')} disabled={processing === req.id}
                       className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
                   )}
@@ -292,7 +304,8 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                   <span className="text-gray-400 text-xs ml-2">{req.reason}</span>
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  {canForemanApprove && (
+                  {/* 帰国申請には siteId が無いため、職長は「いずれかの担当現場あり」で押せる扱い */}
+                  {(isAdminLike || (isForeman && userForemanSites.length > 0)) && (
                     <button onClick={() => handleAction(req.id, 'foreman_approve', '/api/home-long-leave')} disabled={processing === req.id}
                       className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
                   )}
@@ -374,6 +387,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
 export default function DashboardPage() {
   const [password, setPassword] = useState('')
   const [userRole, setUserRole] = useState<string>('')
+  const [userForemanSites, setUserForemanSites] = useState<string[]>([])
   const [ym, setYm] = useState(currentYm)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -385,6 +399,7 @@ export default function DashboardPage() {
       const { password: pw, user } = JSON.parse(stored)
       setPassword(pw)
       setUserRole(user?.role || '')
+      setUserForemanSites(user?.foremanSites || [])
     }
   }, [])
 
@@ -460,6 +475,7 @@ export default function DashboardPage() {
             homeLongLeaveItems={data.actionItems?.homeLongLeaveRequests || []}
             password={password}
             userRole={userRole}
+            userForemanSites={userForemanSites}
             onUpdate={fetchData}
           />
 

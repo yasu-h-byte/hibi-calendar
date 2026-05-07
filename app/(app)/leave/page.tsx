@@ -114,6 +114,8 @@ function getJPHolidays(year: number): Set<string> {
 
 export default function LeavePage() {
   const [password, setPassword] = useState('')
+  const [userRole, setUserRole] = useState<string>('')
+  const [userForemanSites, setUserForemanSites] = useState<string[]>([])
   const [workers, setWorkers] = useState<PLWorker[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -182,7 +184,12 @@ export default function LeavePage() {
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
-    if (stored) setPassword(JSON.parse(stored).password)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      setPassword(parsed.password)
+      setUserRole(parsed.user?.role || '')
+      setUserForemanSites(parsed.user?.foremanSites || [])
+    }
   }, [])
 
   // ?tab=homeleave などURLパラメータでタブ初期表示を制御
@@ -690,25 +697,39 @@ export default function LeavePage() {
                         {req.status === 'rejected' && req.rejectedReason && <div className="text-[10px] text-red-500 mt-1">却下理由: {req.rejectedReason}</div>}
                       </div>
                       <div className="flex items-center gap-2 ml-4">
-                        {req.status === 'pending' && (
+                        {req.status === 'pending' && (() => {
+                          // 権限制御: admin/approver は全件、foreman は自分の担当現場のみ
+                          const isAdminLike = userRole === 'admin' || userRole === 'approver'
+                          const canFA = isAdminLike || (userRole === 'foreman' && userForemanSites.includes(req.siteId))
+                          return (
                           <>
-                            <button onClick={() => handleForemanApprove(req.id)} disabled={processingReq === req.id}
-                              className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                            {canFA && (
+                              <button onClick={() => handleForemanApprove(req.id)} disabled={processingReq === req.id}
+                                className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                            )}
                             <button onClick={() => rejectingId === req.id ? handleReject(req.id) : (setRejectingId(req.id), setRejectReason(''))}
                               disabled={processingReq === req.id}
                               className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
                           </>
-                        )}
-                        {req.status === 'foreman_approved' && (
+                          )
+                        })()}
+                        {req.status === 'foreman_approved' && (() => {
+                          const canFinal = userRole === 'admin' || userRole === 'approver'
+                          return (
                           <>
                             <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">職長済</span>
-                            <button onClick={() => handleApprove(req.id)} disabled={processingReq === req.id}
-                              className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
-                            <button onClick={() => rejectingId === req.id ? handleReject(req.id) : (setRejectingId(req.id), setRejectReason(''))}
-                              disabled={processingReq === req.id}
-                              className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                            {canFinal && (
+                              <button onClick={() => handleApprove(req.id)} disabled={processingReq === req.id}
+                                className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
+                            )}
+                            {canFinal && (
+                              <button onClick={() => rejectingId === req.id ? handleReject(req.id) : (setRejectingId(req.id), setRejectReason(''))}
+                                disabled={processingReq === req.id}
+                                className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                            )}
                           </>
-                        )}
+                          )
+                        })()}
                         {req.status === 'approved' && <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">承認済</span>}
                         {req.status === 'rejected' && <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold">却下</span>}
                         {req.status === 'cancelled' && <span className="px-2 py-1 bg-gray-200 text-gray-600 rounded-full text-xs font-bold">取り消し</span>}
