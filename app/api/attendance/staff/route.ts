@@ -383,10 +383,6 @@ export async function POST(request: NextRequest) {
     // Build entry
     let entry: AttendanceEntry
     const isTimeBased = !!(startTime && endTime) // 時間ベース入力（202605〜）
-    // 各 choice ごとに「削除するフィールド」を定義
-    // → ステータス切り替え時に古いフィールド（出勤の時刻、休みの理由など）が
-    //   merge で残り続けるバグを防ぐ
-    let deleteFields: string[] = []
     switch (choice) {
       case 'work':
         if (isTimeBased) {
@@ -411,13 +407,9 @@ export async function POST(request: NextRequest) {
           const actualH = Math.max(0, actualMin / 60)
           const otH = Math.max(0, Math.round((actualH - 7) * 10) / 10)
           if (otH > 0) entry.o = otH
-          // 出勤: 他のステータスと過去の休み理由を削除
-          deleteFields = ['p', 'r', 'h', 'hk', 'exam', 'rReason', 'rNote']
-          if (otH <= 0) deleteFields.push('o')  // 残業なしなら o を削除
         } else {
           // レガシー入力（202604以前）
           entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)), s: 'staff' }
-          deleteFields = ['p', 'r', 'h', 'hk', 'exam', 'rReason', 'rNote', 'st', 'et', 'b1', 'b2', 'b3']
         }
         break
       case 'rest': {
@@ -429,27 +421,19 @@ export async function POST(request: NextRequest) {
           restEntry.rNote = String(restNote).trim()
         }
         entry = restEntry
-        // 休み: 出勤関連フィールドと他のステータスを削除
-        deleteFields = ['p', 'h', 'hk', 'exam', 'st', 'et', 'b1', 'b2', 'b3', 'o']
-        if (!restEntry.rReason) deleteFields.push('rReason')
-        if (!restEntry.rNote) deleteFields.push('rNote')
         break
       }
       case 'leave':
         entry = { w: 0, p: 1, s: 'staff' }
-        // 有給: 出勤関連と他のステータスを削除
-        deleteFields = ['r', 'h', 'hk', 'exam', 'st', 'et', 'b1', 'b2', 'b3', 'o', 'rReason', 'rNote']
         break
       case 'site_off':
         entry = { w: 0, h: 1, s: 'staff' }
-        // 現場休み: 出勤関連と他のステータスを削除
-        deleteFields = ['r', 'p', 'hk', 'exam', 'st', 'et', 'b1', 'b2', 'b3', 'o', 'rReason', 'rNote']
         break
       default:
         return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
     }
 
-    await setAttendanceEntry(siteId, worker.id, ym, day, entry, { deleteFields })
+    await setAttendanceEntry(siteId, worker.id, ym, day, entry)
 
     return NextResponse.json({ success: true, entry })
   } catch (error) {
