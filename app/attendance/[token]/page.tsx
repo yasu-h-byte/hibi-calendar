@@ -268,41 +268,6 @@ export default function StaffAttendancePage() {
     }
   }, [showLeaveModal, fetchLeaveRequests])
 
-  // 過去日エントリを未入力状態に戻す
-  const clearEntry = async (year: number, month: number, day: number) => {
-    if (!data || saving) return
-    if (!confirm('この日の入力を取り消して未入力に戻します。\nXóa dữ liệu của ngày này?')) return
-    setSaving(true)
-    setSuccessMsg(null)
-    try {
-      const res = await fetch('/api/attendance/staff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          siteId: data.site.id,
-          year, month, day,
-          choice: 'clear',
-        }),
-      })
-      if (res.ok) {
-        setSuccessMsg('✓ 未入力に戻しました')
-        setTimeout(() => setSuccessMsg(null), 1500)
-        setEditingPast(null)
-        fetchData()
-      } else {
-        const d = await res.json()
-        setError(d.error || 'エラー')
-        setTimeout(() => setError(null), 3000)
-      }
-    } catch {
-      setError('つうしん エラー / Lỗi kết nối')
-      setTimeout(() => setError(null), 3000)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   // Fetch home long leave requests when modal opens
   const fetchHlRequests = useCallback(async () => {
     try {
@@ -1272,17 +1237,6 @@ export default function StaffAttendancePage() {
                     </button>
                   ))}
                 </div>
-              )}
-
-              {/* 入力済みの場合のみ「未入力に戻す」ボタンを表示 */}
-              {pd.entry && (
-                <button
-                  onClick={() => clearEntry(pd.year, pd.month, pd.day)}
-                  disabled={saving}
-                  className="w-full mt-3 bg-white border-2 border-red-300 text-red-600 rounded-xl py-3 text-sm font-medium active:bg-red-50 disabled:opacity-50"
-                >
-                  🗑️ 未入力に戻す / Xóa nhập liệu
-                </button>
               )}
 
               <button

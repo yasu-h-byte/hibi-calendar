@@ -3,7 +3,6 @@ import { getWorkerByToken } from '@/lib/workers'
 import {
   getAttendanceDoc,
   setAttendanceEntry,
-  clearAttendanceEntry,
   getApprovalForDay,
   getStaffSites,
   getEntryStatus,
@@ -379,12 +378,6 @@ export async function POST(request: NextRequest) {
     const approval = await getApprovalForDay(siteId, ym, day)
     if (approval?.foreman) {
       return NextResponse.json({ error: 'Day is locked (approved)' }, { status: 409 })
-    }
-
-    // 未入力に戻す（エントリ全体を削除）
-    if (choice === 'clear') {
-      await clearAttendanceEntry(siteId, worker.id, ym, day)
-      return NextResponse.json({ success: true, cleared: true })
     }
 
     // Build entry
