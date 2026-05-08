@@ -311,6 +311,8 @@ export function calcTobiEquiv(
     if (!ymSet.has(pk.ym)) continue
     if (siteId && pk.sid !== siteId) continue
     if (v.p || !v.w) continue
+    // ⚠️ 2026-05-09: 残骸データ対策（休み/現場休/帰国中/試験 を鳶換算から除外）
+    if ((v.r ?? 0) > 0 || (v.h ?? 0) > 0 || (v.hk ?? 0) > 0 || ((v as { exam?: number }).exam ?? 0) > 0) continue
     const w = main.workers.find(x => x.id === parseInt(pk.wid))
     if (!w) continue
     // 出向者: 鳶換算人工から除外
@@ -441,6 +443,12 @@ export function compute(
     // 試験: 人工にも原価にもカウントしない（compute() レベルでは無視）。
     //   給与計算上の扱い (欠勤控除から除外) は computeMonthly() の examDays で別途処理
     if (v.exam) continue
+
+    // ⚠️ 2026-05-09: 残骸データ対策
+    //   {w:1, r:1, o:5} のような残骸（出勤入力後に「休み」へ変更したが o/w が残っている）
+    //   を「出勤」としてカウントしないよう、r/h/hk フラグを早期除外する。
+    //   p/exam は上で個別処理済み。w==0 も下の `if (!v.w)` で除外される。
+    if ((v.r ?? 0) > 0 || (v.h ?? 0) > 0 || (v.hk ?? 0) > 0) continue
 
     if (!v.w) continue
 
@@ -1113,6 +1121,16 @@ export function computeMonthly(
       wm.otAllowance = otPay
       wm.salaryNetPay = basePay + otPay
       wm.netPay = wm.totalCost
+    } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0) {
+      // ⚠️ 2026-05-09: 防御的フォールバック
+      //   外国人 (hourlyRate あり) なのに workerPrescribedDays が0の場合は、
+      //   月所定日数が未設定で給与計算ができない状態。
+      //   4月以前なら main.workDays['YYYYMM'] を 26日（日曜以外）等で設定する必要あり。
+      //   サイレント失敗を防ぐため、console.error と最低限の情報を残す。
+      console.error(`[compute] 警告: ${wm.name} (${ym}) の月所定日数が未設定です。main.workDays['${ym}'] を確認してください。`)
+      wm.basePay = 0
+      wm.salaryNetPay = 0
+      wm.netPay = 0
     } else if (workerPrescribedDays > 0) {
       wm.absence = Math.max(0, workerPrescribedDays - wm.workDays - wm.compDays - wm.plUsed - wm.examDays)  // 0.6は1日出勤扱い、試験も給与計算上は出勤扱い
       wm.absentCost = Math.round(wm.absence * wm.rate)
@@ -1247,6 +1265,14 @@ export function calculateOvertimeSummary(
   sites: { id: string; name: string; workSchedule?: RawSite['workSchedule'] }[],
   calendarDays: Record<string, Record<string, string>>,
 ): OvertimeSummary {
+  // ⚠️ 2026-05-09: この関数は「変形労働時間制（5月以降）」専用。
+  //   1日所定 7h・法定上限 = 暦日数×40÷7・3段階残業判定 を前提とした計算をする。
+  //   4月以前（旧ルール: 6h40min・所定日数ベース）にこの関数を呼ぶと不正な値が出るため、
+  //   呼び出し側 (lib/export.ts) では `if (ym >= '202605')` でガード済み。
+  //   念のためここでも防御。
+  if (ym < '202605') {
+    throw new Error(`calculateOvertimeSummary は5月以降の変形労働時間制専用です（受け取った ym=${ym}）`)
+  }
   const ymY = parseInt(ym.slice(0, 4))
   const ymM = parseInt(ym.slice(4, 6))
   const numDays = new Date(ymY, ymM, 0).getDate()
