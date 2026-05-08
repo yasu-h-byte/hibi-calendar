@@ -959,13 +959,17 @@ export function computeMonthly(
     } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0) {
       // ── 4月以前: 月の所定時間ベース（旧ロジック）── 時給ベース ──
       // 基本給=時給×所定時間, 残業=実労働>所定時間, 欠勤=所定日数下回り分
-      const prescribedH = workerPrescribedDays * 7
-      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
+      // 所定労働時間は1日6時間40分（= 20/3 ≒ 6.667h）。
+      //   週6日出勤で 6h40m × 6 = 40h で法定上限ぴったり、土曜日も追加割増なし。
+      //   旧契約では 8:00-17:00 の間に休憩140分(30+60+30+20)で実労6h40min。
+      const dailyHoursOld = 20 / 3  // = 6.667h
+      const prescribedH = workerPrescribedDays * dailyHoursOld
+      const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.otHours
       const legalOt = Math.max(0, actualWorkH - prescribedH)
       const basePay = Math.round(wm.hourlyRate * prescribedH)
       const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
       const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed)
-      const absentDeduction = Math.round(wm.hourlyRate * 7 * absentDays)
+      const absentDeduction = Math.round(wm.hourlyRate * dailyHoursOld * absentDays)
       const salaryNet = basePay - absentDeduction + otAllowance
 
       wm.prescribedHours = prescribedH
@@ -1019,8 +1023,10 @@ export function computeMonthly(
       wm.netPay = salaryNet
     } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && workerPrescribedDays > 0) {
       // ── 4月以前: 月給制の外国人（旧salary方式）月の所定時間ベース ──
-      const prescribedH = workerPrescribedDays * 7
-      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
+      // 所定労働時間は1日6時間40分（= 20/3）。週6日で40h/週、法定上限内。
+      const dailyHoursOld = 20 / 3
+      const prescribedH = workerPrescribedDays * dailyHoursOld
+      const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.otHours
       const legalOt = Math.max(0, actualWorkH - prescribedH)
       const hourlyRate = wm.salary / prescribedH
       const basePay = wm.salary
