@@ -94,6 +94,14 @@ function appendTimeSheet(
   const calDays = new Date(ymY, ymM, 0).getDate()
   const legalLimit = Math.round(calDays * 40 / 7 * 10) / 10
 
+  // 4月/5月の境界で1日の所定時間が違う。
+  //   4月以前 (旧ルール): 6時間40分 = 20/3h（休憩140分）
+  //   5月以降 (変形労働時間制): 7時間（休憩120分）
+  const useNewRules = ym >= '202605'
+  const dailyPrescribed = useNewRules ? 7 : 20 / 3
+  const dailyPrescribedDisplay = Math.round(dailyPrescribed * 100) / 100  // 6.67 / 7
+  const ruleLabel = useNewRules ? '変形労働時間制' : '旧ルール'
+
   // 週番号: 月の1日を含む週をW1とし、日曜始まりで区切る
   const weekNums: number[] = []
   for (let d = 1; d <= numDays; d++) {
@@ -113,20 +121,20 @@ function appendTimeSheet(
         if (dayType === 'work') { isWorkDay = true; break }
       }
     }
-    prescribedHours.push(isWorkDay ? 7 : 0)
+    prescribedHours.push(isWorkDay ? dailyPrescribed : 0)
   }
-  const totalPrescribed = prescribedHours.reduce((s, h) => s + h, 0)
+  const totalPrescribed = Math.round(prescribedHours.reduce((s, h) => s + h, 0) * 10) / 10
 
   const headers = ['名前', '区分']
   for (let d = 1; d <= numDays; d++) headers.push(dayLabel(ym, d))
   headers.push('合計', '法定上限')
 
-  const titleRow = [`${titlePrefix} 勤務時間一覧 ${ymLabel(ym)}（変形労働時間制）`]
+  const titleRow = [`${titlePrefix} 勤務時間一覧 ${ymLabel(ym)}（${ruleLabel}）`]
   const rows: (string | number)[][] = [titleRow, headers]
 
   // 所定時間行
   const prescRow: (string | number)[] = ['', '所定(h)']
-  for (let d = 0; d < numDays; d++) prescRow.push(prescribedHours[d] > 0 ? prescribedHours[d] : '')
+  for (let d = 0; d < numDays; d++) prescRow.push(prescribedHours[d] > 0 ? dailyPrescribedDisplay : '')
   prescRow.push(totalPrescribed, legalLimit)
   rows.push(prescRow)
 
@@ -157,7 +165,7 @@ function appendTimeSheet(
         if (!entry) continue
         if (entry.p) { isPL = true; break }
         if (entry.w && entry.w > 0) {
-          dayHours = entry.w === 0.6 ? Math.round(7 * 0.6 * 10) / 10 : 7
+          dayHours = entry.w === 0.6 ? Math.round(dailyPrescribed * 0.6 * 10) / 10 : dailyPrescribed
           dayOT = entry.o || 0
           status = entry.w === 0.6 ? '補' : dayOT > 0 ? '出+残' : '出'
         }
@@ -186,10 +194,18 @@ function appendTimeSheet(
   // 備考行
   rows.push([])
   rows.push(['【計算方法】'])
-  rows.push(['', '1日の所定: 7時間（8:00-17:00、休憩2時間）'])
-  rows.push(['', '法定上限: 暦日数 × 40 ÷ 7 =', legalLimit, 'h'])
-  rows.push(['', '残業判定: 1日単位(8h超) → 1週単位(40h超) → 1ヶ月単位(法定上限超) の3段階'])
-  rows.push(['', '※ 「実労働(h)」= 所定7h + 残業h で変換済み。「うち残業(h)」は出面入力の残業欄の値。'])
+  if (useNewRules) {
+    rows.push(['', '1日の所定: 7時間（8:00-17:00、休憩2時間）'])
+    rows.push(['', '法定上限: 暦日数 × 40 ÷ 7 =', legalLimit, 'h'])
+    rows.push(['', '残業判定: 1日単位(8h超) → 1週単位(40h超) → 1ヶ月単位(法定上限超) の3段階'])
+    rows.push(['', '※ 「実労働(h)」= 所定7h + 残業h で変換済み。「うち残業(h)」は出面入力の残業欄の値。'])
+  } else {
+    rows.push(['', '1日の所定: 6時間40分（8:00-17:00、休憩140分）'])
+    rows.push(['', '法定上限: 暦日数 × 40 ÷ 7 =', legalLimit, 'h（参考表示）'])
+    rows.push(['', '残業判定（旧ルール）: 月の実労働 > 月の所定時間（=所定日数×6時間40分）の超過分'])
+    rows.push(['', '※ 「実労働(h)」= 所定6h40min + 残業h で変換済み。「うち残業(h)」は出面入力の残業欄の値。'])
+    rows.push(['', '※ 週6日×6h40min = 40h で法定上限ぴったり。土曜出勤は追加割増なし。'])
+  }
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 3 } }]
@@ -379,12 +395,15 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
   XLSX.utils.book_append_sheet(wb, ws, '出面一覧')
 
   // ── Sheet 2: 勤務時間一覧（日比建設所属の外国人スタッフのみ） ──
+  // 4月以前は1日6h40min、5月以降は1日7h で時間変換（appendTimeSheet 内で自動切替）
   const hibiForeignWorkers = hibiWorkers.filter(w => w.visa && w.visa !== 'none' && w.visa !== '')
   if (hibiForeignWorkers.length > 0 && data.calendarDays) {
     appendTimeSheet(wb, '勤務時間一覧', '日比建設', ym, hibiForeignWorkers, attD, sites, data.calendarDays)
-    // ── Sheet 3: 勤怠サマリー（キャシュモ向け: 3段階残業判定の結果） ──
-    const bd = (data as { baseDays?: number }).baseDays || 20
-    appendOvertimeSummarySheet(wb, '勤怠サマリー', '日比建設', ym, hibiForeignWorkers, attD, sites, data.calendarDays, bd)
+    // ── Sheet 3: 勤怠サマリー（変形労働時間制専用、4月以前はスキップ） ──
+    if (ym >= '202605') {
+      const bd = (data as { baseDays?: number }).baseDays || 20
+      appendOvertimeSummarySheet(wb, '勤怠サマリー', '日比建設', ym, hibiForeignWorkers, attD, sites, data.calendarDays, bd)
+    }
   }
 
   return wb
@@ -479,10 +498,13 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
   }
 
   // ── Sheet 2: 勤務時間一覧（キャシュモ向け: 時間変換済み） ──
+  // 4月以前は1日6h40min、5月以降は1日7h で時間変換（appendTimeSheet 内で自動切替）
   appendTimeSheet(wb, '勤務時間一覧', 'HFU', ym, hfuWorkers, attD, sites, calendarDays)
 
   // ── Sheet 3: 勤怠サマリー（キャシュモ向け: 3段階残業判定の結果） ──
-  if (calendarDays) {
+  // ⚠️ このシートは「1か月単位の変形労働時間制」専用の3段階残業分析。
+  //    4月以前（旧ルール）には適用されないため出力しない。
+  if (calendarDays && ym >= '202605') {
     const bd = (data as { baseDays?: number }).baseDays || 20
     appendOvertimeSummarySheet(wb, '勤怠サマリー', 'HFU', ym, hfuWorkers, attD, sites, calendarDays, bd)
   }
@@ -902,32 +924,45 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   XLSX.utils.book_append_sheet(wb, ws1, '月次集計')
 
   // ── Sheet 2: 給与計算詳細 ──
+  // 4月/5月で見出しと意味が変わる:
+  //   4月以前 (旧ルール): 所定日数(その月の) / 所定時間(=日数×6h40m) / 基本給 / 残業手当
+  //   5月以降 (3層構造):  ベース日数(20日固定) / 法定上限 / 基本給(固定) / 追加所定手当 / 残業手当
+  const useNewRulesForSheet2 = ym >= '202605'
+  const s2RuleLabel = useNewRulesForSheet2 ? '新ルール: 3層構造' : '旧ルール: 月所定時間ベース'
 
-  const s2Title = [`給与計算詳細 ${ymLabel(ym)}`]
+  const s2Title = [`給与計算詳細 ${ymLabel(ym)}（${s2RuleLabel}）`]
   const s2Rows: (string | number | null)[][] = [s2Title]
 
   // Foreign workers (hourlyRate-based)
   const foreignWorkers = workers.filter(w => w.visa !== 'none' && w.hourlyRate && w.hourlyRate > 0)
   if (foreignWorkers.length > 0) {
     s2Rows.push([])
-    const fHeaders = [
-      '名前', '時給', 'ベース日数', '法定上限(h)',
-      '実出勤日数', '実労働時間', '法定残業時間',
-      '基本給（固定）', '追加所定手当', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
-    ]
+    const fHeaders = useNewRulesForSheet2
+      ? [
+          '名前', '時給', 'ベース日数', '法定上限(h)',
+          '実出勤日数', '実労働時間', '法定残業時間',
+          '基本給（固定）', '追加所定手当', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+        ]
+      : [
+          '名前', '時給', '所定日数', '所定時間(h)',
+          '実出勤日数', '実労働時間', '残業時間',
+          '基本給', '─', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+        ]
     s2Rows.push(fHeaders)
 
     for (const w of foreignWorkers) {
+      // 4列目（法定上限/所定時間）: 新ルール = w.legalLimit, 旧ルール = w.prescribedHours
+      // 9列目（追加所定手当）: 新ルールのみ意味あり、旧ルールは "─" で空欄表示
       s2Rows.push([
         w.name,
         w.hourlyRate || 0,
         prescribedDays,
-        w.legalLimit || 0,
+        useNewRulesForSheet2 ? (w.legalLimit || 0) : (w.prescribedHours || 0),
         w.actualWorkDays || 0,
         w.actualWorkHours || 0,
         w.legalOtHours || 0,
         w.fixedBasePay || w.basePay || 0,
-        w.additionalAllowance || 0,
+        useNewRulesForSheet2 ? (w.additionalAllowance || 0) : '─',
         w.otAllowance || 0,
         w.absence || 0,
         w.absentDeduction || 0,
@@ -942,7 +977,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       null,
       foreignWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
-      foreignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
+      useNewRulesForSheet2
+        ? foreignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0)
+        : '─',
       foreignWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.absence || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0),
@@ -955,11 +992,17 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const salaryForeignWorkers = workers.filter(w => w.visa !== 'none' && !w.hourlyRate && w.salary && w.salary > 0)
   if (salaryForeignWorkers.length > 0) {
     s2Rows.push([])
-    const sfHeaders = [
-      '名前', '月給', 'ベース日数', '法定上限(h)',
-      '実出勤日数', '実労働時間', '法定残業時間',
-      '基本給（固定）', '追加所定手当', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
-    ]
+    const sfHeaders = useNewRulesForSheet2
+      ? [
+          '名前', '月給', 'ベース日数', '法定上限(h)',
+          '実出勤日数', '実労働時間', '法定残業時間',
+          '基本給（固定）', '追加所定手当', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+        ]
+      : [
+          '名前', '月給', '所定日数', '所定時間(h)',
+          '実出勤日数', '実労働時間', '残業時間',
+          '基本給', '─', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+        ]
     s2Rows.push(sfHeaders)
 
     for (const w of salaryForeignWorkers) {
@@ -967,12 +1010,12 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         w.name,
         w.salary || 0,
         prescribedDays,
-        w.legalLimit || 0,
+        useNewRulesForSheet2 ? (w.legalLimit || 0) : (w.prescribedHours || 0),
         w.actualWorkDays || 0,
         w.actualWorkHours || 0,
         w.legalOtHours || 0,
         w.fixedBasePay || w.basePay || 0,
-        w.additionalAllowance || 0,
+        useNewRulesForSheet2 ? (w.additionalAllowance || 0) : '─',
         w.otAllowance || 0,
         w.absence || 0,
         w.absentDeduction || 0,
@@ -986,7 +1029,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       null,
       salaryForeignWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
-      salaryForeignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
+      useNewRulesForSheet2
+        ? salaryForeignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0)
+        : '─',
       salaryForeignWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.absence || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0),
