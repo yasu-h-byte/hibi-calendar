@@ -1880,6 +1880,30 @@ export default function AttendanceGridPage() {
                   </td>
                 </tr>
 
+                {/* 鳶 残業合計（日ごと縦集計） */}
+                <tr>
+                  <td
+                    className="sticky left-0 z-20 bg-[#1B2A4A] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-[10px] border-t border-[#2A3B5C]"
+                    style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                  >
+                    鳶 残業合計
+                  </td>
+                  <td className="sticky left-[150px] z-20 bg-[#1B2A4A] px-1 py-1 text-center border-t border-[#2A3B5C]" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+                  {days.map(d => (
+                    <td
+                      key={d.day}
+                      className="bg-[#1B2A4A] text-amber-300 px-0 py-1 text-center text-[11px] font-medium tabular-nums border-l border-gray-600 border-t border-[#2A3B5C]"
+                      style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+                    >
+                      {footerSums.tobiOt[d.day] > 0 ? `${Math.round(footerSums.tobiOt[d.day] * 10) / 10}h` : '-'}
+                    </td>
+                  ))}
+                  <td className="bg-[#1B2A4A] text-amber-300 px-2 py-1 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm border-t border-[#2A3B5C]" style={{ width: 64, minWidth: 64 }}>
+                    {footerSums.tobiOtTotal > 0 ? `${footerSums.tobiOtTotal}h` : '-'}
+                  </td>
+                  <td className="bg-[#1B2A4A] px-2 py-1 border-l border-gray-600 border-t border-[#2A3B5C]" style={{ width: cellWidth, minWidth: cellWidth }}></td>
+                </tr>
+
                 {/* Doko Total */}
                 <tr>
                   <td
@@ -1906,6 +1930,30 @@ export default function AttendanceGridPage() {
                   </td>
                 </tr>
 
+                {/* 土工 残業合計（日ごと縦集計） */}
+                <tr>
+                  <td
+                    className="sticky left-0 z-20 bg-[#243656] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-[10px] border-t border-[#324867]"
+                    style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                  >
+                    土工 残業合計
+                  </td>
+                  <td className="sticky left-[150px] z-20 bg-[#243656] px-1 py-1 text-center border-t border-[#324867]" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+                  {days.map(d => (
+                    <td
+                      key={d.day}
+                      className="bg-[#243656] text-amber-300 px-0 py-1 text-center text-[11px] font-medium tabular-nums border-l border-gray-600 border-t border-[#324867]"
+                      style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+                    >
+                      {footerSums.dokoOt[d.day] > 0 ? `${Math.round(footerSums.dokoOt[d.day] * 10) / 10}h` : '-'}
+                    </td>
+                  ))}
+                  <td className="bg-[#243656] text-amber-300 px-2 py-1 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm border-t border-[#324867]" style={{ width: 64, minWidth: 64 }}>
+                    {footerSums.dokoOtTotal > 0 ? `${footerSums.dokoOtTotal}h` : '-'}
+                  </td>
+                  <td className="bg-[#243656] px-2 py-1 border-l border-gray-600 border-t border-[#324867]" style={{ width: cellWidth, minWidth: cellWidth }}></td>
+                </tr>
+
                 {/* Grand Total */}
                 <tr>
                   <td
@@ -1930,6 +1978,30 @@ export default function AttendanceGridPage() {
                   <td className="bg-[#0F1D36] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: cellWidth, minWidth: cellWidth }}>
                     {footerSums.grandOtTotal > 0 ? footerSums.grandOtTotal : '-'}
                   </td>
+                </tr>
+
+                {/* 総 残業合計（日ごと縦集計） */}
+                <tr>
+                  <td
+                    className="sticky left-0 z-20 bg-[#0F1D36] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-[10px] border-t border-[#1F2D44]"
+                    style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                  >
+                    総 残業合計
+                  </td>
+                  <td className="sticky left-[150px] z-20 bg-[#0F1D36] px-1 py-1 text-center border-t border-[#1F2D44]" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+                  {days.map(d => (
+                    <td
+                      key={d.day}
+                      className="bg-[#0F1D36] text-amber-300 px-0 py-1 text-center text-[11px] font-medium tabular-nums border-l border-gray-600 border-t border-[#1F2D44]"
+                      style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+                    >
+                      {footerSums.grandOt[d.day] > 0 ? `${Math.round(footerSums.grandOt[d.day] * 10) / 10}h` : '-'}
+                    </td>
+                  ))}
+                  <td className="bg-[#0F1D36] text-amber-300 px-2 py-1 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm border-t border-[#1F2D44]" style={{ width: 64, minWidth: 64 }}>
+                    {footerSums.grandOtTotal > 0 ? `${footerSums.grandOtTotal}h` : '-'}
+                  </td>
+                  <td className="bg-[#0F1D36] px-2 py-1 border-l border-gray-600 border-t border-[#1F2D44]" style={{ width: cellWidth, minWidth: cellWidth }}></td>
                 </tr>
               </tbody>
             </table>
