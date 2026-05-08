@@ -871,12 +871,7 @@ export default function EvaluationPage() {
                         <span className="text-gray-500 dark:text-gray-400 block text-xs">勤続年数</span>
                         <span className="text-gray-900 dark:text-white">{years}年</span>
                       </div>
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400 block text-xs">現在の時給</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {sw.hourlyRate ? fmtYen(sw.hourlyRate) : '--'}
-                        </span>
-                      </div>
+                      {/* 時給は評価管理画面では非表示（運用方針） */}
                     </div>
                   </div>
                 )
@@ -1236,12 +1231,7 @@ export default function EvaluationPage() {
                       <span className="text-gray-500 dark:text-gray-400 block text-xs">勤続年数</span>
                       <span className="text-gray-900 dark:text-white">{years}年</span>
                     </div>
-                    <div>
-                      <span className="text-gray-500 dark:text-gray-400 block text-xs">現在の時給</span>
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {worker?.hourlyRate ? fmtYen(worker.hourlyRate) : '--'}
-                      </span>
-                    </div>
+                    {/* 時給は評価管理画面では非表示（運用方針） */}
                   </div>
                 </div>
 
