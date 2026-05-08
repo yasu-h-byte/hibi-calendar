@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc } from 'firebase/firestore'
 import { getWorkerByToken } from '@/lib/workers'
 import { getStaffSites, ymKey, setAttendanceEntry } from '@/lib/attendance'
+import { AttendanceEntry } from '@/types'
 
 interface HomeLongLeave {
   workerId: number
@@ -166,9 +167,21 @@ export async function POST(request: NextRequest) {
 
       if (siteId) {
         // Write attendance entries { w: 0, hk: 1 } for all weekdays in the date range (skip Sundays)
+        // ⚠️ 既存の有給(p)・休み(r)・出勤エントリがある日は上書きしない（2026-05-08 修正）
+        //   既存エントリの上書きは setDoc(merge:true) でも以前は p/r フィールドが残るが、
+        //   compute.ts は entry.hk を最初に判定するため、有給日数(plDays)カウントから外れる事故が起きていた。
+        const { getAttendanceDoc } = await import('@/lib/attendance')
         const start = new Date(data.startDate + 'T00:00:00')
         const end = new Date(data.endDate + 'T00:00:00')
         const current = new Date(start)
+        const skippedDates: string[] = []
+
+        // 期間中に跨る各月の att データをキャッシュして既存エントリ確認
+        const attCache: Record<string, Record<string, AttendanceEntry>> = {}
+        const getAtt = async (ym: string) => {
+          if (!attCache[ym]) attCache[ym] = await getAttendanceDoc(ym)
+          return attCache[ym]
+        }
 
         while (current <= end) {
           const dow = current.getDay()
@@ -177,10 +190,25 @@ export async function POST(request: NextRequest) {
             const month = current.getMonth() + 1
             const day = current.getDate()
             const ym = ymKey(year, month)
+            const key = `${siteId}_${data.workerId}_${ym}_${String(day)}`
+            const att = await getAtt(ym)
+            const existing = att[key]
 
-            await setAttendanceEntry(siteId, data.workerId, ym, day, { w: 0, hk: 1 })
+            // 既に有給(p) / 休み(r) / 出勤(w>0) が記録されている日はスキップ
+            const hasP = existing && existing.p && existing.p > 0
+            const hasR = existing && existing.r && existing.r > 0
+            const hasWork = existing && existing.w && existing.w > 0
+            if (hasP || hasR || hasWork) {
+              skippedDates.push(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
+            } else {
+              await setAttendanceEntry(siteId, data.workerId, ym, day, { w: 0, hk: 1 })
+            }
           }
           current.setDate(current.getDate() + 1)
+        }
+
+        if (skippedDates.length > 0) {
+          console.warn(`[home-long-leave/approve] 既存エントリありスキップ: ${data.workerName} (${data.workerId}) - ${skippedDates.join(', ')}`)
         }
       }
 

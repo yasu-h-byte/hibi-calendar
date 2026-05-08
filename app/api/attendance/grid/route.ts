@@ -350,12 +350,20 @@ export async function POST(request: NextRequest) {
             }
           }
         } catch (e) {
+          // ⚠️ fail-closed: ガード判定に失敗したら拒否する（fail-open は本ガードの趣旨に反する）。
+          //   2026-05-08 修正。判定経路で Firestore 一時障害等が起きても、ベトナム人スタッフ本人入力を
+          //   先行させるルールを破らない。
           console.error('Vietnamese-worker guard error:', e)
-          // ガード判定に失敗した場合は安全側に倒して保存を継続（既存運用を壊さない）
+          return NextResponse.json({ error: 'ガード判定に失敗しました（一時的な障害の可能性）' }, { status: 503 })
         }
       }
 
       if (entry && typeof entry === 'object') {
+        // ⚠️ 空オブジェクト {} は禁止（既存エントリを空マップに置換すると 2026-05-07 事故の同種パターン）。
+        //   有効なエントリであることを保証してから保存。
+        if (Object.keys(entry).length === 0) {
+          return NextResponse.json({ error: 'Empty entry rejected' }, { status: 400 })
+        }
         // 有効なエントリ: ソース情報を付与して保存
         const entryWithSource = { ...entry, s: 'admin' }
         await setDoc(docRef, { d: { [key]: entryWithSource } }, { merge: true })
@@ -370,6 +378,10 @@ export async function POST(request: NextRequest) {
     if (subconId !== undefined && subconEntry !== undefined) {
       const key = `${siteId}_${subconId}_${ym}_${String(day)}`
       if (subconEntry && typeof subconEntry === 'object') {
+        // ⚠️ 同上: 外注エントリも空マップ拒否
+        if (Object.keys(subconEntry).length === 0) {
+          return NextResponse.json({ error: 'Empty subcon entry rejected' }, { status: 400 })
+        }
         await setDoc(docRef, { sd: { [key]: subconEntry } }, { merge: true })
       } else {
         const { deleteField, updateDoc } = await import('firebase/firestore')

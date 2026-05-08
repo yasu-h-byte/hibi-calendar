@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
@@ -19,8 +19,13 @@ import { logActivity } from '@/lib/activity'
  * 認証: x-admin-password ヘッダ（admin/super-admin のみ）
  */
 export async function GET(request: NextRequest) {
-  if (!(await checkApiAuth(request))) {
+  // バックアップ一覧・プレビューも admin 限定（中身に給与情報等が含まれるため）
+  const authResult = await getApiAuthUser(request)
+  if (!authResult.authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (authResult.actor !== 'admin' && authResult.actor !== 'super-admin') {
+    return NextResponse.json({ error: 'admin 権限が必要です' }, { status: 403 })
   }
   const action = request.nextUrl.searchParams.get('action') || 'list'
 
@@ -70,11 +75,16 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await checkApiAuth(request))) {
+  // ⚠️ 復元は admin / super-admin (靖仁さん) 限定。職長・事務・経理の個人パスワードでは拒否。
+  // 任意のスナップショットで demmen/main や att_YYYYMM を全置換できる強力な操作のため。
+  const authResult = await getApiAuthUser(request)
+  if (!authResult.authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const authResult = await getApiAuthUser(request)
-  const actor = authResult.authorized ? String(authResult.actor) : 'admin'
+  if (authResult.actor !== 'admin' && authResult.actor !== 'super-admin') {
+    return NextResponse.json({ error: 'admin 権限が必要です' }, { status: 403 })
+  }
+  const actor = String(authResult.actor)
   const { snapshotId, mode, confirmText } = (await request.json()) as {
     snapshotId?: string
     mode?: 'overwrite' | 'merge'

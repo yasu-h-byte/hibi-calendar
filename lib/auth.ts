@@ -93,8 +93,44 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
 
 const APPROVER_ID = 1 // 日比政仁
 
-export function determineRole(workerId: number, sites: Site[]): { role: UserRole; foremanSites: string[] } {
-  const foremanSites = sites.filter(s => s.foreman === workerId).map(s => s.id)
+/** 当月の YYYYMM を返す（JST 基準） */
+function currentYm(): string {
+  const now = new Date()
+  const jst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+  return `${jst.getFullYear()}${String(jst.getMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * 当該ワーカーが「現在月で職長として担当する現場ID」を返す。
+ * mforeman[siteId_ym] の月別 override を優先し、なければ sites.foreman を採用。
+ *
+ * 2026-05-08 修正: mforeman を反映していなかったため、月途中の職長交代で
+ *   旧職長が承認できる/新職長が承認できない事態が起きていた。
+ */
+function computeForemanSites(
+  workerId: number,
+  sites: Site[],
+  mforeman: Record<string, { foreman?: number; wid?: number }>,
+  ym: string,
+): string[] {
+  const result: string[] = []
+  for (const site of sites) {
+    if (site.archived) continue
+    const monthKey = `${site.id}_${ym}`
+    const override = mforeman[monthKey]?.foreman ?? mforeman[monthKey]?.wid
+    const effective = override ?? site.foreman
+    if (effective === workerId) result.push(site.id)
+  }
+  return result
+}
+
+export function determineRole(
+  workerId: number,
+  sites: Site[],
+  mforeman: Record<string, { foreman?: number; wid?: number }> = {},
+  ym: string = currentYm(),
+): { role: UserRole; foremanSites: string[] } {
+  const foremanSites = computeForemanSites(workerId, sites, mforeman, ym)
 
   if (workerId === APPROVER_ID) {
     return { role: 'approver', foremanSites }
@@ -107,7 +143,12 @@ export function determineRole(workerId: number, sites: Site[]): { role: UserRole
   return { role: 'admin', foremanSites: [] }
 }
 
-export function buildAuthUser(worker: Worker, sites: Site[]): AuthUser {
+export function buildAuthUser(
+  worker: Worker,
+  sites: Site[],
+  mforeman: Record<string, { foreman?: number; wid?: number }> = {},
+): AuthUser {
+  const ym = currentYm()
   // 事務ロールはjobTypeで直接判定
   if (worker.jobType === 'jimu') {
     return {
@@ -122,7 +163,7 @@ export function buildAuthUser(worker: Worker, sites: Site[]): AuthUser {
   // 役員ロールはjobTypeで直接判定。ただし政仁さん（APPROVER_ID=1）は事業責任者ロール
   // 役員が現場の foreman として登録されていても admin として扱う
   if (worker.jobType === 'yakuin') {
-    const foremanSites = sites.filter(s => s.foreman === worker.id).map(s => s.id)
+    const foremanSites = computeForemanSites(worker.id, sites, mforeman, ym)
     return {
       workerId: worker.id,
       name: worker.name,
@@ -134,7 +175,7 @@ export function buildAuthUser(worker: Worker, sites: Site[]): AuthUser {
 
   // 職長ロールはjobTypeでも判定（アーカイブ済み現場の職長に対応）
   if (worker.jobType === 'shokucho') {
-    const foremanSites = sites.filter(s => s.foreman === worker.id).map(s => s.id)
+    const foremanSites = computeForemanSites(worker.id, sites, mforeman, ym)
     return {
       workerId: worker.id,
       name: worker.name,
@@ -144,7 +185,7 @@ export function buildAuthUser(worker: Worker, sites: Site[]): AuthUser {
     }
   }
 
-  const { role, foremanSites } = determineRole(worker.id, sites)
+  const { role, foremanSites } = determineRole(worker.id, sites, mforeman, ym)
   return {
     workerId: worker.id,
     name: worker.name,

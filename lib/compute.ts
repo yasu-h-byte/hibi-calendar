@@ -1,6 +1,6 @@
 import { db } from './firebase'
 import { doc, getDoc } from 'firebase/firestore'
-import { AttendanceEntry } from '@/types'
+import { AttendanceEntry, calcActualHours } from '@/types'
 import { ymKey } from './attendance'
 
 // ────────────────────────────────────────
@@ -767,6 +767,16 @@ export function computeMonthly(
   // Worker monthly map
   // ★ この月時点で出向中かどうかを ym で判定（dispatchFrom 以降のみ true）
   const workerMap = new Map<number, WorkerMonthly>()
+  // 現場ごとの workSchedule マップを構築（時間ベース入力での実労働時間計算に使用）
+  // ※ RawSite では一部フィールドが optional のため、SiteWorkSchedule への代入時に補完が必要
+  const siteScheduleMap = new Map<string, RawSite['workSchedule']>()
+  for (const s of main.sites) {
+    siteScheduleMap.set(s.id, s.workSchedule)
+  }
+
+  // 月の実労働時間累積（時間ベース入力対応）。新ルールの法定上限判定に使用。
+  const actualWorkHoursAccumByWid = new Map<number, number>()
+
   for (const w of main.workers) {
     if (w.retired) continue
     const dispatchedThisMonth = isDispatchedAt(w, ym)
@@ -781,6 +791,7 @@ export function computeMonthly(
       dispatchTo: dispatchedThisMonth ? (w.dispatchTo || '') : '',
       dispatchDeduction: 0,
     })
+    actualWorkHoursAccumByWid.set(w.id, 0)
   }
 
   // Subcon monthly map
@@ -841,6 +852,24 @@ export function computeMonthly(
     if (isComp) wm.compDays += 1
     if (entry.o && entry.o > 0 && !isComp) wm.otHours += entry.o
     if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
+
+    // ⏱️ 実労働時間を正確に集計（新ルール=5月以降の法定上限判定に使用）
+    //   - 時間ベース入力（st/et あり）: calcActualHours で実時間（休憩控除済み・残業含む）を取得
+    //   - レガシー（st/et なし）: w * 7h + entry.o（5月以降の例外的レガシー入力にも対応）
+    //   - 補償日 (isComp) は実労働時間に含めない（新ルールの法定上限から除外）
+    if (!isComp) {
+      let dayHours = 0
+      if (entry.st && entry.et) {
+        // 時間ベース: 現場の workSchedule に従って実労働を計算
+        // ※ RawSite の workSchedule は optional だが、calcActualHours は内部で `?.` でアクセスするので安全
+        dayHours = calcActualHours(entry, siteScheduleMap.get(siteId) as Parameters<typeof calcActualHours>[1])
+      } else {
+        // レガシー: 1日所定（=7h）+ 残業
+        dayHours = (entry.w || 0) * 7 + (entry.o || 0)
+      }
+      const accum = actualWorkHoursAccumByWid.get(wid) || 0
+      actualWorkHoursAccumByWid.set(wid, accum + dayHours)
+    }
 
     // ★ サイト別コストは直接エントリごとに加算
     const otDiv = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
@@ -929,7 +958,9 @@ export function computeMonthly(
       const additionalAllow = Math.round(wm.hourlyRate * additionalDays * 7)
 
       // 残業手当 = 時給 × 1.25 × MAX(0, 実労働時間 − 法定上限)
-      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
+      // ⏱️ 実労働時間は時間ベース入力から正確に集計したもの（2026-05-08 修正）
+      //   旧: actualWorkDays * 7 + otHours は早退・現場別所定を反映できなかった
+      const actualWorkH = actualWorkHoursAccumByWid.get(wm.id) || 0
       const legalOt = Math.max(0, actualWorkH - legalLimitH)
       const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
 
@@ -1014,7 +1045,8 @@ export function computeMonthly(
       const additionalDays = Math.max(0, wm.actualWorkDays - baseDays)
       const additionalAllow = Math.round(derivedHourlyRate * additionalDays * 7)
 
-      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
+      // ⏱️ 実労働時間は時間ベース入力から正確に集計（2026-05-08 修正、hourlyRate版と同じ）
+      const actualWorkH = actualWorkHoursAccumByWid.get(wm.id) || 0
       const legalOt = Math.max(0, actualWorkH - legalLimitH)
       const otAllowance = Math.round(derivedHourlyRate * 1.25 * legalOt)
 

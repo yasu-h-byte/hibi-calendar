@@ -41,7 +41,9 @@ export async function POST(request: NextRequest) {
         const [workers, sites] = await Promise.all([getWorkers(), getSites()])
         const worker = workers.find(w => w.id === Number(wid))
         if (worker) {
-          const authUser = buildAuthUser(worker, sites)
+          // 月別職長 override を反映
+          const mforeman = (mainData.mforeman || {}) as Record<string, { foreman?: number; wid?: number }>
+          const authUser = buildAuthUser(worker, sites, mforeman)
           recordAccess({
             workerId: worker.id,
             workerName: worker.name,
@@ -77,7 +79,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
   }
 
-  const authUser = buildAuthUser(worker, sites)
+  // 月別職長 override を反映するため main.mforeman を取得
+  const mainSnap2 = await getDoc(doc(db, 'demmen', 'main'))
+  const mforeman = mainSnap2.exists()
+    ? ((mainSnap2.data().mforeman || {}) as Record<string, { foreman?: number; wid?: number }>)
+    : {}
+  const authUser = buildAuthUser(worker, sites, mforeman)
   recordAccess({
     workerId: worker.id,
     workerName: worker.name,

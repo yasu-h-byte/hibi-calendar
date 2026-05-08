@@ -170,7 +170,9 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (e) {
+        // ⚠️ fail-closed: 判定不能時は拒否（2026-05-08 修正）
         console.error('Vietnamese-worker guard error (foreman):', e)
+        return NextResponse.json({ error: 'ガード判定に失敗しました（一時的な障害の可能性）' }, { status: 503 })
       }
 
       // Build entry with s:'foreman' source tracking
