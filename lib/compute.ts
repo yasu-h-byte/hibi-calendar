@@ -1264,14 +1264,44 @@ export function calculateOvertimeSummary(
     const weekNum = Math.floor(dayOffset / 7) + 1
 
     // カレンダーから所定時間を判定（複数現場 → 出勤日があれば出勤）
+    // ⚠️ 2026-05-08 修正: 所定時間を「現場の workSchedule から動的計算」に変更。
+    //   旧: prescribed = isWorkDay ? 7 : 0 （IHI現場 7:30-16:30 でも 7h 固定だった）
+    //   新: 当日に出勤予定の現場の workSchedule から実労働所定を計算
     let isWorkDay = false
+    let workSiteIdForDay: string | null = null
     for (const siteId of Object.keys(calendarDays)) {
       const dayType = calendarDays[siteId]?.[String(d)]
-      if (dayType === 'work') { isWorkDay = true; break }
+      if (dayType === 'work') {
+        isWorkDay = true
+        workSiteIdForDay = siteId
+        break
+      }
     }
 
     const isLegalHoliday = dow === 0 // 日曜日 = 法定休日
-    const prescribed = isWorkDay ? 7 : 0
+
+    // 現場の workSchedule から所定時間を計算（休憩を引いた実労働相当）
+    const calcPrescribedH = (siteId: string | null): number => {
+      if (!siteId) return 7
+      const site = sites.find(s => s.id === siteId)
+      const ws = site?.workSchedule
+      if (!ws?.startTime || !ws?.endTime) return 7  // workSchedule 未設定 → デフォルト 7h
+      const stParts = ws.startTime.split(':').map(Number)
+      const etParts = ws.endTime.split(':').map(Number)
+      const startMin = stParts[0] * 60 + (stParts[1] || 0)
+      const endMin = etParts[0] * 60 + (etParts[1] || 0)
+      let totalMin = endMin - startMin
+      // 休憩は mandatory のものを引く（出勤予定の所定時間なので強制休憩のみ控除）
+      if (ws.morningBreak?.enabled !== false && ws.morningBreak?.mandatory) totalMin -= ws.morningBreak.minutes ?? 30
+      if (ws.lunchBreak?.enabled !== false && ws.lunchBreak?.mandatory) totalMin -= ws.lunchBreak.minutes ?? 60
+      if (ws.afternoonBreak?.enabled !== false && ws.afternoonBreak?.mandatory) totalMin -= ws.afternoonBreak.minutes ?? 30
+      // 必須休憩のみだと長すぎるので、デフォルトのフル休憩で計算したい場合は全体引く
+      // 現状の運用は「全休憩を取る前提」 → 全部引く
+      if (ws.morningBreak?.enabled !== false && !ws.morningBreak?.mandatory) totalMin -= ws.morningBreak?.minutes ?? 30
+      if (ws.afternoonBreak?.enabled !== false && !ws.afternoonBreak?.mandatory) totalMin -= ws.afternoonBreak?.minutes ?? 30
+      return Math.max(0, Math.round(totalMin / 60 * 10) / 10)
+    }
+    const prescribed = isWorkDay ? calcPrescribedH(workSiteIdForDay) : 0
 
     // 出面データから実労働時間を取得
     let actual = 0

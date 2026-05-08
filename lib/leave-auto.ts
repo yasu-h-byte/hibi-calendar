@@ -136,12 +136,18 @@ export function calcNextGrantDate(
 /**
  * Calculate carry-over days from previous grant record.
  * Max carry is 20 days.
+ *
+ * ⚠️ 2026-05-08 修正:
+ *   _archived: true レコード（時効処理済の古いレコード）は前期判定から除外。
+ *   旧コードでは archived なレコードでも grantDays > 0 ならば最新FY判定に拾われ、
+ *   archived の fy 値が大きい場合に誤った前期を採用するリスクがあった。
  */
 function calcCarryOver(existingRecords: PLRecord[]): number {
   if (existingRecords.length === 0) return 0
 
-  // Find the most recent FY with grant data
-  const withGrant = existingRecords.filter(r => (r.grantDays || 0) > 0 || (r.grant || 0) > 0)
+  // archived（時効処理済み）を除外し、付与実績のあるレコードのみを対象に
+  const active = existingRecords.filter(r => !(r as PLRecord & { _archived?: boolean })._archived)
+  const withGrant = active.filter(r => (r.grantDays || 0) > 0 || (r.grant || 0) > 0)
   if (withGrant.length === 0) return 0
 
   // 最新FYを特定

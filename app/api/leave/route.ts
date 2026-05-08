@@ -23,7 +23,9 @@ function calcCarryOverForWorker(
   const newGrantTime = new Date(newGrantDate).getTime()
   if (isNaN(newGrantTime)) return 0
 
+  // ⚠️ 2026-05-08 修正: archived（時効処理済）レコードは前期判定から除外
   const prevRecs = records
+    .filter(r => !(r as PLRecLite & { _archived?: boolean })._archived)
     .filter(r => r.grantDate && ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0))
     .filter(r => {
       const t = new Date(r.grantDate!).getTime()
@@ -153,8 +155,8 @@ export async function POST(request: NextRequest) {
       rec.lastEditedAt = nowIso
       rec.lastEditedBy = actor
 
-      plData[String(workerId)] = wRecords
-      await updateDoc(docRef, { plData })
+      // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
+      await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
       return NextResponse.json({ success: true, totalBuyout })
     }
 
@@ -218,8 +220,8 @@ export async function POST(request: NextRequest) {
       targetRec.lastEditedAt = nowIso
       targetRec.lastEditedBy = actor
 
-      plData[String(workerId)] = wRecords
-      await updateDoc(docRef, { plData })
+      // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
+      await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
       return NextResponse.json({ success: true, written })
     }
 
@@ -258,10 +260,14 @@ export async function POST(request: NextRequest) {
           if (exp >= todayDate) continue  // まだ期限内
 
           // 期限切れ → 残日数計算
-          // 残 = grantDays + carryOver - adjustment - (付与期間内のP消化)
+          // 残 = grantDays + carryOver - adjustment - buyoutDays - (付与期間内のP消化)
+          // ⚠️ 2026-05-08 修正: buyoutDays（買取済み日数）を控除
+          //   日本人で年度末買取後に時効処理されると、買取済みの分も「未消化のまま時効」と
+          //   記録されてしまう問題があった。
           const grantDays = (r.grantDays as number | undefined) ?? 0
           const carryOver = (r.carryOver as number | undefined) ?? 0
           const adjustment = (r.adjustment as number | undefined) ?? 0
+          const buyoutDays = (r.buyoutDays as number | undefined) ?? 0
           const periodStart = gd
           const periodEnd = new Date(gd)
           periodEnd.setFullYear(periodEnd.getFullYear() + 1)
@@ -275,7 +281,7 @@ export async function POST(request: NextRequest) {
             const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
             if (d >= periodStart && d < periodEnd) periodUsed++
           }
-          const expiredDays = Math.max(0, grantDays + carryOver - adjustment - periodUsed)
+          const expiredDays = Math.max(0, grantDays + carryOver - adjustment - buyoutDays - periodUsed)
 
           r.expiredDays = expiredDays
           r.expiredAt = nowIso
@@ -292,6 +298,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // race-warning: 同時実行は要注意（全 worker の plData を一括書き換えるため、
+      //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       await updateDoc(docRef, { plData })
       return NextResponse.json({
         success: true,
@@ -508,6 +516,8 @@ export async function POST(request: NextRequest) {
         plData[wid] = records
       }
 
+      // race-warning: 同時実行は要注意（全 worker の plData を一括書き換えるため、
+      //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       await updateDoc(docRef, { plData })
       return NextResponse.json({ success: true, stats })
     }
@@ -764,6 +774,8 @@ export async function POST(request: NextRequest) {
         granted++
       }
 
+      // race-warning: 同時実行は要注意（複数 worker の plData を一括書き換えるため、
+      //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       await updateDoc(docRef, { plData })
       return NextResponse.json({ success: true, granted })
     }
@@ -874,21 +886,20 @@ export async function POST(request: NextRequest) {
         records.push(record)
       }
 
-      // Also store grantMonth on the worker if provided
+      // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
+      // workers 配列は全体置換が必要だが、それは plData とは独立したフィールドなので
+      // plData の他 worker への影響はない。
       if (grantMonth) {
         const workers = (snap.data().workers || []) as { id: number; grantMonth?: number }[]
         const wIdx = workers.findIndex(w => w.id === Number(workerId))
         if (wIdx >= 0) {
           workers[wIdx].grantMonth = Number(grantMonth)
-          plData[key] = records
-          await updateDoc(docRef, { plData, workers })
+          await updateDoc(docRef, { [`plData.${key}`]: records, workers })
         } else {
-          plData[key] = records
-          await updateDoc(docRef, { plData })
+          await updateDoc(docRef, { [`plData.${key}`]: records })
         }
       } else {
-        plData[key] = records
-        await updateDoc(docRef, { plData })
+        await updateDoc(docRef, { [`plData.${key}`]: records })
       }
 
       return NextResponse.json({ success: true })
@@ -942,6 +953,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // race-warning: 同時実行は要注意（全 worker の plData を一括書き換えるため、
+      //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       await updateDoc(docRef, { plData })
       return NextResponse.json({ success: true, updated })
     }
@@ -1049,8 +1062,8 @@ export async function POST(request: NextRequest) {
       } as { fy: string; grantDate?: string; grantDays: number; carryOver: number; adjustment: number })
     }
 
-    plData[key] = records
-    await updateDoc(docRef, { plData })
+    // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
+    await updateDoc(docRef, { [`plData.${key}`]: records })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Leave POST error:', error)
@@ -1245,11 +1258,13 @@ export async function GET(request: NextRequest) {
         // Legal PL calculation info
         const legalPL = w.hireDate ? calcLegalPL(w.hireDate, grantDate || new Date().toISOString().split('T')[0]) : 0
 
-        // 年5日取得義務チェック
-        // 条件: 外国人 + 年10日以上付与 + 有効期限まで残り3ヶ月以内 + 5日未満消化
+        // 年5日取得義務チェック（労基法第39条第7項）
+        // 条件: 年10日以上付与 + 有効期限まで残り3ヶ月以内 + 5日未満消化
+        // ⚠️ 2026-05-08 修正: 国籍に関係なく年10日以上付与のスタッフ全員が対象。
+        //   旧コードは外国人(visa!=='none')限定だったが、勤続6.5年以上の日本人も
+        //   年20日付与で同義務対象なので含める必要があった。
         let fiveDayShortfall = 0
-        const isGaikoku = w.visa && w.visa !== 'none'
-        if (isGaikoku && grantDays >= 10 && periodUsed < 5) {
+        if (grantDays >= 10 && periodUsed < 5) {
           if (expiryDate) {
             const exp = new Date(expiryDate)
             const now = new Date()

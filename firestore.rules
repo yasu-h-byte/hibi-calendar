@@ -43,7 +43,9 @@ service cloud.firestore {
     }
 
     // マスターデータ（main）：新アプリ（パスワード認証）からも読み書き可能
-    // 重要マップ (workers, sites, plData, homeLeaves, subcons) を空に置換する書き込みは拒否。
+    // 重要マップを空に置換する書き込みは拒否。
+    // 2026-05-08 強化: massign / userPasswords / siteWorkDays / workDays / locks / evaluationSettings も追加。
+    //   userPasswords が空に上書きされると全社員ログイン不能になるため特に重要。
     match /demmen/main {
       allow read: if true;
       allow create: if true;
@@ -54,7 +56,13 @@ service cloud.firestore {
                  && notWipingMap('homeLeaves')
                  && notWipingMap('subcons')
                  && notWipingMap('assign')
-                 && notWipingMap('mforeman');
+                 && notWipingMap('massign')
+                 && notWipingMap('mforeman')
+                 && notWipingMap('userPasswords')
+                 && notWipingMap('siteWorkDays')
+                 && notWipingMap('workDays')
+                 && notWipingMap('locks')
+                 && notWipingMap('evaluationSettings');
     }
     // 請求額データ（billing_data）：ロール持ちのみ書き込み
     match /demmen/billing_data {
@@ -74,14 +82,15 @@ service cloud.firestore {
     }
 
     // ────────────────────────────────────────
-    //  有給申請
+    //  有給申請（スマホからスタッフが申請するため非認証 read/write 必要）
+    //  ⚠️ 偽申請の可能性は API 側のサーバ検証で防ぐ（職長承認・最終承認の二段階）
     // ────────────────────────────────────────
     match /leaveRequests/{docId} {
       allow read, write: if true;
     }
 
     // ────────────────────────────────────────
-    //  長期休暇（帰国）申請
+    //  長期休暇（帰国）申請（同上）
     // ────────────────────────────────────────
     match /homeLongLeave/{docId} {
       allow read, write: if true;
@@ -120,15 +129,24 @@ service cloud.firestore {
     }
 
     // 出面承認データ（新アプリ用）
+    // ⚠️ 2026-05-08 強化: 2段階承認 (foreman/final) のフィールド消失防止
+    //   foreman を空マップに置換すると承認失効、final も同様
     match /attendanceApprovals/{docId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if true;
+      allow delete: if true;  // 承認解除で削除されることがある
+      allow update: if notWipingMap('foreman') && notWipingMap('final');
     }
 
     // ────────────────────────────────────────
     //  HR評価データ
     // ────────────────────────────────────────
+    // 評価セッションは reviews 配列に各評価者が追記するので、空マップ化は要注意
     match /evaluations/{docId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if true;
+      allow delete: if false;  // 評価データの削除は禁止（履歴を残す）
+      allow update: if true;
     }
 
     // ────────────────────────────────────────
@@ -148,9 +166,21 @@ service cloud.firestore {
     // ────────────────────────────────────────
     //  バックアップスナップショット (PITR 代替)
     //  /api/backup/snapshot から日次で書き込まれる
+    //  ⚠️ Firebase Admin SDK 未導入のため API も client SDK を使う。
+    //     したがって client/server を rules で区別できず、書き込み許可が必要。
+    //     代わりに schema 制約で偽データ注入を抑止する:
+    //       - data フィールドが必須（中身があるバックアップしか書けない）
+    //       - sourceId が "demmen/" で始まる
+    //     これで「空オブジェクトの偽バックアップ」攻撃は防げる。
     // ────────────────────────────────────────
     match /backups/{docId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create: if request.resource.data.sourceId is string
+                 && request.resource.data.sourceId.matches('demmen/.*')
+                 && request.resource.data.data is map
+                 && request.resource.data.data.size() > 0;
+      allow update: if false;  // バックアップは追記のみ、変更は禁止
+      allow delete: if true;   // 古いスナップショットの自動削除
     }
   }
 }

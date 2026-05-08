@@ -247,6 +247,41 @@ export async function POST(request: NextRequest) {
     const { doc, setDoc, getDoc } = await import('firebase/firestore')
     const { db } = await import('@/lib/firebase')
 
+    // ⚠️ 月次ロックチェック（2026-05-08 追加）
+    //   出面エントリの編集は ym がロックされている場合は API レベルで拒否。
+    //   UIレベルでは表示済みだが、UI を介さず直接 POST する経路を塞ぐ。
+    //   admin は強制解除のため lock 系アクションは別ロジックなので影響なし。
+    //   保存以外の管理アクション (saveWorkDays/saveAssign/approve系) は対象外。
+    const isAttendanceWriteAction =
+      !action || action === 'saveAttendance'  // デフォルトの出面エントリ保存
+    if (isAttendanceWriteAction) {
+      const { ym } = body
+      if (ym) {
+        const main = await getMainData()
+        const lockedLegacy = !!(main.locks?.[ym])
+        const lockedHibi = !!(main.locks?.[`${ym}_hibi`]) || lockedLegacy
+        const lockedHfu = !!(main.locks?.[`${ym}_hfu`]) || lockedLegacy
+        // 両方ロックされていれば全社ロック → 編集禁止
+        if (lockedHibi && lockedHfu) {
+          return NextResponse.json({ error: '月次ロック済みのため編集できません' }, { status: 409 })
+        }
+        // 一部組織のみロック時の判定はワーカーの所属で分岐すべきだが、
+        // grid POST では entry に workerId が含まれるのでチェック可能
+        if (body.workerId !== undefined) {
+          const w = main.workers.find(ww => ww.id === Number(body.workerId))
+          if (w) {
+            const wOrg = w.org === 'hfu' || w.org === 'HFU' ? 'hfu' : 'hibi'
+            if (wOrg === 'hibi' && lockedHibi) {
+              return NextResponse.json({ error: '日比建設の月次ロック済みのため編集できません' }, { status: 409 })
+            }
+            if (wOrg === 'hfu' && lockedHfu) {
+              return NextResponse.json({ error: 'HFUの月次ロック済みのため編集できません' }, { status: 409 })
+            }
+          }
+        }
+      }
+    }
+
     // Action: save workDays
     if (action === 'saveWorkDays') {
       const { ym, value } = body
