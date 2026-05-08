@@ -1082,7 +1082,9 @@ export function computeMonthly(
       const compAllowance = Math.round(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)
       const otAllowance = Math.round(hourlyRate * 1.25 * wm.otHours)
       const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.compDays - wm.plUsed - wm.examDays)
-      const absentDeduction = Math.round(wm.salary / workerPrescribedDays * absentDays)
+      // ⚠️ 2026-05-08 修正: hourlyRate版と式を統一（旧: salary/days*absentDays、新: hourlyRate*dailyHoursOld*absentDays）
+      //   数学的には等価だが、Math.roundの中間誤差による1〜数円のズレを解消。
+      const absentDeduction = Math.round(hourlyRate * dailyHoursOld * absentDays)
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
       const salaryNet = basePay + compAllowance + otAllowance - absentDeduction
 
@@ -1314,22 +1316,11 @@ export function calculateOvertimeSummary(
       if (!entry) continue
       if (entry.p) { isPaidLeave = true; break }
       if (entry.w && entry.w > 0) {
+        // ⚠️ 2026-05-08 修正: 月次集計と同じ実労働時間計算を使うため calcActualHours に統一。
+        //   旧: ここに重複した時間計算ロジックがあり、月次集計と微妙にズレる可能性があった。
         if (entry.st && entry.et) {
-          // 時間ベース入力（202605〜）: 始業/終業/休憩から正確に計算
-          // 休憩時間は現場の workSchedule に従う（未設定なら 30/60/30 デフォルト）
-          const stParts = entry.st.split(':').map(Number)
-          const etParts = entry.et.split(':').map(Number)
-          const startMin = stParts[0] * 60 + (stParts[1] || 0)
-          const endMin = etParts[0] * 60 + (etParts[1] || 0)
-          let totalMin = endMin - startMin
-          const ws = site.workSchedule
-          const morningMin   = ws?.morningBreak?.enabled === false   ? 0 : (ws?.morningBreak?.minutes   ?? 30)
-          const lunchMin     = ws?.lunchBreak?.enabled === false     ? 0 : (ws?.lunchBreak?.minutes     ?? 60)
-          const afternoonMin = ws?.afternoonBreak?.enabled === false ? 0 : (ws?.afternoonBreak?.minutes ?? 30)
-          if (entry.b1) totalMin -= morningMin
-          if (entry.b2) totalMin -= lunchMin
-          if (entry.b3) totalMin -= afternoonMin
-          actual = Math.max(0, Math.round(totalMin / 60 * 10) / 10)
+          // 時間ベース入力（202605〜）: calcActualHours で実時間（休憩控除済み）を取得
+          actual = calcActualHours(entry, site.workSchedule as Parameters<typeof calcActualHours>[1])
           overtime = Math.max(0, Math.round((actual - 7) * 10) / 10)
         } else {
           // レガシー入力（202604以前）: 出勤=7h + 残業h
