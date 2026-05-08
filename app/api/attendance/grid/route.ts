@@ -400,8 +400,13 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Empty entry rejected' }, { status: 400 })
         }
         // 有効なエントリ: ソース情報を付与して保存
-        const entryWithSource = { ...entry, s: 'admin' }
-        await setDoc(docRef, { d: { [key]: entryWithSource } }, { merge: true })
+        // ⚠️ 2026-05-09 根本原因対処: ステータス変更時の残骸を消すため
+        //   setAttendanceEntry + computeAttendanceDeleteFields 経由で書き込む。
+        //   旧コードは setDoc(merge:true) で残骸が残っていた。
+        const entryWithSource = { ...entry, s: 'admin' } as AttendanceEntry
+        const { setAttendanceEntry, computeAttendanceDeleteFields } = await import('@/lib/attendance')
+        const deleteFields = computeAttendanceDeleteFields(entryWithSource)
+        await setAttendanceEntry(siteId, Number(workerId), ym, Number(day), entryWithSource, { deleteFields })
       } else {
         // nullまたは無効なエントリ: フィールドを削除
         const { deleteField } = await import('firebase/firestore')

@@ -10,6 +10,7 @@ import {
   attKey,
   formatDateJP,
   formatDateShort,
+  computeAttendanceDeleteFields,
 } from '@/lib/attendance'
 import { getSites } from '@/lib/sites'
 import { db } from '@/lib/firebase'
@@ -381,6 +382,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Build entry
+    //
+    // ⚠️ 2026-05-09 根本原因対処（c36517b の安全再実装）:
+    //   ステータス変更時に古いフィールド（出勤の時刻、休みの理由、残業時間など）が
+    //   merge:true で残り続けるバグの根治。
+    //   computeAttendanceDeleteFields(entry) で「新エントリに含まれない既知フィールドを
+    //   自動算出して削除」することで、漏れなく残骸を消す。
     let entry: AttendanceEntry
     const isTimeBased = !!(startTime && endTime) // 時間ベース入力（202605〜）
     switch (choice) {
@@ -433,7 +440,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
     }
 
-    await setAttendanceEntry(siteId, worker.id, ym, day, entry)
+    // 残骸消去: entry に含まれない既知フィールドを全て削除
+    const deleteFields = computeAttendanceDeleteFields(entry)
+    await setAttendanceEntry(siteId, worker.id, ym, day, entry, { deleteFields })
 
     return NextResponse.json({ success: true, entry })
   } catch (error) {

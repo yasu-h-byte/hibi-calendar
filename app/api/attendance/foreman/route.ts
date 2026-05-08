@@ -176,6 +176,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Build entry with s:'foreman' source tracking
+      // ⚠️ 2026-05-09 根本原因対処: ステータス変更時に古いフィールドを残さない
+      //   computeAttendanceDeleteFields で「新エントリに含まれない既知フィールドを自動算出」
       let entry: AttendanceEntry
       switch (choice) {
         case 'work':
@@ -194,7 +196,9 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
       }
 
-      await setAttendanceEntry(site.id, workerId, ym, day, entry)
+      const { computeAttendanceDeleteFields } = await import('@/lib/attendance')
+      const deleteFields = computeAttendanceDeleteFields(entry)
+      await setAttendanceEntry(site.id, workerId, ym, day, entry, { deleteFields })
       return NextResponse.json({ success: true, entry })
     }
 

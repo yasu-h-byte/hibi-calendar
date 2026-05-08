@@ -187,6 +187,38 @@ export async function getAttendanceDoc(ym: string): Promise<Record<string, Atten
   return (docSnap.data().d as Record<string, AttendanceEntry>) || {}
 }
 
+/**
+ * 出面エントリから「削除すべき残骸フィールド」を自動算出する。
+ *
+ * 設計思想 (2026-05-09):
+ *   出面エントリは7つの主要フィールドを持つ:
+ *     w (出勤), o (残業時間), p (有給), r (休み), h (現場休), hk (帰国中), exam (試験)
+ *   さらに時間ベース入力 (5月以降) では st/et/b1/b2/b3、休みでは rReason/rNote。
+ *
+ *   ステータス変更時に古いフィールドが残ると、集計コードが残骸データを誤って計上する
+ *   リスクがある（2026-05-09 ビンさん事案）。
+ *   このヘルパーは「**新エントリで言及されていない既知フィールドを全て削除する**」
+ *   というシンプルな原則に基づき、漏れなく残骸を消す。
+ *
+ * 使い方:
+ *   const entry = { w: 0, p: 1, s: 'staff' }   // 有給
+ *   const deleteFields = computeAttendanceDeleteFields(entry)
+ *   // deleteFields = ['o', 'r', 'h', 'hk', 'exam', 'st', 'et', 'b1', 'b2', 'b3', 'rReason', 'rNote']
+ *   await setAttendanceEntry(siteId, workerId, ym, day, entry, { deleteFields })
+ */
+export function computeAttendanceDeleteFields(entry: AttendanceEntry): string[] {
+  const ALL_KNOWN_FIELDS = [
+    'w', 'o',                                  // 出勤・残業
+    'p', 'r', 'h', 'hk', 'exam',                // ステータス flag
+    'st', 'et', 'b1', 'b2', 'b3',               // 時間ベース
+    'rReason', 'rNote',                          // 休み理由
+  ]
+  // 's' (source) はメタデータなので削除対象外
+  // 新エントリで定義されていないフィールドを削除対象に
+  const present = new Set(Object.keys(entry))
+  return ALL_KNOWN_FIELDS.filter(f => !present.has(f))
+}
+
 export async function setAttendanceEntry(
   siteId: string,
   workerId: number,
