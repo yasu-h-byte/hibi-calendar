@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, collection, getDocs, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { logActivity } from '@/lib/activity'
 import { EvaluationScores, EvaluationWeights, RaiseTableRow, EvaluationReview } from '@/types'
@@ -351,54 +351,72 @@ export async function POST(request: NextRequest) {
       }
 
       const evalRef = doc(db, 'evaluations', evaluationId)
-      const evalSnap = await getDoc(evalRef)
-      if (!evalSnap.exists()) {
-        return NextResponse.json({ error: '評価セッションが見つかりません' }, { status: 404 })
+
+      // ⚠️ 2026-05-08 修正: runTransaction で race condition を解消。
+      //   2人以上の評価者が同時に submit しても、トランザクション内で再読み込みされる
+      //   ため reviews 配列の片方が消失することがない。
+      let workerName = ''
+      let newStatus: 'collecting' | 'reviewing' = 'collecting'
+      try {
+        await runTransaction(db, async (tx) => {
+          const evalSnap = await tx.get(evalRef)
+          if (!evalSnap.exists()) {
+            throw new Error('NOT_FOUND')
+          }
+          const current = evalSnap.data()
+          workerName = (current.workerName as string) || ''
+          if (current.status !== 'collecting') {
+            throw new Error('NOT_COLLECTING')
+          }
+          // evaluatorIds に含まれるか確認
+          const evaluatorIds = current.evaluatorIds as number[]
+          if (!evaluatorIds.includes(evaluatorId)) {
+            throw new Error('NOT_EVALUATOR')
+          }
+          // reviews配列を更新（既存なら上書き、なければ追加）
+          const reviews = ((current.reviews || []) as EvaluationReview[]).slice()
+          const existingIdx = reviews.findIndex(r => r.evaluatorId === evaluatorId)
+          const newReview: EvaluationReview = {
+            evaluatorId,
+            evaluatorName,
+            scores,
+            comment: comment || '',
+            submittedAt: new Date().toISOString(),
+          }
+          if (existingIdx >= 0) {
+            reviews[existingIdx] = newReview
+          } else {
+            reviews.push(newReview)
+          }
+          // 全評価者が提出済みか判定
+          const submittedIds = new Set(reviews.map(r => r.evaluatorId))
+          const allSubmitted = evaluatorIds.every(id => submittedIds.has(id))
+          newStatus = allSubmitted ? 'reviewing' : 'collecting'
+
+          tx.update(evalRef, {
+            reviews,
+            status: newStatus,
+            updatedAt: new Date().toISOString(),
+          })
+        })
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (msg === 'NOT_FOUND') {
+          return NextResponse.json({ error: '評価セッションが見つかりません' }, { status: 404 })
+        }
+        if (msg === 'NOT_COLLECTING') {
+          return NextResponse.json({ error: '収集中の評価セッションのみレビューを提出できます' }, { status: 400 })
+        }
+        if (msg === 'NOT_EVALUATOR') {
+          return NextResponse.json({ error: 'この評価者は評価予定者リストに含まれていません' }, { status: 403 })
+        }
+        throw e
       }
-
-      const current = evalSnap.data()
-      if (current.status !== 'collecting') {
-        return NextResponse.json({ error: '収集中の評価セッションのみレビューを提出できます' }, { status: 400 })
-      }
-
-      // evaluatorIds に含まれるか確認
-      const evaluatorIds = current.evaluatorIds as number[]
-      if (!evaluatorIds.includes(evaluatorId)) {
-        return NextResponse.json({ error: 'この評価者は評価予定者リストに含まれていません' }, { status: 403 })
-      }
-
-      // reviews配列を更新（既存なら上書き、なければ追加）
-      const reviews = (current.reviews || []) as EvaluationReview[]
-      const existingIdx = reviews.findIndex(r => r.evaluatorId === evaluatorId)
-      const newReview: EvaluationReview = {
-        evaluatorId,
-        evaluatorName,
-        scores,
-        comment: comment || '',
-        submittedAt: new Date().toISOString(),
-      }
-
-      if (existingIdx >= 0) {
-        reviews[existingIdx] = newReview
-      } else {
-        reviews.push(newReview)
-      }
-
-      // 全評価者が提出済みか判定
-      const submittedIds = new Set(reviews.map(r => r.evaluatorId))
-      const allSubmitted = evaluatorIds.every(id => submittedIds.has(id))
-      const newStatus = allSubmitted ? 'reviewing' : 'collecting'
-
-      await updateDoc(evalRef, {
-        reviews,
-        status: newStatus,
-        updatedAt: new Date().toISOString(),
-      })
 
       await logActivity(
         String(evaluatorId),
         'evaluation.submitReview',
-        `${current.workerName} の個別評価を提出`,
+        `${workerName} の個別評価を提出`,
       )
 
       return NextResponse.json({ success: true, status: newStatus })
