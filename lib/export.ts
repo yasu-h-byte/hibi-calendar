@@ -831,13 +831,19 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const s1Rows: (string | number | null)[][] = [s1Title]
 
   // -- Workers section --
+  // ルール別ラベル: 4月以前 = 「休業補償」、5月以降 = 「追加所定手当」（同じフィールドを表示用ラベルだけ切替）
+  const useNewRulesForSheet1 = ym >= '202605'
   const wHeaders: string[] = [
     '名前', '所属', '現場', '出勤日数', '有給', '残業(h)', '日額単価', '概算労務費',
   ]
   if (showAbsence) {
     wHeaders.push('欠勤日数', '欠勤控除', '差引支給')
   }
-  wHeaders.push('基本給', '追加所定手当', '残業手当', '欠勤控除', '支給額合計')
+  wHeaders.push(
+    '基本給',
+    useNewRulesForSheet1 ? '追加所定手当' : '休業補償',
+    '残業手当', '欠勤控除', '支給額合計',
+  )
   s1Rows.push(wHeaders)
 
   // Group: 日比建設
@@ -946,13 +952,13 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       : [
           '名前', '時給', '所定日数', '所定時間(h)',
           '実出勤日数', '実労働時間', '残業時間',
-          '基本給', '─', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+          '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
         ]
     s2Rows.push(fHeaders)
 
     for (const w of foreignWorkers) {
-      // 4列目（法定上限/所定時間）: 新ルール = w.legalLimit, 旧ルール = w.prescribedHours
-      // 9列目（追加所定手当）: 新ルールのみ意味あり、旧ルールは "─" で空欄表示
+      // 4列目: 新ルール = w.legalLimit (法定上限), 旧ルール = w.prescribedHours (所定時間)
+      // 9列目: 新ルール = additionalAllowance (追加所定手当), 旧ルール = additionalAllowance (休業補償として使用)
       s2Rows.push([
         w.name,
         w.hourlyRate || 0,
@@ -962,7 +968,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         w.actualWorkHours || 0,
         w.legalOtHours || 0,
         w.fixedBasePay || w.basePay || 0,
-        useNewRulesForSheet2 ? (w.additionalAllowance || 0) : '─',
+        w.additionalAllowance || 0,
         w.otAllowance || 0,
         w.absence || 0,
         w.absentDeduction || 0,
@@ -977,9 +983,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       null,
       foreignWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
-      useNewRulesForSheet2
-        ? foreignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0)
-        : '─',
+      foreignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.absence || 0), 0),
       foreignWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0),
@@ -1001,7 +1005,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       : [
           '名前', '月給', '所定日数', '所定時間(h)',
           '実出勤日数', '実労働時間', '残業時間',
-          '基本給', '─', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
+          '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '支給額合計',
         ]
     s2Rows.push(sfHeaders)
 
@@ -1015,7 +1019,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         w.actualWorkHours || 0,
         w.legalOtHours || 0,
         w.fixedBasePay || w.basePay || 0,
-        useNewRulesForSheet2 ? (w.additionalAllowance || 0) : '─',
+        w.additionalAllowance || 0,
         w.otAllowance || 0,
         w.absence || 0,
         w.absentDeduction || 0,
@@ -1029,9 +1033,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       null,
       salaryForeignWorkers.reduce((s, w) => s + (w.legalOtHours || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
-      useNewRulesForSheet2
-        ? salaryForeignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0)
-        : '─',
+      salaryForeignWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.absence || 0), 0),
       salaryForeignWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0),

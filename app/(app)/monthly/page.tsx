@@ -914,7 +914,10 @@ export default function MonthlyPage() {
                 {showSalaryColumns && (
                   <>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">基本給</th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">追加所定</th>
+                    {/* 4月以前は「休業補償」、5月以降は「追加所定」 */}
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">
+                      {ym >= '202605' ? '追加所定' : '休業補償'}
+                    </th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">残業手当</th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">欠勤控除</th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">支給額合計</th>

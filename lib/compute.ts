@@ -957,26 +957,44 @@ export function computeMonthly(
       wm.absentCost = absentDeduction
       wm.netPay = salaryNet
     } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0) {
-      // ── 4月以前: 月の所定時間ベース（旧ロジック）── 時給ベース ──
-      // 基本給=時給×所定時間, 残業=実労働>所定時間, 欠勤=所定日数下回り分
-      // 所定労働時間は1日6時間40分（= 20/3 ≒ 6.667h）。
-      //   週6日出勤で 6h40m × 6 = 40h で法定上限ぴったり、土曜日も追加割増なし。
-      //   旧契約では 8:00-17:00 の間に休憩140分(30+60+30+20)で実労6h40min。
+      // ── 4月以前: 旧ルール（通常の労働時間制）── 時給ベース ──
+      // 設計（2026-05-08 ユーザー確定）:
+      //   1日所定 = 6時間40分（= 20/3h）。週6日×6h40m = 40h で法定上限内。
+      //   基本給   = 時給 × 月の所定時間（=月所定日数 × 6h40min、固定）
+      //   休業補償 = 補償日数 × 時給 × 6h40min × 0.6 （別項目で加算）
+      //   残業手当 = 月の残業時間合計（= 各日の o の合計） × 時給 × 1.25
+      //              ※ 旧ルールは1日単位での残業判定。月単位の所定超過判定はしない。
+      //   欠勤控除 = 真の欠勤日数 × 時給 × 6h40min
+      //              ※ 0.6補償・有給・試験は出勤扱いで欠勤に含めない。
+      //   支給額  = 基本給 + 休業補償 + 残業手当 − 欠勤控除
       const dailyHoursOld = 20 / 3  // = 6.667h
       const prescribedH = workerPrescribedDays * dailyHoursOld
-      const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.otHours
-      const legalOt = Math.max(0, actualWorkH - prescribedH)
+
+      // 基本給
       const basePay = Math.round(wm.hourlyRate * prescribedH)
-      const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
-      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed)
+
+      // 休業補償（補償日 = 0.6保証）
+      const compAllowance = Math.round(wm.hourlyRate * dailyHoursOld * 0.6 * wm.compDays)
+
+      // 残業手当（日単位の積み上げ）
+      const otAllowance = Math.round(wm.hourlyRate * 1.25 * wm.otHours)
+
+      // 真の欠勤日数（補償・有給・試験は出勤扱い）
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.compDays - wm.plUsed - wm.examDays)
       const absentDeduction = Math.round(wm.hourlyRate * dailyHoursOld * absentDays)
-      const salaryNet = basePay - absentDeduction + otAllowance
+
+      // 表示用: 実労働時間（補償も0.6相当でカウント）
+      const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
+
+      const salaryNet = basePay + compAllowance + otAllowance - absentDeduction
 
       wm.prescribedHours = prescribedH
       wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
-      wm.legalOtHours = Math.round(legalOt * 10) / 10
+      wm.legalOtHours = Math.round(wm.otHours * 10) / 10  // 旧ルールは月の残業時間合計と同じ
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.basePay = basePay
+      // additionalAllowance を「休業補償」として流用（UI/Excel 側で旧ルール用ラベル "休業補償" に切替）
+      wm.additionalAllowance = compAllowance
       wm.otAllowance = otAllowance
       wm.absentDeduction = absentDeduction
       wm.salaryNetPay = salaryNet
@@ -1022,24 +1040,26 @@ export function computeMonthly(
       wm.absentCost = absentDeduction
       wm.netPay = salaryNet
     } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && workerPrescribedDays > 0) {
-      // ── 4月以前: 月給制の外国人（旧salary方式）月の所定時間ベース ──
-      // 所定労働時間は1日6時間40分（= 20/3）。週6日で40h/週、法定上限内。
+      // ── 4月以前: 旧ルール（salary方式: 月給からの逆算） ──
+      // 設計はhourlyRate版と同じ（1日6h40m, 残業=日単位積み上げ, 補償別枠, 補償・有給・試験は出勤扱い）
       const dailyHoursOld = 20 / 3
       const prescribedH = workerPrescribedDays * dailyHoursOld
-      const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.otHours
-      const legalOt = Math.max(0, actualWorkH - prescribedH)
-      const hourlyRate = wm.salary / prescribedH
+      const hourlyRate = wm.salary / prescribedH  // 月給からベース時給を逆算
+
       const basePay = wm.salary
-      const otAllowance = Math.round(hourlyRate * 1.25 * legalOt)
-      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed)
+      const compAllowance = Math.round(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)
+      const otAllowance = Math.round(hourlyRate * 1.25 * wm.otHours)
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.compDays - wm.plUsed - wm.examDays)
       const absentDeduction = Math.round(wm.salary / workerPrescribedDays * absentDays)
-      const salaryNet = basePay - absentDeduction + otAllowance
+      const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
+      const salaryNet = basePay + compAllowance + otAllowance - absentDeduction
 
       wm.prescribedHours = prescribedH
       wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
-      wm.legalOtHours = Math.round(legalOt * 10) / 10
+      wm.legalOtHours = Math.round(wm.otHours * 10) / 10
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.basePay = basePay
+      wm.additionalAllowance = compAllowance  // 「休業補償」として使用（UI/Excel側でラベル切替）
       wm.otAllowance = otAllowance
       wm.absentDeduction = absentDeduction
       wm.salaryNetPay = salaryNet
