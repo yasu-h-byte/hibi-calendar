@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, getAssign } from '@/lib/compute'
-import { getApprovalForDay, setApprovalForDay } from '@/lib/attendance'
+import { getApprovalForDay } from '@/lib/attendance'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, getDocs, collection } from 'firebase/firestore'
@@ -91,18 +91,25 @@ export async function GET(request: NextRequest) {
     const foremanName = foremanWorker?.name || ''
     const foremanNote = mf?.note || ''
 
-    // Approval status per day
-    // Check both the attendanceApprovals collection (new) and att doc approvals field (legacy)
+    // Approval status per day（2段階承認対応）
+    // foremanApprovals: 職長による1次承認
+    // finalApprovals:   admin/approver による最終承認
+    // approvals:        後方互換用（旧コードが foreman 承認の有無を見るための bool マップ）
     const approvals: Record<number, boolean> = {}
+    const foremanApprovals: Record<number, { by: number; at: string }> = {}
+    const finalApprovals: Record<number, { by: number; at: string }> = {}
     for (let d = 1; d <= daysInMonth; d++) {
       const approvalKey = `${siteId}_${ym}_${String(d)}`
-      // Check attendanceApprovals collection first (where foreman writes)
       const collectionApproval = await getApprovalForDay(siteId, ym, d)
       if (collectionApproval?.foreman) {
         approvals[d] = true
+        foremanApprovals[d] = collectionApproval.foreman
       } else if (att.approvals?.[approvalKey]) {
-        // Fallback: legacy approvals stored inside att_ document
+        // Fallback: 旧データ (att_*.approvals) の場合
         approvals[d] = true
+      }
+      if (collectionApproval?.final) {
+        finalApprovals[d] = collectionApproval.final
       }
     }
 
@@ -213,6 +220,8 @@ export async function GET(request: NextRequest) {
       lockedHibi,
       lockedHfu,
       approvals,
+      foremanApprovals,
+      finalApprovals,
       workDays: workDaysValue,
       siteWorkDays: siteWorkDaysValue,
       allWorkers,
@@ -267,20 +276,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
-    // Action: approve/unapprove a day
-    if (action === 'approve') {
+    // ── 承認系アクション ──
+    // 後方互換: action: 'approve' / 'unapprove' は職長承認に対応する
+    //   （旧クライアントが投げてくる場合のため残す。新UIは下記の専用アクションを使う）
+    // 新アクション:
+    //   approve_foreman   / unapprove_foreman : 職長による1次承認
+    //   approve_final     / unapprove_final   : 最終承認 (admin/approver)
+
+    if (action === 'approve' || action === 'approve_foreman') {
       const { siteId, ym, day, approvedBy } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
-      await setApprovalForDay(siteId, ym, day, approvedBy || 0)
+      const { setForemanApprovalForDay } = await import('@/lib/attendance')
+      await setForemanApprovalForDay(siteId, ym, day, approvedBy || 0)
       return NextResponse.json({ success: true })
     }
 
-    if (action === 'unapprove') {
+    if (action === 'unapprove' || action === 'unapprove_foreman') {
       const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
-      const { deleteDoc } = await import('firebase/firestore')
-      const approvalDocRef = doc(db, 'attendanceApprovals', `${siteId}_${ym}_${String(day)}`)
-      await deleteDoc(approvalDocRef)
+      const { removeForemanApprovalForDay } = await import('@/lib/attendance')
+      await removeForemanApprovalForDay(siteId, ym, day)
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'approve_final') {
+      const { siteId, ym, day, approvedBy } = body
+      if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      // 「職長承認済み」を必須要件としてサーバ側でチェック（クライアントUIだけでなく二重に保護）
+      const existing = await getApprovalForDay(siteId, ym, day)
+      if (!existing?.foreman) {
+        return NextResponse.json({ error: '職長承認が先に必要です' }, { status: 400 })
+      }
+      const { setFinalApprovalForDay } = await import('@/lib/attendance')
+      await setFinalApprovalForDay(siteId, ym, day, approvedBy || 0)
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'unapprove_final') {
+      const { siteId, ym, day } = body
+      if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      const { removeFinalApprovalForDay } = await import('@/lib/attendance')
+      await removeFinalApprovalForDay(siteId, ym, day)
       return NextResponse.json({ success: true })
     }
 

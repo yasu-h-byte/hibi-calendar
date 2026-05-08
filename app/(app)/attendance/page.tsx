@@ -72,7 +72,9 @@ interface GridData {
   workerEntries: Record<string, Record<number, AttEntry>>
   subconEntries: Record<string, Record<number, SubconDayEntry>>
   locked: boolean
-  approvals: Record<number, boolean>
+  approvals: Record<number, boolean>  // 後方互換: foreman 承認の有無 bool マップ
+  foremanApprovals?: Record<number, { by: number; at: string }>
+  finalApprovals?: Record<number, { by: number; at: string }>
   sites: SiteOption[]
   workDays: number | null
   siteWorkDays: number | null
@@ -208,7 +210,8 @@ export default function AttendanceGridPage() {
   const [error, setError] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [allSites, setAllSites] = useState<{ id: string; name: string; archived?: boolean }[]>([])
-  const [localApprovals, setLocalApprovals] = useState<Record<number, boolean>>({})
+  const [localApprovals, setLocalApprovals] = useState<Record<number, boolean>>({})  // 後方互換: 職長承認 bool
+  const [localFinalApprovals, setLocalFinalApprovals] = useState<Record<number, boolean>>({})
 
   // Save status: null | 'saving' | 'saved'
   const [saveStatus, setSaveStatus] = useState<null | 'saving' | 'saved'>(null)
@@ -292,6 +295,13 @@ export default function AttendanceGridPage() {
       setWorkerEntries(json.workerEntries)
       setSubconEntries(json.subconEntries)
       setLocalApprovals(json.approvals || {})
+      // 最終承認は finalApprovals マップから bool マップを生成
+      const finalBoolMap: Record<number, boolean> = {}
+      const finalRaw = json.finalApprovals || {}
+      for (const k of Object.keys(finalRaw)) {
+        finalBoolMap[Number(k)] = true
+      }
+      setLocalFinalApprovals(finalBoolMap)
       // Use siteWorkDays (from approved calendar) if workDays is not manually set
       const effectiveWorkDays = json.workDays ?? json.siteWorkDays
       setWorkDaysInput(effectiveWorkDays != null ? String(effectiveWorkDays) : '')
@@ -1273,74 +1283,160 @@ export default function AttendanceGridPage() {
                   </tr>
                 )}
 
-                {/* ── Approval row — admin/approver can click to approve (optimistic UI) ── */}
-                <tr className="bg-orange-50 border-b border-orange-200">
+                {/* ── 職長承認 row（1次承認: 担当現場の職長のみ） ── */}
+                <tr className="bg-orange-50 border-b border-orange-100">
                   <td
                     className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px]"
                     style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                   >
-                    承認
-                    {(userRole === 'admin' || userRole === 'approver' || (userRole === 'foreman' && userForemanSites.includes(siteId))) && (() => {
+                    職長承認
+                    {(userRole === 'foreman' && userForemanSites.includes(siteId)) && (() => {
                       const unapprovedDays = days.filter(d => !localApprovals[d.day])
                       return unapprovedDays.length > 0 ? (
                         <button
                           onClick={async () => {
-                            // 楽観的UI: 全日を即座に承認表示
                             const updated = { ...localApprovals }
                             for (const d of unapprovedDays) updated[d.day] = true
                             setLocalApprovals(updated)
-                            // バックグラウンドで全日を承認
                             for (const d of unapprovedDays) {
                               fetch('/api/attendance/grid', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                body: JSON.stringify({ action: 'approve', siteId, ym, day: d.day, approvedBy: userId }),
+                                body: JSON.stringify({ action: 'approve_foreman', siteId, ym, day: d.day, approvedBy: userId }),
                               }).catch(() => {})
                             }
                           }}
-                          className="ml-2 text-[9px] bg-green-600 text-white px-1.5 py-0.5 rounded hover:bg-green-700 transition"
+                          className="ml-2 text-[9px] bg-orange-500 text-white px-1.5 py-0.5 rounded hover:bg-orange-600 transition"
                         >
                           一括承認
                         </button>
                       ) : (
-                        <span className="ml-2 text-[9px] text-green-600">全承認済</span>
+                        <span className="ml-2 text-[9px] text-orange-600">全承認済</span>
                       )
                     })()}
                   </td>
                   <td className="sticky left-[150px] z-20 bg-orange-50 px-1 py-1 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
                   {days.map(d => {
                     const approved = localApprovals[d.day]
-                    const canApprove = userRole === 'admin' || userRole === 'approver'
-                      || (userRole === 'foreman' && userForemanSites.includes(siteId))
+                    // 職長承認は「該当現場の職長」のみ操作可。adminは閲覧のみ。
+                    const canApprove = userRole === 'foreman' && userForemanSites.includes(siteId)
+                    // 既に最終承認済みの場合は職長承認も解除できない（先に最終を外す必要）
+                    const finalApproved = localFinalApprovals[d.day]
+                    const cellLocked = approved && finalApproved
+                    const clickable = canApprove && !cellLocked
                     return (
                       <td
                         key={d.day}
-                        className={`px-0 py-1 border-l border-orange-100 bg-orange-50 text-center ${canApprove ? 'cursor-pointer hover:bg-orange-100' : ''}`}
+                        className={`px-0 py-1 border-l border-orange-100 bg-orange-50 text-center ${clickable ? 'cursor-pointer hover:bg-orange-100' : ''}`}
                         style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
-                        onClick={canApprove ? () => {
-                          // 楽観的UI: 即座にトグル
+                        onClick={clickable ? () => {
                           setLocalApprovals(prev => ({ ...prev, [d.day]: !prev[d.day] }))
-                          // バックグラウンドでAPI
+                          // 解除する場合は最終承認も画面上で消す（API側が連動して削除する）
+                          if (approved) {
+                            setLocalFinalApprovals(prev => {
+                              const next = { ...prev }
+                              delete next[d.day]
+                              return next
+                            })
+                          }
                           fetch('/api/attendance/grid', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
                             body: JSON.stringify({
-                              action: approved ? 'unapprove' : 'approve',
+                              action: approved ? 'unapprove_foreman' : 'approve_foreman',
                               siteId, ym, day: d.day, approvedBy: userId,
                             }),
                           }).catch(() => {})
                         } : undefined}
-                        title={canApprove ? (approved ? 'クリックで承認解除' : 'クリックで承認') : ''}
+                        title={
+                          cellLocked ? '最終承認済のため解除不可（先に最終承認を外す）'
+                          : canApprove ? (approved ? 'クリックで承認解除' : 'クリックで職長承認')
+                          : '担当現場の職長のみ操作可'
+                        }
                       >
                         {approved ? (
-                          <span className="text-green-600 text-[11px] font-bold">&#x2713;</span>
+                          <span className="text-orange-600 text-[11px] font-bold">&#x2713;</span>
                         ) : (
-                          <span className={`text-[11px] ${canApprove ? 'text-orange-400' : 'text-orange-300'}`}>-</span>
+                          <span className={`text-[11px] ${clickable ? 'text-orange-400' : 'text-orange-300'}`}>-</span>
                         )}
                       </td>
                     )
                   })}
                   <td className="px-1 py-1 text-center border-l-2 border-orange-200 bg-orange-50" colSpan={2}></td>
+                </tr>
+
+                {/* ── 最終承認 row（事業責任者・管理者: 職長承認後のみ操作可） ── */}
+                <tr className="bg-indigo-50 border-b border-indigo-200">
+                  <td
+                    className="sticky left-0 z-20 bg-indigo-50 px-2 py-1 font-bold text-indigo-700 whitespace-nowrap text-[11px]"
+                    style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                  >
+                    最終承認
+                    {(userRole === 'admin' || userRole === 'approver') && (() => {
+                      // 職長承認済かつ最終未承認の日だけが対象
+                      const finalizableDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day])
+                      return finalizableDays.length > 0 ? (
+                        <button
+                          onClick={async () => {
+                            const updated = { ...localFinalApprovals }
+                            for (const d of finalizableDays) updated[d.day] = true
+                            setLocalFinalApprovals(updated)
+                            for (const d of finalizableDays) {
+                              fetch('/api/attendance/grid', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                body: JSON.stringify({ action: 'approve_final', siteId, ym, day: d.day, approvedBy: userId }),
+                              }).catch(() => {})
+                            }
+                          }}
+                          className="ml-2 text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded hover:bg-indigo-700 transition"
+                        >
+                          一括最終承認
+                        </button>
+                      ) : null
+                    })()}
+                  </td>
+                  <td className="sticky left-[150px] z-20 bg-indigo-50 px-1 py-1 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+                  {days.map(d => {
+                    const foremanApproved = localApprovals[d.day]
+                    const finalApproved = localFinalApprovals[d.day]
+                    const canFinalize = userRole === 'admin' || userRole === 'approver'
+                    // 職長承認なしには最終承認は付けられない
+                    const clickable = canFinalize && (finalApproved || foremanApproved)
+                    return (
+                      <td
+                        key={d.day}
+                        className={`px-0 py-1 border-l border-indigo-100 bg-indigo-50 text-center ${clickable ? 'cursor-pointer hover:bg-indigo-100' : ''}`}
+                        style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+                        onClick={clickable ? () => {
+                          setLocalFinalApprovals(prev => ({ ...prev, [d.day]: !prev[d.day] }))
+                          fetch('/api/attendance/grid', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                            body: JSON.stringify({
+                              action: finalApproved ? 'unapprove_final' : 'approve_final',
+                              siteId, ym, day: d.day, approvedBy: userId,
+                            }),
+                          }).catch(() => {})
+                        } : undefined}
+                        title={
+                          finalApproved ? 'クリックで最終承認解除'
+                          : !canFinalize ? '管理者・事業責任者のみ操作可'
+                          : !foremanApproved ? '職長承認後に押せます'
+                          : 'クリックで最終承認'
+                        }
+                      >
+                        {finalApproved ? (
+                          <span className="text-indigo-700 text-[11px] font-bold">&#x2713;&#x2713;</span>
+                        ) : foremanApproved && canFinalize ? (
+                          <span className="text-[11px] text-indigo-400">-</span>
+                        ) : (
+                          <span className="text-[11px] text-indigo-200">·</span>
+                        )}
+                      </td>
+                    )
+                  })}
+                  <td className="px-1 py-1 text-center border-l-2 border-indigo-200 bg-indigo-50" colSpan={2}></td>
                 </tr>
 
                 {/* ── Worker groups ── */}

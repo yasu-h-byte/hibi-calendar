@@ -167,7 +167,25 @@ export async function getApprovalForDay(
   return docSnap.data() as AttendanceApproval
 }
 
+/**
+ * 後方互換: 旧 setApprovalForDay = 職長承認を書き込む
+ * 新コードは setForemanApprovalForDay を直接使うこと
+ */
 export async function setApprovalForDay(
+  siteId: string,
+  ym: string,
+  day: number,
+  foremanId: number
+): Promise<void> {
+  return setForemanApprovalForDay(siteId, ym, day, foremanId)
+}
+
+/**
+ * 職長による1次承認を書き込む
+ * - 子値 { by, at } は非空マップなので Firestore の罠は踏まない
+ * - 既存の final フィールドは保持される（merge:true）
+ */
+export async function setForemanApprovalForDay(
   siteId: string,
   ym: string,
   day: number,
@@ -178,6 +196,61 @@ export async function setApprovalForDay(
   await setDoc(docRef, {
     foreman: { by: foremanId, at: new Date().toISOString() }
   }, { merge: true })
+}
+
+/**
+ * 職長承認を解除する
+ * - foreman フィールドを deleteField で削除
+ * - 同時に final フィールドも削除（職長承認なし→最終承認は意味を失うため）
+ * - ドキュメント自体は他のフィールド保護のため残す（updateDoc）
+ */
+export async function removeForemanApprovalForDay(
+  siteId: string,
+  ym: string,
+  day: number,
+): Promise<void> {
+  const docId = `${siteId}_${ym}_${String(day)}`
+  const docRef = doc(db, 'attendanceApprovals', docId)
+  // ドキュメント未存在時に updateDoc が失敗するのを防ぐため、まず存在保証
+  await ensureDocExists(docRef)
+  await updateDoc(docRef, {
+    foreman: deleteField(),
+    final: deleteField(),
+  })
+}
+
+/**
+ * 最終承認を書き込む（admin/approver 用）
+ * - 呼び出し側で「職長承認済みかどうか」を必ずチェックすること
+ *   （API の grid/route.ts で実装）
+ */
+export async function setFinalApprovalForDay(
+  siteId: string,
+  ym: string,
+  day: number,
+  approverId: number,
+): Promise<void> {
+  const docId = `${siteId}_${ym}_${String(day)}`
+  const docRef = doc(db, 'attendanceApprovals', docId)
+  await setDoc(docRef, {
+    final: { by: approverId, at: new Date().toISOString() }
+  }, { merge: true })
+}
+
+/**
+ * 最終承認のみを解除する（職長承認は維持）
+ */
+export async function removeFinalApprovalForDay(
+  siteId: string,
+  ym: string,
+  day: number,
+): Promise<void> {
+  const docId = `${siteId}_${ym}_${String(day)}`
+  const docRef = doc(db, 'attendanceApprovals', docId)
+  await ensureDocExists(docRef)
+  await updateDoc(docRef, {
+    final: deleteField(),
+  })
 }
 
 // ────────────────────────────────────────

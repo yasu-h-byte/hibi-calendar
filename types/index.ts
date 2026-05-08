@@ -178,8 +178,17 @@ export function isTimeBasedMobile(ym: string): boolean {
 
 export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_off' | 'home_leave' | 'exam' | 'none'
 
+/**
+ * 出面の2段階承認データ
+ * - foreman: 職長による1次承認（現場レベルの確認）
+ * - final:   最終承認（事業責任者・管理者による日次確定）
+ *
+ * 運用ルール: 最終承認は「職長承認後のみ」可能。職長承認を解除すると
+ * 最終承認も自動的に意味を失う（解除する側で final も同時に外すこと）。
+ */
 export interface AttendanceApproval {
   foreman?: { by: number; at: string }
+  final?: { by: number; at: string }
 }
 
 // ── HR Evaluation ──
