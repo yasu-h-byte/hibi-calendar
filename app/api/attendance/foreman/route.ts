@@ -149,6 +149,30 @@ export async function POST(request: NextRequest) {
       const { workerId, year, month, day, choice, overtimeHours } = body
       const ym = ymKey(year, month)
 
+      // ベトナム人スタッフのガード: 「最初の入力はスタッフ本人から」を強制。
+      // 既存エントリなしの場合、職長からの新規作成を拒否。
+      try {
+        const { canAdminEditEntry, getAttendanceDoc } = await import('@/lib/attendance')
+        const { db } = await import('@/lib/firebase')
+        const { doc, getDoc } = await import('firebase/firestore')
+        const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+        if (mainSnap.exists()) {
+          const workers = (mainSnap.data().workers || []) as { id: number; visa?: string }[]
+          const targetWorker = workers.find(w => w.id === Number(workerId))
+          if (targetWorker) {
+            const dData = await getAttendanceDoc(ym)
+            const key = `${site.id}_${workerId}_${ym}_${String(day)}`
+            const existing = dData[key]
+            const check = canAdminEditEntry({ visa: targetWorker.visa }, existing)
+            if (!check.editable) {
+              return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Vietnamese-worker guard error (foreman):', e)
+      }
+
       // Build entry with s:'foreman' source tracking
       let entry: AttendanceEntry
       switch (choice) {

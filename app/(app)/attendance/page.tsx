@@ -1530,6 +1530,22 @@ export default function AttendanceGridPage() {
                                 )
                               }
 
+                              // ベトナム人スタッフのスマホ入力待ち: admin/foreman は触れない (2026-05-08)
+                              // entry が無い場合はスタッフ本人のスマホからの入力を待つ
+                              if (!entry) {
+                                return (
+                                  <td key={d.day}
+                                    className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
+                                    style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+                                    title="スタッフ本人のスマホ入力待ち"
+                                  >
+                                    <div className="flex items-center justify-center h-full py-2 opacity-50">
+                                      <span className="text-[10px] text-gray-400">📱待機中</span>
+                                    </div>
+                                  </td>
+                                )
+                              }
+
                               const isWorking = statusVal === 'W'
                               const st = entry?.st || '08:00'
                               const et = entry?.et || '17:00'

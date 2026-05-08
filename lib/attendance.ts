@@ -43,6 +43,49 @@ export function attKey(siteId: string, workerId: number, ym: string, day: number
 }
 
 // ────────────────────────────────────────
+//  ベトナム人スタッフの入力規律ヘルパー
+// ────────────────────────────────────────
+
+/**
+ * 在留資格コードから「ベトナム人スタッフ（特定技能・技能実習）」かどうか判定。
+ *
+ * tokutei1 / tokutei2: 特定技能 1号 / 2号
+ * jisshu  / jisshu2 / jisshu3: 技能実習 1号 / 2号 / 3号
+ * none: 日本人など対象外
+ */
+export function isVietnameseWorker(visa: string | undefined | null): boolean {
+  if (!visa) return false
+  return visa.startsWith('tokutei') || visa.startsWith('jisshu')
+}
+
+/**
+ * admin/foreman が当該日の出面エントリを「新規作成」または「修正」できるかチェック。
+ *
+ * ルール (2026-05-08 導入):
+ *   - 日本人スタッフ等: 常に編集可能（従来通り）
+ *   - ベトナム人スタッフ: 既にエントリが存在する場合のみ編集可能。
+ *     「最初の入力はスタッフ本人のスマホから」という運用を強制する。
+ *     なお、既存エントリのクリア（削除）は可能。
+ *
+ * @param worker - 対象ワーカー（visa フィールドを参照）
+ * @param existingEntry - att_YYYYMM ドキュメントから取得した現在のエントリ
+ * @returns editable=true なら編集可、false なら不可（reason に理由）
+ */
+export function canAdminEditEntry(
+  worker: { visa?: string | null },
+  existingEntry: AttendanceEntry | null | undefined,
+): { editable: boolean; reason?: string } {
+  if (!isVietnameseWorker(worker.visa)) {
+    return { editable: true }
+  }
+  if (!existingEntry) {
+    return { editable: false, reason: 'スタッフ本人のスマホ入力待ち' }
+  }
+  // 既存エントリがあれば修正・削除いずれも可能
+  return { editable: true }
+}
+
+// ────────────────────────────────────────
 //  出面ステータス判定
 // ────────────────────────────────────────
 

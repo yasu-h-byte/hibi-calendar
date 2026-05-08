@@ -331,6 +331,30 @@ export async function POST(request: NextRequest) {
 
     if (workerId !== undefined && entry !== undefined) {
       const key = `${siteId}_${workerId}_${ym}_${String(day)}`
+
+      // ベトナム人スタッフのガード: 「最初の入力はスタッフ本人から」を強制。
+      // 既存エントリがない場合は admin/foreman からの新規作成を拒否。
+      // クリア（削除）と既存エントリの修正は許可。
+      if (entry && typeof entry === 'object') {
+        try {
+          const { canAdminEditEntry } = await import('@/lib/attendance')
+          const main = await getMainData()
+          const worker = main.workers.find(w => w.id === Number(workerId))
+          if (worker) {
+            const curSnap = await getDoc(docRef)
+            const curD = (curSnap.exists() ? curSnap.data().d : {}) as Record<string, unknown>
+            const existing = curD?.[key] as AttendanceEntry | undefined
+            const check = canAdminEditEntry({ visa: worker.visa }, existing)
+            if (!check.editable) {
+              return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
+            }
+          }
+        } catch (e) {
+          console.error('Vietnamese-worker guard error:', e)
+          // ガード判定に失敗した場合は安全側に倒して保存を継続（既存運用を壊さない）
+        }
+      }
+
       if (entry && typeof entry === 'object') {
         // 有効なエントリ: ソース情報を付与して保存
         const entryWithSource = { ...entry, s: 'admin' }

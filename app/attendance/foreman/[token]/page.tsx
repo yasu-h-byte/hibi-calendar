@@ -217,19 +217,36 @@ export default function ForemanAttendancePage() {
           {data.workers.length === 0 ? (
             <div className="p-4 text-center text-gray-400">スタッフがいません</div>
           ) : (
-            data.workers.map(w => (
-              <div
-                key={w.id}
-                className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
-                onClick={() => { setEditingWorker({ id: w.id, name: w.name }); setEditOT(w.entry?.o || 0) }}
-              >
-                <span className="text-sm font-medium text-gray-800 truncate min-w-0">{w.name}</span>
-                <span className={`text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 ${STATUS_COLORS[w.status]}`}>
-                  {STATUS_EMOJI[w.status]} {STATUS_LABELS[w.status]}
-                  {w.status === 'overtime' && w.entry?.o ? ` +${w.entry.o}h` : ''}
-                </span>
-              </div>
-            ))
+            data.workers.map(w => {
+              // ベトナム人スタッフのスマホ入力待ち（2026-05-08 ルール）:
+              //   スタッフ本人が入力するまで、職長は手入力できない。
+              //   既存エントリがある場合のみクリックして修正可能。
+              const awaitingStaff = !w.entry
+              return awaitingStaff ? (
+                <div
+                  key={w.id}
+                  className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 opacity-60"
+                  title="スタッフ本人のスマホ入力待ち"
+                >
+                  <span className="text-sm font-medium text-gray-700 truncate min-w-0">{w.name}</span>
+                  <span className="text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 bg-gray-100 text-gray-500">
+                    📱 スマホ入力待ち
+                  </span>
+                </div>
+              ) : (
+                <div
+                  key={w.id}
+                  className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
+                  onClick={() => { setEditingWorker({ id: w.id, name: w.name }); setEditOT(w.entry?.o || 0) }}
+                >
+                  <span className="text-sm font-medium text-gray-800 truncate min-w-0">{w.name}</span>
+                  <span className={`text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 ${STATUS_COLORS[w.status]}`}>
+                    {STATUS_EMOJI[w.status]} {STATUS_LABELS[w.status]}
+                    {w.status === 'overtime' && w.entry?.o ? ` +${w.entry.o}h` : ''}
+                  </span>
+                </div>
+              )
+            })
           )}
         </div>
 
