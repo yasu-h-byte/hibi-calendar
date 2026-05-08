@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
+import { ym7 } from '@/lib/ym'
 
 /**
  * カレンダーステータスの巻き戻しAPI
@@ -15,12 +16,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { siteId, ym, action, revertedBy } = await request.json()
+    const { siteId, ym: ymRaw, action, revertedBy } = await request.json()
 
-    if (!siteId || !ym || !action) {
+    if (!siteId || !ymRaw || !action) {
       return NextResponse.json({ error: 'siteId, ym, action required' }, { status: 400 })
     }
 
+    // siteCalendar の docId/ym は "YYYY-MM" 形式で統一
+    const ym = ym7(ymRaw)
     const docId = `${siteId}_${ym}`
     const calRef = doc(db, 'siteCalendar', docId)
     const calSnap = await getDoc(calRef)

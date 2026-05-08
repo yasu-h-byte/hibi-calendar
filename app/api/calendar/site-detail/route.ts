@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { getWorkersForSite, getSiteById } from '@/lib/sites'
+import { ym7 } from '@/lib/ym'
 
 export async function GET(request: NextRequest) {
   const siteId = request.nextUrl.searchParams.get('siteId')
-  const ym = request.nextUrl.searchParams.get('ym')
-  if (!siteId || !ym) {
+  const ymParam = request.nextUrl.searchParams.get('ym')
+  if (!siteId || !ymParam) {
     return NextResponse.json({ error: 'siteId and ym required' }, { status: 400 })
   }
+  // ⚠️ 2026-05-08 修正: siteCalendar の docId と ym フィールドは "YYYY-MM" 形式で統一。
+  //   呼び出し側が "YYYYMM" を渡してきた場合に備えて正規化する。
+  const ym = ym7(ymParam)
 
   try {
     const site = await getSiteById(siteId)

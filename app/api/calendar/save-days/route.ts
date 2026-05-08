@@ -2,6 +2,7 @@ import { checkApiAuth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { ym7 } from '@/lib/ym'
 
 export async function POST(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -9,7 +10,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { siteId, ym, days, updatedBy } = await request.json()
+    const { siteId, ym: ymRaw, days, updatedBy } = await request.json()
+    // siteCalendar の docId/ym は "YYYY-MM" 形式で統一（2026-05-08 正規化）
+    const ym = ym7(ymRaw)
     const docId = `${siteId}_${ym}`
 
     // Get existing doc to preserve status

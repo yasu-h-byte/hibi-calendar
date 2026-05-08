@@ -2,6 +2,7 @@ import { checkApiAuth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { ym7 } from '@/lib/ym'
 
 export async function POST(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -9,7 +10,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { siteId, ym, submittedBy } = await request.json()
+    const { siteId, ym: ymRaw, submittedBy } = await request.json()
+    const ym = ym7(ymRaw)
     const docId = `${siteId}_${ym}`
     const docRef = doc(db, 'siteCalendar', docId)
     const existing = await getDoc(docRef)

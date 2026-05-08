@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
 import { DayType } from '@/types'
+import { ym7 } from '@/lib/ym'
 
 export async function POST(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -11,7 +12,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { siteId, ym, approvedBy } = await request.json()
+    const { siteId, ym: ymRaw, approvedBy } = await request.json()
+    const ym = ym7(ymRaw)
     const docId = `${siteId}_${ym}`
 
     // Get the calendar data to count work days

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
+import { ym7 } from '@/lib/ym'
 
 export async function POST(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -10,11 +11,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { ym } = body
+    const { ym: ymRaw } = body
 
-    if (!ym) {
+    if (!ymRaw) {
       return NextResponse.json({ error: 'ym parameter required' }, { status: 400 })
     }
+    // siteCalendar の ym フィールドは "YYYY-MM" 形式（2026-05-08 正規化）
+    const ym = ym7(ymRaw)
 
     let deletedCalendars = 0
     let deletedSignatures = 0

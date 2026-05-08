@@ -37,14 +37,17 @@ function isAuthorized(request: NextRequest): boolean {
 }
 
 function isoDate(d: Date = new Date()): string {
-  // YYYYMMDD-HHmm（JST）
+  // YYYYMMDD-HHmmss（JST）
+  // ⚠️ 2026-05-08 修正: 秒精度に変更。同一分内に手動再実行されても docId が衝突せず、
+  //    既存のスナップショットが上書きされない。
   const jst = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
   const yyyy = jst.getFullYear()
   const mm = String(jst.getMonth() + 1).padStart(2, '0')
   const dd = String(jst.getDate()).padStart(2, '0')
   const hh = String(jst.getHours()).padStart(2, '0')
   const min = String(jst.getMinutes()).padStart(2, '0')
-  return `${yyyy}${mm}${dd}-${hh}${min}`
+  const sec = String(jst.getSeconds()).padStart(2, '0')
+  return `${yyyy}${mm}${dd}-${hh}${min}${sec}`
 }
 
 function ymKey(d: Date): string {
@@ -108,9 +111,10 @@ export async function GET(request: NextRequest) {
     // backups コレクションを全件取得（少ないので問題なし）
     const allBackupsSnap = await getDocs(query(backupsCol, orderBy('snapshotAt', 'desc'), limit(500)))
     for (const d of allBackupsSnap.docs) {
-      // ドキュメントIDの末尾8桁が cutoffStamp より古ければ削除
+      // ドキュメントIDの末尾の YYYYMMDD-HHmmss (or 旧形式 HHmm) が cutoffStamp より古ければ削除
+      // 旧形式 (分精度) との後方互換性のため、両方マッチさせる
       const id = d.id
-      const m = id.match(/_(\d{8}-\d{4})$/)
+      const m = id.match(/_(\d{8}-\d{4,6})$/)
       if (m && m[1] < cutoffStamp) {
         await deleteDoc(d.ref)
         summary.deleted.push(id)

@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs } from 'firebase/firestore'
 import { getAllSitesWithWorkers } from '@/lib/sites'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
+import { ym7 } from '@/lib/ym'
 
 export async function GET(request: NextRequest) {
 
@@ -11,10 +12,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const ym = request.nextUrl.searchParams.get('ym')
-  if (!ym) {
+  const ymRaw = request.nextUrl.searchParams.get('ym')
+  if (!ymRaw) {
     return NextResponse.json({ error: 'ym parameter required' }, { status: 400 })
   }
+  // siteCalendar の ym フィールドは "YYYY-MM" 形式（2026-05-08 正規化）
+  const ym = ym7(ymRaw)
 
   try {
     // Get site calendar data (days + status)
