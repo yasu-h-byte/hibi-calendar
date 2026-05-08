@@ -907,8 +907,15 @@ export function computeMonthly(
       }
     }
 
-    if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0) {
-      // ── 3層構造（A+X案）: 基本給固定 + 追加所定手当 + 残業手当（法定上限基準） ──
+    // ベトナム人スタッフの給与計算は2026年5月を境に旧ルール／新ルールが切り替わる
+    // - 4月以前: 月の所定時間ベース（旧ロジック）
+    //            基本給=時給×所定時間, 残業=実労働>所定時間, 欠勤=所定日数下回り分
+    // - 5月以降: 3層構造 + 法定上限ベース（新ロジック）
+    //            基本給固定=時給×20日×7h, 追加所定=20日超分, 残業=実労働>法定上限
+    const useNewRules = ym >= '202605'
+
+    if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && useNewRules) {
+      // ── 5月以降: 3層構造（A+X案）: 基本給固定 + 追加所定手当 + 残業手当（法定上限基準） ──
       const ymY = parseInt(ym.slice(0, 4))
       const ymM = parseInt(ym.slice(4, 6))
       const calendarDays = new Date(ymY, ymM, 0).getDate()  // 暦日数
@@ -949,8 +956,32 @@ export function computeMonthly(
       wm.absence = absentDays
       wm.absentCost = absentDeduction
       wm.netPay = salaryNet
-    } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0) {
-      // ── 3層構造（salary方式: hourlyRate未設定、旧salary値から時給を逆算） ──
+    } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0) {
+      // ── 4月以前: 月の所定時間ベース（旧ロジック）── 時給ベース ──
+      // 基本給=時給×所定時間, 残業=実労働>所定時間, 欠勤=所定日数下回り分
+      const prescribedH = workerPrescribedDays * 7
+      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
+      const legalOt = Math.max(0, actualWorkH - prescribedH)
+      const basePay = Math.round(wm.hourlyRate * prescribedH)
+      const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed)
+      const absentDeduction = Math.round(wm.hourlyRate * 7 * absentDays)
+      const salaryNet = basePay - absentDeduction + otAllowance
+
+      wm.prescribedHours = prescribedH
+      wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
+      wm.legalOtHours = Math.round(legalOt * 10) / 10
+      wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
+      wm.basePay = basePay
+      wm.otAllowance = otAllowance
+      wm.absentDeduction = absentDeduction
+      wm.salaryNetPay = salaryNet
+
+      wm.absence = absentDays
+      wm.absentCost = absentDeduction
+      wm.netPay = salaryNet
+    } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && useNewRules) {
+      // ── 5月以降: 3層構造（salary方式: hourlyRate未設定、旧salary値から時給を逆算） ──
       const ymY = parseInt(ym.slice(0, 4))
       const ymM = parseInt(ym.slice(4, 6))
       const calendarDays = new Date(ymY, ymM, 0).getDate()
@@ -979,6 +1010,30 @@ export function computeMonthly(
       wm.legalOtHours = Math.round(legalOt * 10) / 10
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.basePay = fixedBase
+      wm.otAllowance = otAllowance
+      wm.absentDeduction = absentDeduction
+      wm.salaryNetPay = salaryNet
+
+      wm.absence = absentDays
+      wm.absentCost = absentDeduction
+      wm.netPay = salaryNet
+    } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && workerPrescribedDays > 0) {
+      // ── 4月以前: 月給制の外国人（旧salary方式）月の所定時間ベース ──
+      const prescribedH = workerPrescribedDays * 7
+      const actualWorkH = wm.actualWorkDays * 7 + wm.otHours
+      const legalOt = Math.max(0, actualWorkH - prescribedH)
+      const hourlyRate = wm.salary / prescribedH
+      const basePay = wm.salary
+      const otAllowance = Math.round(hourlyRate * 1.25 * legalOt)
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed)
+      const absentDeduction = Math.round(wm.salary / workerPrescribedDays * absentDays)
+      const salaryNet = basePay - absentDeduction + otAllowance
+
+      wm.prescribedHours = prescribedH
+      wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
+      wm.legalOtHours = Math.round(legalOt * 10) / 10
+      wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
+      wm.basePay = basePay
       wm.otAllowance = otAllowance
       wm.absentDeduction = absentDeduction
       wm.salaryNetPay = salaryNet
