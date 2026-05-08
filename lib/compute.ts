@@ -1,7 +1,7 @@
 import { db } from './firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { AttendanceEntry, calcActualHours } from '@/types'
-import { ymKey } from './attendance'
+import { ymKey, isWorkingDay } from './attendance'
 
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
@@ -1315,9 +1315,11 @@ export function calculateOvertimeSummary(
       const entry = attD[key]
       if (!entry) continue
       if (entry.p) { isPaidLeave = true; break }
+      // ⚠️ 2026-05-09 修正: 残骸データ対策。
+      //   有給/休み/現場休/帰国中/試験 のステータスがある日は実労働を計上しない。
+      //   isWorkingDay() で 5 ステータスを一括判定。
+      if (!isWorkingDay(entry)) continue
       if (entry.w && entry.w > 0) {
-        // ⚠️ 2026-05-08 修正: 月次集計と同じ実労働時間計算を使うため calcActualHours に統一。
-        //   旧: ここに重複した時間計算ロジックがあり、月次集計と微妙にズレる可能性があった。
         if (entry.st && entry.et) {
           // 時間ベース入力（202605〜）: calcActualHours で実時間（休憩控除済み）を取得
           actual = calcActualHours(entry, site.workSchedule as Parameters<typeof calcActualHours>[1])

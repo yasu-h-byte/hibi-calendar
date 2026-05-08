@@ -1007,7 +1007,9 @@ export default function StaffAttendancePage() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {pd.entry?.st && pd.entry?.et ? (
+                  {/* ⚠️ 2026-05-09: 出勤系のステータス (work/overtime) のみ時刻バッジ表示。
+                      休み/有給/帰国中などで残骸の st/et が残っていても時刻を出さない */}
+                  {pd.entry?.st && pd.entry?.et && (pd.status === 'work' || pd.status === 'overtime') ? (
                     <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[pd.status]}`}>
                       {pd.entry.st}〜{pd.entry.et}
                       {(() => {

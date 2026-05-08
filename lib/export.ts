@@ -10,6 +10,7 @@ import {
   calculateOvertimeSummary,
 } from './compute'
 import { AttendanceEntry } from '@/types'
+import { isWorkingDay } from './attendance'
 
 // ────────────────────────────────────────
 //  共通ヘルパー
@@ -164,6 +165,8 @@ function appendTimeSheet(
         const entry = attD[key]
         if (!entry) continue
         if (entry.p) { isPL = true; break }
+        // ⚠️ 2026-05-09: 残骸データ対策。休み/現場休/帰国中/試験 のステータスがある日は実労働を計上しない
+        if (!isWorkingDay(entry)) continue
         if (entry.w && entry.w > 0) {
           dayHours = entry.w === 0.6 ? Math.round(dailyPrescribed * 0.6 * 10) / 10 : dailyPrescribed
           dayOT = entry.o || 0
@@ -335,6 +338,8 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
           isPL = true
           break
         }
+        // ⚠️ 2026-05-09: 残骸データ対策。休み/現場休/帰国中/試験 では実労働を計上しない
+        if (!isWorkingDay(entry)) continue
         if (entry.w && entry.w > 0) {
           dayWork = entry.w // 1, 0.5, 0.6 をそのまま数値で表示
           if (entry.o && entry.o > 0) dayOT += entry.o
@@ -462,6 +467,8 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
           const entry = attD[key]
           if (!entry) continue
           if (entry.p) { isPL = true; break }
+          // ⚠️ 2026-05-09: 残骸データ対策
+          if (!isWorkingDay(entry)) continue
           if (entry.w && entry.w > 0) {
             dayWork = entry.w
             if (entry.o && entry.o > 0) dayOT += entry.o
@@ -1216,18 +1223,17 @@ export function generatePerSiteAttendance(data: PerSiteAttendanceData): XLSX.Wor
           if (entry) {
             if (entry.p) {
               dayWork = '有'
-            } else if (entry.w && entry.w > 0) {
+              // 有給日は残業を計上しない（旧コードは entry.o があれば加算していたバグ）
+            } else if (isWorkingDay(entry) && entry.w && entry.w > 0) {
+              // ⚠️ 2026-05-09: 残骸データ対策。isWorkingDay で休み/現場休/帰国中/試験 を除外
               dayWork = entry.w
               wWork += entry.w
               secDailyWork[d - 1] += entry.w
               if (entry.o && entry.o > 0) {
                 dayOT = entry.o
+                wOT += dayOT
+                secDailyOT[d - 1] += dayOT
               }
-            }
-            if (entry.o && entry.o > 0) {
-              dayOT = entry.o
-              wOT += dayOT
-              secDailyOT[d - 1] += dayOT
             }
           }
 

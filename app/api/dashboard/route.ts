@@ -17,7 +17,7 @@ import {
   ComputeResult,
   parseDKey,
 } from '@/lib/compute'
-import { ymKey } from '@/lib/attendance'
+import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
@@ -84,7 +84,8 @@ function computeTodayStatus(
     for (const wid of workerIds) {
       const key = `${site.id}_${wid}_${ym}_${String(day)}`
       const entry = attD[key]
-      if (entry && entry.w > 0) {
+      // ⚠️ 2026-05-09: isWorkingDay() で残骸データ対策（有給/休み/現場休/帰国中/試験 を除外）
+      if (entry && isWorkingDay(entry)) {
         const worker = main.workers.find(w => w.id === wid)
         if (worker) {
           const job = worker.job || ''

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { isTimeBasedMonth, calcActualHours } from '@/types'
+import { isWorkingDay } from '@/lib/attendance'
 
 // ────────────────────────────────────────
 //  Types
@@ -751,25 +752,20 @@ export default function AttendanceGridPage() {
     let actualHoursSum = 0
     for (const e of Object.values(entries)) {
       if (!e) continue
-      wSum += e.w || 0
+      // 有給日数は別カウント（残骸関係なく p flag で判定）
       if (e.p && e.p > 0) plSum += 1
+
+      // ⚠️ 2026-05-09 修正: 「働いた日」のみ wSum / compSum / oSum / actualHours を加算する。
+      //   isWorkingDay() で 5 ステータス (p/r/h/hk/exam) を一括チェック。
+      //   旧コードは wSum を先に加算していたため、{w:1, p:1, ...} のような残骸データが
+      //   人工計に水増し計上されていた（昨日のビンさん事案で発覚）。
+      if (!isWorkingDay(e)) continue
+
+      // 出勤日のみ集計対象
+      wSum += e.w || 0
       if (e.w === 0.6) compSum += 0.6
-      // ⚠️ 2026-05-09 修正: 残業は「実際に出勤した日」のみカウントする。
-      //   有給(p) / 休み(r) / 現場休み(h) / 帰国中(hk) / 試験(exam) の場合はスキップ。
-      //   旧コードは st/et さえあれば残業を加算していたため、
-      //   過去の出勤入力時の残骸（st/et/o）が休み変更後も残ったままになると
-      //   その時間が誤って残業として加算されていた（c36517b 未再実装の影響）。
-      //   フッター集計と整合させる。
-      const examVal = (e as { exam?: number }).exam
-      const isNonWork =
-        (e.p ?? 0) > 0 ||
-        (e.r ?? 0) > 0 ||
-        (e.h ?? 0) > 0 ||
-        (e.hk ?? 0) > 0 ||
-        (examVal ?? 0) > 0
-      if (isNonWork) continue
-      if (!(e.w && e.w > 0)) continue
-      // 補償日 (w=0.6) の残業は、外国人ベトナム人スタッフはカウントしない（フッターと整合）
+
+      // 補償日 (w=0.6) の残業は、ベトナム人スタッフはカウントしない（フッターと整合）
       const isComp = e.w === 0.6 && !!worker?.visa && worker.visa !== 'none' && worker.visa !== ''
       if (isComp) continue
 
@@ -836,10 +832,11 @@ export default function AttendanceGridPage() {
 
       // Sum worker contributions by job type
       // 補償(0.6)は外国人の場合は人工数に含めない（compute()と同じルール）
+      // ⚠️ 2026-05-09: isWorkingDay() で残骸データ対策（有給/休み/現場休/帰国中/試験 を除外）
       for (const w of data.workers) {
         const wId = String(w.id)
         const entry = workerEntries[wId]?.[d]
-        if (entry && entry.w > 0 && !entry.p) {
+        if (entry && isWorkingDay(entry)) {
           const isComp = entry.w === 0.6 && w.visa !== 'none'
           const workVal = isComp ? 0 : entry.w
           const otVal = isComp ? 0 : (entry.o || 0)

@@ -47,6 +47,34 @@ export function attKey(siteId: string, workerId: number, ym: string, day: number
 // ────────────────────────────────────────
 
 /**
+ * エントリが「実際に働いた日」かどうかを判定する共通ヘルパー。
+ *
+ * 背景 (2026-05-09 ビンさんの残業 5h→3h バグから):
+ *   スマホ過去日のステータス変更で過去の出勤入力 (st/et/b1/b2/b3/o) が残骸として
+ *   残ったままになるケースがある（c36517b リバートの影響、来週再実装予定）。
+ *   集計コードがステータス flag (p/r/h/hk/exam) を見ずに entry.o や entry.w を
+ *   裸で足すと、有給日や休み日の残骸が誤って加算され、残業手当の過剰支給に
+ *   つながる。
+ *
+ * このヘルパーを必ず使い、true の日のみ集計対象にすること。
+ *
+ * 判定ルール:
+ *   - 有給(p) / 試験(exam) / 休み(r) / 現場休(h) / 帰国中(hk) のいずれかがあれば false
+ *   - w (出勤) > 0 でなければ false
+ *   - 上記いずれにも該当しない（純粋な出勤）場合のみ true
+ */
+export function isWorkingDay(entry: AttendanceEntry | null | undefined): boolean {
+  if (!entry) return false
+  if ((entry.p ?? 0) > 0) return false
+  if ((entry.r ?? 0) > 0) return false
+  if ((entry.h ?? 0) > 0) return false
+  if ((entry.hk ?? 0) > 0) return false
+  const examVal = (entry as { exam?: number }).exam
+  if ((examVal ?? 0) > 0) return false
+  return (entry.w ?? 0) > 0
+}
+
+/**
  * 在留資格コードから「ベトナム人スタッフ（特定技能・技能実習）」かどうか判定。
  *
  * tokutei1 / tokutei2: 特定技能 1号 / 2号
