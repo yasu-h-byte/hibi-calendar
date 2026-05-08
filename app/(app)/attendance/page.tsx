@@ -750,18 +750,36 @@ export default function AttendanceGridPage() {
     let plSum = 0
     let actualHoursSum = 0
     for (const e of Object.values(entries)) {
-      if (e) {
-        wSum += e.w || 0
-        if (e.p && e.p > 0) plSum += 1
-        if (isWorkerTimeBased && e.st && e.et) {
-          const ah = calcActualHours(e as Parameters<typeof calcActualHours>[0])
-          actualHoursSum += ah
-          const ot = Math.max(0, ah - 7)
-          oSum += ot
-        } else {
-          oSum += e.o || 0
-          if (e.w === 0.6) compSum += 0.6
-        }
+      if (!e) continue
+      wSum += e.w || 0
+      if (e.p && e.p > 0) plSum += 1
+      if (e.w === 0.6) compSum += 0.6
+      // ⚠️ 2026-05-09 修正: 残業は「実際に出勤した日」のみカウントする。
+      //   有給(p) / 休み(r) / 現場休み(h) / 帰国中(hk) / 試験(exam) の場合はスキップ。
+      //   旧コードは st/et さえあれば残業を加算していたため、
+      //   過去の出勤入力時の残骸（st/et/o）が休み変更後も残ったままになると
+      //   その時間が誤って残業として加算されていた（c36517b 未再実装の影響）。
+      //   フッター集計と整合させる。
+      const examVal = (e as { exam?: number }).exam
+      const isNonWork =
+        (e.p ?? 0) > 0 ||
+        (e.r ?? 0) > 0 ||
+        (e.h ?? 0) > 0 ||
+        (e.hk ?? 0) > 0 ||
+        (examVal ?? 0) > 0
+      if (isNonWork) continue
+      if (!(e.w && e.w > 0)) continue
+      // 補償日 (w=0.6) の残業は、外国人ベトナム人スタッフはカウントしない（フッターと整合）
+      const isComp = e.w === 0.6 && !!worker?.visa && worker.visa !== 'none' && worker.visa !== ''
+      if (isComp) continue
+
+      if (isWorkerTimeBased && e.st && e.et) {
+        const ah = calcActualHours(e as Parameters<typeof calcActualHours>[0])
+        actualHoursSum += ah
+        const ot = Math.max(0, ah - 7)
+        oSum += ot
+      } else {
+        oSum += e.o || 0
       }
     }
     // 浮動小数点誤差を丸める（0.6 * 12 = 7.199... → 7.2）
