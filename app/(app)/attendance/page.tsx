@@ -1461,7 +1461,7 @@ export default function AttendanceGridPage() {
                       const isLocked = data.locked
 
                       return (
-                        <tr key={worker.id} className="border-t border-gray-100 hover:bg-gray-50/50 group">
+                        <tr key={worker.id} className="border-t-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50/50 group">
                           {/* Worker name - sticky */}
                           <td
                             className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 text-xs"
@@ -1770,7 +1770,7 @@ export default function AttendanceGridPage() {
                       const isLocked = data.locked
 
                       return (
-                        <tr key={sc.id} className="border-t border-gray-100 hover:bg-gray-50/50 group">
+                        <tr key={sc.id} className="border-t-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50/50 group">
                           {/* Subcon name - sticky */}
                           <td
                             className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 text-xs"
