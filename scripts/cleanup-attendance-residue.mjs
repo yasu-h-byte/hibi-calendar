@@ -45,60 +45,72 @@ const targetYms = ymArg ? [ymArg.slice(5)] : null  // null = all att_*
 const ALL_KNOWN_FIELDS = ['w', 'o', 'p', 'r', 'h', 'hk', 'exam', 'st', 'et', 'b1', 'b2', 'b3', 'rReason', 'rNote']
 
 /**
- * エントリに残るべき正しいステータスを判定し、不要フィールドを返す。
- * ステータス優先順: p > exam > r > h > hk > w
+ * エントリの「真の残骸」（=ステータス不整合フィールド）のみを検出する。
+ *
+ * 「真の残骸」の定義:
+ *   非作業ステータス flag (p/r/h/hk/exam) があるのに、
+ *   作業時の時間ベースフィールド (st/et/b1/b2/b3) や残業 (o>0) が残っている状態。
+ *
+ *   これがビンさん事案 (5/1 有給日に o:1 が残骸として加算) で問題化した実態。
+ *
+ *   ※ o:0 や w:0 など 0 値は「正常な明示」なので残骸扱いしない。
+ *   ※ 作業日に st/et を持つのは時間ベース入力 (5月以降) では正常。
  */
 function detectResidue(entry) {
-  // ステータスフラグを判定して「正しい状態」を決める
-  const isPaidLeave = (entry.p ?? 0) > 0
-  const isExam = (entry.exam ?? 0) > 0
-  const isRest = (entry.r ?? 0) > 0
-  const isSiteOff = (entry.h ?? 0) > 0
-  const isHomeLeave = (entry.hk ?? 0) > 0
-  const isWork = (entry.w ?? 0) > 0
+  if (!entry || typeof entry !== 'object') return { residue: [] }
 
-  // 状態決定 (優先順)
+  const p = (entry.p ?? 0) > 0
+  const r = (entry.r ?? 0) > 0
+  const h = (entry.h ?? 0) > 0
+  const hk = (entry.hk ?? 0) > 0
+  const exam = (entry.exam ?? 0) > 0
+  const isNonWork = p || r || h || hk || exam
+
   let canonicalStatus = null
-  if (isPaidLeave) canonicalStatus = 'leave'
-  else if (isExam) canonicalStatus = 'exam'
-  else if (isRest) canonicalStatus = 'rest'
-  else if (isSiteOff) canonicalStatus = 'site_off'
-  else if (isHomeLeave) canonicalStatus = 'home_leave'
-  else if (isWork) canonicalStatus = 'work'
-  else return { residue: [] }  // 全 0 ならクリア対象なし
+  if (p) canonicalStatus = 'leave'
+  else if (exam) canonicalStatus = 'exam'
+  else if (r) canonicalStatus = 'rest'
+  else if (h) canonicalStatus = 'site_off'
+  else if (hk) canonicalStatus = 'home_leave'
+  else if ((entry.w ?? 0) > 0) canonicalStatus = 'work'
+  else return { residue: [] }
 
-  // ステータスに応じて「あるべきフィールド」セット
-  const expected = new Set()
-  if (canonicalStatus === 'work') {
-    expected.add('w')
-    if (entry.o > 0) expected.add('o')
-    if (entry.st && entry.et) {
-      expected.add('st'); expected.add('et')
-      expected.add('b1'); expected.add('b2'); expected.add('b3')
+  // 残骸検出: 非作業ステータスのみ、時間ベース/残業フィールドが残っていれば残骸
+  const residue = []
+  if (isNonWork) {
+    // st/et/b*/o は休み・有給・現場休・帰国中・試験 では不要
+    const TIME_BASED_FIELDS = ['st', 'et', 'b1', 'b2', 'b3']
+    for (const f of TIME_BASED_FIELDS) {
+      if (f in entry) residue.push(f)
     }
-  } else if (canonicalStatus === 'leave') {
-    expected.add('p')
-    expected.add('w')  // w:0 で残す
-  } else if (canonicalStatus === 'exam') {
-    expected.add('exam')
-    expected.add('w')
-  } else if (canonicalStatus === 'rest') {
-    expected.add('r')
-    expected.add('w')
-    if (entry.rReason) expected.add('rReason')
-    if (entry.rNote) expected.add('rNote')
-  } else if (canonicalStatus === 'site_off') {
-    expected.add('h')
-    expected.add('w')
-  } else if (canonicalStatus === 'home_leave') {
-    expected.add('hk')
-    expected.add('w')
+    // 残業 o は値が > 0 のときだけ残骸（o:0 は単なる明示）
+    if ((entry.o ?? 0) > 0) residue.push('o')
+    // 残ステータス flag も他のステータスとの混在は残骸（優先順位上、より優先するもの以外）
+    // 例: p:1, r:1 が両方ある場合 → p が優先、r は残骸
+    if (canonicalStatus === 'leave' && r) residue.push('r')
+    if (canonicalStatus === 'leave' && h) residue.push('h')
+    if (canonicalStatus === 'leave' && hk) residue.push('hk')
+    if (canonicalStatus === 'leave' && exam) residue.push('exam')
+    if (canonicalStatus === 'exam' && r) residue.push('r')
+    if (canonicalStatus === 'exam' && h) residue.push('h')
+    if (canonicalStatus === 'exam' && hk) residue.push('hk')
+    if (canonicalStatus === 'rest' && h) residue.push('h')
+    if (canonicalStatus === 'rest' && hk) residue.push('hk')
+    if (canonicalStatus === 'site_off' && hk) residue.push('hk')
+    // また、非作業ステータス + w > 0 は混在残骸（{w:1, p:1}）。w を 0 に補正する。
+    if ((entry.w ?? 0) > 0) residue.push('w')  // ※後で 0 として再追加すべきだが deleteField でも問題なし
+    // rest 以外の場合 rReason/rNote も残骸
+    if (canonicalStatus !== 'rest') {
+      if ('rReason' in entry) residue.push('rReason')
+      if ('rNote' in entry) residue.push('rNote')
+    }
+  } else if (canonicalStatus === 'work') {
+    // 作業日の場合、ステータス flag (p/r/h/hk/exam) があれば残骸
+    // ※ canonical status='work' になっている時点で flags は false なので、ここに該当はしない
+    // 念のため確認
   }
 
-  // 既存フィールド - あるべきフィールド = 残骸
-  const present = Object.keys(entry).filter(k => k !== 's')  // s (source) は対象外
-  const residue = present.filter(k => !expected.has(k) && ALL_KNOWN_FIELDS.includes(k))
-  return { canonicalStatus, residue }
+  return { canonicalStatus, residue: [...new Set(residue)] }
 }
 
 async function getYmList() {
