@@ -1214,7 +1214,7 @@ export default function AttendanceGridPage() {
       {!loading && data && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
           <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
-            <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 120}px` }}>
+            <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 80}px` }}>
               <thead className="sticky top-0 z-30">
                 {/* Day number row */}
                 <tr className="border-b border-gray-200">
@@ -1252,11 +1252,9 @@ export default function AttendanceGridPage() {
                     </th>
                     )
                   })}
-                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l-2 border-gray-400" style={{ width: 64, minWidth: 64 }}>
-                    人工計
-                  </th>
-                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l border-gray-600" style={{ width: cellWidth, minWidth: cellWidth }}>
-                    残業h
+                  <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l-2 border-gray-400" style={{ width: 80, minWidth: 80 }}>
+                    <div>計</div>
+                    <div className="text-[8px] opacity-70 font-normal">上:人工 / 下:残業h</div>
                   </th>
                 </tr>
               </thead>
@@ -1279,7 +1277,7 @@ export default function AttendanceGridPage() {
                         {/* placeholder: foreman presence can be derived from worker entries */}
                       </td>
                     ))}
-                    <td className="px-1 py-1 text-center border-l-2 border-yellow-200 bg-yellow-50" colSpan={2}></td>
+                    <td className="px-1 py-1 text-center border-l-2 border-yellow-200 bg-yellow-50" style={{ width: 80, minWidth: 80 }}></td>
                   </tr>
                 )}
 
@@ -1362,7 +1360,7 @@ export default function AttendanceGridPage() {
                       </td>
                     )
                   })}
-                  <td className="px-1 py-1 text-center border-l-2 border-orange-200 bg-orange-50" colSpan={2}></td>
+                  <td className="px-1 py-1 text-center border-l-2 border-orange-200 bg-orange-50" style={{ width: 80, minWidth: 80 }}></td>
                 </tr>
 
                 {/* ── 最終承認 row（事業責任者・管理者: 職長承認後のみ操作可） ── */}
@@ -1436,7 +1434,7 @@ export default function AttendanceGridPage() {
                       </td>
                     )
                   })}
-                  <td className="px-1 py-1 text-center border-l-2 border-indigo-200 bg-indigo-50" colSpan={2}></td>
+                  <td className="px-1 py-1 text-center border-l-2 border-indigo-200 bg-indigo-50" style={{ width: 80, minWidth: 80 }}></td>
                 </tr>
 
                 {/* ── Worker groups ── */}
@@ -1729,9 +1727,9 @@ export default function AttendanceGridPage() {
                             )
                           })}
 
-                          {/* Totals - 人工計 */}
-                          <td className="px-2 py-1 text-center font-bold text-hibi-navy tabular-nums border-l-2 border-gray-300 bg-gray-50" style={{ width: 64, minWidth: 64 }}>
-                            <div className="text-sm">{totals.wSum > 0 ? totals.wSum : '-'}</div>
+                          {/* Totals - 人工計 + 残業 を 1 列に縦並び表示 (上: 人工, 下: 残業h) */}
+                          <td className="px-2 py-1 text-center tabular-nums border-l-2 border-gray-300 bg-gray-50" style={{ width: 80, minWidth: 80 }}>
+                            <div className="font-bold text-sm text-hibi-navy">{totals.wSum > 0 ? totals.wSum : '-'}</div>
                             {(totals.compSum > 0 || totals.plSum > 0) && (
                               <div className="text-[9px] font-normal text-gray-400 leading-tight">
                                 {[
@@ -1740,10 +1738,9 @@ export default function AttendanceGridPage() {
                                 ].filter(Boolean).join(' ')}
                               </div>
                             )}
-                          </td>
-                          {/* Totals - 残業計 */}
-                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: cellWidth, minWidth: cellWidth }}>
-                            <div className="text-sm">{totals.oSum > 0 ? totals.oSum : '-'}</div>
+                            <div className="font-bold text-sm text-amber-600 mt-0.5 border-t border-gray-200 pt-0.5">
+                              {totals.oSum > 0 ? `${totals.oSum}h` : '-'}
+                            </div>
                           </td>
                         </tr>
                       )
@@ -1839,13 +1836,12 @@ export default function AttendanceGridPage() {
                             )
                           })}
 
-                          {/* Totals - 人工計 */}
-                          <td className="px-2 py-1 text-center font-bold text-hibi-navy tabular-nums border-l-2 border-gray-300 bg-gray-50" style={{ width: 64, minWidth: 64 }}>
-                            <div className="text-sm">{totals.nSum > 0 ? totals.nSum : '-'}</div>
-                          </td>
-                          {/* Totals - 残業計 */}
-                          <td className="px-2 py-1 text-center font-bold text-amber-600 tabular-nums border-l border-gray-200 bg-gray-50" style={{ width: cellWidth, minWidth: cellWidth }}>
-                            <div className="text-sm">{totals.onSum > 0 ? totals.onSum : '-'}</div>
+                          {/* Totals - 人工計 + 残業計 を 1 列に縦並び表示 */}
+                          <td className="px-2 py-1 text-center tabular-nums border-l-2 border-gray-300 bg-gray-50" style={{ width: 80, minWidth: 80 }}>
+                            <div className="font-bold text-sm text-hibi-navy">{totals.nSum > 0 ? totals.nSum : '-'}</div>
+                            <div className="font-bold text-sm text-amber-600 mt-0.5 border-t border-gray-200 pt-0.5">
+                              {totals.onSum > 0 ? `${totals.onSum}h` : '-'}
+                            </div>
                           </td>
                         </tr>
                       )
@@ -1872,11 +1868,12 @@ export default function AttendanceGridPage() {
                       {footerSums.tobi[d.day] > 0 ? Math.round(footerSums.tobi[d.day] * 10) / 10 : '-'}
                     </td>
                   ))}
-                  <td className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
-                    {footerSums.tobiTotal > 0 ? footerSums.tobiTotal : '-'}
-                  </td>
-                  <td className="bg-[#1B2A4A] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: cellWidth, minWidth: cellWidth }}>
-                    {footerSums.tobiOtTotal > 0 ? footerSums.tobiOtTotal : '-'}
+                  {/* 鳶合計の右端: 人工 (上) + 残業 (下) を 1 列に縦並び */}
+                  <td className="bg-[#1B2A4A] px-2 py-1.5 text-center tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 80, minWidth: 80 }}>
+                    <div className="text-white font-bold">{footerSums.tobiTotal > 0 ? footerSums.tobiTotal : '-'}</div>
+                    <div className="text-amber-300 font-bold border-t border-gray-600 mt-0.5 pt-0.5">
+                      {footerSums.tobiOtTotal > 0 ? `${footerSums.tobiOtTotal}h` : '-'}
+                    </div>
                   </td>
                 </tr>
 
@@ -1898,10 +1895,8 @@ export default function AttendanceGridPage() {
                       {footerSums.tobiOt[d.day] > 0 ? `${Math.round(footerSums.tobiOt[d.day] * 10) / 10}h` : '-'}
                     </td>
                   ))}
-                  <td className="bg-[#1B2A4A] text-amber-300 px-2 py-1 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm border-t border-[#2A3B5C]" style={{ width: 64, minWidth: 64 }}>
-                    {footerSums.tobiOtTotal > 0 ? `${footerSums.tobiOtTotal}h` : '-'}
-                  </td>
-                  <td className="bg-[#1B2A4A] px-2 py-1 border-l border-gray-600 border-t border-[#2A3B5C]" style={{ width: cellWidth, minWidth: cellWidth }}></td>
+                  {/* 月計は鳶合計行に既に表示済みのため空白 */}
+                  <td className="bg-[#1B2A4A] px-2 py-1 border-l-2 border-gray-400 border-t border-[#2A3B5C]" style={{ width: 80, minWidth: 80 }}></td>
                 </tr>
 
                 {/* Doko Total */}
@@ -1922,11 +1917,12 @@ export default function AttendanceGridPage() {
                       {footerSums.doko[d.day] > 0 ? Math.round(footerSums.doko[d.day] * 10) / 10 : '-'}
                     </td>
                   ))}
-                  <td className="bg-[#243656] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
-                    {footerSums.dokoTotal > 0 ? footerSums.dokoTotal : '-'}
-                  </td>
-                  <td className="bg-[#243656] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: cellWidth, minWidth: cellWidth }}>
-                    {footerSums.dokoOtTotal > 0 ? footerSums.dokoOtTotal : '-'}
+                  {/* 土工合計の右端: 人工 (上) + 残業 (下) を 1 列に縦並び */}
+                  <td className="bg-[#243656] px-2 py-1.5 text-center tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 80, minWidth: 80 }}>
+                    <div className="text-white font-bold">{footerSums.dokoTotal > 0 ? footerSums.dokoTotal : '-'}</div>
+                    <div className="text-amber-300 font-bold border-t border-gray-600 mt-0.5 pt-0.5">
+                      {footerSums.dokoOtTotal > 0 ? `${footerSums.dokoOtTotal}h` : '-'}
+                    </div>
                   </td>
                 </tr>
 
@@ -1948,10 +1944,8 @@ export default function AttendanceGridPage() {
                       {footerSums.dokoOt[d.day] > 0 ? `${Math.round(footerSums.dokoOt[d.day] * 10) / 10}h` : '-'}
                     </td>
                   ))}
-                  <td className="bg-[#243656] text-amber-300 px-2 py-1 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm border-t border-[#324867]" style={{ width: 64, minWidth: 64 }}>
-                    {footerSums.dokoOtTotal > 0 ? `${footerSums.dokoOtTotal}h` : '-'}
-                  </td>
-                  <td className="bg-[#243656] px-2 py-1 border-l border-gray-600 border-t border-[#324867]" style={{ width: cellWidth, minWidth: cellWidth }}></td>
+                  {/* 月計は土工合計行に既に表示済みのため空白 */}
+                  <td className="bg-[#243656] px-2 py-1 border-l-2 border-gray-400 border-t border-[#324867]" style={{ width: 80, minWidth: 80 }}></td>
                 </tr>
 
                 {/* Grand Total */}
@@ -1972,11 +1966,12 @@ export default function AttendanceGridPage() {
                       {footerSums.grand[d.day] > 0 ? Math.round(footerSums.grand[d.day] * 10) / 10 : '-'}
                     </td>
                   ))}
-                  <td className="bg-[#0F1D36] text-white px-2 py-1.5 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 64, minWidth: 64 }}>
-                    {footerSums.grandTotal > 0 ? footerSums.grandTotal : '-'}
-                  </td>
-                  <td className="bg-[#0F1D36] text-amber-300 px-2 py-1.5 text-center font-bold tabular-nums border-l border-gray-600 text-sm" style={{ width: cellWidth, minWidth: cellWidth }}>
-                    {footerSums.grandOtTotal > 0 ? footerSums.grandOtTotal : '-'}
+                  {/* 総合計の右端: 人工 (上) + 残業 (下) を 1 列に縦並び */}
+                  <td className="bg-[#0F1D36] px-2 py-1.5 text-center tabular-nums border-l-2 border-gray-400 text-sm" style={{ width: 80, minWidth: 80 }}>
+                    <div className="text-white font-bold">{footerSums.grandTotal > 0 ? footerSums.grandTotal : '-'}</div>
+                    <div className="text-amber-300 font-bold border-t border-gray-600 mt-0.5 pt-0.5">
+                      {footerSums.grandOtTotal > 0 ? `${footerSums.grandOtTotal}h` : '-'}
+                    </div>
                   </td>
                 </tr>
 
@@ -1998,10 +1993,8 @@ export default function AttendanceGridPage() {
                       {footerSums.grandOt[d.day] > 0 ? `${Math.round(footerSums.grandOt[d.day] * 10) / 10}h` : '-'}
                     </td>
                   ))}
-                  <td className="bg-[#0F1D36] text-amber-300 px-2 py-1 text-center font-bold tabular-nums border-l-2 border-gray-400 text-sm border-t border-[#1F2D44]" style={{ width: 64, minWidth: 64 }}>
-                    {footerSums.grandOtTotal > 0 ? `${footerSums.grandOtTotal}h` : '-'}
-                  </td>
-                  <td className="bg-[#0F1D36] px-2 py-1 border-l border-gray-600 border-t border-[#1F2D44]" style={{ width: cellWidth, minWidth: cellWidth }}></td>
+                  {/* 月計は総合計行に既に表示済みのため空白 */}
+                  <td className="bg-[#0F1D36] px-2 py-1 border-l-2 border-gray-400 border-t border-[#1F2D44]" style={{ width: 80, minWidth: 80 }}></td>
                 </tr>
               </tbody>
             </table>
