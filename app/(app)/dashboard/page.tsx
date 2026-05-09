@@ -539,18 +539,10 @@ export default function DashboardPage() {
                     </tbody>
                   </table>
                 </div>
-                {data.todayStatus.absentWorkers.length > 0 && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
-                      休み {data.todayStatus.absentWorkers.length}名:
-                    </span>
-                    {data.todayStatus.absentWorkers.map(w => (
-                      <span key={w.id} className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded-full text-xs">
-                        {w.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                {/* 休みスタッフ表示は撤去 (2026-05-09)
+                    旧運用では朝一番に職長が出面入力していたため意味があったが、
+                    現在は実習生が作業終わりに自己入力する運用に変更。
+                    朝の時点では「休み」が確定していないため表示が機能しなくなった。 */}
               </>
             ) : (
               <div className="py-6 text-center">
