@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from 'firebase/firestore'
-import { getMainData, getAttData, parseDKey } from '@/lib/compute'
+import { getMainData } from '@/lib/compute'
 import { logActivity } from '@/lib/activity'
 import { calcEvaluatorWeights } from '@/lib/evaluator-weights'
+import { calcAttendanceMetrics as calcAttendanceMetricsLib, calcAttendanceBonus } from '@/lib/attendance-rate'
 import { EvaluationScores, EvaluationWeights, RaiseTableRow, EvaluationReview } from '@/types'
 
 // ────────────────────────────────────────
@@ -60,14 +61,6 @@ function calcWeightedScore(scores: EvaluationScores, weights: EvaluationWeights)
   return japaneseSum * weights.japanese + attitudeSum * weights.attitude + skillSum * weights.skill
 }
 
-/** 出席率からボーナス算出 */
-function calcAttendanceBonus(rate: number): number {
-  if (rate >= 98) return 3
-  if (rate >= 95) return 2
-  if (rate >= 90) return 1
-  return 0
-}
-
 /** 合計スコアからランク算出 */
 function calcRank(totalScore: number): 'S' | 'A' | 'B' | 'C' | 'D' {
   if (totalScore >= 30) return 'S'
@@ -101,18 +94,6 @@ function calcYearsFromHire(hireDate: string): number {
   return Math.max(1, years)
 }
 
-/** 過去12ヶ月のYMキーリスト生成 */
-function getPast12MonthsYM(): string[] {
-  const result: string[] = []
-  const now = new Date()
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const ym = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`
-    result.push(ym)
-  }
-  return result
-}
-
 /** 評価設定を取得（存在しなければデフォルト） */
 async function getEvaluationSettings(): Promise<{
   weights: EvaluationWeights
@@ -134,55 +115,30 @@ async function getEvaluationSettings(): Promise<{
   }
 }
 
-/** 出席指標を算出（過去12ヶ月） */
-async function calcAttendanceMetrics(
-  workerId: number,
-  workDays: Record<string, number>,
-): Promise<{
+/**
+ * 出席指標を算出（過去12ヶ月）— lib/attendance-rate.ts に集約済み
+ * 評価日基準で算出する仕様にしてある（前回バグの「now ベース」では評価日と乖離する）。
+ */
+async function calcMetricsForEvaluation(opts: {
+  workerId: number
+  evaluationDate: string
+}): Promise<{
   attendanceRate: number
   overtimeAvg: number
   plUsage: number
   attendanceBonus: number
 }> {
-  const ymList = getPast12MonthsYM()
-  const attResults = await Promise.all(ymList.map(ym => getAttData(ym)))
-
-  let totalWorkDays = 0
-  let totalPlDays = 0
-  let totalOT = 0
-  let totalPrescribed = 0
-
-  for (let i = 0; i < ymList.length; i++) {
-    const ym = ymList[i]
-    const att = attResults[i]
-
-    const prescribed = workDays[ym] || 0
-    totalPrescribed += prescribed
-
-    for (const [key, entry] of Object.entries(att.d)) {
-      if (!entry) continue
-      const pk = parseDKey(key)
-      if (pk.wid !== String(workerId)) continue
-      if (pk.ym !== ym) continue
-
-      const e = entry as { w: number; p?: boolean; o?: number }
-      if (e.w > 0) totalWorkDays++
-      if (e.p) totalPlDays++
-      if (e.o) totalOT += e.o
-    }
+  const r = await calcAttendanceMetricsLib({
+    workerId: opts.workerId,
+    periodEnd: opts.evaluationDate,
+    monthsBack: 12,
+  })
+  return {
+    attendanceRate: r.attendanceRate,
+    overtimeAvg: r.overtimeAvg,
+    plUsage: r.plDays,
+    attendanceBonus: calcAttendanceBonus(r.attendanceRate),
   }
-
-  const attendanceRate = totalPrescribed > 0
-    ? Math.round(((totalWorkDays + totalPlDays) / totalPrescribed) * 10000) / 100
-    : 0
-
-  const overtimeAvg = ymList.length > 0
-    ? Math.round((totalOT / ymList.length) * 100) / 100
-    : 0
-
-  const attendanceBonus = calcAttendanceBonus(attendanceRate)
-
-  return { attendanceRate, overtimeAvg, plUsage: totalPlDays, attendanceBonus }
 }
 
 // ────────────────────────────────────────
@@ -302,8 +258,11 @@ export async function POST(request: NextRequest) {
         evaluatorIds = Array.from(new Set([...shokuchoIds, APPROVER_WORKER_ID, ADMIN_WORKER_ID]))
       }
 
-      // 出席指標を自動算出
-      const metricsRaw = await calcAttendanceMetrics(workerId, mainData.workDays)
+      // 出席指標を自動算出（評価日基準・過去12ヶ月）
+      const metricsRaw = await calcMetricsForEvaluation({
+        workerId,
+        evaluationDate,
+      })
       const metrics = {
         attendanceRate: metricsRaw.attendanceRate,
         overtimeAvg: metricsRaw.overtimeAvg,
@@ -553,6 +512,82 @@ export async function POST(request: NextRequest) {
         }
       }
       await logActivity('admin', 'evaluation.recalculateAllWeights', `ウェイト一括再計算: ${updated}件更新, ${skipped}件スキップ`)
+      return NextResponse.json({ success: true, updated, skipped, errors })
+    }
+
+    // ── 出勤指標 再計算（個別セッション） ──
+    if (action === 'recalculateMetrics') {
+      const { evaluationId } = body as { evaluationId: string }
+      if (!evaluationId) {
+        return NextResponse.json({ error: 'evaluationId は必須です' }, { status: 400 })
+      }
+      const evalRef = doc(db, 'evaluations', evaluationId)
+      const evalSnap = await getDoc(evalRef)
+      if (!evalSnap.exists()) {
+        return NextResponse.json({ error: '評価セッションが見つかりません' }, { status: 404 })
+      }
+      const data = evalSnap.data()
+      const wId = data.workerId as number
+      const evalDate = data.evaluationDate as string
+      const metricsRaw = await calcMetricsForEvaluation({
+        workerId: wId,
+        evaluationDate: evalDate,
+      })
+      const metrics = {
+        attendanceRate: metricsRaw.attendanceRate,
+        overtimeAvg: metricsRaw.overtimeAvg,
+        plUsage: metricsRaw.plUsage,
+        attendanceBonus: metricsRaw.attendanceBonus,
+      }
+      await updateDoc(evalRef, {
+        metrics,
+        updatedAt: new Date().toISOString(),
+      })
+      await logActivity('admin', 'evaluation.recalculateMetrics', `${data.workerName} の出勤指標を再計算`)
+      return NextResponse.json({ success: true, metrics })
+    }
+
+    // ── 出勤指標 一括再計算（既存セッションへの遡及適用） ──
+    if (action === 'recalculateAllMetrics') {
+      const evalSnap = await getDocs(collection(db, 'evaluations'))
+      let updated = 0
+      let skipped = 0
+      const errors: string[] = []
+      for (const snap of evalSnap.docs) {
+        const data = snap.data()
+        const status = data.status as string
+        // 承認済みは再計算しない（既に最終確定済みのため）
+        if (status === 'approved') {
+          skipped++
+          continue
+        }
+        try {
+          const wId = data.workerId as number
+          const evalDate = data.evaluationDate as string
+          if (!wId || !evalDate) {
+            skipped++
+            continue
+          }
+          const metricsRaw = await calcMetricsForEvaluation({
+            workerId: wId,
+            evaluationDate: evalDate,
+          })
+          const metrics = {
+            attendanceRate: metricsRaw.attendanceRate,
+            overtimeAvg: metricsRaw.overtimeAvg,
+            plUsage: metricsRaw.plUsage,
+            attendanceBonus: metricsRaw.attendanceBonus,
+          }
+          await updateDoc(doc(db, 'evaluations', snap.id), {
+            metrics,
+            updatedAt: new Date().toISOString(),
+          })
+          updated++
+        } catch (e) {
+          errors.push(`${snap.id}: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+      await logActivity('admin', 'evaluation.recalculateAllMetrics', `出勤指標 一括再計算: ${updated}件更新, ${skipped}件スキップ`)
       return NextResponse.json({ success: true, updated, skipped, errors })
     }
 

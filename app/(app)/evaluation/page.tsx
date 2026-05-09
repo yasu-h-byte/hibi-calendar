@@ -345,6 +345,54 @@ export default function EvaluationPage() {
     setRecalculatingWeights(false)
   }
 
+  // ── 出勤指標 一括再計算（既存セッション全部） ──
+  const handleRecalculateAllMetrics = async () => {
+    if (!confirm('全ての進行中セッションの出勤指標（出勤率・残業平均・有給取得・ボーナス）を再計算します。\n（承認済みは対象外）\n\n出勤率の100%超え等を直すために、新ロジックで再算出します。\n実行しますか？')) return
+    setRecalculatingWeights(true)
+    const { password } = getAuth()
+    try {
+      const res = await fetch('/api/evaluation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'recalculateAllMetrics' }),
+      })
+      if (res.ok) {
+        const d = await res.json()
+        alert(`✅ 出勤指標 一括再計算完了\n更新: ${d.updated}件\nスキップ: ${d.skipped}件${d.errors?.length ? `\nエラー: ${d.errors.length}件` : ''}`)
+        await fetchData()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(`再計算に失敗しました: ${err.error || res.statusText}`)
+      }
+    } catch (e) {
+      alert(`エラー: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    setRecalculatingWeights(false)
+  }
+
+  // ── 出勤指標 再計算（個別セッション） ──
+  const handleRecalculateMetrics = async (evaluationId: string) => {
+    if (!confirm('このセッションの出勤指標を再計算しますか？\n（過去出勤データから出勤率・残業平均等を再集計します）')) return
+    setRecalculatingWeights(true)
+    const { password } = getAuth()
+    try {
+      const res = await fetch('/api/evaluation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'recalculateMetrics', evaluationId }),
+      })
+      if (res.ok) {
+        await fetchData()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(`再計算に失敗しました: ${err.error || res.statusText}`)
+      }
+    } catch (e) {
+      alert(`エラー: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    setRecalculatingWeights(false)
+  }
+
   const isAdmin = authUser?.role === 'admin' || authUser?.role === 'approver'
   const isAdminOnly = authUser?.role === 'admin' // 生活態度の入力はadminのみ
 
@@ -1204,6 +1252,14 @@ export default function EvaluationPage() {
           {/* Create session button (admin only) */}
           {isAdmin && (
             <div className="flex justify-end gap-2 flex-wrap">
+              <button
+                onClick={handleRecalculateAllMetrics}
+                disabled={recalculatingWeights}
+                className="px-3 py-2 text-sm font-medium rounded-lg border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
+                title="進行中セッションの出勤率・残業平均・ボーナスを新ロジックで再計算"
+              >
+                {recalculatingWeights ? '再計算中...' : '📊 出勤指標 一括再計算'}
+              </button>
               <button
                 onClick={handleRecalculateAllWeights}
                 disabled={recalculatingWeights}
