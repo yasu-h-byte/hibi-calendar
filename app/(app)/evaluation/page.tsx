@@ -1001,18 +1001,48 @@ export default function EvaluationPage() {
           </div>
         )}
 
-        {/* 出席指標 */}
+        {/* 出席指標（詳細内訳付き） */}
         {session.metrics && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-            <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">出勤実績（過去1年）</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                出勤実績（過去1年）
+                {session.metrics.computedAt && (
+                  <span className="ml-2 text-[11px] font-normal text-gray-500">
+                    （{new Date(session.metrics.computedAt).toLocaleString('ja-JP')} 計算）
+                  </span>
+                )}
+              </h4>
+              {isAdmin && session.status !== 'approved' && (
+                <button
+                  onClick={() => handleRecalculateMetrics(session.id)}
+                  disabled={recalculatingWeights}
+                  className="px-2 py-1 text-[11px] font-medium rounded-md border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
+                >
+                  📊 再計算
+                </button>
+              )}
+            </div>
+
+            {/* サマリー */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4">
               <div>
                 <span className="text-gray-500 dark:text-gray-400 block text-xs">出勤率</span>
-                <span className="font-medium text-gray-900 dark:text-white">{session.metrics.attendanceRate.toFixed(1)}%</span>
+                <span className="font-bold text-lg text-gray-900 dark:text-white">{session.metrics.attendanceRate.toFixed(1)}%</span>
+                {session.metrics.rawRate != null && session.metrics.rawRate > 100 && (
+                  <span className="ml-1 text-[10px] text-gray-400" title="100%キャップ前の生比率">
+                    (生 {session.metrics.rawRate.toFixed(1)}%)
+                  </span>
+                )}
               </div>
               <div>
                 <span className="text-gray-500 dark:text-gray-400 block text-xs">残業平均</span>
                 <span className="text-gray-900 dark:text-white">{session.metrics.overtimeAvg.toFixed(1)}h/月</span>
+                {session.metrics.totalOvertime != null && (
+                  <span className="ml-1 text-[10px] text-gray-400">
+                    (合計 {session.metrics.totalOvertime.toFixed(1)}h)
+                  </span>
+                )}
               </div>
               <div>
                 <span className="text-gray-500 dark:text-gray-400 block text-xs">有給取得</span>
@@ -1023,6 +1053,109 @@ export default function EvaluationPage() {
                 <span className="font-bold text-blue-600 dark:text-blue-400">+{session.metrics.attendanceBonus}点</span>
               </div>
             </div>
+
+            {/* 詳細内訳（新ロジックで計算した分のみ表示） */}
+            {session.metrics.applicablePrescribed != null && (
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* 出勤扱い内訳 */}
+                  <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3">
+                    <div className="font-bold text-gray-700 dark:text-gray-300 mb-2">
+                      出勤扱い内訳 <span className="text-gray-500 font-normal">合計 {session.metrics.presentDays?.toFixed(1) ?? '--'} 日</span>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">実出勤</span>
+                        <span className="font-medium tabular-nums text-gray-900 dark:text-white">{session.metrics.workedDays?.toFixed(1) ?? '--'} 日</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">有給</span>
+                        <span className="font-medium tabular-nums text-blue-600 dark:text-blue-400">{session.metrics.plDays ?? session.metrics.plUsage} 日</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">試験</span>
+                        <span className="font-medium tabular-nums text-purple-600 dark:text-purple-400">{session.metrics.examDays ?? 0} 日</span>
+                      </div>
+                      {(session.metrics.compensationDays ?? 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">補償（土曜0.6）</span>
+                          <span className="font-medium tabular-nums text-gray-500" title="出勤率の分子・分母どちらにも入れない">
+                            {session.metrics.compensationDays} 日 <span className="text-[10px]">※対象外</span>
+                          </span>
+                        </div>
+                      )}
+                      {(session.metrics.restDays ?? 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">欠勤</span>
+                          <span className="font-medium tabular-nums text-red-600 dark:text-red-400">{session.metrics.restDays} 日</span>
+                        </div>
+                      )}
+                      {(session.metrics.homeLeaveDays ?? 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">帰国</span>
+                          <span className="font-medium tabular-nums text-orange-600 dark:text-orange-400">{session.metrics.homeLeaveDays} 日</span>
+                        </div>
+                      )}
+                      {(session.metrics.siteOffDays ?? 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">現場休</span>
+                          <span className="font-medium tabular-nums text-gray-500">{session.metrics.siteOffDays} 日</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 期待出勤日内訳 */}
+                  <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3">
+                    <div className="font-bold text-gray-700 dark:text-gray-300 mb-2">
+                      期待出勤日 <span className="text-gray-500 font-normal">{session.metrics.applicablePrescribed} 日</span>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">月所定合計</span>
+                        <span className="font-medium tabular-nums text-gray-900 dark:text-white">{session.metrics.prescribedTotal} 日</span>
+                      </div>
+                      {session.metrics.excludedDays && (
+                        <>
+                          {session.metrics.excludedDays.beforeHire > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">－ 雇用前</span>
+                              <span className="font-medium tabular-nums text-gray-500">{session.metrics.excludedDays.beforeHire} 日</span>
+                            </div>
+                          )}
+                          {session.metrics.excludedDays.afterRetire > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">－ 退職後</span>
+                              <span className="font-medium tabular-nums text-gray-500">{session.metrics.excludedDays.afterRetire} 日</span>
+                            </div>
+                          )}
+                          {session.metrics.excludedDays.homeLeave > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">－ 帰国期間</span>
+                              <span className="font-medium tabular-nums text-orange-600 dark:text-orange-400">{session.metrics.excludedDays.homeLeave} 日</span>
+                            </div>
+                          )}
+                          {session.metrics.excludedDays.longAbsence > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-gray-600 dark:text-gray-400">－ 長期不在(14日+)</span>
+                              <span className="font-medium tabular-nums text-orange-600 dark:text-orange-400">{session.metrics.excludedDays.longAbsence} 日</span>
+                            </div>
+                          )}
+                          {Object.values(session.metrics.excludedDays).every(v => v === 0) && (
+                            <div className="text-gray-400 italic">除外なし</div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  💡 出勤率 = (実出勤 + 有給 + 試験) ÷ 期待出勤日 × 100（上限100%）。
+                  ベトナム土曜の補償日（w=0.6）は分子・分母どちらにも含めません。
+                  期待出勤日は月所定日数から雇用境界・帰国期間・長期不在を控除した値です。
+                </div>
+              </div>
+            )}
           </div>
         )}
 

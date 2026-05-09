@@ -118,6 +118,9 @@ async function getEvaluationSettings(): Promise<{
 /**
  * 出席指標を算出（過去12ヶ月）— lib/attendance-rate.ts に集約済み
  * 評価日基準で算出する仕様にしてある（前回バグの「now ベース」では評価日と乖離する）。
+ *
+ * 詳細内訳（実出勤・試験・欠勤・帰国・補償・除外日数等）も保存して
+ * 詳細モーダルで内訳確認できるようにする。
  */
 async function calcMetricsForEvaluation(opts: {
   workerId: number
@@ -127,6 +130,25 @@ async function calcMetricsForEvaluation(opts: {
   overtimeAvg: number
   plUsage: number
   attendanceBonus: number
+  rawRate: number
+  workedDays: number
+  presentDays: number
+  plDays: number
+  examDays: number
+  restDays: number
+  homeLeaveDays: number
+  siteOffDays: number
+  compensationDays: number
+  totalOvertime: number
+  prescribedTotal: number
+  applicablePrescribed: number
+  excludedDays: {
+    beforeHire: number
+    afterRetire: number
+    homeLeave: number
+    longAbsence: number
+  }
+  computedAt: string
 }> {
   const r = await calcAttendanceMetricsLib({
     workerId: opts.workerId,
@@ -138,6 +160,20 @@ async function calcMetricsForEvaluation(opts: {
     overtimeAvg: r.overtimeAvg,
     plUsage: r.plDays,
     attendanceBonus: calcAttendanceBonus(r.attendanceRate),
+    rawRate: r.rawRate,
+    workedDays: r.workedDays,
+    presentDays: r.presentDays,
+    plDays: r.plDays,
+    examDays: r.examDays,
+    restDays: r.restDays,
+    homeLeaveDays: r.homeLeaveDays,
+    siteOffDays: r.siteOffDays,
+    compensationDays: r.compensationDays,
+    totalOvertime: r.totalOvertime,
+    prescribedTotal: r.prescribedTotal,
+    applicablePrescribed: r.applicablePrescribed,
+    excludedDays: r.excludedDays,
+    computedAt: new Date().toISOString(),
   }
 }
 
@@ -263,12 +299,8 @@ export async function POST(request: NextRequest) {
         workerId,
         evaluationDate,
       })
-      const metrics = {
-        attendanceRate: metricsRaw.attendanceRate,
-        overtimeAvg: metricsRaw.overtimeAvg,
-        plUsage: metricsRaw.plUsage,
-        attendanceBonus: metricsRaw.attendanceBonus,
-      }
+      // 詳細内訳を含む全フィールドを保存
+      const metrics = { ...metricsRaw }
 
       const yearsFromHire = calcYearsFromHire(worker.hireDate)
       const evaluationId = `${workerId}_${evaluationDate}`
@@ -533,12 +565,8 @@ export async function POST(request: NextRequest) {
         workerId: wId,
         evaluationDate: evalDate,
       })
-      const metrics = {
-        attendanceRate: metricsRaw.attendanceRate,
-        overtimeAvg: metricsRaw.overtimeAvg,
-        plUsage: metricsRaw.plUsage,
-        attendanceBonus: metricsRaw.attendanceBonus,
-      }
+      // 詳細内訳を含む全フィールドを保存
+      const metrics = { ...metricsRaw }
       await updateDoc(evalRef, {
         metrics,
         updatedAt: new Date().toISOString(),
@@ -572,12 +600,7 @@ export async function POST(request: NextRequest) {
             workerId: wId,
             evaluationDate: evalDate,
           })
-          const metrics = {
-            attendanceRate: metricsRaw.attendanceRate,
-            overtimeAvg: metricsRaw.overtimeAvg,
-            plUsage: metricsRaw.plUsage,
-            attendanceBonus: metricsRaw.attendanceBonus,
-          }
+          const metrics = { ...metricsRaw }
           await updateDoc(doc(db, 'evaluations', snap.id), {
             metrics,
             updatedAt: new Date().toISOString(),

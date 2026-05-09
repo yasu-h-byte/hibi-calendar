@@ -206,10 +206,31 @@ export interface EvaluationScores {
 }
 
 export interface EvaluationMetrics {
-  attendanceRate: number
-  overtimeAvg: number
-  plUsage: number
-  attendanceBonus: number  // 0-3
+  attendanceRate: number      // 出勤率 0〜100（上限100%キャップ）
+  overtimeAvg: number         // 残業平均 (h/月)
+  plUsage: number             // 有給日数（後方互換のため残存）
+  attendanceBonus: number     // 0〜3
+
+  // ── 詳細内訳（2026-05-09 追加、optional は旧データ互換のため） ──
+  rawRate?: number            // キャップ前の生比率（参考）
+  workedDays?: number         // 実出勤日（補償除く、partial honor）
+  presentDays?: number        // 出勤扱い合計 = workedDays + plDays + examDays
+  plDays?: number             // 有給日数（plUsage と同値、命名統一）
+  examDays?: number           // 試験日数
+  restDays?: number           // 欠勤日数
+  homeLeaveDays?: number      // 帰国扱い日数（出面に hk フラグが立つ日）
+  siteOffDays?: number        // 現場休日数
+  compensationDays?: number   // 補償日（土曜 w=0.6）数
+  totalOvertime?: number      // 残業合計時間
+  prescribedTotal?: number    // 月所定日数の合計（フォールバック含む）
+  applicablePrescribed?: number  // 期待出勤日数（除外後）
+  excludedDays?: {
+    beforeHire: number        // 雇用前で除外した日
+    afterRetire: number       // 退職後で除外した日
+    homeLeave: number         // 一時帰国期間で除外した日
+    longAbsence: number       // 14日以上連続無出勤で除外した日
+  }
+  computedAt?: string         // 計算日時（ISO）
 }
 
 /** 個別評価者のレビュー */
