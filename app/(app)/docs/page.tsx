@@ -19,7 +19,7 @@ export default function DocsPage() {
         { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成（職長担当）', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-30' },
         { title: '出面の見方ガイド（職長向け）', desc: 'PC出面画面のセル表示の読み方・青ドット/オレンジドットの意味・休憩や時刻の確認ポイント', url: '/manual-foreman-attendance-view.html', icon: '👁️', badge: 'NEW', updated: '2026-05-02' },
         { title: '休暇管理マニュアル', desc: '有給・帰国・時季指定・期末買取・時効処理など休暇関連の全機能', url: '/manual-yukyu.html', icon: '🌴', updated: '2026-04-30' },
-        { title: '評価管理マニュアル', desc: '複数評価者による評価入力・承認・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-04-19' },
+        { title: '評価管理マニュアル', desc: '5タブ画面構成・評価者ウェイト・提出状況の可視化・進捗監視・履歴閲覧・スコア計算・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', badge: 'NEW', updated: '2026-05-09' },
         { title: '道具代管理マニュアル（佐藤さん向け）', desc: '道具代補助の購入登録・残額管理・年度切り替え', url: '/manual-sato.html', icon: '🔧', updated: '2026-04-20' },
       ],
     },

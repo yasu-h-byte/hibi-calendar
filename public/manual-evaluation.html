@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>評価管理マニュアル - HIBI CONSTRUCTION</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 880px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
   h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
   h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
   h3 { color: #333; font-size: 16px; margin-top: 24px; }
@@ -13,8 +13,9 @@
   .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
   .box-ok { background: #f0fff0; border: 1px solid #80c080; }
   .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  .box-new { background: #ede9fe; border: 1px solid #a78bfa; }
   table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
-  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; vertical-align: top; }
   th { background: #1B2A4A; color: white; }
   tr:nth-child(even) { background: #f8f8f8; }
   .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
@@ -24,10 +25,17 @@
   .toc { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
   .toc a { color: #1B2A4A; text-decoration: none; }
   .toc a:hover { text-decoration: underline; }
+  .toc ol li { margin: 4px 0; }
   hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
   .grade-a { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
   .grade-b { background: #fef9c3; color: #854d0e; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
   .grade-c { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+  .badge { display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; border: 1px solid; }
+  .badge-submitted { background: #dcfce7; color: #166534; border-color: #86efac; }
+  .badge-pending { background: #f3f4f6; color: #6b7280; border-color: #d1d5db; border-style: dashed; }
+  .badge-stale { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+  .badge-me { background: #dbeafe; color: #1e40af; border-color: #93c5fd; box-shadow: 0 0 0 2px #60a5fa; }
+  .new-tag { display: inline-block; background: #ede9fe; color: #6d28d9; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 6px; vertical-align: middle; }
   @media print { body { font-size: 13px; padding: 0; } }
 </style>
 </head>
@@ -37,20 +45,37 @@
 <h1>HIBI CONSTRUCTION 就業管理システム<br>評価管理マニュアル</h1>
 <p>対象: 管理者・事業責任者（政仁さん）・職長<br>
 作成日: 2026年4月14日<br>
-最終更新: 2026年4月19日<br>
+最終更新: <strong>2026年5月9日（評価管理画面・ウェイト機能の大幅改訂）</strong><br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
+
+<div class="box box-new">
+<strong>📢 2026-05-09 改訂のポイント</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>タブが <strong>5つ</strong>に再編：<code>一覧 / 評価入力 / 進捗監視 / 承認 / 履歴</code>（後ろ3つは admin/approver 限定）</li>
+  <li>一覧画面のステータス列を<strong>評価者バッジ表示</strong>に刷新（誰が提出済みか一目で分かる）</li>
+  <li><strong>共働実績ベースのウェイト</strong>導入：直近一緒に働いた職長の意見が多数決プリフィルで強く反映</li>
+  <li>提出時に <strong>✅ 確認ダイアログ + 緑トースト + 提出時刻表示</strong>で「保存できた」が確実に伝わる</li>
+  <li>停滞通知：<strong>7日以上未提出</strong>のセッションは管理者・本人にリマインダー</li>
+  <li>履歴タブ・詳細モーダルで承認済み評価を後から振り返り可能</li>
+</ul>
+</div>
 
 <div class="toc">
 <strong>目次</strong>
 <ol>
   <li><a href="#sec1">評価管理画面へのアクセス</a></li>
   <li><a href="#sec2">評価の全体フロー</a></li>
-  <li><a href="#sec3">評価セッションの作成（管理者）</a></li>
-  <li><a href="#sec4">評価の入力・提出（職長・政仁さん・管理者）</a></li>
-  <li><a href="#sec5">評価の承認（政仁さん・管理者）</a></li>
-  <li><a href="#sec6">評価基準（ABC判定の目安）</a></li>
-  <li><a href="#sec7">スコア計算と昇給テーブル</a></li>
-  <li><a href="#sec8">よくある質問</a></li>
+  <li><a href="#sec3">画面構成（5タブ）<span class="new-tag">改訂</span></a></li>
+  <li><a href="#sec4">評価セッションの作成（管理者）</a></li>
+  <li><a href="#sec5">評価の入力・提出</a></li>
+  <li><a href="#sec6">提出状況の確認方法<span class="new-tag">NEW</span></a></li>
+  <li><a href="#sec7">評価者ウェイト（重み付き多数決）<span class="new-tag">NEW</span></a></li>
+  <li><a href="#sec8">評価の承認（政仁さん・管理者）</a></li>
+  <li><a href="#sec9">進捗監視と履歴閲覧<span class="new-tag">NEW</span></a></li>
+  <li><a href="#sec10">通知とリマインダー<span class="new-tag">NEW</span></a></li>
+  <li><a href="#sec11">評価基準（ABC判定の目安）</a></li>
+  <li><a href="#sec12">スコア計算と昇給テーブル</a></li>
+  <li><a href="#sec13">よくある質問・トラブル対処</a></li>
 </ol>
 </div>
 
@@ -75,13 +100,9 @@
 <code>https://hibi-calendar.vercel.app/evaluation</code>
 </div>
 
-<div class="box box-warn">
-<strong>表示されない場合：</strong>
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>サイドバーを下にスクロールしてみてください（「人事・労務」セクションにあります）</li>
-  <li>admin または approver でログインしていることを確認してください</li>
-  <li>ブラウザを更新（リロード）してみてください</li>
-</ul>
+<div class="box">
+<strong>ダッシュボードからもアクセス可能：</strong><br>
+ホーム画面の「📋 評価管理」カードから直接、進行中の評価セッションを確認・移動できます。
 </div>
 
 <!-- ================================================ -->
@@ -90,24 +111,56 @@
 <div class="box box-ok">
 <table>
 <tr><th>ステップ</th><th>誰が</th><th>やること</th><th>画面のタブ</th></tr>
-<tr><td><strong>①</strong></td><td><strong>管理者</strong></td><td>評価セッションを作成（対象スタッフと評価者を選択）</td><td>一覧タブ</td></tr>
-<tr><td><strong>②</strong></td><td><strong>職長A</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
-<tr><td><strong>③</strong></td><td><strong>職長B</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
-<tr><td><strong>④</strong></td><td><strong>職長C</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
-<tr><td><strong>⑤</strong></td><td><strong>政仁さん</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
-<tr><td><strong>⑥</strong></td><td><strong>管理者</strong></td><td>自分のABC評価を入力して提出</td><td>評価入力タブ</td></tr>
-<tr><td colspan="4" style="text-align:center; background:#e6f4ea; font-weight:bold;">↓ 全員の提出が完了すると、自動的に「最終確認中」に進む ↓</td></tr>
-<tr><td><strong>⑦</strong></td><td><strong>政仁さん/管理者</strong></td><td>全員の評価を横並びで比較し、最終ABCを決定 → 承認</td><td>承認タブ</td></tr>
+<tr><td><strong>①</strong></td><td><strong>管理者</strong></td><td>評価セッションを作成（対象スタッフと評価者を選択）</td><td>一覧</td></tr>
+<tr><td><strong>②〜⑥</strong></td><td>職長3名 + 政仁さん + 靖仁さん</td><td>各自ABC評価を入力して提出</td><td>評価入力</td></tr>
+<tr><td colspan="4" style="text-align:center; background:#e6f4ea; font-weight:bold;">↓ 全員の提出が完了すると、自動で「最終確認中」に遷移 ↓</td></tr>
+<tr><td><strong>⑦</strong></td><td><strong>政仁さん/管理者</strong></td><td>全員の評価を横並びで比較し、最終ABCを決定 → 承認</td><td>承認</td></tr>
 </table>
 </div>
 
 <div class="box box-warn">
-<strong>バイアス防止：</strong>各評価者は<strong>自分が提出するまで他の人の評価を見ることができません。</strong><br>
-提出後に初めて他の評価者の結果が表示されます。
+<strong>バイアス防止：</strong>各評価者は<strong>自分が提出するまで他の人の評価を見ることができません</strong>。提出後に初めて他の評価者の結果が表示されます。
+</div>
+
+<div class="box box-new">
+<strong>2026-05-09 強化点：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>提出進捗を <strong>誰が出した／誰が未提出</strong> で可視化（一覧・進捗監視タブ）</li>
+  <li>承認の最終ABC初期値は <strong>評価者ウェイト</strong> を考慮した多数決で算出</li>
+  <li>承認後も<strong>履歴タブ</strong>からいつでも詳細を再確認可能</li>
+</ul>
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec3">3. 評価セッションの作成（管理者）</h2>
+<h2 id="sec3">3. 画面構成（5タブ） <span class="new-tag">改訂</span></h2>
+
+<table>
+<tr><th>タブ</th><th>誰が見られる</th><th>主な用途</th></tr>
+<tr><td><strong>一覧</strong></td><td>全員</td><td>全スタッフの評価ステータス・ランク・次回評価日。誰が提出済みかをバッジで把握</td></tr>
+<tr><td><strong>評価入力</strong></td><td>評価者として割り当てられた人</td><td>自分のABC評価の入力・提出</td></tr>
+<tr><td><strong>進捗監視</strong> <span class="new-tag">NEW</span></td><td>管理者・政仁さんのみ</td><td>進行中セッションを横並びで一望。停滞しているセッションを発見</td></tr>
+<tr><td><strong>承認</strong></td><td>管理者・政仁さんのみ</td><td>最終確認待ちセッションの最終ABC決定 → 承認</td></tr>
+<tr><td><strong>履歴</strong> <span class="new-tag">NEW</span></td><td>管理者・政仁さんのみ</td><td>承認済み評価を年フィルタ付きで一覧。詳細を再閲覧可能</td></tr>
+</table>
+
+<h3>一覧タブの見方（刷新）</h3>
+
+<table>
+<tr><th>列</th><th>内容</th></tr>
+<tr><td><strong>名前 / 在留資格 / 勤続</strong></td><td>スタッフ基本情報</td></tr>
+<tr><td><strong>提出状況</strong> <span class="new-tag">改訂</span></td><td>各評価者を <span class="badge badge-submitted">✓田中</span> <span class="badge badge-pending">○山田</span> <span class="badge badge-stale">○大川</span> <span class="badge badge-me">👤✓政仁</span> のように表示。緑=提出済 / グレー破線=未提出 / 橙=7日以上未提出 / 青枠=自分</td></tr>
+<tr><td><strong>自分</strong> <span class="new-tag">NEW</span></td><td>自分が評価者なら <span class="badge badge-submitted">✓ 提出済</span> または <span class="badge badge-stale">⏳ 未提出</span> を表示。評価者でなければ <code>―</code></td></tr>
+<tr><td><strong>ランク</strong></td><td>承認済みなら <strong>S/A/B/C/D</strong>。<strong>クリックで承認時の詳細</strong>（評価者ごとの内容）が再閲覧可能</td></tr>
+<tr><td><strong>次回評価日</strong></td><td>前回承認から1年後。期限超過は赤字＋ <span style="background:#fee2e2; color:#991b1b; padding:1px 6px; border-radius:8px; font-size:11px;">期限超過</span></td></tr>
+<tr><td><strong>操作</strong></td><td>状況に応じて「評価入力」「修正」「承認へ」「詳細」ボタンが出ます</td></tr>
+</table>
+
+<div class="box">
+<strong>評価者バッジにマウスオーバーすると、提出日時または「未提出（開始からN日経過）」が表示されます。</strong>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec4">4. 評価セッションの作成（管理者）</h2>
 
 <div class="step">
   <div class="step-num">1</div>
@@ -115,19 +168,23 @@
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text"><strong>「評価セッション作成」</strong>ボタンをクリック</div>
+  <div class="step-text">右上の<strong>「評価セッション作成」</strong>ボタンをクリック</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">対象スタッフを選択（ベトナム人スタッフが一覧表示されます）</div>
+  <div class="step-text">対象スタッフを選択（外国人スタッフが一覧表示されます）</div>
 </div>
 <div class="step">
   <div class="step-num">4</div>
-  <div class="step-text">評価者を選択（チェックボックスで選択。デフォルトは職長3名+政仁さん+靖仁さんの5名）</div>
+  <div class="step-text">評価者を選択（チェックボックスで選択。デフォルトは <strong>職長3名+政仁さん+靖仁さん</strong> の5名）</div>
 </div>
 <div class="step">
   <div class="step-num">5</div>
   <div class="step-text"><strong>「作成」</strong>ボタンで評価セッションが開始されます</div>
+</div>
+
+<div class="box box-ok">
+<strong>2026-05-09 追加：</strong>セッション作成時に <strong>評価者ウェイト</strong>（共働実績ベース）が自動計算されて保存されます。詳細は <a href="#sec7">第7章</a> をご覧ください。
 </div>
 
 <div class="box">
@@ -135,11 +192,11 @@
 </div>
 
 <div class="box box-warn">
-<strong>「期限超過」アラートについて：</strong>通知ベルに表示される評価の「期限超過」アラートは、<strong>過去にシステムで評価を実施したことがあるスタッフのみ</strong>が対象です。まだ一度も評価されていないスタッフは、入社日基準のアラートは表示されません。
+<strong>「期限超過」アラートについて：</strong>通知ベルに表示される評価の「期限超過」アラートは、<strong>過去にシステムで評価を実施したことがあるスタッフのみ</strong>が対象です。まだ一度も評価されていないスタッフには、入社日基準のアラートは表示されません。
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec4">4. 評価の入力・提出（職長・政仁さん・管理者）</h2>
+<h2 id="sec5">5. 評価の入力・提出</h2>
 
 <div class="step">
   <div class="step-num">1</div>
@@ -165,52 +222,217 @@
   <div class="step-text">画面下部のスコアプレビューを確認し、<strong>「提出する」</strong>ボタンを押す</div>
 </div>
 
+<div class="box box-new">
+<strong>📢 提出が成功したか分かるようになりました（2026-05-09 改善）</strong>
+<p>「提出する」を押すと、以下 <strong>3つの形</strong> で「保存できた」が確認できます：</p>
+<ol style="margin: 8px 0; padding-left: 20px;">
+  <li><strong>確認ダイアログ</strong>が画面中央に出る — クリックで閉じるまで消えません<br>
+  <code>✅ 〇〇さんの評価を提出しました</code></li>
+  <li><strong>緑のトーストバナー</strong>が画面最上部に表示（8秒で自動フェード）</li>
+  <li>画面が自動的にスクロールトップし、<strong>「✓ 〇〇さんの評価を提出済みです（保存完了時刻）」</strong>の緑バナーが表示される</li>
+</ol>
+<p style="margin: 8px 0 0;">⚠️ <strong>これらが出なければ、保存されていません。</strong>もう一度「提出する」を押してください。</p>
+</div>
+
 <div class="box box-ok">
 <strong>提出後にできること：</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
   <li><strong>自分の評価を修正</strong>したい場合は「修正する」ボタンで再編集可能</li>
   <li><strong>他の評価者の結果</strong>を閲覧可能（提出前は見えません）</li>
+  <li><strong>他の対象スタッフ</strong>がいる場合は、上のドロップダウンから次の人を選んで続けて評価できます</li>
 </ul>
 </div>
 
+<div class="box box-warn">
+<strong>複数のスタッフを評価する場合の注意：</strong><br>
+1人提出した後、<strong>必ずドロップダウンから次のスタッフを選んで</strong>評価を続けてください。同じ画面に居続けても次のスタッフには切り替わりません。<br>
+進捗を確認したい場合は「一覧」タブで<strong>提出状況バッジ</strong>を見ると一目です。
+</div>
+
 <!-- ================================================ -->
-<h2 id="sec5">5. 評価の承認（政仁さん・管理者）</h2>
+<h2 id="sec6">6. 提出状況の確認方法 <span class="new-tag">NEW</span></h2>
+
+<p>「誰が提出済みで、誰がまだか」を確認する方法は <strong>3つ</strong>あります。</p>
+
+<h3>① 一覧タブ — 全スタッフを横断的に確認</h3>
+<p>「提出状況」列の評価者バッジを見れば、各セッションの状況が一目で分かります。</p>
+<ul>
+  <li><span class="badge badge-submitted">✓田中</span> 緑＝提出済み（マウスオーバーで提出日時）</li>
+  <li><span class="badge badge-pending">○山田</span> グレー破線＝未提出</li>
+  <li><span class="badge badge-stale">○大川</span> 橙＝7日以上未提出（停滞警告）</li>
+  <li><span class="badge badge-me">👤✓政仁</span> 青枠＝自分</li>
+</ul>
+
+<h3>② 進捗監視タブ（管理者専用） — 進行中セッションだけを2カラムで一望</h3>
+<p>収集中・最終確認待ちのセッションだけを横並びカード表示。停滞中のセッションは橙ボーダーで強調されます。</p>
+
+<h3>③ 詳細モーダル — 1セッションを掘り下げ</h3>
+<p>一覧の「詳細」ボタン、または進捗監視のカード「詳細」ボタンから開けます。表示内容：</p>
+<ul>
+  <li>提出状況バッジ（評価者ごと）</li>
+  <li>出勤実績（過去1年）</li>
+  <li>評価者ウェイト一覧（共働率・ウェイトバー）</li>
+  <li>評価者比較表（読み取り専用）</li>
+  <li>各評価者のコメント</li>
+</ul>
+
+<div class="box">
+<strong>大川さんが「ゴック・サンの評価をしたつもりだったが保存されていなかった」事案を受けて、これらの可視化機能を追加しました。</strong> 今後は提出漏れがあれば一覧バッジで即座に発見できます。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec7">7. 評価者ウェイト（重み付き多数決）<span class="new-tag">NEW</span></h2>
+
+<div class="box box-new">
+<strong>2026-05-09 導入：「直近で実際に一緒に現場にいた職長の意見」が多数決プリフィルで強く反映される仕組み</strong>
+</div>
+
+<h3>なぜ必要？</h3>
+<p>これまでは、対象スタッフを毎日見ている主担当の職長と、たまに顔を出した程度の職長の意見が <strong>同じ重み（1票）</strong> で扱われていました。実態に即した評価のため、共働実績に応じて重みを変えるようにしました。</p>
+
+<h3>ウェイトの計算式</h3>
+
+<div class="box">
+<strong>事業責任者（靖仁さん・政仁さん）</strong>: weight = <strong>1.0（固定）</strong> ← ★ マーク付き<br><br>
+<strong>その他職長</strong>:
+<pre style="background:#f8f8f8; padding: 8px; border-radius: 6px; font-size: 13px; line-height: 1.4;">recent = min(直近90日の共働日数, 60)
+year   = min(過去365日の共働日数, 200)
+weight = 0.3 + 0.4 × (recent / 60) + 0.3 × (year / 200)
+</pre>
+範囲: <strong>0.3 〜 1.0</strong>
+</div>
+
+<h3>シナリオ別の例</h3>
+
+<table>
+<tr><th>シナリオ</th><th>直近90日</th><th>過去365日</th><th>weight</th></tr>
+<tr><td>主担当職長（毎日同じ現場）</td><td>60+ 日</td><td>200+ 日</td><td><strong>1.0</strong></td></tr>
+<tr><td>数ヶ月一緒だったが直近離れた</td><td>0 日</td><td>100 日</td><td>0.45</td></tr>
+<tr><td>直近たまに一緒</td><td>20 日</td><td>30 日</td><td>0.48</td></tr>
+<tr><td>一度も同じ現場なし</td><td>0 日</td><td>0 日</td><td><strong>0.30</strong></td></tr>
+<tr><td>政仁さん・靖仁さん</td><td>―</td><td>―</td><td><strong>1.0 ★</strong></td></tr>
+</table>
+
+<h3>共働日数の判定方法</h3>
+<p>対象スタッフが<strong>「その評価者が月の職長として責任を持っていた現場」</strong>で<strong>実出勤した日</strong>をカウントします。</p>
+<ul>
+  <li>月単位の職長変更（mforeman）も忠実に反映</li>
+  <li>有給・休み・帰国中などの非作業日は除外</li>
+</ul>
+
+<h3>使われ方：承認画面の多数決プリフィル</h3>
+<p>承認時に最終ABCを決める際、これまでは <strong>1人=1票</strong> の多数決で初期値が決まっていました。今後は <strong>1人=ウェイト分の票</strong> で初期値が計算されます。</p>
+
+<div class="box">
+<strong>例：</strong>3名の評価者がそれぞれ A / A / B と評価し、ウェイトが 0.95 / 0.45 / 1.0 の場合<br>
+A票合計 = 0.95 + 0.45 = <strong>1.40</strong> / B票合計 = <strong>1.0</strong> → <strong>A が初期値</strong>になる
+</div>
+
+<div class="box box-warn">
+<strong>あくまで「初期値（プリフィル）」であり、最終決定は政仁さん（または管理者）が承認画面で自由に変更できます。</strong>運用の最終責任は変わりません。
+</div>
+
+<h3>ウェイトの確認方法</h3>
+<p>承認画面の比較表ヘッダーと、詳細モーダルの「評価者ウェイト」セクションで確認できます：</p>
+<ul>
+  <li><code>w=0.95 / 直近63% / 年71%</code> のような表示</li>
+  <li>★マークは事業責任者として 1.0 固定の意</li>
+  <li>マウスオーバーで実日数も表示</li>
+</ul>
+
+<h3>ウェイトの再計算（管理者）</h3>
+<ul>
+  <li><strong>一覧タブ右上の「🔄 ウェイト一括再計算」</strong>ボタン：進行中セッション全部のウェイトを最新の出面データから再算出</li>
+  <li>詳細モーダル内の <strong>「🔄 再計算」</strong>ボタン：個別セッションだけ再算出</li>
+</ul>
+
+<div class="box">
+<strong>承認済みは再計算対象外</strong>です（既に最終決定済みのため、変更しない設計）。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec8">8. 評価の承認（政仁さん・管理者）</h2>
 
 <p>全評価者の提出が完了すると、<strong>「承認」タブ</strong>に対象スタッフが表示されます。</p>
 
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text"><strong>「承認」タブ</strong>を開く</div>
+  <div class="step-text"><strong>「承認」タブ</strong>を開く（または一覧から「承認へ」ボタンで直接）</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">比較表が表示される：各評価者の回答が<strong>横並び</strong>で確認できます<br>
-  <span style="color:#888; font-size:13px;">● 緑 = 全員一致、● 黄 = 意見が分かれている項目</span></div>
+  <div class="step-text">「確認・承認」ボタンを押す → <strong>重み付き多数決</strong>でプリフィルされた最終ABCが表示される</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">各項目の<strong>最終ABC</strong>を決定する（A/B/Cボタンをクリック）</div>
+  <div class="step-text">比較表が表示される：各評価者の回答が<strong>横並び</strong>で確認できます<br>
+  <span style="color:#888; font-size:13px;">● 緑 = 全員一致、● 黄 = 意見が分かれている項目</span><br>
+  <span style="color:#888; font-size:13px;">ヘッダーの <code>w=0.85</code> は評価者ウェイト</span></div>
 </div>
 <div class="step">
   <div class="step-num">4</div>
-  <div class="step-text"><strong>最終コメント</strong>を記入</div>
+  <div class="step-text">必要に応じて<strong>最終ABCを変更</strong>する（A/B/Cボタンをクリック）</div>
 </div>
 <div class="step">
   <div class="step-num">5</div>
+  <div class="step-text"><strong>最終コメント</strong>を記入</div>
+</div>
+<div class="step">
+  <div class="step-num">6</div>
   <div class="step-text">スコア・ランク・昇給額のプレビューを確認し、<strong>「承認する」</strong>ボタンを押す</div>
 </div>
 
-<div class="box">
+<div class="box box-ok">
 <strong>承認すると：</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>最終スコア・ランク・昇給額が確定します</li>
-  <li>評価履歴として保存されます</li>
+  <li>確認ダイアログ <code>✅ 〇〇さんの評価を承認しました（ランク: A / 推奨昇給: +170円/h）</code> が表示される</li>
+  <li>最終スコア・ランク・昇給額が確定</li>
+  <li>履歴タブから後日いつでも詳細を閲覧可能</li>
   <li>昇給額は人員マスタの時給に手動で反映してください</li>
 </ul>
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec6">6. 評価基準（ABC判定の目安）</h2>
+<h2 id="sec9">9. 進捗監視と履歴閲覧 <span class="new-tag">NEW</span></h2>
+
+<h3>進捗監視タブ（admin/approver限定）</h3>
+<p>進行中のセッション（収集中・最終確認待ち）を <strong>2カラムグリッドで一望</strong>できます。</p>
+<ul>
+  <li>並び順：最終確認待ち（amber 強調）→ 古い順（停滞しているもの優先）</li>
+  <li>各カードに評価者バッジと進捗バーを表示</li>
+  <li>停滞7日以上は橙ボーダー＋「<code>🕒 N日経過</code>」マーク</li>
+  <li>「詳細」ボタンで詳細モーダル、「承認へ」で承認画面に直接移動</li>
+</ul>
+
+<h3>履歴タブ（admin/approver限定）</h3>
+<p>承認済み評価を年フィルタ付きでテーブル表示します。</p>
+<ul>
+  <li>名前 / 評価日 / 勤続 / 合計スコア / ランク / 推奨昇給 / 承認日</li>
+  <li>「詳細」ボタンで承認時の評価者比較表・コメント・最終結果を再閲覧可能</li>
+  <li>過去の評価傾向の比較・1on1での振り返りに活用できます</li>
+</ul>
+
+<!-- ================================================ -->
+<h2 id="sec10">10. 通知とリマインダー <span class="new-tag">NEW</span></h2>
+
+<p>画面右上の通知ベルに以下のアラートが表示されます。</p>
+
+<table>
+<tr><th>通知</th><th>誰宛て</th><th>条件</th></tr>
+<tr><td>📋 評価時期到来</td><td>admin・approver</td><td>承認済み前回評価から1年が近づいた</td></tr>
+<tr><td>🔴 評価期限超過</td><td>admin・approver</td><td>前回評価から1年経過</td></tr>
+<tr><td>📝 あなたの評価入力をお願いします</td><td>評価者本人</td><td>自分が評価者の collecting セッションがある</td></tr>
+<tr><td>⚠️ 評価入力がN日経過しています <span class="new-tag">NEW</span></td><td>評価者本人</td><td>自分の未提出セッションが7日以上経過</td></tr>
+<tr><td>⏰ 評価がN日停滞中（残●名未提出: 〇〇、△△） <span class="new-tag">NEW</span></td><td>admin・approver</td><td>セッション開始から7日以上経過し、未提出者がいる</td></tr>
+<tr><td>⚖️ 最終承認待ち</td><td>admin・approver</td><td>全員提出済で reviewing になっている</td></tr>
+</table>
+
+<div class="box">
+<strong>停滞リマインダーは、未提出者の名前を最大3名まで通知メッセージに表示します。</strong>本人にも別途「あなたの評価がN日経過」通知が届くため、二重で気づきやすくなっています。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec11">11. 評価基準（ABC判定の目安）</h2>
 
 <div class="box">
 <strong>評価項目の構成：</strong>全10項目（日本語3 + 勤務態度<strong>4</strong> + 職業能力3）<br>
@@ -265,14 +487,14 @@
   <td>単独行動が多い。チームワークに課題</td>
 </tr>
 <tr style="background: #f0f4ff;">
-  <td><strong>指示遵守</strong><br><span style="color:#888; font-size:11px;">NEW</span></td>
+  <td><strong>指示遵守</strong></td>
   <td>職長や先輩社員の指示を正確に守り、自己判断で勝手に変えない。不明点は必ず確認する</td>
   <td>基本的に指示は守るが、たまに自己判断で省略・変更することがある</td>
   <td>指示を守らないことが目立つ。自分のやり方で勝手に進めてしまうことがある</td>
 </tr>
 </table>
 
-<h3>🔨 職業能力（3項目 × 重み ×1.2 = 28%）</h3>
+<h3>🔨 職業能力（3項目 × 重み ×1.0 = 20%）</h3>
 
 <table>
 <tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
@@ -327,7 +549,7 @@
 </table>
 
 <!-- ================================================ -->
-<h2 id="sec7">7. スコア計算と昇給テーブル</h2>
+<h2 id="sec12">12. スコア計算と昇給テーブル</h2>
 
 <h3>評価者の構成</h3>
 
@@ -423,21 +645,26 @@ S − A = 320円 / A − B = 320円 / B − C = 320円 / C − D ≒ 317円
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec8">8. よくある質問</h2>
+<h2 id="sec13">13. よくある質問・トラブル対処</h2>
 
 <table>
-<tr><th>質問</th><th>回答</th></tr>
+<tr><th>質問・症状</th><th>回答・対処</th></tr>
+<tr><td><strong>提出ボタンを押したが反映されたか分からない</strong></td><td>2026-05-09 改善で、提出成功時には <strong>確認ダイアログ</strong>＋<strong>緑トースト</strong>＋<strong>「✓ 提出済み」バナー（提出時刻付き）</strong>が表示されます。これらが出ていなければ保存されていません。失敗時は <code>❌ 提出に失敗しました</code> のアラートが出るので、もう一度押してください。</td></tr>
 <tr><td>評価入力タブにスタッフが表示されない</td><td>あなたが評価者に指定されていない可能性があります。管理者に確認してください。</td></tr>
 <tr><td>他の評価者の結果が見えない</td><td>自分が提出するまで、他の人の評価は非表示です（バイアス防止のため）。先に自分の評価を提出してください。</td></tr>
 <tr><td>提出した後に修正したい</td><td>「修正する」ボタンで再編集・再提出できます。</td></tr>
-<tr><td>承認タブに何も表示されない</td><td>全員の提出が完了するまで承認画面には表示されません。「一覧」タブで提出状況を確認してください。</td></tr>
+<tr><td>承認タブに何も表示されない</td><td>全員の提出が完了するまで承認画面には表示されません。「一覧」タブの提出状況バッジ、または「進捗監視」タブで状況を確認してください。</td></tr>
+<tr><td>承認済みの評価をもう一度見たい</td><td>「履歴」タブで承認済み評価を一覧表示できます。一覧タブのランク文字をクリックしても詳細モーダルが開きます。</td></tr>
+<tr><td>大川さんなど特定の職長の評価だけ反映されない</td><td>「進捗監視」タブで該当セッションの評価者バッジを確認してください。橙色（7日以上未提出）になっていればリマインダーが既に届いているはず。本人に再提出を依頼してください。</td></tr>
+<tr><td>ウェイトを最新の出面データで更新したい</td><td>一覧タブ右上の <strong>🔄 ウェイト一括再計算</strong> ボタン、または詳細モーダル内の <strong>🔄 再計算</strong> ボタンで実行できます。承認済みは対象外です。</td></tr>
+<tr><td>ウェイト 0.30 になっている職長が居る</td><td>その職長は対象スタッフと過去365日に共働実績がありません（最低ウェイト）。承認時の最終ABC決定で、その意見を参考程度に扱う運用がおすすめです。</td></tr>
 <tr><td>昇給額はどう反映される？</td><td>評価承認後、管理者が人員マスタの時給を手動で更新します。</td></tr>
 <tr><td>評価の頻度は？</td><td>年1回、各スタッフの入社日基準です。入社日の1ヶ月前に通知が届きます。</td></tr>
-<tr><td>旧データとの互換性は？</td><td>「指示遵守」項目がない旧評価データはB（標準）として計算されます。</td></tr>
+<tr><td>旧データとの互換性は？</td><td>「指示遵守」項目がない旧評価データはB（標準）として計算されます。ウェイト未計算の旧セッションは全員 weight=1.0 で扱われます（一括再計算で更新可能）。</td></tr>
 </table>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-19</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-05-09</p>
 
 </body>
 </html>
