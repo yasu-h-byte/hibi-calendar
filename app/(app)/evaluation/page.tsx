@@ -280,6 +280,57 @@ export default function EvaluationPage() {
   // 履歴タブのフィルタ
   const [historyYear, setHistoryYear] = useState<string>('all')
 
+  // ウェイト再計算状態
+  const [recalculatingWeights, setRecalculatingWeights] = useState(false)
+
+  // ── ウェイト再計算（個別セッション） ──
+  const handleRecalculateWeights = async (evaluationId: string) => {
+    if (!confirm('このセッションのウェイトを再計算しますか？\n（過去出勤データから共働日数を再集計します）')) return
+    setRecalculatingWeights(true)
+    const { password } = getAuth()
+    try {
+      const res = await fetch('/api/evaluation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'recalculateWeights', evaluationId }),
+      })
+      if (res.ok) {
+        await fetchData()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(`再計算に失敗しました: ${err.error || res.statusText}`)
+      }
+    } catch (e) {
+      alert(`エラー: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    setRecalculatingWeights(false)
+  }
+
+  // ── ウェイト一括再計算（既存セッション全部） ──
+  const handleRecalculateAllWeights = async () => {
+    if (!confirm('全ての進行中セッション（収集中・最終確認待ち）のウェイトを再計算します。\n（承認済みは対象外）\n\n実行しますか？')) return
+    setRecalculatingWeights(true)
+    const { password } = getAuth()
+    try {
+      const res = await fetch('/api/evaluation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'recalculateAllWeights' }),
+      })
+      if (res.ok) {
+        const d = await res.json()
+        alert(`一括再計算完了\n更新: ${d.updated}件\nスキップ: ${d.skipped}件${d.errors?.length ? `\nエラー: ${d.errors.length}件` : ''}`)
+        await fetchData()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(`再計算に失敗しました: ${err.error || res.statusText}`)
+      }
+    } catch (e) {
+      alert(`エラー: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    setRecalculatingWeights(false)
+  }
+
   const isAdmin = authUser?.role === 'admin' || authUser?.role === 'approver'
   const isAdminOnly = authUser?.role === 'admin' // 生活態度の入力はadminのみ
 
@@ -740,6 +791,93 @@ export default function EvaluationPage() {
           )}
         </div>
 
+        {/* 評価者ウェイト */}
+        {(session.evaluatorWeights || isAdmin) && session.status !== 'approved' && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                評価者ウェイト
+                <span className="ml-2 text-[11px] font-normal text-gray-500">
+                  共働実績ベース：直近で一緒に働いた職長の意見が多数決プリフィルで強く反映されます
+                </span>
+              </h4>
+              {isAdmin && (
+                <button
+                  onClick={() => handleRecalculateWeights(session.id)}
+                  disabled={recalculatingWeights}
+                  className="px-2 py-1 text-[11px] font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  {recalculatingWeights ? '...' : '🔄 再計算'}
+                </button>
+              )}
+            </div>
+            {session.evaluatorWeights ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50 dark:bg-gray-900">
+                    <tr>
+                      <th className="px-2 py-1 text-left font-medium text-gray-500 dark:text-gray-400">評価者</th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400">直近90日</th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400">過去365日</th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400">ウェイト</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {session.evaluatorIds.map(eid => {
+                      const w = session.evaluatorWeights![eid]
+                      const name = evaluatorNameLookup(eid, apiEvaluators, workers)
+                      if (!w) {
+                        return (
+                          <tr key={eid}>
+                            <td className="px-2 py-1 text-gray-700 dark:text-gray-300">{name}</td>
+                            <td className="px-2 py-1 text-right text-gray-400">--</td>
+                            <td className="px-2 py-1 text-right text-gray-400">--</td>
+                            <td className="px-2 py-1 text-right text-gray-400">--</td>
+                          </tr>
+                        )
+                      }
+                      const weightBarPct = Math.round(w.weight * 100)
+                      const barColor = w.isApprover
+                        ? 'bg-purple-400'
+                        : w.weight >= 0.8
+                        ? 'bg-green-400'
+                        : w.weight >= 0.5
+                        ? 'bg-blue-400'
+                        : 'bg-gray-400'
+                      return (
+                        <tr key={eid}>
+                          <td className="px-2 py-1 text-gray-700 dark:text-gray-300 whitespace-nowrap">
+                            {name}
+                            {w.isApprover && <span className="ml-1 text-purple-600 dark:text-purple-400" title="事業責任者">★</span>}
+                          </td>
+                          <td className="px-2 py-1 text-right text-gray-700 dark:text-gray-300 tabular-nums">
+                            {w.isApprover ? '―' : `${w.recentPct}% (${w.recentDays}日)`}
+                          </td>
+                          <td className="px-2 py-1 text-right text-gray-700 dark:text-gray-300 tabular-nums">
+                            {w.isApprover ? '―' : `${w.yearPct}% (${w.yearDays}日)`}
+                          </td>
+                          <td className="px-2 py-1 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <div className="w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div className={`h-full ${barColor}`} style={{ width: `${weightBarPct}%` }} />
+                              </div>
+                              <span className="font-bold tabular-nums w-10 text-right">{w.weight.toFixed(2)}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                ウェイト未計算（旧形式セッション）。{isAdmin && '右上の「再計算」ボタンで算出できます。'}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* 出席指標 */}
         {session.metrics && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
@@ -778,14 +916,29 @@ export default function EvaluationPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 w-32">
                       項目
                     </th>
-                    {session.reviews.map((r, idx) => (
-                      <th
-                        key={r.evaluatorId}
-                        className={`px-3 py-3 text-center text-xs font-medium text-white border-b border-gray-200 dark:border-gray-700 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].header}`}
-                      >
-                        {r.evaluatorName}
-                      </th>
-                    ))}
+                    {session.reviews.map((r, idx) => {
+                      const w = session.evaluatorWeights?.[r.evaluatorId]
+                      return (
+                        <th
+                          key={r.evaluatorId}
+                          className={`px-3 py-3 text-center text-xs font-medium text-white border-b border-gray-200 dark:border-gray-700 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].header}`}
+                        >
+                          <div>{r.evaluatorName}</div>
+                          {w && (
+                            <div className="mt-1 text-[10px] font-normal opacity-90">
+                              {w.isApprover ? (
+                                <span title="事業責任者として常時フルウェイト">w=1.0 ★</span>
+                              ) : (
+                                <span title={`過去365日 共働 ${w.yearDays}日 / 直近90日 共働 ${w.recentDays}日`}>
+                                  w={w.weight.toFixed(2)}
+                                  <span className="block opacity-80">直近{w.recentPct}% / 年{w.yearPct}%</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </th>
+                      )
+                    })}
                     {session.status === 'approved' && session.finalScores && (
                       <>
                         <th className="px-3 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 w-1"></th>
@@ -949,7 +1102,15 @@ export default function EvaluationPage() {
         <div className="space-y-4">
           {/* Create session button (admin only) */}
           {isAdmin && (
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2 flex-wrap">
+              <button
+                onClick={handleRecalculateAllWeights}
+                disabled={recalculatingWeights}
+                className="px-3 py-2 text-sm font-medium rounded-lg border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
+                title="進行中セッションのウェイトを過去出勤データから再計算"
+              >
+                {recalculatingWeights ? '再計算中...' : '🔄 ウェイト一括再計算'}
+              </button>
               <button
                 onClick={async () => {
                   // 最新の評価者リストを取得してからモーダルを開く
@@ -1551,14 +1712,18 @@ export default function EvaluationPage() {
                         <button
                           onClick={() => {
                             setApproveSessionId(session.id)
-                            // Pre-fill finalScores from majority vote or first review
+                            // Pre-fill finalScores from weighted majority vote
+                            // 共働実績ベースのウェイトを使用（直近で一緒に働いた職長の意見が強く反映される）
                             if (session.reviews.length > 0) {
-                              // Use majority vote for each item
                               const majority = JSON.parse(JSON.stringify(EMPTY_SCORES)) as EvaluationScores
                               for (const item of EVAL_ITEMS) {
-                                const grades = session.reviews.map(r => getScoreValue(r.scores, item.category, item.key))
                                 const counts: Record<ABCGrade, number> = { A: 0, B: 0, C: 0 }
-                                for (const g of grades) counts[g]++
+                                for (const r of session.reviews) {
+                                  const g = getScoreValue(r.scores, item.category, item.key)
+                                  // ウェイト未設定（旧セッション）は 1.0 にフォールバック
+                                  const w = session.evaluatorWeights?.[r.evaluatorId]?.weight ?? 1.0
+                                  counts[g] += w
+                                }
                                 const best = (['A', 'B', 'C'] as ABCGrade[]).sort((a, b) => counts[b] - counts[a])[0]
                                 const cat = majority[item.category as keyof EvaluationScores] as Record<string, ABCGrade>
                                 cat[item.key] = best
@@ -1570,6 +1735,7 @@ export default function EvaluationPage() {
                             setFinalComment('')
                           }}
                           className="px-4 py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors"
+                          title="重み付き多数決でプリフィル（直近一緒に働いた職長の意見を強く反映）"
                         >
                           確認・承認
                         </button>
@@ -1638,18 +1804,36 @@ export default function EvaluationPage() {
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 w-32">
                             項目
                           </th>
-                          {session.reviews.map((review, idx) => (
-                            <th
-                              key={review.evaluatorId}
-                              className={`px-3 py-3 text-center text-xs font-medium text-white border-b border-gray-200 dark:border-gray-700 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].header}`}
-                            >
-                              {review.evaluatorName}
-                            </th>
-                          ))}
+                          {session.reviews.map((review, idx) => {
+                            const w = session.evaluatorWeights?.[review.evaluatorId]
+                            return (
+                              <th
+                                key={review.evaluatorId}
+                                className={`px-3 py-3 text-center text-xs font-medium text-white border-b border-gray-200 dark:border-gray-700 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].header}`}
+                              >
+                                <div>{review.evaluatorName}</div>
+                                {w && (
+                                  <div className="mt-1 text-[10px] font-normal opacity-90">
+                                    {w.isApprover ? (
+                                      <span title="事業責任者として常時フルウェイト">w=1.0 ★</span>
+                                    ) : (
+                                      <span title={`過去365日 共働 ${w.yearDays}日 / 直近90日 共働 ${w.recentDays}日`}>
+                                        w={w.weight.toFixed(2)}
+                                        <span className="block opacity-80">直近{w.recentPct}% / 年{w.yearPct}%</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </th>
+                            )
+                          })}
                           <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 w-1">
                           </th>
                           <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/30 min-w-[140px]">
                             最終評価
+                            {session.evaluatorWeights && (
+                              <div className="text-[10px] font-normal opacity-70 mt-0.5">（重み付き多数決）</div>
+                            )}
                           </th>
                         </tr>
                       </thead>

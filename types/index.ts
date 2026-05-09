@@ -221,6 +221,23 @@ export interface EvaluationReview {
   submittedAt: string
 }
 
+/**
+ * 評価者ウェイト（共働実績に基づく多数決重み付け）
+ *
+ * セッション作成時に対象スタッフの過去出勤データから算出。
+ * 直近で実際に一緒に現場に居た職長の意見ほど多数決プリフィルで強く反映される。
+ * admin/approver は事業責任者として常時 1.0。
+ */
+export interface EvaluatorWeightInfo {
+  evaluatorId: number
+  recentDays: number    // 直近90日の共働日数
+  yearDays: number      // 過去365日の共働日数
+  recentPct: number     // 0〜100 (recentDays/60の比率を整数化)
+  yearPct: number       // 0〜100 (yearDays/200の比率を整数化)
+  weight: number        // 0.3〜1.0
+  isApprover: boolean   // 事業責任者として 1.0 固定か
+}
+
 /** 評価セッション（1スタッフ×1評価期間、複数評価者対応） */
 export interface Evaluation {
   id: string                    // workerId_evaluationDate
@@ -240,6 +257,11 @@ export interface Evaluation {
 
   // 自動集計
   metrics: EvaluationMetrics
+
+  // 評価者ウェイト（共働実績に基づく多数決重み付け）
+  // セッション作成時に算出。recalculateWeights API で後から更新可能。
+  // 古いセッションには存在しないので、UI 側は { weight: 1.0 } をフォールバックとして扱う。
+  evaluatorWeights?: Record<number, EvaluatorWeightInfo>
 
   // 最終スコア計算結果（承認後に確定）
   manualScore?: number           // 重み付き（最大33.3）

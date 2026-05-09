@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { logActivity } from '@/lib/activity'
+import { calcEvaluatorWeights } from '@/lib/evaluator-weights'
 import { EvaluationScores, EvaluationWeights, RaiseTableRow, EvaluationReview } from '@/types'
 
 // ────────────────────────────────────────
@@ -314,6 +315,14 @@ export async function POST(request: NextRequest) {
       const evaluationId = `${workerId}_${evaluationDate}`
       const now = new Date().toISOString()
 
+      // 評価者ウェイト（共働日数ベース）を算出
+      const evaluatorWeights = await calcEvaluatorWeights(
+        workerId,
+        evaluatorIds,
+        evaluationDate,
+        mainData,
+      )
+
       const evaluationData = {
         workerId,
         workerName,
@@ -322,6 +331,7 @@ export async function POST(request: NextRequest) {
         evaluatorIds,
         reviews: [] as EvaluationReview[],
         metrics,
+        evaluatorWeights,
         yearsFromHire,
         createdAt: now,
         updatedAt: now,
@@ -480,6 +490,67 @@ export async function POST(request: NextRequest) {
       )
 
       return NextResponse.json({ success: true, rank, totalScore, raiseAmount })
+    }
+
+    // ── ウェイト再計算（個別セッション） ──
+    if (action === 'recalculateWeights') {
+      const { evaluationId } = body as { evaluationId: string }
+      if (!evaluationId) {
+        return NextResponse.json({ error: 'evaluationId は必須です' }, { status: 400 })
+      }
+      const evalRef = doc(db, 'evaluations', evaluationId)
+      const evalSnap = await getDoc(evalRef)
+      if (!evalSnap.exists()) {
+        return NextResponse.json({ error: '評価セッションが見つかりません' }, { status: 404 })
+      }
+      const data = evalSnap.data()
+      const wId = data.workerId as number
+      const evaluatorIds = (data.evaluatorIds || []) as number[]
+      const evalDate = data.evaluationDate as string
+      const evaluatorWeights = await calcEvaluatorWeights(wId, evaluatorIds, evalDate)
+      await updateDoc(evalRef, {
+        evaluatorWeights,
+        updatedAt: new Date().toISOString(),
+      })
+      await logActivity('admin', 'evaluation.recalculateWeights', `${data.workerName} のウェイトを再計算`)
+      return NextResponse.json({ success: true, evaluatorWeights })
+    }
+
+    // ── ウェイト一括再計算（既存セッションへの遡及適用） ──
+    if (action === 'recalculateAllWeights') {
+      const evalSnap = await getDocs(collection(db, 'evaluations'))
+      const mainData = await getMainData()
+      let updated = 0
+      let skipped = 0
+      const errors: string[] = []
+      for (const snap of evalSnap.docs) {
+        const data = snap.data()
+        const status = data.status as string
+        // 承認済みは再計算不要（ウェイトは多数決プリフィル用なので、承認後は意味を持たない）
+        if (status === 'approved') {
+          skipped++
+          continue
+        }
+        try {
+          const wId = data.workerId as number
+          const evaluatorIds = (data.evaluatorIds || []) as number[]
+          const evalDate = data.evaluationDate as string
+          if (!wId || !evaluatorIds.length || !evalDate) {
+            skipped++
+            continue
+          }
+          const weights = await calcEvaluatorWeights(wId, evaluatorIds, evalDate, mainData)
+          await updateDoc(doc(db, 'evaluations', snap.id), {
+            evaluatorWeights: weights,
+            updatedAt: new Date().toISOString(),
+          })
+          updated++
+        } catch (e) {
+          errors.push(`${snap.id}: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+      await logActivity('admin', 'evaluation.recalculateAllWeights', `ウェイト一括再計算: ${updated}件更新, ${skipped}件スキップ`)
+      return NextResponse.json({ success: true, updated, skipped, errors })
     }
 
     // ── 設定保存（重み + 昇給テーブル） ──
