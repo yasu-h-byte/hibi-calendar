@@ -39,6 +39,8 @@ function calcCarryOverForWorker(
   const prevEnd = new Date(prevStart)
   prevEnd.setFullYear(prevEnd.getFullYear() + 1)
 
+  // 多現場の同日重複（multi-site dup）を排除して1日1カウントに正規化
+  const seenDates = new Set<string>()
   let periodUsed = 0
   for (const [key, entry] of Object.entries(allAtt)) {
     if (!entry) continue
@@ -47,7 +49,11 @@ function calcCarryOverForWorker(
     const pk = parseDKey(key)
     if (parseInt(pk.wid) !== workerId) continue
     const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-    if (d >= prevStart && d < prevEnd) periodUsed++
+    if (d < prevStart || d >= prevEnd) continue
+    const dk = `${pk.ym}_${pk.day}`
+    if (seenDates.has(dk)) continue
+    seenDates.add(dk)
+    periodUsed++
   }
 
   const prevGrant = prevRec.grantDays ?? prevRec.grant ?? 0
@@ -271,6 +277,8 @@ export async function POST(request: NextRequest) {
           const periodStart = gd
           const periodEnd = new Date(gd)
           periodEnd.setFullYear(periodEnd.getFullYear() + 1)
+          // 多現場の同日重複を排除して1日1カウントに正規化
+          const seenDatesExpiry = new Set<string>()
           let periodUsed = 0
           for (const [key, entry] of Object.entries(allAtt)) {
             if (!entry) continue
@@ -279,7 +287,11 @@ export async function POST(request: NextRequest) {
             const pk = parseDKey(key)
             if (parseInt(pk.wid) !== workerId) continue
             const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-            if (d >= periodStart && d < periodEnd) periodUsed++
+            if (d < periodStart || d >= periodEnd) continue
+            const dk = `${pk.ym}_${pk.day}`
+            if (seenDatesExpiry.has(dk)) continue
+            seenDatesExpiry.add(dk)
+            periodUsed++
           }
           const expiredDays = Math.max(0, grantDays + carryOver - adjustment - buyoutDays - periodUsed)
 
@@ -1207,14 +1219,18 @@ export async function GET(request: NextRequest) {
         const total = grantDays + carryOver
 
         // 付与日から1年間のPL消化日数を集計（残日数計算用）+ 月別内訳は全期間
+        // ⚠️ 多現場の同日重複（multi-site dup）を排除して1日1カウントに正規化
         let periodUsed = 0
         const plCalendarLocal: string[] = []
-        const monthlyUsage: Record<string, number> = {} // YYYYMM -> count（全期間）
+        const monthlyUsage: Record<string, number> = {} // YYYYMM -> count（全期間、重複排除済）
 
         const hasPeriod = !!grantDate
         const gd = hasPeriod ? new Date(grantDate) : null
         const gdEnd = hasPeriod ? new Date(gd!) : null
         if (gdEnd) gdEnd.setFullYear(gdEnd.getFullYear() + 1)
+
+        const seenAllPeriod = new Set<string>()      // 全期間 (monthly/calendar 用)
+        const seenCurrentFy = new Set<string>()      // 当期 (periodUsed 用)
 
         for (const [key, entry] of Object.entries(allAtt)) {
           if (!entry) continue
@@ -1225,13 +1241,19 @@ export async function GET(request: NextRequest) {
           const wid = parseInt(pk.wid)
           if (wid !== w.id) continue
           const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
+          const dk = `${pk.ym}_${pk.day}`
 
           // monthlyUsage と plCalendarLocal は全期間集計（月別タブやPLカレンダー表示用）
-          monthlyUsage[pk.ym] = (monthlyUsage[pk.ym] || 0) + 1
-          plCalendarLocal.push(`${pk.ym}${pk.day}`)
+          if (!seenAllPeriod.has(dk)) {
+            seenAllPeriod.add(dk)
+            monthlyUsage[pk.ym] = (monthlyUsage[pk.ym] || 0) + 1
+            plCalendarLocal.push(`${pk.ym}${pk.day}`)
+          }
 
           // periodUsed は当期（grantDate〜+1年）のみカウント（残日数計算用）
           if (hasPeriod && (entryDate < gd! || entryDate >= gdEnd!)) continue
+          if (seenCurrentFy.has(dk)) continue
+          seenCurrentFy.add(dk)
           periodUsed++
         }
         const used = adjustment + periodUsed
