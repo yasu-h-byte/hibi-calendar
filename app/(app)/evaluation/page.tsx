@@ -283,6 +283,20 @@ export default function EvaluationPage() {
   // ウェイト再計算状態
   const [recalculatingWeights, setRecalculatingWeights] = useState(false)
 
+  // 提出成功通知（一時的に表示してフェード）
+  const [submitSuccess, setSubmitSuccess] = useState<{
+    workerName: string
+    isEdit: boolean
+    at: string
+  } | null>(null)
+
+  // 成功通知を一定時間後にクリア
+  useEffect(() => {
+    if (!submitSuccess) return
+    const t = setTimeout(() => setSubmitSuccess(null), 8000)
+    return () => clearTimeout(t)
+  }, [submitSuccess])
+
   // ── ウェイト再計算（個別セッション） ──
   const handleRecalculateWeights = async (evaluationId: string) => {
     if (!confirm('このセッションのウェイトを再計算しますか？\n（過去出勤データから共働日数を再集計します）')) return
@@ -441,6 +455,8 @@ export default function EvaluationPage() {
     if (!reviewSession || !authUser) return
     setSaving(true)
     const { password } = getAuth()
+    const wasEditing = isEditing
+    const targetName = reviewSession.workerName
     try {
       const res = await fetch('/api/evaluation', {
         method: 'POST',
@@ -459,12 +475,24 @@ export default function EvaluationPage() {
       })
       if (res.ok) {
         await fetchData()
+        // 成功バナーが見えるよう先頭にスクロール
+        if (typeof window !== 'undefined') {
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }
+        // 一時的に成功通知バナーを表示
+        setSubmitSuccess({
+          workerName: targetName,
+          isEdit: wasEditing,
+          at: new Date().toISOString(),
+        })
+        // 確認ダイアログ — 提出完了が確実に伝わるように
+        alert(`✅ ${targetName} さんの評価を${wasEditing ? '修正' : '提出'}しました\n\n他の評価対象者がいる場合は、上の「対象スタッフ」から続けて評価してください。`)
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(`提出に失敗しました: ${err.error || res.statusText}`)
+        alert(`❌ 提出に失敗しました\n\n${err.error || res.statusText}\n\nもう一度お試しください。`)
       }
     } catch (e) {
-      alert(`通信エラー: ${e instanceof Error ? e.message : String(e)}`)
+      alert(`❌ 通信エラー\n\n${e instanceof Error ? e.message : String(e)}\n\n通信状態を確認してもう一度お試しください。`)
     }
     setSaving(false)
   }
@@ -507,12 +535,13 @@ export default function EvaluationPage() {
         setCreateWorkerId(null)
         setCreateEvaluatorIds([])
         await fetchData()
+        alert(`✅ ${worker.name} さんの評価セッションを作成しました\n\n評価者 ${createEvaluatorIds.length}名に通知が送信されます。`)
       } else {
         const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-        alert(`作成に失敗しました: ${err.error || res.statusText}`)
+        alert(`❌ 作成に失敗しました\n\n${err.error || res.statusText}`)
       }
     } catch (e) {
-      alert(`エラーが発生しました: ${e instanceof Error ? e.message : String(e)}`)
+      alert(`❌ エラーが発生しました: ${e instanceof Error ? e.message : String(e)}`)
     }
     setSaving(false)
   }
@@ -555,12 +584,13 @@ export default function EvaluationPage() {
       if (res.ok) {
         setApproveSessionId(null)
         await fetchData()
+        alert(`✅ ${session.workerName} さんの評価を承認しました\n\nランク: ${rank} / 推奨昇給: +${raiseAmount}円/h`)
       } else {
         const err = await res.json().catch(() => ({}))
-        alert(`承認に失敗しました: ${err.error || res.statusText}`)
+        alert(`❌ 承認に失敗しました\n\n${err.error || res.statusText}`)
       }
     } catch (e) {
-      alert(`通信エラー: ${e instanceof Error ? e.message : String(e)}`)
+      alert(`❌ 通信エラー: ${e instanceof Error ? e.message : String(e)}`)
     }
     setSaving(false)
   }
@@ -1088,6 +1118,32 @@ export default function EvaluationPage() {
     <div className="max-w-6xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">評価管理</h1>
 
+      {/* 提出成功トースト — 8秒で自動フェード */}
+      {submitSuccess && (
+        <div className="sticky top-2 z-40 mb-4 animate-fadeIn">
+          <div className="bg-green-500 dark:bg-green-600 text-white rounded-xl shadow-lg p-4 flex items-center gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-2xl font-bold">
+              ✓
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-base">
+                {submitSuccess.workerName} さんの評価を{submitSuccess.isEdit ? '修正' : '提出'}しました
+              </p>
+              <p className="text-xs text-green-50 mt-0.5 opacity-90">
+                {new Date(submitSuccess.at).toLocaleString('ja-JP')} に保存完了
+              </p>
+            </div>
+            <button
+              onClick={() => setSubmitSuccess(null)}
+              className="flex-shrink-0 text-white/80 hover:text-white text-sm px-2 py-1 rounded hover:bg-white/10"
+              aria-label="閉じる"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tab Bar */}
       <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
         {visibleTabs.map(t => (
@@ -1590,14 +1646,30 @@ export default function EvaluationPage() {
               {/* If submitted and not editing: show read-only view */}
               {hasSubmitted && !isEditing && (
                 <div className="space-y-4">
-                  <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-green-700 dark:text-green-300 font-medium">
-                        評価を提出済みです
-                      </p>
+                  <div className="bg-green-50 dark:bg-green-900/30 border-2 border-green-300 dark:border-green-700 rounded-xl p-5 shadow-sm">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-500 dark:bg-green-600 flex items-center justify-center text-white text-2xl font-bold shadow">
+                          ✓
+                        </div>
+                        <div>
+                          <p className="text-base font-bold text-green-800 dark:text-green-200">
+                            {reviewSession.workerName} さんの評価を提出済みです
+                          </p>
+                          {(() => {
+                            const my = reviewSession.reviews.find(r => r.evaluatorId === authUser?.workerId)
+                            if (!my?.submittedAt) return null
+                            return (
+                              <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
+                                {new Date(my.submittedAt).toLocaleString('ja-JP')} に保存完了
+                              </p>
+                            )
+                          })()}
+                        </div>
+                      </div>
                       <button
                         onClick={() => setIsEditing(true)}
-                        className="px-3 py-1 text-xs font-medium rounded-lg border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50"
+                        className="px-4 py-2 text-sm font-medium rounded-lg border-2 border-green-400 dark:border-green-600 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
                       >
                         修正する
                       </button>
