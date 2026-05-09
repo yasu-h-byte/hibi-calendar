@@ -459,8 +459,13 @@ export default function EvaluationPage() {
       })
       if (res.ok) {
         await fetchData()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(`提出に失敗しました: ${err.error || res.statusText}`)
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      alert(`通信エラー: ${e instanceof Error ? e.message : String(e)}`)
+    }
     setSaving(false)
   }
 
@@ -550,8 +555,13 @@ export default function EvaluationPage() {
       if (res.ok) {
         setApproveSessionId(null)
         await fetchData()
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(`承認に失敗しました: ${err.error || res.statusText}`)
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      alert(`通信エラー: ${e instanceof Error ? e.message : String(e)}`)
+    }
     setSaving(false)
   }
 

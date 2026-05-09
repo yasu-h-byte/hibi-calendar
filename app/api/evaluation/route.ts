@@ -356,7 +356,9 @@ export async function POST(request: NextRequest) {
         comment: string
       }
 
-      if (!evaluationId || !evaluatorId || !evaluatorName || !scores) {
+      // 注意: evaluatorId は 0（靖仁さん, super-admin）が正規の値なので、
+      //       `!evaluatorId` は使わず null/undefined/型を明示チェックする。
+      if (!evaluationId || typeof evaluatorId !== 'number' || !evaluatorName || !scores) {
         return NextResponse.json({ error: 'evaluationId, evaluatorId, evaluatorName, scores は必須です' }, { status: 400 })
       }
 
@@ -441,7 +443,8 @@ export async function POST(request: NextRequest) {
         finalComment?: string
       }
 
-      if (!evaluationId || !approvedBy || !finalScores) {
+      // 注意: approvedBy も 0（靖仁さん）が正規の値
+      if (!evaluationId || typeof approvedBy !== 'number' || !finalScores) {
         return NextResponse.json({ error: 'evaluationId, approvedBy, finalScores は必須です' }, { status: 400 })
       }
 
