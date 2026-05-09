@@ -660,32 +660,37 @@ export async function GET(request: NextRequest) {
       }
     }))
 
-    // ═══ Today's status ═══
+    // ═══ Yesterday's status ═══
+    // 2026-05-09 変更: 旧運用は朝に職長が一括入力していたため「本日」の稼働状況が
+    //   有用だったが、新運用は実習生が作業終わりに自己入力するため「前日」のデータを
+    //   見るほうが確定情報として意味がある。
+    //   フィールド名 todayStatus はクライアント影響を抑えるため維持。
     const now = new Date()
-    const todayYm = ymKey(now.getFullYear(), now.getMonth() + 1)
-    const todayDay = now.getDate()
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const targetYm = ymKey(yesterday.getFullYear(), yesterday.getMonth() + 1)
+    const targetDay = yesterday.getDate()
     let todayStatus = null
     try {
-      const cachedToday = attCache.get(todayYm)
-      const todayAtt = cachedToday || await getAttData(todayYm)
+      const cachedTarget = attCache.get(targetYm)
+      const targetAtt = cachedTarget || await getAttData(targetYm)
 
-      // homeLongLeave コレクションから approved & 今日期間内のワーカーIDを集める
-      // (main.homeLeaves に追記漏れがあるケースの保険)
-      const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      // homeLongLeave コレクションから approved & 前日期間内のワーカーIDを集める
+      const targetDateStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
       const hlOnLeaveWorkerIds = new Set<number>()
       try {
         const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
         hlSnap.forEach(d => {
           const v = d.data() as { workerId?: number; status?: string; startDate?: string; endDate?: string }
           if (v.status === 'approved' && v.startDate && v.endDate
-              && v.startDate <= todayDateStr && todayDateStr <= v.endDate
+              && v.startDate <= targetDateStr && targetDateStr <= v.endDate
               && typeof v.workerId === 'number') {
             hlOnLeaveWorkerIds.add(v.workerId)
           }
         })
       } catch { /* ignore */ }
 
-      todayStatus = computeTodayStatus(main, todayAtt.d, todayAtt.sd, todayYm, todayDay, hiddenSiteIds, hlOnLeaveWorkerIds)
+      todayStatus = computeTodayStatus(main, targetAtt.d, targetAtt.sd, targetYm, targetDay, hiddenSiteIds, hlOnLeaveWorkerIds)
     } catch {
       todayStatus = { siteStatus: [], absentWorkers: [] }
     }

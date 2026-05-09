@@ -445,6 +445,10 @@ export default function DashboardPage() {
   const today = new Date()
   const dowJa = ['日', '月', '火', '水', '木', '金', '土']
   const todayStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日(${dowJa[today.getDay()]})`
+  // 前日の表示用文字列（API は実習生の入力タイミングに合わせて前日のデータを返す）
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayStr = `${yesterday.getFullYear()}年${yesterday.getMonth() + 1}月${yesterday.getDate()}日(${dowJa[yesterday.getDay()]})`
 
   const ymToLabel = (v: string) => {
     const y = v.slice(0, 4)
@@ -492,7 +496,7 @@ export default function DashboardPage() {
           {authUser && <EvaluationCard user={authUser} />}
 
           {/* ═══ 1. Today's Status Table ═══ */}
-          <Section title={`本日の稼働状況 (${todayStr})`}>
+          <Section title={`前日の稼働状況 (${yesterdayStr})`}>
             {data.todayStatus && data.todayStatus.siteStatus.length > 0 && data.todayStatus.siteStatus.some(s => s.total > 0) ? (
               <>
                 <div className="overflow-x-auto">
@@ -539,14 +543,25 @@ export default function DashboardPage() {
                     </tbody>
                   </table>
                 </div>
-                {/* 休みスタッフ表示は撤去 (2026-05-09)
-                    旧運用では朝一番に職長が出面入力していたため意味があったが、
-                    現在は実習生が作業終わりに自己入力する運用に変更。
-                    朝の時点では「休み」が確定していないため表示が機能しなくなった。 */}
+                {/* 前日の休みスタッフ表示
+                    実習生は作業終わりに自己入力する運用のため、前日のデータは確定済み。
+                    休んだ人を一覧で確認できる。 */}
+                {data.todayStatus.absentWorkers.length > 0 && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                      休み {data.todayStatus.absentWorkers.length}名:
+                    </span>
+                    {data.todayStatus.absentWorkers.map(w => (
+                      <span key={w.id} className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded-full text-xs">
+                        {w.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <div className="py-6 text-center">
-                <p className="text-gray-400 text-sm">本日の出面はまだ入力されていません</p>
+                <p className="text-gray-400 text-sm">前日の出面入力がありません</p>
                 <p className="text-gray-300 text-xs mt-1">出面入力画面で入力するとここに反映されます</p>
               </div>
             )}
