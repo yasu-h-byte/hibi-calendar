@@ -19,11 +19,25 @@ interface EvaluationSession {
   evaluationDate: string
   status: SessionStatus
   evaluatorIds: number[]
-  reviews: { evaluatorId: number; evaluatorName: string }[]
+  reviews: { evaluatorId: number; evaluatorName: string; submittedAt?: string }[]
+  createdAt?: string
+}
+
+interface EvaluatorInfo {
+  id: number
+  name: string
+  job: string
 }
 
 interface ApiResp {
   evaluations: EvaluationSession[]
+  evaluators?: EvaluatorInfo[]
+}
+
+function daysSinceIso(iso?: string): number {
+  if (!iso) return 0
+  const d = new Date(iso)
+  return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
 }
 
 /**
@@ -38,6 +52,7 @@ interface ApiResp {
 export default function EvaluationCard({ user }: { user: AuthUser }) {
   const router = useRouter()
   const [sessions, setSessions] = useState<EvaluationSession[]>([])
+  const [evaluators, setEvaluators] = useState<EvaluatorInfo[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -61,7 +76,13 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
           // 職長は「自分が評価予定者」のセッションのみ
           visible = inProgress.filter(e => e.evaluatorIds.includes(user.workerId))
         }
+        // 停滞しているもの（reviewing → 古い collecting）を先頭に
+        visible.sort((a, b) => {
+          if (a.status !== b.status) return a.status === 'reviewing' ? -1 : 1
+          return (a.createdAt || '').localeCompare(b.createdAt || '')
+        })
         setSessions(visible)
+        setEvaluators(data.evaluators || [])
       } catch {
         // silent fail
       } finally {
@@ -99,6 +120,9 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
           const userSubmitted = submittedSet.has(user.workerId)
           const isReviewing = s.status === 'reviewing'
 
+          const ageDays = daysSinceIso(s.createdAt)
+          const isStale = ageDays >= 7 && !isReviewing
+
           return (
             <li key={s.id} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30">
               <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -116,6 +140,43 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
                         📝 評価入力中
                       </span>
                     )}
+                    {isStale && (
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
+                        🕒 {ageDays}日経過
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 評価者ドット — 誰が提出済みか一目でわかる */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                    {s.evaluatorIds.map(id => {
+                      const isSubmittedByThis = submittedSet.has(id)
+                      const evalInfo = evaluators.find(e => e.id === id)
+                      const reviewInfo = s.reviews.find(r => r.evaluatorId === id)
+                      const evalName = reviewInfo?.evaluatorName || evalInfo?.name || `ID:${id}`
+                      const isMe = user.workerId === id
+                      const submittedAt = reviewInfo?.submittedAt
+                      const tip = isSubmittedByThis && submittedAt
+                        ? `${evalName}（${new Date(submittedAt).toLocaleDateString('ja-JP')} 提出）`
+                        : `${evalName}（未提出）`
+                      const cls = isSubmittedByThis
+                        ? 'bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-300 dark:border-green-700'
+                        : isStale
+                        ? 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-300 dark:border-orange-800'
+                        : 'bg-gray-50 text-gray-500 dark:bg-gray-700/50 dark:text-gray-400 border-dashed border-gray-300 dark:border-gray-600'
+                      const ring = isMe ? 'ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-gray-800' : ''
+                      return (
+                        <span
+                          key={id}
+                          title={tip}
+                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border ${cls} ${ring}`}
+                        >
+                          {isMe && <span className="opacity-70">👤</span>}
+                          <span className="opacity-70">{isSubmittedByThis ? '✓' : '○'}</span>
+                          <span className="max-w-[5rem] truncate">{evalName}</span>
+                        </span>
+                      )
+                    })}
                   </div>
 
                   {/* 進捗バー */}

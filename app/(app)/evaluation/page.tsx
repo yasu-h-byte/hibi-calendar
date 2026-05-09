@@ -210,7 +210,34 @@ const EVALUATOR_COLORS = [
   { bg: 'bg-purple-100 dark:bg-purple-900', text: 'text-purple-700 dark:text-purple-300', header: 'bg-purple-500' },
 ]
 
-type TabId = 'list' | 'review' | 'approve'
+// 評価者IDから名前を引く（apiEvaluators 優先 → workers → ID表示）
+function evaluatorNameLookup(
+  id: number,
+  apiEvaluators: { id: number; name: string }[],
+  workers: { id: number; name: string }[],
+): string {
+  const a = apiEvaluators.find(e => e.id === id)
+  if (a) return a.name
+  const w = workers.find(w2 => w2.id === id)
+  if (w) return w.name
+  return `ID:${id}`
+}
+
+// "MM/DD HH:mm" 短縮形式
+function fmtDateShort(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+// 提出日からの経過日数
+function daysSince(iso: string): number {
+  if (!iso) return 0
+  const d = new Date(iso)
+  return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+type TabId = 'list' | 'review' | 'monitor' | 'approve' | 'history'
 
 const EMPTY_SCORES: EvaluationScores = {
   japanese: { understanding: 'B' as ABCGrade, reporting: 'B' as ABCGrade, safety: 'B' as ABCGrade },
@@ -246,6 +273,12 @@ export default function EvaluationPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [createWorkerId, setCreateWorkerId] = useState<number | null>(null)
   const [createEvaluatorIds, setCreateEvaluatorIds] = useState<number[]>([])
+
+  // 詳細閲覧モーダル
+  const [detailSessionId, setDetailSessionId] = useState<string | null>(null)
+
+  // 履歴タブのフィルタ
+  const [historyYear, setHistoryYear] = useState<string>('all')
 
   const isAdmin = authUser?.role === 'admin' || authUser?.role === 'approver'
   const isAdminOnly = authUser?.role === 'admin' // 生活態度の入力はadminのみ
@@ -559,11 +592,323 @@ export default function EvaluationPage() {
     )
   }
 
+  // ── 評価者バッジ列（提出/未提出を視覚化、自分は青リング） ──
+  function EvaluatorBadgeList({
+    session,
+    compact = false,
+    showProgress = true,
+  }: {
+    session: Evaluation
+    compact?: boolean
+    showProgress?: boolean
+  }) {
+    const submitted = new Set(session.reviews.map(r => r.evaluatorId))
+    const total = session.evaluatorIds.length
+    const submittedCount = session.evaluatorIds.filter(id => submitted.has(id)).length
+    const pct = total > 0 ? Math.round((submittedCount / total) * 100) : 0
+
+    let progressColor = 'bg-blue-500'
+    let progressLabel = `${submittedCount}/${total}名 提出`
+    if (session.status === 'approved') {
+      progressColor = 'bg-green-500'
+      progressLabel = '承認済み'
+    } else if (session.status === 'reviewing') {
+      progressColor = 'bg-amber-500'
+      progressLabel = '最終確認待ち'
+    }
+
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-1">
+          {session.evaluatorIds.map(id => {
+            const name = evaluatorNameLookup(id, apiEvaluators, workers)
+            const review = session.reviews.find(r => r.evaluatorId === id)
+            const isSubmitted = !!review
+            const isMe = authUser?.workerId === id
+            const cls = isSubmitted
+              ? 'bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-300 dark:border-green-700'
+              : 'bg-gray-50 text-gray-500 dark:bg-gray-700/50 dark:text-gray-400 border-dashed border-gray-300 dark:border-gray-600'
+            const ring = isMe ? 'ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-gray-800' : ''
+            const stale = isSubmitted ? '' : daysSince(session.createdAt) >= 7 ? 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-800' : ''
+            const tip = isSubmitted && review
+              ? `${name}（${fmtDateShort(review.submittedAt)} 提出）`
+              : `${name}（未提出${daysSince(session.createdAt) >= 7 ? ` / 開始から${daysSince(session.createdAt)}日経過` : ''}）`
+            return (
+              <span
+                key={id}
+                title={tip}
+                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-medium border ${stale || cls} ${ring}`}
+              >
+                {isMe && <span className="opacity-70">👤</span>}
+                <span className="opacity-70">{isSubmitted ? '✓' : '○'}</span>
+                <span className={compact ? 'max-w-[5rem] truncate' : ''}>{name}</span>
+              </span>
+            )
+          })}
+        </div>
+        {showProgress && (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden max-w-[140px]">
+              <div className={`h-full transition-all ${progressColor}`} style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
+              {progressLabel}
+            </span>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── 詳細ビュー（read-only 比較表 + コメント + 最終結果） ──
+  function SessionDetailView({ session }: { session: Evaluation }) {
+    const worker = workers.find(w => w.id === session.workerId)
+    const years = worker?.hireDate ? yearsFromDate(worker.hireDate) : 1
+    const submittedSet = new Set(session.reviews.map(r => r.evaluatorId))
+    const pendingIds = session.evaluatorIds.filter(id => !submittedSet.has(id))
+
+    return (
+      <div className="space-y-4">
+        {/* ヘッダー */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+          <div className="flex items-start justify-between flex-wrap gap-2">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                {session.workerName}
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                評価日: {session.evaluationDate}
+                {session.approvedAt && ` / 承認日時: ${new Date(session.approvedAt).toLocaleString('ja-JP')}`}
+              </p>
+            </div>
+            <div className="text-right">
+              {session.status === 'approved' && session.rank && (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs text-gray-500">ランク</span>
+                  <span className={`text-3xl font-bold ${rankColor(session.rank)}`}>
+                    {session.rank}
+                  </span>
+                </div>
+              )}
+              {session.status === 'reviewing' && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                  最終確認待ち
+                </span>
+              )}
+              {session.status === 'collecting' && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                  {session.reviews.length}/{session.evaluatorIds.length}名 提出
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-sm">
+            <div>
+              <span className="text-xs text-gray-500 dark:text-gray-400 block">在留資格</span>
+              <span className="text-gray-900 dark:text-white">
+                {VISA_LABELS[worker?.visaType || ''] || worker?.visaType || '--'}
+              </span>
+            </div>
+            <div>
+              <span className="text-xs text-gray-500 dark:text-gray-400 block">入社日</span>
+              <span className="text-gray-900 dark:text-white">{worker?.hireDate || '--'}</span>
+            </div>
+            <div>
+              <span className="text-xs text-gray-500 dark:text-gray-400 block">勤続年数</span>
+              <span className="text-gray-900 dark:text-white">{years}年</span>
+            </div>
+            {session.status === 'approved' && session.totalScore != null && (
+              <div>
+                <span className="text-xs text-gray-500 dark:text-gray-400 block">合計スコア</span>
+                <span className="font-bold text-gray-900 dark:text-white">
+                  {session.totalScore.toFixed(1)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 提出状況 */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+          <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">提出状況</h4>
+          <EvaluatorBadgeList session={session} />
+          {pendingIds.length > 0 && session.status !== 'approved' && (
+            <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
+              ⏳ {pendingIds.length}名の提出待ち
+              {daysSince(session.createdAt) >= 7 && `（開始から${daysSince(session.createdAt)}日経過）`}
+            </p>
+          )}
+        </div>
+
+        {/* 出席指標 */}
+        {session.metrics && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">出勤実績（過去1年）</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 block text-xs">出勤率</span>
+                <span className="font-medium text-gray-900 dark:text-white">{session.metrics.attendanceRate.toFixed(1)}%</span>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 block text-xs">残業平均</span>
+                <span className="text-gray-900 dark:text-white">{session.metrics.overtimeAvg.toFixed(1)}h/月</span>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 block text-xs">有給取得</span>
+                <span className="text-gray-900 dark:text-white">{session.metrics.plUsage}日</span>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400 block text-xs">出勤率ボーナス</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400">+{session.metrics.attendanceBonus}点</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 評価者比較表（reviews が1件以上ある場合のみ） */}
+        {session.reviews.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900">
+              <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">評価者比較</h4>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 w-32">
+                      項目
+                    </th>
+                    {session.reviews.map((r, idx) => (
+                      <th
+                        key={r.evaluatorId}
+                        className={`px-3 py-3 text-center text-xs font-medium text-white border-b border-gray-200 dark:border-gray-700 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].header}`}
+                      >
+                        {r.evaluatorName}
+                      </th>
+                    ))}
+                    {session.status === 'approved' && session.finalScores && (
+                      <>
+                        <th className="px-3 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 w-1"></th>
+                        <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/30 min-w-[100px]">
+                          最終
+                        </th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {EVAL_ITEMS.map((item, rowIdx) => {
+                    const grades = session.reviews.map(r => getScoreValue(r.scores, item.category, item.key))
+                    const allSame = grades.length > 0 && grades.every(g => g === grades[0])
+                    const rowBg = rowIdx % 2 === 0 ? '' : 'bg-gray-50/50 dark:bg-gray-750/50'
+                    return (
+                      <tr key={`${item.category}_${item.key}`} className={rowBg}>
+                        <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-gray-700">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`inline-block w-2 h-2 rounded-full ${allSame ? 'bg-green-400' : 'bg-yellow-400'}`} />
+                            {item.label}
+                          </div>
+                        </td>
+                        {session.reviews.map(r => (
+                          <td key={r.evaluatorId} className="px-3 py-2 text-center border-b border-gray-100 dark:border-gray-700">
+                            <GradeBadge grade={getScoreValue(r.scores, item.category, item.key)} />
+                          </td>
+                        ))}
+                        {session.status === 'approved' && session.finalScores && (
+                          <>
+                            <td className="border-b border-gray-100 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 w-1"></td>
+                            <td className="px-3 py-2 text-center border-b border-gray-100 dark:border-gray-700 bg-indigo-50/50 dark:bg-indigo-900/20">
+                              <GradeBadge grade={getScoreValue(session.finalScores, item.category, item.key)} />
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex gap-4 text-xs text-gray-500 dark:text-gray-400">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-400" /> 全員一致
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2 h-2 rounded-full bg-yellow-400" /> 意見分かれ
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* コメント */}
+        {session.reviews.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">評価者コメント</h4>
+            <div className="space-y-3">
+              {session.reviews.map((r, idx) => (
+                <div key={r.evaluatorId} className={`rounded-lg p-3 ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].bg}`}>
+                  <p className={`text-xs font-medium ${EVALUATOR_COLORS[idx % EVALUATOR_COLORS.length].text}`}>
+                    {r.evaluatorName}
+                    <span className="ml-2 text-gray-500 font-normal">
+                      {fmtDateShort(r.submittedAt)} 提出
+                    </span>
+                  </p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">
+                    {r.comment || '（コメントなし）'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 最終結果（承認済みのみ） */}
+        {session.status === 'approved' && session.totalScore != null && session.rank && (
+          <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4">
+            <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">最終結果</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+              <div>
+                <span className="text-xs text-gray-500 dark:text-gray-400 block">手動スコア</span>
+                <span className="font-medium text-gray-900 dark:text-white">{(session.manualScore ?? 0).toFixed(1)}</span>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500 dark:text-gray-400 block">出勤率ボーナス</span>
+                <span className="font-medium text-blue-600 dark:text-blue-400">+{session.metrics?.attendanceBonus ?? 0}点</span>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500 dark:text-gray-400 block">合計スコア</span>
+                <span className="font-bold text-gray-900 dark:text-white">{session.totalScore.toFixed(1)}</span>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500 dark:text-gray-400 block">ランク</span>
+                <span className={`text-2xl font-bold ${rankColor(session.rank)}`}>{session.rank}</span>
+              </div>
+            </div>
+            {session.raiseAmount != null && session.raiseAmount > 0 && (
+              <p className="mt-3 text-sm font-bold text-green-600 dark:text-green-400">
+                推奨昇給: +{session.raiseAmount}円/h（{session.yearsFromHire}年目テーブル）
+              </p>
+            )}
+            {session.finalComment && (
+              <div className="mt-3 pt-3 border-t border-indigo-200 dark:border-indigo-800">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">最終コメント:</p>
+                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                  {session.finalComment}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // ── Tabs ──
   const tabs: { id: TabId; label: string; adminOnly?: boolean }[] = [
     { id: 'list', label: '一覧' },
     { id: 'review', label: '評価入力' },
+    { id: 'monitor', label: '進捗監視', adminOnly: true },
     { id: 'approve', label: '承認', adminOnly: true },
+    { id: 'history', label: '履歴', adminOnly: true },
   ]
 
   const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin)
@@ -634,9 +979,9 @@ export default function EvaluationPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">名前</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">在留資格</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">入社日</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">勤続年数</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ステータス</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">勤続</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase min-w-[260px]">提出状況</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">自分</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ランク</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">次回評価日</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
@@ -658,31 +1003,55 @@ export default function EvaluationPage() {
                       return a.nextDate.localeCompare(b.nextDate)
                     })
                     .map(({ worker: w, latest, nextDate, isOverdue }) => {
-                      const st = latest
-                        ? sessionStatusLabel(latest.status, latest.reviews || [], latest.evaluatorIds || [])
-                        : { text: '未評価', cls: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400' }
                       const yrs = w.hireDate ? yearsFromDate(w.hireDate) : 0
+                      // アクティブセッション（collecting/reviewing）優先、なければ最新の承認済み
+                      const activeSession = evaluations
+                        .filter(e => e.workerId === w.id && e.status !== 'approved')
+                        .sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))[0]
+                      const showSession = activeSession || latest
+                      const youAreEvaluator = showSession && authUser && showSession.evaluatorIds.includes(authUser.workerId)
+                      const youSubmitted = youAreEvaluator && showSession.reviews.some(r => r.evaluatorId === authUser?.workerId)
                       return (
                         <tr key={w.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{w.name}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">{w.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
                             {VISA_LABELS[w.visaType] || w.visaType}
                           </td>
-                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{w.hireDate || '--'}</td>
-                          <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300">
+                          <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300 whitespace-nowrap">
                             {yrs > 0 ? `${yrs}年` : '--'}
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>
-                              {st.text}
-                            </span>
+                          <td className="px-4 py-3">
+                            {showSession ? (
+                              <EvaluatorBadgeList session={showSession} compact />
+                            ) : (
+                              <span className="text-xs text-gray-400 dark:text-gray-500">未評価</span>
+                            )}
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            {!showSession || showSession.status === 'approved' || !youAreEvaluator ? (
+                              <span className="text-xs text-gray-400 dark:text-gray-500">―</span>
+                            ) : youSubmitted ? (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                                ✓ 提出済
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+                                ⏳ 未提出
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
                             {latest?.rank ? (
-                              <span className={`font-bold ${rankColor(latest.rank)}`}>{latest.rank}</span>
+                              <button
+                                onClick={() => setDetailSessionId(latest.id)}
+                                className={`font-bold hover:underline ${rankColor(latest.rank)}`}
+                                title="承認時の詳細を表示"
+                              >
+                                {latest.rank}
+                              </button>
                             ) : '--'}
                           </td>
-                          <td className="px-4 py-3 text-sm">
+                          <td className="px-4 py-3 text-sm whitespace-nowrap">
                             <span className={isOverdue ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-600 dark:text-gray-300'}>
                               {nextDate}
                             </span>
@@ -692,31 +1061,45 @@ export default function EvaluationPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-center">
-                            {latest && latest.status !== 'approved' && authUser && latest.evaluatorIds.includes(authUser.workerId) && (
-                              <button
-                                onClick={() => {
-                                  setSelectedWorkerId(w.id)
-                                  setActiveTab('review')
-                                }}
-                                className="px-3 py-1 text-xs font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-                              >
-                                評価入力
-                              </button>
-                            )}
-                            {latest && latest.status === 'reviewing' && isAdmin && (
-                              <button
-                                onClick={() => {
-                                  setApproveSessionId(latest.id)
-                                  setFinalScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
-                                  setFinalComment('')
-                                  setActiveTab('approve')
-                                }}
-                                className="px-3 py-1 text-xs font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors ml-1"
-                              >
-                                承認へ
-                              </button>
-                            )}
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1 flex-wrap">
+                              {showSession && showSession.status !== 'approved' && youAreEvaluator && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedWorkerId(w.id)
+                                    setActiveTab('review')
+                                  }}
+                                  className={`px-3 py-1 text-xs font-medium rounded-lg ${
+                                    youSubmitted
+                                      ? 'border border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
+                                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                                  } transition-colors`}
+                                >
+                                  {youSubmitted ? '修正' : '評価入力'}
+                                </button>
+                              )}
+                              {showSession && showSession.status === 'reviewing' && isAdmin && (
+                                <button
+                                  onClick={() => {
+                                    setApproveSessionId(showSession.id)
+                                    setFinalScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+                                    setFinalComment('')
+                                    setActiveTab('approve')
+                                  }}
+                                  className="px-3 py-1 text-xs font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors"
+                                >
+                                  承認へ
+                                </button>
+                              )}
+                              {showSession && isAdmin && (
+                                <button
+                                  onClick={() => setDetailSessionId(showSession.id)}
+                                  className="px-3 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                                >
+                                  詳細
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )
@@ -730,6 +1113,14 @@ export default function EvaluationPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+            {/* 凡例 */}
+            <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-300 dark:border-green-700">✓提出済</span>
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-gray-50 text-gray-500 dark:bg-gray-700/50 dark:text-gray-400 border-dashed border-gray-300 dark:border-gray-600">○未提出</span>
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-300 dark:border-orange-800">○未提出(7日+)</span>
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-gray-900 bg-gray-50 dark:bg-gray-700/50">👤あなた</span>
+              <span className="text-[10px] text-gray-400 ml-auto">バッジ・ランク・詳細ボタンで詳細表示</span>
             </div>
           </div>
 
@@ -1412,6 +1803,237 @@ export default function EvaluationPage() {
           })()}
         </div>
       )}
+
+      {/* ═══════════════════════════════════════ */}
+      {/* Tab 4: 進捗監視 (Monitor) — admin only   */}
+      {/* ═══════════════════════════════════════ */}
+      {activeTab === 'monitor' && isAdmin && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">進行中の評価セッション</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              ※ 収集中のセッションを横並びで確認できます
+            </p>
+          </div>
+          {(() => {
+            const inProgress = evaluations
+              .filter(e => e.status !== 'approved')
+              .sort((a, b) => {
+                // reviewing を先頭に、次に古い createdAt 順（停滞しているもの優先）
+                if (a.status !== b.status) return a.status === 'reviewing' ? -1 : 1
+                return (a.createdAt || '').localeCompare(b.createdAt || '')
+              })
+            if (inProgress.length === 0) {
+              return (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center text-gray-400 dark:text-gray-500">
+                  進行中の評価セッションはありません
+                </div>
+              )
+            }
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {inProgress.map(s => {
+                  const total = s.evaluatorIds.length
+                  const submitted = new Set(s.reviews.map(r => r.evaluatorId)).size
+                  const ageDays = daysSince(s.createdAt)
+                  const isStale = ageDays >= 7 && s.status === 'collecting'
+                  const isReviewing = s.status === 'reviewing'
+                  return (
+                    <div
+                      key={s.id}
+                      className={`bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 ${
+                        isReviewing
+                          ? 'border-amber-400'
+                          : isStale
+                          ? 'border-orange-400'
+                          : 'border-blue-400'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2 flex-wrap gap-2">
+                        <div>
+                          <h3 className="font-bold text-gray-900 dark:text-white">{s.workerName}</h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            評価日: {s.evaluationDate}
+                            <span className="ml-2">
+                              開始: {s.createdAt ? new Date(s.createdAt).toLocaleDateString('ja-JP') : '--'}
+                              {ageDays > 0 && (
+                                <span className={isStale ? 'text-orange-600 dark:text-orange-400 font-medium ml-1' : 'ml-1'}>
+                                  ({ageDays}日経過)
+                                </span>
+                              )}
+                            </span>
+                          </p>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            isReviewing
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                              : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                          }`}
+                        >
+                          {isReviewing ? '⚖️ 最終確認待ち' : `📝 収集中 ${submitted}/${total}`}
+                        </span>
+                      </div>
+                      <EvaluatorBadgeList session={s} />
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button
+                          onClick={() => setDetailSessionId(s.id)}
+                          className="px-3 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        >
+                          詳細
+                        </button>
+                        {isReviewing && (
+                          <button
+                            onClick={() => {
+                              setApproveSessionId(s.id)
+                              setFinalScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+                              setFinalComment('')
+                              setActiveTab('approve')
+                            }}
+                            className="px-3 py-1 text-xs font-medium rounded-lg bg-green-500 text-white hover:bg-green-600"
+                          >
+                            承認へ
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════ */}
+      {/* Tab 5: 履歴 (History) — admin only       */}
+      {/* ═══════════════════════════════════════ */}
+      {activeTab === 'history' && isAdmin && (
+        <div className="space-y-4">
+          {(() => {
+            const approved = evaluations.filter(e => e.status === 'approved')
+            const years = Array.from(new Set(approved.map(e => e.evaluationDate.slice(0, 4)))).sort().reverse()
+            const filtered = historyYear === 'all'
+              ? approved
+              : approved.filter(e => e.evaluationDate.startsWith(historyYear))
+            const sorted = filtered.sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))
+            return (
+              <>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">承認済み評価履歴</h2>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-500 dark:text-gray-400">年で絞り込み:</label>
+                    <select
+                      value={historyYear}
+                      onChange={e => setHistoryYear(e.target.value)}
+                      className="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-sm text-gray-900 dark:text-white"
+                    >
+                      <option value="all">すべて</option>
+                      {years.map(y => (
+                        <option key={y} value={y}>{y}年</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {sorted.length === 0 ? (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center text-gray-400 dark:text-gray-500">
+                    承認済みの評価がありません
+                  </div>
+                ) : (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-900">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">名前</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">評価日</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">勤続</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">合計</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ランク</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">推奨昇給</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">承認日</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {sorted.map(s => (
+                            <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">{s.workerName}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">{s.evaluationDate}</td>
+                              <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300 whitespace-nowrap">{s.yearsFromHire}年</td>
+                              <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-200 whitespace-nowrap font-medium">{s.totalScore?.toFixed(1) ?? '--'}</td>
+                              <td className="px-4 py-3 text-center whitespace-nowrap">
+                                {s.rank ? (
+                                  <span className={`text-lg font-bold ${rankColor(s.rank)}`}>{s.rank}</span>
+                                ) : '--'}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-center whitespace-nowrap">
+                                {s.raiseAmount != null && s.raiseAmount > 0 ? (
+                                  <span className="text-green-600 dark:text-green-400 font-medium">+{s.raiseAmount}円</span>
+                                ) : (
+                                  <span className="text-gray-400">--</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                                {s.approvedAt ? new Date(s.approvedAt).toLocaleDateString('ja-JP') : '--'}
+                              </td>
+                              <td className="px-4 py-3 text-center whitespace-nowrap">
+                                <button
+                                  onClick={() => setDetailSessionId(s.id)}
+                                  className="px-3 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                >
+                                  詳細
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
+                      合計 {sorted.length} 件
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          })()}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════ */}
+      {/* Detail Modal — どのタブからも開ける         */}
+      {/* ═══════════════════════════════════════ */}
+      {detailSessionId && (() => {
+        const session = evaluations.find(e => e.id === detailSessionId)
+        if (!session) return null
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto"
+            onClick={() => setDetailSessionId(null)}
+          >
+            <div
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-4xl w-full my-8 max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">評価セッション詳細</h2>
+                <button
+                  onClick={() => setDetailSessionId(null)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                  aria-label="閉じる"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-6">
+                <SessionDetailView session={session} />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }

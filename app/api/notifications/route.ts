@@ -269,30 +269,64 @@ export async function GET(request: NextRequest) {
     //       → 「あなたが評価入力する番です」（職長・政仁・靖仁 各自向け）
     //   (b) status='reviewing' のセッション
     //       → 「最終承認待ち」（admin/approver のみ）
+    //   (c) status='collecting' で開始から7日以上経過し、未提出者がいる
+    //       → admin/approver にエスカレーション通知（停滞リマインダー）
     try {
       const sessQuery = query(
         collection(db, 'evaluations'),
         where('status', 'in', ['collecting', 'reviewing']),
       )
       const sessSnaps = await getDocs(sessQuery)
+      // 評価者ID→名前 の参照マップ（停滞リマインダー用）
+      const workerNameById = new Map<number, string>()
+      for (const w of main.workers) {
+        if (w.name) workerNameById.set(w.id, w.name)
+      }
+      // 靖仁さんは workers にいないので明示
+      if (!workerNameById.has(0)) workerNameById.set(0, '日比靖仁')
       sessSnaps.forEach(snap => {
         const data = snap.data()
         const status = data.status as 'collecting' | 'reviewing'
         const workerName = (data.workerName as string) || '対象者不明'
         const evaluatorIds = (data.evaluatorIds || []) as number[]
         const reviews = (data.reviews || []) as { evaluatorId: number }[]
+        const createdAt = data.createdAt as string | undefined
         const submittedSet = new Set(reviews.map(r => r.evaluatorId))
         const totalCount = evaluatorIds.length
         const submittedCount = evaluatorIds.filter(id => submittedSet.has(id)).length
 
+        // セッション開始からの経過日数
+        const ageDays = createdAt
+          ? Math.floor((now.getTime() - new Date(createdAt).getTime()) / (24 * 60 * 60 * 1000))
+          : 0
+
         if (status === 'collecting') {
           // 自分が評価予定者で、まだ提出していない場合
-          if (requesterWorkerId && evaluatorIds.includes(requesterWorkerId) && !submittedSet.has(requesterWorkerId)) {
+          if (requesterWorkerId !== null && evaluatorIds.includes(requesterWorkerId) && !submittedSet.has(requesterWorkerId)) {
+            const stale = ageDays >= 7
             notifications.push({
               id: `evaluation-todo-${snap.id}`,
-              icon: '📝',
-              message: `${workerName} の評価入力をお願いします（提出 ${submittedCount}/${totalCount}名）`,
-              type: 'info',
+              icon: stale ? '⚠️' : '📝',
+              message: stale
+                ? `${workerName} の評価入力が${ageDays}日経過しています（提出 ${submittedCount}/${totalCount}名）`
+                : `${workerName} の評価入力をお願いします（提出 ${submittedCount}/${totalCount}名）`,
+              type: stale ? 'warning' : 'info',
+            })
+          }
+
+          // 停滞リマインダー: 開始から7日以上経過 → admin/approver にエスカレーション
+          if (ageDays >= 7 && (role === 'admin' || role === 'approver')) {
+            const pendingNames = evaluatorIds
+              .filter(id => !submittedSet.has(id))
+              .map(id => workerNameById.get(id) || `ID:${id}`)
+              .slice(0, 3)
+              .join('、')
+            const remaining = totalCount - submittedCount
+            notifications.push({
+              id: `evaluation-stale-${snap.id}`,
+              icon: '⏰',
+              message: `${workerName} の評価が${ageDays}日停滞中（残${remaining}名未提出${pendingNames ? `: ${pendingNames}` : ''}）`,
+              type: 'warning',
             })
           }
         } else if (status === 'reviewing') {
@@ -619,6 +653,7 @@ export async function GET(request: NextRequest) {
             || n.id.startsWith('evaluation-due')
             || n.id.startsWith('evaluation-todo-')
             || n.id.startsWith('evaluation-pending-approval-')
+            || n.id.startsWith('evaluation-stale-')
       }
       if (role === 'foreman') {
         // 自分宛の評価入力依頼 + カレンダー期限のみ
