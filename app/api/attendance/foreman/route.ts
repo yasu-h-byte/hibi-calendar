@@ -193,43 +193,7 @@ export async function POST(request: NextRequest) {
       const { workerId, year, month, day, choice, overtimeHours } = body
       const ym = ymKey(year, month)
 
-      // ベトナム人スタッフのガード: 「最初の入力はスタッフ本人から」を強制。
-      // 既存エントリなしの場合、職長からの新規作成を拒否。
-      try {
-        const { canAdminEditEntry, detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
-        const { db } = await import('@/lib/firebase')
-        const { doc, getDoc } = await import('firebase/firestore')
-        const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-        if (mainSnap.exists()) {
-          const workers = (mainSnap.data().workers || []) as { id: number; visa?: string }[]
-          const sitesAll = (mainSnap.data().sites || []) as { id: string; name: string; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string } }[]
-          const targetWorker = workers.find(w => w.id === Number(workerId))
-          if (targetWorker) {
-            const dData = await getAttendanceDoc(ym)
-            const key = `${site.id}_${workerId}_${ym}_${String(day)}`
-            const existing = dData[key]
-            const check = canAdminEditEntry({ visa: targetWorker.visa }, existing)
-            if (!check.editable) {
-              return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
-            }
-            // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
-            const conflict = detectMultiSiteConflict(dData, site.id, Number(workerId), ym, day, sitesAll)
-            if (conflict) {
-              const cName = sitesAll.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
-              const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
-              return NextResponse.json({
-                error: `既に「${cName}」（${shiftLabel}）で同日の出面が登録されています。先にそちらを取り消すか「現場違い修正」機能で移動してください。`,
-                conflictSiteId: conflict.conflictSiteId,
-              }, { status: 409 })
-            }
-          }
-        }
-      } catch (e) {
-        // ⚠️ fail-closed: 判定不能時は拒否（2026-05-08 修正）
-        console.error('Multi-site guard error (foreman):', e)
-        return NextResponse.json({ error: 'ガード判定に失敗しました（一時的な障害の可能性）' }, { status: 503 })
-      }
-
+      // Build entry first（ガードで newEntry を参照するため）
       // Build entry with s:'foreman' source tracking
       // ⚠️ 2026-05-09 根本原因対処: ステータス変更時に古いフィールドを残さない
       //   computeAttendanceDeleteFields で「新エントリに含まれない既知フィールドを自動算出」
@@ -249,6 +213,44 @@ export async function POST(request: NextRequest) {
           break
         default:
           return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
+      }
+
+      // ベトナム人スタッフのガード: 「最初の入力はスタッフ本人から」を強制。
+      // ただし事後申請性ステータス（有給/帰国中）は admin/foreman の後付け入力を許容。
+      try {
+        const { canAdminEditEntry, detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
+        const { db } = await import('@/lib/firebase')
+        const { doc, getDoc } = await import('firebase/firestore')
+        const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+        if (mainSnap.exists()) {
+          const workers = (mainSnap.data().workers || []) as { id: number; visa?: string }[]
+          const sitesAll = (mainSnap.data().sites || []) as { id: string; name: string; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string } }[]
+          const targetWorker = workers.find(w => w.id === Number(workerId))
+          if (targetWorker) {
+            const dData = await getAttendanceDoc(ym)
+            const key = `${site.id}_${workerId}_${ym}_${String(day)}`
+            const existing = dData[key]
+            // 事後申請性ステータス例外を許容するため newEntry を渡す
+            const check = canAdminEditEntry({ visa: targetWorker.visa }, existing, entry)
+            if (!check.editable) {
+              return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
+            }
+            // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
+            const conflict = detectMultiSiteConflict(dData, site.id, Number(workerId), ym, day, sitesAll)
+            if (conflict) {
+              const cName = sitesAll.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
+              const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
+              return NextResponse.json({
+                error: `既に「${cName}」（${shiftLabel}）で同日の出面が登録されています。先にそちらを取り消すか「現場違い修正」機能で移動してください。`,
+                conflictSiteId: conflict.conflictSiteId,
+              }, { status: 409 })
+            }
+          }
+        }
+      } catch (e) {
+        // ⚠️ fail-closed: 判定不能時は拒否（2026-05-08 修正）
+        console.error('Multi-site guard error (foreman):', e)
+        return NextResponse.json({ error: 'ガード判定に失敗しました（一時的な障害の可能性）' }, { status: 503 })
       }
 
       const { computeAttendanceDeleteFields } = await import('@/lib/attendance')

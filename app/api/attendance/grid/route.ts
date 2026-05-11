@@ -379,7 +379,8 @@ export async function POST(request: NextRequest) {
             const curSnap = await getDoc(docRef)
             const curD = (curSnap.exists() ? curSnap.data().d : {}) as Record<string, AttendanceEntry>
             const existing = curD?.[key]
-            const check = canAdminEditEntry({ visa: worker.visa }, existing)
+            // 事後申請性ステータス（有給/帰国中）は ガード例外許容のため newEntry を渡す
+            const check = canAdminEditEntry({ visa: worker.visa }, existing, entry as AttendanceEntry)
             if (!check.editable) {
               return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
             }
@@ -417,11 +418,37 @@ export async function POST(request: NextRequest) {
         const { setAttendanceEntry, computeAttendanceDeleteFields } = await import('@/lib/attendance')
         const deleteFields = computeAttendanceDeleteFields(entryWithSource)
         await setAttendanceEntry(siteId, Number(workerId), ym, Number(day), entryWithSource, { deleteFields })
+
+        // ⚠️ 2026-05-11 追加: 追跡可能性向上のため admin の出面書き込みを Activity log に記録
+        //   政仁さんの「4月後付けPL消失」事案でログ無しで原因追跡できなかったため。
+        try {
+          const { logActivity } = await import('@/lib/activity')
+          const status = entryWithSource.p ? '有給'
+            : entryWithSource.r ? '欠勤'
+            : entryWithSource.h ? '現場休'
+            : entryWithSource.hk ? '帰国中'
+            : entryWithSource.exam ? '試験'
+            : entryWithSource.w ? (entryWithSource.o ? `出勤+${entryWithSource.o}h` : '出勤')
+            : '不在'
+          await logActivity(
+            'admin',
+            'attendance.gridEdit',
+            `${siteId}/wid:${workerId} ${ym}/${day} → ${status}`,
+          )
+        } catch { /* ログ失敗は本体処理に影響させない */ }
       } else {
         // nullまたは無効なエントリ: フィールドを削除
         const { deleteField } = await import('firebase/firestore')
         const { updateDoc } = await import('firebase/firestore')
         await updateDoc(docRef, { [`d.${key}`]: deleteField() })
+        try {
+          const { logActivity } = await import('@/lib/activity')
+          await logActivity(
+            'admin',
+            'attendance.gridDelete',
+            `${siteId}/wid:${workerId} ${ym}/${day} を削除`,
+          )
+        } catch { /* ignore */ }
       }
     }
 

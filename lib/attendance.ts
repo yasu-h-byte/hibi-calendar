@@ -89,28 +89,45 @@ export function isVietnameseWorker(visa: string | undefined | null): boolean {
 /**
  * admin/foreman が当該日の出面エントリを「新規作成」または「修正」できるかチェック。
  *
- * ルール (2026-05-08 導入):
+ * ルール:
  *   - 日本人スタッフ等: 常に編集可能（従来通り）
- *   - ベトナム人スタッフ: 既にエントリが存在する場合のみ編集可能。
- *     「最初の入力はスタッフ本人のスマホから」という運用を強制する。
- *     なお、既存エントリのクリア（削除）は可能。
+ *   - ベトナム人スタッフ:
+ *     ・既存エントリあり → 修正・削除いずれも可能
+ *     ・既存エントリなし:
+ *        - 「事後申請性ステータス」（有給 p, 帰国中 hk）は admin/foreman の後付け入力を許容
+ *          （後から有給申請が出てきた、帰国期間を後で追記したい等の業務に対応）
+ *        - 出勤 (w>0) や残業 (o>0) の新規入力はスタッフ本人入力待ち
  *
- * @param worker - 対象ワーカー（visa フィールドを参照）
- * @param existingEntry - att_YYYYMM ドキュメントから取得した現在のエントリ
+ * 履歴:
+ *   - 2026-05-08 導入: 全カテゴリで既存エントリ必須（自己申告原則）
+ *   - 2026-05-11 緩和: 4月後付けPL業務で全件 403 弾きが発生 → 事後申請ステータスのみ例外許容
+ *
+ * @param worker        対象ワーカー（visa フィールドを参照）
+ * @param existingEntry att_YYYYMM ドキュメントから取得した現在のエントリ
+ * @param newEntry      これから書き込もうとしているエントリ（事後申請性判定用）
  * @returns editable=true なら編集可、false なら不可（reason に理由）
  */
 export function canAdminEditEntry(
   worker: { visa?: string | null },
   existingEntry: AttendanceEntry | null | undefined,
+  newEntry?: AttendanceEntry | null | undefined,
 ): { editable: boolean; reason?: string } {
   if (!isVietnameseWorker(worker.visa)) {
     return { editable: true }
   }
-  if (!existingEntry) {
-    return { editable: false, reason: 'スタッフ本人のスマホ入力待ち' }
+  if (existingEntry) {
+    // 既存エントリがあれば修正・削除いずれも可能
+    return { editable: true }
   }
-  // 既存エントリがあれば修正・削除いずれも可能
-  return { editable: true }
+  // 既存エントリなし: 事後申請性ステータスは admin/foreman の後付け入力を許容
+  if (newEntry) {
+    const isPaidLeave = (newEntry.p ?? 0) > 0
+    const isHomeLeave = (newEntry.hk ?? 0) > 0
+    if (isPaidLeave || isHomeLeave) {
+      return { editable: true }
+    }
+  }
+  return { editable: false, reason: 'スタッフ本人のスマホ入力待ち（有給・帰国中は後付け入力可）' }
 }
 
 /**

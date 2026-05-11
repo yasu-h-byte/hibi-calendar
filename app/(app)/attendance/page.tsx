@@ -215,7 +215,7 @@ export default function AttendanceGridPage() {
   const [localFinalApprovals, setLocalFinalApprovals] = useState<Record<number, boolean>>({})
 
   // Save status: null | 'saving' | 'saved'
-  const [saveStatus, setSaveStatus] = useState<null | 'saving' | 'saved'>(null)
+  const [saveStatus, setSaveStatus] = useState<null | 'saving' | 'saved' | 'error'>(null)
   const saveStatusTimer = useRef<NodeJS.Timeout | null>(null)
 
   // Local state for entries (for instant UI updates)
@@ -363,8 +363,8 @@ export default function AttendanceGridPage() {
     pendingSaves.current.clear()
 
     try {
-      // Send all pending saves
-      const promises = saves.map(s => {
+      // Send all pending saves and inspect each response
+      const promises = saves.map(async s => {
         const body: Record<string, unknown> = {
           siteId: data.site.id,
           ym: data.ym,
@@ -377,7 +377,7 @@ export default function AttendanceGridPage() {
           body.subconId = s.id
           body.subconEntry = s.subconEntry
         }
-        return fetch('/api/attendance/grid', {
+        const res = await fetch('/api/attendance/grid', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -385,15 +385,51 @@ export default function AttendanceGridPage() {
           },
           body: JSON.stringify(body),
         })
+        if (!res.ok) {
+          // エラーレスポンスから詳細を取得（保存失敗を握りつぶさない）
+          let errMsg = `${res.status} ${res.statusText}`
+          try {
+            const errData = await res.json()
+            if (errData?.error) errMsg = errData.error
+          } catch { /* JSON でないレスポンスの場合 */ }
+          return { ok: false, save: s, error: errMsg, status: res.status }
+        }
+        return { ok: true as const, save: s }
       })
-      await Promise.all(promises)
+      const results = await Promise.all(promises)
+      const failures = results.filter(r => !r.ok) as { ok: false; save: PendingSave; error: string; status: number }[]
 
-      setSaveStatus('saved')
-      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
-      saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
+      if (failures.length === 0) {
+        setSaveStatus('saved')
+        if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+        saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
+      } else {
+        // ⚠️ 2026-05-11 修正: 旧コードはレスポンスを確認せず常に「保存しました」を表示
+        //   していたため、API が 403/409/503 でエラーを返しても画面に出ず、データ消失と
+        //   誤認される事案が発生。res.ok を厳密にチェックして失敗を alert で明示する。
+        setSaveStatus('error')
+        const sample = failures.slice(0, 5)
+        const detail = sample.map(f => {
+          const s = f.save
+          const label = s.type === 'worker' ? `スタッフID:${s.id}` : `応援:${s.id}`
+          return `  ${label} ${data.ym}/${s.day}: ${f.error}`
+        }).join('\n')
+        const more = failures.length > sample.length ? `\n  …他 ${failures.length - sample.length} 件` : ''
+        alert(
+          `❌ ${failures.length} 件の保存に失敗しました\n\n${detail}${more}\n\n` +
+          `※ベトナム人スタッフの「出勤」を後付け入力することはできません\n` +
+          `（スタッフ本人のスマホ入力が必要です）。\n` +
+          `有給・帰国中は admin/職長が後付け入力可能です。`
+        )
+        if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+        saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 5000)
+      }
     } catch (e) {
       console.error('Save error:', e)
-      setSaveStatus(null)
+      setSaveStatus('error')
+      alert(`❌ 通信エラーで保存できませんでした\n\n${e instanceof Error ? e.message : String(e)}\n\nネットワーク状態を確認してもう一度お試しください。`)
+      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+      saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 5000)
     }
   }, [password, data])
 
@@ -1067,7 +1103,11 @@ export default function AttendanceGridPage() {
 
         {/* Save status indicator */}
         {saveStatus && (
-          <span className={`text-xs flex items-center gap-1 ${saveStatus === 'saving' ? 'text-hibi-navy' : 'text-green-600'}`}>
+          <span className={`text-xs flex items-center gap-1 font-bold px-2 py-1 rounded ${
+            saveStatus === 'saving' ? 'text-hibi-navy' :
+            saveStatus === 'saved' ? 'text-green-600' :
+            'text-red-700 bg-red-100 dark:bg-red-900/40 dark:text-red-300'
+          }`}>
             {saveStatus === 'saving' ? (
               <>
                 <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
@@ -1076,8 +1116,10 @@ export default function AttendanceGridPage() {
                 </svg>
                 保存中...
               </>
-            ) : (
+            ) : saveStatus === 'saved' ? (
               <>&#x2713; 保存済み</>
+            ) : (
+              <>⚠️ 保存失敗 — 内容を確認してください</>
             )}
           </span>
         )}
