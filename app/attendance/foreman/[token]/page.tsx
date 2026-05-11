@@ -4,11 +4,23 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus } from '@/types'
 
+interface MisplacedEntry {
+  siteId: string
+  siteName: string
+  entry: AttendanceEntry
+}
+
 interface ForemanData {
   foreman: { id: number; name: string }
   site: { id: string; name: string }
   date: { year: number; month: number; day: number; ym: string; dateLabel: string; dateISO: string }
-  workers: { id: number; name: string; entry: AttendanceEntry | null; status: AttendanceStatus }[]
+  workers: {
+    id: number
+    name: string
+    entry: AttendanceEntry | null
+    status: AttendanceStatus
+    misplacedEntries?: MisplacedEntry[]
+  }[]
   summary: { workCount: number; noneCount: number; totalCount: number }
   approved: boolean
   pastDays: { date: string; dateISO: string; approved: boolean }[]
@@ -41,6 +53,11 @@ export default function ForemanAttendancePage() {
   const [editingWorker, setEditingWorker] = useState<{ id: number; name: string } | null>(null)
   const [editOT, setEditOT] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [fixingSite, setFixingSite] = useState<{
+    workerId: number
+    workerName: string
+    misplaced: MisplacedEntry[]
+  } | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -123,6 +140,39 @@ export default function ForemanAttendancePage() {
       setEditingWorker(null)
       setEditOT(0)
       fetchData()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── 別現場入力を自現場に移動 ──
+  const handleFixSite = async (fromSiteId: string) => {
+    if (!data || !fixingSite || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/attendance/foreman', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          action: 'fix_site',
+          workerId: fixingSite.workerId,
+          year: data.date.year,
+          month: data.date.month,
+          day: data.date.day,
+          fromSiteId,
+        }),
+      })
+      if (res.ok) {
+        setFixingSite(null)
+        await fetchData()
+        alert(`✅ ${fixingSite.workerName} さんの入力を ${data.site.name} に移動しました`)
+      } else {
+        const err = await res.json().catch(() => ({}))
+        alert(`❌ 移動に失敗しました\n\n${err.error || res.statusText}`)
+      }
+    } catch (e) {
+      alert(`❌ 通信エラー: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setSaving(false)
     }
@@ -222,6 +272,30 @@ export default function ForemanAttendancePage() {
               //   スタッフ本人が入力するまで、職長は手入力できない。
               //   既存エントリがある場合のみクリックして修正可能。
               const awaitingStaff = !w.entry
+              const misplaced = w.misplacedEntries || []
+              const hasMisplaced = misplaced.length > 0
+
+              // 自現場にエントリなし + 別現場で入力済み → 現場違い警告
+              if (awaitingStaff && hasMisplaced) {
+                return (
+                  <div
+                    key={w.id}
+                    className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 bg-orange-50 cursor-pointer active:bg-orange-100"
+                    onClick={() => setFixingSite({ workerId: w.id, workerName: w.name, misplaced })}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-gray-800 truncate">{w.name}</div>
+                      <div className="text-[11px] text-orange-700 mt-0.5 truncate">
+                        ⚠️ {misplaced.map(m => m.siteName).join('・')} で入力されています
+                      </div>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 bg-orange-200 text-orange-800">
+                      🔄 修正
+                    </span>
+                  </div>
+                )
+              }
+
               return awaitingStaff ? (
                 <div
                   key={w.id}
@@ -319,6 +393,73 @@ export default function ForemanAttendancePage() {
               className="w-full bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
             >
               閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 現場違い修正モーダル */}
+      {fixingSite && data && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setFixingSite(null)}>
+          <div
+            className="bg-white rounded-t-2xl w-full max-w-lg px-4 sm:px-6 pt-5 pb-[env(safe-area-inset-bottom,8px)]"
+            onClick={e => e.stopPropagation()}
+            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
+          >
+            <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center truncate">
+              {fixingSite.workerName} さん
+            </h3>
+            <p className="text-sm text-gray-500 mb-4 text-center">{data.date.dateLabel} の現場違い修正</p>
+
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+              <p className="text-sm text-orange-800 font-medium mb-1">
+                ⚠️ 別現場で入力されています
+              </p>
+              <p className="text-xs text-orange-700">
+                スタッフがスマホで違う現場を選んだ可能性があります。<br />
+                正しい現場（こちら：<strong>{data.site.name}</strong>）に移動できます。
+              </p>
+            </div>
+
+            <div className="space-y-2 mb-4">
+              {fixingSite.misplaced.map(m => {
+                const statusText = m.entry.p ? '🌴 有給'
+                  : m.entry.r ? '🏠 休み'
+                  : m.entry.h ? '🚧 現場休み'
+                  : m.entry.hk ? '✈️ 帰国中'
+                  : m.entry.exam ? '📝 試験'
+                  : m.entry.w ? (m.entry.o && m.entry.o > 0 ? `⏰ 出勤 +${m.entry.o}h` : '🔨 出勤')
+                  : '❓ 不明'
+                return (
+                  <div key={m.siteId} className="border-2 border-orange-300 rounded-xl p-3 bg-white">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <div className="text-xs text-gray-500">入力された現場</div>
+                        <div className="text-base font-bold text-gray-900">{m.siteName}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-gray-500">状態</div>
+                        <div className="text-sm font-medium">{statusText}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleFixSite(m.siteId)}
+                      disabled={saving}
+                      className="w-full bg-orange-500 text-white rounded-lg py-3 font-bold text-sm active:scale-95 disabled:opacity-50"
+                    >
+                      🔄 {data.site.name} に移動する
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+
+            <button
+              onClick={() => setFixingSite(null)}
+              disabled={saving}
+              className="w-full bg-gray-100 text-gray-700 rounded-xl py-3 font-medium text-sm disabled:opacity-50"
+            >
+              キャンセル
             </button>
           </div>
         </div>
