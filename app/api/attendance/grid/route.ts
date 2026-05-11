@@ -383,12 +383,13 @@ export async function POST(request: NextRequest) {
             if (!check.editable) {
               return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
             }
-            // 同日多現場ガード (Vietnamese only)
-            const conflict = detectMultiSiteConflict(curD, siteId, Number(workerId), ym, Number(day), worker.visa)
+            // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
+            const conflict = detectMultiSiteConflict(curD, siteId, Number(workerId), ym, Number(day), main.sites)
             if (conflict) {
               const cName = main.sites.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
+              const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
               return NextResponse.json({
-                error: `既に「${cName}」で同日の出面が登録されています。先にそちらを取り消すか別現場のエントリを削除してください。`,
+                error: `既に「${cName}」（${shiftLabel}）で同日の出面が登録されています。先にそちらを取り消すか別現場のエントリを削除してください。`,
                 conflictSiteId: conflict.conflictSiteId,
               }, { status: 409 })
             }

@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
         const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
         if (mainSnap.exists()) {
           const workers = (mainSnap.data().workers || []) as { id: number; visa?: string }[]
-          const sites = (mainSnap.data().sites || []) as { id: string; name: string }[]
+          const sitesAll = (mainSnap.data().sites || []) as { id: string; name: string; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string } }[]
           const targetWorker = workers.find(w => w.id === Number(workerId))
           if (targetWorker) {
             const dData = await getAttendanceDoc(ym)
@@ -212,12 +212,13 @@ export async function POST(request: NextRequest) {
             if (!check.editable) {
               return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
             }
-            // 同日多現場ガード (Vietnamese only)
-            const conflict = detectMultiSiteConflict(dData, site.id, Number(workerId), ym, day, targetWorker.visa)
+            // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
+            const conflict = detectMultiSiteConflict(dData, site.id, Number(workerId), ym, day, sitesAll)
             if (conflict) {
-              const cName = sites.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
+              const cName = sitesAll.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
+              const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
               return NextResponse.json({
-                error: `既に「${cName}」で同日の出面が登録されています。先にそちらを取り消すか「現場違い修正」機能で移動してください。`,
+                error: `既に「${cName}」（${shiftLabel}）で同日の出面が登録されています。先にそちらを取り消すか「現場違い修正」機能で移動してください。`,
                 conflictSiteId: conflict.conflictSiteId,
               }, { status: 409 })
             }
@@ -225,7 +226,7 @@ export async function POST(request: NextRequest) {
         }
       } catch (e) {
         // ⚠️ fail-closed: 判定不能時は拒否（2026-05-08 修正）
-        console.error('Vietnamese-worker guard error (foreman):', e)
+        console.error('Multi-site guard error (foreman):', e)
         return NextResponse.json({ error: 'ガード判定に失敗しました（一時的な障害の可能性）' }, { status: 503 })
       }
 

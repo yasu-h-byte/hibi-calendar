@@ -381,22 +381,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Day is locked (approved)' }, { status: 409 })
     }
 
-    // 同日多現場ガード: ベトナム人スタッフは1日1現場が前提のため、
-    // 既に別現場にエントリがあれば拒否する（誤入力による重複を防ぐ）
+    // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
+    // （日勤+夜勤は許容、日勤+日勤や夜勤+夜勤は拒否）
     try {
       const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
       const attDoc = await getAttendanceDoc(ym)
-      const conflict = detectMultiSiteConflict(attDoc, siteId, worker.id, ym, day, worker.visaType)
+      // 全現場リスト（アーカイブ済みも含む。過去の現場間違いを検出するため）
+      const sitesAll = (await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []
+      const conflict = detectMultiSiteConflict(attDoc, siteId, worker.id, ym, day, sitesAll)
       if (conflict) {
-        // 現場名を引いてメッセージに含める
-        let conflictSiteName = conflict.conflictSiteId
-        try {
-          const allSites = await getSites()
-          const found = allSites.find(s => s.id === conflict.conflictSiteId)
-          if (found) conflictSiteName = found.name
-        } catch { /* ignore */ }
+        const found = sitesAll.find((s: { id: string; name: string }) => s.id === conflict.conflictSiteId)
+        const conflictSiteName = found?.name || conflict.conflictSiteId
+        const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
         return NextResponse.json({
-          error: `既に「${conflictSiteName}」で同日の出面が登録されています。職長に依頼してください。`,
+          error: `既に「${conflictSiteName}」（${shiftLabel}）で同日の出面が登録されています。職長に依頼してください。`,
           conflictSiteId: conflict.conflictSiteId,
           conflictSiteName,
         }, { status: 409 })

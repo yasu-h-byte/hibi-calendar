@@ -49,6 +49,11 @@ export interface Site {
   foreman: number
   archived: boolean
   workSchedule?: SiteWorkSchedule  // 未設定なら DEFAULT_WORK_SCHEDULE が適用される
+  /**
+   * シフト種別（明示指定）。未設定の場合は workSchedule.startTime / 名前 / ID から自動判定。
+   * detectMultiSiteConflict で同日同種シフトの重複を防ぐために使用。
+   */
+  shiftType?: 'day' | 'night'
 }
 
 export interface SiteAssign {

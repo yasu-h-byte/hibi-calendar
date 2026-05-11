@@ -114,19 +114,53 @@ export function canAdminEditEntry(
 }
 
 /**
- * 同一スタッフ・同日の多現場重複を検出するヘルパー。
+ * 現場のシフト種別（日勤/夜勤）を判定する。
  *
- * ベトナム人スタッフは「1日1現場」が前提のため、すでに別現場にエントリが
- * ある状態で別現場に書き込もうとした場合は拒否する。
- * 日本人スタッフは夜勤現場など正当な複数現場併記があり得るため許容する。
+ * 判定優先順位（最初にマッチしたものを採用）:
+ *   1. site.shiftType フィールドが明示されている場合（'day' / 'night'）
+ *   2. workSchedule.startTime の時刻が 16:00 以降 → night
+ *   3. 現場名に「夜勤」が含まれる → night
+ *   4. 現場ID が `_night` で終わる → night
+ *   5. それ以外 → day（デフォルト）
+ *
+ * 物理的に同じ人が「同日に日勤2件」や「同日に夜勤2件」は不可能なので、
+ * detectMultiSiteConflict はこの分類で同種シフトの併記のみを conflict とする。
+ * 「日勤＋夜勤」は管理職などが両方を確認したケースで正当扱い。
+ */
+export function getSiteShiftType(site: {
+  id?: string
+  name?: string
+  shiftType?: 'day' | 'night'
+  workSchedule?: { startTime?: string }
+}): 'day' | 'night' {
+  if (site.shiftType === 'day' || site.shiftType === 'night') return site.shiftType
+  const startTime = site.workSchedule?.startTime
+  if (startTime) {
+    const [hStr] = startTime.split(':')
+    const hour = parseInt(hStr, 10)
+    if (Number.isFinite(hour) && hour >= 16) return 'night'
+  }
+  if (site.name && site.name.includes('夜勤')) return 'night'
+  if (site.id && site.id.endsWith('_night')) return 'night'
+  return 'day'
+}
+
+/**
+ * 同一スタッフ・同日の「物理的に不可能」な多現場重複を検出するヘルパー。
+ *
+ * 「物理的に不可能」とは:
+ *   - 同じ日に「日勤現場2件」または「夜勤現場2件」に出勤すること
+ *
+ * 許容するケース:
+ *   - 日勤＋夜勤の同日併記（管理職が両方を確認した場合等）
  *
  * @param attData      att_YYYYMM の d フィールド全体
  * @param targetSiteId 書き込み先の現場ID
  * @param workerId     書き込み対象のスタッフID
  * @param ym           YYYYMM
  * @param day          日（数値または文字列）
- * @param workerVisa   対象スタッフの visa（在留資格）
- * @returns conflict があれば siteId/entry を返す。なければ null
+ * @param sites        全現場のメタ情報（シフト種別判定用）
+ * @returns conflict があれば siteId/entry/shift を返す。なければ null
  */
 export function detectMultiSiteConflict(
   attData: Record<string, AttendanceEntry>,
@@ -134,10 +168,13 @@ export function detectMultiSiteConflict(
   workerId: number,
   ym: string,
   day: number | string,
-  workerVisa: string | undefined | null,
-): { conflictSiteId: string; existing: AttendanceEntry } | null {
-  if (!isVietnameseWorker(workerVisa)) return null
+  sites: { id: string; name?: string; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string } }[],
+): { conflictSiteId: string; existing: AttendanceEntry; shiftType: 'day' | 'night' } | null {
   const dayStr = String(day)
+  const targetSite = sites.find(s => s.id === targetSiteId)
+  if (!targetSite) return null  // 現場が見つからなければ判定不能
+  const targetShift = getSiteShiftType(targetSite)
+
   for (const [key, entry] of Object.entries(attData)) {
     if (!entry) continue
     const parts = key.split('_')
@@ -150,8 +187,16 @@ export function detectMultiSiteConflict(
     if (keyDay !== dayStr) continue
     if (parseInt(keyWid, 10) !== workerId) continue
     if (keySid === targetSiteId) continue
-    // 他現場にエントリあり → conflict
-    return { conflictSiteId: keySid, existing: entry as AttendanceEntry }
+
+    // 他現場にエントリあり: シフト種別を比較
+    const otherSite = sites.find(s => s.id === keySid)
+    if (!otherSite) continue  // 不明な現場はスキップ（残骸データの可能性）
+    const otherShift = getSiteShiftType(otherSite)
+    if (otherShift === targetShift) {
+      // 同じシフト種別 → 物理的に不可能 → conflict
+      return { conflictSiteId: keySid, existing: entry as AttendanceEntry, shiftType: targetShift }
+    }
+    // 異なるシフト種別（日勤+夜勤など）→ 許容
   }
   return null
 }

@@ -65,6 +65,20 @@ function getStatus(e) {
   return JSON.stringify(e)
 }
 
+/** 現場のシフト種別を判定（lib/attendance.ts の getSiteShiftType と同じロジック） */
+function getSiteShiftType(site) {
+  if (site.shiftType === 'day' || site.shiftType === 'night') return site.shiftType
+  const startTime = site.workSchedule?.startTime
+  if (startTime) {
+    const [hStr] = startTime.split(':')
+    const hour = parseInt(hStr, 10)
+    if (Number.isFinite(hour) && hour >= 16) return 'night'
+  }
+  if (site.name && site.name.includes('夜勤')) return 'night'
+  if (site.id && site.id.endsWith('_night')) return 'night'
+  return 'day'
+}
+
 async function main() {
   console.log('=== 同一スタッフ・同日 多現場エントリ監査 ===\n')
 
@@ -109,31 +123,26 @@ async function main() {
     duplicates.push({ k, arr })
   }
 
-  // 分類
+  // 分類（シフト種別で判定: 同種シフト併記=異常 / 日勤+夜勤=正常）
   const byCategory = {
-    vietnameseAllWork: [],      // ベトナム人で複数現場とも作業日
-    vietnameseOther: [],         // ベトナム人で何らかの組合せ
-    japaneseSplit: [],           // 日本人で w<1 ずつの分割（合計≦1 なら正常）
-    japaneseAllWork: [],         // 日本人で複数とも w=1 (異常)
-    japaneseOther: [],           // それ以外
+    sameShiftDup: [],       // 同種シフト併記（物理的に不可能 = 異常）
+    crossShiftValid: [],    // 日勤+夜勤などのクロスシフト（正常）
   }
 
   for (const dup of duplicates) {
-    const [wid] = dup.k.split('_')
-    const worker = workerMap.get(parseInt(wid))
-    const visa = worker?.visa
-    const isVN = isVietnamese(visa)
-
-    const totalW = dup.arr.reduce((s, x) => s + (x.entry.w > 0 ? x.entry.w : 0), 0)
-    const allFullWork = dup.arr.every(x => x.entry.w === 1)
-
-    if (isVN) {
-      if (allFullWork) byCategory.vietnameseAllWork.push(dup)
-      else byCategory.vietnameseOther.push(dup)
+    // 全現場のシフト種別を取得
+    const shifts = dup.arr.map(x => {
+      const site = siteMap.get(x.sid) || { id: x.sid }
+      return getSiteShiftType(site)
+    })
+    // 同じシフト種別が2つ以上あれば同種シフト併記
+    const dayCount = shifts.filter(s => s === 'day').length
+    const nightCount = shifts.filter(s => s === 'night').length
+    if (dayCount >= 2 || nightCount >= 2) {
+      byCategory.sameShiftDup.push({ ...dup, shifts })
     } else {
-      if (allFullWork) byCategory.japaneseAllWork.push(dup)
-      else if (totalW > 0 && totalW <= 1.01) byCategory.japaneseSplit.push(dup)
-      else byCategory.japaneseOther.push(dup)
+      // 日勤+夜勤のみ（または日勤1のみ・夜勤1のみ=多現場じゃない、ここではあり得ない）
+      byCategory.crossShiftValid.push({ ...dup, shifts })
     }
   }
 
@@ -142,11 +151,8 @@ async function main() {
   console.log(`  うち多現場ありの日付      : ${duplicates.length}`)
   console.log()
   console.log('  カテゴリ別:')
-  console.log(`  🚨 ベトナム人 全現場とも出勤(w=1)     : ${byCategory.vietnameseAllWork.length} 件`)
-  console.log(`  ⚠️  ベトナム人 その他組合せ           : ${byCategory.vietnameseOther.length} 件`)
-  console.log(`  🚨 日本人 全現場とも出勤(w=1)        : ${byCategory.japaneseAllWork.length} 件`)
-  console.log(`  ℹ️  日本人 分割勤務 (w<1, 合計≦1)    : ${byCategory.japaneseSplit.length} 件 (正常パターン)`)
-  console.log(`  ⚠️  日本人 その他組合せ              : ${byCategory.japaneseOther.length} 件`)
+  console.log(`  🚨 同種シフト併記（物理的に不可能 = 異常）   : ${byCategory.sameShiftDup.length} 件`)
+  console.log(`  ℹ️  日勤+夜勤など（正常）                    : ${byCategory.crossShiftValid.length} 件`)
   console.log()
 
   // 詳細出力
@@ -154,33 +160,31 @@ async function main() {
     if (list.length === 0) return
     if (!verbose && !alwaysShow) return
     console.log(`━━━━ ${label} 詳細 ━━━━`)
-    for (const { k, arr } of list) {
+    for (const { k, arr, shifts } of list) {
       const [wid, ym, day] = k.split('_')
       const w = workerMap.get(parseInt(wid))
       const wname = w?.name || `?`
       const visaLabel = w?.visa || '(no visa)'
-      console.log(`  [${wid}] ${wname} (${visaLabel}) ${ym}/${day}:`)
-      for (const x of arr) {
+      const shiftSummary = shifts ? `[${shifts.join('+')}]` : ''
+      console.log(`  [${wid}] ${wname} (${visaLabel}) ${ym}/${day} ${shiftSummary}:`)
+      for (let i = 0; i < arr.length; i++) {
+        const x = arr[i]
         const siteName = siteMap.get(x.sid)?.name || x.sid
-        console.log(`    sid=${x.sid.padEnd(18)} (${siteName.slice(0,12)}) → ${getStatus(x.entry)}  raw=${JSON.stringify(x.entry)}`)
+        const shiftLabel = shifts ? `(${shifts[i]})` : ''
+        console.log(`    sid=${x.sid.padEnd(18)} ${shiftLabel} (${siteName.slice(0,12)}) → ${getStatus(x.entry)}  raw=${JSON.stringify(x.entry)}`)
       }
     }
     console.log()
   }
 
   // 異常系は常に詳細表示、正常系は --verbose のみ
-  printDups('🚨 ベトナム人 全現場とも出勤(w=1)', byCategory.vietnameseAllWork, true)
-  printDups('⚠️  ベトナム人 その他組合せ', byCategory.vietnameseOther, true)
-  printDups('🚨 日本人 全現場とも出勤(w=1)', byCategory.japaneseAllWork, true)
-  printDups('⚠️  日本人 その他組合せ', byCategory.japaneseOther, true)
-  printDups('ℹ️  日本人 分割勤務 (正常パターン)', byCategory.japaneseSplit, false)
+  printDups('🚨 同種シフト併記（物理的に不可能 = 異常）', byCategory.sameShiftDup, true)
+  printDups('ℹ️  日勤+夜勤など（正常パターン）', byCategory.crossShiftValid, false)
 
   if (verbose) {
     console.log('💡 上記の正常パターンも含めた全件を表示しています')
-  } else {
-    if (byCategory.japaneseSplit.length > 0) {
-      console.log(`💡 日本人分割勤務 ${byCategory.japaneseSplit.length} 件の詳細は --verbose で確認可能`)
-    }
+  } else if (byCategory.crossShiftValid.length > 0) {
+    console.log(`💡 日勤+夜勤併記 ${byCategory.crossShiftValid.length} 件の詳細は --verbose で確認可能`)
   }
 
   process.exit(0)
