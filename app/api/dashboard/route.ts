@@ -25,6 +25,22 @@ export const dynamic = 'force-dynamic'
 
 // --- Helpers ---
 
+/**
+ * 日本時間（JST, Asia/Tokyo）の「今日」を返す。
+ *
+ * Vercel サーバは UTC で動作するため、JST の早朝〜午前中（UTC 前日 15:00〜23:59）に
+ * `new Date()` を使うと日付が1日早く判定されてしまう。本ヘルパーで JST 基準の Date を取得する。
+ * 2026-05-12 修正: ダッシュボードの「前日の稼働状況」が JST 早朝アクセス時に
+ * 1日前にずれて表示されない事象への対応。
+ */
+function getJstNow(): Date {
+  // toLocaleString('en-CA', { timeZone: 'Asia/Tokyo' }) は "YYYY-MM-DD HH:mm:ss" 形式
+  const jstStr = new Date().toLocaleString('en-CA', { timeZone: 'Asia/Tokyo', hour12: false })
+  // "YYYY-MM-DD, HH:mm:ss" のカンマ区切りを取り除いて T 区切りに
+  const [datePart, timePart] = jstStr.replace(',', '').trim().split(' ')
+  return new Date(`${datePart}T${timePart}`)
+}
+
 /** Compute PL alert for workers with remaining PL <= 3 */
 function computePLAlert(main: MainData) {
   const alerts: {
@@ -498,7 +514,8 @@ export async function GET(request: NextRequest) {
       const prevAtt = cachedPrev || await getAttData(prevYm)
 
       // 前月同日比: 前月の1日〜当日の日付までの出面データのみ集計
-      const sameDayLimit = new Date().getDate() // 当月の日付（例: 8日なら8）
+      // 2026-05-12 修正: Vercel(UTC) 環境で JST 早朝の日付ずれを防止
+      const sameDayLimit = getJstNow().getDate() // 当月の日付（例: 8日なら8）
       const filteredPrevD: Record<string, AttendanceEntry> = {}
       const filteredPrevSD: Record<string, { n: number; on: number }> = {}
       for (const [k, v] of Object.entries(prevAtt.d)) {
@@ -665,7 +682,9 @@ export async function GET(request: NextRequest) {
     //   有用だったが、新運用は実習生が作業終わりに自己入力するため「前日」のデータを
     //   見るほうが確定情報として意味がある。
     //   フィールド名 todayStatus はクライアント影響を抑えるため維持。
-    const now = new Date()
+    // 2026-05-12 修正: Vercel(UTC) で JST 早朝〜午前中アクセス時に「前日」が1日前にずれて
+    //   日曜=無データ判定で空表示になっていた。JST 基準で計算するよう修正。
+    const now = getJstNow()
     const yesterday = new Date(now)
     yesterday.setDate(yesterday.getDate() - 1)
     const targetYm = ymKey(yesterday.getFullYear(), yesterday.getMonth() + 1)
@@ -951,7 +970,7 @@ export async function GET(request: NextRequest) {
 
     // ═══ Action Items (要対応まとめ) ═══
     // 1. Visa expiry within 90 days
-    const todayDate = new Date()
+    const todayDate = getJstNow()
     todayDate.setHours(0, 0, 0, 0)
     const visaExpiryItems: { name: string; daysLeft: number; expiry: string }[] = []
     for (const w of main.workers) {
@@ -1030,7 +1049,7 @@ export async function GET(request: NextRequest) {
       family: '家族の事情', homeCountry: '帰国関連', other: 'その他',
     }
     try {
-      const todayDate = new Date()
+      const todayDate = getJstNow()
       const sevenDaysAgo = new Date(todayDate)
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
@@ -1143,7 +1162,7 @@ export async function GET(request: NextRequest) {
     let pendingGrantsCount = 0
     let carryOverExpiringCount = 0
     try {
-      const todayD = new Date()
+      const todayD = getJstNow()
       todayD.setHours(0, 0, 0, 0)
       const todayIsoP = todayD.toISOString().slice(0, 10)
       const m = todayD.getMonth() + 1
