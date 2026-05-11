@@ -9,7 +9,8 @@
     "lint": "next lint",
     "lint:firestore": "node scripts/lint-firestore-safety.mjs",
     "diagnose:firestore": "node scripts/diagnose-merge-empty-map.mjs",
-    "audit:pl": "node scripts/audit-pl-attendance.mjs"
+    "audit:pl": "node scripts/audit-pl-attendance.mjs",
+    "audit:duplicate": "node scripts/audit-duplicate-attendance.mjs"
   },
   "dependencies": {
     "firebase": "^11.0.0",

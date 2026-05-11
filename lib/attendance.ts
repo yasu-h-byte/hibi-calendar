@@ -113,6 +113,49 @@ export function canAdminEditEntry(
   return { editable: true }
 }
 
+/**
+ * 同一スタッフ・同日の多現場重複を検出するヘルパー。
+ *
+ * ベトナム人スタッフは「1日1現場」が前提のため、すでに別現場にエントリが
+ * ある状態で別現場に書き込もうとした場合は拒否する。
+ * 日本人スタッフは夜勤現場など正当な複数現場併記があり得るため許容する。
+ *
+ * @param attData      att_YYYYMM の d フィールド全体
+ * @param targetSiteId 書き込み先の現場ID
+ * @param workerId     書き込み対象のスタッフID
+ * @param ym           YYYYMM
+ * @param day          日（数値または文字列）
+ * @param workerVisa   対象スタッフの visa（在留資格）
+ * @returns conflict があれば siteId/entry を返す。なければ null
+ */
+export function detectMultiSiteConflict(
+  attData: Record<string, AttendanceEntry>,
+  targetSiteId: string,
+  workerId: number,
+  ym: string,
+  day: number | string,
+  workerVisa: string | undefined | null,
+): { conflictSiteId: string; existing: AttendanceEntry } | null {
+  if (!isVietnameseWorker(workerVisa)) return null
+  const dayStr = String(day)
+  for (const [key, entry] of Object.entries(attData)) {
+    if (!entry) continue
+    const parts = key.split('_')
+    if (parts.length < 4) continue
+    const keyDay = parts[parts.length - 1]
+    const keyYm = parts[parts.length - 2]
+    const keyWid = parts[parts.length - 3]
+    const keySid = parts.slice(0, parts.length - 3).join('_')
+    if (keyYm !== ym) continue
+    if (keyDay !== dayStr) continue
+    if (parseInt(keyWid, 10) !== workerId) continue
+    if (keySid === targetSiteId) continue
+    // 他現場にエントリあり → conflict
+    return { conflictSiteId: keySid, existing: entry as AttendanceEntry }
+  }
+  return null
+}
+
 // ────────────────────────────────────────
 //  出面ステータス判定
 // ────────────────────────────────────────

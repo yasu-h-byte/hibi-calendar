@@ -381,6 +381,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Day is locked (approved)' }, { status: 409 })
     }
 
+    // 同日多現場ガード: ベトナム人スタッフは1日1現場が前提のため、
+    // 既に別現場にエントリがあれば拒否する（誤入力による重複を防ぐ）
+    try {
+      const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
+      const attDoc = await getAttendanceDoc(ym)
+      const conflict = detectMultiSiteConflict(attDoc, siteId, worker.id, ym, day, worker.visaType)
+      if (conflict) {
+        // 現場名を引いてメッセージに含める
+        let conflictSiteName = conflict.conflictSiteId
+        try {
+          const allSites = await getSites()
+          const found = allSites.find(s => s.id === conflict.conflictSiteId)
+          if (found) conflictSiteName = found.name
+        } catch { /* ignore */ }
+        return NextResponse.json({
+          error: `既に「${conflictSiteName}」で同日の出面が登録されています。職長に依頼してください。`,
+          conflictSiteId: conflict.conflictSiteId,
+          conflictSiteName,
+        }, { status: 409 })
+      }
+    } catch (e) {
+      console.error('Multi-site guard error (staff):', e)
+      return NextResponse.json({ error: 'ガード判定に失敗しました' }, { status: 503 })
+    }
+
     // Build entry
     //
     // ⚠️ 2026-05-09 根本原因対処（c36517b の安全再実装）:

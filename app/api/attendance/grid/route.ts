@@ -372,16 +372,25 @@ export async function POST(request: NextRequest) {
       // クリア（削除）と既存エントリの修正は許可。
       if (entry && typeof entry === 'object') {
         try {
-          const { canAdminEditEntry } = await import('@/lib/attendance')
+          const { canAdminEditEntry, detectMultiSiteConflict } = await import('@/lib/attendance')
           const main = await getMainData()
           const worker = main.workers.find(w => w.id === Number(workerId))
           if (worker) {
             const curSnap = await getDoc(docRef)
-            const curD = (curSnap.exists() ? curSnap.data().d : {}) as Record<string, unknown>
-            const existing = curD?.[key] as AttendanceEntry | undefined
+            const curD = (curSnap.exists() ? curSnap.data().d : {}) as Record<string, AttendanceEntry>
+            const existing = curD?.[key]
             const check = canAdminEditEntry({ visa: worker.visa }, existing)
             if (!check.editable) {
               return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
+            }
+            // 同日多現場ガード (Vietnamese only)
+            const conflict = detectMultiSiteConflict(curD, siteId, Number(workerId), ym, Number(day), worker.visa)
+            if (conflict) {
+              const cName = main.sites.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
+              return NextResponse.json({
+                error: `既に「${cName}」で同日の出面が登録されています。先にそちらを取り消すか別現場のエントリを削除してください。`,
+                conflictSiteId: conflict.conflictSiteId,
+              }, { status: 409 })
             }
           }
         } catch (e) {

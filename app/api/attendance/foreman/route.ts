@@ -196,12 +196,13 @@ export async function POST(request: NextRequest) {
       // ベトナム人スタッフのガード: 「最初の入力はスタッフ本人から」を強制。
       // 既存エントリなしの場合、職長からの新規作成を拒否。
       try {
-        const { canAdminEditEntry, getAttendanceDoc } = await import('@/lib/attendance')
+        const { canAdminEditEntry, detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
         const { db } = await import('@/lib/firebase')
         const { doc, getDoc } = await import('firebase/firestore')
         const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
         if (mainSnap.exists()) {
           const workers = (mainSnap.data().workers || []) as { id: number; visa?: string }[]
+          const sites = (mainSnap.data().sites || []) as { id: string; name: string }[]
           const targetWorker = workers.find(w => w.id === Number(workerId))
           if (targetWorker) {
             const dData = await getAttendanceDoc(ym)
@@ -210,6 +211,15 @@ export async function POST(request: NextRequest) {
             const check = canAdminEditEntry({ visa: targetWorker.visa }, existing)
             if (!check.editable) {
               return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
+            }
+            // 同日多現場ガード (Vietnamese only)
+            const conflict = detectMultiSiteConflict(dData, site.id, Number(workerId), ym, day, targetWorker.visa)
+            if (conflict) {
+              const cName = sites.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
+              return NextResponse.json({
+                error: `既に「${cName}」で同日の出面が登録されています。先にそちらを取り消すか「現場違い修正」機能で移動してください。`,
+                conflictSiteId: conflict.conflictSiteId,
+              }, { status: 409 })
             }
           }
         }
