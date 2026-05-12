@@ -39,7 +39,7 @@ import type { AttendanceEntry } from '@/types'
  */
 export const APPROVER_WEIGHTS: Record<number, number> = {
   0: 0.5,  // 靖仁さん（super admin）
-  1: 1.0,  // 政仁さん（事業責任者）
+  1: 0.7,  // 政仁さん（事業責任者）
 }
 
 /** 後方互換: 旧 APPROVER_WORKER_IDS の代替（呼び出し側で in 演算子を使う） */
