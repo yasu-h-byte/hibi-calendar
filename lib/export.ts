@@ -840,9 +840,19 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   // -- Workers section --
   // ルール別ラベル: 4月以前 = 「休業補償」、5月以降 = 「追加所定手当」（同じフィールドを表示用ラベルだけ切替）
   const useNewRulesForSheet1 = ym >= '202605'
+
+  // 2026-05-12 対応: Sheet 1 と Sheet 2 の数値整合性を確保するため、
+  //   出勤日数 / 残業 を Sheet 2 と同じフィールドに揃える。
+  //   - 出勤日数 → actualWorkDays（補償日除外、Sheet 2 と一致）
+  //   - 補償日 → 新列 compDays を追加（情報損失を防ぐ）
+  //   - 残業時間 → legalOtHours（法定外労働時間、Sheet 2 と一致、給与計算と整合）
+  const anyHasCompDays = workers.some(w => (w.compDays || 0) > 0)
+
   const wHeaders: string[] = [
-    '名前', '所属', '現場', '出勤日数', '有給', '残業(h)', '日額単価', '概算労務費',
+    '名前', '所属', '現場', '実出勤日数',
   ]
+  if (anyHasCompDays) wHeaders.push('補償日')
+  wHeaders.push('有給', '残業時間(h)', '日額単価', '概算労務費')
   if (showAbsence) {
     wHeaders.push('欠勤日数', '欠勤控除', '差引支給')
   }
@@ -859,7 +869,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     for (let i = 1; i < wHeaders.length; i++) groupRow.push(null)
     s1Rows.push(groupRow)
     for (const w of hibiWorkers) {
-      s1Rows.push(buildWorkerRow(w, siteNames, showAbsence))
+      s1Rows.push(buildWorkerRow(w, siteNames, showAbsence, anyHasCompDays))
     }
   }
 
@@ -869,20 +879,24 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     for (let i = 1; i < wHeaders.length; i++) groupRow.push(null)
     s1Rows.push(groupRow)
     for (const w of hfuWorkers) {
-      s1Rows.push(buildWorkerRow(w, siteNames, showAbsence))
+      s1Rows.push(buildWorkerRow(w, siteNames, showAbsence, anyHasCompDays))
     }
   }
 
   // Worker totals（出向控除済みの労務費を集計）
+  // 2026-05-12: actualWorkDays / legalOtHours に揃えて Sheet 2 と整合
   const totalDispatchDeduction = workers.reduce((s, w) => s + (w.dispatchDeduction || 0), 0)
   const wTotals: (string | number | null)[] = [
     totalDispatchDeduction > 0 ? `合計（出向控除 -${totalDispatchDeduction.toLocaleString()}円含む）` : '合計', '', '',
-    workers.reduce((s, w) => s + (w.workAll || w.workDays), 0),
-    workers.reduce((s, w) => s + w.plDays, 0),
-    workers.reduce((s, w) => s + w.otHours, 0),
-    null,
-    workers.reduce((s, w) => s + w.totalCost, 0) - totalDispatchDeduction,
+    workers.reduce((s, w) => s + (w.actualWorkDays || 0), 0),  // 実出勤日数
   ]
+  if (anyHasCompDays) wTotals.push(workers.reduce((s, w) => s + (w.compDays || 0), 0))  // 補償日
+  wTotals.push(
+    workers.reduce((s, w) => s + w.plDays, 0),                  // 有給
+    workers.reduce((s, w) => s + (w.legalOtHours || 0), 0),     // 残業時間
+    null,                                                        // 日額単価
+    workers.reduce((s, w) => s + w.totalCost, 0) - totalDispatchDeduction,  // 概算労務費
+  )
   if (showAbsence) {
     wTotals.push(
       workers.reduce((s, w) => s + (w.absence || 0), 0),
@@ -929,9 +943,12 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   ws1['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: wHeaders.length - 1 } }]
 
   // Column widths for sheet 1
-  const s1Widths = [12, 8, 16, 10, 6, 10, 12, 14]
+  // 列順: 名前/所属/現場/実出勤日数 [/補償日] /有給/残業時間/日額単価/概算労務費 [/欠勤系3] /給与系5
+  const s1Widths = [12, 8, 16, 10]  // 名前/所属/現場/実出勤日数
+  if (anyHasCompDays) s1Widths.push(8)  // 補償日
+  s1Widths.push(6, 10, 12, 14)  // 有給/残業時間/日額単価/概算労務費
   if (showAbsence) s1Widths.push(10, 12, 14)
-  s1Widths.push(12, 12, 12, 14)
+  s1Widths.push(12, 12, 12, 12, 14)  // 給与系5列
   setColWidths(ws1, s1Widths)
 
   XLSX.utils.book_append_sheet(wb, ws1, '月次集計')
@@ -1096,22 +1113,30 @@ function buildWorkerRow(
   w: WorkerMonthly,
   siteNames: Record<string, string>,
   showAbsence: boolean,
+  showCompDaysCol: boolean,  // 2026-05-12: 補償日列を出すか（Sheet 1 内に補償日があるスタッフがいる場合）
 ): (string | number | null)[] {
   const siteList = w.sites.map(sid => siteNames[sid] || sid).join(', ')
   // 出向中スタッフは名前に🔁マークを付け、概算労務費は出向控除額（マイナス）として表示
   const nameWithDispatch = w.isDispatched
     ? `🔁 ${w.name}（出向: ${w.dispatchTo || ''}）`
     : w.name
+  // 2026-05-12 対応: Sheet 2「給与計算詳細」と数値整合のため:
+  //   出勤日数 → actualWorkDays（補償日除外）
+  //   残業時間 → legalOtHours（法定外労働時間）
+  //   補償日数 → 別列で表示（情報損失を防ぐ）
   const row: (string | number | null)[] = [
     nameWithDispatch,
     w.org === 'hfu' || w.org === 'HFU' ? 'HFU' : '日比',
     siteList,
-    w.workAll || w.workDays,
+    w.actualWorkDays || 0,
+  ]
+  if (showCompDaysCol) row.push(w.compDays || 0)
+  row.push(
     w.plDays || 0,
-    w.otHours || 0,
+    w.legalOtHours || 0,
     w.rate,
     w.isDispatched ? -Math.round(w.dispatchDeduction || w.totalCost) : Math.round(w.totalCost),
-  ]
+  )
   if (showAbsence) {
     row.push(
       w.absence || 0,
