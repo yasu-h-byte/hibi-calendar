@@ -210,6 +210,19 @@ const EVALUATOR_COLORS = [
   { bg: 'bg-purple-100 dark:bg-purple-900', text: 'text-purple-700 dark:text-purple-300', header: 'bg-purple-500' },
 ]
 
+/**
+ * 評価者が当該カテゴリの評価対象かどうかを判定（2026-05-12 スコープ分担）
+ *   - 生活態度 (living): 靖仁さん (id=0) のみ評価対象
+ *   - 日本語/勤務態度/職業能力: 靖仁さん以外（職長 + 政仁さん）が対象
+ */
+function isCategoryInScope(evaluatorId: number, categoryKey: string): boolean {
+  const isAdmin = evaluatorId === 0
+  const isLiving = categoryKey === 'living'
+  if (isLiving && !isAdmin) return false   // 生活態度は admin のみ
+  if (!isLiving && isAdmin) return false   // 非生活態度は admin 以外
+  return true
+}
+
 // 評価者IDから名前を引く（apiEvaluators 優先 → workers → ID表示）
 function evaluatorNameLookup(
   id: number,
@@ -394,7 +407,10 @@ export default function EvaluationPage() {
   }
 
   const isAdmin = authUser?.role === 'admin' || authUser?.role === 'approver'
-  const isAdminOnly = authUser?.role === 'admin' // 生活態度の入力はadminのみ
+  // 評価カテゴリのスコープ分担（2026-05-12 ユーザー指示）
+  //   - 靖仁さん (admin, id=0): 生活態度のみ評価
+  //   - その他評価者: 日本語/勤務態度/職業能力の3つ（生活態度は非表示）
+  const isAdminOnly = authUser?.role === 'admin' && authUser?.workerId === 0
 
   const getAuth = () => {
     try {
@@ -1207,8 +1223,11 @@ export default function EvaluationPage() {
                 </thead>
                 <tbody>
                   {EVAL_ITEMS.map((item, rowIdx) => {
-                    const grades = session.reviews.map(r => getScoreValue(r.scores, item.category, item.key))
-                    const allSame = grades.length > 0 && grades.every(g => g === grades[0])
+                    // 担当外評価者を除外して「一致 / 分かれ」を判定（2026-05-12 スコープ反映）
+                    const inScopeGrades = session.reviews
+                      .filter(r => isCategoryInScope(r.evaluatorId, item.category))
+                      .map(r => getScoreValue(r.scores, item.category, item.key))
+                    const allSame = inScopeGrades.length > 0 && inScopeGrades.every(g => g === inScopeGrades[0])
                     const rowBg = rowIdx % 2 === 0 ? '' : 'bg-gray-50/50 dark:bg-gray-750/50'
                     return (
                       <tr key={`${item.category}_${item.key}`} className={rowBg}>
@@ -1218,11 +1237,18 @@ export default function EvaluationPage() {
                             {item.label}
                           </div>
                         </td>
-                        {session.reviews.map(r => (
-                          <td key={r.evaluatorId} className="px-3 py-2 text-center border-b border-gray-100 dark:border-gray-700">
-                            <GradeBadge grade={getScoreValue(r.scores, item.category, item.key)} />
-                          </td>
-                        ))}
+                        {session.reviews.map(r => {
+                          const inScope = isCategoryInScope(r.evaluatorId, item.category)
+                          return (
+                            <td key={r.evaluatorId} className="px-3 py-2 text-center border-b border-gray-100 dark:border-gray-700">
+                              {inScope ? (
+                                <GradeBadge grade={getScoreValue(r.scores, item.category, item.key)} />
+                              ) : (
+                                <span className="text-gray-300 dark:text-gray-600 text-lg" title="担当外（評価対象外）">─</span>
+                              )}
+                            </td>
+                          )
+                        })}
                         {session.status === 'approved' && session.finalScores && (
                           <>
                             <td className="border-b border-gray-100 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 w-1"></td>
@@ -1771,9 +1797,12 @@ export default function EvaluationPage() {
                     </div>
                   )}
 
-                  {/* ABC sections — generated from EVALUATION_CATEGORIES */}
+                  {/* ABC sections — generated from EVALUATION_CATEGORIES
+                     2026-05-12 スコープ分担:
+                       - 靖仁さん (isAdminOnly=true): 生活態度のみ
+                       - その他評価者: 日本語/勤務態度/職業能力（生活態度は非表示） */}
                   <div className="space-y-4">
-                    {EVALUATION_CATEGORIES.filter(cat => cat.key !== 'living' || isAdminOnly).map(cat => {
+                    {EVALUATION_CATEGORIES.filter(cat => isAdminOnly ? cat.key === 'living' : cat.key !== 'living').map(cat => {
                       const bgColor = cat.color === 'blue' ? 'bg-blue-500' : cat.color === 'green' ? 'bg-green-500' : cat.color === 'teal' ? 'bg-teal-500' : 'bg-orange-500'
                       const catScores = myReview[cat.key]
                       return (
@@ -1818,29 +1847,40 @@ export default function EvaluationPage() {
                     />
                   </div>
 
-                  {/* Score preview */}
+                  {/* Score preview — 担当カテゴリのみ表示 */}
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
-                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">スコアプレビュー</h3>
+                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
+                      スコアプレビュー
+                      <span className="ml-2 text-[11px] font-normal text-gray-500">
+                        （あなたの担当カテゴリの合計のみ表示）
+                      </span>
+                    </h3>
                     <div className="space-y-1 text-sm">
-                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                        <span>日本語: {reviewCalc.japanese}点 x1.0</span>
-                        <span className="font-medium">= {reviewCalc.japaneseW.toFixed(1)}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                        <span>勤務態度: {reviewCalc.attitude}点 x1.5</span>
-                        <span className="font-medium">= {reviewCalc.attitudeW.toFixed(1)}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                        <span>職業能力: {reviewCalc.skill}点 x1.0</span>
-                        <span className="font-medium">= {reviewCalc.skillW.toFixed(1)}</span>
-                      </div>
-                      <div className="flex justify-between text-gray-600 dark:text-gray-300">
-                        <span>生活態度: {reviewCalc.living}点 x1.0</span>
-                        <span className="font-medium">= {reviewCalc.livingW.toFixed(1)}</span>
-                      </div>
+                      {!isAdminOnly && (
+                        <>
+                          <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                            <span>日本語: {reviewCalc.japanese}点 x1.0</span>
+                            <span className="font-medium">= {reviewCalc.japaneseW.toFixed(1)}</span>
+                          </div>
+                          <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                            <span>勤務態度: {reviewCalc.attitude}点 x1.5</span>
+                            <span className="font-medium">= {reviewCalc.attitudeW.toFixed(1)}</span>
+                          </div>
+                          <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                            <span>職業能力: {reviewCalc.skill}点 x1.0</span>
+                            <span className="font-medium">= {reviewCalc.skillW.toFixed(1)}</span>
+                          </div>
+                        </>
+                      )}
+                      {isAdminOnly && (
+                        <div className="flex justify-between text-gray-600 dark:text-gray-300">
+                          <span>生活態度: {reviewCalc.living}点 x1.0</span>
+                          <span className="font-medium">= {reviewCalc.livingW.toFixed(1)}</span>
+                        </div>
+                      )}
                       <div className="border-t border-gray-200 dark:border-gray-700 pt-2 mt-2">
                         <div className="flex justify-between text-gray-900 dark:text-white font-bold">
-                          <span>手動合計: {reviewCalc.total.toFixed(1)}点</span>
+                          <span>担当部分合計: {(isAdminOnly ? reviewCalc.livingW : reviewCalc.japaneseW + reviewCalc.attitudeW + reviewCalc.skillW).toFixed(1)}点</span>
                         </div>
                       </div>
                     </div>
@@ -1904,7 +1944,8 @@ export default function EvaluationPage() {
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
                     <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">自分の評価</h3>
                     <div className="space-y-2">
-                      {EVAL_ITEMS.map(item => (
+                      {/* 自分の担当カテゴリの項目のみ表示 */}
+                      {EVAL_ITEMS.filter(item => authUser && isCategoryInScope(authUser.workerId, item.category)).map(item => (
                         <div key={`${item.category}_${item.key}`} className="flex items-center justify-between py-1">
                           <span className="text-sm text-gray-600 dark:text-gray-300">{item.label}</span>
                           <GradeBadge grade={getScoreValue(myReview, item.category, item.key)} />
@@ -1932,7 +1973,8 @@ export default function EvaluationPage() {
                                 {review.evaluatorName}
                               </p>
                               <div className="space-y-1">
-                                {EVAL_ITEMS.map(item => (
+                                {/* 当該評価者の担当カテゴリのみ表示 */}
+                                {EVAL_ITEMS.filter(item => isCategoryInScope(review.evaluatorId, item.category)).map(item => (
                                   <div key={`${review.evaluatorId}_${item.category}_${item.key}`} className="flex items-center justify-between py-0.5">
                                     <span className="text-xs text-gray-600 dark:text-gray-300">{item.label}</span>
                                     <GradeBadge grade={getScoreValue(review.scores, item.category, item.key)} />
@@ -2028,6 +2070,15 @@ export default function EvaluationPage() {
                                 let weightedSum = 0
                                 let totalWeight = 0
                                 for (const r of session.reviews) {
+                                  // 2026-05-12 スコープ分担:
+                                  //   - 生活態度: 靖仁さん (id=0) のみ評価対象
+                                  //   - その他カテゴリ: 靖仁さん以外（職長3 + 政仁さん）
+                                  //   担当外カテゴリは weight=0 で加重平均から除外
+                                  const isAdminEvaluator = r.evaluatorId === 0
+                                  const isLivingCategory = item.category === 'living'
+                                  if (isLivingCategory && !isAdminEvaluator) continue   // 生活態度を非adminは対象外
+                                  if (!isLivingCategory && isAdminEvaluator) continue   // 非生活態度をadminは対象外
+
                                   const g = getScoreValue(r.scores, item.category, item.key)
                                   const gradeNum = g === 'A' ? 3 : g === 'B' ? 2 : 1
                                   // ウェイト未設定（旧セッション）は 1.0 にフォールバック
@@ -2152,8 +2203,11 @@ export default function EvaluationPage() {
                       </thead>
                       <tbody>
                         {EVAL_ITEMS.map((item, rowIdx) => {
-                          const allGrades = session.reviews.map(r => getScoreValue(r.scores, item.category, item.key))
-                          const allSame = allGrades.length > 0 && allGrades.every(g => g === allGrades[0])
+                          // 担当外評価者を除外して「一致 / 分かれ」を判定（2026-05-12 スコープ反映）
+                          const inScopeGrades = session.reviews
+                            .filter(r => isCategoryInScope(r.evaluatorId, item.category))
+                            .map(r => getScoreValue(r.scores, item.category, item.key))
+                          const allSame = inScopeGrades.length > 0 && inScopeGrades.every(g => g === inScopeGrades[0])
                           const rowBg = rowIdx % 2 === 0 ? '' : 'bg-gray-50/50 dark:bg-gray-750/50'
                           return (
                             <tr key={`${item.category}_${item.key}`} className={rowBg}>
@@ -2163,11 +2217,18 @@ export default function EvaluationPage() {
                                   {item.label}
                                 </div>
                               </td>
-                              {session.reviews.map(review => (
-                                <td key={review.evaluatorId} className="px-3 py-2 text-center border-b border-gray-100 dark:border-gray-700">
-                                  <GradeBadge grade={getScoreValue(review.scores, item.category, item.key)} />
-                                </td>
-                              ))}
+                              {session.reviews.map(review => {
+                                const inScope = isCategoryInScope(review.evaluatorId, item.category)
+                                return (
+                                  <td key={review.evaluatorId} className="px-3 py-2 text-center border-b border-gray-100 dark:border-gray-700">
+                                    {inScope ? (
+                                      <GradeBadge grade={getScoreValue(review.scores, item.category, item.key)} />
+                                    ) : (
+                                      <span className="text-gray-300 dark:text-gray-600 text-lg" title="担当外（評価対象外）">─</span>
+                                    )}
+                                  </td>
+                                )
+                              })}
                               <td className="border-b border-gray-100 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 w-1"></td>
                               <td className="px-3 py-2 text-center border-b border-gray-100 dark:border-gray-700 bg-indigo-50/50 dark:bg-indigo-900/20">
                                 <div className="flex gap-1 justify-center">
