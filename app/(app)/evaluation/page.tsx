@@ -921,7 +921,7 @@ export default function EvaluationPage() {
               <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">
                 評価者ウェイト
                 <span className="ml-2 text-[11px] font-normal text-gray-500">
-                  共働実績ベース：直近で一緒に働いた職長の意見が多数決プリフィルで強く反映されます
+                  共働実績ベース（直近1年）：加重平均プリフィルで重みが効きます
                 </span>
               </h4>
               {isAdmin && (
@@ -940,8 +940,8 @@ export default function EvaluationPage() {
                   <thead className="bg-gray-50 dark:bg-gray-900">
                     <tr>
                       <th className="px-2 py-1 text-left font-medium text-gray-500 dark:text-gray-400">評価者</th>
-                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400">直近90日</th>
-                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400">過去365日</th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400" title="参考表示（ウェイトには影響しない）">直近90日<span className="text-[9px] opacity-60 ml-0.5">(参考)</span></th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400" title="ウェイト算出の根拠">過去365日<span className="text-[9px] opacity-60 ml-0.5">(主)</span></th>
                       <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400">ウェイト</th>
                     </tr>
                   </thead>
@@ -1183,11 +1183,11 @@ export default function EvaluationPage() {
                           {w && (
                             <div className="mt-1 text-[10px] font-normal opacity-90">
                               {w.isApprover ? (
-                                <span title="事業責任者として常時フルウェイト">w=1.0 ★</span>
+                                <span title={`事業責任者の固定ウェイト (${w.weight.toFixed(2)})`}>w={w.weight.toFixed(2)} ★</span>
                               ) : (
-                                <span title={`過去365日 共働 ${w.yearDays}日 / 直近90日 共働 ${w.recentDays}日`}>
+                                <span title={`過去365日 共働 ${w.yearDays}日 (うち直近90日 ${w.recentDays}日)`}>
                                   w={w.weight.toFixed(2)}
-                                  <span className="block opacity-80">直近{w.recentPct}% / 年{w.yearPct}%</span>
+                                  <span className="block opacity-80">年共働 {w.yearPct}% ({w.yearDays}日)</span>
                                 </span>
                               )}
                             </div>
@@ -2018,30 +2018,37 @@ export default function EvaluationPage() {
                         <button
                           onClick={() => {
                             setApproveSessionId(session.id)
-                            // Pre-fill finalScores from weighted majority vote
-                            // 共働実績ベースのウェイトを使用（直近で一緒に働いた職長の意見が強く反映される）
+                            // Pre-fill finalScores from weighted average (2026-05-12 改訂)
+                            //   旧: 重み付き多数決（離散投票）→ 重みの小数差が吸収されてしまう
+                            //   新: 加重平均 (A=3, B=2, C=1) → しきい値で ABC 変換
+                            //   評価者全員の意見が連続的に反映され、小数重みが実質的に効く。
                             if (session.reviews.length > 0) {
-                              const majority = JSON.parse(JSON.stringify(EMPTY_SCORES)) as EvaluationScores
+                              const prefill = JSON.parse(JSON.stringify(EMPTY_SCORES)) as EvaluationScores
                               for (const item of EVAL_ITEMS) {
-                                const counts: Record<ABCGrade, number> = { A: 0, B: 0, C: 0 }
+                                let weightedSum = 0
+                                let totalWeight = 0
                                 for (const r of session.reviews) {
                                   const g = getScoreValue(r.scores, item.category, item.key)
+                                  const gradeNum = g === 'A' ? 3 : g === 'B' ? 2 : 1
                                   // ウェイト未設定（旧セッション）は 1.0 にフォールバック
                                   const w = session.evaluatorWeights?.[r.evaluatorId]?.weight ?? 1.0
-                                  counts[g] += w
+                                  weightedSum += gradeNum * w
+                                  totalWeight += w
                                 }
-                                const best = (['A', 'B', 'C'] as ABCGrade[]).sort((a, b) => counts[b] - counts[a])[0]
-                                const cat = majority[item.category as keyof EvaluationScores] as Record<string, ABCGrade>
+                                const avg = totalWeight > 0 ? weightedSum / totalWeight : 2
+                                // しきい値: A=3, B=2, C=1 の中点で区切る
+                                const best: ABCGrade = avg >= 2.5 ? 'A' : avg >= 1.5 ? 'B' : 'C'
+                                const cat = prefill[item.category as keyof EvaluationScores] as Record<string, ABCGrade>
                                 cat[item.key] = best
                               }
-                              setFinalScores(majority)
+                              setFinalScores(prefill)
                             } else {
                               setFinalScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
                             }
                             setFinalComment('')
                           }}
                           className="px-4 py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors"
-                          title="重み付き多数決でプリフィル（直近一緒に働いた職長の意見を強く反映）"
+                          title="重み付き加重平均でプリフィル（A=3 B=2 C=1 の数値化→平均→ABC変換）"
                         >
                           確認・承認
                         </button>
@@ -2121,11 +2128,11 @@ export default function EvaluationPage() {
                                 {w && (
                                   <div className="mt-1 text-[10px] font-normal opacity-90">
                                     {w.isApprover ? (
-                                      <span title="事業責任者として常時フルウェイト">w=1.0 ★</span>
+                                      <span title={`事業責任者の固定ウェイト (${w.weight.toFixed(2)})`}>w={w.weight.toFixed(2)} ★</span>
                                     ) : (
-                                      <span title={`過去365日 共働 ${w.yearDays}日 / 直近90日 共働 ${w.recentDays}日`}>
+                                      <span title={`過去365日 共働 ${w.yearDays}日 (うち直近90日 ${w.recentDays}日)`}>
                                         w={w.weight.toFixed(2)}
-                                        <span className="block opacity-80">直近{w.recentPct}% / 年{w.yearPct}%</span>
+                                        <span className="block opacity-80">年共働 {w.yearPct}% ({w.yearDays}日)</span>
                                       </span>
                                     )}
                                   </div>
@@ -2138,7 +2145,7 @@ export default function EvaluationPage() {
                           <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/30 min-w-[140px]">
                             最終評価
                             {session.evaluatorWeights && (
-                              <div className="text-[10px] font-normal opacity-70 mt-0.5">（重み付き多数決）</div>
+                              <div className="text-[10px] font-normal opacity-70 mt-0.5">（重み付き加重平均）</div>
                             )}
                           </th>
                         </tr>

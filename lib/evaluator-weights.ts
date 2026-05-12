@@ -1,42 +1,60 @@
 /**
  * 評価者ウェイト算出ユーティリティ
  *
- * 「直近で実際に対象スタッフと一緒に現場にいた職長」の意見を
+ * 「直近1年で実際に対象スタッフと一緒に現場にいた職長」の意見を
  * 多数決プリフィルで重く反映するためのウェイト計算ロジック。
  *
- * 数式（2026-05-09 採用）:
- *   admin/approver (靖仁0, 政仁1):
- *     weight = 1.0 (事業責任者として常時フルウェイト)
+ * 数式（2026-05-12 改訂）:
+ *   admin/approver（固定ウェイト）:
+ *     APPROVER_WEIGHTS マップで個別指定
+ *       0: 靖仁さん = 0.5（事業責任者だが現場接点が少ないため抑制）
+ *       1: 政仁さん = 1.0（事業責任者）
  *
- *   その他 (職長):
- *     recentDays = 評価日から直近90日の共働日数
- *     yearDays   = 評価日から過去365日の共働日数
- *     weight = 0.3
- *            + 0.4 * (min(recentDays, 60) / 60)
- *            + 0.3 * (min(yearDays, 200) / 200)
+ *   その他（職長）— 直近1年フラット方式:
+ *     yearDays = 評価日から過去365日の共働日数
+ *     weight = 0.3 + 0.7 * (min(yearDays, 200) / 200)
  *     範囲: 0.3 〜 1.0
+ *       - 0日   → 0.30（最低）
+ *       - 100日 → 0.65
+ *       - 200日+→ 1.00（上限）
  *
  * 共働日数の定義:
  *   対象スタッフが「その評価者が月の職長として責任を持っていた現場」で
  *   実出勤した日数。月の職長は mforeman[siteId_ym] → site.foreman の順で解決。
  *   出勤判定は isWorkingDay() を使用（残骸データの混入を防ぐ）。
+ *
+ * 旧仕様（2026-05-09 〜 2026-05-12）:
+ *   weight = 0.3 + 0.4 * (recentCap / 60) + 0.3 * (yearCap / 200)
+ *   直近90日にボーナス重み付けしていたが、ロジックが直感的でないとの指摘で簡素化。
+ *   recentDays/recentPct は参考表示用に残している。
  */
 
 import { isWorkingDay } from './attendance'
 import { getAttData, getMainData, parseDKey, type MainData } from './compute'
 import type { AttendanceEntry } from '@/types'
 
-/** 事業責任者として常時 weight=1.0 を持つ workerId */
-export const APPROVER_WORKER_IDS = new Set<number>([0, 1])
+/**
+ * 事業責任者として固定ウェイトを持つ workerId のマップ
+ * 共働実績によらず指定値を使用。
+ */
+export const APPROVER_WEIGHTS: Record<number, number> = {
+  0: 0.5,  // 靖仁さん（super admin）
+  1: 1.0,  // 政仁さん（事業責任者）
+}
+
+/** 後方互換: 旧 APPROVER_WORKER_IDS の代替（呼び出し側で in 演算子を使う） */
+export const APPROVER_WORKER_IDS = new Set<number>(
+  Object.keys(APPROVER_WEIGHTS).map(k => Number(k)),
+)
 
 export interface EvaluatorWeight {
   evaluatorId: number
-  recentDays: number    // 直近90日の共働日数（実値）
-  yearDays: number      // 過去365日の共働日数（実値）
-  recentPct: number     // recentDays / 60 * 100 をcap (0〜100, 整数)
-  yearPct: number       // yearDays / 200 * 100 をcap (0〜100, 整数)
+  recentDays: number    // 直近90日の共働日数（参考表示用、ウェイトには影響しない）
+  yearDays: number      // 過去365日の共働日数（ウェイト計算の主たる入力）
+  recentPct: number     // recentDays / 60 * 100 をcap (0〜100, 参考)
+  yearPct: number       // yearDays / 200 * 100 をcap (0〜100)
   weight: number        // 0.3 〜 1.0 の範囲（小数2桁丸め）
-  isApprover: boolean   // approver/admin として 1.0 を受けたかフラグ
+  isApprover: boolean   // approver/admin として 固定ウェイトを受けたか
 }
 
 export type EvaluatorWeightMap = Record<number, EvaluatorWeight>
@@ -116,7 +134,7 @@ export async function calcEvaluatorWeights(
   // ウェイト算出
   const result: EvaluatorWeightMap = {}
   for (const id of evaluatorIds) {
-    const isApprover = APPROVER_WORKER_IDS.has(id)
+    const isApprover = id in APPROVER_WEIGHTS
     const t = tally[id]
     const recentDays = t.recentDays
     const yearDays = t.yearDays
@@ -127,9 +145,10 @@ export async function calcEvaluatorWeights(
 
     let weight: number
     if (isApprover) {
-      weight = 1.0
+      weight = APPROVER_WEIGHTS[id]
     } else {
-      const raw = 0.3 + 0.4 * (recentCap / 60) + 0.3 * (yearCap / 200)
+      // 直近1年フラット方式: 過去365日の共働日数のみで決定
+      const raw = 0.3 + 0.7 * (yearCap / 200)
       weight = Math.round(raw * 100) / 100
     }
 
