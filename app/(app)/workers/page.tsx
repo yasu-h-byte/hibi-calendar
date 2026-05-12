@@ -432,6 +432,15 @@ export default function WorkersPage() {
                       <button onClick={() => openEdit(w)} className="text-hibi-navy text-xs underline hover:text-hibi-light">
                         編集
                       </button>
+                      {isGaikoku(w.visaType) && (
+                        <a
+                          href={`/evaluation/raise-history?worker=${w.id}`}
+                          className="text-emerald-600 text-xs hover:text-emerald-800 ml-1"
+                          title="昇給履歴を表示"
+                        >
+                          💰 履歴
+                        </a>
+                      )}
                       {!w.retired && (
                         <button
                           onClick={() => handleTransfer(w)}

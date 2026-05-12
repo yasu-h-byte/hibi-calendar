@@ -35,6 +35,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     { label: '人員マスタ', icon: '👷', href: '/workers', section: '人事・労務', roles: ['admin', 'jimu'] },
     { label: '休暇管理', icon: '🌴', href: '/leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
     { label: '評価管理', icon: '📋', href: '/evaluation', section: '人事・労務', roles: ['admin', 'approver'] },
+    { label: '昇給履歴', icon: '💰', href: '/evaluation/raise-history', section: '人事・労務', roles: ['admin', 'approver'] },
     // 「帰国・休暇情報」は「休暇管理 → 帰国情報タブ」に統合
     { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人事・労務', roles: ['admin', 'jimu'] },
     // 現場・外注
