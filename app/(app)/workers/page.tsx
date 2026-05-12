@@ -434,7 +434,7 @@ export default function WorkersPage() {
                       </button>
                       {isGaikoku(w.visaType) && (
                         <a
-                          href={`/evaluation/raise-history?worker=${w.id}`}
+                          href={`/evaluation?tab=raise-history&worker=${w.id}`}
                           className="text-emerald-600 text-xs hover:text-emerald-800 ml-1"
                           title="昇給履歴を表示"
                         >
