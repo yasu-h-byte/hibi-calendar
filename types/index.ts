@@ -15,6 +15,13 @@ export interface Worker {
   visaExpiry?: string // 在留期限 YYYY-MM-DD
   dispatchTo?: string // 出向先名（空なら通常勤務、値あり=出向中）
   dispatchFrom?: string // 出向開始月 YYYY-MM（空なら全期間出向扱い）
+  /**
+   * 旧ルール（変形労働時間制導入前）の給与計算を継続使用するフラグ。
+   * 2026-05 から全員新ルール（3層構造給与）に移行したが、本人が移行を拒否したケース等で
+   * 個別に旧ルールを継続するために使う。退職時に retired を設定すれば自動的に対象外になる。
+   * 既定: 未設定（false 相当）= 5月以降は新ルール
+   */
+  useOldRules?: boolean
 }
 
 /** 現場の勤務時間設定（始業・終業・休憩構成） */

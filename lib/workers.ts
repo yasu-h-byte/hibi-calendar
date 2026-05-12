@@ -28,6 +28,7 @@ export async function getWorkers(): Promise<Worker[]> {
     visaExpiry: (w.visaExpiry as string) || '',
     dispatchTo: (w.dispatchTo as string) || '',
     dispatchFrom: (w.dispatchFrom as string) || '',
+    useOldRules: (w.useOldRules as boolean) || undefined,
   }))
 
   return workers

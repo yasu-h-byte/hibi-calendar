@@ -27,6 +27,7 @@ interface WorkerExt extends Worker {
   salary?: number
   dispatchTo?: string
   dispatchFrom?: string
+  useOldRules?: boolean
 }
 
 
@@ -47,6 +48,7 @@ const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
   visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '',
+  useOldRules: false,
 }
 
 function currentYmDash(): string {
@@ -151,6 +153,7 @@ export default function WorkersPage() {
       memo: (w as unknown as { memo?: string }).memo || '',
       dispatchTo: w.dispatchTo || '',
       dispatchFrom: w.dispatchFrom || '',
+      useOldRules: !!w.useOldRules,
     })
     setShowModal(true)
   }
@@ -160,8 +163,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '' }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -695,6 +698,29 @@ export default function WorkersPage() {
                 </p>
               </div>
             </div>
+
+            {/* 旧ルール継続フラグ（個別対応用） */}
+            {isGaikoku(form.visa) && (
+              <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.useOldRules || false}
+                    onChange={e => setForm({ ...form, useOldRules: e.target.checked })}
+                    className="w-4 h-4 text-amber-600 focus:ring-amber-500"
+                  />
+                  <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                    旧ルール（変形労働制以前）で給与計算する
+                  </span>
+                </label>
+                <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                  ※ 通常、ベトナム人スタッフは 2026年5月から新ルール（変形労働時間制・3層構造給与）が
+                  自動適用されます。本人が新ルール移行を拒否した等の個別事情がある場合のみチェック。<br />
+                  チェックすると、5月以降も旧ルール（1日6h40min所定、月集計合計×1.25残業）で計算されます。
+                  退職時に退職日を設定すれば自動的に対象外になります。
+                </p>
+              </div>
+            )}
 
             {/* Token management (edit only) */}
             {editId && (() => {

@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, salary, visaExpiry, dispatchTo, dispatchFrom } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -62,6 +62,9 @@ export async function POST(request: NextRequest) {
       if (dispatchFrom && String(dispatchFrom).trim()) {
         (workerData as Record<string, unknown>).dispatchFrom = String(dispatchFrom).trim()
       }
+      if (useOldRules === true) {
+        (workerData as Record<string, unknown>).useOldRules = true
+      }
       const worker = await addWorker(workerData)
       await logActivity('admin', 'worker.add', `${name} を追加`)
       return NextResponse.json({ success: true, worker })
@@ -86,6 +89,14 @@ export async function POST(request: NextRequest) {
       }
       if (updates.dispatchFrom !== undefined) {
         updates.dispatchFrom = String(updates.dispatchFrom || '').trim()
+      }
+      // useOldRules: true なら保存、false/undefined ならフィールドを削除
+      if (updates.useOldRules === true) {
+        updates.useOldRules = true
+      } else if ('useOldRules' in updates) {
+        // チェック解除時は削除（明示的に false で残すと将来のフラグ追加で混乱しやすい）
+        const { deleteField } = await import('firebase/firestore')
+        updates.useOldRules = deleteField()
       }
       await updateWorker(id, updates)
       await logActivity('admin', 'worker.update', `ID:${id} を更新`)

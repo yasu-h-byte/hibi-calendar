@@ -30,6 +30,7 @@ export interface RawWorker {
   visaExpiry?: string  // 在留期限 YYYY-MM-DD
   dispatchTo?: string  // 出向先名（空なら通常勤務）
   dispatchFrom?: string  // 出向開始月 YYYY-MM（空なら全期間出向扱い）
+  useOldRules?: boolean  // 旧ルール（変形労働制以前）給与計算を継続するフラグ（個別対応）
 }
 
 export interface RawSite {
@@ -949,7 +950,12 @@ export function computeMonthly(
     //            基本給=時給×所定時間, 残業=実労働>所定時間, 欠勤=所定日数下回り分
     // - 5月以降: 3層構造 + 法定上限ベース（新ロジック）
     //            基本給固定=時給×20日×7h, 追加所定=20日超分, 残業=実労働>法定上限
-    const useNewRules = ym >= '202605'
+    //
+    // 2026-05-12 追加: ワーカー個別に useOldRules=true が立っている場合、5月以降も旧ルールを継続。
+    //   本人が新ルール移行を拒否したケース（例: フン 104, 2027/01 退職予定）に対応。
+    //   退職後は retired により自動的に給与計算対象外になる。
+    const workerWm = main.workers.find(x => x.id === wm.id)
+    const useNewRules = ym >= '202605' && !workerWm?.useOldRules
 
     if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && useNewRules) {
       // ── 5月以降: 3層構造（A+X案）: 基本給固定 + 追加所定手当 + 残業手当（法定上限基準） ──
