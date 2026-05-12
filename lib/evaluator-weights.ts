@@ -10,12 +10,16 @@
  *       0: 靖仁さん = 0.5（事業責任者だが現場接点が少ないため抑制）
  *       1: 政仁さん = 0.7（事業責任者）
  *
- *   その他（職長）— 直近1年フラット方式 + 動的キャップ:
+ *   その他（職長）— 直近1年フラット方式 + 動的キャップ + ゼロ日特例:
  *     monthsWithData = 過去365日 のうち att データのある月数（0〜12）
  *     dynamicCap     = max(20, round(200 × monthsWithData / 12))
  *     yearDays       = 評価日から過去365日の共働日数
- *     weight         = 0.3 + 0.7 × (min(yearDays, dynamicCap) / dynamicCap)
- *     範囲: 0.3 〜 1.0
+ *
+ *     IF yearDays == 0:
+ *       weight = 0.1  ← 「この人を知らない」職長の特例
+ *     ELSE:
+ *       weight = 0.3 + 0.7 × (min(yearDays, dynamicCap) / dynamicCap)
+ *     範囲: 0.1（0日特例）or 0.3〜1.0（共働あり）
  *
  *     動的キャップの意図:
  *       新システム稼働前（2025/09以前）の att データはほぼ存在しない。
@@ -178,6 +182,11 @@ export async function calcEvaluatorWeights(
     let weight: number
     if (isApprover) {
       weight = APPROVER_WEIGHTS[id]
+    } else if (yearDays === 0) {
+      // 2026-05-12 追加: 共働ゼロの職長は「この人を知らない」扱いで weight = 0.1
+      //   現場接点がないのに意見だけが多数決に反映されるのを抑制する。
+      //   1日でも共働があれば 0.3+ になる（discrete jump 設計）。
+      weight = 0.1
     } else {
       // 直近1年フラット方式 + 動的キャップ
       const raw = 0.3 + 0.7 * (yearCap / dynamicCap)
