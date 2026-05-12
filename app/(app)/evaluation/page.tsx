@@ -251,7 +251,7 @@ function daysSince(iso: string): number {
   return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-type TabId = 'list' | 'review' | 'monitor' | 'approve' | 'history' | 'raise-history'
+type TabId = 'list' | 'review' | 'monitor' | 'approve' | 'history'
 
 const EMPTY_SCORES: EvaluationScores = {
   japanese: { understanding: 'B' as ABCGrade, reporting: 'B' as ABCGrade, safety: 'B' as ABCGrade },
@@ -266,10 +266,10 @@ export default function EvaluationPage() {
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<TabId>('list')
 
-  // URL ?tab=xxx&worker=N で初期タブ・対象ワーカーを設定（人員マスタからの遷移用）
+  // URL ?tab=xxx で初期タブを設定
   useEffect(() => {
     const tab = searchParams.get('tab')
-    if (tab === 'raise-history' || tab === 'list' || tab === 'review' ||
+    if (tab === 'list' || tab === 'review' ||
         tab === 'monitor' || tab === 'approve' || tab === 'history') {
       setActiveTab(tab as TabId)
     }
@@ -303,21 +303,6 @@ export default function EvaluationPage() {
 
   // 履歴タブのフィルタ
   const [historyYear, setHistoryYear] = useState<string>('all')
-
-  // 昇給履歴タブ用
-  const [raiseDetailWorkerId, setRaiseDetailWorkerId] = useState<number | null>(null)
-  type RaiseSortKey = 'name' | 'company' | 'visa' | 'tenure' | 'rate' | 'evalCount' | 'latestEval' | 'latestRaise' | 'totalRaise'
-  const [raiseSortKey, setRaiseSortKey] = useState<RaiseSortKey>('evalCount')
-  const [raiseSortDir, setRaiseSortDir] = useState<'asc' | 'desc'>('desc')
-
-  // URL ?worker=N で詳細を自動オープン（昇給履歴タブ用）
-  useEffect(() => {
-    const wid = searchParams.get('worker')
-    if (wid && searchParams.get('tab') === 'raise-history') {
-      const n = parseInt(wid, 10)
-      if (Number.isFinite(n)) setRaiseDetailWorkerId(n)
-    }
-  }, [searchParams])
 
   // ウェイト再計算状態
   const [recalculatingWeights, setRecalculatingWeights] = useState(false)
@@ -1370,7 +1355,6 @@ export default function EvaluationPage() {
     { id: 'monitor', label: '進捗監視', adminOnly: true },
     { id: 'approve', label: '承認', adminOnly: true },
     { id: 'history', label: '履歴', adminOnly: true },
-    { id: 'raise-history', label: '💰 昇給履歴', adminOnly: true },
   ]
 
   const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin)
@@ -2586,310 +2570,6 @@ export default function EvaluationPage() {
           })()}
         </div>
       )}
-
-      {/* ═══════════════════════════════════════ */}
-      {/* Tab 6: 昇給履歴 (Raise History) — admin only */}
-      {/* ═══════════════════════════════════════ */}
-      {activeTab === 'raise-history' && isAdmin && (() => {
-        // ベトナム人スタッフ + 承認済み評価のみ
-        const vietnameseWorkers = workers.filter(w => w.visaType && w.visaType !== 'none')
-        type Row = {
-          worker: Worker
-          approvedEvals: Evaluation[]
-          latestEval?: Evaluation
-          totalRaise: number
-        }
-        const rows: Row[] = vietnameseWorkers.map(w => {
-          const approved = evaluations
-            .filter(e => e.workerId === w.id && e.status === 'approved')
-            .sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))
-          const totalRaise = approved.reduce((s, e) => s + (e.raiseAmount || 0), 0)
-          return { worker: w, approvedEvals: approved, latestEval: approved[0], totalRaise }
-        })
-
-        // ソート
-        const sorted = [...rows].sort((a, b) => {
-          const dir = raiseSortDir === 'asc' ? 1 : -1
-          switch (raiseSortKey) {
-            case 'name': return dir * a.worker.name.localeCompare(b.worker.name, 'ja')
-            case 'company': return dir * (a.worker.company || '').localeCompare(b.worker.company || '', 'ja')
-            case 'visa': return dir * (a.worker.visaType || '').localeCompare(b.worker.visaType || '', 'ja')
-            case 'tenure': {
-              const ya = a.worker.hireDate ? yearsFromDate(a.worker.hireDate) : -1
-              const yb = b.worker.hireDate ? yearsFromDate(b.worker.hireDate) : -1
-              return dir * (ya - yb)
-            }
-            case 'rate': return dir * ((a.worker.hourlyRate || 0) - (b.worker.hourlyRate || 0))
-            case 'evalCount': return dir * (a.approvedEvals.length - b.approvedEvals.length)
-            case 'latestEval': {
-              const da = a.latestEval?.evaluationDate || ''
-              const db = b.latestEval?.evaluationDate || ''
-              return dir * da.localeCompare(db)
-            }
-            case 'latestRaise': return dir * ((a.latestEval?.raiseAmount || 0) - (b.latestEval?.raiseAmount || 0))
-            case 'totalRaise': return dir * (a.totalRaise - b.totalRaise)
-            default: return 0
-          }
-        })
-
-        const detailRow = raiseDetailWorkerId
-          ? rows.find(r => r.worker.id === raiseDetailWorkerId)
-          : null
-
-        const sortHandler = (key: RaiseSortKey) => () => {
-          if (raiseSortKey === key) {
-            setRaiseSortDir(raiseSortDir === 'asc' ? 'desc' : 'asc')
-          } else {
-            setRaiseSortKey(key)
-            setRaiseSortDir('desc')
-          }
-        }
-
-        const sortIndicator = (key: RaiseSortKey) =>
-          raiseSortKey === key ? (raiseSortDir === 'asc' ? ' ▲' : ' ▼') : ''
-
-        return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                💰 昇給履歴（ベトナム人スタッフ）
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                評価セッションの承認履歴を基にした推奨昇給額の推移
-              </p>
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-900">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={sortHandler('name')}>
-                        名前{sortIndicator('name')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={sortHandler('company')}>
-                        所属{sortIndicator('company')}
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={sortHandler('visa')}>
-                        在留資格{sortIndicator('visa')}
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={sortHandler('tenure')}>
-                        勤続{sortIndicator('tenure')}
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={sortHandler('rate')}>
-                        現時給{sortIndicator('rate')}
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={sortHandler('evalCount')}>
-                        評価回数{sortIndicator('evalCount')}
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={sortHandler('latestEval')}>
-                        最新評価{sortIndicator('latestEval')}
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={sortHandler('latestRaise')}>
-                        直近昇給{sortIndicator('latestRaise')}
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 select-none" onClick={sortHandler('totalRaise')}>
-                        累計昇給{sortIndicator('totalRaise')}
-                      </th>
-                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {sorted.map(({ worker, approvedEvals, latestEval, totalRaise }) => {
-                      const yrs = worker.hireDate ? yearsFromDate(worker.hireDate) : 0
-                      return (
-                        <tr
-                          key={worker.id}
-                          className="hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer"
-                          onClick={() => setRaiseDetailWorkerId(worker.id)}
-                        >
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">{worker.name}</td>
-                          <td className="px-4 py-3 text-sm whitespace-nowrap">
-                            <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                              worker.company === 'HFU'
-                                ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
-                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                            }`}>
-                              {worker.company === 'HFU' ? 'HFU' : '日比建設'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                            {VISA_LABELS[worker.visaType] || worker.visaType}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                            {yrs > 0 ? `${yrs}年` : '1年未満'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right text-gray-900 dark:text-white whitespace-nowrap font-medium tabular-nums">
-                            {worker.hourlyRate ? `¥${fmtYen(worker.hourlyRate)}` : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-200 whitespace-nowrap">
-                            {approvedEvals.length > 0 ? `${approvedEvals.length}回` : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-center whitespace-nowrap">
-                            {latestEval ? (
-                              <div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">{latestEval.evaluationDate}</div>
-                                <div className={`text-sm font-bold ${rankColor(latestEval.rank!)}`}>{latestEval.rank}</div>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-sm">未評価</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right text-gray-700 dark:text-gray-200 whitespace-nowrap tabular-nums">
-                            {latestEval && latestEval.raiseAmount != null && latestEval.raiseAmount > 0
-                              ? <span className="text-green-600 dark:text-green-400 font-medium">+¥{fmtYen(latestEval.raiseAmount)}</span>
-                              : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-right text-gray-700 dark:text-gray-200 whitespace-nowrap tabular-nums">
-                            {totalRaise > 0 ? <span className="font-medium">+¥{fmtYen(totalRaise)}</span> : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-center whitespace-nowrap">
-                            <button
-                              onClick={e => { e.stopPropagation(); setRaiseDetailWorkerId(worker.id) }}
-                              className="px-3 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                            >
-                              詳細
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                    {sorted.length === 0 && (
-                      <tr>
-                        <td colSpan={10} className="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
-                          ベトナム人スタッフがいません
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-              <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-                合計 {sorted.length} 名 | 列見出しクリックでソート | 行クリックで詳細表示
-              </div>
-            </div>
-
-            {/* 昇給履歴 詳細モーダル */}
-            {detailRow && (
-              <div
-                className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto"
-                onClick={() => setRaiseDetailWorkerId(null)}
-              >
-                <div
-                  className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full my-8 max-h-[90vh] overflow-y-auto"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                      {detailRow.worker.name} の昇給履歴
-                    </h2>
-                    <button
-                      onClick={() => setRaiseDetailWorkerId(null)}
-                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-                      aria-label="閉じる"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div className="p-6 space-y-4">
-                    <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">所属</div>
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {detailRow.worker.company === 'HFU' ? 'HFU' : '日比建設'}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">在留資格</div>
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {VISA_LABELS[detailRow.worker.visaType] || detailRow.worker.visaType}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">入社日 / 勤続</div>
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {detailRow.worker.hireDate || '—'}
-                            {detailRow.worker.hireDate && (
-                              <span className="text-xs text-gray-500 ml-1">({yearsFromDate(detailRow.worker.hireDate)}年)</span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">現時給</div>
-                          <div className="font-medium text-gray-900 dark:text-white tabular-nums">
-                            {detailRow.worker.hourlyRate ? `¥${fmtYen(detailRow.worker.hourlyRate)}` : '—'}
-                          </div>
-                        </div>
-                      </div>
-                      {detailRow.approvedEvals.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                          <div className="flex items-baseline gap-3 flex-wrap">
-                            <span className="text-xs text-gray-500 dark:text-gray-400">累計昇給額</span>
-                            <span className="text-lg font-bold text-green-600 dark:text-green-400 tabular-nums">
-                              +¥{fmtYen(detailRow.totalRaise)}/h
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              ({detailRow.approvedEvals.length} 回の評価)
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {detailRow.approvedEvals.length === 0 ? (
-                      <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-8 text-center text-gray-400 dark:text-gray-500">
-                        まだ承認済みの評価がありません
-                      </div>
-                    ) : (
-                      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <table className="min-w-full text-sm">
-                          <thead className="bg-gray-50 dark:bg-gray-900">
-                            <tr>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">評価日</th>
-                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">勤続</th>
-                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">合計スコア</th>
-                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">ランク</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400">推奨昇給</th>
-                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">承認日</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                            {detailRow.approvedEvals.map((ev) => (
-                              <tr key={ev.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                                <td className="px-3 py-2 text-gray-900 dark:text-white whitespace-nowrap">{ev.evaluationDate}</td>
-                                <td className="px-3 py-2 text-center text-gray-700 dark:text-gray-200 whitespace-nowrap">{ev.yearsFromHire}年目</td>
-                                <td className="px-3 py-2 text-center text-gray-700 dark:text-gray-200 tabular-nums">
-                                  {ev.totalScore?.toFixed(1) ?? '—'}
-                                </td>
-                                <td className="px-3 py-2 text-center whitespace-nowrap">
-                                  {ev.rank ? <span className={`font-bold text-lg ${rankColor(ev.rank)}`}>{ev.rank}</span> : '—'}
-                                </td>
-                                <td className="px-3 py-2 text-right whitespace-nowrap tabular-nums">
-                                  {ev.raiseAmount != null && ev.raiseAmount > 0 ? (
-                                    <span className="text-green-600 dark:text-green-400 font-medium">+¥{fmtYen(ev.raiseAmount)}</span>
-                                  ) : '—'}
-                                </td>
-                                <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                  {ev.approvedAt ? new Date(ev.approvedAt).toLocaleDateString('ja-JP') : '—'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                      💡 「推奨昇給」は評価承認時に算出された推奨額です。実際の時給更新は人員マスタの編集で行われ、ここでは別途記録していません。
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )
-      })()}
 
       {/* ═══════════════════════════════════════ */}
       {/* Detail Modal — どのタブからも開ける         */}

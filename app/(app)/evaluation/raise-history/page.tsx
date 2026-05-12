@@ -17,8 +17,8 @@ export default function RaiseHistoryRedirect() {
   useEffect(() => {
     const wid = searchParams.get('worker')
     const url = wid
-      ? `/evaluation?tab=raise-history&worker=${wid}`
-      : '/evaluation?tab=raise-history'
+      ? `/workers?tab=raise-history&worker=${wid}`
+      : '/workers?tab=raise-history'
     router.replace(url)
   }, [router, searchParams])
 

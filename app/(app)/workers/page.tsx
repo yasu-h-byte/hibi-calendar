@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
-import { Worker } from '@/types'
+import { Worker, AuthUser } from '@/types'
 import { fmtYen } from '@/lib/format'
+import RaiseHistoryTab from './RaiseHistoryTab'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
 const VISA_LABELS: Record<string, string> = {
@@ -70,10 +72,14 @@ function visaExpiryStatus(expiry: string): { label: string; cls: string; priorit
 }
 
 export default function WorkersPage() {
+  const searchParams = useSearchParams()
   const [workers, setWorkers] = useState<WorkerExt[]>([])
   const [password, setPassword] = useState('')
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('all')
+  // メインタブ: 'list' (人員一覧) / 'raise-history' (昇給履歴)
+  const [mainTab, setMainTab] = useState<'list' | 'raise-history'>('list')
   const [showModal, setShowModal] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -86,10 +92,20 @@ export default function WorkersPage() {
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
     if (stored) {
-      const { password: pw } = JSON.parse(stored)
+      const { password: pw, user } = JSON.parse(stored)
       setPassword(pw)
+      if (user) setAuthUser(user as AuthUser)
     }
   }, [])
+
+  // URL ?tab=raise-history で昇給履歴タブを初期表示（人員マスタの履歴ボタン経由）
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam === 'raise-history') setMainTab('raise-history')
+    else if (tabParam === 'list') setMainTab('list')
+  }, [searchParams])
+
+  const isAdminOrApprover = authUser?.role === 'admin' || authUser?.role === 'approver'
 
   const headers = useCallback(() => ({
     'x-admin-password': password,
@@ -246,20 +262,56 @@ export default function WorkersPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-hibi-navy dark:text-white">人員マスタ</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            在籍: {activeWorkers.length}名（日比 {hibiCount} / HFU {hfuCount}）{retiredWorkers.length > 0 && ` / 退職: ${retiredWorkers.length}名`}
-          </p>
+          {mainTab === 'list' && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              在籍: {activeWorkers.length}名（日比 {hibiCount} / HFU {hfuCount}）{retiredWorkers.length > 0 && ` / 退職: ${retiredWorkers.length}名`}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <a href="/leave" className="text-hibi-navy dark:text-blue-400 text-sm underline hover:text-hibi-light transition">
             休暇管理
           </a>
-          <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">
-            + 新規追加
-          </button>
+          {mainTab === 'list' && (
+            <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">
+              + 新規追加
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Main Tabs: 一覧 / 昇給履歴 */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => setMainTab('list')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            mainTab === 'list'
+              ? 'border-hibi-navy text-hibi-navy dark:border-blue-400 dark:text-blue-400'
+              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+          }`}
+        >
+          人員一覧
+        </button>
+        {isAdminOrApprover && (
+          <button
+            onClick={() => setMainTab('raise-history')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              mainTab === 'raise-history'
+                ? 'border-hibi-navy text-hibi-navy dark:border-blue-400 dark:text-blue-400'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            💰 昇給履歴
+          </button>
+        )}
+      </div>
+
+      {mainTab === 'raise-history' && (
+        <RaiseHistoryTab authUser={authUser} />
+      )}
+
+      {mainTab === 'list' && (
+        <>
       {/* Tabs */}
       <div className="flex gap-2">
         {[
@@ -434,7 +486,7 @@ export default function WorkersPage() {
                       </button>
                       {isGaikoku(w.visaType) && (
                         <a
-                          href={`/evaluation?tab=raise-history&worker=${w.id}`}
+                          href={`/workers?tab=raise-history&worker=${w.id}`}
                           className="text-emerald-600 text-xs hover:text-emerald-800 ml-1"
                           title="昇給履歴を表示"
                         >
@@ -464,6 +516,8 @@ export default function WorkersPage() {
           </tbody>
         </table>
       </div>
+        </>
+      )}
 
       {/* Add/Edit Modal */}
       {showModal && (
