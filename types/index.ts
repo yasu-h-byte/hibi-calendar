@@ -266,9 +266,16 @@ export interface EvaluatorWeightInfo {
   recentDays: number    // 直近90日の共働日数
   yearDays: number      // 過去365日の共働日数
   recentPct: number     // 0〜100 (recentDays/60の比率を整数化)
-  yearPct: number       // 0〜100 (yearDays/200の比率を整数化)
+  yearPct: number       // 0〜100 (yearDays/dynamicCapの比率を整数化)
   weight: number        // 0.3〜1.0
   isApprover: boolean   // 事業責任者として 1.0 固定か
+  /**
+   * 動的キャップ情報（2026-05-12 追加）
+   * 旧システム稼働前の att データ欠落に対応するため、データのある月数に
+   * 応じて 200日キャップを按分する。
+   */
+  monthsWithData?: number  // 過去365日のうち att データのある月数（0〜12）
+  dynamicCap?: number      // yearDays に適用するキャップ（max(20, 200×monthsWithData/12)）
 }
 
 /** 評価セッション（1スタッフ×1評価期間、複数評価者対応） */

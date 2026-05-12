@@ -962,6 +962,22 @@ export default function EvaluationPage() {
               )}
             </div>
             {session.evaluatorWeights ? (
+              <>
+                {/* 動的キャップ情報 (2026-05-12 追加) */}
+                {(() => {
+                  const anyW = Object.values(session.evaluatorWeights || {}).find(w => w?.monthsWithData != null)
+                  if (!anyW) return null
+                  return (
+                    <div className="mb-2 text-[11px] text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-md">
+                      📊 データのある月数: <strong>{anyW.monthsWithData}/12</strong> ヶ月
+                      → 年共働キャップ: <strong>{anyW.dynamicCap}日</strong>
+                      <span className="ml-2 opacity-80">
+                        （旧システム稼働前の月はデータが少ないため、データのある月数で按分しキャップを縮小。
+                        主担当職長が短期間でも適正なウェイトを得られるよう調整）
+                      </span>
+                    </div>
+                  )
+                })()}
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-50 dark:bg-gray-900">
@@ -1020,6 +1036,7 @@ export default function EvaluationPage() {
                   </tbody>
                 </table>
               </div>
+              </>
             ) : (
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 ウェイト未計算（旧形式セッション）。{isAdmin && '右上の「再計算」ボタンで算出できます。'}
@@ -1212,7 +1229,7 @@ export default function EvaluationPage() {
                               {w.isApprover ? (
                                 <span title={`事業責任者の固定ウェイト (${w.weight.toFixed(2)})`}>w={w.weight.toFixed(2)} ★</span>
                               ) : (
-                                <span title={`過去365日 共働 ${w.yearDays}日 (うち直近90日 ${w.recentDays}日)`}>
+                                <span title={`過去365日 共働 ${w.yearDays}日 (うち直近90日 ${w.recentDays}日)${w.monthsWithData != null ? ` / データある月 ${w.monthsWithData}/12 (cap ${w.dynamicCap}日)` : ''}`}>
                                   w={w.weight.toFixed(2)}
                                   <span className="block opacity-80">年共働 {w.yearPct}% ({w.yearDays}日)</span>
                                 </span>
