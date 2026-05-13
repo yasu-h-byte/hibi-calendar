@@ -48,6 +48,13 @@ interface WorkerMonthly {
   fixedBasePay?: number
   additionalAllowance?: number
   legalLimit?: number
+  // 法令準拠の詳細支給項目（5月以降）
+  legalHolidayHours?: number
+  legalHolidayAllowance?: number
+  nightHours?: number
+  nightAllowance?: number
+  compAllowance?: number
+  regularWorkDays?: number
   // 出向情報
   isDispatched?: boolean
   dispatchTo?: string
@@ -614,7 +621,9 @@ export default function MonthlyPage() {
   const isWorkerTab = tab !== 'subcon'
 
   // Dynamic column count for empty state
-  const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + 5  // +5: 基本給, 追加所定, 残業, 欠勤控除, 支給額
+  // 給与列: 旧ルール=5列, 新ルール=8列（+法休手当/深夜手当/休業手当）
+  const salaryColCount = ym >= '202605' ? 8 : 5
+  const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + salaryColCount
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -919,6 +928,13 @@ export default function MonthlyPage() {
                       {ym >= '202605' ? '追加所定' : '休業補償'}
                     </th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">残業手当</th>
+                    {ym >= '202605' && (
+                      <>
+                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="日曜出勤 1.35倍">法休手当</th>
+                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="22:00-5:00 +0.25倍">深夜手当</th>
+                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="補償日 60%">休業手当</th>
+                      </>
+                    )}
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">欠勤控除</th>
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">支給額合計</th>
                   </>
@@ -1021,6 +1037,19 @@ export default function MonthlyPage() {
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.otAllowance || 0) > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
                             {(w.otAllowance || 0) > 0 ? fmtYen(w.otAllowance!) : '—'}
                           </td>
+                          {ym >= '202605' && (
+                            <>
+                              <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.legalHolidayAllowance || 0) > 0 ? 'text-pink-600' : 'text-gray-400'}`}>
+                                {w.visa !== 'none' && (w.legalHolidayAllowance || 0) > 0 ? fmtYen(w.legalHolidayAllowance!) : '—'}
+                              </td>
+                              <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.nightAllowance || 0) > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
+                                {w.visa !== 'none' && (w.nightAllowance || 0) > 0 ? fmtYen(w.nightAllowance!) : '—'}
+                              </td>
+                              <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.compAllowance || 0) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                                {w.visa !== 'none' && (w.compAllowance || 0) > 0 ? fmtYen(w.compAllowance!) : '—'}
+                              </td>
+                            </>
+                          )}
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.absentDeduction || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                             {w.visa !== 'none' && (w.absentDeduction || 0) > 0 ? `-${fmtYen(w.absentDeduction!)}` : '—'}
                           </td>
@@ -1092,6 +1121,28 @@ export default function MonthlyPage() {
                           return totalOtAllow > 0 ? fmtYen(totalOtAllow) : '—'
                         })()}
                       </td>
+                      {ym >= '202605' && (
+                        <>
+                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                            {(() => {
+                              const total = filteredWorkers.reduce((s, w) => s + (w.legalHolidayAllowance || 0), 0)
+                              return total > 0 ? fmtYen(total) : '—'
+                            })()}
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                            {(() => {
+                              const total = filteredWorkers.reduce((s, w) => s + (w.nightAllowance || 0), 0)
+                              return total > 0 ? fmtYen(total) : '—'
+                            })()}
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                            {(() => {
+                              const total = filteredWorkers.reduce((s, w) => s + (w.compAllowance || 0), 0)
+                              return total > 0 ? fmtYen(total) : '—'
+                            })()}
+                          </td>
+                        </>
+                      )}
                       <td className="px-3 py-3 text-right tabular-nums bg-green-50/50 text-red-600">
                         {(() => {
                           const totalAbsDed = filteredWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0)

@@ -863,11 +863,15 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const hfuForeign = workers.filter(w => isHfu(w) && isForeign(w))
   const hfuJapanese = workers.filter(w => isHfu(w) && isJapanese(w))
 
-  // 外国人テーブル ヘッダー（17列）
+  // 外国人テーブル ヘッダー
+  //   新ルール(5月以降): 法令準拠の詳細支給（22列）
+  //   旧ルール(4月以前): 月所定時間ベースのシンプル構成（17列）
   const foreignHeaders = useNewRules
     ? ['名前', '現場', '単価種別', '単価', 'ベース日数', '法定上限(h)',
-       '実出勤日数', '補償日', '有給日数', '実労働時間', '法定残業時間',
-       '基本給(固定)', '追加所定手当', '残業手当', '欠勤日数', '欠勤控除', '支給額合計']
+       '通常出勤', '法休出勤', '補償日', '有給日数',
+       '実労働h', '法定残業h', '法休労働h', '深夜労働h',
+       '基本給(固定)', '追加所定手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
+       '欠勤日数', '欠勤控除', '支給額合計']
     : ['名前', '現場', '単価種別', '単価', '所定日数', '所定時間(h)',
        '実出勤日数', '補償日', '有給日数', '実労働時間', '残業時間',
        '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '支給額合計']
@@ -898,41 +902,96 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       const rateValue = w.hourlyRate || w.salary || 0
       const baseDaysOrPrescribed = useNewRules ? prescribedDays : prescribedDays
       const limitOrPrescribedH = useNewRules ? (w.legalLimit || 0) : (w.prescribedHours || 0)
-      rows.push([
-        nameWithDispatch,
-        siteList,
-        rateKind,
-        rateValue,
-        baseDaysOrPrescribed,
-        limitOrPrescribedH,
-        w.actualWorkDays || 0,
-        w.compDays || 0,
-        w.plDays || 0,
-        w.actualWorkHours || 0,
-        w.legalOtHours || 0,
-        w.fixedBasePay || w.basePay || 0,
-        w.additionalAllowance || 0,
-        w.otAllowance || 0,
-        w.absence || 0,
-        w.absentDeduction || 0,
-        w.salaryNetPay || 0,
-      ])
+      if (useNewRules) {
+        // 法令準拠版（22列）
+        const legalHolidayDays = (w.actualWorkDays || 0) - (w.regularWorkDays || 0)
+        rows.push([
+          nameWithDispatch,
+          siteList,
+          rateKind,
+          rateValue,
+          baseDaysOrPrescribed,
+          limitOrPrescribedH,
+          w.regularWorkDays || 0,
+          legalHolidayDays > 0 ? legalHolidayDays : 0,
+          w.compDays || 0,
+          w.plDays || 0,
+          w.actualWorkHours || 0,
+          w.legalOtHours || 0,           // = statutoryOT 合計
+          w.legalHolidayHours || 0,
+          w.nightHours || 0,
+          w.fixedBasePay || w.basePay || 0,
+          w.additionalAllowance || 0,
+          w.otAllowance || 0,
+          w.legalHolidayAllowance || 0,
+          w.nightAllowance || 0,
+          w.compAllowance || 0,
+          w.absence || 0,
+          w.absentDeduction || 0,
+          w.salaryNetPay || 0,
+        ])
+      } else {
+        // 旧ルール版（17列）— additionalAllowance を「休業補償」として表示
+        rows.push([
+          nameWithDispatch,
+          siteList,
+          rateKind,
+          rateValue,
+          baseDaysOrPrescribed,
+          limitOrPrescribedH,
+          w.actualWorkDays || 0,
+          w.compDays || 0,
+          w.plDays || 0,
+          w.actualWorkHours || 0,
+          w.legalOtHours || 0,
+          w.fixedBasePay || w.basePay || 0,
+          w.additionalAllowance || 0,    // 旧ルールでは休業補償
+          w.otAllowance || 0,
+          w.absence || 0,
+          w.absentDeduction || 0,
+          w.salaryNetPay || 0,
+        ])
+      }
     }
     // 小計
-    rows.push([
-      '小計', null, null, null, null, null,
-      ws.reduce((s, w) => s + (w.actualWorkDays || 0), 0),
-      ws.reduce((s, w) => s + (w.compDays || 0), 0),
-      ws.reduce((s, w) => s + w.plDays, 0),
-      null,
-      ws.reduce((s, w) => s + (w.legalOtHours || 0), 0),
-      ws.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
-      ws.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
-      ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
-      ws.reduce((s, w) => s + (w.absence || 0), 0),
-      ws.reduce((s, w) => s + (w.absentDeduction || 0), 0),
-      ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
-    ])
+    if (useNewRules) {
+      const sumLegalHolidayDays = ws.reduce((s, w) => s + Math.max(0, (w.actualWorkDays || 0) - (w.regularWorkDays || 0)), 0)
+      rows.push([
+        '小計', null, null, null, null, null,
+        ws.reduce((s, w) => s + (w.regularWorkDays || 0), 0),
+        sumLegalHolidayDays,
+        ws.reduce((s, w) => s + (w.compDays || 0), 0),
+        ws.reduce((s, w) => s + w.plDays, 0),
+        null,
+        ws.reduce((s, w) => s + (w.legalOtHours || 0), 0),
+        ws.reduce((s, w) => s + (w.legalHolidayHours || 0), 0),
+        ws.reduce((s, w) => s + (w.nightHours || 0), 0),
+        ws.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
+        ws.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
+        ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
+        ws.reduce((s, w) => s + (w.legalHolidayAllowance || 0), 0),
+        ws.reduce((s, w) => s + (w.nightAllowance || 0), 0),
+        ws.reduce((s, w) => s + (w.compAllowance || 0), 0),
+        ws.reduce((s, w) => s + (w.absence || 0), 0),
+        ws.reduce((s, w) => s + (w.absentDeduction || 0), 0),
+        ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
+      ])
+    } else {
+      rows.push([
+        '小計', null, null, null, null, null,
+        ws.reduce((s, w) => s + (w.actualWorkDays || 0), 0),
+        ws.reduce((s, w) => s + (w.compDays || 0), 0),
+        ws.reduce((s, w) => s + w.plDays, 0),
+        null,
+        ws.reduce((s, w) => s + (w.legalOtHours || 0), 0),
+        ws.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
+        ws.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
+        ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
+        ws.reduce((s, w) => s + (w.absence || 0), 0),
+        ws.reduce((s, w) => s + (w.absentDeduction || 0), 0),
+        ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
+      ])
+    }
   }
 
   function renderJapaneseBlock(label: string, ws: WorkerMonthly[]) {
@@ -996,8 +1055,18 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: foreignHeaders.length - 1 } }]
-  // 列幅: 外国人テーブル17列幅で固定（日本人/協力業者の方が列少ないので問題なし）
-  setColWidths(ws, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, 8, 12, 14])
+  // 列幅: 新ルール(23列) / 旧ルール(17列) で切替
+  if (useNewRules) {
+    setColWidths(ws, [
+      14, 14, 8, 10, 10, 10,       // 名前/現場/単価種別/単価/ベース日数/法定上限
+      8, 8, 8, 8,                  // 通常出勤/法休出勤/補償日/有給日数
+      9, 9, 9, 9,                  // 実労働h/法定残業h/法休労働h/深夜労働h
+      11, 11, 12, 12, 10, 10,      // 基本給/追加所定/法定外残業/法休手当/深夜手当/休業手当
+      8, 11, 14,                   // 欠勤日数/欠勤控除/支給額合計
+    ])
+  } else {
+    setColWidths(ws, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, 8, 12, 14])
+  }
 
   XLSX.utils.book_append_sheet(wb, ws, '月次集計')
   return wb

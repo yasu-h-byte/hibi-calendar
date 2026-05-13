@@ -730,6 +730,16 @@ export interface WorkerMonthly {
   fixedBasePay?: number        // 基本給（固定）= 時給 × ベース日数 × 7h
   additionalAllowance?: number // 追加所定手当 = 時給 × MAX(0, 実出勤日数 − ベース日数) × 7h
   legalLimit?: number          // 法定上限時間 = 暦日数 × 40 ÷ 7
+  // ── 法令準拠の詳細支給項目 (2026-05-13 追加、新ルール=変形労働時間制) ──
+  legalHolidayHours?: number      // 法定休日(日曜)の実労働時間
+  legalHolidayAllowance?: number  // 法定休日手当 = 時間 × 時給 × 1.35
+  nightHours?: number             // 深夜(22:00-5:00)の実労働時間
+  nightAllowance?: number         // 深夜手当 = 時間 × 時給 × 0.25
+  compAllowance?: number          // 休業手当 = 補償日数 × 時給 × 7h × 0.6
+  regularWorkDays?: number        // 通常出勤日数（日曜出勤を除く、追加所定の対象）
+  dailyStatutoryOT?: number       // 日単位の法定外残業（1日8h超）
+  weeklyStatutoryOT?: number      // 週単位の法定外残業（週40h超、日単位分除く）
+  monthlyStatutoryOT?: number     // 月単位の法定外残業（法定上限超、日/週分除く）
 }
 
 export interface SubconMonthly {
@@ -958,49 +968,45 @@ export function computeMonthly(
     const useNewRules = ym >= '202605' && !workerWm?.useOldRules
 
     if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && useNewRules) {
-      // ── 5月以降: 3層構造（A+X案）: 基本給固定 + 追加所定手当 + 残業手当（法定上限基準） ──
-      const ymY = parseInt(ym.slice(0, 4))
-      const ymM = parseInt(ym.slice(4, 6))
-      const calendarDays = new Date(ymY, ymM, 0).getDate()  // 暦日数
-      const legalLimitH = calendarDays * 40 / 7              // 法定上限時間
+      // ── 5月以降: 法令準拠（変形労働時間制） ──
+      // 計算内容（calculateVietnameseSalary が一括処理）:
+      //   1. 基本給(固定)     = 時給 × baseDays × 7h
+      //   2. 追加所定手当     = 時給 × (regularWorkDays − baseDays) × 7h  ※法定休日を除いた出勤日
+      //   3. 法定外残業手当   = 3層判定(日/週/月) × 時給 × 1.25
+      //   4. 法定休日手当     = 日曜の実労働 × 時給 × 1.35
+      //   5. 深夜手当         = 22:00-5:00 の重なり × 時給 × 0.25
+      //   6. 休業手当         = 補償日 × 時給 × 7h × 0.6
+      //   7. 欠勤控除         = 欠勤日 × 時給 × 7h
+      // 所定休日(土・カレンダーoff)労働は別枠1.25倍を支払わず、週40h超過分のみ
+      // 法定外残業として1.25倍が自動適用される（法令最低・最適コスト）。
+      const v = calculateVietnameseSalary(
+        wm.id, ym, wm.hourlyRate, baseDays, attD, main.sites,
+        wm.plUsed, wm.compDays, wm.examDays,
+      )
 
-      // 基本給（固定）= 時給 × ベース日数 × 7h
-      const fixedBase = Math.round(wm.hourlyRate * baseDays * 7)
-
-      // 追加所定手当 = 時給 × MAX(0, 実出勤日数 − ベース日数) × 7h
-      const additionalDays = Math.max(0, wm.actualWorkDays - baseDays)
-      const additionalAllow = Math.round(wm.hourlyRate * additionalDays * 7)
-
-      // 残業手当 = 時給 × 1.25 × MAX(0, 実労働時間 − 法定上限)
-      // ⏱️ 実労働時間は時間ベース入力から正確に集計したもの（2026-05-08 修正）
-      //   旧: actualWorkDays * 7 + otHours は早退・現場別所定を反映できなかった
-      const actualWorkH = actualWorkHoursAccumByWid.get(wm.id) || 0
-      const legalOt = Math.max(0, actualWorkH - legalLimitH)
-      const otAllowance = Math.round(wm.hourlyRate * 1.25 * legalOt)
-
-      // 欠勤控除 = 時給 × 7h × MAX(0, ベース日数 − 実出勤日数 − 有給 − 補償 − 試験)
-      // ※ 0.6補償・試験(exam)は会社都合扱いのため欠勤扱いしない
-      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed - wm.compDays - wm.examDays)
-      const absentDeduction = Math.round(wm.hourlyRate * 7 * absentDays)
-
-      // 支給額 = 基本給 − 欠勤控除 + 追加所定手当 + 残業手当
-      const salaryNet = fixedBase - absentDeduction + additionalAllow + otAllowance
-
-      wm.fixedBasePay = fixedBase
-      wm.additionalAllowance = additionalAllow
-      wm.legalLimit = Math.round(legalLimitH * 10) / 10
+      wm.fixedBasePay = v.fixedBasePay
+      wm.additionalAllowance = v.additionalAllowance
+      wm.otAllowance = v.otAllowance
+      wm.legalHolidayHours = v.legalHolidayHours
+      wm.legalHolidayAllowance = v.legalHolidayAllowance
+      wm.nightHours = v.nightHours
+      wm.nightAllowance = v.nightAllowance
+      wm.compAllowance = v.compAllowance
+      wm.absentDeduction = v.absentDeduction
+      wm.salaryNetPay = v.salaryNet
+      wm.regularWorkDays = v.regularWorkDays
+      wm.dailyStatutoryOT = v.dailyStatutoryOT
+      wm.weeklyStatutoryOT = v.weeklyStatutoryOT
+      wm.monthlyStatutoryOT = v.monthlyStatutoryOT
+      wm.legalLimit = v.legalLimit
       wm.prescribedHours = baseDays * 7
-      wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
-      wm.legalOtHours = Math.round(legalOt * 10) / 10
+      wm.actualWorkHours = v.actualWorkHours
+      wm.legalOtHours = v.statutoryOT
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
-      wm.basePay = fixedBase  // legacy: UI互換のため
-      wm.otAllowance = otAllowance
-      wm.absentDeduction = absentDeduction
-      wm.salaryNetPay = salaryNet
-
-      wm.absence = absentDays
-      wm.absentCost = absentDeduction
-      wm.netPay = salaryNet
+      wm.basePay = v.fixedBasePay  // legacy: UI互換のため
+      wm.absence = v.absentDays
+      wm.absentCost = v.absentDeduction
+      wm.netPay = v.salaryNet
     } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0) {
       // ── 4月以前: 旧ルール（通常の労働時間制）── 時給ベース ──
       // 設計（2026-05-08 ユーザー確定）:
@@ -1048,42 +1054,41 @@ export function computeMonthly(
       wm.absentCost = absentDeduction
       wm.netPay = salaryNet
     } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && useNewRules) {
-      // ── 5月以降: 3層構造（salary方式: hourlyRate未設定、旧salary値から時給を逆算） ──
-      const ymY = parseInt(ym.slice(0, 4))
-      const ymM = parseInt(ym.slice(4, 6))
-      const calendarDays = new Date(ymY, ymM, 0).getDate()
-      const legalLimitH = calendarDays * 40 / 7
-      const derivedHourlyRate = wm.salary / (baseDays * 7)  // 月給からベース時給を逆算
-
-      const fixedBase = wm.salary  // 月給固定
-      const additionalDays = Math.max(0, wm.actualWorkDays - baseDays)
-      const additionalAllow = Math.round(derivedHourlyRate * additionalDays * 7)
-
-      // ⏱️ 実労働時間は時間ベース入力から正確に集計（2026-05-08 修正、hourlyRate版と同じ）
-      const actualWorkH = actualWorkHoursAccumByWid.get(wm.id) || 0
-      const legalOt = Math.max(0, actualWorkH - legalLimitH)
-      const otAllowance = Math.round(derivedHourlyRate * 1.25 * legalOt)
-
-      // ※ 0.6補償・試験(exam)は会社都合扱いのため欠勤扱いしない
-      const absentDays = Math.max(0, baseDays - wm.actualWorkDays - wm.plUsed - wm.compDays - wm.examDays)
-      const absentDeduction = Math.round(derivedHourlyRate * 7 * absentDays)
-
-      const salaryNet = fixedBase - absentDeduction + additionalAllow + otAllowance
+      // ── 5月以降: 法令準拠（salary方式: 月給から時給を逆算） ──
+      // hourlyRate版と同じ計算式を使用。基本給だけは月給固定値で上書き。
+      const derivedHourlyRate = wm.salary / (baseDays * 7)
+      const v = calculateVietnameseSalary(
+        wm.id, ym, derivedHourlyRate, baseDays, attD, main.sites,
+        wm.plUsed, wm.compDays, wm.examDays,
+      )
+      // 基本給は月給値を採用（時給からの再計算による丸め誤差を避ける）
+      const fixedBase = wm.salary
+      const salaryNet = fixedBase + v.additionalAllowance + v.otAllowance
+                      + v.legalHolidayAllowance + v.nightAllowance + v.compAllowance
+                      - v.absentDeduction
 
       wm.fixedBasePay = fixedBase
-      wm.additionalAllowance = additionalAllow
-      wm.legalLimit = Math.round(legalLimitH * 10) / 10
+      wm.additionalAllowance = v.additionalAllowance
+      wm.otAllowance = v.otAllowance
+      wm.legalHolidayHours = v.legalHolidayHours
+      wm.legalHolidayAllowance = v.legalHolidayAllowance
+      wm.nightHours = v.nightHours
+      wm.nightAllowance = v.nightAllowance
+      wm.compAllowance = v.compAllowance
+      wm.absentDeduction = v.absentDeduction
+      wm.salaryNetPay = salaryNet
+      wm.regularWorkDays = v.regularWorkDays
+      wm.dailyStatutoryOT = v.dailyStatutoryOT
+      wm.weeklyStatutoryOT = v.weeklyStatutoryOT
+      wm.monthlyStatutoryOT = v.monthlyStatutoryOT
+      wm.legalLimit = v.legalLimit
       wm.prescribedHours = baseDays * 7
-      wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
-      wm.legalOtHours = Math.round(legalOt * 10) / 10
+      wm.actualWorkHours = v.actualWorkHours
+      wm.legalOtHours = v.statutoryOT
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.basePay = fixedBase
-      wm.otAllowance = otAllowance
-      wm.absentDeduction = absentDeduction
-      wm.salaryNetPay = salaryNet
-
-      wm.absence = absentDays
-      wm.absentCost = absentDeduction
+      wm.absence = v.absentDays
+      wm.absentCost = v.absentDeduction
       wm.netPay = salaryNet
     } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && workerPrescribedDays > 0) {
       // ── 4月以前: 旧ルール（salary方式: 月給からの逆算） ──
@@ -1452,6 +1457,252 @@ export function calculateOvertimeSummary(
     fixedBasePay,
     dailyRecords,
     weeklyResults,
+  }
+}
+
+// ────────────────────────────────────────
+//  ベトナム人スタッフ給与計算（新ルール、法令準拠）
+//  2026-05-13 追加: 法定休日・深夜・休業の各手当を自動計上
+// ────────────────────────────────────────
+
+export interface VietnameseSalaryResult {
+  // 時間集計
+  actualWorkHours: number       // 全実労働時間（法定休日含む）
+  regularHours: number          // 日曜以外の実労働時間
+  legalHolidayHours: number     // 日曜の実労働時間
+  nightHours: number            // 22:00〜5:00 と重なる労働時間
+
+  // 日数集計
+  regularWorkDays: number       // 日曜出勤・補償日を除いた出勤日数（追加所定の対象）
+  legalHolidayDays: number      // 日曜出勤日数
+  absentDays: number            // 欠勤日数
+
+  // 残業内訳（3層判定: regular内）
+  dailyStatutoryOT: number
+  weeklyStatutoryOT: number
+  monthlyStatutoryOT: number
+  statutoryOT: number           // 合計
+  legalLimit: number            // 月の法定上限時間
+
+  // 支給項目
+  fixedBasePay: number          // 1. 基本給（固定）
+  additionalAllowance: number   // 2. 追加所定手当
+  otAllowance: number           // 3. 法定外残業手当
+  legalHolidayAllowance: number // 4. 法定休日手当
+  nightAllowance: number        // 5. 深夜手当
+  compAllowance: number         // 6. 休業手当
+  absentDeduction: number       // 7. 欠勤控除
+  salaryNet: number             // 支給額合計
+}
+
+/**
+ * 22:00〜5:00 の深夜時間帯と労働時間帯の重なりを計算（分単位）
+ *
+ * - 出退勤時刻が日付をまたぐ場合（et < st）も対応
+ * - 22:00-翌5:00 を [22*60, 29*60] の連続窓として計算
+ * - 翌5:00 以降の労働が出勤翌々日まで及ぶケースは想定外（建設業のシフトでは発生しない）
+ *
+ * 注: 休憩時間が深夜帯に重なる場合は、簡略化のため引かない。
+ *     建設業の通常運用（昼食60分・午前/午後30分休憩）は深夜帯と重ならないため実害なし。
+ */
+function calcNightMinutes(startMin: number, endMin: number): number {
+  let end = endMin
+  if (end <= startMin) end += 24 * 60 // 日付またぎ
+  // 深夜帯: [22:00, 翌5:00] = [1320, 1740]、および前日からの引き継ぎ [-120, 300] = [0,300]
+  const windows: [number, number][] = [
+    [0, 300],         // 当日 00:00-05:00
+    [1320, 1740],     // 当日 22:00-翌5:00
+    [1320 + 1440, 1740 + 1440], // 翌日 22:00-翌々5:00（日付またぎシフトに対応）
+  ]
+  let total = 0
+  for (const [a, b] of windows) {
+    const lo = Math.max(startMin, a)
+    const hi = Math.min(end, b)
+    if (hi > lo) total += hi - lo
+  }
+  return total
+}
+
+/**
+ * ベトナム人スタッフの月次給与を法令準拠で計算する（変形労働時間制、新ルール）
+ *
+ * 設計方針:
+ *   - 法定休日（日曜）労働: 1.35倍 で別途加算（追加所定・残業判定からは除外）
+ *   - 所定休日（土・カレンダーoff/holiday）労働: 通常時給扱い、週40h超過分のみ1.25倍
+ *     → 別枠の所定休日割増は法律上不要のため、最小コストとなる扱い
+ *   - 深夜帯（22:00〜5:00）労働: 0.25倍を上乗せ（他の倍率と独立）
+ *   - 休業手当（補償日）: 平均賃金の60%（時給×7h×0.6×日数）
+ *   - 欠勤控除: 通常出勤日数が baseDays(20) に満たない場合、不足分を控除
+ *
+ * @param workerId 対象ワーカーID
+ * @param ym       'YYYYMM'
+ * @param hourlyRate 時間給
+ * @param baseDays   基本給ベース日数（通常20）
+ * @param attD       月の出面データ
+ * @param sites      現場リスト（workSchedule で実労働時間を計算するため）
+ * @param plUsed     当月の有給使用日数
+ * @param compDays   当月の補償日数（w=0.6）
+ * @param examDays   当月の試験日数
+ */
+export function calculateVietnameseSalary(
+  workerId: number,
+  ym: string,
+  hourlyRate: number,
+  baseDays: number,
+  attD: Record<string, AttendanceEntry>,
+  sites: { id: string; name?: string; workSchedule?: RawSite['workSchedule'] }[],
+  plUsed: number,
+  compDays: number,
+  examDays: number,
+): VietnameseSalaryResult {
+  const ymY = parseInt(ym.slice(0, 4))
+  const ymM = parseInt(ym.slice(4, 6))
+  const numDays = new Date(ymY, ymM, 0).getDate()
+  const legalLimit = numDays * 40 / 7
+
+  // ── 日次集計 ──
+  // 各日の実労働時間・所定時間・休日種別を計算
+  type DayInfo = {
+    day: number
+    dow: number              // 0=日
+    weekNum: number          // 月曜起算
+    isLegalHoliday: boolean  // 日曜
+    actualHours: number      // その日の実労働時間（補償日除く、休憩控除済み）
+    nightMinutes: number     // その日の深夜時間（分）
+    hadWork: boolean         // 何らかの労働があったか
+  }
+  const dayInfos: DayInfo[] = []
+  const firstDayDow = new Date(ymY, ymM - 1, 1).getDay()
+  const firstMondayOffset = (firstDayDow + 6) % 7
+
+  for (let d = 1; d <= numDays; d++) {
+    const dow = new Date(ymY, ymM - 1, d).getDay()
+    const dayOffset = (d - 1) + firstMondayOffset
+    const weekNum = Math.floor(dayOffset / 7) + 1
+    const isLegalHoliday = dow === 0
+
+    let actualHours = 0
+    let nightMinutes = 0
+    let hadWork = false
+
+    for (const site of sites) {
+      const key = `${site.id}_${workerId}_${ym}_${d}`
+      const entry = attD[key]
+      if (!entry) continue
+      // 有給・休み・現場休・帰国中・試験は実労働ゼロ
+      if (entry.p || entry.r || entry.h || entry.hk || entry.exam) continue
+      if (!entry.w || entry.w <= 0) continue
+      // 補償日（w=0.6）は実労働時間にカウントしない（休業手当で別途支払い）
+      if (entry.w === 0.6) continue
+
+      hadWork = true
+      let dayHours = 0
+      if (entry.st && entry.et) {
+        // 時間ベース: 現場の workSchedule に従って実労働を計算
+        dayHours = calcActualHours(entry, site.workSchedule as Parameters<typeof calcActualHours>[1])
+        // 深夜時間（休憩控除前のレンジで計算 — 建設業の休憩は深夜帯と重ならない前提）
+        const stParts = entry.st.split(':').map(Number)
+        const etParts = entry.et.split(':').map(Number)
+        const startMin = stParts[0] * 60 + (stParts[1] || 0)
+        const endMin = etParts[0] * 60 + (etParts[1] || 0)
+        nightMinutes += calcNightMinutes(startMin, endMin)
+      } else {
+        // レガシー入力: 7h + 残業h
+        dayHours = 7 + (entry.o || 0)
+      }
+      actualHours += dayHours
+    }
+
+    dayInfos.push({
+      day: d, dow, weekNum, isLegalHoliday,
+      actualHours: Math.round(actualHours * 100) / 100,
+      nightMinutes,
+      hadWork,
+    })
+  }
+
+  // ── 時間集計 ──
+  const legalHolidayHours = dayInfos
+    .filter(di => di.isLegalHoliday)
+    .reduce((s, di) => s + di.actualHours, 0)
+  const regularHours = dayInfos
+    .filter(di => !di.isLegalHoliday)
+    .reduce((s, di) => s + di.actualHours, 0)
+  const actualWorkHours = legalHolidayHours + regularHours
+  const nightHours = dayInfos.reduce((s, di) => s + di.nightMinutes, 0) / 60
+
+  // ── 日数集計 ──
+  // 法定休日に出勤した日数（別枠で1.35倍支給するため、追加所定の対象外）
+  const legalHolidayDays = dayInfos.filter(di => di.isLegalHoliday && di.hadWork).length
+  // 通常出勤日数: 法定休日以外で実労働があった日（補償・有給・試験は対象外）
+  // 「追加所定手当」の対象になる日数。所定休日(土・off設定日)も含めて算入し、
+  // 週40h超過の判定で自然に1.25倍が適用される（最低法令準拠）。
+  const regularWorkDays = dayInfos.filter(di => !di.isLegalHoliday && di.hadWork).length
+
+  // ── 3層残業判定（regular内のみ） ──
+  // 第1段階: 日単位の法定外（regular内、1日8h超）
+  const dailyOTByDay: Record<number, number> = {}
+  let totalDailyOT = 0
+  for (const di of dayInfos) {
+    if (di.isLegalHoliday || di.actualHours === 0) continue
+    const over = Math.max(0, di.actualHours - 8)
+    dailyOTByDay[di.day] = over
+    totalDailyOT += over
+  }
+  // 第2段階: 週単位（regular内、週40h超 − 日単位分）
+  const weekNums = [...new Set(dayInfos.map(di => di.weekNum))].sort((a, b) => a - b)
+  let totalWeeklyOT = 0
+  for (const wn of weekNums) {
+    const weekRegular = dayInfos
+      .filter(di => di.weekNum === wn && !di.isLegalHoliday)
+      .reduce((s, di) => s + di.actualHours, 0)
+    const weekDailyOT = dayInfos
+      .filter(di => di.weekNum === wn && !di.isLegalHoliday)
+      .reduce((s, di) => s + (dailyOTByDay[di.day] || 0), 0)
+    totalWeeklyOT += Math.max(0, weekRegular - 40 - weekDailyOT)
+  }
+  // 第3段階: 月単位（regular内、法定上限超 − 日単位 − 週単位）
+  const monthlyStatutoryOT = Math.max(0, regularHours - legalLimit - totalDailyOT - totalWeeklyOT)
+  const statutoryOT = totalDailyOT + totalWeeklyOT + monthlyStatutoryOT
+
+  // ── 支給項目計算 ──
+  const fixedBasePay = Math.round(hourlyRate * baseDays * 7)
+  const additionalDays = Math.max(0, regularWorkDays - baseDays)
+  const additionalAllowance = Math.round(hourlyRate * additionalDays * 7)
+  const otAllowance = Math.round(hourlyRate * 1.25 * statutoryOT)
+  const legalHolidayAllowance = Math.round(hourlyRate * 1.35 * legalHolidayHours)
+  const nightAllowance = Math.round(hourlyRate * 0.25 * nightHours)
+  const compAllowance = Math.round(hourlyRate * 7 * 0.6 * compDays)
+
+  // 欠勤控除: 法定休日出勤は所定日数(20)カウント対象外（カレンダー上は休み）
+  const absentDays = Math.max(0, baseDays - regularWorkDays - plUsed - compDays - examDays)
+  const absentDeduction = Math.round(hourlyRate * 7 * absentDays)
+
+  const salaryNet = fixedBasePay + additionalAllowance + otAllowance
+                  + legalHolidayAllowance + nightAllowance + compAllowance
+                  - absentDeduction
+
+  return {
+    actualWorkHours: Math.round(actualWorkHours * 10) / 10,
+    regularHours: Math.round(regularHours * 10) / 10,
+    legalHolidayHours: Math.round(legalHolidayHours * 10) / 10,
+    nightHours: Math.round(nightHours * 10) / 10,
+    regularWorkDays,
+    legalHolidayDays,
+    absentDays,
+    dailyStatutoryOT: Math.round(totalDailyOT * 10) / 10,
+    weeklyStatutoryOT: Math.round(totalWeeklyOT * 10) / 10,
+    monthlyStatutoryOT: Math.round(monthlyStatutoryOT * 10) / 10,
+    statutoryOT: Math.round(statutoryOT * 10) / 10,
+    legalLimit: Math.round(legalLimit * 10) / 10,
+    fixedBasePay,
+    additionalAllowance,
+    otAllowance,
+    legalHolidayAllowance,
+    nightAllowance,
+    compAllowance,
+    absentDeduction,
+    salaryNet,
   }
 }
 
