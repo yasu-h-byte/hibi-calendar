@@ -1,18 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, getDocs, collection, updateDoc, deleteDoc, query, where } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
+import { getWorkers, resolveWorkerName } from '@/lib/workers'
 
-interface HomeLeave {
-  id: string           // workerId_startDate (e.g., "123_2026-07-01")
+/**
+ * 管理者の手動帰国登録 API（2026-05-13 単一ソース化）
+ *
+ * 旧: `demmen/main.homeLeaves` 配列に書き込み（スマホ申請の `homeLongLeave`
+ *     コレクションと dual storage 状態 → 編集時の不整合事故が頻発）
+ * 新: `homeLongLeave/{wid}_{startDate}` ドキュメントに status='approved' で
+ *     直接書き込み（スマホ申請と同じストレージ）
+ *
+ * - GET:    status='approved' の帰国情報一覧を返す（旧UIとの互換のため
+ *           shape は { homeLeaves: [...] } のまま）
+ * - add:    homeLongLeave コレクションに status='approved' で create
+ * - update: doc を直接 updateDoc
+ * - delete: doc を直接 deleteDoc
+ */
+
+interface HomeLeaveRecord {
+  id: string
   workerId: number
   workerName: string
-  startDate: string    // YYYY-MM-DD (departure date)
-  endDate: string      // YYYY-MM-DD (return to Japan date)
-  reason: string       // '一時帰国' | 'ビザ更新帰国' | 'その他'
-  note?: string        // optional notes
-  createdAt: string    // ISO datetime
+  startDate: string
+  endDate: string
+  reason: string
+  note?: string
+  createdAt: string
+  status?: string
 }
 
 export async function GET(request: NextRequest) {
@@ -21,15 +38,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const mainRef = doc(db, 'demmen', 'main')
-    const snap = await getDoc(mainRef)
-
-    if (!snap.exists()) {
-      return NextResponse.json({ homeLeaves: [] })
+    // homeLongLeave コレクションから approved のものだけ取得
+    // workerName は人員マスタから都度ルックアップして最新名を返す
+    const workers = await getWorkers()
+    const homeLeaves: HomeLeaveRecord[] = []
+    try {
+      const q = query(collection(db, 'homeLongLeave'), where('status', '==', 'approved'))
+      const snap = await getDocs(q)
+      snap.forEach(d => {
+        const v = d.data()
+        homeLeaves.push({
+          id: d.id,
+          workerId: v.workerId,
+          workerName: resolveWorkerName(workers, v.workerId, v.workerName),
+          startDate: v.startDate,
+          endDate: v.endDate,
+          reason: v.reason || '一時帰国',
+          ...(v.note ? { note: v.note } : {}),
+          createdAt: v.requestedAt || v.createdAt || '',
+        })
+      })
+    } catch (e) {
+      console.warn('homeLeave GET fetch failed:', e)
     }
 
-    const data = snap.data()
-    const homeLeaves: HomeLeave[] = data.homeLeaves || []
+    // startDate 順にソート（UIで表示順を安定化）
+    homeLeaves.sort((a, b) => a.startDate.localeCompare(b.startDate))
 
     return NextResponse.json({ homeLeaves })
   } catch (error) {
@@ -47,95 +81,89 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { action } = body
 
-    const mainRef = doc(db, 'demmen', 'main')
-    const snap = await getDoc(mainRef)
-    const data = snap.exists() ? snap.data() : {}
-    const homeLeaves: HomeLeave[] = data.homeLeaves || []
-
-    // ── Add ──
-    if (action === 'add') {
+    // ── 管理者の手動追加 ──
+    // 旧UI が action='create' を送ってきていた経緯があるので両方受け付ける
+    if (action === 'add' || action === 'create') {
       const { workerId, workerName, startDate, endDate, reason, note } = body
 
       if (!workerId || !workerName || !startDate || !endDate || !reason) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
       }
-
-      // Validate startDate < endDate
       if (startDate >= endDate) {
         return NextResponse.json({ error: 'startDate must be before endDate' }, { status: 400 })
       }
 
       const id = `${workerId}_${startDate}`
-
-      // Check for duplicate
-      if (homeLeaves.some(h => h.id === id)) {
+      const ref = doc(db, 'homeLongLeave', id)
+      const existing = await getDoc(ref)
+      if (existing.exists()) {
         return NextResponse.json({ error: 'Already exists' }, { status: 409 })
       }
 
-      const newEntry: HomeLeave = {
-        id,
+      await setDoc(ref, {
         workerId,
         workerName,
         startDate,
         endDate,
         reason,
         ...(note ? { note } : {}),
+        status: 'approved',
+        // 管理者直接登録は申請プロセスをスキップ。createdAt は監査用。
         createdAt: new Date().toISOString(),
-      }
-
-      homeLeaves.push(newEntry)
-      await updateDoc(mainRef, { homeLeaves })
+      })
       await logActivity('admin', 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endDate}`)
 
       return NextResponse.json({ success: true, id })
     }
 
-    // ── Update ──
+    // ── 更新 ──
     if (action === 'update') {
       const { id, startDate, endDate, reason, note } = body
-
       if (!id) {
         return NextResponse.json({ error: 'Missing id' }, { status: 400 })
       }
 
-      const idx = homeLeaves.findIndex(h => h.id === id)
-      if (idx === -1) {
+      const ref = doc(db, 'homeLongLeave', id)
+      const snap = await getDoc(ref)
+      if (!snap.exists()) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 })
       }
-
-      // Merge updates
-      if (startDate !== undefined) homeLeaves[idx].startDate = startDate
-      if (endDate !== undefined) homeLeaves[idx].endDate = endDate
-      if (reason !== undefined) homeLeaves[idx].reason = reason
-      if (note !== undefined) homeLeaves[idx].note = note
-
-      // Validate dates after merge
-      if (homeLeaves[idx].startDate >= homeLeaves[idx].endDate) {
+      const current = snap.data()
+      const newStart = startDate !== undefined ? startDate : current.startDate
+      const newEnd = endDate !== undefined ? endDate : current.endDate
+      if (newStart >= newEnd) {
         return NextResponse.json({ error: 'startDate must be before endDate' }, { status: 400 })
       }
 
-      await updateDoc(mainRef, { homeLeaves })
-      await logActivity('admin', 'homeLeave.update', `${homeLeaves[idx].workerName} 一時帰国更新 ${homeLeaves[idx].startDate}〜${homeLeaves[idx].endDate}`)
+      const updates: Record<string, string> = {}
+      if (startDate !== undefined) updates.startDate = startDate
+      if (endDate !== undefined) updates.endDate = endDate
+      if (reason !== undefined) updates.reason = reason
+      if (note !== undefined) updates.note = note
+
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(ref, updates)
+      }
+      await logActivity('admin', 'homeLeave.update', `${current.workerName} 一時帰国更新 ${newStart}〜${newEnd}`)
 
       return NextResponse.json({ success: true })
     }
 
-    // ── Delete ──
+    // ── 削除 ──
     if (action === 'delete') {
       const { id } = body
-
       if (!id) {
         return NextResponse.json({ error: 'Missing id' }, { status: 400 })
       }
 
-      const target = homeLeaves.find(h => h.id === id)
-      if (!target) {
+      const ref = doc(db, 'homeLongLeave', id)
+      const snap = await getDoc(ref)
+      if (!snap.exists()) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 })
       }
-
-      const updated = homeLeaves.filter(h => h.id !== id)
-      await updateDoc(mainRef, { homeLeaves: updated })
-      await logActivity('admin', 'homeLeave.delete', `${target.workerName} 一時帰国削除 ${target.startDate}〜${target.endDate}`)
+      const data = snap.data()
+      await deleteDoc(ref)
+      await logActivity('admin', 'homeLeave.delete', `${data.workerName} 一時帰国削除 ${data.startDate}〜${data.endDate}`)
 
       return NextResponse.json({ success: true })
     }

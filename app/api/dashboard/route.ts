@@ -138,22 +138,17 @@ function computeTodayStatus(
   }
 
   // Absent workers: assigned but not working today
-  // 帰国中（main.homeLeaves 期間内 or 出面の hk:1）のスタッフは除外
+  // 帰国中（homeLongLeave 期間内 or 出面の hk:1）のスタッフは除外
   const allAssignedWorkerIds = new Set<number>()
   for (const site of activeSites) {
     const siteAssign = getAssign(main, site.id, ym)
     for (const wid of siteAssign.workers) allAssignedWorkerIds.add(wid)
   }
 
-  // 今日帰国中のワーカーIDを集める（main.homeLeaves + 引数の extraHomeLeaveWorkerIds をマージ）
-  const todayDateStr = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+  // 今日帰国中のワーカーIDは呼び出し側で集めた homeLongLeave の結果を使用
+  // （2026-05-13: 旧 main.homeLeaves 配列の参照を廃止）
   const homeLeaveWorkerIds = new Set<number>(extraHomeLeaveWorkerIds || [])
-  const homeLeaves = main.homeLeaves || []
-  for (const hl of homeLeaves) {
-    if (hl.startDate <= todayDateStr && todayDateStr <= hl.endDate) {
-      homeLeaveWorkerIds.add(hl.workerId)
-    }
-  }
+  const todayDateStr = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
 
   for (const wid of Array.from(allAssignedWorkerIds)) {
     if (workingWorkerIds.has(wid)) continue
@@ -1088,15 +1083,17 @@ export async function GET(request: NextRequest) {
     } catch { /* ignore */ }
 
     // 7. 帰国申請一覧（pending + foreman_approved）
+    //    workerName は人員マスタから都度ルックアップ（改名追従のため）
     const homeLongLeaveItems: { id: string; workerName: string; startDate: string; endDate: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string }[] = []
     try {
       const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
       hlSnap.forEach(d => {
         const data = d.data()
         if (data.status === 'pending' || data.status === 'foreman_approved') {
+          const fresh = main.workers.find(w => w.id === data.workerId)?.name
           homeLongLeaveItems.push({
             id: d.id,
-            workerName: data.workerName || '',
+            workerName: fresh || data.workerName || '',
             startDate: data.startDate || '',
             endDate: data.endDate || '',
             reason: data.reason || '',
@@ -1110,9 +1107,8 @@ export async function GET(request: NextRequest) {
     } catch { /* ignore */ }
 
     // 8. 帰国情報（現在帰国中・予定）
-    // 重要: 2つのソースから集計
-    //   ① homeLongLeave コレクション（スマホ申請）
-    //   ② demmen/main.homeLeaves 配列（管理者手動登録）
+    // 2026-05-13: homeLongLeave コレクションを単一ソースとして集計
+    //   旧 demmen/main.homeLeaves 配列の参照は廃止（dual storage 問題解消）
     let homeLeaveCurrentCount = 0
     let homeLeaveUpcomingCount = 0
     let pendingHomeLeaveApprovalCount = 0
@@ -1124,16 +1120,12 @@ export async function GET(request: NextRequest) {
       const futureLimit = new Date(jst)
       futureLimit.setMonth(futureLimit.getMonth() + 6)
       const futureIso = futureLimit.toISOString().slice(0, 10)
-      const seenKeys = new Set<string>()
 
-      // ① homeLongLeave コレクション（スマホ申請）
       const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
       hlSnap.forEach(d => {
         const data = d.data()
         if (!data.startDate || !data.endDate) return
-        const key = `${data.workerId}_${data.startDate}`
         if (data.status === 'approved' || data.status === 'foreman_approved') {
-          seenKeys.add(key)
           if (data.startDate <= todayIso && data.endDate >= todayIso) homeLeaveCurrentCount++
           else if (data.startDate > todayIso && data.startDate <= futureIso) homeLeaveUpcomingCount++
         }
@@ -1141,21 +1133,6 @@ export async function GET(request: NextRequest) {
           pendingHomeLeaveApprovalCount++
         }
       })
-      // ② demmen/main.homeLeaves 配列（手動登録）
-      // MainData 型に含まれないため、直接 Firestore から取得する
-      try {
-        const mainDocSnap = await getDoc(doc(db, 'demmen', 'main'))
-        if (mainDocSnap.exists()) {
-          const manualHL = (mainDocSnap.data().homeLeaves || []) as { workerId: number; startDate: string; endDate: string }[]
-          for (const mhl of manualHL) {
-            if (!mhl.startDate || !mhl.endDate) continue
-            const key = `${mhl.workerId}_${mhl.startDate}`
-            if (seenKeys.has(key)) continue  // homeLongLeave と重複なら無視
-            if (mhl.startDate <= todayIso && mhl.endDate >= todayIso) homeLeaveCurrentCount++
-            else if (mhl.startDate > todayIso && mhl.startDate <= futureIso) homeLeaveUpcomingCount++
-          }
-        }
-      } catch { /* ignore */ }
     } catch { /* ignore */ }
 
     // 9. 半自動付与対象者カウント（休暇管理API のロジック簡易版を再現）

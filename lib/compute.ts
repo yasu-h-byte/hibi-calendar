@@ -20,7 +20,8 @@ export interface MainData {
   plData: Record<string, PLRecord[]>
   defaultRates: { tobiRate?: number; dokoRate?: number }
   mforeman: Record<string, { foreman?: number; wid?: number; note?: string }>
-  homeLeaves?: { id?: string; workerId: number; workerName?: string; startDate: string; endDate: string; reason?: string; note?: string }[]
+  // 2026-05-13: 旧 main.homeLeaves 配列は廃止（homeLongLeave コレクションに統合）
+  //   フィールド自体は demmen/main 上に空配列として残るが、production 読み取りはしない。
 }
 
 export interface RawWorker {
@@ -93,7 +94,6 @@ export async function getMainData(): Promise<MainData> {
     plData: (d.plData || {}) as Record<string, PLRecord[]>,
     defaultRates: (d.defaultRates || {}) as { tobiRate?: number; dokoRate?: number },
     mforeman: (d.mforeman || {}) as Record<string, { foreman?: number; wid?: number; note?: string }>,
-    homeLeaves: (d.homeLeaves || []) as MainData['homeLeaves'],
   }
 }
 

@@ -32,6 +32,7 @@
 
 import { isWorkingDay } from './attendance'
 import { getAttData, getMainData, parseDKey, type MainData } from './compute'
+import { getAllActiveHomeLeaves } from './homeLeave'
 import type { AttendanceEntry } from '@/types'
 
 export interface AttendanceRateResult {
@@ -135,12 +136,14 @@ export async function calcAttendanceMetrics(
   const hireDate = worker?.hireDate ? isoToDate(worker.hireDate) : null
   const retireDate = worker?.retired ? isoToDate(worker.retired) : null
 
-  // 一時帰国期間
-  const homeLeaves = (main.homeLeaves || []).filter(hl => hl.workerId === workerId)
-  const homeLeaveRanges = homeLeaves.map(hl => ({
-    start: isoToDate(hl.startDate),
-    end: isoToDate(hl.endDate),
-  }))
+  // 一時帰国期間（2026-05-13: homeLongLeave コレクションを単一ソースとして取得）
+  const allHomeLeaves = await getAllActiveHomeLeaves()
+  const homeLeaveRanges = allHomeLeaves
+    .filter(hl => hl.workerId === workerId)
+    .map(hl => ({
+      start: isoToDate(hl.startDate),
+      end: isoToDate(hl.endDate),
+    }))
 
   // 期間内の月リスト（最古から）
   const ymList: string[] = []

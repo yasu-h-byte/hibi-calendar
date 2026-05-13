@@ -38,3 +38,39 @@ export async function getWorkerByToken(token: string): Promise<Worker | null> {
   const workers = await getWorkers()
   return workers.find(w => w.token === token) || null
 }
+
+/**
+ * 表示時に最新の workerName を解決するヘルパー（2026-05-13 追加）
+ *
+ * Why: 帰国情報・評価・申請などの永続レコードは作成時に workerName を
+ *   キャッシュしているが、人員マスタで改名しても追従しないため、
+ *   表示時にマスタからルックアップして最新名を保証する必要がある。
+ *
+ * - 通常: workers マスタから ID で引いた名前を返す
+ * - フォールバック: マスタから見つからない場合（退職して削除等）は
+ *   引数の cached を返す。それも無ければ `ID:{id}` を返す。
+ *
+ * 任意の name フィールドを持つ Worker 互換型を受け付ける汎用版。
+ */
+export function resolveWorkerName<T extends { id: number; name: string }>(
+  workers: T[],
+  workerId: number,
+  cached?: string | null,
+): string {
+  const found = workers.find(w => w.id === workerId)
+  if (found?.name) return found.name
+  if (cached) return cached
+  return `ID:${workerId}`
+}
+
+/**
+ * 多数の workerId を一括ルックアップする場合の Map ヘルパー。
+ * 大量レコードで find ループを毎回回すコストを避ける。
+ */
+export function buildWorkerNameMap<T extends { id: number; name: string }>(
+  workers: T[],
+): Map<number, string> {
+  const m = new Map<number, string>()
+  for (const w of workers) m.set(w.id, w.name)
+  return m
+}

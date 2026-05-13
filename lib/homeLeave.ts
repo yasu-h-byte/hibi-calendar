@@ -1,10 +1,20 @@
 import { db } from './firebase'
-import { doc, getDoc, getDocs, collection } from 'firebase/firestore'
+import { getDocs, collection, query, where } from 'firebase/firestore'
 
 /**
- * 帰国期間情報を2つのソースから統合取得
- * - demmen/main の homeLeaves 配列（手動登録、承認済み扱い）
- * - homeLongLeave コレクション（スマホ申請、approved / foreman_approved）
+ * 帰国期間情報を取得（2026-05-13 単一ソース化）
+ *
+ * 旧構成（〜2026-05-13）: 2ストレージから統合取得していた
+ *   ① `homeLongLeave` コレクション（スマホ申請）
+ *   ② `demmen/main.homeLeaves` 配列（管理者手動登録）
+ *   問題: 同じ申請が両方に存在する状態（承認時にコピーされる）、
+ *         さらに片方を編集してももう片方に反映されず重複表示が発生していた。
+ *
+ * 新構成: 単一ソース = `homeLongLeave` コレクション
+ *   - スマホ申請: 通常通り status='pending' → 'foreman_approved' → 'approved'
+ *   - 管理者の手動登録: status='approved' で直接作成
+ *   - 編集/削除: doc 単位で直接更新（並列書き込み安全）
+ *   - workerName は表示時にマスタからルックアップする（キャッシュ追従問題回避）
  */
 export interface HomeLeaveEntry {
   workerId: number
@@ -14,40 +24,20 @@ export interface HomeLeaveEntry {
 
 export async function getAllActiveHomeLeaves(): Promise<HomeLeaveEntry[]> {
   const result: HomeLeaveEntry[] = []
-  const seen = new Set<string>()
 
   try {
-    // ① スマホ申請
     const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
     hlSnap.forEach(d => {
       const hl = d.data()
+      // 承認待ち（pending/foreman_approved）も予定として扱う（旧仕様維持）
       if (hl.status !== 'approved' && hl.status !== 'foreman_approved') return
-      const key = `${hl.workerId}_${hl.startDate}`
-      seen.add(key)
+      if (!hl.startDate || !hl.endDate) return
       result.push({
         workerId: hl.workerId,
         startDate: hl.startDate,
         endDate: hl.endDate,
       })
     })
-  } catch { /* ignore */ }
-
-  try {
-    // ② 手動登録
-    const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-    if (mainSnap.exists()) {
-      const manual: { workerId: number; startDate: string; endDate: string }[] = mainSnap.data().homeLeaves || []
-      for (const mhl of manual) {
-        if (!mhl.startDate || !mhl.endDate) continue
-        const key = `${mhl.workerId}_${mhl.startDate}`
-        if (seen.has(key)) continue
-        result.push({
-          workerId: mhl.workerId,
-          startDate: mhl.startDate,
-          endDate: mhl.endDate,
-        })
-      }
-    }
   } catch { /* ignore */ }
 
   return result
@@ -81,4 +71,49 @@ export function isFullMonthHomeLeave(
  */
 export function normalizeYm(ym: string): string {
   return ym.replace('-', '')
+}
+
+/**
+ * approved な帰国記録だけを取得（手動登録 + スマホ承認済み）
+ * UI 表示用。pending は除外、foreman_approved も除外（最終承認後のみ表示）。
+ */
+export async function getApprovedHomeLeaves(): Promise<Array<{
+  id: string
+  workerId: number
+  workerName: string
+  startDate: string
+  endDate: string
+  reason: string
+  note?: string
+  source: 'mobile' | 'manual'
+}>> {
+  const result: Array<{
+    id: string
+    workerId: number
+    workerName: string
+    startDate: string
+    endDate: string
+    reason: string
+    note?: string
+    source: 'mobile' | 'manual'
+  }> = []
+  try {
+    const q = query(collection(db, 'homeLongLeave'), where('status', '==', 'approved'))
+    const snap = await getDocs(q)
+    snap.forEach(d => {
+      const v = d.data()
+      result.push({
+        id: d.id,
+        workerId: v.workerId,
+        workerName: v.workerName || '',
+        startDate: v.startDate,
+        endDate: v.endDate,
+        reason: v.reason || '一時帰国',
+        note: v.note,
+        // requestedAt が無いものは管理者手動登録、ある場合はスマホ申請由来
+        source: v.requestedAt ? 'mobile' : 'manual',
+      })
+    })
+  } catch { /* ignore */ }
+  return result
 }

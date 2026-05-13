@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore'
 import { getWorkerByToken } from '@/lib/workers'
 import { getStaffSites, ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
@@ -212,29 +212,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Also add entry to homeLeaves array in demmen/main document
-      const mainRef = doc(db, 'demmen', 'main')
-      const mainSnap = await getDoc(mainRef)
-      if (mainSnap.exists()) {
-        const mainData = mainSnap.data()
-        const homeLeaves = mainData.homeLeaves || []
-        const hlId = `${data.workerId}_${data.startDate}`
-
-        // Avoid duplicate
-        if (!homeLeaves.some((h: { id: string }) => h.id === hlId)) {
-          homeLeaves.push({
-            id: hlId,
-            workerId: data.workerId,
-            workerName: data.workerName,
-            startDate: data.startDate,
-            endDate: data.endDate,
-            reason: data.reason,
-            ...(data.note ? { note: data.note } : {}),
-            createdAt: new Date().toISOString(),
-          })
-          await updateDoc(mainRef, { homeLeaves })
-        }
-      }
+      // 2026-05-13: 旧仕様で demmen/main.homeLeaves 配列にコピーを作っていたが、
+      //   dual storage の不整合源だったため廃止。homeLongLeave/{id} が単一ソース。
 
       return NextResponse.json({ success: true })
     }
