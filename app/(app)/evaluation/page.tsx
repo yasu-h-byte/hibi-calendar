@@ -224,6 +224,42 @@ function isCategoryInScope(evaluatorId: number, categoryKey: string): boolean {
   return true
 }
 
+/**
+ * 評価セッションの提出済み review から、最終評価の初期値（加重平均ベース）を計算する。
+ *
+ * 動作:
+ *   - 各評価項目について、スコープ内の評価者の点数 (A=3,B=2,C=1) を重み付き加重平均
+ *   - しきい値 ≥2.5=A / ≥1.5=B / それ以下=C
+ *   - 該当評価者0人の項目は B のまま（EMPTY_SCORES のデフォルト）
+ *   - 評価者の重みは session.evaluatorWeights から取得（未設定なら 1.0）
+ *
+ * 2026-05-13: 複数の入口（承認タブの「確認・承認」、一覧・履歴の「承認へ」）から
+ *   呼ばれるため共通化。以前は片方の入口でこの初期化が走らず、全項目が「B」で
+ *   表示されるバグがあった。
+ */
+function computePrefillScores(session: Evaluation): EvaluationScores {
+  const prefill = JSON.parse(JSON.stringify(EMPTY_SCORES)) as EvaluationScores
+  if (!session.reviews || session.reviews.length === 0) return prefill
+  for (const item of EVAL_ITEMS) {
+    let weightedSum = 0
+    let totalWeight = 0
+    for (const r of session.reviews) {
+      if (!isCategoryInScope(r.evaluatorId, item.category)) continue
+      const g = getScoreValue(r.scores, item.category, item.key)
+      const gradeNum = g === 'A' ? 3 : g === 'B' ? 2 : 1
+      const w = session.evaluatorWeights?.[r.evaluatorId]?.weight ?? 1.0
+      weightedSum += gradeNum * w
+      totalWeight += w
+    }
+    if (totalWeight === 0) continue   // 該当者0 → B のまま
+    const avg = weightedSum / totalWeight
+    const best: ABCGrade = avg >= 2.5 ? 'A' : avg >= 1.5 ? 'B' : 'C'
+    const cat = prefill[item.category as keyof EvaluationScores] as Record<string, ABCGrade>
+    cat[item.key] = best
+  }
+  return prefill
+}
+
 // 評価者IDから名前を引く（apiEvaluators 優先 → workers → ID表示）
 function evaluatorNameLookup(
   id: number,
@@ -1587,7 +1623,7 @@ export default function EvaluationPage() {
                                 <button
                                   onClick={() => {
                                     setApproveSessionId(showSession.id)
-                                    setFinalScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+                                    setFinalScores(computePrefillScores(showSession))
                                     setFinalComment('')
                                     setActiveTab('approve')
                                   }}
@@ -2088,42 +2124,7 @@ export default function EvaluationPage() {
                         <button
                           onClick={() => {
                             setApproveSessionId(session.id)
-                            // Pre-fill finalScores from weighted average (2026-05-12 改訂)
-                            //   旧: 重み付き多数決（離散投票）→ 重みの小数差が吸収されてしまう
-                            //   新: 加重平均 (A=3, B=2, C=1) → しきい値で ABC 変換
-                            //   評価者全員の意見が連続的に反映され、小数重みが実質的に効く。
-                            if (session.reviews.length > 0) {
-                              const prefill = JSON.parse(JSON.stringify(EMPTY_SCORES)) as EvaluationScores
-                              for (const item of EVAL_ITEMS) {
-                                let weightedSum = 0
-                                let totalWeight = 0
-                                for (const r of session.reviews) {
-                                  // 2026-05-12 スコープ分担:
-                                  //   - 生活態度: 靖仁さん (id=0) のみ評価対象
-                                  //   - その他カテゴリ: 靖仁さん以外（職長3 + 政仁さん）
-                                  //   担当外カテゴリは weight=0 で加重平均から除外
-                                  const isAdminEvaluator = r.evaluatorId === 0
-                                  const isLivingCategory = item.category === 'living'
-                                  if (isLivingCategory && !isAdminEvaluator) continue   // 生活態度を非adminは対象外
-                                  if (!isLivingCategory && isAdminEvaluator) continue   // 非生活態度をadminは対象外
-
-                                  const g = getScoreValue(r.scores, item.category, item.key)
-                                  const gradeNum = g === 'A' ? 3 : g === 'B' ? 2 : 1
-                                  // ウェイト未設定（旧セッション）は 1.0 にフォールバック
-                                  const w = session.evaluatorWeights?.[r.evaluatorId]?.weight ?? 1.0
-                                  weightedSum += gradeNum * w
-                                  totalWeight += w
-                                }
-                                const avg = totalWeight > 0 ? weightedSum / totalWeight : 2
-                                // しきい値: A=3, B=2, C=1 の中点で区切る
-                                const best: ABCGrade = avg >= 2.5 ? 'A' : avg >= 1.5 ? 'B' : 'C'
-                                const cat = prefill[item.category as keyof EvaluationScores] as Record<string, ABCGrade>
-                                cat[item.key] = best
-                              }
-                              setFinalScores(prefill)
-                            } else {
-                              setFinalScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
-                            }
+                            setFinalScores(computePrefillScores(session))
                             setFinalComment('')
                           }}
                           className="px-4 py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors"
@@ -2472,7 +2473,7 @@ export default function EvaluationPage() {
                           <button
                             onClick={() => {
                               setApproveSessionId(s.id)
-                              setFinalScores(JSON.parse(JSON.stringify(EMPTY_SCORES)))
+                              setFinalScores(computePrefillScores(s))
                               setFinalComment('')
                               setActiveTab('approve')
                             }}
