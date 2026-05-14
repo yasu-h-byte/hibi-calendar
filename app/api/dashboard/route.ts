@@ -1016,21 +1016,31 @@ export async function GET(request: NextRequest) {
     const calTotal = 0
 
     // 5. 有給申請一覧（pending + foreman_approved）をダッシュボードに返す
-    const leaveRequestItems: { id: string; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string }[] = []
+    //    各申請に「該当現場の職長名」を埋めて返す（UI のボタン表示用）
+    const leaveRequestItems: { id: string; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; siteForemanName?: string }[] = []
     try {
       const allLrSnap = await getDocs(collection(db, 'leaveRequests'))
       allLrSnap.forEach(d => {
         const data = d.data()
         if (data.status === 'pending' || data.status === 'foreman_approved') {
+          // 該当現場の職長を解決（月別オーバーライド優先）
+          const siteId = data.siteId || ''
+          const ym = data.date ? String(data.date).slice(0, 7).replace('-', '') : ''
+          const override = ym && main.mforeman ? main.mforeman[`${siteId}_${ym}`]?.wid : undefined
+          const siteForemanId = override ?? main.sites.find(s => s.id === siteId)?.foreman
+          const siteForemanName = siteForemanId != null
+            ? (main.workers.find(w => w.id === siteForemanId)?.name || '')
+            : ''
           leaveRequestItems.push({
             id: d.id,
             workerName: data.workerName || '',
             date: data.date || '',
-            siteId: data.siteId || '',
+            siteId,
             reason: data.reason || '',
             status: data.status,
             requestedAt: data.requestedAt || '',
             foremanApprovedAt: data.foremanApprovedAt,
+            siteForemanName,
           })
         }
       })
@@ -1084,7 +1094,26 @@ export async function GET(request: NextRequest) {
 
     // 7. 帰国申請一覧（pending + foreman_approved）
     //    workerName は人員マスタから都度ルックアップ（改名追従のため）
-    const homeLongLeaveItems: { id: string; workerName: string; startDate: string; endDate: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string }[] = []
+    //    siteForemanName は対象スタッフの現在配置現場の職長名を引く（ボタン表示用）
+    const homeLongLeaveItems: { id: string; workerName: string; startDate: string; endDate: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; siteForemanName?: string }[] = []
+    const resolveWorkerForemanName = (workerId: number): string => {
+      // 当月の配置現場（massign 優先、なければ assign）から最初の現場を引き、その職長名を返す
+      for (const site of main.sites) {
+        if (site.archived) continue
+        const monthKey = `${site.id}_${ym}`
+        const monthAssign = main.massign?.[monthKey]
+        const defaultAssign = main.assign?.[site.id]
+        const workers = (monthAssign?.workers || defaultAssign?.workers || []) as number[]
+        if (workers.includes(workerId)) {
+          const override = main.mforeman?.[monthKey]?.wid
+          const fid = override ?? site.foreman
+          if (fid != null) {
+            return main.workers.find(w => w.id === fid)?.name || ''
+          }
+        }
+      }
+      return ''
+    }
     try {
       const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
       hlSnap.forEach(d => {
@@ -1100,6 +1129,7 @@ export async function GET(request: NextRequest) {
             status: data.status,
             requestedAt: data.requestedAt || '',
             foremanApprovedAt: data.foremanApprovedAt,
+            siteForemanName: resolveWorkerForemanName(data.workerId),
           })
         }
       })

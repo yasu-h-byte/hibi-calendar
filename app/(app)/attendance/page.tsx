@@ -1344,7 +1344,7 @@ export default function AttendanceGridPage() {
                     className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px]"
                     style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                   >
-                    職長承認
+                    {data.site.foremanName ? `${data.site.foremanName} 職長承認` : '職長承認'}
                     {(userRole === 'foreman' && userForemanSites.includes(siteId)) && (() => {
                       const unapprovedDays = days.filter(d => !localApprovals[d.day])
                       return unapprovedDays.length > 0 ? (

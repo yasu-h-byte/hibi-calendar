@@ -43,6 +43,7 @@ interface LeaveRequestItem {
   status: string
   requestedAt: string
   foremanApprovedAt?: string
+  siteForemanName?: string  // 該当現場の職長名（ボタン表示用）
 }
 
 interface AbsenceReport {
@@ -62,6 +63,7 @@ interface HomeLongLeaveItem {
   status: string
   requestedAt: string
   foremanApprovedAt?: string
+  siteForemanName?: string  // 対象スタッフの配置現場の職長名（ボタン表示用）
 }
 
 interface ActionItems {
@@ -253,7 +255,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                 <div className="flex gap-1.5 flex-shrink-0 ml-2">
                   {canForemanApproveFor((req as { siteId?: string }).siteId) && (
                     <button onClick={() => handleAction(req.id, 'foreman_approve')} disabled={processing === req.id}
-                      className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                      className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">{req.siteForemanName ? `${req.siteForemanName} 職長承認` : '職長承認'}</button>
                   )}
                   <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
                     className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
@@ -269,7 +271,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                 <div className="min-w-0">
                   <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
                   <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
-                  <span className="text-[10px] text-blue-600 ml-2">職長済</span>
+                  <span className="text-[10px] text-blue-600 ml-2">{req.siteForemanName ? `${req.siteForemanName} 職長済` : '職長済'}</span>
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0 ml-2">
                   {canFinalApprove ? (
@@ -309,7 +311,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                   {/* 帰国申請には siteId が無いため、職長は「いずれかの担当現場あり」で押せる扱い */}
                   {(isAdminLike || (isForeman && userForemanSites.length > 0)) && (
                     <button onClick={() => handleAction(req.id, 'foreman_approve', '/api/home-long-leave')} disabled={processing === req.id}
-                      className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                      className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">{req.siteForemanName ? `${req.siteForemanName} 職長承認` : '職長承認'}</button>
                   )}
                   <button onClick={() => handleAction(req.id, 'reject', '/api/home-long-leave')} disabled={processing === req.id}
                     className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
@@ -325,7 +327,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
                 <div className="min-w-0">
                   <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
                   <span className="text-gray-500 text-sm ml-2">{fmtDate(req.startDate)}〜{fmtDate(req.endDate)}</span>
-                  <span className="text-[10px] text-blue-600 ml-2">職長済</span>
+                  <span className="text-[10px] text-blue-600 ml-2">{req.siteForemanName ? `${req.siteForemanName} 職長済` : '職長済'}</span>
                 </div>
                 <div className="flex gap-1.5 flex-shrink-0 ml-2">
                   {canFinalApprove ? (

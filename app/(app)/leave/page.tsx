@@ -176,7 +176,9 @@ export default function LeavePage() {
   const [buyoutSubmitting, setBuyoutSubmitting] = useState(false)
   // 申請管理
   const [leaveRequests, setLeaveRequests] = useState<{ id: string; workerId: number; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; foremanApprovedBy?: number; reviewedAt?: string; rejectedReason?: string }[]>([])
-  const [sites, setSites] = useState<{ id: string; name: string }[]>([])
+  const [sites, setSites] = useState<{ id: string; name: string; foreman?: number }[]>([])
+  // mforeman: 月別職長オーバーライド ("siteId_ym" -> { wid: workerId })
+  const [mforeman, setMforeman] = useState<Record<string, { wid: number }>>({})
   const [processingReq, setProcessingReq] = useState<string | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -237,6 +239,7 @@ export default function LeavePage() {
       if (siteRes.ok) {
         const d = await siteRes.json()
         setSites(d.sites || [])
+        setMforeman(d.mforeman || {})
       }
       if (pendRes.ok) {
         const d = await pendRes.json()
@@ -623,6 +626,15 @@ export default function LeavePage() {
         const getSiteName = (siteId: string) => sites.find(s => s.id === siteId)?.name || siteId
         const fmtDate = (d: string) => { const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}` }
         const fmtTs = (ts: string) => { const d = new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }
+        // 該当現場の職長名を解決（月別オーバーライドがあれば優先）
+        // 申請日 YYYY-MM-DD から ym を抽出して mforeman を引き、なければ sites.foreman をフォールバック
+        const resolveForemanName = (siteId: string, dateStr: string): string => {
+          const ym = dateStr ? dateStr.slice(0, 7).replace('-', '') : ''
+          const override = ym ? mforeman[`${siteId}_${ym}`]?.wid : undefined
+          const foremanId = override ?? sites.find(s => s.id === siteId)?.foreman
+          if (foremanId == null) return ''
+          return workerNames[foremanId] || ''
+        }
         const handleForemanApprove = async (id: string) => {
           setProcessingReq(id)
           try {
@@ -701,11 +713,12 @@ export default function LeavePage() {
                           // 権限制御: admin/approver は全件、foreman は自分の担当現場のみ
                           const isAdminLike = userRole === 'admin' || userRole === 'approver'
                           const canFA = isAdminLike || (userRole === 'foreman' && userForemanSites.includes(req.siteId))
+                          const fName = resolveForemanName(req.siteId, req.date)
                           return (
                           <>
                             {canFA && (
                               <button onClick={() => handleForemanApprove(req.id)} disabled={processingReq === req.id}
-                                className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">職長承認</button>
+                                className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">{fName ? `${fName} 職長承認` : '職長承認'}</button>
                             )}
                             <button onClick={() => rejectingId === req.id ? handleReject(req.id) : (setRejectingId(req.id), setRejectReason(''))}
                               disabled={processingReq === req.id}
@@ -715,9 +728,10 @@ export default function LeavePage() {
                         })()}
                         {req.status === 'foreman_approved' && (() => {
                           const canFinal = userRole === 'admin' || userRole === 'approver'
+                          const fName = resolveForemanName(req.siteId, req.date)
                           return (
                           <>
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">職長済</span>
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">{fName ? `${fName} 職長済` : '職長済'}</span>
                             {canFinal && (
                               <button onClick={() => handleApprove(req.id)} disabled={processingReq === req.id}
                                 className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
