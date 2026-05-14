@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { isTimeBasedMonth, calcActualHours } from '@/types'
 import { isWorkingDay } from '@/lib/attendance'
 
@@ -1496,9 +1496,9 @@ export default function AttendanceGridPage() {
 
                 {/* ── Worker groups ── */}
                 {groupedWorkers.map(group => (
-                  <>
+                  <React.Fragment key={`group-${group.org}`}>
                     {/* Group header */}
-                    <tr key={`group-${group.org}`} className="bg-gray-50">
+                    <tr className="bg-gray-50">
                       <td
                         className="sticky left-0 z-20 bg-gray-50 px-2 py-1 font-bold text-[11px] text-hibi-navy border-t-2 border-hibi-navy"
                         style={{ width: 150, minWidth: 150, maxWidth: 150 }}
@@ -1802,7 +1802,7 @@ export default function AttendanceGridPage() {
                         </tr>
                       )
                     })}
-                  </>
+                  </React.Fragment>
                 ))}
 
                 {/* ── Subcontractors ── */}
