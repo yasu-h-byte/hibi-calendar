@@ -831,7 +831,16 @@ export default function EvaluationPage() {
                 {session.approvedAt && ` / 承認日時: ${new Date(session.approvedAt).toLocaleString('ja-JP')}`}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-right flex items-center gap-2">
+              {session.status === 'approved' && (
+                <a
+                  href={`/evaluation/${session.id}/print`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800 hover:bg-gray-900 text-white inline-flex items-center gap-1"
+                  title="A4 1枚で評価表を印刷"
+                >🖨 A4印刷</a>
+              )}
               {session.status === 'approved' && session.rank && (
                 <div className="flex items-baseline gap-2">
                   <span className="text-xs text-gray-500">ランク</span>
