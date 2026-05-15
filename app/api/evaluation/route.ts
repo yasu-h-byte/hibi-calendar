@@ -6,111 +6,38 @@ import { getMainData } from '@/lib/compute'
 import { logActivity } from '@/lib/activity'
 import { calcEvaluatorWeights } from '@/lib/evaluator-weights'
 import { calcAttendanceMetrics as calcAttendanceMetricsLib, calcAttendanceBonus } from '@/lib/attendance-rate'
-import { EvaluationScores, EvaluationWeights, RaiseTableRow, EvaluationReview } from '@/types'
-
-// ────────────────────────────────────────
-//  デフォルト設定
-// ────────────────────────────────────────
-
-const DEFAULT_WEIGHTS: EvaluationWeights = { japanese: 1.0, attitude: 1.5, skill: 1.2 }
-
-const DEFAULT_RAISE_TABLE: RaiseTableRow[] = [
-  { year: 1, S: 150, A: 100, B: 60, C: 0 },
-  { year: 2, S: 120, A: 80, B: 50, C: 0 },
-  { year: 3, S: 100, A: 60, B: 40, C: 0 },
-  { year: 4, S: 80, A: 50, B: 30, C: 0 },
-  { year: 5, S: 60, A: 40, B: 20, C: 0 },
-  { year: 6, S: 40, A: 30, B: 15, C: 0 },
-]
+import { EvaluationScores, EvaluationReview } from '@/types'
+// ⚠️ 評価ロジックは lib/evaluation-config.ts に集約。
+//   フロントとAPIで重複定義してドリフトする事故を防ぐため、必ず単一の真理ソースを使う。
+import {
+  calculateManualScore,
+  calculateRank,
+  getRaiseAmount,
+  yearsFromHire as calcYearsFromHire,
+  RAISE_TABLE as DEFAULT_RAISE_TABLE,
+  type RaiseTableRow,
+} from '@/lib/evaluation-config'
 
 /** 政仁さんのワーカーID */
 const APPROVER_WORKER_ID = 1
 /** 靖仁さん（admin）のワーカーID — super admin は workerIdが0 */
 const ADMIN_WORKER_ID = 0
 
-// ────────────────────────────────────────
-//  スコア計算ヘルパー
-// ────────────────────────────────────────
-
-/** ABC → 数値変換 */
-function gradeToNum(g: 'A' | 'B' | 'C'): number {
-  switch (g) {
-    case 'A': return 3
-    case 'B': return 2
-    case 'C': return 1
-  }
-}
-
-/** 重み付き手動スコア算出 */
-function calcWeightedScore(scores: EvaluationScores, weights: EvaluationWeights): number {
-  const japaneseSum =
-    gradeToNum(scores.japanese.understanding) +
-    gradeToNum(scores.japanese.reporting) +
-    gradeToNum(scores.japanese.safety)
-
-  const attitudeSum =
-    gradeToNum(scores.attitude.punctuality) +
-    gradeToNum(scores.attitude.safetyAwareness) +
-    gradeToNum(scores.attitude.teamwork)
-
-  const skillSum =
-    gradeToNum(scores.skill.level) +
-    gradeToNum(scores.skill.speed) +
-    gradeToNum(scores.skill.planning)
-
-  return japaneseSum * weights.japanese + attitudeSum * weights.attitude + skillSum * weights.skill
-}
-
-/** 合計スコアからランク算出 */
-function calcRank(totalScore: number): 'S' | 'A' | 'B' | 'C' | 'D' {
-  if (totalScore >= 30) return 'S'
-  if (totalScore >= 25) return 'A'
-  if (totalScore >= 20) return 'B'
-  if (totalScore >= 15) return 'C'
-  return 'D'
-}
-
-/** 昇給テーブルから昇給額を取得 */
-function getRaiseAmount(
-  rank: 'S' | 'A' | 'B' | 'C' | 'D',
-  yearsFromHire: number,
-  raiseTable: RaiseTableRow[],
-): number {
-  if (rank === 'D') return 0
-  const maxYear = Math.max(...raiseTable.map(r => r.year))
-  const yearKey = Math.min(yearsFromHire, maxYear)
-  const row = raiseTable.find(r => r.year === yearKey)
-  if (!row) return 0
-  return row[rank] ?? 0
-}
-
-/** 入社日からの年数算出 */
-function calcYearsFromHire(hireDate: string): number {
-  if (!hireDate) return 1
-  const hire = new Date(hireDate)
-  const now = new Date()
-  const diffMs = now.getTime() - hire.getTime()
-  const years = Math.floor(diffMs / (365.25 * 24 * 60 * 60 * 1000))
-  return Math.max(1, years)
-}
-
-/** 評価設定を取得（存在しなければデフォルト） */
+/**
+ * 評価設定を取得（管理者カスタマイズがあればそれを優先、なければ共通モジュールのデフォルト）。
+ * weights は admin がカスタマイズできない仕様（calculateManualScore に組み込み）。
+ * raiseTable のみ admin 設定での上書きを許容する。
+ */
 async function getEvaluationSettings(): Promise<{
-  weights: EvaluationWeights
   raiseTable: RaiseTableRow[]
 }> {
   const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
   if (!mainDoc.exists()) {
-    return { weights: DEFAULT_WEIGHTS, raiseTable: DEFAULT_RAISE_TABLE }
+    return { raiseTable: DEFAULT_RAISE_TABLE }
   }
   const data = mainDoc.data()
-  const settings = data.evaluationSettings as {
-    weights?: EvaluationWeights
-    raiseTable?: RaiseTableRow[]
-  } | undefined
-
+  const settings = data.evaluationSettings as { raiseTable?: RaiseTableRow[] } | undefined
   return {
-    weights: settings?.weights ?? DEFAULT_WEIGHTS,
     raiseTable: settings?.raiseTable ?? DEFAULT_RAISE_TABLE,
   }
 }
@@ -453,15 +380,16 @@ export async function POST(request: NextRequest) {
       // 評価設定取得
       const settings = await getEvaluationSettings()
 
-      // finalScores から重み付きスコア算出
-      const manualScore = calcWeightedScore(finalScores, settings.weights)
+      // finalScores から重み付きスコア算出（共通ロジック）
+      const manualScoreBreakdown = calculateManualScore(finalScores)
+      const manualScore = Math.round(manualScoreBreakdown.total * 10) / 10
       const attendanceBonus = (current.metrics as { attendanceBonus: number }).attendanceBonus
-      const totalScore = manualScore + attendanceBonus
-      const rank = calcRank(totalScore)
+      const totalScore = Math.round((manualScore + attendanceBonus) * 10) / 10
+      const rank = calculateRank(totalScore)
 
       // 昇給額
       const yearsFromHire = current.yearsFromHire as number
-      const raiseAmount = getRaiseAmount(rank, yearsFromHire, settings.raiseTable)
+      const raiseAmount = getRaiseAmount(rank, yearsFromHire, undefined, settings.raiseTable)
 
       const now = new Date().toISOString()
       await updateDoc(evalRef, {
@@ -484,6 +412,65 @@ export async function POST(request: NextRequest) {
       )
 
       return NextResponse.json({ success: true, rank, totalScore, raiseAmount })
+    }
+
+    // ── 承認済み評価を最新ロジックで再計算（2026-05-15 追加） ──
+    // 過去にロジック不整合や計算ミスで誤った値が保存されたセッションを、
+    // 現在のロジック (lib/evaluation-config.ts) で再計算して保存し直す。
+    // 評価内容 (finalScores) は変更しない。スコア・ランク・昇給額のみ更新する。
+    //
+    // body 例: { action: 'recalculateApproved', evaluationId: '204_2026-05-07' }
+    // body 例: { action: 'recalculateApproved', all: true }  // 全承認済みを一括
+    if (action === 'recalculateApproved') {
+      const { evaluationId, all } = body as { evaluationId?: string; all?: boolean }
+      const settings = await getEvaluationSettings()
+
+      const targets: string[] = []
+      if (all) {
+        const allSnap = await getDocs(collection(db, 'evaluations'))
+        allSnap.forEach(d => {
+          if (d.data().status === 'approved') targets.push(d.id)
+        })
+      } else if (evaluationId) {
+        targets.push(evaluationId)
+      } else {
+        return NextResponse.json({ error: 'evaluationId か all=true のどちらか必須' }, { status: 400 })
+      }
+
+      const results: { id: string; before: { rank?: string; raise?: number; total?: number }; after: { rank: string; raise: number; total: number } }[] = []
+      for (const id of targets) {
+        const ref = doc(db, 'evaluations', id)
+        const snap = await getDoc(ref)
+        if (!snap.exists()) continue
+        const d = snap.data()
+        if (d.status !== 'approved') continue
+        const finalScores = d.finalScores as EvaluationScores
+        if (!finalScores) continue
+
+        const breakdown = calculateManualScore(finalScores)
+        const manualScore = Math.round(breakdown.total * 10) / 10
+        const bonus = (d.metrics?.attendanceBonus as number) ?? 0
+        const totalScore = Math.round((manualScore + bonus) * 10) / 10
+        const newRank = calculateRank(totalScore)
+        const years = d.yearsFromHire as number
+        const newRaise = getRaiseAmount(newRank, years, undefined, settings.raiseTable)
+
+        results.push({
+          id,
+          before: { rank: d.rank, raise: d.raiseAmount, total: d.totalScore },
+          after: { rank: newRank, raise: newRaise, total: totalScore },
+        })
+
+        await updateDoc(ref, {
+          manualScore,
+          totalScore,
+          rank: newRank,
+          raiseAmount: newRaise,
+          recalculatedAt: new Date().toISOString(),
+        })
+      }
+      await logActivity('admin', 'evaluation.recalculateApproved', `承認済み評価を再計算: ${results.length}件`)
+      return NextResponse.json({ success: true, count: results.length, results })
     }
 
     // ── ウェイト再計算（個別セッション） ──
@@ -614,21 +601,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, updated, skipped, errors })
     }
 
-    // ── 設定保存（重み + 昇給テーブル） ──
+    // ── 設定保存（昇給テーブルのみ） ──
+    // 2026-05-15: 重み係数(weights) は lib/evaluation-config.ts に固定値として埋め込み済みのため
+    //   admin カスタマイズの対象外とした。raiseTable のみ上書き可能。
     if (action === 'saveSettings') {
-      const { weights, raiseTable } = body as {
-        weights: EvaluationWeights
-        raiseTable: RaiseTableRow[]
-      }
+      const { raiseTable } = body as { raiseTable: RaiseTableRow[] }
 
-      if (!weights || !raiseTable) {
-        return NextResponse.json({ error: 'weights と raiseTable は必須です' }, { status: 400 })
-      }
-
-      if (weights.japanese <= 0 || weights.attitude <= 0 || weights.skill <= 0) {
-        return NextResponse.json({ error: '重みは正の数である必要があります' }, { status: 400 })
-      }
-      if (raiseTable.length === 0) {
+      if (!raiseTable || raiseTable.length === 0) {
         return NextResponse.json({ error: '昇給テーブルが空です' }, { status: 400 })
       }
 
@@ -639,9 +618,9 @@ export async function POST(request: NextRequest) {
       }
 
       await updateDoc(mainRef, {
-        evaluationSettings: { weights, raiseTable },
+        evaluationSettings: { raiseTable },
       })
-      await logActivity('admin', 'evaluation.saveSettings', '評価設定を更新')
+      await logActivity('admin', 'evaluation.saveSettings', '昇給テーブルを更新')
 
       return NextResponse.json({ success: true })
     }

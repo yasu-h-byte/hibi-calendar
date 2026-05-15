@@ -14,69 +14,15 @@ import {
   AuthUser,
 } from '@/types'
 import { fmtYen } from '@/lib/format'
-
-// ── Helper functions ──
-
-function gradeToScore(g: ABCGrade): number {
-  return g === 'A' ? 3 : g === 'B' ? 2 : 1
-}
-
-const WEIGHTS = { japanese: 1.0, attitude: 1.5, skill: 1.0, living: 1.0 }
-
-function calculateManualScore(scores: EvaluationScores): {
-  japanese: number
-  attitude: number
-  skill: number
-  living: number
-  japaneseW: number
-  attitudeW: number
-  skillW: number
-  livingW: number
-  total: number
-} {
-  const jp =
-    gradeToScore(scores.japanese.understanding) +
-    gradeToScore(scores.japanese.reporting) +
-    gradeToScore(scores.japanese.safety)
-  const att =
-    gradeToScore(scores.attitude.punctuality) +
-    gradeToScore(scores.attitude.safetyAwareness) +
-    gradeToScore(scores.attitude.teamwork) +
-    gradeToScore(scores.attitude.compliance || 'B')
-  const sk =
-    gradeToScore(scores.skill.level) +
-    gradeToScore(scores.skill.speed) +
-    gradeToScore(scores.skill.planning)
-  const lv =
-    gradeToScore(scores.living?.neighborCare || 'B') +
-    gradeToScore(scores.living?.ruleCompliance || 'B') +
-    gradeToScore(scores.living?.cleanliness || 'B')
-  const jpW = jp * WEIGHTS.japanese
-  const attW = att * WEIGHTS.attitude
-  const skW = sk * WEIGHTS.skill
-  const lvW = lv * WEIGHTS.living
-  return {
-    japanese: jp,
-    attitude: att,
-    skill: sk,
-    living: lv,
-    japaneseW: jpW,
-    attitudeW: attW,
-    skillW: skW,
-    livingW: lvW,
-    total: jpW + attW + skW + lvW,
-  }
-}
-
-// 満点45.0（日本語9×1.0 + 勤務態度12×1.5 + 職業能力9×1.0 + 生活態度9×1.0）
-// + 皆勤ボーナス最大3 → 最大48.0
-function calculateRank(totalScore: number): EvaluationRank {
-  if (totalScore >= 39) return 'S'    // 81%+
-  if (totalScore >= 32) return 'A'    // 67%+
-  if (totalScore >= 25) return 'B'    // 52%+
-  if (totalScore >= 17) return 'C'    // 35%+
-  return 'D'
-}
+// ⚠️ 評価ロジック（重み・テーブル・計算関数）は lib/evaluation-config.ts に集約。
+//   フロント・バックエンドで重複して定義すると過去のような不整合が再発する。
+//   修正時は必ず lib/evaluation-config.ts だけを編集すること。
+import {
+  calculateManualScore,
+  calculateRank,
+  getRaiseAmount,
+  yearsFromHire as yearsFromDate,
+} from '@/lib/evaluation-config'
 
 function rankColor(r: EvaluationRank): string {
   switch (r) {
@@ -95,40 +41,7 @@ const VISA_LABELS: Record<string, string> = {
   jisshu: '技能実習', tokutei: '特定技能',
 }
 
-// 昇給テーブル（1,300円スタート → 10年目で S:2,700 A:2,380 B:2,060 C:1,740 到達）
-// D評価は現在時給の1%（法定最低限の昇給義務）
-// 各ランク間の10年目差は均等（約320円）
-const RAISE_TABLE: { year: number; S: number; A: number; B: number; C: number }[] = [
-  { year: 1, S: 220, A: 170, B: 120, C: 80 },
-  { year: 2, S: 200, A: 160, B: 110, C: 65 },
-  { year: 3, S: 180, A: 140, B: 100, C: 55 },
-  { year: 4, S: 170, A: 130, B: 90, C: 50 },
-  { year: 5, S: 160, A: 120, B: 80, C: 50 },
-  { year: 6, S: 140, A: 110, B: 75, C: 45 },
-  { year: 7, S: 120, A: 90, B: 65, C: 35 },
-  { year: 8, S: 110, A: 80, B: 60, C: 30 },
-  { year: 9, S: 100, A: 80, B: 60, C: 30 },
-]
-
-function getRaiseAmount(rank: EvaluationRank, yearsFromHire: number, currentHourlyRate?: number): number {
-  if (rank === 'D') {
-    // D評価: 現在時給の1%（最低昇給義務）
-    const rate = currentHourlyRate || 1300
-    return Math.ceil(rate * 0.01)
-  }
-  const row = RAISE_TABLE.find(r => r.year === Math.min(yearsFromHire, 9)) || RAISE_TABLE[8]
-  return row[rank as 'S' | 'A' | 'B' | 'C']
-}
-
-function yearsFromDate(dateStr: string): number {
-  if (!dateStr) return 0
-  const hire = new Date(dateStr)
-  const now = new Date()
-  let y = now.getFullYear() - hire.getFullYear()
-  const mDiff = now.getMonth() - hire.getMonth()
-  if (mDiff < 0 || (mDiff === 0 && now.getDate() < hire.getDate())) y--
-  return Math.max(1, y)
-}
+// 昇給テーブル / getRaiseAmount / yearsFromDate は lib/evaluation-config.ts に移動済み（import 経由）
 
 /**
  * 次回評価日の計算:
