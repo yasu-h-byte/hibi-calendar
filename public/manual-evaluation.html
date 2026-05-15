@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>評価管理マニュアル - HIBI CONSTRUCTION</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 880px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 920px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
   h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
   h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
   h3 { color: #333; font-size: 16px; margin-top: 24px; }
+  h4 { color: #555; font-size: 14px; margin-top: 16px; margin-bottom: 8px; }
   .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
   .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
   .box-ok { background: #f0fff0; border: 1px solid #80c080; }
@@ -22,99 +23,177 @@
   .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
   .step-text { flex: 1; }
   code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 12px 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+  pre code { background: transparent; color: inherit; padding: 0; }
   .toc { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
   .toc a { color: #1B2A4A; text-decoration: none; }
   .toc a:hover { text-decoration: underline; }
   .toc ol li { margin: 4px 0; }
+  .toc ol ol { margin: 4px 0 4px 16px; }
   hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
-  .grade-a { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
-  .grade-b { background: #fef9c3; color: #854d0e; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
-  .grade-c { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
-  .badge { display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; border: 1px solid; }
-  .badge-submitted { background: #dcfce7; color: #166534; border-color: #86efac; }
-  .badge-pending { background: #f3f4f6; color: #6b7280; border-color: #d1d5db; border-style: dashed; }
-  .badge-stale { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
-  .badge-me { background: #dbeafe; color: #1e40af; border-color: #93c5fd; box-shadow: 0 0 0 2px #60a5fa; }
-  .new-tag { display: inline-block; background: #ede9fe; color: #6d28d9; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 6px; vertical-align: middle; }
-  @media print { body { font-size: 13px; padding: 0; } }
+  .grade-a { background: #dbeafe; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+  .grade-b { background: #f3f4f6; color: #4b5563; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+  .grade-c { background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+  .rank-S { background: #f3e8ff; color: #7c3aed; padding: 2px 10px; border-radius: 4px; font-weight: bold; }
+  .rank-A { background: #dbeafe; color: #1d4ed8; padding: 2px 10px; border-radius: 4px; font-weight: bold; }
+  .rank-B { background: #d1fae5; color: #059669; padding: 2px 10px; border-radius: 4px; font-weight: bold; }
+  .rank-C { background: #fef3c7; color: #d97706; padding: 2px 10px; border-radius: 4px; font-weight: bold; }
+  .rank-D { background: #fee2e2; color: #dc2626; padding: 2px 10px; border-radius: 4px; font-weight: bold; }
+  .audience { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; font-weight: bold; }
+  .aud-admin { background: #fee2e2; color: #b91c1c; }
+  .aud-approver { background: #fef3c7; color: #b45309; }
+  .aud-foreman { background: #dbeafe; color: #1d4ed8; }
+  .aud-all { background: #d1fae5; color: #059669; }
+  @media print { body { font-size: 13px; padding: 0; } pre { color: #333; background: #f5f5f5; } }
 </style>
 </head>
 <body>
 <div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
 
-<h1>HIBI CONSTRUCTION 就業管理システム<br>評価管理マニュアル</h1>
-<p>対象: 管理者・事業責任者（政仁さん）・職長<br>
+<h1>HIBI CONSTRUCTION 就業管理システム<br>評価管理マニュアル（全面改訂版）</h1>
+<p>
+対象: 管理者（靖仁さん）・事業責任者（政仁さん）・職長<br>
 作成日: 2026年4月14日<br>
-最終更新: <strong>2026年5月9日（評価管理画面・ウェイト機能の大幅改訂）</strong><br>
-システムURL: <code>https://hibi-calendar.vercel.app</code></p>
+全面改訂: <strong>2026年5月15日</strong>（評価制度・ロジック刷新を反映してゼロベース書き直し）<br>
+システムURL: <code>https://hibi-calendar.vercel.app</code>
+</p>
 
 <div class="box box-new">
-<strong>📢 2026-05-09 改訂のポイント</strong>
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>タブが <strong>5つ</strong>に再編：<code>一覧 / 評価入力 / 進捗監視 / 承認 / 履歴</code>（後ろ3つは admin/approver 限定）</li>
-  <li>一覧画面のステータス列を<strong>評価者バッジ表示</strong>に刷新（誰が提出済みか一目で分かる）</li>
-  <li><strong>共働実績ベースのウェイト</strong>導入：直近一緒に働いた職長の意見が多数決プリフィルで強く反映</li>
-  <li>提出時に <strong>✅ 確認ダイアログ + 緑トースト + 提出時刻表示</strong>で「保存できた」が確実に伝わる</li>
-  <li>停滞通知：<strong>7日以上未提出</strong>のセッションは管理者・本人にリマインダー</li>
-  <li>履歴タブ・詳細モーダルで承認済み評価を後から振り返り可能</li>
-</ul>
+<strong>📢 このマニュアルについて</strong>
+<p style="margin: 8px 0 0">
+2026年4月の評価制度導入以降、運用と仕様が大きく進化しました。本書はそれを反映した全面改訂版です。<br>
+旧マニュアルの記載と異なる点が多数あるため、評価担当者は<strong>必ず最新版を一読</strong>してから操作してください。
+</p>
+</div>
+
+<div class="box box-warn">
+<strong>対象読者バッジの見方</strong>
+<span class="audience aud-admin">管理者</span>=靖仁さん／
+<span class="audience aud-approver">事業責任者</span>=政仁さん／
+<span class="audience aud-foreman">職長</span>=白戸・大川・大介・他／
+<span class="audience aud-all">全員</span>=全担当者向け
 </div>
 
 <div class="toc">
 <strong>目次</strong>
 <ol>
-  <li><a href="#sec1">評価管理画面へのアクセス</a></li>
-  <li><a href="#sec2">評価の全体フロー</a></li>
-  <li><a href="#sec3">画面構成（5タブ）<span class="new-tag">改訂</span></a></li>
-  <li><a href="#sec4">評価セッションの作成（管理者）</a></li>
-  <li><a href="#sec5">評価の入力・提出</a></li>
-  <li><a href="#sec6">提出状況の確認方法<span class="new-tag">NEW</span></a></li>
-  <li><a href="#sec7">評価者ウェイト（重み付き多数決）<span class="new-tag">NEW</span></a></li>
-  <li><a href="#sec8">評価の承認（政仁さん・管理者）</a></li>
-  <li><a href="#sec9">進捗監視と履歴閲覧<span class="new-tag">NEW</span></a></li>
-  <li><a href="#sec10">通知とリマインダー<span class="new-tag">NEW</span></a></li>
-  <li><a href="#sec11">評価基準（ABC判定の目安）</a></li>
-  <li><a href="#sec12">スコア計算と昇給テーブル</a></li>
-  <li><a href="#sec13">よくある質問・トラブル対処</a></li>
+  <li><a href="#p1">第1部 評価制度の全体像</a>
+    <ol>
+      <li><a href="#sec-1-1">目的と背景</a></li>
+      <li><a href="#sec-1-2">評価対象・評価者・サイクル</a></li>
+      <li><a href="#sec-1-3">評価フローの全体像</a></li>
+    </ol>
+  </li>
+  <li><a href="#p2">第2部 評価項目と判定基準</a>
+    <ol>
+      <li><a href="#sec-2-1">4カテゴリ・13項目の構成</a></li>
+      <li><a href="#sec-2-2">ABC判定の目安（カテゴリ別）</a></li>
+      <li><a href="#sec-2-3">評価者スコープ分担</a></li>
+    </ol>
+  </li>
+  <li><a href="#p3">第3部 評価者ウェイトの仕組み</a>
+    <ol>
+      <li><a href="#sec-3-1">なぜウェイトが必要か</a></li>
+      <li><a href="#sec-3-2">役割別の基準ウェイト</a></li>
+      <li><a href="#sec-3-3">職長のウェイト計算式</a></li>
+      <li><a href="#sec-3-4">ウェイトの確認・再計算</a></li>
+    </ol>
+  </li>
+  <li><a href="#p4">第4部 操作マニュアル</a>
+    <ol>
+      <li><a href="#sec-4-1">アクセスと画面構成</a></li>
+      <li><a href="#sec-4-2">評価セッションの作成</a></li>
+      <li><a href="#sec-4-3">評価入力・提出</a></li>
+      <li><a href="#sec-4-4">提出状況・リマインダー</a></li>
+      <li><a href="#sec-4-5">承認フロー</a></li>
+      <li><a href="#sec-4-6">詳細モーダル・A4印刷</a></li>
+      <li><a href="#sec-4-7">履歴・再計算</a></li>
+    </ol>
+  </li>
+  <li><a href="#p5">第5部 スコアと昇給</a>
+    <ol>
+      <li><a href="#sec-5-1">手動スコアの計算式</a></li>
+      <li><a href="#sec-5-2">出勤指標と皆勤ボーナス</a></li>
+      <li><a href="#sec-5-3">ランク判定（S/A/B/C/D）</a></li>
+      <li><a href="#sec-5-4">昇給テーブル</a></li>
+      <li><a href="#sec-5-5">昇給履歴の確認</a></li>
+    </ol>
+  </li>
+  <li><a href="#p6">第6部 運用ルール</a>
+    <ol>
+      <li><a href="#sec-6-1">バイアス防止</a></li>
+      <li><a href="#sec-6-2">評価期間中の禁止事項</a></li>
+      <li><a href="#sec-6-3">守秘義務（給与情報の取扱い）</a></li>
+    </ol>
+  </li>
+  <li><a href="#p7">第7部 トラブル対処・FAQ</a>
+    <ol>
+      <li><a href="#sec-7-1">よくある質問</a></li>
+      <li><a href="#sec-7-2">不整合発生時の修復</a></li>
+    </ol>
+  </li>
 </ol>
 </div>
 
-<!-- ================================================ -->
-<h2 id="sec1">1. 評価管理画面へのアクセス</h2>
+<!-- ============================================================ -->
+<!-- 第1部: 評価制度の全体像 -->
+<!-- ============================================================ -->
+<h1 id="p1" style="margin-top: 50px;">第1部　評価制度の全体像</h1>
 
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text"><code>https://hibi-calendar.vercel.app</code> にログイン</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">左のサイドバーを開く（スマホはハンバーガーメニュー ☰）</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text"><strong>「人事・労務」セクション</strong>の中の<strong>「評価管理」</strong>をクリック</div>
-</div>
+<h2 id="sec-1-1">1.1 目的と背景 <span class="audience aud-all">全員</span></h2>
+
+<p>
+本評価制度は、外国人スタッフ（技能実習生・特定技能）の<strong>処遇を客観的かつ公平に決定する</strong>ための仕組みです。
+複数の職長と事業責任者・管理者の評価を組み合わせ、各評価者の実際の接点（共働日数）に応じた重み付けで、特定の人の主観に偏らない結果を出すことを目的としています。
+</p>
 
 <div class="box">
-<strong>直接URLでもアクセスできます：</strong><br>
-<code>https://hibi-calendar.vercel.app/evaluation</code>
+<strong>評価結果が反映されるもの</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>時給の昇給額（評価ランクと勤続年数で自動算出）</li>
+  <li>育成方針の判断材料（どの分野を伸ばすか）</li>
+  <li>更新契約・雇用継続の判断材料</li>
+</ul>
 </div>
 
-<div class="box">
-<strong>ダッシュボードからもアクセス可能：</strong><br>
-ホーム画面の「📋 評価管理」カードから直接、進行中の評価セッションを確認・移動できます。
+<h2 id="sec-1-2">1.2 評価対象・評価者・サイクル <span class="audience aud-all">全員</span></h2>
+
+<h3>評価対象</h3>
+<p>
+在留資格を持つ外国人スタッフ全員（日本人スタッフは対象外）。
+原則として<strong>入社記念日の前後1ヶ月</strong>で年1回評価を実施します。
+</p>
+
+<h3>評価者の構成（5名）</h3>
+<table>
+<tr><th>区分</th><th>担当者</th><th>役割</th></tr>
+<tr><td>管理者</td><td><strong>靖仁さん</strong>（workerId=0）</td><td>セッション作成・承認・<strong>生活態度の評価</strong></td></tr>
+<tr><td>事業責任者</td><td><strong>政仁さん</strong>（workerId=1）</td><td>最終承認・業務評価3カテゴリ</td></tr>
+<tr><td>職長 3名</td><td><strong>白戸さん・大川さん・大介さん</strong></td><td>業務評価3カテゴリ</td></tr>
+</table>
+
+<div class="box box-warn">
+<strong>なぜ生活態度だけ靖仁さんが評価？</strong><br>
+寮の運営・近隣からの苦情対応・寮ルール管理は管理部門の担当領域です。職長は現場での業務しか把握しないため、現場接点のない生活面を評価できる立場にありません。スコープを分けて<strong>各自が責任を持って評価できる範囲だけ</strong>を採点する設計にしています。
 </div>
 
-<!-- ================================================ -->
-<h2 id="sec2">2. 評価の全体フロー</h2>
+<h3>評価サイクル</h3>
+<ul>
+  <li>年1回・入社記念日基準</li>
+  <li>セッション作成から承認まで通常2〜3週間</li>
+  <li>承認結果は翌月の給与（昇給）に反映</li>
+</ul>
+
+<h2 id="sec-1-3">1.3 評価フローの全体像 <span class="audience aud-all">全員</span></h2>
 
 <div class="box box-ok">
 <table>
-<tr><th>ステップ</th><th>誰が</th><th>やること</th><th>画面のタブ</th></tr>
-<tr><td><strong>①</strong></td><td><strong>管理者</strong></td><td>評価セッションを作成（対象スタッフと評価者を選択）</td><td>一覧</td></tr>
+<tr><th>ステップ</th><th>担当</th><th>やること</th><th>該当タブ</th></tr>
+<tr><td><strong>①</strong></td><td>管理者</td><td>評価セッション作成（対象スタッフと評価者を選択）</td><td>一覧</td></tr>
 <tr><td><strong>②〜⑥</strong></td><td>職長3名 + 政仁さん + 靖仁さん</td><td>各自ABC評価を入力して提出</td><td>評価入力</td></tr>
-<tr><td colspan="4" style="text-align:center; background:#e6f4ea; font-weight:bold;">↓ 全員の提出が完了すると、自動で「最終確認中」に遷移 ↓</td></tr>
-<tr><td><strong>⑦</strong></td><td><strong>政仁さん/管理者</strong></td><td>全員の評価を横並びで比較し、最終ABCを決定 → 承認</td><td>承認</td></tr>
+<tr><td colspan="4" style="text-align:center; background:#e6f4ea; font-weight:bold;">↓ 全員提出が完了すると、自動で「最終確認待ち」に遷移 ↓</td></tr>
+<tr><td><strong>⑦</strong></td><td>政仁さん／管理者</td><td>各評価者の結果を横並びで比較 → 加重平均でプリフィルされた最終ABCを確認・修正 → 承認</td><td>承認</td></tr>
+<tr><td><strong>⑧</strong></td><td>システム</td><td>承認時に手動スコア・合計スコア・ランク・推奨昇給額を自動算出して保存</td><td>—</td></tr>
 </table>
 </div>
 
@@ -122,549 +201,596 @@
 <strong>バイアス防止：</strong>各評価者は<strong>自分が提出するまで他の人の評価を見ることができません</strong>。提出後に初めて他の評価者の結果が表示されます。
 </div>
 
-<div class="box box-new">
-<strong>2026-05-09 強化点：</strong>
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>提出進捗を <strong>誰が出した／誰が未提出</strong> で可視化（一覧・進捗監視タブ）</li>
-  <li>承認の最終ABC初期値は <strong>評価者ウェイト</strong> を考慮した多数決で算出</li>
-  <li>承認後も<strong>履歴タブ</strong>からいつでも詳細を再確認可能</li>
-</ul>
-</div>
+<!-- ============================================================ -->
+<!-- 第2部: 評価項目と判定基準 -->
+<!-- ============================================================ -->
+<h1 id="p2" style="margin-top: 50px;">第2部　評価項目と判定基準</h1>
 
-<!-- ================================================ -->
-<h2 id="sec3">3. 画面構成（5タブ） <span class="new-tag">改訂</span></h2>
+<h2 id="sec-2-1">2.1 4カテゴリ・13項目の構成 <span class="audience aud-all">全員</span></h2>
 
 <table>
-<tr><th>タブ</th><th>誰が見られる</th><th>主な用途</th></tr>
-<tr><td><strong>一覧</strong></td><td>全員</td><td>全スタッフの評価ステータス・ランク・次回評価日。誰が提出済みかをバッジで把握</td></tr>
-<tr><td><strong>評価入力</strong></td><td>評価者として割り当てられた人</td><td>自分のABC評価の入力・提出</td></tr>
-<tr><td><strong>進捗監視</strong> <span class="new-tag">NEW</span></td><td>管理者・政仁さんのみ</td><td>進行中セッションを横並びで一望。停滞しているセッションを発見</td></tr>
-<tr><td><strong>承認</strong></td><td>管理者・政仁さんのみ</td><td>最終確認待ちセッションの最終ABC決定 → 承認</td></tr>
-<tr><td><strong>履歴</strong> <span class="new-tag">NEW</span></td><td>管理者・政仁さんのみ</td><td>承認済み評価を年フィルタ付きで一覧。詳細を再閲覧可能</td></tr>
+<tr><th>カテゴリ</th><th>項目数</th><th>重み</th><th>満点</th><th>含まれる項目</th></tr>
+<tr><td>🗣 日本語能力</td><td>3項目</td><td>×1.0</td><td>9点</td><td>指示理解／報告・連絡／安全用語</td></tr>
+<tr><td>💼 勤務態度 <strong>(最重要)</strong></td><td>4項目</td><td><strong>×1.5</strong></td><td><strong>18点</strong></td><td>時間厳守・出勤／安全意識／協調性・チームワーク／<strong>指示遵守</strong></td></tr>
+<tr><td>🔨 職業能力</td><td>3項目</td><td>×1.0</td><td>9点</td><td>技能レベル／作業速度・品質／段取り・準備</td></tr>
+<tr><td>🏠 生活態度</td><td>3項目</td><td>×1.0</td><td>9点</td><td>近隣配慮／ルール遵守／住環境維持</td></tr>
+<tr><td><strong>計</strong></td><td><strong>13項目</strong></td><td>—</td><td><strong>45点</strong></td><td>+ 皆勤ボーナス最大3点 = <strong>合計 48点満点</strong></td></tr>
 </table>
 
-<h3>一覧タブの見方（刷新）</h3>
+<h2 id="sec-2-2">2.2 ABC判定の目安（カテゴリ別） <span class="audience aud-all">全員</span></h2>
+
+<p>
+各評価者は項目ごとに <span class="grade-a">A</span><span class="grade-b">B</span><span class="grade-c">C</span> の3段階で評価します。<br>
+迷ったらBが基本。明確に上回る／下回る具体例があるときだけAまたはCを付けてください。
+</p>
+
+<h3>🗣 日本語能力（3項目 × ×1.0 = 9点満点）</h3>
+<table>
+<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
+<tr><td>指示理解</td><td>一度で正確に理解し、確認の質問もできる</td><td>概ね理解するが、たまに聞き返しが必要</td><td>繰り返し説明が必要。複雑な指示は通じにくい</td></tr>
+<tr><td>報告・連絡</td><td>自分から日本語で報告・連絡ができる。問題発生時も的確に伝えられる</td><td>聞かれれば答えられるが、自発的な報告は少ない</td><td>通訳が必要な場面が多い。報告が遅れることがある</td></tr>
+<tr><td>安全用語</td><td>危険予知・安全指示を理解し、他のスタッフにも伝達できる</td><td>基本的な安全用語（危ない・止まれ・ヘルメット等）は理解している</td><td>安全に関する指示の理解が不十分。安全面でのリスクがある</td></tr>
+</table>
+
+<h3>💼 勤務態度（4項目 × ×1.5 = 18点満点 — 最重要）</h3>
+<table>
+<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
+<tr><td>時間厳守・出勤</td><td>無遅刻・無欠勤（有給除く）。始業前に準備を済ませている</td><td>年1〜2回の遅刻程度。基本的には時間を守る</td><td>遅刻・無断欠勤が目立つ。時間管理に課題がある</td></tr>
+<tr><td>安全意識</td><td>ヘルメット・安全帯の着用を自ら徹底。周囲の安全にも気を配る</td><td>注意すれば守る。基本的なルールは理解している</td><td>繰り返し注意が必要。安全装備の着用忘れや不安全行動がある</td></tr>
+<tr><td>協調性・チームワーク</td><td>他のスタッフと積極的に協力し、後輩の面倒も見る。現場の雰囲気を良くする</td><td>与えられた仕事を問題なくこなす。チームワークに支障はない</td><td>単独行動が多い。コミュニケーションが不足し、チームワークに課題がある</td></tr>
+<tr><td>指示遵守</td><td>職長や先輩社員の指示を正確に守り、自己判断で勝手に変えない。不明点は必ず確認する</td><td>基本的に指示は守るが、たまに自己判断で省略・変更することがある</td><td>指示を守らないことが目立つ。自分のやり方で勝手に進めてしまうことがある</td></tr>
+</table>
+
+<h3>🔨 職業能力（3項目 × ×1.0 = 9点満点）</h3>
+<table>
+<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
+<tr><td>技能レベル</td><td>一人で任せられる作業が多い。難易度の高い作業もこなせる</td><td>指示を受ければ一通りの作業ができる。標準的なレベル</td><td>常に監督が必要。基本的な作業でもミスが多い</td></tr>
+<tr><td>作業速度・品質</td><td>日本人と同等以上のスピードと品質。手直しがほとんど不要</td><td>概ね問題ないレベル。時々確認や手直しが必要</td><td>スピード・品質に改善が必要。手直しが頻繁に発生する</td></tr>
+<tr><td>段取り・準備</td><td>次の工程を予測して自ら材料・道具を準備できる。段取りが良い</td><td>言われれば段取りできる。基本的な準備はできる</td><td>段取りの意識が低い。指示待ちになることが多い</td></tr>
+</table>
+
+<h3>🏠 生活態度（3項目 × ×1.0 = 9点満点）</h3>
+<table>
+<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
+<tr><td>近隣配慮</td><td>近隣からの苦情ゼロ。騒音・駐車等に自ら配慮し、他のスタッフにも注意できる</td><td>基本的なルールは守る。年1〜2回注意を受ける程度</td><td>近隣からの苦情がある。騒音・マナー違反を繰り返し注意される</td></tr>
+<tr><td>ルール遵守</td><td>ゴミ出し・分別・当番など寮のルールを率先して守る。他のスタッフにも声かけできる</td><td>言われれば守る。基本的なルールは理解している</td><td>ルールを守らないことが多い。繰り返し注意が必要</td></tr>
+<tr><td>住環境維持</td><td>部屋・共用部をいつもきれいに保つ。整理整頓が行き届いている</td><td>普通の清潔さは保っている。時々散らかっていることがある</td><td>部屋や共用部が不衛生。清掃を怠ることが多い</td></tr>
+</table>
+
+<h2 id="sec-2-3">2.3 評価者スコープ分担 <span class="audience aud-all">全員</span></h2>
+
+<div class="box box-warn">
+<strong>誰がどのカテゴリを評価するか</strong>
+</div>
 
 <table>
-<tr><th>列</th><th>内容</th></tr>
-<tr><td><strong>名前 / 在留資格 / 勤続</strong></td><td>スタッフ基本情報</td></tr>
-<tr><td><strong>提出状況</strong> <span class="new-tag">改訂</span></td><td>各評価者を <span class="badge badge-submitted">✓田中</span> <span class="badge badge-pending">○山田</span> <span class="badge badge-stale">○大川</span> <span class="badge badge-me">👤✓政仁</span> のように表示。緑=提出済 / グレー破線=未提出 / 橙=7日以上未提出 / 青枠=自分</td></tr>
-<tr><td><strong>自分</strong> <span class="new-tag">NEW</span></td><td>自分が評価者なら <span class="badge badge-submitted">✓ 提出済</span> または <span class="badge badge-stale">⏳ 未提出</span> を表示。評価者でなければ <code>―</code></td></tr>
-<tr><td><strong>ランク</strong></td><td>承認済みなら <strong>S/A/B/C/D</strong>。<strong>クリックで承認時の詳細</strong>（評価者ごとの内容）が再閲覧可能</td></tr>
-<tr><td><strong>次回評価日</strong></td><td>前回承認から1年後。期限超過は赤字＋ <span style="background:#fee2e2; color:#991b1b; padding:1px 6px; border-radius:8px; font-size:11px;">期限超過</span></td></tr>
-<tr><td><strong>操作</strong></td><td>状況に応じて「評価入力」「修正」「承認へ」「詳細」ボタンが出ます</td></tr>
+<tr><th>評価者</th><th>🗣 日本語</th><th>💼 勤務態度</th><th>🔨 職業能力</th><th>🏠 生活態度</th></tr>
+<tr><td>靖仁さん（admin）</td><td>—</td><td>—</td><td>—</td><td><strong>◎</strong></td></tr>
+<tr><td>政仁さん（approver）</td><td>◯</td><td>◯</td><td>◯</td><td>—</td></tr>
+<tr><td>白戸さん（職長）</td><td>◯</td><td>◯</td><td>◯</td><td>—</td></tr>
+<tr><td>大川さん（職長）</td><td>◯</td><td>◯</td><td>◯</td><td>—</td></tr>
+<tr><td>大介さん（職長）</td><td>◯</td><td>◯</td><td>◯</td><td>—</td></tr>
 </table>
 
 <div class="box">
-<strong>評価者バッジにマウスオーバーすると、提出日時または「未提出（開始からN日経過）」が表示されます。</strong>
+<strong>画面上の挙動</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>各評価者の入力画面では、<strong>自分が担当するカテゴリしか表示されない</strong></li>
+  <li>承認画面の比較表でスコープ外のセルは「—」と表示される</li>
+  <li>最終ABCの加重平均は<strong>スコープ内の評価者のみ</strong>で計算される</li>
+</ul>
 </div>
 
-<!-- ================================================ -->
-<h2 id="sec4">4. 評価セッションの作成（管理者）</h2>
+<!-- ============================================================ -->
+<!-- 第3部: 評価者ウェイト -->
+<!-- ============================================================ -->
+<h1 id="p3" style="margin-top: 50px;">第3部　評価者ウェイトの仕組み</h1>
+
+<h2 id="sec-3-1">3.1 なぜウェイトが必要か <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
+
+<p>
+全員の意見を単純多数決で扱うと、実際に対象スタッフと一緒に働いていない職長の意見が、毎日一緒の職長と同じ重みで反映されてしまいます。
+これでは公平とは言えません。
+そこで<strong>「対象スタッフと過去1年でどれだけ一緒に働いたか」</strong>を元に、各評価者の意見をどの程度反映するかを自動算出するウェイト機能を導入しています。
+</p>
+
+<h2 id="sec-3-2">3.2 役割別の基準ウェイト <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
+
+<table>
+<tr><th>評価者</th><th>固定値</th><th>説明</th></tr>
+<tr><td>靖仁さん（admin）</td><td><strong>0.5</strong>（固定）</td><td>現場接点が少ないため抑制した値。担当する生活態度の評価には十分な接点があるため、その評価のみで使用される</td></tr>
+<tr><td>政仁さん（approver）</td><td><strong>0.7</strong>（固定）</td><td>事業責任者として全般を見る立場。現場には日常的に出ているが個別スタッフとの密着度は職長より低い</td></tr>
+<tr><td>職長3名</td><td><strong>0.1 〜 1.0</strong>（自動）</td><td>対象スタッフとの直近1年の共働日数で自動算出（次節）</td></tr>
+</table>
+
+<h2 id="sec-3-3">3.3 職長のウェイト計算式 <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
+
+<h3>計算式</h3>
+<pre><code>monthsWithData = 過去365日 のうち att データのある月数（0〜12）
+dynamicCap     = max(20, round(200 × monthsWithData / 12))
+yearDays       = 評価日から過去365日の共働日数
+
+IF yearDays == 0:
+  weight = 0.1   ← 「この人を知らない」職長の特例
+ELSE:
+  weight = 0.3 + 0.7 × (min(yearDays, dynamicCap) / dynamicCap)
+範囲: 0.1（ゼロ日特例）または 0.3〜1.0（共働あり）</code></pre>
+
+<h3>なぜ動的キャップ？</h3>
+<p>
+旧システム稼働前（2025年9月以前）の出面データはほぼ存在しません。
+12ヶ月分のフル日数を固定キャップにすると、データの少ない期間しか評価対象にできないスタッフの主担当職長まで不当に低いウェイトになってしまいます。
+そこで「データのある月数」に按分してキャップを縮小し、主担当職長が8ヶ月分のデータでも 100% に到達できるよう調整しています。
+</p>
+
+<h3>具体例（評価日: 2026-05-07）</h3>
+
+<h4>例1: 主担当職長 — 大川さん × グエン・ミン・サンさん</h4>
+<table>
+<tr><td>monthsWithData</td><td>8ヶ月（2025-10〜2026-05に出面データあり）</td></tr>
+<tr><td>dynamicCap</td><td>max(20, round(200×8/12)) = <strong>133日</strong></td></tr>
+<tr><td>yearDays</td><td>74日</td></tr>
+<tr><td>weight</td><td>0.3 + 0.7 × (74/133) = <strong>0.69</strong></td></tr>
+</table>
+
+<h4>例2: 接点ゼロ — 白戸さん × HFUスタッフ</h4>
+<table>
+<tr><td>yearDays</td><td>0日（別現場で一度も共働なし）</td></tr>
+<tr><td>weight</td><td><strong>0.1</strong>（ゼロ日特例）</td></tr>
+</table>
+
+<div class="box">
+<strong>共働日数の定義</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>対象スタッフが「その評価者が月の職長として責任を持っていた現場」で実出勤した日数</li>
+  <li>月の職長は <code>mforeman[siteId_ym]</code>（月別オーバーライド）→ <code>site.foreman</code>（デフォルト）の順で解決</li>
+  <li>有給・休み・帰国中・試験などは共働にカウントしない（実出勤のみ）</li>
+</ul>
+</div>
+
+<h2 id="sec-3-4">3.4 ウェイトの確認・再計算 <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
+
+<h3>確認方法</h3>
+<ul>
+  <li>承認画面の比較表ヘッダ — 各評価者の名前の下に <code>w=0.70</code> 等で表示</li>
+  <li>ホバーで「過去365日 共働X日／うち直近90日 Y日」が補足表示</li>
+  <li>A4印刷ページにも反映される</li>
+</ul>
+
+<h3>再計算ボタン</h3>
+<p>
+出勤データを後から修正した場合などに、進行中セッションのウェイトを最新の出勤実績で再計算できます。承認画面の「🔄 ウェイト一括再計算」または個別セッションの「🔄 ウェイト再計算」ボタンを使用。<strong>承認済みセッションのウェイトは原則変更しません</strong>（過去の評価結果を変えないため）。
+</p>
+
+<!-- ============================================================ -->
+<!-- 第4部: 操作マニュアル -->
+<!-- ============================================================ -->
+<h1 id="p4" style="margin-top: 50px;">第4部　操作マニュアル</h1>
+
+<h2 id="sec-4-1">4.1 アクセスと画面構成 <span class="audience aud-all">全員</span></h2>
 
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text">評価管理画面の<strong>「一覧」タブ</strong>を開く</div>
+  <div class="step-text"><code>https://hibi-calendar.vercel.app</code> にログイン</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">右上の<strong>「評価セッション作成」</strong>ボタンをクリック</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">対象スタッフを選択（外国人スタッフが一覧表示されます）</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">評価者を選択（チェックボックスで選択。デフォルトは <strong>職長3名+政仁さん+靖仁さん</strong> の5名）</div>
-</div>
-<div class="step">
-  <div class="step-num">5</div>
-  <div class="step-text"><strong>「作成」</strong>ボタンで評価セッションが開始されます</div>
+  <div class="step-text">サイドバー「人事・労務」セクション →「📋 評価管理」</div>
 </div>
 
-<div class="box box-ok">
-<strong>2026-05-09 追加：</strong>セッション作成時に <strong>評価者ウェイト</strong>（共働実績ベース）が自動計算されて保存されます。詳細は <a href="#sec7">第7章</a> をご覧ください。
-</div>
+<h3>画面の5タブ</h3>
+<table>
+<tr><th>タブ</th><th>主な用途</th><th>権限</th></tr>
+<tr><td><strong>一覧</strong></td><td>全スタッフの評価状況を横断的に確認・操作の入口</td><td>全員</td></tr>
+<tr><td><strong>評価入力</strong></td><td>自分が評価者になっているセッションで ABC を入力</td><td>全員</td></tr>
+<tr><td><strong>進捗監視</strong></td><td>進行中セッションのみを集約表示</td><td>管理者・事業責任者</td></tr>
+<tr><td><strong>承認</strong></td><td>全員提出済みセッションの最終確認 → 承認</td><td>管理者・事業責任者</td></tr>
+<tr><td><strong>履歴</strong></td><td>承認済み評価の閲覧・A4印刷</td><td>管理者・事業責任者</td></tr>
+</table>
 
-<div class="box">
-<strong>評価タイミング：</strong>年1回、各スタッフの入社日基準。入社日の1ヶ月前に通知ベルにアラートが表示されます。
-</div>
-
-<div class="box box-warn">
-<strong>「期限超過」アラートについて：</strong>通知ベルに表示される評価の「期限超過」アラートは、<strong>過去にシステムで評価を実施したことがあるスタッフのみ</strong>が対象です。まだ一度も評価されていないスタッフには、入社日基準のアラートは表示されません。
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec5">5. 評価の入力・提出</h2>
+<h2 id="sec-4-2">4.2 評価セッションの作成 <span class="audience aud-admin">管理者</span></h2>
 
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text">評価管理画面の<strong>「評価入力」タブ</strong>を開く</div>
+  <div class="step-text">一覧タブ →「評価セッション作成」ボタン</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">上部のドロップダウンから<strong>評価対象のスタッフ</strong>を選択<br>
-  <span style="color:#888; font-size:13px;">※ 自分が評価者に指定されているスタッフのみ表示されます</span></div>
+  <div class="step-text">評価対象スタッフを選択（外国人スタッフのみ表示）</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">3つの評価カテゴリ（日本語能力・勤務態度・職業能力）について、各項目の<strong>A/B/C</strong>を選択<br>
-  <span style="color:#888; font-size:13px;">※ 勤務態度は4項目（指示遵守を含む）、他は3項目ずつ、計10項目です</span><br>
-  <span style="color:#888; font-size:13px;">※ 各項目の横の ℹ️ アイコンをクリックすると、ABCの具体的な判定基準が表示されます</span></div>
+  <div class="step-text">評価者を選択（職長 + 政仁さん + 靖仁さん の5名がデフォルトで選択済み）</div>
 </div>
 <div class="step">
   <div class="step-num">4</div>
-  <div class="step-text"><strong>コメント</strong>を記入（任意）</div>
+  <div class="step-text">「作成する」をクリック → 自動でウェイトを算出して保存</div>
 </div>
-<div class="step">
-  <div class="step-num">5</div>
-  <div class="step-text">画面下部のスコアプレビューを確認し、<strong>「提出する」</strong>ボタンを押す</div>
-</div>
-
-<div class="box box-new">
-<strong>📢 提出が成功したか分かるようになりました（2026-05-09 改善）</strong>
-<p>「提出する」を押すと、以下 <strong>3つの形</strong> で「保存できた」が確認できます：</p>
-<ol style="margin: 8px 0; padding-left: 20px;">
-  <li><strong>確認ダイアログ</strong>が画面中央に出る — クリックで閉じるまで消えません<br>
-  <code>✅ 〇〇さんの評価を提出しました</code></li>
-  <li><strong>緑のトーストバナー</strong>が画面最上部に表示（8秒で自動フェード）</li>
-  <li>画面が自動的にスクロールトップし、<strong>「✓ 〇〇さんの評価を提出済みです（保存完了時刻）」</strong>の緑バナーが表示される</li>
-</ol>
-<p style="margin: 8px 0 0;">⚠️ <strong>これらが出なければ、保存されていません。</strong>もう一度「提出する」を押してください。</p>
-</div>
-
-<div class="box box-ok">
-<strong>提出後にできること：</strong>
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li><strong>自分の評価を修正</strong>したい場合は「修正する」ボタンで再編集可能</li>
-  <li><strong>他の評価者の結果</strong>を閲覧可能（提出前は見えません）</li>
-  <li><strong>他の対象スタッフ</strong>がいる場合は、上のドロップダウンから次の人を選んで続けて評価できます</li>
-</ul>
-</div>
-
-<div class="box box-warn">
-<strong>複数のスタッフを評価する場合の注意：</strong><br>
-1人提出した後、<strong>必ずドロップダウンから次のスタッフを選んで</strong>評価を続けてください。同じ画面に居続けても次のスタッフには切り替わりません。<br>
-進捗を確認したい場合は「一覧」タブで<strong>提出状況バッジ</strong>を見ると一目です。
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec6">6. 提出状況の確認方法 <span class="new-tag">NEW</span></h2>
-
-<p>「誰が提出済みで、誰がまだか」を確認する方法は <strong>3つ</strong>あります。</p>
-
-<h3>① 一覧タブ — 全スタッフを横断的に確認</h3>
-<p>「提出状況」列の評価者バッジを見れば、各セッションの状況が一目で分かります。</p>
-<ul>
-  <li><span class="badge badge-submitted">✓田中</span> 緑＝提出済み（マウスオーバーで提出日時）</li>
-  <li><span class="badge badge-pending">○山田</span> グレー破線＝未提出</li>
-  <li><span class="badge badge-stale">○大川</span> 橙＝7日以上未提出（停滞警告）</li>
-  <li><span class="badge badge-me">👤✓政仁</span> 青枠＝自分</li>
-</ul>
-
-<h3>② 進捗監視タブ（管理者専用） — 進行中セッションだけを2カラムで一望</h3>
-<p>収集中・最終確認待ちのセッションだけを横並びカード表示。停滞中のセッションは橙ボーダーで強調されます。</p>
-
-<h3>③ 詳細モーダル — 1セッションを掘り下げ</h3>
-<p>一覧の「詳細」ボタン、または進捗監視のカード「詳細」ボタンから開けます。表示内容：</p>
-<ul>
-  <li>提出状況バッジ（評価者ごと）</li>
-  <li>出勤実績（過去1年）</li>
-  <li>評価者ウェイト一覧（共働率・ウェイトバー）</li>
-  <li>評価者比較表（読み取り専用）</li>
-  <li>各評価者のコメント</li>
-</ul>
 
 <div class="box">
-<strong>大川さんが「ゴック・サンの評価をしたつもりだったが保存されていなかった」事案を受けて、これらの可視化機能を追加しました。</strong> 今後は提出漏れがあれば一覧バッジで即座に発見できます。
+<strong>セッションIDの形式</strong><br>
+<code>{workerId}_{評価日YYYY-MM-DD}</code>（例: <code>204_2026-05-07</code>）<br>
+同一スタッフは同じ評価日に複数作成できません（重複作成防止）。
 </div>
 
-<!-- ================================================ -->
-<h2 id="sec7">7. 評価者ウェイト（重み付き多数決）<span class="new-tag">NEW</span></h2>
-
-<div class="box box-new">
-<strong>2026-05-09 導入：「直近で実際に一緒に現場にいた職長の意見」が多数決プリフィルで強く反映される仕組み</strong>
-</div>
-
-<h3>なぜ必要？</h3>
-<p>これまでは、対象スタッフを毎日見ている主担当の職長と、たまに顔を出した程度の職長の意見が <strong>同じ重み（1票）</strong> で扱われていました。実態に即した評価のため、共働実績に応じて重みを変えるようにしました。</p>
-
-<h3>ウェイトの計算式</h3>
-
-<div class="box">
-<strong>事業責任者（靖仁さん・政仁さん）</strong>: weight = <strong>1.0（固定）</strong> ← ★ マーク付き<br><br>
-<strong>その他職長</strong>:
-<pre style="background:#f8f8f8; padding: 8px; border-radius: 6px; font-size: 13px; line-height: 1.4;">recent = min(直近90日の共働日数, 60)
-year   = min(過去365日の共働日数, 200)
-weight = 0.3 + 0.4 × (recent / 60) + 0.3 × (year / 200)
-</pre>
-範囲: <strong>0.3 〜 1.0</strong>
-</div>
-
-<h3>シナリオ別の例</h3>
-
-<table>
-<tr><th>シナリオ</th><th>直近90日</th><th>過去365日</th><th>weight</th></tr>
-<tr><td>主担当職長（毎日同じ現場）</td><td>60+ 日</td><td>200+ 日</td><td><strong>1.0</strong></td></tr>
-<tr><td>数ヶ月一緒だったが直近離れた</td><td>0 日</td><td>100 日</td><td>0.45</td></tr>
-<tr><td>直近たまに一緒</td><td>20 日</td><td>30 日</td><td>0.48</td></tr>
-<tr><td>一度も同じ現場なし</td><td>0 日</td><td>0 日</td><td><strong>0.30</strong></td></tr>
-<tr><td>政仁さん・靖仁さん</td><td>―</td><td>―</td><td><strong>1.0 ★</strong></td></tr>
-</table>
-
-<h3>共働日数の判定方法</h3>
-<p>対象スタッフが<strong>「その評価者が月の職長として責任を持っていた現場」</strong>で<strong>実出勤した日</strong>をカウントします。</p>
-<ul>
-  <li>月単位の職長変更（mforeman）も忠実に反映</li>
-  <li>有給・休み・帰国中などの非作業日は除外</li>
-</ul>
-
-<h3>使われ方：承認画面の多数決プリフィル</h3>
-<p>承認時に最終ABCを決める際、これまでは <strong>1人=1票</strong> の多数決で初期値が決まっていました。今後は <strong>1人=ウェイト分の票</strong> で初期値が計算されます。</p>
-
-<div class="box">
-<strong>例：</strong>3名の評価者がそれぞれ A / A / B と評価し、ウェイトが 0.95 / 0.45 / 1.0 の場合<br>
-A票合計 = 0.95 + 0.45 = <strong>1.40</strong> / B票合計 = <strong>1.0</strong> → <strong>A が初期値</strong>になる
-</div>
-
-<div class="box box-warn">
-<strong>あくまで「初期値（プリフィル）」であり、最終決定は政仁さん（または管理者）が承認画面で自由に変更できます。</strong>運用の最終責任は変わりません。
-</div>
-
-<h3>ウェイトの確認方法</h3>
-<p>承認画面の比較表ヘッダーと、詳細モーダルの「評価者ウェイト」セクションで確認できます：</p>
-<ul>
-  <li><code>w=0.95 / 直近63% / 年71%</code> のような表示</li>
-  <li>★マークは事業責任者として 1.0 固定の意</li>
-  <li>マウスオーバーで実日数も表示</li>
-</ul>
-
-<h3>ウェイトの再計算（管理者）</h3>
-<ul>
-  <li><strong>一覧タブ右上の「🔄 ウェイト一括再計算」</strong>ボタン：進行中セッション全部のウェイトを最新の出面データから再算出</li>
-  <li>詳細モーダル内の <strong>「🔄 再計算」</strong>ボタン：個別セッションだけ再算出</li>
-</ul>
-
-<div class="box">
-<strong>承認済みは再計算対象外</strong>です（既に最終決定済みのため、変更しない設計）。
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec8">8. 評価の承認（政仁さん・管理者）</h2>
-
-<p>全評価者の提出が完了すると、<strong>「承認」タブ</strong>に対象スタッフが表示されます。</p>
+<h2 id="sec-4-3">4.3 評価入力・提出 <span class="audience aud-all">全員</span></h2>
 
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text"><strong>「承認」タブ</strong>を開く（または一覧から「承認へ」ボタンで直接）</div>
+  <div class="step-text">「評価入力」タブを開く → 自分が評価対象のセッション一覧が表示</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">「確認・承認」ボタンを押す → <strong>重み付き多数決</strong>でプリフィルされた最終ABCが表示される</div>
+  <div class="step-text">対象スタッフをクリック → 評価入力フォーム</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text">比較表が表示される：各評価者の回答が<strong>横並び</strong>で確認できます<br>
-  <span style="color:#888; font-size:13px;">● 緑 = 全員一致、● 黄 = 意見が分かれている項目</span><br>
-  <span style="color:#888; font-size:13px;">ヘッダーの <code>w=0.85</code> は評価者ウェイト</span></div>
+  <div class="step-text">各項目をABCで選択（迷ったらB）。スコープ外カテゴリは表示されない</div>
 </div>
 <div class="step">
   <div class="step-num">4</div>
-  <div class="step-text">必要に応じて<strong>最終ABCを変更</strong>する（A/B/Cボタンをクリック）</div>
+  <div class="step-text">コメントを記入（任意・自由記述）</div>
 </div>
 <div class="step">
   <div class="step-num">5</div>
-  <div class="step-text"><strong>最終コメント</strong>を記入</div>
+  <div class="step-text">「提出する」→ 確認ダイアログ → 緑トースト「提出しました」</div>
+</div>
+
+<div class="box box-ok">
+<strong>提出後の見え方</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>他の評価者の結果が見られるようになる（提出までは隠される）</li>
+  <li>一覧タブで自分のバッジが <strong>✓提出済</strong>（緑）に変わる</li>
+  <li>提出時刻が記録される（あとから修正も可能）</li>
+</ul>
+</div>
+
+<div class="box box-warn">
+<strong>提出後の修正：</strong>承認前であれば「修正」ボタンから何度でも更新可能。承認後はロックされる。
+</div>
+
+<h2 id="sec-4-4">4.4 提出状況・リマインダー <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
+
+<h3>一覧タブでの可視化</h3>
+<p>
+各セッション行のステータス列に、評価者名の小バッジが表示されます：
+</p>
+<ul>
+  <li><strong>✓提出済</strong>（緑）= 提出完了</li>
+  <li><strong>○未提出</strong>（白）= 0〜6日経過</li>
+  <li><strong>○未提出(7日+)</strong>（橙）= 7日以上停滞 → リマインダー対象</li>
+  <li><strong>👤あなた</strong>（青枠）= 自分自身</li>
+</ul>
+
+<h3>進捗監視タブ</h3>
+<p>
+進行中（収集中・最終確認待ち）のセッションだけを2カラムで表示。提出率や経過日数が一目で分かります。
+</p>
+
+<h3>自動通知</h3>
+<p>
+7日以上提出のないセッションがあると、ダッシュボードに通知バナーが表示されます（管理者向け）。
+</p>
+
+<h2 id="sec-4-5">4.5 承認フロー <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">「承認」タブ → 最終確認待ちのセッション一覧</div>
 </div>
 <div class="step">
-  <div class="step-num">6</div>
-  <div class="step-text">スコア・ランク・昇給額のプレビューを確認し、<strong>「承認する」</strong>ボタンを押す</div>
+  <div class="step-num">2</div>
+  <div class="step-text">「確認・承認」ボタン → 詳細画面に遷移し、<strong>加重平均で最終ABCがプリフィル</strong>される</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">比較表で各評価者の評価とプリフィル結果を確認。必要なら手動でABCを変更</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">最終コメントを記入（任意・スタッフへのフィードバック）</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">「承認する」→ ランク・推奨昇給額が自動算出されて保存</div>
 </div>
 
-<div class="box box-ok">
-<strong>承認すると：</strong>
+<h3>加重平均プリフィルの計算</h3>
+<p>
+各項目について、スコープ内評価者の <span class="grade-a">A</span>=3 / <span class="grade-b">B</span>=2 / <span class="grade-c">C</span>=1 を重みで加重平均し、しきい値でABCに戻します。
+</p>
+<pre><code>weighted_avg = Σ (grade × weight) / Σ weight  （スコープ内評価者のみ）
+最終ABC:
+  ≥ 2.5  → A
+  ≥ 1.5  → B
+  &lt; 1.5  → C</code></pre>
+
+<div class="box">
+<strong>計算例：</strong>政仁(0.7)=A・白戸(0.1)=B・大川(1.0)=A・大介(0.1)=B<br>
+weighted_avg = (3×0.7 + 2×0.1 + 3×1.0 + 2×0.1) / (0.7+0.1+1.0+0.1) = 5.5 / 1.9 = <strong>2.89</strong> → <span class="grade-a">A</span>
+</div>
+
+<div class="box box-warn">
+<strong>承認権限：</strong>承認は <strong>管理者（靖仁さん）または事業責任者（政仁さん）</strong> のみ可能。職長は承認できない。
+</div>
+
+<h2 id="sec-4-6">4.6 詳細モーダル・A4印刷 <span class="audience aud-all">全員</span></h2>
+
+<h3>詳細モーダル</h3>
+<p>
+一覧タブ・履歴タブから「詳細」ボタンで開く読み取り専用ビュー。
+</p>
+<ul>
+  <li>スタッフ情報（氏名・在留資格・入社日・勤続年数）</li>
+  <li>提出状況バッジ</li>
+  <li>評価者ウェイト一覧</li>
+  <li>出勤指標（出勤率・残業平均・有給取得・皆勤ボーナス）</li>
+  <li>比較表（各評価者の評価 + 最終評価）</li>
+  <li>承認済みの場合: 合計スコア・ランク・推奨昇給額</li>
+  <li>各評価者のコメント + 最終コメント</li>
+</ul>
+
+<h3>A4印刷（承認済みのみ）</h3>
+<p>
+詳細モーダル右上の <strong>「🖨 A4印刷」</strong> ボタンで、A4縦1枚に整形された個人評価表が新タブで開きます。ブラウザの印刷ダイアログで紙印刷 or PDF保存が可能。
+</p>
+
+<div class="box">
+<strong>印刷出力内容</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>確認ダイアログ <code>✅ 〇〇さんの評価を承認しました（ランク: A / 推奨昇給: +170円/h）</code> が表示される</li>
-  <li>最終スコア・ランク・昇給額が確定</li>
-  <li>履歴タブから後日いつでも詳細を閲覧可能</li>
-  <li>昇給額は人員マスタの時給に手動で反映してください</li>
+  <li>ロゴ + タイトル + 評価日・承認日</li>
+  <li>スタッフ情報・出勤指標</li>
+  <li>13項目 × 5評価者 + 最終評価のグリッド</li>
+  <li>合計スコア・ランク・推奨昇給額</li>
+  <li>全評価者のコメント全文 + 最終コメント</li>
 </ul>
 </div>
 
-<!-- ================================================ -->
-<h2 id="sec9">9. 進捗監視と履歴閲覧 <span class="new-tag">NEW</span></h2>
+<h2 id="sec-4-7">4.7 履歴・再計算 <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
 
-<h3>進捗監視タブ（admin/approver限定）</h3>
-<p>進行中のセッション（収集中・最終確認待ち）を <strong>2カラムグリッドで一望</strong>できます。</p>
-<ul>
-  <li>並び順：最終確認待ち（amber 強調）→ 古い順（停滞しているもの優先）</li>
-  <li>各カードに評価者バッジと進捗バーを表示</li>
-  <li>停滞7日以上は橙ボーダー＋「<code>🕒 N日経過</code>」マーク</li>
-  <li>「詳細」ボタンで詳細モーダル、「承認へ」で承認画面に直接移動</li>
-</ul>
+<h3>履歴タブ</h3>
+<p>
+承認済み評価をすべて表示。所属会社・勤続年数・在留資格・時給・ランク・推奨昇給などでソート可能。各行から詳細モーダルとA4印刷にアクセスできます。
+</p>
 
-<h3>履歴タブ（admin/approver限定）</h3>
-<p>承認済み評価を年フィルタ付きでテーブル表示します。</p>
-<ul>
-  <li>名前 / 評価日 / 勤続 / 合計スコア / ランク / 推奨昇給 / 承認日</li>
-  <li>「詳細」ボタンで承認時の評価者比較表・コメント・最終結果を再閲覧可能</li>
-  <li>過去の評価傾向の比較・1on1での振り返りに活用できます</li>
-</ul>
-
-<!-- ================================================ -->
-<h2 id="sec10">10. 通知とリマインダー <span class="new-tag">NEW</span></h2>
-
-<p>画面右上の通知ベルに以下のアラートが表示されます。</p>
-
-<table>
-<tr><th>通知</th><th>誰宛て</th><th>条件</th></tr>
-<tr><td>📋 評価時期到来</td><td>admin・approver</td><td>承認済み前回評価から1年が近づいた</td></tr>
-<tr><td>🔴 評価期限超過</td><td>admin・approver</td><td>前回評価から1年経過</td></tr>
-<tr><td>📝 あなたの評価入力をお願いします</td><td>評価者本人</td><td>自分が評価者の collecting セッションがある</td></tr>
-<tr><td>⚠️ 評価入力がN日経過しています <span class="new-tag">NEW</span></td><td>評価者本人</td><td>自分の未提出セッションが7日以上経過</td></tr>
-<tr><td>⏰ 評価がN日停滞中（残●名未提出: 〇〇、△△） <span class="new-tag">NEW</span></td><td>admin・approver</td><td>セッション開始から7日以上経過し、未提出者がいる</td></tr>
-<tr><td>⚖️ 最終承認待ち</td><td>admin・approver</td><td>全員提出済で reviewing になっている</td></tr>
-</table>
+<h3>再計算 API（自己修復ツール）</h3>
+<p>
+評価ロジックを将来変更した場合などに、過去の承認済み評価を最新ロジックで再計算するためのバックエンドAPIです。
+</p>
 
 <div class="box">
-<strong>停滞リマインダーは、未提出者の名前を最大3名まで通知メッセージに表示します。</strong>本人にも別途「あなたの評価がN日経過」通知が届くため、二重で気づきやすくなっています。
-</div>
+<strong>使用例（管理者がブラウザDevToolsで実行 or curl）：</strong>
+<pre><code># 個別セッション再計算
+POST /api/evaluation
+{ "action": "recalculateApproved", "evaluationId": "204_2026-05-07" }
 
-<!-- ================================================ -->
-<h2 id="sec11">11. 評価基準（ABC判定の目安）</h2>
-
-<div class="box">
-<strong>評価項目の構成：</strong>全10項目（日本語3 + 勤務態度<strong>4</strong> + 職業能力3）<br>
-勤務態度が4項目かつ重み×1.5のため、<strong>スコアの約半分（48%）</strong>を占めます。<br>
-真面目に取り組む姿勢が最も重視される設計です。
-</div>
-
-<h3>🗣 日本語能力（3項目 × 重み ×1.0 = 24%）</h3>
-
-<table>
-<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
-<tr>
-  <td><strong>指示理解</strong></td>
-  <td>一度で正確に理解し、確認の質問もできる</td>
-  <td>概ね理解するが、たまに聞き返しが必要</td>
-  <td>繰り返し説明が必要。複雑な指示は通じにくい</td>
-</tr>
-<tr>
-  <td><strong>報告・連絡</strong></td>
-  <td>自分から日本語で報告・連絡ができる。問題発生時も的確に伝えられる</td>
-  <td>聞かれれば答えられるが、自発的な報告は少ない</td>
-  <td>通訳が必要な場面が多い。報告が遅れることがある</td>
-</tr>
-<tr>
-  <td><strong>安全用語</strong></td>
-  <td>危険予知・安全指示を理解し、他のスタッフにも伝達できる</td>
-  <td>基本的な安全用語（危ない・止まれ等）は理解</td>
-  <td>安全に関する指示の理解が不十分</td>
-</tr>
-</table>
-
-<h3>💼 勤務態度（4項目 × 重み ×1.5 = 48% — 最重要）</h3>
-
-<table>
-<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
-<tr>
-  <td><strong>時間厳守</strong></td>
-  <td>無遅刻・無欠勤。始業前に準備を済ませている</td>
-  <td>年1〜2回の遅刻程度。基本的には時間を守る</td>
-  <td>遅刻・無断欠勤が目立つ</td>
-</tr>
-<tr>
-  <td><strong>安全意識</strong></td>
-  <td>安全帯の着用を自ら徹底。周囲の安全にも気を配る</td>
-  <td>注意すれば守る。基本的なルールは理解</td>
-  <td>繰り返し注意が必要。不安全行動がある</td>
-</tr>
-<tr>
-  <td><strong>協調性</strong></td>
-  <td>他のスタッフと積極的に協力し、後輩の面倒も見る</td>
-  <td>与えられた仕事を問題なくこなす</td>
-  <td>単独行動が多い。チームワークに課題</td>
-</tr>
-<tr style="background: #f0f4ff;">
-  <td><strong>指示遵守</strong></td>
-  <td>職長や先輩社員の指示を正確に守り、自己判断で勝手に変えない。不明点は必ず確認する</td>
-  <td>基本的に指示は守るが、たまに自己判断で省略・変更することがある</td>
-  <td>指示を守らないことが目立つ。自分のやり方で勝手に進めてしまうことがある</td>
-</tr>
-</table>
-
-<h3>🔨 職業能力（3項目 × 重み ×1.0 = 20%）</h3>
-
-<table>
-<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
-<tr>
-  <td><strong>技能レベル</strong></td>
-  <td>一人で任せられる作業が多い</td>
-  <td>指示を受ければ一通りの作業ができる</td>
-  <td>常に監督が必要。ミスが多い</td>
-</tr>
-<tr>
-  <td><strong>作業速度・品質</strong></td>
-  <td>日本人と同等以上。手直し不要</td>
-  <td>概ね問題なし。時々確認が必要</td>
-  <td>改善が必要。手直しが頻繁</td>
-</tr>
-<tr>
-  <td><strong>段取り・準備</strong></td>
-  <td>次の工程を予測して自ら準備できる</td>
-  <td>言われれば段取りできる</td>
-  <td>段取りの意識が低い。指示待ち</td>
-</tr>
-</table>
-
-<h3>🏠 生活態度（3項目 × 重み ×1.0 = 20%）</h3>
-
-<div class="box box-warn">
-<strong>生活態度は管理者（靖仁さん）のみが入力します。</strong><br>
-靖仁さんがエムテック協同組合の担当者（チイさん）と一緒に確認し、代理入力します。<br>
-職長・政仁さんの評価入力画面には表示されません。
-</div>
-
-<table>
-<tr><th>項目</th><th><span class="grade-a">A</span></th><th><span class="grade-b">B</span></th><th><span class="grade-c">C</span></th></tr>
-<tr>
-  <td><strong>近隣配慮</strong></td>
-  <td>近隣からの苦情ゼロ。騒音・駐車等に自ら配慮し、他のスタッフにも注意できる</td>
-  <td>基本的なルールは守る。年1〜2回注意を受ける程度</td>
-  <td>近隣からの苦情がある。騒音・マナー違反を繰り返し注意される</td>
-</tr>
-<tr>
-  <td><strong>ルール遵守</strong></td>
-  <td>ゴミ出し・分別・当番など寮のルールを率先して守る。他のスタッフにも声かけできる</td>
-  <td>言われれば守る。基本的なルールは理解している</td>
-  <td>ルールを守らないことが多い。繰り返し注意が必要</td>
-</tr>
-<tr>
-  <td><strong>住環境維持</strong></td>
-  <td>部屋・共用部をいつもきれいに保つ。整理整頓が行き届いている</td>
-  <td>普通の清潔さは保っている。時々散らかっていることがある</td>
-  <td>部屋や共用部が不衛生。清掃を怠ることが多い</td>
-</tr>
-</table>
-
-<!-- ================================================ -->
-<h2 id="sec12">12. スコア計算と昇給テーブル</h2>
-
-<h3>評価者の構成</h3>
-
-<div class="box">
-<table>
-<tr><th>カテゴリ</th><th>評価者</th></tr>
-<tr><td>日本語能力・勤務態度・職業能力</td><td>職長3名 + 政仁さん + 靖仁さん</td></tr>
-<tr><td><strong>生活態度</strong></td><td><strong>靖仁さんのみ</strong>（エムテック担当者と確認の上、代理入力）</td></tr>
-</table>
-</div>
-
-<h3>スコア計算</h3>
-
-<div class="box">
-<strong>各項目:</strong> A=3点、B=2点、C=1点<br><br>
-<strong>重み付きスコア:</strong><br>
-日本語能力（3項目の合計）× 1.0 = 最大 9.0点（20%）<br>
-+ 勤務態度（<strong>4項目</strong>の合計）× 1.5 = 最大 <strong>18.0点（40%）</strong><br>
-+ 職業能力（3項目の合計）× 1.0 = 最大 9.0点（20%）<br>
-+ 生活態度（3項目の合計）× 1.0 = 最大 9.0点（20%）<br>
-= 手動スコア（最大 <strong>45.0点</strong>）<br><br>
-<strong>出勤率ボーナス:</strong> 98%以上→+3点 / 95%以上→+2点 / 90%以上→+1点<br><br>
-<strong>総合スコア</strong> = 手動スコア + 出勤率ボーナス（最大 <strong>48.0点</strong>）
+# 全承認済みを一括再計算
+POST /api/evaluation
+{ "action": "recalculateApproved", "all": true }</code></pre>
 </div>
 
 <div class="box box-warn">
-<strong>勤務態度の配点が最大（40%）を占めます。</strong><br>
-技能がまだ発展途上の実習生でも、勤務態度がしっかりしていれば高評価（A〜S）を取ることができます。「真面目にやる人が報われる」仕組みです。
+finalScores（評価内容）は変更されず、<strong>manualScore / totalScore / rank / raiseAmount のみ最新ロジックで再計算</strong>されます。再計算した評価は <code>recalculatedAt</code> フィールドに日時が記録されます。
 </div>
 
-<h3>総合ランク</h3>
+<!-- ============================================================ -->
+<!-- 第5部: スコアと昇給 -->
+<!-- ============================================================ -->
+<h1 id="p5" style="margin-top: 50px;">第5部　スコアと昇給</h1>
+
+<h2 id="sec-5-1">5.1 手動スコアの計算式 <span class="audience aud-all">全員</span></h2>
+
+<p>
+4カテゴリそれぞれで <span class="grade-a">A</span>=3 / <span class="grade-b">B</span>=2 / <span class="grade-c">C</span>=1 で素点を集計し、重み係数を掛けて合算します。
+</p>
+
+<pre><code>japaneseSum  = 3項目の素点合計（最大9）
+attitudeSum  = 4項目の素点合計（最大12）
+skillSum     = 3項目の素点合計（最大9）
+livingSum    = 3項目の素点合計（最大9）
+
+manualScore  = japaneseSum × 1.0
+             + attitudeSum × 1.5
+             + skillSum    × 1.0
+             + livingSum   × 1.0
+
+最大値: 9×1.0 + 12×1.5 + 9×1.0 + 9×1.0 = 45.0</code></pre>
+
+<div class="box">
+<strong>計算例：</strong>日本語=Bx3 / 勤務=Ax3+B / 職業=B+B+A / 生活=Bx3 の場合<br>
+手動スコア = 6×1.0 + (9+2)×1.5 + 7×1.0 + 6×1.0 = 6 + 16.5 + 7 + 6 = <strong>35.5</strong>
+</div>
+
+<h2 id="sec-5-2">5.2 出勤指標と皆勤ボーナス <span class="audience aud-all">全員</span></h2>
+
+<p>
+スコアには評価日の過去12ヶ月の出勤実績から算出した皆勤ボーナス（最大+3点）が加算されます。
+</p>
 
 <table>
-<tr><th>ランク</th><th>スコア</th><th>意味</th></tr>
-<tr><td><strong style="color:#9333ea;">S</strong></td><td>39点以上</td><td>極めて優秀</td></tr>
-<tr><td><strong style="color:#2563eb;">A</strong></td><td>32〜38.9点</td><td>優秀</td></tr>
-<tr><td><strong style="color:#16a34a;">B</strong></td><td>25〜31.9点</td><td>標準</td></tr>
-<tr><td><strong style="color:#ca8a04;">C</strong></td><td>17〜24.9点</td><td>改善必要</td></tr>
-<tr><td><strong style="color:#dc2626;">D</strong></td><td>17点未満</td><td>面談実施</td></tr>
-</table>
-
-<div class="box box-red">
-<strong>法令違反のペナルティ：−20点</strong><br>
-法令違反があった場合、総合スコアから<strong>20点を減点</strong>します。<br>
-例：本来33点（Aランク）→ 減点後13点（Dランク）となり、昇給額も大幅に減少します。<br>
-<span style="color:#888; font-size:13px;">※ ペナルティの適用は政仁さん・管理者が承認時に判断します。システムへの反映は今後対応予定です。</span>
-</div>
-
-<h3>昇給テーブル（評価回ごとの昇給額）</h3>
-
-<div class="box box-ok">
-<strong>設計思想：</strong>10年目の到達時給が各ランク間で<strong>等間隔（約320円差）</strong>になるよう設計。<br>
-1,300円スタート → 10年目: S:2,700円 / A:2,380円 / B:2,060円 / C:1,740円 / D:約1,420円
-</div>
-
-<table>
-<tr><th>評価回（年目→翌年目）</th><th style="color:#9333ea;">S</th><th style="color:#2563eb;">A</th><th style="color:#16a34a;">B</th><th style="color:#ca8a04;">C</th><th style="color:#dc2626;">D</th></tr>
-<tr><td>1回目（1→2年目）</td><td>+220円</td><td>+170円</td><td>+120円</td><td>+80円</td><td>1%</td></tr>
-<tr><td>2回目（2→3年目）</td><td>+200円</td><td>+160円</td><td>+110円</td><td>+65円</td><td>1%</td></tr>
-<tr><td>3回目（3→4年目）</td><td>+180円</td><td>+140円</td><td>+100円</td><td>+55円</td><td>1%</td></tr>
-<tr><td>4回目（4→5年目）</td><td>+170円</td><td>+130円</td><td>+90円</td><td>+50円</td><td>1%</td></tr>
-<tr><td>5回目（5→6年目）</td><td>+160円</td><td>+120円</td><td>+80円</td><td>+50円</td><td>1%</td></tr>
-<tr><td>6回目（6→7年目）</td><td>+140円</td><td>+110円</td><td>+75円</td><td>+45円</td><td>1%</td></tr>
-<tr><td>7回目（7→8年目）</td><td>+120円</td><td>+90円</td><td>+65円</td><td>+35円</td><td>1%</td></tr>
-<tr><td>8回目（8→9年目）</td><td>+110円</td><td>+80円</td><td>+60円</td><td>+30円</td><td>1%</td></tr>
-<tr><td>9回目以降（9→10年目〜）</td><td>+100円</td><td>+80円</td><td>+60円</td><td>+30円</td><td>1%</td></tr>
+<tr><th>出勤率</th><th>皆勤ボーナス</th></tr>
+<tr><td>100%（無欠勤）</td><td>+3</td></tr>
+<tr><td>95%以上</td><td>+2</td></tr>
+<tr><td>90%以上</td><td>+1</td></tr>
+<tr><td>90%未満</td><td>0</td></tr>
 </table>
 
 <div class="box">
-<strong>D評価について：</strong>D評価は現在の時給の<strong>1%</strong>を昇給額とします（技能実習制度の最低昇給義務に対応）。<br>
-例：時給1,300円の場合 → +13円/h
+<strong>出勤率の計算</strong>
+<pre><code>出勤率 = (実出勤日 + 有給日 + 試験日) / 期待出勤日 × 100  (上限100%)</code></pre>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>期待出勤日</strong>: 月の所定日数の合計（カレンダーで算出）から、雇用前・退職後・一時帰国期間・14日以上の連続無出勤期間 を除外</li>
+  <li><strong>分子</strong>: 実出勤＋有給＋試験（補償日 w=0.6 は分子・分母どちらにも含めない）</li>
+</ul>
 </div>
 
-<h3>10年シミュレーション（1,300円スタート・同一ランク継続の場合）</h3>
+<h2 id="sec-5-3">5.3 ランク判定（S/A/B/C/D） <span class="audience aud-all">全員</span></h2>
+
+<p>
+<code>合計スコア = 手動スコア + 皆勤ボーナス</code>（最大48点）からランクを決定します。
+</p>
 
 <table>
-<tr><th>年目</th><th style="color:#9333ea;">S</th><th style="color:#2563eb;">A</th><th style="color:#16a34a;">B</th><th style="color:#ca8a04;">C</th><th style="color:#dc2626;">D（1%）</th></tr>
-<tr><td><strong>1年目</strong>（入社時）</td><td>1,300</td><td>1,300</td><td>1,300</td><td>1,300</td><td>1,300</td></tr>
-<tr><td><strong>2年目</strong></td><td>1,520</td><td>1,470</td><td>1,420</td><td>1,380</td><td>1,313</td></tr>
-<tr><td><strong>3年目</strong></td><td>1,720</td><td>1,630</td><td>1,530</td><td>1,445</td><td>1,326</td></tr>
-<tr><td><strong>4年目</strong></td><td>1,900</td><td>1,770</td><td>1,630</td><td>1,500</td><td>1,340</td></tr>
-<tr><td><strong>5年目</strong></td><td>2,070</td><td>1,900</td><td>1,720</td><td>1,550</td><td>1,353</td></tr>
-<tr><td><strong>6年目</strong></td><td>2,230</td><td>2,020</td><td>1,800</td><td>1,600</td><td>1,367</td></tr>
-<tr><td><strong>7年目</strong></td><td>2,370</td><td>2,130</td><td>1,875</td><td>1,645</td><td>1,381</td></tr>
-<tr><td><strong>8年目</strong></td><td>2,490</td><td>2,220</td><td>1,940</td><td>1,680</td><td>1,395</td></tr>
-<tr><td><strong>9年目</strong></td><td>2,600</td><td>2,300</td><td>2,000</td><td>1,710</td><td>1,409</td></tr>
-<tr style="background:#f0f4ff; font-weight:bold;"><td><strong>10年目</strong></td><td style="color:#9333ea;">2,700</td><td style="color:#2563eb;">2,380</td><td style="color:#16a34a;">2,060</td><td style="color:#ca8a04;">1,740</td><td style="color:#dc2626;">1,423</td></tr>
+<tr><th>ランク</th><th>しきい値</th><th>満点比</th><th>意味</th></tr>
+<tr><td><span class="rank-S">S</span></td><td>≥ 39</td><td>81%+</td><td>非常に優秀（特別な活躍）</td></tr>
+<tr><td><span class="rank-A">A</span></td><td>≥ 32</td><td>67%+</td><td>優秀（期待を上回る）</td></tr>
+<tr><td><span class="rank-B">B</span></td><td>≥ 25</td><td>52%+</td><td>標準（期待通り）</td></tr>
+<tr><td><span class="rank-C">C</span></td><td>≥ 17</td><td>35%+</td><td>要改善</td></tr>
+<tr><td><span class="rank-D">D</span></td><td>&lt; 17</td><td>35%-</td><td>不適格（改善の見込みなし）</td></tr>
 </table>
 
-<div class="box box-ok">
-<strong>10年目の各ランク差（等間隔）：</strong><br>
-S − A = 320円 / A − B = 320円 / B − C = 320円 / C − D ≒ 317円
+<h2 id="sec-5-4">5.4 昇給テーブル <span class="audience aud-all">全員</span></h2>
+
+<p>
+ランクと「勤続年数（完了年数）」から推奨昇給額（時給アップ／時間）を自動算出します。
+</p>
+
+<table>
+<tr><th>勤続年数</th><th><span class="rank-S">S</span></th><th><span class="rank-A">A</span></th><th><span class="rank-B">B</span></th><th><span class="rank-C">C</span></th></tr>
+<tr><td>1年目</td><td>+220</td><td>+170</td><td>+120</td><td>+80</td></tr>
+<tr><td>2年目</td><td>+200</td><td>+160</td><td>+110</td><td>+65</td></tr>
+<tr><td>3年目</td><td>+180</td><td>+140</td><td>+100</td><td>+55</td></tr>
+<tr><td>4年目</td><td>+170</td><td>+130</td><td>+90</td><td>+50</td></tr>
+<tr><td>5年目</td><td>+160</td><td>+120</td><td>+80</td><td>+50</td></tr>
+<tr><td>6年目</td><td>+140</td><td>+110</td><td>+75</td><td>+45</td></tr>
+<tr><td>7年目</td><td>+120</td><td>+90</td><td>+65</td><td>+35</td></tr>
+<tr><td>8年目</td><td>+110</td><td>+80</td><td>+60</td><td>+30</td></tr>
+<tr><td>9年目以降</td><td>+100</td><td>+80</td><td>+60</td><td>+30</td></tr>
+</table>
+
+<div class="box">
+<strong>D評価の昇給額</strong>: 現在時給の <strong>1%（最低昇給義務の遵守）</strong>。例えば時給1,500円なら +15円/h。
 </div>
 
-<!-- ================================================ -->
-<h2 id="sec13">13. よくある質問・トラブル対処</h2>
+<div class="box box-warn">
+<strong>勤続年数の数え方</strong>: 完了年数を使用します。例：2023-10-23入社・2026-05-15評価 → まだ3年経っていないため <strong>2年目</strong> として year=2 行を引きます。
+</div>
 
+<h3>10年シミュレーション（時給1,300円スタート・同一ランク継続の場合）</h3>
 <table>
-<tr><th>質問・症状</th><th>回答・対処</th></tr>
-<tr><td><strong>提出ボタンを押したが反映されたか分からない</strong></td><td>2026-05-09 改善で、提出成功時には <strong>確認ダイアログ</strong>＋<strong>緑トースト</strong>＋<strong>「✓ 提出済み」バナー（提出時刻付き）</strong>が表示されます。これらが出ていなければ保存されていません。失敗時は <code>❌ 提出に失敗しました</code> のアラートが出るので、もう一度押してください。</td></tr>
-<tr><td>評価入力タブにスタッフが表示されない</td><td>あなたが評価者に指定されていない可能性があります。管理者に確認してください。</td></tr>
-<tr><td>他の評価者の結果が見えない</td><td>自分が提出するまで、他の人の評価は非表示です（バイアス防止のため）。先に自分の評価を提出してください。</td></tr>
-<tr><td>提出した後に修正したい</td><td>「修正する」ボタンで再編集・再提出できます。</td></tr>
-<tr><td>承認タブに何も表示されない</td><td>全員の提出が完了するまで承認画面には表示されません。「一覧」タブの提出状況バッジ、または「進捗監視」タブで状況を確認してください。</td></tr>
-<tr><td>承認済みの評価をもう一度見たい</td><td>「履歴」タブで承認済み評価を一覧表示できます。一覧タブのランク文字をクリックしても詳細モーダルが開きます。</td></tr>
-<tr><td>大川さんなど特定の職長の評価だけ反映されない</td><td>「進捗監視」タブで該当セッションの評価者バッジを確認してください。橙色（7日以上未提出）になっていればリマインダーが既に届いているはず。本人に再提出を依頼してください。</td></tr>
-<tr><td>ウェイトを最新の出面データで更新したい</td><td>一覧タブ右上の <strong>🔄 ウェイト一括再計算</strong> ボタン、または詳細モーダル内の <strong>🔄 再計算</strong> ボタンで実行できます。承認済みは対象外です。</td></tr>
-<tr><td>ウェイト 0.30 になっている職長が居る</td><td>その職長は対象スタッフと過去365日に共働実績がありません（最低ウェイト）。承認時の最終ABC決定で、その意見を参考程度に扱う運用がおすすめです。</td></tr>
-<tr><td>昇給額はどう反映される？</td><td>評価承認後、管理者が人員マスタの時給を手動で更新します。</td></tr>
-<tr><td>評価の頻度は？</td><td>年1回、各スタッフの入社日基準です。入社日の1ヶ月前に通知が届きます。</td></tr>
-<tr><td>旧データとの互換性は？</td><td>「指示遵守」項目がない旧評価データはB（標準）として計算されます。ウェイト未計算の旧セッションは全員 weight=1.0 で扱われます（一括再計算で更新可能）。</td></tr>
+<tr><th>年数</th><th><span class="rank-S">S継続</span></th><th><span class="rank-A">A継続</span></th><th><span class="rank-B">B継続</span></th><th><span class="rank-C">C継続</span></th></tr>
+<tr><td>スタート</td><td>1,300</td><td>1,300</td><td>1,300</td><td>1,300</td></tr>
+<tr><td>1年後</td><td>1,520</td><td>1,470</td><td>1,420</td><td>1,380</td></tr>
+<tr><td>5年後</td><td>2,250</td><td>1,990</td><td>1,730</td><td>1,530</td></tr>
+<tr><td>10年後</td><td>2,720</td><td>2,380</td><td>2,070</td><td>1,740</td></tr>
 </table>
+
+<h2 id="sec-5-5">5.5 昇給履歴の確認 <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
+
+<p>
+人員マスタ（<code>/workers</code>）の「💰 昇給履歴」タブで、各スタッフの昇給遍歴を一覧表示できます。
+</p>
+<ul>
+  <li>勤続年数・在留資格・時給・所属会社などでソート可能</li>
+  <li>各行から評価詳細にアクセス</li>
+</ul>
+
+<div class="box box-warn">
+<strong>職長は昇給履歴を見られません。</strong>給与情報は管理職層（管理者・事業責任者）のみアクセス可能。
+</div>
+
+<!-- ============================================================ -->
+<!-- 第6部: 運用ルール -->
+<!-- ============================================================ -->
+<h1 id="p6" style="margin-top: 50px;">第6部　運用ルール</h1>
+
+<h2 id="sec-6-1">6.1 バイアス防止 <span class="audience aud-all">全員</span></h2>
+
+<ul>
+  <li><strong>提出前は他人の評価を見ない</strong>：自分が提出するまで他評価者の結果は画面に表示されない</li>
+  <li><strong>事前打ち合わせ禁止</strong>：「みんなBにしよう」などの根回しは制度の意義を損なう</li>
+  <li><strong>具体的な事実ベースで採点</strong>：印象ではなく「いつ・何があったか」で判断</li>
+  <li><strong>カテゴリスコープを守る</strong>：自分が担当しないカテゴリは画面に出ないので、誤評価のリスクなし</li>
+</ul>
+
+<h2 id="sec-6-2">6.2 評価期間中の禁止事項 <span class="audience aud-all">全員</span></h2>
+
+<ul>
+  <li>評価対象スタッフへの「自分はこう評価する」の事前告知</li>
+  <li>他評価者の評価内容を本人に漏らす</li>
+  <li>承認前のスコアやランクを本人に伝える</li>
+  <li>システム外で評価結果を集計し直す（公式な記録は本システムのみ）</li>
+</ul>
+
+<h2 id="sec-6-3">6.3 守秘義務（給与情報の取扱い） <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
+
+<p>
+推奨昇給額・実際の時給情報はスタッフ本人と管理職以外には開示しません。
+評価入力ページや承認画面では時給を表示しない設計になっています。
+昇給履歴タブも管理者と事業責任者のみアクセス可能で、職長は閲覧できません。
+</p>
+
+<!-- ============================================================ -->
+<!-- 第7部: トラブル対処・FAQ -->
+<!-- ============================================================ -->
+<h1 id="p7" style="margin-top: 50px;">第7部　トラブル対処・FAQ</h1>
+
+<h2 id="sec-7-1">7.1 よくある質問 <span class="audience aud-all">全員</span></h2>
+
+<h3>Q. 評価を間違えて提出してしまった</h3>
+<p>
+承認前なら「修正」ボタンから何度でも更新できます。承認後はロックされるため、管理者に相談してください。
+</p>
+
+<h3>Q. 担当外のカテゴリが表示されない</h3>
+<p>
+仕様です。靖仁さんは生活態度のみ、他の評価者は業務系3カテゴリ（日本語・勤務態度・職業能力）のみ表示されます。
+</p>
+
+<h3>Q. 私のウェイトが他の職長より低いのはなぜ？</h3>
+<p>
+対象スタッフとの過去365日の共働日数で自動算出されます。実際に一緒に働いていない期間が多いと低くなる仕組みで、評価結果の公平性を保つためです。
+</p>
+
+<h3>Q. 接点がないスタッフを評価しなければならない</h3>
+<p>
+コメント欄に「接点がないため評価困難」と書いて、全てBで提出してOKです。ウェイトが0.1（特例）になるため、評価結果への影響は最小限になります。
+</p>
+
+<h3>Q. 加重平均でBになった項目を、最終評価でAに変えていい？</h3>
+<p>
+はい。プリフィルはあくまで初期値の提案です。承認者の判断で最終的なABCを決定できます。ただし大幅に変える場合は最終コメントに理由を残してください。
+</p>
+
+<h3>Q. 既に承認した評価のスコアやランクが間違っている</h3>
+<p>
+管理者に連絡してください。「再計算API」（4.7参照）で最新ロジックで再計算するか、極端な不整合の場合はFirestoreの直接修正が必要になることがあります。
+</p>
+
+<h2 id="sec-7-2">7.2 不整合発生時の修復 <span class="audience aud-admin">管理者</span></h2>
+
+<h3>ロジック変更後に過去データを更新したい</h3>
+<p>
+評価ロジック（重み・ランクしきい値・昇給テーブルなど）を変更した場合、過去の承認済み評価は古いロジックで計算された値のまま保存されています。最新ロジックで再計算するには：
+</p>
+
+<pre><code># 全承認済みを一括再計算
+POST /api/evaluation
+Headers: x-admin-password: &lt;管理者パスワード&gt;
+Body: { "action": "recalculateApproved", "all": true }</code></pre>
+
+<div class="box box-warn">
+<strong>注意：</strong>再計算で <code>rank</code> や <code>raiseAmount</code> が変わる可能性があります。給与計算に影響する可能性があるため、本番反映前に該当スタッフに事前説明することを推奨します。
+</div>
+
+<h3>評価ロジックの修正箇所</h3>
+<p>
+評価制度の重み係数・ランクしきい値・昇給テーブルは、<strong>すべて <code>lib/evaluation-config.ts</code> に集約</strong>されています。フロント・バックエンド両方がこのファイルから import するため、片方だけ更新するドリフト事故は構造的に発生しません。
+</p>
+
+<div class="box">
+<strong>評価ロジックの単一の真理ソース</strong><br>
+<code>lib/evaluation-config.ts</code> をのみ編集すること。<br>
+<code>EVALUATION_WEIGHTS</code>、<code>RAISE_TABLE</code>、<code>calculateManualScore</code>、<code>calculateRank</code>、<code>getRaiseAmount</code> がここで定義されています。
+</div>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-05-09</p>
+
+<p style="text-align: center; color: #888; font-size: 13px; margin-top: 40px;">
+HIBI CONSTRUCTION 鳶事業部 — 評価管理マニュアル<br>
+最終更新: 2026年5月15日 / 全面改訂版<br>
+お問い合わせ・改訂提案: 管理者（靖仁さん）まで
+</p>
 
 </body>
 </html>
