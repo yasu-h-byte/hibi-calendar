@@ -232,6 +232,49 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
   const hlPending = homeLongLeaveItems.filter(i => i.status === 'pending')
   const hlForemanApproved = homeLongLeaveItems.filter(i => i.status === 'foreman_approved')
 
+  // ── 一括処理（2026-05-15 追加） ──
+  // 同一スタッフ + 同一reason の申請を1ボタンで処理する。
+  // 並列リクエストで全件投げ、最後に onUpdate() で再読込。
+  const handleBulkAction = async (ids: string[], action: string, apiPath: string = '/api/leave-request') => {
+    if (ids.length === 0) return
+    setProcessing(`bulk:${action}:${ids[0]}`)
+    try {
+      const stored = localStorage.getItem('hibi_auth')
+      const user = stored ? JSON.parse(stored).user : null
+      const wid = user?.workerId || 0
+      await Promise.all(ids.map(id => fetch(apiPath, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({
+          action,
+          requestId: id,
+          ...(action === 'foreman_approve' ? { foremanId: wid } : { approvedBy: wid }),
+        }),
+      })))
+      onUpdate()
+    } catch { /* ignore */ }
+    finally { setProcessing(null) }
+  }
+
+  // 有給申請を「スタッフ + reason」でグループ化（同じ status 内で）
+  // ※ reason は trim() で正規化（末尾スペース等の入力ゆれを吸収）
+  function groupLeaves(list: LeaveRequestItem[]): { key: string; items: LeaveRequestItem[] }[] {
+    const groups: { key: string; items: LeaveRequestItem[] }[] = []
+    const idx: Record<string, number> = {}
+    for (const r of list) {
+      const normReason = (r.reason || '').trim()
+      const k = `${r.workerName}_${normReason}`
+      if (idx[k] === undefined) {
+        idx[k] = groups.length
+        groups.push({ key: k, items: [] })
+      }
+      groups[idx[k]].items.push(r)
+    }
+    return groups
+  }
+  const pendingGroups = groupLeaves(pending)
+  const foremanApprovedGroups = groupLeaves(foremanApproved)
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-blue-400">
       <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">📋 勤怠申請</h3>
@@ -245,48 +288,112 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
             <p className="text-[10px] text-yellow-700 dark:text-yellow-400 font-medium mb-1 ml-1">⏳ 職長承認待ち（{pending.length}件）</p>
           )}
           <div className="space-y-1">
-            {pending.map(req => (
-              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <div className="min-w-0">
-                  <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
-                  <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
-                  {req.reason && <span className="text-gray-400 text-xs ml-2">{req.reason}</span>}
+            {pendingGroups.map(group => {
+              const items = group.items
+              const first = items[0]
+              const ids = items.map(r => r.id)
+              if (items.length === 1) {
+                const req = first
+                return (
+                  <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                    <div className="min-w-0">
+                      <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
+                      <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
+                      {req.reason && <span className="text-gray-400 text-xs ml-2">{req.reason}</span>}
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0 ml-2">
+                      {canForemanApproveFor(req.siteId) && (
+                        <button onClick={() => handleAction(req.id, 'foreman_approve')} disabled={processing === req.id}
+                          className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">{req.siteForemanName ? `${req.siteForemanName} 職長承認` : '職長承認'}</button>
+                      )}
+                      <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
+                        className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                    </div>
+                  </div>
+                )
+              }
+              // 集約表示
+              const bulkKey = `bulk:foreman_approve:${ids[0]}`
+              const dates = items.map(r => r.date).sort().map(fmtDate).join('・')
+              return (
+                <div key={group.key} className="py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm text-hibi-navy dark:text-white">{first.workerName}</span>
+                        <span className="text-[10px] bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded-full font-bold">{items.length}件</span>
+                        {first.reason && <span className="text-gray-400 text-xs">{first.reason}</span>}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-300 mt-0.5 break-words">{dates}</div>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      {canForemanApproveFor(first.siteId) && (
+                        <button onClick={() => handleBulkAction(ids, 'foreman_approve')} disabled={processing === bulkKey}
+                          className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">
+                          {first.siteForemanName ? `${first.siteForemanName} 一括職長承認` : '一括職長承認'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  {canForemanApproveFor((req as { siteId?: string }).siteId) && (
-                    <button onClick={() => handleAction(req.id, 'foreman_approve')} disabled={processing === req.id}
-                      className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">{req.siteForemanName ? `${req.siteForemanName} 職長承認` : '職長承認'}</button>
-                  )}
-                  <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
-                    className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
             {/* 最終承認待ちサブ見出し（管理者向け、件数があるときのみ） */}
             {canFinalApprove && foremanApproved.length > 0 && pending.length > 0 && (
               <p className="text-[10px] text-blue-700 dark:text-blue-400 font-medium mt-2 mb-1 ml-1">⏳ 最終承認待ち（{foremanApproved.length}件）</p>
             )}
-            {foremanApproved.map(req => (
-              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="min-w-0">
-                  <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
-                  <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
-                  <span className="text-[10px] text-blue-600 ml-2">{req.siteForemanName ? `${req.siteForemanName} 職長済` : '職長済'}</span>
+            {foremanApprovedGroups.map(group => {
+              const items = group.items
+              const first = items[0]
+              const ids = items.map(r => r.id)
+              if (items.length === 1) {
+                const req = first
+                return (
+                  <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <div className="min-w-0">
+                      <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
+                      <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
+                      <span className="text-[10px] text-blue-600 ml-2">{req.siteForemanName ? `${req.siteForemanName} 職長済` : '職長済'}</span>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0 ml-2">
+                      {canFinalApprove ? (
+                        <>
+                          <button onClick={() => handleAction(req.id, 'approve')} disabled={processing === req.id}
+                            className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
+                          <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
+                            className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-gray-500">最終承認待ち</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              }
+              const bulkKey = `bulk:approve:${ids[0]}`
+              const dates = items.map(r => r.date).sort().map(fmtDate).join('・')
+              return (
+                <div key={group.key} className="py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm text-hibi-navy dark:text-white">{first.workerName}</span>
+                        <span className="text-[10px] bg-blue-200 text-blue-900 px-1.5 py-0.5 rounded-full font-bold">{items.length}件</span>
+                        <span className="text-[10px] text-blue-600">{first.siteForemanName ? `${first.siteForemanName} 職長済` : '職長済'}</span>
+                        {first.reason && <span className="text-gray-400 text-xs">{first.reason}</span>}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-300 mt-0.5 break-words">{dates}</div>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      {canFinalApprove && (
+                        <button onClick={() => handleBulkAction(ids, 'approve')} disabled={processing === bulkKey}
+                          className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">一括最終承認</button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  {canFinalApprove ? (
-                    <>
-                      <button onClick={() => handleAction(req.id, 'approve')} disabled={processing === req.id}
-                        className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
-                      <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
-                        className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
-                    </>
-                  ) : (
-                    <span className="text-[10px] text-gray-500">最終承認待ち</span>
-                  )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
