@@ -227,7 +227,11 @@ export async function GET(request: NextRequest) {
             const adj = latest.adjustment ?? latest.adj ?? 0
 
             // periodUsed を出面から動的計算（grantDate..+1年の範囲内のPエントリ数）
+            // ⚠️ 2026-05-18 修正: 未来日付の P エントリは「使用済み」にカウントしない
+            //   （帰国予定の有給申請が承認時に出面へ書き込まれ、残日数が過少表示される事象の修正）
             let periodUsed = 0
+            const todayMid = new Date()
+            todayMid.setHours(0, 0, 0, 0)
             if (latest.grantDate) {
               const gdStart = new Date(latest.grantDate + 'T00:00:00')
               if (!isNaN(gdStart.getTime())) {
@@ -247,7 +251,7 @@ export async function GET(request: NextRequest) {
                   const pk = parseDKey(key)
                   if (parseInt(pk.wid) !== worker.id) continue
                   const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-                  if (d >= gdStart && d < gdEnd) periodUsed++
+                  if (d >= gdStart && d < gdEnd && d <= todayMid) periodUsed++
                 }
               }
             }

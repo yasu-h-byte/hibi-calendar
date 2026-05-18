@@ -732,25 +732,39 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
     }
   }
 
+  // ⚠️ 2026-05-18 修正:
+  //   1. 今日が含まれる「アクティブなレコード」を選ぶ（未来年度のレコードを誤選択しないため）
+  //   2. 未来日付の P エントリは使用済みカウントから除外（残日数 = 申請可能な残り）
+  const todayPL = new Date()
+  todayPL.setHours(0, 0, 0, 0)
+
   for (const w of activeWorkers) {
-    const records = plData[String(w.id)] || []
+    const records = (plData[String(w.id)] || []).filter(rec => !(rec as { _archived?: boolean })._archived)
     if (records.length === 0) {
       rows.push([w.name, w.org, w.hireDate || '', '-', 0, 0, 0, 0, '-'])
       continue
     }
 
-    // 最新のレコードを使用
-    const recordsWithGrant = records.filter(r =>
-      (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
+    // 最新のアクティブレコードを選択（grantDate <= 今日 < grantDate+1y）
+    const recordsWithGrant = records.filter(rec =>
+      (rec.grantDays && rec.grantDays > 0) || (rec.grant && rec.grant > 0)
     )
-    const r = recordsWithGrant.length > 0 ? recordsWithGrant[recordsWithGrant.length - 1] : records[records.length - 1]
+    const activeRec = recordsWithGrant.find(rec => {
+      if (!rec.grantDate) return false
+      const gd = new Date(rec.grantDate)
+      if (isNaN(gd.getTime())) return false
+      const end = new Date(gd); end.setFullYear(end.getFullYear() + 1)
+      return todayPL >= gd && todayPL < end
+    })
+    const r = activeRec
+      ?? (recordsWithGrant.length > 0 ? recordsWithGrant[recordsWithGrant.length - 1] : records[records.length - 1])
 
     const grantDays = r.grantDays ?? r.grant ?? 0
     const carryOver = r.carryOver ?? r.carry ?? 0
     const adjustment = Math.max(r.adjustment ?? 0, r.adj ?? 0)
     const total = grantDays + carryOver
 
-    // 出面からの取得日数
+    // 出面からの取得日数（未来日付は除外）
     let periodUsed = 0
     if (r.grantDate) {
       const gd = new Date(r.grantDate)
@@ -759,7 +773,7 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
       const wDates = plDates[w.id] || []
       periodUsed = wDates.filter(d => {
         const pd = new Date(d.replace(/\//g, '-'))
-        return pd >= gd && pd < gdEnd
+        return pd >= gd && pd < gdEnd && pd <= todayPL
       }).length
     }
 
@@ -1296,7 +1310,11 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
     return fmtDate(exp.toISOString())
   }
 
-  // periodUsed 計算（grantDate..+1年 のPエントリ）
+  // periodUsed 計算（grantDate..+1年 のPエントリ、ただし未来日付は除外）
+  // ⚠️ 2026-05-18 修正: 帰国予定の有給申請が承認時に書かれた未来日付の p:1 を
+  //   「使用済み」扱いしないようにする（残日数 = 申請可能な残り）
+  const todayLedger = new Date()
+  todayLedger.setHours(0, 0, 0, 0)
   const countPeriodUsed = (workerId: number, grantDate?: string): number => {
     if (!grantDate) return 0
     const gd = new Date(grantDate)
@@ -1310,7 +1328,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
       const pk = parseDKey(key)
       if (parseInt(pk.wid) !== workerId) continue
       const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-      if (d >= gd && d < end) count++
+      if (d >= gd && d < end && d <= todayLedger) count++
     }
     return count
   }
