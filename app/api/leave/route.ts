@@ -1231,14 +1231,14 @@ export async function GET(request: NextRequest) {
 
         const seenAllPeriod = new Set<string>()      // 全期間 (monthly/calendar 用)
         const seenCurrentFy = new Set<string>()      // 当期 (periodUsed 用)
-        // ⚠️ 2026-05-18 修正: 未来日付の P エントリは「使用済み」にカウントしない
-        //   原因: 帰国予定の有給申請が承認時に出面へ書き込まれるため、未来日付の p:1 が
-        //         残日数計算で「もう使った」扱いになり、申請承認した時点で残日数が
-        //         実態より過少表示される事象が発生していた（例: フン 0日表示、実際15日残）
-        //   方針: 「残日数 = 申請可能な残り」の意味として、まだ来ていない日は除外する
-        const todayMidnight = new Date()
-        todayMidnight.setHours(0, 0, 0, 0)
-
+        //
+        // 設計ポリシー（2026-05-18 確定）:
+        //   有給残日数は「申請ベース」で全画面・全帳票統一する。
+        //   = 出面に書き込まれた p:1（過去・未来とも）をすべて使用済みとして集計。
+        //   理由: 申請承認時点で日数はコミット済みリソースとなるため、
+        //         スタッフ・管理者ともに「申請可能な残り」として見るのが直感的。
+        //   ※ 帰国予定の有給申請（未来日付）も承認時に出面 p:1 になるが、これも当然使用済み扱い。
+        //
         for (const [key, entry] of Object.entries(allAtt)) {
           if (!entry) continue
           const e = entry as { p?: number | boolean }
@@ -1251,17 +1251,14 @@ export async function GET(request: NextRequest) {
           const dk = `${pk.ym}_${pk.day}`
 
           // monthlyUsage と plCalendarLocal は全期間集計（月別タブやPLカレンダー表示用）
-          // ※ こちらは未来日付も含めて表示する（カレンダー上で「予定あり」を表現するため）
           if (!seenAllPeriod.has(dk)) {
             seenAllPeriod.add(dk)
             monthlyUsage[pk.ym] = (monthlyUsage[pk.ym] || 0) + 1
             plCalendarLocal.push(`${pk.ym}${pk.day}`)
           }
 
-          // periodUsed は当期（grantDate〜+1年）のみカウント（残日数計算用）
+          // periodUsed は当期（grantDate〜+1年）のみカウント（残日数計算用、申請ベース）
           if (hasPeriod && (entryDate < gd! || entryDate >= gdEnd!)) continue
-          // 未来日付は除外（残日数 = 申請可能な残り）
-          if (entryDate > todayMidnight) continue
           if (seenCurrentFy.has(dk)) continue
           seenCurrentFy.add(dk)
           periodUsed++

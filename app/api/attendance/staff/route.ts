@@ -227,11 +227,20 @@ export async function GET(request: NextRequest) {
             const adj = latest.adjustment ?? latest.adj ?? 0
 
             // periodUsed を出面から動的計算（grantDate..+1年の範囲内のPエントリ数）
-            // ⚠️ 2026-05-18 修正: 未来日付の P エントリは「使用済み」にカウントしない
-            //   （帰国予定の有給申請が承認時に出面へ書き込まれ、残日数が過少表示される事象の修正）
+            //
+            // 設計ポリシー（2026-05-18 確定）:
+            //   スタッフ画面の残日数は「申請可能な日数」を示す → 未来日付の予定も「使用済み」扱いに含める
+            //   （対比: 管理画面/Excelは「実消化日数」基準なので未来日付は除外）
+            //
+            // 含めるもの:
+            //   - 過去P（実際に消化済み）
+            //   - 未来P（承認済みの帰国予定など、出面に既に書き込まれている）
+            // 含めないもの:
+            //   - pending状態の申請（まだ承認されていない、leave-request API側で別途算入）
+            //
+            // この設計により、スタッフが「あと15日ある」と思って追加申請したら拒否される、
+            // という UX 不整合を防ぐ。
             let periodUsed = 0
-            const todayMid = new Date()
-            todayMid.setHours(0, 0, 0, 0)
             if (latest.grantDate) {
               const gdStart = new Date(latest.grantDate + 'T00:00:00')
               if (!isNaN(gdStart.getTime())) {
@@ -251,7 +260,7 @@ export async function GET(request: NextRequest) {
                   const pk = parseDKey(key)
                   if (parseInt(pk.wid) !== worker.id) continue
                   const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-                  if (d >= gdStart && d < gdEnd && d <= todayMid) periodUsed++
+                  if (d >= gdStart && d < gdEnd) periodUsed++
                 }
               }
             }

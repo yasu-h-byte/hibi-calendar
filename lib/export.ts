@@ -733,8 +733,8 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
   }
 
   // ⚠️ 2026-05-18 修正:
-  //   1. 今日が含まれる「アクティブなレコード」を選ぶ（未来年度のレコードを誤選択しないため）
-  //   2. 未来日付の P エントリは使用済みカウントから除外（残日数 = 申請可能な残り）
+  //   今日が含まれる「アクティブなレコード」を選ぶ（未来年度のレコードを誤選択しないため）
+  //   ※ 残日数は申請ベース（未来日付の p:1 も使用済みカウント）— 全画面・全帳票で統一
   const todayPL = new Date()
   todayPL.setHours(0, 0, 0, 0)
 
@@ -764,7 +764,7 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
     const adjustment = Math.max(r.adjustment ?? 0, r.adj ?? 0)
     const total = grantDays + carryOver
 
-    // 出面からの取得日数（未来日付は除外）
+    // 出面からの取得日数（申請ベース：未来日付の p:1 も含む）
     let periodUsed = 0
     if (r.grantDate) {
       const gd = new Date(r.grantDate)
@@ -773,7 +773,7 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
       const wDates = plDates[w.id] || []
       periodUsed = wDates.filter(d => {
         const pd = new Date(d.replace(/\//g, '-'))
-        return pd >= gd && pd < gdEnd && pd <= todayPL
+        return pd >= gd && pd < gdEnd
       }).length
     }
 
@@ -1310,11 +1310,8 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
     return fmtDate(exp.toISOString())
   }
 
-  // periodUsed 計算（grantDate..+1年 のPエントリ、ただし未来日付は除外）
-  // ⚠️ 2026-05-18 修正: 帰国予定の有給申請が承認時に書かれた未来日付の p:1 を
-  //   「使用済み」扱いしないようにする（残日数 = 申請可能な残り）
-  const todayLedger = new Date()
-  todayLedger.setHours(0, 0, 0, 0)
+  // periodUsed 計算（grantDate..+1年 のPエントリ、申請ベース）
+  // ※ 2026-05-18: 申請ベースで統一（未来日付の p:1 も使用済みとして含める）
   const countPeriodUsed = (workerId: number, grantDate?: string): number => {
     if (!grantDate) return 0
     const gd = new Date(grantDate)
@@ -1328,7 +1325,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
       const pk = parseDKey(key)
       if (parseInt(pk.wid) !== workerId) continue
       const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-      if (d >= gd && d < end && d <= todayLedger) count++
+      if (d >= gd && d < end) count++
     }
     return count
   }

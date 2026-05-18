@@ -62,7 +62,7 @@ async function main() {
     const adjustment = Math.max(r.adjustment ?? 0, r.adj ?? 0)
     const total = grantDays + carryOver
 
-    // 修正後: 未来日付除外
+    // 申請ベース: 期間内のP entriesをすべてカウント（未来も含む）
     let periodUsed = 0
     if (r.grantDate) {
       const gd = new Date(r.grantDate)
@@ -71,7 +71,7 @@ async function main() {
       const wDates = plDates[wid] || []
       periodUsed = wDates.filter(d => {
         const pd = new Date(d.replace(/\//g, '-'))
-        return pd >= gd && pd < gdEnd && pd <= today
+        return pd >= gd && pd < gdEnd
       }).length
     }
 
