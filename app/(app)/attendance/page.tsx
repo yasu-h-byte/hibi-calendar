@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { isTimeBasedMonth, calcActualHours } from '@/types'
 import { isWorkingDay } from '@/lib/attendance'
+import AttendanceActionBar from '@/components/AttendanceActionBar'
 
 // ────────────────────────────────────────
 //  Types
@@ -1168,6 +1169,18 @@ export default function AttendanceGridPage() {
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600 text-sm">
           {error}
         </div>
+      )}
+
+      {/* ── 勤怠申請のアクションバー（2026-05-18 追加） ── */}
+      {/* 出面入力画面で有給承認・帰国承認まで完結できるようにする。スマホ操作前提。 */}
+      {password && userRole && (
+        <AttendanceActionBar
+          password={password}
+          userRole={userRole}
+          userWorkerId={userId}
+          userForemanSites={userForemanSites}
+          onUpdate={fetchData}
+        />
       )}
 
       {/* ── Sunday validation warnings ── */}
