@@ -133,6 +133,9 @@ export async function GET(request: NextRequest) {
       .filter(w => !w.retired)
       .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
+    // All subcons (for assignment modal) — 2026-05-18: 配置編集モーダルの「外注先」タブ用
+    const allSubcons = (main.subcons || []).map(sc => ({ id: sc.id, name: sc.name, type: sc.type }))
+
     // foremanOverride: non-null only when mforeman actually overrides the default
     const foremanOverride = mf
       ? { name: foremanWorker?.name || '', note: mf.note || '' }
@@ -191,6 +194,7 @@ export async function GET(request: NextRequest) {
       workDays: workDaysValue,
       siteWorkDays: siteWorkDaysValue,
       allWorkers,
+      allSubcons,
       sites: main.sites.map(s => ({ id: s.id, name: s.name, archived: s.archived })),
       calendarDays,
       homeLeaves,
@@ -257,22 +261,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
-    // Action: save assignments
+    // Action: save assignments (workers と subcons 両対応)
+    // 2026-05-18: subconIds を受け付けるように拡張（配置編集モーダルの「外注先」タブ用）
+    // workerIds / subconIds はそれぞれ undefined 可（指定なしの side は変更しない）
     if (action === 'saveAssign') {
-      const { siteId, workerIds } = body
+      const { siteId, workerIds, subconIds } = body
       if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 })
       const docRef = doc(db, 'demmen', 'main')
-      // Read current assign to preserve subcons
+      // Read current assign to preserve unspecified sides (workers or subcons)
       const snap = await getDoc(docRef)
       const current = snap.exists() ? snap.data() : {}
       const currentAssign = (current.assign || {})[siteId] || {}
+      const nextAssign: Record<string, unknown> = { ...currentAssign }
+      if (Array.isArray(workerIds)) nextAssign.workers = workerIds
+      if (Array.isArray(subconIds)) nextAssign.subcons = subconIds
       await setDoc(docRef, {
-        assign: {
-          [siteId]: {
-            ...currentAssign,
-            workers: workerIds || [],
-          }
-        }
+        assign: { [siteId]: nextAssign }
       }, { merge: true })
       return NextResponse.json({ success: true })
     }
