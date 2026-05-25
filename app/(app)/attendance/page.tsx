@@ -1019,6 +1019,7 @@ export default function AttendanceGridPage() {
         body: JSON.stringify({
           action: 'saveAssign',
           siteId: data.site.id,
+          ym,  // 2026-05-19: ym を必ず送って massign[siteId_ym] も更新させる
           workerIds,
           subconIds,
         }),
@@ -1033,7 +1034,7 @@ export default function AttendanceGridPage() {
       console.error('Save assign error:', e)
       setSaveStatus(null)
     }
-  }, [password, data, fetchData])
+  }, [password, data, ym, fetchData])
 
   // ── Render ──
 

@@ -262,22 +262,48 @@ export async function POST(request: NextRequest) {
     }
 
     // Action: save assignments (workers と subcons 両対応)
-    // 2026-05-18: subconIds を受け付けるように拡張（配置編集モーダルの「外注先」タブ用）
+    //
+    // ⚠️ 2026-05-19 修正: assign[siteId] だけ更新しても画面に反映されないバグ修正
+    //
+    // バグの原因:
+    //   getAssign() は massign[siteId_ym] → 過去12ヶ月分の massign → assign[siteId]
+    //   の順で参照する。massign に既存データがあると assign の更新が表示されない。
+    //
+    // 修正方針:
+    //   1. assign[siteId] を更新（デフォルト・未来月用）
+    //   2. massign[siteId_ym] も更新（現在表示中の月の override として確実に反映）
+    //   ym が指定されている場合のみ massign を更新する（後方互換）
+    //
     // workerIds / subconIds はそれぞれ undefined 可（指定なしの side は変更しない）
     if (action === 'saveAssign') {
-      const { siteId, workerIds, subconIds } = body
+      const { siteId, ym, workerIds, subconIds } = body
       if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 })
       const docRef = doc(db, 'demmen', 'main')
-      // Read current assign to preserve unspecified sides (workers or subcons)
+      // Read current to preserve unspecified sides (workers or subcons)
       const snap = await getDoc(docRef)
       const current = snap.exists() ? snap.data() : {}
+
+      // (1) assign[siteId] を更新
       const currentAssign = (current.assign || {})[siteId] || {}
       const nextAssign: Record<string, unknown> = { ...currentAssign }
       if (Array.isArray(workerIds)) nextAssign.workers = workerIds
       if (Array.isArray(subconIds)) nextAssign.subcons = subconIds
-      await setDoc(docRef, {
+
+      const updatePayload: Record<string, unknown> = {
         assign: { [siteId]: nextAssign }
-      }, { merge: true })
+      }
+
+      // (2) ym 指定があれば massign[siteId_ym] も更新（現在月の override を確実に反映）
+      if (ym && typeof ym === 'string' && /^\d{6}$/.test(ym)) {
+        const mk = `${siteId}_${ym}`
+        const currentMassign = (current.massign || {})[mk] || {}
+        const nextMassign: Record<string, unknown> = { ...currentMassign }
+        if (Array.isArray(workerIds)) nextMassign.workers = workerIds
+        if (Array.isArray(subconIds)) nextMassign.subcons = subconIds
+        updatePayload.massign = { [mk]: nextMassign }
+      }
+
+      await setDoc(docRef, updatePayload, { merge: true })
       return NextResponse.json({ success: true })
     }
 
