@@ -23,6 +23,16 @@ interface Worker {
   org: string
   visa: string
   job: string
+  retired?: string  // YYYY-MM-DD 退職日（バッジ表示用）
+}
+
+// 退職予定リスト用（3ヶ月以内）
+interface UpcomingRetirement {
+  id: number
+  name: string
+  org: string
+  visa: string
+  retired: string  // YYYY-MM-DD
 }
 
 interface Subcon {
@@ -85,6 +95,7 @@ interface GridData {
   foremanOverride: { name: string; note: string } | null
   calendarDays: Record<string, DayType> | null
   homeLeaves?: HomeLeaveInfo[]
+  upcomingRetirements?: UpcomingRetirement[]
 }
 
 // ── Visa badge helper ──
@@ -111,6 +122,31 @@ function orgBadgeLabel(org: string, visa: string): string {
   const v = visaBadge(visa)
   if (v) return v.label
   return org === 'hfu' ? 'HFU' : '日比'
+}
+
+// 退職日バッジの色とラベルを返す
+//   - 既に退職済（過去日）→ 赤・濃い「✅退職済」
+//   - 30日以内 → 赤「🏁 5/15退職」
+//   - 31〜90日 → オレンジ「🏁 6/30退職」
+//   - それ以降 → null（バッジ表示なし）
+function retirementBadge(retired: string | undefined): { label: string; cls: string; title: string } | null {
+  if (!retired) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const retiredDate = new Date(retired + 'T00:00:00')
+  const diffDays = Math.floor((retiredDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+  const m = retiredDate.getMonth() + 1
+  const d = retiredDate.getDate()
+  if (diffDays < 0) {
+    return { label: `✅${m}/${d}退職済`, cls: 'bg-gray-200 text-gray-700', title: `${retired} 退職済` }
+  }
+  if (diffDays <= 30) {
+    return { label: `🏁${m}/${d}退職`, cls: 'bg-red-100 text-red-700 ring-1 ring-red-300', title: `${retired} 退職予定（あと${diffDays}日）` }
+  }
+  if (diffDays <= 90) {
+    return { label: `🏁${m}/${d}退職`, cls: 'bg-orange-100 text-orange-700', title: `${retired} 退職予定（あと${diffDays}日）` }
+  }
+  return null
 }
 
 // ────────────────────────────────────────
@@ -1283,6 +1319,71 @@ export default function AttendanceGridPage() {
         )
       })()}
 
+      {/* ── 退職予定バナー（3ヶ月以内）── */}
+      {/* 出面入力画面で職長が退職予定を見落とさないように表示。
+          バッジは worker 行にも出るが、月をまたぐ退職や全体俯瞰がここでできる。 */}
+      {data?.upcomingRetirements && data.upcomingRetirements.length > 0 && (() => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        // 30日以内（緊急）と 31〜90日（予定）に分類
+        const urgent = data.upcomingRetirements.filter(r => {
+          const d = new Date(r.retired + 'T00:00:00')
+          const diffDays = Math.floor((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+          return diffDays <= 30
+        })
+        const later = data.upcomingRetirements.filter(r => {
+          const d = new Date(r.retired + 'T00:00:00')
+          const diffDays = Math.floor((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+          return diffDays > 30
+        })
+        return (
+          <div className={`${urgent.length > 0 ? 'bg-red-50 border-red-300' : 'bg-orange-50 border-orange-200'} border rounded-xl px-4 py-3 text-sm`}>
+            <div className={`flex items-center gap-2 font-bold mb-2 flex-wrap ${urgent.length > 0 ? 'text-red-800' : 'text-orange-800'}`}>
+              <span>🏁 退職予定（3ヶ月以内）</span>
+              {urgent.length > 0 && (
+                <span className="text-xs bg-red-200 text-red-900 px-1.5 py-0.5 rounded-full">
+                  30日以内 {urgent.length}名
+                </span>
+              )}
+              {later.length > 0 && (
+                <span className="text-xs bg-orange-200 text-orange-900 px-1.5 py-0.5 rounded-full">
+                  予定 {later.length}名
+                </span>
+              )}
+            </div>
+            <div className="space-y-1">
+              {data.upcomingRetirements.map((r, i) => {
+                const d = new Date(r.retired + 'T00:00:00')
+                const diffDays = Math.floor((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+                const isUrgent = diffDays <= 30
+                const visa = visaBadge(r.visa)
+                return (
+                  <div key={i} className={`flex items-center gap-2 text-xs flex-wrap ${isUrgent ? 'text-red-700' : 'text-orange-700'}`}>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      isUrgent ? 'bg-red-200 text-red-800' : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {isUrgent ? `あと${diffDays}日` : `あと${diffDays}日`}
+                    </span>
+                    <span className="font-medium">{r.name}</span>
+                    {visa && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${visa.cls}`}>
+                        {visa.label}
+                      </span>
+                    )}
+                    {!visa && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${r.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {r.org === 'hfu' ? 'HFU' : '日比'}
+                      </span>
+                    )}
+                    <span className="tabular-nums">{r.retired} 退職</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── Grid Table ── */}
       {!loading && data && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
@@ -1540,7 +1641,21 @@ export default function AttendanceGridPage() {
                             className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 text-xs"
                             style={{ width: 150, minWidth: 150, maxWidth: 150 }}
                           >
-                            {worker.name}
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span>{worker.name}</span>
+                              {(() => {
+                                const rb = retirementBadge(worker.retired)
+                                if (!rb) return null
+                                return (
+                                  <span
+                                    className={`text-[9px] px-1 py-0.5 rounded font-bold whitespace-nowrap ${rb.cls}`}
+                                    title={rb.title}
+                                  >
+                                    {rb.label}
+                                  </span>
+                                )
+                              })()}
+                            </div>
                           </td>
 
                           {/* Org badge - sticky (colored by visa) */}

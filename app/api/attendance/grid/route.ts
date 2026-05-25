@@ -51,10 +51,19 @@ export async function GET(request: NextRequest) {
       ? workerIds.filter((wid: number) => Object.keys(allWorkerEntries[wid] || {}).length > 0)
       : workerIds
 
+    // 2026-05-25 修正: 退職日が入っていても、退職日が表示月の月初以降ならまだ在籍中なので表示する
+    //   旧: !w.retired （退職日が入った瞬間に非表示 → 退職月の出面入力ができないバグ）
+    //   新: 退職日 >= 表示月の月初 なら表示（退職月の出面入力可能、翌月以降は非表示）
+    const monthFirstDay = `${ym.substring(0, 4)}-${ym.substring(4, 6)}-01`
+    const isStillActiveForMonth = (retired?: string): boolean => {
+      if (!retired) return true
+      return retired >= monthFirstDay
+    }
     const workers = main.workers
-      .filter(w => filteredWorkerIds.includes(w.id) && !w.retired)
+      .filter(w => filteredWorkerIds.includes(w.id) && isStillActiveForMonth(w.retired))
       .map(w => ({
         id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
+        retired: w.retired || undefined,  // 退職日（バッジ表示用）
       }))
 
     const workerEntries: Record<string, Record<number, AttendanceEntry>> = {}
@@ -198,6 +207,23 @@ export async function GET(request: NextRequest) {
       sites: main.sites.map(s => ({ id: s.id, name: s.name, archived: s.archived })),
       calendarDays,
       homeLeaves,
+      // 2026-05-25 追加: 退職予定情報（今日から3ヶ月以内に退職予定の全スタッフ）
+      //   出面入力画面のバナー表示用。職長が他現場のスタッフも含めて全社の退職予定を把握できる。
+      upcomingRetirements: (() => {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const horizon = new Date(today)
+        horizon.setMonth(horizon.getMonth() + 3)
+        const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+        const horizonIso = `${horizon.getFullYear()}-${String(horizon.getMonth() + 1).padStart(2, '0')}-${String(horizon.getDate()).padStart(2, '0')}`
+        return main.workers
+          .filter(w => w.retired && w.retired >= todayIso && w.retired <= horizonIso)
+          .map(w => ({
+            id: w.id, name: w.name, org: w.org, visa: w.visa,
+            retired: w.retired as string,
+          }))
+          .sort((a, b) => a.retired.localeCompare(b.retired))
+      })(),
     })
   } catch (error) {
     console.error('Grid GET error:', error)
