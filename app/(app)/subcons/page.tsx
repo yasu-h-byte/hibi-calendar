@@ -1,18 +1,21 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 
 interface Subcon {
   id: string; name: string; type: string; rate: number; otRate: number; note: string
+  /** 兼業業者を1社としてまとめるためのグループ名（任意）
+   *  例: 「株式会社A（鳶）」「株式会社A（土工）」を companyGroup="株式会社A" でグルーピング */
+  companyGroup?: string
 }
 
 interface SiteMinimal {
   id: string; name: string
 }
 
-const EMPTY_FORM = { name: '', type: '鳶業者', rate: '', otRate: '', note: '' }
+const EMPTY_FORM = { name: '', type: '鳶業者', rate: '', otRate: '', note: '', companyGroup: '' }
 
 export default function SubconsPage() {
   const { ready } = useAuthPassword()
@@ -26,6 +29,9 @@ export default function SubconsPage() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [siteRateForm, setSiteRateForm] = useState<Record<string, string>>({}) // siteId -> rate string
   const [saving, setSaving] = useState(false)
+  // 表示モード: 'flat' = 区分別（鳶/土工）/ 'group' = 会社グループ別（兼業業者を1グループに集約）
+  const [viewMode, setViewMode] = useState<'flat' | 'group'>('flat')
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
   const fetchData = useCallback(async () => {
     if (!ready) return
@@ -50,7 +56,7 @@ export default function SubconsPage() {
   }
   const openEdit = (sc: Subcon) => {
     setEditId(sc.id)
-    setForm({ name: sc.name, type: sc.type, rate: String(sc.rate || ''), otRate: String(sc.otRate || ''), note: sc.note || '' })
+    setForm({ name: sc.name, type: sc.type, rate: String(sc.rate || ''), otRate: String(sc.otRate || ''), note: sc.note || '', companyGroup: sc.companyGroup || '' })
     // 現在の現場別単価を初期値にセット
     const rateMap: Record<string, string> = {}
     const existingRates = subconRates[sc.id] || {}
@@ -66,7 +72,7 @@ export default function SubconsPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note }
+        ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup }
         : { action: 'add', ...form }
       const res = await postJson('/api/subcons', body)
       if (!res.ok) { alert('保存に失敗しました'); setSaving(false); return }
@@ -141,14 +147,65 @@ export default function SubconsPage() {
     )
   }
 
+  // ── 会社グループ表示用の集計 ──
+  // companyGroup が同じ業者をまとめる。グループ無しの単独業者は1社扱い。
+  const companyGroups = (() => {
+    const groups: { key: string; companyGroup: string | null; members: Subcon[] }[] = []
+    const idx: Record<string, number> = {}
+    for (const sc of subcons) {
+      const k = (sc.companyGroup && sc.companyGroup.trim()) || `__solo_${sc.id}`
+      if (idx[k] === undefined) {
+        idx[k] = groups.length
+        groups.push({
+          key: k,
+          companyGroup: sc.companyGroup && sc.companyGroup.trim() ? sc.companyGroup.trim() : null,
+          members: [],
+        })
+      }
+      groups[idx[k]].members.push(sc)
+    }
+    // ソート: 兼業（members≥2）を先に、その後フラット
+    groups.sort((a, b) => {
+      if (a.members.length >= 2 && b.members.length < 2) return -1
+      if (a.members.length < 2 && b.members.length >= 2) return 1
+      return (a.companyGroup || a.members[0].name).localeCompare(b.companyGroup || b.members[0].name, 'ja')
+    })
+    return groups
+  })()
+  const multiBizCount = companyGroups.filter(g => g.members.length >= 2).length
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-bold text-hibi-navy dark:text-white">外注先マスタ</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">鳶業者: {tobiSubcons.length}社 / 土工業者: {dokoSubcons.length}社 / 合計: {subcons.length}社</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            鳶業者: {tobiSubcons.length}社 / 土工業者: {dokoSubcons.length}社 / 合計: {subcons.length}社
+            {multiBizCount > 0 && ` / 兼業: ${multiBizCount}社`}
+          </p>
         </div>
-        <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">+ 新規追加</button>
+        <div className="flex items-center gap-2">
+          {/* 表示モード切替 */}
+          <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('flat')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                viewMode === 'flat' ? 'bg-white dark:bg-gray-600 text-hibi-navy shadow-sm' : 'text-gray-500'
+              }`}
+            >
+              区分別
+            </button>
+            <button
+              onClick={() => setViewMode('group')}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                viewMode === 'group' ? 'bg-white dark:bg-gray-600 text-hibi-navy shadow-sm' : 'text-gray-500'
+              }`}
+            >
+              会社グループ
+            </button>
+          </div>
+          <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">+ 新規追加</button>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
@@ -168,7 +225,7 @@ export default function SubconsPage() {
               <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : subcons.length === 0 ? (
               <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">外注先がありません</td></tr>
-            ) : (
+            ) : viewMode === 'flat' ? (
               <>
                 {/* 鳶業者グループ */}
                 <tr className="bg-yellow-50 dark:bg-yellow-900/20">
@@ -185,6 +242,26 @@ export default function SubconsPage() {
                   </td>
                 </tr>
                 {dokoSubcons.map(renderSubconRow)}
+              </>
+            ) : (
+              /* 会社グループ表示モード（兼業業者を1グループに集約） */
+              <>
+                {companyGroups.map(g => {
+                  if (g.members.length === 1) {
+                    return renderSubconRow(g.members[0])
+                  }
+                  // 兼業業者: グループヘッダ + メンバー行
+                  const expanded = expandedGroups[g.key] !== false  // デフォルト展開
+                  return (
+                    <RenderGroupedSubcon
+                      key={g.key}
+                      group={g}
+                      expanded={expanded}
+                      onToggle={() => setExpandedGroups(prev => ({ ...prev, [g.key]: !expanded }))}
+                      renderRow={renderSubconRow}
+                    />
+                  )
+                })}
               </>
             )}
           </tbody>
@@ -225,6 +302,25 @@ export default function SubconsPage() {
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">備考</label>
                 <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+              </div>
+
+              {/* 会社グループ（兼業業者を1社にまとめるための任意項目） */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                <label className="text-xs text-blue-700 dark:text-blue-300 block mb-1 font-medium">
+                  会社グループ（兼業業者のみ・任意）
+                </label>
+                <input value={form.companyGroup} onChange={e => setForm({ ...form, companyGroup: e.target.value })}
+                  placeholder="例：株式会社A"
+                  list="subcon-company-groups"
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none" />
+                <datalist id="subcon-company-groups">
+                  {Array.from(new Set(subcons.map(s => s.companyGroup).filter(Boolean) as string[])).map(g => (
+                    <option key={g} value={g} />
+                  ))}
+                </datalist>
+                <p className="text-[10px] text-blue-600 dark:text-blue-300/80 mt-1">
+                  鳶と土工を両方やる業者の場合、両方のエントリに同じ会社名を入れるとグルーピング表示できます。
+                </p>
               </div>
 
               {/* 現場別単価（編集モード＆配置あり時のみ） */}
@@ -276,5 +372,33 @@ export default function SubconsPage() {
         </div>
       )}
     </div>
+  )
+}
+
+// 兼業業者を1グループにまとめて表示するコンポーネント
+function RenderGroupedSubcon({
+  group,
+  expanded,
+  onToggle,
+  renderRow,
+}: {
+  group: { key: string; companyGroup: string | null; members: Subcon[] }
+  expanded: boolean
+  onToggle: () => void
+  renderRow: (sc: Subcon) => React.ReactNode
+}) {
+  return (
+    <>
+      <tr className="bg-blue-50 dark:bg-blue-900/20 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={onToggle}>
+        <td colSpan={6} className="px-3 py-2 font-bold text-blue-800 dark:text-blue-200 text-sm">
+          <span className="inline-block w-4">{expanded ? '▼' : '▶'}</span>
+          🏢 {group.companyGroup}（兼業 {group.members.length}件）
+          <span className="ml-2 text-xs font-normal text-blue-600 dark:text-blue-300">
+            {group.members.map(m => m.type).join(' / ')}
+          </span>
+        </td>
+      </tr>
+      {expanded && group.members.map(m => renderRow(m))}
+    </>
   )
 }

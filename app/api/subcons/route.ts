@@ -56,10 +56,18 @@ export async function POST(request: NextRequest) {
     const subcons = (snap.data().subcons || []) as Record<string, unknown>[]
 
     if (action === 'add') {
-      const { name, type, rate, otRate, note } = body
+      const { name, type, rate, otRate, note, companyGroup } = body
       if (!name) return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20) + '_' + Date.now().toString(36).slice(-4)
-      const newSubcon = { id, name, type: type || '鳶業者', rate: Number(rate) || 0, otRate: Number(otRate) || 0, note: note || '' }
+      // companyGroup: 兼業業者を1社としてまとめるためのグループ名（任意）
+      // 例: 「株式会社A（鳶）」「株式会社A（土工）」を companyGroup="株式会社A" でグルーピング
+      const newSubcon: Record<string, unknown> = {
+        id, name, type: type || '鳶業者',
+        rate: Number(rate) || 0, otRate: Number(otRate) || 0, note: note || '',
+      }
+      if (companyGroup && String(companyGroup).trim()) {
+        newSubcon.companyGroup = String(companyGroup).trim()
+      }
       subcons.push(newSubcon)
       await updateDoc(docRef, { subcons })
       await logActivity('admin', 'subcon.add', `${name} を追加`)
@@ -73,7 +81,17 @@ export async function POST(request: NextRequest) {
       if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
       if (updates.rate !== undefined) updates.rate = Number(updates.rate)
       if (updates.otRate !== undefined) updates.otRate = Number(updates.otRate)
+      // companyGroup: 空文字なら未指定として削除（フィールドごと消すと UI が綺麗）
+      if (updates.companyGroup !== undefined) {
+        const cg = String(updates.companyGroup || '').trim()
+        if (cg) updates.companyGroup = cg
+        else delete updates.companyGroup
+      }
       subcons[idx] = { ...subcons[idx], ...updates }
+      // 既存の companyGroup を空文字で消したい場合のサポート
+      if (body.companyGroup === '' || body.companyGroup === null) {
+        delete (subcons[idx] as Record<string, unknown>).companyGroup
+      }
       await updateDoc(docRef, { subcons })
       await logActivity('admin', 'subcon.update', `${id} を更新`)
       return NextResponse.json({ success: true })
