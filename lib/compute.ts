@@ -936,9 +936,14 @@ export function computeMonthly(
   // Calculate worker costs
   for (const wm of workerMap.values()) {
     wm.workAll = wm.workDays + wm.compDays * 0.6  // 出勤日数（0.6含む）
-    wm.cost = wm.workDays * wm.rate + (wm.compDays * 0.6 * wm.rate)  // 補償分も原価に含む
+    // 月給制の日本人は rate が 0 でも salary から日額換算で原価計算（現場別配賦のため）
+    // 月給/月所定日数（20日固定で簡便。実所定日数は後段で計算するが、原価配賦は概算で十分）
+    const effectiveDailyRate = (wm.visa === 'none' && wm.salary && wm.salary > 0)
+      ? wm.salary / 20
+      : wm.rate
+    wm.cost = wm.workDays * effectiveDailyRate + (wm.compDays * 0.6 * effectiveDailyRate)  // 補償分も原価に含む
     const otDiv2 = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
-    wm.otCost = wm.otHours * (wm.rate / otDiv2) * wm.otMul
+    wm.otCost = wm.otHours * (effectiveDailyRate / otDiv2) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
     // 出向者: 控除額 = totalCost（人件費から差引）
     if (wm.isDispatched) {
@@ -1120,6 +1125,25 @@ export function computeMonthly(
       wm.absence = absentDays
       wm.absentCost = absentDeduction
       wm.netPay = salaryNet
+    } else if (wm.visa === 'none' && wm.salary && wm.salary > 0) {
+      // ── 月給制の日本人: 月給固定 + 残業時給換算 ──
+      // 基本給 = 月給(固定)
+      // 時給換算 = 月給 ÷ 月所定時間（月所定日数×8h、未設定なら 20日×8h=160h）
+      // 残業手当 = 時給換算 × otMul × 残業時間
+      // 支給額 = 基本給 + 残業手当
+      // ※ 出勤日数に関わらず基本給は固定（労基法上の月給制）
+      const prescribedDaysForCalc = workerPrescribedDays > 0 ? workerPrescribedDays : 20
+      const prescribedH = prescribedDaysForCalc * 8
+      const hourlyEquivalent = wm.salary / prescribedH
+      const basePay = wm.salary
+      const otPay = Math.round(hourlyEquivalent * wm.otMul * wm.otHours)
+      wm.basePay = basePay
+      wm.prescribedHours = prescribedH
+      wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
+      wm.otAllowance = otPay
+      wm.salaryNetPay = basePay + otPay
+      // netPay: 給与支給額（=月給+残業）。totalCost は使わない（出勤日数 × rate で誤算するため）。
+      wm.netPay = basePay + otPay
     } else if (wm.visa === 'none') {
       // 日給月給制の日本人: daily-rate based
       // 基本給 = 日額(rate) × 実出勤日数

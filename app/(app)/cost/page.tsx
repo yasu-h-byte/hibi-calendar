@@ -114,6 +114,7 @@ function ymToShortLabel(ym: string): string {
 
 function jobLabel(job: string): string {
   if (job === 'とび' || job === 'tobi' || job === '鳶') return '鳶'
+  if (job === 'tobi_apprentice' || job === '鳶見習い') return '鳶見習い'
   if (job === 'doko' || job === '土工') return '土工'
   if (job === '職長' || job === 'shokucho') return '職長'
   if (job === '役員' || job === 'yakuin') return '役員'

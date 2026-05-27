@@ -18,7 +18,7 @@ const VISA_LABELS: Record<string, string> = {
 const isGaikoku = (v: string) => v !== 'none' && v !== ''
 const isJisshu = (v: string) => v.startsWith('jisshu')
 const isTokutei = (v: string) => v.startsWith('tokutei')
-const JOB_LABELS: Record<string, string> = { yakuin: '役員', shokucho: '職長', tobi: 'とび', doko: '土工', jimu: '事務' }
+const JOB_LABELS: Record<string, string> = { yakuin: '役員', shokucho: '職長', tobi: 'とび', tobi_apprentice: '鳶見習い', doko: '土工', jimu: '事務' }
 
 interface WorkerExt extends Worker {
   rate?: number
@@ -38,6 +38,7 @@ function jobBadge(jobType?: string): { label: string; cls: string } {
     case 'yakuin': case '役員': return { label: '役員', cls: 'bg-red-100 text-red-700' }
     case 'shokucho': case '職長': return { label: '職長', cls: 'bg-blue-100 text-blue-700' }
     case 'tobi': case 'とび': return { label: 'とび', cls: 'bg-green-100 text-green-700' }
+    case 'tobi_apprentice': return { label: '鳶見習い', cls: 'bg-lime-100 text-lime-700' }
     case 'doko': case '土工': return { label: '土工', cls: 'bg-gray-200 text-gray-600' }
     case 'jimu': case '事務': return { label: '事務', cls: 'bg-purple-100 text-purple-700' }
     default: return { label: jobType || '—', cls: 'bg-gray-100 text-gray-500' }
@@ -554,6 +555,7 @@ export default function WorkersPage() {
                     <select value={form.job} onChange={e => setForm({ ...form, job: e.target.value })}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
                       <option value="tobi">とび</option>
+                      <option value="tobi_apprentice">鳶見習い</option>
                       <option value="doko">土工</option>
                       <option value="shokucho">職長</option>
                       <option value="yakuin">役員</option>
@@ -682,38 +684,123 @@ export default function WorkersPage() {
                   </>
                 ) : (
                   <>
-                    {/* 日本人: 日額ベース */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">日額単価（円）</label>
-                        <input type="text" inputMode="numeric"
-                          value={form.rate ? Number(form.rate).toLocaleString() : ''}
-                          onChange={e => setForm({ ...form, rate: e.target.value.replace(/[^0-9]/g, '') })}
-                          placeholder="25,000"
-                          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">残業倍率</label>
-                        <input type="number" step="0.05" value={form.otMul} onChange={e => setForm({ ...form, otMul: e.target.value })}
-                          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                      </div>
-                    </div>
-                    {form.rate && Number(form.rate) > 0 && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs text-gray-400 block mb-1">時給換算（参考）</label>
-                          <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
-                            ¥{Math.round(Number(form.rate) / 8).toLocaleString()}
+                    {/* 日本人: 日給制 or 月給制を選択 */}
+                    {/* salary > 0 を「月給制」、それ以外を「日給制」と判定。
+                        モード切替時に対側のフィールドはクリアして両立を防ぐ。 */}
+                    {(() => {
+                      const isMonthly = !!(form.salary && Number(form.salary) > 0)
+                      const prescribedDays = 20  // 月所定日数の標準値（時給換算用）
+                      const prescribedH = prescribedDays * 8
+                      return (
+                        <>
+                          {/* モード切替 */}
+                          <div className="flex gap-2">
+                            <button type="button"
+                              onClick={() => setForm({ ...form, salary: '' })}
+                              className={`flex-1 px-3 py-2 rounded-lg text-sm font-bold transition ${
+                                !isMonthly
+                                  ? 'bg-blue-600 text-white shadow'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200'
+                              }`}
+                            >
+                              日給制
+                            </button>
+                            <button type="button"
+                              onClick={() => setForm({ ...form, rate: '', salary: form.salary || '300000' })}
+                              className={`flex-1 px-3 py-2 rounded-lg text-sm font-bold transition ${
+                                isMonthly
+                                  ? 'bg-blue-600 text-white shadow'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 hover:bg-gray-200'
+                              }`}
+                            >
+                              月給制
+                            </button>
                           </div>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-400 block mb-1">残業単価（参考）</label>
-                          <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
-                            ¥{Math.round(Number(form.rate) / 8 * Number(form.otMul || 1.25)).toLocaleString()}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+
+                          {!isMonthly ? (
+                            <>
+                              {/* 日給制 */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">日額単価（円）</label>
+                                  <input type="text" inputMode="numeric"
+                                    value={form.rate ? Number(form.rate).toLocaleString() : ''}
+                                    onChange={e => setForm({ ...form, rate: e.target.value.replace(/[^0-9]/g, '') })}
+                                    placeholder="25,000"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">残業倍率</label>
+                                  <input type="number" step="0.05" value={form.otMul} onChange={e => setForm({ ...form, otMul: e.target.value })}
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                </div>
+                              </div>
+                              {form.rate && Number(form.rate) > 0 && (
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="text-xs text-gray-400 block mb-1">時給換算（参考）</label>
+                                    <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                                      ¥{Math.round(Number(form.rate) / 8).toLocaleString()}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-gray-400 block mb-1">残業単価（参考）</label>
+                                    <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                                      ¥{Math.round(Number(form.rate) / 8 * Number(form.otMul || 1.25)).toLocaleString()}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {/* 月給制 */}
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">月給（円）</label>
+                                  <input type="text" inputMode="numeric"
+                                    value={form.salary ? Number(form.salary).toLocaleString() : ''}
+                                    onChange={e => setForm({ ...form, salary: e.target.value.replace(/[^0-9]/g, '') })}
+                                    placeholder="300,000"
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">残業倍率</label>
+                                  <input type="number" step="0.05" value={form.otMul} onChange={e => setForm({ ...form, otMul: e.target.value })}
+                                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                                </div>
+                              </div>
+                              {form.salary && Number(form.salary) > 0 && (
+                                <div className="grid grid-cols-3 gap-3">
+                                  <div>
+                                    <label className="text-xs text-gray-400 block mb-1">日額換算（参考）</label>
+                                    <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                                      ¥{Math.round(Number(form.salary) / prescribedDays).toLocaleString()}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-gray-400 block mb-1">時給換算（参考）</label>
+                                    <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                                      ¥{Math.round(Number(form.salary) / prescribedH).toLocaleString()}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="text-xs text-gray-400 block mb-1">残業単価（参考）</label>
+                                    <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
+                                      ¥{Math.round(Number(form.salary) / prescribedH * Number(form.otMul || 1.25)).toLocaleString()}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              <p className="text-[10px] text-gray-400">
+                                ※ 月給制: 出勤日数に関わらず月給固定。残業は時給換算 × 倍率で加算。
+                                <br/>※ 換算は月所定 {prescribedDays}日 × 8h = {prescribedH}h で計算。
+                              </p>
+                            </>
+                          )}
+                        </>
+                      )
+                    })()}
                   </>
                 )}
               </div>

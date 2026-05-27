@@ -957,7 +957,7 @@ export default function AttendanceGridPage() {
           const isComp = entry.w === 0.6 && w.visa !== 'none'
           const workVal = isComp ? 0 : entry.w
           const otVal = isComp ? 0 : (entry.o || 0)
-          if (w.job === 'tobi' || w.job === 'shokucho' || w.job === 'yakuin') {
+          if (w.job === 'tobi' || w.job === 'tobi_apprentice' || w.job === 'shokucho' || w.job === 'yakuin') {
             tobiDay += workVal
             tobiOtDay += otVal
           } else if (w.job === 'doko') {
@@ -2496,7 +2496,7 @@ function AssignModal({
                       </span>
                       {w.job && (
                         <span className="text-[10px] text-gray-400">
-                          {w.job === 'tobi' ? '鳶' : w.job === 'doko' ? '土工' : w.job}
+                          {w.job === 'tobi' ? '鳶' : w.job === 'tobi_apprentice' ? '鳶見習い' : w.job === 'doko' ? '土工' : w.job === 'shokucho' ? '職長' : w.job === 'yakuin' ? '役員' : w.job === 'jimu' ? '事務' : w.job}
                         </span>
                       )}
                     </button>

@@ -464,7 +464,7 @@ export async function GET(request: NextRequest) {
         for (const wid of wids) {
           const worker = main.workers.find(w => w.id === wid && !w.retired)
           if (worker) {
-            if (worker.job === 'tobi' || worker.job === 'shokucho' || worker.job === 'yakuin') tobi++
+            if (worker.job === 'tobi' || worker.job === 'tobi_apprentice' || worker.job === 'shokucho' || worker.job === 'yakuin') tobi++
             else doko++
           }
         }
