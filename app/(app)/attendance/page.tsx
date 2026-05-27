@@ -266,6 +266,13 @@ export default function AttendanceGridPage() {
   // Assignment modal
   const [showAssignModal, setShowAssignModal] = useState(false)
 
+  // 翌月カレンダー未確定アラート用（月末1週間前を過ぎたら全現場の status を取得）
+  const [nextMonthCalCheck, setNextMonthCalCheck] = useState<{
+    ym: string
+    daysToMonthEnd: number
+    sites: { siteId: string; siteName: string; status: string | null }[]
+  } | null>(null)
+
   // Debounce queue
   const pendingSaves = useRef<Map<string, PendingSave>>(new Map())
   const debounceTimer = useRef<NodeJS.Timeout | null>(null)
@@ -389,6 +396,42 @@ export default function AttendanceGridPage() {
     }
     loadSites()
   }, [password, siteId, setSiteId])
+
+  // ── 翌月カレンダー未確定アラート ──
+  // 月末1週間前を過ぎたら、翌月の siteCalendar status を全現場分取得して
+  // 未確定（draft/未作成/rejected/submitted）の現場があればバナー表示。
+  // ym 切替には依存させず、今日の日付ベースで一度だけチェック。
+  useEffect(() => {
+    if (!password) return
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+    const daysToMonthEnd = lastDayOfMonth - today.getDate()
+    if (daysToMonthEnd > 7) {
+      setNextMonthCalCheck(null)
+      return
+    }
+    // 翌月の ym "YYYY-MM"
+    const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1)
+    const nextYm = `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, '0')}`
+    fetch(`/api/calendar/status?ym=${nextYm}`, {
+      headers: { 'x-admin-password': password },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((json: { sites?: { siteId: string; siteName: string; status: string | null }[] } | null) => {
+        if (!json || !json.sites) return
+        setNextMonthCalCheck({
+          ym: nextYm,
+          daysToMonthEnd,
+          sites: json.sites.map(s => ({
+            siteId: s.siteId,
+            siteName: s.siteName,
+            status: s.status,
+          })),
+        })
+      })
+      .catch(() => {})
+  }, [password])
 
   // ── Debounced save flush ──
 
@@ -1209,6 +1252,76 @@ export default function AttendanceGridPage() {
           {error}
         </div>
       )}
+
+      {/* ── 翌月カレンダー未確定アラート（月末1週間前以降） ── */}
+      {/* 翌月の就業カレンダーが全現場 approved になっているか横断チェック。
+          赤=未作成/draft/rejected（要作成・要再提出）、黄=submitted（承認待ち）、緑=approved。
+          - foreman: 担当現場が赤なら作成催促、submitted は承認待ちと案内
+          - admin/approver: submitted 件数を出して承認画面への動線 */}
+      {nextMonthCalCheck && (() => {
+        const sites = nextMonthCalCheck.sites
+        const redSites = sites.filter(s => !s.status || s.status === 'draft' || s.status === 'rejected')
+        const yellowSites = sites.filter(s => s.status === 'submitted')
+        const greenSites = sites.filter(s => s.status === 'approved')
+        // 全て approved なら表示しない
+        if (redSites.length === 0 && yellowSites.length === 0) return null
+        const isUrgent = redSites.length > 0
+        const ymLabel = (() => {
+          const [y, m] = nextMonthCalCheck.ym.split('-')
+          return `${y}年${parseInt(m, 10)}月`
+        })()
+        return (
+          <div className={`${isUrgent ? 'bg-red-50 border-red-300' : 'bg-yellow-50 border-yellow-300'} border-2 rounded-xl px-4 py-3 text-sm shadow-sm`}>
+            <div className={`flex items-center gap-2 font-bold mb-2 flex-wrap ${isUrgent ? 'text-red-800' : 'text-yellow-800'}`}>
+              <span className="text-base">{isUrgent ? '🚨' : '⏳'}</span>
+              <span>翌月（{ymLabel}）の就業カレンダー未確定</span>
+              <span className="text-xs font-normal text-gray-600">
+                月末まであと{nextMonthCalCheck.daysToMonthEnd}日
+              </span>
+              {redSites.length > 0 && (
+                <span className="text-xs bg-red-200 text-red-900 px-1.5 py-0.5 rounded-full">
+                  要作成 {redSites.length}件
+                </span>
+              )}
+              {yellowSites.length > 0 && (
+                <span className="text-xs bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded-full">
+                  承認待ち {yellowSites.length}件
+                </span>
+              )}
+              {greenSites.length > 0 && (
+                <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                  確定済 {greenSites.length}件
+                </span>
+              )}
+              <a
+                href="/calendar"
+                className={`ml-auto text-xs underline ${isUrgent ? 'text-red-700 hover:text-red-900' : 'text-yellow-700 hover:text-yellow-900'}`}
+              >
+                カレンダー画面へ →
+              </a>
+            </div>
+            <div className="space-y-1">
+              {redSites.map(s => (
+                <div key={s.siteId} className="flex items-center gap-2 text-xs text-red-700 flex-wrap">
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-200 text-red-800">
+                    {!s.status ? '未作成' : s.status === 'rejected' ? '差戻し' : '作成中'}
+                  </span>
+                  <span className="font-medium">{s.siteName}</span>
+                </div>
+              ))}
+              {yellowSites.map(s => (
+                <div key={s.siteId} className="flex items-center gap-2 text-xs text-yellow-700 flex-wrap">
+                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-yellow-200 text-yellow-800">
+                    承認待ち
+                  </span>
+                  <span className="font-medium">{s.siteName}</span>
+                  <span className="text-[10px] text-yellow-600">職長提出済・最終承認待ち</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── 勤怠申請のアクションバー（2026-05-18 追加） ── */}
       {/* 出面入力画面で有給承認・帰国承認まで完結できるようにする。スマホ操作前提。 */}
