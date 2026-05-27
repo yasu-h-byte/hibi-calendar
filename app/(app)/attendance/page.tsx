@@ -1094,8 +1094,26 @@ export default function AttendanceGridPage() {
 
   // ── Assignment modal handlers ──
 
-  const handleSaveAssign = useCallback(async (workerIds: number[], subconIds: string[]) => {
+  const handleSaveAssign = useCallback(async (
+    workerIds: number[],
+    subconIds: string[],
+    expectedSiteId: string,
+    expectedYm: string,
+  ) => {
     if (!password || !data) return
+    // 🛡 多層防御: モーダル open 時点の siteId/ym と現在のものが食い違うと
+    //   別現場/別月の配置データで上書きしてしまう。明示的に拒否してアラート。
+    //   (2026-05-27 sasazuka → IHIメンバー上書き事案の再発防止)
+    if (data.site.id !== expectedSiteId || ym !== expectedYm) {
+      alert(
+        `⚠️ 配置編集中にサイト/月が切り替わったため保存を中止しました。\n\n` +
+        `編集開始時: ${expectedSiteId} / ${expectedYm}\n` +
+        `現在: ${data.site.id} / ${ym}\n\n` +
+        `モーダルを閉じてから再度開いて、編集をやり直してください。`
+      )
+      setShowAssignModal(false)
+      return
+    }
     setSaveStatus('saving')
     try {
       await fetch('/api/attendance/grid', {
@@ -2348,7 +2366,14 @@ export default function AttendanceGridPage() {
 
       {/* ── Assignment Modal ── */}
       {showAssignModal && data && (
+        // 🛡 重要: key に siteId+ym を含めることで、開いている間にサイト・月が
+        // 切り替わった場合に強制 re-mount し、内部 state を新しい配置で初期化する。
+        // これをしないと、サイト切替後に古いサイトの workers がそのまま新しい
+        // サイトに保存されるバグが起きる（2026-05-27 sasazuka → IHIメンバー上書き事案）。
         <AssignModal
+          key={`assign-modal-${data.site.id}-${ym}`}
+          siteId={data.site.id}
+          ym={ym}
           siteName={data.site.name}
           currentWorkerIds={data.workers.map(w => w.id)}
           allWorkers={data.allWorkers || []}
@@ -2367,6 +2392,8 @@ export default function AttendanceGridPage() {
 // ────────────────────────────────────────
 
 function AssignModal({
+  siteId,
+  ym,
   siteName,
   currentWorkerIds,
   allWorkers,
@@ -2375,12 +2402,14 @@ function AssignModal({
   onSave,
   onClose,
 }: {
+  siteId: string
+  ym: string
   siteName: string
   currentWorkerIds: number[]
   allWorkers: Worker[]
   currentSubconIds: string[]
   allSubcons: { id: string; name: string; type: string }[]
-  onSave: (workerIds: number[], subconIds: string[]) => void
+  onSave: (workerIds: number[], subconIds: string[], expectedSiteId: string, expectedYm: string) => void
   onClose: () => void
 }) {
   // 2026-05-18 拡張: 作業員 / 外注先 タブ切替
@@ -2388,6 +2417,11 @@ function AssignModal({
   const [assignedWorkerIds, setAssignedWorkerIds] = useState<Set<number>>(new Set(currentWorkerIds))
   const [assignedSubconIds, setAssignedSubconIds] = useState<Set<string>>(new Set(currentSubconIds))
   const [search, setSearch] = useState('')
+
+  // モーダル open 時点のサイト/月を保持し、保存時に親側で照合する。
+  // サイト切替が裏で起きていた場合の誤書き込みを防ぐ多層防御。
+  const openedSiteIdRef = useRef(siteId)
+  const openedYmRef = useRef(ym)
 
   // ── 作業員 ──
   const unassignedWorkers = useMemo(() => {
@@ -2430,7 +2464,13 @@ function AssignModal({
   }
 
   const handleSave = () => {
-    onSave(Array.from(assignedWorkerIds), Array.from(assignedSubconIds))
+    // 親側で openedSiteId/openedYm と現在の data.site.id/ym を照合させる
+    onSave(
+      Array.from(assignedWorkerIds),
+      Array.from(assignedSubconIds),
+      openedSiteIdRef.current,
+      openedYmRef.current,
+    )
   }
 
   return (
