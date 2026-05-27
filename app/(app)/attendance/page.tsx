@@ -836,8 +836,17 @@ export default function AttendanceGridPage() {
 
   const groupedWorkers = useMemo(() => {
     if (!data) return []
-    const hibi = data.workers.filter(w => w.org === 'hibi')
-    const hfu = data.workers.filter(w => w.org === 'hfu')
+    // 並び順: 日本人（visa=none）を先に → 同区分内は ID 昇順
+    //   ID 採番が帯域別（日本人=1-99 / 外国人=100-200番台 / 事務=300番台）になったため、
+    //   素直に visa→id 昇順で並べると 入力しやすい順番（職人→ベトナム→事務）になる。
+    const sortFn = (a: Worker, b: Worker) => {
+      const aIsJp = !a.visa || a.visa === 'none'
+      const bIsJp = !b.visa || b.visa === 'none'
+      if (aIsJp !== bIsJp) return aIsJp ? -1 : 1
+      return a.id - b.id
+    }
+    const hibi = data.workers.filter(w => w.org === 'hibi').slice().sort(sortFn)
+    const hfu = data.workers.filter(w => w.org === 'hfu').slice().sort(sortFn)
     const groups: { org: string; label: string; workers: Worker[] }[] = []
     if (hibi.length > 0) groups.push({ org: 'hibi', label: '日比建設', workers: hibi })
     if (hfu.length > 0) groups.push({ org: 'hfu', label: 'HFU', workers: hfu })
