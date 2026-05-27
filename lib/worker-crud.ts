@@ -40,10 +40,59 @@ export async function getAllWorkers(): Promise<WorkerData[]> {
   return (data.workers || []) as WorkerData[]
 }
 
+/**
+ * 社員IDの採番ルール（2026-05-27 〜）
+ *
+ *  - 日本人職人（visa=none かつ job≠jimu）: 1〜99 の空き番号
+ *  - 日本人事務（visa=none かつ job=jimu）: 300〜399 の空き番号
+ *  - 外国人 / 日比建設（visa≠none かつ org=hibi）: 100〜199 の空き番号
+ *  - 外国人 / HFU（visa≠none かつ org=hfu）: 200〜299 の空き番号
+ *  - 上記いずれの帯にも該当しない場合: 既存ロジックの max+1（フォールバック）
+ *
+ * 帯域内で最小の空き番号を採用するため、退職者の番号は基本的に再利用しない
+ * （workers 配列に retired 含めて残っている前提）。
+ */
+function assignWorkerId(
+  workers: WorkerData[],
+  newWorker: Omit<WorkerData, 'id' | 'token'>,
+): number {
+  const isForeigner = newWorker.visa !== 'none' && newWorker.visa !== ''
+  const isJimu = newWorker.job === 'jimu'
+  const isHfu = newWorker.org === 'hfu'
+
+  let bandStart = 0
+  let bandEnd = 0
+  if (!isForeigner && !isJimu) {
+    // 日本人職人
+    bandStart = 1; bandEnd = 99
+  } else if (!isForeigner && isJimu) {
+    // 日本人事務
+    bandStart = 300; bandEnd = 399
+  } else if (isForeigner && !isHfu) {
+    // 外国人・日比建設
+    bandStart = 100; bandEnd = 199
+  } else if (isForeigner && isHfu) {
+    // 外国人・HFU
+    bandStart = 200; bandEnd = 299
+  }
+
+  if (bandStart > 0) {
+    const usedIds = new Set(workers.map(w => w.id))
+    for (let id = bandStart; id <= bandEnd; id++) {
+      if (!usedIds.has(id)) return id
+    }
+    // 帯域が全部埋まったらフォールバック（実運用ではまず起きない）
+    console.warn(`[addWorker] 帯域 ${bandStart}-${bandEnd} が満員のため max+1 にフォールバック`)
+  }
+
+  // フォールバック: 既存の単純インクリメント
+  return Math.max(0, ...workers.map(w => w.id)) + 1
+}
+
 export async function addWorker(worker: Omit<WorkerData, 'id' | 'token'>): Promise<WorkerData> {
   const { docRef, data } = await getMainDoc()
   const workers = (data.workers || []) as WorkerData[]
-  const nextId = (data.nextWorkerId as number) || (Math.max(0, ...workers.map(w => w.id)) + 1)
+  const nextId = assignWorkerId(workers, worker)
 
   const newWorker: WorkerData = {
     id: nextId,
@@ -52,9 +101,11 @@ export async function addWorker(worker: Omit<WorkerData, 'id' | 'token'>): Promi
   }
 
   workers.push(newWorker)
+  // nextWorkerId は後方互換のため最大値を保存しておく（旧コード参照用）
+  const maxId = Math.max(nextId, ...(data.nextWorkerId ? [data.nextWorkerId as number] : []))
   await updateDoc(docRef, {
     workers,
-    nextWorkerId: nextId + 1,
+    nextWorkerId: maxId + 1,
   })
 
   return newWorker
