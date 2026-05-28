@@ -92,11 +92,17 @@ export function buildWorkerNameMap<T extends { id: number; name: string }>(
  * （retired フィールドが入った瞬間に全画面から消える）を防ぐ。
  *
  * @param retired  YYYY-MM-DD 形式の退職日（空文字／undefined OK）
- * @param ym       表示対象月 YYYYMM 形式
+ * @param ym       表示対象月。"YYYYMM"（6桁）または "YYYY-MM"（7桁ダッシュ付き）の両方を受け付ける
+ *                 2026-05-27: ダッシュ付き形式も受け付けるように修正
+ *                 （以前は正規表現で6桁限定だったため YYYY-MM 渡しで安全側 true にフォール
+ *                  バックし、退職者が表示画面に残るバグが発生していた）
  */
 export function isStillActiveForMonth(retired: string | undefined | null, ym: string): boolean {
   if (!retired) return true
-  if (!/^\d{6}$/.test(ym)) return true  // ym 不正は安全側で表示
-  const monthFirstDay = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
+  if (!ym) return true  // ym 不在は安全側で表示
+  // "YYYYMM" / "YYYY-MM" の両方に対応
+  const normalized = ym.replace('-', '')
+  if (!/^\d{6}$/.test(normalized)) return true  // 不正フォーマットは安全側で表示
+  const monthFirstDay = `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}-01`
   return retired >= monthFirstDay
 }
