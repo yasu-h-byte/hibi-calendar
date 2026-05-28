@@ -226,12 +226,28 @@ Chon ten -> Xem lich -> Ky
     ymOptions.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
-  // Signature summary
-  const totalWorkers = visibleSites.reduce((sum, s) => sum + s.workers.length, 0)
-  const signedWorkers = visibleSites.reduce((sum, s) => sum + s.workers.filter(w => w.signed).length, 0)
-  const unsignedWorkers = visibleSites.flatMap(s =>
-    s.workers.filter(w => !w.signed).map(w => ({ name: w.name, siteName: s.siteName }))
-  )
+  // Signature summary (2026-05-27: 人毎ユニーク集計に変更)
+  //   「全員が全現場のカレンダーに署名する」モデルに合わせ、
+  //   人 × 現場ペアではなく「ユニークなスタッフ数」で集計する。
+  //   - 完了 = そのスタッフが対象となる全現場で署名済み
+  //   - 未署名件数 = そのスタッフがまだ署名していない現場数
+  const workerStatusMap = new Map<number, { name: string; total: number; signed: number }>()
+  visibleSites.forEach(s => {
+    s.workers.forEach(w => {
+      const cur = workerStatusMap.get(w.id) || { name: w.name, total: 0, signed: 0 }
+      cur.total += 1
+      if (w.signed) cur.signed += 1
+      workerStatusMap.set(w.id, cur)
+    })
+  })
+  const allWorkersStatus = Array.from(workerStatusMap.entries())
+    .map(([id, s]) => ({ id, name: s.name, total: s.total, signed: s.signed, remaining: s.total - s.signed }))
+  const totalWorkers = allWorkersStatus.length
+  const signedWorkers = allWorkersStatus.filter(w => w.remaining === 0).length
+  // 未署名スタッフ一覧（残件数の多い順）
+  const unsignedWorkers = allWorkersStatus
+    .filter(w => w.remaining > 0)
+    .sort((a, b) => b.remaining - a.remaining || a.name.localeCompare(b.name))
 
   // Check if any site has legal limit exceeded
   const hasLegalExceed = visibleSites.some(site => {
@@ -531,11 +547,18 @@ Chon ten -> Xem lich -> Ky
           </div>
           {unsignedWorkers.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">未署名者:</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                未署名者 ({unsignedWorkers.length}名):
+              </p>
               <div className="flex flex-wrap gap-1">
-                {unsignedWorkers.map((w, i) => (
-                  <span key={i} className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 text-xs px-2 py-0.5 rounded-full">
-                    {w.name}（{w.siteName}）
+                {unsignedWorkers.map(w => (
+                  <span key={w.id} className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 text-xs px-2 py-0.5 rounded-full">
+                    {w.name}
+                    {w.total > 1 && (
+                      <span className="ml-1 text-yellow-600 dark:text-yellow-400 font-medium">
+                        ({w.remaining}/{w.total}件)
+                      </span>
+                    )}
                   </span>
                 ))}
               </div>
