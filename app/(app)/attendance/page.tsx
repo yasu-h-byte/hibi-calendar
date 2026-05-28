@@ -1403,10 +1403,57 @@ export default function AttendanceGridPage() {
       )}
 
       {/* ── Home leave banner ── */}
+      {/* 表示ルール（2026-05-27 〜）:
+          - 帰国中: 開始 <= today <= 終了
+          - 予定: today < 開始
+          - 済: 終了 < today、ただし帰国から 7日以内のみ表示（最近帰国した人として）
+          並び順: 帰国中 → 予定 → 済 */}
       {data?.homeLeaves && data.homeLeaves.length > 0 && (() => {
         const now = new Date().toISOString().slice(0, 10)
-        const currentCount = data.homeLeaves.filter(hl => hl.startDate <= now && hl.endDate >= now).length
-        const futureCount = data.homeLeaves.filter(hl => hl.startDate > now).length
+        const today = new Date(now + 'T00:00:00')
+        const RECENT_RETURN_DAYS = 7
+
+        // 各帰国の状態と「最近帰国してから何日経ったか」を計算
+        type Categorized = {
+          hl: HomeLeaveInfo
+          status: 'current' | 'future' | 'recent'
+          daysUntilStart: number
+          daysSinceReturn: number
+        }
+        const categorized: Categorized[] = data.homeLeaves.map(hl => {
+          const isCurrent = hl.startDate <= now && hl.endDate >= now
+          const isFuture = hl.startDate > now
+          const start = new Date(hl.startDate + 'T00:00:00')
+          const end = new Date(hl.endDate + 'T00:00:00')
+          const daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+          const daysSinceReturn = Math.floor((today.getTime() - end.getTime()) / (24 * 60 * 60 * 1000))
+          const status: 'current' | 'future' | 'recent' =
+            isCurrent ? 'current'
+            : isFuture ? 'future'
+            : 'recent'
+          return { hl, status, daysUntilStart, daysSinceReturn }
+        })
+
+        // 済は帰国から N 日以内のみフィルタ
+        const visible = categorized.filter(c =>
+          c.status !== 'recent' || c.daysSinceReturn <= RECENT_RETURN_DAYS
+        )
+
+        // 並び順: 帰国中 (0) → 予定 (1) → 済 (2)、同一区分内は開始日昇順
+        const statusOrder = { current: 0, future: 1, recent: 2 }
+        visible.sort((a, b) => {
+          const diff = statusOrder[a.status] - statusOrder[b.status]
+          if (diff !== 0) return diff
+          return a.hl.startDate.localeCompare(b.hl.startDate)
+        })
+
+        // バナー表示判定: 何か1件でも見える状態であれば表示
+        if (visible.length === 0) return null
+
+        const currentCount = visible.filter(c => c.status === 'current').length
+        const futureCount = visible.filter(c => c.status === 'future').length
+        const recentCount = visible.filter(c => c.status === 'recent').length
+
         return (
           <div className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm">
             <div className="flex items-center gap-2 font-bold text-cyan-800 mb-2 flex-wrap">
@@ -1421,31 +1468,35 @@ export default function AttendanceGridPage() {
                   予定 {futureCount}名
                 </span>
               )}
+              {recentCount > 0 && (
+                <span className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded-full">
+                  最近帰国 {recentCount}名
+                </span>
+              )}
             </div>
             <div className="space-y-1">
-              {data.homeLeaves.map((hl, i) => {
-                const isCurrent = hl.startDate <= now && hl.endDate >= now
-                const isFuture = hl.startDate > now
-                // 帰国までの日数（予定の場合のみ）
-                let daysUntilStart = 0
-                if (isFuture) {
-                  const start = new Date(hl.startDate + 'T00:00:00')
-                  const today = new Date(now + 'T00:00:00')
-                  daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
-                }
+              {visible.map((c, i) => {
+                const { hl, status, daysUntilStart, daysSinceReturn } = c
                 return (
                   <div key={i} className="flex items-center gap-2 text-xs text-cyan-700 flex-wrap">
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      isCurrent ? 'bg-cyan-200 text-cyan-800' : isFuture ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                      status === 'current' ? 'bg-cyan-200 text-cyan-800'
+                      : status === 'future' ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-200 text-gray-700'
                     }`}>
-                      {isCurrent ? '帰国中' : isFuture ? '予定' : '済'}
+                      {status === 'current' ? '帰国中' : status === 'future' ? '予定' : '済'}
                     </span>
                     <span className="font-medium">{hl.workerName}</span>
                     <span>{hl.startDate.slice(5)} 〜 {hl.endDate.slice(5)}</span>
                     <span className="text-cyan-500">({hl.reason})</span>
-                    {isFuture && daysUntilStart > 0 && (
+                    {status === 'future' && daysUntilStart > 0 && (
                       <span className="text-[10px] text-blue-600">
                         {daysUntilStart === 1 ? '明日から' : `あと${daysUntilStart}日`}
+                      </span>
+                    )}
+                    {status === 'recent' && (
+                      <span className="text-[10px] text-gray-500">
+                        {daysSinceReturn === 0 ? '今日帰国' : daysSinceReturn === 1 ? '昨日帰国' : `${daysSinceReturn}日前に帰国`}
                       </span>
                     )}
                     {hl.status === 'foreman_approved' && (
