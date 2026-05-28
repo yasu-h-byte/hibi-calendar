@@ -127,6 +127,32 @@ export default function StaffAttendancePage() {
   const [restReason, setRestReason] = useState('sick')
   const [restNote, setRestNote] = useState('')
 
+  // ── 翌月カレンダー承認用 state（2026-05-27 追加） ──
+  // 旧 /calendar/public は「名前を選んで」方式で他人になりすませる脆弱性があったため、
+  // 本人のトークン認証ページで承認できる新フローを実装。
+  interface PendingCalendarSite {
+    siteId: string
+    siteName: string
+    status: 'approved' | 'draft' | 'submitted' | null
+    days: Record<string, string> | null
+    signed: boolean
+    signedAt: string | null
+  }
+  interface PendingCalendarData {
+    workerId: number
+    workerName: string
+    ym: string  // "YYYY-MM"
+    allApproved: boolean
+    fullMonthHomeLeave: boolean
+    sites: PendingCalendarSite[]
+  }
+  const [pendingCalendar, setPendingCalendar] = useState<PendingCalendarData | null>(null)
+  const [showCalendarModal, setShowCalendarModal] = useState(false)
+  const [calendarReviewed, setCalendarReviewed] = useState(false)  // 「確認した」チェック
+  const [signingCalendar, setSigningCalendar] = useState(false)
+  const [calendarSuccessMsg, setCalendarSuccessMsg] = useState<string | null>(null)
+  const [calendarErrorMsg, setCalendarErrorMsg] = useState<string | null>(null)
+
   // 現場の勤務時間設定（API経由で取得、未設定なら DEFAULT_WORK_SCHEDULE）
   const workSchedule: SiteWorkScheduleConfig = data?.site?.workSchedule || DEFAULT_WORK_SCHEDULE
 
@@ -196,6 +222,63 @@ export default function StaffAttendancePage() {
   }, [token, siteId])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // ── 翌月カレンダー承認状況を取得（2026-05-27 追加） ──
+  // 全現場が承認済みで本人が未署名なら、バナー表示の判断材料になる
+  const fetchPendingCalendar = useCallback(async () => {
+    if (!token) return
+    // 翌月の ym を計算
+    const now = new Date()
+    const nm = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    const ymDash = `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, '0')}`
+    try {
+      const res = await fetch(`/api/calendar/my-pending?token=${token}&ym=${ymDash}`)
+      if (!res.ok) {
+        setPendingCalendar(null)
+        return
+      }
+      const json: PendingCalendarData = await res.json()
+      setPendingCalendar(json)
+    } catch {
+      setPendingCalendar(null)
+    }
+  }, [token])
+
+  useEffect(() => { fetchPendingCalendar() }, [fetchPendingCalendar])
+
+  // カレンダー承認のサブミット（本人のトークンで自分自身としてサイン）
+  const submitCalendarSign = useCallback(async () => {
+    if (!pendingCalendar || signingCalendar) return
+    const ym = pendingCalendar.ym
+    const unsignedSites = pendingCalendar.sites
+      .filter(s => s.status === 'approved' && !s.signed)
+      .map(s => s.siteId)
+    if (unsignedSites.length === 0) return
+    setSigningCalendar(true)
+    setCalendarErrorMsg(null)
+    try {
+      const res = await fetch('/api/calendar/sign-self', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, ym, siteIds: unsignedSites }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        setCalendarErrorMsg(json.error || 'サインに失敗しました / Lỗi khi ký')
+        setSigningCalendar(false)
+        return
+      }
+      setCalendarSuccessMsg(`✓ ${json.signedCount}件のカレンダーを承認しました / Đã ký ${json.signedCount} lịch`)
+      setShowCalendarModal(false)
+      setCalendarReviewed(false)
+      await fetchPendingCalendar()
+      setTimeout(() => setCalendarSuccessMsg(null), 4000)
+    } catch {
+      setCalendarErrorMsg('通信エラー / Lỗi kết nối')
+    } finally {
+      setSigningCalendar(false)
+    }
+  }, [token, pendingCalendar, signingCalendar, fetchPendingCalendar])
 
   // Fetch leave requests when modal opens
   const fetchLeaveRequests = useCallback(async () => {
@@ -698,6 +781,47 @@ export default function StaffAttendancePage() {
             {error}
           </div>
         )}
+        {calendarSuccessMsg && (
+          <div className="bg-green-100 text-green-700 rounded-xl p-3 text-center font-bold animate-pulse">
+            {calendarSuccessMsg}
+          </div>
+        )}
+
+        {/* ── 翌月カレンダー承認バナー（2026-05-27 追加） ── */}
+        {/* 表示条件:
+            - 翌月の全現場カレンダーが承認済み (allApproved)
+            - 全期間帰国中ではない
+            - まだ署名していない現場がある */}
+        {pendingCalendar && pendingCalendar.allApproved && !pendingCalendar.fullMonthHomeLeave && (() => {
+          const unsignedCount = pendingCalendar.sites.filter(s => s.status === 'approved' && !s.signed).length
+          if (unsignedCount === 0) return null
+          const [y, m] = pendingCalendar.ym.split('-')
+          return (
+            <button
+              onClick={() => { setShowCalendarModal(true); setCalendarReviewed(false); setCalendarErrorMsg(null) }}
+              className="w-full bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-orange-400 rounded-xl p-4 text-left active:scale-[0.98] transition shadow-md"
+            >
+              <div className="flex items-start gap-3">
+                <div className="text-3xl">📋</div>
+                <div className="flex-1">
+                  <div className="font-bold text-orange-800 text-base leading-tight">
+                    {parseInt(y)}年{parseInt(m)}月のカレンダー承認
+                  </div>
+                  <div className="text-xs text-orange-700 mt-0.5">
+                    Xác nhận lịch tháng {parseInt(m)}/{parseInt(y)}
+                  </div>
+                  <div className="text-sm text-orange-900 mt-2 font-medium">
+                    {unsignedCount}件の現場カレンダーを確認・承認してください
+                  </div>
+                  <div className="text-xs text-orange-700 mt-0.5">
+                    Vui lòng xem và xác nhận {unsignedCount} lịch công trường
+                  </div>
+                </div>
+                <div className="text-2xl text-orange-500 self-center">›</div>
+              </div>
+            </button>
+          )
+        })()}
 
         {/* Today's status */}
         {data.todayLocked ? (
@@ -1653,6 +1777,150 @@ export default function StaffAttendancePage() {
           </div>
         </div>
       )}
+
+      {/* ── 翌月カレンダー承認モーダル（2026-05-27 追加） ── */}
+      {showCalendarModal && pendingCalendar && (() => {
+        const [y, m] = pendingCalendar.ym.split('-')
+        const yearNum = parseInt(y)
+        const monthNum = parseInt(m)
+        const daysInMonth = new Date(yearNum, monthNum, 0).getDate()
+        const firstDow = new Date(yearNum, monthNum - 1, 1).getDay()  // 0=日
+        const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土']
+
+        // 表示対象: 承認済み × 未署名（または既署名）の現場
+        // すべての該当現場のカレンダーを縦に並べて表示
+        const targetSites = pendingCalendar.sites.filter(s => s.status === 'approved')
+        const unsignedSites = targetSites.filter(s => !s.signed)
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 p-2 flex items-start sm:items-center justify-center overflow-y-auto" onClick={() => !signingCalendar && setShowCalendarModal(false)}>
+            <div
+              className="bg-white rounded-xl shadow-2xl w-full max-w-lg my-4 flex flex-col max-h-[95vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* ヘッダー */}
+              <div className="bg-hibi-navy text-white px-4 py-3 rounded-t-xl flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-lg leading-tight">
+                    {yearNum}年{monthNum}月 カレンダー承認
+                  </div>
+                  <div className="text-xs opacity-80">
+                    Xác nhận lịch tháng {monthNum}/{yearNum}
+                  </div>
+                </div>
+                <button
+                  onClick={() => !signingCalendar && setShowCalendarModal(false)}
+                  className="text-white/80 hover:text-white text-2xl leading-none"
+                  disabled={signingCalendar}
+                >
+                  &times;
+                </button>
+              </div>
+
+              {/* 本文 */}
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                  下のカレンダーを見て、出勤日 / 休日 を確認してください。問題なければ承認してください。
+                  <br />
+                  Hãy xem lịch dưới đây để xác nhận ngày làm việc / ngày nghỉ. Nếu không có vấn đề, hãy ký xác nhận.
+                </div>
+
+                {targetSites.map(site => (
+                  <div key={site.siteId} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className={`px-3 py-2 flex items-center justify-between ${site.signed ? 'bg-green-50' : 'bg-gray-50'}`}>
+                      <div className="font-bold text-sm text-hibi-navy">{site.siteName}</div>
+                      {site.signed && (
+                        <span className="text-[10px] bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-bold">
+                          ✓ 署名済み
+                        </span>
+                      )}
+                    </div>
+                    {/* カレンダーグリッド */}
+                    <div className="p-2">
+                      <div className="grid grid-cols-7 gap-0.5 text-center text-[10px]">
+                        {DOW_LABELS.map((d, i) => (
+                          <div key={d} className={`py-1 font-bold ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-600'}`}>{d}</div>
+                        ))}
+                        {Array.from({ length: firstDow }).map((_, i) => (
+                          <div key={`pad-${i}`} className="py-2" />
+                        ))}
+                        {Array.from({ length: daysInMonth }, (_, i) => {
+                          const day = i + 1
+                          const dow = (firstDow + i) % 7
+                          const dayType = site.days?.[String(day)] || 'work'
+                          const isOff = dayType === 'off' || dayType === 'holiday'
+                          return (
+                            <div
+                              key={day}
+                              className={`py-1.5 rounded text-[11px] font-medium ${
+                                isOff
+                                  ? 'bg-gray-200 text-gray-500'
+                                  : dow === 0 ? 'bg-red-50 text-red-600' : dow === 6 ? 'bg-blue-50 text-blue-600' : 'bg-blue-100 text-blue-800'
+                              }`}
+                              title={isOff ? '休み / Nghỉ' : '出勤 / Đi làm'}
+                            >
+                              {day}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className="flex gap-3 mt-2 text-[10px] text-gray-500 justify-center">
+                        <span><span className="inline-block w-2.5 h-2.5 bg-blue-100 rounded-sm mr-1 align-middle" />出勤</span>
+                        <span><span className="inline-block w-2.5 h-2.5 bg-gray-200 rounded-sm mr-1 align-middle" />休み</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {calendarErrorMsg && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-red-700 text-sm text-center">
+                    {calendarErrorMsg}
+                  </div>
+                )}
+              </div>
+
+              {/* フッター: 確認チェック + 承認ボタン */}
+              <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 rounded-b-xl space-y-3">
+                {unsignedSites.length === 0 ? (
+                  <div className="text-center text-sm text-green-700 font-bold">
+                    すべて署名済みです / Đã ký tất cả
+                  </div>
+                ) : (
+                  <>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={calendarReviewed}
+                        onChange={e => setCalendarReviewed(e.target.checked)}
+                        className="mt-1 w-5 h-5 rounded"
+                      />
+                      <span className="text-sm text-gray-800 leading-tight">
+                        カレンダーを確認しました
+                        <br />
+                        <span className="text-xs text-gray-500">Tôi đã xem lịch</span>
+                      </span>
+                    </label>
+                    <button
+                      onClick={submitCalendarSign}
+                      disabled={!calendarReviewed || signingCalendar}
+                      className={`w-full py-3 rounded-xl font-bold text-base transition ${
+                        calendarReviewed && !signingCalendar
+                          ? 'bg-orange-500 text-white hover:bg-orange-600 active:scale-95'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {signingCalendar
+                        ? '送信中... / Đang gửi...'
+                        : `${unsignedSites.length}件のカレンダーを承認する / Ký ${unsignedSites.length} lịch`
+                      }
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
