@@ -74,3 +74,29 @@ export function buildWorkerNameMap<T extends { id: number; name: string }>(
   for (const w of workers) m.set(w.id, w.name)
   return m
 }
+
+/**
+ * 「指定月にまだ在籍中」かを判定（2026-05-27 追加）
+ *
+ * - retired が空 / undefined → 常に在籍中 (true)
+ * - retired が「表示月の月初」以降 → まだその月までは勤務する (true)
+ *   例: ym=202606、retired=2026-06-30 → true（6月末日まで勤務）
+ *   例: ym=202607、retired=2026-06-30 → false（既に退職済み）
+ *
+ * 用途:
+ *   - 出面入力グリッド (api/attendance/grid)
+ *   - 就業カレンダー署名対象 (api/calendar/*)
+ *   - 退職予定バナー
+ *
+ * これにより `!w.retired` を使う既存箇所のバグ
+ * （retired フィールドが入った瞬間に全画面から消える）を防ぐ。
+ *
+ * @param retired  YYYY-MM-DD 形式の退職日（空文字／undefined OK）
+ * @param ym       表示対象月 YYYYMM 形式
+ */
+export function isStillActiveForMonth(retired: string | undefined | null, ym: string): boolean {
+  if (!retired) return true
+  if (!/^\d{6}$/.test(ym)) return true  // ym 不正は安全側で表示
+  const monthFirstDay = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
+  return retired >= monthFirstDay
+}

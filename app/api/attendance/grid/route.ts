@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, getAssign } from '@/lib/compute'
 import { getApprovalForDay } from '@/lib/attendance'
+import { isStillActiveForMonth } from '@/lib/workers'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, getDocs, collection } from 'firebase/firestore'
@@ -54,13 +55,9 @@ export async function GET(request: NextRequest) {
     // 2026-05-25 修正: 退職日が入っていても、退職日が表示月の月初以降ならまだ在籍中なので表示する
     //   旧: !w.retired （退職日が入った瞬間に非表示 → 退職月の出面入力ができないバグ）
     //   新: 退職日 >= 表示月の月初 なら表示（退職月の出面入力可能、翌月以降は非表示）
-    const monthFirstDay = `${ym.substring(0, 4)}-${ym.substring(4, 6)}-01`
-    const isStillActiveForMonth = (retired?: string): boolean => {
-      if (!retired) return true
-      return retired >= monthFirstDay
-    }
+    //   2026-05-27: lib/workers の共通ヘルパーに統一
     const workers = main.workers
-      .filter(w => filteredWorkerIds.includes(w.id) && isStillActiveForMonth(w.retired))
+      .filter(w => filteredWorkerIds.includes(w.id) && isStillActiveForMonth(w.retired, ym))
       .map(w => ({
         id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
         retired: w.retired || undefined,  // 退職日（バッジ表示用）

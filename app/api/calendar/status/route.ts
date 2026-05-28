@@ -1,10 +1,11 @@
 import { checkApiAuth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { getAllSitesWithWorkers } from '@/lib/sites'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
 import { ym7 } from '@/lib/ym'
+import { isStillActiveForMonth } from '@/lib/workers'
 
 export async function GET(request: NextRequest) {
 
@@ -50,12 +51,27 @@ export async function GET(request: NextRequest) {
       signaturesBySite[`${data.workerId}_${data.siteId}`] = data.signedAt
     })
 
-    // Get all sites with workers
-    const sitesWithWorkers = await getAllSitesWithWorkers()
+    // Get all sites with workers（ym を渡して退職月のスタッフも対象）
+    const sitesWithWorkers = await getAllSitesWithWorkers(ym)
 
     // 帰国情報を取得（当該月の全期間が帰国中のスタッフは署名対象から除外）
     const homeLeaves = await getAllActiveHomeLeaves()
     const ymKey = normalizeYm(ym)
+
+    // 2026-05-27: 「全員が全現場のカレンダーに署名する」モデルに変更
+    //   従来は site.workers（=その現場に配置されたスタッフのみ）を署名対象としていたが、
+    //   /api/calendar/public-sites（外国人スタッフ向けページ）と数字を揃えるため、
+    //   全外国人 × 全現場 で集計する。
+    //   これで /calendar 管理画面の「3/13名」と /calendar/public の人数が整合する。
+    const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
+    const allRawWorkers = mainDoc.exists() ? ((mainDoc.data().workers || []) as Record<string, unknown>[]) : []
+    const eligibleForeignWorkers = allRawWorkers
+      .filter(w =>
+        w.token && w.visa && w.visa !== 'none' &&
+        isStillActiveForMonth(w.retired as string | undefined, ym)
+      )
+      .filter(w => !isFullMonthHomeLeave(w.id as number, ymKey, homeLeaves))
+      .map(w => ({ id: w.id as number, name: w.name as string }))
 
     const sites = sitesWithWorkers.map(sw => {
       const cal = siteCalendars[sw.site.id]
@@ -67,15 +83,13 @@ export async function GET(request: NextRequest) {
         submittedBy: cal?.submittedBy || null,
         approvedBy: cal?.approvedBy || null,
         rejectedReason: cal?.rejectedReason || null,
-        workers: sw.workers
-          .filter(w => !!w.token) // 署名対象は実習生・特定技能生（トークン持ち）のみ
-          .filter(w => !isFullMonthHomeLeave(w.id, ymKey, homeLeaves)) // 月全期間帰国中は除外
-          .map(w => ({
-            id: w.id,
-            name: w.name,
-            signed: !!signaturesBySite[`${w.id}_${sw.site.id}`],
-            signedAt: signaturesBySite[`${w.id}_${sw.site.id}`] || null,
-          })),
+        // 全現場に対して同じ署名対象スタッフを返す
+        workers: eligibleForeignWorkers.map(w => ({
+          id: w.id,
+          name: w.name,
+          signed: !!signaturesBySite[`${w.id}_${sw.site.id}`],
+          signedAt: signaturesBySite[`${w.id}_${sw.site.id}`] || null,
+        })),
       }
     })
 

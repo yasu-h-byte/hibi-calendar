@@ -1,6 +1,7 @@
 import { db } from './firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { Site, SiteAssign, Worker } from '@/types'
+import { isStillActiveForMonth } from './workers'
 
 interface MainDoc {
   sites?: Record<string, unknown>[]
@@ -56,14 +57,26 @@ export async function getWorkersForSite(siteId: string): Promise<Worker[]> {
     }))
 }
 
-export async function getAllSitesWithWorkers(): Promise<
+/**
+ * 全現場の workers/assign を返す
+ *
+ * @param ym 表示対象月 (YYYYMM)。指定すると「その月にまだ在籍中」のスタッフだけ含める。
+ *           退職月のスタッフ（例: 6/30 退職を 6月のカレンダーで表示）も対象に残せる。
+ *           省略すると `!w.retired` 厳密フィルタ（退職予定者も除外）— 後方互換用。
+ */
+export async function getAllSitesWithWorkers(ym?: string): Promise<
   { site: Site; workers: Worker[]; assign: SiteAssign }[]
 > {
   const data = await getMainDoc()
   if (!data.sites || !data.assign || !data.workers) return []
 
   const allWorkers = (data.workers as Record<string, unknown>[])
-    .filter(w => !w.retired) // 退職者を除外
+    // 2026-05-27: ym が渡された場合は「その月にまだ在籍中」基準で判定
+    //   従来の `!w.retired` だと退職日が入った瞬間に当月のカレンダーから消えてしまう
+    .filter(w => ym
+      ? isStillActiveForMonth(w.retired as string | undefined, ym)
+      : !w.retired
+    )
     .map(w => ({
       id: w.id as number,
       name: w.name as string,

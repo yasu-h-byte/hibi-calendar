@@ -3,6 +3,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { getAllSitesWithWorkers } from '@/lib/sites'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
+import { isStillActiveForMonth } from '@/lib/workers'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -27,8 +28,8 @@ export async function GET(request: Request) {
       approvedCalendars[data.siteId] = data.days || {}
     })
 
-    // Get sites with workers
-    const sitesWithWorkers = await getAllSitesWithWorkers()
+    // Get sites with workers (ym を渡して退職月のスタッフも対象に含める)
+    const sitesWithWorkers = await getAllSitesWithWorkers(ym)
 
     // Get signatures
     const signQ = query(collection(db, 'calendarSign'), where('ym', '==', ym))
@@ -61,8 +62,11 @@ export async function GET(request: Request) {
     // (全員が全現場のカレンダーに署名する方式)
     const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
     const allWorkers = mainDoc.exists() ? (mainDoc.data().workers || []) : []
+    // 2026-05-27: 退職月のスタッフも署名対象に含める（isStillActiveForMonth）
+    //   従来は `!w.retired` だったため、6/30 退職予定者が6月のカレンダーに署名できなかった
     const foreignWorkers = allWorkers.filter((w: Record<string, unknown>) =>
-      w.token && w.visa && w.visa !== 'none' && !w.retired
+      w.token && w.visa && w.visa !== 'none' &&
+      isStillActiveForMonth(w.retired as string | undefined, ym)
     ).filter((w: Record<string, unknown>) =>
       // 当該月の全期間帰国中のスタッフは一覧からも除外
       !isFullMonthHomeLeave(w.id as number, ymKey, homeLeaves)
