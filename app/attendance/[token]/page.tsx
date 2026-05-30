@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus, isTimeBasedMobile, isTimeBasedEntry } from '@/types'
 import CalendarApprovalModal, { type PendingCalendarData } from '@/components/attendance/CalendarApprovalModal'
+import LeaveRequestModal from '@/components/attendance/LeaveRequestModal'
+import HomeLongLeaveModal from '@/components/attendance/HomeLongLeaveModal'
+import RestReportModal from '@/components/attendance/RestReportModal'
 
 interface SiteBreakConfig {
   enabled: boolean
@@ -72,14 +75,7 @@ const STATUS_COLORS: Record<AttendanceStatus, string> = {
   none: 'bg-red-50 text-red-400',
 }
 
-const REST_REASONS = [
-  { value: 'sick', label: '体調不良', vi: 'Bị ốm' },
-  { value: 'hospital', label: '通院', vi: 'Đi khám bệnh' },
-  { value: 'personal', label: '私用', vi: 'Việc riêng' },
-  { value: 'family', label: '家族の事情', vi: 'Việc gia đình' },
-  { value: 'homeCountry', label: '帰国関連', vi: 'Liên quan về nước' },
-  { value: 'other', label: 'その他', vi: 'Khác' },
-]
+// REST_REASONS は components/attendance/RestReportModal.tsx に集約
 
 interface LeaveRequestData {
   id: string
@@ -1367,408 +1363,56 @@ export default function StaffAttendancePage() {
         )
       })()}
 
-      {/* Absence report modal */}
-      {showRestModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowRestModal(false)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center">
-              欠勤届 / Đơn xin nghỉ
-            </h3>
-            <p className="text-xs text-gray-400 text-center mb-4">
-              出勤日に休む場合の届出です / Đơn nghỉ khi ngày đi làm
-            </p>
+      {/* 欠勤届モーダル（components/attendance/RestReportModal.tsx に集約） */}
+      <RestReportModal
+        isOpen={showRestModal}
+        onClose={() => setShowRestModal(false)}
+        reason={restReason}
+        setReason={setRestReason}
+        note={restNote}
+        setNote={setRestNote}
+        saving={saving}
+        onSubmit={handleRestSubmit}
+      />
 
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm text-gray-600 font-bold block mb-2">
-                  理由 / Lý do
-                </label>
-                <div className="space-y-2">
-                  {REST_REASONS.map(r => (
-                    <label key={r.value} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition ${
-                      restReason === r.value ? 'bg-hibi-navy text-white' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-                    }`}>
-                      <input type="radio" name="restReason" value={r.value}
-                        checked={restReason === r.value}
-                        onChange={() => setRestReason(r.value)}
-                        className="hidden" />
-                      <span className="font-medium">{r.label}</span>
-                      <span className={`text-sm ${restReason === r.value ? 'text-white/70' : 'text-gray-400'}`}>/ {r.vi}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+      {/* 有給申請モーダル（components/attendance/LeaveRequestModal.tsx に集約） */}
+      <LeaveRequestModal
+        isOpen={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        dateFrom={leaveDateFrom}
+        setDateFrom={setLeaveDateFrom}
+        dateTo={leaveDateTo}
+        setDateTo={setLeaveDateTo}
+        reason={leaveReason}
+        setReason={setLeaveReason}
+        successMsg={leaveSuccess}
+        errorMsg={leaveError}
+        submitting={leaveSubmitting}
+        requests={leaveRequests}
+        onSubmit={submitLeaveRequest}
+        onCancelRequest={cancelLeaveRequest}
+      />
 
-              {restReason === 'other' && (
-                <div>
-                  <label className="text-sm text-gray-600 font-bold block mb-1">
-                    補足 / Chi tiết
-                  </label>
-                  <input type="text" value={restNote} onChange={e => setRestNote(e.target.value)}
-                    placeholder="理由を入力 / Nhập lý do"
-                    className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
-                </div>
-              )}
-
-              <button onClick={handleRestSubmit}
-                disabled={saving}
-                className="w-full bg-gray-700 text-white rounded-2xl py-4 text-base font-bold active:bg-gray-800 transition disabled:opacity-50">
-                欠勤届を提出 / Gửi đơn xin nghỉ
-              </button>
-
-              <button onClick={() => setShowRestModal(false)}
-                className="w-full bg-gray-200 text-gray-600 rounded-xl py-3 text-sm">
-                戻る / Quay lại
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Leave request modal */}
-      {/* Leave Request Modal */}
-      {showLeaveModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowLeaveModal(false)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-4 text-center">
-              有給申請 / Xin nghỉ phép
-            </h3>
-
-            {leaveSuccess && (
-              <div className="bg-green-100 text-green-700 rounded-xl p-3 text-center font-bold mb-3 animate-pulse">
-                しんせい しました / Da gui don
-              </div>
-            )}
-            {leaveError && (
-              <div className="bg-red-100 text-red-600 rounded-xl p-3 text-center text-sm mb-3">
-                {leaveError}
-              </div>
-            )}
-
-            {/* Date picker (range) */}
-            <div className="mb-4">
-              <label className="text-sm text-gray-600 font-bold block mb-2">
-                日付を選んでください / Chọn ngày nghỉ
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">開始日 / Từ ngày</label>
-                  <input
-                    type="date"
-                    value={leaveDateFrom}
-                    min={getMinDate()}
-                    onChange={e => {
-                      setLeaveDateFrom(e.target.value)
-                      if (!leaveDateTo || e.target.value > leaveDateTo) setLeaveDateTo(e.target.value)
-                    }}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">終了日 / Đến ngày</label>
-                  <input
-                    type="date"
-                    value={leaveDateTo}
-                    min={leaveDateFrom || getMinDate()}
-                    onChange={e => setLeaveDateTo(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
-                  />
-                </div>
-              </div>
-              {leaveDateFrom && leaveDateTo && leaveDateFrom !== leaveDateTo && (
-                <p className="text-xs text-blue-600 mt-2 font-bold">
-                  {(() => {
-                    const from = new Date(leaveDateFrom + 'T00:00:00')
-                    const to = new Date(leaveDateTo + 'T00:00:00')
-                    let count = 0
-                    const c = new Date(from)
-                    while (c <= to) { if (c.getDay() !== 0) count++; c.setDate(c.getDate() + 1) }
-                    return `${count}日分の申請になります / Sẽ gửi ${count} ngày`
-                  })()}
-                </p>
-              )}
-              <p className="text-xs text-gray-400 mt-1">
-                ※ 5日前から選べます / Chọn được từ 5 ngày trước
-              </p>
-            </div>
-
-            {/* Reason */}
-            <div className="mb-4">
-              <label className="text-sm text-gray-600 block mb-1">
-                理由（任意）/ Lý do (tùy chọn)
-              </label>
-              <input
-                type="text"
-                value={leaveReason}
-                onChange={e => setLeaveReason(e.target.value)}
-                placeholder="通院、予定など"
-                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
-              />
-            </div>
-
-            {/* Submit */}
-            <button
-              onClick={submitLeaveRequest}
-              disabled={leaveSubmitting || !leaveDateFrom}
-              className="w-full bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
-            >
-              {leaveSubmitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  そうしんちゅう / Đang gửi...
-                </span>
-              ) : '有給を申請する / Gửi đơn nghỉ phép'}
-            </button>
-
-            {/* Request history */}
-            {leaveRequests.length > 0 && (
-              <div className="mt-6">
-                <div className="text-sm text-gray-500 font-bold mb-2">
-                  申請の状況 / Trạng thái đơn
-                </div>
-                <div className="space-y-2">
-                  {leaveRequests.map(req => (
-                    <div key={req.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${req.status === 'cancelled' ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
-                      <span className="text-sm text-gray-700 font-medium">
-                        {formatLeaveDate(req.date)}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {req.status === 'approved' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-bold">
-                            ✅ 承認済 / Đã duyệt
-                          </span>
-                        )}
-                        {req.status === 'foreman_approved' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
-                            🔵 職長済 / Đốc công đã duyệt
-                          </span>
-                        )}
-                        {req.status === 'pending' && (
-                          <>
-                            <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
-                              ⏳ 承認待ち / Đang chờ
-                            </span>
-                            <button
-                              onClick={() => cancelLeaveRequest(req.id)}
-                              className="text-xs px-2 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 active:scale-95"
-                            >
-                              取り消し / Hủy
-                            </button>
-                          </>
-                        )}
-                        {req.status === 'rejected' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold" title={req.rejectedReason || ''}>
-                            ❌ 却下 / Từ chối
-                          </span>
-                        )}
-                        {req.status === 'cancelled' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-500 font-medium">
-                            🚫 取り消し済 / Đã hủy
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowLeaveModal(false)}
-              className="w-full mt-4 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
-            >
-              閉じる / Đóng
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Home Long Leave Modal */}
-      {showHomeLongLeaveModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowHomeLongLeaveModal(false)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-4 text-center">
-              帰国申請 / Xin về nước
-            </h3>
-
-            {hlSuccess && (
-              <div className="bg-green-100 text-green-700 rounded-xl p-3 text-center font-bold mb-3 animate-pulse">
-                {hlSuccess}
-              </div>
-            )}
-            {hlError && (
-              <div className="bg-red-100 text-red-600 rounded-xl p-3 text-center text-sm mb-3">
-                {hlError}
-              </div>
-            )}
-
-            {/* Date range picker */}
-            <div className="mb-4">
-              <label className="text-sm text-gray-600 font-bold block mb-2">
-                期間を選んでください / Chọn thời gian
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">出発日 / Ngày đi</label>
-                  <select
-                    value={hlStartDate}
-                    onChange={e => {
-                      const val = e.target.value
-                      setHlError(null)
-                      setHlStartDate(val)
-                      // 出発日を変えたら帰国日も連動して +7日 に再計算
-                      // （ユーザーが帰国日を手動で長くしたい場合は、出発日確定後に変更）
-                      const d = new Date(val + 'T00:00:00')
-                      d.setDate(d.getDate() + 7)
-                      setHlEndDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
-                    }}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base bg-white"
-                  >
-                    {getHlDateOptions().map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">帰国日 / Ngày về</label>
-                  <select
-                    value={hlEndDate}
-                    onChange={e => setHlEndDate(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base bg-white"
-                  >
-                    {hlStartDate && getHlDateOptions(hlStartDate).slice(1).map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                ※ 原則3ヶ月前までに申請してください / Nguyên tắc nộp đơn trước 3 tháng<br/>
-                <span style={{ fontSize: 11, color: '#999' }}>（緊急の場合は会社に相談してください / Trường hợp khẩn cấp hãy liên hệ công ty）</span>
-              </p>
-            </div>
-
-            {/* Reason radio buttons */}
-            <div className="mb-4">
-              <label className="text-sm text-gray-600 font-bold block mb-2">
-                理由 / Lý do
-              </label>
-              <div className="space-y-2">
-                {[
-                  { value: '一時帰国', label: '一時帰国', vi: 'Về nước tạm thời' },
-                  { value: 'ビザ更新帰国', label: 'ビザ更新帰国', vi: 'Về nước gia hạn visa' },
-                  { value: 'その他', label: 'その他', vi: 'Khác' },
-                ].map(opt => (
-                  <label key={opt.value} className="flex items-center gap-3 cursor-pointer py-1.5 px-3 rounded-lg hover:bg-gray-50">
-                    <input
-                      type="radio"
-                      name="hlReason"
-                      value={opt.value}
-                      checked={hlReason === opt.value}
-                      onChange={e => setHlReason(e.target.value)}
-                      className="w-5 h-5 text-purple-600"
-                    />
-                    <span className="text-sm text-gray-700">{opt.label} / {opt.vi}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Note */}
-            <div className="mb-4">
-              <label className="text-sm text-gray-600 block mb-1">
-                備考（任意）/ Ghi chú (tùy chọn)
-              </label>
-              <input
-                type="text"
-                value={hlNote}
-                onChange={e => setHlNote(e.target.value)}
-                placeholder="飛行機の予定など"
-                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
-              />
-            </div>
-
-            {/* Submit */}
-            <button
-              onClick={submitHomeLongLeave}
-              disabled={hlSubmitting || !hlStartDate || !hlEndDate || hlStartDate < getHlMinDate()}
-              className="w-full bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
-            >
-              {hlSubmitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  そうしんちゅう / Đang gửi...
-                </span>
-              ) : '帰国を申請する / Gửi đơn xin về nước'}
-            </button>
-
-            {/* Request history */}
-            {hlRequests.length > 0 && (
-              <div className="mt-6">
-                <div className="text-sm text-gray-500 font-bold mb-2">
-                  申請の状況 / Trạng thái đơn
-                </div>
-                <div className="space-y-2">
-                  {hlRequests.map(req => (
-                    <div key={req.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${req.status === 'cancelled' ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
-                      <div className="min-w-0">
-                        <span className="text-sm text-gray-700 font-medium">
-                          {(() => { const [,m,d] = req.startDate.split('-'); return `${parseInt(m)}/${parseInt(d)}` })()}
-                          〜
-                          {(() => { const [,m,d] = req.endDate.split('-'); return `${parseInt(m)}/${parseInt(d)}` })()}
-                        </span>
-                        <span className="text-xs text-gray-400 ml-2">{req.reason}</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {req.status === 'approved' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-bold">
-                            承認済 / Đã duyệt
-                          </span>
-                        )}
-                        {req.status === 'foreman_approved' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
-                            職長済 / Đốc công đã duyệt
-                          </span>
-                        )}
-                        {req.status === 'pending' && (
-                          <>
-                            <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
-                              承認待ち / Đang chờ
-                            </span>
-                            <button
-                              onClick={() => cancelHomeLongLeave(req.id)}
-                              className="text-xs px-2 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 active:scale-95"
-                            >
-                              取り消し / Hủy
-                            </button>
-                          </>
-                        )}
-                        {req.status === 'rejected' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold">
-                            却下 / Từ chối
-                          </span>
-                        )}
-                        {req.status === 'cancelled' && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-500 font-medium">
-                            取り消し済 / Đã hủy
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => setShowHomeLongLeaveModal(false)}
-              className="w-full mt-4 bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
-            >
-              閉じる / Đóng
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 帰国申請モーダル（components/attendance/HomeLongLeaveModal.tsx に集約） */}
+      <HomeLongLeaveModal
+        isOpen={showHomeLongLeaveModal}
+        onClose={() => setShowHomeLongLeaveModal(false)}
+        startDate={hlStartDate}
+        setStartDate={setHlStartDate}
+        endDate={hlEndDate}
+        setEndDate={setHlEndDate}
+        reason={hlReason}
+        setReason={setHlReason}
+        note={hlNote}
+        setNote={setHlNote}
+        successMsg={hlSuccess}
+        errorMsg={hlError}
+        setErrorMsg={setHlError}
+        submitting={hlSubmitting}
+        requests={hlRequests}
+        onSubmit={submitHomeLongLeave}
+        onCancelRequest={cancelHomeLongLeave}
+      />
 
       {/* 翌月カレンダー承認モーダル（components/attendance/CalendarApprovalModal.tsx に集約） */}
       {showCalendarModal && pendingCalendar && (

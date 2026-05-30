@@ -10,11 +10,8 @@
  * 解決するため、本人のサイン状況だけ返す。
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs } from 'firebase/firestore'
 import { getWorkerByToken } from '@/lib/workers'
-import { getAllSitesWithWorkers } from '@/lib/sites'
-import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
+import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 
 // query パラメータを使うため強制的に動的レンダリング
 export const dynamic = 'force-dynamic'
@@ -39,48 +36,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not applicable for this worker' }, { status: 400 })
     }
 
-    // 独立した 4 つの読み取りを並列化（以前は sequential で 4 RTT → 1 RTT 相当に）
-    const ymCompact = ym.replace('-', '')
-    const [homeLeaves, sitesWithWorkers, calSnap, signSnap] = await Promise.all([
-      getAllActiveHomeLeaves(),
-      getAllSitesWithWorkers(ymCompact),
-      getDocs(query(collection(db, 'siteCalendar'), where('ym', '==', ym))),
-      getDocs(query(
-        collection(db, 'calendarSign'),
-        where('ym', '==', ym),
-        where('workerId', '==', worker.id),
-      )),
-    ])
+    // 共通データ取得（status/public-sites と同じローダー）
+    const m = await loadCalendarMatrix(ym)
 
-    // 当該月の全期間が帰国中なら署名不要
-    const fullMonthHomeLeave = isFullMonthHomeLeave(worker.id, normalizeYm(ym), homeLeaves)
+    const fullMonthHomeLeave = m.fullMonthHlIds.has(worker.id)
 
-    // siteCalendar の状態
-    const calData: Record<string, { status: string; days: Record<string, string> | null }> = {}
-    calSnap.forEach(d => {
-      const data = d.data()
-      calData[data.siteId] = {
-        status: data.status || 'draft',
-        days: data.days || null,
-      }
-    })
-
-    // 本人の署名状態
-    const signedSites: Record<string, string> = {}  // siteId → signedAt
-    signSnap.forEach(d => {
-      const data = d.data()
-      signedSites[data.siteId] = data.signedAt || ''
-    })
-
-    const sites = sitesWithWorkers.map(sw => {
-      const cal = calData[sw.site.id]
+    // 本人の署名状態のみを各現場に投影
+    const sites = m.sitesWithWorkers.map(sw => {
+      const cal = m.siteCalendars[sw.site.id]
+      const sigVal = m.signaturesBySite[`${worker.id}_${sw.site.id}`]
       return {
         siteId: sw.site.id,
         siteName: sw.site.name,
         status: (cal?.status || null) as 'approved' | 'draft' | 'submitted' | null,
         days: cal?.days || null,
-        signed: !!signedSites[sw.site.id],
-        signedAt: signedSites[sw.site.id] || null,
+        signed: !!sigVal,
+        signedAt: sigVal && sigVal !== 'true' ? sigVal : null,
       }
     })
 
