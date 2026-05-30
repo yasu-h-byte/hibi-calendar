@@ -16,6 +16,7 @@ import {
   parseDKey,
 } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
+import { isTobiGroup } from '@/lib/jobs'
 import { AttendanceEntry } from '@/types'
 
 /** Map frontend period param to compute buildYMList mode */
@@ -464,7 +465,7 @@ export async function GET(request: NextRequest) {
         for (const wid of wids) {
           const worker = main.workers.find(w => w.id === wid && !w.retired)
           if (worker) {
-            if (worker.job === 'tobi' || worker.job === 'tobi_apprentice' || worker.job === 'shokucho' || worker.job === 'yakuin') tobi++
+            if (isTobiGroup(worker.job)) tobi++
             else doko++
           }
         }

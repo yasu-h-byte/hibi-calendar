@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { isTimeBasedMonth, calcActualHours } from '@/types'
 import { isWorkingDay } from '@/lib/attendance'
+import { isTobiGroup, jobShortLabel } from '@/lib/jobs'
 import AttendanceActionBar from '@/components/AttendanceActionBar'
 
 // ────────────────────────────────────────
@@ -845,8 +846,9 @@ export default function AttendanceGridPage() {
       if (aIsJp !== bIsJp) return aIsJp ? -1 : 1
       return a.id - b.id
     }
-    const hibi = data.workers.filter(w => w.org === 'hibi').slice().sort(sortFn)
-    const hfu = data.workers.filter(w => w.org === 'hfu').slice().sort(sortFn)
+    // filter() で既に新しい配列が返るため slice() は不要
+    const hibi = data.workers.filter(w => w.org === 'hibi').sort(sortFn)
+    const hfu = data.workers.filter(w => w.org === 'hfu').sort(sortFn)
     const groups: { org: string; label: string; workers: Worker[] }[] = []
     if (hibi.length > 0) groups.push({ org: 'hibi', label: '日比建設', workers: hibi })
     if (hfu.length > 0) groups.push({ org: 'hfu', label: 'HFU', workers: hfu })
@@ -966,7 +968,7 @@ export default function AttendanceGridPage() {
           const isComp = entry.w === 0.6 && w.visa !== 'none'
           const workVal = isComp ? 0 : entry.w
           const otVal = isComp ? 0 : (entry.o || 0)
-          if (w.job === 'tobi' || w.job === 'tobi_apprentice' || w.job === 'shokucho' || w.job === 'yakuin') {
+          if (isTobiGroup(w.job)) {
             tobiDay += workVal
             tobiOtDay += otVal
           } else if (w.job === 'doko') {
@@ -1516,17 +1518,13 @@ export default function AttendanceGridPage() {
       {data?.upcomingRetirements && data.upcomingRetirements.length > 0 && (() => {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
-        // 30日以内（緊急）と 31〜90日（予定）に分類
-        const urgent = data.upcomingRetirements.filter(r => {
-          const d = new Date(r.retired + 'T00:00:00')
-          const diffDays = Math.floor((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
-          return diffDays <= 30
-        })
-        const later = data.upcomingRetirements.filter(r => {
-          const d = new Date(r.retired + 'T00:00:00')
-          const diffDays = Math.floor((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
-          return diffDays > 30
-        })
+        // diffDays を 1 度だけ計算してから 30日以内（緊急）/ 31〜90日（予定）に分類
+        const withDiff = data.upcomingRetirements.map(r => ({
+          ...r,
+          diffDays: Math.floor((new Date(r.retired + 'T00:00:00').getTime() - today.getTime()) / (24 * 60 * 60 * 1000)),
+        }))
+        const urgent = withDiff.filter(r => r.diffDays <= 30)
+        const later = withDiff.filter(r => r.diffDays > 30)
         return (
           <div className={`${urgent.length > 0 ? 'bg-red-50 border-red-300' : 'bg-orange-50 border-orange-200'} border rounded-xl px-4 py-3 text-sm`}>
             <div className={`flex items-center gap-2 font-bold mb-2 flex-wrap ${urgent.length > 0 ? 'text-red-800' : 'text-orange-800'}`}>
@@ -1543,9 +1541,8 @@ export default function AttendanceGridPage() {
               )}
             </div>
             <div className="space-y-1">
-              {data.upcomingRetirements.map((r, i) => {
-                const d = new Date(r.retired + 'T00:00:00')
-                const diffDays = Math.floor((d.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+              {withDiff.map((r, i) => {
+                const { diffDays } = r
                 const isUrgent = diffDays <= 30
                 const visa = visaBadge(r.visa)
                 return (
@@ -1553,7 +1550,7 @@ export default function AttendanceGridPage() {
                     <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
                       isUrgent ? 'bg-red-200 text-red-800' : 'bg-orange-100 text-orange-700'
                     }`}>
-                      {isUrgent ? `あと${diffDays}日` : `あと${diffDays}日`}
+                      {`あと${diffDays}日`}
                     </span>
                     <span className="font-medium">{r.name}</span>
                     {visa && (
@@ -2596,7 +2593,7 @@ function AssignModal({
                       </span>
                       {w.job && (
                         <span className="text-[10px] text-gray-400">
-                          {w.job === 'tobi' ? '鳶' : w.job === 'tobi_apprentice' ? '鳶見習い' : w.job === 'doko' ? '土工' : w.job === 'shokucho' ? '職長' : w.job === 'yakuin' ? '役員' : w.job === 'jimu' ? '事務' : w.job}
+                          {jobShortLabel(w.job)}
                         </span>
                       )}
                     </button>

@@ -18,6 +18,7 @@ import {
   parseDKey,
 } from '@/lib/compute'
 import { ymKey, isWorkingDay } from '@/lib/attendance'
+import { isTobiGroup } from '@/lib/jobs'
 import { AttendanceEntry } from '@/types'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
@@ -105,8 +106,7 @@ function computeTodayStatus(
         const worker = main.workers.find(w => w.id === wid)
         if (worker) {
           const job = worker.job || ''
-          // "鳶" = tobi / tobi_apprentice / shokucho / yakuin
-          if (job === 'tobi' || job === 'tobi_apprentice' || job === 'shokucho' || job === 'yakuin') tobi++
+          if (isTobiGroup(job)) tobi++
           else if (job === 'doko') doko++
           else tobi++ // default to tobi for unknown jobs
           workingWorkerIds.add(wid)
@@ -805,7 +805,7 @@ export async function GET(request: NextRequest) {
         for (const wid of wids) {
           const worker = main.workers.find(w => w.id === wid && !w.retired)
           if (worker) {
-            if (worker.job === 'tobi' || worker.job === 'tobi_apprentice' || worker.job === 'shokucho' || worker.job === 'yakuin') tobi++
+            if (isTobiGroup(worker.job)) tobi++
             else doko++
           }
         }

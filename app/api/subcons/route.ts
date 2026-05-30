@@ -81,15 +81,19 @@ export async function POST(request: NextRequest) {
       if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
       if (updates.rate !== undefined) updates.rate = Number(updates.rate)
       if (updates.otRate !== undefined) updates.otRate = Number(updates.otRate)
-      // companyGroup: 空文字なら未指定として削除（フィールドごと消すと UI が綺麗）
+      // companyGroup: 空文字／null は「クリア指示」として扱う。
+      //   updates から削除して spread を汚さず、その後 spread 結果から明示的に消す
+      //   （updates のみ削除だと既存値が残ってしまうため両方の処理が必要）
+      const shouldClearCompanyGroup =
+        body.companyGroup === '' || body.companyGroup === null ||
+        (updates.companyGroup !== undefined && !String(updates.companyGroup || '').trim())
       if (updates.companyGroup !== undefined) {
         const cg = String(updates.companyGroup || '').trim()
         if (cg) updates.companyGroup = cg
         else delete updates.companyGroup
       }
       subcons[idx] = { ...subcons[idx], ...updates }
-      // 既存の companyGroup を空文字で消したい場合のサポート
-      if (body.companyGroup === '' || body.companyGroup === null) {
+      if (shouldClearCompanyGroup) {
         delete (subcons[idx] as Record<string, unknown>).companyGroup
       }
       await updateDoc(docRef, { subcons })

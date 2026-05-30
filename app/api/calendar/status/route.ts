@@ -5,7 +5,7 @@ import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firesto
 import { getAllSitesWithWorkers } from '@/lib/sites'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
 import { ym7 } from '@/lib/ym'
-import { isStillActiveForMonth } from '@/lib/workers'
+import { isCalendarSignTarget } from '@/lib/workers'
 
 export async function GET(request: NextRequest) {
 
@@ -21,9 +21,15 @@ export async function GET(request: NextRequest) {
   const ym = ym7(ymRaw)
 
   try {
-    // Get site calendar data (days + status)
-    const siteCalQ = query(collection(db, 'siteCalendar'), where('ym', '==', ym))
-    const siteCalSnap = await getDocs(siteCalQ)
+    // 独立した 4 つの I/O を並列化（以前は sequential で 4 RTT、いまは 1 RTT 相当）
+    const [siteCalSnap, signSnap, sitesWithWorkers, homeLeaves, mainDoc] = await Promise.all([
+      getDocs(query(collection(db, 'siteCalendar'), where('ym', '==', ym))),
+      getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ym))),
+      getAllSitesWithWorkers(ym),
+      getAllActiveHomeLeaves(),
+      getDoc(doc(db, 'demmen', 'main')),
+    ])
+
     const siteCalendars: Record<string, {
       days: Record<string, string>
       status: string
@@ -42,35 +48,28 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Get signatures
-    const signQ = query(collection(db, 'calendarSign'), where('ym', '==', ym))
-    const signSnap = await getDocs(signQ)
     const signaturesBySite: Record<string, string> = {}
     signSnap.forEach(d => {
       const data = d.data()
       signaturesBySite[`${data.workerId}_${data.siteId}`] = data.signedAt
     })
 
-    // Get all sites with workers（ym を渡して退職月のスタッフも対象）
-    const sitesWithWorkers = await getAllSitesWithWorkers(ym)
-
-    // 帰国情報を取得（当該月の全期間が帰国中のスタッフは署名対象から除外）
-    const homeLeaves = await getAllActiveHomeLeaves()
+    // 2026-05-27: 「全員が全現場のカレンダーに署名する」モデル。
+    //   /api/calendar/public-sites と数字を揃えるため、
+    //   全外国人 × 全現場 で集計する（管理画面と公開ページの人数が整合）
     const ymKey = normalizeYm(ym)
-
-    // 2026-05-27: 「全員が全現場のカレンダーに署名する」モデルに変更
-    //   従来は site.workers（=その現場に配置されたスタッフのみ）を署名対象としていたが、
-    //   /api/calendar/public-sites（外国人スタッフ向けページ）と数字を揃えるため、
-    //   全外国人 × 全現場 で集計する。
-    //   これで /calendar 管理画面の「3/13名」と /calendar/public の人数が整合する。
-    const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
+    const fullMonthHlIds = new Set(
+      ((mainDoc.exists() ? (mainDoc.data().workers || []) : []) as Record<string, unknown>[])
+        .map(w => w.id as number)
+        .filter(id => isFullMonthHomeLeave(id, ymKey, homeLeaves))
+    )
     const allRawWorkers = mainDoc.exists() ? ((mainDoc.data().workers || []) as Record<string, unknown>[]) : []
     const eligibleForeignWorkers = allRawWorkers
-      .filter(w =>
-        w.token && w.visa && w.visa !== 'none' &&
-        isStillActiveForMonth(w.retired as string | undefined, ym)
-      )
-      .filter(w => !isFullMonthHomeLeave(w.id as number, ymKey, homeLeaves))
+      .filter(w => isCalendarSignTarget(
+        { id: w.id as number, visa: w.visa as string, token: w.token as string, retired: w.retired as string | undefined },
+        ym,
+        fullMonthHlIds,
+      ))
       .map(w => ({ id: w.id as number, name: w.name as string }))
 
     const sites = sitesWithWorkers.map(sw => {

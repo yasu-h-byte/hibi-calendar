@@ -106,3 +106,26 @@ export function isStillActiveForMonth(retired: string | undefined | null, ym: st
   const monthFirstDay = `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}-01`
   return retired >= monthFirstDay
 }
+
+/**
+ * カレンダー署名対象スタッフ判定の共通述語（2026-05-27 追加）
+ *
+ * 「外国人 × トークン保有 × 当該月在籍 × 当該月全期間帰国でない」の条件を
+ * 一箇所に集約。以前は3 つの API ルート (status / public-sites / sign-self) で
+ * 微妙に違う条件を書いていたためズレが発生しやすかった。
+ *
+ * @param worker  Firestore raw worker (visa, token, retired を持つ)
+ * @param ym      "YYYY-MM" or "YYYYMM"
+ * @param fullMonthHomeLeaveWorkerIds  当該月全期間帰国中のスタッフ ID 集合
+ */
+export function isCalendarSignTarget(
+  worker: { id: number; visa?: string; token?: string; retired?: string },
+  ym: string,
+  fullMonthHomeLeaveWorkerIds: Set<number>,
+): boolean {
+  if (!worker.token) return false
+  if (!worker.visa || worker.visa === 'none') return false  // 日本人は対象外
+  if (!isStillActiveForMonth(worker.retired, ym)) return false
+  if (fullMonthHomeLeaveWorkerIds.has(worker.id)) return false
+  return true
+}

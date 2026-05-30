@@ -3,7 +3,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
 import { getAllSitesWithWorkers } from '@/lib/sites'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
-import { isStillActiveForMonth } from '@/lib/workers'
+import { isCalendarSignTarget } from '@/lib/workers'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -13,13 +13,20 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Get approved calendars only
-    const calQ = query(
-      collection(db, 'siteCalendar'),
-      where('ym', '==', ym),
-      where('status', '==', 'approved')
-    )
-    const calSnap = await getDocs(calQ)
+    // 5 つの独立した I/O を並列化（以前は sequential で 5 RTT、いまは 1 RTT 相当）
+    const [calSnap, sitesWithWorkers, signSnap, homeLeaves, mainDoc] = await Promise.all([
+      // approved カレンダーのみ
+      getDocs(query(
+        collection(db, 'siteCalendar'),
+        where('ym', '==', ym),
+        where('status', '==', 'approved'),
+      )),
+      getAllSitesWithWorkers(ym),
+      getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ym))),
+      getAllActiveHomeLeaves(),
+      getDoc(doc(db, 'demmen', 'main')),
+    ])
+
     const approvedSites = new Set<string>()
     const approvedCalendars: Record<string, Record<string, string>> = {}
     calSnap.forEach(d => {
@@ -28,27 +35,27 @@ export async function GET(request: Request) {
       approvedCalendars[data.siteId] = data.days || {}
     })
 
-    // Get sites with workers (ym を渡して退職月のスタッフも対象に含める)
-    const sitesWithWorkers = await getAllSitesWithWorkers(ym)
-
-    // Get signatures
-    const signQ = query(collection(db, 'calendarSign'), where('ym', '==', ym))
-    const signSnap = await getDocs(signQ)
     const sigs: Record<string, string> = {} // key: workerId_siteId, value: signedAt
     signSnap.forEach(d => {
       const data = d.data()
       sigs[`${data.workerId}_${data.siteId}`] = data.signedAt || 'true'
     })
 
-    // 帰国情報（当該月の全期間帰国中のスタッフは署名対象から除外）
-    const homeLeaves = await getAllActiveHomeLeaves()
     const ymKey = normalizeYm(ym)
 
-    // Build site list (backwards compatible)
+    // 全期間帰国中の workerId 集合（共通フィルタで使う）
+    const allRawWorkers = mainDoc.exists() ? ((mainDoc.data().workers || []) as Record<string, unknown>[]) : []
+    const fullMonthHlIds = new Set(
+      allRawWorkers
+        .map(w => w.id as number)
+        .filter(id => isFullMonthHomeLeave(id, ymKey, homeLeaves))
+    )
+
+    // Build site list (backwards compatible) — 配置済みスタッフ数ベースの旧仕様維持
     const sites = sitesWithWorkers
       .filter(sw => approvedSites.has(sw.site.id))
       .map(sw => {
-        const eligibleWorkers = sw.workers.filter(w => !!w.token && !isFullMonthHomeLeave(w.id, ymKey, homeLeaves))
+        const eligibleWorkers = sw.workers.filter(w => !!w.token && !fullMonthHlIds.has(w.id))
         return {
           id: sw.site.id,
           name: sw.site.name,
@@ -59,53 +66,38 @@ export async function GET(request: Request) {
       })
 
     // Build foreign workers list: ALL foreign workers × ALL approved sites
-    // (全員が全現場のカレンダーに署名する方式)
-    const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
-    const allWorkers = mainDoc.exists() ? (mainDoc.data().workers || []) : []
-    // 2026-05-27: 退職月のスタッフも署名対象に含める（isStillActiveForMonth）
-    //   従来は `!w.retired` だったため、6/30 退職予定者が6月のカレンダーに署名できなかった
-    const foreignWorkers = allWorkers.filter((w: Record<string, unknown>) =>
-      w.token && w.visa && w.visa !== 'none' &&
-      isStillActiveForMonth(w.retired as string | undefined, ym)
-    ).filter((w: Record<string, unknown>) =>
-      // 当該月の全期間帰国中のスタッフは一覧からも除外
-      !isFullMonthHomeLeave(w.id as number, ymKey, homeLeaves)
+    // (全員が全現場のカレンダーに署名する方式 — 共通述語 isCalendarSignTarget で判定)
+    const foreignWorkers = allRawWorkers.filter(w =>
+      isCalendarSignTarget(
+        { id: w.id as number, visa: w.visa as string, token: w.token as string, retired: w.retired as string | undefined },
+        ym,
+        fullMonthHlIds,
+      )
     )
 
     const approvedSiteList = sitesWithWorkers.filter(sw => approvedSites.has(sw.site.id))
 
-    const workerMap = new Map<number, {
-      id: number
-      name: string
-      nameVi: string
-      token: string
-      sites: { siteId: string; siteName: string; signed: boolean; signedAt: string | null }[]
-    }>()
-
-    for (const w of foreignWorkers) {
+    const workers = foreignWorkers.map(w => {
       const wId = w.id as number
-      workerMap.set(wId, {
+      const sites = approvedSiteList.map(sw => {
+        const sigKey = `${wId}_${sw.site.id}`
+        return {
+          siteId: sw.site.id,
+          siteName: sw.site.name,
+          signed: !!sigs[sigKey],
+          signedAt: sigs[sigKey] && sigs[sigKey] !== 'true' ? sigs[sigKey] : null,
+        }
+      })
+      return {
         id: wId,
         name: w.name as string,
         nameVi: (w.nameVi as string) || '',
         token: w.token as string,
-        sites: approvedSiteList.map(sw => {
-          const sigKey = `${wId}_${sw.site.id}`
-          return {
-            siteId: sw.site.id,
-            siteName: sw.site.name,
-            signed: !!sigs[sigKey],
-            signedAt: sigs[sigKey] && sigs[sigKey] !== 'true' ? sigs[sigKey] : null,
-          }
-        }),
-      })
-    }
-
-    const workers = Array.from(workerMap.values()).map(w => ({
-      ...w,
-      allSigned: w.sites.every(s => s.signed),
-      unsignedCount: w.sites.filter(s => !s.signed).length,
-    }))
+        sites,
+        allSigned: sites.every(s => s.signed),
+        unsignedCount: sites.filter(s => !s.signed).length,
+      }
+    })
 
     return NextResponse.json({ sites, workers })
   } catch (error) {

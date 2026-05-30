@@ -1,19 +1,18 @@
+/**
+ * POST /api/calendar/sign
+ *
+ * 旧フロー: workerId を直接受け取って署名する（公開ページ /calendar/public 等）
+ *
+ * セキュリティ注意: 本エンドポイントは workerId をクライアントから受け取るため
+ * なりすまし可能。新フロー /api/calendar/sign-self（token 認証）への移行を推奨。
+ * 6月までの移行期間中は併存。
+ *
+ * 共通処理は lib/calendar-sign.ts に集約済み。
+ */
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { getWorkersForSite } from '@/lib/sites'
 import { getMainData } from '@/lib/compute'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
-
-function hashIP(ip: string): string {
-  let hash = 0
-  for (let i = 0; i < ip.length; i++) {
-    const char = ip.charCodeAt(i)
-    hash = ((hash << 5) - hash) + char
-    hash |= 0
-  }
-  return Math.abs(hash).toString(36)
-}
+import { getRequestIpHash, signMultipleSitesForWorker } from '@/lib/calendar-sign'
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,54 +26,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'workerId, ym, siteId(s) required' }, { status: 400 })
     }
 
-    // workerIdの存在確認（なりすまし防止）+ 退職者チェック
-    const main = await getMainData()
+    // workerId の存在確認（なりすまし防止の最低限のチェック）+ 退職者チェック
+    // 並列化: main データと帰国情報を同時取得
+    const [main, homeLeaves] = await Promise.all([
+      getMainData(),
+      getAllActiveHomeLeaves(),
+    ])
+
     const worker = main.workers.find(w => w.id === Number(workerId))
     if (!worker || worker.retired) {
       return NextResponse.json({ error: 'Invalid worker' }, { status: 401 })
     }
 
     // 当該月の全期間が帰国中のスタッフは署名不要
-    const homeLeaves = await getAllActiveHomeLeaves()
     if (isFullMonthHomeLeave(Number(workerId), normalizeYm(ym), homeLeaves)) {
       return NextResponse.json({ error: 'Sign not required for full-month home leave' }, { status: 400 })
     }
 
-    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
-    const ipHash = hashIP(ip)
-    const signedAt = new Date().toISOString()
-
-    const results: { siteId: string; success: boolean; error?: string; signedAt?: string }[] = []
-
-    for (const siteId of siteIds) {
-      // 全現場署名方式: 配置チェックは行わず、外国人スタッフであれば署名可能
-      // Check if site calendar is approved
-      const calDocId = `${siteId}_${ym}`
-      const calDoc = await getDoc(doc(db, 'siteCalendar', calDocId))
-      if (!calDoc.exists() || calDoc.data().status !== 'approved') {
-        results.push({ siteId, success: false, error: 'Calendar not approved' })
-        continue
-      }
-
-      // Check if already signed
-      const signDocId = `${workerId}_${ym}_${siteId}`
-      const existingSign = await getDoc(doc(db, 'calendarSign', signDocId))
-      if (existingSign.exists()) {
-        results.push({ siteId, success: true, signedAt: existingSign.data().signedAt })
-        continue
-      }
-
-      await setDoc(doc(db, 'calendarSign', signDocId), {
-        workerId,
-        ym,
-        siteId,
-        signedAt,
-        method: 'tap',
-        ipHash,
-      })
-
-      results.push({ siteId, success: true, signedAt })
-    }
+    const ipHash = getRequestIpHash(request.headers)
+    const results = await signMultipleSitesForWorker(Number(workerId), ym, siteIds, ipHash, 'tap')
 
     // For single-site backwards compatibility
     if (siteIds.length === 1) {

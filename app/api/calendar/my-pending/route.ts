@@ -8,24 +8,6 @@
  * セキュリティ: 旧 /calendar/public は「名前を選んで承認」だったため
  * 他人になりすまし可能だった。本 API は token → workerId をサーバ側で
  * 解決するため、本人のサイン状況だけ返す。
- *
- * 戻り値:
- *   {
- *     workerId: number,
- *     workerName: string,
- *     ym: string,                       // "YYYY-MM"
- *     allApproved: boolean,             // 全現場（archived 除外）が approved か
- *     fullMonthHomeLeave: boolean,      // 当該月の全期間が帰国中なら true
- *     sites: [
- *       {
- *         siteId, siteName,
- *         status: 'approved' | 'draft' | 'submitted' | null,
- *         days: Record<string, 'work'|'off'|'holiday'> | null,
- *         signed: boolean,
- *         signedAt: string | null,
- *       }
- *     ]
- *   }
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
@@ -57,17 +39,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not applicable for this worker' }, { status: 400 })
     }
 
+    // 独立した 4 つの読み取りを並列化（以前は sequential で 4 RTT → 1 RTT 相当に）
+    const ymCompact = ym.replace('-', '')
+    const [homeLeaves, sitesWithWorkers, calSnap, signSnap] = await Promise.all([
+      getAllActiveHomeLeaves(),
+      getAllSitesWithWorkers(ymCompact),
+      getDocs(query(collection(db, 'siteCalendar'), where('ym', '==', ym))),
+      getDocs(query(
+        collection(db, 'calendarSign'),
+        where('ym', '==', ym),
+        where('workerId', '==', worker.id),
+      )),
+    ])
+
     // 当該月の全期間が帰国中なら署名不要
-    const homeLeaves = await getAllActiveHomeLeaves()
     const fullMonthHomeLeave = isFullMonthHomeLeave(worker.id, normalizeYm(ym), homeLeaves)
 
-    // 現場一覧（archived 除外、ym で退職月フィルタ）
-    const ymCompact = ym.replace('-', '')
-    const sitesWithWorkers = await getAllSitesWithWorkers(ymCompact)
-
-    // siteCalendar の状態を取得
-    const calQ = query(collection(db, 'siteCalendar'), where('ym', '==', ym))
-    const calSnap = await getDocs(calQ)
+    // siteCalendar の状態
     const calData: Record<string, { status: string; days: Record<string, string> | null }> = {}
     calSnap.forEach(d => {
       const data = d.data()
@@ -77,13 +65,7 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // 本人の署名状態を取得
-    const signQ = query(
-      collection(db, 'calendarSign'),
-      where('ym', '==', ym),
-      where('workerId', '==', worker.id),
-    )
-    const signSnap = await getDocs(signQ)
+    // 本人の署名状態
     const signedSites: Record<string, string> = {}  // siteId → signedAt
     signSnap.forEach(d => {
       const data = d.data()
@@ -103,7 +85,6 @@ export async function GET(request: NextRequest) {
     })
 
     // 「全現場の翌月カレンダー」が全て approved になっているか
-    // archived ではない、かつ getAllSitesWithWorkers が返した現場群が判定対象
     const allApproved = sites.length > 0 && sites.every(s => s.status === 'approved')
 
     return NextResponse.json({

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { Worker, AuthUser } from '@/types'
 import { fmtYen } from '@/lib/format'
+import { JOB_LABELS } from '@/lib/jobs'
 import RaiseHistoryTab from './RaiseHistoryTab'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
@@ -18,19 +19,9 @@ const VISA_LABELS: Record<string, string> = {
 const isGaikoku = (v: string) => v !== 'none' && v !== ''
 const isJisshu = (v: string) => v.startsWith('jisshu')
 const isTokutei = (v: string) => v.startsWith('tokutei')
-const JOB_LABELS: Record<string, string> = { yakuin: '役員', shokucho: '職長', tobi: 'とび', tobi_apprentice: '鳶見習い', doko: '土工', jimu: '事務' }
+// JOB_LABELS は lib/jobs.ts に集約済み（旧定義は重複だったため削除）— import は上部
 
-interface WorkerExt extends Worker {
-  rate?: number
-  hourlyRate?: number
-  otMul?: number
-  hireDate?: string
-  retired?: string
-  salary?: number
-  dispatchTo?: string
-  dispatchFrom?: string
-  useOldRules?: boolean
-}
+// 旧 WorkerExt 型は types/index.ts の Worker と完全一致だったため削除して直接 Worker を使用
 
 
 function jobBadge(jobType?: string): { label: string; cls: string } {
@@ -74,7 +65,7 @@ function visaExpiryStatus(expiry: string): { label: string; cls: string; priorit
 
 export default function WorkersPage() {
   const searchParams = useSearchParams()
-  const [workers, setWorkers] = useState<WorkerExt[]>([])
+  const [workers, setWorkers] = useState<Worker[]>([])
   const [password, setPassword] = useState('')
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
@@ -85,7 +76,7 @@ export default function WorkersPage() {
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  const [qrWorker, setQrWorker] = useState<WorkerExt | null>(null)
+  const [qrWorker, setQrWorker] = useState<Worker | null>(null)
   const [sortKey, setSortKey] = useState<string>('id')
   const [sortAsc, setSortAsc] = useState(true)
   const [transferring, setTransferring] = useState<number | null>(null)
@@ -130,7 +121,7 @@ export default function WorkersPage() {
   useEffect(() => { fetchWorkers() }, [fetchWorkers])
 
   // Transfer handler (toggle org between hibi/hfu)
-  const handleTransfer = async (w: WorkerExt) => {
+  const handleTransfer = async (w: Worker) => {
     const newOrg = w.company === 'HFU' ? 'hibi' : 'hfu'
     const newLabel = newOrg === 'hfu' ? 'HFU' : '日比建設'
     if (!confirm(`${w.name} を ${newLabel} に転籍しますか？`)) return
@@ -153,7 +144,7 @@ export default function WorkersPage() {
     setShowModal(true)
   }
 
-  const openEdit = (w: WorkerExt) => {
+  const openEdit = (w: Worker) => {
     setEditId(w.id)
     setForm({
       name: w.name,

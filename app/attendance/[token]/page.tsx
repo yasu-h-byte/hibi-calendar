@@ -28,7 +28,7 @@ interface SiteInfo { id: string; name: string; workSchedule?: SiteWorkScheduleCo
 interface AvailableSite { id: string; name: string; primary: boolean }
 
 interface StaffData {
-  worker: { id: number; name: string; nameVi?: string }
+  worker: { id: number; name: string; nameVi?: string; visaType?: string }
   site: SiteInfo
   allSites: SiteInfo[]
   availableSites?: AvailableSite[]
@@ -225,8 +225,14 @@ export default function StaffAttendancePage() {
 
   // ── 翌月カレンダー承認状況を取得（2026-05-27 追加） ──
   // 全現場が承認済みで本人が未署名なら、バナー表示の判断材料になる
+  // 注意: 日本人スタッフは API 側で 400 を返す→無駄な fetch を防ぐためクライアント側でガード
   const fetchPendingCalendar = useCallback(async () => {
     if (!token) return
+    // 日本人スタッフ（visa=none）はこの機能の対象外。fetch しない（Firestore 読込み削減）
+    if (!data?.worker?.visaType || data.worker.visaType === 'none') {
+      setPendingCalendar(null)
+      return
+    }
     // 翌月の ym を計算
     const now = new Date()
     const nm = new Date(now.getFullYear(), now.getMonth() + 1, 1)
@@ -242,7 +248,7 @@ export default function StaffAttendancePage() {
     } catch {
       setPendingCalendar(null)
     }
-  }, [token])
+  }, [token, data?.worker?.visaType])
 
   useEffect(() => { fetchPendingCalendar() }, [fetchPendingCalendar])
 

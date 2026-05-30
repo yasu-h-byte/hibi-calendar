@@ -19,8 +19,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const main = await getMainData()
-    const att = await getAttData(ym)
+    // 独立した 2 つの read を並列化（1 RTT 削減）
+    const [main, att] = await Promise.all([
+      getMainData(),
+      getAttData(ym),
+    ])
 
     const site = main.sites.find(s => s.id === siteId)
     if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 })
@@ -97,16 +100,19 @@ export async function GET(request: NextRequest) {
     const foremanName = foremanWorker?.name || ''
     const foremanNote = mf?.note || ''
 
-    // Approval status per day（2段階承認対応）
-    // foremanApprovals: 職長による1次承認
-    // finalApprovals:   admin/approver による最終承認
-    // approvals:        後方互換用（旧コードが foreman 承認の有無を見るための bool マップ）
+    // Approval status per day（2段階承認対応）— 1日ずつ sequential 取得していた為遅かった
+    //   30 RTT → 並列化で 1 RTT 相当に
     const approvals: Record<number, boolean> = {}
     const foremanApprovals: Record<number, { by: number; at: string }> = {}
     const finalApprovals: Record<number, { by: number; at: string }> = {}
-    for (let d = 1; d <= daysInMonth; d++) {
+    const dayList = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+    const collectionApprovals = await Promise.all(
+      dayList.map(d => getApprovalForDay(siteId, ym, d))
+    )
+    for (let i = 0; i < dayList.length; i++) {
+      const d = dayList[i]
       const approvalKey = `${siteId}_${ym}_${String(d)}`
-      const collectionApproval = await getApprovalForDay(siteId, ym, d)
+      const collectionApproval = collectionApprovals[i]
       if (collectionApproval?.foreman) {
         approvals[d] = true
         foremanApprovals[d] = collectionApproval.foreman

@@ -317,7 +317,7 @@ export async function GET(request: NextRequest) {
     } catch { /* ignore */ }
 
     return NextResponse.json({
-      worker: { id: worker.id, name: worker.name, nameVi: worker.nameVi },
+      worker: { id: worker.id, name: worker.name, nameVi: worker.nameVi, visaType: worker.visaType },
       site: { id: site.id, name: site.name, workSchedule: currentSiteWorkSchedule },
       allSites: assignedSites,
       availableSites,
