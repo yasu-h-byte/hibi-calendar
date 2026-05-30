@@ -6,6 +6,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Worker, AuthUser } from '@/types'
 import { fmtYen } from '@/lib/format'
 import { JOB_LABELS } from '@/lib/jobs'
+import { jobBadge } from '@/lib/labels'
 import RaiseHistoryTab from './RaiseHistoryTab'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
@@ -24,17 +25,7 @@ const isTokutei = (v: string) => v.startsWith('tokutei')
 // 旧 WorkerExt 型は types/index.ts の Worker と完全一致だったため削除して直接 Worker を使用
 
 
-function jobBadge(jobType?: string): { label: string; cls: string } {
-  switch (jobType) {
-    case 'yakuin': case '役員': return { label: '役員', cls: 'bg-red-100 text-red-700' }
-    case 'shokucho': case '職長': return { label: '職長', cls: 'bg-blue-100 text-blue-700' }
-    case 'tobi': case 'とび': return { label: 'とび', cls: 'bg-green-100 text-green-700' }
-    case 'tobi_apprentice': return { label: '鳶見習い', cls: 'bg-lime-100 text-lime-700' }
-    case 'doko': case '土工': return { label: '土工', cls: 'bg-gray-200 text-gray-600' }
-    case 'jimu': case '事務': return { label: '事務', cls: 'bg-purple-100 text-purple-700' }
-    default: return { label: jobType || '—', cls: 'bg-gray-100 text-gray-500' }
-  }
-}
+// jobBadge は lib/labels.ts に集約済み
 
 const DEFAULT_DISPATCH_TO = '山岡建設工業'
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { visaLabel } from '@/lib/labels'
 
 interface Purchase {
   id: string
@@ -30,17 +31,7 @@ interface WorkerBudget {
   purchases: Purchase[]
 }
 
-function visaLabel(visa: string): string {
-  if (visa.startsWith('jisshu')) {
-    const n = visa.replace('jisshu', '')
-    return n ? `実習${n}号` : '実習'
-  }
-  if (visa.startsWith('tokutei')) {
-    const n = visa.replace('tokutei', '')
-    return n ? `特定${n}号` : '特定'
-  }
-  return visa
-}
+// visaLabel は lib/labels.ts に集約済み — import は上部
 
 function formatPeriod(p: Period | null): string {
   if (!p) return '期間未設定'

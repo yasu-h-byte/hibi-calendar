@@ -4,7 +4,12 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { isTimeBasedMonth, calcActualHours } from '@/types'
 import { isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup, jobShortLabel } from '@/lib/jobs'
+import { visaBadge, orgBadgeCls, orgBadgeLabel } from '@/lib/labels'
 import AttendanceActionBar from '@/components/AttendanceActionBar'
+import HomeLeaveBanner from '@/components/attendance/HomeLeaveBanner'
+import UpcomingRetirementsBanner from '@/components/attendance/UpcomingRetirementsBanner'
+import NextMonthCalendarBanner from '@/components/attendance/NextMonthCalendarBanner'
+import AttendanceWarningBanner from '@/components/attendance/AttendanceWarningBanner'
 
 // ────────────────────────────────────────
 //  Types
@@ -99,31 +104,7 @@ interface GridData {
   upcomingRetirements?: UpcomingRetirement[]
 }
 
-// ── Visa badge helper ──
-
-function visaBadge(visa: string): { label: string; cls: string } | null {
-  if (visa.startsWith('jisshu')) {
-    const num = visa.replace('jisshu', '')
-    return { label: num ? `実習${num}号` : '実習', cls: 'bg-orange-100 text-orange-700' }
-  }
-  if (visa.startsWith('tokutei')) {
-    const num = visa.replace('tokutei', '')
-    return { label: num ? `特定${num}号` : '特定', cls: 'bg-pink-100 text-pink-700' }
-  }
-  return null // 日本人 = no special badge, uses org badge
-}
-
-function orgBadgeCls(org: string, visa: string): string {
-  const v = visaBadge(visa)
-  if (v) return v.cls
-  return org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-}
-
-function orgBadgeLabel(org: string, visa: string): string {
-  const v = visaBadge(visa)
-  if (v) return v.label
-  return org === 'hfu' ? 'HFU' : '日比'
-}
+// visaBadge / orgBadgeCls / orgBadgeLabel は lib/labels.ts に集約済み
 
 // 退職日バッジの色とラベルを返す
 //   - 既に退職済（過去日）→ 赤・濃い「✅退職済」
@@ -1282,75 +1263,8 @@ export default function AttendanceGridPage() {
         </div>
       )}
 
-      {/* ── 翌月カレンダー未確定アラート（月末1週間前以降） ── */}
-      {/* 翌月の就業カレンダーが全現場 approved になっているか横断チェック。
-          赤=未作成/draft/rejected（要作成・要再提出）、黄=submitted（承認待ち）、緑=approved。
-          - foreman: 担当現場が赤なら作成催促、submitted は承認待ちと案内
-          - admin/approver: submitted 件数を出して承認画面への動線 */}
-      {nextMonthCalCheck && (() => {
-        const sites = nextMonthCalCheck.sites
-        const redSites = sites.filter(s => !s.status || s.status === 'draft' || s.status === 'rejected')
-        const yellowSites = sites.filter(s => s.status === 'submitted')
-        const greenSites = sites.filter(s => s.status === 'approved')
-        // 全て approved なら表示しない
-        if (redSites.length === 0 && yellowSites.length === 0) return null
-        const isUrgent = redSites.length > 0
-        const ymLabel = (() => {
-          const [y, m] = nextMonthCalCheck.ym.split('-')
-          return `${y}年${parseInt(m, 10)}月`
-        })()
-        return (
-          <div className={`${isUrgent ? 'bg-red-50 border-red-300' : 'bg-yellow-50 border-yellow-300'} border-2 rounded-xl px-4 py-3 text-sm shadow-sm`}>
-            <div className={`flex items-center gap-2 font-bold mb-2 flex-wrap ${isUrgent ? 'text-red-800' : 'text-yellow-800'}`}>
-              <span className="text-base">{isUrgent ? '🚨' : '⏳'}</span>
-              <span>翌月（{ymLabel}）の就業カレンダー未確定</span>
-              <span className="text-xs font-normal text-gray-600">
-                月末まであと{nextMonthCalCheck.daysToMonthEnd}日
-              </span>
-              {redSites.length > 0 && (
-                <span className="text-xs bg-red-200 text-red-900 px-1.5 py-0.5 rounded-full">
-                  要作成 {redSites.length}件
-                </span>
-              )}
-              {yellowSites.length > 0 && (
-                <span className="text-xs bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded-full">
-                  承認待ち {yellowSites.length}件
-                </span>
-              )}
-              {greenSites.length > 0 && (
-                <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
-                  確定済 {greenSites.length}件
-                </span>
-              )}
-              <a
-                href="/calendar"
-                className={`ml-auto text-xs underline ${isUrgent ? 'text-red-700 hover:text-red-900' : 'text-yellow-700 hover:text-yellow-900'}`}
-              >
-                カレンダー画面へ →
-              </a>
-            </div>
-            <div className="space-y-1">
-              {redSites.map(s => (
-                <div key={s.siteId} className="flex items-center gap-2 text-xs text-red-700 flex-wrap">
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-200 text-red-800">
-                    {!s.status ? '未作成' : s.status === 'rejected' ? '差戻し' : '作成中'}
-                  </span>
-                  <span className="font-medium">{s.siteName}</span>
-                </div>
-              ))}
-              {yellowSites.map(s => (
-                <div key={s.siteId} className="flex items-center gap-2 text-xs text-yellow-700 flex-wrap">
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-yellow-200 text-yellow-800">
-                    承認待ち
-                  </span>
-                  <span className="font-medium">{s.siteName}</span>
-                  <span className="text-[10px] text-yellow-600">職長提出済・最終承認待ち</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })()}
+      {/* 翌月カレンダー未確定アラート（components/attendance/NextMonthCalendarBanner.tsx に集約） */}
+      <NextMonthCalendarBanner check={nextMonthCalCheck} />
 
       {/* ── 勤怠申請のアクションバー（2026-05-18 追加） ── */}
       {/* 出面入力画面で有給承認・帰国承認まで完結できるようにする。スマホ操作前提。 */}
@@ -1364,213 +1278,19 @@ export default function AttendanceGridPage() {
         />
       )}
 
-      {/* ── Sunday validation warnings ── */}
-      {sundayWarnings.length > 0 && (
-        <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-xl px-4 py-3 text-sm">
-          <div className="flex items-center gap-2 font-bold text-yellow-800 dark:text-yellow-300 mb-1">
-            <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-            日曜出勤あり ({sundayWarnings.length}件)
-          </div>
-          <div className="text-yellow-700 dark:text-yellow-400 text-xs leading-relaxed">
-            {sundayWarnings.map((w, i) => (
-              <span key={i}>
-                {i > 0 && '、 '}
-                {w.workerName} ({w.day}日)
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 日曜出勤・休日出勤の警告（components/attendance/AttendanceWarningBanner.tsx に集約） */}
+      <AttendanceWarningBanner title="日曜出勤あり" items={sundayWarnings} tone="warning" />
+      <AttendanceWarningBanner
+        title="休日出勤あり"
+        items={holidayWorkWarnings.map(w => ({ workerName: w.workerName, day: w.day, suffix: w.dayType }))}
+        tone="orange"
+      />
 
-      {/* ── Holiday work warnings ── */}
-      {holidayWorkWarnings.length > 0 && (
-        <div className="bg-orange-50 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700 rounded-xl px-4 py-3 text-sm">
-          <div className="flex items-center gap-2 font-bold text-orange-800 dark:text-orange-300 mb-1">
-            <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-            休日出勤あり ({holidayWorkWarnings.length}件)
-          </div>
-          <div className="text-orange-700 dark:text-orange-400 text-xs leading-relaxed">
-            {holidayWorkWarnings.map((w, i) => (
-              <span key={i}>
-                {i > 0 && ', '}
-                {w.workerName} ({w.day}日/{w.dayType})
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 帰国情報バナー（components/attendance/HomeLeaveBanner.tsx に集約） */}
+      <HomeLeaveBanner homeLeaves={data?.homeLeaves} />
 
-      {/* ── Home leave banner ── */}
-      {/* 表示ルール（2026-05-27 〜）:
-          - 帰国中: 開始 <= today <= 終了
-          - 予定: today < 開始
-          - 済: 終了 < today、ただし帰国から 7日以内のみ表示（最近帰国した人として）
-          並び順: 帰国中 → 予定 → 済 */}
-      {data?.homeLeaves && data.homeLeaves.length > 0 && (() => {
-        const now = new Date().toISOString().slice(0, 10)
-        const today = new Date(now + 'T00:00:00')
-        const RECENT_RETURN_DAYS = 7
-
-        // 各帰国の状態と「最近帰国してから何日経ったか」を計算
-        type Categorized = {
-          hl: HomeLeaveInfo
-          status: 'current' | 'future' | 'recent'
-          daysUntilStart: number
-          daysSinceReturn: number
-        }
-        const categorized: Categorized[] = data.homeLeaves.map(hl => {
-          const isCurrent = hl.startDate <= now && hl.endDate >= now
-          const isFuture = hl.startDate > now
-          const start = new Date(hl.startDate + 'T00:00:00')
-          const end = new Date(hl.endDate + 'T00:00:00')
-          const daysUntilStart = Math.ceil((start.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
-          const daysSinceReturn = Math.floor((today.getTime() - end.getTime()) / (24 * 60 * 60 * 1000))
-          const status: 'current' | 'future' | 'recent' =
-            isCurrent ? 'current'
-            : isFuture ? 'future'
-            : 'recent'
-          return { hl, status, daysUntilStart, daysSinceReturn }
-        })
-
-        // 済は帰国から N 日以内のみフィルタ
-        const visible = categorized.filter(c =>
-          c.status !== 'recent' || c.daysSinceReturn <= RECENT_RETURN_DAYS
-        )
-
-        // 並び順: 帰国中 (0) → 予定 (1) → 済 (2)、同一区分内は開始日昇順
-        const statusOrder = { current: 0, future: 1, recent: 2 }
-        visible.sort((a, b) => {
-          const diff = statusOrder[a.status] - statusOrder[b.status]
-          if (diff !== 0) return diff
-          return a.hl.startDate.localeCompare(b.hl.startDate)
-        })
-
-        // バナー表示判定: 何か1件でも見える状態であれば表示
-        if (visible.length === 0) return null
-
-        const currentCount = visible.filter(c => c.status === 'current').length
-        const futureCount = visible.filter(c => c.status === 'future').length
-        const recentCount = visible.filter(c => c.status === 'recent').length
-
-        return (
-          <div className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm">
-            <div className="flex items-center gap-2 font-bold text-cyan-800 mb-2 flex-wrap">
-              <span>✈️ 帰国情報</span>
-              {currentCount > 0 && (
-                <span className="text-xs bg-cyan-200 text-cyan-900 px-1.5 py-0.5 rounded-full">
-                  帰国中 {currentCount}名
-                </span>
-              )}
-              {futureCount > 0 && (
-                <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
-                  予定 {futureCount}名
-                </span>
-              )}
-              {recentCount > 0 && (
-                <span className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded-full">
-                  最近帰国 {recentCount}名
-                </span>
-              )}
-            </div>
-            <div className="space-y-1">
-              {visible.map((c, i) => {
-                const { hl, status, daysUntilStart, daysSinceReturn } = c
-                return (
-                  <div key={i} className="flex items-center gap-2 text-xs text-cyan-700 flex-wrap">
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      status === 'current' ? 'bg-cyan-200 text-cyan-800'
-                      : status === 'future' ? 'bg-blue-100 text-blue-700'
-                      : 'bg-gray-200 text-gray-700'
-                    }`}>
-                      {status === 'current' ? '帰国中' : status === 'future' ? '予定' : '済'}
-                    </span>
-                    <span className="font-medium">{hl.workerName}</span>
-                    <span>{hl.startDate.slice(5)} 〜 {hl.endDate.slice(5)}</span>
-                    <span className="text-cyan-500">({hl.reason})</span>
-                    {status === 'future' && daysUntilStart > 0 && (
-                      <span className="text-[10px] text-blue-600">
-                        {daysUntilStart === 1 ? '明日から' : `あと${daysUntilStart}日`}
-                      </span>
-                    )}
-                    {status === 'recent' && (
-                      <span className="text-[10px] text-gray-500">
-                        {daysSinceReturn === 0 ? '今日帰国' : daysSinceReturn === 1 ? '昨日帰国' : `${daysSinceReturn}日前に帰国`}
-                      </span>
-                    )}
-                    {hl.status === 'foreman_approved' && (
-                      <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded">職長済・最終承認待ち</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* ── 退職予定バナー（3ヶ月以内）── */}
-      {/* 出面入力画面で職長が退職予定を見落とさないように表示。
-          バッジは worker 行にも出るが、月をまたぐ退職や全体俯瞰がここでできる。 */}
-      {data?.upcomingRetirements && data.upcomingRetirements.length > 0 && (() => {
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        // diffDays を 1 度だけ計算してから 30日以内（緊急）/ 31〜90日（予定）に分類
-        const withDiff = data.upcomingRetirements.map(r => ({
-          ...r,
-          diffDays: Math.floor((new Date(r.retired + 'T00:00:00').getTime() - today.getTime()) / (24 * 60 * 60 * 1000)),
-        }))
-        const urgent = withDiff.filter(r => r.diffDays <= 30)
-        const later = withDiff.filter(r => r.diffDays > 30)
-        return (
-          <div className={`${urgent.length > 0 ? 'bg-red-50 border-red-300' : 'bg-orange-50 border-orange-200'} border rounded-xl px-4 py-3 text-sm`}>
-            <div className={`flex items-center gap-2 font-bold mb-2 flex-wrap ${urgent.length > 0 ? 'text-red-800' : 'text-orange-800'}`}>
-              <span>🏁 退職予定（3ヶ月以内）</span>
-              {urgent.length > 0 && (
-                <span className="text-xs bg-red-200 text-red-900 px-1.5 py-0.5 rounded-full">
-                  30日以内 {urgent.length}名
-                </span>
-              )}
-              {later.length > 0 && (
-                <span className="text-xs bg-orange-200 text-orange-900 px-1.5 py-0.5 rounded-full">
-                  予定 {later.length}名
-                </span>
-              )}
-            </div>
-            <div className="space-y-1">
-              {withDiff.map((r, i) => {
-                const { diffDays } = r
-                const isUrgent = diffDays <= 30
-                const visa = visaBadge(r.visa)
-                return (
-                  <div key={i} className={`flex items-center gap-2 text-xs flex-wrap ${isUrgent ? 'text-red-700' : 'text-orange-700'}`}>
-                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      isUrgent ? 'bg-red-200 text-red-800' : 'bg-orange-100 text-orange-700'
-                    }`}>
-                      {`あと${diffDays}日`}
-                    </span>
-                    <span className="font-medium">{r.name}</span>
-                    {visa && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${visa.cls}`}>
-                        {visa.label}
-                      </span>
-                    )}
-                    {!visa && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${r.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                        {r.org === 'hfu' ? 'HFU' : '日比'}
-                      </span>
-                    )}
-                    <span className="tabular-nums">{r.retired} 退職</span>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })()}
+      {/* 退職予定バナー（components/attendance/UpcomingRetirementsBanner.tsx に集約） */}
+      <UpcomingRetirementsBanner retirements={data?.upcomingRetirements} />
 
       {/* ── Grid Table ── */}
       {!loading && data && (

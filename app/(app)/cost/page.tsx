@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
+import { visaLabel } from '@/lib/labels'
 
 // ─── Types ───
 
@@ -130,18 +131,8 @@ function jobBadgeColor(job: string): string {
   return 'bg-gray-100 text-gray-600'
 }
 
-function visaBadge(visa: string): string {
-  if (visa.startsWith('jisshu')) {
-    const n = visa.replace('jisshu', '')
-    return n ? `実習${n}号` : '技能実習'
-  }
-  if (visa.startsWith('tokutei')) {
-    const n = visa.replace('tokutei', '')
-    return n ? `特定${n}号` : '特定技能'
-  }
-  if (!visa || visa === 'none' || visa === '') return ''
-  return visa
-}
+// visaBadge は lib/labels.ts の visaLabel に集約済み（このページではラベルのみ使用）
+const visaBadge = (visa: string): string => visaLabel(visa)
 
 // ─── Main Component ───
 
