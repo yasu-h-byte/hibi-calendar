@@ -159,6 +159,24 @@ export default function WorkersPage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { alert('名前を入力してください'); return }
+
+    // 新規追加時のみ: 同名スタッフチェック（スペース・全角半角を無視）
+    //   2026-05-30 「日比靖仁」が誤って 2 回追加された事案を受けて追加。
+    //   全角/半角スペースを除去して比較し、誤ったコピー入力を防ぐ。
+    if (!editId) {
+      const normalize = (s: string) => s.replace(/[\s　]/g, '').toLowerCase()
+      const inputName = normalize(form.name)
+      const duplicates = workers.filter(w => normalize(w.name) === inputName)
+      if (duplicates.length > 0) {
+        const list = duplicates.map(w => `  - ID ${w.id}: ${w.name}${w.retired ? '（退職済）' : ''}`).join('\n')
+        const ok = confirm(
+          `⚠️ 同じ名前のスタッフが既に登録されています:\n\n${list}\n\n` +
+          `別人として新規追加しますか？\n（同じ人を誤って二重登録しようとしている場合は「キャンセル」してください）`
+        )
+        if (!ok) return
+      }
+    }
+
     setSaving(true)
     try {
       const body = editId
