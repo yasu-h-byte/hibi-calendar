@@ -98,6 +98,9 @@ export default function CalendarManagePage() {
   const [error, setError] = useState('')
   const [editingDays, setEditingDays] = useState<Record<string, Record<string, DayType>>>({})
   const [saving, setSaving] = useState(false)
+  // 承認済みカレンダーの修正モード（admin/approver 限定）。siteId をキーに保持。
+  // 台風等で承認後にカレンダーを修正する場合、明示的にこのフラグを立てて編集可能にする。
+  const [revisingApproved, setRevisingApproved] = useState<Record<string, boolean>>({})
   const [copiedMsg, setCopiedMsg] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
@@ -308,7 +311,9 @@ Chon ten -> Xem lich -> Ky
             const days = getEditDays(site.siteId, site.days)
             const isApproved = site.status === 'approved'
             const isSubmitted = site.status === 'submitted'
-            const isReadOnly = isApproved || (isSubmitted && user.role === 'foreman')
+            const isRevising = !!revisingApproved[site.siteId]  // 承認済みカレンダーの修正中
+            // 修正モード中は admin/approver なら編集可能
+            const isReadOnly = (isApproved && !isRevising) || (isSubmitted && user.role === 'foreman')
 
             return (
               <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
@@ -484,31 +489,102 @@ Chon ten -> Xem lich -> Ky
                         {/* 承認済み */}
                         {isApproved && (
                           <div className="space-y-2">
-                            <div className="text-center text-green-600 dark:text-green-400 text-sm font-bold py-2">
-                              ✅ 承認済み
-                            </div>
-                            {/* approver/admin: 承認取消しボタン */}
-                            {user.role !== 'foreman' && (
-                              <button
-                                onClick={async () => {
-                                  if (!confirm(`${site.siteName} の承認を取消しますか？\n署名データも削除され、再承認後に再署名が必要になります。`)) return
-                                  setSaving(true)
-                                  try {
-                                    const res = await fetch('/api/calendar/revert', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                      body: JSON.stringify({ siteId: site.siteId, ym, action: 'unapprove', revertedBy: user?.workerId || 0 }),
-                                    })
-                                    if (res.ok) { fetchData() }
-                                    else { const d = await res.json(); alert(d.error || '取消しに失敗しました') }
-                                  } catch { alert('取消しに失敗しました') }
-                                  finally { setSaving(false) }
-                                }}
-                                disabled={saving}
-                                className="w-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 py-2 rounded-lg text-xs hover:bg-red-100 transition disabled:opacity-50"
-                              >
-                                ↩ 承認を取消す
-                              </button>
+                            {!isRevising ? (
+                              <>
+                                <div className="text-center text-green-600 dark:text-green-400 text-sm font-bold py-2">
+                                  ✅ 承認済み
+                                </div>
+                                {/* approver/admin: 修正モード突入ボタン（台風等の事後修正用） */}
+                                {user.role !== 'foreman' && (
+                                  <button
+                                    onClick={() => {
+                                      if (!confirm(
+                                        `${site.siteName} のカレンダーを修正モードにします。\n\n` +
+                                        `※ 承認済みカレンダーを修正すると、署名済みのスタッフは「再確認」が必要になります。\n` +
+                                        `（例: 台風で出勤日を休みに変更、別の日を出勤日にする等）\n\n` +
+                                        `続行しますか？`
+                                      )) return
+                                      setRevisingApproved(prev => ({ ...prev, [site.siteId]: true }))
+                                    }}
+                                    disabled={saving}
+                                    className="w-full text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 py-2 rounded-lg text-xs hover:bg-amber-100 transition disabled:opacity-50 font-medium"
+                                  >
+                                    ✏️ 承認済みカレンダーを修正する
+                                  </button>
+                                )}
+                                {/* approver/admin: 承認取消しボタン（全署名削除して最初から） */}
+                                {user.role !== 'foreman' && (
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm(`${site.siteName} の承認を取消しますか？\n署名データも削除され、再承認後に再署名が必要になります。`)) return
+                                      setSaving(true)
+                                      try {
+                                        const res = await fetch('/api/calendar/revert', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                          body: JSON.stringify({ siteId: site.siteId, ym, action: 'unapprove', revertedBy: user?.workerId || 0 }),
+                                        })
+                                        if (res.ok) { fetchData() }
+                                        else { const d = await res.json(); alert(d.error || '取消しに失敗しました') }
+                                      } catch { alert('取消しに失敗しました') }
+                                      finally { setSaving(false) }
+                                    }}
+                                    disabled={saving}
+                                    className="w-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 py-2 rounded-lg text-xs hover:bg-red-100 transition disabled:opacity-50"
+                                  >
+                                    ↩ 承認を取消す（署名も全削除）
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-center text-amber-700 dark:text-amber-400 text-sm font-bold py-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-300">
+                                  ✏️ 修正モード（承認済みカレンダーを編集中）
+                                </div>
+                                <p className="text-xs text-gray-600 leading-relaxed px-1">
+                                  カレンダーを編集して「保存」を押すと、署名済みのスタッフは個人ページで「🔄 更新あり」バナーが表示され、再確認が必要になります。
+                                </p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={() => {
+                                      // キャンセル: 編集内容を破棄してモード解除
+                                      setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
+                                      setRevisingApproved(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
+                                    }}
+                                    disabled={saving}
+                                    className="text-gray-700 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 py-3 rounded-lg text-sm hover:bg-gray-200 transition disabled:opacity-50 font-medium"
+                                  >
+                                    キャンセル
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm(`${site.siteName} の修正を保存しますか？\n署名済みのスタッフへ再確認依頼が出ます。`)) return
+                                      setSaving(true)
+                                      try {
+                                        const res = await fetch('/api/calendar/save-days', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                          body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0 }),
+                                        })
+                                        if (res.ok) {
+                                          setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
+                                          setRevisingApproved(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
+                                          fetchData()
+                                          alert('修正を保存しました。署名済みスタッフへ再確認依頼が出ます。')
+                                        } else {
+                                          const d = await res.json()
+                                          alert(d.error || '保存に失敗しました')
+                                        }
+                                      } catch { alert('保存に失敗しました') }
+                                      finally { setSaving(false) }
+                                    }}
+                                    disabled={saving || exceedsLimit}
+                                    className="bg-amber-600 text-white py-3 rounded-lg text-sm font-bold hover:bg-amber-700 transition disabled:opacity-50"
+                                  >
+                                    💾 修正を保存
+                                  </button>
+                                </div>
+                              </>
                             )}
                           </div>
                         )}

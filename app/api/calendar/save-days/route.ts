@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { ym7 } from '@/lib/ym'
+import { logActivity } from '@/lib/activity'
 
 export async function POST(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -18,6 +19,21 @@ export async function POST(request: NextRequest) {
     // Get existing doc to preserve status
     const existing = await getDoc(doc(db, 'siteCalendar', docId))
     const existingData = existing.exists() ? existing.data() : {}
+    const wasApproved = existingData.status === 'approved'
+
+    // 承認後修正時の差分計算（監査用）
+    let diffSummary = ''
+    if (wasApproved && existingData.days) {
+      const oldDays = existingData.days as Record<string, string>
+      const changes: string[] = []
+      const allKeys = new Set([...Object.keys(oldDays), ...Object.keys(days || {})])
+      for (const k of allKeys) {
+        const before = oldDays[k] || 'work'
+        const after = (days || {})[k] || 'work'
+        if (before !== after) changes.push(`${k}日: ${before}→${after}`)
+      }
+      diffSummary = changes.join(', ')
+    }
 
     await setDoc(doc(db, 'siteCalendar', docId), {
       siteId,
@@ -32,6 +48,14 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date().toISOString(),
       updatedBy,
     })
+
+    // 承認後修正は監査用に明示的にログ。差分も記録する。
+    if (wasApproved) {
+      const detail = diffSummary
+        ? `${siteId} ${ym} 承認後修正: ${diffSummary}`
+        : `${siteId} ${ym} 承認後修正（変更なし or 全置換）`
+      await logActivity(String(updatedBy || 'admin'), 'calendar.reviseApproved', detail)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

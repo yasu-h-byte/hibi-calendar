@@ -24,6 +24,10 @@ export interface SiteCalendarInfo {
   submittedBy: number | null
   approvedBy: number | null
   rejectedReason: string | null
+  /** 最終更新時刻（save-days 経由）。承認後に修正された場合の判定に使う */
+  updatedAt: string | null
+  /** 承認時刻。再署名要否判定の補助 */
+  approvedAt: string | null
 }
 
 export interface EligibleForeignWorker {
@@ -80,6 +84,8 @@ export async function loadCalendarMatrix(ym: string): Promise<CalendarMatrix> {
       submittedBy: data.submittedBy || null,
       approvedBy: data.approvedBy || null,
       rejectedReason: data.rejectedReason || null,
+      updatedAt: data.updatedAt || null,
+      approvedAt: data.approvedAt || null,
     }
     if (status === 'approved') approvedSiteIds.add(data.siteId)
   })

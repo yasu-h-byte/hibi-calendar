@@ -42,16 +42,24 @@ export async function GET(request: NextRequest) {
     const fullMonthHomeLeave = m.fullMonthHlIds.has(worker.id)
 
     // 本人の署名状態のみを各現場に投影
+    // 2026-06-XX 追加: needsResign — 承認済みカレンダーが本人の署名後に修正された
+    //   (updatedAt > signedAt) 場合に true。差分署名（再確認）が必要なことを示す。
     const sites = m.sitesWithWorkers.map(sw => {
       const cal = m.siteCalendars[sw.site.id]
       const sigVal = m.signaturesBySite[`${worker.id}_${sw.site.id}`]
+      const signed = !!sigVal
+      const signedAt = sigVal && sigVal !== 'true' ? sigVal : null
+      // 既に署名済みで、カレンダーが署名後に更新された場合は再署名要
+      const needsResign = signed && !!signedAt && !!cal?.updatedAt && cal.updatedAt > signedAt
       return {
         siteId: sw.site.id,
         siteName: sw.site.name,
         status: (cal?.status || null) as 'approved' | 'draft' | 'submitted' | null,
         days: cal?.days || null,
-        signed: !!sigVal,
-        signedAt: sigVal && sigVal !== 'true' ? sigVal : null,
+        signed,
+        signedAt,
+        needsResign,
+        updatedAt: cal?.updatedAt || null,
       }
     })
 

@@ -128,7 +128,10 @@ export default function StaffAttendancePage() {
   // 旧 /calendar/public は「名前を選んで」方式で他人になりすませる脆弱性があったため、
   // 本人のトークン認証ページで承認できる新フローを実装。
   // 型は components/attendance/CalendarApprovalModal に集約
-  const [pendingCalendar, setPendingCalendar] = useState<PendingCalendarData | null>(null)
+  // 今月と翌月の両方をチェックする（typhoon 等で当月カレンダー修正後の再署名にも対応）
+  const [pendingCalendars, setPendingCalendars] = useState<PendingCalendarData[]>([])
+  // モーダルで表示中のカレンダー（複数月ある場合の選択用）
+  const [activePendingCalendar, setActivePendingCalendar] = useState<PendingCalendarData | null>(null)
   const [showCalendarModal, setShowCalendarModal] = useState(false)
   const [calendarReviewed, setCalendarReviewed] = useState(false)  // 「確認した」チェック
   const [signingCalendar, setSigningCalendar] = useState(false)
@@ -205,50 +208,55 @@ export default function StaffAttendancePage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  // ── 翌月カレンダー承認状況を取得（2026-05-27 追加） ──
-  // 全現場が承認済みで本人が未署名なら、バナー表示の判断材料になる
+  // ── カレンダー承認状況を取得（2026-05-27 追加 / 2026-06-XX 拡張） ──
+  // 今月＋翌月の 2 ヶ月分を取得して、承認が必要な月を全て表示する。
+  // - 翌月: 通常の月次承認フロー（既存）
+  // - 今月: 台風等で承認後にカレンダーが修正された場合の再署名フロー
   // 注意: 日本人スタッフは API 側で 400 を返す→無駄な fetch を防ぐためクライアント側でガード
   const fetchPendingCalendar = useCallback(async () => {
     if (!token) return
-    // 日本人スタッフ（visa=none）はこの機能の対象外。fetch しない（Firestore 読込み削減）
     if (!data?.worker?.visaType || data.worker.visaType === 'none') {
-      setPendingCalendar(null)
+      setPendingCalendars([])
       return
     }
-    // 翌月の ym を計算
+    // 今月と翌月の ym (YYYY-MM)
     const now = new Date()
+    const thisYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const nm = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-    const ymDash = `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, '0')}`
+    const nextYm = `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, '0')}`
     try {
-      const res = await fetch(`/api/calendar/my-pending?token=${token}&ym=${ymDash}`)
-      if (!res.ok) {
-        setPendingCalendar(null)
-        return
-      }
-      const json: PendingCalendarData = await res.json()
-      setPendingCalendar(json)
+      const [thisRes, nextRes] = await Promise.all([
+        fetch(`/api/calendar/my-pending?token=${token}&ym=${thisYm}`),
+        fetch(`/api/calendar/my-pending?token=${token}&ym=${nextYm}`),
+      ])
+      const results: PendingCalendarData[] = []
+      if (thisRes.ok) results.push(await thisRes.json())
+      if (nextRes.ok) results.push(await nextRes.json())
+      setPendingCalendars(results)
     } catch {
-      setPendingCalendar(null)
+      setPendingCalendars([])
     }
   }, [token, data?.worker?.visaType])
 
   useEffect(() => { fetchPendingCalendar() }, [fetchPendingCalendar])
 
   // カレンダー承認のサブミット（本人のトークンで自分自身としてサイン）
+  // モーダルで開いている月の「未署名 OR 再署名要」の現場を一括サイン
   const submitCalendarSign = useCallback(async () => {
-    if (!pendingCalendar || signingCalendar) return
-    const ym = pendingCalendar.ym
-    const unsignedSites = pendingCalendar.sites
-      .filter(s => s.status === 'approved' && !s.signed)
+    if (!activePendingCalendar || signingCalendar) return
+    const ym = activePendingCalendar.ym
+    // 未署名と「再署名要 (needsResign)」の両方を対象に
+    const targetSiteIds = activePendingCalendar.sites
+      .filter(s => s.status === 'approved' && (!s.signed || s.needsResign))
       .map(s => s.siteId)
-    if (unsignedSites.length === 0) return
+    if (targetSiteIds.length === 0) return
     setSigningCalendar(true)
     setCalendarErrorMsg(null)
     try {
       const res = await fetch('/api/calendar/sign-self', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, ym, siteIds: unsignedSites }),
+        body: JSON.stringify({ token, ym, siteIds: targetSiteIds }),
       })
       const json = await res.json()
       if (!res.ok || !json.success) {
@@ -258,6 +266,7 @@ export default function StaffAttendancePage() {
       }
       setCalendarSuccessMsg(`✓ ${json.signedCount}件のカレンダーを承認しました / Đã ký ${json.signedCount} lịch`)
       setShowCalendarModal(false)
+      setActivePendingCalendar(null)
       setCalendarReviewed(false)
       await fetchPendingCalendar()
       setTimeout(() => setCalendarSuccessMsg(null), 4000)
@@ -266,7 +275,7 @@ export default function StaffAttendancePage() {
     } finally {
       setSigningCalendar(false)
     }
-  }, [token, pendingCalendar, signingCalendar, fetchPendingCalendar])
+  }, [token, activePendingCalendar, signingCalendar, fetchPendingCalendar])
 
   // Fetch leave requests when modal opens
   const fetchLeaveRequests = useCallback(async () => {
@@ -775,41 +784,71 @@ export default function StaffAttendancePage() {
           </div>
         )}
 
-        {/* ── 翌月カレンダー承認バナー（2026-05-27 追加） ── */}
-        {/* 表示条件:
-            - 翌月の全現場カレンダーが承認済み (allApproved)
-            - 全期間帰国中ではない
-            - まだ署名していない現場がある */}
-        {pendingCalendar && pendingCalendar.allApproved && !pendingCalendar.fullMonthHomeLeave && (() => {
-          const unsignedCount = pendingCalendar.sites.filter(s => s.status === 'approved' && !s.signed).length
-          if (unsignedCount === 0) return null
-          const [y, m] = pendingCalendar.ym.split('-')
+        {/* ── カレンダー承認バナー（2026-05-27 追加 / 2026-06-XX 改) ── */}
+        {/* 今月＋翌月の両方をチェックし、未署名 or 再署名要の月ごとにバナーを表示。
+            - 未署名: 通常の承認バナー（オレンジ）
+            - 再署名要: 「更新あり」バナー（黄色） */}
+        {pendingCalendars.map(pc => {
+          if (pc.fullMonthHomeLeave) return null
+          // 承認済みの中で「アクション要 = 未署名 OR 再署名要」の現場数をカウント
+          const sitesNeedAction = pc.sites.filter(s => s.status === 'approved' && (!s.signed || s.needsResign))
+          if (sitesNeedAction.length === 0) return null
+          const hasResign = sitesNeedAction.some(s => s.needsResign)
+          const hasFirstSign = sitesNeedAction.some(s => !s.signed)
+          const [y, m] = pc.ym.split('-')
+          // 表示モード判定: 再署名 only / 初回署名 only / 混在
+          const isResignOnly = hasResign && !hasFirstSign
+          const containerCls = isResignOnly
+            ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-amber-400'
+            : 'bg-gradient-to-r from-amber-50 to-orange-50 border-orange-400'
+          const headingCls = isResignOnly ? 'text-amber-900' : 'text-orange-800'
+          const subCls = isResignOnly ? 'text-amber-800' : 'text-orange-700'
+          const emoji = isResignOnly ? '🔄' : '📋'
+          const headlineJa = isResignOnly
+            ? `${parseInt(y)}年${parseInt(m)}月 カレンダー更新あり`
+            : `${parseInt(y)}年${parseInt(m)}月のカレンダー承認`
+          const headlineVi = isResignOnly
+            ? `Lịch tháng ${parseInt(m)}/${parseInt(y)} đã cập nhật`
+            : `Xác nhận lịch tháng ${parseInt(m)}/${parseInt(y)}`
+          const bodyJa = isResignOnly
+            ? `${sitesNeedAction.length}件の現場で変更がありました。再確認してください`
+            : `${sitesNeedAction.length}件の現場カレンダーを確認・承認してください`
+          const bodyVi = isResignOnly
+            ? `Có ${sitesNeedAction.length} công trường đã thay đổi. Hãy xem lại`
+            : `Vui lòng xem và xác nhận ${sitesNeedAction.length} lịch công trường`
+
           return (
             <button
-              onClick={() => { setShowCalendarModal(true); setCalendarReviewed(false); setCalendarErrorMsg(null) }}
-              className="w-full bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-orange-400 rounded-xl p-4 text-left active:scale-[0.98] transition shadow-md"
+              key={pc.ym}
+              onClick={() => {
+                setActivePendingCalendar(pc)
+                setShowCalendarModal(true)
+                setCalendarReviewed(false)
+                setCalendarErrorMsg(null)
+              }}
+              className={`w-full ${containerCls} border-2 rounded-xl p-4 text-left active:scale-[0.98] transition shadow-md`}
             >
               <div className="flex items-start gap-3">
-                <div className="text-3xl">📋</div>
+                <div className="text-3xl">{emoji}</div>
                 <div className="flex-1">
-                  <div className="font-bold text-orange-800 text-base leading-tight">
-                    {parseInt(y)}年{parseInt(m)}月のカレンダー承認
+                  <div className={`font-bold ${headingCls} text-base leading-tight`}>
+                    {headlineJa}
                   </div>
-                  <div className="text-xs text-orange-700 mt-0.5">
-                    Xác nhận lịch tháng {parseInt(m)}/{parseInt(y)}
+                  <div className={`text-xs ${subCls} mt-0.5`}>
+                    {headlineVi}
                   </div>
-                  <div className="text-sm text-orange-900 mt-2 font-medium">
-                    {unsignedCount}件の現場カレンダーを確認・承認してください
+                  <div className="text-sm text-gray-900 mt-2 font-medium">
+                    {bodyJa}
                   </div>
-                  <div className="text-xs text-orange-700 mt-0.5">
-                    Vui lòng xem và xác nhận {unsignedCount} lịch công trường
+                  <div className={`text-xs ${subCls} mt-0.5`}>
+                    {bodyVi}
                   </div>
                 </div>
-                <div className="text-2xl text-orange-500 self-center">›</div>
+                <div className={`text-2xl ${headingCls} self-center`}>›</div>
               </div>
             </button>
           )
-        })()}
+        })}
 
         {/* Today's status */}
         {data.todayLocked ? (
@@ -1414,15 +1453,15 @@ export default function StaffAttendancePage() {
         onCancelRequest={cancelHomeLongLeave}
       />
 
-      {/* 翌月カレンダー承認モーダル（components/attendance/CalendarApprovalModal.tsx に集約） */}
-      {showCalendarModal && pendingCalendar && (
+      {/* カレンダー承認モーダル（components/attendance/CalendarApprovalModal.tsx に集約） */}
+      {showCalendarModal && activePendingCalendar && (
         <CalendarApprovalModal
-          pendingCalendar={pendingCalendar}
+          pendingCalendar={activePendingCalendar}
           reviewed={calendarReviewed}
           onReviewedChange={setCalendarReviewed}
           signing={signingCalendar}
           onSubmit={submitCalendarSign}
-          onClose={() => setShowCalendarModal(false)}
+          onClose={() => { setShowCalendarModal(false); setActivePendingCalendar(null) }}
           errorMsg={calendarErrorMsg}
         />
       )}

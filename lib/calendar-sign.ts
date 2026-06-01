@@ -36,7 +36,8 @@ export interface SignResult {
  * 1 件のサイト × 月 × ワーカーの署名を実行
  *
  * - siteCalendar の approved 確認（サーバ側の改ざん対策）
- * - 冪等: 既存署名があればその signedAt を返してスキップ
+ * - 冪等: 既存署名がカレンダー最終更新 (updatedAt) 以降なら何もしない
+ * - 再署名: 既存署名後にカレンダーが修正されていれば signedAt を更新（差分承認）
  * - 新規: calendarSign/{workerId}_{ym}_{siteId} に書き込み
  *
  * @param method 'tap' (旧フロー) / 'self_tap' (新フロー) — 分析用
@@ -55,14 +56,32 @@ export async function signOneSiteForWorker(
   if (!calDoc.exists() || calDoc.data().status !== 'approved') {
     return { siteId, success: false, error: 'Calendar not approved' }
   }
+  const calUpdatedAt = (calDoc.data().updatedAt as string | undefined) || null
 
-  // 既に署名済みなら冪等にスキップ
   const signDocId = `${workerId}_${ym}_${siteId}`
   const existingSign = await getDoc(doc(db, 'calendarSign', signDocId))
+
   if (existingSign.exists()) {
-    return { siteId, success: true, signedAt: existingSign.data().signedAt }
+    const existingSignedAt = existingSign.data().signedAt as string
+    // 既存署名がカレンダー最終更新以降なら、再署名不要（冪等）
+    if (!calUpdatedAt || existingSignedAt >= calUpdatedAt) {
+      return { siteId, success: true, signedAt: existingSignedAt }
+    }
+    // それ以外は「再署名」として signedAt を更新し、履歴として previousSignedAt を残す
+    await setDoc(doc(db, 'calendarSign', signDocId), {
+      workerId,
+      ym,
+      siteId,
+      signedAt,                          // 新しい署名時刻
+      previousSignedAt: existingSignedAt, // 直前の署名時刻（再署名の証跡）
+      resignCount: ((existingSign.data().resignCount as number) || 0) + 1,
+      method,
+      ipHash,
+    })
+    return { siteId, success: true, signedAt }
   }
 
+  // 新規署名
   await setDoc(doc(db, 'calendarSign', signDocId), {
     workerId,
     ym,

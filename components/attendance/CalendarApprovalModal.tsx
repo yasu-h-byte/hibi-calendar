@@ -15,6 +15,10 @@ export interface PendingCalendarSite {
   days: Record<string, string> | null
   signed: boolean
   signedAt: string | null
+  /** 署名後にカレンダーが修正された場合 true（再署名要） */
+  needsResign?: boolean
+  /** カレンダー最終更新日時 */
+  updatedAt?: string | null
 }
 
 export interface PendingCalendarData {
@@ -51,9 +55,13 @@ export default function CalendarApprovalModal({
   const daysInMonth = new Date(yearNum, monthNum, 0).getDate()
   const firstDow = new Date(yearNum, monthNum - 1, 1).getDay()  // 0=日
 
-  // 表示対象: 承認済み × 未署名（または既署名）の現場
+  // 表示対象: 承認済みの現場
   const targetSites = pendingCalendar.sites.filter(s => s.status === 'approved')
-  const unsignedSites = targetSites.filter(s => !s.signed)
+  // 「サインが必要な現場」= 未署名 OR 署名後に修正された（needsResign）
+  const sitesNeedingAction = targetSites.filter(s => !s.signed || s.needsResign)
+  // ヘッダー文言を変えるための判定: 全てが needsResign なら「更新」モード、混在なら混合
+  const hasRevisions = sitesNeedingAction.some(s => s.needsResign)
+  const hasFirstTimeSign = sitesNeedingAction.some(s => !s.signed)
 
   return (
     <div
@@ -85,21 +93,40 @@ export default function CalendarApprovalModal({
 
         {/* 本文 */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-            下のカレンダーを見て、出勤日 / 休日 を確認してください。問題なければ承認してください。
-            <br />
-            Hãy xem lịch dưới đây để xác nhận ngày làm việc / ngày nghỉ. Nếu không có vấn đề, hãy ký xác nhận.
-          </div>
+          {hasRevisions ? (
+            <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-xs text-amber-900">
+              <div className="font-bold mb-1">🔄 カレンダーが更新されました / Lịch đã được cập nhật</div>
+              前回サインしたあとに、出勤日や休日が変更されている現場があります。
+              内容を確認してから、もう一度サインしてください。
+              <br />
+              Sau khi bạn đã ký, ngày làm việc hoặc ngày nghỉ ở một số công trường đã được thay đổi.
+              Hãy xem nội dung và ký lại.
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+              下のカレンダーを見て、出勤日 / 休日 を確認してください。問題なければ承認してください。
+              <br />
+              Hãy xem lịch dưới đây để xác nhận ngày làm việc / ngày nghỉ. Nếu không có vấn đề, hãy ký xác nhận.
+            </div>
+          )}
 
           {targetSites.map(site => (
-            <div key={site.siteId} className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className={`px-3 py-2 flex items-center justify-between ${site.signed ? 'bg-green-50' : 'bg-gray-50'}`}>
+            <div key={site.siteId} className={`border rounded-lg overflow-hidden ${
+              site.needsResign ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'
+            }`}>
+              <div className={`px-3 py-2 flex items-center justify-between ${
+                site.needsResign ? 'bg-amber-50' : site.signed ? 'bg-green-50' : 'bg-gray-50'
+              }`}>
                 <div className="font-bold text-sm text-hibi-navy">{site.siteName}</div>
-                {site.signed && (
+                {site.needsResign ? (
+                  <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                    🔄 更新あり / Đã cập nhật
+                  </span>
+                ) : site.signed ? (
                   <span className="text-[10px] bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-bold">
                     ✓ 署名済み
                   </span>
-                )}
+                ) : null}
               </div>
               {/* カレンダーグリッド */}
               <div className="p-2">
@@ -147,7 +174,7 @@ export default function CalendarApprovalModal({
 
         {/* フッター: 確認チェック + 承認ボタン */}
         <div className="border-t border-gray-200 px-4 py-3 bg-gray-50 rounded-b-xl space-y-3">
-          {unsignedSites.length === 0 ? (
+          {sitesNeedingAction.length === 0 ? (
             <div className="text-center text-sm text-green-700 font-bold">
               すべて署名済みです / Đã ký tất cả
             </div>
@@ -161,9 +188,15 @@ export default function CalendarApprovalModal({
                   className="mt-1 w-5 h-5 rounded"
                 />
                 <span className="text-sm text-gray-800 leading-tight">
-                  カレンダーを確認しました
+                  {hasRevisions && !hasFirstTimeSign
+                    ? '変更内容を確認しました'
+                    : 'カレンダーを確認しました'}
                   <br />
-                  <span className="text-xs text-gray-500">Tôi đã xem lịch</span>
+                  <span className="text-xs text-gray-500">
+                    {hasRevisions && !hasFirstTimeSign
+                      ? 'Tôi đã xem nội dung cập nhật'
+                      : 'Tôi đã xem lịch'}
+                  </span>
                 </span>
               </label>
               <button
@@ -177,7 +210,9 @@ export default function CalendarApprovalModal({
               >
                 {signing
                   ? '送信中... / Đang gửi...'
-                  : `${unsignedSites.length}件のカレンダーを承認する / Ký ${unsignedSites.length} lịch`
+                  : hasRevisions && !hasFirstTimeSign
+                    ? `${sitesNeedingAction.length}件の変更を承認する / Xác nhận ${sitesNeedingAction.length} thay đổi`
+                    : `${sitesNeedingAction.length}件のカレンダーを承認する / Ký ${sitesNeedingAction.length} lịch`
                 }
               </button>
             </>
