@@ -12,8 +12,22 @@ interface SiteCalendarData {
   status: CalendarStatus | null
   submittedBy: number | null
   approvedBy: number | null
+  approvedAt?: string | null
+  updatedAt?: string | null
+  updatedBy?: number | null
   rejectedReason: string | null
-  workers: { id: number; name: string; signed: boolean; signedAt: string | null }[]
+  /** 承認後に修正された場合 true（差分署名待ちの判定材料） */
+  wasRevised?: boolean
+  workers: {
+    id: number
+    name: string
+    signed: boolean
+    signedAt: string | null
+    /** 当該月に当該現場へ配置されているか */
+    assignedHere?: boolean
+    /** 修正後に再確認したか（wasRevised=true の場合のみ意味あり） */
+    reconfirmedAfterRevision?: boolean
+  }[]
 }
 
 function DaySummary({ days, year, month }: { days: Record<string, DayType>; year: number; month: number }) {
@@ -649,6 +663,99 @@ Chon ten -> Xem lich -> Ky
           </a>
         </div>
       )}
+
+      {/* ── カレンダー修正後の再確認状況パネル（2026-06-XX 追加） ── */}
+      {/* 「✏️ 承認済みカレンダーを修正する」を行った現場について、
+          配置者が再確認したかを一覧表示。職長が「まだ確認していない人」を
+          把握して個別に声かけする運用を想定 */}
+      {(() => {
+        const revisedSites = visibleSites.filter(s => s.wasRevised)
+        if (revisedSites.length === 0) return null
+
+        // 修正者の名前を解決するためのワーカーマップ（既存の workers list から）
+        const workerNameById = new Map<number, string>()
+        visibleSites.forEach(s => s.workers.forEach(w => workerNameById.set(w.id, w.name)))
+
+        const fmtTime = (iso: string | null | undefined) => {
+          if (!iso) return ''
+          const d = new Date(iso)
+          return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+        }
+
+        return (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl shadow p-4 space-y-3">
+            <h3 className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+              <span>✏️</span>
+              <span>カレンダー修正後の再確認状況</span>
+              <span className="text-xs bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-normal">
+                {revisedSites.length}現場
+              </span>
+            </h3>
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              承認済みカレンダーを修正した現場の、配置者ごとの再確認状況です。<br/>
+              未確認のスタッフには個人ページで「🔄 更新あり」バナーが表示されています。職長から声をかけて確認をお願いします。
+            </p>
+            <div className="space-y-3">
+              {revisedSites.map(site => {
+                const assignedWorkers = site.workers.filter(w => w.assignedHere)
+                const reconfirmedCount = assignedWorkers.filter(w => w.reconfirmedAfterRevision).length
+                const pendingWorkers = assignedWorkers.filter(w => !w.reconfirmedAfterRevision)
+                const updatedByName = site.updatedBy != null
+                  ? (workerNameById.get(site.updatedBy) || `ID:${site.updatedBy}`)
+                  : '不明'
+                return (
+                  <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                      <div className="font-bold text-hibi-navy dark:text-white">
+                        {site.siteName}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {assignedWorkers.length === 0
+                          ? '配置者なし'
+                          : `再確認 ${reconfirmedCount}/${assignedWorkers.length}名`}
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+                      修正日時: {fmtTime(site.updatedAt)} / 修正者: {updatedByName}
+                    </div>
+
+                    {assignedWorkers.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">配置者がいません</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {/* 未確認を先頭に */}
+                        {pendingWorkers.map(w => (
+                          <div key={w.id} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-900/30 rounded text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-yellow-600">⏳</span>
+                              <span className="font-medium text-gray-800 dark:text-gray-200">{w.name}</span>
+                            </div>
+                            <span className="text-[10px] text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/50 px-2 py-0.5 rounded-full">
+                              未再確認（通知中）
+                            </span>
+                          </div>
+                        ))}
+                        {/* 再確認済みは折り畳まずに表示（証跡として価値） */}
+                        {assignedWorkers.filter(w => w.reconfirmedAfterRevision).map(w => (
+                          <div key={w.id} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-green-50 dark:bg-green-900/30 rounded text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-600">✓</span>
+                              <span className="font-medium text-gray-800 dark:text-gray-200">{w.name}</span>
+                            </div>
+                            <span className="text-[10px] text-green-700 dark:text-green-400">
+                              再確認済み ({fmtTime(w.signedAt)})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Confirmation dialog */}
       {showConfirmDialog && (

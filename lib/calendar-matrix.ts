@@ -28,6 +28,8 @@ export interface SiteCalendarInfo {
   updatedAt: string | null
   /** 承認時刻。再署名要否判定の補助 */
   approvedAt: string | null
+  /** 最終更新者の worker ID（save-days 経由） */
+  updatedBy: number | null
 }
 
 export interface EligibleForeignWorker {
@@ -92,6 +94,7 @@ export async function loadCalendarMatrix(ym: string): Promise<CalendarMatrix> {
       rejectedReason: data.rejectedReason || null,
       updatedAt: data.updatedAt || null,
       approvedAt: data.approvedAt || null,
+      updatedBy: data.updatedBy ?? null,
     }
     if (status === 'approved') approvedSiteIds.add(data.siteId)
   })
