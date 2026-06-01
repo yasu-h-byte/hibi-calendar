@@ -54,6 +54,12 @@ export interface CalendarMatrix {
   fullMonthHlIds: Set<number>
   /** 「カレンダー署名対象」となる外国人スタッフ一覧（在籍×token×帰国でない） */
   eligibleForeignWorkers: EligibleForeignWorker[]
+  /**
+   * 当該月における現場ごとの配置済みスタッフ ID 集合
+   * （massign[siteId_ym] を優先、なければ assign[siteId] のデフォルト）
+   * 修正再署名の対象を「実際に配置されているスタッフ」に絞るために使用。
+   */
+  assignedWorkerIdsBySite: Record<string, Set<number>>
 }
 
 /**
@@ -97,8 +103,23 @@ export async function loadCalendarMatrix(ym: string): Promise<CalendarMatrix> {
     signaturesBySite[`${data.workerId}_${data.siteId}`] = data.signedAt || 'true'
   })
 
+  // 現場ごとの配置済みスタッフ ID 集合
+  //   - massign[siteId_ym] が存在すればそれを優先（月別オーバーライド）
+  //   - そうでなければ assign[siteId] (デフォルト)
+  // 修正時の再署名フィルタに使用
+  const mainData = mainDoc.exists() ? mainDoc.data() : {}
+  const assignMap = (mainData.assign || {}) as Record<string, { workers?: number[] }>
+  const massignMap = (mainData.massign || {}) as Record<string, { workers?: number[] }>
+  const ymCompact = ym.replace('-', '')  // "YYYY-MM" → "YYYYMM"
+  const assignedWorkerIdsBySite: Record<string, Set<number>> = {}
+  for (const sw of sitesWithWorkers) {
+    const massignKey = `${sw.site.id}_${ymCompact}`
+    const source = massignMap[massignKey]?.workers ?? assignMap[sw.site.id]?.workers ?? []
+    assignedWorkerIdsBySite[sw.site.id] = new Set(source)
+  }
+
   // 全期間帰国 + 署名対象外国人
-  const allRawWorkers = mainDoc.exists() ? ((mainDoc.data().workers || []) as Record<string, unknown>[]) : []
+  const allRawWorkers = (mainData.workers || []) as Record<string, unknown>[]
   const ymKey = normalizeYm(ym)
   const fullMonthHlIds = new Set(
     allRawWorkers
@@ -133,5 +154,6 @@ export async function loadCalendarMatrix(ym: string): Promise<CalendarMatrix> {
     homeLeaves,
     fullMonthHlIds,
     eligibleForeignWorkers,
+    assignedWorkerIdsBySite,
   }
 }

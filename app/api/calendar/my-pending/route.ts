@@ -44,13 +44,19 @@ export async function GET(request: NextRequest) {
     // 本人の署名状態のみを各現場に投影
     // 2026-06-XX 追加: needsResign — 承認済みカレンダーが本人の署名後に修正された
     //   (updatedAt > signedAt) 場合に true。差分署名（再確認）が必要なことを示す。
+    //
+    // 重要: 修正時の再署名は「当該現場の配置者」だけに限定する。
+    //   初回署名は全員 × 全現場モデルだが、修正で needsResign を立てるのは
+    //   実際に当該現場に配置されているスタッフ（assign/massign）に限定。
+    //   これにより、他現場のスタッフには不要なバナーが出ない。
     const sites = m.sitesWithWorkers.map(sw => {
       const cal = m.siteCalendars[sw.site.id]
       const sigVal = m.signaturesBySite[`${worker.id}_${sw.site.id}`]
       const signed = !!sigVal
       const signedAt = sigVal && sigVal !== 'true' ? sigVal : null
-      // 既に署名済みで、カレンダーが署名後に更新された場合は再署名要
-      const needsResign = signed && !!signedAt && !!cal?.updatedAt && cal.updatedAt > signedAt
+      const isAssignedHere = m.assignedWorkerIdsBySite[sw.site.id]?.has(worker.id) || false
+      // 既に署名済みで、カレンダーが署名後に更新され、かつ本人が配置者なら再署名要
+      const needsResign = isAssignedHere && signed && !!signedAt && !!cal?.updatedAt && cal.updatedAt > signedAt
       return {
         siteId: sw.site.id,
         siteName: sw.site.name,
