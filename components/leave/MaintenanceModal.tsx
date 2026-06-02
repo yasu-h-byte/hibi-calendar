@@ -33,9 +33,10 @@ interface Props {
   password: string
   onClose: () => void
   onChanged: () => void
+  onOpenGrantModal: () => void  // 2026-06-XX 追加: 手動有給付与モーダルを開く
 }
 
-export default function MaintenanceModal({ password, onClose, onChanged }: Props) {
+export default function MaintenanceModal({ password, onClose, onChanged, onOpenGrantModal }: Props) {
   const [health, setHealth] = useState<HealthCheck | null>(null)
   const [loading, setLoading] = useState(false)
   const [running, setRunning] = useState<string | null>(null)
@@ -131,13 +132,44 @@ export default function MaintenanceModal({ password, onClose, onChanged }: Props
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-8" onClick={e => e.stopPropagation()}>
         <div className="bg-hibi-navy text-white px-5 py-4 rounded-t-xl flex justify-between items-center">
           <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">🔧 保守ツール</h2>
-            <div className="text-xs opacity-80 mt-0.5">通常運用では不要。データ異常を検出した際のみ使用</div>
+            <h2 className="text-lg font-bold flex items-center gap-2">🔧 メニュー</h2>
+            <div className="text-xs opacity-80 mt-0.5">例外オペレーション・保守ツール</div>
           </div>
           <button onClick={onClose} className="text-2xl leading-none hover:opacity-70">&times;</button>
         </div>
 
         <div className="px-5 py-4 space-y-4">
+          {/* ── 例外オペレーション ── */}
+          <div className="border-b border-gray-200 pb-4">
+            <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">
+              ✏️ 例外オペレーション
+            </div>
+            <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-3">
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex-1">
+                  <div className="font-bold text-sm">手動有給付与</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    特定スタッフへの個別付与（過去分の遡及・特別付与・補正用）
+                  </div>
+                  <div className="text-[11px] text-gray-500 mt-1">
+                    💡 通常の年次付与は「🌴 半自動付与バナー」から実行してください
+                  </div>
+                </div>
+                <button
+                  onClick={() => { onOpenGrantModal(); onClose() }}
+                  className="text-xs px-3 py-1.5 rounded font-bold whitespace-nowrap bg-green-600 text-white hover:bg-green-700"
+                >
+                  + 付与する
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── 保守ツール（健全性） ── */}
+          <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">
+            🔧 保守ツール（データ整合性）
+          </div>
+
           {/* 全体ステータス */}
           <div className={`rounded-lg p-3 border ${health.ok ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-300'}`}>
             <div className="font-bold text-sm">

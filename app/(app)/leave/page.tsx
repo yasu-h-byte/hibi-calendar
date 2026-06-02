@@ -386,15 +386,15 @@ export default function LeavePage() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">有給休暇の付与・消化状況</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowGrantModal(true)}
-            className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-green-700 transition">
-            + 有給付与
-          </button>
-          {/* 2026-06-XX 改善: 4つの保守ボタンを「保守ツール」モーダル1つに集約
-              - 通常状態（健全）: グレーアウト
-              - 異常検出時: 件数バッジで強調
-              これにより誤操作リスクを排除し、必要なタイミングが明確になる */}
-          <MaintenanceButton password={password} onChanged={fetchData} />
+          {/* 2026-06-XX 改善: 「+ 有給付与」緑ボタンを🔧メニュー内へ移動
+              - 通常運用は「🌴 半自動付与バナー」が main flow
+              - 手動付与は例外オペレーションなので 🔧メニュー > 例外オペレーション に隠す
+              - これにより主動線（半自動）を明確化し、誤操作リスクを削減 */}
+          <MaintenanceButton
+            password={password}
+            onChanged={fetchData}
+            onOpenGrantModal={() => setShowGrantModal(true)}
+          />
           <button onClick={async () => {
             const res = await fetch('/api/leave/export-ledger', {
               headers: { 'x-admin-password': password },

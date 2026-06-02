@@ -15,9 +15,10 @@ import MaintenanceModal from './MaintenanceModal'
 interface Props {
   password: string
   onChanged: () => void
+  onOpenGrantModal: () => void  // 2026-06-XX: 手動付与モーダルを開く
 }
 
-export default function MaintenanceButton({ password, onChanged }: Props) {
+export default function MaintenanceButton({ password, onChanged, onOpenGrantModal }: Props) {
   const [open, setOpen] = useState(false)
   const [totalIssues, setTotalIssues] = useState<number | null>(null)
 
@@ -52,9 +53,9 @@ export default function MaintenanceButton({ password, onChanged }: Props) {
             ? 'bg-amber-500 text-white hover:bg-amber-600 animate-pulse'
             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
         }`}
-        title={hasIssues ? `${totalIssues}件の修正が必要` : '保守ツール（通常は不要）'}
+        title={hasIssues ? `${totalIssues}件の修正が必要` : 'メニュー（手動付与・保守ツール）'}
       >
-        🔧 保守ツール
+        🔧 メニュー
         {hasIssues && (
           <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
             {totalIssues! > 99 ? '!' : totalIssues}
@@ -66,6 +67,7 @@ export default function MaintenanceButton({ password, onChanged }: Props) {
           password={password}
           onClose={() => { setOpen(false); checkHealth() }}
           onChanged={() => { onChanged(); checkHealth() }}
+          onOpenGrantModal={onOpenGrantModal}
         />
       )}
     </>
