@@ -462,6 +462,7 @@ export default function LeavePage() {
                 </div>
                 <div className="text-xs text-red-700 dark:text-red-300 mt-0.5">
                   法定義務として会社が時季指定する必要があります。
+                  <span className="text-red-500/70 ml-1">（労基法第39条第7項：年10日以上付与で対象）</span>
                 </div>
               </div>
             </div>
@@ -957,24 +958,8 @@ export default function LeavePage() {
         </div>
       </div>
 
-      {/* 年5日取得義務 警告 */}
-      {fiveDayAlertCount > 0 && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
-          <div className="text-sm font-bold text-red-700 dark:text-red-400 mb-2">
-            年5日取得義務（労基法第39条第7項）
-          </div>
-          <div className="text-xs text-red-600 dark:text-red-400 mb-2">
-            年10日以上付与された労働者は、付与日から1年以内に5日以上取得させる義務があります。
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {filteredWorkers.filter(w => w.fiveDayShortfall > 0).map(w => (
-              <span key={w.id} className="text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 px-2 py-1 rounded-full">
-                {w.name}（あと{w.fiveDayShortfall}日）
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* 2026-06-XX 改善: 旧「年5日取得義務 警告」ボックスを削除
+          → 上段の赤バナー（時季指定ボタン付き）に労基法根拠を統合済みのため重複表示を排除 */}
 
       {/* Company-wide consumption rate bar */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
