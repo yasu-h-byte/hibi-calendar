@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
 import { getYmOptions as getYmOptionsFromLib } from '@/lib/compute'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
+import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 
 // ────────────────────────────────────────
 //  Types
@@ -539,6 +540,12 @@ export default function MonthlyPage() {
     }
   }, [filteredWorkers])
 
+  // 給与計算の自動検算（2026-06-XX 追加: 不変条件で過去バグ3種を検出）
+  //   新ルール外国人スタッフのみが対象（旧ルール・日本人・月給制は対象外）
+  const validationResult = useMemo(() => {
+    return validatePayrolls(filteredWorkers as unknown as PayrollSnapshot[])
+  }, [filteredWorkers])
+
   const toggleWorkerSort = (key: WorkerSortKey) => {
     if (workerSortKey === key) setWorkerSortAsc(!workerSortAsc)
     else { setWorkerSortKey(key); setWorkerSortAsc(true) }
@@ -870,6 +877,54 @@ export default function MonthlyPage() {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600 text-sm">
           {error}
+        </div>
+      )}
+
+      {/* 給与計算の自動検算バナー（2026-06-XX 追加） */}
+      {!loading && data && isWorkerTab && validationResult.total > 0 && (
+        <div className={`rounded-xl p-4 border ${
+          validationResult.critical > 0
+            ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
+            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700'
+        }`}>
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">{validationResult.critical > 0 ? '⚠️' : '🔔'}</span>
+            <div className="flex-1 min-w-0">
+              <div className={`font-bold ${
+                validationResult.critical > 0
+                  ? 'text-red-800 dark:text-red-300'
+                  : 'text-yellow-800 dark:text-yellow-300'
+              }`}>
+                給与計算に{validationResult.critical > 0 ? '異常' : '注意点'}があります（{validationResult.affectedWorkerIds.length}名 / 検出{validationResult.total}件）
+              </div>
+              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                労基法・実労働時間ベースの自動検算で {validationResult.critical > 0 && <span className="font-semibold text-red-700 dark:text-red-400">critical {validationResult.critical}件</span>}
+                {validationResult.critical > 0 && validationResult.warning > 0 && ' / '}
+                {validationResult.warning > 0 && <span className="font-semibold text-yellow-700 dark:text-yellow-400">warning {validationResult.warning}件</span>}
+                {' '}を検出しました。該当スタッフの行クリックで「計算根拠」モーダルを開いて詳細を確認してください。
+              </div>
+              <ul className="mt-2 space-y-1 text-sm">
+                {validationResult.issues.slice(0, 5).map((iss, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className={iss.severity === 'critical' ? 'text-red-600' : 'text-yellow-600'}>
+                      {iss.severity === 'critical' ? '❌' : '⚠'}
+                    </span>
+                    <span className="text-gray-800 dark:text-gray-200">
+                      <span className="font-semibold">{iss.workerName}</span>: {iss.message}
+                      {iss.expected !== undefined && iss.actual !== undefined && (
+                        <span className="text-gray-500"> (想定 {fmtYen(iss.expected)} / 実額 {fmtYen(iss.actual)})</span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+                {validationResult.issues.length > 5 && (
+                  <li className="text-xs text-gray-500 dark:text-gray-400 pl-6">
+                    …他 {validationResult.issues.length - 5} 件
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 

@@ -14,6 +14,7 @@
 
 import { jobShortLabel } from '@/lib/jobs'
 import { fmtYen } from '@/lib/format'
+import { validatePayroll, type PayrollSnapshot } from '@/lib/payroll-validator'
 
 interface WorkerMonthly {
   id: number
@@ -201,6 +202,28 @@ function buildAuditChecks(w: WorkerMonthly, ym: string, prescribedDays: number):
     pass: w.otMul >= 1.25,
     detail: `otMul = ${w.otMul} ≧ 1.25 (労基法37条)`,
   })
+
+  // 5. 自動検算: lib/payroll-validator.ts (2026-06-XX 追加)
+  //   各支給コンポーネントが労基法・実労働時間に対して妥当な範囲にあるかを検証
+  //   過去バグ3種（残業二重支給・所定外労働漏れ・式表示不一致）を自動検出
+  if (!mode.useOldRules) {
+    const issues = validatePayroll(w as unknown as PayrollSnapshot)
+    if (issues.length === 0) {
+      checks.push({
+        label: '自動検算（労基法・実労働時間ベース）',
+        pass: true,
+        detail: '全項目 ✓: 法定外残業 [0.25, 0.5]倍 / 所定外労働の支給漏れなし / 法定休日 [1.35, 1.60]倍 / 深夜 0.25倍 / 休業 60%',
+      })
+    } else {
+      checks.push({
+        label: '自動検算（労基法・実労働時間ベース）',
+        pass: false,
+        detail: issues.map(i =>
+          `[${i.severity}] ${i.message}: 想定 ${fmtYen(i.expected || 0)} / 実額 ${fmtYen(i.actual || 0)} (差 ${(i.diff || 0) > 0 ? '+' : ''}${fmtYen(i.diff || 0)})`
+        ).join(' / '),
+      })
+    }
+  }
 
   return checks
 }
