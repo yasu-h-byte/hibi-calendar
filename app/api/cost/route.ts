@@ -318,16 +318,29 @@ export async function GET(request: NextRequest) {
     const perW = billedEquiv.equiv > 0 ? totalBillingConfirmed / billedEquiv.equiv : 0
     const pctWork = prevTotalManDays > 0 ? ((totalManDays - prevTotalManDays) / prevTotalManDays) * 100 : 0
 
+    // 2026-06-XX 修正 (C5): 粗利率は「確定売上のみ」で計算（経営判断指標の信頼性）
+    //   旧: 概算売上を含めた totalBillingAll で割り算 → 粗利率が15%付近に張り付く
+    //   新: confirmed 売上分の原価を概算で出すのは複雑 → 確定売上 vs 全期間原価で
+    //       「保守的な粗利率」を提示。概算売上は別フィールドで併記
+    const profitRateConfirmed = totalBillingConfirmed > 0
+      ? ((totalBillingConfirmed - totalAllCost) / totalBillingConfirmed) * 100
+      : 0
+    const profitRateEst = totalBillingAll > 0 ? (totalProfit / totalBillingAll) * 100 : 0
+
     const kpiExtended = {
       totalManDays,
       inHouseManDays: totalWork,
       subconManDays: totalSubWork,
       subconRate,
       billing: totalBillingAll,
+      billingConfirmed: totalBillingConfirmed,  // 2026-06-XX 追加: 確定のみの売上
       billingRaw: totalBillingAll,
       cost: totalAllCost,
       profit: totalProfit,
-      profitRate: totalBillingAll > 0 ? (totalProfit / totalBillingAll) * 100 : 0,
+      // profitRate は従来通り「概算込み」（後方互換）
+      // profitRateConfirmed が信頼できる経営指標（推奨）
+      profitRate: profitRateEst,
+      profitRateConfirmed,  // 2026-06-XX 追加: 確定売上のみベースの粗利率
       perW,
       perWEst,
       billingPerManDay: perWEst,
@@ -371,9 +384,13 @@ export async function GET(request: NextRequest) {
       )
 
       let mBilling = 0, mCostVal = 0, mWorkDays = 0, mSubDays = 0, mDispatchDeduction = 0
+      // 2026-06-XX 修正 (C3): yaesu_night ハードコード除外を削除
+      //   旧: monthlyTrend のみハードコードで yaesu_night を除外、合計KPIには含む
+      //       → 月次推移と合計KPIが恒常的に不一致
+      //   新: 全社一律で同じ集計対象。除外したい現場は archived フラグで管理
       const trendSites = siteFilter !== 'all'
         ? main.sites.filter(s => s.id === siteFilter)
-        : main.sites.filter(s => s.id !== 'yaesu_night')
+        : main.sites
       for (const site of trendSites) {
         const sd = mc.sites[site.id]
         if (sd) {

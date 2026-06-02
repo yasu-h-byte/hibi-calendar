@@ -3,6 +3,7 @@ import { doc, getDoc } from 'firebase/firestore'
 import { AttendanceEntry, calcActualHours } from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
 import { isStillActiveForMonth } from './workers'
+import { isTobiGroup, isDokoGroup } from './jobs'
 
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
@@ -186,6 +187,26 @@ export function getAssign(
 //   - dispatchFrom が空 → 全期間出向扱い（後方互換）
 //   - dispatchFrom が設定済み → ym >= dispatchFrom のときのみ出向扱い
 // ym は YYYYMM 形式、dispatchFrom は YYYY-MM 形式
+/**
+ * スタッフ1人の日額換算単価を取得（2026-06-XX 新設・C1 修正）
+ *
+ * 旧バグ: 月給制日本人 (rate=0, salary>0) でサイト原価が w.rate=0 で
+ *   ゼロ計上される問題（compute.ts:461 と 913）
+ *
+ * 統一ロジック:
+ *   - 月給制日本人 (visa==='none' && salary>0): salary / 20 (月所定日数前提)
+ *   - その他: w.rate（時給制ベトナム人もrateは時給×7で自動セット済）
+ *
+ * 注: ベース20日固定は概算用。中途入退社按分は computeMonthly() 側で対応済み。
+ *     より精密な日割りが必要な場合は呼出側で workerPrescribedDays を考慮する。
+ */
+export function getWorkerDailyRate(w: { visa?: string; rate?: number; salary?: number }): number {
+  if (w.visa === 'none' && w.salary && w.salary > 0) {
+    return w.salary / 20
+  }
+  return w.rate || 0
+}
+
 export function isDispatchedAt(w: RawWorker | undefined, ym: string): boolean {
   if (!w?.dispatchTo) return false
   if (!w.dispatchFrom) return true
@@ -326,11 +347,16 @@ export function calcTobiEquiv(
     const stdH = w.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h（変形労働時間制）
     const oe = (v.o || 0) / stdH
     if (!monthly[pk.ym]) monthly[pk.ym] = { tw: 0, dw: 0, toe: 0, doe: 0 }
-    if (w.job === 'doko') {
+    // 2026-06-XX 修正 (C6): 単一の真理ソース isTobiGroup/isDokoGroup を使用
+    //   旧: doko 以外は全部鳶側 → 事務(jimu)等も鳶換算に混入
+    //   新: isTobiGroup (tobi/tobi_apprentice/shokucho/yakuin) と isDokoGroup のみ集計
+    //       その他 (jimu 等) は除外
+    if (isDokoGroup(w.job)) {
       monthly[pk.ym].dw += v.w; monthly[pk.ym].doe += oe; dokoWork += v.w; dokoOtEq += oe
-    } else {
+    } else if (isTobiGroup(w.job)) {
       monthly[pk.ym].tw += v.w; monthly[pk.ym].toe += oe; tobiWork += v.w; tobiOtEq += oe
     }
+    // 上記以外 (jimu 等) は鳶換算対象外
   }
 
   // 外注
@@ -422,6 +448,10 @@ export function compute(
     if (ymSet && !ymSet.has(entryYm)) continue
     const w = main.workers.find(x => x.id === wid)
     if (!w) continue
+    // 2026-06-XX 修正 (C2): 退職済みワーカーは原価集計から除外
+    //   旧: 退職済みでも出面残骸が残っていれば原価計上 → 過去月の数字が変動
+    //   新: computeMonthly() と同じく isStillActiveForMonth でガード
+    if (!isStillActiveForMonth(w.retired, entryYm)) continue
 
     const swk = `${sid}_${w.id}`
 
@@ -457,8 +487,12 @@ export function compute(
     // 休業補償(0.6): 外国人の会社都合休業 → 原価のみ計上、人工数には含めない
     const isComp = (v.w === 0.6 && w.visa !== 'none')
     const otDivisor = w.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
-    const otCost = (v.o || 0) * (w.rate / otDivisor) * w.otMul
-    const cost = v.w * w.rate + otCost
+    // 2026-06-XX 修正 (C1): 月給制日本人 (rate=0, salary>0) のサイト原価ゼロ問題
+    //   旧: w.rate を直接使用 → rate=0 だとサイト原価=0 で過小計上
+    //   新: getWorkerDailyRate() で月給制も日額換算（salary/20）
+    const dailyRate = getWorkerDailyRate(w)
+    const otCost = (v.o || 0) * (dailyRate / otDivisor) * w.otMul
+    const cost = v.w * dailyRate + otCost
     const workCount = isComp ? 0 : v.w  // 休業補償は人工0
     const stdH = w.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h（変形労働時間制）
     const oe = isComp ? 0 : (v.o || 0) / stdH  // 残業→人工換算
@@ -717,6 +751,9 @@ export interface WorkerMonthly {
   absence: number
   absentCost: number
   netPay: number
+  // 2026-06-XX 追加 (C8): 同一日複数現場の actualWorkDays 重複排除用
+  //   内部利用のみ。集計後の表示には使わない（リファクタ時に削除可）
+  _actualDaySeen?: Set<string>
   // 出向情報
   isDispatched?: boolean         // 常時出向中（Worker.dispatchTo が設定済み）
   dispatchTo?: string            // 出向先名
@@ -884,7 +921,18 @@ export function computeMonthly(
     const workCount = isComp ? 0 : entry.w  // 補償は人工0
 
     wm.workDays += workCount
-    if (!isComp) wm.actualWorkDays += 1  // 0.6補償は実出勤にカウントしない
+    // 2026-06-XX 修正 (C8): 同一日複数現場の actualWorkDays 二重カウント解消
+    //   旧: エントリ単位で += 1 → 1日に2現場勤務(各 w=0.5)で actualWorkDays += 2 となり
+    //       「1日なのに2日出勤」扱い、欠勤判定が過少に
+    //   新: ワーカーごとに日単位でユニーク化（Set<ym_day>）
+    if (!isComp) {
+      const dayKey = `${pk.ym}_${pk.day}`
+      if (!wm._actualDaySeen) wm._actualDaySeen = new Set<string>()
+      if (!wm._actualDaySeen.has(dayKey)) {
+        wm._actualDaySeen.add(dayKey)
+        wm.actualWorkDays += 1
+      }
+    }
     if (isComp) wm.compDays += 1
     if (entry.o && entry.o > 0 && !isComp) wm.otHours += entry.o
     if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
@@ -908,9 +956,12 @@ export function computeMonthly(
     }
 
     // ★ サイト別コストは直接エントリごとに加算
+    // 2026-06-XX 修正 (C1): 月給制日本人 (rate=0) のサイト原価ゼロ問題
+    //   getWorkerDailyRate で月給制も日額換算（salary/20）
     const otDiv = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
-    const otCost = (isComp ? 0 : (entry.o || 0)) * (wm.rate / otDiv) * wm.otMul
-    const entryCost = entry.w * wm.rate + otCost
+    const entryDailyRate = getWorkerDailyRate({ visa: wm.visa, rate: wm.rate, salary: wm.salary })
+    const otCost = (isComp ? 0 : (entry.o || 0)) * (entryDailyRate / otDiv) * wm.otMul
+    const entryCost = entry.w * entryDailyRate + otCost
     const site = siteMap.get(siteId)
     if (site) {
       site.workDays += workCount
