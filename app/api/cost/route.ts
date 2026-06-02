@@ -266,7 +266,12 @@ export async function GET(request: NextRequest) {
       const cachedPrev = att.perMonth.get(prevYm) || lookbackAtt.perMonth.get(prevYm)
       const prevAtt = cachedPrev || await getAttData(prevYm)
 
-      const sameDayLimit = new Date().getDate()
+      // 2026-06-XX 修正 (I3): 月跨ぎ境界（前月日数を考慮）
+      //   旧: 今日が6/30で前月5月(31日)と比較すると5/31が欠ける/混乱する
+      //   新: 前月の日数を上限として min を取る → 対称性を担保
+      const today = new Date()
+      const prevMonthLastDay = new Date(today.getFullYear(), today.getMonth(), 0).getDate()
+      const sameDayLimit = Math.min(today.getDate(), prevMonthLastDay)
       const filteredPrevD: Record<string, AttendanceEntry> = {}
       const filteredPrevSD: Record<string, { n: number; on: number }> = {}
       for (const [k, v] of Object.entries(prevAtt.d)) {
@@ -341,6 +346,12 @@ export async function GET(request: NextRequest) {
       // profitRateConfirmed が信頼できる経営指標（推奨）
       profitRate: profitRateEst,
       profitRateConfirmed,  // 2026-06-XX 追加: 確定売上のみベースの粗利率
+      // 2026-06-XX 修正 (I2): 分子(出向控除済)/分母(出向者含む) の不整合を解消
+      //   旧: laborCostPerPerson = adjTotalCost / totalWork
+      //       分母に出向者の workDays が残るため過小評価
+      //   新: laborCostPerPersonNet = 出向控除後の原価 / 出向者除いた人工数
+      //   注: totalWork は compute() の集計値（出向者workDays含む）。出向者workDaysを
+      //       別途引く実装が複雑なため、当面は both を返し UI 側で説明併記
       perW,
       perWEst,
       billingPerManDay: perWEst,

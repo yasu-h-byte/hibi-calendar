@@ -270,10 +270,16 @@ export default function CostPage() {
                   siteFilter === 'all' ? 'bg-hibi-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
                 }`}>全現場</button>
               {data.siteList.map(s => (
-                <button key={s.id} onClick={() => setSiteFilter(s.id)}
+                <button
+                  key={s.id}
+                  onClick={() => setSiteFilter(s.id)}
+                  title={s.name}  // 2026-06-XX 修正 (U9): 省略表示の元名をtooltipで確認可能に
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
                     siteFilter === s.id ? 'bg-hibi-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
-                  }`}>{s.name.substring(0, 10) + (s.name.length > 10 ? '...' : '')}</button>
+                  }`}
+                >
+                  {s.name.substring(0, 10) + (s.name.length > 10 ? '...' : '')}
+                </button>
               ))}
             </div>
           )}
@@ -322,13 +328,36 @@ export default function CostPage() {
                 </span>
               </div>
             )}
+            {/* 2026-06-XX 追加 (U1): 前月同日比 */}
+            {kpi.prevBilling > 0 && (() => {
+              const diff = kpi.billing - kpi.prevBilling
+              const pct = (diff / kpi.prevBilling) * 100
+              const positive = diff >= 0
+              return (
+                <div className={`text-[10px] mt-1 ${positive ? 'text-green-600' : 'text-red-600'}`}>
+                  前月同日比 {positive ? '↑' : '↓'} {fmtYenMan(Math.abs(diff))} ({positive ? '+' : ''}{pct.toFixed(1)}%)
+                </div>
+              )
+            })()}
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
             <div className={`text-2xl font-bold tabular-nums ${profitColor(kpi.profitRate)}`}>{fmtYenMan(kpi.profit)}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">粗利（{fmtPct(kpi.profitRate)}）</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">
+              粗利（{fmtPct(kpi.profitRate)}）
+            </div>
             <div className="text-[11px] text-gray-500 mt-1">
               原価{fmtYenMan(kpi.cost)}
             </div>
+            {/* 2026-06-XX 追加 (U1): 前月同日比 粗利率 */}
+            {kpi.prevBilling > 0 && kpi.prevProfitRate !== undefined && (() => {
+              const diff = kpi.profitRate - kpi.prevProfitRate
+              const positive = diff >= 0
+              return (
+                <div className={`text-[10px] mt-1 ${positive ? 'text-green-600' : 'text-red-600'}`}>
+                  前月同日比 {positive ? '↑' : '↓'} {Math.abs(diff).toFixed(1)}pt
+                </div>
+              )
+            })()}
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
             <div className="text-2xl font-bold text-hibi-navy tabular-nums">

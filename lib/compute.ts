@@ -237,13 +237,25 @@ export function getSubconRate(
   main: MainData,
   scid: string,
   siteId?: string,
+  ym?: string,
 ): { rate: number; otRate: number } {
   const sc = main.subcons.find(x => x.id === scid)
   const base = { rate: sc ? sc.rate : 0, otRate: sc ? sc.otRate : 0 }
   if (!siteId) return base
-  const a = main.assign[siteId]
-  if (!a || !a.subconRates || !a.subconRates[scid]) return base
-  const ov = a.subconRates[scid]
+  // 2026-06-XX 修正 (I7): 月別 overrides (massign[siteId_ym].subconRates) を優先参照
+  //   旧: main.assign[siteId].subconRates のみ参照 → 月別単価変更を反映できない
+  //   新: massign を優先、なければ assign にフォールバック
+  let ov: { rate?: number; otRate?: number } | undefined
+  if (ym) {
+    const massignKey = `${siteId}_${ym}`
+    const mAssign = (main as { massign?: Record<string, { subconRates?: Record<string, { rate?: number; otRate?: number }> }> }).massign?.[massignKey]
+    if (mAssign?.subconRates?.[scid]) ov = mAssign.subconRates[scid]
+  }
+  if (!ov) {
+    const a = main.assign[siteId]
+    if (a?.subconRates?.[scid]) ov = a.subconRates[scid]
+  }
+  if (!ov) return base
   const r = ov.rate || base.rate
   const o = ov.otRate || (r ? Math.round(r / 8 * 1.25) : base.otRate)
   return { rate: r, otRate: o }
@@ -555,7 +567,8 @@ export function compute(
     if (!sc) continue
 
     // ★ 現場別単価を使用（旧アプリのgetSubconRateと同等）
-    const scR = getSubconRate(main, scid, sid)
+    // 2026-06-XX 修正 (I7): 月別単価 (massign) を優先するため entryYm を渡す
+    const scR = getSubconRate(main, scid, sid, entryYm)
     const cost = v.n * scR.rate + v.on * scR.otRate
     const soe = v.on / 8  // 外注は8h換算
 
@@ -990,8 +1003,8 @@ export function computeMonthly(
       sc.otCount += entry.on || 0
       if (!sc.sites.includes(siteId)) sc.sites.push(siteId)
 
-      // ★ 現場別単価を使用
-      const scR = getSubconRate(main, scid, siteId)
+      // ★ 現場別単価を使用（月別overrides も考慮）
+      const scR = getSubconRate(main, scid, siteId, ym)
       const scCost = entry.n * scR.rate + (entry.on || 0) * scR.otRate
       const site = siteMap.get(siteId)
       if (site) {
