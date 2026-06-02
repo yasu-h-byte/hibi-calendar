@@ -376,6 +376,77 @@ describe('computeMonthly - 集計整合性チェック', () => {
   })
 })
 
+describe('computeMonthly - 補償日 (w=0.6) の労基法26条準拠 (Phase N で追加)', () => {
+  test('補償日は欠勤扱いで基本給から減額され、別途60%の休業手当が支給される', () => {
+    // 仕様 (2026-06-XX 修正後):
+    //   - 補償日 (w=0.6) は会社都合休業日
+    //   - 基本給では「欠勤」として扱われ、その日の分が控除される
+    //   - 別途、休業手当 = 時給 × 7h × 0.6 が支給される
+    //   - 結果: 補償日 1日 = 通常時給1日分の 60% を受け取る (労基法26条準拠)
+    //
+    // 旧実装: 補償日を absentDays から除外 → 基本給100% + 休業手当60% = 160% (過払い)
+    // 新実装: 補償日を absentDays に算入 → 基本給0% (1日分控除) + 休業手当60% = 60%
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    // 19日通常出勤 + 1日補償（w=0.6）
+    for (let d = 4; d <= 22; d++) Object.assign(attD, dayWork('site1', 101, '202605', d))
+    Object.assign(attD, { [attKey('site1', 101, '202605', 25)]: { w: 0.6 } })
+
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+
+    expect(w.compDays).toBe(1)
+    // regularWorkDays = 出勤19日 (Sundays = 10, 17, 24 を除く → 5/4,5,6,7,8,9,11,12,13,14,15,16,18,19,20,21,22 = 17日)
+    // 実際は 5/4 ~ 5/22 のうち Sundays = 5/10, 5/17 = 2日を除いた 17日
+    // 5/25 は補償日（regularWorkDays に含まれない）
+    // 欠勤 = baseDays(20) - regularWorkDays(17) - plUsed(0) - examDays(0) = 3日 ※補償日は含めない
+    expect(w.absence).toBe(3)
+    // 休業手当 = 1,500 × 7 × 0.6 × 1 = 6,300
+    expect(w.compAllowance).toBe(6300)
+    // 欠勤控除 = 1,500 × 7 × 3 = 31,500
+    expect(w.absentDeduction).toBe(31500)
+  })
+
+  test('全日補償日（5日全部w=0.6）: 完全に60%支給のみ', () => {
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 5 } },
+    })
+    const attD: Record<string, { w: number }> = {}
+    // 5日全部補償（w=0.6）
+    Object.assign(attD, { [attKey('site1', 101, '202605', 4)]: { w: 0.6 } })
+    Object.assign(attD, { [attKey('site1', 101, '202605', 5)]: { w: 0.6 } })
+    Object.assign(attD, { [attKey('site1', 101, '202605', 6)]: { w: 0.6 } })
+    Object.assign(attD, { [attKey('site1', 101, '202605', 7)]: { w: 0.6 } })
+    Object.assign(attD, { [attKey('site1', 101, '202605', 8)]: { w: 0.6 } })
+
+    const result = computeMonthly(main, attD, {}, '202605', 5, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+
+    expect(w.compDays).toBe(5)
+    // 補償日も欠勤扱い → 欠勤 = 20 (baseDays全部)
+    expect(w.absence).toBe(20)
+    // 休業手当 = 1,500 × 7 × 0.6 × 5 = 31,500
+    expect(w.compAllowance).toBe(31500)
+    // 欠勤控除 = 1,500 × 7 × 20 = 210,000
+    expect(w.absentDeduction).toBe(210000)
+    // 基本給 - 欠勤控除 = 210,000 - 210,000 = 0
+    // + 休業手当 31,500 = 支給額 31,500
+    expect(w.salaryNetPay).toBe(31500)
+  })
+})
+
 describe('computeMonthly - 所定外労働手当（割増なし）(Phase N で追加)', () => {
   test('出勤4日+残業4hで法定外残業0、所定外労働4hが通常賃金支給', () => {
     // シナリオ: 月の総労働時間が法定上限を全く超えない最小例
@@ -492,8 +563,9 @@ describe('computeMonthly - 試験日 examDays (Phase M で追加)', () => {
   })
 
   test('試験日が増えると欠勤日数が減る（同じ稼働日数で比較）', () => {
-    // 仕様: absentDays = baseDays - regularWorkDays - plUsed - compDays - examDays
+    // 仕様: absentDays = baseDays - regularWorkDays - plUsed - examDays
     //   examDays が +1 されると absentDays が −1 → absentDeduction が減る
+    //   ※2026-06-XX 修正: 補償日 (compDays) は欠勤扱いに変更（労基法26条準拠）
     const buildMainTpl = () => buildMain({
       workers: [{
         id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',

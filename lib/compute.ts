@@ -1054,8 +1054,9 @@ export function computeMonthly(
       // 残業手当（日単位の積み上げ）
       const otAllowance = Math.round(wm.hourlyRate * 1.25 * wm.otHours)
 
-      // 真の欠勤日数（補償・有給・試験は出勤扱い）
-      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.compDays - wm.plUsed - wm.examDays)
+      // 真の欠勤日数（有給・試験は出勤扱い、補償日は欠勤扱いで60%休業手当のみ支給）
+      // 2026-06-XX 修正: 補償日を欠勤に算入（労基法26条準拠で60%支給のみ）
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays)
       const absentDeduction = Math.round(wm.hourlyRate * dailyHoursOld * absentDays)
 
       // 表示用: 実労働時間（補償も0.6相当でカウント）
@@ -1127,7 +1128,8 @@ export function computeMonthly(
       const basePay = wm.salary
       const compAllowance = Math.round(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)
       const otAllowance = Math.round(hourlyRate * 1.25 * wm.otHours)
-      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.compDays - wm.plUsed - wm.examDays)
+      // 2026-06-XX 修正: 補償日も欠勤扱いに（労基法26条準拠で60%支給）
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays)
       // ⚠️ 2026-05-08 修正: hourlyRate版と式を統一（旧: salary/days*absentDays、新: hourlyRate*dailyHoursOld*absentDays）
       //   数学的には等価だが、Math.roundの中間誤差による1〜数円のズレを解消。
       const absentDeduction = Math.round(hourlyRate * dailyHoursOld * absentDays)
@@ -1751,7 +1753,11 @@ export function calculateVietnameseSalary(
   const nonStatutoryOTAllowance = Math.round(hourlyRate * nonStatutoryOTHours)
 
   // 欠勤控除: 法定休日出勤は所定日数(20)カウント対象外（カレンダー上は休み）
-  const absentDays = Math.max(0, baseDays - regularWorkDays - plUsed - compDays - examDays)
+  // 2026-06-XX 修正: 補償日(compDays)も欠勤扱いに変更（労基法26条準拠）
+  //   旧: compDays を absentDays から除外 → 基本給で100%支払い + 60% 休業手当 = 160% (過払い)
+  //   新: compDays を欠勤として算入 → 基本給から 1日分減額 + 60% 休業手当 = 60% (法令準拠)
+  //   結果: 補償日 1日 = 基本給(時給×7h) を欠勤控除で減額し、休業手当(時給×7h×0.6) で 60% 補償
+  const absentDays = Math.max(0, baseDays - regularWorkDays - plUsed - examDays)
   const absentDeduction = Math.round(hourlyRate * 7 * absentDays)
 
   const salaryNet = fixedBasePay + additionalAllowance + nonStatutoryOTAllowance + otAllowance
