@@ -9,7 +9,7 @@ import {
   parseDKey,
   calculateOvertimeSummary,
 } from './compute'
-import { AttendanceEntry } from '@/types'
+import { AttendanceEntry, calcActualHours } from '@/types'
 import { isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isAlreadyRetired } from './workers'
 
@@ -169,8 +169,21 @@ function appendTimeSheet(
         // ⚠️ 2026-05-09: 残骸データ対策。休み/現場休/帰国中/試験 のステータスがある日は実労働を計上しない
         if (!isWorkingDay(entry)) continue
         if (entry.w && entry.w > 0) {
-          dayHours = entry.w === 0.6 ? Math.round(dailyPrescribed * 0.6 * 10) / 10 : dailyPrescribed
-          dayOT = entry.o || 0
+          // 2026-06-XX 修正 (I-11/I-12): 時間ベース入力(st/et)があれば実労働時間を採用
+          //   - 旧: 一律 dailyPrescribed (7h or 6h40m) で固定 → 実労働が短い場合に過大表示
+          //   - 新: st/et から実労働時間を計算 (休憩控除済み)、無ければ従来通り
+          // 2026-06-XX 追加 (I-12): w に旧ルール継続フラグがあれば 6h40m を採用
+          const dailyPrescribedForWorker = w.useOldRules ? 20 / 3 : dailyPrescribed
+          if (entry.st && entry.et) {
+            // 注: appendTimeSheet の sites 型は最小限 {id, name} のため workSchedule を持たない
+            //     → workSchedule なしで calcActualHours を呼ぶと「休憩控除なし」になる可能性
+            //     現状は最低限の整合性として実労働時間を直接計算
+            dayHours = calcActualHours(entry, undefined as unknown as Parameters<typeof calcActualHours>[1])
+            dayOT = Math.max(0, dayHours - dailyPrescribedForWorker)
+          } else {
+            dayHours = entry.w === 0.6 ? Math.round(dailyPrescribedForWorker * 0.6 * 10) / 10 : dailyPrescribedForWorker
+            dayOT = entry.o || 0
+          }
           status = entry.w === 0.6 ? '補' : dayOT > 0 ? '出+残' : '出'
         }
       }

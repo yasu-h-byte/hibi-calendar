@@ -49,6 +49,9 @@ interface WorkerMonthly {
   fixedBasePay?: number
   additionalAllowance?: number
   legalLimit?: number
+  // 2026-06-XX 追加: 所定外労働手当（法定内・割増なし、新ルール時のみ）
+  nonStatutoryOTHours?: number
+  nonStatutoryOTAllowance?: number
   // 法令準拠の詳細支給項目（5月以降）
   legalHolidayHours?: number
   legalHolidayAllowance?: number
@@ -60,6 +63,8 @@ interface WorkerMonthly {
   isDispatched?: boolean
   dispatchTo?: string
   dispatchDeduction?: number
+  // 旧ルール継続フラグ
+  useOldRules?: boolean
 }
 
 interface SubconMonthly {
@@ -624,8 +629,9 @@ export default function MonthlyPage() {
   const isWorkerTab = tab !== 'subcon'
 
   // Dynamic column count for empty state
-  // 給与列: 旧ルール=5列, 新ルール=8列（+法休手当/深夜手当/休業手当）
-  const salaryColCount = ym >= '202605' ? 8 : 5
+  // 給与列: 旧ルール=5列, 新ルール=9列（+所定外労働/法休手当/深夜手当/休業手当）
+  // 2026-06-XX 修正 (I-2): 新ルール時の所定外労働手当列を追加
+  const salaryColCount = ym >= '202605' ? 9 : 5
   const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + salaryColCount
 
   return (
@@ -930,10 +936,21 @@ export default function MonthlyPage() {
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">
                       {ym >= '202605' ? '追加所定' : '休業補償'}
                     </th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">残業手当</th>
+                    {/* 2026-06-XX 追加 (I-2): 所定外労働手当列を新ルール時に表示 */}
+                    {ym >= '202605' && (
+                      <th
+                        className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700"
+                        title="月所定140h超〜法定上限内の労働 × 通常賃金（労基法24条）"
+                      >
+                        所定外労働
+                      </th>
+                    )}
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">
+                      {ym >= '202605' ? '法定外残業' : '残業手当'}
+                    </th>
                     {ym >= '202605' && (
                       <>
-                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="日曜出勤 1.35倍">法休手当</th>
+                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="日曜出勤 1.35倍 (8h超は1.60倍)">法休手当</th>
                         <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="22:00-5:00 +0.25倍">深夜手当</th>
                         <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="補償日 60%">休業手当</th>
                       </>
@@ -1044,6 +1061,13 @@ export default function MonthlyPage() {
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.additionalAllowance || 0) > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
                             {w.visa !== 'none' && (w.additionalAllowance || 0) > 0 ? fmtYen(w.additionalAllowance!) : '—'}
                           </td>
+                          {/* 2026-06-XX 追加 (I-2): 所定外労働手当 列（新ルール時のみ） */}
+                          {ym >= '202605' && (
+                            <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.nonStatutoryOTAllowance || 0) > 0 ? 'text-cyan-600' : 'text-gray-400'}`}
+                              title={`所定外労働 ${w.nonStatutoryOTHours || 0}h × 通常賃金（割増なし）`}>
+                              {w.visa !== 'none' && (w.nonStatutoryOTAllowance || 0) > 0 ? fmtYen(w.nonStatutoryOTAllowance!) : '—'}
+                            </td>
+                          )}
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.otAllowance || 0) > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
                             {(w.otAllowance || 0) > 0 ? fmtYen(w.otAllowance!) : '—'}
                           </td>
@@ -1125,6 +1149,15 @@ export default function MonthlyPage() {
                           return totalAddAllow > 0 ? fmtYen(totalAddAllow) : '—'
                         })()}
                       </td>
+                      {/* 2026-06-XX 追加 (I-2): 所定外労働手当 合計列 */}
+                      {ym >= '202605' && (
+                        <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                          {(() => {
+                            const total = filteredWorkers.reduce((s, w) => s + (w.nonStatutoryOTAllowance || 0), 0)
+                            return total > 0 ? fmtYen(total) : '—'
+                          })()}
+                        </td>
+                      )}
                       <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
                         {(() => {
                           const totalOtAllow = filteredWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0)

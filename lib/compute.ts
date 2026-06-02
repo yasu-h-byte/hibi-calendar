@@ -1031,6 +1031,9 @@ export function computeMonthly(
       wm.absence = v.absentDays
       wm.absentCost = v.absentDeduction
       wm.netPay = v.salaryNet
+      // 2026-06-XX 修正 (I-10): 出向控除を実支給額ベースに置換
+      //   旧: totalCost (rate×days の粗い原価) → 実支給額と乖離 → 出向先請求と不整合
+      if (wm.isDispatched) wm.dispatchDeduction = v.salaryNet
     } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0) {
       // ── 4月以前: 旧ルール（通常の労働時間制）── 時給ベース ──
       // 設計（2026-05-08 ユーザー確定）:
@@ -1115,6 +1118,8 @@ export function computeMonthly(
       wm.legalOtHours = v.statutoryOT
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.basePay = fixedBase
+      // 2026-06-XX 修正 (I-10): 出向控除を実支給額ベースに置換
+      if (wm.isDispatched) wm.dispatchDeduction = salaryNet
       wm.absence = v.absentDays
       wm.absentCost = v.absentDeduction
       wm.netPay = salaryNet
@@ -1695,6 +1700,15 @@ export function calculateVietnameseSalary(
         // C-6 修正: 旧 (7 + o) → (w × sitePrescribed + o)
         //   半日勤務 (w=0.5) で actualHours が過大計上されるバグを修正
         dayHours = entry.w * sitePrescribed + (entry.o || 0)
+        // C-5 警告: レガシー入力では深夜時間が判定不能（st/et が無いため）
+        //   5月以降の新ルール月で残業欄(o)が入っている場合は、深夜手当が
+        //   0として扱われる可能性がある。コンソール警告で気付かせる。
+        if (ym >= '202605' && (entry.o || 0) > 0) {
+          console.warn(
+            `[compute] 警告: ${workerId} の ${ym}-${d} はレガシー入力(st/et無し)で残業 ${entry.o}h あり。` +
+            `深夜手当が計算できない可能性があります。出面入力でst/etを記入してください。`
+          )
+        }
       }
       actualHours += dayHours
     }
@@ -1756,7 +1770,15 @@ export function calculateVietnameseSalary(
   const fixedBasePay = Math.round(hourlyRate * baseDays * 7)
   const additionalDays = Math.max(0, regularWorkDays - baseDays)
   const additionalAllowance = Math.round(hourlyRate * additionalDays * 7)
-  const otAllowance = Math.round(hourlyRate * 1.25 * statutoryOT)
+
+  // 2026-06-XX 修正 (C-4): 月60h超の法定外残業は 1.5 倍（労基法37条1項ただし書）
+  //   2023/4/1〜 中小企業含めて全企業適用
+  //   - 60h以下: 1.25 倍
+  //   - 60h超部分: 1.5 倍
+  //   例: statutoryOT = 70h → 60h × 1.25 + 10h × 1.5
+  const otUnder60 = Math.min(60, statutoryOT)
+  const otOver60 = Math.max(0, statutoryOT - 60)
+  const otAllowance = Math.round(hourlyRate * (1.25 * otUnder60 + 1.5 * otOver60))
 
   // 2026-06-XX 修正 (C-3): 法定休日労働 8h超の追加0.25倍（労基法37条）
   //   法定休日(日曜)出勤は通常1.35倍だが、8h超部分は更に深夜・時間外と
