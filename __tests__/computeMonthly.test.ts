@@ -449,6 +449,33 @@ describe('computeMonthly - useOldRules フラグ (Phase M で追加)', () => {
     expect(w.prescribedHours).toBeCloseTo(133.33, 0)
   })
 
+  test('フンケース: useOldRules=true で6月以降も旧ルール計算が正しく完了', () => {
+    // 想定: ID 104 フン (2027/01 退職予定, useOldRules=true)
+    //   2026/06 の月次集計でも旧ルール（時給×6h40m×所定日数）で計算される必要がある
+    const main = buildMain({
+      workers: [{
+        id: 104, name: 'フン', org: 'hibi', visa: 'jisshu2', job: 'tobi',
+        rate: 10000, hourlyRate: 1500, otMul: 1.25, hireDate: '2024-01-01',
+        retired: '2027-01-31', token: 'hun-tok', useOldRules: true,
+      }],
+      assign: { site1: { workers: [104], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 22 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    for (let d = 1; d <= 22; d++) Object.assign(attD, dayWork('site1', 104, '202606', d))
+
+    const result = computeMonthly(main, attD, {}, '202606', 22, undefined, 20)
+    const w = result.workers.find(x => x.id === 104)!
+    // 旧ルール特徴: prescribedHours = 22 × 20/3 ≈ 146.67 (新ルールなら 140)
+    expect(w.prescribedHours).toBeCloseTo(146.67, 0)
+    // 基本給 = 時給 × 月所定時間 = 1500 × 146.67 ≈ 220000
+    expect(w.basePay).toBe(Math.round(1500 * 22 * 20 / 3))
+    // 新ルール特有の fixedBasePay は undefined のまま
+    expect(w.fixedBasePay).toBeUndefined()
+    // useOldRules フラグが下流に伝播している
+    expect(w.useOldRules).toBe(true)
+  })
+
   test('useOldRules=undefined (デフォルト): 5月以降は新ルール（baseDays × 7h）', () => {
     const main = buildMain({
       workers: [{

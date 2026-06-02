@@ -203,6 +203,13 @@ function appendTimeSheet(
     rows.push(['', '法定上限: 暦日数 × 40 ÷ 7 =', legalLimit, 'h'])
     rows.push(['', '残業判定: 1日単位(8h超) → 1週単位(40h超) → 1ヶ月単位(法定上限超) の3段階'])
     rows.push(['', '※ 「実労働(h)」= 所定7h + 残業h で変換済み。「うち残業(h)」は出面入力の残業欄の値。'])
+    // 2026-06-XX: 個別に旧ルール継続のスタッフがいる場合の注意書き
+    const oldRulesNames = foreignWorkers.filter(w => w.useOldRules).map(w => w.name)
+    if (oldRulesNames.length > 0) {
+      rows.push(['', `⚠️ 旧ルール継続スタッフ: ${oldRulesNames.join(', ')}`])
+      rows.push(['', '　　上記スタッフは1日所定 6時間40分（合計表示の7h/日は参考値、実際の所定時間は ×6.667 で計算）'])
+      rows.push(['', '　　月所定時間 = 月所定日数 × 6時間40分 で別途算出されます'])
+    }
   } else {
     rows.push(['', '1日の所定: 6時間40分（8:00-17:00、休憩140分）'])
     rows.push(['', '法定上限: 暦日数 × 40 ÷ 7 =', legalLimit, 'h（参考表示）'])
@@ -868,8 +875,16 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const { ym, workers, subcons, siteNames, prescribedDays } = data
   const wb = XLSX.utils.book_new()
 
-  const useNewRules = ym >= '202605'
-  const ruleLabel = useNewRules ? '新ルール: 3層構造' : '旧ルール: 月所定時間ベース'
+  // 2026-06-XX 修正: 全員一律ではなく「月の代表ルール」のみを表示用に決定。
+  //   個別に旧ルール継続フラグが立っているワーカー（例: フン）が含まれる場合は
+  //   そのワーカーだけ別ブロック（旧ルール用17列）で表示する。
+  const useNewRulesByMonth = ym >= '202605'
+  const ruleLabel = useNewRulesByMonth ? '新ルール: 3層構造' : '旧ルール: 月所定時間ベース'
+  // 各ワーカーがそのデータ取得時点でどちらのルールで計算されたか
+  const isWorkerOldRules = (w: WorkerMonthly): boolean => {
+    if (!useNewRulesByMonth) return true  // 月全体が旧ルール
+    return (w as { useOldRules?: boolean }).useOldRules === true
+  }
 
   // 雇用区分 × 会社 でグルーピング
   const isHibi = (w: WorkerMonthly) => w.org === '日比' || w.org === 'hibi'
@@ -885,15 +900,15 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   // 外国人テーブル ヘッダー
   //   新ルール(5月以降): 法令準拠の詳細支給（22列）
   //   旧ルール(4月以前): 月所定時間ベースのシンプル構成（17列）
-  const foreignHeaders = useNewRules
-    ? ['名前', '現場', '単価種別', '単価', 'ベース日数', '法定上限(h)',
-       '通常出勤', '法休出勤', '補償日', '有給日数',
-       '実労働h', '法定残業h', '法休労働h', '深夜労働h',
-       '基本給(固定)', '追加所定手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
-       '欠勤日数', '欠勤控除', '支給額合計']
-    : ['名前', '現場', '単価種別', '単価', '所定日数', '所定時間(h)',
-       '実出勤日数', '補償日', '有給日数', '実労働時間', '残業時間',
-       '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '支給額合計']
+  const foreignHeadersNew = ['名前', '現場', '単価種別', '単価', 'ベース日数', '法定上限(h)',
+    '通常出勤', '法休出勤', '補償日', '有給日数',
+    '実労働h', '法定残業h', '法休労働h', '深夜労働h',
+    '基本給(固定)', '追加所定手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
+    '欠勤日数', '欠勤控除', '支給額合計']
+  const foreignHeadersOld = ['名前', '現場', '単価種別', '単価', '所定日数', '所定時間(h)',
+    '実出勤日数', '補償日', '有給日数', '実労働時間', '残業時間',
+    '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '支給額合計']
+  const foreignHeaders = useNewRulesByMonth ? foreignHeadersNew : foreignHeadersOld
 
   // 日本人テーブル ヘッダー（8列）
   const japaneseHeaders = ['名前', '現場', '日額', '出勤日数', '残業時間(h)', '基本給', '残業手当', '支給額合計']
@@ -907,11 +922,29 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
 
   function renderForeignBlock(label: string, ws: WorkerMonthly[]) {
     if (ws.length === 0) return
+    // 2026-06-XX 修正: 旧ルール継続者（フン等）が混在する場合は別ブロックで表示
+    //   理由: 旧/新でテーブル列の意味が違うため、同じヘッダーに両者を混ぜると
+    //         「追加所定手当」列に「休業補償」が入る等の列ズレが発生する
+    const oldRulesWorkers = useNewRulesByMonth ? ws.filter(isWorkerOldRules) : []
+    const newRulesWorkers = useNewRulesByMonth ? ws.filter(w => !isWorkerOldRules(w)) : ws
+    if (useNewRulesByMonth && oldRulesWorkers.length > 0) {
+      // 新ルール組を先に出力、旧ルール組はその後に別テーブルで
+      renderForeignBlockInternal(label, newRulesWorkers, false)
+      renderForeignBlockInternal(`${label}（旧ルール継続）`, oldRulesWorkers, true)
+      return
+    }
+    renderForeignBlockInternal(label, ws, !useNewRulesByMonth)
+  }
+
+  function renderForeignBlockInternal(label: string, ws: WorkerMonthly[], forceOldRules: boolean) {
+    if (ws.length === 0) return
+    const useNewRules = !forceOldRules
+    const headers = useNewRules ? foreignHeadersNew : foreignHeadersOld
     rows.push([])
     const groupRow: (string | number | null)[] = [label]
-    for (let i = 1; i < foreignHeaders.length; i++) groupRow.push(null)
+    for (let i = 1; i < headers.length; i++) groupRow.push(null)
     rows.push(groupRow)
-    rows.push(foreignHeaders)
+    rows.push(headers)
     for (const w of ws) {
       const siteList = w.sites.map(sid => siteNames[sid] || sid).join(', ')
       const nameWithDispatch = w.isDispatched
@@ -919,7 +952,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         : w.name
       const rateKind = w.hourlyRate ? '時給' : (w.salary ? '月給' : '—')
       const rateValue = w.hourlyRate || w.salary || 0
-      const baseDaysOrPrescribed = useNewRules ? prescribedDays : prescribedDays
+      const baseDaysOrPrescribed = prescribedDays
       const limitOrPrescribedH = useNewRules ? (w.legalLimit || 0) : (w.prescribedHours || 0)
       if (useNewRules) {
         // 法令準拠版（22列）
@@ -1075,7 +1108,10 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const ws = XLSX.utils.aoa_to_sheet(rows)
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: foreignHeaders.length - 1 } }]
   // 列幅: 新ルール(23列) / 旧ルール(17列) で切替
-  if (useNewRules) {
+  // 2026-06-XX: 月の代表ルールに基づく列幅。旧ルール継続者の別ブロックも
+  //            ヘッダーは旧ルール17列を使うが、シート全体の列幅は新ルール基準で問題ない
+  //            （余った列は空白として描画される）
+  if (useNewRulesByMonth) {
     setColWidths(ws, [
       14, 14, 8, 10, 10, 10,       // 名前/現場/単価種別/単価/ベース日数/法定上限
       8, 8, 8, 8,                  // 通常出勤/法休出勤/補償日/有給日数

@@ -79,7 +79,11 @@ function getEmploymentMode(w: WorkerMonthly, ym: string): {
 } {
   const isJapanese = !w.visa || w.visa === 'none'
   const yearMonth = parseInt(ym.slice(0, 4)) * 100 + parseInt(ym.slice(4, 6))
-  const isNewRules = yearMonth >= 202605  // 2026-05 以降が新ルール
+  // 2026-06-XX 修正: 人員マスタの useOldRules フラグも考慮
+  //   compute.ts L977 と同じ判定式: `ym >= '202605' && !workerWm?.useOldRules`
+  //   個別に新ルール移行を拒否したケース（例: フン 104）は 5月以降も旧ルール継続
+  const workerOptedOut = (w as { useOldRules?: boolean }).useOldRules === true
+  const isNewRules = yearMonth >= 202605 && !workerOptedOut
   const useOldRules = !isNewRules
   if (isJapanese) {
     if (w.salary && w.salary > 0) return {

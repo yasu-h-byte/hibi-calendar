@@ -696,6 +696,9 @@ export interface WorkerMonthly {
   hourlyRate?: number
   otMul: number
   salary?: number
+  // 2026-06-XX 追加: 旧ルール継続フラグ（人員マスタの個別設定）
+  //   下流（PayrollAuditModal / Excel出力）で表示分岐するために必要
+  useOldRules?: boolean
   sites: string[]
   workDays: number
   actualWorkDays: number
@@ -805,7 +808,10 @@ export function computeMonthly(
     const dispatchedThisMonth = isDispatchedAt(w, ym)
     workerMap.set(w.id, {
       id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
-      rate: w.rate, hourlyRate: w.hourlyRate, otMul: w.otMul, salary: w.salary, sites: [],
+      rate: w.rate, hourlyRate: w.hourlyRate, otMul: w.otMul, salary: w.salary,
+      // 2026-06-XX 追加: 下流の表示層が「フン等の個別旧ルール継続者」を判別できるようにする
+      useOldRules: w.useOldRules,
+      sites: [],
       workDays: 0, actualWorkDays: 0, compDays: 0, workAll: 0, otHours: 0,
       plDays: 0, plUsed: 0, restDays: 0, siteOffDays: 0, examDays: 0,
       cost: 0, otCost: 0, totalCost: 0,
