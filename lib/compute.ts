@@ -2,6 +2,7 @@ import { db } from './firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { AttendanceEntry, calcActualHours } from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
+import { isStillActiveForMonth } from './workers'
 
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
@@ -797,7 +798,10 @@ export function computeMonthly(
   const actualWorkHoursAccumByWid = new Map<number, number>()
 
   for (const w of main.workers) {
-    if (w.retired) continue
+    // 2026-06-XX: 退職月のスタッフ（例: 6/30 退職予定）も当月は集計対象に含める
+    // （旧: `if (w.retired) continue` は退職日が入った瞬間に当月も除外する事故）
+    // 該当月の月初以降に退職する場合は在籍中とみなす
+    if (!isStillActiveForMonth(w.retired, ym)) continue
     const dispatchedThisMonth = isDispatchedAt(w, ym)
     workerMap.set(w.id, {
       id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,

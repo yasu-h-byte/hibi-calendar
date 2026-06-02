@@ -11,6 +11,7 @@ import {
 } from './compute'
 import { AttendanceEntry } from '@/types'
 import { isWorkingDay } from './attendance'
+import { isStillActiveForMonth } from './workers'
 
 // ────────────────────────────────────────
 //  共通ヘルパー
@@ -297,7 +298,8 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
   const numDays = daysInMonth(ym)
   const wb = XLSX.utils.book_new()
 
-  const hibiWorkers = workers.filter(w => (w.org === '日比' || w.org === 'hibi') && !w.retired)
+  // 退職月の在籍スタッフ（例: 6/30 退職予定）も当月分は集計対象に含める
+  const hibiWorkers = workers.filter(w => (w.org === '日比' || w.org === 'hibi') && isStillActiveForMonth(w.retired, ym))
 
   // Header rows
   const headers = ['名前', '区分']
@@ -436,7 +438,8 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
   const numDays = daysInMonth(ym)
   const wb = XLSX.utils.book_new()
 
-  const hfuWorkers = workers.filter(w => (w.org === 'HFU' || w.org === 'hfu') && !w.retired)
+  // 退職月の在籍スタッフも当月分は集計対象に含める
+  const hfuWorkers = workers.filter(w => (w.org === 'HFU' || w.org === 'hfu') && isStillActiveForMonth(w.retired, ym))
 
   // ── Sheet 1: 従来形式（出面確認用） ──
   {
@@ -1130,13 +1133,13 @@ export function generatePerSiteAttendance(data: PerSiteAttendanceData): XLSX.Wor
   for (const site of activeSites) {
     const siteWorkerIds = siteWorkerData.get(site.id) || new Set()
 
-    // 日比建設ワーカーとHFUワーカーに分ける（退職者除く）
+    // 日比建設ワーカーとHFUワーカーに分ける（退職月の在籍スタッフは含める）
     const hibiWorkers = Array.from(siteWorkerIds)
       .map(id => workerMap.get(id))
-      .filter((w): w is RawWorker => !!w && !w.retired && (w.org === '日比' || w.org === 'hibi'))
+      .filter((w): w is RawWorker => !!w && isStillActiveForMonth(w.retired, ym) && (w.org === '日比' || w.org === 'hibi'))
     const hfuWorkers = Array.from(siteWorkerIds)
       .map(id => workerMap.get(id))
-      .filter((w): w is RawWorker => !!w && !w.retired && (w.org === 'HFU' || w.org === 'hfu'))
+      .filter((w): w is RawWorker => !!w && isStillActiveForMonth(w.retired, ym) && (w.org === 'HFU' || w.org === 'hfu'))
 
     if (hibiWorkers.length === 0 && hfuWorkers.length === 0) continue
 
