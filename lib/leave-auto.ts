@@ -2,6 +2,7 @@ import { db } from './firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { MainData, PLRecord, RawWorker } from './compute'
 import { isAlreadyRetired } from './workers'
+import { calcLegalPL } from './leave-compute'
 
 /**
  * Get current date in JST (Asia/Tokyo).
@@ -16,24 +17,12 @@ function getJSTDate(): Date {
 
 /**
  * Calculate legal PL days based on years of service at grant date.
+ * 2026-06-XX 修正 (MI-1): lib/leave-compute.ts の calcLegalPL に統合
+ *   重複実装を削除して共通ヘルパーに委譲
  */
 function calcLegalPLDays(hireDate: string, grantDate: Date): number {
-  const hire = new Date(hireDate)
-  if (isNaN(hire.getTime())) return 0
-
-  // 月数ベースで計算（浮動小数点誤差を回避）
-  const diffMonths = (grantDate.getFullYear() - hire.getFullYear()) * 12
-    + (grantDate.getMonth() - hire.getMonth())
-    + (grantDate.getDate() >= hire.getDate() ? 0 : -1)
-
-  if (diffMonths < 6) return 0    // 0.5年未満
-  if (diffMonths < 18) return 10   // 0.5年〜1.5年未満
-  if (diffMonths < 30) return 11   // 1.5年〜2.5年未満
-  if (diffMonths < 42) return 12   // 2.5年〜3.5年未満
-  if (diffMonths < 54) return 14   // 3.5年〜4.5年未満
-  if (diffMonths < 66) return 16   // 4.5年〜5.5年未満
-  if (diffMonths < 78) return 18   // 5.5年〜6.5年未満
-  return 20                         // 6.5年以上
+  const grantIso = grantDate.toISOString().slice(0, 10)
+  return calcLegalPL(hireDate, grantIso)
 }
 
 /**

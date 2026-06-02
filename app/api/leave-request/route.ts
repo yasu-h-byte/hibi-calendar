@@ -304,12 +304,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Already processed' }, { status: 409 })
       }
 
-      await setDoc(docRef, {
-        ...data,
+      // 2026-06-XX 修正 (IM-7): 履歴を保持しつつ updateDoc で部分更新
+      //   旧: setDoc で全置換 → 過去の reviewedAt/Reason 等の履歴消失
+      //   新: 既存フィールドを保持＋ stateHistory に追記
+      const stateHistory = (data as { stateHistory?: unknown[] }).stateHistory || []
+      await updateDoc(docRef, {
         status: 'rejected',
         reviewedAt: new Date().toISOString(),
         reviewedBy: authWorkerId,
         rejectedReason: reason || '',
+        stateHistory: [
+          ...stateHistory,
+          { at: new Date().toISOString(), by: authWorkerId, action: 'reject', previousStatus: data.status, reason: reason || '' },
+        ],
       })
 
       return NextResponse.json({ success: true })
@@ -346,10 +353,15 @@ export async function POST(request: NextRequest) {
         }, { status: 409 })
       }
 
-      await setDoc(docRef, {
-        ...data,
+      // 2026-06-XX 修正 (IM-7): 履歴を保持しつつ updateDoc で部分更新
+      const stateHistory = (data as { stateHistory?: unknown[] }).stateHistory || []
+      await updateDoc(docRef, {
         status: 'cancelled',
         cancelledAt: new Date().toISOString(),
+        stateHistory: [
+          ...stateHistory,
+          { at: new Date().toISOString(), by: worker.id, action: 'cancel', previousStatus: data.status },
+        ],
       })
 
       return NextResponse.json({ success: true })

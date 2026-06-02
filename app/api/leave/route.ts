@@ -6,7 +6,7 @@ import { getMainData, getAttData, parseDKey, isDispatchedAt } from '@/lib/comput
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 
 /**
@@ -81,27 +81,9 @@ function relevantAttMonths(): string[] {
   return out
 }
 
-/** 法定有給付与日数を計算 */
-function calcLegalPL(hireDate: string, grantDate: string): number {
-  if (!hireDate || !grantDate) return 0
-  const hire = new Date(hireDate)
-  const grant = new Date(grantDate)
-  if (isNaN(hire.getTime()) || isNaN(grant.getTime())) return 0
-
-  // 月数ベースで計算（浮動小数点誤差を回避）
-  const diffMonths = (grant.getFullYear() - hire.getFullYear()) * 12
-    + (grant.getMonth() - hire.getMonth())
-    + (grant.getDate() >= hire.getDate() ? 0 : -1)
-
-  if (diffMonths < 6) return 0
-  if (diffMonths < 18) return 10
-  if (diffMonths < 30) return 11
-  if (diffMonths < 42) return 12
-  if (diffMonths < 54) return 14
-  if (diffMonths < 66) return 16
-  if (diffMonths < 78) return 18
-  return 20
-}
+// 2026-06-XX 修正 (MI-1): calcLegalPL は lib/leave-compute.ts に統合済み
+//   旧: ここに重複実装があった → leave-auto.ts と微妙にズレるリスク
+//   新: 共通ヘルパーから import
 
 export async function POST(request: NextRequest) {
   const authResult = await getApiAuthUser(request)

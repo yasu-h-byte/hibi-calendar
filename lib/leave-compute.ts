@@ -16,6 +16,52 @@
 import { addMonthsSafe, todayJstIso } from './date-utils'
 
 /**
+ * 法定付与日数（労基法39条1項・2項）
+ *
+ * MI-1: lib/leave-auto.ts と app/api/leave/route.ts に重複実装されていた calcLegalPL を統合。
+ *
+ * @param hireDate    入社日 YYYY-MM-DD
+ * @param grantDate   付与日 YYYY-MM-DD（その時点の勤続年数で日数を決定）
+ * @returns 法定付与日数（最低10日、最大20日）
+ *
+ * ⚠️ 比例付与（週4日以下/週30h未満）は未対応。フルタイム前提（MI-16）。
+ */
+export function calcLegalPL(hireDate: string, grantDate: string): number {
+  if (!hireDate || !grantDate) return 0
+  const hire = new Date(hireDate)
+  const grant = new Date(grantDate)
+  if (isNaN(hire.getTime()) || isNaN(grant.getTime())) return 0
+  // 月数ベースで計算（浮動小数点誤差を回避）
+  const diffMonths = (grant.getFullYear() - hire.getFullYear()) * 12
+    + (grant.getMonth() - hire.getMonth())
+    + (grant.getDate() >= hire.getDate() ? 0 : -1)
+  if (diffMonths < 6) return 0     // 0.5年未満
+  if (diffMonths < 18) return 10   // 0.5年〜1.5年未満
+  if (diffMonths < 30) return 11   // 1.5年〜2.5年未満
+  if (diffMonths < 42) return 12   // 2.5年〜3.5年未満
+  if (diffMonths < 54) return 14   // 3.5年〜4.5年未満
+  if (diffMonths < 66) return 16   // 4.5年〜5.5年未満
+  if (diffMonths < 78) return 18   // 5.5年〜6.5年未満
+  return 20                         // 6.5年以上
+}
+
+/**
+ * PLRecord の正規化（新/旧フィールドの差を吸収）
+ *
+ * MI-3: 旧フィールド (grant/carry/adj) と新フィールド (grantDays/carryOver/adjustment)
+ * の優先順位が画面別にバラバラだったため、ここに一元化。
+ */
+export function normalizePLRecord(
+  r: { grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; [key: string]: unknown }
+): { grantDays: number; carryOver: number; adjustment: number } {
+  return {
+    grantDays: r.grantDays ?? r.grant ?? 0,
+    carryOver: r.carryOver ?? r.carry ?? 0,
+    adjustment: r.adjustment ?? r.adj ?? 0,
+  }
+}
+
+/**
  * 1スタッフの付与期間内有給消化を集計
  *
  * @param workerId       スタッフID

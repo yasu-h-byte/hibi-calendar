@@ -4,7 +4,7 @@
  * Workflow CR-1 で検出された「年5日義務監視ロジックが多重破綻」の解消検証。
  */
 import { describe, test, expect } from 'vitest'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord } from '@/lib/leave-compute'
 import { addMonthsSafe, calcExpiryIso } from '@/lib/date-utils'
 
 describe('addMonthsSafe', () => {
@@ -134,6 +134,45 @@ describe('judgeFiveDayObligation', () => {
     // 付与 2026-04-01、今日 2026-08-01 (4ヶ月経過)
     const r = judgeFiveDayObligation('2026-04-01', 10, 0, undefined, '2026-08-01')
     expect(r.warning).toBe(false)
+  })
+})
+
+describe('calcLegalPL (法定付与日数表)', () => {
+  test('入社6ヶ月未満は0日', () => {
+    expect(calcLegalPL('2026-01-01', '2026-06-15')).toBe(0)
+  })
+  test('0.5年〜1.5年未満は10日', () => {
+    expect(calcLegalPL('2025-10-01', '2026-04-01')).toBe(10)  // 6ヶ月
+    expect(calcLegalPL('2025-04-01', '2026-09-15')).toBe(10)  // 約1.4年
+  })
+  test('1.5年〜2.5年未満は11日', () => {
+    expect(calcLegalPL('2024-10-01', '2026-04-01')).toBe(11)  // 1.5年
+  })
+  test('6.5年以上は20日', () => {
+    expect(calcLegalPL('2019-04-01', '2026-04-01')).toBe(20)  // 7年
+    expect(calcLegalPL('2018-01-01', '2026-04-01')).toBe(20)  // 8.25年
+  })
+  test('入社日/付与日いずれかが空は0', () => {
+    expect(calcLegalPL('', '2026-04-01')).toBe(0)
+    expect(calcLegalPL('2025-01-01', '')).toBe(0)
+  })
+})
+
+describe('normalizePLRecord (新旧フィールド吸収)', () => {
+  test('新フィールド優先', () => {
+    expect(normalizePLRecord({ grantDays: 10, grant: 5 })).toEqual({
+      grantDays: 10, carryOver: 0, adjustment: 0
+    })
+  })
+  test('新フィールドが無ければ旧フィールド', () => {
+    expect(normalizePLRecord({ grant: 10, carry: 5, adj: 2 })).toEqual({
+      grantDays: 10, carryOver: 5, adjustment: 2
+    })
+  })
+  test('全て空なら0', () => {
+    expect(normalizePLRecord({})).toEqual({
+      grantDays: 0, carryOver: 0, adjustment: 0
+    })
   })
 })
 
