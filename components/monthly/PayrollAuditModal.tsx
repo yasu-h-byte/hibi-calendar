@@ -324,7 +324,7 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                     <td>うち法定外残業</td>
                     <td className="font-mono">
                       <span className="font-bold">{fmtNum(w.legalOtHours, 'h')}</span>
-                      <span className="text-[10px] text-gray-500 ml-1">（3層判定後・1.25倍支給）</span>
+                      <span className="text-[10px] text-gray-500 ml-1">（3層判定後・基本1.0倍は所定外労働に含む。+0.25倍を法定外残業手当で支給）</span>
                     </td>
                   </tr>
                 )}
@@ -333,7 +333,7 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                     <td>うち所定外労働</td>
                     <td className="font-mono">
                       <span className="font-bold">{fmtNum(w.nonStatutoryOTHours, 'h')}</span>
-                      <span className="text-[10px] text-gray-500 ml-1">（法定内・割増なし、通常賃金で支給）</span>
+                      <span className="text-[10px] text-gray-500 ml-1">（残業欄入力分の合計。1.0倍で全部支給）</span>
                     </td>
                   </tr>
                 )}
@@ -399,23 +399,28 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                 )}
                 {(w.otAllowance || 0) > 0 && (
                   <tr>
-                    <td>残業手当</td>
+                    <td>
+                      {!mode.useOldRules && w.hourlyRate
+                        ? <>法定外残業<br/><span className="text-[10px] text-gray-500">(割増のみ +0.25倍)</span></>
+                        : '残業手当'}
+                    </td>
                     <td className="font-mono">
-                      {/* 2026-06-XX 修正: 旧来 `× w.otHours` (日次入力の合計) を表示していたが、
-                          新ルールでは実際の支給は 3層判定後の `w.legalOtHours` を使う。
-                          表示式と実額が食い違って「金額計算がおかしい」と誤解される原因だった。
-                          - 新ルール: 法定外残業時間 (legalOtHours) × 時給 × 1.25 = otAllowance
-                          - 旧ルール: 月の残業合計 (otHours) × 時給 × 1.25 = otAllowance
-                          - 日本人: (日額 ÷ 8h) × otMul × otHours = otAllowance */}
+                      {/* 2025-06-XX 修正: 新ルール外国人は「割増分のみ 0.25倍」で支給
+                          - 基本給/追加所定/所定外労働 で全労働の 1.0倍 を支払い済み
+                          - 法定外残業手当 = 0.25倍 (60h超は 0.5倍)
+                          - 合算で 1.25倍 (= 1.0倍 base + 0.25倍 premium) になる
+                          - 旧ルール・日本人は従来通り 1.25倍 (base 含む) */}
                       <div className="text-[10px] text-gray-500">
                         {(() => {
                           const isVietnameseNewRules = !mode.useOldRules && w.hourlyRate
-                          const hUsed = isVietnameseNewRules ? (w.legalOtHours ?? 0) : (w.otHours ?? 0)
-                          const hLabel = isVietnameseNewRules ? '法定外残業' : '残業時間'
-                          if (w.hourlyRate) {
-                            return `時給 ${fmtYen(w.hourlyRate)} × ${w.otMul} × ${hUsed}h（${hLabel}）`
+                          if (isVietnameseNewRules) {
+                            return `時給 ${fmtYen(w.hourlyRate || 0)} × 0.25 × ${w.legalOtHours ?? 0}h（割増分のみ）`
                           }
-                          return `(日額 ${fmtYen(w.rate)} ÷ 8h) × ${w.otMul} × ${hUsed}h（${hLabel}）`
+                          const hUsed = w.otHours ?? 0
+                          if (w.hourlyRate) {
+                            return `時給 ${fmtYen(w.hourlyRate)} × ${w.otMul} × ${hUsed}h（残業時間）`
+                          }
+                          return `(日額 ${fmtYen(w.rate)} ÷ 8h) × ${w.otMul} × ${hUsed}h（残業時間）`
                         })()}
                       </div>
                       <div className="font-bold">{fmtYen(w.otAllowance || 0)}</div>

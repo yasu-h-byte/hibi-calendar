@@ -1880,14 +1880,19 @@ export function calculateVietnameseSalary(
   const additionalDays = Math.max(0, regularWorkDays - baseDays)
   const additionalAllowance = Math.round(hourlyRate * additionalDays * 7)
 
-  // 2026-06-XX 修正 (C-4): 月60h超の法定外残業は 1.5 倍（労基法37条1項ただし書）
-  //   2023/4/1〜 中小企業含めて全企業適用
-  //   - 60h以下: 1.25 倍
-  //   - 60h超部分: 1.5 倍
-  //   例: statutoryOT = 70h → 60h × 1.25 + 10h × 1.5
+  // 2026-06-XX 修正: 法定外残業手当は「割増分のみ (0.25 or 0.5倍)」
+  //   旧バグ: 1.25 倍 (= 基本1.0 + 割増0.25) で計算 → 基本1.0倍が
+  //     基本給/追加所定/所定外労働でも支払われており二重支給
+  //     例: ハウ 22日×7h, 週40h超4h → 基本給+追加所定で154h × 1.0 + 法定外残業4h × 1.25
+  //          = 159h相当 → 正解は 155h (154h + 4h × 0.25) なので 4h × 時給 過払い
+  //   新ロジック:
+  //     - 基本給/追加所定/所定外労働 が全労働を 1.0 倍カバー
+  //     - 法定外残業 = 割増分のみ (0.25 or 0.5倍)
+  //     - 結果: 全労働 1.0倍 + 法定外残業に対して +0.25 (= 1.25倍) → 法令準拠
+  //   2026-06-XX (C-4): 月60h超は +0.5倍（旧: 1.5倍 = 1.0 + 0.5）
   const otUnder60 = Math.min(60, statutoryOT)
   const otOver60 = Math.max(0, statutoryOT - 60)
-  const otAllowance = Math.round(hourlyRate * (1.25 * otUnder60 + 1.5 * otOver60))
+  const otAllowance = Math.round(hourlyRate * (0.25 * otUnder60 + 0.5 * otOver60))
 
   // 2026-06-XX 修正 (C-3): 法定休日労働 8h超の追加0.25倍（労基法37条）
   //   法定休日(日曜)出勤は通常1.35倍だが、8h超部分は更に深夜・時間外と
@@ -1903,26 +1908,34 @@ export function calculateVietnameseSalary(
   const nightAllowance = Math.round(hourlyRate * 0.25 * nightHours)
   const compAllowance = Math.round(hourlyRate * 7 * 0.6 * compDays)
 
-  // 2026-06-XX 追加: 所定外労働手当（法定内・割増なし）
+  // 所定外労働手当（法定内・割増なし）
   // 労基法24条（賃金全額払い）に基づき、月所定時間を超えた労働で
   // 法定上限内のものは「通常賃金」で支払う必要がある。
   //
   // 基本給 = baseDays × 7h をカバー。
   // 追加所定 = 出勤日数が baseDays を超えた場合に「丸1日分 × 7h」を加算。
   // ↑これだけだと、1日のうち所定超過の労働（残業欄入力分）が支払い対象から
-  //   漏れる。日次の所定超過分(各日 actualHours - prescribedHours)から
-  //   3層判定後の法定外残業 (statutoryOT) を差し引いた残りを支払う。
+  //   漏れる。日次の所定超過分(各日 actualHours - prescribedHours)を支払う。
   //
   // 2026-06-XX 修正 (C-2): 所定時間を固定 7h ではなく、各日の prescribedHours
   //   (現場workSchedule × w係数) で動的判定。IHI現場(8h)などで過大計上を防ぐ。
   //
+  // 2026-06-XX 修正: statutoryOT を差し引かない（法定外残業手当を「割増のみ」にしたため）
+  //   旧: nonStatutoryOTHours = max(0, totalDailyExcess - statutoryOT)
+  //       → 「法定外残業の 1.0倍 base portion」を所定外労働から減算していた
+  //       → 法定外残業手当が 1.25倍 (= base + premium) を支払う前提だった
+  //   新: nonStatutoryOTHours = totalDailyExcess（全部 1.0倍 で支払い）
+  //       法定外残業手当は割増 0.25倍のみ。base 1.0倍は所定外労働手当から自然に支払われる
+  //
   // 例: 出勤18日(各日所定7h)+有給2日+残業18.5h、3層判定 statutoryOT=1.0h
-  //     → 所定外労働時間 = 18.5 - 1.0 = 17.5h
-  //     → 所定外労働手当 = 時給×17.5h = 17.5×時給 (1.25倍ではない)
+  //     → 所定外労働時間 = 18.5h (全部)
+  //     → 所定外労働手当 = 時給×18.5h × 1.0 (内 1h は法定外残業も該当)
+  //     → 法定外残業手当 = 時給×1.0h × 0.25 (割増のみ)
+  //     → 1.0h分の合計 = 1.0倍 + 0.25倍 = 1.25倍 ✓ (法令準拠)
   const totalDailyExcess = dayInfos
     .filter(di => !di.isLegalHoliday && di.actualHours > 0)
     .reduce((s, di) => s + Math.max(0, di.actualHours - di.prescribedHours), 0)
-  const nonStatutoryOTHours = Math.max(0, totalDailyExcess - statutoryOT)
+  const nonStatutoryOTHours = totalDailyExcess
   const nonStatutoryOTAllowance = Math.round(hourlyRate * nonStatutoryOTHours)
 
   // 欠勤控除: 法定休日出勤は所定日数(20)カウント対象外（カレンダー上は休み）
