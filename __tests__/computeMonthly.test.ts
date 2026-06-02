@@ -376,6 +376,80 @@ describe('computeMonthly - 集計整合性チェック', () => {
   })
 })
 
+describe('computeMonthly - 法定休日 8h超の追加0.25倍 (Phase N C-3)', () => {
+  test('日曜10h労働: 8h × 1.35 + 2h × 1.60 で計算される', () => {
+    // 仕様: 法定休日(日曜)労働は通常1.35倍だが、8h超部分は更に+0.25 = 1.60倍にする必要がある
+    //   (労基法37条 時間外労働＋休日労働＋深夜労働の重畳)
+    //   旧実装: 全時間×1.35のみ → 8h超部分の0.25が不払い
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    // 5/3 (日曜) に 10h勤務 = 7h規定 + 3h残業
+    Object.assign(attD, { [attKey('site1', 101, '202605', 3)]: { w: 1, o: 3 } })
+
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+
+    // 法定休日労働 10h
+    expect(w.legalHolidayHours).toBe(10)
+    // 法定休日手当 = 1,500 × (1.35 × 8 + 1.60 × 2) = 1,500 × (10.8 + 3.2) = 1,500 × 14 = 21,000
+    expect(w.legalHolidayAllowance).toBe(21000)
+  })
+
+  test('日曜8h労働 (8h丁度): 全時間×1.35のみ', () => {
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    Object.assign(attD, { [attKey('site1', 101, '202605', 3)]: { w: 1, o: 1 } })  // 8h
+
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    // 8h × 1.35 = 10.8h × 1,500 = 16,200
+    expect(w.legalHolidayHours).toBe(8)
+    expect(w.legalHolidayAllowance).toBe(Math.round(1500 * 1.35 * 8))
+  })
+})
+
+describe('computeMonthly - 半日勤務 w=0.5 の actualHours 整合 (Phase N C-6)', () => {
+  test('半日勤務 (w=0.5) では actualHours が 3.5h + 残業 で計算される', () => {
+    // 仕様: w=0.5 = 半日勤務 = 所定の半分 (3.5h相当)
+    //   旧実装: actualHours = 7 + entry.o で常に7h固定 → 過大計上
+    //   新実装: actualHours = w × 7 + entry.o
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 4 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    // 5/4 月曜に半日勤務 (w=0.5, o=0)
+    Object.assign(attD, { [attKey('site1', 101, '202605', 4)]: { w: 0.5 } })
+
+    const result = computeMonthly(main, attD, {}, '202605', 4, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    // 実労働時間 = 3.5h (= 7 × 0.5)
+    expect(w.actualWorkHours).toBeCloseTo(3.5, 1)
+    // 所定外労働は発生しない (3.5h < 所定 3.5h)
+    expect(w.nonStatutoryOTHours || 0).toBe(0)
+    // 法定外残業も発生しない
+    expect(w.legalOtHours || 0).toBe(0)
+  })
+})
+
 describe('computeMonthly - 補償日 (w=0.6) の労基法26条準拠 (Phase N で追加)', () => {
   test('補償日は欠勤扱いで基本給から減額され、別途60%の休業手当が支給される', () => {
     // 仕様 (2026-06-XX 修正後):

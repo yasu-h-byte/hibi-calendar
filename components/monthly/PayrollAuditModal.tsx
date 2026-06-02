@@ -140,6 +140,8 @@ interface AuditCheck {
 function buildAuditChecks(w: WorkerMonthly, ym: string, prescribedDays: number): AuditCheck[] {
   const checks: AuditCheck[] = []
   const legalLimit = calcLegalMonthlyLimit(ym)
+  // mode は買い直し（getEmploymentMode の戻り値を再利用）
+  const mode = getEmploymentMode(w, ym)
 
   // 1. 法定上限チェック
   // 2026-06-XX 修正: フォールバック時の所定時間を 7h/日 に統一
@@ -153,27 +155,44 @@ function buildAuditChecks(w: WorkerMonthly, ym: string, prescribedDays: number):
   })
 
   // 2. 出勤日数の整合性
-  const daysAccountedFor = w.workDays + (w.plDays || 0) + (w.restDays || 0) + (w.siteOffDays || 0) + (w.examDays || 0)
-  // 補償(0.6) は workDays に含まれるので別に加えない
+  // 2026-06-XX 修正 (M-3): compDays も加算 (補償日も出勤実績の一部としてカウント)
+  const daysAccountedFor = w.workDays + (w.plDays || 0) + (w.restDays || 0) + (w.siteOffDays || 0) + (w.examDays || 0) + (w.compDays || 0)
   checks.push({
     label: '出勤実績の合計が所定日数以内',
     pass: daysAccountedFor <= prescribedDays + 1,  // 月によって1日のゆとり
-    detail: `出勤${w.workDays} + 有給${w.plDays || 0} + 欠勤${w.restDays || 0} + 現場休${w.siteOffDays || 0} + 試験${w.examDays || 0} = ${daysAccountedFor}日 ≦ 所定${prescribedDays}日`,
+    detail: `出勤${w.workDays} + 有給${w.plDays || 0} + 欠勤${w.restDays || 0} + 現場休${w.siteOffDays || 0} + 試験${w.examDays || 0} + 補償${w.compDays || 0} = ${daysAccountedFor}日 ≦ 所定${prescribedDays}日`,
   })
 
   // 3. 支給額の内訳整合
+  // 2026-06-XX 修正 (I-1): 旧式は (additionalAllowance || compAllowance) の OR 結合で
+  //   両方非ゼロの場合 compAllowance が消えていた。新ルールでは別項目として加算。
+  //   nonStatutoryOTAllowance (所定外労働手当) も追加。
   const fixedBase = w.fixedBasePay || w.basePay || 0
-  const sumPay = fixedBase
-    + (w.additionalAllowance || w.compAllowance || 0)
-    + (w.otAllowance || 0)
-    + (w.legalHolidayAllowance || 0)
-    + (w.nightAllowance || 0)
-    - (w.absentDeduction || 0)
+  let sumPay: number
+  if (mode.useOldRules) {
+    // 旧ルール: additionalAllowance フィールドが休業補償として流用されている
+    sumPay = fixedBase
+      + (w.additionalAllowance || 0)  // 旧ルールでは = 休業補償
+      + (w.otAllowance || 0)
+      - (w.absentDeduction || 0)
+  } else {
+    // 新ルール: 各項目を独立加算
+    sumPay = fixedBase
+      + (w.additionalAllowance || 0)
+      + (w.nonStatutoryOTAllowance || 0)  // 2026-06-XX 追加
+      + (w.otAllowance || 0)
+      + (w.legalHolidayAllowance || 0)
+      + (w.nightAllowance || 0)
+      + (w.compAllowance || 0)
+      - (w.absentDeduction || 0)
+  }
   const reported = w.salaryNetPay || 0
   checks.push({
     label: '支給額の内訳合計が一致',
     pass: Math.abs(sumPay - reported) < 2,  // 丸め誤差 ±1円許容
-    detail: `基本 ${fmtYen(fixedBase)} + 追加 ${fmtYen(w.additionalAllowance || w.compAllowance || 0)} + 残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
+    detail: mode.useOldRules
+      ? `基本 ${fmtYen(fixedBase)} + 休業補償 ${fmtYen(w.additionalAllowance || 0)} + 残業 ${fmtYen(w.otAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`
+      : `基本 ${fmtYen(fixedBase)} + 追加所定 ${fmtYen(w.additionalAllowance || 0)} + 所定外労働 ${fmtYen(w.nonStatutoryOTAllowance || 0)} + 法定外残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} + 休業 ${fmtYen(w.compAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
   })
 
   // 4. otMul の妥当性

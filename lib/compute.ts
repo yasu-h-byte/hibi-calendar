@@ -1620,18 +1620,39 @@ export function calculateVietnameseSalary(
 
   // ── 日次集計 ──
   // 各日の実労働時間・所定時間・休日種別を計算
+  // 2026-06-XX 追加: prescribedHours (その日の所定時間) を保持
+  //   - C-2: 現場の workSchedule に従って動的に算出（IHI現場の 8h 等）
+  //   - C-6: 半日勤務 (w=0.5) は scheduled も w 倍にして整合
   type DayInfo = {
     day: number
     dow: number              // 0=日
     weekNum: number          // 月曜起算
     isLegalHoliday: boolean  // 日曜
     actualHours: number      // その日の実労働時間（補償日除く、休憩控除済み）
+    prescribedHours: number  // その日の所定時間（現場workSchedule + w係数）
     nightMinutes: number     // その日の深夜時間（分）
     hadWork: boolean         // 何らかの労働があったか
   }
   const dayInfos: DayInfo[] = []
   const firstDayDow = new Date(ymY, ymM - 1, 1).getDay()
   const firstMondayOffset = (firstDayDow + 6) % 7
+
+  // 現場の workSchedule から所定時間 (休憩込み) を計算するヘルパー
+  // calculateOvertimeSummary の calcPrescribedH と同じロジック
+  const calcPrescribedH = (siteId: string): number => {
+    const site = sites.find(s => s.id === siteId)
+    const ws = site?.workSchedule as { startTime?: string; endTime?: string; morningBreak?: { enabled?: boolean; mandatory?: boolean; minutes?: number }; lunchBreak?: { enabled?: boolean; mandatory?: boolean; minutes?: number }; afternoonBreak?: { enabled?: boolean; mandatory?: boolean; minutes?: number } } | undefined
+    if (!ws?.startTime || !ws?.endTime) return 7
+    const stParts = ws.startTime.split(':').map(Number)
+    const etParts = ws.endTime.split(':').map(Number)
+    const startMin = stParts[0] * 60 + (stParts[1] || 0)
+    const endMin = etParts[0] * 60 + (etParts[1] || 0)
+    let totalMin = endMin - startMin
+    if (ws.morningBreak?.enabled !== false) totalMin -= ws.morningBreak?.minutes ?? 30
+    if (ws.lunchBreak?.enabled !== false) totalMin -= ws.lunchBreak?.minutes ?? 60
+    if (ws.afternoonBreak?.enabled !== false) totalMin -= ws.afternoonBreak?.minutes ?? 30
+    return Math.max(0, Math.round(totalMin / 60 * 10) / 10)
+  }
 
   for (let d = 1; d <= numDays; d++) {
     const dow = new Date(ymY, ymM - 1, d).getDay()
@@ -1640,6 +1661,7 @@ export function calculateVietnameseSalary(
     const isLegalHoliday = dow === 0
 
     let actualHours = 0
+    let prescribedHours = 0
     let nightMinutes = 0
     let hadWork = false
 
@@ -1654,6 +1676,10 @@ export function calculateVietnameseSalary(
       if (entry.w === 0.6) continue
 
       hadWork = true
+      const sitePrescribed = calcPrescribedH(site.id)
+      // C-6 修正: w 係数を所定時間にも適用（半日勤務 w=0.5 → 所定 3.5h）
+      prescribedHours += sitePrescribed * entry.w
+
       let dayHours = 0
       if (entry.st && entry.et) {
         // 時間ベース: 現場の workSchedule に従って実労働を計算
@@ -1665,8 +1691,10 @@ export function calculateVietnameseSalary(
         const endMin = etParts[0] * 60 + (etParts[1] || 0)
         nightMinutes += calcNightMinutes(startMin, endMin)
       } else {
-        // レガシー入力: 7h + 残業h
-        dayHours = 7 + (entry.o || 0)
+        // レガシー入力: 主集計と式統一 = w × sitePrescribed + 残業h
+        // C-6 修正: 旧 (7 + o) → (w × sitePrescribed + o)
+        //   半日勤務 (w=0.5) で actualHours が過大計上されるバグを修正
+        dayHours = entry.w * sitePrescribed + (entry.o || 0)
       }
       actualHours += dayHours
     }
@@ -1674,6 +1702,7 @@ export function calculateVietnameseSalary(
     dayInfos.push({
       day: d, dow, weekNum, isLegalHoliday,
       actualHours: Math.round(actualHours * 100) / 100,
+      prescribedHours: Math.round(prescribedHours * 100) / 100,
       nightMinutes,
       hadWork,
     })
@@ -1728,7 +1757,18 @@ export function calculateVietnameseSalary(
   const additionalDays = Math.max(0, regularWorkDays - baseDays)
   const additionalAllowance = Math.round(hourlyRate * additionalDays * 7)
   const otAllowance = Math.round(hourlyRate * 1.25 * statutoryOT)
-  const legalHolidayAllowance = Math.round(hourlyRate * 1.35 * legalHolidayHours)
+
+  // 2026-06-XX 修正 (C-3): 法定休日労働 8h超の追加0.25倍（労基法37条）
+  //   法定休日(日曜)出勤は通常1.35倍だが、8h超部分は更に深夜・時間外と
+  //   同じく+0.25 = 1.60倍にする必要がある。
+  //   例: 日曜10h勤務 = 8h × 1.35 + 2h × 1.60 = 10.8h + 3.2h = 14.0h相当
+  const lhUnder8 = dayInfos
+    .filter(di => di.isLegalHoliday && di.actualHours > 0)
+    .reduce((s, di) => s + Math.min(8, di.actualHours), 0)
+  const lhOver8 = dayInfos
+    .filter(di => di.isLegalHoliday && di.actualHours > 0)
+    .reduce((s, di) => s + Math.max(0, di.actualHours - 8), 0)
+  const legalHolidayAllowance = Math.round(hourlyRate * (1.35 * lhUnder8 + 1.60 * lhOver8))
   const nightAllowance = Math.round(hourlyRate * 0.25 * nightHours)
   const compAllowance = Math.round(hourlyRate * 7 * 0.6 * compDays)
 
@@ -1736,19 +1776,21 @@ export function calculateVietnameseSalary(
   // 労基法24条（賃金全額払い）に基づき、月所定時間を超えた労働で
   // 法定上限内のものは「通常賃金」で支払う必要がある。
   //
-  // 基本給 = baseDays × 7h をカバー（有給・出勤の合計が baseDays に満たない場合は
-  //          別途欠勤控除で調整）。
+  // 基本給 = baseDays × 7h をカバー。
   // 追加所定 = 出勤日数が baseDays を超えた場合に「丸1日分 × 7h」を加算。
-  // ↑これだけだと、1日のうち所定7h超過の労働（残業欄入力分）が支払い対象から
-  //   漏れる。日次の所定超過分(各日 actualHours - 7h)から3層判定後の法定外残業
-  //   (statutoryOT) を差し引いた残りを「所定外労働手当」として支払う。
+  // ↑これだけだと、1日のうち所定超過の労働（残業欄入力分）が支払い対象から
+  //   漏れる。日次の所定超過分(各日 actualHours - prescribedHours)から
+  //   3層判定後の法定外残業 (statutoryOT) を差し引いた残りを支払う。
   //
-  // 例: 出勤18日(各日7h)+有給2日+残業18.5h、3層判定 statutoryOT=1.0h
+  // 2026-06-XX 修正 (C-2): 所定時間を固定 7h ではなく、各日の prescribedHours
+  //   (現場workSchedule × w係数) で動的判定。IHI現場(8h)などで過大計上を防ぐ。
+  //
+  // 例: 出勤18日(各日所定7h)+有給2日+残業18.5h、3層判定 statutoryOT=1.0h
   //     → 所定外労働時間 = 18.5 - 1.0 = 17.5h
   //     → 所定外労働手当 = 時給×17.5h = 17.5×時給 (1.25倍ではない)
   const totalDailyExcess = dayInfos
     .filter(di => !di.isLegalHoliday && di.actualHours > 0)
-    .reduce((s, di) => s + Math.max(0, di.actualHours - 7), 0)
+    .reduce((s, di) => s + Math.max(0, di.actualHours - di.prescribedHours), 0)
   const nonStatutoryOTHours = Math.max(0, totalDailyExcess - statutoryOT)
   const nonStatutoryOTAllowance = Math.round(hourlyRate * nonStatutoryOTHours)
 
