@@ -1340,17 +1340,20 @@ export async function GET(request: NextRequest) {
         const legalPL = w.hireDate ? calcLegalPL(w.hireDate, grantDate || new Date().toISOString().split('T')[0]) : 0
 
         // 年5日取得義務チェック（労基法第39条第7項）
-        // 2026-06-XX 修正 (CR-1): 共通ヘルパー judgeFiveDayObligation に集約
-        //   旧バグ: periodUsed (申請ベース、未来日含む) で判定 → 義務未達を見落とし
-        //   旧バグ: 期限90日以内のみ警告 → 行政指導タイミング(6-8ヶ月)に間に合わない
-        //   新ロジック:
-        //     - actualPeriodUsed (実消化、今日以前のみ) で判定
-        //     - 経過9ヶ月以上 OR 残3ヶ月以内 OR 退職予定が期限前 で警告
+        // 2026-06-XX 改訂: requestedPeriodUsed（承認済み未来日も含む申請ベース）で判定
+        //   背景:
+        //     - 承認済み有給は att に p:1 が書かれ「コミット済み取得予定」として扱える
+        //     - 取り消しは admin revoke action 必須（容易には起きない）
+        //     - 「6月後半5日承認済みなのに警告が出る」UX問題（過剰警告）を解消
+        //   安全網:
+        //     - 万一 revoke で承認が取り消された場合、次回ページ更新時に
+        //       requestedPeriodUsed が減って警告が再表示される
+        //     - 経過9ヶ月以上 OR 残3ヶ月以内 OR 退職予定が期限前 で警告（早期通知維持）
         let fiveDayShortfall = 0
         if (grantDate && grantDays > 0) {
-          const { actualPeriodUsed } = computePeriodUsed(w.id, grantDate, allAtt, todayIso)
+          const { requestedPeriodUsed } = computePeriodUsed(w.id, grantDate, allAtt, todayIso)
           const judge = judgeFiveDayObligation(
-            grantDate, grantDays, actualPeriodUsed, w.retired, todayIso
+            grantDate, grantDays, requestedPeriodUsed, w.retired, todayIso
           )
           if (judge.warning) {
             fiveDayShortfall = judge.shortfall
