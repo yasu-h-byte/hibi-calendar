@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
@@ -300,6 +300,13 @@ export async function POST(request: NextRequest) {
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
       await updateMapByKey(docRef, 'plData', plData)
+      // 2026-06-XX 追加: 健全性チェック用に最終実行時刻を記録
+      try {
+        const sysRef = doc(db, 'demmen', 'system')
+        await setDoc(sysRef, { lastExpiryRun: new Date().toISOString() }, { merge: true })
+      } catch (sysErr) {
+        console.warn('[processExpiry] lastExpiryRun 記録失敗:', sysErr)
+      }
       return NextResponse.json({
         success: true,
         processed: expiredList.length,
