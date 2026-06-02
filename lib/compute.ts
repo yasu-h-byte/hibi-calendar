@@ -977,6 +977,46 @@ export function computeMonthly(
       }
     }
 
+    // 2026-06-XX 追加 (I-7): 中途入退社月の baseDays / 所定日数 を在籍期間で按分
+    //   旧: baseDays/prescribedDays が常に20固定で、中途入退社月では実労働<20で
+    //       過大な欠勤控除が発生していた
+    //   新: 在籍日数の割合で baseDays/prescribedDays を縮小
+    //       例: 6/15入社 → 在籍 16/30 = 53% → baseDays = round(20 × 0.53) = 11日
+    const rawWorker = main.workers.find(x => x.id === wm.id)
+    let proratedBaseDays = baseDays
+    let proratedPrescribedDays = workerPrescribedDays
+    if (rawWorker) {
+      const ymY = parseInt(ym.slice(0, 4))
+      const ymM = parseInt(ym.slice(4, 6))
+      const monthStartIso = `${ymY}-${String(ymM).padStart(2, '0')}-01`
+      const monthEndIso = `${ymY}-${String(ymM).padStart(2, '0')}-${String(new Date(ymY, ymM, 0).getDate()).padStart(2, '0')}`
+      const totalDaysInMonth = new Date(ymY, ymM, 0).getDate()
+
+      const hireDate = rawWorker.hireDate || ''
+      const retiredDate = rawWorker.retired || ''
+
+      // 在籍期間の開始日 = max(月初, 入社日)
+      const startIso = hireDate && hireDate > monthStartIso ? hireDate : monthStartIso
+      // 在籍期間の終了日 = min(月末, 退職日)
+      const endIso = retiredDate && retiredDate < monthEndIso ? retiredDate : monthEndIso
+
+      if (startIso <= endIso) {
+        // 在籍日数を計算
+        const startD = parseInt(startIso.slice(8, 10))
+        const endD = parseInt(endIso.slice(8, 10))
+        const activeDays = endD - startD + 1
+        if (activeDays < totalDaysInMonth) {
+          // 按分が必要なケース（中途入社 or 中途退職）
+          const ratio = activeDays / totalDaysInMonth
+          proratedBaseDays = Math.round(baseDays * ratio)
+          proratedPrescribedDays = Math.round(workerPrescribedDays * ratio)
+        }
+      }
+    }
+    // 後段の計算で proratedBaseDays / proratedPrescribedDays を使う
+    // 一旦 workerPrescribedDays を上書き
+    workerPrescribedDays = proratedPrescribedDays
+
     // ベトナム人スタッフの給与計算は2026年5月を境に旧ルール／新ルールが切り替わる
     // - 4月以前: 月の所定時間ベース（旧ロジック）
     //            基本給=時給×所定時間, 残業=実労働>所定時間, 欠勤=所定日数下回り分
@@ -1001,8 +1041,9 @@ export function computeMonthly(
       //   7. 欠勤控除         = 欠勤日 × 時給 × 7h
       // 所定休日(土・カレンダーoff)労働は別枠1.25倍を支払わず、週40h超過分のみ
       // 法定外残業として1.25倍が自動適用される（法令最低・最適コスト）。
+      // 2026-06-XX 修正 (I-7): 中途入退社時は proratedBaseDays を使用
       const v = calculateVietnameseSalary(
-        wm.id, ym, wm.hourlyRate, baseDays, attD, main.sites,
+        wm.id, ym, wm.hourlyRate, proratedBaseDays, attD, main.sites,
         wm.plUsed, wm.compDays, wm.examDays,
       )
 
@@ -1084,13 +1125,17 @@ export function computeMonthly(
     } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && useNewRules) {
       // ── 5月以降: 法令準拠（salary方式: 月給から時給を逆算） ──
       // hourlyRate版と同じ計算式を使用。基本給だけは月給固定値で上書き。
-      const derivedHourlyRate = wm.salary / (baseDays * 7)
+      // 2026-06-XX 修正 (I-7/I-9): 中途入退社時は基本給を proratedBaseDays で按分
+      //   月給制でも在籍期間に応じて basePay を縮小（労基法の日割り原則）
+      const proratedSalary = baseDays > 0 ? Math.round(wm.salary * (proratedBaseDays / baseDays)) : wm.salary
+      const derivedHourlyRate = wm.salary / (baseDays * 7)  // 単価は固定（按分前の月給ベース）
       const v = calculateVietnameseSalary(
-        wm.id, ym, derivedHourlyRate, baseDays, attD, main.sites,
+        wm.id, ym, derivedHourlyRate, proratedBaseDays, attD, main.sites,
         wm.plUsed, wm.compDays, wm.examDays,
       )
       // 基本給は月給値を採用（時給からの再計算による丸め誤差を避ける）
-      const fixedBase = wm.salary
+      // 2026-06-XX 修正 (I-7): 中途入退社時は按分した値を採用
+      const fixedBase = proratedSalary
       // 2026-06-XX 修正: 所定外労働手当 (nonStatutoryOTAllowance) も加算
       const salaryNet = fixedBase + v.additionalAllowance + v.nonStatutoryOTAllowance + v.otAllowance
                       + v.legalHolidayAllowance + v.nightAllowance + v.compAllowance

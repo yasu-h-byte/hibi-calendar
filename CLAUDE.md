@@ -9,6 +9,9 @@
 | [docs/company.md](docs/company.md) | 会社概要・組織構成・従業員構成 |
 | [docs/labor-rules.md](docs/labor-rules.md) | 労働時間・変形労働時間制・運用サイクル |
 | [docs/salary-calculation.md](docs/salary-calculation.md) | 給与計算（日給月給制・時給制）・鳶土工合計ルール |
+| [docs/calc-examples.md](docs/calc-examples.md) | 給与計算例集（社労士確認用・8パターン） |
+| [docs/labor-agreements.md](docs/labor-agreements.md) | 労使協定・36協定・就業規則対応表（社労士向け） |
+| [docs/historical-changes.md](docs/historical-changes.md) | 給与計算ルール変更履歴（労基法115条対応） |
 | [docs/paid-leave.md](docs/paid-leave.md) | 有給休暇管理・法定付与・申請フロー・年5日義務 |
 | [docs/attendance.md](docs/attendance.md) | 出面入力・PC/スマホ画面・フッター合計ルール |
 | [docs/ui-design.md](docs/ui-design.md) | UI・デザイン・色分け・言語表示ルール |
