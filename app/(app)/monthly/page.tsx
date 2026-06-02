@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
 import { getYmOptions as getYmOptionsFromLib } from '@/lib/compute'
+import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 
 // ────────────────────────────────────────
 //  Types
@@ -251,6 +252,8 @@ export default function MonthlyPage() {
 
   // 所定日数
   const [prescribedDays, setPrescribedDays] = useState<string>('')
+  // 計算根拠モーダル用
+  const [auditingWorker, setAuditingWorker] = useState<WorkerMonthly | null>(null)
   const [savingWorkDays, setSavingWorkDays] = useState(false)
 
   // Top-level tab
@@ -958,7 +961,14 @@ export default function MonthlyPage() {
                   return (
                     <tr key={w.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30 ${w.isDispatched ? 'bg-purple-50/30' : ''}`}>
                       <td className="px-3 py-2.5 font-medium whitespace-nowrap">
-                        {w.name}
+                        <button
+                          onClick={() => setAuditingWorker(w)}
+                          className="hover:underline hover:text-hibi-navy text-left"
+                          title="クリックで給与計算の根拠を表示"
+                        >
+                          {w.name}
+                          <span className="ml-1 text-[10px] text-blue-500 opacity-0 group-hover:opacity-100">🔍</span>
+                        </button>
                         {w.isDispatched && (
                           <span
                             className="ml-1.5 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold align-middle"
@@ -1252,6 +1262,17 @@ export default function MonthlyPage() {
         </div>
       )}
       </>}
+
+      {/* 給与計算根拠モーダル（透明化・監査用） */}
+      {auditingWorker && (
+        <PayrollAuditModal
+          worker={auditingWorker}
+          ym={ym}
+          prescribedDays={Number(prescribedDays) || 0}
+          baseDays={20}
+          onClose={() => setAuditingWorker(null)}
+        />
+      )}
     </div>
   )
 }
