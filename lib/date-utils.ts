@@ -111,3 +111,69 @@ export function yearsFromDate(isoDate: string, asOf?: Date): number {
 export function todayIso(): string {
   return formatIsoDate(new Date())
 }
+
+/**
+ * JST 固定で「今日の日付」を取得（2026-06-XX 追加）
+ *
+ * - ホスト TZ に依存せず、Asia/Tokyo (UTC+9) として日付を返す
+ * - Vercel (UTC) / ローカル (JST) で挙動が変わらない
+ *
+ * @returns YYYY-MM-DD
+ */
+export function todayJstIso(): string {
+  const now = new Date()
+  const jstMs = now.getTime() + 9 * 60 * 60 * 1000
+  return new Date(jstMs).toISOString().slice(0, 10)
+}
+
+/**
+ * 安全な月加算（2026-06-XX 追加・行政解釈準拠）
+ *
+ * JavaScript の `Date.setMonth(+n)` は「翌n月後の同日が存在しない場合、
+ * 次月に繰り越す」仕様。これが労基法上の「応当日」判定で問題になる。
+ *
+ * 例: 入社 2025-08-31 → setMonth(+6) → 2026-03-03 (JS バグ)
+ *     行政解釈: 月末入社の応当日は前月末日 → 2026-02-28 (正)
+ *
+ * - 加算後の月に応当日が存在する場合: そのまま
+ * - 存在しない場合（月末入社など）: 加算後月の末日に丸める
+ *
+ * @param dateIso YYYY-MM-DD 形式の日付
+ * @param months  加算する月数（負も可）
+ * @returns YYYY-MM-DD 形式の日付
+ *
+ * 例:
+ *   addMonthsSafe('2025-08-31', 6) → '2026-02-28' (2月末日)
+ *   addMonthsSafe('2024-02-29', 12) → '2025-02-28' (うるう年→平年)
+ *   addMonthsSafe('2025-08-15', 6) → '2026-02-15' (通常)
+ */
+export function addMonthsSafe(dateIso: string, months: number): string {
+  if (!dateIso) return ''
+  const [y, m, d] = dateIso.slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return ''
+
+  const totalMonths = (m - 1) + months  // 0-indexed
+  const targetY = y + Math.floor(totalMonths / 12)
+  const targetM = ((totalMonths % 12) + 12) % 12  // 0-indexed (負の月対応)
+
+  // 加算後月の末日（targetM+1 月の 0日目 = 当月末日）
+  const lastDayOfTargetMonth = new Date(targetY, targetM + 1, 0).getDate()
+  const safeDay = Math.min(d, lastDayOfTargetMonth)
+
+  const mm = String(targetM + 1).padStart(2, '0')
+  const dd = String(safeDay).padStart(2, '0')
+  return `${targetY}-${mm}-${dd}`
+}
+
+/**
+ * 有給休暇の時効: 付与日 + 2年（うるう年も正確に）
+ *
+ * 旧実装は `Date.now() + 2*365*86400000` でうるう年1日ズレあり。
+ * `addMonthsSafe` 経由で月末入社・うるう年を正しく処理。
+ *
+ * @param grantDateIso YYYY-MM-DD
+ * @returns YYYY-MM-DD（時効発生日 = grantDate + 2年）
+ */
+export function calcExpiryIso(grantDateIso: string): string {
+  return addMonthsSafe(grantDateIso, 24)
+}

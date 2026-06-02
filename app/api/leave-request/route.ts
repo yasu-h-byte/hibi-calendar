@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from 'firebase/firestore'
 import { getWorkerByToken } from '@/lib/workers'
@@ -150,13 +150,27 @@ export async function POST(request: NextRequest) {
         }
 
         // pending の申請もカウント
+        // 2026-06-XX 修正 (CR-6): 当期 (grantDate〜+1年) 内の pending のみカウント
+        //   旧: 全期間の pending → 来期分も控除 → 当期残あるのに却下されるバグ
+        //   新: 当期内日付の pending のみ
         const pendingQ = query(
           collection(db, 'leaveRequests'),
           where('workerId', '==', worker.id),
           where('status', '==', 'pending')
         )
         const pendingSnap = await getDocs(pendingQ)
-        const pendingCount = pendingSnap.size
+        const gdStartIso = grantDate ? grantDate.toISOString().slice(0, 10) : ''
+        const gdEndIso = grantDate ? (() => {
+          const e = new Date(grantDate)
+          e.setFullYear(e.getFullYear() + 1)
+          return e.toISOString().slice(0, 10)
+        })() : ''
+        const pendingCount = pendingSnap.docs.filter(d => {
+          const pd = d.data().date
+          if (!pd) return false
+          if (!gdStartIso || !gdEndIso) return true  // grantDate なし時は従来通り全カウント
+          return pd >= gdStartIso && pd < gdEndIso
+        }).length
 
         const used = adjustment + periodUsed + pendingCount
         const remaining = Math.max(0, total - used)
@@ -341,6 +355,68 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
+    // ── 管理者: 承認済み有給の取消（労使協定・社内ポリシー対応） ──
+    //   - admin/approver 限定（職長は不可）
+    //   - status='approved' のみ対象
+    //   - att の p=1 をピンポイント削除（他の併存フィールドは保持）
+    //   - leaveRequest doc に revoked 状態 + 履歴を記録
+    if (action === 'revoke') {
+      const authUser = await getApiAuthUser(request)
+      if (!authUser.authorized) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      // admin / super-admin / 承認者(政仁さん, workerId=1) のみ
+      const isAdmin = authUser.actor === 'admin' || authUser.actor === 'super-admin'
+      const isApprover = typeof authUser.actor === 'number' && authUser.actor === 1  // 政仁さん
+      if (!isAdmin && !isApprover) {
+        return NextResponse.json({ error: 'Admin/approver only' }, { status: 403 })
+      }
+      const { requestId, reason } = body
+      if (!requestId) {
+        return NextResponse.json({ error: 'Missing requestId' }, { status: 400 })
+      }
+      const docRef = doc(db, 'leaveRequests', requestId)
+      const snap = await getDoc(docRef)
+      if (!snap.exists()) {
+        return NextResponse.json({ error: 'Request not found' }, { status: 404 })
+      }
+      const data = snap.data() as LeaveRequest
+      if (data.status !== 'approved' && data.status !== 'foreman_approved') {
+        return NextResponse.json({ error: 'Only approved/foreman_approved can be revoked' }, { status: 409 })
+      }
+      // att から p=1 をピンポイント削除（IM-11 と同じく他フィールドは温存）
+      const attYm = data.date.replace(/-/g, '').slice(0, 6)
+      const attDay = data.date.slice(8, 10).replace(/^0/, '')
+      const attRef = doc(db, 'demmen', `att_${attYm}`)
+      // siteId 不明なので main から取得（落ち着いた dispatch）
+      const siteIdForAtt = data.siteId || 'unknown'
+      const attKey = `${siteIdForAtt}_${data.workerId}_${attYm}_${attDay}`
+      try {
+        await updateDoc(attRef, { [`d.${attKey}.p`]: deleteField() })
+      } catch (delErr) {
+        console.warn('[revoke] att p 削除失敗 (siteId 違いの可能性):', delErr)
+      }
+      // leaveRequest doc を revoked 状態に
+      const revokeHistory = (data as { revokeHistory?: unknown[] }).revokeHistory || []
+      const actorStr = String(authUser.actor)
+      await updateDoc(docRef, {
+        status: 'revoked',
+        revokedAt: new Date().toISOString(),
+        revokedBy: actorStr,
+        revokedReason: reason || '',
+        revokeHistory: [
+          ...revokeHistory,
+          {
+            at: new Date().toISOString(),
+            by: actorStr,
+            previousStatus: data.status,
+            reason: reason || '',
+          },
+        ],
+      })
+      return NextResponse.json({ success: true })
+    }
+
     // ── 管理者: 承認済み有給の日付を変更（誤申請の修正用） ──
     //   - admin/approver 限定
     //   - status='approved' or 'foreman_approved' のみ対象
@@ -384,11 +460,13 @@ export async function POST(request: NextRequest) {
 
       // approved 状態の場合は att データの差し替えが必要
       if (data.status === 'approved') {
-        // 旧日付の p=1 を削除（エントリ全体を削除）
+        // 2026-06-XX 修正 (IM-11): p フィールドのみピンポイント削除
+        //   旧: エントリ全体を deleteField() → 併存フィールド (m, r, note 等) も巻添え消失
+        //   新: dot-notation で .p のみ削除 → 他フィールドは温存
         const oldKey = attKey(data.siteId, data.workerId, data.ym, data.day)
         const oldAttRef = doc(db, 'demmen', `att_${data.ym}`)
         await ensureDocExists(oldAttRef)
-        await updateDoc(oldAttRef, { [`d.${oldKey}`]: deleteField() })
+        await updateDoc(oldAttRef, { [`d.${oldKey}.p`]: deleteField() })
 
         // 新日付に p=1 を書込
         await setAttendanceEntry(data.siteId, data.workerId, newYm, newDay, { w: 0, p: 1 })

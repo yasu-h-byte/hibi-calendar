@@ -20,7 +20,7 @@
  * このファイルの関数のみを使い、生の `setDoc(ref, { 何か: {} }, { merge: true })`
  * は **使わない** こと。
  */
-import { DocumentReference, setDoc, getDoc } from 'firebase/firestore'
+import { DocumentReference, setDoc, getDoc, updateDoc } from 'firebase/firestore'
 
 /**
  * ドキュメントが存在することを保証する。
@@ -42,6 +42,44 @@ export async function ensureDocExists(ref: DocumentReference): Promise<void> {
  * それぞれ空マップで初期化したいケース。ただし既存ドキュメントの
  * これらのフィールドには絶対に触れない。
  */
+/**
+ * Map 型フィールドの worker 単位更新（2026-06-XX 追加・CR-5 対応）
+ *
+ * 用途: plData = { "1": [...], "2": [...], ... } のような worker ID キーの
+ * Map 型フィールドを「dot-notation で worker ごとに更新」する。
+ *
+ * これにより:
+ * - `setDoc(ref, { plData: {} }, { merge: true })` の罠を完全回避
+ * - 並列実行時の race condition を最小化（他 worker は触らない）
+ * - 大量データ書き込みを 400件ずつチャンク化
+ *
+ * 注意: 既存 worker のレコードを「上書き」する用途。差分マージはしない。
+ *       追加・削除も含めた完全置換なら、書き込み前にメモリ上で構築済みの
+ *       worker レコード配列を渡すこと。
+ *
+ * @param ref       書き込み対象のドキュメント
+ * @param mapField  対象フィールド名 (例: "plData")
+ * @param updates   { workerId: 新しい値, ... } の map
+ */
+export async function updateMapByKey(
+  ref: DocumentReference,
+  mapField: string,
+  updates: Record<string, unknown>,
+): Promise<void> {
+  const keys = Object.keys(updates)
+  if (keys.length === 0) return
+  // 400件ごとにチャンク化（Firestore updateDoc の上限を回避）
+  const CHUNK = 400
+  for (let i = 0; i < keys.length; i += CHUNK) {
+    const chunk = keys.slice(i, i + CHUNK)
+    const payload: Record<string, unknown> = {}
+    for (const k of chunk) {
+      payload[`${mapField}.${k}`] = updates[k]
+    }
+    await updateDoc(ref, payload)
+  }
+}
+
 export async function ensureFieldsInitialized(
   ref: DocumentReference,
   fields: string[]

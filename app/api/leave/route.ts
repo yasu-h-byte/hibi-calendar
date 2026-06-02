@@ -5,6 +5,9 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
+import { addMonthsSafe, todayJstIso, calcExpiryIso } from '@/lib/date-utils'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear } from '@/lib/leave-compute'
+import { updateMapByKey } from '@/lib/firestore-safe'
 
 /**
  * 前期残日数から新FY付与時の carryOver 値を計算する共通ヘルパー
@@ -313,7 +316,8 @@ export async function POST(request: NextRequest) {
 
       // race-warning: 同時実行は要注意（全 worker の plData を一括書き換えるため、
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
-      await updateDoc(docRef, { plData })
+      // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
+      await updateMapByKey(docRef, 'plData', plData)
       return NextResponse.json({
         success: true,
         processed: expiredList.length,
@@ -533,7 +537,8 @@ export async function POST(request: NextRequest) {
 
       // race-warning: 同時実行は要注意（全 worker の plData を一括書き換えるため、
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
-      await updateDoc(docRef, { plData })
+      // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
+      await updateMapByKey(docRef, 'plData', plData)
       return NextResponse.json({ success: true, stats })
     }
 
@@ -563,13 +568,13 @@ export async function POST(request: NextRequest) {
 
       // 入社日 + 6ヶ月の日付文字列 (YYYY-MM-DD) を返す。空文字なら null。
       // 労基法上、初回付与は必ず入社から6ヶ月以上経過後 (39条1項)
+      // 2026-06-XX 修正 (IM-1): addMonthsSafe で月末入社バグを解消
+      //   旧: setMonth(+6) で 2025-08-31 → 2026-03-03（誤、3月に繰越）
+      //   新: 行政解釈準拠 → 2026-02-28（応当日がなければ前月末日）
       const hirePlus6Months = (hireDate: string): string | null => {
         if (!hireDate) return null
-        const h = new Date(hireDate)
-        if (isNaN(h.getTime())) return null
-        const d = new Date(h)
-        d.setMonth(d.getMonth() + 6)
-        return d.toISOString().slice(0, 10)
+        const safe = addMonthsSafe(hireDate, 6)
+        return safe || null
       }
 
       type PendingGrant = {
@@ -758,7 +763,9 @@ export async function POST(request: NextRequest) {
         return !w?.visa || w.visa === 'none'
       }
 
-      // 付与日近傍(±7日)に既存付与があるかチェック（二重付与防止用）
+      // 付与日近傍(±7日) or 同一FY に既存付与があるかチェック（二重付与防止用）
+      // 2026-06-XX 修正 (IM-12): ±7日 だけだと別日付の連打で同FY二重付与を防げない
+      //   isSameFiscalYear (1年以内の近接付与) も併用して防御強化
       type PLRec = { fy: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number }
       const hasGrantNear = (records: PLRec[], targetDate: string): boolean => {
         const target = new Date(targetDate).getTime()
@@ -768,7 +775,10 @@ export async function POST(request: NextRequest) {
           if (!r.grantDate) return false
           const d = new Date(r.grantDate).getTime()
           if (isNaN(d)) return false
-          return Math.abs(d - target) <= 7 * 86400000
+          // ±7日 OR 同一FY (1年以内の近接付与)
+          if (Math.abs(d - target) <= 7 * 86400000) return true
+          if (isSameFiscalYear({ grantDate: r.grantDate }, targetDate)) return true
+          return false
         })
       }
 
@@ -835,7 +845,8 @@ export async function POST(request: NextRequest) {
 
       // race-warning: 同時実行は要注意（複数 worker の plData を一括書き換えるため、
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
-      await updateDoc(docRef, { plData })
+      // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
+      await updateMapByKey(docRef, 'plData', plData)
       return NextResponse.json({ success: true, granted })
     }
 
@@ -1014,7 +1025,8 @@ export async function POST(request: NextRequest) {
 
       // race-warning: 同時実行は要注意（全 worker の plData を一括書き換えるため、
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
-      await updateDoc(docRef, { plData })
+      // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
+      await updateMapByKey(docRef, 'plData', plData)
       return NextResponse.json({ success: true, updated })
     }
 
@@ -1168,12 +1180,14 @@ export async function GET(request: NextRequest) {
     const currentYm = ymKey(nowForDispatch.getFullYear(), nowForDispatch.getMonth() + 1)
 
     // Build worker PL data — 現在FYに該当するレコードを優先して使用
-    // 出向中スタッフは出向先で有給管理されるため、ここでは除外
+    // 2026-06-XX 修正 (CR-2): 出向中スタッフも年5日義務の監視対象に含める
+    //   労基法上、在籍出向の場合は出向元の使用者に5日義務が課せられる
+    //   旧: !isDispatchedAt で完全除外 → 監視外 → 罰金リスク
+    //   新: 出向中も含めて監視（出向先での消化が plData に反映されている前提）
     // 2026-06-XX 修正: 「今日時点で退職済み」のみ除外（未来日退職予定者は5日義務監視対象）
-    const todayIso = new Date().toISOString().slice(0, 10)
+    const todayIso = todayJstIso()
     const workers = main.workers
       .filter(w => !isAlreadyRetired(w.retired, todayIso) && w.job !== 'yakuin' && w.job !== 'jimu')
-      .filter(w => !isDispatchedAt(w, currentYm))
       .map(w => {
         const plRecordsRaw = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number; _archived?: boolean }[]
         // アーカイブ済みレコードは表示対象から除外（期限切れで2年以上経過）
@@ -1337,19 +1351,20 @@ export async function GET(request: NextRequest) {
         const legalPL = w.hireDate ? calcLegalPL(w.hireDate, grantDate || new Date().toISOString().split('T')[0]) : 0
 
         // 年5日取得義務チェック（労基法第39条第7項）
-        // 条件: 年10日以上付与 + 有効期限まで残り3ヶ月以内 + 5日未満消化
-        // ⚠️ 2026-05-08 修正: 国籍に関係なく年10日以上付与のスタッフ全員が対象。
-        //   旧コードは外国人(visa!=='none')限定だったが、勤続6.5年以上の日本人も
-        //   年20日付与で同義務対象なので含める必要があった。
+        // 2026-06-XX 修正 (CR-1): 共通ヘルパー judgeFiveDayObligation に集約
+        //   旧バグ: periodUsed (申請ベース、未来日含む) で判定 → 義務未達を見落とし
+        //   旧バグ: 期限90日以内のみ警告 → 行政指導タイミング(6-8ヶ月)に間に合わない
+        //   新ロジック:
+        //     - actualPeriodUsed (実消化、今日以前のみ) で判定
+        //     - 経過9ヶ月以上 OR 残3ヶ月以内 OR 退職予定が期限前 で警告
         let fiveDayShortfall = 0
-        if (grantDays >= 10 && periodUsed < 5) {
-          if (expiryDate) {
-            const exp = new Date(expiryDate)
-            const now = new Date()
-            const diffDays = Math.floor((exp.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
-            if (diffDays <= 90) {  // 残り3ヶ月（90日）以内
-              fiveDayShortfall = 5 - periodUsed
-            }
+        if (grantDate && grantDays > 0) {
+          const { actualPeriodUsed } = computePeriodUsed(w.id, grantDate, allAtt, todayIso)
+          const judge = judgeFiveDayObligation(
+            grantDate, grantDays, actualPeriodUsed, w.retired, todayIso
+          )
+          if (judge.warning) {
+            fiveDayShortfall = judge.shortfall
           }
         }
 
