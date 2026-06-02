@@ -545,6 +545,29 @@ export async function POST(request: NextRequest) {
       const today = todayJST()
       const todayDate = new Date(today)
 
+      // アラート表示の事前通知ウィンドウ: 付与日の 30日前 から通知開始
+      //   (旧: 付与日が来てから通知 → 直前まで気付かない問題があった)
+      const ALERT_LEAD_DAYS = 30
+      const isWithinAlertWindow = (grantDateStr: string): boolean => {
+        const grant = new Date(grantDateStr)
+        if (isNaN(grant.getTime())) return false
+        const alertStart = new Date(grant)
+        alertStart.setDate(alertStart.getDate() - ALERT_LEAD_DAYS)
+        const alertStartStr = alertStart.toISOString().slice(0, 10)
+        return alertStartStr <= today
+      }
+
+      // 入社日 + 6ヶ月の日付文字列 (YYYY-MM-DD) を返す。空文字なら null。
+      // 労基法上、初回付与は必ず入社から6ヶ月以上経過後 (39条1項)
+      const hirePlus6Months = (hireDate: string): string | null => {
+        if (!hireDate) return null
+        const h = new Date(hireDate)
+        if (isNaN(h.getTime())) return null
+        const d = new Date(h)
+        d.setMonth(d.getMonth() + 6)
+        return d.toISOString().slice(0, 10)
+      }
+
       type PendingGrant = {
         workerId: number
         name: string
@@ -603,15 +626,38 @@ export async function POST(request: NextRequest) {
         const isJp = !w.visa || w.visa === 'none'
 
         if (isJp) {
-          // 日本人: 10/1起点
+          // 日本人: 10/1 起点だが、入社が直近の場合は hireDate + 6ヶ月を初回付与日とする
+          //   (労基法 39条1項: 初回付与は入社から6ヶ月経過後)
+          //   - 例: 入社 6/1 → hire+6m = 12/1 → 次の 10/1 (来年) より前 → 初回は 12/1
+          //   - 例: 入社 1/1 → hire+6m = 7/1 → 同年 10/1 より前 → 同年 10/1 でOK
+          //   - 例: 入社 5/1 (3年前)など → 既に複数年経過なら 10/1 起点で OK
           const y = todayDate.getFullYear()
           const m = todayDate.getMonth() + 1
           const currentFyStart = m >= 10 ? y : y - 1
-          const expectedFy = String(currentFyStart)
-          const expectedGrantDate = `${currentFyStart}-10-01`
+          const fyGrantDate = `${currentFyStart}-10-01`
+          const hirePlus6 = w.hireDate ? hirePlus6Months(w.hireDate) : null
 
-          // 付与判定に引っかからなければ対象
-          if (expectedGrantDate <= today && !hasGrantForExpected(records, expectedFy, expectedGrantDate)) {
+          // 初回付与かどうかの判定: 過去に付与レコードが一切なければ初回
+          const hasAnyGrant = records.some(r => (r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)
+
+          let expectedGrantDate: string
+          let expectedFy: string
+          let reason: string
+
+          if (!hasAnyGrant && hirePlus6 && hirePlus6 > fyGrantDate) {
+            // 初回付与で、入社+6ヶ月が FY 起点より遅い → 入社+6ヶ月を採用
+            expectedGrantDate = hirePlus6
+            expectedFy = expectedGrantDate.slice(0, 4)
+            reason = '初回付与（入社6ヶ月経過）'
+          } else {
+            // 通常の FY 起点
+            expectedGrantDate = fyGrantDate
+            expectedFy = String(currentFyStart)
+            reason = `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`
+          }
+
+          // アラートウィンドウ (付与日の30日前～) かつ未付与なら対象に
+          if (isWithinAlertWindow(expectedGrantDate) && !hasGrantForExpected(records, expectedFy, expectedGrantDate)) {
             const hasHire = !!w.hireDate
             const legalDays = hasHire ? calcLegalPL(w.hireDate!, expectedGrantDate) : 10
             pending.push({
@@ -623,7 +669,7 @@ export async function POST(request: NextRequest) {
               nextGrantDate: expectedGrantDate,
               fy: expectedFy,
               legalDays,
-              reason: `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`,
+              reason,
               needsAttention: !hasHire,
               attentionNote: !hasHire ? '入社日未登録のため法定日数(10日)はデフォルト値です' : undefined,
             })
@@ -637,28 +683,23 @@ export async function POST(request: NextRequest) {
           const lastRec = withGrant[withGrant.length - 1]
 
           if (!lastRec) {
-            // 初回付与候補: hireDate + 6ヶ月
+            // 初回付与候補: hireDate + 6ヶ月、ただし30日前から事前通知
             if (w.hireDate) {
-              const hire = new Date(w.hireDate)
-              if (!isNaN(hire.getTime())) {
-                const firstGrant = new Date(hire)
-                firstGrant.setMonth(firstGrant.getMonth() + 6)
-                const firstGrantStr = firstGrant.toISOString().slice(0, 10)
-                if (firstGrantStr <= today) {
-                  const legalDays = calcLegalPL(w.hireDate, firstGrantStr)
-                  pending.push({
-                    workerId: w.id,
-                    name: w.name,
-                    visa: w.visa || '',
-                    hireDate: w.hireDate,
-                    tenureText: tenureTextOf(w.hireDate, firstGrantStr),
-                    nextGrantDate: firstGrantStr,
-                    fy: String(firstGrant.getFullYear()),
-                    legalDays,
-                    reason: '初回付与（入社6ヶ月経過）',
-                    needsAttention: false,
-                  })
-                }
+              const firstGrantStr = hirePlus6Months(w.hireDate)
+              if (firstGrantStr && isWithinAlertWindow(firstGrantStr)) {
+                const legalDays = calcLegalPL(w.hireDate, firstGrantStr)
+                pending.push({
+                  workerId: w.id,
+                  name: w.name,
+                  visa: w.visa || '',
+                  hireDate: w.hireDate,
+                  tenureText: tenureTextOf(w.hireDate, firstGrantStr),
+                  nextGrantDate: firstGrantStr,
+                  fy: firstGrantStr.slice(0, 4),
+                  legalDays,
+                  reason: '初回付与（入社6ヶ月経過）',
+                  needsAttention: false,
+                })
               }
             }
             continue
@@ -671,7 +712,8 @@ export async function POST(request: NextRequest) {
           const nextGrantStr = nextGrant.toISOString().slice(0, 10)
 
           const nextFyForCheck = String(nextGrant.getFullYear())
-          if (nextGrantStr <= today && !hasGrantForExpected(records, nextFyForCheck, nextGrantStr)) {
+          // アラートウィンドウ (付与日の30日前～) かつ未付与なら対象に
+          if (isWithinAlertWindow(nextGrantStr) && !hasGrantForExpected(records, nextFyForCheck, nextGrantStr)) {
             const nextFy = nextFyForCheck
             const hasHire = !!w.hireDate
             const legalDays = hasHire ? calcLegalPL(w.hireDate!, nextGrantStr) : 10
