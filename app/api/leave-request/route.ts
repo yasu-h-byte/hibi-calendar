@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore'
+import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from 'firebase/firestore'
 import { getWorkerByToken } from '@/lib/workers'
 import { getStaffSites, ymKey, attKey, setAttendanceEntry } from '@/lib/attendance'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
+import { ensureDocExists } from '@/lib/firestore-safe'
+import { logActivity } from '@/lib/activity'
 
 interface LeaveRequest {
   workerId: number
@@ -337,6 +339,95 @@ export async function POST(request: NextRequest) {
       })
 
       return NextResponse.json({ success: true })
+    }
+
+    // ── 管理者: 承認済み有給の日付を変更（誤申請の修正用） ──
+    //   - admin/approver 限定
+    //   - status='approved' or 'foreman_approved' のみ対象
+    //   - 旧日付の att エントリから p=1 を削除、新日付に p=1 を書込
+    //   - leaveRequest doc に新日付・previousDate を記録、activity ログ出力
+    if (action === 'modify_date') {
+      if (!await checkApiAuth(request)) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const { requestId, newDate, modifiedBy } = body
+      if (!requestId || !newDate) {
+        return NextResponse.json({ error: 'requestId and newDate required' }, { status: 400 })
+      }
+      // newDate format: "YYYY-MM-DD"
+      const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(newDate)
+      if (!dateMatch) {
+        return NextResponse.json({ error: 'Invalid newDate format (YYYY-MM-DD required)' }, { status: 400 })
+      }
+      const newYm = `${dateMatch[1]}${dateMatch[2]}`
+      const newDay = parseInt(dateMatch[3], 10)
+
+      const docRef = doc(db, 'leaveRequests', requestId)
+      const snap = await getDoc(docRef)
+      if (!snap.exists()) {
+        return NextResponse.json({ error: 'Request not found' }, { status: 404 })
+      }
+      const data = snap.data() as LeaveRequest
+
+      // 承認済み (or 職長承認済み) のみ日付変更可能
+      if (data.status !== 'approved' && data.status !== 'foreman_approved') {
+        return NextResponse.json({
+          error: `承認前の申請は日付変更できません（現在: ${data.status}）。スタッフ本人に取消してもらい、再申請してください。`,
+        }, { status: 409 })
+      }
+
+      // 既に同じ日付なら何もしない（誤操作防止）
+      if (data.date === newDate) {
+        return NextResponse.json({ success: true, noop: true })
+      }
+
+      // approved 状態の場合は att データの差し替えが必要
+      if (data.status === 'approved') {
+        // 旧日付の p=1 を削除（エントリ全体を削除）
+        const oldKey = attKey(data.siteId, data.workerId, data.ym, data.day)
+        const oldAttRef = doc(db, 'demmen', `att_${data.ym}`)
+        await ensureDocExists(oldAttRef)
+        await updateDoc(oldAttRef, { [`d.${oldKey}`]: deleteField() })
+
+        // 新日付に p=1 を書込
+        await setAttendanceEntry(data.siteId, data.workerId, newYm, newDay, { w: 0, p: 1 })
+      }
+
+      // leaveRequest doc を更新
+      const modifiedAt = new Date().toISOString()
+      const dataAsRecord = data as unknown as Record<string, unknown>
+      const history = Array.isArray(dataAsRecord.dateModifyHistory)
+        ? (dataAsRecord.dateModifyHistory as unknown[])
+        : []
+      await setDoc(docRef, {
+        ...data,
+        date: newDate,
+        ym: newYm,
+        day: newDay,
+        // 履歴を保存（複数回の変更にも対応）
+        dateModifyHistory: [
+          ...history,
+          {
+            previousDate: data.date,
+            previousYm: data.ym,
+            previousDay: data.day,
+            newDate,
+            modifiedAt,
+            modifiedBy: modifiedBy || 0,
+          },
+        ],
+        lastDateModifiedAt: modifiedAt,
+        lastDateModifiedBy: modifiedBy || 0,
+      })
+
+      await logActivity(
+        String(modifiedBy || 'admin'),
+        'leave.modifyDate',
+        `${data.workerName} (ID:${data.workerId}) の有給日付を ${data.date} → ${newDate} に変更`,
+      )
+
+      return NextResponse.json({ success: true, oldDate: data.date, newDate })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })

@@ -175,13 +175,22 @@ export default function LeavePage() {
   const [buyoutForm, setBuyoutForm] = useState({ days: '', amount: '', reason: 'year-end' as 'year-end' | 'retirement' | 'other' })
   const [buyoutSubmitting, setBuyoutSubmitting] = useState(false)
   // 申請管理
-  const [leaveRequests, setLeaveRequests] = useState<{ id: string; workerId: number; workerName: string; date: string; siteId: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; foremanApprovedBy?: number; reviewedAt?: string; rejectedReason?: string }[]>([])
+  const [leaveRequests, setLeaveRequests] = useState<{
+    id: string; workerId: number; workerName: string; date: string; siteId: string;
+    reason: string; status: string; requestedAt: string;
+    foremanApprovedAt?: string; foremanApprovedBy?: number;
+    reviewedAt?: string; rejectedReason?: string;
+    dateModifyHistory?: { previousDate: string; newDate: string; modifiedAt: string; modifiedBy: number }[];
+  }[]>([])
   const [sites, setSites] = useState<{ id: string; name: string; foreman?: number }[]>([])
   // mforeman: 月別職長オーバーライド ("siteId_ym" -> { wid: workerId })
   const [mforeman, setMforeman] = useState<Record<string, { wid: number }>>({})
   const [processingReq, setProcessingReq] = useState<string | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  // 日付変更モーダル用（承認済み有給の誤申請修正）
+  const [modifyingId, setModifyingId] = useState<string | null>(null)
+  const [modifyNewDate, setModifyNewDate] = useState('')
   const [reqFilter, setReqFilter] = useState<'all' | 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled'>('all')
   // 一括承認用: 展開中グループ集合（key = `${workerId}_${status}_${reason}`）
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -673,6 +682,35 @@ export default function LeavePage() {
             setRejectingId(null); setRejectReason(''); fetchData()
           } catch {} finally { setProcessingReq(null) }
         }
+        // 承認済み有給の日付変更（誤申請修正用、admin/approver のみ）
+        const handleModifyDate = async (id: string, newDate: string) => {
+          if (!newDate) { alert('新しい日付を選択してください'); return }
+          setProcessingReq(id)
+          try {
+            const stored = localStorage.getItem('hibi_auth')
+            const { user } = stored ? JSON.parse(stored) : { user: null }
+            const res = await fetch('/api/leave-request', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+              body: JSON.stringify({ action: 'modify_date', requestId: id, newDate, modifiedBy: user?.workerId || 0 }),
+            })
+            if (!res.ok) {
+              const d = await res.json().catch(() => ({}))
+              alert(d.error || '日付変更に失敗しました')
+              return
+            }
+            const data = await res.json()
+            if (data.noop) {
+              alert('変更前と同じ日付です')
+            } else {
+              alert(`日付を変更しました\n${data.oldDate} → ${data.newDate}`)
+            }
+            setModifyingId(null)
+            setModifyNewDate('')
+            fetchData()
+          } catch {
+            alert('通信エラー')
+          } finally { setProcessingReq(null) }
+        }
         // ── 一括処理（2026-05-15 追加） ──
         // 同一スタッフの連続申請（例: 帰国に伴う15件分の有給）を1クリックで処理する。
         // 並列リクエストで全件を投げ、最後に fetchData() で再読込。
@@ -810,17 +848,77 @@ export default function LeavePage() {
                                   </>
                                   )
                                 })()}
-                                {req.status === 'approved' && <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">承認済</span>}
+                                {req.status === 'approved' && (
+                                  <>
+                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">承認済</span>
+                                    {(userRole === 'admin' || userRole === 'approver') && (
+                                      <button
+                                        onClick={() => { setModifyingId(req.id); setModifyNewDate(req.date) }}
+                                        disabled={processingReq === req.id}
+                                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-full text-[10px] font-bold disabled:opacity-50"
+                                        title="承認済み有給の日付を変更（誤申請修正）"
+                                      >
+                                        📝 日付変更
+                                      </button>
+                                    )}
+                                  </>
+                                )}
                                 {req.status === 'rejected' && <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold">却下</span>}
                                 {req.status === 'cancelled' && <span className="px-2 py-1 bg-gray-200 text-gray-600 rounded-full text-xs font-bold">取り消し</span>}
                               </div>
                             </div>
+                            {/* 日付変更モードの表示（承認済み有給の修正） */}
+                            {modifyingId === req.id && (
+                              <div className="mt-3 border-t pt-3 bg-amber-50 dark:bg-amber-900/20 -mx-4 -mb-4 px-4 pb-4 rounded-b-xl">
+                                <div className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-2">
+                                  📝 日付変更 — 承認済み有給の日付を修正します
+                                </div>
+                                <div className="text-[11px] text-amber-700 dark:text-amber-400 mb-2 leading-relaxed">
+                                  現在の日付: <strong>{fmtDate(req.date)}</strong><br/>
+                                  ※ 旧日付の出面データから「有給」を削除し、新日付に「有給」を書き込みます。<br/>
+                                  ※ 操作は監査ログに記録されます。
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <label className="text-xs text-gray-600">新しい日付:</label>
+                                  <input
+                                    type="date"
+                                    value={modifyNewDate}
+                                    onChange={e => setModifyNewDate(e.target.value)}
+                                    className="border border-amber-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+                                  />
+                                  <button
+                                    onClick={() => handleModifyDate(req.id, modifyNewDate)}
+                                    disabled={processingReq === req.id || !modifyNewDate || modifyNewDate === req.date}
+                                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                                  >
+                                    {processingReq === req.id ? '処理中...' : '日付変更を実行'}
+                                  </button>
+                                  <button
+                                    onClick={() => { setModifyingId(null); setModifyNewDate('') }}
+                                    className="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs"
+                                  >
+                                    キャンセル
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                             {rejectingId === req.id && (
                               <div className="mt-3 flex items-center gap-2 border-t pt-3">
                                 <input type="text" value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="却下理由（任意）"
                                   className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-3 py-1.5 text-sm" />
                                 <button onClick={() => handleReject(req.id)} className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold">却下する</button>
                                 <button onClick={() => setRejectingId(null)} className="px-2 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs">取消</button>
+                              </div>
+                            )}
+                            {/* 日付変更履歴の表示（あれば） */}
+                            {req.dateModifyHistory && req.dateModifyHistory.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
+                                <span className="font-bold">📝 修正履歴:</span>
+                                {req.dateModifyHistory.map((h, i) => (
+                                  <span key={i} className="ml-2">
+                                    {h.previousDate} → {h.newDate} ({fmtTs(h.modifiedAt)})
+                                  </span>
+                                ))}
                               </div>
                             )}
                           </div>
