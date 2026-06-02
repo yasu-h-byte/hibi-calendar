@@ -12,6 +12,8 @@ import {
 import { AttendanceEntry, calcActualHours } from '@/types'
 import { isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isAlreadyRetired } from './workers'
+import { computePeriodUsed } from './leave-compute'
+import { calcExpiryIso } from './date-utils'
 
 // ────────────────────────────────────────
 //  共通ヘルパー
@@ -1367,30 +1369,22 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
     if (!grantDate) return ''
     const gd = new Date(grantDate)
     if (isNaN(gd.getTime())) return ''
-    const exp = new Date(gd)
-    exp.setFullYear(exp.getFullYear() + 2)
-    exp.setDate(exp.getDate() - 1)
-    return fmtDate(exp.toISOString())
+    // 2026-06-XX 修正 (MI-7): calcExpiryIso で正確な+2年計算（うるう年対応）
+    //   旧: setFullYear(+2) は 2024-02-29 → 2026-02-28 になるが、
+    //       内部的に setDate(-1) で 2026-02-27 になる微妙なズレあり
+    //   新: addMonthsSafe(grantDate, 24) で常に同じ日付（応当日無ければ末日）
+    const expIso = calcExpiryIso(grantDate)
+    return fmtDate(expIso + 'T00:00:00Z')
   }
 
   // periodUsed 計算（grantDate..+1年 のPエントリ、申請ベース）
-  // ※ 2026-05-18: 申請ベースで統一（未来日付の p:1 も使用済みとして含める）
+  // 2026-06-XX 修正 (IM-6): 共通ヘルパー computePeriodUsed に統一
+  //   - multi-site dedup を内蔵（旧実装は dup count バグあり）
+  //   - 残日数表示は申請ベース (requestedPeriodUsed) を採用
   const countPeriodUsed = (workerId: number, grantDate?: string): number => {
     if (!grantDate) return 0
-    const gd = new Date(grantDate)
-    if (isNaN(gd.getTime())) return 0
-    const end = new Date(gd); end.setFullYear(end.getFullYear() + 1)
-    let count = 0
-    for (const [key, entry] of Object.entries(allAtt)) {
-      if (!entry) continue
-      const e = entry as { p?: number | boolean }
-      if (!e.p) continue
-      const pk = parseDKey(key)
-      if (parseInt(pk.wid) !== workerId) continue
-      const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-      if (d >= gd && d < end) count++
-    }
-    return count
+    const result = computePeriodUsed(workerId, grantDate, allAtt as Record<string, unknown>)
+    return result.requestedPeriodUsed  // 残日数計算は申請ベース
   }
 
   // ─── シート1: 管理簿 ───
