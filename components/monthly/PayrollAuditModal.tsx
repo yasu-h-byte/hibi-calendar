@@ -288,9 +288,45 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                 {w.actualWorkDays !== undefined && w.actualWorkDays !== w.workDays && (
                   <tr><td>実出勤日数</td><td className="font-mono">{w.actualWorkDays}日（補償を含まない）</td></tr>
                 )}
-                <tr><td>残業時間（合計）</td><td className="font-mono">{fmtNum(w.otHours, 'h')}</td></tr>
+                <tr>
+                  <td>残業時間（合計）</td>
+                  <td className="font-mono">
+                    {fmtNum(w.otHours, 'h')}
+                    <span className="text-[10px] text-gray-500 ml-1">（出面入力の残業欄合計）</span>
+                  </td>
+                </tr>
+                {/* 2026-06-XX 追加: 新ルールでは「3層判定後の法定外残業」のみが1.25倍支給対象。
+                    18.5h 入力されていても、実労働が法定上限を超えなければ大部分は基本給範囲内になる
+                    （変形労働時間制の本質）。誤解を避けるため明示する。 */}
+                {!mode.useOldRules && w.legalOtHours !== undefined && (
+                  <tr>
+                    <td>うち法定外残業</td>
+                    <td className="font-mono">
+                      <span className="font-bold">{fmtNum(w.legalOtHours, 'h')}</span>
+                      <span className="text-[10px] text-gray-500 ml-1">（3層判定後・1.25倍支給対象）</span>
+                    </td>
+                  </tr>
+                )}
+                {!mode.useOldRules && w.legalOtHours !== undefined && (w.otHours - w.legalOtHours) > 0.05 && (
+                  <tr>
+                    <td>うち基本給内</td>
+                    <td className="font-mono text-gray-600 text-[11px]">
+                      {fmtNum(w.otHours - w.legalOtHours, 'h')}（変形労働の枠内 ＝ 月の法定上限を超えないため割増対象外）
+                    </td>
+                  </tr>
+                )}
                 {w.actualWorkHours !== undefined && (
-                  <tr><td>実労働時間（時間ベース）</td><td className="font-mono">{fmtNum(w.actualWorkHours, 'h')}</td></tr>
+                  <tr>
+                    <td>実労働時間（時間ベース）</td>
+                    <td className="font-mono">
+                      {fmtNum(w.actualWorkHours, 'h')}
+                      {w.legalLimit !== undefined && (
+                        <span className="text-[10px] text-gray-500 ml-1">
+                          / 法定上限 {w.legalLimit}h（{(w.actualWorkHours || 0) <= w.legalLimit ? '✓ 範囲内' : '⚠️ 超過'}）
+                        </span>
+                      )}
+                    </td>
+                  </tr>
                 )}
                 <tr><td>有給日数</td><td className="font-mono">{w.plUsed || w.plDays || 0}日</td></tr>
                 {(w.examDays || 0) > 0 && <tr><td>試験日</td><td className="font-mono">{w.examDays}日</td></tr>}
@@ -326,9 +362,22 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                   <tr>
                     <td>残業手当</td>
                     <td className="font-mono">
+                      {/* 2026-06-XX 修正: 旧来 `× w.otHours` (日次入力の合計) を表示していたが、
+                          新ルールでは実際の支給は 3層判定後の `w.legalOtHours` を使う。
+                          表示式と実額が食い違って「金額計算がおかしい」と誤解される原因だった。
+                          - 新ルール: 法定外残業時間 (legalOtHours) × 時給 × 1.25 = otAllowance
+                          - 旧ルール: 月の残業合計 (otHours) × 時給 × 1.25 = otAllowance
+                          - 日本人: (日額 ÷ 8h) × otMul × otHours = otAllowance */}
                       <div className="text-[10px] text-gray-500">
-                        {w.hourlyRate ? `時給 ${fmtYen(w.hourlyRate)} × ${w.otMul} × ${w.otHours}h` :
-                          `(日額 ${fmtYen(w.rate)} ÷ 8h) × ${w.otMul} × ${w.otHours}h`}
+                        {(() => {
+                          const isVietnameseNewRules = !mode.useOldRules && w.hourlyRate
+                          const hUsed = isVietnameseNewRules ? (w.legalOtHours ?? 0) : (w.otHours ?? 0)
+                          const hLabel = isVietnameseNewRules ? '法定外残業' : '残業時間'
+                          if (w.hourlyRate) {
+                            return `時給 ${fmtYen(w.hourlyRate)} × ${w.otMul} × ${hUsed}h（${hLabel}）`
+                          }
+                          return `(日額 ${fmtYen(w.rate)} ÷ 8h) × ${w.otMul} × ${hUsed}h（${hLabel}）`
+                        })()}
                       </div>
                       <div className="font-bold">{fmtYen(w.otAllowance || 0)}</div>
                     </td>
@@ -403,6 +452,13 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
               <li>計算ロジックの詳細は <code className="bg-white px-1 rounded">lib/compute.ts</code> の <code className="bg-white px-1 rounded">computeMonthly</code> 関数を参照</li>
               <li>1ヶ月単位変形労働時間制（労基法32条の2）に基づき法定上限を月単位で判定</li>
               <li>{mode.useOldRules ? '〜2026年4月: 旧ルール（月所定時間ベース）' : '2026年5月〜: 新ルール（calculateVietnameseSalary による3層構造、法令準拠）'}</li>
+              {!mode.useOldRules && (
+                <li className="text-gray-700">
+                  <strong>変形労働時間制の本質:</strong> 1日所定7hで月の法定上限（暦日数×40÷7）以内であれば、所定を超えた労働の一部は基本給に含まれ、追加割増は不要。
+                  実労働が法定上限を超えた分のみ「法定外残業」として1.25倍支給される（労基法37条）。
+                  そのため「残業時間（合計）」と「法定外残業」は通常一致しない。
+                </li>
+              )}
             </ul>
           </section>
         </div>
