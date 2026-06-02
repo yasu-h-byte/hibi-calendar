@@ -35,7 +35,8 @@ export async function GET(request: NextRequest) {
         org: w.org || '',
         visa: w.visa || 'none',
         hireDate: w.hireDate,
-        retired: Boolean(w.retired),
+        // 2026-06-XX: retired は YYYY-MM-DD 文字列。空 → 未退職
+        retired: w.retired || '',
       }))
 
     const plData = (main.plData || {}) as Record<string, LeaveLedgerRecord[]>

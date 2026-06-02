@@ -1,6 +1,7 @@
 import { db } from './firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { MainData, PLRecord, RawWorker } from './compute'
+import { isAlreadyRetired } from './workers'
 
 /**
  * Get current date in JST (Asia/Tokyo).
@@ -184,9 +185,12 @@ export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]
   const today = getJSTDate()
   const results: AutoGrantResult[] = []
 
-  // Filter eligible workers: not retired, not yakuin, has hireDate
+  // Filter eligible workers: not yet retired, not yakuin, has hireDate
+  // 2026-06-XX 修正: 「未来日に退職予定」のスタッフは付与候補に残す
+  //   （退職日が入った瞬間に半自動付与対象から外れる旧バグの修正）
+  const todayIso = today.toISOString().slice(0, 10)
   const eligible = main.workers.filter(
-    (w: RawWorker) => !w.retired && w.job !== 'yakuin' && w.hireDate
+    (w: RawWorker) => !isAlreadyRetired(w.retired, todayIso) && w.job !== 'yakuin' && w.hireDate
   )
 
   const plData = { ...main.plData } as Record<string, PLRecord[]>
@@ -277,8 +281,10 @@ export function getUpcomingGrants(
   const today = getJSTDate()
   const upcoming: UpcomingGrant[] = []
 
+  // 2026-06-XX 修正: 未来日退職予定者を通知対象に含める（退職日まで付与され続けるため）
+  const todayIso = today.toISOString().slice(0, 10)
   const eligible = main.workers.filter(
-    (w: RawWorker) => !w.retired && w.job !== 'yakuin' && w.hireDate
+    (w: RawWorker) => !isAlreadyRetired(w.retired, todayIso) && w.job !== 'yakuin' && w.hireDate
   )
 
   for (const w of eligible) {

@@ -108,6 +108,34 @@ export function isStillActiveForMonth(retired: string | undefined | null, ym: st
 }
 
 /**
+ * 「今日時点で既に退職済み」かを判定（2026-06-XX 追加）
+ *
+ * - retired が空 → 退職予定なし → false（在籍中）
+ * - retired < todayIso → 退職日が過去 → true（退職済み）
+ * - retired >= todayIso → 退職予定だが今日時点では在籍 → false
+ *
+ * 用途:
+ *   - ダッシュボードの「今日時点で在籍中のメンバー」判定
+ *   - 自動有給付与通知の対象判定
+ *   - アクセスログの「現役スタッフ」判定
+ *
+ * isStillActiveForMonth との違い:
+ *   - isStillActiveForMonth(retired, ym): 月単位の集計対象判定
+ *   - isAlreadyRetired(retired, todayIso): 今日時点で退職済みか判定
+ *
+ * @param retired   YYYY-MM-DD 形式の退職日
+ * @param todayIso  YYYY-MM-DD 形式の今日の日付（省略時は new Date() を使用）
+ */
+export function isAlreadyRetired(
+  retired: string | undefined | null,
+  todayIso?: string,
+): boolean {
+  if (!retired) return false  // 退職予定なし
+  const today = todayIso || new Date().toISOString().slice(0, 10)
+  return retired < today
+}
+
+/**
  * カレンダー署名対象スタッフ判定の共通述語（2026-05-27 追加）
  *
  * 「外国人 × トークン保有 × 当該月在籍 × 当該月全期間帰国でない」の条件を

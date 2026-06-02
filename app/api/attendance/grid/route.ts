@@ -141,8 +141,9 @@ export async function GET(request: NextRequest) {
       calData?.status === 'approved' && calData?.days ? calData.days as Record<string, DayType> : null
 
     // All active workers (for assignment modal)
+    // 2026-06-XX 修正: 退職月までは配置候補に含める（同月内の引き継ぎ対応）
     const allWorkers = main.workers
-      .filter(w => !w.retired)
+      .filter(w => isStillActiveForMonth(w.retired, ym))
       .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
     // All subcons (for assignment modal) — 2026-05-18: 配置編集モーダルの「外注先」タブ用

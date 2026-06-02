@@ -125,7 +125,10 @@ export async function GET(request: NextRequest) {
       }
 
       case 'bukake': {
-        const result = computeMonthly(main, attD, attSD, ymStr, 0, undefined, baseDays)
+        // 2026-06-XX 修正: siteWorkDaysMap を画面と統一（/api/monthly と整合性確保）
+        const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
+        const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
+        const result = computeMonthly(main, attD, attSD, ymStr, 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -169,7 +172,10 @@ export async function GET(request: NextRequest) {
 
       case 'monthly': {
         // Monthly report: return JSON data for client-side print rendering
-        const result = computeMonthly(main, attD, attSD, ymStr, 0, undefined, baseDays)
+        // 2026-06-XX 修正: siteWorkDaysMap を画面と統一（/api/monthly と整合性確保）
+        const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
+        const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
+        const result = computeMonthly(main, attD, attSD, ymStr, 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -186,7 +192,10 @@ export async function GET(request: NextRequest) {
       case 'monthlyExcel': {
         const prescribedDays = Number(searchParams.get('prescribedDays')) || 0
         const orgFilter = searchParams.get('org') || 'all'
-        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays, undefined, baseDays)
+        // 2026-06-XX 修正: siteWorkDaysMap を画面と統一（/api/monthly と整合性確保）
+        const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
+        const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
+        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
         const monthSiteNames: Record<string, string> = {}
         for (const s of main.sites) monthSiteNames[s.id] = s.name
 

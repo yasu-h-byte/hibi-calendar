@@ -376,6 +376,195 @@ describe('computeMonthly - 集計整合性チェック', () => {
   })
 })
 
+describe('computeMonthly - 試験日 examDays (Phase M で追加)', () => {
+  test('試験日は workDays に含めないが examDays としてカウントされる', () => {
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number; exam?: number }> = {}
+    // 19日出勤 + 1日試験
+    for (let d = 1; d <= 19; d++) Object.assign(attD, dayWork('site1', 101, '202605', d))
+    Object.assign(attD, { [attKey('site1', 101, '202605', 20)]: { w: 0, exam: 1 } })
+
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    expect(w.examDays).toBe(1)
+    expect(w.workDays).toBe(19)
+  })
+
+  test('試験日が増えると欠勤日数が減る（同じ稼働日数で比較）', () => {
+    // 仕様: absentDays = baseDays - regularWorkDays - plUsed - compDays - examDays
+    //   examDays が +1 されると absentDays が −1 → absentDeduction が減る
+    const buildMainTpl = () => buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 20 } },
+    })
+
+    // ケースA: 10日出勤、試験なし
+    const attA: Record<string, { w: number; o?: number; exam?: number }> = {}
+    for (let d = 1; d <= 10; d++) Object.assign(attA, dayWork('site1', 101, '202605', d))
+    const resA = computeMonthly(buildMainTpl(), attA, {}, '202605', 20, undefined, 20)
+    const wA = resA.workers.find(x => x.id === 101)!
+
+    // ケースB: 10日出勤、+ 1日試験
+    const attB: Record<string, { w: number; o?: number; exam?: number }> = {}
+    for (let d = 1; d <= 10; d++) Object.assign(attB, dayWork('site1', 101, '202605', d))
+    Object.assign(attB, { [attKey('site1', 101, '202605', 11)]: { w: 0, exam: 1 } })
+    const resB = computeMonthly(buildMainTpl(), attB, {}, '202605', 20, undefined, 20)
+    const wB = resB.workers.find(x => x.id === 101)!
+
+    expect(wB.examDays).toBe(1)
+    expect(wA.examDays || 0).toBe(0)
+    // examDays が増えた分、欠勤控除が時給×7×1日分（=10500円）減る
+    expect((wA.absentDeduction || 0) - (wB.absentDeduction || 0)).toBe(Math.round(1500 * 7 * 1))
+  })
+})
+
+describe('computeMonthly - useOldRules フラグ (Phase M で追加)', () => {
+  test('useOldRules=true: 5月以降でも旧ルール（時給×月所定h）で計算', () => {
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+        useOldRules: true,
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 101, '202606', d))
+
+    const result = computeMonthly(main, attD, {}, '202606', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    // 旧ルール: prescribedHours = 20日 × 20/3h ≈ 133.33h（新ルールなら 140h）
+    expect(w.prescribedHours).toBeCloseTo(133.33, 0)
+  })
+
+  test('useOldRules=undefined (デフォルト): 5月以降は新ルール（baseDays × 7h）', () => {
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 101, '202606', d))
+
+    const result = computeMonthly(main, attD, {}, '202606', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    expect(w.prescribedHours).toBe(140)  // 20 × 7
+  })
+})
+
+describe('computeMonthly - 新ルール3層構造の金額検証 (Phase M で追加)', () => {
+  test('追加所定手当: regularWorkDays > baseDays の月のみ発生', () => {
+    // 2026年5月 — Sundays: 5/3, 5/10, 5/17, 5/24, 5/31 (5日)
+    // d=1..26 で稼働すると Sundays(3,10,17,24) を除く 22 日が regularWorkDays
+    // → additionalDays = 22 - 20 = 2
+    // → additionalAllowance = 1500 × 2 × 7 = 21000
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 22 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    for (let d = 1; d <= 26; d++) Object.assign(attD, dayWork('site1', 101, '202605', d))
+
+    const result = computeMonthly(main, attD, {}, '202605', 22, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    // 基本給（固定） = 1500 × 20 × 7 = 210000
+    expect(w.fixedBasePay).toBe(210000)
+    // 追加所定 = 1500 × 2 × 7 = 21000 (日曜は regularWorkDays に含めない)
+    expect(w.additionalAllowance).toBe(21000)
+  })
+
+  test('regularWorkDays ≤ baseDays なら追加所定手当は0', () => {
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    // 15日出勤（baseDays=20 未満）
+    for (let d = 1; d <= 15; d++) Object.assign(attD, dayWork('site1', 101, '202605', d))
+
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    expect(w.additionalAllowance).toBe(0)
+    // 基本給は固定（出勤に依らず）
+    expect(w.fixedBasePay).toBe(210000)
+  })
+})
+
+describe('computeMonthly - 法定休日（日曜出勤）— 新ルール (Phase M で追加)', () => {
+  test('日曜出勤分は legalHolidayHours / legalHolidayAllowance に反映', () => {
+    // 2026年5月 — 5/3, 5/10, 5/17, 5/24, 5/31 が日曜
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number; st?: string; et?: string }> = {}
+    // 5/3 (日曜) に出勤（8:00-17:00 → 実労働 8h）
+    Object.assign(attD, {
+      [attKey('site1', 101, '202605', 3)]: { w: 1, st: '08:00', et: '17:00' },
+    })
+
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    // 法定休日労働があれば legalHolidayHours が記録される
+    expect(w.legalHolidayHours).toBeGreaterThan(0)
+    // 法定休日手当 = 時給 × 1.35 × legalHolidayHours
+    expect(w.legalHolidayAllowance).toBeGreaterThan(0)
+  })
+})
+
+describe('computeMonthly - 深夜（22:00-5:00）— 新ルール (Phase M で追加)', () => {
+  test('深夜帯の労働は nightHours / nightAllowance に反映', () => {
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number; st?: string; et?: string }> = {}
+    // 18:00-23:00 出勤（22:00-23:00 が深夜帯 = 60分 = 1h）
+    Object.assign(attD, {
+      [attKey('site1', 101, '202605', 5)]: { w: 1, st: '18:00', et: '23:00' },
+    })
+
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    // 深夜割増（+0.25）
+    expect(w.nightHours).toBeGreaterThan(0)
+    expect(w.nightAllowance).toBeGreaterThan(0)
+    // 1h × 1500 × 0.25 = 375
+    expect(w.nightAllowance).toBe(Math.round(1 * 1500 * 0.25))
+  })
+})
+
 describe('computeMonthly - 鳶見習い (Phase 19 で追加)', () => {
   test('tobi_apprentice は tobi グループとして集計（合計面）', () => {
     const main = buildMain({

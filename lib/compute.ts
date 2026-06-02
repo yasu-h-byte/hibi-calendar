@@ -1201,7 +1201,15 @@ export function computeMonthly(
   const r1 = (v: number) => Math.round(v * 10) / 10
   const r0 = (v: number) => Math.round(v)
 
-  const workers = Array.from(workerMap.values()).filter(w => w.workDays > 0 || w.plDays > 0 || w.compDays > 0)
+  // 2026-06-XX 修正: 月給制日本人・月給制外国人はゼロ出勤月でも表示する
+  //   理由: 月給制は基本給が固定で支払われるため、出勤ゼロでも給与明細に出さないと
+  //         労基法24条（賃金全額払い）違反になる。
+  //   従来: w.workDays > 0 || w.plDays > 0 || w.compDays > 0 のいずれかが必要だった
+  //   → これだと月給制スタッフが「丸ごと有給の月」「丸ごと欠勤の月」に画面から消えていた
+  const workers = Array.from(workerMap.values()).filter(w =>
+    w.workDays > 0 || w.plDays > 0 || w.compDays > 0 ||
+    (w.salary !== undefined && w.salary > 0)
+  )
   workers.forEach(w => {
     w.workDays = r1(w.workDays); w.workAll = r1(w.workAll); w.otHours = r1(w.otHours)
     w.cost = r0(w.cost); w.otCost = r0(w.otCost); w.totalCost = r0(w.totalCost)

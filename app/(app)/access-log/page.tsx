@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { isTobiGroup } from '@/lib/jobs'
 
 interface AccessRow {
   workerId: number
@@ -23,11 +24,13 @@ function jobTypeBadge(row: AccessRow): { label: string; cls: string } {
   // workerId=0 の社長は「管理者」（人員マスタに無いケース）
   if (row.workerId === 0) return { label: '管理者', cls: 'bg-red-100 text-red-700' }
   switch (row.jobType) {
-    case 'yakuin':   return { label: '役員', cls: 'bg-red-100 text-red-700' }
-    case 'shokucho': return { label: '職長', cls: 'bg-blue-100 text-blue-700' }
-    case 'tobi':     return { label: 'とび', cls: 'bg-green-100 text-green-700' }
-    case 'doko':     return { label: '土工', cls: 'bg-gray-200 text-gray-600' }
-    case 'jimu':     return { label: '事務', cls: 'bg-purple-100 text-purple-700' }
+    case 'yakuin':         return { label: '役員', cls: 'bg-red-100 text-red-700' }
+    case 'shokucho':       return { label: '職長', cls: 'bg-blue-100 text-blue-700' }
+    case 'tobi':           return { label: 'とび', cls: 'bg-green-100 text-green-700' }
+    // 2026-06-XX 追加: 鳶見習い (tobi_apprentice) の表示対応
+    case 'tobi_apprentice':return { label: '鳶見習い', cls: 'bg-green-50 text-green-600' }
+    case 'doko':           return { label: '土工', cls: 'bg-gray-200 text-gray-600' }
+    case 'jimu':           return { label: '事務', cls: 'bg-purple-100 text-purple-700' }
     default:
       // 在留資格ありなら外国人スタッフ
       if (row.visa && row.visa !== 'none') return { label: 'スタッフ', cls: 'bg-orange-100 text-orange-700' }
@@ -70,7 +73,8 @@ export default function AccessLogPage() {
   const [rows, setRows] = useState<AccessRow[]>([])
   const [loading, setLoading] = useState(false)
   const [days, setDays] = useState(30)
-  const [jobFilter, setJobFilter] = useState<'all' | 'yakuin' | 'shokucho' | 'tobi' | 'doko' | 'jimu' | 'staff' | 'admin'>('all')
+  // 2026-06-XX: 鳶見習い (tobi_apprentice) フィルタ追加
+  const [jobFilter, setJobFilter] = useState<'all' | 'yakuin' | 'shokucho' | 'tobi' | 'tobi_apprentice' | 'doko' | 'jimu' | 'staff' | 'admin'>('all')
 
   useEffect(() => {
     try {
@@ -102,7 +106,8 @@ export default function AccessLogPage() {
   const filtered = rows.filter(r => {
     if (jobFilter === 'all') return true
     if (jobFilter === 'admin') return r.workerId === 0
-    if (jobFilter === 'staff') return r.jobType !== 'yakuin' && r.jobType !== 'shokucho' && r.jobType !== 'tobi' && r.jobType !== 'doko' && r.jobType !== 'jimu' && r.workerId !== 0 && r.visa && r.visa !== 'none'
+    // 2026-06-XX 修正: 鳶グループ判定は isTobiGroup に統一（鳶見習い・職長・役員を含む）
+    if (jobFilter === 'staff') return !isTobiGroup(r.jobType) && r.jobType !== 'doko' && r.jobType !== 'jimu' && r.workerId !== 0 && r.visa && r.visa !== 'none'
     return r.jobType === jobFilter
   })
 
@@ -147,6 +152,7 @@ export default function AccessLogPage() {
           <option value="yakuin">役員</option>
           <option value="shokucho">職長</option>
           <option value="tobi">とび</option>
+          <option value="tobi_apprentice">鳶見習い</option>
           <option value="doko">土工</option>
           <option value="jimu">事務</option>
           <option value="staff">スタッフ（外国人）</option>

@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
 import { getMainData, getAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
+import { isAlreadyRetired } from '@/lib/workers'
 
 /**
  * 前期残日数から新FY付与時の carryOver 値を計算する共通ヘルパー
@@ -327,7 +328,9 @@ export async function POST(request: NextRequest) {
       //   (fy を grantDate の年に合わせる。grantDate を認定データとして扱う)
       const autoFixMismatches = body.autoFixMismatches === true
       const data = snap.data()
-      type Worker = { id: number; name: string; retired?: boolean; job?: string; visa?: string; hireDate?: string }
+      // 2026-06-XX 修正: retired は YYYY-MM-DD 文字列であり boolean ではない
+      //   旧型宣言だと「未来日の退職予定が入った瞬間に対象から消える」バグの温床になる
+      type Worker = { id: number; name: string; retired?: string; job?: string; visa?: string; hireDate?: string }
       type PLRecFull = {
         fy: string | number
         grantDate?: string
@@ -537,7 +540,8 @@ export async function POST(request: NextRequest) {
     if (action === 'getPendingGrants') {
       // 付与時期を迎えているが未付与のワーカー一覧を返す（半自動付与用）
       const data = snap.data()
-      type Worker = { id: number; name: string; retired?: boolean; job?: string; visa?: string; hireDate?: string }
+      // 2026-06-XX 修正: retired は YYYY-MM-DD 文字列
+      type Worker = { id: number; name: string; retired?: string; job?: string; visa?: string; hireDate?: string }
       type PLRecord = { fy: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number }
       const workers = (data.workers || []) as Worker[]
       const plData = (data.plData || {}) as Record<string, PLRecord[]>
@@ -619,7 +623,8 @@ export async function POST(request: NextRequest) {
       }
 
       for (const w of workers) {
-        if (w.retired) continue
+        // 2026-06-XX 修正: 「今日時点で退職済み」のみ除外（未来日退職予定者は通知対象）
+        if (isAlreadyRetired(w.retired, today)) continue
         if (w.job === 'yakuin' || w.job === 'jimu') continue
 
         const records = plData[String(w.id)] || []
@@ -1164,8 +1169,10 @@ export async function GET(request: NextRequest) {
 
     // Build worker PL data — 現在FYに該当するレコードを優先して使用
     // 出向中スタッフは出向先で有給管理されるため、ここでは除外
+    // 2026-06-XX 修正: 「今日時点で退職済み」のみ除外（未来日退職予定者は5日義務監視対象）
+    const todayIso = new Date().toISOString().slice(0, 10)
     const workers = main.workers
-      .filter(w => !w.retired && w.job !== 'yakuin' && w.job !== 'jimu')
+      .filter(w => !isAlreadyRetired(w.retired, todayIso) && w.job !== 'yakuin' && w.job !== 'jimu')
       .filter(w => !isDispatchedAt(w, currentYm))
       .map(w => {
         const plRecordsRaw = (main.plData[String(w.id)] || []) as { fy: number | string; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number; _archived?: boolean }[]

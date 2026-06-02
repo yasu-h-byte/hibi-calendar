@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
 import { visaLabel } from '@/lib/labels'
+import { isTobiGroup, jobLabel as jobLabelLib } from '@/lib/jobs'
 
 // ─── Types ───
 
@@ -114,12 +115,18 @@ function ymToShortLabel(ym: string): string {
 }
 
 function jobLabel(job: string): string {
-  if (job === 'とび' || job === 'tobi' || job === '鳶') return '鳶'
-  if (job === 'tobi_apprentice' || job === '鳶見習い') return '鳶見習い'
-  if (job === 'doko' || job === '土工') return '土工'
-  if (job === '職長' || job === 'shokucho') return '職長'
-  if (job === '役員' || job === 'yakuin') return '役員'
-  return job || '他'
+  // 2026-06-XX 修正: 単一の真理ソース lib/jobs.ts に委譲
+  //   過去の入力で日本語ラベル ('とび' / '鳶' 等) が job フィールドに混入している
+  //   ケースに対する後方互換は jobLabelLib で吸収済み
+  if (job === 'とび' || job === '鳶') return '鳶'
+  if (job === '鳶見習い') return '鳶見習い'
+  if (job === '土工') return '土工'
+  if (job === '職長') return '職長'
+  if (job === '役員') return '役員'
+  // それ以外は lib/jobs.ts に集約された JOB_LABELS で解決（コード→日本語）
+  // 鳶見習い (tobi_apprentice) も自動対応
+  const lib = jobLabelLib(job)
+  return lib === '—' ? (job || '他') : lib
 }
 
 function jobBadgeColor(job: string): string {
@@ -1109,10 +1116,11 @@ function SiteMemberList({ members }: { members: SiteMember[] }) {
 
 /** SVG donut chart showing tobi vs doko breakdown */
 function DonutChart({ members }: { members: SiteMember[] }) {
-  const tobi = members.filter(m => {
-    const j = m.job || ''
-    return j === 'とび' || j === 'tobi' || j === '鳶'
-  }).length
+  // 2026-06-XX 修正: 集計ルール（鳶合計＝とび+鳶見習い+職長+役員+外注鳶）に合わせ
+  //                 単一の真理ソース isTobiGroup を使用。
+  //                 旧コードはハードコードで 'とび' / 'tobi' / '鳶' のみ判定しており
+  //                 鳶見習い・職長・役員が誤って土工に分類されていた。
+  const tobi = members.filter(m => isTobiGroup(m.job)).length
   const doko = members.length - tobi
   const total = members.length
 

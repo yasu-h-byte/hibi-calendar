@@ -11,7 +11,7 @@ import {
 } from './compute'
 import { AttendanceEntry } from '@/types'
 import { isWorkingDay } from './attendance'
-import { isStillActiveForMonth } from './workers'
+import { isStillActiveForMonth, isAlreadyRetired } from './workers'
 
 // ────────────────────────────────────────
 //  共通ヘルパー
@@ -708,8 +708,10 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
   ]
 
   const rows: (string | number)[][] = [titleRow, headers]
+  // 2026-06-XX 修正: 「今日時点で退職済み」のみ除外。未来日退職予定者は ledger 管理対象
+  const todayIso = new Date().toISOString().slice(0, 10)
   const activeWorkers = workers.filter(w => {
-    if (w.retired) return false
+    if (isAlreadyRetired(w.retired, todayIso)) return false
     if (orgFilter === 'hibi') return w.org === 'hibi' || w.org === '日比'
     if (orgFilter === 'hfu') return w.org === 'hfu' || w.org === 'HFU'
     return true
@@ -1266,7 +1268,8 @@ export interface LeaveLedgerWorker {
   org: string
   visa: string
   hireDate?: string
-  retired?: boolean
+  // 2026-06-XX 修正: 退職日は string (YYYY-MM-DD) で扱う（旧 boolean から変更）
+  retired?: string
 }
 
 export interface LeaveLedgerRecord {
@@ -1363,8 +1366,11 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
     return m
   }
 
+  // 2026-06-XX 修正: PL ledger は「今日時点で退職済み」のみ除外
+  //   未来日退職予定者は5日義務監視対象として ledger に必要
+  const todayIsoForLedger = new Date().toISOString().slice(0, 10)
   for (const w of workers) {
-    if (w.retired) continue
+    if (isAlreadyRetired(w.retired, todayIsoForLedger)) continue
     const records = plData[String(w.id)] || []
     // 付与日でソート
     const sorted = records.slice().sort((a, b) => {

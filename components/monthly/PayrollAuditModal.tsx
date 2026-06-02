@@ -134,7 +134,10 @@ function buildAuditChecks(w: WorkerMonthly, ym: string, prescribedDays: number):
   const legalLimit = calcLegalMonthlyLimit(ym)
 
   // 1. 法定上限チェック
-  const prescribedHours = w.prescribedHours || (prescribedDays * (w.visa === 'none' ? 8 : 7))
+  // 2026-06-XX 修正: フォールバック時の所定時間を 7h/日 に統一
+  //   理由: 当社の1ヶ月単位変形労働時間制では全スタッフ 7h/日 が標準（lib/compute.ts L1379 参照）
+  //   旧: 日本人 8h, 外国人 7h で食い違っていた（×8 だと 22日×8=176h で法定上限 171h を超えて誤判定）
+  const prescribedHours = w.prescribedHours || (prescribedDays * 7)
   checks.push({
     label: '所定労働時間が法定上限以内',
     pass: prescribedHours <= legalLimit,

@@ -17,6 +17,7 @@ import {
 } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
+import { isStillActiveForMonth } from '@/lib/workers'
 import { AttendanceEntry } from '@/types'
 
 /** Map frontend period param to compute buildYMList mode */
@@ -451,8 +452,9 @@ export async function GET(request: NextRequest) {
       const siteAssignData = getAssign(main, siteFilter, ym)
       const workerIds = siteAssignData.workers
 
+      // 2026-06-XX 修正: 退職月のスタッフは当該月まで集計対象に含める
       siteMembers = workerIds
-        .map(wid => main.workers.find(w => w.id === wid && !w.retired))
+        .map(wid => main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, ym)))
         .filter((w): w is typeof main.workers[0] => !!w)
         .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
@@ -463,7 +465,8 @@ export async function GET(request: NextRequest) {
         let tobi = 0
         let doko = 0
         for (const wid of wids) {
-          const worker = main.workers.find(w => w.id === wid && !w.retired)
+          // 2026-06-XX 修正: 当該月在籍判定（退職月スタッフを含める）
+          const worker = main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, mStr))
           if (worker) {
             if (isTobiGroup(worker.job)) tobi++
             else doko++

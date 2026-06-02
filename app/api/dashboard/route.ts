@@ -19,6 +19,7 @@ import {
 } from '@/lib/compute'
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
+import { isStillActiveForMonth, isAlreadyRetired } from '@/lib/workers'
 import { AttendanceEntry } from '@/types'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
@@ -49,8 +50,10 @@ function computePLAlert(main: MainData) {
     totalDays: number; usedDays: number; remaining: number; status: string
   }[] = []
 
+  // 2026-06-XX 修正: 今日時点で退職済みのみ除外（未来日退職予定者は5日義務監視対象）
+  const todayIsoForPl = new Date().toISOString().slice(0, 10)
   for (const w of main.workers) {
-    if (w.retired) continue
+    if (isAlreadyRetired(w.retired, todayIsoForPl)) continue
     const records = main.plData[String(w.id)] || []
     if (records.length === 0) continue
 
@@ -163,7 +166,8 @@ function computeTodayStatus(
     }
     if (isHomeLeaveByEntry) continue
 
-    const worker = main.workers.find(w => w.id === wid && !w.retired)
+    // 2026-06-XX 修正: 当該月在籍中のスタッフを欠勤者候補に
+    const worker = main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, ym))
     if (worker) absentWorkers.push({ id: worker.id, name: worker.name })
   }
 
@@ -176,8 +180,9 @@ async function computeForeignWorkerRates(
   baseYm: string, // YYYYMM
   cachedAtt?: Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>,
 ) {
+  // 2026-06-XX 修正: baseYm 在籍中の外国人スタッフ
   const foreignWorkers = main.workers.filter(w =>
-    !w.retired && w.visa && w.visa !== 'none' && w.visa !== ''
+    isStillActiveForMonth(w.retired, baseYm) && w.visa && w.visa !== 'none' && w.visa !== ''
   )
 
   // 進行月を除外し、過去6ヶ月分（確定済みの月のみ）を使用
@@ -791,8 +796,9 @@ export async function GET(request: NextRequest) {
       const siteAssignData = getAssign(main, siteFilter, ym)
       const workerIds = siteAssignData.workers
 
+      // 2026-06-XX 修正: 当該月 ym 在籍中のメンバーを表示
       siteMembers = workerIds
-        .map(wid => main.workers.find(w => w.id === wid && !w.retired))
+        .map(wid => main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, ym)))
         .filter((w): w is typeof main.workers[0] => !!w)
         .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
@@ -803,7 +809,8 @@ export async function GET(request: NextRequest) {
         let tobi = 0
         let doko = 0
         for (const wid of wids) {
-          const worker = main.workers.find(w => w.id === wid && !w.retired)
+          // 2026-06-XX 修正: トレンドは各月 mStr 在籍中で判定
+          const worker = main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, mStr))
           if (worker) {
             if (isTobiGroup(worker.job)) tobi++
             else doko++
@@ -968,8 +975,10 @@ export async function GET(request: NextRequest) {
     const todayDate = getJstNow()
     todayDate.setHours(0, 0, 0, 0)
     const visaExpiryItems: { name: string; daysLeft: number; expiry: string }[] = []
+    // 2026-06-XX 修正: 今日時点で退職済みのみ除外
+    const todayIsoForVisa = todayDate.toISOString().slice(0, 10)
     for (const w of main.workers) {
-      if (w.retired) continue
+      if (isAlreadyRetired(w.retired, todayIsoForVisa)) continue
       if (!w.visa || w.visa === 'none' || w.visa === '') continue
       const expiry = w.visaExpiry
       if (!expiry) continue
@@ -986,8 +995,9 @@ export async function GET(request: NextRequest) {
     // Use plAlert already computed - check workers with fiveDayShortfall from leave API logic
     // For simplicity, count workers with grantDays >= 10 and used < 5
     let plShortfallCount = 0
+    // 2026-06-XX 修正: 今日時点で退職済みのみ除外（未来日退職予定者は5日義務監視対象）
     for (const w of main.workers) {
-      if (w.retired) continue
+      if (isAlreadyRetired(w.retired, todayIsoForVisa)) continue
       const records = main.plData[String(w.id)] || []
       if (records.length === 0) continue
       const latest = records[records.length - 1]
@@ -1175,8 +1185,9 @@ export async function GET(request: NextRequest) {
       const m = todayD.getMonth() + 1
       const y = todayD.getFullYear()
 
+      // 2026-06-XX 修正: 今日時点で退職済みのみ除外（未来日退職予定者は付与候補）
       for (const w of main.workers) {
-        if (w.retired) continue
+        if (isAlreadyRetired(w.retired, todayIsoP)) continue
         if (w.job === 'yakuin' || w.job === 'jimu') continue
 
         const records = main.plData[String(w.id)] || []
