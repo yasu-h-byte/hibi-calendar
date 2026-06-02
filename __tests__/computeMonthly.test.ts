@@ -376,6 +376,100 @@ describe('computeMonthly - 集計整合性チェック', () => {
   })
 })
 
+describe('computeMonthly - 所定外労働手当（割増なし）(Phase N で追加)', () => {
+  test('出勤4日+残業4hで法定外残業0、所定外労働4hが通常賃金支給', () => {
+    // シナリオ: 月の総労働時間が法定上限を全く超えない最小例
+    //   - 1週間中の4日（Mon-Thu）にそれぞれ8h勤務 = 7h規定 + 1h残業
+    //   - 各日 actualHours=8h → daily statutory = 0
+    //   - 週labels = 4 × 8 = 32h → weekly statutory = 0
+    //   - 月labels = 32h → 法定上限以内、monthly statutory = 0
+    //   - 計 4h の残業は全て「所定外労働（割増なし）」として支給される
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 4 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    // 2026/5/4(月), 5/5(火), 5/6(水), 5/7(木) に各日 +1h残業
+    Object.assign(attD, { [attKey('site1', 101, '202605', 4)]: { w: 1, o: 1 } })
+    Object.assign(attD, { [attKey('site1', 101, '202605', 5)]: { w: 1, o: 1 } })
+    Object.assign(attD, { [attKey('site1', 101, '202605', 6)]: { w: 1, o: 1 } })
+    Object.assign(attD, { [attKey('site1', 101, '202605', 7)]: { w: 1, o: 1 } })
+
+    const result = computeMonthly(main, attD, {}, '202605', 4, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+
+    // 基本給は 20日 × 7h × 1,500 = 210,000（実出勤に関わらず固定）
+    expect(w.fixedBasePay).toBe(210000)
+    // 法定外残業 = 0（全ての層を超えていない）
+    expect(w.legalOtHours).toBe(0)
+    // 所定外労働 = 残業合計 4h（全て割増対象外）
+    expect(w.nonStatutoryOTHours).toBe(4)
+    // 所定外労働手当 = 1,500 × 4 = ¥6,000
+    expect(w.nonStatutoryOTAllowance).toBe(6000)
+    // 法定外残業手当 = 0
+    expect(w.otAllowance).toBe(0)
+    // 欠勤控除 = (20 - 4) × 1,500 × 7 = 168,000 ※有給なし
+    expect(w.absentDeduction).toBe(168000)
+    // 支給額 = 210,000 + 6,000 + 0 - 168,000 = 48,000
+    expect(w.salaryNetPay).toBe(48000)
+  })
+
+  test('出勤4日+有給2日+残業4hで欠勤控除が減る', () => {
+    // 上のテストに有給2日を追加 → 欠勤控除 = (20-4-2) × 時給 × 7h = 14 × 1500 × 7 = 147,000
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 4 } },
+    })
+    const attD: Record<string, { w: number; o?: number; p?: number }> = {}
+    for (const d of [4, 5, 6, 7]) Object.assign(attD, { [attKey('site1', 101, '202605', d)]: { w: 1, o: 1 } })
+    Object.assign(attD, { [attKey('site1', 101, '202605', 8)]: { w: 0, p: 1 } })
+    Object.assign(attD, { [attKey('site1', 101, '202605', 11)]: { w: 0, p: 1 } })
+
+    const result = computeMonthly(main, attD, {}, '202605', 4, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    // 有給は基本給枠を埋めるので、残業4hは全て所定外労働として支給
+    expect(w.nonStatutoryOTHours).toBe(4)
+    expect(w.nonStatutoryOTAllowance).toBe(6000)
+    expect(w.plUsed).toBe(2)
+    // 欠勤 = 20 - 4 (実出勤) - 2 (有給) = 14日
+    expect(w.absentDeduction).toBe(14 * 1500 * 7)
+  })
+
+  test('日次8h超で法定外残業が発生する場合、その分は所定外労働から除外', () => {
+    // 1日だけ 9h勤務 (= 7h規定 + 2h残業) → daily statutory = 1h
+    // 3日 × 8h = 24h + 1日 × 9h = 33h、weekly statutory = 0 (週40h以内)
+    // 残業合計 = 2 + 1×3 = 5h, statutoryOT = 1h, nonStatutoryOT = 4h
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人A', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 4 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    Object.assign(attD, { [attKey('site1', 101, '202605', 4)]: { w: 1, o: 2 } })  // 9h
+    Object.assign(attD, { [attKey('site1', 101, '202605', 5)]: { w: 1, o: 1 } })  // 8h
+    Object.assign(attD, { [attKey('site1', 101, '202605', 6)]: { w: 1, o: 1 } })  // 8h
+    Object.assign(attD, { [attKey('site1', 101, '202605', 7)]: { w: 1, o: 1 } })  // 8h
+
+    const result = computeMonthly(main, attD, {}, '202605', 4, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    expect(w.legalOtHours).toBeCloseTo(1.0, 1)  // 日次1.0h
+    expect(w.nonStatutoryOTHours).toBeCloseTo(4.0, 1)  // 残業合計5 - statutory1 = 4
+    expect(w.nonStatutoryOTAllowance).toBe(6000)  // 1,500 × 4
+    expect(w.otAllowance).toBe(Math.round(1500 * 1.25 * 1.0))  // 1,875
+  })
+})
+
 describe('computeMonthly - 試験日 examDays (Phase M で追加)', () => {
   test('試験日は workDays に含めないが examDays としてカウントされる', () => {
     const main = buildMain({

@@ -900,10 +900,12 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   // 外国人テーブル ヘッダー
   //   新ルール(5月以降): 法令準拠の詳細支給（22列）
   //   旧ルール(4月以前): 月所定時間ベースのシンプル構成（17列）
+  // 2026-06-XX 追加: 「所定外労働h」と「所定外労働手当」列を追加
+  //   月所定140hを超えた労働で法定上限内のもの（労基法24条による通常賃金支払い対象）
   const foreignHeadersNew = ['名前', '現場', '単価種別', '単価', 'ベース日数', '法定上限(h)',
     '通常出勤', '法休出勤', '補償日', '有給日数',
-    '実労働h', '法定残業h', '法休労働h', '深夜労働h',
-    '基本給(固定)', '追加所定手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
+    '実労働h', '所定外労働h', '法定残業h', '法休労働h', '深夜労働h',
+    '基本給(固定)', '追加所定手当', '所定外労働手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
     '欠勤日数', '欠勤控除', '支給額合計']
   const foreignHeadersOld = ['名前', '現場', '単価種別', '単価', '所定日数', '所定時間(h)',
     '実出勤日数', '補償日', '有給日数', '実労働時間', '残業時間',
@@ -955,8 +957,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       const baseDaysOrPrescribed = prescribedDays
       const limitOrPrescribedH = useNewRules ? (w.legalLimit || 0) : (w.prescribedHours || 0)
       if (useNewRules) {
-        // 法令準拠版（22列）
+        // 法令準拠版（25列、所定外労働列を含む）
         const legalHolidayDays = (w.actualWorkDays || 0) - (w.regularWorkDays || 0)
+        const wext = w as WorkerMonthly & { nonStatutoryOTHours?: number; nonStatutoryOTAllowance?: number }
         rows.push([
           nameWithDispatch,
           siteList,
@@ -969,11 +972,13 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
           w.compDays || 0,
           w.plDays || 0,
           w.actualWorkHours || 0,
-          w.legalOtHours || 0,           // = statutoryOT 合計
+          wext.nonStatutoryOTHours || 0,  // 所定外労働h（割増なし、通常賃金）
+          w.legalOtHours || 0,            // = statutoryOT 合計
           w.legalHolidayHours || 0,
           w.nightHours || 0,
           w.fixedBasePay || w.basePay || 0,
           w.additionalAllowance || 0,
+          wext.nonStatutoryOTAllowance || 0,  // 所定外労働手当
           w.otAllowance || 0,
           w.legalHolidayAllowance || 0,
           w.nightAllowance || 0,
@@ -1008,6 +1013,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     // 小計
     if (useNewRules) {
       const sumLegalHolidayDays = ws.reduce((s, w) => s + Math.max(0, (w.actualWorkDays || 0) - (w.regularWorkDays || 0)), 0)
+      const wsExt = ws as (WorkerMonthly & { nonStatutoryOTHours?: number; nonStatutoryOTAllowance?: number })[]
       rows.push([
         '小計', null, null, null, null, null,
         ws.reduce((s, w) => s + (w.regularWorkDays || 0), 0),
@@ -1015,11 +1021,13 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         ws.reduce((s, w) => s + (w.compDays || 0), 0),
         ws.reduce((s, w) => s + w.plDays, 0),
         null,
+        wsExt.reduce((s, w) => s + (w.nonStatutoryOTHours || 0), 0),
         ws.reduce((s, w) => s + (w.legalOtHours || 0), 0),
         ws.reduce((s, w) => s + (w.legalHolidayHours || 0), 0),
         ws.reduce((s, w) => s + (w.nightHours || 0), 0),
         ws.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
         ws.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
+        wsExt.reduce((s, w) => s + (w.nonStatutoryOTAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.legalHolidayAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.nightAllowance || 0), 0),
@@ -1113,11 +1121,11 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   //            （余った列は空白として描画される）
   if (useNewRulesByMonth) {
     setColWidths(ws, [
-      14, 14, 8, 10, 10, 10,       // 名前/現場/単価種別/単価/ベース日数/法定上限
-      8, 8, 8, 8,                  // 通常出勤/法休出勤/補償日/有給日数
-      9, 9, 9, 9,                  // 実労働h/法定残業h/法休労働h/深夜労働h
-      11, 11, 12, 12, 10, 10,      // 基本給/追加所定/法定外残業/法休手当/深夜手当/休業手当
-      8, 11, 14,                   // 欠勤日数/欠勤控除/支給額合計
+      14, 14, 8, 10, 10, 10,           // 名前/現場/単価種別/単価/ベース日数/法定上限
+      8, 8, 8, 8,                      // 通常出勤/法休出勤/補償日/有給日数
+      9, 10, 9, 9, 9,                  // 実労働h/所定外労働h/法定残業h/法休労働h/深夜労働h
+      11, 11, 12, 12, 11, 10, 10,      // 基本給/追加所定/所定外労働/法定外残業/法休手当/深夜手当/休業手当
+      8, 11, 14,                       // 欠勤日数/欠勤控除/支給額合計
     ])
   } else {
     setColWidths(ws, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, 8, 12, 14])

@@ -51,6 +51,9 @@ interface WorkerMonthly {
   salaryNetPay?: number
   fixedBasePay?: number
   additionalAllowance?: number
+  // 2026-06-XX 追加: 所定外労働手当（法定内・割増なし、新ルール時のみ）
+  nonStatutoryOTHours?: number
+  nonStatutoryOTAllowance?: number
   legalLimit?: number
   legalHolidayHours?: number
   legalHolidayAllowance?: number
@@ -61,6 +64,7 @@ interface WorkerMonthly {
   isDispatched?: boolean
   dispatchTo?: string
   dispatchDeduction?: number
+  useOldRules?: boolean
 }
 
 interface Props {
@@ -295,23 +299,22 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                     <span className="text-[10px] text-gray-500 ml-1">（出面入力の残業欄合計）</span>
                   </td>
                 </tr>
-                {/* 2026-06-XX 追加: 新ルールでは「3層判定後の法定外残業」のみが1.25倍支給対象。
-                    18.5h 入力されていても、実労働が法定上限を超えなければ大部分は基本給範囲内になる
-                    （変形労働時間制の本質）。誤解を避けるため明示する。 */}
+                {/* 2026-06-XX 追加: 残業時間の内訳を明示 */}
                 {!mode.useOldRules && w.legalOtHours !== undefined && (
                   <tr>
                     <td>うち法定外残業</td>
                     <td className="font-mono">
                       <span className="font-bold">{fmtNum(w.legalOtHours, 'h')}</span>
-                      <span className="text-[10px] text-gray-500 ml-1">（3層判定後・1.25倍支給対象）</span>
+                      <span className="text-[10px] text-gray-500 ml-1">（3層判定後・1.25倍支給）</span>
                     </td>
                   </tr>
                 )}
-                {!mode.useOldRules && w.legalOtHours !== undefined && (w.otHours - w.legalOtHours) > 0.05 && (
+                {!mode.useOldRules && (w.nonStatutoryOTHours || 0) > 0.05 && (
                   <tr>
-                    <td>うち基本給内</td>
-                    <td className="font-mono text-gray-600 text-[11px]">
-                      {fmtNum(w.otHours - w.legalOtHours, 'h')}（変形労働の枠内 ＝ 月の法定上限を超えないため割増対象外）
+                    <td>うち所定外労働</td>
+                    <td className="font-mono">
+                      <span className="font-bold">{fmtNum(w.nonStatutoryOTHours, 'h')}</span>
+                      <span className="text-[10px] text-gray-500 ml-1">（法定内・割増なし、通常賃金で支給）</span>
                     </td>
                   </tr>
                 )}
@@ -354,7 +357,24 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                   <tr>
                     <td>{mode.useOldRules ? '休業補償' : '追加所定手当 / 補償手当'}</td>
                     <td className="font-mono">
+                      <div className="text-[10px] text-gray-500">
+                        {mode.useOldRules
+                          ? '時給 × 6h40min × 0.6 × 補償日数'
+                          : `時給 × 7h × MAX(0, 実出勤日数 − ベース日数20) = 追加出勤日 × 7h × 時給`}
+                      </div>
                       <div className="font-bold">{fmtYen(w.additionalAllowance || w.compAllowance || 0)}</div>
+                    </td>
+                  </tr>
+                )}
+                {/* 2026-06-XX 追加: 所定外労働手当（法定内・割増なし） */}
+                {!mode.useOldRules && (w.nonStatutoryOTAllowance || 0) > 0 && (
+                  <tr>
+                    <td>所定外労働手当<br/><span className="text-[10px] text-gray-500">(割増なし)</span></td>
+                    <td className="font-mono">
+                      <div className="text-[10px] text-gray-500">
+                        時給 {fmtYen(w.hourlyRate || 0)} × {w.nonStatutoryOTHours || 0}h（月所定超 − 法定外残業）
+                      </div>
+                      <div className="font-bold">{fmtYen(w.nonStatutoryOTAllowance || 0)}</div>
                     </td>
                   </tr>
                 )}
@@ -454,9 +474,11 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
               <li>{mode.useOldRules ? '〜2026年4月: 旧ルール（月所定時間ベース）' : '2026年5月〜: 新ルール（calculateVietnameseSalary による3層構造、法令準拠）'}</li>
               {!mode.useOldRules && (
                 <li className="text-gray-700">
-                  <strong>変形労働時間制の本質:</strong> 1日所定7hで月の法定上限（暦日数×40÷7）以内であれば、所定を超えた労働の一部は基本給に含まれ、追加割増は不要。
-                  実労働が法定上限を超えた分のみ「法定外残業」として1.25倍支給される（労基法37条）。
-                  そのため「残業時間（合計）」と「法定外残業」は通常一致しない。
+                  <strong>変形労働時間制 + 月給制の支払い構造:</strong>
+                  <br />・基本給は <strong>月所定時間（ベース日数20×7h=140h）</strong>のみをカバー。有給日もこの枠内。
+                  <br />・残業欄の入力時間（出面の「o」欄）は、<strong>全て基本給とは別に支給</strong>される。
+                  <br />・うち法定外残業（3層判定）= <strong>1.25倍</strong>（労基法37条）
+                  <br />・うち所定外労働（法定内）= <strong>通常賃金</strong>（労基法24条 賃金全額払い）
                 </li>
               )}
             </ul>

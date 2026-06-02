@@ -744,6 +744,13 @@ export interface WorkerMonthly {
   dailyStatutoryOT?: number       // 日単位の法定外残業（1日8h超）
   weeklyStatutoryOT?: number      // 週単位の法定外残業（週40h超、日単位分除く）
   monthlyStatutoryOT?: number     // 月単位の法定外残業（法定上限超、日/週分除く）
+  // ── 2026-06-XX 追加: 所定外労働手当（法定内・割増なし） ──
+  // 残業欄入力時間のうち、3層判定で法定外残業に該当しなかった分を
+  // 通常賃金で支払う必要がある（労基法24条 賃金全額払い）。
+  // 例: 出勤18日+有給2日+残業18.5h、statutoryOT=1.0h
+  //     → nonStatutoryOTHours = 17.5h、手当 = 時給×17.5h
+  nonStatutoryOTHours?: number    // 所定外労働時間（法定内・割増なし）
+  nonStatutoryOTAllowance?: number // 所定外労働手当 = 時給 × nonStatutoryOTHours
 }
 
 export interface SubconMonthly {
@@ -1001,6 +1008,8 @@ export function computeMonthly(
 
       wm.fixedBasePay = v.fixedBasePay
       wm.additionalAllowance = v.additionalAllowance
+      wm.nonStatutoryOTHours = v.nonStatutoryOTHours
+      wm.nonStatutoryOTAllowance = v.nonStatutoryOTAllowance
       wm.otAllowance = v.otAllowance
       wm.legalHolidayHours = v.legalHolidayHours
       wm.legalHolidayAllowance = v.legalHolidayAllowance
@@ -1078,12 +1087,15 @@ export function computeMonthly(
       )
       // 基本給は月給値を採用（時給からの再計算による丸め誤差を避ける）
       const fixedBase = wm.salary
-      const salaryNet = fixedBase + v.additionalAllowance + v.otAllowance
+      // 2026-06-XX 修正: 所定外労働手当 (nonStatutoryOTAllowance) も加算
+      const salaryNet = fixedBase + v.additionalAllowance + v.nonStatutoryOTAllowance + v.otAllowance
                       + v.legalHolidayAllowance + v.nightAllowance + v.compAllowance
                       - v.absentDeduction
 
       wm.fixedBasePay = fixedBase
       wm.additionalAllowance = v.additionalAllowance
+      wm.nonStatutoryOTHours = v.nonStatutoryOTHours
+      wm.nonStatutoryOTAllowance = v.nonStatutoryOTAllowance
       wm.otAllowance = v.otAllowance
       wm.legalHolidayHours = v.legalHolidayHours
       wm.legalHolidayAllowance = v.legalHolidayAllowance
@@ -1528,11 +1540,13 @@ export interface VietnameseSalaryResult {
 
   // 支給項目
   fixedBasePay: number          // 1. 基本給（固定）
-  additionalAllowance: number   // 2. 追加所定手当
-  otAllowance: number           // 3. 法定外残業手当
-  legalHolidayAllowance: number // 4. 法定休日手当
-  nightAllowance: number        // 5. 深夜手当
-  compAllowance: number         // 6. 休業手当
+  additionalAllowance: number   // 2. 追加所定手当（追加出勤日 × 7h）
+  nonStatutoryOTHours: number   // 3a. 所定外労働時間（法定内・割増なし）
+  nonStatutoryOTAllowance: number // 3a. 所定外労働手当 = 時給 × nonStatutoryOTHours
+  otAllowance: number           // 3b. 法定外残業手当（1.25倍）
+  legalHolidayAllowance: number // 4. 法定休日手当（1.35倍）
+  nightAllowance: number        // 5. 深夜手当（+0.25倍）
+  compAllowance: number         // 6. 休業手当（補償日）
   absentDeduction: number       // 7. 欠勤控除
   salaryNet: number             // 支給額合計
 }
@@ -1716,11 +1730,31 @@ export function calculateVietnameseSalary(
   const nightAllowance = Math.round(hourlyRate * 0.25 * nightHours)
   const compAllowance = Math.round(hourlyRate * 7 * 0.6 * compDays)
 
+  // 2026-06-XX 追加: 所定外労働手当（法定内・割増なし）
+  // 労基法24条（賃金全額払い）に基づき、月所定時間を超えた労働で
+  // 法定上限内のものは「通常賃金」で支払う必要がある。
+  //
+  // 基本給 = baseDays × 7h をカバー（有給・出勤の合計が baseDays に満たない場合は
+  //          別途欠勤控除で調整）。
+  // 追加所定 = 出勤日数が baseDays を超えた場合に「丸1日分 × 7h」を加算。
+  // ↑これだけだと、1日のうち所定7h超過の労働（残業欄入力分）が支払い対象から
+  //   漏れる。日次の所定超過分(各日 actualHours - 7h)から3層判定後の法定外残業
+  //   (statutoryOT) を差し引いた残りを「所定外労働手当」として支払う。
+  //
+  // 例: 出勤18日(各日7h)+有給2日+残業18.5h、3層判定 statutoryOT=1.0h
+  //     → 所定外労働時間 = 18.5 - 1.0 = 17.5h
+  //     → 所定外労働手当 = 時給×17.5h = 17.5×時給 (1.25倍ではない)
+  const totalDailyExcess = dayInfos
+    .filter(di => !di.isLegalHoliday && di.actualHours > 0)
+    .reduce((s, di) => s + Math.max(0, di.actualHours - 7), 0)
+  const nonStatutoryOTHours = Math.max(0, totalDailyExcess - statutoryOT)
+  const nonStatutoryOTAllowance = Math.round(hourlyRate * nonStatutoryOTHours)
+
   // 欠勤控除: 法定休日出勤は所定日数(20)カウント対象外（カレンダー上は休み）
   const absentDays = Math.max(0, baseDays - regularWorkDays - plUsed - compDays - examDays)
   const absentDeduction = Math.round(hourlyRate * 7 * absentDays)
 
-  const salaryNet = fixedBasePay + additionalAllowance + otAllowance
+  const salaryNet = fixedBasePay + additionalAllowance + nonStatutoryOTAllowance + otAllowance
                   + legalHolidayAllowance + nightAllowance + compAllowance
                   - absentDeduction
 
@@ -1739,6 +1773,8 @@ export function calculateVietnameseSalary(
     legalLimit: Math.round(legalLimit * 10) / 10,
     fixedBasePay,
     additionalAllowance,
+    nonStatutoryOTHours: Math.round(nonStatutoryOTHours * 10) / 10,
+    nonStatutoryOTAllowance,
     otAllowance,
     legalHolidayAllowance,
     nightAllowance,
