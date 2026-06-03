@@ -791,6 +791,11 @@ export interface WorkerMonthly {
   nightAllowance?: number         // 深夜手当 = 時間 × 時給 × 0.25
   compAllowance?: number          // 休業手当 = 補償日数 × 時給 × 7h × 0.6
   regularWorkDays?: number        // 通常出勤日数（日曜出勤を除く、追加所定の対象）
+  // 2026-06-XX 追加: スタッフ固有の所定日数（配置現場の calendar から算出）
+  //   新ルール: MAX(配置現場の siteWorkDays) — 笹塚なら 23 など
+  //   旧ルール: 全社所定 (main.workDays[ym]) — 23 など
+  //   基本給ベース日数 (baseDays=20) とは別概念。UI 表示で混同しないため明示保持。
+  workerPrescribedDays?: number
   dailyStatutoryOT?: number       // 日単位の法定外残業（1日8h超）
   weeklyStatutoryOT?: number      // 週単位の法定外残業（週40h超、日単位分除く）
   monthlyStatutoryOT?: number     // 月単位の法定外残業（法定上限超、日/週分除く）
@@ -1090,6 +1095,11 @@ export function computeMonthly(
     // 後段の計算で proratedBaseDays / proratedPrescribedDays を使う
     // 一旦 workerPrescribedDays を上書き
     workerPrescribedDays = proratedPrescribedDays
+
+    // 2026-06-XX 追加: UI 表示用に workerPrescribedDays を保存
+    //   PayrollAuditModal で「所定日数(配置現場)」として表示。
+    //   baseDays (=20, 基本給ベース) と区別して見せるための情報。
+    wm.workerPrescribedDays = workerPrescribedDays
 
     // ベトナム人スタッフの給与計算は2026年5月を境に旧ルール／新ルールが切り替わる
     // - 4月以前: 月の所定時間ベース（旧ロジック）
