@@ -40,6 +40,31 @@ export async function GET(request: NextRequest) {
       siteNames[s.id] = s.name
     }
 
+    // 2026-06-XX 追加: 印刷ページ (/monthly/audit-print) 用に
+    //   日別出勤データを optional で返す。includeDaily=true で取得。
+    //   キー形式: workerId -> { day -> entry }
+    //   通常の月次集計画面では使われないので、デフォルトでは含めない（payload 削減）。
+    let dailyByWorker: Record<number, Record<number, unknown>> | undefined
+    if (searchParams.get('includeDaily') === 'true') {
+      dailyByWorker = {}
+      for (const [key, entry] of Object.entries(att.d || {})) {
+        if (!entry || typeof entry !== 'object') continue
+        // key 形式: `${siteId}_${workerId}_${ym}_${day}`
+        const parts = key.split('_')
+        if (parts.length < 4) continue
+        const day = parseInt(parts[parts.length - 1])
+        const keyYm = parts[parts.length - 2]
+        const wid = parseInt(parts[parts.length - 3])
+        const siteId = parts.slice(0, parts.length - 3).join('_')
+        if (keyYm !== ym || !Number.isFinite(wid) || !Number.isFinite(day)) continue
+        if (!dailyByWorker[wid]) dailyByWorker[wid] = {}
+        // 同一日に複数現場の入力がある場合は最初のものを保持（カレンダー表示では1日1セル）
+        if (!dailyByWorker[wid][day]) {
+          dailyByWorker[wid][day] = { ...entry, _siteId: siteId }
+        }
+      }
+    }
+
     return NextResponse.json({
       workers: result.workers,
       subcons: result.subcons,
@@ -53,6 +78,7 @@ export async function GET(request: NextRequest) {
       siteNames,
       hasCalendarData,
       siteWorkDays: siteWorkDaysMap,
+      ...(dailyByWorker ? { dailyByWorker } : {}),
     })
   } catch (error) {
     console.error('Monthly API error:', error)

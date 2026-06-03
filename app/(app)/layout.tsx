@@ -65,18 +65,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Sidebar user={user} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/* Main content */}
-        <div className="lg:ml-52">
+        {/* 2026-06-XX: print:ml-0 print:p-0 で印刷時のサイドバー余白とハンバーガーを完全排除 */}
+        <div className="lg:ml-52 print:ml-0">
           {/* Mobile hamburger button */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden fixed top-3 left-3 z-40 bg-hibi-navy text-white p-2 rounded-lg shadow-lg"
+            className="lg:hidden fixed top-3 left-3 z-40 bg-hibi-navy text-white p-2 rounded-lg shadow-lg print:hidden"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
 
-          <main className="pt-14 px-4 pb-20 lg:pt-6 lg:px-6 lg:pb-6">
+          <main className="pt-14 px-4 pb-20 lg:pt-6 lg:px-6 lg:pb-6 print:pt-0 print:px-0 print:pb-0">
             <div className="animate-fadeIn">
               {children}
             </div>

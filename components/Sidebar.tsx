@@ -157,7 +157,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
       )}
 
       <aside
-        className={`fixed top-0 left-0 h-full w-52 bg-hibi-navy dark:bg-gray-950 text-white z-50 transform transition-transform duration-200 lg:translate-x-0 flex flex-col ${
+        className={`fixed top-0 left-0 h-full w-52 bg-hibi-navy dark:bg-gray-950 text-white z-50 transform transition-transform duration-200 lg:translate-x-0 flex flex-col print:hidden ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

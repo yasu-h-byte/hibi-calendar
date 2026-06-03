@@ -903,6 +903,32 @@ export default function MonthlyPage() {
         )}
       </div>
 
+      {/* 2026-06-XX 追加: 社労士確認用 PDF 出力ボタン */}
+      {isWorkerTab && data && (
+        <div className="flex flex-wrap items-center gap-2 mt-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-3">
+          <span className="text-xs font-bold text-purple-800 dark:text-purple-300">
+            📄 社労士確認用 PDF（ベトナム人スタッフのみ）:
+          </span>
+          <button
+            onClick={() => window.open(`/monthly/audit-print?ym=${ym.replace('-', '')}&org=hibi`, '_blank')}
+            className="px-3 py-1.5 text-xs rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition font-medium"
+            title="日比建設のベトナム人スタッフ全員の給与計算根拠を新タブで開く（ブラウザのPDF保存機能で出力）"
+          >
+            日比建設
+          </button>
+          <button
+            onClick={() => window.open(`/monthly/audit-print?ym=${ym.replace('-', '')}&org=hfu`, '_blank')}
+            className="px-3 py-1.5 text-xs rounded-lg bg-pink-600 text-white hover:bg-pink-700 transition font-medium"
+            title="HFUのベトナム人スタッフ全員の給与計算根拠を新タブで開く（ブラウザのPDF保存機能で出力）"
+          >
+            HFU
+          </button>
+          <span className="text-[10px] text-purple-700 dark:text-purple-400">
+            💡 新タブで開いた後、Cmd+P → 「PDFとして保存」で出力できます
+          </span>
+        </div>
+      )}
+
       {/* Loading / Error */}
       {loading && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center text-gray-400 dark:text-gray-500">
