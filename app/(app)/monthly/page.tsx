@@ -935,7 +935,7 @@ export default function MonthlyPage() {
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
                 <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap"
+                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap sticky left-0 z-20 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]"
                   onClick={() => toggleWorkerSort('name')}
                 >
                   名前{sortArrow(workerSortKey === 'name', workerSortAsc)}
@@ -1032,7 +1032,17 @@ export default function MonthlyPage() {
                   const netPay = showAbsenceColumns ? calcNetPay(w) : 0
                   return (
                     <tr key={w.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30 ${w.isDispatched ? 'bg-purple-50/30' : ''}`}>
-                      <td className="px-3 py-2.5 font-medium whitespace-nowrap">
+                      {/*
+                        名前列は横スクロール時に固定（sticky left-0）。
+                        sticky cell は透過できないので solid な背景色が必要。
+                        even/hover の交互色は失われるが、出向中(紫)はインライン badge も
+                        あるため視認性は維持される。
+                      */}
+                      <td className={`px-3 py-2.5 font-medium whitespace-nowrap sticky left-0 z-10 border-r border-gray-200 dark:border-gray-700 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] ${
+                        w.isDispatched
+                          ? 'bg-purple-50 dark:bg-purple-900/40'
+                          : 'bg-white dark:bg-gray-800'
+                      }`}>
                         <button
                           onClick={() => setAuditingWorker(w)}
                           className="hover:underline hover:text-hibi-navy text-left"
@@ -1155,7 +1165,7 @@ export default function MonthlyPage() {
             {sortedWorkers.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy">
-                  <td className="px-3 py-3">合計 ({filteredWorkers.length}名)</td>
+                  <td className="px-3 py-3 sticky left-0 z-10 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">合計 ({filteredWorkers.length}名)</td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3 text-right tabular-nums">{workerTotals.workAll % 1 !== 0 ? workerTotals.workAll.toFixed(1) : workerTotals.workAll}</td>
