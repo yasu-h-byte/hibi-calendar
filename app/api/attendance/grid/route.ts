@@ -394,7 +394,8 @@ export async function POST(request: NextRequest) {
       const key = `${siteId}_${workerId}_${ym}_${String(day)}`
 
       // ベトナム人スタッフのガード: 「最初の入力はスタッフ本人から」を強制。
-      // 既存エントリがない場合は admin/foreman からの新規作成を拒否。
+      // 既存エントリがない場合は admin/foreman からの新規作成を原則拒否。
+      // 例外: 事後申請性ステータス (p:有給 / hk:帰国中 / w=0.6:現場都合休み) は許容。
       // クリア（削除）と既存エントリの修正は許可。
       if (entry && typeof entry === 'object') {
         try {
@@ -405,7 +406,8 @@ export async function POST(request: NextRequest) {
             const curSnap = await getDoc(docRef)
             const curD = (curSnap.exists() ? curSnap.data().d : {}) as Record<string, AttendanceEntry>
             const existing = curD?.[key]
-            // 事後申請性ステータス（有給/帰国中）は ガード例外許容のため newEntry を渡す
+            // 事後申請性ステータス（有給/帰国中/現場都合休み w=0.6）は ガード例外許容のため newEntry を渡す
+            // ※ 2026-06-XX: w=0.6 (補償日) を例外に追加（lib/attendance.ts canAdminEditEntry 参照）
             const check = canAdminEditEntry({ visa: worker.visa }, existing, entry as AttendanceEntry)
             if (!check.editable) {
               return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
