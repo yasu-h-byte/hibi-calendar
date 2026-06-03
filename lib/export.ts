@@ -14,6 +14,8 @@ import { isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isAlreadyRetired } from './workers'
 import { computePeriodUsed } from './leave-compute'
 import { calcExpiryIso } from './date-utils'
+// 2026-06-XX 追加: 自動検算を Excel にも反映
+import { validatePayrolls, type PayrollSnapshot } from './payroll-validator'
 
 // ────────────────────────────────────────
 //  共通ヘルパー
@@ -890,12 +892,23 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const { ym, workers, subcons, siteNames, prescribedDays } = data
   const wb = XLSX.utils.book_new()
 
-  // 2026-06-XX 修正: 全員一律ではなく「月の代表ルール」のみを表示用に決定。
-  //   個別に旧ルール継続フラグが立っているワーカー（例: フン）が含まれる場合は
-  //   そのワーカーだけ別ブロック（旧ルール用17列）で表示する。
+  // 2026-06-XX 全面リライト:
+  //   旧: 1シート内に5ブロック縦並び
+  //   新: タブ別シート構成（給与計算者の作業効率向上）
+  //     - 日比建設・日本人
+  //     - 日比建設・ベトナム人(新ルール)
+  //     - 日比建設・ベトナム人(旧ルール)  ← フン (104) 等
+  //     - HFU・ベトナム人(新ルール)
+  //     - HFU・日本人 (該当者がいれば)
+  //     - 協力業者(外注)
+  //   加えて以下を同時修正:
+  //     A. legalHolidayDays を compute.ts 出力 (w.legalHolidayDays) から取得
+  //        （旧: actualWorkDays - regularWorkDays で独自計算 → 補償日があるとズレ）
+  //     B. 所定日数列を workerPrescribedDays (スタッフ個別) で表示
+  //        （旧: prescribedDays = UI入力の全社値で固定）
+  //     C. validatePayrolls の検算結果を各シート末尾に追加
+
   const useNewRulesByMonth = ym >= '202605'
-  const ruleLabel = useNewRulesByMonth ? '新ルール: 3層構造' : '旧ルール: 月所定時間ベース'
-  // 各ワーカーがそのデータ取得時点でどちらのルールで計算されたか
   const isWorkerOldRules = (w: WorkerMonthly): boolean => {
     if (!useNewRulesByMonth) return true  // 月全体が旧ルール
     return (w as { useOldRules?: boolean }).useOldRules === true
@@ -907,60 +920,63 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const isForeign = (w: WorkerMonthly) => w.visa !== 'none'
   const isJapanese = (w: WorkerMonthly) => w.visa === 'none'
 
-  const hibiForeign = workers.filter(w => isHibi(w) && isForeign(w))
+  // 外国人を新旧ルールに分割
+  const hibiForeignNew = workers.filter(w => isHibi(w) && isForeign(w) && !isWorkerOldRules(w))
+  const hibiForeignOld = workers.filter(w => isHibi(w) && isForeign(w) && isWorkerOldRules(w))
   const hibiJapanese = workers.filter(w => isHibi(w) && isJapanese(w))
-  const hfuForeign = workers.filter(w => isHfu(w) && isForeign(w))
+  const hfuForeignNew = workers.filter(w => isHfu(w) && isForeign(w) && !isWorkerOldRules(w))
+  const hfuForeignOld = workers.filter(w => isHfu(w) && isForeign(w) && isWorkerOldRules(w))
   const hfuJapanese = workers.filter(w => isHfu(w) && isJapanese(w))
 
-  // 外国人テーブル ヘッダー
-  //   新ルール(5月以降): 法令準拠の詳細支給（22列）
-  //   旧ルール(4月以前): 月所定時間ベースのシンプル構成（17列）
-  // 2026-06-XX 追加: 「所定外労働h」と「所定外労働手当」列を追加
-  //   月所定140hを超えた労働で法定上限内のもの（労基法24条による通常賃金支払い対象）
-  const foreignHeadersNew = ['名前', '現場', '単価種別', '単価', 'ベース日数', '法定上限(h)',
+  // ── 列定義 ──
+  // 新ルール: 25列（法定休日日数 と 法定休日労働h を別列で持つ詳細版）
+  const foreignHeadersNew = ['名前', '現場', '単価種別', '単価', '所定日数', '法定上限(h)',
     '通常出勤', '法休出勤', '補償日', '有給日数',
     '実労働h', '所定外労働h', '法定残業h', '法休労働h', '深夜労働h',
     '基本給(固定)', '追加所定手当', '所定外労働手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
     '欠勤日数', '欠勤控除', '支給額合計']
+  // 旧ルール: 17列
   const foreignHeadersOld = ['名前', '現場', '単価種別', '単価', '所定日数', '所定時間(h)',
     '実出勤日数', '補償日', '有給日数', '実労働時間', '残業時間',
     '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '支給額合計']
-  const foreignHeaders = useNewRulesByMonth ? foreignHeadersNew : foreignHeadersOld
-
-  // 日本人テーブル ヘッダー（8列）
+  // 日本人: 8列
   const japaneseHeaders = ['名前', '現場', '日額', '出勤日数', '残業時間(h)', '基本給', '残業手当', '支給額合計']
 
-  const rows: (string | number | null)[][] = []
-
-  // タイトル
-  rows.push([`月次集計 ${ymLabel(ym)}（${ruleLabel}）`])
-
-  // ── ブロックレンダラ ──
-
-  function renderForeignBlock(label: string, ws: WorkerMonthly[]) {
-    if (ws.length === 0) return
-    // 2026-06-XX 修正: 旧ルール継続者（フン等）が混在する場合は別ブロックで表示
-    //   理由: 旧/新でテーブル列の意味が違うため、同じヘッダーに両者を混ぜると
-    //         「追加所定手当」列に「休業補償」が入る等の列ズレが発生する
-    const oldRulesWorkers = useNewRulesByMonth ? ws.filter(isWorkerOldRules) : []
-    const newRulesWorkers = useNewRulesByMonth ? ws.filter(w => !isWorkerOldRules(w)) : ws
-    if (useNewRulesByMonth && oldRulesWorkers.length > 0) {
-      // 新ルール組を先に出力、旧ルール組はその後に別テーブルで
-      renderForeignBlockInternal(label, newRulesWorkers, false)
-      renderForeignBlockInternal(`${label}（旧ルール継続）`, oldRulesWorkers, true)
-      return
+  // ── 検算結果のシート末尾追加（共通ヘルパー） ──
+  function appendValidation(rows: (string | number | null)[][], targets: WorkerMonthly[], colCount: number) {
+    // 検算対象は新ルール外国人のみ (validatePayroll の内部で判定)
+    const snapshots = targets as unknown as PayrollSnapshot[]
+    const result = validatePayrolls(snapshots)
+    rows.push([])
+    const headerCell: (string | number | null)[] = [
+      result.total === 0
+        ? '✓ 自動検算: 全項目 OK（法定外残業 0.25倍 / 所定外労働 / 法休 1.35倍 / 深夜 0.25倍 / 休業 60%）'
+        : `⚠ 自動検算: ${result.affectedWorkerIds.length}名で${result.total}件の違反検出（critical ${result.critical} / warning ${result.warning}）`
+    ]
+    for (let i = 1; i < colCount; i++) headerCell.push(null)
+    rows.push(headerCell)
+    if (result.total > 0) {
+      for (const iss of result.issues) {
+        const expected = iss.expected !== undefined ? `想定 ¥${iss.expected.toLocaleString()}` : ''
+        const actual = iss.actual !== undefined ? `/ 実額 ¥${iss.actual.toLocaleString()}` : ''
+        const detail = [`[${iss.severity}]`, iss.workerName, ':', iss.message, expected, actual].filter(Boolean).join(' ')
+        const row: (string | number | null)[] = [detail]
+        for (let i = 1; i < colCount; i++) row.push(null)
+        rows.push(row)
+      }
     }
-    renderForeignBlockInternal(label, ws, !useNewRulesByMonth)
   }
 
-  function renderForeignBlockInternal(label: string, ws: WorkerMonthly[], forceOldRules: boolean) {
-    if (ws.length === 0) return
+  // ── 外国人シート生成 ──
+  function buildForeignSheet(sheetName: string, ws: WorkerMonthly[], forceOldRules: boolean): XLSX.WorkSheet | null {
+    if (ws.length === 0) return null
     const useNewRules = !forceOldRules
     const headers = useNewRules ? foreignHeadersNew : foreignHeadersOld
+    const rows: (string | number | null)[][] = []
+    // タイトル
+    const ruleTag = useNewRules ? '新ルール' : '旧ルール'
+    rows.push([`${sheetName}（${ruleTag}） ${ymLabel(ym)}`])
     rows.push([])
-    const groupRow: (string | number | null)[] = [label]
-    for (let i = 1; i < headers.length; i++) groupRow.push(null)
-    rows.push(groupRow)
     rows.push(headers)
     for (const w of ws) {
       const siteList = w.sites.map(sid => siteNames[sid] || sid).join(', ')
@@ -969,70 +985,45 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         : w.name
       const rateKind = w.hourlyRate ? '時給' : (w.salary ? '月給' : '—')
       const rateValue = w.hourlyRate || w.salary || 0
-      const baseDaysOrPrescribed = prescribedDays
+      // 2026-06-XX 修正B: スタッフ個別の所定日数を使用（旧: 全社の prescribedDays 固定）
+      const workerDays = w.workerPrescribedDays ?? prescribedDays
       const limitOrPrescribedH = useNewRules ? (w.legalLimit || 0) : (w.prescribedHours || 0)
       if (useNewRules) {
-        // 法令準拠版（25列、所定外労働列を含む）
-        const legalHolidayDays = (w.actualWorkDays || 0) - (w.regularWorkDays || 0)
+        // 2026-06-XX 修正A: legalHolidayDays を compute.ts の値から直接取得
+        //   旧: const legalHolidayDays = (w.actualWorkDays || 0) - (w.regularWorkDays || 0)
+        //       → 補償日(w=0.6)がある場合に不正確
+        //   新: w.legalHolidayDays (calculateVietnameseSalary で計算済み)
+        const legalHolidayDays = w.legalHolidayDays ?? 0
         const wext = w as WorkerMonthly & { nonStatutoryOTHours?: number; nonStatutoryOTAllowance?: number }
         rows.push([
-          nameWithDispatch,
-          siteList,
-          rateKind,
-          rateValue,
-          baseDaysOrPrescribed,
-          limitOrPrescribedH,
-          w.regularWorkDays || 0,
-          legalHolidayDays > 0 ? legalHolidayDays : 0,
-          w.compDays || 0,
-          w.plDays || 0,
-          w.actualWorkHours || 0,
-          wext.nonStatutoryOTHours || 0,  // 所定外労働h（割増なし、通常賃金）
-          w.legalOtHours || 0,            // = statutoryOT 合計
-          w.legalHolidayHours || 0,
-          w.nightHours || 0,
-          w.fixedBasePay || w.basePay || 0,
-          w.additionalAllowance || 0,
-          wext.nonStatutoryOTAllowance || 0,  // 所定外労働手当
-          w.otAllowance || 0,
-          w.legalHolidayAllowance || 0,
-          w.nightAllowance || 0,
-          w.compAllowance || 0,
-          w.absence || 0,
-          w.absentDeduction || 0,
-          w.salaryNetPay || 0,
+          nameWithDispatch, siteList, rateKind, rateValue, workerDays, limitOrPrescribedH,
+          w.regularWorkDays || 0, legalHolidayDays, w.compDays || 0, w.plDays || 0,
+          w.actualWorkHours || 0, wext.nonStatutoryOTHours || 0, w.legalOtHours || 0,
+          w.legalHolidayHours || 0, w.nightHours || 0,
+          w.fixedBasePay || w.basePay || 0, w.additionalAllowance || 0,
+          wext.nonStatutoryOTAllowance || 0, w.otAllowance || 0,
+          w.legalHolidayAllowance || 0, w.nightAllowance || 0, w.compAllowance || 0,
+          w.absence || 0, w.absentDeduction || 0, w.salaryNetPay || 0,
         ])
       } else {
-        // 旧ルール版（17列）— additionalAllowance を「休業補償」として表示
         rows.push([
-          nameWithDispatch,
-          siteList,
-          rateKind,
-          rateValue,
-          baseDaysOrPrescribed,
-          limitOrPrescribedH,
-          w.actualWorkDays || 0,
-          w.compDays || 0,
-          w.plDays || 0,
-          w.actualWorkHours || 0,
-          w.legalOtHours || 0,
+          nameWithDispatch, siteList, rateKind, rateValue, workerDays, limitOrPrescribedH,
+          w.actualWorkDays || 0, w.compDays || 0, w.plDays || 0,
+          w.actualWorkHours || 0, w.legalOtHours || 0,
           w.fixedBasePay || w.basePay || 0,
-          w.additionalAllowance || 0,    // 旧ルールでは休業補償
+          w.additionalAllowance || 0,  // 旧ルールでは休業補償
           w.otAllowance || 0,
-          w.absence || 0,
-          w.absentDeduction || 0,
-          w.salaryNetPay || 0,
+          w.absence || 0, w.absentDeduction || 0, w.salaryNetPay || 0,
         ])
       }
     }
     // 小計
     if (useNewRules) {
-      const sumLegalHolidayDays = ws.reduce((s, w) => s + Math.max(0, (w.actualWorkDays || 0) - (w.regularWorkDays || 0)), 0)
       const wsExt = ws as (WorkerMonthly & { nonStatutoryOTHours?: number; nonStatutoryOTAllowance?: number })[]
       rows.push([
         '小計', null, null, null, null, null,
         ws.reduce((s, w) => s + (w.regularWorkDays || 0), 0),
-        sumLegalHolidayDays,
+        ws.reduce((s, w) => s + (w.legalHolidayDays || 0), 0),
         ws.reduce((s, w) => s + (w.compDays || 0), 0),
         ws.reduce((s, w) => s + w.plDays, 0),
         null,
@@ -1067,14 +1058,31 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
       ])
     }
+    // 2026-06-XX 追加C: 自動検算結果（新ルール対象スタッフのみチェック）
+    if (useNewRules) appendValidation(rows, ws, headers.length)
+    // ── シート生成 ──
+    const sheet = XLSX.utils.aoa_to_sheet(rows)
+    sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
+    if (useNewRules) {
+      setColWidths(sheet, [
+        14, 14, 8, 10, 10, 10,
+        8, 8, 8, 8,
+        9, 10, 9, 9, 9,
+        11, 11, 12, 12, 11, 10, 10,
+        8, 11, 14,
+      ])
+    } else {
+      setColWidths(sheet, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, 8, 12, 14])
+    }
+    return sheet
   }
 
-  function renderJapaneseBlock(label: string, ws: WorkerMonthly[]) {
-    if (ws.length === 0) return
+  // ── 日本人シート生成 ──
+  function buildJapaneseSheet(sheetName: string, ws: WorkerMonthly[]): XLSX.WorkSheet | null {
+    if (ws.length === 0) return null
+    const rows: (string | number | null)[][] = []
+    rows.push([`${sheetName} ${ymLabel(ym)}`])
     rows.push([])
-    const groupRow: (string | number | null)[] = [label]
-    for (let i = 1; i < japaneseHeaders.length; i++) groupRow.push(null)
-    rows.push(groupRow)
     rows.push(japaneseHeaders)
     for (const w of ws) {
       const siteList = w.sites.map(sid => siteNames[sid] || sid).join(', ')
@@ -1082,14 +1090,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         ? `🔁 ${w.name}（出向: ${w.dispatchTo || ''}）`
         : w.name
       rows.push([
-        nameWithDispatch,
-        siteList,
-        w.rate,
-        w.workDays,
+        nameWithDispatch, siteList, w.rate, w.workDays,
         w.dailyOtHours || w.otHours || 0,
-        w.basePay || 0,
-        w.otAllowance || 0,
-        w.salaryNetPay || 0,
+        w.basePay || 0, w.otAllowance || 0, w.salaryNetPay || 0,
       ])
     }
     rows.push([
@@ -1100,21 +1103,20 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
       ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
     ])
+    const sheet = XLSX.utils.aoa_to_sheet(rows)
+    sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: japaneseHeaders.length - 1 } }]
+    setColWidths(sheet, [14, 16, 10, 8, 10, 12, 12, 14])
+    return sheet
   }
 
-  // ── 4 ブロック + 協力業者 ──
-  renderForeignBlock('【日比建設・ベトナム人】', hibiForeign)
-  renderJapaneseBlock('【日比建設・日本人】', hibiJapanese)
-  renderForeignBlock('【HFU・ベトナム人】', hfuForeign)
-  renderJapaneseBlock('【HFU・日本人】', hfuJapanese)
-
-  // 協力業者
-  if (subcons.length > 0) {
+  // ── 協力業者シート生成 ──
+  function buildSubconSheet(): XLSX.WorkSheet | null {
+    if (subcons.length === 0) return null
+    const rows: (string | number | null)[][] = []
+    const headers = ['外注先', '区分', '現場', '人工', '残業', '単価', '金額']
+    rows.push([`協力業者（外注） ${ymLabel(ym)}`])
     rows.push([])
-    const groupRow: (string | number | null)[] = ['【協力業者】']
-    for (let i = 1; i < 7; i++) groupRow.push(null)
-    rows.push(groupRow)
-    rows.push(['外注先', '区分', '現場', '人工', '残業', '単価', '金額'])
+    rows.push(headers)
     for (const sc of subcons) {
       const siteList = sc.sites.map(sid => siteNames[sid] || sid).join(', ')
       rows.push([sc.name, sc.type, siteList, sc.workDays, sc.otCount, sc.rate, sc.cost])
@@ -1126,27 +1128,32 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       null,
       subcons.reduce((s, sc) => s + sc.cost, 0),
     ])
+    const sheet = XLSX.utils.aoa_to_sheet(rows)
+    sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
+    setColWidths(sheet, [18, 8, 18, 8, 8, 10, 14])
+    return sheet
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(rows)
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: foreignHeaders.length - 1 } }]
-  // 列幅: 新ルール(23列) / 旧ルール(17列) で切替
-  // 2026-06-XX: 月の代表ルールに基づく列幅。旧ルール継続者の別ブロックも
-  //            ヘッダーは旧ルール17列を使うが、シート全体の列幅は新ルール基準で問題ない
-  //            （余った列は空白として描画される）
-  if (useNewRulesByMonth) {
-    setColWidths(ws, [
-      14, 14, 8, 10, 10, 10,           // 名前/現場/単価種別/単価/ベース日数/法定上限
-      8, 8, 8, 8,                      // 通常出勤/法休出勤/補償日/有給日数
-      9, 10, 9, 9, 9,                  // 実労働h/所定外労働h/法定残業h/法休労働h/深夜労働h
-      11, 11, 12, 12, 11, 10, 10,      // 基本給/追加所定/所定外労働/法定外残業/法休手当/深夜手当/休業手当
-      8, 11, 14,                       // 欠勤日数/欠勤控除/支給額合計
-    ])
-  } else {
-    setColWidths(ws, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, 8, 12, 14])
+  // ── シート登録（順序固定: 日比 → HFU → 外注） ──
+  // Excel のシートタブには 31文字制限あり。日本語短めなら問題なし
+  const sheetDefs: { name: string; sheet: XLSX.WorkSheet | null }[] = [
+    { name: '日比建設・日本人', sheet: buildJapaneseSheet('日比建設・日本人', hibiJapanese) },
+    { name: '日比建設・ベトナム人', sheet: buildForeignSheet('日比建設・ベトナム人', hibiForeignNew, false) },
+    { name: '日比建設・ベトナム人(旧)', sheet: buildForeignSheet('日比建設・ベトナム人', hibiForeignOld, true) },
+    { name: 'HFU・日本人', sheet: buildJapaneseSheet('HFU・日本人', hfuJapanese) },
+    { name: 'HFU・ベトナム人', sheet: buildForeignSheet('HFU・ベトナム人', hfuForeignNew, false) },
+    { name: 'HFU・ベトナム人(旧)', sheet: buildForeignSheet('HFU・ベトナム人', hfuForeignOld, true) },
+    { name: '協力業者', sheet: buildSubconSheet() },
+  ]
+  for (const d of sheetDefs) {
+    if (d.sheet) XLSX.utils.book_append_sheet(wb, d.sheet, d.name)
   }
 
-  XLSX.utils.book_append_sheet(wb, ws, '月次集計')
+  // フォールバック: 1シートも作られていない場合は空のサマリーシートを追加
+  if (wb.SheetNames.length === 0) {
+    const emptySheet = XLSX.utils.aoa_to_sheet([[`月次集計 ${ymLabel(ym)} — 該当データなし`]])
+    XLSX.utils.book_append_sheet(wb, emptySheet, '月次集計')
+  }
   return wb
 }
 

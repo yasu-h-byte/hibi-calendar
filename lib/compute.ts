@@ -786,6 +786,7 @@ export interface WorkerMonthly {
   legalLimit?: number          // 法定上限時間 = 暦日数 × 40 ÷ 7
   // ── 法令準拠の詳細支給項目 (2026-05-13 追加、新ルール=変形労働時間制) ──
   legalHolidayHours?: number      // 法定休日(日曜)の実労働時間
+  legalHolidayDays?: number       // 法定休日(日曜)に実労働があった日数
   legalHolidayAllowance?: number  // 法定休日手当 = 時間 × 時給 × 1.35
   nightHours?: number             // 深夜(22:00-5:00)の実労働時間
   nightAllowance?: number         // 深夜手当 = 時間 × 時給 × 0.25
@@ -1137,6 +1138,7 @@ export function computeMonthly(
       wm.nonStatutoryOTAllowance = v.nonStatutoryOTAllowance
       wm.otAllowance = v.otAllowance
       wm.legalHolidayHours = v.legalHolidayHours
+      wm.legalHolidayDays = v.legalHolidayDays
       wm.legalHolidayAllowance = v.legalHolidayAllowance
       wm.nightHours = v.nightHours
       wm.nightAllowance = v.nightAllowance
@@ -1231,6 +1233,7 @@ export function computeMonthly(
       wm.nonStatutoryOTAllowance = v.nonStatutoryOTAllowance
       wm.otAllowance = v.otAllowance
       wm.legalHolidayHours = v.legalHolidayHours
+      wm.legalHolidayDays = v.legalHolidayDays
       wm.legalHolidayAllowance = v.legalHolidayAllowance
       wm.nightHours = v.nightHours
       wm.nightAllowance = v.nightAllowance
