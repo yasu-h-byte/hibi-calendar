@@ -125,10 +125,17 @@ function calcLegalMonthlyLimit(ym: string): number {
   return Math.round((daysInMonth * 40 / 7) * 10) / 10
 }
 
-// 数値表示（- なら表示しない）
+// 数値表示（- なら表示しない、テーブルセル向け）
 function fmtNum(n: number | undefined | null, suffix = ''): string {
   if (n == null || n === 0) return '—'
   return `${Math.round(n * 10) / 10}${suffix}`
+}
+
+// 時間（h）表示: 0 でも数値で表示（計算式の中で「× 0h」が必要なケース向け）
+// 旧: ${w.prescribedHours || 0}h → 133.33333333333334h と表示される問題を解消
+// 新: 小数点1桁で揃える → 133.3h
+function fmtH(n: number | undefined | null): string {
+  return `${Math.round((n || 0) * 10) / 10}h`
 }
 
 // 監査チェック項目
@@ -152,7 +159,7 @@ function buildAuditChecks(w: WorkerMonthly, ym: string, prescribedDays: number):
   checks.push({
     label: '所定労働時間が法定上限以内',
     pass: prescribedHours <= legalLimit,
-    detail: `所定 ${prescribedHours}h ≦ 法定上限 ${legalLimit}h (= 暦日数 × 40 ÷ 7)`,
+    detail: `所定 ${fmtH(prescribedHours)} ≦ 法定上限 ${fmtH(legalLimit)} (= 暦日数 × 40 ÷ 7)`,
   })
 
   // 2. 出勤日数の整合性
@@ -251,7 +258,7 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
     }
     // 時給制外国人
     if (mode.useOldRules) {
-      return `時給 ${fmtYen(w.hourlyRate || 0)} × 月所定時間 ${w.prescribedHours || 0}h = ${fmtYen(w.basePay || 0)}`
+      return `時給 ${fmtYen(w.hourlyRate || 0)} × 月所定時間 ${fmtH(w.prescribedHours)} = ${fmtYen(w.basePay || 0)}`
     }
     return `時給 ${fmtYen(w.hourlyRate || 0)} × ${baseDays}日 × 7h = ${fmtYen(w.fixedBasePay || w.basePay || 0)}`
   }
@@ -293,7 +300,7 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
             <table className="w-full text-xs">
               <tbody className="[&_td]:py-1 [&_td:first-child]:text-gray-600 [&_td:first-child]:w-1/3">
                 <tr><td>暦日数</td><td className="font-mono">{daysInMonth}日</td></tr>
-                <tr><td>法定上限（月）</td><td className="font-mono">{daysInMonth} × 40 ÷ 7 = <strong>{legalLimit}h</strong></td></tr>
+                <tr><td>法定上限（月）</td><td className="font-mono">{daysInMonth} × 40 ÷ 7 = <strong>{fmtH(legalLimit)}</strong></td></tr>
                 {/*
                   2026-06-XX 修正: 表示する所定日数を「実計算で使われた値」に変更。
                     旧: 常に prop の prescribedDays (= 全社カレンダー値) を表示
@@ -328,7 +335,7 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                   )
                 })()}
                 {w.legalLimit !== undefined && (
-                  <tr><td>本人別 法定上限</td><td className="font-mono">{w.legalLimit}h（新ルール）</td></tr>
+                  <tr><td>本人別 法定上限</td><td className="font-mono">{fmtH(w.legalLimit)}（新ルール）</td></tr>
                 )}
               </tbody>
             </table>
@@ -399,7 +406,7 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                       {fmtNum(w.actualWorkHours, 'h')}
                       {w.legalLimit !== undefined && (
                         <span className="text-[10px] text-gray-500 ml-1">
-                          / 法定上限 {w.legalLimit}h（{(w.actualWorkHours || 0) <= w.legalLimit ? '✓ 範囲内' : '⚠️ 超過'}）
+                          / 法定上限 {fmtH(w.legalLimit)}（{(w.actualWorkHours || 0) <= w.legalLimit ? '✓ 範囲内' : '⚠️ 超過'}）
                         </span>
                       )}
                     </td>
@@ -446,7 +453,7 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                     <td>所定外労働手当<br/><span className="text-[10px] text-gray-500">(割増なし)</span></td>
                     <td className="font-mono">
                       <div className="text-[10px] text-gray-500">
-                        時給 {fmtYen(w.hourlyRate || 0)} × {w.nonStatutoryOTHours || 0}h（月所定超 − 法定外残業）
+                        時給 {fmtYen(w.hourlyRate || 0)} × {fmtH(w.nonStatutoryOTHours)}（月所定超 − 法定外残業）
                       </div>
                       <div className="font-bold">{fmtYen(w.nonStatutoryOTAllowance || 0)}</div>
                     </td>
@@ -469,11 +476,11 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
                         {(() => {
                           const isVietnameseNewRules = !mode.useOldRules && w.hourlyRate
                           if (isVietnameseNewRules) {
-                            return `時給 ${fmtYen(w.hourlyRate || 0)} × 0.25 × ${w.legalOtHours ?? 0}h（割増分のみ）`
+                            return `時給 ${fmtYen(w.hourlyRate || 0)} × 0.25 × ${fmtH(w.legalOtHours)}（割増分のみ）`
                           }
                           const hUsed = w.otHours ?? 0
                           if (w.hourlyRate) {
-                            return `時給 ${fmtYen(w.hourlyRate)} × ${w.otMul} × ${hUsed}h（残業時間）`
+                            return `時給 ${fmtYen(w.hourlyRate)} × ${w.otMul} × ${fmtH(hUsed)}（残業時間）`
                           }
                           return `(日額 ${fmtYen(w.rate)} ÷ 8h) × ${w.otMul} × ${hUsed}h（残業時間）`
                         })()}

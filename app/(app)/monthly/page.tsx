@@ -258,6 +258,23 @@ export default function MonthlyPage() {
 
   // 所定日数
   const [prescribedDays, setPrescribedDays] = useState<string>('')
+
+  // 2026-06-XX 追加: 旧ルール想定の「日曜以外の日数」を月から自動算出
+  //   旧ルール (フン等) の所定日数は「原則 日曜のみ休み」が基準。
+  //   例: 5月 = 31日 − 日曜5日 = 26日 (基準値)。GW/夏季/年末年始 などは
+  //   ユーザーが手動で減算する想定。
+  //   未設定月のフォールバック値および UI ヒント表示に使用。
+  const calcDefaultPrescribedDays = useCallback((ymStr: string): number => {
+    if (!ymStr || !/^\d{6}$/.test(ymStr)) return 0
+    const y = parseInt(ymStr.slice(0, 4))
+    const m = parseInt(ymStr.slice(4, 6))
+    const daysInMonth = new Date(y, m, 0).getDate()
+    let sundays = 0
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (new Date(y, m - 1, d).getDay() === 0) sundays++
+    }
+    return daysInMonth - sundays
+  }, [])
   // 計算根拠モーダル用
   const [auditingWorker, setAuditingWorker] = useState<WorkerMonthly | null>(null)
   const [savingWorkDays, setSavingWorkDays] = useState(false)
@@ -318,14 +335,17 @@ export default function MonthlyPage() {
       }
       const json: MonthlyData = await res.json()
       setData(json)
-      setPrescribedDays(json.workDays ? String(json.workDays) : '')
+      // 2026-06-XX: 未設定 (0/null) 月は「日曜以外の日数」を自動初期値に
+      //   旧ルール継続者の所定日数は通常この値が基準（特別休暇分を手動で減算）
+      const defaultDays = calcDefaultPrescribedDays(ym)
+      setPrescribedDays(json.workDays ? String(json.workDays) : String(defaultDays))
     } catch (e) {
       setError('通信エラーが発生しました')
       setData(null)
     } finally {
       setLoading(false)
     }
-  }, [password, ym])
+  }, [password, ym, calcDefaultPrescribedDays])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -844,7 +864,7 @@ export default function MonthlyPage() {
           </div>
         )}
         {isWorkerTab && !data?.hasCalendarData && (
-          <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600">
+          <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600 flex-wrap">
             <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">所定日数:</label>
             <input
               type="number"
@@ -863,6 +883,22 @@ export default function MonthlyPage() {
             >
               {savingWorkDays ? '...' : '保存'}
             </button>
+            {/* 2026-06-XX 追加: 日曜以外の基準値ヒント + クイックリセット */}
+            {(() => {
+              const baseDays = calcDefaultPrescribedDays(ym)
+              const current = Number(prescribedDays) || 0
+              const diff = current - baseDays
+              return (
+                <span
+                  className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap cursor-pointer hover:text-hibi-navy"
+                  title="クリックで基準値（日曜以外の日数）にリセット。特別休暇分はここから手動で減算してください"
+                  onClick={() => setPrescribedDays(String(baseDays))}
+                >
+                  📅 基準値: {baseDays}日 (日曜以外)
+                  {diff < 0 && <span className="ml-1 text-amber-600">{diff}日</span>}
+                </span>
+              )
+            })()}
           </div>
         )}
       </div>
