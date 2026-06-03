@@ -294,7 +294,39 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
               <tbody className="[&_td]:py-1 [&_td:first-child]:text-gray-600 [&_td:first-child]:w-1/3">
                 <tr><td>暦日数</td><td className="font-mono">{daysInMonth}日</td></tr>
                 <tr><td>法定上限（月）</td><td className="font-mono">{daysInMonth} × 40 ÷ 7 = <strong>{legalLimit}h</strong></td></tr>
-                <tr><td>所定日数</td><td className="font-mono">{prescribedDays}日（就業カレンダーから算出）</td></tr>
+                {/*
+                  2026-06-XX 修正: 表示する所定日数を「実計算で使われた値」に変更。
+                    旧: 常に prop の prescribedDays (= 全社カレンダー値) を表示
+                    新: w.prescribedHours から逆算 (旧ルール=÷6.667, 新ルール=÷7)
+                    理由: 過去バグで「画面表示23日／実計算20日」のズレが発生。
+                          実計算ベースに統一することで再発防止。
+                  フォールバック: w.prescribedHours が無ければ prop を使用
+                */}
+                {(() => {
+                  // 旧ルール: 1日 20/3h, 新ルール: 1日 7h
+                  const dailyH = mode.useOldRules ? (20 / 3) : 7
+                  const computedDays = w.prescribedHours
+                    ? Math.round(w.prescribedHours / dailyH)
+                    : prescribedDays
+                  const source = mode.useOldRules
+                    ? '全社所定（日曜・祝日除く）'
+                    : '配置現場の就業カレンダー'
+                  const mismatch = w.prescribedHours && computedDays !== prescribedDays
+                  return (
+                    <tr>
+                      <td>所定日数</td>
+                      <td className="font-mono">
+                        <strong>{computedDays}日</strong>
+                        <span className="text-gray-500 ml-1">（{source}）</span>
+                        {mismatch ? (
+                          <div className="text-[10px] text-amber-600 mt-0.5">
+                            ⚠ 全社設定は {prescribedDays}日 ですが、このスタッフの計算では {computedDays}日 が採用されました
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  )
+                })()}
                 {w.legalLimit !== undefined && (
                   <tr><td>本人別 法定上限</td><td className="font-mono">{w.legalLimit}h（新ルール）</td></tr>
                 )}

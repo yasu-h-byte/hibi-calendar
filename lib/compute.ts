@@ -1031,10 +1031,20 @@ export function computeMonthly(
       wm.dispatchDeduction = wm.totalCost
     }
 
-    // スタッフごとの所定日数: カレンダー(siteWorkDaysMap)があればそちらを優先
+    // スタッフごとの所定日数:
+    //   - 新ルール（変形労働制 ym>=202605）: 現場の就業カレンダー(siteWorkDaysMap)を使用
+    //     → 現場が土曜も休む等で月20日設定なら、その値で給与計算
+    //   - 旧ルール (useOldRules=true や 4月以前): 全社所定 prescribedDays を使用
+    //     → 「日曜のみ休み(+祝日) = 月23日」が原則。現場 calendar とは独立。
+    //
+    // 2026-06-XX 修正: 旧ルール継続者(フン 104 等)に対して誤って site calendar の値が
+    //   採用されていたバグを修正。例: フンが IH 現場(土曜休み20日設定)のみ配置の場合、
+    //   旧ルールでは 23日所定のはずが 20日扱いで欠勤控除が発生しない問題があった。
+    const workerWmEarly = main.workers.find(x => x.id === wm.id)
+    const isOldRulesWorker = ym < '202605' || workerWmEarly?.useOldRules === true
     let workerPrescribedDays = prescribedDays
-    if (siteWorkDaysMap && wm.sites.length > 0) {
-      // スタッフが配置されている現場の所定日数の最大値を採用
+    if (!isOldRulesWorker && siteWorkDaysMap && wm.sites.length > 0) {
+      // 新ルールのみ: スタッフが配置されている現場の所定日数の最大値を採用
       const siteDays = wm.sites.map(sid => siteWorkDaysMap[sid] || 0).filter(d => d > 0)
       if (siteDays.length > 0) {
         workerPrescribedDays = Math.max(...siteDays)
