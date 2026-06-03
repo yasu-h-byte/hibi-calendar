@@ -236,11 +236,23 @@ Chon ten -> Xem lich -> Ky
   }
 
   // Ym options
-  const ymOptions: string[] = []
+  // 2026-06-XX 修正: 過去3ヶ月も閲覧可能に (旧: 今月以降6ヶ月のみ → 新: 過去3ヶ月〜未来6ヶ月)
+  //   理由: 給与計算の根拠確認・労務監査・過去の承認状況の見返しが必要なため。
+  //   API 側は元から ym パラメータの月制限なし。フロントのセレクター生成範囲のみ拡張。
+  const ymOptions: { value: string; label: string }[] = []
   const now = new Date()
-  for (let i = 0; i < 6; i++) {
+  for (let i = -3; i < 6; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
-    ymOptions.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const baseLabel = `${d.getFullYear()}年${d.getMonth() + 1}月`
+    // 月差別ラベル: 過去月は「(先月)」「(2ヶ月前)」を併記、今月は「(今月)」
+    let suffix = ''
+    if (i === -1) suffix = ' (先月)'
+    else if (i === -2) suffix = ' (2ヶ月前)'
+    else if (i === -3) suffix = ' (3ヶ月前)'
+    else if (i === 0) suffix = ' (今月)'
+    else if (i === 1) suffix = ' (来月)'
+    ymOptions.push({ value, label: baseLabel + suffix })
   }
 
   // Signature summary (2026-05-27: 人毎ユニーク集計に変更)
@@ -296,7 +308,7 @@ Chon ten -> Xem lich -> Ky
             className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white"
           >
             {ymOptions.map(o => (
-              <option key={o} value={o}>{o.replace('-', '年')}月</option>
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
           {user.role !== 'foreman' && (
