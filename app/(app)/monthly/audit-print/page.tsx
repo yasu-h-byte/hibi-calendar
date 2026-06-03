@@ -52,8 +52,13 @@ export default function AuditPrintPage() {
     }
     const stored = localStorage.getItem('hibi_auth')
     const password = stored ? JSON.parse(stored).password : ''
+    if (!password) {
+      setError('認証情報がありません。/monthly を一度開いてからこのページに遷移してください')
+      setLoading(false)
+      return
+    }
     fetch(`/api/monthly?ym=${ym}&includeDaily=true`, {
-      headers: { 'X-Auth': password },
+      headers: { 'x-admin-password': password },
     })
       .then(async r => {
         if (!r.ok) throw new Error(`API ${r.status}`)
