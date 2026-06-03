@@ -101,6 +101,10 @@ export function isVietnameseWorker(visa: string | undefined | null): boolean {
  * 履歴:
  *   - 2026-05-08 導入: 全カテゴリで既存エントリ必須（自己申告原則）
  *   - 2026-05-11 緩和: 4月後付けPL業務で全件 403 弾きが発生 → 事後申請ステータスのみ例外許容
+ *   - 2026-06-XX 緩和: 補償日 (w=0.6, 現場都合休み) を例外に追加
+ *     理由: 現場都合休みはスタッフが自己申告する性質ではなく、会社/職長/管理者が
+ *           「今日は雨で休み」「資材届かず休み」と判断して代理入力するもの。
+ *           スタッフの未入力を待つフローは現実的でない（休業手当60%の支給が漏れる）。
  *
  * @param worker        対象ワーカー（visa フィールドを参照）
  * @param existingEntry att_YYYYMM ドキュメントから取得した現在のエントリ
@@ -120,14 +124,18 @@ export function canAdminEditEntry(
     return { editable: true }
   }
   // 既存エントリなし: 事後申請性ステータスは admin/foreman の後付け入力を許容
+  //   - 有給 (p): スタッフが事前申請するが、当日体調不良の事後申請もある
+  //   - 帰国中 (hk): 長期帰国は管理者一括登録が運用上自然
+  //   - 補償日 (w=0.6): 現場都合休みは会社/職長判断 → 代理入力が前提
   if (newEntry) {
     const isPaidLeave = (newEntry.p ?? 0) > 0
     const isHomeLeave = (newEntry.hk ?? 0) > 0
-    if (isPaidLeave || isHomeLeave) {
+    const isCompensation = (newEntry.w ?? 0) === 0.6
+    if (isPaidLeave || isHomeLeave || isCompensation) {
       return { editable: true }
     }
   }
-  return { editable: false, reason: 'スタッフ本人のスマホ入力待ち（有給・帰国中は後付け入力可）' }
+  return { editable: false, reason: 'スタッフ本人のスマホ入力待ち（有給・帰国中・現場都合休みは後付け入力可）' }
 }
 
 /**

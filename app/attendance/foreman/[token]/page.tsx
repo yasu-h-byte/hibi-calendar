@@ -50,7 +50,7 @@ export default function ForemanAttendancePage() {
   const [dateISO, setDateISO] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [editingWorker, setEditingWorker] = useState<{ id: number; name: string } | null>(null)
+  const [editingWorker, setEditingWorker] = useState<{ id: number; name: string; hasEntry: boolean } | null>(null)
   const [editOT, setEditOT] = useState(0)
   const [saving, setSaving] = useState(false)
   const [fixingSite, setFixingSite] = useState<{
@@ -299,8 +299,9 @@ export default function ForemanAttendancePage() {
               return awaitingStaff ? (
                 <div
                   key={w.id}
-                  className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 opacity-60"
-                  title="スタッフ本人のスマホ入力待ち"
+                  className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
+                  title="現場都合休み・有給などは職長が代理入力できます"
+                  onClick={() => { setEditingWorker({ id: w.id, name: w.name, hasEntry: false }); setEditOT(0) }}
                 >
                   <span className="text-sm font-medium text-gray-700 truncate min-w-0">{w.name}</span>
                   <span className="text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 bg-gray-100 text-gray-500">
@@ -311,7 +312,7 @@ export default function ForemanAttendancePage() {
                 <div
                   key={w.id}
                   className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
-                  onClick={() => { setEditingWorker({ id: w.id, name: w.name }); setEditOT(w.entry?.o || 0) }}
+                  onClick={() => { setEditingWorker({ id: w.id, name: w.name, hasEntry: true }); setEditOT(w.entry?.o || 0) }}
                 >
                   <span className="text-sm font-medium text-gray-800 truncate min-w-0">{w.name}</span>
                   <span className={`text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 ${STATUS_COLORS[w.status]}`}>
@@ -351,23 +352,41 @@ export default function ForemanAttendancePage() {
             <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center truncate">{editingWorker.name}</h3>
             <p className="text-sm text-gray-500 mb-4 text-center">{data.date.dateLabel}</p>
 
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4">
+            {/* スタッフ未入力時のヒント（待機中行から開いた場合） */}
+            {!editingWorker.hasEntry && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                <p className="text-xs text-yellow-800 font-medium mb-1">
+                  💡 スタッフ未入力の状態です
+                </p>
+                <p className="text-xs text-yellow-700">
+                  「現場都合休み」「有給」のみ職長が代理入力できます。出勤・休みは
+                  スタッフ本人のスマホ入力をお待ちください。
+                </p>
+              </div>
+            )}
+
+            {/* 2026-06-XX: 現場都合休み (補償日 0.6) を追加 → 4ボタンの 2x2 グリッド */}
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-4">
               {([
-                { choice: 'work', emoji: '🔨', label: '出勤', color: 'bg-blue-500' },
-                { choice: 'rest', emoji: '🏠', label: '休み', color: 'bg-gray-400' },
-                { choice: 'leave', emoji: '🌴', label: '有給', color: 'bg-green-500' },
-                // site_off（現場休み）は変形労働時間制導入により非表示
-              ] as const).map(btn => (
-                <button
-                  key={btn.choice}
-                  onClick={() => handleEdit(btn.choice)}
-                  disabled={saving}
-                  className={`${btn.color} text-white rounded-xl py-3 sm:py-4 text-center active:scale-95 disabled:opacity-50`}
-                >
-                  <div className="text-xl sm:text-2xl mb-1">{btn.emoji}</div>
-                  <div className="text-xs sm:text-sm font-bold">{btn.label}</div>
-                </button>
-              ))}
+                { choice: 'work', emoji: '🔨', label: '出勤', color: 'bg-blue-500', requiresEntry: true },
+                { choice: 'rest', emoji: '🏠', label: '休み', color: 'bg-gray-400', requiresEntry: true },
+                { choice: 'leave', emoji: '🌴', label: '有給', color: 'bg-green-500', requiresEntry: false },
+                { choice: 'comp', emoji: '🚧', label: '現場都合休み', color: 'bg-yellow-500', requiresEntry: false },
+              ] as const).map(btn => {
+                const disabled = saving || (btn.requiresEntry && !editingWorker.hasEntry)
+                return (
+                  <button
+                    key={btn.choice}
+                    onClick={() => handleEdit(btn.choice)}
+                    disabled={disabled}
+                    title={disabled && !saving ? 'スタッフ本人のスマホ入力後に変更できます' : undefined}
+                    className={`${btn.color} text-white rounded-xl py-3 sm:py-4 text-center active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed`}
+                  >
+                    <div className="text-xl sm:text-2xl mb-1">{btn.emoji}</div>
+                    <div className="text-xs sm:text-sm font-bold">{btn.label}</div>
+                  </button>
+                )
+              })}
             </div>
 
             {/* OT input for work */}

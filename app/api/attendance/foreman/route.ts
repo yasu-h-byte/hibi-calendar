@@ -211,6 +211,12 @@ export async function POST(request: NextRequest) {
         case 'site_off':
           entry = { w: 0, h: 1, s: 'foreman' }
           break
+        case 'comp':
+          // 2026-06-XX 追加: 現場都合休み (補償日 w=0.6, 休業手当60%)
+          //   会社/職長判断で代理入力する性質のため、スタッフ未入力でも登録可能
+          //   (canAdminEditEntry の例外リストに含まれる)
+          entry = { w: 0.6, s: 'foreman' }
+          break
         default:
           return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
       }
