@@ -36,6 +36,25 @@
 - Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com> を付与
 - 日本語でコミットメッセージを記述
 
+### マニュアル改訂ルール（必読）
+
+業務マニュアル（`docs/manual-*.md`、`public/manual-*.html`）を改訂したら、
+**必ず以下 3 箇所の更新日を同時に変更する** こと。1つでも忘れると古い日付が
+残り、利用者（奥寺さん等）が「これは最新か？」と判断できなくなる。
+
+| 場所 | 更新する箇所 |
+|---|---|
+| `docs/manual-*.md` (原本) | フロントマター「最終更新」+ 改訂履歴の表に新エントリ |
+| `public/manual-*.html` (公開HTML) | 冒頭の「最終更新: YYYY年MM月」+ 改訂履歴の表に新エントリ |
+| `app/(app)/docs/page.tsx` (資料一覧) | 該当エントリの `updated: 'YYYY-MM-DD'` |
+
+改訂履歴の表には「何を変更したか」を 1-2 行で記載。空のエントリは作らない。
+
+例: 給与計算マニュアル (奥寺さん用) の場合
+- `docs/payroll-manual-okutera.md`
+- `public/manual-payroll-okudera.html`
+- `app/(app)/docs/page.tsx` の `'/manual-payroll-okudera.html'` 行
+
 ### 関係者の役割
 
 このアプリには「事業責任者」と「アプリ開発・管理者」という2つの異なる役割が存在する。混同しないこと。
