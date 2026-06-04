@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>給与計算マニュアル（奥寺さん向け） - HIBI CONSTRUCTION</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; }
+  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  .box-purple { background: #f5f0ff; border: 1px solid #c0a0e0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #1B2A4A; color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .highlight { background: #ffe0e0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+  .formula { background: #f8f8f8; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 12px 0; font-family: monospace; font-size: 14px; line-height: 2; }
+  .toc { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: #1B2A4A; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  ul.checklist { list-style: none; padding-left: 0; }
+  ul.checklist li { padding: 4px 0; padding-left: 28px; position: relative; }
+  ul.checklist li:before { content: "☐"; position: absolute; left: 0; font-size: 18px; color: #1B2A4A; }
+  @media print { body { font-size: 12px; } .toc { page-break-after: always; } }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>HIBI CONSTRUCTION 就業管理システム<br>給与計算マニュアル（奥寺さん用）</h1>
+<p>
+対象: 奥寺智子さん（日比建設の給与計算担当）<br>
+担当範囲: <strong>日比建設のみ</strong>（HFU は対象外）<br>
+作成日: 2026年6月<br>
+最終更新: 2026年6月<br>
+システムURL: <code>https://hibi-calendar.vercel.app</code>
+</p>
+
+<div class="box">
+<strong>📌 関連資料：</strong>
+<ul style="margin: 6px 0; padding-left: 20px;">
+  <li><a href="/manual-okudera.html">📘 業務マニュアル（事務担当 総合版）</a> — 出面入力・有給管理など日次運用全般</li>
+  <li><a href="/manual-checklist.html">✅ ロール別やることチェックリスト</a> — 日次・月次のやること</li>
+  <li><a href="/guide">📖 運用ガイド</a> — 変形労働時間制・3層構造給与の仕組み</li>
+</ul>
+<strong>このマニュアルは「日比建設の月次給与計算」に特化しています。</strong>
+有給管理・出面入力など他の業務は総合版マニュアルを参照してください。
+</div>
+
+<div class="toc">
+<strong>目次</strong>
+<ol>
+  <li><a href="#sec0">はじめに（担当範囲）</a></li>
+  <li><a href="#sec1">毎月の作業フロー</a></li>
+  <li><a href="#sec2">月次集計画面の基本操作</a></li>
+  <li><a href="#sec3">⚠ 自動検算バナーが出ているとき</a></li>
+  <li><a href="#sec4">個別スタッフの計算根拠を確認する</a></li>
+  <li><a href="#sec5">Excel 出力</a></li>
+  <li><a href="#sec6">6パターンの給与計算式</a></li>
+  <li><a href="#sec7">よくある問題と対処（FAQ）</a></li>
+  <li><a href="#sec8">用語集</a></li>
+  <li><a href="#sec9">緊急連絡</a></li>
+  <li><a href="#sec10">チェックリスト（振込前）</a></li>
+  <li><a href="#sec11">補足: 印刷・PDF出力</a></li>
+</ol>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec0">0. はじめに（担当範囲）</h2>
+
+<table>
+<tr><th>対象</th><th>担当者</th><th>給与計算方法</th></tr>
+<tr><td><strong>日比建設の従業員</strong></td><td><strong class="highlight">奥寺さん</strong>（このマニュアルの対象）</td><td>本システムで集計 → 振込手続き</td></tr>
+<tr><td>HFU の従業員</td><td>靖仁さん</td><td>別途、外注業者に委託</td></tr>
+<tr><td>外注業者（協力会社）</td><td>政仁さん経由</td><td>業者向け請求書ベース</td></tr>
+</table>
+
+<div class="box-ok">
+<strong>👉 奥寺さんは「日比建設」タブのみ見ればOK</strong> です。HFU タブ・外注タブは見なくて大丈夫です。
+</div>
+
+<h3>給与計算の責任分担フロー</h3>
+<div class="formula">
+[出面入力] → [カレンダー承認] → [月次集計確認] → [Excel出力] → [振込手続き]
+スタッフ・職長   職長提出→政仁承認   ★ 奥寺さん ★   ★ 奥寺さん ★   ★ 奥寺さん ★
+  (前月末まで)     (前月末まで)      (毎月10日まで)  (10〜20日)     (25日まで)
+</div>
+
+奥寺さんは <strong>「月次集計確認」以降</strong> を担当します。
+出面の入力・修正に違和感があれば靖仁さんに連絡してください。
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec1">1. 毎月の作業フロー（日比建設の場合）</h2>
+
+<p>給与支給日: <strong>毎月 25日</strong>（前月分）</p>
+
+<table>
+<tr><th>日程</th><th>作業</th><th>画面/手段</th></tr>
+<tr><td>1〜5日</td><td>前月の出面入力が完了しているか確認</td><td><code>/attendance</code></td></tr>
+<tr><td>5〜10日</td><td>月次集計画面で日比建設の数字を確認</td><td><code>/monthly</code></td></tr>
+<tr><td>10〜15日</td><td>個別スタッフの計算根拠を「給与計算根拠モーダル」で確認</td><td><code>/monthly</code> の各行クリック</td></tr>
+<tr><td>15〜20日</td><td>Excel 出力 → 振込金額の確定</td><td><code>/monthly</code> の Excel ボタン</td></tr>
+<tr><td>20〜23日</td><td>政仁さんへ最終確認依頼 → 承認</td><td>口頭 or メール</td></tr>
+<tr><td>25日</td><td>銀行振込手続き</td><td>銀行サイト等</td></tr>
+</table>
+
+<p>例：<strong>6月25日支給 = 5月分の給与計算</strong></p>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec2">2. 月次集計画面（<code>/monthly</code>）の基本操作</h2>
+
+<h3>2-1. 開き方</h3>
+<p>ブラウザで <code>/monthly</code> にアクセス（管理者パスワード必要）。</p>
+
+<h3>2-2. 操作手順</h3>
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text"><strong>画面上部の月選択</strong>で対象月（前月）を選ぶ。例：6月作業 → 「2026年5月」</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text"><strong>タブで「日比建設」をクリック</strong>（日比建設の従業員のみ表示される）</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">スタッフ一覧の各列を確認</div>
+</div>
+
+<h3>2-3. 主な列の意味</h3>
+<table>
+<tr><th>列名</th><th>意味</th><th>注意点</th></tr>
+<tr><td>名前</td><td>スタッフ名</td><td><strong>クリックで詳細モーダルが開く</strong></td></tr>
+<tr><td>所属</td><td>「日比」バッジ</td><td>HFUは別タブ</td></tr>
+<tr><td>現場</td><td>出勤した現場</td><td>例: 笹塚, IH</td></tr>
+<tr><td>出勤日数</td><td>月間出勤日数（補償日0.6含む）</td><td>補償日があれば「うち補 0.6」表示</td></tr>
+<tr><td>有給</td><td>有給取得日数</td><td>—</td></tr>
+<tr><td>残業(h)</td><td>出面入力された残業時間</td><td>—</td></tr>
+<tr><td>基本給</td><td>月の基本給</td><td>雇用区分により計算式が異なる</td></tr>
+<tr><td>追加所定</td><td>21日目以降の出勤日 × 7h × 時給</td><td>外国人新ルールのみ、<strong>日単位</strong></td></tr>
+<tr><td>所定外労働</td><td>1日の所定(7h)超の残業 × 時給</td><td>外国人新ルールのみ、<strong>時間単位</strong>、1.0倍</td></tr>
+<tr><td>法定外残業</td><td>週40h超など × 0.25倍</td><td>割増分のみ</td></tr>
+<tr><td>法定休日手当</td><td>日曜出勤 × 1.35倍</td><td>—</td></tr>
+<tr><td>深夜手当</td><td>22:00〜5:00 × 0.25倍</td><td>—</td></tr>
+<tr><td>休業手当</td><td>補償日 × 7h × 60%</td><td>労基法26条</td></tr>
+<tr><td>欠勤控除</td><td>欠勤日数 × 7h × 時給</td><td>マイナス表示</td></tr>
+<tr><td><strong>支給額合計</strong></td><td>上記の合計</td><td><strong>振込金額のベース</strong></td></tr>
+</table>
+
+<div class="box">
+<strong>👉 名前列は横スクロールしても固定表示されます。</strong>
+列が多くて右に流れても、左端の名前は常に見えます。
+</div>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec3">3. ⚠ 自動検算バナーが出ているとき</h2>
+
+<p>画面上部に <span class="highlight">赤バナー</span> または <span style="background: #fff0a0; padding: 2px 6px; border-radius: 4px;">黄バナー</span> が出ている場合は <strong>要確認</strong> です。</p>
+
+<div class="box-red">
+<strong>表示例:</strong><br>
+⚠ 給与計算に異常があります（1名 / 検出1件）<br>
+労基法・実労働時間ベースの自動検算で <strong>critical 1件</strong> を検出しました。<br>
+該当スタッフの行クリックで「計算根拠」モーダルを開いて詳細を確認してください。<br><br>
+❌ ハウ: 法定外残業手当が上限（0.5倍）を超える（二重支給の可能性）<br>
+　（想定 ¥1,513 / 実額 ¥7,500）
+</div>
+
+<h3>対処方法</h3>
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">該当スタッフの行をクリック → 計算根拠モーダルを開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">「⑤ 監査チェック」セクションで ❌ になっている項目を確認</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">出面入力に不自然な点がないか確認（残業時間の入力ミスなど）</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">必要に応じて靖仁さんに連絡</div>
+</div>
+
+<table>
+<tr><th>バナーの色</th><th>意味</th><th>対応</th></tr>
+<tr><td>赤 (critical)</td><td>計算ロジック上の異常</td><td><strong>必ず確認</strong>。靖仁さんへ連絡</td></tr>
+<tr><td>黄 (warning)</td><td>通常範囲を逸脱した値</td><td>チェック推奨</td></tr>
+<tr><td>表示なし</td><td>全員 OK</td><td>そのまま進めて問題なし</td></tr>
+</table>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec4">4. 個別スタッフの計算根拠を確認する</h2>
+
+<h3>4-1. 計算根拠モーダルの開き方</h3>
+<p><code>/monthly</code> 画面で <strong>スタッフ名の文字をクリック</strong>。モーダルが開き、5つのセクションが表示されます。</p>
+
+<div class="formula">
+🔍 給与計算の根拠 (2026年5月)
+ファン スアン ハウ (HFU/鳶) — ID:203
+
+① 月情報
+   暦日数 31日
+   法定上限 (月) 31 × 40 ÷ 7 = 177.1h
+   所定日数 23日（配置現場の就業カレンダー）
+   基本給ベース日数 20日（全社設定）
+
+② 雇用区分・適用ルール
+   時給制（外国人）
+   新ルール: 法令準拠の3層構造
+
+③ 出勤実績の集計
+   出勤日数 22日
+   残業時間（合計）— ...
+   有給日数 1日
+   欠勤日数 0日
+
+④ 給与計算（式と結果）
+   基本給:        時給¥1,513 × 20日 × 7h = ¥211,820
+   追加所定手当:  時給 × 7h × MAX(0, 出勤22-20) = ¥21,182
+   法定外残業:    時給¥1,513 × 0.25 × 4h（割増のみ）= ¥1,513
+   ─────────────
+   支給額 ¥234,515
+
+⑤ 監査チェック 5/5
+   ✓ 所定労働時間が法定上限以内
+   ✓ 出勤実績の合計が所定日数以内
+   ✓ 支給額の内訳合計が一致
+   ✓ 残業倍率が法定下限以上
+   ✓ 自動検算（労基法・実労働時間ベース）
+</div>
+
+<h3>4-2. 確認のコツ</h3>
+<table>
+<tr><th>セクション</th><th>確認ポイント</th></tr>
+<tr><td>① 月情報</td><td>所定日数が正しいか（5月は23日が標準）</td></tr>
+<tr><td>② 雇用区分</td><td>「時給制（外国人）」「日給制（日本人）」など正しいか</td></tr>
+<tr><td>③ 出勤実績</td><td>出勤日数・有給日数が出面と一致しているか</td></tr>
+<tr><td>④ 給与計算</td><td>計算式と金額が想定通りか</td></tr>
+<tr><td>⑤ 監査チェック</td><td><strong>5項目すべて ✓（緑）であること</strong></td></tr>
+</table>
+
+<div class="box-warn">
+❌（赤）が出ている項目があれば、detail の文章を読んで原因を特定してください。
+</div>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec5">5. Excel 出力</h2>
+
+<h3>5-1. 出力手順</h3>
+<p><code>/monthly</code> 画面の「帳票出力」セクションから、対象の Excel をダウンロード。</p>
+
+<h3>5-2. 奥寺さん用の主な帳票</h3>
+<table>
+<tr><th>帳票名</th><th>用途</th><th>ファイル名例</th></tr>
+<tr><td><strong>月次集計（日比建設）</strong></td><td>振込金額算出のメイン</td><td><code>月次集計_日比建設_202605.xlsx</code></td></tr>
+<tr><td>日比建設向け 出面一覧</td><td>出面の証跡</td><td><code>日比建設_出面一覧_202605.xlsx</code></td></tr>
+<tr><td>有給管理台帳</td><td>年5日付与チェック</td><td><code>有給管理台帳_日比建設.xlsx</code></td></tr>
+</table>
+
+<h3>5-3. 月次集計Excel の構成（タブ別シート）</h3>
+<p><code>月次集計_日比建設_202605.xlsx</code> を開くと、複数シートに分かれています:</p>
+
+<div class="formula">
+[日比建設・日本人]         ← 日本人スタッフ（日給制/月給制）
+[日比建設・ベトナム人]     ← 新ルール対象（多数派）
+[日比建設・ベトナム人(旧)] ← 旧ルール継続（フンさんのみ）
+</div>
+
+<p>各シートの末尾に <strong>小計</strong> と <strong>自動検算結果</strong> が出ます。</p>
+
+<div class="box-ok">
+<strong>検算 OK 時:</strong><br>
+✓ 自動検算: 全項目 OK<br>
+（法定外残業 0.25倍 / 所定外労働 / 法休 1.35倍 / 深夜 0.25倍 / 休業 60%）
+</div>
+
+<div class="box-red">
+<strong>検算 NG 時:</strong><br>
+⚠ 自動検算: 1名で1件の違反検出（critical 1 / warning 0）<br>
+[critical] ハウ : 法定外残業手当が上限（0.5倍）を超える<br>
+　想定 ¥1,500 / 実額 ¥7,500
+</div>
+
+<div class="box-warn">
+⚠ Excel末尾に「⚠ 自動検算: ...違反検出」と出た場合、振込前に必ず靖仁さんに確認してください。
+</div>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec6">6. 6パターンの給与計算式（参考）</h2>
+
+<p>スタッフごとに、雇用区分により計算式が変わります。</p>
+
+<h3>パターン1: 日本人 日給制（多くの日比建設従業員）</h3>
+<div class="formula">
+基本給 = 日額 × 出勤日数 + 日額 × 0.6 × 補償日数
+残業手当 = (日額 ÷ 8h) × 1.25 × 残業時間
+支給額 = 基本給 + 残業手当
+</div>
+
+<h3>パターン2: 日本人 月給制</h3>
+<div class="formula">
+基本給 = 月給（固定値）
+残業時給 = 月給 ÷ (月所定日数 × 8h)
+残業手当 = 残業時給 × 1.25 × 残業時間
+支給額 = 基本給 + 残業手当
+</div>
+
+<h3>パターン3: 外国人 時給制 新ルール（多数派ベトナム人）</h3>
+<div class="formula">
+基本給(固定)    = 時給 × 20日 × 7h                ← 全社固定
+追加所定手当    = 時給 × MAX(0, 出勤-20) × 7h
+所定外労働手当  = 時給 × 残業欄入力時間 × 1.0倍   ← base
+法定外残業手当  = 時給 × 法定外残業時間 × 0.25倍  ← premium
+法定休日手当    = 時給 × 日曜実労働 × 1.35倍
+深夜手当        = 時給 × 0.25 × 深夜労働h
+休業手当        = 時給 × 7h × 0.6 × 補償日
+欠勤控除        = 時給 × 7h × 欠勤日数
+
+支給額 = 上記合計 − 欠勤控除
+</div>
+
+<div class="box">
+<strong>💡「追加所定」と「所定外労働」の違い:</strong>
+<ul>
+  <li>追加所定 = <strong>日数</strong>ベース（21日目以降の丸1日）</li>
+  <li>所定外労働 = <strong>時間</strong>ベース（1日の所定 7h を超えた残業）</li>
+</ul>
+どちらも 1.0倍だが集計の粒度が違うだけです。
+</div>
+
+<h3>パターン4: 外国人 月給制 新ルール</h3>
+<p>パターン3と同じ式。基本給だけ「月給固定」で時給は salary ÷ 140h で逆算。</p>
+
+<h3>パターン5: 外国人 時給制 旧ルール継続（フンさん 104）</h3>
+<div class="formula">
+基本給         = 時給 × 月所定日数 × 6h40m  ※5月なら 23 × 6.667 = 153.33h
+休業補償       = 時給 × 6h40m × 0.6 × 補償日
+残業手当       = 時給 × 1.25 × 全残業時間  ※3層判定なし、1.25倍で一括
+欠勤控除       = 時給 × 6h40m × 欠勤日数
+
+支給額 = 基本給 + 休業補償 + 残業手当 − 欠勤控除
+</div>
+
+<h3>パターン6: 外国人 月給制 旧ルール継続</h3>
+<p>パターン5と同じ式。基本給だけ月給固定。</p>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec7">7. よくある問題と対処（FAQ）</h2>
+
+<h3>Q1. スタッフが画面に出てこない</h3>
+<div class="box">
+<strong>A.</strong> 以下のいずれか:
+<ul>
+  <li>退職日が月初より過去 → 人員マスタで <code>retired</code> フィールドを確認</li>
+  <li>当月一切出勤も有給もなし → 表示対象外（給与計算なし）</li>
+</ul>
+</div>
+
+<h3>Q2. 基本給が ¥0 になっている</h3>
+<div class="box">
+<strong>A.</strong> スタッフの人員マスタで <code>hourlyRate</code> と <code>salary</code> が両方未設定の可能性。靖仁さんに連絡してください。
+</div>
+
+<h3>Q3. 残業を入れていないのに「残業手当」が出ている</h3>
+<div class="box">
+<strong>A.</strong> 週40時間超による <strong>自動判定</strong> です。<br>
+例：月〜土の6日勤務で各日 7h勤務 = 週42h → 週40h超分の 2h が法定外残業に。<br>
+これは労基法準拠の正常動作です。
+</div>
+
+<h3>Q4. 補償日 (w=0.6) があるスタッフの支給額が想定と違う</h3>
+<div class="box">
+<strong>A.</strong> 補償日は 60% 支給（労基法26条）。
+<ul>
+  <li>基本給からは 1日分 減額（欠勤控除）</li>
+  <li>別途、休業手当 = 時給 × 7h × 0.6 を加算</li>
+  <li><strong>正味: 通常日の 60% の支給</strong></li>
+</ul>
+</div>
+
+<h3>Q5. 旧ルール継続スタッフ（フンさん）の計算が他の人と違う</h3>
+<div class="box">
+<strong>A.</strong> 正しい動作です。
+<ul>
+  <li>フンさんは本人希望で旧ルール継続を選択</li>
+  <li>月所定時間ベース（時給 × 月所定日数 × 6h40m）で基本給算出</li>
+  <li>残業は全時間 × 1.25倍</li>
+  <li>退職まで継続</li>
+</ul>
+</div>
+
+<h3>Q6. 中途入社・退社月の計算は？</h3>
+<div class="box">
+<strong>A.</strong> 在籍日数を暦日数で按分。<br>
+例：6/15入社（在籍 16/30 = 53%）→ baseDays = round(20 × 53%) = 11日<br>
+基本給も同比率で減額（月給制の場合）
+</div>
+
+<h3>Q7. 計算結果が「想定と違う」感じがする</h3>
+<div class="box">
+<strong>A.</strong> 以下の順で確認:
+<ol>
+  <li>該当スタッフの行をクリック → 計算根拠モーダル</li>
+  <li>「① 月情報」の所定日数が正しいか</li>
+  <li>「② 雇用区分」が正しいか</li>
+  <li>「③ 出勤実績」が出面と一致しているか</li>
+  <li>「⑤ 監査チェック」で 5/5 すべて ✓ か</li>
+</ol>
+それでも不明なら靖仁さんに連絡。
+</div>
+
+<h3>Q8. Excelと画面の数字が合わない</h3>
+<div class="box">
+<strong>A.</strong> ブラウザのキャッシュの可能性:
+<ol>
+  <li>ブラウザをリロード（Cmd+R / Ctrl+R）</li>
+  <li>再度 Excel をダウンロード</li>
+</ol>
+</div>
+
+<h3>Q9. 振込明細を社内会計システムに入れる際の注意</h3>
+<div class="box">
+<strong>A.</strong> Excel から <strong>支給額合計</strong> の列を見て転記してください。
+<ul>
+  <li>列名: <code>支給額合計</code></li>
+  <li>これは「基本給 + 各手当 − 欠勤控除」が全て計算済みの最終金額</li>
+  <li>そのまま振込金額として使えます</li>
+</ul>
+</div>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec8">8. 用語集</h2>
+
+<table>
+<tr><th>用語</th><th>意味</th></tr>
+<tr><td>新ルール</td><td>2026/5〜 1ヶ月単位変形労働時間制</td></tr>
+<tr><td>旧ルール</td><td>〜2026/4 月所定時間ベース（フンさん継続中）</td></tr>
+<tr><td>所定日数</td><td>月の出勤予定日数（カレンダーで設定、5月なら23日）</td></tr>
+<tr><td>ベース日数</td><td>月給制の基準日数（全社固定で 20日）</td></tr>
+<tr><td>月所定時間</td><td>ベース日数 × 1日所定 = 20×7 = 140h</td></tr>
+<tr><td>法定上限</td><td>月の労働時間の絶対上限 = 暦日数 × 40 ÷ 7</td></tr>
+<tr><td>法定外残業</td><td>1日8h超 / 週40h超 / 月法定上限超 の労働時間</td></tr>
+<tr><td>所定外労働</td><td>残業欄入力時間（全部含む、1.0倍 base）</td></tr>
+<tr><td>補償日 (w=0.6)</td><td>会社/現場都合での休業日。60% 支給（労基法26条）</td></tr>
+<tr><td>法定休日</td><td>日曜（1.35倍支給）</td></tr>
+<tr><td>3層判定</td><td>日単位→週単位→月単位の順に法定外残業を認定する仕組み</td></tr>
+</table>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec9">9. 緊急連絡</h2>
+
+<div class="box-red">
+<strong>こういう場合は靖仁さんに連絡</strong>
+<ul>
+  <li>計算結果が明らかにおかしい</li>
+  <li>自動検算で critical (赤) が出ている</li>
+  <li>出面入力に修正が必要そう</li>
+  <li>退職予定・新入社員の扱いが不明</li>
+  <li>カレンダーの所定日数が違うように見える</li>
+  <li>システムにアクセスできない / エラーが出る</li>
+</ul>
+<strong>連絡方法</strong>: メール <code>y.hibi@kwj.jp</code> / 口頭・電話（緊急時）
+</div>
+
+<div class="box">
+<strong>業務上の最終承認</strong>
+<ul>
+  <li>給与計算結果の最終承認は <strong>政仁さん</strong></li>
+  <li>奥寺さんが計算 → 政仁さんが承認 → 振込手続き</li>
+</ul>
+</div>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec10">10. チェックリスト（25日振込前）</h2>
+
+<p>支払い前に以下を確認:</p>
+
+<ul class="checklist">
+  <li>前月の出面入力が全員分完了している（<code>/attendance</code>）</li>
+  <li>前月のカレンダーが「承認済み」（<code>/calendar</code>）</li>
+  <li><code>/monthly</code> 画面で日比建設タブを開いて確認</li>
+  <li>自動検算バナー（赤/黄）が <strong>出ていない</strong> ことを確認</li>
+  <li>全スタッフの計算根拠モーダルで監査5項目が ✓ 緑</li>
+  <li>退職予定者・補償日があるスタッフは個別に金額確認</li>
+  <li>Excel 出力（月次集計_日比建設）→ 支給額合計を確認</li>
+  <li>Excel 末尾の自動検算が「✓ 全項目OK」</li>
+  <li>政仁さんに最終確認・承認をもらう</li>
+  <li>銀行で振込手続き</li>
+</ul>
+
+<hr>
+
+<!-- ================================================ -->
+<h2 id="sec11">11. 補足: 印刷・PDF出力</h2>
+
+<div class="box-purple">
+<code>/monthly</code> 画面に「📄 社労士確認用PDF」というボタンがあります。<br>
+これは <strong>社労士チェック用のPDF出力機能</strong> で、ベトナム人スタッフの計算根拠を一覧で見られます。
+<ul>
+  <li>日比建設のベトナム人がいる場合、社労士確認時に使用</li>
+  <li>通常は政仁さん・靖仁さんが操作するので、奥寺さんが触る必要は基本的にありません</li>
+  <li>もし政仁さんから「社労士に送るPDFを出して」と依頼があれば、<br>
+    「日比建設」ボタン → Cmd+P → PDF として保存</li>
+</ul>
+</div>
+
+<hr>
+
+<!-- ================================================ -->
+<h2>改訂履歴</h2>
+
+<table>
+<tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-06</td><td>初版作成。以下の最新改善を全反映:
+  <ul>
+    <li>自動検算バナー（バリデータ）</li>
+    <li>所定日数の自動初期値（日曜以外）</li>
+    <li>名前列固定（横スクロール対応）</li>
+    <li>Excel タブ別シート構成</li>
+    <li>補償日（w=0.6）の入力経路</li>
+    <li>社労士確認用 PDF 出力</li>
+    <li>旧ルール継続者（フン104）の正しい所定日数採用</li>
+    <li>法定外残業 0.25倍化（二重支給バグ修正）</li>
+  </ul>
+</td></tr>
+</table>
+
+<p style="margin-top: 40px; color: #666; font-size: 13px; text-align: center;">
+HIBI CONSTRUCTION 就業管理システム<br>
+このマニュアルの更新は GitHub の <code>docs/payroll-manual-okutera.md</code> から反映されます。
+</p>
+
+</body>
+</html>
