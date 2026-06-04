@@ -9,6 +9,7 @@
 | [docs/company.md](docs/company.md) | 会社概要・組織構成・従業員構成 |
 | [docs/labor-rules.md](docs/labor-rules.md) | 労働時間・変形労働時間制・運用サイクル |
 | **[docs/payroll-manual.md](docs/payroll-manual.md)** | **給与計算 実務マニュアル（運用者向け・最重要）** |
+| **[docs/payroll-manual-okutera.md](docs/payroll-manual-okutera.md)** | **奥寺さん向け給与計算マニュアル（日比建設専用・実務担当者向け）** |
 | [docs/salary-calculation.md](docs/salary-calculation.md) | 給与計算の技術仕様（開発者向け） |
 | [docs/calc-examples.md](docs/calc-examples.md) | 給与計算例集（社労士確認用・8パターン） |
 | [docs/labor-agreements.md](docs/labor-agreements.md) | 労使協定・36協定・就業規則対応表（社労士向け） |

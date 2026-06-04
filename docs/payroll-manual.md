@@ -3,6 +3,8 @@
 > 月次給与計算（変形労働時間制）の運用ガイド。
 > 政仁さん・キャシュモさん・社労士確認用。
 > 技術詳細は [salary-calculation.md](./salary-calculation.md)、計算例は [calc-examples.md](./calc-examples.md)、法令対応は [labor-agreements.md](./labor-agreements.md)。
+>
+> **👉 奥寺さん（日比建設の実務担当者）向けは → [payroll-manual-okutera.md](./payroll-manual-okutera.md)**
 
 ---
 
