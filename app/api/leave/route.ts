@@ -6,7 +6,7 @@ import { getMainData, getAttData, parseDKey, isDispatchedAt } from '@/lib/comput
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 
 /**
@@ -252,14 +252,12 @@ export async function POST(request: NextRequest) {
           if (exp >= todayDate) continue  // まだ期限内
 
           // 期限切れ → 残日数計算
-          // 残 = grantDays + carryOver - adjustment - buyoutDays - (付与期間内のP消化)
-          // ⚠️ 2026-05-08 修正: buyoutDays（買取済み日数）を控除
-          //   日本人で年度末買取後に時効処理されると、買取済みの分も「未消化のまま時効」と
-          //   記録されてしまう問題があった。
+          // 2026-06-XX 修正 (audit #5+#6): computeUsedDays / computeRemainingDays に統一
+          //   旧: expiredDays = grantDays + carryOver - adjustment - buyoutDays - periodUsed
+          //   新: computeRemainingDays(total, rec, periodUsed) で画面表示と式統一
+          //   両者は数学的に等価だが、ヘルパー経由にすることで定義の食い違いを構造的に防ぐ
           const grantDays = (r.grantDays as number | undefined) ?? 0
           const carryOver = (r.carryOver as number | undefined) ?? 0
-          const adjustment = (r.adjustment as number | undefined) ?? 0
-          const buyoutDays = (r.buyoutDays as number | undefined) ?? 0
           const periodStart = gd
           const periodEnd = new Date(gd)
           periodEnd.setFullYear(periodEnd.getFullYear() + 1)
@@ -279,7 +277,11 @@ export async function POST(request: NextRequest) {
             seenDatesExpiry.add(dk)
             periodUsed++
           }
-          const expiredDays = Math.max(0, grantDays + carryOver - adjustment - buyoutDays - periodUsed)
+          const expiredDays = computeRemainingDays(
+            grantDays + carryOver,
+            r as Parameters<typeof computeUsedDays>[0],
+            periodUsed,
+          )
 
           r.expiredDays = expiredDays
           r.expiredAt = nowIso
@@ -1315,8 +1317,12 @@ export async function GET(request: NextRequest) {
           seenCurrentFy.add(dk)
           periodUsed++
         }
-        const used = adjustment + periodUsed
-        const remaining = Math.max(0, total - used)
+        // 2026-06-XX 修正 (audit #5+#6): computeUsedDays ヘルパー経由で計算
+        //   旧: used = adjustment + periodUsed （buyoutDays が抜けていた）
+        //   新: used = adjustment + buyoutDays + periodUsed （時効処理と式を統一）
+        //   結果: 買取後も画面残数に買取分が含まれていたバグを根治
+        const used = computeUsedDays(fyRecord as Parameters<typeof computeUsedDays>[0], periodUsed)
+        const remaining = computeRemainingDays(total, fyRecord as Parameters<typeof computeUsedDays>[0], periodUsed)
 
         // Expiry calculation: grantDate + 2 years - 1 day
         let expiryDate = ''

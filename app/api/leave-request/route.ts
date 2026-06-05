@@ -20,7 +20,7 @@ interface LeaveRequest {
   requestedAt: string
   // 職長承認
   foremanApprovedAt?: string
-  foremanApprovedBy?: number
+  foremanApprovedBy?: number | string  // workerId (number) or 'admin' / 'super-admin' (string)
   // 最終承認（事業責任者）
   reviewedAt?: string
   reviewedBy?: number
@@ -200,41 +200,77 @@ export async function POST(request: NextRequest) {
 
     // ── 職長: 有給申請を承認（第1段階） ──
     if (action === 'foreman_approve') {
-      // 職長はトークン認証またはadmin認証
-      const { requestId, foremanId, token } = body
+      // 2026-06-XX 修正 (audit #1+#2): 権限チェックを厳格化
+      //   旧: foremanId を無条件に受け取り、admin パスワード時は workerId=0 で記録
+      //   新: 認証 → 配置現場の foreman であることを assert
+      //        admin パスワード時は actor='admin' として記録（workerId=0 で誰か分からない問題を解消）
+      const { requestId, token } = body
       if (!requestId) {
         return NextResponse.json({ error: 'Missing requestId' }, { status: 400 })
       }
 
-      // 認証: トークンまたは管理者パスワード
-      let authWorkerId = foremanId || 0
-      if (token) {
-        const worker = await getWorkerByToken(token)
-        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-        authWorkerId = worker.id
-      } else if (!await checkApiAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-
+      // まず申請ドキュメントを取得（権限チェックに siteId が必要なため）
       const docRef = doc(db, 'leaveRequests', requestId)
       const snap = await getDoc(docRef)
       if (!snap.exists()) {
         return NextResponse.json({ error: 'Request not found' }, { status: 404 })
       }
-
       const data = snap.data() as LeaveRequest
       if (data.status !== 'pending') {
         return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+      }
+
+      // 現場の foreman 一覧を取得（権限判定用）
+      const mainDocSnap = await getDoc(doc(db, 'demmen', 'main'))
+      const mainData = mainDocSnap.exists() ? mainDocSnap.data() : {}
+      const sites = (mainData.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
+      const site = sites.find(s => s.id === data.siteId)
+      const foremenOfSite = site?.foremen || (site?.foreman ? [site.foreman] : [])
+
+      // 認証 + 権限チェック
+      let approvedBy: number | string = 'unknown'
+      if (token) {
+        // トークン認証: 配置現場の foreman であることを assert
+        const worker = await getWorkerByToken(token)
+        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+        if (!foremenOfSite.includes(worker.id)) {
+          return NextResponse.json({
+            error: `現場「${data.siteId}」の職長権限がありません`,
+            yourId: worker.id,
+            siteForemen: foremenOfSite,
+          }, { status: 403 })
+        }
+        approvedBy = worker.id
+      } else {
+        // パスワード認証: actor 種別を確認
+        const authUser = await getApiAuthUser(request)
+        if (!authUser.authorized) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+        if (typeof authUser.actor === 'number') {
+          // 個人パスワード: 配置現場の foreman であることを assert
+          if (!foremenOfSite.includes(authUser.actor)) {
+            return NextResponse.json({
+              error: `現場「${data.siteId}」の職長権限がありません`,
+              yourId: authUser.actor,
+              siteForemen: foremenOfSite,
+            }, { status: 403 })
+          }
+          approvedBy = authUser.actor
+        } else {
+          // admin / super-admin: 承認は許可するが actor 文字列で記録
+          approvedBy = authUser.actor
+        }
       }
 
       await setDoc(docRef, {
         ...data,
         status: 'foreman_approved',
         foremanApprovedAt: new Date().toISOString(),
-        foremanApprovedBy: authWorkerId,
+        foremanApprovedBy: approvedBy,
       })
 
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, approvedBy })
     }
 
     // ── 事業責任者: 最終承認（第2段階） ──

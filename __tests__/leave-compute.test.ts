@@ -4,7 +4,7 @@
  * Workflow CR-1 で検出された「年5日義務監視ロジックが多重破綻」の解消検証。
  */
 import { describe, test, expect } from 'vitest'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays } from '@/lib/leave-compute'
 import { addMonthsSafe, calcExpiryIso } from '@/lib/date-utils'
 
 describe('addMonthsSafe', () => {
@@ -191,5 +191,74 @@ describe('isSameFiscalYear', () => {
 
   test('grantDate なしは別FY扱い', () => {
     expect(isSameFiscalYear({}, '2026-04-01')).toBe(false)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// audit #5+#6: computeUsedDays / computeRemainingDays 統一ヘルパー
+// 「画面表示と時効処理で used 定義が違う」バグの回帰テスト
+// ─────────────────────────────────────────────────────────────
+describe('computeUsedDays (audit #5+#6)', () => {
+  test('adjustment + buyoutDays + periodUsed の合計を返す', () => {
+    expect(computeUsedDays({ adjustment: 1, buyoutDays: 3 }, 5)).toBe(9)
+  })
+
+  test('buyoutDays が cached されていなければ buyoutHistory から計算', () => {
+    expect(computeUsedDays({
+      adjustment: 2,
+      buyoutHistory: [{ days: 3 }, { days: 4 }, { days: 1 }],
+    }, 5)).toBe(2 + 8 + 5)  // 15
+  })
+
+  test('cached buyoutDays が優先される', () => {
+    expect(computeUsedDays({
+      adjustment: 0,
+      buyoutDays: 10,  // cached
+      buyoutHistory: [{ days: 999 }],  // 仮に古い履歴
+    }, 5)).toBe(0 + 10 + 5)  // 15 (cached が使われる)
+  })
+
+  test('全フィールド未設定なら periodUsed のみ', () => {
+    expect(computeUsedDays({}, 3)).toBe(3)
+  })
+
+  test('旧フィールド名 (adj) も認識される', () => {
+    expect(computeUsedDays({ adj: 2 } as Parameters<typeof computeUsedDays>[0], 5)).toBe(7)
+  })
+})
+
+describe('computeRemainingDays (audit #5+#6)', () => {
+  test('total - used を計算', () => {
+    expect(computeRemainingDays(20, { adjustment: 1, buyoutDays: 3 }, 5)).toBe(11)
+  })
+
+  test('used > total なら 0 にクリップ', () => {
+    expect(computeRemainingDays(10, { adjustment: 5, buyoutDays: 8 }, 5)).toBe(0)
+  })
+
+  test('リグレッション: 買取後の残数が買取分減る (旧バグ: 減らなかった)', () => {
+    const total = 20  // grantDays + carryOver
+    const periodUsed = 0
+    // 旧計算 (バグ): remaining = 20 - 0 = 20 (買取無視)
+    // 新計算 (修正): remaining = 20 - (0 + 7 + 0) = 13
+    expect(computeRemainingDays(total, { adjustment: 0, buyoutDays: 7 }, periodUsed)).toBe(13)
+  })
+
+  test('リグレッション: 買取 + 申請消化 が同時にあるケース', () => {
+    // 20日付与、買取3日、申請4日、調整0
+    // remaining = 20 - (0 + 3 + 4) = 13
+    expect(computeRemainingDays(20, { adjustment: 0, buyoutDays: 3 }, 4)).toBe(13)
+  })
+
+  test('画面表示と時効処理で同じ結果を返す (式統一)', () => {
+    // 旧: 画面残数と時効残数が別計算で違う結果になっていた
+    // 新: 同じヘルパー経由なので必ず一致
+    const rec = { adjustment: 1, buyoutDays: 2 }
+    const periodUsed = 3
+    const total = 20
+    const displayRemaining = computeRemainingDays(total, rec, periodUsed)
+    const expiryRemaining = computeRemainingDays(total, rec, periodUsed)
+    expect(displayRemaining).toBe(expiryRemaining)
+    expect(displayRemaining).toBe(14)
   })
 })

@@ -62,6 +62,56 @@ export function normalizePLRecord(
 }
 
 /**
+ * 有給レコードの「消化済み日数 (used)」を計算する共通ヘルパー (2026-06-XX 追加)
+ *
+ * 背景: 監査 finding #5/#6 — 「画面表示の残数」と「時効処理の残数」で
+ *   used 定義が食い違うバグがあった。
+ *     - 画面表示 (旧): used = adjustment + periodUsed                 （買取無視）
+ *     - 時効処理 (旧): used = adjustment + buyoutDays + periodUsed   （正しい）
+ *   結果: 買取済み日数が画面では残数に含まれたままで、社労士監査で必ず指摘される
+ *
+ * 修正: 両箇所からこの関数を呼ぶことで定義を一元化。
+ *
+ * @param rec        PLRecord (grantDays, carryOver, adjustment, buyoutHistory 等)
+ * @param periodUsed 当該付与期間の申請ベース消化日数 (computePeriodUsed の結果)
+ * @returns used: 消化済み合計 (残数計算用、調整 + 買取 + 申請消化)
+ */
+export function computeUsedDays(
+  rec: {
+    adjustment?: number
+    adj?: number
+    buyoutDays?: number
+    buyoutHistory?: Array<{ days?: number }>
+  },
+  periodUsed: number,
+): number {
+  const norm = normalizePLRecord(rec as Parameters<typeof normalizePLRecord>[0])
+  // 買取済み日数: cached `buyoutDays` を優先（買取APIで履歴追加時に更新される）。
+  // 後方互換: buyoutDays が未設定なら buyoutHistory から再計算
+  const buyoutDays = rec.buyoutDays ?? (rec.buyoutHistory || []).reduce(
+    (s, h) => s + (h.days || 0),
+    0,
+  )
+  return norm.adjustment + buyoutDays + periodUsed
+}
+
+/**
+ * 残日数 = total − used を計算する共通ヘルパー
+ *
+ * @param total      grantDays + carryOver (付与総枠)
+ * @param rec        PLRecord
+ * @param periodUsed 当該付与期間の申請ベース消化
+ * @returns remaining (マイナスは0でクリップ)
+ */
+export function computeRemainingDays(
+  total: number,
+  rec: Parameters<typeof computeUsedDays>[0],
+  periodUsed: number,
+): number {
+  return Math.max(0, total - computeUsedDays(rec, periodUsed))
+}
+
+/**
  * 1スタッフの付与期間内有給消化を集計
  *
  * @param workerId       スタッフID
@@ -129,28 +179,39 @@ export function computePeriodUsed(
 /**
  * 5日義務（労基法39条7項）の警告判定
  *
- * 対象: 当該年度に10日以上付与されたスタッフ
- * 判定: 以下のいずれかに該当すれば警告
- *   1. 期限まで残3ヶ月以内かつ実消化 < 5日
- *   2. 経過9ヶ月以上かつ実消化 < 5日
- *   3. 退職予定日 < 期限 かつ 退職前に消化未達
+ * 【対象】年10日以上付与された全スタッフ（国籍・在留資格不問。2026-06-XX 修正）
  *
- * 旧実装の「期限90日切ってから」のみだと行政指導タイミング（6-8ヶ月）に間に合わない。
+ * 【判定基準】(2026-06-XX 明文化、社労士確認済み・docs/paid-leave.md 参照)
+ *   「申請ベース (requestedPeriodUsed)」で判定する
+ *     - 申請されて承認済みの日数を「取得」とカウント
+ *     - 申請キャンセル分・却下分は含まない
+ *     - 当日キャンセル等の事情で実取得が5日未満になっても、
+ *       申請ベースで5日達成していれば会社の時季指定義務は果たしたと解釈
  *
- * @param grantDate     付与日
- * @param grantDays     その年の付与日数
- * @param actualPeriodUsed  実消化日数（computePeriodUsed の結果）
- * @param retiredIso    退職予定日（あれば）
- * @param todayIso      今日（省略時は JST 今日）
+ *   ※ パラメータ名 `requestedPeriodUsed` がこの基準を反映している
+ *
+ * 【判定ルール】以下のいずれかに該当すれば警告:
+ *   1. 期限まで残3ヶ月以内かつ申請ベース消化 < 5日 → 'urgent'
+ *   2. 経過9ヶ月以上かつ申請ベース消化 < 5日 → 'late' (行政指導タイミング)
+ *   3. 退職予定日 < 期限 かつ 退職前に申請ベース未達 → 'retiring'
+ *
+ * @param grantDate              付与日
+ * @param grantDays              その年の付与日数
+ * @param requestedPeriodUsed    申請ベース消化日数（computePeriodUsed の結果）
+ *                               ※ 旧パラメータ名 actualPeriodUsed から変更（2026-06-XX）
+ *                                  実装はずっと requestedPeriodUsed を受け取っていたが
+ *                                  名前と JSDoc が "実消化" となっていた誤記を修正
+ * @param retiredIso             退職予定日（あれば）
+ * @param todayIso               今日（省略時は JST 今日）
  * @returns
- *   shortfall: 不足日数（5 - actualPeriodUsed、0 以上）
+ *   shortfall: 不足日数（5 - requestedPeriodUsed、0 以上）
  *   warning: 警告すべきか
  *   reason: 警告理由（'late' / 'urgent' / 'retiring' / null）
  */
 export function judgeFiveDayObligation(
   grantDate: string,
   grantDays: number,
-  actualPeriodUsed: number,
+  requestedPeriodUsed: number,
   retiredIso?: string,
   todayIso?: string,
 ): {
@@ -161,7 +222,7 @@ export function judgeFiveDayObligation(
   const today = todayIso || todayJstIso()
   const periodEnd = addMonthsSafe(grantDate, 12)
   const periodEnd9m = addMonthsSafe(grantDate, 9)
-  const shortfall = Math.max(0, 5 - actualPeriodUsed)
+  const shortfall = Math.max(0, 5 - requestedPeriodUsed)
 
   if (grantDays < 10) {
     return { shortfall: 0, warning: false, reason: null }
