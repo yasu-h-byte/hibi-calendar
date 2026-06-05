@@ -84,6 +84,8 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
   const router = useRouter()
   const [fontSize, setFontSizeState] = useState<FontSize>('normal')
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]> | null>(null)
+  // 2026-06-XX 追加 (UI #2): メニュー項目の未対応件数バッジ
+  const [badges, setBadges] = useState<{ monthly: number; calendar: number; leave: number } | null>(null)
 
   useEffect(() => {
     initTheme()
@@ -104,6 +106,15 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
             setRolePermissions(data.rolePermissions)
             localStorage.setItem('hibi_role_permissions', JSON.stringify(data.rolePermissions))
           }
+        })
+        .catch(() => {})
+
+      // 2026-06-XX 追加 (UI #2): バッジ件数を非同期取得
+      //   重い処理を含むので失敗しても他は表示されるよう catch で握り潰す
+      fetch('/api/sidebar-badges', { headers: { 'x-admin-password': password } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.badges) setBadges(data.badges)
         })
         .catch(() => {})
     }
@@ -192,6 +203,16 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
                 .map(item => {
                   const isActive = item.href && pathname === item.href
                   const isExternal = !!item.external
+                  // 2026-06-XX 追加 (UI #2): URL別バッジ件数
+                  //   /monthly → 検算違反スタッフ数
+                  //   /calendar → 未承認サイト数
+                  //   /leave → 年5日アラート数
+                  let badgeCount = 0
+                  if (badges) {
+                    if (item.href === '/monthly') badgeCount = badges.monthly
+                    else if (item.href === '/calendar') badgeCount = badges.calendar
+                    else if (item.href === '/leave') badgeCount = badges.leave
+                  }
                   return (
                     <button
                       key={item.label}
@@ -204,6 +225,14 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
                     >
                       <span>{item.icon}</span>
                       <span className="flex-1">{item.label}</span>
+                      {badgeCount > 0 && (
+                        <span
+                          className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[11px] font-bold rounded-full"
+                          title={`未対応 ${badgeCount}件`}
+                        >
+                          {badgeCount > 99 ? '99+' : badgeCount}
+                        </span>
+                      )}
                       {isExternal && (
                         <span className="text-white/30 text-xs">↗</span>
                       )}

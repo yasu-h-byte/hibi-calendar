@@ -251,6 +251,8 @@ export default function MonthlyPage() {
   const [password, setPassword] = useState('')
   const [ym, setYm] = useState(currentYm)
   const [tab, setTab] = useState<TabKey>('all')
+  // 2026-06-XX 追加 (UI #3): 自動検算で違反のあったスタッフだけ絞り込むフィルタ
+  const [showAnomalyOnly, setShowAnomalyOnly] = useState(false)
   const [data, setData] = useState<MonthlyData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -521,12 +523,27 @@ export default function MonthlyPage() {
 
   // ── Worker filtering & sorting ──
 
-  const filteredWorkers = useMemo(() => {
+  // 2026-06-XX 修正 (UI #3): 2段階フィルタ
+  //   Step 1: tabFilteredWorkers = タブ (全体/日比/HFU) でフィルタ
+  //   Step 2: validation を tabFiltered で計算 (filteredWorkers 経由だと循環依存)
+  //   Step 3: filteredWorkers = 異常フラグで更にフィルタ
+  const tabFilteredWorkers = useMemo(() => {
     if (!data) return []
     if (tab === 'hibi') return data.workers.filter(w => w.org === 'hibi')
     if (tab === 'hfu') return data.workers.filter(w => w.org === 'hfu')
     return data.workers
   }, [data, tab])
+
+  // tab フィルタ後の validation 結果（異常フィルタの ID source）
+  const validationOnTab = useMemo(() => {
+    return validatePayrolls(tabFilteredWorkers as unknown as PayrollSnapshot[])
+  }, [tabFilteredWorkers])
+
+  const filteredWorkers = useMemo(() => {
+    if (!showAnomalyOnly) return tabFilteredWorkers
+    const idsSet = new Set(validationOnTab.affectedWorkerIds)
+    return tabFilteredWorkers.filter(w => idsSet.has(w.id))
+  }, [tabFilteredWorkers, showAnomalyOnly, validationOnTab])
 
   const sortedWorkers = useMemo(() => {
     const list = [...filteredWorkers]
@@ -562,9 +579,8 @@ export default function MonthlyPage() {
 
   // 給与計算の自動検算（2026-06-XX 追加: 不変条件で過去バグ3種を検出）
   //   新ルール外国人スタッフのみが対象（旧ルール・日本人・月給制は対象外）
-  const validationResult = useMemo(() => {
-    return validatePayrolls(filteredWorkers as unknown as PayrollSnapshot[])
-  }, [filteredWorkers])
+  //   バナー表示は tabFiltered ベースで判定（異常フィルタの ON/OFF で件数が変わらないように）
+  const validationResult = validationOnTab
 
   const toggleWorkerSort = (key: WorkerSortKey) => {
     if (workerSortKey === key) setWorkerSortAsc(!workerSortAsc)
@@ -901,6 +917,26 @@ export default function MonthlyPage() {
             })()}
           </div>
         )}
+
+        {/* 2026-06-XX 追加 (UI #3): 異常スタッフのみフィルタ */}
+        {isWorkerTab && validationOnTab.affectedWorkerIds.length > 0 && (
+          <button
+            onClick={() => setShowAnomalyOnly(s => !s)}
+            className={`ml-4 pl-4 border-l border-gray-300 dark:border-gray-600 flex items-center gap-2 transition ${
+              showAnomalyOnly
+                ? 'text-red-700 dark:text-red-300 font-bold'
+                : 'text-gray-500 dark:text-gray-400 hover:text-red-600'
+            }`}
+            title={showAnomalyOnly
+              ? 'クリックして全員表示に戻す'
+              : 'クリックして検算で違反のあるスタッフだけ表示'}
+          >
+            <span className="text-base">{showAnomalyOnly ? '🔴' : '⚪'}</span>
+            <span className="text-xs whitespace-nowrap">
+              {showAnomalyOnly ? '異常者のみ表示中' : `異常者のみ (${validationOnTab.affectedWorkerIds.length}名)`}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* 2026-06-XX 追加: 社労士確認用 PDF 出力ボタン */}
@@ -1108,7 +1144,31 @@ export default function MonthlyPage() {
                         <button
                           onClick={() => setAuditingWorker(w)}
                           className="hover:underline hover:text-hibi-navy text-left"
-                          title="クリックで給与計算の根拠を表示"
+                          title={(() => {
+                            // 2026-06-XX 追加 (UI #4): ホバーで支給額内訳を即表示
+                            //   モーダルを開かなくても合計の構成が把握できる
+                            const lines: string[] = ['📋 給与内訳（クリックで詳細）']
+                            lines.push('')
+                            if ((w.fixedBasePay || w.basePay || 0) > 0)
+                              lines.push(`基本給:        ¥${(w.fixedBasePay || w.basePay || 0).toLocaleString()}`)
+                            if ((w.additionalAllowance || 0) > 0)
+                              lines.push(`追加所定:      ¥${(w.additionalAllowance || 0).toLocaleString()}`)
+                            if ((w.nonStatutoryOTAllowance || 0) > 0)
+                              lines.push(`所定外労働:    ¥${(w.nonStatutoryOTAllowance || 0).toLocaleString()}`)
+                            if ((w.otAllowance || 0) > 0)
+                              lines.push(`法定外残業:    ¥${(w.otAllowance || 0).toLocaleString()}`)
+                            if ((w.legalHolidayAllowance || 0) > 0)
+                              lines.push(`法定休日:      ¥${(w.legalHolidayAllowance || 0).toLocaleString()}`)
+                            if ((w.nightAllowance || 0) > 0)
+                              lines.push(`深夜:          ¥${(w.nightAllowance || 0).toLocaleString()}`)
+                            if ((w.compAllowance || 0) > 0)
+                              lines.push(`休業手当:      ¥${(w.compAllowance || 0).toLocaleString()}`)
+                            if ((w.absentDeduction || 0) > 0)
+                              lines.push(`欠勤控除:     −¥${(w.absentDeduction || 0).toLocaleString()}`)
+                            lines.push('─────────────')
+                            lines.push(`支給額:        ¥${(w.salaryNetPay || 0).toLocaleString()}`)
+                            return lines.join('\n')
+                          })()}
                         >
                           {w.name}
                           <span className="ml-1 text-[10px] text-blue-500 opacity-0 group-hover:opacity-100">🔍</span>

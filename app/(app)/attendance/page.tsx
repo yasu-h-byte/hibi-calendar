@@ -537,9 +537,20 @@ export default function AttendanceGridPage() {
 
   // 任意のキーボードイベントから呼び出すヘルパー
   const handleAttCellKeyDown = useCallback((e: React.KeyboardEvent, day: number, workerId: string) => {
+    // 2026-06-XX 追加 (UI #5): 追加ショートカット
+    //   Enter / Shift+Enter: 縦方向の移動 (既存)
+    //   Esc: フォーカス解除（誤入力時の取り消し）
+    //   Ctrl/Cmd+S: debounce 待たず即保存（後続処理は scheduleSave 側でハンドル）
+    //   ※ select 要素では文字キーでオプションがジャンプ (W/P/R/E/H) — ブラウザ標準動作
     if (e.key === 'Enter') {
       e.preventDefault()
       focusNextWorkerStatus(day, workerId, e.shiftKey)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      ;(e.target as HTMLElement).blur()
+    } else if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
+      // ブラウザのページ保存ダイアログを抑制（debounce 内で自動保存されるので何もしなくて良い）
+      e.preventDefault()
     }
   }, [focusNextWorkerStatus])
 
@@ -1138,6 +1149,31 @@ export default function AttendanceGridPage() {
               d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
           出面入力
+          {/* 2026-06-XX 追加 (UI #5): キーボードショートカット案内 */}
+          <span
+            className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-normal bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full cursor-help"
+            title={[
+              '⌨️ キーボードショートカット',
+              '',
+              '【セル内】',
+              ' W → 出勤 / P → 有給 / R → 休み',
+              ' E → 試験 / H → 現場休',
+              ' (select の標準動作: 文字キーで該当オプションへジャンプ)',
+              '',
+              '【ナビゲーション】',
+              ' Enter → 同じ日の次のスタッフへ移動',
+              ' Shift+Enter → 同じ日の前のスタッフへ移動',
+              ' Tab → 同じ行の次のセル',
+              ' Shift+Tab → 同じ行の前のセル',
+              '',
+              '【その他】',
+              ' Esc → フォーカス解除（誤入力時）',
+              ' Cmd+S (Mac) / Ctrl+S (Win) → 自動保存中なので何も起きません',
+              '   （ブラウザのページ保存ダイアログを抑制）',
+            ].join('\n')}
+          >
+            ⌨️ ショートカット
+          </span>
         </h1>
 
         {data?.locked && (
