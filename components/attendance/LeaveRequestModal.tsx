@@ -34,6 +34,9 @@ interface Props {
   // アクション
   onSubmit: () => void
   onCancelRequest: (requestId: string) => void
+  // 2026-06-XX 追加: 残数表示 + 残0時のボタン disable (監査 finding #26 対応)
+  /** 有給残日数（pending申請差し引き済み） */
+  plRemaining?: number | null
 }
 
 // 最短申請日 = 今日 + 5日
@@ -63,8 +66,25 @@ export default function LeaveRequestModal({
   requests,
   onSubmit,
   onCancelRequest,
+  plRemaining,
 }: Props) {
   if (!isOpen) return null
+
+  // 2026-06-XX 追加: 申請日数を計算（日曜以外）
+  const requestedDays = (() => {
+    if (!dateFrom || !dateTo) return 0
+    const from = new Date(dateFrom + 'T00:00:00')
+    const to = new Date(dateTo + 'T00:00:00')
+    if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) return 0
+    let count = 0
+    const c = new Date(from)
+    while (c <= to) { if (c.getDay() !== 0) count++; c.setDate(c.getDate() + 1) }
+    return count
+  })()
+  // 残数 0 or 申請日数 > 残数 のとき申請ブロック
+  const isNoBalance = plRemaining !== null && plRemaining !== undefined && plRemaining <= 0
+  const isOverBalance = plRemaining !== null && plRemaining !== undefined && requestedDays > plRemaining
+  const submitBlocked = isNoBalance || isOverBalance
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={onClose}>
@@ -72,6 +92,27 @@ export default function LeaveRequestModal({
         <h3 className="text-lg font-bold text-hibi-navy mb-4 text-center">
           有給申請 / Xin nghỉ phép
         </h3>
+
+        {/* 2026-06-XX 追加: 残数表示（モーダル内でも常時確認できるように） */}
+        {plRemaining !== null && plRemaining !== undefined && (
+          <div className={`rounded-xl p-3 text-center mb-3 ${
+            isNoBalance
+              ? 'bg-red-100 text-red-700 border-2 border-red-300'
+              : plRemaining <= 3
+                ? 'bg-yellow-50 text-yellow-800 border border-yellow-300'
+                : 'bg-green-50 text-green-700 border border-green-200'
+          }`}>
+            <div className="text-xs">🌴 有給残り / Nghỉ phép còn</div>
+            <div className="text-2xl font-bold">
+              {plRemaining}<span className="text-sm font-normal ml-1">日</span>
+            </div>
+            {isNoBalance && (
+              <div className="text-xs font-bold mt-1">
+                残りがないため申請できません<br/>Không còn ngày phép, không thể xin nghỉ
+              </div>
+            )}
+          </div>
+        )}
 
         {successMsg && (
           <div className="bg-green-100 text-green-700 rounded-xl p-3 text-center font-bold mb-3 animate-pulse">
@@ -116,14 +157,14 @@ export default function LeaveRequestModal({
           </div>
           {dateFrom && dateTo && dateFrom !== dateTo && (
             <p className="text-xs text-blue-600 mt-2 font-bold">
-              {(() => {
-                const from = new Date(dateFrom + 'T00:00:00')
-                const to = new Date(dateTo + 'T00:00:00')
-                let count = 0
-                const c = new Date(from)
-                while (c <= to) { if (c.getDay() !== 0) count++; c.setDate(c.getDate() + 1) }
-                return `${count}日分の申請になります / Sẽ gửi ${count} ngày`
-              })()}
+              {requestedDays}日分の申請になります / Sẽ gửi {requestedDays} ngày
+            </p>
+          )}
+          {/* 2026-06-XX 追加: 申請日数が残数を超える場合の警告 */}
+          {isOverBalance && (
+            <p className="text-xs text-red-600 mt-2 font-bold">
+              ⚠ 残り{plRemaining}日を超えているため申請できません<br/>
+              Vượt quá {plRemaining} ngày còn lại, không thể xin nghỉ
             </p>
           )}
           <p className="text-xs text-gray-400 mt-1">
@@ -146,17 +187,28 @@ export default function LeaveRequestModal({
         </div>
 
         {/* Submit */}
+        {/* 2026-06-XX 修正: 残数不足/超過時はボタン disable */}
         <button
           onClick={onSubmit}
-          disabled={submitting || !dateFrom}
-          className="w-full bg-green-500 hover:bg-green-600 active:bg-green-700 text-white rounded-xl py-3 font-bold text-base transition disabled:opacity-50 active:scale-95"
+          disabled={submitting || !dateFrom || submitBlocked}
+          className={`w-full rounded-xl py-3 font-bold text-base transition active:scale-95 ${
+            submitBlocked
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-green-500 hover:bg-green-600 active:bg-green-700 text-white disabled:opacity-50'
+          }`}
         >
           {submitting ? (
             <span className="flex items-center justify-center gap-2">
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               そうしんちゅう / Đang gửi...
             </span>
-          ) : '有給を申請する / Gửi đơn nghỉ phép'}
+          ) : isNoBalance ? (
+            '残りなし / Không còn ngày phép'
+          ) : isOverBalance ? (
+            '日数超過 / Vượt quá ngày phép'
+          ) : (
+            '有給を申請する / Gửi đơn nghỉ phép'
+          )}
         </button>
 
         {/* Request history */}

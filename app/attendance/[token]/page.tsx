@@ -1430,6 +1430,8 @@ export default function StaffAttendancePage() {
         requests={leaveRequests}
         onSubmit={submitLeaveRequest}
         onCancelRequest={cancelLeaveRequest}
+        // 2026-06-XX 追加: 残数表示 + ボタン disable (監査 finding #26)
+        plRemaining={data?.plRemaining ?? null}
       />
 
       {/* 帰国申請モーダル（components/attendance/HomeLongLeaveModal.tsx に集約） */}
