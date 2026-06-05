@@ -4,3 +4,7 @@ node_modules/
 *.tsbuildinfo
 next-env.d.ts
 .vercel
+
+# Claude Code runtime state (should not be committed)
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
