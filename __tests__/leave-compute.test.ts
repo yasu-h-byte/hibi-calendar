@@ -222,6 +222,14 @@ describe('computeUsedDays (audit #5+#6)', () => {
     expect(computeUsedDays({}, 3)).toBe(3)
   })
 
+  test('リグレッション: 空オブジェクト ({}) でも例外なく動く (fyRecord=undefined フォールバック)', () => {
+    // 過去バグ: /api/leave で fyRecord が undefined のとき computeUsedDays に渡す引数で
+    // 失敗してページ全体が「データの取得に失敗しました」になっていた
+    // 修正: fyRecord ?? {} で必ず安全な空オブジェクトを渡すように変更
+    expect(() => computeUsedDays({}, 0)).not.toThrow()
+    expect(computeUsedDays({}, 0)).toBe(0)
+  })
+
   test('旧フィールド名 (adj) も認識される', () => {
     expect(computeUsedDays({ adj: 2 } as Parameters<typeof computeUsedDays>[0], 5)).toBe(7)
   })

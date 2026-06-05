@@ -1321,8 +1321,11 @@ export async function GET(request: NextRequest) {
         //   旧: used = adjustment + periodUsed （buyoutDays が抜けていた）
         //   新: used = adjustment + buyoutDays + periodUsed （時効処理と式を統一）
         //   結果: 買取後も画面残数に買取分が含まれていたバグを根治
-        const used = computeUsedDays(fyRecord as Parameters<typeof computeUsedDays>[0], periodUsed)
-        const remaining = computeRemainingDays(total, fyRecord as Parameters<typeof computeUsedDays>[0], periodUsed)
+        //   注: fyRecord が undefined の場合 (新規スタッフで履歴なし等) は
+        //       空オブジェクト渡してヘルパー内のデフォルト値を使う
+        const safeRec = (fyRecord as Parameters<typeof computeUsedDays>[0] | undefined) ?? {}
+        const used = computeUsedDays(safeRec, periodUsed)
+        const remaining = computeRemainingDays(total, safeRec, periodUsed)
 
         // Expiry calculation: grantDate + 2 years - 1 day
         let expiryDate = ''
