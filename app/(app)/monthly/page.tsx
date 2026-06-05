@@ -85,6 +85,7 @@ interface SubconMonthly {
 // ────────────────────────────────────────
 
 type ExportType = 'hibi' | 'hfu' | 'perSite' | 'subcon' | 'bukake' | 'monthly' | 'pl'
+  | 'auditPdf' | 'plannedShift' | 'actualHours'  // 2026-06-XX 追加: 社労士提出用
 
 interface ExportCard {
   icon: string
@@ -152,6 +153,34 @@ const EXPORT_CARDS: ExportCard[] = [
     format: 'Excel出力',
     type: 'pl',
     needsYm: false,
+    needsOrg: true,
+  },
+  // 2026-06-XX 追加: 社労士提出用 (会社別。タブ下のクイックアクセスにも同じ機能あり)
+  {
+    icon: '🔍',
+    title: '社労士確認用 PDF',
+    description: 'ベトナム人スタッフの給与計算根拠を PDF で出力。各スタッフ 1ページずつ。社労士チェック・労基署対応用。',
+    format: 'PDF出力',
+    type: 'auditPdf',
+    needsYm: true,
+    needsOrg: true,
+  },
+  {
+    icon: '📅',
+    title: '勤務予定シフト表（社労士提出用）',
+    description: 'ベトナム人スタッフの勤務予定シフトを Excel で出力。各スタッフ 1シート。労働時間・休憩・所定日数の事前計画。',
+    format: 'Excel出力',
+    type: 'plannedShift',
+    needsYm: true,
+    needsOrg: true,
+  },
+  {
+    icon: '⏱',
+    title: '実労働時間明細（社労士提出用）',
+    description: 'ベトナム人スタッフの実際の始業・終業・残業を Excel で出力。各スタッフ 1シート。',
+    format: 'Excel出力',
+    type: 'actualHours',
+    needsYm: true,
     needsOrg: true,
   },
 ]
@@ -283,6 +312,8 @@ export default function MonthlyPage() {
 
   // Top-level tab
   const [topTab, setTopTab] = useState<TopTab>('summary')
+  // 2026-06-XX 追加: 社労士提出用資料セクションの開閉
+  const [showSyaroshiSection, setShowSyaroshiSection] = useState(false)
 
   // Export states
   const [exportSelectedYm, setExportSelectedYm] = useState<Record<string, string>>({})
@@ -478,6 +509,13 @@ export default function MonthlyPage() {
 
         const reportData: MonthlyReportData = await res.json()
         openMonthlyPrintPage(reportData)
+      } else if (card.type === 'auditPdf') {
+        // 2026-06-XX 追加: 社労士確認 PDF は新タブで /monthly/audit-print を開く
+        //   ファイルダウンロードではなくブラウザの「PDFとして保存」を使う
+        const orgSel = exportSelectedOrg[card.type] || 'hibi'
+        const orgParam = orgSel === 'all' ? 'hibi' : orgSel  // all指定なら hibi に fallback (PDF は1組織ずつ)
+        window.open(`/monthly/audit-print?ym=${eym}&org=${orgParam}`, '_blank')
+        return  // 新タブ遷移後はダウンロード完了扱い
       } else {
         const params = new URLSearchParams({ type: card.type })
         if (card.needsYm && eym) params.set('ym', eym)
@@ -842,8 +880,9 @@ export default function MonthlyPage() {
           <button
             onClick={handleExcelExport}
             className="px-3 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition"
+            title="月次集計テーブルを Excel 出力（タブ別シート構成・自動検算結果込み）。給与計算のメイン帳票"
           >
-            📊 Excel出力
+            📊 月次集計 Excel
           </button>
           <select
             value={ym}
@@ -939,39 +978,30 @@ export default function MonthlyPage() {
         )}
       </div>
 
-      {/* 2026-06-XX 追加: 社労士確認用 PDF 出力ボタン */}
+      {/* 2026-06-XX 整理: 社労士提出用資料を 1セクションに統合 (折りたたみ式) */}
+      {/*   旧: 紫バナー (PDF) と 緑バナー (Excel) が並んでて画面を圧迫
+           新: 「📥 社労士提出用資料」1セクション、デフォルト折りたたみ
+                 開くと日比/HFU別に PDF + Excel × 2 を配置 */}
       {isWorkerTab && data && (
-        <div className="flex flex-wrap items-center gap-2 mt-2 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-3">
-          <span className="text-xs font-bold text-purple-800 dark:text-purple-300">
-            📄 社労士確認用 PDF（ベトナム人スタッフのみ）:
-          </span>
+        <div className="mt-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg overflow-hidden">
           <button
-            onClick={() => window.open(`/monthly/audit-print?ym=${ym.replace('-', '')}&org=hibi`, '_blank')}
-            className="px-3 py-1.5 text-xs rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition font-medium"
-            title="日比建設のベトナム人スタッフ全員の給与計算根拠を新タブで開く（ブラウザのPDF保存機能で出力）"
+            onClick={() => setShowSyaroshiSection(s => !s)}
+            className="w-full flex items-center justify-between px-3 py-2 hover:bg-indigo-100/50 dark:hover:bg-indigo-900/30 transition"
           >
-            日比建設
+            <div className="flex items-center gap-2">
+              <span className="text-sm">📥</span>
+              <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300">
+                社労士提出用資料（ベトナム人スタッフのみ）
+              </span>
+              <span className="text-[10px] text-indigo-600 dark:text-indigo-400">
+                計算根拠 PDF / 勤務予定シフト / 実労働時間明細
+              </span>
+            </div>
+            <span className="text-xs text-indigo-600 dark:text-indigo-400">
+              {showSyaroshiSection ? '▲ 閉じる' : '▼ 開く'}
+            </span>
           </button>
-          <button
-            onClick={() => window.open(`/monthly/audit-print?ym=${ym.replace('-', '')}&org=hfu`, '_blank')}
-            className="px-3 py-1.5 text-xs rounded-lg bg-pink-600 text-white hover:bg-pink-700 transition font-medium"
-            title="HFUのベトナム人スタッフ全員の給与計算根拠を新タブで開く（ブラウザのPDF保存機能で出力）"
-          >
-            HFU
-          </button>
-          <span className="text-[10px] text-purple-700 dark:text-purple-400">
-            💡 新タブで開いた後、Cmd+P → 「PDFとして保存」で出力できます
-          </span>
-        </div>
-      )}
-
-      {/* 2026-06-XX 追加: 社労士提出用 Excel (会社別) */}
-      {isWorkerTab && data && (
-        <div className="mt-2 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg p-3 space-y-2">
-          <div className="text-xs font-bold text-teal-800 dark:text-teal-300">
-            📊 社労士提出用 Excel（ベトナム人スタッフのみ・1人1シート・会社別）
-          </div>
-          {(() => {
+          {showSyaroshiSection && (() => {
             const ymClean = ym.replace('-', '')
             const downloadExcel = async (type: 'plannedShift' | 'actualHours', org: 'hibi' | 'hfu', filename: string) => {
               const stored = localStorage.getItem('hibi_auth')
@@ -991,50 +1021,42 @@ export default function MonthlyPage() {
               a.click()
               URL.revokeObjectURL(url)
             }
+            const renderCompanyRow = (orgKey: 'hibi' | 'hfu', orgLabel: string, colorClass: string) => (
+              <div className="flex flex-wrap items-center gap-2 py-1.5">
+                <span className={`text-xs font-semibold min-w-[72px] ${colorClass}`}>{orgLabel}:</span>
+                <button
+                  onClick={() => window.open(`/monthly/audit-print?ym=${ymClean}&org=${orgKey}`, '_blank')}
+                  className="px-2.5 py-1 text-[11px] rounded bg-purple-600 text-white hover:bg-purple-700 transition font-medium"
+                  title="計算根拠 PDF を新タブで開く（Cmd+P → PDF保存）"
+                >
+                  🔍 計算根拠 PDF
+                </button>
+                <button
+                  onClick={() => downloadExcel('plannedShift', orgKey, `勤務予定シフト_${orgLabel}_${ymClean}.xlsx`)}
+                  className="px-2.5 py-1 text-[11px] rounded bg-teal-600 text-white hover:bg-teal-700 transition font-medium"
+                  title="勤務予定シフト表 (Excel)"
+                >
+                  📅 勤務予定シフト
+                </button>
+                <button
+                  onClick={() => downloadExcel('actualHours', orgKey, `実労働時間明細_${orgLabel}_${ymClean}.xlsx`)}
+                  className="px-2.5 py-1 text-[11px] rounded bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium"
+                  title="実労働時間明細 (Excel)"
+                >
+                  ⏱ 実労働時間明細
+                </button>
+              </div>
+            )
             return (
-              <>
-                {/* 日比建設 */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold text-teal-900 dark:text-teal-200 min-w-[80px]">日比建設:</span>
-                  <button
-                    onClick={() => downloadExcel('plannedShift', 'hibi', `勤務予定シフト_日比建設_${ymClean}.xlsx`)}
-                    className="px-3 py-1.5 text-xs rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition font-medium"
-                    title="日比建設のベトナム人スタッフの勤務予定シフト表"
-                  >
-                    勤務予定シフト
-                  </button>
-                  <button
-                    onClick={() => downloadExcel('actualHours', 'hibi', `実労働時間明細_日比建設_${ymClean}.xlsx`)}
-                    className="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium"
-                    title="日比建設のベトナム人スタッフの実労働時間明細"
-                  >
-                    実労働時間明細
-                  </button>
+              <div className="px-3 pb-3 border-t border-indigo-200/50 dark:border-indigo-700/50">
+                {renderCompanyRow('hibi', '日比建設', 'text-teal-900 dark:text-teal-200')}
+                {renderCompanyRow('hfu', 'HFU', 'text-pink-900 dark:text-pink-200')}
+                <div className="text-[10px] text-indigo-700 dark:text-indigo-400 mt-1 pl-1">
+                  💡 会社ごとに社労士が異なるため別々に出力。PDF はブラウザの「PDFとして保存」、Excel は自動ダウンロード
                 </div>
-                {/* HFU */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold text-pink-900 dark:text-pink-200 min-w-[80px]">HFU:</span>
-                  <button
-                    onClick={() => downloadExcel('plannedShift', 'hfu', `勤務予定シフト_HFU_${ymClean}.xlsx`)}
-                    className="px-3 py-1.5 text-xs rounded-lg bg-pink-600 text-white hover:bg-pink-700 transition font-medium"
-                    title="HFUのベトナム人スタッフの勤務予定シフト表"
-                  >
-                    勤務予定シフト
-                  </button>
-                  <button
-                    onClick={() => downloadExcel('actualHours', 'hfu', `実労働時間明細_HFU_${ymClean}.xlsx`)}
-                    className="px-3 py-1.5 text-xs rounded-lg bg-fuchsia-600 text-white hover:bg-fuchsia-700 transition font-medium"
-                    title="HFUのベトナム人スタッフの実労働時間明細"
-                  >
-                    実労働時間明細
-                  </button>
-                </div>
-              </>
+              </div>
             )
           })()}
-          <div className="text-[10px] text-teal-700 dark:text-teal-400">
-            💡 会社ごとに社労士が異なるため、別々の Excel として出力。各スタッフ1シートずつ、変形労働制の遵守を確認する法定保存書類
-          </div>
         </div>
       )}
 
