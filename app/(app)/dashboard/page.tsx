@@ -595,13 +595,15 @@ export default function DashboardPage() {
       )}
 
       {/* 2026-06-XX 追加 (UI #1): 「今すぐ対応が必要」集約パネル */}
-      {actionBadges && (actionBadges.monthly + actionBadges.calendar + actionBadges.leave) > 0 && (
+      {/* 2026-06-XX 修正 (運用方針): 有給(年5日)アラートは表示しない (靖仁さん判断)。
+          カレンダーは API 側で 18日以降のみカウントするように制限済み。 */}
+      {actionBadges && (actionBadges.monthly + actionBadges.calendar) > 0 && (
         <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-300 dark:border-red-700 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-2xl">📌</span>
-            <h2 className="font-bold text-red-800 dark:text-red-300">今すぐ対応が必要 ({actionBadges.monthly + actionBadges.calendar + actionBadges.leave}件)</h2>
+            <h2 className="font-bold text-red-800 dark:text-red-300">今すぐ対応が必要 ({actionBadges.monthly + actionBadges.calendar}件)</h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {actionBadges.monthly > 0 && (
               <a
                 href="/monthly"
@@ -628,33 +630,18 @@ export default function DashboardPage() {
                   <div className="font-bold text-orange-700 dark:text-orange-300">
                     未承認 <span className="text-lg">{actionBadges.calendar}</span>件
                   </div>
-                  <div className="text-[11px] text-gray-500 mt-1">来月カレンダーの承認待ち</div>
-                </div>
-              </a>
-            )}
-            {actionBadges.leave > 0 && (
-              <a
-                href="/leave"
-                className="bg-white dark:bg-gray-800 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3 hover:shadow-md transition flex items-start gap-3"
-              >
-                <span className="text-2xl shrink-0">🌴</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-gray-500 dark:text-gray-400">休暇管理</div>
-                  <div className="font-bold text-yellow-700 dark:text-yellow-400">
-                    年5日義務アラート <span className="text-lg">{actionBadges.leave}</span>名
-                  </div>
-                  <div className="text-[11px] text-gray-500 mt-1">期限切れ間近・未達</div>
+                  <div className="text-[11px] text-gray-500 mt-1">来月カレンダーの承認待ち (毎月18日以降)</div>
                 </div>
               </a>
             )}
           </div>
         </div>
       )}
-      {actionBadges && (actionBadges.monthly + actionBadges.calendar + actionBadges.leave) === 0 && (
+      {actionBadges && (actionBadges.monthly + actionBadges.calendar) === 0 && (
         <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-xl p-3 text-sm text-green-800 dark:text-green-300 flex items-center gap-2">
           <span className="text-xl">✓</span>
           <span className="font-medium">未対応事項はありません</span>
-          <span className="text-xs text-green-700 dark:text-green-400 ml-1">給与計算・カレンダー・有給すべて健全</span>
+          <span className="text-xs text-green-700 dark:text-green-400 ml-1">給与計算・カレンダーすべて健全</span>
         </div>
       )}
 

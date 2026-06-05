@@ -13,10 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
-import { computePeriodUsed, judgeFiveDayObligation } from '@/lib/leave-compute'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
-import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -29,7 +26,6 @@ export async function GET(request: NextRequest) {
     // 当月 (今日の年月) を計算
     const now = new Date()
     const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
-    const todayIso = now.toISOString().slice(0, 10)
 
     // ── 月次集計: 検算違反スタッフ数 ──
     let monthlyAnomalyCount = 0
@@ -47,65 +43,41 @@ export async function GET(request: NextRequest) {
     }
 
     // ── カレンダー: 未承認の月数 (来月のみチェック) ──
+    // 2026-06-XX 修正 (運用方針): 翌月分の確定は前月25日以降。
+    //   アラートは確定期限の 1週間前 = 18日 以降のみ表示。
+    //   それ以前は「まだ確定タイミングではない」ので静かに。
     let calendarPendingCount = 0
     try {
-      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-      const nextYm = `${nextMonth.getFullYear()}${String(nextMonth.getMonth() + 1).padStart(2, '0')}`
-      // calendar 承認状況を Firestore から確認: demmen/calendar_approvals/{nextYm}_{siteId}
-      // 単純化: siteWorkDays[nextYm] が未設定なら承認待ちと判定
-      const nextSiteWorkDays = main.siteWorkDays?.[nextYm] || {}
-      const activeSites = (main.sites || []).filter(s => !s.archived && s.end >= `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`)
-      calendarPendingCount = activeSites.filter(s => !nextSiteWorkDays[s.id]).length
+      const todayDay = now.getDate()
+      // 18日以降のみアラート (= 25日確定の1週間前)
+      if (todayDay >= 18) {
+        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+        const nextYm = `${nextMonth.getFullYear()}${String(nextMonth.getMonth() + 1).padStart(2, '0')}`
+        const nextSiteWorkDays = main.siteWorkDays?.[nextYm] || {}
+        const activeSites = (main.sites || []).filter(s => !s.archived && s.end >= `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`)
+        calendarPendingCount = activeSites.filter(s => !nextSiteWorkDays[s.id]).length
+      }
     } catch (e) {
       console.warn('[sidebar-badges] calendar check failed:', e)
     }
 
-    // ── 休暇管理: 年5日義務 未達 + 期限切れ間近 ──
-    let leaveAlertCount = 0
-    try {
-      // 全 plData を読む
-      const plSnap = await getDoc(doc(db, 'demmen', 'main'))
-      const plData = plSnap.exists() ? ((plSnap.data().plData || {}) as Record<string, Array<Record<string, unknown>>>) : {}
-      // 全期間 att (90日以内)
-      const sevenDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-      const checkYms = new Set<string>()
-      for (let d = sevenDaysAgo; d <= now; d.setMonth(d.getMonth() + 1)) {
-        checkYms.add(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`)
-      }
-      const attCombined: Record<string, unknown> = {}
-      for (const ymKey of checkYms) {
-        try {
-          const a = await getAttData(ymKey)
-          Object.assign(attCombined, a.d)
-        } catch { /* skip */ }
-      }
-      const alertedIds = new Set<number>()
-      for (const w of main.workers) {
-        if (w.retired && w.retired < todayIso) continue
-        const records = plData[String(w.id)] || []
-        for (const r of records) {
-          if (r._archived) continue
-          const grantDate = r.grantDate as string | undefined
-          const grantDays = (r.grantDays as number | undefined) ?? 0
-          if (!grantDate || grantDays < 10) continue
-          // 当該レコードが当期内ならチェック
-          const { requestedPeriodUsed } = computePeriodUsed(w.id, grantDate, attCombined as Record<string, unknown>, todayIso)
-          const judge = judgeFiveDayObligation(grantDate, grantDays, requestedPeriodUsed, w.retired, todayIso)
-          if (judge.warning) alertedIds.add(w.id)
-        }
-      }
-      leaveAlertCount = alertedIds.size
-    } catch (e) {
-      console.warn('[sidebar-badges] leave check failed:', e)
-    }
+    // ── 休暇管理: 年5日義務 ──
+    // 2026-06-XX 修正 (運用方針): 年5日義務のアラートは不要 (常に 0)。
+    //   理由: 靖仁さん判断。/leave ページ内では引き続き状況を表示するが、
+    //         サイドバーやダッシュボードでの cross-page アラートはノイズになる
+    //         ため出さない方針。
+    //   関連監査 finding #17 はこの方針に基づき却下扱い。
+    const leaveAlertCount = 0
+    // (旧実装: 全 plData を読んで judgeFiveDayObligation で集計していた処理は
+    //  上記方針により削除。/leave ページ内の表示は別途存続)
 
     return NextResponse.json({
       ym,
       generatedAt: now.toISOString(),
       badges: {
         monthly: monthlyAnomalyCount,    // 月次集計: 検算違反スタッフ数
-        calendar: calendarPendingCount,  // カレンダー: 未承認サイト数
-        leave: leaveAlertCount,           // 休暇管理: 年5日義務アラート数
+        calendar: calendarPendingCount,  // カレンダー: 未承認サイト数 (18日以降のみ)
+        leave: leaveAlertCount,           // 休暇管理: 常に 0 (アラート不要方針)
       },
     })
   } catch (error) {
