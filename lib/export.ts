@@ -1571,6 +1571,8 @@ export interface PlannedShiftData {
   sites: { id: string; name: string; archived?: boolean; workSchedule?: SiteWorkSchedule }[]
   /** siteId -> days map (key='1'..'31', value DayType). siteCalendar から取得 */
   siteCalendars: Record<string, Record<string, ShiftCalendarDay | string>>
+  /** 2026-06-XX 追加: 会社別フィルタ (社労士が会社ごとに違うため) */
+  org?: 'hibi' | 'hfu' | 'all'
 }
 
 interface SiteWorkSchedule {
@@ -1635,13 +1637,17 @@ function inferPrimarySiteId(workerId: number, ym: string, assign: PlannedShiftDa
  * #1: 勤務予定シフト表 Excel を生成
  */
 export function generatePlannedShiftExcel(data: PlannedShiftData): XLSX.WorkBook {
-  const { ym, workers, assign, massign, sites, siteCalendars } = data
+  const { ym, workers, assign, massign, sites, siteCalendars, org } = data
   const wb = XLSX.utils.book_new()
 
-  // 対象: ベトナム人スタッフ + 当月在籍
-  const foreignWorkers = workers.filter(w =>
-    w.visa && w.visa !== 'none' && w.visa !== '' && isStillActiveForMonth(w.retired, ym)
-  )
+  // 対象: ベトナム人スタッフ + 当月在籍 + (org フィルタ指定があれば該当会社のみ)
+  const foreignWorkers = workers.filter(w => {
+    if (!(w.visa && w.visa !== 'none' && w.visa !== '')) return false
+    if (!isStillActiveForMonth(w.retired, ym)) return false
+    if (org === 'hibi' && w.org !== 'hibi') return false
+    if (org === 'hfu' && w.org !== 'hfu') return false
+    return true
+  })
 
   const y = parseInt(ym.slice(0, 4))
   const m = parseInt(ym.slice(4, 6))
@@ -1718,18 +1724,24 @@ export interface ActualHoursData {
   workers: RawWorker[]
   attD: Record<string, AttendanceEntry>
   sites: { id: string; name: string; workSchedule?: SiteWorkSchedule }[]
+  /** 2026-06-XX 追加: 会社別フィルタ (社労士が会社ごとに違うため) */
+  org?: 'hibi' | 'hfu' | 'all'
 }
 
 /**
  * #2: 実労働時間明細 Excel を生成
  */
 export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
-  const { ym, workers, attD, sites } = data
+  const { ym, workers, attD, sites, org } = data
   const wb = XLSX.utils.book_new()
 
-  const foreignWorkers = workers.filter(w =>
-    w.visa && w.visa !== 'none' && w.visa !== '' && isStillActiveForMonth(w.retired, ym)
-  )
+  const foreignWorkers = workers.filter(w => {
+    if (!(w.visa && w.visa !== 'none' && w.visa !== '')) return false
+    if (!isStillActiveForMonth(w.retired, ym)) return false
+    if (org === 'hibi' && w.org !== 'hibi') return false
+    if (org === 'hfu' && w.org !== 'hfu') return false
+    return true
+  })
 
   const y = parseInt(ym.slice(0, 4))
   const m = parseInt(ym.slice(4, 6))

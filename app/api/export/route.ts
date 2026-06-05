@@ -244,7 +244,10 @@ export async function GET(request: NextRequest) {
       }
 
       // 2026-06-XX 追加: 社労士提出用シフト表 (勤務予定)
+      // 2026-06-XX 修正: 会社別 (org=hibi/hfu/all) フィルタ対応
       case 'plannedShift': {
+        const orgFilter = (searchParams.get('org') || 'all') as 'hibi' | 'hfu' | 'all'
+        const orgLabel = orgFilter === 'hibi' ? '_日比建設' : orgFilter === 'hfu' ? '_HFU' : ''
         // siteCalendar のドキュメント ym フィールドは "YYYY-MM" 形式
         const ymDash = `${ymStr.slice(0, 4)}-${ymStr.slice(4, 6)}`
         const calQuery = query(collection(db, 'siteCalendar'), where('ym', '==', ymDash))
@@ -268,14 +271,18 @@ export async function GET(request: NextRequest) {
             workSchedule: (s as { workSchedule?: unknown }).workSchedule as Parameters<typeof generatePlannedShiftExcel>[0]['sites'][number]['workSchedule'],
           })),
           siteCalendars,
+          org: orgFilter,
         })
         buffer = workbookToBuffer(wb)
-        filename = `勤務予定シフト_${ymStr}.xlsx`
+        filename = `勤務予定シフト${orgLabel}_${ymStr}.xlsx`
         break
       }
 
       // 2026-06-XX 追加: 社労士提出用 実労働時間明細
+      // 2026-06-XX 修正: 会社別 (org=hibi/hfu/all) フィルタ対応
       case 'actualHours': {
+        const orgFilter = (searchParams.get('org') || 'all') as 'hibi' | 'hfu' | 'all'
+        const orgLabel = orgFilter === 'hibi' ? '_日比建設' : orgFilter === 'hfu' ? '_HFU' : ''
         const wb = generateActualHoursExcel({
           ym: ymStr,
           workers: main.workers,
@@ -285,9 +292,10 @@ export async function GET(request: NextRequest) {
             name: s.name,
             workSchedule: (s as { workSchedule?: unknown }).workSchedule as Parameters<typeof generateActualHoursExcel>[0]['sites'][number]['workSchedule'],
           })),
+          org: orgFilter,
         })
         buffer = workbookToBuffer(wb)
-        filename = `実労働時間明細_${ymStr}.xlsx`
+        filename = `実労働時間明細${orgLabel}_${ymStr}.xlsx`
         break
       }
 

@@ -965,17 +965,18 @@ export default function MonthlyPage() {
         </div>
       )}
 
-      {/* 2026-06-XX 追加: 社労士提出用 Excel (勤務予定シフト / 実労働時間明細) */}
+      {/* 2026-06-XX 追加: 社労士提出用 Excel (会社別) */}
       {isWorkerTab && data && (
-        <div className="flex flex-wrap items-center gap-2 mt-2 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg p-3">
-          <span className="text-xs font-bold text-teal-800 dark:text-teal-300">
-            📊 社労士提出用 Excel（ベトナム人スタッフのみ・1人1シート）:
-          </span>
-          <button
-            onClick={async () => {
+        <div className="mt-2 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg p-3 space-y-2">
+          <div className="text-xs font-bold text-teal-800 dark:text-teal-300">
+            📊 社労士提出用 Excel（ベトナム人スタッフのみ・1人1シート・会社別）
+          </div>
+          {(() => {
+            const ymClean = ym.replace('-', '')
+            const downloadExcel = async (type: 'plannedShift' | 'actualHours', org: 'hibi' | 'hfu', filename: string) => {
               const stored = localStorage.getItem('hibi_auth')
               const pw = stored ? JSON.parse(stored).password : ''
-              const res = await fetch(`/api/export?type=plannedShift&ym=${ym.replace('-', '')}`, {
+              const res = await fetch(`/api/export?type=${type}&ym=${ymClean}&org=${org}`, {
                 headers: { 'x-admin-password': pw },
               })
               if (!res.ok) {
@@ -986,42 +987,54 @@ export default function MonthlyPage() {
               const url = URL.createObjectURL(blob)
               const a = document.createElement('a')
               a.href = url
-              a.download = `勤務予定シフト_${ym.replace('-', '')}.xlsx`
+              a.download = filename
               a.click()
               URL.revokeObjectURL(url)
-            }}
-            className="px-3 py-1.5 text-xs rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition font-medium"
-            title="勤務予定シフト表（労働時間記載あり）。社労士による変形労働時間制の事前計画確認用"
-          >
-            勤務予定シフト
-          </button>
-          <button
-            onClick={async () => {
-              const stored = localStorage.getItem('hibi_auth')
-              const pw = stored ? JSON.parse(stored).password : ''
-              const res = await fetch(`/api/export?type=actualHours&ym=${ym.replace('-', '')}`, {
-                headers: { 'x-admin-password': pw },
-              })
-              if (!res.ok) {
-                alert('ダウンロードに失敗しました')
-                return
-              }
-              const blob = await res.blob()
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `実労働時間明細_${ym.replace('-', '')}.xlsx`
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-            className="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium"
-            title="実際の始業/終業/休憩/実労働/残業の明細。社労士による事後確認用"
-          >
-            実労働時間明細
-          </button>
-          <span className="text-[10px] text-teal-700 dark:text-teal-400">
-            💡 各スタッフ1シートずつ。社労士が変形労働制の遵守を確認する法定保存書類
-          </span>
+            }
+            return (
+              <>
+                {/* 日比建設 */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-teal-900 dark:text-teal-200 min-w-[80px]">日比建設:</span>
+                  <button
+                    onClick={() => downloadExcel('plannedShift', 'hibi', `勤務予定シフト_日比建設_${ymClean}.xlsx`)}
+                    className="px-3 py-1.5 text-xs rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition font-medium"
+                    title="日比建設のベトナム人スタッフの勤務予定シフト表"
+                  >
+                    勤務予定シフト
+                  </button>
+                  <button
+                    onClick={() => downloadExcel('actualHours', 'hibi', `実労働時間明細_日比建設_${ymClean}.xlsx`)}
+                    className="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium"
+                    title="日比建設のベトナム人スタッフの実労働時間明細"
+                  >
+                    実労働時間明細
+                  </button>
+                </div>
+                {/* HFU */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-pink-900 dark:text-pink-200 min-w-[80px]">HFU:</span>
+                  <button
+                    onClick={() => downloadExcel('plannedShift', 'hfu', `勤務予定シフト_HFU_${ymClean}.xlsx`)}
+                    className="px-3 py-1.5 text-xs rounded-lg bg-pink-600 text-white hover:bg-pink-700 transition font-medium"
+                    title="HFUのベトナム人スタッフの勤務予定シフト表"
+                  >
+                    勤務予定シフト
+                  </button>
+                  <button
+                    onClick={() => downloadExcel('actualHours', 'hfu', `実労働時間明細_HFU_${ymClean}.xlsx`)}
+                    className="px-3 py-1.5 text-xs rounded-lg bg-fuchsia-600 text-white hover:bg-fuchsia-700 transition font-medium"
+                    title="HFUのベトナム人スタッフの実労働時間明細"
+                  >
+                    実労働時間明細
+                  </button>
+                </div>
+              </>
+            )
+          })()}
+          <div className="text-[10px] text-teal-700 dark:text-teal-400">
+            💡 会社ごとに社労士が異なるため、別々の Excel として出力。各スタッフ1シートずつ、変形労働制の遵守を確認する法定保存書類
+          </div>
         </div>
       )}
 

@@ -43,7 +43,7 @@
 対象: 奥寺智子さん（日比建設の給与計算担当）<br>
 担当範囲: <strong>日比建設のみ</strong>（HFU は対象外）<br>
 作成日: 2026年6月<br>
-最終更新: 2026年6月<br>
+最終更新: 2026年6月5日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code>
 </p>
 
@@ -308,6 +308,86 @@
 ⚠ Excel末尾に「⚠ 自動検算: ...違反検出」と出た場合、振込前に必ず靖仁さんに確認してください。
 </div>
 
+<h3>5-4. 社労士提出用 Excel（2026年6月追加）</h3>
+
+<p>社労士から「変形労働時間制の遵守確認のため、勤務予定シフトと実際の労働時間記録が欲しい」との依頼に対応した専用 Excel が出力できます。</p>
+
+<div class="box-purple">
+<strong>会社ごとに社労士が違う</strong>ので、<strong>日比建設用 / HFU用 を別々にダウンロード</strong>できます。
+</div>
+
+<p><code>/monthly</code> 画面の「📊 社労士提出用 Excel」セクションから:</p>
+
+<div class="formula">
+📊 社労士提出用 Excel（ベトナム人スタッフのみ・1人1シート・会社別）
+
+日比建設:  [勤務予定シフト] [実労働時間明細]
+HFU:       [勤務予定シフト] [実労働時間明細]
+</div>
+
+<h4>帳票A: 勤務予定シフト表 (<code>勤務予定シフト_日比建設_202605.xlsx</code>)</h4>
+<p>スタッフ 1名につき 1シート。各日の予定:</p>
+<table>
+<tr><th>列</th><th>内容</th></tr>
+<tr><td>日 / 曜</td><td>日付と曜日</td></tr>
+<tr><td>予定</td><td>出勤 / 休</td></tr>
+<tr><td>始業 / 終業</td><td>配置現場の標準時刻</td></tr>
+<tr><td>休憩(分)</td><td>配置現場の標準休憩</td></tr>
+<tr><td>所定労働時間(h)</td><td>1日の所定時間</td></tr>
+<tr><td>備考</td><td>法定休日 / 所定休日 / 祝日 など</td></tr>
+</table>
+<p>シート末尾に「所定出勤日数」「所定労働時間 合計」「法定上限 vs 合計 ✓」を表示。</p>
+
+<h4>帳票B: 実労働時間明細 (<code>実労働時間明細_日比建設_202605.xlsx</code>)</h4>
+<p>スタッフ 1名につき 1シート。各日の実労働:</p>
+<table>
+<tr><th>列</th><th>内容</th></tr>
+<tr><td>日 / 曜</td><td>日付と曜日</td></tr>
+<tr><td>状態</td><td>出勤 / 有給 / 補償日 / 欠勤 など</td></tr>
+<tr><td>現場</td><td>その日勤務した現場</td></tr>
+<tr><td>始業 / 終業</td><td>実際の時刻（出面入力ベース）</td></tr>
+<tr><td>休憩(分)</td><td>実際の休憩時間</td></tr>
+<tr><td>実労働(h)</td><td>始業-終業-休憩</td></tr>
+<tr><td>残業(h)</td><td>残業欄入力分</td></tr>
+<tr><td>備考</td><td>推定（時刻未記録）等の注記</td></tr>
+</table>
+
+<div class="box-warn">
+<strong>「推定」と表示される場合</strong>:
+<ul>
+<li>出面入力で実時刻 (st/et) が記録されていない日</li>
+<li>配置現場の<strong>標準時刻</strong>で計算しています</li>
+<li>社労士に渡すときは「次回からは時刻入力をお願いする」と伝えてください</li>
+</ul>
+</div>
+
+<h4>操作手順</h4>
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text"><code>/monthly</code> で対象月を選ぶ</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">「📊 社労士提出用 Excel」セクションへ移動</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text"><strong>会社（日比建設 or HFU）</strong>を選び、欲しい帳票（勤務予定 / 実労働）をクリック</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">自動ダウンロード → 該当の社労士へメール送付</div>
+</div>
+
+<div class="box-ok">
+<strong>社労士に渡すときのポイント</strong>
+<ul>
+<li><strong>両方セット</strong>で渡すと「予定 vs 実績」の対比ができる</li>
+<li><strong>会社ごとに別々のファイル</strong>で送る（社労士が違うので混ぜない）</li>
+<li>ファイル名に<strong>「日比建設」「HFU」</strong>が入っているので識別しやすい</li>
+</ul>
+</div>
+
 <hr>
 
 <!-- ================================================ -->
@@ -556,6 +636,7 @@
     <li>法定外残業 0.25倍化（二重支給バグ修正）</li>
   </ul>
 </td></tr>
+<tr><td>2026-06-05</td><td>§5-4「社労士提出用 Excel」追加（勤務予定シフト + 実労働時間明細、会社別ダウンロード対応）</td></tr>
 </table>
 
 <p style="margin-top: 40px; color: #666; font-size: 13px; text-align: center;">
