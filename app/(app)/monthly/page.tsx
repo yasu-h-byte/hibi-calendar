@@ -965,6 +965,66 @@ export default function MonthlyPage() {
         </div>
       )}
 
+      {/* 2026-06-XX 追加: 社労士提出用 Excel (勤務予定シフト / 実労働時間明細) */}
+      {isWorkerTab && data && (
+        <div className="flex flex-wrap items-center gap-2 mt-2 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-700 rounded-lg p-3">
+          <span className="text-xs font-bold text-teal-800 dark:text-teal-300">
+            📊 社労士提出用 Excel（ベトナム人スタッフのみ・1人1シート）:
+          </span>
+          <button
+            onClick={async () => {
+              const stored = localStorage.getItem('hibi_auth')
+              const pw = stored ? JSON.parse(stored).password : ''
+              const res = await fetch(`/api/export?type=plannedShift&ym=${ym.replace('-', '')}`, {
+                headers: { 'x-admin-password': pw },
+              })
+              if (!res.ok) {
+                alert('ダウンロードに失敗しました')
+                return
+              }
+              const blob = await res.blob()
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `勤務予定シフト_${ym.replace('-', '')}.xlsx`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+            className="px-3 py-1.5 text-xs rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition font-medium"
+            title="勤務予定シフト表（労働時間記載あり）。社労士による変形労働時間制の事前計画確認用"
+          >
+            勤務予定シフト
+          </button>
+          <button
+            onClick={async () => {
+              const stored = localStorage.getItem('hibi_auth')
+              const pw = stored ? JSON.parse(stored).password : ''
+              const res = await fetch(`/api/export?type=actualHours&ym=${ym.replace('-', '')}`, {
+                headers: { 'x-admin-password': pw },
+              })
+              if (!res.ok) {
+                alert('ダウンロードに失敗しました')
+                return
+              }
+              const blob = await res.blob()
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `実労働時間明細_${ym.replace('-', '')}.xlsx`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+            className="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium"
+            title="実際の始業/終業/休憩/実労働/残業の明細。社労士による事後確認用"
+          >
+            実労働時間明細
+          </button>
+          <span className="text-[10px] text-teal-700 dark:text-teal-400">
+            💡 各スタッフ1シートずつ。社労士が変形労働制の遵守を確認する法定保存書類
+          </span>
+        </div>
+      )}
+
       {/* Loading / Error */}
       {loading && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center text-gray-400 dark:text-gray-500">

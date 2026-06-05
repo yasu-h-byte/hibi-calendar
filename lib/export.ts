@@ -1547,3 +1547,311 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
 
   return wb
 }
+
+// ────────────────────────────────────────
+//  社労士提出用: 勤務予定シフト表 / 実労働時間明細 (2026-06-XX 追加)
+//
+//  変形労働時間制（1ヶ月単位）の遵守を社労士が確認するための法定保存書類。
+//  - 勤務予定シフト: 月の労働日と所定時間の事前計画
+//  - 実労働時間明細: 実際の始業・終業・残業の記録
+//
+//  どちらもベトナム人スタッフ(変形労働制対象者)のみ対象、スタッフ1名1シート。
+// ────────────────────────────────────────
+
+interface ShiftCalendarDay {
+  /** 'work' | 'off' | 'holiday' (DayType) */
+  type: string
+}
+
+export interface PlannedShiftData {
+  ym: string  // YYYYMM
+  workers: RawWorker[]  // 全ワーカー（フィルタは関数内で実施）
+  assign: Record<string, { workers?: number[]; subcons?: string[] }>
+  massign: Record<string, { workers?: number[]; subcons?: string[] }>
+  sites: { id: string; name: string; archived?: boolean; workSchedule?: SiteWorkSchedule }[]
+  /** siteId -> days map (key='1'..'31', value DayType). siteCalendar から取得 */
+  siteCalendars: Record<string, Record<string, ShiftCalendarDay | string>>
+}
+
+interface SiteWorkSchedule {
+  startTime?: string
+  endTime?: string
+  morningBreak?: { enabled?: boolean; minutes?: number }
+  lunchBreak?: { enabled?: boolean; minutes?: number }
+  afternoonBreak?: { enabled?: boolean; minutes?: number }
+}
+
+/**
+ * workSchedule から「始業/終業/休憩(分)/所定労働時間(h)」を計算
+ */
+function computePrescribedFromSchedule(ws: SiteWorkSchedule | undefined): {
+  start: string
+  end: string
+  breakMin: number
+  workH: number
+} {
+  if (!ws?.startTime || !ws?.endTime) {
+    // 標準値（システムデフォルト 8:00-17:00, 休憩 2h, 7h）
+    return { start: '08:00', end: '17:00', breakMin: 120, workH: 7.0 }
+  }
+  const [sh, sm] = ws.startTime.split(':').map(Number)
+  const [eh, em] = ws.endTime.split(':').map(Number)
+  const startMin = sh * 60 + (sm || 0)
+  const endMin = eh * 60 + (em || 0)
+  let totalMin = endMin - startMin
+  let breakMin = 0
+  if (ws.morningBreak?.enabled !== false) breakMin += ws.morningBreak?.minutes ?? 30
+  if (ws.lunchBreak?.enabled !== false) breakMin += ws.lunchBreak?.minutes ?? 60
+  if (ws.afternoonBreak?.enabled !== false) breakMin += ws.afternoonBreak?.minutes ?? 30
+  totalMin -= breakMin
+  return {
+    start: ws.startTime,
+    end: ws.endTime,
+    breakMin,
+    workH: Math.max(0, Math.round(totalMin / 60 * 10) / 10),
+  }
+}
+
+/**
+ * 1スタッフの月の配置先（assign + massign）から主要現場を判定
+ */
+function inferPrimarySiteId(workerId: number, ym: string, assign: PlannedShiftData['assign'], massign: PlannedShiftData['massign']): string | null {
+  // ym (YYYYMM) を assign キーで使うかは実装次第。massign の方が月次オーバーライドなので優先
+  const mOver = massign[ym]
+  if (mOver) {
+    for (const [sid, sa] of Object.entries(assign)) {
+      if (mOver.workers?.includes(workerId)) return sid
+      void sa
+    }
+  }
+  // デフォルト assign を見る
+  for (const [sid, sa] of Object.entries(assign)) {
+    if (sa.workers?.includes(workerId)) return sid
+  }
+  return null
+}
+
+/**
+ * #1: 勤務予定シフト表 Excel を生成
+ */
+export function generatePlannedShiftExcel(data: PlannedShiftData): XLSX.WorkBook {
+  const { ym, workers, assign, massign, sites, siteCalendars } = data
+  const wb = XLSX.utils.book_new()
+
+  // 対象: ベトナム人スタッフ + 当月在籍
+  const foreignWorkers = workers.filter(w =>
+    w.visa && w.visa !== 'none' && w.visa !== '' && isStillActiveForMonth(w.retired, ym)
+  )
+
+  const y = parseInt(ym.slice(0, 4))
+  const m = parseInt(ym.slice(4, 6))
+  const daysInMonth = new Date(y, m, 0).getDate()
+  const legalLimit = Math.round((daysInMonth * 40 / 7) * 10) / 10
+
+  for (const w of foreignWorkers) {
+    const siteId = inferPrimarySiteId(w.id, ym, assign, massign)
+    const site = siteId ? sites.find(s => s.id === siteId) : undefined
+    const schedule = computePrescribedFromSchedule(site?.workSchedule)
+    const dayMap = siteId ? (siteCalendars[siteId] || {}) : {}
+
+    const rows: unknown[][] = []
+    // ヘッダー
+    rows.push([`勤務予定シフト表 ${ymLabel(ym)} - ${w.name}`])
+    rows.push([`スタッフ ID: ${w.id}  /  雇用区分: ${w.visa}`])
+    rows.push([`配置現場: ${site?.name || '未確定'}`])
+    rows.push([`勤務時間 (標準): ${schedule.start}-${schedule.end} / 休憩 ${schedule.breakMin}分 / 所定 ${schedule.workH}h`])
+    rows.push([])
+    rows.push(['日', '曜', '予定', '始業', '終業', '休憩(分)', '所定労働時間(h)', '備考'])
+
+    let totalWork = 0
+    let totalH = 0
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(y, m - 1, d).getDay()
+      const dowLabel = ['日', '月', '火', '水', '木', '金', '土'][dow]
+      const dayEntry = dayMap[String(d)]
+      // dayEntry が文字列 ('work'/'off'/'holiday') or オブジェクト
+      const dayType = typeof dayEntry === 'string' ? dayEntry : (dayEntry?.type || (dow === 0 ? 'off' : 'work'))
+      const isWork = dayType === 'work'
+
+      const note = dayType === 'holiday' ? '祝日' : (dayType === 'off' && dow === 0 ? '法定休日' : (dayType === 'off' ? '所定休日' : ''))
+
+      if (isWork) {
+        totalWork++
+        totalH += schedule.workH
+        rows.push([
+          d, dowLabel, '出勤',
+          schedule.start, schedule.end, schedule.breakMin, schedule.workH, note,
+        ])
+      } else {
+        rows.push([d, dowLabel, '休', '-', '-', '-', '-', note])
+      }
+    }
+    // 合計
+    rows.push([])
+    rows.push(['', '', '所定出勤日数', '', '', '', totalWork + '日', ''])
+    rows.push(['', '', '所定労働時間 合計', '', '', '', Math.round(totalH * 10) / 10 + 'h', `法定上限 ${legalLimit}h ${totalH <= legalLimit ? '✓' : '⚠'}`])
+
+    // シート名: 30文字以内（Excel制限31文字、安全マージン）
+    const sheetName = w.name.slice(0, 28) + (w.name.length > 28 ? '..' : '')
+    const sheet = XLSX.utils.aoa_to_sheet(rows)
+    sheet['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 7 } },
+    ]
+    setColWidths(sheet, [6, 6, 8, 8, 8, 10, 14, 18])
+    XLSX.utils.book_append_sheet(wb, sheet, sheetName)
+  }
+
+  if (wb.SheetNames.length === 0) {
+    const emptySheet = XLSX.utils.aoa_to_sheet([[`勤務予定シフト ${ymLabel(ym)} — 対象スタッフがいません`]])
+    XLSX.utils.book_append_sheet(wb, emptySheet, '対象なし')
+  }
+  return wb
+}
+
+// ────────────────────────────────────────
+
+export interface ActualHoursData {
+  ym: string  // YYYYMM
+  workers: RawWorker[]
+  attD: Record<string, AttendanceEntry>
+  sites: { id: string; name: string; workSchedule?: SiteWorkSchedule }[]
+}
+
+/**
+ * #2: 実労働時間明細 Excel を生成
+ */
+export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
+  const { ym, workers, attD, sites } = data
+  const wb = XLSX.utils.book_new()
+
+  const foreignWorkers = workers.filter(w =>
+    w.visa && w.visa !== 'none' && w.visa !== '' && isStillActiveForMonth(w.retired, ym)
+  )
+
+  const y = parseInt(ym.slice(0, 4))
+  const m = parseInt(ym.slice(4, 6))
+  const daysInMonth = new Date(y, m, 0).getDate()
+
+  const siteMap = new Map(sites.map(s => [s.id, s]))
+
+  for (const w of foreignWorkers) {
+    const rows: unknown[][] = []
+    rows.push([`実労働時間明細 ${ymLabel(ym)} - ${w.name}`])
+    rows.push([`スタッフ ID: ${w.id}  /  雇用区分: ${w.visa}`])
+    rows.push([`※ 始業/終業に「(推定)」がある日は、出面入力で時刻が記録されていないため、現場の標準時刻を表示しています`])
+    rows.push([])
+    rows.push(['日', '曜', '状態', '現場', '始業', '終業', '休憩(分)', '実労働(h)', '残業(h)', '備考'])
+
+    let totalActual = 0
+    let totalOT = 0
+    let workDays = 0
+    let pDays = 0
+    let rDays = 0
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(y, m - 1, d).getDay()
+      const dowLabel = ['日', '月', '火', '水', '木', '金', '土'][dow]
+
+      // 該当スタッフのその日のエントリを全現場分検索
+      const entriesForDay: { siteId: string; entry: AttendanceEntry }[] = []
+      for (const site of sites) {
+        const key = `${site.id}_${w.id}_${ym}_${d}`
+        if (attD[key]) entriesForDay.push({ siteId: site.id, entry: attD[key] })
+      }
+
+      if (entriesForDay.length === 0) {
+        rows.push([d, dowLabel, '-', '', '', '', '', '', '', ''])
+        continue
+      }
+
+      // 各エントリを別行で出力（同日複数現場対応）
+      for (const { siteId, entry } of entriesForDay) {
+        const site = siteMap.get(siteId)
+        const e = entry as { w?: number; o?: number; p?: number; r?: number; h?: number; hk?: number; exam?: number; st?: string; et?: string }
+
+        // 状態判定
+        let status = ''
+        if (e.p) { status = '有給'; pDays++ }
+        else if (e.hk) status = '帰国中'
+        else if (e.exam) status = '試験'
+        else if (e.r) { status = '欠勤'; rDays++ }
+        else if (e.h) status = '現場休'
+        else if (e.w === 0.6) status = '補償日'
+        else if ((e.w || 0) > 0) { status = e.w === 0.5 ? '半日' : '出勤'; workDays++ }
+        else status = '-'
+
+        // 始業/終業 (st/et が無ければ workSchedule 標準時刻 + 推定マーク)
+        let startTime = ''
+        let endTime = ''
+        let breakMin = 0
+        let actualH = 0
+        let isEstimated = false
+        if ((e.w || 0) > 0 && e.w !== 0.6) {
+          if (e.st && e.et) {
+            // 時間ベース入力
+            startTime = e.st
+            endTime = e.et
+            const schedule = computePrescribedFromSchedule(site?.workSchedule)
+            breakMin = schedule.breakMin
+            // 実労働 = 始業-終業 - 休憩
+            const [sh, sm] = e.st.split(':').map(Number)
+            const [eh, em] = e.et.split(':').map(Number)
+            const startMin = sh * 60 + (sm || 0)
+            const endMin = eh * 60 + (em || 0)
+            actualH = Math.max(0, Math.round((endMin - startMin - breakMin) / 60 * 10) / 10)
+          } else {
+            // レガシー入力: workSchedule 標準時刻を表示（推定）
+            const schedule = computePrescribedFromSchedule(site?.workSchedule)
+            startTime = schedule.start + ' (推定)'
+            endTime = schedule.end + ' (推定)'
+            breakMin = schedule.breakMin
+            actualH = schedule.workH + (e.o || 0)
+            isEstimated = true
+          }
+          totalActual += actualH
+        }
+
+        const otH = e.o || 0
+        if (otH > 0) totalOT += otH
+
+        rows.push([
+          d, dowLabel, status,
+          site?.name || siteId,
+          startTime || '-',
+          endTime || '-',
+          breakMin || '-',
+          actualH > 0 ? actualH : '-',
+          otH > 0 ? otH : '-',
+          isEstimated ? '時刻未記録（標準時刻で推定）' : '',
+        ])
+      }
+    }
+
+    // 合計
+    rows.push([])
+    rows.push(['', '', '出勤実日数', '', '', '', '', '', workDays + '日', ''])
+    rows.push(['', '', '有給日数', '', '', '', '', '', pDays + '日', ''])
+    if (rDays > 0) rows.push(['', '', '欠勤日数', '', '', '', '', '', rDays + '日', ''])
+    rows.push(['', '', '実労働時間 合計', '', '', '', '', Math.round(totalActual * 10) / 10 + 'h', '', ''])
+    rows.push(['', '', '残業時間 合計', '', '', '', '', '', Math.round(totalOT * 10) / 10 + 'h', ''])
+
+    const sheetName = w.name.slice(0, 28) + (w.name.length > 28 ? '..' : '')
+    const sheet = XLSX.utils.aoa_to_sheet(rows)
+    sheet['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 9 } },
+    ]
+    setColWidths(sheet, [5, 5, 8, 14, 12, 12, 8, 9, 8, 22])
+    XLSX.utils.book_append_sheet(wb, sheet, sheetName)
+  }
+
+  if (wb.SheetNames.length === 0) {
+    const emptySheet = XLSX.utils.aoa_to_sheet([[`実労働時間明細 ${ymLabel(ym)} — 対象スタッフがいません`]])
+    XLSX.utils.book_append_sheet(wb, emptySheet, '対象なし')
+  }
+  return wb
+}

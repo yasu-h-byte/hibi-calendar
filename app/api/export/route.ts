@@ -10,8 +10,12 @@ import {
   generatePLLedger,
   generateMonthlyExcel,
   generatePerSiteAttendance,
+  generatePlannedShiftExcel,
+  generateActualHoursExcel,
   workbookToBuffer,
 } from '@/lib/export'
+import { db } from '@/lib/firebase'
+import { collection, getDocs, query, where } from 'firebase/firestore'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -236,6 +240,54 @@ export async function GET(request: NextRequest) {
         })
         buffer = workbookToBuffer(wb)
         filename = `現場別出面一覧_${ymStr}.xlsx`
+        break
+      }
+
+      // 2026-06-XX 追加: 社労士提出用シフト表 (勤務予定)
+      case 'plannedShift': {
+        // siteCalendar のドキュメント ym フィールドは "YYYY-MM" 形式
+        const ymDash = `${ymStr.slice(0, 4)}-${ymStr.slice(4, 6)}`
+        const calQuery = query(collection(db, 'siteCalendar'), where('ym', '==', ymDash))
+        const calSnap = await getDocs(calQuery)
+        const siteCalendars: Record<string, Record<string, string>> = {}
+        calSnap.forEach(d => {
+          const data = d.data()
+          if (data.siteId && data.days) {
+            siteCalendars[data.siteId] = data.days
+          }
+        })
+        const wb = generatePlannedShiftExcel({
+          ym: ymStr,
+          workers: main.workers,
+          assign: main.assign,
+          massign: main.massign,
+          sites: main.sites.map(s => ({
+            id: s.id,
+            name: s.name,
+            archived: s.archived,
+            workSchedule: (s as { workSchedule?: unknown }).workSchedule as Parameters<typeof generatePlannedShiftExcel>[0]['sites'][number]['workSchedule'],
+          })),
+          siteCalendars,
+        })
+        buffer = workbookToBuffer(wb)
+        filename = `勤務予定シフト_${ymStr}.xlsx`
+        break
+      }
+
+      // 2026-06-XX 追加: 社労士提出用 実労働時間明細
+      case 'actualHours': {
+        const wb = generateActualHoursExcel({
+          ym: ymStr,
+          workers: main.workers,
+          attD,
+          sites: main.sites.map(s => ({
+            id: s.id,
+            name: s.name,
+            workSchedule: (s as { workSchedule?: unknown }).workSchedule as Parameters<typeof generateActualHoursExcel>[0]['sites'][number]['workSchedule'],
+          })),
+        })
+        buffer = workbookToBuffer(wb)
+        filename = `実労働時間明細_${ymStr}.xlsx`
         break
       }
 
