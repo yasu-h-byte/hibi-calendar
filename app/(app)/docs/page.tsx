@@ -15,7 +15,7 @@ export default function DocsPage() {
       description: '各ロールごとの操作マニュアル。日々の作業はここを参照',
       items: [
         { title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・帳票出力（事務担当 総合版）', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-26' },
-        { title: '給与計算マニュアル（奥寺さん用）', desc: '日比建設の月次給与計算に特化。自動検算・所定日数・Excel タブ別構成・社労士提出用 Excel（会社別）など', url: '/manual-payroll-okudera.html', icon: '💰', badge: 'NEW', updated: '2026-06-05' },
+        { title: '給与計算マニュアル（奥寺さん用）', desc: '日比建設の月次給与計算に特化。自動検算・所定日数・Excel タブ別構成・社労士提出用資料（PDF+Excel・会社別、折りたたみセクション）など', url: '/manual-payroll-okudera.html', icon: '💰', badge: 'NEW', updated: '2026-06-05' },
         { title: '政仁さん向けマニュアル', desc: '出面承認・就業カレンダー・原価収益（役員担当）', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-30' },
         { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成（職長担当）', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-30' },
         { title: '出面の見方ガイド（職長向け）', desc: 'PC出面画面のセル表示の読み方・青ドット/オレンジドットの意味・休憩や時刻の確認ポイント', url: '/manual-foreman-attendance-view.html', icon: '👁️', badge: 'NEW', updated: '2026-05-02' },

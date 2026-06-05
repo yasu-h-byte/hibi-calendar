@@ -43,7 +43,7 @@
 対象: 奥寺智子さん（日比建設の給与計算担当）<br>
 担当範囲: <strong>日比建設のみ</strong>（HFU は対象外）<br>
 作成日: 2026年6月<br>
-最終更新: 2026年6月5日<br>
+最終更新: 2026年6月5日（帳票出力UI整理）<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code>
 </p>
 
@@ -308,24 +308,48 @@
 ⚠ Excel末尾に「⚠ 自動検算: ...違反検出」と出た場合、振込前に必ず靖仁さんに確認してください。
 </div>
 
-<h3>5-4. 社労士提出用 Excel（2026年6月追加）</h3>
+<h3>5-4. 社労士提出用資料（2026年6月追加）</h3>
 
-<p>社労士から「変形労働時間制の遵守確認のため、勤務予定シフトと実際の労働時間記録が欲しい」との依頼に対応した専用 Excel が出力できます。</p>
+<p>社労士から「変形労働時間制の遵守確認のため、給与計算根拠と、勤務予定シフト、実際の労働時間記録が欲しい」との依頼に対応した専用出力が用意されています。</p>
 
 <div class="box-purple">
-<strong>会社ごとに社労士が違う</strong>ので、<strong>日比建設用 / HFU用 を別々にダウンロード</strong>できます。
+<strong>会社ごとに社労士が違う</strong>ので、<strong>日比建設用 / HFU用 を別々にダウンロード</strong>できます。<br>
+<strong>3 種類の資料</strong> を <strong>1 セクションに集約</strong>しています。
 </div>
 
-<p><code>/monthly</code> 画面の「📊 社労士提出用 Excel」セクションから:</p>
+<h4>アクセス方法 (2つあり)</h4>
+
+<p><strong>A. 月次集計画面から（推奨・素早くアクセス）</strong></p>
+<p><code>/monthly</code> 画面のタブ下に「📥 社労士提出用資料」セクションがあります。デフォルトは折りたたまれていて、<strong>「▼ 開く」をクリック</strong>すると以下が表示されます:</p>
 
 <div class="formula">
-📊 社労士提出用 Excel（ベトナム人スタッフのみ・1人1シート・会社別）
+📥 社労士提出用資料（ベトナム人スタッフのみ）  ▲ 閉じる
 
-日比建設:  [勤務予定シフト] [実労働時間明細]
-HFU:       [勤務予定シフト] [実労働時間明細]
+日比建設:  [🔍 計算根拠 PDF] [📅 勤務予定シフト] [⏱ 実労働時間明細]
+HFU:       [🔍 計算根拠 PDF] [📅 勤務予定シフト] [⏱ 実労働時間明細]
+
+💡 会社ごとに社労士が異なるため別々に出力。
+   PDF はブラウザの「PDFとして保存」、Excel は自動ダウンロード
 </div>
 
-<h4>帳票A: 勤務予定シフト表 (<code>勤務予定シフト_日比建設_202605.xlsx</code>)</h4>
+<p><strong>B. 帳票出力タブから（カード形式で探す場合）</strong></p>
+<p><code>/monthly</code> 画面上部の「📑 帳票出力」タブに切り替えると、他の帳票と並んで以下 3 カードがあります:</p>
+<ul>
+<li>🔍 社労士確認用 PDF（会社セレクト付き）</li>
+<li>📅 勤務予定シフト表（社労士提出用）（会社セレクト付き）</li>
+<li>⏱ 実労働時間明細（社労士提出用）（会社セレクト付き）</li>
+</ul>
+
+<h4>3 種類の資料</h4>
+
+<h5>① 🔍 計算根拠 PDF</h5>
+<p>ベトナム人スタッフの給与計算根拠を 1人1ページの PDF で出力。</p>
+<ul>
+<li>ブラウザの新タブで開いて <strong>Cmd+P (Mac) / Ctrl+P (Win) → 「PDFとして保存」</strong>で出力</li>
+<li>月情報・雇用区分・出勤実績・計算式・監査チェック・日別カレンダーを含む</li>
+</ul>
+
+<h5>② 📅 勤務予定シフト表 (<code>勤務予定シフト_日比建設_202605.xlsx</code> 等)</h5>
 <p>スタッフ 1名につき 1シート。各日の予定:</p>
 <table>
 <tr><th>列</th><th>内容</th></tr>
@@ -338,7 +362,7 @@ HFU:       [勤務予定シフト] [実労働時間明細]
 </table>
 <p>シート末尾に「所定出勤日数」「所定労働時間 合計」「法定上限 vs 合計 ✓」を表示。</p>
 
-<h4>帳票B: 実労働時間明細 (<code>実労働時間明細_日比建設_202605.xlsx</code>)</h4>
+<h5>③ ⏱ 実労働時間明細 (<code>実労働時間明細_日比建設_202605.xlsx</code> 等)</h5>
 <p>スタッフ 1名につき 1シート。各日の実労働:</p>
 <table>
 <tr><th>列</th><th>内容</th></tr>
@@ -361,30 +385,35 @@ HFU:       [勤務予定シフト] [実労働時間明細]
 </ul>
 </div>
 
-<h4>操作手順</h4>
+<h4>操作手順 (月次集計画面から)</h4>
 <div class="step">
   <div class="step-num">1</div>
   <div class="step-text"><code>/monthly</code> で対象月を選ぶ</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">「📊 社労士提出用 Excel」セクションへ移動</div>
+  <div class="step-text">タブ下の<strong>「📥 社労士提出用資料 ▼ 開く」</strong>をクリック</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text"><strong>会社（日比建設 or HFU）</strong>を選び、欲しい帳票（勤務予定 / 実労働）をクリック</div>
+  <div class="step-text"><strong>会社（日比建設 or HFU）</strong>の行から、欲しい資料 (PDF / シフト / 明細) のボタンをクリック</div>
 </div>
 <div class="step">
   <div class="step-num">4</div>
-  <div class="step-text">自動ダウンロード → 該当の社労士へメール送付</div>
+  <div class="step-text">PDF は新タブで開く → Cmd+P で保存 ／ Excel は自動ダウンロード</div>
+</div>
+<div class="step">
+  <div class="step-num">5</div>
+  <div class="step-text">該当の社労士へメール送付</div>
 </div>
 
 <div class="box-ok">
 <strong>社労士に渡すときのポイント</strong>
 <ul>
-<li><strong>両方セット</strong>で渡すと「予定 vs 実績」の対比ができる</li>
+<li><strong>3点セット</strong>で渡すと「計算根拠 + 予定 + 実績」の三角検証ができて完璧</li>
 <li><strong>会社ごとに別々のファイル</strong>で送る（社労士が違うので混ぜない）</li>
 <li>ファイル名に<strong>「日比建設」「HFU」</strong>が入っているので識別しやすい</li>
+<li>「📊 月次集計 Excel」（緑ボタン）は別物で、社労士提出用ではなく給与計算メイン帳票</li>
 </ul>
 </div>
 
@@ -637,6 +666,7 @@ HFU:       [勤務予定シフト] [実労働時間明細]
   </ul>
 </td></tr>
 <tr><td>2026-06-05</td><td>§5-4「社労士提出用 Excel」追加（勤務予定シフト + 実労働時間明細、会社別ダウンロード対応）</td></tr>
+<tr><td>2026-06-05</td><td>§5-4 を「社労士提出用資料」にリネーム + UI整理対応。タブ下バナーが折りたたみ式 1セクションに統合され、計算根拠PDFも同セクションに統合。帳票出力タブにも 3カード追加</td></tr>
 </table>
 
 <p style="margin-top: 40px; color: #666; font-size: 13px; text-align: center;">
