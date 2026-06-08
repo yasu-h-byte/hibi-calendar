@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>社労士提出用資料マニュアル - HIBI CONSTRUCTION</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; }
+  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: #1B2A4A; color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .highlight { background: #ffe0e0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+  .formula { background: #f8f8f8; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 12px 0; font-family: monospace; font-size: 14px; line-height: 2; }
+  .toc { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: #1B2A4A; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  @media print { body { font-size: 12px; } .toc { page-break-after: always; } }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>HIBI CONSTRUCTION 就業管理システム<br>社労士提出用資料マニュアル</h1>
+<p>
+目的: 当社が社労士に提出する給与計算用資料の<strong>読み方・計算の考え方</strong>の説明<br>
+対象読者: 顧問社労士、および資料を準備・送付する当社担当者<br>
+会社別: 資料は<strong>会社ごとに分かれています</strong>（会社で顧問社労士が異なるため）<br>
+作成日: 2026年6月<br>
+最終更新: 2026年6月8日（現状のシステムをゼロベースで記述）
+</p>
+
+<div class="toc">
+<strong>目次</strong>
+<ol>
+  <li><a href="#s1">会社と給与計算の体制</a></li>
+  <li><a href="#s2">労働時間制度（前提）</a></li>
+  <li><a href="#s3">残業（時間外労働）の判定方法</a></li>
+  <li><a href="#s4">提出資料の説明（3点）</a></li>
+  <li><a href="#s5">賃金計算の構成（参考）</a></li>
+  <li><a href="#s6">提出フロー</a></li>
+</ol>
+</div>
+
+<hr>
+
+<h2 id="s1">1. 会社と給与計算の体制</h2>
+<table>
+<tr><th>会社</th><th>対象</th><th>最終的な給与計算</th></tr>
+<tr><td>日比建設</td><td>日本人 ＋ 日比建設所属の外国人 ＋ 外注</td><td>当社（システムの月次集計で確定）</td></tr>
+<tr><td><strong>HFU</strong></td><td>HFU 所属の外国人（技能実習・特定技能）</td><td><strong>社労士が本資料の「時間データ」を基に計算</strong></td></tr>
+</table>
+<p>本マニュアルが主に対象とするのは <strong>HFU の外国人スタッフ</strong>（社労士が給与計算を行うケース）です。当社システムは「労働時間の事実」を正確に集計して提供し、最終的な賃金額の計算・割増の確定は社労士にお願いする体制です。</p>
+
+<h2 id="s2">2. 労働時間制度（前提）</h2>
+<h3>2-1. 1ヶ月単位の変形労働時間制（労基法32条の2）</h3>
+<table>
+<tr><th>項目</th><th>内容</th></tr>
+<tr><td>1日の所定労働時間</td><td><strong>7時間</strong>（始業8:00／終業17:00、休憩2時間：10時30分＋昼60分＋15時30分）</td></tr>
+<tr><td>月の所定総枠（法定上限）</td><td><strong>暦日数 × 40 ÷ 7</strong>（31日月＝177.1h、30日月＝171.4h、28日月＝160h）</td></tr>
+<tr><td>各日・各週の所定</td><td>就業カレンダーで期間開始前に特定・周知（前月25日までに職長作成→事業責任者承認→本人署名）</td></tr>
+<tr><td>基本給のベース日数</td><td>20日（基本給＝時給 × 20日 × 7時間）</td></tr>
+</table>
+<h3>2-2. 現場別の勤務時間</h3>
+<table>
+<tr><th>現場</th><th>始業</th><th>終業</th><th>休憩</th><th>1日所定</th></tr>
+<tr><td>標準（笹塚等）</td><td>8:00</td><td>17:00</td><td>2時間</td><td>7時間</td></tr>
+<tr><td>IHI現場</td><td>7:30</td><td>16:30</td><td>2時間</td><td>7時間</td></tr>
+</table>
+<div class="box-warn box">現場や作業内容により、10時・15時の休憩を取れない日があります。その場合は休憩を取らず労働時間に算入し、出面の休憩チェックボックスで「取得／未取得」を記録しています（§4-2）。</div>
+
+<h2 id="s3">3. 残業（時間外労働）の判定方法</h2>
+<p>変形労働時間制のため、残業は<strong>「事前に特定した所定」を基準に、日 → 週 → 月の3段階</strong>で判定しています（厚労省の考え方に準拠）。</p>
+<table>
+<tr><th>段階</th><th>判定基準</th></tr>
+<tr><td>第1（日）</td><td>所定8時間超の日 → 所定超が時間外 ／ 所定8時間以下の日 → <strong>8時間超</strong>が時間外</td></tr>
+<tr><td>第2（週）</td><td>所定40時間超の週 → <strong>週所定超</strong>が時間外 ／ 所定40時間以下の週 → 40時間超が時間外（第1段階分を除く）</td></tr>
+<tr><td>第3（月）</td><td>月の所定総枠（暦日数×40÷7）超が時間外（第1・2段階分を除く）</td></tr>
+</table>
+<p>提出資料の数値は<strong>「時間」</strong>です。割増賃金額の最終確定は社労士にお願いします。</p>
+
+<div class="box-red box">
+<strong>⚠ 確認をお願いしたい論点（笹塚等の週6日勤務）</strong><br>
+笹塚現場は週6日（週42時間）の週があります。当社システムでは現在、週次の時間外を「週40時間超」で集計していますが、変形労働時間制では本来<strong>「週所定（42時間）を超えた分」</strong>が時間外と考えています。
+<ul>
+<li><strong>確認事項</strong>：週所定を週42時間として、残業を「週42時間超」で判定してよいか。</li>
+<li>影響範囲は週6日現場のスタッフのみ（5日週の IHI 等は影響なし）。</li>
+<li>ご確認いただいた方針に合わせ、システムの集計を調整します。</li>
+</ul>
+</div>
+
+<h2 id="s4">4. 提出資料の説明（3点）</h2>
+<p>月次集計画面の「社労士提出用」セクションから、<strong>会社ごと</strong>に出力します。</p>
+
+<h3>4-1. 📅 勤務予定シフト表（Excel）</h3>
+<p>ファイル名例：<code>勤務予定シフト_HFU_202605.xlsx</code>。各スタッフ1シートで、その月の各日・各週の<strong>所定労働時間</strong>を示します。</p>
+<ul>
+<li>日別：日／曜／予定（出勤・休）／始業・終業／休憩(分)／所定労働時間(h)／備考</li>
+<li><strong>週別の所定サマリー</strong>：第N週ごとの所定出勤日数・週所定労働時間・残業判定の基準（例：週6日の週は「週所定 42h 超で時間外（40hではない）」と明示）</li>
+<li>ヘッダーに「制度：1ヶ月単位の変形労働時間制／月の所定総枠 ◯h（暦日数÷7×40）」を表示</li>
+</ul>
+<p>→ 変形労働の「事前に定めた所定」を確認いただくための資料です。</p>
+
+<h3>4-2. ⏱ 実労働時間明細（Excel）</h3>
+<p>ファイル名例：<code>実労働時間明細_HFU_202605.xlsx</code>。各スタッフの<strong>実際の始業・終業・実労働時間</strong>の明細です。</p>
+<ul>
+<li>各日：日付／現場／始業／終業／<strong>休憩(分)</strong>／<strong>実労働(h)</strong>／所定外(h)／備考</li>
+<li><strong>休憩は「実際に取得した分のみ」控除</strong>（10時・15時の休憩を取れなかった日はその分を労働時間に算入）。</li>
+<li>「始業−終業−実取得休憩＝実労働」となり、所定（7時間）超が「所定外」に表示されます。</li>
+<li>備考に「休憩未取得分を労働時間に算入」と記載される日があります。</li>
+</ul>
+<div class="box-ok box"><strong>重要：</strong>この明細の実労働時間は、当社の給与計算と<strong>同じ休憩控除</strong>で算出しています（時間の二重基準はありません）。</div>
+
+<h3>4-3. 🔍 計算根拠 PDF</h3>
+<p>ファイル名例：<code>計算根拠_HFU_202605.pdf</code>（各スタッフ1ページ）。当社システムが算出した給与計算の根拠（参考）です。</p>
+<ul>
+<li>雇用形態／出勤日数・所定日数／実労働・所定外・法定外残業の時間</li>
+<li>基本給・各種手当・欠勤控除の内訳と金額</li>
+<li>自動検算（内訳合計＝支給額の一致確認、割増率の下限確認）</li>
+</ul>
+<p>HFU は社労士が最終計算を行うため、この PDF は当社側の集計の参考値です。時間の根拠（§4-1, §4-2）と突き合わせてご確認ください。</p>
+
+<h2 id="s5">5. 賃金計算の構成（参考：当社システムの算出方法）</h2>
+<h3>外国人・時給制（新ルール＝2026年5月以降）</h3>
+<table>
+<tr><th>項目</th><th>計算</th></tr>
+<tr><td>基本給（固定）</td><td>時給 × 20日 × 7時間</td></tr>
+<tr><td>追加所定手当</td><td>時給 × (出勤日数 − 20日) × 7時間（法定休日を除く、1.0倍）</td></tr>
+<tr><td>所定外労働手当</td><td>時給 × 所定外労働時間（1日の所定超のうち法定内、1.0倍）</td></tr>
+<tr><td>法定外残業手当</td><td>時給 × 0.25 × 法定外残業時間（月60時間超は 0.5倍）</td></tr>
+<tr><td>法定休日手当</td><td>時給 × 1.35 × 日曜労働（8時間超は 1.60倍）</td></tr>
+<tr><td>深夜手当</td><td>時給 × 0.25 × 深夜労働（22:00–5:00）</td></tr>
+<tr><td>休業手当</td><td>時給 × 7時間 × 0.6 × 会社都合休業日</td></tr>
+<tr><td>欠勤控除</td><td>時給 × 7時間 × 欠勤日数</td></tr>
+</table>
+<h3>端数処理</h3>
+<ul>
+<li>支給項目：1円未満を<strong>切り上げ</strong>（過少支払い防止）</li>
+<li>控除項目：1円未満を<strong>切り捨て</strong></li>
+<li>労働時間：0.1時間（6分）単位の四捨五入</li>
+</ul>
+
+<h2 id="s6">6. 提出フロー（当社担当者向け）</h2>
+<div class="step"><div class="step-num">1</div><div class="step-text">月次集計画面（<code>/monthly</code>）で対象月を選ぶ</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「社労士提出用」セクションを開く</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text"><strong>会社（HFU）</strong>を選び、3点（勤務予定シフト／実労働時間明細／計算根拠PDF）を出力</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">出面の確認・承認の完了を確認のうえ、社労士へ送付</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">社労士の最終計算が出たら、HFU の支給額として使用</div></div>
+
+<hr>
+<h2>改訂履歴</h2>
+<table>
+<tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-06-08</td><td>新規作成（変形労働時間制・3段階残業判定・提出3資料の読み方・端数処理・週6日論点を記述）</td></tr>
+</table>
+
+</body>
+</html>
