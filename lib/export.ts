@@ -1618,15 +1618,22 @@ function computePrescribedFromSchedule(ws: SiteWorkSchedule | undefined): {
  * 1スタッフの月の配置先（assign + massign）から主要現場を判定
  */
 function inferPrimarySiteId(workerId: number, ym: string, assign: PlannedShiftData['assign'], massign: PlannedShiftData['massign']): string | null {
-  // ym (YYYYMM) を assign キーで使うかは実装次第。massign の方が月次オーバーライドなので優先
-  const mOver = massign[ym]
-  if (mOver) {
-    for (const [sid, sa] of Object.entries(assign)) {
-      if (mOver.workers?.includes(workerId)) return sid
-      void sa
-    }
+  // 2026-06-XX 修正 (社労士監査): massign のキー形式は `${siteId}_${ym}` (例: ihi_202605)
+  //   旧バグ: massign[ym] (例: massign['202605']) を参照 → 常に undefined → 月次配置替えが効かず
+  //           デフォルト assign にフォールバックし、別現場のカレンダーを表示していた
+  //   新: 全現場について massign[`${siteId}_${ym}`] を走査し、当月配置現場を特定。
+  //       月次オーバーライドがあればそれを優先、なければデフォルト assign。
+  const allSiteIds = new Set<string>([
+    ...Object.keys(assign),
+    ...Object.keys(massign).map(k => k.replace(new RegExp(`_${ym}$`), '')).filter(k => massign[`${k}_${ym}`]),
+  ])
+
+  // 月次オーバーライド (massign) を優先
+  for (const sid of allSiteIds) {
+    const mOver = massign[`${sid}_${ym}`]
+    if (mOver?.workers?.includes(workerId)) return sid
   }
-  // デフォルト assign を見る
+  // デフォルト assign にフォールバック
   for (const [sid, sa] of Object.entries(assign)) {
     if (sa.workers?.includes(workerId)) return sid
   }
@@ -1753,9 +1760,11 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
     const rows: unknown[][] = []
     rows.push([`実労働時間明細 ${ymLabel(ym)} - ${w.name}`])
     rows.push([`スタッフ ID: ${w.id}  /  雇用区分: ${w.visa}`])
-    rows.push([`※ 始業/終業に「(推定)」がある日は、出面入力で時刻が記録されていないため、現場の標準時刻を表示しています`])
+    rows.push([`※ 実労働(h) = 始業〜終業 − 実際に取得した休憩。給与計算と完全に同一の算出方法です`])
+    rows.push([`※ 休憩(分)は実際に取得した分のみ。現場・作業内容により休憩を取れなかった場合は労働時間に算入されます`])
+    rows.push([`※ 所定外(h) = 実労働 − 当日所定時間。始業/終業に「(推定)」がある日は時刻未記録のため標準時刻で推定`])
     rows.push([])
-    rows.push(['日', '曜', '状態', '現場', '始業', '終業', '休憩(分)', '実労働(h)', '残業(h)', '備考'])
+    rows.push(['日', '曜', '状態', '現場', '始業', '終業', '休憩(分)', '実労働(h)', '所定外(h)', '備考'])
 
     let totalActual = 0
     let totalOT = 0
@@ -1782,7 +1791,7 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
       // 各エントリを別行で出力（同日複数現場対応）
       for (const { siteId, entry } of entriesForDay) {
         const site = siteMap.get(siteId)
-        const e = entry as { w?: number; o?: number; p?: number; r?: number; h?: number; hk?: number; exam?: number; st?: string; et?: string }
+        const e = entry as { w?: number; o?: number; p?: number; r?: number; h?: number; hk?: number; exam?: number; st?: string; et?: string; b1?: number; b2?: number; b3?: number }
 
         // 状態判定
         let status = ''
@@ -1796,38 +1805,47 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
         else status = '-'
 
         // 始業/終業 (st/et が無ければ workSchedule 標準時刻 + 推定マーク)
+        // 2026-06-XX 修正 (社労士監査): 給与計算 (calcActualHours) と完全に同一ロジックに統一
+        //   旧バグ: computePrescribedFromSchedule で「所定休憩を全部固定控除」していた
+        //     → 休憩を実際は取っていない日 (b1/b3未設定) でも7hと表示し、給与計算の8hと食い違う
+        //     → 社労士が「実労働明細7h なのに残業1hが別途出る」と照合不能になった
+        //   新: calcActualHours(entry, workSchedule) を使用。休憩フラグ b1/b2/b3 が立っている
+        //       分のみ控除 = 給与計算と同じ実労働時間になる
+        const ws = site?.workSchedule
+        const schedule = computePrescribedFromSchedule(ws)
         let startTime = ''
         let endTime = ''
         let breakMin = 0
         let actualH = 0
+        let prescribedH = schedule.workH  // 所定労働時間 (この日)
+        let nonStatOT = 0                 // 所定外 (実労働 − 所定、当日分)
         let isEstimated = false
         if ((e.w || 0) > 0 && e.w !== 0.6) {
           if (e.st && e.et) {
-            // 時間ベース入力
             startTime = e.st
             endTime = e.et
-            const schedule = computePrescribedFromSchedule(site?.workSchedule)
-            breakMin = schedule.breakMin
-            // 実労働 = 始業-終業 - 休憩
-            const [sh, sm] = e.st.split(':').map(Number)
-            const [eh, em] = e.et.split(':').map(Number)
-            const startMin = sh * 60 + (sm || 0)
-            const endMin = eh * 60 + (em || 0)
-            actualH = Math.max(0, Math.round((endMin - startMin - breakMin) / 60 * 10) / 10)
+            // 実際に取得した休憩のみ集計 (フラグ連動・給与計算と同じ)
+            const wsTyped = ws as SiteWorkSchedule | undefined
+            const mMin = wsTyped?.morningBreak?.enabled === false ? 0 : (wsTyped?.morningBreak?.minutes ?? 30)
+            const lMin = wsTyped?.lunchBreak?.enabled === false ? 0 : (wsTyped?.lunchBreak?.minutes ?? 60)
+            const aMin = wsTyped?.afternoonBreak?.enabled === false ? 0 : (wsTyped?.afternoonBreak?.minutes ?? 30)
+            breakMin = (e.b1 ? mMin : 0) + (e.b2 ? lMin : 0) + (e.b3 ? aMin : 0)
+            // 給与計算と同一の calcActualHours で実労働を算出
+            actualH = calcActualHours(entry, ws as Parameters<typeof calcActualHours>[1])
+            // 所定外 = 実労働 − 所定 (当日。負なら0)
+            nonStatOT = Math.max(0, Math.round((actualH - prescribedH) * 10) / 10)
           } else {
-            // レガシー入力: workSchedule 標準時刻を表示（推定）
-            const schedule = computePrescribedFromSchedule(site?.workSchedule)
+            // レガシー入力: 標準時刻 + o で推定
             startTime = schedule.start + ' (推定)'
             endTime = schedule.end + ' (推定)'
             breakMin = schedule.breakMin
             actualH = schedule.workH + (e.o || 0)
+            nonStatOT = e.o || 0
             isEstimated = true
           }
           totalActual += actualH
+          totalOT += nonStatOT
         }
-
-        const otH = e.o || 0
-        if (otH > 0) totalOT += otH
 
         rows.push([
           d, dowLabel, status,
@@ -1836,8 +1854,9 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
           endTime || '-',
           breakMin || '-',
           actualH > 0 ? actualH : '-',
-          otH > 0 ? otH : '-',
-          isEstimated ? '時刻未記録（標準時刻で推定）' : '',
+          nonStatOT > 0 ? nonStatOT : '-',
+          isEstimated ? '時刻未記録（標準時刻で推定）'
+            : (breakMin < schedule.breakMin && actualH > prescribedH ? '休憩未取得分を労働時間に算入' : ''),
         ])
       }
     }
@@ -1848,7 +1867,7 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
     rows.push(['', '', '有給日数', '', '', '', '', '', pDays + '日', ''])
     if (rDays > 0) rows.push(['', '', '欠勤日数', '', '', '', '', '', rDays + '日', ''])
     rows.push(['', '', '実労働時間 合計', '', '', '', '', Math.round(totalActual * 10) / 10 + 'h', '', ''])
-    rows.push(['', '', '残業時間 合計', '', '', '', '', '', Math.round(totalOT * 10) / 10 + 'h', ''])
+    rows.push(['', '', '所定外 合計', '', '', '', '', '', Math.round(totalOT * 10) / 10 + 'h', ''])
 
     const sheetName = w.name.slice(0, 28) + (w.name.length > 28 ? '..' : '')
     const sheet = XLSX.utils.aoa_to_sheet(rows)
@@ -1856,6 +1875,8 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
       { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
       { s: { r: 1, c: 0 }, e: { r: 1, c: 9 } },
       { s: { r: 2, c: 0 }, e: { r: 2, c: 9 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 9 } },
+      { s: { r: 4, c: 0 }, e: { r: 4, c: 9 } },
     ]
     setColWidths(sheet, [5, 5, 8, 14, 12, 12, 8, 9, 8, 22])
     XLSX.utils.book_append_sheet(wb, sheet, sheetName)
