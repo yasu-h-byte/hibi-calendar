@@ -336,10 +336,19 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
               <tr><td>実出勤日数</td><td className="font-mono">{w.actualWorkDays}日（補償を含まない）</td></tr>
             )}
             <tr>
-              <td>残業時間（合計）</td>
+              <td>{mode.useOldRules ? '残業時間（合計）' : '時間外労働（合計）'}</td>
               <td className="font-mono">
-                {fmtNum(w.otHours, 'h')}
-                <span className="text-[10px] text-gray-500 ml-1">（出面入力の残業欄合計）</span>
+                {mode.useOldRules ? (
+                  <>
+                    {fmtNum(w.otHours, 'h')}
+                    <span className="text-[10px] text-gray-500 ml-1">（出面入力の残業欄合計）</span>
+                  </>
+                ) : (
+                  <>
+                    {fmtNum((w.nonStatutoryOTHours || 0) + (w.legalOtHours || 0), 'h')}
+                    <span className="text-[10px] text-gray-500 ml-1">（所定外労働 + 法定外残業。3層判定後の計算値。出面の残業欄 {fmtNum(w.otHours, 'h')} とは別）</span>
+                  </>
+                )}
               </td>
             </tr>
             {!mode.useOldRules && w.legalOtHours !== undefined && (
@@ -356,7 +365,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 <td>うち所定外労働</td>
                 <td className="font-mono">
                   <span className="font-bold">{fmtNum(w.nonStatutoryOTHours, 'h')}</span>
-                  <span className="text-[10px] text-gray-500 ml-1">（残業欄入力分の合計。1.0倍で全部支給）</span>
+                  <span className="text-[10px] text-gray-500 ml-1">（実労働 − 当日所定。法定内・1.0倍で全部支給）</span>
                 </td>
               </tr>
             )}

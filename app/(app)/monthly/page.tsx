@@ -256,6 +256,19 @@ function currentYm(): string {
   return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+// 表示用の「時間外労働(h)」を返す。
+// - 新ルール（変形労働）ベトナム人: 計算値 = 所定外労働 + 法定外残業（3層判定後）
+//   ※ 生の o 欄合計(otHours)は、st/et 入力月では実態とズレるため使わない
+//   （例: 笹塚は o=0 だが法定外残業あり / 富岡は o過多だが実態は所定外）
+// - 日本人(日額制) / 旧ルール: 従来どおり出面の残業欄合計(otHours)
+function displayOtHours(w: WorkerMonthly): number {
+  if (w.useOldRules) return w.otHours
+  if (w.nonStatutoryOTHours !== undefined || w.legalOtHours !== undefined) {
+    return Math.round(((w.nonStatutoryOTHours || 0) + (w.legalOtHours || 0)) * 10) / 10
+  }
+  return w.otHours
+}
+
 type WorkerSortKey = 'name' | 'org' | 'workDays' | 'plDays' | 'otHours' | 'rate' | 'totalCost'
 type SubconSortKey = 'name' | 'type' | 'workDays' | 'otCount' | 'rate' | 'cost'
 
@@ -592,7 +605,7 @@ export default function MonthlyPage() {
         case 'org': cmp = a.org.localeCompare(b.org); break
         case 'workDays': cmp = a.workDays - b.workDays; break
         case 'plDays': cmp = a.plDays - b.plDays; break
-        case 'otHours': cmp = a.otHours - b.otHours; break
+        case 'otHours': cmp = displayOtHours(a) - displayOtHours(b); break
         case 'rate': cmp = a.rate - b.rate; break
         case 'totalCost': cmp = a.totalCost - b.totalCost; break
       }
@@ -608,7 +621,7 @@ export default function MonthlyPage() {
       workDays: filteredWorkers.reduce((s, w) => s + w.workDays, 0),
       workAll: filteredWorkers.reduce((s, w) => s + (w.workAll || w.workDays), 0),
       plDays: filteredWorkers.reduce((s, w) => s + w.plDays, 0),
-      otHours: filteredWorkers.reduce((s, w) => s + w.otHours, 0),
+      otHours: Math.round(filteredWorkers.reduce((s, w) => s + displayOtHours(w), 0) * 10) / 10,
       totalCost: totalCostRaw - dispatchDeduction,  // 出向控除済み
       totalCostRaw,                                   // 出向控除前
       dispatchDeduction,
@@ -829,7 +842,7 @@ export default function MonthlyPage() {
             <h1 className="text-xl font-bold text-hibi-navy dark:text-white">月次集計</h1>
             {data && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                出勤延べ {fmtNum(data.totals.workDays)}人日 / 外注 {fmtNum(data.totals.subWorkDays)}人工 / 残業 {fmtNum(data.totals.otHours)}h
+                出勤延べ {fmtNum(data.totals.workDays)}人日 / 外注 {fmtNum(data.totals.subWorkDays)}人工 / 残業 {fmtNum(Math.round(data.workers.reduce((s, w) => s + displayOtHours(w), 0) * 10) / 10)}h
               </p>
             )}
           </div>
@@ -1306,7 +1319,7 @@ export default function MonthlyPage() {
                         {w.plDays > 0 ? w.plDays : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
-                        {w.otHours > 0 ? fmtNum(w.otHours) : '—'}
+                        {displayOtHours(w) > 0 ? fmtNum(displayOtHours(w)) : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
                         {fmtYen(w.rate)}

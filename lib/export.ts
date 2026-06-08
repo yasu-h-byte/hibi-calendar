@@ -1667,20 +1667,29 @@ export function generatePlannedShiftExcel(data: PlannedShiftData): XLSX.WorkBook
     const schedule = computePrescribedFromSchedule(site?.workSchedule)
     const dayMap = siteId ? (siteCalendars[siteId] || {}) : {}
 
+    // 月曜起算の週番号（変形労働の週所定を示すため）
+    const firstDow = new Date(y, m - 1, 1).getDay()
+    const firstMondayOffset = (firstDow + 6) % 7
+    const weekOf = (d: number) => Math.floor((d - 1 + firstMondayOffset) / 7) + 1
+
     const rows: unknown[][] = []
     // ヘッダー
     rows.push([`勤務予定シフト表 ${ymLabel(ym)} - ${w.name}`])
     rows.push([`スタッフ ID: ${w.id}  /  雇用区分: ${w.visa}`])
     rows.push([`配置現場: ${site?.name || '未確定'}`])
     rows.push([`勤務時間 (標準): ${schedule.start}-${schedule.end} / 休憩 ${schedule.breakMin}分 / 所定 ${schedule.workH}h`])
+    rows.push([`制度: 1ヶ月単位の変形労働時間制 / 月の所定総枠 ${legalLimit}h (暦日数${daysInMonth}÷7×40)`])
     rows.push([])
-    rows.push(['日', '曜', '予定', '始業', '終業', '休憩(分)', '所定労働時間(h)', '備考'])
+    rows.push(['週', '日', '曜', '予定', '始業', '終業', '休憩(分)', '所定労働時間(h)', '備考'])
 
     let totalWork = 0
     let totalH = 0
+    // 週別所定: weekNum -> { days, hours }
+    const weekly: Record<number, { days: number; hours: number }> = {}
     for (let d = 1; d <= daysInMonth; d++) {
       const dow = new Date(y, m - 1, d).getDay()
       const dowLabel = ['日', '月', '火', '水', '木', '金', '土'][dow]
+      const wn = weekOf(d)
       const dayEntry = dayMap[String(d)]
       // dayEntry が文字列 ('work'/'off'/'holiday') or オブジェクト
       const dayType = typeof dayEntry === 'string' ? dayEntry : (dayEntry?.type || (dow === 0 ? 'off' : 'work'))
@@ -1688,32 +1697,52 @@ export function generatePlannedShiftExcel(data: PlannedShiftData): XLSX.WorkBook
 
       const note = dayType === 'holiday' ? '祝日' : (dayType === 'off' && dow === 0 ? '法定休日' : (dayType === 'off' ? '所定休日' : ''))
 
+      if (!weekly[wn]) weekly[wn] = { days: 0, hours: 0 }
       if (isWork) {
         totalWork++
         totalH += schedule.workH
+        weekly[wn].days++
+        weekly[wn].hours += schedule.workH
         rows.push([
-          d, dowLabel, '出勤',
+          `第${wn}週`, d, dowLabel, '出勤',
           schedule.start, schedule.end, schedule.breakMin, schedule.workH, note,
         ])
       } else {
-        rows.push([d, dowLabel, '休', '-', '-', '-', '-', note])
+        rows.push([`第${wn}週`, d, dowLabel, '休', '-', '-', '-', '-', note])
       }
     }
     // 合計
     rows.push([])
-    rows.push(['', '', '所定出勤日数', '', '', '', totalWork + '日', ''])
-    rows.push(['', '', '所定労働時間 合計', '', '', '', Math.round(totalH * 10) / 10 + 'h', `法定上限 ${legalLimit}h ${totalH <= legalLimit ? '✓' : '⚠'}`])
+    rows.push(['', '', '', '所定出勤日数', '', '', '', totalWork + '日', ''])
+    rows.push(['', '', '', '所定労働時間 合計', '', '', '', Math.round(totalH * 10) / 10 + 'h', `月の所定総枠 ${legalLimit}h ${totalH <= legalLimit ? '✓ 枠内' : '⚠ 超過'}`])
+    // 週別の所定（変形労働：週40h超の週は「週所定」が残業判定の基準になる）
+    rows.push([])
+    const weeklyTitle = '【週別 所定労働時間】変形労働時間制では、この週所定を超えた分が時間外労働になります'
+    rows.push([weeklyTitle])
+    rows.push(['週', '所定出勤日数', '週所定労働時間', '残業判定の基準', '', '', '', '', ''])
+    for (const wn of Object.keys(weekly).map(Number).sort((a, b) => a - b)) {
+      const wk = weekly[wn]
+      if (wk.days === 0) continue
+      const wh = Math.round(wk.hours * 10) / 10
+      const basis = wh > 40
+        ? `週所定 ${wh}h 超で時間外（40hではない）`
+        : `週40h 超で時間外`
+      rows.push([`第${wn}週`, wk.days + '日', wh + 'h', basis, '', '', '', '', ''])
+    }
 
     // シート名: 30文字以内（Excel制限31文字、安全マージン）
     const sheetName = w.name.slice(0, 28) + (w.name.length > 28 ? '..' : '')
     const sheet = XLSX.utils.aoa_to_sheet(rows)
+    const weeklyHeaderRow = rows.findIndex(r => r[0] === weeklyTitle)
     sheet['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
-      { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } },
-      { s: { r: 3, c: 0 }, e: { r: 3, c: 7 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 8 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 8 } },
+      { s: { r: 4, c: 0 }, e: { r: 4, c: 8 } },
+      ...(weeklyHeaderRow >= 0 ? [{ s: { r: weeklyHeaderRow, c: 0 }, e: { r: weeklyHeaderRow, c: 8 } }] : []),
     ]
-    setColWidths(sheet, [6, 6, 8, 8, 8, 10, 14, 18])
+    setColWidths(sheet, [8, 6, 6, 8, 8, 8, 10, 16, 30])
     XLSX.utils.book_append_sheet(wb, sheet, sheetName)
   }
 

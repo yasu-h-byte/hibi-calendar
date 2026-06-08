@@ -11,6 +11,7 @@
     "lint:tobi": "node scripts/lint-tobi-group.mjs",
     "lint:retired": "node scripts/lint-retired-flag.mjs",
     "diagnose:firestore": "node scripts/diagnose-merge-empty-map.mjs",
+    "diagnose:hours": "node scripts/diagnose-working-hours.mjs",
     "audit:pl": "node scripts/audit-pl-attendance.mjs",
     "audit:duplicate": "node scripts/audit-duplicate-attendance.mjs",
     "audit:unpaid-ot": "node scripts/audit-unpaid-non-statutory-ot.mjs",
