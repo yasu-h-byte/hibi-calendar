@@ -270,6 +270,31 @@ describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () 
     // 新ルール 3層構造: 基本給 = 1500 × 20 × 7 = 210000
     expect(w.fixedBasePay).toBe(210000)
     expect(w.prescribedHours).toBe(140)  // 20 × 7
+    // 原価＝実支給額に統一: totalCost = salaryNetPay（旧: 日数×日額+残業概算ではない）
+    expect(w.totalCost).toBe(w.salaryNetPay)
+    // 単一現場なら site.cost = 支給額
+    const site = result.sites.find(s => s.id === 'site1')!
+    expect(site.cost).toBe(w.salaryNetPay)
+  })
+
+  test('原価＝実支給額: 残業ありでも totalCost = salaryNetPay（日額×日数概算ではない）', () => {
+    const main = buildMain({
+      workers: [{
+        id: 102, name: 'ベトナム人B', org: 'hibi', visa: 'tokutei2', job: 'tobi',
+        rate: 16727, hourlyRate: 2509, otMul: 1.25, hireDate: '2025-01-01', token: 'def',
+      }],
+      assign: { site1: { workers: [102], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 102, '202605', d, 1, d <= 10 ? 1 : 0))
+
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 102)!
+    // 概算労務費の旧式（日数×日額+残業概算）ではなく、実際の支給額に一致する
+    expect(w.totalCost).toBe(w.salaryNetPay)
+    const site = result.sites.find(s => s.id === 'site1')!
+    expect(site.cost).toBe(w.salaryNetPay)
   })
 })
 

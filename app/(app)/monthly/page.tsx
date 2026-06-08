@@ -1181,7 +1181,7 @@ export default function MonthlyPage() {
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('totalCost')}
                 >
-                  概算労務費{sortArrow(workerSortKey === 'totalCost', workerSortAsc)}
+                  <span title="実際の支給額ベースの労務費（ベトナム人・完全月給は支給額、日本人日給月給は日額×日数）">労務費</span>{sortArrow(workerSortKey === 'totalCost', workerSortAsc)}
                 </th>
                 {showAbsenceColumns && (
                   <>
