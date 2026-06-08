@@ -863,6 +863,11 @@ export function computeMonthly(
   // 月の実労働時間累積（時間ベース入力対応）。新ルールの法定上限判定に使用。
   const actualWorkHoursAccumByWid = new Map<number, number>()
 
+  // 完全月給者（日本人 salary>0 = 政仁・濱上等）の現場別出勤日数。
+  //   原価は「固定給」を出勤実績で各現場へ配賦するため、エントリ単位の概算(salary/20)は
+  //   site.cost に積まず、ここに日数を貯めて後段で固定給を比例配賦する。
+  const fullMonthlySiteDays = new Map<number, Map<string, number>>()
+
   for (const w of main.workers) {
     // 2026-06-XX: 退職月のスタッフ（例: 6/30 退職予定）も当月は集計対象に含める
     // （旧: `if (w.retired) continue` は退職日が入った瞬間に当月も除外する事故）
@@ -981,14 +986,25 @@ export function computeMonthly(
     const entryDailyRate = getWorkerDailyRate({ visa: wm.visa, rate: wm.rate, salary: wm.salary })
     const otCost = (isComp ? 0 : (entry.o || 0)) * (entryDailyRate / otDiv) * wm.otMul
     const entryCost = entry.w * entryDailyRate + otCost
+    // 完全月給者（日本人 salary>0）は原価=固定給。エントリ単位の概算は site.cost に積まず、
+    // 出勤日数だけ記録して後段で固定給を比例配賦する（GAP2: 固定給を原価にする方針）。
+    const isFullMonthly = wm.visa === 'none' && !!wm.salary && wm.salary > 0
     const site = siteMap.get(siteId)
     if (site) {
       site.workDays += workCount
       site.otHours += (isComp ? 0 : (entry.o || 0))
-      site.cost += entryCost
-      // 出向者の人件費はサイトの出向控除額に積む（後段で売上・人件費から差引）
-      if (wm.isDispatched) {
-        site.dispatchDeduction = (site.dispatchDeduction || 0) + entryCost
+      if (isFullMonthly) {
+        if (workCount > 0) {
+          let m = fullMonthlySiteDays.get(wid)
+          if (!m) { m = new Map<string, number>(); fullMonthlySiteDays.set(wid, m) }
+          m.set(siteId, (m.get(siteId) || 0) + workCount)
+        }
+      } else {
+        site.cost += entryCost
+        // 出向者の人件費はサイトの出向控除額に積む（後段で売上・人件費から差引）
+        if (wm.isDispatched) {
+          site.dispatchDeduction = (site.dispatchDeduction || 0) + entryCost
+        }
       }
     }
   }
@@ -1305,6 +1321,11 @@ export function computeMonthly(
       wm.salaryNetPay = basePay + otPay
       // netPay: 給与支給額（=月給+残業）。totalCost は使わない（出勤日数 × rate で誤算するため）。
       wm.netPay = basePay + otPay
+      // GAP2: 完全月給の原価は固定給。エントリループで積んだ salary/20 概算を上書きし、
+      //   原価(totalCost) = 固定給 + 残業 = 支給額。site.cost への配賦は後段で実施。
+      wm.cost = basePay
+      wm.otCost = otPay
+      wm.totalCost = basePay + otPay
     } else if (wm.visa === 'none') {
       // 日給月給制の日本人: daily-rate based
       // 基本給 = 日額(rate) × 実出勤日数
@@ -1333,6 +1354,36 @@ export function computeMonthly(
       wm.netPay = wm.totalCost - wm.absentCost
     } else {
       wm.netPay = wm.totalCost
+    }
+  }
+
+  // GAP2: 完全月給者の固定給(=totalCost)を、出勤日数比で各現場の原価へ配賦する。
+  //   エントリループでは site.cost に積んでいないため、ここで現場別に上乗せする。
+  //   出勤実績のない月（全休等）でも固定給は発生するため、配置現場の先頭へ計上する。
+  for (const wm of workerMap.values()) {
+    if (!(wm.visa === 'none' && wm.salary && wm.salary > 0)) continue
+    const cost = wm.totalCost || 0
+    if (cost <= 0) continue
+    const dayMap = fullMonthlySiteDays.get(wm.id)
+    const totalDays = dayMap ? Array.from(dayMap.values()).reduce((a, b) => a + b, 0) : 0
+    if (dayMap && totalDays > 0) {
+      const rows = Array.from(dayMap.entries())
+      let allocated = 0
+      rows.forEach(([sid, days], i) => {
+        const site = siteMap.get(sid)
+        if (!site) return
+        // 端数は最後の現場で吸収して合計＝固定給に一致させる
+        const share = i === rows.length - 1 ? (cost - allocated) : Math.round(cost * days / totalDays)
+        site.cost += share
+        allocated += share
+        if (wm.isDispatched) site.dispatchDeduction = (site.dispatchDeduction || 0) + share
+      })
+    } else if (wm.sites.length > 0) {
+      const site = siteMap.get(wm.sites[0])
+      if (site) {
+        site.cost += cost
+        if (wm.isDispatched) site.dispatchDeduction = (site.dispatchDeduction || 0) + cost
+      }
     }
   }
 

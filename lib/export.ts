@@ -940,7 +940,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     '実出勤日数', '補償日', '有給日数', '実労働時間', '残業時間',
     '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '支給額合計']
   // 日本人: 8列
-  const japaneseHeaders = ['名前', '現場', '日額', '出勤日数', '残業時間(h)', '基本給', '残業手当', '支給額合計']
+  const japaneseHeaders = ['名前', '現場', '雇用形態', '日額/月給', '出勤日数', '残業時間(h)', '基本給', '残業手当', '支給額合計']
 
   // ── 検算結果のシート末尾追加（共通ヘルパー） ──
   function appendValidation(rows: (string | number | null)[][], targets: WorkerMonthly[], colCount: number) {
@@ -1084,28 +1084,43 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     rows.push([`${sheetName} ${ymLabel(ym)}`])
     rows.push([])
     rows.push(japaneseHeaders)
+    let hasFullMonthly = false
     for (const w of ws) {
       const siteList = w.sites.map(sid => siteNames[sid] || sid).join(', ')
       const nameWithDispatch = w.isDispatched
         ? `🔁 ${w.name}（出向: ${w.dispatchTo || ''}）`
         : w.name
+      const isFullMonthly = (w.salary || 0) > 0
+      if (isFullMonthly) hasFullMonthly = true
       rows.push([
-        nameWithDispatch, siteList, w.rate, w.workDays,
+        nameWithDispatch, siteList,
+        isFullMonthly ? '完全月給' : '日給月給',
+        isFullMonthly ? (w.salary || 0) : w.rate,
+        w.workDays,
         w.dailyOtHours || w.otHours || 0,
         w.basePay || 0, w.otAllowance || 0, w.salaryNetPay || 0,
       ])
     }
     rows.push([
-      '小計', null, null,
+      '小計', null, null, null,
       ws.reduce((s, w) => s + w.workDays, 0),
       ws.reduce((s, w) => s + (w.dailyOtHours || w.otHours || 0), 0),
       ws.reduce((s, w) => s + (w.basePay || 0), 0),
       ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
       ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
     ])
+    if (hasFullMonthly) {
+      rows.push([])
+      rows.push(['※ 完全月給者は出勤日数に関わらず基本給（=月給）を固定支給。「日額/月給」列は月給額。'])
+    }
     const sheet = XLSX.utils.aoa_to_sheet(rows)
-    sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: japaneseHeaders.length - 1 } }]
-    setColWidths(sheet, [14, 16, 10, 8, 10, 12, 12, 14])
+    const merges: XLSX.Range[] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: japaneseHeaders.length - 1 } }]
+    if (hasFullMonthly) {
+      const noteRow = rows.length - 1
+      merges.push({ s: { r: noteRow, c: 0 }, e: { r: noteRow, c: japaneseHeaders.length - 1 } })
+    }
+    sheet['!merges'] = merges
+    setColWidths(sheet, [14, 16, 10, 12, 8, 10, 12, 12, 14])
     return sheet
   }
 

@@ -166,6 +166,42 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
     const w = result.workers.find(x => x.id === 12)!
     expect(w.basePay).toBe(235000)
     expect(w.salaryNetPay).toBe(235000)
+    // GAP2: 完全月給の原価＝固定給（15日出勤でも 15×(235000/20)=176250 ではなく 235000）
+    expect(w.totalCost).toBe(235000)
+    // 固定給が現場原価に全額計上される（出勤日数比の概算ではない）
+    const site = result.sites.find(s => s.id === 'site1')!
+    expect(site.cost).toBe(235000)
+  })
+
+  test('GAP2: 完全月給を複数現場で勤務 → 固定給を出勤日数比で配賦（合計=月給）', () => {
+    const main = buildMain({
+      workers: [{
+        id: 12, name: '濱上祥太郎', org: 'hibi', visa: 'none', job: 'tobi_apprentice',
+        rate: 0, salary: 200000, otMul: 1.25, hireDate: '2026-06-01', token: '',
+      }],
+      sites: [
+        { id: 'siteA', name: '現場A', start: '', end: '', foreman: 0, archived: false },
+        { id: 'siteB', name: '現場B', start: '', end: '', foreman: 0, archived: false },
+      ],
+      assign: {
+        siteA: { workers: [12], subcons: [] },
+        siteB: { workers: [12], subcons: [] },
+      },
+      siteWorkDays: { '202606': { siteA: 20, siteB: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    // siteA 12日 / siteB 8日 = 計20日
+    for (let d = 1; d <= 12; d++) Object.assign(attD, dayWork('siteA', 12, '202606', d))
+    for (let d = 13; d <= 20; d++) Object.assign(attD, dayWork('siteB', 12, '202606', d))
+
+    const result = computeMonthly(main, attD, {}, '202606', 20)
+    const w = result.workers.find(x => x.id === 12)!
+    expect(w.totalCost).toBe(200000)
+    const siteA = result.sites.find(s => s.id === 'siteA')!
+    const siteB = result.sites.find(s => s.id === 'siteB')!
+    // 12:8 の比で配賦、合計は固定給に一致
+    expect(siteA.cost + siteB.cost).toBe(200000)
+    expect(siteA.cost).toBe(Math.round(200000 * 12 / 20)) // 120000
   })
 
   test('月給制 + 残業10h → 残業手当 = (月給/月所定h) × otMul × 10h', () => {

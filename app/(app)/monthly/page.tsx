@@ -1322,7 +1322,14 @@ export default function MonthlyPage() {
                         {displayOtHours(w) > 0 ? fmtNum(displayOtHours(w)) : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                        {fmtYen(w.rate)}
+                        {(w.salary || 0) > 0 ? (
+                          <span title="完全月給（出勤日数に関わらず固定）">
+                            {fmtYen(w.salary || 0)}
+                            <span className="ml-1 text-[10px] text-purple-600 dark:text-purple-300">月給</span>
+                          </span>
+                        ) : (
+                          fmtYen(w.rate)
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-medium">
                         {w.isDispatched ? (
