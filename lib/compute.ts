@@ -6,6 +6,16 @@ import { isStillActiveForMonth } from './workers'
 import { isTobiGroup, isDokoGroup } from './jobs'
 
 // ────────────────────────────────────────
+//  円未満の端数処理（2026-06: 労基の過少支払い指摘を踏まえ「支給は切上・控除は切捨」で統一）
+//    浮動小数点ノイズ対策として、まず銭(0.01円)単位に四捨五入してから円に丸める。
+//    例: ceilYen(220000.0000001)=220000 / ceilYen(2984.375)=2985 / floorYen(50000.4)=50000
+// ────────────────────────────────────────
+/** 支給額: 1円未満を切り上げ（従業員有利・過少支払い防止） */
+const ceilYen = (v: number): number => Math.ceil(Math.round(v * 100) / 100)
+/** 控除額: 1円未満を切り捨て（控除を増やさない＝過少支払い防止） */
+const floorYen = (v: number): number => Math.floor(Math.round(v * 100) / 100)
+
+// ────────────────────────────────────────
 //  Firestoreデータ読み込み
 // ────────────────────────────────────────
 
@@ -1194,18 +1204,18 @@ export function computeMonthly(
       const prescribedH = workerPrescribedDays * dailyHoursOld
 
       // 基本給
-      const basePay = Math.round(wm.hourlyRate * prescribedH)
+      const basePay = ceilYen(wm.hourlyRate * prescribedH)  // 支給: 1円未満切り上げ
 
       // 休業補償（補償日 = 0.6保証）
-      const compAllowance = Math.round(wm.hourlyRate * dailyHoursOld * 0.6 * wm.compDays)
+      const compAllowance = ceilYen(wm.hourlyRate * dailyHoursOld * 0.6 * wm.compDays)  // 支給: 切り上げ
 
       // 残業手当（日単位の積み上げ）— 1円未満は切り上げ
-      const otAllowance = Math.ceil(wm.hourlyRate * 1.25 * wm.otHours)
+      const otAllowance = ceilYen(wm.hourlyRate * 1.25 * wm.otHours)
 
       // 真の欠勤日数（有給・試験は出勤扱い、補償日は欠勤扱いで60%休業手当のみ支給）
       // 2026-06-XX 修正: 補償日を欠勤に算入（労基法26条準拠で60%支給のみ）
       const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays)
-      const absentDeduction = Math.round(wm.hourlyRate * dailyHoursOld * absentDays)
+      const absentDeduction = floorYen(wm.hourlyRate * dailyHoursOld * absentDays)  // 控除: 切り捨て（過少支払い防止）
 
       // 表示用: 実労働時間（補償も0.6相当でカウント）
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
@@ -1231,7 +1241,7 @@ export function computeMonthly(
       // hourlyRate版と同じ計算式を使用。基本給だけは月給固定値で上書き。
       // 2026-06-XX 修正 (I-7/I-9): 中途入退社時は基本給を proratedBaseDays で按分
       //   月給制でも在籍期間に応じて basePay を縮小（労基法の日割り原則）
-      const proratedSalary = baseDays > 0 ? Math.round(wm.salary * (proratedBaseDays / baseDays)) : wm.salary
+      const proratedSalary = baseDays > 0 ? ceilYen(wm.salary * (proratedBaseDays / baseDays)) : wm.salary  // 支給: 切り上げ
       const derivedHourlyRate = wm.salary / (baseDays * 7)  // 単価は固定（按分前の月給ベース）
       const v = calculateVietnameseSalary(
         wm.id, ym, derivedHourlyRate, proratedBaseDays, attD, main.sites,
@@ -1281,13 +1291,13 @@ export function computeMonthly(
       const hourlyRate = wm.salary / prescribedH  // 月給からベース時給を逆算
 
       const basePay = wm.salary
-      const compAllowance = Math.round(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)
-      const otAllowance = Math.ceil(hourlyRate * 1.25 * wm.otHours)  // 残業手当: 1円未満切り上げ
+      const compAllowance = ceilYen(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)  // 支給: 切り上げ
+      const otAllowance = ceilYen(hourlyRate * 1.25 * wm.otHours)  // 残業手当: 1円未満切り上げ
       // 2026-06-XX 修正: 補償日も欠勤扱いに（労基法26条準拠で60%支給）
       const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays)
       // ⚠️ 2026-05-08 修正: hourlyRate版と式を統一（旧: salary/days*absentDays、新: hourlyRate*dailyHoursOld*absentDays）
       //   数学的には等価だが、Math.roundの中間誤差による1〜数円のズレを解消。
-      const absentDeduction = Math.round(hourlyRate * dailyHoursOld * absentDays)
+      const absentDeduction = floorYen(hourlyRate * dailyHoursOld * absentDays)  // 控除: 切り捨て（過少支払い防止）
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
       const salaryNet = basePay + compAllowance + otAllowance - absentDeduction
 
@@ -1316,8 +1326,8 @@ export function computeMonthly(
       const hourlyEquivalent = wm.salary / prescribedH
       const basePay = wm.salary
       // 残業単価を1円単位に切り上げ → 残業代も1円未満切り上げ
-      const otUnitRate = Math.ceil(hourlyEquivalent * wm.otMul)
-      const otPay = Math.ceil(otUnitRate * wm.otHours)
+      const otUnitRate = ceilYen(hourlyEquivalent * wm.otMul)
+      const otPay = ceilYen(otUnitRate * wm.otHours)
       wm.basePay = basePay
       wm.prescribedHours = prescribedH
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
@@ -1331,9 +1341,9 @@ export function computeMonthly(
       // 基本給 = 日額(rate) × 実出勤日数
       // 残業手当 = 残業単価(日額 ÷ 8h × otMul, 1円単位に切り上げ) × 残業時間
       // 支給額 = 基本給 + 残業手当
-      const basePay = Math.round(wm.workDays * wm.rate + (wm.compDays * 0.6 * wm.rate))
-      const otUnitRate = Math.ceil((wm.rate / 8) * wm.otMul)  // 残業単価を1円単位に切り上げ
-      const otPay = Math.ceil(otUnitRate * wm.otHours)          // 残業代も1円未満切り上げ
+      const basePay = ceilYen(wm.workDays * wm.rate + (wm.compDays * 0.6 * wm.rate))  // 支給: 切り上げ
+      const otUnitRate = ceilYen((wm.rate / 8) * wm.otMul)  // 残業単価を1円単位に切り上げ
+      const otPay = ceilYen(otUnitRate * wm.otHours)          // 残業代も1円未満切り上げ
       wm.basePay = basePay
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.otAllowance = otPay
@@ -1351,7 +1361,7 @@ export function computeMonthly(
       wm.netPay = 0
     } else if (workerPrescribedDays > 0) {
       wm.absence = Math.max(0, workerPrescribedDays - wm.workDays - wm.compDays - wm.plUsed - wm.examDays)  // 0.6は1日出勤扱い、試験も給与計算上は出勤扱い
-      wm.absentCost = Math.round(wm.absence * wm.rate)
+      wm.absentCost = floorYen(wm.absence * wm.rate)  // 控除: 切り捨て（過少支払い防止）
       wm.netPay = wm.totalCost - wm.absentCost
     } else {
       wm.netPay = wm.totalCost
@@ -1692,7 +1702,7 @@ export function calculateOvertimeSummary(
     .reduce((s, r) => s + Math.max(0, r.actual - r.prescribed), 0)
 
   const statutoryOT = Math.round((totalDailyOT + totalWeeklyOT + monthlyStatutoryOT) * 10) / 10
-  const fixedBasePay = Math.round(hourlyRate * baseDays * 7)
+  const fixedBasePay = ceilYen(hourlyRate * baseDays * 7)  // 支給: 切り上げ
 
   return {
     prescribedHours: Math.round(prescribedHours * 10) / 10,
@@ -1959,9 +1969,9 @@ export function calculateVietnameseSalary(
   const statutoryOT = totalDailyOT + totalWeeklyOT + monthlyStatutoryOT
 
   // ── 支給項目計算 ──
-  const fixedBasePay = Math.round(hourlyRate * baseDays * 7)
+  const fixedBasePay = ceilYen(hourlyRate * baseDays * 7)  // 支給: 切り上げ
   const additionalDays = Math.max(0, regularWorkDays - baseDays)
-  const additionalAllowance = Math.round(hourlyRate * additionalDays * 7)
+  const additionalAllowance = ceilYen(hourlyRate * additionalDays * 7)  // 支給: 切り上げ
 
   // 2026-06-XX 修正: 法定外残業手当は「割増分のみ (0.25 or 0.5倍)」
   //   旧バグ: 1.25 倍 (= 基本1.0 + 割増0.25) で計算 → 基本1.0倍が
@@ -1975,7 +1985,7 @@ export function calculateVietnameseSalary(
   //   2026-06-XX (C-4): 月60h超は +0.5倍（旧: 1.5倍 = 1.0 + 0.5）
   const otUnder60 = Math.min(60, statutoryOT)
   const otOver60 = Math.max(0, statutoryOT - 60)
-  const otAllowance = Math.ceil(hourlyRate * (0.25 * otUnder60 + 0.5 * otOver60))  // 残業(割増)手当: 1円未満切り上げ
+  const otAllowance = ceilYen(hourlyRate * (0.25 * otUnder60 + 0.5 * otOver60))  // 残業(割増)手当: 1円未満切り上げ
 
   // 2026-06-XX 修正 (C-3): 法定休日労働 8h超の追加0.25倍（労基法37条）
   //   法定休日(日曜)出勤は通常1.35倍だが、8h超部分は更に深夜・時間外と
@@ -1987,9 +1997,9 @@ export function calculateVietnameseSalary(
   const lhOver8 = dayInfos
     .filter(di => di.isLegalHoliday && di.actualHours > 0)
     .reduce((s, di) => s + Math.max(0, di.actualHours - 8), 0)
-  const legalHolidayAllowance = Math.round(hourlyRate * (1.35 * lhUnder8 + 1.60 * lhOver8))
-  const nightAllowance = Math.round(hourlyRate * 0.25 * nightHours)
-  const compAllowance = Math.round(hourlyRate * 7 * 0.6 * compDays)
+  const legalHolidayAllowance = ceilYen(hourlyRate * (1.35 * lhUnder8 + 1.60 * lhOver8))  // 支給: 切り上げ
+  const nightAllowance = ceilYen(hourlyRate * 0.25 * nightHours)  // 支給: 切り上げ
+  const compAllowance = ceilYen(hourlyRate * 7 * 0.6 * compDays)  // 支給: 切り上げ
 
   // 所定外労働手当（法定内・割増なし）
   // 労基法24条（賃金全額払い）に基づき、月所定時間を超えた労働で
@@ -2019,7 +2029,7 @@ export function calculateVietnameseSalary(
     .filter(di => !di.isLegalHoliday && di.actualHours > 0)
     .reduce((s, di) => s + Math.max(0, di.actualHours - di.prescribedHours), 0)
   const nonStatutoryOTHours = totalDailyExcess
-  const nonStatutoryOTAllowance = Math.ceil(hourlyRate * nonStatutoryOTHours)  // 所定外労働手当: 1円未満切り上げ
+  const nonStatutoryOTAllowance = ceilYen(hourlyRate * nonStatutoryOTHours)  // 所定外労働手当: 1円未満切り上げ
 
   // 欠勤控除: 法定休日出勤は所定日数(20)カウント対象外（カレンダー上は休み）
   // 2026-06-XX 修正: 補償日(compDays)も欠勤扱いに変更（労基法26条準拠）
@@ -2027,7 +2037,7 @@ export function calculateVietnameseSalary(
   //   新: compDays を欠勤として算入 → 基本給から 1日分減額 + 60% 休業手当 = 60% (法令準拠)
   //   結果: 補償日 1日 = 基本給(時給×7h) を欠勤控除で減額し、休業手当(時給×7h×0.6) で 60% 補償
   const absentDays = Math.max(0, baseDays - regularWorkDays - plUsed - examDays)
-  const absentDeduction = Math.round(hourlyRate * 7 * absentDays)
+  const absentDeduction = floorYen(hourlyRate * 7 * absentDays)  // 控除: 切り捨て（過少支払い防止）
 
   const salaryNet = fixedBasePay + additionalAllowance + nonStatutoryOTAllowance + otAllowance
                   + legalHolidayAllowance + nightAllowance + compAllowance
