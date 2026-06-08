@@ -98,9 +98,30 @@ describe('computeMonthly - 日給制日本人', () => {
     const result = computeMonthly(main, attD, {}, '202604', 20)
     const w = result.workers.find(x => x.id === 4)!
     expect(w.otHours).toBe(10)
-    // 残業手当 = round((17655 / 8) × 1.25 × 10) = round(27585.94) = 27586
-    expect(w.otAllowance).toBe(Math.round((17655 / 8) * 1.25 * 10))
+    // 残業代は「1円未満切り上げ」: 残業単価=ceil(17655/8×1.25)=ceil(2758.59)=2759、残業代=ceil(2759×10)=27590
+    const otUnit = Math.ceil((17655 / 8) * 1.25)
+    expect(w.otAllowance).toBe(Math.ceil(otUnit * 10))
+    expect(w.otAllowance).toBe(27590)
     expect(w.basePay).toBe(17655 * 20)
+  })
+
+  test('残業代は1円未満を切り上げ（四捨五入ではない）', () => {
+    const main = buildMain({
+      workers: [{
+        id: 5, name: '倉本隆次', org: 'hibi', visa: 'none', job: 'tobi',
+        rate: 19100, otMul: 1.25, hireDate: '', token: '',
+      }],
+      assign: { site1: { workers: [5], subcons: [] } },
+      siteWorkDays: { '202604': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 5, '202604', d, 1, d === 1 ? 1 : 0))
+
+    const result = computeMonthly(main, attD, {}, '202604', 20)
+    const w = result.workers.find(x => x.id === 5)!
+    // 残業単価 = 19100/8 × 1.25 = 2984.375 → 切り上げ 2985（四捨五入なら 2984）
+    expect(w.otAllowance).toBe(2985)
+    expect(w.otAllowance).not.toBe(Math.round((19100 / 8) * 1.25 * 1)) // 2984 ではない
   })
 
   test('日本人 w=0.6 → 半日勤務として workDays に 0.6 加算 (compDays は外国人限定)', () => {
