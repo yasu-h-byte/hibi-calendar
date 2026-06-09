@@ -93,21 +93,23 @@ describe('不変条件 - 標準ケース', () => {
     expect(issues).toEqual([])
   })
 
-  test('週40h超ケース（ハウ問題の検証）→ 不変条件 OK', () => {
-    // 過去の二重支給バグの直接テスト
+  test('法定外残業ケース（日8h超）→ 二重支給なしの不変条件 OK', () => {
+    // 過去の二重支給バグの直接テスト。
+    // 週6日42hは社労士確認により週次残業ゼロのため、ここは「日8h超」で法定外残業を発生させる。
     const main = buildMain({
       workers: [STANDARD_WORKER],
       assign: { site1: { workers: [101], subcons: [] } },
       siteWorkDays: { '202605': { site1: 22 } },
     })
-    const attD: Record<string, { w: number }> = {}
-    // 22日 (6日連続を含む) で週40h超を発生させる
+    const attD: Record<string, { w: number; o?: number }> = {}
     const days = [4,5,6,7,8,9, 11,12,13,14,15,16, 18,19,20,21,22,23, 25,26,27,28]
     for (const d of days) Object.assign(attD, { [attKey('site1', 101, '202605', d)]: { w: 1 } })
+    // 1日だけ残業3h（=10h勤務）→ 日次8h超で法定外残業を確実に発生
+    attD[attKey('site1', 101, '202605', 28)] = { w: 1, o: 3 }
 
     const result = computeMonthly(main, attD, {}, '202605', 22, undefined, 20)
     const w = result.workers.find(x => x.id === 101)!
-    expect(w.legalOtHours).toBeGreaterThan(0)  // 週40h超で法定外残業発生
+    expect(w.legalOtHours).toBeGreaterThan(0)  // 日8h超で法定外残業発生
     const issues = validatePayroll(w)
     expect(issues).toEqual([])  // 二重支給バグがあると critical が出る
   })

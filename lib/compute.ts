@@ -1952,17 +1952,21 @@ export function calculateVietnameseSalary(
     dailyOTByDay[di.day] = over
     totalDailyOT += over
   }
-  // 第2段階: 週単位（regular内、週40h超 − 日単位分）
+  // 第2段階: 週単位（regular内）
+  // 2026-06 社労士確認: 変形労働時間制では「事前にカレンダーで定めた週の所定」を基準にする。
+  //   週所定が40hを超える週（例: 週6日×7h=42h）は、週所定を超えた分のみが時間外。
+  //   週所定が40h以下の週は40h超が時間外。→ 判定基準 = max(40, 週所定)。
+  //   ※ 社労士提出Excel側の calculateOvertimeSummary と同一ロジックに統一。
   const weekNums = [...new Set(dayInfos.map(di => di.weekNum))].sort((a, b) => a - b)
   let totalWeeklyOT = 0
   for (const wn of weekNums) {
-    const weekRegular = dayInfos
-      .filter(di => di.weekNum === wn && !di.isLegalHoliday)
-      .reduce((s, di) => s + di.actualHours, 0)
-    const weekDailyOT = dayInfos
-      .filter(di => di.weekNum === wn && !di.isLegalHoliday)
-      .reduce((s, di) => s + (dailyOTByDay[di.day] || 0), 0)
-    totalWeeklyOT += Math.max(0, weekRegular - 40 - weekDailyOT)
+    const weekDays = dayInfos.filter(di => di.weekNum === wn && !di.isLegalHoliday)
+    const weekRegular = weekDays.reduce((s, di) => s + di.actualHours, 0)
+    const weekDailyOT = weekDays.reduce((s, di) => s + (dailyOTByDay[di.day] || 0), 0)
+    // 週所定 = その週の出勤日の所定時間合計（カレンダーで6日設定なら 6×7h=42h）
+    const weekPrescribed = weekDays.reduce((s, di) => s + di.prescribedHours, 0)
+    const weekThreshold = Math.max(40, weekPrescribed)
+    totalWeeklyOT += Math.max(0, weekRegular - weekThreshold - weekDailyOT)
   }
   // 第3段階: 月単位（regular内、法定上限超 − 日単位 − 週単位）
   const monthlyStatutoryOT = Math.max(0, regularHours - legalLimit - totalDailyOT - totalWeeklyOT)
