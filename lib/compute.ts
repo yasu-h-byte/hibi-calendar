@@ -2,7 +2,7 @@ import { db } from './firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { AttendanceEntry, calcActualHours } from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
-import { isStillActiveForMonth } from './workers'
+import { isStillActiveForMonth, isHiredByMonth } from './workers'
 import { isTobiGroup, isDokoGroup } from './jobs'
 
 // ────────────────────────────────────────
@@ -474,6 +474,7 @@ export function compute(
     //   旧: 退職済みでも出面残骸が残っていれば原価計上 → 過去月の数字が変動
     //   新: computeMonthly() と同じく isStillActiveForMonth でガード
     if (!isStillActiveForMonth(w.retired, entryYm)) continue
+    if (!isHiredByMonth(w.hireDate, entryYm)) continue  // 入社前の月は対象外
 
     const swk = `${sid}_${w.id}`
 
@@ -884,6 +885,9 @@ export function computeMonthly(
     // （旧: `if (w.retired) continue` は退職日が入った瞬間に当月も除外する事故）
     // 該当月の月初以降に退職する場合は在籍中とみなす
     if (!isStillActiveForMonth(w.retired, ym)) continue
+    // 2026-06: 入社前の月は対象外（例: 濱上 hireDate 2026-06-01 は 2026年5月に出さない）。
+    // 完全月給/月給制は出勤ゼロでも表示するため、入社前ガードが無いと前月に載ってしまう。
+    if (!isHiredByMonth(w.hireDate, ym)) continue
     const dispatchedThisMonth = isDispatchedAt(w, ym)
     workerMap.set(w.id, {
       id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,

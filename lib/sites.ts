@@ -1,7 +1,7 @@
 import { db } from './firebase'
 import { doc, getDoc } from 'firebase/firestore'
 import { Site, SiteAssign, Worker } from '@/types'
-import { isStillActiveForMonth } from './workers'
+import { isStillActiveForMonth, isHiredByMonth } from './workers'
 
 interface MainDoc {
   sites?: Record<string, unknown>[]
@@ -117,7 +117,7 @@ async function buildSitesWithWorkers(
 export async function getAllSitesWithWorkersForMonth(ym: string): Promise<
   { site: Site; workers: Worker[]; assign: SiteAssign }[]
 > {
-  return buildSitesWithWorkers(w => isStillActiveForMonth(w.retired as string | undefined, ym))
+  return buildSitesWithWorkers(w => isStillActiveForMonth(w.retired as string | undefined, ym) && isHiredByMonth(w.hireDate as string | undefined, ym))
 }
 
 /**

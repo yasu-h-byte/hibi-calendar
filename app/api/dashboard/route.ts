@@ -19,7 +19,7 @@ import {
 } from '@/lib/compute'
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
-import { isStillActiveForMonth, isAlreadyRetired } from '@/lib/workers'
+import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from '@/lib/workers'
 import { AttendanceEntry } from '@/types'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
@@ -167,7 +167,7 @@ function computeTodayStatus(
     if (isHomeLeaveByEntry) continue
 
     // 2026-06-XX 修正: 当該月在籍中のスタッフを欠勤者候補に
-    const worker = main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, ym))
+    const worker = main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym))
     if (worker) absentWorkers.push({ id: worker.id, name: worker.name })
   }
 
@@ -182,7 +182,7 @@ async function computeForeignWorkerRates(
 ) {
   // 2026-06-XX 修正: baseYm 在籍中の外国人スタッフ
   const foreignWorkers = main.workers.filter(w =>
-    isStillActiveForMonth(w.retired, baseYm) && w.visa && w.visa !== 'none' && w.visa !== ''
+    isStillActiveForMonth(w.retired, baseYm) && isHiredByMonth(w.hireDate, baseYm) && w.visa && w.visa !== 'none' && w.visa !== ''
   )
 
   // 進行月を除外し、過去6ヶ月分（確定済みの月のみ）を使用
@@ -798,7 +798,7 @@ export async function GET(request: NextRequest) {
 
       // 2026-06-XX 修正: 当該月 ym 在籍中のメンバーを表示
       siteMembers = workerIds
-        .map(wid => main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, ym)))
+        .map(wid => main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym)))
         .filter((w): w is typeof main.workers[0] => !!w)
         .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
@@ -810,7 +810,7 @@ export async function GET(request: NextRequest) {
         let doko = 0
         for (const wid of wids) {
           // 2026-06-XX 修正: トレンドは各月 mStr 在籍中で判定
-          const worker = main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, mStr))
+          const worker = main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, mStr) && isHiredByMonth(w.hireDate, mStr))
           if (worker) {
             if (isTobiGroup(worker.job)) tobi++
             else doko++

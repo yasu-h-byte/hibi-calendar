@@ -187,6 +187,10 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
     const w = result.workers.find(x => x.id === 12)!
     expect(w.basePay).toBe(235000)
     expect(w.salaryNetPay).toBe(235000)
+
+    // 入社前（2026年5月）は月次集計に出さない（完全月給でも入社月より前は対象外）
+    const mayResult = computeMonthly(main, {}, {}, '202605', 23)
+    expect(mayResult.workers.find(x => x.id === 12)).toBeUndefined()
     // GAP2: 完全月給の原価＝固定給（15日出勤でも 15×(235000/20)=176250 ではなく 235000）
     expect(w.totalCost).toBe(235000)
     // 固定給が現場原価に全額計上される（出勤日数比の概算ではない）

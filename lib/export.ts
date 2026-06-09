@@ -11,7 +11,7 @@ import {
 } from './compute'
 import { AttendanceEntry, calcActualHours } from '@/types'
 import { isWorkingDay } from './attendance'
-import { isStillActiveForMonth, isAlreadyRetired } from './workers'
+import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from './workers'
 import { computePeriodUsed } from './leave-compute'
 import { calcExpiryIso } from './date-utils'
 // 2026-06-XX 追加: 自動検算を Excel にも反映
@@ -323,7 +323,7 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
   const wb = XLSX.utils.book_new()
 
   // 退職月の在籍スタッフ（例: 6/30 退職予定）も当月分は集計対象に含める
-  const hibiWorkers = workers.filter(w => (w.org === '日比' || w.org === 'hibi') && isStillActiveForMonth(w.retired, ym))
+  const hibiWorkers = workers.filter(w => (w.org === '日比' || w.org === 'hibi') && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym))
 
   // Header rows
   const headers = ['名前', '区分']
@@ -463,7 +463,7 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
   const wb = XLSX.utils.book_new()
 
   // 退職月の在籍スタッフも当月分は集計対象に含める
-  const hfuWorkers = workers.filter(w => (w.org === 'HFU' || w.org === 'hfu') && isStillActiveForMonth(w.retired, ym))
+  const hfuWorkers = workers.filter(w => (w.org === 'HFU' || w.org === 'hfu') && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym))
 
   // ── Sheet 1: 従来形式（出面確認用） ──
   {
@@ -1219,10 +1219,10 @@ export function generatePerSiteAttendance(data: PerSiteAttendanceData): XLSX.Wor
     // 日比建設ワーカーとHFUワーカーに分ける（退職月の在籍スタッフは含める）
     const hibiWorkers = Array.from(siteWorkerIds)
       .map(id => workerMap.get(id))
-      .filter((w): w is RawWorker => !!w && isStillActiveForMonth(w.retired, ym) && (w.org === '日比' || w.org === 'hibi'))
+      .filter((w): w is RawWorker => !!w && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym) && (w.org === '日比' || w.org === 'hibi'))
     const hfuWorkers = Array.from(siteWorkerIds)
       .map(id => workerMap.get(id))
-      .filter((w): w is RawWorker => !!w && isStillActiveForMonth(w.retired, ym) && (w.org === 'HFU' || w.org === 'hfu'))
+      .filter((w): w is RawWorker => !!w && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym) && (w.org === 'HFU' || w.org === 'hfu'))
 
     if (hibiWorkers.length === 0 && hfuWorkers.length === 0) continue
 

@@ -108,6 +108,26 @@ export function isStillActiveForMonth(retired: string | undefined | null, ym: st
 }
 
 /**
+ * 「その月までに入社済みか」を判定（2026-06 追加 / isStillActiveForMonth の入社版）
+ *
+ * - hireDate が空 → 入社日未設定（既存スタッフ扱い）→ true（対象）
+ * - hireDate の年月 <= ym の年月 → 入社済み → true
+ * - hireDate の年月 >  ym の年月 → 入社前 → false（対象外）
+ *
+ * 用途: 月次集計・原価・出面グリッド等で「入社前の月に表示しない」ためのガード。
+ *   例: 濱上(hireDate 2026-06-01) は 202605 では false（5月に出さない）、202606 で true。
+ */
+export function isHiredByMonth(hireDate: string | undefined | null, ym: string): boolean {
+  if (!hireDate) return true
+  if (!ym) return true
+  const normalized = ym.replace('-', '')
+  if (!/^\d{6}$/.test(normalized)) return true
+  const ymMonth = `${normalized.slice(0, 4)}-${normalized.slice(4, 6)}` // 'YYYY-MM'
+  const hireMonth = hireDate.slice(0, 7)                                 // 'YYYY-MM'
+  return hireMonth <= ymMonth
+}
+
+/**
  * 「今日時点で既に退職済み」かを判定（2026-06-XX 追加）
  *
  * - retired が空 → 退職予定なし → false（在籍中）
