@@ -933,7 +933,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const foreignHeadersNew = ['名前', '現場', '単価種別', '単価', '所定日数', '法定上限(h)',
     '通常出勤', '法休出勤', '補償日', '有給日数',
     '実労働h', '所定外労働h', '法定残業h', '法休労働h', '深夜労働h',
-    '基本給(固定)', '追加所定手当', '所定外労働手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
+    '基本給(固定)', '追加所定手当', '有給日給', '所定外労働手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
     '欠勤日数', '欠勤控除', '支給額合計']
   // 旧ルール: 17列
   const foreignHeadersOld = ['名前', '現場', '単価種別', '単価', '所定日数', '所定時間(h)',
@@ -1000,7 +1000,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
           w.regularWorkDays || 0, legalHolidayDays, w.compDays || 0, w.plDays || 0,
           w.actualWorkHours || 0, wext.nonStatutoryOTHours || 0, w.legalOtHours || 0,
           w.legalHolidayHours || 0, w.nightHours || 0,
-          w.fixedBasePay || w.basePay || 0, w.additionalAllowance || 0,
+          w.fixedBasePay || w.basePay || 0, w.additionalAllowance || 0, w.paidLeaveAllowance || 0,
           wext.nonStatutoryOTAllowance || 0, w.otAllowance || 0,
           w.legalHolidayAllowance || 0, w.nightAllowance || 0, w.compAllowance || 0,
           w.absence || 0, w.absentDeduction || 0, w.salaryNetPay || 0,
@@ -1033,6 +1033,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         ws.reduce((s, w) => s + (w.nightHours || 0), 0),
         ws.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
         ws.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
+        ws.reduce((s, w) => s + (w.paidLeaveAllowance || 0), 0),
         wsExt.reduce((s, w) => s + (w.nonStatutoryOTAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.legalHolidayAllowance || 0), 0),

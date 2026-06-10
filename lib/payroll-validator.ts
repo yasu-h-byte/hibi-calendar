@@ -63,6 +63,7 @@ export interface PayrollSnapshot {
   fixedBasePay?: number
   basePay?: number
   additionalAllowance?: number
+  paidLeaveAllowance?: number
   nonStatutoryOTHours?: number
   nonStatutoryOTAllowance?: number
   otAllowance?: number
@@ -115,6 +116,7 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
   // ── I1. 構成要素合計 == salaryNet ──
   const components = (w.fixedBasePay || 0)
     + (w.additionalAllowance || 0)
+    + (w.paidLeaveAllowance || 0)
     + (w.nonStatutoryOTAllowance || 0)
     + (w.otAllowance || 0)
     + (w.legalHolidayAllowance || 0)

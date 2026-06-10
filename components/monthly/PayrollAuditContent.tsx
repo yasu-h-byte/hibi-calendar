@@ -57,6 +57,8 @@ export interface PayrollAuditWorker {
   salaryNetPay?: number
   fixedBasePay?: number
   additionalAllowance?: number
+  paidLeaveDays?: number
+  paidLeaveAllowance?: number
   nonStatutoryOTHours?: number
   nonStatutoryOTAllowance?: number
   legalLimit?: number
@@ -179,6 +181,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
   } else {
     sumPay = fixedBase
       + (w.additionalAllowance || 0)
+      + (w.paidLeaveAllowance || 0)
       + (w.nonStatutoryOTAllowance || 0)
       + (w.otAllowance || 0)
       + (w.legalHolidayAllowance || 0)
@@ -192,7 +195,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
     pass: Math.abs(sumPay - reported) < 2,
     detail: mode.useOldRules
       ? `基本 ${fmtYen(fixedBase)} + 休業補償 ${fmtYen(w.additionalAllowance || 0)} + 残業 ${fmtYen(w.otAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`
-      : `基本 ${fmtYen(fixedBase)} + 追加所定 ${fmtYen(w.additionalAllowance || 0)} + 所定外労働 ${fmtYen(w.nonStatutoryOTAllowance || 0)} + 法定外残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} + 休業 ${fmtYen(w.compAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
+      : `基本 ${fmtYen(fixedBase)} + 追加所定 ${fmtYen(w.additionalAllowance || 0)} + 有給日給 ${fmtYen(w.paidLeaveAllowance || 0)} + 所定外労働 ${fmtYen(w.nonStatutoryOTAllowance || 0)} + 法定外残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} + 休業 ${fmtYen(w.compAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
   })
 
   // 4. otMul の妥当性
@@ -414,6 +417,17 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                       : `時給 × 7h × MAX(0, 実出勤日数 − ベース日数20) = 追加出勤日 × 7h × 時給`}
                   </div>
                   <div className="font-bold">{fmtYen(w.additionalAllowance || w.compAllowance || 0)}</div>
+                </td>
+              </tr>
+            )}
+            {!mode.useOldRules && (w.paidLeaveAllowance || 0) > 0 && (
+              <tr>
+                <td>有給日給<br/><span className="text-[10px] text-gray-500">(20日枠超の有給)</span></td>
+                <td className="font-mono">
+                  <div className="text-[10px] text-gray-500">
+                    時給 {fmtYen(w.hourlyRate || 0)} × 7h × {fmtNum(w.paidLeaveDays, '日')}（基本給20日枠を超えた有給）
+                  </div>
+                  <div className="font-bold">{fmtYen(w.paidLeaveAllowance || 0)}</div>
                 </td>
               </tr>
             )}

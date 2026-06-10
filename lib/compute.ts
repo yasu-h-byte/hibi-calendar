@@ -794,6 +794,9 @@ export interface WorkerMonthly {
   // 3層構造 fields (A+X案: 2026年5月〜)
   fixedBasePay?: number        // 基本給（固定）= 時給 × ベース日数 × 7h
   additionalAllowance?: number // 追加所定手当 = 時給 × MAX(0, 実出勤日数 − ベース日数) × 7h
+  // 2026-06 追加: 有給日給（20日枠を超えた有給日 × 時給 × 7h）。月給制維持での有給未払い是正用。
+  paidLeaveDays?: number
+  paidLeaveAllowance?: number
   legalLimit?: number          // 法定上限時間 = 暦日数 × 40 ÷ 7
   // ── 法令準拠の詳細支給項目 (2026-05-13 追加、新ルール=変形労働時間制) ──
   legalHolidayHours?: number      // 法定休日(日曜)の実労働時間
@@ -1166,6 +1169,8 @@ export function computeMonthly(
 
       wm.fixedBasePay = v.fixedBasePay
       wm.additionalAllowance = v.additionalAllowance
+      wm.paidLeaveDays = v.paidLeaveDays
+      wm.paidLeaveAllowance = v.paidLeaveAllowance
       wm.nonStatutoryOTHours = v.nonStatutoryOTHours
       wm.nonStatutoryOTAllowance = v.nonStatutoryOTAllowance
       wm.otAllowance = v.otAllowance
@@ -1754,6 +1759,8 @@ export interface VietnameseSalaryResult {
   // 支給項目
   fixedBasePay: number          // 1. 基本給（固定）
   additionalAllowance: number   // 2. 追加所定手当（追加出勤日 × 7h）
+  paidLeaveDays: number         // 2b. 20日枠を超えた有給日数
+  paidLeaveAllowance: number    // 2b. 有給日給（20日枠超の有給 × 7h）
   nonStatutoryOTHours: number   // 3a. 所定外労働時間（法定内・割増なし）
   nonStatutoryOTAllowance: number // 3a. 所定外労働手当 = 時給 × nonStatutoryOTHours
   otAllowance: number           // 3b. 法定外残業手当（1.25倍）
@@ -1977,9 +1984,16 @@ export function calculateVietnameseSalary(
   const statutoryOT = totalDailyOT + totalWeeklyOT + monthlyStatutoryOT
 
   // ── 支給項目計算 ──
-  const fixedBasePay = ceilYen(hourlyRate * baseDays * 7)  // 支給: 切り上げ
+  const fixedBasePay = ceilYen(hourlyRate * baseDays * 7)  // 支給: 切り上げ（月給制: 20日固定）
   const additionalDays = Math.max(0, regularWorkDays - baseDays)
   const additionalAllowance = ceilYen(hourlyRate * additionalDays * 7)  // 支給: 切り上げ
+  // 2026-06 社労士対応: 「20日(基本給枠)を超えた有給」を有給日給として別途支給。
+  //   月給制(基本給20日固定)は維持しつつ、20日以上働いて有給も取った人の有給未払いを是正。
+  //   ・基本給枠(20日)を出勤で埋めた残りの有給日のみが対象（枠内の有給は基本給に内包）。
+  //   ・absentDays(欠勤控除) は worked+有給 < 20 のときだけ発生 → paidLeaveDays とは排他（二重計上なし）。
+  const totalBeyondBase = Math.max(0, (regularWorkDays + plUsed) - baseDays)
+  const paidLeaveDays = totalBeyondBase - additionalDays  // 20日枠を超えた有給日数
+  const paidLeaveAllowance = ceilYen(hourlyRate * paidLeaveDays * 7)  // 有給日給: 切り上げ
 
   // 2026-06-XX 修正: 法定外残業手当は「割増分のみ (0.25 or 0.5倍)」
   //   旧バグ: 1.25 倍 (= 基本1.0 + 割増0.25) で計算 → 基本1.0倍が
@@ -2047,7 +2061,7 @@ export function calculateVietnameseSalary(
   const absentDays = Math.max(0, baseDays - regularWorkDays - plUsed - examDays)
   const absentDeduction = floorYen(hourlyRate * 7 * absentDays)  // 控除: 切り捨て（過少支払い防止）
 
-  const salaryNet = fixedBasePay + additionalAllowance + nonStatutoryOTAllowance + otAllowance
+  const salaryNet = fixedBasePay + additionalAllowance + paidLeaveAllowance + nonStatutoryOTAllowance + otAllowance
                   + legalHolidayAllowance + nightAllowance + compAllowance
                   - absentDeduction
 
@@ -2066,6 +2080,8 @@ export function calculateVietnameseSalary(
     legalLimit: Math.round(legalLimit * 10) / 10,
     fixedBasePay,
     additionalAllowance,
+    paidLeaveDays,
+    paidLeaveAllowance,
     nonStatutoryOTHours: Math.round(nonStatutoryOTHours * 10) / 10,
     nonStatutoryOTAllowance,
     otAllowance,

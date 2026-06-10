@@ -81,6 +81,32 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 2026-06 社労士対応: 有給は「カレンダ上の出勤日」のみ申請可。
+      //   月給制では20日枠を超えた有給を「有給日給」として別途支給するため、
+      //   非稼働日（日曜・所定休）に有給を入れると過払いになる。これを入口で防ぐ。
+      //   ※ カレンダー未確定の月は dayType 未取得 → 日曜以外は出勤扱い（正当な申請を誤って弾かない）。
+      {
+        const ymDash = `${yearStr}-${monthStr.padStart(2, '0')}`
+        const calSnap = await getDocs(query(
+          collection(db, 'siteCalendar'),
+          where('ym', '==', ymDash),
+          where('siteId', '==', resolvedSiteId),
+        ))
+        let dayType: string | undefined
+        calSnap.forEach(d => {
+          const days = d.data().days as Record<string, string> | undefined
+          if (days && days[String(day)] !== undefined) dayType = days[String(day)]
+        })
+        const dow = new Date(year, month - 1, day).getDay()
+        const resolvedDayType = dayType ?? (dow === 0 ? 'off' : 'work')
+        if (resolvedDayType !== 'work') {
+          return NextResponse.json(
+            { error: 'この日は出勤予定日ではないため有給を申請できません（休日・所定休は対象外）/ Ngày này không phải ngày làm việc theo lịch nên không thể xin nghỉ phép' },
+            { status: 400 },
+          )
+        }
+      }
+
       // Check for duplicate
       // 却下 (rejected) または 取り消し (cancelled) されたものは上から再申請OK。
       // それ以外（pending / foreman_approved / approved）は重複として弾く

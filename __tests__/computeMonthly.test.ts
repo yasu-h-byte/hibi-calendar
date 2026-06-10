@@ -285,16 +285,72 @@ describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () 
         rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'xyz',
       }],
       assign: { site1: { workers: [101], subcons: [] } },
-      siteWorkDays: { '202506': { site1: 24 } },
+      siteWorkDays: { '202606': { site1: 24 } },
     })
     // 2026年6月1日(月)〜6日(土) = 同一週、各7時間（週42時間）
     const attD: Record<string, { w: number; o?: number }> = {}
-    for (let d = 1; d <= 6; d++) Object.assign(attD, dayWork('site1', 101, '202506', d))
+    for (let d = 1; d <= 6; d++) Object.assign(attD, dayWork('site1', 101, '202606', d))
 
-    const result = computeMonthly(main, attD, {}, '202506', 24, undefined, 20)
+    const result = computeMonthly(main, attD, {}, '202606', 24, undefined, 20)
     const w = result.workers.find(x => x.id === 101)!
     // 週所定42hが事前設定されているため、週次の法定外残業は0（旧 flat-40h では 2h 計上されていた）
     expect(w.legalOtHours).toBe(0)
+  })
+
+  test('有給日給: 20日以上働いて有給を取った人は、20日枠超の有給を別途支給（月給制維持・ハウ問題）', () => {
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人D', org: 'hfu', visa: 'jisshu3', job: 'tobi',
+        rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'p1',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 26 } },
+    })
+    const attD: Record<string, { w?: number; o?: number; p?: number }> = {}
+    // 22日出勤（日曜7,14,21を避ける）+ 有給1日
+    const workDays = [1,2,3,4,5,6, 8,9,10,11,12,13, 15,16,17,18,19,20, 22,23,24,25]
+    for (const d of workDays) Object.assign(attD, dayWork('site1', 101, '202606', d))
+    Object.assign(attD, dayPL('site1', 101, '202606', 26))
+
+    const result = computeMonthly(main, attD, {}, '202606', 26, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    expect(w.regularWorkDays).toBe(22)
+    expect(w.plUsed).toBe(1)
+    // 20日枠を出勤で超えているため、有給1日は有給日給として別途支給（旧: 未払い）
+    expect(w.paidLeaveDays).toBe(1)
+    expect(w.paidLeaveAllowance).toBe(Math.ceil(1500 * 1 * 7)) // 10,500
+    // 支給額に有給日給が含まれる
+    const sum = (w.fixedBasePay || 0) + (w.additionalAllowance || 0) + (w.paidLeaveAllowance || 0)
+      + (w.nonStatutoryOTAllowance || 0) + (w.otAllowance || 0)
+      + (w.legalHolidayAllowance || 0) + (w.nightAllowance || 0) + (w.compAllowance || 0)
+      - (w.absentDeduction || 0)
+    expect(w.salaryNetPay).toBe(sum)
+  })
+
+  test('有給日給: 20日未満の出勤で有給を取った人は、有給は基本給20日枠に内包（別途支給なし）', () => {
+    const main = buildMain({
+      workers: [{
+        id: 101, name: 'ベトナム人E', org: 'hfu', visa: 'jisshu2', job: 'tobi',
+        rate: 0, hourlyRate: 1425, otMul: 1.25, hireDate: '2025-01-01', token: 'p2',
+      }],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 20 } },
+    })
+    const attD: Record<string, { w?: number; o?: number; p?: number }> = {}
+    // 18日出勤 + 有給2日 = 20日（基本給枠内）
+    const workDays = [1,2,3,4,5,6, 8,9,10,11,12,13, 15,16,17,18]
+    for (const d of workDays) Object.assign(attD, dayWork('site1', 101, '202606', d))
+    Object.assign(attD, dayPL('site1', 101, '202606', 19))
+    Object.assign(attD, dayPL('site1', 101, '202606', 20))
+
+    const result = computeMonthly(main, attD, {}, '202606', 20, undefined, 20)
+    const w = result.workers.find(x => x.id === 101)!
+    expect(w.plUsed).toBe(2)
+    // 有給2日が20日枠を埋めるため、有給日給は0（基本給に内包）
+    expect(w.paidLeaveDays).toBe(0)
+    expect(w.paidLeaveAllowance).toBe(0)
+    // 基本給は20日固定（月給制維持）
+    expect(w.fixedBasePay).toBe(1425 * 20 * 7)
   })
 
   test('新ルール: 基本給 = 時給 × baseDays × 7h', () => {
