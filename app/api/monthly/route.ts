@@ -3,6 +3,7 @@ import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore'
 import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
+import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -109,6 +110,13 @@ export async function GET(request: NextRequest) {
       workDays,
       prescribedDays,
       baseDays,  // 2026-06-12 (監査): モーダル/印刷の式表示用（旧: クライアントで20固定）
+      // 2026-06-12 (監査 Sprint2): 旧ルール継続者（フン等）が当月在籍しているか。
+      //   true の場合、カレンダーがある月でも全社所定日数の入力欄を表示する
+      //   （旧ルール者の欠勤控除は main.workDays[ym] を使うため毎月の設定が必要）
+      hasOldRulesWorkers: main.workers.some(w =>
+        (w as { useOldRules?: boolean }).useOldRules === true
+        && isStillActiveForMonth(w.retired, ym)
+        && isHiredByMonth(w.hireDate, ym)),
       siteNames,
       hasCalendarData,
       siteWorkDays: siteWorkDaysMap,

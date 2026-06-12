@@ -219,6 +219,7 @@ interface MonthlyData {
   workDays: number
   prescribedDays?: number
   baseDays?: number
+  hasOldRulesWorkers?: boolean
   // 2026-06-12 (監査 Sprint2-D): 締め後に支給額が変わった場合の差分情報
   snapshotDiffs?: {
     org: string
@@ -935,15 +936,23 @@ export default function MonthlyPage() {
           </button>
         ))}
 
-        {/* 所定日数: カレンダーデータがある月は自動取得、ない月は手入力 */}
-        {isWorkerTab && data?.hasCalendarData && (
+        {/* 所定日数: カレンダーデータがある月は自動取得、ない月は手入力。
+            2026-06-12 (監査 Sprint2): 旧ルール継続者（フン）が在籍する月は、カレンダーが
+            あっても全社所定の入力欄を常時表示する（フンの欠勤控除は main.workDays[ym] を
+            使うため毎月の設定が必要。旧: 欄が消えて Firestore 直編集が必要だった） */}
+        {isWorkerTab && data?.hasCalendarData && !data?.hasOldRulesWorkers && (
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600">
             <span className="text-xs text-green-600 dark:text-green-400 font-medium whitespace-nowrap">📅 所定日数: カレンダーから自動取得</span>
           </div>
         )}
-        {isWorkerTab && !data?.hasCalendarData && (
+        {isWorkerTab && (!data?.hasCalendarData || data?.hasOldRulesWorkers) && (
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600 flex-wrap">
-            <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">所定日数:</label>
+            <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap" title={data?.hasCalendarData ? '新ルールのスタッフは現場カレンダーから自動取得。この欄は旧ルール継続者（フン等）の所定日数（日曜以外−祝日）' : undefined}>
+              {data?.hasCalendarData ? '所定日数(旧ルール用):' : '所定日数:'}
+            </label>
+            {data?.hasOldRulesWorkers && (Number(prescribedDays) || 0) === 0 && (
+              <span className="text-xs text-red-600 dark:text-red-400 font-bold whitespace-nowrap">⚠ 未設定（フンさんの欠勤控除が計算できません）</span>
+            )}
             <input
               type="number"
               value={prescribedDays}
