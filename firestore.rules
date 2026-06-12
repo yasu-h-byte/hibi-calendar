@@ -182,5 +182,28 @@ service cloud.firestore {
       allow update: if false;  // バックアップは追記のみ、変更は禁止
       allow delete: if true;   // 古いスナップショットの自動削除
     }
+
+    // ────────────────────────────────────────
+    //  給与系変更の永続監査ログ（2026-06-12 監査 Sprint2-C）
+    //  労基法115条（賃金請求権3年）の証跡。追記のみ・変更/削除は完全禁止
+    // ────────────────────────────────────────
+    match /auditTrail/{docId} {
+      allow read: if true;
+      allow create: if request.resource.data.type is string
+                 && request.resource.data.at is string;
+      allow update: if false;
+      allow delete: if false;  // 証跡は削除不可
+    }
+
+    // ────────────────────────────────────────
+    //  月締め時の支給額スナップショット（2026-06-12 監査 Sprint2-D）
+    //  締め時点の「支払うと確定した金額」を凍結保存し、締め後の変動を検知する
+    // ────────────────────────────────────────
+    match /payrollSnapshots/{docId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.ym is string
+                 && request.resource.data.workers is list;
+      allow delete: if false;  // 支払額の証跡は削除不可
+    }
   }
 }

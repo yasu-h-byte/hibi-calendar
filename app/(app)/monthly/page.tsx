@@ -219,6 +219,13 @@ interface MonthlyData {
   workDays: number
   prescribedDays?: number
   baseDays?: number
+  // 2026-06-12 (監査 Sprint2-D): 締め後に支給額が変わった場合の差分情報
+  snapshotDiffs?: {
+    org: string
+    lockedAt?: string
+    count: number
+    items: { id: number; name: string; snapshot: number; current: number }[]
+  }[]
   hasCalendarData?: boolean
   siteWorkDays?: Record<string, number>
   siteNames?: Record<string, string>
@@ -1086,6 +1093,47 @@ export default function MonthlyPage() {
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600 text-sm">
           {error}
+        </div>
+      )}
+
+      {/* 2026-06-12 (監査 Sprint2-D): 締め後に支給額が変わった場合の警告バナー。
+          締め時に保存したスナップショットと現行計算を突合し、単価変更・出面修正等で
+          「支払った金額」と画面の金額がズレたことを検知する */}
+      {!loading && data && isWorkerTab && (data.snapshotDiffs?.length || 0) > 0 && (
+        <div className="rounded-xl p-4 border bg-red-50 dark:bg-red-900/20 border-red-400 dark:border-red-700">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🚨</span>
+            <div className="flex-1 min-w-0">
+              <div className="font-bold text-red-800 dark:text-red-300">
+                締め（給与確定）後に支給額が変わっています
+              </div>
+              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                締め時点のスナップショットと現在の計算結果が一致しません。締め後に単価・出面・有給等が変更された可能性があります。
+                変更が誤りなら元に戻し、正当な修正なら「締め解除 → 内容確認 → 再締め」でスナップショットを更新してください。
+              </div>
+              {data.snapshotDiffs!.map(diff => (
+                <div key={diff.org} className="mt-2">
+                  <div className="text-xs font-bold text-red-700 dark:text-red-400">
+                    {diff.org === 'hibi' ? '日比建設' : 'HFU'}（締め: {diff.lockedAt ? diff.lockedAt.slice(0, 16).replace('T', ' ') : '—'} / 差分 {diff.count}名）
+                  </div>
+                  <ul className="mt-1 space-y-0.5 text-sm">
+                    {diff.items.map(item => (
+                      <li key={item.id} className="text-gray-800 dark:text-gray-200">
+                        <span className="font-semibold">{item.name}</span>:
+                        <span className="font-mono ml-1">締め時 {fmtYen(item.snapshot)} → 現在 {fmtYen(item.current)}</span>
+                        <span className={`ml-1 font-mono font-bold ${item.current > item.snapshot ? 'text-red-600' : 'text-blue-600'}`}>
+                          ({item.current > item.snapshot ? '+' : ''}{fmtYen(item.current - item.snapshot)})
+                        </span>
+                      </li>
+                    ))}
+                    {diff.count > diff.items.length && (
+                      <li className="text-xs text-gray-500">…他 {diff.count - diff.items.length} 名</li>
+                    )}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

@@ -125,14 +125,20 @@ export async function POST(request: NextRequest) {
         const actor = auth.authorized ? String(auth.actor) : 'unknown'
         const at = new Date().toISOString()
         const detail = Object.entries(changes).map(([k, v]) => `${k}: ${v.from ?? '—'} → ${v.to ?? '—'}`).join(', ')
-        await setDoc(doc(db, 'auditTrail', `worker-${id}-${Date.now()}`), {
-          type: 'worker.payChange',
-          workerId: Number(id),
-          workerName: beforeW?.name || '',
-          changes,
-          actor,
-          at,
-        })
+        try {
+          await setDoc(doc(db, 'auditTrail', `worker-${id}-${Date.now()}`), {
+            type: 'worker.payChange',
+            workerId: Number(id),
+            workerName: beforeW?.name || '',
+            changes,
+            actor,
+            at,
+          })
+        } catch (e) {
+          // rules 未デプロイ等で監査ログ書込に失敗しても、更新自体は成立させる
+          // （activityLog 側には必ず残す）
+          console.error('[workers] auditTrail 書込失敗:', e)
+        }
         await logActivity('admin', 'worker.payChange', `${beforeW?.name || `ID:${id}`} 給与系変更: ${detail}（操作者: ${actor}）`)
       } else {
         await logActivity('admin', 'worker.update', `ID:${id} を更新`)

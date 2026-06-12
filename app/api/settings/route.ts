@@ -168,13 +168,15 @@ export async function POST(request: NextRequest) {
       }
 
       // 復元前に現在の main をセーフティ退避（誤復元からの復帰用）
+      // ※ backups コレクションの rules スキーマ（sourceId + data 必須）に準拠
       const current = await getMainDoc()
       if (current) {
         const safetyRef = doc(db, 'backups', `pre-restore-${Date.now()}`)
         await setDoc(safetyRef, {
+          sourceId: 'demmen/main',
+          data: current.data,
           createdAt: new Date().toISOString(),
           reason: 'settings.restore 実行前の自動退避',
-          main: current.data,
         })
       }
 

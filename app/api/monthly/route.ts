@@ -65,6 +65,39 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 2026-06-12 (監査 Sprint2-D): 締め済み月は締め時スナップショットと現行計算を突合。
+    //   締め後の単価変更・出面修正で支給額が変わっていれば画面に警告する。
+    type SnapDiffItem = { id: number; name: string; snapshot: number; current: number }
+    const snapshotDiffs: { org: string; lockedAt?: string; count: number; items: SnapDiffItem[] }[] = []
+    const isHfuOrg = (o?: string) => o === 'hfu' || o === 'HFU'
+    for (const [orgKey, isLocked] of [['hibi', lockedHibi], ['hfu', lockedHfu]] as const) {
+      if (!isLocked) continue
+      try {
+        let snapDoc = await getDoc(doc(db, 'payrollSnapshots', `${ym}_${orgKey}`))
+        if (!snapDoc.exists()) snapDoc = await getDoc(doc(db, 'payrollSnapshots', `${ym}_all`))
+        if (!snapDoc.exists()) continue  // スナップショット導入前の締めは検知対象外
+        const snapData = snapDoc.data() as { lockedAt?: string; workers?: { id: number; name: string; salaryNetPay?: number }[] }
+        const snapMap = new Map((snapData.workers || []).map(w => [w.id, w]))
+        const items: SnapDiffItem[] = []
+        for (const w of result.workers) {
+          if ((isHfuOrg(w.org) ? 'hfu' : 'hibi') !== orgKey) continue
+          const cur = w.salaryNetPay || 0
+          const s = snapMap.get(w.id)
+          snapMap.delete(w.id)
+          const snapVal = s?.salaryNetPay || 0
+          if (snapVal !== cur) items.push({ id: w.id, name: w.name, snapshot: snapVal, current: cur })
+        }
+        for (const s of snapMap.values()) {
+          if ((s.salaryNetPay || 0) !== 0) items.push({ id: s.id, name: s.name, snapshot: s.salaryNetPay || 0, current: 0 })
+        }
+        if (items.length > 0) {
+          snapshotDiffs.push({ org: orgKey, lockedAt: snapData.lockedAt, count: items.length, items: items.slice(0, 10) })
+        }
+      } catch (e) {
+        console.error(`[monthly] snapshot diff 取得失敗 (${orgKey}):`, e)
+      }
+    }
+
     return NextResponse.json({
       workers: result.workers,
       subcons: result.subcons,
@@ -79,6 +112,7 @@ export async function GET(request: NextRequest) {
       siteNames,
       hasCalendarData,
       siteWorkDays: siteWorkDaysMap,
+      ...(snapshotDiffs.length > 0 ? { snapshotDiffs } : {}),
       ...(dailyByWorker ? { dailyByWorker } : {}),
     })
   } catch (error) {
