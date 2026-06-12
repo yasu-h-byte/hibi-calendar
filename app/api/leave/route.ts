@@ -189,6 +189,25 @@ export async function POST(request: NextRequest) {
       // 帰国期間の上書きが必要な場合、hk フィールドを削除してから書き込み
       const setOptions = overwriteHomeLeave ? { deleteFields: ['hk'] } : {}
 
+      // 2026-06-12 (監査 Sprint2-B): 時季指定・管理者手動入力にも request と同じガードを適用
+      //   ① ロック済み月は拒否（給与確定後のデータ変更防止）
+      //   ② カレンダー非稼働日への P は拒否（有給日給の過払い防止）
+      {
+        const { checkMonthLocked } = await import('@/lib/locks')
+        const { isScheduledWorkDay } = await import('@/lib/attendance')
+        const wOrgRec = (data.workers as { id: number; org?: string }[] | undefined)?.find(w => w.id === Number(workerId))
+        for (const dateStr of dates) {
+          const d0 = new Date(dateStr)
+          if (isNaN(d0.getTime())) continue
+          const ymCheck = ymKey(d0.getFullYear(), d0.getMonth() + 1)
+          const lockErr = await checkMonthLocked(ymCheck, wOrgRec?.org)
+          if (lockErr) return NextResponse.json({ error: `${dateStr}: ${lockErr}` }, { status: 409 })
+          if (!await isScheduledWorkDay(siteId, dateStr)) {
+            return NextResponse.json({ error: `${dateStr} は出勤予定日ではないため有給にできません（休日・所定休は対象外）` }, { status: 400 })
+          }
+        }
+      }
+
       for (const dateStr of dates) {
         const d = new Date(dateStr)
         if (isNaN(d.getTime())) continue

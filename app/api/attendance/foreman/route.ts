@@ -193,6 +193,13 @@ export async function POST(request: NextRequest) {
       const { workerId, year, month, day, choice, overtimeHours } = body
       const ym = ymKey(year, month)
 
+      // 2026-06-12 (監査 Sprint2-B): ロック済み月への職長編集を拒否（給与確定後のデータ変更防止）
+      {
+        const { checkMonthLocked } = await import('@/lib/locks')
+        const lockErr = await checkMonthLocked(ym)
+        if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
+      }
+
       // Build entry first（ガードで newEntry を参照するため）
       // Build entry with s:'foreman' source tracking
       // ⚠️ 2026-05-09 根本原因対処: ステータス変更時に古いフィールドを残さない
@@ -283,6 +290,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '自現場のエントリは移動できません' }, { status: 400 })
       }
       const ym = ymKey(year, month)
+
+      // 2026-06-12 (監査 Sprint2-B): ロック済み月の現場間移動を拒否
+      {
+        const { checkMonthLocked } = await import('@/lib/locks')
+        const lockErr = await checkMonthLocked(ym)
+        if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
+      }
 
       const { db } = await import('@/lib/firebase')
       const { doc, getDoc, updateDoc, deleteField } = await import('firebase/firestore')

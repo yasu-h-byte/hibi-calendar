@@ -394,6 +394,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Day is locked (approved)' }, { status: 409 })
     }
 
+    // 2026-06-12 (監査 Sprint2-B): 月次ロック済み月への書込を拒否。
+    //   year/month は任意指定できるため、過去のロック済み月（給与確定後）への
+    //   遡及入力で支払額とシステムが食い違うのを防ぐ
+    {
+      const { checkMonthLocked } = await import('@/lib/locks')
+      const lockErr = await checkMonthLocked(ym, (worker as { org?: string }).org)
+      if (lockErr) {
+        return NextResponse.json({ error: `${lockErr} / Tháng này đã khóa, không thể thay đổi` }, { status: 409 })
+      }
+    }
+
     // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
     // （日勤+夜勤は許容、日勤+日勤や夜勤+夜勤は拒否）
     try {

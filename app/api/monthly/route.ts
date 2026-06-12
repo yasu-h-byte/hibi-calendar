@@ -102,9 +102,18 @@ export async function POST(request: NextRequest) {
       if (!ym || !/^\d{6}$/.test(ym)) {
         return NextResponse.json({ error: 'ym required' }, { status: 400 })
       }
+      // 2026-06-12 (監査 Sprint2-B): 全社所定日数は旧ルール継続者(フン)の欠勤控除に
+      //   直結するため、当該月がロック済みなら変更を拒否
+      {
+        const { checkMonthLocked } = await import('@/lib/locks')
+        const lockErr = await checkMonthLocked(ym, 'hibi')
+        if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
+      }
       const numValue = Number(value) || 0
       const docRef = doc(db, 'demmen', 'main')
       await updateDoc(docRef, { [`workDays.${ym}`]: numValue })
+      const { logActivity } = await import('@/lib/activity')
+      await logActivity('admin', 'monthly.setWorkDays', `${ym} の全社所定日数を ${numValue}日 に設定`)
       return NextResponse.json({ success: true, workDays: numValue })
     }
 

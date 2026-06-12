@@ -1,10 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore'
 import { getWorkerByToken } from '@/lib/workers'
 import { getStaffSites, ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { AttendanceEntry } from '@/types'
+
+/**
+ * 申請者の配置現場を担当する職長の workerId 集合を返す（権限判定用）。
+ * 2026-06-12 (監査 Sprint2-B): leave-request の foreman_approve 権限チェックの横展開。
+ */
+async function getForemenOfWorkerSites(workerId: number): Promise<Set<number>> {
+  const result = new Set<number>()
+  const staffSites = await getStaffSites(workerId)
+  const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+  const sites = (mainSnap.exists() ? mainSnap.data().sites || [] : []) as { id: string; foremen?: number[]; foreman?: number }[]
+  for (const ss of staffSites) {
+    const site = sites.find(s => s.id === ss.id)
+    if (!site) continue
+    for (const f of site.foremen || (site.foreman ? [site.foreman] : [])) result.add(f)
+  }
+  return result
+}
 
 interface HomeLongLeave {
   workerId: number
@@ -92,19 +109,11 @@ export async function POST(request: NextRequest) {
 
     // ── 職長: 帰国申請を承認（第1段階） ──
     if (action === 'foreman_approve') {
-      const { requestId, foremanId, token } = body
+      // 2026-06-12 (監査 Sprint2-B): 権限チェックを leave-request と同水準に横展開。
+      //   旧: 任意の有効スタッフ token で他人の帰国申請を職長承認できた
+      const { requestId, token } = body
       if (!requestId) {
         return NextResponse.json({ error: 'Missing requestId' }, { status: 400 })
-      }
-
-      // 認証: トークンまたは管理者パスワード
-      let authWorkerId = foremanId || 0
-      if (token) {
-        const worker = await getWorkerByToken(token)
-        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-        authWorkerId = worker.id
-      } else if (!await checkApiAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
       const docRef = doc(db, 'homeLongLeave', requestId)
@@ -116,6 +125,28 @@ export async function POST(request: NextRequest) {
       const data = snap.data() as HomeLongLeave
       if (data.status !== 'pending') {
         return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+      }
+
+      // 申請者の配置現場の職長一覧（権限判定用）
+      const allowedForemen = await getForemenOfWorkerSites(data.workerId)
+
+      let authWorkerId: number | string = 'unknown'
+      if (token) {
+        const worker = await getWorkerByToken(token)
+        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+        if (!allowedForemen.has(worker.id)) {
+          return NextResponse.json({ error: '申請者の配置現場の職長権限がありません' }, { status: 403 })
+        }
+        authWorkerId = worker.id
+      } else {
+        const authUser = await getApiAuthUser(request)
+        if (!authUser.authorized) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+        if (typeof authUser.actor === 'number' && !allowedForemen.has(authUser.actor)) {
+          return NextResponse.json({ error: '申請者の配置現場の職長権限がありません' }, { status: 403 })
+        }
+        authWorkerId = authUser.actor
       }
 
       await setDoc(docRef, {
@@ -150,6 +181,23 @@ export async function POST(request: NextRequest) {
         // 後方互換: pending から直接承認も許可（管理者権限）
         if (data.status !== 'pending') {
           return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+        }
+      }
+
+      // 2026-06-12 (監査 Sprint2-B): 期間に含まれる月がロック済みなら承認を拒否
+      //   （hk 書込は欠勤控除に影響するため、給与確定後の変更を防ぐ）
+      {
+        const { checkMonthLocked } = await import('@/lib/locks')
+        const yms = new Set<string>()
+        const cur = new Date(data.startDate + 'T00:00:00')
+        const endD = new Date(data.endDate + 'T00:00:00')
+        while (cur <= endD) {
+          yms.add(ymKey(cur.getFullYear(), cur.getMonth() + 1))
+          cur.setDate(cur.getDate() + 1)
+        }
+        for (const ymCheck of yms) {
+          const lockErr = await checkMonthLocked(ymCheck)
+          if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
         }
       }
 
@@ -220,18 +268,9 @@ export async function POST(request: NextRequest) {
 
     // ── 却下（職長 or 管理者） ──
     if (action === 'reject') {
-      const { requestId, rejectedBy, reason, token: rejectToken } = body
+      const { requestId, reason, token: rejectToken } = body
       if (!requestId) {
         return NextResponse.json({ error: 'Missing requestId' }, { status: 400 })
-      }
-
-      let authWorkerId = rejectedBy || 0
-      if (rejectToken) {
-        const worker = await getWorkerByToken(rejectToken)
-        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-        authWorkerId = worker.id
-      } else if (!await checkApiAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
       const docRef = doc(db, 'homeLongLeave', requestId)
@@ -243,6 +282,25 @@ export async function POST(request: NextRequest) {
       const data = snap.data() as HomeLongLeave
       if (data.status === 'approved' || data.status === 'rejected') {
         return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+      }
+
+      // 2026-06-12 (監査 Sprint2-B): token 却下は「申請者の配置現場の職長」のみ。
+      //   旧: 任意の有効スタッフ token で他人の申請を却下できた
+      let authWorkerId: number | string = 0
+      if (rejectToken) {
+        const worker = await getWorkerByToken(rejectToken)
+        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+        const allowedForemen = await getForemenOfWorkerSites(data.workerId)
+        if (!allowedForemen.has(worker.id)) {
+          return NextResponse.json({ error: '申請者の配置現場の職長権限がありません' }, { status: 403 })
+        }
+        authWorkerId = worker.id
+      } else {
+        const authUser = await getApiAuthUser(request)
+        if (!authUser.authorized) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+        authWorkerId = authUser.actor
       }
 
       await setDoc(docRef, {

@@ -1,7 +1,35 @@
 import { db } from './firebase'
-import { doc, getDoc, setDoc, updateDoc, deleteField } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, deleteField, collection, getDocs, query, where } from 'firebase/firestore'
 import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site } from '@/types'
 import { ensureDocExists } from './firestore-safe'
+
+/**
+ * カレンダー上の「出勤予定日」かを判定（2026-06-12 監査 Sprint2-B で共通化）。
+ *
+ * 有給は稼働日のみ申請可（2026-06 社労士対応）。月給制では20日枠超の有給を
+ * 有給日給として別途支給するため、非稼働日への有給は過払いになる。
+ * カレンダー未確定の月は dayType 未取得 → 日曜以外は出勤扱い（正当な申請を誤って弾かない）。
+ *
+ * @param siteId  現場ID
+ * @param dateIso 'YYYY-MM-DD'
+ */
+export async function isScheduledWorkDay(siteId: string, dateIso: string): Promise<boolean> {
+  const [y, m, d] = dateIso.split('-').map(Number)
+  if (!y || !m || !d) return false
+  const ymDash = dateIso.slice(0, 7)
+  const calSnap = await getDocs(query(
+    collection(db, 'siteCalendar'),
+    where('ym', '==', ymDash),
+    where('siteId', '==', siteId),
+  ))
+  let dayType: string | undefined
+  calSnap.forEach(s => {
+    const days = s.data().days as Record<string, string> | undefined
+    if (days && days[String(d)] !== undefined) dayType = days[String(d)]
+  })
+  const dow = new Date(y, m - 1, d).getDay()
+  return (dayType ?? (dow === 0 ? 'off' : 'work')) === 'work'
+}
 
 // ────────────────────────────────────────
 //  日付ヘルパー

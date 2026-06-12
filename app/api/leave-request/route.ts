@@ -3,8 +3,9 @@ import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from 'firebase/firestore'
 import { getWorkerByToken } from '@/lib/workers'
-import { getStaffSites, ymKey, attKey, setAttendanceEntry } from '@/lib/attendance'
+import { getStaffSites, ymKey, attKey, setAttendanceEntry, isScheduledWorkDay } from '@/lib/attendance'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
+import { isMonthLockedInLocks } from '@/lib/locks'
 import { ensureDocExists } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
@@ -84,27 +85,13 @@ export async function POST(request: NextRequest) {
       // 2026-06 社労士対応: 有給は「カレンダ上の出勤日」のみ申請可。
       //   月給制では20日枠を超えた有給を「有給日給」として別途支給するため、
       //   非稼働日（日曜・所定休）に有給を入れると過払いになる。これを入口で防ぐ。
-      //   ※ カレンダー未確定の月は dayType 未取得 → 日曜以外は出勤扱い（正当な申請を誤って弾かない）。
-      {
-        const ymDash = `${yearStr}-${monthStr.padStart(2, '0')}`
-        const calSnap = await getDocs(query(
-          collection(db, 'siteCalendar'),
-          where('ym', '==', ymDash),
-          where('siteId', '==', resolvedSiteId),
-        ))
-        let dayType: string | undefined
-        calSnap.forEach(d => {
-          const days = d.data().days as Record<string, string> | undefined
-          if (days && days[String(day)] !== undefined) dayType = days[String(day)]
-        })
-        const dow = new Date(year, month - 1, day).getDay()
-        const resolvedDayType = dayType ?? (dow === 0 ? 'off' : 'work')
-        if (resolvedDayType !== 'work') {
-          return NextResponse.json(
-            { error: 'この日は出勤予定日ではないため有給を申請できません（休日・所定休は対象外）/ Ngày này không phải ngày làm việc theo lịch nên không thể xin nghỉ phép' },
-            { status: 400 },
-          )
-        }
+      //   2026-06-12 (監査 Sprint2-B): 判定ロジックを isScheduledWorkDay に共通化
+      //   （modify_date / designateLeaves と同一基準）
+      if (!await isScheduledWorkDay(resolvedSiteId, date)) {
+        return NextResponse.json(
+          { error: 'この日は出勤予定日ではないため有給を申請できません（休日・所定休は対象外）/ Ngày này không phải ngày làm việc theo lịch nên không thể xin nghỉ phép' },
+          { status: 400 },
+        )
       }
 
       // Check for duplicate
@@ -324,6 +311,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 2026-06-12 (監査 Sprint2-B): 月次ロック済み月への有給承認を拒否。
+      //   締め（給与確定）後に p:1 が書き込まれると支払額とシステムが食い違う
+      {
+        const mainForLock = await getMainData()
+        const wOrg = mainForLock.workers.find(w => w.id === data.workerId)?.org
+        if (isMonthLockedInLocks(mainForLock.locks, data.ym, wOrg)) {
+          return NextResponse.json({ error: `${data.ym.slice(0, 4)}年${parseInt(data.ym.slice(4, 6))}月は月次締め済みのため承認できません。先に月次集計画面でロックを解除してください`, status: 409 }, { status: 409 })
+        }
+      }
+
       // Update status
       await setDoc(docRef, {
         ...data,
@@ -458,8 +455,16 @@ export async function POST(request: NextRequest) {
       if (data.status !== 'approved' && data.status !== 'foreman_approved') {
         return NextResponse.json({ error: 'Only approved/foreman_approved can be revoked' }, { status: 409 })
       }
-      // att から p=1 をピンポイント削除（IM-11 と同じく他フィールドは温存）
+      // 2026-06-12 (監査 Sprint2-B): ロック済み月の有給取消は拒否（支払額確定後のデータ変更防止）
       const attYm = data.date.replace(/-/g, '').slice(0, 6)
+      {
+        const mainForLock = await getMainData()
+        const wOrg = mainForLock.workers.find(w => w.id === data.workerId)?.org
+        if (isMonthLockedInLocks(mainForLock.locks, attYm, wOrg)) {
+          return NextResponse.json({ error: `${attYm.slice(0, 4)}年${parseInt(attYm.slice(4, 6))}月は月次締め済みのため取消できません。先にロックを解除してください` }, { status: 409 })
+        }
+      }
+      // att から p=1 をピンポイント削除（IM-11 と同じく他フィールドは温存）
       const attDay = data.date.slice(8, 10).replace(/^0/, '')
       const attRef = doc(db, 'demmen', `att_${attYm}`)
       // siteId 不明なので main から取得（落ち着いた dispatch）
@@ -530,6 +535,37 @@ export async function POST(request: NextRequest) {
       // 既に同じ日付なら何もしない（誤操作防止）
       if (data.date === newDate) {
         return NextResponse.json({ success: true, noop: true })
+      }
+
+      // 2026-06-12 (監査 Sprint2-B): request アクションと同じガードを日付変更にも適用
+      // ① 新日付はカレンダー上の稼働日のみ（非稼働日への変更は有給日給の過払いになる）
+      if (!await isScheduledWorkDay(data.siteId, newDate)) {
+        return NextResponse.json(
+          { error: '変更先の日付は出勤予定日ではないため有給にできません（休日・所定休は対象外）' },
+          { status: 400 },
+        )
+      }
+      // ② 旧日付・新日付の月がロック済みなら拒否（締め後の支払額変更防止）
+      {
+        const mainForLock = await getMainData()
+        const wOrg = mainForLock.workers.find(w => w.id === data.workerId)?.org
+        for (const checkYm of [data.ym, newYm]) {
+          if (isMonthLockedInLocks(mainForLock.locks, checkYm, wOrg)) {
+            return NextResponse.json({ error: `${checkYm.slice(0, 4)}年${parseInt(checkYm.slice(4, 6))}月は月次締め済みのため日付変更できません。先にロックを解除してください` }, { status: 409 })
+          }
+        }
+      }
+      // ③ 新日付に既存のアクティブな有給申請があれば拒否（重複防止。docId は旧日付のままのため
+      //    request アクションの existing チェックが効かない）
+      {
+        const dupRef = doc(db, 'leaveRequests', `${data.workerId}_${newDate.replace(/-/g, '')}`)
+        const dupSnap = await getDoc(dupRef)
+        if (dupSnap.exists()) {
+          const dup = dupSnap.data() as LeaveRequest
+          if (dup.status !== 'rejected' && dup.status !== 'cancelled' && (dup as { status?: string }).status !== 'revoked') {
+            return NextResponse.json({ error: '変更先の日付には既に有給申請があります' }, { status: 409 })
+          }
+        }
       }
 
       // approved 状態の場合は att データの差し替えが必要
