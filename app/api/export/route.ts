@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
-import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
+import { getMainData, getAttData, computeMonthly, getSubconRate } from '@/lib/compute'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import {
   generateHibiAttendance,
@@ -89,6 +89,13 @@ export async function GET(request: NextRequest) {
       }
 
       case 'subcon': {
+        // 2026-06-12 (監査): 現場別単価オーバーライド(getSubconRate)を確認書の金額に反映。
+        //   旧: 基本単価で再計算 → 原価(site.subCost)・歩掛と金額が食い違っていた
+        const buildSiteRates = (scid: string) => {
+          const map: Record<string, { rate: number; otRate: number }> = {}
+          for (const s of activeSites) map[s.id] = getSubconRate(main, scid, s.id, ymStr)
+          return map
+        }
         // Find the specific subcon or generate for all
         if (subconId) {
           const subcon = main.subcons.find(s => s.id === subconId)
@@ -100,6 +107,7 @@ export async function GET(request: NextRequest) {
             subcon,
             attSD,
             sites: activeSites,
+            siteRates: buildSiteRates(subcon.id),
           })
           buffer = workbookToBuffer(wb)
           filename = `外注確認書_${subcon.name}_${ymStr}.xlsx`
@@ -115,6 +123,7 @@ export async function GET(request: NextRequest) {
               subcon,
               attSD,
               sites: activeSites,
+              siteRates: buildSiteRates(subcon.id),
             })
             // Copy the first sheet from subWb to wb
             const sheetName = subcon.name.slice(0, 31)

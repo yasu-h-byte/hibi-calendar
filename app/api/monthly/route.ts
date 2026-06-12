@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
       lockedHfu,
       workDays,
       prescribedDays,
+      baseDays,  // 2026-06-12 (監査): モーダル/印刷の式表示用（旧: クライアントで20固定）
       siteNames,
       hasCalendarData,
       siteWorkDays: siteWorkDaysMap,

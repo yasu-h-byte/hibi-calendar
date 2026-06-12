@@ -1047,6 +1047,10 @@ export function computeMonthly(
       // ★ 現場別単価を使用（月別overrides も考慮）
       const scR = getSubconRate(main, scid, siteId, ym)
       const scCost = entry.n * scR.rate + (entry.on || 0) * scR.otRate
+      // 2026-06-12 修正 (監査): SubconMonthly.cost も現場別単価で積み上げ。
+      //   旧: 後段で workDays×基本単価 の一括計算 → 現場別オーバーライドがある外注先で
+      //   site.subCost（現場別単価）と外注先別合計（基本単価）が食い違っていた
+      sc.cost += scCost
       const site = siteMap.get(siteId)
       if (site) {
         site.subWorkDays += entry.n
@@ -1453,10 +1457,8 @@ export function computeMonthly(
     }
   }
 
-  // Calculate subcon costs
-  for (const sc of subconMap.values()) {
-    sc.cost = sc.workDays * sc.rate + sc.otCount * sc.otRate
-  }
+  // Subcon costs はエントリループで現場別単価(getSubconRate)により積み上げ済み
+  // （2026-06-12 監査修正: 旧 workDays×基本単価の一括計算を廃止 — オーバーライド非対応だった）
 
   // Billing & profit
   // 出向者の人件費のみ差引（売上は既に控除済みの値が入力されているためそのまま）

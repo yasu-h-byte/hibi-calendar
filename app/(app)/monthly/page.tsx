@@ -50,6 +50,9 @@ interface WorkerMonthly {
   fixedBasePay?: number
   additionalAllowance?: number
   legalLimit?: number
+  // 有給手当（日本人=日給×有給日数）／有給日給（ベトナム人=20日枠超×時給×7h）
+  paidLeaveDays?: number
+  paidLeaveAllowance?: number
   // 2026-06-XX 追加: 所定外労働手当（法定内・割増なし、新ルール時のみ）
   nonStatutoryOTHours?: number
   nonStatutoryOTAllowance?: number
@@ -215,6 +218,7 @@ interface MonthlyData {
   lockedHfu: boolean
   workDays: number
   prescribedDays?: number
+  baseDays?: number
   hasCalendarData?: boolean
   siteWorkDays?: Record<string, number>
   siteNames?: Record<string, string>
@@ -701,22 +705,20 @@ export default function MonthlyPage() {
   // Show salary columns for all tabs (visible for all workers)
   const showSalaryColumns = true
 
+  // 2026-06-12 修正 (監査): 画面側の金額フォールバック計算を削除。
+  //   computeMonthly は absence/absentCost/netPay を常に初期化するため到達しないデッドコードだったが、
+  //   「出力層は金額を再計算しない」原則に反し、API 形状変更時に compute とズレた金額が
+  //   静かに表示されるリスクがあった。サーバ値のみを表示する。
   function calcAbsentDays(w: WorkerMonthly): number {
-    // Use server-computed value if available, otherwise calculate locally
-    if (w.absence !== undefined) return w.absence
-    const absent = prescribedDaysNum - (w.actualWorkDays || 0) - w.plUsed
-    return Math.max(0, Math.round(absent * 10) / 10)
+    return w.absence ?? 0
   }
 
   function calcAbsentDeduction(w: WorkerMonthly): number {
-    if (w.absentCost !== undefined) return w.absentCost
-    const absentDays = calcAbsentDays(w)
-    return Math.round(absentDays * w.rate)
+    return w.absentCost ?? 0
   }
 
   function calcNetPay(w: WorkerMonthly): number {
-    if (w.netPay !== undefined) return w.netPay
-    return w.totalCost - calcAbsentDeduction(w)
+    return w.netPay ?? 0
   }
 
   // ── Render ──
@@ -1169,14 +1171,16 @@ export default function MonthlyPage() {
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('otHours')}
+                  title="新ルール(ベトナム人): 所定外労働+法定外残業の計算値（3層判定後）。日本人・旧ルール: 出面の残業欄合計"
                 >
                   残業(h){sortArrow(workerSortKey === 'otHours', workerSortAsc)}
                 </th>
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('rate')}
+                  title="日給月給=日額 / 完全月給・固定月給=月給 / ベトナム人=時給ベース（行に応じて表示）"
                 >
-                  日額単価{sortArrow(workerSortKey === 'rate', workerSortAsc)}
+                  単価/月給{sortArrow(workerSortKey === 'rate', workerSortAsc)}
                 </th>
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
@@ -1186,39 +1190,39 @@ export default function MonthlyPage() {
                 </th>
                 {showAbsenceColumns && (
                   <>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700">欠勤日数</th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700">欠勤控除</th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700">差引支給</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300">欠勤日数</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300">欠勤控除</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300">差引支給</th>
                   </>
                 )}
                 {showSalaryColumns && (
                   <>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">基本給</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">基本給</th>
                     {/* 4月以前は「休業補償」、5月以降は「追加所定」 */}
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
                       {ym >= '202605' ? '追加所定' : '休業補償'}
                     </th>
                     {/* 2026-06-XX 追加 (I-2): 所定外労働手当列を新ルール時に表示 */}
                     {ym >= '202605' && (
                       <th
-                        className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700"
+                        className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                         title="月所定140h超〜法定上限内の労働 × 通常賃金（労基法24条）"
                       >
                         所定外労働
                       </th>
                     )}
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
                       {ym >= '202605' ? '法定外残業' : '残業手当'}
                     </th>
                     {ym >= '202605' && (
                       <>
-                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="日曜出勤 1.35倍 (8h超は1.60倍)">法休手当</th>
-                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="22:00-5:00 +0.25倍">深夜手当</th>
-                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700" title="補償日 60%">休業手当</th>
+                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="日曜出勤 1.35倍 (8h超は1.60倍)">法休手当</th>
+                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="22:00-5:00 +0.25倍">深夜手当</th>
+                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="補償日 60%">休業手当</th>
                       </>
                     )}
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">欠勤控除</th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700">支給額合計</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">欠勤控除</th>
+                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">支給額合計</th>
                   </>
                 )}
               </tr>
@@ -1262,6 +1266,8 @@ export default function MonthlyPage() {
                               lines.push(`基本給:        ¥${(w.fixedBasePay || w.basePay || 0).toLocaleString()}`)
                             if ((w.additionalAllowance || 0) > 0)
                               lines.push(`追加所定:      ¥${(w.additionalAllowance || 0).toLocaleString()}`)
+                            if ((w.paidLeaveAllowance || 0) > 0)
+                              lines.push(`有給手当:      ¥${(w.paidLeaveAllowance || 0).toLocaleString()}`)
                             if ((w.nonStatutoryOTAllowance || 0) > 0)
                               lines.push(`所定外労働:    ¥${(w.nonStatutoryOTAllowance || 0).toLocaleString()}`)
                             if ((w.otAllowance || 0) > 0)
@@ -1402,7 +1408,7 @@ export default function MonthlyPage() {
             </tbody>
             {sortedWorkers.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy">
+                <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy dark:text-white">
                   <td className="px-3 py-3 sticky left-0 z-10 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">合計 ({filteredWorkers.length}名)</td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3"></td>
@@ -1582,7 +1588,7 @@ export default function MonthlyPage() {
             </tbody>
             {sortedSubcons.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy">
+                <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy dark:text-white">
                   <td className="px-3 py-3">合計 ({data!.subcons.length}社)</td>
                   <td className="px-3 py-3"></td>
                   <td className="px-3 py-3"></td>
@@ -1604,8 +1610,8 @@ export default function MonthlyPage() {
         <PayrollAuditModal
           worker={auditingWorker}
           ym={ym}
-          prescribedDays={Number(prescribedDays) || 0}
-          baseDays={20}
+          prescribedDays={data?.prescribedDays ?? (Number(prescribedDays) || 0)}
+          baseDays={data?.baseDays ?? 20}
           onClose={() => setAuditingWorker(null)}
         />
       )}

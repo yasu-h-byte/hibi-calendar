@@ -28,6 +28,7 @@ interface MonthlyDataRaw {
   workers: PayrollAuditWorker[]
   workDays: number
   prescribedDays: number
+  baseDays?: number
   siteNames: Record<string, string>
   dailyByWorker?: Record<number, Record<number, {
     w?: number; o?: number; p?: number; r?: number; h?: number; hk?: number; exam?: number;
@@ -111,7 +112,9 @@ export default function AuditPrintPage() {
   const ymY = parseInt(ym.slice(0, 4))
   const ymM = parseInt(ym.slice(4, 6))
   const yearMonthLabel = `${ymY}年${ymM}月`
-  const today = '本日'  // Date.now() がランタイム制限の場合があるためフォールバック
+  // 2026-06-12 修正 (監査): 作成日が文字列「本日」のまま印刷されていた。クライアント側で実日付を整形
+  const now = new Date()
+  const today = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
 
   return (
     <>
@@ -236,7 +239,7 @@ export default function AuditPrintPage() {
                   worker={worker}
                   ym={ym}
                   prescribedDays={data.prescribedDays || data.workDays || 0}
-                  baseDays={20}
+                  baseDays={data.baseDays ?? 20}
                 />
 
                 {/* 日別カレンダー */}

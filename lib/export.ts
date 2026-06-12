@@ -433,7 +433,12 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
     // ── Sheet 3: 勤怠サマリー（変形労働時間制専用、4月以前はスキップ） ──
     if (ym >= '202605') {
       const bd = (data as { baseDays?: number }).baseDays || 20
-      appendOvertimeSummarySheet(wb, '勤怠サマリー', '日比建設', ym, hibiForeignWorkers, attD, sites, data.calendarDays, bd)
+      // 2026-06-12 修正 (監査): 旧ルール継続者(フン等)は変形労働の3層計算対象外のため除外。
+      //   含めると「基本給=時給×20日×7h」等、実際の給与（固定月給）と矛盾する行が社労士提出物に載る
+      const newRuleWorkers = hibiForeignWorkers.filter(w => !(w as { useOldRules?: boolean }).useOldRules)
+      if (newRuleWorkers.length > 0) {
+        appendOvertimeSummarySheet(wb, '勤怠サマリー', '日比建設', ym, newRuleWorkers, attD, sites, data.calendarDays, bd)
+      }
     }
   }
 
@@ -538,9 +543,13 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
   // ── Sheet 3: 勤怠サマリー（キャシュモ向け: 3段階残業判定の結果） ──
   // ⚠️ このシートは「1か月単位の変形労働時間制」専用の3段階残業分析。
   //    4月以前（旧ルール）には適用されないため出力しない。
+  //    旧ルール継続者(useOldRules)も対象外（2026-06-12 監査: 固定月給と矛盾する行が載るため除外）
   if (calendarDays && ym >= '202605') {
     const bd = (data as { baseDays?: number }).baseDays || 20
-    appendOvertimeSummarySheet(wb, '勤怠サマリー', 'HFU', ym, hfuWorkers, attD, sites, calendarDays, bd)
+    const newRuleHfu = hfuWorkers.filter(w => !(w as { useOldRules?: boolean }).useOldRules)
+    if (newRuleHfu.length > 0) {
+      appendOvertimeSummarySheet(wb, '勤怠サマリー', 'HFU', ym, newRuleHfu, attD, sites, calendarDays, bd)
+    }
   }
 
   return wb
@@ -555,10 +564,14 @@ export interface SubconConfirmationData {
   subcon: RawSubcon
   attSD: Record<string, { n: number; on: number }>
   sites: { id: string; name: string }[]
+  /** 2026-06-12 (監査): 現場別の実効単価（getSubconRate の結果）。
+   *  未指定なら基本単価で計算（後方互換）。指定すると金額が現場別単価で積算され、
+   *  compute.ts の site.subCost / SubconMonthly.cost と一致する */
+  siteRates?: Record<string, { rate: number; otRate: number }>
 }
 
 export function generateSubconConfirmation(data: SubconConfirmationData): XLSX.WorkBook {
-  const { ym, subcon, attSD, sites } = data
+  const { ym, subcon, attSD, sites, siteRates } = data
   const numDays = daysInMonth(ym)
   const wb = XLSX.utils.book_new()
 
@@ -570,6 +583,14 @@ export function generateSubconConfirmation(data: SubconConfirmationData): XLSX.W
 
   let totalN = 0
   let totalON = 0
+  let totalAmount = 0
+  let hasOverride = false
+
+  const rateFor = (siteId: string) => {
+    const ov = siteRates?.[siteId]
+    if (ov && (ov.rate !== subcon.rate || ov.otRate !== subcon.otRate)) hasOverride = true
+    return ov || { rate: subcon.rate, otRate: subcon.otRate }
+  }
 
   for (let d = 1; d <= numDays; d++) {
     const dd = String(d)
@@ -585,6 +606,8 @@ export function generateSubconConfirmation(data: SubconConfirmationData): XLSX.W
         dayN += entry.n
         dayON += entry.on || 0
         siteNames.push(site.name)
+        const r = rateFor(site.id)
+        totalAmount += entry.n * r.rate + (entry.on || 0) * r.otRate
       }
     }
 
@@ -604,8 +627,7 @@ export function generateSubconConfirmation(data: SubconConfirmationData): XLSX.W
   // Totals
   rows.push([])
   rows.push(['合計', totalN, totalON, ''])
-  rows.push(['単価', `${subcon.rate.toLocaleString()}円`, `${subcon.otRate.toLocaleString()}円`, ''])
-  const totalAmount = totalN * subcon.rate + totalON * subcon.otRate
+  rows.push(['単価', `${subcon.rate.toLocaleString()}円`, `${subcon.otRate.toLocaleString()}円`, hasOverride ? '※現場別単価あり（金額は現場別単価で積算）' : ''])
   rows.push(['金額', `${totalAmount.toLocaleString()}円`, '', ''])
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
@@ -755,9 +777,10 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
         plDates[wid].push(dateStr)
       }
     }
-    // 日付順にソート
+    // 2026-06-12 修正 (監査): 同一日に複数現場で p:1 残骸がある場合の二重カウントを排除
+    //   （generateLeaveLedger は computePeriodUsed で dedup 済み。本帳票への横展開）
     for (const wid of Object.keys(plDates)) {
-      plDates[Number(wid)].sort()
+      plDates[Number(wid)] = [...new Set(plDates[Number(wid)])].sort()
     }
   }
 
@@ -983,8 +1006,10 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       const nameWithDispatch = w.isDispatched
         ? `🔁 ${w.name}（出向: ${w.dispatchTo || ''}）`
         : w.name
-      const rateKind = w.hourlyRate ? '時給' : (w.salary ? '月給' : '—')
-      const rateValue = w.hourlyRate || w.salary || 0
+      // 2026-06-12 修正 (監査): salary を優先（フン等の固定月給者は salary が計算の正。
+      //   旧: hourlyRate 優先のため、計算に使われない旧時給が単価列に出ていた）
+      const rateKind = w.salary ? '月給' : (w.hourlyRate ? '時給' : '—')
+      const rateValue = w.salary || w.hourlyRate || 0
       // 2026-06-XX 修正B: スタッフ個別の所定日数を使用（旧: 全社の prescribedDays 固定）
       const workerDays = w.workerPrescribedDays ?? prescribedDays
       const limitOrPrescribedH = useNewRules ? (w.legalLimit || 0) : (w.prescribedHours || 0)
@@ -1065,11 +1090,12 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     const sheet = XLSX.utils.aoa_to_sheet(rows)
     sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
     if (useNewRules) {
+      // 2026-06-12 修正 (監査): 26列に対し25要素で列幅が1列ずつズレていたのを修正
       setColWidths(sheet, [
         14, 14, 8, 10, 10, 10,
         8, 8, 8, 8,
         9, 10, 9, 9, 9,
-        11, 11, 12, 12, 11, 10, 10,
+        11, 11, 11, 12, 12, 11, 10, 10,
         8, 11, 14,
       ])
     } else {
@@ -1462,7 +1488,10 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
       const adjustment = r.adjustment ?? 0
       const used = adjustment + periodUsed
       const remaining = Math.max(0, grantDays + carryOver - used)
-      const status = r._archived ? 'アーカイブ' : (r.expiredAt ? '失効済' : (r.grantDate && new Date(r.grantDate).getTime() + 2 * 365 * 86400000 < Date.now() ? '期限切れ' : '有効'))
+      // 2026-06-12 修正 (監査): 期限判定を 2×365日近似 → calcExpiryIso（うるう年対応）に統一。
+      //   有効期限列(fmtExpiry)と判定基準がズレて境界日で「期限切れ/有効」が矛盾していた
+      const expiredByDate = !!(r.grantDate && calcExpiryIso(r.grantDate) < new Date().toISOString().slice(0, 10))
+      const status = r._archived ? 'アーカイブ' : (r.expiredAt ? '失効済' : (expiredByDate ? '期限切れ' : '有効'))
       ledgerRows.push([
         w.id, w.name, w.org || '', visaLabel(w.visa), w.hireDate || '',
         String(r.fy ?? ''), r.grantDate || '', grantDays, carryOver, adjustment,
@@ -1667,9 +1696,11 @@ export function generatePlannedShiftExcel(data: PlannedShiftData): XLSX.WorkBook
   const wb = XLSX.utils.book_new()
 
   // 対象: ベトナム人スタッフ + 当月在籍 + (org フィルタ指定があれば該当会社のみ)
+  // 2026-06-12 修正 (監査): isHiredByMonth を追加（入社前月のスタッフが社労士提出書類に載る横展開漏れ）
   const foreignWorkers = workers.filter(w => {
     if (!(w.visa && w.visa !== 'none' && w.visa !== '')) return false
     if (!isStillActiveForMonth(w.retired, ym)) return false
+    if (!isHiredByMonth(w.hireDate, ym)) return false
     if (org === 'hibi' && w.org !== 'hibi') return false
     if (org === 'hfu' && w.org !== 'hfu') return false
     return true
@@ -1793,6 +1824,7 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
   const foreignWorkers = workers.filter(w => {
     if (!(w.visa && w.visa !== 'none' && w.visa !== '')) return false
     if (!isStillActiveForMonth(w.retired, ym)) return false
+    if (!isHiredByMonth(w.hireDate, ym)) return false  // 2026-06-12 (監査): 入社前月除外の横展開
     if (org === 'hibi' && w.org !== 'hibi') return false
     if (org === 'hfu' && w.org !== 'hfu') return false
     return true
