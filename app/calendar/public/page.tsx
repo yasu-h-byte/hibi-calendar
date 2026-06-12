@@ -15,7 +15,6 @@ interface WorkerInfo {
   id: number
   name: string
   nameVi: string
-  token: string
   sites: WorkerSiteStatus[]
   allSigned: boolean
   unsignedCount: number

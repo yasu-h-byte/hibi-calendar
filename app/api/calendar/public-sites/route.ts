@@ -39,11 +39,13 @@ export async function GET(request: Request) {
           signedAt: sigVal && sigVal !== 'true' ? sigVal : null,
         }
       })
+      // 2026-06-12 (監査S1): token をレスポンスから除去。
+      //   無認証エンドポイントで全スタッフの token（出面/有給申請/署名の本人認証クレデンシャル）が
+      //   取得でき、なりすましが可能だった。公開ページは token を使用していない（型定義のみ）。
       return {
         id: w.id,
         name: w.name,
         nameVi: w.nameVi,
-        token: w.token,
         sites: sitesArr,
         allSigned: sitesArr.every(s => s.signed),
         unsignedCount: sitesArr.filter(s => !s.signed).length,

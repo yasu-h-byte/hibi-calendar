@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, clearPasswordCache } from '@/lib/auth'
+import { checkApiAuth, clearPasswordCache, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
+
+// 2026-06-12 (監査S3): 管理者層（ADMIN_PASSWORD / SUPER_ADMIN_PASSWORD）かを判定。
+//   個人パスワード（事務・役員個人）では「全員のパスワード閲覧・変更」「権限設定」「復元」を
+//   実行できないようにする（個人パスワード1つの漏洩が全アカウント乗っ取りに昇格するのを防ぐ）。
+async function getAdminTier(request: NextRequest): Promise<'super-admin' | 'admin' | 'personal' | null> {
+  const auth = await getApiAuthUser(request)
+  if (!auth.authorized) return null
+  if (auth.actor === 'super-admin') return 'super-admin'
+  if (auth.actor === 'admin') return 'admin'
+  return 'personal'
+}
 
 async function getMainDoc() {
   const docRef = doc(db, 'demmen', 'main')
@@ -30,6 +41,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (action === 'getUserPasswords') {
+      // 監査S3: 個人パスワードでは全員のパスワードを閲覧不可（権限昇格防止）
+      const tier = await getAdminTier(request)
+      if (tier !== 'super-admin' && tier !== 'admin') {
+        return NextResponse.json({ error: 'この操作には管理者パスワードが必要です' }, { status: 403 })
+      }
       const userPasswords = (result.data.userPasswords as Record<string, string>) || {}
       return NextResponse.json({ userPasswords })
     }
@@ -52,6 +68,11 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'savePermissions') {
+      // 監査S3: 権限設定の変更は管理者パスワード限定
+      const tier = await getAdminTier(request)
+      if (tier !== 'super-admin' && tier !== 'admin') {
+        return NextResponse.json({ error: 'この操作には管理者パスワードが必要です' }, { status: 403 })
+      }
       const { rolePermissions } = body
       if (!rolePermissions || typeof rolePermissions !== 'object') {
         return NextResponse.json({ error: 'rolePermissions required' }, { status: 400 })
@@ -59,10 +80,16 @@ export async function POST(request: NextRequest) {
       const docRef = doc(db, 'demmen', 'main')
       const { updateDoc } = await import('firebase/firestore')
       await updateDoc(docRef, { rolePermissions })
+      await logActivity('admin', 'settings.permissions', `権限設定を更新 (${tier})`)
       return NextResponse.json({ success: true })
     }
 
     if (action === 'saveUserPasswords') {
+      // 監査S3: 全員のパスワード変更は管理者パスワード限定（個人パスワードからの全員ロックアウト防止）
+      const tier = await getAdminTier(request)
+      if (tier !== 'super-admin' && tier !== 'admin') {
+        return NextResponse.json({ error: 'この操作には管理者パスワードが必要です' }, { status: 403 })
+      }
       const { userPasswords } = body
       if (!userPasswords || typeof userPasswords !== 'object') {
         return NextResponse.json({ error: 'userPasswords required' }, { status: 400 })
@@ -71,7 +98,7 @@ export async function POST(request: NextRequest) {
       const { updateDoc } = await import('firebase/firestore')
       await updateDoc(docRef, { userPasswords })
       clearPasswordCache()  // キャッシュを即時無効化して新パスワードを即座に有効にする
-      await logActivity('admin', 'settings.userPasswords', '個人パスワードを更新')
+      await logActivity('admin', 'settings.userPasswords', `個人パスワードを更新 (${tier})`)
       return NextResponse.json({ success: true })
     }
 
@@ -124,6 +151,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'restore') {
+      // 監査S3: 全データ置換の最危険操作。super-admin（靖仁さん）限定 + 復元前セーフティ退避。
+      //   旧: checkApiAuth のみ（事務の個人パスワードでも実行可能）で setDoc 全置換だった。
+      const tier = await getAdminTier(request)
+      if (tier !== 'super-admin') {
+        return NextResponse.json({ error: 'データ復元は super-admin のみ実行できます' }, { status: 403 })
+      }
       const { data } = body
       if (!data || typeof data !== 'object') {
         return NextResponse.json({ error: '有効なJSONデータが必要です' }, { status: 400 })
@@ -132,6 +165,17 @@ export async function POST(request: NextRequest) {
       // Safety checks
       if (!data.workers && !data.sites) {
         return NextResponse.json({ error: 'workers または sites フィールドが見つかりません。有効なバックアップファイルか確認してください' }, { status: 400 })
+      }
+
+      // 復元前に現在の main をセーフティ退避（誤復元からの復帰用）
+      const current = await getMainDoc()
+      if (current) {
+        const safetyRef = doc(db, 'backups', `pre-restore-${Date.now()}`)
+        await setDoc(safetyRef, {
+          createdAt: new Date().toISOString(),
+          reason: 'settings.restore 実行前の自動退避',
+          main: current.data,
+        })
       }
 
       // Separate attendance docs from main data
@@ -151,6 +195,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      await logActivity('admin', 'settings.restore', 'JSONバックアップから全データを復元 (super-admin)')
       return NextResponse.json({ success: true })
     }
 
