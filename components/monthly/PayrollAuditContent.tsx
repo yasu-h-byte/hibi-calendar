@@ -109,7 +109,9 @@ export function getEmploymentMode(w: PayrollAuditWorker, ym: string): {
   }
   if (w.salary && w.salary > 0) return {
     label: '月給制（外国人）',
-    description: '基本給は月給固定、時給を月給から逆算して各種手当を計算',
+    description: useOldRules
+      ? '基本給は固定月給（所定日数で変動しない）。残業単価・欠勤控除は日給ベースで固定（旧ルール継続者: フン等）'
+      : '基本給は月給固定、時給を月給から逆算して各種手当を計算',
     useOldRules,
   }
   return {
@@ -319,7 +321,9 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
         <table className="w-full text-xs mt-2">
           <tbody className="[&_td]:py-1 [&_td:first-child]:text-gray-600 [&_td:first-child]:w-1/3">
             {w.rate > 0 && <tr><td>日額単価</td><td className="font-mono">{fmtYen(w.rate)}</td></tr>}
-            {w.hourlyRate && w.hourlyRate > 0 && <tr><td>時給単価</td><td className="font-mono">{fmtYen(w.hourlyRate)}</td></tr>}
+            {/* 旧ルール固定月給者(フン)の hourlyRate は計算に使われない旧値のため非表示 */}
+            {w.hourlyRate && w.hourlyRate > 0 && !(mode.useOldRules && w.salary && w.salary > 0) &&
+              <tr><td>時給単価</td><td className="font-mono">{fmtYen(w.hourlyRate)}</td></tr>}
             {w.salary && w.salary > 0 && <tr><td>月給</td><td className="font-mono">{fmtYen(w.salary)}</td></tr>}
             <tr><td>残業倍率 (otMul)</td><td className="font-mono">× {w.otMul}</td></tr>
             {w.isDispatched && (
@@ -459,6 +463,11 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                         return `時給 ${fmtYen(w.hourlyRate || 0)} × 0.25 × ${fmtH(w.legalOtHours)}（割増分のみ）`
                       }
                       const hUsed = w.otHours ?? 0
+                      // 旧ルール固定月給(フン): 残業単価は日給ベースで固定（月給からの逆算ではない）
+                      if (mode.useOldRules && w.salary && w.salary > 0 && w.rate > 0) {
+                        const unit = Math.ceil(Math.round((w.rate / (20 / 3)) * w.otMul * 100) / 100)
+                        return `残業単価 ${fmtYen(unit)}（= 切上(日額 ${fmtYen(w.rate)} ÷ 6.667h × ${w.otMul})・固定） × ${fmtH(hUsed)}`
+                      }
                       if (w.hourlyRate) {
                         return `時給 ${fmtYen(w.hourlyRate)} × ${w.otMul} × ${fmtH(hUsed)}（残業時間）`
                       }
@@ -489,6 +498,11 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
               <tr>
                 <td>欠勤控除</td>
                 <td className="font-mono text-red-600">
+                  {mode.useOldRules && w.salary && w.salary > 0 && w.rate > 0 && (
+                    <div className="text-[10px] text-gray-500">
+                      日額 {fmtYen(w.rate)} × {fmtNum(w.absence, '日')}（欠勤・切捨）
+                    </div>
+                  )}
                   <div className="font-bold">- {fmtYen(w.absentDeduction || 0)}</div>
                 </td>
               </tr>

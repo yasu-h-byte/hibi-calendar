@@ -130,9 +130,11 @@ export async function GET(request: NextRequest) {
 
       case 'bukake': {
         // 2026-06-XX 修正: siteWorkDaysMap を画面と統一（/api/monthly と整合性確保）
+        // 2026-06-12 修正 (監査C2): 全社所定を 0 固定 → main.workDays[ym] に。
+        //   0 のままだと旧ルール継続者(フン等)の給与・原価がこの帳票だけ 0 円になっていた。
         const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
-        const result = computeMonthly(main, attD, attSD, ymStr, 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
+        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -177,9 +179,10 @@ export async function GET(request: NextRequest) {
       case 'monthly': {
         // Monthly report: return JSON data for client-side print rendering
         // 2026-06-XX 修正: siteWorkDaysMap を画面と統一（/api/monthly と整合性確保）
+        // 2026-06-12 修正 (監査C2): 全社所定を 0 固定 → main.workDays[ym] に（bukake と同様）
         const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
-        const result = computeMonthly(main, attD, attSD, ymStr, 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
+        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -194,7 +197,10 @@ export async function GET(request: NextRequest) {
       }
 
       case 'monthlyExcel': {
-        const prescribedDays = Number(searchParams.get('prescribedDays')) || 0
+        // 2026-06-12 修正 (監査C3): 所定日数をクエリ（画面の未保存入力値）から取らず、
+        //   サーバ保存値 main.workDays[ym] を使用。画面(/api/monthly)と同一ソースにし、
+        //   「画面で確認した金額」と「Excelの金額」が食い違う事故経路を遮断。
+        const prescribedDays = main.workDays[ymStr] || 0
         const orgFilter = searchParams.get('org') || 'all'
         // 2026-06-XX 修正: siteWorkDaysMap を画面と統一（/api/monthly と整合性確保）
         const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}

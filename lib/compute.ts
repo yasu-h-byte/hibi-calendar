@@ -1100,6 +1100,9 @@ export function computeMonthly(
     const rawWorker = main.workers.find(x => x.id === wm.id)
     let proratedBaseDays = baseDays
     let proratedPrescribedDays = workerPrescribedDays
+    // 2026-06-12 追加 (監査C5): 固定月給者（フン・完全月給）の月途中入退社の日割り用比率。
+    //   在籍日数 ÷ 暦日数。固定月給の基本給に乗じる（労基法の日割り原則）。
+    let prorationRatio = 1
     if (rawWorker) {
       const ymY = parseInt(ym.slice(0, 4))
       const ymM = parseInt(ym.slice(4, 6))
@@ -1125,11 +1128,15 @@ export function computeMonthly(
           const ratio = activeDays / totalDaysInMonth
           proratedBaseDays = Math.round(baseDays * ratio)
           proratedPrescribedDays = Math.round(workerPrescribedDays * ratio)
+          prorationRatio = ratio
         }
       }
     }
     // 後段の計算で proratedBaseDays / proratedPrescribedDays を使う
     // 一旦 workerPrescribedDays を上書き
+    // 2026-06-12 追加 (監査C5): 按分前の所定日数も保持（固定月給の時給換算単価は
+    //   按分前のフル月ベースで出す。按分後で割ると単価が月途中入退社月だけ跳ね上がるため）
+    const unproratedPrescribedDays = workerPrescribedDays
     workerPrescribedDays = proratedPrescribedDays
 
     // 2026-06-XX 追加: UI 表示用に workerPrescribedDays を保存
@@ -1144,7 +1151,7 @@ export function computeMonthly(
     //            基本給固定=時給×20日×7h, 追加所定=20日超分, 残業=実労働>法定上限
     //
     // 2026-05-12 追加: ワーカー個別に useOldRules=true が立っている場合、5月以降も旧ルールを継続。
-    //   本人が新ルール移行を拒否したケース（例: フン 104, 2027/01 退職予定）に対応。
+    //   本人が新ルール移行を拒否したケース（例: フン 104, 2027/02 で現雇用契約終了）に対応。
     //   退職後は retired により自動的に給与計算対象外になる。
     const workerWm = main.workers.find(x => x.id === wm.id)
     const useNewRules = ym >= '202605' && !workerWm?.useOldRules
@@ -1264,11 +1271,17 @@ export function computeMonthly(
       // 2026-06-XX 修正 (I-7): 中途入退社時は按分した値を採用
       const fixedBase = proratedSalary
       // 2026-06-XX 修正: 所定外労働手当 (nonStatutoryOTAllowance) も加算
-      const salaryNet = fixedBase + v.additionalAllowance + v.nonStatutoryOTAllowance + v.otAllowance
+      // 2026-06-12 修正 (監査C1): 有給日給 (paidLeaveAllowance) の加算漏れを是正。
+      //   時給ブランチは v.salaryNet（有給日給込み）を使うが、本ブランチは合算を
+      //   手組みしているため b38d658 の有給日給追加から取り残されていた。
+      const salaryNet = fixedBase + v.additionalAllowance + v.paidLeaveAllowance
+                      + v.nonStatutoryOTAllowance + v.otAllowance
                       + v.legalHolidayAllowance + v.nightAllowance + v.compAllowance
                       - v.absentDeduction
 
       wm.fixedBasePay = fixedBase
+      wm.paidLeaveDays = v.paidLeaveDays
+      wm.paidLeaveAllowance = v.paidLeaveAllowance
       wm.additionalAllowance = v.additionalAllowance
       wm.nonStatutoryOTHours = v.nonStatutoryOTHours
       wm.nonStatutoryOTAllowance = v.nonStatutoryOTAllowance
@@ -1308,10 +1321,13 @@ export function computeMonthly(
       //   ※ 日給(rate)が無い場合のみ月給から逆算（後方互換）。
       const dailyHoursOld = 20 / 3
       const prescribedH = workerPrescribedDays * dailyHoursOld
-      const hourlyRate = (wm.rate && wm.rate > 0) ? (wm.rate / dailyHoursOld) : (wm.salary / prescribedH)
+      // 後方互換フォールバックの時給換算は按分前のフル月所定で算出（単価は月で変えない）
+      const fullPrescribedH = (unproratedPrescribedDays > 0 ? unproratedPrescribedDays : workerPrescribedDays) * dailyHoursOld
+      const hourlyRate = (wm.rate && wm.rate > 0) ? (wm.rate / dailyHoursOld) : (wm.salary / fullPrescribedH)
       const otMul = wm.otMul && wm.otMul > 0 ? wm.otMul : 1.25
 
-      const basePay = wm.salary
+      // 2026-06-12 修正 (監査C5): 月途中入退社は固定月給を在籍日数で日割り（暦日比・切上）
+      const basePay = ceilYen(wm.salary * prorationRatio)
       const compAllowance = ceilYen(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)  // 休業補償 = 日給×0.6×補償日（切上）
       const otUnitRate = ceilYen(hourlyRate * otMul)        // 残業単価を1円単位に切り上げ（固定）
       const otAllowance = ceilYen(otUnitRate * wm.otHours)  // 残業手当も1円未満切り上げ
@@ -1336,15 +1352,17 @@ export function computeMonthly(
       wm.netPay = salaryNet
     } else if (wm.visa === 'none' && wm.salary && wm.salary > 0) {
       // ── 月給制の日本人: 月給固定 + 残業時給換算 ──
-      // 基本給 = 月給(固定)
-      // 時給換算 = 月給 ÷ 月所定時間（月所定日数×8h、未設定なら 20日×8h=160h）
+      // 基本給 = 月給(固定)。月途中入退社のみ在籍日数で日割り（暦日比・切上）
+      // 時給換算 = 月給 ÷ 月所定時間（按分前の月所定日数×8h、未設定なら 20日×8h=160h）
       // 残業手当 = 時給換算 × otMul × 残業時間
       // 支給額 = 基本給 + 残業手当
       // ※ 出勤日数に関わらず基本給は固定（労基法上の月給制）
-      const prescribedDaysForCalc = workerPrescribedDays > 0 ? workerPrescribedDays : 20
+      // 2026-06-12 修正 (監査C5): 中途入退社の日割りを追加。時給換算単価は按分前ベース
+      //   （按分後の所定で割ると入退社月だけ残業単価が跳ね上がるため）
+      const prescribedDaysForCalc = unproratedPrescribedDays > 0 ? unproratedPrescribedDays : 20
       const prescribedH = prescribedDaysForCalc * 8
       const hourlyEquivalent = wm.salary / prescribedH
-      const basePay = wm.salary
+      const basePay = ceilYen(wm.salary * prorationRatio)
       // 残業単価を1円単位に切り上げ → 残業代も1円未満切り上げ
       const otUnitRate = ceilYen(hourlyEquivalent * wm.otMul)
       const otPay = ceilYen(otUnitRate * wm.otHours)
@@ -1372,9 +1390,12 @@ export function computeMonthly(
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.otAllowance = otPay
       wm.salaryNetPay = basePay + paidLeaveAllowance + otPay
-      // 有給手当は原価(totalCost)にも算入し、支給額(netPay)に反映
-      wm.totalCost = (wm.totalCost || 0) + paidLeaveAllowance
-      wm.netPay = wm.totalCost
+      // 2026-06-12 修正 (監査C4): 原価(totalCost)・netPay を支給額(salaryNetPay)に統一。
+      //   旧: totalCost = 概算(cost + 丸め前float残業) + 有給手当 → salaryNetPay と数円ズレ、
+      //       労務費合計と支給額合計が一致しなかった。原価=実支給額の原則に揃える。
+      wm.totalCost = wm.salaryNetPay
+      wm.netPay = wm.salaryNetPay
+      if (wm.isDispatched) wm.dispatchDeduction = wm.salaryNetPay
     } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0) {
       // ⚠️ 2026-05-09: 防御的フォールバック
       //   外国人 (hourlyRate あり) なのに workerPrescribedDays が0の場合は、

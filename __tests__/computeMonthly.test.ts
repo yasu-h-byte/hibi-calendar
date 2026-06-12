@@ -250,6 +250,29 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
     expect(w.otAllowance).toBe(18750)
     expect(w.salaryNetPay).toBe(240000 + 18750)
   })
+
+  test('完全月給: 月途中入社は在籍日数で日割り、残業単価は按分前ベース（監査C5）', () => {
+    const main = buildMain({
+      workers: [{
+        id: 12, name: '濱上祥太郎', org: 'hibi', visa: 'none', job: 'tobi_apprentice',
+        rate: 0, salary: 240000, otMul: 1.25, hireDate: '2026-06-16', token: '',
+      }],
+      assign: { site1: { workers: [12], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    // 6/16〜6/30 のうち10日出勤、1日に残業4h
+    for (let d = 16; d <= 25; d++) Object.assign(attD, dayWork('site1', 12, '202606', d, 1, d === 16 ? 4 : 0))
+
+    const result = computeMonthly(main, attD, {}, '202606', 20)
+    const w = result.workers.find(x => x.id === 12)!
+    // 在籍 6/16〜6/30 = 15日 / 暦30日 → ratio 0.5
+    // 基本給 = 切上(240,000 × 0.5) = 120,000
+    expect(w.basePay).toBe(120000)
+    // 残業単価は按分前の月所定(20日×8h=160h)ベース: 240,000/160=1,500 → 単価 ceil(1,500×1.25)=1,875
+    expect(w.otAllowance).toBe(1875 * 4)
+    expect(w.salaryNetPay).toBe(120000 + 7500)
+  })
 })
 
 describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', () => {
@@ -333,6 +356,36 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
       expect(w.absentDeduction).toBe(15693 * 2)
     }
   })
+
+  test('固定月給: 月途中退職は在籍日数で日割り（監査C5）', () => {
+    const main = buildMain({
+      workers: [{
+        id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25,
+        hireDate: '2017-10-01', retired: '2026-06-15', token: 'h', useOldRules: true,
+      }],
+      assign: { site1: { workers: [104], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 26 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    // 6/1〜6/13 のうち12日出勤（日曜7を除く）、1日に残業2h
+    for (let d = 1; d <= 13; d++) {
+      if (d === 7) continue
+      Object.assign(attD, dayWork('site1', 104, '202606', d, 1, d === 1 ? 2 : 0))
+    }
+
+    const result = computeMonthly(main, attD, {}, '202606', 26)
+    const w = result.workers.find(x => x.id === 104)!
+    // 在籍 6/1〜6/15 = 15日 / 暦30日 → ratio 0.5
+    // 基本給 = 切上(396,105 × 0.5) = 198,053
+    expect(w.basePay).toBe(198053)
+    // 残業単価は日給ベースで固定 2,943（按分の影響なし）
+    expect(w.otAllowance).toBe(2943 * 2)
+    // 所定は按分: round(26×0.5)=13日 → 出勤12日で欠勤1日 = 15,693
+    expect(w.absence).toBe(1)
+    expect(w.absentDeduction).toBe(15693)
+    expect(w.salaryNetPay).toBe(198053 + 5886 - 15693)
+  })
 })
 
 describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () => {
@@ -409,6 +462,36 @@ describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () 
     expect(w.paidLeaveAllowance).toBe(0)
     // 基本給は20日固定（月給制維持）
     expect(w.fixedBasePay).toBe(1425 * 20 * 7)
+  })
+
+  test('有給日給: 月給(salary)方式の新ルール外国人でも20日枠超の有給が別途支給される（監査C1）', () => {
+    // salary方式ブランチは salaryNet を手組みしており、有給日給の加算が漏れていた
+    const main = buildMain({
+      workers: [{
+        id: 108, name: 'ベトナム人F月給', org: 'hfu', visa: 'jisshu3', job: 'tobi',
+        rate: 0, hourlyRate: 0, salary: 210000, otMul: 1.25, hireDate: '2025-01-01', token: 'p3',
+      }],
+      assign: { site1: { workers: [108], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 26 } },
+    })
+    const attD: Record<string, { w?: number; o?: number; p?: number }> = {}
+    // 時給ブランチの既存テストと同じ勤務パターン: 22日出勤 + 有給1日
+    const workDays = [1,2,3,4,5,6, 8,9,10,11,12,13, 15,16,17,18,19,20, 22,23,24,25]
+    for (const d of workDays) Object.assign(attD, dayWork('site1', 108, '202606', d))
+    Object.assign(attD, dayPL('site1', 108, '202606', 26))
+
+    const result = computeMonthly(main, attD, {}, '202606', 26, undefined, 20)
+    const w = result.workers.find(x => x.id === 108)!
+    // 時給換算 = 210,000 ÷ (20日×7h) = 1,500
+    expect(w.fixedBasePay).toBe(210000)
+    expect(w.paidLeaveDays).toBe(1)
+    expect(w.paidLeaveAllowance).toBe(1500 * 1 * 7)  // 10,500（旧: 加算漏れで未払い）
+    // 支給額に有給日給が含まれる（内訳和と一致）
+    const sum = (w.fixedBasePay || 0) + (w.additionalAllowance || 0) + (w.paidLeaveAllowance || 0)
+      + (w.nonStatutoryOTAllowance || 0) + (w.otAllowance || 0)
+      + (w.legalHolidayAllowance || 0) + (w.nightAllowance || 0) + (w.compAllowance || 0)
+      - (w.absentDeduction || 0)
+    expect(w.salaryNetPay).toBe(sum)
   })
 
   test('新ルール: 基本給 = 時給 × baseDays × 7h', () => {
@@ -605,6 +688,30 @@ describe('computeMonthly - 集計整合性チェック', () => {
     // 支給額 = 基本給 + 残業手当
     const expected = (w.basePay || 0) + (w.otAllowance || 0)
     expect(w.salaryNetPay).toBe(expected)
+  })
+
+  test('日給月給: netPay・労務費(totalCost)が支給額(salaryNetPay)と一致する（監査C4）', () => {
+    // 旧: totalCost が丸め前 float の残業原価を含み、salaryNetPay と数円ズレていた
+    const main = buildMain({
+      workers: [{
+        id: 4, name: '本田文人', org: 'hibi', visa: 'none', job: 'tobi',
+        rate: 19100, otMul: 1.25, hireDate: '', token: '',
+      }],
+      assign: { site1: { workers: [4], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 24 } },
+    })
+    const attD: Record<string, { w?: number; o?: number; p?: number }> = {}
+    // 20日出勤 + 残業5.5h + 有給2日（単価 ceil(19100/8×1.25)=2,985 → 残業 ceil(2,985×5.5)=16,418）
+    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 4, '202605', d, 1, d === 1 ? 5.5 : 0))
+    Object.assign(attD, dayPL('site1', 4, '202605', 21))
+    Object.assign(attD, dayPL('site1', 4, '202605', 22))
+
+    const result = computeMonthly(main, attD, {}, '202605', 24)
+    const w = result.workers.find(x => x.id === 4)!
+    expect(w.otAllowance).toBe(16418)
+    expect(w.salaryNetPay).toBe((w.basePay || 0) + (w.paidLeaveAllowance || 0) + 16418)
+    expect(w.netPay).toBe(w.salaryNetPay)
+    expect(w.totalCost).toBe(w.salaryNetPay)
   })
 
   test('totals.workDays = 全スタッフの workDays 合計', () => {

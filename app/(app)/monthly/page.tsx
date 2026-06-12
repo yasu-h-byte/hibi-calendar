@@ -422,10 +422,11 @@ export default function MonthlyPage() {
   const handleExcelExport = useCallback(async () => {
     if (!password || !ym) return
     try {
-      const pd = Number(prescribedDays) || 0
+      // 2026-06-12 修正 (監査C3): 所定日数は送らない。サーバが保存値 main.workDays[ym] を
+      // 使うため、画面の未保存入力値で Excel だけ違う金額になる事故を防ぐ。
       const orgFilter = tab === 'hibi' ? 'hibi' : tab === 'hfu' ? 'hfu' : tab === 'subcon' ? 'subcon' : 'all'
       const res = await fetch(
-        `/api/export?type=monthlyExcel&ym=${ym}&prescribedDays=${pd}&org=${orgFilter}`,
+        `/api/export?type=monthlyExcel&ym=${ym}&org=${orgFilter}`,
         { headers: { 'x-admin-password': password } },
       )
       if (!res.ok) {
@@ -445,7 +446,7 @@ export default function MonthlyPage() {
     } catch {
       alert('Excel出力に失敗しました')
     }
-  }, [password, ym, prescribedDays, tab])
+  }, [password, ym, tab])
 
   // ── 所定日数の保存 ──
 
