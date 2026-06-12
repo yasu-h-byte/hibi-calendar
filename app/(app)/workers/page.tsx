@@ -681,6 +681,27 @@ export default function WorkersPage() {
                       </div>
                     </div>
                     <p className="text-[10px] text-gray-400">※ 時給を入力すると日額・月給・残業単価が自動計算されます</p>
+
+                    {/* 固定月給（任意）— 旧ルール継続者など、毎月固定の月給で支払う外国人スタッフ用 */}
+                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                        固定月給（任意・円）
+                      </label>
+                      <input type="text" inputMode="numeric"
+                        value={form.salary ? Number(form.salary).toLocaleString() : ''}
+                        onChange={e => setForm({ ...form, salary: e.target.value.replace(/[^0-9]/g, '') })}
+                        placeholder="未設定（時給制）"
+                        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                      {form.salary && Number(form.salary) > 0 ? (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                          ⚠ 月給制に切替: 基本給は毎月この固定額。残業単価・欠勤控除は月給÷月所定時間から逆算（割増基礎は月給÷月所定時間）。出勤日数では基本給は変動しません。
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          ※ 通常は空欄（時給制）。フンさん等、毎月固定月給で支払う旧ルール継続者のみ設定。
+                        </p>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <>

@@ -1149,8 +1149,10 @@ export function computeMonthly(
     const workerWm = main.workers.find(x => x.id === wm.id)
     const useNewRules = ym >= '202605' && !workerWm?.useOldRules
 
-    if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && useNewRules) {
+    if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && useNewRules && !(wm.salary && wm.salary > 0)) {
       // ── 5月以降: 法令準拠（変形労働時間制） ──
+      // ※ salary（固定月給）が設定されている場合は時給ブランチをスキップし、
+      //   下段の salary 方式（基本給=月給固定）を採用する。salary が authoritative。
       // 計算内容（calculateVietnameseSalary が一括処理）:
       //   1. 基本給(固定)     = 時給 × baseDays × 7h
       //   2. 追加所定手当     = 時給 × (regularWorkDays − baseDays) × 7h  ※法定休日を除いた出勤日
@@ -1198,8 +1200,10 @@ export function computeMonthly(
       // 2026-06-XX 修正 (I-10): 出向控除を実支給額ベースに置換
       //   旧: totalCost (rate×days の粗い原価) → 実支給額と乖離 → 出向先請求と不整合
       if (wm.isDispatched) wm.dispatchDeduction = v.salaryNet
-    } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0) {
-      // ── 4月以前: 旧ルール（通常の労働時間制）── 時給ベース ──
+    } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && workerPrescribedDays > 0 && !(wm.salary && wm.salary > 0)) {
+      // ── 4月以前 / 旧ルール継続: 時給ベース ──
+      // ※ salary（固定月給）が設定されている場合はこのブランチをスキップし、
+      //   下段の旧ルール salary 方式（基本給=月給固定）を採用する（フン等の固定月給者）。
       // 設計（2026-05-08 ユーザー確定）:
       //   1日所定 = 6時間40分（= 20/3h）。週6日×6h40m = 40h で法定上限内。
       //   基本給   = 時給 × 月の所定時間（=月所定日数 × 6h40min、固定）

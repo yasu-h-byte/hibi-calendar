@@ -275,6 +275,32 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
     // 残業 = round(1500 × 1.25 × 10) = 18750
     expect(w.otAllowance).toBe(18750)
   })
+
+  test('固定月給(salary)が設定された旧ルール外国人は、基本給=月給固定（所定日数で変動しない・フン問題）', () => {
+    // フン(104)を再現: 旧ルール継続 + 固定月給。時給も持つが salary が優先。
+    const mk = (ym: string, prescribed: number, siteDays: number) => {
+      const main = buildMain({
+        workers: [{
+          id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+          rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25,
+          hireDate: '2017-10-01', token: 'h', useOldRules: true,
+        }],
+        assign: { site1: { workers: [104], subcons: [] } },
+        siteWorkDays: { [ym]: { site1: siteDays } },
+      })
+      const attD: Record<string, { w: number; o?: number }> = {}
+      for (let d = 1; d <= prescribed; d++) Object.assign(attD, dayWork('site1', 104, ym, d))
+      return computeMonthly(main, attD, {}, ym, prescribed)
+    }
+    // 所定が異なる2か月でも基本給は同じ固定額
+    const may = mk('202605', 23, 23).workers.find(x => x.id === 104)!
+    const jun = mk('202606', 24, 24).workers.find(x => x.id === 104)!
+    expect(may.basePay).toBe(396105)
+    expect(jun.basePay).toBe(396105)
+    // フル出勤（欠勤なし・残業なし）なら支給額も月給固定そのもの
+    expect(may.salaryNetPay).toBe(396105)
+    expect(jun.salaryNetPay).toBe(396105)
+  })
 })
 
 describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () => {
