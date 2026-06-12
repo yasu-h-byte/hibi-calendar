@@ -1137,6 +1137,29 @@ export default function MonthlyPage() {
         </div>
       )}
 
+      {/* 2026-06-12 (監査 Sprint2-C): 異常0件でも検算の実施状況を常時表示。
+          旧: 異常時のみバナー → 「検算対象外（日本人・フン・完全月給）も含めて全員OK」と
+          誤認するリスクがあった。対象/対象外の人数を明示する */}
+      {!loading && data && isWorkerTab && validationResult.total === 0 && (() => {
+        const targets = tabFilteredWorkers.filter(w =>
+          w.visa && w.visa !== 'none' && (w.hourlyRate || 0) > 0 && !(w.salary && w.salary > 0) && !w.useOldRules)
+        const exempt = tabFilteredWorkers.length - targets.length
+        return (
+          <div className="rounded-xl px-4 py-3 border bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 flex items-center gap-3 text-sm">
+            <span className="text-xl">✅</span>
+            <div className="text-green-800 dark:text-green-300">
+              <span className="font-bold">自動検算OK</span>
+              <span className="ml-2">対象 {targets.length}名（ベトナム人・新ルール時給制）に異常なし。</span>
+              {exempt > 0 && (
+                <span className="ml-1 text-green-700/80 dark:text-green-400/80">
+                  対象外 {exempt}名（日本人・完全月給・旧ルール継続）は自動検算の対象外のため、計算根拠モーダルで目視確認してください。
+                </span>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Worker Table (全体 / 日比建設 / HFU) */}
       {!loading && data && isWorkerTab && (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">

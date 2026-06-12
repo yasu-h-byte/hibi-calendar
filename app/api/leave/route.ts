@@ -8,6 +8,7 @@ import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso } from '@/lib/date-utils'
 import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
+import { logActivity } from '@/lib/activity'
 
 /**
  * 前期残日数から新FY付与時の carryOver 値を計算する共通ヘルパー
@@ -149,6 +150,7 @@ export async function POST(request: NextRequest) {
 
       // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
       await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
+      await logActivity('admin', 'leave.buyout', `workerId=${workerId} FY${fy} 買取 ${days}日${amount ? ` ¥${amount}` : ''}（操作者: ${actor}）`)
       return NextResponse.json({ success: true, totalBuyout })
     }
 
@@ -233,6 +235,7 @@ export async function POST(request: NextRequest) {
 
       // race-fix: dot-notation で 1 worker 単位に局所化（他 worker の plData と衝突しない）
       await updateDoc(docRef, { [`plData.${String(workerId)}`]: wRecords })
+      await logActivity('admin', 'leave.designate', `workerId=${workerId} に有給P入力 ${written.length}日 (${written.join(', ')})（操作者: ${actor}）`)
       return NextResponse.json({ success: true, written })
     }
 
@@ -982,6 +985,7 @@ export async function POST(request: NextRequest) {
         await updateDoc(docRef, { [`plData.${key}`]: records })
       }
 
+      await logActivity('admin', 'leave.grant', `workerId=${workerId} に有給付与/編集（操作者: ${actor}）`)
       return NextResponse.json({ success: true })
     }
 

@@ -318,6 +318,15 @@ export default function LeavePage() {
 
   const handleGrant = async () => {
     if (!grantForm.workerId) { alert('対象者を選択してください'); return }
+    // 2026-06-12 (監査 Sprint2-C): 付与日数は有給日給=支給額に直結するため確認を挟む
+    {
+      const target = workers.find(w => w.id === Number(grantForm.workerId))
+      const ok = confirm(
+        `⚠️ 有給を付与します:\n\n  対象: ${target?.name || `ID ${grantForm.workerId}`}\n  付与日数: ${grantForm.grantDays}日\n  付与日: ${grantForm.grantDate || '(未指定)'}\n\n` +
+        `付与日数は有給手当（支給額）に直結します。よろしいですか？（操作は記録されます）`
+      )
+      if (!ok) return
+    }
     setSaving(true)
     try {
       await fetch('/api/leave', {

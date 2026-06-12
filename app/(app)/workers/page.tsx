@@ -177,6 +177,33 @@ export default function WorkersPage() {
       }
     }
 
+    // 2026-06-12 (監査 Sprint2-C): 給与に直結するフィールドの変更は確認を挟む。
+    //   特に外国人への固定月給の誤入力は計算方式自体が月給制に切り替わるため危険。
+    if (editId) {
+      const orig = workers.find(w => w.id === editId)
+      if (orig) {
+        const diffs: string[] = []
+        const numOrEmpty = (v: string | number | undefined | null) => Number(v) || 0
+        if (numOrEmpty(form.rate) !== numOrEmpty(orig.rate)) diffs.push(`日額: ¥${numOrEmpty(orig.rate).toLocaleString()} → ¥${numOrEmpty(form.rate).toLocaleString()}`)
+        if (numOrEmpty(form.hourlyRate) !== numOrEmpty(orig.hourlyRate)) diffs.push(`時給: ¥${numOrEmpty(orig.hourlyRate).toLocaleString()} → ¥${numOrEmpty(form.hourlyRate).toLocaleString()}`)
+        if (numOrEmpty(form.salary) !== numOrEmpty(orig.salary)) {
+          const ns = numOrEmpty(form.salary)
+          diffs.push(ns > 0
+            ? `固定月給: ¥${numOrEmpty(orig.salary).toLocaleString()} → ¥${ns.toLocaleString()}（月給制${numOrEmpty(orig.salary) > 0 ? '' : 'に切替'}）`
+            : `固定月給: ¥${numOrEmpty(orig.salary).toLocaleString()} → 解除（時給/日給制に戻る）`)
+        }
+        if (Number(form.otMul) !== (orig.otMul || 1.25)) diffs.push(`残業倍率: ${orig.otMul || 1.25} → ${form.otMul}`)
+        if (!!form.useOldRules !== !!orig.useOldRules) diffs.push(`旧ルール継続: ${orig.useOldRules ? 'ON' : 'OFF'} → ${form.useOldRules ? 'ON' : 'OFF'}`)
+        if (diffs.length > 0) {
+          const ok = confirm(
+            `⚠️ ${form.name} さんの給与計算に直結する設定を変更します:\n\n${diffs.map(d => `  - ${d}`).join('\n')}\n\n` +
+            `保存すると月次集計の金額に即反映されます（変更は監査ログに記録されます）。よろしいですか？`
+          )
+          if (!ok) return
+        }
+      }
+    }
+
     setSaving(true)
     try {
       const body = editId
@@ -682,7 +709,9 @@ export default function WorkersPage() {
                     </div>
                     <p className="text-[10px] text-gray-400">※ 時給を入力すると日額・月給・残業単価が自動計算されます</p>
 
-                    {/* 固定月給（任意）— 旧ルール継続者など、毎月固定の月給で支払う外国人スタッフ用 */}
+    {/* 固定月給 — 旧ルール継続者（フン等）専用。誤入力で計算方式が月給制に切り替わるため、
+                        useOldRules ON か既に設定済みの場合のみ表示（2026-06-12 監査 Sprint2-C） */}
+                    {(form.useOldRules || (form.salary && Number(form.salary) > 0)) ? (
                     <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
                       <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
                         固定月給（任意・円）
@@ -694,7 +723,7 @@ export default function WorkersPage() {
                         className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                       {form.salary && Number(form.salary) > 0 ? (
                         <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
-                          ⚠ 月給制に切替: 基本給は毎月この固定額。残業単価・欠勤控除は月給÷月所定時間から逆算（割増基礎は月給÷月所定時間）。出勤日数では基本給は変動しません。
+                          ⚠ 月給制: 基本給は毎月この固定額（所定日数で変動しない）。残業・欠勤は日給ベースで固定単価。月途中入退社は日割り。
                         </p>
                       ) : (
                         <p className="text-[10px] text-gray-400 mt-1">
@@ -702,6 +731,7 @@ export default function WorkersPage() {
                         </p>
                       )}
                     </div>
+                    ) : null}
                   </>
                 ) : (
                   <>

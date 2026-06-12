@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { getWorkers } from '@/lib/workers'
 import {
   addWorker,
@@ -9,6 +9,13 @@ import {
   revokeWorkerToken,
 } from '@/lib/worker-crud'
 import { logActivity } from '@/lib/activity'
+import { db } from '@/lib/firebase'
+import { doc, setDoc, getDocs, collection } from 'firebase/firestore'
+
+// 2026-06-12 (監査 Sprint2-C): 給与に直結するフィールドの変更を永続監査ログに残す。
+//   activityLog は500件で古い順に自動削除されるため、単価変更の証跡が数週間で消えていた。
+//   auditTrail コレクションは削除処理を持たない（労基法115条の3年証跡）。
+const PAY_FIELDS = ['rate', 'hourlyRate', 'salary', 'otMul', 'useOldRules', 'retired'] as const
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -90,7 +97,12 @@ export async function POST(request: NextRequest) {
       if (updates.dispatchFrom !== undefined) {
         updates.dispatchFrom = String(updates.dispatchFrom || '').trim()
       }
+      // 2026-06-12 (監査 Sprint2-C): 給与系フィールドの old→new を永続記録（更新前に現値を取得）
+      const beforeWorkers = await getWorkers()
+      const beforeW = beforeWorkers.find(w => w.id === Number(id)) as Record<string, unknown> | undefined
+
       // useOldRules: true なら保存、false/undefined ならフィールドを削除
+      const useOldRulesNew = updates.useOldRules === true
       if (updates.useOldRules === true) {
         updates.useOldRules = true
       } else if ('useOldRules' in updates) {
@@ -99,13 +111,61 @@ export async function POST(request: NextRequest) {
         updates.useOldRules = deleteField()
       }
       await updateWorker(id, updates)
-      await logActivity('admin', 'worker.update', `ID:${id} を更新`)
+
+      // 給与系フィールドの差分を auditTrail へ（削除されない永続コレクション）
+      const changes: Record<string, { from: unknown; to: unknown }> = {}
+      for (const f of PAY_FIELDS) {
+        if (!(f in updates)) continue
+        const oldV = beforeW?.[f] ?? null
+        const newV = f === 'useOldRules' ? useOldRulesNew : (updates[f] ?? null)
+        if (JSON.stringify(oldV) !== JSON.stringify(newV)) changes[f] = { from: oldV, to: newV }
+      }
+      if (Object.keys(changes).length > 0) {
+        const auth = await getApiAuthUser(request)
+        const actor = auth.authorized ? String(auth.actor) : 'unknown'
+        const at = new Date().toISOString()
+        const detail = Object.entries(changes).map(([k, v]) => `${k}: ${v.from ?? '—'} → ${v.to ?? '—'}`).join(', ')
+        await setDoc(doc(db, 'auditTrail', `worker-${id}-${Date.now()}`), {
+          type: 'worker.payChange',
+          workerId: Number(id),
+          workerName: beforeW?.name || '',
+          changes,
+          actor,
+          at,
+        })
+        await logActivity('admin', 'worker.payChange', `${beforeW?.name || `ID:${id}`} 給与系変更: ${detail}（操作者: ${actor}）`)
+      } else {
+        await logActivity('admin', 'worker.update', `ID:${id} を更新`)
+      }
       return NextResponse.json({ success: true })
     }
 
     if (action === 'delete') {
       const { id } = body
       if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+      // 2026-06-12 (監査 Sprint2-C): 出面実績のあるスタッフの削除をブロック。
+      //   main.workers から消すと computeMonthly の起点が消え、過去の全月次集計・
+      //   Excel・原価からその人が遡って消えてしまう（支払済み金額の証跡が壊れる）。
+      //   正しい運用は「退職日の設定」（翌月以降に自動で集計から外れる）。
+      {
+        const allDocs = await getDocs(collection(db, 'demmen'))
+        const marker = `_${id}_`
+        let foundYm: string | null = null
+        allDocs.forEach(snap => {
+          if (foundYm || !snap.id.startsWith('att_')) return
+          const d = (snap.data().d || {}) as Record<string, unknown>
+          for (const key of Object.keys(d)) {
+            if (key.includes(marker)) { foundYm = snap.id.slice(4); break }
+          }
+        })
+        if (foundYm) {
+          return NextResponse.json({
+            error: `出面実績（${foundYm} 等）があるため削除できません。削除すると過去の給与集計からも消えてしまいます。代わりに「退職日」を設定してください（翌月以降は自動で集計対象外になります）`,
+          }, { status: 409 })
+        }
+      }
+
       await deleteWorker(id)
       await logActivity('admin', 'worker.delete', `ID:${id} を削除`)
       return NextResponse.json({ success: true })
