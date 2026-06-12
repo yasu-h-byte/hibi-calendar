@@ -301,6 +301,38 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
     expect(may.salaryNetPay).toBe(396105)
     expect(jun.salaryNetPay).toBe(396105)
   })
+
+  test('固定月給の残業単価は日給ベースで固定（月給からの逆算ではない・フン2,943円問題）', () => {
+    // 残業10h・欠勤2日を含めて、残業単価=日給÷6h40m×1.25 固定、欠勤=日給×日数 を検証
+    const mk = (ym: string, prescribed: number) => {
+      const main = buildMain({
+        workers: [{
+          id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+          rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25,
+          hireDate: '2017-10-01', token: 'h', useOldRules: true,
+        }],
+        assign: { site1: { workers: [104], subcons: [] } },
+        siteWorkDays: { [ym]: { site1: prescribed } },
+      })
+      const attD: Record<string, { w: number; o?: number }> = {}
+      // (prescribed-2)日出勤・うち1日10h残業・2日欠勤
+      for (let d = 1; d <= prescribed - 2; d++) Object.assign(attD, dayWork('site1', 104, ym, d, 1, d === 1 ? 10 : 0))
+      return computeMonthly(main, attD, {}, ym, prescribed).workers.find(x => x.id === 104)!
+    }
+    const expectedOtUnit = Math.ceil(Math.round((15693 / (20 / 3)) * 1.25 * 100) / 100) // = 2943
+    expect(expectedOtUnit).toBe(2943)
+    for (const [ym, pd] of [['202605', 23], ['202606', 26]] as const) {
+      const w = mk(ym, pd)
+      expect(w.basePay).toBe(396105)               // 基本給は固定
+      expect(w.otHours).toBe(10)
+      // 残業手当 = 切上(2,943 × 10) = 29,430（所定日数に関係なく単価固定）
+      expect(w.otAllowance).toBe(Math.ceil(Math.round(expectedOtUnit * 10 * 100) / 100))
+      expect(w.otAllowance).toBe(29430)
+      // 欠勤控除 = 日給15,693 × 2日（所定日数に関係なく日給ベース）
+      expect(w.absence).toBe(2)
+      expect(w.absentDeduction).toBe(15693 * 2)
+    }
+  })
 })
 
 describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () => {

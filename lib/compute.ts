@@ -1297,20 +1297,27 @@ export function computeMonthly(
       wm.absentCost = v.absentDeduction
       wm.netPay = salaryNet
     } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && workerPrescribedDays > 0) {
-      // ── 4月以前: 旧ルール（salary方式: 月給からの逆算） ──
-      // 設計はhourlyRate版と同じ（1日6h40m, 残業=日単位積み上げ, 補償別枠, 補償・有給・試験は出勤扱い）
+      // ── 旧ルール継続・固定月給（フン 104）──
+      //   基本給 = 固定月給(salary)。出勤・所定日数に関わらず毎月固定。
+      //   残業・欠勤は「日給(rate)ベース」で計算する。月給から逆算すると所定日数で
+      //   単価が月ごとに変動してしまうため（フンの残業単価は固定2,943円が正）。
+      //     時給     = 日給(rate) ÷ 1日所定(6h40m=20/3)
+      //     残業単価 = 切上(時給 × otMul)  ← 固定（例: 15,693÷6.667×1.25 = 2,943）
+      //     残業手当 = 切上(残業単価 × 残業時間)
+      //     欠勤控除 = 日給 × 欠勤日数（= 時給 × 6h40m × 欠勤日数、切捨）
+      //   ※ 日給(rate)が無い場合のみ月給から逆算（後方互換）。
       const dailyHoursOld = 20 / 3
       const prescribedH = workerPrescribedDays * dailyHoursOld
-      const hourlyRate = wm.salary / prescribedH  // 月給からベース時給を逆算
+      const hourlyRate = (wm.rate && wm.rate > 0) ? (wm.rate / dailyHoursOld) : (wm.salary / prescribedH)
+      const otMul = wm.otMul && wm.otMul > 0 ? wm.otMul : 1.25
 
       const basePay = wm.salary
-      const compAllowance = ceilYen(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)  // 支給: 切り上げ
-      const otAllowance = ceilYen(hourlyRate * 1.25 * wm.otHours)  // 残業手当: 1円未満切り上げ
+      const compAllowance = ceilYen(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)  // 休業補償 = 日給×0.6×補償日（切上）
+      const otUnitRate = ceilYen(hourlyRate * otMul)        // 残業単価を1円単位に切り上げ（固定）
+      const otAllowance = ceilYen(otUnitRate * wm.otHours)  // 残業手当も1円未満切り上げ
       // 2026-06-XX 修正: 補償日も欠勤扱いに（労基法26条準拠で60%支給）
       const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays)
-      // ⚠️ 2026-05-08 修正: hourlyRate版と式を統一（旧: salary/days*absentDays、新: hourlyRate*dailyHoursOld*absentDays）
-      //   数学的には等価だが、Math.roundの中間誤差による1〜数円のズレを解消。
-      const absentDeduction = floorYen(hourlyRate * dailyHoursOld * absentDays)  // 控除: 切り捨て（過少支払い防止）
+      const absentDeduction = floorYen(hourlyRate * dailyHoursOld * absentDays)  // = 日給 × 欠勤日数（切捨: 過少払い防止）
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
       const salaryNet = basePay + compAllowance + otAllowance - absentDeduction
 
