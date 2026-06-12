@@ -1,9 +1,82 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, updateDoc, setDoc } from 'firebase/firestore'
+import { doc, updateDoc, setDoc, getDocs, collection } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
-import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
+import { getMainData, getAttData, computeMonthly, parseDKey } from '@/lib/compute'
+
+/** JST 基準の当月 YYYYMM */
+function currentYmJst(): string {
+  const jst = new Date(Date.now() + 9 * 3600 * 1000)
+  return `${jst.getUTCFullYear()}${String(jst.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * 締め前チェック（2026-06-13 仕様確定）:
+ * 「その月一ヶ月分のチェックがすべて終わってから初めて締められる」
+ *
+ * ① 月の完了: 進行中・未来の月は締め不可（月が終わって翌月になってから）
+ * ② 職長チェック: 労働実績（出勤 w>0 / 残業 o>0）のある全「現場×日」に
+ *    職長の日次承認（attendanceApprovals の foreman）が付いていること。
+ *    組織別締めの場合は、その組織のスタッフの実績がある現場×日のみ対象。
+ *    ※ 有給(p)・休み(r)・現場都合(h)・帰国(hk) のみの日は管理プロセス由来のため対象外
+ *
+ * 戻り値: エラーメッセージ（null = 締めOK）
+ */
+async function checkReadyToLock(ym: string, org?: string): Promise<string | null> {
+  // ① 進行中・未来の月
+  if (ym >= currentYmJst()) {
+    return `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月はまだ終わっていないため締められません。月が終わり、入力と職長チェックがすべて完了してから締めてください`
+  }
+
+  // ② 職長の日次承認チェック
+  const main = await getMainData()
+  const att = await getAttData(ym)
+  const isHfu = (o?: string) => o === 'hfu' || o === 'HFU'
+  const orgKey = org === 'hibi' || org === 'hfu' ? org : 'all'
+  const workerOrg = new Map(main.workers.map(w => [w.id, isHfu(w.org) ? 'hfu' : 'hibi']))
+
+  // 労働実績のある (現場, 日) を収集
+  const needed = new Map<string, Set<number>>()
+  for (const [key, entry] of Object.entries(att.d || {})) {
+    if (!entry || typeof entry !== 'object') continue
+    const pk = parseDKey(key)
+    if (pk.ym !== ym) continue
+    const wid = Number(pk.wid)
+    const wOrg = workerOrg.get(wid)
+    if (!wOrg) continue
+    if (orgKey !== 'all' && wOrg !== orgKey) continue
+    const e = entry as { w?: number; o?: number }
+    if (!((e.w || 0) > 0 || (e.o || 0) > 0)) continue
+    if (!needed.has(pk.sid)) needed.set(pk.sid, new Set())
+    needed.get(pk.sid)!.add(Number(pk.day))
+  }
+
+  if (needed.size === 0) return null  // 実績ゼロ（対象者なし月）は承認チェック不要
+
+  // 当月の職長承認済み (現場_ym_日) を収集
+  const approved = new Set<string>()
+  const apSnap = await getDocs(collection(db, 'attendanceApprovals'))
+  apSnap.forEach(s => {
+    if (!s.id.includes(`_${ym}_`)) return
+    const d = s.data() as { foreman?: unknown }
+    if (d.foreman) approved.add(s.id)
+  })
+
+  const siteNames = new Map(main.sites.map(s => [s.id, s.name]))
+  const missing: string[] = []
+  let missingTotal = 0
+  for (const [sid, days] of needed) {
+    const md = [...days].filter(d => !approved.has(`${sid}_${ym}_${String(d)}`)).sort((a, b) => a - b)
+    if (md.length === 0) continue
+    missingTotal += md.length
+    missing.push(`${siteNames.get(sid) || sid}: ${md.slice(0, 8).join(',')}日${md.length > 8 ? ` 他${md.length - 8}日` : ''}`)
+  }
+  if (missing.length > 0) {
+    return `職長チェック（日次承認）が完了していないため締められません（未承認 ${missingTotal}日分）。\n${missing.join('\n')}\n出面画面で職長承認を完了してから締めてください`
+  }
+  return null
+}
 
 /**
  * 締め時点の支給額スナップショットを保存（2026-06-12 監査 Sprint2-D）。
@@ -56,6 +129,15 @@ export async function POST(request: NextRequest) {
     const { ym, locked, org } = await request.json()
     if (!ym) {
       return NextResponse.json({ error: 'ym required' }, { status: 400 })
+    }
+
+    // 2026-06-13: 締め（locked=true）は「月が終了 + 職長チェック全完了」が前提条件。
+    //   進行中の月や未承認日が残る月は締められない（解除には条件なし）
+    if (locked) {
+      const notReady = await checkReadyToLock(ym, org)
+      if (notReady) {
+        return NextResponse.json({ error: notReady }, { status: 409 })
+      }
     }
 
     const docRef = doc(db, 'demmen', 'main')

@@ -418,11 +418,17 @@ export default function MonthlyPage() {
     if (!confirm(msg)) return
     setLockToggling(true)
     try {
-      await fetch('/api/monthly/lock', {
+      const res = await fetch('/api/monthly/lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({ ym, locked: newLocked, org }),
       })
+      // 2026-06-13: 締め前チェック（月未了・職長未承認）の 409 メッセージを表示
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: '締め処理に失敗しました' }))
+        alert(`締めできません:\n\n${err.error || res.statusText}`)
+        return
+      }
       fetchData()
     } catch {
       alert('エラーが発生しました')
