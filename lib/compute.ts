@@ -1348,15 +1348,21 @@ export function computeMonthly(
     } else if (wm.visa === 'none') {
       // 日給月給制の日本人: daily-rate based
       // 基本給 = 日額(rate) × 実出勤日数
+      // 有給手当 = 日額(rate) × 有給日数（2026-06 追加: 日給月給は有給日も日給を加算して支給）
       // 残業手当 = 残業単価(日額 ÷ 8h × otMul, 1円単位に切り上げ) × 残業時間
-      // 支給額 = 基本給 + 残業手当
+      // 支給額 = 基本給 + 有給手当 + 残業手当
       const basePay = ceilYen(wm.workDays * wm.rate + (wm.compDays * 0.6 * wm.rate))  // 支給: 切り上げ
+      const paidLeaveAllowance = ceilYen(wm.plUsed * wm.rate)  // 有給手当 = 有給日数 × 日額（支給: 切り上げ）
       const otUnitRate = ceilYen((wm.rate / 8) * wm.otMul)  // 残業単価を1円単位に切り上げ
       const otPay = ceilYen(otUnitRate * wm.otHours)          // 残業代も1円未満切り上げ
       wm.basePay = basePay
+      wm.paidLeaveDays = wm.plUsed
+      wm.paidLeaveAllowance = paidLeaveAllowance
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.otAllowance = otPay
-      wm.salaryNetPay = basePay + otPay
+      wm.salaryNetPay = basePay + paidLeaveAllowance + otPay
+      // 有給手当は原価(totalCost)にも算入し、支給額(netPay)に反映
+      wm.totalCost = (wm.totalCost || 0) + paidLeaveAllowance
       wm.netPay = wm.totalCost
     } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0) {
       // ⚠️ 2026-05-09: 防御的フォールバック

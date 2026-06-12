@@ -15,7 +15,7 @@ export default function DocsPage() {
       description: '各ロールごとの操作マニュアル。日々の作業はここを参照',
       items: [
         { title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・帳票出力（事務担当 総合版）', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-26' },
-        { title: '給与計算マニュアル（奥寺さん用）', desc: '日比建設の月次給与計算。雇用形態4区分・ベトナム人の有給日給（20日枠超）・週所定での残業判定・端数処理（支給切上/控除切捨）・支給額合計の使い方・自動検算・社労士提出用資料など', url: '/manual-payroll-okudera.html', icon: '💰', badge: 'NEW', updated: '2026-06-11' },
+        { title: '給与計算マニュアル（奥寺さん用）', desc: '日比建設の月次給与計算。雇用形態4区分・日本人日給月給の有給手当（日給×有給日数）・ベトナム人の有給日給（20日枠超）・週所定での残業判定・端数処理（支給切上/控除切捨）・支給額合計の使い方・自動検算・社労士提出用資料など', url: '/manual-payroll-okudera.html', icon: '💰', badge: 'NEW', updated: '2026-06-12' },
         { title: '社労士提出用資料マニュアル', desc: 'HFU分を社労士に渡す資料の説明。変形労働時間制・3段階残業判定（週6日=週所定42hで確認済み）・提出3資料（勤務予定シフト/実労働時間明細/計算根拠PDF）の読み方・端数処理', url: '/manual-syaroshi.html', icon: '🏛', badge: 'NEW', updated: '2026-06-09' },
         { title: '政仁さん向けマニュアル', desc: '出面承認・就業カレンダー・原価収益（役員担当）', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-30' },
         { title: '職長向けマニュアル', desc: '出面入力・承認・カレンダー作成（職長担当）', url: '/manual-foreman.html', icon: '📕', updated: '2026-04-30' },

@@ -420,12 +420,14 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 </td>
               </tr>
             )}
-            {!mode.useOldRules && (w.paidLeaveAllowance || 0) > 0 && (
+            {(w.paidLeaveAllowance || 0) > 0 && (
               <tr>
-                <td>有給日給<br/><span className="text-[10px] text-gray-500">(20日枠超の有給)</span></td>
+                <td>有給{w.fixedBasePay ? '日給' : '手当'}<br/><span className="text-[10px] text-gray-500">{w.fixedBasePay ? '(20日枠超の有給)' : '(有給×日額)'}</span></td>
                 <td className="font-mono">
                   <div className="text-[10px] text-gray-500">
-                    時給 {fmtYen(w.hourlyRate || 0)} × 7h × {fmtNum(w.paidLeaveDays, '日')}（基本給20日枠を超えた有給）
+                    {w.fixedBasePay
+                      ? `時給 ${fmtYen(w.hourlyRate || 0)} × 7h × ${fmtNum(w.paidLeaveDays, '日')}（基本給20日枠を超えた有給）`
+                      : `日額 ${fmtYen(w.rate || 0)} × ${fmtNum(w.paidLeaveDays, '日')}（有給）`}
                   </div>
                   <div className="font-bold">{fmtYen(w.paidLeaveAllowance || 0)}</div>
                 </td>

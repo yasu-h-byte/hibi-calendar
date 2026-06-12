@@ -472,6 +472,38 @@ describe('computeMonthly - 有給日', () => {
     expect(w.plUsed).toBe(1)
     // 日給制日本人: 基本給 = 19日 × 17655 (有給は別途)
     expect(w.basePay).toBe(19 * 17655)
+    // 2026-06 追加: 日給月給は有給日も日給を加算して支給（有給手当 = 有給日数 × 日額）
+    expect(w.paidLeaveDays).toBe(1)
+    expect(w.paidLeaveAllowance).toBe(1 * 17655)
+    // 支給額 = 基本給 + 有給手当（残業なし）
+    expect(w.salaryNetPay).toBe(19 * 17655 + 1 * 17655)
+    expect(w.netPay).toBe(19 * 17655 + 1 * 17655)
+  })
+
+  test('日給月給: 有給を複数日取った場合、有給日数 × 日額 が支給額に加算される', () => {
+    const main = buildMain({
+      workers: [{
+        id: 2, name: '白戸', org: 'hibi', visa: 'none', job: 'tobi',
+        rate: 21300, otMul: 1.25, hireDate: '', token: '',
+      }],
+      assign: { site1: { workers: [2], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 24 } },
+    })
+    const attD: Record<string, { w: number; o?: number; p?: number }> = {}
+    // 20日出勤 + 4日有給（5月の実データを再現）
+    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 2, '202605', d))
+    for (const d of [21, 22, 23, 24]) Object.assign(attD, dayPL('site1', 2, '202605', d))
+
+    const result = computeMonthly(main, attD, {}, '202605', 24)
+    const w = result.workers.find(x => x.id === 2)!
+    expect(w.workDays).toBe(20)
+    expect(w.plUsed).toBe(4)
+    expect(w.paidLeaveDays).toBe(4)
+    // 有給手当 = 4日 × 21,300 = 85,200（旧: 未払いだった）
+    expect(w.paidLeaveAllowance).toBe(4 * 21300)
+    // 支給額 = 基本給(20日×21,300) + 有給手当(4日×21,300)
+    expect(w.salaryNetPay).toBe(20 * 21300 + 4 * 21300)
+    expect(w.netPay).toBe(20 * 21300 + 4 * 21300)
   })
 })
 
