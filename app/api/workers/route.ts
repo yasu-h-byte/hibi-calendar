@@ -102,23 +102,31 @@ export async function POST(request: NextRequest) {
       const beforeW = beforeWorkers.find(w => w.id === Number(id)) as Record<string, unknown> | undefined
 
       // useOldRules: true なら保存、false/undefined ならフィールドを削除
+      // 2026-06-13 (監査 Sprint3): deleteField() は配列要素内では機能しないため、
+      //   unsetFields で updateWorker に「マージ後に delete するキー」を渡す方式に変更
       const useOldRulesNew = updates.useOldRules === true
+      const unsetFields: string[] = []
       if (updates.useOldRules === true) {
         updates.useOldRules = true
       } else if ('useOldRules' in updates) {
-        // チェック解除時は削除（明示的に false で残すと将来のフラグ追加で混乱しやすい）
-        const { deleteField } = await import('firebase/firestore')
-        updates.useOldRules = deleteField()
+        delete updates.useOldRules
+        unsetFields.push('useOldRules')
       }
-      await updateWorker(id, updates)
+      await updateWorker(id, updates, unsetFields)
 
       // 給与系フィールドの差分を auditTrail へ（削除されない永続コレクション）
       const changes: Record<string, { from: unknown; to: unknown }> = {}
       for (const f of PAY_FIELDS) {
+        if (f === 'useOldRules') continue  // 下で個別判定（unsetFields に移したため updates に無い）
         if (!(f in updates)) continue
         const oldV = beforeW?.[f] ?? null
-        const newV = f === 'useOldRules' ? useOldRulesNew : (updates[f] ?? null)
+        const newV = updates[f] ?? null
         if (JSON.stringify(oldV) !== JSON.stringify(newV)) changes[f] = { from: oldV, to: newV }
+      }
+      // useOldRules は body にキーがあった場合のみ差分判定（true/解除）
+      if ('useOldRules' in body) {
+        const oldV = !!beforeW?.useOldRules
+        if (oldV !== useOldRulesNew) changes.useOldRules = { from: oldV, to: useOldRulesNew }
       }
       if (Object.keys(changes).length > 0) {
         const auth = await getApiAuthUser(request)
