@@ -159,3 +159,18 @@ await updateDoc(ref, { [`plData.${workerId}`]: records })
 4. **バックアップ**: `app/api/backup/snapshot` が日次で `backups` コレクションへスナップショット保存（PITR 代替）
 
 復元: `/api/backup/restore` (admin only)。
+
+### セキュリティ根治（Admin SDK 移行）— 保留中の重要課題
+
+現状 `firestore.rules` は多くのコレクションが `allow read, write: if true` で、Firebase API キーが
+公開情報のため**未認証の第三者がブラウザから直接 Firestore を読み書きできる穴**がある
+（個人パスワード平文・単価・給与額の閲覧、改竄、月締め解除等）。`notWipingMap()` 等は
+データ消失は防ぐが、未認証アクセス自体は防げない。
+
+**根治策**: Firebase Admin SDK 移行（サーバを rules バイパスの特権アクセスに → rules を deny-by-default 化）。
+- 土台は実装済み: `lib/firebase-admin.ts`（**デュアルモード**: `FIREBASE_SERVICE_ACCOUNT_B64` 未設定なら
+  Web SDK にフォールバック＝現状ゼロ変化。設定時のみ Admin 有効）。
+- 切替用 rules 雛形: `firestore.rules.locked`（deny-by-default）。
+- **全データアクセスは API 経由**（クライアント直 Firestore アクセスは無し）と確認済みのため、rules deny化で画面は壊れない。
+- 手順: **[docs/admin-sdk-migration.md](docs/admin-sdk-migration.md)**（靖仁さん向けの鍵発行・env設定 + エンジニア向けの fsdb 実装・import差替・検証・rules切替）。
+- ⚠️ 移行の実装（lib/fsdb.ts・import差替）は**エミュレータ/プレビューでの実機検証必須**。未検証で本番投入しないこと。

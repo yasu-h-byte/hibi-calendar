@@ -1,0 +1,43 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────
+//  【ロック版 firestore.rules】Admin SDK 移行 完了後にのみ使用する
+//
+//  これは「サーバからの Firestore アクセスを全て Firebase Admin SDK
+//  （サービスアカウント＝rules バイパス特権）に移行し終えた後」に、
+//  現行 firestore.rules をこの内容に置き換えてデプロイするための雛形。
+//
+//  方針: deny-by-default。クライアント（Web SDK）からの直接アクセスを
+//  原則すべて拒否する。本システムは全データアクセスが API（サーバ）経由で
+//  あることを確認済み（2026-06-13 監査）のため、クライアント直アクセスを
+//  禁止しても画面機能は壊れない。サーバは Admin SDK でアクセスするため
+//  rules の制約を受けない。
+//
+//  ⚠️ 切替前提（必須）:
+//    1. 全 API ルート・サーバ lib の Firestore アクセスが Admin SDK 経由に
+//       なっていること（lib/fsdb.ts 経由 + FIREBASE_SERVICE_ACCOUNT_B64 設定済み）
+//    2. ステージング/プレビューで全機能（出面入力・承認・月次・有給・帰国・
+//       カレンダー公開ページ・バックアップ）が動作確認済みであること
+//
+//  ロールバック: 問題が出たら現行 firestore.rules（許可版）に戻して deploy。
+//  詳細は docs/admin-sdk-migration.md。
+// ─────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // すべて拒否（クライアント Web SDK からの直接アクセスを禁止）。
+    // サーバは Admin SDK でアクセスするため、この拒否の影響を受けない。
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 公開ページ等で「ログイン不要のクライアント直読み」が将来必要になった場合のみ、
+    // ここに最小限の read 許可を個別追加する（現状は不要 = 全て API 経由）。
+    // 例:
+    // match /calendarPatterns/{docId} {
+    //   allow read: if true;   // 読み取り専用の公開テンプレート等
+    //   allow write: if false;
+    // }
+  }
+}
