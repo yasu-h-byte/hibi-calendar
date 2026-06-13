@@ -225,11 +225,24 @@ export default function WorkersPage() {
   }
 
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`${name} を削除しますか？この操作は取り消せません。`)) return
-    await fetch('/api/workers', {
+    // 2026-06-13 (監査 Sprint3): 「完全削除」と「退職」を取り違えないよう導線を明示。
+    //   退職は編集画面の退職日設定で（過去の給与記録は保持・翌月から自動で集計対象外）。
+    //   完全削除は出面実績のないスタッフのみ可能（サーバが実績ありをブロック）。
+    if (!confirm(
+      `${name} を完全に削除しますか？\n\n` +
+      `⚠ 退職させたいだけなら「キャンセル」して、編集画面で「退職日」を設定してください。\n` +
+      `　退職日設定なら過去の給与記録は残り、翌月から自動で集計対象外になります。\n\n` +
+      `完全削除は出面実績のないスタッフのみ可能で、取り消せません。`,
+    )) return
+    const res = await fetch('/api/workers', {
       method: 'POST', headers: headers(),
       body: JSON.stringify({ action: 'delete', id }),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: '削除に失敗しました' }))
+      alert(err.error || '削除に失敗しました')
+      return
+    }
     fetchWorkers()
   }
 

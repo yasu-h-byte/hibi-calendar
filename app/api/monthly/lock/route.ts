@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, updateDoc, setDoc, getDocs, collection } from 'firebase/firestore'
+import { doc, updateDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
 import { getMainData, getAttData, computeMonthly, parseDKey } from '@/lib/compute'
+import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 
 /** JST 基準の当月 YYYYMM */
 function currentYmJst(): string {
@@ -74,6 +75,37 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
   }
   if (missing.length > 0) {
     return `職長チェック（日次承認）が完了していないため締められません（未承認 ${missingTotal}日分）。\n${missing.join('\n')}\n出面画面で職長承認を完了してから締めてください`
+  }
+
+  // ③ 給与計算の自動検算で critical が残っていないこと（給与が法令準拠で計算できている）
+  {
+    const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ym] || {}
+    const hasCal = Object.keys(siteWorkDaysMap).length > 0
+    const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
+    const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays)
+    const targets = result.workers.filter(w => orgKey === 'all' ? true : ((isHfu(w.org) ? 'hfu' : 'hibi') === orgKey))
+    const v = validatePayrolls(targets as unknown as PayrollSnapshot[])
+    if (v.critical > 0) {
+      const names = [...new Set(v.issues.filter(i => i.severity === 'critical').map(i => i.workerName))].slice(0, 8).join('、')
+      return `給与計算の自動検算で異常（critical ${v.critical}件: ${names}）が残っているため締められません。月次集計画面で該当スタッフの計算根拠を確認し、出面を修正してから締めてください`
+    }
+  }
+
+  // ④ 未処理の有給申請（pending / 職長承認止まり）が残っていないこと
+  //    締め後に承認されると支払額が変わるため、締め前に処理を完了させる
+  {
+    const lrSnap = await getDocs(query(collection(db, 'leaveRequests'), where('ym', '==', ym)))
+    const pendings: string[] = []
+    lrSnap.forEach(s => {
+      const d = s.data() as { status?: string; workerName?: string; workerId?: number; day?: number }
+      if (d.status !== 'pending' && d.status !== 'foreman_approved') return
+      const wOrg = workerOrg.get(Number(d.workerId))
+      if (orgKey !== 'all' && wOrg !== orgKey) return
+      pendings.push(`${d.workerName || `ID${d.workerId}`}（${d.day}日・${d.status === 'pending' ? '未承認' : '職長承認のみ'}）`)
+    })
+    if (pendings.length > 0) {
+      return `未処理の有給申請が ${pendings.length}件 残っているため締められません:\n${pendings.slice(0, 10).join('、')}\n有給管理画面で承認または却下を済ませてから締めてください`
+    }
   }
   return null
 }
