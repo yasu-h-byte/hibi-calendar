@@ -357,6 +357,43 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
     }
   })
 
+  test('固定月給: 会社都合休(0.6補)は欠勤日数に含めず、補償日控除＋休業補償で正味60%支給（フン土曜休み）', () => {
+    // 5月: 所定23日のうち 20日出勤・2日欠勤・1日(18日)を会社都合休(w=0.6)
+    const main = buildMain({
+      workers: [{
+        id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1', job: 'tobi',
+        rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25,
+        hireDate: '2017-10-01', token: 'h', useOldRules: true,
+      }],
+      assign: { site1: { workers: [104], subcons: [] } },
+      siteWorkDays: { '202605': { site1: 23 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    let worked = 0
+    for (let d = 1; d <= 23 && worked < 20; d++) {
+      if (d === 18) continue
+      Object.assign(attD, dayWork('site1', 104, '202605', d))
+      worked++
+    }
+    Object.assign(attD, dayWork('site1', 104, '202605', 18, 0.6))  // 会社都合休
+
+    const w = computeMonthly(main, attD, {}, '202605', 23).workers.find(x => x.id === 104)!
+    expect(w.compDays).toBe(1)
+    // 欠勤日数は「無給の欠勤」だけ＝2日（補償日は含めない）
+    expect(w.absence).toBe(2)
+    // 欠勤控除 = 日給15,693 × 2日（補償日を含まない）
+    expect(w.absentDeduction).toBe(15693 * 2)
+    // 補償日 通常分控除 = 日給15,693 × 1日（固定給は満額前提のため一旦控除）
+    expect(w.compBaseDeduction).toBe(15693)
+    // 休業補償 = 日給15,693 × 60% × 1日（切上）
+    expect(w.additionalAllowance).toBe(Math.ceil(15693 * 0.6))  // = 9416
+    // 支給額 = 396,105 + 9,416 − 31,386 − 15,693（補償日は正味60%支給＝日給の40%控除）
+    expect(w.salaryNetPay).toBe(396105 + 9416 - 15693 * 2 - 15693)
+    expect(w.salaryNetPay).toBe(358442)
+    // 補償日を会社都合休にすると、単なる欠勤(60%なし)より日給の60%=9,416円多い
+    // （= 補償日の休業補償分。資料の支給額もこの値に連動する）
+  })
+
   test('固定月給: 月途中退職は在籍日数で日割り（監査C5）', () => {
     const main = buildMain({
       workers: [{

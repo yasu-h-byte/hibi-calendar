@@ -958,10 +958,10 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     '実労働h', '所定外労働h', '法定残業h', '法休労働h', '深夜労働h',
     '基本給(固定)', '追加所定手当', '有給日給', '所定外労働手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
     '欠勤日数', '欠勤控除', '支給額合計']
-  // 旧ルール: 17列
+  // 旧ルール: 18列（補償日控除を欠勤控除と分離）
   const foreignHeadersOld = ['名前', '現場', '単価種別', '単価', '所定日数', '所定時間(h)',
     '実出勤日数', '補償日', '有給日数', '実労働時間', '残業時間',
-    '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '支給額合計']
+    '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '補償日控除', '支給額合計']
   // 日本人: 8列
   const japaneseHeaders = ['名前', '現場', '雇用形態', '日額/月給', '出勤日数', '有給日数', '残業時間(h)', '基本給', '有給手当', '残業手当', '支給額合計']
 
@@ -1036,9 +1036,11 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
           w.actualWorkDays || 0, w.compDays || 0, w.plDays || 0,
           w.actualWorkHours || 0, w.legalOtHours || 0,
           w.fixedBasePay || w.basePay || 0,
-          w.additionalAllowance || 0,  // 旧ルールでは休業補償
+          w.additionalAllowance || 0,  // 旧ルールでは休業補償（会社都合休の60%還元分）
           w.otAllowance || 0,
-          w.absence || 0, w.absentDeduction || 0, w.salaryNetPay || 0,
+          w.absence || 0, w.absentDeduction || 0,
+          w.compBaseDeduction || 0,    // 補償日控除（会社都合休の通常分・固定給は満額前提のため一旦控除）
+          w.salaryNetPay || 0,
         ])
       }
     }
@@ -1081,6 +1083,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.absence || 0), 0),
         ws.reduce((s, w) => s + (w.absentDeduction || 0), 0),
+        ws.reduce((s, w) => s + (w.compBaseDeduction || 0), 0),
         ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
       ])
     }
@@ -1099,7 +1102,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         8, 11, 14,
       ])
     } else {
-      setColWidths(sheet, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, 8, 12, 14])
+      setColWidths(sheet, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, 8, 12, 12, 14])
     }
     return sheet
   }

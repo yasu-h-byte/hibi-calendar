@@ -45,6 +45,7 @@ interface WorkerMonthly {
   basePay?: number
   otAllowance?: number
   absentDeduction?: number
+  compBaseDeduction?: number  // 補償日 通常分控除（旧ルール固定給・会社都合休）
   salaryNetPay?: number
   // 3層構造 fields
   fixedBasePay?: number
@@ -742,7 +743,9 @@ export default function MonthlyPage() {
   // Dynamic column count for empty state
   // 給与列: 旧ルール=5列, 新ルール=9列（+所定外労働/法休手当/深夜手当/休業手当）
   // 2026-06-XX 修正 (I-2): 新ルール時の所定外労働手当列を追加
-  const salaryColCount = ym >= '202605' ? 9 : 5
+  // 2026-06-15 追加: 補償日控除（会社都合休の通常分・旧ルール固定給者）は、該当者がいる時だけ列を出す
+  const showCompBaseDeduction = filteredWorkers.some(w => (w.compBaseDeduction || 0) > 0)
+  const salaryColCount = (ym >= '202605' ? 9 : 5) + (showCompBaseDeduction ? 1 : 0)
   const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + salaryColCount
 
   return (
@@ -1308,6 +1311,9 @@ export default function MonthlyPage() {
                       </>
                     )}
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">欠勤控除</th>
+                    {showCompBaseDeduction && (
+                      <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="会社都合休(補償日)の通常分。固定給は満額前提のため一旦控除し、60%を休業補償で還元（正味 日給の40%控除）">補償日控除</th>
+                    )}
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">支給額合計</th>
                   </>
                 )}
@@ -1366,6 +1372,8 @@ export default function MonthlyPage() {
                               lines.push(`休業手当:      ¥${(w.compAllowance || 0).toLocaleString()}`)
                             if ((w.absentDeduction || 0) > 0)
                               lines.push(`欠勤控除:     −¥${(w.absentDeduction || 0).toLocaleString()}`)
+                            if ((w.compBaseDeduction || 0) > 0)
+                              lines.push(`補償日控除:   −¥${(w.compBaseDeduction || 0).toLocaleString()}（会社都合休の通常分・60%は休業手当で還元）`)
                             lines.push('─────────────')
                             lines.push(`支給額:        ¥${(w.salaryNetPay || 0).toLocaleString()}`)
                             return lines.join('\n')
@@ -1482,6 +1490,12 @@ export default function MonthlyPage() {
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.absentDeduction || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                             {w.visa !== 'none' && (w.absentDeduction || 0) > 0 ? `-${fmtYen(w.absentDeduction!)}` : '—'}
                           </td>
+                          {showCompBaseDeduction && (
+                            <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.compBaseDeduction || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}
+                              title="補償日の通常分控除。60%は休業補償で還元（正味 日給の40%控除＝60%支給）">
+                              {(w.compBaseDeduction || 0) > 0 ? `-${fmtYen(w.compBaseDeduction!)}` : '—'}
+                            </td>
+                          )}
                           <td className="px-3 py-2.5 text-right tabular-nums bg-green-50/50 font-medium">
                             {w.salaryNetPay != null && w.salaryNetPay > 0 ? fmtYen(w.salaryNetPay) : '—'}
                           </td>
@@ -1587,6 +1601,14 @@ export default function MonthlyPage() {
                           return totalAbsDed > 0 ? `-${fmtYen(totalAbsDed)}` : '—'
                         })()}
                       </td>
+                      {showCompBaseDeduction && (
+                        <td className="px-3 py-3 text-right tabular-nums bg-green-50/50 text-red-600">
+                          {(() => {
+                            const total = filteredWorkers.reduce((s, w) => s + (w.compBaseDeduction || 0), 0)
+                            return total > 0 ? `-${fmtYen(total)}` : '—'
+                          })()}
+                        </td>
+                      )}
                       <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
                         {fmtYen(filteredWorkers.reduce((s, w) => s + (w.salaryNetPay || 0), 0))}
                       </td>

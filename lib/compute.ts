@@ -790,6 +790,11 @@ export interface WorkerMonthly {
   basePay?: number
   otAllowance?: number
   absentDeduction?: number
+  // 2026-06-15 追加: 旧ルール固定給(フン等)の「補償日 通常分控除」。
+  //   固定月給/固定所定の基本給は全所定日を満額前提とするため、会社都合休(0.6補)の日も
+  //   一旦満額を控除し、別途60%を休業補償で還元する（労基法26条）。正味は日給の40%控除。
+  //   これにより欠勤日数(absence)は「真の無給欠勤」だけを表し、補償日と二重計上しない。
+  compBaseDeduction?: number
   salaryNetPay?: number
   // 3層構造 fields (A+X案: 2026年5月〜)
   fixedBasePay?: number        // 基本給（固定）= 時給 × ベース日数 × 7h
@@ -1236,15 +1241,19 @@ export function computeMonthly(
       // 残業手当（日単位の積み上げ）— 1円未満は切り上げ
       const otAllowance = ceilYen(wm.hourlyRate * 1.25 * wm.otHours)
 
-      // 真の欠勤日数（有給・試験は出勤扱い、補償日は欠勤扱いで60%休業手当のみ支給）
-      // 2026-06-XX 修正: 補償日を欠勤に算入（労基法26条準拠で60%支給のみ）
-      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays)
+      // 真の欠勤日数（有給・試験・補償日は欠勤に含めない）
+      // 2026-06-15 修正: 補償日(0.6補)を欠勤日数から除外。欠勤日数は「無給の欠勤」だけを表す。
+      //   補償日の通常分(満額)は別途 compBaseDeduction で控除し、60%を休業補償で還元する。
+      //   （正味は日給の40%控除＝60%支給。支給総額は従来と不変。）
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays - wm.compDays)
       const absentDeduction = floorYen(wm.hourlyRate * dailyHoursOld * absentDays)  // 控除: 切り捨て（過少支払い防止）
+      // 補償日 通常分控除（固定所定の基本給は満額前提のため、補償日も一旦満額を控除）
+      const compBaseDeduction = floorYen(wm.hourlyRate * dailyHoursOld * wm.compDays)
 
       // 表示用: 実労働時間（補償も0.6相当でカウント）
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
 
-      const salaryNet = basePay + compAllowance + otAllowance - absentDeduction
+      const salaryNet = basePay + compAllowance + otAllowance - absentDeduction - compBaseDeduction
 
       wm.prescribedHours = prescribedH
       wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
@@ -1255,10 +1264,11 @@ export function computeMonthly(
       wm.additionalAllowance = compAllowance
       wm.otAllowance = otAllowance
       wm.absentDeduction = absentDeduction
+      wm.compBaseDeduction = compBaseDeduction
       wm.salaryNetPay = salaryNet
 
       wm.absence = absentDays
-      wm.absentCost = absentDeduction
+      wm.absentCost = absentDeduction + compBaseDeduction
       wm.netPay = salaryNet
     } else if (wm.visa !== 'none' && wm.salary && wm.salary > 0 && useNewRules) {
       // ── 5月以降: 法令準拠（salary方式: 月給から時給を逆算） ──
@@ -1335,11 +1345,14 @@ export function computeMonthly(
       const compAllowance = ceilYen(hourlyRate * dailyHoursOld * 0.6 * wm.compDays)  // 休業補償 = 日給×0.6×補償日（切上）
       const otUnitRate = ceilYen(hourlyRate * otMul)        // 残業単価を1円単位に切り上げ（固定）
       const otAllowance = ceilYen(otUnitRate * wm.otHours)  // 残業手当も1円未満切り上げ
-      // 2026-06-XX 修正: 補償日も欠勤扱いに（労基法26条準拠で60%支給）
-      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays)
+      // 2026-06-15 修正: 補償日(0.6補)を欠勤日数から除外。欠勤日数は「無給の欠勤」だけを表す。
+      //   固定月給は全所定日を満額前提とするため、補償日の通常分(満額)を compBaseDeduction で控除し、
+      //   別途60%を休業補償(compAllowance)で還元する（正味は日給の40%控除＝60%支給）。支給総額は不変。
+      const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays - wm.compDays)
       const absentDeduction = floorYen(hourlyRate * dailyHoursOld * absentDays)  // = 日給 × 欠勤日数（切捨: 過少払い防止）
+      const compBaseDeduction = floorYen(hourlyRate * dailyHoursOld * wm.compDays)  // 補償日 通常分控除（満額・切捨）
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
-      const salaryNet = basePay + compAllowance + otAllowance - absentDeduction
+      const salaryNet = basePay + compAllowance + otAllowance - absentDeduction - compBaseDeduction
 
       wm.prescribedHours = prescribedH
       wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
@@ -1349,10 +1362,11 @@ export function computeMonthly(
       wm.additionalAllowance = compAllowance  // 「休業補償」として使用（UI/Excel側でラベル切替）
       wm.otAllowance = otAllowance
       wm.absentDeduction = absentDeduction
+      wm.compBaseDeduction = compBaseDeduction
       wm.salaryNetPay = salaryNet
 
       wm.absence = absentDays
-      wm.absentCost = absentDeduction
+      wm.absentCost = absentDeduction + compBaseDeduction
       wm.netPay = salaryNet
     } else if (wm.visa === 'none' && wm.salary && wm.salary > 0) {
       // ── 月給制の日本人: 月給固定 + 残業時給換算 ──

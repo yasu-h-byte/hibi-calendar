@@ -54,6 +54,7 @@ export interface PayrollAuditWorker {
   basePay?: number
   otAllowance?: number
   absentDeduction?: number
+  compBaseDeduction?: number  // 旧ルール固定給: 補償日 通常分控除（満額・60%を別途休業補償で還元）
   salaryNetPay?: number
   fixedBasePay?: number
   additionalAllowance?: number
@@ -180,6 +181,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
       + (w.additionalAllowance || 0)
       + (w.otAllowance || 0)
       - (w.absentDeduction || 0)
+      - (w.compBaseDeduction || 0)
   } else {
     sumPay = fixedBase
       + (w.additionalAllowance || 0)
@@ -196,7 +198,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
     label: '支給額の内訳合計が一致',
     pass: Math.abs(sumPay - reported) < 2,
     detail: mode.useOldRules
-      ? `基本 ${fmtYen(fixedBase)} + 休業補償 ${fmtYen(w.additionalAllowance || 0)} + 残業 ${fmtYen(w.otAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`
+      ? `基本 ${fmtYen(fixedBase)} + 休業補償 ${fmtYen(w.additionalAllowance || 0)} + 残業 ${fmtYen(w.otAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)}${(w.compBaseDeduction || 0) > 0 ? ` - 補償日通常分 ${fmtYen(w.compBaseDeduction || 0)}` : ''} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`
       : `基本 ${fmtYen(fixedBase)} + 追加所定 ${fmtYen(w.additionalAllowance || 0)} + 有給日給 ${fmtYen(w.paidLeaveAllowance || 0)} + 所定外労働 ${fmtYen(w.nonStatutoryOTAllowance || 0)} + 法定外残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} + 休業 ${fmtYen(w.compAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
   })
 
@@ -504,6 +506,19 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                     </div>
                   )}
                   <div className="font-bold">- {fmtYen(w.absentDeduction || 0)}</div>
+                </td>
+              </tr>
+            )}
+            {mode.useOldRules && (w.compBaseDeduction || 0) > 0 && (
+              <tr>
+                <td>補償日 通常分控除<br/><span className="text-[10px] text-gray-500">(会社都合休: 固定給は満額前提のため一旦控除。60%は上の休業補償で還元 → 正味 日給の40%控除)</span></td>
+                <td className="font-mono text-red-600">
+                  <div className="text-[10px] text-gray-500">
+                    {w.rate > 0
+                      ? `日額 ${fmtYen(w.rate)} × ${fmtNum(w.compDays, '日')}（補償日・切捨）`
+                      : `補償日 ${fmtNum(w.compDays, '日')} × 日給（切捨）`}
+                  </div>
+                  <div className="font-bold">- {fmtYen(w.compBaseDeduction || 0)}</div>
                 </td>
               </tr>
             )}
