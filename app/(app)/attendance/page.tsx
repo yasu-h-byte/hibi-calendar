@@ -31,6 +31,7 @@ interface Worker {
   visa: string
   job: string
   retired?: string  // YYYY-MM-DD 退職日（バッジ表示用）
+  useOldRules?: boolean  // 旧契約継続者（フン等）。出面UIをレガシー（日数+残業+0.6補）にする
 }
 
 // 退職予定リスト用（3ヶ月以内）
@@ -864,8 +865,9 @@ export default function AttendanceGridPage() {
   const workerTotals = useCallback((workerId: string) => {
     const entries = workerEntries[workerId] || {}
     // 外国人のみ時間ベース計算（202605〜かつvisaあり）
+    // 2026-06-13: 旧契約継続者(フン等)はレガシー日数ベース計算なので時間ベースから除外
     const worker = data?.workers.find(w => String(w.id) === workerId)
-    const isWorkerTimeBased = useTimeBased && !!worker?.visa && worker.visa !== 'none' && worker.visa !== ''
+    const isWorkerTimeBased = useTimeBased && !!worker?.visa && worker.visa !== 'none' && worker.visa !== '' && !worker.useOldRules
     let wSum = 0
     let oSum = 0
     let compSum = 0
@@ -1641,7 +1643,8 @@ export default function AttendanceGridPage() {
                             // Input source indicator
                             const source = entry?.s
                             // 外国人のみ時間ベース（202605〜かつvisaあり）
-                            const isWorkerTimeBased = useTimeBased && !!worker.visa && worker.visa !== 'none' && worker.visa !== ''
+                            // 2026-06-13: 旧契約継続者(フン等)はレガシーUI（日数+残業+0.6補・待機中ガードなし）
+                            const isWorkerTimeBased = useTimeBased && !!worker.visa && worker.visa !== 'none' && worker.visa !== '' && !worker.useOldRules
 
                             // ── 時間ベースモード（外国人 + 202605〜）──
                             if (isWorkerTimeBased) {
