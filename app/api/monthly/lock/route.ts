@@ -78,7 +78,9 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
   }
 
   // ③ 給与計算の自動検算で critical が残っていないこと（給与が法令準拠で計算できている）
-  {
+  //   2026-06-15 修正: 自動検算は新ルール(変形労働制・2026年5月〜)専用。4月以前は compute が
+  //   旧ルールで計算するため新ルール検算は当てられない（誤検知で締められなくなる）。ym>='202605' のみ。
+  if (ym >= '202605') {
     const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ym] || {}
     const hasCal = Object.keys(siteWorkDaysMap).length > 0
     const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
