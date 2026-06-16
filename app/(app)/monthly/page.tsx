@@ -606,9 +606,14 @@ export default function MonthlyPage() {
   }, [data, tab])
 
   // tab フィルタ後の validation 結果（異常フィルタの ID source）
+  // 2026-06-15 修正: 自動検算は「新ルール（変形労働制・2026年5月〜）」専用。
+  //   4月以前は compute が全員を旧ルールで計算するため、新ルール検算を当てると
+  //   構成要素不一致・所定外労働¥0 等の誤検知が大量に出る（給与計算自体は正しい）。
+  //   → ym < '202605'（旧ルール月）は検算対象外にして空結果を返す。
   const validationOnTab = useMemo(() => {
-    return validatePayrolls(tabFilteredWorkers as unknown as PayrollSnapshot[])
-  }, [tabFilteredWorkers])
+    const targets = ym >= '202605' ? tabFilteredWorkers : []
+    return validatePayrolls(targets as unknown as PayrollSnapshot[])
+  }, [tabFilteredWorkers, ym])
 
   const filteredWorkers = useMemo(() => {
     if (!showAnomalyOnly) return tabFilteredWorkers
