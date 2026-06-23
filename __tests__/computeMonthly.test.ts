@@ -305,7 +305,7 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
       const main = buildMain({
         workers: [{
           id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1', job: 'tobi',
-          rate: 15702, hourlyRate: 2403, salary: 396105, otMul: 1.25,
+          rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25,
           hireDate: '2017-10-01', token: 'h', useOldRules: true,
         }],
         assign: { site1: { workers: [104], subcons: [] } },
@@ -331,7 +331,7 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
       const main = buildMain({
         workers: [{
           id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1', job: 'tobi',
-          rate: 15702, hourlyRate: 2403, salary: 396105, otMul: 1.25,
+          rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25,
           hireDate: '2017-10-01', token: 'h', useOldRules: true,
         }],
         assign: { site1: { workers: [104], subcons: [] } },
@@ -342,18 +342,18 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
       for (let d = 1; d <= prescribed - 2; d++) Object.assign(attD, dayWork('site1', 104, ym, d, 1, d === 1 ? 10 : 0))
       return computeMonthly(main, attD, {}, ym, prescribed).workers.find(x => x.id === 104)!
     }
-    const expectedOtUnit = Math.ceil(Math.round((15702 / (20 / 3)) * 1.25 * 100) / 100) // = 2945
-    expect(expectedOtUnit).toBe(2945)
+    const expectedOtUnit = Math.ceil(Math.round((15693 / (20 / 3)) * 1.25 * 100) / 100) // = 2943
+    expect(expectedOtUnit).toBe(2943)
     for (const [ym, pd] of [['202605', 23], ['202606', 26]] as const) {
       const w = mk(ym, pd)
       expect(w.basePay).toBe(396105)               // 基本給は固定
       expect(w.otHours).toBe(10)
       // 残業手当 = 切上(2,943 × 10) = 29,430（所定日数に関係なく単価固定）
       expect(w.otAllowance).toBe(Math.ceil(Math.round(expectedOtUnit * 10 * 100) / 100))
-      expect(w.otAllowance).toBe(29450)
+      expect(w.otAllowance).toBe(29430)
       // 欠勤控除 = 日給15,693 × 2日（所定日数に関係なく日給ベース）
       expect(w.absence).toBe(2)
-      expect(w.absentDeduction).toBe(15702 * 2)
+      expect(w.absentDeduction).toBe(15693 * 2)
     }
   })
 
@@ -362,7 +362,7 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
     const main = buildMain({
       workers: [{
         id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1', job: 'tobi',
-        rate: 15702, hourlyRate: 2403, salary: 396105, otMul: 1.25,
+        rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25,
         hireDate: '2017-10-01', token: 'h', useOldRules: true,
       }],
       assign: { site1: { workers: [104], subcons: [] } },
@@ -381,16 +381,16 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
     expect(w.compDays).toBe(1)
     // 欠勤日数は「無給の欠勤」だけ＝2日（補償日は含めない）
     expect(w.absence).toBe(2)
-    // 欠勤控除 = 日給15,702 × 2日（補償日を含まない）
-    expect(w.absentDeduction).toBe(15702 * 2)
-    // 補償日 通常分控除 = 日給15,702 × 1日（固定給は満額前提のため一旦控除）
-    expect(w.compBaseDeduction).toBe(15702)
-    // 休業補償 = 日給15,702 × 60% × 1日（切上）
-    expect(w.additionalAllowance).toBe(Math.ceil(15702 * 0.6))  // = 9422
-    // 支給額 = 396,105 + 9,422 − 31,404 − 15,702（補償日は正味60%支給＝日給の40%控除）
-    expect(w.salaryNetPay).toBe(396105 + 9422 - 15702 * 2 - 15702)
-    expect(w.salaryNetPay).toBe(358421)
-    // 補償日を会社都合休にすると、単なる欠勤(60%なし)より日給の60%=9,422円多い
+    // 欠勤控除 = 日給15,693 × 2日（補償日を含まない）
+    expect(w.absentDeduction).toBe(15693 * 2)
+    // 補償日 通常分控除 = 日給15,693 × 1日（固定給は満額前提のため一旦控除）
+    expect(w.compBaseDeduction).toBe(15693)
+    // 休業補償 = 日給15,693 × 60% × 1日（切上）
+    expect(w.additionalAllowance).toBe(Math.ceil(15693 * 0.6))  // = 9416
+    // 支給額 = 396,105 + 9,416 − 31,386 − 15,693（補償日は正味60%支給＝日給の40%控除）
+    expect(w.salaryNetPay).toBe(396105 + 9416 - 15693 * 2 - 15693)
+    expect(w.salaryNetPay).toBe(358442)
+    // 補償日を会社都合休にすると、単なる欠勤(60%なし)より日給の60%=9,416円多い
     // （= 補償日の休業補償分。資料の支給額もこの値に連動する）
   })
 
@@ -398,7 +398,7 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
     const main = buildMain({
       workers: [{
         id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1', job: 'tobi',
-        rate: 15702, hourlyRate: 2403, salary: 396105, otMul: 1.25,
+        rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25,
         hireDate: '2017-10-01', retired: '2026-06-15', token: 'h', useOldRules: true,
       }],
       assign: { site1: { workers: [104], subcons: [] } },
@@ -416,12 +416,12 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
     // 在籍 6/1〜6/15 = 15日 / 暦30日 → ratio 0.5
     // 基本給 = 切上(396,105 × 0.5) = 198,053
     expect(w.basePay).toBe(198053)
-    // 残業単価は日給ベースで固定 2,945（按分の影響なし）
-    expect(w.otAllowance).toBe(2945 * 2)
-    // 所定は按分: round(26×0.5)=13日 → 出勤12日で欠勤1日 = 15,702
+    // 残業単価は日給ベースで固定 2,943（按分の影響なし）
+    expect(w.otAllowance).toBe(2943 * 2)
+    // 所定は按分: round(26×0.5)=13日 → 出勤12日で欠勤1日 = 15,693
     expect(w.absence).toBe(1)
-    expect(w.absentDeduction).toBe(15702)
-    expect(w.salaryNetPay).toBe(198053 + 2945 * 2 - 15702)
+    expect(w.absentDeduction).toBe(15693)
+    expect(w.salaryNetPay).toBe(198053 + 5886 - 15693)
   })
 })
 
