@@ -732,14 +732,12 @@ Chon ten -> Xem lich -> Ky
               </div>
             </div>
           )}
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
+            🔐 承認は各スタッフ<b>本人の個人リンク</b>（出面入力と同じQR/リンク）から行います。氏名入力＋同意チェックで本人確認します。
+            個人リンク・QRは <a href="/workers" className="underline font-medium hover:text-blue-900 dark:hover:text-blue-200">スタッフ管理</a> から配布できます。
+            <span className="text-blue-500 dark:text-blue-400">（名前選択式の旧ページは廃止しました）</span>
+          </div>
           <div className="flex flex-wrap items-center gap-3 pt-1">
-            <a
-              href="/calendar/public"
-              target="_blank"
-              className="inline-block text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
-            >
-              署名ページを開く
-            </a>
             {user.role !== 'foreman' && (
               <div className="flex flex-wrap items-center gap-2">
                 <input

@@ -56,6 +56,8 @@ async function appendSignLog(params: {
   event: 'sign' | 'resign'
   signedDays: Record<string, string> | null
   calendarApprovedAt: string | null
+  /** 同意セレモニーで本人が入力した氏名（なりすまし対策・本人同意の証跡） */
+  consentName?: string
 }): Promise<void> {
   try {
     const safeStamp = params.signedAt.replace(/[/:.]/g, '-')
@@ -71,6 +73,8 @@ async function appendSignLog(params: {
       event: params.event,
       signedDays: params.signedDays ?? null,
       calendarApprovedAt: params.calendarApprovedAt ?? null,
+      consentName: params.consentName || '',
+      agreed: true,
       loggedAt: new Date().toISOString(),
     })
   } catch (e) {
@@ -95,6 +99,7 @@ export async function signOneSiteForWorker(
   ipHash: string,
   method: 'tap' | 'self_tap' = 'tap',
   signedAt: string = new Date().toISOString(),
+  consentName: string = '',
 ): Promise<SignResult> {
   // approved 確認（クライアント改ざん対策で必ずサーバ側で再チェック）
   const calDocId = `${siteId}_${ym}`
@@ -128,9 +133,10 @@ export async function signOneSiteForWorker(
       resignCount: newResignCount,
       method,
       ipHash,
+      consentName: consentName || '',    // 同意セレモニーで本人が入力した氏名
     })
     // 永続アーカイブにも追記（再署名イベント）
-    await appendSignLog({ workerId, ym, siteId, signedAt, method, ipHash, resignCount: newResignCount, event: 'resign', signedDays, calendarApprovedAt })
+    await appendSignLog({ workerId, ym, siteId, signedAt, method, ipHash, resignCount: newResignCount, event: 'resign', signedDays, calendarApprovedAt, consentName })
     return { siteId, success: true, signedAt }
   }
 
@@ -142,9 +148,10 @@ export async function signOneSiteForWorker(
     signedAt,
     method,
     ipHash,
+    consentName: consentName || '',      // 同意セレモニーで本人が入力した氏名
   })
   // 永続アーカイブにも追記（新規署名イベント）
-  await appendSignLog({ workerId, ym, siteId, signedAt, method, ipHash, resignCount: 0, event: 'sign', signedDays, calendarApprovedAt })
+  await appendSignLog({ workerId, ym, siteId, signedAt, method, ipHash, resignCount: 0, event: 'sign', signedDays, calendarApprovedAt, consentName })
   return { siteId, success: true, signedAt }
 }
 
@@ -160,10 +167,11 @@ export async function signMultipleSitesForWorker(
   siteIds: string[],
   ipHash: string,
   method: 'tap' | 'self_tap' = 'tap',
+  consentName: string = '',
 ): Promise<SignResult[]> {
   const signedAt = new Date().toISOString()
   return Promise.all(
-    siteIds.map(siteId => signOneSiteForWorker(workerId, ym, siteId, ipHash, method, signedAt))
+    siteIds.map(siteId => signOneSiteForWorker(workerId, ym, siteId, ipHash, method, signedAt, consentName))
   )
 }
 

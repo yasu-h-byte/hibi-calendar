@@ -242,7 +242,8 @@ export default function StaffAttendancePage() {
 
   // カレンダー承認のサブミット（本人のトークンで自分自身としてサイン）
   // モーダルで開いている月の「未署名 OR 再署名要」の現場を一括サイン
-  const submitCalendarSign = useCallback(async () => {
+  //   consentName: 同意セレモニーで本人が入力した氏名（本人同意の証跡）
+  const submitCalendarSign = useCallback(async (consentName: string) => {
     if (!activePendingCalendar || signingCalendar) return
     const ym = activePendingCalendar.ym
     // 未署名と「再署名要 (needsResign)」の両方を対象に
@@ -256,7 +257,7 @@ export default function StaffAttendancePage() {
       const res = await fetch('/api/calendar/sign-self', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, ym, siteIds: targetSiteIds }),
+        body: JSON.stringify({ token, ym, siteIds: targetSiteIds, consentName }),
       })
       const json = await res.json()
       if (!res.ok || !json.success) {

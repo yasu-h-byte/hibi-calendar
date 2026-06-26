@@ -327,6 +327,7 @@ export async function GET(request: NextRequest) {
         type LogRow = {
           workerId: number; siteId: string; signedAt?: string; method?: string; ipHash?: string
           resignCount?: number; event?: string; signedDays?: Record<string, string>; calendarApprovedAt?: string
+          consentName?: string
         }
         // 永続アーカイブから当月の署名イベントを取得 → (worker,site) ごとに最新を採用
         const logSnap = await getDocs(query(collection(db, 'calendarSignLog'), where('ym', '==', ymDash)))
@@ -364,7 +365,7 @@ export async function GET(request: NextRequest) {
         const workerIdSet = new Set<number>([...m.eligibleForeignWorkers.map(w => w.id), ...workerIdsInLog])
         const workers = [...workerIdSet].map(id => ({ id, name: workerName(id) }))
 
-        const signs: Record<string, { signedAt?: string; method?: string; ipHash?: string; resignCount?: number; workCount?: number | null }> = {}
+        const signs: Record<string, { signedAt?: string; method?: string; ipHash?: string; resignCount?: number; workCount?: number | null; consentName?: string }> = {}
         for (const key of Object.keys(latest)) {
           const x = latest[key]
           const workCount = x.signedDays ? Object.values(x.signedDays).filter(v => v === 'work').length : null
@@ -374,6 +375,7 @@ export async function GET(request: NextRequest) {
             ipHash: x.ipHash,
             resignCount: typeof x.resignCount === 'number' ? x.resignCount : 0,
             workCount,
+            consentName: x.consentName || '',
           }
         }
 

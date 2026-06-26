@@ -6,6 +6,8 @@
  */
 'use client'
 
+import { useState } from 'react'
+
 const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
 
 export interface PendingCalendarSite {
@@ -35,7 +37,8 @@ interface Props {
   reviewed: boolean
   onReviewedChange: (next: boolean) => void
   signing: boolean
-  onSubmit: () => void
+  /** 同意セレモニーで本人が入力した氏名を渡す */
+  onSubmit: (consentName: string) => void
   onClose: () => void
   errorMsg: string | null
 }
@@ -54,6 +57,10 @@ export default function CalendarApprovalModal({
   const monthNum = parseInt(m)
   const daysInMonth = new Date(yearNum, monthNum, 0).getDate()
   const firstDow = new Date(yearNum, monthNum - 1, 1).getDay()  // 0=日
+
+  // 同意セレモニー: 本人が氏名を入力して同意を明示する（なりすまし対策・本人同意の証跡）
+  const [consentName, setConsentName] = useState('')
+  const consentOk = consentName.trim().length >= 2
 
   // 表示対象: 承認済みの現場
   const targetSites = pendingCalendar.sites.filter(s => s.status === 'approved')
@@ -180,6 +187,22 @@ export default function CalendarApprovalModal({
             </div>
           ) : (
             <>
+              {/* 本人確認: 氏名の入力（同意セレモニー） */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  確認のため、お名前を入力してください<br />
+                  <span className="text-gray-500 font-normal">Vui lòng nhập họ tên của bạn để xác nhận</span>
+                </label>
+                <input
+                  type="text"
+                  value={consentName}
+                  onChange={e => setConsentName(e.target.value)}
+                  placeholder={pendingCalendar.workerName}
+                  autoComplete="off"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
+                />
+              </div>
+              {/* 同意チェック */}
               <label className="flex items-start gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -188,22 +211,18 @@ export default function CalendarApprovalModal({
                   className="mt-1 w-5 h-5 rounded"
                 />
                 <span className="text-sm text-gray-800 leading-tight">
-                  {hasRevisions && !hasFirstTimeSign
-                    ? '変更内容を確認しました'
-                    : 'カレンダーを確認しました'}
+                  上記は私本人です。カレンダーの内容を確認し、同意します
                   <br />
                   <span className="text-xs text-gray-500">
-                    {hasRevisions && !hasFirstTimeSign
-                      ? 'Tôi đã xem nội dung cập nhật'
-                      : 'Tôi đã xem lịch'}
+                    Đây chính là tôi. Tôi đã xem và đồng ý với nội dung lịch.
                   </span>
                 </span>
               </label>
               <button
-                onClick={onSubmit}
-                disabled={!reviewed || signing}
+                onClick={() => onSubmit(consentName.trim())}
+                disabled={!reviewed || !consentOk || signing}
                 className={`w-full py-3 rounded-xl font-bold text-base transition ${
-                  reviewed && !signing
+                  reviewed && consentOk && !signing
                     ? 'bg-orange-500 text-white hover:bg-orange-600 active:scale-95'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}

@@ -24,9 +24,15 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { token, ym } = body
     const siteIdsParam: string[] | undefined = body.siteIds
+    // 同意セレモニー: 本人が入力した氏名（なりすまし対策・本人同意の証跡）
+    const consentName: string = (body.consentName || '').toString().trim()
 
     if (!token || !ym) {
       return NextResponse.json({ error: 'token and ym required' }, { status: 400 })
+    }
+    // 本人による同意の明示を必須化（氏名未入力では承認できない）
+    if (consentName.length < 2) {
+      return NextResponse.json({ error: 'お名前を入力してください / Vui lòng nhập họ tên' }, { status: 400 })
     }
 
     // Token → worker
@@ -68,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     const ipHash = getRequestIpHash(request.headers)
-    const results = await signMultipleSitesForWorker(worker.id, ym, targetSiteIds, ipHash, 'self_tap')
+    const results = await signMultipleSitesForWorker(worker.id, ym, targetSiteIds, ipHash, 'self_tap', consentName)
 
     const signedCount = results.filter(r => r.success).length
     const failedCount = results.filter(r => !r.success).length
