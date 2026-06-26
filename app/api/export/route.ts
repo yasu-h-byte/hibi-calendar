@@ -12,8 +12,10 @@ import {
   generatePerSiteAttendance,
   generatePlannedShiftExcel,
   generateActualHoursExcel,
+  generateConsentLedger,
   workbookToBuffer,
 } from '@/lib/export'
+import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 import { db } from '@/lib/firebase'
 import { collection, getDocs, query, where } from 'firebase/firestore'
 
@@ -311,6 +313,46 @@ export async function GET(request: NextRequest) {
         })
         buffer = workbookToBuffer(wb)
         filename = `実労働時間明細${orgLabel}_${ymStr}.xlsx`
+        break
+      }
+
+      // 2026-06-XX 追加: 変形労働 カレンダー周知・同意台帳
+      //   calendarSign の電子署名を「誰が・いつ・どの現場の・どの月のカレンダーを承認したか」の
+      //   台帳として出力（社労士・労基署提出用）。データ源は /calendar と同じ loadCalendarMatrix。
+      case 'consentLedger': {
+        const ymDash = `${ymStr.slice(0, 4)}-${ymStr.slice(4, 6)}`
+        const m = await loadCalendarMatrix(ymDash)
+        // 承認済み現場のみ（確定日時・承認者付き）
+        const approvedSites = m.sitesWithWorkers
+          .filter(sw => m.siteCalendars[sw.site.id]?.status === 'approved')
+          .map(sw => ({
+            siteId: sw.site.id,
+            siteName: sw.site.name,
+            approvedAt: m.siteCalendars[sw.site.id]?.approvedAt || null,
+            approvedBy: m.siteCalendars[sw.site.id]?.approvedBy ?? null,
+          }))
+        // calendarSign 全フィールド（method/ipHash/再署名履歴）を取得
+        const signSnap = await getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ymDash)))
+        const signs: Record<string, { signedAt?: string; method?: string; ipHash?: string; resignCount?: number; previousSignedAt?: string }> = {}
+        signSnap.forEach(d => {
+          const x = d.data()
+          signs[`${x.workerId}_${x.siteId}`] = {
+            signedAt: x.signedAt,
+            method: x.method,
+            ipHash: x.ipHash,
+            resignCount: x.resignCount,
+            previousSignedAt: x.previousSignedAt,
+          }
+        })
+        const wb = generateConsentLedger({
+          ym: ymStr,
+          generatedAt: new Date().toISOString(),
+          approvedSites,
+          workers: m.eligibleForeignWorkers.map(w => ({ id: w.id, name: w.name })),
+          signs,
+        })
+        buffer = workbookToBuffer(wb)
+        filename = `カレンダー周知同意台帳_${ymStr}.xlsx`
         break
       }
 

@@ -119,6 +119,7 @@ export default function CalendarManagePage() {
   // 2段階操作にする。1タップ目で armed 状態にし、2タップ目の明示ボタンで初めて発火。
   // siteId をキーに 'revise' | 'unapprove' を保持（同時に1つだけ）。
   const [armedDanger, setArmedDanger] = useState<Record<string, 'revise' | 'unapprove'>>({})
+  const [downloadingLedger, setDownloadingLedger] = useState(false)
   const [copiedMsg, setCopiedMsg] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
@@ -725,13 +726,42 @@ Chon ten -> Xem lich -> Ky
               </div>
             </div>
           )}
-          <a
-            href="/calendar/public"
-            target="_blank"
-            className="inline-block text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
-          >
-            署名ページを開く
-          </a>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <a
+              href="/calendar/public"
+              target="_blank"
+              className="inline-block text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
+            >
+              署名ページを開く
+            </a>
+            {user.role !== 'foreman' && (
+              <button
+                onClick={async () => {
+                  const ymClean = ym.replace('-', '')
+                  setDownloadingLedger(true)
+                  try {
+                    const res = await fetch(`/api/export?type=consentLedger&ym=${ymClean}`, {
+                      headers: { 'x-admin-password': password },
+                    })
+                    if (!res.ok) { alert('台帳の出力に失敗しました'); return }
+                    const blob = await res.blob()
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `カレンダー周知同意台帳_${ymClean}.xlsx`
+                    a.click()
+                    URL.revokeObjectURL(url)
+                  } catch { alert('台帳の出力に失敗しました') }
+                  finally { setDownloadingLedger(false) }
+                }}
+                disabled={downloadingLedger}
+                className="inline-flex items-center gap-1 text-sm bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
+                title="変形労働の周知・同意記録（誰がいつどの現場のカレンダーを承認したか）をExcelで出力"
+              >
+                📋 {downloadingLedger ? '出力中...' : '周知・同意台帳をExcel出力'}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

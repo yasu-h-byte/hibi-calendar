@@ -1971,3 +1971,114 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
   }
   return wb
 }
+
+// ────────────────────────────────────────
+// 変形労働時間制 カレンダー周知・同意台帳（2026-06 追加）
+//   1ヶ月単位の変形労働時間制では「事前に確定した休日カレンダーを各スタッフへ周知し
+//   本人の同意を得た」記録が法的に重要。calendarSign の電子署名を台帳化して
+//   社労士・労基署提出に使える形で出力する。
+// ────────────────────────────────────────
+
+/** UTC ISO → JST 表示 "YYYY/MM/DD HH:mm"（サーバTZに依存しない） */
+function isoToJst(iso?: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const j = new Date(d.getTime() + 9 * 3600 * 1000)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${j.getUTCFullYear()}/${p(j.getUTCMonth() + 1)}/${p(j.getUTCDate())} ${p(j.getUTCHours())}:${p(j.getUTCMinutes())}`
+}
+
+/** 承認方法コード → 表示ラベル */
+function signMethodLabel(method?: string): string {
+  if (method === 'self_tap') return '本人認証(個人リンク)'
+  if (method === 'tap') return '名前選択(旧方式)'
+  return method || '—'
+}
+
+export interface ConsentLedgerData {
+  ym: string                 // YYYYMM
+  generatedAt?: string       // 出力日時(ISO)。サーバ側で new Date().toISOString()
+  approvedSites: { siteId: string; siteName: string; approvedAt: string | null; approvedBy: number | null }[]
+  workers: { id: number; name: string }[]   // 署名対象の外国人スタッフ
+  /** key: `${workerId}_${siteId}` → 署名レコード（calendarSign 全フィールド） */
+  signs: Record<string, { signedAt?: string; method?: string; ipHash?: string; resignCount?: number; previousSignedAt?: string }>
+}
+
+/**
+ * 変形労働時間制 カレンダー周知・同意台帳 Excel を生成。
+ *  Sheet1「同意台帳」: 承認済みカレンダー一覧 + スタッフ×現場の署名日時マトリクス
+ *  Sheet2「署名明細」: 1署名=1行の監査ログ（方法・再署名履歴・端末ハッシュ）
+ */
+export function generateConsentLedger(data: ConsentLedgerData): XLSX.WorkBook {
+  const { ym, generatedAt, approvedSites, workers, signs } = data
+  const wb = XLSX.utils.book_new()
+  const sitesSorted = [...approvedSites].sort((a, b) => a.siteName.localeCompare(b.siteName, 'ja'))
+  const workersSorted = [...workers].sort((a, b) => a.id - b.id)
+
+  // ── Sheet1: 同意台帳（サマリー + マトリクス） ──
+  const s1: unknown[][] = []
+  s1.push([`変形労働時間制 カレンダー周知・同意台帳　${ymLabel(ym)}`])
+  s1.push(['1ヶ月単位の変形労働時間制において、事前に確定した休日カレンダーを各スタッフへ周知し、本人の電子署名で同意を得た記録です。'])
+  s1.push([`出力日時: ${isoToJst(generatedAt) || '—'}（JST）`])
+  s1.push([])
+  s1.push(['【承認（確定）済みカレンダー】'])
+  s1.push(['現場', 'カレンダー確定（承認）日時', '承認者ID'])
+  if (sitesSorted.length === 0) {
+    s1.push(['（承認済みの現場がありません）', '', ''])
+  } else {
+    for (const st of sitesSorted) {
+      s1.push([st.siteName, isoToJst(st.approvedAt) || '未記録', st.approvedBy ?? '—'])
+    }
+  }
+  s1.push([])
+  s1.push(['【署名状況マトリクス】セル＝署名日時（JST）／空欄＝未署名'])
+  const matrixHeaderRowIdx = s1.length
+  s1.push(['スタッフID', '氏名', ...sitesSorted.map(s => s.siteName), '署名済 / 対象'])
+  for (const w of workersSorted) {
+    const cells: unknown[] = [w.id, w.name]
+    let signed = 0
+    for (const st of sitesSorted) {
+      const rec = signs[`${w.id}_${st.siteId}`]
+      if (rec?.signedAt) { signed++; cells.push(isoToJst(rec.signedAt)) }
+      else cells.push('未署名')
+    }
+    cells.push(`${signed} / ${sitesSorted.length}`)
+    s1.push(cells)
+  }
+  const sheet1 = XLSX.utils.aoa_to_sheet(s1)
+  const lastCol = Math.max(2, 2 + sitesSorted.length) // 氏名列以降
+  sheet1['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: lastCol } },
+  ]
+  setColWidths(sheet1, [10, 20, ...sitesSorted.map(() => 18), 12])
+  XLSX.utils.book_append_sheet(wb, sheet1, '同意台帳')
+  void matrixHeaderRowIdx
+
+  // ── Sheet2: 署名明細（1署名=1行の監査ログ） ──
+  const s2: unknown[][] = []
+  s2.push([`署名明細（監査ログ）　${ymLabel(ym)}`])
+  s2.push(['スタッフID', '氏名', '現場', '対象月', '署名状況', '署名日時(JST)', '承認方法', '再署名回数', '前回署名日時(JST)', '端末ハッシュ'])
+  for (const w of workersSorted) {
+    for (const st of sitesSorted) {
+      const rec = signs[`${w.id}_${st.siteId}`]
+      if (rec?.signedAt) {
+        s2.push([
+          w.id, w.name, st.siteName, ymLabel(ym), '署名済',
+          isoToJst(rec.signedAt), signMethodLabel(rec.method),
+          rec.resignCount ?? 0, isoToJst(rec.previousSignedAt), rec.ipHash || '',
+        ])
+      } else {
+        s2.push([w.id, w.name, st.siteName, ymLabel(ym), '未署名', '', '', '', '', ''])
+      }
+    }
+  }
+  const sheet2 = XLSX.utils.aoa_to_sheet(s2)
+  sheet2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 9 } }]
+  setColWidths(sheet2, [10, 20, 18, 10, 10, 18, 20, 10, 18, 12])
+  XLSX.utils.book_append_sheet(wb, sheet2, '署名明細')
+
+  return wb
+}
