@@ -117,6 +117,17 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // カレンダー承認の永続アーカイブ（append-only・法的証跡）
+    //   変形労働時間制の「事前確定・周知・同意」の証跡を**消えない形**で残す。
+    //   live の calendarSign は承認取消(revert)/初期化(reset)で削除されるが、本ログは残す。
+    //   改竄・削除を rules レベルで禁止して証跡性を担保（create のみ許可）。
+    match /calendarSignLog/{docId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if false;
+      allow delete: if false;
+    }
+
     // カレンダーパターン定義
     match /calendarPatterns/{docId} {
       allow read: if true;
@@ -176,7 +187,8 @@ service cloud.firestore {
     match /backups/{docId} {
       allow read: if true;
       allow create: if request.resource.data.sourceId is string
-                 && request.resource.data.sourceId.matches('demmen/.*')
+                 && (request.resource.data.sourceId.matches('demmen/.*')
+                     || request.resource.data.sourceId.matches('calendarSign.*'))
                  && request.resource.data.data is map
                  && request.resource.data.data.size() > 0;
       allow update: if false;  // バックアップは追記のみ、変更は禁止

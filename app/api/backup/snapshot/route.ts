@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, deleteDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, deleteDoc, where } from 'firebase/firestore'
 
 /**
  * 出面・人員マスターデータの日次バックアップ
@@ -100,6 +100,25 @@ export async function GET(request: NextRequest) {
           data: attSnap.data(),
         })
         summary.saved.push(`att_${ym}_${stamp}`)
+      }
+    }
+
+    // (2b) 当月周辺の calendarSign（カレンダー承認署名）をスナップショット
+    //   ※ 恒久的な法的証跡は calendarSignLog（append-only・revert/reset でも消えない）が正本。
+    //      ここでは live の calendarSign を 30 日保険として併せて退避する（多層防御）。
+    for (const offset of [-1, 0, 1]) {
+      const ym = relativeYm(now, offset)                    // YYYYMM
+      const ymDash = `${ym.slice(0, 4)}-${ym.slice(4, 6)}`  // siteCalendar/calendarSign の ym 形式
+      const signSnap = await getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ymDash)))
+      if (!signSnap.empty) {
+        const docs = signSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+        await setDoc(doc(db, 'backups', `csign_${ym}_${stamp}`), {
+          sourceId: `calendarSign(${ymDash})`,
+          ym,
+          snapshotAt: now.toISOString(),
+          data: { docs },
+        })
+        summary.saved.push(`csign_${ym}_${stamp}`)
       }
     }
 

@@ -33,6 +33,52 @@ export interface SignResult {
 }
 
 /**
+ * 永続アーカイブ（calendarSignLog）への追記。
+ *
+ * 変形労働時間制の「事前確定・周知・同意」の法的証跡を**消えない形**で残すための
+ * append-only ログ。live の calendarSign は承認取消(revert)/初期化(reset)で削除されるが、
+ * 本ログは**絶対に削除しない**（過去どの月の承認状況もいつでも台帳出力できるようにするため）。
+ *
+ * - 1署名イベント = 1ドキュメント（再署名も別ドキュメントとして履歴を残す）
+ * - signedDays: 署名した瞬間のカレンダー休日設定スナップショット（後から修正されても凍結）
+ * - docId は (worker, ym, site, signedAt) で決まり冪等（同一イベントの二重起動でも重複しない）
+ * - 署名本体が成功していれば、ログ書き込みの失敗は致命的ではない（backfill で後追い修復可能）
+ *   ため try/catch で握りつぶす（署名 UX を止めない）。
+ */
+async function appendSignLog(params: {
+  workerId: number
+  ym: string
+  siteId: string
+  signedAt: string
+  method: string
+  ipHash: string
+  resignCount: number
+  event: 'sign' | 'resign'
+  signedDays: Record<string, string> | null
+  calendarApprovedAt: string | null
+}): Promise<void> {
+  try {
+    const safeStamp = params.signedAt.replace(/[/:.]/g, '-')
+    const id = `${params.workerId}_${params.ym}_${params.siteId}_${safeStamp}`
+    await setDoc(doc(db, 'calendarSignLog', id), {
+      workerId: params.workerId,
+      ym: params.ym,
+      siteId: params.siteId,
+      signedAt: params.signedAt,
+      method: params.method,
+      ipHash: params.ipHash,
+      resignCount: params.resignCount,
+      event: params.event,
+      signedDays: params.signedDays ?? null,
+      calendarApprovedAt: params.calendarApprovedAt ?? null,
+      loggedAt: new Date().toISOString(),
+    })
+  } catch (e) {
+    console.error('appendSignLog failed (sign itself succeeded; backfill can repair):', e)
+  }
+}
+
+/**
  * 1 件のサイト × 月 × ワーカーの署名を実行
  *
  * - siteCalendar の approved 確認（サーバ側の改ざん対策）
@@ -56,7 +102,11 @@ export async function signOneSiteForWorker(
   if (!calDoc.exists() || calDoc.data().status !== 'approved') {
     return { siteId, success: false, error: 'Calendar not approved' }
   }
-  const calUpdatedAt = (calDoc.data().updatedAt as string | undefined) || null
+  const calData = calDoc.data()
+  const calUpdatedAt = (calData.updatedAt as string | undefined) || null
+  // 署名時点のカレンダー内容スナップショット（永続アーカイブ用・B）
+  const signedDays = (calData.days as Record<string, string> | undefined) || null
+  const calendarApprovedAt = (calData.approvedAt as string | undefined) || null
 
   const signDocId = `${workerId}_${ym}_${siteId}`
   const existingSign = await getDoc(doc(db, 'calendarSign', signDocId))
@@ -68,16 +118,19 @@ export async function signOneSiteForWorker(
       return { siteId, success: true, signedAt: existingSignedAt }
     }
     // それ以外は「再署名」として signedAt を更新し、履歴として previousSignedAt を残す
+    const newResignCount = ((existingSign.data().resignCount as number) || 0) + 1
     await setDoc(doc(db, 'calendarSign', signDocId), {
       workerId,
       ym,
       siteId,
       signedAt,                          // 新しい署名時刻
       previousSignedAt: existingSignedAt, // 直前の署名時刻（再署名の証跡）
-      resignCount: ((existingSign.data().resignCount as number) || 0) + 1,
+      resignCount: newResignCount,
       method,
       ipHash,
     })
+    // 永続アーカイブにも追記（再署名イベント）
+    await appendSignLog({ workerId, ym, siteId, signedAt, method, ipHash, resignCount: newResignCount, event: 'resign', signedDays, calendarApprovedAt })
     return { siteId, success: true, signedAt }
   }
 
@@ -90,6 +143,8 @@ export async function signOneSiteForWorker(
     method,
     ipHash,
   })
+  // 永続アーカイブにも追記（新規署名イベント）
+  await appendSignLog({ workerId, ym, siteId, signedAt, method, ipHash, resignCount: 0, event: 'sign', signedDays, calendarApprovedAt })
   return { siteId, success: true, signedAt }
 }
 

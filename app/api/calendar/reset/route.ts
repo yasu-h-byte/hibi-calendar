@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Delete all calendarSign docs for this month
+    // ※ 永続アーカイブ calendarSignLog は法的証跡として**削除しない**（過去の承認状況を残す）。
     const signQ = query(collection(db, 'calendarSign'), where('ym', '==', ym))
     const signSnap = await getDocs(signQ)
     for (const d of signSnap.docs) {

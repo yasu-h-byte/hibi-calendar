@@ -41,7 +41,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `承認済みではありません（現在: ${currentStatus}）` }, { status: 400 })
       }
 
-      // 署名データも削除（承認取消し後は再署名が必要）
+      // 署名データ（live calendarSign）は削除（承認取消し後は再署名が必要）。
+      // ※ 永続アーカイブ calendarSignLog は法的証跡として**削除しない**（過去の承認状況を残す）。
       const signQ = query(
         collection(db, 'calendarSign'),
         where('ym', '==', ym),

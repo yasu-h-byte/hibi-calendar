@@ -317,38 +317,71 @@ export async function GET(request: NextRequest) {
       }
 
       // 2026-06-XX 追加: 変形労働 カレンダー周知・同意台帳
-      //   calendarSign の電子署名を「誰が・いつ・どの現場の・どの月のカレンダーを承認したか」の
-      //   台帳として出力（社労士・労基署提出用）。データ源は /calendar と同じ loadCalendarMatrix。
+      //   「誰が・いつ・どの現場の・どの月のカレンダーを承認したか」の台帳（社労士・労基署提出用）。
+      //   正本は永続アーカイブ calendarSignLog（承認取消/初期化でも消えない・任意の過去月を出力可）。
+      //   現行ロスター情報（未署名者の把握）のため loadCalendarMatrix も併用して和集合を取る。
       case 'consentLedger': {
         const ymDash = `${ymStr.slice(0, 4)}-${ymStr.slice(4, 6)}`
         const m = await loadCalendarMatrix(ymDash)
-        // 承認済み現場のみ（確定日時・承認者付き）
-        const approvedSites = m.sitesWithWorkers
+
+        type LogRow = {
+          workerId: number; siteId: string; signedAt?: string; method?: string; ipHash?: string
+          resignCount?: number; event?: string; signedDays?: Record<string, string>; calendarApprovedAt?: string
+        }
+        // 永続アーカイブから当月の署名イベントを取得 → (worker,site) ごとに最新を採用
+        const logSnap = await getDocs(query(collection(db, 'calendarSignLog'), where('ym', '==', ymDash)))
+        const latest: Record<string, LogRow> = {}
+        const siteIdsInLog = new Set<string>()
+        const workerIdsInLog = new Set<number>()
+        const approvedAtFromLog: Record<string, string> = {}
+        logSnap.forEach(d => {
+          const x = d.data() as LogRow
+          if (x.event && x.event !== 'sign' && x.event !== 'resign') return
+          siteIdsInLog.add(x.siteId)
+          workerIdsInLog.add(Number(x.workerId))
+          if (x.calendarApprovedAt && !approvedAtFromLog[x.siteId]) approvedAtFromLog[x.siteId] = x.calendarApprovedAt
+          const key = `${x.workerId}_${x.siteId}`
+          const prev = latest[key]
+          if (!prev || String(x.signedAt || '') > String(prev.signedAt || '')) latest[key] = x
+        })
+
+        const siteName = (id: string) => main.sites.find(s => s.id === id)?.name || id
+        const workerName = (id: number) => main.workers.find(w => w.id === id)?.name || `ID:${id}`
+
+        // 承認済み現場 = 現行で承認済み ∪ ログに署名がある現場（過去月の復元）
+        const approvedFromMatrix = m.sitesWithWorkers
           .filter(sw => m.siteCalendars[sw.site.id]?.status === 'approved')
-          .map(sw => ({
-            siteId: sw.site.id,
-            siteName: sw.site.name,
-            approvedAt: m.siteCalendars[sw.site.id]?.approvedAt || null,
-            approvedBy: m.siteCalendars[sw.site.id]?.approvedBy ?? null,
-          }))
-        // calendarSign 全フィールド（method/ipHash/再署名履歴）を取得
-        const signSnap = await getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ymDash)))
-        const signs: Record<string, { signedAt?: string; method?: string; ipHash?: string; resignCount?: number; previousSignedAt?: string }> = {}
-        signSnap.forEach(d => {
-          const x = d.data()
-          signs[`${x.workerId}_${x.siteId}`] = {
+          .map(sw => sw.site.id)
+        const siteIdSet = new Set<string>([...approvedFromMatrix, ...siteIdsInLog])
+        const approvedSites = [...siteIdSet].map(id => ({
+          siteId: id,
+          siteName: siteName(id),
+          approvedAt: m.siteCalendars[id]?.approvedAt || approvedAtFromLog[id] || null,
+          approvedBy: m.siteCalendars[id]?.approvedBy ?? null,
+        }))
+
+        // 対象スタッフ = 現行の署名対象 ∪ ログに記録のあるスタッフ
+        const workerIdSet = new Set<number>([...m.eligibleForeignWorkers.map(w => w.id), ...workerIdsInLog])
+        const workers = [...workerIdSet].map(id => ({ id, name: workerName(id) }))
+
+        const signs: Record<string, { signedAt?: string; method?: string; ipHash?: string; resignCount?: number; workCount?: number | null }> = {}
+        for (const key of Object.keys(latest)) {
+          const x = latest[key]
+          const workCount = x.signedDays ? Object.values(x.signedDays).filter(v => v === 'work').length : null
+          signs[key] = {
             signedAt: x.signedAt,
             method: x.method,
             ipHash: x.ipHash,
-            resignCount: x.resignCount,
-            previousSignedAt: x.previousSignedAt,
+            resignCount: typeof x.resignCount === 'number' ? x.resignCount : 0,
+            workCount,
           }
-        })
+        }
+
         const wb = generateConsentLedger({
           ym: ymStr,
           generatedAt: new Date().toISOString(),
           approvedSites,
-          workers: m.eligibleForeignWorkers.map(w => ({ id: w.id, name: w.name })),
+          workers,
           signs,
         })
         buffer = workbookToBuffer(wb)

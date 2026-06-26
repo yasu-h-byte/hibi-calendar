@@ -2001,8 +2001,8 @@ export interface ConsentLedgerData {
   generatedAt?: string       // 出力日時(ISO)。サーバ側で new Date().toISOString()
   approvedSites: { siteId: string; siteName: string; approvedAt: string | null; approvedBy: number | null }[]
   workers: { id: number; name: string }[]   // 署名対象の外国人スタッフ
-  /** key: `${workerId}_${siteId}` → 署名レコード（calendarSign 全フィールド） */
-  signs: Record<string, { signedAt?: string; method?: string; ipHash?: string; resignCount?: number; previousSignedAt?: string }>
+  /** key: `${workerId}_${siteId}` → 署名レコード（calendarSignLog の最新イベント） */
+  signs: Record<string, { signedAt?: string; method?: string; ipHash?: string; resignCount?: number; workCount?: number | null }>
 }
 
 /**
@@ -2060,7 +2060,7 @@ export function generateConsentLedger(data: ConsentLedgerData): XLSX.WorkBook {
   // ── Sheet2: 署名明細（1署名=1行の監査ログ） ──
   const s2: unknown[][] = []
   s2.push([`署名明細（監査ログ）　${ymLabel(ym)}`])
-  s2.push(['スタッフID', '氏名', '現場', '対象月', '署名状況', '署名日時(JST)', '承認方法', '再署名回数', '前回署名日時(JST)', '端末ハッシュ'])
+  s2.push(['スタッフID', '氏名', '現場', '対象月', '署名状況', '署名日時(JST)', '承認方法', '署名回数', '同意した稼働日数', '端末ハッシュ'])
   for (const w of workersSorted) {
     for (const st of sitesSorted) {
       const rec = signs[`${w.id}_${st.siteId}`]
@@ -2068,7 +2068,9 @@ export function generateConsentLedger(data: ConsentLedgerData): XLSX.WorkBook {
         s2.push([
           w.id, w.name, st.siteName, ymLabel(ym), '署名済',
           isoToJst(rec.signedAt), signMethodLabel(rec.method),
-          rec.resignCount ?? 0, isoToJst(rec.previousSignedAt), rec.ipHash || '',
+          (rec.resignCount ?? 0) + 1,
+          rec.workCount != null ? `${rec.workCount}日` : '—',
+          rec.ipHash || '',
         ])
       } else {
         s2.push([w.id, w.name, st.siteName, ymLabel(ym), '未署名', '', '', '', '', ''])
@@ -2077,7 +2079,7 @@ export function generateConsentLedger(data: ConsentLedgerData): XLSX.WorkBook {
   }
   const sheet2 = XLSX.utils.aoa_to_sheet(s2)
   sheet2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 9 } }]
-  setColWidths(sheet2, [10, 20, 18, 10, 10, 18, 20, 10, 18, 12])
+  setColWidths(sheet2, [10, 20, 18, 10, 10, 18, 20, 10, 16, 12])
   XLSX.utils.book_append_sheet(wb, sheet2, '署名明細')
 
   return wb
