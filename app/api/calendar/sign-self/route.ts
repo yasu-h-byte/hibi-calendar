@@ -52,23 +52,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Sign not required for full-month home leave' }, { status: 400 })
     }
 
-    // siteIds が指定されていなければ「承認済み未署名の全現場」を対象に
+    // siteIds が指定されていなければ「承認済みの全現場」を対象に。
+    //   ※ 以前は「未署名の現場」だけに絞っていたが、それだと承認後にカレンダーが修正された現場
+    //     （既存署名はあるが古い＝要再確認）が抜け落ち、一括タップで再確認できなかった。
+    //   signOneSiteForWorker は冪等（署名がカレンダー最終更新以降なら何もしない／古ければ再署名）
+    //   なので、承認済み全現場を渡せば「新規署名＋要再確認」の両方を正しくカバーできる。
     let targetSiteIds: string[]
     if (Array.isArray(siteIdsParam) && siteIdsParam.length > 0) {
       targetSiteIds = siteIdsParam
     } else {
-      // 承認済みカレンダー & 既存署名を並列取得
-      const [calSnap, signSnap] = await Promise.all([
-        getDocs(query(collection(db, 'siteCalendar'),
-          where('ym', '==', ym),
-          where('status', '==', 'approved'))),
-        getDocs(query(collection(db, 'calendarSign'),
-          where('ym', '==', ym),
-          where('workerId', '==', worker.id))),
-      ])
-      const approvedSiteIds = calSnap.docs.map(d => d.data().siteId as string)
-      const signedSiteIds = new Set(signSnap.docs.map(d => d.data().siteId as string))
-      targetSiteIds = approvedSiteIds.filter(id => !signedSiteIds.has(id))
+      const calSnap = await getDocs(query(collection(db, 'siteCalendar'),
+        where('ym', '==', ym),
+        where('status', '==', 'approved')))
+      targetSiteIds = calSnap.docs.map(d => d.data().siteId as string)
     }
 
     const ipHash = getRequestIpHash(request.headers)

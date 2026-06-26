@@ -273,7 +273,11 @@ Chon ten -> Xem lich -> Ky
     s.workers.forEach(w => {
       const cur = workerStatusMap.get(w.id) || { name: w.name, total: 0, signed: 0 }
       cur.total += 1
-      if (w.signed) cur.signed += 1
+      // 「承認後に修正された現場の配置者で、まだ再確認していない」場合は、
+      //   過去の署名があっても未完了として扱う（下の「再確認状況」パネルと数字を一致させる）。
+      //   = 署名済み(古い)だが needsResign 相当のスタッフを「署名済み」に数えない。
+      const needsReconfirm = !!(s.wasRevised && w.assignedHere && w.signed && !w.reconfirmedAfterRevision)
+      if (w.signed && !needsReconfirm) cur.signed += 1
       workerStatusMap.set(w.id, cur)
     })
   })
@@ -712,7 +716,7 @@ Chon ten -> Xem lich -> Ky
           {unsignedWorkers.length > 0 && (
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                未署名者 ({unsignedWorkers.length}名):
+                未署名・要再確認 ({unsignedWorkers.length}名):
               </p>
               <div className="flex flex-wrap gap-1">
                 {unsignedWorkers.map(w => (
