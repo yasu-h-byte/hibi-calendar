@@ -115,6 +115,10 @@ export default function CalendarManagePage() {
   // 承認済みカレンダーの修正モード（admin/approver 限定）。siteId をキーに保持。
   // 台風等で承認後にカレンダーを修正する場合、明示的にこのフラグを立てて編集可能にする。
   const [revisingApproved, setRevisingApproved] = useState<Record<string, boolean>>({})
+  // 誤操作防止: 承認済みカレンダーの「修正」「承認取消」は破壊的（再確認依頼/署名全削除）なため
+  // 2段階操作にする。1タップ目で armed 状態にし、2タップ目の明示ボタンで初めて発火。
+  // siteId をキーに 'revise' | 'unapprove' を保持（同時に1つだけ）。
+  const [armedDanger, setArmedDanger] = useState<Record<string, 'revise' | 'unapprove'>>({})
   const [copiedMsg, setCopiedMsg] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
@@ -158,6 +162,7 @@ export default function CalendarManagePage() {
   // Reset editingDays when ym changes
   useEffect(() => {
     setEditingDays({})
+    setArmedDanger({})
   }, [ym])
 
   const getEditDays = (siteId: string, currentDays: Record<string, DayType> | null) => {
@@ -520,47 +525,98 @@ Chon ten -> Xem lich -> Ky
                                 <div className="text-center text-green-600 dark:text-green-400 text-sm font-bold py-2">
                                   ✅ 承認済み
                                 </div>
-                                {/* approver/admin: 修正モード突入ボタン（台風等の事後修正用） */}
-                                {user.role !== 'foreman' && (
-                                  <button
-                                    onClick={() => {
-                                      if (!confirm(
-                                        `${site.siteName} のカレンダーを修正モードにします。\n\n` +
-                                        `※ 承認済みカレンダーを修正すると、署名済みのスタッフは「再確認」が必要になります。\n` +
-                                        `（例: 台風で出勤日を休みに変更、別の日を出勤日にする等）\n\n` +
-                                        `続行しますか？`
-                                      )) return
-                                      setRevisingApproved(prev => ({ ...prev, [site.siteId]: true }))
-                                    }}
-                                    disabled={saving}
-                                    className="w-full text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 py-2 rounded-lg text-xs hover:bg-amber-100 transition disabled:opacity-50 font-medium"
-                                  >
-                                    ✏️ 承認済みカレンダーを修正する
-                                  </button>
-                                )}
-                                {/* approver/admin: 承認取消しボタン（全署名削除して最初から） */}
-                                {user.role !== 'foreman' && (
-                                  <button
-                                    onClick={async () => {
-                                      if (!confirm(`${site.siteName} の承認を取消しますか？\n署名データも削除され、再承認後に再署名が必要になります。`)) return
-                                      setSaving(true)
-                                      try {
-                                        const res = await fetch('/api/calendar/revert', {
-                                          method: 'POST',
-                                          headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                          body: JSON.stringify({ siteId: site.siteId, ym, action: 'unapprove', revertedBy: user?.workerId || 0 }),
-                                        })
-                                        if (res.ok) { fetchData() }
-                                        else { const d = await res.json(); alert(d.error || '取消しに失敗しました') }
-                                      } catch { alert('取消しに失敗しました') }
-                                      finally { setSaving(false) }
-                                    }}
-                                    disabled={saving}
-                                    className="w-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 py-2 rounded-lg text-xs hover:bg-red-100 transition disabled:opacity-50"
-                                  >
-                                    ↩ 承認を取消す（署名も全削除）
-                                  </button>
-                                )}
+                                {/* approver/admin: 破壊的操作（修正・承認取消）を「最小化＋2段階」で誤操作防止
+                                    - 既定は折りたたみ（⚙️ 管理操作）→ カードの誤タップで発火しない
+                                    - 各操作は 1タップ目で armed→ 2タップ目の明示ボタンで初めて実行 */}
+                                {user.role !== 'foreman' && (() => {
+                                  const armed = armedDanger[site.siteId]
+                                  const disarm = () => setArmedDanger(prev => { const n = { ...prev }; delete n[site.siteId]; return n })
+                                  return (
+                                    <details
+                                      className="group rounded-lg border border-gray-200 dark:border-gray-700"
+                                      onToggle={(e) => { if (!(e.currentTarget as HTMLDetailsElement).open) disarm() }}
+                                    >
+                                      <summary className="cursor-pointer select-none list-none px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-between">
+                                        <span>⚙️ 管理操作（カレンダー修正・承認の取消）</span>
+                                        <span className="text-[10px] text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+                                      </summary>
+                                      <div className="px-3 pb-3 pt-1 space-y-2 border-t border-gray-100 dark:border-gray-700">
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                                          下記は署名済みスタッフ全員に影響します。誤操作防止のため2段階です。
+                                        </p>
+
+                                        {/* ── 修正する（2段階） ── */}
+                                        {armed !== 'unapprove' && (armed === 'revise' ? (
+                                          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 rounded-lg p-2 space-y-2">
+                                            <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                                              ⚠️ 修正モードにすると、保存時に<b>署名済みの配置スタッフへ再確認依頼</b>が出ます。本当に修正しますか？
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <button onClick={disarm} disabled={saving}
+                                                className="text-gray-700 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 py-2 rounded-lg text-xs hover:bg-gray-200 transition disabled:opacity-50">
+                                                やめる
+                                              </button>
+                                              <button
+                                                onClick={() => { disarm(); setRevisingApproved(prev => ({ ...prev, [site.siteId]: true })) }}
+                                                disabled={saving}
+                                                className="bg-amber-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-amber-700 transition disabled:opacity-50">
+                                                ✓ 修正モードにする
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            onClick={() => setArmedDanger(prev => ({ ...prev, [site.siteId]: 'revise' }))}
+                                            disabled={saving}
+                                            className="w-full text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 py-2 rounded-lg text-xs hover:bg-amber-100 transition disabled:opacity-50 font-medium">
+                                            ✏️ 承認済みカレンダーを修正する
+                                          </button>
+                                        ))}
+
+                                        {/* ── 承認取消（2段階・最も破壊的: 署名を全件削除） ── */}
+                                        {armed !== 'revise' && (armed === 'unapprove' ? (
+                                          <div className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded-lg p-2 space-y-2">
+                                            <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed">
+                                              ⚠️ 承認を取消すと<b>この現場の署名データが全件削除</b>されます。再承認後に全員の再署名が必要です。本当に取消しますか？
+                                            </p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                              <button onClick={disarm} disabled={saving}
+                                                className="text-gray-700 bg-gray-100 dark:bg-gray-700 dark:text-gray-300 py-2 rounded-lg text-xs hover:bg-gray-200 transition disabled:opacity-50">
+                                                やめる
+                                              </button>
+                                              <button
+                                                onClick={async () => {
+                                                  disarm()
+                                                  setSaving(true)
+                                                  try {
+                                                    const res = await fetch('/api/calendar/revert', {
+                                                      method: 'POST',
+                                                      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                                      body: JSON.stringify({ siteId: site.siteId, ym, action: 'unapprove', revertedBy: user?.workerId || 0 }),
+                                                    })
+                                                    if (res.ok) { fetchData() }
+                                                    else { const d = await res.json(); alert(d.error || '取消しに失敗しました') }
+                                                  } catch { alert('取消しに失敗しました') }
+                                                  finally { setSaving(false) }
+                                                }}
+                                                disabled={saving}
+                                                className="bg-red-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
+                                                ✓ 承認を取消す
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            onClick={() => setArmedDanger(prev => ({ ...prev, [site.siteId]: 'unapprove' }))}
+                                            disabled={saving}
+                                            className="w-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 py-2 rounded-lg text-xs hover:bg-red-100 transition disabled:opacity-50">
+                                            ↩ 承認を取消す（署名も全削除）
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </details>
+                                  )
+                                })()}
                               </>
                             ) : (
                               <>
