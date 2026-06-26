@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
 import { DayType } from '@/types'
+import { checkCalendarLegal } from '@/lib/calendar-legal'
 
 export async function POST(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -11,37 +12,38 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { ym, sites, approvedBy } = await request.json() as {
+    const { ym, sites, approvedBy, acknowledgeWarnings } = await request.json() as {
       ym: string
       sites: { siteId: string; days: Record<string, DayType> }[]
       approvedBy: number
+      acknowledgeWarnings?: boolean
     }
 
     if (!ym || !sites || !Array.isArray(sites) || sites.length === 0) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     }
 
-    const [checkY, checkM] = ym.split('-').map(Number)
-    const daysInMonth = new Date(checkY, checkM, 0).getDate()
-    const legalLimitHours = daysInMonth * 40 / 7
-
-    const errors: string[] = []
     const ymKey = ym.replace('-', '')
 
-    // Validate all sites first
+    // 法令適合チェック（全現場・変形労働: 月総枠/法定休日/連続勤務）
+    const errorMsgs: string[] = []
+    const warnMsgs: string[] = []
     for (const site of sites) {
-      const workDayCount = Object.values(site.days).filter(d => d === 'work').length
-      const prescribedHours = workDayCount * 7
-      if (prescribedHours > legalLimitHours) {
-        const maxDays = Math.floor(legalLimitHours / 7)
-        errors.push(
-          `${site.siteId}: 出勤${workDayCount}日(${prescribedHours}h)が法定上限${maxDays}日(${(Math.round(legalLimitHours * 10) / 10).toFixed(1)}h)を超えています`
-        )
+      const legal = checkCalendarLegal(site.days, ym)
+      for (const f of legal.findings) {
+        if (f.severity === 'error') errorMsgs.push(`${site.siteId}: ${f.message}`)
+        else if (f.severity === 'warn') warnMsgs.push(`${site.siteId}: ${f.message}`)
       }
     }
-
-    if (errors.length > 0) {
-      return NextResponse.json({ error: errors.join('\n') }, { status: 400 })
+    if (errorMsgs.length > 0) {
+      return NextResponse.json({ error: errorMsgs.join('\n') }, { status: 400 })
+    }
+    if (warnMsgs.length > 0 && !acknowledgeWarnings) {
+      return NextResponse.json({
+        error: '法令上の確認事項があります。内容を確認の上で承認してください。',
+        requiresAcknowledge: true,
+        warnings: warnMsgs,
+      }, { status: 400 })
     }
 
     // Save all sites

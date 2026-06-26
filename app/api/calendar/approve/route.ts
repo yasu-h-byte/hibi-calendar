@@ -5,6 +5,7 @@ import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore'
 import { logActivity } from '@/lib/activity'
 import { DayType } from '@/types'
 import { ym7 } from '@/lib/ym'
+import { checkCalendarLegal } from '@/lib/calendar-legal'
 
 export async function POST(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { siteId, ym: ymRaw, approvedBy } = await request.json()
+    const { siteId, ym: ymRaw, approvedBy, acknowledgeWarnings } = await request.json()
     const ym = ym7(ymRaw)
     const docId = `${siteId}_${ym}`
 
@@ -21,17 +22,21 @@ export async function POST(request: NextRequest) {
     const calData = calSnap.exists() ? calSnap.data() : null
     const days: Record<string, DayType> | null = calData?.days || null
 
-    // 法定上限チェック（1ヶ月単位の変形労働時間制）
+    // 法令適合チェック（変形労働: 月総枠/法定休日/連続勤務）
     if (days) {
-      const workDayCount = Object.values(days).filter(d => d === 'work').length
-      const [checkY, checkM] = ym.split('-').map(Number)
-      const daysInMonth = new Date(checkY, checkM, 0).getDate()
-      const legalLimitHours = daysInMonth * 40 / 7
-      const prescribedHours = workDayCount * 7
-      if (prescribedHours > legalLimitHours) {
-        const maxDays = Math.floor(legalLimitHours / 7)
+      const legal = checkCalendarLegal(days, ym)
+      if (legal.hasError) {
+        // 月の総労働時間超過などは無条件ブロック
         return NextResponse.json({
-          error: `所定時間${prescribedHours}hが法定上限${(Math.round(legalLimitHours * 10) / 10).toFixed(1)}h（暦日${daysInMonth}日×40÷7）を超えています。出勤日数を${maxDays}日以下にしてください。`,
+          error: legal.findings.filter(f => f.severity === 'error').map(f => f.message).join('\n'),
+        }, { status: 400 })
+      }
+      if (legal.hasWarn && !acknowledgeWarnings) {
+        // 法定休日のない週など。例外（4週4日制等）があり得るため確認の上で承認可
+        return NextResponse.json({
+          error: '法令上の確認事項があります。内容を確認の上で承認してください。',
+          requiresAcknowledge: true,
+          warnings: legal.findings.filter(f => f.severity === 'warn').map(f => f.message),
         }, { status: 400 })
       }
     }

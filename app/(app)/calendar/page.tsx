@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import CalendarEditor from '@/components/CalendarEditor'
 import { AuthUser, DayType, CalendarStatus } from '@/types'
 import { getNextMonth, generateDefaultDays, getHoliday } from '@/lib/calendar'
+import { checkCalendarLegal } from '@/lib/calendar-legal'
 
 interface SiteCalendarData {
   siteId: string
@@ -177,31 +178,66 @@ export default function CalendarManagePage() {
     setEditingDays(prev => ({ ...prev, [siteId]: days }))
   }
 
+  // bulk-confirm を投げ、法令上の警告(requiresAcknowledge)があれば内容を確認の上で再送する。
+  //   月総枠超過などの error は無条件で弾かれる（再送不可）。法定休日なし等の warn のみ確認で続行可。
+  const postBulkConfirmWithAck = async (
+    sitesPayload: { siteId: string; days: Record<string, DayType> }[],
+    ack = false,
+  ): Promise<boolean> => {
+    const res = await fetch('/api/calendar/bulk-confirm', {
+      method: 'POST',
+      headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ym, sites: sitesPayload, approvedBy: user!.workerId, acknowledgeWarnings: ack }),
+    })
+    if (res.ok) return true
+    const data = await res.json().catch(() => ({}))
+    if (data.requiresAcknowledge && !ack) {
+      const ok = confirm(
+        `⚠️ 法令上の確認事項があります:\n\n${(data.warnings || []).join('\n')}\n\n` +
+        `（4週4日制など正当な例外がある場合のみ）この内容で承認しますか？`,
+      )
+      if (!ok) return false
+      return postBulkConfirmWithAck(sitesPayload, true)
+    }
+    alert(data.error || '確定に失敗しました')
+    return false
+  }
+
+  // 提出済みカレンダーの承認（/api/calendar/approve）。法令警告は確認の上で続行可。
+  const postApproveWithAck = async (siteId: string, ack = false): Promise<boolean> => {
+    const res = await fetch('/api/calendar/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ siteId, ym, approvedBy: user!.workerId, acknowledgeWarnings: ack }),
+    })
+    if (res.ok) return true
+    const data = await res.json().catch(() => ({}))
+    if (data.requiresAcknowledge && !ack) {
+      const ok = confirm(
+        `⚠️ 法令上の確認事項があります:\n\n${(data.warnings || []).join('\n')}\n\n` +
+        `（4週4日制など正当な例外がある場合のみ）この内容で承認しますか？`,
+      )
+      if (!ok) return false
+      return postApproveWithAck(siteId, true)
+    }
+    alert(data.error || '承認に失敗しました')
+    return false
+  }
+
   const handleBulkConfirm = async () => {
     if (!user) return
     setSaving(true)
     setShowConfirmDialog(false)
     try {
-      // Build the payload with current days for each site
       const payload = visibleSites.map(site => ({
         siteId: site.siteId,
         days: getEditDays(site.siteId, site.days),
       }))
-
-      const res = await fetch('/api/calendar/bulk-confirm', {
-        method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ym, sites: payload, approvedBy: user.workerId }),
-      })
-
-      if (!res.ok) {
-        const data = await res.json()
-        alert(data.error || '確定に失敗しました')
-        return
+      const ok = await postBulkConfirmWithAck(payload)
+      if (ok) {
+        setEditingDays({})
+        fetchData()
       }
-
-      setEditingDays({})
-      fetchData()
     } catch (error) {
       console.error('Failed to bulk confirm:', error)
       alert('確定に失敗しました')
@@ -377,6 +413,33 @@ Chon ten -> Xem lich -> Ky
                 {/* Day-type summary + legal limit */}
                 <div className="px-4 pb-4 pt-2 space-y-2">
                   <DaySummary days={days} year={y} month={m} />
+                  {/* 法令適合チェック（変形労働: 法定休日/連続勤務）。月総枠は上の DaySummary が表示 */}
+                  {(() => {
+                    const legal = checkCalendarLegal(days, ym)
+                    const warns = legal.findings.filter(f => f.severity === 'warn')
+                    const infos = legal.findings.filter(f => f.severity === 'info')
+                    if (warns.length === 0 && infos.length === 0) {
+                      return (
+                        <div className="text-xs text-green-700 dark:text-green-400 flex items-center gap-1">
+                          ✅ 法定休日・連続勤務 問題なし（最大{legal.maxConsecutive}連勤）
+                        </div>
+                      )
+                    }
+                    return (
+                      <div className="space-y-1">
+                        {warns.map((f, i) => (
+                          <div key={`w${i}`} className="text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded px-2 py-1">
+                            ⚠️ {f.message}
+                          </div>
+                        ))}
+                        {infos.map((f, i) => (
+                          <div key={`i${i}`} className="text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
+                            ⏱ {f.message}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
                   <div className="bg-blue-50 dark:bg-blue-900/20 dark:text-blue-200 rounded-lg p-3 text-sm">
                     就業時間: 8:00〜17:00（休憩2時間）
                   </div>
@@ -470,17 +533,8 @@ Chon ten -> Xem lich -> Ky
                               if (!confirm(`${site.siteName} のカレンダーを承認しますか？`)) return
                               setSaving(true)
                               try {
-                                const res = await fetch('/api/calendar/approve', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                  body: JSON.stringify({ siteId: site.siteId, ym, approvedBy: user?.workerId || 0 }),
-                                })
-                                if (!res.ok) {
-                                  const data = await res.json()
-                                  alert(data.error || '承認に失敗しました')
-                                } else {
-                                  fetchData()
-                                }
+                                const ok = await postApproveWithAck(site.siteId)
+                                if (ok) fetchData()
                               } catch { alert('承認に失敗しました') }
                               finally { setSaving(false) }
                             }}
@@ -498,19 +552,8 @@ Chon ten -> Xem lich -> Ky
                               if (!confirm(`${site.siteName} のカレンダーを直接承認しますか？（提出を省略）`)) return
                               setSaving(true)
                               try {
-                                const res = await fetch('/api/calendar/bulk-confirm', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                  body: JSON.stringify({
-                                    ym,
-                                    sites: [{ siteId: site.siteId, days }],
-                                    approvedBy: user?.workerId || 0,
-                                  }),
-                                })
-                                if (!res.ok) {
-                                  const data = await res.json()
-                                  alert(data.error || '確定に失敗しました')
-                                } else {
+                                const ok = await postBulkConfirmWithAck([{ siteId: site.siteId, days }])
+                                if (ok) {
                                   setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
                                   fetchData()
                                 }
