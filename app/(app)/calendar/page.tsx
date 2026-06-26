@@ -276,6 +276,9 @@ Chon ten -> Xem lich -> Ky
     if (site.status === 'submitted') {
       return <span className="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 text-xs font-bold px-2 py-0.5 rounded-full">提出済み（承認待ち）</span>
     }
+    if (site.status === 'rejected') {
+      return <span className="bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs font-bold px-2 py-0.5 rounded-full">差し戻し（要修正）</span>
+    }
     return <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full">未作成</span>
   }
 
@@ -398,6 +401,15 @@ Chon ten -> Xem lich -> Ky
                     {statusBadge(site)}
                   </div>
                 </div>
+
+                {/* 差し戻し理由（職長が修正理由を確認できる） */}
+                {site.status === 'rejected' && (
+                  <div className="mx-4 mt-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 rounded-lg p-3 text-sm text-orange-800 dark:text-orange-300">
+                    <div className="font-bold">📝 差し戻されました（要修正）</div>
+                    {site.rejectedReason && <div className="mt-1">理由: {site.rejectedReason}</div>}
+                    <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">内容を修正して、もう一度提出してください。</div>
+                  </div>
+                )}
 
                 {/* Calendar editor */}
                 <div className="px-4 pt-4">
@@ -523,6 +535,31 @@ Chon ten -> Xem lich -> Ky
                             className="w-full text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 py-2 rounded-lg text-xs hover:bg-yellow-100 transition disabled:opacity-50"
                           >
                             ↩ 提出を取消す（職長に差戻し）
+                          </button>
+                        )}
+
+                        {/* approver/admin: 理由つき差し戻し */}
+                        {isSubmitted && user.role !== 'foreman' && (
+                          <button
+                            onClick={async () => {
+                              const reason = prompt(`${site.siteName} を職長へ差し戻します。\n理由を入力してください（職長の画面に表示されます）:`)
+                              if (reason === null) return
+                              setSaving(true)
+                              try {
+                                const res = await fetch('/api/calendar/reject', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                  body: JSON.stringify({ siteId: site.siteId, ym, reason: reason.trim(), rejectedBy: user?.workerId || 0 }),
+                                })
+                                if (res.ok) { fetchData() }
+                                else { const d = await res.json(); alert(d.error || '差し戻しに失敗しました') }
+                              } catch { alert('差し戻しに失敗しました') }
+                              finally { setSaving(false) }
+                            }}
+                            disabled={saving}
+                            className="w-full text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 py-2 rounded-lg text-xs hover:bg-orange-100 transition disabled:opacity-50"
+                          >
+                            📝 理由をつけて差し戻す
                           </button>
                         )}
 

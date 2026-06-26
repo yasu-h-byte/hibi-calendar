@@ -1,4 +1,4 @@
-import { checkApiAuth } from "@/lib/auth"
+import { getApiRole, isManagerRole } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
@@ -7,8 +7,11 @@ import { DayType } from '@/types'
 import { checkCalendarLegal } from '@/lib/calendar-legal'
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 提出を飛ばした直接確定は管理者・事業責任者のみ
+  const role = await getApiRole(request)
+  if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isManagerRole(role.role)) {
+    return NextResponse.json({ error: '確定権限がありません（管理者・事業責任者のみ）' }, { status: 403 })
   }
 
   try {

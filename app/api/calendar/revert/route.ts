@@ -1,4 +1,4 @@
-import { checkApiAuth } from "@/lib/auth"
+import { getApiRole, isManagerRole } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, getDoc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore'
@@ -11,8 +11,11 @@ import { ym7 } from '@/lib/ym'
  * - 提出済み → 下書きに戻す（提出取消し）
  */
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 巻き戻し（承認取消・提出取消）は管理者・事業責任者のみ
+  const role = await getApiRole(request)
+  if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isManagerRole(role.role)) {
+    return NextResponse.json({ error: '取消権限がありません（管理者・事業責任者のみ）' }, { status: 403 })
   }
 
   try {

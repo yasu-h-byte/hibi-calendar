@@ -107,7 +107,7 @@ function currentYm(): string {
  * 2026-05-08 修正: mforeman を反映していなかったため、月途中の職長交代で
  *   旧職長が承認できる/新職長が承認できない事態が起きていた。
  */
-function computeForemanSites(
+export function computeForemanSites(
   workerId: number,
   sites: Site[],
   mforeman: Record<string, { foreman?: number; wid?: number }>,
@@ -193,4 +193,47 @@ export function buildAuthUser(
     foremanSites,
     token: worker.token || undefined,
   }
+}
+
+/**
+ * サーバ側でリクエスト元の「ロール」を解決する（2026-06 追加）。
+ *
+ * これまで承認系API（submit/approve/bulk-confirm/revert/reject）は checkApiAuth の
+ * パスワード一致のみで、ロール強制はフロントだけだった（＝API直叩きで誰でも承認できた）。
+ * 本関数で個人パスワード→実ロールを解決し、各ルートで権限を強制する。
+ *
+ * - super-admin / admin（共通管理者パスワード）: 全権限
+ * - 個人パスワード: 人員マスタの jobType / 職長割当からロールを判定（buildAuthUser と同じ）
+ * @param ym 職長判定の対象月（"YYYY-MM" or "YYYYMM"）。省略時は当月。
+ */
+export interface ApiRole {
+  role: UserRole | 'super-admin'
+  workerId: number | null
+  foremanSites: string[]
+}
+
+/** 承認・差し戻し等の管理操作を行える権限か（職長は不可・最終承認は管理者/事業責任者） */
+export function isManagerRole(role: string): boolean {
+  return role === 'super-admin' || role === 'admin' || role === 'approver'
+}
+
+export async function getApiRole(request: NextRequest, ym?: string): Promise<ApiRole | null> {
+  const auth = await getApiAuthUser(request)
+  if (!auth.authorized) return null
+  if (auth.actor === 'super-admin') return { role: 'super-admin', workerId: 0, foremanSites: [] }
+  if (auth.actor === 'admin') return { role: 'admin', workerId: null, foremanSites: [] }
+
+  // 個人パスワード → 人員マスタから実ロールを解決
+  const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+  const main = mainSnap.exists() ? mainSnap.data() : {}
+  const workers = (main.workers || []) as Worker[]
+  const sites = (main.sites || []) as Site[]
+  const mforeman = (main.mforeman || {}) as Record<string, { foreman?: number; wid?: number }>
+  const worker = workers.find(w => w.id === auth.actor)
+  if (!worker) return null
+
+  const u = buildAuthUser(worker, sites, mforeman)
+  const targetYm = ym ? ym.replace('-', '') : currentYm()
+  const foremanSites = computeForemanSites(worker.id, sites, mforeman, targetYm)
+  return { role: u.role, workerId: u.workerId, foremanSites }
 }

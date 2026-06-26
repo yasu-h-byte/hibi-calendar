@@ -1,4 +1,4 @@
-import { checkApiAuth } from "@/lib/auth"
+import { getApiRole, isManagerRole } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore'
@@ -8,8 +8,11 @@ import { ym7 } from '@/lib/ym'
 import { checkCalendarLegal } from '@/lib/calendar-legal'
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 最終承認は管理者・事業責任者のみ（職長は提出まで）。サーバ側でロール強制。
+  const role = await getApiRole(request)
+  if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isManagerRole(role.role)) {
+    return NextResponse.json({ error: '承認権限がありません（最終承認は管理者・事業責任者のみ）' }, { status: 403 })
   }
 
   try {
