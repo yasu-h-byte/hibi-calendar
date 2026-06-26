@@ -39,6 +39,8 @@ interface Props {
   signing: boolean
   /** 同意セレモニーで本人が入力した氏名を渡す */
   onSubmit: (consentName: string) => void
+  /** 質問・異議の送信（成功なら true）。承認とは独立 */
+  onQuestion: (message: string) => Promise<boolean>
   onClose: () => void
   errorMsg: string | null
 }
@@ -49,6 +51,7 @@ export default function CalendarApprovalModal({
   onReviewedChange,
   signing,
   onSubmit,
+  onQuestion,
   onClose,
   errorMsg,
 }: Props) {
@@ -61,6 +64,12 @@ export default function CalendarApprovalModal({
   // 同意セレモニー: 本人が氏名を入力して同意を明示する（なりすまし対策・本人同意の証跡）
   const [consentName, setConsentName] = useState('')
   const consentOk = consentName.trim().length >= 2
+
+  // 質問・異議（承認とは独立して送信できる）
+  const [showQuestion, setShowQuestion] = useState(false)
+  const [questionText, setQuestionText] = useState('')
+  const [questionSending, setQuestionSending] = useState(false)
+  const [questionSent, setQuestionSent] = useState(false)
 
   // 表示対象: 承認済みの現場
   const targetSites = pendingCalendar.sites.filter(s => s.status === 'approved')
@@ -236,6 +245,54 @@ export default function CalendarApprovalModal({
               </button>
             </>
           )}
+
+          {/* 質問・異議の窓口（承認とは独立。確認したが疑問・要望がある場合） */}
+          <div className="pt-2 border-t border-gray-200">
+            {questionSent ? (
+              <div className="text-center text-sm text-green-700">
+                ✓ 送信しました。担当者が確認します / Đã gửi, người phụ trách sẽ kiểm tra
+              </div>
+            ) : !showQuestion ? (
+              <button
+                onClick={() => setShowQuestion(true)}
+                className="text-xs text-blue-600 underline"
+              >
+                ❓ 質問・相談・変更してほしい点がある方はこちら / Có thắc mắc hoặc đề nghị?
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <textarea
+                  value={questionText}
+                  onChange={e => setQuestionText(e.target.value)}
+                  rows={3}
+                  placeholder="質問・相談・変更してほしい点 / Câu hỏi, đề nghị thay đổi..."
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => { setShowQuestion(false); setQuestionText('') }}
+                    disabled={questionSending}
+                    className="py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition disabled:opacity-50"
+                  >
+                    閉じる
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setQuestionSending(true)
+                      const ok = await onQuestion(questionText.trim())
+                      setQuestionSending(false)
+                      if (ok) setQuestionSent(true)
+                      else alert('送信に失敗しました / Gửi thất bại')
+                    }}
+                    disabled={questionSending || questionText.trim().length < 2}
+                    className="py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"
+                  >
+                    {questionSending ? '送信中...' : '送信 / Gửi'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

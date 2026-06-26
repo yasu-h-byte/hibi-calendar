@@ -278,6 +278,21 @@ export default function StaffAttendancePage() {
     }
   }, [token, activePendingCalendar, signingCalendar, fetchPendingCalendar])
 
+  // カレンダーへの質問・異議を送信（承認とは独立）
+  const submitCalendarQuestion = useCallback(async (message: string): Promise<boolean> => {
+    if (!activePendingCalendar) return false
+    try {
+      const res = await fetch('/api/calendar/question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, ym: activePendingCalendar.ym, message }),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  }, [token, activePendingCalendar])
+
   // Fetch leave requests when modal opens
   const fetchLeaveRequests = useCallback(async () => {
     try {
@@ -1464,6 +1479,7 @@ export default function StaffAttendancePage() {
           onReviewedChange={setCalendarReviewed}
           signing={signingCalendar}
           onSubmit={submitCalendarSign}
+          onQuestion={submitCalendarQuestion}
           onClose={() => { setShowCalendarModal(false); setActivePendingCalendar(null) }}
           errorMsg={calendarErrorMsg}
         />

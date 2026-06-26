@@ -19,6 +19,17 @@ interface OverviewMonth {
 }
 interface OverviewResp { curYm: string; dayOfMonth: number; months: OverviewMonth[] }
 
+interface CalQuestion {
+  id: string
+  workerId: number
+  workerName: string
+  ym: string
+  message: string
+  kind: 'question' | 'objection'
+  resolved: boolean
+  createdAt: string
+}
+
 interface SiteCalendarData {
   siteId: string
   siteName: string
@@ -141,6 +152,8 @@ export default function CalendarManagePage() {
   const [overview, setOverview] = useState<OverviewResp | null>(null)
   const [showOverview, setShowOverview] = useState(true)
   const [copiedReminderYm, setCopiedReminderYm] = useState<string | null>(null)
+  // スタッフからの質問・異議（当月）
+  const [questions, setQuestions] = useState<CalQuestion[]>([])
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   const [y, m] = ym.split('-').map(Number)
@@ -193,6 +206,31 @@ export default function CalendarManagePage() {
     fetchOverview()
   }, [fetchOverview])
 
+  // 当月のスタッフ質問・異議（管理者のみ）
+  const fetchQuestions = useCallback(async () => {
+    if (!password || user?.role === 'foreman') return
+    try {
+      const res = await fetch(`/api/calendar/question?ym=${ym}`, { headers: { 'x-admin-password': password } })
+      if (res.ok) { const d = await res.json(); setQuestions(d.items || []) }
+    } catch { /* 取得失敗は致命的でない */ }
+  }, [password, ym, user?.role])
+
+  useEffect(() => {
+    fetchQuestions()
+  }, [fetchQuestions])
+
+  const resolveQuestion = async (id: string) => {
+    try {
+      const res = await fetch('/api/calendar/question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ resolve: true, id, resolvedBy: user?.workerId || 0 }),
+      })
+      if (res.ok) fetchQuestions()
+      else alert('更新に失敗しました')
+    } catch { alert('更新に失敗しました') }
+  }
+
   // Reset editingDays when ym changes
   useEffect(() => {
     setEditingDays({})
@@ -206,6 +244,22 @@ export default function CalendarManagePage() {
 
   const handleDaysChange = (siteId: string, days: Record<string, DayType>) => {
     setEditingDays(prev => ({ ...prev, [siteId]: days }))
+  }
+
+  // クイック設定: 月全体の休日パターンを一括適用（毎月の手作業トグルを削減）
+  //   weekends = 土日祝休み（変形労働で月上限内・各週に休みが入る推奨設定）
+  //   sundays  = 日・祝のみ休み（週6日。月によっては上限超になり法令チェックが警告）
+  const buildPreset = (pattern: 'weekends' | 'sundays'): Record<string, DayType> => {
+    const out: Record<string, DayType> = {}
+    const dim = new Date(y, m, 0).getDate()
+    for (let d = 1; d <= dim; d++) {
+      const dow = new Date(y, m - 1, d).getDay()
+      if (getHoliday(y, m, d)) out[String(d)] = 'holiday'
+      else if (dow === 0) out[String(d)] = 'off'
+      else if (pattern === 'weekends' && dow === 6) out[String(d)] = 'off'
+      else out[String(d)] = 'work'
+    }
+    return out
   }
 
   // bulk-confirm を投げ、法令上の警告(requiresAcknowledge)があれば内容を確認の上で再送する。
@@ -489,6 +543,35 @@ Chon ten -> Xem lich -> Ky
         </div>
       )}
 
+      {/* スタッフからの質問・相談（当月・管理者のみ） */}
+      {user.role !== 'foreman' && questions.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+          <h3 className="font-bold text-hibi-navy dark:text-white mb-2">
+            ❓ スタッフからの質問・相談（{y}年{m}月）
+            <span className="ml-2 text-xs font-normal text-gray-400">未解決 {questions.filter(q => !q.resolved).length}件</span>
+          </h3>
+          <div className="space-y-2">
+            {questions.map(q => (
+              <div key={q.id} className={`border rounded-lg p-2 text-sm ${q.resolved ? 'bg-gray-50 dark:bg-gray-700/40 border-gray-200 dark:border-gray-600 opacity-70' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-medium text-gray-800 dark:text-gray-100">
+                    {q.workerName}
+                    {q.kind === 'objection' && <span className="ml-1 text-orange-600 dark:text-orange-400 text-xs">(異議)</span>}
+                  </div>
+                  <div className="text-[10px] text-gray-400">{(q.createdAt || '').slice(0, 16).replace('T', ' ')}</div>
+                </div>
+                <div className="text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">{q.message}</div>
+                <div className="text-right mt-1">
+                  {q.resolved
+                    ? <span className="text-xs text-green-600 dark:text-green-400">✓ 解決済み</span>
+                    : <button onClick={() => resolveQuestion(q.id)} className="text-xs text-blue-600 dark:text-blue-400 underline">解決済みにする</button>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Site calendars - all expanded */}
       {loading ? (
         <div className="text-center py-8 text-gray-400 dark:text-gray-500">読み込み中...</div>
@@ -527,6 +610,26 @@ Chon ten -> Xem lich -> Ky
 
                 {/* Calendar editor */}
                 <div className="px-4 pt-4">
+                  {!isReadOnly && (
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">クイック設定:</span>
+                      <button
+                        onClick={() => handleDaysChange(site.siteId, buildPreset('weekends'))}
+                        className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition"
+                        title="土曜・日曜・祝日を休みに（変形労働の上限内・推奨）"
+                      >
+                        土日祝を休み
+                      </button>
+                      <button
+                        onClick={() => handleDaysChange(site.siteId, buildPreset('sundays'))}
+                        className="text-xs px-2.5 py-1 rounded-full bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 hover:bg-gray-100 transition"
+                        title="日曜・祝日のみ休み（週6日。月により上限超の場合あり）"
+                      >
+                        日・祝のみ休み
+                      </button>
+                      <span className="text-[10px] text-gray-400">適用後に下の法令チェックをご確認ください</span>
+                    </div>
+                  )}
                   <CalendarEditor
                     year={y}
                     month={m}
