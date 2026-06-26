@@ -6,6 +6,19 @@ import { AuthUser, DayType, CalendarStatus } from '@/types'
 import { getNextMonth, generateDefaultDays, getHoliday } from '@/lib/calendar'
 import { checkCalendarLegal } from '@/lib/calendar-legal'
 
+interface OverviewMonth {
+  ym: string
+  ymCompact: string
+  isCurrent: boolean
+  isFuture: boolean
+  sites: { total: number; approved: number; submitted: number; draft: number; rejected: number }
+  workers: { target: number; fullySigned: number; partial: number; unsigned: number }
+  complete: boolean
+  atRisk: boolean
+  unsignedNames: string[]
+}
+interface OverviewResp { curYm: string; dayOfMonth: number; months: OverviewMonth[] }
+
 interface SiteCalendarData {
   siteId: string
   siteName: string
@@ -124,6 +137,10 @@ export default function CalendarManagePage() {
   // 周知・同意台帳のダウンロード対象月（任意の過去月を指定可。既定は表示中の月）
   const [ledgerYm, setLedgerYm] = useState(defaultYm)
   const [copiedMsg, setCopiedMsg] = useState(false)
+  // 月またぎ運用ダッシュボード（全体状況）
+  const [overview, setOverview] = useState<OverviewResp | null>(null)
+  const [showOverview, setShowOverview] = useState(true)
+  const [copiedReminderYm, setCopiedReminderYm] = useState<string | null>(null)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   const [y, m] = ym.split('-').map(Number)
@@ -162,6 +179,19 @@ export default function CalendarManagePage() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  // 月またぎの全体状況（管理者のみ）。承認/差し戻し等の後も再取得して数字を最新化。
+  const fetchOverview = useCallback(async () => {
+    if (!password || user?.role === 'foreman') return
+    try {
+      const res = await fetch('/api/calendar/overview', { headers: { 'x-admin-password': password } })
+      if (res.ok) setOverview(await res.json())
+    } catch { /* 全体状況の取得失敗はページ機能を阻害しない */ }
+  }, [password, user?.role])
+
+  useEffect(() => {
+    fetchOverview()
+  }, [fetchOverview])
 
   // Reset editingDays when ym changes
   useEffect(() => {
@@ -224,6 +254,22 @@ export default function CalendarManagePage() {
     return false
   }
 
+  // 未承認者へのお願い文をクリップボードにコピー（個人リンクから承認してもらう運用）
+  const copyReminder = async (mo: OverviewMonth) => {
+    const [yy, mm] = mo.ym.split('-')
+    const names = mo.unsignedNames.join('、')
+    const text =
+      `【${parseInt(yy)}年${parseInt(mm)}月の勤務カレンダー承認のお願い / Xác nhận lịch tháng ${parseInt(mm)}/${yy}】\n` +
+      `未承認の方は、ご自身の個人リンク（出面入力と同じQR/リンク）から承認してください。\n` +
+      `Vui lòng ký xác nhận lịch từ link cá nhân của bạn (giống link chấm công).` +
+      (names ? `\n\n未承認 / Chưa ký: ${names}` : '')
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedReminderYm(mo.ym)
+      setTimeout(() => setCopiedReminderYm(null), 2500)
+    } catch { alert('コピーに失敗しました') }
+  }
+
   const handleBulkConfirm = async () => {
     if (!user) return
     setSaving(true)
@@ -237,6 +283,7 @@ export default function CalendarManagePage() {
       if (ok) {
         setEditingDays({})
         fetchData()
+        fetchOverview()
       }
     } catch (error) {
       console.error('Failed to bulk confirm:', error)
@@ -374,6 +421,73 @@ Chon ten -> Xem lich -> Ky
           )}
         </div>
       </div>
+
+      {/* 全体状況（月またぎ運用ダッシュボード・管理者のみ） */}
+      {user.role !== 'foreman' && overview && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => setShowOverview(v => !v)} className="font-bold text-hibi-navy dark:text-white flex items-center gap-2">
+              📊 全体状況（月またぎ）<span className="text-xs text-gray-400">{showOverview ? '▲' : '▼'}</span>
+            </button>
+            <button onClick={fetchOverview} className="text-xs text-blue-600 dark:text-blue-400 underline">🔄 更新</button>
+          </div>
+          {showOverview && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                    <th className="py-1 pr-2">月</th>
+                    <th className="py-1 pr-2">現場(承認/全)</th>
+                    <th className="py-1 pr-2">署名(完了/対象)</th>
+                    <th className="py-1 pr-2">状態</th>
+                    <th className="py-1 pr-2 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overview.months.map(mo => {
+                    const [yy, mm] = mo.ym.split('-')
+                    const signPct = mo.workers.target > 0 ? Math.round(mo.workers.fullySigned / mo.workers.target * 100) : 0
+                    return (
+                      <tr key={mo.ym} className={`border-b dark:border-gray-700/50 ${mo.atRisk ? 'bg-red-50 dark:bg-red-900/20' : mo.isCurrent ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}>
+                        <td className="py-1.5 pr-2 font-medium whitespace-nowrap">
+                          {parseInt(yy)}/{parseInt(mm)}月
+                          {mo.isCurrent && <span className="text-[10px] text-blue-500 ml-1">今月</span>}
+                          {mo.isFuture && <span className="text-[10px] text-gray-400 ml-1">先</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          {mo.sites.approved}/{mo.sites.total}
+                          {mo.sites.submitted > 0 && <span className="text-yellow-600 dark:text-yellow-400 ml-1">提{mo.sites.submitted}</span>}
+                          {mo.sites.rejected > 0 && <span className="text-orange-600 dark:text-orange-400 ml-1">差{mo.sites.rejected}</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          {mo.workers.fullySigned}/{mo.workers.target}<span className="text-gray-400 ml-1">({signPct}%)</span>
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          {mo.complete ? <span className="text-green-600 dark:text-green-400">✅ 完了</span>
+                            : mo.atRisk ? <span className="text-red-600 dark:text-red-400 font-bold">⚠ 締切間近・未完了</span>
+                            : mo.sites.total === 0 ? <span className="text-gray-400">未作成</span>
+                            : <span className="text-yellow-600 dark:text-yellow-400">対応中</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap text-right">
+                          <button onClick={() => setYm(mo.ym)} className="text-xs text-blue-600 dark:text-blue-400 underline mr-2">開く</button>
+                          {!mo.complete && mo.sites.approved > 0 && mo.unsignedNames.length > 0 && (
+                            <button onClick={() => copyReminder(mo)} className="text-xs text-emerald-700 dark:text-emerald-400 underline">
+                              {copiedReminderYm === mo.ym ? '✓コピー済' : '📋通知文'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
+                「📋通知文」= 未承認者へのお願い文をコピー（個人リンクから承認してもらう）。赤=翌月が締切間近で未完了。
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Site calendars - all expanded */}
       {loading ? (
