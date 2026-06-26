@@ -21,8 +21,9 @@ export async function POST(request: NextRequest) {
     const existingData = existing.exists() ? existing.data() : {}
     const wasApproved = existingData.status === 'approved'
 
-    // 承認後修正時の差分計算（監査用）
+    // 承認後修正時の差分計算（監査用）+ 変更なし判定
     let diffSummary = ''
+    let hasChanges = true
     if (wasApproved && existingData.days) {
       const oldDays = existingData.days as Record<string, string>
       const changes: string[] = []
@@ -33,6 +34,21 @@ export async function POST(request: NextRequest) {
         if (before !== after) changes.push(`${k}日: ${before}→${after}`)
       }
       diffSummary = changes.join(', ')
+      hasChanges = changes.length > 0
+    }
+
+    // 承認済みカレンダーを「修正」したが休日設定（days）が一切変わっていない場合:
+    //   updatedAt を更新すると wasRevised/needsResign が立ち、署名済みスタッフへ
+    //   不要な再確認依頼が出てしまう。誤操作・空振り保存を救済するため、書き込み自体を
+    //   スキップして既存の updatedAt を温存する（＝再確認を発生させない）。
+    //   ※承認前(draft)の保存は署名が無く再確認に影響しないため対象外。
+    if (wasApproved && existingData.days && !hasChanges) {
+      await logActivity(
+        String(updatedBy || 'admin'),
+        'calendar.reviseApproved',
+        `${siteId} ${ym} 承認後修正を試みたが変更なし → 再確認は発生させず（updatedAt温存）`,
+      )
+      return NextResponse.json({ success: true, unchanged: true })
     }
 
     await setDoc(doc(db, 'siteCalendar', docId), {

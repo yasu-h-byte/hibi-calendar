@@ -649,10 +649,13 @@ Chon ten -> Xem lich -> Ky
                                           body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0 }),
                                         })
                                         if (res.ok) {
+                                          const data = await res.json().catch(() => ({}))
                                           setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
                                           setRevisingApproved(prev => { const next = { ...prev }; delete next[site.siteId]; return next })
                                           fetchData()
-                                          alert('修正を保存しました。署名済みスタッフへ再確認依頼が出ます。')
+                                          alert(data.unchanged
+                                            ? '休日設定に変更がなかったため、カレンダーはそのままです。署名済みスタッフへの再確認依頼は出ていません。'
+                                            : '修正を保存しました。署名済みスタッフへ再確認依頼が出ます。')
                                         } else {
                                           const d = await res.json()
                                           alert(d.error || '保存に失敗しました')
