@@ -26,7 +26,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type AdminFirestore = any
 
-let cached: { db: AdminFirestore | null } | null = null
+let cached: { db: AdminFirestore | null; admin: any | null } | null = null
 
 function loadServiceAccount(): Record<string, unknown> | null {
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64
@@ -55,7 +55,7 @@ export function getAdminDb(): AdminFirestore | null {
 
   const svc = loadServiceAccount()
   if (!svc) {
-    cached = { db: null }
+    cached = { db: null, admin: null }
     return null
   }
 
@@ -70,13 +70,22 @@ export function getAdminDb(): AdminFirestore | null {
         projectId: (svc as any).project_id,
       })
     }
-    cached = { db: admin.firestore() }
+    cached = { db: admin.firestore(), admin }
     return cached.db
   } catch (e) {
     console.error('[firebase-admin] 初期化に失敗（firebase-admin 未インストール？）:', e)
-    cached = { db: null }
+    cached = { db: null, admin: null }
     return null
   }
+}
+
+/**
+ * Admin モード時の FieldValue（deleteField 等のセンチネル生成用）。
+ * 未設定（Web モード）なら null。lib/fsdb.ts の deleteField() が使う。
+ */
+export function getAdminFieldValue(): any | null {
+  getAdminDb() // 初期化を保証（cached を埋める）
+  return cached?.admin ? cached.admin.firestore.FieldValue : null
 }
 
 /** サーバが Admin SDK モードで動いているか（運用画面での可視化用） */
