@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { isAdminSdkActive } from '@/lib/firebase-admin'
+import { isAdminSdkActive, getAdminStatus } from '@/lib/firebase-admin'
 
 /**
  * ヘルス／稼働モード確認エンドポイント（Admin SDK 移行の検証用・2026-06）
@@ -22,14 +22,18 @@ export const dynamic = 'force-dynamic'
 
 export function GET() {
   let adminMode = false
+  let diag: ReturnType<typeof getAdminStatus> | null = null
   try {
     adminMode = isAdminSdkActive()
-  } catch {
+    diag = getAdminStatus()
+  } catch (e) {
     adminMode = false
+    diag = { status: 'init_error', hasRawEnv: false, hasB64Env: false, errorHint: e instanceof Error ? e.message.slice(0, 140) : String(e) }
   }
   return NextResponse.json({
     ok: true,
     adminMode,
+    ...diag,
     time: new Date().toISOString(),
   })
 }

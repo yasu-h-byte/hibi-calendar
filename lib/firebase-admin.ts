@@ -28,21 +28,33 @@ type AdminFirestore = any
 
 let cached: { db: AdminFirestore | null; admin: any | null } | null = null
 
-function loadServiceAccount(): Record<string, unknown> | null {
+/**
+ * Admin SDK 初期化の状態（/api/health 経由の遠隔診断用）。
+ * - 'unset'       : 鍵 env が未設定（＝Web モードで正常運用中）
+ * - 'active'      : 鍵を読み Admin SDK 初期化成功（Admin モード）
+ * - 'parse_error' : env はあるが JSON 解析に失敗（貼り付けで改行崩れ等）
+ * - 'init_error'  : 解析は通ったが cert()/require で失敗（private_key 不正・依存欠落等）
+ * - 'browser'     : ブラウザ実行（Admin は使わない）
+ */
+export type AdminInitStatus = 'unset' | 'active' | 'parse_error' | 'init_error' | 'browser'
+let initStatus: AdminInitStatus = 'unset'
+let initErrorHint: string | null = null
+
+/** 鍵 env の存在チェック（値は返さない・bool 判定のみ） */
+function readServiceAccountEnv(): { present: boolean; value?: string; isB64?: boolean } {
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_B64
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT
-  try {
-    if (b64 && b64.trim()) {
-      const json = Buffer.from(b64.trim(), 'base64').toString('utf-8')
-      return JSON.parse(json)
-    }
-    if (raw && raw.trim()) {
-      return JSON.parse(raw.trim())
-    }
-  } catch (e) {
-    console.error('[firebase-admin] サービスアカウントの解析に失敗（env の値を確認）:', e)
-  }
-  return null
+  if (b64 && b64.trim()) return { present: true, value: b64.trim(), isB64: true }
+  if (raw && raw.trim()) return { present: true, value: raw.trim(), isB64: false }
+  return { present: false }
+}
+
+/** env から JSON を取り出してパース。解析失敗時は throw（呼び出し側で parse_error 判定） */
+function loadServiceAccount(): Record<string, unknown> | null {
+  const env = readServiceAccountEnv()
+  if (!env.present) return null
+  const json = env.isB64 ? Buffer.from(env.value as string, 'base64').toString('utf-8') : (env.value as string)
+  return JSON.parse(json)
 }
 
 /**
@@ -50,11 +62,31 @@ function loadServiceAccount(): Record<string, unknown> | null {
  */
 export function getAdminDb(): AdminFirestore | null {
   // ブラウザでは絶対に Admin SDK を使わない
-  if (typeof window !== 'undefined') return null
+  if (typeof window !== 'undefined') {
+    initStatus = 'browser'
+    return null
+  }
   if (cached) return cached.db
 
-  const svc = loadServiceAccount()
+  const env = readServiceAccountEnv()
+  if (!env.present) {
+    initStatus = 'unset'
+    cached = { db: null, admin: null }
+    return null
+  }
+
+  let svc: Record<string, unknown> | null = null
+  try {
+    svc = loadServiceAccount()
+  } catch (e) {
+    initStatus = 'parse_error'
+    initErrorHint = (e instanceof Error ? e.message : String(e)).slice(0, 140)
+    console.error('[firebase-admin] サービスアカウントの解析に失敗（env の値を確認）:', e)
+    cached = { db: null, admin: null }
+    return null
+  }
   if (!svc) {
+    initStatus = 'unset'
     cached = { db: null, admin: null }
     return null
   }
@@ -71,9 +103,12 @@ export function getAdminDb(): AdminFirestore | null {
       })
     }
     cached = { db: admin.firestore(), admin }
+    initStatus = 'active'
     return cached.db
   } catch (e) {
-    console.error('[firebase-admin] 初期化に失敗（firebase-admin 未インストール？）:', e)
+    initStatus = 'init_error'
+    initErrorHint = (e instanceof Error ? e.message : String(e)).slice(0, 140)
+    console.error('[firebase-admin] 初期化に失敗（firebase-admin 未インストール？private_key 不正？）:', e)
     cached = { db: null, admin: null }
     return null
   }
@@ -91,4 +126,25 @@ export function getAdminFieldValue(): any | null {
 /** サーバが Admin SDK モードで動いているか（運用画面での可視化用） */
 export function isAdminSdkActive(): boolean {
   return getAdminDb() !== null
+}
+
+/**
+ * 初期化状態の遠隔診断（/api/health 用・秘密情報は含めない）。
+ * - status: 上記 AdminInitStatus
+ * - hasRawEnv / hasB64Env: 鍵 env がこのランタイムに届いているか（bool のみ）
+ * - errorHint: parse/init 失敗時のエラー要約（先頭140字・鍵素材は含まない）
+ */
+export function getAdminStatus(): {
+  status: AdminInitStatus
+  hasRawEnv: boolean
+  hasB64Env: boolean
+  errorHint: string | null
+} {
+  getAdminDb() // 初期化を試行して initStatus を確定
+  return {
+    status: initStatus,
+    hasRawEnv: !!(process.env.FIREBASE_SERVICE_ACCOUNT && process.env.FIREBASE_SERVICE_ACCOUNT.trim()),
+    hasB64Env: !!(process.env.FIREBASE_SERVICE_ACCOUNT_B64 && process.env.FIREBASE_SERVICE_ACCOUNT_B64.trim()),
+    errorHint: initErrorHint,
+  }
 }
