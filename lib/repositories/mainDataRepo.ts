@@ -93,7 +93,7 @@ export async function mergeMainDoc(updates: Record<string, unknown>): Promise<vo
  * フィールドを削除（FieldValue.delete()）
  */
 export async function deleteMainDocField(field: string): Promise<void> {
-  const { deleteField } = await import('firebase/firestore')
+  const { deleteField } = await import('@/lib/fsdb')
   await updateDoc(doc(db, MAIN_DOC_PATH[0], MAIN_DOC_PATH[1]), {
     [field]: deleteField() as unknown as FieldValue,
   })

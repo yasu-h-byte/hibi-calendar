@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'rolePermissions required' }, { status: 400 })
       }
       const docRef = doc(db, 'demmen', 'main')
-      const { updateDoc } = await import('firebase/firestore')
+      const { updateDoc } = await import('@/lib/fsdb')
       await updateDoc(docRef, { rolePermissions })
       await logActivity('admin', 'settings.permissions', `権限設定を更新 (${tier})`)
       return NextResponse.json({ success: true })
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'userPasswords required' }, { status: 400 })
       }
       const docRef = doc(db, 'demmen', 'main')
-      const { updateDoc } = await import('firebase/firestore')
+      const { updateDoc } = await import('@/lib/fsdb')
       await updateDoc(docRef, { userPasswords })
       clearPasswordCache()  // キャッシュを即時無効化して新パスワードを即座に有効にする
       await logActivity('admin', 'settings.userPasswords', `個人パスワードを更新 (${tier})`)

@@ -246,7 +246,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { action } = body
 
-    const { doc, setDoc, getDoc } = await import('firebase/firestore')
+    const { doc, setDoc, getDoc } = await import('@/lib/fsdb')
     const { db } = await import('@/lib/firebase')
 
     // ⚠️ 月次ロックチェック（2026-05-08 追加）
@@ -468,8 +468,8 @@ export async function POST(request: NextRequest) {
         } catch { /* ログ失敗は本体処理に影響させない */ }
       } else {
         // nullまたは無効なエントリ: フィールドを削除
-        const { deleteField } = await import('firebase/firestore')
-        const { updateDoc } = await import('firebase/firestore')
+        const { deleteField } = await import('@/lib/fsdb')
+        const { updateDoc } = await import('@/lib/fsdb')
         await updateDoc(docRef, { [`d.${key}`]: deleteField() })
         try {
           const { logActivity } = await import('@/lib/activity')
@@ -491,7 +491,7 @@ export async function POST(request: NextRequest) {
         }
         await setDoc(docRef, { sd: { [key]: subconEntry } }, { merge: true })
       } else {
-        const { deleteField, updateDoc } = await import('firebase/firestore')
+        const { deleteField, updateDoc } = await import('@/lib/fsdb')
         await updateDoc(docRef, { [`sd.${key}`]: deleteField() })
       }
     }

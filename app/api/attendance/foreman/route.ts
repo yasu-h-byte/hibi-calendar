@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
     const siteNameMap: Record<string, string> = {}
     {
       const { db } = await import('@/lib/firebase')
-      const { doc, getDoc } = await import('firebase/firestore')
+      const { doc, getDoc } = await import('@/lib/fsdb')
       const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
       if (mainSnap.exists()) {
         const sites = (mainSnap.data().sites || []) as { id: string; name: string }[]
@@ -233,7 +233,7 @@ export async function POST(request: NextRequest) {
       try {
         const { canAdminEditEntry, detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
         const { db } = await import('@/lib/firebase')
-        const { doc, getDoc } = await import('firebase/firestore')
+        const { doc, getDoc } = await import('@/lib/fsdb')
         const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
         if (mainSnap.exists()) {
           const workers = (mainSnap.data().workers || []) as { id: number; visa?: string }[]
@@ -299,7 +299,7 @@ export async function POST(request: NextRequest) {
       }
 
       const { db } = await import('@/lib/firebase')
-      const { doc, getDoc, updateDoc, deleteField } = await import('firebase/firestore')
+      const { doc, getDoc, updateDoc, deleteField } = await import('@/lib/fsdb')
       // ソースエントリを取得
       const attData = await getAttendanceDoc(ym)
       const fromKey = `${fromSiteId}_${workerId}_${ym}_${String(day)}`
