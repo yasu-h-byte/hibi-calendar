@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, deleteDoc, where } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, deleteDoc, where } from '@/lib/fsdb'
 
 /**
  * 出面・人員マスターデータの日次バックアップ

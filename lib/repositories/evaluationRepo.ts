@@ -13,7 +13,7 @@ import {
   collection,
   query,
   where,
-} from 'firebase/firestore'
+} from '@/lib/fsdb'
 import type { Evaluation } from '@/types'
 
 const EVAL_COL = 'evaluations'

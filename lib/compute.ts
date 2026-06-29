@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc } from '@/lib/fsdb'
 import { AttendanceEntry, calcActualHours } from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isHiredByMonth } from './workers'

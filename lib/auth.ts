@@ -1,7 +1,7 @@
 import { AuthUser, UserRole, Site, Worker } from '@/types'
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc } from '@/lib/fsdb'
 
 // 個人パスワードのキャッシュ（APIリクエストごとにFirestore読み取りを避ける）
 let cachedUserPasswords: Record<string, string> | null = null

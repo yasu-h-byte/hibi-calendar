@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { MainData, PLRecord, RawWorker } from './compute'
 import { isAlreadyRetired } from './workers'
 import { calcLegalPL } from './leave-compute'

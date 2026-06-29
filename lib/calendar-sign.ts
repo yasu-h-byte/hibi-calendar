@@ -9,7 +9,7 @@
  * 以前は同じロジックが両 route で重複していた。
  */
 import { db } from './firebase'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from '@/lib/fsdb'
 
 /**
  * IP アドレスを短い hash 文字列に変換

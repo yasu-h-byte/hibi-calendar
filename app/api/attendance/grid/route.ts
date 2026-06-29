@@ -5,7 +5,7 @@ import { getApprovalForDay } from '@/lib/attendance'
 import { isStillActiveForMonth } from '@/lib/workers'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, getDocs, collection } from 'firebase/firestore'
+import { doc, getDoc, getDocs, collection } from '@/lib/fsdb'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {

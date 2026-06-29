@@ -5,7 +5,7 @@
  */
 
 import { db } from './firebase'
-import { doc, getDoc, setDoc, getDocs, collection, query, where, orderBy, deleteDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, getDocs, collection, query, where, orderBy, deleteDoc } from '@/lib/fsdb'
 
 export type AccessRole = 'admin' | 'approver' | 'foreman' | 'jimu' | 'staff'
 

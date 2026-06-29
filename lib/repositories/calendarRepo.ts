@@ -19,7 +19,7 @@ import {
   query,
   where,
   type DocumentSnapshot,
-} from 'firebase/firestore'
+} from '@/lib/fsdb'
 import type { DayType } from '@/types'
 import type { Ym7 } from '@/lib/ym'
 

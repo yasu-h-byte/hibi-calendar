@@ -1,7 +1,7 @@
 import { getApiRole, isManagerRole } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { ym7 } from '@/lib/ym'
 
 export async function POST(request: NextRequest) {

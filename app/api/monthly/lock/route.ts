@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, updateDoc, setDoc, getDocs, collection, query, where } from 'firebase/firestore'
+import { doc, updateDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { getMainData, getAttData, computeMonthly, parseDKey } from '@/lib/compute'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'

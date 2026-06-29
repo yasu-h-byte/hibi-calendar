@@ -10,7 +10,7 @@ import {
 } from '@/lib/worker-crud'
 import { logActivity } from '@/lib/activity'
 import { db } from '@/lib/firebase'
-import { doc, setDoc, getDocs, collection } from 'firebase/firestore'
+import { doc, setDoc, getDocs, collection } from '@/lib/fsdb'
 
 // 2026-06-12 (監査 Sprint2-C): 給与に直結するフィールドの変更を永続監査ログに残す。
 //   activityLog は500件で古い順に自動削除されるため、単価変更の証跡が数週間で消えていた。

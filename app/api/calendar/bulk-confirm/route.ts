@@ -1,7 +1,7 @@
 import { getApiRole, isManagerRole } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { DayType } from '@/types'
 import { checkCalendarLegal } from '@/lib/calendar-legal'

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from '@/lib/fsdb'
 import { getMainData } from '@/lib/compute'
 import { logActivity } from '@/lib/activity'
 import { calcEvaluatorWeights } from '@/lib/evaluator-weights'

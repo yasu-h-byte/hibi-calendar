@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc } from '@/lib/fsdb'
 import { recordAccess, getRequestIp, AccessRole } from '@/lib/accessLog'
 
 /**

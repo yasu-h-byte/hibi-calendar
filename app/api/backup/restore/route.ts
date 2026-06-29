@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
+import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 
 /**

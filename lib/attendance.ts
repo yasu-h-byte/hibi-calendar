@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, getDoc, setDoc, updateDoc, deleteField, collection, getDocs, query, where } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, deleteField, collection, getDocs, query, where } from '@/lib/fsdb'
 import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site } from '@/types'
 import { ensureDocExists } from './firestore-safe'
 

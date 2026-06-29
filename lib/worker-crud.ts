@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, getDoc, runTransaction } from 'firebase/firestore'
+import { doc, getDoc, runTransaction } from '@/lib/fsdb'
 
 export interface WorkerData {
   id: number

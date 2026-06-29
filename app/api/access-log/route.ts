@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { getWorkerLastAccessMap, getAccessLogsInRange, AccessRole, WorkerLastAccess } from '@/lib/accessLog'
 import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc } from '@/lib/fsdb'
 
 interface WorkerEntry {
   id: number

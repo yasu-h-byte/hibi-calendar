@@ -14,7 +14,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { collection, query, where, getDocs } from '@/lib/fsdb'
 import { getWorkerByToken, isStillActiveForMonth } from '@/lib/workers'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm } from '@/lib/homeLeave'
 import { getRequestIpHash, signMultipleSitesForWorker } from '@/lib/calendar-sign'

@@ -8,7 +8,7 @@
  */
 
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc, setDoc, FieldValue } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, setDoc, FieldValue } from '@/lib/fsdb'
 
 const MAIN_DOC_PATH = ['demmen', 'main'] as const
 

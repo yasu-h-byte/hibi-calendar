@@ -1,7 +1,7 @@
 import { getApiRole, isManagerRole } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, updateDoc } from 'firebase/firestore'
+import { doc, updateDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { ym7 } from '@/lib/ym'
 

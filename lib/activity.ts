@@ -9,7 +9,7 @@ import {
   where,
   deleteDoc,
   QueryConstraint,
-} from 'firebase/firestore'
+} from '@/lib/fsdb'
 
 export interface ActivityEntry {
   id?: string

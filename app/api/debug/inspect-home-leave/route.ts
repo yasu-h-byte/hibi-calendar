@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, getDocs, collection } from 'firebase/firestore'
+import { doc, getDoc, getDocs, collection } from '@/lib/fsdb'
 
 /**
  * デバッグ用: 帰国情報のソース2つを生で返す

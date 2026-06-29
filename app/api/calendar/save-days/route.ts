@@ -1,7 +1,7 @@
 import { checkApiAuth } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { ym7 } from '@/lib/ym'
 import { logActivity } from '@/lib/activity'
 

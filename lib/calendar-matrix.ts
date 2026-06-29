@@ -12,7 +12,7 @@
  * プロジェクション（変換）するだけ。
  */
 import { db } from './firebase'
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, getDoc, collection, query, where, getDocs } from '@/lib/fsdb'
 import { getAllSitesWithWorkersForMonth } from './sites'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm, type HomeLeaveEntry } from './homeLeave'
 import { isCalendarSignTarget } from './workers'

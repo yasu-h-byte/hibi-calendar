@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore'
+import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { ym7 } from '@/lib/ym'
 
 export async function POST(request: NextRequest) {

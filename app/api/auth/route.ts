@@ -3,7 +3,7 @@ import { getSites } from '@/lib/sites'
 import { getWorkers } from '@/lib/workers'
 import { buildAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc } from '@/lib/fsdb'
 import { recordAccess, getRequestIp, AccessRole } from '@/lib/accessLog'
 
 export async function POST(request: NextRequest) {

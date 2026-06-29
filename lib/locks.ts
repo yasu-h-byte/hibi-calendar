@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc } from '@/lib/fsdb'
 
 /**
  * 月次ロック判定の共通ヘルパー（2026-06-12 監査 Sprint2-B）

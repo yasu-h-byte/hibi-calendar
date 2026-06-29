@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc } from '@/lib/fsdb'
 import { Site, SiteAssign, Worker } from '@/types'
 import { isStillActiveForMonth, isHiredByMonth } from './workers'
 

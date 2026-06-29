@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { getDocs, collection, query, where } from 'firebase/firestore'
+import { getDocs, collection, query, where } from '@/lib/fsdb'
 
 /**
  * 帰国期間情報を取得（2026-05-13 単一ソース化）

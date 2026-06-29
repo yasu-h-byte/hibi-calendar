@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'
+import { doc, getDoc, collection, query, where, getDocs } from '@/lib/fsdb'
 import { getWorkersForSite, getSiteById } from '@/lib/sites'
 import { ym7 } from '@/lib/ym'
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, clearPasswordCache, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 
 // 2026-06-12 (監査S3): 管理者層（ADMIN_PASSWORD / SUPER_ADMIN_PASSWORD）かを判定。

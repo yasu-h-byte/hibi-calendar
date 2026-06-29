@@ -17,7 +17,7 @@ import {
 } from '@/lib/export'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 import { db } from '@/lib/firebase'
-import { collection, getDocs, query, where } from 'firebase/firestore'
+import { collection, getDocs, query, where } from '@/lib/fsdb'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {

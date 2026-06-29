@@ -20,7 +20,7 @@
  * このファイルの関数のみを使い、生の `setDoc(ref, { 何か: {} }, { merge: true })`
  * は **使わない** こと。
  */
-import { DocumentReference, setDoc, getDoc, updateDoc } from 'firebase/firestore'
+import { DocumentReference, setDoc, getDoc, updateDoc } from '@/lib/fsdb'
 
 /**
  * ドキュメントが存在することを保証する。

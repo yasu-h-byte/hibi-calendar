@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs } from 'firebase/firestore'
+import { collection, query, where, getDocs } from '@/lib/fsdb'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'

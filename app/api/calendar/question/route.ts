@@ -11,7 +11,7 @@
 import { checkApiAuth } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
-import { collection, addDoc, getDocs, query, where, doc, updateDoc } from 'firebase/firestore'
+import { collection, addDoc, getDocs, query, where, doc, updateDoc } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
 
 export const dynamic = 'force-dynamic'

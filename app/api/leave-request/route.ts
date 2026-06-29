@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from 'firebase/firestore'
+import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
 import { getStaffSites, ymKey, attKey, setAttendanceEntry, isScheduledWorkDay } from '@/lib/attendance'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'

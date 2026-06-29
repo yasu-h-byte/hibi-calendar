@@ -14,7 +14,7 @@ import {
 } from '@/lib/attendance'
 import { getSites } from '@/lib/sites'
 import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc } from '@/lib/fsdb'
 import { AttendanceEntry } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { getAttData, parseDKey } from '@/lib/compute'

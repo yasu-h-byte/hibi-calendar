@@ -21,7 +21,25 @@ import { db as webDb } from './firebase'
 import { getAdminDb, getAdminFieldValue } from './firebase-admin'
 
 // 型はそのまま Web SDK のものを再エクスポート（型注釈用・実行時に影響なし）
-export type { DocumentReference, FieldValue, DocumentData, QueryDocumentSnapshot } from 'firebase/firestore'
+export type {
+  DocumentReference, FieldValue, DocumentData, QueryDocumentSnapshot,
+  DocumentSnapshot, QueryConstraint, CollectionReference, Query, QuerySnapshot,
+  Transaction, WhereFilterOp, OrderByDirection,
+} from 'firebase/firestore'
+
+// Web/Admin 両対応のスナップショット型（呼び出し側の d:any を防ぐため最小限を型付け）
+export interface FsDocSnap {
+  exists: () => boolean
+  data: () => any
+  id: string
+  ref: any
+}
+export interface FsQuerySnap {
+  docs: FsDocSnap[]
+  size: number
+  empty: boolean
+  forEach: (cb: (d: FsDocSnap, index?: number) => void) => void
+}
 
 /** Admin モードなら admin の Firestore、そうでなければ null */
 function adb(): any | null {
@@ -70,7 +88,7 @@ export function query(collectionRef: any, ...constraints: any[]): any {
 }
 
 // ── 読み取り ──
-function wrapDocSnap(snap: any): any {
+function wrapDocSnap(snap: any): FsDocSnap {
   return {
     exists: () => snap.exists,
     data: () => snap.data(),
@@ -78,16 +96,16 @@ function wrapDocSnap(snap: any): any {
     ref: snap.ref,
   }
 }
-export async function getDoc(ref: any): Promise<any> {
+export async function getDoc(ref: any): Promise<FsDocSnap> {
   const a = adb()
-  if (!a) return web.getDoc(ref)
+  if (!a) return (await web.getDoc(ref)) as unknown as FsDocSnap
   return wrapDocSnap(await ref.get())
 }
-export async function getDocs(q: any): Promise<any> {
+export async function getDocs(q: any): Promise<FsQuerySnap> {
   const a = adb()
-  if (!a) return web.getDocs(q)
+  if (!a) return (await web.getDocs(q)) as unknown as FsQuerySnap
   const snap = await q.get()
-  const docs = snap.docs.map((d: any) => ({
+  const docs: FsDocSnap[] = snap.docs.map((d: any) => ({
     id: d.id,
     data: () => d.data(),
     ref: d.ref,
@@ -97,7 +115,7 @@ export async function getDocs(q: any): Promise<any> {
     docs,
     size: snap.size,
     empty: snap.empty,
-    forEach: (cb: any) => docs.forEach(cb),
+    forEach: (cb: (d: FsDocSnap, index?: number) => void) => docs.forEach(cb),
   }
 }
 
