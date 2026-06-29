@@ -92,17 +92,26 @@ export function getAdminDb(): AdminFirestore | null {
   }
 
   try {
-    // 静的解析回避のための eval-require（webpack にバンドルさせない）
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-eval
-    const req = eval('require') as NodeRequire
-    const admin = req('firebase-admin')
-    if (admin.apps.length === 0) {
-      admin.initializeApp({
-        credential: admin.credential.cert(svc as any),
+    // firebase-admin は next.config.js の experimental.serverComponentsExternalPackages
+    // でサーバ外部依存として扱う（クライアントに出さず、サーバ関数には同梱トレース）。
+    // 以前は eval('require') でバンドル回避していたが、それだと Next の依存トレーサからも
+    // 隠れてしまい Vercel 上で "Cannot find module 'firebase-admin'" になった（2026-06 判明）。
+    //
+    // firebase-admin v14 はモジュラー API。app 関数は 'firebase-admin/app'、
+    // Firestore は 'firebase-admin/firestore' から取得する（旧 namespaced な
+    // admin.apps / admin.credential / admin.firestore() は存在しない）。
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const { initializeApp, getApps, cert } = require('firebase-admin/app')
+    const firestoreMod = require('firebase-admin/firestore')
+    /* eslint-enable @typescript-eslint/no-var-requires */
+    if (getApps().length === 0) {
+      initializeApp({
+        credential: cert(svc as any),
         projectId: (svc as any).project_id,
       })
     }
-    cached = { db: admin.firestore(), admin }
+    // cached.admin には firestore モジュールを保持（getAdminFieldValue が FieldValue を使う）
+    cached = { db: firestoreMod.getFirestore(), admin: firestoreMod }
     initStatus = 'active'
     return cached.db
   } catch (e) {
@@ -120,7 +129,8 @@ export function getAdminDb(): AdminFirestore | null {
  */
 export function getAdminFieldValue(): any | null {
   getAdminDb() // 初期化を保証（cached を埋める）
-  return cached?.admin ? cached.admin.firestore.FieldValue : null
+  // cached.admin は 'firebase-admin/firestore' モジュール。FieldValue.delete() 等を提供。
+  return cached?.admin ? cached.admin.FieldValue : null
 }
 
 /** サーバが Admin SDK モードで動いているか（運用画面での可視化用） */
