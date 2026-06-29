@@ -1,229 +1,43 @@
 rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────
+//  【ロック版 firestore.rules】Admin SDK 移行 完了後にのみ使用する
+//
+//  これは「サーバからの Firestore アクセスを全て Firebase Admin SDK
+//  （サービスアカウント＝rules バイパス特権）に移行し終えた後」に、
+//  現行 firestore.rules をこの内容に置き換えてデプロイするための雛形。
+//
+//  方針: deny-by-default。クライアント（Web SDK）からの直接アクセスを
+//  原則すべて拒否する。本システムは全データアクセスが API（サーバ）経由で
+//  あることを確認済み（2026-06-13 監査）のため、クライアント直アクセスを
+//  禁止しても画面機能は壊れない。サーバは Admin SDK でアクセスするため
+//  rules の制約を受けない。
+//
+//  ⚠️ 切替前提（必須）:
+//    1. 全 API ルート・サーバ lib の Firestore アクセスが Admin SDK 経由に
+//       なっていること（lib/fsdb.ts 経由 + FIREBASE_SERVICE_ACCOUNT_B64 設定済み）
+//    2. ステージング/プレビューで全機能（出面入力・承認・月次・有給・帰国・
+//       カレンダー公開ページ・バックアップ）が動作確認済みであること
+//
+//  ロールバック: 問題が出たら現行 firestore.rules（許可版）に戻して deploy。
+//  詳細は docs/admin-sdk-migration.md。
+// ─────────────────────────────────────────────────────────────
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ────────────────────────────────────────
-    //  ヘルパー関数
-    // ────────────────────────────────────────
-    function isAdmin() {
-      return request.auth != null
-        && get(/databases/$(database)/documents/app_config/user_roles).data[request.auth.uid] == 'admin';
-    }
-    function hasRole() {
-      return request.auth != null
-        && get(/databases/$(database)/documents/app_config/user_roles).data[request.auth.uid] in ['admin','foreman','keiri'];
-    }
-    function isAuthenticated() {
-      return request.auth != null;
+    // すべて拒否（クライアント Web SDK からの直接アクセスを禁止）。
+    // サーバは Admin SDK でアクセスするため、この拒否の影響を受けない。
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    // ────────────────────────────────────────
-    //  ユーザー管理・ロール設定
-    // ────────────────────────────────────────
-    match /app_config/user_registry {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    match /app_config/{document} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    // ────────────────────────────────────────
-    //  出面データ
-    // ────────────────────────────────────────
-
-    // ヘルパー: 既存マップフィールドが「非空 → 空」に書き換えられていないか
-    // (2026-05-07 事故対策。setDoc({field:{}}, {merge:true}) のような罠を server 側で拒否する)
-    function notWipingMap(fieldName) {
-      return !(fieldName in resource.data)
-          || resource.data[fieldName].size() == 0
-          || !(fieldName in request.resource.data)
-          || request.resource.data[fieldName].size() > 0;
-    }
-
-    // マスターデータ（main）：新アプリ（パスワード認証）からも読み書き可能
-    // 重要マップを空に置換する書き込みは拒否。
-    // 2026-05-08 強化: massign / userPasswords / siteWorkDays / workDays / locks / evaluationSettings も追加。
-    //   userPasswords が空に上書きされると全社員ログイン不能になるため特に重要。
-    match /demmen/main {
-      allow read: if true;
-      allow create: if true;
-      allow delete: if false;  // main ドキュメント自体の削除を禁止
-      allow update: if notWipingMap('workers')
-                 && notWipingMap('sites')
-                 && notWipingMap('plData')
-                 && notWipingMap('homeLeaves')
-                 && notWipingMap('subcons')
-                 && notWipingMap('assign')
-                 && notWipingMap('massign')
-                 && notWipingMap('mforeman')
-                 && notWipingMap('userPasswords')
-                 && notWipingMap('siteWorkDays')
-                 && notWipingMap('workDays')
-                 && notWipingMap('locks')
-                 && notWipingMap('evaluationSettings');
-    }
-    // 請求額データ（billing_data）：ロール持ちのみ書き込み
-    match /demmen/billing_data {
-      allow read: if isAuthenticated();
-      allow write: if hasRole();
-    }
-    // 月別出面データ（att_YYYYMM）+ 道具代補助（toolBudget）— 新アプリ（トークン認証）からも読み書き可能
-    // 既存の d / sd マップを空に置換する書き込みは拒否（2026-05-07 事故と同種の事故防止）
-    match /demmen/{docId} {
-      allow read: if true;
-      allow create: if docId.matches('att_[0-9]{6}') || docId == 'toolBudget';
-      // delete は禁止（過去に att_ を delete するコードはなく、誤操作・攻撃を防ぐ）
-      allow delete: if false;
-      allow update: if (docId.matches('att_[0-9]{6}') || docId == 'toolBudget')
-                 && notWipingMap('d')
-                 && notWipingMap('sd');
-    }
-
-    // ────────────────────────────────────────
-    //  有給申請（スマホからスタッフが申請するため非認証 read/write 必要）
-    //  ⚠️ 偽申請の可能性は API 側のサーバ検証で防ぐ（職長承認・最終承認の二段階）
-    // ────────────────────────────────────────
-    match /leaveRequests/{docId} {
-      allow read, write: if true;
-    }
-
-    // ────────────────────────────────────────
-    //  長期休暇（帰国）申請（同上）
-    // ────────────────────────────────────────
-    match /homeLongLeave/{docId} {
-      allow read, write: if true;
-    }
-
-    // ────────────────────────────────────────
-    //  ログイン履歴
-    // ────────────────────────────────────────
-    match /login_logs/{logId} {
-      allow create: if isAuthenticated();
-      allow read: if isAdmin();
-    }
-
-    // ────────────────────────────────────────
-    //  就業カレンダーシステム
-    // ────────────────────────────────────────
-    // カレンダー割当データ
-    match /workerCalendar/{docId} {
-      allow read, write: if true;
-    }
-
-    // カレンダー署名データ
-    match /calendarSign/{docId} {
-      allow read, write: if true;
-    }
-
-    // カレンダー承認の永続アーカイブ（append-only・法的証跡）
-    //   変形労働時間制の「事前確定・周知・同意」の証跡を**消えない形**で残す。
-    //   live の calendarSign は承認取消(revert)/初期化(reset)で削除されるが、本ログは残す。
-    //   改竄・削除を rules レベルで禁止して証跡性を担保（create のみ許可）。
-    match /calendarSignLog/{docId} {
-      allow read: if true;
-      allow create: if true;
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    // カレンダーへの労働者の質問・異議（本人が作成・管理者が解決フラグ更新）
-    match /calendarQuestions/{docId} {
-      allow read: if true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if false;
-    }
-
-    // カレンダーパターン定義
-    match /calendarPatterns/{docId} {
-      allow read: if true;
-      allow write: if false;
-    }
-
-    // 現場別カレンダー割当データ
-    match /siteCalendar/{docId} {
-      allow read, write: if true;
-    }
-
-    // 出面承認データ（新アプリ用）
-    // ⚠️ 2026-05-08 強化: 2段階承認 (foreman/final) のフィールド消失防止
-    //   foreman を空マップに置換すると承認失効、final も同様
-    match /attendanceApprovals/{docId} {
-      allow read: if true;
-      allow create: if true;
-      allow delete: if true;  // 承認解除で削除されることがある
-      allow update: if notWipingMap('foreman') && notWipingMap('final');
-    }
-
-    // ────────────────────────────────────────
-    //  HR評価データ
-    // ────────────────────────────────────────
-    // 評価セッションは reviews 配列に各評価者が追記するので、空マップ化は要注意
-    match /evaluations/{docId} {
-      allow read: if true;
-      allow create: if true;
-      allow delete: if false;  // 評価データの削除は禁止（履歴を残す）
-      allow update: if true;
-    }
-
-    // ────────────────────────────────────────
-    //  アクティビティログ
-    // ────────────────────────────────────────
-    match /activityLog/{docId} {
-      allow read, write: if true;
-    }
-
-    // ────────────────────────────────────────
-    //  アクセスログ
-    // ────────────────────────────────────────
-    match /accessLog/{docId} {
-      allow read, write: if true;
-    }
-
-    // ────────────────────────────────────────
-    //  バックアップスナップショット (PITR 代替)
-    //  /api/backup/snapshot から日次で書き込まれる
-    //  ⚠️ Firebase Admin SDK 未導入のため API も client SDK を使う。
-    //     したがって client/server を rules で区別できず、書き込み許可が必要。
-    //     代わりに schema 制約で偽データ注入を抑止する:
-    //       - data フィールドが必須（中身があるバックアップしか書けない）
-    //       - sourceId が "demmen/" で始まる
-    //     これで「空オブジェクトの偽バックアップ」攻撃は防げる。
-    // ────────────────────────────────────────
-    match /backups/{docId} {
-      allow read: if true;
-      allow create: if request.resource.data.sourceId is string
-                 && (request.resource.data.sourceId.matches('demmen/.*')
-                     || request.resource.data.sourceId.matches('calendarSign.*'))
-                 && request.resource.data.data is map
-                 && request.resource.data.data.size() > 0;
-      allow update: if false;  // バックアップは追記のみ、変更は禁止
-      allow delete: if true;   // 古いスナップショットの自動削除
-    }
-
-    // ────────────────────────────────────────
-    //  給与系変更の永続監査ログ（2026-06-12 監査 Sprint2-C）
-    //  労基法115条（賃金請求権3年）の証跡。追記のみ・変更/削除は完全禁止
-    // ────────────────────────────────────────
-    match /auditTrail/{docId} {
-      allow read: if true;
-      allow create: if request.resource.data.type is string
-                 && request.resource.data.at is string;
-      allow update: if false;
-      allow delete: if false;  // 証跡は削除不可
-    }
-
-    // ────────────────────────────────────────
-    //  月締め時の支給額スナップショット（2026-06-12 監査 Sprint2-D）
-    //  締め時点の「支払うと確定した金額」を凍結保存し、締め後の変動を検知する
-    // ────────────────────────────────────────
-    match /payrollSnapshots/{docId} {
-      allow read: if true;
-      allow create, update: if request.resource.data.ym is string
-                 && request.resource.data.workers is list;
-      allow delete: if false;  // 支払額の証跡は削除不可
-    }
+    // 公開ページ等で「ログイン不要のクライアント直読み」が将来必要になった場合のみ、
+    // ここに最小限の read 許可を個別追加する（現状は不要 = 全て API 経由）。
+    // 例:
+    // match /calendarPatterns/{docId} {
+    //   allow read: if true;   // 読み取り専用の公開テンプレート等
+    //   allow write: if false;
+    // }
   }
 }

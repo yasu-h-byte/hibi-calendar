@@ -160,17 +160,32 @@ await updateDoc(ref, { [`plData.${workerId}`]: records })
 
 復元: `/api/backup/restore` (admin only)。
 
-### セキュリティ根治（Admin SDK 移行）— 保留中の重要課題
+### セキュリティ根治（Admin SDK 移行）— ✅ 完了（2026-06-29）
 
-現状 `firestore.rules` は多くのコレクションが `allow read, write: if true` で、Firebase API キーが
-公開情報のため**未認証の第三者がブラウザから直接 Firestore を読み書きできる穴**がある
-（個人パスワード平文・単価・給与額の閲覧、改竄、月締め解除等）。`notWipingMap()` 等は
-データ消失は防ぐが、未認証アクセス自体は防げない。
+**かつての穴**: `firestore.rules` が多くのコレクションで `allow read, write: if true` だったため、
+Firebase API キーが公開情報であることと相まって**未認証の第三者がブラウザから直接 Firestore を
+読み書きできた**（個人パスワード平文・単価・給与額の閲覧、改竄、月締め解除等）。
 
-**根治策**: Firebase Admin SDK 移行（サーバを rules バイパスの特権アクセスに → rules を deny-by-default 化）。
-- 土台は実装済み: `lib/firebase-admin.ts`（**デュアルモード**: `FIREBASE_SERVICE_ACCOUNT_B64` 未設定なら
-  Web SDK にフォールバック＝現状ゼロ変化。設定時のみ Admin 有効）。
-- 切替用 rules 雛形: `firestore.rules.locked`（deny-by-default）。
-- **全データアクセスは API 経由**（クライアント直 Firestore アクセスは無し）と確認済みのため、rules deny化で画面は壊れない。
-- 手順: **[docs/admin-sdk-migration.md](docs/admin-sdk-migration.md)**（靖仁さん向けの鍵発行・env設定 + エンジニア向けの fsdb 実装・import差替・検証・rules切替）。
-- ⚠️ 移行の実装（lib/fsdb.ts・import差替）は**エミュレータ/プレビューでの実機検証必須**。未検証で本番投入しないこと。
+**根治済み**: サーバの Firestore アクセスを全て Firebase Admin SDK（rules バイパス特権）に移行し、
+`firestore.rules` を **deny-by-default**（`match /{document=**} { allow read, write: if false }`）に切替。
+本番で「未認証の直アクセス→`permission-denied`」「アプリ（Admin経由）→正常」の両方を実機確認済み。
+
+- **稼働モード確認**: `GET /api/health` が `{adminMode, status, hasRawEnv, errorHint}` を返す（秘密なし）。
+  本番は `adminMode:true / status:"active"`。`false` なら鍵未設定 or 初期化失敗（errorHint で診断）。
+- **鍵**: Vercel env `FIREBASE_SERVICE_ACCOUNT`（JSON直貼り。`_B64` も可）を Production+Preview に設定済。
+  `lib/firebase-admin.ts` がデュアルモード（鍵が無ければ Web SDK へ完全パススルー）。
+- **重要な実装上の罠**（再発防止）:
+  - `firebase-admin` は `next.config.js` の `experimental.serverComponentsExternalPackages` で
+    サーバ外部化＋トレース、`webpack` の `resolve.alias` でクライアント側は空モジュール化。
+    （eval-require だと Next の依存トレーサからも隠れて Vercel で "Cannot find module" になる）
+  - firebase-admin **v14 はモジュラーAPI**（`firebase-admin/app` の initializeApp/getApps/cert、
+    `firebase-admin/firestore` の getFirestore/FieldValue）。旧 `admin.apps`/`admin.firestore()` は無い。
+  - サーバの Firestore アクセスは**静的・動的 import とも** `@/lib/fsdb` に統一（`firebase/firestore`
+    を直接 import しない。`lib/firebase.ts` の Web SDK 初期化のみ例外）。
+- **⚠️ 副作用**: Admin SDK は rules を完全バイパスするため、`notWipingMap()` 等の**ルールレベルの
+  誤消去ガードは無効化**された。誤消去対策はコード層（`lib/firestore-safe.ts`）＋ `npm run lint:firestore`
+  ＋日次バックアップ（`backups`）で担保する。
+- **ロールバック**: 問題時は (1) Vercel の `FIREBASE_SERVICE_ACCOUNT` を削除（→ Web SDK に戻る）
+  **かつ** (2) `firestore.rules` を許可版（`firestore.rules.permissive-rollback`）に戻して deploy。
+  rules の deploy は Firebase MCP（temp/worktree を project_dir に → `firebase_deploy --only firestore`）。
+- 手順詳細: **[docs/admin-sdk-migration.md](docs/admin-sdk-migration.md)**。
