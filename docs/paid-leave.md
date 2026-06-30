@@ -92,6 +92,14 @@ total = grantDays + carryOver
 remaining = max(0, total - used)
 ```
 
+## 実消化（参考表記・2026-06 追加）
+
+担当者の実績把握用に、`/leave` 一覧の「消化」セルへ **実消化（今日までに実際に取得済みの日数）** を参考表示する。
+
+- **申請ベース（従来・管理の正）**: 承認済みの未来日 P も含む（`periodUsed`）。残日数・スマホ残日数・年5日義務はすべてこのまま。
+- **実消化（参考のみ）**: 当期 [grantDate, +1年) の P のうち **日付 ≤ 今日** のものだけ（`actualPeriodUsed`）。`GET /api/leave` が各 worker に返す。`lib/leave-compute.ts` の `computePeriodUsed().actualPeriodUsed` と同義。
+- **残日数管理は申請ベース据え置き**（実消化ベースに切り替えると承認済みの未来有給が残数に戻り「二重取り」余地が生まれるため）。スマホ表示も申請ベースのまま（過剰申請の抑止）。
+
 ## 繰越計算（外国人のみ）
 
 付与時に自動実行（共通ヘルパー `calcCarryOverForWorker`）:

@@ -1298,6 +1298,7 @@ export async function GET(request: NextRequest) {
         // 付与日から1年間のPL消化日数を集計（残日数計算用）+ 月別内訳は全期間
         // ⚠️ 多現場の同日重複（multi-site dup）を排除して1日1カウントに正規化
         let periodUsed = 0
+        let actualPeriodUsed = 0 // 実消化（今日以前に実際に取得済み・参考列用。残数管理は periodUsed=申請ベースのまま）
         const plCalendarLocal: string[] = []
         const monthlyUsage: Record<string, number> = {} // YYYYMM -> count（全期間、重複排除済）
 
@@ -1339,6 +1340,11 @@ export async function GET(request: NextRequest) {
           if (seenCurrentFy.has(dk)) continue
           seenCurrentFy.add(dk)
           periodUsed++
+          // 実消化（参考・2026-06）: 申請ベース(periodUsed)とは別に「今日以前に実際に取得済み」の
+          //   有給だけを数える。残数管理・スマホ残日数・年5日義務は従来どおり申請ベースのまま。
+          //   担当者の実績把握用に一覧へ参考列として並べる（computePeriodUsed.actualPeriodUsed と同義）。
+          const entryIso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
+          if (entryIso <= todayIso) actualPeriodUsed++
         }
         // 2026-06-XX 修正 (audit #5+#6): computeUsedDays ヘルパー経由で計算
         //   旧: used = adjustment + periodUsed （buyoutDays が抜けていた）
@@ -1449,6 +1455,7 @@ export async function GET(request: NextRequest) {
           carryOver,
           adjustment,
           periodUsed,
+          actualPeriodUsed, // 実消化（今日以前・参考列用。残数管理は periodUsed=申請ベースのまま）
           used,
           total,
           remaining: expiryStatus === 'expired' ? 0 : remaining,

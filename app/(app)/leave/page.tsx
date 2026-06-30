@@ -6,7 +6,7 @@ import MaintenanceButton from '@/components/leave/MaintenanceButton'
 
 interface PLWorker {
   id: number; name: string; org: string; visa: string; hireDate: string
-  grantDays: number; carryOver: number; adjustment: number; periodUsed: number; used: number
+  grantDays: number; carryOver: number; adjustment: number; periodUsed: number; actualPeriodUsed: number; used: number
   total: number; remaining: number; rate: number; grantMonth?: number
   grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'; inferredFromDefault?: boolean
   legalPL: number; fiveDayShortfall: number
@@ -1127,6 +1127,14 @@ export default function LeavePage() {
                       <div className="text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap tabular-nums">
                         <span className="font-medium">{w.used}</span><span className="text-gray-400">/{w.total}</span>
                       </div>
+                    </div>
+                    {/* 実消化（参考・2026-06）: 今日までに実際に取得済みの日数。残数管理・スマホ残日数・
+                        年5日義務は従来どおり申請ベース（承認済み・未来分含む）のまま。担当者の実績把握用。 */}
+                    <div
+                      className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap tabular-nums mt-0.5"
+                      title="実消化＝今日までに実際に取得済みの有給日数（参考）。残数管理・スマホ表示・年5日義務は従来どおり「申請ベース」（承認済み・未来分含む）で管理しています。"
+                    >
+                      実消化 {w.actualPeriodUsed ?? 0}日
                     </div>
                   </td>
                   {/* 残日数: 大きく表示 */}
