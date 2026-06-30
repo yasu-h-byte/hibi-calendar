@@ -100,6 +100,14 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
   const legalOtHours = w.legalOtHours || 0
   const compDays = w.compDays || 0
 
+  // ── 時間の0.1h丸め許容（2026-06-30 誤検知対策） ──
+  // compute.ts は legalOtHours / legalHolidayHours / nightHours を return 時に
+  // 0.1h 単位へ丸めるが、実支給額は丸め前の精密な時間で計算する。表示用に丸めた
+  // 時間で「想定」を出すと、最大 ±0.05h 分（割増額で 時給×0.05×倍率 円）ズレる。
+  // これは過払い/未払いではなく丸め差なので、各時間ベースのチェックの許容差に
+  // この分を織り込む（実バグは手当まるごと欠落=桁違いなので依然として検出可能）。
+  const hoursRoundSlack = (mult: number) => Math.ceil(hourlyRate * 0.05 * mult) + 2
+
   const push = (
     severity: 'critical' | 'warning',
     field: string,
@@ -135,12 +143,12 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
   const otMin = Math.round(hourlyRate * legalOtHours * 0.25)
   const otMax = Math.round(hourlyRate * legalOtHours * 0.5)
   const paidOtAllowance = w.otAllowance || 0
-  if (paidOtAllowance < otMin - 2) {
+  if (paidOtAllowance < otMin - hoursRoundSlack(0.25)) {
     push('critical', 'otAllowance',
       '法定外残業の割増（0.25倍以上）が不足（労基法37条違反リスク）',
       otMin, paidOtAllowance)
   }
-  if (paidOtAllowance > otMax + 2) {
+  if (paidOtAllowance > otMax + hoursRoundSlack(0.5)) {
     push('critical', 'otAllowance',
       '法定外残業手当が上限（0.5倍）を超える（二重支給の可能性）',
       otMax, paidOtAllowance)
@@ -166,12 +174,12 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
   const lhMin = Math.round(hourlyRate * legalHolidayHours * 1.35)
   const lhMax = Math.round(hourlyRate * legalHolidayHours * 1.60)
   const paidLhAllowance = w.legalHolidayAllowance || 0
-  if (paidLhAllowance < lhMin - 2) {
+  if (paidLhAllowance < lhMin - hoursRoundSlack(1.35)) {
     push('critical', 'legalHolidayAllowance',
       '法定休日手当が下限（1.35倍）未満',
       lhMin, paidLhAllowance)
   }
-  if (paidLhAllowance > lhMax + 2) {
+  if (paidLhAllowance > lhMax + hoursRoundSlack(1.60)) {
     push('warning', 'legalHolidayAllowance',
       '法定休日手当が上限（1.60倍）超',
       lhMax, paidLhAllowance)
@@ -180,7 +188,7 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
   // ── I6. nightAllowance: 時給 × nightHours × 0.25（誤差±2円） ──
   const expectedNight = Math.round(hourlyRate * nightHours * 0.25)
   const paidNight = w.nightAllowance || 0
-  if (Math.abs(paidNight - expectedNight) > 2) {
+  if (Math.abs(paidNight - expectedNight) > hoursRoundSlack(0.25)) {
     push('critical', 'nightAllowance',
       '深夜手当が想定（0.25倍）と一致しません',
       expectedNight, paidNight)

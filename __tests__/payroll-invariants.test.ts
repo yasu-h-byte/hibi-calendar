@@ -363,6 +363,34 @@ describe('過去バグの直接リグレッション', () => {
     expect(validatePayroll(w)).toEqual([])
   })
 
+  test('回帰: 残業時間の0.1h丸めで割増が¥10下振れしても誤検知しない（2026-06-30）', () => {
+    // 月次集計で「法定外残業の割増(0.25倍)が不足」と誤検知された実ケース（モン/ハウ/ゴック）。
+    // 原因: 実支給 otAllowance は丸め前の精密な残業時間で計算（例 5.07h → ¥2,005）するが、
+    //   検算が使う legalOtHours は compute.ts が return 時に 0.1h へ丸めた値（5.1h）。
+    //   検算の想定 = round(時給×5.1×0.25)=¥2,016 となり、差¥11が±2円許容を超えて誤検知。
+    // 対策: hoursRoundSlack（時給×0.05×倍率）を許容差に織り込み、丸め差では発火しないこと。
+    const snap = {
+      id: 107, name: 'モン ヴァンケン', visa: 'jisshu3', hourlyRate: 1581,
+      useOldRules: false,
+      workDays: 22, regularWorkDays: 22, compDays: 0, plDays: 0,
+      actualWorkHours: 5.1, legalHolidayHours: 0, nightHours: 0,
+      legalOtHours: 5.1, otHours: 5.1,
+      fixedBasePay: 0, additionalAllowance: 0, paidLeaveAllowance: 0,
+      nonStatutoryOTAllowance: 0,
+      otAllowance: 2005,            // 丸め前 5.07h で計算した実額（正しい）
+      legalHolidayAllowance: 0, nightAllowance: 0, compAllowance: 0,
+      absentDeduction: 0,
+      salaryNetPay: 2005,
+    }
+    const issues = validatePayroll(snap)
+    expect(issues).toEqual([])  // 丸め差では critical を出さない
+
+    // 一方、本当に割増が大きく不足（例: 半額しか払っていない）ケースは依然として検出する
+    const realShortfall = { ...snap, otAllowance: 1000, salaryNetPay: 1000 }
+    const realIssues = validatePayroll(realShortfall)
+    expect(realIssues.some(i => i.field === 'otAllowance')).toBe(true)
+  })
+
   test('回帰: 補償日(w=0.6)の160%過払い', () => {
     // 旧バグ: 基本給100% + 休業手当60% = 160%
     // 修正後: 基本給から1日分減額(40%) + 休業手当60% = 60% ✓
