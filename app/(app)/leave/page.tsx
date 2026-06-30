@@ -6,7 +6,7 @@ import MaintenanceButton from '@/components/leave/MaintenanceButton'
 
 interface PLWorker {
   id: number; name: string; org: string; visa: string; hireDate: string
-  grantDays: number; carryOver: number; adjustment: number; periodUsed: number; actualPeriodUsed: number; used: number
+  grantDays: number; carryOver: number; adjustment: number; periodUsed: number; actualPeriodUsed: number; remainingActual: number; used: number
   total: number; remaining: number; rate: number; grantMonth?: number
   grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'; inferredFromDefault?: boolean
   legalPL: number; fiveDayShortfall: number
@@ -1128,21 +1128,24 @@ export default function LeavePage() {
                         <span className="font-medium">{w.used}</span><span className="text-gray-400">/{w.total}</span>
                       </div>
                     </div>
-                    {/* 実消化（参考・2026-06）: 今日までに実際に取得済みの日数。残数管理・スマホ残日数・
-                        年5日義務は従来どおり申請ベース（承認済み・未来分含む）のまま。担当者の実績把握用。 */}
-                    <div
-                      className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap tabular-nums mt-0.5"
-                      title="実消化＝今日までに実際に取得済みの有給日数（参考）。残数管理・スマホ表示・年5日義務は従来どおり「申請ベース」（承認済み・未来分含む）で管理しています。"
-                    >
-                      実消化 {w.actualPeriodUsed ?? 0}日
-                    </div>
                   </td>
-                  {/* 残日数: 大きく表示 */}
+                  {/* 残日数: 大きく表示（申請ベース＝管理の正） */}
                   <td className="px-3 py-2 text-right tabular-nums">
                     <span className={`text-2xl font-bold ${w.remaining <= 3 ? 'text-red-500' : w.remaining <= 5 ? 'text-amber-500' : 'text-gray-800 dark:text-gray-100'}`}>
                       {w.remaining}
                     </span>
                     <span className="text-[10px] text-gray-400 ml-0.5">日</span>
+                    {/* 実消化ベース残（参考・2026-06）: 承認済みの未来分を引かず「今日まで実際に取得した分」だけ
+                        引いた残日数。管理の正は上の大きい数字（申請ベース）。スマホ表示・年5日義務も申請ベースのまま。
+                        申請ベース残と一致する場合（未来の承認済み有給が無い）は冗長なので非表示。 */}
+                    {(w.remainingActual ?? w.remaining) !== w.remaining && (
+                      <div
+                        className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5"
+                        title="実消化ベース残＝今日までに実際に取得した有給だけを引いた残日数（参考）。上の大きい残日数は「申請ベース」（承認済みの未来有給も引く）で、管理・スマホ表示・年5日義務はこちらが正です。"
+                      >
+                        実消化残 {w.remainingActual ?? w.remaining}日
+                      </div>
+                    )}
                   </td>
                   {/* 警告: 年5日未達 等 */}
                   <td className="px-3 py-2">

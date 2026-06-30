@@ -1355,6 +1355,9 @@ export async function GET(request: NextRequest) {
         const safeRec = (fyRecord as Parameters<typeof computeUsedDays>[0] | undefined) ?? {}
         const used = computeUsedDays(safeRec, periodUsed)
         const remaining = computeRemainingDays(total, safeRec, periodUsed)
+        // 実消化ベース残（参考・2026-06）: 申請ベース(periodUsed)ではなく、今日までに実際に取得した
+        //   分(actualPeriodUsed)だけ引いた残日数。承認済みの未来有給は引かないので remaining 以上になる。
+        const remainingActual = computeRemainingDays(total, safeRec, actualPeriodUsed)
 
         // Expiry calculation: grantDate + 2 years - 1 day
         let expiryDate = ''
@@ -1455,10 +1458,11 @@ export async function GET(request: NextRequest) {
           carryOver,
           adjustment,
           periodUsed,
-          actualPeriodUsed, // 実消化（今日以前・参考列用。残数管理は periodUsed=申請ベースのまま）
+          actualPeriodUsed, // 実消化（今日以前）
           used,
           total,
           remaining: expiryStatus === 'expired' ? 0 : remaining,
+          remainingActual: expiryStatus === 'expired' ? 0 : remainingActual, // 実消化ベース残（参考）
           rate: total > 0 ? (used / total) * 100 : 0,
           grantMonth: (w as unknown as { grantMonth?: number }).grantMonth,
           grantDate,
