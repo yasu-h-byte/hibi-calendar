@@ -82,12 +82,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('my-pending error:', error)
-    // 一時診断（2026-06-30 障害調査）: 実際の例外を返す。原因特定後に元へ戻す。
-    return NextResponse.json({
-      error: 'Server error',
-      detail: error instanceof Error ? error.message : String(error),
-      code: (error as { code?: string | number })?.code ?? null,
-      stack: error instanceof Error ? (error.stack || '').split('\n').slice(0, 5).join(' | ') : '',
-    }, { status: 500 })
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }

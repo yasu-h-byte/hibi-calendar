@@ -110,8 +110,17 @@ export function getAdminDb(): AdminFirestore | null {
         projectId: (svc as any).project_id,
       })
     }
+    const adminDb = firestoreMod.getFirestore()
+    // 【重要・2026-06-30 障害対策】Vercel のサーバレス関数では firebase-admin の Firestore が
+    //   既定の gRPC 接続を使い、warm 関数の idle gRPC ストリームが時間経過で切れて読み取りが
+    //   断続的に 500 になる（再デプロイで一時回復）。REST トランスポートに切替えて根治する。
+    //   settings() は最初の Firestore 操作前に1回だけ呼べる。cached により cold start ごとに
+    //   1回だけ適用される（2回目以降は throw → 無視）。
+    try {
+      adminDb.settings({ preferRest: true })
+    } catch { /* 既に設定済み/操作後なら無視 */ }
     // cached.admin には firestore モジュールを保持（getAdminFieldValue が FieldValue を使う）
-    cached = { db: firestoreMod.getFirestore(), admin: firestoreMod }
+    cached = { db: adminDb, admin: firestoreMod }
     initStatus = 'active'
     return cached.db
   } catch (e) {
