@@ -111,14 +111,10 @@ export function getAdminDb(): AdminFirestore | null {
       })
     }
     const adminDb = firestoreMod.getFirestore()
-    // 【重要・2026-06-30 障害対策】Vercel のサーバレス関数では firebase-admin の Firestore が
-    //   既定の gRPC 接続を使い、warm 関数の idle gRPC ストリームが時間経過で切れて読み取りが
-    //   断続的に 500 になる（再デプロイで一時回復）。REST トランスポートに切替えて根治する。
-    //   settings() は最初の Firestore 操作前に1回だけ呼べる。cached により cold start ごとに
-    //   1回だけ適用される（2回目以降は throw → 無視）。
-    try {
-      adminDb.settings({ preferRest: true })
-    } catch { /* 既に設定済み/操作後なら無視 */ }
+    // 2026-06-30: gRPC idle 切断対策で preferRest(REST) を有効化したが、
+    //   2026-07-02 に REST 経路で 429 RESOURCE_EXHAUSTED(rateLimitExceeded) が恒常発生。
+    //   preferRest を外して gRPC 既定に戻す（REST固有のレート制限を回避）。
+    //   ※ 根本的にはSparkプランの読み取り上限が疑わしく、Blaze化で解消見込み。
     // cached.admin には firestore モジュールを保持（getAdminFieldValue が FieldValue を使う）
     cached = { db: adminDb, admin: firestoreMod }
     initStatus = 'active'
