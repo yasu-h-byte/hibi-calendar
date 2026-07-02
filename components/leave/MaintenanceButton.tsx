@@ -37,8 +37,9 @@ export default function MaintenanceButton({ password, onChanged, onOpenGrantModa
 
   useEffect(() => {
     checkHealth()
-    // 30秒ごとに再チェック（モーダル閉じた後の状態反映）
-    const t = setInterval(checkHealth, 30000)
+    // 5分ごとに再チェック（2026-07-02 コスト対策: 旧30秒はFirestore読み取りを無駄に消費）。
+    // 保守ツールの健全性表示は頻繁な更新を要さないため5分で十分。
+    const t = setInterval(checkHealth, 5 * 60 * 1000)
     return () => clearInterval(t)
   }, [checkHealth])
 

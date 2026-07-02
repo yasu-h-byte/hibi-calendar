@@ -64,14 +64,39 @@ export interface CalendarMatrix {
   assignedWorkerIdsBySite: Record<string, Set<number>>
 }
 
+// ── loadCalendarMatrix の短時間キャッシュ（2026-07-02 Firestore読み取りコスト対策） ──
+//   my-pending(スタッフ端末)/status/public-sites が calendarSign を毎回大量に読むため
+//   読み取り回数の主要因。matrix は書き込みされない計算ビューなので ym 単位で短時間
+//   キャッシュしても整合性は壊れない（返却時 structuredClone で呼び出し側の変更から保護）。
+//   署名/承認の反映は最大 CAL_MATRIX_TTL 秒（20秒）遅れ得るが、書き込み自体は即時成功する
+//   （署名は冪等なので二重でも安全）。即時反映が要る箇所は invalidateCalendarMatrixCache() を呼ぶ。
+const _calMatrixCache = new Map<string, { data: CalendarMatrix; ts: number }>()
+const CAL_MATRIX_TTL = 20_000 // 20秒
+
+/** カレンダー署名/承認を変更したら呼ぶ（次の loadCalendarMatrix で再読込） */
+export function invalidateCalendarMatrixCache(ym?: string): void {
+  if (ym) _calMatrixCache.delete(ym)
+  else _calMatrixCache.clear()
+}
+
 /**
- * カレンダー署名画面群（admin/public/my-pending）共通のデータ取得
- *
+ * カレンダー署名画面群（admin/public/my-pending）共通のデータ取得（20秒キャッシュ付き）
  * @param ym  "YYYY-MM" 形式（siteCalendar の ym フィールド）
- *
- * 全 5 つの独立 read を並列実行（合計 ~1 RTT 相当）
  */
 export async function loadCalendarMatrix(ym: string): Promise<CalendarMatrix> {
+  const now = Date.now()
+  const hit = _calMatrixCache.get(ym)
+  if (hit && now - hit.ts < CAL_MATRIX_TTL) return structuredClone(hit.data)
+  const data = await loadCalendarMatrixUncached(ym)
+  _calMatrixCache.set(ym, { data, ts: now })
+  return structuredClone(data)
+}
+
+/**
+ * 実読込み本体（全 5 read を並列実行、合計 ~1 RTT 相当）。キャッシュは上の
+ * loadCalendarMatrix が担当。
+ */
+async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
   const [siteCalSnap, signSnap, sitesWithWorkers, homeLeaves, mainDoc] = await Promise.all([
     getDocs(query(collection(db, 'siteCalendar'), where('ym', '==', ym))),
     getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ym))),

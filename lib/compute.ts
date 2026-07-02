@@ -89,7 +89,24 @@ function normalizeBilling(raw: Record<string, unknown>): Record<string, number[]
   return result
 }
 
-export async function getMainData(): Promise<MainData> {
+// ── getMainData の短時間キャッシュ（2026-07-02 Firestore読み取りコスト対策） ──
+//   全APIが毎リクエストで demmen/main を読むため、これが読み取り回数の主要因だった
+//   （無料枠 5万reads/日 超過→ RESOURCE_EXHAUSTED 障害の一因）。master data は頻繁に
+//   変わらないので短時間キャッシュで読み取りを集約する。
+//   【安全性】書き込みは各エンドポイントが独自に getDoc→updateDoc(対象フィールド) するため
+//     getMainData はほぼ読み取り専用＝本キャッシュは書き込み整合性に影響しない。
+//     返却時に structuredClone して呼び出し側のミューテーションからキャッシュを保護する。
+//     master data 編集(worker-crud 等)は invalidateMainCache() で即時反映。
+//     どうしても最新が要る箇所は getMainData({ fresh: true })。
+let _mainCache: { data: MainData; ts: number } | null = null
+const MAIN_CACHE_TTL = 30_000 // 30秒
+
+/** master data を変更したら呼ぶ（次の getMainData で必ず再読込） */
+export function invalidateMainCache(): void {
+  _mainCache = null
+}
+
+async function loadMainData(): Promise<MainData> {
   const docSnap = await getDoc(doc(db, 'demmen', 'main'))
   if (!docSnap.exists()) throw new Error('Main doc not found')
   const d = docSnap.data()
@@ -107,6 +124,16 @@ export async function getMainData(): Promise<MainData> {
     defaultRates: (d.defaultRates || {}) as { tobiRate?: number; dokoRate?: number },
     mforeman: (d.mforeman || {}) as Record<string, { foreman?: number; wid?: number; note?: string }>,
   }
+}
+
+export async function getMainData(opts?: { fresh?: boolean }): Promise<MainData> {
+  const now = Date.now()
+  if (!opts?.fresh && _mainCache && now - _mainCache.ts < MAIN_CACHE_TTL) {
+    return structuredClone(_mainCache.data)
+  }
+  const data = await loadMainData()
+  _mainCache = { data, ts: now }
+  return structuredClone(data)
 }
 
 export async function getAttData(ym: string): Promise<{

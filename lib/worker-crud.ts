@@ -1,5 +1,6 @@
 import { db } from './firebase'
 import { doc, getDoc, runTransaction } from '@/lib/fsdb'
+import { invalidateMainCache } from './compute'
 
 export interface WorkerData {
   id: number
@@ -102,7 +103,7 @@ function assignWorkerId(
 
 export async function addWorker(worker: Omit<WorkerData, 'id' | 'token'>): Promise<WorkerData> {
   const ref = MAIN_REF()
-  return runTransaction(db, async (tx) => {
+  const created = await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref)
     if (!snap.exists()) throw new Error('Main doc not found')
     const data = snap.data()
@@ -115,6 +116,8 @@ export async function addWorker(worker: Omit<WorkerData, 'id' | 'token'>): Promi
     tx.update(ref, { workers, nextWorkerId: maxId + 1 })
     return newWorker
   })
+  invalidateMainCache()  // master data 変更を即反映
+  return created
 }
 
 /**
@@ -140,6 +143,7 @@ export async function updateWorker(
     workers[idx] = merged as unknown as WorkerData
     tx.update(ref, { workers })
   })
+  invalidateMainCache()  // master data 変更を即反映（単価等は給与計算に直結）
 }
 
 export async function deleteWorker(id: number): Promise<void> {
@@ -161,21 +165,24 @@ export async function deleteWorker(id: number): Promise<void> {
     }
     tx.update(ref, { workers: filtered, assign })
   })
+  invalidateMainCache()  // master data 変更を即反映
 }
 
 export async function generateWorkerToken(id: number): Promise<string> {
   const ref = MAIN_REF()
-  return runTransaction(db, async (tx) => {
+  const token = await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref)
     if (!snap.exists()) throw new Error('Main doc not found')
     const workers = (snap.data().workers || []) as WorkerData[]
     const idx = workers.findIndex(w => w.id === id)
     if (idx === -1) throw new Error('Worker not found')
-    const token = generateToken()
-    workers[idx].token = token
+    const t = generateToken()
+    workers[idx].token = t
     tx.update(ref, { workers })
-    return token
+    return t
   })
+  invalidateMainCache()  // master data 変更を即反映
+  return token
 }
 
 export async function revokeWorkerToken(id: number): Promise<void> {
@@ -189,4 +196,5 @@ export async function revokeWorkerToken(id: number): Promise<void> {
     workers[idx].token = ''
     tx.update(ref, { workers })
   })
+  invalidateMainCache()  // master data 変更を即反映
 }
