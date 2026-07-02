@@ -160,52 +160,21 @@ await updateDoc(ref, { [`plData.${workerId}`]: records })
 
 復元: `/api/backup/restore` (admin only)。
 
-### セキュリティ根治（Admin SDK 移行）— ✅ 完了（2026-06-29）
+### Firestore 運用の必須ルール（Admin SDK 移行済み）
 
-**かつての穴**: `firestore.rules` が多くのコレクションで `allow read, write: if true` だったため、
-Firebase API キーが公開情報であることと相まって**未認証の第三者がブラウザから直接 Firestore を
-読み書きできた**（個人パスワード平文・単価・給与額の閲覧、改竄、月締め解除等）。
+セキュリティ根治（サーバを Admin SDK 化 + rules を deny-by-default 化）は **2026-06-29 完了**。
+経緯・移行手順・障害履歴（2026-06-30 preferRest / 2026-07-02 クォータ超過）・ロールバック手順は
+**[docs/admin-sdk-migration.md](docs/admin-sdk-migration.md)** を参照。コードを書くときの必須ルールのみ以下に残す:
 
-**根治済み**: サーバの Firestore アクセスを全て Firebase Admin SDK（rules バイパス特権）に移行し、
-`firestore.rules` を **deny-by-default**（`match /{document=**} { allow read, write: if false }`）に切替。
-本番で「未認証の直アクセス→`permission-denied`」「アプリ（Admin経由）→正常」の両方を実機確認済み。
-
-- **稼働モード確認**: `GET /api/health` が `{adminMode, status, hasRawEnv, errorHint}` を返す（秘密なし）。
-  本番は `adminMode:true / status:"active"`。`false` なら鍵未設定 or 初期化失敗（errorHint で診断）。
-- **鍵**: Vercel env `FIREBASE_SERVICE_ACCOUNT`（JSON直貼り。`_B64` も可）を Production+Preview に設定済。
-  `lib/firebase-admin.ts` がデュアルモード（鍵が無ければ Web SDK へ完全パススルー）。
-- **重要な実装上の罠**（再発防止）:
-  - `firebase-admin` は `next.config.js` の `experimental.serverComponentsExternalPackages` で
-    サーバ外部化＋トレース、`webpack` の `resolve.alias` でクライアント側は空モジュール化。
-    （eval-require だと Next の依存トレーサからも隠れて Vercel で "Cannot find module" になる）
-  - firebase-admin **v14 はモジュラーAPI**（`firebase-admin/app` の initializeApp/getApps/cert、
-    `firebase-admin/firestore` の getFirestore/FieldValue）。旧 `admin.apps`/`admin.firestore()` は無い。
-  - サーバの Firestore アクセスは**静的・動的 import とも** `@/lib/fsdb` に統一（`firebase/firestore`
-    を直接 import しない。`lib/firebase.ts` の Web SDK 初期化のみ例外）。
-  - **`preferRest: true` 必須**（2026-06-30 障害で判明）。Vercel サーバレスでは firebase-admin の
-    既定 gRPC 接続が warm 関数の idle で切れ、**読み取りが断続的に 500**（再デプロイで一時回復）。
-    `lib/firebase-admin.ts` で `getFirestore().settings({ preferRest: true })` を適用し REST に固定。
-    症状が再発したら `/api/health` は adminMode:true のまま読取系だけ 500 になるのが目印。
-
-### Firestore 読み取りコスト／クォータ（2026-07-02 障害で判明）
-
-**事象**: 本番で全ページが「データ取得に失敗」（恒常 500）。`/api/health` が `adminMode:true` かつ
-`readError.code:8/429 RESOURCE_EXHAUSTED "Quota exceeded"`＝**Firestore の読み取りクォータ超過**。
-gRPC/REST どちらでも同じ（通信方式は無関係）。原因は **Admin SDK 移行で全読み取りがサーバ集約され
-ブラウザキャッシュが消え、読み取り回数が急増**して Spark(無料)の日次上限(5万reads/日)に到達したこと。
-
-- **診断**: `GET /api/health` に `readOk`/`readError`（実 getDoc プローブ）を実装済。adminMode:true かつ
-  readOk:false／readError.code が 8 or 429 なら**クォータ超過**（コードのバグではない）。
-- **恒久対策**: Firebase を **Blaze（従量課金）** に。14人規模なら月数十〜数百円。無料枠5万/日は実運用に狭い。
-- **読み取り削減（実装済・低コスト化）**: `getMainData` 30秒キャッシュ（`invalidateMainCache()`／worker編集で無効化）、
-  `loadCalendarMatrix` 20秒キャッシュ（`invalidateCalendarMatrixCache()`）、保守ポーリング 30秒→5分。
-  **新しい高頻度エンドポイントを足すときは getMainData/loadCalendarMatrix のキャッシュ経由を使い、
-  ポーリング間隔を短くしすぎない**こと。
-- 一時的には太平洋時間の深夜（JST 昼ごろ）にクォータが自動リセットされ復旧するが、Blaze化しないと再発する。
-- **⚠️ 副作用**: Admin SDK は rules を完全バイパスするため、`notWipingMap()` 等の**ルールレベルの
-  誤消去ガードは無効化**された。誤消去対策はコード層（`lib/firestore-safe.ts`）＋ `npm run lint:firestore`
-  ＋日次バックアップ（`backups`）で担保する。
-- **ロールバック**: 問題時は (1) Vercel の `FIREBASE_SERVICE_ACCOUNT` を削除（→ Web SDK に戻る）
-  **かつ** (2) `firestore.rules` を許可版（`firestore.rules.permissive-rollback`）に戻して deploy。
-  rules の deploy は Firebase MCP（temp/worktree を project_dir に → `firebase_deploy --only firestore`）。
-- 手順詳細: **[docs/admin-sdk-migration.md](docs/admin-sdk-migration.md)**。
+- サーバの Firestore アクセスは**静的・動的 import とも `@/lib/fsdb` に統一**
+  （`firebase/firestore` を直接 import しない。`lib/firebase.ts` の Web SDK 初期化のみ例外）
+- firebase-admin は **v14 モジュラーAPI**。`next.config.js` の serverComponentsExternalPackages /
+  webpack alias 設定を壊さない（eval-require 化すると Vercel で "Cannot find module" になる）
+- **`preferRest: true` 必須**（`lib/firebase-admin.ts` で適用済み。外すと Vercel で読み取りが断続500）
+- **読み取り回数を増やさない**: 高頻度アクセスは `getMainData`(30秒キャッシュ) /
+  `loadCalendarMatrix`(20秒キャッシュ) 経由で。ポーリング間隔を短くしない
+  （クォータ超過で全画面500になった障害歴あり。恒久対策は Blaze 化）
+- **Admin SDK は rules をバイパスする** → 誤消去ガードは rules でなくコード層
+  （`lib/firestore-safe.ts`）+ `npm run lint:firestore` + 日次バックアップで担保
+- 診断: `GET /api/health`（adminMode / readOk / readError）。readError.code 8/429 は
+  クォータ超過（コードのバグではない）
