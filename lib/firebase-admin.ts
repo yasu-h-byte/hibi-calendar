@@ -111,10 +111,13 @@ export function getAdminDb(): AdminFirestore | null {
       })
     }
     const adminDb = firestoreMod.getFirestore()
-    // 2026-06-30: gRPC idle 切断対策で preferRest(REST) を有効化したが、
-    //   2026-07-02 に REST 経路で 429 RESOURCE_EXHAUSTED(rateLimitExceeded) が恒常発生。
-    //   preferRest を外して gRPC 既定に戻す（REST固有のレート制限を回避）。
-    //   ※ 根本的にはSparkプランの読み取り上限が疑わしく、Blaze化で解消見込み。
+    // gRPC idle 切断（2026-06-30 の断続500）対策で REST 固定にする。
+    //   ※ 2026-07-02 の恒常 500 は preferRest とは無関係の Firestore 読み取りクォータ超過
+    //     （Sparkプランの日次上限）で、gRPC/REST どちらでも RESOURCE_EXHAUSTED になることを確認済み。
+    //     根本対策は Blaze 化＋読み取り量削減。preferRest はサーバレス安定性のため維持する。
+    try {
+      adminDb.settings({ preferRest: true })
+    } catch { /* 既に設定済み/操作後なら無視 */ }
     // cached.admin には firestore モジュールを保持（getAdminFieldValue が FieldValue を使う）
     cached = { db: adminDb, admin: firestoreMod }
     initStatus = 'active'
