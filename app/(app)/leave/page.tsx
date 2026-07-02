@@ -313,7 +313,7 @@ export default function LeavePage() {
   const totalUsed = filteredWorkers.reduce((s, w) => s + w.used, 0)
   const totalTotal = filteredWorkers.reduce((s, w) => s + w.total, 0)
   const alertCount = filteredWorkers.filter(w => w.remaining <= 3).length
-  const fiveDayAlertCount = filteredWorkers.filter(w => w.fiveDayShortfall > 0).length
+  // 年5日未達のアラート表示は非表示（2026-07-02 靖仁さん指示。fiveDayShortfall の計算は API 側で維持）
   const companyRate = totalTotal > 0 ? (totalUsed / totalTotal * 100) : 0
 
   const handleGrant = async () => {
@@ -457,48 +457,8 @@ export default function LeavePage() {
         )
       })()}
 
-      {/* 年5日未達アラートバナー (Phase 5) */}
-      {(() => {
-        const shortfallWorkers = workers.filter(w => w.fiveDayShortfall > 0)
-        if (shortfallWorkers.length === 0) return null
-        return (
-          <div className="w-full bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/30 dark:to-pink-900/30 border border-red-300 dark:border-red-700 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="text-2xl">⚠️</div>
-              <div>
-                <div className="text-sm font-bold text-red-900 dark:text-red-200">
-                  年5日取得義務 未達: {shortfallWorkers.length}名
-                </div>
-                <div className="text-xs text-red-700 dark:text-red-300 mt-0.5">
-                  法定義務として会社が時季指定する必要があります。
-                  <span className="text-red-500/70 ml-1">（労基法第39条第7項：年10日以上付与で対象）</span>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-1 mt-3">
-              {shortfallWorkers.map(w => (
-                <div key={w.id} className="flex items-center justify-between gap-2 text-xs bg-white/80 dark:bg-gray-800/80 rounded px-2 py-1.5">
-                  <div>
-                    <span className="font-medium">{w.name}</span>
-                    <span className="text-gray-500 ml-2">消化 {w.periodUsed}日 / 義務5日 → あと {w.fiveDayShortfall}日</span>
-                    <span className="text-gray-400 ml-2">期限: {w.expiryDate}</span>
-                  </div>
-                  <button onClick={() => {
-                    setDesignateWorker(w)
-                    setDesignateKind('designation')
-                    setDesignateDates([])
-                    setDesignateSiteId(sites[0]?.id || '')
-                    setDesignateNote('年5日取得義務対応')
-                    setDesignateOverwriteHomeLeave(false)
-                  }} className="bg-red-500 text-white px-2.5 py-1 rounded text-[10px] font-bold hover:bg-red-600">
-                    時季指定する
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })()}
+      {/* 年5日未達アラートバナーは運用上不要のため非表示（2026-07-02 靖仁さん指示。
+          fiveDayShortfall の計算・データは維持。時季指定は編集モーダルの手動P入力で代替可能） */}
 
       {/* 未付与検知バナー */}
       {pendingGrants.length > 0 && (
@@ -944,8 +904,8 @@ export default function LeavePage() {
         </div>
       )}
 
-      {/* KPI */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      {/* KPI（年5日未達カードは非表示: 2026-07-02 靖仁さん指示） */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
           <div className="text-2xl font-bold text-hibi-navy">{eligible}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400">対象人数</div>
@@ -961,10 +921,6 @@ export default function LeavePage() {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
           <div className={`text-2xl font-bold ${alertCount > 0 ? 'text-red-500' : 'text-green-600'}`}>{alertCount}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400">残3日以下</div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
-          <div className={`text-2xl font-bold ${fiveDayAlertCount > 0 ? 'text-red-500' : 'text-green-600'}`}>{fiveDayAlertCount}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">年5日未達</div>
         </div>
       </div>
 
@@ -1011,7 +967,7 @@ export default function LeavePage() {
               // ── 総合ステータス判定 (🟢 ok / 🟡 注意 / 🔴 警告) ──
               let statusColor = 'bg-emerald-500'
               let statusLabel = '正常'
-              if (w.expiryStatus === 'expired' || w.carryOverExpiryStatus === 'expired' || w.fiveDayShortfall > 0) {
+              if (w.expiryStatus === 'expired' || w.carryOverExpiryStatus === 'expired') {
                 statusColor = 'bg-red-500'
                 statusLabel = '要対応'
               } else if (w.remaining <= 3 || w.carryOverExpiryStatus === 'warning' || w.expiryStatus === 'warning') {
@@ -1147,14 +1103,9 @@ export default function LeavePage() {
                       </div>
                     )}
                   </td>
-                  {/* 警告: 年5日未達 等 */}
+                  {/* 警告: 期限切れ 等（年5日未達バッジは非表示: 2026-07-02 靖仁さん指示） */}
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1">
-                      {w.fiveDayShortfall > 0 && (
-                        <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold" title="年5日取得義務未達">
-                          5日未達
-                        </span>
-                      )}
                       {w.expiryStatus === 'expired' && (
                         <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">
                           期限切れ
@@ -1183,7 +1134,7 @@ export default function LeavePage() {
       <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-4 pl-1">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>正常</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>注意（残≤5日/時効3ヶ月以内）</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>要対応（期限切れ/年5日未達）</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>要対応（期限切れ）</span>
         <span className="ml-auto text-gray-400">行をクリックで編集</span>
       </div>
 

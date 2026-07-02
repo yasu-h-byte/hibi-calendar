@@ -8,3 +8,6 @@ next-env.d.ts
 # Claude Code runtime state (should not be committed)
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
+
+# Claude Code MCP config (contains absolute paths, personal)
+.mcp.json
