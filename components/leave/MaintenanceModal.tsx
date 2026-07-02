@@ -16,7 +16,8 @@ import { useState, useEffect } from 'react'
 
 interface HealthCheck {
   ok: boolean
-  counts: {
+  // API 応答に counts が欠けるケース（旧バージョン・異常系）があるため optional
+  counts?: {
     needsNormalization?: number
     needsFyAutoFix?: number
     needsExpiryProcess?: number
@@ -26,7 +27,7 @@ interface HealthCheck {
     fyAutoFix?: string[]
     expiry?: string[]
   }
-  lastExpiryRun: string | null
+  lastExpiryRun?: string | null
 }
 
 interface Props {
@@ -39,18 +40,24 @@ interface Props {
 export default function MaintenanceModal({ password, onClose, onChanged, onOpenGrantModal }: Props) {
   const [health, setHealth] = useState<HealthCheck | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState<string | null>(null)
 
   const fetchHealth = async () => {
     setLoading(true)
+    setError(null)
     try {
       const res = await fetch('/api/leave/health-check', {
         headers: { 'x-admin-password': password },
       })
-      if (res.ok) {
-        const data = await res.json()
-        setHealth(data)
+      if (!res.ok) {
+        setError(`健全性チェックに失敗しました（HTTP ${res.status}）`)
+        return
       }
+      const data = await res.json()
+      setHealth(data)
+    } catch {
+      setError('健全性チェックに失敗しました（通信エラー）')
     } finally { setLoading(false) }
   }
 
@@ -109,7 +116,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
     },
   )
 
-  const fmtDateTime = (iso: string | null) => {
+  const fmtDateTime = (iso: string | null | undefined) => {
     if (!iso) return '未実行'
     const d = new Date(iso)
     if (isNaN(d.getTime())) return iso
@@ -124,8 +131,26 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
     )
   }
 
-  if (!health) return null
-  const c = health.counts
+  if (!health) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+          <div className="text-red-600 font-bold text-sm mb-2">⚠️ 保守ツールを開けません</div>
+          <div className="text-sm text-gray-700 mb-4">{error || '健全性チェックの結果を取得できませんでした。'}</div>
+          <div className="flex justify-end gap-2">
+            <button onClick={fetchHealth} className="px-4 py-2 bg-hibi-navy text-white rounded-lg text-sm font-bold hover:opacity-90">
+              再試行
+            </button>
+            <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-300">
+              閉じる
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  // API 応答に counts が無くてもクラッシュしないようガード（c.xxx は全て optional 参照）
+  const c = health.counts ?? {}
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
