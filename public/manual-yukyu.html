@@ -3,735 +3,346 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>休暇管理マニュアル - HIBI CONSTRUCTION</title>
+<title>有給・休暇管理マニュアル - HIBI CONSTRUCTION</title>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Segoe UI', sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.7; }
-  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 24px; }
-  h2 { color: #1B2A4A; border-left: 5px solid #1B2A4A; padding-left: 14px; margin-top: 44px; font-size: 20px; }
-  h3 { color: #333; margin-top: 28px; font-size: 16px; border-bottom: 1px dashed #ccc; padding-bottom: 4px; }
-  h4 { color: #555; margin-top: 20px; font-size: 14px; }
-  p { margin: 10px 0; }
-  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 10px; padding: 16px 18px; margin: 16px 0; }
+  :root {
+    --charcoal: #20262F;
+    --amber: #F5A623;
+    --green: #1E9E52;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #20262F; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid var(--charcoal); padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #fff; background: var(--charcoal); padding: 8px 14px; margin-top: 40px; font-size: 18px; border-radius: 6px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; border-left: 4px solid var(--charcoal); padding-left: 10px; }
+  .box { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px; margin: 16px 0; }
   .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
-  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
-  .box-danger { background: #ffecec; border: 1px solid #e08080; }
-  .box-info { background: #e0f4ff; border: 1px solid #80c0e0; }
-  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
-  th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
-  th { background: #1B2A4A; color: white; font-size: 13px; }
+  .box-ok { background: #eefaf1; border: 1px solid #9dd8b4; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: var(--charcoal); color: white; }
   tr:nth-child(even) { background: #f8f8f8; }
-  .step { display: flex; gap: 12px; margin: 10px 0; align-items: flex-start; }
-  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
-  .step-text { flex: 1; padding-top: 2px; }
-  code { background: #eef0f5; padding: 2px 6px; border-radius: 4px; font-size: 13px; color: #c7254e; }
-  .highlight { background: #ffe0e0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: var(--charcoal); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .toc { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: var(--charcoal); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
   hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
-
-  /* UI mockups */
-  .ui-frame { background: white; border: 1px solid #dce0e8; border-radius: 10px; padding: 18px 20px; margin: 14px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
-  .ui-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
-  .ui-title { font-size: 17px; font-weight: bold; color: #1B2A4A; }
-  .ui-sub { font-size: 12px; color: #888; margin-top: 2px; }
-
-  .btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 600; color: white; border: none; }
-  .btn-green { background: #16a34a; }
-  .btn-gray { background: #9ca3af; }
-  .btn-purple { background: #8b5cf6; }
-  .btn-purple-dark { background: #7c3aed; }
-  .btn-slate { background: #475569; }
-  .btn-blue { background: #2563eb; }
-  .btn-amber { background: #f59e0b; }
-  .btn-indigo { background: #6366f1; }
-  .btn-red { background: #dc2626; }
-  .btn-navy { background: #1B2A4A; }
-
-  .banner { border-radius: 12px; padding: 14px 18px; margin: 10px 0; display: flex; align-items: center; gap: 12px; }
-  .banner-amber { background: linear-gradient(to right, #fffbeb, #fff7ed); border: 1px solid #fcd34d; }
-  .banner-red { background: linear-gradient(to right, #fef2f2, #fdf2f8); border: 1px solid #fca5a5; }
-  .banner-title { font-weight: bold; font-size: 14px; }
-  .banner-sub { font-size: 11px; color: #666; margin-top: 2px; }
-
-  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 10px 0; }
-  .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; text-align: center; }
-  .card-num { font-size: 22px; font-weight: bold; color: #1B2A4A; }
-  .card-num.green { color: #16a34a; }
-  .card-num.blue { color: #2563eb; }
-  .card-num.red { color: #dc2626; }
-  .card-label { font-size: 11px; color: #666; margin-top: 4px; }
-
-  .modal-mock { background: #f8fafc; border: 2px solid #c7d2fe; border-radius: 12px; padding: 18px 22px; margin: 12px 0; }
-  .modal-mock-title { font-size: 16px; font-weight: bold; color: #1B2A4A; margin-bottom: 4px; }
-  .modal-mock-sub { font-size: 11px; color: #6366f1; margin-bottom: 14px; }
-  .field { margin: 10px 0; }
-  .field-label { font-size: 11px; color: #555; margin-bottom: 4px; }
-  .field-input { background: white; border: 1px solid #d1d5db; border-radius: 5px; padding: 6px 10px; font-size: 12px; color: #333; }
-  .checkbox-row { display: flex; align-items: flex-start; gap: 8px; padding: 8px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 6px; margin: 10px 0; }
-  .checkbox-box { width: 16px; height: 16px; border: 2px solid #6366f1; border-radius: 3px; background: #6366f1; color: white; font-weight: bold; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; margin-top: 1px; }
-  .checkbox-label { font-size: 11px; color: #3730a3; }
-
-  .audit-box { background: #f5f5f5; border: 1px solid #d1d5db; border-radius: 6px; padding: 10px; margin: 10px 0; font-size: 11px; color: #444; }
-
-  .tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+  .btn-amber { display: inline-block; background: var(--amber); color: var(--charcoal); font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  .badge-done { display: inline-block; background: var(--green); color: #fff; font-weight: bold; padding: 4px 12px; border-radius: 20px; font-size: 13px; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
   .tag-hibi { background: #dcfce7; color: #166534; }
-  .tag-hfu { background: #fee2e2; color: #991b1b; }
-
-  @media print {
-    body { font-size: 12px; padding: 0; }
-    h2 { page-break-before: always; }
-    h2:first-of-type { page-break-before: auto; }
-    .ui-frame, .modal-mock, .banner { break-inside: avoid; }
+  .tag-hfu { background: #ece0f8; color: #6b3fa0; }
+  @media print { body { font-size: 13px; padding: 0; } h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 14px; }
+    table { font-size: 13px; }
+    th, td { padding: 6px 8px; }
+    .step-text { font-size: 14px; }
   }
 </style>
 </head>
 <body>
-<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
 
-<h1>🌴 休暇管理マニュアル（有給・帰国 統合版）</h1>
-<p>HIBI CONSTRUCTION 就業管理システム<br>
-作成日: 2026年4月4日<br>
-最終更新: 2026年4月30日（取り消し機能・月別タブ刷新・出向除外 対応）</p>
+<h1>HIBI CONSTRUCTION 就業管理システム<br>有給・休暇管理マニュアル</h1>
+<p>対象: 事務・管理者<br>
+最終更新: 2026年7月3日<br>
+システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
-<div class="box box-info">
-  <strong>このマニュアルで扱う内容：</strong>
-  <ul style="margin: 8px 0;">
-    <li>有給管理システム全体の機能と使い方</li>
-    <li>旧スプレッドシートからのデータ移行作業</li>
-    <li>付与・消化・繰越・買取・時効処理の各種機能</li>
-    <li>監査対応（有給管理簿Excel出力）</li>
-    <li>イレギュラー対応：帰国期間中の有給事後計上（リンさんの件）</li>
-  </ul>
+<div class="box box-ok">
+<strong>有給休暇・帰国休暇のことは、この1冊にまとめてあります。</strong>
+付与・申請承認・時季指定・繰越/時効・期末買取/退職清算・管理簿出力まで、
+運用で必要な操作はすべてここを見れば分かるようになっています。
 </div>
 
-<h2>目次</h2>
+<div class="box box-red">
+<strong>承認は2段階です。</strong>職長が「職長承認」まで、最終承認は事業責任者（政仁さん）が行います。
+有給も帰国も同じ2段階承認です。
+</div>
+
+<div class="box" style="font-size:13px;">
+<strong>📌 関連資料：</strong>
+<a href="/manual-foreman.html">🔨 職長向けマニュアル</a> ／
+<a href="/manual-checklist.html">✅ ロール別チェックリスト</a>
+</div>
+
+<div class="toc">
+<strong>目次</strong>
 <ol>
-  <li><a href="#overview">有給管理画面の全体像</a></li>
-  <li><a href="#rules">ロール別の運用ルール</a></li>
-  <li><a href="#migration">旧データ移行（初回セットアップ）</a></li>
-  <li><a href="#normal-flow">通常の運用フロー（付与・消化・繰越）</a></li>
-  <li><a href="#five-day">年5日取得義務の時季指定</a></li>
-  <li><a href="#buyout">期末買取・退職時清算</a></li>
-  <li><a href="#fifo">繰越分と当期付与分の管理（重要）</a></li>
-  <li><a href="#expiry">時効処理（2年失効）</a></li>
-  <li><a href="#ledger">有給管理簿のExcel出力</a></li>
-  <li><a href="#irregular">イレギュラー対応：帰国期間中の有給事後計上</a></li>
-  <li><a href="#faq">よくある質問</a></li>
+  <li><a href="#sec1">このマニュアルについて・全体像</a></li>
+  <li><a href="#sec2">ロール別の運用ルール</a></li>
+  <li><a href="#sec3">有給の付与（半自動・付与日数）</a></li>
+  <li><a href="#sec4">申請と承認（有給・帰国）</a></li>
+  <li><a href="#sec5">年5日取得義務の時季指定</a></li>
+  <li><a href="#sec6">繰越・当期（FIFO）と時効</a></li>
+  <li><a href="#sec7">期末買取・退職時清算</a></li>
+  <li><a href="#sec8">有給管理簿のExcel出力</a></li>
+  <li><a href="#sec9">FAQ・イレギュラー対応</a></li>
 </ol>
-
-<hr>
-
-<h2 id="overview">1. 休暇管理画面の全体像</h2>
-
-<p>サイドバーの「🌴 休暇管理」を開くと、以下の画面が表示されます。</p>
-
-<div class="ui-frame">
-  <div class="ui-header">
-    <div>
-      <div class="ui-title">🌴 休暇管理</div>
-      <div class="ui-sub">有給休暇の付与・消化・繰越 / 帰国情報の管理</div>
-    </div>
-    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-      <span class="btn btn-green">+ 有給付与</span>
-      <span class="btn btn-gray">⟲ 繰越再計算</span>
-      <span class="btn btn-purple">🔧 データ正規化</span>
-      <span class="btn btn-purple-dark">🔧 自動修正</span>
-      <span class="btn btn-slate">⏳ 時効処理</span>
-      <span class="btn btn-blue">📊 管理簿出力</span>
-    </div>
-  </div>
-
-  <div style="display: flex; gap: 8px; margin-bottom: 12px; font-size: 12px;">
-    <span style="background: white; padding: 4px 14px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); font-weight: bold;">一覧</span>
-    <span style="color: #666; padding: 4px 14px;">申請</span>
-    <span style="color: #666; padding: 4px 14px;">月別</span>
-    <span style="color: #666; padding: 4px 14px;">カレンダー</span>
-  </div>
-
-  <div style="display: flex; gap: 8px; margin-bottom: 12px; font-size: 12px;">
-    <span style="background: white; padding: 4px 14px; border-radius: 6px; font-weight: bold;">全員</span>
-    <span style="color: #666; padding: 4px 14px;">日比建設</span>
-    <span style="color: #666; padding: 4px 14px;">HFU</span>
-  </div>
-
-  <div style="font-size: 11px; color: #666; margin-top: 4px;">
-    ※ 「月別」タブは会社別に表が分かれて表示されます（<span class="tag tag-hibi">日比建設</span> 青バッジ / <span class="tag tag-hfu">HFU</span> 紫バッジ）。<br>
-    ※ 出向中スタッフ（dispatchTo 設定済み）は全タブから自動除外されます。
-  </div>
-
-  <div class="card-grid">
-    <div class="card"><div class="card-num">24</div><div class="card-label">対象人数</div></div>
-    <div class="card"><div class="card-num blue">369</div><div class="card-label">有給日数</div></div>
-    <div class="card"><div class="card-num green">50</div><div class="card-label">消化日数</div></div>
-    <div class="card"><div class="card-num red">1</div><div class="card-label">残3日以下</div></div>
-    <div class="card"><div class="card-num">0</div><div class="card-label">年5日未達</div></div>
-  </div>
 </div>
 
-<h3>ヘッダーボタンの役割</h3>
+<!-- ================================================ -->
+<h2 id="sec1">1. このマニュアルについて・全体像</h2>
+
+<p>サイドバーの <strong>「🌴 休暇管理」（/leave）</strong> を開くと、有給と帰国の管理画面が表示されます。画面は<strong>6つのタブ</strong>で構成されています。</p>
 
 <table>
-  <tr><th>ボタン</th><th>用途</th><th>使用頻度</th></tr>
-  <tr><td><span class="btn btn-green">+ 有給付与</span></td><td>特定スタッフに有給を手動で付与する</td><td>時々（バナー経由が主流）</td></tr>
-  <tr><td><span class="btn btn-gray">⟲ 繰越再計算</span></td><td>全スタッフの繰越を再計算（旧データ修復用）</td><td>基本不要</td></tr>
-  <tr><td><span class="btn btn-purple">🔧 データ正規化</span></td><td>旧フィールドを整理・重複レコード集約</td><td>初回セットアップ時のみ</td></tr>
-  <tr><td><span class="btn btn-purple-dark">🔧 自動修正</span></td><td>fy/grantDate の年ズレを自動修正</td><td>正規化で警告が出たときのみ</td></tr>
-  <tr><td><span class="btn btn-slate">⏳ 時効処理</span></td><td>2年経過の有給を失効記録（月1回Cronが自動実行）</td><td>通常は自動</td></tr>
-  <tr><td><span class="btn btn-blue">📊 管理簿出力</span></td><td>労基法準拠の有給管理簿をExcelでダウンロード</td><td>監査対応・年次</td></tr>
+<tr><th>タブ</th><th>内容</th></tr>
+<tr><td><strong>一覧</strong></td><td>スタッフごとの付与/繰越/消化/残日数の一覧。ここから編集・買取も行う</td></tr>
+<tr><td><strong>申請</strong></td><td>有給・帰国の申請を承認/却下する（職長承認・最終承認）</td></tr>
+<tr><td><strong>基準日</strong></td><td>付与の起点となる基準日の確認・設定</td></tr>
+<tr><td><strong>付与</strong></td><td>有給付与の実行（半自動バナー経由が主流）</td></tr>
+<tr><td><strong>帰国</strong></td><td>帰国申請・帰国期間の管理</td></tr>
+<tr><td><strong>月次</strong></td><td>月ごとの消化状況を会社別（<span class="tag tag-hibi">日比建設</span>／<span class="tag tag-hfu">HFU</span>）に集計表示</td></tr>
 </table>
 
-<hr>
+<div class="box">
+<strong>ヘッダーの主なボタン：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><span class="btn-amber">📊 有給管理簿を出力</span> — 労基法準拠の法定様式Excelをダウンロード</li>
+  <li><strong>時効処理を実行</strong> — 2年経過分を手動で失効記録（通常は自動。admin のみ）</li>
+</ul>
+<p style="margin:8px 0 0; font-size:13px;">※ 繰越再計算・データ正規化などの保守ツールも用意されていますが、通常運用では使いません（移行完了済み）。</p>
+</div>
 
-<h2 id="rules">2. ロール別の運用ルール</h2>
+<div class="box" style="font-size:13px;">
+<strong>表示の対象外：</strong>役員（yakuin）・事務（jimu）は有給管理の対象外です。また出向中スタッフ（<code>dispatchTo</code> 設定済み）は全タブから自動除外されます（出向先で管理される前提）。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec2">2. ロール別の運用ルール</h2>
 
 <table>
-  <tr><th>区分</th><th>付与サイクル</th><th>繰越</th><th>期末買取</th></tr>
-  <tr><td>役員（yakuin）</td><td colspan="3" style="background: #f3f4f6; color: #888;">有給管理対象外</td></tr>
-  <tr><td>事務（jimu）</td><td colspan="3" style="background: #f3f4f6; color: #888;">有給管理対象外</td></tr>
-  <tr><td>職長（日本人）</td><td>10/1起点（全員一律）</td><td>なし（強制0）</td><td>あり（9/30残を給与反映）</td></tr>
-  <tr><td>一般・とび（日本人）</td><td>10/1起点（全員一律）</td><td>なし（強制0）</td><td>あり</td></tr>
-  <tr><td>実習生（jisshu1/2）</td><td>個別（入社6ヶ月後起点）</td><td>あり（上限20日）</td><td>なし（退職時のみ）</td></tr>
-  <tr><td>特定技能（tokutei1/2）</td><td>個別（入社6ヶ月後起点）</td><td>あり（上限20日）</td><td>なし（退職時のみ）</td></tr>
+<tr><th>区分</th><th>付与サイクル</th><th>繰越</th><th>期末買取</th></tr>
+<tr><td>役員（yakuin）</td><td colspan="3" style="background:#f3f4f6; color:#888;">有給管理対象外</td></tr>
+<tr><td>事務（jimu）</td><td colspan="3" style="background:#f3f4f6; color:#888;">有給管理対象外</td></tr>
+<tr><td>職長（日本人）</td><td>10/1起点（全員一律）</td><td>なし（強制0）</td><td>あり（9/30残を給与反映）</td></tr>
+<tr><td>一般・とび（日本人）</td><td>10/1起点（全員一律）</td><td>なし（強制0）</td><td>あり</td></tr>
+<tr><td>実習生（jisshu1/2）</td><td>個別（入社6ヶ月後起点）</td><td>あり（上限20日）</td><td>なし（退職時のみ）</td></tr>
+<tr><td>特定技能（tokutei1/2）</td><td>個別（入社6ヶ月後起点）</td><td>あり（上限20日）</td><td>なし（退職時のみ）</td></tr>
 </table>
 
 <div class="box box-ok">
-<strong>法定日数（労働基準法第39条）：</strong><br>
-0.5年→10日 / 1.5年→11日 / 2.5年→12日 / 3.5年→14日 / 4.5年→16日 / 5.5年→18日 / 6.5年〜20日<br>
+<strong>法定付与日数（労働基準法第39条）：</strong><br>
+勤続0.5年→10日 ／ 1.5年→11日 ／ 2.5年→12日 ／ 3.5年→14日 ／ 4.5年→16日 ／ 5.5年→18日 ／ 6.5年〜→20日<br>
 ※ システムが入社日から自動計算します。
 </div>
 
-<hr>
+<!-- ================================================ -->
+<h2 id="sec3">3. 有給の付与（半自動・付与日数）</h2>
 
-<h2 id="migration">3. 旧データ移行（初回セットアップ）</h2>
+<p>付与時期を迎えたスタッフがいると、画面上部に自動でバナーが表示されます。バナーから<strong>ワンクリックで一括付与</strong>できます。</p>
 
-<p>旧スプレッドシートで管理していた消化データを移行する手順です。<strong>一度だけ実施</strong>します。</p>
-
-<h3>作業A: 2025年2月以前の消化日数を入力</h3>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">サイドバー「🌴 休暇管理」を開く</div>
+<div class="box box-warn" style="font-weight:bold;">
+🌴 N名 に有給付与の時期が来ています　→　<span class="btn-amber">付与内容を確認</span>
 </div>
 
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">対象スタッフの行の右にある「<strong>編集</strong>」ボタンを押す</div>
-</div>
+<div class="step"><div class="step-num">1</div><div class="step-text">バナーの <span class="btn-amber">付与内容を確認</span> をクリック → モーダルが開き、対象スタッフが一覧表示される</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">各スタッフの<strong>付与日・付与日数</strong>を確認（勤続年数から法定値を<strong>自動算出</strong>してプリセット済み）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">対象外にしたいスタッフは「付与する」チェックを外す</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text"><strong>「一括付与」</strong>を押す → 確認ダイアログ「N名に有給を付与します。よろしいですか？」で「OK」</div></div>
 
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text"><strong>「調整」</strong>欄に、2025年2月までの消化日数の合計を入力<br>
-    <span style="color: #888; font-size: 12px;">例：スプレッドシート上で5日消化していたら「5」</span>
-  </div>
-</div>
-
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">「保存」を押す</div>
-</div>
-
-<div class="box box-warn">
-<strong>注意：</strong>「付与日数」「繰越」は変更しないでください。自動計算されています。「調整」欄のみ入力します。
-</div>
-
-<h3>作業B: 2025年3月以降の有給取得日を入力</h3>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">サイドバー「出面入力」を開く</div>
-</div>
-
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">右上の<strong>年月セレクタ</strong>で対象月を選ぶ</div>
-</div>
-
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">右上の<strong>現場セレクタ</strong>でスタッフが配置されていた現場を選ぶ<br>
-    <span style="color: #888; font-size: 12px;">※ 終了した現場は「終了現場を表示」チェックボックスでONに</span>
-  </div>
-</div>
-
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">有給取得日のセルのドロップダウンから <span class="highlight">有</span> を選択（自動保存）</div>
-</div>
+<h3>付与日数（勤続年数別）</h3>
+<table>
+<tr><th>勤続年数</th><th>付与日数</th></tr>
+<tr><td>6ヶ月</td><td>10日</td></tr>
+<tr><td>1年6ヶ月</td><td>11日</td></tr>
+<tr><td>2年6ヶ月</td><td>12日</td></tr>
+<tr><td>3年6ヶ月</td><td>14日</td></tr>
+<tr><td>4年6ヶ月</td><td>16日</td></tr>
+<tr><td>5年6ヶ月</td><td>18日</td></tr>
+<tr><td>6年6ヶ月〜</td><td>20日</td></tr>
+</table>
 
 <div class="box box-ok">
-<strong>確認：</strong>入力後、「休暇管理」画面で消化日数に自動反映されます。
+<strong>繰越は自動計算：</strong>付与時に「前期残日数」が自動で新年度の繰越に設定されます。手動で繰越を再計算する必要はありません。
 </div>
 
-<h3>データ正規化（初回）</h3>
+<!-- ================================================ -->
+<h2 id="sec4">4. 申請と承認（有給・帰国）</h2>
 
-<p>移行作業が一通り完了したら、<strong>「🔧 データ正規化」ボタン</strong>を一度だけ押してください。</p>
-
-<div class="box">
-  <strong>🔧 データ正規化ボタンの動作：</strong>
-  <ol style="margin: 8px 0;">
-    <li>旧フィールド（grant/carry/adj）→ 新フィールドに昇格＆削除</li>
-    <li>fy 型ブレ（string ↔ number）を統一</li>
-    <li>grantDate 欠落レコードを自動補完（日本人なら10/1）</li>
-    <li>同一fy の重複レコードを集約</li>
-    <li>期限切れレコードを archive 扱いに</li>
-    <li>fy と grantDate の年ズレを警告ログに出力</li>
-  </ol>
-</div>
-
-<p>警告が出た場合（mismatches表示）、<strong>「🔧 自動修正」ボタン</strong>を押すと grantDate の年に合わせて fy を修正します。</p>
-
-<hr>
-
-<h2 id="normal-flow">4. 通常の運用フロー（付与・消化・繰越）</h2>
-
-<h3>付与：バナー経由のワンクリック</h3>
-
-<p>有給付与時期を迎えたスタッフがいると、画面上部に自動でバナーが表示されます。</p>
-
-<div class="banner banner-amber">
-  <div style="font-size: 22px;">🌴</div>
-  <div style="flex: 1;">
-    <div class="banner-title">3名 に有給付与の時期が来ています</div>
-    <div class="banner-sub">ルオン バオ クオック、ホー チョン ゴック、グエン ミン サン</div>
-  </div>
-  <div class="btn btn-amber">内容を確認する →</div>
-</div>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">バナーをクリックするとモーダルが開き、対象スタッフが一覧表示される</div>
-</div>
-
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">各スタッフの付与日・付与日数（法定値がプリセット）を確認・調整</div>
-</div>
-
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">対象外にしたいスタッフは「付与する」チェックを外す</div>
-</div>
-
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text"><strong>「一括付与する（N名）」</strong>ボタンを押して確定</div>
-</div>
-
-<div class="box box-ok">
-<strong>繰越は自動計算：</strong>付与時に「前期残日数」が自動で新FYの繰越に設定されます。手動で「⟲ 繰越再計算」を押す必要はありません。
-</div>
-
-<h3>消化：スマホ出面入力で「有」を選択</h3>
-
-<p>スタッフはスマホで出面入力画面の「🌴 ゆうきゅうしんせい」ボタンから申請します。</p>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">スタッフがスマホから有給申請</div>
-</div>
-
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">職長が「職長承認」（第1段階）<br>
-  <span style="color:#888; font-size:12px;">※ admin / approver / foreman が押せます</span></div>
-</div>
-
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">管理者（政仁さん）が「最終承認」（第2段階）→ 出面に P が自動入力<br>
-  <span style="color:#888; font-size:12px;">※ admin / approver のみ押せます。職長画面では「最終承認待ち」と表示されるだけで、ボタンは出ません</span></div>
-</div>
-
-<div class="box box-warn">
-<strong>スマホからの直接P入力は禁止：</strong>スタッフは必ず「ゆうきゅうしんせい」ボタン経由で申請する必要があります。
-</div>
-
-<h3>取り消し：スタッフが自分のスマホから pending の申請を取り消す</h3>
-
-<div class="box box-info">
-  スタッフは自分のスマホから、まだ職長承認されていない（pending の）有給申請を「取り消し / Hủy」ボタンで取り消せます。
-</div>
+<p>有給・帰国とも<strong>同じ2段階承認</strong>です。スタッフが申請すると「申請」タブと通知に届きます。</p>
 
 <table>
-  <tr><th>ステータス</th><th>取り消し可否</th><th>同じ日付で再申請</th></tr>
-  <tr><td>pending（職長承認待ち）</td><td><strong>可</strong>（スタッフ本人が取り消し）</td><td>—</td></tr>
-  <tr><td>cancelled（取り消し済み）</td><td>—</td><td><strong>可</strong>（履歴は薄く表示、最新のみ残る）</td></tr>
-  <tr><td>rejected（却下）</td><td>—</td><td><strong>可</strong>（同様に再申請可能）</td></tr>
-  <tr><td>foreman_approved（職長承認後）</td><td><strong>不可</strong>（「会社に連絡」と表示）</td><td>—</td></tr>
-  <tr><td>approved（最終承認済み）</td><td><strong>不可</strong></td><td>—</td></tr>
+<tr><th>段階</th><th>誰が</th><th>操作</th></tr>
+<tr style="background:#eefaf1;"><td><strong>第1段階</strong></td><td><strong>職長</strong></td><td>内容を確認 →「職長承認」（押せるのは admin / approver / foreman）</td></tr>
+<tr><td><strong>第2段階</strong></td><td>政仁さん</td><td>職長承認済みを「最終承認」（押せるのは admin / approver）</td></tr>
+</table>
+
+<div class="box">
+<strong>ステータスの流れ：</strong>
+<ul style="margin:8px 0 0; padding-left:20px;">
+  <li><code>pending</code>（職長承認待ち）→ 職長が<strong>「職長承認」</strong></li>
+  <li><code>foreman_approved</code>（最終承認待ち）→ 政仁さんが<strong>「最終承認」</strong></li>
+  <li><strong>「却下」</strong>は理由を入力して差し戻し（どの段階でも可）</li>
+</ul>
+<p style="margin:8px 0 0; font-size:13px;">最終承認されると、有給は出面に「P（有給）」が自動入力されます。</p>
+</div>
+
+<h3>有給申請</h3>
+<div class="box">
+<ul style="margin:0; padding-left:20px;">
+  <li>スタッフはスマホの<strong>「🌴 ゆうきゅうしんせい」ボタン</strong>から申請（スマホからの直接P入力は不可）</li>
+  <li>原則<strong>5日前まで</strong>に申請（日本人社員には申請フローの適用なし）</li>
+</ul>
+</div>
+
+<h3>帰国申請</h3>
+<div class="box">
+<ul style="margin:0; padding-left:20px;">
+  <li>有給と同じ2段階承認</li>
+  <li>原則<strong>出発の3ヶ月前まで</strong>に申請</li>
+  <li>最終承認されると、帰国期間中の出勤日に<strong>「帰国中」が自動記録</strong>される（人工数にも欠勤にもカウントされない）</li>
+</ul>
+</div>
+
+<h3>取り消しの可否</h3>
+<table>
+<tr><th>ステータス</th><th>スタッフによる取り消し</th><th>同じ日付で再申請</th></tr>
+<tr><td>pending（職長承認待ち）</td><td><strong>可</strong>（本人がスマホで取り消し）</td><td>—</td></tr>
+<tr><td>cancelled（取り消し済み）</td><td>—</td><td><strong>可</strong>（履歴は最新のみ残る）</td></tr>
+<tr><td>rejected（却下）</td><td>—</td><td><strong>可</strong></td></tr>
+<tr><td>foreman_approved（職長承認後）</td><td><strong>不可</strong></td><td>—</td></tr>
+<tr><td>approved（最終承認済み）</td><td><strong>不可</strong></td><td>—</td></tr>
 </table>
 
 <div class="box box-warn">
-<strong>運用上の注意：</strong>職長承認後の取り消しはスマホからはできません。スタッフから「取り消したい」と相談があったら、管理者が休暇管理画面で却下処理してください。
+<strong>職長承認後の取り消しはスマホからできません。</strong>スタッフから相談があったら、管理者が休暇管理画面で<strong>却下処理</strong>してください。却下後は同じ日付で再申請できます。
 </div>
 
-<hr>
+<!-- ================================================ -->
+<h2 id="sec5">5. 年5日取得義務の時季指定</h2>
 
-<h2 id="five-day">5. 年5日取得義務の時季指定</h2>
-
-<p>2019年の労働基準法改正により、<strong>年10日以上付与されたスタッフに対し、会社は最低5日を時季指定して取得させる義務</strong>があります。</p>
+<p>労働基準法により、<strong>年10日以上付与されたスタッフには、会社が最低5日を時季指定して取得させる義務</strong>があります。</p>
 
 <div class="box box-warn">
-<strong>対象者の自動検知：</strong>外国人・年10日以上付与・有効期限まで3ヶ月以内・5日未満消化 の全てを満たすと、画面上部に赤いバナーが表示されます。
+<strong>対象者の自動検知：</strong>「外国人 ＋ 年10日以上付与 ＋ 有効期限まで3ヶ月以内 ＋ 5日未満消化」の全てを満たすスタッフには、未達者として <strong>「時季指定」</strong> ボタンが表示されます。
 </div>
 
-<div class="banner banner-red">
-  <div style="font-size: 22px;">⚠️</div>
-  <div>
-    <div class="banner-title" style="color: #991b1b;">年5日取得義務 未達: 1名</div>
-    <div class="banner-sub" style="color: #7f1d1d;">法定義務として会社が時季指定する必要があります。</div>
-  </div>
+<div class="step"><div class="step-num">1</div><div class="step-text">対象者の<strong>「時季指定」ボタン</strong>をクリック</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">モーダルで<strong>指定日を入力</strong>（複数日可。「+日付を追加」で増やせる）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text"><strong>対象現場</strong>（スタッフが所属する現場）を選択</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">確認後「時季指定する」を押す → 出面に P 自動入力 ＋ 履歴記録</div></div>
+
+<div class="box" style="font-size:13px;">
+※ 未達の警告バナー表示は現在オフにしていますが、各スタッフの取得状況の俯瞰と「時季指定」操作はそのまま使えます。
 </div>
 
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">バナー内の「時季指定する」ボタン（赤）をクリック</div>
+<!-- ================================================ -->
+<h2 id="sec6">6. 繰越・当期（FIFO）と時効</h2>
+
+<div class="box">
+<strong>2世代の並行保有：</strong>有給は付与から2年で時効消滅します。1年ごとに付与されるため、常に<strong>「繰越分（前期）」と「当期付与分」</strong>の2世代を同時に保有している状態になります。
 </div>
 
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">モーダルで指定日を入力（複数日可、「+日付を追加」で増やせる）</div>
-</div>
+<h3>例：あるスタッフの保有状況</h3>
+<table>
+<tr><th>レコード</th><th>付与日</th><th>付与日数</th><th>時効日</th></tr>
+<tr><td>繰越分（前期）</td><td>2025-04-23</td><td>11日</td><td><strong>2027-04-22</strong></td></tr>
+<tr><td>当期付与分</td><td>2026-04-23</td><td>12日</td><td><strong>2028-04-22</strong></td></tr>
+</table>
 
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">対象現場を選択（スタッフが所属する現場）</div>
-</div>
-
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">確認後「時季指定する」を押す → 出面に P 自動入力 + 履歴記録</div>
-</div>
-
-<hr>
-
-<h2 id="buyout">6. 期末買取・退職時清算</h2>
-
-<h3>日本人の期末買取（9月末）</h3>
-
-<p>日本人社員は繰越なし（強制0）なので、9月30日時点の残日数を買取として記録します。</p>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">対象スタッフ行の「編集」ボタンをクリック</div>
-</div>
-
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">編集モーダル内の<strong>「💰 買取を記録」ボタン（黄土色）</strong>をクリック</div>
-</div>
-
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">モーダルで買取内容を入力
-    <div class="modal-mock" style="margin-top: 8px;">
-      <div class="modal-mock-title">💰 有給買取記録</div>
-      <div class="modal-mock-sub" style="color: #666;">日比大介さん / 現在残 10日</div>
-      <div class="field">
-        <div class="field-label">買取理由</div>
-        <div class="field-input">期末買取（9/30時点） ▼</div>
-      </div>
-      <div class="field">
-        <div class="field-label">買取日数</div>
-        <div class="field-input">10</div>
-      </div>
-      <div class="field">
-        <div class="field-label">買取金額（任意、¥）</div>
-        <div class="field-input">80000</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">「買取を記録する」ボタンで確定</div>
-</div>
+<h3>FIFO 消費ルール</h3>
+<p>有給を取得すると、<strong>古い付与分（繰越分）から先に消費</strong>されます（FIFO: First In, First Out）。労働者有利のルールで、時効間近の有給を先に使うことで失効リスクを減らします。管理画面・スマホ画面のどちらにも、各分の<strong>時効日が個別に表示</strong>され、繰越分はオレンジでハイライトされます。</p>
 
 <div class="box box-ok">
-<strong>買取記録は累積：</strong>同じレコードに複数回記録できます。編集モーダル内で履歴を参照可能です。
+<strong>繰越分の時効が近い（残り3ヶ月以内）</strong>スタッフがいると、画面上部にアラートが出ます。時効までに取得させるようにしてください。
+</div>
+
+<h3>時効処理（2年失効）</h3>
+<p>時効を迎えた有給は自動で失効記録されます。</p>
+<table>
+<tr><th>実行方法</th><th>タイミング</th><th>実行者</th></tr>
+<tr><td><strong>自動</strong>（Cron）</td><td>毎月1日 9:00（JST）</td><td>system</td></tr>
+<tr><td><strong>手動</strong></td><td>「時効処理を実行」ボタン</td><td>admin（緊急時のみ）</td></tr>
+</table>
+<p style="font-size:13px;">失効時は、失効日数・処理日時・実行者が記録され、以後の表示から除外されます。通常は自動で十分なので手動実行は不要です。</p>
+
+<!-- ================================================ -->
+<h2 id="sec7">7. 期末買取・退職時清算</h2>
+
+<h3>日本人の期末買取（9月末）</h3>
+<p>日本人社員は繰越なし（強制0）のため、9月30日時点の残日数を買取として記録します。</p>
+
+<div class="step"><div class="step-num">1</div><div class="step-text">「一覧」タブで対象スタッフ行の<strong>「編集」</strong>をクリック</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">編集モーダル内の<strong><span class="btn-amber">💰 買取を記録</span></strong> をクリック</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">買取理由「<strong>期末買取（9/30時点）</strong>」・買取日数・買取金額（任意）を入力</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">「買取を記録する」で確定</div></div>
+
+<div class="box box-ok">
+<strong>買取記録は累積できます。</strong>同じレコードに複数回記録でき、編集モーダル内で履歴を参照できます。金額を入れておくと給与計算連携に使えます。
 </div>
 
 <h3>退職時清算</h3>
+<p>退職するスタッフも同じ手順で、買取理由を<strong>「退職時清算」</strong>にして記録します。実習生・特定技能の買取はこの退職時清算のみです。</p>
 
-<p>退職するスタッフに対しても同じ手順で、買取理由を「退職時清算」にして記録します。</p>
+<!-- ================================================ -->
+<h2 id="sec8">8. 有給管理簿のExcel出力</h2>
 
-<hr>
+<p>労働基準法施行規則24条の7準拠の管理簿を、1クリックでダウンロードできます（労基署監査対応の法定様式）。</p>
 
-<h2 id="fifo">7. 繰越分と当期付与分の管理（重要）</h2>
+<div class="step"><div class="step-num">1</div><div class="step-text">ヘッダー右上の <span class="btn-amber">📊 有給管理簿を出力</span> をクリック</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">自動的に Excelファイル（<code>有給管理簿_YYYYMMDD.xlsx</code>）がダウンロードされる</div></div>
 
-<div class="box box-info">
-<strong>労働基準法の考え方：</strong>有給は付与から2年で時効消滅します。1年ごとに付与されるので、常に「繰越分（前期）」と「当期付与分」の2世代が並行保有されている状態になります。
-</div>
-
-<h3>例：ルオンさんの場合</h3>
-
+<h3>Excelファイルの構成（4シート）</h3>
 <table>
-  <tr><th>レコード</th><th>付与日</th><th>付与日数</th><th>時効日</th></tr>
-  <tr><td>繰越分（前期）</td><td>2025-04-23</td><td>11日</td><td><strong>2027-04-22</strong></td></tr>
-  <tr><td>当期付与分</td><td>2026-04-23</td><td>12日</td><td><strong>2028-04-22</strong></td></tr>
+<tr><th>シート</th><th>内容</th><th>主な用途</th></tr>
+<tr><td>①管理簿</td><td>スタッフ×年度ごとの付与/繰越/消化/残/失効/買取/有効期限</td><td>労基署監査・年次確認</td></tr>
+<tr><td>②取得日一覧</td><td>P エントリを日付順（時季指定は備考で識別）</td><td>個別確認</td></tr>
+<tr><td>③買取記録</td><td>買取日数・金額・理由</td><td>給与計算連携</td></tr>
+<tr><td>④時季指定</td><td>会社が指定した有給日の履歴</td><td>義務履行の証跡</td></tr>
 </table>
 
-<div class="box box-warn">
-<strong>重要：</strong>同じスタッフが時効の異なる2つの有給を並行保有しています。<br>
-→ 繰越分（1日）が<strong>2027-04-22に先に時効</strong>を迎える<br>
-→ 当期分（12日）は<strong>2028-04-22まで有効</strong>
+<!-- ================================================ -->
+<h2 id="sec9">9. FAQ・イレギュラー対応</h2>
+
+<h3>よくある質問</h3>
+
+<table>
+<tr><th>質問</th><th>対応</th></tr>
+<tr><td>「有」を入力したのに管理画面に反映されない</td><td>画面をリロード。出面データからリアルタイムで集計されます</td></tr>
+<tr><td>間違えて「有」を入力した</td><td>出面入力画面で該当セルを「-」（空欄）に戻す</td></tr>
+<tr><td>終了した現場が出面入力画面に出ない</td><td>現場セレクタ右の「終了現場を表示」チェックをONに</td></tr>
+<tr><td>誰がいつ調整したか確認したい</td><td>編集モーダルの「📋 監査情報」で付与日時・操作者・履歴を確認</td></tr>
+<tr><td>スタッフが間違えて有給申請を出した</td><td>職長承認前ならスタッフ本人がスマホで取り消し可。承認後は管理者が却下処理</td></tr>
+<tr><td>出向中スタッフの有給は？</td><td>人員マスタで <code>dispatchTo</code>／<code>dispatchFrom</code> を設定すると開始日以降は全タブから自動除外</td></tr>
+<tr><td>月次タブで日比建設とHFUを混ぜて見たい</td><td>月次は会社別に表が分かれる仕様。混在表示は不可（バッジで識別）</td></tr>
+<tr><td>退職したスタッフの処理</td><td>編集モーダル →「💰 買取を記録」→ 理由「退職時清算」</td></tr>
+</table>
+
+<h3>イレギュラー: 帰国期間中の有給を後から計上する</h3>
+
+<div class="box box-red">
+<strong>これは例外対応用の機能です。</strong>通常は有給申請フロー経由で処理します。帰国マーカーが先に入ってしまい、PC出面画面から遡って「有」を入れられないケースだけで使います。
 </div>
 
-<h3>FIFO 消費ルール</h3>
+<p><strong>発生シナリオ：</strong>スタッフが帰国予定日以降の日付で有給申請を出していたのに、管理者が出面で先に帰国期間（✈️マーカー）を設定してしまうと、帰国マーカーが残って有給が消化計上されない状態になります。</p>
 
-<p>有給を取得したときは、<strong>古い付与分（繰越分）から先に消費</strong>されます（FIFO: First In, First Out）。これは労働者有利のルールで、時効間近の有給を先に使うことで失効リスクを減らす効果があります。</p>
+<h4 style="margin-top:16px;">対応手順：「🗓 有給日を直接入力」</h4>
+<div class="step"><div class="step-num">1</div><div class="step-text">「一覧」タブで対象スタッフの行 →「編集」でモーダルを開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">モーダル内の<strong>「🗓 有給日を直接入力」</strong>をクリック</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text"><strong>指定日</strong>（事前申請されていた日付。複数可）・<strong>対象現場</strong>・備考を入力</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text"><strong>「帰国期間(✈️)を上書きする」チェックはONのまま</strong>（デフォルトON）</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">「有給を記録する」→ 確認ダイアログで「OK」</div></div>
 
-<h3>管理画面での内訳表示</h3>
-
-<div class="ui-frame">
-  <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 12px;">
-    <div style="font-size: 12px; font-weight: bold; color: #1e40af; margin-bottom: 6px;">📊 残日数の内訳（FIFO：繰越分から先に消費）</div>
-    <div style="font-size: 12px; color: #ea580c; font-weight: bold;">⏰ 繰越分: <strong>1日</strong> <span style="font-size: 10px; font-weight: normal;">（時効: 2027/04/22）← 時効間近・優先消化推奨</span></div>
-    <div style="font-size: 12px; color: #1e40af;">当期付与: <strong>12日</strong> <span style="font-size: 10px;">（時効: 2028/04/22）</span></div>
-    <div style="font-size: 10px; color: #666; padding-top: 4px; border-top: 1px solid #bfdbfe; margin-top: 4px;">合計残: 13日</div>
-  </div>
-</div>
-
-<h3>繰越時効アラート</h3>
-
-<p>繰越分の時効まで残り3ヶ月以内のスタッフがいると、画面上部にバナーが表示されます。</p>
-
-<div class="banner" style="background: linear-gradient(to right, #fff7ed, #fefce8); border: 1px solid #fdba74;">
-  <div style="font-size: 22px;">⏰</div>
-  <div>
-    <div class="banner-title" style="color: #9a3412;">繰越分の時効が近づいています: 1名</div>
-    <div class="banner-sub" style="color: #7c2d12;">繰越分は先に消費される設計です。時効までに取得させることを推奨。</div>
-  </div>
-</div>
-
-<h3>スマホ画面にも同じ内訳が表示される</h3>
-
-<p>スタッフのスマホ出面画面の「🌴 有給残り」カードにも、繰越分・当期分の内訳が表示されます。時効間近の繰越分はオレンジ色でハイライトされ、スタッフ自身が「先に繰越分を使おう」と判断できます。</p>
-
-<div class="box box-ok">
-<strong>これで労働基準法の「時効2年」の考え方に完全準拠した管理ができます。</strong>
-</div>
-
-<hr>
-
-<h2 id="expiry">8. 時効処理（2年失効）</h2>
-
-<p>有給は付与日から2年で時効消滅します。システムが<strong>月1回（毎月1日 JST 9:00）</strong>自動で実行し、失効日数を記録します。</p>
-
-<div class="box box-info">
-<strong>管理者が手動実行する場合：</strong>ヘッダーの「⏳ 時効処理」ボタンをクリック。通常は自動で十分なので、緊急時以外は不要です。
-</div>
-
-<h4>失効時に記録される情報</h4>
-<ul>
-  <li><code>expiredDays</code>: 失効した日数</li>
-  <li><code>expiredAt</code>: 処理実行日時</li>
-  <li><code>expiredBy</code>: 実行者（<code>'system'</code> または管理者ID）</li>
-  <li><code>_archived: true</code>: 以後の表示から除外</li>
+<div class="box">
+<strong>実行される処理：</strong>
+<ul style="margin:8px 0 0; padding-left:20px;">
+  <li>指定日の出面から帰国マーカー（<code>hk</code>）を削除し、<code>p: 1</code>（有給）を書き込み</li>
+  <li>有給レコードの履歴（<code>designatedLeaves</code>）に手動計上として記録（監査ログ）</li>
+  <li>月別消化カウント・年5日義務判定にも反映</li>
 </ul>
-
-<hr>
-
-<h2 id="ledger">8. 有給管理簿のExcel出力</h2>
-
-<p>労働基準法施行規則24条の7準拠の管理簿を、1クリックでダウンロードできます。</p>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">ヘッダー右上の <span class="btn btn-blue">📊 管理簿出力</span> ボタンをクリック</div>
 </div>
-
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">自動的にExcelファイル（<code>有給管理簿_YYYYMMDD.xlsx</code>）がダウンロード</div>
-</div>
-
-<h4>Excelファイルの構成（4シート）</h4>
-
-<table>
-  <tr><th>シート</th><th>内容</th><th>主な用途</th></tr>
-  <tr><td>シート1「管理簿」</td><td>スタッフ×FYごとの付与/繰越/消化/残/失効/買取/有効期限</td><td>労基署監査・年次確認</td></tr>
-  <tr><td>シート2「取得日一覧」</td><td>P エントリを日付順（時季指定は備考で識別）</td><td>個別確認</td></tr>
-  <tr><td>シート3「買取記録」</td><td>買取日数・金額・理由</td><td>給与計算連携</td></tr>
-  <tr><td>シート4「時季指定」</td><td>会社が指定した有給日の履歴</td><td>義務履行証跡</td></tr>
-</table>
-
-<hr>
-
-<h2 id="irregular">9. イレギュラー対応：帰国期間中の有給事後計上</h2>
-
-<div class="box box-danger">
-<strong>このケースのみ使う機能です：</strong>通常は有給申請フロー経由で処理されます。以下のようなイレギュラーが起きた場合のみ使用してください。
-</div>
-
-<h3>発生シナリオ（リンさんの事例）</h3>
-
-<ol>
-  <li>スタッフ（ヴゥ・ドゥック・リンさん）が帰国予定日以降の日付で有給申請を出していた</li>
-  <li>管理者が出面入力で先に <strong>帰国期間（✈️マーカー）</strong> を設定してしまった</li>
-  <li>既存の帰国マーカーが残ってしまい、PC出面入力画面では遡って「有」を入れられない</li>
-  <li>結果、<strong>本来の有給申請が消化として計上されない状態</strong>になる</li>
-</ol>
 
 <div class="box box-warn">
-  <strong>技術的背景：</strong>Firestoreの保存仕様上、既存の帰国マーカー(<code>hk</code>)が残ったまま<code>p</code>フィールドだけが追加されてしまうため、通常の出面入力画面からは上書きできません。
-</div>
-
-<h3>対応方法：「🗓 有給日を直接入力」機能</h3>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">サイドバー「🌴 休暇管理」を開く</div>
-</div>
-
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">対象スタッフ（例：ヴゥ・ドゥック・リン）の行をクリック→編集モーダルが開く</div>
-</div>
-
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">モーダル内の<strong>「🗓 有給日を直接入力」ボタン（インディゴ色）</strong>をクリック
-  </div>
-</div>
-
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">専用モーダルが開く
-    <div class="modal-mock" style="margin-top: 10px;">
-      <div class="modal-mock-title">🗓 有給日を直接入力</div>
-      <div class="modal-mock-sub">ヴゥ ドゥック リンさん / 残 7日</div>
-      <div style="background: #eef2ff; color: #4338ca; padding: 6px 8px; border-radius: 4px; font-size: 10px; margin-bottom: 10px;">
-        ※ 出面に P を直接書き込みます。管理者の手動計上として監査ログに記録されます。
-      </div>
-
-      <div class="field">
-        <div class="field-label">指定日（複数可）</div>
-        <div class="field-input">2026-03-15</div>
-        <div style="margin-top: 4px;" class="field-input">2026-03-16</div>
-        <div style="margin-top: 6px; font-size: 11px; color: #2563eb;">+ 日付を追加</div>
-      </div>
-
-      <div class="field">
-        <div class="field-label">対象現場</div>
-        <div class="field-input">笹塚 ▼</div>
-      </div>
-
-      <div class="field">
-        <div class="field-label">備考（任意）</div>
-        <div class="field-input">帰国期間中の有給申請を後から計上</div>
-      </div>
-
-      <div class="checkbox-row">
-        <div class="checkbox-box">✓</div>
-        <div class="checkbox-label">
-          <strong>帰国期間(✈️)を上書きする</strong><br>
-          <span style="font-weight: normal;">既存の帰国マーカーを削除して Pを書き込みます。帰国中でも事前に有給申請があった日を計上する場合に使用。</span>
-        </div>
-      </div>
-
-      <div style="display: flex; gap: 6px; margin-top: 12px;">
-        <div class="btn btn-indigo" style="flex: 1; justify-content: center;">有給を記録する</div>
-        <div class="btn" style="flex: 1; justify-content: center; background: #e5e7eb; color: #374151;">キャンセル</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="step">
-  <div class="step-num">5</div>
-  <div class="step-text">入力内容
-    <table style="margin-top: 6px;">
-      <tr><th>項目</th><th>入力内容</th></tr>
-      <tr><td>指定日</td><td>事前申請されていた日付（「+日付を追加」で複数可）</td></tr>
-      <tr><td>対象現場</td><td>スタッフが普段所属している現場</td></tr>
-      <tr><td>備考</td><td>デフォルトの「帰国期間中の有給申請を後から計上」でOK</td></tr>
-      <tr><td>帰国期間を上書きする</td><td><strong>ON のまま</strong>（デフォルトON）</td></tr>
-    </table>
-  </div>
-</div>
-
-<div class="step">
-  <div class="step-num">6</div>
-  <div class="step-text">「有給を記録する」ボタン（インディゴ色）をクリック</div>
-</div>
-
-<div class="step">
-  <div class="step-num">7</div>
-  <div class="step-text">確認ダイアログで内容を確認して「OK」</div>
-</div>
-
-<h3>実行される処理</h3>
-
-<ul>
-  <li>指定した日の出面エントリから <code>hk</code>（帰国マーカー）を削除</li>
-  <li>代わりに <code>p: 1</code>（有給）を書き込み</li>
-  <li>有給レコードの <code>designatedLeaves</code> 配列に履歴を記録
-    <div class="audit-box">
-      <code>{ kind: 'manual-entry', date, note, siteId, designatedAt, designatedBy, overwroteHomeLeave: true }</code>
-    </div>
-  </li>
-  <li>編集モーダル内の「📋 監査情報」セクションから履歴確認可能</li>
-  <li>月別消化カウント・5日義務判定にも反映</li>
-</ul>
-
-<h3>期待される結果</h3>
-
-<table>
-  <tr><th>項目</th><th>Before</th><th>After</th></tr>
-  <tr><td>出面の該当日</td><td>✈️（帰国マーカー）</td><td>P（有給）</td></tr>
-  <tr><td>消化日数</td><td>3日</td><td>3日 + 追加分</td></tr>
-  <tr><td>残日数</td><td>7日</td><td>7日 - 追加分</td></tr>
-  <tr><td>監査ログ</td><td>-</td><td>手動P入力として記録</td></tr>
-</table>
-
-<div class="box box-warn">
-<strong>再発防止：</strong>今後はスタッフが<strong>帰国前に必ず有給申請</strong>を出すように徹底してください。この機能はあくまで例外対応用です。
+<strong>再発防止：</strong>今後はスタッフが帰国前に必ず有給申請を出すよう徹底してください。この機能はあくまで例外対応用です。
 </div>
 
 <hr>
-
-<h2 id="faq">10. よくある質問</h2>
-
-<h3>Q: 「有」を入力したのに有給管理画面に反映されない</h3>
-<p>A: 有給管理画面をリロードしてください。出面データからリアルタイムで集計されます。</p>
-
-<h3>Q: 間違えて「有」を入力した場合</h3>
-<p>A: 出面入力画面で該当セルのドロップダウンを「-」（空欄）に戻してください。</p>
-
-<h3>Q: 終了した現場が出面入力画面に出てこない</h3>
-<p>A: 現場セレクタの右にある「終了現場を表示」チェックボックスをONにしてください。</p>
-
-<h3>Q: 有給管理台帳をExcelで出力したい</h3>
-<p>A: ヘッダー右上の「📊 管理簿出力」ボタンからダウンロードできます。4シート構成（管理簿／取得日一覧／買取記録／時季指定）です。</p>
-
-<h3>Q: 誰がいつ調整を変更したか確認したい</h3>
-<p>A: 編集モーダル内の「📋 監査情報」セクションを開くと、付与日時・操作者・変更履歴がすべて表示されます。</p>
-
-<h3>Q: 繰越がおかしい</h3>
-<p>A: 「⟲ 繰越再計算」ボタンを押してください。全スタッフの最新付与レコードに対して前期残日数から再計算します。ただし、通常は付与時に自動計算されるのでこのボタンは不要です。</p>
-<p>※ 旧フィールド（grant/carry/adj）が残っているレコードでも GET /api/leave は「新フィールド優先・旧フォールバック」のロジックで正しい値を返します。データ正規化（🔧 データ正規化）で旧フィールドを削除すれば確実です。</p>
-
-<h3>Q: スタッフが間違えて有給申請を出してしまった</h3>
-<p>A: 職長承認前（pending）であれば、スタッフ自身がスマホ画面の「取り消し / Hủy」ボタンで取り消せます。取り消し済みの日は同じ日付で再申請可能です（履歴は最新のみ残る）。職長承認後は取り消し不可になるため、管理者が休暇管理画面で却下処理してください。</p>
-
-<h3>Q: 出向中スタッフの有給はどうなる？</h3>
-<p>A: 人員マスタで <code>dispatchTo</code>（出向先）と <code>dispatchFrom</code>（出向開始日）を設定すると、出向開始日以降は有給管理ページの全タブから自動的に除外されます。出向先で管理されることが前提です。</p>
-
-<h3>Q: 月別タブで日比建設とHFUを混ぜて見たい</h3>
-<p>A: 月別タブは会社別に表が分かれた仕様になっており、混ぜての表示はできません。各表は会社バッジ（日比建設=青 / HFU=紫）で識別できます。全期間で月別取得を集計するため、有給が付与されているスタッフは消化0でも一覧に表示されます。</p>
-
-<h3>Q: 退職したスタッフの有給処理</h3>
-<p>A: 編集モーダルで「💰 買取を記録」→ 理由「退職時清算」を選んで記録してください。</p>
-
-<h3>Q: 日本人の9/30期末買取</h3>
-<p>A: 9月末の残日数を確認→「💰 買取を記録」→ 理由「期末買取（9/30時点）」で記録。金額も入れておくと給与計算連携に使えます。</p>
-
-<h3>Q: 帰国期間中に申請されていた有給を計上したい（リンさんのケース）</h3>
-<p>A: <a href="#irregular">「9. イレギュラー対応：帰国期間中の有給事後計上」</a>の手順で対応してください。</p>
-
-<hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 休暇管理マニュアル</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 有給・休暇管理マニュアル</p>
 
 </body>
 </html>

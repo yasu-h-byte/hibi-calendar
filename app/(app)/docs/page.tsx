@@ -30,7 +30,7 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'guide', title: '運用ガイド', desc: '変形労働時間制・3段階残業判定・3層構造給与・通知ベルなどの仕組みの解説', url: '/guide', icon: '📖', internal: true, badge: '初回読了推奨', updated: '2026-04-18' },
 
   // ── 事務（奥寺さん） ──
-  { category: 'manual', roles: ['jimu'], title: '奥寺さん向けマニュアル', desc: '出面入力・月次集計・給与計算・帳票出力（事務担当 総合版）', url: '/manual-okudera.html', icon: '📘', updated: '2026-04-26' },
+  { category: 'manual', roles: ['jimu'], title: '奥寺さん向けマニュアル', desc: '出面補助・月次集計・月締めロック・帳票出力（事務の日常運用。給与計算と有給は各専用マニュアルへ）', url: '/manual-okudera.html', icon: '📘', updated: '2026-07-03' },
   { category: 'manual', roles: ['jimu'], title: '給与計算マニュアル（奥寺さん用）', desc: '日比建設の月次給与計算。雇用形態4区分・日本人日給月給の有給手当・フンさんの固定月給・ベトナム人の有給日給・週所定での残業判定・端数処理・月締めの前提条件・自動検算・社労士提出用資料など', url: '/manual-payroll-okudera.html', icon: '💰', badge: 'NEW', updated: '2026-06-23' },
   { category: 'manual', roles: ['jimu'], title: '社労士提出用資料マニュアル', desc: 'HFU分を社労士に渡す資料の説明。変形労働時間制・3段階残業判定・有給日給・提出3資料の読み方・端数処理', url: '/manual-syaroshi.html', icon: '🏛', badge: 'NEW', updated: '2026-06-12' },
 
@@ -41,7 +41,7 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・ロック／就業カレンダー作成／出面グリッドの読み方（1冊に統合）', url: '/manual-foreman.html', icon: '📕', updated: '2026-07-03' },
 
   // ── 有給担当（事務・事業責任者） ──
-  { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国・時季指定・期末買取・時効処理など休暇関連の全機能', url: '/manual-yukyu.html', icon: '🌴', updated: '2026-04-30' },
+  { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元（付与・申請承認・時季指定・繰越/時効・期末買取・管理簿出力）', url: '/manual-yukyu.html', icon: '🌴', updated: '2026-07-03' },
 
   // ── 経理（佐藤さん） ──
   { category: 'manual', roles: ['jimu'], title: '道具代管理マニュアル（佐藤さん向け）', desc: '道具代補助の購入登録・残額管理・年度切り替え', url: '/manual-sato.html', icon: '🔧', updated: '2026-04-20' },

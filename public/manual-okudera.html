@@ -5,49 +5,71 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>業務マニュアル（奥寺さん向け） - HIBI CONSTRUCTION</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
-  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
-  h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
-  h3 { color: #333; font-size: 16px; margin-top: 24px; }
-  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  :root {
+    --charcoal: #20262F;
+    --amber: #F5A623;
+    --green: #1E9E52;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #20262F; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid var(--charcoal); padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #fff; background: var(--charcoal); padding: 8px 14px; margin-top: 40px; font-size: 18px; border-radius: 6px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; border-left: 4px solid var(--charcoal); padding-left: 10px; }
+  .box { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px; margin: 16px 0; }
   .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
-  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
+  .box-ok { background: #eefaf1; border: 1px solid #9dd8b4; }
   .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
   table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
   th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
-  th { background: #1B2A4A; color: white; }
+  th { background: var(--charcoal); color: white; }
   tr:nth-child(even) { background: #f8f8f8; }
   .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
-  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-num { background: var(--charcoal); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
   .step-text { flex: 1; }
   code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
-  .highlight { background: #ffe0e0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-  .formula { background: #f8f8f8; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 12px 0; font-family: monospace; font-size: 14px; line-height: 2; }
-  .toc { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
-  .toc a { color: #1B2A4A; text-decoration: none; }
+  .toc { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: var(--charcoal); text-decoration: none; }
   .toc a:hover { text-decoration: underline; }
   .toc li { margin: 4px 0; }
   hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
-  @media print { body { font-size: 12px; } .toc { page-break-after: always; } }
+  .btn-amber { display: inline-block; background: var(--amber); color: var(--charcoal); font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  @media print { body { font-size: 13px; padding: 0; } h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 14px; }
+    table { font-size: 13px; }
+    th, td { padding: 6px 8px; }
+    .step-text { font-size: 14px; }
+  }
 </style>
 </head>
 <body>
-<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
 
 <h1>HIBI CONSTRUCTION 就業管理システム<br>業務マニュアル（事務担当）</h1>
 <p>対象: 奥寺智子さん（事務担当）<br>
-作成日: 2026年4月4日<br>
-最終更新: 2026年4月26日<br>
+最終更新: 2026年7月3日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
-<div style="background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 8px; padding: 12px 16px; margin: 16px 0; font-size: 13px;">
+<!-- サマリー：毎月の流れ -->
+<div class="box box-ok">
+<strong>奥寺さんの毎月の流れ（月初〜10日が目安）</strong>
+<table style="margin-top:10px;">
+<tr><th>順番</th><th>やること</th><th>画面</th></tr>
+<tr><td><strong>①</strong></td><td><strong>前月の出面を確認</strong>（職長チェック済みのデータを最終確認）</td><td>出面入力</td></tr>
+<tr><td><strong>②</strong></td><td><strong>月次集計</strong>で出勤日数・残業・有給・欠勤をチェック</td><td>月次集計</td></tr>
+<tr><td><strong>③</strong></td><td><strong>給与計算</strong>を確認（詳しくは <a href="/manual-payroll-okudera.html">給与計算マニュアル</a>）</td><td>月次集計</td></tr>
+<tr><td><strong>④</strong></td><td><strong>帳票を出力</strong>（出面表・給与明細・有給管理簿）</td><td>各タブの 📥 Excel出力</td></tr>
+<tr><td><strong>⑤</strong></td><td><strong>月締めロック</strong>（🔒 この月を締める）</td><td>月次集計</td></tr>
+</table>
+<p style="margin:10px 0 0; font-size:13px;">奥寺さんの担当は<strong>日比建設分</strong>です。HFU分は靖仁さんが担当します。</p>
+</div>
+
+<div class="box" style="font-size:13px;">
 <strong>📌 関連資料：</strong>
 <ul style="margin: 6px 0; padding-left: 20px;">
+  <li><a href="/manual-payroll-okudera.html">💰 給与計算マニュアル（奥寺さん用）</a> — 給与計算の詳しい手順・計算例</li>
+  <li><a href="/manual-yukyu.html">🌴 休暇管理マニュアル</a> — 有給の付与・消化・申請承認の詳細</li>
   <li><a href="/manual-checklist.html">✅ ロール別やることチェックリスト</a> — 日次・月次のやること一覧</li>
-  <li><a href="/manual-yukyu.html">🌴 休暇管理マニュアル</a> — 有給・帰国情報の操作詳細（このマニュアルからの遷移先）</li>
-  <li><a href="/guide">📖 運用ガイド</a> — 変形労働時間制・3層構造給与の仕組み解説</li>
 </ul>
-<strong>このマニュアルは「事務として日次でやる操作」に特化しています。</strong>有給・帰国情報の詳細は休暇管理マニュアルを参照してください。
 </div>
 
 <div class="toc">
@@ -55,19 +77,13 @@
 <ol>
   <li><a href="#sec1">ログイン</a></li>
   <li><a href="#sec2">画面の見方（サイドバー）</a></li>
-  <li><a href="#sec3">有給データ移行（初回のみ）</a></li>
-  <li><a href="#sec4">出面入力</a></li>
-  <li><a href="#sec5">月次集計・月締め</a></li>
-  <li><a href="#sec6">給与計算</a>
-    <ul>
-      <li><a href="#sec6-1">6-1. 日本人社員（日給月給制）</a></li>
-      <li><a href="#sec6-2">6-2. ベトナム人スタッフ（時給制・変形労働時間制）</a></li>
-      <li><a href="#sec6-3">6-3. 確認ポイント</a></li>
-    </ul>
-  </li>
-  <li><a href="#sec7">有給管理（通常運用）</a></li>
-  <li><a href="#sec8">帳票出力</a></li>
-  <li><a href="#sec9">マスタ管理</a></li>
+  <li><a href="#sec3">出面入力の事務補助</a></li>
+  <li><a href="#sec4">月次集計・月締め</a></li>
+  <li><a href="#sec5">給与計算（要点）</a></li>
+  <li><a href="#sec6">有給管理</a></li>
+  <li><a href="#sec7">帳票出力</a></li>
+  <li><a href="#sec8">マスタ管理</a></li>
+  <li><a href="#sec9">毎月のルーティン</a></li>
 </ol>
 </div>
 
@@ -78,19 +94,17 @@
   <div class="step-num">1</div>
   <div class="step-text">ブラウザで <code>https://hibi-calendar.vercel.app</code> を開く</div>
 </div>
-
 <div class="step">
   <div class="step-num">2</div>
   <div class="step-text"><strong>個人パスワード</strong>を入力して「ログイン」を押す</div>
 </div>
-
 <div class="step">
   <div class="step-num">3</div>
   <div class="step-text">ダッシュボードが表示されればログイン完了</div>
 </div>
 
 <div class="box">
-<strong>パスワードについて：</strong>奥寺さん専用の個人パスワードが割り当てられています。日比さんから共有されます。名前の選択は不要で、パスワードを入力するだけで直接ログインできます。一度ログインすると、同じブラウザでは次回から入力不要です。
+<strong>パスワードについて：</strong>奥寺さん専用の個人パスワードが割り当てられています（靖仁さんから共有）。名前の選択は不要で、パスワードを入力するだけで直接ログインできます。一度ログインすると、同じブラウザでは次回から入力不要です。
 </div>
 
 <!-- ================================================ -->
@@ -100,519 +114,205 @@
 
 <table>
 <tr><th>メニュー名</th><th>用途</th><th>使用頻度</th></tr>
-<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">ホーム</td></tr>
-<tr><td>ダッシュボード</td><td>お知らせ・<strong>勤怠申請</strong>（有給申請・帰国申請の承認・欠勤届の確認）・本日の稼働状況・今月サマリー・日別チャート<br><span style="color:#888; font-size:12px;">※ 原価・収益の詳細分析は「原価・収益管理」に移動しました</span></td><td>確認用</td></tr>
-<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">日常業務</td></tr>
+<tr><td colspan="3" style="background:#f4f6f8; font-weight:bold; font-size:13px;">ホーム</td></tr>
+<tr><td>ダッシュボード</td><td>お知らせ・<strong>勤怠申請</strong>（有給・帰国申請の承認・欠勤届の確認）・本日の稼働状況・今月サマリー・日別チャート</td><td>確認用</td></tr>
+<tr><td colspan="3" style="background:#f4f6f8; font-weight:bold; font-size:13px;">日常業務</td></tr>
 <tr><td><strong>出面入力</strong></td><td>日々の出勤・残業・有給を入力・確認</td><td><strong>毎日</strong></td></tr>
 <tr><td>就業カレンダー</td><td>各現場の就業カレンダーの確認</td><td>確認用</td></tr>
-<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">集計・分析</td></tr>
+<tr><td colspan="3" style="background:#f4f6f8; font-weight:bold; font-size:13px;">集計・分析</td></tr>
 <tr><td><strong>月次集計</strong></td><td>日比建設分の出勤集計・給与計算・月締め<br><span style="color:#888; font-size:12px;">※ HFU分は靖仁さんが担当</span></td><td><strong>毎月</strong></td></tr>
 <tr><td><strong>帳票出力</strong></td><td>出面表・給与・有給台帳のExcel/PDF出力</td><td><strong>毎月</strong></td></tr>
-<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">人事・労務</td></tr>
-<tr><td><strong>有給・休み管理</strong></td><td>有給の付与・消化・残日数の管理<br><span style="color:#888; font-size:12px;">※ 有給申請の承認/却下は「申請」タブから行います</span></td><td><strong>毎月</strong></td></tr>
-<tr><td colspan="3" style="background:#f0f4ff; font-weight:bold; font-size:13px;">現場・外注</td></tr>
+<tr><td colspan="3" style="background:#f4f6f8; font-weight:bold; font-size:13px;">人事・労務</td></tr>
+<tr><td><strong>有給・休み管理</strong></td><td>有給の付与・消化・残日数の管理<br><span style="color:#888; font-size:12px;">※ 有給申請の承認/却下は「申請」タブから</span></td><td><strong>毎月</strong></td></tr>
+<tr><td colspan="3" style="background:#f4f6f8; font-weight:bold; font-size:13px;">現場・外注</td></tr>
 <tr><td>現場マスタ</td><td>現場情報・単価の確認</td><td>随時</td></tr>
 <tr><td>外注先マスタ</td><td>外注先の情報確認</td><td>随時</td></tr>
 </table>
 
 <!-- ================================================ -->
-<h2 id="sec3">3. 有給データ移行（日比建設分 — 奥寺さん担当）</h2>
+<h2 id="sec3">3. 出面入力の事務補助</h2>
 
-<div class="box box-red">
-<strong>重要：この作業が完了するまで、日比建設スタッフの有給残日数が正しく表示されません。</strong><br>
-旧スプレッドシートの有給取得データを新システムに移行する必要があります。<br>
-HFU分は靖仁さんが完了済みです。<strong>日比建設分は奥寺さんの担当</strong>です。
-</div>
+<p>出面入力画面はグリッド形式で、現場ごと・月ごとに入力します。ベトナム人スタッフは本人がスマホ入力、日本人社員は職長がPC入力するのが基本です。奥寺さんは<strong>入力漏れの補助・過去日の修正</strong>を担当します。</p>
 
-<div class="box box-ok">
-<strong>作業の全体像（2ステップ）：</strong>
-<table>
-<tr><th>ステップ</th><th>対象期間</th><th>やること</th><th>入力先</th></tr>
-<tr><td><strong>A</strong></td><td>2025年2月以前</td><td>スプレッドシートの消化合計を入力</td><td>有給管理 →「調整」欄</td></tr>
-<tr><td><strong>B</strong></td><td>2025年3月〜2026年4月</td><td>有給を取った日を1日ずつ入力</td><td>出面入力 →「有」入力</td></tr>
-</table>
-</div>
-
-<h3>ステップA: 2025年2月以前の消化分 →「調整」に入力</h3>
-
-<p>旧スプレッドシートで管理していた<strong>2025年2月以前</strong>の有給消化日数を、まとめて1つの数字で入力します。</p>
-
-<div class="box box-warn">
-<strong>準備：</strong>旧スプレッドシートを開き、各スタッフの「2025年2月までに消化した有給日数の合計」をメモしてください。
-</div>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">サイドバー →<strong>「有給・休み管理」</strong>を開く</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">日比建設のスタッフ一覧から、対象スタッフの右にある<strong>「編集」</strong>ボタンを押す</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text"><strong>「調整」</strong>欄に、スプレッドシートでの消化日数合計を入力する<br>
-  <span style="color:#888; font-size:13px;">例: スプレッドシートで5日消化済みなら「5」と入力</span></div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text"><strong>「保存」</strong>ボタンを押す</div>
-</div>
-<div class="step">
-  <div class="step-num">5</div>
-  <div class="step-text">「残日数」が正しいか確認する<br>
-  <span style="color:#888; font-size:13px;">残日数 = 付与 + 繰越 − 調整 − 消化 で計算されます</span></div>
-</div>
-<div class="step">
-  <div class="step-num">6</div>
-  <div class="step-text">全スタッフについて②〜⑤を繰り返す</div>
-</div>
-
-<div class="box box-red">
-<strong>注意：</strong>
-<ul style="margin: 4px 0 0; padding-left: 20px;">
-  <li>「付与日数」と「繰越」は<strong>変更しないでください</strong>。「調整」欄のみ入力します</li>
-  <li>「消化」は出面の「有」から自動計算されるため、直接編集できません</li>
-</ul>
-</div>
-
-<h3>ステップB: 2025年3月〜2026年4月の有給取得日 → 出面に「有」入力</h3>
-
-<p>2025年3月以降は、有給を取った<strong>具体的な日付</strong>を出面入力画面から1日ずつ入力します。</p>
-
-<div class="box box-warn">
-<strong>準備：</strong>旧スプレッドシートで、各スタッフが<strong>2025年3月〜2026年4月</strong>に有給を取った日付を確認してください。
-</div>
-
+<h3>3-1. 画面を開く</h3>
 <div class="step">
   <div class="step-num">1</div>
   <div class="step-text">サイドバー →<strong>「出面入力」</strong>を開く</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">右上の<strong>年月セレクタ</strong>で対象月を選ぶ（例: 2025年3月）</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text"><strong>現場セレクタ</strong>でスタッフが配置されていた現場を選ぶ<br>
-  <span style="color:#888; font-size:13px;">※ 終了した現場は「終了現場を表示」チェックボックスをONにすると表示されます</span></div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">有給を取った日のセルで、ドロップダウンから<span class="highlight">有</span>を選択する（自動保存）</div>
-</div>
-<div class="step">
-  <div class="step-num">5</div>
-  <div class="step-text">その月の全スタッフの有給を入力したら、次の月に進む（年月セレクタを変更）</div>
-</div>
-<div class="step">
-  <div class="step-num">6</div>
-  <div class="step-text">2025年3月〜2026年4月まで、月ごとに繰り返す</div>
-</div>
-
-<div class="box box-ok">
-<strong>入力のコツ：</strong>
-<ul style="margin: 4px 0 0; padding-left: 20px;">
-  <li>月ごとにまとめて作業すると効率的です（年月セレクタで月を切り替え）</li>
-  <li>入力した「有」は<strong>有給管理画面の消化日数に自動で反映</strong>されます</li>
-  <li>現場が変わったスタッフは、その時期に配置されていた現場を選んでください</li>
-  <li>現場がわからない場合は、靖仁さんに確認してください</li>
-</ul>
-</div>
-
-<h3>完了確認</h3>
-
-<p>ステップA・Bの両方が完了したら、以下を確認してください。</p>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">サイドバー →<strong>「有給・休み管理」</strong>を開く</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">各スタッフの<strong>「残日数」</strong>が旧スプレッドシートと一致しているか確認する</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">一致しない場合は、「調整」の数字 or 出面の「有」入力漏れを確認する</div>
-</div>
-
-<div class="box box-ok">
-<strong>完了したら靖仁さんに報告してください。</strong>確認後、スタッフのスマホ画面に有給残日数が表示されるようになります。
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec4">4. 出面入力</h2>
-
-<p>出面入力画面はグリッド形式で、現場ごと・月ごとに入力します。</p>
-
-<h3>入力値の一覧</h3>
-
-<div class="box box-warn">
-<strong>5月〜 外国人スタッフの入力方式が変わります：</strong><br>
-外国人スタッフ（ベトナム人）はPC画面でも<strong>時刻ベース入力</strong>になります。セルには出勤区分（出/有/休/現）＋ 開始時刻・終了時刻 ＋ 休憩チェックボックス（午前10:00-10:30 / 午後15:00-15:30）を入力します。昼休み（12:00-13:00）は常に控除され、チェック不要です。<br>
-<strong>日本人社員</strong>は従来形式（1/0.5/有 ＋ 残業時間入力）のままです。
-</div>
-
-<table>
-<tr><th>入力値</th><th>意味</th><th>色</th><th>使い方</th></tr>
-<tr><td><strong>1</strong></td><td>出勤（1日）</td><td>緑</td><td>通常の出勤日（日本人社員）</td></tr>
-<tr><td><strong>0.5</strong></td><td>半日</td><td>黄</td><td>半日だけ出勤した場合（日本人社員）</td></tr>
-<tr><td><strong>有</strong></td><td>有給休暇</td><td>紫</td><td>有給を取得した日</td></tr>
-<tr><td><strong>下段の数字</strong></td><td>残業時間</td><td>オレンジ</td><td>0.5h単位で入力（例: 1.5）— 日本人社員のみ</td></tr>
-<tr><td><strong>空欄</strong></td><td>休み / 未入力</td><td>—</td><td>何も入力しない</td></tr>
-</table>
-
-<div class="box">
-<strong>保存は自動です。</strong>セルに入力するだけで自動保存されます。保存ボタンを押す必要はありません。
-</div>
-
-<div class="box box-ok">
-<strong>日付ヘッダーが固定表示になりました。</strong>スクロールしても日付行が画面上部に固定されるため、どの日付のセルかを見失いません。
-</div>
-
-<div class="box">
-<strong>就業カレンダーとの連動：</strong><br>
-承認済みの就業カレンダーがある月は、出面グリッドにカレンダー情報が自動反映されます。
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li><strong>平日の休み</strong>（祝日・現場休み）: ヘッダー・セルがグレー ＋「休」マーク表示</li>
-  <li><strong>土曜の休み</strong>: ヘッダーは青のまま「土 休」と表示</li>
-  <li><strong>帰国中のスタッフ</strong>: セルに「✈帰国」と表示（帰国・休暇情報ページの登録データも反映）</li>
-</ul>
-</div>
-
-<div class="box box-ok">
-<strong>現場の選択はリロードしても保持されます。</strong>前回選択した現場が自動で復元されるため、毎回選び直す必要はありません。
-</div>
-
-<h3>操作手順</h3>
-<div class="step">
-  <div class="step-num">1</div>
   <div class="step-text">右上の<strong>現場セレクタ</strong>で現場を選ぶ<br>
-  <span style="color:#888; font-size:13px;">※ 終了した現場は「終了現場を表示」チェックボックスをONにすると表示されます</span></div>
+  <span style="color:#888; font-size:13px;">※ 終了した現場は「終了現場を表示」チェックボックスをONにすると表示されます。前回選んだ現場はリロードしても保持されます。</span></div>
 </div>
 <div class="step">
-  <div class="step-num">2</div>
+  <div class="step-num">3</div>
   <div class="step-text">右上の<strong>年月セレクタ</strong>で月を選ぶ（過去26ヶ月分まで選択可能）</div>
 </div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">各スタッフの行で、出勤した日に <strong>1</strong>、有給の日に <strong>有</strong> を入力</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">残業があれば、セルの下段に残業時間を入力</div>
-</div>
 
-<!-- ================================================ -->
-<h2 id="sec5">5. 月次集計・月締め</h2>
-
-<p>毎月の出勤データを集計し、給与計算を確認してから月を確定（月締め）します。</p>
-
-<div class="box box-warn">
-<strong>担当範囲：</strong>奥寺さんは<strong>「日比建設」タブ</strong>と<strong>「外注」タブ</strong>を担当します。<br>
-「HFU」タブは靖仁さんが担当するため、操作不要です。
-</div>
-
-<h3>手順</h3>
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">サイドバー →<strong>「月次集計」</strong>を開く</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">年月セレクタで<strong>対象月</strong>を選ぶ</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text"><strong>「所定日数」</strong>を確認する（就業カレンダーの稼働日数と一致しているか）</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">各スタッフの<strong>出勤日数・残業時間・有給日数・欠勤</strong>が正しいか確認</div>
-</div>
-<div class="step">
-  <div class="step-num">5</div>
-  <div class="step-text">問題なければ<strong>「月締め」</strong>ボタンを押して確定</div>
-</div>
-
-<div class="box box-warn">
-<strong>月締め後は出面入力が編集不可になります。</strong>間違いが見つかった場合は「締め解除」で戻せます。
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec6">6. 給与計算</h2>
-
-<p>月次集計画面で自動計算されます。奥寺さんは<strong>日比建設分</strong>（日本人社員+日比建設所属の外国人）を担当します。HFU分と原価・収益管理は靖仁さんが担当します。</p>
-
-<div class="box box-red">
-<strong>2026年5月から給与制度が変わります（外国人スタッフ対象）。</strong><br>
-以下の3点を把握してください：
-<ol style="margin: 8px 0 0; padding-left: 20px;">
-  <li><strong>1ヶ月単位の変形労働時間制</strong>を導入 → 就業カレンダーで出勤日/休日を毎月事前に決定</li>
-  <li><strong>3層構造の給与計算</strong> → ① 基本給固定20日分 + ② 追加所定手当 + ③ 残業手当</li>
-  <li><strong>3段階の残業判定</strong> → 日8h超 → 週40h超 → 月法定上限超（システム自動計算）</li>
-</ol>
-日本人社員の給与計算は<strong>従来通り</strong>です（変更なし）。
-</div>
-
-<h3>5月以降の給与計算で変わること・変わらないこと</h3>
+<h3>3-2. 入力する値（日本人社員）</h3>
 
 <table>
-<tr><th>項目</th><th>日本人社員</th><th>外国人スタッフ</th></tr>
-<tr><td>給与体系</td><td>日給月給制（変更なし）</td><td><strong>3層構造に変更</strong></td></tr>
-<tr><td>残業計算</td><td>8h超 × 1.25（変更なし）</td><td><strong>3段階判定</strong>（自動計算）</td></tr>
-<tr><td>所定労働時間</td><td>8h/日（変更なし）</td><td><strong>7h/日</strong></td></tr>
-<tr><td>休憩時間</td><td>1h（変更なし）</td><td><strong>2h</strong>（午前30分+昼1h+午後30分）</td></tr>
-<tr><td>所定日数</td><td>—</td><td><strong>就業カレンダーで決定</strong></td></tr>
-<tr><td>Excelシート</td><td>従来通り</td><td><strong>3シート</strong>（出面+勤務時間+勤怠サマリー）</td></tr>
+<tr><th>入力値</th><th>意味</th><th>使い方</th></tr>
+<tr><td><strong>1</strong></td><td>出勤（1日）</td><td>通常の出勤日</td></tr>
+<tr><td><strong>0.5</strong></td><td>半日</td><td>午前だけ／午後だけ</td></tr>
+<tr><td><strong>有</strong></td><td>有給休暇</td><td>有給を取得した日</td></tr>
+<tr><td><strong>試</strong></td><td>試験</td><td>技能試験・検定などで出勤扱いにする日</td></tr>
+<tr><td><strong>下段の数字</strong></td><td>残業時間</td><td>0.5h単位で入力（例: 1.5）</td></tr>
+<tr><td><strong>空欄</strong></td><td>休み / 未入力</td><td>何も入力しない</td></tr>
 </table>
 
-<!-- 6-1 日本人 -->
-<h3 id="sec6-1">6-1. 日本人社員（日給月給制 — 変更なし）</h3>
-
-<p>出勤した日数分の日額が基本給になります。5月以降も変わりません。</p>
-
-<div class="formula">
-<strong>基本給</strong> = 日額 &times; 実出勤日数<br>
-<strong>残業手当</strong> = (日額 &divide; 8時間) &times; 1.25 &times; 残業時間<br>
-<hr style="border-top: 1px solid #999;">
-<strong>支給額</strong> = 基本給 + 残業手当
+<div class="box box-ok">
+<strong>保存は自動です。</strong>セルに値を入れるだけで自動保存されます。保存ボタンはありません。日付ヘッダーはスクロールしても画面上部に固定されます。
 </div>
 
-<div class="box">
-<strong>計算例：大川さん（日額 23,000円 / 24日出勤 / 残業10h）</strong>
+<h3>3-3. 事務補助でよく使う操作</h3>
+
 <table>
-<tr><th>項目</th><th>計算</th><th>金額</th></tr>
-<tr><td>基本給</td><td>23,000 &times; 24日</td><td>552,000円</td></tr>
-<tr><td>時間単価</td><td>23,000 &divide; 8h</td><td>2,875円/h</td></tr>
-<tr><td>残業手当</td><td>2,875 &times; 1.25 &times; 10h</td><td>35,938円</td></tr>
-<tr><td><strong>支給額</strong></td><td></td><td><strong>587,938円</strong></td></tr>
+<tr><th>操作</th><th>やり方</th></tr>
+<tr><td><strong>代理入力</strong></td><td>スタッフが入力し忘れた日を、奥寺さん（admin）が代わりにセルへ入力できます</td></tr>
+<tr><td><strong>過去日の修正</strong></td><td>月締めロック前なら過去日のセルも修正できます（ロック後は不可）</td></tr>
+<tr><td><strong>試験ステータス</strong></td><td>試験の日はドロップダウンで「試」を選択</td></tr>
+<tr><td><strong>Enterで次へ</strong></td><td>セルに値を入れて Enter を押すと、次の従業員の同じ日へ移動します（連続入力が速い）</td></tr>
+<tr><td><strong>配置編集</strong></td><td>スタッフの現場配置が違う場合は配置編集で正しい現場へ移動</td></tr>
 </table>
-</div>
-
-<!-- 6-2 ベトナム人 -->
-<h3 id="sec6-2">6-2. ベトナム人スタッフ（時給制・変形労働時間制 — 5月から変更）</h3>
-
-<p>2026年5月から適用する<strong>1ヶ月単位の変形労働時間制</strong>に基づく計算です。</p>
 
 <div class="box">
-<strong>なぜ変形労働時間制を導入するのか：</strong>
+<strong>就業カレンダーとの連動：</strong>承認済みカレンダーがある月は、出面グリッドに休日情報が自動反映されます。
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>カレンダーで出勤日と決めた<strong>土曜日が通常勤務扱い</strong>になる（割増不要）</li>
-  <li>会社都合の休業補償（0.6）が<strong>発生しなくなる</strong></li>
-  <li>毎月事前にカレンダーを確定するので、スタッフに予定を伝えやすい</li>
+  <li><strong>平日の休み</strong>（祝日・現場休み）: ヘッダー・セルがグレー ＋「休」マーク</li>
+  <li><strong>土曜の休み</strong>: ヘッダーは青のまま「土 休」と表示</li>
+  <li><strong>帰国中</strong>: セルに「✈帰国」と自動表示（入力不要）</li>
 </ul>
 </div>
 
-<div class="box box-warn">
-<strong>3層構造の給与計算：</strong><br>
-① 基本給固定20日分 + ② 追加所定手当 + ③ 残業手当<br>
-<span style="color:#888; font-size:13px;">基本給は毎月20日分が最低保証されます。20日以上出勤した分は追加所定手当として加算。残業は3段階判定でシステムが自動計算します。</span>
-</div>
-
-<div class="formula">
-<strong>① 基本給（固定）</strong> = 時給 &times; 20日 &times; 7時間<br>
-<strong>② 追加所定手当</strong> = 時給 &times; MAX(0, 実出勤日数 &minus; 20日) &times; 7時間<br>
-<strong>③ 法定外労働時間</strong> = 3段階判定（日8h超 + 週40h超 + 月法定上限超）<br>
-<strong>③ 残業手当</strong> = 時給 &times; 1.25 &times; 法定外労働時間<br>
-<strong>欠勤控除</strong> = 時給 &times; 7時間 &times; MAX(0, 20日 &minus; 実出勤日数 &minus; 有給日数)<br>
-<hr style="border-top: 1px solid #999;">
-<strong>支給額</strong> = ① &minus; 欠勤控除 + ② + ③
-</div>
-
-<div class="box">
-<strong>計算例：フウさん（時給 2,000円 / 所定24日 / 実出勤24日 / 残業12h）</strong>
-<table>
-<tr><th>項目</th><th>計算</th><th>金額</th></tr>
-<tr><td>基本給（固定）</td><td>2,000 &times; 20日 &times; 7h</td><td>280,000円</td></tr>
-<tr><td>追加所定手当</td><td>2,000 &times; (24日 &minus; 20日) &times; 7h</td><td>56,000円</td></tr>
-<tr><td>法定外労働時間</td><td>3段階判定（システム自動計算）</td><td>例: 7.3h</td></tr>
-<tr><td>残業手当</td><td>2,000 &times; 1.25 &times; 7.3h</td><td>18,250円</td></tr>
-<tr><td>欠勤控除</td><td>MAX(0, 20 &minus; 24 &minus; 0) = 0日</td><td>0円</td></tr>
-<tr><td><strong>支給額</strong></td><td>280,000 + 56,000 + 18,250</td><td><strong>354,250円</strong></td></tr>
-</table>
-</div>
-
-<div class="box">
-<strong>欠勤がある場合の例：（18日しか出勤しなかった場合、有給0日）</strong>
-<table>
-<tr><th>項目</th><th>計算</th><th>金額</th></tr>
-<tr><td>基本給（固定）</td><td>2,000 &times; 20日 &times; 7h</td><td>280,000円</td></tr>
-<tr><td>欠勤日数</td><td>MAX(0, 20日 &minus; 18日 &minus; 0日)</td><td>2日</td></tr>
-<tr><td>欠勤控除</td><td>2,000 &times; 7h &times; 2日</td><td>28,000円</td></tr>
-<tr><td><strong>支給額</strong></td><td>280,000 &minus; 28,000 + 残業手当</td><td><strong>252,000円 + 残業</strong></td></tr>
-</table>
-<p style="font-size:13px; color:#888;">※ 有給取得日は欠勤にカウントされません。20日以上出勤した場合は追加所定手当が加算されます。</p>
-</div>
-
-<!-- 6-3 残業の3段階判定 -->
-<h3 id="sec6-3">6-3. 残業の3段階判定（外国人スタッフ）</h3>
-
-<p>外国人スタッフの残業はシステムが<strong>3段階で自動判定</strong>します。奥寺さんが手計算する必要はありませんが、仕組みの理解が必要です。</p>
-
-<div class="box">
-<table>
-<tr><th>段階</th><th>判定基準</th><th>具体例</th></tr>
-<tr><td><strong>第1段階</strong></td><td><strong>1日8時間</strong>を超えた分</td><td>8:00〜19:00勤務（休憩2h）→ 実働9h → <strong>1hが残業</strong></td></tr>
-<tr><td><strong>第2段階</strong></td><td><strong>週40時間</strong>を超えた分（第1段階の分を除く）</td><td>月〜金35h + 土7h = 42h → <strong>2hが残業</strong></td></tr>
-<tr><td><strong>第3段階</strong></td><td><strong>月の法定上限</strong>を超えた分（第1・2段階の分を除く）</td><td>法定上限 = 暦日数 &times; 40 &divide; 7</td></tr>
-</table>
-<p style="font-size:13px; color:#888;">※ いずれも1.25倍の割増賃金が発生します。</p>
-</div>
-
-<div class="box box-ok">
-<strong>Excelの「勤怠サマリー」シートで確認できます。</strong><br>
-出面Excelの3枚目のシートに、スタッフごとの3段階残業判定の結果が自動出力されます。<br>
-日次・週次・月次それぞれの法定外労働時間が記載されているので、キャシュモへの入力時に参照してください。
-</div>
-
-<!-- 6-4 確認ポイント -->
-<h3 id="sec6-4">6-4. 月次集計の確認ポイント</h3>
-
-<h4>日本人社員</h4>
-<table>
-<tr><th>確認項目</th><th>確認方法</th></tr>
-<tr><td>出勤日数が合っているか</td><td>出面入力画面の合計欄と一致しているか</td></tr>
-<tr><td>残業時間が正しいか</td><td>出面入力の残業時間合計と一致しているか</td></tr>
-<tr><td>有給が消化にカウントされているか</td><td>出面で「有」を入力した日数が反映されているか</td></tr>
-</table>
-
-<h4>外国人スタッフ（5月〜）</h4>
-<table>
-<tr><th>確認項目</th><th>確認方法</th></tr>
-<tr><td>所定日数が正しいか</td><td>就業カレンダーの稼働日数と一致しているか</td></tr>
-<tr><td>基本給（固定）が正しいか</td><td>時給 &times; 20日 &times; 7h で計算されているか</td></tr>
-<tr><td>追加所定手当が正しいか</td><td>20日を超えた分 &times; 時給 &times; 7h</td></tr>
-<tr><td>欠勤控除が正しいか</td><td>20日に満たない場合のみ控除（有給は欠勤にならない）</td></tr>
-<tr><td>法定外労働時間の内訳</td><td>Excel「勤怠サマリー」シートの日/週/月の内訳を確認</td></tr>
-</table>
-
 <!-- ================================================ -->
-<h2 id="sec7">7. 有給管理（通常運用）</h2>
+<h2 id="sec4">4. 月次集計・月締め</h2>
 
-<div class="box">
-<strong>画面の特徴：</strong>年度セレクタはありません。各スタッフの<strong>最新の有給レコード</strong>が常に表示されます。
-画面下部に<strong>月別消化テーブル</strong>があり、月ごとの有給取得状況を一覧できます。
+<p>毎月の出勤データを集計し、給与計算を確認してから月を確定（月締めロック）します。</p>
+
+<div class="box box-warn">
+<strong>担当範囲：</strong>奥寺さんは<strong>日比建設分</strong>を担当します。HFU分は靖仁さんが担当するため操作不要です。日比建設分・HFU分は<strong>別々にロック</strong>できます。
 </div>
 
-<h3>7-1. 有給管理画面の見方</h3>
+<h3>4-1. 月次集計の画面（タブ構成）</h3>
+
+<p>サイドバー →「月次集計」を開き、右上の<strong>年月セレクタ</strong>で対象月を選びます（前月がデフォルト表示）。画面には次の4つのタブがあります。</p>
 
 <table>
-<tr><th>列</th><th>意味</th></tr>
-<tr><td>付与日数</td><td>今回付与された有給日数（法定に基づく）</td></tr>
-<tr><td>繰越</td><td>前回の付与期間から持ち越した日数（上限20日、出面Pデータ含む）</td></tr>
-<tr><td>合計</td><td>付与 + 繰越 = 使える総日数</td></tr>
-<tr><td>調整</td><td>旧データから移行した消化済み日数（初回のみ手入力）</td></tr>
-<tr><td>消化</td><td>出面データから自動集計された消化日数</td></tr>
-<tr><td>残日数</td><td>合計 &minus; (調整 + 消化) = 残り使える日数</td></tr>
-<tr><td>有効期限</td><td>付与日から2年間。期限切れは赤で表示</td></tr>
+<tr><th>タブ</th><th>内容</th></tr>
+<tr><td><strong>月次集計</strong></td><td>スタッフごとの出勤日数・残業時間・有給日数・欠勤の一覧</td></tr>
+<tr><td><strong>給与計算</strong></td><td>基本給・残業手当・支給額の自動計算結果（詳細は<a href="/manual-payroll-okudera.html">給与計算マニュアル</a>）</td></tr>
+<tr><td><strong>勤怠サマリー</strong></td><td>3段階残業判定の結果（日次・週次・月次の法定外労働時間）</td></tr>
+<tr><td><strong>チェック</strong></td><td>所定日数・入力漏れ・未承認データなどの警告一覧</td></tr>
 </table>
 
-<h3>7-2. 有給の付与（通知ベース）</h3>
-
-<p>有給の付与時期が来ると、ヘッダーの<strong>通知ベル</strong>にアラートが表示されます。</p>
-
+<h3>4-2. 確認する手順</h3>
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text">ヘッダー右上の<strong>ベルアイコン</strong>を確認（バッジが表示されている場合は未処理の通知あり）</div>
+  <div class="step-text"><strong>「月次集計」</strong>タブで、各スタッフの出勤日数・残業・有給・欠勤が正しいか確認</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">通知を開くと「有給付与」のアラートが表示される</div>
+  <div class="step-text"><strong>所定日数</strong>が就業カレンダーの稼働日数と一致しているか確認</div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
-  <div class="step-text"><strong>「付与する」</strong>ボタンをワンクリックで付与を実行</div>
+  <div class="step-text"><strong>「チェック」</strong>タブで警告が残っていないか確認</div>
 </div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text"><strong>「給与計算」</strong>タブで支給額を確認（詳しくは給与計算マニュアル）</div>
+</div>
+
+<h3>4-3. 月締めロック</h3>
+
+<p>すべて確認できたら、月次集計画面の <span class="btn-amber">🔒 この月を締める</span> を押します。</p>
 
 <div class="box box-warn">
-<strong>自動付与は廃止されました。</strong>付与は必ず通知からの手動確認で行います。これにより、付与内容を事前に確認してから実行できます。
-</div>
-
-<h3>7-3. 有給申請の承認（2段階承認）</h3>
-
-<div class="box">
-<strong>承認フロー（2段階）：</strong>
-<table>
-<tr><th>段階</th><th>誰が</th><th>やること</th><th>フィルタ名</th></tr>
-<tr><td><strong>第1段階</strong></td><td>職長</td><td>申請内容を確認 →「職長承認」</td><td>職長待ち</td></tr>
-<tr style="background:#e6f4ea;"><td><strong>第2段階</strong></td><td><strong>奥寺さん / 政仁さん</strong></td><td>職長承認済みの申請を「最終承認」</td><td>最終承認待ち</td></tr>
-</table>
-<p style="font-size:13px; color:#888;">※ 最終承認すると出面に自動で「有」が入力されます。手動入力は不要です。</p>
-</div>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">ダッシュボードの<strong>「勤怠申請」カード</strong>、またはサイドバー →<strong>「有給管理」</strong>→<strong>「申請」タブ</strong>を開く<br>
-  <span style="color:#888; font-size:13px;">※ ダッシュボードから直接承認操作が可能です。欠勤届（本日＋過去7日分）もここで確認できます。</span></div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">フィルタで<strong>「最終承認待ち」</strong>を選択（職長承認済みの申請が表示される）</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">内容を確認して<strong>「最終承認」</strong>ボタンを押す</div>
-</div>
-
-<div class="box box-warn">
-<strong>ベトナム人スタッフの有給申請は原則5日前まで</strong>です。（日本人社員には適用されません）<br>
-却下する場合は「却下」ボタンを押し、理由を入力してください。
+<strong>月締めの前提：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>全現場の<strong>職長チェックが完了</strong>していること</li>
+  <li><strong>未承認の出面が残っていない</strong>こと</li>
+</ul>
+<p style="margin:8px 0 0;">警告が残っていても<strong>確認ダイアログで強制ロック</strong>できますが、内容を確認してから締めてください。</p>
 </div>
 
 <div class="box">
-<strong>残日数が0のスタッフは申請できません。</strong>スマホ画面で「ゆうきゅう の こり 0 にち です」と表示されます。
-</div>
-
-<h3>7-4. 帰国申請の承認</h3>
-
-<p>ベトナム人スタッフが一時帰国する際に、スマホから帰国申請を提出します。有給申請と同じ2段階承認フローです。</p>
-
-<div class="box">
-<strong>帰国申請の承認フロー：</strong>
-<table>
-<tr><th>段階</th><th>誰が</th><th>やること</th></tr>
-<tr><td><strong>第1段階</strong></td><td>職長</td><td>申請内容を確認 →「職長承認」</td></tr>
-<tr style="background:#e6f4ea;"><td><strong>第2段階</strong></td><td><strong>奥寺さん / 政仁さん</strong></td><td>職長承認済みの申請を「最終承認」</td></tr>
-</table>
-<p style="font-size:13px; color:#888;">※ 最終承認すると、帰国期間中の出面に「帰国中」が自動記録されます。手入力は不要です。</p>
-</div>
-
-<div class="box box-ok">
-<strong>ダッシュボードの「勤怠申請」カード</strong>に帰国申請も表示されます。有給申請・欠勤届と同じ場所で承認操作が可能です。
-</div>
-
-<h3>7-5. 有給管理台帳の出力</h3>
-
-<p>帳票出力画面から「有給管理台帳」をダウンロードできます（Excel形式）。</p>
-<p>監査対応用に、シート1「管理簿」とシート2「取得日一覧」が含まれます。</p>
-
-<h3>7-6. 過去の有給データ移行（日比建設分）</h3>
-
-<div class="box box-warn">
-詳しい手順は<strong><a href="#sec3">セクション3「有給データ移行」</a></strong>を参照してください。<br>
-ステップA（調整入力）とステップB（出面に「有」入力）の2段階で作業します。
+<strong>ロックすると：</strong>その月の出面入力が編集不可になります。間違いが見つかった場合は <strong>🔓 ロックを解除</strong>（admin）で戻せます。日比建設分・HFU分はそれぞれ独立してロック／解除できます。
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec8">8. 帳票出力</h2>
+<h2 id="sec5">5. 給与計算（要点）</h2>
 
-<p>サイドバー →「帳票出力」で各種帳票をダウンロードできます。</p>
+<p>給与は月次集計画面の「給与計算」タブで<strong>自動計算</strong>されます。奥寺さんは<strong>日比建設分</strong>（日本人社員＋日比建設所属の外国人）を担当します。HFU分と原価・収益管理は靖仁さんが担当します。</p>
+
+<div class="box">
+<strong>おおまかな仕組み（詳細は専用マニュアル）：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>日本人社員</strong>：日給月給制（日額 × 出勤日数 ＋ 残業 8h超×1.25）</li>
+  <li><strong>ベトナム人スタッフ</strong>：時給制・1ヶ月単位の変形労働時間制（基本給固定20日分 ＋ 追加所定手当 ＋ 残業手当）。残業は日8h超・週40h超・月法定上限超の<strong>3段階</strong>をシステムが自動判定</li>
+</ul>
+</div>
+
+<div class="box box-ok">
+<strong>計算方法・計算例・確認ポイントの詳細は、<a href="/manual-payroll-okudera.html">給与計算マニュアル（奥寺さん用）</a>を参照してください。</strong>このマニュアルでは日常運用の流れのみ扱います。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec6">6. 有給管理</h2>
+
+<p>有給の付与・消化・残日数は「有給・休み管理」画面で管理します。有給申請・帰国申請の承認もここ（または ダッシュボードの「勤怠申請」カード）で行います。</p>
+
+<div class="box">
+<strong>日常でよく使う操作：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>有給の付与</strong>：付与時期が来るとヘッダーの通知ベル（🔔）にアラート。「付与する」をワンクリックで実行（自動付与は廃止済み）</li>
+  <li><strong>有給申請の承認</strong>：職長が「職長承認」→ 奥寺さん／政仁さんが「最終承認」。最終承認すると出面に自動で「有」が入力されます</li>
+  <li><strong>帰国申請の承認</strong>：同じ2段階承認。最終承認すると帰国期間中の出面に「帰国中」が自動記録されます</li>
+  <li><strong>消化日数</strong>：出面の「有」から自動集計（直接編集不可）</li>
+</ul>
+</div>
+
+<div class="box box-ok">
+<strong>付与・消化・申請承認・残日数計算・有給管理簿の詳しい手順は、<a href="/manual-yukyu.html">休暇管理マニュアル</a>を参照してください。</strong>
+</div>
+
+<div class="box" style="font-size:13px;">
+<strong>※ 保守メモ：</strong>旧スプレッドシートからの有給データ移行（調整入力・過去分の「有」入力）は完了済みです。残数がおかしい等の保守が必要になった場合のみ、靖仁さんに連絡してください。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec7">7. 帳票出力</h2>
+
+<p>サイドバー →「帳票出力」で各種帳票をダウンロードできます。各月次集計タブにも <strong>📥 Excel出力</strong> ボタンがあります。</p>
 
 <table>
 <tr><th>帳票名</th><th>形式</th><th>用途</th></tr>
-<tr><td>日比建設向け出面一覧</td><td>Excel</td><td>日比建設社員の出面表<br><span style="color:#888; font-size:12px;">※ 3シート構成：Sheet1=出面一覧、Sheet2=勤務時間一覧、Sheet3=勤怠サマリー（3段階残業判定）</span></td></tr>
-<tr><td>HFU向け出面一覧</td><td>Excel</td><td>ベトナム人スタッフの出面表<br><span style="color:#888; font-size:12px;">※ 3シート構成：Sheet1=出面一覧、Sheet2=勤務時間一覧、Sheet3=勤怠サマリー（3段階残業判定）</span></td></tr>
+<tr><td>日比建設向け出面一覧</td><td>Excel</td><td>日比建設分の出面表（3シート構成）</td></tr>
+<tr><td>HFU向け出面一覧</td><td>Excel</td><td>ベトナム人スタッフの出面表（3シート構成／社労士提出用は別ボタン）</td></tr>
 <tr><td>外注先向け出面確認書</td><td>Excel</td><td>外注先への確認用</td></tr>
+<tr><td>給与明細</td><td>Excel</td><td>スタッフごとの給与明細</td></tr>
 <tr><td>歩掛管理表</td><td>Excel</td><td>現場別の人工数管理</td></tr>
 <tr><td>月次レポート</td><td>PDF</td><td>売上・原価・利益のサマリー</td></tr>
-<tr><td><strong>有給管理台帳</strong></td><td>Excel</td><td>監査対応用の有給管理簿</td></tr>
+<tr><td><strong>有給管理簿</strong></td><td>Excel</td><td>監査対応用（有給・休み管理画面／<code>/leave</code> から出力）</td></tr>
 </table>
+
+<div class="box box-ok">
+<strong>出面Excelの3シート構成：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>Sheet1「出面一覧」</strong>：従来の出面表形式（社内確認用）</li>
+  <li><strong>Sheet2「勤務時間一覧」</strong>：日次の実労働時間・所定時間・週番号</li>
+  <li><strong>Sheet3「勤怠サマリー」</strong>：3段階残業判定の結果（日/週/月の法定外労働時間の内訳付き）。キャシュモへの入力時に参照</li>
+</ul>
+</div>
+
+<div class="box" style="font-size:13px;">
+<strong>社労士提出用（HFU分）</strong>は専用ボタンから出力します。社労士向け資料の詳細は靖仁さんの担当範囲です。
+</div>
 
 <div class="step">
   <div class="step-num">1</div>
-  <div class="step-text">出力したい帳票のカードを選ぶ</div>
+  <div class="step-text">出力したい帳票のカード（または月次集計タブの 📥 Excel出力）を選ぶ</div>
 </div>
 <div class="step">
   <div class="step-num">2</div>
@@ -623,19 +323,10 @@ HFU分は靖仁さんが完了済みです。<strong>日比建設分は奥寺さ
   <div class="step-text">ダウンロードボタンを押す → ファイルが自動ダウンロードされる</div>
 </div>
 
-<div class="box box-ok">
-<strong>出面Excelの3シート構成について：</strong>日比建設向け・HFU向け出面Excelは外国人スタッフがいる場合3シート構成になっています。<br>
-<strong>Sheet1「出面一覧」</strong>：従来の出面表形式（社内確認用）。<br>
-<strong>Sheet2「勤務時間一覧」</strong>：出面データを時間に変換した一覧（日次の実労働時間・所定時間・週番号）。<br>
-<strong>Sheet3「勤怠サマリー」</strong>：3段階残業判定の結果（個人別月次集計）。所定労働時間/日数、実労働時間/日数、法定外労働時間（日/週/月の内訳付き）、基本給（固定）など。
-</div>
-
 <!-- ================================================ -->
-<h2 id="sec9">9. 現場マスタ・外注先マスタ</h2>
+<h2 id="sec8">8. マスタ管理</h2>
 
-<p>現場や外注先の情報を確認できます。</p>
-
-<h3>9-1. 現場マスタ</h3>
+<h3>8-1. 現場マスタ</h3>
 
 <p>サイドバー →<strong>「現場マスタ」</strong>で、各現場の情報を確認できます。</p>
 
@@ -647,66 +338,41 @@ HFU分は靖仁さんが完了済みです。<strong>日比建設分は奥寺さ
 <tr><td>とび単価・土工単価</td><td>元請への請求単価（日額）</td></tr>
 </table>
 
-<h3>9-2. 外注先マスタ</h3>
+<h3>8-2. 外注先マスタ</h3>
 
 <p>サイドバー →<strong>「外注先マスタ」</strong>で、外注先の会社名・職種・単価などを確認できます。</p>
 
 <div class="box box-warn">
-<strong>外注先の現場別単価について：</strong><br>
-外注先は基本単価のほかに、現場ごとに異なる単価を設定できます。<br>
-現場マスタの編集画面 →「外注先」セクションで設定します。<strong>単価変更時は速やかに反映してください。</strong>
+<strong>外注先の現場別単価：</strong>外注先は基本単価のほか、現場ごとに異なる単価を設定できます。現場マスタの編集画面 →「外注先」セクションで設定します。<strong>単価変更時は速やかに反映してください。</strong>
 </div>
 
 <div class="box box-warn">
-<strong>人員マスタについて：</strong>社員情報の追加・編集・退職処理は管理者（靖仁さん）が担当します。変更が必要な場合は管理者に連絡してください。
+<strong>人員マスタについて：</strong>社員情報の追加・編集・退職処理は管理者（靖仁さん）が担当します。入退社・ビザ更新など変更が必要な場合は靖仁さんに連絡してください。
 </div>
 
-<hr>
-
-<h2>5月以降の出面運用フロー</h2>
-
-<div class="box">
-<p>5月からは、出面データが3段階で入力・確認されます。奥寺さんの作業は<strong>最終確認と月締め</strong>です。</p>
-
-<table>
-<tr><th>ステップ</th><th>誰が</th><th>やること</th></tr>
-<tr><td>1</td><td>実習生・特定技能</td><td>スマホから毎日、開始時刻・終了時刻・休憩を入力して出勤登録（5月〜新形式）</td></tr>
-<tr><td>2</td><td>政仁さん</td><td>PC画面で出面を確認し、必要に応じて修正・承認</td></tr>
-<tr><td>3</td><td><strong>奥寺さん</strong></td><td>月次集計の「日比建設」タブで給与計算をチェック → 月締め</td></tr>
-<tr><td>4</td><td>靖仁さん</td><td>月次集計の「HFU」タブで給与計算をチェック</td></tr>
-</table>
-</div>
-
-<h2>毎月のルーティン（チェックリスト）</h2>
+<!-- ================================================ -->
+<h2 id="sec9">9. 毎月のルーティン</h2>
 
 <div class="box">
 <table>
 <tr><th>タイミング</th><th>作業</th><th>画面</th></tr>
-<tr><td>毎日</td><td>政仁さんが入力・承認した出面データの確認</td><td>出面入力</td></tr>
-<tr><td>月末</td><td>有給申請・帰国申請があれば承認/却下</td><td>ダッシュボード「勤怠申請」カード<br>or 有給管理 → 申請タブ</td></tr>
-<tr><td>翌月5日頃</td><td>前月の出面データを最終確認</td><td>出面入力</td></tr>
-<tr><td>翌月5日頃</td><td>月次集計「日比建設」タブで給与計算を確認 → 月締め</td><td>月次集計</td></tr>
-<tr><td>翌月5日頃</td><td>帳票を出力（出面表・給与・有給台帳）</td><td>帳票出力</td></tr>
-<tr><td>随時</td><td>スタッフの入退社・ビザ更新時は管理者に連絡</td><td>—</td></tr>
+<tr><td>毎日</td><td>職長がチェックした出面データを確認。入力漏れは代理入力で補助</td><td>出面入力</td></tr>
+<tr><td>随時</td><td>有給・帰国申請があれば「最終承認」／却下</td><td>ダッシュボード「勤怠申請」カード<br>or 有給・休み管理 → 申請タブ</td></tr>
+<tr><td>随時</td><td>有給付与の通知（🔔）が来たら「付与する」</td><td>通知ベル</td></tr>
+<tr><td>翌月〜10日頃</td><td>前月の出面データを最終確認</td><td>出面入力</td></tr>
+<tr><td>翌月〜10日頃</td><td>月次集計「日比建設」で集計・給与計算を確認</td><td>月次集計</td></tr>
+<tr><td>翌月〜10日頃</td><td>帳票を出力（出面表・給与明細・有給管理簿）</td><td>帳票出力</td></tr>
+<tr><td>翌月〜10日頃</td><td>問題なければ 🔒 月締めロック</td><td>月次集計</td></tr>
+<tr><td>随時</td><td>スタッフの入退社・ビザ更新時は靖仁さんに連絡</td><td>—</td></tr>
 </table>
 </div>
 
-<hr>
-
-<h2>補足：時給制と公平性について</h2>
-
-<div class="box">
-<p>ベトナム人スタッフは<strong>時給制</strong>のため、現場ごとに所定日数が違っても不公平は発生しません。</p>
-<table>
-<tr><th></th><th>現場A（22日稼働）</th><th>現場B（25日稼働）</th></tr>
-<tr><td>所定時間</td><td>22日 &times; 7h = 154h</td><td>25日 &times; 7h = 175h</td></tr>
-<tr><td>基本給</td><td>時給 &times; 154h</td><td>時給 &times; 175h</td></tr>
-</table>
-<p>所定日数が少ない現場 → 基本給も少ない → <strong>働いた分だけ支払う</strong>仕組みです。</p>
+<div class="box box-ok">
+<strong>不明点は管理者（靖仁さん）に気軽に聞いてください。</strong>
 </div>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-04-19</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-07-03</p>
 
 </body>
 </html>
