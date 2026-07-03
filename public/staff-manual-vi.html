@@ -5,34 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>スタッフ向けマニュアル / Hướng dẫn cho nhân viên - HIBI CONSTRUCTION</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 860px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
-  h1 { text-align: center; font-size: 24px; border-bottom: 3px solid #1B2A4A; padding-bottom: 12px; margin-bottom: 5px; }
-  .subtitle { text-align: center; font-size: 15px; color: #666; margin-bottom: 30px; }
-  h2 { font-size: 20px; color: white; background: #1B2A4A; padding: 10px 16px; border-radius: 8px; margin-top: 40px; }
-  h3 { font-size: 16px; color: #1B2A4A; margin-top: 24px; border-bottom: 2px solid #e0e0e0; padding-bottom: 4px; }
-  .vi { color: #2563EB; font-size: 0.95em; }
-  .section { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 12px; padding: 24px; margin: 20px 0; }
+  :root{
+    --charcoal:#20262F; --amber:#F5A623; --amber-dark:#DD9314;
+    --navy:#1B2A4A; --vi:#2563EB; --line:#E3E6EC;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif; max-width: 820px; margin: 0 auto; padding: 20px; color: var(--charcoal); line-height: 1.75; font-size: 15px; background:#fff; }
+  h1 { text-align: center; font-size: 24px; border-bottom: 4px solid var(--amber); padding-bottom: 12px; margin-bottom: 5px; color:var(--charcoal); }
+  .subtitle { text-align: center; font-size: 15px; color: #666; margin-bottom: 28px; }
+  h2 { font-size: 19px; color: white; background: var(--charcoal); padding: 10px 16px; border-radius: 10px; margin-top: 36px; }
+  h3 { font-size: 16px; color: var(--charcoal); margin-top: 22px; border-bottom: 2px solid var(--line); padding-bottom: 4px; }
+  .vi { color: var(--vi); font-size: 0.95em; }
+  .section { background: #FAFBFC; border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin: 18px 0; }
   table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
-  th, td { border: 1px solid #ccc; padding: 10px 12px; text-align: center; }
-  th { background: #1B2A4A; color: white; }
-  .phone-btn { border-radius: 16px; padding: 20px 28px; font-size: 18px; font-weight: bold; color: white; text-align: center; min-width: 130px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-  .btn-work { background: #1B2A4A; }
-  .btn-rest { background: #6B7280; }
-  .btn-leave { background: #16a34a; }
-  .btn-home { background: #a855f7; }
-  .point { background: #fef3c7; border: 2px solid #fbbf24; border-radius: 10px; padding: 16px; margin: 16px 0; }
-  .point-title { font-weight: bold; color: #92400e; font-size: 15px; }
-  .good { background: #f0fdf4; border: 2px solid #86efac; border-radius: 10px; padding: 16px; margin: 16px 0; }
-  .good-title { font-weight: bold; color: #16a34a; font-size: 15px; }
-  .warn { background: #fee2e2; border: 2px solid #fca5a5; border-radius: 10px; padding: 16px; margin: 16px 0; }
-  .warn-title { font-weight: bold; color: #dc2626; font-size: 15px; }
-  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; margin-right: 8px; }
+  th, td { border: 1px solid #d5dae2; padding: 9px 11px; text-align: center; vertical-align: middle; }
+  th { background: var(--charcoal); color: white; }
+  /* ボタンの見た目（実画面に合わせる） */
+  .btn { display:inline-block; border-radius: 12px; padding: 8px 18px; font-size: 14px; font-weight: bold; }
+  .btn-work { background: var(--amber); color: var(--charcoal); box-shadow: 0 3px 8px rgba(245,166,35,0.35); }
+  .btn-sub  { background: #fff; color: var(--charcoal); border: 2px solid #C9D0DA; }
+  .point { background: #FFF6E3; border: 2px solid #F2D9A0; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+  .point-title { font-weight: bold; color: #8A5A00; font-size: 15px; margin:0 0 4px; }
+  .good { background: #EAF7EE; border: 2px solid #9FDCB2; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+  .good-title { font-weight: bold; color: #15803D; font-size: 15px; margin:0 0 4px; }
+  .warn { background: #FDECEC; border: 2px solid #F4A9A9; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+  .warn-title { font-weight: bold; color: #C2413B; font-size: 15px; margin:0 0 4px; }
+  .step-num { background: var(--amber); color: var(--charcoal); border-radius: 50%; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; margin-right: 8px; }
+  p { margin: 8px 0; }
 
-  /* Phone mockup */
-  .phone-frame { max-width: 360px; margin: 20px auto; background: #f8f9ff; border: 3px solid #1B2A4A; border-radius: 24px; padding: 20px 16px; }
-  .phone-header { background: #1B2A4A; color: white; margin: -20px -16px 16px -16px; padding: 14px; border-radius: 20px 20px 0 0; }
-  .phone-card { background: white; border-radius: 12px; padding: 14px; margin: 10px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-  .info-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* Phone mockup（新デザイン: チャコール＋アンバー） */
+  .phone-frame { max-width: 340px; margin: 18px auto; background: #F1F2F5; border: 5px solid var(--charcoal); border-radius: 26px; padding: 0 0 16px; overflow:hidden; }
+  .phone-header { background: var(--charcoal); color: white; padding: 14px 16px; }
+  .phone-header b { font-size: 16px; }
+  .phone-header small { display:block; opacity:.7; font-size: 11px; }
+  .phone-body { padding: 12px 12px 0; }
+  .phone-card { background: white; border:1px solid var(--line); border-radius: 12px; padding: 12px; margin: 8px 0; }
+  .phone-hours { background:#FFF6E3; border:1px solid #F2D9A0; border-radius:12px; padding:12px; text-align:center; margin:8px 0; }
+  .phone-hours .big { font-size:22px; font-weight:800; color:#8A5A00; }
+  .phone-cta { background:var(--amber); color:var(--charcoal); border-radius:14px; text-align:center; padding:13px; font-weight:800; font-size:15px; margin:8px 0; box-shadow:0 4px 12px rgba(245,166,35,.4); }
+  .info-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
   @media print {
     body { font-size: 11px; padding: 0; margin: 0; max-width: 100%; line-height: 1.5; }
@@ -45,18 +55,18 @@
     th, td { padding: 4px 6px; }
     th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .point, .good, .warn { padding: 8px; margin: 8px 0; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .vi { color: #2563EB !important; }
+    .vi { color: var(--vi) !important; }
     a[href="/docs"] { display: none; }
     h2 { break-after: avoid; }
     .phone-frame { break-inside: avoid; }
   }
   @media (max-width: 600px) {
-    body { padding: 12px; font-size: 14px; line-height: 1.7; }
+    body { padding: 12px; font-size: 14px; }
     h1 { font-size: 20px; padding-bottom: 8px; }
-    .subtitle { font-size: 13px; margin-bottom: 20px; }
-    h2 { font-size: 17px; padding: 8px 12px; margin-top: 28px; }
-    h3 { font-size: 14px; margin-top: 18px; }
-    .section { padding: 16px; }
+    .subtitle { font-size: 13px; margin-bottom: 18px; }
+    h2 { font-size: 17px; padding: 8px 12px; margin-top: 26px; }
+    h3 { font-size: 14px; margin-top: 16px; }
+    .section { padding: 15px; }
     table { font-size: 12px; }
     th, td { padding: 6px 8px; }
     .info-cards { grid-template-columns: 1fr; }
@@ -65,24 +75,32 @@
 </head>
 <body>
 
-<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">&larr; システムに戻る / Quay lại hệ thống</a></div>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: var(--charcoal); text-decoration: none; font-size: 13px;">&larr; システムに戻る / Quay lại hệ thống</a></div>
 
 <h1>スタッフ向けマニュアル<br><span class="vi">Hướng dẫn cho nhân viên</span></h1>
 <div class="subtitle">
   技能実習生・特定技能の皆さまへ<br>
   <span class="vi">Dành cho các bạn thực tập sinh kỹ năng và kỹ năng đặc định</span><br>
-  <span style="font-size: 13px; color: #999;">最終更新 / Cập nhật: 2026年4月30日</span>
+  <span style="font-size: 13px; color: #999;">最終更新 / Cập nhật: 2026年7月3日</span>
+</div>
+
+<!-- ===== まず覚える3つ ===== -->
+<div class="good">
+  <p class="good-title">📱 覚えることは3つだけ / Chỉ cần nhớ 3 điều</p>
+  <p style="margin:0;">
+    ① <strong>毎日、出勤登録</strong> / Đăng ký đi làm mỗi ngày<br>
+    ② <strong>休むときは届出</strong>（欠勤・有給・帰国）/ Khi nghỉ thì nộp đơn<br>
+    ③ <strong>毎月、翌月カレンダーに署名</strong> / Ký lịch tháng sau mỗi tháng
+  </p>
 </div>
 
 <!-- ===== 目次 ===== -->
-<h2>📖 目次 / Mục lục</h2>
 <div class="section">
-<ol style="font-size: 15px; line-height: 2;">
+<ol style="font-size: 15px; line-height: 1.9; margin:0; padding-left:20px;">
   <li>毎日の出勤登録 / Đăng ký đi làm hàng ngày</li>
   <li>休みの届出（3種類）/ Đơn nghỉ (3 loại)</li>
   <li>就業カレンダーの署名 / Ký xác nhận lịch làm việc</li>
-  <li>有給残日数の確認（5月から）/ Xem ngày nghỉ phép còn lại (từ tháng 5)</li>
-  <li>道具代の残金確認（5月から）/ Xem tiền dụng cụ còn lại (từ tháng 5)</li>
+  <li>有給・道具代の残りを見る / Xem phép năm & tiền dụng cụ còn lại</li>
   <li>過去5日分の修正 / Sửa 5 ngày trước</li>
   <li>困ったときは / Khi gặp khó khăn</li>
 </ol>
@@ -92,70 +110,45 @@
 <h2>1. 毎日の出勤登録 / Đăng ký đi làm hàng ngày</h2>
 
 <div class="section">
-  <p>毎日の仕事の前後にスマホで出勤登録してください。<br>
-  <span class="vi">Trước và sau giờ làm mỗi ngày, hãy đăng ký đi làm bằng điện thoại.</span></p>
+  <p>毎日の仕事のあと、スマホの<strong>個人URL</strong>を開いて出勤登録します。画面の一番上に自分の名前が出ているか必ず確認してください。<br>
+  <span class="vi">Sau giờ làm mỗi ngày, mở <strong>URL cá nhân</strong> để đăng ký. Hãy kiểm tra đúng tên mình ở trên cùng màn hình.</span></p>
 
-  <p>画面の上に自分の名前とベトナム語名（例：「ヴゥ ドゥック リン さん / Vu Duc Linh」）が表示されます。自分の画面か必ず確認してください。<br>
-  <span class="vi">Phía trên màn hình hiển thị tên tiếng Nhật và tên tiếng Việt của bạn (VD: "ヴゥ ドゥック リン さん / Vu Duc Linh"). Hãy kiểm tra đúng là màn hình của mình.</span></p>
+  <div class="phone-frame">
+    <div class="phone-header"><b>グエン ヴァン ナム さん</b><small>Nguyễn Văn Nam ／ 7月3日（金）</small></div>
+    <div class="phone-body">
+      <div class="phone-card" style="font-size:12px;"><span style="color:#8A93A3;">げんば / Công trường</span><br><b>IHI相生</b></div>
+      <div class="phone-card" style="display:flex; gap:8px; font-size:12px; text-align:center;">
+        <div style="flex:1;"><span style="color:#8A93A3;">始業 / Bắt đầu</span><br><b style="font-size:16px;">07:30</b></div>
+        <div style="flex:1;"><span style="color:#8A93A3;">終業 / Kết thúc</span><br><b style="font-size:16px;">16:30</b></div>
+      </div>
+      <div class="phone-hours"><span style="font-size:10px; color:#8A5A00;">実労働時間 / Giờ làm thực tế</span><br><span class="big">7時間0分</span></div>
+      <div class="phone-cta">出勤登録 / Xác nhận đi làm</div>
+    </div>
+  </div>
 
   <h3>手順 / Các bước</h3>
+  <p><span class="step-num">1</span><strong>現場</strong>を選ぶ（「げんば / Công trường」）→ 始業・終業時刻が自動でセットされる<br>
+  <span class="vi">Chọn <strong>công trường</strong> → giờ bắt đầu / kết thúc tự động điền</span></p>
 
-  <p><span class="step-num">1</span>配布された<strong>個人URL</strong>をブラウザで開く<br>
-  <span class="vi">Mở <strong>URL cá nhân</strong> đã được phát trên trình duyệt</span></p>
+  <p><span class="step-num">2</span><strong>始業・終業の時刻</strong>を確認。違う日は時刻を選び直す<br>
+  <span class="vi">Kiểm tra <strong>giờ bắt đầu / kết thúc</strong>. Nếu khác thì chọn lại</span></p>
 
-  <p><span class="step-num">2</span><strong>現場</strong>を選ぶ → 始業時刻・終業時刻が自動でセットされる<br>
-  <span class="vi">Chọn <strong>công trường</strong> → giờ bắt đầu / kết thúc tự động được điền</span></p>
+  <p><span class="step-num">3</span><strong>休憩</strong>のチェックを確認（午前・午後。通常はON）<br>
+  <span class="vi">Kiểm tra <strong>nghỉ giải lao</strong> (sáng・chiều, thường bật ON)</span></p>
 
-  <div class="good">
-    <p class="good-title">✅ 現場ごとの始業・終業（自動セット）/ Giờ làm theo công trường (tự động)</p>
-    <p>IHI現場を選ぶと <strong>7:30 / 16:30</strong>、その他の現場は <strong>8:00 / 17:00</strong> が初期表示されます。必要なら手で前後に変更できます。<br>
-    <span class="vi">Chọn công trường IHI → <strong>7:30 / 16:30</strong>, các công trường khác → <strong>8:00 / 17:00</strong>. Có thể chỉnh tay nếu cần.</span></p>
-  </div>
-
-  <p><span class="step-num">3</span>休憩のチェックボックスを確認（通常はすべてON）<br>
-  <span class="vi">Kiểm tra checkbox nghỉ giải lao (thường bật tất cả)</span></p>
-
-  <table>
-    <tr><th>チェック / Checkbox</th><th>時間 / Thời gian</th><th>説明 / Ghi chú</th></tr>
-    <tr><td>☑ 午前休憩 / Nghỉ sáng（30分 / 30 phút）</td><td>10:00〜10:30</td><td>取った時ON / Bật khi nghỉ</td></tr>
-    <tr><td>☑ 午後休憩 / Nghỉ chiều（30分 / 30 phút）</td><td>15:00〜15:30</td><td>取った時ON / Bật khi nghỉ</td></tr>
-  </table>
+  <p><span class="step-num">4</span><span class="btn btn-work">出勤登録 / Xác nhận đi làm</span> を押す<br>
+  <span class="vi">Nhấn nút <strong>"Xác nhận đi làm"</strong> (màu cam)</span></p>
 
   <div class="point">
-    <p class="point-title">💡 昼休み（60分）は自動 / Nghỉ trưa (60 phút) tự động</p>
-    <p>昼休み（12:00〜13:00 60分）はチェック欄に表示されません。<strong>自動的に取得扱い</strong>になります。<br>
-    <span class="vi">Nghỉ trưa (12:00〜13:00, 60 phút) không hiển thị trên checkbox, hệ thống <strong>tự động tính là đã nghỉ</strong>.</span></p>
-  </div>
-
-  <p><span class="step-num">4</span>残業した日は画面の<strong>残業 ＋／−</strong>ボタンで時間を調整<br>
-  <span class="vi">Ngày tăng ca: dùng nút <strong>残業 ＋／−</strong> để điều chỉnh thời gian</span></p>
-
-  <p><span class="step-num">5</span><span class="phone-btn btn-work" style="display:inline-block; padding: 8px 20px; font-size: 14px;">出勤登録 / Xác nhận đi làm</span>ボタンを押す → <strong>「そうしんちゅう / Đang gửi...」</strong>と表示されたら送信中<br>
-  <span class="vi">Nhấn nút "Xác nhận đi làm" → khi hiện <strong>"そうしんちゅう / Đang gửi..."</strong> nghĩa là đang gửi</span></p>
-
-  <div class="good">
-    <p class="good-title">✅ 通常の日（残業なし）/ Ngày bình thường (không tăng ca)</p>
-    <p>現場を選ぶ → 休憩ON のまま「出勤登録」を押すだけ<br>
-    <span class="vi">Chọn công trường → giữ nghỉ giải lao ON → nhấn "Xác nhận đi làm"</span></p>
-    <p class="good-title" style="margin-top: 10px;">✅ 残業の日 / Ngày tăng ca</p>
-    <p>残業ボタン（大きくて軍手でも押しやすい）で時間を足す → 「出勤登録」<br>
-    <span class="vi">Dùng nút tăng ca (to, đeo găng tay vẫn bấm được) để cộng giờ → "Xác nhận đi làm"</span></p>
+    <p class="point-title">💡 休憩と実労働時間 / Nghỉ giải lao & giờ làm</p>
+    <p style="margin:0;">昼休み（60分）は自動で計算されます。午前・午後の休憩を取らなかった日はチェックを外してください（外すと赤い文字が出ます）。実労働時間はアンバー色のカードに自動表示されます。<br>
+    <span class="vi">Nghỉ trưa (60 phút) tự động tính. Ngày không nghỉ sáng/chiều thì bỏ tick (sẽ hiện chữ đỏ). Giờ làm hiện tự động ở thẻ màu cam.</span></p>
   </div>
 
   <div class="point">
-    <p class="point-title">📡 通信エラー・読み込み中の表示 / Hiển thị khi lỗi mạng / đang tải</p>
-    <p>画面に次の表示が出ることがあります：<br>
-    ・<strong>「よみこみちゅう... / Đang tải...」</strong> ＝ データを読み込み中<br>
-    ・<strong>「つうしん エラー / Lỗi kết nối」「エラー / Lỗi」</strong> ＝ 電波が悪い、もう一度試してください<br>
-    <span class="vi">Có thể hiện：<br>
-    ・<strong>"よみこみちゅう... / Đang tải..."</strong> = đang tải dữ liệu<br>
-    ・<strong>"つうしん エラー / Lỗi kết nối", "エラー / Lỗi"</strong> = sóng yếu, hãy thử lại</span></p>
-  </div>
-
-  <div class="point">
-    <p class="point-title">⚠ 毎日必ず入力してください / Hãy nhập mỗi ngày</p>
-    <p>入力を忘れると給与計算に影響します。どうしても忘れた場合は<strong>過去5日まで</strong>修正できます。<br>
-    <span class="vi">Quên nhập sẽ ảnh hưởng đến tính lương. Nếu quên, có thể sửa <strong>trong vòng 5 ngày</strong>.</span></p>
+    <p class="point-title">⚠ 毎日必ず入力 / Nhập mỗi ngày</p>
+    <p style="margin:0;">入力を忘れると給料の計算に影響します。忘れた日は<strong>過去5日まで</strong>あとから直せます（→6章）。<br>
+    <span class="vi">Quên nhập sẽ ảnh hưởng tính lương. Có thể sửa <strong>trong vòng 5 ngày</strong> (xem mục 6).</span></p>
   </div>
 </div>
 
@@ -163,361 +156,177 @@
 <h2>2. 休みの届出（3種類）/ Đơn nghỉ (3 loại)</h2>
 
 <div class="section">
-  <p>休む理由によって届出の種類が変わります。用途に合わせて正しいボタンを押してください。<br>
-  <span class="vi">Tùy theo lý do nghỉ, có 3 loại đơn khác nhau. Hãy nhấn nút đúng theo trường hợp.</span></p>
+  <p>休む理由で届出が変わります。正しいボタンを押してください。<br>
+  <span class="vi">Tùy lý do nghỉ, chọn đúng nút.</span></p>
 
   <table>
-    <tr><th>種類 / Loại</th><th>いつ使う / Khi nào</th><th>期限 / Hạn nộp</th></tr>
+    <tr><th>種類 / Loại</th><th>いつ使う / Khi nào</th><th>期限 / Hạn</th></tr>
     <tr>
-      <td><strong style="color: #6B7280;">欠勤届 / Xin nghỉ</strong></td>
-      <td>当日・急な休み<br><span class="vi">Nghỉ đột xuất, trong ngày</span></td>
-      <td>当日でもOK<br><span class="vi">Được nộp trong ngày</span></td>
+      <td><strong>欠勤届<br><span class="vi">Xin nghỉ</span></strong></td>
+      <td>当日・急な休み<br><span class="vi">Nghỉ đột xuất</span></td>
+      <td>当日OK<br><span class="vi">Trong ngày</span></td>
     </tr>
     <tr>
-      <td><strong style="color: #16a34a;">有給申請 / Xin phép có lương</strong></td>
-      <td>計画的な休み（有給消化）<br><span class="vi">Nghỉ có kế hoạch (dùng phép năm)</span></td>
-      <td><strong>5日前まで</strong><br><span class="vi"><strong>Trước 5 ngày</strong></span></td>
+      <td><strong style="color:#15803D;">有給申請<br><span class="vi" style="color:#15803D;">Xin phép</span></strong></td>
+      <td>計画的な休み（有給）<br><span class="vi">Nghỉ có kế hoạch</span></td>
+      <td><strong>5日前まで</strong><br><span class="vi">Trước 5 ngày</span></td>
     </tr>
     <tr>
-      <td><strong style="color: #a855f7;">帰国申請 / Xin về nước</strong></td>
-      <td>長期の一時帰国<br><span class="vi">Về nước tạm thời dài ngày</span></td>
-      <td>原則 <strong>3ヶ月前まで</strong><br><span class="vi">Nguyên tắc <strong>trước 3 tháng</strong></span></td>
+      <td><strong style="color:#7C3AED;">帰国申請<br><span class="vi" style="color:#7C3AED;">Xin về nước</span></strong></td>
+      <td>長期の一時帰国<br><span class="vi">Về nước dài ngày</span></td>
+      <td><strong>3ヶ月前まで</strong><br><span class="vi">Trước 3 tháng</span></td>
     </tr>
   </table>
 
   <h3>2-1. 欠勤届 / Xin nghỉ đột xuất</h3>
-
-  <p>カレンダーで「出勤日」に休む場合に使います。体調不良・通院・家族の事情など。<br>
-  <span class="vi">Dùng khi nghỉ vào ngày "đi làm" trên lịch. Lý do: ốm, khám bệnh, việc gia đình...</span></p>
-
-  <p><span class="step-num">1</span><span class="phone-btn btn-rest" style="display:inline-block; padding: 8px 16px; font-size: 14px;">欠勤届 / Xin nghỉ</span>ボタンを押す</p>
-  <p><span class="step-num">2</span>理由を選ぶ（体調不良 / 通院 / 私用 / 家族の事情 / 帰国関連 / その他）<br>
-  <span class="vi">Chọn lý do (Sức khỏe / Khám bệnh / Việc riêng / Gia đình / Về nước / Khác)</span></p>
-  <p><span class="step-num">3</span>提出 → 職長と上司が確認</p>
+  <p>出勤日に急に休むとき（体調不良・通院など）。<span class="btn btn-sub" style="padding:4px 12px; font-size:13px;">欠勤届 / Xin nghỉ</span>を押す → 理由を選ぶ（体調不良／通院／私用／家族の事情／帰国関連／その他）→ 提出。<br>
+  <span class="vi">Nghỉ đột xuất ngày đi làm. Nhấn "Xin nghỉ" → chọn lý do (ốm / khám bệnh / việc riêng / gia đình / về nước / khác) → gửi.</span></p>
 
   <h3>2-2. 有給申請 / Xin phép có lương</h3>
-
-  <p>計画的に有給休暇を取りたい場合に使います。<br>
-  <span class="vi">Dùng khi muốn nghỉ có kế hoạch dùng phép năm.</span></p>
-
-  <p><span class="step-num">1</span><span class="phone-btn btn-leave" style="display:inline-block; padding: 8px 16px; font-size: 14px;">有給申請 / Xin phép</span>ボタンを押す</p>
-  <p><span class="step-num">2</span>日付を選ぶ（<strong>5日先以降のみ</strong>選択可能）<br>
-  <span class="vi">Chọn ngày (chỉ chọn được từ 5 ngày sau trở đi)</span></p>
-  <p><span class="step-num">3</span>連続休暇の場合は開始日〜終了日を範囲指定（日曜は自動除外）<br>
-  <span class="vi">Nghỉ liên tục: chọn ngày bắt đầu 〜 ngày kết thúc (Chủ nhật tự động loại)</span></p>
-  <p><span class="step-num">4</span>提出 → 職長承認 → 上司最終承認 → カレンダーに反映</p>
+  <p><span class="btn btn-sub" style="padding:4px 12px; font-size:13px;">有給申請 / Xin phép</span>を押す → 開始日〜終了日を選ぶ（<strong>5日先以降</strong>のみ、日曜は自動除外）→ 提出。<br>
+  <span class="vi">Nhấn "Xin phép" → chọn ngày bắt đầu 〜 kết thúc (chỉ từ 5 ngày sau, Chủ nhật tự loại) → gửi.</span></p>
 
   <div class="point">
-    <p class="point-title">⚠ 有給は5日前まで / Xin phép trước 5 ngày</p>
-    <p>原則5日前までに申請してください。緊急の場合は「欠勤届」で当日届出もできます。<br>
-    <span class="vi">Nguyên tắc xin trước 5 ngày. Trường hợp khẩn cấp, có thể dùng "Xin nghỉ" trong ngày.</span></p>
-  </div>
-
-  <h3>有給申請の取り消し / Hủy đơn xin phép</h3>
-
-  <p>間違えて申請した場合や、予定が変わった場合は、自分で取り消せます。<br>
-  <span class="vi">Nếu nộp nhầm hoặc thay đổi kế hoạch, bạn có thể tự hủy đơn.</span></p>
-
-  <p><span class="step-num">1</span>申請履歴で<strong>⏳ 承認待ち / Đang chờ</strong>の行の右側にある<strong>「取り消し / Hủy」</strong>ボタンをタップ<br>
-  <span class="vi">Trong lịch sử đơn, ở dòng <strong>⏳ Đang chờ</strong>, nhấn nút <strong>"取り消し / Hủy"</strong> bên phải</span></p>
-  <p><span class="step-num">2</span>確認ダイアログで「OK」を押す → 取り消し完了<br>
-  <span class="vi">Nhấn "OK" trên hộp thoại xác nhận → hủy xong</span></p>
-  <p><span class="step-num">3</span>取り消した申請は履歴に薄く<strong>🚫 取り消し済 / Đã hủy</strong>と残ります<br>
-  <span class="vi">Đơn đã hủy vẫn lưu trong lịch sử với chữ mờ <strong>🚫 取り消し済 / Đã hủy</strong></span></p>
-
-  <div class="good">
-    <p class="good-title">✅ 同じ日付で再申請OK / Có thể xin lại cùng ngày</p>
-    <p>取り消した日や却下された日は、<strong>同じ日付でもう一度申請</strong>できます。<br>
-    <span class="vi">Ngày đã hủy hoặc bị từ chối có thể <strong>xin lại với cùng ngày</strong>.</span></p>
-  </div>
-
-  <div class="warn">
-    <p class="warn-title">🔒 職長が確認した後は取り消し不可 / Đốc công duyệt rồi không hủy được</p>
-    <p>職長が確認済み（🔵 職長済 / Đốc công OK）になると「取り消し」ボタンは消え、<strong>「会社に連絡 / Liên hệ công ty」</strong>と表示されます。取り消しが必要なら職長または会社に直接相談してください。<br>
-    <span class="vi">Khi đốc công đã xác nhận (🔵 Đốc công OK), nút "Hủy" sẽ biến mất và hiển thị <strong>"会社に連絡 / Liên hệ công ty"</strong>. Cần hủy thì hỏi đốc công hoặc liên hệ trực tiếp công ty.</span></p>
+    <p class="point-title">🌴 残り日数をチェックします / Kiểm tra số ngày còn lại</p>
+    <p style="margin:0;">申請画面に有給の残り日数が出ます。<strong>残りが0日、または申請日数が残りを超えるときは申請できません</strong>（ボタンが押せなくなります）。残り1〜3日のときは黄色で注意表示されます。<br>
+    <span class="vi">Màn hình hiện số phép còn lại. <strong>Nếu còn 0 ngày hoặc xin quá số còn lại thì không gửi được</strong> (nút bị khóa). Còn 1〜3 ngày sẽ hiện cảnh báo vàng.</span></p>
   </div>
 
   <h3>2-3. 帰国申請 / Xin về nước</h3>
+  <p>長期の一時帰国（ビザ更新・家族事情など）。画面下の<span class="btn btn-sub" style="padding:4px 12px; font-size:13px;">✈️ 帰国申請 / Xin về nước</span>を押す → 出発日（最短90日後）と帰国日を選ぶ（出発日を変えると帰国日が自動で＋7日）→ 理由を選ぶ（一時帰国／ビザ更新帰国／その他）→ 提出。承認されると帰国期間の出面に「帰国中」が自動記録されます。<br>
+  <span class="vi">Về nước dài ngày. Nhấn "Xin về nước" → chọn ngày đi (sớm nhất 90 ngày sau) và ngày về (đổi ngày đi thì ngày về tự +7) → chọn lý do → gửi. Được duyệt thì chấm công tự ghi "Về nước".</span></p>
 
-  <p>長期の一時帰国（ビザ更新・家族事情など）で使います。<br>
-  <span class="vi">Dùng khi về nước dài ngày (gia hạn visa, việc gia đình...).</span></p>
-
-  <p><span class="step-num">1</span>スマホ画面の<span class="phone-btn btn-home" style="display:inline-block; padding: 8px 16px; font-size: 14px;">✈️ 帰国申請 / Xin về nước</span>ボタンをタップ → 申請モーダルが開く<br>
-  <span class="vi">Nhấn nút <strong>"✈️ 帰国申請 / Xin về nước"</strong> → mở hộp thoại đăng ký</span></p>
-  <p><span class="step-num">2</span>モーダルを開くたびに日付が自動でセットされる：<strong>出発日＝最短申請日（90日後）／帰国日＝出発日＋7日</strong><br>
-  <span class="vi">Mỗi lần mở hộp thoại, ngày được tự động đặt: <strong>ngày đi = ngày sớm nhất có thể xin (90 ngày sau) / ngày về = ngày đi + 7 ngày</strong></span></p>
-  <p><span class="step-num">3</span>出発日を変えると、帰国日が自動で<strong>＋7日</strong>に再計算される（必要なら手で変更可）<br>
-  <span class="vi">Khi đổi ngày đi, ngày về tự động tính lại <strong>+7 ngày</strong> (có thể chỉnh tay nếu cần)</span></p>
-  <p><span class="step-num">4</span>理由を選ぶ（一時帰国 / ビザ更新帰国 / その他）<br>
-  <span class="vi">Chọn lý do (Về tạm thời / Gia hạn visa / Khác)</span></p>
-  <p><span class="step-num">5</span>提出 → 職長承認 → 上司最終承認<br>
-  承認されると、帰国期間中の出面に「帰国中」が自動で記録されます。<br>
-  <span class="vi">Được duyệt → Chấm công tự động ghi "Về nước" trong thời gian về nước.</span></p>
-
-  <h3>帰国申請の取り消し / Hủy đơn xin về nước</h3>
-
-  <p>有給と同じく、<strong>⏳ 承認待ち / Đang chờ</strong>のときだけ自分で取り消せます。<br>
-  <span class="vi">Giống xin phép, chỉ khi đơn ở trạng thái <strong>⏳ Đang chờ</strong> mới tự hủy được.</span></p>
-
-  <p><span class="step-num">1</span>申請履歴の右側<strong>「取り消し / Hủy」</strong>ボタンをタップ → 確認 → OK<br>
-  <span class="vi">Nhấn nút <strong>"取り消し / Hủy"</strong> bên phải lịch sử → xác nhận → OK</span></p>
-  <p><span class="step-num">2</span>職長承認後（🔵 職長済）は取り消し不可。会社に直接連絡してください。<br>
-  <span class="vi">Sau khi đốc công duyệt (🔵 Đốc công OK) thì không hủy được, hãy liên hệ trực tiếp công ty.</span></p>
-
-  <div class="warn">
-    <p class="warn-title">🚨 帰国申請は3ヶ月前まで / Xin về nước trước 3 tháng</p>
-    <p>原則、出発日の<strong>3ヶ月前まで</strong>に申請してください。<br>
-    身内の不幸など緊急やむを得ない場合は、会社に直接相談してください。<br>
-    <span class="vi">Nguyên tắc xin <strong>trước 3 tháng</strong> so với ngày đi.<br>
-    Trường hợp khẩn cấp (tang gia...), hãy liên hệ trực tiếp công ty.</span></p>
-  </div>
-
-  <h3>申請の状況確認 / Xem trạng thái đơn</h3>
-
-  <p>提出した申請の状況は画面で確認できます。<br>
-  <span class="vi">Có thể xem trạng thái đơn trên màn hình.</span></p>
-
+  <h3>申請の状況と取り消し / Trạng thái & hủy đơn</h3>
   <table>
     <tr><th>表示 / Trạng thái</th><th>意味 / Ý nghĩa</th></tr>
-    <tr><td style="background: #fef9c3;">⏳ 承認待ち / Đang chờ</td><td>職長の確認を待っています / Đang chờ đốc công xác nhận</td></tr>
-    <tr><td style="background: #dbeafe;">🔵 職長済 / Đốc công OK</td><td>上司の最終承認を待っています / Chờ quản lý duyệt cuối</td></tr>
-    <tr><td style="background: #dcfce7;">✅ 承認済 / Đã duyệt</td><td>承認されました / Đã được chấp nhận</td></tr>
-    <tr><td style="background: #fee2e2;">❌ 却下 / Từ chối</td><td>理由を確認してください。同じ日付で再申請OK / Hãy xem lý do, có thể xin lại cùng ngày</td></tr>
-    <tr><td style="background: #f3f4f6; color: #6b7280;">🚫 取り消し済 / Đã hủy</td><td>自分で取り消した申請。同じ日付で再申請OK / Đơn tự hủy, có thể xin lại cùng ngày</td></tr>
+    <tr><td style="background:#FEF9C3;">⏳ 承認待ち / Đang chờ</td><td>職長の確認待ち。ここでは自分で「取り消し / Hủy」できます / Chờ đốc công. Có thể tự "Hủy"</td></tr>
+    <tr><td style="background:#DBEAFE;">🔵 職長済 / Đốc công OK</td><td>上司の最終承認待ち / Chờ quản lý duyệt cuối</td></tr>
+    <tr><td style="background:#DCFCE7;">✅ 承認済 / Đã duyệt</td><td>承認されました / Đã chấp nhận</td></tr>
+    <tr><td style="background:#FEE2E2;">❌ 却下 / Từ chối</td><td>同じ日付で再申請OK / Có thể xin lại cùng ngày</td></tr>
+    <tr><td style="background:#F3F4F6; color:#6B7280;">🚫 取り消し済 / Đã hủy</td><td>同じ日付で再申請OK / Có thể xin lại cùng ngày</td></tr>
   </table>
+  <div class="warn">
+    <p class="warn-title">🔒 職長が確認した後は自分で取り消せません / Đốc công duyệt rồi không tự hủy</p>
+    <p style="margin:0;">「🔵 職長済」になると「取り消し」ボタンは消えます。取り消したいときは職長か会社に直接連絡してください。<br>
+    <span class="vi">Khi thành "🔵 Đốc công OK" thì nút "Hủy" biến mất. Cần hủy hãy liên hệ đốc công hoặc công ty.</span></p>
+  </div>
 </div>
 
-<!-- ===== 3. 就業カレンダー署名 ===== -->
+<!-- ===== 3. カレンダー署名 ===== -->
 <h2>3. 就業カレンダーの署名 / Ký xác nhận lịch làm việc</h2>
 
 <div class="section">
   <p>毎月、翌月の出勤日・休みを決めたカレンダーに署名します。<br>
-  <span class="vi">Mỗi tháng ký xác nhận lịch làm việc của tháng tiếp theo.</span></p>
+  <span class="vi">Mỗi tháng ký xác nhận lịch làm việc tháng sau.</span></p>
 
-  <h3>手順 / Các bước</h3>
-
-  <p><span class="step-num">1</span>Messengerで送られてくる<strong>カレンダーURL</strong>をタップ<br>
-  <span class="vi">Nhấn vào <strong>URL lịch</strong> được gửi qua Messenger</span></p>
-
-  <p><span class="step-num">2</span>一覧から<strong>自分の名前</strong>を選ぶ<br>
-  <span class="vi">Chọn <strong>tên của bạn</strong> từ danh sách</span></p>
-
-  <p><span class="step-num">3</span>翌月のカレンダーを確認（青=出勤、グレー=休み）<br>
+  <p><span class="step-num">1</span>Messengerで届く<strong>カレンダーURL</strong>、またはスマホ画面上部の<strong>カレンダー承認バナー</strong>を開く<br>
+  <span class="vi">Mở <strong>URL lịch</strong> gửi qua Messenger, hoặc <strong>banner xác nhận lịch</strong> ở trên màn hình</span></p>
+  <p><span class="step-num">2</span>翌月のカレンダーを確認（青=出勤、グレー=休み）<br>
   <span class="vi">Xem lịch tháng sau (xanh = đi làm, xám = nghỉ)</span></p>
-
-  <p><span class="step-num">4</span><strong>「全ての現場のカレンダーを確認しました」</strong>ボタンを押す<br>
-  <span class="vi">Nhấn nút <strong>"Tôi đã xác nhận nội dung tất cả công trường"</strong></span></p>
+  <p><span class="step-num">3</span><strong>自分の氏名を入力</strong>し、「内容を確認しました」にチェック → <strong>「承認する / Xác nhận」</strong>を押す<br>
+  <span class="vi">Nhập <strong>tên của bạn</strong>, tick "Đã xác nhận nội dung" → nhấn <strong>"Xác nhận"</strong></span></p>
 
   <div class="good">
-    <p class="good-title">✅ 1回で全現場まとめて署名できます / Ký 1 lần cho tất cả công trường</p>
-    <p>複数の現場で働いている場合も、「全ての現場」ボタンで一度にすべての現場の署名が完了します。<br>
-    <span class="vi">Nếu làm ở nhiều công trường, chỉ cần nhấn nút "Tất cả công trường" là ký được hết cùng lúc.</span></p>
+    <p class="good-title">✅ 全現場まとめて署名 / Ký hết cùng lúc</p>
+    <p style="margin:0;">複数の現場で働いていても、1回の承認ですべての現場の署名が完了します。質問や違うところがあれば、同じ画面から会社に伝えられます。<br>
+    <span class="vi">Làm nhiều công trường vẫn ký hết bằng 1 lần. Có câu hỏi hay chỗ khác thì báo công ty ngay trên màn hình đó.</span></p>
   </div>
 
   <div class="point">
-    <p class="point-title">⚠ 月末までに必ず署名してください / Phải ký trước cuối tháng</p>
-    <p>翌月のカレンダーに月末までに署名してください。未署名があると会社から通知が届きます。<br>
-    <span class="vi">Phải ký lịch tháng sau trước cuối tháng. Chưa ký sẽ nhận được thông báo từ công ty.</span></p>
+    <p class="point-title">⚠ 月末までに署名 / Ký trước cuối tháng</p>
+    <p style="margin:0;">未署名があると会社から通知が届きます。カレンダーが修正されたときは<strong>もう一度署名</strong>が必要です（🔄マークが出ます）。<br>
+    <span class="vi">Chưa ký sẽ nhận thông báo. Lịch bị sửa thì phải <strong>ký lại</strong> (hiện dấu 🔄).</span></p>
   </div>
 </div>
 
-<!-- ===== 4. 有給残日数 ===== -->
-<h2>4. 有給残日数の確認（5月から）/ Xem ngày nghỉ phép còn lại (từ tháng 5)</h2>
+<!-- ===== 4. 有給・道具代の残り ===== -->
+<h2>4. 有給・道具代の残りを見る / Xem phép năm & tiền dụng cụ còn lại</h2>
 
 <div class="section">
-  <p><strong>2026年5月1日から</strong>、スマホ画面に有給休暇の残り日数が表示されます。<br>
-  <span class="vi"><strong>Từ ngày 1 tháng 5 năm 2026</strong>, số ngày nghỉ phép còn lại sẽ hiển thị trên điện thoại.</span></p>
+  <p>出勤登録の画面に、有給の残り日数と道具代の残金カードが表示されます。<br>
+  <span class="vi">Trên màn hình đăng ký có thẻ số phép còn lại và tiền dụng cụ còn lại.</span></p>
 
-  <div class="phone-frame">
-    <div class="phone-header" style="text-align: center; font-weight: bold;">出勤登録画面 / Màn hình đi làm</div>
-    <div class="phone-card" style="text-align: center; color: #999; font-size: 13px;">[出勤登録ボタンなど]</div>
-    <div class="info-cards">
-      <div class="phone-card" style="text-align: center;">
-        <div style="font-size: 11px; color: #999;">🌴 有給残り / Nghỉ phép còn</div>
-        <div style="font-size: 22px; font-weight: bold; color: #16a34a; margin-top: 4px;">8<span style="font-size: 14px; color: #999; margin-left: 4px;">日</span></div>
-        <div style="font-size: 11px; color: #999; margin-top: 2px;">2028/05まで / đến 2028/05</div>
-      </div>
-      <div class="phone-card" style="text-align: center;">
-        <div style="font-size: 11px; color: #999;">🔧 道具代残り / Tiền dụng cụ còn</div>
-        <div style="font-size: 20px; font-weight: bold; color: #2563EB; margin-top: 4px;">¥18,500</div>
-        <div style="font-size: 11px; color: #999; margin-top: 2px;">期間 / Kỳ<br>2026/2/7 〜 2027/2/6</div>
+  <div class="phone-frame" style="max-width:320px;">
+    <div class="phone-body" style="padding-top:12px;">
+      <div class="info-cards">
+        <div class="phone-card" style="text-align:center;">
+          <div style="font-size:11px; color:#8A93A3;">🌴 有給残り / Nghỉ phép còn</div>
+          <div style="font-size:22px; font-weight:bold; color:#15803D; margin-top:4px;">5<span style="font-size:13px; color:#999; margin-left:3px;">日</span></div>
+          <div style="font-size:10px; color:#999; margin-top:3px;">繰越2 / 当期3</div>
+        </div>
+        <div class="phone-card" style="text-align:center;">
+          <div style="font-size:11px; color:#8A93A3;">🔧 道具代残り / Tiền dụng cụ</div>
+          <div style="font-size:19px; font-weight:bold; color:var(--vi); margin-top:4px;">¥18,000</div>
+          <div style="font-size:10px; color:#999; margin-top:3px;">〜2027/2/6</div>
+        </div>
       </div>
     </div>
-    <div class="phone-card" style="text-align: center; color: #999; font-size: 13px;">[最近5日の履歴]</div>
   </div>
 
-  <h3>有給の仕組み / Cách tính phép năm</h3>
-
-  <table>
-    <tr>
-      <th>勤続年数<br><span class="vi">Thâm niên</span></th>
-      <th>6ヶ月<br>6 tháng</th>
-      <th>1年半<br>1,5 năm</th>
-      <th>2年半<br>2,5 năm</th>
-      <th>3年半<br>3,5 năm</th>
-      <th>4年半<br>4,5 năm</th>
-      <th>5年半<br>5,5 năm</th>
-      <th>6年半〜<br>6,5 năm〜</th>
-    </tr>
-    <tr>
-      <td>付与日数 / Ngày cấp</td>
-      <td><strong>10</strong></td><td><strong>11</strong></td><td><strong>12</strong></td>
-      <td><strong>14</strong></td><td><strong>16</strong></td><td><strong>18</strong></td><td><strong>20</strong></td>
-    </tr>
-  </table>
+  <h3>有給休暇 / Nghỉ phép có lương</h3>
+  <p>残り日数は「<strong>繰越分</strong>（前の年から持ち越した分）」と「<strong>当期分</strong>（今の年にもらった分）」に分かれて表示され、それぞれ有効期限（年月）も出ます。有給は<strong>2年間</strong>有効です。使わないと消えるので、計画的に取りましょう。<br>
+  <span class="vi">Số còn lại chia thành "<strong>Chuyển sang</strong> (từ năm trước)" và "<strong>Hiện tại</strong> (năm nay)", mỗi loại có hạn dùng (năm/tháng). Phép có hiệu lực <strong>2 năm</strong>, không dùng sẽ mất — hãy nghỉ có kế hoạch.</span></p>
 
   <div class="point">
-    <p class="point-title">⚠ 年5日は必ず取得してください / Phải nghỉ ít nhất 5 ngày/năm</p>
-    <p>10日以上付与された人は、1年以内に<strong>5日以上</strong>有給を取る義務があります（法律）。<br>
+    <p class="point-title">⚠ 年5日は必ず取得 / Phải nghỉ ít nhất 5 ngày/năm</p>
+    <p style="margin:0;">10日以上もらった人は、1年以内に<strong>5日以上</strong>有給を取る義務があります（法律）。<br>
     <span class="vi">Người được cấp từ 10 ngày trở lên phải nghỉ <strong>ít nhất 5 ngày</strong> trong 1 năm (luật).</span></p>
   </div>
 
-  <div class="good">
-    <p class="good-title">✅ 2年間有効 / Có hiệu lực 2 năm</p>
-    <p>付与された有給は<strong>2年間</strong>有効です。使わないと消えるので、計画的に取得してください。<br>
-    スマホ画面の残り日数カードに<strong>有効期限の年月</strong>も表示されます（例：2028/05まで）。<br>
-    <span class="vi">Phép được cấp có hiệu lực <strong>2 năm</strong>. Không dùng sẽ mất, hãy sử dụng có kế hoạch.<br>
-    Trên thẻ số ngày còn lại sẽ hiển thị <strong>năm/tháng hết hạn</strong> (VD: đến 2028/05).</span></p>
-  </div>
+  <h3>道具代 / Tiền dụng cụ</h3>
+  <p>仕事の道具（安全帯・工具・保護具など）の費用を、会社が<strong>年間3万円</strong>まで負担します。買ったら<strong>マネーフォワードのアプリから領収書を登録</strong>してください。残金と期間（西暦付き）がカードに表示されます。<br>
+  <span class="vi">Công ty hỗ trợ tiền dụng cụ (dây an toàn, công cụ, đồ bảo hộ) tối đa <strong>30.000 yên/năm</strong>. Mua xong hãy <strong>đăng ký hóa đơn qua app Money Forward</strong>. Số còn lại và thời hạn hiện trên thẻ.</span></p>
 </div>
 
-<!-- ===== 5. 道具代残金 ===== -->
-<h2>5. 道具代の残金確認（5月から）/ Xem tiền dụng cụ còn lại (từ tháng 5)</h2>
+<!-- ===== 5. 過去5日の修正 ===== -->
+<h2>5. 過去5日分の修正 / Sửa 5 ngày trước</h2>
 
 <div class="section">
-  <p>仕事に使う道具（安全帯、工具、保護具など）の購入費を会社が補助します。<br>
-  <span class="vi">Công ty hỗ trợ chi phí mua dụng cụ làm việc (dây an toàn, công cụ, đồ bảo hộ...).</span></p>
+  <p>入力を忘れた・時刻を間違えたときは、過去5日まで直せます。<br>
+  <span class="vi">Quên nhập hoặc nhập sai giờ thì sửa được trong vòng 5 ngày.</span></p>
 
-  <div class="good">
-    <p class="good-title">💰 1人あたり年間 ¥30,000 / 30.000 yên/người/năm</p>
-    <p>1年間で最大3万円まで、会社が道具代を負担します。<br>
-    <span class="vi">Trong 1 năm, công ty chi trả tối đa 30.000 yên tiền dụng cụ.</span></p>
-  </div>
-
-  <h3>仕組み / Cách sử dụng</h3>
-
-  <p><span class="step-num">1</span>自分で道具を購入する（領収書を必ずもらう）<br>
-  <span class="vi">Tự mua dụng cụ (nhớ lấy hóa đơn)</span></p>
-
-  <p><span class="step-num">2</span><strong>マネーフォワードのアプリから領収書を登録</strong>する<br>
-  <span class="vi"><strong>Đăng ký hóa đơn qua ứng dụng Money Forward</strong></span></p>
-
-  <p><span class="step-num">3</span>会社が金額をシステムに登録 → 立替精算<br>
-  <span class="vi">Công ty đăng ký số tiền vào hệ thống → hoàn tiền</span></p>
-
-  <p><span class="step-num">4</span>スマホ画面で<strong>残金</strong>と<strong>「期間 / Kỳ」</strong>（開始日〜終了日、西暦付き）を確認できる<br>
-  <span class="vi">Có thể xem <strong>số tiền còn lại</strong> và <strong>"期間 / Kỳ"</strong> (ngày bắt đầu 〜 ngày kết thúc, có cả năm) trên điện thoại</span></p>
-
-  <div class="good">
-    <p class="good-title">📅 期間表記（西暦付き）/ Hiển thị thời hạn (có năm)</p>
-    <p>道具代カードには「期間 / Kỳ」見出しのもとに <strong>「2026/2/7 〜 2027/2/6」</strong> のように開始日と終了日の両方が西暦付きで表示されます。<br>
-    <span class="vi">Trên thẻ tiền dụng cụ, dưới dòng "期間 / Kỳ" hiển thị <strong>"2026/2/7 〜 2027/2/6"</strong> — cả ngày bắt đầu và ngày kết thúc đều có năm.</span></p>
-  </div>
-
-  <h3>期間について / Về thời hạn</h3>
-
-  <p>各自の入社日を起点に1年ごとのサイクルで管理されます。例：<br>
-  <span class="vi">Quản lý theo chu kỳ 1 năm tính từ ngày vào công ty. Ví dụ:</span></p>
-
-  <table>
-    <tr><th>期間 / Chu kỳ</th><th>対象日 / Thời gian</th><th>予算 / Ngân sách</th></tr>
-    <tr><td>1年目 / Năm 1</td><td>2025/05/14 〜 2026/05/13</td><td>¥30,000</td></tr>
-    <tr><td>2年目 / Năm 2</td><td>2026/05/14 〜 2027/05/13</td><td>¥30,000（自動リセット）</td></tr>
-    <tr><td>3年目 / Năm 3</td><td>2027/05/14 〜 2028/05/13</td><td>¥30,000（自動リセット）</td></tr>
-  </table>
-
-  <div class="point">
-    <p class="point-title">⚠ マネーフォワードに必ず登録してください / Phải đăng ký vào Money Forward</p>
-    <p>領収書をマネーフォワードのアプリから登録しないと精算できません。購入時は必ず受け取って、すぐに登録してください。<br>
-    <span class="vi">Không đăng ký hóa đơn qua ứng dụng Money Forward sẽ không thể hoàn tiền. Khi mua hãy nhận hóa đơn và đăng ký ngay.</span></p>
-  </div>
-</div>
-
-<!-- ===== 6. 過去5日の修正 ===== -->
-<h2>6. 過去5日分の修正 / Sửa 5 ngày trước</h2>
-
-<div class="section">
-  <p>出勤登録を忘れたり、時刻を間違えて入力した場合は、過去5日まで修正できます。<br>
-  <span class="vi">Nếu quên đăng ký đi làm hoặc nhập sai giờ, có thể sửa trong vòng 5 ngày.</span></p>
-
-  <h3>手順 / Các bước</h3>
-
-  <p><span class="step-num">1</span>スマホ画面の<strong>「最近5日 / 5 ngày gần đây」</strong>エリアを見る<br>
-  <span class="vi">Xem vùng <strong>"5 ngày gần đây"</strong> trên màn hình</span></p>
-
-  <p><span class="step-num">2</span>修正したい日をタップ<br>
-  <span class="vi">Nhấn vào ngày muốn sửa</span></p>
-
-  <p><span class="step-num">3</span>始業時刻・終業時刻・休憩を修正 → 保存<br>
-  <span class="vi">Sửa giờ bắt đầu, giờ kết thúc, nghỉ giải lao → lưu</span></p>
-
-  <p><span class="step-num">4</span>修正をやめたいときは画面下の<strong>「やめる / Hủy」</strong>ボタン（赤い枠の警告色）で戻れます<br>
-  <span class="vi">Nếu muốn dừng sửa, nhấn nút <strong>"やめる / Hủy"</strong> (viền đỏ cảnh báo) ở dưới màn hình để quay lại</span></p>
+  <p><span class="step-num">1</span>画面の<strong>「最近5日 / 5 ngày gần đây」</strong>で直したい日をタップ<br>
+  <span class="vi">Nhấn ngày muốn sửa ở <strong>"5 ngày gần đây"</strong></span></p>
+  <p><span class="step-num">2</span>始業・終業・休憩を直して<span class="btn btn-work" style="padding:4px 12px; font-size:13px;">出勤登録</span>を押す（休みにするなら「休み / Nghỉ」）<br>
+  <span class="vi">Sửa giờ và nghỉ → nhấn "Xác nhận đi làm" (hoặc "Nghỉ")</span></p>
+  <p><span class="step-num">3</span>やめたいときは<strong>「やめる / Hủy」</strong>（赤い枠）で戻る<br>
+  <span class="vi">Muốn dừng thì nhấn <strong>"Hủy"</strong> (viền đỏ)</span></p>
 
   <div class="warn">
-    <p class="warn-title">🔒 職長が確認した日は修正できません / Không sửa được ngày đốc công đã xác nhận</p>
-    <p>鍵（🔒）マークが付いている日は、職長が確認済みのため修正できません。修正が必要な場合は職長に相談してください。<br>
-    <span class="vi">Ngày có dấu khóa (🔒) đã được đốc công xác nhận, không thể sửa. Cần sửa, hãy hỏi đốc công.</span></p>
+    <p class="warn-title">🔒 鍵マークの日は直せません / Ngày có khóa không sửa được</p>
+    <p style="margin:0;">🔒が付いた日は職長が確認済みです。直したいときは職長に相談してください。<br>
+    <span class="vi">Ngày có 🔒 đã được đốc công xác nhận. Cần sửa hãy hỏi đốc công.</span></p>
   </div>
 </div>
 
-<!-- ===== 7. 困ったときは ===== -->
-<h2>7. 困ったときは / Khi gặp khó khăn</h2>
+<!-- ===== 6. 困ったとき ===== -->
+<h2>6. 困ったときは / Khi gặp khó khăn</h2>
 
 <div class="section">
   <table>
     <tr><th>困りごと / Tình huống</th><th>対応 / Cách xử lý</th></tr>
-    <tr>
-      <td>スマホ画面が開かない<br><span class="vi">Không mở được màn hình</span></td>
-      <td>ブラウザを更新（リロード）してください。それでもダメなら会社に連絡。<br><span class="vi">Tải lại trang. Vẫn không được thì liên hệ công ty.</span></td>
-    </tr>
-    <tr>
-      <td>出勤登録を忘れた<br><span class="vi">Quên đăng ký đi làm</span></td>
-      <td>「最近5日」から修正できます。5日を過ぎたら職長に相談。<br><span class="vi">Sửa từ "5 ngày gần đây". Quá 5 ngày thì hỏi đốc công.</span></td>
-    </tr>
-    <tr>
-      <td>急に休みたい<br><span class="vi">Cần nghỉ đột xuất</span></td>
-      <td>「欠勤届」ボタンで当日でも届出できます。<br><span class="vi">Dùng nút "Xin nghỉ", nộp được cả trong ngày.</span></td>
-    </tr>
-    <tr>
-      <td>有給を取りたい<br><span class="vi">Muốn nghỉ phép</span></td>
-      <td>「有給申請」から5日前までに提出。<br><span class="vi">Nộp "Xin phép" trước 5 ngày.</span></td>
-    </tr>
-    <tr>
-      <td>申請を間違えた・取り消したい<br><span class="vi">Nộp nhầm / muốn hủy đơn</span></td>
-      <td>承認待ちなら履歴の「取り消し / Hủy」で自分で取消可。職長承認後は会社に連絡。<br><span class="vi">Đang chờ → nhấn "取り消し / Hủy" trong lịch sử. Đốc công duyệt rồi thì liên hệ công ty.</span></td>
-    </tr>
-    <tr>
-      <td>ベトナムに長期帰国したい<br><span class="vi">Muốn về Việt Nam dài ngày</span></td>
-      <td>「帰国申請」から3ヶ月前までに提出。<br><span class="vi">Nộp "Xin về nước" trước 3 tháng.</span></td>
-    </tr>
-    <tr>
-      <td>残業代が計算されているか心配<br><span class="vi">Lo lắng về tiền tăng ca</span></td>
-      <td>毎日正確に時刻を入力すれば自動で計算されます。<br><span class="vi">Nhập chính xác giờ mỗi ngày thì hệ thống tự tính.</span></td>
-    </tr>
-    <tr>
-      <td>道具代の残金を知りたい<br><span class="vi">Muốn biết tiền dụng cụ còn lại</span></td>
-      <td>5月1日以降、スマホ画面に表示されます。<br><span class="vi">Từ ngày 1/5 sẽ hiển thị trên điện thoại.</span></td>
-    </tr>
-    <tr>
-      <td>日本語がわからない<br><span class="vi">Không hiểu tiếng Nhật</span></td>
-      <td>チイさんに相談してください。<br><span class="vi">Hãy hỏi chị Chi.</span></td>
-    </tr>
+    <tr><td>画面が開かない<br><span class="vi">Không mở được</span></td><td>ブラウザを更新。ダメなら会社へ連絡<br><span class="vi">Tải lại trang. Không được thì liên hệ công ty</span></td></tr>
+    <tr><td>出勤登録を忘れた<br><span class="vi">Quên đăng ký</span></td><td>「最近5日」から修正。5日超なら職長へ<br><span class="vi">Sửa từ "5 ngày gần đây". Quá 5 ngày thì hỏi đốc công</span></td></tr>
+    <tr><td>急に休みたい<br><span class="vi">Nghỉ đột xuất</span></td><td>「欠勤届」で当日でも届出OK<br><span class="vi">Dùng "Xin nghỉ", nộp cả trong ngày</span></td></tr>
+    <tr><td>有給を取りたい<br><span class="vi">Muốn nghỉ phép</span></td><td>「有給申請」から5日前までに<br><span class="vi">"Xin phép" trước 5 ngày</span></td></tr>
+    <tr><td>申請を取り消したい<br><span class="vi">Muốn hủy đơn</span></td><td>承認待ちなら「取り消し」。職長承認後は会社へ<br><span class="vi">Đang chờ → "Hủy". Đốc công duyệt rồi → công ty</span></td></tr>
+    <tr><td>長期帰国したい<br><span class="vi">Về nước dài ngày</span></td><td>「帰国申請」から3ヶ月前までに<br><span class="vi">"Xin về nước" trước 3 tháng</span></td></tr>
+    <tr><td>通信エラーが出た<br><span class="vi">Lỗi kết nối</span></td><td>「つうしんエラー / Lỗi kết nối」は電波が弱いだけ。もう一度試す<br><span class="vi">"Lỗi kết nối" là sóng yếu, thử lại</span></td></tr>
+    <tr><td>日本語がわからない<br><span class="vi">Không hiểu tiếng Nhật</span></td><td>チイさんに相談<br><span class="vi">Hỏi chị Chi</span></td></tr>
   </table>
 
-  <div class="good" style="text-align: center; margin-top: 24px;">
-    <p style="font-size: 18px; font-weight: bold; margin: 0;">
+  <div class="good" style="text-align: center; margin-top: 20px;">
+    <p style="font-size: 17px; font-weight: bold; margin: 0;">
       毎日の入力が正確な給料につながります<br>
       <span class="vi">Nhập chính xác mỗi ngày = Lương chính xác</span>
     </p>
   </div>
-
 </div>
 
-<hr style="margin-top: 40px; border: none; border-top: 1px solid #ddd;">
+<hr style="margin-top: 36px; border: none; border-top: 1px solid #ddd;">
 <p style="text-align: center; color: #999; font-size: 12px;">
   HIBI CONSTRUCTION / HFU — スタッフ向けマニュアル<br>
-  最終更新: 2026-04-30
+  最終更新: 2026-07-03
 </p>
 
 </body>

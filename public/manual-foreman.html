@@ -5,69 +5,95 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>業務マニュアル（職長向け） - HIBI CONSTRUCTION</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #1B2A4A; line-height: 1.8; font-size: 15px; }
-  h1 { border-bottom: 3px solid #1B2A4A; padding-bottom: 10px; font-size: 22px; }
-  h2 { color: #1B2A4A; border-left: 4px solid #1B2A4A; padding-left: 12px; margin-top: 40px; font-size: 18px; }
-  h3 { color: #333; font-size: 16px; margin-top: 24px; }
-  .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  :root {
+    --charcoal: #20262F;
+    --amber: #F5A623;
+    --green: #1E9E52;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #20262F; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid var(--charcoal); padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #fff; background: var(--charcoal); padding: 8px 14px; margin-top: 40px; font-size: 18px; border-radius: 6px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; border-left: 4px solid var(--charcoal); padding-left: 10px; }
+  .box { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px; margin: 16px 0; }
   .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
-  .box-ok { background: #f0fff0; border: 1px solid #80c080; }
+  .box-ok { background: #eefaf1; border: 1px solid #9dd8b4; }
   .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
   table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
   th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
-  th { background: #1B2A4A; color: white; }
+  th { background: var(--charcoal); color: white; }
   tr:nth-child(even) { background: #f8f8f8; }
   .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
-  .step-num { background: #1B2A4A; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-num { background: var(--charcoal); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
   .step-text { flex: 1; }
   code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
-  .highlight { background: #ffe0e0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-  .toc { background: #f8f9ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
-  .toc a { color: #1B2A4A; text-decoration: none; }
+  .toc { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: var(--charcoal); text-decoration: none; }
   .toc a:hover { text-decoration: underline; }
   hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
-  @media print { body { font-size: 13px; padding: 0; } }
+  /* 主要ボタン（スマホ画面の再現） */
+  .btn-amber { display: inline-block; background: var(--amber); color: var(--charcoal); font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  .badge-done { display: inline-block; background: var(--green); color: #fff; font-weight: bold; padding: 4px 12px; border-radius: 20px; font-size: 13px; }
+  /* PC出面セルのピル表示 */
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: bold; }
+  .pill-work { background: #d6f2df; color: #157a3d; }
+  .pill-half { background: #fdf3cf; color: #9a7a00; }
+  .pill-paid { background: #ece0f8; color: #6b3fa0; }
+  .pill-exam { background: #dde3f7; color: #33448c; }
+  .pill-off  { background: #fbdada; color: #b03636; }
+  .pill-site { background: #e4e7eb; color: #5a626c; }
+  .pill-home { background: #d3f1f5; color: #1a7f8c; }
+  .ot { color: #E07B00; font-weight: bold; font-size: 13px; }
+  @media print { body { font-size: 13px; padding: 0; } h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 14px; }
+    table { font-size: 13px; }
+    th, td { padding: 6px 8px; }
+    .step-text { font-size: 14px; }
+  }
 </style>
 </head>
 <body>
-<div style="margin-bottom: 16px;"><a href="/docs" style="color: #1B2A4A; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
 
 <h1>HIBI CONSTRUCTION 就業管理システム<br>業務マニュアル（職長向け）</h1>
 <p>対象: 職長（大川愛志さん・白戸寛之さん・日比大介さん）<br>
-作成日: 2026年4月8日<br>
-最終更新: 2026年4月26日<br>
+最終更新: 2026年7月<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
-<div style="background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; padding: 12px 16px; margin: 16px 0; font-size: 13px;">
-<strong>📌 関連資料：</strong>
-<ul style="margin: 6px 0; padding-left: 20px;">
-  <li><a href="/manual-checklist.html">✅ ロール別やることチェックリスト</a> — 職長として日次・月次でやること</li>
-  <li><a href="/manual-yukyu.html">🌴 休暇管理マニュアル</a> — 有給・帰国申請の職長承認の詳細</li>
-  <li><a href="/manual-evaluation.html">📋 評価管理マニュアル</a> — 年次評価の入力</li>
-</ul>
-<strong>このマニュアルは「職長として現場運営する操作」に特化しています。</strong>
+<!-- サマリー：やることは3つ -->
+<div class="box box-ok">
+<strong>職長のあなたがやることは、大きく3つだけです。</strong>
+<table style="margin-top:10px;">
+<tr><th>やること</th><th>いつ</th><th>どこで</th></tr>
+<tr><td><strong>① 毎日の出面確認とロック</strong><br>スタッフの入力を確認し「この日を確認する」を押す</td><td><strong>毎日</strong></td><td>スマホ職長画面</td></tr>
+<tr><td><strong>② 就業カレンダー作成</strong><br>翌月の出勤日/休日を決めて提出</td><td><strong>月1回</strong></td><td>PC</td></tr>
+<tr><td><strong>③ 現場違いの修正</strong><br>別現場で入力されたスタッフを正しい現場へ移動</td><td>気づいたとき</td><td>スマホ職長画面</td></tr>
+</table>
+<p style="margin:10px 0 0; font-size:13px;">このほか、有給申請・帰国申請が来たら「職長承認」します（最終承認は政仁さん）。</p>
 </div>
 
 <div class="box box-red">
-<strong>2026年5月から本格運用を開始します。</strong><br>
-職長には以下の3つの業務をシステム上でお願いします。
-<ol style="margin: 8px 0 0; padding-left: 20px;">
-  <li><strong>出面の入力</strong> — 毎日の出勤・残業を入力</li>
-  <li><strong>出面の確認・承認</strong> — ベトナム人スタッフの入力内容を確認し、政仁さんの最終承認につなげる</li>
-  <li><strong>就業カレンダーの作成・提出</strong> — 翌月の出勤日/休日を設定して提出</li>
-  <li><strong>有給申請・帰国申請の承認</strong> — スタッフからの有給申請・帰国申請を確認し、職長承認する（政仁さんが最終承認）</li>
-</ol>
+<strong>職長の役割は「確認（ロック）」まで。最終承認は政仁さんです。</strong><br>
+現場レベルの作業は職長、最終承認は事業責任者（政仁さん）が行います。
+<strong>職長の画面に「最終承認」ボタンはありません。</strong>有給・帰国申請も職長は「職長承認」まで（その後、政仁さんが最終承認）。
+</div>
+
+<div class="box" style="font-size:13px;">
+<strong>📌 関連資料：</strong>
+<a href="/manual-checklist.html">✅ ロール別チェックリスト</a> ／
+<a href="/manual-yukyu.html">🌴 休暇管理マニュアル</a> ／
+<a href="/manual-evaluation.html">📋 評価管理マニュアル</a>
 </div>
 
 <div class="toc">
 <strong>目次</strong>
 <ol>
   <li><a href="#sec1">ログイン</a></li>
-  <li><a href="#sec2">職長の3つの仕事</a></li>
-  <li><a href="#sec3">出面の入力（毎日の業務）</a></li>
-  <li><a href="#sec4">出面の確認・承認 / 有給申請・帰国申請の承認</a></li>
-  <li><a href="#sec5">就業カレンダーの作成・提出</a></li>
-  <li><a href="#sec6">ダッシュボード・マスタの確認</a></li>
+  <li><a href="#sec2">毎日の出面確認（スマホ）</a></li>
+  <li><a href="#sec3">出面の入力・修正</a></li>
+  <li><a href="#sec4">付録: 出面グリッドの読み方（PC）</a></li>
+  <li><a href="#sec5">就業カレンダーの作成・提出（PC）</a></li>
+  <li><a href="#sec6">有給・帰国申請の承認</a></li>
   <li><a href="#sec7">毎日・毎月のルーティン</a></li>
   <li><a href="#sec8">困ったときは</a></li>
 </ol>
@@ -76,322 +102,206 @@
 <!-- ================================================ -->
 <h2 id="sec1">1. ログイン</h2>
 
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">ブラウザで <code>https://hibi-calendar.vercel.app</code> を開く</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text"><strong>職長用の共有パスワード</strong>を入力して「ログイン」を押す</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">名前の一覧から<strong>自分の名前</strong>を選択する<br>
-  <span style="color:#888; font-size:13px;">※ 一覧には職長のみ表示されます（大川・白戸・日比大介）</span></div>
-</div>
+<div class="step"><div class="step-num">1</div><div class="step-text">ブラウザで <code>https://hibi-calendar.vercel.app</code> を開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text"><strong>職長用の共有パスワード</strong>を入力して「ログイン」を押す</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">名前の一覧から<strong>自分の名前</strong>を選ぶ（一覧には職長のみ表示）</div></div>
 
 <div class="box">
-<strong>ログインすると使える画面：</strong>
+<strong>スマホとPCの使い分け：</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li><strong>ダッシュボード</strong> — お知らせ・本日の稼働状況・今月サマリー・日別チャート</li>
-  <li><strong>出面入力</strong> — 全現場のスタッフの出勤・残業を入力・確認</li>
-  <li><strong>就業カレンダー</strong> — 翌月の出勤日/休日を設定して提出</li>
-  <li><strong>現場マスタ</strong> — 現場情報の確認</li>
-  <li><strong>外注先マスタ</strong> — 外注先の情報確認</li>
+  <li><strong>スマホ職長画面</strong> — 毎日の出面確認・ロック、現場違いの修正、代理入力</li>
+  <li><strong>PC</strong> — 就業カレンダー作成、出面の一括確認・修正、ダッシュボード</li>
 </ul>
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec2">2. 職長の3つの仕事</h2>
+<h2 id="sec2">2. 毎日の出面確認（スマホ）</h2>
 
-<div class="box box-ok">
-<table>
-<tr><th>仕事</th><th>内容</th><th>頻度</th><th>所要時間</th></tr>
-<tr><td><strong>① 出面の入力</strong></td><td>日本人社員・外注先の出勤・残業を入力<br>ベトナム人スタッフのスマホ入力を確認・修正</td><td><strong>毎日</strong></td><td>10〜15分</td></tr>
-<tr><td><strong>② 出面の承認</strong></td><td>スマホ画面で「✅ この日を確認する」を押す<br>→ 政仁さんがPC画面で最終承認</td><td><strong>毎日</strong></td><td>1〜2分</td></tr>
-<tr><td><strong>③ カレンダーの作成</strong></td><td>翌月の出勤日/休日を設定して「提出する」を押す<br>→ 政仁さんが承認 → スタッフが署名</td><td><strong>毎月1回</strong></td><td>10〜15分</td></tr>
-<tr><td><strong>④ 有給申請の承認</strong></td><td>スタッフからの有給申請を確認 →「職長承認」<br>→ 政仁さんが最終承認</td><td><strong>随時</strong></td><td>1〜2分</td></tr>
-<tr><td><strong>⑤ 帰国申請の承認</strong></td><td>ベトナム人スタッフからの帰国申請を確認 →「職長承認」<br>→ 政仁さんが最終承認 → 出面に「帰国中」が自動記録</td><td><strong>年1〜2回</strong></td><td>1〜2分</td></tr>
-</table>
+<p>これが職長の<strong>いちばん大事な毎日の仕事</strong>です。スタッフがスマホで入れた出勤データを確認し、その日をロックします。</p>
+
+<h3>2-1. 画面の見方</h3>
+
+<div class="box">
+<ul style="margin: 0; padding-left: 20px;">
+  <li><strong>ヘッダー</strong>（チャコール背景）に「職長」ラベル＋あなたの氏名＋担当現場が出ます</li>
+  <li><strong>日付ナビ</strong>：「◀ 前日」「翌日 ▶」で日を移動（翌日は当日まで。当日では無効）</li>
+  <li><strong>サマリー3カード</strong>：出勤 / 未入力 / 全員（人数）が一目でわかります</li>
+</ul>
 </div>
+
+<p>スタッフ一覧は、各スタッフが次の<strong>3つの状態</strong>のどれかで表示されます。</p>
+
+<table>
+<tr><th>表示</th><th>意味</th><th>職長の操作</th></tr>
+<tr>
+  <td>📱 <strong>スマホ入力待ち</strong></td>
+  <td>本人がまだ入力していない</td>
+  <td>入力を促す。職長が代理入力できるのは<strong>「有給」「現場都合休み」のみ</strong>（出勤・休みは本人のスマホ入力後）</td>
+</tr>
+<tr>
+  <td><span class="pill pill-work">出勤</span> 等のステータス</td>
+  <td>入力済み（出勤/残業/休み/有給など）</td>
+  <td>タップすると<strong>全ステータスを修正可能</strong></td>
+</tr>
+<tr>
+  <td>⚠️ <strong>別現場で入力されています</strong></td>
+  <td>そのスタッフが別の現場で入力した</td>
+  <td>タップ →「🔄 こちらに移動する」で正しい現場へ移す</td>
+</tr>
+</table>
+
+<h3>2-2. 代理入力・修正</h3>
+
+<p>スタッフ名（またはステータス）をタップすると入力モーダルが開きます。</p>
+
+<table>
+<tr><th>ボタン</th><th>意味</th></tr>
+<tr><td>出勤 🔨</td><td>出勤として記録。出勤時は<strong>残業を「−／＋」で0.5h刻み</strong>に調整できる</td></tr>
+<tr><td>休み 🏠</td><td>休みとして記録</td></tr>
+<tr><td>有給 🌴</td><td>有給休暇として記録（代理入力OK）</td></tr>
+<tr><td>現場都合休み 🚧</td><td>現場都合の休みとして記録（代理入力OK）</td></tr>
+</table>
+
+<h3>2-3. その日をロックする（最重要）</h3>
+
+<p>全員の入力を確認したら、画面下の <span class="btn-amber">✅ この日を確認する</span> を押します。</p>
 
 <div class="box box-warn">
-<strong>職長ではできないこと（管理者・政仁さんの担当）：</strong>
+<strong>「この日を確認する」を押すと：</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>カレンダーの最終承認（政仁さん）</li>
-  <li>月次集計・月締め・給与計算（奥寺さん・管理者）</li>
-  <li>有給・帰国申請の最終承認（政仁さん。職長は第1段階の承認まで）</li>
-  <li>スタッフのマスタ登録（管理者）</li>
+  <li>その日の全スタッフの入力が<strong>ロック</strong>されます（本人は編集不可）</li>
+  <li>ボタンが <span class="badge-done">✅ 確認済み</span> に変わります</li>
+  <li><strong>取り消しはできません。</strong>全員の入力を確認してから押してください</li>
 </ul>
+<p style="margin:8px 0 0;">※ ロック後も、職長自身は個別スタッフの入力を修正できます。</p>
 </div>
 
+<p>下の「過去の確認状況」で、日ごとに <span class="badge-done">✅ 確認済み</span> ／ <strong>— 未確認</strong> を確認できます。押し忘れた日がないかチェックしてください。</p>
+
 <!-- ================================================ -->
-<h2 id="sec3">3. 出面の入力（毎日の業務）</h2>
+<h2 id="sec3">3. 出面の入力・修正</h2>
 
-<p>出面入力はシステムの<strong>最も重要な業務</strong>です。ここに入力したデータが給与計算・原価管理の基になります。</p>
-
-<h3>3-1. 誰の出面を入力するか</h3>
+<p>ベトナム人スタッフはスマホから自分で入力します。<strong>日本人社員・外注先は職長がPCで入力</strong>します。</p>
 
 <table>
 <tr><th>対象</th><th>入力方法</th><th>職長の作業</th></tr>
-<tr><td><strong>日本人社員</strong><br>（大川・本田・入江 等）</td><td>職長がPC画面で直接入力</td><td>毎日、出勤日に <strong>1</strong> を入力<br>残業があれば下段に時間を入力</td></tr>
-<tr><td><strong>ベトナム人スタッフ</strong></td><td>スタッフがスマホから入力<br>（5月〜: 開始/終了時刻＋休憩チェック）</td><td>スタッフの入力を<strong>確認</strong><br>間違いがあれば<strong>修正</strong></td></tr>
-<tr><td><strong>外注先</strong><br>（吉本建設・岩井田建工 等）</td><td>職長がPC画面で直接入力</td><td>会社単位で<strong>人数</strong>を入力<br>（例: 4人出勤なら <strong>4</strong>）</td></tr>
+<tr><td><strong>ベトナム人スタッフ</strong></td><td>本人がスマホから入力<br>（始業/終業時刻＋休憩チェック）</td><td>スマホ職長画面で<strong>確認・修正・ロック</strong></td></tr>
+<tr><td><strong>日本人社員</strong><br>（大川・本田・入江 等）</td><td>職長がPCで直接入力</td><td>出勤日に <strong>1</strong>、残業があれば下段に時間</td></tr>
+<tr><td><strong>外注先</strong><br>（吉本建設・岩井田建工 等）</td><td>職長がPCで直接入力</td><td>会社単位で<strong>人数</strong>を入力（例: 4人出勤なら 4）</td></tr>
 </table>
 
-<h3>3-2. PC画面での入力手順</h3>
+<h3>3-1. PC画面での入力手順</h3>
 
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">サイドバー →<strong>「出面入力」</strong>を開く</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">右上の<strong>現場セレクタ</strong>で現場を選ぶ</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">右上の<strong>年月セレクタ</strong>で月を選ぶ（通常は当月）</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">各スタッフの行で、<strong>今日の日付のセル</strong>に値を入力<br>
-  <span style="color:#888; font-size:13px;">日付ヘッダーは固定表示なので、スクロールしても日付が見えます</span></div>
-</div>
+<div class="step"><div class="step-num">1</div><div class="step-text">サイドバー →<strong>「出面入力」</strong>を開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">右上の<strong>現場セレクタ</strong>で現場を選ぶ（前回の選択は自動で復元されます）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">右上の<strong>年月セレクタ</strong>で月を選ぶ（通常は当月）</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">各スタッフの行で、<strong>今日の日付のセル</strong>に値を入力</div></div>
 
-<div class="box box-ok">
-<strong>保存は自動です。</strong>セルに値を入力するだけで自動保存されます。保存ボタンはありません。
-</div>
+<div class="box box-ok"><strong>保存は自動です。</strong>セルに値を入れるだけで自動保存されます。保存ボタンはありません。</div>
 
-<h3>3-3. 入力する値</h3>
+<h3>3-2. 入力する値（日本人社員）</h3>
 
 <table>
-<tr><th>入力値</th><th>意味</th><th>いつ使う？</th></tr>
-<tr><td><strong>1</strong></td><td>出勤（1日）</td><td>通常の出勤日</td></tr>
-<tr><td><strong>0.5</strong></td><td>半日</td><td>午前だけ、午後だけ出勤した場合</td></tr>
-<tr><td><strong>有</strong></td><td>有給休暇</td><td>有給を取得した日</td></tr>
-<tr><td><strong>下段の数字</strong></td><td>残業時間</td><td>0.5h単位で入力（例: 1.5）</td></tr>
-<tr><td><strong>空欄</strong></td><td>休み / 未入力</td><td>何も入力しない</td></tr>
+<tr><th>入力値</th><th>意味</th></tr>
+<tr><td><strong>1</strong></td><td>出勤（1日）</td></tr>
+<tr><td><strong>0.5</strong></td><td>半日（午前だけ／午後だけ）</td></tr>
+<tr><td><strong>有</strong></td><td>有給休暇</td></tr>
+<tr><td><strong>下段の数字</strong></td><td>残業時間（0.5h単位。例: 1.5）</td></tr>
+<tr><td><strong>空欄</strong></td><td>休み / 未入力</td></tr>
 </table>
 
-<div class="box box-ok">
-<strong>ベトナム人スタッフの入力値：</strong><br>
-5月以降、ベトナム人スタッフはPC画面上で<strong>「出」（出勤）</strong>を選択すると、始業/終業時間と休憩チェックが表示されます。<br>
-日本人社員は従来通り「1」「0.5」「有」で入力します。
-</div>
+<h3>3-3. 外注先の入力</h3>
 
-<div class="box">
-<strong>就業カレンダーとの連動：</strong><br>
-承認済みの就業カレンダーがある月は、出面入力画面にカレンダーの出勤/休み情報が自動で反映されます。
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li><strong>日曜</strong>: ヘッダー赤（常に）</li>
-  <li><strong>土曜の休み</strong>: ヘッダー青のまま「土 休」と表示</li>
-  <li><strong>平日の休み</strong>（祝日・現場休み）: ヘッダー・セルがグレー＋「休」マーク表示</li>
-  <li><strong>帰国中のスタッフ</strong>: セルに「✈帰国」と表示（自動。入力不要）</li>
-</ul>
-</div>
-
-<div class="box box-ok">
-<strong>現場の選択はリロードしても保持されます。</strong>前回選択した現場が自動で復元されるため、毎回選び直す必要はありません。
-</div>
-
-<h3>3-4. 外注先の入力</h3>
-
-<p>外注先は人ごとではなく<strong>会社単位</strong>で入力します。</p>
 <table>
 <tr><th>例</th><th>入力値</th></tr>
-<tr><td>吉本建設工業から4人出勤</td><td>上段: <strong>4</strong></td></tr>
-<tr><td>吉本建設工業から4人出勤、うち2人が残業1.5h</td><td>上段: <strong>4</strong>、下段: <strong>2</strong>（残業人数）</td></tr>
+<tr><td>吉本建設から4人出勤</td><td>上段: <strong>4</strong></td></tr>
+<tr><td>4人出勤、うち2人が残業</td><td>上段: <strong>4</strong>、下段: <strong>2</strong>（残業人数）</td></tr>
 </table>
 
-<!-- ================================================ -->
-<h2 id="sec4">4. 出面の確認・承認</h2>
-
-<p>ベトナム人スタッフがスマホで入力した出勤データを、職長が確認・承認します。<br>
-これが<strong>3段階の承認フローの第2段階</strong>です。</p>
-
 <div class="box">
-<strong>3段階の承認フロー：</strong>
-<table>
-<tr><th>段階</th><th>誰が</th><th>やること</th><th>効果</th></tr>
-<tr><td><strong>第1段階</strong></td><td>実習生・特定技能</td><td>スマホから毎日、開始/終了時刻・休憩を入力して出勤登録（5月〜新形式）</td><td>出面データが記録される</td></tr>
-<tr style="background:#e6f4ea;"><td><strong>第2段階</strong></td><td><strong>職長</strong></td><td>スマホ画面で確認 →「✅ この日を確認する」</td><td><strong>スタッフの入力がロック</strong>される</td></tr>
-<tr><td><strong>第3段階</strong></td><td>政仁さん</td><td>PC画面で「承認」行をクリック</td><td>最終確定</td></tr>
-</table>
-</div>
-
-<div class="box box-ok">
-<strong>職長が「この日を確認する」を押すと：</strong>
+<strong>就業カレンダーとの連動：</strong>承認済みカレンダーがある月は、出面入力画面に出勤/休み情報が自動反映されます。
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>その日のスタッフのスマホ入力が<strong>ロック</strong>されます（誤入力・後からの変更を防止）</li>
-  <li>PC画面の承認行にもチェックが反映されます</li>
-  <li>確認後も、<strong>職長は個別のスタッフの入力を修正できます</strong></li>
+  <li><strong>日曜</strong>: ヘッダー赤　／　<strong>土曜の休み</strong>: 「土 休」表示</li>
+  <li><strong>平日の休み</strong>（祝日・現場休み）: グレー＋「休」マーク</li>
+  <li><strong>帰国中</strong>: セルに「✈帰国」と自動表示（入力不要）</li>
 </ul>
-</div>
-
-<h3>4-1. スマホ職長画面での承認手順</h3>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">職長専用URLをスマホで開く（QRコード or ブックマーク）<br>
-  <span style="color:#888; font-size:13px;">※ QRコードは印刷したカードで配布済み</span></div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">各スタッフの<strong>出勤状況が一覧</strong>で表示される<br>
-  <span style="color:#888; font-size:13px;">🔨出勤、⏰残業あり、🏠休み、🌴有給、❓未入力</span></div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">スタッフ名をタップすると<strong>編集画面</strong>が開く → 出勤/休み/有給の修正、残業時間の入力</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">全員確認したら<strong>「✅ この日を確認する」</strong>ボタンを押す</div>
-</div>
-
-<div class="box box-warn">
-<strong>「❓未入力」のスタッフがいる場合：</strong><br>
-スタッフがまだスマホで入力していません。入力を促すか、職長が代わりにスマホ画面から入力してください。
-</div>
-
-<h3>4-2. PC画面での確認</h3>
-
-<p>スマホ画面だけでなく、PC画面でも出面を確認・修正できます。</p>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">サイドバー →<strong>「出面入力」</strong>を開く</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">全現場が表示される（現場セレクタで切り替え可能）</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">各スタッフの出勤状況を確認し、間違いがあればセルをクリックして修正</div>
-</div>
-
-<h3>4-3. 有給申請の承認</h3>
-
-<p>スタッフがスマホから有給を申請すると、職長に承認依頼が届きます。</p>
-
-<div class="box">
-<strong>有給承認の2段階フロー：</strong>
-<table>
-<tr><th>段階</th><th>誰が</th><th>やること</th><th>画面</th></tr>
-<tr style="background:#e6f4ea;"><td><strong>第1段階</strong></td><td><strong>職長</strong></td><td>申請内容を確認 →「職長承認」ボタン</td><td>ダッシュボード「勤怠申請」カード<br>or 有給管理 → 申請タブ</td></tr>
-<tr><td><strong>第2段階</strong></td><td>政仁さん</td><td>職長承認済みの申請を最終承認</td><td>ダッシュボード「勤怠申請」カード<br>or 有給管理 → 申請タブ</td></tr>
-</table>
-</div>
-
-<div class="box box-ok">
-<strong>ダッシュボードから直接承認できます。</strong>ダッシュボードの「勤怠申請」カードに有給申請と欠勤届がまとめて表示されるため、有給管理画面を開かなくても承認操作が可能です。
-</div>
-
-<div class="box box-warn">
-<strong>有給申請のルール：</strong><br>
-ベトナム人スタッフには原則<strong>5日前まで</strong>に申請するよう伝えてください。（日本人社員には適用されません）<br>
-申請があると通知ベル（🔔）に表示されます。
-</div>
-
-<div class="box">
-<strong>申請の取り消しについて：</strong>
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>スタッフが申請を取り消すと <code>cancelled</code> ステータスとなり、職長の対応リストから自動的に消えます</li>
-  <li>取り消しできるのは<strong>「職長承認」ボタンを押す前まで</strong>。職長が承認した後はスタッフ側で取り消し不可</li>
-  <li>取り消し済み・却下済みの申請は、同じ日付で再申請可能（上書きされる）</li>
-</ul>
-</div>
-
-<div class="box box-warn">
-<strong>承認権限の境界：</strong>
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>職長ができるのは「職長承認」「却下」のみ。<strong>最終承認は政仁さんが実施</strong>します</li>
-  <li>ダッシュボードで「職長承認」を押すと、政仁さん側に「最終承認待ち」として回ります</li>
-  <li>foreman の画面では「最終承認」ボタンは表示されず、「最終承認待ち」のラベルのみ表示されます</li>
-</ul>
-</div>
-
-<h3>4-4. 帰国申請の承認</h3>
-
-<p>ベトナム人スタッフ（技能実習生・特定技能）が一時帰国する際に、スマホから帰国申請を提出します。有給申請と同じ2段階承認フローです。</p>
-
-<div class="box">
-<strong>帰国申請の2段階フロー：</strong>
-<table>
-<tr><th>段階</th><th>誰が</th><th>やること</th><th>画面</th></tr>
-<tr style="background:#e6f4ea;"><td><strong>第1段階</strong></td><td><strong>職長</strong></td><td>申請内容を確認 →「職長承認」ボタン</td><td>ダッシュボード「勤怠申請」カード</td></tr>
-<tr><td><strong>第2段階</strong></td><td>政仁さん</td><td>職長承認済みの申請を最終承認</td><td>ダッシュボード「勤怠申請」カード</td></tr>
-</table>
-</div>
-
-<div class="box box-ok">
-<strong>最終承認されると：</strong>
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>帰国期間中の出勤日に<strong>「帰国中」</strong>が自動で記録されます（手入力不要）</li>
-  <li>帰国中の日は人工数にも欠勤にもカウントされません</li>
-  <li>帰国・休暇情報ページにも自動的に表示されます</li>
-</ul>
-</div>
-
-<div class="box box-warn">
-<strong>帰国申請のルール：</strong><br>
-原則、出発日の<strong>3ヶ月前まで</strong>に申請する必要があります。長期休暇のため早めの申請をお願いしています。<br>
-<span style="color:#888; font-size:13px;">※ 身内の不幸など緊急やむを得ない場合は会社に直接相談してください。</span>
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec5">5. 就業カレンダーの作成・提出</h2>
+<h2 id="sec4">4. 付録: 出面グリッドの読み方（PC）</h2>
 
-<div class="box">
-<strong>なぜカレンダーを作るのか：</strong><br>
-5月から<strong>変形労働時間制</strong>を導入します。毎月事前にカレンダーで出勤日/休日を決めておくことで：
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>土曜出勤を<strong>所定内</strong>にできる（割増賃金が不要）</li>
-  <li>会社都合の休業（0.6補償）が<strong>発生しなくなる</strong></li>
-  <li>スタッフに事前に勤務予定を伝えられる</li>
-</ul>
-</div>
+<p>PCの出面入力画面では、スタッフの各日がステータスの<strong>ピル表示</strong>（淡い色の背景＋濃い文字）になっています。色で状態がひと目で分かります。</p>
 
-<h3>5-1. カレンダー作成〜署名の流れ</h3>
+<h3>4-1. ステータスの色</h3>
 
 <table>
-<tr><th>ステップ</th><th>誰が</th><th>やること</th><th>システム上の状態</th></tr>
-<tr style="background:#e6f4ea;"><td><strong>1</strong></td><td><strong>職長</strong></td><td>カレンダーに出勤日/休日を設定</td><td>未作成 → 作成中</td></tr>
-<tr style="background:#e6f4ea;"><td><strong>2</strong></td><td><strong>職長</strong></td><td><strong>「○○を提出する」</strong>ボタンを押す</td><td>→ 提出済み（承認待ち）</td></tr>
-<tr><td>3</td><td>政仁さん</td><td>内容を確認して「承認する」</td><td>→ 承認済み</td></tr>
-<tr><td>4</td><td>管理者</td><td>Messengerでスタッフに署名リンクを送信</td><td>→ 署名完了</td></tr>
+<tr><th>表示</th><th>意味</th></tr>
+<tr><td><span class="pill pill-work">出勤</span></td><td>出勤（緑）</td></tr>
+<tr><td><span class="pill pill-half">半日</span></td><td>半日（黄）</td></tr>
+<tr><td><span class="pill pill-paid">有給</span></td><td>有給休暇（紫）</td></tr>
+<tr><td><span class="pill pill-exam">試験</span></td><td>試験（藍）</td></tr>
+<tr><td><span class="pill pill-off">休み</span></td><td>休み（赤）</td></tr>
+<tr><td><span class="pill pill-site">現場休</span></td><td>現場都合休み（グレー）</td></tr>
+<tr><td><span class="pill pill-home">帰国</span></td><td>帰国中（シアン）</td></tr>
 </table>
 
-<h3>5-2. カレンダーの作成手順</h3>
+<p>残業がある日は、ピルの<strong>下段にオレンジで時間</strong>が表示されます（例: <span class="ot">＋2.0h</span>）。</p>
 
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">サイドバー →<strong>「就業カレンダー」</strong>を開く</div>
+<h3>4-2. 時刻・休憩・実労働時間</h3>
+
+<p>ベトナム人スタッフの出勤セルには、始業/終業時刻・休憩チェック・実労働時間も表示されます。</p>
+
+<table>
+<tr><th>表示</th><th>意味</th></tr>
+<tr><td><code>07:30　16:30</code></td><td>左が<strong>始業</strong>、右が<strong>終業</strong>（IHI現場は7:30開始）</td></tr>
+<tr><td>☑ ☑</td><td>午前・午後の<strong>休憩を取ったか</strong>（左=午前30分、右=午後30分）</td></tr>
+<tr><td><code>7.0</code> など</td><td><strong>実労働時間</strong> ＝ 終業 − 始業 − 取った休憩 − 昼60分（昼は必ず取得の前提で非表示）</td></tr>
+</table>
+
+<div class="box box-ok">
+<strong>所定実労働は 7時間／日。</strong>7時間を超えた分が残業として給与計算に反映されます。
 </div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">右上の<strong>年月セレクタ</strong>で翌月を選ぶ</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">カレンダーの日付をクリックして<strong>出勤/休み</strong>を切り替える<br>
-  <span style="color:#888; font-size:13px;">🔵青=出勤、⬜グレー=休み（日曜・祝日は日付が赤文字）</span></div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">画面に表示される<strong>所定日数と法定上限</strong>を確認<br>
-  <span style="color:#888; font-size:13px;">所定日数が法定上限を超えると提出できません</span></div>
-</div>
-<div class="step">
-  <div class="step-num">5</div>
-  <div class="step-text"><strong>「○○を提出する」</strong>ボタンを押す</div>
-</div>
+
+<h3>4-3. 職長がチェックすべきポイント</h3>
+
+<ol>
+  <li><strong>始業・終業時刻が現実と合っているか</strong>（7:30開始の現場で8:00入力なら要修正）</li>
+  <li><strong>休憩のチェックが正しいか</strong></li>
+  <li><strong>残業時間が妥当か</strong>（実労働7h超は残業扱い）</li>
+  <li>おかしければ職長が<strong>直接修正</strong>（プルダウンで時刻を選び直す）</li>
+</ol>
 
 <div class="box box-red">
-<strong>重要：法定上限を超えるカレンダーは提出できません。</strong><br>
-例えば31日の月では所定日数25日（175時間）が上限です。超えている場合は休日を追加してください。
+<strong>職長は出面の入力・確認（ロック）までが役割です。</strong>ロック後も職長は修正できますが、政仁さんが最終承認した日は変更できません（必要なら政仁さんに依頼）。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec5">5. 就業カレンダーの作成・提出（PC）</h2>
+
+<div class="box">
+<strong>なぜ作るのか：</strong>変形労働時間制のため、毎月事前に出勤日/休日を決めます。これで土曜出勤を所定内にでき（割増不要）、会社都合休業（0.6補償）も発生しなくなります。
+</div>
+
+<h3>5-1. 作成〜署名の流れ</h3>
+
+<table>
+<tr><th>ステップ</th><th>誰が</th><th>やること</th></tr>
+<tr style="background:#eefaf1;"><td><strong>1</strong></td><td><strong>職長</strong></td><td>カレンダーに出勤日/休日を設定</td></tr>
+<tr style="background:#eefaf1;"><td><strong>2</strong></td><td><strong>職長</strong></td><td><strong>「提出する」</strong>を押す → 承認待ちへ</td></tr>
+<tr><td>3</td><td>政仁さん</td><td>内容を確認して「承認する」</td></tr>
+<tr><td>4</td><td>管理者</td><td>Messengerでスタッフに署名リンクを送信</td></tr>
+</table>
+
+<h3>5-2. 作成手順</h3>
+
+<div class="step"><div class="step-num">1</div><div class="step-text">サイドバー →<strong>「就業カレンダー」</strong>を開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">右上の<strong>年月セレクタ</strong>で翌月を選ぶ</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">日付をクリックして<strong>出勤／休み</strong>を切り替える（青=出勤、グレー=休み、日曜・祝日は赤文字）</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">画面の<strong>所定日数と法定上限</strong>を確認（上限超過だと提出できません）</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text"><span class="btn-amber">提出する</span> を押す</div></div>
+
+<div class="box box-red">
+<strong>法定上限を超えるカレンダーは提出できません。</strong>超えている場合は休日を追加してください。
 <table style="margin-top:8px;">
 <tr><th>月の日数</th><th>最大所定日数</th></tr>
 <tr><td>28日</td><td>22日</td></tr>
@@ -401,99 +311,67 @@
 </table>
 </div>
 
-<div class="box box-warn">
-<strong>提出後は編集できません。</strong>修正が必要な場合は政仁さんまたは管理者（靖仁さん）に連絡してください。
-</div>
+<div class="box box-warn"><strong>提出後は編集できません。</strong>修正が必要なら政仁さんまたは管理者（靖仁さん）に連絡してください。</div>
 
-<h3>5-3. カレンダー設定のポイント</h3>
-
+<h3>5-3. 設定のポイント</h3>
 <table>
-<tr><th>日</th><th>設定</th><th>説明</th></tr>
-<tr><td>平日（月〜金）</td><td>出勤</td><td>元請の工程表に従う</td></tr>
-<tr><td>土曜</td><td>現場に合わせて出勤/休み</td><td>元請の工程表に従う。<strong>出勤にすれば割増なし</strong></td></tr>
-<tr><td>日曜</td><td>休み</td><td>原則休み（法定休日）</td></tr>
-<tr><td>祝日</td><td>現場に合わせて出勤/休み</td><td>元請の工程表に従う。日付は赤文字で表示</td></tr>
+<tr><th>日</th><th>設定</th></tr>
+<tr><td>平日（月〜金）</td><td>出勤（元請の工程表に従う）</td></tr>
+<tr><td>土曜</td><td>現場に合わせて出勤/休み。<strong>出勤にすれば割増なし</strong></td></tr>
+<tr><td>日曜</td><td>原則休み（法定休日）</td></tr>
+<tr><td>祝日</td><td>現場に合わせて出勤/休み（日付は赤文字）</td></tr>
 </table>
 
 <!-- ================================================ -->
-<h2 id="sec6">6. ダッシュボード・マスタの確認</h2>
+<h2 id="sec6">6. 有給・帰国申請の承認</h2>
 
-<h3>6-1. ダッシュボード</h3>
-
-<p>サイドバー →「ダッシュボード」で、全体の稼働状況を一目で確認できます。</p>
+<p>スタッフが申請すると、ダッシュボードの<strong>「勤怠申請」カード</strong>と通知ベル（🔔）に届きます。職長は「職長承認」まで、最終承認は政仁さんです。</p>
 
 <table>
-<tr><th>項目</th><th>内容</th></tr>
-<tr><td><strong>お知らせ</strong></td><td>カレンダー準備状況・月締め状況などの通知</td></tr>
-<tr><td><strong>勤怠申請</strong></td><td>有給申請・帰国申請の承認（職長承認/最終承認）、本日の欠勤届＋過去7日の欠勤を表示</td></tr>
-<tr><td><strong>本日の稼働状況</strong></td><td>今日の出勤人数・現場別の配置状況</td></tr>
-<tr><td><strong>今月サマリー</strong></td><td>人工数・売上の月間集計</td></tr>
-<tr><td><strong>日別稼働人数チャート</strong></td><td>日ごとの稼働人数の推移グラフ</td></tr>
+<tr><th>段階</th><th>誰が</th><th>やること</th></tr>
+<tr style="background:#eefaf1;"><td><strong>第1段階</strong></td><td><strong>職長</strong></td><td>内容を確認 →「職長承認」（または却下）</td></tr>
+<tr><td><strong>第2段階</strong></td><td>政仁さん</td><td>職長承認済みの申請を最終承認</td></tr>
 </table>
-
-<h3>6-2. 現場マスタ・外注先マスタ</h3>
-
-<p>サイドバーから「現場マスタ」「外注先マスタ」を開くと、現場情報（名称・工期・単価）や外注先情報を確認できます。</p>
 
 <div class="box box-warn">
-<strong>外注先の現場別単価について：</strong><br>
-外注先は基本単価のほかに、<strong>現場ごとに異なる単価</strong>を設定できます。<br>
-現場マスタの編集画面 → 「外注先」セクションで、外注先ごとに現場別の人工単価を設定できます。<br>
-<strong>単価に変更があった場合は速やかにシステムに反映してください。</strong>原価・収益の計算に直接影響します。
-</div>
-
-<div class="box">
-<strong>現場別勤務時間設定：</strong>
+<strong>承認権限の境界：</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>現場マスタの「⏰ 勤務時間設定」セクションで、現場ごとの始業・終業時刻と休憩構成を確認できます</li>
-  <li>未設定の現場はデフォルト（8:00〜17:00、午前30分・昼60分・午後30分）</li>
-  <li>IHI現場は <strong>7:30〜16:30</strong>。スマホ画面のスタッフ入力デフォルトもこの設定に合わせて自動で切り替わります</li>
-  <li>設定変更が必要な場合は政仁さんまたは管理者に依頼してください</li>
+  <li>職長の画面に<strong>「最終承認」ボタンはありません</strong>。「最終承認待ち」ラベルのみ表示されます</li>
+  <li>「職長承認」を押すと、政仁さん側に「最終承認待ち」として回ります</li>
 </ul>
 </div>
 
 <div class="box">
-<strong>出向中スタッフの扱い：</strong>
+<strong>申請ルール（スタッフに伝えてください）：</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>出向中スタッフ（<code>dispatchTo</code> 設定済み）は<strong>有給管理ページからは除外</strong>されます（出向先で管理されるため）</li>
-  <li>出面入力ページには引き続き表示されますので、通常通り入力・確認してください</li>
+  <li><strong>有給</strong>：原則<strong>5日前まで</strong>に申請（日本人社員には適用なし）</li>
+  <li><strong>帰国</strong>：原則<strong>出発の3ヶ月前まで</strong>に申請。最終承認されると帰国期間中の出勤日に「帰国中」が自動記録され、人工数にも欠勤にもカウントされません</li>
 </ul>
 </div>
 
-<h3>6-3. 通知ベル</h3>
-
-<p>ヘッダー右上の<strong>ベルアイコン</strong>に通知が届きます。職長に関係する主な通知は以下のとおりです。</p>
-
-<table>
-<tr><th>通知</th><th>意味</th></tr>
-<tr><td>在留期限アラート</td><td>スタッフの在留期限が近づいている（180日/90日/30日/期限切れ）</td></tr>
-<tr><td>有給承認待ち</td><td>スタッフからの有給申請が職長の承認を待っている</td></tr>
-<tr><td>帰国申請</td><td>スタッフからの帰国申請が職長の承認を待っている</td></tr>
-<tr><td>お知らせ</td><td>システムからの重要なお知らせ（カレンダー準備状況・月締め状況など）</td></tr>
-<tr><td>就業カレンダー未署名</td><td>スタッフがまだカレンダーに署名していない</td></tr>
-</table>
+<div class="box box-ok" style="font-size:13px;">
+取り消しできるのは職長承認を押す<strong>前</strong>まで。承認後はスタッフ側で取り消し不可。取り消し・却下済みの申請は同じ日付で再申請できます（詳細は <a href="/manual-yukyu.html">休暇管理マニュアル</a>）。
+</div>
 
 <!-- ================================================ -->
 <h2 id="sec7">7. 毎日・毎月のルーティン</h2>
 
-<h3>毎日のルーティン</h3>
-
+<h3>毎日</h3>
 <div class="box">
 <table>
-<tr><th>タイミング</th><th>作業</th><th>画面</th><th>所要時間</th></tr>
-<tr><td><strong>朝（現場到着後）</strong></td><td>① ダッシュボードで今日の稼働状況を確認<br>② <strong>「勤怠申請」カード</strong>で有給申請・欠勤届を確認<br>③ 出面入力画面で日本人社員・外注先の出勤を入力</td><td>ダッシュボード<br>出面入力</td><td>5〜10分</td></tr>
-<tr><td><strong>夕方（作業終了後）</strong></td><td>① ベトナム人スタッフのスマホ入力を確認・修正<br>② 残業があれば残業時間を入力<br>③ 有給申請・帰国申請があれば「職長承認」する（ダッシュボードから可能）<br>④ スマホ画面で<strong>「✅ この日を確認する」</strong>を押す</td><td>スマホ職長画面<br>or 出面入力</td><td>5〜10分</td></tr>
+<tr><th>タイミング</th><th>作業</th></tr>
+<tr><td><strong>朝</strong></td><td>① ダッシュボードで稼働状況・勤怠申請を確認<br>② PCで日本人社員・外注先の出勤を入力</td></tr>
+<tr><td><strong>夕方</strong></td><td>① スマホ職長画面でスタッフの入力を確認・修正<br>② 現場違いがあれば正しい現場へ移動<br>③ 有給・帰国申請があれば「職長承認」<br>④ <span class="btn-amber">✅ この日を確認する</span> を押す</td></tr>
 </table>
 </div>
 
-<h3>毎月のルーティン</h3>
-
+<h3>毎月</h3>
 <div class="box">
 <table>
-<tr><th>タイミング</th><th>作業</th><th>画面</th></tr>
-<tr><td><strong>20日頃</strong></td><td>元請から翌月工程表を入手</td><td>—</td></tr>
-<tr><td><strong>〜25日</strong></td><td>就業カレンダーを作成して<strong>「提出する」</strong></td><td>就業カレンダー</td></tr>
-<tr><td><strong>月末</strong></td><td>政仁さんの承認を確認<br>ダッシュボードのカレンダー準備で進捗を確認</td><td>ダッシュボード</td></tr>
+<tr><th>タイミング</th><th>作業</th></tr>
+<tr><td><strong>20日頃</strong></td><td>元請から翌月工程表を入手</td></tr>
+<tr><td><strong>〜25日</strong></td><td>就業カレンダーを作成して「提出する」</td></tr>
+<tr><td><strong>月末</strong></td><td>ダッシュボードで政仁さんの承認・準備状況を確認</td></tr>
 </table>
 </div>
 
@@ -502,17 +380,16 @@
 
 <table>
 <tr><th>困りごと</th><th>対応方法</th></tr>
-<tr><td>出面の入力を間違えた</td><td>セルをクリックして修正してください（自動保存）</td></tr>
-<tr><td>カレンダーを提出した後に修正したい</td><td>政仁さんまたは管理者（靖仁さん）に連絡してください</td></tr>
-<tr><td>スタッフがスマホで入力していない</td><td>スタッフに入力を促すか、職長画面から代わりに入力してください</td></tr>
-<tr><td>承認した後に間違いに気づいた</td><td>スマホ画面で再度タップして修正できます。政仁さんの最終承認前であれば修正可能</td></tr>
-<tr><td>ログインできない</td><td>管理者（靖仁さん）に連絡してパスワードを確認してください</td></tr>
-<tr><td>画面の表示がおかしい</td><td>ブラウザを更新（リロード）してください。それでも直らなければ管理者に連絡</td></tr>
+<tr><td>出面の入力を間違えた</td><td>セルをタップ／クリックして修正（自動保存）</td></tr>
+<tr><td>スタッフがスマホで入力していない</td><td>入力を促す。有給・現場都合休みは職長が代理入力可</td></tr>
+<tr><td>別現場で入力されている</td><td>スタッフをタップ →「🔄 こちらに移動する」</td></tr>
+<tr><td>確認した後に間違いに気づいた</td><td>職長は修正可。ただし政仁さんの最終承認後は不可（政仁さんに依頼）</td></tr>
+<tr><td>カレンダーを提出後に修正したい</td><td>政仁さんまたは管理者（靖仁さん）に連絡</td></tr>
+<tr><td>ログインできない／表示がおかしい</td><td>ブラウザを更新。直らなければ管理者（靖仁さん）に連絡</td></tr>
 </table>
 
 <div class="box box-ok">
-<strong>不明点は管理者（靖仁さん）に気軽に聞いてください。</strong><br>
-システムの操作でわからないことがあれば、遠慮なく連絡してください。
+<strong>不明点は管理者（靖仁さん）に気軽に聞いてください。</strong>
 </div>
 
 <hr>
