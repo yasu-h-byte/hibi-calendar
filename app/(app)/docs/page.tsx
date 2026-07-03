@@ -26,7 +26,7 @@ const ROLE_LABEL: Record<Role, string> = {
 // 全資料（フラットに保持。category は表示グループ用）
 const DOCS: (DocItem & { category: string })[] = [
   // ── 全員向けの入口 ──
-  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-04-30' },
+  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-07-03' },
   { category: 'guide', title: '運用ガイド', desc: '変形労働時間制・3段階残業判定・3層構造給与・通知ベルなどの仕組みの解説', url: '/guide', icon: '📖', internal: true, badge: '初回読了推奨', updated: '2026-04-18' },
 
   // ── 事務（奥寺さん） ──
@@ -35,7 +35,7 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'manual', roles: ['jimu'], title: '社労士提出用資料マニュアル', desc: 'HFU分を社労士に渡す資料の説明。変形労働時間制・3段階残業判定・有給日給・提出3資料の読み方・端数処理', url: '/manual-syaroshi.html', icon: '🏛', badge: 'NEW', updated: '2026-06-12' },
 
   // ── 事業責任者（政仁さん） ──
-  { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面承認・就業カレンダー・原価収益（役員担当）', url: '/manual-masahito.html', icon: '📗', updated: '2026-04-30' },
+  { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面の最終承認・有給/帰国申請の承認・就業カレンダー承認（事業責任者の承認業務に特化）', url: '/manual-masahito.html', icon: '📗', updated: '2026-07-03' },
 
   // ── 職長 ──
   { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・ロック／就業カレンダー作成／出面グリッドの読み方（1冊に統合）', url: '/manual-foreman.html', icon: '📕', updated: '2026-07-03' },
