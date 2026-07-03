@@ -798,7 +798,7 @@ export default function MonthlyPage() {
               const isDownloading = exportDownloading === card.type
 
               return (
-                <div key={card.type} className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-5 flex flex-col">
+                <div key={card.type} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col">
                   <div className="text-3xl mb-3">{card.icon}</div>
                   <h3 className="font-bold text-hibi-navy dark:text-white text-sm mb-1">{card.title}</h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 flex-1">{card.description}</p>
@@ -1108,7 +1108,7 @@ export default function MonthlyPage() {
 
       {/* Loading / Error */}
       {loading && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center text-gray-400 dark:text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-8 text-center text-gray-400 dark:text-gray-500">
           読み込み中...
         </div>
       )}
@@ -1233,7 +1233,7 @@ export default function MonthlyPage() {
 
       {/* Worker Table (全体 / 日比建設 / HFU) */}
       {!loading && data && isWorkerTab && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
           <table className="w-full text-sm min-w-[1400px]">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
@@ -1628,7 +1628,7 @@ export default function MonthlyPage() {
 
       {/* Subcon Table (外注) */}
       {!loading && data && !isWorkerTab && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">

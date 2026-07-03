@@ -110,19 +110,19 @@ export default function ToolBudgetPage() {
 
       {/* サマリー */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
           <div className="text-xs text-gray-500">対象人数</div>
           <div className="text-2xl font-bold text-hibi-navy">{workers.length}名</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
           <div className="text-xs text-gray-500">期間設定済</div>
           <div className="text-2xl font-bold text-hibi-navy">{setupCount} / {workers.length}</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
           <div className="text-xs text-gray-500">使用済み合計</div>
           <div className="text-2xl font-bold text-orange-600">¥{totalUsed.toLocaleString()}</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
           <div className="text-xs text-gray-500">残額合計</div>
           <div className="text-2xl font-bold text-green-600">¥{(totalBudget - totalUsed).toLocaleString()}</div>
         </div>
@@ -131,12 +131,12 @@ export default function ToolBudgetPage() {
       {loading ? (
         <div className="text-center py-8 text-gray-400">読み込み中...</div>
       ) : workers.length === 0 ? (
-        <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-8 text-center text-gray-400">
           <p>対象スタッフがいません。</p>
           <p className="text-sm mt-2">技能実習生・特定技能のスタッフが登録されているか、人員マスタをご確認ください。</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-hibi-navy text-white">
@@ -393,7 +393,7 @@ function WorkerModal({
                 <button
                   onClick={saveAnchor}
                   disabled={anchorSaving || anchor === (worker.periodAnchor || '')}
-                  className="bg-hibi-navy text-white px-4 py-1.5 rounded text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
+                  className="bg-hibi-navy text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
                 >
                   {anchorSaving ? '保存中...' : '保存'}
                 </button>
@@ -594,7 +594,7 @@ function WorkerModal({
                     <button
                       onClick={handleAddNew}
                       disabled={newSaving || !newDate || !newAmount}
-                      className="bg-hibi-navy text-white px-4 py-1.5 rounded text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
+                      className="bg-hibi-navy text-white px-4 py-1.5 rounded-lg text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
                     >
                       {newSaving ? '追加中...' : '+ 追加'}
                     </button>

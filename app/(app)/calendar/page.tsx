@@ -478,7 +478,7 @@ Chon ten -> Xem lich -> Ky
 
       {/* 全体状況（月またぎ運用ダッシュボード・管理者のみ） */}
       {user.role !== 'foreman' && overview && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
           <div className="flex items-center justify-between mb-2">
             <button onClick={() => setShowOverview(v => !v)} className="font-bold text-hibi-navy dark:text-white flex items-center gap-2">
               📊 全体状況（月またぎ）<span className="text-xs text-gray-400">{showOverview ? '▲' : '▼'}</span>
@@ -545,7 +545,7 @@ Chon ten -> Xem lich -> Ky
 
       {/* スタッフからの質問・相談（当月・管理者のみ） */}
       {user.role !== 'foreman' && questions.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
           <h3 className="font-bold text-hibi-navy dark:text-white mb-2">
             ❓ スタッフからの質問・相談（{y}年{m}月）
             <span className="ml-2 text-xs font-normal text-gray-400">未解決 {questions.filter(q => !q.resolved).length}件</span>
@@ -590,7 +590,7 @@ Chon ten -> Xem lich -> Ky
             const isReadOnly = (isApproved && !isRevising) || (isSubmitted && user.role === 'foreman')
 
             return (
-              <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+              <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
                 {/* Site header */}
                 <div className="p-4 border-b dark:border-gray-700 flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -989,7 +989,7 @@ Chon ten -> Xem lich -> Ky
 
       {/* Bulk confirm button (admin only, when multiple unconfirmed sites exist) */}
       {!loading && visibleSites.length > 1 && !allApproved && user.role !== 'foreman' && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
           <button
             onClick={() => setShowConfirmDialog(true)}
             disabled={saving || hasLegalExceed}
@@ -1005,7 +1005,7 @@ Chon ten -> Xem lich -> Ky
 
       {/* Signature status summary */}
       {!loading && visibleSites.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 space-y-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4 space-y-3">
           <h3 className="font-bold text-hibi-navy dark:text-white">署名状況</h3>
           <div className="text-sm text-gray-700 dark:text-gray-300">
             署名状況: <span className="font-bold">{signedWorkers}/{totalWorkers}名</span> 署名済み
@@ -1095,7 +1095,7 @@ Chon ten -> Xem lich -> Ky
         }
 
         return (
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl shadow p-4 space-y-3">
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl shadow-sm p-4 space-y-3">
             <h3 className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
               <span>✏️</span>
               <span>カレンダー修正後の再確認状況</span>

@@ -145,7 +145,7 @@ function AnnouncementsCard({ password }: { password: string }) {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-hibi-navy">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-hibi-navy">
       <h3 className="text-sm font-bold text-hibi-navy dark:text-white mb-3">📢 お知らせ</h3>
       <div className="divide-y divide-gray-100 dark:divide-gray-700">
         {items.map(a => {
@@ -276,7 +276,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
   const foremanApprovedGroups = groupLeaves(foremanApproved)
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-blue-400">
+    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-blue-400">
       <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">📋 勤怠申請</h3>
 
       {/* 有給申請 */}
@@ -743,7 +743,7 @@ export default function DashboardPage() {
           {/* ═══ 今月サマリー ═══ */}
           {data.summary && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
                 <div className="flex items-center gap-1 text-xs font-semibold mb-1">
                   <span className="text-gray-500 dark:text-gray-400">総人工数</span>
                   {data.summary.prevTotalManDays > 0 && data.summary.pctWork !== 0 && (
@@ -757,7 +757,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-xs text-gray-400 dark:text-gray-500">人工</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
                 <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">
                   {data.summary.billing > 0 ? '売上' : '売上（概算）'}
                 </div>
@@ -843,7 +843,7 @@ export default function DashboardPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 bg-white">
         <h2 className="font-bold text-hibi-navy dark:text-blue-300 text-sm">{title}</h2>
       </div>

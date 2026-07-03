@@ -161,19 +161,19 @@ export default function AccessLogPage() {
 
       {/* サマリー */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
           <div className="text-xs text-gray-500">対象人数</div>
           <div className="text-2xl font-bold text-hibi-navy">{filtered.length}名</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
           <div className="text-xs text-gray-500">今日アクセス</div>
           <div className="text-2xl font-bold text-green-600">{todayCount}名</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
           <div className="text-xs text-gray-500">3日以上未</div>
           <div className="text-2xl font-bold text-yellow-600">{warningCount}名</div>
         </div>
-        <div className="bg-white rounded-xl shadow p-4 text-center">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
           <div className="text-xs text-gray-500">未アクセス</div>
           <div className="text-2xl font-bold text-red-600">{neverCount}名</div>
         </div>
@@ -182,11 +182,11 @@ export default function AccessLogPage() {
       {loading ? (
         <div className="text-center py-8 text-gray-400">読み込み中...</div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white rounded-xl shadow p-8 text-center text-gray-400">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-8 text-center text-gray-400">
           データがありません
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-hibi-navy text-white">

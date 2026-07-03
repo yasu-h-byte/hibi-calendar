@@ -160,7 +160,7 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
 
   if (!isAdmin) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 text-center text-gray-400 dark:text-gray-500">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-8 text-center text-gray-400 dark:text-gray-500">
         管理者・事業責任者のみ閲覧できます
       </div>
     )
@@ -185,7 +185,7 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
         </p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-900">
@@ -302,7 +302,7 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
           onClick={() => setDetailWorkerId(null)}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full my-8 max-h-[90vh] overflow-y-auto"
+            className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-xl max-w-3xl w-full my-8 max-h-[90vh] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">

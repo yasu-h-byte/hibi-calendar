@@ -39,7 +39,7 @@ export default function MonthlyTab({ visible, filteredWorkers, orgFilter }: Prop
   ) => {
     if (targetWorkers.length === 0) {
       return (
-        <div key={orgKey} className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+        <div key={orgKey} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
           <div className="flex items-center gap-2 mb-2">
             <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${orgBadgeColor}`}>{orgLabel}</span>
             <h2 className="text-base font-bold text-hibi-navy dark:text-white">月別 有給取得日数</h2>
@@ -56,7 +56,7 @@ export default function MonthlyTab({ visible, filteredWorkers, orgFilter }: Prop
     const orgGrandTotal = Object.values(orgTotalByMonth).reduce((s, n) => s + n, 0)
 
     return (
-      <div key={orgKey} className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+      <div key={orgKey} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
         <div className="flex items-center gap-2 mb-3">
           <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${orgBadgeColor}`}>{orgLabel}</span>
           <h2 className="text-base font-bold text-hibi-navy dark:text-white">月別 有給取得日数</h2>

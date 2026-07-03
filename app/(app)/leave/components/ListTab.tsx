@@ -28,26 +28,26 @@ export default function ListTab({ visible, filteredWorkers, loading, onEdit }: P
   return (<>
     {/* KPI */}
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
         <div className="text-2xl font-bold text-hibi-navy">{eligible}</div>
         <div className="text-xs text-gray-500 dark:text-gray-400">対象人数</div>
       </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
         <div className="text-2xl font-bold text-blue-600">{totalRemaining}</div>
         <div className="text-xs text-gray-500 dark:text-gray-400">有給残日数</div>
       </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
         <div className="text-2xl font-bold text-green-600">{totalUsed}</div>
         <div className="text-xs text-gray-500 dark:text-gray-400">消化日数</div>
       </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
         <div className={`text-2xl font-bold ${alertCount > 0 ? 'text-red-500' : 'text-green-600'}`}>{alertCount}</div>
         <div className="text-xs text-gray-500 dark:text-gray-400">残3日以下</div>
       </div>
     </div>
 
     {/* Company-wide consumption rate bar */}
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">全社消化率</span>
         <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{fmtPct(companyRate)}（{totalUsed}/{totalTotal}日）</span>
@@ -62,7 +62,7 @@ export default function ListTab({ visible, filteredWorkers, loading, onEdit }: P
 
     {/* Table */}
     {/* === リデザイン: 8列構成・固定行高・ステータスドット === */}
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">

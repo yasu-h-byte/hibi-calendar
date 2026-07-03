@@ -315,7 +315,7 @@ export default function CostPage() {
       {/* ═══ KPI Cards (expanded) ═══ */}
       {kpi && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
             <div className="text-2xl font-bold text-hibi-navy tabular-nums">{fmtYenMan(kpi.billing)}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">
               {kpi.estMonths > 0 ? '概算売上' : '確定売上'}
@@ -340,7 +340,7 @@ export default function CostPage() {
               )
             })()}
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
             <div className={`text-2xl font-bold tabular-nums ${profitColor(kpi.profitRate)}`}>{fmtYenMan(kpi.profit)}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">
               粗利（{fmtPct(kpi.profitRate)}）
@@ -359,7 +359,7 @@ export default function CostPage() {
               )
             })()}
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
             <div className="text-2xl font-bold text-hibi-navy tabular-nums">
               {(() => {
                 const displayValue = kpi.estMonths > 0 ? kpi.perWEst : kpi.perW
@@ -371,7 +371,7 @@ export default function CostPage() {
               基準{fmtYen(kpi.billingPerManDayBaseline)}
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
             <div className="text-2xl font-bold text-blue-600 tabular-nums">{fmtYen(kpi.laborCostPerPersonAll)}</div>
             <div className="text-xs text-gray-500 dark:text-gray-400">1人あたり労務費</div>
             <div className="text-[11px] text-gray-500 mt-1 space-y-0.5">
@@ -594,7 +594,7 @@ export default function CostPage() {
       )}
 
       {/* ═══ Site profit table ═══ */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
@@ -753,7 +753,7 @@ export default function CostPage() {
 
       {/* Cost Bar Chart */}
       {data && data.sites.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
           <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-3">現場別原価バーチャート</h2>
           <div className="space-y-2">
             {data.sites
@@ -803,7 +803,7 @@ export default function CostPage() {
 
       {/* Subcon cost detail table */}
       {data && data.subconDetails && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
           <div className="px-4 py-3 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
             <h2 className="text-sm font-bold text-hibi-navy dark:text-white">外注先別原価明細</h2>
           </div>
@@ -859,7 +859,7 @@ export default function CostPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 bg-white dark:bg-gray-800">
         <h2 className="font-bold text-hibi-navy dark:text-blue-300 text-sm">{title}</h2>
       </div>

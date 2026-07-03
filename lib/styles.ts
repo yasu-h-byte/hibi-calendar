@@ -15,9 +15,9 @@
 //  Card
 // ────────────────────────────────────────
 
-/** 標準カード（bg-white + shadow + rounded） */
+/** 標準カード（bg-white + border + shadow-sm + rounded） */
 export function cardCls(extra = ''): string {
-  return `bg-white dark:bg-gray-800 rounded-xl shadow ${extra}`.trim()
+  return `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm ${extra}`.trim()
 }
 
 /** 境界線ありカード */
@@ -35,7 +35,7 @@ export const modalOverlayCls =
 
 /** モーダルのコンテンツ枠 */
 export function modalContentCls(extra = ''): string {
-  return `bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-lg w-full mx-4 p-6 animate-modalIn ${extra}`.trim()
+  return `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-xl max-w-lg w-full mx-4 p-6 animate-modalIn ${extra}`.trim()
 }
 
 // ────────────────────────────────────────

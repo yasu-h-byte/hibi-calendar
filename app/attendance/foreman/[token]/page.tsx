@@ -180,16 +180,16 @@ export default function ForemanAttendancePage() {
 
   if (loading && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-hibi-navy text-lg">読み込み中...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5]">
+        <div className="text-hibi-charcoal text-lg font-bold">読み込み中...</div>
       </div>
     )
   }
 
   if (error && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white rounded-xl shadow p-6 text-center max-w-sm w-full">
+      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5] p-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center max-w-sm w-full">
           <div className="text-red-500 text-lg font-bold mb-2">エラー</div>
           <div className="text-gray-700">{error}</div>
         </div>
@@ -200,9 +200,9 @@ export default function ForemanAttendancePage() {
   if (!data) return null
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F1F2F5]">
       {/* Header */}
-      <div className="bg-hibi-navy text-white px-4 py-4">
+      <div className="bg-hibi-charcoal text-white px-4 py-4">
         <div className="max-w-lg mx-auto">
           <div className="text-sm opacity-70">職長</div>
           <div className="text-lg sm:text-xl font-bold truncate">{data.foreman.name}</div>
@@ -215,17 +215,17 @@ export default function ForemanAttendancePage() {
         <div className="max-w-lg mx-auto flex items-center justify-between gap-2">
           <button
             onClick={() => navDay(-1)}
-            className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-bold active:bg-gray-200 shrink-0"
+            className="px-3 py-2 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-lg text-sm font-bold active:bg-gray-100 shrink-0"
           >
             ◀ 前日
           </button>
           <div className="text-center min-w-0">
-            <div className="text-sm sm:text-base font-bold text-hibi-navy truncate">{data.date.dateLabel}</div>
+            <div className="text-sm sm:text-base font-bold text-hibi-charcoal tabular-nums truncate">{data.date.dateLabel}</div>
           </div>
           <button
             onClick={() => navDay(1)}
             disabled={isToday}
-            className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-bold active:bg-gray-200 disabled:opacity-30 shrink-0"
+            className="px-3 py-2 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-lg text-sm font-bold active:bg-gray-100 disabled:opacity-30 shrink-0"
           >
             翌日 ▶
           </button>
@@ -235,17 +235,17 @@ export default function ForemanAttendancePage() {
       <div className="max-w-lg mx-auto p-4 space-y-4">
         {/* Summary */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-blue-50 rounded-xl p-3 text-center">
-            <div className="text-2xl font-bold text-blue-600">{data.summary.workCount}</div>
-            <div className="text-xs text-blue-500">出勤</div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 text-center">
+            <div className="text-2xl font-extrabold text-blue-700 tabular-nums">{data.summary.workCount}</div>
+            <div className="text-xs text-gray-600 font-bold">出勤</div>
           </div>
-          <div className="bg-red-50 rounded-xl p-3 text-center">
-            <div className="text-2xl font-bold text-red-400">{data.summary.noneCount}</div>
-            <div className="text-xs text-red-400">未入力</div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 text-center">
+            <div className="text-2xl font-extrabold text-red-600 tabular-nums">{data.summary.noneCount}</div>
+            <div className="text-xs text-gray-600 font-bold">未入力</div>
           </div>
-          <div className="bg-gray-50 rounded-xl p-3 text-center">
-            <div className="text-2xl font-bold text-gray-600">{data.summary.totalCount}</div>
-            <div className="text-xs text-gray-500">全員</div>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 text-center">
+            <div className="text-2xl font-extrabold text-hibi-charcoal tabular-nums">{data.summary.totalCount}</div>
+            <div className="text-xs text-gray-600 font-bold">全員</div>
           </div>
         </div>
 
@@ -253,17 +253,17 @@ export default function ForemanAttendancePage() {
         <button
           onClick={handleApprove}
           disabled={data.approved || saving}
-          className={`w-full rounded-xl py-4 text-base font-bold transition ${
+          className={`w-full rounded-xl py-4 text-base transition ${
             data.approved
-              ? 'bg-green-100 text-green-700 border-2 border-green-300'
-              : 'bg-hibi-navy text-white active:bg-hibi-light'
+              ? 'bg-[#1E9E52] text-white font-bold'
+              : 'bg-hibi-amber text-hibi-charcoal font-extrabold shadow-[0_4px_12px_rgba(245,166,35,0.4)] active:bg-hibi-amberDark'
           } disabled:opacity-70`}
         >
           {data.approved ? '✅ 確認済み' : '✅ この日を確認する'}
         </button>
 
         {/* Worker list */}
-        <div className="bg-white rounded-xl shadow overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           {data.workers.length === 0 ? (
             <div className="p-4 text-center text-gray-400">スタッフがいません</div>
           ) : (
@@ -326,7 +326,7 @@ export default function ForemanAttendancePage() {
         </div>
 
         {/* Past days */}
-        <div className="bg-white rounded-xl shadow p-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <div className="text-sm text-gray-500 mb-2 font-bold">過去の確認状況</div>
           {data.pastDays.map((pd, i) => (
             <div
@@ -336,7 +336,7 @@ export default function ForemanAttendancePage() {
             >
               <span className="text-sm text-gray-600 truncate min-w-0">{pd.date}</span>
               <span className={`text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 ${
-                pd.approved ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                pd.approved ? 'bg-[#1E9E52] text-white' : 'bg-gray-100 text-gray-500'
               }`}>
                 {pd.approved ? '✅ 確認済み' : '— 未確認'}
               </span>
@@ -349,7 +349,7 @@ export default function ForemanAttendancePage() {
       {editingWorker && (
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setEditingWorker(null)}>
           <div className="bg-white rounded-t-2xl w-full max-w-lg px-4 sm:px-6 pt-5 pb-[env(safe-area-inset-bottom,8px)]" onClick={e => e.stopPropagation()} style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}>
-            <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center truncate">{editingWorker.name}</h3>
+            <h3 className="text-lg font-bold text-hibi-charcoal mb-1 text-center truncate">{editingWorker.name}</h3>
             <p className="text-sm text-gray-500 mb-4 text-center">{data.date.dateLabel}</p>
 
             {/* スタッフ未入力時のヒント（待機中行から開いた場合） */}
@@ -395,21 +395,21 @@ export default function ForemanAttendancePage() {
               <div className="flex items-center justify-center gap-3">
                 <button
                   onClick={() => setEditOT(Math.max(0, editOT - 0.5))}
-                  className="w-10 h-10 bg-gray-200 rounded-lg text-lg font-bold"
+                  className="w-10 h-10 bg-gray-200 text-hibi-charcoal rounded-lg text-lg font-bold active:bg-gray-300"
                 >−</button>
-                <span className="text-lg font-bold w-14 text-center text-orange-600">
+                <span className="text-lg font-bold w-14 text-center text-orange-600 tabular-nums">
                   {editOT.toFixed(1)}h
                 </span>
                 <button
                   onClick={() => setEditOT(Math.min(8, editOT + 0.5))}
-                  className="w-10 h-10 bg-gray-200 rounded-lg text-lg font-bold"
+                  className="w-10 h-10 bg-gray-200 text-hibi-charcoal rounded-lg text-lg font-bold active:bg-gray-300"
                 >＋</button>
               </div>
             </div>
 
             <button
               onClick={() => setEditingWorker(null)}
-              className="w-full bg-gray-200 text-gray-600 rounded-xl py-3 text-sm"
+              className="w-full bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-sm font-bold active:bg-gray-100"
             >
               閉じる
             </button>
@@ -425,7 +425,7 @@ export default function ForemanAttendancePage() {
             onClick={e => e.stopPropagation()}
             style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
           >
-            <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center truncate">
+            <h3 className="text-lg font-bold text-hibi-charcoal mb-1 text-center truncate">
               {fixingSite.workerName} さん
             </h3>
             <p className="text-sm text-gray-500 mb-4 text-center">{data.date.dateLabel} の現場違い修正</p>
@@ -476,7 +476,7 @@ export default function ForemanAttendancePage() {
             <button
               onClick={() => setFixingSite(null)}
               disabled={saving}
-              className="w-full bg-gray-100 text-gray-700 rounded-xl py-3 font-medium text-sm disabled:opacity-50"
+              className="w-full bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 font-bold text-sm active:bg-gray-100 disabled:opacity-50"
             >
               キャンセル
             </button>

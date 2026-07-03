@@ -213,7 +213,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           {ui.deleteConfirm === h.id ? (
             <div className="flex gap-1">
               <button onClick={() => handleHlDelete(h.id)} disabled={hlSaving}
-                className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50">削除する</button>
+                className="px-3 py-1 text-xs font-bold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">削除する</button>
               <button onClick={() => patchUi({ deleteConfirm: null })}
                 className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded">やめる</button>
             </div>
@@ -229,7 +229,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
   return (
     <div className="space-y-6 max-w-2xl">
       {/* 新規登録 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm">
         <button onClick={() => patchUi({ formOpen: !ui.formOpen })}
           className="w-full px-4 py-3 flex items-center justify-between text-left">
           <span className="font-medium text-gray-900 dark:text-white">＋ 新規登録</span>

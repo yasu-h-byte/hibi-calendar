@@ -727,16 +727,16 @@ export default function StaffAttendancePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-hibi-navy text-lg">よみこみちゅう... / Đang tải...</div>
+      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5]">
+        <div className="text-hibi-charcoal text-lg font-bold">よみこみちゅう... / Đang tải...</div>
       </div>
     )
   }
 
   if (error && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="bg-white rounded-xl shadow p-6 text-center max-w-sm w-full">
+      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5] p-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center max-w-sm w-full">
           <div className="text-red-500 text-lg font-bold mb-2">エラー / Lỗi</div>
           <div className="text-gray-700">{error}</div>
         </div>
@@ -751,9 +751,9 @@ export default function StaffAttendancePage() {
   const useTimeBased = isTimeBasedMobile(currentYm)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F1F2F5]">
       {/* Header */}
-      <div className="bg-hibi-navy text-white px-4 py-4">
+      <div className="bg-hibi-charcoal text-white px-4 py-4">
         <div className="max-w-lg mx-auto">
           <div className="text-xl font-bold">{data.worker.name} さん</div>
           {data.worker.nameVi && (
@@ -770,7 +770,7 @@ export default function StaffAttendancePage() {
           <select
             value={data.site.id}
             onChange={(e) => { setSiteId(e.target.value); setLoading(true) }}
-            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-base text-hibi-navy font-bold appearance-none"
+            className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-base text-hibi-charcoal font-bold appearance-none"
             style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%23666' stroke-width='2'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
           >
             {(data.availableSites || data.allSites.map(s => ({ ...s, primary: true }))).map(s => (
@@ -790,7 +790,7 @@ export default function StaffAttendancePage() {
           </div>
         )}
         {error && data && (
-          <div className="bg-red-100 text-red-600 rounded-xl p-3 text-center text-sm">
+          <div className="bg-red-100 text-red-600 rounded-xl p-3 text-center text-sm font-bold">
             {error}
           </div>
         )}
@@ -868,13 +868,13 @@ export default function StaffAttendancePage() {
 
         {/* Today's status */}
         {data.todayLocked ? (
-          <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 text-center">
-            <div className="text-green-700 font-bold text-lg">🔒 かくにんずみ</div>
-            <div className="text-green-600 text-sm mt-1">
+          <div className={`${currentStatus === 'rest' ? 'bg-gray-500' : 'bg-[#1E9E52]'} rounded-xl p-4 text-center`}>
+            <div className="text-white font-bold text-lg">🔒 かくにんずみ</div>
+            <div className="text-white/90 text-sm mt-1 font-bold">
               {STATUS_EMOJI[currentStatus]} {STATUS_LABELS[currentStatus]}
               {currentStatus === 'overtime' && data.currentEntry?.o ? ` +${data.currentEntry.o}h` : ''}
               {data.currentEntry?.st && data.currentEntry?.et && (
-                <span className="block text-xs mt-0.5">{data.currentEntry.st}〜{data.currentEntry.et}</span>
+                <span className="block text-xs mt-0.5 tabular-nums">{data.currentEntry.st}〜{data.currentEntry.et}</span>
               )}
             </div>
           </div>
@@ -883,10 +883,10 @@ export default function StaffAttendancePage() {
           <div className="space-y-4">
             {/* Start/End time pickers */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white rounded-xl shadow p-4 text-center">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
                 <p className="text-xs text-gray-500 mb-1">始業 / Bat dau</p>
                 <select value={startTime} onChange={e => setStartTime(e.target.value)}
-                  className="text-2xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
+                  className="text-2xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
                   {/* 5:00〜13:00 30分刻み (現場ごとの始業時刻に対応) */}
                   {Array.from({length: 17}, (_, i) => {
                     const h = 5 + Math.floor(i / 2)
@@ -896,10 +896,10 @@ export default function StaffAttendancePage() {
                   })}
                 </select>
               </div>
-              <div className="bg-white rounded-xl shadow p-4 text-center">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
                 <p className="text-xs text-gray-500 mb-1">終業 / Ket thuc</p>
                 <select value={endTime} onChange={e => setEndTime(e.target.value)}
-                  className="text-2xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
+                  className="text-2xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
                   {Array.from({length: 17}, (_, i) => {
                     const h = 15 + Math.floor(i / 2)
                     const m = i % 2 === 0 ? '00' : '30'
@@ -912,7 +912,7 @@ export default function StaffAttendancePage() {
 
             {/* Break checkboxes (午前・午後のみ表示。昼休憩は内部的に処理) */}
             {(workSchedule.morningBreak.enabled || workSchedule.afternoonBreak.enabled) && (
-              <div className="bg-white rounded-xl shadow p-4">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                 <p className="text-xs text-gray-500 mb-2">休憩 / Nghỉ giải lao</p>
                 <div className="space-y-2">
                   {[
@@ -937,9 +937,9 @@ export default function StaffAttendancePage() {
             )}
 
             {/* Actual hours display */}
-            <div className="bg-blue-50 rounded-xl p-4 text-center">
+            <div className="bg-[#FFF6E3] border border-[#F2D9A0] rounded-xl p-4 text-center">
               <p className="text-xs text-gray-500">実労働時間 / Gio lam thuc te</p>
-              <p className="text-3xl font-bold text-hibi-navy">
+              <p className="text-3xl font-extrabold text-[#8A5A00] tabular-nums">
                 {(() => {
                   const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
                   const end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
@@ -960,7 +960,7 @@ export default function StaffAttendancePage() {
                 if (workSchedule.lunchBreak.enabled     && (workSchedule.lunchBreak.mandatory     || break2)) mins -= workSchedule.lunchBreak.minutes
                 if (workSchedule.afternoonBreak.enabled && (workSchedule.afternoonBreak.mandatory || break3)) mins -= workSchedule.afternoonBreak.minutes
                 const ot = Math.max(0, mins / 60 - 7)
-                return ot > 0 ? <p className="text-sm text-orange-600 mt-1">うち所定外: {ot.toFixed(1)}h</p> : null
+                return ot > 0 ? <p className="text-sm text-orange-600 font-bold tabular-nums mt-1">うち所定外: {ot.toFixed(1)}h</p> : null
               })()}
             </div>
 
@@ -968,7 +968,7 @@ export default function StaffAttendancePage() {
             <button
               onClick={() => handleTimeBasedSubmit('work')}
               disabled={saving}
-              className="w-full bg-hibi-navy text-white rounded-2xl py-4 text-lg font-bold active:bg-hibi-light transition disabled:opacity-50"
+              className="w-full bg-hibi-amber text-hibi-charcoal rounded-xl py-4 text-lg font-extrabold shadow-[0_4px_12px_rgba(245,166,35,0.4)] active:bg-hibi-amberDark transition disabled:opacity-50"
             >
               出勤登録 / Xac nhan di lam
             </button>
@@ -977,12 +977,12 @@ export default function StaffAttendancePage() {
             <div className="grid grid-cols-2 gap-3">
               <button onClick={() => setShowRestModal(true)}
                 disabled={saving}
-                className="bg-gray-200 text-gray-700 rounded-2xl py-3 text-base font-bold active:bg-gray-300 transition disabled:opacity-50">
+                className="bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-base font-bold active:bg-gray-100 transition disabled:opacity-50">
                 欠勤届 / Xin nghi
               </button>
               <button onClick={() => setShowLeaveModal(true)}
                 disabled={saving}
-                className="bg-green-100 text-green-700 rounded-2xl py-3 text-base font-bold active:bg-green-200 transition disabled:opacity-50">
+                className="bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-base font-bold active:bg-gray-100 transition disabled:opacity-50">
                 有給申請 / Xin phep
               </button>
             </div>
@@ -1059,7 +1059,7 @@ export default function StaffAttendancePage() {
 
         {/* Leave request status (visible on main screen) */}
         {leaveRequests.length > 0 && leaveRequests.some(r => r.status === 'pending' || r.status === 'foreman_approved') && (
-          <div className="bg-white rounded-xl shadow p-4">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
             <div className="text-sm text-gray-500 mb-2 font-bold">有給申請の状況 / Trạng thái nghỉ phép</div>
             <div className="space-y-1.5">
               {leaveRequests.filter(r => r.status === 'pending' || r.status === 'foreman_approved').map(req => (
@@ -1095,9 +1095,9 @@ export default function StaffAttendancePage() {
         {(data.plRemaining !== null || data.toolBudgetRemaining !== null) && (
           <div className="grid grid-cols-2 gap-3">
             {data.plRemaining !== null && (
-              <div className="bg-white rounded-xl shadow p-4 text-center">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
                 <div className="text-xs text-gray-400 mb-1">🌴 有給残り / Nghỉ phép còn</div>
-                <div className="text-2xl font-bold text-green-600">{data.plRemaining}<span className="text-sm font-normal text-gray-400 ml-1">日</span></div>
+                <div className="text-2xl font-bold text-green-600 tabular-nums">{data.plRemaining}<span className="text-sm font-normal text-gray-400 ml-1">日</span></div>
                 {/* Phase 8: FIFO内訳表示（繰越分と当期付与分） */}
                 {((data.plCarryOverRemaining ?? 0) > 0 || (data.plGrantRemaining ?? 0) > 0) ? (
                   <div className="text-[10px] text-gray-500 mt-1 space-y-0.5">
@@ -1133,9 +1133,9 @@ export default function StaffAttendancePage() {
               </div>
             )}
             {data.toolBudgetRemaining !== null && (
-              <div className="bg-white rounded-xl shadow p-4 text-center">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
                 <div className="text-xs text-gray-400 mb-1">🔧 道具代残り / Tiền dụng cụ còn</div>
-                <div className="text-2xl font-bold text-blue-600">¥{data.toolBudgetRemaining.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-blue-600 tabular-nums">¥{data.toolBudgetRemaining.toLocaleString()}</div>
                 {(data.toolBudgetPeriodStart || data.toolBudgetPeriodEnd) && (
                   <div className="text-[10px] text-gray-500 mt-1 leading-tight">
                     <div className="text-gray-400">期間 / Kỳ</div>
@@ -1156,7 +1156,7 @@ export default function StaffAttendancePage() {
         )}
 
         {/* Past 5 days */}
-        <div className="bg-white rounded-xl shadow p-4">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <div className="text-sm text-gray-500 mb-3 font-bold">最近5日 / 5 ngày gần đây</div>
           <div className="space-y-1.5">
             {data.pastDays.map((pd, i) => (
@@ -1209,7 +1209,7 @@ export default function StaffAttendancePage() {
         {/* Home long leave button */}
         <div className="text-center py-3">
           <button onClick={() => setShowHomeLongLeaveModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-100 transition border border-purple-200">
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl text-sm font-bold active:bg-gray-100 transition">
             ✈️ 帰国申請 / Xin về nước
           </button>
         </div>
@@ -1236,7 +1236,7 @@ export default function StaffAttendancePage() {
         return (
           <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setEditingPast(null)}>
             <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center">
+              <h3 className="text-lg font-bold text-hibi-charcoal mb-1 text-center tabular-nums">
                 {pd.date}
               </h3>
               <p className="text-sm text-gray-500 mb-4 text-center">修正</p>
@@ -1248,7 +1248,7 @@ export default function StaffAttendancePage() {
                     <div className="bg-gray-50 rounded-xl p-3 text-center">
                       <p className="text-xs text-gray-500 mb-1">始業</p>
                       <select value={pastStartTime} onChange={e => setPastStartTime(e.target.value)}
-                        className="text-xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
+                        className="text-xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
                         {Array.from({length: 17}, (_, i) => {
                           const h = 5 + Math.floor(i / 2)
                           const m = i % 2 === 0 ? '00' : '30'
@@ -1260,7 +1260,7 @@ export default function StaffAttendancePage() {
                     <div className="bg-gray-50 rounded-xl p-3 text-center">
                       <p className="text-xs text-gray-500 mb-1">終業</p>
                       <select value={pastEndTime} onChange={e => setPastEndTime(e.target.value)}
-                        className="text-xl font-bold text-hibi-navy text-center w-full border-none bg-transparent">
+                        className="text-xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
                         {Array.from({length: 17}, (_, i) => {
                           const h = 15 + Math.floor(i / 2)
                           const m = i % 2 === 0 ? '00' : '30'
@@ -1300,7 +1300,7 @@ export default function StaffAttendancePage() {
                   <button
                     onClick={() => handleTimeBasedSubmit('work', pd.year, pd.month, pd.day, pastStartTime, pastEndTime, pastBreak1, pastBreak2, pastBreak3)}
                     disabled={saving}
-                    className="w-full bg-hibi-navy text-white rounded-xl py-3 font-bold active:scale-95 disabled:opacity-50"
+                    className="w-full bg-hibi-amber text-hibi-charcoal rounded-xl py-3 font-extrabold shadow-[0_4px_12px_rgba(245,166,35,0.4)] active:scale-95 disabled:opacity-50"
                   >
                     出勤登録
                   </button>
@@ -1343,7 +1343,7 @@ export default function StaffAttendancePage() {
                       }
                     }}
                     disabled={saving}
-                    className="w-full bg-gray-200 text-gray-700 rounded-xl py-3 font-bold active:scale-95 disabled:opacity-50"
+                    className="w-full bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 font-bold active:bg-gray-100 active:scale-95 disabled:opacity-50"
                   >
                     休み / Nghi
                   </button>
@@ -1409,7 +1409,7 @@ export default function StaffAttendancePage() {
 
               <button
                 onClick={() => setEditingPast(null)}
-                className="w-full mt-3 bg-gray-100 border-2 border-gray-300 text-gray-700 rounded-xl py-3 text-sm font-medium active:bg-gray-200"
+                className="w-full mt-3 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-sm font-bold active:bg-gray-100"
               >
                 やめる / Hủy
               </button>

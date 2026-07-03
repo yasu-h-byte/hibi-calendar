@@ -10,7 +10,7 @@ interface CardProps {
 /**
  * 標準カード（bg-white + shadow + rounded）
  *
- * 72+ 箇所の `bg-white dark:bg-gray-800 rounded-xl shadow` を統一。
+ * 72+ 箇所の `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm` を統一。
  *
  * 使用例:
  *   <Card>...</Card>

@@ -637,7 +637,7 @@ export default function SettingsPage() {
       {activeTab === 'settings' && (
         <div className="max-w-2xl space-y-6">
           {/* Default Rates Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">デフォルト単価エディタ</h2>
 
             <div className="space-y-4">
@@ -736,7 +736,7 @@ export default function SettingsPage() {
           </div>
 
           {/* User Passwords Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">個人パスワード設定</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
               役員・事務スタッフの個人ログインパスワード。設定すると名前選択なしで直接ログインできます。
@@ -792,7 +792,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Backup Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">バックアップ</h2>
 
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
@@ -809,7 +809,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Restore Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">リストア</h2>
 
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
@@ -992,26 +992,26 @@ export default function SettingsPage() {
 
           {/* Summary */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
               <div className="text-2xl font-bold text-hibi-navy dark:text-white">{userWorkers.length}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">ユーザー数</div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
               <div className="text-2xl font-bold text-red-600">{userWorkers.filter(w => w.jobType === 'yakuin').length}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">役員</div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
               <div className="text-2xl font-bold text-blue-600">{userWorkers.filter(w => w.jobType === 'shokucho').length}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">職長</div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 text-center">
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
               <div className="text-2xl font-bold text-purple-600">{userWorkers.filter(w => w.jobType === 'jimu').length}</div>
               <div className="text-xs text-gray-500 dark:text-gray-400">事務</div>
             </div>
           </div>
 
           {/* User Table */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
@@ -1060,7 +1060,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Role Permissions */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-bold text-hibi-navy dark:text-white">ロール別権限設定</h2>
@@ -1146,7 +1146,7 @@ export default function SettingsPage() {
       {activeTab === 'announcements' && (
         <div className="max-w-3xl space-y-4">
           {/* 投稿フォーム */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-5">
             <h2 className="text-base font-bold text-hibi-navy dark:text-white mb-3">
               {annEditId ? '✏️ お知らせを編集' : '📝 新しいお知らせを投稿'}
             </h2>
@@ -1210,7 +1210,7 @@ export default function SettingsPage() {
           </div>
 
           {/* お知らせ一覧 */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-5">
             <h2 className="text-base font-bold text-hibi-navy dark:text-white mb-3">投稿済み一覧</h2>
             {annLoading ? (
               <div className="text-center py-6 text-gray-400 text-sm">読み込み中...</div>

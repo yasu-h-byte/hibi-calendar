@@ -29,7 +29,7 @@ export default function PayrollAuditModal({ worker: w, ym, prescribedDays, baseD
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl my-4 flex flex-col max-h-[95vh]"
+        className="bg-white rounded-xl border border-hibi-line shadow-2xl w-full max-w-3xl my-4 flex flex-col max-h-[95vh]"
         onClick={e => e.stopPropagation()}
       >
         {/* ヘッダー */}

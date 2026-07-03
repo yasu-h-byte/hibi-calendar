@@ -31,7 +31,7 @@ export default function CalendarTab({ visible, plCalendar, workerNames }: Props)
   if (!visible) return null
 
   return (<>
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
       <h2 className="text-base font-bold text-hibi-navy dark:text-white mb-3">PLカレンダー</h2>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {calendarMonths.map(({ year, month, label }) => {

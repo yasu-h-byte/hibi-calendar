@@ -58,20 +58,20 @@ export default function AttendanceGrid({
   const finalizableDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day])
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
         <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 80}px` }}>
           <thead className="sticky top-0 z-30">
             {/* Day number row */}
             <tr className="border-b border-gray-200">
               <th
-                className="sticky left-0 z-40 bg-[#1B2A4A] text-white px-2 py-1.5 text-left font-medium whitespace-nowrap"
+                className="sticky left-0 z-40 bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1.5 text-left font-bold whitespace-nowrap"
                 style={{ width: 150, minWidth: 150, maxWidth: 150 }}
               >
                 名前
               </th>
               <th
-                className="sticky left-[150px] z-40 bg-[#1B2A4A] text-white px-1 py-1.5 text-center font-medium"
+                className="sticky left-[150px] z-40 bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1 py-1.5 text-center font-bold"
                 style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
               >
                 所属
@@ -98,7 +98,7 @@ export default function AttendanceGrid({
                 </th>
                 )
               })}
-              <th className="bg-[#1B2A4A] text-white px-2 py-1.5 text-center font-medium border-l-2 border-gray-400" style={{ width: 80, minWidth: 80 }}>
+              <th className="bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1.5 text-center font-bold border-l-2 border-gray-400" style={{ width: 80, minWidth: 80 }}>
                 <div>計</div>
                 <div className="text-[8px] opacity-70 font-normal">上:人工 / 下:残業h</div>
               </th>

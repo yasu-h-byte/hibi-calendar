@@ -35,7 +35,7 @@ export function HomeLeaveCell({ colBg, cellWidth }: { colBg: string; cellWidth: 
       style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
     >
       <div className="flex items-center justify-center h-full py-2">
-        <span className="text-[10px] font-bold text-cyan-600 bg-cyan-50 px-1.5 py-0.5 rounded">✈帰国</span>
+        <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-md">✈帰国</span>
       </div>
     </td>
   )
@@ -109,14 +109,14 @@ export function TimeBasedCell({
           data-att-day={day}
           data-att-row={wId}
           disabled={isLocked}
-          className={`w-full text-center text-xs font-bold py-0.5 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
+          className={`w-full text-center text-xs font-bold py-0.5 px-1 border-0 rounded-md focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
             ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
-            ${statusVal === 'W' ? 'text-green-700' : ''}
-            ${statusVal === 'P' ? 'text-purple-600' : ''}
-            ${statusVal === 'E' ? 'text-indigo-600' : ''}
-            ${statusVal === 'R' ? 'text-red-500' : ''}
-            ${statusVal === 'H' ? 'text-gray-500' : ''}
-            ${statusVal === '' ? 'text-gray-300 font-normal' : ''}
+            ${statusVal === 'W' ? 'text-green-700 bg-green-50 dark:bg-green-900/30 dark:text-green-300' : ''}
+            ${statusVal === 'P' ? 'text-violet-700 bg-violet-50 dark:bg-violet-900/30 dark:text-violet-300' : ''}
+            ${statusVal === 'E' ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300' : ''}
+            ${statusVal === 'R' ? 'text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-300' : ''}
+            ${statusVal === 'H' ? 'text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400' : ''}
+            ${statusVal === '' ? 'text-gray-300 font-normal bg-transparent border-b border-gray-100' : ''}
           `}
         >
           <option value="">-</option>
@@ -164,8 +164,15 @@ export function TimeBasedCell({
             </div>
           </>
         ) : statusVal !== '' ? (
-          <div className="text-[11px] text-center py-0.5 font-medium text-gray-400">
-            {statusVal === 'P' ? '有給' : statusVal === 'E' ? '試験' : statusVal === 'R' ? '休' : '現休'}
+          <div className="text-[11px] text-center py-0.5">
+            <span className={`rounded-md px-1 font-bold ${
+              statusVal === 'P' ? 'text-violet-700 bg-violet-50 dark:bg-violet-900/30 dark:text-violet-300'
+              : statusVal === 'E' ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300'
+              : statusVal === 'R' ? 'text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-300'
+              : 'text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400'
+            }`}>
+              {statusVal === 'P' ? '有給' : statusVal === 'E' ? '試験' : statusVal === 'R' ? '休' : '現休'}
+            </span>
           </div>
         ) : null}
       </div>
@@ -213,14 +220,14 @@ export function LegacyCell({
           data-att-day={day}
           data-att-row={wId}
           disabled={isLocked}
-          className={`w-full text-center text-sm font-bold py-1 bg-transparent border-0 border-b border-gray-100 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
+          className={`w-full text-center text-sm font-bold py-1 px-1 border-0 rounded-md focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none
             ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
-            ${workVal === '1' ? 'text-green-700' : ''}
-            ${workVal === '0.5' ? 'text-yellow-700' : ''}
-            ${workVal === '0.6' ? 'text-orange-600' : ''}
-            ${workVal === 'P' ? 'text-purple-600' : ''}
-            ${workVal === 'E' ? 'text-indigo-600' : ''}
-            ${workVal === '' ? 'text-gray-300 font-normal' : ''}
+            ${workVal === '1' ? 'text-green-700 bg-green-50 dark:bg-green-900/30 dark:text-green-300' : ''}
+            ${workVal === '0.5' ? 'text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-300' : ''}
+            ${workVal === '0.6' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-300' : ''}
+            ${workVal === 'P' ? 'text-violet-700 bg-violet-50 dark:bg-violet-900/30 dark:text-violet-300' : ''}
+            ${workVal === 'E' ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300' : ''}
+            ${workVal === '' ? 'text-gray-300 font-normal bg-transparent border-b border-gray-100' : ''}
           `}
         >
           <option value="">-</option>

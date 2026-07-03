@@ -154,7 +154,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-8" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-xl border border-hibi-line shadow-2xl max-w-2xl w-full my-8" onClick={e => e.stopPropagation()}>
         <div className="bg-hibi-navy text-white px-5 py-4 rounded-t-xl flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold flex items-center gap-2">🔧 メニュー</h2>

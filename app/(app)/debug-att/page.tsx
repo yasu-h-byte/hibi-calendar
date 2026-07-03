@@ -207,7 +207,7 @@ export default function DebugAttPage() {
         <button
           onClick={handleSubmit}
           disabled={loading || !workerNameLike || !ym}
-          className="px-4 py-2 bg-hibi-navy text-white rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50"
+          className="px-4 py-2 bg-hibi-navy text-white rounded-lg text-sm font-bold hover:opacity-90 disabled:opacity-50"
         >
           {loading ? '確認中…' : '確認する'}
         </button>
@@ -507,7 +507,7 @@ export default function DebugAttPage() {
                 }
               }}
               disabled={repairLoading || !repairWorkerId}
-              className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50"
+              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:opacity-90 disabled:opacity-50"
             >
               {repairLoading ? '実行中…' : '⚠️ 本番実行'}
             </button>

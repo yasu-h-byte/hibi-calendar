@@ -88,7 +88,7 @@ export default function HeaderBar({
       {/* 配置編集 button */}
       <button
         onClick={onOpenAssign}
-        className="text-xs px-3 py-1.5 border border-hibi-navy text-hibi-navy rounded-lg hover:bg-hibi-navy hover:text-white transition"
+        className="text-xs px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium transition"
       >
         配置編集
       </button>
@@ -118,10 +118,10 @@ export default function HeaderBar({
 
       {/* Save status indicator */}
       {saveStatus && (
-        <span className={`text-xs flex items-center gap-1 font-bold px-2 py-1 rounded ${
-          saveStatus === 'saving' ? 'text-hibi-navy' :
-          saveStatus === 'saved' ? 'text-green-600' :
-          'text-red-700 bg-red-100 dark:bg-red-900/40 dark:text-red-300'
+        <span className={`text-xs flex items-center gap-1 font-bold px-2.5 py-1 rounded-full ${
+          saveStatus === 'saving' ? 'bg-blue-50 text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300' :
+          saveStatus === 'saved' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+          'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
         }`}>
           {saveStatus === 'saving' ? (
             <>

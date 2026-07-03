@@ -16,7 +16,7 @@ export function Skeleton({ className = '' }: SkeletonProps) {
 /** Table skeleton: renders rows of animated bars mimicking a data table */
 export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-hidden">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
       {/* Header */}
       <div className="bg-gray-50 dark:bg-gray-700 px-3 py-3 flex gap-4">
         {Array.from({ length: cols }).map((_, i) => (
@@ -40,7 +40,7 @@ export function CardSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 space-y-3">
+        <div key={i} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4 space-y-3">
           <Skeleton className="h-8 w-16 mx-auto" />
           <Skeleton className="h-3 w-20 mx-auto" />
         </div>

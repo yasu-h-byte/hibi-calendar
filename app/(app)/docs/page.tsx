@@ -74,7 +74,7 @@ export default function DocsPage() {
                 href={item.url}
                 target={item.internal ? undefined : '_blank'}
                 rel={item.internal ? undefined : 'noopener noreferrer'}
-                className="block bg-white dark:bg-gray-800 rounded-xl shadow hover:shadow-md transition-shadow p-4 group"
+                className="block bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 group"
               >
                 <div className="flex items-start gap-3">
                   <span className="text-2xl">{item.icon}</span>

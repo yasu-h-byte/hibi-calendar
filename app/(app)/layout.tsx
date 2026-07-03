@@ -50,7 +50,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-hibi-bg dark:bg-gray-900">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-3 border-hibi-navy border-t-transparent rounded-full animate-spin" />
           <div className="text-gray-400 dark:text-gray-500">読み込み中...</div>
@@ -61,7 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+      <div className="min-h-screen bg-hibi-bg dark:bg-gray-900">
         <Sidebar user={user} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
         {/* Main content */}

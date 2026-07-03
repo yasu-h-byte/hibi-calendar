@@ -382,7 +382,7 @@ export default function WorkersPage() {
           .sort((a, b) => a.status!.priority - b.status!.priority)
         if (alerts.length === 0) return null
         return (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 border-l-4 border-red-500">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-red-500">
             <h3 className="text-sm font-bold text-red-700 dark:text-red-400 mb-2">在留期限アラート</h3>
             <div className="flex flex-wrap gap-2">
               {alerts.map(w => (
@@ -401,7 +401,7 @@ export default function WorkersPage() {
       })()}
 
       {/* Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">

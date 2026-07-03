@@ -44,7 +44,7 @@ export default function GrantDatesTab({ visible, filteredWorkers }: Props) {
         起算ルールは原則「<strong>入社日＋6ヶ月で初回付与、以後毎年その月</strong>」（労基法39条）。個別に基準日（月）を指定している場合は「指定」と表示します。
         <span className="text-amber-600 dark:text-amber-400">ⓘ 印</span>は、実際の付与日の月が「入社日＋6ヶ月」と異なるスタッフです（旧データ・在留更新・基準日統一などで異なることがあり、必ずしも誤りではありません。気になる場合のみ確認）。基準日の変更は「一覧」タブ→各行の編集から行えます。
       </div>
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
