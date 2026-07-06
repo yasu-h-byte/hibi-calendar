@@ -494,7 +494,7 @@ export async function POST(request: NextRequest) {
               new Date(b.grantDate!).getTime() - new Date(a.grantDate!).getTime()
             )[0]
           if (latest) {
-            const { computePeriodUsed } = await import('@/lib/leave-compute')
+            const { computePeriodUsed, computeRemainingDays } = await import('@/lib/leave-compute')
             // 当該年度の全有給日を集計（全月の att を取得）
             const { getAttData } = await import('@/lib/compute')
             const allAtt: Record<string, unknown> = {}
@@ -511,10 +511,11 @@ export async function POST(request: NextRequest) {
               ?? (latest as { grant?: number }).grant ?? 0
             const carry = (latest as { carryOver?: number; carry?: number }).carryOver
               ?? (latest as { carry?: number }).carry ?? 0
-            const adj = (latest as { adjustment?: number; adj?: number }).adjustment
-              ?? (latest as { adj?: number }).adj ?? 0
-            const total = grant + carry - adj
-            const remaining = Math.max(0, total - used.requestedPeriodUsed)
+            // 残数 = (付与 + 繰越) − (調整 + 買取済み + 申請消化)。
+            //   手組みの total-periodUsed は買取済み日数を引いておらず、買取後の
+            //   残0スタッフでも申請が通ってしまっていた（監査⑥）。共通ヘルパーに統一。
+            const total = grant + carry
+            const remaining = computeRemainingDays(total, latest, used.requestedPeriodUsed)
             if (remaining <= 0) {
               return NextResponse.json(
                 { error: '有給休暇の残日数がありません。管理者にご確認ください。' },

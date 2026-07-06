@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { getApiRole, isManagerRole } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { ym7 } from '@/lib/ym'
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 指定月の【全現場】のカレンダーと署名を削除する破壊的操作。
+  //   管理者・事業責任者のみ（職長・事務は不可）。
+  //   旧: checkApiAuth のみ → ログインできる誰でも全現場の承認済みカレンダーを消せた。監査(B)で塞いだ。
+  const role = await getApiRole(request)
+  if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isManagerRole(role.role)) {
+    return NextResponse.json({ error: 'リセット権限がありません（管理者・事業責任者のみ）' }, { status: 403 })
   }
 
   try {

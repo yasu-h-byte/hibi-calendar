@@ -1,4 +1,4 @@
-import { checkApiAuth } from "@/lib/auth"
+import { getApiRole, isManagerRole } from "@/lib/auth"
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
@@ -6,14 +6,22 @@ import { ym7 } from '@/lib/ym'
 import { logActivity } from '@/lib/activity'
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const { siteId, ym: ymRaw, days, updatedBy } = await request.json()
     // siteCalendar の docId/ym は "YYYY-MM" 形式で統一（2026-05-08 正規化）
     const ym = ym7(ymRaw)
+
+    // カレンダーの保存(＝作成・編集)は submit と同じ権限:
+    //   「その現場の職長」または管理者・事業責任者のみ。
+    //   旧: checkApiAuth のみ → ログインできれば他現場の職長・事務も任意現場のカレンダーを
+    //       上書きできた（承認済みの休日設定の書き換え含む）。監査(B)で塞いだ。
+    const role = await getApiRole(request, ym)
+    if (!role) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const canEdit = isManagerRole(role.role) || (role.role === 'foreman' && role.foremanSites.includes(siteId))
+    if (!canEdit) {
+      return NextResponse.json({ error: '保存権限がありません（担当現場の職長または管理者のみ）' }, { status: 403 })
+    }
+
     const docId = `${siteId}_${ym}`
 
     // Get existing doc to preserve status
