@@ -140,6 +140,19 @@ export function calcLegalCarryOver(args: {
 }
 
 /**
+ * その付与レコードの繰越(carryOver)が「人が手動で調整した値」かどうかを判定する。
+ *
+ * 「繰越自動計算」は全ワーカーの最新記録を一括再計算するが、管理者が個別に手動調整した
+ * 繰越を上書きしてはいけない（実例: super-admin が 11→0 に調整した値を自動計算が 11 に戻す事故）。
+ * 手動編集は edit action が adjustmentHistory に `field:'carryOver'` を記録するため、それを検出する。
+ */
+export function hasManualCarryOverOverride(rec: unknown): boolean {
+  const hist = (rec as { adjustmentHistory?: Array<{ field?: string }> } | null)?.adjustmentHistory
+  if (!Array.isArray(hist)) return false
+  return hist.some(h => h?.field === 'carryOver')
+}
+
+/**
  * 1スタッフの付与期間内有給消化を集計
  *
  * @param workerId       スタッフID

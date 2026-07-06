@@ -4,7 +4,7 @@
  * Workflow CR-1 で検出された「年5日義務監視ロジックが多重破綻」の解消検証。
  */
 import { describe, test, expect } from 'vitest'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays, calcLegalCarryOver } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride } from '@/lib/leave-compute'
 import { addMonthsSafe, calcExpiryIso } from '@/lib/date-utils'
 
 describe('addMonthsSafe', () => {
@@ -328,5 +328,25 @@ describe('calcLegalCarryOver (労基法115条: 2年時効準拠の繰越)', () =
     expect(calcLegalCarryOver({ prevGrant: 20, prevCarry: 20, periodUsed: 0 })).toBe(20)
     // 付与20+繰越20、消化5 → 古い5を消化、前期20は満額 → 20
     expect(calcLegalCarryOver({ prevGrant: 20, prevCarry: 20, periodUsed: 5 })).toBe(20)
+  })
+})
+
+describe('hasManualCarryOverOverride (繰越の手動調整判定)', () => {
+  test('carryOver の変更履歴があれば手動調整とみなす', () => {
+    expect(hasManualCarryOverOverride({
+      adjustmentHistory: [{ field: 'carryOver', before: '11', after: '0' }],
+    })).toBe(true)
+  })
+
+  test('adjustment 等 carryOver 以外の履歴のみなら手動調整ではない', () => {
+    expect(hasManualCarryOverOverride({
+      adjustmentHistory: [{ field: 'adjustment', before: '0', after: '1' }],
+    })).toBe(false)
+  })
+
+  test('履歴なし・null・不正値は手動調整ではない', () => {
+    expect(hasManualCarryOverOverride({})).toBe(false)
+    expect(hasManualCarryOverOverride(null)).toBe(false)
+    expect(hasManualCarryOverOverride({ adjustmentHistory: 'x' })).toBe(false)
   })
 })

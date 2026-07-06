@@ -6,7 +6,7 @@ import { getMainData, getAttData, parseDKey, isDispatchedAt } from '@/lib/comput
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
@@ -1012,6 +1012,8 @@ export async function POST(request: NextRequest) {
       }
 
       let updated = 0
+      let skipped = 0
+      const skippedNames: string[] = []
       for (const [wid, records] of Object.entries(plData)) {
         const workerId = Number(wid)
         // 日本人社員は期末買取制のため繰越なし → 強制0
@@ -1025,18 +1027,27 @@ export async function POST(request: NextRequest) {
         const latest = granted[granted.length - 1]
         if (!latest) continue
 
+        const idx = records.findIndex(r => r === latest)
+        if (idx < 0) continue
+
+        // ★ 手動で調整済みの繰越は上書きしない（管理者の手動調整を尊重する）。
+        //   日本人は繰越なしのため 0 を強制する必要があり、スキップ対象外。
+        if (!isJp && hasManualCarryOverOverride(records[idx])) {
+          skipped++
+          const nm = workersList.find(w => w.id === workerId)
+          skippedNames.push((nm as { name?: string } | undefined)?.name || `id${workerId}`)
+          continue
+        }
+
         const newCarry = calcCarryOverForWorker(workerId, latest.grantDate!, records, allAtt, isJp)
 
         // 最新レコードの carryOver を更新
-        const idx = records.findIndex(r => r === latest)
-        if (idx >= 0) {
-          const before = (records[idx].carryOver ?? records[idx].carry ?? 0)
-          if (before !== newCarry) {
-            (records[idx] as { carryOver: number }).carryOver = newCarry
-            // 旧フィールドも掃除しておく
-            delete (records[idx] as Record<string, unknown>).carry
-            updated++
-          }
+        const before = (records[idx].carryOver ?? records[idx].carry ?? 0)
+        if (before !== newCarry) {
+          (records[idx] as { carryOver: number }).carryOver = newCarry
+          // 旧フィールドも掃除しておく
+          delete (records[idx] as Record<string, unknown>).carry
+          updated++
         }
       }
 
@@ -1044,7 +1055,7 @@ export async function POST(request: NextRequest) {
       //   他の編集 action と並行実行すると後勝ちで上書きが発生し得る。実行ロックを推奨）
       // 2026-06-XX 修正 (CR-5): dot-notation で worker 単位更新（plData={} 罠を回避）
       await updateMapByKey(docRef, 'plData', plData)
-      return NextResponse.json({ success: true, updated })
+      return NextResponse.json({ success: true, updated, skipped, skippedNames })
     }
 
     // Default: edit PL record

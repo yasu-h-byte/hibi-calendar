@@ -66,7 +66,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
   const runAction = async (
     label: string,
     body: Record<string, unknown>,
-    resultFormatter: (data: { stats?: Record<string, unknown>; processed?: number; expired?: unknown[]; recordsArchived?: number }) => string,
+    resultFormatter: (data: { stats?: Record<string, unknown>; processed?: number; expired?: unknown[]; recordsArchived?: number; updated?: number; skipped?: number; skippedNames?: string[] }) => string,
   ) => {
     setRunning(label)
     try {
@@ -101,7 +101,19 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
   const handleCarryOver = () => runAction(
     '繰越再計算',
     { action: 'carryOver', fy: String(new Date().getFullYear()) },
-    () => '全スタッフの最新付与レコードの繰越を再計算しました。',
+    (d) => {
+      const updated = (d.updated as number) || 0
+      const skipped = (d.skipped as number) || 0
+      const names = (d.skippedNames || []) as string[]
+      let msg = `全スタッフの最新付与レコードの繰越を再計算しました（${updated}件更新）。`
+      if (skipped > 0) {
+        msg += `\n\n手動で調整済みの ${skipped}名は上書きせず据え置きました:\n` +
+          names.slice(0, 10).map(n => `  - ${n}`).join('\n') +
+          (names.length > 10 ? `\n  ... ほか${names.length - 10}名` : '') +
+          `\n（これらの繰越を再計算したい場合は、その人の記録を個別に編集してください）`
+      }
+      return msg
+    },
   )
 
   const handleExpiry = () => runAction(
