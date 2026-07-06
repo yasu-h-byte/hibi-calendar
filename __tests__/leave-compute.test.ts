@@ -4,7 +4,7 @@
  * Workflow CR-1 で検出された「年5日義務監視ロジックが多重破綻」の解消検証。
  */
 import { describe, test, expect } from 'vitest'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays, calcLegalCarryOver } from '@/lib/leave-compute'
 import { addMonthsSafe, calcExpiryIso } from '@/lib/date-utils'
 
 describe('addMonthsSafe', () => {
@@ -289,5 +289,44 @@ describe('computeRemainingDays (audit #5+#6)', () => {
     const expiryRemaining = computeRemainingDays(total, rec, periodUsed)
     expect(displayRemaining).toBe(expiryRemaining)
     expect(displayRemaining).toBe(14)
+  })
+})
+
+describe('calcLegalCarryOver (労基法115条: 2年時効準拠の繰越)', () => {
+  test('消化ゼロ: 繰越は前期付与分のみ（前々期繰越分は時効消滅で再繰越しない）', () => {
+    // 前期: 付与10 + 繰越10（=前々期付与分）、消化0
+    //   旧バグ: 20日をそのまま再繰越 → 毎年20日が転がる
+    //   正: 前々期分10は時効消滅。繰越は前期付与分10のみ
+    expect(calcLegalCarryOver({ prevGrant: 10, prevCarry: 10, periodUsed: 0 })).toBe(10)
+  })
+
+  test('消化が前期繰越と同数: 前期付与分は満額繰越', () => {
+    // 消化10 = 繰越10（古い分を先に消化）→ 前期付与10はそのまま残る
+    expect(calcLegalCarryOver({ prevGrant: 10, prevCarry: 10, periodUsed: 10 })).toBe(10)
+  })
+
+  test('消化が前期繰越を超える: 超過分だけ前期付与分から減る', () => {
+    // 消化15 → 繰越10を使い切り、前期付与から5消化 → 繰越 = 10-5 = 5
+    expect(calcLegalCarryOver({ prevGrant: 10, prevCarry: 10, periodUsed: 15 })).toBe(5)
+  })
+
+  test('消化が枠を全部超える: 繰越0', () => {
+    expect(calcLegalCarryOver({ prevGrant: 10, prevCarry: 10, periodUsed: 25 })).toBe(0)
+  })
+
+  test('繰越なしの初回付与の翌期: 前期付与分の未消化がそのまま繰越', () => {
+    expect(calcLegalCarryOver({ prevGrant: 10, prevCarry: 0, periodUsed: 3 })).toBe(7)
+  })
+
+  test('買取・調整も消化として差し引く', () => {
+    // 前期: 付与10+繰越5、消化2、買取3、調整1 → remaining = 10+5-1-3-2 = 9、上限10 → 9
+    expect(calcLegalCarryOver({ prevGrant: 10, prevCarry: 5, periodUsed: 2, prevBuyout: 3, prevAdj: 1 })).toBe(9)
+  })
+
+  test('上限は常に前期付与分（20日枠でも前々期分は乗らない）', () => {
+    // 付与20+繰越20、消化0 → 旧は40→20クランプ。正: 20（前期付与分のみ）
+    expect(calcLegalCarryOver({ prevGrant: 20, prevCarry: 20, periodUsed: 0 })).toBe(20)
+    // 付与20+繰越20、消化5 → 古い5を消化、前期20は満額 → 20
+    expect(calcLegalCarryOver({ prevGrant: 20, prevCarry: 20, periodUsed: 5 })).toBe(20)
   })
 })

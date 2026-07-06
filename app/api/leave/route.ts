@@ -6,7 +6,7 @@ import { getMainData, getAttData, parseDKey, isDispatchedAt } from '@/lib/comput
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
@@ -64,8 +64,11 @@ function calcCarryOverForWorker(
   const prevGrant = prevRec.grantDays ?? prevRec.grant ?? 0
   const prevCarry = prevRec.carryOver ?? prevRec.carry ?? 0
   const prevAdj = prevRec.adjustment ?? prevRec.adj ?? 0
-  const remaining = prevGrant + prevCarry - prevAdj - periodUsed
-  return Math.max(0, Math.min(20, remaining))
+  // 前期の買取済み日数（cached buyoutDays 優先、なければ履歴合算）
+  const prevRecFull = prevRec as PLRecLite & { buyoutDays?: number; buyoutHistory?: Array<{ days?: number }> }
+  const prevBuyout = prevRecFull.buyoutDays ?? (prevRecFull.buyoutHistory || []).reduce((s, h) => s + (h.days || 0), 0)
+  // 労基法115条準拠: 前々期付与分(prevCarry)は時効消滅するため、繰越上限は prevGrant（共通ヘルパー）
+  return calcLegalCarryOver({ prevGrant, prevCarry, prevAdj, prevBuyout, periodUsed })
 }
 
 /**

@@ -5,6 +5,7 @@ import { collection, query, where, getDocs } from '@/lib/fsdb'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
+import { calcLegalCarryOver } from '@/lib/leave-compute'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
 import { getWorkerLastAccessMap } from '@/lib/accessLog'
 
@@ -366,7 +367,9 @@ export async function GET(request: NextRequest) {
 
         // 前回レコードから正しい繰越を計算（出面のPを含む）
         const wRecords = (main.plData[String(u.workerId)] || []) as { grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number; fy?: string | number }[]
-        const recordsWithGrant = wRecords.filter(r => (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0))
+        const recordsWithGrant = wRecords.filter(r =>
+          !(r as { _archived?: boolean })._archived &&  // 時効処理済みは前期候補から除外
+          ((r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)))
         // 同じFYに複数ある場合はgrantDateが最も新しいものを採用（正しいレコード）
         let prevRecord = null as typeof recordsWithGrant[0] | null
         if (recordsWithGrant.length > 0) {
@@ -384,24 +387,26 @@ export async function GET(request: NextRequest) {
           const gd = new Date(prevRecord.grantDate)
           const gdEnd = new Date(gd)
           gdEnd.setFullYear(gdEnd.getFullYear() + 1)
-          // 出面からP消化を集計
-          let periodUsed = 0
+          // 出面からP消化を集計（同日複数現場は1日として数える = multi-site dedup）
+          const seenDates = new Set<string>()
           for (const [key, entry] of Object.entries(allAttForPL)) {
             const e = entry as { p?: number }
             if (e.p === 1) {
               const pk = parseDKey(key)
               if (parseInt(pk.wid) === u.workerId) {
                 const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-                if (entryDate >= gd && entryDate < gdEnd) periodUsed++
+                if (entryDate >= gd && entryDate < gdEnd) seenDates.add(`${pk.ym}_${pk.day}`)
               }
             }
           }
+          const periodUsed = seenDates.size
           const prevGrant = prevRecord.grantDays || prevRecord.grant || 0
           const prevCarry = prevRecord.carryOver || prevRecord.carry || 0
           const prevAdj = Math.max(prevRecord.adjustment || 0, prevRecord.adj || 0)
-          const prevTotal = prevGrant + prevCarry
-          const prevUsed = prevAdj + periodUsed
-          realCarryOver = Math.min(20, Math.max(0, prevTotal - prevUsed))
+          const pr = prevRecord as { buyoutDays?: number; buyoutHistory?: Array<{ days?: number }> }
+          const prevBuyout = pr.buyoutDays ?? (pr.buyoutHistory || []).reduce((s, h) => s + (h.days || 0), 0)
+          // 労基法115条準拠: 前々期付与分(prevCarry)は時効消滅するため繰越上限は prevGrant（leave本体と同一ヘルパー）
+          realCarryOver = calcLegalCarryOver({ prevGrant, prevCarry, prevAdj, prevBuyout, periodUsed })
         }
 
         const realTotal = u.days + realCarryOver

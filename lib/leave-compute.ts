@@ -112,6 +112,34 @@ export function computeRemainingDays(
 }
 
 /**
+ * 労基法115条（有給の2年時効）準拠の「次期への繰越日数」を計算する共通ヘルパー。
+ *
+ * 前提となる有給の消滅ルール:
+ *   - ある付与分は付与から2年で時効消滅する。
+ *   - 各期の枠 = 当期付与(grant) + 前期繰越(carry)。前期繰越(=前々期付与分)は当期末で時効を迎える。
+ *   → よって「次期へ繰り越せるのは、前期付与分(prevGrant)の未消化分まで」。
+ *     前期末の残(remaining)が prevGrant を超える分は、時効消滅する前々期付与分なので繰り越さない。
+ *
+ * remaining = prevGrant + prevCarry − prevAdj − prevBuyout − periodUsed を、上限 prevGrant でクランプする。
+ * これは「古い付与から先に消化する(先入先出)」計算と数学的に等価:
+ *   min(prevGrant, prevGrant + prevCarry − used) = prevGrant − max(0, used − prevCarry)
+ *
+ * 旧実装は上限を 20（法定最大付与）にしていたため、消化の少ないスタッフで
+ * 前々期の時効消滅分がそのまま次期へ再繰越され、残日数・退職清算・買取額が過大になっていた。
+ */
+export function calcLegalCarryOver(args: {
+  prevGrant: number
+  prevCarry: number
+  prevAdj?: number
+  prevBuyout?: number
+  periodUsed: number
+}): number {
+  const { prevGrant, prevCarry, prevAdj = 0, prevBuyout = 0, periodUsed } = args
+  const remaining = prevGrant + prevCarry - prevAdj - prevBuyout - periodUsed
+  return Math.max(0, Math.min(prevGrant, remaining))
+}
+
+/**
  * 1スタッフの付与期間内有給消化を集計
  *
  * @param workerId       スタッフID
