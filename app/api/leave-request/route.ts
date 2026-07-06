@@ -337,19 +337,12 @@ export async function POST(request: NextRequest) {
 
     // ── 却下（職長 or 管理者） ──
     if (action === 'reject') {
-      // 職長もadminも却下可能
+      // 却下は「その現場の職長」または管理者・事業責任者のみ（監査C）。
+      //   旧: rejectToken があれば有効性のみ確認し、職長判定なしで誰でも他人の申請を却下できた。
+      //   新: foreman_approve と同じく、申請現場の foreman であることを assert（帰国申請側と統一）。
       const { requestId, rejectedBy, reason, token: rejectToken } = body
       if (!requestId) {
         return NextResponse.json({ error: 'Missing requestId' }, { status: 400 })
-      }
-
-      let authWorkerId = rejectedBy || 0
-      if (rejectToken) {
-        const worker = await getWorkerByToken(rejectToken)
-        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-        authWorkerId = worker.id
-      } else if (!await checkApiAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
       const docRef = doc(db, 'leaveRequests', requestId)
@@ -361,6 +354,36 @@ export async function POST(request: NextRequest) {
       const data = snap.data() as LeaveRequest
       if (data.status === 'approved' || data.status === 'rejected') {
         return NextResponse.json({ error: 'Already processed' }, { status: 409 })
+      }
+
+      // 権限判定: 申請現場の職長 or 管理者・事業責任者
+      const rejMainSnap = await getDoc(doc(db, 'demmen', 'main'))
+      const rejMain = rejMainSnap.exists() ? rejMainSnap.data() : {}
+      const rejSites = (rejMain.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
+      const rejSite = rejSites.find(s => s.id === data.siteId)
+      const rejForemen = rejSite?.foremen || (rejSite?.foreman ? [rejSite.foreman] : [])
+
+      let authWorkerId: number | string = rejectedBy || 0
+      if (rejectToken) {
+        const worker = await getWorkerByToken(rejectToken)
+        if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+        if (!rejForemen.includes(worker.id)) {
+          return NextResponse.json({ error: `現場「${data.siteId}」の職長権限がありません` }, { status: 403 })
+        }
+        authWorkerId = worker.id
+      } else {
+        const authUser = await getApiAuthUser(request)
+        if (!authUser.authorized) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+        if (typeof authUser.actor === 'number') {
+          if (!rejForemen.includes(authUser.actor)) {
+            return NextResponse.json({ error: `現場「${data.siteId}」の職長権限がありません` }, { status: 403 })
+          }
+          authWorkerId = authUser.actor
+        } else {
+          authWorkerId = authUser.actor  // admin / super-admin
+        }
       }
 
       // 2026-06-XX 修正 (IM-7): 履歴を保持しつつ updateDoc で部分更新

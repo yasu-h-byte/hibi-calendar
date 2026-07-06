@@ -75,6 +75,20 @@ export async function POST(request: NextRequest) {
 
     // 承認後修正は監査用に明示的にログ。差分も記録する。
     if (wasApproved) {
+      // ★ 給与が参照する所定日数(siteWorkDays / workDays)を新しい days から再計算する（監査A）。
+      //   これがないと承認後に休日⇄出勤を変えても siteWorkDays が承認時のまま残り、
+      //   月次給与の欠勤控除が過大/過少になる（approve / bulk-confirm と同じ再計算を踏襲）。
+      const ymKey = ym.replace('-', '')
+      const workDayCount = Object.values(days as Record<string, string>).filter(d => d === 'work').length
+      const mainRef = doc(db, 'demmen', 'main')
+      await setDoc(mainRef, { siteWorkDays: { [ymKey]: { [siteId]: workDayCount } } }, { merge: true })
+      const mainSnap = await getDoc(mainRef)
+      const siteWorkDaysForMonth = (mainSnap.exists() ? (mainSnap.data().siteWorkDays || {}) : {})[ymKey] || {}
+      const vals = Object.values(siteWorkDaysForMonth) as number[]
+      if (vals.length > 0) {
+        await setDoc(mainRef, { workDays: { [ymKey]: Math.max(...vals) } }, { merge: true })
+      }
+
       const detail = diffSummary
         ? `${siteId} ${ym} 承認後修正: ${diffSummary}`
         : `${siteId} ${ym} 承認後修正（変更なし or 全置換）`

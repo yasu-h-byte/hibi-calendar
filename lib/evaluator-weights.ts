@@ -41,6 +41,7 @@
 
 import { isWorkingDay } from './attendance'
 import { getAttData, getMainData, parseDKey, type MainData } from './compute'
+import { enumerateYmsBack } from './attendance-rate'
 import type { AttendanceEntry } from '@/types'
 
 /**
@@ -94,12 +95,9 @@ export async function calcEvaluatorWeights(
   yearCut.setDate(yearCut.getDate() - 365)
 
   // 過去13ヶ月分の att を網羅（評価日が月初の場合に365日前は前年の同月をまたぐ可能性があるため）
-  const ymList: string[] = []
-  for (let i = 0; i < 13; i++) {
-    const d = new Date(evalDate)
-    d.setMonth(d.getMonth() - i)
-    ymList.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
+  //   ※ Date.setMonth は月末31日起点だと繰り上がり対象月が抜ける（監査⑦の横展開）。
+  //     整数計算の enumerateYmsBack に統一（順序非依存の集計なので oldest-first でも問題なし）。
+  const ymList = enumerateYmsBack(evaluationDate, 12)
 
   const mainData = main ?? (await getMainData())
   const attResults = await Promise.all(ymList.map(ym => getAttData(ym)))

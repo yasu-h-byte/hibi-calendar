@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
-import { getWorkerByToken } from '@/lib/workers'
+import { getWorkerByToken, isAlreadyRetired } from '@/lib/workers'
 
 // ────────────────────────────────────────
 // 各スタッフ個別の期間計算（入社日ベース、1年サイクル）
@@ -108,7 +108,8 @@ async function saveToolBudgetData(data: ToolBudgetData): Promise<void> {
 
 // 対象: 技能実習生・特定技能のみ（日本人・事務・役員・退職は除外）
 function isForeignActiveWorker(w: { visa?: string; retired?: string; job?: string }): boolean {
-  if (w.retired) return false
+  // 退職「予定」日（未来日）は在職中扱い。isAlreadyRetired で「今日時点で退職済み」のみ除外（監査E）。
+  if (isAlreadyRetired(w.retired)) return false
   if (!w.visa) return false
   if (w.visa === 'none') return false
   // visaが jisshu* or tokutei* のみ対象

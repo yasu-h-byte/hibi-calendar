@@ -56,9 +56,13 @@ function ymKey(d: Date): string {
 }
 
 function relativeYm(d: Date, monthsOffset: number): string {
-  const r = new Date(d)
-  r.setMonth(r.getMonth() + monthsOffset)
-  return ymKey(r)
+  // JST の年・月を取り出し、整数計算で月をずらす。
+  //   ※ Date.setMonth は月末31日起点だと繰り上がって対象月が抜ける（監査⑦の横展開）。
+  const jst = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+  const total = jst.getMonth() + monthsOffset
+  const y = jst.getFullYear() + Math.floor(total / 12)
+  const m0 = ((total % 12) + 12) % 12
+  return `${y}${String(m0 + 1).padStart(2, '0')}`
 }
 
 export async function GET(request: NextRequest) {
