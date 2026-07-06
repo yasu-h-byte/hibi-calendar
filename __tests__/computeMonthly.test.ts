@@ -20,6 +20,7 @@
  */
 import { describe, test, expect } from 'vitest'
 import { computeMonthly, type MainData } from '@/lib/compute'
+import type { AttendanceEntry } from '@/types'
 
 // ─────────────────────────────────────────────────────────────
 // ヘルパー: 最小のテスト用 MainData / Attendance を生成
@@ -454,7 +455,7 @@ describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () 
       assign: { site1: { workers: [101], subcons: [] } },
       siteWorkDays: { '202606': { site1: 26 } },
     })
-    const attD: Record<string, { w?: number; o?: number; p?: number }> = {}
+    const attD: Record<string, AttendanceEntry> = {}
     // 22日出勤（日曜7,14,21を避ける）+ 有給1日
     const workDays = [1,2,3,4,5,6, 8,9,10,11,12,13, 15,16,17,18,19,20, 22,23,24,25]
     for (const d of workDays) Object.assign(attD, dayWork('site1', 101, '202606', d))
@@ -484,7 +485,7 @@ describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () 
       assign: { site1: { workers: [101], subcons: [] } },
       siteWorkDays: { '202606': { site1: 20 } },
     })
-    const attD: Record<string, { w?: number; o?: number; p?: number }> = {}
+    const attD: Record<string, AttendanceEntry> = {}
     // 18日出勤 + 有給2日 = 20日（基本給枠内）
     const workDays = [1,2,3,4,5,6, 8,9,10,11,12,13, 15,16,17,18]
     for (const d of workDays) Object.assign(attD, dayWork('site1', 101, '202606', d))
@@ -511,7 +512,7 @@ describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () 
       assign: { site1: { workers: [108], subcons: [] } },
       siteWorkDays: { '202606': { site1: 26 } },
     })
-    const attD: Record<string, { w?: number; o?: number; p?: number }> = {}
+    const attD: Record<string, AttendanceEntry> = {}
     // 時給ブランチの既存テストと同じ勤務パターン: 22日出勤 + 有給1日
     const workDays = [1,2,3,4,5,6, 8,9,10,11,12,13, 15,16,17,18,19,20, 22,23,24,25]
     for (const d of workDays) Object.assign(attD, dayWork('site1', 108, '202606', d))
@@ -737,7 +738,7 @@ describe('computeMonthly - 集計整合性チェック', () => {
       assign: { site1: { workers: [4], subcons: [] } },
       siteWorkDays: { '202605': { site1: 24 } },
     })
-    const attD: Record<string, { w?: number; o?: number; p?: number }> = {}
+    const attD: Record<string, AttendanceEntry> = {}
     // 20日出勤 + 残業5.5h + 有給2日（単価 ceil(19100/8×1.25)=2,985 → 残業 ceil(2,985×5.5)=16,418）
     for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 4, '202605', d, 1, d === 1 ? 5.5 : 0))
     Object.assign(attD, dayPL('site1', 4, '202605', 21))
