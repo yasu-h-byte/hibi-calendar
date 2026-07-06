@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from '@/lib/fsdb'
 import { getMainData } from '@/lib/compute'
@@ -278,6 +278,17 @@ export async function POST(request: NextRequest) {
       //       `!evaluatorId` は使わず null/undefined/型を明示チェックする。
       if (!evaluationId || typeof evaluatorId !== 'number' || !evaluatorName || !scores) {
         return NextResponse.json({ error: 'evaluationId, evaluatorId, evaluatorName, scores は必須です' }, { status: 400 })
+      }
+
+      // 本人性チェック（監査）: 提出者は評価者本人のみ。個人パスワードの actor が evaluatorId と
+      //   一致することを要求する（evaluatorId をボディで詐称して他評価者を騙るのを防ぐ）。
+      //   admin / super-admin（共通・靖仁）は代理提出を許可。
+      const submitAuth = await getApiAuthUser(request)
+      if (!submitAuth.authorized) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      if (typeof submitAuth.actor === 'number' && submitAuth.actor !== evaluatorId) {
+        return NextResponse.json({ error: '他の評価者を騙ってレビューを提出することはできません' }, { status: 403 })
       }
 
       const evalRef = doc(db, 'evaluations', evaluationId)

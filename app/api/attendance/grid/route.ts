@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, getApiRole, isManagerRole } from '@/lib/auth'
 import { getMainData, getAttData, getAssign } from '@/lib/compute'
 import { getApprovalForDay } from '@/lib/attendance'
 import { isStillActiveForMonth } from '@/lib/workers'
@@ -363,6 +363,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'approve_final') {
+      // 最終承認は管理者・事業責任者のみ（職長は職長承認まで）。UI の canFinalize と一致させ、
+      //   サーバ側でロール強制する（監査: checkApiAuth のみで事務・他現場職長が最終承認できた穴を塞ぐ）。
+      const role = await getApiRole(request)
+      if (!role || !isManagerRole(role.role)) {
+        return NextResponse.json({ error: '最終承認の権限がありません（管理者・事業責任者のみ）' }, { status: 403 })
+      }
       const { siteId, ym, day, approvedBy } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       // 「職長承認済み」を必須要件としてサーバ側でチェック（クライアントUIだけでなく二重に保護）
@@ -376,6 +382,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'unapprove_final') {
+      // 最終承認の解除も管理者・事業責任者のみ
+      const role = await getApiRole(request)
+      if (!role || !isManagerRole(role.role)) {
+        return NextResponse.json({ error: '最終承認解除の権限がありません（管理者・事業責任者のみ）' }, { status: 403 })
+      }
       const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       const { removeFinalApprovalForDay } = await import('@/lib/attendance')
