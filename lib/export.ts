@@ -23,6 +23,31 @@ import { validatePayrolls, type PayrollSnapshot } from './payroll-validator'
 
 const DOW_SHORT = ['日', '月', '火', '水', '木', '金', '土']
 
+/**
+ * 勤務時間一覧（社労士提出用）の1日分の実労働時間を計算する。
+ *   dayHours = その日の総実労働時間（所定＋残業）
+ *   dayOT    = うち残業部分
+ * 呼び出し側は dayHours をそのまま合計に使う（残業を二重に足さない）。
+ *
+ * ★ 2026-07-06: 時間ベース入力(st/et)の日に、残業込みの実労働時間へさらに残業を
+ *   足していた二重加算バグ（例: 実9.5hが12h表示）を解消。回帰防止のため純粋関数化。
+ */
+export function timesheetDayHours(
+  entry: { st?: string; et?: string; w?: number; o?: number },
+  dailyPrescribedForWorker: number,
+): { dayHours: number; dayOT: number } {
+  if (entry.st && entry.et) {
+    // calcActualHours は残業込みの実労働時間を返す → これがそのまま総労働時間
+    const dayHours = calcActualHours(entry as AttendanceEntry, undefined as unknown as Parameters<typeof calcActualHours>[1])
+    const dayOT = Math.max(0, dayHours - dailyPrescribedForWorker)
+    return { dayHours, dayOT }
+  }
+  // レガシー入力: 所定（補償日は0.6按分）＋ 残業 o を足して総労働時間にする
+  const base = entry.w === 0.6 ? Math.round(dailyPrescribedForWorker * 0.6 * 10) / 10 : dailyPrescribedForWorker
+  const dayOT = entry.o || 0
+  return { dayHours: base + dayOT, dayOT }
+}
+
 function ymLabel(ym: string): string {
   const y = parseInt(ym.slice(0, 4))
   const m = parseInt(ym.slice(4, 6))
@@ -177,17 +202,11 @@ function appendTimeSheet(
           //   - 旧: 一律 dailyPrescribed (7h or 6h40m) で固定 → 実労働が短い場合に過大表示
           //   - 新: st/et から実労働時間を計算 (休憩控除済み)、無ければ従来通り
           // 2026-06-XX 追加 (I-12): w に旧ルール継続フラグがあれば 6h40m を採用
+          // 注: appendTimeSheet の sites 型は最小限 {id, name} のため workSchedule を持たない
+          //     → workSchedule なしで calcActualHours を呼ぶと「休憩控除なし」になる可能性
+          //     現状は最低限の整合性として実労働時間を直接計算
           const dailyPrescribedForWorker = w.useOldRules ? 20 / 3 : dailyPrescribed
-          if (entry.st && entry.et) {
-            // 注: appendTimeSheet の sites 型は最小限 {id, name} のため workSchedule を持たない
-            //     → workSchedule なしで calcActualHours を呼ぶと「休憩控除なし」になる可能性
-            //     現状は最低限の整合性として実労働時間を直接計算
-            dayHours = calcActualHours(entry, undefined as unknown as Parameters<typeof calcActualHours>[1])
-            dayOT = Math.max(0, dayHours - dailyPrescribedForWorker)
-          } else {
-            dayHours = entry.w === 0.6 ? Math.round(dailyPrescribedForWorker * 0.6 * 10) / 10 : dailyPrescribedForWorker
-            dayOT = entry.o || 0
-          }
+          ;({ dayHours, dayOT } = timesheetDayHours(entry, dailyPrescribedForWorker))
           status = entry.w === 0.6 ? '補' : dayOT > 0 ? '出+残' : '出'
         }
       }
@@ -196,7 +215,8 @@ function appendTimeSheet(
         status = '有給'; plCount++
         hoursRow.push(''); otRow.push('')
       } else if (dayHours > 0) {
-        const actualH = Math.round((dayHours + dayOT) * 10) / 10
+        // dayHours は既に総実労働時間（所定＋残業）。dayOT を再度足さない。
+        const actualH = Math.round(dayHours * 10) / 10
         hoursRow.push(actualH); otRow.push(dayOT > 0 ? dayOT : '')
         totalHours += actualH; totalOT += dayOT
       } else {

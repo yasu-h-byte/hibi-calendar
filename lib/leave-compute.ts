@@ -149,12 +149,16 @@ export function computePeriodUsed(
     if (!e.p) continue
 
     // key 形式: `siteId_workerId_yyyymm_dd`
+    // ★ siteId 自体がアンダースコアを含み得る（例: yaesu_night）ため、
+    //   右端3要素（wid / ym / dd）を末尾から取り出す（parseDKey と同じ方式）。
+    //   split して長さ4を期待する旧実装は、アンダースコア入り現場IDの有給を
+    //   丸ごと取りこぼしていた（消化日数の過少 → 残日数の過大表示）。
     const parts = key.split('_')
-    if (parts.length !== 4) continue
-    const wid = parseInt(parts[1], 10)
+    if (parts.length < 4) continue
+    const dd = parts[parts.length - 1]
+    const ym = parts[parts.length - 2]
+    const wid = parseInt(parts[parts.length - 3], 10)
     if (wid !== workerId) continue
-    const ym = parts[2]
-    const dd = parts[3]
     if (!/^\d{6}$/.test(ym) || !/^\d{1,2}$/.test(dd)) continue
     const isoDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${dd.padStart(2, '0')}`
 

@@ -84,6 +84,30 @@ describe('computeMonthly - 日給制日本人', () => {
     expect(w.salaryNetPay).toBe(353100)
   })
 
+  test('同日2現場の有給は1日として数える（plUsed 二重カウント防止）', () => {
+    // 回帰防止: C8修正で actualWorkDays は日単位デデュープされたが、p/exam/w=0.6 は
+    //   エントリ単位のままだった。同日2現場に有給があると plUsed=2 となり、
+    //   有給手当の過払い・欠勤控除の漏れが発生していた。
+    const main = buildMain({
+      workers: [{
+        id: 4, name: '本田文人', org: 'hibi', visa: 'none', job: 'tobi',
+        rate: 17655, otMul: 1.25, hireDate: '', token: '',
+      }],
+      assign: { site1: { workers: [4], subcons: [] }, site2: { workers: [4], subcons: [] } },
+      siteWorkDays: { '202604': { site1: 20 } },
+    })
+    const attD: Record<string, AttendanceEntry> = {}
+    for (let d = 1; d <= 19; d++) Object.assign(attD, dayWork('site1', 4, '202604', d))
+    // 20日目: 同じ日に2現場とも有給
+    Object.assign(attD, dayPL('site1', 4, '202604', 20))
+    Object.assign(attD, dayPL('site2', 4, '202604', 20))
+
+    const result = computeMonthly(main, attD, {}, '202604', 20)
+    const w = result.workers.find(x => x.id === 4)!
+    expect(w.plUsed).toBe(1)        // 2現場でも1日
+    expect(w.paidLeaveDays).toBe(1) // 有給手当も1日分
+  })
+
   test('出勤20日・残業10h → 残業手当 = (日額/8) × otMul × 10h', () => {
     const main = buildMain({
       workers: [{

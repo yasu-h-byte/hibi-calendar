@@ -805,6 +805,12 @@ export interface WorkerMonthly {
   // 2026-06-XX 追加 (C8): 同一日複数現場の actualWorkDays 重複排除用
   //   内部利用のみ。集計後の表示には使わない（リファクタ時に削除可）
   _actualDaySeen?: Set<string>
+  // 2026-07-06 追加: 有給/試験/休業補償も同一日複数現場で重複排除する（全日単位の概念）。
+  //   これがないと同日2現場に p/exam/w=0.6 が入っている人で plUsed 等が2倍になり、
+  //   有給手当の過払い・欠勤控除の漏れが発生していた（actualWorkDays と同じ扱いに統一）。
+  _plDaySeen?: Set<string>
+  _examDaySeen?: Set<string>
+  _compDaySeen?: Set<string>
   // 出向情報
   isDispatched?: boolean         // 常時出向中（Worker.dispatchTo が設定済み）
   dispatchTo?: string            // 出向先名
@@ -972,15 +978,27 @@ export function computeMonthly(
     if (!wm) continue
 
     // ★ 有給は人工にカウントしない → 即continue
+    //   同一日複数現場は1日として数える（全日単位。actualWorkDays と同じ扱い）
     if (entry.p) {
-      wm.plDays += 1
-      wm.plUsed += 1
+      const dayKey = `${pk.ym}_${pk.day}`
+      if (!wm._plDaySeen) wm._plDaySeen = new Set<string>()
+      if (!wm._plDaySeen.has(dayKey)) {
+        wm._plDaySeen.add(dayKey)
+        wm.plDays += 1
+        wm.plUsed += 1
+      }
       if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
       continue
     }
     // ★ 試験は人工にカウントしないが、給与計算では出勤と同等扱い (examDays として集計)
+    //   同一日複数現場は1日として数える
     if (entry.exam) {
-      wm.examDays += 1
+      const dayKey = `${pk.ym}_${pk.day}`
+      if (!wm._examDaySeen) wm._examDaySeen = new Set<string>()
+      if (!wm._examDaySeen.has(dayKey)) {
+        wm._examDaySeen.add(dayKey)
+        wm.examDays += 1
+      }
       if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
       continue
     }
@@ -1007,7 +1025,15 @@ export function computeMonthly(
         wm.actualWorkDays += 1
       }
     }
-    if (isComp) wm.compDays += 1
+    if (isComp) {
+      // 休業補償(0.6)も全日単位 → 同一日複数現場は1日として数える
+      const compDayKey = `${pk.ym}_${pk.day}`
+      if (!wm._compDaySeen) wm._compDaySeen = new Set<string>()
+      if (!wm._compDaySeen.has(compDayKey)) {
+        wm._compDaySeen.add(compDayKey)
+        wm.compDays += 1
+      }
+    }
     if (entry.o && entry.o > 0 && !isComp) wm.otHours += entry.o
     if (!wm.sites.includes(siteId)) wm.sites.push(siteId)
 

@@ -72,6 +72,27 @@ describe('computePeriodUsed', () => {
     expect(result.actualPeriodUsed).toBe(2)  // 4/15 と 5/10 (4/15 は重複しない)
   })
 
+  test('アンダースコア入り現場ID(yaesu_night)の有給も正しく集計する', () => {
+    // 回帰防止: split('_') で長さ4を要求する旧実装は、siteId に _ を含む
+    //   夜勤現場(yaesu_night)の有給を丸ごと取りこぼし、残日数が過大表示されていた。
+    const allAtt: Record<string, unknown> = {
+      'yaesu_night_101_202604_15': { p: 1 },  // 夜勤現場の有給
+      'site1_101_202605_10': { p: 1 },        // 通常現場の有給
+    }
+    const result = computePeriodUsed(101, '2026-04-01', allAtt, today)
+    expect(result.actualPeriodUsed).toBe(2)     // 両方数える（夜勤分を取りこぼさない）
+    expect(result.requestedPeriodUsed).toBe(2)
+  })
+
+  test('アンダースコア入り現場ID + 同日別現場の重複排除も効く', () => {
+    const allAtt: Record<string, unknown> = {
+      'yaesu_night_101_202604_15': { p: 1 },
+      'site1_101_202604_15': { p: 1 },  // 同日・通常現場（重複）
+    }
+    const result = computePeriodUsed(101, '2026-04-01', allAtt, today)
+    expect(result.actualPeriodUsed).toBe(1)  // 同日なので1日
+  })
+
   test('他のスタッフのデータは集計対象外', () => {
     const allAtt: Record<string, unknown> = {
       'site1_101_202604_15': { p: 1 },
