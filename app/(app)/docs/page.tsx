@@ -51,7 +51,6 @@ const DOCS: (DocItem & { category: string })[] = [
 
   // ── スタッフ向け（全員が内容を把握しておく／スタッフ本人はスマホから） ──
   { category: 'staff', title: 'スタッフ向けマニュアル', desc: '出勤登録・欠勤届・有給申請・帰国申請・残数確認の使い方（日本語＋ベトナム語）', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-07-03' },
-  { category: 'staff', roles: ['foreman', 'jimu'], title: 'QRコードカード（印刷用）', desc: '全スタッフの出勤入力用QRコード', url: '/qr-cards.html', icon: '📱', updated: '2026-04-08' },
 ]
 
 const CATEGORY_LABEL: Record<string, string> = {
