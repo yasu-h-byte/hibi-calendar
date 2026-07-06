@@ -126,6 +126,46 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // (2c) 給与・労務の重要コレクションをスナップショット（監査: 復旧不能コレクションの穴を塞ぐ）
+    //   コレクション全体を1ドキュメントに退避。小規模（〜数十件）前提。各々を独立の try で囲み、
+    //   1つが失敗しても他のバックアップは継続する。
+    const snapshotCollection = async (collName: string, backupPrefix: string) => {
+      try {
+        const snap = await getDocs(query(collection(db, collName), limit(2000)))
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        await setDoc(doc(db, 'backups', `${backupPrefix}_${stamp}`), {
+          sourceId: collName,
+          count: docs.length,
+          truncated: docs.length >= 2000,
+          snapshotAt: now.toISOString(),
+          data: { docs },
+        })
+        summary.saved.push(`${backupPrefix}_${stamp}(${docs.length})`)
+      } catch (e) {
+        summary.errors.push(`${collName}: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+    await snapshotCollection('leaveRequests', 'leavereq')       // 有給申請＋承認履歴
+    await snapshotCollection('homeLongLeave', 'homeleave')      // 帰国情報の単一ソース
+    await snapshotCollection('evaluations', 'evals')            // 人事評価
+    await snapshotCollection('siteCalendar', 'sitecal')         // 承認済みカレンダー本体
+    await snapshotCollection('activityLog', 'actlog')           // 操作ログ（500件ローテーションの退避）
+
+    // (2d) demmen/toolBudget（道具代の購入記録＝金銭データ）を退避
+    try {
+      const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
+      if (tbSnap.exists()) {
+        await setDoc(doc(db, 'backups', `toolbudget_${stamp}`), {
+          sourceId: 'demmen/toolBudget',
+          snapshotAt: now.toISOString(),
+          data: tbSnap.data(),
+        })
+        summary.saved.push(`toolbudget_${stamp}`)
+      }
+    } catch (e) {
+      summary.errors.push(`toolBudget: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
     // (3) 古いバックアップを削除（30日保持）
     const cutoff = new Date(now)
     cutoff.setDate(cutoff.getDate() - RETENTION_DAYS)
