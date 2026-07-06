@@ -33,7 +33,26 @@
 import { isWorkingDay } from './attendance'
 import { getAttData, getMainData, parseDKey, type MainData } from './compute'
 import { getAllActiveHomeLeaves } from './homeLeave'
+import { addMonthsSafe } from './date-utils'
 import type { AttendanceEntry } from '@/types'
+
+/**
+ * periodEnd（ISO日付）から monthsBack ヶ月前までの YYYYMM を最古順で列挙する。
+ *   年・月の整数計算で行う。Date.setMonth は periodEnd が29〜31日のとき
+ *   対象月が繰り上がって1ヶ月抜け落ちるため使わない（監査⑦）。
+ */
+export function enumerateYmsBack(periodEndIso: string, monthsBack: number): string[] {
+  const [endY, endM] = periodEndIso.slice(0, 7).split('-').map(Number)
+  const endM0 = endM - 1  // 0-indexed
+  const out: string[] = []
+  for (let i = monthsBack; i >= 0; i--) {
+    const t = endM0 - i
+    const y = endY + Math.floor(t / 12)
+    const m0 = ((t % 12) + 12) % 12
+    out.push(`${y}${String(m0 + 1).padStart(2, '0')}`)
+  }
+  return out
+}
 
 export interface AttendanceRateResult {
   /** 出勤率 (0〜100、上限100%キャップ済み) */
@@ -129,8 +148,9 @@ export async function calcAttendanceMetrics(
 
   const periodEndDate = isoToDate(periodEnd)
   // 期間始端 = periodEnd の monthsBack ヶ月前の同日
-  const periodStartDate = new Date(periodEndDate)
-  periodStartDate.setMonth(periodStartDate.getMonth() - monthsBack)
+  //   ※ Date.setMonth は月末日(29〜31日)起点だと繰り上がる（例: 5/31 の11ヶ月前が
+  //     6/31→7/1 になる）。addMonthsSafe で末日クランプして正しく計算する（監査⑦）。
+  const periodStartDate = isoToDate(addMonthsSafe(periodEnd, -monthsBack))
 
   // 雇用境界
   const hireDate = worker?.hireDate ? isoToDate(worker.hireDate) : null
@@ -146,12 +166,7 @@ export async function calcAttendanceMetrics(
     }))
 
   // 期間内の月リスト（最古から）
-  const ymList: string[] = []
-  for (let i = monthsBack; i >= 0; i--) {
-    const d = new Date(periodEndDate)
-    d.setMonth(d.getMonth() - i)
-    ymList.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
+  const ymList = enumerateYmsBack(periodEnd, monthsBack)
   const uniqYmList = Array.from(new Set(ymList))
 
   // attData を一括取得
