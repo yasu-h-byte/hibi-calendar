@@ -55,6 +55,15 @@ export async function GET(request: NextRequest) {
     const activeSites = main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name }))
     const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
 
+    // 外国人給与の週残業しきい値を「カレンダー予定日ベース」で判定するための日別カレンダー（監査④）。
+    //   給与を計算するケース(monthly / monthlyExcel / bukake)だけで遅延ロードする。
+    const loadCalendarDaysMap = async (): Promise<Record<string, Record<string, string>>> => {
+      const cals = await getMonthlyCalendars(`${ymStr.slice(0, 4)}-${ymStr.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
+      const m: Record<string, Record<string, string>> = {}
+      for (const c of cals) if (c.days) m[c.siteId] = c.days
+      return m
+    }
+
     let buffer: Buffer
     let filename: string
 
@@ -145,7 +154,8 @@ export async function GET(request: NextRequest) {
         //   0 のままだと旧ルール継続者(フン等)の給与・原価がこの帳票だけ 0 円になっていた。
         const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
-        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
+        const calendarDaysMap = await loadCalendarDaysMap()
+        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -193,7 +203,8 @@ export async function GET(request: NextRequest) {
         // 2026-06-12 修正 (監査C2): 全社所定を 0 固定 → main.workDays[ym] に（bukake と同様）
         const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
-        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
+        const calendarDaysMap = await loadCalendarDaysMap()
+        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -216,7 +227,8 @@ export async function GET(request: NextRequest) {
         // 2026-06-XX 修正: siteWorkDaysMap を画面と統一（/api/monthly と整合性確保）
         const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
-        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays, hasCalendar ? siteWorkDaysMap : undefined, baseDays)
+        const calendarDaysMap = await loadCalendarDaysMap()
+        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
         const monthSiteNames: Record<string, string> = {}
         for (const s of main.sites) monthSiteNames[s.id] = s.name
 

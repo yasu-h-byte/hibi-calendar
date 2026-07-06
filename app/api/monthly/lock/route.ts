@@ -4,7 +4,16 @@ import { db } from '@/lib/firebase'
 import { doc, updateDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { getMainData, getAttData, computeMonthly, parseDKey } from '@/lib/compute'
+import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
+
+/** 週残業しきい値の判定に使う日別カレンダー（監査④・給与Excelと同一基準） */
+async function loadCalendarDaysForYm(ym: string): Promise<Record<string, Record<string, string>>> {
+  const cals = await getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
+  const m: Record<string, Record<string, string>> = {}
+  for (const c of cals) if (c.days) m[c.siteId] = c.days
+  return m
+}
 
 /** JST 基準の当月 YYYYMM */
 function currentYmJst(): string {
@@ -84,7 +93,8 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
     const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ym] || {}
     const hasCal = Object.keys(siteWorkDaysMap).length > 0
     const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
-    const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays)
+    const calendarDaysMap = await loadCalendarDaysForYm(ym)
+    const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
     const targets = result.workers.filter(w => orgKey === 'all' ? true : ((isHfu(w.org) ? 'hfu' : 'hibi') === orgKey))
     const v = validatePayrolls(targets as unknown as PayrollSnapshot[])
     if (v.critical > 0) {
@@ -127,7 +137,8 @@ async function savePayrollSnapshot(ym: string, orgKey: 'hibi' | 'hfu' | 'all', l
   const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ym] || {}
   const hasCal = Object.keys(siteWorkDaysMap).length > 0
   const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
-  const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays)
+  const calendarDaysMap = await loadCalendarDaysForYm(ym)
+  const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
   const isHfu = (org?: string) => org === 'hfu' || org === 'HFU'
   const workers = result.workers
     .filter(w => orgKey === 'all' ? true : (orgKey === 'hfu' ? isHfu(w.org) : !isHfu(w.org)))

@@ -3,6 +3,7 @@ import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
+import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
 
 export async function GET(request: NextRequest) {
@@ -26,7 +27,12 @@ export async function GET(request: NextRequest) {
     const hasCalendarData = Object.keys(siteWorkDaysMap).length > 0
     // 3層構造のベース日数（管理者設定）
     const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
-    const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays)
+    // 外国人給与の週残業しきい値を「カレンダー予定日ベース」で判定するための日別カレンダー（監査④）。
+    //   Excel出力(/api/export)と同一基準にし、画面とExcelの残業額を一致させる。
+    const cals = await getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
+    const calendarDaysMap: Record<string, Record<string, string>> = {}
+    for (const c of cals) if (c.days) calendarDaysMap[c.siteId] = c.days
+    const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
 
     // 組織別ロック状態（後方互換: 旧 locks[ym] もチェック）
     const lockedLegacy = !!(main.locks[ym])

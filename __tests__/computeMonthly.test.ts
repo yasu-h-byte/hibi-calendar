@@ -19,7 +19,7 @@
  *   - 計算式は仕様書 (docs/salary-calculation.md) を真の元とする
  */
 import { describe, test, expect } from 'vitest'
-import { computeMonthly, type MainData } from '@/lib/compute'
+import { computeMonthly, calculateVietnameseSalary, type MainData } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'
 
 // ─────────────────────────────────────────────────────────────
@@ -1309,5 +1309,31 @@ describe('computeMonthly - 鳶見習い (Phase 19 で追加)', () => {
     const w = result.workers.find(x => x.id === 12)!
     expect(w.job).toBe('tobi_apprentice')
     expect(w.basePay).toBe(235000)  // 月給固定
+  })
+})
+
+describe('calculateVietnameseSalary - 週残業しきい値（監査④: カレンダー予定日ベース）', () => {
+  // 2026年6月: 6/1(月)〜6/6(土)は同一週。日曜6/7は法定休日。
+  //   カレンダーは月〜金(6/1-5)の5日を予定(work)、土曜6/6は予定外。
+  //   実際は臨時で土曜も出て月〜土6日×7h = 週42h 勤務。
+  const sites = [{ id: 'site1', name: '現場1' }]  // workSchedule なし → 所定7h
+  const attD: Record<string, AttendanceEntry> = {}
+  for (let d = 1; d <= 6; d++) attD[`site1_101_202606_${d}`] = { w: 1 }
+  const calendarScheduled5Days = { site1: { '1': 'work', '2': 'work', '3': 'work', '4': 'work', '5': 'work' } }
+
+  test('カレンダー予定日ベース: 予定5日(35h)基準 → 週40h超の2hが法定外残業に計上', () => {
+    const v = calculateVietnameseSalary(101, '202606', 1500, 20, attD, sites, 0, 0, 0, calendarScheduled5Days)
+    // 週所定=35h → しきい値 max(40,35)=40。週実労働42h・日次残業0 → 週次残業 = 42-40 = 2h
+    expect(v.weeklyStatutoryOT).toBe(2)
+    expect(v.statutoryOT).toBe(2)
+    // 割増手当 = ceil(1500 × 0.25 × 2) = 750
+    expect(v.otAllowance).toBe(750)
+  })
+
+  test('カレンダー未指定（後方互換）: 実出勤6日(42h)基準 → 週次残業0（従来動作）', () => {
+    const v = calculateVietnameseSalary(101, '202606', 1500, 20, attD, sites, 0, 0, 0)
+    // 週所定=実出勤6×7=42h → しきい値 max(40,42)=42。週実労働42h → 週次残業0
+    expect(v.weeklyStatutoryOT).toBe(0)
+    expect(v.statutoryOT).toBe(0)
   })
 })

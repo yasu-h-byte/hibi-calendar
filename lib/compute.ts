@@ -896,6 +896,10 @@ export function computeMonthly(
   prescribedDays: number = 0,
   siteWorkDaysMap?: Record<string, number>,  // siteId -> workDays (from calendar)
   baseDays: number = 20,  // 3層構造の基本給ベース日数（管理者設定）
+  // 現場×日の勤務カレンダー（siteId -> { "d": "work"|... }）。
+  //   外国人給与の週残業しきい値を「カレンダー予定日ベース」で判定するために
+  //   calculateVietnameseSalary へ引き渡す（監査④）。未指定時は従来動作。
+  calendarDays?: Record<string, Record<string, string>>,
 ): {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
@@ -1235,7 +1239,7 @@ export function computeMonthly(
       // 2026-06-XX 修正 (I-7): 中途入退社時は proratedBaseDays を使用
       const v = calculateVietnameseSalary(
         wm.id, ym, wm.hourlyRate, proratedBaseDays, attD, main.sites,
-        wm.plUsed, wm.compDays, wm.examDays,
+        wm.plUsed, wm.compDays, wm.examDays, calendarDays,
       )
 
       wm.fixedBasePay = v.fixedBasePay
@@ -1332,7 +1336,7 @@ export function computeMonthly(
       const derivedHourlyRate = wm.salary / (baseDays * 7)  // 単価は固定（按分前の月給ベース）
       const v = calculateVietnameseSalary(
         wm.id, ym, derivedHourlyRate, proratedBaseDays, attD, main.sites,
-        wm.plUsed, wm.compDays, wm.examDays,
+        wm.plUsed, wm.compDays, wm.examDays, calendarDays,
       )
       // 基本給は月給値を採用（時給からの再計算による丸め誤差を避ける）
       // 2026-06-XX 修正 (I-7): 中途入退社時は按分した値を採用
@@ -1937,6 +1941,11 @@ export function calculateVietnameseSalary(
   plUsed: number,
   compDays: number,
   examDays: number,
+  // 現場×日の勤務カレンダー（siteId -> { "d": "work"|... }）。
+  //   週の残業しきい値を「カレンダーで事前に定めた週所定」で判定するために使う
+  //   （社労士提出Excel calculateOvertimeSummary と同一基準）。
+  //   未指定時は従来どおり「実出勤日の所定合計」で判定（後方互換）。
+  calendarDays?: Record<string, Record<string, string>>,
 ): VietnameseSalaryResult {
   const ymY = parseInt(ym.slice(0, 4))
   const ymM = parseInt(ym.slice(4, 6))
@@ -2042,6 +2051,22 @@ export function calculateVietnameseSalary(
     })
   }
 
+  // ── カレンダー予定日ベースの「日別 所定時間」──
+  //   週の残業しきい値の基準に使う。calendarDays がある日のみ scheduled 所定を持ち、
+  //   予定外の臨時出勤日は 0（＝しきい値を押し上げない）。
+  //   これがないと「予定5日の週に臨時で6日働いた」ケースで週所定=42hに膨らみ、
+  //   40h超の割増(0.25倍)が未払いになっていた（監査④）。
+  const scheduledPrescribedByDay: Record<number, number> = {}
+  if (calendarDays) {
+    for (let d = 1; d <= numDays; d++) {
+      let schedSiteId: string | null = null
+      for (const siteId of Object.keys(calendarDays)) {
+        if (calendarDays[siteId]?.[String(d)] === 'work') { schedSiteId = siteId; break }
+      }
+      scheduledPrescribedByDay[d] = schedSiteId ? calcPrescribedH(schedSiteId) : 0
+    }
+  }
+
   // ── 時間集計 ──
   const legalHolidayHours = dayInfos
     .filter(di => di.isLegalHoliday)
@@ -2081,8 +2106,12 @@ export function calculateVietnameseSalary(
     const weekDays = dayInfos.filter(di => di.weekNum === wn && !di.isLegalHoliday)
     const weekRegular = weekDays.reduce((s, di) => s + di.actualHours, 0)
     const weekDailyOT = weekDays.reduce((s, di) => s + (dailyOTByDay[di.day] || 0), 0)
-    // 週所定 = その週の出勤日の所定時間合計（カレンダーで6日設定なら 6×7h=42h）
-    const weekPrescribed = weekDays.reduce((s, di) => s + di.prescribedHours, 0)
+    // 週所定 = その週の「カレンダー予定日」の所定時間合計（例: 予定5日なら 5×7h=35h）。
+    //   calendarDays がある場合は予定日ベース（社労士Excelと同一基準・監査④修正）。
+    //   未指定時は従来どおり実出勤日ベースにフォールバック。
+    const weekPrescribed = calendarDays
+      ? weekDays.reduce((s, di) => s + (scheduledPrescribedByDay[di.day] || 0), 0)
+      : weekDays.reduce((s, di) => s + di.prescribedHours, 0)
     const weekThreshold = Math.max(40, weekPrescribed)
     totalWeeklyOT += Math.max(0, weekRegular - weekThreshold - weekDailyOT)
   }
