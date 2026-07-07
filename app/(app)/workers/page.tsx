@@ -504,9 +504,16 @@ export default function WorkersPage() {
                     )}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                    {w.visaType && isGaikoku(w.visaType) && w.hourlyRate ? (
+                    {w.salary && w.salary > 0 ? (
+                      // 固定月給が設定されている人（日本人・外国人問わず）は実際の月給を表示
+                      <div>
+                        <div className="font-medium">{fmtYen(w.salary)}</div>
+                        <div className="text-[10px] text-gray-400">固定月給</div>
+                      </div>
+                    ) : w.visaType && isGaikoku(w.visaType) && w.hourlyRate ? (
+                      // 外国人・時給者は時給×168hの月給目安
                       fmtYen(w.hourlyRate * 168)
-                    ) : w.visaType && isGaikoku(w.visaType) && w.salary ? fmtYen(w.salary) : '—'}
+                    ) : '—'}
                   </td>
                   <td className="px-3 py-2.5">
                     {w.token ? (
