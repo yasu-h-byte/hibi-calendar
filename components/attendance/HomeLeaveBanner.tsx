@@ -9,6 +9,8 @@
  */
 'use client'
 
+import { todayJstIso } from '@/lib/date-utils'
+
 export interface HomeLeaveInfo {
   workerId: number
   workerName: string
@@ -26,7 +28,9 @@ interface Props {
 export default function HomeLeaveBanner({ homeLeaves, recentReturnDays = 7 }: Props) {
   if (!homeLeaves || homeLeaves.length === 0) return null
 
-  const now = new Date().toISOString().slice(0, 10)
+  // 「今日」は日本時間で判定する。UTC(toISOString)だとJSTの朝0〜9時は前日扱いになり、
+  //   帰国終了日の翌日でも「帰国中」のまま残る等、1日ズレる（2026-07 修正）。
+  const now = todayJstIso()
   const today = new Date(now + 'T00:00:00')
 
   type Categorized = {

@@ -1,6 +1,7 @@
 import { db } from './firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { Worker } from '@/types'
+import { todayJstIso } from './date-utils'
 
 export async function getWorkers(): Promise<Worker[]> {
   const docRef = doc(db, 'demmen', 'main')
@@ -151,7 +152,7 @@ export function isAlreadyRetired(
   todayIso?: string,
 ): boolean {
   if (!retired) return false  // 退職予定なし
-  const today = todayIso || new Date().toISOString().slice(0, 10)
+  const today = todayIso || todayJstIso()  // 既定は日本時間の今日（UTCだとJST朝に1日ズレる）
   return retired < today
 }
 

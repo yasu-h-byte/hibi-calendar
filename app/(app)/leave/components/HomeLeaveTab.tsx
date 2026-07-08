@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { HomeLeave, PLWorker } from '../types'
+import { todayJstIso } from '@/lib/date-utils'
 
 // 帰国情報タブ（旧 home-leave ページから統合）
 // フォーム・開閉状態はデータ再取得で画面全体が読み込み表示に切り替わっても
@@ -54,8 +55,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
 
   if (!visible) return null
 
-  // 計算ヘルパー
-  const today = new Date().toISOString().slice(0, 10)
+  // 計算ヘルパー（今日は日本時間で判定 — UTCだとJST朝に1日ズレる）
+  const today = todayJstIso()
   const fmt = (s: string) => {
     const d = new Date(s + 'T00:00:00')
     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`

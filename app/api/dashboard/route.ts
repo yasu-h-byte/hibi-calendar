@@ -20,6 +20,7 @@ import {
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from '@/lib/workers'
+import { todayJstIso } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
@@ -51,7 +52,7 @@ function computePLAlert(main: MainData) {
   }[] = []
 
   // 2026-06-XX 修正: 今日時点で退職済みのみ除外（未来日退職予定者は5日義務監視対象）
-  const todayIsoForPl = new Date().toISOString().slice(0, 10)
+  const todayIsoForPl = todayJstIso()  // 日本時間の今日（UTCだとJST朝に1日ズレる）
   for (const w of main.workers) {
     if (isAlreadyRetired(w.retired, todayIsoForPl)) continue
     const records = main.plData[String(w.id)] || []

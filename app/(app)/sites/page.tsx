@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { fmtYen } from '@/lib/format'
+import { todayJstIso } from '@/lib/date-utils'
 
 interface RatePeriod {
   from: string
@@ -318,7 +319,7 @@ export default function SitesPage() {
   const isActive = (s: SiteData): boolean => {
     if (s.archived) return false
     if (!s.end) return true
-    return new Date(s.end) >= new Date(new Date().toISOString().slice(0, 10))
+    return new Date(s.end) >= new Date(todayJstIso())
   }
 
   const filtered = showArchived ? sites : sites.filter(s => !s.archived)

@@ -13,7 +13,7 @@ import { AttendanceEntry, calcActualHours } from '@/types'
 import { isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from './workers'
 import { computePeriodUsed } from './leave-compute'
-import { calcExpiryIso } from './date-utils'
+import { calcExpiryIso, todayJstIso } from './date-utils'
 // 2026-06-XX 追加: 自動検算を Excel にも反映
 import { validatePayrolls, type PayrollSnapshot } from './payroll-validator'
 
@@ -775,7 +775,7 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
 
   const rows: (string | number)[][] = [titleRow, headers]
   // 2026-06-XX 修正: 「今日時点で退職済み」のみ除外。未来日退職予定者は ledger 管理対象
-  const todayIso = new Date().toISOString().slice(0, 10)
+  const todayIso = todayJstIso()
   const activeWorkers = workers.filter(w => {
     if (isAlreadyRetired(w.retired, todayIso)) return false
     if (orgFilter === 'hibi') return w.org === 'hibi' || w.org === '日比'
@@ -1494,7 +1494,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
 
   // 2026-06-XX 修正: PL ledger は「今日時点で退職済み」のみ除外
   //   未来日退職予定者は5日義務監視対象として ledger に必要
-  const todayIsoForLedger = new Date().toISOString().slice(0, 10)
+  const todayIsoForLedger = todayJstIso()
   for (const w of workers) {
     if (isAlreadyRetired(w.retired, todayIsoForLedger)) continue
     const records = plData[String(w.id)] || []
@@ -1513,7 +1513,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
       const remaining = Math.max(0, grantDays + carryOver - used)
       // 2026-06-12 修正 (監査): 期限判定を 2×365日近似 → calcExpiryIso（うるう年対応）に統一。
       //   有効期限列(fmtExpiry)と判定基準がズレて境界日で「期限切れ/有効」が矛盾していた
-      const expiredByDate = !!(r.grantDate && calcExpiryIso(r.grantDate) < new Date().toISOString().slice(0, 10))
+      const expiredByDate = !!(r.grantDate && calcExpiryIso(r.grantDate) < todayJstIso())
       const status = r._archived ? 'アーカイブ' : (r.expiredAt ? '失効済' : (expiredByDate ? '期限切れ' : '有効'))
       ledgerRows.push([
         w.id, w.name, w.org || '', visaLabel(w.visa), w.hireDate || '',

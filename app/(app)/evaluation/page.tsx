@@ -14,6 +14,7 @@ import {
   AuthUser,
 } from '@/types'
 import { fmtYen } from '@/lib/format'
+import { todayJstIso } from '@/lib/date-utils'
 // ⚠️ 評価ロジック（重み・テーブル・計算関数）は lib/evaluation-config.ts に集約。
 //   フロント・バックエンドで重複して定義すると過去のような不整合が再発する。
 //   修正時は必ず lib/evaluation-config.ts だけを編集すること。
@@ -1458,7 +1459,7 @@ export default function EvaluationPage() {
                       const nextDate = nextEvalDate(w.hireDate || '', wEvals)
                       // アラートは「システムで評価済み＆1年経過」の場合のみ
                       const evaluated = hasBeenEvaluated(wEvals)
-                      const isOverdue = evaluated && nextDate !== '--' && nextDate <= new Date().toISOString().slice(0, 10)
+                      const isOverdue = evaluated && nextDate !== '--' && nextDate <= todayJstIso()
                       return { worker: w, latest, nextDate, isOverdue }
                     })
                     .sort((a, b) => {
