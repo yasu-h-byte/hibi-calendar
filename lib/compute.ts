@@ -232,14 +232,22 @@ export function getAssign(
  *
  * 統一ロジック:
  *   - 月給制日本人 (visa==='none' && salary>0): salary / 20 (月所定日数前提)
- *   - その他: w.rate（時給制ベトナム人もrateは時給×7で自動セット済）
+ *   - 外国人・時給制 (visa!=='none' && hourlyRate>0): 時給 × 7（常に時給から導出）
+ *   - その他: w.rate
+ *
+ * ★ 2026-07 修正: 外国人の日額は保存済み rate ではなく「時給×7」で都度算出する。
+ *   旧: w.rate を使用 → 昇給で時給を上げても rate が追随せず、原価が古い単価で過小計上
+ *       （監査で外国人13名中11名の日額ドリフトを検出）。時給から算出すればドリフト不能。
  *
  * 注: ベース20日固定は概算用。中途入退社按分は computeMonthly() 側で対応済み。
  *     より精密な日割りが必要な場合は呼出側で workerPrescribedDays を考慮する。
  */
-export function getWorkerDailyRate(w: { visa?: string; rate?: number; salary?: number }): number {
+export function getWorkerDailyRate(w: { visa?: string; rate?: number; salary?: number; hourlyRate?: number }): number {
   if (w.visa === 'none' && w.salary && w.salary > 0) {
     return w.salary / 20
+  }
+  if (w.visa && w.visa !== 'none' && w.hourlyRate && w.hourlyRate > 0) {
+    return w.hourlyRate * 7
   }
   return w.rate || 0
 }
@@ -1063,7 +1071,7 @@ export function computeMonthly(
     // 2026-06-XX 修正 (C1): 月給制日本人 (rate=0) のサイト原価ゼロ問題
     //   getWorkerDailyRate で月給制も日額換算（salary/20）
     const otDiv = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
-    const entryDailyRate = getWorkerDailyRate({ visa: wm.visa, rate: wm.rate, salary: wm.salary })
+    const entryDailyRate = getWorkerDailyRate({ visa: wm.visa, rate: wm.rate, salary: wm.salary, hourlyRate: wm.hourlyRate })
     const otCost = (isComp ? 0 : (entry.o || 0)) * (entryDailyRate / otDiv) * wm.otMul
     const entryCost = entry.w * entryDailyRate + otCost
     // 原価=実支給額で集計するスタッフ（ベトナム人 + 日本人完全月給）は、エントリ単位の

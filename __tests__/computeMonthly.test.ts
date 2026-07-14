@@ -19,8 +19,21 @@
  *   - 計算式は仕様書 (docs/salary-calculation.md) を真の元とする
  */
 import { describe, test, expect } from 'vitest'
-import { computeMonthly, calculateVietnameseSalary, type MainData } from '@/lib/compute'
+import { computeMonthly, calculateVietnameseSalary, getWorkerDailyRate, type MainData } from '@/lib/compute'
 import type { AttendanceEntry } from '@/types'
+
+describe('getWorkerDailyRate (原価用の日額換算)', () => {
+  test('外国人・時給制: 保存rateが古くても時給×7で算出（ドリフト防止・監査①）', () => {
+    // 昇給で時給は2214だが保存rateは古い14333のまま → 原価には時給×7を使う
+    expect(getWorkerDailyRate({ visa: 'tokutei1', hourlyRate: 2214, rate: 14333 })).toBe(15498)
+  })
+  test('月給制日本人: salary / 20', () => {
+    expect(getWorkerDailyRate({ visa: 'none', salary: 235000 })).toBe(11750)
+  })
+  test('日給制日本人（時給なし）: 保存rateを使う', () => {
+    expect(getWorkerDailyRate({ visa: 'none', rate: 18000 })).toBe(18000)
+  })
+})
 
 // ─────────────────────────────────────────────────────────────
 // ヘルパー: 最小のテスト用 MainData / Attendance を生成
