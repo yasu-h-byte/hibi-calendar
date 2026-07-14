@@ -193,6 +193,8 @@ interface MonthlyReportData {
   workers: {
     name: string; org: string; workDays: number; otHours: number;
     plDays: number; totalCost: number; job: string
+    // 残業(h)の表示統一用（API は WorkerMonthly 全体を返すため実際には存在する）
+    useOldRules?: boolean; nonStatutoryOTHours?: number; legalOtHours?: number
   }[]
   subcons: {
     name: string; type: string; workDays: number; otCount: number; cost: number
@@ -270,16 +272,26 @@ function currentYm(): string {
 }
 
 // 表示用の「時間外労働(h)」を返す。
-// - 新ルール（変形労働）ベトナム人: 計算値 = 所定外労働 + 法定外残業（3層判定後）
+// - 新ルール（変形労働）ベトナム人: 所定外労働時間（=所定を超えた実体の時間。法定内+法定外を含む）
 //   ※ 生の o 欄合計(otHours)は、st/et 入力月では実態とズレるため使わない
-//   （例: 笹塚は o=0 だが法定外残業あり / 富岡は o過多だが実態は所定外）
+//   ※ 法定外残業(legalOtHours)は所定外の「内数」（同じ時間に割増が付くだけ）なので合算しない。
+//     旧実装は 所定外+法定外 を足しており、例: 22.5h+5.1h=27.6h という実体のない数字が
+//     表示されて Excel（所定外/法定外を別列表示）と突合できなかった（2026-07 奥寺さん指摘②）。
+//     予定外の休日出勤等で「所定外0だが法定外あり」になるケースがあるため max を取る。
 // - 日本人(日額制) / 旧ルール: 従来どおり出面の残業欄合計(otHours)
-function displayOtHours(w: WorkerMonthly): number {
+type OtDisplayable = { useOldRules?: boolean; otHours: number; nonStatutoryOTHours?: number; legalOtHours?: number }
+function displayOtHours(w: OtDisplayable): number {
   if (w.useOldRules) return w.otHours
   if (w.nonStatutoryOTHours !== undefined || w.legalOtHours !== undefined) {
-    return Math.round(((w.nonStatutoryOTHours || 0) + (w.legalOtHours || 0)) * 10) / 10
+    return Math.round(Math.max(w.nonStatutoryOTHours || 0, w.legalOtHours || 0) * 10) / 10
   }
   return w.otHours
+}
+
+// 「うち法定外(割増対象)」— displayOtHours の内数として添えて表示する
+function displayLegalOtHours(w: OtDisplayable): number {
+  if (w.useOldRules) return 0
+  return Math.round((w.legalOtHours || 0) * 10) / 10
 }
 
 type WorkerSortKey = 'name' | 'org' | 'workDays' | 'plDays' | 'otHours' | 'rate' | 'totalCost'
@@ -1265,7 +1277,7 @@ export default function MonthlyPage() {
                 <th
                   className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('otHours')}
-                  title="新ルール(ベトナム人): 所定外労働+法定外残業の計算値（3層判定後）。日本人・旧ルール: 出面の残業欄合計"
+                  title="新ルール(ベトナム人): 所定外労働時間（所定7hを超えた実体の時間。法定外はこの内数で下段に表示）。日本人・旧ルール: 出面の残業欄合計"
                 >
                   残業(h){sortArrow(workerSortKey === 'otHours', workerSortAsc)}
                 </th>
@@ -1425,7 +1437,14 @@ export default function MonthlyPage() {
                         {w.plDays > 0 ? w.plDays : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">
-                        {displayOtHours(w) > 0 ? fmtNum(displayOtHours(w)) : '—'}
+                        {displayOtHours(w) > 0 ? (
+                          <span title={displayLegalOtHours(w) > 0 ? `所定外 ${fmtNum(displayOtHours(w))}h のうち、法定外(割増対象) ${fmtNum(displayLegalOtHours(w))}h` : undefined}>
+                            {fmtNum(displayOtHours(w))}
+                            {displayLegalOtHours(w) > 0 && (
+                              <span className="block text-[10px] text-gray-400 leading-tight">法定外 {fmtNum(displayLegalOtHours(w))}</span>
+                            )}
+                          </span>
+                        ) : '—'}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
                         {(w.salary || 0) > 0 ? (
@@ -1764,7 +1783,7 @@ function openMonthlyPrintPage(data: MonthlyReportData) {
       <td>${w.org}</td>
       <td>${w.job}</td>
       <td class="num">${w.workDays}</td>
-      <td class="num">${w.otHours}</td>
+      <td class="num">${displayOtHours(w)}</td>
       <td class="num">${w.plDays}</td>
       <td class="num">${formatYen(w.totalCost)}</td>
     </tr>
