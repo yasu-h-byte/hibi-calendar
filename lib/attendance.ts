@@ -155,15 +155,19 @@ export function canAdminEditEntry(
   //   - 有給 (p): スタッフが事前申請するが、当日体調不良の事後申請もある
   //   - 帰国中 (hk): 長期帰国は管理者一括登録が運用上自然
   //   - 補償日 (w=0.6): 現場都合休みは会社/職長判断 → 代理入力が前提
+  //   - 欠勤 (r, w=0): 来なかった日を本人がスマホ入力することはないため、後付け記録が唯一の手段
+  //     （2026-07-09 追加。w=0 で賃金が増えないため、本ガードの趣旨＝賃金操作防止は損なわない。
+  //      実例: 未入力のまま最終承認まで進んだ日を、後から欠勤として正す運用）
   if (newEntry) {
     const isPaidLeave = (newEntry.p ?? 0) > 0
     const isHomeLeave = (newEntry.hk ?? 0) > 0
     const isCompensation = (newEntry.w ?? 0) === 0.6
-    if (isPaidLeave || isHomeLeave || isCompensation) {
+    const isAbsence = (newEntry.r ?? 0) > 0 && (newEntry.w ?? 0) === 0
+    if (isPaidLeave || isHomeLeave || isCompensation || isAbsence) {
       return { editable: true }
     }
   }
-  return { editable: false, reason: 'スタッフ本人のスマホ入力待ち（有給・帰国中・現場都合休みは後付け入力可）' }
+  return { editable: false, reason: 'スタッフ本人のスマホ入力待ち（有給・欠勤・帰国中・現場都合休みは後付け入力可）' }
 }
 
 /**
