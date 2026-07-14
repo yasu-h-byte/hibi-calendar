@@ -15,6 +15,14 @@ const ceilYen = (v: number): number => Math.ceil(Math.round(v * 100) / 100)
 /** 控除額: 1円未満を切り捨て（控除を増やさない＝過少支払い防止） */
 const floorYen = (v: number): number => Math.floor(Math.round(v * 100) / 100)
 
+/**
+ * 日本人・月給制の割増賃金算定基礎に使う「月平均所定労働時間」(h)。
+ * 施行規則19条（月ごとに所定が異なる場合は年平均で除する）に基づく固定値。
+ * 年間休日が現場依存で確定できないため、想定レンジ(月140〜145.8h)内の145hに固定
+ * （2026-07-09 代表確定）。変更時は docs/salary-calculation.md と賃金規程も更新すること。
+ */
+export const JP_SALARY_AVG_MONTHLY_HOURS = 145
+
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
 // ────────────────────────────────────────
@@ -1436,21 +1444,24 @@ export function computeMonthly(
     } else if (wm.visa === 'none' && wm.salary && wm.salary > 0) {
       // ── 月給制の日本人: 月給固定 + 残業時給換算 ──
       // 基本給 = 月給(固定)。月途中入退社のみ在籍日数で日割り（暦日比・切上）
-      // 時給換算 = 月給 ÷ 月所定時間（按分前の月所定日数×8h、未設定なら 20日×8h=160h）
+      // 時給換算 = 月給 ÷ 月平均所定労働時間 145h（固定・2026-07-09 代表確定）
+      //   施行規則19条: 月ごとに所定労働時間が異なる場合は「年平均の月所定時間」で除する。
+      //   日比建設は年間休日が現場依存で事前確定できないため、新卒等の想定レンジ
+      //   （完全週休2日・祝日出勤・GW/夏季/年末年始 → 年間休日115〜125日 × 7h/日
+      //    → 月平均 140〜145.8h）の内側の 145h に固定する。
+      //   分母を実際の所定より小さめに固定するぶんには単価が法定最低を上回り常に適法。
+      //   旧: 当月所定日数×8h → 単価が毎月変動し、契約実態(7h/日)とも不一致で法定割れの疑い。
       // 残業手当 = 時給換算 × otMul × 残業時間
       // 支給額 = 基本給 + 残業手当
       // ※ 出勤日数に関わらず基本給は固定（労基法上の月給制）
       // 2026-06-12 修正 (監査C5): 中途入退社の日割りを追加。時給換算単価は按分前ベース
-      //   （按分後の所定で割ると入退社月だけ残業単価が跳ね上がるため）
-      const prescribedDaysForCalc = unproratedPrescribedDays > 0 ? unproratedPrescribedDays : 20
-      const prescribedH = prescribedDaysForCalc * 8
-      const hourlyEquivalent = wm.salary / prescribedH
+      const hourlyEquivalent = wm.salary / JP_SALARY_AVG_MONTHLY_HOURS
       const basePay = ceilYen(wm.salary * prorationRatio)
       // 残業単価を1円単位に切り上げ → 残業代も1円未満切り上げ
       const otUnitRate = ceilYen(hourlyEquivalent * wm.otMul)
       const otPay = ceilYen(otUnitRate * wm.otHours)
       wm.basePay = basePay
-      wm.prescribedHours = prescribedH
+      wm.prescribedHours = JP_SALARY_AVG_MONTHLY_HOURS  // 割増算定基礎の月平均所定時間
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.otAllowance = otPay
       wm.salaryNetPay = basePay + otPay

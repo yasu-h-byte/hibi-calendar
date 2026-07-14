@@ -267,7 +267,7 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
     expect(siteA.cost).toBe(Math.round(200000 * 12 / 20)) // 120000
   })
 
-  test('月給制 + 残業10h → 残業手当 = (月給/月所定h) × otMul × 10h', () => {
+  test('月給制 + 残業10h → 残業手当 = (月給 ÷ 145h) × otMul × 10h（月平均所定固定）', () => {
     const main = buildMain({
       workers: [{
         id: 12, name: '濱上祥太郎', org: 'hibi', visa: 'none', job: 'tobi_apprentice',
@@ -282,11 +282,32 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
     const result = computeMonthly(main, attD, {}, '202606', 20)
     const w = result.workers.find(x => x.id === 12)!
     expect(w.basePay).toBe(240000)
-    // 月所定 = 20日 × 8h = 160h
-    // 時給換算 = 240000 / 160 = 1500
-    // 残業 = round(1500 × 1.25 × 10) = 18750
-    expect(w.otAllowance).toBe(18750)
-    expect(w.salaryNetPay).toBe(240000 + 18750)
+    // 2026-07-09 変更: 分母は当月所定でなく月平均所定145h（施行規則19条・現場依存の休日変動対策）
+    // 時給換算 = 240000 / 145 = 1655.17…
+    // 残業単価 = ceil(1655.17 × 1.25) = ceil(2068.97) = 2069
+    // 残業 = ceil(2069 × 10) = 20690
+    expect(w.otAllowance).toBe(20690)
+    expect(w.salaryNetPay).toBe(240000 + 20690)
+  })
+
+  test('月給制の残業単価は月所定日数が変わっても固定（145h固定の回帰防止・濱上の実値）', () => {
+    // 濱上の実契約値 235,000円: 235,000/145=1,620.69 → 単価 ceil(×1.25)=2,026円/h
+    // 所定22日の月でも24日の月でも単価は同じであること
+    for (const [ym, days] of [['202606', 24], ['202607', 22]] as const) {
+      const main = buildMain({
+        workers: [{
+          id: 12, name: '濱上祥太郎', org: 'hibi', visa: 'none', job: 'tobi_apprentice',
+          rate: 0, salary: 235000, otMul: 1.25, hireDate: '2026-06-01', token: '',
+        }],
+        assign: { site1: { workers: [12], subcons: [] } },
+        siteWorkDays: { [ym]: { site1: days } },
+      })
+      const attD: Record<string, { w: number; o?: number }> = {}
+      Object.assign(attD, dayWork('site1', 12, ym, 1, 1, 0.5))  // 残業0.5h
+      const result = computeMonthly(main, attD, {}, ym, days)
+      const w = result.workers.find(x => x.id === 12)!
+      expect(w.otAllowance).toBe(1013)  // ceil(2026 × 0.5)
+    }
   })
 
   test('完全月給: 月途中入社は在籍日数で日割り、残業単価は按分前ベース（監査C5）', () => {
@@ -307,9 +328,9 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
     // 在籍 6/16〜6/30 = 15日 / 暦30日 → ratio 0.5
     // 基本給 = 切上(240,000 × 0.5) = 120,000
     expect(w.basePay).toBe(120000)
-    // 残業単価は按分前の月所定(20日×8h=160h)ベース: 240,000/160=1,500 → 単価 ceil(1,500×1.25)=1,875
-    expect(w.otAllowance).toBe(1875 * 4)
-    expect(w.salaryNetPay).toBe(120000 + 7500)
+    // 残業単価は按分に影響されず月平均所定145h固定: 240,000/145=1,655.17 → 単価 ceil(×1.25)=2,069
+    expect(w.otAllowance).toBe(2069 * 4)
+    expect(w.salaryNetPay).toBe(120000 + 8276)
   })
 })
 
