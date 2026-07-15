@@ -10,7 +10,7 @@ import { orgBadgeCls, orgBadgeLabel } from '@/lib/labels'
 import { GridData, AttEntry, SubconDayEntry } from '../types'
 import { TimeBasedCell, LegacyCell, HomeLeaveCell, WaitingCell } from './WorkerDayCell'
 
-// 出面グリッド本体: ヘッダー行・職長行・職長承認行・最終承認行・ワーカー行・
+// 出面グリッド本体: ヘッダー行・職長承認行・最終承認行・ワーカー行・
 // 外注行・フッター合計6行・凡例
 
 interface Props {
@@ -106,34 +106,16 @@ export default function AttendanceGrid({
           </thead>
 
           <tbody>
-            {/* ── Foreman row (yellow) ── */}
-            {data.site.foremanName && (
-              <tr className="bg-yellow-50 border-b border-yellow-200">
-                <td
-                  className="sticky left-0 z-20 bg-yellow-50 px-2 py-1 font-bold text-yellow-800 whitespace-nowrap text-[11px]"
-                  style={{ width: 150, minWidth: 150, maxWidth: 150 }}
-                >
-                  職長: {data.site.foremanName}{data.site.foremanNote ? <span className="text-[9px] text-gray-500 ml-1">({data.site.foremanNote})</span> : ''}
-                </td>
-                <td className="sticky left-[150px] z-20 bg-yellow-50 px-1 py-1 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-yellow-200 text-yellow-800">職長</span>
-                </td>
-                {days.map(d => (
-                  <td key={d.day} className={`px-0 py-1 border-l border-yellow-100 bg-yellow-50 text-center text-[10px] text-yellow-600`} style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}>
-                    {/* placeholder: foreman presence can be derived from worker entries */}
-                  </td>
-                ))}
-                <td className="px-1 py-1 text-center border-l-2 border-yellow-200 bg-yellow-50" style={{ width: 80, minWidth: 80 }}></td>
-              </tr>
-            )}
-
-            {/* ── 職長承認 row（1次承認: 担当現場の職長のみ） ── */}
+            {/* ── 職長承認 row（1次承認: 担当現場の職長のみ）──
+                 職長名はこの承認行に集約表示（旧: 上部に空セルだけの黄色「職長行」があったが
+                 情報が無く名前も二重だったため 2026-07-09 に削除。代理メモはここへ移設）。 */}
             <tr className="bg-orange-50 border-b border-orange-100">
               <td
                 className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px]"
                 style={{ width: 150, minWidth: 150, maxWidth: 150 }}
               >
                 {data.site.foremanName ? `${data.site.foremanName} 職長承認` : '職長承認'}
+                {data.site.foremanNote ? <span className="text-[9px] text-gray-500 font-normal ml-1">({data.site.foremanNote})</span> : ''}
                 {canForemanApprove && (unapprovedDays.length > 0 ? (
                   <button
                     onClick={onForemanApproveAll}
