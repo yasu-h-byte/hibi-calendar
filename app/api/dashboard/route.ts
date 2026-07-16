@@ -349,6 +349,10 @@ export async function GET(request: NextRequest) {
     const baseY = parseInt(ym.slice(0, 4))
     const baseM = parseInt(ym.slice(4, 6))
 
+    // homeLongLeave はこのハンドラ内の3箇所が使う → 1回だけ読んで使い回す（性能改善 2026-07-09）
+    let hlAllDocs: Awaited<ReturnType<typeof getDocs>>['docs'] = []
+    try { hlAllDocs = (await getDocs(collection(db, 'homeLongLeave'))).docs } catch { /* 読取失敗時は空 */ }
+
     // ═══ Build YM list for the selected period ═══
     const ymListObj = buildYMList(period, baseY, baseM)
     const ymStrList = ymListObj.map(x => ymKey(x.y, x.m))
@@ -699,8 +703,7 @@ export async function GET(request: NextRequest) {
       const targetDateStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
       const hlOnLeaveWorkerIds = new Set<number>()
       try {
-        const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
-        hlSnap.forEach(d => {
+        hlAllDocs.forEach(d => {
           const v = d.data() as { workerId?: number; status?: string; startDate?: string; endDate?: string }
           if (v.status === 'approved' && v.startDate && v.endDate
               && v.startDate <= targetDateStr && targetDateStr <= v.endDate
@@ -1126,8 +1129,7 @@ export async function GET(request: NextRequest) {
       return ''
     }
     try {
-      const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
-      hlSnap.forEach(d => {
+      hlAllDocs.forEach(d => {
         const data = d.data()
         if (data.status === 'pending' || data.status === 'foreman_approved') {
           const fresh = main.workers.find(w => w.id === data.workerId)?.name
@@ -1162,8 +1164,7 @@ export async function GET(request: NextRequest) {
       futureLimit.setMonth(futureLimit.getMonth() + 6)
       const futureIso = futureLimit.toISOString().slice(0, 10)
 
-      const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
-      hlSnap.forEach(d => {
+      hlAllDocs.forEach(d => {
         const data = d.data()
         if (!data.startDate || !data.endDate) return
         if (data.status === 'approved' || data.status === 'foreman_approved') {
