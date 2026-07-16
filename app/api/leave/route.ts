@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
-import { getMainData, getAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
+import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso } from '@/lib/date-utils'
@@ -253,10 +253,7 @@ export async function POST(request: NextRequest) {
 
       // 出面データをロード（残日数計算用）
       const allAtt: Record<string, Record<string, unknown>> = {}
-      for (const ym of relevantAttMonths()) {
-        const att = await getAttData(ym)
-        Object.assign(allAtt, att.d)
-      }
+      Object.assign(allAtt, (await getMultiMonthAttData(relevantAttMonths())).d)  // 並列読み（性能改善 2026-07-09）
 
       const expiredList: { workerId: number; workerName: string; fy: string; grantDate: string; expiredDays: number }[] = []
       const workersArr = (data.workers || []) as { id: number; name: string }[]
@@ -803,10 +800,7 @@ export async function POST(request: NextRequest) {
       const allAtt: Record<string, Record<string, unknown>> = {}
       if (needsAttLoad) {
         const months = relevantAttMonths()
-        for (const ym of months) {
-          const att = await getAttData(ym)
-          Object.assign(allAtt, att.d)
-        }
+        Object.assign(allAtt, (await getMultiMonthAttData(months)).d)  // 並列読み（性能改善 2026-07-09）
       }
 
       let granted = 0
@@ -934,10 +928,7 @@ export async function POST(request: NextRequest) {
       } else if (grantDate) {
         // 自動計算には出面データが必要
         const allAttG: Record<string, Record<string, unknown>> = {}
-        for (const ym of relevantAttMonths()) {
-          const att = await getAttData(ym)
-          Object.assign(allAttG, att.d)
-        }
+        Object.assign(allAttG, (await getMultiMonthAttData(relevantAttMonths())).d)  // 並列読み（性能改善 2026-07-09）
         carryOverVal = calcCarryOverForWorker(Number(workerId), grantDate, records, allAttG, isJpG)
       } else {
         carryOverVal = 0
@@ -1006,10 +997,7 @@ export async function POST(request: NextRequest) {
 
       // 出面データを一括ロード
       const allAtt: Record<string, Record<string, unknown>> = {}
-      for (const ym of relevantAttMonths()) {
-        const att = await getAttData(ym)
-        Object.assign(allAtt, att.d)
-      }
+      Object.assign(allAtt, (await getMultiMonthAttData(relevantAttMonths())).d)  // 並列読み（性能改善 2026-07-09）
 
       let updated = 0
       let skipped = 0
@@ -1194,10 +1182,7 @@ export async function GET(request: NextRequest) {
     }
 
     const allAtt: Record<string, Record<string, unknown>> = {}
-    for (const ym of allMonths) {
-      const att = await getAttData(ym)
-      Object.assign(allAtt, att.d)
-    }
+    Object.assign(allAtt, (await getMultiMonthAttData(allMonths)).d)  // 並列読み（性能改善 2026-07-09・GET経路の主因）
 
     // Worker name map for calendar tooltips
     const workerNames: Record<number, string> = {}
