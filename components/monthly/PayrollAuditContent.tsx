@@ -354,8 +354,10 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                   </>
                 ) : (
                   <>
-                    {fmtNum((w.nonStatutoryOTHours || 0) + (w.legalOtHours || 0), 'h')}
-                    <span className="text-[10px] text-gray-500 ml-1">（所定外労働 + 法定外残業。3層判定後の計算値。出面の残業欄 {fmtNum(w.otHours, 'h')} とは別）</span>
+                    {/* 2026-07-09: 月次画面と表示を統一。所定外労働(7h超の実体)を主表示し、
+                        法定外(割増対象)はその内数として添える。旧: 所定外+法定外の合算(実体のない数字)。 */}
+                    {fmtNum(w.nonStatutoryOTHours || 0, 'h')}
+                    <span className="text-[10px] text-gray-500 ml-1">（所定外労働。うち法定外(割増対象) {fmtNum(w.legalOtHours || 0, 'h')}。3層判定後の計算値。出面の残業欄 {fmtNum(w.otHours, 'h')} とは別）</span>
                   </>
                 )}
               </td>

@@ -2136,7 +2136,11 @@ export function calculateVietnameseSalary(
   }
   // 第3段階: 月単位（regular内、法定上限超 − 日単位 − 週単位）
   const monthlyStatutoryOT = Math.max(0, regularHours - legalLimit - totalDailyOT - totalWeeklyOT)
-  const statutoryOT = totalDailyOT + totalWeeklyOT + monthlyStatutoryOT
+  // ★ 2026-07-09: 法定外残業の合計時間を 0.1h 単位に丸める。
+  //   月次判定の法定上限(暦日×40÷7)が割り切れず端数(例5.073h)が出るが、書類表示は 0.1h
+  //   丸め(5.1h)。金額を生値で計算すると「表示時間×単価」で手検算しても合わなかった
+  //   （奥寺さん指摘）。表示と同じ丸め値で金額を出し、手計算と突合できるようにする。
+  const statutoryOT = Math.round((totalDailyOT + totalWeeklyOT + monthlyStatutoryOT) * 10) / 10
 
   // ── 支給項目計算 ──
   const fixedBasePay = ceilYen(hourlyRate * baseDays * 7)  // 支給: 切り上げ（月給制: 20日固定）
@@ -2162,7 +2166,12 @@ export function calculateVietnameseSalary(
   //   2026-06-XX (C-4): 月60h超は +0.5倍（旧: 1.5倍 = 1.0 + 0.5）
   const otUnder60 = Math.min(60, statutoryOT)
   const otOver60 = Math.max(0, statutoryOT - 60)
-  const otAllowance = ceilYen(hourlyRate * (0.25 * otUnder60 + 0.5 * otOver60))  // 残業(割増)手当: 1円未満切り上げ
+  // ★ 2026-07-09: 割増単価を先に1円未満切上げしてから時間を掛ける（奥寺さんの実務・
+  //   労基法の端数処理に合わせる）。例: 時給1581 × 0.25 = 395.25 → 396円/h、396 × 法定外時間。
+  //   旧: 時給×0.25×時間 をまとめて切上げ → 単価を先に丸める手計算と数円ズレていた。
+  const otUnitUnder60 = ceilYen(hourlyRate * 0.25)  // 法定外(60h以内)の割増単価/h
+  const otUnitOver60 = ceilYen(hourlyRate * 0.5)     // 法定外(月60h超)の割増単価/h
+  const otAllowance = ceilYen(otUnitUnder60 * otUnder60 + otUnitOver60 * otOver60)  // 残業(割増)手当
 
   // 2026-06-XX 修正 (C-3): 法定休日労働 8h超の追加0.25倍（労基法37条）
   //   法定休日(日曜)出勤は通常1.35倍だが、8h超部分は更に深夜・時間外と

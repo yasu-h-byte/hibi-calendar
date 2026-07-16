@@ -485,6 +485,27 @@ describe('computeMonthly - 時給制ベトナム人 (旧ルール ~ 2026/4)', ()
 })
 
 describe('computeMonthly - 時給制ベトナム人 (新ルール 2026/5~)', () => {
+  test('法定外残業の割増は「割増単価を先に切上げ×時間」で手計算と一致（時給1581・奥寺さん対応 2026-07-09）', () => {
+    // ケンの実ケース: 時給1581 → 割増単価 ceil(1581×0.25)=396円/h。
+    //   1日だけ10h(残業欄o=3)で日次法定外2.0h。他は通常7h（週/月の法定外は非該当）。
+    //   割増手当 = ceil(396 × 2.0) = 792（旧: ceil(1581×0.25×2)=791 と数円ズレていた）。
+    const main = buildMain({
+      workers: [{
+        id: 107, name: 'モン ヴァン ケン', org: 'hfu', visa: 'jisshu3', job: 'tobi',
+        rate: 0, hourlyRate: 1581, otMul: 1.25, hireDate: '2025-01-01', token: 'k1',
+      }],
+      assign: { site1: { workers: [107], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 20 } },
+    })
+    const attD: Record<string, AttendanceEntry> = {}
+    Object.assign(attD, dayWork('site1', 107, '202606', 2, 1, 3))  // 10h(o=3) → 日次法定外2.0h
+    for (const d of [3, 4, 5, 6]) Object.assign(attD, dayWork('site1', 107, '202606', d))
+    const result = computeMonthly(main, attD, {}, '202606', 20)
+    const w = result.workers.find(x => x.id === 107)!
+    expect(w.legalOtHours).toBe(2)
+    expect(w.otAllowance).toBe(792)  // ceil(396 × 2)
+  })
+
   test('変形労働: 週6日×7h=42h（事前所定）の週は週次の法定外残業ゼロ（週所定ベース判定）', () => {
     const main = buildMain({
       workers: [{
