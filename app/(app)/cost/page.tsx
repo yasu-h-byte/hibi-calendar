@@ -162,9 +162,11 @@ export default function CostPage() {
     if (stored) setPassword(JSON.parse(stored).password)
   }, [])
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!password) return
-    setLoading(true)
+    // silent=true（保存後のバックグラウンド更新）は「読み込み中」に差し替えない。
+    //   差し替えると表が一瞬1行に縮んで画面がガクッとスクロールするため。
+    if (!opts?.silent) setLoading(true)
     try {
       const params = new URLSearchParams({ ym, period, site: siteFilter })
       const res = await fetch(`/api/cost?${params}`, { headers: { 'x-admin-password': password } })
@@ -181,7 +183,7 @@ export default function CostPage() {
         setBillingEdits(edits)
       }
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [password, ym, period, siteFilter])
 
@@ -219,7 +221,7 @@ export default function CostPage() {
       headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
       body: JSON.stringify({ siteId, ym: month, amounts }),
     })
-    fetchData()
+    fetchData({ silent: true })  // 静かに更新（表を縮めない＝スクロールが飛ばない）
   }
 
   // Update a billing row value locally
