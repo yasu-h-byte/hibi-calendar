@@ -52,6 +52,21 @@ function adb(): any | null {
  */
 export const db: any = webDb
 
+// ── main ドキュメント書き込み時のキャッシュ無効化（2026-07-09 追加）──
+//   getMainData() は 30秒キャッシュするため、demmen/main を更新した直後に GET で
+//   getMainData を読むと古い値が返り、編集した値が巻き戻る不具合があった（原価の請求額
+//   入力が典型）。書き込みの共通経路であるここで demmen/main への書き込みを検知して
+//   キャッシュを無効化する。循環importを避けるため compute.ts から invalidator を登録する。
+let _mainWriteHook: (() => void) | null = null
+export function registerMainWriteHook(fn: () => void): void { _mainWriteHook = fn }
+const MAIN_DOC_PATH = 'demmen/main'
+function isMainRef(ref: any): boolean {
+  try { return !!ref && ref.path === MAIN_DOC_PATH } catch { return false }
+}
+function invalidateIfMain(ref: any): void {
+  try { if (_mainWriteHook && isMainRef(ref)) _mainWriteHook() } catch { /* noop */ }
+}
+
 // ── 参照の生成 ──
 export function doc(_db: any, ...segments: string[]): any {
   const a = adb()
@@ -122,18 +137,21 @@ export async function getDocs(q: any): Promise<FsQuerySnap> {
 // ── 書き込み ──
 export async function setDoc(ref: any, data: any, options?: any): Promise<void> {
   const a = adb()
-  if (!a) return web.setDoc(ref, data, options)
+  if (!a) { await web.setDoc(ref, data, options); invalidateIfMain(ref); return }
   await ref.set(data, options || {})
+  invalidateIfMain(ref)
 }
 export async function updateDoc(ref: any, data: any): Promise<void> {
   const a = adb()
-  if (!a) return web.updateDoc(ref, data)
+  if (!a) { await web.updateDoc(ref, data); invalidateIfMain(ref); return }
   await ref.update(data)
+  invalidateIfMain(ref)
 }
 export async function deleteDoc(ref: any): Promise<void> {
   const a = adb()
-  if (!a) return web.deleteDoc(ref)
+  if (!a) { await web.deleteDoc(ref); invalidateIfMain(ref); return }
   await ref.delete()
+  invalidateIfMain(ref)
 }
 export async function addDoc(collectionRef: any, data: any): Promise<any> {
   const a = adb()
@@ -152,13 +170,18 @@ export function deleteField(): any {
 export async function runTransaction<T>(_db: any, updateFn: (tx: any) => Promise<T>): Promise<T> {
   const a = adb()
   if (!a) return web.runTransaction(webDb, updateFn as any) as Promise<T>
-  return a.runTransaction(async (tx: any) => {
+  let touchedMain = false
+  const markIfMain = (ref: any) => { if (isMainRef(ref)) touchedMain = true }
+  const result = await a.runTransaction(async (tx: any) => {
     const wrappedTx = {
       get: async (ref: any) => wrapDocSnap(await tx.get(ref)),
-      set: (ref: any, data: any, options?: any) => tx.set(ref, data, options || {}),
-      update: (ref: any, data: any) => tx.update(ref, data),
-      delete: (ref: any) => tx.delete(ref),
+      set: (ref: any, data: any, options?: any) => { markIfMain(ref); return tx.set(ref, data, options || {}) },
+      update: (ref: any, data: any) => { markIfMain(ref); return tx.update(ref, data) },
+      delete: (ref: any) => { markIfMain(ref); return tx.delete(ref) },
     }
     return updateFn(wrappedTx)
   })
+  // トランザクションのコミット完了後にキャッシュ無効化（コミット前だと再読込で旧値を掴む恐れ）
+  if (touchedMain && _mainWriteHook) { try { _mainWriteHook() } catch { /* noop */ } }
+  return result
 }

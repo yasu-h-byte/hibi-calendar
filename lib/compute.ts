@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, getDoc } from '@/lib/fsdb'
+import { doc, getDoc, registerMainWriteHook } from '@/lib/fsdb'
 import { AttendanceEntry, calcActualHours } from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isHiredByMonth } from './workers'
@@ -113,6 +113,11 @@ const MAIN_CACHE_TTL = 30_000 // 30秒
 export function invalidateMainCache(): void {
   _mainCache = null
 }
+
+// demmen/main への全書き込み（fsdb 経由）で自動的にキャッシュ無効化する（2026-07-09）。
+//   これにより各ルートで invalidateMainCache を呼び忘れても、保存直後の getMainData が
+//   古い値を返さない（原価の請求額入力が巻き戻る等の read-after-write 不整合を根治）。
+registerMainWriteHook(invalidateMainCache)
 
 async function loadMainData(): Promise<MainData> {
   const docSnap = await getDoc(doc(db, 'demmen', 'main'))
