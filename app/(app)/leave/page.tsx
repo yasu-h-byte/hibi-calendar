@@ -30,6 +30,8 @@ export default function LeavePage() {
   const [error, setError] = useState('')
   const [orgFilter, setOrgFilter] = useState<OrgFilter>('all')
   const [activeTab, setActiveTab] = useState<LeaveTab>('list')
+  // 残数の基準日（空=今日）。月末残高の突合用（例: 6月末を指定して「6月末時点の残数」を見る）
+  const [asOfDate, setAsOfDate] = useState<string>('')
 
   // データ
   const [plCalendar, setPlCalendar] = useState<Record<string, number[]>>({})
@@ -81,7 +83,7 @@ export default function LeavePage() {
     setError('')
     try {
       const [res, reqRes, siteRes, pendRes, hlRes] = await Promise.all([
-        fetch(`/api/leave?calendar=true`, { headers: { 'x-admin-password': password } }),
+        fetch(`/api/leave?calendar=true${asOfDate ? `&asOf=${asOfDate}` : ''}`, { headers: { 'x-admin-password': password } }),
         fetch('/api/leave-request', { headers: { 'x-admin-password': password } }),
         fetch('/api/sites', { headers: { 'x-admin-password': password } }),
         fetch('/api/leave', {
@@ -132,7 +134,7 @@ export default function LeavePage() {
     } finally {
       setLoading(false)
     }
-  }, [password])
+  }, [password, asOfDate])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -208,17 +210,39 @@ export default function LeavePage() {
         ))}
       </div>
 
-      {/* Org filter (一覧・基準日タブ) */}
+      {/* Org filter (一覧・基準日タブ) + 残数の基準日（一覧タブのみ） */}
       {(activeTab === 'list' || activeTab === 'grantdates') && (
-        <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
-          {([['all', '全員'], ['hibi', '日比建設'], ['hfu', 'HFU']] as [OrgFilter, string][]).map(([key, label]) => (
-            <button key={key} onClick={() => setOrgFilter(key)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
-                orgFilter === key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-              }`}>
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
+            {([['all', '全員'], ['hibi', '日比建設'], ['hfu', 'HFU']] as [OrgFilter, string][]).map(([key, label]) => (
+              <button key={key} onClick={() => setOrgFilter(key)}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+                  orgFilter === key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {activeTab === 'list' && (
+            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-lg px-3 py-1.5">
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">残数の基準日</span>
+              <input
+                type="date"
+                value={asOfDate}
+                onChange={e => setAsOfDate(e.target.value)}
+                className="text-sm bg-transparent text-hibi-navy dark:text-white outline-none"
+                title="この日「時点」の残数を表示します（月末残高の突合用）。空欄=今日時点。"
+              />
+              {asOfDate ? (
+                <button onClick={() => setAsOfDate('')}
+                  className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 whitespace-nowrap">
+                  今日に戻す
+                </button>
+              ) : (
+                <span className="text-[10px] text-gray-400 whitespace-nowrap">今日時点</span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -241,6 +265,7 @@ export default function LeavePage() {
         filteredWorkers={filteredWorkers}
         loading={loading}
         onEdit={w => setEditWorker(w)}
+        asOfDate={asOfDate}
       />
       <GrantDatesTab
         visible={activeTab === 'grantdates'}

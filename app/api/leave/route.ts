@@ -1214,6 +1214,10 @@ export async function GET(request: NextRequest) {
     //   新: 出向中も含めて監視（出向先での消化が plData に反映されている前提）
     // 2026-06-XX 修正: 「今日時点で退職済み」のみ除外（未来日退職予定者は5日義務監視対象）
     const todayIso = todayJstIso()
+    // 基準日 (asOf): 指定日「時点」の残数を計算する。省略時は今日。
+    //   奥寺さん対応(2026-07-09): 月末残高の突合用。例 asOf=2026-06-30 で「6月末時点の残数」。
+    const asOfParam = request.nextUrl.searchParams.get('asOf')
+    const asOfIso = (asOfParam && /^\d{4}-\d{2}-\d{2}$/.test(asOfParam)) ? asOfParam : todayIso
     const workers = main.workers
       .filter(w => !isAlreadyRetired(w.retired, todayIso) && w.job !== 'yakuin' && w.job !== 'jimu')
       .map(w => {
@@ -1313,6 +1317,7 @@ export async function GET(request: NextRequest) {
         // ⚠️ 多現場の同日重複（multi-site dup）を排除して1日1カウントに正規化
         let periodUsed = 0
         let actualPeriodUsed = 0 // 実消化（今日以前に実際に取得済み・参考列用。残数管理は periodUsed=申請ベースのまま）
+        let asOfUsed = 0         // 基準日(asOf)までに取得済みの消化日数（月末残高の突合用）
         const plCalendarLocal: string[] = []
         const monthlyUsage: Record<string, number> = {} // YYYYMM -> count（全期間、重複排除済）
 
@@ -1359,6 +1364,7 @@ export async function GET(request: NextRequest) {
           //   担当者の実績把握用に一覧へ参考列として並べる（computePeriodUsed.actualPeriodUsed と同義）。
           const entryIso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
           if (entryIso <= todayIso) actualPeriodUsed++
+          if (entryIso <= asOfIso) asOfUsed++  // 基準日までに取得済みの分
         }
         // 2026-06-XX 修正 (audit #5+#6): computeUsedDays ヘルパー経由で計算
         //   旧: used = adjustment + periodUsed （buyoutDays が抜けていた）
@@ -1372,6 +1378,9 @@ export async function GET(request: NextRequest) {
         // 実消化ベース残（参考・2026-06）: 申請ベース(periodUsed)ではなく、今日までに実際に取得した
         //   分(actualPeriodUsed)だけ引いた残日数。承認済みの未来有給は引かないので remaining 以上になる。
         const remainingActual = computeRemainingDays(total, safeRec, actualPeriodUsed)
+        // 基準日(asOf)時点の残数: 基準日までに取得した分だけを引く（月末残高の突合用）。
+        //   asOf 省略時は今日なので remainingActual と同値。
+        const asOfRemaining = computeRemainingDays(total, safeRec, asOfUsed)
 
         // Expiry calculation: grantDate + 2 years - 1 day
         let expiryDate = ''
@@ -1477,6 +1486,8 @@ export async function GET(request: NextRequest) {
           total,
           remaining: expiryStatus === 'expired' ? 0 : remaining,
           remainingActual: expiryStatus === 'expired' ? 0 : remainingActual, // 実消化ベース残（参考）
+          asOfUsed,  // 基準日までの消化日数
+          asOfRemaining: expiryStatus === 'expired' ? 0 : asOfRemaining, // 基準日時点の残数（月末残高突合用）
           rate: total > 0 ? (used / total) * 100 : 0,
           grantMonth: (w as unknown as { grantMonth?: number }).grantMonth,
           grantDate,
@@ -1525,7 +1536,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const response: Record<string, unknown> = { workers }
+    // 基準日をエコー（フロントで「○○時点の残数」ラベルに使う）。today と一致なら null 相当。
+    const response: Record<string, unknown> = { workers, asOf: asOfIso, isAsOfToday: asOfIso === todayIso }
 
     if (calendarMode) {
       response.plCalendar = plCalendar

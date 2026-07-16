@@ -3,6 +3,7 @@
 export interface PLWorker {
   id: number; name: string; org: string; visa: string; hireDate: string
   grantDays: number; carryOver: number; adjustment: number; periodUsed: number; actualPeriodUsed: number; remainingActual: number; used: number
+  asOfUsed?: number; asOfRemaining?: number  // 基準日時点の消化・残数（月末残高突合用）
   total: number; remaining: number; rate: number; grantMonth?: number
   grantDate: string; expiryDate: string; expiryStatus: 'ok' | 'warning' | 'expired'; inferredFromDefault?: boolean
   legalPL: number; fiveDayShortfall: number

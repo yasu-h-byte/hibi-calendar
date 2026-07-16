@@ -11,21 +11,36 @@ interface Props {
   filteredWorkers: PLWorker[]
   loading: boolean
   onEdit: (worker: PLWorker) => void
+  asOfDate?: string  // 残数の基準日（空=今日）。指定時はその日時点の残数を表示
 }
 
-export default function ListTab({ visible, filteredWorkers, loading, onEdit }: Props) {
+export default function ListTab({ visible, filteredWorkers, loading, onEdit, asOfDate }: Props) {
   if (!visible) return null
 
+  // 基準日が指定されていれば「その日時点の残数」を表示する（月末残高の突合用）。
+  const useAsOf = !!asOfDate
+  const remOf = (w: PLWorker) => useAsOf ? (w.asOfRemaining ?? w.remaining) : w.remaining
+  const usedOf = (w: PLWorker) => useAsOf ? (w.asOfUsed ?? w.used) : w.used
+  const asOfLabel = asOfDate ? new Date(asOfDate + 'T00:00:00').toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
+
   const eligible = filteredWorkers.length
-  const totalRemaining = filteredWorkers.reduce((s, w) => s + w.remaining, 0)
-  const totalUsed = filteredWorkers.reduce((s, w) => s + w.used, 0)
+  const totalRemaining = filteredWorkers.reduce((s, w) => s + remOf(w), 0)
+  const totalUsed = filteredWorkers.reduce((s, w) => s + usedOf(w), 0)
   const totalTotal = filteredWorkers.reduce((s, w) => s + w.total, 0)
-  const alertCount = filteredWorkers.filter(w => w.remaining <= 3).length
+  const alertCount = filteredWorkers.filter(w => remOf(w) <= 3).length
   const companyRate = totalTotal > 0 ? (totalUsed / totalTotal * 100) : 0
 
   // ※ 年5日未達のKPI・警告表示は運用上不要のため非表示（2026-07-02 靖仁さん指示）
 
   return (<>
+    {/* 基準日バナー: この日「時点」の残数を表示中であることを一目で示す */}
+    {useAsOf && (
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-2.5 text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2 flex-wrap">
+        <span className="font-bold">🗓 {asOfLabel} 時点の残数を表示中</span>
+        <span className="text-xs text-blue-600 dark:text-blue-300">（この日までに取得した有給だけを引いた残数です。翌月以降に入力済みの有給は含みません）</span>
+      </div>
+    )}
+
     {/* KPI */}
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
@@ -34,7 +49,7 @@ export default function ListTab({ visible, filteredWorkers, loading, onEdit }: P
       </div>
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
         <div className="text-2xl font-bold text-blue-600">{totalRemaining}</div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">有給残日数</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400">有給残日数{useAsOf ? '（基準日時点）' : ''}</div>
       </div>
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 text-center">
         <div className="text-2xl font-bold text-green-600">{totalUsed}</div>
@@ -200,26 +215,33 @@ export default function ListTab({ visible, filteredWorkers, loading, onEdit }: P
                       />
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap tabular-nums">
-                      <span className="font-medium">{w.used}</span><span className="text-gray-400">/{w.total}</span>
+                      <span className="font-medium">{usedOf(w)}</span><span className="text-gray-400">/{w.total}</span>
                     </div>
                   </div>
                 </td>
-                {/* 残日数: 大きく表示（申請ベース＝管理の正） */}
+                {/* 残日数: 大きく表示。基準日指定時はその日時点の残数、通常は申請ベース＝管理の正 */}
                 <td className="px-3 py-2 text-right tabular-nums">
-                  <span className={`text-2xl font-bold ${w.remaining <= 3 ? 'text-red-500' : w.remaining <= 5 ? 'text-amber-500' : 'text-gray-800 dark:text-gray-100'}`}>
-                    {w.remaining}
+                  <span className={`text-2xl font-bold ${remOf(w) <= 3 ? 'text-red-500' : remOf(w) <= 5 ? 'text-amber-500' : 'text-gray-800 dark:text-gray-100'}`}>
+                    {remOf(w)}
                   </span>
                   <span className="text-[10px] text-gray-400 ml-0.5">日</span>
-                  {/* 実消化ベース残（参考・2026-06）: 承認済みの未来分を引かず「今日まで実際に取得した分」だけ
-                      引いた残日数。管理の正は上の大きい数字（申請ベース）。スマホ表示・年5日義務も申請ベースのまま。
-                      申請ベース残と一致する場合（未来の承認済み有給が無い）は冗長なので非表示。 */}
-                  {(w.remainingActual ?? w.remaining) !== w.remaining && (
-                    <div
-                      className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5"
-                      title="実消化ベース残＝今日までに実際に取得した有給だけを引いた残日数（参考）。上の大きい残日数は「申請ベース」（承認済みの未来有給も引く）で、管理・スマホ表示・年5日義務はこちらが正です。"
-                    >
-                      実消化残 {w.remainingActual ?? w.remaining}日
-                    </div>
+                  {useAsOf ? (
+                    // 基準日モード: 参考として「今日時点の残数」も小さく添える
+                    (w.remaining !== remOf(w)) && (
+                      <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5" title="今日時点の残数（申請ベース）。上の大きい数字は選択した基準日時点の残数です。">
+                        今日時点 {w.remaining}日
+                      </div>
+                    )
+                  ) : (
+                    // 通常モード: 実消化ベース残（参考・2026-06）
+                    (w.remainingActual ?? w.remaining) !== w.remaining && (
+                      <div
+                        className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5"
+                        title="実消化ベース残＝今日までに実際に取得した有給だけを引いた残日数（参考）。上の大きい残日数は「申請ベース」（承認済みの未来有給も引く）で、管理・スマホ表示・年5日義務はこちらが正です。"
+                      >
+                        実消化残 {w.remainingActual ?? w.remaining}日
+                      </div>
+                    )
                   )}
                 </td>
                 {/* 警告: 期限切れ 等 */}
