@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, updateDoc, deleteDoc, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { getWorkers, resolveWorkerName } from '@/lib/workers'
+import { HOME_LEAVE_SENTINEL_END } from '@/lib/homeLeave'
 
 /**
  * 管理者の手動帰国登録 API（2026-05-13 単一ソース化）
@@ -30,6 +31,7 @@ interface HomeLeaveRecord {
   note?: string
   createdAt: string
   status?: string
+  returnUndecided?: boolean  // 2026-07-18: 復帰未定（番兵終了日）フラグ
 }
 
 export async function GET(request: NextRequest) {
@@ -55,6 +57,7 @@ export async function GET(request: NextRequest) {
           endDate: v.endDate,
           reason: v.reason || '一時帰国',
           ...(v.note ? { note: v.note } : {}),
+          ...(v.returnUndecided || v.endDate >= HOME_LEAVE_SENTINEL_END ? { returnUndecided: true } : {}),
           createdAt: v.requestedAt || v.createdAt || '',
         })
       })
@@ -84,7 +87,11 @@ export async function POST(request: NextRequest) {
     // ── 管理者の手動追加 ──
     // 旧UI が action='create' を送ってきていた経緯があるので両方受け付ける
     if (action === 'add' || action === 'create') {
-      const { workerId, workerName, startDate, endDate, reason, note } = body
+      const { workerId, workerName, startDate, reason, note, returnUndecided } = body
+      // 2026-07-18 追加: 「復帰未定（急な帰国）」対応。終了日に番兵値を入れて
+      //   既存の文字列比較ロジック（endDate >= 月末 等）を壊さずに「開始日以降ずっと帰国中」を表現する。
+      //   復帰時は update で実際の復帰日に置き換える。
+      const endDate = returnUndecided ? HOME_LEAVE_SENTINEL_END : body.endDate
 
       if (!workerId || !workerName || !startDate || !endDate || !reason) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -107,18 +114,20 @@ export async function POST(request: NextRequest) {
         endDate,
         reason,
         ...(note ? { note } : {}),
+        ...(returnUndecided ? { returnUndecided: true } : {}),
         status: 'approved',
         // 管理者直接登録は申請プロセスをスキップ。createdAt は監査用。
         createdAt: new Date().toISOString(),
       })
-      await logActivity('admin', 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endDate}`)
+      const endLabel = returnUndecided ? '復帰未定' : endDate
+      await logActivity('admin', 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endLabel}`)
 
       return NextResponse.json({ success: true, id })
     }
 
     // ── 更新 ──
     if (action === 'update') {
-      const { id, startDate, endDate, reason, note } = body
+      const { id, startDate, reason, note, returnUndecided } = body
       if (!id) {
         return NextResponse.json({ error: 'Missing id' }, { status: 400 })
       }
@@ -129,22 +138,44 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 })
       }
       const current = snap.data()
+
+      // 2026-07-18: endDate の決定。
+      //   - returnUndecided===true  → 番兵値（復帰未定へ変更）
+      //   - returnUndecided===false → body.endDate が実際の復帰日（未定 → 復帰確定）
+      //   - returnUndecided 未指定   → 従来どおり body.endDate をそのまま採用
+      let newEnd: string
+      if (returnUndecided === true) {
+        newEnd = HOME_LEAVE_SENTINEL_END
+      } else if (body.endDate !== undefined) {
+        newEnd = body.endDate
+      } else {
+        newEnd = current.endDate
+      }
       const newStart = startDate !== undefined ? startDate : current.startDate
-      const newEnd = endDate !== undefined ? endDate : current.endDate
       if (newStart >= newEnd) {
         return NextResponse.json({ error: 'startDate must be before endDate' }, { status: 400 })
       }
 
-      const updates: Record<string, string> = {}
+      const updates: Record<string, string | boolean> = {}
       if (startDate !== undefined) updates.startDate = startDate
-      if (endDate !== undefined) updates.endDate = endDate
+      if (returnUndecided === true) {
+        updates.endDate = HOME_LEAVE_SENTINEL_END
+        updates.returnUndecided = true
+      } else if (returnUndecided === false) {
+        // 復帰日を確定 → 未定フラグを解除
+        updates.returnUndecided = false
+        if (body.endDate !== undefined) updates.endDate = body.endDate
+      } else if (body.endDate !== undefined) {
+        updates.endDate = body.endDate
+      }
       if (reason !== undefined) updates.reason = reason
       if (note !== undefined) updates.note = note
 
       if (Object.keys(updates).length > 0) {
         await updateDoc(ref, updates)
       }
-      await logActivity('admin', 'homeLeave.update', `${current.workerName} 一時帰国更新 ${newStart}〜${newEnd}`)
+      const endLabel = newEnd >= HOME_LEAVE_SENTINEL_END ? '復帰未定' : newEnd
+      await logActivity('admin', 'homeLeave.update', `${current.workerName} 一時帰国更新 ${newStart}〜${endLabel}`)
 
       return NextResponse.json({ success: true })
     }

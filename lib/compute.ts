@@ -4,6 +4,7 @@ import { AttendanceEntry, calcActualHours } from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isHiredByMonth } from './workers'
 import { isTobiGroup, isDokoGroup } from './jobs'
+import type { HomeLeaveEntry } from './homeLeave'
 
 // ────────────────────────────────────────
 //  円未満の端数処理（2026-06: 労基の過少支払い指摘を踏まえ「支給は切上・控除は切捨」で統一）
@@ -194,6 +195,44 @@ export function parseDKey(k: string): { sid: string; wid: string; ym: string; da
   const wid = p[p.length - 3]
   const sid = p.slice(0, p.length - 3).join('_')
   return { sid, wid, ym, day }
+}
+
+// ────────────────────────────────────────
+//  帰国中（一時帰国）日数のカウント（2026-07-18 追加）
+//  指定ワーカーの homeLongLeave 期間のうち、[rangeStartIso, rangeEndIso]（在籍期間）に
+//  重なる暦日数を返す。復帰未定は endDate=番兵('9999-12-31') のため月末まで加算される。
+//  期間が重複しても暦日 Set で二重計上を防ぐ。range は在籍1ヶ月以内(≤31日)に限定される。
+// ────────────────────────────────────────
+function addOneDayIso(iso: string): string {
+  // 引数付き new Date は許可（"今日"の argless new Date は禁止だが本関数は特定日を進めるだけ）
+  const d = new Date(iso + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+export function countHomeLeaveDaysInRange(
+  homeLeaves: HomeLeaveEntry[] | undefined,
+  workerId: number,
+  rangeStartIso: string,
+  rangeEndIso: string,
+): number {
+  if (!homeLeaves || homeLeaves.length === 0) return 0
+  const days = new Set<string>()
+  for (const hl of homeLeaves) {
+    if (hl.workerId !== workerId) continue
+    if (!hl.startDate || !hl.endDate) continue
+    // 在籍期間と帰国期間の重なり（文字列比較。YYYY-MM-DD なので辞書順=日付順）
+    const s = hl.startDate > rangeStartIso ? hl.startDate : rangeStartIso
+    const e = hl.endDate < rangeEndIso ? hl.endDate : rangeEndIso
+    if (s > e) continue
+    let cur = s
+    let guard = 0
+    while (cur <= e && guard < 400) {
+      days.add(cur)
+      cur = addOneDayIso(cur)
+      guard++
+    }
+  }
+  return days.size
 }
 
 // ────────────────────────────────────────
@@ -870,6 +909,9 @@ export interface WorkerMonthly {
   //   旧ルール: 全社所定 (main.workDays[ym]) — 23 など
   //   基本給ベース日数 (baseDays=20) とは別概念。UI 表示で混同しないため明示保持。
   workerPrescribedDays?: number
+  // 2026-07-18 追加: 当月の帰国中（一時帰国・復帰未定含む）日数。
+  //   在籍日数から差し引かれ、その日は無給かつ欠勤に計上されない。UI/書類で「帰国中◯日」表示用。
+  hkDays?: number
   dailyStatutoryOT?: number       // 日単位の法定外残業（1日8h超）
   weeklyStatutoryOT?: number      // 週単位の法定外残業（週40h超、日単位分除く）
   monthlyStatutoryOT?: number     // 月単位の法定外残業（法定上限超、日/週分除く）
@@ -921,6 +963,10 @@ export function computeMonthly(
   //   外国人給与の週残業しきい値を「カレンダー予定日ベース」で判定するために
   //   calculateVietnameseSalary へ引き渡す（監査④）。未指定時は従来動作。
   calendarDays?: Record<string, Record<string, string>>,
+  // 2026-07-18 追加: 帰国中（一時帰国・復帰未定）期間。approved/foreman_approved の
+  //   homeLongLeave を getAllActiveHomeLeaves() で取得して渡す。未指定時は従来動作
+  //   （帰国中日の除外なし）。在籍日数按分に織り込み、帰国中日を無給かつ非欠勤扱いにする。
+  homeLeaves?: HomeLeaveEntry[],
 ): {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
@@ -1209,9 +1255,18 @@ export function computeMonthly(
         // 在籍日数を計算
         const startD = parseInt(startIso.slice(8, 10))
         const endD = parseInt(endIso.slice(8, 10))
-        const activeDays = endD - startD + 1
+        let activeDays = endD - startD + 1
+        // 2026-07-18 追加: 帰国中（一時帰国・復帰未定を含む）の暦日を在籍日数から除外。
+        //   これにより基本給・所定日数がその日ぶん縮小し、「無給かつ欠勤に計上されない」を実現する
+        //   （欠勤控除は所定日数を基準に残差算出するため、所定から外れた帰国中日は欠勤にならない）。
+        //   按分は既存の中途入退社ロジックと同じ暦日比方式（近似）で一貫させる。
+        const hkDays = countHomeLeaveDaysInRange(homeLeaves, wm.id, startIso, endIso)
+        if (hkDays > 0) {
+          wm.hkDays = hkDays
+          activeDays = Math.max(0, activeDays - hkDays)
+        }
         if (activeDays < totalDaysInMonth) {
-          // 按分が必要なケース（中途入社 or 中途退職）
+          // 按分が必要なケース（中途入社 / 中途退職 / 帰国中）
           const ratio = activeDays / totalDaysInMonth
           proratedBaseDays = Math.round(baseDays * ratio)
           proratedPrescribedDays = Math.round(workerPrescribedDays * ratio)
@@ -1501,7 +1556,10 @@ export function computeMonthly(
       //   月所定日数が未設定で給与計算ができない状態。
       //   4月以前なら main.workDays['YYYYMM'] を 26日（日曜以外）等で設定する必要あり。
       //   サイレント失敗を防ぐため、console.error と最低限の情報を残す。
-      console.error(`[compute] 警告: ${wm.name} (${ym}) の月所定日数が未設定です。main.workDays['${ym}'] を確認してください。`)
+      //   2026-07-18: ただし当月まるごと帰国中(hkDays>0で所定0)なら正常な0円支給なので警告しない。
+      if (!wm.hkDays) {
+        console.error(`[compute] 警告: ${wm.name} (${ym}) の月所定日数が未設定です。main.workDays['${ym}'] を確認してください。`)
+      }
       wm.basePay = 0
       wm.salaryNetPay = 0
       wm.netPay = 0
@@ -1577,8 +1635,11 @@ export function computeMonthly(
   //         労基法24条（賃金全額払い）違反になる。
   //   従来: w.workDays > 0 || w.plDays > 0 || w.compDays > 0 のいずれかが必要だった
   //   → これだと月給制スタッフが「丸ごと有給の月」「丸ごと欠勤の月」に画面から消えていた
+  //   2026-07-18: 当月まるごと帰国中(hkDays>0)のスタッフも表示する（給与は0だが
+  //     「帰国中」を明示して奥寺さんが欠勤と誤認しないようにする）。
   const workers = Array.from(workerMap.values()).filter(w =>
     w.workDays > 0 || w.plDays > 0 || w.compDays > 0 ||
+    (w.hkDays !== undefined && w.hkDays > 0) ||
     (w.salary !== undefined && w.salary > 0)
   )
   workers.forEach(w => {

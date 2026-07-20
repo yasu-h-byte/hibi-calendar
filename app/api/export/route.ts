@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, computeMonthly, getSubconRate } from '@/lib/compute'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
+import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
 import {
   generateHibiAttendance,
   generateHfuAttendance,
@@ -155,7 +156,8 @@ export async function GET(request: NextRequest) {
         const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
         const calendarDaysMap = await loadCalendarDaysMap()
-        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
+        const homeLeaves = await getAllActiveHomeLeaves()
+        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -204,7 +206,8 @@ export async function GET(request: NextRequest) {
         const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
         const calendarDaysMap = await loadCalendarDaysMap()
-        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
+        const homeLeaves = await getAllActiveHomeLeaves()
+        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -228,7 +231,8 @@ export async function GET(request: NextRequest) {
         const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
         const calendarDaysMap = await loadCalendarDaysMap()
-        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
+        const homeLeaves = await getAllActiveHomeLeaves()
+        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
         const monthSiteNames: Record<string, string> = {}
         for (const s of main.sites) monthSiteNames[s.id] = s.name
 

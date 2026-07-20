@@ -48,6 +48,7 @@ export interface PayrollAuditWorker {
   netPay: number
   prescribedHours?: number
   workerPrescribedDays?: number  // 配置現場 calendar の所定日数（baseDays とは別概念）
+  hkDays?: number                // 帰国中（一時帰国・復帰未定）日数。所定から除外され無給・非欠勤
   actualWorkHours?: number
   legalOtHours?: number
   dailyOtHours?: number
@@ -170,7 +171,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
   checks.push({
     label: '出勤実績の合計が所定日数以内',
     pass: daysAccountedFor <= prescribedDays + 1,
-    detail: `出勤${w.workDays} + 有給${w.plDays || 0} + 欠勤${w.restDays || 0} + 現場休${w.siteOffDays || 0} + 試験${w.examDays || 0} + 補償${w.compDays || 0} = ${daysAccountedFor}日 ≦ 所定${prescribedDays}日`,
+    detail: `出勤${w.workDays} + 有給${w.plDays || 0} + 欠勤${w.restDays || 0} + 現場休${w.siteOffDays || 0} + 試験${w.examDays || 0} + 補償${w.compDays || 0}${(w.hkDays || 0) > 0 ? ` ＋ 帰国中${w.hkDays}（所定から除外・無給）` : ''} = ${daysAccountedFor}日 ≦ 所定${prescribedDays}日`,
   })
 
   // 3. 支給額の内訳整合

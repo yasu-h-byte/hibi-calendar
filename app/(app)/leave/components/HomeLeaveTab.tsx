@@ -16,11 +16,13 @@ export interface HomeLeaveUiState {
   formEnd: string
   formReason: string
   formNote: string
+  formUndecided: boolean       // 2026-07-18: 復帰日 未定（急な帰国）
   editingId: string | null
   editStart: string
   editEnd: string
   editReason: string
   editNote: string
+  editUndecided: boolean       // 2026-07-18: 編集時の復帰未定トグル
   deleteConfirm: string | null
 }
 
@@ -32,11 +34,13 @@ export const initialHomeLeaveUi: HomeLeaveUiState = {
   formEnd: '',
   formReason: '一時帰国',
   formNote: '',
+  formUndecided: false,
   editingId: null,
   editStart: '',
   editEnd: '',
   editReason: '',
   editNote: '',
+  editUndecided: false,
   deleteConfirm: null,
 }
 
@@ -66,6 +70,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     const ed = new Date(e + 'T00:00:00')
     return Math.ceil((ed.getTime() - sd.getTime()) / (24 * 60 * 60 * 1000)) + 1
   }
+  // 復帰未定（番兵終了日）判定。API GET が returnUndecided を正規化して返す
+  const isUndecided = (h: HomeLeave) => !!h.returnUndecided
   const currentLeaves = homeLeaves.filter(h => h.startDate <= today && h.endDate >= today)
     .sort((a, b) => a.endDate.localeCompare(b.endDate))
   const upcomingLeaves = homeLeaves.filter(h => h.startDate > today)
@@ -75,7 +81,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
 
   // 操作ハンドラ
   const handleHlAdd = async () => {
-    if (!ui.formWorkerId || !ui.formStart || !ui.formEnd) return
+    // 復帰未定なら帰国日は不要
+    if (!ui.formWorkerId || !ui.formStart || (!ui.formUndecided && !ui.formEnd)) return
     setHlSaving(true)
     try {
       const w = workers.find(w => w.id === Number(ui.formWorkerId))
@@ -87,24 +94,25 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           workerId: Number(ui.formWorkerId),
           workerName: w?.name || '',
           startDate: ui.formStart,
-          endDate: ui.formEnd,
+          ...(ui.formUndecided ? { returnUndecided: true } : { endDate: ui.formEnd }),
           reason: ui.formReason,
           note: ui.formNote,
         }),
       })
       if (res.ok) {
-        patchUi({ formOpen: false, formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '' })
+        patchUi({ formOpen: false, formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
         onRefresh()
       }
     } finally { setHlSaving(false) }
   }
   const startHlEdit = (h: HomeLeave) => {
-    patchUi({ editingId: h.id, editStart: h.startDate, editEnd: h.endDate, editReason: h.reason, editNote: h.note || '' })
+    patchUi({ editingId: h.id, editStart: h.startDate, editEnd: isUndecided(h) ? '' : h.endDate, editReason: h.reason, editNote: h.note || '', editUndecided: isUndecided(h) })
   }
   const cancelHlEdit = () => {
     patchUi({ editingId: null })
   }
   const handleHlUpdate = async (id: string) => {
+    if (!ui.editUndecided && !ui.editEnd) return
     setHlSaving(true)
     try {
       const res = await fetch('/api/home-leave', {
@@ -114,7 +122,9 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           action: 'update',
           id,
           startDate: ui.editStart,
-          endDate: ui.editEnd,
+          // editUndecided の状態を明示送信（true→未定へ / false→復帰日確定）
+          returnUndecided: ui.editUndecided,
+          ...(ui.editUndecided ? {} : { endDate: ui.editEnd }),
           reason: ui.editReason,
           note: ui.editNote,
         }),
@@ -141,6 +151,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
   }
 
   const renderHlCard = (h: HomeLeave, section: 'current' | 'upcoming') => {
+    const undecided = isUndecided(h)
     const totalDays = daysBetween(h.startDate, h.endDate)
     const dayMs = 24 * 60 * 60 * 1000
     const todayD = new Date(today + 'T00:00:00')
@@ -148,23 +159,30 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     const endD = new Date(h.endDate + 'T00:00:00')
     const daysRemaining = Math.ceil((endD.getTime() - todayD.getTime()) / dayMs)
     const daysUntilDeparture = Math.ceil((startD.getTime() - todayD.getTime()) / dayMs)
+    // 帰国からの経過日数（復帰未定カードで「◯日経過」を出す）
+    const daysSinceDeparture = Math.max(0, Math.ceil((todayD.getTime() - startD.getTime()) / dayMs))
 
     if (ui.editingId === h.id) {
       return (
         <div key={h.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-blue-300 dark:border-blue-600">
           <div className="font-semibold mb-3 text-gray-900 dark:text-white">{h.workerName}</div>
-          <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className="grid grid-cols-2 gap-3 mb-2">
             <div>
               <label className="block text-xs text-gray-500 mb-1">出発日</label>
               <input type="date" value={ui.editStart} onChange={e => patchUi({ editStart: e.target.value })}
                 className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">帰国日</label>
-              <input type="date" value={ui.editEnd} onChange={e => patchUi({ editEnd: e.target.value })}
-                className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+              <label className="block text-xs text-gray-500 mb-1">帰国日（復帰日）</label>
+              <input type="date" value={ui.editEnd} disabled={ui.editUndecided} onChange={e => patchUi({ editEnd: e.target.value })}
+                className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-40 disabled:bg-gray-100 dark:disabled:bg-gray-900" />
             </div>
           </div>
+          <label className="flex items-center gap-2 mb-3 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+            <input type="checkbox" checked={ui.editUndecided}
+              onChange={e => patchUi({ editUndecided: e.target.checked })} className="w-4 h-4" />
+            復帰日は未定（急な帰国・戻る時期が決まっていない）
+          </label>
           <div className="mb-3">
             <label className="block text-xs text-gray-500 mb-1">理由</label>
             <select value={ui.editReason} onChange={e => patchUi({ editReason: e.target.value })}
@@ -191,11 +209,15 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       <div key={h.id} className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2">
           <div className="font-semibold text-gray-900 dark:text-white">{h.workerName}</div>
-          {section === 'current' && (
+          {section === 'current' && (undecided ? (
+            <span className="text-xs px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded-full font-medium">
+              帰国中・復帰未定（{daysSinceDeparture}日経過）
+            </span>
+          ) : (
             <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-full">
               帰国まで {daysRemaining}日
             </span>
-          )}
+          ))}
           {section === 'upcoming' && (
             <span className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full">
               出発まで {daysUntilDeparture}日
@@ -203,12 +225,20 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           )}
         </div>
         <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
-          <div>{fmt(h.startDate)} 〜 {fmt(h.endDate)} <span className="text-gray-400 ml-2">({totalDays}日間)</span></div>
+          {undecided ? (
+            <div>{fmt(h.startDate)} 〜 <span className="text-amber-600 dark:text-amber-400 font-medium">復帰未定</span></div>
+          ) : (
+            <div>{fmt(h.startDate)} 〜 {fmt(h.endDate)} <span className="text-gray-400 ml-2">({totalDays}日間)</span></div>
+          )}
           <div className="text-xs text-gray-500 dark:text-gray-400">
             {h.reason}{h.note && <span className="ml-2">- {h.note}</span>}
           </div>
         </div>
         <div className="flex gap-2 mt-3">
+          {undecided && section === 'current' && (
+            <button onClick={() => patchUi({ editingId: h.id, editStart: h.startDate, editEnd: today, editReason: h.reason, editNote: h.note || '', editUndecided: false })}
+              className="px-3 py-1 text-xs font-medium bg-amber-500 text-white rounded hover:bg-amber-600">復帰日を登録</button>
+          )}
           <button onClick={() => startHlEdit(h)}
             className="px-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200">編集</button>
           {ui.deleteConfirm === h.id ? (
@@ -257,10 +287,15 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
               </div>
               <div>
                 <label className="block text-sm text-gray-600 mb-1">帰国日</label>
-                <input type="date" value={ui.formEnd} onChange={e => patchUi({ formEnd: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                <input type="date" value={ui.formEnd} disabled={ui.formUndecided} onChange={e => patchUi({ formEnd: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-40 disabled:bg-gray-100 dark:disabled:bg-gray-900" />
               </div>
             </div>
+            <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+              <input type="checkbox" checked={ui.formUndecided}
+                onChange={e => patchUi({ formUndecided: e.target.checked, ...(e.target.checked ? { formEnd: '' } : {}) })} className="w-4 h-4" />
+              復帰日は未定（急な帰国・戻る時期が決まっていない）
+            </label>
             <div>
               <label className="block text-sm text-gray-600 mb-1">理由</label>
               <select value={ui.formReason} onChange={e => patchUi({ formReason: e.target.value })}
@@ -274,7 +309,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
                 className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
             </div>
             <button onClick={handleHlAdd}
-              disabled={hlSaving || !ui.formWorkerId || !ui.formStart || !ui.formEnd}
+              disabled={hlSaving || !ui.formWorkerId || !ui.formStart || (!ui.formUndecided && !ui.formEnd)}
               className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
               {hlSaving ? '登録中...' : '登録する'}
             </button>

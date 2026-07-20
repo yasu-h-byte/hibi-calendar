@@ -5,6 +5,7 @@ import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
+import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -32,7 +33,9 @@ export async function GET(request: NextRequest) {
     const cals = await getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
     const calendarDaysMap: Record<string, Record<string, string>> = {}
     for (const c of cals) if (c.days) calendarDaysMap[c.siteId] = c.days
-    const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap)
+    // 帰国中（一時帰国・復帰未定）期間を給与計算へ渡す（帰国中日を無給かつ非欠勤扱いにする）
+    const homeLeaves = await getAllActiveHomeLeaves()
+    const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
 
     // 組織別ロック状態（後方互換: 旧 locks[ym] もチェック）
     const lockedLegacy = !!(main.locks[ym])

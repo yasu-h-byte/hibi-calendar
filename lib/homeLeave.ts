@@ -22,6 +22,18 @@ export interface HomeLeaveEntry {
   endDate: string    // YYYY-MM-DD
 }
 
+/**
+ * 「復帰未定（急な帰国）」を表す終了日の番兵値（2026-07-18 追加）。
+ * 既存の終了日比較（endDate >= 月末 / endDate < today 等）は全て文字列比較のため、
+ * 遠い未来の番兵を入れると「開始日以降ずっと帰国中」が自然に表現できる。
+ * 復帰が確定したら実際の復帰日に置き換える。
+ */
+export const HOME_LEAVE_SENTINEL_END = '9999-12-31'
+/** 終了日が番兵値か（＝復帰未定か）を判定 */
+export function isReturnUndecided(endDate?: string): boolean {
+  return !!endDate && endDate >= HOME_LEAVE_SENTINEL_END
+}
+
 export async function getAllActiveHomeLeaves(): Promise<HomeLeaveEntry[]> {
   const result: HomeLeaveEntry[] = []
 

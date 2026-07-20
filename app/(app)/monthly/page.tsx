@@ -38,6 +38,7 @@ interface WorkerMonthly {
   absentCost: number
   netPay: number
   // Salary calc fields (variable working hours system)
+  hkDays?: number  // 帰国中（一時帰国・復帰未定）日数。所定から除外され無給・非欠勤
   prescribedHours?: number
   actualWorkHours?: number
   legalOtHours?: number
@@ -1405,6 +1406,14 @@ export default function MonthlyPage() {
                             title={`出向先: ${w.dispatchTo || ''}`}
                           >
                             🔁 出向中
+                          </span>
+                        )}
+                        {(w.hkDays || 0) > 0 && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            title={`当月 ${w.hkDays}日 帰国中（所定から除外・無給。欠勤ではありません）`}
+                          >
+                            ✈ 帰国中{w.hkDays}日
                           </span>
                         )}
                       </td>
