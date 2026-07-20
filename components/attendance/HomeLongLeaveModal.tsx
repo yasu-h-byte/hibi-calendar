@@ -212,7 +212,8 @@ export default function HomeLongLeaveModal({
                 <div key={req.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${req.status === 'cancelled' ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
                   <div className="min-w-0">
                     <span className="text-sm text-gray-700 font-medium">
-                      {formatMD(req.startDate)} 〜 {formatMD(req.endDate)}
+                      {/* 復帰未定は番兵終了日(9999-12-31)。仮日付ではなく「未定」と表示 */}
+                      {formatMD(req.startDate)} 〜 {req.endDate >= '9999-12-31' ? '未定 / Chưa xác định' : formatMD(req.endDate)}
                     </span>
                     <span className="text-xs text-gray-400 ml-2">{req.reason}</span>
                   </div>

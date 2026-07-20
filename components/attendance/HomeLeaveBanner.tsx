@@ -105,7 +105,8 @@ export default function HomeLeaveBanner({ homeLeaves, recentReturnDays = 7 }: Pr
                 {status === 'current' ? '帰国中' : status === 'future' ? '予定' : '済'}
               </span>
               <span className="font-medium">{hl.workerName}</span>
-              <span>{hl.startDate.slice(5)} 〜 {hl.endDate.slice(5)}</span>
+              {/* 復帰未定は番兵終了日(9999-12-31)。仮日付ではなく「帰国日未定」と表示する */}
+              <span>{hl.startDate.slice(5)} 〜 {hl.endDate >= '9999-12-31' ? '帰国日未定' : hl.endDate.slice(5)}</span>
               <span className="text-cyan-500">({hl.reason})</span>
               {status === 'future' && daysUntilStart > 0 && (
                 <span className="text-[10px] text-blue-600">
