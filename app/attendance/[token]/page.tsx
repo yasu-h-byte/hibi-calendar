@@ -36,6 +36,7 @@ interface StaffData {
   site: SiteInfo
   allSites: SiteInfo[]
   availableSites?: AvailableSite[]
+  unassigned?: boolean  // 2026-07-22: 現場未配置（新入社員が配置前）。現場選択を促す
   today: { year: number; month: number; day: number; ym: string; dateLabel: string }
   currentEntry: AttendanceEntry | null
   currentStatus: AttendanceStatus
@@ -766,6 +767,13 @@ export default function StaffAttendancePage() {
       {/* Site selector dropdown */}
       <div className="bg-white border-b px-4 py-3">
         <div className="max-w-lg mx-auto">
+          {data.unassigned && (
+            <div className="mb-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 text-xs font-medium leading-relaxed">
+              げんばが まだ わりあてられていません。<br />
+              じぶんの げんばを えらんでください。<br />
+              <span className="text-amber-600">Chưa được phân công công trường. Vui lòng chọn công trường của bạn.</span>
+            </div>
+          )}
           <label className="text-xs text-gray-500 block mb-1">げんば / Công trường</label>
           <select
             value={data.site.id}

@@ -43,9 +43,12 @@ export async function GET(request: NextRequest) {
     }).catch(() => {})
 
     const assignedSites = await getStaffSites(worker.id)
-    if (assignedSites.length === 0 && !siteIdParam) {
-      return NextResponse.json({ error: 'No site assigned' }, { status: 404 })
-    }
+    // 2026-07-22: 現場未配置（新入社員が配置前にQRを開いた等）でも入口で弾かない。
+    //   従来は「未配置かつ現場指定なし」で 404 'No site assigned' を返し、新入社員の
+    //   QRが必ずエラーになっていた。配置済みスタッフも元々ドロップダウンで全現場を選べる
+    //   ため、未配置でも同じく全現場から選んで使えるようにする（挙動を一貫させる）。
+    //   未配置は unassigned フラグで画面に「現場を選んでください」を促す。
+    const unassigned = assignedSites.length === 0
 
     // Get all active (non-archived) sites for the dropdown
     const allActiveSites = await getSites()
@@ -321,6 +324,7 @@ export async function GET(request: NextRequest) {
       site: { id: site.id, name: site.name, workSchedule: currentSiteWorkSchedule },
       allSites: assignedSites,
       availableSites,
+      unassigned,  // 2026-07-22: 現場未配置（新入社員が配置前）。画面で現場選択を促す
       today: {
         year: y, month: m, day: d, ym,
         dateLabel: formatDateJP(now),
