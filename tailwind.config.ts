@@ -5,6 +5,9 @@ const config: Config = {
   content: [
     './app/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
+    // クラス文字列を返すヘルパー（lib/leave-utils.ts の rateBarColor 等）も
+    // スキャン対象にする。外すと CSS が生成されず UI が無色になる
+    './lib/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     extend: {
