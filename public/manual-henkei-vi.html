@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>変形労働時間制マニュアル / Chế độ giờ làm linh hoạt theo tháng - HIBI CONSTRUCTION</title>
+<style>
+  :root{
+    --charcoal:#20262F; --amber:#F5A623; --amber-dark:#DD9314;
+    --navy:#1B2A4A; --vi:#2563EB; --line:#E3E6EC;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', sans-serif; max-width: 820px; margin: 0 auto; padding: 20px; color: var(--charcoal); line-height: 1.75; font-size: 15px; background:#fff; }
+  h1 { text-align: center; font-size: 24px; border-bottom: 4px solid var(--amber); padding-bottom: 12px; margin-bottom: 5px; color:var(--charcoal); }
+  .subtitle { text-align: center; font-size: 15px; color: #666; margin-bottom: 28px; }
+  h2 { font-size: 19px; color: white; background: var(--charcoal); padding: 10px 16px; border-radius: 10px; margin-top: 36px; }
+  h3 { font-size: 16px; color: var(--charcoal); margin-top: 22px; border-bottom: 2px solid var(--line); padding-bottom: 4px; }
+  .vi { color: var(--vi); font-size: 0.95em; }
+  .section { background: #FAFBFC; border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin: 18px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+  th, td { border: 1px solid #d5dae2; padding: 9px 11px; text-align: center; vertical-align: middle; }
+  th { background: var(--charcoal); color: white; }
+  td.l, th.l { text-align: left; }
+  .point { background: #FFF6E3; border: 2px solid #F2D9A0; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+  .point-title { font-weight: bold; color: #8A5A00; font-size: 15px; margin:0 0 4px; }
+  .good { background: #EAF7EE; border: 2px solid #9FDCB2; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+  .good-title { font-weight: bold; color: #15803D; font-size: 15px; margin:0 0 4px; }
+  .warn { background: #FDECEC; border: 2px solid #F4A9A9; border-radius: 10px; padding: 14px 16px; margin: 14px 0; }
+  .warn-title { font-weight: bold; color: #C2413B; font-size: 15px; margin:0 0 4px; }
+  .step-num { background: var(--amber); color: var(--charcoal); border-radius: 50%; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; margin-right: 8px; }
+  .formula { background: #f8f8f8; border: 1px solid #ddd; border-radius: 8px; padding: 12px 16px; margin: 10px 0; font-size: 14px; line-height: 1.9; }
+  .big-rate { font-size: 20px; font-weight: 800; color: #8A5A00; }
+  p { margin: 8px 0; }
+  .timebar { display:flex; border-radius:8px; overflow:hidden; margin:10px 0; font-size:12px; font-weight:bold; text-align:center; color:white; }
+  .timebar div { padding: 8px 2px; }
+  .tb-work { background:#1E9E52; }
+  .tb-rest { background:#9AA3AF; }
+  .tb-ot0  { background:#F5A623; color:#20262F; }
+  .tb-ot25 { background:#E25555; }
+
+  @media print {
+    body { font-size: 11px; padding: 0; margin: 0; max-width: 100%; line-height: 1.5; }
+    @page { size: A4; margin: 15mm 12mm; }
+    h1 { font-size: 20px; margin-top: 0; }
+    h2 { font-size: 16px; margin-top: 20px; padding: 6px 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; break-after: avoid; }
+    h3 { font-size: 13px; margin-top: 14px; }
+    .section { padding: 12px; margin: 10px 0; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    table { font-size: 11px; }
+    th, td { padding: 4px 6px; }
+    th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .point, .good, .warn { padding: 8px; margin: 8px 0; break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .timebar div { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .vi { color: var(--vi) !important; }
+    a[href="/docs"] { display: none; }
+  }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 14px; }
+    h1 { font-size: 20px; padding-bottom: 8px; }
+    .subtitle { font-size: 13px; margin-bottom: 18px; }
+    h2 { font-size: 17px; padding: 8px 12px; margin-top: 26px; }
+    h3 { font-size: 14px; margin-top: 16px; }
+    .section { padding: 15px; }
+    table { font-size: 12px; }
+    th, td { padding: 6px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: var(--charcoal); text-decoration: none; font-size: 13px;">&larr; システムに戻る / Quay lại hệ thống</a></div>
+
+<h1>変形労働時間制と残業のルール<br><span class="vi">Chế độ giờ làm linh hoạt theo tháng và quy tắc tăng ca</span></h1>
+<div class="subtitle">
+  技能実習生・特定技能の皆さまへ（働く時間と給料のしくみの説明）<br>
+  <span class="vi">Dành cho các bạn thực tập sinh kỹ năng và kỹ năng đặc định (Giải thích về giờ làm việc và cách tính lương)</span><br>
+  <span style="font-size: 13px; color: #999;">最終更新 / Cập nhật: 2026年7月27日</span>
+</div>
+
+<!-- ===== まず大事な3つ ===== -->
+<div class="good">
+  <p class="good-title">📌 いちばん大事な3つ / 3 điều quan trọng nhất</p>
+  <p style="margin:0;">
+    ① <strong>働く日は、毎月カレンダーで前もって決まる</strong>（皆さんが署名する）<br>
+    <span class="vi">① Ngày làm việc được quyết định trước mỗi tháng bằng lịch làm việc (các bạn sẽ ký tên)</span><br>
+    ② <strong>働いた時間は、ぜんぶ給料で払われる</strong>（1時間もなくならない）<br>
+    <span class="vi">② Toàn bộ thời gian làm việc đều được trả lương (không mất một giờ nào)</span><br>
+    ③ <strong>残業の「割増（＋25%）」が付くかどうかは、法律の3ステップで決まる</strong><br>
+    <span class="vi">③ Tiền phụ cấp tăng ca (+25%) có được cộng hay không sẽ được xác định theo 3 bước của pháp luật</span>
+  </p>
+</div>
+
+<!-- ===== 目次 ===== -->
+<div class="section">
+<strong>目次 / Mục lục</strong>
+<ol style="font-size: 15px; line-height: 1.9; margin:0; padding-left:20px;">
+  <li>変形労働時間制とは？ / Chế độ giờ làm linh hoạt theo tháng là gì?</li>
+  <li>1日の働く時間 / Giờ làm việc trong một ngày</li>
+  <li>残業とは？ / Tăng ca là gì?</li>
+  <li>残業の3ステップ判定（いちばん大事） / 3 bước xác định tăng ca (quan trọng nhất)</li>
+  <li>給料のしくみ / Cấu trúc tiền lương</li>
+  <li>計算の例 / Ví dụ tính lương</li>
+  <li>よくある質問 / Câu hỏi thường gặp</li>
+  <li>まとめ：割増の一覧表 / Tóm tắt: Bảng tỷ lệ phụ cấp</li>
+</ol>
+</div>
+
+<!-- ===== 1 ===== -->
+<h2>1. 変形労働時間制とは？ <span style="font-weight:normal;font-size:15px;">/ Chế độ giờ làm linh hoạt theo tháng là gì?</span></h2>
+
+<div class="section">
+<p>
+ふつうの会社は「1日8時間・1週40時間」と決まっています。<br>
+でも建設の仕事は、月によって忙しさが違います。<br>
+そこで当社は、<strong>「1ヶ月単位の変形労働時間制」</strong>という、法律（労働基準法32条の2）で認められた制度を使っています（2026年5月から）。
+</p>
+<p class="vi">
+Công ty bình thường quy định "1 ngày 8 giờ, 1 tuần 40 giờ".<br>
+Nhưng công việc xây dựng bận rộn khác nhau tùy theo tháng.<br>
+Vì vậy công ty chúng ta áp dụng <strong>"chế độ giờ làm việc linh hoạt theo đơn vị 1 tháng"</strong> — một chế độ được pháp luật công nhận (Điều 32-2 Luật Lao động Tiêu chuẩn Nhật Bản), từ tháng 5 năm 2026.
+</p>
+
+<h3>しくみ / Cơ chế hoạt động</h3>
+<p>
+毎月、<strong>次の月のカレンダー（働く日・休みの日）を前もって決めます</strong>。<br>
+職長が作る → 事業責任者（政仁さん）が承認する → 皆さんがスマホで内容を確認して署名する、という流れです。
+</p>
+<p class="vi">
+Mỗi tháng, <strong>lịch làm việc của tháng sau (ngày làm, ngày nghỉ) được quyết định trước</strong>.<br>
+Trình tự: Tổ trưởng lập lịch → Người phụ trách (anh Masahito) phê duyệt → Các bạn xác nhận nội dung trên điện thoại và ký tên.
+</p>
+
+<h3>月の上限時間 / Giới hạn giờ làm trong tháng</h3>
+<p>
+カレンダーは、法律で決まった<strong>月の上限時間</strong>の中で作られます。上限は「その月の日数 × 40時間 ÷ 7」です。
+</p>
+<p class="vi">
+Lịch làm việc được lập trong phạm vi <strong>giới hạn giờ làm của tháng</strong> theo luật định. Giới hạn = "số ngày của tháng × 40 giờ ÷ 7".
+</p>
+<table>
+  <tr><th>月の日数<br><span style="font-weight:normal">Số ngày trong tháng</span></th><th>上限時間<br><span style="font-weight:normal">Giới hạn giờ</span></th><th>1日7時間なら最大何日<br><span style="font-weight:normal">Tối đa bao nhiêu ngày (7h/ngày)</span></th></tr>
+  <tr><td>28日</td><td>160.0時間</td><td>22日</td></tr>
+  <tr><td>29日</td><td>165.7時間</td><td>23日</td></tr>
+  <tr><td>30日</td><td>171.4時間</td><td>24日</td></tr>
+  <tr><td>31日</td><td>177.1時間</td><td>25日</td></tr>
+</table>
+
+<div class="point">
+  <p class="point-title">✍️ 署名はとても大事 / Việc ký tên rất quan trọng</p>
+  <p style="margin:0;">
+    カレンダーに署名する＝「この予定で働きます」という約束です。内容をよく見てから署名してください。<br>
+    <span class="vi">Ký tên vào lịch = lời hứa "tôi sẽ làm việc theo lịch này". Hãy xem kỹ nội dung trước khi ký.</span>
+  </p>
+</div>
+</div>
+
+<!-- ===== 2 ===== -->
+<h2>2. 1日の働く時間 <span style="font-weight:normal;font-size:15px;">/ Giờ làm việc trong một ngày</span></h2>
+
+<div class="section">
+<p>
+1日の<strong>所定労働時間（決まった働く時間）は7時間</strong>です。
+</p>
+<p class="vi">
+<strong>Giờ làm việc quy định trong 1 ngày là 7 tiếng.</strong>
+</p>
+<table>
+  <tr><th class="l">項目 / Mục</th><th>時間 / Giờ</th></tr>
+  <tr><td class="l">始業 / Bắt đầu làm</td><td>8:00</td></tr>
+  <tr><td class="l">休憩① / Nghỉ giải lao 1</td><td>10:00〜10:30（30分 / 30 phút）</td></tr>
+  <tr><td class="l">昼休み / Nghỉ trưa</td><td>12:00〜13:00（60分 / 60 phút）</td></tr>
+  <tr><td class="l">休憩② / Nghỉ giải lao 2</td><td>15:00〜15:30（30分 / 30 phút）</td></tr>
+  <tr><td class="l">終業 / Kết thúc làm</td><td>17:00</td></tr>
+  <tr><td class="l"><strong>働く時間の合計 / Tổng giờ làm việc</strong></td><td><strong>7時間 / 7 tiếng</strong>（休憩2時間をひく / trừ 2 tiếng nghỉ）</td></tr>
+</table>
+<p>
+※ 現場によって時間が違うことがあります（例：IHI現場は 7:30〜16:30）。働く時間は同じ7時間です。<br>
+<span class="vi">※ Tùy công trường, giờ có thể khác (ví dụ: công trường IHI là 7:30〜16:30). Tổng giờ làm vẫn là 7 tiếng.</span>
+</p>
+</div>
+
+<!-- ===== 3 ===== -->
+<h2>3. 残業とは？ <span style="font-weight:normal;font-size:15px;">/ Tăng ca là gì?</span></h2>
+
+<div class="section">
+<p>
+終業時間（17:00）より後に働いた時間が<strong>残業</strong>です。スマホの出勤画面で、残業時間を入力します（±ボタン）。
+</p>
+<p class="vi">
+Thời gian làm việc sau giờ kết thúc (17:00) là <strong>tăng ca</strong>. Các bạn nhập giờ tăng ca trên màn hình đăng ký đi làm của điện thoại (nút ±).
+</p>
+
+<div class="good">
+  <p class="good-title">💰 残業した時間は、ぜんぶ払われます / Toàn bộ giờ tăng ca đều được trả lương</p>
+  <p style="margin:0;">
+    残業1時間 ＝ まず<strong>時給 × 1.0</strong> が必ず払われます。<br>
+    そのうえで、法律の3ステップ判定（次の章）で「法定外残業」になった時間には、<strong>さらに＋25%（時給 × 0.25）</strong>が追加されます。<br>
+    合計すると、法定外残業は <span class="big-rate">1.25倍</span> になります。<br>
+    <span class="vi">1 giờ tăng ca = trước tiên chắc chắn được trả <strong>lương giờ × 1.0</strong>.<br>
+    Sau đó, những giờ được xác định là "tăng ca vượt luật định" theo 3 bước (chương sau) sẽ được cộng thêm <strong>+25% (lương giờ × 0.25)</strong>.<br>
+    Tổng cộng, tăng ca vượt luật định = <strong>1.25 lần</strong> lương giờ.</span>
+  </p>
+</div>
+
+<p>
+給与明細では、この2つは分けて書かれます:
+</p>
+<p class="vi">Trên bảng lương, 2 khoản này được ghi riêng:</p>
+<table>
+  <tr><th class="l">明細の名前 / Tên trên bảng lương</th><th>倍率 / Tỷ lệ</th><th class="l">意味 / Ý nghĩa</th></tr>
+  <tr><td class="l">所定外労働手当<br><span class="vi">Phụ cấp làm ngoài giờ quy định</span></td><td>× 1.0</td><td class="l">残業時間ぜんぶの基本部分<br><span class="vi">Phần cơ bản của toàn bộ giờ tăng ca</span></td></tr>
+  <tr><td class="l">法定外残業手当<br><span class="vi">Phụ cấp tăng ca vượt luật định</span></td><td>× 0.25（追加 / cộng thêm）</td><td class="l">3ステップ判定で法定外になった時間だけ<br><span class="vi">Chỉ những giờ vượt luật định theo 3 bước</span></td></tr>
+</table>
+</div>
+
+<!-- ===== 4 ===== -->
+<h2>4. 残業の3ステップ判定 <span style="font-weight:normal;font-size:15px;">/ 3 bước xác định tăng ca theo luật</span></h2>
+
+<div class="section">
+<p>
+変形労働時間制では、「＋25%の割増が付く残業（＝法定外残業）」を、法律で決まった<strong>3つのステップ</strong>で順番に数えます。同じ時間を2回数えることはありません。
+</p>
+<p class="vi">
+Trong chế độ giờ làm linh hoạt, "giờ tăng ca được cộng +25% (= tăng ca vượt luật định)" được đếm theo <strong>3 bước</strong> quy định bởi pháp luật. Không đếm trùng một giờ hai lần.
+</p>
+
+<h3><span class="step-num">1</span>ステップ1：1日ごとに見る / Bước 1: Xét theo từng ngày</h3>
+<p>
+1日に<strong>8時間を超えて</strong>働いた時間 → 法定外残業（＋25%）<br>
+所定は7時間なので、<strong>最初の残業1時間（7→8時間目）は8時間以内</strong>。この1時間は割増なし（×1.0のみ）です。
+</p>
+<p class="vi">
+Thời gian làm việc <strong>vượt quá 8 tiếng trong 1 ngày</strong> → tăng ca vượt luật định (+25%).<br>
+Vì giờ quy định là 7 tiếng, <strong>1 giờ tăng ca đầu tiên (giờ thứ 7→8) vẫn trong phạm vi 8 tiếng</strong> nên không có phụ cấp (chỉ ×1.0).
+</p>
+
+<p style="margin-top:14px;"><strong>例：8:00〜19:00 まで働いた日（残業2時間） / Ví dụ: ngày làm từ 8:00 đến 19:00 (tăng ca 2 tiếng)</strong></p>
+<div class="timebar">
+  <div class="tb-work" style="flex:7;">所定 7h<br>×1.0（基本給）</div>
+  <div class="tb-ot0" style="flex:1;">1h<br>×1.0</div>
+  <div class="tb-ot25" style="flex:1;">1h<br>×1.25</div>
+</div>
+<p style="font-size:13px; color:#666; margin-top:0;">
+17:00〜18:00 の1時間 → 1日8時間以内なので ×1.0 ／ 18:00〜19:00 の1時間 → 8時間を超えたので ×1.25<br>
+<span class="vi">1 giờ từ 17:00〜18:00 → trong phạm vi 8 tiếng/ngày nên ×1.0 ／ 1 giờ từ 18:00〜19:00 → vượt 8 tiếng nên ×1.25</span>
+</p>
+
+<h3><span class="step-num">2</span>ステップ2：1週間ごとに見る / Bước 2: Xét theo từng tuần</h3>
+<p>
+週の合計時間が「<strong>週の基準時間</strong>」を超えた分 → 法定外残業（＋25%）。<br>
+週の基準時間 ＝ <strong>40時間と、カレンダーで決めた週の所定時間の、大きいほう</strong>です。<br>
+（ステップ1ですでに数えた時間は、もう数えません）
+</p>
+<p class="vi">
+Phần vượt quá "<strong>giờ chuẩn của tuần</strong>" trong tổng giờ làm của tuần → tăng ca vượt luật định (+25%).<br>
+Giờ chuẩn của tuần = <strong>số lớn hơn giữa 40 tiếng và giờ quy định trong tuần theo lịch</strong>.<br>
+(Những giờ đã đếm ở Bước 1 sẽ không đếm lại)
+</p>
+
+<div class="point">
+  <p class="point-title">📅 週6日働く週のポイント / Điểm lưu ý tuần làm 6 ngày</p>
+  <p style="margin:0;">
+    カレンダーで「週6日 × 7時間 ＝ 42時間」と前もって決めた週は、基準が<strong>42時間</strong>になります。<br>
+    40〜42時間の2時間には割増が付きません（これが変形労働時間制の効果です。労務の専門家（社労士）にも確認済みのルールです）。<br>
+    <span class="vi">Tuần đã được quyết định trước trên lịch là "6 ngày × 7 tiếng = 42 tiếng" thì giờ chuẩn là <strong>42 tiếng</strong>.<br>
+    2 tiếng từ 40〜42 tiếng không có phụ cấp (đây là hiệu quả của chế độ giờ làm linh hoạt; quy tắc này đã được chuyên gia lao động (shakai-hoken-roumushi) xác nhận).</span>
+  </p>
+</div>
+
+<p style="margin-top:14px;"><strong>例：週6日のカレンダーの週に、毎日1時間ずつ残業した場合 / Ví dụ: tuần có lịch 6 ngày, mỗi ngày tăng ca 1 tiếng</strong></p>
+<table>
+  <tr><th></th><th>月<br>T2</th><th>火<br>T3</th><th>水<br>T4</th><th>木<br>T5</th><th>金<br>T6</th><th>土<br>T7</th><th>合計<br>Tổng</th></tr>
+  <tr><td class="l">働いた時間 / Giờ làm</td><td>8h</td><td>8h</td><td>8h</td><td>8h</td><td>8h</td><td>8h</td><td><strong>48h</strong></td></tr>
+</table>
+<ul style="font-size:14px;">
+  <li>ステップ1（1日8時間超）→ 0時間（毎日ちょうど8時間なので）<br><span class="vi">Bước 1 (vượt 8h/ngày) → 0 giờ (mỗi ngày đúng 8 tiếng)</span></li>
+  <li>ステップ2（週の基準42時間超）→ 48 − 42 ＝ <strong>6時間が法定外残業（＋25%）</strong><br><span class="vi">Bước 2 (vượt chuẩn tuần 42h) → 48 − 42 = <strong>6 giờ là tăng ca vượt luật định (+25%)</strong></span></li>
+  <li>残業6時間ぜんぶに ×1.0 は支払済み。この6時間に ＋0.25 が追加されます<br><span class="vi">Toàn bộ 6 giờ tăng ca đã được trả ×1.0. 6 giờ này được cộng thêm +0.25</span></li>
+</ul>
+
+<h3><span class="step-num">3</span>ステップ3：1ヶ月ごとに見る / Bước 3: Xét theo cả tháng</h3>
+<p>
+月の合計時間が「<strong>月の上限時間</strong>（その月の日数 × 40 ÷ 7。第1章の表）」を超えた分 → 法定外残業（＋25%）。<br>
+（ステップ1・2ですでに数えた時間は、もう数えません）
+</p>
+<p class="vi">
+Phần vượt quá "<strong>giới hạn giờ của tháng</strong> (số ngày của tháng × 40 ÷ 7, xem bảng ở chương 1)" trong tổng giờ làm của tháng → tăng ca vượt luật định (+25%).<br>
+(Những giờ đã đếm ở Bước 1 và 2 sẽ không đếm lại)
+</p>
+
+<div class="warn">
+  <p class="warn-title">⚠️ 月60時間を超える残業 / Tăng ca vượt 60 tiếng/tháng</p>
+  <p style="margin:0;">
+    法定外残業が月60時間を超えた分は、割増が ＋25% → <strong>＋50%</strong>（合計1.5倍）になります。<br>
+    <span class="vi">Phần tăng ca vượt luật định quá 60 tiếng/tháng sẽ có phụ cấp tăng từ +25% lên <strong>+50%</strong> (tổng 1.5 lần).</span>
+  </p>
+</div>
+</div>
+
+<!-- ===== 5 ===== -->
+<h2>5. 給料のしくみ <span style="font-weight:normal;font-size:15px;">/ Cấu trúc tiền lương</span></h2>
+
+<div class="section">
+<p>
+給料は「<strong>基本給（毎月固定）＋ 働いた分の手当</strong>」の足し算です。
+</p>
+<p class="vi">
+Tiền lương = "<strong>lương cơ bản (cố định hàng tháng) + các khoản phụ cấp theo giờ làm</strong>".
+</p>
+<table>
+  <tr><th class="l">項目 / Khoản</th><th class="l">計算 / Cách tính</th><th>倍率 / Tỷ lệ</th></tr>
+  <tr><td class="l"><strong>基本給</strong>（毎月同じ・月給制）<br><span class="vi">Lương cơ bản (cố định hàng tháng)</span></td><td class="l">時給 × 20日 × 7時間（140時間分）<br><span class="vi">Lương giờ × 20 ngày × 7 tiếng (140 giờ)</span></td><td>× 1.0</td></tr>
+  <tr><td class="l">追加所定手当（21日目から）<br><span class="vi">Phụ cấp ngày làm thêm (từ ngày thứ 21)</span></td><td class="l">時給 × (出勤日数 − 20日) × 7時間<br><span class="vi">Lương giờ × (số ngày làm − 20) × 7 tiếng</span></td><td>× 1.0</td></tr>
+  <tr><td class="l">有給日給<br><span class="vi">Lương ngày nghỉ phép</span></td><td class="l">20日を超えて有給を取った分<br><span class="vi">Phần nghỉ phép vượt khung 20 ngày</span></td><td>× 1.0</td></tr>
+  <tr><td class="l">所定外労働手当（残業の基本部分）<br><span class="vi">Phụ cấp làm ngoài giờ quy định (phần cơ bản của tăng ca)</span></td><td class="l">時給 × 残業時間ぜんぶ<br><span class="vi">Lương giờ × toàn bộ giờ tăng ca</span></td><td>× 1.0</td></tr>
+  <tr><td class="l">法定外残業手当（割増）<br><span class="vi">Phụ cấp tăng ca vượt luật định</span></td><td class="l">時給 × 0.25 × 3ステップ判定の時間<br><span class="vi">Lương giờ × 0.25 × giờ xác định theo 3 bước</span></td><td>＋ 0.25<br>(60h超は / vượt 60h: ＋0.5)</td></tr>
+  <tr><td class="l">深夜手当（22:00〜翌5:00）<br><span class="vi">Phụ cấp làm đêm (22:00〜5:00 sáng)</span></td><td class="l">時給 × 0.25 × 深夜の時間<br><span class="vi">Lương giờ × 0.25 × giờ làm đêm</span></td><td>＋ 0.25</td></tr>
+  <tr><td class="l">法定休日手当<br><span class="vi">Phụ cấp làm ngày nghỉ luật định</span></td><td class="l">時給 × 1.35（8時間超の部分は1.60）<br><span class="vi">Lương giờ × 1.35 (phần vượt 8 tiếng: 1.60)</span></td><td>× 1.35〜1.60</td></tr>
+  <tr><td class="l">休業手当（会社都合の休み）<br><span class="vi">Trợ cấp ngừng việc (nghỉ do công ty)</span></td><td class="l">時給 × 7時間 × 60% × 日数<br><span class="vi">Lương giờ × 7 tiếng × 60% × số ngày</span></td><td>× 0.6</td></tr>
+  <tr><td class="l">欠勤控除（ひかれる）<br><span class="vi">Khấu trừ ngày nghỉ không phép (bị trừ)</span></td><td class="l">時給 × 7時間 × 欠勤日数（20日基準）<br><span class="vi">Lương giờ × 7 tiếng × số ngày vắng (chuẩn 20 ngày)</span></td><td>− 1.0</td></tr>
+</table>
+
+<div class="good">
+  <p class="good-title">🌴 有給を取っても基本給は減りません / Nghỉ phép có lương không làm giảm lương cơ bản</p>
+  <p style="margin:0;">
+    基本給140時間の中に有給の日も含まれています。有給を取って給料が減ることはありません。<br>
+    20日以上働いた月に有給も取った場合は、「有給日給」が別に払われます。<br>
+    <span class="vi">Ngày nghỉ phép đã được bao gồm trong 140 giờ lương cơ bản. Nghỉ phép không làm giảm lương.<br>
+    Nếu trong tháng bạn làm từ 20 ngày trở lên và còn nghỉ phép, "lương ngày nghỉ phép" sẽ được trả riêng.</span>
+  </p>
+</div>
+</div>
+
+<!-- ===== 6 ===== -->
+<h2>6. 計算の例 <span style="font-weight:normal;font-size:15px;">/ Ví dụ tính lương</span></h2>
+
+<div class="section">
+<p>時給1,500円の場合の例です。 <span class="vi">Ví dụ với lương giờ 1,500 yên.</span></p>
+
+<h3>例A：22日 × 7時間働いた月（残業入力なし） / Ví dụ A: tháng làm 22 ngày × 7 tiếng (không nhập tăng ca)</h3>
+<p>
+週の判定（ステップ2）で、法定外残業が4時間発生したとします。
+<span class="vi">Giả sử theo xét tuần (Bước 2), phát sinh 4 giờ tăng ca vượt luật định.</span>
+</p>
+<table>
+  <tr><th class="l">項目 / Khoản</th><th class="l">計算 / Tính</th><th>金額 / Số tiền</th></tr>
+  <tr><td class="l">基本給 / Lương cơ bản</td><td class="l">1,500 × 20日 × 7h</td><td>¥210,000</td></tr>
+  <tr><td class="l">追加所定手当（2日分） / Phụ cấp ngày làm thêm (2 ngày)</td><td class="l">1,500 × 2日 × 7h</td><td>¥21,000</td></tr>
+  <tr><td class="l">所定外労働手当 / Phụ cấp làm ngoài giờ quy định</td><td class="l">0（毎日7時間ちょうど / mỗi ngày đúng 7 tiếng）</td><td>¥0</td></tr>
+  <tr><td class="l">法定外残業手当 / Phụ cấp tăng ca vượt luật định</td><td class="l">1,500 × 0.25 × 4h</td><td>¥1,500</td></tr>
+  <tr><td class="l"><strong>合計 / Tổng</strong></td><td class="l"></td><td><strong>¥232,500</strong></td></tr>
+</table>
+<div class="formula">
+検算 / Kiểm tra lại:<br>
+働いた時間ぜんぶ 154h × 1,500 × 1.0 = ¥231,000<br>
+＋ 法定外残業 4h × 1,500 × 0.25 = ¥1,500<br>
+= ¥232,500 ✓（1時間もなくなっていません / không mất một giờ nào）
+</div>
+
+<h3>例B：出勤18日 ＋ 有給2日 ＋ 残業18.5時間の月 / Ví dụ B: tháng làm 18 ngày + nghỉ phép 2 ngày + tăng ca 18.5 giờ</h3>
+<p>
+3ステップ判定で、法定外残業が1時間だったとします。
+<span class="vi">Giả sử theo 3 bước, có 1 giờ tăng ca vượt luật định.</span>
+</p>
+<table>
+  <tr><th class="l">項目 / Khoản</th><th class="l">計算 / Tính</th><th>金額 / Số tiền</th></tr>
+  <tr><td class="l">基本給 / Lương cơ bản</td><td class="l">1,500 × 20日 × 7h（出勤18日＋有給2日を含む / gồm 18 ngày làm + 2 ngày phép）</td><td>¥210,000</td></tr>
+  <tr><td class="l">所定外労働手当 / Phụ cấp làm ngoài giờ quy định</td><td class="l">1,500 × 18.5h</td><td>¥27,750</td></tr>
+  <tr><td class="l">法定外残業手当 / Phụ cấp tăng ca vượt luật định</td><td class="l">1,500 × 0.25 × 1h</td><td>¥375</td></tr>
+  <tr><td class="l"><strong>合計 / Tổng</strong></td><td class="l"></td><td><strong>¥238,125</strong></td></tr>
+</table>
+<div class="formula">
+検算 / Kiểm tra lại:<br>
+出勤126h ＋ 有給14h ＋ 残業18.5h = 158.5h × 1,500 × 1.0 = ¥237,750<br>
+＋ 法定外残業 1h × 1,500 × 0.25 = ¥375<br>
+= ¥238,125 ✓
+</div>
+</div>
+
+<!-- ===== 7 ===== -->
+<h2>7. よくある質問 <span style="font-weight:normal;font-size:15px;">/ Câu hỏi thường gặp</span></h2>
+
+<div class="section">
+<h3>Q1. 残業したのに、明細の残業手当が「×1.25」より少なく見えます / Tôi tăng ca nhưng phụ cấp trên bảng lương trông ít hơn "×1.25"?</h3>
+<p>
+残業代は2つに分けて払っています。「所定外労働手当（×1.0）」＋「法定外残業手当（×0.25）」＝ 合計1.25倍です。2つを足して見てください。
+</p>
+<p class="vi">
+Tiền tăng ca được chia làm 2 khoản: "Phụ cấp làm ngoài giờ quy định (×1.0)" + "Phụ cấp tăng ca vượt luật định (×0.25)" = tổng 1.25 lần. Hãy cộng cả 2 khoản khi xem.
+</p>
+
+<h3>Q2. 週6日働いた週、42時間まで割増が付かないのはなぜ？ / Tại sao tuần làm 6 ngày, đến 42 tiếng vẫn không có phụ cấp?</h3>
+<p>
+カレンダーで前もって「週6日・42時間」と決めて、皆さんが署名しているからです。変形労働時間制では、前もって決めた所定時間までは割増の対象になりません（法律のルール・社労士確認済み）。42時間分の給料（×1.0）はもちろん払われます。
+</p>
+<p class="vi">
+Vì lịch làm việc đã quyết định trước "tuần 6 ngày, 42 tiếng" và các bạn đã ký tên. Trong chế độ giờ làm linh hoạt, giờ quy định đã quyết định trước không thuộc đối tượng phụ cấp (quy tắc pháp luật, đã được chuyên gia lao động xác nhận). Tất nhiên lương của 42 tiếng (×1.0) vẫn được trả đầy đủ.
+</p>
+
+<h3>Q3. 有給を取ると給料は減りますか？ / Nghỉ phép có lương thì lương có giảm không?</h3>
+<p>
+減りません。有給の日は基本給の中に含まれています。さらに、20日以上働いた月に有給も取った場合は「有給日給」が追加で払われます。
+</p>
+<p class="vi">
+Không giảm. Ngày nghỉ phép được bao gồm trong lương cơ bản. Ngoài ra, nếu tháng đó bạn làm từ 20 ngày trở lên và còn nghỉ phép thì được trả thêm "lương ngày nghỉ phép".
+</p>
+
+<h3>Q4. 会社の都合で休みになった日は？ / Ngày nghỉ do công ty (thời tiết, công trường đóng cửa)?</h3>
+<p>
+会社都合の休業日は、法律（労基法26条）により1日あたり60%（時給 × 7時間 × 0.6）の休業手当が払われます。
+</p>
+<p class="vi">
+Ngày ngừng việc do công ty, theo luật (Điều 26 Luật Lao động Tiêu chuẩn), được trả trợ cấp ngừng việc 60% mỗi ngày (lương giờ × 7 tiếng × 0.6).
+</p>
+
+<h3>Q5. 自分の時間や残業はどこで確認できますか？ / Xem giờ làm và tăng ca của mình ở đâu?</h3>
+<p>
+毎日のスマホの出勤画面で、自分の入力（出勤・残業時間）を確認できます。「おかしいな」と思ったら、職長か事務の奥寺さんに聞いてください。最終的な残業の計算は、会社と労務の専門家（社労士）がこのマニュアルのルール通りに行います。
+</p>
+<p class="vi">
+Bạn có thể xem thông tin mình đã nhập (đi làm, giờ tăng ca) trên màn hình đăng ký đi làm của điện thoại hàng ngày. Nếu thấy "có gì đó sai", hãy hỏi tổ trưởng hoặc chị Okudera (văn phòng). Việc tính tăng ca cuối cùng do công ty và chuyên gia lao động thực hiện đúng theo quy tắc trong tài liệu này.
+</p>
+</div>
+
+<!-- ===== 8 ===== -->
+<h2>8. まとめ：割増の一覧表 <span style="font-weight:normal;font-size:15px;">/ Tóm tắt: Bảng tỷ lệ phụ cấp</span></h2>
+
+<div class="section">
+<table>
+  <tr><th class="l">働き方 / Loại thời gian làm việc</th><th>合計の倍率 / Tổng tỷ lệ</th></tr>
+  <tr><td class="l">所定時間内（カレンダー通り・1日7時間）<br><span class="vi">Trong giờ quy định (theo lịch, 7 tiếng/ngày)</span></td><td>× 1.0</td></tr>
+  <tr><td class="l">残業（3ステップ判定で法定内）<br><span class="vi">Tăng ca (trong luật định theo 3 bước)</span></td><td>× 1.0</td></tr>
+  <tr><td class="l">残業（3ステップ判定で法定外）<br><span class="vi">Tăng ca (vượt luật định theo 3 bước)</span></td><td><strong>× 1.25</strong></td></tr>
+  <tr><td class="l">法定外残業が月60時間を超えた分<br><span class="vi">Phần tăng ca vượt luật định quá 60 giờ/tháng</span></td><td><strong>× 1.5</strong></td></tr>
+  <tr><td class="l">深夜（22:00〜翌5:00）に働いた分<br><span class="vi">Làm đêm (22:00〜5:00 sáng)</span></td><td>＋ 0.25 追加 / cộng thêm</td></tr>
+  <tr><td class="l">法定休日に働いた分<br><span class="vi">Làm vào ngày nghỉ luật định</span></td><td>× 1.35（8時間超 / vượt 8 tiếng: × 1.60）</td></tr>
+  <tr><td class="l">会社都合の休み<br><span class="vi">Nghỉ do công ty</span></td><td>× 0.6（休業手当 / trợ cấp ngừng việc）</td></tr>
+</table>
+
+<div class="good">
+  <p class="good-title">✅ 安心してください / Các bạn yên tâm</p>
+  <p style="margin:0;">
+    ・働いた時間は1時間もなくなりません。ぜんぶ給料になります。<br>
+    ・割増のルールは日本の法律の通りで、労務の専門家（社労士）が確認しています。<br>
+    ・わからないことは、職長・奥寺さん・政仁さんに、いつでも聞いてください。<br>
+    <span class="vi">・Thời gian làm việc không mất một giờ nào. Tất cả đều thành lương.<br>
+    ・Quy tắc phụ cấp đúng theo pháp luật Nhật Bản và đã được chuyên gia lao động xác nhận.<br>
+    ・Có gì không hiểu, hãy hỏi tổ trưởng, chị Okudera hoặc anh Masahito bất cứ lúc nào.</span>
+  </p>
+</div>
+</div>
+
+<hr style="border:none; border-top:1px solid #ddd; margin:30px 0;">
+<p style="font-size:12px; color:#999; text-align:center;">
+HIBI CONSTRUCTION 就業カレンダーシステム ／ 変形労働時間制マニュアル（スタッフ向け・日本語＋ベトナム語）<br>
+最終更新: 2026年7月27日
+</p>
+
+</body>
+</html>
