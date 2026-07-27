@@ -13,7 +13,7 @@ import { AttendanceEntry, calcActualHours } from '@/types'
 import { isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from './workers'
 import { computePeriodUsed } from './leave-compute'
-import { calcExpiryIso, todayJstIso } from './date-utils'
+import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso } from './date-utils'
 // 2026-06-XX 追加: 自動検算を Excel にも反映
 import { validatePayrolls, type PayrollSnapshot } from './payroll-validator'
 
@@ -852,14 +852,11 @@ export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
     const used = adjustment + periodUsed
     const remaining = Math.max(0, total - used)
 
-    // 有効期限
+    // 有効期限（= 最終利用可能日。calcLastUsableDayIso に統一）
     let expiry = '-'
     if (r.grantDate) {
-      const gd = new Date(r.grantDate)
-      const exp = new Date(gd)
-      exp.setFullYear(exp.getFullYear() + 2)
-      exp.setDate(exp.getDate() - 1)
-      expiry = `${exp.getFullYear()}/${String(exp.getMonth() + 1).padStart(2, '0')}/${String(exp.getDate()).padStart(2, '0')}`
+      const lastUsable = calcLastUsableDayIso(r.grantDate as string)
+      if (lastUsable) expiry = lastUsable.replace(/-/g, '/')
     }
 
     rows.push([
@@ -1442,14 +1439,12 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
 
   const fmtExpiry = (grantDate?: string): string => {
     if (!grantDate) return ''
-    const gd = new Date(grantDate)
-    if (isNaN(gd.getTime())) return ''
-    // 2026-06-XX 修正 (MI-7): calcExpiryIso で正確な+2年計算（うるう年対応）
-    //   旧: setFullYear(+2) は 2024-02-29 → 2026-02-28 になるが、
-    //       内部的に setDate(-1) で 2026-02-27 になる微妙なズレあり
-    //   新: addMonthsSafe(grantDate, 24) で常に同じ日付（応当日無ければ末日）
-    const expIso = calcExpiryIso(grantDate)
-    return fmtDate(expIso + 'T00:00:00Z')
+    // 2026-07-27 修正: 「有効期限」列は最終利用可能日（付与日+2年-1日）を出す。
+    //   旧実装は calcExpiryIso（= 時効発生日 = 付与日+2年）をそのまま出しており、
+    //   画面（〜YYYY/MM/DD）より1日甘い日付になっていた。
+    const lastUsable = calcLastUsableDayIso(grantDate)
+    if (!lastUsable) return ''
+    return fmtDate(lastUsable + 'T00:00:00Z')
   }
 
   // periodUsed 計算（grantDate..+1年 のPエントリ、申請ベース）
@@ -1511,9 +1506,10 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
       const adjustment = r.adjustment ?? 0
       const used = adjustment + periodUsed
       const remaining = Math.max(0, grantDays + carryOver - used)
-      // 2026-06-12 修正 (監査): 期限判定を 2×365日近似 → calcExpiryIso（うるう年対応）に統一。
-      //   有効期限列(fmtExpiry)と判定基準がズレて境界日で「期限切れ/有効」が矛盾していた
-      const expiredByDate = !!(r.grantDate && calcExpiryIso(r.grantDate) < todayJstIso())
+      // 2026-07-27 修正: 期限判定を isLeaveExpiredAsOf に統一。
+      //   旧実装 `calcExpiryIso(grantDate) < today` は時効発生日との比較で、
+      //   有効期限列(fmtExpiry)より1日甘く、境界日で「期限切れ/有効」が矛盾していた
+      const expiredByDate = !!(r.grantDate && isLeaveExpiredAsOf(r.grantDate, todayJstIso()))
       const status = r._archived ? 'アーカイブ' : (r.expiredAt ? '失効済' : (expiredByDate ? '期限切れ' : '有効'))
       ledgerRows.push([
         w.id, w.name, w.org || '', visaLabel(w.visa), w.hireDate || '',

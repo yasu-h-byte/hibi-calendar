@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { calcGrantMonthFromHire, calcLegalPL } from '@/lib/leave-utils'
+import { calcLastUsableDayIso } from '@/lib/date-utils'
 import { PLWorker } from '../types'
 
 // 有給付与モーダル
@@ -132,12 +133,8 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
           {grantForm.grantDate && (
             <div className="text-xs text-gray-500">
               有効期限: {(() => {
-                const gd = new Date(grantForm.grantDate)
-                if (isNaN(gd.getTime())) return '—'
-                const exp = new Date(gd)
-                exp.setFullYear(exp.getFullYear() + 2)
-                exp.setDate(exp.getDate() - 1)
-                return `${exp.getFullYear()}/${String(exp.getMonth() + 1).padStart(2, '0')}/${String(exp.getDate()).padStart(2, '0')}`
+                const lastUsable = calcLastUsableDayIso(grantForm.grantDate)
+                return lastUsable ? lastUsable.replace(/-/g, '/') : '—'
               })()}
             </div>
           )}

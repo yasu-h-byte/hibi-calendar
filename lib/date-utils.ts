@@ -166,14 +166,78 @@ export function addMonthsSafe(dateIso: string, months: number): string {
 }
 
 /**
- * 有給休暇の時効: 付与日 + 2年（うるう年も正確に）
+ * ISO 日付に日数を加減する。
  *
- * 旧実装は `Date.now() + 2*365*86400000` でうるう年1日ズレあり。
- * `addMonthsSafe` 経由で月末入社・うるう年を正しく処理。
+ * `Date.UTC` 基準で計算するのでタイムゾーンに依存しない。
+ * `new Date('2026-01-13')`（UTC 深夜）と `new Date('2026-01-13T00:00:00')`（ローカル深夜）が
+ * 混在すると JST 環境で `toISOString()` が前日を返すため、日付演算は必ず本関数を通すこと。
+ *
+ * @param dateIso YYYY-MM-DD
+ * @param days    加減する日数（負も可）
+ * @returns YYYY-MM-DD
+ */
+export function addDaysIso(dateIso: string, days: number): string {
+  if (!dateIso) return ''
+  const [y, m, d] = dateIso.slice(0, 10).split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const dt = new Date(Date.UTC(y, m - 1, d) + days * 86400000)
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getUTCDate()).padStart(2, '0')
+  return `${dt.getUTCFullYear()}-${mm}-${dd}`
+}
+
+/**
+ * 有給休暇の「時効発生日」= 付与日 + 2年（うるう年も正確に）。
+ *
+ * ⚠️ これは**時効が到来する日そのもの**であって、最後に使える日ではない。
+ * 画面・帳票に「有効期限 / 〜YYYY/MM/DD」として出す日付は
+ * {@link calcLastUsableDayIso} を使うこと（1日ズレる）。
+ * 期限切れ判定も {@link isLeaveExpiredAsOf} を使うこと。
  *
  * @param grantDateIso YYYY-MM-DD
  * @returns YYYY-MM-DD（時効発生日 = grantDate + 2年）
  */
 export function calcExpiryIso(grantDateIso: string): string {
   return addMonthsSafe(grantDateIso, 24)
+}
+
+/**
+ * 有給休暇の「最終利用可能日」= その日まで有給を消化できる最後の日。
+ *
+ * 労基法115条の2年時効を民法143条2項に従って算定する:
+ *   - 原則: 2年後の応当日の**前日**に満了（2026-01-13 付与 → 2028-01-12）
+ *   - 例外: 応当日が存在しない月は**その月の末日**に満了
+ *           （2024-02-29 付与 → 2026年2月に29日は無いので 2026-02-28。
+ *            ここで更に -1日 して 2026-02-27 とするのは誤り）
+ *
+ * 画面・Excel の「有効期限」「〜YYYY/MM/DD」表示はすべて本関数に統一する。
+ *
+ * @param grantDateIso YYYY-MM-DD
+ * @returns YYYY-MM-DD（最終利用可能日）
+ */
+export function calcLastUsableDayIso(grantDateIso: string): string {
+  if (!grantDateIso) return ''
+  const day = Number(grantDateIso.slice(8, 10))
+  const anniversary = calcExpiryIso(grantDateIso)
+  if (!anniversary || !day) return ''
+  // 応当日がそのまま取れた場合のみ前日にする。
+  // クランプされた（= 応当日が無かった）場合、その末日自体が満了日。
+  if (Number(anniversary.slice(8, 10)) === day) return addDaysIso(anniversary, -1)
+  return anniversary
+}
+
+/**
+ * 指定日時点で、その付与分の有給が時効消滅しているか。
+ *
+ * 最終利用可能日を1日でも過ぎていれば消滅。境界日（最終利用可能日当日）は
+ * まだ消化できるので false。
+ *
+ * @param grantDateIso YYYY-MM-DD
+ * @param asOfIso      判定基準日 YYYY-MM-DD（省略時は JST の今日）
+ */
+export function isLeaveExpiredAsOf(grantDateIso: string, asOfIso?: string): boolean {
+  const lastUsable = calcLastUsableDayIso(grantDateIso)
+  if (!lastUsable) return false
+  const asOf = (asOfIso || todayJstIso()).slice(0, 10)
+  return asOf > lastUsable
 }

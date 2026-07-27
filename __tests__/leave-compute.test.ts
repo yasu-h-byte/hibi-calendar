@@ -5,7 +5,7 @@
  */
 import { describe, test, expect } from 'vitest'
 import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride } from '@/lib/leave-compute'
-import { addMonthsSafe, calcExpiryIso } from '@/lib/date-utils'
+import { addMonthsSafe, calcExpiryIso, addDaysIso, calcLastUsableDayIso, isLeaveExpiredAsOf } from '@/lib/date-utils'
 
 describe('addMonthsSafe', () => {
   test('通常ケース: 2025-08-15 + 6ヶ月 = 2026-02-15', () => {
@@ -44,6 +44,74 @@ describe('calcExpiryIso (有給時効 +2年)', () => {
   test('月末付与の正確な計算', () => {
     expect(calcExpiryIso('2025-08-31')).toBe('2027-08-31')
     expect(calcExpiryIso('2025-04-30')).toBe('2027-04-30')
+  })
+})
+
+describe('addDaysIso', () => {
+  test('月・年を跨ぐ加減', () => {
+    expect(addDaysIso('2028-01-13', -1)).toBe('2028-01-12')
+    expect(addDaysIso('2027-11-01', -1)).toBe('2027-10-31')
+    expect(addDaysIso('2027-01-01', -1)).toBe('2026-12-31')
+    expect(addDaysIso('2024-03-01', -1)).toBe('2024-02-29')  // うるう年
+    expect(addDaysIso('2025-12-31', 1)).toBe('2026-01-01')
+  })
+
+  test('不正な入力は空文字', () => {
+    expect(addDaysIso('', -1)).toBe('')
+    expect(addDaysIso('not-a-date', -1)).toBe('')
+  })
+})
+
+describe('calcLastUsableDayIso (最終利用可能日 = 付与日+2年-1日)', () => {
+  test('原則: 応当日の前日に満了', () => {
+    // 画面に出ている実データ（2026-07 時点の在籍スタッフ）
+    expect(calcLastUsableDayIso('2026-01-13')).toBe('2028-01-12')
+    expect(calcLastUsableDayIso('2025-11-01')).toBe('2027-10-31')
+    expect(calcLastUsableDayIso('2025-09-16')).toBe('2027-09-15')
+    expect(calcLastUsableDayIso('2026-03-03')).toBe('2028-03-02')
+    expect(calcLastUsableDayIso('2025-11-14')).toBe('2027-11-13')
+    expect(calcLastUsableDayIso('2025-08-19')).toBe('2027-08-18')
+  })
+
+  test('例外: 応当日が無い月は末日に満了（更に-1日しない）', () => {
+    // 民法143条2項ただし書き。2026年2月に29日は無いので 2026-02-28 が満了日。
+    // ここで -1 して 2026-02-27 にするのは誤り（旧 attendance/staff の実装バグ）
+    expect(calcLastUsableDayIso('2024-02-29')).toBe('2026-02-28')
+  })
+
+  test('月末付与は素直に前日', () => {
+    expect(calcLastUsableDayIso('2025-08-31')).toBe('2027-08-30')
+    expect(calcLastUsableDayIso('2025-04-30')).toBe('2027-04-29')
+  })
+
+  test('時効発生日（calcExpiryIso）とは必ず別物', () => {
+    // 混同すると帳票が1日甘くなる。回帰防止のため明示的に固定。
+    expect(calcExpiryIso('2026-01-13')).toBe('2028-01-13')
+    expect(calcLastUsableDayIso('2026-01-13')).toBe('2028-01-12')
+  })
+
+  test('不正な入力は空文字', () => {
+    expect(calcLastUsableDayIso('')).toBe('')
+  })
+})
+
+describe('isLeaveExpiredAsOf (時効消滅判定)', () => {
+  const grant = '2026-01-13'   // 最終利用可能日 = 2028-01-12
+
+  test('最終利用可能日の当日はまだ使える', () => {
+    expect(isLeaveExpiredAsOf(grant, '2028-01-12')).toBe(false)
+  })
+
+  test('翌日から時効消滅', () => {
+    expect(isLeaveExpiredAsOf(grant, '2028-01-13')).toBe(true)
+  })
+
+  test('期限内は false', () => {
+    expect(isLeaveExpiredAsOf(grant, '2026-07-27')).toBe(false)
+  })
+
+  test('付与日不明なら false（誤って失効扱いしない）', () => {
+    expect(isLeaveExpiredAsOf('', '2028-01-13')).toBe(false)
   })
 })
 

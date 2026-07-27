@@ -17,6 +17,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { AttendanceEntry } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
+import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween } from '@/lib/date-utils'
 import { getAttData, parseDKey } from '@/lib/compute'
 
 export async function GET(request: NextRequest) {
@@ -276,16 +277,11 @@ export async function GET(request: NextRequest) {
             plGrantRemaining = Math.max(0, grant - fromGrant)
             plRemaining = plCarryOverRemaining + plGrantRemaining
 
-            // 当期付与分の時効 = 付与日 + 2年 - 1日
+            // 当期付与分の最終利用可能日 = 付与日 + 2年 - 1日
             if (latest.grantDate) {
-              const grantDate = new Date(latest.grantDate + 'T00:00:00')
-              if (!isNaN(grantDate.getTime())) {
-                const expiry = new Date(grantDate)
-                const origMonth = expiry.getMonth()
-                expiry.setFullYear(expiry.getFullYear() + 2)
-                if (expiry.getMonth() !== origMonth) expiry.setDate(0)
-                expiry.setDate(expiry.getDate() - 1)
-                plExpiryDate = expiry.toISOString().slice(0, 10)
+              const lastUsable = calcLastUsableDayIso(latest.grantDate)
+              if (lastUsable) {
+                plExpiryDate = lastUsable
                 plGrantExpiryDate = plExpiryDate
               }
             }
@@ -300,17 +296,12 @@ export async function GET(request: NextRequest) {
                 .sort((a, b) => a.time - b.time)
               const prev = prevCandidates[prevCandidates.length - 1]
               if (prev && prev.rec.grantDate) {
-                const prevGd = new Date(prev.rec.grantDate + 'T00:00:00')
-                const prevExp = new Date(prevGd)
-                const origM = prevExp.getMonth()
-                prevExp.setFullYear(prevExp.getFullYear() + 2)
-                if (prevExp.getMonth() !== origM) prevExp.setDate(0)
-                prevExp.setDate(prevExp.getDate() - 1)
-                plCarryOverExpiryDate = prevExp.toISOString().slice(0, 10)
-                const nowT = Date.now()
-                const diffDays = Math.floor((prevExp.getTime() - nowT) / (24 * 60 * 60 * 1000))
-                if (diffDays < 0) plCarryOverExpiryStatus = 'expired'
-                else if (diffDays <= 90) plCarryOverExpiryStatus = 'warning'
+                const prevGrant = prev.rec.grantDate as string
+                const prevLastUsable = calcLastUsableDayIso(prevGrant)
+                plCarryOverExpiryDate = prevLastUsable
+                const todayStr = todayJstIso()
+                if (isLeaveExpiredAsOf(prevGrant, todayStr)) plCarryOverExpiryStatus = 'expired'
+                else if (daysBetween(todayStr, prevLastUsable) <= 90) plCarryOverExpiryStatus = 'warning'
                 else plCarryOverExpiryStatus = 'ok'
                 if (plCarryOverExpiryStatus === 'expired') plCarryOverRemaining = 0
               }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { addDaysIso, addMonthsSafe, calcLastUsableDayIso } from '@/lib/date-utils'
 import { PLWorker } from '../types'
 
 // 有給編集モーダル（付与日・付与日数・繰越・調整 + 監査情報・各種履歴の表示）
@@ -46,13 +47,13 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
               個別に変更したい場合のみ日付を選び直してください。
             </p>
             {editForm.grantDate && (() => {
-              const gd = new Date(editForm.grantDate)
-              const end = new Date(gd); end.setFullYear(end.getFullYear() + 1); end.setDate(end.getDate() - 1)
-              const expiry = new Date(gd); expiry.setFullYear(expiry.getFullYear() + 2); expiry.setDate(expiry.getDate() - 1)
-              const fmt = (d: Date) => `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+              // 期間末 = 付与日+1年-1日、有効期限 = 最終利用可能日（付与日+2年-1日）
+              const end = addDaysIso(addMonthsSafe(editForm.grantDate, 12), -1)
+              const expiry = calcLastUsableDayIso(editForm.grantDate)
+              const fmt = (iso: string) => iso.replace(/-/g, '/')
               return (
                 <div className="text-[10px] text-gray-500 mt-1">
-                  期間: {fmt(gd)} 〜 {fmt(end)} / 当期付与の有効期限: {fmt(expiry)}
+                  期間: {fmt(editForm.grantDate)} 〜 {fmt(end)} / 当期付与の有効期限: {fmt(expiry)}
                 </div>
               )
             })()}

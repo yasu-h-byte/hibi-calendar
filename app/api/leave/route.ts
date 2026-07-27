@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
-import { addMonthsSafe, todayJstIso, calcExpiryIso } from '@/lib/date-utils'
+import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
 import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
@@ -249,7 +249,6 @@ export async function POST(request: NextRequest) {
       const data = snap.data()
       const plData = (data.plData || {}) as Record<string, Record<string, unknown>[]>
       const today = todayJST()
-      const todayDate = new Date(today)
 
       // 出面データをロード（残日数計算用）
       const allAtt: Record<string, Record<string, unknown>> = {}
@@ -265,13 +264,8 @@ export async function POST(request: NextRequest) {
           // 既に処理済みはスキップ
           if (r._archived || r.expiredAt) continue
           if (!r.grantDate) continue
-          const gd = new Date(r.grantDate as string)
-          if (isNaN(gd.getTime())) continue
-          // 有効期限 = grantDate + 2年 - 1日
-          const exp = new Date(gd)
-          exp.setFullYear(exp.getFullYear() + 2)
-          exp.setDate(exp.getDate() - 1)
-          if (exp >= todayDate) continue  // まだ期限内
+          // 有効期限判定は isLeaveExpiredAsOf に統一（民法143条2項・うるう年対応）
+          if (!isLeaveExpiredAsOf(r.grantDate as string, today)) continue  // まだ期限内
 
           // 期限切れ → 残日数計算
           // 2026-06-XX 修正 (audit #5+#6): computeUsedDays / computeRemainingDays に統一
@@ -280,8 +274,8 @@ export async function POST(request: NextRequest) {
           //   両者は数学的に等価だが、ヘルパー経由にすることで定義の食い違いを構造的に防ぐ
           const grantDays = (r.grantDays as number | undefined) ?? 0
           const carryOver = (r.carryOver as number | undefined) ?? 0
-          const periodStart = gd
-          const periodEnd = new Date(gd)
+          const periodStart = new Date(r.grantDate as string)
+          const periodEnd = new Date(periodStart)
           periodEnd.setFullYear(periodEnd.getFullYear() + 1)
           // 多現場の同日重複を排除して1日1カウントに正規化
           const seenDatesExpiry = new Set<string>()
@@ -525,13 +519,7 @@ export async function POST(request: NextRequest) {
         for (const r of records) {
           if (r._archived) continue
           if (!r.grantDate) continue
-          const gd = new Date(r.grantDate)
-          if (isNaN(gd.getTime())) continue
-          const exp = new Date(gd)
-          exp.setFullYear(exp.getFullYear() + 2)
-          exp.setDate(exp.getDate() - 1)
-          const expStr = exp.toISOString().slice(0, 10)
-          if (expStr < today) {
+          if (isLeaveExpiredAsOf(r.grantDate, today)) {
             r._archived = true
             stats.recordsArchived++
           }
@@ -1367,21 +1355,16 @@ export async function GET(request: NextRequest) {
         //   asOf 省略時は今日なので remainingActual と同値。
         const asOfRemaining = computeRemainingDays(total, safeRec, asOfUsed)
 
-        // Expiry calculation: grantDate + 2 years - 1 day
+        // 最終利用可能日（= 付与日 + 2年 - 1日）。calcLastUsableDayIso に統一。
         let expiryDate = ''
         let expiryStatus: 'ok' | 'warning' | 'expired' = 'ok'
         if (grantDate) {
-          const gd = new Date(grantDate)
-          if (!isNaN(gd.getTime())) {
-            const exp = new Date(gd)
-            exp.setFullYear(exp.getFullYear() + 2)
-            exp.setDate(exp.getDate() - 1)
-            expiryDate = `${exp.getFullYear()}/${String(exp.getMonth() + 1).padStart(2, '0')}/${String(exp.getDate()).padStart(2, '0')}`
-
-            const now = new Date()
-            const diffDays = Math.floor((exp.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
-            if (diffDays < 0) expiryStatus = 'expired'
-            else if (diffDays <= 60) expiryStatus = 'warning'
+          const lastUsable = calcLastUsableDayIso(grantDate)
+          if (lastUsable) {
+            expiryDate = lastUsable.replace(/-/g, '/')
+            const todayStr = todayJstIso()
+            if (isLeaveExpiredAsOf(grantDate, todayStr)) expiryStatus = 'expired'
+            else if (daysBetween(todayStr, lastUsable) <= 60) expiryStatus = 'warning'
           }
         }
 
@@ -1437,15 +1420,11 @@ export async function GET(request: NextRequest) {
           const prevRec = prevCandidates[prevCandidates.length - 1]
           if (prevRec && prevRec.rec.grantDate) {
             carryOverSourceGrantDate = prevRec.rec.grantDate
-            const prevGd = new Date(prevRec.rec.grantDate)
-            const prevExp = new Date(prevGd)
-            prevExp.setFullYear(prevExp.getFullYear() + 2)
-            prevExp.setDate(prevExp.getDate() - 1)
-            carryOverExpiryDate = `${prevExp.getFullYear()}/${String(prevExp.getMonth() + 1).padStart(2, '0')}/${String(prevExp.getDate()).padStart(2, '0')}`
-            const nowT = Date.now()
-            const diffDays = Math.floor((prevExp.getTime() - nowT) / (24 * 60 * 60 * 1000))
-            if (diffDays < 0) carryOverExpiryStatus = 'expired'
-            else if (diffDays <= 90) carryOverExpiryStatus = 'warning'
+            const prevLastUsable = calcLastUsableDayIso(prevRec.rec.grantDate)
+            carryOverExpiryDate = prevLastUsable.replace(/-/g, '/')
+            const todayStr = todayJstIso()
+            if (isLeaveExpiredAsOf(prevRec.rec.grantDate, todayStr)) carryOverExpiryStatus = 'expired'
+            else if (daysBetween(todayStr, prevLastUsable) <= 90) carryOverExpiryStatus = 'warning'
           }
         }
         // 繰越分が時効済みの場合は残 0 とする（実務上消費できないため）
