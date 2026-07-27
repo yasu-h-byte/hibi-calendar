@@ -16,13 +16,10 @@ const ceilYen = (v: number): number => Math.ceil(Math.round(v * 100) / 100)
 /** 控除額: 1円未満を切り捨て（控除を増やさない＝過少支払い防止） */
 const floorYen = (v: number): number => Math.floor(Math.round(v * 100) / 100)
 
-/**
- * 日本人・月給制の割増賃金算定基礎に使う「月平均所定労働時間」(h)。
- * 施行規則19条（月ごとに所定が異なる場合は年平均で除する）に基づく固定値。
- * 年間休日が現場依存で確定できないため、想定レンジ(月140〜145.8h)内の145hに固定
- * （2026-07-09 代表確定）。変更時は docs/salary-calculation.md と賃金規程も更新すること。
- */
-export const JP_SALARY_AVG_MONTHLY_HOURS = 145
+// 日本人・月給制の割増賃金算定基礎「月平均所定労働時間」(145h)。
+// 給与計算エンジンと人員マスタ画面の参考表示で同じ値を使うため lib/constants.ts に集約。
+export { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
+import { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
 
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
