@@ -20,7 +20,7 @@ import {
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from '@/lib/workers'
-import { todayJstIso } from '@/lib/date-utils'
+import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
@@ -1237,11 +1237,11 @@ export async function GET(request: NextRequest) {
         if (sortedRecords.length >= 2) {
           const prev = sortedRecords[sortedRecords.length - 2]
           const cur = sortedRecords[sortedRecords.length - 1]
-          const prevExp = new Date(prev.grantDate as string)
-          prevExp.setFullYear(prevExp.getFullYear() + 2)
-          prevExp.setDate(prevExp.getDate() - 1)
-          const diffDays = Math.floor((prevExp.getTime() - todayD.getTime()) / (24 * 60 * 60 * 1000))
-          if (diffDays >= 0 && diffDays <= 90) {
+          const prevGrant = prev.grantDate as string
+          const prevLastUsable = calcLastUsableDayIso(prevGrant)
+          // 未時効かつ最終利用可能日まで90日以内
+          const stillValid = !isLeaveExpiredAsOf(prevGrant, todayIsoP)
+          if (stillValid && daysBetween(todayIsoP, prevLastUsable) <= 90) {
             // 前期に未消化の繰越が残っているか簡易チェック
             const curCarry = (cur.carryOver as number | undefined) ?? (cur.carry as number | undefined) ?? 0
             if (curCarry > 0) carryOverExpiringCount++

@@ -28,7 +28,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
-import { todayJstIso, calcExpiryIso } from '@/lib/date-utils'
+import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf } from '@/lib/date-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -87,8 +87,10 @@ export async function GET(request: NextRequest) {
       // 5. 期限切れアーカイブ漏れ
       let expiryArchiveNeeded = false
       if (r.grantDate && !r._archived) {
-        const expiry = calcExpiryIso(r.grantDate)
-        if (expiry < today) expiryArchiveNeeded = true
+        // 実際のアーカイブ処理（POST expiry）と同じ判定に揃える。
+        // 旧: calcExpiryIso < today は時効発生日との比較で1日甘く、
+        //     処理側が archive する日に health-check が「対象0件」と報告していた
+        if (isLeaveExpiredAsOf(r.grantDate, today)) expiryArchiveNeeded = true
       }
 
       if (hasLegacy || fyTypeBlur || grantDateMissing || fyDup || expiryArchiveNeeded) {
@@ -117,11 +119,11 @@ export async function GET(request: NextRequest) {
 
       // 時効処理が必要（_archived: false かつ expiry < today かつ実際に失効日数が出る）
       if (r.grantDate && !r._archived) {
-        const expiry = calcExpiryIso(r.grantDate)
-        if (expiry < today) {
+        if (isLeaveExpiredAsOf(r.grantDate, today)) {
           needsExpiryProcess++
           if (samples.expiry.length < 5) {
-            samples.expiry.push(`${workerName} fy=${r.fy}: ${r.grantDate} → 期限 ${expiry}`)
+            const lastUsable = calcLastUsableDayIso(r.grantDate)
+            samples.expiry.push(`${workerName} fy=${r.fy}: ${r.grantDate} → 期限 ${lastUsable}`)
           }
         }
       }
