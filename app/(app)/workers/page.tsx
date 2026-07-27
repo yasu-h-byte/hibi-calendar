@@ -7,6 +7,7 @@ import { Worker, AuthUser } from '@/types'
 import { fmtYen } from '@/lib/format'
 import { JOB_LABELS } from '@/lib/jobs'
 import { jobBadge } from '@/lib/labels'
+import { JP_SALARY_AVG_MONTHLY_HOURS } from '@/lib/constants'
 import RaiseHistoryTab from './RaiseHistoryTab'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
@@ -760,8 +761,10 @@ export default function WorkersPage() {
                         モード切替時に対側のフィールドはクリアして両立を防ぐ。 */}
                     {(() => {
                       const isMonthly = !!(form.salary && Number(form.salary) > 0)
-                      const prescribedDays = 20  // 月所定日数の標準値（時給換算用）
-                      const prescribedH = prescribedDays * 8
+                      const prescribedDays = 20  // 日額換算（原価配賦の概算基準）用
+                      // 月給制の残業単価は給与計算エンジンと同じ「月平均所定 145h」で算出する
+                      // （lib/constants.ts の JP_SALARY_AVG_MONTHLY_HOURS が単一の真理ソース）
+                      const otMonthlyHours = JP_SALARY_AVG_MONTHLY_HOURS
                       return (
                         <>
                           {/* モード切替 */}
@@ -852,20 +855,20 @@ export default function WorkersPage() {
                                   <div>
                                     <label className="text-xs text-gray-400 block mb-1">時給換算（参考）</label>
                                     <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
-                                      ¥{Math.round(Number(form.salary) / prescribedH).toLocaleString()}
+                                      ¥{Math.round(Number(form.salary) / otMonthlyHours).toLocaleString()}
                                     </div>
                                   </div>
                                   <div>
                                     <label className="text-xs text-gray-400 block mb-1">残業単価（参考）</label>
                                     <div className="border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2 text-sm text-right text-gray-500 tabular-nums">
-                                      ¥{Math.round(Number(form.salary) / prescribedH * Number(form.otMul || 1.25)).toLocaleString()}
+                                      ¥{Math.ceil(Number(form.salary) / otMonthlyHours * Number(form.otMul || 1.25)).toLocaleString()}
                                     </div>
                                   </div>
                                 </div>
                               )}
                               <p className="text-[10px] text-gray-400">
-                                ※ 月給制: 出勤日数に関わらず月給固定。残業は時給換算 × 倍率で加算。
-                                <br/>※ 換算は月所定 {prescribedDays}日 × 8h = {prescribedH}h で計算。
+                                ※ 月給制: 出勤日数に関わらず月給固定。残業は時給換算 × 倍率で加算（1円未満切上）。
+                                <br/>※ 残業単価は給与計算と同じ月平均所定 {otMonthlyHours}h で算出。日額換算は原価配賦用の概算（月給 ÷ {prescribedDays}日）。
                               </p>
                             </>
                           )}
