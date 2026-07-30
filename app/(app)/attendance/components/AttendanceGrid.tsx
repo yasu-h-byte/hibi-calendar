@@ -58,14 +58,16 @@ export default function AttendanceGrid({
   const finalizableDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day])
 
   // 承認2行（職長承認・最終承認）を日付ヘッダーの直下に sticky 固定する。
-  // top オフセットは thead と職長承認行の実高さから算出（フォント・ズームで変わるため実測）
+  // top オフセットは thead と職長承認行の実高さから算出（フォント・ズームで変わるため実測）。
+  // offsetHeight は整数丸めのため、ズーム率が100%以外だと合計値に誤差が生じ、
+  // sticky行の隙間から裏の行が透けて見える不具合があった（getBoundingClientRectで解消）
   const theadRef = useRef<HTMLTableSectionElement>(null)
   const foremanRowRef = useRef<HTMLTableRowElement>(null)
   const [approvalTops, setApprovalTops] = useState<[number, number]>([0, 0])
   useLayoutEffect(() => {
     const measure = () => {
-      const theadH = theadRef.current?.offsetHeight ?? 0
-      const foremanH = foremanRowRef.current?.offsetHeight ?? 0
+      const theadH = theadRef.current?.getBoundingClientRect().height ?? 0
+      const foremanH = foremanRowRef.current?.getBoundingClientRect().height ?? 0
       setApprovalTops([theadH, theadH + foremanH])
     }
     measure()
