@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import {
   dayColBg, dayHeaderBg, dayTextColor,
   getWorkValue, getTimeStatusValue, retirementBadge,
@@ -57,11 +57,27 @@ export default function AttendanceGrid({
   // 職長承認済かつ最終未承認の日だけが最終承認の対象
   const finalizableDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day])
 
+  // 承認2行（職長承認・最終承認）を日付ヘッダーの直下に sticky 固定する。
+  // top オフセットは thead と職長承認行の実高さから算出（フォント・ズームで変わるため実測）
+  const theadRef = useRef<HTMLTableSectionElement>(null)
+  const foremanRowRef = useRef<HTMLTableRowElement>(null)
+  const [approvalTops, setApprovalTops] = useState<[number, number]>([0, 0])
+  useLayoutEffect(() => {
+    const measure = () => {
+      const theadH = theadRef.current?.offsetHeight ?? 0
+      const foremanH = foremanRowRef.current?.offsetHeight ?? 0
+      setApprovalTops([theadH, theadH + foremanH])
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [days.length, cellWidth])
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
         <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 80}px` }}>
-          <thead className="sticky top-0 z-30">
+          <thead ref={theadRef} className="sticky top-0 z-30">
             {/* Day number row */}
             <tr className="border-b border-gray-200">
               <th
@@ -109,7 +125,7 @@ export default function AttendanceGrid({
             {/* ── 職長承認 row（1次承認: 担当現場の職長のみ）──
                  職長名はこの承認行に集約表示（旧: 上部に空セルだけの黄色「職長行」があったが
                  情報が無く名前も二重だったため 2026-07-09 に削除。代理メモはここへ移設）。 */}
-            <tr className="bg-orange-50 border-b border-orange-100">
+            <tr ref={foremanRowRef} className="bg-orange-50 border-b border-orange-100 sticky z-[25]" style={{ top: approvalTops[0] }}>
               <td
                 className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px]"
                 style={{ width: 150, minWidth: 150, maxWidth: 150 }}
@@ -158,7 +174,7 @@ export default function AttendanceGrid({
             </tr>
 
             {/* ── 最終承認 row（事業責任者・管理者: 職長承認後のみ操作可） ── */}
-            <tr className="bg-indigo-50 border-b border-indigo-200">
+            <tr className="bg-indigo-50 border-b border-indigo-200 sticky z-[25]" style={{ top: approvalTops[1] }}>
               <td
                 className="sticky left-0 z-20 bg-indigo-50 px-2 py-1 font-bold text-indigo-700 whitespace-nowrap text-[11px]"
                 style={{ width: 150, minWidth: 150, maxWidth: 150 }}

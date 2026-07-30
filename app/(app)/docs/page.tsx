@@ -50,7 +50,7 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'manual', roles: ['admin'], title: '評価管理マニュアル', desc: '5タブ画面構成・評価者ウェイト・提出状況の可視化・進捗監視・履歴閲覧・スコア計算・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', badge: 'NEW', updated: '2026-05-09' },
 
   // ── スタッフ向け（全員が内容を把握しておく／スタッフ本人はスマホから） ──
-  { category: 'staff', title: 'スタッフ向けマニュアル', desc: '出勤登録・欠勤届・有給申請・帰国申請・残数確認の使い方（日本語＋ベトナム語）', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-07-03' },
+  { category: 'staff', title: 'スタッフ向けマニュアル', desc: '出勤登録・欠勤届（未来日も届出可）・有給申請・帰国申請・残数確認の使い方（日本語＋ベトナム語）', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-07-30' },
   { category: 'staff', title: '変形労働時間制と残業のルール', desc: '変形労働時間制のしくみ・残業の3段階判定・給料の4層構造・計算例・FAQ（スタッフへの制度説明用）', url: '/manual-henkei-vi.html', icon: '⏰', badge: '日本語+ベトナム語', updated: '2026-07-27' },
 ]
 

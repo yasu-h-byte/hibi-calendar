@@ -124,6 +124,8 @@ export default function StaffAttendancePage() {
   const [showRestModal, setShowRestModal] = useState(false)
   const [restReason, setRestReason] = useState('sick')
   const [restNote, setRestNote] = useState('')
+  // 欠勤届の対象日 (YYYY-MM-DD)。デフォルトは今日、未来の日付も選択可
+  const [restDate, setRestDate] = useState('')
 
   // ── 翌月カレンダー承認用 state（2026-05-27 追加） ──
   // 旧 /calendar/public は「名前を選んで」方式で他人になりすませる脆弱性があったため、
@@ -661,6 +663,7 @@ export default function StaffAttendancePage() {
     } else if (choice === 'rest') {
       // 欠勤届モーダルを開く
       setShowOT(false)
+      setRestDate(todayDateStr())
       setShowRestModal(true)
     } else {
       setShowOT(false)
@@ -668,16 +671,27 @@ export default function StaffAttendancePage() {
     }
   }
 
+  // 今日の日付を YYYY-MM-DD で返す（欠勤届モーダルの初期値・最小日）
+  const todayDateStr = () => {
+    if (!data) return ''
+    const t = data.today
+    return `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`
+  }
+
   const handleRestSubmit = async () => {
     if (!data || saving) return
     setSaving(true)
     setSuccessMsg(null)
+    // 対象日: モーダルで選択した日（未指定・不正なら今日にフォールバック）
+    const parts = restDate.split('-').map(n => parseInt(n, 10))
+    const validDate = parts.length === 3 && parts.every(n => Number.isFinite(n) && n > 0)
+    const [ry, rm, rd] = validDate ? parts : [data.today.year, data.today.month, data.today.day]
     const body: Record<string, unknown> = {
       token,
       siteId: data.site.id,
-      year: data.today.year,
-      month: data.today.month,
-      day: data.today.day,
+      year: ry,
+      month: rm,
+      day: rd,
       choice: 'rest',
       restReason,
       restNote: restReason === 'other' ? restNote : undefined,
@@ -983,7 +997,7 @@ export default function StaffAttendancePage() {
 
             {/* Rest / Leave buttons */}
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => setShowRestModal(true)}
+              <button onClick={() => { setRestDate(todayDateStr()); setShowRestModal(true) }}
                 disabled={saving}
                 className="bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-base font-bold active:bg-gray-100 transition disabled:opacity-50">
                 欠勤届 / Xin nghi
@@ -1434,6 +1448,9 @@ export default function StaffAttendancePage() {
         setReason={setRestReason}
         note={restNote}
         setNote={setRestNote}
+        date={restDate}
+        setDate={setRestDate}
+        minDate={todayDateStr()}
         saving={saving}
         onSubmit={handleRestSubmit}
       />
