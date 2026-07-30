@@ -27,6 +27,9 @@ interface Props {
   setReason: (s: string) => void
   note: string
   setNote: (s: string) => void
+  date: string
+  setDate: (s: string) => void
+  minDate: string
   saving: boolean
   onSubmit: () => void
 }
@@ -38,10 +41,14 @@ export default function RestReportModal({
   setReason,
   note,
   setNote,
+  date,
+  setDate,
+  minDate,
   saving,
   onSubmit,
 }: Props) {
   if (!isOpen) return null
+  const isFuture = !!date && !!minDate && date > minDate
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={onClose}>
@@ -51,9 +58,28 @@ export default function RestReportModal({
         </h3>
         <p className="text-xs text-gray-400 text-center mb-4">
           出勤日に休む場合の届出です / Đơn nghỉ khi ngày đi làm
+          <br />先の日付も選べます / Có thể chọn ngày trong tương lai
         </p>
 
         <div className="space-y-4">
+          <div>
+            <label className="text-sm text-gray-600 font-bold block mb-1">
+              休む日 / Ngày nghỉ
+            </label>
+            <input
+              type="date"
+              value={date}
+              min={minDate}
+              onChange={e => setDate(e.target.value)}
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+            />
+            {isFuture && (
+              <p className="text-xs text-blue-600 mt-1 font-bold">
+                先の日の欠勤届です / Đơn nghỉ cho ngày trong tương lai
+              </p>
+            )}
+          </div>
+
           <div>
             <label className="text-sm text-gray-600 font-bold block mb-2">
               理由 / Lý do
@@ -86,7 +112,7 @@ export default function RestReportModal({
           )}
 
           <button onClick={onSubmit}
-            disabled={saving}
+            disabled={saving || !date}
             className="w-full bg-gray-700 text-white rounded-2xl py-4 text-base font-bold active:bg-gray-800 transition disabled:opacity-50">
             欠勤届を提出 / Gửi đơn xin nghỉ
           </button>
