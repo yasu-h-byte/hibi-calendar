@@ -55,6 +55,24 @@ select.text-center {
   text-align-last: center;
 }
 
+/* iOS Safari の input[type="date"] 対策
+   Safari は日付入力を独自ウィジェットとして描画するため、他の入力欄と揃わない:
+   ・値（2026/07/31）が入力欄の中央に寄り、ラベルやボタンと行頭が合わない
+   ・コンテンツ由来の内在幅が親を超え、右側にはみ出す（w-full が効かない）
+   欠勤届モーダル（components/attendance/RestReportModal.tsx）で顕在化したが、
+   管理画面を含む全ての日付入力に同じ問題があるためここで一括して当てる。 */
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
 /* Attendance grid: prevent select from expanding cell width */
 .table-fixed select,
 .table-fixed input[type="number"] {
