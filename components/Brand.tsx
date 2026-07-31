@@ -65,3 +65,10 @@ export const DEDURA_TAGLINE = '現場を組む。日々を組む。'
 
 /** metadata・manifest と表記を揃えるための正式名称 */
 export const DEDURA_NAME = 'DEDURA＋'
+
+/**
+ * サイドバーでシステム名の下に添えるグループ名。
+ * このシステムは日比建設と HFU の両社の人員を扱うため、
+ * 管理画面の常設表示は個社名ではなくグループ名を出す。
+ */
+export const DEDURA_GROUP = 'BOWHEAD HOLDINGS'

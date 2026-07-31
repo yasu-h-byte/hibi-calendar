@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
 import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
 import NotificationBell from './NotificationBell'
-import { DeduraWordmark } from './Brand'
+import { DeduraWordmark, DEDURA_GROUP } from './Brand'
 
 interface MenuItem {
   label: string
@@ -173,15 +173,13 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Header - 会社ロゴ（HIBI CONSTRUCTION）+ システム名（DEDURA＋） */}
-        <div className="px-3 pt-3 pb-2 border-b border-white/10">
-          <div className="bg-white rounded-lg p-1.5 flex items-center justify-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-full max-w-[160px]" />
-          </div>
-          <div className="flex justify-center mt-2">
-            <DeduraWordmark size="sm" variant="white" />
-          </div>
+        {/* Header - システム名（DEDURA＋）+ グループ名。
+            会社ロゴは外してある: 見るのは社内4ロールだけで常時掲げる情報価値が薄く、
+            白カードがメニューより目立って視線の優先順位が逆になっていたため。
+            会社名 HIBI CONSTRUCTION はログイン画面・公開カレンダー・帳票に残っている。 */}
+        <div className="px-4 pt-4 pb-3 border-b border-white/10">
+          <DeduraWordmark size="lg" variant="white" />
+          <div className="text-[10px] text-white/40 tracking-wider mt-1.5">{DEDURA_GROUP}</div>
         </div>
 
         {/* User info */}
