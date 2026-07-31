@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
 import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
 import NotificationBell from './NotificationBell'
-import { DeduraWordmark, DEDURA_GROUP } from './Brand'
+import { DeduraWordmark, DEDURA_BYLINE } from './Brand'
 
 interface MenuItem {
   label: string
@@ -179,7 +179,9 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
             会社名 HIBI CONSTRUCTION はログイン画面・公開カレンダー・帳票に残っている。 */}
         <div className="px-4 pt-4 pb-3 border-b border-white/10">
           <DeduraWordmark size="lg" variant="white" />
-          <div className="text-[10px] text-white/40 tracking-wider mt-1.5">{DEDURA_GROUP}</div>
+          {/* mt-1 / 50% / 9px はロックアップとして成立させるための値。
+              広げると DEDURA＋ と別物に見え、暗くすると 9px では読めなくなる。 */}
+          <div className="text-[9px] text-white/50 mt-1 whitespace-nowrap">{DEDURA_BYLINE}</div>
         </div>
 
         {/* User info */}

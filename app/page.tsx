@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AuthUser } from '@/types'
-import { DeduraWordmark, DEDURA_TAGLINE, DEDURA_GROUP } from '@/components/Brand'
+import { DeduraWordmark, DEDURA_TAGLINE, DEDURA_BYLINE } from '@/components/Brand'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -74,7 +74,8 @@ export default function LoginPage() {
             <DeduraWordmark size="lg" />
           </div>
           <p className="text-xs text-gray-400 mt-1.5 tracking-wide">{DEDURA_TAGLINE}</p>
-          <p className="text-xs text-gray-500 tracking-widest mt-3">{DEDURA_GROUP}</p>
+          {/* タグラインより濃くしないこと。濃いと主役（タグライン）と階層が逆転する */}
+          <p className="text-[11px] text-gray-400 tracking-wide mt-3">{DEDURA_BYLINE}</p>
         </div>
 
         {step === 'password' ? (

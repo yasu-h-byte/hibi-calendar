@@ -67,8 +67,15 @@ export const DEDURA_TAGLINE = '現場を組む。日々を組む。'
 export const DEDURA_NAME = 'DEDURA＋'
 
 /**
- * サイドバーでシステム名の下に添えるグループ名。
- * このシステムは日比建設と HFU の両社の人員を扱うため、
- * 管理画面の常設表示は個社名ではなくグループ名を出す。
+ * グループ名。このシステムは日比建設と HFU の両社の人員を扱うため、
+ * 常設表示は個社名ではなくグループ名を出す。
  */
 export const DEDURA_GROUP = 'BOWHEAD HOLDINGS'
+
+/**
+ * 運営主体の表示。DEDURA＋ の下に添える。
+ * 「Managed by」は英語では運用受託（他社に代わって管理する）の含みが出るため使わない。
+ * 自社グループが自社のために運営しているシステムなので「Operated by」が正確。
+ * サイドバーの内寸は 176px しかないので、9px・字間ほぼ標準で1行に収める前提。
+ */
+export const DEDURA_BYLINE = `Operated by ${DEDURA_GROUP}`
