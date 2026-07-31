@@ -1,14 +1,23 @@
 import type { Metadata } from 'next'
 import './globals.css'
 
+// タブ・PWA はシステム名（DEDURA＋）、画面内の見出し・帳票は会社名（HIBI CONSTRUCTION）。
+// 使い分けの基準は components/Brand.tsx を参照。
 export const metadata: Metadata = {
-  title: 'HIBI CONSTRUCTION - 管理システム',
-  description: 'HIBI CONSTRUCTION 鳶事業部 管理システム',
+  title: 'DEDURA＋ - 出面管理システム',
+  description: 'DEDURA＋ | HIBI CONSTRUCTION 鳶事業部 出面管理システム',
   openGraph: {
-    title: 'HIBI CONSTRUCTION',
-    description: '鳶事業部 管理システム',
-    siteName: 'HIBI CONSTRUCTION',
+    title: 'DEDURA＋',
+    description: 'HIBI CONSTRUCTION 鳶事業部 出面管理システム',
+    siteName: 'DEDURA＋',
     type: 'website',
+  },
+  icons: {
+    icon: [
+      { url: '/brand/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/brand/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/brand/apple-touch-icon.png',
   },
   viewport: {
     width: 'device-width',
@@ -30,7 +39,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <link rel="apple-touch-icon" href="/logo.png" />
+        <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
       </head>
       <body className="text-base">{children}</body>
     </html>

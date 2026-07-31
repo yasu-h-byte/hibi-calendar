@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { AuthUser } from '@/types'
 import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
 import NotificationBell from './NotificationBell'
+import { DeduraWordmark } from './Brand'
 
 interface MenuItem {
   label: string
@@ -172,11 +173,14 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Header - Logo */}
+        {/* Header - 会社ロゴ（HIBI CONSTRUCTION）+ システム名（DEDURA＋） */}
         <div className="px-3 pt-3 pb-2 border-b border-white/10">
           <div className="bg-white rounded-lg p-1.5 flex items-center justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.png" alt="HIBI CONSTRUCTION" className="w-full max-w-[160px]" />
+          </div>
+          <div className="flex justify-center mt-2">
+            <DeduraWordmark size="sm" variant="white" />
           </div>
         </div>
 

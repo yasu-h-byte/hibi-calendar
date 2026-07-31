@@ -15,6 +15,45 @@
 - `hibi-amber` #F5A623 / `hibi-amberDark` #DD9314（スマホ主役ボタン）
 - ダークモード対応（管理画面のみ。スマホ画面は非対応）
 
+## ブランド（システム名 DEDURA＋）
+
+**会社名とシステム名は別物。混同しないこと。**
+
+| | 名称 | 使う場所 |
+|---|---|---|
+| システム名 | **DEDURA＋**（デヅラプラス） | ブラウザタブ・PWA・アプリアイコン・サイドバー・ログイン画面 |
+| 会社名 | **HIBI CONSTRUCTION** | 公開カレンダー・評価帳票などの印字・LINE通知文の差出人・サイドバーの会社ロゴ |
+
+- 由来: 「出面（でづら）」＋ 機能拡張の「＋」。表記は旧アプリ `dedura-kanri` に合わせて **DEDURA**（DEZURA ではない）
+- **＋ は単管クランプ**（直交する2本のパイプ＋ボルトの芯）がモチーフ。とび・土工の道具をそのまま記号にしている。**この意味づけは変えない**
+- タグライン: **現場を組む。日々を組む。**（ログイン画面に表示）
+
+### 実装
+
+- アプリ画面内のシステム名表示は **必ず `components/Brand.tsx` 経由**。
+  `<DeduraWordmark size="sm|md|lg" variant="navy|white" />` / `<DeduraMark />` / `DEDURA_TAGLINE`
+  （アプリのフォントと自動で揃うため。SVG ファイルを `<img>` で貼らない）
+- マークのサイズは文字のキャップハイト（≒ font-size × 0.85）に合わせる。等倍にすると
+  ＋だけ大きく見えてワードマークが分離する
+- 16px 未満ではボルトの芯を省略（潰れて濁るため）。`DeduraMark` が自動で処理する
+
+### アセット
+
+| ファイル | 用途 |
+|---|---|
+| `public/brand/dedura-icon.svg` | アプリアイコンの原本（アンバー地＋ネイビーのクランプ）。文字を含まないのでフォント環境に依存しない |
+| `public/brand/icon-192.png` / `icon-512.png` | PWA（`manifest.json`、`purpose: any maskable`） |
+| `public/brand/apple-touch-icon.png` | iOS ホーム画面 |
+| `public/brand/favicon-32.png` | ファビコン |
+| `public/brand/dedura-logo.svg` | 横組みワードマーク。**印刷物・社外資料用**。アプリ画面では使わない |
+| `public/logo.png` | **会社ロゴ**（HIBI CONSTRUCTION）。サイドバー上部・評価帳票で継続使用 |
+
+PNG は原本 SVG から再生成する:
+
+```bash
+cd public/brand && qlmanage -t -s 512 -o . dedura-icon.svg && mv dedura-icon.svg.png icon-512.png && sips -z 192 192 icon-512.png --out icon-192.png && sips -z 180 180 icon-512.png --out apple-touch-icon.png && sips -z 32 32 icon-512.png --out favicon-32.png
+```
+
 ## カード様式（管理画面共通）
 - `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm`
 - 共通ヘルパー: `lib/styles.ts` の `cardCls()` / `modalContentCls()`

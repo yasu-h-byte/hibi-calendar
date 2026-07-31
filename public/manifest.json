@@ -1,13 +1,13 @@
 {
-  "name": "HIBI CONSTRUCTION",
-  "short_name": "HIBI",
-  "description": "鳶事業部 管理システム",
+  "name": "DEDURA＋",
+  "short_name": "DEDURA＋",
+  "description": "HIBI CONSTRUCTION 鳶事業部 出面管理システム",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1B2A4A",
   "theme_color": "#1B2A4A",
   "icons": [
-    { "src": "/logo.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/logo.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

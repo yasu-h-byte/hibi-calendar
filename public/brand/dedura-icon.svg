@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="DEDURA＋">
+  <!-- DEDURA＋ アプリアイコン。＋は単管クランプ（直交する2本のパイプ＋ボルト芯）。
+       地色は工事アンバー（直射日光下でもホーム画面で埋もれない）。
+       文字を含まないため、フォント環境に依存せず PNG 化できる。 -->
+  <rect width="512" height="512" fill="#F5A623"/>
+  <rect x="96" y="218" width="320" height="76" rx="18" fill="#1B2A4A"/>
+  <rect x="218" y="96" width="76" height="320" rx="18" fill="#16223C"/>
+  <circle cx="256" cy="256" r="42" fill="#F5A623"/>
+  <circle cx="256" cy="256" r="16" fill="#1B2A4A"/>
+</svg>

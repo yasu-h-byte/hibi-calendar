@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 96" width="460" height="96" role="img" aria-label="DEDURA＋">
+  <!-- DEDURA＋ 横組みワードマーク（明るい地色用）。
+       印刷物・マニュアル・社外資料向け。アプリ画面内では components/Brand.tsx を使うこと
+       （アプリのフォントと自動的に揃うため）。 -->
+  <text x="0" y="70" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="66" font-weight="700" letter-spacing="2" fill="#1B2A4A">DEDURA</text>
+  <g transform="translate(330 26)">
+    <rect x="0" y="16" width="44" height="12" rx="3" fill="#F5A623"/>
+    <rect x="16" y="0" width="12" height="44" rx="3" fill="#DD9314"/>
+    <circle cx="22" cy="22" r="6.4" fill="#1B2A4A"/>
+    <circle cx="22" cy="22" r="2.3" fill="#F5A623"/>
+  </g>
+</svg>

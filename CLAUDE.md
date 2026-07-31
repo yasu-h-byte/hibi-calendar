@@ -1,4 +1,9 @@
-# HIBI CONSTRUCTION 就業カレンダーシステム - 開発ルール
+# DEDURA＋（デヅラプラス） - 開発ルール
+
+HIBI CONSTRUCTION 鳶事業部の出面管理システム。**システム名は DEDURA＋、会社名は
+HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表示はシステム名、
+公開カレンダー・帳票・スタッフ向け通知の差出人は会社名を使う。表示は必ず
+`components/Brand.tsx` 経由。詳細は [docs/ui-design.md](docs/ui-design.md) の「ブランド」節。
 
 各仕様の詳細は `docs/` ディレクトリを参照。仕様変更時は該当ドキュメントを更新すること。
 
