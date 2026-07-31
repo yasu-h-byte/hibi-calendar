@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AuthUser } from '@/types'
-import { DeduraWordmark, DEDURA_TAGLINE } from '@/components/Brand'
+import { DeduraWordmark, DEDURA_TAGLINE, DEDURA_GROUP } from '@/components/Brand'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -74,7 +74,7 @@ export default function LoginPage() {
             <DeduraWordmark size="lg" />
           </div>
           <p className="text-xs text-gray-400 mt-1.5 tracking-wide">{DEDURA_TAGLINE}</p>
-          <p className="text-sm text-gray-500 mt-3">HIBI CONSTRUCTION 鳶事業部</p>
+          <p className="text-xs text-gray-500 tracking-widest mt-3">{DEDURA_GROUP}</p>
         </div>
 
         {step === 'password' ? (
