@@ -51,7 +51,8 @@ const DOCS: (DocItem & { category: string })[] = [
 
   // ── スタッフ向け（全員が内容を把握しておく／スタッフ本人はスマホから） ──
   { category: 'staff', title: 'スタッフ向けマニュアル', desc: '出勤登録・欠勤届（未来日も届出可）・有給申請・帰国申請・残数確認の使い方（日本語＋ベトナム語）', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-07-30' },
-  { category: 'staff', title: '変形労働時間制と残業のルール', desc: '変形労働時間制のしくみ・残業の3段階判定・給料の4層構造・計算例・FAQ（スタッフへの制度説明用）', url: '/manual-henkei-vi.html', icon: '⏰', badge: '日本語+ベトナム語', updated: '2026-07-27' },
+  { category: 'staff', title: '変形労働時間制と残業のルール', desc: '変形労働時間制のしくみ・残業の3段階判定・給料の4層構造・計算例・FAQ（スタッフへの制度説明用）', url: '/manual-henkei-vi.html', icon: '⏰', badge: '日本語+ベトナム語', updated: '2026-08-01' },
+  { category: 'staff', title: '新しい給与制度の説明（スライド）', desc: '旧制度との比較・稼働日数と残業のパターン別金額・割増の3つの判定・休業手当の変更点（対面説明用スライド／スマホ可）', url: '/manual-kyuyo-hikaku-vi.html', icon: '📊', badge: '日本語+ベトナム語', updated: '2026-08-01' },
 ]
 
 const CATEGORY_LABEL: Record<string, string> = {

@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>給与制度の説明 / Giải thích chế độ lương</title>
+<style>
+  :root{
+    --charcoal:#20262F; --amber:#F5A623; --amber-dk:#DD9314;
+    --vi:#2563EB; --line:#E3E6EC; --green:#15803D; --red:#C2413B;
+    --gray:#6B7280;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;
+    background:#111418; color:var(--charcoal);
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; overflow:hidden;
+  }
+  #deck{width:100vw; height:100vh; position:relative;}
+  .slide{
+    position:absolute; inset:0; display:none;
+    flex-direction:column; justify-content:center;
+    background:#fff; padding:4.5vh 5vw;
+  }
+  .slide.on{display:flex;}
+  h1{font-size:clamp(28px,4.6vw,60px); line-height:1.25; letter-spacing:-.01em;}
+  h2{
+    font-size:clamp(20px,2.8vw,38px); color:#fff; background:var(--charcoal);
+    padding:.45em .8em; border-radius:12px; display:inline-block;
+    align-self:flex-start; margin-bottom:.7em; line-height:1.3;
+  }
+  .vi{color:var(--vi); font-weight:500;}
+  h1 .vi, h2 .vi{display:block; font-size:.56em; margin-top:.35em; opacity:.95;}
+  h2 .vi{color:#A8C7FF;}
+  .lead{font-size:clamp(17px,2vw,27px); line-height:1.6; margin-bottom:.6em;}
+  .lead .vi{font-size:.82em;}
+  table{border-collapse:collapse; width:100%; font-size:clamp(14px,1.55vw,23px);}
+  th,td{border:1px solid #D5DAE2; padding:.55em .7em; text-align:center;}
+  th{background:var(--charcoal); color:#fff; font-weight:600;}
+  th .vi{color:#A8C7FF; font-size:.76em; display:block; font-weight:400;}
+  td .vi{display:block; font-size:.78em; font-weight:400; line-height:1.35;}
+  td.l,th.l{text-align:left;}
+  .num{font-variant-numeric:tabular-nums; font-weight:700;}
+  .up{color:var(--green);} .dn{color:var(--red);}
+  .box{border-radius:14px; padding:1em 1.2em; margin:.5em 0; font-size:clamp(15px,1.7vw,25px); line-height:1.55;}
+  .point{background:#FFF6E3; border:2px solid #F2D9A0;}
+  .good{background:#EAF7EE; border:2px solid #9FDCB2;}
+  .warn{background:#FDECEC; border:2px solid #F4A9A9;}
+  .box b{display:block; margin-bottom:.15em;}
+  .box .vi{font-size:.82em; display:block; margin-top:.2em;}
+  .quad{display:grid; grid-template-columns:auto 1fr 1fr; gap:.45vw; font-size:clamp(12px,1.32vw,20px);}
+  .quad>div{padding:.55em .5em; border-radius:10px; text-align:center;}
+  .qh{background:var(--charcoal); color:#fff; display:flex; flex-direction:column; justify-content:center;}
+  .qh .vi{color:#A8C7FF; font-size:.74em;}
+  .qc{background:#FAFBFC; border:1px solid var(--line);}
+  .qc .big{font-size:1.55em; font-weight:800; color:var(--charcoal); display:block; margin:.05em 0 .15em;}
+  .qc small{color:var(--gray); font-size:.76em; line-height:1.4; display:block;}
+  .qc .gain{color:var(--green); font-weight:800;}
+  .arrow{font-size:clamp(20px,3vw,46px); color:var(--amber-dk); text-align:center; font-weight:800; margin:.1em 0;}
+  .big-num{font-size:clamp(34px,6vw,86px); font-weight:800; letter-spacing:-.02em; line-height:1.05;}
+  .center{align-items:center; text-align:center; justify-content:center;}
+  .center h1{margin-bottom:.4em;}
+  .sub{font-size:clamp(15px,1.8vw,26px); color:var(--gray); line-height:1.6;}
+  .note{font-size:clamp(12px,1.25vw,18px); color:var(--gray); margin-top:.8em; line-height:1.5;}
+  .cols{display:grid; grid-template-columns:1fr 1fr; gap:1.4vw; align-items:stretch;}
+  .cols3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.1vw; align-items:stretch;}
+  .rule{border:3px solid var(--amber); border-radius:16px; padding:.9em .7em; background:#FFFCF5; text-align:center;}
+  .rule .no{background:var(--amber); color:var(--charcoal); border-radius:50%; width:1.9em; height:1.9em;
+            display:inline-flex; align-items:center; justify-content:center; font-weight:800;
+            font-size:clamp(15px,1.7vw,24px); margin-bottom:.3em;}
+  .rule .unit{font-size:clamp(15px,1.75vw,25px); font-weight:700; display:block;}
+  .rule .hr{font-size:clamp(26px,4.2vw,58px); font-weight:800; color:var(--amber-dk); line-height:1.1; display:block; margin:.1em 0;}
+  .rule .cap{font-size:clamp(11px,1.2vw,17px); color:var(--gray); display:block; line-height:1.4;}
+  .rule .cap .vi{display:block;}
+  .rule .unit .vi{display:block; font-size:.72em; font-weight:500;}
+  .card{border:2px solid var(--line); border-radius:14px; padding:1em 1.1em; background:#FAFBFC;}
+  .card h3{font-size:clamp(16px,1.9vw,28px); margin-bottom:.45em; line-height:1.3;}
+  .card h3 .vi{display:block; font-size:.72em; font-weight:500;}
+  .card.old{border-color:#F4A9A9; background:#FDF3F3;}
+  .card.new{border-color:#9FDCB2; background:#F2FAF5;}
+  .person{font-size:clamp(14px,1.6vw,23px); line-height:1.75; margin-top:.3em;}
+  .person .num{font-size:1.15em;}
+  .verdict{margin-top:.6em; padding-top:.5em; border-top:2px dashed #CBD2DC; font-weight:700; font-size:clamp(14px,1.6vw,23px);}
+  #bar{position:fixed; bottom:0; left:0; right:0; height:5px; background:#E3E6EC; z-index:10;}
+  #fill{height:100%; background:var(--amber); transition:width .25s;}
+  #pg{position:fixed; bottom:14px; right:20px; font-size:13px; color:var(--gray); z-index:10;
+      background:rgba(255,255,255,.9); padding:2px 10px; border-radius:20px;}
+  .hint{position:fixed; bottom:14px; left:20px; font-size:12px; color:#9AA3AF; z-index:10;
+      background:rgba(255,255,255,.95); padding:2px 10px; border-radius:20px;}
+  .hint .sp{display:none;}
+  ul{margin-left:1.1em; font-size:clamp(15px,1.75vw,25px); line-height:1.75;}
+  li{margin-bottom:.35em;}
+  li .vi{font-size:.8em; display:block;}
+  /* スマホ（縦画面）: 1画面固定をやめ、スライドごとに縦スクロールできるようにする。
+     これがないと内容の多いスライドで下部が切れて読めない。 */
+  @media (max-width:640px){
+    body{overflow:auto; display:block; min-height:100dvh;}
+    #deck{width:100%; height:auto; min-height:100dvh;}
+    .slide{position:static; display:none; min-height:auto;
+           padding:18px 16px 84px; justify-content:flex-start;}
+    .slide.on{display:flex;}
+    h2{font-size:21px; margin-bottom:.6em;}
+    h1{font-size:26px;}
+    .cols,.cols3{grid-template-columns:1fr; gap:10px;}
+    .quad{grid-template-columns:1fr; gap:8px; font-size:15px;}
+    .qh{padding:.5em .7em;}
+    .quad>div{text-align:left;}
+    .qc{padding:.7em .8em;}
+    .qc .big{font-size:1.5em;}
+    .rule .hr{font-size:34px;}
+    .big-num{font-size:40px;}
+    table{font-size:14px;}
+    th,td{padding:.45em .4em;}
+    .box{font-size:16px; padding:.8em .9em;}
+    .lead{font-size:17px;}
+    ul{font-size:16px;}
+    .note{font-size:13px;}
+    /* 下部の固定バーが本文に重ならないよう、余白は .slide の padding-bottom で確保 */
+    #pg,.hint{bottom:10px;}
+    .hint{font-size:11px; left:12px;}
+    .hint .pc{display:none;}
+    .hint .sp{display:inline;}
+    #pg{right:12px;}
+  }
+  @media print{
+    body{background:#fff; display:block; overflow:visible;}
+    #deck{width:auto; height:auto;}
+    .slide{display:flex !important; position:relative; inset:auto;
+           page-break-after:always; height:100vh; border:none;}
+    #bar,#pg,.hint{display:none;}
+    @page{size:A4 landscape; margin:0;}
+  }
+</style>
+</head>
+<body>
+<div id="deck">
+
+<!-- 1. 給与制度の説明 -->
+<section class="slide on center">
+  <h1>給与制度の説明<span class="vi">Giải thích chế độ lương</span></h1>
+  <p class="sub">
+    2026年5月からの新しい計算方法について<br>
+    <span class="vi">Về cách tính lương mới từ tháng 5 năm 2026</span>
+  </p>
+</section>
+
+<!-- 2. 今日話すこと -->
+<section class="slide">
+  <h2>今日話すこと<span class="vi">Nội dung hôm nay</span></h2>
+  <div class="box point">
+    <b>1. なぜ制度を変えたのか</b>
+    <span class="vi">1. Tại sao phải thay đổi chế độ</span>
+  </div>
+  <div class="box good">
+    <b>2. 働いた日の給料は減っていません</b>
+    <span class="vi">2. Lương cho những ngày đã làm việc KHÔNG bị giảm</span>
+  </div>
+  <div class="box warn">
+    <b>3. 変わったのは「休んだ日」の扱いです</b>
+    <span class="vi">3. Điều thay đổi là cách xử lý "ngày nghỉ"</span>
+  </div>
+  <p class="note">この3つだけです。すべて数字で見ていきます。<br>
+  <span class="vi">Chỉ có 3 điểm này. Tất cả sẽ được xem bằng con số cụ thể.</span></p>
+</section>
+
+<!-- 3. ① なぜ制度を変えたのか -->
+<section class="slide">
+  <h2>① なぜ制度を変えたのか<span class="vi">① Tại sao phải thay đổi chế độ</span></h2>
+  <p class="lead">私たちの仕事では、<b>休みの日を自分たちで決めることができません。</b>
+    <span class="vi">Trong công việc của chúng ta, chúng ta KHÔNG thể tự quyết định ngày nghỉ.</span></p>
+  <div class="box point">
+    <b>いつ休みになるかを決めるのは、元請け会社です</b>
+    <span class="vi">Công ty tổng thầu là bên quyết định ngày nghỉ.</span>
+  </div>
+  <ul style="margin-top:.5em">
+    <li>土曜日が休みになるか → <b>現場によって違う</b>
+      <span class="vi">Thứ Bảy có nghỉ hay không → tùy theo công trường</span></li>
+    <li>祝日が休みになるか → <b>現場によって違う</b>
+      <span class="vi">Ngày lễ có nghỉ hay không → tùy theo công trường</span></li>
+  </ul>
+</section>
+
+<!-- 4. 旧制度では、ここに無理がありました -->
+<section class="slide">
+  <h2>旧制度では、ここに無理がありました<span class="vi">Chế độ cũ đã không theo kịp điều này</span></h2>
+  <div class="cols">
+    <div class="card old">
+      <h3>会社が決めていたこと<span class="vi">Công ty quy định</span></h3>
+      <p class="person">休みは<b>日曜だけ</b><br>
+      <span class="vi">Chỉ nghỉ Chủ nhật</span><br>
+      <small>全現場おなじ / Áp dụng chung mọi công trường</small></p>
+    </div>
+    <div class="card old">
+      <h3>実際の現場<span class="vi">Thực tế công trường</span></h3>
+      <p class="person">現場ごとに<b>バラバラ</b><br>
+      <span class="vi">Mỗi công trường một khác</span><br>
+      <small>土曜休み・祝日休みの現場もある / Có công trường nghỉ Thứ Bảy, nghỉ lễ</small></p>
+    </div>
+  </div>
+  <div class="box warn" style="margin-top:.8em">
+    <b>この「ズレ」の分が、すべて「会社都合の休み」として処理されていました</b>
+    <span class="vi">Toàn bộ phần "lệch" này bị xử lý như là "nghỉ do công ty".</span>
+  </div>
+</section>
+
+<!-- 5. 新制度 ＝ 1ヶ月単位の変形労働時間制 -->
+<section class="slide">
+  <h2>新制度 ＝ 1ヶ月単位の変形労働時間制<span class="vi">Chế độ mới = giờ làm linh hoạt theo tháng</span></h2>
+  <p class="lead"><b>前の月の後半には、翌月の休みがカレンダーで決まります。</b>
+    <span class="vi">Vào nửa cuối tháng trước, ngày nghỉ của tháng sau đã được xác định trên lịch làm việc.</span></p>
+  <div class="box good">
+    <b>その現場のカレンダーを、そのまま給与計算に使います</b>
+    <span class="vi">Lịch của chính công trường đó được dùng trực tiếp để tính lương.</span>
+  </div>
+  <div class="arrow">職長が作成 → 事業責任者が承認 → みなさんが署名</div>
+  <p class="sub" style="text-align:center">
+    <span class="vi">Tổ trưởng lập → Giám đốc phê duyệt → Các bạn ký xác nhận</span></p>
+  <p class="note">だから「あとから休みになった」ではなく、<b>最初から休みと決まっている</b>状態を作れます。<br>
+  <span class="vi">Nhờ vậy, ngày nghỉ được xác định TỪ ĐẦU, chứ không phải "bị cho nghỉ sau đó".</span></p>
+</section>
+
+<!-- 6. これから休みは増えていきます -->
+<section class="slide">
+  <h2>これから休みは増えていきます<span class="vi">Sắp tới, ngày nghỉ sẽ tăng lên</span></h2>
+  <p class="lead">建設業でも<b>働き方改革</b>が進んでいます。
+    <span class="vi">Ngành xây dựng cũng đang thực hiện "cải cách phương thức làm việc".</span></p>
+  <ul>
+    <li>土曜日が休みになる現場が<b>増えていく</b>
+      <span class="vi">Số công trường nghỉ Thứ Bảy sẽ tăng lên</span></li>
+    <li>祝日も休みになる方向
+      <span class="vi">Ngày lễ cũng có xu hướng được nghỉ</span></li>
+    <li>これは<b>国の方針</b>で、避けられない変化です
+      <span class="vi">Đây là chính sách của nhà nước, là thay đổi không thể tránh khỏi</span></li>
+  </ul>
+  <div class="box good" style="margin-top:.6em">
+    <b>休みが増えても対応できるように、今回の制度を設計しました</b>
+    <span class="vi">Chế độ lần này được thiết kế để thích ứng được kể cả khi ngày nghỉ tăng lên.</span>
+  </div>
+</section>
+
+<!-- 7. ② 1日の時間が変わりました -->
+<section class="slide">
+  <h2>② 1日の時間が変わりました<span class="vi">② Giờ làm quy định 1 ngày đã thay đổi</span></h2>
+  <div class="cols">
+    <div class="card old">
+      <h3>旧制度<span class="vi">Chế độ cũ</span></h3>
+      <div class="big-num">6時間40分</div>
+      <p class="sub">1日の所定<br><span class="vi">Giờ quy định / ngày</span></p>
+    </div>
+    <div class="card new">
+      <h3>新制度<span class="vi">Chế độ mới</span></h3>
+      <div class="big-num">7時間</div>
+      <p class="sub">1日の所定<br><span class="vi">Giờ quy định / ngày</span></p>
+    </div>
+  </div>
+  <div class="box good" style="margin-top:1em">
+    <b>1日あたり 20分 増えました → その分、基本給が増えます</b>
+    <span class="vi">Mỗi ngày tăng 20 phút → Lương cơ bản tăng tương ứng</span>
+  </div>
+</section>
+
+<!-- 8. 基本給の増え方 -->
+<section class="slide">
+  <h2>基本給の増え方<span class="vi">Lương cơ bản tăng bao nhiêu</span></h2>
+  <p class="lead">増える金額 ＝ <b>時給 × 20分 × 働いた日数</b><br>
+    ここから<b>2人の例</b>で見ていきます。
+    <span class="vi">Số tiền tăng = Lương giờ × 20 phút × Số ngày làm việc.
+    Từ đây, chúng ta xem qua ví dụ của 2 người.</span></p>
+  <table>
+    <tr><th class="l">だれ<span class="vi">Ai</span></th>
+        <th>1日あたり<span class="vi">Mỗi ngày</span></th>
+        <th>22日働いた月<span class="vi">Tháng làm 22 ngày</span></th></tr>
+    <tr><td class="l"><b>Aさん</b>／技能実習・時給¥1,500<span class="vi">Bạn A / Thực tập sinh</span></td>
+        <td class="num up">+¥500</td><td class="num up">+¥11,000</td></tr>
+    <tr><td class="l"><b>Bさん</b>／特定技能・時給¥2,200<span class="vi">Bạn B / Kỹ năng đặc định</span></td>
+        <td class="num up">+¥733</td><td class="num up">+¥16,133</td></tr>
+  </table>
+  <p class="note">20分＝1時間の3分の1。つまり「自分の時給の3分の1」が1日あたり増えた分です。<br>
+  <span class="vi">20 phút = 1/3 giờ. Tức là mỗi ngày tăng thêm 1/3 lương giờ của bạn.</span></p>
+</section>
+
+<!-- 9. 残業の割増（+0.25）はこう決まります -->
+<section class="slide">
+  <h2>残業の割増（+0.25）はこう決まります<span class="vi">Phụ cấp tăng thêm (+0,25) được xác định thế nào</span></h2>
+  <div class="box good" style="margin:0 0 .5em">
+    <b>まず、働いた時間は全部 ×1.0 で払います。これは必ずです。</b>
+    <span class="vi">Trước hết, TOÀN BỘ giờ đã làm đều được trả ×1,0. Điều này là chắc chắn.</span>
+  </div>
+  <p class="lead" style="margin:.2em 0 .5em">そのうえで、<b>3つのものさし</b>のどれかを超えた時間にだけ <b>+0.25</b> を足します。
+    この超えた時間のことを、給与明細では<b>「法定外」</b>と書きます。
+    <span class="vi">Sau đó, chỉ phần vượt quá 1 trong 3 mốc dưới đây mới được cộng thêm +0,25.
+    Phần vượt này trên phiếu lương được ghi là "法定外" (ngoài định mức luật).</span></p>
+  <div class="cols3">
+    <div class="rule">
+      <span class="no">1</span>
+      <span class="unit">1日<span class="vi">Mỗi ngày</span></span>
+      <span class="hr">8時間</span>
+      <span class="cap">を超えた分<span class="vi">phần vượt 8 giờ</span></span>
+    </div>
+    <div class="rule">
+      <span class="no">2</span>
+      <span class="unit">1週間<span class="vi">Mỗi tuần</span></span>
+      <span class="hr">40時間</span>
+      <span class="cap">を超えた分（週6日の現場は42時間）<span class="vi">phần vượt 40 giờ (công trường 6 ngày/tuần: 42 giờ)</span></span>
+    </div>
+    <div class="rule">
+      <span class="no">3</span>
+      <span class="unit">1ヶ月<span class="vi">Mỗi tháng</span></span>
+      <span class="hr">約177時間</span>
+      <span class="cap">を超えた分（31日の月）<span class="vi">phần vượt ~177 giờ (tháng 31 ngày)</span></span>
+    </div>
+  </div>
+  <div class="box point" style="margin-top:.6em">
+    <b>同じ時間を2回は数えません。どれか1つで数えたら、それで終わりです。</b>
+    <span class="vi">Không tính trùng cùng một giờ hai lần. Đã tính ở 1 mốc thì thôi.</span>
+  </div>
+  <p class="note">1ヶ月の上限は月の日数で変わります: 28日=160.0h / 29日=165.7h / 30日=171.4h / 31日=177.1h<br>
+  <span class="vi">Mốc tháng thay đổi theo số ngày: 28 ngày=160,0h / 29=165,7h / 30=171,4h / 31=177,1h</span></p>
+</section>
+
+<!-- 12. 残業のある現場は、内訳が変わります -->
+<section class="slide">
+  <h2>残業のある現場は、中身が変わります<span class="vi">Công trường có tăng ca: cơ cấu thay đổi</span></h2>
+  <p class="lead"><b>Aさん</b>（技能実習・時給¥1,500）が、毎日1時間残業する現場で22日働いた月
+    <span class="vi">Bạn A (Thực tập sinh, ¥1.500/giờ) làm 22 ngày ở công trường tăng ca 1h mỗi ngày</span></p>
+  <table>
+    <tr><th class="l">項目<span class="vi">Mục</span></th>
+        <th>旧制度<span class="vi">Chế độ cũ</span></th>
+        <th>新制度<span class="vi">Chế độ mới</span></th>
+        <th>差<span class="vi">Chênh lệch</span></th></tr>
+    <tr><td class="l">基本の部分<span class="vi">Phần cơ bản</span></td>
+        <td class="num">¥220,000</td><td class="num">¥231,000</td><td class="num up">+¥11,000</td></tr>
+    <tr><td class="l">残業手当<span class="vi">Phụ cấp tăng ca</span></td>
+        <td class="num">¥41,250</td><td class="num">¥33,000</td><td class="num dn">−¥8,250</td></tr>
+    <tr style="background:#FFF6E3"><td class="l"><b>合計</b><span class="vi">Tổng cộng</span></td>
+        <td class="num">¥261,250</td><td class="num">¥264,000</td><td class="num up">+¥2,750</td></tr>
+  </table>
+  <div class="box point" style="margin-top:.8em">
+    <b>旧制度は、法律で決まっている以上に手厚く払っていました。新制度は法律どおりの計算になるので残業手当は減りますが、
+    基本給がそれ以上に増えるため、合計は減りません。</b>
+    <span class="vi">Chế độ cũ đã trả CAO HƠN mức luật quy định. Chế độ mới tính đúng theo luật nên phụ cấp tăng ca giảm,
+    nhưng lương cơ bản tăng nhiều hơn nên TỔNG không giảm.</span>
+  </div>
+  <p class="note">残業が2時間に増えても、減る額は同じ <b>¥8,250</b> です（2時間目からは1日8時間超で割増が付くため）。<br>
+  <span class="vi">Dù tăng ca lên 2 tiếng, số tiền giảm vẫn là 8.250 yên (vì từ giờ thứ 2 đã quá 8 tiếng/ngày nên được cộng phụ cấp).</span></p>
+</section>
+
+<!-- 13. 残業すると、給料は増えます -->
+<section class="slide">
+  <h2>残業すると、給料は増えます<span class="vi">Làm thêm giờ thì lương TĂNG</span></h2>
+  <div class="box warn" style="margin:0 0 .5em">
+    <b>「割増が減るから、残業しても損」— これは誤解です</b>
+    <span class="vi">"Phụ cấp giảm nên làm thêm cũng thiệt" — Đây là HIỂU LẦM.</span>
+  </div>
+  <table>
+    <tr><th class="l">Aさんの1ヶ月（22日稼働）<span class="vi">1 tháng của Bạn A (22 ngày)</span></th>
+        <th>もらえる金額<span class="vi">Số tiền nhận</span></th>
+        <th>残業なしとの差<span class="vi">So với không tăng ca</span></th></tr>
+    <tr><td class="l">残業なし<span class="vi">Không tăng ca</span></td>
+        <td class="num">¥231,000</td><td>—</td></tr>
+    <tr><td class="l">毎日1時間<span class="vi">Tăng ca 1h/ngày</span></td>
+        <td class="num">¥264,000</td><td class="num up">+¥33,000</td></tr>
+    <tr style="background:#EAF7EE"><td class="l">毎日2時間<span class="vi">Tăng ca 2h/ngày</span></td>
+        <td class="num">¥305,250</td><td class="num up">+¥74,250</td></tr>
+  </table>
+  <div class="cols" style="margin-top:.5em">
+    <div class="card">
+      <h3 style="font-size:clamp(14px,1.6vw,22px)">残業 1時間目<span class="vi">Giờ tăng ca thứ 1</span></h3>
+      <p class="person"><span class="num" style="font-size:1.5em">¥1,500</span>／時間</p>
+    </div>
+    <div class="card new">
+      <h3 style="font-size:clamp(14px,1.6vw,22px)">残業 2時間目から<span class="vi">Từ giờ tăng ca thứ 2</span></h3>
+      <p class="person"><span class="num" style="font-size:1.5em">¥1,875</span>／時間<br>
+      <small style="color:var(--green)"><b>こちらのほうが高い</b> / Giờ này CAO HƠN</small></p>
+    </div>
+  </div>
+  <div class="box good" style="margin-top:.5em">
+    <b>残業を1時間すれば、必ず最低でも ¥1,500 増えます。減ることはありません。</b>
+    <span class="vi">Làm thêm 1 giờ thì chắc chắn tăng ít nhất 1.500 yên. Không bao giờ bị giảm.</span>
+  </div>
+  <p class="note">週6日（25日稼働）の現場では、1時間目から ¥1,875 になります（週42時間を超えるため）。<br>
+  <span class="vi">Ở công trường 6 ngày/tuần (25 ngày), ngay từ giờ đầu đã là 1.875 yên (vì vượt 42 giờ/tuần).</span></p>
+</section>
+
+<!-- 10. 22日稼働の現場（週5日） -->
+<section class="slide">
+  <h2>22日稼働の現場（週5日）<span class="vi">Công trường 22 ngày/tháng (tuần 5 ngày)</span></h2>
+  <p class="lead" style="margin-bottom:.4em">大きい数字が<b>新制度でもらえる金額</b>。その下が旧制度との比較です。
+    <span class="vi">Số lớn là SỐ TIỀN NHẬN theo chế độ mới. Bên dưới là so sánh với chế độ cũ.</span></p>
+  <div class="quad">
+    <div class="qh" style="background:#fff"></div>
+    <div class="qh">Aさん<span class="vi">Bạn A / Thực tập sinh</span><span class="vi">技能実習・¥1,500</span></div>
+    <div class="qh">Bさん<span class="vi">Bạn B / Kỹ năng đặc định</span><span class="vi">特定技能・¥2,200</span></div>
+
+    <div class="qh">残業なし<span class="vi">Không tăng ca</span></div>
+    <div class="qc"><span class="big">¥231,000</span><small>旧制度 ¥220,000 → <b class="gain">+¥11,000</b></small></div>
+    <div class="qc"><span class="big">¥338,800</span><small>旧制度 ¥322,667 → <b class="gain">+¥16,133</b></small></div>
+
+    <div class="qh">毎日1時間<span class="vi">Tăng ca 1h/ngày</span></div>
+    <div class="qc"><span class="big">¥264,000</span><small>旧制度 ¥261,250 → <b class="gain">+¥2,750</b><br>うち割増 ¥0（法定外 0h）</small></div>
+    <div class="qc"><span class="big">¥387,200</span><small>旧制度 ¥383,167 → <b class="gain">+¥4,033</b><br>うち割増 ¥0（法定外 0h）</small></div>
+
+    <div class="qh">毎日2時間<span class="vi">Tăng ca 2h/ngày</span></div>
+    <div class="qc"><span class="big">¥305,250</span><small>旧制度 ¥302,500 → <b class="gain">+¥2,750</b><br>うち割増 <b>¥8,250</b>（法定外 22h）</small></div>
+    <div class="qc"><span class="big">¥447,700</span><small>旧制度 ¥443,667 → <b class="gain">+¥4,033</b><br>うち割増 <b>¥12,100</b>（法定外 22h）</small></div>
+  </div>
+  <p class="note"><b>差が1時間でも2時間でも同じ（Aさん +¥2,750）なのは、旧制度も残業を増やせば同じだけ上がるからです。</b>
+  内訳は前ページのとおり「基本給 +¥11,000 ／ 残業手当 −¥8,250」で、目減りするのは毎日の1時間目だけ。2時間に増えても目減りは増えません。<br>
+  <span class="vi">Mức chênh giống nhau dù 1 hay 2 tiếng, vì chế độ cũ cũng tăng theo. Cơ cấu: lương cơ bản +11.000 / phụ cấp tăng ca −8.250.</span></p>
+</section>
+
+<!-- 11. 25日稼働の現場（週6日） -->
+<section class="slide">
+  <h2>25日稼働の現場（週6日）<span class="vi">Công trường 25 ngày/tháng (tuần 6 ngày)</span></h2>
+  <p class="lead" style="margin-bottom:.4em">同じ見方です。大きい数字が<b>新制度でもらえる金額</b>。
+    <span class="vi">Cách đọc giống nhau. Số lớn là SỐ TIỀN NHẬN theo chế độ mới.</span></p>
+  <div class="quad">
+    <div class="qh" style="background:#fff"></div>
+    <div class="qh">Aさん<span class="vi">Bạn A / Thực tập sinh</span><span class="vi">技能実習・¥1,500</span></div>
+    <div class="qh">Bさん<span class="vi">Bạn B / Kỹ năng đặc định</span><span class="vi">特定技能・¥2,200</span></div>
+
+    <div class="qh">残業なし<span class="vi">Không tăng ca</span></div>
+    <div class="qc"><span class="big">¥262,500</span><small>旧制度 ¥250,000 → <b class="gain">+¥12,500</b></small></div>
+    <div class="qc"><span class="big">¥385,000</span><small>旧制度 ¥366,667 → <b class="gain">+¥18,333</b></small></div>
+
+    <div class="qh">毎日1時間<span class="vi">Tăng ca 1h/ngày</span></div>
+    <div class="qc"><span class="big">¥309,000</span><small>旧制度 ¥296,875 → <b class="gain">+¥12,125</b><br>うち割増 <b>¥9,000</b>（法定外 24h）</small></div>
+    <div class="qc"><span class="big">¥453,200</span><small>旧制度 ¥435,417 → <b class="gain">+¥17,783</b><br>うち割増 <b>¥13,200</b>（法定外 24h）</small></div>
+
+    <div class="qh">毎日2時間<span class="vi">Tăng ca 2h/ngày</span></div>
+    <div class="qc"><span class="big">¥355,875</span><small>旧制度 ¥343,750 → <b class="gain">+¥12,125</b><br>うち割増 <b>¥18,375</b>（法定外 49h）</small></div>
+    <div class="qc"><span class="big">¥521,950</span><small>旧制度 ¥504,167 → <b class="gain">+¥17,783</b><br>うち割増 <b>¥26,950</b>（法定外 49h）</small></div>
+  </div>
+  <p class="note"><b>週6日の現場は週42時間を超えるので、1時間目から割増が付きます。</b>
+  だから残業手当は旧制度とほとんど変わりません（Aさん −¥375／Bさん −¥550 のみ）。<br>
+  <span class="vi">Công trường 6 ngày/tuần vượt 42 giờ/tuần, nên có phụ cấp ngay từ giờ đầu.
+  Vì vậy phụ cấp tăng ca gần như không đổi so với chế độ cũ (chỉ −375 / −550).</span></p>
+</section>
+
+<!-- 14. 働いた日の給料は -->
+<section class="slide center">
+  <h1 style="font-size:clamp(24px,3.8vw,52px)">働いた日の給料は<br>1円も減っていません
+    <span class="vi">Lương cho ngày đã làm việc<br>KHÔNG giảm dù chỉ 1 yên</span></h1>
+  <p class="sub" style="margin-top:.8em">12のパターン全部で、合計はプラスです<br>
+  <span class="vi">Cả 12 trường hợp, tổng cộng đều tăng</span></p>
+</section>
+
+<!-- 15. ③ 変わったのは「休んだ日」です -->
+<section class="slide">
+  <h2>③ 変わったのは「休んだ日」です<span class="vi">③ Điều thay đổi: "ngày nghỉ"</span></h2>
+  <div class="cols">
+    <div class="card old">
+      <h3>旧制度<span class="vi">Chế độ cũ</span></h3>
+      <p class="person">現場の都合で休みになった日にも<br>
+      <b>休業手当 60%</b> が出ていた<br>
+      <span class="vi">Ngày nghỉ do tình hình công trường<br>vẫn được trả phụ cấp nghỉ việc 60%</span></p>
+    </div>
+    <div class="card new">
+      <h3>新制度<span class="vi">Chế độ mới</span></h3>
+      <p class="person">前の月にカレンダーで休みが決まる<br>
+      → <b>「現場都合の休み」がほとんど起きない</b><br>
+      <span class="vi">Ngày nghỉ được xác định trước trong lịch<br>→ hầu như không còn "nghỉ do công trường"</span></p>
+    </div>
+  </div>
+  <div class="box warn" style="margin-top:.8em">
+    <b>その60%の分は、なくなります。ここは正直に減る部分です。</b>
+    <span class="vi">Phần 60% đó sẽ không còn. Đây là phần thực sự bị giảm — chúng tôi nói thẳng.</span>
+  </div>
+  <p class="note">休みが「あとから決まる」のではなく「最初から決まっている」状態になったためです。<br>
+  <b>急に休みになった場合は別です（あとで説明します）。</b><br>
+  <span class="vi">Vì ngày nghỉ không còn "được quyết định sau" mà "đã xác định từ đầu".
+  Trường hợp bị cho nghỉ đột ngột thì khác — sẽ giải thích sau.</span></p>
+</section>
+
+<!-- 16. 旧制度で起きていた不公平 -->
+<section class="slide">
+  <h2>旧制度で起きていた不公平<span class="vi">Sự bất công trong chế độ cũ</span></h2>
+  <p class="lead">土曜が休みの現場では、その土曜が「会社都合の休み」になり、<b>働かなくてもお金が出ていました。</b>
+    <span class="vi">Ở công trường nghỉ Thứ Bảy, ngày đó bị tính là "nghỉ do công ty",
+    nên vẫn được trả tiền dù không làm việc.</span></p>
+  <div class="box warn">
+    <b>土曜が休みの現場に当たった人ほど、働いた1日あたりの金額が多かった</b>
+    <span class="vi">Ai được phân vào công trường nghỉ Thứ Bảy thì thu nhập bình quân 1 ngày làm việc cao hơn.</span>
+  </div>
+  <div class="box point">
+    <b>でも、どの現場に行くかは自分では選べません</b>
+    <span class="vi">Nhưng bạn không thể tự chọn mình sẽ đi công trường nào.</span>
+  </div>
+  <p class="note">同じ会社で、同じように働いているのに、配属先だけで差がついていました。<br>
+  <span class="vi">Cùng công ty, cùng làm việc như nhau, nhưng chỉ vì nơi được phân công mà thu nhập khác nhau.</span></p>
+</section>
+
+<!-- 17. 同じ時給の2人を比べると -->
+<section class="slide">
+  <h2>同じ時給の2人を比べると<span class="vi">So sánh hai người cùng lương giờ</span></h2>
+  <p class="lead">ここでは別の2人で見ます。<b>CさんとDさんは同じ時給</b>。土曜が4日ある月です。
+    <span class="vi">Ở đây xem 2 người khác. Bạn C và Bạn D có cùng lương giờ. Tháng có 4 ngày Thứ Bảy.</span></p>
+  <div class="cols">
+    <div class="card">
+      <h3>Cさん<span class="vi">Bạn C</span></h3>
+      <p class="person">土曜も働く現場<br>
+      <span class="vi">Công trường làm cả Thứ Bảy</span><br>
+      <b>26日</b> 働いた<br>
+      <span class="num" style="font-size:1.4em">¥260,000</span><br>
+      <small style="color:var(--gray)">働いた1日あたり <b>¥10,000</b><br>
+      <span class="vi">Bình quân 1 ngày làm việc</span></small></p>
+    </div>
+    <div class="card">
+      <h3>Dさん<span class="vi">Bạn D</span></h3>
+      <p class="person">土曜が休みの現場<br>
+      <span class="vi">Công trường nghỉ Thứ Bảy</span><br>
+      <b>22日</b> 働いた（+休み4日）<br>
+      <span class="num" style="font-size:1.4em">¥244,000</span><br>
+      <small style="color:var(--red)">働いた1日あたり <b>¥11,091</b><br>
+      <span class="vi">Bình quân 1 ngày làm việc</span></small></p>
+    </div>
+  </div>
+  <div class="box warn" style="margin-top:.7em">
+    <b>Dさんは働いていない4日で ¥24,000 を受け取っていた<br>
+    → 働いた1日あたりで見ると、Dさんのほうが約11%高い</b>
+    <span class="vi">Bạn D nhận 24.000 yên cho 4 ngày KHÔNG làm việc.
+    → Tính bình quân 1 ngày làm việc, Bạn D cao hơn khoảng 11%.</span>
+  </div>
+</section>
+
+<!-- 18. 新制度ではこうなります -->
+<section class="slide">
+  <h2>新制度ではこうなります<span class="vi">Trong chế độ mới</span></h2>
+  <p class="lead">現場ごとに<b>カレンダーを事前に決めます</b>。土曜が休みの現場では、その土曜は<b>最初から休みの日</b>です。
+    <span class="vi">Lịch làm việc được quyết định trước cho từng công trường. Ở công trường nghỉ Thứ Bảy, ngày đó vốn dĩ là ngày nghỉ.</span></p>
+  <div class="cols">
+    <div class="card new">
+      <h3>Cさん（26日働いた）<span class="vi">Bạn C (làm 26 ngày)</span></h3>
+      <p class="person"><span class="num" style="font-size:1.5em">¥273,000</span><br>
+      <small style="color:var(--gray)">働いた1日あたり <b>¥10,500</b></small></p>
+    </div>
+    <div class="card new">
+      <h3>Dさん（22日働いた）<span class="vi">Bạn D (làm 22 ngày)</span></h3>
+      <p class="person"><span class="num" style="font-size:1.5em">¥231,000</span><br>
+      <small style="color:var(--gray)">働いた1日あたり <b>¥10,500</b></small></p>
+    </div>
+  </div>
+  <div class="box good" style="margin-top:.7em">
+    <b>働いた1日あたりが、どの現場でも完全に同じになりました</b>
+    <span class="vi">Bình quân 1 ngày làm việc giờ đây HOÀN TOÀN GIỐNG NHAU ở mọi công trường.</span>
+  </div>
+  <p class="note">Dさんの合計は ¥244,000 → ¥231,000 と下がります。ただし<b>働いた22日分は減っていません</b>（22日 × ¥10,500）。
+  減ったのは<b>休んだ日に出ていた60%</b>だけです。<br>
+  <span class="vi">Tổng của Bạn D giảm từ 244.000 xuống 231.000. Nhưng phần 22 ngày ĐÃ LÀM thì không giảm (22 × 10.500).
+  Chỉ phần 60% của ngày nghỉ là mất đi.</span></p>
+</section>
+
+<!-- 19. 休業手当がなくなるわけではありません -->
+<section class="slide">
+  <h2>休業手当がなくなるわけではありません<span class="vi">Phụ cấp nghỉ việc KHÔNG biến mất</span></h2>
+  <table>
+    <tr><th class="l">どんな日か<span class="vi">Loại ngày</span></th>
+        <th>休業手当<span class="vi">Phụ cấp nghỉ</span></th></tr>
+    <tr><td class="l">カレンダーで<b>最初から休み</b>と決まっている日<br>
+        <span class="vi">Ngày đã được ghi là NGHỈ trong lịch từ đầu</span></td>
+        <td>なし<span class="vi">Không có</span></td></tr>
+    <tr><td class="l"><b>働く予定だった日</b>が、会社の都合で急に休みになった日<br>
+        <span class="vi">Ngày dự định LÀM VIỆC nhưng công ty đột ngột cho nghỉ</span></td>
+        <td><b>60%</b><span class="vi">Có, 60%</span></td></tr>
+  </table>
+  <div class="box point" style="margin-top:.8em">
+    <b>急に「明日は休み」と言われた場合は、これまでどおり60%が出ます</b>
+    <span class="vi">Nếu bị báo nghỉ đột ngột, bạn vẫn được nhận 60% như trước.</span>
+  </div>
+</section>
+
+<!-- 20. まとめ -->
+<section class="slide">
+  <h2>まとめ<span class="vi">Tóm tắt</span></h2>
+  <ul>
+    <li>休みを決めるのは元請け。<b>その変化に対応するための新制度</b>です
+      <span class="vi">Ngày nghỉ do tổng thầu quyết định. Chế độ mới là để thích ứng với điều đó.</span></li>
+    <li>1日の所定が <b>6時間40分 → 7時間</b>。基本給が増えました
+      <span class="vi">Giờ quy định 6h40 → 7h. Lương cơ bản tăng.</span></li>
+    <li><b>働いた日の給料は減っていません</b>（22日・25日 × 残業0/1/2h × 2人＝12パターンで確認）
+      <span class="vi">Lương cho ngày đã làm việc không giảm (đã kiểm tra 12 trường hợp).</span></li>
+    <li>変わったのは<b>「もともと休みの日」に出ていたお金</b>です
+      <span class="vi">Điều thay đổi là tiền trả cho "ngày vốn dĩ đã là ngày nghỉ".</span></li>
+    <li>これで<b>どの現場に行っても不公平がなくなります</b>
+      <span class="vi">Nhờ vậy, đi công trường nào cũng công bằng như nhau.</span></li>
+    <li>これから休みが増えても、<b>同じしくみで対応できます</b>
+      <span class="vi">Sau này dù ngày nghỉ tăng lên, cơ chế này vẫn xử lý được.</span></li>
+  </ul>
+</section>
+
+<!-- 21. 質問はありますか？ -->
+<section class="slide center">
+  <h1 style="font-size:clamp(26px,4.2vw,56px)">質問はありますか？<span class="vi">Bạn có câu hỏi không?</span></h1>
+  <p class="sub" style="margin-top:.8em">
+    わからないことは、何でも聞いてください<br>
+    <span class="vi">Có điều gì chưa rõ, hãy hỏi bất cứ lúc nào.</span>
+  </p>
+</section>
+
+</div>
+<div id="bar"><div id="fill"></div></div>
+<div id="pg"></div>
+<div class="hint"><span class="pc">← → でめくる / Dùng phím ← →</span><span class="sp">タップでめくる / Chạm để chuyển trang</span></div>
+<script>
+  const s=[...document.querySelectorAll('.slide')];let i=0;
+  const pg=document.getElementById('pg'),fill=document.getElementById('fill');
+  function go(n){i=Math.max(0,Math.min(s.length-1,n));
+    s.forEach((el,k)=>el.classList.toggle('on',k===i));
+    pg.textContent=(i+1)+' / '+s.length;
+    fill.style.width=((i+1)/s.length*100)+'%';}
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight',' ','PageDown','Enter'].includes(e.key)){e.preventDefault();go(i+1);}
+    if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();go(i-1);}
+    if(e.key==='Home')go(0); if(e.key==='End')go(s.length-1);
+  });
+  document.addEventListener('click',e=>{go(e.clientX<innerWidth*0.25?i-1:i+1);});
+  go(0);
+</script>
+</body>
+</html>
