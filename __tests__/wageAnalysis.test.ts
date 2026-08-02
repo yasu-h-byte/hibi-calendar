@@ -7,6 +7,7 @@
 import { describe, test, expect } from 'vitest'
 import {
   minWageAt, roundUp10, stageOf, buildWageAnalysis, currentMinWage,
+  modelWage, MODEL_RAISE_RATE, KENSETSU_TOKUTEI,
 } from '@/lib/wage-analysis'
 
 describe('minWageAt（東京都最低賃金）', () => {
@@ -62,6 +63,37 @@ describe('stageOf（在籍年数 → 制度上の段階）', () => {
     expect(stageOf(8.8, 'tokutei2')).toBe(4)
     // 同じ年数でも tokutei1 なら段階3のまま（試験未合格）
     expect(stageOf(8.8, 'tokutei1')).toBe(3)
+  })
+})
+
+describe('modelWage（7%昇給モデル）', () => {
+  test('10年で約2倍になる', () => {
+    expect(MODEL_RAISE_RATE).toBe(0.07)
+    expect(modelWage(1270, 0)).toBe(1270)
+    expect(modelWage(1270, 10)).toBeCloseTo(2498, 0)
+    expect(modelWage(1270, 10) / 1270).toBeCloseTo(1.97, 2)
+  })
+
+  test('定率なので上げ幅は年々大きくなる', () => {
+    const d1 = modelWage(1270, 1) - modelWage(1270, 0)
+    const d10 = modelWage(1270, 10) - modelWage(1270, 9)
+    expect(d1).toBeCloseTo(89, 0)
+    expect(d10).toBeCloseTo(163, 0)
+    expect(d10).toBeGreaterThan(d1)
+  })
+
+  test('建設特定技能の定期昇給要件（月額1,000円/年）を満たす', () => {
+    // 1年目の上げ幅を月額換算（140h）しても要件を超える
+    const monthly = (modelWage(1270, 1) - modelWage(1270, 0)) * 140
+    expect(monthly).toBeGreaterThan(KENSETSU_TOKUTEI.minAnnualRaiseMonthly)
+  })
+
+  test('要件を割る昇給率の境目', () => {
+    // 起点1270・140h で月額1,000円/年 を割るのは概ね年0.56%未満
+    const rate = KENSETSU_TOKUTEI.minAnnualRaiseMonthly / 140 / 1270
+    expect(rate * 100).toBeCloseTo(0.56, 1)
+    expect((modelWage(1270, 1, 0.005) - 1270) * 140).toBeLessThan(KENSETSU_TOKUTEI.minAnnualRaiseMonthly)
+    expect((modelWage(1270, 1, 0.01) - 1270) * 140).toBeGreaterThan(KENSETSU_TOKUTEI.minAnnualRaiseMonthly)
   })
 })
 
@@ -131,6 +163,20 @@ describe('buildWageAnalysis', () => {
   test('しきい値以内なら高いとも低いとも判定しない', () => {
     const r2 = buildWageAnalysis(W, '2026-08-01', 1000)
     expect(r2.rows.every(x => !x.allLow && !x.allHigh)).toBe(true)
+  })
+
+  test('モデル起点は在籍0年の人の時給を使う', () => {
+    const r4 = buildWageAnalysis([
+      ...W,
+      { id: 207, name: 'NEW', visaType: 'jisshu1', hireDate: '2026-08-01', hourlyRate: 1270 },
+    ], '2026-08-01')
+    expect(r4.modelStart).toBe(1270)
+    // 10年後は約2倍
+    expect(r4.rows.find(x => x.name === 'NEW')!.model).toBeCloseTo(1270, 5)
+  })
+
+  test('特定技能1号の報酬下限は最低賃金×1.1', () => {
+    expect(r.tokuteiFloor).toBeCloseTo(1226 * 1.1, 5)
   })
 
   test('入社日が無い場合でも落ちない', () => {

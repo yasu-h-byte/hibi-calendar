@@ -13,7 +13,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  buildWageAnalysis, STAGES, TOKYO_MIN_WAGE, type WageAnalysis, type WageRow,
+  buildWageAnalysis, modelWage, STAGES, TOKYO_MIN_WAGE, MODEL_RAISE_RATE,
+  MARKET_REFERENCE, KENSETSU_TOKUTEI, type WageAnalysis, type WageRow,
 } from '@/lib/wage-analysis'
 
 const OWNER_ID = 0 // 日比靖仁
@@ -110,6 +111,21 @@ function Report({ a }: { a: WageAnalysis }) {
 
       <Card title="④ 段階ごとの賃金と段差" note="制度上の段階（1年目=実習1号／2〜3年目=2号／4〜5年目=3号／6年目〜=特定技能）ごとの平均と、移行時の昇給率。">
         <StageTable a={a} />
+      </Card>
+
+      <Card title={`⑤ 今後の昇給モデル（年${(MODEL_RAISE_RATE * 100).toFixed(0)}％・10年で約2倍）`}
+        note={`起点は新規入社と同じ ${yen(a.modelStart)}。定率なので上げ幅は年々大きくなる（1年目 +${yen(modelWage(a.modelStart, 1) - a.modelStart)} → 10年目 +${yen(modelWage(a.modelStart, 10) - modelWage(a.modelStart, 9))}）。`}>
+        <ModelTable a={a} />
+      </Card>
+
+      <Card title="⑥ 現在の在籍者とモデルの差"
+        note="＋＝モデルより高い（今後の昇給を抑える余地がある）／−＝モデルより低い（追いつかせる対象）。段階的に昇給スピードを調整する際の目安。">
+        <ModelGap a={a} />
+      </Card>
+
+      <Card title="⑦ 参考データ（外部・法令）"
+        note="いずれも全国値。東京都は地域別最低賃金が全国最高のため、実勢はこれより高いとみて読むこと。">
+        <Reference a={a} />
       </Card>
 
       <DataTable a={a} />
@@ -301,6 +317,147 @@ function StageTable({ a }: { a: WageAnalysis }) {
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function ModelTable({ a }: { a: WageAnalysis }) {
+  const years = Array.from({ length: 11 }, (_, i) => i)
+  const th = 'border border-gray-300 dark:border-gray-600 px-2 py-1.5'
+  const td = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
+  const max = modelWage(a.modelStart, 10)
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr className="bg-gray-800 text-white">
+            <th className={th}>在籍</th><th className={th}>時給</th><th className={th}>前年から</th>
+            <th className={th}>月額換算(140h)</th><th className={th}>起点比</th>
+            <th className={`${th} w-1/3`}>推移</th>
+          </tr>
+        </thead>
+        <tbody>
+          {years.map(n => {
+            const v = modelWage(a.modelStart, n)
+            const p = n ? modelWage(a.modelStart, n - 1) : null
+            return (
+              <tr key={n} className={n === 0 || n === 10 ? 'bg-blue-50 dark:bg-blue-900/20' : ''}>
+                <td className={td}>{n}年</td>
+                <td className={`${td} font-semibold`}>{yen(v)}</td>
+                <td className={td}>{p ? '+' + yen(v - p) : '—'}</td>
+                <td className={td}>{yen(v * 140)}</td>
+                <td className={td}>{(v / a.modelStart).toFixed(2)}倍</td>
+                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">
+                  <div className="h-3 rounded bg-blue-600 dark:bg-blue-500" style={{ width: `${(v / max) * 100}%` }} />
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ModelGap({ a }: { a: WageAnalysis }) {
+  const list = [...a.rows].sort((x, y) => y.devModel - x.devModel)
+  const max = Math.max(...list.map(r => Math.abs(r.devModel)), 1)
+  return (
+    <div className="space-y-1">
+      {list.map(r => {
+        const w = (Math.abs(r.devModel) / max) * 46
+        const over = r.devModel > 40
+        const under = r.devModel < -40
+        return (
+          <div key={r.id} className="flex items-center gap-2 text-xs">
+            <span className="w-40 shrink-0 text-right text-gray-500 truncate">{r.name}</span>
+            <span className="w-11 shrink-0 text-right text-gray-400">{r.years}年</span>
+            <span className="w-16 shrink-0 text-right tabular-nums text-gray-600 dark:text-gray-300">{yen(r.hourly)}</span>
+            <span className="w-16 shrink-0 text-right tabular-nums text-gray-400">{yen(r.model)}</span>
+            <div className="flex-1 relative h-5">
+              <div className="absolute inset-y-0 left-1/2 w-px bg-gray-300 dark:bg-gray-600" />
+              <div className={`absolute inset-y-1 rounded-sm ${over ? 'bg-blue-600' : under ? 'bg-red-500' : 'bg-gray-400'}`}
+                style={r.devModel < 0 ? { right: '50%', width: `${w}%` } : { left: '50%', width: `${w}%` }} />
+              <span className="absolute top-0 text-[10px] tabular-nums text-gray-500 whitespace-nowrap"
+                style={r.devModel < 0 ? { right: `calc(50% + ${w}%)`, paddingRight: 4 } : { left: `calc(50% + ${w}%)`, paddingLeft: 4 }}>
+                {signed(r.devModel)}
+              </span>
+            </div>
+          </div>
+        )
+      })}
+      <p className="text-[11px] text-gray-400 pt-2">
+        左から 氏名／在籍／現在の時給／モデル時給／差。
+        モデルより高い人は昇給を緩め、低い人は追いつかせることで、全体が年{(MODEL_RAISE_RATE * 100).toFixed(0)}％の軌道に乗る。
+      </p>
+    </div>
+  )
+}
+
+function Reference({ a }: { a: WageAnalysis }) {
+  const tokutei = a.rows.filter(r => r.visa.startsWith('特定'))
+  const ng = tokutei.filter(r => r.hourly < a.tokuteiFloor)
+  const nearest = [...tokutei].sort((x, y) => x.hourly - y.hourly)[0]
+  const minRatePct = (KENSETSU_TOKUTEI.minAnnualRaiseMonthly / 140 / a.modelStart) * 100
+  const th = 'border border-gray-300 dark:border-gray-600 px-2 py-1.5'
+  const td = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
+  return (
+    <div className="space-y-4">
+      <div>
+        <div className="text-xs font-semibold mb-1">市場水準（月額）</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-800 text-white">
+                <th className={`${th} text-left`}>区分</th><th className={th}>月額</th>
+                <th className={th}>時給換算(140h)</th><th className={`${th} text-left`}>出典</th>
+              </tr>
+            </thead>
+            <tbody>
+              {MARKET_REFERENCE.map(m => (
+                <tr key={m.label}>
+                  <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">{m.label}</td>
+                  <td className={td}>{yen(m.monthly)}</td>
+                  <td className={td}>{yen(m.monthly / 140)}</td>
+                  <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-gray-500">{m.note}</td>
+                </tr>
+              ))}
+              <tr className="bg-blue-50 dark:bg-blue-900/20 font-semibold">
+                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">自社 平均</td>
+                <td className={td}>{yen(a.overallAvg * 140)}</td>
+                <td className={td}>{yen(a.overallAvg)}</td>
+                <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-gray-500">在籍{a.rows.length}名</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-lg border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs leading-relaxed">
+        <div className="font-semibold mb-1">建設分野 特定技能1号の法令要件</div>
+        <p className="text-gray-600 dark:text-gray-300">出典: {KENSETSU_TOKUTEI.source}</p>
+        <ul className="mt-2 space-y-1.5 text-gray-700 dark:text-gray-200">
+          <li>
+            <b>① 報酬の下限</b>：所定内賃金 ÷ 月所定労働時間 ≧ 地域別最低賃金 × {KENSETSU_TOKUTEI.minWageMultiplier}
+            <span className="block text-gray-500">
+              東京都 {yen(a.currentMinWage)} × {KENSETSU_TOKUTEI.minWageMultiplier} = <b>{yen(a.tokuteiFloor)}／時</b>。
+              {ng.length === 0
+                ? <>特定技能{tokutei.length}名は<b className="text-green-700 dark:text-green-400">全員クリア</b>（最も近いのは {nearest?.name} {yen(nearest?.hourly ?? 0)}・下限比 {((nearest?.hourly ?? 0) / a.tokuteiFloor).toFixed(2)}倍）。</>
+                : <b className="text-red-600"> {ng.map(r => r.name).join('・')} が下限割れ。要是正。</b>}
+            </span>
+          </li>
+          <li>
+            <b>② 定期昇給が必須</b>：年間の月額所定内賃金の上昇が {yen(KENSETSU_TOKUTEI.minAnnualRaiseMonthly)} 未満だと定期昇給と認められない
+            <span className="block text-gray-500">
+              時給換算で年 {yen(KENSETSU_TOKUTEI.minAnnualRaiseMonthly / 140)} 以上。起点 {yen(a.modelStart)} なら
+              <b> 年{minRatePct.toFixed(2)}％が下限</b>。昇給スピードを落とす際も、これを下回らせない。
+            </span>
+          </li>
+          <li>
+            <b>③ 月給制が前提</b>：1号特定技能外国人への報酬は全て月給制であることが前提とされている
+          </li>
+        </ul>
+      </div>
     </div>
   )
 }
