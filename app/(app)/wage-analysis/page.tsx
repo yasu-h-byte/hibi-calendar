@@ -13,7 +13,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  buildWageAnalysis, modelWage, STAGES, TOKYO_MIN_WAGE, MODEL_RAISE_RATE,
+  buildWageAnalysis, modelWage, findInversions, stageIQROutliers,
+  STAGES, TOKYO_MIN_WAGE, MODEL_RAISE_RATE,
   MARKET_REFERENCE, KENSETSU_TOKUTEI, type WageAnalysis, type WageRow,
 } from '@/lib/wage-analysis'
 
@@ -126,6 +127,11 @@ function Report({ a }: { a: WageAnalysis }) {
       <Card title="⑦ 参考データ（外部・法令）"
         note="いずれも全国値。東京都は地域別最低賃金が全国最高のため、実勢はこれより高いとみて読むこと。">
         <Reference a={a} />
+      </Card>
+
+      <Card title="⑧ 逆転・外れ値チェック"
+        note="「在籍が長いのに時給が低い」ペアの全数調査（Kendall の順位相関）と、段階内の箱ひげ（IQR）基準の外れ値。昇給協議で個別に確認する候補。">
+        <AnomalyCheck a={a} />
       </Card>
 
       <DataTable a={a} />
@@ -489,6 +495,66 @@ function Reference({ a }: { a: WageAnalysis }) {
             <b>③ 月給制が前提</b>：1号特定技能外国人への報酬は全て月給制であることが前提とされている
           </li>
         </ul>
+      </div>
+    </div>
+  )
+}
+
+function AnomalyCheck({ a }: { a: WageAnalysis }) {
+  const inv = findInversions(a.rows)
+  const outliers = stageIQROutliers(a.rows)
+  const tauPct = ((1 - inv.discordant / Math.max(1, inv.concordant + inv.discordant)) * 100)
+  return (
+    <div className="space-y-4">
+      <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 text-xs leading-relaxed">
+        在籍差0.3年超の全 {inv.concordant + inv.discordant} ペア中、逆転は
+        <b> {inv.discordant} ペア</b>（順位一致率 {tauPct.toFixed(1)}%・Kendall τ = {inv.tau.toFixed(2)}）。
+        {inv.tau >= 0.8
+          ? ' τ が 0.8 以上なので、全体としては「長く働くほど高い」が保たれている。'
+          : ' τ が 0.8 を下回っており、年功と時給の対応が崩れ始めている。'}
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold mb-1">逆転ペア（在籍が長いのに時給が低い）</div>
+        {inv.pairs.length === 0 ? (
+          <p className="text-xs text-gray-400">なし</p>
+        ) : (
+          <div className="space-y-1">
+            {inv.pairs.map((p, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs">
+                <span className="w-56 shrink-0 text-right text-red-600 dark:text-red-400">
+                  {p.senior.name}（{p.senior.years}年 {yen(p.senior.hourly)}）
+                </span>
+                <span className="text-gray-400">＜</span>
+                <span className="w-56 shrink-0 text-blue-600 dark:text-blue-400">
+                  {p.junior.name}（{p.junior.years}年 {yen(p.junior.hourly)}）
+                </span>
+                <span className="tabular-nums text-gray-500">差 {yen(p.gap)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="text-xs font-semibold mb-1">段階内の外れ値（IQR法・3名以上の段階のみ）</div>
+        {outliers.length === 0 ? (
+          <p className="text-xs text-gray-400">なし</p>
+        ) : (
+          <div className="space-y-1 text-xs">
+            {outliers.map(o => (
+              <div key={o.stage}>
+                <span className="text-gray-500">{STAGES[o.stage].key}（Q1 {yen(o.q1)}〜Q3 {yen(o.q3)}）: </span>
+                {o.high.map(r => (
+                  <span key={r.id} className="text-blue-600 dark:text-blue-400 font-semibold mr-2">↑ {r.name} {yen(r.hourly)}</span>
+                ))}
+                {o.low.map(r => (
+                  <span key={r.id} className="text-red-600 dark:text-red-400 font-semibold mr-2">↓ {r.name} {yen(r.hourly)}</span>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
