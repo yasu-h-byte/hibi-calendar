@@ -59,6 +59,56 @@ export const STAGES = [
   { key: '特定技能2号', years: '8年目〜・試験合格', from: 7, to: 99 },
 ] as const
 
+/* ────────────────────────────────────────────────
+   昇給モデル（今後の設計値）
+   ──────────────────────────────────────────────── */
+
+/** 目標とする年平均昇給率。10年在籍で約2倍になる水準（2026-08 代表確定）。 */
+export const MODEL_RAISE_RATE = 0.07
+
+/** モデル上の時給 = 起点 × (1 + 率)^年 */
+export function modelWage(start: number, years: number, rate = MODEL_RAISE_RATE): number {
+  return start * Math.pow(1 + rate, years)
+}
+
+/**
+ * 建設分野 特定技能1号の報酬に関する法令要件。
+ *
+ * 出典: 国土交通省 不動産・建設経済局 国際市場課長通知
+ *       「建設特定技能受入計画における報酬額の認定について」
+ *       国不国第654号（令和4年3月28日）／令和4年6月1日以降の申請に適用
+ *
+ * ① 報酬額（1-②③）:
+ *    所定内賃金 ÷ 一月当たり所定労働時間 が、事業所の所在地の地域別最低賃金に
+ *    1.1 を乗じた額（または地域別最低賃金の全国加重平均に1.1を乗じた額）を
+ *    下回ってはならない。
+ * ② 定期昇給（2-②）:
+ *    定期昇給を予定していないと認定されない。さらに「一年当たりに見込まれる
+ *    一月当たり所定内賃金の上昇額が千円未満」だと実質的な定期昇給と認められない。
+ * ③ 支払方法: 1号特定技能外国人への報酬は全て月給制であることが前提。
+ */
+export const KENSETSU_TOKUTEI = {
+  /** 地域別最低賃金に乗じる係数 */
+  minWageMultiplier: 1.1,
+  /** 定期昇給として認められる月額所定内賃金の年間上昇額の下限（円） */
+  minAnnualRaiseMonthly: 1000,
+  source: '国土交通省 国不国第654号（令和4年3月28日）',
+} as const
+
+/**
+ * 外部の賃金参考データ。
+ *
+ * 出典: 厚生労働省「令和6年賃金構造基本統計調査（外国人労働者）」ほか。
+ * ⚠️ いずれも全国値。首都圏のみに絞った公表値は見当たらないため、
+ *    東京都は地域別最低賃金が全国最高であることを踏まえて割り引いて読むこと。
+ */
+export const MARKET_REFERENCE = [
+  { label: '技能実習（全産業）', monthly: 182700, note: '令和6年 賃金構造基本統計調査' },
+  { label: '技能実習（建設業）', monthly: 203025, note: '令和5年度' },
+  { label: '特定技能（全産業）', monthly: 211200, note: '令和6年 賃金構造基本統計調査' },
+  { label: '外国人労働者 全体', monthly: 242700, note: '令和6年 賃金構造基本統計調査' },
+] as const
+
 export interface WageRow {
   id: number
   name: string
@@ -93,6 +143,10 @@ export interface WageRow {
   allLow: boolean
   /** 3基準すべてで高い */
   allHigh: boolean
+  /** 7%モデル上の時給（起点＝新規入社の時給） */
+  model: number
+  /** モデルとの差（＋なら今後の昇給を抑える余地あり） */
+  devModel: number
 }
 
 export interface WageAnalysis {
@@ -104,6 +158,10 @@ export interface WageAnalysis {
   currentMinWage: number
   /** 判定のしきい値（±この額を超えたら高い／低いとみなす） */
   threshold: number
+  /** 昇給モデルの起点時給（＝在籍0年の人の時給。いなければ最低賃金×1.04で代用） */
+  modelStart: number
+  /** 特定技能1号の報酬下限（地域別最低賃金 × 1.1） */
+  tokuteiFloor: number
 }
 
 /**
@@ -202,6 +260,10 @@ export function buildWageAnalysis(
     ;(cohort[k] = cohort[k] || []).push(r)
   })
 
+  // 昇給モデルの起点は「いま入社した人の時給」。該当者がいなければ最低賃金から推定。
+  const newest = base.filter(b => b.years < 0.5).sort((x, y) => y.hourly - x.hourly)[0]
+  const modelStart = newest ? newest.hourly : Math.round(nowMw * 1.04)
+
   const rows: WageRow[] = base.map(r => {
     const devStage = r.hourly - stageAvg[r.stage]
     const devTrend = r.hourly - (a + b1 * r.years)
@@ -210,12 +272,14 @@ export function buildWageAnalysis(
       ? r.hourly - peers.reduce((s, p) => s + p.hourly, 0) / peers.length
       : null
     const ds = [devStage, devTrend, devCohort].filter((v): v is number => v !== null)
+    const model = modelWage(modelStart, r.years)
     return {
       ...r,
       realGain: r.cagr !== null && r.minWageCagr !== null ? r.cagr - r.minWageCagr : null,
       devStage, devTrend, devCohort,
       allLow: ds.length > 1 && ds.every(v => v < -threshold),
       allHigh: ds.length > 1 && ds.every(v => v > threshold),
+      model, devModel: r.hourly - model,
     }
   })
 
@@ -226,5 +290,7 @@ export function buildWageAnalysis(
     overallAvg: rows.length ? rows.reduce((s, r) => s + r.hourly, 0) / rows.length : 0,
     currentMinWage: nowMw,
     threshold,
+    modelStart,
+    tokuteiFloor: nowMw * KENSETSU_TOKUTEI.minWageMultiplier,
   }
 }
