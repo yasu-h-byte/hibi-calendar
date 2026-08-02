@@ -8,6 +8,7 @@ import { describe, test, expect } from 'vitest'
 import {
   minWageAt, roundUp10, stageOf, buildWageAnalysis, currentMinWage,
   modelWage, MODEL_RAISE_RATE, KENSETSU_TOKUTEI,
+  findInversions, stageIQROutliers,
 } from '@/lib/wage-analysis'
 
 describe('minWageAt（東京都最低賃金）', () => {
@@ -186,5 +187,63 @@ describe('buildWageAnalysis', () => {
     )
     expect(r3.rows[0].years).toBe(0)
     expect(r3.rows[0].cagr).toBeNull()
+  })
+})
+
+describe('findInversions（逆転ペア検出）', () => {
+  // 実データ相当のミニセット: ケン(3.2年¥1581)がラップ(3.8年¥1464)を逆転している
+  const W = [
+    { id: 107, name: 'ケン', visaType: 'jisshu3', hireDate: '2023-05-14', hourlyRate: 1581 },
+    { id: 202, name: 'ラップ', visaType: 'jisshu3', hireDate: '2022-10-01', hourlyRate: 1464 },
+    { id: 109, name: 'リン', visaType: 'tokutei1', hireDate: '2020-01-15', hourlyRate: 2214 },
+  ]
+  const rows = buildWageAnalysis(W, '2026-08-03').rows
+
+  test('在籍が長いのに時給が低いペアを検出する', () => {
+    const r = findInversions(rows)
+    expect(r.discordant).toBe(1)
+    const p = r.pairs[0]
+    expect(p.senior.name).toBe('ラップ')
+    expect(p.junior.name).toBe('ケン')
+    expect(p.gap).toBe(1581 - 1464)
+  })
+
+  test('順方向のペアは concordant に数える', () => {
+    const r = findInversions(rows)
+    // リン>ケン, リン>ラップ が順方向
+    expect(r.concordant).toBe(2)
+    expect(r.tau).toBeCloseTo((2 - 1) / 3, 5)
+  })
+
+  test('在籍差が閾値以下のペアは比較しない', () => {
+    const near = buildWageAnalysis([
+      { id: 1, name: 'A', visaType: 'jisshu3', hireDate: '2022-10-01', hourlyRate: 1500 },
+      { id: 2, name: 'B', visaType: 'jisshu3', hireDate: '2022-11-01', hourlyRate: 1400 },
+    ], '2026-08-03').rows
+    expect(findInversions(near).discordant + findInversions(near).concordant).toBe(0)
+  })
+})
+
+describe('stageIQROutliers（段階内の外れ値）', () => {
+  test('実習3号相当の5名でケンが上側・ラップが下側の外れ値になる', () => {
+    const rows = buildWageAnalysis([
+      { id: 107, name: 'ケン', visaType: 'jisshu3', hireDate: '2023-05-14', hourlyRate: 1581 },
+      { id: 106, name: 'タン', visaType: 'tokutei1', hireDate: '2023-05-14', hourlyRate: 1527 },
+      { id: 201, name: 'グエン', visaType: 'jisshu3', hireDate: '2022-10-01', hourlyRate: 1513 },
+      { id: 203, name: 'ハウ', visaType: 'jisshu3', hireDate: '2022-10-01', hourlyRate: 1513 },
+      { id: 202, name: 'ラップ', visaType: 'jisshu3', hireDate: '2022-10-01', hourlyRate: 1464 },
+    ], '2026-08-03').rows
+    const out = stageIQROutliers(rows)
+    expect(out).toHaveLength(1)
+    expect(out[0].high.map(r => r.name)).toEqual(['ケン'])
+    expect(out[0].low.map(r => r.name)).toEqual(['ラップ'])
+  })
+
+  test('3名未満の段階は判定しない', () => {
+    const rows = buildWageAnalysis([
+      { id: 1, name: 'A', visaType: 'jisshu2', hireDate: '2023-10-23', hourlyRate: 1425 },
+      { id: 2, name: 'B', visaType: 'jisshu2', hireDate: '2023-10-23', hourlyRate: 9999 },
+    ], '2026-08-03').rows
+    expect(stageIQROutliers(rows)).toHaveLength(0)
   })
 })

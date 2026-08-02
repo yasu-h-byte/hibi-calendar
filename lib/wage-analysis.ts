@@ -149,6 +149,69 @@ export interface WageRow {
   devModel: number
 }
 
+/* ────────────────────────────────────────────────
+   逆転・外れ値チェック（異常値検出）
+   ──────────────────────────────────────────────── */
+
+export interface InversionPair {
+  /** 在籍が長いのに時給が低い側 */
+  senior: WageRow
+  /** 在籍が短いのに時給が高い側 */
+  junior: WageRow
+  /** 時給差（junior − senior、常に正） */
+  gap: number
+}
+
+/**
+ * 「在籍が長いのに時給が低い」逆転ペアを全数列挙する（Kendall の不一致対）。
+ *
+ * τ（タウ）は順位相関: 1 なら完全に「長いほど高い」。0.9 超なら強い正相関。
+ * 同時給のペアはどちらにも数えない。
+ *
+ * @param minYearGap 在籍差がこれ以下のペアは比較しない（誤差扱い）
+ */
+export function findInversions(rows: WageRow[], minYearGap = 0.3): {
+  pairs: InversionPair[]; concordant: number; discordant: number; tau: number
+} {
+  const pairs: InversionPair[] = []
+  let concordant = 0, discordant = 0
+  for (const a of rows) for (const b of rows) {
+    if (a.years - b.years <= minYearGap) continue
+    if (a.hourly > b.hourly) concordant++
+    else if (a.hourly < b.hourly) { discordant++; pairs.push({ senior: a, junior: b, gap: b.hourly - a.hourly }) }
+  }
+  pairs.sort((p, q) => q.gap - p.gap)
+  const total = concordant + discordant
+  return { pairs, concordant, discordant, tau: total ? (concordant - discordant) / total : 1 }
+}
+
+export interface StageOutliers {
+  stage: number
+  q1: number
+  q3: number
+  /** Q1 − 1.5×IQR を下回る人 */
+  low: WageRow[]
+  /** Q3 + 1.5×IQR を上回る人 */
+  high: WageRow[]
+}
+
+/** 段階内の IQR 法（箱ひげ基準）による外れ値。3名以上の段階のみ判定する。 */
+export function stageIQROutliers(rows: WageRow[]): StageOutliers[] {
+  const out: StageOutliers[] = []
+  for (const stage of [0, 1, 2, 3, 4]) {
+    const m = rows.filter(r => r.stage === stage)
+    if (m.length < 3) continue
+    const hs = m.map(r => r.hourly).sort((a, b) => a - b)
+    const q1 = hs[Math.floor((hs.length - 1) * 0.25)]
+    const q3 = hs[Math.ceil((hs.length - 1) * 0.75)]
+    const iqr = q3 - q1
+    const low = m.filter(r => r.hourly < q1 - 1.5 * iqr)
+    const high = m.filter(r => r.hourly > q3 + 1.5 * iqr)
+    if (low.length || high.length) out.push({ stage, q1, q3, low, high })
+  }
+  return out
+}
+
 export interface WageAnalysis {
   rows: WageRow[]
   stageAvg: number[]
