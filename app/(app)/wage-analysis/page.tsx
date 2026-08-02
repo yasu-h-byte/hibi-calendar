@@ -97,7 +97,7 @@ function Report({ a }: { a: WageAnalysis }) {
         <Flag tone="high" title="3基準すべてで高い" items={highs} />
       </section>
 
-      <Card title="① 在籍年数 × 時給" note="青の実線＝各段階の平均（この線より下が段階内で低い）。灰の破線＝全体平均。赤＝一貫して低い人、青＝一貫して高い人。">
+      <Card title="① 在籍年数 × 時給" note="青の実線＝各段階の平均（この線より下が段階内で低い）。灰の破線＝全体平均。赤＝一貫して低い人、青＝一貫して高い人。点にカーソルを合わせる（スマホはタップ）と氏名と内訳が出ます。">
         <Scatter a={a} />
       </Card>
 
@@ -167,8 +167,36 @@ function Flag({ tone, title, items }: { tone: 'low' | 'high'; title: string; ite
   )
 }
 
+/** 散布図のツールチップ。SVG内に描くので最後にレンダリングして最前面にする。 */
+function Tip({ r, x, y, W }: { r: WageRow; x: number; y: number; W: number }) {
+  const lines = [
+    `${r.years}年 ／ ${STAGES[r.stage].key}`,
+    `時給 ${yen(r.hourly)}（月額 ${yen(r.hourly * 140)}）`,
+    `段階内平均との差 ${signed(r.devStage)}`,
+    r.devCohort !== null ? `同期との差 ${signed(r.devCohort)}` : '同期なし',
+    `7%モデルとの差 ${signed(r.devModel)}`,
+  ]
+  // 名前(baseline by+17) + 明細(by+34 から 15px 間隔)。最終行の下に余白を残す
+  const w = 214, h = 30 + lines.length * 15
+  // 右端に近ければ左側に出す。上端に近ければ下に出す。
+  const flipX = x + w + 18 > W
+  const bx = flipX ? x - w - 14 : x + 14
+  const by = Math.max(2, y - h / 2)
+  return (
+    <g pointerEvents="none">
+      <rect x={bx} y={by} width={w} height={h} rx={6}
+        className="fill-gray-900/95 dark:fill-gray-100/95" />
+      <text x={bx + 10} y={by + 17} className="fill-white dark:fill-gray-900 text-[12px] font-semibold">{r.name}</text>
+      {lines.map((t, i) => (
+        <text key={i} x={bx + 10} y={by + 34 + i * 15} className="fill-gray-300 dark:fill-gray-600 text-[11px]">{t}</text>
+      ))}
+    </g>
+  )
+}
+
 function Scatter({ a }: { a: WageAnalysis }) {
   const rows = a.rows
+  const [hover, setHover] = useState<WageRow | null>(null)
   const W = 900, H = 420, ML = 74, MR = 20, MT = 14, MB = 62
   const PW = W - ML - MR, PH = H - MT - MB
   const hs = rows.map(r => r.hourly)
@@ -201,17 +229,21 @@ function Scatter({ a }: { a: WageAnalysis }) {
       ))}
       {rows.map(r => (
         <g key={r.id}>
-          <circle cx={px(r.years)} cy={py(r.hourly)} r={r.allLow || r.allHigh ? 8 : 6}
+          <circle cx={px(r.years)} cy={py(r.hourly)} r={hover?.id === r.id ? 10 : r.allLow || r.allHigh ? 8 : 6}
             className={r.allLow ? 'fill-red-500' : r.allHigh ? 'fill-blue-600 dark:fill-blue-400' : 'fill-gray-400'}
-            stroke="white" strokeWidth={1.5}>
-            <title>{r.name}／{r.years}年／{yen(r.hourly)}</title>
-          </circle>
+            stroke="white" strokeWidth={1.5} />
           {(r.allLow || r.allHigh) && (
             <text x={px(r.years) + 12} y={py(r.hourly) + 4}
               className={`text-[11px] font-semibold ${r.allLow ? 'fill-red-600' : 'fill-blue-600 dark:fill-blue-400'}`}>{r.name}</text>
           )}
+          {/* 当たり判定を広めに取る。点が小さいと拾いにくいため */}
+          <circle cx={px(r.years)} cy={py(r.hourly)} r={16} fill="transparent"
+            className="cursor-pointer"
+            onMouseEnter={() => setHover(r)} onMouseLeave={() => setHover(null)}
+            onClick={() => setHover(r)} />
         </g>
       ))}
+      {hover && <Tip r={hover} x={px(hover.years)} y={py(hover.hourly)} W={W} />}
     </svg>
   )
 }
