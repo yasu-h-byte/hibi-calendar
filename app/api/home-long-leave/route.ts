@@ -3,8 +3,7 @@ import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
-import { getStaffSites, ymKey, setAttendanceEntry } from '@/lib/attendance'
-import { AttendanceEntry } from '@/types'
+import { getStaffSites, ymKey } from '@/lib/attendance'
 
 /**
  * 申請者の配置現場を担当する職長の workerId 集合を返す（権限判定用）。
@@ -209,55 +208,19 @@ export async function POST(request: NextRequest) {
         reviewedBy: approvedBy || 0,
       })
 
-      // Determine worker's site
-      const sites = await getStaffSites(data.workerId)
-      const siteId = sites.length > 0 ? sites[0].id : ''
-
-      if (siteId) {
-        // Write attendance entries { w: 0, hk: 1 } for all weekdays in the date range (skip Sundays)
-        // ⚠️ 既存の有給(p)・休み(r)・出勤エントリがある日は上書きしない（2026-05-08 修正）
-        //   既存エントリの上書きは setDoc(merge:true) でも以前は p/r フィールドが残るが、
-        //   compute.ts は entry.hk を最初に判定するため、有給日数(plDays)カウントから外れる事故が起きていた。
-        const { getAttendanceDoc } = await import('@/lib/attendance')
-        const start = new Date(data.startDate + 'T00:00:00')
-        const end = new Date(data.endDate + 'T00:00:00')
-        const current = new Date(start)
-        const skippedDates: string[] = []
-
-        // 期間中に跨る各月の att データをキャッシュして既存エントリ確認
-        const attCache: Record<string, Record<string, AttendanceEntry>> = {}
-        const getAtt = async (ym: string) => {
-          if (!attCache[ym]) attCache[ym] = await getAttendanceDoc(ym)
-          return attCache[ym]
-        }
-
-        while (current <= end) {
-          const dow = current.getDay()
-          if (dow !== 0) { // Skip Sundays
-            const year = current.getFullYear()
-            const month = current.getMonth() + 1
-            const day = current.getDate()
-            const ym = ymKey(year, month)
-            const key = `${siteId}_${data.workerId}_${ym}_${String(day)}`
-            const att = await getAtt(ym)
-            const existing = att[key]
-
-            // 既に有給(p) / 休み(r) / 出勤(w>0) が記録されている日はスキップ
-            const hasP = existing && existing.p && existing.p > 0
-            const hasR = existing && existing.r && existing.r > 0
-            const hasWork = existing && existing.w && existing.w > 0
-            if (hasP || hasR || hasWork) {
-              skippedDates.push(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)
-            } else {
-              await setAttendanceEntry(siteId, data.workerId, ym, day, { w: 0, hk: 1 })
-            }
-          }
-          current.setDate(current.getDate() + 1)
-        }
-
-        if (skippedDates.length > 0) {
-          console.warn(`[home-long-leave/approve] 既存エントリありスキップ: ${data.workerName} (${data.workerId}) - ${skippedDates.join(', ')}`)
-        }
+      // 出面の帰国フラグを同期（2026-08-03: lib/home-leave-sync.ts に一元化）
+      //   旧実装は日ごとに setAttendanceEntry を呼ぶ書き込みループで、
+      //   ① 復帰未定(9999-12-31)だと事実上無限に書き込む
+      //   ② 承認以外の経路（手動登録・期間変更・削除）と同期処理を共有していない
+      //   という2点の問題があった。共通ヘルパーは月単位の冪等 reconcile で両方を解消する。
+      const { syncHomeLeaveAttendance } = await import('@/lib/home-leave-sync')
+      const syncResult = await syncHomeLeaveAttendance(
+        data.workerId,
+        null,
+        { startDate: data.startDate, endDate: data.endDate },
+      )
+      if (syncResult.skipped.length > 0) {
+        console.warn(`[home-long-leave/approve] 既存実績ありスキップ: ${data.workerName} (${data.workerId}) - ${syncResult.skipped.join(', ')}`)
       }
 
       // 2026-05-13: 旧仕様で demmen/main.homeLeaves 配列にコピーを作っていたが、

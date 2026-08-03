@@ -3,6 +3,17 @@
 import { useState } from 'react'
 import { HomeLeave, PLWorker } from '../types'
 import { todayJstIso } from '@/lib/date-utils'
+import { fetchWithAuth, postJson } from '@/lib/api-client'
+
+/** 出面に残った帰国フラグの突合結果 */
+interface OrphanDay { date: string; workerId: number; locked: boolean }
+type ReconcileState =
+  | { status: 'idle' }
+  | { status: 'checking' }
+  | { status: 'checked'; orphans: OrphanDay[] }
+  | { status: 'fixing'; orphans: OrphanDay[] }
+  | { status: 'fixed'; removed: number; skippedLocked: number }
+  | { status: 'error'; message: string }
 
 // 帰国情報タブ（旧 home-leave ページから統合）
 // フォーム・開閉状態はデータ再取得で画面全体が読み込み表示に切り替わっても
@@ -56,6 +67,8 @@ interface Props {
 
 export default function HomeLeaveTab({ visible, homeLeaves, workers, password, ui, patchUi, onRefresh }: Props) {
   const [hlSaving, setHlSaving] = useState(false)
+  // 出面の帰国フラグ突合（2026-08-03 追加）。詳細は app/api/home-leave/reconcile/route.ts
+  const [reconcile, setReconcile] = useState<ReconcileState>({ status: 'idle' })
 
   if (!visible) return null
 
@@ -379,6 +392,102 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
             ))}
           </div>
         ))}
+      </div>
+
+      {/* ── 出面の帰国フラグ点検（2026-08-03 追加） ──
+          帰国フラグは承認時に出面へ実際に書き込まれる実体データ。2026-08-03 以前は
+          期間変更・削除が出面へ同期されず、どの申請にも紐づかない残骸が発生していた。
+          書き込み側は lib/home-leave-sync.ts で根治済みだが、過去データの掃除用に残す。 */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+        <h3 className="font-bold text-hibi-navy dark:text-gray-200 flex items-center gap-2">
+          🔍 出面の帰国表示を点検
+        </h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+          出面入力画面に、どの帰国申請にも対応しない「✈帰国」が残っていないか調べます。
+          期間を変更したのに古い帰国表示が消えない場合はここで確認してください。
+          先に検出だけ行い、内容を確認してから削除します。
+        </p>
+
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button
+            onClick={async () => {
+              setReconcile({ status: 'checking' })
+              try {
+                const res = await fetchWithAuth('/api/home-leave/reconcile', { password })
+                if (!res.ok) throw new Error(`検出に失敗しました (${res.status})`)
+                const data = await res.json()
+                setReconcile({ status: 'checked', orphans: data.orphans || [] })
+              } catch (e) {
+                setReconcile({ status: 'error', message: e instanceof Error ? e.message : '通信エラー' })
+              }
+            }}
+            disabled={reconcile.status === 'checking' || reconcile.status === 'fixing'}
+            className="bg-white border border-gray-300 text-hibi-navy dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {reconcile.status === 'checking' ? '検出中...' : '残っている帰国表示を検出'}
+          </button>
+
+          {reconcile.status === 'checked' && reconcile.orphans.filter(o => !o.locked).length > 0 && (
+            <button
+              onClick={async () => {
+                const orphans = reconcile.status === 'checked' ? reconcile.orphans : []
+                setReconcile({ status: 'fixing', orphans })
+                const r = await postJson<{ removed: number; skippedLocked: number }>(
+                  '/api/home-leave/reconcile', { fix: true }, { password },
+                )
+                if (!r.ok || !r.data) {
+                  setReconcile({ status: 'error', message: r.error || '削除に失敗しました' })
+                  return
+                }
+                setReconcile({ status: 'fixed', removed: r.data.removed, skippedLocked: r.data.skippedLocked })
+                onRefresh()
+              }}
+              className="bg-hibi-navy hover:bg-hibi-light text-white rounded-lg px-4 py-2 text-sm font-bold"
+            >
+              {reconcile.orphans.filter(o => !o.locked).length}件を削除する
+            </button>
+          )}
+        </div>
+
+        {reconcile.status === 'checked' && (
+          reconcile.orphans.length === 0 ? (
+            <div className="mt-3 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-2">
+              ✓ 余分な帰国表示はありません
+            </div>
+          ) : (
+            <div className="mt-3 text-sm bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+              <div className="font-bold text-amber-800 dark:text-amber-300">
+                {reconcile.orphans.length}件の余分な帰国表示が見つかりました
+              </div>
+              <ul className="mt-2 space-y-0.5 text-amber-900 dark:text-amber-200 max-h-48 overflow-y-auto">
+                {reconcile.orphans.map(o => (
+                  <li key={`${o.workerId}_${o.date}`}>
+                    {o.date}　{workers.find(w => w.id === o.workerId)?.name || `ID:${o.workerId}`}
+                    {o.locked && <span className="ml-2 text-xs text-gray-500">（月次ロック済みのため削除しません）</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        )}
+
+        {reconcile.status === 'fixing' && (
+          <div className="mt-3 text-sm text-gray-500">削除中...</div>
+        )}
+
+        {reconcile.status === 'fixed' && (
+          <div className="mt-3 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-lg px-3 py-2">
+            ✓ {reconcile.removed}件の余分な帰国表示を削除しました
+            {reconcile.skippedLocked > 0 && `（月次ロック済み ${reconcile.skippedLocked}件はそのまま）`}
+            <div className="text-xs text-gray-500 mt-1">出面入力画面を再読み込みすると反映されます</div>
+          </div>
+        )}
+
+        {reconcile.status === 'error' && (
+          <div className="mt-3 text-sm text-red-700 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2">
+            {reconcile.message}
+          </div>
+        )}
       </div>
     </div>
   )

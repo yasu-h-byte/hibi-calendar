@@ -119,10 +119,16 @@ export async function POST(request: NextRequest) {
         // 管理者直接登録は申請プロセスをスキップ。createdAt は監査用。
         createdAt: new Date().toISOString(),
       })
+      // 出面の帰国フラグを同期（2026-08-03 追加）。
+      // 手動登録は status='approved' で作るのに、これまで出面へ何も書いていなかった。
+      // 承認経路と同じ状態になるよう、ここでも必ず同期する。
+      const { syncHomeLeaveAttendance } = await import('@/lib/home-leave-sync')
+      const sync = await syncHomeLeaveAttendance(workerId, null, { startDate, endDate })
+
       const endLabel = returnUndecided ? '復帰未定' : endDate
       await logActivity('admin', 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endLabel}`)
 
-      return NextResponse.json({ success: true, id })
+      return NextResponse.json({ success: true, id, attendanceSync: sync })
     }
 
     // ── 更新 ──
@@ -174,10 +180,25 @@ export async function POST(request: NextRequest) {
       if (Object.keys(updates).length > 0) {
         await updateDoc(ref, updates)
       }
+
+      // 出面の帰国フラグを同期（2026-08-03 追加 / グエン タイン フウ事案の直接原因）。
+      // ここで旧期間を渡すのが肝。渡さないと旧期間に書いた hk が消えず、
+      // 「9/1開始に直したのに7/30から帰国中」という残骸が生まれる。
+      // hk は承認済みの申請にしか書かれないので、それ以外の状態では触らない。
+      let sync = null
+      if (current.status === 'approved') {
+        const { syncHomeLeaveAttendance } = await import('@/lib/home-leave-sync')
+        sync = await syncHomeLeaveAttendance(
+          current.workerId,
+          { startDate: current.startDate, endDate: current.endDate },
+          { startDate: newStart, endDate: newEnd },
+        )
+      }
+
       const endLabel = newEnd >= HOME_LEAVE_SENTINEL_END ? '復帰未定' : newEnd
       await logActivity('admin', 'homeLeave.update', `${current.workerName} 一時帰国更新 ${newStart}〜${endLabel}`)
 
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, attendanceSync: sync })
     }
 
     // ── 削除 ──
@@ -194,9 +215,23 @@ export async function POST(request: NextRequest) {
       }
       const data = snap.data()
       await deleteDoc(ref)
+
+      // 出面の帰国フラグも消す（2026-08-03 追加）。
+      // 申請だけ消して出面に hk が残ると、どの申請にも紐づかない孤立フラグになり
+      // 原因を追えなくなる。削除は「新期間 null」として同期する。
+      let sync = null
+      if (data.status === 'approved') {
+        const { syncHomeLeaveAttendance } = await import('@/lib/home-leave-sync')
+        sync = await syncHomeLeaveAttendance(
+          data.workerId,
+          { startDate: data.startDate, endDate: data.endDate },
+          null,
+        )
+      }
+
       await logActivity('admin', 'homeLeave.delete', `${data.workerName} 一時帰国削除 ${data.startDate}〜${data.endDate}`)
 
-      return NextResponse.json({ success: true })
+      return NextResponse.json({ success: true, attendanceSync: sync })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
