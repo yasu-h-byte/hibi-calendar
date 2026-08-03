@@ -10,7 +10,7 @@ import { isTimeBasedMonth, calcActualHours } from '@/types'
 import {
   currentYm, getYmOptions, getDow, DOW_JA,
   computeWorkerTotals, computeSubconTotals, computeFooterSums, EMPTY_FOOTER_SUMS,
-  collectSundayWarnings, collectHolidayWorkWarnings,
+  collectRestDayWorkWarnings,
 } from '@/lib/attendance-grid'
 import AttendanceActionBar from '@/components/AttendanceActionBar'
 import HomeLeaveBanner from '@/components/attendance/HomeLeaveBanner'
@@ -768,14 +768,12 @@ export default function AttendanceGridPage() {
 
   // ── Computed: validation warnings ──
 
-  const sundayWarnings = useMemo(() => {
+  // 日曜と休日は同じ日に重なるため1つに統合（2026-08-03）。詳細は lib/attendance-grid.ts
+  const restDayWarnings = useMemo(() => {
     if (!data) return []
-    return collectSundayWarnings(data.year, data.month, data.daysInMonth, data.workers, workerEntries)
-  }, [data, workerEntries])
-
-  const holidayWorkWarnings = useMemo(() => {
-    if (!data) return []
-    return collectHolidayWorkWarnings(data.daysInMonth, data.calendarDays, data.workers, workerEntries)
+    return collectRestDayWorkWarnings(
+      data.year, data.month, data.daysInMonth, data.calendarDays, data.workers, workerEntries,
+    )
   }, [data, workerEntries])
 
   // ── Assignment modal handlers ──
@@ -881,11 +879,10 @@ export default function AttendanceGridPage() {
         />
       )}
 
-      {/* 日曜出勤・休日出勤の警告（components/attendance/AttendanceWarningBanner.tsx に集約） */}
-      <AttendanceWarningBanner title="日曜出勤あり" items={sundayWarnings} tone="warning" />
+      {/* 休日・日曜の出勤警告。1日につき1件だけ出す（日曜と休日で二重表示しない） */}
       <AttendanceWarningBanner
-        title="休日出勤あり"
-        items={holidayWorkWarnings.map(w => ({ workerName: w.workerName, day: w.day, suffix: w.dayType }))}
+        title="休日・日曜の出勤あり"
+        items={restDayWarnings.map(w => ({ workerName: w.workerName, day: w.day, suffix: w.dayType }))}
         tone="orange"
       />
 

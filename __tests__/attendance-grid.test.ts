@@ -13,8 +13,7 @@ import {
   computeWorkerTotals,
   computeSubconTotals,
   computeFooterSums,
-  collectSundayWarnings,
-  collectHolidayWorkWarnings,
+  collectRestDayWorkWarnings,
 } from '@/lib/attendance-grid'
 import { AttEntry } from '@/app/(app)/attendance/types'
 
@@ -281,27 +280,44 @@ describe('警告の収集', () => {
 
   it('日曜出勤を検出（有給は除外）', () => {
     // 2026年6月: 日曜 = 7, 14, 21, 28
-    const warnings = collectSundayWarnings(2026, 6, 30, workers, {
+    const warnings = collectRestDayWorkWarnings(2026, 6, 30, null, workers, {
       '1': {
         7: { w: 1 },          // 日曜出勤 → 警告
         14: { w: 1, p: 1 },   // 有給 → 除外
-        8: { w: 1 },          // 月曜 → 対象外
+        8: { w: 1 },          // 月曜・カレンダー未設定 → 対象外
       },
     })
-    expect(warnings).toEqual([{ workerName: '日本 太郎', day: 7 }])
+    expect(warnings).toEqual([{ workerName: '日本 太郎', day: 7, dayType: '日曜' }])
   })
 
-  it('カレンダー休日の出勤を検出', () => {
-    const warnings = collectHolidayWorkWarnings(30, { '10': 'off', '11': 'holiday', '12': 'work' }, workers, {
-      '1': { 10: { w: 1 }, 11: { w: 0.5 }, 12: { w: 1 } },
-    })
+  it('カレンダー休日・祝日の出勤を検出', () => {
+    // 2026年6月10日=水, 11日=木, 12日=金（いずれも日曜ではない）
+    const warnings = collectRestDayWorkWarnings(
+      2026, 6, 30, { '10': 'off', '11': 'holiday', '12': 'work' }, workers,
+      { '1': { 10: { w: 1 }, 11: { w: 0.5 }, 12: { w: 1 } } },
+    )
     expect(warnings).toEqual([
       { workerName: '日本 太郎', day: 10, dayType: '休日' },
       { workerName: '日本 太郎', day: 11, dayType: '祝日' },
     ])
   })
 
-  it('カレンダー未設定なら休日警告なし', () => {
-    expect(collectHolidayWorkWarnings(30, null, workers, { '1': { 10: { w: 1 } } })).toEqual([])
+  it('カレンダー未設定でも日曜は検出する', () => {
+    // 統合前は collectHolidayWorkWarnings が calendarDays=null で即 return していたが、
+    // 日曜判定はカレンダーに依存しない
+    expect(collectRestDayWorkWarnings(2026, 6, 30, null, workers, { '1': { 10: { w: 1 } } })).toEqual([])
+    expect(collectRestDayWorkWarnings(2026, 6, 30, null, workers, { '1': { 7: { w: 1 } } }))
+      .toEqual([{ workerName: '日本 太郎', day: 7, dayType: '日曜' }])
+  })
+
+  it('日曜かつカレンダー休日の日を二重に報告しない（2026-08-02 日比大介の事例）', () => {
+    // 2026年8月2日は日曜。カレンダー上も休みに設定されているのが通常で、
+    // 統合前はこの1日が「日曜出勤」と「休日出勤」の2枚のバナーに現れていた。
+    const warnings = collectRestDayWorkWarnings(
+      2026, 8, 31, { '2': 'off' }, workers, { '1': { 2: { w: 1 } } },
+    )
+    expect(warnings).toHaveLength(1)
+    // 法定休日（割増1.35倍）である日曜を優先して表示する
+    expect(warnings[0]).toEqual({ workerName: '日本 太郎', day: 2, dayType: '日曜' })
   })
 })

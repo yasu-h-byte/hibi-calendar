@@ -329,51 +329,46 @@ export function computeFooterSums(
 
 // ── 警告の収集 ──
 
-/** 日曜出勤の警告 */
-export function collectSundayWarnings(
+/** 休みの日に出勤していた場合の区分。強い順（法定休日 > 祝日 > 所定休日） */
+export type RestDayWorkType = '日曜' | '祝日' | '休日'
+
+/**
+ * 休日・日曜の出勤警告
+ *
+ * 2026-08-03 統合。以前は「日曜出勤」と「休日出勤」を別々に集めてバナーを2枚
+ * 出していたが、日曜はカレンダー上も休みに設定されているのが通常なので、
+ * 同じ1日が両方に現れて二重表示になっていた（2026-08-02 日比大介の事例:
+ * 「日曜出勤あり 日比大介(2日)」と「休日出勤あり 日比大介(2日/休日)」が並んだ）。
+ *
+ * 1日につき必ず1件だけ、最も強い区分で報告する。日曜を優先するのは法定休日
+ * （割増 1.35 倍）で、給与上の扱いが所定休日より重いため。
+ */
+export function collectRestDayWorkWarnings(
   year: number,
   month: number,
-  daysInMonth: number,
-  workers: Pick<Worker, 'id' | 'name'>[],
-  workerEntries: Record<string, Record<number, AttEntry | null>>,
-): { workerName: string; day: number }[] {
-  const warnings: { workerName: string; day: number }[] = []
-  for (const w of workers) {
-    const wId = String(w.id)
-    const entries = workerEntries[wId] || {}
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dow = getDow(year, month, d)
-      if (dow === 0) {
-        const entry = entries[d]
-        if (entry && entry.w > 0 && !entry.p) {
-          warnings.push({ workerName: w.name, day: d })
-        }
-      }
-    }
-  }
-  return warnings
-}
-
-/** 休日出勤の警告（カレンダーがoff/holidayの日に出勤あり） */
-export function collectHolidayWorkWarnings(
   daysInMonth: number,
   calendarDays: Record<string, DayType> | null,
   workers: Pick<Worker, 'id' | 'name'>[],
   workerEntries: Record<string, Record<number, AttEntry | null>>,
-): { workerName: string; day: number; dayType: string }[] {
-  if (!calendarDays) return []
-  const warnings: { workerName: string; day: number; dayType: string }[] = []
+): { workerName: string; day: number; dayType: RestDayWorkType }[] {
+  const warnings: { workerName: string; day: number; dayType: RestDayWorkType }[] = []
   for (const w of workers) {
-    const wId = String(w.id)
-    const entries = workerEntries[wId] || {}
+    const entries = workerEntries[String(w.id)] || {}
     for (let d = 1; d <= daysInMonth; d++) {
-      const calDay = calendarDays[String(d)]
-      if (calDay && (calDay === 'off' || calDay === 'holiday')) {
-        const entry = entries[d]
-        if (entry && entry.w > 0 && !entry.p) {
-          warnings.push({ workerName: w.name, day: d, dayType: calDay === 'holiday' ? '祝日' : '休日' })
-        }
-      }
+      const entry = entries[d]
+      // 有給(p)は出勤ではないので対象外（統合前の両関数と同じ条件）
+      if (!entry || !(entry.w > 0) || entry.p) continue
+
+      const isSunday = getDow(year, month, d) === 0
+      const calDay = calendarDays?.[String(d)]
+      const isCalendarRest = calDay === 'off' || calDay === 'holiday'
+      if (!isSunday && !isCalendarRest) continue
+
+      warnings.push({
+        workerName: w.name,
+        day: d,
+        dayType: isSunday ? '日曜' : calDay === 'holiday' ? '祝日' : '休日',
+      })
     }
   }
   return warnings
