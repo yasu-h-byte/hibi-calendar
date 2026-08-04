@@ -135,7 +135,7 @@ export default function ListTab({ visible, filteredWorkers, loading, onEdit, asO
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-2">
                       {/* 名前: 顔写真 + 固定幅160px（写真が無い人はイニシャル表示） */}
-                      <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={36} />
+                      <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={48} />
                       <div className="w-[160px] flex-shrink-0 truncate" title={w.name}>
                         <span className="font-semibold text-gray-900 dark:text-gray-100">{w.name}</span>
                       </div>

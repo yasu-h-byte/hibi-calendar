@@ -444,7 +444,7 @@ export default function WorkersPage() {
                 <tr key={w.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30 ${w.retired ? 'opacity-45' : ''}`}>
                   <td className="px-3 py-2.5 text-gray-400">{w.id}</td>
                   <td className="px-3 py-2.5 font-medium">
-                    <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={36} className="mr-2" />
+                    <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={48} className="mr-2" />
                     {w.name}
                     {w.dispatchTo && (
                       <span
@@ -591,7 +591,7 @@ export default function WorkersPage() {
                 <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
                   <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">顔写真</h4>
                   <div className="flex items-center gap-4">
-                    <WorkerAvatar name={form.name} src={photos[String(editId)]} size={72} />
+                    <WorkerAvatar name={form.name} src={photos[String(editId)]} size={96} />
                     <div className="flex-1">
                       <label className={`inline-block bg-white border border-gray-300 text-hibi-navy dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium ${photoBusy ? 'opacity-50' : 'cursor-pointer'}`}>
                         {photoBusy ? '保存中...' : photos[String(editId)] ? '写真を変更' : '写真を選ぶ'}
