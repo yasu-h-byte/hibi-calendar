@@ -3,6 +3,8 @@
 import { fmtPct } from '@/lib/format'
 import { rateBarColor } from '@/lib/leave-utils'
 import { PLWorker } from '../types'
+import WorkerAvatar from '@/components/WorkerAvatar'
+import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 
 // 一覧タブ: KPI・全社消化率・スタッフ別テーブル
 
@@ -15,6 +17,9 @@ interface Props {
 }
 
 export default function ListTab({ visible, filteredWorkers, loading, onEdit, asOfDate }: Props) {
+  // 顔写真（2026-08-03 追加）。フックは早期 return より前に呼ぶ必要がある
+  const { photos } = useWorkerPhotos()
+
   if (!visible) return null
 
   // 基準日が指定されていれば「その日時点の残数」を表示する（月末残高の突合用）。
@@ -129,7 +134,8 @@ export default function ListTab({ visible, filteredWorkers, loading, onEdit, asO
                 <td className="px-3 py-2">
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-2">
-                      {/* 名前: 固定幅160px */}
+                      {/* 名前: 顔写真 + 固定幅160px（写真が無い人はイニシャル表示） */}
+                      <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={24} />
                       <div className="w-[160px] flex-shrink-0 truncate" title={w.name}>
                         <span className="font-semibold text-gray-900 dark:text-gray-100">{w.name}</span>
                       </div>

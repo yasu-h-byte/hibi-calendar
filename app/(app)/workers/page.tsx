@@ -9,6 +9,9 @@ import { JOB_LABELS } from '@/lib/jobs'
 import { jobBadge } from '@/lib/labels'
 import { JP_SALARY_AVG_MONTHLY_HOURS } from '@/lib/constants'
 import RaiseHistoryTab from './RaiseHistoryTab'
+import WorkerAvatar from '@/components/WorkerAvatar'
+import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
+import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
 const VISA_LABELS: Record<string, string> = {
@@ -68,6 +71,10 @@ export default function WorkersPage() {
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  // 顔写真（2026-08-03 追加）。名前と顔が一致しない問題への対応
+  const { photos, reload: reloadPhotos } = useWorkerPhotos()
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState('')
   const [qrWorker, setQrWorker] = useState<Worker | null>(null)
   const [sortKey, setSortKey] = useState<string>('id')
   const [sortAsc, setSortAsc] = useState(true)
@@ -437,6 +444,7 @@ export default function WorkersPage() {
                 <tr key={w.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30 ${w.retired ? 'opacity-45' : ''}`}>
                   <td className="px-3 py-2.5 text-gray-400">{w.id}</td>
                   <td className="px-3 py-2.5 font-medium">
+                    <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={24} className="mr-2" />
                     {w.name}
                     {w.dispatchTo && (
                       <span
@@ -577,6 +585,84 @@ export default function WorkersPage() {
             </h3>
 
             <div className="space-y-4">
+              {/* ── 顔写真（2026-08-03 追加。保存は他項目と独立して即時反映） ──
+                  新規追加時は workerId がまだ無いので出さない。先に保存してから登録する。 */}
+              {editId && (
+                <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+                  <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">顔写真</h4>
+                  <div className="flex items-center gap-4">
+                    <WorkerAvatar name={form.name} src={photos[String(editId)]} size={56} />
+                    <div className="flex-1">
+                      <label className={`inline-block bg-white border border-gray-300 text-hibi-navy dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium ${photoBusy ? 'opacity-50' : 'cursor-pointer'}`}>
+                        {photoBusy ? '保存中...' : photos[String(editId)] ? '写真を変更' : '写真を選ぶ'}
+                        <input
+                          type="file"
+                          accept={AVATAR_ACCEPT}
+                          disabled={photoBusy}
+                          className="hidden"
+                          onChange={async e => {
+                            const file = e.target.files?.[0]
+                            e.target.value = ''  // 同じファイルを選び直せるようにする
+                            if (!file) return
+                            setPhotoError('')
+                            setPhotoBusy(true)
+                            try {
+                              const dataUri = await fileToAvatarDataUri(file)
+                              const res = await fetch('/api/workers/photo', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                body: JSON.stringify({ action: 'save', workerId: editId, workerName: form.name, dataUri }),
+                              })
+                              if (!res.ok) {
+                                const err = await res.json().catch(() => ({}))
+                                throw new Error(err.error || '保存に失敗しました')
+                              }
+                              reloadPhotos()
+                            } catch (err) {
+                              setPhotoError(err instanceof Error ? err.message : '保存に失敗しました')
+                            } finally {
+                              setPhotoBusy(false)
+                            }
+                          }}
+                        />
+                      </label>
+                      {photos[String(editId)] && (
+                        <button
+                          type="button"
+                          disabled={photoBusy}
+                          onClick={async () => {
+                            if (!confirm(`${form.name} さんの写真を削除しますか？`)) return
+                            setPhotoError('')
+                            setPhotoBusy(true)
+                            try {
+                              const res = await fetch('/api/workers/photo', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                                body: JSON.stringify({ action: 'delete', workerId: editId, workerName: form.name }),
+                              })
+                              if (!res.ok) throw new Error('削除に失敗しました')
+                              reloadPhotos()
+                            } catch (err) {
+                              setPhotoError(err instanceof Error ? err.message : '削除に失敗しました')
+                            } finally {
+                              setPhotoBusy(false)
+                            }
+                          }}
+                          className="ml-2 text-xs text-gray-500 hover:text-red-600 disabled:opacity-50"
+                        >
+                          削除
+                        </button>
+                      )}
+                      <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">
+                        選ぶだけで自動的に正方形・小サイズに縮小して保存します。<br />
+                        写真はログインした人にしか表示されません。
+                      </p>
+                      {photoError && <p className="text-xs text-red-600 mt-1">{photoError}</p>}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* ── 基本情報 ── */}
               <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-3">
                 <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">基本情報</h4>
