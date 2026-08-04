@@ -33,7 +33,9 @@ export default function WorkerAvatar({
         alt={name}
         title={name}
         style={style}
-        className={`rounded-full object-cover bg-gray-100 dark:bg-gray-700 flex-shrink-0 align-middle ${className}`}
+        // inline-block を必ず付けること。Tailwind の preflight が img を display:block に
+        // するため、付け忘れると表のセル内で名前が次の行へ押し出される（2026-08-03 の不具合）
+        className={`rounded-full object-cover bg-gray-100 dark:bg-gray-700 flex-shrink-0 inline-block align-middle ${className}`}
       />
     )
   }
