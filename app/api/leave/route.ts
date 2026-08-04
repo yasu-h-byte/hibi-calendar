@@ -6,7 +6,7 @@ import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
@@ -176,14 +176,45 @@ export async function POST(request: NextRequest) {
       const plData = (data.plData || {}) as Record<string, Record<string, unknown>[]>
       const wRecords = plData[String(workerId)] || []
 
-      // 対象FYレコード: 最新の付与レコード
-      const granted = wRecords
-        .filter(r => r.grantDate && ((r.grantDays as number | undefined) ?? 0) > 0)
-        .slice()
-        .sort((a, b) => new Date(a.grantDate as string).getTime() - new Date(b.grantDate as string).getTime())
-      const targetRec = granted[granted.length - 1]
+      // 対象FYレコード: 「今日時点で有効な」付与レコード（2026-08-04 修正）
+      //   旧: grantDate 最大 = 先に作られた未来の付与レコードを掴み、履歴がそちらに残る
+      //   （残数チェックが未来枠を見ていたトゥアン事案と同型のバグ）
+      const activeRec = selectActiveGrantRecord(
+        wRecords as { grantDate?: string; grantDays?: number; grant?: number; _archived?: boolean }[],
+        todayJST(),
+      )
+      const targetRec = (activeRec as Record<string, unknown> | null)
+        ?? wRecords.filter(r => r.grantDate && ((r.grantDays as number | undefined) ?? 0) > 0).slice(-1)[0]
       if (!targetRec) {
         return NextResponse.json({ error: 'No granted record found for worker' }, { status: 404 })
+      }
+
+      // ── 有給残数チェック（2026-08-04 追加 / トゥアン事案の横展開）──
+      //   この経路（時季指定・管理者手動入力）はこれまで残数を一切見ておらず、
+      //   4月の9日連続入力のような枠超過の主要経路だった。
+      //   残数 < 入力日数 は既定で拒否。前借り等の意図的な超過は
+      //   allowOverdraft:true を明示した場合のみ通し、activityLog に必ず残す。
+      {
+        const { getLeaveBalance } = await import('@/lib/leave-balance')
+        const bal = await getLeaveBalance(Number(workerId))
+        if (bal.remaining < dates.length && body.allowOverdraft !== true) {
+          const wName = (data.workers as { id: number; name?: string }[] | undefined)
+            ?.find(w => w.id === Number(workerId))?.name || `ID:${workerId}`
+          return NextResponse.json({
+            error: bal.noGrant
+              ? `${wName} さんは有給が付与されていません（付与レコードなし）`
+              : `${wName} さんの有給残は ${bal.remaining}日 です（枠 ${bal.total}日 / 消化 ${bal.used}日）。${dates.length}日 は登録できません`,
+            code: 'LEAVE_OVERDRAFT',
+            balance: bal,
+            requestedDays: dates.length,
+          }, { status: 409 })
+        }
+        if (bal.remaining < dates.length && body.allowOverdraft === true) {
+          const wName = (data.workers as { id: number; name?: string }[] | undefined)
+            ?.find(w => w.id === Number(workerId))?.name || `ID:${workerId}`
+          await logActivity('admin', 'leave.overdraft',
+            `${wName} 有給${dates.length}日を残数超過で登録（残 ${bal.remaining}日 / 枠 ${bal.total}日、操作者: ${actor}）`)
+        }
       }
 
       // 出面に P を書き込み
@@ -907,9 +938,44 @@ export async function POST(request: NextRequest) {
 
       // 繰越: ユーザーが明示的に指定している場合はそれを優先。
       // 未指定の場合は前期残日数から自動計算（日本人は強制0）
-      const workersArrG = ((snap.data().workers || []) as { id: number; visa?: string }[])
+      const workersArrG = ((snap.data().workers || []) as { id: number; visa?: string; hireDate?: string }[])
       const workerG = workersArrG.find(x => x.id === Number(workerId))
       const isJpG = !workerG?.visa || workerG.visa === 'none'
+
+      // ── 入力値バリデーション（2026-08-04 追加 / 有給システム総点検）──
+      //   これまで法定超の付与も繰越上限超も素通りだった。詳細は validateGrantInput。
+      {
+        const prevRecsG = records
+          .filter(r => r.grantDate && ((r.grantDays ?? 0) > 0) && !(r as { _archived?: boolean })._archived)
+          .filter(r => !grantDate || (r.grantDate as string) < grantDate)
+          .sort((a, b) => (a.grantDate as string).localeCompare(b.grantDate as string))
+        const prevGrantG = prevRecsG.length > 0 ? (prevRecsG[prevRecsG.length - 1].grantDays ?? 0) : null
+        const v = validateGrantInput({
+          grantDays: Number(grantDays) || 0,
+          carryOver: bodyCarryOver != null ? Number(bodyCarryOver) || 0 : undefined,
+          hireDate: workerG?.hireDate,
+          grantDate: grantDate || undefined,
+          prevGrant: prevGrantG,
+          isJapanese: isJpG,
+        })
+        if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
+
+        // 同一期間への二重付与ガード: 新規作成（同 fy のレコードなし）で、
+        // 既存の別 fy レコードの付与期間内に grantDate が入る場合は拒否。
+        // （半自動付与 executePendingGrants には同等のガードがあるのに手動側に無かった）
+        if (grantDate && idx < 0) {
+          const overlapping = records.find(r =>
+            r.grantDate && ((r.grantDays ?? 0) > 0) && !(r as { _archived?: boolean })._archived &&
+            isSameFiscalYear({ grantDate: r.grantDate as string }, grantDate)
+          )
+          if (overlapping) {
+            return NextResponse.json({
+              error: `付与日 ${grantDate} は既存の付与（${overlapping.grantDate}・FY${overlapping.fy}）の期間内です。同一期間への二重付与はできません。既存レコードの編集で対応してください`,
+            }, { status: 409 })
+          }
+        }
+      }
+
       let carryOverVal: number
       if (bodyCarryOver != null) {
         carryOverVal = Number(bodyCarryOver) || 0
@@ -1083,6 +1149,40 @@ export async function POST(request: NextRequest) {
     records = Array.from(fyMap2.values())
 
     const idx = records.findIndex(r => String(r.fy) === String(fy))
+
+    // ── 入力値バリデーション（2026-08-04 追加 / 有給システム総点検）──
+    //   変更されたフィールドだけ検証する。既存レコードに移行期の変則値
+    //   （法定と一致しない付与日数など）が入っていても、それを触らない編集
+    //   （調整だけ直す等）まで巻き添えで弾かないため。
+    {
+      const workersArrE = ((snap.data().workers || []) as { id: number; visa?: string; hireDate?: string }[])
+      const workerE = workersArrE.find(x => x.id === Number(workerId))
+      const isJpE = !workerE?.visa || workerE.visa === 'none'
+      const existing = idx >= 0 ? records[idx] as Record<string, unknown> : null
+      const newGrantDays = Number(grantDays) || 0
+      const newCarryOver = Number(carryOver) || 0
+      const effGrantDate = (grantDate !== undefined ? grantDate : existing?.grantDate) as string | undefined
+      const grantDaysChanged = !existing || (Number(existing.grantDays) || 0) !== newGrantDays
+      const carryOverChanged = !existing || (Number(existing.carryOver) || 0) !== newCarryOver
+
+      const prevRecsE = records
+        .filter(r => r.grantDate && ((r.grantDays ?? 0) > 0) && !(r as { _archived?: boolean })._archived)
+        .filter(r => String(r.fy) !== String(fy))
+        .filter(r => !effGrantDate || (r.grantDate as string) < effGrantDate)
+        .sort((a, b) => (a.grantDate as string).localeCompare(b.grantDate as string))
+      const prevGrantE = prevRecsE.length > 0 ? (prevRecsE[prevRecsE.length - 1].grantDays ?? 0) : null
+
+      const v = validateGrantInput({
+        grantDays: newGrantDays,
+        // 検証は「変更されたときだけ」。据え置き値は移行期データの可能性があるため素通し
+        carryOver: carryOverChanged ? newCarryOver : undefined,
+        hireDate: grantDaysChanged ? workerE?.hireDate : undefined,
+        grantDate: grantDaysChanged ? (effGrantDate || undefined) : undefined,
+        prevGrant: prevGrantE,
+        isJapanese: isJpE,
+      })
+      if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
+    }
 
     const record: Record<string, unknown> = {
       fy: String(fy),

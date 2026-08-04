@@ -144,6 +144,78 @@ export function selectActiveGrantRecord<T extends {
 }
 
 /**
+ * 付与・編集の入力値バリデーション（2026-08-04 追加）
+ *
+ * ■ なぜ必要か（有給システム総点検）
+ *   手動付与(action:'grant')と編集(default action)は grantDays / carryOver / adjustment を
+ *   無制限に受け付けていた。法定を超える付与も、繰越の法定上限（前期付与分まで＝労基法115条の
+ *   FIFO消化）を超える値も素通りし、トゥアン事案の「繰越15日」誤入力を止められなかった。
+ *   代表の方針は「意図して法定より多く付与することはない」なので、超過はエラーとして弾く。
+ *
+ * ■ ルール
+ *   - grantDays: 0〜20（フルタイムの法定最大は20日）
+ *   - hireDate と grantDate が揃っていれば calcLegalPL を上限とする
+ *     （法定未満は移行データ等で存在し得るため許容。超過のみ拒否）
+ *   - 入社6ヶ月未満（legal=0）への付与は拒否（前倒し付与の誤操作防止。
+ *     意図的な前倒しをしたくなったらこのガードごと見直すこと）
+ *   - carryOver: 0〜20。前期レコードがあればその付与日数(prevGrant)が上限（法115条FIFO）。
+ *     前期レコードが無い（初回付与）のに繰越>0 は拒否
+ *   - 日本人（期末買取制）の繰越>0 は拒否
+ */
+export function validateGrantInput(args: {
+  grantDays: number
+  /** 手動指定された繰越。自動計算値を渡さないこと（検証不要のため undefined でよい） */
+  carryOver?: number
+  hireDate?: string
+  grantDate?: string
+  /** 前期レコードの付与日数。前期が存在しなければ null */
+  prevGrant?: number | null
+  isJapanese?: boolean
+}): { ok: true } | { ok: false; error: string } {
+  const { grantDays, carryOver, hireDate, grantDate, prevGrant, isJapanese } = args
+
+  if (!Number.isFinite(grantDays) || grantDays < 0) {
+    return { ok: false, error: `付与日数が不正です（${grantDays}）` }
+  }
+  if (grantDays > 20) {
+    return { ok: false, error: `付与日数 ${grantDays}日 は法定最大（20日）を超えています` }
+  }
+  if (hireDate && grantDate) {
+    const legal = calcLegalPL(hireDate, grantDate)
+    if (legal === 0 && grantDays > 0) {
+      return { ok: false, error: `入社（${hireDate}）から6ヶ月未満の ${grantDate} には付与できません。入社日が正しいか確認してください` }
+    }
+    if (legal > 0 && grantDays > legal) {
+      return { ok: false, error: `付与日数 ${grantDays}日 は法定（${legal}日）を超えています。勤続年数に対して多すぎます` }
+    }
+  }
+
+  if (carryOver !== undefined) {
+    if (!Number.isFinite(carryOver) || carryOver < 0) {
+      return { ok: false, error: `繰越日数が不正です（${carryOver}）` }
+    }
+    if (isJapanese && carryOver > 0) {
+      return { ok: false, error: '日本人社員は期末買取制のため繰越はできません（0日にしてください）' }
+    }
+    if (carryOver > 20) {
+      return { ok: false, error: `繰越日数 ${carryOver}日 は法定最大（20日）を超えています` }
+    }
+    if (prevGrant === null && carryOver > 0) {
+      return { ok: false, error: `初回付与（前期レコードなし）に繰越 ${carryOver}日 は設定できません` }
+    }
+    if (typeof prevGrant === 'number' && carryOver > prevGrant) {
+      return {
+        ok: false,
+        error: `繰越 ${carryOver}日 は前期付与分（${prevGrant}日）を超えています。`
+          + `前々期以前の分は2年時効（労基法115条）で消滅するため、繰越の上限は前期付与日数です`,
+      }
+    }
+  }
+
+  return { ok: true }
+}
+
+/**
  * 労基法115条（有給の2年時効）準拠の「次期への繰越日数」を計算する共通ヘルパー。
  *
  * 前提となる有給の消滅ルール:

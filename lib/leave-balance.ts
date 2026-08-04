@@ -1,7 +1,7 @@
 import { getMainData, getAttData, parseDKey } from './compute'
 import { selectActiveGrantRecord, normalizePLRecord } from './leave-compute'
 import { ymKey } from './attendance'
-import { todayJstIso } from './date-utils'
+import { todayJstIso, addMonthsSafe } from './date-utils'
 
 /**
  * 有給残日数の算出（サーバ共通・2026-08-04 追加）
@@ -64,17 +64,28 @@ export async function getLeaveBalance(
   const buyoutDays = Number((rec as { buyoutDays?: number }).buyoutDays || 0)
 
   // 付与期間 = [grantDate, grantDate + 1年)
+  // ★ 期間終端は addMonthsSafe（文字列演算）で作ること。Date+toISOString だと
+  //   実行環境のタイムゾーンで日付が1日ズレる（JST機で -9h → 前日になる）。
+  //   Vercel(UTC) では顕在化しないが、ローカル検証と本番で結果が変わる罠になる。
   const start = rec.grantDate as string
-  const endDate = new Date(start + 'T00:00:00')
-  endDate.setFullYear(endDate.getFullYear() + 1)
-  const end = endDate.toISOString().slice(0, 10)
+  const end = addMonthsSafe(start, 12)
 
-  // 期間内の月をすべて走査して p:1 を数える（同日複数現場は1日に丸める）
+  // 期間内の月（YYYYMM）を start の月から end の月まで列挙して p:1 を数える
+  //（同日複数現場は1日に丸める）
   const days = new Set<string>()
-  const cur = new Date(start + 'T00:00:00')
-  cur.setDate(1)
-  while (cur < endDate) {
-    const ym = ymKey(cur.getFullYear(), cur.getMonth() + 1)
+  const startYm = start.slice(0, 4) + start.slice(5, 7)
+  const endYm = end.slice(0, 4) + end.slice(5, 7)
+  const yms: string[] = []
+  {
+    let y = Number(startYm.slice(0, 4))
+    let m = Number(startYm.slice(4, 6))
+    while (ymKey(y, m) <= endYm && yms.length < 14) {
+      yms.push(ymKey(y, m))
+      m++
+      if (m > 12) { m = 1; y++ }
+    }
+  }
+  for (const ym of yms) {
     const att = await getAttData(ym)
     for (const [key, entry] of Object.entries(att.d)) {
       const e = entry as { p?: number } | null
@@ -86,7 +97,6 @@ export async function getLeaveBalance(
       if (excludeDate && iso === excludeDate) continue
       days.add(iso)
     }
-    cur.setMonth(cur.getMonth() + 1)
   }
 
   const used = norm.adjustment + buyoutDays + days.size

@@ -473,50 +473,23 @@ export async function POST(request: NextRequest) {
         break
       }
       case 'leave': {
-        // 2026-06-XX 修正 (CR-3): 出面入力経由の有給申請でも残日数チェック
-        //   旧: 無条件に書き込み → 残超過消化が成立する
-        //   新: 申請モーダルと同じ残チェックを実施
-        //   ※ 「申請モーダル経由のみ」に強制する代替案もあるが、既存UXを壊さないため
-        //      ここでチェックする方針
+        // 2026-08-04 修正（有給システム総点検）: 残数チェックを getLeaveBalance に統一
+        //   旧実装は2つの穴があった:
+        //   ① 「grantDate 降順の先頭」= 先に作られた未来の付与レコードを掴み、
+        //      未消化の未来枠で判定してすり抜ける（トゥアン事案と同型）
+        //   ② 付与レコードが1件も無いスタッフは latest=undefined でチェック自体を素通り
+        //   また 36ヶ月分の出面を読んでおり、クォータ超過事故歴のある読み取り量だった
+        //   （共通ヘルパーは付与期間の12〜13ヶ月分のみ）。
         try {
-          const mainData = (await import('@/lib/compute')).getMainData
-          const main = await mainData()
-          const plRecords = main.plData[String(worker.id)] || []
-          // 当期 (grantDate 最新) を取得
-          const latest = plRecords
-            .filter((r: { grantDate?: string }) => r.grantDate)
-            .sort((a: { grantDate?: string }, b: { grantDate?: string }) =>
-              new Date(b.grantDate!).getTime() - new Date(a.grantDate!).getTime()
-            )[0]
-          if (latest) {
-            const { computePeriodUsed, computeRemainingDays } = await import('@/lib/leave-compute')
-            // 当該年度の全有給日を集計（全月の att を取得）
-            const { getAttData } = await import('@/lib/compute')
-            const allAtt: Record<string, unknown> = {}
-            const now = new Date()
-            for (let y = now.getFullYear() - 1; y <= now.getFullYear() + 1; y++) {
-              for (let m = 1; m <= 12; m++) {
-                const ymStr = `${y}${String(m).padStart(2, '0')}`
-                const att = await getAttData(ymStr)
-                Object.assign(allAtt, att.d)
-              }
-            }
-            const used = computePeriodUsed(worker.id, latest.grantDate!, allAtt)
-            const grant = (latest as { grantDays?: number; grant?: number }).grantDays
-              ?? (latest as { grant?: number }).grant ?? 0
-            const carry = (latest as { carryOver?: number; carry?: number }).carryOver
-              ?? (latest as { carry?: number }).carry ?? 0
-            // 残数 = (付与 + 繰越) − (調整 + 買取済み + 申請消化)。
-            //   手組みの total-periodUsed は買取済み日数を引いておらず、買取後の
-            //   残0スタッフでも申請が通ってしまっていた（監査⑥）。共通ヘルパーに統一。
-            const total = grant + carry
-            const remaining = computeRemainingDays(total, latest, used.requestedPeriodUsed)
-            if (remaining <= 0) {
-              return NextResponse.json(
-                { error: '有給休暇の残日数がありません。管理者にご確認ください。' },
-                { status: 400 }
-              )
-            }
+          const { getLeaveBalance } = await import('@/lib/leave-balance')
+          const targetDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+          // 同じ日の再送信で自分自身を二重カウントしないよう excludeDate を渡す
+          const bal = await getLeaveBalance(worker.id, undefined, targetDate)
+          if (bal.remaining <= 0) {
+            return NextResponse.json(
+              { error: '有給休暇の残日数がありません。管理者にご確認ください。 / Không còn ngày nghỉ phép. Vui lòng liên hệ quản lý.' },
+              { status: 400 }
+            )
           }
         } catch (chkErr) {
           // 残チェックでエラーが出ても申請自体は通す（既存運用継続性）

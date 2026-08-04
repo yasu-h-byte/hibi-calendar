@@ -110,23 +110,42 @@ export default function DesignateModal({ worker, kind, sites, password, onClose,
               if (!confirm(msg)) return
               setDesignateSubmitting(true)
               try {
-                const res = await fetch('/api/leave', {
+                const payload = {
+                  action: 'designateLeaves',
+                  workerId: worker.id,
+                  dates: validDates,
+                  siteId: designateSiteId,
+                  note: designateNote,
+                  kind,
+                  overwriteHomeLeave: designateOverwriteHomeLeave,
+                }
+                const post = (extra: Record<string, unknown> = {}) => fetch('/api/leave', {
                   method: 'POST',
                   headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    action: 'designateLeaves',
-                    workerId: worker.id,
-                    dates: validDates,
-                    siteId: designateSiteId,
-                    note: designateNote,
-                    kind,
-                    overwriteHomeLeave: designateOverwriteHomeLeave,
-                  }),
+                  body: JSON.stringify({ ...payload, ...extra }),
                 })
+                let res = await post()
+                // 残数超過（2026-08-04 追加）: 内容を明示したうえで、承知の場合のみ上書き実行。
+                // 上書きはサーバ側で activityLog に記録される
+                if (res.status === 409) {
+                  const err = await res.clone().json().catch(() => null)
+                  if (err?.code === 'LEAVE_OVERDRAFT') {
+                    const b = err.balance
+                    const over = confirm(
+                      `${worker.name} さんの有給残は ${b?.remaining ?? 0} 日です`
+                      + `（枠 ${b?.total}日 / 消化 ${b?.used}日）。\n`
+                      + `${validDates.length}日 を登録すると枠を超えます。\n\n`
+                      + `残数を超えて登録しますか？（記録に残ります）`
+                    )
+                    if (!over) return
+                    res = await post({ allowOverdraft: true })
+                  }
+                }
                 if (res.ok) {
                   onSuccess()
                 } else {
-                  alert('処理に失敗しました')
+                  const err = await res.json().catch(() => null)
+                  alert(err?.error || '処理に失敗しました')
                 }
               } finally { setDesignateSubmitting(false) }
             }}

@@ -1,8 +1,18 @@
-import { db } from './firebase'
-import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { MainData, PLRecord, RawWorker } from './compute'
 import { isAlreadyRetired } from './workers'
 import { calcLegalPL } from './leave-compute'
+
+/**
+ * ⚠️ 2026-08-04 有給システム総点検での整理:
+ *   旧 `checkAndGrantPL`（全自動付与）と旧 `calcCarryOver` はこのファイルから削除した。
+ *   - checkAndGrantPL は呼び出し元ゼロの休眠コードだったが、繰越計算が出面の実消化を
+ *     完全に無視し（stale な used フィールドだけで計算）、上限も法定FIFO（前期付与分まで）
+ *     でなく一律20日だった。さらに plData 全体を丸ごと updateDoc しており、
+ *     将来誰かが呼ぶと「余分に付与 + 他ワーカーの巻き添え上書き」の二重事故になる状態だった。
+ *   - 実際の付与は app/api/leave/route.ts の getPendingGrants / executePendingGrants
+ *     （半自動付与）に一本化されている。全自動付与を復活させる場合は必ずそちらの
+ *     calcCarryOverForWorker（出面ベース + calcLegalCarryOver）を使うこと。
+ */
 
 /**
  * Get current date in JST (Asia/Tokyo).
@@ -18,10 +28,11 @@ function getJSTDate(): Date {
 /**
  * Calculate legal PL days based on years of service at grant date.
  * 2026-06-XX 修正 (MI-1): lib/leave-compute.ts の calcLegalPL に統合
- *   重複実装を削除して共通ヘルパーに委譲
+ * 2026-08-04 修正: toISOString はUTC変換で JST 環境だと日付が1日ズレるため、
+ *   ローカル日付のまま文字列化する
  */
 function calcLegalPLDays(hireDate: string, grantDate: Date): number {
-  const grantIso = grantDate.toISOString().slice(0, 10)
+  const grantIso = `${grantDate.getFullYear()}-${String(grantDate.getMonth() + 1).padStart(2, '0')}-${String(grantDate.getDate()).padStart(2, '0')}`
   return calcLegalPL(hireDate, grantIso)
 }
 
@@ -124,132 +135,6 @@ export function calcNextGrantDate(
 }
 
 /**
- * Calculate carry-over days from previous grant record.
- * Max carry is 20 days.
- *
- * ⚠️ 2026-05-08 修正:
- *   _archived: true レコード（時効処理済の古いレコード）は前期判定から除外。
- *   旧コードでは archived なレコードでも grantDays > 0 ならば最新FY判定に拾われ、
- *   archived の fy 値が大きい場合に誤った前期を採用するリスクがあった。
- */
-function calcCarryOver(existingRecords: PLRecord[]): number {
-  if (existingRecords.length === 0) return 0
-
-  // archived（時効処理済み）を除外し、付与実績のあるレコードのみを対象に
-  const active = existingRecords.filter(r => !(r as PLRecord & { _archived?: boolean })._archived)
-  const withGrant = active.filter(r => (r.grantDays || 0) > 0 || (r.grant || 0) > 0)
-  if (withGrant.length === 0) return 0
-
-  // 最新FYを特定
-  const maxFy = Math.max(...withGrant.map(r => Number(r.fy)))
-  // 同じFYに複数レコードがある場合、grantDateが最も新しいもの（正しいレコード）を採用
-  const sameFy = withGrant.filter(r => Number(r.fy) === maxFy)
-  const prev = sameFy.reduce((best, r) => {
-    const bestDate = best.grantDate || ''
-    const rDate = r.grantDate || ''
-    return rDate > bestDate ? r : best
-  })
-
-  const prevTotal = (prev.grantDays || prev.grant || 0) + (prev.carryOver || prev.carry || 0)
-  const prevUsed = (prev.adjustment || prev.adj || 0) + (prev.used || 0)
-  const prevRemaining = Math.max(0, prevTotal - prevUsed)
-
-  return Math.min(prevRemaining, 20)
-}
-
-export interface AutoGrantResult {
-  workerId: number
-  name: string
-  days: number
-  grantDate: string
-  carry: number
-}
-
-/**
- * Check all eligible workers and auto-grant PL if their grant date has arrived.
- *
- * Returns a list of workers who were auto-granted in this call.
- */
-export async function checkAndGrantPL(main: MainData): Promise<AutoGrantResult[]> {
-  const today = getJSTDate()
-  const results: AutoGrantResult[] = []
-
-  // Filter eligible workers: not yet retired, not yakuin, has hireDate
-  // 2026-06-XX 修正: 「未来日に退職予定」のスタッフは付与候補に残す
-  //   （退職日が入った瞬間に半自動付与対象から外れる旧バグの修正）
-  const todayIso = today.toISOString().slice(0, 10)
-  const eligible = main.workers.filter(
-    (w: RawWorker) => !isAlreadyRetired(w.retired, todayIso) && w.job !== 'yakuin' && w.hireDate
-  )
-
-  const plData = { ...main.plData } as Record<string, PLRecord[]>
-  let hasChanges = false
-
-  for (const w of eligible) {
-    const wKey = String(w.id)
-    const records = plData[wKey] || []
-
-    // 旧アプリのデータ（grantDateなし）を持つスタッフはスキップ
-    // 管理画面から手動で付与・更新する
-    const hasOldRecords = records.some(r =>
-      ((r.grant && r.grant > 0) || (r.adj != null) || (r.carry != null)) && !r.grantDate
-    )
-    if (hasOldRecords) continue
-
-    const grantMonth = w.grantMonth
-
-    const nextGrant = calcNextGrantDate(w.hireDate, grantMonth, records)
-    if (!nextGrant) continue
-
-    // Check if today >= next grant date
-    if (today >= nextGrant) {
-      const legalDays = calcLegalPLDays(w.hireDate, nextGrant)
-      if (legalDays <= 0) continue
-
-      const carry = calcCarryOver(records)
-
-      const grantDateStr = `${nextGrant.getFullYear()}-${String(nextGrant.getMonth() + 1).padStart(2, '0')}-${String(nextGrant.getDate()).padStart(2, '0')}`
-      const fy = String(nextGrant.getFullYear())
-
-      const newRecord: PLRecord = {
-        fy,
-        grantDate: grantDateStr,
-        grantDays: legalDays,
-        carryOver: carry,
-        adjustment: 0,
-        used: 0,
-      }
-
-      // 同じ付与日が既にあればスキップ（FYではなく付与日でチェック）
-      const existingGrant = records.find(r => r.grantDate === grantDateStr)
-      if (existingGrant) continue
-
-      // Add new record (don't overwrite existing records)
-      records.push(newRecord)
-
-      plData[wKey] = records
-      hasChanges = true
-
-      results.push({
-        workerId: w.id,
-        name: w.name,
-        days: legalDays,
-        grantDate: grantDateStr,
-        carry,
-      })
-    }
-  }
-
-  // Write to Firestore if any changes
-  if (hasChanges) {
-    const docRef = doc(db, 'demmen', 'main')
-    await updateDoc(docRef, { plData })
-  }
-
-  return results
-}
-
-/**
  * Get upcoming PL grant dates within the next N days.
  * Used for dashboard notifications.
  */
@@ -293,8 +178,10 @@ export function getUpcomingGrants(
       const legalDays = calcLegalPLDays(w.hireDate, nextGrant)
       if (legalDays <= 0) continue
 
-      // 繰越計算: 前回レコードの残日数
-      const carryOver = Math.min(20, calcCarryOver(records))
+      // 繰越の正確な値は出面データが必要（この関数は同期・軽量が前提のため計算しない）。
+      // 表示に使う notifications 側が calcLegalCarryOver + 出面で再計算して上書きする。
+      // 前期レコードが無い（初回付与）ケースでは 0 がそのまま正しい値になる。
+      const carryOver = 0
 
       // 勤続年数
       const hire = new Date(w.hireDate)

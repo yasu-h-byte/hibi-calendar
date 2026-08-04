@@ -81,10 +81,30 @@ export default function RequestsTab({
     try {
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
-      await fetch('/api/leave-request', {
+      const post = (extra: Record<string, unknown> = {}) => fetch('/api/leave-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'approve', requestId: id, approvedBy: user?.workerId || 0 }),
+        body: JSON.stringify({ action: 'approve', requestId: id, approvedBy: user?.workerId || 0, ...extra }),
       })
+      let res = await post()
+      // 残数超過（2026-08-04 追加）: 承認は出面に P を書く「実行」なので残数を再確認している。
+      // 超過を承知で承認する場合のみ上書き（activityLog に記録される）
+      if (res.status === 409) {
+        const err = await res.clone().json().catch(() => null)
+        if (err?.code === 'LEAVE_OVERDRAFT') {
+          const b = err.balance
+          const over = confirm(
+            `有給残が足りません（枠 ${b?.total}日 / 消化 ${b?.used}日 / 残 ${b?.remaining ?? 0}日）。\n\n`
+            + `残数を超えて承認しますか？（記録に残ります）`
+          )
+          if (over) res = await post({ allowOverdraft: true })
+          else { patchUi({ processingReq: null }); return }
+        }
+      }
+      // ⚠️ 旧実装はレスポンスを見ずに成功扱いだった。失敗（月次ロック・残数不足等）を必ず表示する
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        alert(err?.error || `承認に失敗しました (${res.status})`)
+      }
       onRefresh()
     } catch {} finally { patchUi({ processingReq: null }) }
   }

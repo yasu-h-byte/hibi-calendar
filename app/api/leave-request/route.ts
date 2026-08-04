@@ -322,6 +322,30 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // ── 承認時の残数再チェック（2026-08-04 追加 / 有給システム総点検）──
+      //   残数チェックは申請時にしか無く、申請→承認の間に出面直接入力等で残数が
+      //   減っていると、承認によって枠を超える p:1 が書き込まれていた。
+      //   承認は p:1 を出面に書く「実行」の瞬間なので、ここでも必ず残数を見る。
+      //   意図的な超過は allowOverdraft:true でのみ通し、activityLog に残す。
+      {
+        const { getLeaveBalance } = await import('@/lib/leave-balance')
+        const bal = await getLeaveBalance(data.workerId, undefined, data.date)
+        if (bal.remaining < 1 && body.allowOverdraft !== true) {
+          return NextResponse.json({
+            error: bal.noGrant
+              ? `${data.workerName} さんは有給が付与されていません（付与レコードなし）`
+              : `${data.workerName} さんの有給残は 0 日です（枠 ${bal.total}日 / 消化 ${bal.used}日）。承認すると枠を超えます`,
+            code: 'LEAVE_OVERDRAFT',
+            balance: bal,
+          }, { status: 409 })
+        }
+        if (bal.remaining < 1 && body.allowOverdraft === true) {
+          const { logActivity } = await import('@/lib/activity')
+          await logActivity('admin', 'leave.overdraft',
+            `${data.workerName} ${data.date} 有給承認を残数超過で実行（枠 ${bal.total}日 / 消化 ${bal.used}日）`)
+        }
+      }
+
       // Update status
       await setDoc(docRef, {
         ...data,

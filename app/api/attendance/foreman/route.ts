@@ -266,6 +266,28 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'ガード判定に失敗しました（一時的な障害の可能性）' }, { status: 503 })
       }
 
+      // ── 有給の残数チェック（2026-08-04 追加 / 有給システム総点検）──
+      //   職長の代理入力（choice='leave'）はこれまで残数を一切見ていなかった。
+      //   出面グリッド・スタッフ入力・時季指定と同じ共通ヘルパーで判定する。
+      //   職長には超過の上書き権限を与えない（超過が必要な例外は管理者が行う）。
+      if (choice === 'leave') {
+        try {
+          const { getLeaveBalance } = await import('@/lib/leave-balance')
+          const targetDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+          const bal = await getLeaveBalance(Number(workerId), undefined, targetDate)
+          if (bal.remaining <= 0) {
+            return NextResponse.json({
+              error: bal.noGrant
+                ? 'このスタッフは有給が付与されていません。管理者に連絡してください。'
+                : `有給の残日数が 0 日です（枠 ${bal.total}日 / 消化 ${bal.used}日）。管理者に連絡してください。`,
+            }, { status: 409 })
+          }
+        } catch (chkErr) {
+          // 残チェック不能時は従来動作を維持（業務を止めない）。ログのみ残す
+          console.warn('[foreman/leave] 残チェック失敗:', chkErr)
+        }
+      }
+
       const { computeAttendanceDeleteFields } = await import('@/lib/attendance')
       const deleteFields = computeAttendanceDeleteFields(entry)
       await setAttendanceEntry(site.id, workerId, ym, day, entry, { deleteFields })
