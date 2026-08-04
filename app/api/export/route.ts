@@ -8,7 +8,7 @@ import {
   generateHfuAttendance,
   generateSubconConfirmation,
   generateBukakeReport,
-  generatePLLedger,
+  generateLeaveLedger,
   generateMonthlyExcel,
   generatePerSiteAttendance,
   generatePlannedShiftExcel,
@@ -176,21 +176,33 @@ export async function GET(request: NextRequest) {
       }
 
       case 'pl': {
-        // 過去2年分の出面データからPL取得日を収集
+        // 2026-08-04 帳票整理: 旧 generatePLLedger（2シート・サマリー版）を廃止し、
+        // /api/leave/export-ledger と同じ generateLeaveLedger（4シート・買取/時季指定付き）に統一。
+        // 同じ法定帳簿（年次有給休暇管理簿）の二重実装で修正ドリフトが起きかけていたため。
         const now = new Date()
-        const plAttData: Record<string, Record<string, unknown>> = {}
-        for (let y = now.getFullYear() - 2; y <= now.getFullYear(); y++) {
+        const allAttPl: Record<string, import('@/types').AttendanceEntry> = {}
+        for (let y = now.getFullYear() - 3; y <= now.getFullYear(); y++) {
           for (let m = 1; m <= 12; m++) {
-            const attYm = `${y}${String(m).padStart(2, '0')}`
-            const att = await getAttData(attYm)
-            if (att.d) Object.assign(plAttData, att.d)
+            const att = await getAttData(`${y}${String(m).padStart(2, '0')}`)
+            if (att.d) Object.assign(allAttPl, att.d)
           }
         }
-        const plOrg = request.nextUrl.searchParams.get('org') || 'all'
-        const wb = generatePLLedger({
-          workers: main.workers,
-          plData: main.plData,
-          attData: plAttData,
+        const plOrgRaw = request.nextUrl.searchParams.get('org')
+        const plOrg = plOrgRaw === 'hibi' || plOrgRaw === 'hfu' ? plOrgRaw : 'all'
+        const ledgerWorkers = main.workers
+          .filter(w => w.job !== 'yakuin' && w.job !== 'jimu')
+          .map(w => ({
+            id: w.id,
+            name: w.name,
+            org: w.org || '',
+            visa: w.visa || 'none',
+            hireDate: w.hireDate,
+            retired: w.retired || '',
+          }))
+        const wb = generateLeaveLedger({
+          workers: ledgerWorkers,
+          plData: main.plData as Parameters<typeof generateLeaveLedger>[0]['plData'],
+          allAtt: allAttPl,
           org: plOrg,
         })
         const orgLabel = plOrg === 'hfu' ? '_HFU' : plOrg === 'hibi' ? '_日比建設' : ''
@@ -199,27 +211,8 @@ export async function GET(request: NextRequest) {
         break
       }
 
-      case 'monthly': {
-        // Monthly report: return JSON data for client-side print rendering
-        // 2026-06-XX 修正: siteWorkDaysMap を画面と統一（/api/monthly と整合性確保）
-        // 2026-06-12 修正 (監査C2): 全社所定を 0 固定 → main.workDays[ym] に（bukake と同様）
-        const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
-        const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
-        const calendarDaysMap = await loadCalendarDaysMap()
-        const homeLeaves = await getAllActiveHomeLeaves()
-        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
-        const siteNames: Record<string, string> = {}
-        for (const s of main.sites) siteNames[s.id] = s.name
-
-        return NextResponse.json({
-          workers: result.workers,
-          subcons: result.subcons,
-          sites: result.sites,
-          totals: result.totals,
-          siteNames,
-          ym: ymStr,
-        })
-      }
+      // 2026-08-04 帳票整理: case 'monthly'（月次レポートPDF用のJSON返却）は削除。
+      // 画面の集計タブと同じ数字のグラフPDFで、実務で使われていなかった（代表確認済み）。
 
       case 'monthlyExcel': {
         // 2026-06-12 修正 (監査C3): 所定日数をクエリ（画面の未保存入力値）から取らず、

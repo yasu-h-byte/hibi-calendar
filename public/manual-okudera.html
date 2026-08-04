@@ -46,7 +46,7 @@
 
 <h1>HIBI CONSTRUCTION 就業管理システム<br>業務マニュアル（事務担当）</h1>
 <p>対象: 奥寺智子さん（事務担当）<br>
-最終更新: 2026年7月3日<br>
+最終更新: 2026年8月4日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <!-- サマリー：毎月の流れ -->
@@ -57,7 +57,7 @@
 <tr><td><strong>①</strong></td><td><strong>前月の出面を確認</strong>（職長チェック済みのデータを最終確認）</td><td>出面入力</td></tr>
 <tr><td><strong>②</strong></td><td><strong>月次集計</strong>で出勤日数・残業・有給・欠勤をチェック</td><td>月次集計</td></tr>
 <tr><td><strong>③</strong></td><td><strong>給与計算</strong>を確認（詳しくは <a href="/manual-payroll-okudera.html">給与計算マニュアル</a>）</td><td>月次集計</td></tr>
-<tr><td><strong>④</strong></td><td><strong>帳票を出力</strong>（出面表・給与明細・有給管理簿）</td><td>各タブの 📥 Excel出力</td></tr>
+<tr><td><strong>④</strong></td><td><strong>帳票を出力</strong>（出面表・月次集計Excel・有給管理台帳）</td><td>各タブの 📥 Excel出力</td></tr>
 <tr><td><strong>⑤</strong></td><td><strong>月締めロック</strong>（🔒 この月を締める）</td><td>月次集計</td></tr>
 </table>
 <p style="margin:10px 0 0; font-size:13px;">奥寺さんの担当は<strong>日比建設分</strong>です。HFU分は靖仁さんが担当します。</p>
@@ -290,12 +290,14 @@
 <tr><th>帳票名</th><th>形式</th><th>用途</th></tr>
 <tr><td>日比建設向け出面一覧</td><td>Excel</td><td>日比建設分の出面表（3シート構成）</td></tr>
 <tr><td>HFU向け出面一覧</td><td>Excel</td><td>ベトナム人スタッフの出面表（3シート構成／社労士提出用は別ボタン）</td></tr>
+<tr><td>現場別出面一覧</td><td>Excel</td><td>現場ごとにシートを分けた出面表</td></tr>
 <tr><td>外注先向け出面確認書</td><td>Excel</td><td>外注先への確認用</td></tr>
-<tr><td>給与明細</td><td>Excel</td><td>スタッフごとの給与明細</td></tr>
 <tr><td>歩掛管理表</td><td>Excel</td><td>現場別の人工数管理</td></tr>
-<tr><td>月次レポート</td><td>PDF</td><td>売上・原価・利益のサマリー</td></tr>
-<tr><td><strong>有給管理簿</strong></td><td>Excel</td><td>監査対応用（有給・休み管理画面／<code>/leave</code> から出力）</td></tr>
+<tr><td><strong>有給管理台帳</strong></td><td>Excel</td><td>労基署・監査対応用（会社別に出力可。有給・休み管理画面 <code>/leave</code> からも同じものを出力できます）</td></tr>
 </table>
+<div class="box" style="font-size:13px;">
+<strong>※ 2026-08 帳票整理：</strong>「月次レポート（PDF）」「給与明細」は廃止されました。社労士提出用3点（計算根拠PDF・勤務予定シフト・実労働時間明細）は月次集計画面の上部「社労士クイックアクセス」から出力します。
+</div>
 
 <div class="box box-ok">
 <strong>出面Excelの3シート構成：</strong>
@@ -372,7 +374,7 @@
 </div>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-07-03</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-08-04</p>
 
 </body>
 </html>

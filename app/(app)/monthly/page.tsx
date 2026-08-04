@@ -89,8 +89,10 @@ interface SubconMonthly {
 //  Export Types & Cards
 // ────────────────────────────────────────
 
-type ExportType = 'hibi' | 'hfu' | 'perSite' | 'subcon' | 'bukake' | 'monthly' | 'pl'
-  | 'auditPdf' | 'plannedShift' | 'actualHours'  // 2026-06-XX 追加: 社労士提出用
+// 2026-08-04 帳票整理: 'monthly'（月次レポートPDF・未使用）と
+// 'auditPdf' | 'plannedShift' | 'actualHours'（社労士3点 — 集計タブ上部の
+// クイックアクセスと完全重複だったためカードを廃止。機能はクイックアクセスに一本化）を削除
+type ExportType = 'hibi' | 'hfu' | 'perSite' | 'subcon' | 'bukake' | 'pl'
 
 interface ExportCard {
   icon: string
@@ -144,73 +146,17 @@ const EXPORT_CARDS: ExportCard[] = [
     needsYm: true,
   },
   {
-    icon: '📈',
-    title: '月次レポート',
-    description: '月次の売上・原価・粗利をグラフ付きで出力します。経営会議や報告書に利用できます。',
-    format: 'PDF出力',
-    type: 'monthly',
-    needsYm: true,
-  },
-  {
     icon: '🌴',
     title: '有給管理台帳',
-    description: '有給付与・消化・残日数をExcel形式で出力。会社別に出力可能。',
+    description: '年次有給休暇管理簿（管理簿・取得日一覧・買取記録・時季指定記録の4シート）。会社別に出力可能。労基署対応用。',
     format: 'Excel出力',
     type: 'pl',
     needsYm: false,
     needsOrg: true,
   },
-  // 2026-06-XX 追加: 社労士提出用 (会社別。タブ下のクイックアクセスにも同じ機能あり)
-  {
-    icon: '🔍',
-    title: '社労士確認用 PDF',
-    description: 'ベトナム人スタッフの給与計算根拠を PDF で出力。各スタッフ 1ページずつ。社労士チェック・労基署対応用。',
-    format: 'PDF出力',
-    type: 'auditPdf',
-    needsYm: true,
-    needsOrg: true,
-  },
-  {
-    icon: '📅',
-    title: '勤務予定シフト表（社労士提出用）',
-    description: 'ベトナム人スタッフの勤務予定シフトを Excel で出力。各スタッフ 1シート。労働時間・休憩・所定日数の事前計画。',
-    format: 'Excel出力',
-    type: 'plannedShift',
-    needsYm: true,
-    needsOrg: true,
-  },
-  {
-    icon: '⏱',
-    title: '実労働時間明細（社労士提出用）',
-    description: 'ベトナム人スタッフの実際の始業・終業・残業を Excel で出力。各スタッフ 1シート。',
-    format: 'Excel出力',
-    type: 'actualHours',
-    needsYm: true,
-    needsOrg: true,
-  },
+  // 社労士提出用3点（計算根拠PDF・勤務予定シフト・実労働時間明細）は
+  // 集計タブ上部の「社労士クイックアクセス」から出力する（カードは重複のため2026-08-04廃止）
 ]
-
-interface MonthlyReportData {
-  workers: {
-    name: string; org: string; workDays: number; otHours: number;
-    plDays: number; totalCost: number; job: string
-    // 残業(h)の表示統一用（API は WorkerMonthly 全体を返すため実際には存在する）
-    useOldRules?: boolean; nonStatutoryOTHours?: number; legalOtHours?: number
-  }[]
-  subcons: {
-    name: string; type: string; workDays: number; otCount: number; cost: number
-  }[]
-  sites: {
-    name: string; workDays: number; subWorkDays: number;
-    cost: number; subCost: number; billing: number; profit: number; profitRate: number
-  }[]
-  totals: {
-    workDays: number; subWorkDays: number; cost: number;
-    subCost: number; billing: number; profit: number; otHours: number
-  }
-  siteNames: Record<string, string>
-  ym: string
-}
 
 type TopTab = 'summary' | 'export'
 
@@ -541,28 +487,7 @@ export default function MonthlyPage() {
     setExportDownloading(card.type)
 
     try {
-      if (card.type === 'monthly') {
-        const params = new URLSearchParams({ type: 'monthly', ym: eym })
-        const res = await fetch(`/api/export?${params}`, {
-          headers: { 'x-admin-password': password },
-        })
-
-        if (!res.ok) {
-          const msg = await res.text()
-          setExportError(msg || 'データ取得に失敗しました')
-          return
-        }
-
-        const reportData: MonthlyReportData = await res.json()
-        openMonthlyPrintPage(reportData)
-      } else if (card.type === 'auditPdf') {
-        // 2026-06-XX 追加: 社労士確認 PDF は新タブで /monthly/audit-print を開く
-        //   ファイルダウンロードではなくブラウザの「PDFとして保存」を使う
-        const orgSel = exportSelectedOrg[card.type] || 'hibi'
-        const orgParam = orgSel === 'all' ? 'hibi' : orgSel  // all指定なら hibi に fallback (PDF は1組織ずつ)
-        window.open(`/monthly/audit-print?ym=${eym}&org=${orgParam}`, '_blank')
-        return  // 新タブ遷移後はダウンロード完了扱い
-      } else {
+      {
         const params = new URLSearchParams({ type: card.type })
         if (card.needsYm && eym) params.set('ym', eym)
         if (card.needsOrg) params.set('org', exportSelectedOrg[card.type] || 'all')
@@ -1760,171 +1685,3 @@ export default function MonthlyPage() {
   )
 }
 
-// ────────────────────────────────────────
-//  月次レポート印刷用ページ
-// ────────────────────────────────────────
-
-function openMonthlyPrintPage(data: MonthlyReportData) {
-  const ymLabel = (() => {
-    const y = parseInt(data.ym.slice(0, 4))
-    const m = parseInt(data.ym.slice(4, 6))
-    return `${y}年${m}月`
-  })()
-
-  const formatYen = (v: number) => `\u00A5${v.toLocaleString()}`
-
-  const siteRows = data.sites.map(s => `
-    <tr>
-      <td>${s.name}</td>
-      <td class="num">${s.workDays}</td>
-      <td class="num">${s.subWorkDays}</td>
-      <td class="num">${formatYen(s.cost)}</td>
-      <td class="num">${formatYen(s.subCost)}</td>
-      <td class="num">${formatYen(s.billing)}</td>
-      <td class="num">${formatYen(s.profit)}</td>
-      <td class="num">${s.profitRate.toFixed(1)}%</td>
-    </tr>
-  `).join('')
-
-  const workerRows = data.workers.map(w => `
-    <tr>
-      <td>${w.name}</td>
-      <td>${w.org}</td>
-      <td>${w.job}</td>
-      <td class="num">${w.workDays}</td>
-      <td class="num">${displayOtHours(w)}</td>
-      <td class="num">${w.plDays}</td>
-      <td class="num">${formatYen(w.totalCost)}</td>
-    </tr>
-  `).join('')
-
-  const subconRows = data.subcons.map(sc => `
-    <tr>
-      <td>${sc.name}</td>
-      <td>${sc.type}</td>
-      <td class="num">${sc.workDays}</td>
-      <td class="num">${sc.otCount}</td>
-      <td class="num">${formatYen(sc.cost)}</td>
-    </tr>
-  `).join('')
-
-  const t = data.totals
-
-  const html = `<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<title>月次レポート ${ymLabel}</title>
-<style>
-  @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .no-print { display: none !important; }
-  }
-  body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; margin: 20px; color: #1a1a2e; font-size: 12px; }
-  h1 { font-size: 20px; margin-bottom: 4px; }
-  h2 { font-size: 15px; margin-top: 24px; margin-bottom: 8px; border-bottom: 2px solid #1a1a2e; padding-bottom: 4px; }
-  .subtitle { color: #666; font-size: 13px; margin-bottom: 20px; }
-  .summary { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
-  .summary-card { background: #f0f4ff; border-radius: 8px; padding: 12px 16px; min-width: 140px; }
-  .summary-card .label { font-size: 11px; color: #666; }
-  .summary-card .value { font-size: 18px; font-weight: bold; color: #1a1a2e; }
-  .summary-card.profit { background: #e8f5e9; }
-  .summary-card.loss { background: #ffebee; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-  th { background: #1a1a2e; color: white; padding: 6px 8px; text-align: left; font-size: 11px; }
-  td { border-bottom: 1px solid #ddd; padding: 5px 8px; font-size: 11px; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  tr:last-child td { border-bottom: 2px solid #1a1a2e; font-weight: bold; }
-  .print-btn { position: fixed; top: 16px; right: 16px; background: #1a1a2e; color: white; border: none; border-radius: 8px; padding: 10px 24px; font-size: 14px; cursor: pointer; z-index: 100; }
-  .print-btn:hover { background: #2d2d5e; }
-</style>
-</head>
-<body>
-  <button class="print-btn no-print" onclick="window.print()">印刷 / PDF保存</button>
-
-  <h1>月次レポート</h1>
-  <div class="subtitle">${ymLabel}</div>
-
-  <div class="summary">
-    <div class="summary-card">
-      <div class="label">売上</div>
-      <div class="value">${formatYen(t.billing)}</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">総原価</div>
-      <div class="value">${formatYen(t.cost + t.subCost)}</div>
-    </div>
-    <div class="summary-card ${t.profit >= 0 ? 'profit' : 'loss'}">
-      <div class="label">粗利</div>
-      <div class="value">${formatYen(t.profit)}</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">自社人工</div>
-      <div class="value">${t.workDays}人工</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">外注人工</div>
-      <div class="value">${t.subWorkDays}人工</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">残業</div>
-      <div class="value">${t.otHours}h</div>
-    </div>
-  </div>
-
-  <h2>現場別サマリー</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>現場名</th><th>自社人工</th><th>外注人工</th>
-        <th>自社原価</th><th>外注原価</th><th>請求額</th><th>粗利</th><th>粗利率</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${siteRows}
-      <tr>
-        <td>合計</td>
-        <td class="num">${t.workDays}</td>
-        <td class="num">${t.subWorkDays}</td>
-        <td class="num">${formatYen(t.cost)}</td>
-        <td class="num">${formatYen(t.subCost)}</td>
-        <td class="num">${formatYen(t.billing)}</td>
-        <td class="num">${formatYen(t.profit)}</td>
-        <td class="num">${t.billing > 0 ? ((t.profit / t.billing) * 100).toFixed(1) + '%' : '-'}</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <h2>社員別集計</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>名前</th><th>所属</th><th>職種</th>
-        <th>出勤日数</th><th>残業(h)</th><th>有給</th><th>原価</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${workerRows}
-    </tbody>
-  </table>
-
-  <h2>外注先別集計</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>外注先名</th><th>区分</th><th>人工数</th><th>残業人数</th><th>原価</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${subconRows}
-    </tbody>
-  </table>
-</body>
-</html>`
-
-  const printWindow = window.open('', '_blank')
-  if (printWindow) {
-    printWindow.document.write(html)
-    printWindow.document.close()
-  }
-}

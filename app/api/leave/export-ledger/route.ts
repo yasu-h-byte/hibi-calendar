@@ -41,11 +41,17 @@ export async function GET(request: NextRequest) {
 
     const plData = (main.plData || {}) as Record<string, LeaveLedgerRecord[]>
 
-    const wb = generateLeaveLedger({ workers, plData, allAtt })
+    // 会社別フィルタ（2026-08-04 追加）。会社ごとに社労士が異なるため別々に出せるようにする。
+    // 省略時は従来どおり全社（/leave 画面のボタンは全社出力）
+    const orgParam = request.nextUrl.searchParams.get('org')
+    const org = orgParam === 'hibi' || orgParam === 'hfu' ? orgParam : 'all'
+
+    const wb = generateLeaveLedger({ workers, plData, allAtt, org })
     const buffer = workbookToBuffer(wb)
 
     const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-    const filename = `有給管理簿_${dateStr}.xlsx`
+    const orgLabel = org === 'hibi' ? '_日比建設' : org === 'hfu' ? '_HFU' : ''
+    const filename = `有給管理簿${orgLabel}_${dateStr}.xlsx`
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

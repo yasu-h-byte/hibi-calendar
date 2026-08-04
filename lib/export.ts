@@ -748,152 +748,12 @@ export function generateBukakeReport(data: BukakeData): XLSX.WorkBook {
 
 // ────────────────────────────────────────
 //  5. 有給管理台帳
+//  2026-08-04 帳票整理: 旧 generatePLLedger（2シート・サマリー版）は削除した。
+//  generateLeaveLedger（4シート・買取/時季指定の記録付き）と同じ法定帳簿の二重実装で、
+//  修正が片方にしか入らないドリフトが実際に起きかけていたため
+//  （有効期限が1日甘くなるバグを両方で個別に修正した経緯がある）。
+//  /api/export?type=pl と /api/leave/export-ledger の両方が generateLeaveLedger を使う。
 // ────────────────────────────────────────
-
-export interface PLLedgerData {
-  workers: RawWorker[]
-  plData: Record<string, PLRecord[]>
-  attData?: Record<string, Record<string, unknown>>
-  org?: string // 'hibi' | 'hfu' | 'all'
-}
-
-export function generatePLLedger(data: PLLedgerData): XLSX.WorkBook {
-  const { workers, plData, attData, org } = data
-  const wb = XLSX.utils.book_new()
-
-  // 会社フィルタ
-  const orgFilter = org || 'all'
-  const orgLabel = orgFilter === 'hfu' ? 'HFU' : orgFilter === 'hibi' ? '日比建設' : '全社'
-
-  // ── シート1: 有給管理台帳（サマリー） ──
-  const titleRow = [`年次有給休暇管理簿（${orgLabel}）`]
-  const headers = [
-    '名前', '所属', '入社日',
-    '基準日（付与日）', '付与日数', '繰越日数',
-    '取得日数', '残日数', '有効期限',
-  ]
-
-  const rows: (string | number)[][] = [titleRow, headers]
-  // 2026-06-XX 修正: 「今日時点で退職済み」のみ除外。未来日退職予定者は ledger 管理対象
-  const todayIso = todayJstIso()
-  const activeWorkers = workers.filter(w => {
-    if (isAlreadyRetired(w.retired, todayIso)) return false
-    if (orgFilter === 'hibi') return w.org === 'hibi' || w.org === '日比'
-    if (orgFilter === 'hfu') return w.org === 'hfu' || w.org === 'HFU'
-    return true
-  })
-
-  // 出面データからPL取得日を集計
-  const plDates: Record<number, string[]> = {} // workerId -> ['2025/04/15', ...]
-  if (attData) {
-    for (const [key, entry] of Object.entries(attData)) {
-      if (!entry) continue
-      const e = entry as { p?: number }
-      if (e.p === 1) {
-        const pk = parseDKey(key)
-        const wid = parseInt(pk.wid)
-        const dateStr = `${pk.ym.slice(0, 4)}/${pk.ym.slice(4, 6)}/${pk.day.padStart(2, '0')}`
-        if (!plDates[wid]) plDates[wid] = []
-        plDates[wid].push(dateStr)
-      }
-    }
-    // 2026-06-12 修正 (監査): 同一日に複数現場で p:1 残骸がある場合の二重カウントを排除
-    //   （generateLeaveLedger は computePeriodUsed で dedup 済み。本帳票への横展開）
-    for (const wid of Object.keys(plDates)) {
-      plDates[Number(wid)] = [...new Set(plDates[Number(wid)])].sort()
-    }
-  }
-
-  // ⚠️ 2026-05-18 修正:
-  //   今日が含まれる「アクティブなレコード」を選ぶ（未来年度のレコードを誤選択しないため）
-  //   ※ 残日数は申請ベース（未来日付の p:1 も使用済みカウント）— 全画面・全帳票で統一
-  const todayPL = new Date()
-  todayPL.setHours(0, 0, 0, 0)
-
-  for (const w of activeWorkers) {
-    const records = (plData[String(w.id)] || []).filter(rec => !(rec as { _archived?: boolean })._archived)
-    if (records.length === 0) {
-      rows.push([w.name, w.org, w.hireDate || '', '-', 0, 0, 0, 0, '-'])
-      continue
-    }
-
-    // 最新のアクティブレコードを選択（grantDate <= 今日 < grantDate+1y）
-    const recordsWithGrant = records.filter(rec =>
-      (rec.grantDays && rec.grantDays > 0) || (rec.grant && rec.grant > 0)
-    )
-    const activeRec = recordsWithGrant.find(rec => {
-      if (!rec.grantDate) return false
-      const gd = new Date(rec.grantDate)
-      if (isNaN(gd.getTime())) return false
-      const end = new Date(gd); end.setFullYear(end.getFullYear() + 1)
-      return todayPL >= gd && todayPL < end
-    })
-    const r = activeRec
-      ?? (recordsWithGrant.length > 0 ? recordsWithGrant[recordsWithGrant.length - 1] : records[records.length - 1])
-
-    const grantDays = r.grantDays ?? r.grant ?? 0
-    const carryOver = r.carryOver ?? r.carry ?? 0
-    const adjustment = Math.max(r.adjustment ?? 0, r.adj ?? 0)
-    const total = grantDays + carryOver
-
-    // 出面からの取得日数（申請ベース：未来日付の p:1 も含む）
-    let periodUsed = 0
-    if (r.grantDate) {
-      const gd = new Date(r.grantDate)
-      const gdEnd = new Date(gd)
-      gdEnd.setFullYear(gdEnd.getFullYear() + 1)
-      const wDates = plDates[w.id] || []
-      periodUsed = wDates.filter(d => {
-        const pd = new Date(d.replace(/\//g, '-'))
-        return pd >= gd && pd < gdEnd
-      }).length
-    }
-
-    const used = adjustment + periodUsed
-    const remaining = Math.max(0, total - used)
-
-    // 有効期限（= 最終利用可能日。calcLastUsableDayIso に統一）
-    let expiry = '-'
-    if (r.grantDate) {
-      const lastUsable = calcLastUsableDayIso(r.grantDate as string)
-      if (lastUsable) expiry = lastUsable.replace(/-/g, '/')
-    }
-
-    rows.push([
-      w.name, w.org, w.hireDate || '',
-      r.grantDate || '-', grantDays, carryOver,
-      used, remaining, expiry,
-    ])
-  }
-
-  const ws = XLSX.utils.aoa_to_sheet(rows)
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }]
-  setColWidths(ws, [14, 6, 12, 12, 8, 8, 8, 8, 12])
-  XLSX.utils.book_append_sheet(wb, ws, '管理簿')
-
-  // ── シート2: 取得日一覧 ──
-  const dateHeaders = ['名前', '所属', '取得日']
-  const dateRows: (string | number)[][] = [['取得日一覧'], dateHeaders]
-
-  for (const w of activeWorkers) {
-    const wDates = plDates[w.id] || []
-    if (wDates.length === 0) continue
-    for (let i = 0; i < wDates.length; i++) {
-      dateRows.push([
-        i === 0 ? w.name : '',
-        i === 0 ? w.org : '',
-        wDates[i],
-      ])
-    }
-  }
-
-  const ws2 = XLSX.utils.aoa_to_sheet(dateRows)
-  ws2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }]
-  setColWidths(ws2, [14, 6, 12])
-  XLSX.utils.book_append_sheet(wb, ws2, '取得日一覧')
-
-  return wb
-}
 
 // ────────────────────────────────────────
 //  6. 月次集計Excel
@@ -1424,10 +1284,16 @@ export interface LeaveLedgerData {
   workers: LeaveLedgerWorker[]
   plData: Record<string, LeaveLedgerRecord[]>
   allAtt: Record<string, AttendanceEntry>  // 全期間の出面データ
+  /** 会社別フィルタ（2026-08-04 追加。省略時は全社）。会社ごとに社労士が異なるため */
+  org?: 'hibi' | 'hfu' | 'all'
 }
 
 export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
-  const { workers, plData, allAtt } = data
+  const { plData, allAtt } = data
+  const orgFilter = data.org && data.org !== 'all' ? data.org : null
+  const workers = orgFilter
+    ? data.workers.filter(w => (w.org === orgFilter) || (orgFilter === 'hibi' && w.org === '日比') || (orgFilter === 'hfu' && w.org === 'HFU'))
+    : data.workers
   const wb = XLSX.utils.book_new()
 
   const fmtDate = (iso?: string): string => {
@@ -1459,7 +1325,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
 
   // ─── シート1: 管理簿 ───
   const ledgerRows: unknown[][] = []
-  ledgerRows.push(['有給休暇管理簿'])
+  ledgerRows.push([`有給休暇管理簿${orgFilter ? `（${orgFilter === 'hfu' ? 'HFU' : '日比建設'}）` : '（全社）'}`])
   ledgerRows.push([`作成日: ${fmtDate(new Date().toISOString())}`])
   ledgerRows.push([])
   ledgerRows.push([

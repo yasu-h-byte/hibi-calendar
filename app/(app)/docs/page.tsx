@@ -30,7 +30,7 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'guide', title: '運用ガイド', desc: '変形労働時間制・3段階残業判定・3層構造給与・通知ベルなどの仕組みの解説', url: '/guide', icon: '📖', internal: true, badge: '初回読了推奨', updated: '2026-04-18' },
 
   // ── 事務（奥寺さん） ──
-  { category: 'manual', roles: ['jimu'], title: '奥寺さん向けマニュアル', desc: '出面補助・月次集計・月締めロック・帳票出力（事務の日常運用。給与計算と有給は各専用マニュアルへ）', url: '/manual-okudera.html', icon: '📘', updated: '2026-07-03' },
+  { category: 'manual', roles: ['jimu'], title: '奥寺さん向けマニュアル', desc: '出面補助・月次集計・月締めロック・帳票出力（事務の日常運用。給与計算と有給は各専用マニュアルへ）', url: '/manual-okudera.html', icon: '📘', updated: '2026-08-04' },
   { category: 'manual', roles: ['jimu'], title: '給与計算マニュアル（奥寺さん用）', desc: '日比建設の月次給与計算。雇用形態4区分・日本人日給月給の有給手当・フンさんの固定月給・ベトナム人の有給日給・週所定での残業判定・端数処理・月締めの前提条件・自動検算・社労士提出用資料など', url: '/manual-payroll-okudera.html', icon: '💰', badge: 'NEW', updated: '2026-06-23' },
   { category: 'manual', roles: ['jimu'], title: '社労士提出用資料マニュアル', desc: 'HFU分を社労士に渡す資料の説明。変形労働時間制・3段階残業判定・有給日給・提出3資料の読み方・端数処理', url: '/manual-syaroshi.html', icon: '🏛', badge: 'NEW', updated: '2026-06-12' },
 
