@@ -112,6 +112,38 @@ export function computeRemainingDays(
 }
 
 /**
+ * 「その日に有効な付与レコード」を選ぶ共通ヘルパー（2026-08-04 追加）
+ *
+ * ■ なぜ必要か（グエン ミン トゥアン事案）
+ *   残数チェックが `records[records.length - 1]`（配列の最後）を基準にしていた。
+ *   plData には次期の付与レコードが先に作られることがあり、その場合
+ *   「まだ来ていない未来の付与枠」で残数を判定してしまう。
+ *   実際、当期（2025-11-01付与・枠17日）を21日消化済みなのに、未来の
+ *   2026-11-01付与（枠17＋繰越15＝32日・消化0日）を見て「残32日」と判定し、
+ *   申請が何件でも通っていた。
+ *
+ * ■ 選び方
+ *   grantDate <= asOf を満たすもののうち最も新しいもの。
+ *   すべて未来なら null（＝まだ付与されていない）を返す。呼び出し側は残0として扱うこと。
+ *   「配列の最後」「fy の数値比較」で代用しないこと。どちらも未来レコードを掴む。
+ */
+export function selectActiveGrantRecord<T extends {
+  grantDate?: string
+  grantDays?: number
+  grant?: number
+  _archived?: boolean
+}>(records: T[], asOfIso: string): T | null {
+  const candidates = records
+    .filter(r => !r._archived)
+    .filter(r => !!r.grantDate)
+    .filter(r => ((r.grantDays ?? r.grant ?? 0) > 0))
+    .filter(r => (r.grantDate as string) <= asOfIso)
+    .sort((a, b) => (a.grantDate as string).localeCompare(b.grantDate as string))
+
+  return candidates.length > 0 ? candidates[candidates.length - 1] : null
+}
+
+/**
  * 労基法115条（有給の2年時効）準拠の「次期への繰越日数」を計算する共通ヘルパー。
  *
  * 前提となる有給の消滅ルール:

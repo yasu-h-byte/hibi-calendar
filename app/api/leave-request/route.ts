@@ -8,6 +8,8 @@ import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { ensureDocExists } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
+import { selectActiveGrantRecord } from '@/lib/leave-compute'
+import { todayJstIso } from '@/lib/date-utils'
 
 interface LeaveRequest {
   workerId: number
@@ -114,13 +116,12 @@ export async function POST(request: NextRequest) {
       const wKey = String(worker.id)
       const plRecords = (main.plData[wKey] || []) as { fy: string | number; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number; _archived?: boolean }[]
 
-      // 最新のレコード（付与日数があるもの、archivedは除外）
-      // 新フィールド優先・旧フィールドにフォールバック
-      const recordsWithGrant = plRecords.filter(r =>
-        !r._archived && ((r.grantDays ?? r.grant ?? 0) > 0)
-      )
-      const fyRecord = recordsWithGrant.length > 0
-        ? recordsWithGrant[recordsWithGrant.length - 1] : null
+      // ★ 「その日に有効な付与レコード」を選ぶこと（2026-08-04 修正）
+      //   旧実装は配列の最後を取っていたため、次期の付与レコードが先に作られていると
+      //   「まだ来ていない未来の枠」で残数を判定し、当期の枠を使い切っていても
+      //   申請が通り続けた（グエン ミン トゥアン: 当期17日枠を21日消化）。
+      //   すべて未来なら null → 残0扱いで却下する。
+      const fyRecord = selectActiveGrantRecord(plRecords, todayJstIso())
 
       if (fyRecord) {
         // 新優先・旧フォールバック（GET側と統一）
