@@ -252,7 +252,7 @@ export default function AttendanceGridPage() {
           body.subconId = s.id
           body.subconEntry = s.subconEntry
         }
-        const res = await fetch('/api/attendance/grid', {
+        let res = await fetch('/api/attendance/grid', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -260,6 +260,32 @@ export default function AttendanceGridPage() {
           },
           body: JSON.stringify(body),
         })
+
+        // 有給の残数超過（2026-08-04 追加 / グエン ミン トゥアン事案）
+        //   既定では拒否されるが、前借り等の正当な運用を止めないよう、
+        //   内容を明示したうえで承知の場合だけ上書きできるようにする。
+        //   上書きした場合はサーバ側で activityLog に記録される。
+        if (res.status === 409) {
+          const errData = await res.clone().json().catch(() => null)
+          if (errData?.code === 'LEAVE_OVERDRAFT') {
+            const b = errData.balance
+            const msg = b?.noGrant
+              ? `${errData.workerName} さんには有給が付与されていません。\n\nこのまま有給として登録しますか？`
+              : `${errData.workerName} さんの有給残は 0 日です。\n`
+                + `　付与枠: ${b?.total} 日\n　消化済み: ${b?.used} 日`
+                + (b?.overdraft ? `\n　超過: ${b.overdraft} 日` : '')
+                + `\n\n残数を超えて有給を登録しますか？（記録に残ります）`
+            if (!confirm(msg)) {
+              return { ok: false, save: s, error: '有給残数の超過のため登録しませんでした', status: 409 }
+            }
+            res = await fetch('/api/attendance/grid', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+              body: JSON.stringify({ ...body, allowOverdraft: true }),
+            })
+          }
+        }
+
         if (!res.ok) {
           // エラーレスポンスから詳細を取得（保存失敗を握りつぶさない）
           let errMsg = `${res.status} ${res.statusText}`

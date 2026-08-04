@@ -284,6 +284,42 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ⚠️ 有給残数チェック（2026-08-04 追加 / グエン ミン トゥアン事案）
+    //   出面へ有給(p)を直接入力する経路には残数チェックが一切なく、当期17日枠に対し
+    //   21日が消化された（うち11日がこの経路からの直接入力）。申請経路だけ塞いでも
+    //   ここから同じことが起きるため、書き込みの入口で必ず残数を見る。
+    //
+    //   方針は「警告付き上書き」: 超過する入力は既定で拒否するが、前借り等の正当な
+    //   運用を止めないよう allowOverdraft:true で明示的に上書きできる。
+    //   上書きした場合は誰がいつ超過させたかを activityLog に必ず残す。
+    if (isAttendanceWriteAction && body.entry?.p && body.workerId !== undefined && body.ym && body.day) {
+      const targetDate = `${body.ym.slice(0, 4)}-${body.ym.slice(4, 6)}-${String(body.day).padStart(2, '0')}`
+      const { getLeaveBalance } = await import('@/lib/leave-balance')
+      // その日自身の p は除外して数える（同じ日を編集し直したときの二重計上を防ぐ）
+      const bal = await getLeaveBalance(Number(body.workerId), targetDate, targetDate)
+
+      if (bal.remaining < 1 && !body.allowOverdraft) {
+        const main = await getMainData()
+        const wName = main.workers.find(ww => ww.id === Number(body.workerId))?.name || `ID:${body.workerId}`
+        return NextResponse.json({
+          error: bal.noGrant
+            ? `${wName} さんは有給が付与されていません（付与レコードなし）`
+            : `${wName} さんの有給残は 0 日です（枠 ${bal.total}日 / 消化 ${bal.used}日）`,
+          code: 'LEAVE_OVERDRAFT',
+          balance: bal,
+          workerName: wName,
+        }, { status: 409 })
+      }
+
+      if (bal.remaining < 1 && body.allowOverdraft) {
+        const main = await getMainData()
+        const wName = main.workers.find(ww => ww.id === Number(body.workerId))?.name || `ID:${body.workerId}`
+        const { logActivity } = await import('@/lib/activity')
+        await logActivity('admin', 'leave.overdraft',
+          `${wName} ${targetDate} 有給を残数超過で登録（枠 ${bal.total}日 / 消化 ${bal.used}日）`)
+      }
+    }
+
     // Action: save workDays
     if (action === 'saveWorkDays') {
       const { ym, value } = body
