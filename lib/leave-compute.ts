@@ -404,6 +404,10 @@ export function judgeFiveDayObligation(
  *
  * 半自動付与の二重付与検知用（旧: ±7日近傍のみだったため別日付の連打で重複していた）
  *
+ * ⚠️ この判定は「target が既存期間の中にあるか」の一方向のみ。
+ *   逆向き（既存の付与日が target の期間内にある = 遡り付与で期間が重なる）は検知できない。
+ *   二重付与ガードには grantPeriodsOverlap を使うこと（2026-08-04 総点検）。
+ *
  * @param r       既存PLレコード
  * @param target  これから付与しようとしている日
  * @returns       同一FYとみなされるか（true なら付与しない）
@@ -421,4 +425,25 @@ export function isSameFiscalYear(
   // 1年以内の近接付与も同一FYとみなす（半自動付与の誤操作対策）
   const oneYearLater = addMonthsSafe(r.grantDate, 12)
   return target >= r.grantDate && target < oneYearLater
+}
+
+/**
+ * 2つの付与期間（各 grantDate から1年間）が重なるかを判定（2026-08-04 追加）
+ *
+ * ■ なぜ必要か（新規付与まわりの点検）
+ *   二重付与ガードが isSameFiscalYear（一方向）だったため、「既存の付与日より
+ *   前の日付で遡って付与する」パターンを検知できなかった。
+ *   実例: 年途中入社の日本人（濱上さん、入社2026-06-01）に初回 2026-12-01 を
+ *   付与した直後、付与判定は 10/1 統一起点の「FY2026 (2026-10-01) が未実施」を
+ *   検知し、実行側のガードも素通りして 10/1 と 12/1 の重複期間ができてしまう。
+ *
+ * ■ 判定
+ *   期間 [a, a+1年) と [b, b+1年) が1日でも重なれば true。
+ *   ちょうど1年離れている場合（通常の年次サイクル）は重ならない（半開区間）。
+ */
+export function grantPeriodsOverlap(aGrantDate: string, bGrantDate: string): boolean {
+  if (!aGrantDate || !bGrantDate) return false
+  const aEnd = addMonthsSafe(aGrantDate, 12)
+  const bEnd = addMonthsSafe(bGrantDate, 12)
+  return aGrantDate < bEnd && bGrantDate < aEnd
 }

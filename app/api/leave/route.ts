@@ -6,7 +6,7 @@ import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
@@ -641,18 +641,18 @@ export async function POST(request: NextRequest) {
       }
 
       // 「付与判定」: 以下のいずれかで「付与済み」とみなす
-      //   (a) 付与日近傍（±7日）に既存レコードあり → 通常パターン
+      //   (a) 既存レコードの付与期間と重なる（grantPeriodsOverlap）→ 通常パターン
       //   (b) grantDateが欠落していても fy が一致する → 「本田文人」のような移行期データに対応
-      // (a)単独だと grantDate 欠落レコードを見逃し、(b)単独だと fy 不整合データで誤スキップ。
-      // 両条件のOR合成が最適解。
+      // 2026-08-04 修正（新規付与まわりの点検）: (a) は旧「±7日近傍」から期間重複判定に変更。
+      //   年途中入社の日本人は初回付与（入社+6ヶ月）が 10/1 統一起点とズレるため、
+      //   初回付与直後に「10/1 の付与が未実施」と誤検知し、実行すると期間の重なる
+      //   二重付与になっていた（例: 濱上さん 入社2026-06-01 → 初回12/1 の直後に10/1分を誤付与）。
+      //   期間が重なる限り付与済み扱いにし、統一起点への合流は前期間の満了後に行う。
       const hasGrantForExpected = (records: PLRecord[], expectedFy: string, expectedGrantDate: string): boolean => {
-        const target = new Date(expectedGrantDate).getTime()
         return records.some(r => {
           if (!((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)) return false
           if (r.grantDate) {
-            const d = new Date(r.grantDate).getTime()
-            if (isNaN(d) || isNaN(target)) return false
-            return Math.abs(d - target) <= 7 * 86400000
+            return grantPeriodsOverlap(r.grantDate, expectedGrantDate)
           }
           // grantDate 欠落 → fy一致で判定
           return String(r.fy) === expectedFy
@@ -789,28 +789,42 @@ export async function POST(request: NextRequest) {
       }
 
       const plData = (snap.data().plData || {}) as Record<string, { fy: string | number; grantDate?: string; grantDays?: number; carryOver?: number; adjustment?: number; grant?: number; carry?: number; adj?: number }[]>
-      const workersArr = ((snap.data().workers || []) as { id: number; visa?: string }[])
+      const workersArr = ((snap.data().workers || []) as { id: number; name?: string; visa?: string; hireDate?: string }[])
       const isJpOf = (id: number) => {
         const w = workersArr.find(x => x.id === id)
         return !w?.visa || w.visa === 'none'
       }
 
-      // 付与日近傍(±7日) or 同一FY に既存付与があるかチェック（二重付与防止用）
+      // ── 入力値バリデーション（2026-08-04 追加 / 新規付与まわりの点検）──
+      //   半自動付与モーダルは付与日数を自由に編集できるのに、サーバ側は
+      //   grantDays を素通ししていた。法定超（勤続年数に対する法定・上限20日）を弾く。
+      //   1件でも不正があれば全体を拒否する（部分実行は「どれが付与されたか」の混乱を生む）。
+      for (const g of grants) {
+        const w = workersArr.find(x => x.id === g.workerId)
+        const v = validateGrantInput({
+          grantDays: Number(g.grantDays) || 0,
+          hireDate: w?.hireDate,
+          grantDate: g.grantDate || undefined,
+        })
+        if (!v.ok) {
+          return NextResponse.json({
+            error: `${w?.name || `ID:${g.workerId}`}: ${v.error}`,
+          }, { status: 400 })
+        }
+      }
+
+      // 期間の重なる既存付与があるかチェック（二重付与防止用）
       // 2026-06-XX 修正 (IM-12): ±7日 だけだと別日付の連打で同FY二重付与を防げない
-      //   isSameFiscalYear (1年以内の近接付与) も併用して防御強化
+      // 2026-08-04 修正（新規付与まわりの点検）: isSameFiscalYear は一方向判定のため、
+      //   「既存の付与日より前へ遡る付与」（期間が重なる）を止められなかった。
+      //   grantPeriodsOverlap（双方向の期間重複）に統一。ちょうど1年後の通常サイクルは重ならない。
       type PLRec = { fy: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number }
       const hasGrantNear = (records: PLRec[], targetDate: string): boolean => {
-        const target = new Date(targetDate).getTime()
-        if (isNaN(target)) return false
+        if (!targetDate) return false
         return records.some(r => {
           if (!((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)) return false
           if (!r.grantDate) return false
-          const d = new Date(r.grantDate).getTime()
-          if (isNaN(d)) return false
-          // ±7日 OR 同一FY (1年以内の近接付与)
-          if (Math.abs(d - target) <= 7 * 86400000) return true
-          if (isSameFiscalYear({ grantDate: r.grantDate }, targetDate)) return true
-          return false
+          return grantPeriodsOverlap(r.grantDate, targetDate)
         })
       }
 
@@ -961,12 +975,12 @@ export async function POST(request: NextRequest) {
         if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
 
         // 同一期間への二重付与ガード: 新規作成（同 fy のレコードなし）で、
-        // 既存の別 fy レコードの付与期間内に grantDate が入る場合は拒否。
+        // 既存の別 fy レコードの付与期間と重なる場合は拒否。
         // （半自動付与 executePendingGrants には同等のガードがあるのに手動側に無かった）
         if (grantDate && idx < 0) {
           const overlapping = records.find(r =>
             r.grantDate && ((r.grantDays ?? 0) > 0) && !(r as { _archived?: boolean })._archived &&
-            isSameFiscalYear({ grantDate: r.grantDate as string }, grantDate)
+            grantPeriodsOverlap(r.grantDate as string, grantDate)
           )
           if (overlapping) {
             return NextResponse.json({
