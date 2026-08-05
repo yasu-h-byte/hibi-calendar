@@ -180,6 +180,67 @@ export function getRaiseAmount(
 }
 
 // ────────────────────────────────────────
+//  法令フロア（2026-08-04 追加 / 賃金モデル突合検証）
+// ────────────────────────────────────────
+
+/**
+ * 昇給後の時給に法令下限を適用する。
+ *
+ * ■ なぜ必要か
+ *   評価テーブルの昇給ペースは C連続で年3.3%・B連続で年5.3%。一方、東京都最低賃金は
+ *   直近3年で年4〜5%上昇しており、さらに建設分野の特定技能1号は
+ *   「地域別最低賃金 × 1.1 以上」が認定要件（国交省 国不国第654号）。
+ *   シミュレーションでは C連続は特定技能移行時点で下限割れ、B連続も
+ *   現最賃起点だと10年目に割る。テーブルどおりの昇給額をそのまま確定すると
+ *   法令割れが起きるため、承認時にフロアで底上げする。
+ *
+ * ■ 使い方
+ *   minWage には評価時点の地域別最低賃金を渡す（lib/wage-analysis.ts の minWageAt）。
+ *   将来の最賃は読めないため「毎年の評価のたびに、その時点の最賃で底上げ」する設計。
+ *   currentHourlyRate が不明な場合はフロアを適用できないのでテーブル値をそのまま返す。
+ */
+export interface LegalFloorResult {
+  /** 適用後の昇給額（フロア発動時はテーブル値より大きくなる） */
+  raiseAmount: number
+  /** フロアで底上げされたか */
+  floored: boolean
+  /** 適用した下限時給（最賃 × 係数、円未満切上げ） */
+  legalMinRate: number
+  /** テーブル由来の昇給額（記録用） */
+  baseRaise: number
+}
+
+export function applyLegalWageFloor(args: {
+  baseRaise: number
+  currentHourlyRate?: number
+  /** RawWorker.visa（'tokutei1' 等）。tokutei* のとき 1.1 倍が適用される */
+  visa?: string
+  /** 評価時点の地域別最低賃金 */
+  minWage: number
+}): LegalFloorResult {
+  const { baseRaise, currentHourlyRate, visa, minWage } = args
+  const isTokutei = !!visa && visa.startsWith('tokutei')
+  // ×1.1 は整数演算（×11÷10）で行う。浮動小数点だと 1430×1.1=1573.0000000000002 の
+  // ような誤差で切上げ結果が1円ズレる
+  const legalMinRate = isTokutei ? Math.ceil((minWage * 11) / 10) : Math.ceil(minWage)
+
+  if (!currentHourlyRate || currentHourlyRate <= 0 || !minWage) {
+    return { raiseAmount: baseRaise, floored: false, legalMinRate, baseRaise }
+  }
+
+  const afterRaise = currentHourlyRate + baseRaise
+  if (afterRaise >= legalMinRate) {
+    return { raiseAmount: baseRaise, floored: false, legalMinRate, baseRaise }
+  }
+  return {
+    raiseAmount: legalMinRate - currentHourlyRate,
+    floored: true,
+    legalMinRate,
+    baseRaise,
+  }
+}
+
+// ────────────────────────────────────────
 //  入社年数
 // ────────────────────────────────────────
 

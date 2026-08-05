@@ -13,10 +13,13 @@ import {
   calculateManualScore,
   calculateRank,
   getRaiseAmount,
+  applyLegalWageFloor,
   yearsFromHire as calcYearsFromHire,
   RAISE_TABLE as DEFAULT_RAISE_TABLE,
   type RaiseTableRow,
 } from '@/lib/evaluation-config'
+import { minWageAt } from '@/lib/wage-analysis'
+import { todayJstIso } from '@/lib/date-utils'
 
 /** 政仁さんのワーカーID */
 const APPROVER_WORKER_ID = 1
@@ -398,9 +401,21 @@ export async function POST(request: NextRequest) {
       const totalScore = Math.round((manualScore + attendanceBonus) * 10) / 10
       const rank = calculateRank(totalScore)
 
-      // 昇給額
+      // 昇給額（テーブル値 → 法令フロア適用。2026-08-04 賃金モデル突合検証）
+      //   C・B評価のテーブル昇給は最賃上昇（年4〜5%）や建設特定技能の
+      //   「最賃×1.1」認定要件を将来割り込むため、承認の瞬間に
+      //   「昇給後の時給 >= その時点の下限」を保証する。詳細は applyLegalWageFloor。
       const yearsFromHire = current.yearsFromHire as number
-      const raiseAmount = getRaiseAmount(rank, yearsFromHire, undefined, settings.raiseTable)
+      const baseRaise = getRaiseAmount(rank, yearsFromHire, undefined, settings.raiseTable)
+      const mainForFloor = await getMainData()
+      const workerForFloor = mainForFloor.workers.find(w => w.id === Number(current.workerId))
+      const floorResult = applyLegalWageFloor({
+        baseRaise,
+        currentHourlyRate: workerForFloor?.hourlyRate,
+        visa: workerForFloor?.visa,
+        minWage: minWageAt(todayJstIso()),
+      })
+      const raiseAmount = floorResult.raiseAmount
 
       const now = new Date().toISOString()
       await updateDoc(evalRef, {
@@ -411,6 +426,10 @@ export async function POST(request: NextRequest) {
         totalScore,
         rank,
         raiseAmount,
+        // 法令フロアの適用記録（監査用）。floored=true のとき raiseAmount はテーブル値より大きい
+        raiseFlooredToLegalMin: floorResult.floored,
+        raiseBaseAmount: floorResult.baseRaise,
+        raiseLegalMinRate: floorResult.legalMinRate,
         approvedBy,
         approvedAt: now,
         updatedAt: now,
@@ -419,10 +438,18 @@ export async function POST(request: NextRequest) {
       await logActivity(
         String(approvedBy),
         'evaluation.approve',
-        `${current.workerName} の評価を承認（ランク: ${rank}）`,
+        `${current.workerName} の評価を承認（ランク: ${rank}）`
+        + (floorResult.floored
+          ? `※昇給を法令下限で底上げ +${baseRaise}→+${raiseAmount}円/h（下限時給 ${floorResult.legalMinRate}円）`
+          : ''),
       )
 
-      return NextResponse.json({ success: true, rank, totalScore, raiseAmount })
+      return NextResponse.json({
+        success: true, rank, totalScore, raiseAmount,
+        raiseFlooredToLegalMin: floorResult.floored,
+        raiseLegalMinRate: floorResult.legalMinRate,
+        raiseBaseAmount: floorResult.baseRaise,
+      })
     }
 
     // ── 承認済み評価を最新ロジックで再計算（2026-05-15 追加） ──

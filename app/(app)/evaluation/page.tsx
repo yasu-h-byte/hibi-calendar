@@ -22,8 +22,10 @@ import {
   calculateManualScore,
   calculateRank,
   getRaiseAmount,
+  applyLegalWageFloor,
   yearsFromHire as yearsFromDate,
 } from '@/lib/evaluation-config'
+import { minWageAt } from '@/lib/wage-analysis'
 
 function rankColor(r: EvaluationRank): string {
   switch (r) {
@@ -607,9 +609,15 @@ export default function EvaluationPage() {
         }),
       })
       if (res.ok) {
+        // 確定値はサーバが法令フロア適用込みで再計算する。表示はその値を使う
+        const result = await res.json().catch(() => null)
+        const finalRaise = result?.raiseAmount ?? raiseAmount
+        const floorNote = result?.raiseFlooredToLegalMin
+          ? `\n⚖️ 法令下限（時給${result.raiseLegalMinRate}円）により +${result.raiseBaseAmount}円 → +${finalRaise}円 に底上げされました`
+          : ''
         setApproveSessionId(null)
         await fetchData()
-        alert(`✅ ${session.workerName} さんの評価を承認しました\n\nランク: ${rank} / 推奨昇給: +${raiseAmount}円/h`)
+        alert(`✅ ${session.workerName} さんの評価を承認しました\n\nランク: ${rank} / 推奨昇給: +${finalRaise}円/h${floorNote}`)
       } else {
         const err = await res.json().catch(() => ({}))
         alert(`❌ 承認に失敗しました\n\n${err.error || res.statusText}`)
@@ -2074,7 +2082,15 @@ export default function EvaluationPage() {
             const bonus = session.metrics?.attendanceBonus ?? 0
             const totalScore = finalCalc.total + bonus
             const rank = calculateRank(totalScore)
-            const raiseAmount = getRaiseAmount(rank, years, worker?.hourlyRate)
+            // 法令フロア（最賃×1.0 / 特定技能は×1.1）を適用したプレビュー。
+            // 確定値はサーバ側が同じロジックで再計算する
+            const floorPreview = applyLegalWageFloor({
+              baseRaise: getRaiseAmount(rank, years, worker?.hourlyRate),
+              currentHourlyRate: worker?.hourlyRate,
+              visa: worker?.visaType,
+              minWage: minWageAt(todayJstIso()),
+            })
+            const raiseAmount = floorPreview.raiseAmount
 
             return (
               <div className="space-y-6">
@@ -2288,6 +2304,13 @@ export default function EvaluationPage() {
                           推奨昇給: +{raiseAmount}円/h
                         </span>
                       </div>
+                      {floorPreview.floored && (
+                        <div className="mt-1.5 text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 rounded-lg px-2.5 py-1.5">
+                          ⚖️ 法令下限により調整: テーブル値 +{floorPreview.baseRaise}円 では下限時給
+                          {floorPreview.legalMinRate}円（最低賃金{worker?.visaType?.startsWith('tokutei') ? '×1.1（建設特定技能の認定要件）' : ''}）を
+                          下回るため、+{raiseAmount}円 に底上げされます
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
