@@ -123,6 +123,14 @@ describe('人工数（calcManDays）', () => {
     expect(calcManDays({ w: 1, ns: 1, nonly: 1, nst: '20:00', net: '29:00' })).toBe(1.5)
   })
 
+  it('半日出勤（0.5）＋夜勤 = 2.0人工。夜勤は日勤の長さに関係なく1.5人工', () => {
+    // 2026-08-11 の実例: 午後から出勤（0.5）してそのまま台風待機に入った
+    const night = { ns: 1, nst: '17:00', net: '29:00', nb: 60 }
+    expect(calcManDays({ w: 0.5, ...night })).toBe(2)
+    expect(calcManDays({ w: 1, ...night })).toBe(2.5)
+    expect(calcManDays({ w: 0.5, nonly: 1, ...night })).toBe(1.5)
+  })
+
   it('有給・欠勤・現場休・帰国中・試験は人工0', () => {
     expect(calcManDays({ w: 0, p: 1 })).toBe(0)
     expect(calcManDays({ w: 0, r: 1 })).toBe(0)
@@ -180,6 +188,18 @@ describe('1.5人工が法定を満たすか（日本人・日給月給）', () =
     const need = inManDays(calcNightShiftLegalRequiredPay(args(13, 1, false)))
     expect(need).toBeCloseTo(1.813, 2)
     expect(need).toBeLessThan(2.5)
+  })
+
+  it('半日4h＋夜勤11h（通し15h）・深夜7h → 2.31人工必要。2.0人工では不足', () => {
+    const need = inManDays(calcNightShiftLegalRequiredPay(args(15, 7, false)))
+    expect(need).toBeCloseTo(2.313, 2)
+    expect(need).toBeGreaterThan(2.0)
+  })
+
+  it('半日4h＋夜勤8h（12h）・深夜7h → 1.84人工。2.0人工で足りる', () => {
+    const need = inManDays(calcNightShiftLegalRequiredPay(args(12, 7, false)))
+    expect(need).toBeCloseTo(1.844, 2)
+    expect(need).toBeLessThan(2.0)
   })
 
   it('日額が未設定なら0（判定不能なので警告を出さない）', () => {
