@@ -4,7 +4,7 @@
 //  バッジ系は lib/labels.ts、職種分類は lib/jobs.ts に集約済み（重複定義しない）
 // ────────────────────────────────────────
 
-import { calcActualHours } from '@/types'
+import { calcActualHours, calcDayShiftHours, calcNightShiftHours } from '@/types'
 import { isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { AttEntry, SubconDayEntry, DayType, Worker, Subcon } from '@/app/(app)/attendance/types'
@@ -175,12 +175,15 @@ export function computeWorkerTotals(
     if (isComp) continue
 
     if (opts.timeBased && e.st && e.et) {
-      const ah = calcActualHours(e)
-      actualHoursSum += ah
-      const ot = Math.max(0, ah - 7)
-      oSum += ot
+      // 実労働合計は夜勤ブロックも含める（労働時間の実績として正しい）。
+      // 一方 残業h は日勤ブロックだけから出す — 夜勤は 1.5人工 で別途支給するため、
+      // 残業h に混ぜると二重計上になる。
+      actualHoursSum += calcActualHours(e)
+      oSum += Math.max(0, calcDayShiftHours(e) - 7)
     } else {
       oSum += e.o || 0
+      // レガシー入力（日本人など st/et 無し）でも夜勤ブロックの実労働は計上する
+      actualHoursSum += calcNightShiftHours(e)
     }
   }
   // 浮動小数点誤差を丸める（0.6 * 12 = 7.199... → 7.2）

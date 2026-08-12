@@ -63,6 +63,14 @@ interface WorkerMonthly {
   legalHolidayAllowance?: number
   nightHours?: number
   nightAllowance?: number
+  // 夜勤（2026-08）: 人工は workDays と分離して持つ。詳細は lib/compute.ts の WorkerMonthly
+  manDays?: number
+  nightShiftDays?: number
+  nightManDays?: number
+  nightShiftHours?: number
+  legalRequiredPay?: number
+  nightShiftPaid?: number
+  legalShortfall?: number
   compAllowance?: number
   regularWorkDays?: number
   // 出向情報
@@ -1341,6 +1349,16 @@ export default function MonthlyPage() {
                             ✈ 帰国中{w.hkDays}日
                           </span>
                         )}
+                        {/* 夜勤の 1.5人工 が法定割増を下回った場合の警告。
+                            日曜（法定休日）の夜勤や長時間の通し勤務で発生する。 */}
+                        {(w.legalShortfall || 0) > 0 && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            title={`夜勤日の法定必要額 ¥${Math.ceil(w.legalRequiredPay || 0).toLocaleString()} に対し支給 ¥${(w.nightShiftPaid || 0).toLocaleString()}。¥${(w.legalShortfall || 0).toLocaleString()} 不足しています（日曜の夜勤 または 長時間の通し勤務）。1.5人工の慣例では法定割増を満たさないケースです。`}
+                          >
+                            ⚠ 法定不足 ¥{(w.legalShortfall || 0).toLocaleString()}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">{orgBadge(w.org)}</td>
                       <td className="px-3 py-2.5">
@@ -1365,6 +1383,15 @@ export default function MonthlyPage() {
                         <div>{w.workAll % 1 !== 0 ? w.workAll.toFixed(1) : w.workAll}</div>
                         {hasComp && (
                           <div className="text-[10px] text-gray-400">うち補{(compDays * 0.6).toFixed(1)}</div>
+                        )}
+                        {/* 夜勤: 出勤日数と人工がズレるため人工を併記（夜勤1回=1.5人工） */}
+                        {(w.nightShiftDays || 0) > 0 && (
+                          <div
+                            className="text-[10px] text-indigo-600 font-bold leading-tight"
+                            title={`夜勤 ${w.nightShiftDays}回（実労働 ${fmtNum(w.nightShiftHours || 0)}h）。人工 ${w.manDays} 人工で支給・元請け請求`}
+                          >
+                            夜勤{w.nightShiftDays} / {w.manDays}人工
+                          </div>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">

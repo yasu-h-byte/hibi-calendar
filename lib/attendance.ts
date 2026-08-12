@@ -357,6 +357,7 @@ export function computeAttendanceDeleteFields(entry: AttendanceEntry): string[] 
     'p', 'r', 'h', 'hk', 'exam',                // ステータス flag
     'st', 'et', 'b1', 'b2', 'b3',               // 時間ベース
     'rReason', 'rNote',                          // 休み理由
+    'ns', 'nonly', 'nst', 'net', 'nb', 'nnote',  // 夜勤ブロック
   ]
   // 's' (source) はメタデータなので削除対象外
   // 新エントリで定義されていないフィールドを削除対象に

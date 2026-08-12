@@ -6,7 +6,7 @@
 // 純粋な計算（フッター合計・警告収集・退職バッジ等）は lib/attendance-grid.ts を参照。
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { isTimeBasedMonth, calcActualHours } from '@/types'
+import { isTimeBasedMonth, calcDayShiftHours, DAY_START_OPTIONS, DAY_END_OPTIONS } from '@/types'
 import {
   currentYm, getYmOptions, getDow, DOW_JA,
   computeWorkerTotals, computeSubconTotals, computeFooterSums, EMPTY_FOOTER_SUMS,
@@ -21,6 +21,7 @@ import AssignModal from '@/components/attendance/AssignModal'
 import { GridData, AttEntry, SubconDayEntry, PendingSave, Worker } from './types'
 import HeaderBar from './components/HeaderBar'
 import AttendanceGrid from './components/AttendanceGrid'
+import NightShiftModal, { NightShiftValue } from './components/NightShiftModal'
 
 export default function AttendanceGridPage() {
   const [password, setPassword] = useState('')
@@ -59,6 +60,8 @@ export default function AttendanceGridPage() {
 
   // Assignment modal
   const [showAssignModal, setShowAssignModal] = useState(false)
+  // 夜勤モーダル（台風待機など年数回のケース）
+  const [nightTarget, setNightTarget] = useState<{ workerId: string; day: number } | null>(null)
 
   // 翌月カレンダー未確定アラート用（月末1週間前を過ぎたら全現場の status を取得）
   const [nextMonthCalCheck, setNextMonthCalCheck] = useState<{
@@ -80,24 +83,9 @@ export default function AttendanceGridPage() {
   // 時間ベース入力月は始業・終業・休憩など情報が多いため広めに
   const cellWidth = useTimeBased ? 76 : 56
 
-  // 時間選択肢を生成
-  const startTimeOptions = useMemo(() => {
-    const opts: string[] = []
-    for (let h = 6; h <= 12; h++) {
-      opts.push(`${String(h).padStart(2, '0')}:00`)
-      if (h < 12) opts.push(`${String(h).padStart(2, '0')}:30`)
-    }
-    return opts
-  }, [])
-
-  const endTimeOptions = useMemo(() => {
-    const opts: string[] = []
-    for (let h = 15; h <= 23; h++) {
-      opts.push(`${String(h).padStart(2, '0')}:00`)
-      if (h < 23) opts.push(`${String(h).padStart(2, '0')}:30`)
-    }
-    return opts
-  }, [])
+  // 時間選択肢は lib/attendance.ts の共通定数（スマホ入力と同一）
+  const startTimeOptions = DAY_START_OPTIONS
+  const endTimeOptions = DAY_END_OPTIONS
 
   // Read auth
   useEffect(() => {
@@ -510,7 +498,9 @@ export default function AttendanceGridPage() {
       const existing = entries[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
       const updated = { ...existing, st, s: 'admin' }
       // 残業時間を再計算
-      const actual = calcActualHours(updated)
+      // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
+    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
+    const actual = calcDayShiftHours(updated)
       const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
       updated.o = otH > 0 ? otH : undefined
       entries[day] = updated
@@ -521,7 +511,9 @@ export default function AttendanceGridPage() {
     // For save: get current entry and apply
     const current = workerEntries[workerId]?.[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
     const updated = { ...current, st, s: 'admin' }
-    const actual = calcActualHours(updated)
+    // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
+    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
+    const actual = calcDayShiftHours(updated)
     const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
     if (otH > 0) updated.o = otH; else delete updated.o
     scheduleSave(`w-${workerId}-${day}`, {
@@ -537,7 +529,9 @@ export default function AttendanceGridPage() {
       const entries = { ...next[workerId] }
       const existing = entries[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
       const updated = { ...existing, et, s: 'admin' }
-      const actual = calcActualHours(updated)
+      // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
+    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
+    const actual = calcDayShiftHours(updated)
       const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
       updated.o = otH > 0 ? otH : undefined
       entries[day] = updated
@@ -547,7 +541,9 @@ export default function AttendanceGridPage() {
 
     const current = workerEntries[workerId]?.[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
     const updated = { ...current, et, s: 'admin' }
-    const actual = calcActualHours(updated)
+    // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
+    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
+    const actual = calcDayShiftHours(updated)
     const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
     if (otH > 0) updated.o = otH; else delete updated.o
     scheduleSave(`w-${workerId}-${day}`, {
@@ -563,7 +559,9 @@ export default function AttendanceGridPage() {
       const entries = { ...next[workerId] }
       const existing = entries[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
       const updated = { ...existing, [breakKey]: checked ? 1 : 0, s: 'admin' }
-      const actual = calcActualHours(updated)
+      // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
+    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
+    const actual = calcDayShiftHours(updated)
       const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
       updated.o = otH > 0 ? otH : undefined
       entries[day] = updated
@@ -573,13 +571,68 @@ export default function AttendanceGridPage() {
 
     const current = workerEntries[workerId]?.[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
     const updated = { ...current, [breakKey]: checked ? 1 : 0, s: 'admin' }
-    const actual = calcActualHours(updated)
+    // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
+    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
+    const actual = calcDayShiftHours(updated)
     const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
     if (otH > 0) updated.o = otH; else delete updated.o
     scheduleSave(`w-${workerId}-${day}`, {
       type: 'worker', id: workerId, day, entry: updated,
     })
   }, [scheduleSave, workerEntries])
+
+  /**
+   * 夜勤の保存 / 取り消し（台風待機など年数回のケース）。
+   *
+   * 夜勤は w に足さず ns/nst/net で別枠に持つ。w を 1.5 にすると出勤日数が 1.5 日になり、
+   * 欠勤判定（所定日数 − 出勤日数）が壊れるため。人工は lib/compute.ts の calcManDays が
+   * ns から導出する（夜勤のみ 1.5 / 日勤＋夜勤 2.5）。
+   *
+   * ⚠️ 「夜勤のみ」に切り替えたときは日勤の時刻・休憩・残業を消す。残しておくと
+   *    日勤ブロックと夜勤ブロックの二重計上になる。API 側は computeAttendanceDeleteFields で
+   *    エントリに無いフィールドを削除するので、ここで delete すれば残骸は残らない。
+   */
+  const handleNightSave = useCallback((value: NightShiftValue | null) => {
+    if (!nightTarget) return
+    const { workerId, day } = nightTarget
+    const base = workerEntries[workerId]?.[day]
+    if (!base) { setNightTarget(null); return }
+
+    const updated: AttEntry = { ...base, s: 'admin' }
+    if (!value) {
+      // 夜勤の取り消し
+      delete updated.ns
+      delete updated.nonly
+      delete updated.nst
+      delete updated.net
+      delete updated.nb
+      delete updated.nnote
+    } else {
+      updated.ns = 1
+      updated.nst = value.nst
+      updated.net = value.net
+      updated.nb = value.nb
+      if (value.nonly) updated.nonly = 1; else delete updated.nonly
+      if (value.nnote) updated.nnote = value.nnote; else delete updated.nnote
+      if (value.nonly) {
+        // 夜勤のみ: 日勤ぶんの入力を消す
+        delete updated.st
+        delete updated.et
+        delete updated.b1
+        delete updated.b2
+        delete updated.b3
+        delete updated.o
+      }
+    }
+
+    setWorkerEntries(prev => {
+      const next = { ...prev }
+      next[workerId] = { ...(next[workerId] || {}), [day]: updated }
+      return next
+    })
+    scheduleSave(`w-${workerId}-${day}`, { type: 'worker', id: workerId, day, entry: updated })
+    setNightTarget(null)
+  }, [nightTarget, workerEntries, scheduleSave])
 
   // ── Subcon cell handlers ──
 
@@ -946,6 +999,7 @@ export default function AttendanceGridPage() {
           onSubconNChange={handleSubconNChange}
           onSubconOnChange={handleSubconOnChange}
           onCellKeyDown={handleAttCellKeyDown}
+          onNightClick={(workerId, day) => setNightTarget({ workerId, day })}
           onForemanApproveAll={handleForemanApproveAll}
           onToggleForemanApproval={handleToggleForemanApproval}
           onFinalApproveAll={handleFinalApproveAll}
@@ -979,6 +1033,16 @@ export default function AttendanceGridPage() {
           onClose={() => setShowAssignModal(false)}
         />
       )}
+
+      {/* 夜勤モーダル（台風待機など） */}
+      <NightShiftModal
+        isOpen={!!nightTarget}
+        workerName={data?.workers.find(w => String(w.id) === nightTarget?.workerId)?.name || ''}
+        day={nightTarget?.day || 0}
+        entry={nightTarget ? workerEntries[nightTarget.workerId]?.[nightTarget.day] : null}
+        onSave={handleNightSave}
+        onClose={() => setNightTarget(null)}
+      />
     </div>
   )
 }

@@ -505,6 +505,7 @@ export async function POST(request: NextRequest) {
             : entryWithSource.h ? '現場休'
             : entryWithSource.hk ? '帰国中'
             : entryWithSource.exam ? '試験'
+            : entryWithSource.ns ? `${entryWithSource.nonly ? '夜勤のみ' : '日勤+夜勤'} ${entryWithSource.nst}-${entryWithSource.net}${entryWithSource.nnote ? `(${entryWithSource.nnote})` : ''}`
             : entryWithSource.w ? (entryWithSource.o ? `出勤+${entryWithSource.o}h` : '出勤')
             : '不在'
           await logActivity(

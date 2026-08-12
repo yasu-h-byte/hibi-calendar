@@ -1,6 +1,9 @@
 import { db } from './firebase'
 import { doc, getDoc, registerMainWriteHook } from '@/lib/fsdb'
-import { AttendanceEntry, calcActualHours } from '@/types'
+import {
+  AttendanceEntry, calcActualHours, calcDayShiftHours, calcNightShiftHours,
+  getNightRange, timeToMinutes, calcManDays, NIGHT_SHIFT_MANDAYS,
+} from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isHiredByMonth } from './workers'
 import { isTobiGroup, isDokoGroup } from './jobs'
@@ -20,6 +23,13 @@ const floorYen = (v: number): number => Math.floor(Math.round(v * 100) / 100)
 // 給与計算エンジンと人員マスタ画面の参考表示で同じ値を使うため lib/constants.ts に集約。
 export { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
 import { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
+
+/**
+ * 日本人の1日所定労働時間。割増賃金の算定基礎（日額 ÷ 所定時間）の分母。
+ * docs/labor-rules.md「日本人は1日8時間（長年の運用。日給は8時間分の対価）」に対応。
+ * 外国人は変形労働時間制で7h。
+ */
+const JP_PRESCRIBED_HOURS_PER_DAY = 8
 
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
@@ -457,10 +467,14 @@ export function calcTobiEquiv(
     //   旧: doko 以外は全部鳶側 → 事務(jimu)等も鳶換算に混入
     //   新: isTobiGroup (tobi/tobi_apprentice/shokucho/yakuin) と isDokoGroup のみ集計
     //       その他 (jimu 等) は除外
+    // 2026-08: 人工ベース。夜勤日は 1.5人工（日勤＋夜勤なら 2.5人工）で元請けに請求するため
+    //   鳶換算人工にも同じ人工を用いる。上で p/r/h/hk/exam と補償日は除外済みなので、
+    //   夜勤が無ければ calcManDays(v) === v.w となり従来と同値。
+    const md = calcManDays(v)
     if (isDokoGroup(w.job)) {
-      monthly[pk.ym].dw += v.w; monthly[pk.ym].doe += oe; dokoWork += v.w; dokoOtEq += oe
+      monthly[pk.ym].dw += md; monthly[pk.ym].doe += oe; dokoWork += md; dokoOtEq += oe
     } else if (isTobiGroup(w.job)) {
-      monthly[pk.ym].tw += v.w; monthly[pk.ym].toe += oe; tobiWork += v.w; tobiOtEq += oe
+      monthly[pk.ym].tw += md; monthly[pk.ym].toe += oe; tobiWork += md; tobiOtEq += oe
     }
     // 上記以外 (jimu 等) は鳶換算対象外
   }
@@ -848,6 +862,16 @@ export interface WorkerMonthly {
   workAll: number
   halfDays?: number
   otHours: number
+  // ── 夜勤（2026-08 追加）──
+  //   workDays は「出勤日数」のまま維持し（欠勤判定 = 所定日数 − workDays が壊れるため）、
+  //   人工は manDays に分離して持つ。夜勤が無い月は manDays === workDays。
+  manDays?: number          // 人工数（夜勤のみ 1.5 / 日勤＋夜勤 2.5）。支給・元請け請求の基礎
+  nightShiftDays?: number   // 夜勤の回数
+  nightManDays?: number     // 夜勤ぶんの人工（回数 × 1.5）
+  nightShiftHours?: number  // 夜勤ブロックの実労働時間 合計
+  legalRequiredPay?: number // 夜勤日の法定最低支給額 合計（1.5人工が法令を満たすかの判定用）
+  nightShiftPaid?: number   // 夜勤日に実際に支払う額 合計（人工 × 日額 ＋ 残業手当）
+  legalShortfall?: number   // 法定必要額 − 実支給額（プラスなら不足 = 要是正）
   plDays: number
   plUsed: number
   restDays: number
@@ -1081,6 +1105,48 @@ export function computeMonthly(
     const workCount = isComp ? 0 : entry.w  // 補償は人工0
 
     wm.workDays += workCount
+    // ── 夜勤（2026-08 追加）──
+    //   夜勤は workDays に足さない。w=1.5 のような表現にすると出勤日数が1.5日になり、
+    //   欠勤判定（所定日数 − workDays）が壊れる。人工は manDays 側で持つ。
+    if (entry.ns && !isComp) {
+      const nsHours = calcNightShiftHours(entry)
+      wm.nightShiftDays = (wm.nightShiftDays || 0) + 1
+      wm.nightManDays = Math.round(((wm.nightManDays || 0) + NIGHT_SHIFT_MANDAYS) * 100) / 100
+      wm.nightShiftHours = Math.round(((wm.nightShiftHours || 0) + nsHours) * 10) / 10
+
+      // 日本人（日給月給）の 1.5人工 が法令を満たすかを夜勤日ごとに検証し、
+      // 法定必要額と実支給額を積む。支給額は変えず、不足があれば月次画面で警告する。
+      if (wm.visa === 'none' && wm.rate > 0) {
+        const dayH = entry.st && entry.et
+          ? calcDayShiftHours(entry, siteScheduleMap.get(siteId) as Parameters<typeof calcActualHours>[1])
+          : (entry.nonly ? 0 : (entry.w || 0) * JP_PRESCRIBED_HOURS_PER_DAY + (entry.o || 0))
+        let nightMin = entry.st && entry.et
+          ? calcNightMinutes(timeToMinutes(entry.st), timeToMinutes(entry.et))
+          : 0
+        const nr = getNightRange(entry)
+        if (nr) {
+          nightMin += Math.min(
+            calcNightMinutes(timeToMinutes(nr.start), timeToMinutes(nr.end)),
+            Math.round(nsHours * 60),
+          )
+        }
+        const dow = new Date(parseInt(ym.slice(0, 4)), parseInt(ym.slice(4, 6)) - 1, Number(pk.day)).getDay()
+        wm.legalRequiredPay = (wm.legalRequiredPay || 0) + calcNightShiftLegalRequiredPay({
+          dailyRate: wm.rate,
+          prescribedHours: JP_PRESCRIBED_HOURS_PER_DAY,
+          totalHours: dayH + nsHours,
+          nightHours: nightMin / 60,
+          isLegalHoliday: dow === 0,
+          otMul: wm.otMul,
+        })
+        // 同じ日に実際に支払う額（人工 × 日額 ＋ 残業手当）
+        const otUnit = ceilYen((wm.rate / JP_PRESCRIBED_HOURS_PER_DAY) * (wm.otMul || 1.25))
+        wm.nightShiftPaid = (wm.nightShiftPaid || 0)
+          + ceilYen(calcManDays(entry) * wm.rate) + ceilYen(otUnit * (entry.o || 0))
+      }
+    }
+    // 人工数: 夜勤が無ければ workCount と一致する（既存挙動を変えない）
+    wm.manDays = Math.round(((wm.manDays || 0) + (isComp ? 0 : calcManDays(entry))) * 100) / 100
     // 2026-06-XX 修正 (C8): 同一日複数現場の actualWorkDays 二重カウント解消
     //   旧: エントリ単位で += 1 → 1日に2現場勤務(各 w=0.5)で actualWorkDays += 2 となり
     //       「1日なのに2日出勤」扱い、欠勤判定が過少に
@@ -1116,8 +1182,10 @@ export function computeMonthly(
         // ※ RawSite の workSchedule は optional だが、calcActualHours は内部で `?.` でアクセスするので安全
         dayHours = calcActualHours(entry, siteScheduleMap.get(siteId) as Parameters<typeof calcActualHours>[1])
       } else {
-        // レガシー: 1日所定（=7h）+ 残業
-        dayHours = (entry.w || 0) * 7 + (entry.o || 0)
+        // レガシー: 1日所定（=7h）+ 残業 ＋ 夜勤ブロック
+        //   日本人は日給月給で st/et を持たないため、夜勤の実労働はここで加算される
+        dayHours = (entry.nonly ? 0 : (entry.w || 0) * 7 + (entry.o || 0))
+          + calcNightShiftHours(entry)
       }
       const accum = actualWorkHoursAccumByWid.get(wid) || 0
       actualWorkHoursAccumByWid.set(wid, accum + dayHours)
@@ -1129,7 +1197,9 @@ export function computeMonthly(
     const otDiv = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
     const entryDailyRate = getWorkerDailyRate({ visa: wm.visa, rate: wm.rate, salary: wm.salary, hourlyRate: wm.hourlyRate })
     const otCost = (isComp ? 0 : (entry.o || 0)) * (entryDailyRate / otDiv) * wm.otMul
-    const entryCost = entry.w * entryDailyRate + otCost
+    // 2026-08: 人工ベース。夜勤日は 1.5人工（日勤＋夜勤なら 2.5人工）で原価計上する。
+    //   夜勤が無ければ calcManDays(entry) === entry.w なので従来と同額。
+    const entryCost = (isComp ? entry.w : calcManDays(entry)) * entryDailyRate + otCost
     // 原価=実支給額で集計するスタッフ（ベトナム人 + 日本人完全月給）は、エントリ単位の
     // 概算(日数×日額)を site.cost に積まず、出勤日数だけ記録して後段で支給額を比例配賦する。
     //   ※ 日本人日給月給(visa none & salary無)は totalCost=日数×日額=支給額 で一致 → 従来加算。
@@ -1193,7 +1263,8 @@ export function computeMonthly(
     const effectiveDailyRate = (wm.visa === 'none' && wm.salary && wm.salary > 0)
       ? wm.salary / 20
       : wm.rate
-    wm.cost = wm.workDays * effectiveDailyRate + (wm.compDays * 0.6 * effectiveDailyRate)  // 補償分も原価に含む
+    // 2026-08: 人工ベース（夜勤の 1.5人工 を原価に反映）。夜勤が無い月は manDays === workDays
+    wm.cost = (wm.manDays ?? wm.workDays) * effectiveDailyRate + (wm.compDays * 0.6 * effectiveDailyRate)  // 補償分も原価に含む
     const otDiv2 = wm.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h
     wm.otCost = wm.otHours * (effectiveDailyRate / otDiv2) * wm.otMul
     wm.totalCost = wm.cost + wm.otCost
@@ -1531,7 +1602,10 @@ export function computeMonthly(
       // 有給手当 = 日額(rate) × 有給日数（2026-06 追加: 日給月給は有給日も日給を加算して支給）
       // 残業手当 = 残業単価(日額 ÷ 8h × otMul, 1円単位に切り上げ) × 残業時間
       // 支給額 = 基本給 + 有給手当 + 残業手当
-      const basePay = ceilYen(wm.workDays * wm.rate + (wm.compDays * 0.6 * wm.rate))  // 支給: 切り上げ
+      // 2026-08 追加: 人工ベースに変更。夜勤日は 1.5人工（日勤＋夜勤なら 2.5人工）で支給する
+      //   慣例に対応する。夜勤が無い月は manDays === workDays なので従来と同額。
+      const payManDays = wm.manDays ?? wm.workDays
+      const basePay = ceilYen(payManDays * wm.rate + (wm.compDays * 0.6 * wm.rate))  // 支給: 切り上げ
       const paidLeaveAllowance = ceilYen(wm.plUsed * wm.rate)  // 有給手当 = 有給日数 × 日額（支給: 切り上げ）
       const otUnitRate = ceilYen((wm.rate / 8) * wm.otMul)  // 残業単価を1円単位に切り上げ
       const otPay = ceilYen(otUnitRate * wm.otHours)          // 残業代も1円未満切り上げ
@@ -1547,6 +1621,19 @@ export function computeMonthly(
       wm.totalCost = wm.salaryNetPay
       wm.netPay = wm.salaryNetPay
       if (wm.isDispatched) wm.dispatchDeduction = wm.salaryNetPay
+      // 夜勤日の 1.5人工 が法定割増を満たしているか判定（不足分は月次画面で警告）。
+      //   支給額は変えない。日曜の夜勤・長時間の通し勤務で不足が出る。
+      if (wm.nightShiftDays) {
+        const shortfall = (wm.legalRequiredPay || 0) - (wm.nightShiftPaid || 0)
+        wm.legalShortfall = shortfall > 0 ? Math.ceil(shortfall) : 0
+        if (wm.legalShortfall > 0) {
+          console.warn(
+            `[compute] 法定割増の不足: ${wm.name} (${ym}) 夜勤${wm.nightShiftDays}回。` +
+            `法定必要額 ¥${Math.ceil(wm.legalRequiredPay || 0)} > 支給額 ¥${wm.nightShiftPaid || 0}` +
+            `（不足 ¥${wm.legalShortfall}）。日曜の夜勤か長時間の通し勤務の可能性があります。`
+          )
+        }
+      }
     } else if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0) {
       // ⚠️ 2026-05-09: 防御的フォールバック
       //   外国人 (hourlyRate あり) なのに workerPrescribedDays が0の場合は、
@@ -1993,6 +2080,39 @@ function calcNightMinutes(startMin: number, endMin: number): number {
 }
 
 /**
+ * 夜勤日の「法定最低の支給額」を1日単位で算出する（日本人・日給月給の 1.5人工 慣例の検証用）。
+ *
+ * 日本人の夜勤は 1.5人工（日勤＋夜勤なら 2.5人工）で支払い、元請けにも同率で請求する
+ * 商習慣がある。これは法令上の割増賃金とは別建ての計算なので、条件次第で法定を下回る:
+ *   - 法定休日（日曜）の夜勤 … 1.35倍と深夜0.25倍が重なるため、実労働 7.6h 超で不足
+ *   - 長時間の通し勤務       … 平日でも実労働 16.2h 超で不足（日勤7h＋夜勤の通し等）
+ * この関数で法定必要額を出し、支給額と比べて不足があれば警告する。支給額自体は変えない。
+ *
+ * 法定休日は所定労働日ではないため日額は発生せず、全時間に1.35倍を掛ける。
+ * 休日労働は8時間を超えても35%増のままで足りる（時間外割増と重複しない）ため、
+ * ここでは法令下限の1.35倍で評価する。
+ */
+export function calcNightShiftLegalRequiredPay(args: {
+  dailyRate: number          // 日額
+  prescribedHours: number    // 1日の所定労働時間（日本人=8h。割増単価の分母）
+  totalHours: number         // その日の実労働時間（日勤＋夜勤、休憩控除済み）
+  nightHours: number         // 深夜(22:00-5:00)と重なる労働時間
+  isLegalHoliday: boolean    // 法定休日（日曜）か
+  otMul?: number             // 時間外の割増率（既定1.25）
+}): number {
+  const { dailyRate, prescribedHours, totalHours, nightHours, isLegalHoliday } = args
+  if (dailyRate <= 0 || prescribedHours <= 0) return 0
+  const hourly = dailyRate / prescribedHours
+  const nightPremium = hourly * 0.25 * nightHours
+  if (isLegalHoliday) {
+    return ceilYen(hourly * 1.35 * totalHours + nightPremium)
+  }
+  const otMul = args.otMul && args.otMul > 0 ? args.otMul : 1.25
+  const otHours = Math.max(0, totalHours - prescribedHours)
+  return ceilYen(dailyRate + hourly * otMul * otHours + nightPremium)
+}
+
+/**
  * ベトナム人スタッフの月次給与を法令準拠で計算する（変形労働時間制、新ルール）
  *
  * 設計方針:
@@ -2098,18 +2218,15 @@ export function calculateVietnameseSalary(
 
       let dayHours = 0
       if (entry.st && entry.et) {
-        // 時間ベース: 現場の workSchedule に従って実労働を計算
-        dayHours = calcActualHours(entry, site.workSchedule as Parameters<typeof calcActualHours>[1])
+        // 時間ベース（日勤ブロック）: 現場の workSchedule に従って実労働を計算
+        dayHours = calcDayShiftHours(entry, site.workSchedule as Parameters<typeof calcActualHours>[1])
         // 深夜時間（休憩控除前のレンジで計算 — 建設業の休憩は深夜帯と重ならない前提）
-        const stParts = entry.st.split(':').map(Number)
-        const etParts = entry.et.split(':').map(Number)
-        const startMin = stParts[0] * 60 + (stParts[1] || 0)
-        const endMin = etParts[0] * 60 + (etParts[1] || 0)
-        nightMinutes += calcNightMinutes(startMin, endMin)
-      } else {
+        nightMinutes += calcNightMinutes(timeToMinutes(entry.st), timeToMinutes(entry.et))
+      } else if (!entry.nonly) {
         // レガシー入力: 主集計と式統一 = w × sitePrescribed + 残業h
         // C-6 修正: 旧 (7 + o) → (w × sitePrescribed + o)
         //   半日勤務 (w=0.5) で actualHours が過大計上されるバグを修正
+        // ※ 夜勤のみの日 (nonly) はここに来ない — 下の夜勤ブロックで数える
         dayHours = entry.w * sitePrescribed + (entry.o || 0)
         // C-5 警告: レガシー入力では深夜時間が判定不能（st/et が無いため）
         //   5月以降の新ルール月で残業欄(o)が入っている場合は、深夜手当が
@@ -2120,6 +2237,20 @@ export function calculateVietnameseSalary(
             `深夜手当が計算できない可能性があります。出面入力でst/etを記入してください。`
           )
         }
+      }
+      // ── 夜勤ブロック（2026-08 追加）──
+      //   「日勤＋夜勤」「夜勤のみ」の両方をここで加算する。台風待機など年数回のケース。
+      const nRange = getNightRange(entry)
+      if (nRange) {
+        const nHours = calcNightShiftHours(entry)
+        dayHours += nHours
+        // 夜勤は休憩が深夜帯（例 0:00-1:00）に重なるのが普通なので、深夜時間が
+        // 夜勤の実労働時間を超えないよう上限を掛ける。休憩位置は記録していないため、
+        // 重なった分の控除まではしない（＝わずかに多め＝過払い側で法令リスクなし）。
+        nightMinutes += Math.min(
+          calcNightMinutes(timeToMinutes(nRange.start), timeToMinutes(nRange.end)),
+          Math.round(nHours * 60),
+        )
       }
       actualHours += dayHours
     }

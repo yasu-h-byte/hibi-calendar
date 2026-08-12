@@ -39,6 +39,7 @@ interface Props {
   onSubconNChange: (subconId: string, day: number, value: string) => void
   onSubconOnChange: (subconId: string, day: number, value: string) => void
   onCellKeyDown: (e: React.KeyboardEvent, day: number, workerId: string) => void
+  onNightClick?: (workerId: string, day: number) => void
   onForemanApproveAll: () => void
   onToggleForemanApproval: (day: number) => void
   onFinalApproveAll: () => void
@@ -50,7 +51,7 @@ export default function AttendanceGrid({
   workerEntries, subconEntries, footerSums, localApprovals, localFinalApprovals,
   canForemanApprove, canFinalize, startTimeOptions, endTimeOptions, workerTotals, subconTotals,
   onWorkChange, onOtChange, onTimeStatusChange, onStartTimeChange, onEndTimeChange, onBreakChange,
-  onSubconNChange, onSubconOnChange, onCellKeyDown,
+  onSubconNChange, onSubconOnChange, onCellKeyDown, onNightClick,
   onForemanApproveAll, onToggleForemanApproval, onFinalApproveAll, onToggleFinalApproval,
 }: Props) {
   const unapprovedDays = days.filter(d => !localApprovals[d.day])
@@ -337,6 +338,7 @@ export default function AttendanceGrid({
                               onEndTimeChange={onEndTimeChange}
                               onBreakChange={onBreakChange}
                               onCellKeyDown={onCellKeyDown}
+                              onNightClick={onNightClick}
                             />
                           )
                         }
@@ -359,6 +361,7 @@ export default function AttendanceGrid({
                             onWorkChange={onWorkChange}
                             onOtChange={onOtChange}
                             onCellKeyDown={onCellKeyDown}
+                            onNightClick={onNightClick}
                           />
                         )
                       })}

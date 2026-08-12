@@ -48,6 +48,13 @@ export interface AttEntry {
   b1?: number   // 午前休憩 1/0
   b2?: number   // 昼休み 1/0
   b3?: number   // 午後休憩 1/0
+  // 夜勤ブロック（202608〜・台風待機等）— 詳細は types/index.ts の AttendanceEntry を参照
+  ns?: number     // 1=夜勤あり
+  nonly?: number  // 1=夜勤のみ（日勤なし）
+  nst?: string    // 夜勤の始業 "20:00"
+  net?: string    // 夜勤の終業 "29:00"（24時超え表記＝翌5:00）
+  nb?: number     // 夜勤中の休憩（分）
+  nnote?: string  // 夜勤の理由「台風待機」等
 }
 
 export interface SubconDayEntry {

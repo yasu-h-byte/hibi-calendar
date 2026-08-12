@@ -1,6 +1,6 @@
 'use client'
 
-import { calcActualHours } from '@/types'
+import { calcDayShiftHours, calcNightShiftHours, calcManDays } from '@/types'
 import { getTimeStatusValue, getWorkValue } from '@/lib/attendance-grid'
 import { AttEntry } from '../types'
 
@@ -10,10 +10,33 @@ import { AttEntry } from '../types'
 //   HomeLeaveCell … ✈帰国 表示
 //   WaitingCell   … ベトナム人スタッフのスマホ入力待ち（admin/職長は触れない・2026-05-08）
 
-/** 入力元インジケータ（スタッフ/職長入力の点）と休日出勤マーク */
-function CellMarkers({ isHolidayWork, source }: { isHolidayWork: boolean; source?: string }) {
+/** 入力元インジケータ（スタッフ/職長入力の点）と休日出勤マーク・夜勤バッジ */
+function CellMarkers({
+  isHolidayWork, source, hasNight, canEditNight, onNightClick,
+}: {
+  isHolidayWork: boolean
+  source?: string
+  hasNight?: boolean
+  canEditNight?: boolean
+  onNightClick?: () => void
+}) {
   return (
     <>
+      {/* 夜勤バッジ: 登録済みなら常時表示、未登録ならホバーで薄く出す（年数回の機能なので常時は出さない） */}
+      {canEditNight && (
+        <button
+          type="button"
+          onClick={e => { e.stopPropagation(); onNightClick?.() }}
+          title={hasNight ? '夜勤あり（クリックで編集）' : '夜勤を追加'}
+          className={`absolute top-0 left-0.5 text-[8px] font-bold leading-none rounded px-0.5 z-10 transition-opacity ${
+            hasNight
+              ? 'text-white bg-indigo-600 opacity-100'
+              : 'text-indigo-400 opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          夜
+        </button>
+      )}
       {isHolidayWork && (
         <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
       )}
@@ -73,12 +96,14 @@ interface TimeBasedCellProps {
   onEndTimeChange: (workerId: string, day: number, et: string) => void
   onBreakChange: (workerId: string, day: number, breakKey: 'b1' | 'b2' | 'b3', checked: boolean) => void
   onCellKeyDown: (e: React.KeyboardEvent, day: number, workerId: string) => void
+  onNightClick?: (workerId: string, day: number) => void
 }
 
 export function TimeBasedCell({
   entry, wId, day, isLocked, isHolidayWork, colBg, cellWidth,
   startTimeOptions, endTimeOptions,
   onStatusChange, onStartTimeChange, onEndTimeChange, onBreakChange, onCellKeyDown,
+  onNightClick,
 }: TimeBasedCellProps) {
   const statusVal = getTimeStatusValue(entry)
   const source = entry?.s
@@ -88,17 +113,23 @@ export function TimeBasedCell({
   const et = entry?.et || '17:00'
   const b1 = entry?.b1 ?? 1
   const b3 = entry?.b3 ?? 1
-  // 実時間計算
+  // 実時間計算（日勤ブロックのみ。夜勤は「夜」バッジ側に表示する）
   const actualH = isWorking && entry?.st && entry?.et
-    ? calcActualHours(entry)
+    ? calcDayShiftHours(entry)
     : 0
 
   return (
     <td
-      className={`px-0 py-0 border-l border-gray-100 relative ${colBg}`}
+      className={`group px-0 py-0 border-l border-gray-100 relative ${colBg}`}
       style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
     >
-      <CellMarkers isHolidayWork={isHolidayWork} source={source} />
+      <CellMarkers
+        isHolidayWork={isHolidayWork}
+        source={source}
+        hasNight={!!entry?.ns}
+        canEditNight={!isLocked && isWorking && !!onNightClick}
+        onNightClick={() => onNightClick?.(wId, day)}
+      />
       <div className="flex flex-col items-center">
         {/* ステータス選択 */}
         <select
@@ -127,7 +158,16 @@ export function TimeBasedCell({
           <option value="H">現</option>
         </select>
 
-        {isWorking ? (
+        {isWorking && entry?.nonly ? (
+          /* 夜勤のみの日: 日勤の時刻欄を出さない（既定値 08:00-17:00 が表示されて誤解を招くため）。
+             時刻の編集は「夜」バッジからモーダルで行う。 */
+          <div className="text-[10px] text-center py-1 leading-tight">
+            <span className="rounded-md px-1 font-bold text-indigo-700 bg-indigo-50">夜勤のみ</span>
+            <div className="tabular-nums text-gray-500 mt-0.5">
+              {calcNightShiftHours(entry).toFixed(1)}h
+            </div>
+          </div>
+        ) : isWorking ? (
           <>
             {/* 始業・終業（時刻フル表示） */}
             <div className="flex items-center gap-0 w-full">
@@ -160,6 +200,10 @@ export function TimeBasedCell({
               </label>
               <span className={`text-[10px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
                 {actualH.toFixed(1)}
+                {/* 日勤＋夜勤: 夜勤ぶんを別建てで見せる（日勤の実時間と混ぜない） */}
+                {entry?.ns && (
+                  <span className="text-indigo-600">+{calcNightShiftHours(entry).toFixed(1)}</span>
+                )}
               </span>
             </div>
           </>
@@ -193,11 +237,12 @@ interface LegacyCellProps {
   onWorkChange: (workerId: string, day: number, value: string) => void
   onOtChange: (workerId: string, day: number, otValue: string) => void
   onCellKeyDown: (e: React.KeyboardEvent, day: number, workerId: string) => void
+  onNightClick?: (workerId: string, day: number) => void
 }
 
 export function LegacyCell({
   entry, wId, day, isLocked, isHolidayWork, colBg, cellWidth,
-  onWorkChange, onOtChange, onCellKeyDown,
+  onWorkChange, onOtChange, onCellKeyDown, onNightClick,
 }: LegacyCellProps) {
   const workVal = getWorkValue(entry)
   const source = entry?.s
@@ -206,10 +251,16 @@ export function LegacyCell({
 
   return (
     <td
-      className={`px-0 py-0 border-l border-gray-100 relative ${colBg}`}
+      className={`group px-0 py-0 border-l border-gray-100 relative ${colBg}`}
       style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
     >
-      <CellMarkers isHolidayWork={isHolidayWork} source={source} />
+      <CellMarkers
+        isHolidayWork={isHolidayWork}
+        source={source}
+        hasNight={!!entry?.ns}
+        canEditNight={!isLocked && !!canOt && !!onNightClick}
+        onNightClick={() => onNightClick?.(wId, day)}
+      />
       <div className="flex flex-col">
         {/* Work dropdown - 大きめ */}
         <select
@@ -253,6 +304,12 @@ export function LegacyCell({
             ${!canOt || isLocked ? 'opacity-20 cursor-not-allowed' : 'text-amber-600'}
           `}
         />
+        {/* 夜勤がある日は人工を明示する（出勤値のドロップダウンは 1 のままなので分かりにくい） */}
+        {entry?.ns && (
+          <div className="text-[9px] text-center font-bold text-indigo-600 tabular-nums leading-none pb-0.5">
+            {calcManDays(entry)}人工
+          </div>
+        )}
       </div>
     </td>
   )
