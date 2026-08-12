@@ -71,6 +71,7 @@ interface WorkerMonthly {
   legalRequiredPay?: number
   nightShiftPaid?: number
   legalShortfall?: number
+  lateNightRiskDays?: number
   compAllowance?: number
   regularWorkDays?: number
   // 出向情報
@@ -1357,6 +1358,16 @@ export default function MonthlyPage() {
                             title={`夜勤日の法定必要額 ¥${Math.ceil(w.legalRequiredPay || 0).toLocaleString()} に対し支給 ¥${(w.nightShiftPaid || 0).toLocaleString()}。¥${(w.legalShortfall || 0).toLocaleString()} 不足しています（日曜の夜勤 または 長時間の通し勤務）。1.5人工の慣例では法定割増を満たさないケースです。`}
                           >
                             ⚠ 法定不足 ¥{(w.legalShortfall || 0).toLocaleString()}
+                          </span>
+                        )}
+                        {/* 「22時以降は必ず夜勤」の運用ルールから外れた日の検出。
+                            残業欄だけに長時間が入っていると深夜割増も1.5人工も付かない。 */}
+                        {(w.lateNightRiskDays || 0) > 0 && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            title={`残業時間から逆算すると22時を超えている日が ${w.lateNightRiskDays}日 ありますが、夜勤として登録されていません。22時以降の労働は夜勤（1.5人工）で登録する運用です。出面画面で確認してください。`}
+                          >
+                            ⚠ 夜勤未登録{w.lateNightRiskDays}日
                           </span>
                         )}
                       </td>

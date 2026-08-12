@@ -872,6 +872,7 @@ export interface WorkerMonthly {
   legalRequiredPay?: number // 夜勤日の法定最低支給額 合計（1.5人工が法令を満たすかの判定用）
   nightShiftPaid?: number   // 夜勤日に実際に支払う額 合計（人工 × 日額 ＋ 残業手当）
   legalShortfall?: number   // 法定必要額 − 実支給額（プラスなら不足 = 要是正）
+  lateNightRiskDays?: number // 残業hから逆算すると22時を超えるが夜勤登録が無い日数（運用ルール違反の検出）
   plDays: number
   plUsed: number
   restDays: number
@@ -1147,6 +1148,24 @@ export function computeMonthly(
     }
     // 人工数: 夜勤が無ければ workCount と一致する（既存挙動を変えない）
     wm.manDays = Math.round(((wm.manDays || 0) + (isComp ? 0 : calcManDays(entry))) * 100) / 100
+
+    // ── 「22時以降の労働は必ず夜勤として登録する」運用ルールのガード（2026-08）──
+    //   日本人はレガシー入力（出勤値＋残業h）で始業終業を持たないため、深夜時間を
+    //   時刻から判定できない。原則として22時以降は夜勤シフトになる運用だが、
+    //   残業欄だけに長時間が入っていると深夜割増も1.5人工も付かない状態になる。
+    //   現場の終業時刻＋残業hから終業を逆算し、22時を超える日を検出して警告する。
+    if (wm.visa === 'none' && !isComp && !entry.ns && !entry.st && (entry.o || 0) > 0) {
+      const jws = siteScheduleMap.get(siteId) as { endTime?: string } | undefined
+      const schedEndMin = jws?.endTime ? timeToMinutes(jws.endTime) : 17 * 60
+      if (schedEndMin + (entry.o || 0) * 60 > 22 * 60) {
+        wm.lateNightRiskDays = (wm.lateNightRiskDays || 0) + 1
+        console.warn(
+          `[compute] 22時超の労働が夜勤未登録: ${wm.name} (${ym}-${pk.day}) 残業${entry.o}h。` +
+          `現場の終業 ${jws?.endTime || '17:00'} から逆算すると22時を超えています。` +
+          `夜勤として登録すべきか確認してください（深夜割増も1.5人工も付いていません）。`
+        )
+      }
+    }
     // 2026-06-XX 修正 (C8): 同一日複数現場の actualWorkDays 二重カウント解消
     //   旧: エントリ単位で += 1 → 1日に2現場勤務(各 w=0.5)で actualWorkDays += 2 となり
     //       「1日なのに2日出勤」扱い、欠勤判定が過少に
