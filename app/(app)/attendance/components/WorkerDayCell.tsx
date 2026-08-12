@@ -22,16 +22,17 @@ function CellMarkers({
 }) {
   return (
     <>
-      {/* 夜勤バッジ: 登録済みなら常時表示、未登録ならホバーで薄く出す（年数回の機能なので常時は出さない） */}
+      {/* 夜勤バッジ。日付ヘッダーで「夜勤あり」に指定した日だけ表示される（canEditNight）。
+          登録済み = 塗り、未登録 = 枠線。日が絞られているので常時表示でよい。 */}
       {canEditNight && (
         <button
           type="button"
           onClick={e => { e.stopPropagation(); onNightClick?.() }}
-          title={hasNight ? '夜勤あり（クリックで編集）' : '夜勤を追加'}
-          className={`absolute top-0 left-0.5 text-[8px] font-bold leading-none rounded px-0.5 z-10 transition-opacity ${
+          title={hasNight ? '夜勤あり（クリックで編集）' : 'この人の夜勤を登録する'}
+          className={`absolute top-0 left-0.5 text-[8px] font-bold leading-none rounded px-0.5 z-10 ${
             hasNight
-              ? 'text-white bg-indigo-600 opacity-100'
-              : 'text-indigo-400 opacity-0 group-hover:opacity-100'
+              ? 'text-white bg-indigo-600'
+              : 'text-indigo-500 bg-white border border-indigo-300 hover:bg-indigo-50'
           }`}
         >
           夜

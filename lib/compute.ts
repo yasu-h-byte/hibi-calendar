@@ -48,6 +48,13 @@ export interface MainData {
   plData: Record<string, PLRecord[]>
   defaultRates: { tobiRate?: number; dokoRate?: number }
   mforeman: Record<string, { foreman?: number; wid?: number; note?: string }>
+  /**
+   * 夜勤が発生した日（台風待機など）。key = `${siteId}_${ym}`、値 = 日のリスト。
+   * 出面画面で「この日は夜勤あり」と指定された日だけスタッフのセルに夜勤バッジが出る。
+   * 誰が夜勤したかはエントリ側の ns フラグが持つ。ここは入力対象日を絞るためだけの指定で、
+   * 給与計算・所定日数には一切影響しない（純粋なUIフィルタ）。
+   */
+  nightDays: Record<string, number[]>
   // 2026-05-13: 旧 main.homeLeaves 配列は廃止（homeLongLeave コレクションに統合）
   //   フィールド自体は demmen/main 上に空配列として残るが、production 読み取りはしない。
 }
@@ -144,6 +151,7 @@ async function loadMainData(): Promise<MainData> {
     plData: (d.plData || {}) as Record<string, PLRecord[]>,
     defaultRates: (d.defaultRates || {}) as { tobiRate?: number; dokoRate?: number },
     mforeman: (d.mforeman || {}) as Record<string, { foreman?: number; wid?: number; note?: string }>,
+    nightDays: (d.nightDays || {}) as Record<string, number[]>,
   }
 }
 

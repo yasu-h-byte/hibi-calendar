@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   dayColBg, dayHeaderBg, dayTextColor,
   getWorkValue, getTimeStatusValue, retirementBadge,
@@ -40,6 +40,9 @@ interface Props {
   onSubconOnChange: (subconId: string, day: number, value: string) => void
   onCellKeyDown: (e: React.KeyboardEvent, day: number, workerId: string) => void
   onNightClick?: (workerId: string, day: number) => void
+  /** 夜勤が発生した日（この日だけスタッフのセルに夜勤バッジが出る） */
+  nightDays?: number[]
+  onToggleNightDay?: (day: number) => void
   onForemanApproveAll: () => void
   onToggleForemanApproval: (day: number) => void
   onFinalApproveAll: () => void
@@ -52,8 +55,13 @@ export default function AttendanceGrid({
   canForemanApprove, canFinalize, startTimeOptions, endTimeOptions, workerTotals, subconTotals,
   onWorkChange, onOtChange, onTimeStatusChange, onStartTimeChange, onEndTimeChange, onBreakChange,
   onSubconNChange, onSubconOnChange, onCellKeyDown, onNightClick,
+  nightDays, onToggleNightDay,
   onForemanApproveAll, onToggleForemanApproval, onFinalApproveAll, onToggleFinalApproval,
 }: Props) {
+  // 夜勤が発生した日の判定（台風待機など）。指定日だけスタッフのセルに夜勤バッジを出す
+  const nightDaySet = useMemo(() => new Set(nightDays || []), [nightDays])
+  const isNightDay = (day: number) => nightDaySet.has(day)
+
   const unapprovedDays = days.filter(d => !localApprovals[d.day])
   // 職長承認済かつ最終未承認の日だけが最終承認の対象
   const finalizableDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day])
@@ -113,6 +121,24 @@ export default function AttendanceGrid({
                   <div className="leading-tight">
                     <div className="text-[11px]">{d.day}</div>
                     <div className="text-[9px] opacity-70">{d.label}{showOffMark ? ' 休' : ''}</div>
+                    {/* 夜勤日の指定（台風待機など年数回）。ここで指定した日だけ
+                        スタッフのセルに「夜」バッジが出る。未指定日はホバーで薄く出る */}
+                    {onToggleNightDay && !data.locked && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleNightDay(d.day)}
+                        title={isNightDay(d.day)
+                          ? `${d.day}日は夜勤あり（クリックで解除）`
+                          : `${d.day}日を夜勤ありにする`}
+                        className={`mt-0.5 w-full text-[8px] font-bold leading-none rounded transition-opacity ${
+                          isNightDay(d.day)
+                            ? 'bg-indigo-600 text-white opacity-100'
+                            : 'text-indigo-400 opacity-0 hover:opacity-100'
+                        }`}
+                      >
+                        夜
+                      </button>
+                    )}
                   </div>
                 </th>
                 )
@@ -338,7 +364,7 @@ export default function AttendanceGrid({
                               onEndTimeChange={onEndTimeChange}
                               onBreakChange={onBreakChange}
                               onCellKeyDown={onCellKeyDown}
-                              onNightClick={onNightClick}
+                              onNightClick={isNightDay(d.day) ? onNightClick : undefined}
                             />
                           )
                         }
@@ -361,7 +387,7 @@ export default function AttendanceGrid({
                             onWorkChange={onWorkChange}
                             onOtChange={onOtChange}
                             onCellKeyDown={onCellKeyDown}
-                            onNightClick={onNightClick}
+                            onNightClick={isNightDay(d.day) ? onNightClick : undefined}
                           />
                         )
                       })}

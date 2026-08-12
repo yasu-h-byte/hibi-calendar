@@ -90,6 +90,8 @@ export interface GridData {
   sites: SiteOption[]
   workDays: number | null
   siteWorkDays: number | null
+  /** 夜勤が発生した日（台風待機など）。この日だけスタッフのセルに夜勤バッジが出る */
+  nightDays?: number[]
   allWorkers: Worker[]
   allSubcons?: { id: string; name: string; type: string }[]
   foremanOverride: { name: string; note: string } | null

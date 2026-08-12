@@ -5,9 +5,13 @@
  * レイアウトが崩れる。夜勤は頻度が低いので、セルの「夜」バッジからこのモーダルを開いて
  * 入力する方式にしている。
  *
- * 日勤との関係:
- *   - 夜勤のみ    … 日勤なし。人工 1.5
- *   - 日勤＋夜勤  … 日勤で働いてそのまま夜間待機に入るケース。人工 1＋1.5＝2.5
+ * 日勤との関係（夜勤は日勤の長さに関係なく常に 1.5人工）:
+ *   - 夜勤のみ        … 日勤なし。人工 1.5
+ *   - 日勤＋夜勤      … 日勤で働いてそのまま夜間待機に入るケース。人工 1＋1.5＝2.5
+ *   - 半日(0.5)＋夜勤 … 午後から出勤してそのまま待機。人工 0.5＋1.5＝2.0
+ *
+ * ⚠️ 人工の表示は必ず calcManDays() を使う。ここで「日勤=1」と決め打ちすると
+ *    半日出勤の日に給与計算と食い違う（2026-08-12 に実際に起きたバグ）。
  *
  * 終業は「翌5:00」を "29:00" という24時超え表記で保存する。こうすると時刻→分の変換が
  * 単調増加になり、実労働・深夜時間の計算が日付またぎ補正なしで正しく動く。
@@ -16,7 +20,7 @@
 
 import { useEffect, useState } from 'react'
 import {
-  formatTimeLabel, timeToMinutes, NIGHT_DEFAULT_BREAK_MIN, NIGHT_SHIFT_MANDAYS,
+  formatTimeLabel, timeToMinutes, calcManDays, NIGHT_DEFAULT_BREAK_MIN, NIGHT_SHIFT_MANDAYS,
   NIGHT_START_OPTIONS, NIGHT_END_OPTIONS,
 } from '@/types'
 import { AttEntry } from '../types'
@@ -80,7 +84,10 @@ export default function NightShiftModal({
   const spanMin = Math.max(0, endMin - startMin)
   const workMin = Math.max(0, spanMin - nb)
   const nightMin = Math.min(nightMinutesOf(startMin, endMin), workMin)
-  const manDays = (nonly ? 0 : 1) + NIGHT_SHIFT_MANDAYS
+  // ⚠️ 人工は必ず calcManDays で出す。ここで独自に「日勤=1」と決め打ちすると、
+  //    半日出勤（w=0.5）の日に給与計算と表示が食い違う（2026-08-12 のバグ）。
+  const dayManDays = nonly ? 0 : (entry?.w || 0)
+  const manDays = calcManDays({ ...(entry || { w: 1 }), ns: 1, nonly: nonly ? 1 : undefined })
   const invalid = endMin <= startMin || workMin <= 0
 
   const fmtH = (min: number) => `${Math.floor(min / 60)}時間${min % 60 > 0 ? `${min % 60}分` : ''}`
@@ -190,7 +197,13 @@ export default function NightShiftModal({
                 <span className="font-bold tabular-nums text-purple-700">{fmtH(nightMin)}</span>
               </div>
               <div className="flex justify-between text-sm pt-1 border-t border-indigo-200">
-                <span className="text-gray-600">この日の人工</span>
+                <span className="text-gray-600">
+                  この日の人工
+                  {/* 内訳を出す。出勤欄が 0.5（半日）だと 2.5 ではなく 2.0 になるため */}
+                  <span className="block text-[11px] text-gray-400 tabular-nums">
+                    日勤 {dayManDays} ＋ 夜勤 {NIGHT_SHIFT_MANDAYS}
+                  </span>
+                </span>
                 <span className="font-bold tabular-nums text-hibi-navy">{manDays} 人工</span>
               </div>
               <p className="text-[11px] text-gray-500 pt-1">

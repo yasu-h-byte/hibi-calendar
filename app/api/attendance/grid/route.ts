@@ -208,6 +208,8 @@ export async function GET(request: NextRequest) {
       finalApprovals,
       workDays: workDaysValue,
       siteWorkDays: siteWorkDaysValue,
+      // 夜勤が発生した日（台風待機など）。この日だけスタッフのセルに夜勤バッジが出る
+      nightDays: main.nightDays?.[`${siteId}_${ym}`] || [],
       allWorkers,
       allSubcons,
       sites: main.sites.map(s => ({ id: s.id, name: s.name, archived: s.archived })),
@@ -327,6 +329,31 @@ export async function POST(request: NextRequest) {
       const docRef = doc(db, 'demmen', 'main')
       await setDoc(docRef, { workDays: { [ym]: value } }, { merge: true })
       return NextResponse.json({ success: true })
+    }
+
+    // Action: 夜勤が発生した日の指定（台風待機など）
+    //
+    //   nightDays[siteId_ym] = [11, 12] のように日のリストを持つ。指定された日だけ
+    //   出面画面のセルに夜勤バッジが出る。誰が夜勤したかはエントリ側の ns が持つので、
+    //   ここは入力対象日を絞るためのUIフィルタでしかない（給与計算・所定日数に影響しない）。
+    //
+    //   ⚠️ 空配列を書くケースがあるが、これは top-level field `nightDays` の
+    //      子フィールド（配列）の置換であり、マップを空にする 2026-05-07 事故の
+    //      パターンには当たらない（配列は要素の追加削除が正常な操作）。
+    if (action === 'saveNightDays') {
+      const { ym: nym, siteId: nsid, days } = body
+      if (!nym || !nsid) return NextResponse.json({ error: 'ym and siteId required' }, { status: 400 })
+      if (!Array.isArray(days) || days.some(d => !Number.isInteger(d) || d < 1 || d > 31)) {
+        return NextResponse.json({ error: '日の指定が不正です' }, { status: 400 })
+      }
+      const sorted = Array.from(new Set(days as number[])).sort((a, b) => a - b)
+      const docRef = doc(db, 'demmen', 'main')
+      await setDoc(docRef, { nightDays: { [`${nsid}_${nym}`]: sorted } }, { merge: true })
+      try {
+        const { logActivity } = await import('@/lib/activity')
+        await logActivity('admin', 'attendance.nightDays', `${nsid}/${nym} 夜勤日 → [${sorted.join(',')}]`)
+      } catch { /* ログ失敗は本体処理に影響させない */ }
+      return NextResponse.json({ success: true, nightDays: sorted })
     }
 
     // Action: save assignments (workers と subcons 両対応)

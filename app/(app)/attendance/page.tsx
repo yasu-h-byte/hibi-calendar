@@ -62,6 +62,8 @@ export default function AttendanceGridPage() {
   const [showAssignModal, setShowAssignModal] = useState(false)
   // 夜勤モーダル（台風待機など年数回のケース）
   const [nightTarget, setNightTarget] = useState<{ workerId: string; day: number } | null>(null)
+  // 夜勤が発生した日（現場×月ごと）。指定した日だけスタッフのセルに夜勤バッジが出る
+  const [nightDays, setNightDays] = useState<number[]>([])
 
   // 翌月カレンダー未確定アラート用（月末1週間前を過ぎたら全現場の status を取得）
   const [nextMonthCalCheck, setNextMonthCalCheck] = useState<{
@@ -121,6 +123,7 @@ export default function AttendanceGridPage() {
       const json: GridData = await res.json()
       setData(json)
       setWorkerEntries(json.workerEntries)
+      setNightDays(json.nightDays || [])
       setSubconEntries(json.subconEntries)
       setLocalApprovals(json.approvals || {})
       // 最終承認は finalApprovals マップから bool マップを生成
@@ -582,6 +585,34 @@ export default function AttendanceGridPage() {
   }, [scheduleSave, workerEntries])
 
   /**
+   * 夜勤が発生した日の指定 / 解除（台風待機など）。
+   *
+   * 「まず夜勤があった日を選び、その日のスタッフだけに夜勤バッジを出す」という流れにするための
+   * 日単位の指定。誰が夜勤したかはエントリ側の ns が持つので、これは入力対象日を絞る
+   * UIフィルタでしかない（給与計算・所定日数には影響しない）。
+   *
+   * 解除するとバッジが消えるが、既に登録済みの夜勤エントリ（ns）は消さない。
+   * 誤操作で給与が変わらないようにするため。個別の取り消しはモーダルから行う。
+   */
+  const handleToggleNightDay = useCallback(async (day: number) => {
+    const next = nightDays.includes(day)
+      ? nightDays.filter(d => d !== day)
+      : [...nightDays, day].sort((a, b) => a - b)
+    setNightDays(next)   // 楽観更新
+    try {
+      const res = await fetch('/api/attendance/grid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'saveNightDays', siteId, ym, days: next }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+    } catch {
+      setNightDays(nightDays)  // 失敗したら戻す
+      setSaveStatus('error')
+    }
+  }, [nightDays, password, siteId, ym])
+
+  /**
    * 夜勤の保存 / 取り消し（台風待機など年数回のケース）。
    *
    * 夜勤は w に足さず ns/nst/net で別枠に持つ。w を 1.5 にすると出勤日数が 1.5 日になり、
@@ -1000,6 +1031,8 @@ export default function AttendanceGridPage() {
           onSubconOnChange={handleSubconOnChange}
           onCellKeyDown={handleAttCellKeyDown}
           onNightClick={(workerId, day) => setNightTarget({ workerId, day })}
+          nightDays={nightDays}
+          onToggleNightDay={handleToggleNightDay}
           onForemanApproveAll={handleForemanApproveAll}
           onToggleForemanApproval={handleToggleForemanApproval}
           onFinalApproveAll={handleFinalApproveAll}

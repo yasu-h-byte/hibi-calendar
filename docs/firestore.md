@@ -24,6 +24,7 @@
 | locks | map | 月締め状態 |
 | defaultRates | map | デフォルト単価 |
 | mforeman | map | 月別代理職長 |
+| nightDays | map | 夜勤が発生した日 `{ "siteId_YYYYMM": [11, 12] }`。出面画面で夜勤バッジを出す日を絞るUIフィルタ。給与計算・所定日数には影響しない（誰が夜勤したかはエントリの `ns`） |
 | nextWorkerId | number | 次のワーカーID |
 
 #### MainData.homeLeaves
