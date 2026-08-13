@@ -4,7 +4,7 @@
 //  バッジ系は lib/labels.ts、職種分類は lib/jobs.ts に集約済み（重複定義しない）
 // ────────────────────────────────────────
 
-import { calcActualHours, calcDayShiftHours, calcNightShiftHours } from '@/types'
+import { calcActualHours, calcDayShiftHours, calcNightShiftHours, calcManDays } from '@/types'
 import { isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { AttEntry, SubconDayEntry, DayType, Worker, Subcon } from '@/app/(app)/attendance/types'
@@ -166,8 +166,11 @@ export function computeWorkerTotals(
 
     if (!isWorkingDay(e)) continue
 
-    // 出勤日のみ集計対象
-    wSum += e.w || 0
+    // 出勤日のみ集計対象。
+    // ⚠️ e.w を直接足さない。夜勤がある日は 1.5人工 が別枠で乗るため、
+    //    w だけ足すとセルの「2人工」表示や給与計算と合計欄が食い違う（2026-08-13 修正）。
+    //    夜勤が無ければ calcManDays(e) === e.w なので従来と同値。
+    wSum += calcManDays(e)
     if (e.w === 0.6) compSum += 0.6
 
     // 補償日 (w=0.6) の残業は、ベトナム人スタッフはカウントしない（フッターと整合）
@@ -273,7 +276,9 @@ export function computeFooterSums(
       const entry = workerEntries[wId]?.[d]
       if (entry && isWorkingDay(entry)) {
         const isComp = entry.w === 0.6 && w.visa !== 'none'
-        const workVal = isComp ? 0 : entry.w
+        // ⚠️ entry.w を直接使わない。夜勤の 1.5人工 が抜けて鳶計・土工計・総計が
+        //    人ごとの合計と合わなくなる（2026-08-13 修正）。
+        const workVal = isComp ? 0 : calcManDays(entry)
         const otVal = isComp ? 0 : (entry.o || 0)
         if (isTobiGroup(w.job)) {
           tobiDay += workVal

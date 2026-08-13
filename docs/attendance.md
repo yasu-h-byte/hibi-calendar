@@ -235,6 +235,24 @@ nnote?: string  // 理由
 日勤ぶんは `w` がそのまま人工になるので、午後から出勤（0.5）してそのまま待機に入った
 日は 0.5＋1.5＝**2.0人工** になる。2.5 にはならない。
 
+### ⚠️ 人工の集計は必ず calcManDays を通す
+
+`entry.w` を直接足すと夜勤の 1.5人工 が抜ける。2026-08-13 に
+`computeWorkerTotals`（人ごとの合計欄）と `computeFooterSums`（鳶計・土工計・総計）で
+実際にこのバグが出た。セルの「2人工」表示・給与計算・元請け請求とだけ食い違うので
+気づきにくい。
+
+- 人工が欲しい場所 → `calcManDays(entry)`
+- 出勤**日数**が欲しい場所 → `entry.w`（夜勤で日数は増えない）
+
+出勤率の計算（`lib/attendance-rate.ts`）は `Math.min(workSum, 1)` で日数に丸めているため
+`entry.w` のままで正しい。
+
+**Excel帳票（`generateHibiAttendance` / `generateHfuAttendance` /
+`generatePerSiteAttendance`）は未対応**。`entry.w` を使っているので夜勤ぶんが出ない。
+社労士提出用は「出勤日数」であるべきで請求用は「人工」であるべき、と用途が分かれるため
+方針決定待ち。
+
 ### ⚠️ 残業h（o）に夜勤を混ぜない
 
 `calcActualHours()` は日勤＋夜勤の**合計**を返す。一方、残業時間の自動算出には

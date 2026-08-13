@@ -119,6 +119,27 @@ describe('セル表示値の判定', () => {
 })
 
 describe('computeWorkerTotals: ワーカー月間合計', () => {
+  // 2026-08-13 修正: 合計欄が e.w を直接足していて夜勤の1.5人工が抜けていた。
+  // セルの「2人工」表示・給与計算・元請け請求と食い違うため calcManDays に統一した。
+  it('夜勤の1.5人工が人工計に含まれる（合計欄の抜けの回帰防止）', () => {
+    const night = { ns: 1, nst: '22:00', net: '29:00', nb: 60 }
+    const entries: Record<number, AttEntry> = {
+      10: { w: 1 },                        // 通常出勤 → 1
+      11: { w: 0.5, o: 5, ...night },      // 半日＋残業5h＋夜勤 → 2.0人工
+      12: { w: 1, ...night },              // 日勤＋夜勤 → 2.5人工
+      13: { w: 1, nonly: 1, ...night },    // 夜勤のみ → 1.5人工
+    }
+    const t = computeWorkerTotals(entries, { timeBased: false, foreign: false })
+    expect(t.wSum).toBe(7)     // 1 + 2.0 + 2.5 + 1.5
+    expect(t.oSum).toBe(5)     // 残業は夜勤と別枠。夜勤ぶんを混ぜない
+  })
+
+  it('夜勤が無ければ人工計は従来と同じ（w の素の合計）', () => {
+    const entries: Record<number, AttEntry> = { 1: { w: 1 }, 2: { w: 0.5 }, 3: { w: 0.6 } }
+    const t = computeWorkerTotals(entries, { timeBased: false, foreign: false })
+    expect(t.wSum).toBe(2.1)
+  })
+
   it('レガシー: 人工・残業・補償・有給を集計', () => {
     const entries: Record<number, AttEntry> = {
       1: { w: 1, o: 2 },
@@ -227,6 +248,21 @@ describe('computeFooterSums: 鳶合計・土工合計・総合計（フッター
     expect(f.grandOt[1]).toBe(4)   // 2+1(ワーカー) + 1(外注鳶on)
     expect(f.tobiTotal).toBe(6)
     expect(f.grandTotal).toBe(8)
+  })
+
+  it('夜勤の1.5人工が鳶計・総計に含まれる（フッターの抜けの回帰防止）', () => {
+    const night = { ns: 1, nst: '22:00', net: '29:00', nb: 60 }
+    const workerEntries = {
+      '1': { 1: { w: 0.5, o: 5, ...night } },  // 鳶: 半日＋夜勤 → 2.0人工
+      '2': { 1: { w: 1, ...night } },          // 職長→鳶: 日勤＋夜勤 → 2.5人工
+      '3': { 1: { w: 1 } },                    // 土工: 通常 → 1
+    }
+    const f = computeFooterSums(1, workers, subcons, workerEntries, {})
+    expect(f.tobi[1]).toBe(4.5)     // 2.0 + 2.5
+    expect(f.doko[1]).toBe(1)
+    expect(f.grand[1]).toBe(5.5)
+    expect(f.grandTotal).toBe(5.5)
+    expect(f.tobiOt[1]).toBe(5)     // 残業は夜勤と別枠
   })
 
   it('外国人の補償(0.6)は人工数から除外、日本人の0.6は含む', () => {
