@@ -57,7 +57,7 @@
 
 <h1>HIBI CONSTRUCTION 就業管理システム<br>業務マニュアル（職長向け）</h1>
 <p>対象: 職長（大川愛志さん・白戸寛之さん・日比大介さん）<br>
-最終更新: 2026年7月<br>
+最終更新: 2026年8月<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <!-- サマリー：やることは3つ -->
@@ -70,6 +70,7 @@
 <tr><td><strong>③ 現場違いの修正</strong><br>別現場で入力されたスタッフを正しい現場へ移動</td><td>気づいたとき</td><td>スマホ職長画面</td></tr>
 </table>
 <p style="margin:10px 0 0; font-size:13px;">このほか、有給申請・帰国申請が来たら「職長承認」します（最終承認は政仁さん）。</p>
+<p style="margin:6px 0 0; font-size:13px;">台風待機などで<strong>夜勤</strong>が発生した日は <a href="#sec3-4">3-4. 夜勤（台風待機など）の入力</a> を参照してください。</p>
 </div>
 
 <div class="box box-red">
@@ -96,6 +97,7 @@
   <li><a href="#sec6">有給・帰国申請の承認</a></li>
   <li><a href="#sec7">毎日・毎月のルーティン</a></li>
   <li><a href="#sec8">困ったときは</a></li>
+  <li><a href="#sec9">改訂履歴</a></li>
 </ol>
 </div>
 
@@ -224,6 +226,63 @@
   <li><strong>日曜</strong>: ヘッダー赤　／　<strong>土曜の休み</strong>: 「土 休」表示</li>
   <li><strong>平日の休み</strong>（祝日・現場休み）: グレー＋「休」マーク</li>
   <li><strong>帰国中</strong>: セルに「✈帰国」と自動表示（入力不要）</li>
+</ul>
+</div>
+
+<h3 id="sec3-4">3-4. 夜勤（台風待機など）の入力</h3>
+
+<p>台風待機のように<strong>夜間の現場待機が発生した日</strong>は、通常の出面とは別枠で
+「夜勤」として登録します。年に数回のことなので、専用のボタンから入力します。</p>
+
+<div class="box box-warn">
+<strong>22時以降に働く場合は、必ず夜勤として登録してください。</strong><br>
+残業欄に長い時間を入れるだけで済ませると、深夜ぶんの手当が付きません。
+</div>
+
+<p><strong>入力は2ステップです。</strong>まず「夜勤があった日」を指定し、次に「その日に夜勤した人」を登録します。</p>
+
+<div class="box"><strong>ステップ1: 夜勤があった日を指定する</strong></div>
+
+<div class="step"><div class="step-num">1</div><div class="step-text">サイドバー →<strong>「出面入力」</strong>を開き、現場と年月を選ぶ</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text"><strong>日付の見出し</strong>（例「11 火」）にマウスを乗せると、日付の下に薄く<strong>「夜」</strong>が出る</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">その「夜」をクリック。<strong>紫色</strong>に変われば、その日が夜勤日になる（もう一度押すと解除）</div></div>
+
+<div class="box"><strong>ステップ2: 夜勤した人を登録する</strong></div>
+
+<div class="step"><div class="step-num">1</div><div class="step-text">夜勤日に指定すると、その日のスタッフのセル<strong>左上に「夜」バッジ</strong>が出る（<strong>白ぬき</strong>＝未登録／<strong>紫ぬり</strong>＝登録済み）</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">夜勤した人の「夜」バッジをクリックすると入力画面が開く</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">下の表のとおり入力する</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">画面下に出る<strong>「夜勤の実労働」「うち深夜」「この日の人工」</strong>を確認して<strong>「保存」</strong></div></div>
+
+<table>
+<tr><th>入力項目</th><th>内容</th></tr>
+<tr><td><strong>この日の勤務</strong></td><td><strong>日勤＋夜勤</strong>（日勤で働いてそのまま待機に入った）か<br><strong>夜勤のみ</strong>（その日は夜勤だけ）を選ぶ</td></tr>
+<tr><td><strong>夜勤の始業／終業</strong></td><td>翌朝までの時刻が選べる（例「<strong>翌5:00</strong>」）</td></tr>
+<tr><td><strong>夜勤中の休憩（分）</strong></td><td>初期値は60分。実際に取った休憩に合わせて直す</td></tr>
+<tr><td><strong>理由</strong></td><td>「台風待機」など。あとから経緯がわかるように残す</td></tr>
+</table>
+
+<h4 style="margin:20px 0 8px; font-size:15px;">人工の数え方</h4>
+
+<p>夜勤は<strong>1回につき1.5人工</strong>です。日勤ぶんはそのまま足します。</p>
+
+<table>
+<tr><th>その日の働き方</th><th>出勤欄</th><th>人工</th></tr>
+<tr><td>夜勤のみ</td><td>—</td><td><strong>1.5 人工</strong></td></tr>
+<tr><td>日勤＋夜勤</td><td>1</td><td><strong>2.5 人工</strong></td></tr>
+<tr><td>半日＋夜勤（午後から出勤してそのまま待機）</td><td>0.5</td><td><strong>2.0 人工</strong></td></tr>
+</table>
+
+<div class="box box-ok">
+元請けへの請求も同じ人工で計上されます。出勤欄の数字は変えずに、夜勤ぶんが上に乗る形です。
+</div>
+
+<div class="box box-red">
+<strong>注意点</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>ベトナム人スタッフは、本人がスマホで出勤入力を済ませたあとに登録</strong>してください。出勤の入力がない日は「夜」バッジが出ません。</li>
+  <li>日付の「夜」指定を解除しても、<strong>登録済みの夜勤は消えません</strong>（誤操作で給与が変わらないようにするため）。個別に消すときは、その人の「夜」バッジを開いて<strong>「夜勤を取り消す」</strong>を押してください。</li>
+  <li>ロック済み（確認済み）の日は編集できません。</li>
 </ul>
 </div>
 
@@ -391,6 +450,15 @@
 <div class="box box-ok">
 <strong>不明点は管理者（靖仁さん）に気軽に聞いてください。</strong>
 </div>
+
+<!-- ================================================ -->
+<h2 id="sec9">改訂履歴</h2>
+
+<table>
+<tr><th>改訂日</th><th>内容</th></tr>
+<tr><td>2026年8月</td><td>「3-4. 夜勤（台風待機など）の入力」を追加。夜勤日の指定 → 人ごとの登録という2ステップの手順と、人工の数え方（夜勤1回=1.5人工）を記載</td></tr>
+<tr><td>2026年7月</td><td>職長向けの資料を1冊に統合（毎日の出面確認・就業カレンダー作成・出面グリッドの読み方）</td></tr>
+</table>
 
 <hr>
 <p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム</p>

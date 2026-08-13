@@ -38,7 +38,7 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面の最終承認・有給/帰国申請の承認・就業カレンダー承認（事業責任者の承認業務に特化）', url: '/manual-masahito.html', icon: '📗', updated: '2026-07-03' },
 
   // ── 職長 ──
-  { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・ロック／就業カレンダー作成／出面グリッドの読み方（1冊に統合）', url: '/manual-foreman.html', icon: '📕', updated: '2026-07-03' },
+  { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・ロック／就業カレンダー作成／出面グリッドの読み方／夜勤（台風待機）の入力（1冊に統合）', url: '/manual-foreman.html', icon: '📕', badge: 'NEW', updated: '2026-08-12' },
 
   // ── 有給担当（事務・事業責任者） ──
   { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元（付与・申請承認・時季指定・繰越/時効・期末買取・管理簿出力）', url: '/manual-yukyu.html', icon: '🌴', updated: '2026-07-03' },
