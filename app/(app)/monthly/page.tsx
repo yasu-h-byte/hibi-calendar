@@ -1473,7 +1473,8 @@ export default function MonthlyPage() {
                           {ym >= '202605' && (
                             <>
                               <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.legalHolidayAllowance || 0) > 0 ? 'text-pink-600' : 'text-gray-400'}`}>
-                                {w.visa !== 'none' && (w.legalHolidayAllowance || 0) > 0 ? fmtYen(w.legalHolidayAllowance!) : '—'}
+                                {/* 2026-08-13: 日本人にも法定休日割増を実装したので visa のゲートを外した */}
+                                {(w.legalHolidayAllowance || 0) > 0 ? fmtYen(w.legalHolidayAllowance!) : '—'}
                               </td>
                               <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.nightAllowance || 0) > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
                                 {w.visa !== 'none' && (w.nightAllowance || 0) > 0 ? fmtYen(w.nightAllowance!) : '—'}

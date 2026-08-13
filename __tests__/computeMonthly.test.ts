@@ -67,6 +67,26 @@ function dayWork(siteId: string, workerId: number, ym: string, day: number, w: n
   return { [attKey(siteId, workerId, ym, day)]: { w, ...(o > 0 ? { o } : {}) } }
 }
 
+/**
+ * 出勤日のリスト（日曜を除く）。
+ *
+ * 日曜は法定休日で、基本給から外して 1.35倍の別枠支給になる（2026-08-13 実装）。
+ * 日曜以外の論点（残業単価・月給固定・日割り・有給手当など）を検証するテストで日曜を
+ * 混ぜると、基本給の一部が法定休日手当へ移って意図した式と合わなくなるため除外する。
+ * 日曜の挙動そのものは「法定休日（日曜）」の describe と
+ * __tests__/legalHolidayJp.test.ts で検証している。
+ */
+function workDaysNoSun(ym: string, count: number, from = 1): number[] {
+  const y = parseInt(ym.slice(0, 4))
+  const m = parseInt(ym.slice(4, 6))
+  const last = new Date(y, m, 0).getDate()
+  const out: number[] = []
+  for (let d = from; d <= last && out.length < count; d++) {
+    if (new Date(y, m - 1, d).getDay() !== 0) out.push(d)
+  }
+  return out
+}
+
 /** 1日分の有給エントリ生成 */
 function dayPL(siteId: string, workerId: number, ym: string, day: number) {
   return { [attKey(siteId, workerId, ym, day)]: { w: 0, p: 1 } }
@@ -87,7 +107,7 @@ describe('computeMonthly - 日給制日本人', () => {
       siteWorkDays: { '202604': { site1: 20 } },
     })
     const attD: Record<string, { w: number; o?: number }> = {}
-    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 4, '202604', d))
+    for (const d of workDaysNoSun('202604', 20)) Object.assign(attD, dayWork('site1', 4, '202604', d))
 
     const result = computeMonthly(main, attD, {}, '202604', 20)
     const w = result.workers.find(x => x.id === 4)!
@@ -110,7 +130,7 @@ describe('computeMonthly - 日給制日本人', () => {
       siteWorkDays: { '202604': { site1: 20 } },
     })
     const attD: Record<string, AttendanceEntry> = {}
-    for (let d = 1; d <= 19; d++) Object.assign(attD, dayWork('site1', 4, '202604', d))
+    for (const d of workDaysNoSun('202604', 19)) Object.assign(attD, dayWork('site1', 4, '202604', d))
     // 20日目: 同じ日に2現場とも有給
     Object.assign(attD, dayPL('site1', 4, '202604', 20))
     Object.assign(attD, dayPL('site2', 4, '202604', 20))
@@ -131,7 +151,7 @@ describe('computeMonthly - 日給制日本人', () => {
       siteWorkDays: { '202604': { site1: 20 } },
     })
     const attD: Record<string, { w: number; o?: number }> = {}
-    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 4, '202604', d, 1, d === 1 ? 10 : 0))
+    for (const d of workDaysNoSun('202604', 20)) Object.assign(attD, dayWork('site1', 4, '202604', d, 1, d === 1 ? 10 : 0))
 
     const result = computeMonthly(main, attD, {}, '202604', 20)
     const w = result.workers.find(x => x.id === 4)!
@@ -153,7 +173,7 @@ describe('computeMonthly - 日給制日本人', () => {
       siteWorkDays: { '202604': { site1: 20 } },
     })
     const attD: Record<string, { w: number; o?: number }> = {}
-    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 5, '202604', d, 1, d === 1 ? 1 : 0))
+    for (const d of workDaysNoSun('202604', 20)) Object.assign(attD, dayWork('site1', 5, '202604', d, 1, d === 1 ? 1 : 0))
 
     const result = computeMonthly(main, attD, {}, '202604', 20)
     const w = result.workers.find(x => x.id === 5)!
@@ -174,8 +194,9 @@ describe('computeMonthly - 日給制日本人', () => {
       siteWorkDays: { '202604': { site1: 20 } },
     })
     const attD: Record<string, { w: number; o?: number }> = {}
-    for (let d = 1; d <= 19; d++) Object.assign(attD, dayWork('site1', 4, '202604', d))
-    Object.assign(attD, { [attKey('site1', 4, '202604', 20)]: { w: 0.6 } })
+    const compDays20 = workDaysNoSun('202604', 20)
+    for (const d of compDays20.slice(0, 19)) Object.assign(attD, dayWork('site1', 4, '202604', d))
+    Object.assign(attD, { [attKey('site1', 4, '202604', compDays20[19])]: { w: 0.6 } })
 
     const result = computeMonthly(main, attD, {}, '202604', 20)
     const w = result.workers.find(x => x.id === 4)!
@@ -219,7 +240,7 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
     })
     const attD: Record<string, { w: number; o?: number }> = {}
     // 15日出勤 (5日欠勤相当だが月給制なので影響なし)
-    for (let d = 1; d <= 15; d++) Object.assign(attD, dayWork('site1', 12, '202606', d))
+    for (const d of workDaysNoSun('202606', 15)) Object.assign(attD, dayWork('site1', 12, '202606', d))
 
     const result = computeMonthly(main, attD, {}, '202606', 20)
     const w = result.workers.find(x => x.id === 12)!
@@ -254,8 +275,9 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
     })
     const attD: Record<string, { w: number; o?: number }> = {}
     // siteA 12日 / siteB 8日 = 計20日
-    for (let d = 1; d <= 12; d++) Object.assign(attD, dayWork('siteA', 12, '202606', d))
-    for (let d = 13; d <= 20; d++) Object.assign(attD, dayWork('siteB', 12, '202606', d))
+    const gap2Days = workDaysNoSun('202606', 20)
+    for (const d of gap2Days.slice(0, 12)) Object.assign(attD, dayWork('siteA', 12, '202606', d))
+    for (const d of gap2Days.slice(12)) Object.assign(attD, dayWork('siteB', 12, '202606', d))
 
     const result = computeMonthly(main, attD, {}, '202606', 20)
     const w = result.workers.find(x => x.id === 12)!
@@ -277,7 +299,7 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
       siteWorkDays: { '202606': { site1: 20 } },
     })
     const attD: Record<string, { w: number; o?: number }> = {}
-    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 12, '202606', d, 1, d === 1 ? 10 : 0))
+    for (const d of workDaysNoSun('202606', 20)) Object.assign(attD, dayWork('site1', 12, '202606', d, 1, d === 1 ? 10 : 0))
 
     const result = computeMonthly(main, attD, {}, '202606', 20)
     const w = result.workers.find(x => x.id === 12)!
@@ -321,7 +343,7 @@ describe('computeMonthly - 月給制日本人 (Phase G で追加)', () => {
     })
     const attD: Record<string, { w: number; o?: number }> = {}
     // 6/16〜6/30 のうち10日出勤、1日に残業4h
-    for (let d = 16; d <= 25; d++) Object.assign(attD, dayWork('site1', 12, '202606', d, 1, d === 16 ? 4 : 0))
+    for (const d of workDaysNoSun('202606', 9, 16)) Object.assign(attD, dayWork('site1', 12, '202606', d, 1, d === 16 ? 4 : 0))
 
     const result = computeMonthly(main, attD, {}, '202606', 20)
     const w = result.workers.find(x => x.id === 12)!
@@ -721,8 +743,9 @@ describe('computeMonthly - 有給日', () => {
     })
     const attD: Record<string, { w: number; o?: number; p?: number }> = {}
     // 19日出勤 + 1日有給
-    for (let d = 1; d <= 19; d++) Object.assign(attD, dayWork('site1', 4, '202604', d))
-    Object.assign(attD, dayPL('site1', 4, '202604', 20))
+    const plDays20 = workDaysNoSun('202604', 20)
+    for (const d of plDays20.slice(0, 19)) Object.assign(attD, dayWork('site1', 4, '202604', d))
+    Object.assign(attD, dayPL('site1', 4, '202604', plDays20[19]))
 
     const result = computeMonthly(main, attD, {}, '202604', 20)
     const w = result.workers.find(x => x.id === 4)!
@@ -749,8 +772,9 @@ describe('computeMonthly - 有給日', () => {
     })
     const attD: Record<string, { w: number; o?: number; p?: number }> = {}
     // 20日出勤 + 4日有給（5月の実データを再現）
-    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 2, '202605', d))
-    for (const d of [21, 22, 23, 24]) Object.assign(attD, dayPL('site1', 2, '202605', d))
+    const may = workDaysNoSun('202605', 24)
+    for (const d of may.slice(0, 20)) Object.assign(attD, dayWork('site1', 2, '202605', d))
+    for (const d of may.slice(20)) Object.assign(attD, dayPL('site1', 2, '202605', d))
 
     const result = computeMonthly(main, attD, {}, '202605', 24)
     const w = result.workers.find(x => x.id === 2)!
@@ -762,6 +786,77 @@ describe('computeMonthly - 有給日', () => {
     // 支給額 = 基本給(20日×21,300) + 有給手当(4日×21,300)
     expect(w.salaryNetPay).toBe(20 * 21300 + 4 * 21300)
     expect(w.netPay).toBe(20 * 21300 + 4 * 21300)
+  })
+})
+
+describe('computeMonthly - 法定休日（日曜）の割増: 日本人', () => {
+  // 2026-08-13 実装。従来は日曜出勤も「日額×1日 ＋ 残業h×1.25」で処理しており、
+  // 労基法37条の35%増（法定休日労働）が未計上だった。
+  // 法定休日は所定労働日ではないので日額・残業から除外し、全時間に1.35倍（8h超1.60倍）。
+
+  const jp = (rate: number) => buildMain({
+    workers: [{
+      id: 4, name: '本田文人', org: 'hibi', visa: 'none', job: 'tobi',
+      rate, otMul: 1.25, hireDate: '', token: '',
+    }],
+    assign: { site1: { workers: [4], subcons: [] } },
+    siteWorkDays: { '202604': { site1: 20 } },
+  })
+  // 2026年4月の日曜: 5, 12, 19, 26
+  const SUNDAY = 5
+
+  test('日曜出勤は基本給から外れ、法定休日手当 1.35倍として支給される', () => {
+    const attD: Record<string, { w: number; o?: number }> = {}
+    Object.assign(attD, dayWork('site1', 4, '202604', SUNDAY))
+
+    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    expect(w.legalHolidayDays).toBe(1)
+    expect(w.legalHolidayHours).toBe(8)
+    expect(w.basePay).toBe(0)                       // 日額は発生しない
+    expect(w.legalHolidayAllowance).toBe(23835)     // (17655/8) × 1.35 × 8h
+    expect(w.salaryNetPay).toBe(23835)
+    // 出勤日数は1日のまま（人工と日数は別概念）
+    expect(w.workDays).toBe(1)
+  })
+
+  test('従来（日額1日分）との差は日額の0.35倍', () => {
+    const attD: Record<string, { w: number; o?: number }> = {}
+    Object.assign(attD, dayWork('site1', 4, '202604', SUNDAY))
+    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    expect((w.salaryNetPay || 0) - 17655).toBe(6180)  // ≒ 0.35 × 17,655
+  })
+
+  test('日曜の残業は残業手当ではなく法定休日手当に含まれる（1.25と1.35の二重取り防止）', () => {
+    const attD: Record<string, { w: number; o?: number }> = {}
+    Object.assign(attD, dayWork('site1', 4, '202604', SUNDAY, 1, 2))  // 8h + 残業2h = 10h
+
+    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    expect(w.otAllowance).toBe(0)                   // 残業手当には出さない
+    expect(w.legalHolidayHours).toBe(10)
+    // (17655/8) × (1.35×8 + 1.60×2) = 2206.875 × 14 = 30,896.25 → 切上 30,897
+    expect(w.legalHolidayAllowance).toBe(30897)
+  })
+
+  test('平日と日曜が混在: 平日は日額、日曜だけ1.35倍', () => {
+    const attD: Record<string, { w: number; o?: number }> = {}
+    for (const d of [1, 2, 3]) Object.assign(attD, dayWork('site1', 4, '202604', d))  // 平日3日
+    Object.assign(attD, dayWork('site1', 4, '202604', SUNDAY))                        // 日曜1日
+
+    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    expect(w.basePay).toBe(3 * 17655)
+    expect(w.legalHolidayDays).toBe(1)
+    expect(w.legalHolidayAllowance).toBe(23835)
+    expect(w.salaryNetPay).toBe(3 * 17655 + 23835)
+  })
+
+  test('日曜が無い月は法定休日手当ゼロ（従来と同額）', () => {
+    const attD: Record<string, { w: number; o?: number }> = {}
+    for (const d of workDaysNoSun('202604', 20)) Object.assign(attD, dayWork('site1', 4, '202604', d))
+
+    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    expect(w.legalHolidayAllowance || 0).toBe(0)
+    expect(w.basePay).toBe(20 * 17655)
+    expect(w.salaryNetPay).toBe(20 * 17655)
   })
 })
 
@@ -798,7 +893,7 @@ describe('computeMonthly - 集計整合性チェック', () => {
       siteWorkDays: { '202604': { site1: 20 } },
     })
     const attD: Record<string, { w: number; o?: number }> = {}
-    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 4, '202604', d, 1, d === 1 ? 5 : 0))
+    for (const d of workDaysNoSun('202604', 20)) Object.assign(attD, dayWork('site1', 4, '202604', d, 1, d === 1 ? 5 : 0))
 
     const result = computeMonthly(main, attD, {}, '202604', 20)
     const w = result.workers.find(x => x.id === 4)!
@@ -819,7 +914,7 @@ describe('computeMonthly - 集計整合性チェック', () => {
     })
     const attD: Record<string, AttendanceEntry> = {}
     // 20日出勤 + 残業5.5h + 有給2日（単価 ceil(19100/8×1.25)=2,985 → 残業 ceil(2,985×5.5)=16,418）
-    for (let d = 1; d <= 20; d++) Object.assign(attD, dayWork('site1', 4, '202605', d, 1, d === 1 ? 5.5 : 0))
+    for (const d of workDaysNoSun('202605', 20)) Object.assign(attD, dayWork('site1', 4, '202605', d, 1, d === 1 ? 5.5 : 0))
     Object.assign(attD, dayPL('site1', 4, '202605', 21))
     Object.assign(attD, dayPL('site1', 4, '202605', 22))
 

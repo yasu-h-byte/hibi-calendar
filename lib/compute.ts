@@ -895,6 +895,13 @@ export interface WorkerMonthly {
   // 2026-06-XX 追加 (C8): 同一日複数現場の actualWorkDays 重複排除用
   //   内部利用のみ。集計後の表示には使わない（リファクタ時に削除可）
   _actualDaySeen?: Set<string>
+  // 2026-08-13 追加: 日本人の法定休日（日曜）割増を別枠支給するための集計。
+  //   基本給・残業から除外して 1.35/1.60 倍を別建てするため、人工と残業hを分離して持つ。
+  //   8h超の 1.60 倍判定は「日ごと」なので実労働時間は日単位で保持する
+  //   （同一日に複数現場があるとエントリ単位では8hの線が引けない）。
+  legalHolidayManDays?: number   // 法定休日の人工（基本給から除外する分）
+  legalHolidayOtHours?: number   // 法定休日の残業h（残業手当から除外する分）
+  _lhDayHours?: Map<string, number>  // ym_day → 法定休日の実労働時間
   // 2026-07-06 追加: 有給/試験/休業補償も同一日複数現場で重複排除する（全日単位の概念）。
   //   これがないと同日2現場に p/exam/w=0.6 が入っている人で plUsed 等が2倍になり、
   //   有給手当の過払い・欠勤控除の漏れが発生していた（actualWorkDays と同じ扱いに統一）。
@@ -1156,6 +1163,25 @@ export function computeMonthly(
     }
     // 人工数: 夜勤が無ければ workCount と一致する（既存挙動を変えない）
     wm.manDays = Math.round(((wm.manDays || 0) + (isComp ? 0 : calcManDays(entry))) * 100) / 100
+
+    // ── 法定休日（日曜）の労働を別枠で集計 ──（2026-08-13 追加）
+    //   日本人は「日額×人工 ＋ 残業h×1.25」で処理していたため、法定休日の1.35倍が
+    //   未計上だった（労基法37条は国籍を問わない）。ベトナム人と同じ建て方に揃え、
+    //   法定休日は所定労働日ではないので基本給・残業から外し、別枠で1.35/1.60倍を支給する。
+    //   ※ ベトナム人は calculateVietnameseSalary が独自に処理するのでここでは集計しない
+    if (wm.visa === 'none' && !isComp) {
+      const dow0 = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, Number(pk.day)).getDay()
+      if (dow0 === 0) {
+        wm.legalHolidayManDays = Math.round(((wm.legalHolidayManDays || 0) + calcManDays(entry)) * 100) / 100
+        wm.legalHolidayOtHours = (wm.legalHolidayOtHours || 0) + (entry.o || 0)
+        // 実労働時間は日単位で積む（8h超の1.60倍判定が日ごとのため）
+        const lhKey = `${pk.ym}_${pk.day}`
+        if (!wm._lhDayHours) wm._lhDayHours = new Map<string, number>()
+        const lhHours = (entry.nonly ? 0 : (entry.w || 0) * JP_PRESCRIBED_HOURS_PER_DAY + (entry.o || 0))
+          + calcNightShiftHours(entry)
+        wm._lhDayHours.set(lhKey, (wm._lhDayHours.get(lhKey) || 0) + lhHours)
+      }
+    }
 
     // ── 「22時以降の労働は必ず夜勤として登録する」運用ルールのガード（2026-08）──
     //   日本人はレガシー入力（出勤値＋残業h）で始業終業を持たないため、深夜時間を
@@ -1612,17 +1638,27 @@ export function computeMonthly(
       // 2026-06-12 修正 (監査C5): 中途入退社の日割りを追加。時給換算単価は按分前ベース
       const hourlyEquivalent = wm.salary / JP_SALARY_AVG_MONTHLY_HOURS
       const basePay = ceilYen(wm.salary * prorationRatio)
+      // 2026-08-13 追加: 法定休日（日曜）労働は月給がカバーする所定労働日ではないため、
+      //   別枠で 1.35/1.60 倍を支給する。月給は固定なので基本給からの除外は不要だが、
+      //   残業hからは除外する（同じ時間に1.25倍と1.35倍が二重にかかるのを防ぐ）。
+      const lhOtHoursM = wm.legalHolidayOtHours || 0
+      const lhDayHoursM = Array.from(wm._lhDayHours?.values() || [])
+      const otHoursExLhM = Math.max(0, wm.otHours - lhOtHoursM)
       // 残業単価を1円単位に切り上げ → 残業代も1円未満切り上げ
       const otUnitRate = ceilYen(hourlyEquivalent * wm.otMul)
-      const otPay = ceilYen(otUnitRate * wm.otHours)
+      const otPay = ceilYen(otUnitRate * otHoursExLhM)
+      const legalHolidayAllowanceM = calcLegalHolidayAllowance(hourlyEquivalent, lhDayHoursM)
       wm.basePay = basePay
       wm.prescribedHours = JP_SALARY_AVG_MONTHLY_HOURS  // 割増算定基礎の月平均所定時間
-      wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
+      wm.dailyOtHours = Math.round(otHoursExLhM * 10) / 10
       wm.otAllowance = otPay
-      wm.salaryNetPay = basePay + otPay
-      // netPay: 給与支給額（=月給+残業）。
+      wm.legalHolidayDays = wm._lhDayHours?.size || 0
+      wm.legalHolidayHours = Math.round(lhDayHoursM.reduce((a, b) => a + b, 0) * 10) / 10
+      wm.legalHolidayAllowance = legalHolidayAllowanceM
+      wm.salaryNetPay = basePay + otPay + legalHolidayAllowanceM
+      // netPay: 給与支給額（=月給+残業+法定休日手当）。
       //   原価(totalCost) と現場別配賦は後段の「原価＝実支給額」統一パスで処理する。
-      wm.netPay = basePay + otPay
+      wm.netPay = wm.salaryNetPay
     } else if (wm.visa === 'none') {
       // 日給月給制の日本人: daily-rate based
       // 基本給 = 日額(rate) × 実出勤日数
@@ -1631,17 +1667,28 @@ export function computeMonthly(
       // 支給額 = 基本給 + 有給手当 + 残業手当
       // 2026-08 追加: 人工ベースに変更。夜勤日は 1.5人工（日勤＋夜勤なら 2.5人工）で支給する
       //   慣例に対応する。夜勤が無い月は manDays === workDays なので従来と同額。
-      const payManDays = wm.manDays ?? wm.workDays
+      // 2026-08-13 追加: 法定休日（日曜）は所定労働日ではないので日額・残業から除外し、
+      //   別枠で 1.35/1.60 倍を支給する（労基法37条。ベトナム人と同じ建て方）。
+      //   日曜出勤が無い月は除外額ゼロなので従来と同額。
+      const lhManDays = wm.legalHolidayManDays || 0
+      const lhOtHours = wm.legalHolidayOtHours || 0
+      const lhDayHours = Array.from(wm._lhDayHours?.values() || [])
+      const payManDays = Math.max(0, (wm.manDays ?? wm.workDays) - lhManDays)
+      const otHoursExLh = Math.max(0, wm.otHours - lhOtHours)
       const basePay = ceilYen(payManDays * wm.rate + (wm.compDays * 0.6 * wm.rate))  // 支給: 切り上げ
       const paidLeaveAllowance = ceilYen(wm.plUsed * wm.rate)  // 有給手当 = 有給日数 × 日額（支給: 切り上げ）
       const otUnitRate = ceilYen((wm.rate / 8) * wm.otMul)  // 残業単価を1円単位に切り上げ
-      const otPay = ceilYen(otUnitRate * wm.otHours)          // 残業代も1円未満切り上げ
+      const otPay = ceilYen(otUnitRate * otHoursExLh)         // 残業代も1円未満切り上げ
+      const legalHolidayAllowance = calcLegalHolidayAllowance(wm.rate / JP_PRESCRIBED_HOURS_PER_DAY, lhDayHours)
       wm.basePay = basePay
       wm.paidLeaveDays = wm.plUsed
       wm.paidLeaveAllowance = paidLeaveAllowance
-      wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
+      wm.dailyOtHours = Math.round(otHoursExLh * 10) / 10
       wm.otAllowance = otPay
-      wm.salaryNetPay = basePay + paidLeaveAllowance + otPay
+      wm.legalHolidayDays = wm._lhDayHours?.size || 0
+      wm.legalHolidayHours = Math.round(lhDayHours.reduce((a, b) => a + b, 0) * 10) / 10
+      wm.legalHolidayAllowance = legalHolidayAllowance
+      wm.salaryNetPay = basePay + paidLeaveAllowance + otPay + legalHolidayAllowance
       // 2026-06-12 修正 (監査C4): 原価(totalCost)・netPay を支給額(salaryNetPay)に統一。
       //   旧: totalCost = 概算(cost + 丸め前float残業) + 有給手当 → salaryNetPay と数円ズレ、
       //       労務費合計と支給額合計が一致しなかった。原価=実支給額の原則に揃える。
@@ -2104,6 +2151,33 @@ function calcNightMinutes(startMin: number, endMin: number): number {
     if (hi > lo) total += hi - lo
   }
   return total
+}
+
+/**
+ * 法定休日（日曜）労働の割増手当を算出する（日本人。労基法37条は国籍を問わない）。
+ *
+ * 法定休日は所定労働日ではないため日額は発生しない。その日の労働は全時間に 1.35倍、
+ * 8時間を超えた部分は 1.60倍（C-3 と同じ扱い。ベトナム人の
+ * `calculateVietnameseSalary` と同一の建て方に揃えている）。
+ * したがって呼び出し側は、法定休日ぶんの人工と残業hを基本給・残業手当から除外すること。
+ *
+ * ⚠️ 8時間の線は「日ごと」に引く。月合計に対して引くと、日曜が複数ある月で
+ *    1.60倍の対象が過大になる。そのため dayHours は日単位の配列で受け取る。
+ *
+ * @param hourlyRate 割増算定基礎の時給（日給月給なら 日額 ÷ 8、月給制なら 月給 ÷ 145）
+ * @param dayHours   法定休日ごとの実労働時間の配列
+ */
+export function calcLegalHolidayAllowance(hourlyRate: number, dayHours: number[]): number {
+  if (hourlyRate <= 0) return 0
+  let under8 = 0
+  let over8 = 0
+  for (const h of dayHours) {
+    if (h <= 0) continue
+    under8 += Math.min(8, h)
+    over8 += Math.max(0, h - 8)
+  }
+  if (under8 <= 0 && over8 <= 0) return 0
+  return ceilYen(hourlyRate * (1.35 * under8 + 1.60 * over8))
 }
 
 /**
