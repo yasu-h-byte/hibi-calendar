@@ -794,22 +794,24 @@ describe('computeMonthly - 法定休日（日曜）の割増: 日本人', () => 
   // 労基法37条の35%増（法定休日労働）が未計上だった。
   // 法定休日は所定労働日ではないので日額・残業から除外し、全時間に1.35倍（8h超1.60倍）。
 
+  // 適用開始は 202608（過去月は支払済みどおりに再現するため。JP_LEGAL_HOLIDAY_FROM_YM）
+  const YM = '202608'
   const jp = (rate: number) => buildMain({
     workers: [{
       id: 4, name: '本田文人', org: 'hibi', visa: 'none', job: 'tobi',
       rate, otMul: 1.25, hireDate: '', token: '',
     }],
     assign: { site1: { workers: [4], subcons: [] } },
-    siteWorkDays: { '202604': { site1: 20 } },
+    siteWorkDays: { [YM]: { site1: 20 } },
   })
-  // 2026年4月の日曜: 5, 12, 19, 26
-  const SUNDAY = 5
+  // 2026年8月の日曜: 2, 9, 16, 23, 30
+  const SUNDAY = 2
 
   test('日曜出勤は基本給から外れ、法定休日手当 1.35倍として支給される', () => {
     const attD: Record<string, { w: number; o?: number }> = {}
-    Object.assign(attD, dayWork('site1', 4, '202604', SUNDAY))
+    Object.assign(attD, dayWork('site1', 4, YM, SUNDAY))
 
-    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    const w = computeMonthly(jp(17655), attD, {}, YM, 20).workers.find(x => x.id === 4)!
     expect(w.legalHolidayDays).toBe(1)
     expect(w.legalHolidayHours).toBe(8)
     expect(w.basePay).toBe(0)                       // 日額は発生しない
@@ -821,16 +823,16 @@ describe('computeMonthly - 法定休日（日曜）の割増: 日本人', () => 
 
   test('従来（日額1日分）との差は日額の0.35倍', () => {
     const attD: Record<string, { w: number; o?: number }> = {}
-    Object.assign(attD, dayWork('site1', 4, '202604', SUNDAY))
-    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    Object.assign(attD, dayWork('site1', 4, YM, SUNDAY))
+    const w = computeMonthly(jp(17655), attD, {}, YM, 20).workers.find(x => x.id === 4)!
     expect((w.salaryNetPay || 0) - 17655).toBe(6180)  // ≒ 0.35 × 17,655
   })
 
   test('日曜の残業は残業手当ではなく法定休日手当に含まれる（1.25と1.35の二重取り防止）', () => {
     const attD: Record<string, { w: number; o?: number }> = {}
-    Object.assign(attD, dayWork('site1', 4, '202604', SUNDAY, 1, 2))  // 8h + 残業2h = 10h
+    Object.assign(attD, dayWork('site1', 4, YM, SUNDAY, 1, 2))  // 8h + 残業2h = 10h
 
-    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    const w = computeMonthly(jp(17655), attD, {}, YM, 20).workers.find(x => x.id === 4)!
     expect(w.otAllowance).toBe(0)                   // 残業手当には出さない
     expect(w.legalHolidayHours).toBe(10)
     // (17655/8) × (1.35×8 + 1.60×2) = 2206.875 × 14 = 30,896.25 → 切上 30,897
@@ -839,21 +841,41 @@ describe('computeMonthly - 法定休日（日曜）の割増: 日本人', () => 
 
   test('平日と日曜が混在: 平日は日額、日曜だけ1.35倍', () => {
     const attD: Record<string, { w: number; o?: number }> = {}
-    for (const d of [1, 2, 3]) Object.assign(attD, dayWork('site1', 4, '202604', d))  // 平日3日
-    Object.assign(attD, dayWork('site1', 4, '202604', SUNDAY))                        // 日曜1日
+    for (const d of [3, 4, 5]) Object.assign(attD, dayWork('site1', 4, YM, d))  // 平日3日（月火水）
+    Object.assign(attD, dayWork('site1', 4, YM, SUNDAY))                        // 日曜1日
 
-    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    const w = computeMonthly(jp(17655), attD, {}, YM, 20).workers.find(x => x.id === 4)!
     expect(w.basePay).toBe(3 * 17655)
     expect(w.legalHolidayDays).toBe(1)
     expect(w.legalHolidayAllowance).toBe(23835)
     expect(w.salaryNetPay).toBe(3 * 17655 + 23835)
   })
 
+  test('適用開始前の月（202607以前）は従来どおり日額1日分で計算される', () => {
+    // 過去月は支払済みの金額どおりに再現する必要がある（労基法115条の証跡）。
+    // 遡及支払いは行わない方針のため月ゲートを設けている。
+    const main = buildMain({
+      workers: [{
+        id: 4, name: '本田文人', org: 'hibi', visa: 'none', job: 'tobi',
+        rate: 17655, otMul: 1.25, hireDate: '', token: '',
+      }],
+      assign: { site1: { workers: [4], subcons: [] } },
+      siteWorkDays: { '202607': { site1: 20 } },
+    })
+    const attD: Record<string, { w: number; o?: number }> = {}
+    Object.assign(attD, dayWork('site1', 4, '202607', 5))  // 2026-07-05 は日曜
+
+    const w = computeMonthly(main, attD, {}, '202607', 20).workers.find(x => x.id === 4)!
+    expect(w.legalHolidayAllowance || 0).toBe(0)
+    expect(w.basePay).toBe(17655)          // 従来どおり日額1日分
+    expect(w.salaryNetPay).toBe(17655)
+  })
+
   test('日曜が無い月は法定休日手当ゼロ（従来と同額）', () => {
     const attD: Record<string, { w: number; o?: number }> = {}
-    for (const d of workDaysNoSun('202604', 20)) Object.assign(attD, dayWork('site1', 4, '202604', d))
+    for (const d of workDaysNoSun(YM, 20)) Object.assign(attD, dayWork('site1', 4, YM, d))
 
-    const w = computeMonthly(jp(17655), attD, {}, '202604', 20).workers.find(x => x.id === 4)!
+    const w = computeMonthly(jp(17655), attD, {}, YM, 20).workers.find(x => x.id === 4)!
     expect(w.legalHolidayAllowance || 0).toBe(0)
     expect(w.basePay).toBe(20 * 17655)
     expect(w.salaryNetPay).toBe(20 * 17655)

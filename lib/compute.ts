@@ -31,6 +31,19 @@ import { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
  */
 const JP_PRESCRIBED_HOURS_PER_DAY = 8
 
+/**
+ * 日本人の法定休日（日曜）割増の適用開始月。
+ *
+ * 労基法37条の35%増は本来ずっと適用されるが、実装は 2026-08 からのため、
+ * **過去月は支払済みの金額どおりに再現される必要がある**
+ * （docs/historical-changes.md は労基法115条＝賃金請求権3年の証跡として、
+ *  過去の計算を再現できることを前提にしている）。
+ * 遡及支払いは行わない方針（2026-08-13 代表判断）。この月ゲートを外すと
+ * 過去月の表示額が実際の支払額と食い違うため、変更するときは遡及支払いの
+ * 実施とセットで判断すること。
+ */
+const JP_LEGAL_HOLIDAY_FROM_YM = '202608'
+
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
 // ────────────────────────────────────────
@@ -1169,7 +1182,7 @@ export function computeMonthly(
     //   未計上だった（労基法37条は国籍を問わない）。ベトナム人と同じ建て方に揃え、
     //   法定休日は所定労働日ではないので基本給・残業から外し、別枠で1.35/1.60倍を支給する。
     //   ※ ベトナム人は calculateVietnameseSalary が独自に処理するのでここでは集計しない
-    if (wm.visa === 'none' && !isComp) {
+    if (wm.visa === 'none' && !isComp && ym >= JP_LEGAL_HOLIDAY_FROM_YM) {
       const dow0 = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, Number(pk.day)).getDay()
       if (dow0 === 0) {
         wm.legalHolidayManDays = Math.round(((wm.legalHolidayManDays || 0) + calcManDays(entry)) * 100) / 100
