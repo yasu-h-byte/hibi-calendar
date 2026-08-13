@@ -5,6 +5,10 @@
  * レイアウトが崩れる。夜勤は頻度が低いので、セルの「夜」バッジからこのモーダルを開いて
  * 入力する方式にしている。
  *
+ * 実際の運用は「日勤 → 残業 → 22時から夜勤」の3段構成になる（2026-08-11 台風待機の実例）:
+ *   13:00-17:00 半日(w=0.5) ／ 17:00-22:00 残業(o=5) ／ 22:00-翌5:00 夜勤(nst/net)
+ * 残業欄と夜勤は時間帯が重ならないので二重計上ではない。残業欄は消さないこと。
+ *
  * 日勤との関係（夜勤は日勤の長さに関係なく常に 1.5人工）:
  *   - 夜勤のみ        … 日勤なし。人工 1.5
  *   - 日勤＋夜勤      … 日勤で働いてそのまま夜間待機に入るケース。人工 1＋1.5＝2.5
@@ -61,7 +65,9 @@ function nightMinutesOf(startMin: number, endMin: number): number {
 export default function NightShiftModal({
   isOpen, workerName, day, entry, onSave, onClose,
 }: Props) {
-  const [nst, setNst] = useState('20:00')
+  // 初期値は 22:00。「22時以降に働く場合は必ず夜勤として登録する」という運用ルールがあり、
+  // 実際の流れは「日勤 → 残業 → 22時から夜勤」の3段構成になるため（2026-08-11 実例）。
+  const [nst, setNst] = useState('22:00')
   const [net, setNet] = useState('29:00')
   const [nb, setNb] = useState(NIGHT_DEFAULT_BREAK_MIN)
   const [nonly, setNonly] = useState(false)
@@ -70,7 +76,7 @@ export default function NightShiftModal({
   // 開くたびに既存値を読み込む
   useEffect(() => {
     if (!isOpen) return
-    setNst(entry?.nst || '20:00')
+    setNst(entry?.nst || '22:00')
     setNet(entry?.net || '29:00')
     setNb(entry?.nb ?? NIGHT_DEFAULT_BREAK_MIN)
     setNonly(!!entry?.nonly)
