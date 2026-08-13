@@ -29,10 +29,10 @@ function CellMarkers({
           type="button"
           onClick={e => { e.stopPropagation(); onNightClick?.() }}
           title={hasNight ? '夜勤あり（クリックで編集）' : 'この人の夜勤を登録する'}
-          className={`absolute top-0 left-0.5 text-[8px] font-bold leading-none rounded px-0.5 z-10 ${
+          className={`absolute top-0 left-0 text-[11px] font-bold leading-none rounded px-1 py-0.5 z-10 shadow-sm ${
             hasNight
               ? 'text-white bg-indigo-600'
-              : 'text-indigo-500 bg-white border border-indigo-300 hover:bg-indigo-50'
+              : 'text-indigo-600 bg-white border border-indigo-400 hover:bg-indigo-50'
           }`}
         >
           夜

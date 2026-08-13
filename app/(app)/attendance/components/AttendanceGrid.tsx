@@ -130,10 +130,10 @@ export default function AttendanceGrid({
                         title={isNightDay(d.day)
                           ? `${d.day}日は夜勤あり（クリックで解除）`
                           : `${d.day}日を夜勤ありにする`}
-                        className={`mt-0.5 w-full text-[8px] font-bold leading-none rounded transition-opacity ${
+                        className={`mt-0.5 w-full text-[10px] font-bold leading-tight rounded py-0.5 transition-opacity ${
                           isNightDay(d.day)
                             ? 'bg-indigo-600 text-white opacity-100'
-                            : 'text-indigo-400 opacity-0 hover:opacity-100'
+                            : 'text-indigo-500 opacity-0 hover:opacity-100'
                         }`}
                       >
                         夜
