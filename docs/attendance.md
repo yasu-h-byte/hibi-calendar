@@ -248,10 +248,15 @@ nnote?: string  // 理由
 出勤率の計算（`lib/attendance-rate.ts`）は `Math.min(workSum, 1)` で日数に丸めているため
 `entry.w` のままで正しい。
 
-**Excel帳票（`generateHibiAttendance` / `generateHfuAttendance` /
-`generatePerSiteAttendance`）は未対応**。`entry.w` を使っているので夜勤ぶんが出ない。
-社労士提出用は「出勤日数」であるべきで請求用は「人工」であるべき、と用途が分かれるため
-方針決定待ち。
+**Excel の出面帳票3種は人工ベースに統一済み**（2026-08-13 代表決定）。
+`generateHibiAttendance` / `generateHfuAttendance` / `generatePerSiteAttendance` は
+`calcManDays()` を使う。**元請けへの請求ベース（出面入力ベース）で給与計算をする**方針のため、
+帳票・請求・給与のすべてが同じ人工で揃う。夜勤日は 1.5 / 2.0 / 2.5 が出面欄に入る。
+
+一方、**労働時間の記録は日数・時刻ベースのまま**にしている（人工に置き換えない）:
+- `appendTimeSheet`（出勤簿）… 時刻と実労働時間の記録。`entry.w` は出勤判定にのみ使用
+- `generateActualHoursExcel`（実労働時間明細）… `workDays` は出勤**日数**（1日は1日）
+- `lib/attendance-rate.ts`（出勤率）… `Math.min(workSum, 1)` で日数に丸める
 
 ### ⚠️ 残業h（o）に夜勤を混ぜない
 

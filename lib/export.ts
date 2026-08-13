@@ -9,7 +9,7 @@ import {
   parseDKey,
   calculateOvertimeSummary,
 } from './compute'
-import { AttendanceEntry, calcActualHours } from '@/types'
+import { AttendanceEntry, calcActualHours, calcManDays } from '@/types'
 import { isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from './workers'
 import { computePeriodUsed } from './leave-compute'
@@ -387,7 +387,9 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
         // ⚠️ 2026-05-09: 残骸データ対策。休み/現場休/帰国中/試験 では実労働を計上しない
         if (!isWorkingDay(entry)) continue
         if (entry.w && entry.w > 0) {
-          dayWork = entry.w // 1, 0.5, 0.6 をそのまま数値で表示
+          // 2026-08-13: 元請け請求ベース（出面入力ベース）に統一。夜勤がある日は
+          //   1.5人工 が乗るので calcManDays を使う（夜勤なしなら entry.w と同値）。
+          dayWork = calcManDays(entry) // 1, 0.5, 0.6 / 夜勤日は 1.5・2.0・2.5
           if (entry.o && entry.o > 0) dayOT += entry.o
         }
       }
@@ -522,7 +524,8 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
           // ⚠️ 2026-05-09: 残骸データ対策
           if (!isWorkingDay(entry)) continue
           if (entry.w && entry.w > 0) {
-            dayWork = entry.w
+            // 2026-08-13: 元請け請求ベース（出面入力ベース）に統一。夜勤日は 1.5人工 が乗る
+            dayWork = calcManDays(entry)
             if (entry.o && entry.o > 0) dayOT += entry.o
           }
         }
@@ -1179,9 +1182,11 @@ export function generatePerSiteAttendance(data: PerSiteAttendanceData): XLSX.Wor
               // 有給日は残業を計上しない（旧コードは entry.o があれば加算していたバグ）
             } else if (isWorkingDay(entry) && entry.w && entry.w > 0) {
               // ⚠️ 2026-05-09: 残骸データ対策。isWorkingDay で休み/現場休/帰国中/試験 を除外
-              dayWork = entry.w
-              wWork += entry.w
-              secDailyWork[d - 1] += entry.w
+              // 2026-08-13: 元請け請求ベース（出面入力ベース）に統一。夜勤日は 1.5人工 が乗る
+              const md = calcManDays(entry)
+              dayWork = md
+              wWork += md
+              secDailyWork[d - 1] += md
               if (entry.o && entry.o > 0) {
                 dayOT = entry.o
                 wOT += dayOT
