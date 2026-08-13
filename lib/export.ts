@@ -1707,6 +1707,18 @@ export interface ActualHoursData {
 /**
  * #2: 実労働時間明細 Excel を生成
  */
+/**
+ * ⚠️ 夜勤（2026-08〜）の未対応事項 — 実際にベトナム人の夜勤が発生した時点で対応する
+ *
+ * 実労働時間は calcActualHours() から出すため夜勤ブロックを含むが、この帳票の
+ * 始業・終業列は日勤の st/et しか出さない。そのためベトナム人スタッフが夜勤した日は
+ * 「始業08:00 / 終業17:00 なのに実労働15時間」という行になり、社労士が照合できない。
+ * （日本人は st/et を持たないため推定表示になり、この齟齬は出ない）
+ *
+ * 対応方針: 終業列に夜勤の時刻を併記する（例「17:00 ＋ 22:00〜翌5:00」）。
+ *           既存の列構成を崩さないためこちらが安全。別行に分ける案は列設計の変更が大きい。
+ * 詳細: docs/attendance.md「未対応（今後の課題）」
+ */
 export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
   const { ym, workers, attD, sites, org } = data
   const wb = XLSX.utils.book_new()
