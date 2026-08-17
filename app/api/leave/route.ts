@@ -1076,6 +1076,10 @@ export async function POST(request: NextRequest) {
         const isJp = isJapaneseOf(workerId)
 
         // 最新付与レコード（grantDate最大 かつ grantDays>0）を特定
+        // ⚠️ ここは selectActiveGrantRecord に置き換えないこと。
+        //   繰越の自動計算は「次期の付与レコードに繰越日数を書き込む」処理なので、
+        //   **未来の付与レコードを対象にするのが正しい**。今日時点で有効なレコードに
+        //   書くと当期の枠が書き換わってしまう。
         const granted = records
           .filter(r => r.grantDate && ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0))
           .slice()
@@ -1342,14 +1346,17 @@ export async function GET(request: NextRequest) {
           if (matching.length > 0) fyRecord = matching[matching.length - 1]
         }
 
-        // フォールバック: 付与日数があるレコードの最後、なければplRecordsの最後
+        // フォールバック（2026-08-17 修正）
+        // ⚠️ 旧コードは「付与日数があるレコードの最後」を取っていたため、
+        //   全レコードが未来付与のケースで**まだ来ていない枠**を掴み残数が過大になった
+        //   （トゥアン事案と同種。詳細は lib/leave-compute.ts の selectActiveGrantRecord）。
+        //   今日時点で有効な付与が無ければ fyRecord は未確定のまま = 残0 として扱う。
         if (!fyRecord) {
-          const recordsWithGrant = plRecords.filter(r =>
-            (r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)
-          )
-          fyRecord = recordsWithGrant.length > 0
-            ? recordsWithGrant[recordsWithGrant.length - 1]
-            : (plRecords.length > 0 ? plRecords[plRecords.length - 1] : undefined)
+          fyRecord = selectActiveGrantRecord(plRecords, todayJstIso()) ?? undefined
+          // grantDate を持たない移行期データのみ、最後のレコードで救済する
+          if (!fyRecord && plRecords.length > 0 && plRecords.every(r => !r.grantDate)) {
+            fyRecord = plRecords[plRecords.length - 1]
+          }
         }
 
         // 新フィールド優先、なければ旧フィールドにフォールバック

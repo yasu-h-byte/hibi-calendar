@@ -219,13 +219,20 @@ export async function GET(request: NextRequest) {
           const plRecordsRaw = plData[String(worker.id)] || []
           const plRecords = plRecordsRaw.filter(r => !r._archived)
 
-          if (plRecords.length > 0) {
-            // 最新の付与レコードを特定（grantDate最大・grantDays>0）
-            const granted = plRecords
-              .filter(r => r.grantDate && ((r.grantDays ?? r.grant ?? 0) > 0))
-              .slice()
-              .sort((a, b) => new Date(a.grantDate as string).getTime() - new Date(b.grantDate as string).getTime())
-            const latest = granted[granted.length - 1] || plRecords[plRecords.length - 1]
+          // ⚠️ 2026-08-17 修正: 「今日時点で有効な」付与レコードを選ぶこと。
+          //   旧コードは grantDate でソートして配列の最後を取っていたため、
+          //   **まだ付与日が来ていない未来のレコード**を掴んでいた。
+          //   実例: トゥアン(102) は当期(2025-11-01付与・17日)を17日消化して残0日なのに、
+          //   未来の 2026-11-01 付与(17日・消化0)を見て「残17日」と表示していた
+          //   （有効期限も 2028/10/31 と未来枠のものが出ていた）。
+          //   申請時のガードは getLeaveBalance → selectActiveGrantRecord で正しく0と
+          //   判定して弾くため、「17日あるのに申請できない」というUX不整合になっていた。
+          //   ※ 判定は lib/leave-compute.ts の selectActiveGrantRecord に一元化する。
+          //     「配列の最後」「fyの数値比較」で代用しないこと（どちらも未来レコードを掴む）。
+          const { selectActiveGrantRecord } = await import('@/lib/leave-compute')
+          const latest = selectActiveGrantRecord(plRecords, todayJstIso())
+
+          if (latest) {
             const grant = latest.grantDays ?? latest.grant ?? 0
             const carry = latest.carryOver ?? latest.carry ?? 0
             const adj = latest.adjustment ?? latest.adj ?? 0

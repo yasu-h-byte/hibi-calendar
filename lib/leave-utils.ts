@@ -3,26 +3,42 @@
 //  （app/(app)/leave/page.tsx から抽出。UIに依存しない計算のみ）
 // ────────────────────────────────────────
 
+/**
+ * 'YYYY-MM-DD' を年月日の数値に分解する。
+ *
+ * ⚠️ `new Date('2025-08-01')` を使ってはいけない。ISO の日付のみの文字列は **UTC深夜**として
+ *    解釈されるため、UTCより後ろのタイムゾーン（米国など）では `getMonth()/getDate()` が
+ *    前日の値を返し、付与月・勤続月数が1ヶ月ずれる。
+ *    本番(Vercel=UTC)と日本のブラウザ(JST)では偶然正しく動くが、実行環境に依存する実装は
+ *    バグの温床なので文字列演算で扱う（lib/leave-balance.ts の addMonthsSafe と同じ方針）。
+ */
+function parseYmd(iso: string): { y: number; m: number; d: number } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return null
+  const y = Number(m[1]); const mo = Number(m[2]); const d = Number(m[3])
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null
+  return { y, m: mo, d }
+}
+
 /** hireDate + 6ヶ月 → 発生月を計算 */
 export function calcGrantMonthFromHire(hireDate: string): number | null {
-  if (!hireDate) return null
-  const d = new Date(hireDate)
-  if (isNaN(d.getTime())) return null
-  const grantDate = new Date(d.getFullYear(), d.getMonth() + 6, 1)
-  return grantDate.getMonth() + 1 // 1-12
+  const p = parseYmd(hireDate)
+  if (!p) return null
+  // 1-12 に正規化（0起算に落として +6 して戻す）
+  return ((p.m - 1 + 6) % 12) + 1
 }
 
 /** 法定有給付与日数を計算（フロントエンド版） */
 export function calcLegalPL(hireDate: string, grantDate: string): { days: number; years: number; months: number; label: string } {
   if (!hireDate || !grantDate) return { days: 0, years: 0, months: 0, label: '' }
-  const hire = new Date(hireDate)
-  const grant = new Date(grantDate)
-  if (isNaN(hire.getTime()) || isNaN(grant.getTime())) return { days: 0, years: 0, months: 0, label: '' }
+  const hire = parseYmd(hireDate)
+  const grant = parseYmd(grantDate)
+  if (!hire || !grant) return { days: 0, years: 0, months: 0, label: '' }
 
   // 月数ベースで計算（浮動小数点誤差を回避）
-  const diffMonths = (grant.getFullYear() - hire.getFullYear()) * 12
-    + (grant.getMonth() - hire.getMonth())
-    + (grant.getDate() >= hire.getDate() ? 0 : -1)
+  const diffMonths = (grant.y - hire.y) * 12
+    + (grant.m - hire.m)
+    + (grant.d >= hire.d ? 0 : -1)
   const years = Math.floor(diffMonths / 12)
   const months = diffMonths % 12
 

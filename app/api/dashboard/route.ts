@@ -22,6 +22,7 @@ import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from '@/lib/workers'
 import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
+import { selectActiveGrantRecord } from '@/lib/leave-compute'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
 export const dynamic = 'force-dynamic'
@@ -58,7 +59,10 @@ function computePLAlert(main: MainData) {
     const records = main.plData[String(w.id)] || []
     if (records.length === 0) continue
 
-    const latest = records[records.length - 1]
+    // ⚠️ 2026-08-17 修正: 配列の最後だと**まだ付与日が来ていない未来のレコード**を掴み、
+    //   残数が過大になる（トゥアン事案。詳細は lib/leave-compute.ts の selectActiveGrantRecord）
+    const latest = selectActiveGrantRecord(records, todayIsoForPl)
+    if (!latest) continue  // まだ付与前 → アラート対象外
     // 旧フィールド対応 + adjustment は消化側
     const isOld = latest.grant != null || latest.adj != null || latest.carry != null
     const grantDays = isOld ? (latest.grant ?? latest.grantDays ?? 0) : (latest.grantDays ?? 0)
@@ -1004,7 +1008,9 @@ export async function GET(request: NextRequest) {
       if (isAlreadyRetired(w.retired, todayIsoForVisa)) continue
       const records = main.plData[String(w.id)] || []
       if (records.length === 0) continue
-      const latest = records[records.length - 1]
+      // ⚠️ 未来の付与レコードを掴まないこと（selectActiveGrantRecord に一元化）
+      const latest = selectActiveGrantRecord(records, todayIsoForVisa)
+      if (!latest) continue  // まだ付与前 → 5日義務の対象外
       const isOld = latest.grant != null || latest.adj != null || latest.carry != null
       const grantDays = isOld ? (latest.grant ?? latest.grantDays ?? 0) : (latest.grantDays ?? 0)
       if (grantDays < 10) continue // 5日義務は年10日以上付与者のみ
@@ -1212,6 +1218,10 @@ export async function GET(request: NextRequest) {
           }
         } else {
           // 外国人: 最新grantDate+1年
+          // ⚠️ ここは selectActiveGrantRecord に置き換えないこと。
+          //   「次の付与時期が来ているか」の判定なので、**未来の付与レコードも含めた最新**を
+          //   見る必要がある。未来を除外すると「もう次期を付与済み」を検出できず、
+          //   付与漏れアラートが誤って出続ける。
           const granted = records.filter(r => r.grantDate && (((r.grantDays as number | undefined) ?? 0) > 0 || ((r.grant as number | undefined) ?? 0) > 0))
             .sort((a, b) => new Date(a.grantDate as string).getTime() - new Date(b.grantDate as string).getTime())
           const latest = granted[granted.length - 1]
