@@ -5,7 +5,8 @@ import { collection, query, where, getDocs } from '@/lib/fsdb'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
-import { calcLegalCarryOver } from '@/lib/leave-compute'
+import { todayJstIso } from '@/lib/date-utils'
+import { calcLegalCarryOver, selectActiveGrantRecord } from '@/lib/leave-compute'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
 import { getWorkerLastAccessMap } from '@/lib/accessLog'
 
@@ -149,27 +150,62 @@ export async function GET(request: NextRequest) {
       console.error('Calendar sign check error:', e)
     }
 
-    // 2. PL remaining <= 3 days
-    try {
-      const currentFy = now.getMonth() + 1 >= 10
-        ? String(now.getFullYear())
-        : String(now.getFullYear() - 1)
+    // 出面データ（有給P消化の集計用）。ブロック2の残数計算とブロック6の繰越計算で共用する。
+    // ⚠️ 読み取り回数を増やさないこと（クォータ障害歴あり）。従来ブロック6が読んでいた
+    //   範囲をそのまま巻き上げただけで、読む月数は変えていない。
+    const allAttForPL: Record<string, Record<string, unknown>> = {}
+    {
+      const currentYear = now.getFullYear()
+      for (let y = currentYear - 2; y <= currentYear; y++) {
+        for (let m = 1; m <= 12; m++) {
+          const att = await getAttData(ymKey(y, m))
+          Object.assign(allAttForPL, att.d)
+        }
+      }
+    }
 
+    // 2. PL remaining <= 3 days
+    // ⚠️ 2026-08-17 全面修正（有給総点検・第2回）。旧実装は3重に間違っていた:
+    //   ① fy を日本人の年度式（10/1起点）で選んでいた → 外国人は自分の付与サイクルなので
+    //      期間の切り替わり付近で古い/未来のレコードを掴む
+    //   ② total に adjustment を「足して」いた → adjustment は消化側のフィールド。
+    //      例: 梶原(付与12・調整11) が「残23日」扱いになり、実残0なのにアラートが出なかった
+    //   ③ used をレコードの used フィールドから読んでいた → 消化は出面のPから動的計算する
+    //      設計（used はほぼ常に0）なので、残数が常に満額に見えていた
+    //   正: selectActiveGrantRecord で今日有効なレコードを選び、
+    //       残 = (付与+繰越) − (調整+買取+期間内のP日数)。getLeaveBalance と同じ式。
+    try {
+      const todayIsoPl = todayJstIso()
       const lowPLWorkers: string[] = []
 
       for (const w of activeWorkers) {
-        const records = main.plData[String(w.id)] || []
+        const records = (main.plData[String(w.id)] || []) as ({ grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; buyoutDays?: number; _archived?: boolean })[]
         if (records.length === 0) continue
 
-        const fyRecord = records.find(r => r.fy === currentFy)
-        if (!fyRecord) continue
+        const rec = selectActiveGrantRecord(records, todayIsoPl)
+        if (!rec || !rec.grantDate) continue
 
-        const total = fyRecord.grantDays + fyRecord.carryOver + fyRecord.adjustment
-        const used = fyRecord.used || 0
+        const total = (rec.grantDays ?? rec.grant ?? 0) + (rec.carryOver ?? rec.carry ?? 0)
+        if (total <= 0) continue
+
+        // 期間 [grantDate, +1年) 内の P 日数（同日複数現場は1日）
+        const start = rec.grantDate
+        const endY = String(Number(start.slice(0, 4)) + 1)
+        const end = endY + start.slice(4)
+        const seen = new Set<string>()
+        for (const [key, entry] of Object.entries(allAttForPL)) {
+          const e = entry as { p?: number }
+          if (!e?.p) continue
+          const pk = parseDKey(key)
+          if (parseInt(pk.wid) !== w.id) continue
+          const iso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
+          if (iso >= start && iso < end) seen.add(iso)
+        }
+        const used = Math.max(rec.adjustment ?? 0, rec.adj ?? 0) + (rec.buyoutDays ?? 0) + seen.size
         const remaining = total - used
 
-        if (remaining <= 3 && total > 0) {
-          lowPLWorkers.push(w.name)
+        if (remaining <= 3) {
+          lowPLWorkers.push(`${w.name}(残${Math.max(0, remaining)})`)
         }
       }
 
@@ -347,16 +383,6 @@ export async function GET(request: NextRequest) {
     // 6. Upcoming / overdue PL grant dates (30 days ahead, 30 days past)
     try {
       const upcoming = getUpcomingGrants(main, 30)
-
-      // 出面データから正しい繰越を計算するため、全期間のattデータを取得
-      const currentYear = now.getFullYear()
-      const allAttForPL: Record<string, Record<string, unknown>> = {}
-      for (let y = currentYear - 2; y <= currentYear; y++) {
-        for (let m = 1; m <= 12; m++) {
-          const att = await getAttData(ymKey(y, m))
-          Object.assign(allAttForPL, att.d)
-        }
-      }
 
       for (const u of upcoming) {
         const m = u.grantDate.getMonth() + 1

@@ -1242,6 +1242,7 @@ export async function GET(request: NextRequest) {
 
         // 繰越時効チェック (前期grantDate+2年が3ヶ月以内)
         const sortedRecords = records
+          .filter(r => !(r as { _archived?: boolean })._archived)  // 時効処理済みを前期候補から除外（2026-08-17）
           .filter(r => r.grantDate && (((r.grantDays as number | undefined) ?? 0) > 0 || ((r.grant as number | undefined) ?? 0) > 0))
           .sort((a, b) => new Date(a.grantDate as string).getTime() - new Date(b.grantDate as string).getTime())
         if (sortedRecords.length >= 2) {

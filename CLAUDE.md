@@ -64,7 +64,7 @@ Tailwind は `tailwind.config.ts` の `content` に列挙したディレクト�
 - 新システムに完全移行済み（2026年4月〜）
 
 ### コミットルール
-- `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>` を付与
+- `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` を付与
   - **実際に作業したモデル名を書く**こと。モデルが変わったらこの行も更新する
     （履歴からどのモデルが書いたコードか辿れるようにするため）
 - 日本語でコミットメッセージを記述
