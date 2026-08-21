@@ -242,8 +242,9 @@ export function countHomeLeaveDaysInRange(
   workerId: number,
   rangeStartIso: string,
   rangeEndIso: string,
-): number {
-  if (!homeLeaves || homeLeaves.length === 0) return 0
+  workedDatesIso?: Set<string>,
+): { days: number; earlyReturnDates: string[] } {
+  if (!homeLeaves || homeLeaves.length === 0) return { days: 0, earlyReturnDates: [] }
   const days = new Set<string>()
   for (const hl of homeLeaves) {
     if (hl.workerId !== workerId) continue
@@ -260,7 +261,20 @@ export function countHomeLeaveDaysInRange(
       guard++
     }
   }
-  return days.size
+  // ⚠️ 2026-08-20 追加（早期復帰対応）: 申請期間内でも **実際に出勤打刻がある日は帰国から外す**。
+  //   帰国は「予定より早く帰ってきてそのまま復帰する」ことが実務では普通に起きるが、
+  //   申請の endDate は予定のまま残るため、期間だけで数えると働いた日まで帰国扱いになり
+  //   基本給の日割りが過少になる（フン(104): 63,888円 の過少支給が実際に発生）。
+  //   打刻は本人が入れた事実なので、申請期間より実データを優先する。
+  //   日曜は元々打刻が無いので帰国日数に残り、従来の日数計算は変わらない。
+  const earlyReturnDates: string[] = []
+  if (workedDatesIso && workedDatesIso.size > 0) {
+    for (const d of workedDatesIso) {
+      if (days.delete(d)) earlyReturnDates.push(d)
+    }
+    earlyReturnDates.sort()
+  }
+  return { days: days.size, earlyReturnDates }
 }
 
 // ────────────────────────────────────────
@@ -962,6 +976,10 @@ export interface WorkerMonthly {
   // 2026-07-18 追加: 当月の帰国中（一時帰国・復帰未定含む）日数。
   //   在籍日数から差し引かれ、その日は無給かつ欠勤に計上されない。UI/書類で「帰国中◯日」表示用。
   hkDays?: number
+  /** 帰国申請の期間内なのに出勤打刻があった日数（＝予定より早く復帰した。申請の終了日を直すべき） */
+  hkEarlyReturnDays?: number
+  /** 同上の最初の日付（画面に「◯◯から復帰済み」と出すため） */
+  hkEarlyReturnFirstDate?: string
   dailyStatutoryOT?: number       // 日単位の法定外残業（1日8h超）
   weeklyStatutoryOT?: number      // 週単位の法定外残業（週40h超、日単位分除く）
   monthlyStatutoryOT?: number     // 月単位の法定外残業（法定上限超、日/週分除く）
@@ -1394,10 +1412,24 @@ export function computeMonthly(
         //   これにより基本給・所定日数がその日ぶん縮小し、「無給かつ欠勤に計上されない」を実現する
         //   （欠勤控除は所定日数を基準に残差算出するため、所定から外れた帰国中日は欠勤にならない）。
         //   按分は既存の中途入退社ロジックと同じ暦日比方式（近似）で一貫させる。
-        const hkDays = countHomeLeaveDaysInRange(homeLeaves, wm.id, startIso, endIso)
-        if (hkDays > 0) {
-          wm.hkDays = hkDays
-          activeDays = Math.max(0, activeDays - hkDays)
+        // 出勤打刻のある日（ISO）。申請期間内でもこの日は帰国から除外する（早期復帰対応）。
+        //   _actualDaySeen は entry ループで作った「実際に出勤した日」の集合（同日複数現場は1日）。
+        const workedIso = new Set<string>()
+        for (const k of wm._actualDaySeen || []) {
+          const [kym, kday] = k.split('_')
+          if (!kym || !kday) continue
+          workedIso.add(`${kym.slice(0, 4)}-${kym.slice(4, 6)}-${kday.padStart(2, '0')}`)
+        }
+        const hk = countHomeLeaveDaysInRange(homeLeaves, wm.id, startIso, endIso, workedIso)
+        if (hk.earlyReturnDates.length > 0) {
+          // 申請より早く復帰した日。給与は実データで正しく計算されるが、
+          // 申請の終了日を直すべきなので月次画面に出して管理者に気づかせる。
+          wm.hkEarlyReturnDays = hk.earlyReturnDates.length
+          wm.hkEarlyReturnFirstDate = hk.earlyReturnDates[0]
+        }
+        if (hk.days > 0) {
+          wm.hkDays = hk.days
+          activeDays = Math.max(0, activeDays - hk.days)
         }
         if (activeDays < totalDaysInMonth) {
           // 按分が必要なケース（中途入社 / 中途退職 / 帰国中）

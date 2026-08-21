@@ -38,7 +38,9 @@ interface WorkerMonthly {
   absentCost: number
   netPay: number
   // Salary calc fields (variable working hours system)
-  hkDays?: number  // 帰国中（一時帰国・復帰未定）日数。所定から除外され無給・非欠勤
+  hkDays?: number
+  hkEarlyReturnDays?: number
+  hkEarlyReturnFirstDate?: string  // 帰国中（一時帰国・復帰未定）日数。所定から除外され無給・非欠勤
   prescribedHours?: number
   actualWorkHours?: number
   legalOtHours?: number
@@ -1348,6 +1350,16 @@ export default function MonthlyPage() {
                             title={`当月 ${w.hkDays}日 帰国中（所定から除外・無給。欠勤ではありません）`}
                           >
                             ✈ 帰国中{w.hkDays}日
+                          </span>
+                        )}
+                        {/* 申請より早く復帰して出勤している。給与は打刻ベースで正しく計算されるが、
+                            帰国申請の終了日が予定のまま残っているので直すべき（2026-08-20 追加）。 */}
+                        {(w.hkEarlyReturnDays || 0) > 0 && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            title={`帰国申請の期間内に出勤打刻が ${w.hkEarlyReturnDays}日 あります（${w.hkEarlyReturnFirstDate} から復帰済み）。給与は打刻どおり計算していますが、休暇管理の帰国申請の「最終帰国日」を実際の復帰前日に直してください。`}
+                          >
+                            ⚠ 早期復帰{w.hkEarlyReturnDays}日
                           </span>
                         )}
                         {/* 夜勤の 1.5人工 が法定割増を下回った場合の警告。

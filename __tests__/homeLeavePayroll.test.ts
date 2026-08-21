@@ -43,26 +43,26 @@ describe('countHomeLeaveDaysInRange', () => {
   test('復帰未定（番兵終了日）は月末まで加算される', () => {
     const hl = [{ workerId: 1, startDate: '2026-05-10', endDate: SENTINEL }]
     // 5/10〜5/31 = 22日
-    expect(countHomeLeaveDaysInRange(hl, 1, '2026-05-01', '2026-05-31')).toBe(22)
+    expect(countHomeLeaveDaysInRange(hl, 1, '2026-05-01', '2026-05-31').days).toBe(22)
   })
   test('在籍期間より前に始まる帰国は在籍開始日でクランプ', () => {
     const hl = [{ workerId: 1, startDate: '2026-04-20', endDate: '2026-05-05' }]
     // 在籍 5/1〜5/31、帰国は 5/1〜5/5 に切り詰め = 5日
-    expect(countHomeLeaveDaysInRange(hl, 1, '2026-05-01', '2026-05-31')).toBe(5)
+    expect(countHomeLeaveDaysInRange(hl, 1, '2026-05-01', '2026-05-31').days).toBe(5)
   })
   test('別のスタッフの帰国はカウントしない', () => {
     const hl = [{ workerId: 2, startDate: '2026-05-01', endDate: SENTINEL }]
-    expect(countHomeLeaveDaysInRange(hl, 1, '2026-05-01', '2026-05-31')).toBe(0)
+    expect(countHomeLeaveDaysInRange(hl, 1, '2026-05-01', '2026-05-31').days).toBe(0)
   })
   test('重複する期間でも暦日は二重計上しない', () => {
     const hl = [
       { workerId: 1, startDate: '2026-05-01', endDate: '2026-05-20' },
       { workerId: 1, startDate: '2026-05-15', endDate: '2026-05-31' },
     ]
-    expect(countHomeLeaveDaysInRange(hl, 1, '2026-05-01', '2026-05-31')).toBe(31)
+    expect(countHomeLeaveDaysInRange(hl, 1, '2026-05-01', '2026-05-31').days).toBe(31)
   })
   test('homeLeaves 未指定なら 0', () => {
-    expect(countHomeLeaveDaysInRange(undefined, 1, '2026-05-01', '2026-05-31')).toBe(0)
+    expect(countHomeLeaveDaysInRange(undefined, 1, '2026-05-01', '2026-05-31').days).toBe(0)
   })
 })
 
@@ -179,5 +179,49 @@ describe('computeMonthly - 帰国中の後方互換', () => {
     const w = computeMonthly(main, attD, {}, '202605', 20, { site1: 20 }, 20).workers.find(x => x.id === 101)!
     expect(w.hkDays).toBeUndefined()
     expect(w.fixedBasePay).toBe(1500 * 20 * 7)  // 通常の基本給
+  })
+})
+
+/**
+ * 早期復帰への対応（2026-08-20 追加）
+ *
+ * 帰国は「予定より早く帰ってきてそのまま復帰する」ことが実務では普通に起きる。
+ * ところが申請の endDate は予定のまま残るため、期間だけで帰国日数を数えると
+ * 実際に働いた日まで帰国扱いになり、基本給の日割りが過少になる。
+ *   実例: フン(104) 申請7/18まで → 実際は7/14から出勤 → 基本給 63,888円 の過少支給
+ * 打刻は本人が入れた事実なので、申請期間より実データを優先する。
+ */
+describe('countHomeLeaveDaysInRange: 早期復帰（出勤打刻の優先）', () => {
+  const hl = [{ workerId: 1, startDate: '2026-07-01', endDate: '2026-07-18' }]
+
+  test('申請期間内でも出勤打刻がある日は帰国日数から外れる', () => {
+    const worked = new Set(['2026-07-14', '2026-07-15', '2026-07-16', '2026-07-17'])
+    const r = countHomeLeaveDaysInRange(hl, 1, '2026-07-01', '2026-07-31', worked)
+    expect(r.days).toBe(14)              // 18日 − 出勤4日
+    expect(r.earlyReturnDates.length).toBe(4)
+    expect(r.earlyReturnDates[0]).toBe('2026-07-14')  // 最初の復帰日
+  })
+
+  test('ファン事案: 終了日当日に出勤していれば その日は帰国に数えない', () => {
+    const phan = [{ workerId: 1, startDate: '2026-03-28', endDate: '2026-07-08' }]
+    const r = countHomeLeaveDaysInRange(phan, 1, '2026-07-01', '2026-07-31', new Set(['2026-07-08']))
+    expect(r.days).toBe(7)               // 7/1〜7/7 の7日（7/8は出勤）
+    expect(r.earlyReturnDates).toEqual(['2026-07-08'])
+  })
+
+  test('打刻が無ければ従来どおり（日曜も帰国日数に残る）', () => {
+    const r = countHomeLeaveDaysInRange(hl, 1, '2026-07-01', '2026-07-31', new Set())
+    expect(r.days).toBe(18)
+    expect(r.earlyReturnDates).toEqual([])
+  })
+
+  test('期間外の出勤打刻は帰国日数に影響しない', () => {
+    const r = countHomeLeaveDaysInRange(hl, 1, '2026-07-01', '2026-07-31', new Set(['2026-07-25']))
+    expect(r.days).toBe(18)
+    expect(r.earlyReturnDates).toEqual([])
+  })
+
+  test('workedDatesIso 未指定なら従来動作（後方互換）', () => {
+    expect(countHomeLeaveDaysInRange(hl, 1, '2026-07-01', '2026-07-31').days).toBe(18)
   })
 })
