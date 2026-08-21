@@ -200,6 +200,22 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 2026-08-20 追加: 帰国期間の中に出勤打刻がある日が無いか承認前に確認する。
+      //   終了日に「復帰日」を入れる入力ミスが繰り返し起きたため（ファン/フン事案）。
+      //   承認してしまうと出面に hk が書かれ給与の日割りに直結するので、ここで止める。
+      //   force:true が明示されたときだけ通す（帰国中の一時出勤など正当なケース用）。
+      if (!body.force) {
+        const { findWorkedDaysInHomeLeave } = await import('@/lib/home-leave-sync')
+        const conflicts = await findWorkedDaysInHomeLeave(data.workerId, data.startDate, data.endDate)
+        if (conflicts.length > 0) {
+          return NextResponse.json({
+            error: 'WORKED_DAYS_IN_RANGE',
+            message: `申請期間の中に出勤打刻のある日が ${conflicts.length}日 あります。終了日が「復帰日」になっていないか確認してください（終了日は最終帰国日です）。`,
+            conflicts,
+          }, { status: 409 })
+        }
+      }
+
       // Update status
       await setDoc(docRef, {
         ...data,

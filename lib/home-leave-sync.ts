@@ -58,6 +58,9 @@ export interface HomeLeaveSyncResult {
  */
 export const HK_STAMP_HORIZON_MONTHS = 12
 
+/** これ以上の終了日は「復帰未定の番兵」とみなす閾値（9999-12-31 等） */
+const HOME_LEAVE_SENTINEL_CAP = '2900-01-01'
+
 /** 'YYYY-MM-DD' → 'YYYYMM' */
 function ymOf(iso: string): string {
   return iso.slice(0, 4) + iso.slice(5, 7)
@@ -125,6 +128,80 @@ export function planHomeLeaveDay(
   }
   if (!entry?.hk) return 'noop'
   return isPureHomeLeaveStub(entry) ? 'clear-entry' : 'clear-field'
+}
+
+/**
+ * その日が「帰国期間なのに出勤している」矛盾日か（副作用なし・テスト用に切り出し）。
+ *
+ * 出勤(w>0)だけを矛盾とみなす。有給・欠勤・現場休は w=0 なので対象外
+ * （帰国中でも正当に立ちうる）。補償日(w=0.6)は会社都合休みで帰国中には
+ * 発生しないため、検出されたら人が確認すべきものとして矛盾に含める。
+ */
+export function isHomeLeaveConflictDay(
+  entry: AttendanceEntry | undefined,
+  date: string,
+  startDate: string,
+  endDate: string,
+): boolean {
+  if (!entry) return false
+  if (!(entry.w && entry.w > 0)) return false
+  return date >= startDate && date <= endDate
+}
+
+/** 帰国期間と実際の出勤打刻が矛盾している日 */
+export interface HomeLeaveConflictDay {
+  date: string      // YYYY-MM-DD
+  siteId: string
+  /** その日のエントリ概要（画面に出して人が判断できるように） */
+  summary: string
+}
+
+/**
+ * 帰国期間の中に「実際に出勤している日」が無いか調べる（副作用なし）。
+ *
+ * ■ なぜ必要か（2026-08-20 ファン/フン事案）
+ *   帰国申請の終了日に **復帰日** を入れてしまう入力ミスが繰り返し起きた。
+ *   システムは終了日を帰国期間に「含める」仕様なので、復帰日を入れると
+ *   その日が帰国扱いになり、給与の日割りが1日ぶん過少になる。
+ *     - ファン(103): 終了日 7/8 なのに 7/8 から出勤打刻 → 帰国8日（正しくは7日）
+ *     - フン(104):  終了日 7/18 なのに 7/14 から出勤打刻 → 帰国18日（正しくは13日）
+ *                   基本給が 63,888円 過少になっていた
+ *   出面の打刻は本人が入れた事実なので、これと期間が矛盾していたら入力ミスを疑う。
+ *
+ * ■ 判定
+ *   期間内の日で「w > 0（＝出勤している）」エントリがあれば矛盾とみなす。
+ *   hk だけの空エントリ・有給・欠勤・現場休は対象外（帰国中でも正当に立ちうる）。
+ *
+ * @returns 矛盾している日の一覧（日付昇順）。空なら矛盾なし
+ */
+export async function findWorkedDaysInHomeLeave(
+  workerId: number,
+  startDate: string,
+  endDate: string,
+): Promise<HomeLeaveConflictDay[]> {
+  if (!startDate || !endDate || startDate > endDate) return []
+
+  // 番兵（復帰未定）は期間が事実上無限なので、暦の先読み上限で打ち切る
+  const cappedEnd = endDate >= HOME_LEAVE_SENTINEL_CAP
+    ? addMonths(ymOf(startDate), HK_STAMP_HORIZON_MONTHS) + '-31'
+    : endDate
+
+  const conflicts: HomeLeaveConflictDay[] = []
+  for (const ym of monthsInclusive(ymOf(startDate), ymOf(cappedEnd))) {
+    const att = await getAttendanceDoc(ym)
+    for (const [key, entry] of Object.entries(att)) {
+      const m = /^(.+)_(\d+)_(\d{6})_(\d+)$/.exec(key)
+      if (!m) continue
+      if (Number(m[2]) !== workerId || m[3] !== ym) continue
+      const date = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(m[4]).padStart(2, '0')}`
+      if (!isHomeLeaveConflictDay(entry, date, startDate, cappedEnd)) continue
+      const times = entry.st && entry.et ? `${entry.st}〜${entry.et}` : `出勤 ${entry.w}`
+      const ot = entry.o ? ` 残業${entry.o}h` : ''
+      conflicts.push({ date, siteId: m[1], summary: `${times}${ot}` })
+    }
+  }
+  conflicts.sort((a, b) => a.date.localeCompare(b.date))
+  return conflicts
 }
 
 /**

@@ -21,6 +21,17 @@ import { HOME_LEAVE_SENTINEL_END } from '@/lib/homeLeave'
  * - delete: doc を直接 deleteDoc
  */
 
+/**
+ * ISO日付の前日を返す（文字列演算・タイムゾーン非依存）。
+ * 「最初の出勤日の前日」＝正しい最終帰国日 を画面に提案するために使う。
+ */
+function prevDateIso(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  dt.setUTCDate(dt.getUTCDate() - 1)
+  return dt.toISOString().slice(0, 10)
+}
+
 interface HomeLeaveRecord {
   id: string
   workerId: number
@@ -107,6 +118,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Already exists' }, { status: 409 })
       }
 
+      // 2026-08-20 追加: 帰国期間の中に出勤打刻がある日が無いかを保存前に確認する。
+      //   終了日に「復帰日」を入れる入力ミスが繰り返し起きたため（ファン/フン事案）。
+      //   force:true が明示されたときだけ通す（帰国中の一時出勤など正当なケース用）。
+      if (!body.force) {
+        const { findWorkedDaysInHomeLeave } = await import('@/lib/home-leave-sync')
+        const conflicts = await findWorkedDaysInHomeLeave(Number(workerId), startDate, endDate)
+        if (conflicts.length > 0) {
+          return NextResponse.json({
+            error: 'WORKED_DAYS_IN_RANGE',
+            message: `帰国期間の中に出勤打刻のある日が ${conflicts.length}日 あります。終了日には「最終帰国日」を入れてください（復帰日ではありません）。`,
+            conflicts,
+            suggestedEndDate: prevDateIso(conflicts[0].date),
+          }, { status: 409 })
+        }
+      }
+
       await setDoc(ref, {
         workerId,
         workerName,
@@ -160,6 +187,21 @@ export async function POST(request: NextRequest) {
       const newStart = startDate !== undefined ? startDate : current.startDate
       if (newStart >= newEnd) {
         return NextResponse.json({ error: 'startDate must be before endDate' }, { status: 400 })
+      }
+
+      // 2026-08-20 追加: add と同じ「帰国期間内の出勤打刻」チェック。
+      //   期間を伸ばす方向の編集でも入力ミスを止められるようにする。
+      if (!body.force) {
+        const { findWorkedDaysInHomeLeave } = await import('@/lib/home-leave-sync')
+        const conflicts = await findWorkedDaysInHomeLeave(Number(current.workerId), newStart, newEnd)
+        if (conflicts.length > 0) {
+          return NextResponse.json({
+            error: 'WORKED_DAYS_IN_RANGE',
+            message: `帰国期間の中に出勤打刻のある日が ${conflicts.length}日 あります。終了日には「最終帰国日」を入れてください（復帰日ではありません）。`,
+            conflicts,
+            suggestedEndDate: prevDateIso(conflicts[0].date),
+          }, { status: 409 })
+        }
       }
 
       const updates: Record<string, string | boolean> = {}

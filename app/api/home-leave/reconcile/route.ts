@@ -123,6 +123,53 @@ async function detectOrphans(fromYm: string, toYm: string): Promise<{
   return { orphans, scannedMonths, rangeCount: ranges.length }
 }
 
+/** 帰国期間の中に出勤打刻が入っている＝期間が実態より長い疑い（2026-08-20 追加） */
+interface RangeConflict {
+  workerId: number
+  workerName: string
+  startDate: string
+  endDate: string
+  /** 期間内で実際に出勤している日 */
+  workedDays: { date: string; siteId: string; summary: string }[]
+  /** 最初の出勤日の前日 ＝ 正しいと思われる最終帰国日 */
+  suggestedEndDate: string
+}
+
+/**
+ * 「帰国期間なのに出勤打刻がある」申請を洗い出す（読み取り専用）。
+ *
+ * detectOrphans が拾うのは逆方向（期間外に hk が残っている）なので、
+ * ファン/フン事案（終了日に復帰日を入れて期間が1日〜4日長い）は素通りしていた。
+ */
+async function detectRangeConflicts(): Promise<RangeConflict[]> {
+  const { findWorkedDaysInHomeLeave } = await import('@/lib/home-leave-sync')
+  const out: RangeConflict[] = []
+  const snap = await getDocs(collection(db, 'homeLongLeave'))
+  const targets: { workerId: number; workerName: string; startDate: string; endDate: string }[] = []
+  snap.forEach(d => {
+    const v = d.data()
+    if (v.status !== 'approved') return
+    if (!v.startDate || !v.endDate) return
+    targets.push({
+      workerId: Number(v.workerId),
+      workerName: String(v.workerName || v.workerId),
+      startDate: v.startDate,
+      endDate: v.endDate,
+    })
+  })
+  for (const t of targets) {
+    const workedDays = await findWorkedDaysInHomeLeave(t.workerId, t.startDate, t.endDate)
+    if (workedDays.length === 0) continue
+    const first = workedDays[0].date
+    const [y, m, dd] = first.split('-').map(Number)
+    const prev = new Date(Date.UTC(y, m - 1, dd))
+    prev.setUTCDate(prev.getUTCDate() - 1)
+    out.push({ ...t, workedDays, suggestedEndDate: prev.toISOString().slice(0, 10) })
+  }
+  out.sort((a, b) => a.startDate.localeCompare(b.startDate))
+  return out
+}
+
 function resolveWindow(request: NextRequest): { fromYm: string; toYm: string } {
   const sp = request.nextUrl.searchParams
   const now = new Date()
@@ -140,6 +187,8 @@ export async function GET(request: NextRequest) {
     }
     const { fromYm, toYm } = resolveWindow(request)
     const { orphans, scannedMonths, rangeCount } = await detectOrphans(fromYm, toYm)
+    // 2026-08-20 追加: 逆方向（帰国期間内に出勤打刻）も同時に点検する
+    const rangeConflicts = await detectRangeConflicts()
     return NextResponse.json({
       mode: 'detect',
       from: fromYm,
@@ -149,6 +198,9 @@ export async function GET(request: NextRequest) {
       orphanCount: orphans.length,
       lockedOrphanCount: orphans.filter(o => o.locked).length,
       orphans,
+      // 期間が実態より長い疑いのある申請（終了日に復帰日を入れた入力ミス）
+      rangeConflictCount: rangeConflicts.length,
+      rangeConflicts,
     })
   } catch (error) {
     console.error('home-leave reconcile GET error:', error)

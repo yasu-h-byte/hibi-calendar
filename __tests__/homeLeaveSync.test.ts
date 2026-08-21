@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { planHomeLeaveDay } from '@/lib/home-leave-sync'
+import { planHomeLeaveDay, isHomeLeaveConflictDay } from '@/lib/home-leave-sync'
 import type { AttendanceEntry } from '@/types'
 
 /**
@@ -71,5 +71,60 @@ describe('planHomeLeaveDay', () => {
     it('9/1 以降（新期間内）は hk が立つ', () => {
       expect(planHomeLeaveDay(undefined, true)).toBe('write')
     })
+  })
+})
+
+/**
+ * 帰国期間内の出勤打刻の検出（2026-08-20 追加）
+ *
+ * 回帰対象: ファン(103) / フン(104) 事案
+ *   帰国申請の「終了日」に復帰日を入れる入力ミスが繰り返し起きた。
+ *   システムは終了日を帰国期間に含めるため、復帰日を入れると1日ぶん多く帰国扱いになり、
+ *   給与の日割りが過少になる。
+ *     - ファン: 終了日7/8 なのに 7/8 から出勤打刻 → 帰国8日（正しくは7日）
+ *     - フン:  終了日7/18 なのに 7/14 から出勤打刻 → 帰国18日（正しくは13日）
+ *              基本給が 63,888円 過少だった
+ *   出面の打刻は本人が入れた事実なので、期間と矛盾したら保存前に止める。
+ */
+describe('isHomeLeaveConflictDay', () => {
+  const e = (v: Partial<AttendanceEntry>) => v as AttendanceEntry
+  const RANGE = { start: '2026-03-28', end: '2026-07-08' }
+  const hit = (entry: AttendanceEntry | undefined, date: string) =>
+    isHomeLeaveConflictDay(entry, date, RANGE.start, RANGE.end)
+
+  it('ファン事案: 終了日当日に出勤打刻があれば矛盾として検出する', () => {
+    expect(hit(e({ w: 1, st: '06:30', et: '16:30', o: 1.5 }), '2026-07-08')).toBe(true)
+  })
+
+  it('期間の途中に出勤打刻があっても検出する（フン事案: 復帰後4日ぶん）', () => {
+    expect(hit(e({ w: 1, st: '07:30', et: '16:30' }), '2026-07-01')).toBe(true)
+  })
+
+  it('期間外の出勤打刻は検出しない（正常な復帰後の勤務）', () => {
+    expect(hit(e({ w: 1, st: '06:30', et: '16:30' }), '2026-07-09')).toBe(false)
+    expect(hit(e({ w: 1 }), '2026-03-27')).toBe(false)
+  })
+
+  it('帰国フラグだけの日は矛盾ではない（正常な帰国中）', () => {
+    expect(hit(e({ hk: 1, w: 0 }), '2026-07-01')).toBe(false)
+  })
+
+  it('有給・欠勤・現場休は帰国中でも正当なので検出しない', () => {
+    expect(hit(e({ p: 1, w: 0 }), '2026-07-01')).toBe(false)
+    expect(hit(e({ r: 1, w: 0 }), '2026-07-01')).toBe(false)
+    expect(hit(e({ h: 1, w: 0 }), '2026-07-01')).toBe(false)
+  })
+
+  it('半日出勤・補償日も出勤扱いなので検出する（人が確認すべき）', () => {
+    expect(hit(e({ w: 0.5 }), '2026-07-01')).toBe(true)
+    expect(hit(e({ w: 0.6 }), '2026-07-01')).toBe(true)
+  })
+
+  it('エントリが無い日は検出しない', () => {
+    expect(hit(undefined, '2026-07-01')).toBe(false)
+  })
+
+  it('境界: 開始日当日の出勤も検出する', () => {
+    expect(hit(e({ w: 1 }), '2026-03-28')).toBe(true)
   })
 })

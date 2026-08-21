@@ -93,6 +93,31 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     .sort((a, b) => b.endDate.localeCompare(a.endDate))
 
   // 操作ハンドラ
+  /**
+   * 帰国期間の中に出勤打刻がある場合（409 WORKED_DAYS_IN_RANGE）の対話処理。
+   * 2026-08-20 追加。終了日に「復帰日」を入れる入力ミスが繰り返し起きたため
+   * （ファン: 帰国8日→正しくは7日 / フン: 帰国18日→正しくは13日で基本給63,888円の過少）。
+   * 打刻と矛盾する期間は保存前に止め、正しい最終帰国日を提案して1クリックで直せるようにする。
+   *
+   * @returns 提案日で再送信するなら その日付、キャンセルなら null
+   */
+  const askFixEndDate = async (res: Response): Promise<string | null> => {
+    let data: { error?: string; message?: string; suggestedEndDate?: string; conflicts?: { date: string; summary: string }[] } = {}
+    try { data = await res.json() } catch { /* JSONでなければ後段でnull */ }
+    if (data.error !== 'WORKED_DAYS_IN_RANGE' || !data.suggestedEndDate) {
+      if (data.message) alert(data.message)
+      return null
+    }
+    const list = (data.conflicts || []).slice(0, 8).map(c => `　${c.date}  ${c.summary}`).join('\n')
+    const more = (data.conflicts || []).length > 8 ? `\n　…他${(data.conflicts || []).length - 8}日` : ''
+    const ok = confirm(
+      `${data.message}\n\n【出勤打刻のある日】\n${list}${more}\n\n` +
+      `OK … 最終帰国日を ${data.suggestedEndDate} に直して登録する\n` +
+      `キャンセル … 入力画面に戻る`
+    )
+    return ok ? data.suggestedEndDate : null
+  }
+
   const handleHlAdd = async () => {
     // 復帰未定なら帰国日は不要
     if (!ui.formWorkerId || !ui.formStart || (!ui.formUndecided && !ui.formEnd)) return
@@ -115,6 +140,28 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       if (res.ok) {
         patchUi({ formOpen: false, formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
         onRefresh()
+        return
+      }
+      if (res.status === 409) {
+        const fixed = await askFixEndDate(res)
+        if (!fixed) { patchUi({ formEnd: '' }); return }
+        const retry = await fetch('/api/home-leave', {
+          method: 'POST',
+          headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'create',
+            workerId: Number(ui.formWorkerId),
+            workerName: w?.name || '',
+            startDate: ui.formStart,
+            endDate: fixed,
+            reason: ui.formReason,
+            note: ui.formNote,
+          }),
+        })
+        if (retry.ok) {
+          patchUi({ formOpen: false, formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
+          onRefresh()
+        }
       }
     } finally { setHlSaving(false) }
   }
@@ -145,6 +192,24 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       if (res.ok) {
         cancelHlEdit()
         onRefresh()
+        return
+      }
+      if (res.status === 409) {
+        const fixed = await askFixEndDate(res)
+        if (!fixed) return
+        const retry = await fetch('/api/home-leave', {
+          method: 'POST',
+          headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update', id,
+            startDate: ui.editStart,
+            returnUndecided: false,
+            endDate: fixed,
+            reason: ui.editReason,
+            note: ui.editNote,
+          }),
+        })
+        if (retry.ok) { cancelHlEdit(); onRefresh() }
       }
     } finally { setHlSaving(false) }
   }
@@ -186,7 +251,10 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
                 className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">帰国日（復帰日）</label>
+              <label className="block text-xs text-gray-500 mb-1">
+                最終帰国日
+                <span className="block text-[10px] text-gray-400 leading-tight">この日まで帰国（翌日から出勤）</span>
+              </label>
               <input type="date" value={ui.editEnd} disabled={ui.editUndecided} onChange={e => patchUi({ editEnd: e.target.value })}
                 className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-40 disabled:bg-gray-100 dark:disabled:bg-gray-900" />
             </div>
@@ -299,7 +367,10 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
               </div>
               <div>
-                <label className="block text-sm text-gray-600 mb-1">帰国日</label>
+                <label className="block text-sm text-gray-600 mb-1">
+                  最終帰国日
+                  <span className="block text-[11px] font-normal text-gray-400 leading-tight">この日まで帰国（翌日から出勤）</span>
+                </label>
                 <input type="date" value={ui.formEnd} disabled={ui.formUndecided} onChange={e => patchUi({ formEnd: e.target.value })}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-40 disabled:bg-gray-100 dark:disabled:bg-gray-900" />
               </div>
