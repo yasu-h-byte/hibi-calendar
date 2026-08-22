@@ -76,7 +76,7 @@ interface ActionItems {
   pendingHomeLeaveApprovalCount?: number
   pendingGrantsCount?: number
   carryOverExpiringCount?: number
-  plShortfall?: { count: number }
+  plShortfall?: { count: number; names?: string[] }
   visaExpiry?: { count: number; items: { name: string; daysLeft: number; expiry: string }[] }
 }
 

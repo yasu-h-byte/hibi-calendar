@@ -22,7 +22,7 @@ import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from '@/lib/workers'
 import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
-import { selectActiveGrantRecord } from '@/lib/leave-compute'
+import { selectActiveGrantRecord, judgeFiveDayObligation } from '@/lib/leave-compute'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
 export const dynamic = 'force-dynamic'
@@ -1000,22 +1000,43 @@ export async function GET(request: NextRequest) {
     visaExpiryItems.sort((a, b) => a.daysLeft - b.daysLeft)
 
     // 2. PL 5-day shortfall (法定5日義務)
-    // Use plAlert already computed - check workers with fiveDayShortfall from leave API logic
-    // For simplicity, count workers with grantDays >= 10 and used < 5
+    // ⚠️ 2026-08-21 全面修正（有給総点検の横展開）。旧実装は2点間違っていた:
+    //   ① used をレコードの used フィールドから読んでいた → 消化は出面のPから動的計算する
+    //      設計なので used はほぼ常に0 → 「全員5日未消化」と判定し、実際は5名なのに
+    //      22名と表示していた（オオカミ少年化してアラートが機能していなかった）
+    //   ② 付与直後でも即警告していた → 5日義務は「付与から1年以内」に取ればよいので、
+    //      期限まで余裕がある人を今すぐ対応リストに入れるのは誤り
+    //   正: 出面のPから期間内消化を数え、judgeFiveDayObligation（通知ベル・有給画面と同一）で判定
     let plShortfallCount = 0
-    // 2026-06-XX 修正: 今日時点で退職済みのみ除外（未来日退職予定者は5日義務監視対象）
+    const plShortfallNames: string[] = []
     for (const w of main.workers) {
       if (isAlreadyRetired(w.retired, todayIsoForVisa)) continue
       const records = main.plData[String(w.id)] || []
       if (records.length === 0) continue
-      // ⚠️ 未来の付与レコードを掴まないこと（selectActiveGrantRecord に一元化）
       const latest = selectActiveGrantRecord(records, todayIsoForVisa)
-      if (!latest) continue  // まだ付与前 → 5日義務の対象外
-      const isOld = latest.grant != null || latest.adj != null || latest.carry != null
-      const grantDays = isOld ? (latest.grant ?? latest.grantDays ?? 0) : (latest.grantDays ?? 0)
+      if (!latest || !latest.grantDate) continue  // まだ付与前 → 5日義務の対象外
+      const grantDays = latest.grantDays ?? latest.grant ?? 0
       if (grantDays < 10) continue // 5日義務は年10日以上付与者のみ
-      const used = (latest.used || 0) + Math.max(latest.adjustment ?? 0, latest.adj ?? 0)
-      if (used < 5) plShortfallCount++
+
+      // 期間 [grantDate, +1年) の P 日数を出面から数える（同日複数現場は1日）
+      const start = latest.grantDate
+      const end = String(Number(start.slice(0, 4)) + 1) + start.slice(4)
+      const seen = new Set<string>()
+      for (const [key, entry] of Object.entries(allAttD)) {
+        const e = entry as { p?: number } | null
+        if (!e?.p) continue
+        const pk = parseDKey(key)
+        if (parseInt(pk.wid) !== w.id) continue
+        const iso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
+        if (iso >= start && iso < end) seen.add(iso)
+      }
+      const periodUsed = Math.max(latest.adjustment ?? 0, latest.adj ?? 0) + seen.size
+
+      const judged = judgeFiveDayObligation(start, grantDays, periodUsed, w.retired, todayIsoForVisa)
+      if (judged.warning) {
+        plShortfallCount++
+        plShortfallNames.push(`${w.name}(残${judged.shortfall}日)`)
+      }
     }
 
     // 3. Pending leave requests
@@ -1263,7 +1284,7 @@ export async function GET(request: NextRequest) {
 
     const actionItems = {
       visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },
-      plShortfall: { count: plShortfallCount },
+      plShortfall: { count: plShortfallCount, names: plShortfallNames },
       pendingLeaveRequests: { count: pendingLeaveCount, items: leaveRequestItems },
       calendarProgress: { pending: calPending, total: calTotal },
       absenceReports,
