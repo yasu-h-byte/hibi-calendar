@@ -66,6 +66,13 @@ interface HomeLongLeaveItem {
   siteForemanName?: string  // 対象スタッフの配置現場の職長名（ボタン表示用）
 }
 
+interface QuietIssue {
+  kind: 'nightUnregistered' | 'legalShortfall' | 'earlyReturn' | 'staleAttendance'
+  workerName: string
+  detail: string
+  href: string
+}
+
 interface ActionItems {
   pendingLeaveRequests: { count: number; items: LeaveRequestItem[] }
   absenceReports?: AbsenceReport[]
@@ -77,6 +84,7 @@ interface ActionItems {
   pendingGrantsCount?: number
   carryOverExpiringCount?: number
   plShortfall?: { count: number; names?: string[] }
+  quietIssues?: { count: number; items: QuietIssue[] }
   visaExpiry?: { count: number; items: { name: string; daysLeft: number; expiry: string }[] }
 }
 
@@ -594,56 +602,117 @@ export default function DashboardPage() {
         <div className="bg-red-50 text-red-600 rounded-lg p-4 text-sm">{error}</div>
       )}
 
-      {/* 2026-06-XX 追加 (UI #1): 「今すぐ対応が必要」集約パネル */}
-      {/* 2026-06-XX 修正 (運用方針): 有給(年5日)アラートは表示しない (靖仁さん判断)。
-          カレンダーは API 側で 18日以降のみカウントするように制限済み。 */}
-      {actionBadges && (actionBadges.monthly + actionBadges.calendar) > 0 && (
-        <div className="bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-300 dark:border-red-700 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-2xl">📌</span>
-            <h2 className="font-bold text-red-800 dark:text-red-300">今すぐ対応が必要 ({actionBadges.monthly + actionBadges.calendar}件)</h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {actionBadges.monthly > 0 && (
-              <a
-                href="/monthly"
-                className="bg-white dark:bg-gray-800 border border-red-200 dark:border-red-700 rounded-lg p-3 hover:shadow-md transition flex items-start gap-3"
-              >
-                <span className="text-2xl shrink-0">💰</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-gray-500 dark:text-gray-400">月次集計</div>
-                  <div className="font-bold text-red-700 dark:text-red-300">
-                    検算で異常 <span className="text-lg">{actionBadges.monthly}</span>名
+      {/* ═══ 今日の判断（2026-08-21 再設計・第1弾） ═══
+          代表が最初に見るのは「実績の要約」ではなく「自分の判断待ち」。
+          ① 承認・確認が必要なもの ② 静かな異常 ③ 期限接近 を1枚に集約し、
+          すべてクリックで該当画面へ飛べるようにする（従来は件数表示のみで導線が無かった）。 */}
+      {(() => {
+        if (!actionBadges && !data) return null
+        const q = data?.actionItems?.quietIssues
+        const visa = data?.actionItems?.visaExpiry
+        const pl = data?.actionItems?.plShortfall
+        const approvals = (actionBadges?.monthly || 0) + (actionBadges?.calendar || 0)
+        const quietN = q?.count || 0
+        const visaN = visa?.count || 0
+        const plN = pl?.count || 0
+        const total = approvals + quietN + visaN + plN
+
+        if (total === 0) {
+          return (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-xl p-4 flex items-center gap-3">
+              <span className="text-2xl">✓</span>
+              <div>
+                <div className="font-bold text-green-800 dark:text-green-300">対応が必要なことはありません</div>
+                <div className="text-xs text-green-700 dark:text-green-400 mt-0.5">承認・給与計算・期限・異常検知すべて健全です</div>
+              </div>
+            </div>
+          )
+        }
+
+        const KIND_LABEL: Record<string, string> = {
+          nightUnregistered: '夜勤未登録',
+          legalShortfall: '法定割れ',
+          earlyReturn: '帰国申請',
+          staleAttendance: '出面未入力',
+        }
+
+        return (
+          <div className="bg-white dark:bg-gray-800 border-2 border-hibi-navy dark:border-blue-500 rounded-xl overflow-hidden">
+            <div className="bg-hibi-navy dark:bg-blue-900 px-4 py-2.5 flex items-center justify-between">
+              <h2 className="font-bold text-white text-sm">今日の判断</h2>
+              <span className="text-white/90 text-xs tabular-nums">{total}件</span>
+            </div>
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
+
+              {/* ① 承認・確認 */}
+              {actionBadges && actionBadges.monthly > 0 && (
+                <a href={`/monthly?ym=${ym}`} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                  <span className="w-1.5 h-8 rounded-full bg-red-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-red-700 dark:text-red-300">給与計算の検算で異常 {actionBadges.monthly}名</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">月次集計を開いて確認する</div>
                   </div>
-                  <div className="text-[11px] text-gray-500 mt-1">給与計算で要確認のスタッフ</div>
-                </div>
-              </a>
-            )}
-            {actionBadges.calendar > 0 && (
-              <a
-                href="/calendar"
-                className="bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 rounded-lg p-3 hover:shadow-md transition flex items-start gap-3"
-              >
-                <span className="text-2xl shrink-0">📅</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-gray-500 dark:text-gray-400">就業カレンダー</div>
-                  <div className="font-bold text-orange-700 dark:text-orange-300">
-                    未承認 <span className="text-lg">{actionBadges.calendar}</span>件
+                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
+                </a>
+              )}
+              {actionBadges && actionBadges.calendar > 0 && (
+                <a href="/calendar" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                  <span className="w-1.5 h-8 rounded-full bg-orange-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-orange-700 dark:text-orange-300">就業カレンダー 未承認 {actionBadges.calendar}件</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">来月分の承認待ち</div>
                   </div>
-                  <div className="text-[11px] text-gray-500 mt-1">来月カレンダーの承認待ち (毎月18日以降)</div>
-                </div>
-              </a>
-            )}
+                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
+                </a>
+              )}
+
+              {/* ② 静かな異常 */}
+              {(q?.items || []).map((it, i) => (
+                <a key={`q${i}`} href={it.href} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                  <span className="w-1.5 h-8 rounded-full bg-amber-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-gray-800 dark:text-gray-100">
+                      <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded mr-2 align-middle">
+                        {KIND_LABEL[it.kind] || '確認'}
+                      </span>
+                      {it.workerName}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{it.detail}</div>
+                  </div>
+                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
+                </a>
+              ))}
+
+              {/* ③ 期限接近 */}
+              {visaN > 0 && (
+                <a href="/workers" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                  <span className="w-1.5 h-8 rounded-full bg-purple-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-purple-700 dark:text-purple-300">在留期限が近い {visaN}名</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {(visa?.items || []).slice(0, 3).map(v => `${v.name}(あと${v.daysLeft}日)`).join('、')}
+                      {visaN > 3 ? ` 他${visaN - 3}名` : ''}
+                    </div>
+                  </div>
+                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
+                </a>
+              )}
+              {plN > 0 && (
+                <a href="/leave" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                  <span className="w-1.5 h-8 rounded-full bg-teal-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-teal-700 dark:text-teal-300">有給5日義務が未達 {plN}名</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      {(pl?.names || []).slice(0, 3).join('、')}{plN > 3 ? ` 他${plN - 3}名` : ''}
+                    </div>
+                  </div>
+                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
+                </a>
+              )}
+            </div>
           </div>
-        </div>
-      )}
-      {actionBadges && (actionBadges.monthly + actionBadges.calendar) === 0 && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-xl p-3 text-sm text-green-800 dark:text-green-300 flex items-center gap-2">
-          <span className="text-xl">✓</span>
-          <span className="font-medium">未対応事項はありません</span>
-          <span className="text-xs text-green-700 dark:text-green-400 ml-1">給与計算・カレンダーすべて健全</span>
-        </div>
-      )}
+        )
+      })()}
 
       {loading ? (
         <div className="text-center py-12 text-gray-400">読み込み中...</div>

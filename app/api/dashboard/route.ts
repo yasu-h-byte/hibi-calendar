@@ -1282,6 +1282,120 @@ export async function GET(request: NextRequest) {
       }
     } catch { /* ignore */ }
 
+    // ═══ 静かな異常の検出（2026-08-21 追加 / ダッシュボード第1弾） ═══
+    // 「件数として目立たないが、放置すると給与に効く」問題を毎日拾う。
+    // 今回の帰国期間ズレ（フン: 基本給 63,888円 の過少支給）は月次で人が気づいたが、
+    // 検出ロジックはすべて実装済みなので、ここに集めて日次で見えるようにする。
+    // compute() の結果を再利用するだけなので Firestore の読み取りは増えない。
+    interface PayrollLite {
+      id: number
+      name: string
+      job?: string
+      retired?: string
+      hkDays?: number
+      lateNightRiskDays?: number
+      legalShortfall?: number
+      hkEarlyReturnDays?: number
+      hkEarlyReturnFirstDate?: string
+    }
+    interface QuietIssue {
+      kind: 'nightUnregistered' | 'legalShortfall' | 'earlyReturn' | 'staleAttendance'
+      workerName: string
+      detail: string
+      href: string
+    }
+    const quietIssues: QuietIssue[] = []
+    const nowYm = ymKey(new Date().getFullYear(), new Date().getMonth() + 1)
+    try {
+      // 給与明細レベルの検出（法定割れ・夜勤未登録・早期復帰）は computeMonthly が必要。
+      // ⚠️ 読み取りを増やさないため **当月を表示しているときだけ** 走らせる。
+      //    過去月の閲覧では検出をスキップする（過去は月次集計画面で確認する運用）。
+      const payrollWorkers: PayrollLite[] = []
+      if (ym === nowYm) {
+        const { computeMonthly } = await import('@/lib/compute')
+        const { getMonthlyCalendars } = await import('@/lib/repositories/calendarRepo')
+        const { getAllActiveHomeLeaves } = await import('@/lib/homeLeave')
+        const attNow = await getAttData(ym)
+        const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}
+        const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
+        const cals = await getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
+        const calendarDaysMap: Record<string, Record<string, string>> = {}
+        for (const cal of cals) if (cal.days) calendarDaysMap[cal.siteId] = cal.days
+        const homeLeavesNow = await getAllActiveHomeLeaves()
+        const mres = computeMonthly(
+          main, attNow.d, attNow.sd, ym, main.workDays[ym] || 0,
+          Object.keys(siteWorkDaysMap).length > 0 ? siteWorkDaysMap : undefined,
+          baseDays, calendarDaysMap, homeLeavesNow,
+        )
+        payrollWorkers.push(...(mres.workers as unknown as PayrollLite[]))
+      }
+
+      for (const w of payrollWorkers) {
+        if ((w.lateNightRiskDays || 0) > 0) {
+          quietIssues.push({
+            kind: 'nightUnregistered',
+            workerName: w.name,
+            detail: `22時超の労働が夜勤未登録 ${w.lateNightRiskDays}日`,
+            href: `/attendance?ym=${ym}`,
+          })
+        }
+        if ((w.legalShortfall || 0) > 0) {
+          quietIssues.push({
+            kind: 'legalShortfall',
+            workerName: w.name,
+            detail: `夜勤の法定割増が ¥${(w.legalShortfall || 0).toLocaleString()} 不足`,
+            href: `/monthly?ym=${ym}`,
+          })
+        }
+        if ((w.hkEarlyReturnDays || 0) > 0) {
+          quietIssues.push({
+            kind: 'earlyReturn',
+            workerName: w.name,
+            detail: `帰国申請より早く復帰（${w.hkEarlyReturnFirstDate} から出勤）。申請の最終帰国日を直す`,
+            href: '/leave?tab=homeleave',
+          })
+        }
+      }
+
+      // 出面が数日入っていないスタッフ（当月・稼働中の人だけ。直近5日で1件も入力が無い）
+      // ※ 当月を表示しているときだけ意味があるので、過去月を見ているときは出さない
+      if (ym === nowYm) {
+        const todayD = new Date()
+        const recentIso: string[] = []
+        for (let i = 1; i <= 5; i++) {
+          const d = new Date(todayD)
+          d.setDate(d.getDate() - i)
+          if (d.getDay() === 0) continue // 日曜は除く
+          recentIso.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+        }
+        if (recentIso.length > 0) {
+          const seenByWorker = new Map<number, number>()
+          for (const [key, entry] of Object.entries(allAttD)) {
+            if (!entry) continue
+            const pk = parseDKey(key)
+            const iso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
+            if (!recentIso.includes(iso)) continue
+            const wid = parseInt(pk.wid)
+            seenByWorker.set(wid, (seenByWorker.get(wid) || 0) + 1)
+          }
+          for (const w of payrollWorkers) {
+            if (isAlreadyRetired(w.retired, todayIsoForVisa)) continue
+            if (w.job === 'jimu' || w.job === 'yakuin') continue // 事務・役員は出面対象外
+            if ((w.hkDays || 0) > 0) continue                    // 帰国中は入力が無くて当然
+            if ((seenByWorker.get(w.id) || 0) > 0) continue
+            quietIssues.push({
+              kind: 'staleAttendance',
+              workerName: w.name,
+              detail: `直近${recentIso.length}稼働日に出面の入力がありません`,
+              href: `/attendance?ym=${ym}`,
+            })
+          }
+        }
+      }
+    } catch (e) {
+      console.error('quietIssues detection error:', e)
+    }
+
     const actionItems = {
       visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },
       plShortfall: { count: plShortfallCount, names: plShortfallNames },
@@ -1295,6 +1409,7 @@ export async function GET(request: NextRequest) {
       pendingHomeLeaveApprovalCount,
       pendingGrantsCount,
       carryOverExpiringCount,
+      quietIssues: { count: quietIssues.length, items: quietIssues },
     }
 
     // ダッシュボードは「今の状況と要対応」に特化（詳細分析は原価・収益管理ページへ）
