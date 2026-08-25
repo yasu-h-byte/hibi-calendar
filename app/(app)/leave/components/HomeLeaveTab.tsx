@@ -314,22 +314,55 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           {/* 期間の変更履歴（2026-08-25 追加）。
               当初いつまでの予定だったかが分からず活動ログを直接調べる必要があったため、
               カードから直接追えるようにした。変更が無いレコードには何も出さない。 */}
-          {(h.changeHistory || []).length > 0 && (
-            <div className="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-gray-600">
-              <div className="text-[10px] text-gray-400 mb-1">期間の変更履歴</div>
-              <div className="space-y-0.5">
-                {(h.changeHistory || []).map((ch, i) => (
-                  <div key={i} className="text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
-                    <span className="text-gray-400">{ch.at.slice(0, 10)}</span>
-                    <span className="mx-1.5">{ch.field === 'endDate' ? '最終帰国日' : ch.field === 'startDate' ? '出発日' : ch.field}</span>
-                    <span className="line-through text-gray-400">{fmt(ch.before)}</span>
-                    <span className="mx-1">→</span>
-                    <span className="font-medium text-gray-700 dark:text-gray-200">{fmt(ch.after)}</span>
+          {(() => {
+            const hist = h.changeHistory || []
+            // 申請〜承認の経緯。既にデータは保存されていたが画面に出していなかった。
+            // 承認がどこで止まっているかも見えるようになる。
+            const flow: { label: string; at: string }[] = []
+            if (h.requestedAt) flow.push({ label: '本人が申請', at: h.requestedAt })
+            if (h.foremanApprovedAt) flow.push({ label: '職長が承認', at: h.foremanApprovedAt })
+            if (h.reviewedAt) flow.push({ label: '最終承認', at: h.reviewedAt })
+            if (hist.length === 0 && flow.length === 0) return null
+            return (
+              <div className="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-gray-600 space-y-2">
+                {flow.length > 0 && (
+                  <div>
+                    <div className="text-[10px] text-gray-400 mb-1">申請の経緯</div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                      {flow.map((f, i) => (
+                        <span key={i} className="flex items-center gap-1.5">
+                          {i > 0 && <span className="text-gray-300">→</span>}
+                          <span>{f.at.slice(0, 10)}</span>
+                          <span className="text-gray-600 dark:text-gray-300">{f.label}</span>
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                )}
+                {hist.length > 0 && (
+                  <div>
+                    <div className="text-[10px] text-gray-400 mb-1">期間の変更履歴</div>
+                    <div className="space-y-1">
+                      {hist.map((ch, i) => (
+                        <div key={i} className="text-[11px] text-gray-500 dark:text-gray-400">
+                          <div className="tabular-nums">
+                            <span className="text-gray-400">{ch.at.slice(0, 10)}</span>
+                            <span className="mx-1.5">{ch.field === 'endDate' ? '最終帰国日' : ch.field === 'startDate' ? '出発日' : ch.field}</span>
+                            <span className="line-through text-gray-400">{fmt(ch.before)}</span>
+                            <span className="mx-1">→</span>
+                            <span className="font-medium text-gray-700 dark:text-gray-200">{fmt(ch.after)}</span>
+                          </div>
+                          {ch.note && (
+                            <div className="text-[10px] text-gray-400 pl-1 mt-0.5">{ch.note}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            )
+          })()}
           <div className="text-xs text-gray-500 dark:text-gray-400">
             {h.reason}{h.note && <span className="ml-2">- {h.note}</span>}
           </div>

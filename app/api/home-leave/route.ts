@@ -53,6 +53,12 @@ interface HomeLeaveRecord {
   status?: string
   returnUndecided?: boolean  // 2026-07-18: 復帰未定（番兵終了日）フラグ
   changeHistory?: HomeLeaveChange[]  // 2026-08-25: 期間の変更履歴
+  // 2026-08-25: 申請〜承認の経緯。既に保存されていたが画面に出していなかった
+  requestedAt?: string
+  foremanApprovedAt?: string
+  foremanApprovedBy?: number
+  reviewedAt?: string
+  reviewedBy?: number
 }
 
 export async function GET(request: NextRequest) {
@@ -80,6 +86,11 @@ export async function GET(request: NextRequest) {
           ...(v.note ? { note: v.note } : {}),
           ...(v.returnUndecided || v.endDate >= HOME_LEAVE_SENTINEL_END ? { returnUndecided: true } : {}),
           ...(Array.isArray(v.changeHistory) && v.changeHistory.length > 0 ? { changeHistory: v.changeHistory } : {}),
+          ...(v.requestedAt ? { requestedAt: v.requestedAt } : {}),
+          ...(v.foremanApprovedAt ? { foremanApprovedAt: v.foremanApprovedAt } : {}),
+          ...(v.foremanApprovedBy !== undefined ? { foremanApprovedBy: v.foremanApprovedBy } : {}),
+          ...(v.reviewedAt ? { reviewedAt: v.reviewedAt } : {}),
+          ...(v.reviewedBy !== undefined ? { reviewedBy: v.reviewedBy } : {}),
           createdAt: v.requestedAt || v.createdAt || '',
         })
       })
