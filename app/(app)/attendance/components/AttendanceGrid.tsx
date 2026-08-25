@@ -62,12 +62,18 @@ export default function AttendanceGrid({
   const nightDaySet = useMemo(() => new Set(nightDays || []), [nightDays])
   const isNightDay = (day: number) => nightDaySet.has(day)
 
-  // 「現場都合休みの日」の判定（2026-08-25）。
-  // 待機中セルの 0.6補 ボタンを未入力の全日程に出すと過剰なので、対象日を絞る。
-  //   ① カレンダー上は出勤日（休日なら補償の対象外）
-  //   ② その日に誰か1人でも補償日(0.6)が入っている
-  // 現場都合休みは現場全体が休むので、1人目を入れれば残りの人に出る。
-  // 1人目は「その日に誰も出勤していない」ことを条件に出す（下の noWorkDay）。
+  // 「現場都合休みの日」の判定（2026-08-25 / 2026-08-26 条件見直し）。
+  // 待機中セルの 0.6補 ボタンを未入力の全日程に出すと過剰なので対象日を絞る。
+  //
+  // ⚠️ カレンダー休日(off/holiday)を除外してはいけない。
+  //    「カレンダー上は休みだが補償を付ける」運用が現に存在する
+  //    （IHI 8/1: calendarDays='off' なのに2人へ補償日を入力済み）。
+  //    当初その条件を入れたため 8/1 にボタンが出ず、逆に入力できなくなっていた。
+  //
+  // 絞り込みは「その日に出勤者がいるか」だけで行う:
+  //   ・誰かに補償日が入っている日   → 現場都合休み確定。残りの人にも出す
+  //   ・まだ誰も出勤していない日     → 現場都合休みの可能性あり。1人目を入れられる
+  //   ・既に誰かが出勤している日     → 現場は動いているので出さない（過剰表示の抑制）
   const compDayInfo = useMemo(() => {
     const hasComp = new Set<number>()
     const hasWork = new Set<number>()
@@ -375,10 +381,8 @@ export default function AttendanceGrid({
                                 isLocked={isLocked}
                                 onStatusChange={onTimeStatusChange}
                                 showCompButton={
-                                  // カレンダー休日は補償の対象外
-                                  calDay !== 'off' && calDay !== 'holiday' &&
                                   // 既に誰かに補償が入っている日 or その日まだ誰も出勤していない日
-                                  (compDayInfo.hasComp.has(d.day) || !compDayInfo.hasWork.has(d.day))
+                                  compDayInfo.hasComp.has(d.day) || !compDayInfo.hasWork.has(d.day)
                                 }
                               />
                             )
