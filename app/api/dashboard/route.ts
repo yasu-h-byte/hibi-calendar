@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs, doc, getDoc } from '@/lib/fsdb'
 import {
@@ -1300,6 +1300,7 @@ export async function GET(request: NextRequest) {
     }
     interface QuietIssue {
       kind: 'nightUnregistered' | 'legalShortfall' | 'earlyReturn' | 'staleAttendance'
+        | 'wageRevisionPending'
       workerName: string
       detail: string
       href: string
@@ -1354,6 +1355,35 @@ export async function GET(request: NextRequest) {
             detail: `帰国申請より早く復帰（${w.hkEarlyReturnFirstDate} から出勤）。申請の最終帰国日を直す`,
             href: '/leave?tab=homeleave',
           })
+        }
+      }
+
+      // 賃金改定の予定が実施日を過ぎているのに人員マスタへ未反映
+      //
+      // ⚠️ 個人の賃金額を含むため **代表のみ** に返す。ダッシュボードは職長も見るので、
+      //    ここで絞らないと他者の時給が漏れる。閲覧先の /wage-analysis も代表専用。
+      // 追加の Firestore 読み取りは発生しない（main は取得済み、認証は60秒キャッシュ）。
+      {
+        const auth = await getApiAuthUser(request)
+        const isOwner = auth.authorized && (auth.actor === 0 || auth.actor === 'super-admin')
+        if (isOwner) {
+          const { SCHEDULED_WAGE_CHANGES } = await import('@/lib/wage-curve')
+          const todayIso = todayJstIso()
+          for (const c of SCHEDULED_WAGE_CHANGES) {
+            if (c.effective > todayIso) continue  // まだ実施日前
+            for (const [idStr, planned] of Object.entries(c.targets)) {
+              const wm = main.workers.find(x => x.id === Number(idStr))
+              if (!wm || wm.retired) continue
+              const cur = Number((wm as { hourlyRate?: number }).hourlyRate || 0)
+              if (cur >= planned) continue  // 反映済み
+              quietIssues.push({
+                kind: 'wageRevisionPending',
+                workerName: wm.name,
+                detail: `${c.effective} の${c.label}が未反映（¥${cur.toLocaleString()} → ¥${planned.toLocaleString()}）`,
+                href: '/wage-analysis',
+              })
+            }
+          }
         }
       }
 

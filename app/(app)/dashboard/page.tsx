@@ -68,6 +68,7 @@ interface HomeLongLeaveItem {
 
 interface QuietIssue {
   kind: 'nightUnregistered' | 'legalShortfall' | 'earlyReturn' | 'staleAttendance'
+    | 'wageRevisionPending'
   workerName: string
   detail: string
   href: string
@@ -634,6 +635,7 @@ export default function DashboardPage() {
           legalShortfall: '法定割れ',
           earlyReturn: '帰国申請',
           staleAttendance: '出面未入力',
+          wageRevisionPending: '賃金改定未反映',
         }
 
         return (
