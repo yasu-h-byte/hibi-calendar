@@ -22,6 +22,14 @@ export interface Worker {
    * 既定: 未設定（false 相当）= 5月以降は新ルール
    */
   useOldRules?: boolean
+  /**
+   * 日本人社員の号俸制（docs/wage-system.md）の現在位置。
+   * jpGrade: '1G'〜'6G' または 'doko'（土工）。jpStep: 号数(1〜60)。
+   * 年1回の改定でシステムが更新する。外国人スタッフ（visaType≠'none'）は対象外。
+   * 詳細ロジックは lib/jp-wage.ts。
+   */
+  jpGrade?: string
+  jpStep?: number
 }
 
 /** 現場の勤務時間設定（始業・終業・休憩構成） */
