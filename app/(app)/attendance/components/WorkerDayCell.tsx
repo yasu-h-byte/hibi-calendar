@@ -76,7 +76,7 @@ export function HomeLeaveCell({ colBg, cellWidth }: { colBg: string; cellWidth: 
  * 許可していたので、塞いでいたのは画面だけだった。
  */
 export function WaitingCell({
-  colBg, cellWidth, wId, day, isLocked, onStatusChange,
+  colBg, cellWidth, wId, day, isLocked, onStatusChange, showCompButton,
 }: {
   colBg: string
   cellWidth: number
@@ -84,8 +84,11 @@ export function WaitingCell({
   day?: number
   isLocked?: boolean
   onStatusChange?: (workerId: string, day: number, value: string) => void
+  /** 現場都合休みの可能性がある日だけ true。未入力の全日程に出すと過剰なため絞る */
+  showCompButton?: boolean
 }) {
-  const canAddComp = !isLocked && !!onStatusChange && wId !== undefined && day !== undefined
+  const canAddComp = showCompButton !== false
+    && !isLocked && !!onStatusChange && wId !== undefined && day !== undefined
   return (
     <td
       className={`group px-0 py-0 border-l border-gray-100 ${colBg}`}
@@ -242,17 +245,17 @@ export function TimeBasedCell({
               </span>
             </div>
           </>
-        ) : statusVal !== '' ? (
+        ) : statusVal !== '' && statusVal !== 'C' ? (
+          /* 補償日(C)はここでラベルを出さない。プルダウン自体が「0.6補」と表示しており
+             二重になるため（他ステータスは 有→有給 / 休→休 のように略称と正式名で使い分けている）。 */
           <div className="text-[11px] text-center py-0.5">
             <span className={`rounded-md px-1 font-bold ${
               statusVal === 'P' ? 'text-violet-700 bg-violet-50 dark:bg-violet-900/30 dark:text-violet-300'
               : statusVal === 'E' ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300'
               : statusVal === 'R' ? 'text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-300'
-              : statusVal === 'C' ? 'text-orange-700 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-300'
               : 'text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400'
             }`}>
-              {statusVal === 'P' ? '有給' : statusVal === 'E' ? '試験' : statusVal === 'R' ? '休'
-                : statusVal === 'C' ? '0.6補' : '現休'}
+              {statusVal === 'P' ? '有給' : statusVal === 'E' ? '試験' : statusVal === 'R' ? '休' : '現休'}
             </span>
           </div>
         ) : null}
