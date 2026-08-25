@@ -32,6 +32,15 @@ function prevDateIso(iso: string): string {
   return dt.toISOString().slice(0, 10)
 }
 
+/** 期間の変更履歴（当初の予定日を後から追えるようにする） */
+interface HomeLeaveChange {
+  field: string
+  before: string
+  after: string
+  at: string
+  by: string
+}
+
 interface HomeLeaveRecord {
   id: string
   workerId: number
@@ -43,6 +52,7 @@ interface HomeLeaveRecord {
   createdAt: string
   status?: string
   returnUndecided?: boolean  // 2026-07-18: 復帰未定（番兵終了日）フラグ
+  changeHistory?: HomeLeaveChange[]  // 2026-08-25: 期間の変更履歴
 }
 
 export async function GET(request: NextRequest) {
@@ -69,6 +79,7 @@ export async function GET(request: NextRequest) {
           reason: v.reason || '一時帰国',
           ...(v.note ? { note: v.note } : {}),
           ...(v.returnUndecided || v.endDate >= HOME_LEAVE_SENTINEL_END ? { returnUndecided: true } : {}),
+          ...(Array.isArray(v.changeHistory) && v.changeHistory.length > 0 ? { changeHistory: v.changeHistory } : {}),
           createdAt: v.requestedAt || v.createdAt || '',
         })
       })
@@ -218,6 +229,25 @@ export async function POST(request: NextRequest) {
       }
       if (reason !== undefined) updates.reason = reason
       if (note !== undefined) updates.note = note
+
+      // ── 変更履歴をレコード自体に残す（2026-08-25 追加）──
+      // 「当初の帰国予定日は何日だったか」を後から画面で追えるようにする。
+      // 活動ログ(activity)にも記録は残るが、出面編集のログに埋もれて実用的に辿れない
+      // （実際 200件遡っても出面編集で埋まっていた）。有給の adjustmentHistory と同じ方式で
+      // レコードに持たせ、休暇管理画面のカードから直接見られるようにする。
+      const changeEntries: { field: string; before: string; after: string; at: string; by: string }[] = []
+      const nowIso = new Date().toISOString()
+      const actorLabel = 'admin'
+      if (updates.startDate !== undefined && updates.startDate !== current.startDate) {
+        changeEntries.push({ field: 'startDate', before: String(current.startDate), after: String(updates.startDate), at: nowIso, by: actorLabel })
+      }
+      if (updates.endDate !== undefined && updates.endDate !== current.endDate) {
+        changeEntries.push({ field: 'endDate', before: String(current.endDate), after: String(updates.endDate), at: nowIso, by: actorLabel })
+      }
+      if (changeEntries.length > 0) {
+        const prevHistory = Array.isArray(current.changeHistory) ? current.changeHistory : []
+        ;(updates as Record<string, unknown>).changeHistory = [...prevHistory, ...changeEntries]
+      }
 
       if (Object.keys(updates).length > 0) {
         await updateDoc(ref, updates)

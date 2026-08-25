@@ -39,6 +39,8 @@ export interface HomeLeave {
   id: string; workerId: number; workerName: string
   startDate: string; endDate: string; reason: string; note?: string; createdAt: string
   returnUndecided?: boolean  // 2026-07-18: 復帰未定（番兵終了日）。endDate は番兵値が入る
+  // 2026-08-25: 期間の変更履歴。「当初の帰国予定日は何日だったか」を画面から追えるようにする
+  changeHistory?: { field: string; before: string; after: string; at: string; by: string }[]
 }
 
 // 半自動付与（未付与検知）

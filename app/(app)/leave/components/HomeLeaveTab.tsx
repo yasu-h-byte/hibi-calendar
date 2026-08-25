@@ -311,6 +311,25 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           ) : (
             <div>{fmt(h.startDate)} 〜 {fmt(h.endDate)} <span className="text-gray-400 ml-2">({totalDays}日間)</span></div>
           )}
+          {/* 期間の変更履歴（2026-08-25 追加）。
+              当初いつまでの予定だったかが分からず活動ログを直接調べる必要があったため、
+              カードから直接追えるようにした。変更が無いレコードには何も出さない。 */}
+          {(h.changeHistory || []).length > 0 && (
+            <div className="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-gray-600">
+              <div className="text-[10px] text-gray-400 mb-1">期間の変更履歴</div>
+              <div className="space-y-0.5">
+                {(h.changeHistory || []).map((ch, i) => (
+                  <div key={i} className="text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                    <span className="text-gray-400">{ch.at.slice(0, 10)}</span>
+                    <span className="mx-1.5">{ch.field === 'endDate' ? '最終帰国日' : ch.field === 'startDate' ? '出発日' : ch.field}</span>
+                    <span className="line-through text-gray-400">{fmt(ch.before)}</span>
+                    <span className="mx-1">→</span>
+                    <span className="font-medium text-gray-700 dark:text-gray-200">{fmt(ch.after)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="text-xs text-gray-500 dark:text-gray-400">
             {h.reason}{h.note && <span className="ml-2">- {h.note}</span>}
           </div>
