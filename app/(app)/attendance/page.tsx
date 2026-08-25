@@ -466,6 +466,10 @@ export default function AttendanceGridPage() {
         entry = { w: 0, r: 1, s: 'admin' }
       } else if (value === 'H') {
         entry = { w: 0, h: 1, s: 'admin' }
+      } else if (value === 'C') {
+        // 現場都合休みの休業補償（2026-08-25）。w=0.6 が補償日の実体。
+        // スタッフは打刻しないので管理者・職長・事業責任者が代理入力する。
+        entry = { w: 0.6, s: 'admin' }
       } else if (value === 'W') {
         // 出勤: デフォルト時間で初期化
         entry = { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
@@ -485,6 +489,7 @@ export default function AttendanceGridPage() {
     else if (value === 'E') entry = { w: 0, exam: 1, s: 'admin' }
     else if (value === 'R') entry = { w: 0, r: 1, s: 'admin' }
     else if (value === 'H') entry = { w: 0, h: 1, s: 'admin' }
+    else if (value === 'C') entry = { w: 0.6, s: 'admin' }
     else if (value === 'W') entry = { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
 
     scheduleSave(`w-${workerId}-${day}`, {

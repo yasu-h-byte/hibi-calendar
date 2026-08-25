@@ -108,6 +108,19 @@ describe('セル表示値の判定', () => {
     expect(getWorkValue({ w: 0, p: 1, hk: 1 })).toBe('P')
   })
 
+  // 2026-08-25 追加: 現場都合休みの休業補償(0.6)をベトナム人セルで代理入力できるようにした。
+  // 従来は w>0 を一律 'W'（出勤）と返していたため、0.6 が「出」と表示され区別できず、
+  // 急な現場休みの日に誰も補償を付けられなかった。
+  it('getTimeStatusValue: 補償日(0.6)は出勤ではなく C を返す', () => {
+    expect(getTimeStatusValue({ w: 0.6 })).toBe('C')
+    // 通常の出勤・半日は従来どおり W のまま
+    expect(getTimeStatusValue({ w: 1 })).toBe('W')
+    expect(getTimeStatusValue({ w: 0.5 })).toBe('W')
+    // 明示ステータスは補償日より優先（残骸データ対策の優先順は維持）
+    expect(getTimeStatusValue({ w: 0.6, p: 1 })).toBe('P')
+    expect(getTimeStatusValue({ w: 0.6, hk: 1 })).toBe('HK')
+  })
+
   it('getTimeStatusValue: 優先順 P > E > R > H > HK > W', () => {
     expect(getTimeStatusValue({ w: 1, st: '08:00', et: '17:00' })).toBe('W')
     expect(getTimeStatusValue({ w: 0, r: 1 })).toBe('R')

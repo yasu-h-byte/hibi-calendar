@@ -126,6 +126,10 @@ export function getTimeStatusValue(entry: AttEntry | null | undefined): string {
   if (entry.r && entry.r > 0) return 'R'
   if (entry.h && entry.h > 0) return 'H'
   if (entry.hk && entry.hk > 0) return 'HK'
+  // 補償日(0.6)は「出勤」ではなく独立したステータス（2026-08-25）。
+  // w>0 で一律 'W' を返していたため、ベトナム人セルで 0.6 が「出」と表示され
+  // 区別できなかった。現場都合休みの代理入力を可能にするため分離する。
+  if (entry.w === 0.6) return 'C'
   if (entry.w > 0) return 'W'
   return ''
 }

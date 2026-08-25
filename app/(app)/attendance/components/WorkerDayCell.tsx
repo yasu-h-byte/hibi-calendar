@@ -65,16 +65,46 @@ export function HomeLeaveCell({ colBg, cellWidth }: { colBg: string; cellWidth: 
   )
 }
 
-/** ベトナム人スタッフのスマホ入力待ちセル */
-export function WaitingCell({ colBg, cellWidth }: { colBg: string; cellWidth: number }) {
+/**
+ * ベトナム人スタッフのスマホ入力待ちセル。
+ *
+ * 出勤の新規入力は本人のスマホからという原則は維持しつつ、
+ * **現場都合休みの休業補償(0.6)だけは代理入力できる**ようにしている（2026-08-25）。
+ * 急に現場が休みになった日はスタッフが打刻しないため、この日は永久に「待機中」のままで、
+ * 管理者・職長・事業責任者の誰も補償を付けられない状態だった。
+ * サーバ側のガード(canAdminEditEntry)は以前から w=0.6 を代理入力の例外として
+ * 許可していたので、塞いでいたのは画面だけだった。
+ */
+export function WaitingCell({
+  colBg, cellWidth, wId, day, isLocked, onStatusChange,
+}: {
+  colBg: string
+  cellWidth: number
+  wId?: string
+  day?: number
+  isLocked?: boolean
+  onStatusChange?: (workerId: string, day: number, value: string) => void
+}) {
+  const canAddComp = !isLocked && !!onStatusChange && wId !== undefined && day !== undefined
   return (
     <td
-      className={`px-0 py-0 border-l border-gray-100 ${colBg}`}
+      className={`group px-0 py-0 border-l border-gray-100 ${colBg}`}
       style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
-      title="スタッフ本人のスマホ入力待ち"
+      title={canAddComp ? 'スタッフ本人のスマホ入力待ち（現場都合休みは 0.6補 を代理入力できます）' : 'スタッフ本人のスマホ入力待ち'}
     >
-      <div className="flex items-center justify-center h-full py-2 opacity-50">
-        <span className="text-[10px] text-gray-400">📱待機中</span>
+      <div className="flex flex-col items-center justify-center h-full py-1.5 gap-1">
+        <span className="text-[10px] text-gray-400 opacity-50">📱待機中</span>
+        {canAddComp && (
+          <button
+            type="button"
+            onClick={() => onStatusChange!(wId!, day!, 'C')}
+            className="text-[9px] font-bold text-orange-600 border border-orange-300 rounded px-1 py-0.5
+                       opacity-0 group-hover:opacity-100 transition-opacity hover:bg-orange-50
+                       dark:text-orange-300 dark:border-orange-700 dark:hover:bg-orange-900/30"
+          >
+            0.6補
+          </button>
+        )}
       </div>
     </td>
   )
@@ -148,6 +178,7 @@ export function TimeBasedCell({
             ${statusVal === 'E' ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300' : ''}
             ${statusVal === 'R' ? 'text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-300' : ''}
             ${statusVal === 'H' ? 'text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400' : ''}
+            ${statusVal === 'C' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-300' : ''}
             ${statusVal === '' ? 'text-gray-300 font-normal bg-transparent border-b border-gray-100' : ''}
           `}
         >
@@ -157,6 +188,9 @@ export function TimeBasedCell({
           <option value="E">試</option>
           <option value="R">休</option>
           <option value="H">現</option>
+          {/* 現場都合休みの休業補償（2026-08-25 追加）。
+              スタッフは打刻しないので、管理者・職長・事業責任者が代理入力する。 */}
+          <option value="C">0.6補</option>
         </select>
 
         {isWorking && entry?.nonly ? (
@@ -214,9 +248,11 @@ export function TimeBasedCell({
               statusVal === 'P' ? 'text-violet-700 bg-violet-50 dark:bg-violet-900/30 dark:text-violet-300'
               : statusVal === 'E' ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300'
               : statusVal === 'R' ? 'text-red-700 bg-red-50 dark:bg-red-900/30 dark:text-red-300'
+              : statusVal === 'C' ? 'text-orange-700 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-300'
               : 'text-gray-500 bg-gray-100 dark:bg-gray-700 dark:text-gray-400'
             }`}>
-              {statusVal === 'P' ? '有給' : statusVal === 'E' ? '試験' : statusVal === 'R' ? '休' : '現休'}
+              {statusVal === 'P' ? '有給' : statusVal === 'E' ? '試験' : statusVal === 'R' ? '休'
+                : statusVal === 'C' ? '0.6補' : '現休'}
             </span>
           </div>
         ) : null}

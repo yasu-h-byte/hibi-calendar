@@ -345,7 +345,17 @@ export default function AttendanceGrid({
                           // ベトナム人スタッフのスマホ入力待ち: admin/foreman は触れない (2026-05-08)
                           // entry が無い場合はスタッフ本人のスマホからの入力を待つ
                           if (!entry) {
-                            return <WaitingCell key={d.day} colBg={colBg} cellWidth={cellWidth} />
+                            return (
+                              <WaitingCell
+                                key={d.day}
+                                colBg={colBg}
+                                cellWidth={cellWidth}
+                                wId={wId}
+                                day={d.day}
+                                isLocked={isLocked}
+                                onStatusChange={onTimeStatusChange}
+                              />
+                            )
                           }
                           return (
                             <TimeBasedCell
