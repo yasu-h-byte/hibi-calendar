@@ -1,33 +1,90 @@
 /**
- * 2026年度の新体系への移行データ（現員10名）。
+ * 日本人社員の号俸制への移行データ（2026年度）。
  *
- * docs/wage-system.md 第12節の移行表。移行方式は「現在の日額に近い号へ
- * 読み替える（日額は下げない）」。現員の jpGrade / jpStep を初期投入する
- * ためのシード。移行前日額から stepForDaily() で読み替えた結果と一致する。
+ * docs/wage-system.md 第12節の移行表。移行方式は
+ * **「現在の日額に近い号へ読み替える（日額は下げない）」**。
+ * 移行そのものでは昇給させず、以後の改定で昇給幅を乗せていく。
  *
- * ⚠️ workerId は本番の人員マスタに合わせて確定させること（下記は氏名ベースの暫定）。
- *    投入スクリプトで氏名→id を解決してから jpGrade/jpStep をセットする。
+ * 現員の `jpGrade` / `jpStep` を人員マスタへ初期投入するためのシード。
+ * `step` は `stepForDaily(grade, fromDaily)` の結果と一致する（テストで担保）。
+ *
+ * ## 2026-08-25 改訂
+ * 初版は現員と食い違っていたため、人員マスタ（demmen/main）と突き合わせて作り直した。
+ * - **梶原 章雄 を追加**（初版に欠落。日額28,000円で役員を除く最高額）
+ *   等級は 4G 上級班長 + 移籍調整給とし、処遇は固定（2026-08-25 代表決定）
+ * - 藤野 伸一（2026-02-28 退職）・山崎 春奈（該当者は白戸 春奈・2025-11-30 退職）を削除
+ * - 大川 愛志の移行前日額を 23,550 → 23,850 に修正（マスタの実額）
+ * - 濱上 祥太郎は入社1年目で月給制のため、日給への読み替えを保留
+ * - 氏名ベースだった対応付けを workerId に確定（初版の TODO を解消）
  */
 import type { JpGrade } from './jp-wage'
 
 export interface MigrationSeed {
+  /** 人員マスタの workerId */
+  id: number
   name: string
+  /** 役割にもとづく等級 */
   grade: JpGrade
-  /** 移行前日額（読み替えの入力）。 */
-  fromDaily: number
-  /** 読み替え後の号（fromDaily を stepForDaily で読み替えた値と一致する）。 */
-  step: number
+  /**
+   * 移行前日額（読み替えの入力）。
+   * 入社1年目で月給制の者は null（日給月給制へ移る時点で確定させる）。
+   */
+  fromDaily: number | null
+  /** 読み替え後の号。fromDaily が null の間は null。 */
+  step: number | null
+  /**
+   * 号俸表の額では足りない分を埋める調整給（円/日）。
+   *
+   * 号俸表は**役割**の対価を表す。役割では説明できない処遇（事業承継・移籍にあたって
+   * 前職の条件を引き継いだ場合など）は、等級に無理やり押し込まず、ここに分けて持つ。
+   * 押し込むと「役割を担っていない人が最上位等級にいる」状態になり、制度が壊れる。
+   *
+   * 調整給も賃金なので割増賃金の基礎に算入される（労基法37条5項の除外項目に当たらない）。
+   * したがって内訳を分けても残業単価は変わらず、給与計算への影響はない。
+   */
+  adjustment?: number
+  /**
+   * 昇給の対象外。本人の合意のうえで処遇を固定する場合に true。
+   * 評価は行うが号は動かさない（賞与等で反映する）。
+   */
+  fixed?: boolean
+  /** 確定前に確認が要る点 */
+  note?: string
 }
 
 export const MIGRATION_2026: MigrationSeed[] = [
-  { name: '大川 愛志', grade: '6G', fromDaily: 23550, step: 22 },
-  { name: '白戸 寛之', grade: '6G', fromDaily: 21300, step: 13 },
-  { name: '日比 大介', grade: '5G', fromDaily: 17780, step: 7 },
-  { name: '入江 隆太', grade: '4G', fromDaily: 19700, step: 29 },
-  { name: '倉本 隆次', grade: '4G', fromDaily: 19100, step: 25 },
-  { name: '藤野 伸一', grade: '4G', fromDaily: 18620, step: 22 },
-  { name: '本田 文人', grade: '3G', fromDaily: 17655, step: 33 },
-  { name: '山崎 春奈', grade: '2G', fromDaily: 12225, step: 6 },
-  { name: '濱上 祥太郎', grade: '1G', fromDaily: 11235, step: 6 },
-  { name: '新山 正昭', grade: 'doko', fromDaily: 12300, step: 5 },
+  {
+    // 元は当社の下請けの社長。社員数名を連れて移籍してきた経緯があり、
+    // 日額28,000円は役割の対価ではなく**移籍時の条件を引き継いだもの**。
+    // 役割としては上級班長なので 4G の上限（60号 23,575円）に置き、
+    // 超過分 4,425円は移籍調整給として分けて持つ。
+    //
+    // 昇給は行わない（本人合意済み・年齢的な事情。2026-08-25 代表決定）。
+    // 4G の上限に置いてあるため、号俸表の構造として自動的に上がらない。
+    id: 10, name: '梶原 章雄', grade: '4G', fromDaily: 28000, step: 60,
+    adjustment: 4425, fixed: true,
+    note: '移籍調整給つき・処遇固定。23,575 + 4,425 = 28,000',
+  },
+  {
+    id: 3, name: '大川 愛志', grade: '6G', fromDaily: 23850, step: 23,
+    note: '2025年10月から山岡建設工業へ出向中。出向は等級に影響しない前提',
+  },
+  { id: 2,  name: '白戸 寛之',   grade: '6G',   fromDaily: 21300, step: 13 },
+  { id: 7,  name: '入江 隆太',   grade: '4G',   fromDaily: 19700, step: 29 },
+  { id: 5,  name: '倉本 隆次',   grade: '4G',   fromDaily: 19100, step: 25 },
+  { id: 6,  name: '日比 大介',   grade: '5G',   fromDaily: 17780, step: 7  },
+  { id: 4,  name: '本田 文人',   grade: '3G',   fromDaily: 17655, step: 33 },
+  { id: 11, name: '新山 正昭',   grade: 'doko', fromDaily: 12300, step: 5  },
+  {
+    id: 12, name: '濱上 祥太郎', grade: '1G', fromDaily: null, step: null,
+    // 2026-06-01 入社。第13節により入社1年目は月給制（235,000円/月）。
+    // 日給月給制への移行は2年目（2027年6月）で、そのときに号を確定させる。
+    note: '入社1年目は月給制。日給への読み替えは2027年6月',
+  },
 ]
+
+/**
+ * 移行の対象外。
+ * - 日比 政仁（id:1）… 役員。7G は年俸制で号俸表を設けない
+ */
+export const MIGRATION_EXCLUDED = [1] as const
