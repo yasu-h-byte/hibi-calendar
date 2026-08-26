@@ -36,6 +36,8 @@ interface RawSite {
   rates?: RatePeriod[]
   workSchedule?: SiteWorkScheduleRaw | null
   commute?: import('@/types').SiteCommuteData
+  siteType?: 'direct' | 'support'
+  client?: string
 }
 
 async function getMainDoc() {
@@ -69,6 +71,12 @@ export async function GET(request: NextRequest) {
       dokoRate: s.dokoRate || 0,
       rates: s.rates || [],
       workSchedule: s.workSchedule || null,  // 未設定はnull (クライアント側でDEFAULTを補完)
+      // ⚠️ 保存されるフィールドは必ずここにも足すこと（許可リスト）。
+      //   commute/siteType/client が漏れていて「保存したのに開き直すと消えて見える →
+      //   その状態で再保存すると空値で上書き消去」が起きた（2026-08-26 修正）
+      commute: s.commute || undefined,
+      siteType: s.siteType || undefined,
+      client: s.client ?? undefined,
     }))
 
     const assign: Record<string, { workers: number[]; subcons: string[]; subconRates?: Record<string, { rate: number; otRate: number }> }> = {}
@@ -107,6 +115,26 @@ export async function GET(request: NextRequest) {
     console.error('Failed to fetch sites:', error)
     return NextResponse.json({ error: 'Failed to fetch sites' }, { status: 500 })
   }
+}
+
+/**
+ * 通勤時間（commute）の更新を安全に取り込む。
+ * - 凍結済み（judgedMin あり）は変更不可: 非課税の根拠となる客観基準のため、
+ *   既存値をそのまま維持する（UI も編集不可にしているが、サーバでも保証する）
+ * - 空の commute（住所なし・サンプルなし）で既存の実データを上書きしない:
+ *   読み出し漏れ等でフォームが空のまま保存されても消えないようにする多層防御
+ * - サンプルは空配列で既存分を消さない（自動測定の蓄積を守る）
+ */
+function mergeCommute(
+  existing: import('@/types').SiteCommuteData | undefined,
+  incoming: import('@/types').SiteCommuteData | null | undefined,
+): import('@/types').SiteCommuteData | undefined {
+  if (existing?.judgedMin !== undefined) return existing
+  if (!incoming) return existing
+  const incomingEmpty = !incoming.address && !(incoming.samples?.length) && incoming.judgedMin === undefined
+  if (incomingEmpty) return existing
+  const samples = (incoming.samples?.length ? incoming.samples : existing?.samples) || []
+  return { ...incoming, samples }
 }
 
 export async function POST(request: NextRequest) {
@@ -175,7 +203,8 @@ export async function POST(request: NextRequest) {
         ...(dokoRate !== undefined && { dokoRate: Number(dokoRate) }),
         ...(rates !== undefined && { rates }),
         ...(workSchedule !== undefined && { workSchedule: workSchedule as SiteWorkScheduleRaw | null }),
-        ...(commute !== undefined && { commute }),
+        // commute は素通しにしない（凍結後は不変・古い空フォームからの上書き消去を防ぐ）
+        ...(commute !== undefined && { commute: mergeCommute(updated[idx].commute, commute) }),
         ...(siteType !== undefined && { siteType }),
         ...(client !== undefined && { client }),
       }
