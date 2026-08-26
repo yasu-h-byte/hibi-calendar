@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc } from '@/lib/fsdb'
+import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
 import { updateWorker } from '@/lib/worker-crud'
 import {
@@ -99,8 +99,14 @@ export async function GET(request: NextRequest) {
     asOf: effective,
     profitRatePercent: docData.profitRatePercent ?? 0,
   })
+  // 給料表の推移グラフに使うので、履歴も一緒に返す
+  const histSnap = await getDocs(collection(db, 'jpWageHistory'))
+  const history: Record<string, { year: number; baseAnnual: number }[]> = {}
+  histSnap.forEach(d => { history[d.id] = (d.data() as { points?: { year: number; baseAnnual: number }[] }).points || [] })
+
   return NextResponse.json({
     effective,
+    history,
     status: docData.status,
     profitRatePercent: docData.profitRatePercent,
     appliedAt: docData.appliedAt ?? null,
@@ -198,6 +204,19 @@ export async function POST(request: NextRequest) {
       rate: r.newTotal!,   // 号俸額＋調整給。日額は下げない
     } as Record<string, unknown>)
     applied.push(`${r.member.name}: ${r.member.currentStep}号→${r.result.newStep}号 ¥${r.oldTotal}→¥${r.newTotal}`)
+  }
+
+  // 確定した年度のベース年収を履歴へ積む（次回以降の推移グラフの元になる）
+  const fiscalYear = Number(effective.slice(0, 4)) + 1
+  for (const r of revision.rows) {
+    if (r.newTotal == null) continue
+    const ref = doc(db, 'jpWageHistory', String(r.member.id))
+    const cur = await getDoc(ref)
+    const points = (cur.exists() ? ((cur.data() as { points?: { year: number; baseAnnual: number }[] }).points || []) : [])
+      .filter(p => p.year !== fiscalYear)
+    points.push({ year: fiscalYear, baseAnnual: r.newTotal * 310 })
+    points.sort((a, b) => a.year - b.year)
+    await setDoc(ref, { workerId: r.member.id, points, updatedAt: new Date().toISOString() })
   }
 
   await setDoc(doc(db, 'jpWageRevisions', effective), {
