@@ -166,8 +166,8 @@ export interface WorkerAllowanceMonthly {
   driveAllowanceYen: number
   /** 運転した便数（行き・帰り合計） */
   driveLegs: number
-  /** 明細: 現場ごとの内訳 */
-  bySite: Record<string, { days: number; yen: number }>
+  /** 明細: 現場ごとの内訳（yen=日当、driveYen=運転手当。現場別原価への配賦に使う） */
+  bySite: Record<string, { days: number; yen: number; driveYen?: number }>
 }
 
 /**
@@ -242,6 +242,9 @@ export function calcMonthlyAllowances(
         const v = get(wid)
         v.driveLegs += 1
         v.driveAllowanceYen += yenPerLeg
+        const bs = v.bySite[sid] || { days: 0, yen: 0 }
+        bs.driveYen = (bs.driveYen || 0) + yenPerLeg
+        v.bySite[sid] = bs
       }
     }
   }

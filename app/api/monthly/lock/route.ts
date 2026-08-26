@@ -3,7 +3,7 @@ import { getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
-import { getMainData, getAttData, computeMonthly, parseDKey } from '@/lib/compute'
+import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, parseDKey } from '@/lib/compute'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
@@ -96,7 +96,8 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
     const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
     const calendarDaysMap = await loadCalendarDaysForYm(ym)
     const homeLeaves = await getAllActiveHomeLeaves()
-    const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
+    const allowances = await loadMonthlyAllowances(main, ym, att.d, att.drv)
+    const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
     const targets = result.workers.filter(w => orgKey === 'all' ? true : ((isHfu(w.org) ? 'hfu' : 'hibi') === orgKey))
     const v = validatePayrolls(targets as unknown as PayrollSnapshot[])
     if (v.critical > 0) {
@@ -141,7 +142,9 @@ async function savePayrollSnapshot(ym: string, orgKey: 'hibi' | 'hfu' | 'all', l
   const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
   const calendarDaysMap = await loadCalendarDaysForYm(ym)
   const homeLeaves = await getAllActiveHomeLeaves()
-  const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
+  // 締めスナップショットも画面(/api/monthly)と同じく手当込みで凍結する
+  const allowances = await loadMonthlyAllowances(main, ym, att.d, att.drv)
+  const result = computeMonthly(main, att.d, att.sd, ym, main.workDays[ym] || 0, hasCal ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
   const isHfu = (org?: string) => org === 'hfu' || org === 'HFU'
   const workers = result.workers
     .filter(w => orgKey === 'all' ? true : (orgKey === 'hfu' ? isHfu(w.org) : !isHfu(w.org)))

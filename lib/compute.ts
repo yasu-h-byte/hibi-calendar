@@ -8,6 +8,10 @@ import { ymKey, isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isHiredByMonth } from './workers'
 import { isTobiGroup, isDokoGroup } from './jobs'
 import type { HomeLeaveEntry } from './homeLeave'
+import {
+  ALLOWANCE_FROM_YM, calcMonthlyAllowances, dailyAllowanceYen, isAllowanceEligibleDay,
+  type SiteCommute, type WorkerAllowanceMonthly,
+} from './allowance'
 
 // ────────────────────────────────────────
 //  円未満の端数処理（2026-06: 労基の過少支払い指摘を踏まえ「支給は切上・控除は切捨」で統一）
@@ -228,6 +232,86 @@ export function parseDKey(k: string): { sid: string; wid: string; ym: string; da
   const wid = p[p.length - 3]
   const sid = p.slice(0, p.length - 3).join('_')
   return { sid, wid, ym, day }
+}
+
+// ────────────────────────────────────────
+//  遠方現場日当・運転手当（2026-10-01 施行）のデータ読み込み（2026-08 追加）
+//  規則そのものは lib/allowance.ts。ここは Firestore からの材料集めと
+//  computeMonthly へ渡す形への組み立てだけを行う。
+// ────────────────────────────────────────
+
+/** 'YYYYMM' を n ヶ月進める */
+function addYm(ym: string, n: number): string {
+  const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6)) - 1 + n
+  const yy = y + Math.floor(m / 12); const mm = ((m % 12) + 12) % 12 + 1
+  return `${yy}${String(mm).padStart(2, '0')}`
+}
+
+/**
+ * 長期従事の起算日導出に読む履歴月数の上限。
+ *
+ * 逓減は満24ヶ月で0円になるため、27ヶ月より前の履歴は結果を変えない:
+ * - 27ヶ月窓の最古の対象日が24ヶ月以上前 → どのみち率0（真の起算日がさらに古くても同じ）
+ * - 窓内の最古が24ヶ月未満 → 30日以上の空白（リセット）が窓内で検出できている
+ * よって読み取りをここで打ち切っても計算結果は不変（クォータ対策）。
+ */
+const TENURE_HISTORY_MONTHS = 27
+
+/**
+ * 手当（遠方現場日当・運転手当）の月次計算に必要な材料を読み込んで計算する。
+ *
+ * - **施行前の月（ALLOWANCE_FROM_YM 未満）は undefined を返す** — 給与計算のゲートはここ。
+ *   過去月の給与・原価はゴールデンマスターどおり1円も変わらない
+ * - 判定値は現場マスタの凍結値（site.commute.judgedMin）。未凍結の遠方現場は日当0円のまま
+ *   になるので、凍結後にその月を開き直せば自動で反映される（月次は毎回導出）
+ * - 日当の対象外（役員）は job==='yakuin' から導出
+ * - 長期従事の起算日は施行月〜前月の出面から毎回導出（カウンタ非保存。出面の事後修正と
+ *   常に一致させるため）
+ *
+ * @param attD 対象月の出面（呼び出し元が既に読んでいる att.d を渡す＝当月の再読なし）
+ * @param drv  対象月の運転記録（att.drv）
+ */
+export async function loadMonthlyAllowances(
+  main: MainData,
+  ym: string,
+  attD: Record<string, AttendanceEntry>,
+  drv: Record<string, { am?: number[]; pm?: number[] }> | undefined,
+): Promise<Map<number, WorkerAllowanceMonthly> | undefined> {
+  if (ym < ALLOWANCE_FROM_YM) return undefined
+
+  const commutes: Record<string, SiteCommute> = {}
+  for (const s of main.sites) {
+    const j = s.commute?.judgedMin
+    if (typeof j === 'number') commutes[s.id] = { judgedMin: j }
+  }
+  const excludeIds = main.workers.filter(w => w.job === 'yakuin').map(w => w.id)
+
+  // 履歴月（施行月〜前月・上限つき）。施行初月は空＝追加読み取りゼロ
+  const histStart = addYm(ym, -TENURE_HISTORY_MONTHS) > ALLOWANCE_FROM_YM
+    ? addYm(ym, -TENURE_HISTORY_MONTHS) : ALLOWANCE_FROM_YM
+  const histMonths: string[] = []
+  for (let m = histStart; m < ym; m = addYm(m, 1)) histMonths.push(m)
+  const histAtts = histMonths.length
+    ? await Promise.all(histMonths.map(m => getAttData(m).then(a => a.d)))
+    : []
+
+  // `${wid}_${sid}` → 対象日（ISO・昇順）。当月分も含める（当月内の逓減切替に対応）
+  const eligibleHistory: Record<string, string[]> = {}
+  const push = (d: Record<string, AttendanceEntry>) => {
+    for (const [key, entry] of Object.entries(d)) {
+      const pk = parseDKey(key)
+      if (dailyAllowanceYen(commutes[pk.sid]?.judgedMin) <= 0) continue
+      if (!isAllowanceEligibleDay(entry)) continue
+      const iso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
+      const k = `${pk.wid}_${pk.sid}`
+      ;(eligibleHistory[k] = eligibleHistory[k] || []).push(iso)
+    }
+  }
+  for (const d of histAtts) push(d)
+  push(attD)
+  for (const k of Object.keys(eligibleHistory)) eligibleHistory[k].sort()
+
+  return calcMonthlyAllowances(attD, ym, commutes, drv || {}, excludeIds, eligibleHistory)
 }
 
 // ────────────────────────────────────────
@@ -995,6 +1079,13 @@ export interface WorkerMonthly {
   //     → nonStatutoryOTHours = 17.5h、手当 = 時給×17.5h
   nonStatutoryOTHours?: number    // 所定外労働時間（法定内・割増なし）
   nonStatutoryOTAllowance?: number // 所定外労働手当 = 時給 × nonStatutoryOTHours
+  // ── 2026-08 追加: 遠方現場日当・運転手当（2026-10-01 施行、lib/allowance.ts が規則の唯一の置き場） ──
+  //   netPay / salaryNetPay / totalCost には加算済みの状態で返る（内訳表示用にここへも分けて持つ）。
+  //   施行前の月（ALLOWANCE_FROM_YM 未満）ではフィールド自体が付かない。
+  siteAllowance?: number   // 遠方現場日当（非課税・実費弁償）。長期従事の逓減適用後
+  allowanceDays?: number   // 日当の対象日数
+  driveAllowance?: number  // 運転手当（課税。割増賃金基礎への算入は社労士レビュー後）
+  driveLegs?: number       // 運転した便数（行き・帰り合計）
 }
 
 export interface SubconMonthly {
@@ -1040,6 +1131,9 @@ export function computeMonthly(
   //   homeLongLeave を getAllActiveHomeLeaves() で取得して渡す。未指定時は従来動作
   //   （帰国中日の除外なし）。在籍日数按分に織り込み、帰国中日を無給かつ非欠勤扱いにする。
   homeLeaves?: HomeLeaveEntry[],
+  // 2026-08 追加: 遠方現場日当・運転手当（loadMonthlyAllowances() の戻り値をそのまま渡す）。
+  //   施行前の月は loadMonthlyAllowances が undefined を返すので、過去月の計算は変わらない。
+  allowances?: Map<number, WorkerAllowanceMonthly>,
 ): {
   workers: WorkerMonthly[]
   subcons: SubconMonthly[]
@@ -1777,6 +1871,35 @@ export function computeMonthly(
       wm.netPay = wm.totalCost - wm.absentCost
     } else {
       wm.netPay = wm.totalCost
+    }
+  }
+
+  // ── 遠方現場日当・運転手当（2026-10-01 施行）──
+  //   ここ（実支給への原価統一ブロックの前）で netPay / salaryNetPay に加算しておくと、
+  //   「原価＝実支給額」のスタッフ（ベトナム人・日本人完全月給）は後続ブロックが
+  //   手当込みの支給額をそのまま原価・現場配賦に反映する。
+  //   日本人日給月給（原価＝エントリ積み上げ）だけは、ここで原価と現場別原価にも直接積む。
+  if (allowances) {
+    for (const [wid, al] of allowances) {
+      const wm = workerMap.get(wid)
+      if (!wm) continue
+      const total = al.siteAllowanceYen + al.driveAllowanceYen
+      if (total <= 0) continue
+      wm.siteAllowance = al.siteAllowanceYen
+      wm.allowanceDays = al.allowanceDays
+      wm.driveAllowance = al.driveAllowanceYen
+      wm.driveLegs = al.driveLegs
+      wm.netPay += total
+      if (wm.salaryNetPay !== undefined) wm.salaryNetPay += total
+      const usePayrollCost = (wm.visa !== 'none') || (!!wm.salary && wm.salary > 0)
+      if (!usePayrollCost) {
+        wm.cost += total
+        wm.totalCost += total
+        for (const [sid, bs] of Object.entries(al.bySite)) {
+          const site = siteMap.get(sid)
+          if (site) site.cost += bs.yen + (bs.driveYen || 0)
+        }
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
-import { getMainData, getAttData, computeMonthly, getSubconRate } from '@/lib/compute'
+import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, getSubconRate } from '@/lib/compute'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
 import {
@@ -46,11 +46,13 @@ export async function GET(request: NextRequest) {
     // For types that need attendance data
     let attD: Record<string, import('@/types').AttendanceEntry> = {}
     let attSD: Record<string, { n: number; on: number }> = {}
+    let attDrv: Record<string, { am?: number[]; pm?: number[] }> | undefined
 
     if (type !== 'pl' && ymStr) {
       const att = await getAttData(ymStr)
       attD = att.d
       attSD = att.sd
+      attDrv = att.drv
     }
 
     const activeSites = main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name }))
@@ -157,7 +159,8 @@ export async function GET(request: NextRequest) {
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
         const calendarDaysMap = await loadCalendarDaysMap()
         const homeLeaves = await getAllActiveHomeLeaves()
-        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
+        const allowances = await loadMonthlyAllowances(main, ymStr, attD, attDrv)
+        const result = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
         const siteNames: Record<string, string> = {}
         for (const s of main.sites) siteNames[s.id] = s.name
 
@@ -225,7 +228,8 @@ export async function GET(request: NextRequest) {
         const hasCalendar = Object.keys(siteWorkDaysMap).length > 0
         const calendarDaysMap = await loadCalendarDaysMap()
         const homeLeaves = await getAllActiveHomeLeaves()
-        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
+        const allowances = await loadMonthlyAllowances(main, ymStr, attD, attDrv)
+        const monthlyResult = computeMonthly(main, attD, attSD, ymStr, prescribedDays, hasCalendar ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
         const monthSiteNames: Record<string, string> = {}
         for (const s of main.sites) monthSiteNames[s.id] = s.name
 
