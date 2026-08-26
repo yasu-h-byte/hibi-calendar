@@ -607,3 +607,68 @@ describe('賞与の点数表（A案・6等級）', () => {
     expect(pts[5] / pts[0]).toBeCloseTo(5.6, 1)
   })
 })
+
+describe('代表加算（裁量での昇給）', () => {
+  const base = { asOf: '2026-10-01' }
+  const m = (o: Partial<RosterMember>): RosterMember => ({
+    id: 1, name: 'テスト', grade: '3G', currentStep: 30,
+    birthDate: '1990-01-01', hyogo: 'A', ...o,
+  })
+
+  it('号を直接動かせる', () => {
+    const r = computeRevision({ grade: '3G', currentStep: 30, hyogo: 'A', age: 35, discretionaryPitch: 5 })
+    expect(r.discretionaryPitch).toBe(5)
+    expect(r.totalPitch).toBe(9)     // A(4) + 代表(5)
+    expect(r.newStep).toBe(39)
+  })
+
+  it('上限は設けない（60号のキャップだけが効く）', () => {
+    const r = computeRevision({ grade: '3G', currentStep: 55, hyogo: 'A', age: 35, discretionaryPitch: 20 })
+    expect(r.newStep).toBe(60)
+  })
+
+  it('マイナスも入るが、合計は0で止まる（降給しない）', () => {
+    const r = computeRevision({ grade: '3G', currentStep: 30, hyogo: 'A', age: 35, discretionaryPitch: -10 })
+    expect(r.totalPitch).toBe(0)
+    expect(r.newDaily).toBe(r.oldDaily)
+  })
+
+  it('特別調整とは別枠で積む（規則の分と裁量の分を混ぜない）', () => {
+    const r = computeRevision({
+      grade: '3G', currentStep: 30, hyogo: 'A', age: 35,
+      specialKeys: ['qualification'], discretionaryPitch: 3,
+    })
+    expect(r.specialPitch).toBe(1)         // 事由リスト（±3上限）
+    expect(r.discretionaryPitch).toBe(3)   // 裁量（上限なし）
+    expect(r.totalPitch).toBe(8)
+  })
+
+  it('特別調整の±3上限は代表加算に及ばない', () => {
+    const r = computeRevision({
+      grade: '3G', currentStep: 30, hyogo: 'A', age: 35,
+      specialKeys: ['qualification', 'newsite', 'offsite'], discretionaryPitch: 5,
+    })
+    expect(r.specialPitch).toBe(3)         // 3件で+3。上限に張り付く
+    expect(r.discretionaryPitch).toBe(5)   // こちらは別枠なので削られない
+  })
+
+  it('理由が無いと計算しない', () => {
+    const no = computeRosterRevision([m({ discretionaryPitch: 4 })], base)
+    expect(no.rows[0].status).toBe('blocked')
+    expect(no.rows[0].blockers.some(b => b.includes('代表加算'))).toBe(true)
+
+    const ok = computeRosterRevision([m({ discretionaryPitch: 4, discretionaryReason: '独断で加算' })], base)
+    expect(ok.rows[0].status).toBe('ok')
+    expect(ok.rows[0].result!.discretionaryPitch).toBe(4)
+  })
+
+  it('0なら理由は要らない', () => {
+    expect(computeRosterRevision([m({ discretionaryPitch: 0 })], base).rows[0].status).toBe('ok')
+    expect(computeRosterRevision([m({})], base).rows[0].status).toBe('ok')
+  })
+
+  it('小数は切り捨てる（号は整数）', () => {
+    const r = computeRevision({ grade: '3G', currentStep: 30, hyogo: 'A', age: 35, discretionaryPitch: 2.9 })
+    expect(r.discretionaryPitch).toBe(2)
+  })
+})

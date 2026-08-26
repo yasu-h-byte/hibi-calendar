@@ -32,6 +32,10 @@ interface Entry {
   forceInclude?: boolean
   /** 給料表の右下に載せる本人向けのコメント */
   comment?: string
+  /** 代表加算（裁量で足し引きする号数） */
+  discretionaryPitch?: number
+  /** 代表加算の理由。0以外なら必須 */
+  discretionaryReason?: string
 }
 interface RevisionDoc {
   effective: string
@@ -80,6 +84,8 @@ async function buildRoster(effective: string, entries: Record<string, Entry>) {
         hyogo: e.hyogo || 'A',
         reason: e.reason,
         specialKeys: e.specialKeys,
+        discretionaryPitch: e.discretionaryPitch,
+        discretionaryReason: e.discretionaryReason,
         forceInclude: e.forceInclude,
         fixed: seed?.fixed,
         adjustment: seed?.adjustment,
@@ -171,11 +177,15 @@ export async function POST(request: NextRequest) {
     newStep: r.result?.newStep ?? r.member.currentStep,
     hyogo: r.member.hyogo,
     reason: r.member.reason ?? null,
+    discretionaryReason: r.member.discretionaryReason ?? null,
     comment: docData.entries[String(r.member.id)]?.comment ?? null,
     birthDate: r.member.birthDate,
     hireDate: r.member.hireDate ?? null,
     pitches: r.result
-      ? { hyogo: r.result.hyogoPitch, age: r.result.agePitch, special: r.result.specialPitch, total: r.result.totalPitch }
+      ? {
+          hyogo: r.result.hyogoPitch, age: r.result.agePitch, special: r.result.specialPitch,
+          discretionary: r.result.discretionaryPitch, total: r.result.totalPitch,
+        }
       : null,
     oldDaily: r.oldTotal,
     newDaily: r.newTotal,

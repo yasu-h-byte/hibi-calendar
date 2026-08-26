@@ -30,10 +30,11 @@ interface Row {
     birthDate: string | null; hireDate?: string | null
     hyogo: Hyogo; reason?: string; specialKeys?: string[]
     fixed?: boolean; adjustment?: number; forceInclude?: boolean
+    discretionaryPitch?: number; discretionaryReason?: string
   }
   status: RosterStatus
   result: null | {
-    hyogoPitch: number; agePitch: number; specialPitch: number
+    hyogoPitch: number; agePitch: number; specialPitch: number; discretionaryPitch: number
     totalPitch: number; newStep: number; raisePerDay: number; upRate: number
   }
   oldTotal: number | null
@@ -47,7 +48,10 @@ interface Payload {
   status: 'draft' | 'applied'
   profitRatePercent: number | null
   appliedAt: string | null
-  entries: Record<string, { hyogo: Hyogo; reason?: string; specialKeys?: string[]; forceInclude?: boolean; comment?: string }>
+  entries: Record<string, {
+    hyogo: Hyogo; reason?: string; specialKeys?: string[]; forceInclude?: boolean; comment?: string
+    discretionaryPitch?: number; discretionaryReason?: string
+  }>
   revision: {
     rows: Row[]
     balance: { counts: Record<Hyogo, number>; needB: number; needC: number; ok: boolean; messages: string[] }
@@ -330,13 +334,19 @@ export default function RevisionPanel() {
                         onClick={() => setOpenSpecial(openSpecial === m.id ? null : m.id)}
                         disabled={!editable}
                         className={`text-xs px-2 py-1 rounded-lg border transition disabled:opacity-60 ${
-                          (e.specialKeys?.length ?? 0) > 0
+                          (e.specialKeys?.length ?? 0) > 0 || (e.discretionaryPitch ?? 0) !== 0
                             ? 'border-hibi-navy text-hibi-navy font-bold dark:border-blue-400 dark:text-blue-300'
                             : 'border-gray-300 text-gray-400 dark:border-gray-600'}`}
                       >
-                        {(e.specialKeys?.length ?? 0) > 0
-                          ? `${signedPitch(specialSum(e.specialKeys!, data.meta.specialReasons))}（${e.specialKeys!.length}件）`
-                          : 'なし'}
+                        {(() => {
+                          const sp = specialSum(e.specialKeys ?? [], data.meta.specialReasons)
+                          const dp = e.discretionaryPitch ?? 0
+                          if (sp === 0 && dp === 0) return 'なし'
+                          const parts = []
+                          if (sp !== 0) parts.push(`特${signedPitch(sp)}`)
+                          if (dp !== 0) parts.push(`代${signedPitch(dp)}`)
+                          return parts.join(' ')
+                        })()}
                       </button>
                     )}
                   </td>
@@ -345,6 +355,7 @@ export default function RevisionPanel() {
                     {r.result ? (
                       <span className="text-xs tabular-nums text-gray-600 dark:text-gray-300">
                         評{signedPitch(r.result.hyogoPitch)} 齢{signedPitch(r.result.agePitch)} 特{signedPitch(r.result.specialPitch)}
+                        {r.result.discretionaryPitch !== 0 && <b className="text-hibi-navy dark:text-blue-300"> 代{signedPitch(r.result.discretionaryPitch)}</b>}
                         <b className="ml-1.5 text-hibi-navy dark:text-blue-300">= {r.result.totalPitch}</b>
                       </span>
                     ) : <span className="text-[11px] text-gray-400">{r.blockers.join(' / ') || '—'}</span>}
@@ -403,6 +414,46 @@ export default function RevisionPanel() {
                           </label>
                         )
                       })}
+                    </div>
+
+                    {/* 代表加算。事由リストに当てはまらないものを、裁量で直接動かす。
+                        規則で決まる特別調整と混ぜないよう別枠にし、理由を必須にしている。 */}
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                      <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                        <b className="text-sm">代表加算</b>
+                        <span className="text-[11px] text-gray-500">
+                          事由リストに当てはまらない分を、代表の判断で直接動かします（上限なし）
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-start gap-2">
+                        <div>
+                          <input
+                            type="number" step={1} disabled={busy || applied}
+                            value={e.discretionaryPitch ?? 0}
+                            onChange={ev => setEntry(m.id, { discretionaryPitch: Number(ev.target.value) || 0 })}
+                            className="w-20 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-lg px-2 py-1.5 text-sm tabular-nums"
+                          />
+                          <span className="text-xs text-gray-500 ml-1">号</span>
+                        </div>
+                        <div className="flex-1 min-w-[220px]">
+                          <input
+                            type="text" disabled={busy || applied}
+                            defaultValue={e.discretionaryReason || ''}
+                            placeholder={(e.discretionaryPitch ?? 0) !== 0 ? '理由（必須）' : '理由'}
+                            onBlur={ev => { if (ev.target.value !== (e.discretionaryReason || '')) setEntry(m.id, { discretionaryReason: ev.target.value }) }}
+                            className={`w-full border rounded-lg px-2 py-1.5 text-xs dark:bg-gray-800 ${
+                              (e.discretionaryPitch ?? 0) !== 0 && !e.discretionaryReason?.trim()
+                                ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
+                                : 'border-gray-300 dark:border-gray-600'}`}
+                          />
+                        </div>
+                      </div>
+                      {(e.discretionaryPitch ?? 0) !== 0 && (
+                        <p className="text-[11px] text-gray-500 mt-1.5">
+                          号を {signedPitch(e.discretionaryPitch!)} 動かします。
+                          <b>理由は給料表と監査証跡に残ります。</b>翌年の改定でも参照されます。
+                        </p>
+                      )}
                     </div>
                   </td>
                 </tr>

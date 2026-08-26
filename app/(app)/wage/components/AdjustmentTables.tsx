@@ -32,7 +32,7 @@ export default function AdjustmentTables() {
       <div className="bg-hibi-navy/5 dark:bg-blue-900/20 rounded-xl border border-hibi-navy/20 dark:border-blue-800 p-4">
         <div className="text-sm font-bold mb-1">改定額の決まり方</div>
         <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
-          合計ピッチ ＝ <b>昇給評価</b> ＋ <b>年齢調整</b> ＋ <b>特別調整</b><br />
+          合計ピッチ ＝ <b>昇給評価</b> ＋ <b>年齢調整</b> ＋ <b>特別調整</b> ＋ <b>代表加算</b><br />
           新しい号 ＝ 現在の号 ＋ 合計ピッチ（60号が上限）。<b>合計がマイナスでも 0 まで</b>で、降給は行いません。
         </p>
       </div>
@@ -85,6 +85,15 @@ export default function AdjustmentTables() {
             ))}
           </tbody>
         </table>
+      </Card>
+
+      <Card title="④ 代表加算" note="事由リストに当てはまらない分を、代表の判断で直接動かす。上限なし。理由の記録が必須。">
+        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+          特別調整（③）が「事由が決まっていて誰が計算しても同じ結果になるもの」なのに対し、
+          代表加算は<b>その時の判断</b>です。混ぜると規則で決まった分と裁量で足した分の区別がつかなくなり、
+          翌年に説明できなくなるため、別枠にしています。<br />
+          入力すると<b>給料表の「代表加算」欄と監査証跡に理由が残ります。</b>
+        </p>
       </Card>
 
       <section className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4">

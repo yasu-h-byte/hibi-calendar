@@ -240,12 +240,23 @@ export interface RevisionInput {
   hyogo: Hyogo
   age: number
   specialKeys?: string[]
+  /**
+   * 代表加算。事由リストに当てはまらないものを、代表の判断で直接足し引きする号数。
+   *
+   * 特別調整（SPECIAL_REASONS・±3上限）とは別枠にしている。あちらは事由が決まっていて
+   * 誰が計算しても同じ結果になるもの、こちらは**その時の判断**。混ぜると、
+   * 規則で決まった分と裁量で足した分の区別がつかなくなり、翌年の説明ができない。
+   * 上限は設けないが、理由の記録を必須にする（呼び出し側で検査）。
+   */
+  discretionaryPitch?: number
 }
 
 export interface RevisionResult {
   hyogoPitch: number
   agePitch: number
   specialPitch: number
+  /** 代表加算（裁量分） */
+  discretionaryPitch: number
   totalPitch: number          // 合計（マイナスは0にクランプ＝降給なし）
   newStep: number
   oldDaily: number
@@ -256,20 +267,21 @@ export interface RevisionResult {
 }
 
 /**
- * 改定の計算。合計ピッチ = 評語 + 年齢 + 特別。
+ * 改定の計算。合計ピッチ = 評語 + 年齢 + 特別 + 代表加算。
  * 合計がマイナスなら0（降給なし）。新号 = 現号 + 合計（60でキャップ）。
  */
 export function computeRevision(input: RevisionInput): RevisionResult {
   const hyogoPitch = HYOGO_PITCH[input.hyogo]
   const agePitch = ageAdjustment(input.age, input.grade)
   const specialPitch = specialAdjustment(input.specialKeys ?? [])
-  const rawTotal = hyogoPitch + agePitch + specialPitch
+  const discretionaryPitch = Math.trunc(input.discretionaryPitch ?? 0)
+  const rawTotal = hyogoPitch + agePitch + specialPitch + discretionaryPitch
   const totalPitch = Math.max(0, rawTotal)
   const newStep = Math.min(MAX_STEP, input.currentStep + totalPitch)
   const oldDaily = dailyForStep(input.grade, input.currentStep)
   const newDaily = dailyForStep(input.grade, newStep)
   return {
-    hyogoPitch, agePitch, specialPitch, totalPitch, newStep,
+    hyogoPitch, agePitch, specialPitch, discretionaryPitch, totalPitch, newStep,
     oldDaily, newDaily,
     raisePerDay: newDaily - oldDaily,
     newBaseAnnual: baseAnnual(newDaily),
@@ -446,6 +458,10 @@ export interface RosterMember {
   /** S以上・B以下は理由が必須（第5節） */
   reason?: string
   specialKeys?: string[]
+  /** 代表加算（裁量で足し引きする号数）。0以外なら理由が必須 */
+  discretionaryPitch?: number
+  /** 代表加算の理由 */
+  discretionaryReason?: string
   /** 処遇固定。号を動かさない */
   fixed?: boolean
   /** 号俸額に上乗せする調整給（移籍調整給など） */
@@ -528,6 +544,10 @@ export function computeRosterRevision(
     if (m.birthDate === null) blockers.push('生年月日が未登録（年齢調整が出せない）')
     if ((m.hyogo === 'SS' || m.hyogo === 'S' || m.hyogo === 'B' || m.hyogo === 'C')
       && !m.reason?.trim()) blockers.push(`${m.hyogo}評価には理由の記録が必要`)
+    // 裁量で動かすものほど、なぜそうしたかが残っていないと翌年に説明できない
+    if ((m.discretionaryPitch ?? 0) !== 0 && !m.discretionaryReason?.trim()) {
+      blockers.push('代表加算には理由の記録が必要')
+    }
 
     if (blockers.length > 0) {
       return { member: m, status: 'blocked', result: null, oldTotal: cur, newTotal: null, tenureMonths, blockers }
@@ -539,6 +559,7 @@ export function computeRosterRevision(
       hyogo: m.hyogo,
       age: ageOn(m.birthDate!, opts.asOf),
       specialKeys: m.specialKeys,
+      discretionaryPitch: m.discretionaryPitch,
     })
     return {
       member: m, status: 'ok', result,
