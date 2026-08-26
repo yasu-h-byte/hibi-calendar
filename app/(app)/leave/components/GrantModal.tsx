@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { calcGrantMonthFromHire, calcLegalPL } from '@/lib/leave-utils'
-import { calcLastUsableDayIso } from '@/lib/date-utils'
+import { calcLastUsableDayIso, todayJstIso } from '@/lib/date-utils'
 import { PLWorker } from '../types'
 
 // 有給付与モーダル
@@ -26,7 +26,7 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
     if (grantForm.workerId) {
       const w = workers.find(w => w.id === Number(grantForm.workerId))
       if (w?.hireDate) {
-        const grantDate = grantForm.grantDate || new Date().toISOString().split('T')[0]
+        const grantDate = grantForm.grantDate || todayJstIso()   // UTC日付だとJST早朝に前日の付与になる
         const info = calcLegalPL(w.hireDate, grantDate)
         setLegalPLInfo(info)
         // Auto-fill grant days from legal calculation

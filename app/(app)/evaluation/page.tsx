@@ -544,7 +544,7 @@ export default function EvaluationPage() {
         action: 'create',
         workerId: createWorkerId,
         workerName: worker.name,
-        evaluationDate: new Date().toISOString().slice(0, 10),
+        evaluationDate: todayJstIso(),   // toISOString は UTC 日付。JST 0〜9時に前日になるため不可
       }
       if (createEvaluatorIds.length > 0) {
         requestBody.evaluatorIds = createEvaluatorIds

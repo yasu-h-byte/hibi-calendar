@@ -349,7 +349,7 @@ export default function SitesPage() {
 
   // Rate period helpers
   const addRatePeriod = () => {
-    setFormRates([...formRates, { from: new Date().toISOString().slice(0, 10), tobiRate: 36000, dokoRate: 28000 }])
+    setFormRates([...formRates, { from: todayJstIso(), tobiRate: 36000, dokoRate: 28000 }])
   }
   const removeRatePeriod = (idx: number) => {
     setFormRates(formRates.filter((_, i) => i !== idx))

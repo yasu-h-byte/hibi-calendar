@@ -20,6 +20,7 @@ import EditModal from './components/EditModal'
 import BuyoutModal from './components/BuyoutModal'
 import DesignateModal from './components/DesignateModal'
 import PendingGrantsModal from './components/PendingGrantsModal'
+import { todayJstIso } from '@/lib/date-utils'
 
 export default function LeavePage() {
   const [password, setPassword] = useState('')
@@ -173,7 +174,7 @@ export default function LeavePage() {
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
-            a.download = `有給管理簿_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.xlsx`
+            a.download = `有給管理簿_${todayJstIso().replace(/-/g, '')}.xlsx`
             a.click()
             URL.revokeObjectURL(url)
           }}
