@@ -22,7 +22,7 @@ type Tab = 'table' | 'rules' | 'bonus' | 'revision' | 'docs'
 
 const TABS: { key: Tab; label: string; note: string }[] = [
   { key: 'table', label: '号俸表', note: '等級と号ごとの日額' },
-  { key: 'rules', label: '調整の基準', note: '評価・年齢・利益・特別' },
+  { key: 'rules', label: '調整の基準', note: '評価・年齢・特別' },
   { key: 'bonus', label: '賞与', note: '原資を点数比で配分' },
   { key: 'revision', label: '年次改定', note: '毎年10月1日' },
   { key: 'docs', label: '資料', note: '規程と関連ドキュメント' },
@@ -40,6 +40,8 @@ function WageHub() {
   const params = useSearchParams()
   const tab = (params.get('tab') as Tab) || 'table'
   const [placed, setPlaced] = useState<{ name: string; grade: string; step: number }[]>([])
+  // 等級が未設定の日本人社員。放置すると年次改定が確定できないので、どのタブでも出す
+  const [unset, setUnset] = useState<{ id: number; name: string }[]>([])
 
   // 号俸表に「誰がどこにいるか」を重ねる。制度の話と実際の配置が別画面だと結びつかない
   useEffect(() => {
@@ -51,9 +53,15 @@ function WageHub() {
         .then(r => r.ok ? r.json() : null)
         .then(j => {
           if (!j?.workers) return
-          setPlaced((j.workers as Record<string, unknown>[])
+          const ws = j.workers as Record<string, unknown>[]
+          setPlaced(ws
             .filter(w => !w.retired && w.jpGrade && w.jpStep)
             .map(w => ({ name: String(w.name), grade: String(w.jpGrade), step: Number(w.jpStep) })))
+          setUnset(ws
+            .filter(w => !w.retired && (!w.visaType || w.visaType === 'none'))
+            .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
+            .filter(w => !w.jpGrade || !w.jpStep)
+            .map(w => ({ id: Number(w.id), name: String(w.name) })))
         })
         .catch(() => {})
     } catch { /* 配置が出せなくても表は見られるので握りつぶす */ }
@@ -70,6 +78,26 @@ function WageHub() {
           外国人スタッフは時給制の別制度です。
         </p>
       </header>
+
+      {unset.length > 0 && (
+        <section className="rounded-xl border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-900/20 p-4">
+          <h2 className="text-sm font-bold text-amber-800 dark:text-amber-300 mb-1">
+            等級・号数が未設定 {unset.length}名
+          </h2>
+          <p className="text-xs text-gray-600 dark:text-gray-300 mb-2 leading-relaxed">
+            未設定のままだと年次改定で「要入力」になり、<b>改定を確定できません</b>。
+            人員マスタの編集画面で、等級（役割）を選んでください。日額に見合う号は自動で当たります。
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {unset.map(w => (
+              <a key={w.id} href={`/workers?edit=${w.id}`}
+                className="text-xs px-2.5 py-1 rounded-lg bg-white text-amber-800 border border-amber-300 hover:bg-amber-100 dark:bg-gray-800 dark:text-amber-300 dark:border-amber-800 transition">
+                {w.name}
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 pb-px">
         {TABS.map(t => (

@@ -1,14 +1,17 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { Worker, AuthUser } from '@/types'
 import { fmtYen } from '@/lib/format'
 import { JOB_LABELS } from '@/lib/jobs'
 import { jobBadge } from '@/lib/labels'
 import { JP_SALARY_AVG_MONTHLY_HOURS } from '@/lib/constants'
-import { ageOn, nextRevisionDate } from '@/lib/jp-wage'
+import {
+  ageOn, nextRevisionDate, stepForDaily, dailyForStep, capDaily,
+  GRADE_LABELS, GRADES_IN_ORDER, type JpGrade,
+} from '@/lib/jp-wage'
 import RaiseHistoryTab from './RaiseHistoryTab'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
@@ -37,6 +40,7 @@ const DEFAULT_DISPATCH_TO = '山岡建設工業'
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', birthDate: '', retired: '', salary: '',
+  jpGrade: '', jpStep: '',
   visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '',
   useOldRules: false,
 }
@@ -86,6 +90,7 @@ function visaExpiryStatus(expiry: string): { label: string; cls: string; priorit
 
 export default function WorkersPage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const [workers, setWorkers] = useState<Worker[]>([])
   const [password, setPassword] = useState('')
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
@@ -124,6 +129,16 @@ export default function WorkersPage() {
     if (tabParam === 'raise-history') setMainTab('raise-history')
     else if (tabParam === 'list') setMainTab('list')
   }, [searchParams])
+
+  // URL ?edit=<workerId> で編集モーダルを直接開く（賃金制度の「等級が未設定」から飛ぶ）
+  useEffect(() => {
+    const id = searchParams.get('edit')
+    if (id === null || workers.length === 0) return
+    const w = workers.find(x => x.id === Number(id))
+    if (w) openEdit(w)
+    // 開いたらパラメータを落とす。残すと閉じても再度開いてしまう
+    router.replace('/workers', { scroll: false })
+  }, [searchParams, workers])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAdminOrApprover = authUser?.role === 'admin' || authUser?.role === 'approver'
 
@@ -184,6 +199,8 @@ export default function WorkersPage() {
       otMul: String(w.otMul || 1.25),
       hireDate: w.hireDate || '',
       birthDate: w.birthDate || '',
+      jpGrade: w.jpGrade || '',
+      jpStep: w.jpStep ? String(w.jpStep) : '',
       retired: w.retired || '',
       salary: String(w.salary || ''),
       visaExpiry: w.visaExpiry || '',
@@ -245,8 +262,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId !== null
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -906,6 +923,73 @@ export default function WorkersPage() {
                       </div>
                     </div>
                     <p className="text-[10px] text-gray-400">※ 時給を入力すると日額・月給・残業単価が自動計算されます</p>
+
+                    {/* 号俸制（日本人社員のみ）。等級は役割で決め、号は日額から自動で決まる。
+                        未設定だと年次改定が「要入力」で止まるので、入社時にここで入れておく。 */}
+                    {form.visa === 'none' && (
+                      <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">号俸制（等級・号数）</h4>
+                          {!form.jpGrade && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">未設定</span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">等級（役割）</label>
+                            <select
+                              value={form.jpGrade}
+                              onChange={e => {
+                                const g = e.target.value
+                                // 等級を選んだら、現在の日額に見合う号を自動で当てる
+                                const d = Number(form.rate) || 0
+                                const step = g && d > 0 ? String(stepForDaily(g as JpGrade, d)) : form.jpStep
+                                setForm({ ...form, jpGrade: g, jpStep: g ? step : '' })
+                              }}
+                              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                            >
+                              <option value="">未設定</option>
+                              {GRADES_IN_ORDER.map(g => (
+                                <option key={g} value={g}>{g === 'doko' ? '土工' : g} {GRADE_LABELS[g]}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">号数（1〜60）</label>
+                            <input
+                              type="number" min={1} max={60} value={form.jpStep} disabled={!form.jpGrade}
+                              onChange={e => setForm({ ...form, jpStep: e.target.value })}
+                              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm tabular-nums disabled:opacity-50 focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        {form.jpGrade && form.jpStep && (() => {
+                          const g = form.jpGrade as JpGrade
+                          const st = Math.max(1, Math.min(60, Number(form.jpStep) || 1))
+                          const tableDaily = dailyForStep(g, st)
+                          const actual = Number(form.rate) || 0
+                          const gap = actual - tableDaily
+                          return (
+                            <p className="text-[11px] mt-1.5 leading-relaxed">
+                              <span className="text-gray-500">
+                                号俸表の日額 <b className="tabular-nums">¥{tableDaily.toLocaleString()}</b>
+                                <span className="text-gray-400">（{g === 'doko' ? '土工' : g}の上限 ¥{capDaily(g).toLocaleString()}）</span>
+                              </span>
+                              {actual > 0 && gap !== 0 && (
+                                <span className={gap > 0 ? 'text-amber-700 dark:text-amber-400 ml-1.5' : 'text-gray-400 ml-1.5'}>
+                                  ／ 実際の日額との差 {gap > 0 ? '+' : '−'}¥{Math.abs(gap).toLocaleString()}
+                                  {gap > 0 && '（調整給として持つ分）'}
+                                </span>
+                              )}
+                            </p>
+                          )
+                        })()}
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          等級は<b>役割</b>で決めます（在籍年数では上がりません）。等級を選ぶと、日額に見合う号を自動で当てます。
+                          未設定のままだと年次改定で「要入力」になり、改定を確定できません。
+                        </p>
+                      </div>
+                    )}
 
     {/* 固定月給 — 旧ルール継続者（フン等）専用。誤入力で計算方式が月給制に切り替わるため、
                         useOldRules ON か既に設定済みの場合のみ表示（2026-06-12 監査 Sprint2-C） */}

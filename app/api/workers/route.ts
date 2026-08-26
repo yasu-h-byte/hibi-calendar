@@ -19,7 +19,7 @@ import { doc, setDoc, getDocs, collection } from '@/lib/fsdb'
 //   誤入力すると昇給額が静かに変わる。前後の値を追えるようここに含める。
 // ⚠️ workerId の存在チェックに `!id` を使わないこと。**日比靖仁さんの workerId は 0** で、
 //    falsy のため「id required」で弾かれる（2026-08-26 に発生）。undefined/null/'' で判定する。
-const PAY_FIELDS = ['rate', 'hourlyRate', 'salary', 'otMul', 'useOldRules', 'retired', 'birthDate'] as const
+const PAY_FIELDS = ['rate', 'hourlyRate', 'salary', 'otMul', 'useOldRules', 'retired', 'birthDate', 'jpGrade', 'jpStep'] as const
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -70,6 +70,11 @@ export async function POST(request: NextRequest) {
       // 生年月日は労働者名簿の必須記載事項（労基法107条）。号俸制の年齢調整にも使う
       if (birthDate) {
         (workerData as Record<string, unknown>).birthDate = String(birthDate)
+      }
+      // 号俸制（日本人社員）。未設定だと年次改定が確定できない
+      if (jpGrade) {
+        (workerData as Record<string, unknown>).jpGrade = String(jpGrade)
+        if (jpStep) (workerData as Record<string, unknown>).jpStep = Number(jpStep)
       }
       if (dispatchTo && String(dispatchTo).trim()) {
         (workerData as Record<string, unknown>).dispatchTo = String(dispatchTo).trim()
