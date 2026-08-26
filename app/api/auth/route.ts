@@ -30,6 +30,10 @@ export async function POST(request: NextRequest) {
   }
 
   // 個人パスワードチェック（役員・事務は個別パスワードで直接ログイン）
+  //
+  // ここの `!workerId` は「workerId が送られていない」の意味。日比靖仁さんの
+  // workerId は 0 で falsy だが、下の名前選択リストは職長のみのため 0 は届かない。
+  // リストに役員を載せる変更をするなら、ここを undefined 判定に変えること。
   if (!workerId) {
     const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
     const mainData = mainSnap.exists() ? mainSnap.data() : {}

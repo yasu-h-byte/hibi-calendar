@@ -327,7 +327,8 @@ export async function POST(request: NextRequest) {
     // 期間起点日の設定（佐藤さんが手動設定）
     if (action === 'setPeriodAnchor') {
       const { workerId, anchor } = body
-      if (!workerId) {
+      // ⚠️ `!workerId` にしないこと。日比靖仁さんの workerId は 0 で falsy のため弾かれる
+      if (workerId === undefined || workerId === null || workerId === '') {
         return NextResponse.json({ error: 'Missing workerId' }, { status: 400 })
       }
 

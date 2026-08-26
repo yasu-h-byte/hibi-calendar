@@ -17,6 +17,8 @@ import { doc, setDoc, getDocs, collection } from '@/lib/fsdb'
 //   auditTrail コレクションは削除処理を持たない（労基法115条の3年証跡）。
 //   birthDate は賃金そのものではないが、号俸制の年齢調整（−4〜+3ピッチ）を左右し、
 //   誤入力すると昇給額が静かに変わる。前後の値を追えるようここに含める。
+// ⚠️ workerId の存在チェックに `!id` を使わないこと。**日比靖仁さんの workerId は 0** で、
+//    falsy のため「id required」で弾かれる（2026-08-26 に発生）。undefined/null/'' で判定する。
 const PAY_FIELDS = ['rate', 'hourlyRate', 'salary', 'otMul', 'useOldRules', 'retired', 'birthDate'] as const
 
 export async function GET(request: NextRequest) {
@@ -85,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'update') {
       const { id, ...updates } = body
-      if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+      if (id === undefined || id === null || id === '') return NextResponse.json({ error: 'id required' }, { status: 400 })
       delete updates.action
       if (updates.rate !== undefined) updates.rate = Number(updates.rate) || 0
       if (updates.hourlyRate !== undefined) {
@@ -162,7 +164,7 @@ export async function POST(request: NextRequest) {
 
     if (action === 'delete') {
       const { id } = body
-      if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+      if (id === undefined || id === null || id === '') return NextResponse.json({ error: 'id required' }, { status: 400 })
 
       // 2026-06-12 (監査 Sprint2-C): 出面実績のあるスタッフの削除をブロック。
       //   main.workers から消すと computeMonthly の起点が消え、過去の全月次集計・
@@ -193,14 +195,14 @@ export async function POST(request: NextRequest) {
 
     if (action === 'generateToken') {
       const { id } = body
-      if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+      if (id === undefined || id === null || id === '') return NextResponse.json({ error: 'id required' }, { status: 400 })
       const token = await generateWorkerToken(id)
       return NextResponse.json({ success: true, token })
     }
 
     if (action === 'revokeToken') {
       const { id } = body
-      if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+      if (id === undefined || id === null || id === '') return NextResponse.json({ error: 'id required' }, { status: 400 })
       await revokeWorkerToken(id)
       return NextResponse.json({ success: true })
     }

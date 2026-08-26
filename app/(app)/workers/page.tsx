@@ -94,6 +94,9 @@ export default function WorkersPage() {
   // メインタブ: 'list' (人員一覧) / 'raise-history' (昇給履歴)
   const [mainTab, setMainTab] = useState<'list' | 'raise-history'>('list')
   const [showModal, setShowModal] = useState(false)
+  // ⚠️ 判定は必ず `editId !== null` で行うこと。**日比靖仁さんの workerId は 0** で、
+  //    `if (editId)` だと編集なのに新規追加として扱われる（2026-08-26 に発生。
+  //    自分の生年月日を入れようとしたら「同名スタッフが既にいます」と出た）。
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -198,7 +201,7 @@ export default function WorkersPage() {
     // 新規追加時のみ: 同名スタッフチェック（スペース・全角半角を無視）
     //   2026-05-30 「日比靖仁」が誤って 2 回追加された事案を受けて追加。
     //   全角/半角スペースを除去して比較し、誤ったコピー入力を防ぐ。
-    if (!editId) {
+    if (editId === null) {
       const normalize = (s: string) => s.replace(/[\s　]/g, '').toLowerCase()
       const inputName = normalize(form.name)
       const duplicates = workers.filter(w => normalize(w.name) === inputName)
@@ -214,7 +217,7 @@ export default function WorkersPage() {
 
     // 2026-06-12 (監査 Sprint2-C): 給与に直結するフィールドの変更は確認を挟む。
     //   特に外国人への固定月給の誤入力は計算方式自体が月給制に切り替わるため危険。
-    if (editId) {
+    if (editId !== null) {
       const orig = workers.find(w => w.id === editId)
       if (orig) {
         const diffs: string[] = []
@@ -241,7 +244,7 @@ export default function WorkersPage() {
 
     setSaving(true)
     try {
-      const body = editId
+      const body = editId !== null
         ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
         : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
@@ -649,13 +652,13 @@ export default function WorkersPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto animate-modalIn" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">
-              {editId ? '社員編集' : '社員追加'}
+              {editId !== null ? '社員編集' : '社員追加'}
             </h3>
 
             <div className="space-y-4">
               {/* ── 顔写真（2026-08-03 追加。保存は他項目と独立して即時反映） ──
                   新規追加時は workerId がまだ無いので出さない。先に保存してから登録する。 */}
-              {editId && (
+              {editId !== null && (
                 <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
                   <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">顔写真</h4>
                   <div className="flex items-center gap-4">
@@ -807,7 +810,7 @@ export default function WorkersPage() {
                       </p>
                     )}
                   </div>
-                  {editId && (
+                  {editId !== null && (
                     <div>
                       <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">退職日</label>
                       <div className="flex gap-2">
@@ -1121,7 +1124,7 @@ export default function WorkersPage() {
             )}
 
             {/* Token management (edit only) */}
-            {editId && (() => {
+            {editId !== null && (() => {
               const w = workers.find(x => x.id === editId)
               if (!w) return null
               return w.token ? (
