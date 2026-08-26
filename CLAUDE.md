@@ -21,6 +21,7 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 | [docs/labor-agreements.md](docs/labor-agreements.md) | 労使協定・36協定・就業規則対応表（社労士向け） |
 | [docs/historical-changes.md](docs/historical-changes.md) | 給与計算ルール変更履歴（労基法115条対応） |
 | [docs/paid-leave.md](docs/paid-leave.md) | 有給休暇管理・法定付与・申請フロー・年5日義務 |
+| [docs/allowance.md](docs/allowance.md) | 遠方現場日当・運転手当（2026-10施行・判定値・長期従事逓減） |
 | [docs/attendance.md](docs/attendance.md) | 出面入力・PC/スマホ画面・フッター合計ルール |
 | [docs/ui-design.md](docs/ui-design.md) | UI・デザイン・色分け・言語表示ルール |
 | [docs/firestore.md](docs/firestore.md) | Firestoreデータ構造・コレクション定義 |
