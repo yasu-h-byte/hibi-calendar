@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/commute/measure",
-      "schedule": "0 21 * * *"
+      "schedule": "30 20 * * *"
     },
     {
       "path": "/api/commute/measure",

@@ -1,5 +1,5 @@
 /**
- * 通勤時間の自動測定（Vercel Cron: 朝6:00 JST / 夕17:30 JST）。
+ * 通勤時間の自動測定（Vercel Cron: 朝5:30 JST / 夕17:30 JST）。
  *
  * Google Routes API（交通状況込み）で 清瀬本社⇄現場 の所要時間をその場で測り、
  * 測定中（judgedMin 未凍結）の現場にサンプルとして追記する。
