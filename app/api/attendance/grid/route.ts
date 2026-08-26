@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
         retired: w.retired || undefined,  // 退職日（バッジ表示用）
         // 2026-06-13: 旧契約継続者（フン等）は出面UIをレガシー（日数+残業+0.6補）にするため
         useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
+        canDrive: (w as { canDrive?: boolean }).canDrive,
       }))
 
     const workerEntries: Record<string, Record<number, AttendanceEntry>> = {}

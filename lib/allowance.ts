@@ -122,6 +122,16 @@ export function fullMonthsBetween(fromIso: string, toIso: string): number {
 /** 凍結に必要な最少サンプル日数（朝夕そろった日）。規程の「最初の10営業日」に対応。 */
 export const COMMUTE_SAMPLE_TARGET = 10
 
+/**
+ * 運転者の選択肢に出すか。canDrive が未設定なら「日本人=可／外国人=不可」。
+ * ベトナム人スタッフに運転させることはない（2026-08-27 代表）ため、既定で除外する。
+ */
+export function canDriveDefault(w: { canDrive?: boolean; visaType?: string; visa?: string }): boolean {
+  if (typeof w.canDrive === 'boolean') return w.canDrive
+  const visa = w.visaType ?? w.visa ?? ''
+  return !visa || visa === 'none'
+}
+
 export interface CommuteSampleLike { am?: number; pm?: number }
 
 /**

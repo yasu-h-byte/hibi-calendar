@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -70,6 +70,9 @@ export async function POST(request: NextRequest) {
       // 生年月日は労働者名簿の必須記載事項（労基法107条）。号俸制の年齢調整にも使う
       if (birthDate) {
         (workerData as Record<string, unknown>).birthDate = String(birthDate)
+      }
+      if (typeof canDrive === 'boolean') {
+        (workerData as Record<string, unknown>).canDrive = canDrive
       }
       // 号俸制（日本人社員）。未設定だと年次改定が確定できない
       if (jpGrade) {

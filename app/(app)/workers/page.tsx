@@ -41,6 +41,7 @@ const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', birthDate: '', retired: '', salary: '',
   jpGrade: '', jpStep: '',
+  canDrive: undefined as boolean | undefined,
   visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '',
   useOldRules: false,
 }
@@ -201,6 +202,7 @@ export default function WorkersPage() {
       birthDate: w.birthDate || '',
       jpGrade: w.jpGrade || '',
       jpStep: w.jpStep ? String(w.jpStep) : '',
+      canDrive: w.canDrive,
       retired: w.retired || '',
       salary: String(w.salary || ''),
       visaExpiry: w.visaExpiry || '',
@@ -262,8 +264,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId !== null
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -807,6 +809,21 @@ export default function WorkersPage() {
                     <input type="date" value={form.hireDate} onChange={e => setForm({ ...form, hireDate: e.target.value })}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                   </div>
+                  {/* 運転者の選択肢に出すか。未設定なら日本人=あり／外国人=なし */}
+                  <div className="col-span-2">
+                    <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.canDrive ?? (form.visa === 'none' || !form.visa)}
+                        onChange={e => setForm({ ...form, canDrive: e.target.checked })}
+                      />
+                      社有車を運転する可能性がある（出面の運転者の選択肢に出す）
+                      {form.canDrive === undefined && (
+                        <span className="text-[10px] text-gray-400">（既定: {form.visa === 'none' || !form.visa ? '日本人=あり' : '外国人=なし'}）</span>
+                      )}
+                    </label>
+                  </div>
+
                   {/* 生年月日は労働者名簿の必須記載事項（労基法107条）。
                       日本人社員はさらに号俸制の年齢調整（docs/wage-system.md 第6節）に使う。 */}
                   <div>

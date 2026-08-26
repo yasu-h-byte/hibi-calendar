@@ -23,6 +23,7 @@ import HeaderBar from './components/HeaderBar'
 import AttendanceGrid from './components/AttendanceGrid'
 import NightShiftModal, { NightShiftValue } from './components/NightShiftModal'
 import DriverModal from './components/DriverModal'
+import { canDriveDefault } from '@/lib/allowance'
 
 export default function AttendanceGridPage() {
   const [password, setPassword] = useState('')
@@ -1114,6 +1115,7 @@ export default function AttendanceGridPage() {
         day={driverDay ?? 0}
         siteName={data?.site.name || ''}
         workers={(data?.workers || [])
+          .filter(w => canDriveDefault(w))   // 運転しうる人だけ（未設定なら日本人のみ）
           .filter(w => {
             // その日に出面のある人だけを選択肢に（実働・夜勤。0.6補償や休みは出ない）
             const e = driverDay !== null ? workerEntries[String(w.id)]?.[driverDay] : null

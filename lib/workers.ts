@@ -42,6 +42,7 @@ export async function getWorkers(): Promise<Worker[]> {
     birthDate: (w.birthDate as string) || '',
     jpGrade: (w.jpGrade as string) || undefined,
     jpStep: (w.jpStep as number) || undefined,
+    canDrive: typeof w.canDrive === 'boolean' ? (w.canDrive as boolean) : undefined,
   }))
 
   return workers
