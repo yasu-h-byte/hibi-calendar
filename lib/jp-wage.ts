@@ -500,3 +500,15 @@ export function computeRosterRevision(
     annualCost: raisePerDay * annualDays,
   }
 }
+
+/**
+ * 改定の基準日（毎年10月1日・docs/wage-system.md 第4節）のうち、指定日以後で最も近いもの。
+ *
+ * 年齢調整はこの日の満年齢で決まる。画面に「◯歳」を出すときは必ずこの日を基準にする
+ * （今日の年齢を出すと、10月1日をまたぐ人の表示と実際の改定額が食い違う）。
+ */
+export function nextRevisionDate(todayIso: string): string {
+  const year = Number(todayIso.slice(0, 4))
+  const oct = `${year}-10-01`
+  return todayIso <= oct ? oct : `${year + 1}-10-01`
+}

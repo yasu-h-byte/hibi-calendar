@@ -8,7 +8,7 @@ import { fmtYen } from '@/lib/format'
 import { JOB_LABELS } from '@/lib/jobs'
 import { jobBadge } from '@/lib/labels'
 import { JP_SALARY_AVG_MONTHLY_HOURS } from '@/lib/constants'
-import { ageOn } from '@/lib/jp-wage'
+import { ageOn, nextRevisionDate } from '@/lib/jp-wage'
 import RaiseHistoryTab from './RaiseHistoryTab'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
@@ -39,6 +39,25 @@ const EMPTY_FORM = {
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', birthDate: '', retired: '', salary: '',
   visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '',
   useOldRules: false,
+}
+
+/**
+ * 号俸制の年齢調整の基準日。毎年10月1日で、過ぎたら翌年へ自動で繰り上がる。
+ * 画面に出す「◯歳」は必ずこの日基準（今日の年齢だと改定額と食い違う）。
+ */
+function revisionBaseDate(): string {
+  return nextRevisionDate(currentDateDash())
+}
+
+/** 'YYYY-MM-DD' を '2026年10月1日' 形式にする（先頭の0を落とす）。 */
+function jpDate(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${y}年${Number(m)}月${Number(d)}日`
+}
+
+/** 生年月日の入力が要る人か（外国人スタッフは号俸制の対象外／退職者は不要）。 */
+function needsBirthDate(w: { visaType?: string; retired?: string }): boolean {
+  return !isGaikoku(w.visaType || '') && !w.retired
 }
 
 /** 今日を 'YYYY-MM-DD' で返す（生年月日の未来日入力を防ぐ上限用）。 */
@@ -389,6 +408,31 @@ export default function WorkersPage() {
         ))}
       </div>
 
+      {/* 生年月日の未入力（号俸制の年齢調整に必要）。全員入れば消える。 */}
+      {(() => {
+        const missing = activeWorkers.filter(w => needsBirthDate(w) && !w.birthDate)
+        if (missing.length === 0) return null
+        return (
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
+            <h3 className="text-sm font-bold text-amber-700 dark:text-amber-400 mb-1">
+              生年月日が未入力 {missing.length}名
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 leading-relaxed">
+              号俸制の年齢調整（{jpDate(revisionBaseDate())} 基準）に必要です。
+              未入力のままだと改定額を確定できません。名前を押すと編集画面が開きます。
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {missing.map(w => (
+                <button key={w.id} onClick={() => openEdit(w)}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800 dark:hover:bg-amber-900/50 transition">
+                  {w.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Visa expiry alerts */}
       {(() => {
         const alerts = activeWorkers
@@ -431,8 +475,7 @@ export default function WorkersPage() {
               <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('jobType')}>
                 職種 {sortKey === 'jobType' && (sortAsc ? '↑' : '↓')}
               </th>
-              <th className="px-3 py-3">在留資格</th>
-              <th className="px-3 py-3">在留期限</th>
+              <th className="px-3 py-3">在留・生年月日</th>
               <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('rate')}>
                 単価 {sortKey === 'rate' && (sortAsc ? '↑' : '↓')}
               </th>
@@ -443,9 +486,9 @@ export default function WorkersPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={10} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
             ) : sorted.map(w => {
               const jb = jobBadge(w.jobType)
               return (
@@ -484,24 +527,41 @@ export default function WorkersPage() {
                       {jb.label}
                     </span>
                   </td>
+                  {/* 外国人は在留資格＋在留期限、日本人は生年月日＋改定基準日の年齢。
+                      日本人にとって在留欄は常に空だったため、その枠を生年月日に充てている。 */}
                   <td className="px-3 py-2.5">
-                    {w.visaType && isGaikoku(w.visaType) && (
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        isJisshu(w.visaType) ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'
-                      }`}>
-                        {VISA_LABELS[w.visaType] || w.visaType}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {w.visaExpiry && isGaikoku(w.visaType || '') ? (() => {
-                      const s = visaExpiryStatus(w.visaExpiry!)
-                      return s ? (
-                        <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${s.cls}`}>{s.label}</span>
-                      ) : (
-                        <span className="text-xs text-gray-400">{w.visaExpiry}</span>
-                      )
-                    })() : '—'}
+                    {isGaikoku(w.visaType || '') ? (
+                      <div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          isJisshu(w.visaType || '') ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'
+                        }`}>
+                          {VISA_LABELS[w.visaType || ''] || w.visaType}
+                        </span>
+                        {w.visaExpiry && (() => {
+                          const s = visaExpiryStatus(w.visaExpiry!)
+                          return (
+                            <div className="mt-1">
+                              {s
+                                ? <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${s.cls}`}>{s.label}</span>
+                                : <span className="text-[10px] text-gray-400 tabular-nums">{w.visaExpiry}</span>}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    ) : w.birthDate ? (
+                      <div>
+                        <div className="text-xs text-gray-600 dark:text-gray-300 tabular-nums">{w.birthDate}</div>
+                        <div className="text-[10px] text-gray-400">{ageOn(w.birthDate, revisionBaseDate())}歳</div>
+                      </div>
+                    ) : needsBirthDate(w) ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(w)}
+                        className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60 transition"
+                      >
+                        生年月日 未入力
+                      </button>
+                    ) : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
                     {w.visaType && isGaikoku(w.visaType) ? (
@@ -743,7 +803,7 @@ export default function WorkersPage() {
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                     {form.birthDate && (
                       <p className="text-[11px] text-gray-500 mt-1">
-                        2026年10月1日時点で {ageOn(form.birthDate, '2026-10-01')}歳
+                        {jpDate(revisionBaseDate())}時点で {ageOn(form.birthDate, revisionBaseDate())}歳
                       </p>
                     )}
                   </div>

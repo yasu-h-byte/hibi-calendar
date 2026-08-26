@@ -3,7 +3,7 @@ import {
   dailyForStep, capDaily, baseAnnual, stepForDaily, dailyFromMonthly,
   HYOGO_PITCH, ageAdjustment, profitAdjustment, profitRankOf, specialAdjustment,
   computeRevision, promote, bonusPoints, allocateBonus, MAX_STEP, ANNUAL_DAYS,
-  ageOn, checkHyogoBalance, computeRosterRevision, type RosterMember,
+  ageOn, nextRevisionDate, checkHyogoBalance, computeRosterRevision, type RosterMember,
 } from '@/lib/jp-wage'
 import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration'
 
@@ -402,5 +402,20 @@ describe('computeRosterRevision（名簿全体の改定）', () => {
   it('年間コストは 1日あたり × 年間所定日数', () => {
     const r = computeRosterRevision([m({})], { ...base, annualDays: 290 })
     expect(r.annualCost).toBe(r.raisePerDay * 290)
+  })
+})
+
+describe('nextRevisionDate（改定の基準日）', () => {
+  it('10月1日より前なら今年の10月1日', () => {
+    expect(nextRevisionDate('2026-08-25')).toBe('2026-10-01')
+  })
+
+  it('10月1日当日はその日', () => {
+    expect(nextRevisionDate('2026-10-01')).toBe('2026-10-01')
+  })
+
+  it('10月1日を過ぎたら翌年', () => {
+    expect(nextRevisionDate('2026-10-02')).toBe('2027-10-01')
+    expect(nextRevisionDate('2026-12-31')).toBe('2027-10-01')
   })
 })
