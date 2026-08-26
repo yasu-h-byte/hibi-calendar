@@ -16,15 +16,17 @@ import { GRADE_LABELS } from '@/lib/jp-wage'
 import GradeTable from './components/GradeTable'
 import AdjustmentTables from './components/AdjustmentTables'
 import BonusTable from './components/BonusTable'
+import PromotionPanel from './components/PromotionPanel'
 import RevisionPanel from './components/RevisionPanel'
 
-type Tab = 'table' | 'rules' | 'bonus' | 'revision' | 'docs'
+type Tab = 'table' | 'rules' | 'revision' | 'promotion' | 'bonus' | 'docs'
 
 const TABS: { key: Tab; label: string; note: string }[] = [
   { key: 'table', label: '号俸表', note: '等級と号ごとの日額' },
   { key: 'rules', label: '調整の基準', note: '評価・年齢・特別' },
-  { key: 'bonus', label: '賞与', note: '原資を点数比で配分' },
   { key: 'revision', label: '年次改定', note: '毎年10月1日' },
+  { key: 'promotion', label: '昇格', note: '役割が変わったとき' },
+  { key: 'bonus', label: '賞与', note: '原資を点数比で配分' },
   { key: 'docs', label: '資料', note: '規程と関連ドキュメント' },
 ]
 
@@ -115,6 +117,7 @@ function WageHub() {
 
       {tab === 'table' && <GradeTable placed={placed} />}
       {tab === 'rules' && <AdjustmentTables />}
+      {tab === 'promotion' && <PromotionPanel />}
       {tab === 'bonus' && <BonusTable />}
       {tab === 'revision' && <RevisionPanel />}
       {tab === 'docs' && (
