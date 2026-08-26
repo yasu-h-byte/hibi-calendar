@@ -325,9 +325,9 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
           <tbody className="[&_td]:py-1 [&_td:first-child]:text-gray-600 [&_td:first-child]:w-1/3">
             {w.rate > 0 && <tr><td>日額単価</td><td className="font-mono">{fmtYen(w.rate)}</td></tr>}
             {/* 旧ルール固定月給者(フン)の hourlyRate は計算に使われない旧値のため非表示 */}
-            {w.hourlyRate && w.hourlyRate > 0 && !(mode.useOldRules && w.salary && w.salary > 0) &&
-              <tr><td>時給単価</td><td className="font-mono">{fmtYen(w.hourlyRate)}</td></tr>}
-            {w.salary && w.salary > 0 && <tr><td>月給</td><td className="font-mono">{fmtYen(w.salary)}</td></tr>}
+            {(w.hourlyRate ?? 0) > 0 && !(mode.useOldRules && (w.salary ?? 0) > 0) &&
+              <tr><td>時給単価</td><td className="font-mono">{fmtYen(w.hourlyRate ?? 0)}</td></tr>}
+            {(w.salary ?? 0) > 0 && <tr><td>月給</td><td className="font-mono">{fmtYen(w.salary ?? 0)}</td></tr>}
             <tr><td>残業倍率 (otMul)</td><td className="font-mono">× {w.otMul}</td></tr>
             {w.isDispatched && (
               <tr><td>出向</td><td className="font-mono text-purple-700">{w.dispatchTo} へ出向中（控除 {fmtYen(w.dispatchDeduction || 0)}）</td></tr>

@@ -307,10 +307,12 @@ export default function CostPage() {
       </div>
 
       {/* 出向控除バナー */}
-      {t && t.dispatchDeduction && t.dispatchDeduction > 0 && (
+      {/* ⚠️ `t.dispatchDeduction &&` の形は、値が 0 のとき数値の 0 がそのまま描画される
+          （タイトル下に謎の「0」が出た原因）。数値は必ず比較式にしてから && に使う */}
+      {t && (t.dispatchDeduction ?? 0) > 0 && (
         <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl px-4 py-3 text-xs text-purple-700 dark:text-purple-300">
-          出向中スタッフの人件費 <span className="font-bold">{fmtYen(t.dispatchDeduction)}</span> を人件費から差し引いています（売上は既に控除済みの値が入力されています）。
-          {t.billingRaw && <span className="ml-2 text-gray-500">（控除前: 売上 {fmtYen(t.billingRaw)} / 人件費 {fmtYen(t.costRaw || 0)}）</span>}
+          出向中スタッフの人件費 <span className="font-bold">{fmtYen(t.dispatchDeduction ?? 0)}</span> を人件費から差し引いています（売上は既に控除済みの値が入力されています）。
+          {(t.billingRaw ?? 0) > 0 && <span className="ml-2 text-gray-500">（控除前: 売上 {fmtYen(t.billingRaw ?? 0)} / 人件費 {fmtYen(t.costRaw || 0)}）</span>}
         </div>
       )}
 
@@ -626,12 +628,12 @@ export default function CostPage() {
                     <tr key={s.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 align-top">
                       <td className="px-3 py-2.5 font-medium">
                         {s.name}
-                        {s.dispatchDeduction && s.dispatchDeduction > 0 && (
+                        {(s.dispatchDeduction ?? 0) > 0 && (
                           <span
                             className="ml-1.5 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold"
-                            title={`出向控除: -${fmtYen(s.dispatchDeduction)}（人件費から差引）`}
+                            title={`出向控除: -${fmtYen(s.dispatchDeduction ?? 0)}（人件費から差引）`}
                           >
-                            -{fmtYen(s.dispatchDeduction)}
+                            -{fmtYen(s.dispatchDeduction ?? 0)}
                           </span>
                         )}
                       </td>
@@ -904,7 +906,7 @@ function KPILineChart({
   const padL = 70
   const padR = 20
   const padT = 50
-  const padB = 40
+  const padB = 58   // 月ラベル + 差益の2段ぶん
   const chartW = svgW - padL - padR
   const chartH = svgH - padT - padB
 
@@ -940,12 +942,6 @@ function KPILineChart({
   })
 
   const baselineY = getY(baseline)
-
-  const momPct = (curr: number, prev: number) => {
-    if (prev === 0) return ''
-    const pct = ((curr - prev) / prev) * 100
-    return `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`
-  }
 
   return (
     <div>
@@ -1004,79 +1000,59 @@ function KPILineChart({
         <path d={billingPath} fill="none" stroke={COLORS.billing} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
         <path d={costPath} fill="none" stroke={COLORS.cost} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
 
-        {/* 全ラベルを衝突回避しながら描画 */}
+        {/* ラベルの置き方の原則:
+            ・売上 = 青ドットの上（上空側。上には基準線しかない）
+            ・原価 = 橙ドットの上（売上線との間の回廊。バーは原価線の下から迫るので、
+              下に置くとバーに刺さる。以前の「ドットの下」が崩れていた原因）
+            ・差益 = プロットの外（軸の下の2段目）。バーや線と場所を取り合わない
+            線が接近したときだけ、2つのラベルの間隔14pxを機械的に確保する */}
         {data.map((d, i) => {
           const x = getX(i)
+          // 端の列は y軸目盛りや枠と重なるため、ラベルだけ内側へ寄せる
+          const labelX = Math.min(Math.max(x, padL + 26), svgW - padR - 26)
           const bY = getY(d.billingPerManDay)
           const cY = getY(d.costPerManDay)
-          const pVal = d.profitPerManDay
-          const pBarTop = pVal >= 0 ? getY(pVal) : zeroY
 
-          // ラベル候補Y（初期位置）
-          let bLabelY = bY - 12       // 売上: ドットの上
-          let cLabelY = cY + 18       // 原価: ドットの下
-          let pLabelY = pBarTop - 6   // 差益: バーの上
-
-          // 基準線との衝突回避（売上ラベルが基準線と重なる場合）
-          if (Math.abs(bLabelY - baselineY) < 14) {
-            bLabelY = baselineY - 18
-          }
-
-          // 売上と原価ラベルの衝突回避
-          const MIN_GAP = 16
-          if (cLabelY - bLabelY < MIN_GAP) {
-            // 売上を上に、原価を下に押す
-            const mid = (bLabelY + cLabelY) / 2
-            bLabelY = mid - MIN_GAP / 2
-            cLabelY = mid + MIN_GAP / 2
-          }
-
-          // 原価ラベルと差益ラベルの衝突回避
-          if (Math.abs(cLabelY - pLabelY) < MIN_GAP) {
-            pLabelY = cLabelY + MIN_GAP
-          }
-
-          // 差益バーの下に原価ラベルが入り込む場合
-          if (cLabelY < pBarTop + 8 && cLabelY > pBarTop - 20) {
-            cLabelY = pBarTop + 22
-          }
-
-          const showProfit = i === 0 || i === data.length - 1 || i % 2 === 0
+          let bLabelY = bY - 10
+          let cLabelY = cY - 10
+          // 基準線（破線）に乗るときは上へ逃がす
+          if (Math.abs(bLabelY - baselineY) < 12) bLabelY = Math.min(bLabelY, baselineY - 14)
+          // 売上と原価のラベル間隔を確保（上側にある売上をさらに上へ）
+          if (cLabelY - bLabelY < 14) bLabelY = cLabelY - 14
+          bLabelY = Math.max(bLabelY, padT - 36)
+          cLabelY = Math.max(cLabelY, bLabelY + 14)
 
           return (
             <g key={`labels-${i}`}>
-              {/* 売上ドット+ラベル */}
               <circle cx={x} cy={bY} r={4} fill={COLORS.billing} stroke="white" strokeWidth="2" />
-              <text x={x} y={bLabelY} textAnchor="middle" fill={COLORS.billing} fontSize="9" fontWeight="600">
+              <text x={labelX} y={bLabelY} textAnchor="middle" fill={COLORS.billing} fontSize="9" fontWeight="600">
                 {fmtYen(d.billingPerManDay)}
               </text>
 
-              {/* 原価ドット+ラベル */}
               <circle cx={x} cy={cY} r={4} fill={COLORS.cost} stroke="white" strokeWidth="2" />
-              <text x={x} y={cLabelY} textAnchor="middle" fill={COLORS.cost} fontSize="9" fontWeight="600">
+              <text x={labelX} y={cLabelY} textAnchor="middle" fill={COLORS.cost} fontSize="9" fontWeight="600">
                 {fmtYen(d.costPerManDay)}
               </text>
-
-              {/* 差益ラベル */}
-              {showProfit && (
-                <text x={x} y={pLabelY} textAnchor="middle"
-                  fill={pVal >= 0 ? COLORS.profit : '#DC2626'} fontSize="8" fontWeight="600">
-                  {fmtYen(pVal)}
-                </text>
-              )}
             </g>
           )
         })}
 
-        {data.map((d, i) => (
-          <text
-            key={`x-${i}`}
-            x={getX(i)} y={svgH - 8}
-            textAnchor="middle" fill="#6b7280" fontSize="11"
-          >
-            {ymToShortLabel(d.ym)}
-          </text>
-        ))}
+        {data.map((d, i) => {
+          const x = getX(i)
+          const labelX = Math.min(Math.max(x, padL + 26), svgW - padR - 26)
+          const p = d.profitPerManDay
+          return (
+            <g key={`x-${i}`}>
+              <text x={x} y={svgH - 24} textAnchor="middle" fill="#6b7280" fontSize="11">
+                {ymToShortLabel(d.ym)}
+              </text>
+              <text x={labelX} y={svgH - 8} textAnchor="middle"
+                fill={p >= 0 ? COLORS.profit : '#DC2626'} fontSize="9" fontWeight="600">
+                {p >= 0 ? '+' : ''}{fmtYen(p)}
+              </text>
+            </g>
+          )
+        })}
       </svg>
 
       <div className="flex items-center gap-5 text-xs text-gray-500 dark:text-gray-400 mt-1 flex-wrap">
@@ -1087,7 +1063,7 @@ function KPILineChart({
           <span className="inline-block w-4 h-0.5 rounded" style={{ backgroundColor: COLORS.cost }} /> 原価/人工
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS.profit, opacity: 0.7 }} /> 差益/人工
+          <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS.profit, opacity: 0.7 }} /> 差益/人工（数値は月の下）
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-4 border-t-2 border-dashed" style={{ borderColor: COLORS.baseline }} /> 基準
