@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     const sites = (data.sites || []) as RawSite[]
 
     if (action === 'add') {
-      const { name, start, end, foreman, tobiRate, dokoRate } = body
+      const { name, start, end, foreman, tobiRate, dokoRate, siteType, client } = body
       if (!name) {
         return NextResponse.json({ error: '現場名を入力してください' }, { status: 400 })
       }
@@ -143,6 +143,8 @@ export async function POST(request: NextRequest) {
         tobiRate: Number(tobiRate) || 0,
         dokoRate: Number(dokoRate) || 0,
         rates: [],
+        ...(siteType !== undefined && { siteType }),
+        ...(client !== undefined && { client }),
       }
 
       await updateDoc(ref, { sites: [...sites, newSite] })
@@ -151,7 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'update') {
-      const { id, name, start, end, foreman, archived, tobiRate, dokoRate, rates, subconRates, workSchedule, commute } = body
+      const { id, name, start, end, foreman, archived, tobiRate, dokoRate, rates, subconRates, workSchedule, commute, siteType, client } = body
       if (!id) {
         return NextResponse.json({ error: 'id required' }, { status: 400 })
       }
@@ -174,6 +176,8 @@ export async function POST(request: NextRequest) {
         ...(rates !== undefined && { rates }),
         ...(workSchedule !== undefined && { workSchedule: workSchedule as SiteWorkScheduleRaw | null }),
         ...(commute !== undefined && { commute }),
+        ...(siteType !== undefined && { siteType }),
+        ...(client !== undefined && { client }),
       }
 
       const updateData: Record<string, unknown> = { sites: updated }

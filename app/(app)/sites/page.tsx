@@ -53,6 +53,8 @@ interface SiteData {
   rates: RatePeriod[]
   workSchedule?: SiteWorkScheduleConfig | null
   commute?: CommuteState
+  siteType?: 'direct' | 'support'
+  client?: string
 }
 
 interface SiteAssign {
@@ -82,6 +84,8 @@ interface MforemanEntry {
 
 const EMPTY_FORM = {
   name: '',
+  siteType: 'direct',
+  client: '',
   start: '',
   end: '',
   foreman: '0',
@@ -163,6 +167,8 @@ export default function SitesPage() {
     setEditId(s.id)
     setForm({
       name: s.name,
+      siteType: s.siteType || 'direct',
+      client: s.client || '',
       start: s.start,
       end: s.end,
       foreman: String(s.foreman),
@@ -234,6 +240,8 @@ export default function SitesPage() {
             action: 'update',
             id: editId,
             name: form.name,
+            siteType: form.siteType,
+            client: form.client,
             start: form.start,
             end: form.end,
             foreman: form.foreman,
@@ -248,6 +256,8 @@ export default function SitesPage() {
         : {
             action: 'add',
             name: form.name,
+            siteType: form.siteType,
+            client: form.client,
             start: form.start,
             end: form.end,
             foreman: form.foreman,
@@ -466,7 +476,13 @@ export default function SitesPage() {
 
               return (
                 <tr key={s.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${s.archived ? 'opacity-45' : ''}`}>
-                  <td className="px-3 py-2.5 font-medium">{s.name}</td>
+                  <td className="px-3 py-2.5 font-medium">
+                    {s.name}
+                    {s.siteType === 'support' && (
+                      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-bold">応援</span>
+                    )}
+                    {s.client && <div className="text-[10px] text-gray-400 font-normal">{s.client}</div>}
+                  </td>
                   <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">
                     {s.start && s.end
                       ? `${s.start} ~ ${s.end}`
@@ -532,6 +548,29 @@ export default function SitesPage() {
                   placeholder="例：〇〇ビル新築工事"
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">種別</label>
+                  <select
+                    value={form.siteType}
+                    onChange={e => setForm({ ...form, siteType: e.target.value })}
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                  >
+                    <option value="direct">直（自分たちが主体の現場）</option>
+                    <option value="support">応援（他社現場に応援で入る）</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">元請け・取引先</label>
+                  <input
+                    value={form.client}
+                    onChange={e => setForm({ ...form, client: e.target.value })}
+                    placeholder="例：山岡建設工業"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
