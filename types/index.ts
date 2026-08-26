@@ -30,6 +30,12 @@ export interface Worker {
    */
   jpGrade?: string
   jpStep?: number
+  /**
+   * 生年月日 'YYYY-MM-DD'。号俸制の**年齢調整**（docs/wage-system.md 第6節）に使う。
+   * 調整幅は −4〜+3ピッチと大きく、A評価の4ピッチを打ち消すこともあるため、
+   * 未登録のままでは改定額を確定できない。外国人スタッフは対象外。
+   */
+  birthDate?: string
 }
 
 /** 現場の勤務時間設定（始業・終業・休憩構成） */

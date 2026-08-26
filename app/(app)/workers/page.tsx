@@ -8,6 +8,7 @@ import { fmtYen } from '@/lib/format'
 import { JOB_LABELS } from '@/lib/jobs'
 import { jobBadge } from '@/lib/labels'
 import { JP_SALARY_AVG_MONTHLY_HOURS } from '@/lib/constants'
+import { ageOn } from '@/lib/jp-wage'
 import RaiseHistoryTab from './RaiseHistoryTab'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
@@ -35,9 +36,15 @@ const DEFAULT_DISPATCH_TO = '山岡建設工業'
 
 const EMPTY_FORM = {
   name: '', org: 'hibi', visa: 'none', job: 'tobi',
-  rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', retired: '', salary: '',
+  rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', birthDate: '', retired: '', salary: '',
   visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '',
   useOldRules: false,
+}
+
+/** 今日を 'YYYY-MM-DD' で返す（生年月日の未来日入力を防ぐ上限用）。 */
+function currentDateDash(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function currentYmDash(): string {
@@ -154,6 +161,7 @@ export default function WorkersPage() {
       hourlyRate: String(w.hourlyRate || ''),
       otMul: String(w.otMul || 1.25),
       hireDate: w.hireDate || '',
+      birthDate: w.birthDate || '',
       retired: w.retired || '',
       salary: String(w.salary || ''),
       visaExpiry: w.visaExpiry || '',
@@ -215,8 +223,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -718,6 +726,26 @@ export default function WorkersPage() {
                     <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">入社日</label>
                     <input type="date" value={form.hireDate} onChange={e => setForm({ ...form, hireDate: e.target.value })}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                  </div>
+                  {/* 生年月日は労働者名簿の必須記載事項（労基法107条）。
+                      日本人社員はさらに号俸制の年齢調整（docs/wage-system.md 第6節）に使う。 */}
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                      生年月日
+                      {form.visa === 'none' && !form.birthDate && (
+                        <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          号俸制に必要
+                        </span>
+                      )}
+                    </label>
+                    <input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })}
+                      max={currentDateDash()}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                    {form.birthDate && (
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        2026年10月1日時点で {ageOn(form.birthDate, '2026-10-01')}歳
+                      </p>
+                    )}
                   </div>
                   {editId && (
                     <div>

@@ -15,7 +15,9 @@ import { doc, setDoc, getDocs, collection } from '@/lib/fsdb'
 // 2026-06-12 (監査 Sprint2-C): 給与に直結するフィールドの変更を永続監査ログに残す。
 //   activityLog は500件で古い順に自動削除されるため、単価変更の証跡が数週間で消えていた。
 //   auditTrail コレクションは削除処理を持たない（労基法115条の3年証跡）。
-const PAY_FIELDS = ['rate', 'hourlyRate', 'salary', 'otMul', 'useOldRules', 'retired'] as const
+//   birthDate は賃金そのものではないが、号俸制の年齢調整（−4〜+3ピッチ）を左右し、
+//   誤入力すると昇給額が静かに変わる。前後の値を追えるようここに含める。
+const PAY_FIELDS = ['rate', 'hourlyRate', 'salary', 'otMul', 'useOldRules', 'retired', 'birthDate'] as const
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -62,6 +64,10 @@ export async function POST(request: NextRequest) {
       }
       if (visaExpiry) {
         (workerData as Record<string, unknown>).visaExpiry = visaExpiry
+      }
+      // 生年月日は労働者名簿の必須記載事項（労基法107条）。号俸制の年齢調整にも使う
+      if (birthDate) {
+        (workerData as Record<string, unknown>).birthDate = String(birthDate)
       }
       if (dispatchTo && String(dispatchTo).trim()) {
         (workerData as Record<string, unknown>).dispatchTo = String(dispatchTo).trim()

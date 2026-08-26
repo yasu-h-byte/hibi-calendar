@@ -349,3 +349,154 @@ export const GRADE_LABEL: Record<JpGrade, string> = {
   '4G': '上級班長', '5G': '職長', '6G': '上級職長',
   'doko': '土工',
 }
+
+// ────────────────────────────────────────
+//  名簿単位の改定（10月1日の年次改定を回すための層）
+// ────────────────────────────────────────
+
+/**
+ * 基準日時点の満年齢。
+ *
+ * ⚠️ ISO 文字列のまま比較する。`new Date('2000-01-01')` は UTC 深夜として解釈されるため、
+ *    日本時間で評価すると1日ずれて年齢が1つ変わることがある（誕生日が基準日と同日の場合）。
+ */
+export function ageOn(birthDate: string, onDateIso: string): number {
+  const [by, bm, bd] = birthDate.split('-').map(Number)
+  const [oy, om, od] = onDateIso.split('-').map(Number)
+  let age = oy - by
+  if (om < bm || (om === bm && od < bd)) age -= 1
+  return age
+}
+
+/**
+ * 評語の分布がペアのルール（docs/wage-system.md 第5節）を満たすか。
+ *
+ * 「S を1人出したら B を1人出す」「SS を1人出したら C を1人出す」。
+ * 全体が A に寄りすぎず甘くなりすぎないための歯止めで、昇給総額の自然な抑制にもなる。
+ */
+export interface HyogoBalance {
+  counts: Record<Hyogo, number>
+  /** B が何人不足しているか（0 なら充足） */
+  needB: number
+  /** C が何人不足しているか（0 なら充足） */
+  needC: number
+  ok: boolean
+  messages: string[]
+}
+
+export function checkHyogoBalance(list: Hyogo[]): HyogoBalance {
+  const counts: Record<Hyogo, number> = { SS: 0, S: 0, A: 0, B: 0, C: 0 }
+  for (const h of list) counts[h] += 1
+  const needB = Math.max(0, counts.S - counts.B)
+  const needC = Math.max(0, counts.SS - counts.C)
+  const messages: string[] = []
+  if (needB > 0) messages.push(`S が ${counts.S}名に対して B が ${counts.B}名。あと ${needB}名 B が必要`)
+  if (needC > 0) messages.push(`SS が ${counts.SS}名に対して C が ${counts.C}名。あと ${needC}名 C が必要`)
+  return { counts, needB, needC, ok: needB === 0 && needC === 0, messages }
+}
+
+export interface RosterMember {
+  id: number
+  name: string
+  grade: JpGrade
+  /** 現在の号。未確定なら null */
+  currentStep: number | null
+  /** 生年月日 'YYYY-MM-DD'。未登録なら null */
+  birthDate: string | null
+  hyogo: Hyogo
+  /** S以上・B以下は理由が必須（第5節） */
+  reason?: string
+  specialKeys?: string[]
+  /** 処遇固定。号を動かさない */
+  fixed?: boolean
+  /** 号俸額に上乗せする調整給（移籍調整給など） */
+  adjustment?: number
+}
+
+export interface RosterRow {
+  member: RosterMember
+  /** 計算できた場合の結果。できなければ null */
+  result: RevisionResult | null
+  /** 調整給を含めた改定前後の日額 */
+  oldTotal: number | null
+  newTotal: number | null
+  /** 計算できない・対象外の理由 */
+  blockers: string[]
+}
+
+export interface RosterRevision {
+  rows: RosterRow[]
+  balance: HyogoBalance
+  /** 改定できた人数 */
+  applied: number
+  /** 入力が足りず計算できなかった人数 */
+  blocked: number
+  /** 1日あたりの昇給額 合計 */
+  raisePerDay: number
+  /** 年間の増加額（`annualDays` 日換算） */
+  annualCost: number
+}
+
+/**
+ * 名簿全体の改定を計算する。
+ *
+ * 入力が欠けている人は計算せず `blockers` に理由を積む。**欠けたまま概算を出さない**のは、
+ * 年齢調整が −4〜+3ピッチと大きく、A評価（4ピッチ）を丸ごと打ち消すことがあるため。
+ * 生年月日が無い状態の「仮の改定額」は本人へ提示できる数字にならない。
+ */
+export function computeRosterRevision(
+  members: RosterMember[],
+  opts: { asOf: string; profitRatePercent: number; annualDays?: number },
+): RosterRevision {
+  const annualDays = opts.annualDays ?? ANNUAL_DAYS
+  const profitRank = profitRankOf(opts.profitRatePercent)
+
+  const rows: RosterRow[] = members.map(m => {
+    const blockers: string[] = []
+    if (m.currentStep === null) blockers.push('号が未確定')
+    if (!m.fixed && m.birthDate === null) blockers.push('生年月日が未登録（年齢調整が出せない）')
+    if ((m.hyogo === 'SS' || m.hyogo === 'S' || m.hyogo === 'B' || m.hyogo === 'C')
+      && !m.reason?.trim()) blockers.push(`${m.hyogo}評価には理由の記録が必要`)
+
+    const adj = m.adjustment ?? 0
+
+    if (m.fixed) {
+      // 処遇固定。等級の上限に置いてあるので号は動かないが、意図を明示するため計算しない
+      const cur = m.currentStep === null ? null : dailyForStep(m.grade, m.currentStep) + adj
+      return { member: m, result: null, oldTotal: cur, newTotal: cur, blockers: ['処遇固定（改定対象外）'] }
+    }
+    if (blockers.length > 0) {
+      const cur = m.currentStep === null ? null : dailyForStep(m.grade, m.currentStep) + adj
+      return { member: m, result: null, oldTotal: cur, newTotal: null, blockers }
+    }
+
+    const result = computeRevision({
+      grade: m.grade,
+      currentStep: m.currentStep!,
+      hyogo: m.hyogo,
+      age: ageOn(m.birthDate!, opts.asOf),
+      profitRank,
+      specialKeys: m.specialKeys,
+    })
+    return {
+      member: m, result,
+      oldTotal: result.oldDaily + adj,
+      newTotal: result.newDaily + adj,
+      blockers: [],
+    }
+  })
+
+  // 評語のバランスは、改定対象になる人だけで見る（固定・保留の人は母数に入れない）
+  const balance = checkHyogoBalance(
+    rows.filter(r => r.result !== null).map(r => r.member.hyogo),
+  )
+  const raisePerDay = rows.reduce((s, r) => s + (r.result?.raisePerDay ?? 0), 0)
+
+  return {
+    rows, balance,
+    applied: rows.filter(r => r.result !== null).length,
+    blocked: rows.filter(r => r.result === null && !r.member.fixed).length,
+    raisePerDay,
+    annualCost: raisePerDay * annualDays,
+  }
+}

@@ -3,8 +3,9 @@ import {
   dailyForStep, capDaily, baseAnnual, stepForDaily, dailyFromMonthly,
   HYOGO_PITCH, ageAdjustment, profitAdjustment, profitRankOf, specialAdjustment,
   computeRevision, promote, bonusPoints, allocateBonus, MAX_STEP, ANNUAL_DAYS,
+  ageOn, checkHyogoBalance, computeRosterRevision, type RosterMember,
 } from '@/lib/jp-wage'
-import { MIGRATION_2026 } from '@/lib/jp-wage-migration'
+import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration'
 
 describe('号俸表: 初号・上限（docs/wage-system.md と一致）', () => {
   it('初号(1号)', () => {
@@ -67,11 +68,15 @@ describe('読み替え stepForDaily: 現日額を下回らない最初の号', (
   })
 })
 
-describe('2026年度移行: 現員10名（docs §12 と一致・日額は下げない）', () => {
-  it.each(MIGRATION_2026)('$name: $fromDaily → $step号', ({ grade, fromDaily, step }) => {
-    expect(stepForDaily(grade, fromDaily)).toBe(step)
-    expect(dailyForStep(grade, step)).toBeGreaterThanOrEqual(fromDaily)
-  })
+describe('2026年度移行: 現員（docs §12 と一致・日額は下げない）', () => {
+  // 月給制の1年目（fromDaily=null）と、調整給つきの者は別に検証する
+  it.each(MIGRATION_2026.filter(m => m.fromDaily !== null && !m.adjustment))(
+    '$name: $fromDaily → $step号',
+    ({ grade, fromDaily, step }) => {
+      expect(stepForDaily(grade, fromDaily!)).toBe(step)
+      expect(dailyForStep(grade, step!)).toBeGreaterThanOrEqual(fromDaily!)
+    },
+  )
 })
 
 describe('新卒: 月給→日給→着地号', () => {
@@ -207,5 +212,195 @@ describe('賞与 bonusPoints / allocateBonus', () => {
 describe('定数の健全性', () => {
   it('年間所定日数は290', () => {
     expect(ANNUAL_DAYS).toBe(290)
+  })
+})
+
+describe('MIGRATION_2026（号俸制への移行シード）', () => {
+  it('号俸額 + 調整給 で移行前日額を下回らない（読み替えの原則）', () => {
+    for (const m of MIGRATION_2026) {
+      if (m.fromDaily === null || m.step === null) continue
+      const total = dailyForStep(m.grade, m.step) + (m.adjustment ?? 0)
+      expect(total).toBeGreaterThanOrEqual(m.fromDaily)
+    }
+  })
+
+  it('調整給が無い人は、移行前日額がその等級の上限に収まっている', () => {
+    for (const m of MIGRATION_2026) {
+      if (m.fromDaily === null || m.adjustment) continue
+      expect(m.fromDaily).toBeLessThanOrEqual(capDaily(m.grade))
+    }
+  })
+
+  it('調整給がある人は上限を超えており、超過分と調整給が一致する', () => {
+    for (const m of MIGRATION_2026) {
+      if (!m.adjustment || m.fromDaily === null || m.step === null) continue
+      // 調整給は「役割等級では払えない分」なので、上限に置いたうえでの差額に等しい
+      expect(m.step).toBe(60)
+      expect(m.fromDaily).toBeGreaterThan(capDaily(m.grade))
+      expect(m.adjustment).toBe(m.fromDaily - capDaily(m.grade))
+    }
+  })
+
+  it('workerId が一意で、役員（id:1）を含まない', () => {
+    const ids = MIGRATION_2026.map(m => m.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids).not.toContain(1)
+    expect(MIGRATION_EXCLUDED).toContain(1)
+  })
+
+  it('梶原さんは 4G上限 + 移籍調整給 で28,000円になり、処遇は固定', () => {
+    const k = MIGRATION_2026.find(m => m.id === 10)!
+    expect(k.grade).toBe('4G')
+    expect(k.step).toBe(60)          // 4Gの上限。構造として号が上がらない
+    expect(k.fixed).toBe(true)
+    expect(dailyForStep('4G', 60)).toBe(23575)
+    expect(k.adjustment).toBe(4425)
+    expect(dailyForStep(k.grade, k.step!) + k.adjustment!).toBe(28000)
+  })
+
+  it('処遇固定の人は等級の上限に置かれている（号で上がらないことの担保）', () => {
+    for (const m of MIGRATION_2026) {
+      if (!m.fixed) continue
+      expect(m.step).toBe(60)
+    }
+  })
+
+  it('移行による増額は合計685円/日（梶原さんは調整給で±0）', () => {
+    const inc = MIGRATION_2026.reduce((s, m) => {
+      if (m.fromDaily === null || m.step === null) return s
+      return s + (dailyForStep(m.grade, m.step) + (m.adjustment ?? 0) - m.fromDaily)
+    }, 0)
+    expect(inc).toBe(685)
+  })
+})
+
+describe('ageOn（基準日時点の満年齢）', () => {
+  it('誕生日を迎えていれば加齢している', () => {
+    expect(ageOn('1980-09-30', '2026-10-01')).toBe(46)
+  })
+
+  it('誕生日前なら1つ少ない', () => {
+    expect(ageOn('1980-10-02', '2026-10-01')).toBe(45)
+  })
+
+  it('誕生日当日は加齢している', () => {
+    expect(ageOn('1980-10-01', '2026-10-01')).toBe(46)
+  })
+
+  it('タイムゾーンに影響されない（文字列で比較している）', () => {
+    // new Date() を挟むと UTC 深夜解釈で1日ずれ、誕生日当日の判定が変わる
+    const tz = process.env.TZ
+    try {
+      for (const z of ['UTC', 'Asia/Tokyo', 'America/Chicago']) {
+        process.env.TZ = z
+        expect(ageOn('1980-10-01', '2026-10-01')).toBe(46)
+      }
+    } finally { process.env.TZ = tz }
+  })
+})
+
+describe('checkHyogoBalance（ペア評価のルール）', () => {
+  it('SをBとペアで出していれば通る', () => {
+    const b = checkHyogoBalance(['S', 'A', 'A', 'B'])
+    expect(b.ok).toBe(true)
+  })
+
+  it('Bを伴わないSは不足として出る', () => {
+    const b = checkHyogoBalance(['S', 'S', 'A', 'B'])
+    expect(b.ok).toBe(false)
+    expect(b.needB).toBe(1)
+    expect(b.messages[0]).toContain('あと 1名 B が必要')
+  })
+
+  it('SSはCとペアで見る（Bでは代替できない）', () => {
+    expect(checkHyogoBalance(['SS', 'A', 'B']).needC).toBe(1)
+    expect(checkHyogoBalance(['SS', 'A', 'C']).ok).toBe(true)
+  })
+
+  it('全員Aなら当然通る', () => {
+    expect(checkHyogoBalance(['A', 'A', 'A']).ok).toBe(true)
+  })
+})
+
+describe('computeRosterRevision（名簿全体の改定）', () => {
+  const base = { asOf: '2026-10-01', profitRatePercent: 6 }
+  const m = (o: Partial<RosterMember>): RosterMember => ({
+    id: 1, name: 'テスト', grade: '3G', currentStep: 30,
+    birthDate: '1990-01-01', hyogo: 'A', ...o,
+  })
+
+  it('標準（A評価）で号が進み、日額が上がる', () => {
+    const r = computeRosterRevision([m({})], base)
+    const row = r.rows[0]
+    expect(row.result).not.toBeNull()
+    // A=4ピッチ、31〜35歳は年齢調整0、利益6%(over5)は3Gで0
+    expect(row.result!.totalPitch).toBe(4)
+    expect(row.result!.newStep).toBe(34)
+    expect(r.applied).toBe(1)
+  })
+
+  it('生年月日が無い人は計算せず、理由を返す', () => {
+    const r = computeRosterRevision([m({ birthDate: null })], base)
+    expect(r.rows[0].result).toBeNull()
+    expect(r.rows[0].blockers[0]).toContain('生年月日')
+    expect(r.blocked).toBe(1)
+    expect(r.raisePerDay).toBe(0)
+  })
+
+  it('号が未確定の人も計算しない', () => {
+    const r = computeRosterRevision([m({ currentStep: null })], base)
+    expect(r.rows[0].blockers).toContain('号が未確定')
+  })
+
+  it('S評価は理由がないと計算しない', () => {
+    expect(computeRosterRevision([m({ hyogo: 'S' })], base).rows[0].blockers[0]).toContain('理由')
+    expect(computeRosterRevision([m({ hyogo: 'S', reason: '大型現場を完遂' })], base).rows[0].result).not.toBeNull()
+  })
+
+  it('A評価は理由がなくてよい（標準だから）', () => {
+    expect(computeRosterRevision([m({ hyogo: 'A' })], base).rows[0].blockers).toEqual([])
+  })
+
+  it('処遇固定の人は号が動かず、調整給込みの日額が前後で同じ', () => {
+    const r = computeRosterRevision(
+      [m({ grade: '4G', currentStep: 60, adjustment: 4425, fixed: true, birthDate: null })],
+      base,
+    )
+    const row = r.rows[0]
+    expect(row.result).toBeNull()
+    expect(row.oldTotal).toBe(28000)
+    expect(row.newTotal).toBe(28000)
+    expect(r.blocked).toBe(0)   // 固定は「入力不足」ではない
+    expect(r.raisePerDay).toBe(0)
+  })
+
+  it('調整給は改定後の日額にも引き継がれる', () => {
+    const r = computeRosterRevision([m({ grade: '3G', currentStep: 30, adjustment: 500 })], base)
+    const row = r.rows[0]
+    expect(row.newTotal! - row.oldTotal!).toBe(row.result!.raisePerDay)
+    expect(row.newTotal).toBe(row.result!.newDaily + 500)
+  })
+
+  it('年齢調整が効く（46〜50歳の2Gは −3ピッチ）', () => {
+    const young = computeRosterRevision([m({ grade: '2G', birthDate: '1994-01-01' })], base)
+    const old = computeRosterRevision([m({ grade: '2G', birthDate: '1978-01-01' })], base)
+    expect(young.rows[0].result!.agePitch).toBe(0)   // 32歳
+    expect(old.rows[0].result!.agePitch).toBe(-3)    // 48歳
+    expect(old.rows[0].result!.totalPitch).toBe(1)   // A(4) − 3
+  })
+
+  it('評語のバランスは改定対象者だけで判定する', () => {
+    const r = computeRosterRevision([
+      m({ id: 1, hyogo: 'S', reason: '完遂' }),
+      m({ id: 2, hyogo: 'B', reason: '出勤状況' }),
+      m({ id: 3, hyogo: 'S', reason: '育成', fixed: true }),   // 固定＝母数外
+    ], base)
+    expect(r.balance.counts.S).toBe(1)
+    expect(r.balance.ok).toBe(true)
+  })
+
+  it('年間コストは 1日あたり × 年間所定日数', () => {
+    const r = computeRosterRevision([m({})], { ...base, annualDays: 290 })
+    expect(r.annualCost).toBe(r.raisePerDay * 290)
   })
 })
