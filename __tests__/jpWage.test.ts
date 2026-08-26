@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   dailyForStep, capDaily, baseAnnual, stepForDaily, dailyFromMonthly,
-  HYOGO_PITCH, ageAdjustment, profitAdjustment, profitRankOf, specialAdjustment,
+  HYOGO_PITCH, ageAdjustment, specialAdjustment,
   computeRevision, promote, bonusPoints, allocateBonus, MAX_STEP, ANNUAL_DAYS,
   ageOn, nextRevisionDate, monthsBetween, checkHyogoBalance, computeRosterRevision, type RosterMember,
   paySheetFigures, baseAnnualWithLeave, TOTAL_PAID_DAYS,
+  type JpGrade,
 } from '@/lib/jp-wage'
 import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration'
 
@@ -122,18 +123,29 @@ describe('年齢調整（docs §6）', () => {
   })
 })
 
-describe('利益調整（docs §7）', () => {
-  it('利益率→ランク', () => {
-    expect(profitRankOf(12)).toBe('over10')
-    expect(profitRankOf(5)).toBe('over5')
-    expect(profitRankOf(1)).toBe('profit')
-    expect(profitRankOf(-3)).toBe('loss')
+describe('利益調整（2026-08 撤廃）', () => {
+  it('昇給の計算に業績が入らない', () => {
+    // 賞与で既に業績連動しているため二重連動になること、また号は定年まで残るため
+    // 単年の業績を恒久的な賃金へ変えてしまうことから撤廃した（docs §7）
+    const r = computeRevision({ grade: '6G', currentStep: 20, hyogo: 'A', age: 45 })
+    expect(r.totalPitch).toBe(4)              // 評語のみ（年齢は6Gの45歳で0）
+    expect(Object.keys(r)).not.toContain('profitPitch')
   })
-  it('1G/2Gは常に0、上位ほど連動が強い', () => {
-    expect(profitAdjustment('over10', '1G')).toBe(0)
-    expect(profitAdjustment('over10', '6G')).toBe(3)
-    expect(profitAdjustment('loss', '6G')).toBe(-3)
-    expect(profitAdjustment('profit', '6G')).toBe(1)
+
+  it('等級の逆転が起きない（撤廃前は赤字の年に 4G > 5G > 6G となっていた）', () => {
+    const yen = (g: JpGrade, step: number, pitch: number) => {
+      let v = 0
+      for (let k = 1; k <= pitch; k++) v += dailyForStep(g, step + k) - dailyForStep(g, step + k - 1)
+      return v
+    }
+    const grades: JpGrade[] = ['1G', '2G', '3G', '4G', '5G', '6G']
+    const raises = grades.map(g => {
+      const r = computeRevision({ grade: g, currentStep: 20, hyogo: 'A', age: 35 })
+      return yen(g, 20, r.totalPitch)
+    })
+    for (let i = 1; i < raises.length; i++) {
+      expect(raises[i], `${grades[i]} が ${grades[i - 1]} を下回らない`).toBeGreaterThan(raises[i - 1])
+    }
   })
 })
 
@@ -149,26 +161,25 @@ describe('特別調整（±3上限）', () => {
 })
 
 describe('改定 computeRevision: 合計ピッチ・降給なし', () => {
-  it('標準A・利益黒字・特別なしの一般的ケース', () => {
-    // 本田さん相当: 3G 33号, A, 47歳, 黒字
-    const r = computeRevision({ grade: '3G', currentStep: 33, hyogo: 'A', age: 47, profitRank: 'profit' })
+  it('標準A・特別なしの一般的ケース', () => {
+    // 本田さん相当: 3G 33号, A, 47歳
+    const r = computeRevision({ grade: '3G', currentStep: 33, hyogo: 'A', age: 47 })
     expect(r.hyogoPitch).toBe(4)
     expect(r.agePitch).toBe(ageAdjustment(47, '3G')) // -2
-    expect(r.profitPitch).toBe(0)
     expect(r.totalPitch).toBe(2)
     expect(r.newStep).toBe(35)
   })
   it('合計マイナスは0にクランプ（降給なし）', () => {
-    // C(1) + 年齢-3 + 利益赤字-2 = -4 → 0
-    const r = computeRevision({ grade: '4G', currentStep: 30, hyogo: 'C', age: 58, profitRank: 'loss' })
+    // C(1) + 年齢-3 + 特別-2 = -4 → 0
+    const r = computeRevision({ grade: '4G', currentStep: 30, hyogo: 'C', age: 58, specialKeys: ['discipline'] })
     expect(r.agePitch).toBe(-3)
-    expect(r.profitPitch).toBe(-2)
+    expect(r.specialPitch).toBe(-2)
     expect(r.totalPitch).toBe(0)
     expect(r.newStep).toBe(30)
     expect(r.newDaily).toBe(r.oldDaily) // 据え置き
   })
   it('60号でキャップ', () => {
-    const r = computeRevision({ grade: '1G', currentStep: 58, hyogo: 'SS', age: 20, profitRank: 'over10' })
+    const r = computeRevision({ grade: '1G', currentStep: 58, hyogo: 'SS', age: 20 })
     expect(r.newStep).toBe(MAX_STEP)
   })
 })
@@ -324,7 +335,7 @@ describe('checkHyogoBalance（ペア評価のルール）', () => {
 })
 
 describe('computeRosterRevision（名簿全体の改定）', () => {
-  const base = { asOf: '2026-10-01', profitRatePercent: 6 }
+  const base = { asOf: '2026-10-01' }
   const m = (o: Partial<RosterMember>): RosterMember => ({
     id: 1, name: 'テスト', grade: '3G', currentStep: 30,
     birthDate: '1990-01-01', hyogo: 'A', ...o,
@@ -422,7 +433,7 @@ describe('nextRevisionDate（改定の基準日）', () => {
 })
 
 describe('中途採用の初回改定', () => {
-  const base = { asOf: '2026-10-01', profitRatePercent: 6 }
+  const base = { asOf: '2026-10-01' }
   const m = (o: Partial<RosterMember>): RosterMember => ({
     id: 20, name: '中途 太郎', grade: '3G', currentStep: 20,
     birthDate: '1990-01-01', hyogo: 'A', ...o,

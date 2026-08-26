@@ -33,7 +33,7 @@ interface Row {
   }
   status: RosterStatus
   result: null | {
-    hyogoPitch: number; agePitch: number; profitPitch: number; specialPitch: number
+    hyogoPitch: number; agePitch: number; specialPitch: number
     totalPitch: number; newStep: number; raisePerDay: number; upRate: number
   }
   oldTotal: number | null
@@ -73,7 +73,6 @@ export default function RevisionPanel() {
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
-  const [profitInput, setProfitInput] = useState('')
   // 特別調整の事由は行を展開して選ぶ。表の中にポップオーバーを出すと位置合わせが崩れるため
   const [openSpecial, setOpenSpecial] = useState<number | null>(null)
 
@@ -83,7 +82,6 @@ export default function RevisionPanel() {
       if (!res.ok) throw new Error(`取得に失敗しました（${res.status}）`)
       const j: Payload = await res.json()
       setData(j)
-      setProfitInput(j.profitRatePercent === null ? '' : String(j.profitRatePercent))
       setErr('')
     } catch (e) {
       setErr(e instanceof Error ? e.message : '不明なエラー')
@@ -107,14 +105,14 @@ export default function RevisionPanel() {
   const entries = data?.entries ?? {}
 
   /** 下書きを保存して読み直す。計算はサーバ側の1本に寄せる */
-  const save = async (patch: { entries?: Payload['entries']; profitRatePercent?: number | null }) => {
+  const save = async (patch: { entries?: Payload['entries'] }) => {
     if (!data) return
     setBusy(true); setMsg('')
     try {
       const res = await fetch('/api/jp-wage/revision', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
-        body: JSON.stringify({ effective: data.effective, entries: patch.entries ?? entries, profitRatePercent: patch.profitRatePercent ?? data.profitRatePercent }),
+        body: JSON.stringify({ effective: data.effective, entries: patch.entries ?? entries }),
       })
       if (!res.ok) throw new Error((await res.json()).error || `保存に失敗しました（${res.status}）`)
       await load(pw)
@@ -196,28 +194,7 @@ export default function RevisionPanel() {
       {msg && <div className="rounded-lg border border-green-300 bg-green-50 dark:bg-green-900/20 p-3 text-sm text-green-800 dark:text-green-300">{msg}</div>}
 
       {/* ── 経常利益率と合計 ── */}
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-          <label className="text-xs text-gray-500 block mb-1">経常利益率（9月決算）</label>
-          <div className="flex gap-2">
-            <input
-              type="number" step="0.1" value={profitInput} disabled={applied}
-              onChange={e => setProfitInput(e.target.value)}
-              placeholder="未入力"
-              className="w-24 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-3 py-2 text-sm tabular-nums disabled:opacity-60"
-            />
-            <span className="self-center text-sm text-gray-500">%</span>
-            {!applied && (
-              <button onClick={() => save({ profitRatePercent: profitInput === '' ? null : Number(profitInput) })}
-                disabled={busy}
-                className="text-xs px-3 py-2 rounded-lg bg-hibi-navy text-white hover:opacity-90 disabled:opacity-50">保存</button>
-            )}
-          </div>
-          <p className="text-[11px] text-gray-400 mt-1.5">
-            {data.profitRatePercent === null ? '未入力のうちは利益調整が 0 のまま計算されます。' : '第7節の表を当てはめて利益調整に反映しています。'}
-          </p>
-        </div>
-
+      <section className="grid gap-4 md:grid-cols-2">
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="text-xs text-gray-500">昇給額 合計</div>
           <div className="text-2xl font-bold tabular-nums">{yen(totals.raise)}<span className="text-xs font-normal text-gray-400"> / 日</span></div>
@@ -367,7 +344,7 @@ export default function RevisionPanel() {
                   <td className={`${td} text-center whitespace-nowrap`}>
                     {r.result ? (
                       <span className="text-xs tabular-nums text-gray-600 dark:text-gray-300">
-                        評{signedPitch(r.result.hyogoPitch)} 齢{signedPitch(r.result.agePitch)} 益{signedPitch(r.result.profitPitch)} 特{signedPitch(r.result.specialPitch)}
+                        評{signedPitch(r.result.hyogoPitch)} 齢{signedPitch(r.result.agePitch)} 特{signedPitch(r.result.specialPitch)}
                         <b className="ml-1.5 text-hibi-navy dark:text-blue-300">= {r.result.totalPitch}</b>
                       </span>
                     ) : <span className="text-[11px] text-gray-400">{r.blockers.join(' / ') || '—'}</span>}
@@ -461,7 +438,7 @@ export default function RevisionPanel() {
               要入力が残っている・評語のバランスが取れていない場合は確定できません。
             </div>
           </div>
-          <button onClick={apply} disabled={busy || totals.blocked > 0 || !data.revision.balance.ok || data.profitRatePercent === null}
+          <button onClick={apply} disabled={busy || totals.blocked > 0 || !data.revision.balance.ok}
             className="px-5 py-2.5 rounded-lg bg-hibi-navy text-white font-bold text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
             {busy ? '処理中…' : '改定を確定する'}
           </button>

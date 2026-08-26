@@ -31,7 +31,7 @@ interface Frozen {
   hyogo: string
   comment: string | null
   birthDate: string | null
-  pitches: null | { hyogo: number; age: number; profit: number; special: number; total: number }
+  pitches: null | { hyogo: number; age: number; special: number; total: number }
   oldDaily: number | null
   newDaily: number | null
   raisePerDay: number
@@ -179,7 +179,7 @@ function SheetBody() {
               <table className="g" style={{ borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    <th colSpan={2}>昇給評価</th><th>年齢調整</th><th>利益調整</th><th>特別調整</th><th>合計</th>
+                    <th colSpan={2}>昇給評価</th><th>年齢調整</th><th>特別調整</th><th>合計</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -187,7 +187,6 @@ function SheetBody() {
                     <td style={{ minWidth: 34 }}>{f.hyogo}</td>
                     <td style={{ minWidth: 34 }}>{f.pitches?.hyogo ?? '—'}</td>
                     <td style={{ minWidth: 56 }}>{f.pitches?.age || ''}</td>
-                    <td style={{ minWidth: 56 }}>{f.pitches?.profit || ''}</td>
                     <td style={{ minWidth: 56 }}>{f.pitches?.special || ''}</td>
                     <td style={{ minWidth: 44, fontWeight: 700 }}>{f.pitches?.total ?? '—'}</td>
                   </tr>

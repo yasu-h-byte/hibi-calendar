@@ -6,7 +6,7 @@
  */
 
 import {
-  HYOGO_PITCH, ageTableForDisplay, profitTableForDisplay,
+  HYOGO_PITCH, ageTableForDisplay,
   SPECIAL_REASONS, SPECIAL_CAP, GRADE_LABELS,
 } from '@/lib/jp-wage'
 
@@ -32,7 +32,7 @@ export default function AdjustmentTables() {
       <div className="bg-hibi-navy/5 dark:bg-blue-900/20 rounded-xl border border-hibi-navy/20 dark:border-blue-800 p-4">
         <div className="text-sm font-bold mb-1">改定額の決まり方</div>
         <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
-          合計ピッチ ＝ <b>昇給評価</b> ＋ <b>年齢調整</b> ＋ <b>利益調整</b> ＋ <b>特別調整</b><br />
+          合計ピッチ ＝ <b>昇給評価</b> ＋ <b>年齢調整</b> ＋ <b>特別調整</b><br />
           新しい号 ＝ 現在の号 ＋ 合計ピッチ（60号が上限）。<b>合計がマイナスでも 0 まで</b>で、降給は行いません。
         </p>
       </div>
@@ -71,26 +71,7 @@ export default function AdjustmentTables() {
         </table>
       </Card>
 
-      <Card title="③ 利益調整" note="会社の業績を反映する。上位等級ほど幅が大きい（責任に応じて連動させる）。経常利益率は9月決算の確定値を使う。">
-        <table className="text-sm">
-          <thead><tr>
-            <th className={`${th} text-left`}>業績</th>
-            {GRADE_COLS.map(g => <th key={g} className={`${th} text-right`}>{g}</th>)}
-          </tr></thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-            {profitTableForDisplay().map(r => (
-              <tr key={r.rank}>
-                <td className="px-2.5 py-1.5 whitespace-nowrap">{r.label}</td>
-                {r.pitches.map((p, i) => (
-                  <td key={i} className={`${td} ${p < 0 ? 'text-red-600 dark:text-red-400' : p > 0 ? 'text-green-700 dark:text-green-400' : 'text-gray-400'}`}>{signed(p)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-
-      <Card title="④ 特別調整" note={`該当する事由を足し合わせる。合計は ±${SPECIAL_CAP} が上限。`}>
+      <Card title="③ 特別調整" note={`該当する事由を足し合わせる。合計は ±${SPECIAL_CAP} が上限。`}>
         <table className="text-sm w-full">
           <thead><tr>
             <th className={`${th} text-left`}>事由</th><th className={`${th} text-right`}>ピッチ</th>
@@ -105,6 +86,16 @@ export default function AdjustmentTables() {
           </tbody>
         </table>
       </Card>
+
+      <section className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <h3 className="text-sm font-bold mb-1">業績（利益）はここには入りません</h3>
+        <p className="text-[11px] text-gray-500 leading-relaxed">
+          以前は「利益調整」として号数に反映していましたが、2026年8月に撤廃しました。
+          賞与が「原資を業績で決め、等級×評語の点数で配分する」方式のため二重連動になること、
+          また号は一度上げると定年まで残るため、単年の業績を恒久的な賃金に変えてしまうことが理由です。
+          業績連動は賞与に一本化しています。
+        </p>
+      </section>
 
       <p className="text-[11px] text-gray-400">
         等級の呼称：{Object.entries(GRADE_LABELS).map(([g, l]) => `${g === 'doko' ? '土工' : g}=${l}`).join(' ／ ')}

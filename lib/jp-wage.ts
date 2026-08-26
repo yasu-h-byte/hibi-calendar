@@ -26,8 +26,6 @@ export type JpGrade = '1G' | '2G' | '3G' | '4G' | '5G' | '6G' | 'doko'
 export type Hyogo = 'SS' | 'S' | 'A' | 'B' | 'C'
 
 /** 経常利益率のランク（利益調整用）。 */
-export type ProfitRank = 'over10' | 'over5' | 'profit' | 'loss'
-
 // ────────────────────────────────────────
 //  号俸表（初号 + 逓減ピッチ）
 // ────────────────────────────────────────
@@ -183,42 +181,24 @@ export function ageAdjustment(age: number, grade: JpGrade): number {
 }
 
 // ────────────────────────────────────────
-//  利益調整
+//  利益調整（2026-08 撤廃）
 // ────────────────────────────────────────
-
-const PROFIT_TABLE: Record<ProfitRank, number[]> = {
-  over10: [0, 0, 1, 2, 2, 3],
-  over5: [0, 0, 0, 1, 1, 2],
-  profit: [0, 0, 0, 0, 0, 1],
-  loss: [0, 0, -1, -2, -2, -3],
-}
-
-/** 利益ランクの定義（表示用）。しきい値は profitRankOf と対で保つこと。 */
-export const PROFIT_RANK_LABELS: Array<{ rank: ProfitRank; label: string }> = [
-  { rank: 'over10', label: '経常利益率 10%以上' },
-  { rank: 'over5', label: '5%以上 10%未満' },
-  { rank: 'profit', label: '0%以上 5%未満（黒字）' },
-  { rank: 'loss', label: '赤字' },
-]
-
-/** 利益調整の全表（表示用）。 */
-export function profitTableForDisplay(): Array<{ rank: ProfitRank; label: string; pitches: number[] }> {
-  return PROFIT_RANK_LABELS.map(r => ({ ...r, pitches: PROFIT_TABLE[r.rank] }))
-}
-
-/** 経常利益率(%)からランクを判定。 */
-export function profitRankOf(profitRatePercent: number): ProfitRank {
-  if (profitRatePercent >= 10) return 'over10'
-  if (profitRatePercent >= 5) return 'over5'
-  if (profitRatePercent >= 0) return 'profit'
-  return 'loss'
-}
-
-/** 利益ランクと等級から利益調整ピッチを返す。 */
-export function profitAdjustment(rank: ProfitRank, grade: JpGrade): number {
-  const gi = grade === 'doko' ? GRADE_INDEX['3G'] : GRADE_INDEX[grade]
-  return PROFIT_TABLE[rank][gi]
-}
+//
+// 会社の業績を昇給（号数）へ反映する仕組みを置いていたが撤廃した。
+//
+// 理由は2つ。
+// ① **賞与で既に業績連動している。** 賞与は「原資を代表が業績を見て決め、
+//    等級×評語の点数で配分する」方式。総額の決定にすでに業績が入っているので、
+//    昇給にも掛けると二重連動になる。
+// ② **昇給で背負わせると等級が逆転する。** 上位等級ほど大きく引く設計にすると、
+//    赤字の年に「4G班長 700円 > 5G職長 430円 > 6G上級職長 260円」が起きる。
+//    号のピッチ差（等級1段で15〜25%）より、1ピッチ減の影響のほうが大きいため、
+//    表をどう組んでも避けられない。
+//
+// さらに、号は一度上げると定年まで残る。単年の業績を恒久的な賃金へ変換することに
+// なり、性質が合わない（好調な年に在籍していたかどうかで生涯賃金が変わる）。
+//
+// 業績連動は賞与に一本化した。docs/wage-system.md 第7節を参照。
 
 // ────────────────────────────────────────
 //  特別調整（事由リスト・合計±3上限）
@@ -259,14 +239,12 @@ export interface RevisionInput {
   currentStep: number
   hyogo: Hyogo
   age: number
-  profitRank: ProfitRank
   specialKeys?: string[]
 }
 
 export interface RevisionResult {
   hyogoPitch: number
   agePitch: number
-  profitPitch: number
   specialPitch: number
   totalPitch: number          // 合計（マイナスは0にクランプ＝降給なし）
   newStep: number
@@ -278,21 +256,20 @@ export interface RevisionResult {
 }
 
 /**
- * 改定の計算。合計ピッチ = 評語 + 年齢 + 利益 + 特別。
+ * 改定の計算。合計ピッチ = 評語 + 年齢 + 特別。
  * 合計がマイナスなら0（降給なし）。新号 = 現号 + 合計（60でキャップ）。
  */
 export function computeRevision(input: RevisionInput): RevisionResult {
   const hyogoPitch = HYOGO_PITCH[input.hyogo]
   const agePitch = ageAdjustment(input.age, input.grade)
-  const profitPitch = profitAdjustment(input.profitRank, input.grade)
   const specialPitch = specialAdjustment(input.specialKeys ?? [])
-  const rawTotal = hyogoPitch + agePitch + profitPitch + specialPitch
+  const rawTotal = hyogoPitch + agePitch + specialPitch
   const totalPitch = Math.max(0, rawTotal)
   const newStep = Math.min(MAX_STEP, input.currentStep + totalPitch)
   const oldDaily = dailyForStep(input.grade, input.currentStep)
   const newDaily = dailyForStep(input.grade, newStep)
   return {
-    hyogoPitch, agePitch, profitPitch, specialPitch, totalPitch, newStep,
+    hyogoPitch, agePitch, specialPitch, totalPitch, newStep,
     oldDaily, newDaily,
     raisePerDay: newDaily - oldDaily,
     newBaseAnnual: baseAnnual(newDaily),
@@ -516,10 +493,9 @@ export interface RosterRevision {
  */
 export function computeRosterRevision(
   members: RosterMember[],
-  opts: { asOf: string; profitRatePercent: number; annualDays?: number },
+  opts: { asOf: string; annualDays?: number },
 ): RosterRevision {
   const annualDays = opts.annualDays ?? ANNUAL_DAYS
-  const profitRank = profitRankOf(opts.profitRatePercent)
 
   const rows: RosterRow[] = members.map(m => {
     const adj = m.adjustment ?? 0
@@ -557,7 +533,6 @@ export function computeRosterRevision(
       currentStep: m.currentStep!,
       hyogo: m.hyogo,
       age: ageOn(m.birthDate!, opts.asOf),
-      profitRank,
       specialKeys: m.specialKeys,
     })
     return {

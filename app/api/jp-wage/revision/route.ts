@@ -95,10 +95,7 @@ export async function GET(request: NextRequest) {
   const effective = effectiveOf(request)
   const docData = await loadDoc(effective)
   const { members } = await buildRoster(effective, docData.entries)
-  const revision = computeRosterRevision(members, {
-    asOf: effective,
-    profitRatePercent: docData.profitRatePercent ?? 0,
-  })
+  const revision = computeRosterRevision(members, { asOf: effective })
   // 給料表の推移グラフに使うので、履歴も一緒に返す
   const histSnap = await getDocs(collection(db, 'jpWageHistory'))
   const history: Record<string, { year: number; baseAnnual: number }[]> = {}
@@ -148,15 +145,8 @@ export async function POST(request: NextRequest) {
   if (docData.status === 'applied') {
     return NextResponse.json({ error: 'この改定は既に適用済みです', appliedAt: docData.appliedAt }, { status: 409 })
   }
-  if (docData.profitRatePercent === null) {
-    return NextResponse.json({ error: '経常利益率が未入力です' }, { status: 400 })
-  }
-
   const { members } = await buildRoster(effective, docData.entries)
-  const revision = computeRosterRevision(members, {
-    asOf: effective,
-    profitRatePercent: docData.profitRatePercent,
-  })
+  const revision = computeRosterRevision(members, { asOf: effective })
 
   // 入力が足りない人が1人でもいたら適用しない（一部だけ反映されるのが一番困る）
   const blocked = revision.rows.filter(r => r.status === 'blocked')
@@ -185,7 +175,7 @@ export async function POST(request: NextRequest) {
     birthDate: r.member.birthDate,
     hireDate: r.member.hireDate ?? null,
     pitches: r.result
-      ? { hyogo: r.result.hyogoPitch, age: r.result.agePitch, profit: r.result.profitPitch, special: r.result.specialPitch, total: r.result.totalPitch }
+      ? { hyogo: r.result.hyogoPitch, age: r.result.agePitch, special: r.result.specialPitch, total: r.result.totalPitch }
       : null,
     oldDaily: r.oldTotal,
     newDaily: r.newTotal,
