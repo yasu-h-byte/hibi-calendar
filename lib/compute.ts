@@ -85,6 +85,8 @@ export interface RawWorker {
 export interface RawSite {
   id: string; name: string; start: string; end: string
   foreman: number; archived: boolean
+  /** 通勤時間の測定（手当判定）。types/index.ts の SiteCommuteData と同形 */
+  commute?: import('@/types').SiteCommuteData
   tobiRate?: number; dokoRate?: number
   rates?: { from: string; tobiRate: number; dokoRate: number }[]
   workSchedule?: {

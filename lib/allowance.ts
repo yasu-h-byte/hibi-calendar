@@ -119,6 +119,28 @@ export function fullMonthsBetween(fromIso: string, toIso: string): number {
   return m
 }
 
+/** 凍結に必要な最少サンプル日数（朝夕そろった日）。規程の「最初の10営業日」に対応。 */
+export const COMMUTE_SAMPLE_TARGET = 10
+
+export interface CommuteSampleLike { am?: number; pm?: number }
+
+/**
+ * サンプル → 判定値（分）。
+ * 朝の平均と夕の平均をそれぞれ出し、その平均を四捨五入する（片道換算）。
+ * 朝夕どちらかが欠けた日はその側の平均に含めない。
+ */
+export function judgeFromSamples(samples: CommuteSampleLike[]): {
+  amAvg: number | null; pmAvg: number | null; judged: number | null; completeDays: number
+} {
+  const ams = samples.map(s => s.am).filter((v): v is number => typeof v === 'number' && v > 0)
+  const pms = samples.map(s => s.pm).filter((v): v is number => typeof v === 'number' && v > 0)
+  const amAvg = ams.length ? ams.reduce((a, b) => a + b, 0) / ams.length : null
+  const pmAvg = pms.length ? pms.reduce((a, b) => a + b, 0) / pms.length : null
+  const judged = amAvg !== null && pmAvg !== null ? Math.round((amAvg + pmAvg) / 2) : null
+  const completeDays = samples.filter(s => (s.am ?? 0) > 0 && (s.pm ?? 0) > 0).length
+  return { amAvg, pmAvg, judged, completeDays }
+}
+
 export interface SiteCommute {
   /** 凍結済みの判定値（片道換算・分）。未測定なら undefined */
   judgedMin?: number

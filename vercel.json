@@ -7,6 +7,14 @@
     {
       "path": "/api/backup/snapshot",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/commute/measure",
+      "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/commute/measure",
+      "schedule": "30 8 * * *"
     }
   ]
 }

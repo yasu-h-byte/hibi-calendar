@@ -75,6 +75,31 @@ export interface Site {
    * detectMultiSiteConflict で同日同種シフトの重複を防ぐために使用。
    */
   shiftType?: 'day' | 'night'
+  /**
+   * 通勤時間の測定（遠方現場日当・運転手当の判定用。lib/allowance.ts 参照）。
+   * 判定値 = 朝平均と夕平均の平均（片道換算・分）。凍結後は動かさない。
+   */
+  commute?: SiteCommuteData
+}
+
+export interface CommuteSample {
+  /** 測定日 'YYYY-MM-DD' */
+  date: string
+  /** 朝便（清瀬6:00発→現場）の所要分。未測定なら省略 */
+  am?: number
+  /** 夕便（現場17:30発→清瀬）の所要分 */
+  pm?: number
+  source: 'manual' | 'auto'
+}
+
+export interface SiteCommuteData {
+  /** 測定の目的地（現場住所。自動測定に使う） */
+  address?: string
+  samples?: CommuteSample[]
+  /** 凍結された判定値（分）。これが入ったら測定終了 */
+  judgedMin?: number
+  frozenAt?: string
+  frozenBy?: string
 }
 
 export interface SiteAssign {

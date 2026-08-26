@@ -35,6 +35,7 @@ interface RawSite {
   dokoRate?: number
   rates?: RatePeriod[]
   workSchedule?: SiteWorkScheduleRaw | null
+  commute?: import('@/types').SiteCommuteData
 }
 
 async function getMainDoc() {
@@ -150,7 +151,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'update') {
-      const { id, name, start, end, foreman, archived, tobiRate, dokoRate, rates, subconRates, workSchedule } = body
+      const { id, name, start, end, foreman, archived, tobiRate, dokoRate, rates, subconRates, workSchedule, commute } = body
       if (!id) {
         return NextResponse.json({ error: 'id required' }, { status: 400 })
       }
@@ -172,6 +173,7 @@ export async function POST(request: NextRequest) {
         ...(dokoRate !== undefined && { dokoRate: Number(dokoRate) }),
         ...(rates !== undefined && { rates }),
         ...(workSchedule !== undefined && { workSchedule: workSchedule as SiteWorkScheduleRaw | null }),
+        ...(commute !== undefined && { commute }),
       }
 
       const updateData: Record<string, unknown> = { sites: updated }
@@ -196,6 +198,9 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      if (commute?.judgedMin !== undefined && sites[idx]?.commute?.judgedMin === undefined) {
+        await logActivity('admin', 'site.commute', `${updated[idx].name || id} 通勤時間を凍結: 判定値${commute.judgedMin}分`)
+      }
       await logActivity('admin', 'site.update', `${id} を更新`)
       return NextResponse.json({ success: true })
     }
