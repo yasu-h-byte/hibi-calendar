@@ -3,6 +3,15 @@ import { doc, getDoc } from '@/lib/fsdb'
 import { Worker } from '@/types'
 import { todayJstIso } from './date-utils'
 
+/**
+ * 人員マスタの読み出し。
+ *
+ * ⚠️ **この map は許可リストになっている。** Firestore に保存されていても、ここに
+ *    書き忘れたフィールドは呼び出し側に届かない。「保存したのに画面では未入力のまま」
+ *    という形で表面化し、書き込み側を疑って時間を溶かす（2026-08-26 に birthDate で発生）。
+ *    Worker 型にフィールドを足したら、必ずここにも足すこと。
+ *    漏れは `__tests__/workersMapping.test.ts` が検出する。
+ */
 export async function getWorkers(): Promise<Worker[]> {
   const docRef = doc(db, 'demmen', 'main')
   const docSnap = await getDoc(docRef)
@@ -30,6 +39,9 @@ export async function getWorkers(): Promise<Worker[]> {
     dispatchTo: (w.dispatchTo as string) || '',
     dispatchFrom: (w.dispatchFrom as string) || '',
     useOldRules: (w.useOldRules as boolean) || undefined,
+    birthDate: (w.birthDate as string) || '',
+    jpGrade: (w.jpGrade as string) || undefined,
+    jpStep: (w.jpStep as number) || undefined,
   }))
 
   return workers
