@@ -332,13 +332,22 @@ export interface BonusMember {
 
 export interface BonusAllocation extends BonusMember {
   points: number
-  amount: number       // 千円未満は四捨五入（配分の慣行）
+  /**
+   * 支給額。**千円未満は切り上げ**。
+   * 実際の配分表がそうなっている（75,472 → 76,000 / 52,830 → 53,000）。
+   * 切り上げのぶん、合計は原資をわずかに超える（10名で3,000円程度）。
+   */
+  amount: number
 }
 
 /**
  * 原資（総額）を点数比で配分する。
- *   単価 = 原資 ÷ 総点数、各人 = 点数 × 単価（千円丸め）。
- * 原資は代表が決める前提。役員はこの配分の外（呼び出し側で除外）。
+ *
+ *   単価 = 原資 ÷ 総点数 → 各人 = 点数 × 単価（千円切り上げ）
+ *
+ * **業績連動はこの原資の決定に集約している。** 代表が利益を見て総額を決めるので、
+ * 配分側にも昇給側にも業績の係数は掛けない（掛けると二重連動になる。第7節）。
+ * 役員はこの配分の外（呼び出し側で除外する）。
  */
 export function allocateBonus(pool: number, members: BonusMember[]): { unit: number; totalPoints: number; allocations: BonusAllocation[] } {
   const withPoints = members.map(m => ({ ...m, points: bonusPoints(m.grade, m.hyogo) }))
@@ -346,7 +355,7 @@ export function allocateBonus(pool: number, members: BonusMember[]): { unit: num
   const unit = totalPoints > 0 ? pool / totalPoints : 0
   const allocations: BonusAllocation[] = withPoints.map(m => ({
     ...m,
-    amount: Math.round((m.points * unit) / 1000) * 1000,
+    amount: Math.ceil((m.points * unit) / 1000) * 1000,
   }))
   return { unit, totalPoints, allocations }
 }
@@ -355,11 +364,7 @@ export function allocateBonus(pool: number, members: BonusMember[]): { unit: num
 //  等級ラベル
 // ────────────────────────────────────────
 
-export const GRADE_LABEL: Record<JpGrade, string> = {
-  '1G': '初級職', '2G': '中級職', '3G': '班長',
-  '4G': '上級班長', '5G': '職長', '6G': '上級職長',
-  'doko': '土工',
-}
+// 等級ラベルは GRADE_LABELS（ファイル冒頭）に集約した
 
 // ────────────────────────────────────────
 //  名簿単位の改定（10月1日の年次改定を回すための層）

@@ -6,6 +6,7 @@ import {
   ageOn, nextRevisionDate, monthsBetween, checkHyogoBalance, computeRosterRevision, type RosterMember,
   paySheetFigures, baseAnnualWithLeave, TOTAL_PAID_DAYS,
   type JpGrade,
+  type BonusMember,
 } from '@/lib/jp-wage'
 import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration'
 
@@ -205,7 +206,7 @@ describe('賞与 bonusPoints / allocateBonus', () => {
     expect(bonusPoints('3G', 'A')).toBe(200)
     expect(bonusPoints('doko', 'A')).toBe(200) // 土工=3G相当
   })
-  it('原資を点数比で配分（千円丸め・単価一定）', () => {
+  it('原資を点数比で配分（千円切り上げ・単価一定）', () => {
     const { unit, totalPoints, allocations } = allocateBonus(3000000, [
       { workerId: 1, grade: '6G', hyogo: 'A' }, // 560
       { workerId: 2, grade: '3G', hyogo: 'A' }, // 200
@@ -213,11 +214,12 @@ describe('賞与 bonusPoints / allocateBonus', () => {
     ])
     expect(totalPoints).toBe(860)
     expect(unit).toBeCloseTo(3000000 / 860)
-    // 各人 = 点数×単価を千円丸め
-    expect(allocations[0].amount).toBe(Math.round((560 * unit) / 1000) * 1000)
-    // 配分は原資近傍（千円丸め誤差の範囲）
+    // 各人 = 点数×単価を千円切り上げ（実物の配分表がそうなっている）
+    expect(allocations[0].amount).toBe(Math.ceil((560 * unit) / 1000) * 1000)
+    // 切り上げなので合計は原資以上・千円×人数の範囲に収まる
     const sum = allocations.reduce((s, a) => s + a.amount, 0)
-    expect(Math.abs(sum - 3000000)).toBeLessThan(3000)
+    expect(sum).toBeGreaterThanOrEqual(3000000)
+    expect(sum - 3000000).toBeLessThan(3000)
   })
 })
 
@@ -536,5 +538,72 @@ describe('paySheetFigures（給料表の換算）', () => {
 
   it('昇給（年）は日額の差 × 310', () => {
     expect(paySheetFigures(23550, 22650).raisePerYear).toBe(900 * 310)
+  })
+})
+
+describe('賞与の配分（実物の配分表で検算）', () => {
+  /**
+   * 共有された配分表（原資120万円・10名）をそのまま再現する。
+   * 単価 = 1,200,000 ÷ 3,180点 = 377.36円。千円未満は切り上げ。
+   * 配分の考え方を変えたらここが落ちる。
+   */
+  it('単価と支給額が実物と一致する', () => {
+    const rows = [
+      { points: 800, headcount: 1, expected: 302000 },
+      { points: 200, headcount: 1, expected: 76000 },
+      { points: 400, headcount: 2, expected: 151000 },
+      { points: 280, headcount: 3, expected: 106000 },
+      { points: 200, headcount: 2, expected: 76000 },
+      { points: 140, headcount: 1, expected: 53000 },
+    ]
+    const totalPoints = rows.reduce((s, r) => s + r.points * r.headcount, 0)
+    expect(totalPoints).toBe(3180)
+
+    const unit = 1200000 / totalPoints
+    expect(Number(unit.toFixed(2))).toBe(377.36)
+
+    for (const r of rows) {
+      expect(Math.ceil((r.points * unit) / 1000) * 1000).toBe(r.expected)
+    }
+  })
+
+  it('切り上げのため、支給合計は原資をわずかに超える', () => {
+    const members: BonusMember[] = [
+      { workerId: 1, grade: '6G', hyogo: 'A' },
+      { workerId: 2, grade: '5G', hyogo: 'A' },
+      { workerId: 3, grade: '3G', hyogo: 'A' },
+    ]
+    const { allocations } = allocateBonus(1200000, members)
+    const sum = allocations.reduce((s, a) => s + a.amount, 0)
+    expect(sum).toBeGreaterThanOrEqual(1200000)
+    expect(sum - 1200000).toBeLessThan(3000)
+  })
+})
+
+describe('賞与の点数表（A案・6等級）', () => {
+  it('A評価の基準点が1段ずつ上がる', () => {
+    const expected: Array<[JpGrade, number]> = [
+      ['1G', 100], ['2G', 140], ['3G', 200], ['4G', 280], ['5G', 400], ['6G', 560],
+    ]
+    for (const [g, pt] of expected) expect(bonusPoints(g, 'A')).toBe(pt)
+  })
+
+  it('評語は等級を上下にずらすのと同じ（班長の例）', () => {
+    expect(bonusPoints('3G', 'SS')).toBe(400)  // 2段上
+    expect(bonusPoints('3G', 'S')).toBe(280)   // 1段上
+    expect(bonusPoints('3G', 'A')).toBe(200)
+    expect(bonusPoints('3G', 'B')).toBe(140)
+    expect(bonusPoints('3G', 'C')).toBe(100)
+  })
+
+  it('土工は3G相当（旧配分表で班長と同額だった扱いを踏襲）', () => {
+    expect(bonusPoints('doko', 'A')).toBe(bonusPoints('3G', 'A'))
+  })
+
+  it('上位等級ほど業績の振れ幅が大きくなる（原資が動いたときの受け方）', () => {
+    const g: JpGrade[] = ['1G', '2G', '3G', '4G', '5G', '6G']
+    const pts = g.map(x => bonusPoints(x, 'A'))
+    for (let i = 1; i < pts.length; i++) expect(pts[i]).toBeGreaterThan(pts[i - 1])
+    expect(pts[5] / pts[0]).toBeCloseTo(5.6, 1)
   })
 })
