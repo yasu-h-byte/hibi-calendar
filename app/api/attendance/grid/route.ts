@@ -24,6 +24,15 @@ export async function GET(request: NextRequest) {
       getMainData(),
       getAttData(ym),
     ])
+    // 運転記録: att_ドキュメントの drv マップ（`${siteId}_${ym}_${day}` → {am,pm}）から
+    // この現場の分だけ day キーに直して返す
+    const driversForSite: Record<number, { am: number[]; pm: number[] }> = {}
+    for (const [k, v] of Object.entries((att as { drv?: Record<string, { am?: number[]; pm?: number[] }> }).drv || {})) {
+      const prefix = `${siteId}_${ym}_`
+      if (!k.startsWith(prefix)) continue
+      const day = Number(k.slice(prefix.length))
+      if (Number.isFinite(day)) driversForSite[day] = { am: v.am || [], pm: v.pm || [] }
+    }
 
     const site = main.sites.find(s => s.id === siteId)
     if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 })
@@ -210,6 +219,8 @@ export async function GET(request: NextRequest) {
       siteWorkDays: siteWorkDaysValue,
       // 夜勤が発生した日（台風待機など）。この日だけスタッフのセルに夜勤バッジが出る
       nightDays: main.nightDays?.[`${siteId}_${ym}`] || [],
+      // 運転記録（day → {am,pm}）。運転手当（2026-10施行）の元データ
+      drivers: driversForSite,
       allWorkers,
       allSubcons,
       sites: main.sites.map(s => ({ id: s.id, name: s.name, archived: s.archived })),
@@ -370,6 +381,28 @@ export async function POST(request: NextRequest) {
     //   ym が指定されている場合のみ massign を更新する（後方互換）
     //
     // workerIds / subconIds はそれぞれ undefined 可（指定なしの side は変更しない）
+    if (action === 'saveDrivers') {
+      // 便ごとの運転者を保存。`drv.<siteId>_<ym>_<day>` へのドット記法更新なので
+      // 他の日・他の現場のキーには触れない（Firestore安全ルール準拠）
+      const { ym: dym, siteId: dsid, day, am, pm } = body
+      if (!dym || !dsid || !day) return NextResponse.json({ error: 'ym, siteId, day required' }, { status: 400 })
+      const clean = (v: unknown) => Array.isArray(v) ? [...new Set(v.map(Number).filter(Number.isFinite))] : []
+      const amIds = clean(am); const pmIds = clean(pm)
+      const key = `drv.${dsid}_${dym}_${Number(day)}`
+      const { doc, updateDoc, deleteField } = await import('@/lib/fsdb')
+      const { ensureDocExists } = await import('@/lib/firestore-safe')
+      const attRef = doc(db, 'demmen', `att_${dym}`)
+      await ensureDocExists(attRef)
+      if (amIds.length === 0 && pmIds.length === 0) {
+        await updateDoc(attRef, { [key]: deleteField() })
+      } else {
+        await updateDoc(attRef, { [key]: { am: amIds, pm: pmIds } })
+      }
+      const { logActivity } = await import('@/lib/activity')
+      await logActivity('admin', 'attendance.drivers', `${dsid}/${dym}/${day}日 運転者: 行き[${amIds.join(',')}] 帰り[${pmIds.join(',')}]`)
+      return NextResponse.json({ success: true })
+    }
+
     if (action === 'saveAssign') {
       const { siteId, ym, workerIds, subconIds } = body
       if (!siteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 })

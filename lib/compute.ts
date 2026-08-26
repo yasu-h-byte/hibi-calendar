@@ -184,6 +184,8 @@ export async function getAttData(ym: string): Promise<{
   d: Record<string, AttendanceEntry>
   sd: Record<string, { n: number; on: number }>
   approvals?: Record<string, boolean>
+  /** 運転記録 `${siteId}_${ym}_${day}` → {am,pm}（運転手当の元データ） */
+  drv?: Record<string, { am?: number[]; pm?: number[] }>
 }> {
   const docSnap = await getDoc(doc(db, 'demmen', `att_${ym}`))
   if (!docSnap.exists()) return { d: {}, sd: {} }
@@ -192,6 +194,7 @@ export async function getAttData(ym: string): Promise<{
     d: (data.d || {}) as Record<string, AttendanceEntry>,
     sd: (data.sd || {}) as Record<string, { n: number; on: number }>,
     approvals: (data.approvals || undefined) as Record<string, boolean> | undefined,
+    drv: (data.drv || undefined) as Record<string, { am?: number[]; pm?: number[] }> | undefined,
   }
 }
 

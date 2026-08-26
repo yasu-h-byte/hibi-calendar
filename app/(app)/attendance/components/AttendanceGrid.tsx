@@ -43,6 +43,9 @@ interface Props {
   /** 夜勤が発生した日（この日だけスタッフのセルに夜勤バッジが出る） */
   nightDays?: number[]
   onToggleNightDay?: (day: number) => void
+  /** 運転記録（day → {am,pm}）。運転手当の元データ */
+  drivers?: Record<number, { am: number[]; pm: number[] }>
+  onDriverClick?: (day: number) => void
   onForemanApproveAll: () => void
   onToggleForemanApproval: (day: number) => void
   onFinalApproveAll: () => void
@@ -56,6 +59,7 @@ export default function AttendanceGrid({
   onWorkChange, onOtChange, onTimeStatusChange, onStartTimeChange, onEndTimeChange, onBreakChange,
   onSubconNChange, onSubconOnChange, onCellKeyDown, onNightClick,
   nightDays, onToggleNightDay,
+  drivers, onDriverClick,
   onForemanApproveAll, onToggleForemanApproval, onFinalApproveAll, onToggleFinalApproval,
 }: Props) {
   // 夜勤が発生した日の判定（台風待機など）。指定日だけスタッフのセルに夜勤バッジを出す
@@ -166,6 +170,26 @@ export default function AttendanceGrid({
                         夜
                       </button>
                     )}
+                    {/* 便ごとの運転者（運転手当）。記録がある日は 運N で常時表示、
+                        無い日はホバーで薄く出る（夜バッジと同じ流儀） */}
+                    {onDriverClick && !data.locked && (() => {
+                      const dr = drivers?.[d.day]
+                      const cnt = (dr?.am.length || 0) + (dr?.pm.length || 0)
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => onDriverClick(d.day)}
+                          title={cnt > 0 ? `${d.day}日の運転者（行き${dr!.am.length}・帰り${dr!.pm.length}）` : `${d.day}日の運転者を記録`}
+                          className={`mt-0.5 w-full text-[10px] font-bold leading-tight rounded py-0.5 transition-opacity ${
+                            cnt > 0
+                              ? 'bg-emerald-600 text-white opacity-100'
+                              : 'text-emerald-600 opacity-0 hover:opacity-100'
+                          }`}
+                        >
+                          {cnt > 0 ? `運${cnt}` : '運'}
+                        </button>
+                      )
+                    })()}
                   </div>
                 </th>
                 )

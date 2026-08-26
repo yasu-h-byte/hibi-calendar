@@ -98,6 +98,8 @@ export interface GridData {
   calendarDays: Record<string, DayType> | null
   homeLeaves?: HomeLeaveInfo[]
   upcomingRetirements?: UpcomingRetirement[]
+  /** 運転記録（day → {am,pm}）。運転手当の元データ */
+  drivers?: Record<number, { am: number[]; pm: number[] }>
 }
 
 export interface PendingSave {

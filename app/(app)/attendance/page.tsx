@@ -22,6 +22,7 @@ import { GridData, AttEntry, SubconDayEntry, PendingSave, Worker } from './types
 import HeaderBar from './components/HeaderBar'
 import AttendanceGrid from './components/AttendanceGrid'
 import NightShiftModal, { NightShiftValue } from './components/NightShiftModal'
+import DriverModal from './components/DriverModal'
 
 export default function AttendanceGridPage() {
   const [password, setPassword] = useState('')
@@ -64,6 +65,8 @@ export default function AttendanceGridPage() {
   const [nightTarget, setNightTarget] = useState<{ workerId: string; day: number } | null>(null)
   // 夜勤が発生した日（現場×月ごと）。指定した日だけスタッフのセルに夜勤バッジが出る
   const [nightDays, setNightDays] = useState<number[]>([])
+  const [drivers, setDrivers] = useState<Record<number, { am: number[]; pm: number[] }>>({})
+  const [driverDay, setDriverDay] = useState<number | null>(null)
 
   // 翌月カレンダー未確定アラート用（月末1週間前を過ぎたら全現場の status を取得）
   const [nextMonthCalCheck, setNextMonthCalCheck] = useState<{
@@ -124,6 +127,7 @@ export default function AttendanceGridPage() {
       setData(json)
       setWorkerEntries(json.workerEntries)
       setNightDays(json.nightDays || [])
+      setDrivers(json.drivers || {})
       setSubconEntries(json.subconEntries)
       setLocalApprovals(json.approvals || {})
       // 最終承認は finalApprovals マップから bool マップを生成
@@ -617,6 +621,27 @@ export default function AttendanceGridPage() {
     }
   }, [nightDays, password, siteId, ym])
 
+  /** 便ごとの運転者を保存（運転手当の元データ） */
+  const handleSaveDrivers = useCallback(async (day: number, am: number[], pm: number[]) => {
+    const prev = drivers
+    const next = { ...drivers }
+    if (am.length === 0 && pm.length === 0) delete next[day]
+    else next[day] = { am, pm }
+    setDrivers(next)   // 楽観更新
+    setDriverDay(null)
+    try {
+      const res = await fetch('/api/attendance/grid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'saveDrivers', siteId, ym, day, am, pm }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+    } catch {
+      setDrivers(prev)  // 失敗したら戻す
+      setSaveStatus('error')
+    }
+  }, [drivers, password, siteId, ym])
+
   /**
    * 夜勤の保存 / 取り消し（台風待機など年数回のケース）。
    *
@@ -1038,6 +1063,8 @@ export default function AttendanceGridPage() {
           onNightClick={(workerId, day) => setNightTarget({ workerId, day })}
           nightDays={nightDays}
           onToggleNightDay={handleToggleNightDay}
+          drivers={drivers}
+          onDriverClick={setDriverDay}
           onForemanApproveAll={handleForemanApproveAll}
           onToggleForemanApproval={handleToggleForemanApproval}
           onFinalApproveAll={handleFinalApproveAll}
@@ -1080,6 +1107,24 @@ export default function AttendanceGridPage() {
         entry={nightTarget ? workerEntries[nightTarget.workerId]?.[nightTarget.day] : null}
         onSave={handleNightSave}
         onClose={() => setNightTarget(null)}
+      />
+
+      <DriverModal
+        isOpen={driverDay !== null}
+        day={driverDay ?? 0}
+        siteName={data?.site.name || ''}
+        workers={(data?.workers || [])
+          .filter(w => {
+            // その日に出面のある人だけを選択肢に（実働・夜勤。0.6補償や休みは出ない）
+            const e = driverDay !== null ? workerEntries[String(w.id)]?.[driverDay] : null
+            if (!e) return false
+            const wv = e.w || 0
+            return (wv > 0 && wv !== 0.6) || !!e.ns
+          })
+          .map(w => ({ id: w.id, name: w.name }))}
+        current={driverDay !== null ? drivers[driverDay] : undefined}
+        onSave={(am, pm) => { if (driverDay !== null) handleSaveDrivers(driverDay, am, pm) }}
+        onClose={() => setDriverDay(null)}
       />
     </div>
   )
