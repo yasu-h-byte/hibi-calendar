@@ -69,6 +69,11 @@ export interface PayrollAuditWorker {
   nightHours?: number
   nightAllowance?: number
   compAllowance?: number
+  // 遠方現場日当・運転手当（2026-10 施行。支給額に加算済み）
+  siteAllowance?: number
+  allowanceDays?: number
+  driveAllowance?: number
+  driveLegs?: number
   regularWorkDays?: number
   isDispatched?: boolean
   dispatchTo?: string
@@ -181,6 +186,8 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
     sumPay = fixedBase
       + (w.additionalAllowance || 0)
       + (w.otAllowance || 0)
+      + (w.siteAllowance || 0)
+      + (w.driveAllowance || 0)
       - (w.absentDeduction || 0)
       - (w.compBaseDeduction || 0)
   } else {
@@ -192,6 +199,8 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
       + (w.legalHolidayAllowance || 0)
       + (w.nightAllowance || 0)
       + (w.compAllowance || 0)
+      + (w.siteAllowance || 0)
+      + (w.driveAllowance || 0)
       - (w.absentDeduction || 0)
   }
   const reported = w.salaryNetPay || 0
@@ -200,7 +209,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
     pass: Math.abs(sumPay - reported) < 2,
     detail: mode.useOldRules
       ? `基本 ${fmtYen(fixedBase)} + 休業補償 ${fmtYen(w.additionalAllowance || 0)} + 残業 ${fmtYen(w.otAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)}${(w.compBaseDeduction || 0) > 0 ? ` - 補償日通常分 ${fmtYen(w.compBaseDeduction || 0)}` : ''} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`
-      : `基本 ${fmtYen(fixedBase)} + 追加所定 ${fmtYen(w.additionalAllowance || 0)} + 有給日給 ${fmtYen(w.paidLeaveAllowance || 0)} + 所定外労働 ${fmtYen(w.nonStatutoryOTAllowance || 0)} + 法定外残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} + 休業 ${fmtYen(w.compAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
+      : `基本 ${fmtYen(fixedBase)} + 追加所定 ${fmtYen(w.additionalAllowance || 0)} + 有給日給 ${fmtYen(w.paidLeaveAllowance || 0)} + 所定外労働 ${fmtYen(w.nonStatutoryOTAllowance || 0)} + 法定外残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} + 休業 ${fmtYen(w.compAllowance || 0)}${(w.siteAllowance || 0) + (w.driveAllowance || 0) > 0 ? ` + 日当 ${fmtYen(w.siteAllowance || 0)} + 運転 ${fmtYen(w.driveAllowance || 0)}` : ''} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
   })
 
   // 4. otMul の妥当性
@@ -496,6 +505,24 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 <td>深夜労働手当 (0.25倍)</td>
                 <td className="font-mono">
                   <div className="font-bold">{fmtYen(w.nightAllowance || 0)}</div>
+                </td>
+              </tr>
+            )}
+            {(w.siteAllowance || 0) > 0 && (
+              <tr>
+                <td>遠方現場日当 <span className="text-[10px] text-gray-500">(非課税・実費弁償)</span></td>
+                <td className="font-mono">
+                  <div className="text-[10px] text-gray-500">対象 {w.allowanceDays || 0}日（判定値80分超500円/120分超1,500円・長期従事は逓減）</div>
+                  <div className="font-bold">{fmtYen(w.siteAllowance || 0)}</div>
+                </td>
+              </tr>
+            )}
+            {(w.driveAllowance || 0) > 0 && (
+              <tr>
+                <td>運転手当</td>
+                <td className="font-mono">
+                  <div className="text-[10px] text-gray-500">{w.driveLegs || 0}便（片道500円/1,000円・判定値60分で区分）</div>
+                  <div className="font-bold">{fmtYen(w.driveAllowance || 0)}</div>
                 </td>
               </tr>
             )}

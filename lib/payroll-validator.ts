@@ -72,6 +72,9 @@ export interface PayrollSnapshot {
   compAllowance?: number
   absentDeduction?: number
   salaryNetPay?: number
+  // 遠方現場日当・運転手当（2026-10 施行）。salaryNetPay に加算済みなので I1 の構成要素に含める
+  siteAllowance?: number
+  driveAllowance?: number
 }
 
 /**
@@ -130,6 +133,8 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
     + (w.legalHolidayAllowance || 0)
     + (w.nightAllowance || 0)
     + (w.compAllowance || 0)
+    + (w.siteAllowance || 0)
+    + (w.driveAllowance || 0)
     - (w.absentDeduction || 0)
   if (Math.abs(components - salaryNet) > 2) {
     push('critical', 'salaryNetPay', '構成要素の合計が支給額と一致しません',

@@ -65,6 +65,11 @@ interface WorkerMonthly {
   legalHolidayAllowance?: number
   nightHours?: number
   nightAllowance?: number
+  // 遠方現場日当・運転手当（2026-10 施行。支給額合計には加算済み、ここは内訳表示用）
+  siteAllowance?: number
+  allowanceDays?: number
+  driveAllowance?: number
+  driveLegs?: number
   // 夜勤（2026-08）: 人工は workDays と分離して持つ。詳細は lib/compute.ts の WorkerMonthly
   manDays?: number
   nightShiftDays?: number
@@ -699,7 +704,7 @@ export default function MonthlyPage() {
   // 2026-06-XX 修正 (I-2): 新ルール時の所定外労働手当列を追加
   // 2026-06-15 追加: 補償日控除（会社都合休の通常分・旧ルール固定給者）は、該当者がいる時だけ列を出す
   const showCompBaseDeduction = filteredWorkers.some(w => (w.compBaseDeduction || 0) > 0)
-  const salaryColCount = (ym >= '202605' ? 9 : 5) + (showCompBaseDeduction ? 1 : 0)
+  const salaryColCount = (ym >= '202605' ? 9 : 5) + (ym >= '202610' ? 2 : 0) + (showCompBaseDeduction ? 1 : 0)
   const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + salaryColCount
 
   return (
@@ -1264,6 +1269,13 @@ export default function MonthlyPage() {
                         <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="補償日 60%">休業手当</th>
                       </>
                     )}
+                    {/* 遠方現場日当・運転手当（2026-10 施行、lib/allowance.ts） */}
+                    {ym >= '202610' && (
+                      <>
+                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="遠方現場日当（非課税・実費弁償）。判定値80分超500円/120分超1,500円、13ヶ月目から半額・25ヶ月目から0円">日当</th>
+                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="運転手当（課税）。片道500円（判定値60分未満）/1,000円（60分以上）">運転手当</th>
+                      </>
+                    )}
                     <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">欠勤控除</th>
                     {showCompBaseDeduction && (
                       <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="会社都合休(補償日)の通常分。固定給は満額前提のため一旦控除し、60%を休業補償で還元（正味 日給の40%控除）">補償日控除</th>
@@ -1324,6 +1336,10 @@ export default function MonthlyPage() {
                               lines.push(`深夜:          ¥${(w.nightAllowance || 0).toLocaleString()}`)
                             if ((w.compAllowance || 0) > 0)
                               lines.push(`休業手当:      ¥${(w.compAllowance || 0).toLocaleString()}`)
+                            if ((w.siteAllowance || 0) > 0)
+                              lines.push(`遠方現場日当:  ¥${(w.siteAllowance || 0).toLocaleString()}（${w.allowanceDays || 0}日・非課税）`)
+                            if ((w.driveAllowance || 0) > 0)
+                              lines.push(`運転手当:      ¥${(w.driveAllowance || 0).toLocaleString()}（${w.driveLegs || 0}便）`)
                             if ((w.absentDeduction || 0) > 0)
                               lines.push(`欠勤控除:     −¥${(w.absentDeduction || 0).toLocaleString()}`)
                             if ((w.compBaseDeduction || 0) > 0)
@@ -1496,6 +1512,18 @@ export default function MonthlyPage() {
                               </td>
                             </>
                           )}
+                          {ym >= '202610' && (
+                            <>
+                              <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.siteAllowance || 0) > 0 ? 'text-teal-600' : 'text-gray-400'}`}
+                                title={(w.siteAllowance || 0) > 0 ? `遠方現場日当 対象 ${w.allowanceDays || 0}日` : undefined}>
+                                {(w.siteAllowance || 0) > 0 ? fmtYen(w.siteAllowance!) : '—'}
+                              </td>
+                              <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.driveAllowance || 0) > 0 ? 'text-teal-600' : 'text-gray-400'}`}
+                                title={(w.driveAllowance || 0) > 0 ? `運転 ${w.driveLegs || 0}便（行き・帰り合計）` : undefined}>
+                                {(w.driveAllowance || 0) > 0 ? fmtYen(w.driveAllowance!) : '—'}
+                              </td>
+                            </>
+                          )}
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.absentDeduction || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                             {w.visa !== 'none' && (w.absentDeduction || 0) > 0 ? `-${fmtYen(w.absentDeduction!)}` : '—'}
                           </td>
@@ -1599,6 +1627,22 @@ export default function MonthlyPage() {
                           <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
                             {(() => {
                               const total = filteredWorkers.reduce((s, w) => s + (w.compAllowance || 0), 0)
+                              return total > 0 ? fmtYen(total) : '—'
+                            })()}
+                          </td>
+                        </>
+                      )}
+                      {ym >= '202610' && (
+                        <>
+                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                            {(() => {
+                              const total = filteredWorkers.reduce((s, w) => s + (w.siteAllowance || 0), 0)
+                              return total > 0 ? fmtYen(total) : '—'
+                            })()}
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                            {(() => {
+                              const total = filteredWorkers.reduce((s, w) => s + (w.driveAllowance || 0), 0)
                               return total > 0 ? fmtYen(total) : '—'
                             })()}
                           </td>

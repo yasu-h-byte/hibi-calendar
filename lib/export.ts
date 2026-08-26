@@ -812,6 +812,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   //     C. validatePayrolls の検算結果を各シート末尾に追加
 
   const useNewRulesByMonth = ym >= '202605'
+  // 遠方現場日当・運転手当（2026-10 施行）。施行前の月は列自体を出さない
+  //   （過去月のExcelの列構成・列幅を1ミリも変えない＝奥寺さんの既存の見方を壊さない）
+  const withAllowance = ym >= '202610'
   const isWorkerOldRules = (w: WorkerMonthly): boolean => {
     if (!useNewRulesByMonth) return true  // 月全体が旧ルール
     return (w as { useOldRules?: boolean }).useOldRules === true
@@ -837,13 +840,18 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     '通常出勤', '法休出勤', '補償日', '有給日数',
     '実労働h', '所定外労働h', '法定残業h', '法休労働h', '深夜労働h',
     '基本給(固定)', '追加所定手当', '有給日給', '所定外労働手当', '法定外残業手当', '法定休日手当', '深夜手当', '休業手当',
+    ...(withAllowance ? ['遠方日当', '運転手当'] : []),
     '欠勤日数', '欠勤控除', '支給額合計']
   // 旧ルール: 18列（補償日控除を欠勤控除と分離）
   const foreignHeadersOld = ['名前', '現場', '単価種別', '単価', '所定日数', '所定時間(h)',
     '実出勤日数', '補償日', '有給日数', '実労働時間', '残業時間',
-    '基本給', '休業補償', '残業手当', '欠勤日数', '欠勤控除', '補償日控除', '支給額合計']
+    '基本給', '休業補償', '残業手当',
+    ...(withAllowance ? ['遠方日当', '運転手当'] : []),
+    '欠勤日数', '欠勤控除', '補償日控除', '支給額合計']
   // 日本人: 8列
-  const japaneseHeaders = ['名前', '現場', '雇用形態', '日額/月給', '出勤日数', '有給日数', '残業時間(h)', '基本給', '有給手当', '残業手当', '支給額合計']
+  const japaneseHeaders = ['名前', '現場', '雇用形態', '日額/月給', '出勤日数', '有給日数', '残業時間(h)', '基本給', '有給手当', '残業手当',
+    ...(withAllowance ? ['遠方日当', '運転手当'] : []),
+    '支給額合計']
 
   // ── 検算結果のシート末尾追加（共通ヘルパー） ──
   function appendValidation(rows: (string | number | null)[][], targets: WorkerMonthly[], colCount: number) {
@@ -908,6 +916,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
           w.fixedBasePay || w.basePay || 0, w.additionalAllowance || 0, w.paidLeaveAllowance || 0,
           wext.nonStatutoryOTAllowance || 0, w.otAllowance || 0,
           w.legalHolidayAllowance || 0, w.nightAllowance || 0, w.compAllowance || 0,
+          ...(withAllowance ? [w.siteAllowance || 0, w.driveAllowance || 0] : []),
           w.absence || 0, w.absentDeduction || 0, w.salaryNetPay || 0,
         ])
       } else {
@@ -918,6 +927,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
           w.fixedBasePay || w.basePay || 0,
           w.additionalAllowance || 0,  // 旧ルールでは休業補償（会社都合休の60%還元分）
           w.otAllowance || 0,
+          ...(withAllowance ? [w.siteAllowance || 0, w.driveAllowance || 0] : []),
           w.absence || 0, w.absentDeduction || 0,
           w.compBaseDeduction || 0,    // 補償日控除（会社都合休の通常分・固定給は満額前提のため一旦控除）
           w.salaryNetPay || 0,
@@ -946,6 +956,10 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         ws.reduce((s, w) => s + (w.legalHolidayAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.nightAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.compAllowance || 0), 0),
+        ...(withAllowance ? [
+          ws.reduce((s, w) => s + (w.siteAllowance || 0), 0),
+          ws.reduce((s, w) => s + (w.driveAllowance || 0), 0),
+        ] : []),
         ws.reduce((s, w) => s + (w.absence || 0), 0),
         ws.reduce((s, w) => s + (w.absentDeduction || 0), 0),
         ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
@@ -961,6 +975,10 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         ws.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
         ws.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
+        ...(withAllowance ? [
+          ws.reduce((s, w) => s + (w.siteAllowance || 0), 0),
+          ws.reduce((s, w) => s + (w.driveAllowance || 0), 0),
+        ] : []),
         ws.reduce((s, w) => s + (w.absence || 0), 0),
         ws.reduce((s, w) => s + (w.absentDeduction || 0), 0),
         ws.reduce((s, w) => s + (w.compBaseDeduction || 0), 0),
@@ -979,10 +997,11 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         8, 8, 8, 8,
         9, 10, 9, 9, 9,
         11, 11, 11, 12, 12, 11, 10, 10,
+        ...(withAllowance ? [10, 10] : []),
         8, 11, 14,
       ])
     } else {
-      setColWidths(sheet, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, 8, 12, 12, 14])
+      setColWidths(sheet, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, ...(withAllowance ? [10, 10] : []), 8, 12, 12, 14])
     }
     return sheet
   }
@@ -1009,7 +1028,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         w.workDays,
         w.plDays || 0,
         w.dailyOtHours || w.otHours || 0,
-        w.basePay || 0, w.paidLeaveAllowance || 0, w.otAllowance || 0, w.salaryNetPay || 0,
+        w.basePay || 0, w.paidLeaveAllowance || 0, w.otAllowance || 0,
+        ...(withAllowance ? [w.siteAllowance || 0, w.driveAllowance || 0] : []),
+        w.salaryNetPay || 0,
       ])
     }
     rows.push([
@@ -1020,6 +1041,10 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       ws.reduce((s, w) => s + (w.basePay || 0), 0),
       ws.reduce((s, w) => s + (w.paidLeaveAllowance || 0), 0),
       ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
+      ...(withAllowance ? [
+        ws.reduce((s, w) => s + (w.siteAllowance || 0), 0),
+        ws.reduce((s, w) => s + (w.driveAllowance || 0), 0),
+      ] : []),
       ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
     ])
     if (hasFullMonthly) {
@@ -1033,7 +1058,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       merges.push({ s: { r: noteRow, c: 0 }, e: { r: noteRow, c: japaneseHeaders.length - 1 } })
     }
     sheet['!merges'] = merges
-    setColWidths(sheet, [14, 16, 10, 12, 8, 8, 10, 12, 12, 12, 14])
+    setColWidths(sheet, [14, 16, 10, 12, 8, 8, 10, 12, 12, 12, ...(withAllowance ? [10, 10] : []), 14])
     return sheet
   }
 
