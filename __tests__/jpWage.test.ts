@@ -4,6 +4,7 @@ import {
   HYOGO_PITCH, ageAdjustment, profitAdjustment, profitRankOf, specialAdjustment,
   computeRevision, promote, bonusPoints, allocateBonus, MAX_STEP, ANNUAL_DAYS,
   ageOn, nextRevisionDate, monthsBetween, checkHyogoBalance, computeRosterRevision, type RosterMember,
+  paySheetFigures, baseAnnualWithLeave, TOTAL_PAID_DAYS,
 } from '@/lib/jp-wage'
 import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration'
 
@@ -486,5 +487,43 @@ describe('中途採用の初回改定', () => {
     expect(r.ineligible).toBe(1)
     expect(r.blocked).toBe(1)
     expect(r.rows.find(x => x.member.id === 3)!.status).toBe('fixed')
+  })
+})
+
+describe('paySheetFigures（給料表の換算）', () => {
+  /**
+   * 2025年10月改定版の実物（とび事業部給料表）の数値。
+   * 様式を作り替えても数字がズレないよう、実際に本人へ渡した値で固定する。
+   * [氏名, 確定日給, 改訂前, 有給買取額, 日給換算, 前期実質日給, 実質日給, 昇給(日), 昇給(年), ベース年収, UP率%]
+   */
+  const REAL = [
+    ['大川 愛志', 23550, 22650, 471000, 1624, 24212, 25174, 962, 279000, 7300500, 4.0],
+    ['白戸 寛之', 21300, 20780, 426000, 1469, 22213, 22769, 556, 161200, 6603000, 2.5],
+    ['入江 隆太', 19700, 19220, 394000, 1359, 20546, 21059, 513, 148800, 6107000, 2.5],
+    ['倉本 隆次', 19100, 18620, 382000, 1317, 19904, 20417, 513, 148800, 5921000, 2.6],
+    ['日比 大介', 17780, 16940, 355600, 1226, 18108, 19006, 898, 260400, 5511800, 5.0],
+    ['本田 文人', 17655, 17465, 353100, 1218, 18669, 18873, 203, 58900, 5473050, 1.1],
+    ['新山 正昭', 12300, 12130, 246000, 848, 12967, 13148, 182, 52700, 3813000, 1.4],
+  ] as const
+
+  it.each(REAL)('%s の給料表の数値が実物と一致する', (_n, daily, prev, buyout, perDay, prevEff, eff, rDay, rYear, base, up) => {
+    const f = paySheetFigures(Number(daily), Number(prev))
+    expect(f.leaveBuyout).toBe(buyout)
+    expect(Math.round(f.leavePerDay)).toBe(perDay)
+    expect(Math.round(f.prevEffectiveDaily)).toBe(prevEff)
+    expect(Math.round(f.effectiveDaily)).toBe(eff)
+    expect(Math.round(f.raisePerDay)).toBe(rDay)
+    expect(f.raisePerYear).toBe(rYear)
+    expect(f.baseAnnual).toBe(base)
+    expect(Number((f.upRate * 100).toFixed(1))).toBe(up)
+  })
+
+  it('ベース年収は 日額 × 310（稼働290 + 有給20）', () => {
+    expect(TOTAL_PAID_DAYS).toBe(310)
+    expect(baseAnnualWithLeave(23550)).toBe(23550 * 310)
+  })
+
+  it('昇給（年）は日額の差 × 310', () => {
+    expect(paySheetFigures(23550, 22650).raisePerYear).toBe(900 * 310)
   })
 })

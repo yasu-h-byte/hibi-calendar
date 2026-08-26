@@ -30,6 +30,8 @@ interface Entry {
   reason?: string
   specialKeys?: string[]
   forceInclude?: boolean
+  /** 給料表の右下に載せる本人向けのコメント */
+  comment?: string
 }
 interface RevisionDoc {
   effective: string
@@ -173,6 +175,9 @@ export async function POST(request: NextRequest) {
     newStep: r.result?.newStep ?? r.member.currentStep,
     hyogo: r.member.hyogo,
     reason: r.member.reason ?? null,
+    comment: docData.entries[String(r.member.id)]?.comment ?? null,
+    birthDate: r.member.birthDate,
+    hireDate: r.member.hireDate ?? null,
     pitches: r.result
       ? { hyogo: r.result.hyogoPitch, age: r.result.agePitch, profit: r.result.profitPitch, special: r.result.specialPitch, total: r.result.totalPitch }
       : null,

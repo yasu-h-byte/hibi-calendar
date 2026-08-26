@@ -595,3 +595,79 @@ export function nextRevisionDate(todayIso: string): string {
   const oct = `${year}-10-01`
   return todayIso <= oct ? oct : `${year + 1}-10-01`
 }
+
+// ────────────────────────────────────────
+//  給料表（本人へ渡す様式）の換算
+// ────────────────────────────────────────
+
+/**
+ * 年間の有給付与日数。給料表ではこの日数を「買取」として年収に含めている。
+ *
+ * ⚠️ 実際の付与日数は勤続年数で変わるが、給料表は全員 20日 で計算している
+ *    （2025年10月改定版の実物で確認）。個人の付与実績ではなく、年収を比較する
+ *    ための共通の物差しとして使っているため、ここも定数で持つ。
+ */
+export const PAID_LEAVE_DAYS = 20
+
+/** ベース年収の計算日数 = 稼働290日 + 有給20日。 */
+export const TOTAL_PAID_DAYS = ANNUAL_DAYS + PAID_LEAVE_DAYS
+
+/**
+ * ベース年収 = 確定日給 × 310。
+ * 稼働290日分に有給20日分の買取を足したもの。給料表の「ベース年収概算」。
+ */
+export function baseAnnualWithLeave(daily: number): number {
+  return daily * TOTAL_PAID_DAYS
+}
+
+/**
+ * 実質日給 = ベース年収 ÷ 稼働日数。
+ * 有給の買取分を稼働日にならすと1日いくらになるか、という指標。
+ */
+export function effectiveDaily(daily: number): number {
+  return (daily * TOTAL_PAID_DAYS) / ANNUAL_DAYS
+}
+
+export interface PaySheetFigures {
+  /** 号俸表の額（＋調整給） */
+  daily: number
+  /** 改訂前の日額 */
+  prevDaily: number
+  paidLeaveDays: number
+  /** 有給買取額 = 日額 × 付与日数 */
+  leaveBuyout: number
+  /** 買取額の日給換算 = 買取額 ÷ 稼働日数 */
+  leavePerDay: number
+  effectiveDaily: number
+  prevEffectiveDaily: number
+  /** 昇給（日）= 実質日給の差 */
+  raisePerDay: number
+  baseAnnual: number
+  prevBaseAnnual: number
+  /** 昇給（年）= ベース年収の差 */
+  raisePerYear: number
+  /** UP率 */
+  upRate: number
+}
+
+/** 給料表に載せる数値を一括で出す。 */
+export function paySheetFigures(daily: number, prevDaily: number): PaySheetFigures {
+  const leaveBuyout = daily * PAID_LEAVE_DAYS
+  const eff = effectiveDaily(daily)
+  const prevEff = effectiveDaily(prevDaily)
+  const base = baseAnnualWithLeave(daily)
+  const prevBase = baseAnnualWithLeave(prevDaily)
+  return {
+    daily, prevDaily,
+    paidLeaveDays: PAID_LEAVE_DAYS,
+    leaveBuyout,
+    leavePerDay: leaveBuyout / ANNUAL_DAYS,
+    effectiveDaily: eff,
+    prevEffectiveDaily: prevEff,
+    raisePerDay: eff - prevEff,
+    baseAnnual: base,
+    prevBaseAnnual: prevBase,
+    raisePerYear: base - prevBase,
+    upRate: prevBase > 0 ? base / prevBase - 1 : 0,
+  }
+}

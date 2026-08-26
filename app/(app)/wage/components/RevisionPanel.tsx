@@ -47,7 +47,7 @@ interface Payload {
   status: 'draft' | 'applied'
   profitRatePercent: number | null
   appliedAt: string | null
-  entries: Record<string, { hyogo: Hyogo; reason?: string; specialKeys?: string[]; forceInclude?: boolean }>
+  entries: Record<string, { hyogo: Hyogo; reason?: string; specialKeys?: string[]; forceInclude?: boolean; comment?: string }>
   revision: {
     rows: Row[]
     balance: { counts: Record<Hyogo, number>; needB: number; needC: number; ok: boolean; messages: string[] }
@@ -325,6 +325,12 @@ export default function RevisionPanel() {
                               ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
                               : 'border-gray-300 dark:border-gray-600'}`}
                         />
+                        <textarea
+                          defaultValue={e.comment || ''} disabled={!editable} rows={2}
+                          placeholder="給料表に載せる本人へのコメント"
+                          onBlur={ev => { if (ev.target.value !== (e.comment || '')) setEntry(m.id, { comment: ev.target.value }) }}
+                          className="w-full mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-2 py-1.5 text-[11px] leading-relaxed disabled:opacity-60"
+                        />
                         {r.status === 'ineligible' && !applied && (
                           <button onClick={() => setEntry(m.id, { forceInclude: true })} disabled={busy}
                             className="mt-1 text-[10px] px-2 py-0.5 rounded border border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300">
@@ -433,15 +439,15 @@ export default function RevisionPanel() {
       {applied && (
         <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-gray-600 dark:text-gray-300">
-            <b>本人へ渡す通知書</b>
+            <b>本人へ渡す給料表</b>
             <div className="text-[11px] text-gray-400 mt-0.5">
-              昇給した方の分をA4縦1枚ずつ出力します。金額は確定時に凍結した値を使うので、
-              あとから号俸表を変えても通知書の数字は動きません。
+              とび事業部給料表の様式でA4横1枚ずつ出力します。金額は確定時に凍結した値を使うので、
+              あとから号俸表を変えても給料表の数字は動きません。
             </div>
           </div>
           <a href={`/wage/notice?effective=${data.effective}`} target="_blank" rel="noopener noreferrer"
             className="px-5 py-2.5 rounded-lg bg-hibi-navy text-white font-bold text-sm hover:opacity-90">
-            🖨 賃金改定通知書を開く
+            🖨 給料表を開く
           </a>
         </section>
       )}
