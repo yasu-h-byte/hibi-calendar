@@ -3,7 +3,7 @@ import {
   dailyForStep, capDaily, baseAnnual, stepForDaily, dailyFromMonthly,
   HYOGO_PITCH, ageAdjustment, profitAdjustment, profitRankOf, specialAdjustment,
   computeRevision, promote, bonusPoints, allocateBonus, MAX_STEP, ANNUAL_DAYS,
-  ageOn, nextRevisionDate, checkHyogoBalance, computeRosterRevision, type RosterMember,
+  ageOn, nextRevisionDate, monthsBetween, checkHyogoBalance, computeRosterRevision, type RosterMember,
 } from '@/lib/jp-wage'
 import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration'
 
@@ -417,5 +417,74 @@ describe('nextRevisionDate（改定の基準日）', () => {
   it('10月1日を過ぎたら翌年', () => {
     expect(nextRevisionDate('2026-10-02')).toBe('2027-10-01')
     expect(nextRevisionDate('2026-12-31')).toBe('2027-10-01')
+  })
+})
+
+describe('中途採用の初回改定', () => {
+  const base = { asOf: '2026-10-01', profitRatePercent: 6 }
+  const m = (o: Partial<RosterMember>): RosterMember => ({
+    id: 20, name: '中途 太郎', grade: '3G', currentStep: 20,
+    birthDate: '1990-01-01', hyogo: 'A', ...o,
+  })
+
+  it('monthsBetween は満月数を返す', () => {
+    expect(monthsBetween('2026-09-15', '2026-10-01')).toBe(0)
+    expect(monthsBetween('2026-04-01', '2026-10-01')).toBe(6)
+    expect(monthsBetween('2026-04-02', '2026-10-01')).toBe(5)  // 日が足りない
+    expect(monthsBetween('2025-10-01', '2026-10-01')).toBe(12)
+  })
+
+  it('9月半ば入社は10月の改定対象外になる', () => {
+    const r = computeRosterRevision([m({ hireDate: '2026-09-15' })], base)
+    expect(r.rows[0].status).toBe('ineligible')
+    expect(r.rows[0].tenureMonths).toBe(0)
+    expect(r.rows[0].blockers[0]).toContain('在籍0ヶ月')
+    expect(r.ineligible).toBe(1)
+    expect(r.raisePerDay).toBe(0)
+  })
+
+  it('対象外でも日額は据え置き（下がらない）', () => {
+    const r = computeRosterRevision([m({ hireDate: '2026-09-15' })], base)
+    expect(r.rows[0].newTotal).toBe(r.rows[0].oldTotal)
+  })
+
+  it('在籍6ヶ月ちょうどなら対象になる', () => {
+    const r = computeRosterRevision([m({ hireDate: '2026-04-01' })], base)
+    expect(r.rows[0].status).toBe('ok')
+  })
+
+  it('forceInclude で既定を上書きできる', () => {
+    const r = computeRosterRevision([m({ hireDate: '2026-09-15', forceInclude: true })], base)
+    expect(r.rows[0].status).toBe('ok')
+    expect(r.rows[0].result!.totalPitch).toBeGreaterThan(0)
+  })
+
+  it('入社日が未登録なら在籍で弾かない（他の不足で止める）', () => {
+    const r = computeRosterRevision([m({ hireDate: null })], base)
+    expect(r.rows[0].status).toBe('ok')
+    expect(r.rows[0].tenureMonths).toBeNull()
+  })
+
+  it('対象外の人は評語のバランス母数に入らない', () => {
+    const r = computeRosterRevision([
+      m({ id: 1, hyogo: 'S', reason: '完遂' }),
+      m({ id: 2, hyogo: 'B', reason: '出勤' }),
+      m({ id: 3, hyogo: 'S', reason: '育成', hireDate: '2026-09-15' }),
+    ], base)
+    expect(r.balance.counts.S).toBe(1)
+    expect(r.balance.ok).toBe(true)
+  })
+
+  it('status で内訳が数えられる', () => {
+    const r = computeRosterRevision([
+      m({ id: 1 }),
+      m({ id: 2, hireDate: '2026-09-15' }),
+      m({ id: 3, fixed: true, currentStep: 60 }),
+      m({ id: 4, birthDate: null }),
+    ], base)
+    expect(r.applied).toBe(1)
+    expect(r.ineligible).toBe(1)
+    expect(r.blocked).toBe(1)
+    expect(r.rows.find(x => x.member.id === 3)!.status).toBe('fixed')
   })
 })

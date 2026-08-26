@@ -101,6 +101,8 @@ export default function DocsPage() {
   // 賃金分析は個人の給与を一覧するため、代表（workerId=0）にだけリンクを出す。
   // ページ側でも同じ判定でガードしている（二重防御）。
   const [isOwner, setIsOwner] = useState(false)
+  // 賃金改定は代表（0）と事業責任者（1）。評価を決めるのはこの2名（第4節）
+  const [isManagement, setIsManagement] = useState(false)
 
   useEffect(() => {
     try {
@@ -111,7 +113,10 @@ export default function DocsPage() {
         if (r === 'admin' || r === 'approver' || r === 'foreman' || r === 'jimu') {
           setRole(r)
         }
-        if (parsed?.user?.workerId === 0) setIsOwner(true)
+        const wid = parsed?.user?.workerId
+        if (wid === 0) setIsOwner(true)
+        // workerId 0 は falsy なので、必ず値で比較する
+        if (wid === 0 || wid === 1) setIsManagement(true)
       }
     } catch {
       // ロール取得に失敗しても全資料を表示するだけなので無視
@@ -157,6 +162,25 @@ export default function DocsPage() {
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
                 ベトナム人スタッフの在籍年数と時給の分布。入社時の東京都最低賃金を起点にした昇給率、段階ごとの段差、相対的に高い・低い人の判定
+              </p>
+            </div>
+          </div>
+        </a>
+      )}
+
+      {/* 賃金改定（日本人）。評価を決めるのは代表と事業責任者（docs/wage-system.md 第4節） */}
+      {isManagement && (
+        <a href="/jp-wage"
+          className="block bg-white dark:bg-gray-800 rounded-xl border-2 border-red-200 dark:border-red-800/60 shadow-sm hover:shadow-md transition-shadow p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">📈</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-hibi-navy dark:text-white">賃金改定（日本人社員）</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表・事業責任者</span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+                毎年10月1日の年次改定。評語を入れると号俸表・年齢調整・利益調整から改定額を計算し、人員マスタへ反映する。下書きのまま置いておける
               </p>
             </div>
           </div>

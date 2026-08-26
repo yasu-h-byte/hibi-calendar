@@ -395,6 +395,25 @@ export function checkHyogoBalance(list: Hyogo[]): HyogoBalance {
   return { counts, needB, needC, ok: needB === 0 && needC === 0, messages }
 }
 
+/**
+ * 初回改定の対象になる最短の在籍月数。
+ *
+ * 基準日時点でこれに満たない人は、評価する期間そのものが無いので改定しない。
+ * 入社時の賃金は採用時に決めたばかりで、直後に改定する理由もない。
+ * ※ 就業規則・仕様書に明文の規定が無いため、運用上の既定値として置いている
+ *   （2026-08 時点。中途採用が続くようなら docs/wage-system.md に条文化すること）。
+ */
+export const FIRST_REVISION_MIN_MONTHS = 6
+
+/** 満月数。日付は文字列のまま扱う（new Date は UTC 解釈でずれる）。 */
+export function monthsBetween(fromIso: string, toIso: string): number {
+  const [fy, fm, fd] = fromIso.split('-').map(Number)
+  const [ty, tm, td] = toIso.split('-').map(Number)
+  let m = (ty - fy) * 12 + (tm - fm)
+  if (td < fd) m -= 1
+  return m
+}
+
 export interface RosterMember {
   id: number
   name: string
@@ -403,6 +422,10 @@ export interface RosterMember {
   currentStep: number | null
   /** 生年月日 'YYYY-MM-DD'。未登録なら null */
   birthDate: string | null
+  /** 入社日 'YYYY-MM-DD'。在籍が浅い人を初回改定から外す判定に使う */
+  hireDate?: string | null
+  /** 在籍が浅くても改定対象に含める（個別判断で既定を上書きする） */
+  forceInclude?: boolean
   hyogo: Hyogo
   /** S以上・B以下は理由が必須（第5節） */
   reason?: string
@@ -413,14 +436,25 @@ export interface RosterMember {
   adjustment?: number
 }
 
+/**
+ * - `ok`         … 改定を計算した
+ * - `fixed`      … 処遇固定。号を動かさない
+ * - `ineligible` … 在籍が浅く初回改定の対象外
+ * - `blocked`    … 入力が足りず計算できない
+ */
+export type RosterStatus = 'ok' | 'fixed' | 'ineligible' | 'blocked'
+
 export interface RosterRow {
   member: RosterMember
+  status: RosterStatus
   /** 計算できた場合の結果。できなければ null */
   result: RevisionResult | null
   /** 調整給を含めた改定前後の日額 */
   oldTotal: number | null
   newTotal: number | null
-  /** 計算できない・対象外の理由 */
+  /** 基準日時点の在籍月数（入社日が無ければ null） */
+  tenureMonths: number | null
+  /** 計算しなかった理由 */
   blockers: string[]
 }
 
@@ -431,6 +465,8 @@ export interface RosterRevision {
   applied: number
   /** 入力が足りず計算できなかった人数 */
   blocked: number
+  /** 在籍が浅く初回改定の対象外だった人数 */
+  ineligible: number
   /** 1日あたりの昇給額 合計 */
   raisePerDay: number
   /** 年間の増加額（`annualDays` 日換算） */
@@ -452,22 +488,34 @@ export function computeRosterRevision(
   const profitRank = profitRankOf(opts.profitRatePercent)
 
   const rows: RosterRow[] = members.map(m => {
-    const blockers: string[] = []
-    if (m.currentStep === null) blockers.push('号が未確定')
-    if (!m.fixed && m.birthDate === null) blockers.push('生年月日が未登録（年齢調整が出せない）')
-    if ((m.hyogo === 'SS' || m.hyogo === 'S' || m.hyogo === 'B' || m.hyogo === 'C')
-      && !m.reason?.trim()) blockers.push(`${m.hyogo}評価には理由の記録が必要`)
-
     const adj = m.adjustment ?? 0
+    const cur = m.currentStep === null ? null : dailyForStep(m.grade, m.currentStep) + adj
+    const tenureMonths = m.hireDate ? monthsBetween(m.hireDate, opts.asOf) : null
 
     if (m.fixed) {
       // 処遇固定。等級の上限に置いてあるので号は動かないが、意図を明示するため計算しない
-      const cur = m.currentStep === null ? null : dailyForStep(m.grade, m.currentStep) + adj
-      return { member: m, result: null, oldTotal: cur, newTotal: cur, blockers: ['処遇固定（改定対象外）'] }
+      return {
+        member: m, status: 'fixed', result: null, oldTotal: cur, newTotal: cur,
+        tenureMonths, blockers: ['処遇固定（改定対象外）'],
+      }
     }
+
+    // 在籍が浅い人は初回改定の対象外。individual に含める判断をしたら forceInclude で上書きする
+    if (!m.forceInclude && tenureMonths !== null && tenureMonths < FIRST_REVISION_MIN_MONTHS) {
+      return {
+        member: m, status: 'ineligible', result: null, oldTotal: cur, newTotal: cur, tenureMonths,
+        blockers: [`在籍${tenureMonths}ヶ月（初回改定は${FIRST_REVISION_MIN_MONTHS}ヶ月以上）`],
+      }
+    }
+
+    const blockers: string[] = []
+    if (m.currentStep === null) blockers.push('号が未確定')
+    if (m.birthDate === null) blockers.push('生年月日が未登録（年齢調整が出せない）')
+    if ((m.hyogo === 'SS' || m.hyogo === 'S' || m.hyogo === 'B' || m.hyogo === 'C')
+      && !m.reason?.trim()) blockers.push(`${m.hyogo}評価には理由の記録が必要`)
+
     if (blockers.length > 0) {
-      const cur = m.currentStep === null ? null : dailyForStep(m.grade, m.currentStep) + adj
-      return { member: m, result: null, oldTotal: cur, newTotal: null, blockers }
+      return { member: m, status: 'blocked', result: null, oldTotal: cur, newTotal: null, tenureMonths, blockers }
     }
 
     const result = computeRevision({
@@ -479,10 +527,10 @@ export function computeRosterRevision(
       specialKeys: m.specialKeys,
     })
     return {
-      member: m, result,
+      member: m, status: 'ok', result,
       oldTotal: result.oldDaily + adj,
       newTotal: result.newDaily + adj,
-      blockers: [],
+      tenureMonths, blockers: [],
     }
   })
 
@@ -494,8 +542,9 @@ export function computeRosterRevision(
 
   return {
     rows, balance,
-    applied: rows.filter(r => r.result !== null).length,
-    blocked: rows.filter(r => r.result === null && !r.member.fixed).length,
+    applied: rows.filter(r => r.status === 'ok').length,
+    blocked: rows.filter(r => r.status === 'blocked').length,
+    ineligible: rows.filter(r => r.status === 'ineligible').length,
     raisePerDay,
     annualCost: raisePerDay * annualDays,
   }
