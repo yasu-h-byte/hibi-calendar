@@ -155,6 +155,11 @@ export default function CostPage() {
   })
   // Local billing edits: siteId_ym -> number[]
   const [billingEdits, setBillingEdits] = useState<Record<string, number[]>>({})
+  // 行を削除したときに入力群を作り直すための世代番号。
+  // 入力欄は defaultValue（非制御）＋ index キーなので、行を消すと下の行の DOM 値が
+  // 上の行に残ってしまう。削除時だけ世代を上げて丸ごと再マウントする
+  // （追加は末尾に足すだけで既存 index が動かないため、上げない＝フォーカスを守る）。
+  const [billingRowsVersion, setBillingRowsVersion] = useState<Record<string, number>>({})
   const [expandedBilling, setExpandedBilling] = useState<string | null>(null)
 
   useEffect(() => {
@@ -173,14 +178,28 @@ export default function CostPage() {
       if (res.ok) {
         const d = await res.json()
         setData(d)
-        // Initialize billing edits from data
-        const edits: Record<string, number[]> = {}
-        for (const site of d.sites) {
-          for (const [m, arr] of Object.entries(site.billingByMonth as Record<string, number[]>)) {
-            edits[`${site.id}_${m}`] = arr.length > 0 ? [...arr] : [0]
+        // 入力欄の状態をサーバー値から組み立てる。
+        //
+        // ⚠️ ただし丸ごと上書きしない。保存APIは0円の行を捨てるため、
+        //    「+ 行追加」直後の空行が再取得のたびに消え、そこへフォーカスを移した
+        //    瞬間に入力欄ごとアンマウントされていた（連続入力できない不具合の原因）。
+        //    非ゼロの値がサーバーと一致している間は、ローカルの配列（空行含む）を保持する。
+        setBillingEdits(prev => {
+          const edits: Record<string, number[]> = {}
+          for (const site of d.sites) {
+            for (const [m, arr] of Object.entries(site.billingByMonth as Record<string, number[]>)) {
+              const key = `${site.id}_${m}`
+              const server = (arr as number[]).filter(v => v !== 0)
+              const local = prev[key]
+              const localNonZero = local ? local.filter(v => v !== 0) : null
+              const same = localNonZero !== null
+                && localNonZero.length === server.length
+                && localNonZero.every((v, i) => v === server[i])
+              edits[key] = same ? local! : (server.length > 0 ? [...server] : [0])
+            }
           }
-        }
-        setBillingEdits(edits)
+          return edits
+        })
       }
     } finally {
       if (!opts?.silent) setLoading(false)
@@ -245,6 +264,7 @@ export default function CostPage() {
 
   // Remove billing row
   const removeBillingRow = (siteId: string, month: string, rowIndex: number) => {
+    setBillingRowsVersion(prev => ({ ...prev, [`${siteId}_${month}`]: (prev[`${siteId}_${month}`] || 0) + 1 }))
     const key = `${siteId}_${month}`
     setBillingEdits(prev => {
       const arr = [...(prev[key] || [0])]
@@ -671,15 +691,17 @@ export default function CostPage() {
                             {(() => {
                               const key = `${s.id}_${ym}`
                               const rows = billingEdits[key] || [0]
+                              const ver = billingRowsVersion[key] || 0
                               return (
                                 <>
                                   {rows.map((val, ri) => (
-                                    <div key={ri} className="flex items-center justify-end gap-1">
+                                    <div key={`${ver}:${ri}`} className="flex items-center justify-end gap-1">
                                       <input
                                         type="text"
                                         defaultValue={val ? val.toLocaleString() : ''}
                                         placeholder="0"
                                         onFocus={(e) => { e.target.value = String(Number(e.target.value.replace(/,/g, '')) || '') }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
                                         onBlur={(e) => {
                                           const v = Number(e.target.value.replace(/,/g, '')) || 0
                                           e.target.value = v ? v.toLocaleString() : ''
