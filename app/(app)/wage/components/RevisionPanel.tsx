@@ -359,6 +359,23 @@ export default function RevisionPanel() {
         </table>
       </div>
 
+      {/* ── 確定後: 本人へ渡す通知書 ── */}
+      {applied && (
+        <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-gray-600 dark:text-gray-300">
+            <b>本人へ渡す通知書</b>
+            <div className="text-[11px] text-gray-400 mt-0.5">
+              昇給した方の分をA4縦1枚ずつ出力します。金額は確定時に凍結した値を使うので、
+              あとから号俸表を変えても通知書の数字は動きません。
+            </div>
+          </div>
+          <a href={`/wage/notice?effective=${data.effective}`} target="_blank" rel="noopener noreferrer"
+            className="px-5 py-2.5 rounded-lg bg-hibi-navy text-white font-bold text-sm hover:opacity-90">
+            🖨 賃金改定通知書を開く
+          </a>
+        </section>
+      )}
+
       {/* ── 確定 ── */}
       {!applied && (
         <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-wrap items-center justify-between gap-3">
