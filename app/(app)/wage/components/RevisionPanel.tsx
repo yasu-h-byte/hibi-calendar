@@ -10,7 +10,7 @@
  *    評価を決めるのはこの2名と定められている（第4節）。
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import type { Hyogo, RosterStatus, SpecialReason } from '@/lib/jp-wage'
 
 const ALLOWED_VIEWERS = [0, 1]   // 代表・事業責任者
@@ -235,228 +235,238 @@ export default function RevisionPanel() {
         </p>
       </section>
 
-      {/* ── 名簿 ── */}
+      {/* ── 名簿 ──
+          理由とコメントの入力欄を常時出すと表が縦に伸びて一覧できないため、
+          行ごとの「編集」で開く形にしている。表は読むもの、パネルは書くもの。 */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-x-auto">
-        <table className="w-full text-sm min-w-[1020px]">
+        <table className="w-full text-sm min-w-[880px]">
           <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
             <tr>
               <th className={`${th} text-left`}>氏名</th>
               <th className={`${th} text-left`}>等級・号</th>
-              <th className={`${th} text-right`}>年齢</th>
-              <th className={`${th} text-right`}>在籍</th>
-              <th className={`${th} text-right`}>現在の日額</th>
+              <th className={`${th} text-right`}>年齢 / 在籍</th>
+              <th className={`${th} text-right`}>現在</th>
               <th className={`${th} text-left`}>評語</th>
-              <th className={`${th} text-left`}>理由</th>
-              <th className={`${th} text-center`}>特別調整</th>
-              <th className={`${th} text-center`}>ピッチ内訳</th>
+              <th className={`${th} text-left`}>内訳</th>
               <th className={`${th} text-right`}>改定後</th>
               <th className={`${th} text-right`}>昇給</th>
+              <th className={`${th} text-center`}></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
             {data.revision.rows.map(r => {
               const m = r.member
               const e = entries[String(m.id)] || { hyogo: 'A' as Hyogo }
-              const needsReason = ['SS', 'S', 'B', 'C'].includes(e.hyogo)
               const editable = !applied && r.status !== 'fixed'
+              const open = openSpecial === m.id
+              const sp = specialSum(e.specialKeys ?? [], data.meta.specialReasons)
+              const dp = e.discretionaryPitch ?? 0
+              const needsReason = ['SS', 'S', 'B', 'C'].includes(e.hyogo)
+              const missing = (needsReason && !e.reason?.trim()) || (dp !== 0 && !e.discretionaryReason?.trim())
+
               return (
-                <tr key={m.id} className={r.status === 'blocked' ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}>
-                  <td className={td}>
-                    <div className="font-medium">{m.name}</div>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${STATUS_CHIP[r.status].cls}`}>{STATUS_CHIP[r.status].label}</span>
-                    {m.adjustment ? <div className="text-[10px] text-gray-400 mt-0.5">調整給 {yen(m.adjustment)}</div> : null}
-                  </td>
-                  <td className={`${td} whitespace-nowrap`}>
-                    {m.currentStep === null
-                      ? <span className="text-amber-700 dark:text-amber-400 text-xs">未設定</span>
-                      : <span className="tabular-nums">{m.grade} <b>{m.currentStep}</b>号</span>}
-                  </td>
-                  <td className={`${td} text-right tabular-nums`}>
-                    {m.birthDate ? ageAt(m.birthDate, data.effective) + '歳'
-                      : <span className="text-amber-700 dark:text-amber-400 text-xs">未登録</span>}
-                  </td>
-                  <td className={`${td} text-right tabular-nums text-gray-500`}>
-                    {r.tenureMonths === null ? '—' : r.tenureMonths >= 24 ? `${Math.floor(r.tenureMonths / 12)}年` : `${r.tenureMonths}ヶ月`}
-                  </td>
-                  <td className={`${td} text-right tabular-nums`}>{yen(r.oldTotal)}</td>
-
-                  <td className={td}>
-                    {r.status === 'fixed' ? <span className="text-xs text-gray-400">—</span> : (
-                      <select
-                        value={e.hyogo} disabled={!editable}
-                        onChange={ev => setEntry(m.id, { hyogo: ev.target.value as Hyogo })}
-                        className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-2 py-1.5 text-sm disabled:opacity-60"
-                      >
-                        {HYOGO_ORDER.map(h => (
-                          <option key={h} value={h}>{h}（{signedPitch(data.meta.hyogoPitch[h])}）</option>
-                        ))}
-                      </select>
-                    )}
-                  </td>
-
-                  <td className={`${td} w-56`}>
-                    {r.status === 'fixed' ? <span className="text-xs text-gray-400">処遇固定</span> : (
-                      <>
-                        <input
-                          type="text" defaultValue={e.reason || ''} disabled={!editable}
-                          placeholder={needsReason ? '必須' : '任意'}
-                          onBlur={ev => { if (ev.target.value !== (e.reason || '')) setEntry(m.id, { reason: ev.target.value }) }}
-                          className={`w-full border rounded-lg px-2 py-1.5 text-xs dark:bg-gray-700 disabled:opacity-60 ${
-                            needsReason && !e.reason?.trim()
-                              ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
-                              : 'border-gray-300 dark:border-gray-600'}`}
-                        />
-                        <textarea
-                          defaultValue={e.comment || ''} disabled={!editable} rows={2}
-                          placeholder="給料表に載せる本人へのコメント"
-                          onBlur={ev => { if (ev.target.value !== (e.comment || '')) setEntry(m.id, { comment: ev.target.value }) }}
-                          className="w-full mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-2 py-1.5 text-[11px] leading-relaxed disabled:opacity-60"
-                        />
-                        {r.status === 'ineligible' && !applied && (
-                          <button onClick={() => setEntry(m.id, { forceInclude: true })} disabled={busy}
-                            className="mt-1 text-[10px] px-2 py-0.5 rounded border border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300">
-                            今回の対象に含める
-                          </button>
-                        )}
-                        {m.forceInclude && !applied && (
-                          <button onClick={() => setEntry(m.id, { forceInclude: false })} disabled={busy}
-                            className="mt-1 text-[10px] px-2 py-0.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300">
-                            対象から外す
-                          </button>
-                        )}
-                      </>
-                    )}
-                  </td>
-
-                  <td className={`${td} text-center whitespace-nowrap`}>
-                    {r.status === 'fixed' ? <span className="text-xs text-gray-400">—</span> : (
-                      <button
-                        onClick={() => setOpenSpecial(openSpecial === m.id ? null : m.id)}
-                        disabled={!editable}
-                        className={`text-xs px-2 py-1 rounded-lg border transition disabled:opacity-60 ${
-                          (e.specialKeys?.length ?? 0) > 0 || (e.discretionaryPitch ?? 0) !== 0
-                            ? 'border-hibi-navy text-hibi-navy font-bold dark:border-blue-400 dark:text-blue-300'
-                            : 'border-gray-300 text-gray-400 dark:border-gray-600'}`}
-                      >
-                        {(() => {
-                          const sp = specialSum(e.specialKeys ?? [], data.meta.specialReasons)
-                          const dp = e.discretionaryPitch ?? 0
-                          if (sp === 0 && dp === 0) return 'なし'
-                          const parts = []
-                          if (sp !== 0) parts.push(`特${signedPitch(sp)}`)
-                          if (dp !== 0) parts.push(`代${signedPitch(dp)}`)
-                          return parts.join(' ')
-                        })()}
-                      </button>
-                    )}
-                  </td>
-
-                  <td className={`${td} text-center whitespace-nowrap`}>
-                    {r.result ? (
-                      <span className="text-xs tabular-nums text-gray-600 dark:text-gray-300">
-                        評{signedPitch(r.result.hyogoPitch)} 齢{signedPitch(r.result.agePitch)} 特{signedPitch(r.result.specialPitch)}
-                        {r.result.discretionaryPitch !== 0 && <b className="text-hibi-navy dark:text-blue-300"> 代{signedPitch(r.result.discretionaryPitch)}</b>}
-                        <b className="ml-1.5 text-hibi-navy dark:text-blue-300">= {r.result.totalPitch}</b>
-                      </span>
-                    ) : <span className="text-[11px] text-gray-400">{r.blockers.join(' / ') || '—'}</span>}
-                  </td>
-
-                  <td className={`${td} text-right tabular-nums`}>
-                    {r.result
-                      ? <><b>{yen(r.newTotal)}</b><div className="text-[10px] text-gray-400">{r.result.newStep}号</div></>
-                      : <span className="text-gray-400">{yen(r.newTotal)}</span>}
-                  </td>
-                  <td className={`${td} text-right tabular-nums`}>
-                    {r.result && r.result.raisePerDay > 0
-                      ? <><b className="text-green-700 dark:text-green-400">+{yen(r.result.raisePerDay)}</b>
-                          <div className="text-[10px] text-gray-400">{(r.result.upRate * 100).toFixed(2)}%</div></>
-                      : <span className="text-gray-400">—</span>}
-                  </td>
-                </tr>
-              )
-            })}
-            {/* 特別調整の事由選択。開いている人の直下に差し込む */}
-            {data.revision.rows.map(r => {
-              const m = r.member
-              if (openSpecial !== m.id) return null
-              const e = entries[String(m.id)] || { hyogo: 'A' as Hyogo }
-              const keys = e.specialKeys ?? []
-              const sum = specialSum(keys, data.meta.specialReasons)
-              return (
-                <tr key={`sp-${m.id}`} className="bg-gray-50 dark:bg-gray-700/30">
-                  <td colSpan={11} className="px-4 py-3">
-                    <div className="flex flex-wrap items-baseline gap-2 mb-2">
-                      <b className="text-sm">{m.name} の特別調整</b>
-                      <span className="text-xs text-gray-500">
-                        合計 <b className={sum < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}>{signedPitch(sum)}</b>
-                        <span className="text-gray-400 ml-1">（±3が上限。超えた分は切り詰められます）</span>
-                      </span>
-                      <button onClick={() => setOpenSpecial(null)} className="ml-auto text-xs text-gray-500 underline">閉じる</button>
-                    </div>
-                    <div className="grid gap-1.5 sm:grid-cols-2">
-                      {data.meta.specialReasons.map(sr => {
-                        const on = keys.includes(sr.key)
-                        return (
-                          <label key={sr.key} className={`flex items-start gap-2 rounded-lg border px-3 py-2 cursor-pointer transition ${
-                            on ? 'border-hibi-navy bg-white dark:bg-gray-800 dark:border-blue-400' : 'border-gray-200 dark:border-gray-600 hover:bg-white dark:hover:bg-gray-800'}`}>
-                            <input
-                              type="checkbox" checked={on} disabled={busy || applied}
-                              onChange={ev => {
-                                const next = ev.target.checked ? [...keys, sr.key] : keys.filter(k => k !== sr.key)
-                                setEntry(m.id, { specialKeys: next })
-                              }}
-                              className="mt-0.5"
-                            />
-                            <span className="text-xs leading-relaxed">
-                              {sr.label}
-                              <b className={`ml-1.5 ${sr.pitch < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}`}>{signedPitch(sr.pitch)}</b>
-                            </span>
-                          </label>
-                        )
-                      })}
-                    </div>
-
-                    {/* 代表加算。事由リストに当てはまらないものを、裁量で直接動かす。
-                        規則で決まる特別調整と混ぜないよう別枠にし、理由を必須にしている。 */}
-                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                      <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                        <b className="text-sm">代表加算</b>
-                        <span className="text-[11px] text-gray-500">
-                          事由リストに当てはまらない分を、代表の判断で直接動かします（上限なし）
-                        </span>
+                <Fragment key={m.id}>
+                  <tr className={`${open ? 'bg-gray-50 dark:bg-gray-700/30' : ''} ${r.status === 'blocked' ? 'bg-amber-50/40 dark:bg-amber-900/10' : ''}`}>
+                    <td className={`${td} whitespace-nowrap`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium">{m.name}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${STATUS_CHIP[r.status].cls}`}>{STATUS_CHIP[r.status].label}</span>
                       </div>
-                      <div className="flex flex-wrap items-start gap-2">
-                        <div>
-                          <input
-                            type="number" step={1} disabled={busy || applied}
-                            value={e.discretionaryPitch ?? 0}
-                            onChange={ev => setEntry(m.id, { discretionaryPitch: Number(ev.target.value) || 0 })}
-                            className="w-20 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-lg px-2 py-1.5 text-sm tabular-nums"
-                          />
-                          <span className="text-xs text-gray-500 ml-1">号</span>
-                        </div>
-                        <div className="flex-1 min-w-[220px]">
-                          <input
-                            type="text" disabled={busy || applied}
-                            defaultValue={e.discretionaryReason || ''}
-                            placeholder={(e.discretionaryPitch ?? 0) !== 0 ? '理由（必須）' : '理由'}
-                            onBlur={ev => { if (ev.target.value !== (e.discretionaryReason || '')) setEntry(m.id, { discretionaryReason: ev.target.value }) }}
-                            className={`w-full border rounded-lg px-2 py-1.5 text-xs dark:bg-gray-800 ${
-                              (e.discretionaryPitch ?? 0) !== 0 && !e.discretionaryReason?.trim()
-                                ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
-                                : 'border-gray-300 dark:border-gray-600'}`}
-                          />
-                        </div>
-                      </div>
-                      {(e.discretionaryPitch ?? 0) !== 0 && (
-                        <p className="text-[11px] text-gray-500 mt-1.5">
-                          号を {signedPitch(e.discretionaryPitch!)} 動かします。
-                          <b>理由は給料表と監査証跡に残ります。</b>翌年の改定でも参照されます。
-                        </p>
+                      {m.adjustment ? (
+                        <div className="text-[10px] text-gray-400 mt-0.5">調整給 {yen(m.adjustment)}</div>
+                      ) : null}
+                    </td>
+
+                    <td className={`${td} whitespace-nowrap`}>
+                      {m.currentStep === null
+                        ? <span className="text-amber-700 dark:text-amber-400 text-xs">未設定</span>
+                        : <span className="tabular-nums">{m.grade === 'doko' ? '土工' : m.grade} <b>{m.currentStep}</b>号</span>}
+                    </td>
+
+                    <td className={`${td} text-right whitespace-nowrap tabular-nums text-gray-500`}>
+                      {m.birthDate ? `${ageAt(m.birthDate, data.effective)}歳` : <span className="text-amber-700 dark:text-amber-400 text-xs">生年月日なし</span>}
+                      <span className="text-gray-300 dark:text-gray-600 mx-1">/</span>
+                      {r.tenureMonths === null
+                        ? <span className="text-gray-400">—</span>
+                        : r.tenureMonths >= 24 ? `${Math.floor(r.tenureMonths / 12)}年` : `${r.tenureMonths}ヶ月`}
+                    </td>
+
+                    <td className={`${td} text-right tabular-nums whitespace-nowrap`}>{yen(r.oldTotal)}</td>
+
+                    <td className={td}>
+                      {r.status === 'fixed' ? <span className="text-xs text-gray-400">—</span> : (
+                        <select
+                          value={e.hyogo} disabled={!editable}
+                          onChange={ev => setEntry(m.id, { hyogo: ev.target.value as Hyogo })}
+                          className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-2 py-1 text-sm disabled:opacity-60"
+                        >
+                          {HYOGO_ORDER.map(h => (
+                            <option key={h} value={h}>{h}（{signedPitch(data.meta.hyogoPitch[h])}）</option>
+                          ))}
+                        </select>
                       )}
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+
+                    <td className={`${td} whitespace-nowrap`}>
+                      {r.result ? (
+                        <span className="text-xs tabular-nums text-gray-500">
+                          {signedPitch(r.result.hyogoPitch)}
+                          <span className="text-gray-300 dark:text-gray-600 mx-0.5">·</span>{signedPitch(r.result.agePitch)}
+                          {r.result.specialPitch !== 0 && <><span className="text-gray-300 dark:text-gray-600 mx-0.5">·</span><span className="text-gray-700 dark:text-gray-200">{signedPitch(r.result.specialPitch)}</span></>}
+                          {r.result.discretionaryPitch !== 0 && <><span className="text-gray-300 dark:text-gray-600 mx-0.5">·</span><b className="text-hibi-navy dark:text-blue-300">{signedPitch(r.result.discretionaryPitch)}</b></>}
+                          <b className="ml-1.5 text-gray-900 dark:text-white">= {r.result.totalPitch}</b>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-amber-700 dark:text-amber-400">{r.blockers[0] || '—'}</span>
+                      )}
+                    </td>
+
+                    <td className={`${td} text-right tabular-nums whitespace-nowrap`}>
+                      {r.result
+                        ? <><b>{yen(r.newTotal)}</b><div className="text-[10px] text-gray-400">{r.result.newStep}号</div></>
+                        : <span className="text-gray-400">{yen(r.newTotal)}</span>}
+                    </td>
+
+                    <td className={`${td} text-right tabular-nums whitespace-nowrap`}>
+                      {r.result && r.result.raisePerDay > 0 ? (
+                        <>
+                          <b className="text-green-700 dark:text-green-400">+{yen(r.result.raisePerDay)}</b>
+                          <div className="text-[10px] text-gray-400">{(r.result.upRate * 100).toFixed(2)}%</div>
+                        </>
+                      ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                    </td>
+
+                    <td className={`${td} text-center whitespace-nowrap`}>
+                      {r.status === 'fixed' ? <span className="text-xs text-gray-300 dark:text-gray-600">—</span> : (
+                        <button
+                          onClick={() => setOpenSpecial(open ? null : m.id)}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg border transition ${
+                            missing
+                              ? 'border-amber-400 bg-amber-50 text-amber-800 font-bold dark:bg-amber-900/30 dark:text-amber-300'
+                              : (sp !== 0 || dp !== 0 || e.reason || e.comment)
+                                ? 'border-hibi-navy text-hibi-navy dark:border-blue-400 dark:text-blue-300'
+                                : 'border-gray-300 text-gray-400 dark:border-gray-600'
+                          }`}
+                        >
+                          {missing ? '要入力' : open ? '閉じる' : '編集'}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+
+                  {open && (
+                    <tr className="bg-gray-50 dark:bg-gray-700/30">
+                      <td colSpan={9} className="px-4 py-4">
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          {/* 左: 理由とコメント */}
+                          <div className="space-y-3">
+                            <div>
+                              <label className="text-xs font-bold block mb-1">
+                                評価の理由
+                                {needsReason && <span className="text-amber-700 dark:text-amber-400 ml-1.5 font-normal">（{e.hyogo}評価には必須）</span>}
+                              </label>
+                              <input
+                                type="text" defaultValue={e.reason || ''} disabled={!editable}
+                                placeholder={needsReason ? '必須' : 'A評価は記入不要'}
+                                onBlur={ev => { if (ev.target.value !== (e.reason || '')) setEntry(m.id, { reason: ev.target.value }) }}
+                                className={`w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 disabled:opacity-60 ${
+                                  needsReason && !e.reason?.trim()
+                                    ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
+                                    : 'border-gray-300 dark:border-gray-600'}`}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold block mb-1">給料表に載せるコメント</label>
+                              <textarea
+                                defaultValue={e.comment || ''} disabled={!editable} rows={3}
+                                placeholder="本人へのメッセージ。給料表の右下に入ります"
+                                onBlur={ev => { if (ev.target.value !== (e.comment || '')) setEntry(m.id, { comment: ev.target.value }) }}
+                                className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-lg px-3 py-2 text-xs leading-relaxed disabled:opacity-60"
+                              />
+                            </div>
+                            {r.status === 'ineligible' && !applied && (
+                              <button onClick={() => setEntry(m.id, { forceInclude: true })} disabled={busy}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300">
+                                今回の対象に含める
+                              </button>
+                            )}
+                            {m.forceInclude && !applied && (
+                              <button onClick={() => setEntry(m.id, { forceInclude: false })} disabled={busy}
+                                className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300">
+                                対象から外す
+                              </button>
+                            )}
+                          </div>
+
+                          {/* 右: 特別調整と代表加算 */}
+                          <div className="space-y-3">
+                            <div>
+                              <div className="flex items-baseline gap-2 mb-1.5">
+                                <span className="text-xs font-bold">特別調整</span>
+                                <span className="text-[11px] text-gray-500">
+                                  合計 <b className={sp < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}>{signedPitch(sp)}</b>（±3が上限）
+                                </span>
+                              </div>
+                              <div className="grid gap-1 sm:grid-cols-2">
+                                {data.meta.specialReasons.map(sr => {
+                                  const keys = e.specialKeys ?? []
+                                  const on = keys.includes(sr.key)
+                                  return (
+                                    <label key={sr.key} className={`flex items-start gap-2 rounded-lg border px-2.5 py-1.5 cursor-pointer transition ${
+                                      on ? 'border-hibi-navy bg-white dark:bg-gray-800 dark:border-blue-400' : 'border-gray-200 dark:border-gray-600 hover:bg-white dark:hover:bg-gray-800'}`}>
+                                      <input
+                                        type="checkbox" checked={on} disabled={busy || applied}
+                                        onChange={ev => setEntry(m.id, { specialKeys: ev.target.checked ? [...keys, sr.key] : keys.filter(k => k !== sr.key) })}
+                                        className="mt-0.5"
+                                      />
+                                      <span className="text-[11px] leading-snug">
+                                        {sr.label}
+                                        <b className={`ml-1 ${sr.pitch < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}`}>{signedPitch(sr.pitch)}</b>
+                                      </span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            </div>
+
+                            <div className="pt-3 border-t border-gray-200 dark:border-gray-600">
+                              <div className="flex items-baseline gap-2 mb-1.5">
+                                <span className="text-xs font-bold">代表加算</span>
+                                <span className="text-[11px] text-gray-500">事由に当てはまらない分を直接動かす（上限なし）</span>
+                              </div>
+                              <div className="flex flex-wrap items-start gap-2">
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number" step={1} disabled={busy || applied}
+                                    value={e.discretionaryPitch ?? 0}
+                                    onChange={ev => setEntry(m.id, { discretionaryPitch: Number(ev.target.value) || 0 })}
+                                    className="w-20 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-lg px-2 py-2 text-sm tabular-nums"
+                                  />
+                                  <span className="text-xs text-gray-500">号</span>
+                                </div>
+                                <input
+                                  type="text" disabled={busy || applied}
+                                  defaultValue={e.discretionaryReason || ''}
+                                  placeholder={dp !== 0 ? '理由（必須）' : '理由'}
+                                  onBlur={ev => { if (ev.target.value !== (e.discretionaryReason || '')) setEntry(m.id, { discretionaryReason: ev.target.value }) }}
+                                  className={`flex-1 min-w-[200px] border rounded-lg px-3 py-2 text-xs dark:bg-gray-800 ${
+                                    dp !== 0 && !e.discretionaryReason?.trim()
+                                      ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
+                                      : 'border-gray-300 dark:border-gray-600'}`}
+                                />
+                              </div>
+                              {dp !== 0 && (
+                                <p className="text-[11px] text-gray-500 mt-1.5">
+                                  号を {signedPitch(dp)} 動かします。<b>理由は給料表と監査証跡に残ります。</b>
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               )
             })}
           </tbody>
