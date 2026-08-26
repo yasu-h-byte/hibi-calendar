@@ -11,7 +11,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
 import type { Hyogo, RosterStatus, SpecialReason } from '@/lib/jp-wage'
 
 const ALLOWED_VIEWERS = [0, 1]   // 代表・事業責任者
@@ -61,7 +60,7 @@ const STATUS_CHIP: Record<RosterStatus, { label: string; cls: string }> = {
   blocked:    { label: '要入力', cls: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
 }
 
-export default function JpWagePage() {
+export default function RevisionPanel() {
   const [allowed, setAllowed] = useState<boolean | null>(null)
   const [pw, setPw] = useState('')
   const [data, setData] = useState<Payload | null>(null)
@@ -151,28 +150,29 @@ export default function JpWagePage() {
     return { raise: r.raisePerDay, annual: r.annualCost, ok: r.applied, blocked: r.blocked, ineligible: r.ineligible }
   }, [data])
 
-  if (allowed === null) return <div className="p-6 text-gray-500">読み込み中…</div>
+  if (allowed === null) return <div className="py-10 text-gray-500">読み込み中…</div>
   if (!allowed) return (
-    <div className="p-6">
-      <h1 className="text-lg font-semibold mb-2">閲覧権限がありません</h1>
-      <p className="text-sm text-gray-500">この画面は代表と事業責任者のみが利用できます。</p>
-      <Link href="/dashboard" className="text-sm text-blue-600 mt-3 inline-block">← ダッシュボードへ</Link>
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
+      <h2 className="text-base font-bold mb-1">この内容は表示できません</h2>
+      <p className="text-sm text-gray-500">
+        改定の画面は個人の賃金を一覧するため、代表と事業責任者のみが利用できます（第4節）。
+        号俸表そのものは「号俸表」タブで確認できます。
+      </p>
     </div>
   )
-  if (err && !data) return <div className="p-6 text-red-600 whitespace-pre-wrap">エラー: {err}</div>
-  if (!data || !totals) return <div className="p-6 text-gray-500">集計中…</div>
+  if (err && !data) return <div className="py-6 text-red-600 whitespace-pre-wrap">エラー: {err}</div>
+  if (!data || !totals) return <div className="py-10 text-gray-500">集計中…</div>
 
   const applied = data.status === 'applied'
   const th = 'px-3 py-2.5 text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap'
   const td = 'px-3 py-2.5 align-top'
 
   return (
-    <div className="max-w-[1180px] mx-auto p-4 sm:p-6 space-y-5">
+    <div className="space-y-5">
 
       <header>
         <div className="flex flex-wrap items-center gap-2 mb-1">
-          <h1 className="text-xl font-bold">賃金改定（日本人社員）</h1>
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表・事業責任者のみ</span>
+          <h2 className="text-lg font-bold">年次改定</h2>
           {applied
             ? <span className="text-[11px] px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">確定済み</span>
             : <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">下書き</span>}

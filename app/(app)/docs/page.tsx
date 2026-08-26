@@ -170,17 +170,17 @@ export default function DocsPage() {
 
       {/* 賃金改定（日本人）。評価を決めるのは代表と事業責任者（docs/wage-system.md 第4節） */}
       {isManagement && (
-        <a href="/jp-wage"
+        <a href="/wage?tab=revision"
           className="block bg-white dark:bg-gray-800 rounded-xl border-2 border-red-200 dark:border-red-800/60 shadow-sm hover:shadow-md transition-shadow p-4">
           <div className="flex items-start gap-3">
             <span className="text-2xl">📈</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-bold text-hibi-navy dark:text-white">賃金改定（日本人社員）</span>
+                <span className="font-bold text-hibi-navy dark:text-white">賃金制度（日本人社員）</span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表・事業責任者</span>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-                毎年10月1日の年次改定。評語を入れると号俸表・年齢調整・利益調整から改定額を計算し、人員マスタへ反映する。下書きのまま置いておける
+                号俸表・調整の基準・年次改定を1つにまとめた画面。改定の数字がどの表から出ているかをその場で辿れる
               </p>
             </div>
           </div>

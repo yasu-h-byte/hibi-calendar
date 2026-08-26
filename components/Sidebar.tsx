@@ -37,6 +37,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     { label: '休暇管理', icon: '🌴', href: '/leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
     { label: '評価管理', icon: '📋', href: '/evaluation', section: '人事・労務', roles: ['admin', 'approver'] },
     { label: '昇給履歴', icon: '💰', href: '/workers?tab=raise-history', section: '人事・労務', roles: ['admin', 'approver'] },
+    { label: '賃金制度', icon: '💴', href: '/wage', section: '人事・労務', roles: ['admin', 'approver'] },
     // 「帰国・休暇情報」は「休暇管理 → 帰国情報タブ」に統合
     { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人事・労務', roles: ['admin', 'jimu'] },
     // 現場・外注
@@ -61,6 +62,7 @@ const MENU_ID_MAP: Record<string, string> = {
   '/leave': 'leave',
   // '/leave-requests': removed (merged into /leave)
   '/evaluation': 'evaluation',
+  '/wage': 'wage',
   // '/home-leave' は廃止（/leave?tab=homeleave に統合）
   '/tool-budget': 'tool-budget',
   '/access-log': 'access-log',

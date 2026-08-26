@@ -49,6 +49,7 @@ const ALL_MENUS = [
   { id: 'workers', label: '人員マスタ', section: '人事・労務' },
   { id: 'leave', label: '休暇管理（有給・帰国情報）', section: '人事・労務' },
   { id: 'evaluation', label: '評価管理', section: '人事・労務' },
+  { id: 'wage', label: '賃金制度（日本人社員）', section: '人事・労務' },
   { id: 'tool-budget', label: '道具代管理', section: '人事・労務' },
   // 現場・外注
   { id: 'sites', label: '現場マスタ', section: '現場・外注' },
@@ -68,7 +69,7 @@ const CONFIGURABLE_ROLES = [
 
 // Default permissions (used when no Firestore data exists)
 const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  approver: ['dashboard', 'attendance', 'calendar', 'monthly', 'leave', 'evaluation', 'sites', 'subcons', 'cost', 'docs'],
+  approver: ['dashboard', 'attendance', 'calendar', 'monthly', 'leave', 'evaluation', 'wage', 'sites', 'subcons', 'cost', 'docs'],
   foreman: ['attendance', 'calendar', 'docs'],
   jimu: ['dashboard', 'monthly', 'workers', 'sites', 'subcons', 'leave', 'tool-budget', 'cost', 'docs'],
 }

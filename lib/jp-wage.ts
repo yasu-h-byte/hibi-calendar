@@ -33,6 +33,16 @@ export type ProfitRank = 'over10' | 'over5' | 'profit' | 'loss'
 // ────────────────────────────────────────
 
 export const MAX_STEP = 60
+
+/** 等級の呼称（docs/wage-system.md 第2節）。 */
+export const GRADE_LABELS: Record<JpGrade, string> = {
+  '1G': '初級職', '2G': '中級職', '3G': '班長',
+  '4G': '上級班長', '5G': '職長', '6G': '上級職長',
+  doko: '土工（3G相当）',
+}
+
+/** 号俸表を持つ等級を並び順で。 */
+export const GRADES_IN_ORDER: JpGrade[] = ['1G', '2G', '3G', '4G', '5G', '6G', 'doko']
 export const ANNUAL_DAYS = 290 // 既存社員の年間所定日数（年収換算用）
 
 /** 号のレンジ境界（このstep以下ならそのゾーン）。 */
@@ -140,6 +150,12 @@ const GRADE_INDEX: Record<Exclude<JpGrade, 'doko'>, number> = {
 }
 
 /** 年齢帯 [上限年齢, [1G..6G の調整]]。上限を超えたら次の帯。 */
+/** 画面に表を出すための年齢帯ラベル（AGE_TABLE と同じ並び）。 */
+export const AGE_BAND_LABELS = [
+  '25歳まで', '26〜30歳', '31〜35歳', '36〜40歳', '41〜45歳',
+  '46〜50歳', '51〜55歳', '56〜59歳', '60歳〜（再雇用）',
+] as const
+
 const AGE_TABLE: Array<[number, number[]]> = [
   [25, [3, 2, 1, 0, 0, 0]],
   [30, [1, 1, 0, 0, 0, 0]],
@@ -151,6 +167,11 @@ const AGE_TABLE: Array<[number, number[]]> = [
   [59, [-4, -4, -3, -3, -2, -2]],
   [Infinity, [-4, -4, -3, -3, -3, -3]], // 60歳〜（再雇用）
 ]
+
+/** 年齢調整の全表（表示用）。[帯ラベル, 1G..6G の調整] */
+export function ageTableForDisplay(): Array<{ band: string; pitches: number[] }> {
+  return AGE_TABLE.map((row, i) => ({ band: AGE_BAND_LABELS[i], pitches: row[1] }))
+}
 
 /** 年齢と等級から年齢調整ピッチを返す（土工は3G相当で扱う）。 */
 export function ageAdjustment(age: number, grade: JpGrade): number {
@@ -170,6 +191,19 @@ const PROFIT_TABLE: Record<ProfitRank, number[]> = {
   over5: [0, 0, 0, 1, 1, 2],
   profit: [0, 0, 0, 0, 0, 1],
   loss: [0, 0, -1, -2, -2, -3],
+}
+
+/** 利益ランクの定義（表示用）。しきい値は profitRankOf と対で保つこと。 */
+export const PROFIT_RANK_LABELS: Array<{ rank: ProfitRank; label: string }> = [
+  { rank: 'over10', label: '経常利益率 10%以上' },
+  { rank: 'over5', label: '5%以上 10%未満' },
+  { rank: 'profit', label: '0%以上 5%未満（黒字）' },
+  { rank: 'loss', label: '赤字' },
+]
+
+/** 利益調整の全表（表示用）。 */
+export function profitTableForDisplay(): Array<{ rank: ProfitRank; label: string; pitches: number[] }> {
+  return PROFIT_RANK_LABELS.map(r => ({ ...r, pitches: PROFIT_TABLE[r.rank] }))
 }
 
 /** 経常利益率(%)からランクを判定。 */
