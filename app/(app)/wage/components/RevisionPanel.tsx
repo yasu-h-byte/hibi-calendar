@@ -18,6 +18,12 @@ const ALLOWED_VIEWERS = [0, 1]   // 代表・事業責任者
 const yen = (v: number | null | undefined) => v == null ? '—' : '¥' + Math.round(v).toLocaleString()
 const signedPitch = (v: number) => (v > 0 ? '+' : '') + v
 
+/** 選んだ事由の合計（±3でクランプ）。サーバの specialAdjustment と同じ規則 */
+function specialSum(keys: string[], reasons: SpecialReason[]): number {
+  const raw = keys.reduce((a, k) => a + (reasons.find(r => r.key === k)?.pitch ?? 0), 0)
+  return Math.max(-3, Math.min(3, raw))
+}
+
 interface Row {
   member: {
     id: number; name: string; grade: string; currentStep: number | null
@@ -68,6 +74,8 @@ export default function RevisionPanel() {
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const [profitInput, setProfitInput] = useState('')
+  // 特別調整の事由は行を展開して選ぶ。表の中にポップオーバーを出すと位置合わせが崩れるため
+  const [openSpecial, setOpenSpecial] = useState<number | null>(null)
 
   const load = useCallback(async (password: string) => {
     try {
@@ -258,6 +266,7 @@ export default function RevisionPanel() {
               <th className={`${th} text-right`}>現在の日額</th>
               <th className={`${th} text-left`}>評語</th>
               <th className={`${th} text-left`}>理由</th>
+              <th className={`${th} text-center`}>特別調整</th>
               <th className={`${th} text-center`}>ピッチ内訳</th>
               <th className={`${th} text-right`}>改定後</th>
               <th className={`${th} text-right`}>昇給</th>
@@ -333,6 +342,23 @@ export default function RevisionPanel() {
                   </td>
 
                   <td className={`${td} text-center whitespace-nowrap`}>
+                    {r.status === 'fixed' ? <span className="text-xs text-gray-400">—</span> : (
+                      <button
+                        onClick={() => setOpenSpecial(openSpecial === m.id ? null : m.id)}
+                        disabled={!editable}
+                        className={`text-xs px-2 py-1 rounded-lg border transition disabled:opacity-60 ${
+                          (e.specialKeys?.length ?? 0) > 0
+                            ? 'border-hibi-navy text-hibi-navy font-bold dark:border-blue-400 dark:text-blue-300'
+                            : 'border-gray-300 text-gray-400 dark:border-gray-600'}`}
+                      >
+                        {(e.specialKeys?.length ?? 0) > 0
+                          ? `${signedPitch(specialSum(e.specialKeys!, data.meta.specialReasons))}（${e.specialKeys!.length}件）`
+                          : 'なし'}
+                      </button>
+                    )}
+                  </td>
+
+                  <td className={`${td} text-center whitespace-nowrap`}>
                     {r.result ? (
                       <span className="text-xs tabular-nums text-gray-600 dark:text-gray-300">
                         評{signedPitch(r.result.hyogoPitch)} 齢{signedPitch(r.result.agePitch)} 益{signedPitch(r.result.profitPitch)} 特{signedPitch(r.result.specialPitch)}
@@ -351,6 +377,50 @@ export default function RevisionPanel() {
                       ? <><b className="text-green-700 dark:text-green-400">+{yen(r.result.raisePerDay)}</b>
                           <div className="text-[10px] text-gray-400">{(r.result.upRate * 100).toFixed(2)}%</div></>
                       : <span className="text-gray-400">—</span>}
+                  </td>
+                </tr>
+              )
+            })}
+            {/* 特別調整の事由選択。開いている人の直下に差し込む */}
+            {data.revision.rows.map(r => {
+              const m = r.member
+              if (openSpecial !== m.id) return null
+              const e = entries[String(m.id)] || { hyogo: 'A' as Hyogo }
+              const keys = e.specialKeys ?? []
+              const sum = specialSum(keys, data.meta.specialReasons)
+              return (
+                <tr key={`sp-${m.id}`} className="bg-gray-50 dark:bg-gray-700/30">
+                  <td colSpan={11} className="px-4 py-3">
+                    <div className="flex flex-wrap items-baseline gap-2 mb-2">
+                      <b className="text-sm">{m.name} の特別調整</b>
+                      <span className="text-xs text-gray-500">
+                        合計 <b className={sum < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}>{signedPitch(sum)}</b>
+                        <span className="text-gray-400 ml-1">（±3が上限。超えた分は切り詰められます）</span>
+                      </span>
+                      <button onClick={() => setOpenSpecial(null)} className="ml-auto text-xs text-gray-500 underline">閉じる</button>
+                    </div>
+                    <div className="grid gap-1.5 sm:grid-cols-2">
+                      {data.meta.specialReasons.map(sr => {
+                        const on = keys.includes(sr.key)
+                        return (
+                          <label key={sr.key} className={`flex items-start gap-2 rounded-lg border px-3 py-2 cursor-pointer transition ${
+                            on ? 'border-hibi-navy bg-white dark:bg-gray-800 dark:border-blue-400' : 'border-gray-200 dark:border-gray-600 hover:bg-white dark:hover:bg-gray-800'}`}>
+                            <input
+                              type="checkbox" checked={on} disabled={busy || applied}
+                              onChange={ev => {
+                                const next = ev.target.checked ? [...keys, sr.key] : keys.filter(k => k !== sr.key)
+                                setEntry(m.id, { specialKeys: next })
+                              }}
+                              className="mt-0.5"
+                            />
+                            <span className="text-xs leading-relaxed">
+                              {sr.label}
+                              <b className={`ml-1.5 ${sr.pitch < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}`}>{signedPitch(sr.pitch)}</b>
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
                   </td>
                 </tr>
               )
