@@ -11,7 +11,7 @@
  * 呼び出し側で auditTrail に残せるようにするため。
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, setDoc } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
@@ -90,9 +90,7 @@ function buildPlan(workers: Awaited<ReturnType<typeof getWorkers>>): {
 }
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
   const workers = await getWorkers()
   const plan = buildPlan(workers)
   return NextResponse.json({
@@ -108,9 +106,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
   const workers = await getWorkers()
   const plan = buildPlan(workers)
 

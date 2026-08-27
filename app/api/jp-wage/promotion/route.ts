@@ -12,7 +12,7 @@
  * - POST … 昇格を実行し、人員マスタと履歴を更新
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, setDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
@@ -39,7 +39,7 @@ interface PromotionRecord {
 }
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
   const snap = await getDocs(collection(db, 'jpPromotions'))
   const records: PromotionRecord[] = []
   snap.forEach(d => records.push({ id: d.id, ...(d.data() as Omit<PromotionRecord, 'id'>) }))
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
   const body = await request.json()
   const workerId = Number(body.workerId)
   const toGrade = String(body.toGrade || '') as JpGrade

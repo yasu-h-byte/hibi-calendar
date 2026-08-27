@@ -387,6 +387,19 @@ export async function POST(request: NextRequest) {
       // 他の日・他の現場のキーには触れない（Firestore安全ルール準拠）
       const { ym: dym, siteId: dsid, day, am, pm } = body
       if (!dym || !dsid || !day) return NextResponse.json({ error: 'ym, siteId, day required' }, { status: 400 })
+      // 2026-08-27 追加（給与総点検）: 入力検証と月次ロックガード。
+      //   運転記録は運転手当（給与）の元データなのに、ロックチェックの対象外だった。
+      //   締め済み月の drv を書き換えると確定済み給与の運転手当が黙って変わるため、
+      //   出面エントリ保存と同じく締め済み月は拒否する
+      const dayNum = Number(day)
+      if (!Number.isInteger(dayNum) || dayNum < 1 || dayNum > 31) {
+        return NextResponse.json({ error: 'day は 1〜31 で指定してください' }, { status: 400 })
+      }
+      {
+        const { checkMonthLocked } = await import('@/lib/locks')
+        const lockErr = await checkMonthLocked(String(dym))
+        if (lockErr) return NextResponse.json({ error: `${lockErr}（運転記録は運転手当の元データのため、締め済み月は変更できません）` }, { status: 409 })
+      }
       const clean = (v: unknown) => Array.isArray(v) ? [...new Set(v.map(Number).filter(Number.isFinite))] : []
       const amIds = clean(am); const pmIds = clean(pm)
       const key = `drv.${dsid}_${dym}_${Number(day)}`

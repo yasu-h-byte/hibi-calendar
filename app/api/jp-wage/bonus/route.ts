@@ -12,7 +12,7 @@
  * - POST … 配分を確定して保存
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
@@ -35,7 +35,7 @@ interface BonusRecord {
 }
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
 
   const snap = await getDocs(collection(db, 'jpBonuses'))
   const records: BonusRecord[] = []
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
   const body = await request.json()
   const label = String(body.label || '').trim()
   const paidOn = String(body.paidOn || todayJstIso())

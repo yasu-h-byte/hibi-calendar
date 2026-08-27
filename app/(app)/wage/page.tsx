@@ -37,6 +37,8 @@ const RELATED = [
   { href: '/docs', label: '資料一覧', note: '全ドキュメント' },
 ]
 
+const ALLOWED_VIEWERS = [0, 1]   // 代表・事業責任者（RevisionPanel と同一基準）
+
 function WageHub() {
   const router = useRouter()
   const params = useSearchParams()
@@ -44,9 +46,22 @@ function WageHub() {
   const [placed, setPlaced] = useState<{ name: string; grade: string; step: number }[]>([])
   // 等級が未設定の日本人社員。放置すると年次改定が確定できないので、どのタブでも出す
   const [unset, setUnset] = useState<{ id: number; name: string }[]>([])
+  // 2026-08-27 追加（給与総点検）: ページ全体の閲覧ガード。改定タブだけでなく
+  //   昇格・賞与タブにも個人の日額・賞与額が出るため、ハブごと代表・事業責任者に限定する
+  //   （APIはサーバ側 requireExecutiveAuth でも強制済み。これはUXのための早期表示制御）
+  const [allowed, setAllowed] = useState<boolean | null>(null)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('hibi_auth')
+      const wid = raw ? JSON.parse(raw)?.user?.workerId : undefined
+      // workerId 0（代表）は falsy なので includes で判定
+      setAllowed(typeof wid === 'number' && ALLOWED_VIEWERS.includes(wid))
+    } catch { setAllowed(false) }
+  }, [])
 
   // 号俸表に「誰がどこにいるか」を重ねる。制度の話と実際の配置が別画面だと結びつかない
   useEffect(() => {
+    if (allowed !== true) return
     try {
       const raw = localStorage.getItem('hibi_auth')
       const pw = raw ? JSON.parse(raw)?.password : ''
@@ -67,9 +82,20 @@ function WageHub() {
         })
         .catch(() => {})
     } catch { /* 配置が出せなくても表は見られるので握りつぶす */ }
-  }, [])
+  }, [allowed])
 
   const go = (t: Tab) => router.replace(`/wage?tab=${t}`, { scroll: false })
+
+  if (allowed === null) return <div className="p-8 text-center text-gray-400">読み込み中...</div>
+  if (!allowed) {
+    return (
+      <div className="max-w-lg mx-auto p-8 text-center space-y-2">
+        <div className="text-3xl">🔒</div>
+        <p className="font-bold">このページは代表・事業責任者のみ閲覧できます</p>
+        <p className="text-sm text-gray-500">賃金制度の内容（等級・日額・賞与）は機密情報のため、閲覧を制限しています。</p>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-[1180px] mx-auto p-4 sm:p-6 space-y-5">

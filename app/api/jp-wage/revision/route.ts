@@ -10,7 +10,7 @@
  * - POST   … 確定して人員マスタへ反映。結果を凍結し auditTrail に残す
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
@@ -97,7 +97,7 @@ async function buildRoster(effective: string, entries: Record<string, Entry>) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
   const effective = effectiveOf(request)
   const docData = await loadDoc(effective)
   const { members } = await buildRoster(effective, docData.entries)
@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
   const body = await request.json()
   const effective = body.effective || nextRevisionDate(todayJstIso())
   const current = await loadDoc(effective)
@@ -144,7 +144,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
   const body = await request.json()
   const effective = body.effective || nextRevisionDate(todayJstIso())
   const docData = await loadDoc(effective)

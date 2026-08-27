@@ -1,5 +1,5 @@
 import { AuthUser, UserRole, Site, Worker } from '@/types'
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 
@@ -213,6 +213,24 @@ export interface ApiRole {
 }
 
 /** 承認・差し戻し等の管理操作を行える権限か（職長は不可・最終承認は管理者/事業責任者） */
+/**
+ * 賃金・給与などの最高機密APIに使う「代表・管理者のみ」の認証（2026-08-27 追加）。
+ * admin / super-admin パスワード、または事業責任者（政仁さん workerId=1）の個人パスワードのみ許可。
+ * checkApiAuth は任意の個人パスワードでも通るため、機密系には使わないこと。
+ * 通れば null、拒否なら NextResponse を返す。
+ */
+export async function requireExecutiveAuth(request: NextRequest): Promise<Response | null> {
+  const auth = await getApiAuthUser(request)
+  if (!auth.authorized) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  const ok = auth.actor === 'admin' || auth.actor === 'super-admin' || auth.actor === 1
+  if (!ok) {
+    return NextResponse.json({ error: 'この操作は管理者・事業責任者のみ実行できます' }, { status: 403 })
+  }
+  return null
+}
+
 export function isManagerRole(role: string): boolean {
   return role === 'super-admin' || role === 'admin' || role === 'approver'
 }
