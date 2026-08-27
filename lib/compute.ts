@@ -735,7 +735,12 @@ export function compute(
     //   p/exam は上で個別処理済み。w==0 も下の `if (!v.w)` で除外される。
     if ((v.r ?? 0) > 0 || (v.h ?? 0) > 0 || (v.hk ?? 0) > 0) continue
 
-    if (!v.w) continue
+    // 2026-08-27 修正（給与総点検）: 夜勤対応。
+    //   夜勤のみ(ns, w=0)の日は旧 `if (!v.w) continue` で原価・人工とも0になり、
+    //   日勤+夜勤の日も 1.5人工の加算分が欠落していた（computeMonthly は対応済みで
+    //   ダッシュボード/原価管理だけズレる）。人工は calcManDays で統一する
+    const hasNight = !!(v as { ns?: number }).ns
+    if (!v.w && !hasNight) continue
 
     // 休業補償(0.6): 外国人の会社都合休業 → 原価のみ計上、人工数には含めない
     const isComp = (v.w === 0.6 && w.visa !== 'none')
@@ -745,8 +750,9 @@ export function compute(
     //   新: getWorkerDailyRate() で月給制も日額換算（salary/20）
     const dailyRate = getWorkerDailyRate(w)
     const otCost = (v.o || 0) * (dailyRate / otDivisor) * w.otMul
-    const cost = v.w * dailyRate + otCost
-    const workCount = isComp ? 0 : v.w  // 休業補償は人工0
+    const manDays = isComp ? v.w : calcManDays(v)  // 夜勤1.5人工を含む人工数
+    const cost = (isComp ? v.w : manDays) * dailyRate + otCost
+    const workCount = isComp ? 0 : manDays  // 休業補償は人工0
     const stdH = w.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h（変形労働時間制）
     const oe = isComp ? 0 : (v.o || 0) / stdH  // 残業→人工換算
 
@@ -1268,9 +1274,11 @@ export function computeMonthly(
       wm.nightManDays = Math.round(((wm.nightManDays || 0) + NIGHT_SHIFT_MANDAYS) * 100) / 100
       wm.nightShiftHours = Math.round(((wm.nightShiftHours || 0) + nsHours) * 10) / 10
 
-      // 日本人（日給月給）の 1.5人工 が法令を満たすかを夜勤日ごとに検証し、
+      // 日本人（日給月給・完全月給）の 1.5人工 が法令を満たすかを夜勤日ごとに検証し、
       // 法定必要額と実支給額を積む。支給額は変えず、不足があれば月次画面で警告する。
-      if (wm.visa === 'none' && wm.rate > 0) {
+      // 2026-08-27 修正（給与総点検）: 完全月給者(rate=0, salary>0)が rate>0 条件で
+      //   素通しになり、深夜割増の未払いが無警告だった → 月給の日額換算で判定に含める
+      if (wm.visa === 'none' && (wm.rate > 0 || (wm.salary ?? 0) > 0)) {
         const dayH = entry.st && entry.et
           ? calcDayShiftHours(entry, siteScheduleMap.get(siteId) as Parameters<typeof calcActualHours>[1])
           : (entry.nonly ? 0 : (entry.w || 0) * JP_PRESCRIBED_HOURS_PER_DAY + (entry.o || 0))
@@ -1285,8 +1293,11 @@ export function computeMonthly(
           )
         }
         const dow = new Date(parseInt(ym.slice(0, 4)), parseInt(ym.slice(4, 6)) - 1, Number(pk.day)).getDay()
+        // 完全月給者は日額換算（salary/20）で法定必要額を見積もる。実支給側(nightShiftPaid)は
+        // rate=0 のため0となり、夜勤があれば必ず不足警告が出る＝深夜割増の検討を促す
+        const effRateForLegal = wm.rate > 0 ? wm.rate : Math.round((wm.salary ?? 0) / 20)
         wm.legalRequiredPay = (wm.legalRequiredPay || 0) + calcNightShiftLegalRequiredPay({
-          dailyRate: wm.rate,
+          dailyRate: effRateForLegal,
           prescribedHours: JP_PRESCRIBED_HOURS_PER_DAY,
           totalHours: dayH + nsHours,
           nightHours: nightMin / 60,
@@ -1426,7 +1437,9 @@ export function computeMonthly(
     const sc = subconMap.get(scid)
     if (!sc) continue
 
-    if (entry.n > 0) {
+    // 2026-08-27 修正（給与総点検）: 残業のみの日（n=0, on>0。入力UIが正当に保存する形）が
+    //   n>0 ガードで丸ごと脱落し、残業原価が未計上=利益過大になっていた
+    if (entry.n > 0 || (entry.on || 0) > 0) {
       sc.workDays += entry.n
       sc.otCount += entry.on || 0
       if (!sc.sites.includes(siteId)) sc.sites.push(siteId)
@@ -1682,7 +1695,7 @@ export function computeMonthly(
       // 2026-06-XX 修正 (I-7/I-9): 中途入退社時は基本給を proratedBaseDays で按分
       //   月給制でも在籍期間に応じて basePay を縮小（労基法の日割り原則）
       const proratedSalary = baseDays > 0 ? ceilYen(wm.salary * (proratedBaseDays / baseDays)) : wm.salary  // 支給: 切り上げ
-      const derivedHourlyRate = wm.salary / (baseDays * 7)  // 単価は固定（按分前の月給ベース）
+      const derivedHourlyRate = wm.salary / (Math.max(1, baseDays) * 7)  // 単価は固定（按分前の月給ベース。baseDays=0 設定でも NaN にしない）
       const v = calculateVietnameseSalary(
         wm.id, ym, derivedHourlyRate, proratedBaseDays, attD, main.sites,
         wm.plUsed, wm.compDays, wm.examDays, calendarDays,
@@ -1988,6 +2001,7 @@ export function computeMonthly(
   //     「帰国中」を明示して奥寺さんが欠勤と誤認しないようにする）。
   const workers = Array.from(workerMap.values()).filter(w =>
     w.workDays > 0 || w.plDays > 0 || w.compDays > 0 ||
+    w.examDays > 0 ||  // 試験のみの月も表示（欠勤控除対象外＝基本給が出るのに一覧から消えていた 2026-08-27）
     (w.hkDays !== undefined && w.hkDays > 0) ||
     (w.salary !== undefined && w.salary > 0)
   )
@@ -2173,18 +2187,27 @@ export function calculateOvertimeSummary(
       //   有給/休み/現場休/帰国中/試験 のステータスがある日は実労働を計上しない。
       //   isWorkingDay() で 5 ステータスを一括判定。
       if (!isWorkingDay(entry)) continue
+      // 2026-08-27 修正（給与総点検・社労士Excel）: 給与計算(calcVN)との基準統一3点。
+      //   ① 同日複数現場は加算（旧: `actual =` の上書きで最後の現場だけになり過少）
+      //   ② レガシー入力の半日(w=0.5等)は w×7h（旧: 半日でも 7h 固定で過大）
+      //   ③ 夜勤ブロック(ns)の実労働を calcNightShiftHours で加算（旧: 夜勤月が過少）
       if (entry.w && entry.w > 0) {
         if (entry.st && entry.et) {
           // 時間ベース入力（202605〜）: calcActualHours で実時間（休憩控除済み）を取得
-          actual = calcActualHours(entry, site.workSchedule as Parameters<typeof calcActualHours>[1])
-          overtime = Math.max(0, Math.round((actual - 7) * 10) / 10)
+          actual += calcActualHours(entry, site.workSchedule as Parameters<typeof calcActualHours>[1])
         } else {
-          // レガシー入力（202604以前）: 出勤=7h + 残業h
-          actual = entry.w === 0.6 ? Math.round(7 * 0.6 * 10) / 10 : 7
-          overtime = entry.o || 0
-          actual += overtime
+          // レガシー入力: 出勤 = w×7h + 残業h
+          actual += entry.w === 0.6 ? Math.round(7 * 0.6 * 10) / 10 : entry.w * 7
+          actual += entry.o || 0
         }
       }
+      if ((entry as { ns?: number }).ns) {
+        actual += calcNightShiftHours(entry)
+      }
+    }
+    if (!isPaidLeave && actual > 0) {
+      actual = Math.round(actual * 10) / 10
+      overtime = Math.max(0, Math.round((actual - 7) * 10) / 10)
     }
 
     // 第1段階: 日単位の法定外
