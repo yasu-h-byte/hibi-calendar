@@ -122,6 +122,28 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
       return `未処理の有給申請が ${pendings.length}件 残っているため締められません:\n${pendings.slice(0, 10).join('、')}\n有給管理画面で承認または却下を済ませてから締めてください`
     }
   }
+
+  // ⑤ 対象月に期間が重なる「未処理の帰国申請」が残っていないこと（2026-08-27 追加・休暇届総点検）
+  //    締め後に最終承認すると hk 書込・按分変更で確定給とズレる。逆にロックガードで
+  //    承認できなくなり申請が詰むため、締め前に処理を完了させる
+  {
+    const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
+    const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
+    const monthEnd = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-31`
+    const hlPendings: string[] = []
+    hlSnap.forEach(s2 => {
+      const d = s2.data() as { status?: string; workerId?: number; workerName?: string; startDate?: string; endDate?: string }
+      if (d.status !== 'pending' && d.status !== 'foreman_approved') return
+      if (!d.startDate || !d.endDate) return
+      if (d.endDate < monthStart || d.startDate > monthEnd) return  // 対象月に重ならない
+      const wOrg = workerOrg.get(Number(d.workerId))
+      if (orgKey !== 'all' && wOrg !== orgKey) return
+      hlPendings.push(`${d.workerName || `ID${d.workerId}`}（${d.startDate}〜・${d.status === 'pending' ? '未承認' : '職長承認のみ'}）`)
+    })
+    if (hlPendings.length > 0) {
+      return `対象月に重なる未処理の帰国申請が ${hlPendings.length}件 残っているため締められません:\n${hlPendings.slice(0, 5).join('、')}\n休暇管理画面で最終承認または却下を済ませてから締めてください`
+    }
+  }
   return null
 }
 

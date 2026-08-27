@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { doc, updateDoc, deleteField } from '@/lib/fsdb'
+import { doc, updateDoc, deleteField, getDocs, query, collection, where } from '@/lib/fsdb'
 import { ensureDocExists } from './firestore-safe'
 import { getAttendanceDoc, attKey, getStaffSites, ymKey } from './attendance'
 import { checkMonthLocked } from './locks'
@@ -182,8 +182,11 @@ export async function findWorkedDaysInHomeLeave(
   if (!startDate || !endDate || startDate > endDate) return []
 
   // 番兵（復帰未定）は期間が事実上無限なので、暦の先読み上限で打ち切る
+  // 2026-08-27 修正: 旧実装は 'YYYYMM' + '-31' → '202708-31' という壊れた文字列になり、
+  //   月走査が過剰になっていた（正: ISO形式 'YYYY-MM-31'）
+  const capYm = addMonths(ymOf(startDate), HK_STAMP_HORIZON_MONTHS)
   const cappedEnd = endDate >= HOME_LEAVE_SENTINEL_CAP
-    ? addMonths(ymOf(startDate), HK_STAMP_HORIZON_MONTHS) + '-31'
+    ? `${capYm.slice(0, 4)}-${capYm.slice(4, 6)}-31`
     : endDate
 
   const conflicts: HomeLeaveConflictDay[] = []
@@ -216,7 +219,7 @@ export async function syncHomeLeaveAttendance(
   workerId: number,
   oldRange: HomeLeaveRange | null,
   newRange: HomeLeaveRange | null,
-  options: { siteId?: string } = {},
+  options: { siteId?: string; excludeDocId?: string } = {},
 ): Promise<HomeLeaveSyncResult> {
   const result: HomeLeaveSyncResult = { written: [], cleared: [], skipped: [], lockedMonths: [] }
 
@@ -227,6 +230,31 @@ export async function syncHomeLeaveAttendance(
   }
   // 現場が特定できないと出面のキーが作れない。何もしないが、これは異常系。
   if (!siteId) return result
+
+  // ── 2026-08-27 追加（休暇届総点検）──
+  // ① ロック判定は本人の org で行う（旧: org 無指定＝両組織ロック時のみ locked 扱いで、
+  //    片組織だけ締めた月に hk の書換が素通りしていた）
+  // ② 同一人の「他の承認済み帰国期間」がカバーする日の hk は消さない。
+  //    期間が重複して登録されていた場合、片方の削除がもう片方の hk を
+  //    巻き添えで消していた（excludeDocId = 操作中のレコード自身）
+  const { getWorkers } = await import('./workers')
+  const workerCompany = (await getWorkers()).find(w => w.id === workerId)?.company
+  const workerOrg = workerCompany === 'HFU' ? 'hfu' : workerCompany ? 'hibi' : undefined
+  const protectRanges: HomeLeaveRange[] = []
+  try {
+    const othersSnap = await getDocs(query(
+      collection(db, 'homeLongLeave'),
+      where('workerId', '==', workerId),
+      where('status', '==', 'approved'),
+    ))
+    othersSnap.forEach(d0 => {
+      if (options.excludeDocId && d0.id === options.excludeDocId) return
+      const v = d0.data() as { startDate?: string; endDate?: string }
+      if (v.startDate && v.endDate) protectRanges.push({ startDate: v.startDate, endDate: v.endDate })
+    })
+  } catch { /* 保護リストが取れなくても本処理は続行（従来挙動） */ }
+  const isProtected = (iso: string) =>
+    protectRanges.some(r => iso >= r.startDate && iso <= r.endDate)
 
   // 対象月 = 旧期間 ∪ 新期間 が触れる月。旧期間を含めるのは残骸を消すため。
   const starts: string[] = []
@@ -246,7 +274,7 @@ export async function syncHomeLeaveAttendance(
   if (fromYm > toYm) return result
 
   for (const ym of monthsInclusive(fromYm, toYm)) {
-    if (await checkMonthLocked(ym)) {
+    if (await checkMonthLocked(ym, workerOrg)) {
       result.lockedMonths.push(ym)
       continue
     }
@@ -264,7 +292,8 @@ export async function syncHomeLeaveAttendance(
       // 日曜は元々出面対象外なので帰国フラグも立てない（承認時の既存仕様を踏襲）
       const isSunday = new Date(y, m - 1, day).getDay() === 0
       const shouldHaveHk =
-        !!newRange && !isSunday && iso >= newRange.startDate && iso <= newRange.endDate
+        (!!newRange && !isSunday && iso >= newRange.startDate && iso <= newRange.endDate)
+        || (!isSunday && isProtected(iso))  // 他の承認済み期間がカバーする日は維持
 
       switch (planHomeLeaveDay(entry, shouldHaveHk)) {
         case 'write':

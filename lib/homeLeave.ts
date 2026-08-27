@@ -41,8 +41,11 @@ export async function getAllActiveHomeLeaves(): Promise<HomeLeaveEntry[]> {
     const hlSnap = await getDocs(collection(db, 'homeLongLeave'))
     hlSnap.forEach(d => {
       const hl = d.data()
-      // 承認待ち（pending/foreman_approved）も予定として扱う（旧仕様維持）
-      if (hl.status !== 'approved' && hl.status !== 'foreman_approved') return
+      // 2026-08-27 修正（休暇届総点検）: **最終承認済み(approved)のみ**を給与・通知に反映。
+      //   旧: foreman_approved（職長承認どまり）も含めており、政仁さんの最終承認前に
+      //   基本給の按分が減っていた（承認フロー原則違反）。さらに、その状態で締めると
+      //   スナップショットに未確定の帰国が凍結され、後から承認も取消もできない詰みになっていた
+      if (hl.status !== 'approved') return
       if (!hl.startDate || !hl.endDate) return
       result.push({
         workerId: hl.workerId,
@@ -71,11 +74,22 @@ export function isFullMonthHomeLeave(
   const monthStart = `${y}-${String(m).padStart(2, '0')}-01`
   const monthEnd = `${y}-${String(m).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
-  return homeLeaves.some(hl =>
-    hl.workerId === workerId &&
-    hl.startDate <= monthStart &&
-    hl.endDate >= monthEnd
-  )
+  // 2026-08-27 修正: 連続する複数の申請（例 8/1-15 + 8/16-31）が合算で月全体を
+  //   カバーするケースにも対応（旧: 単一レコード判定で false → 未署名通知が誤発火）
+  const mine = homeLeaves
+    .filter(hl => hl.workerId === workerId && hl.endDate >= monthStart && hl.startDate <= monthEnd)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+  let cursor = monthStart
+  for (const hl of mine) {
+    if (hl.startDate > cursor) return false  // カバーの穴
+    if (hl.endDate >= monthEnd) return true
+    // 翌日へ（endDate は帰国期間に含む）
+    const d = new Date(hl.endDate + 'T00:00:00Z')
+    d.setUTCDate(d.getUTCDate() + 1)
+    const next = d.toISOString().slice(0, 10)
+    if (next > cursor) cursor = next
+  }
+  return false
 }
 
 /**

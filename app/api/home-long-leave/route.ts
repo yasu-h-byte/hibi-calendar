@@ -62,9 +62,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Not eligible' }, { status: 403 })
       }
 
-      // Validate startDate < endDate
+      // Validate startDate < endDate（2026-08-27: 書式と期間長も検証。
+      //   不正な endDate（番兵級の未来日）が承認処理のループ暴走・hk過剰スタンプの元だった）
+      const ISO_RE = /^\d{4}-\d{2}-\d{2}$/
+      if (!ISO_RE.test(startDate) || !ISO_RE.test(endDate)) {
+        return NextResponse.json({ error: '日付の形式が不正です / Ngày không hợp lệ' }, { status: 400 })
+      }
       if (startDate >= endDate) {
         return NextResponse.json({ error: 'Start date must be before end date' }, { status: 400 })
+      }
+      {
+        // UI の上限（180日）と同じ制限をサーバでも強制
+        const sd = new Date(startDate + 'T00:00:00Z')
+        const ed = new Date(endDate + 'T00:00:00Z')
+        if ((ed.getTime() - sd.getTime()) / 86400000 > 185) {
+          return NextResponse.json({ error: '帰国期間が長すぎます（最大180日）。復帰未定の場合は会社に連絡してください / Thời gian về nước quá dài (tối đa 180 ngày)' }, { status: 400 })
+        }
       }
 
       // Validate dates are at least 90 days (3 months) in the future (JST)
@@ -89,6 +102,23 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Already requested' }, { status: 409 })
         }
         // rejected または cancelled は新しい申請で上書き許可
+      }
+      // 2026-08-27 追加: 開始日をずらした「期間の重なる申請」も拒否（doc id 一致だけでは防げない）
+      {
+        const dupSnap = await getDocs(query(collection(db, 'homeLongLeave'), where('workerId', '==', worker.id)))
+        let overlap = null as { s: string; e: string } | null
+        dupSnap.forEach(dd => {
+          if (overlap || dd.id === docId) return
+          const v = dd.data() as { startDate?: string; endDate?: string; status?: string }
+          if (!v.startDate || !v.endDate) return
+          if (v.status !== 'approved' && v.status !== 'pending' && v.status !== 'foreman_approved') return
+          if (startDate <= v.endDate && v.startDate <= endDate) overlap = { s: v.startDate, e: v.endDate }
+        })
+        if (overlap) {
+          return NextResponse.json({
+            error: `既存の申請期間（${overlap.s}〜${overlap.e}）と重なっています / Trùng với đơn đã có (${overlap.s}〜${overlap.e})`,
+          }, { status: 409 })
+        }
       }
 
       const leaveReq: HomeLongLeave = {
@@ -160,9 +190,11 @@ export async function POST(request: NextRequest) {
 
     // ── 事業責任者: 最終承認（第2段階） ──
     if (action === 'approve') {
-      if (!await checkApiAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
+      // 2026-08-27（休暇届総点検）: 最終承認は代表・事業責任者のみ
+      //   （旧: 任意の個人パスワードで最終承認できた。有給 approve と同一基準に統一）
+      const { requireExecutiveAuth, getApiAuthUser } = await import('@/lib/auth')
+      { const denied = await requireExecutiveAuth(request); if (denied) return denied }
+      const authForApprove = await getApiAuthUser(request)
 
       const { requestId, approvedBy } = body
       if (!requestId) {
@@ -185,18 +217,22 @@ export async function POST(request: NextRequest) {
 
       // 2026-06-12 (監査 Sprint2-B): 期間に含まれる月がロック済みなら承認を拒否
       //   （hk 書込は欠勤控除に影響するため、給与確定後の変更を防ぐ）
+      // 2026-08-27 修正: 走査を日単位→月単位に変更し、復帰未定（番兵 9999-12-31）でも
+      //   12ヶ月で打ち切る（旧: 1日ずつ約290万回転で checkMonthLocked を叩き
+      //   タイムアウト＋クォータ浪費の恐れがあった）。ロック判定は本人の org で行う
       {
         const { checkMonthLocked } = await import('@/lib/locks')
-        const yms = new Set<string>()
-        const cur = new Date(data.startDate + 'T00:00:00')
-        const endD = new Date(data.endDate + 'T00:00:00')
-        while (cur <= endD) {
-          yms.add(ymKey(cur.getFullYear(), cur.getMonth() + 1))
-          cur.setDate(cur.getDate() + 1)
-        }
-        for (const ymCheck of yms) {
-          const lockErr = await checkMonthLocked(ymCheck)
+        const { getWorkers } = await import('@/lib/workers')
+        const company = (await getWorkers()).find(w => w.id === data.workerId)?.company
+        const org = company === 'HFU' ? 'hfu' : company ? 'hibi' : undefined
+        let ymCur = data.startDate.slice(0, 7).replace('-', '')
+        const endYmRaw = data.endDate.slice(0, 7).replace('-', '')
+        let guard = 0
+        while (ymCur <= endYmRaw && guard++ < 13) {
+          const lockErr = await checkMonthLocked(ymCur, org)
           if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
+          const y = Number(ymCur.slice(0, 4)); const m = Number(ymCur.slice(4, 6))
+          ymCur = m === 12 ? `${y + 1}01` : `${y}${String(m + 1).padStart(2, '0')}`
         }
       }
 
@@ -221,7 +257,9 @@ export async function POST(request: NextRequest) {
         ...data,
         status: 'approved',
         reviewedAt: new Date().toISOString(),
-        reviewedBy: approvedBy || 0,
+        // 認証者から記録（body の自己申告は表示用フォールバック）
+        reviewedBy: authForApprove.authorized && typeof authForApprove.actor === 'number'
+          ? authForApprove.actor : (approvedBy ?? 0),
       })
 
       // 出面の帰国フラグを同期（2026-08-03: lib/home-leave-sync.ts に一元化）
@@ -234,6 +272,7 @@ export async function POST(request: NextRequest) {
         data.workerId,
         null,
         { startDate: data.startDate, endDate: data.endDate },
+        { excludeDocId: requestId },
       )
       if (syncResult.skipped.length > 0) {
         console.warn(`[home-long-leave/approve] 既存実績ありスキップ: ${data.workerName} (${data.workerId}) - ${syncResult.skipped.join(', ')}`)

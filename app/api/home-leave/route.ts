@@ -1,10 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, updateDoc, deleteDoc, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { getWorkers, resolveWorkerName } from '@/lib/workers'
 import { HOME_LEAVE_SENTINEL_END } from '@/lib/homeLeave'
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * 同一スタッフの他のアクティブ申請（approved/pending/foreman_approved）と
+ * 期間が重なっていないか調べる（2026-08-27 追加・休暇届総点検）。
+ * 旧: doc id（workerId_開始日）の完全一致のみで、開始日を1日ずらせば
+ * 重なる期間を何件でも登録でき、削除時に hk の巻き添え消しを起こしていた。
+ * endDate は「最終帰国日」（期間に含む）なので重なりは inclusive で判定する。
+ */
+async function findOverlappingLeave(
+  workerId: number, startDate: string, endDate: string, excludeId?: string,
+): Promise<{ id: string; startDate: string; endDate: string; status: string } | null> {
+  const snap = await getDocs(query(collection(db, 'homeLongLeave'), where('workerId', '==', Number(workerId))))
+  let hit: { id: string; startDate: string; endDate: string; status: string } | null = null
+  snap.forEach(d => {
+    if (hit) return
+    if (excludeId && d.id === excludeId) return
+    const v = d.data() as { startDate?: string; endDate?: string; status?: string }
+    if (!v.startDate || !v.endDate) return
+    if (v.status !== 'approved' && v.status !== 'pending' && v.status !== 'foreman_approved') return
+    if (startDate <= v.endDate && v.startDate <= endDate) {
+      hit = { id: d.id, startDate: v.startDate, endDate: v.endDate, status: v.status || '' }
+    }
+  })
+  return hit
+}
+
+/**
+ * 期間（旧∪新）が本人の組織のロック済み月にかかっていないか（2026-08-27 追加）。
+ * 締め済み給与は帰国期間の事後変更で黙って変わってはいけない。
+ * 変更が必要な場合は月次集計画面でロックを解除してから行う運用に統一する。
+ * 番兵（復帰未定）は12ヶ月で打ち切って走査する。
+ */
+async function findLockedMonthInRanges(
+  workerId: number,
+  ranges: { startDate?: string; endDate?: string }[],
+): Promise<string | null> {
+  const { checkMonthLocked } = await import('@/lib/locks')
+  const { getWorkers } = await import('@/lib/workers')
+  const company = (await getWorkers()).find(w => w.id === Number(workerId))?.company
+  const org = company === 'HFU' ? 'hfu' : company ? 'hibi' : undefined
+  const seen = new Set<string>()
+  for (const r of ranges) {
+    if (!r?.startDate || !r?.endDate || !ISO_DATE_RE.test(r.startDate)) continue
+    let ym = r.startDate.slice(0, 7).replace('-', '')
+    let endYm = (r.endDate >= HOME_LEAVE_SENTINEL_END ? '' : r.endDate.slice(0, 7).replace('-', ''))
+    // 番兵は開始から12ヶ月で打ち切り（syncHomeLeaveAttendance の horizon と同じ）
+    if (!endYm || Number(endYm.slice(0, 4)) > Number(ym.slice(0, 4)) + 2) {
+      const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6)) - 1 + 12
+      endYm = `${y + Math.floor(m / 12)}${String((m % 12) + 1).padStart(2, '0')}`
+    }
+    let guard = 0
+    while (ym <= endYm && guard++ < 30) {
+      if (!seen.has(ym)) {
+        seen.add(ym)
+        const lockErr = await checkMonthLocked(ym, org)
+        if (lockErr) return ym
+      }
+      const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6))
+      ym = m === 12 ? `${y + 1}01` : `${y}${String(m + 1).padStart(2, '0')}`
+    }
+  }
+  return null
+}
 
 /**
  * 管理者の手動帰国登録 API（2026-05-13 単一ソース化）
@@ -110,9 +175,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!await checkApiAuth(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // 2026-08-27（休暇届総点検）: 帰国記録の登録・変更・削除は給与（基本給の按分）に
+    //   直結するため、代表・管理者のみに制限（旧: 任意の個人パスワードで可能だった）
+    { const denied = await requireExecutiveAuth(request); if (denied) return denied }
+    const authUser = await getApiAuthUser(request)
+    const actorLabel = authUser.authorized
+      ? (typeof authUser.actor === 'number' ? `worker:${authUser.actor}` : String(authUser.actor))
+      : 'admin'
 
     const body = await request.json()
     const { action } = body
@@ -126,11 +195,28 @@ export async function POST(request: NextRequest) {
       //   復帰時は update で実際の復帰日に置き換える。
       const endDate = returnUndecided ? HOME_LEAVE_SENTINEL_END : body.endDate
 
-      if (!workerId || !workerName || !startDate || !endDate || !reason) {
+      if (!Number.isInteger(Number(workerId)) || !workerName || !startDate || !endDate || !reason) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+      }
+      // 2026-08-27: 日付は ISO 形式を強制（空文字や不正形式が保存されると
+      //   同期の文字列比較が全日 true になり hk が一斉スタンプされる事故経路だった）
+      if (!ISO_DATE_RE.test(startDate) || (!returnUndecided && !ISO_DATE_RE.test(endDate))) {
+        return NextResponse.json({ error: '日付は YYYY-MM-DD 形式で指定してください' }, { status: 400 })
       }
       if (startDate >= endDate) {
         return NextResponse.json({ error: 'startDate must be before endDate' }, { status: 400 })
+      }
+      const overlapAdd = await findOverlappingLeave(Number(workerId), startDate, endDate)
+      if (overlapAdd) {
+        return NextResponse.json({
+          error: `既存の帰国期間（${overlapAdd.startDate}〜${overlapAdd.endDate}・${overlapAdd.status}）と重なっています。既存の記録を編集してください`,
+        }, { status: 409 })
+      }
+      {
+        const lockedYm = await findLockedMonthInRanges(Number(workerId), [{ startDate, endDate }])
+        if (lockedYm) {
+          return NextResponse.json({ error: `${lockedYm.slice(0, 4)}年${Number(lockedYm.slice(4, 6))}月は月次締め済みのため、この期間の帰国は登録できません。先にロックを解除してください` }, { status: 409 })
+        }
       }
 
       const id = `${workerId}_${startDate}`
@@ -172,7 +258,7 @@ export async function POST(request: NextRequest) {
       // 手動登録は status='approved' で作るのに、これまで出面へ何も書いていなかった。
       // 承認経路と同じ状態になるよう、ここでも必ず同期する。
       const { syncHomeLeaveAttendance } = await import('@/lib/home-leave-sync')
-      const sync = await syncHomeLeaveAttendance(workerId, null, { startDate, endDate })
+      const sync = await syncHomeLeaveAttendance(Number(workerId), null, { startDate, endDate }, { excludeDocId: id })
 
       const endLabel = returnUndecided ? '復帰未定' : endDate
       await logActivity('admin', 'homeLeave.add', `${workerName} 一時帰国登録 ${startDate}〜${endLabel}`)
@@ -207,8 +293,26 @@ export async function POST(request: NextRequest) {
         newEnd = current.endDate
       }
       const newStart = startDate !== undefined ? startDate : current.startDate
+      if (!ISO_DATE_RE.test(newStart) || !(ISO_DATE_RE.test(newEnd) || newEnd >= HOME_LEAVE_SENTINEL_END)) {
+        return NextResponse.json({ error: '日付は YYYY-MM-DD 形式で指定してください' }, { status: 400 })
+      }
       if (newStart >= newEnd) {
         return NextResponse.json({ error: 'startDate must be before endDate' }, { status: 400 })
+      }
+      const overlapUpd = await findOverlappingLeave(Number(current.workerId), newStart, newEnd, id)
+      if (overlapUpd) {
+        return NextResponse.json({
+          error: `別の帰国期間（${overlapUpd.startDate}〜${overlapUpd.endDate}・${overlapUpd.status}）と重なっています`,
+        }, { status: 409 })
+      }
+      {
+        const lockedYm = await findLockedMonthInRanges(Number(current.workerId), [
+          { startDate: current.startDate, endDate: current.endDate },
+          { startDate: newStart, endDate: newEnd },
+        ])
+        if (lockedYm) {
+          return NextResponse.json({ error: `${lockedYm.slice(0, 4)}年${Number(lockedYm.slice(4, 6))}月は月次締め済みのため変更できません。先にロックを解除してください` }, { status: 409 })
+        }
       }
 
       // 2026-08-20 追加: add と同じ「帰国期間内の出勤打刻」チェック。
@@ -248,7 +352,6 @@ export async function POST(request: NextRequest) {
       // レコードに持たせ、休暇管理画面のカードから直接見られるようにする。
       const changeEntries: { field: string; before: string; after: string; at: string; by: string }[] = []
       const nowIso = new Date().toISOString()
-      const actorLabel = 'admin'
       if (updates.startDate !== undefined && updates.startDate !== current.startDate) {
         changeEntries.push({ field: 'startDate', before: String(current.startDate), after: String(updates.startDate), at: nowIso, by: actorLabel })
       }
@@ -275,6 +378,7 @@ export async function POST(request: NextRequest) {
           current.workerId,
           { startDate: current.startDate, endDate: current.endDate },
           { startDate: newStart, endDate: newEnd },
+          { excludeDocId: id },
         )
       }
 
@@ -297,6 +401,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 })
       }
       const data = snap.data()
+      {
+        const lockedYm = await findLockedMonthInRanges(Number(data.workerId), [
+          { startDate: data.startDate, endDate: data.endDate },
+        ])
+        if (lockedYm) {
+          return NextResponse.json({ error: `${lockedYm.slice(0, 4)}年${Number(lockedYm.slice(4, 6))}月は月次締め済みのため削除できません。先にロックを解除してください` }, { status: 409 })
+        }
+      }
       await deleteDoc(ref)
 
       // 出面の帰国フラグも消す（2026-08-03 追加）。
@@ -309,6 +421,7 @@ export async function POST(request: NextRequest) {
           data.workerId,
           { startDate: data.startDate, endDate: data.endDate },
           null,
+          { excludeDocId: id },
         )
       }
 

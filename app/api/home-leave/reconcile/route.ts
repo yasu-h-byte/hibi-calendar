@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDocs, collection, updateDoc, deleteField } from '@/lib/fsdb'
 import { getAttendanceDoc, ymKey } from '@/lib/attendance'
@@ -210,9 +210,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!await checkApiAuth(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // hk の一括削除は給与に直結するため代表・管理者のみ（2026-08-27）
+    { const denied = await requireExecutiveAuth(request); if (denied) return denied }
     const body = await request.json().catch(() => ({}))
     if (body.fix !== true) {
       return NextResponse.json({ error: '削除するには {"fix": true} を明示してください' }, { status: 400 })
