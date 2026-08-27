@@ -246,11 +246,13 @@ export async function calcAttendanceMetrics(
   let totalOvertime = 0
 
   for (const [, ds] of Object.entries(dayMap)) {
-    // 優先順位: 帰国 > 有給 > 試験 > 現場休 > 欠勤 > 出勤
-    if (ds.hasHomeLeaveFlag) {
-      homeLeaveDays++
-    } else if (ds.hasPL) {
+    // 優先順位: 有給 > 帰国 > 試験 > 現場休 > 欠勤 > 出勤
+    // 2026-08-27 修正（休暇届総点検）: 有給を帰国より優先（給与計算・出面グリッドと統一。
+    //   旧: 帰国優先で、p+hk 共存日が評価指標だけ帰国日に化けていた）
+    if (ds.hasPL) {
       plDays++
+    } else if (ds.hasHomeLeaveFlag) {
+      homeLeaveDays++
     } else if (ds.hasExam) {
       examDays++
     } else if (ds.hasSiteOff) {

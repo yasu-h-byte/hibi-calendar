@@ -685,7 +685,10 @@ export async function GET(request: NextRequest) {
     const filtered = notifications.filter(n => {
       if (role === 'admin') return true
       if (role === 'approver') {
-        return ['unsigned-calendar', 'calendar-deadline', 'month-unlocked-hibi', 'month-unlocked-hfu'].includes(n.id)
+        // 2026-08-27 追加: 最終承認者に承認待ち（有給・帰国）を配信
+        //   （旧: admin 限定で、承認フローの当事者にベルが出なかった）
+        return ['unsigned-calendar', 'calendar-deadline', 'month-unlocked-hibi', 'month-unlocked-hfu',
+                'pending-leave-requests', 'pending-home-long-leave'].includes(n.id)
             || n.id.startsWith('pl-grant')
             || n.id.startsWith('evaluation-due')
             || n.id.startsWith('evaluation-todo-')

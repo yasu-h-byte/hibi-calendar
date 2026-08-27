@@ -216,7 +216,7 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
     try {
       const stored = localStorage.getItem('hibi_auth')
       const user = stored ? JSON.parse(stored).user : null
-      await fetch(apiPath, {
+      const res = await fetch(apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({
@@ -225,8 +225,14 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
           ...(action === 'foreman_approve' ? { foremanId: user?.workerId || 0 } : { approvedBy: user?.workerId || 0 }),
         }),
       })
+      // 2026-08-27（休暇届総点検）: 失敗（出勤実績との矛盾409・ロック409・権限403等）を
+      //   必ず表示する。旧: 応答を見ずに再読込 → 承認したつもりがリストに残り理由不明
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        alert(err?.message || err?.error || `処理に失敗しました (${res.status})`)
+      }
       onUpdate()
-    } catch { /* ignore */ }
+    } catch { alert('通信エラーが発生しました') }
     finally { setProcessing(null) }
   }
 
@@ -251,17 +257,30 @@ function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems,
       const stored = localStorage.getItem('hibi_auth')
       const user = stored ? JSON.parse(stored).user : null
       const wid = user?.workerId || 0
-      await Promise.all(ids.map(id => fetch(apiPath, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({
-          action,
-          requestId: id,
-          ...(action === 'foreman_approve' ? { foremanId: wid } : { approvedBy: wid }),
+      const results = await Promise.all(ids.map(async id => ({
+        id,
+        res: await fetch(apiPath, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+          body: JSON.stringify({
+            action,
+            requestId: id,
+            ...(action === 'foreman_approve' ? { foremanId: wid } : { approvedBy: wid }),
+          }),
         }),
       })))
+      const failures: string[] = []
+      for (const { res } of results) {
+        if (res.ok) continue
+        const err = await res.json().catch(() => null)
+        failures.push(err?.message || err?.error || `HTTP ${res.status}`)
+      }
+      if (failures.length > 0) {
+        alert(`${ids.length}件中 ${failures.length}件が失敗しました:\n` +
+          [...new Set(failures)].slice(0, 4).map(f => `・${f}`).join('\n'))
+      }
       onUpdate()
-    } catch { /* ignore */ }
+    } catch { alert('通信エラーが発生しました') }
     finally { setProcessing(null) }
   }
 

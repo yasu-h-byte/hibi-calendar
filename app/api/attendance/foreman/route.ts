@@ -209,9 +209,18 @@ export async function POST(request: NextRequest) {
         case 'work':
           entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)), s: 'foreman' }
           break
-        case 'rest':
+        case 'rest': {
           entry = { w: 0, r: 1, s: 'foreman' }
+          // 2026-08-27（休暇届総点検）: スタッフが出した欠勤届の理由(rReason/rNote)を
+          //   職長の「休み」確認で消さない。旧: 残骸掃除が理由も削除し、
+          //   ダッシュボードの欠勤届一覧から届が黙って消えていた
+          const { getAttendanceDoc, attKey } = await import('@/lib/attendance')
+          const attDocF = await getAttendanceDoc(ym)
+          const prevEntry = attDocF[attKey(site.id, workerId, ym, day)] as { rReason?: string; rNote?: string } | undefined
+          if (prevEntry?.rReason) (entry as { rReason?: string }).rReason = prevEntry.rReason
+          if (prevEntry?.rNote) (entry as { rNote?: string }).rNote = prevEntry.rNote
           break
+        }
         case 'leave':
           entry = { w: 0, p: 1, s: 'foreman' }
           break

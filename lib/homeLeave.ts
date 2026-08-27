@@ -93,6 +93,16 @@ export function isFullMonthHomeLeave(
 }
 
 /**
+ * 指定日が承認済みの帰国期間に含まれるか（2026-08-27 追加・休暇届総点検）。
+ * 帰国中の日は無給の帰国扱いであり、有給(p)と両立しない。
+ * 有給の申請・承認・スマホ直接入力のガードに使う。
+ */
+export async function isDateInApprovedHomeLeave(workerId: number, dateIso: string): Promise<boolean> {
+  const leaves = await getAllActiveHomeLeaves()
+  return leaves.some(hl => hl.workerId === workerId && dateIso >= hl.startDate && dateIso <= hl.endDate)
+}
+
+/**
  * 2つのYM形式に対応（YYYYMM or YYYY-MM）
  */
 export function normalizeYm(ym: string): string {

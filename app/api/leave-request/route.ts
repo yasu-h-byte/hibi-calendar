@@ -96,6 +96,18 @@ export async function POST(request: NextRequest) {
         )
       }
 
+      // 2026-08-27 追加（休暇届総点検）: 帰国期間中の日は有給を申請できない。
+      //   帰国日は無給・非欠勤の扱いで、有給と両立しない（旧ルール者は残数だけ
+      //   消化して支給0になる計算穴もあった）。帰国期間の変更が先。
+      {
+        const { isDateInApprovedHomeLeave } = await import('@/lib/homeLeave')
+        if (await isDateInApprovedHomeLeave(worker.id, date)) {
+          return NextResponse.json({
+            error: 'この日は帰国期間中のため有給を申請できません。復帰日が変わった場合は会社に連絡してください / Ngày này đang trong thời gian về nước, không thể xin nghỉ phép. Nếu ngày trở lại thay đổi, vui lòng liên hệ công ty',
+          }, { status: 400 })
+        }
+      }
+
       // Check for duplicate
       // 却下 (rejected)・取り消し (cancelled)・管理者取消 (revoked) は上から再申請OK。
       // それ以外（pending / foreman_approved / approved）は重複として弾く
@@ -377,6 +389,17 @@ export async function POST(request: NextRequest) {
           const { logActivity } = await import('@/lib/activity')
           await logActivity('admin', 'leave.overdraft',
             `${data.workerName} ${data.date} 有給承認を残数超過で実行（枠 ${bal.total}日 / 消化 ${bal.used}日）`)
+        }
+      }
+
+      // 2026-08-27 追加（休暇届総点検）: 申請後に帰国が承認されたケースを承認時にも再チェック。
+      //   ここを通すと computeAttendanceDeleteFields が hk を消して帰国期間と出面が食い違う
+      {
+        const { isDateInApprovedHomeLeave } = await import('@/lib/homeLeave')
+        if (await isDateInApprovedHomeLeave(data.workerId, data.date)) {
+          return NextResponse.json({
+            error: `${data.workerName} さんの ${data.date} は帰国期間中です。有給にする場合は先に休暇管理画面で帰国期間を修正してください`,
+          }, { status: 409 })
         }
       }
 

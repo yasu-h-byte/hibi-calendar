@@ -209,11 +209,21 @@ export async function POST(request: NextRequest) {
       }
 
       // Rewrite keys: replace prevYm with ym in attendance keys
+      // 2026-08-27 修正（休暇届総点検）: ステータス系（帰国hk・有給p・休みr・現場休h・試験）は
+      //   コピーしない。前月の帰国スタブや有給が翌月に複製されると、申請と紐づかない
+      //   孤立フラグになり、帰国が終わっている月では欠勤控除化・有給の過剰消化を招いていた。
+      //   コピーの目的は「配置と出勤パターンの下敷き」なので出勤系のみ写す
       const newD: Record<string, unknown> = {}
+      let skippedStatus = 0
       for (const [key, value] of Object.entries(prevD)) {
+        const v = value as { hk?: number; p?: number; r?: number; h?: number; exam?: number } | null
+        if (v && (v.hk || v.p || v.r || v.h || v.exam)) { skippedStatus++; continue }
         // Keys are like: siteId_workerId_ym_dd
         const newKey = key.replace(`_${prevYm}_`, `_${ym}_`)
         newD[newKey] = value
+      }
+      if (Object.keys(newD).length === 0) {
+        return NextResponse.json({ error: '前月データが休暇・ステータスのみのためコピーする出勤データがありません' }, { status: 400 })
       }
 
       // ⚠️ 安全対策（2026-05-07 事故を受けて改修）:
@@ -241,7 +251,7 @@ export async function POST(request: NextRequest) {
         await updateDoc(curDocRef, updates)
       }
 
-      return NextResponse.json({ success: true, copiedEntries: newKeys.length })
+      return NextResponse.json({ success: true, copiedEntries: newKeys.length, skippedStatusDays: skippedStatus })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })

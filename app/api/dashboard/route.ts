@@ -1100,26 +1100,31 @@ export async function GET(request: NextRequest) {
       family: '家族の事情', homeCountry: '帰国関連', other: 'その他',
     }
     try {
-      const todayDate = getJstNow()
-      const sevenDaysAgo = new Date(todayDate)
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      // 2026-08-27 修正（休暇届総点検）:
+      //   ① 比較を日付文字列に統一（旧: 時刻付き Date 比較で「ちょうど7日前」が常に漏れ、
+      //     実質6日分だった）
+      //   ② 未来日の欠勤届（事前届・2026-07-30 実装）も表示対象に追加（30日先まで）。
+      //     旧: 未来日は除外され、事前に届を出しても管理者が当日まで気づけなかった
+      const { todayJstIso, addDaysIso } = await import('@/lib/date-utils')
+      const todayIsoAb = todayJstIso()
+      const fromIso = addDaysIso(todayIsoAb, -7)
+      const toIso = addDaysIso(todayIsoAb, 30)
 
-      // 過去7日分の月をカバー
-      const monthsToCheck = new Set<string>()
-      for (let i = 0; i <= 7; i++) {
-        const d = new Date(todayDate)
-        d.setDate(d.getDate() - i)
-        monthsToCheck.add(ymKey(d.getFullYear(), d.getMonth() + 1))
-      }
+      // 過去7日〜30日先にかかる月をカバー
+      const monthsToCheck = new Set<string>([
+        fromIso.slice(0, 7).replace('-', ''),
+        todayIsoAb.slice(0, 7).replace('-', ''),
+        toIso.slice(0, 7).replace('-', ''),
+      ])
 
       for (const checkYm of monthsToCheck) {
         const attDoc = await getAttData(checkYm)
         for (const [key, entry] of Object.entries(attDoc.d)) {
           if (!entry || !entry.r || entry.r !== 1 || !entry.rReason) continue
           const pk = parseDKey(key)
-          // 日付チェック（過去7日 + 本日）
-          const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-          if (entryDate < sevenDaysAgo || entryDate > todayDate) continue
+          const entryIso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
+          if (entryIso < fromIso || entryIso > toIso) continue
+          const entryDate = new Date(entryIso + 'T00:00:00')
 
           const wid = parseInt(pk.wid)
           const worker = main.workers.find(w => w.id === wid)
