@@ -206,16 +206,16 @@ export async function getAttData(ym: string): Promise<{
 export async function getMultiMonthAttData(ymList: string[]): Promise<{
   d: Record<string, AttendanceEntry>
   sd: Record<string, { n: number; on: number }>
-  perMonth: Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>
+  perMonth: Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }>; drv?: Record<string, { am?: number[]; pm?: number[] }> }>
 }> {
   const merged = { d: {} as Record<string, AttendanceEntry>, sd: {} as Record<string, { n: number; on: number }> }
-  const perMonth = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>()
+  const perMonth = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }>; drv?: Record<string, { am?: number[]; pm?: number[] }> }>()
   const results = await Promise.all(ymList.map(ym => getAttData(ym)))
   for (let i = 0; i < ymList.length; i++) {
     const att = results[i]
     Object.assign(merged.d, att.d)
     Object.assign(merged.sd, att.sd)
-    perMonth.set(ymList[i], { d: att.d, sd: att.sd })
+    perMonth.set(ymList[i], { d: att.d, sd: att.sd, drv: att.drv })
   }
   return { ...merged, perMonth }
 }
@@ -276,6 +276,8 @@ export async function loadMonthlyAllowances(
   ym: string,
   attD: Record<string, AttendanceEntry>,
   drv: Record<string, { am?: number[]; pm?: number[] }> | undefined,
+  // 呼び出し元が既に読んである月の出面（ダッシュボード等の複数月一括処理でクォータを増やさない）
+  opts?: { preloadedAttD?: Record<string, Record<string, AttendanceEntry>> },
 ): Promise<Map<number, WorkerAllowanceMonthly> | undefined> {
   if (ym < ALLOWANCE_FROM_YM) return undefined
 
@@ -292,7 +294,10 @@ export async function loadMonthlyAllowances(
   const histMonths: string[] = []
   for (let m = histStart; m < ym; m = addYm(m, 1)) histMonths.push(m)
   const histAtts = histMonths.length
-    ? await Promise.all(histMonths.map(m => getAttData(m).then(a => a.d)))
+    ? await Promise.all(histMonths.map(m =>
+        opts?.preloadedAttD?.[m] !== undefined
+          ? Promise.resolve(opts.preloadedAttD[m])
+          : getAttData(m).then(a => a.d)))
     : []
 
   // `${wid}_${sid}` → 対象日（ISO・昇順）。当月分も含める（当月内の逓減切替に対応）
@@ -1318,7 +1323,10 @@ export function computeMonthly(
     //   未計上だった（労基法37条は国籍を問わない）。ベトナム人と同じ建て方に揃え、
     //   法定休日は所定労働日ではないので基本給・残業から外し、別枠で1.35/1.60倍を支給する。
     //   ※ ベトナム人は calculateVietnameseSalary が独自に処理するのでここでは集計しない
-    if (wm.visa === 'none' && !isComp && ym >= JP_LEGAL_HOLIDAY_FROM_YM) {
+    //   ※ 夜勤(ns)のある日は対象外（2026-08-27 代表決定）: 日曜夜勤は「夜勤1回=1.5人工」の
+    //     慣例支給を維持する（1.35×実時間に置換しない）。法定必要額との差は
+    //     legalRequiredPay/legalShortfall（日曜は1.35倍で算定済み）の警告で監視する。
+    if (wm.visa === 'none' && !isComp && !entry.ns && ym >= JP_LEGAL_HOLIDAY_FROM_YM) {
       const dow0 = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, Number(pk.day)).getDay()
       if (dow0 === 0) {
         wm.legalHolidayManDays = Math.round(((wm.legalHolidayManDays || 0) + calcManDays(entry)) * 100) / 100

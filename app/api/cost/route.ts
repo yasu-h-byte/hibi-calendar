@@ -15,6 +15,7 @@ import {
   buildYMList,
   parseDKey,
 } from '@/lib/compute'
+import { applyPayrollCosts, type MonthAtt } from '@/lib/payroll-cost'
 import { ymKey } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
@@ -77,6 +78,12 @@ export async function GET(request: NextRequest) {
 
     // Run compute() once with all attendance data
     const c = compute(main, att.d, att.sd, ymList)
+    // 2026-08-27（給与総点検・代表決定）: 労務費を実支給額ベースへ上書き（月次集計と同基準）
+    const monthAtts: MonthAtt[] = ymRange.map(m => {
+      const pm = att.perMonth.get(m)
+      return { ym: m, d: pm?.d || {}, sd: pm?.sd || {}, drv: pm?.drv }
+    })
+    await applyPayrollCosts(c, main, monthAtts)
 
     // Determine which sites to show:
     // - active sites always
@@ -375,7 +382,7 @@ export async function GET(request: NextRequest) {
     const missingFyMonths = fyYmStrList.filter(m => !ymRange.includes(m))
     const fyExtraAtt = missingFyMonths.length > 0 ? await getMultiMonthAttData(missingFyMonths) : { d: {}, sd: {}, perMonth: new Map() }
 
-    const attCache = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>()
+    const attCache = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }>; drv?: Record<string, { am?: number[]; pm?: number[] }> }>()
     for (const [k, v] of att.perMonth) attCache.set(k, v)
     for (const [k, v] of fyExtraAtt.perMonth) attCache.set(k, v)
     for (const [k, v] of lookbackAtt.perMonth) attCache.set(k, v)
@@ -389,6 +396,8 @@ export async function GET(request: NextRequest) {
       const mattData = cached || await getAttData(mStr)
 
       const mc = compute(main, mattData.d, mattData.sd, ymObj)
+      // 実支給ベース化（メインKPIと同じ基準）
+      await applyPayrollCosts(mc, main, [{ ym: mStr, d: mattData.d, sd: mattData.sd, drv: (mattData as { drv?: MonthAtt['drv'] }).drv }])
       const mTobiEq = calcTobiEquiv(
         main, mattData.d, mattData.sd, ymObj,
         siteFilter !== 'all' ? siteFilter : undefined,

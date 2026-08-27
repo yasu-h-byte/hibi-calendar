@@ -23,6 +23,7 @@ import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from '@/lib/w
 import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
 import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter } from '@/lib/leave-compute'
+import { applyPayrollCosts, type MonthAtt } from '@/lib/payroll-cost'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
 export const dynamic = 'force-dynamic'
@@ -330,6 +331,14 @@ export async function GET(request: NextRequest) {
 
     // ═══ Run compute() for the full period ═══
     const c = compute(main, mergedAtt.d, mergedAtt.sd, ymListObj)
+    // 2026-08-27（給与総点検・代表決定）: 労務費を実支給額ベースへ上書き。
+    //   簡易 compute() の概算原価（有給・月給者・割増・手当が入らない）を、
+    //   月次集計と同じ computeMonthly の値に置き換える（人工・外注費は据え置き）
+    const monthAtts: MonthAtt[] = ymStrList.map(m => {
+      const pm = mergedAtt.perMonth.get(m)
+      return { ym: m, d: pm?.d || {}, sd: pm?.sd || {}, drv: pm?.drv }
+    })
+    await applyPayrollCosts(c, main, monthAtts)
 
     // ═══ Determine which sites to include ═══
     // Exclude yaesu_night only if it has zero data
@@ -593,7 +602,7 @@ export async function GET(request: NextRequest) {
     const fyExtraAtt = missingFyMonths.length > 0 ? await getMultiMonthAttData(missingFyMonths) : { d: {}, sd: {}, perMonth: new Map() }
 
     // Build a combined per-month cache from all loaded data
-    const attCache = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>()
+    const attCache = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }>; drv?: Record<string, { am?: number[]; pm?: number[] }> }>()
     for (const [k, v] of mergedAtt.perMonth) attCache.set(k, v)
     for (const [k, v] of fyExtraAtt.perMonth) attCache.set(k, v)
     for (const [k, v] of lookbackAtt.perMonth) attCache.set(k, v)
@@ -609,6 +618,8 @@ export async function GET(request: NextRequest) {
       const att = cached || await getAttData(mStr)
 
       const mc = compute(main, att.d, att.sd, ymObj)
+      // 実支給ベース化（メインKPIと同じ基準。カレンダー等は30秒メモで追加読み最小）
+      await applyPayrollCosts(mc, main, [{ ym: mStr, d: att.d, sd: att.sd, drv: (att as { drv?: MonthAtt['drv'] }).drv }])
       const mTobiEq = calcTobiEquiv(
         main, att.d, att.sd, ymObj,
         siteFilter !== 'all' ? siteFilter : undefined,
@@ -895,6 +906,11 @@ export async function GET(request: NextRequest) {
     const prevYearAtt = await getMultiMonthAttData(prevYearYmStrList)
     const prevYearYmObj = prevYearYmStrList.map(m => ({ y: parseInt(m.slice(0, 4)), m: parseInt(m.slice(4, 6)) }))
     const prevYearC = compute(main, prevYearAtt.d, prevYearAtt.sd, prevYearYmObj)
+    // 前年同期も実支給ベースで比較（比較の両辺を同じ基準に）
+    await applyPayrollCosts(prevYearC, main, prevYearYmStrList.map(m => {
+      const pm = prevYearAtt.perMonth.get(m)
+      return { ym: m, d: pm?.d || {}, sd: pm?.sd || {}, drv: pm?.drv }
+    }))
 
     let currentTotalLabor = 0
     let prevTotalLabor = 0
