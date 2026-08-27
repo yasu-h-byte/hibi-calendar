@@ -3,7 +3,7 @@ import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
-import { ymKey, setAttendanceEntry } from '@/lib/attendance'
+import { ymKey, setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
 import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap , jpNextGrantAfter } from '@/lib/leave-compute'
@@ -99,6 +99,14 @@ export async function POST(request: NextRequest) {
   const authResult = await getApiAuthUser(request)
   if (!authResult.authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const actor = authResult.actor  // number | 'admin' | 'super-admin'
+  // 2026-08-27 追加（有給総点検・第3回）: 本ルートの POST は全て管理アクション
+  //   （付与・時季指定・買取・時効処理・レコード編集）。管理者・事業責任者のみに制限する。
+  //   旧実装は「誰のパスワードでも可」で、個人パスワードを持つ職長が自分に付与→
+  //   時季指定で出面に p を書くまで一人で完結できた（承認フロー原則違反）。
+  //   revoke（leave-request 側）と同一基準。
+  if (!(actor === 'admin' || actor === 'super-admin' || actor === 1)) {
+    return NextResponse.json({ error: '有給の管理操作は管理者・事業責任者のみ実行できます' }, { status: 403 })
+  }
   try {
     const body = await request.json()
     const { action } = body
@@ -228,8 +236,14 @@ export async function POST(request: NextRequest) {
       const history = (targetRec.designatedLeaves as DesignatedEntry[] | undefined) ?? []
       const written: string[] = []
 
-      // 帰国期間の上書きが必要な場合、hk フィールドを削除してから書き込み
-      const setOptions = overwriteHomeLeave ? { deleteFields: ['hk'] } : {}
+      // 2026-08-27 修正（有給総点検・第3回）: 残骸掃除を追加。
+      //   既に出勤入力がある日を時季指定で有給化すると残業(o)・時刻(st/et)等が
+      //   残っていた（承認経路と同じ deleteFields 方式に統一）。
+      //   帰国期間の上書きが必要な場合は hk も削除対象（computeAttendanceDeleteFields は
+      //   entry に無い既知フィールドを全て挙げるので hk も自動的に含まれる）
+      const desigEntry = { w: 0, p: 1 }
+      const desigDelete = computeAttendanceDeleteFields(desigEntry)
+      const setOptions = { deleteFields: overwriteHomeLeave ? desigDelete : desigDelete.filter(f => f !== 'hk') }
 
       // 2026-06-12 (監査 Sprint2-B): 時季指定・管理者手動入力にも request と同じガードを適用
       //   ① ロック済み月は拒否（給与確定後のデータ変更防止）
@@ -256,7 +270,7 @@ export async function POST(request: NextRequest) {
         const ym = ymKey(d.getFullYear(), d.getMonth() + 1)
         const day = d.getDate()
         // 出面書き込み: { w: 0, p: 1 } (overwriteHomeLeave時はhkを削除)
-        await setAttendanceEntry(siteId, workerId, ym, day, { w: 0, p: 1 }, setOptions)
+        await setAttendanceEntry(siteId, workerId, ym, day, desigEntry, setOptions)
         history.push({
           date: dateStr,
           designatedAt: nowIso,

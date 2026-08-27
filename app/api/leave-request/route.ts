@@ -3,7 +3,7 @@ import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
-import { getStaffSites, ymKey, attKey, setAttendanceEntry, isScheduledWorkDay } from '@/lib/attendance'
+import { getStaffSites, ymKey, attKey, setAttendanceEntry, isScheduledWorkDay, computeAttendanceDeleteFields } from '@/lib/attendance'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { ensureDocExists } from '@/lib/firestore-safe'
@@ -97,17 +97,29 @@ export async function POST(request: NextRequest) {
       }
 
       // Check for duplicate
-      // 却下 (rejected) または 取り消し (cancelled) されたものは上から再申請OK。
+      // 却下 (rejected)・取り消し (cancelled)・管理者取消 (revoked) は上から再申請OK。
       // それ以外（pending / foreman_approved / approved）は重複として弾く
+      // 2026-08-27 修正（有給総点検・第3回）: revoked を再申請可能に追加。
+      //   管理者が取消した日を本人が申請し直せず 409 になっていた
+      //   （modify_date の重複チェックは revoked を非アクティブ扱いしており不整合だった）
       const docId = `${worker.id}_${date.replace(/-/g, '')}`
       const docRef = doc(db, 'leaveRequests', docId)
       const existing = await getDoc(docRef)
+      const INACTIVE = ['rejected', 'cancelled', 'revoked']
+      let prevHistory: unknown = undefined
       if (existing.exists()) {
-        const data = existing.data() as LeaveRequest
-        if (data.status !== 'rejected' && data.status !== 'cancelled') {
+        const data = existing.data() as LeaveRequest & { stateHistory?: unknown[] }
+        if (!INACTIVE.includes(data.status)) {
           return NextResponse.json({ error: 'Already requested' }, { status: 409 })
         }
-        // rejected または cancelled は新しい申請で上書き許可
+        // 再申請で上書きする際も監査履歴 (stateHistory) は引き継ぐ（IM-7 の履歴を消さない）
+        prevHistory = [
+          ...(Array.isArray(data.stateHistory) ? data.stateHistory : []),
+          { status: data.status, at: (data as { rejectedAt?: string; cancelledAt?: string; revokedAt?: string }).rejectedAt
+              || (data as { cancelledAt?: string }).cancelledAt
+              || (data as { revokedAt?: string }).revokedAt || '',
+            reason: (data as { rejectedReason?: string }).rejectedReason || '', note: '再申請により上書き' },
+        ]
       }
 
       // ── 有給残日数チェック ──
@@ -151,8 +163,8 @@ export async function POST(request: NextRequest) {
             const att = await getAttData(fym)
             for (const [key, entry] of Object.entries(att.d)) {
               if (!entry) continue
-              const e = entry as { p?: number }
-              if (e.p === 1) {
+              const e = entry as { p?: number | boolean }
+              if (e.p) {  // truthy 判定（旧データの p:true 互換。他経路と統一 2026-08-27）
                 const pk = parseDKey(key)
                 if (parseInt(pk.wid) === worker.id) {
                   const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
@@ -167,10 +179,14 @@ export async function POST(request: NextRequest) {
         // 2026-06-XX 修正 (CR-6): 当期 (grantDate〜+1年) 内の pending のみカウント
         //   旧: 全期間の pending → 来期分も控除 → 当期残あるのに却下されるバグ
         //   新: 当期内日付の pending のみ
+        // 2026-08-27 修正（有給総点検・第3回）: foreman_approved も控除に含める。
+        //   職長承認済み（まだ p 未書込）は pending と同じ「確定前の枠取り」なのに
+        //   数えておらず、残1日で2件目の申請が通っていた（最終承認時に止まるが、
+        //   承認画面に矛盾した2件が並ぶ）
         const pendingQ = query(
           collection(db, 'leaveRequests'),
           where('workerId', '==', worker.id),
-          where('status', '==', 'pending')
+          where('status', 'in', ['pending', 'foreman_approved'])
         )
         const pendingSnap = await getDocs(pendingQ)
         const gdStartIso = grantDate ? grantDate.toISOString().slice(0, 10) : ''
@@ -196,7 +212,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'No remaining leave' }, { status: 400 })
       }
 
-      const leaveReq: LeaveRequest = {
+      const leaveReq: LeaveRequest & { stateHistory?: unknown } = {
         workerId: worker.id,
         workerName: worker.name,
         date,
@@ -207,6 +223,7 @@ export async function POST(request: NextRequest) {
         status: 'pending',
         requestedAt: new Date().toISOString(),
       }
+      if (prevHistory) leaveReq.stateHistory = prevHistory
 
       await setDoc(docRef, leaveReq)
       return NextResponse.json({ success: true, id: docId })
@@ -240,6 +257,13 @@ export async function POST(request: NextRequest) {
       const sites = (mainData.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
       const site = sites.find(s => s.id === data.siteId)
       const foremenOfSite = site?.foremen || (site?.foreman ? [site.foreman] : [])
+      // 2026-08-27 修正（有給総点検・第3回）: 月次職長交代 (mforeman) を権限判定に反映。
+      //   交代後の新職長が 403 になり、旧職長だけが承認できる状態だった
+      {
+        const mf = (mainData.mforeman || {}) as Record<string, { wid?: number }>
+        const ov = mf[`${data.siteId}_${data.ym}`]?.wid
+        if (ov !== undefined && !foremenOfSite.includes(ov)) foremenOfSite.push(ov)
+      }
 
       // 認証 + 権限チェック
       let approvedBy: number | string = 'unknown'
@@ -289,8 +313,18 @@ export async function POST(request: NextRequest) {
 
     // ── 事業責任者: 最終承認（第2段階） ──
     if (action === 'approve') {
-      if (!await checkApiAuth(request)) {
+      // 2026-08-27 修正（有給総点検・第3回）: 最終承認は管理者・事業責任者（政仁さん）のみ。
+      //   旧実装は checkApiAuth（誰のパスワードでも可）だったため、職長が個人パスワードで
+      //   最終承認を直叩きできた（CLAUDE.md「職長は提出・確認まで」の原則違反）。
+      //   revoke と同じ判定に統一する。reviewedBy も body 値でなく認証者から記録する
+      const authForApprove = await getApiAuthUser(request)
+      if (!authForApprove.authorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const apIsAdmin = authForApprove.actor === 'admin' || authForApprove.actor === 'super-admin'
+      const apIsApprover = typeof authForApprove.actor === 'number' && authForApprove.actor === 1  // 政仁さん
+      if (!apIsAdmin && !apIsApprover) {
+        return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
       }
 
       const { requestId, approvedBy } = body
@@ -346,16 +380,22 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Update status
+      // 2026-08-27 修正（有給総点検・第3回）:
+      //   - 出面を先に書く（att 書込失敗時に「承認済みなのに p 無し」の不整合を作らない。
+      //     逆順の失敗は「p ありで foreman_approved のまま」となり残数上は安全側）
+      //   - 残骸掃除: 既に出勤入力(w:1, o, st...)がある日を有給化すると残業等の
+      //     フィールドが残り、誤集計の火種だった（staff 経路と同じ deleteFields 方式に統一）
+      //   - reviewedBy は認証者から記録（body の approvedBy は表示用フォールバック）
+      const approveEntry = { w: 0, p: 1 }
+      await setAttendanceEntry(data.siteId, data.workerId, data.ym, data.day, approveEntry,
+        { deleteFields: computeAttendanceDeleteFields(approveEntry) })
+
       await setDoc(docRef, {
         ...data,
         status: 'approved',
         reviewedAt: new Date().toISOString(),
-        reviewedBy: approvedBy || 0,
+        reviewedBy: typeof authForApprove.actor === 'number' ? authForApprove.actor : (approvedBy ?? authForApprove.actor),
       })
-
-      // Write attendance: { w: 0, p: 1 }
-      await setAttendanceEntry(data.siteId, data.workerId, data.ym, data.day, { w: 0, p: 1 })
 
       return NextResponse.json({ success: true })
     }
@@ -387,6 +427,12 @@ export async function POST(request: NextRequest) {
       const rejSites = (rejMain.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
       const rejSite = rejSites.find(s => s.id === data.siteId)
       const rejForemen = rejSite?.foremen || (rejSite?.foreman ? [rejSite.foreman] : [])
+      {
+        // mforeman（月次職長交代）も却下権限に反映（foreman_approve と対）
+        const mf = (rejMain.mforeman || {}) as Record<string, { wid?: number }>
+        const ov = mf[`${data.siteId}_${data.ym}`]?.wid
+        if (ov !== undefined && !rejForemen.includes(ov)) rejForemen.push(ov)
+      }
 
       let authWorkerId: number | string = rejectedBy || 0
       if (rejectToken) {
@@ -513,15 +559,23 @@ export async function POST(request: NextRequest) {
         }
       }
       // att から p=1 をピンポイント削除（IM-11 と同じく他フィールドは温存）
+      // 2026-08-27 修正（有給総点検・第3回）: 申請時の siteId 固定をやめ、
+      //   その日の全現場キーから p を削除する。承認後に職長が現場を付け替えていると
+      //   旧実装は削除が空振りし、「取消済みなのに p が残って残数が戻らない」状態になっていた
       const attDay = data.date.slice(8, 10).replace(/^0/, '')
       const attRef = doc(db, 'demmen', `att_${attYm}`)
-      // siteId 不明なので main から取得（落ち着いた dispatch）
-      const siteIdForAtt = data.siteId || 'unknown'
-      const attKey = `${siteIdForAtt}_${data.workerId}_${attYm}_${attDay}`
       try {
-        await updateDoc(attRef, { [`d.${attKey}.p`]: deleteField() })
+        const attSnap = await getDoc(attRef)
+        const attD = (attSnap.exists() ? attSnap.data().d : {}) as Record<string, { p?: number | boolean }>
+        const suffix = `_${data.workerId}_${attYm}_${attDay}`
+        const updates: Record<string, unknown> = {}
+        for (const [k, e] of Object.entries(attD)) {
+          if (k.endsWith(suffix) && e?.p) updates[`d.${k}.p`] = deleteField()
+        }
+        if (Object.keys(updates).length > 0) await updateDoc(attRef, updates)
+        else console.warn(`[revoke] 対象日に p が見つかりません: wid=${data.workerId} ${data.date}`)
       } catch (delErr) {
-        console.warn('[revoke] att p 削除失敗 (siteId 違いの可能性):', delErr)
+        console.warn('[revoke] att p 削除失敗:', delErr)
       }
       // leaveRequest doc を revoked 状態に
       const revokeHistory = (data as { revokeHistory?: unknown[] }).revokeHistory || []
@@ -550,8 +604,16 @@ export async function POST(request: NextRequest) {
     //   - 旧日付の att エントリから p=1 を削除、新日付に p=1 を書込
     //   - leaveRequest doc に新日付・previousDate を記録、activity ログ出力
     if (action === 'modify_date') {
-      if (!await checkApiAuth(request)) {
+      // 2026-08-27 修正（有給総点検・第3回）: 承認済み有給の日付変更は
+      //   管理者・事業責任者のみ（approve/revoke と同一基準。旧: 誰のパスワードでも可）
+      const authForModify = await getApiAuthUser(request)
+      if (!authForModify.authorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const mdIsAdmin = authForModify.actor === 'admin' || authForModify.actor === 'super-admin'
+      const mdIsApprover = typeof authForModify.actor === 'number' && authForModify.actor === 1
+      if (!mdIsAdmin && !mdIsApprover) {
+        return NextResponse.json({ error: '日付変更は管理者・事業責任者のみ実行できます' }, { status: 403 })
       }
 
       const { requestId, newDate, modifiedBy } = body
@@ -627,7 +689,12 @@ export async function POST(request: NextRequest) {
         await updateDoc(oldAttRef, { [`d.${oldKey}.p`]: deleteField() })
 
         // 新日付に p=1 を書込
-        await setAttendanceEntry(data.siteId, data.workerId, newYm, newDay, { w: 0, p: 1 })
+        // 残骸掃除つきで p を書く（approve と同方式・2026-08-27）
+        {
+          const mvEntry = { w: 0, p: 1 }
+          await setAttendanceEntry(data.siteId, data.workerId, newYm, newDay, mvEntry,
+            { deleteFields: computeAttendanceDeleteFields(mvEntry) })
+        }
       }
 
       // leaveRequest doc を更新

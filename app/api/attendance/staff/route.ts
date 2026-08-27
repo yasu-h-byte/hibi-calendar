@@ -411,11 +411,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // 2026-08-27 追加（有給総点検・第3回）: 入力可能な日付範囲を制限。
+    //   year/month/day は body で任意指定できたため、トークンさえあれば
+    //   未来日や遠い過去日へ API 直叩きで書き込めた（UI は今日+過去5日のみ）。
+    //   未来日は不可・過去は14日前まで（多少の余裕を持たせた運用値）。
+    {
+      const { todayJstIso, addDaysIso } = await import('@/lib/date-utils')
+      const dateIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+      const today = todayJstIso()
+      if (dateIso > today) {
+        return NextResponse.json({ error: '未来の日付には入力できません / Không thể nhập cho ngày trong tương lai' }, { status: 400 })
+      }
+      if (dateIso < addDaysIso(today, -14)) {
+        return NextResponse.json({ error: '2週間より前の日付は変更できません。職長に依頼してください / Không thể thay đổi ngày quá 2 tuần trước' }, { status: 400 })
+      }
+    }
+
     // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
     // （日勤+夜勤は許容、日勤+日勤や夜勤+夜勤は拒否）
     try {
-      const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
+      const { detectMultiSiteConflict, getAttendanceDoc, attKey } = await import('@/lib/attendance')
       const attDoc = await getAttendanceDoc(ym)
+
+      // 2026-08-27 追加（有給総点検・第3回）: 承認済み有給(p)の日をスタッフが
+      //   別ステータスで上書きすると、p だけが消えて申請レコードは approved のまま残り、
+      //   残数が黙って1日戻っていた（承認↔出面の対の崩れ）。有給の変更は管理者の
+      //   取消(revoke)経由に限定する。
+      if (choice !== 'leave') {
+        const existing = attDoc[attKey(siteId, worker.id, ym, day)] as { p?: number | boolean } | undefined
+        if (existing?.p) {
+          return NextResponse.json({
+            error: 'この日は有給として登録済みです。変更が必要な場合は管理者に連絡してください / Ngày này đã đăng ký nghỉ phép. Vui lòng liên hệ quản lý nếu cần thay đổi',
+          }, { status: 409 })
+        }
+      }
       // 全現場リスト（アーカイブ済みも含む。過去の現場間違いを検出するため）
       const sitesAll = (await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []
       const conflict = detectMultiSiteConflict(attDoc, siteId, worker.id, ym, day, sitesAll)
@@ -505,6 +534,20 @@ export async function POST(request: NextRequest) {
         } catch (chkErr) {
           // 残チェックでエラーが出ても申請自体は通す（既存運用継続性）
           console.warn('[staff/leave] 残チェック失敗:', chkErr)
+        }
+        // 2026-08-27 追加（有給総点検・第3回）: 非稼働日ガード。
+        //   申請経路(request)・時季指定・日付変更には isScheduledWorkDay があるのに
+        //   この直接入力経路だけ無く、カレンダー休日への有給＝有給日給の過払いが
+        //   ここからだけ通ってしまっていた（2026-06 社労士対応の取り残し）。
+        {
+          const { isScheduledWorkDay } = await import('@/lib/attendance')
+          const targetDate2 = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+          if (!await isScheduledWorkDay(siteId, targetDate2)) {
+            return NextResponse.json(
+              { error: 'この日は現場の非稼働日のため有給を取得できません / Ngày này công trường nghỉ, không thể lấy phép' },
+              { status: 400 }
+            )
+          }
         }
         // 2026-06-XX 追加 (IM-3): 退職日跨ぎガード
         if (worker.retired && `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}` > worker.retired) {
