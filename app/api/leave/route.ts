@@ -6,7 +6,7 @@ import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/
 import { ymKey, setAttendanceEntry } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap , jpNextGrantAfter } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
@@ -73,13 +73,19 @@ function calcCarryOverForWorker(
 
 /**
  * 付与期間を内包するのに必要な月群（YYYYMM）を返す
- * 過去2年分の出面データを読めば、任意の前期を完全にカバーできる
+ *
+ * 2026-08-27 修正（有給総点検・第3回）: 2年 → 3年に拡大。
+ *   時効処理は付与から2年後に走るため、「今年−2年の1月」始まりだと
+ *   12月付与のレコード（例: 2024-12-15 付与を 2027-01 に処理）の
+ *   付与月の消化を取りこぼし、失効日数が過大に記録されていた。
+ *   本関数は手動の管理アクション（時効処理・半自動付与）でのみ使われるため
+ *   読み取り増（+12 doc）は許容範囲。
  */
 function relevantAttMonths(): string[] {
   const now = new Date()
   const y = now.getFullYear()
   const out: string[] = []
-  for (let yy = y - 2; yy <= y; yy++) {
+  for (let yy = y - 3; yy <= y; yy++) {
     for (let mm = 1; mm <= 12; mm++) out.push(ymKey(yy, mm))
   }
   return out
@@ -324,11 +330,21 @@ export async function POST(request: NextRequest) {
             seenDatesExpiry.add(dk)
             periodUsed++
           }
-          const expiredDays = computeRemainingDays(
+          // 2026-08-27 修正（有給総点検・第3回）: 次期へ繰り越した分を失効に数えない。
+          //   繰越は残数を次期レコードへ移す処理なので、次期の carryOver を
+          //   差し引かないと繰越分が「失効」として二重記録され、台帳の
+          //   失効日数列が過大になっていた（残数計算は正しく、記録のみの問題）
+          const nextRec = records
+            .filter(x => x !== r && typeof x.grantDate === 'string' && (x.grantDate as string) > (r.grantDate as string))
+            .sort((a, b) => String(a.grantDate).localeCompare(String(b.grantDate)))[0]
+          const carriedOut = nextRec
+            ? ((nextRec.carryOver as number | undefined) ?? (nextRec.carry as number | undefined) ?? 0)
+            : 0
+          const expiredDays = Math.max(0, computeRemainingDays(
             grantDays + carryOver,
             r as Parameters<typeof computeUsedDays>[0],
             periodUsed,
-          )
+          ) - carriedOut)
 
           r.expiredDays = expiredDays
           r.expiredAt = nowIso
@@ -679,29 +695,59 @@ export async function POST(request: NextRequest) {
           const fyGrantDate = `${currentFyStart}-10-01`
           const hirePlus6 = w.hireDate ? hirePlus6Months(w.hireDate) : null
 
-          // 初回付与かどうかの判定: 過去に付与レコードが一切なければ初回
-          const hasAnyGrant = records.some(r => (r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)
+          // 初回付与かどうかの判定: 過去に付与レコードが一切なければ初回。
+          //   2回目以降は「前回付与日」から次の付与日を導出する（fy一致判定は使わない）
+          const effGrantDate = (r: PLRecord): string =>
+            r.grantDate || (r.fy !== undefined && r.fy !== null ? `${r.fy}-10-01` : '')
+          const latestGrant = records
+            .filter(r => (r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)
+            .map(effGrantDate).filter(Boolean).sort().slice(-1)[0] || null
 
           let expectedGrantDate: string
           let expectedFy: string
           let reason: string
+          // 前倒し合流時の法定日数計算に使う「みなし勤続」基準日（通常は付与日そのもの）
+          let deemedDateForDays: string
 
-          if (!hasAnyGrant && hirePlus6 && hirePlus6 > fyGrantDate) {
-            // 初回付与で、入社+6ヶ月が FY 起点より遅い → 入社+6ヶ月を採用
-            expectedGrantDate = hirePlus6
-            expectedFy = expectedGrantDate.slice(0, 4)
-            reason = '初回付与（入社6ヶ月経過）'
+          if (!latestGrant) {
+            if (hirePlus6 && hirePlus6 > fyGrantDate) {
+              // 初回付与で、入社+6ヶ月が FY 起点より遅い → 入社+6ヶ月を採用
+              expectedGrantDate = hirePlus6
+              expectedFy = expectedGrantDate.slice(0, 4)
+              reason = '初回付与（入社6ヶ月経過）'
+            } else {
+              expectedGrantDate = fyGrantDate
+              expectedFy = String(currentFyStart)
+              reason = `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`
+            }
+            deemedDateForDays = expectedGrantDate
           } else {
-            // 通常の FY 起点
-            expectedGrantDate = fyGrantDate
-            expectedFy = String(currentFyStart)
-            reason = `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`
+            // ── 2回目以降: 前回付与日の後の最初の 10/1 へ「前倒し合流」──
+            // 2026-08-27 修正（有給総点検・第3回）:
+            //   旧実装は現FYの10/1 と前回付与期間の「重複」で抑止していたため、
+            //   年途中入社の日本人は次回付与が最大22ヶ月後になっていた。
+            //   労基法39条は継続勤務1年ごとの付与を要求し、基準日の統一は
+            //   **前倒しのみ**許される（後ろ倒しは法定割れ）。
+            //   例: 初回 2026-12-01 → 次回は 2027-10-01（2ヶ月前倒しで統一基準日へ合流）
+            //   前倒し分の勤続は本来の応当日まで勤続したものとみなす（斉一的取扱い）
+            //   ため、法定日数は max(合流日, 前回+1年) 時点の勤続で計算する。
+            const next = jpNextGrantAfter(latestGrant)
+            expectedGrantDate = next.grantDate
+            expectedFy = expectedGrantDate.slice(0, 4)
+            deemedDateForDays = next.deemedDate
+            reason = latestGrant.slice(5) === '10-01'
+              ? `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`
+              : `統一基準日へ前倒し合流（前回付与 ${latestGrant}）`
           }
 
-          // アラートウィンドウ (付与日の30日前～) かつ未付与なら対象に
-          if (isWithinAlertWindow(expectedGrantDate) && !hasGrantForExpected(records, expectedFy, expectedGrantDate)) {
+          // アラートウィンドウ (付与日の30日前～) かつ未付与なら対象に。
+          //   「未付与」= expectedGrantDate 以降の付与レコードが無いこと
+          //   （latestGrant < expectedGrantDate は構成上保証されるので実質ウィンドウ判定のみ）
+          const alreadyGranted = records.some(r =>
+            ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0) && effGrantDate(r) >= expectedGrantDate)
+          if (isWithinAlertWindow(expectedGrantDate) && !alreadyGranted) {
             const hasHire = !!w.hireDate
-            const legalDays = hasHire ? calcLegalPL(w.hireDate!, expectedGrantDate) : 10
+            const legalDays = hasHire ? calcLegalPL(w.hireDate!, deemedDateForDays) : 10
             pending.push({
               workerId: w.id,
               name: w.name,
@@ -819,12 +865,17 @@ export async function POST(request: NextRequest) {
       //   「既存の付与日より前へ遡る付与」（期間が重なる）を止められなかった。
       //   grantPeriodsOverlap（双方向の期間重複）に統一。ちょうど1年後の通常サイクルは重ならない。
       type PLRec = { fy: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number }
+      // 2026-08-27 修正（有給総点検・第3回）: 期間重複での判定をやめ、
+      //   「targetDate 以降（同日含む）の付与が既にあるか」で判定する。
+      //   前倒し合流（例: 初回12/1 → 翌10/1）は前回期間と重なるのが正常であり、
+      //   旧判定だとこの正当な付与まで弾いて法定割れ（付与ギャップ）を招いていた。
+      //   過去へ遡る付与・同日の再実行は「既存付与 >= target」で従来どおり弾ける。
       const hasGrantNear = (records: PLRec[], targetDate: string): boolean => {
         if (!targetDate) return false
         return records.some(r => {
           if (!((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)) return false
-          if (!r.grantDate) return false
-          return grantPeriodsOverlap(r.grantDate, targetDate)
+          const d = r.grantDate || (r.fy !== undefined && r.fy !== null ? `${r.fy}-10-01` : '')
+          return !!d && d >= targetDate
         })
       }
 
@@ -1343,7 +1394,13 @@ export async function GET(request: NextRequest) {
         let fyRecord: typeof plRecords[number] | undefined
         if (targetFy !== null) {
           const matching = plRecords.filter(r => String(r.fy) === targetFy)
-          if (matching.length > 0) fyRecord = matching[matching.length - 1]
+          if (matching.length > 0) {
+            const cand = matching[matching.length - 1]
+            // 2026-08-27 修正（有給総点検・第3回）: fy一致でも付与日が未来なら未付与扱い。
+            //   年途中入社の日本人（例: 初回付与12/1・fy=当FY）が 10/1〜付与日前の間、
+            //   まだ来ていない枠を「現在の残数」として表示していた（トゥアン事案と同型）
+            if (!cand.grantDate || cand.grantDate <= asOfIso) fyRecord = cand
+          }
         }
 
         // フォールバック（2026-08-17 修正）

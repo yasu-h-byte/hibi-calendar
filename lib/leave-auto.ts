@@ -1,6 +1,7 @@
 import { MainData, PLRecord, RawWorker } from './compute'
 import { isAlreadyRetired } from './workers'
 import { calcLegalPL } from './leave-compute'
+import { addMonthsSafe } from './date-utils'
 
 /**
  * ⚠️ 2026-08-04 有給システム総点検での整理:
@@ -56,7 +57,11 @@ export function calcNextGrantDate(
   const hireDay = hire.getDate()
 
   // First grant date: hire + 6 months
-  const firstGrantDate = new Date(hire.getFullYear(), hire.getMonth() + 6, hireDay)
+  // 2026-08-27 修正（有給総点検・第3回）: 月末入社の日繰り越しを解消。
+  //   旧: new Date(y, m+6, day) は 2025-08-31 → 2026-03-03 になる（行政解釈は 2026-02-28）。
+  //   付与実行側(app/api/leave)は addMonthsSafe 修正済みだったが、
+  //   通知・ダッシュボードの付与予定日を出すこちらだけ旧式で日付が食い違っていた。
+  const firstGrantDate = new Date(addMonthsSafe(hireDate, 6) + 'T00:00:00')
 
   // If custom grantMonth is set, adjust the first grant to use that month
   // but keep the day from hireDate

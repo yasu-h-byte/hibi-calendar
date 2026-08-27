@@ -441,6 +441,24 @@ export function isSameFiscalYear(
  *   期間 [a, a+1年) と [b, b+1年) が1日でも重なれば true。
  *   ちょうど1年離れている場合（通常の年次サイクル）は重ならない（半開区間）。
  */
+/**
+ * 日本人（10/1 統一基準日）の「次回付与日」を前回付与日から導出する（2026-08-27 追加）。
+ *
+ * - 前回が 10/1 なら次回は翌年 10/1（通常サイクル）
+ * - 前回が年途中（初回付与など）なら、その後の最初の 10/1 へ**前倒し合流**する。
+ *   労基法39条は継続勤務1年ごとの付与を要求し、基準日統一は前倒しのみ許される
+ *   （旧実装は期間重複で抑止していたため合流が後ろ倒しになり、最大22ヶ月の
+ *   付与ギャップ＝法定割れが生じていた）。
+ * - `deemedDate` は法定日数の勤続計算に使う「みなし基準日」。前倒し分の勤続は
+ *   本来の応当日（前回+1年）まで勤務したものとみなす（斉一的取扱いの行政解釈）。
+ */
+export function jpNextGrantAfter(latestGrantIso: string): { grantDate: string; deemedDate: string } {
+  const mergeYear = Number(latestGrantIso.slice(0, 4)) + (latestGrantIso.slice(5) >= '10-01' ? 1 : 0)
+  const grantDate = `${mergeYear}-10-01`
+  const anniversary = addMonthsSafe(latestGrantIso, 12)
+  return { grantDate, deemedDate: anniversary > grantDate ? anniversary : grantDate }
+}
+
 export function grantPeriodsOverlap(aGrantDate: string, bGrantDate: string): boolean {
   if (!aGrantDate || !bGrantDate) return false
   const aEnd = addMonthsSafe(aGrantDate, 12)

@@ -1299,6 +1299,10 @@ export interface LeaveLedgerRecord {
   grantDays?: number
   carryOver?: number
   adjustment?: number
+  /** 旧形式フィールド（移行期データ互換） */
+  grant?: number
+  carry?: number
+  adj?: number
   expiredDays?: number
   expiredAt?: string
   buyoutDays?: number
@@ -1397,10 +1401,16 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
     })
     for (const r of sorted) {
       const periodUsed = countPeriodUsed(w.id, r.grantDate)
-      const grantDays = r.grantDays ?? 0
-      const carryOver = r.carryOver ?? 0
-      const adjustment = r.adjustment ?? 0
-      const used = adjustment + periodUsed
+      // 2026-08-27 修正（有給総点検・第3回）:
+      //   - 旧フィールド（grant/carry/adj）へのフォールバックが無く、移行期レコードが0日表示だった
+      //   - used に買取(buyoutDays)が入っておらず、画面残数と管理簿の残日数が食い違っていた
+      //     （本体 computeUsedDays は買取込みに統一済み。この帳票だけ取り残し）
+      const grantDays = r.grantDays ?? r.grant ?? 0
+      const carryOver = r.carryOver ?? r.carry ?? 0
+      const adjustment = r.adjustment ?? r.adj ?? 0
+      const buyout = r.buyoutDays
+        ?? (r.buyoutHistory || []).reduce((s2, b) => s2 + (b.days || 0), 0)
+      const used = adjustment + buyout + periodUsed
       const remaining = Math.max(0, grantDays + carryOver - used)
       // 2026-07-27 修正: 期限判定を isLeaveExpiredAsOf に統一。
       //   旧実装 `calcExpiryIso(grantDate) < today` は時効発生日との比較で、
@@ -1449,6 +1459,8 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
         break
       }
     }
+    // 同日複数現場の p は1日としてカウント（管理簿シートの取得日数と行数を一致させる）
+    if (entries.some(x => x.workerId === wid && x.date === dateStr)) continue
     entries.push({ workerId: wid, name: w.name, visa: w.visa, date: dateStr, note })
   }
   entries.sort((a, b) => a.date.localeCompare(b.date) || a.workerId - b.workerId)

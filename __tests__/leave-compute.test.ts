@@ -3,8 +3,8 @@
  *
  * Workflow CR-1 で検出された「年5日義務監視ロジックが多重破綻」の解消検証。
  */
-import { describe, test, expect } from 'vitest'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride } from '@/lib/leave-compute'
+import { describe, test, it, expect } from 'vitest'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, jpNextGrantAfter } from '@/lib/leave-compute'
 import { addMonthsSafe, calcExpiryIso, addDaysIso, calcLastUsableDayIso, isLeaveExpiredAsOf } from '@/lib/date-utils'
 
 describe('addMonthsSafe', () => {
@@ -416,5 +416,31 @@ describe('hasManualCarryOverOverride (繰越の手動調整判定)', () => {
     expect(hasManualCarryOverOverride({})).toBe(false)
     expect(hasManualCarryOverOverride(null)).toBe(false)
     expect(hasManualCarryOverOverride({ adjustmentHistory: 'x' })).toBe(false)
+  })
+})
+
+describe('jpNextGrantAfter（日本人の次回付与日・前倒し合流）', () => {
+  it('通常サイクル: 10/1 付与の次は翌年 10/1（みなしも同日）', () => {
+    expect(jpNextGrantAfter('2025-10-01')).toEqual({ grantDate: '2026-10-01', deemedDate: '2026-10-01' })
+  })
+  it('年途中の初回付与は次の 10/1 へ前倒し合流（22ヶ月ギャップの再発防止）', () => {
+    // 濱上さんパターン: 初回 2026-12-01 → 次は 2027-10-01（旧実装は 2028-10-01 になっていた）
+    const r = jpNextGrantAfter('2026-12-01')
+    expect(r.grantDate).toBe('2027-10-01')
+    // 前倒し分の勤続は応当日(2027-12-01)までみなす → 法定日数は1.5年区分(11日)側
+    expect(r.deemedDate).toBe('2027-12-01')
+  })
+  it('初回が7/1 なら3ヶ月後の 10/1 で合流し、みなしは翌年の応当日', () => {
+    const r = jpNextGrantAfter('2027-07-01')
+    expect(r.grantDate).toBe('2027-10-01')
+    expect(r.deemedDate).toBe('2028-07-01')
+  })
+  it('10/1 より後（11/15）は翌年 10/1', () => {
+    expect(jpNextGrantAfter('2026-11-15').grantDate).toBe('2027-10-01')
+  })
+  it('10/1 より前（9/30）は同年 10/1（1日だけの前倒し合流）', () => {
+    const r = jpNextGrantAfter('2026-09-30')
+    expect(r.grantDate).toBe('2026-10-01')
+    expect(r.deemedDate).toBe('2027-09-30')
   })
 })
