@@ -43,8 +43,10 @@ export function timesheetDayHours(
     const dayOT = Math.max(0, dayHours - dailyPrescribedForWorker)
     return { dayHours, dayOT }
   }
-  // レガシー入力: 所定（補償日は0.6按分）＋ 残業 o を足して総労働時間にする
-  const base = entry.w === 0.6 ? Math.round(dailyPrescribedForWorker * 0.6 * 10) / 10 : dailyPrescribedForWorker
+  // レガシー入力: 所定 × w（半日0.5は半分、補償日0.6は0.6按分）＋ 残業 o
+  // 2026-08-27 修正（給与総点検）: 半日勤務(w=0.5)が所定フル時間で出て
+  //   社労士提出の勤務時間一覧が過大表示になっていた
+  const base = Math.round(dailyPrescribedForWorker * (entry.w ?? 1) * 10) / 10
   const dayOT = entry.o || 0
   return { dayHours: base + dayOT, dayOT }
 }
@@ -207,7 +209,10 @@ function appendTimeSheet(
           //     → workSchedule なしで calcActualHours を呼ぶと「休憩控除なし」になる可能性
           //     現状は最低限の整合性として実労働時間を直接計算
           const dailyPrescribedForWorker = w.useOldRules ? 20 / 3 : dailyPrescribed
-          ;({ dayHours, dayOT } = timesheetDayHours(entry, dailyPrescribedForWorker))
+          // 同日複数現場は加算（旧: 上書きで最後の現場だけになり過少 2026-08-27）
+          const th = timesheetDayHours(entry, dailyPrescribedForWorker)
+          dayHours += th.dayHours
+          dayOT += th.dayOT
           status = entry.w === 0.6 ? '補' : dayOT > 0 ? '出+残' : '出'
         }
       }
@@ -390,7 +395,8 @@ export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook 
         if (entry.w && entry.w > 0) {
           // 2026-08-13: 元請け請求ベース（出面入力ベース）に統一。夜勤がある日は
           //   1.5人工 が乗るので calcManDays を使う（夜勤なしなら entry.w と同値）。
-          dayWork = calcManDays(entry) // 1, 0.5, 0.6 / 夜勤日は 1.5・2.0・2.5
+          // 同日複数現場は加算（旧: 上書きで最後の現場だけになり過少 2026-08-27）
+          dayWork = (typeof dayWork === 'number' ? dayWork : 0) + calcManDays(entry) // 1, 0.5, 0.6 / 夜勤日は 1.5・2.0・2.5
           if (entry.o && entry.o > 0) dayOT += entry.o
         }
       }
@@ -526,7 +532,8 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
           if (!isWorkingDay(entry)) continue
           if (entry.w && entry.w > 0) {
             // 2026-08-13: 元請け請求ベース（出面入力ベース）に統一。夜勤日は 1.5人工 が乗る
-            dayWork = calcManDays(entry)
+            // 同日複数現場は加算（2026-08-27）
+            dayWork = (typeof dayWork === 'number' ? dayWork : 0) + calcManDays(entry)
             if (entry.o && entry.o > 0) dayOT += entry.o
           }
         }
@@ -850,7 +857,11 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     ...(withAllowance ? ['遠方日当', '運転手当'] : []),
     '欠勤日数', '欠勤控除', '補償日控除', '支給額合計']
   // 日本人: 8列
+  // 2026-08-27 追加（給与総点検）: 日本人にも法定休日割増を実装済み(202608〜)なのに
+  //   この列だけ無く、日曜出勤者のいる月は内訳を足しても支給額合計に一致しなかった
+  const withJpLegalHoliday = ym >= '202608'
   const japaneseHeaders = ['名前', '現場', '雇用形態', '日額/月給', '出勤日数', '有給日数', '残業時間(h)', '基本給', '有給手当', '残業手当',
+    ...(withJpLegalHoliday ? ['法定休日手当'] : []),
     ...(withAllowance ? ['遠方日当', '運転手当'] : []),
     '支給額合計']
 
@@ -1030,6 +1041,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         w.plDays || 0,
         w.dailyOtHours || w.otHours || 0,
         w.basePay || 0, w.paidLeaveAllowance || 0, w.otAllowance || 0,
+        ...(withJpLegalHoliday ? [w.legalHolidayAllowance || 0] : []),
         ...(withAllowance ? [w.siteAllowance || 0, w.driveAllowance || 0] : []),
         w.salaryNetPay || 0,
       ])
@@ -1042,6 +1054,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       ws.reduce((s, w) => s + (w.basePay || 0), 0),
       ws.reduce((s, w) => s + (w.paidLeaveAllowance || 0), 0),
       ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
+      ...(withJpLegalHoliday ? [ws.reduce((s, w) => s + (w.legalHolidayAllowance || 0), 0)] : []),
       ...(withAllowance ? [
         ws.reduce((s, w) => s + (w.siteAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.driveAllowance || 0), 0),
@@ -1059,7 +1072,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       merges.push({ s: { r: noteRow, c: 0 }, e: { r: noteRow, c: japaneseHeaders.length - 1 } })
     }
     sheet['!merges'] = merges
-    setColWidths(sheet, [14, 16, 10, 12, 8, 8, 10, 12, 12, 12, ...(withAllowance ? [10, 10] : []), 14])
+    setColWidths(sheet, [14, 16, 10, 12, 8, 8, 10, 12, 12, 12, ...(withJpLegalHoliday ? [11] : []), ...(withAllowance ? [10, 10] : []), 14])
     return sheet
   }
 

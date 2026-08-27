@@ -90,7 +90,12 @@ export default function AuditPrintPage() {
     const total = targetWorkers.reduce((s, w) => s + (w.salaryNetPay || 0), 0)
     const newRulesCount = targetWorkers.filter(w => !w.useOldRules && ym >= '202605').length
     const oldRulesCount = targetWorkers.length - newRulesCount
-    const validation = validatePayrolls(targetWorkers as unknown as PayrollSnapshot[])
+    // 2026-08-27 修正（給与総点検）: 自動検算は新ルール(202605〜)専用。
+    //   4月以前に当てると旧ルールの構成（fixedBasePay なし・1.25倍残業）が
+    //   全員「違反」と誤検知され、社労士PDFの表紙に赤字で印刷されていた
+    const validation = ym >= '202605'
+      ? validatePayrolls(targetWorkers as unknown as PayrollSnapshot[])
+      : { total: 0, critical: 0, warning: 0, issues: [], affectedWorkerIds: [] }
     return { total, newRulesCount, oldRulesCount, validation }
   }, [targetWorkers, ym])
 

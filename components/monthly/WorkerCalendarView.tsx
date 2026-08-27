@@ -42,6 +42,13 @@ function getStatus(e: AttendanceEntry | undefined): {
   if (e.r) return { label: '欠勤', short: '欠', bgClass: 'bg-red-100', textClass: 'text-red-800' }
   if (e.h) return { label: '現場休', short: '現休', bgClass: 'bg-yellow-100', textClass: 'text-yellow-800' }
   if (e.w === 0.6) return { label: '補償日', short: '補', bgClass: 'bg-orange-100', textClass: 'text-orange-800' }
+  // 夜勤（2026-08 実装）: 日勤+夜勤は「出+夜」、夜勤のみは「夜」。
+  //   旧: ns 未対応で夜勤のみの日が「－」（未出勤様）に見えていた（2026-08-27 修正）
+  if ((e as { ns?: number }).ns) {
+    return (e.w || 0) > 0
+      ? { label: '出勤+夜勤', short: '出夜', bgClass: 'bg-indigo-100', textClass: 'text-indigo-800' }
+      : { label: '夜勤', short: '夜', bgClass: 'bg-indigo-100', textClass: 'text-indigo-800' }
+  }
   if (e.w === 0.5) return { label: '半日', short: '半', bgClass: 'bg-blue-50', textClass: 'text-blue-700' }
   if ((e.w || 0) > 0) return { label: '出勤', short: '出', bgClass: 'bg-blue-100', textClass: 'text-blue-800' }
   return { label: '－', short: '－', bgClass: 'bg-gray-50', textClass: 'text-gray-400' }

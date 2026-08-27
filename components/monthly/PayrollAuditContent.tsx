@@ -172,10 +172,13 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
   })
 
   // 2. 出勤日数の整合性
+  //   分母はスタッフ個別の所定（配置現場カレンダー）を優先。全社所定(prescribedDays)は
+  //   旧ルール用で、未設定の月に 0 が入り全員 ❌ になる時限バグだった（2026-08-27）
+  const daysBasis = w.workerPrescribedDays || prescribedDays
   const daysAccountedFor = w.workDays + (w.plDays || 0) + (w.restDays || 0) + (w.siteOffDays || 0) + (w.examDays || 0) + (w.compDays || 0)
   checks.push({
     label: '出勤実績の合計が所定日数以内',
-    pass: daysAccountedFor <= prescribedDays + 1,
+    pass: daysBasis <= 0 || daysAccountedFor <= daysBasis + 1,
     detail: `出勤${w.workDays} + 有給${w.plDays || 0} + 欠勤${w.restDays || 0} + 現場休${w.siteOffDays || 0} + 試験${w.examDays || 0} + 補償${w.compDays || 0}${(w.hkDays || 0) > 0 ? ` ＋ 帰国中${w.hkDays}（所定から除外・無給）` : ''} = ${daysAccountedFor}日 ≦ 所定${prescribedDays}日`,
   })
 
@@ -183,8 +186,13 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
   const fixedBase = w.fixedBasePay || w.basePay || 0
   let sumPay: number
   if (mode.useOldRules) {
+    // 2026-08-27 修正（給与総点検）: 旧ルール表示は「4月以前の全員」も通るため、
+    //   日本人日給月給の構成要素（有給手当・法定休日手当）が抜けていると
+    //   有給取得者・日曜出勤者で「内訳合計が一致しない」誤検知になっていた
     sumPay = fixedBase
       + (w.additionalAllowance || 0)
+      + (w.paidLeaveAllowance || 0)
+      + (w.legalHolidayAllowance || 0)
       + (w.otAllowance || 0)
       + (w.siteAllowance || 0)
       + (w.driveAllowance || 0)

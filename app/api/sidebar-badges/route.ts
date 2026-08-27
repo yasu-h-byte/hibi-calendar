@@ -23,9 +23,11 @@ export async function GET(request: NextRequest) {
   try {
     const main = await getMainData()
 
-    // 当月 (今日の年月) を計算
-    const now = new Date()
-    const ym = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+    // 当月 (今日の年月) を JST で計算（旧: UTC の new Date で JST 0〜9時に前月扱い 2026-08-27）
+    const { todayJstIso } = await import('@/lib/date-utils')
+    const todayIsoB = todayJstIso()
+    const ym = todayIsoB.slice(0, 7).replace('-', '')
+    const now = new Date(todayIsoB + 'T00:00:00')  // 以降の日付演算も JST 当日基準
 
     // ── 月次集計: 検算違反スタッフ数 ──
     let monthlyAnomalyCount = 0
@@ -35,7 +37,15 @@ export async function GET(request: NextRequest) {
       const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}
       const hasCalendarData = Object.keys(siteWorkDaysMap).length > 0
       const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
-      const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays)
+      // 2026-08-27 修正（給与総点検）: /api/monthly と同じ引数（カレンダー・帰国情報）で
+      //   計算しないと、境界月でバッジ件数と月次画面のバナー件数が食い違う
+      const { getMonthlyCalendars } = await import('@/lib/repositories/calendarRepo')
+      const { getAllActiveHomeLeaves } = await import('@/lib/homeLeave')
+      const cals = await getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
+      const calendarDaysMap: Record<string, Record<string, string>> = {}
+      for (const c of cals) if (c.days) calendarDaysMap[c.siteId] = c.days
+      const homeLeaves = await getAllActiveHomeLeaves()
+      const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
       const validation = validatePayrolls(result.workers as unknown as PayrollSnapshot[])
       monthlyAnomalyCount = validation.affectedWorkerIds.length
     } catch (e) {

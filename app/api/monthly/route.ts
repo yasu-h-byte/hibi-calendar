@@ -70,8 +70,14 @@ export async function GET(request: NextRequest) {
         const siteId = parts.slice(0, parts.length - 3).join('_')
         if (keyYm !== ym || !Number.isFinite(wid) || !Number.isFinite(day)) continue
         if (!dailyByWorker[wid]) dailyByWorker[wid] = {}
-        // 同一日に複数現場の入力がある場合は最初のものを保持（カレンダー表示では1日1セル）
-        if (!dailyByWorker[wid][day]) {
+        // 同一日に複数現場の入力がある場合は「実労働・夜勤のあるエントリ」を優先して保持
+        //（カレンダー表示は1日1セル。旧: 走査順の1件目固定で、夜勤や出勤が
+        //  休み残骸などに隠れることがあった 2026-08-27）
+        type DailyEnt = { w?: number; ns?: number }
+        const prev = dailyByWorker[wid][day] as DailyEnt | undefined
+        const cur = entry as DailyEnt
+        const weight = (x?: DailyEnt) => x ? ((x.w || 0) > 0 || x.ns ? 2 : 1) : 0
+        if (weight(cur) > weight(prev)) {
           dailyByWorker[wid][day] = { ...entry, _siteId: siteId }
         }
       }
