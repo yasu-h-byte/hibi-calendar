@@ -681,6 +681,8 @@ export function compute(
   })
 
   // ─── 個人の出面データ処理 ───
+  // 同日複数現場の有給(p)を1日として数えるための dedup（computeMonthly の _plDaySeen と同扱い）
+  const plDaySeenCompute = new Set<string>()
   for (const [k, v] of Object.entries(attD)) {
     if (!v) continue
     const pk = parseDKey(k)
@@ -710,7 +712,13 @@ export function compute(
       } else if (dispatchedThisYm && !result.workers[w.id].isDispatched) {
         result.workers[w.id].isDispatched = true
       }
-      result.workers[w.id].plUsed = (result.workers[w.id].plUsed || 0) + 1
+      // 2026-08-27 横展開: 同日複数現場の p は1日（現状この plUsed を読む画面は
+      //   無いが、配線された時に2倍カウントになる地雷を除去）
+      const plDayKey = `${w.id}_${entryYm}_${dayS}`
+      if (!plDaySeenCompute.has(plDayKey)) {
+        plDaySeenCompute.add(plDayKey)
+        result.workers[w.id].plUsed = (result.workers[w.id].plUsed || 0) + 1
+      }
       if (!result.workers[w.id].sites.includes(sid)) result.workers[w.id].sites.push(sid)
       if (!result.siteWorkers[swk]) result.siteWorkers[swk] = { work: 0, ot: 0, cost: 0, plUsed: 0 }
       result.siteWorkers[swk].plUsed = (result.siteWorkers[swk].plUsed || 0) + 1

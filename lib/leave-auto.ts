@@ -1,7 +1,7 @@
 import { MainData, PLRecord, RawWorker } from './compute'
 import { isAlreadyRetired } from './workers'
 import { calcLegalPL } from './leave-compute'
-import { addMonthsSafe } from './date-utils'
+import { addMonthsSafe, todayJstIso } from './date-utils'
 
 /**
  * ⚠️ 2026-08-04 有給システム総点検での整理:
@@ -161,7 +161,8 @@ export function getUpcomingGrants(
   const upcoming: UpcomingGrant[] = []
 
   // 2026-06-XX 修正: 未来日退職予定者を通知対象に含める（退職日まで付与され続けるため）
-  const todayIso = today.toISOString().slice(0, 10)
+  // 2026-08-27: getJSTDate はローカル時刻ベースのため toISOString でズレる → todayJstIso に統一
+  const todayIso = todayJstIso()
   const eligible = main.workers.filter(
     (w: RawWorker) => !isAlreadyRetired(w.retired, todayIso) && w.job !== 'yakuin' && w.hireDate
   )

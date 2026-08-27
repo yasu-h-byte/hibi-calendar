@@ -1561,7 +1561,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Legal PL calculation info
-        const legalPL = w.hireDate ? calcLegalPL(w.hireDate, grantDate || new Date().toISOString().split('T')[0]) : 0
+        const legalPL = w.hireDate ? calcLegalPL(w.hireDate, grantDate || todayJstIso()) : 0
 
         // 年5日取得義務チェック（労基法第39条第7項）
         // 2026-06-XX 改訂: requestedPeriodUsed（承認済み未来日も含む申請ベース）で判定

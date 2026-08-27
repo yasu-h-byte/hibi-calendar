@@ -61,7 +61,10 @@ export async function getLeaveBalance(
 
   const norm = normalizePLRecord(rec)
   const total = norm.grantDays + norm.carryOver
-  const buyoutDays = Number((rec as { buyoutDays?: number }).buyoutDays || 0)
+  // buyoutDays が未キャッシュの移行データは履歴合算へフォールバック（computeUsedDays と統一 2026-08-27）
+  const recB = rec as { buyoutDays?: number; buyoutHistory?: Array<{ days?: number }> }
+  const buyoutDays = recB.buyoutDays
+    ?? (recB.buyoutHistory || []).reduce((s2, b) => s2 + (b.days || 0), 0)
 
   // 付与期間 = [grantDate, grantDate + 1年)
   // ★ 期間終端は addMonthsSafe（文字列演算）で作ること。Date+toISOString だと

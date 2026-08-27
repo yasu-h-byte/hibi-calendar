@@ -264,6 +264,8 @@ export async function GET(request: NextRequest) {
                     Object.assign(attEntries, att.d)
                   }
                 }
+                // 同日複数現場の p は1日として数える（他経路と同じ dedup。2026-08-27）
+                const seenP = new Set<string>()
                 for (const [key, entry] of Object.entries(attEntries)) {
                   if (!entry) continue
                   const e = entry as { p?: number | boolean }
@@ -271,8 +273,9 @@ export async function GET(request: NextRequest) {
                   const pk = parseDKey(key)
                   if (parseInt(pk.wid) !== worker.id) continue
                   const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-                  if (d >= gdStart && d < gdEnd) periodUsed++
+                  if (d >= gdStart && d < gdEnd) seenP.add(`${pk.ym}_${pk.day}`)
                 }
+                periodUsed = seenP.size
               }
             }
             // 買取済み日数も消化側に含める（getLeaveBalance と同じ式。

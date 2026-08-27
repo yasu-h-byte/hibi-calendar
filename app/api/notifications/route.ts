@@ -5,7 +5,8 @@ import { collection, query, where, getDocs } from '@/lib/fsdb'
 import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
-import { todayJstIso } from '@/lib/date-utils'
+import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
+import { isAlreadyRetired } from '@/lib/workers'
 import { calcLegalCarryOver, selectActiveGrantRecord } from '@/lib/leave-compute'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
 import { getWorkerLastAccessMap } from '@/lib/accessLog'
@@ -42,7 +43,10 @@ export async function GET(request: NextRequest) {
     const notifications: Notification[] = []
 
     const main = await getMainData()
-    const activeWorkers = main.workers.filter(w => !w.retired)
+    // 2026-08-27 修正（有給総点検・第3回）: 「退職日が入っているだけ」で全通知から
+    //   即日消えていた（例: 12/31退職予定を登録した瞬間に有給残・付与予定・未署名等の
+    //   通知が全部止まる）。dashboard/ledger と同じく「今日時点で退職済み」のみ除外
+    const activeWorkers = main.workers.filter(w => !isAlreadyRetired(w.retired, todayJstIso()))
 
     // 1. Calendar unsigned workers (承認済みカレンダーのみ、現月＋翌月をチェック)
     try {
@@ -190,8 +194,7 @@ export async function GET(request: NextRequest) {
 
         // 期間 [grantDate, +1年) 内の P 日数（同日複数現場は1日）
         const start = rec.grantDate
-        const endY = String(Number(start.slice(0, 4)) + 1)
-        const end = endY + start.slice(4)
+        const end = addMonthsSafe(start, 12)  // 2/29 付与にも安全（旧: 文字列+1年）
         const seen = new Set<string>()
         for (const [key, entry] of Object.entries(allAttForPL)) {
           const e = entry as { p?: number }
@@ -201,7 +204,9 @@ export async function GET(request: NextRequest) {
           const iso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
           if (iso >= start && iso < end) seen.add(iso)
         }
-        const used = Math.max(rec.adjustment ?? 0, rec.adj ?? 0) + (rec.buyoutDays ?? 0) + seen.size
+        // adjustment は「新フィールド優先」（normalizePLRecord と統一。旧 Math.max は
+        //   負の調整＝日数を足す調整を 0 に丸め、残3日誤警報の原因だった 2026-08-27）
+        const used = (rec.adjustment ?? rec.adj ?? 0) + (rec.buyoutDays ?? 0) + seen.size
         const remaining = total - used
 
         if (remaining <= 3) {
@@ -396,16 +401,14 @@ export async function GET(request: NextRequest) {
         const recordsWithGrant = wRecords.filter(r =>
           !(r as { _archived?: boolean })._archived &&  // 時効処理済みは前期候補から除外
           ((r.grantDays && r.grantDays > 0) || (r.grant && r.grant > 0)))
-        // 同じFYに複数ある場合はgrantDateが最も新しいものを採用（正しいレコード）
+        // 前期レコード = grantDate が最も新しいもの。
+        // 2026-08-27 修正（有給総点検・第3回）: 旧実装は Math.max(...fy数値) で選んでおり、
+        //   fy 欠損レコードが1件でもあると NaN → 空配列 reduce が throw → catch で
+        //   付与予定通知ブロック全体が黙って消えていた。fy比較は selectActiveGrantRecord の
+        //   コメントで禁止されたパターンでもある
         let prevRecord = null as typeof recordsWithGrant[0] | null
-        if (recordsWithGrant.length > 0) {
-          const maxFy = Math.max(...recordsWithGrant.map(r => Number(r.fy)))
-          const sameFy = recordsWithGrant.filter(r => Number(r.fy) === maxFy)
-          prevRecord = sameFy.reduce((best, r) => {
-            const bestDate = best.grantDate || ''
-            const rDate = r.grantDate || ''
-            return rDate > bestDate ? r : best
-          })
+        for (const r of recordsWithGrant) {
+          if (!prevRecord || (r.grantDate || '') > (prevRecord.grantDate || '')) prevRecord = r
         }
 
         let realCarryOver = u.carryOver // フォールバック
@@ -416,8 +419,8 @@ export async function GET(request: NextRequest) {
           // 出面からP消化を集計（同日複数現場は1日として数える = multi-site dedup）
           const seenDates = new Set<string>()
           for (const [key, entry] of Object.entries(allAttForPL)) {
-            const e = entry as { p?: number }
-            if (e.p === 1) {
+            const e = entry as { p?: number | boolean }
+            if (e.p) {  // truthy 判定（旧データ p:true 互換・他経路と統一 2026-08-27）
               const pk = parseDKey(key)
               if (parseInt(pk.wid) === u.workerId) {
                 const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
@@ -428,7 +431,7 @@ export async function GET(request: NextRequest) {
           const periodUsed = seenDates.size
           const prevGrant = prevRecord.grantDays || prevRecord.grant || 0
           const prevCarry = prevRecord.carryOver || prevRecord.carry || 0
-          const prevAdj = Math.max(prevRecord.adjustment || 0, prevRecord.adj || 0)
+          const prevAdj = prevRecord.adjustment ?? prevRecord.adj ?? 0
           const pr = prevRecord as { buyoutDays?: number; buyoutHistory?: Array<{ days?: number }> }
           const prevBuyout = pr.buyoutDays ?? (pr.buyoutHistory || []).reduce((s, h) => s + (h.days || 0), 0)
           // 労基法115条準拠: 前々期付与分(prevCarry)は時効消滅するため繰越上限は prevGrant（leave本体と同一ヘルパー）

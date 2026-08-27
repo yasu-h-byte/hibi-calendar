@@ -20,9 +20,9 @@ import {
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from '@/lib/workers'
-import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
+import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
-import { selectActiveGrantRecord, judgeFiveDayObligation } from '@/lib/leave-compute'
+import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter } from '@/lib/leave-compute'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
 export const dynamic = 'force-dynamic'
@@ -43,42 +43,6 @@ function getJstNow(): Date {
   // "YYYY-MM-DD, HH:mm:ss" のカンマ区切りを取り除いて T 区切りに
   const [datePart, timePart] = jstStr.replace(',', '').trim().split(' ')
   return new Date(`${datePart}T${timePart}`)
-}
-
-/** Compute PL alert for workers with remaining PL <= 3 */
-function computePLAlert(main: MainData) {
-  const alerts: {
-    workerId: number; name: string; org: string
-    totalDays: number; usedDays: number; remaining: number; status: string
-  }[] = []
-
-  // 2026-06-XX 修正: 今日時点で退職済みのみ除外（未来日退職予定者は5日義務監視対象）
-  const todayIsoForPl = todayJstIso()  // 日本時間の今日（UTCだとJST朝に1日ズレる）
-  for (const w of main.workers) {
-    if (isAlreadyRetired(w.retired, todayIsoForPl)) continue
-    const records = main.plData[String(w.id)] || []
-    if (records.length === 0) continue
-
-    // ⚠️ 2026-08-17 修正: 配列の最後だと**まだ付与日が来ていない未来のレコード**を掴み、
-    //   残数が過大になる（トゥアン事案。詳細は lib/leave-compute.ts の selectActiveGrantRecord）
-    const latest = selectActiveGrantRecord(records, todayIsoForPl)
-    if (!latest) continue  // まだ付与前 → アラート対象外
-    // 旧フィールド対応 + adjustment は消化側
-    const isOld = latest.grant != null || latest.adj != null || latest.carry != null
-    const grantDays = isOld ? (latest.grant ?? latest.grantDays ?? 0) : (latest.grantDays ?? 0)
-    const carryOver = isOld ? (latest.carry ?? 0) : (latest.carryOver ?? 0)
-    const adjustment = Math.max(latest.adjustment ?? 0, latest.adj ?? 0)
-    const totalDays = grantDays + carryOver
-    const usedDays = adjustment + (latest.used || 0)
-    const remaining = Math.max(0, totalDays - usedDays)
-
-    if (remaining <= 3) {
-      const status = remaining <= 0 ? 'danger' : remaining <= 1 ? 'warning' : 'caution'
-      alerts.push({ workerId: w.id, name: w.name, org: w.org, totalDays, usedDays, remaining, status })
-    }
-  }
-
-  return alerts.sort((a, b) => a.remaining - b.remaining)
 }
 
 /** Today's attendance status */
@@ -772,7 +736,6 @@ export async function GET(request: NextRequest) {
     const cumulativeDataFiltered = cumulativeData.filter(cd => cd.billing > 0)
 
     // ═══ PL Alert ═══
-    const plAlert = computePLAlert(main)
 
     // ═══ Foreign worker attendance rates ═══
     const foreignWorkerRates = await computeForeignWorkerRates(main, ym, attCache)
@@ -984,7 +947,7 @@ export async function GET(request: NextRequest) {
     todayDate.setHours(0, 0, 0, 0)
     const visaExpiryItems: { name: string; daysLeft: number; expiry: string }[] = []
     // 2026-06-XX 修正: 今日時点で退職済みのみ除外
-    const todayIsoForVisa = todayDate.toISOString().slice(0, 10)
+    const todayIsoForVisa = todayJstIso()  // 2026-08-27: ローカルJST実行でも1日ズレないよう統一
     for (const w of main.workers) {
       if (isAlreadyRetired(w.retired, todayIsoForVisa)) continue
       if (!w.visa || w.visa === 'none' || w.visa === '') continue
@@ -1009,6 +972,12 @@ export async function GET(request: NextRequest) {
     //   正: 出面のPから期間内消化を数え、judgeFiveDayObligation（通知ベル・有給画面と同一）で判定
     let plShortfallCount = 0
     const plShortfallNames: string[] = []
+    // ── 対象者と付与期間を先に確定し、表示期間外の出面を追加ロードする ──
+    // 2026-08-27 修正（有給総点検・第3回）: allAttD は「表示期間+遡り3ヶ月」しか
+    //   持たないため、付与から半年以上前に取った P が数えられず、実際は取得済みでも
+    //   「5日未達」と誤警告していた（2026-08-21 修正①のオオカミ少年化が別経路で再発）。
+    //   付与期間のうち未ロードの月だけを一括で追加ロードする（最大12ヶ月・月次表示時のみ増加）
+    const obligationTargets: { w: (typeof main.workers)[number]; start: string; grantDays: number }[] = []
     for (const w of main.workers) {
       if (isAlreadyRetired(w.retired, todayIsoForVisa)) continue
       const records = main.plData[String(w.id)] || []
@@ -1017,20 +986,40 @@ export async function GET(request: NextRequest) {
       if (!latest || !latest.grantDate) continue  // まだ付与前 → 5日義務の対象外
       const grantDays = latest.grantDays ?? latest.grant ?? 0
       if (grantDays < 10) continue // 5日義務は年10日以上付与者のみ
+      obligationTargets.push({ w, start: latest.grantDate, grantDays })
+    }
+    const loadedYms = new Set([...ymStrList, ...lookbackYms])
+    const extraYms = new Set<string>()
+    for (const t of obligationTargets) {
+      let cur = t.start.slice(0, 7).replace('-', '')
+      const endYm2 = todayIsoForVisa.slice(0, 7).replace('-', '')
+      while (cur <= endYm2) {
+        if (!loadedYms.has(cur)) extraYms.add(cur)
+        const y2 = Number(cur.slice(0, 4)); const m2 = Number(cur.slice(4, 6))
+        cur = m2 === 12 ? `${y2 + 1}01` : `${y2}${String(m2 + 1).padStart(2, '0')}`
+      }
+    }
+    const extraAttD = extraYms.size > 0
+      ? (await getMultiMonthAttData([...extraYms])).d
+      : {}
+    const attForObligation = { ...allAttD, ...extraAttD }
 
+    for (const { w, start, grantDays } of obligationTargets) {
       // 期間 [grantDate, +1年) の P 日数を出面から数える（同日複数現場は1日）
-      const start = latest.grantDate
-      const end = String(Number(start.slice(0, 4)) + 1) + start.slice(4)
+      const end = addMonthsSafe(start, 12)
       const seen = new Set<string>()
-      for (const [key, entry] of Object.entries(allAttD)) {
-        const e = entry as { p?: number } | null
+      for (const [key, entry] of Object.entries(attForObligation)) {
+        const e = entry as { p?: number | boolean } | null
         if (!e?.p) continue
         const pk = parseDKey(key)
         if (parseInt(pk.wid) !== w.id) continue
         const iso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
         if (iso >= start && iso < end) seen.add(iso)
       }
-      const periodUsed = Math.max(latest.adjustment ?? 0, latest.adj ?? 0) + seen.size
+      // 消化 = 出面の P のみ（/leave 画面の judgeFiveDayObligation 入力と統一。
+      //   旧: adjustment を足していたが、移行時調整は「取得させた日数」ではないため
+      //   経路間で警告の有無が食い違っていた。少なく数える方＝警告が出る方に倒す）
+      const periodUsed = seen.size
 
       const judged = judgeFiveDayObligation(start, grantDays, periodUsed, w.retired, todayIsoForVisa)
       if (judged.warning) {
@@ -1210,7 +1199,7 @@ export async function GET(request: NextRequest) {
     try {
       const todayD = getJstNow()
       todayD.setHours(0, 0, 0, 0)
-      const todayIsoP = todayD.toISOString().slice(0, 10)
+      const todayIsoP = todayJstIso()  // 2026-08-27: getJstNow+toISOString はローカルJST機で1日ズレる
       const m = todayD.getMonth() + 1
       const y = todayD.getFullYear()
 
@@ -1223,18 +1212,21 @@ export async function GET(request: NextRequest) {
         const isJp = !w.visa || w.visa === 'none'
 
         // 付与時期チェック
+        // 2026-08-27 修正（有給総点検・第3回）: 判定を休暇管理API（getPendingGrants）と同期。
+        //   旧: ±7日近傍判定のため、年途中入社の日本人（初回付与が10/1以外）が
+        //   10/1以降ずっと「付与待ち」にカウントされ、/leave 画面(0件)と食い違っていた。
+        //   新: 前回付与日から jpNextGrantAfter で次回（前倒し合流）を導出し、
+        //   「次回日以降の付与レコードが無い」ことで判定する
         if (isJp) {
-          // 日本人: 当期FY (10/1起点)
+          const effD = (r: (typeof records)[number]): string =>
+            (r.grantDate as string | undefined) || (r.fy !== undefined && r.fy !== null ? `${r.fy}-10-01` : '')
+          const grantedRecs = records.filter(r =>
+            (((r.grantDays as number | undefined) ?? (r.grant as number | undefined) ?? 0) > 0))
+          const latestG = grantedRecs.map(effD).filter(Boolean).sort().slice(-1)[0] || null
           const curFy = m >= 10 ? y : y - 1
-          const expDate = `${curFy}-10-01`
+          const expDate = latestG ? jpNextGrantAfter(latestG).grantDate : `${curFy}-10-01`
           if (expDate <= todayIsoP) {
-            const hasGrant = records.some(r =>
-              ((r.grantDays as number | undefined) ?? (r.grant as number | undefined) ?? 0) > 0 &&
-              (
-                (r.grantDate && Math.abs(new Date(r.grantDate as string).getTime() - new Date(expDate).getTime()) <= 7 * 24 * 60 * 60 * 1000) ||
-                (!r.grantDate && String(r.fy ?? '') === String(curFy))
-              )
-            )
+            const hasGrant = grantedRecs.some(r => effD(r) >= expDate)
             if (!hasGrant) pendingGrantsCount++
           }
         } else {
@@ -1251,10 +1243,11 @@ export async function GET(request: NextRequest) {
             const nextT = lastT + 365 * 24 * 60 * 60 * 1000
             const nextIso = new Date(nextT).toISOString().slice(0, 10)
             if (nextIso <= todayIsoP) {
+              // 次回予定日以降の付与があれば付与済み（±7日判定は別日付の付与を取りこぼす）
               const hasGrant = records.some(r => {
                 if (!r.grantDate) return false
                 if (!(((r.grantDays as number | undefined) ?? 0) > 0 || ((r.grant as number | undefined) ?? 0) > 0)) return false
-                return Math.abs(new Date(r.grantDate as string).getTime() - nextT) <= 7 * 24 * 60 * 60 * 1000
+                return (r.grantDate as string) >= nextIso
               })
               if (!hasGrant) pendingGrantsCount++
             }
@@ -1452,7 +1445,6 @@ export async function GET(request: NextRequest) {
       },
       todayStatus,
       dailyAttendance,
-      plAlert,
       foreignWorkerRates,
       siteList,
       ymList: ymStrList.sort(),
