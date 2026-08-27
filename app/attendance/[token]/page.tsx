@@ -711,12 +711,12 @@ export default function StaffAttendancePage() {
         fetchData()
       } else {
         const d = await res.json()
-        setError(d.error || 'エラー')
-        setTimeout(() => setError(null), 3000)
+        // 2026-08-27 修正: setError のバナーはモーダル(z-50)の裏に隠れて3秒で消え、
+        //   スタッフに失敗が伝わらなかった → モーダルの前面に alert で表示し、開いたまま残す
+        alert(d.error || 'エラー / Lỗi')
       }
     } catch {
-      setError('つうしん エラー / Lỗi kết nối')
-      setTimeout(() => setError(null), 3000)
+      alert('つうしん エラー / Lỗi kết nối')
     } finally {
       setSaving(false)
     }

@@ -315,7 +315,7 @@ export async function POST(request: NextRequest) {
       }
       if (data.status !== 'pending') {
         return NextResponse.json({
-          error: '職長が承認した後は取り消しできません。会社に連絡してください。',
+          error: '職長が承認した後は取り消しできません。会社に連絡してください。 / Sau khi tổ trưởng duyệt thì không thể hủy. Vui lòng liên hệ công ty.',
         }, { status: 409 })
       }
 

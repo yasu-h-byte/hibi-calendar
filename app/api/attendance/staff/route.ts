@@ -74,10 +74,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No sites available' }, { status: 404 })
     }
 
-    const now = new Date()
-    const y = now.getFullYear()
-    const m = now.getMonth() + 1
-    const d = now.getDate()
+    // 2026-08-27 修正（休暇届総点検）: Vercel は UTC のため、JST 0〜9時に「今日」が
+    //   前日になり、欠勤届の初期日付が前日を指して確定済み出勤を上書きし得た
+    const { todayJstIso } = await import('@/lib/date-utils')
+    const tIso = todayJstIso()
+    const now = new Date(tIso + 'T00:00:00')  // 後続の期間計算も JST 当日基準
+    const y = Number(tIso.slice(0, 4))
+    const m = Number(tIso.slice(5, 7))
+    const d = Number(tIso.slice(8, 10))
     const ym = ymKey(y, m)
 
     // Read attendance data
@@ -417,13 +421,18 @@ export async function POST(request: NextRequest) {
     // 2026-08-27 追加（有給総点検・第3回）: 入力可能な日付範囲を制限。
     //   year/month/day は body で任意指定できたため、トークンさえあれば
     //   未来日や遠い過去日へ API 直叩きで書き込めた（UI は今日+過去5日のみ）。
-    //   未来日は不可・過去は14日前まで（多少の余裕を持たせた運用値）。
+    //   過去は14日前まで。未来日は原則不可だが、**欠勤届(rest)だけは+30日まで許可**
+    //   （「明日休みます」の事前届は 2026-07-30 実装の正規機能。当初ガードが
+    //   一律拒否で回帰させていたのを同日中に修正）。
     {
       const { todayJstIso, addDaysIso } = await import('@/lib/date-utils')
       const dateIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
       const today = todayJstIso()
-      if (dateIso > today) {
-        return NextResponse.json({ error: '未来の日付には入力できません / Không thể nhập cho ngày trong tương lai' }, { status: 400 })
+      const futureLimit = choice === 'rest' ? addDaysIso(today, 30) : today
+      if (dateIso > futureLimit) {
+        return NextResponse.json({ error: choice === 'rest'
+          ? '欠勤届は30日先まで提出できます / Đơn xin nghỉ chỉ nộp được trước tối đa 30 ngày'
+          : '未来の日付には入力できません / Không thể nhập cho ngày trong tương lai' }, { status: 400 })
       }
       if (dateIso < addDaysIso(today, -14)) {
         return NextResponse.json({ error: '2週間より前の日付は変更できません。職長に依頼してください / Không thể thay đổi ngày quá 2 tuần trước' }, { status: 400 })
@@ -456,14 +465,14 @@ export async function POST(request: NextRequest) {
         const conflictSiteName = found?.name || conflict.conflictSiteId
         const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
         return NextResponse.json({
-          error: `既に「${conflictSiteName}」（${shiftLabel}）で同日の出面が登録されています。職長に依頼してください。`,
+          error: `既に「${conflictSiteName}」（${shiftLabel}）で同日の出面が登録されています。職長に依頼してください。 / Ngày này đã có chấm công tại "${conflictSiteName}". Vui lòng nhờ tổ trưởng.`,
           conflictSiteId: conflict.conflictSiteId,
           conflictSiteName,
         }, { status: 409 })
       }
     } catch (e) {
       console.error('Multi-site guard error (staff):', e)
-      return NextResponse.json({ error: 'ガード判定に失敗しました' }, { status: 503 })
+      return NextResponse.json({ error: 'ガード判定に失敗しました。もう一度お試しください / Kiểm tra thất bại. Vui lòng thử lại' }, { status: 503 })
     }
 
     // Build entry

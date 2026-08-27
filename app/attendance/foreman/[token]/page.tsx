@@ -102,7 +102,7 @@ export default function ForemanAttendancePage() {
     if (!data || saving) return
     setSaving(true)
     try {
-      await fetch('/api/attendance/foreman', {
+      const res = await fetch('/api/attendance/foreman', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -113,6 +113,11 @@ export default function ForemanAttendancePage() {
           day: data.date.day,
         }),
       })
+      // 失敗（ロック済み等）を必ず表示（2026-08-27 休暇届総点検）
+      if (!res.ok) {
+        const d = await res.json().catch(() => null)
+        alert(d?.error || `確認に失敗しました (${res.status})`)
+      }
       fetchData()
     } finally {
       setSaving(false)
@@ -123,7 +128,7 @@ export default function ForemanAttendancePage() {
     if (!data || !editingWorker || saving) return
     setSaving(true)
     try {
-      await fetch('/api/attendance/foreman', {
+      const res = await fetch('/api/attendance/foreman', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -137,6 +142,11 @@ export default function ForemanAttendancePage() {
           overtimeHours: choice === 'work' ? editOT : 0,
         }),
       })
+      if (!res.ok) {
+        const d = await res.json().catch(() => null)
+        alert(d?.error || `変更に失敗しました (${res.status})`)
+        return
+      }
       setEditingWorker(null)
       setEditOT(0)
       fetchData()
