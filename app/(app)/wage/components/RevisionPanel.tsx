@@ -3,7 +3,7 @@
 /**
  * 日本人社員の賃金改定（docs/wage-system.md 第4節・基準日 毎年10月1日）
  *
- * 評価を入力し、号俸表・年齢調整・利益調整から改定額を出して人員マスタへ反映する。
+ * 評価を入力し、号俸表・年齢調整・特別調整から改定額を出して人員マスタへ反映する。
  * 下書きは Firestore に保存されるので、決算の数字が出るまで置いておける。
  *
  * ⚠️ 個人の賃金を一覧するため、代表（0）と事業責任者（1）以外には表示しない。
@@ -507,7 +507,7 @@ export default function RevisionPanel() {
       )}
 
       <p className="text-[11px] text-gray-400">
-        号俸表・評語・年齢調整・利益調整・特別調整の定義は <code>docs/wage-system.md</code>。
+        号俸表・評語・年齢調整・特別調整の定義は <code>docs/wage-system.md</code>。
         在籍{data.meta.firstRevisionMinMonths}ヶ月未満の方は初回改定の対象外です（個別に含めることもできます）。
       </p>
     </div>

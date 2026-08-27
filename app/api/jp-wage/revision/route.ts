@@ -16,9 +16,10 @@ import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
 import { updateWorker } from '@/lib/worker-crud'
 import {
-  computeRosterRevision, nextRevisionDate, dailyForStep,
+  computeRosterRevision, nextRevisionDate, lastRevisionDate, dailyForStep,
   SPECIAL_REASONS, HYOGO_PITCH, FIRST_REVISION_MIN_MONTHS,
   type RosterMember, type Hyogo, type JpGrade,
+  TOTAL_PAID_DAYS,
 } from '@/lib/jp-wage'
 import { MIGRATION_2026 } from '@/lib/jp-wage-migration'
 import { todayJstIso } from '@/lib/date-utils'
@@ -52,7 +53,7 @@ interface RevisionDoc {
 const DEFAULT_ENTRY: Entry = { hyogo: 'A' }
 
 function effectiveOf(request: NextRequest): string {
-  return request.nextUrl.searchParams.get('effective') || nextRevisionDate(todayJstIso())
+  return request.nextUrl.searchParams.get('effective') || ''
 }
 
 async function loadDoc(effective: string): Promise<RevisionDoc> {
@@ -98,7 +99,25 @@ async function buildRoster(effective: string, entries: Record<string, Entry>) {
 
 export async function GET(request: NextRequest) {
   { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ（2026-08-27）
-  const effective = effectiveOf(request)
+  // 既定の表示対象（2026-08-27 修正・給与総点検）:
+  //   旧: 常に「次回の基準日」→ 10/2 以降は確定したばかりの改定が画面から消え、
+  //   翌年の空下書き（全員A）に切り替わっていた。誤ってそれを確定すると
+  //   翌年分を1年前倒しで全員A確定できてしまう危険もあった。
+  //   新: 次回まで60日以内なら次回（下書き作成期間）。それ以外は、直近の基準日の
+  //   ドキュメントが存在すればそれ（確定済みの閲覧）、無ければ次回。
+  let effective = effectiveOf(request)
+  if (!effective) {
+    const today = todayJstIso()
+    const next = nextRevisionDate(today)
+    const last = lastRevisionDate(today)
+    const daysToNext = Math.round((Date.parse(next) - Date.parse(today)) / 86400000)
+    if (daysToNext <= 60) {
+      effective = next
+    } else {
+      const lastSnap = await getDoc(doc(db, 'jpWageRevisions', last))
+      effective = lastSnap.exists() ? last : next
+    }
+  }
   const docData = await loadDoc(effective)
   const { members } = await buildRoster(effective, docData.entries)
   const revision = computeRosterRevision(members, { asOf: effective })
@@ -195,10 +214,21 @@ export async function POST(request: NextRequest) {
     blockers: r.blockers,
   }))
 
-  // 人員マスタへ反映。号が動いた人だけ触る
+  // 人員マスタへ反映。号が動いた人だけ触る。
+  // 2026-08-27 追加（給与総点検）: 冪等化。確定処理が途中失敗した後の再実行で、
+  //   前回反映済みの人（jpStep と rate が既に新値）にもう一度ピッチが乗る
+  //   「二重昇給」を防ぐ。マスタの現在値と付き合わせてから書く
+  const { getWorkers } = await import('@/lib/workers')
+  const currentWorkers = await getWorkers()
   const applied: string[] = []
+  const skippedAlready: string[] = []
   for (const r of revision.rows) {
     if (r.status !== 'ok' || !r.result || r.result.raisePerDay === 0) continue
+    const cur = currentWorkers.find(w => w.id === r.member.id)
+    if (cur && cur.jpStep === r.result.newStep && cur.rate === r.newTotal) {
+      skippedAlready.push(r.member.name)
+      continue
+    }
     await updateWorker(r.member.id, {
       jpStep: r.result.newStep,
       rate: r.newTotal!,   // 号俸額＋調整給。日額は下げない
@@ -214,7 +244,7 @@ export async function POST(request: NextRequest) {
     const cur = await getDoc(ref)
     const points = (cur.exists() ? ((cur.data() as { points?: { year: number; baseAnnual: number }[] }).points || []) : [])
       .filter(p => p.year !== fiscalYear)
-    points.push({ year: fiscalYear, baseAnnual: r.newTotal * 310 })
+    points.push({ year: fiscalYear, baseAnnual: r.newTotal * TOTAL_PAID_DAYS })
     points.sort((a, b) => a.year - b.year)
     await setDoc(ref, { workerId: r.member.id, points, updatedAt: new Date().toISOString() })
   }

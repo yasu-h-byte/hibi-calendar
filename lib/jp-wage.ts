@@ -591,6 +591,12 @@ export function computeRosterRevision(
  * 年齢調整はこの日の満年齢で決まる。画面に「◯歳」を出すときは必ずこの日を基準にする
  * （今日の年齢を出すと、10月1日をまたぐ人の表示と実際の改定額が食い違う）。
  */
+/** 直近の（今日以前で最後の）改定基準日 10/1 を返す（2026-08-27 追加） */
+export function lastRevisionDate(todayIso: string): string {
+  const y = Number(todayIso.slice(0, 4))
+  return todayIso >= `${y}-10-01` ? `${y}-10-01` : `${y - 1}-10-01`
+}
+
 export function nextRevisionDate(todayIso: string): string {
   const year = Number(todayIso.slice(0, 4))
   const oct = `${year}-10-01`

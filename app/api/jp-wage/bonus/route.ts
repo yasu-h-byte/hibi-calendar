@@ -16,7 +16,7 @@ import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
-import { allocateBonus, nextRevisionDate, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
+import { allocateBonus, nextRevisionDate, lastRevisionDate, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
 import { todayJstIso } from '@/lib/date-utils'
 
 export const dynamic = 'force-dynamic'
@@ -42,12 +42,22 @@ export async function GET(request: NextRequest) {
   snap.forEach(d => records.push({ id: d.id, ...(d.data() as Omit<BonusRecord, 'id'>) }))
   records.sort((a, b) => b.paidOn.localeCompare(a.paidOn))
 
-  // 評語は年次改定で決めたものを初期値にする。賞与と昇給で別の評価を付けない
-  const effective = nextRevisionDate(todayJstIso())
-  const revSnap = await getDoc(doc(db, 'jpWageRevisions', effective))
-  const entries = revSnap.exists()
-    ? ((revSnap.data() as { entries?: Record<string, { hyogo?: Hyogo }> }).entries || {})
-    : {}
+  // 評語は年次改定で決めたものを初期値にする。賞与と昇給で別の評価を付けない。
+  // 2026-08-27 修正（給与総点検）: 取得元を「直近の基準日 → 無ければ次回の下書き」に。
+  //   旧: 常に次回基準日を見ていたため、10/1 を過ぎた冬季賞与（12月）で
+  //   確定したばかりの評語が読まれず全員デフォルトAになっていた
+  const today = todayJstIso()
+  const candidates = [lastRevisionDate(today), nextRevisionDate(today)]
+  let effective = candidates[0]
+  let entries: Record<string, { hyogo?: Hyogo }> = {}
+  for (const cand of candidates) {
+    const revSnap = await getDoc(doc(db, 'jpWageRevisions', cand))
+    if (revSnap.exists()) {
+      entries = (revSnap.data() as { entries?: Record<string, { hyogo?: Hyogo }> }).entries || {}
+      effective = cand
+      break
+    }
+  }
   const hyogo: Record<string, Hyogo> = {}
   for (const [id, e] of Object.entries(entries)) if (e.hyogo) hyogo[id] = e.hyogo
 

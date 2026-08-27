@@ -147,7 +147,10 @@ function SheetBody() {
       {targets.map(f => {
         const fig = paySheetFigures(f.newDaily!, f.oldDaily!)
         const hist = data.history?.[String(f.workerId)] ?? []
-        const points = [...hist, { year: fy - 1, baseAnnual: fig.baseAnnual }]
+        // 2026-08-27 修正（給与総点検）: 補完点の年度が1年ズレていた。
+        //   新年収(baseAnnual)は改定年度 fy の点、前年 fy-1 には改定前年収(prevBaseAnnual)。
+        //   履歴に同年度の点が既にあれば dedupe（先勝ち）で履歴側を採用する
+        const points = [...hist, { year: fy - 1, baseAnnual: fig.prevBaseAnnual }, { year: fy, baseAnnual: fig.baseAnnual }]
           .filter((p, i, a) => a.findIndex(x => x.year === p.year) === i)
           .sort((a, b) => a.year - b.year)
         const gradeLabel = GRADE_LABELS[f.grade as JpGrade] ?? f.grade
