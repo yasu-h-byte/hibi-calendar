@@ -92,9 +92,22 @@ export async function GET(request: NextRequest) {
       summary.errors.push('demmen/main not found')
     }
 
-    // (2) 前月・当月・翌月の att_YYYYMM をスナップショット
-    for (const offset of [-1, 0, 1]) {
-      const ym = relativeYm(now, offset)
+    // (2) 前月・当月・翌月の att_YYYYMM をスナップショット。
+    //     2026-08-27 追加（バックアップ実効性検証）: **日曜は全期間の att_ を退避**。
+    //     旧: 3ヶ月窓のみで、過去月の doc が事故で消えると復元手段が無かった
+    //     （5月の事故は当月だったから救えたが、過去月なら詰みだった）。
+    //     30日保持なので日曜分は常に直近4〜5世代残る。
+    const isSundayJst = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' })).getDay() === 0
+    const attYms = new Set<string>([-1, 0, 1].map(o => relativeYm(now, o)))
+    if (isSundayJst) {
+      // demmen コレクションから att_ ドキュメントを列挙
+      const demmenSnap = await getDocs(collection(db, 'demmen'))
+      demmenSnap.forEach(d => {
+        const m = /^att_(\d{6})$/.exec(d.id)
+        if (m) attYms.add(m[1])
+      })
+    }
+    for (const ym of [...attYms].sort()) {
       const attSnap = await getDoc(doc(db, 'demmen', `att_${ym}`))
       if (attSnap.exists()) {
         await setDoc(doc(db, 'backups', `att_${ym}_${stamp}`), {
@@ -150,6 +163,13 @@ export async function GET(request: NextRequest) {
     await snapshotCollection('evaluations', 'evals')            // 人事評価
     await snapshotCollection('siteCalendar', 'sitecal')         // 承認済みカレンダー本体
     await snapshotCollection('activityLog', 'actlog')           // 操作ログ（500件ローテーションの退避）
+    // 2026-08-27 追加（バックアップ実効性検証）: 8月に新設した給与・賃金系の穴を塞ぐ
+    await snapshotCollection('payrollSnapshots', 'paysnap')     // 締めスナップショット（給与確定の証跡）
+    await snapshotCollection('jpWageRevisions', 'jprev')        // 号俸制の年次改定（評語・凍結給料表）
+    await snapshotCollection('jpWageHistory', 'jphist')         // ベース年収履歴
+    await snapshotCollection('jpBonuses', 'jpbonus')            // 賞与支給記録
+    await snapshotCollection('jpPromotions', 'jpprom')          // 昇格履歴
+    await snapshotCollection('calendarSignLog', 'csignlog')     // 署名の恒久台帳（append-only の正本）
 
     // (2d) demmen/toolBudget（道具代の購入記録＝金銭データ）を退避
     try {

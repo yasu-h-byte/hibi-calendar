@@ -107,9 +107,46 @@ export async function POST(request: NextRequest) {
   if (!ds.exists()) return NextResponse.json({ error: 'snapshot not found' }, { status: 404 })
   const backup = ds.data() as { sourceId: string; data: Record<string, unknown> }
 
-  // 復元前に現状をもう一度バックアップ（差し戻し用）
   const safetyStamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const safetyRef = doc(db, 'backups', `safety_pre_restore_${safetyStamp}`)
+
+  // ── コレクション型バックアップ（sourceId にスラッシュ無し: leaveRequests 等）の復元 ──
+  // 2026-08-27 追加（バックアップ実効性検証）: 従来はドキュメント型しか復元できず、
+  //   コレクション退避（leavereq/homeleave/paysnap 等）は「取れるが戻せない」片道だった。
+  //   data.docs[] を各ドキュメントへ書き戻す。
+  //   - overwrite: バックアップ内の全 doc を setDoc（存在しない doc も復活）
+  //   - merge:     現在存在しない doc のみ復活（既存 doc は一切触らない）
+  if (!backup.sourceId.includes('/')) {
+    const collName = backup.sourceId.replace(/\(.*\)$/, '')  // 'calendarSign(2026-08)' → 'calendarSign'
+    const docsArr = (backup.data as { docs?: ({ id: string } & Record<string, unknown>)[] }).docs
+    if (!Array.isArray(docsArr)) {
+      return NextResponse.json({ error: 'このスナップショットは docs 配列を持たないため復元できません' }, { status: 400 })
+    }
+    // safety: 現在のコレクション全体を同形式で退避
+    const curSnap = await getDocs(query(collection(db, collName), limit(2000)))
+    await setDoc(safetyRef, {
+      sourceId: backup.sourceId,
+      snapshotAt: new Date().toISOString(),
+      reason: `safety backup before restore from ${snapshotId}`,
+      count: curSnap.docs.length,
+      data: { docs: curSnap.docs.map(d => ({ id: d.id, ...d.data() })) },
+    })
+    const existingIds = new Set(curSnap.docs.map(d => d.id))
+    let restored = 0
+    let skipped = 0
+    for (const item of docsArr) {
+      const { id: itemId, ...payload } = item
+      if (!itemId) continue
+      if (mode === 'merge' && existingIds.has(itemId)) { skipped++; continue }
+      await setDoc(doc(db, collName, itemId), payload)
+      restored++
+    }
+    await logActivity(actor, 'backup.restore',
+      `${snapshotId} を ${mode} で復元（コレクション ${collName}: ${restored}件復元/${skipped}件スキップ, safety: ${safetyRef.id}）`)
+    return NextResponse.json({ success: true, restoredFrom: snapshotId, mode, collection: collName, restored, skipped, safetyBackup: safetyRef.id })
+  }
+
+  // ── ドキュメント型バックアップ（sourceId: 'demmen/main' 等）の復元 ──
   const currentRef = doc(db, backup.sourceId.split('/')[0], backup.sourceId.split('/')[1])
   const currentSnap = await getDoc(currentRef)
   if (currentSnap.exists()) {
