@@ -69,12 +69,17 @@ export default function RequestsTab({
     try {
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
-      await fetch('/api/leave-request', {
+      const res = await fetch('/api/leave-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({ action: 'foreman_approve', requestId: id, foremanId: user?.workerId || 0 }),
       })
+      // 失敗（権限なし・処理済み等）を必ず表示する（個別最終承認と同方式 2026-08-27）
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        alert(err?.error || `職長承認に失敗しました (${res.status})`)
+      }
       onRefresh()
-    } catch {} finally { patchUi({ processingReq: null }) }
+    } catch { alert('通信エラーが発生しました') } finally { patchUi({ processingReq: null }) }
   }
   const handleApprove = async (id: string) => {
     patchUi({ processingReq: id })
@@ -113,13 +118,19 @@ export default function RequestsTab({
     try {
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
-      await fetch('/api/leave-request', {
+      const res = await fetch('/api/leave-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({ action: 'reject', requestId: id, rejectedBy: user?.workerId || 0, reason: rejectReason }),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        alert(err?.error || `却下に失敗しました (${res.status})`)
+        // 失敗時は入力（却下理由）を消さない
+        return
+      }
       patchUi({ rejectingId: null, rejectReason: '' })
       onRefresh()
-    } catch {} finally { patchUi({ processingReq: null }) }
+    } catch { alert('通信エラーが発生しました') } finally { patchUi({ processingReq: null }) }
   }
   // 承認済み有給の日付変更（誤申請修正用、admin/approver のみ）
   const handleModifyDate = async (id: string, newDate: string) => {
@@ -164,7 +175,7 @@ export default function RequestsTab({
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
       const wid = user?.workerId || 0
-      await Promise.all(ids.map(id => fetch('/api/leave-request', {
+      const post = (id: string, extra: Record<string, unknown> = {}) => fetch('/api/leave-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({
           action,
@@ -172,11 +183,46 @@ export default function RequestsTab({
           ...(action === 'foreman_approve' ? { foremanId: wid } : {}),
           ...(action === 'approve' ? { approvedBy: wid } : {}),
           ...(action === 'reject' ? { rejectedBy: wid, reason: opts.reason || '' } : {}),
+          ...extra,
         }),
-      })))
-      if (action === 'reject') { patchUi({ rejectingId: null, rejectReason: '' }) }
+      })
+      // 2026-08-27 修正（有給総点検・第3回）: 旧実装は投げっぱなしで、残数不足(409)や
+      //   月次ロックの拒否を無言でスキップしていた（帰国に伴う15件一括などで
+      //   「一部だけ承認されず理由不明」になる）。失敗を集計して必ず表示する
+      const results = await Promise.all(ids.map(async id => ({ id, res: await post(id) })))
+      const failures: { id: string; error: string }[] = []
+      const overdrafts: string[] = []
+      for (const { id, res } of results) {
+        if (res.ok) continue
+        const err = await res.json().catch(() => null)
+        if (res.status === 409 && err?.code === 'LEAVE_OVERDRAFT') overdrafts.push(id)
+        else failures.push({ id, error: err?.error || `HTTP ${res.status}` })
+      }
+      // 残数超過は個別承認と同じく、確認のうえ超過承認で再実行できる
+      if (overdrafts.length > 0 && action === 'approve') {
+        const over = confirm(`${overdrafts.length}件が有給残の不足で承認できませんでした。\n残数を超えて承認しますか？（記録に残ります）`)
+        if (over) {
+          const retry = await Promise.all(overdrafts.map(async id => ({ id, res: await post(id, { allowOverdraft: true }) })))
+          for (const { id, res } of retry) {
+            if (!res.ok) {
+              const err = await res.json().catch(() => null)
+              failures.push({ id, error: err?.error || `HTTP ${res.status}` })
+            }
+          }
+        } else {
+          failures.push(...overdrafts.map(id => ({ id, error: '残数不足のためスキップ' })))
+        }
+      } else if (overdrafts.length > 0) {
+        failures.push(...overdrafts.map(id => ({ id, error: '残数不足' })))
+      }
+      if (failures.length > 0) {
+        alert(`${ids.length}件中 ${failures.length}件が失敗しました:\n` +
+          failures.slice(0, 5).map(f => `・${f.error}`).join('\n') +
+          (failures.length > 5 ? `\n…他${failures.length - 5}件` : ''))
+      }
+      if (action === 'reject' && failures.length === 0) { patchUi({ rejectingId: null, rejectReason: '' }) }
       onRefresh()
-    } catch {} finally { patchUi({ processingReq: null }) }
+    } catch { alert('通信エラーが発生しました') } finally { patchUi({ processingReq: null }) }
   }
   // 申請を「スタッフ + status + reason」でグループ化
   // 同一条件のものを集約してまとめて承認/却下できるようにする。

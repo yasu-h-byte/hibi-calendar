@@ -61,11 +61,11 @@ export default function CalendarTab({ visible, plCalendar, workerNames }: Props)
                   const hasPL = plWorkers.length > 0
 
                   let bgClass = ''
-                  if (hasPL) bgClass = 'bg-yellow-200'
-                  else if (dow === 0 || isHoliday) bgClass = 'bg-red-50'
-                  else if (dow === 6) bgClass = 'bg-blue-50'
+                  if (hasPL) bgClass = 'bg-yellow-200 dark:bg-yellow-700/40'
+                  else if (dow === 0 || isHoliday) bgClass = 'bg-red-50 dark:bg-red-900/20'
+                  else if (dow === 6) bgClass = 'bg-blue-50 dark:bg-blue-900/20'
 
-                  const textClass = isHoliday ? 'text-red-500' : dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : 'text-gray-700'
+                  const textClass = isHoliday ? 'text-red-500' : dow === 0 ? 'text-red-400' : dow === 6 ? 'text-blue-400' : 'text-gray-700 dark:text-gray-200'
 
                   return (
                     <div

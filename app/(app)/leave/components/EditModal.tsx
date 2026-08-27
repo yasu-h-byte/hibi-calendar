@@ -233,13 +233,21 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
               // 日本人社員は繰越強制0
               const isJp = !worker.visa || worker.visa === 'none'
               const payload = { ...editForm, ...(isJp ? { carryOver: '0' } : {}) }
-              await fetch('/api/leave', {
+              // fy は編集後の付与日から算出（旧: 編集前の日付 → 年またぎ修正で
+              //   fy と grantDate が食い違うレコードができていた 2026-08-27）
+              const fyBase = (editForm as { grantDate?: string }).grantDate || worker.grantDate
+              const res = await fetch('/api/leave', {
                 method: 'POST',
                 headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ workerId: worker.id, fy: worker.grantDate ? worker.grantDate.slice(0, 4) : String(new Date().getFullYear()), ...payload }),
+                body: JSON.stringify({ workerId: worker.id, fy: fyBase ? fyBase.slice(0, 4) : String(new Date().getFullYear()), ...payload }),
               })
+              if (!res.ok) {
+                const err = await res.json().catch(() => null)
+                alert(err?.error || `保存に失敗しました (${res.status})`)
+                return
+              }
               onSaved()
-            } finally { setSaving(false) }
+            } catch { alert('通信エラーが発生しました') } finally { setSaving(false) }
           }} className="flex-1 bg-hibi-navy text-white rounded-lg py-2.5 font-bold text-sm disabled:opacity-50">
             {saving ? '保存中...' : '保存'}
           </button>

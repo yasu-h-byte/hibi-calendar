@@ -104,7 +104,8 @@ export default function DesignateModal({ worker, kind, sites, password, onClose,
           <button
             disabled={designateSubmitting || designateDates.filter(d => !!d).length === 0 || !designateSiteId}
             onClick={async () => {
-              const validDates = designateDates.filter(d => !!d)
+              // 同じ日の重複入力は1件に（2026-08-27）
+              const validDates = [...new Set(designateDates.filter(d => !!d))]
               const label = kind === 'designation' ? '時季指定' : '有給として記録'
               const msg = `${worker.name}さんに以下の日を${label}しますか？\n${validDates.join('\n')}\n\n出面にPが自動入力され、履歴が記録されます。${designateOverwriteHomeLeave ? '\n\n⚠️ 既存の帰国マーカーは削除されます。' : ''}`
               if (!confirm(msg)) return

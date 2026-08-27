@@ -1,6 +1,7 @@
 'use client'
 
 import { PLWorker } from '../types'
+import { addMonthsSafe } from '@/lib/date-utils'
 
 // 基準日タブ（閲覧専用: 各スタッフの有給発生月／基準日・次回付与日）
 
@@ -15,8 +16,9 @@ export default function GrantDatesTab({ visible, filteredWorkers }: Props) {
   const parseYMD = (s: string) => { const [y, m, d] = (s || '').split('-').map(Number); return { y, m, d } }
   // 発生月（基準日）: 当年度レコードの付与日から「毎年○月○日」
   const fmtBasis = (gd: string) => { if (!gd) return '—'; const { m, d } = parseYMD(gd); return `毎年 ${m}月${d}日` }
-  // 次回付与日 = 当年度付与日 + 1年（付与は年1回・年次）
-  const fmtNext = (gd: string) => { if (!gd) return '—'; const { y, m, d } = parseYMD(gd); return `${y + 1}/${String(m).padStart(2, '0')}/${String(d).padStart(2, '0')}` }
+  // 次回付与日 = 当年度付与日 + 1年（付与は年1回・年次）。
+  //   addMonthsSafe で 2/29 付与も実在日に丸める（旧: 文字列+1で 2/29 のまま表示）
+  const fmtNext = (gd: string) => { if (!gd) return '—'; return addMonthsSafe(gd, 12).replace(/-/g, '/') }
   // 法定起算月: grantMonth 指定があればその月、無ければ 入社日+6ヶ月 の月
   const legalMonth = (w: PLWorker): number | null => {
     if (w.grantMonth) return w.grantMonth

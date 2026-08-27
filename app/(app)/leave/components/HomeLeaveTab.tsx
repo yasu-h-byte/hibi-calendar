@@ -161,9 +161,16 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
         if (retry.ok) {
           patchUi({ formOpen: false, formWorkerId: '', formStart: '', formEnd: '', formReason: '一時帰国', formNote: '', formUndecided: false })
           onRefresh()
+          return
         }
+        const rerr = await retry.json().catch(() => null)
+        alert(rerr?.error || `登録に失敗しました (${retry.status})`)
+        return
       }
-    } finally { setHlSaving(false) }
+      // 409以外の失敗（検証エラー・500等）も理由を表示する（旧: 無言でスピナーだけ止まる）
+      const err = await res.json().catch(() => null)
+      alert(err?.error || `登録に失敗しました (${res.status})`)
+    } catch { alert('通信エラーが発生しました') } finally { setHlSaving(false) }
   }
   const startHlEdit = (h: HomeLeave) => {
     patchUi({ editingId: h.id, editStart: h.startDate, editEnd: isUndecided(h) ? '' : h.endDate, editReason: h.reason, editNote: h.note || '', editUndecided: isUndecided(h) })
@@ -209,9 +216,14 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
             note: ui.editNote,
           }),
         })
-        if (retry.ok) { cancelHlEdit(); onRefresh() }
+        if (retry.ok) { cancelHlEdit(); onRefresh(); return }
+        const rerr = await retry.json().catch(() => null)
+        alert(rerr?.error || `更新に失敗しました (${retry.status})`)
+        return
       }
-    } finally { setHlSaving(false) }
+      const err = await res.json().catch(() => null)
+      alert(err?.error || `更新に失敗しました (${res.status})`)
+    } catch { alert('通信エラーが発生しました') } finally { setHlSaving(false) }
   }
   const handleHlDelete = async (id: string) => {
     setHlSaving(true)
@@ -224,8 +236,11 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       if (res.ok) {
         patchUi({ deleteConfirm: null })
         onRefresh()
+        return
       }
-    } finally { setHlSaving(false) }
+      const err = await res.json().catch(() => null)
+      alert(err?.error || `削除に失敗しました (${res.status})`)
+    } catch { alert('通信エラーが発生しました') } finally { setHlSaving(false) }
   }
 
   const renderHlCard = (h: HomeLeave, section: 'current' | 'upcoming') => {

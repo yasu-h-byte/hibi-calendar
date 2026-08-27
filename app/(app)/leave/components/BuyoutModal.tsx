@@ -69,6 +69,15 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
             disabled={buyoutSubmitting || !buyoutForm.days || Number(buyoutForm.days) <= 0}
             onClick={async () => {
               const days = Number(buyoutForm.days)
+              // 2026-08-27 追加: 注記どおり残日数の範囲内に制限（旧: >0 のみで超過買取が送れた）
+              if (days > worker.remaining) {
+                alert(`買取日数（${days}日）が残日数（${worker.remaining}日）を超えています`)
+                return
+              }
+              if (buyoutForm.amount && Number(buyoutForm.amount) < 0) {
+                alert('金額に負の値は入力できません')
+                return
+              }
               if (!confirm(`${worker.name}さんの有給 ${days}日を買取記録しますか？\n理由: ${buyoutForm.reason === 'year-end' ? '期末買取' : buyoutForm.reason === 'retirement' ? '退職時清算' : 'その他'}${buyoutForm.amount ? `\n金額: ¥${Number(buyoutForm.amount).toLocaleString()}` : ''}`)) return
               setBuyoutSubmitting(true)
               try {

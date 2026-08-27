@@ -72,7 +72,9 @@ export default function LeaveRequestModal({
 
   // 2026-06-XX 追加: 申請日数を計算（日曜以外）
   const requestedDays = (() => {
-    if (!dateFrom || !dateTo) return 0
+    // 終了日が空なら開始日1日分として数える（旧: 0扱いで超過チェックが素通りしていた）
+    if (!dateFrom) return 0
+    if (!dateTo) return 1
     const from = new Date(dateFrom + 'T00:00:00')
     const to = new Date(dateTo + 'T00:00:00')
     if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) return 0

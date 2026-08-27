@@ -61,7 +61,7 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
     }
     setSaving(true)
     try {
-      await fetch('/api/leave', {
+      const res = await fetch('/api/leave', {
         method: 'POST',
         headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,10 +73,17 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
           grantDate: grantForm.grantDate,
         }),
       })
+      // 2026-08-27 修正: 失敗（重複・検証エラー等）を成功扱いにしない。
+      //   付与日数は支給額に直結するため、失敗時はフォームを保持して理由を表示する
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        alert(err?.error || `付与に失敗しました (${res.status})`)
+        return
+      }
       setGrantForm({ workerId: '', grantDays: '10', grantMonth: '', grantDate: '' })
       setLegalPLInfo(null)
       onSaved()
-    } finally { setSaving(false) }
+    } catch { alert('通信エラーが発生しました') } finally { setSaving(false) }
   }
 
   if (!open) return null

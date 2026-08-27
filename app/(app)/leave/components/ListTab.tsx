@@ -101,7 +101,8 @@ export default function ListTab({ visible, filteredWorkers, loading, onEdit, asO
           ) : filteredWorkers.length === 0 ? (
             <tr><td colSpan={7} className="px-3 py-10 text-center text-gray-400">対象者がいません</td></tr>
           ) : filteredWorkers.map(w => {
-            const rate = w.total > 0 ? (w.used / w.total * 100) : 0
+            // 基準日モードでは全指標を基準日時点で揃える（旧: バーとドットだけ今日基準で混在）
+            const rate = w.total > 0 ? (usedOf(w) / w.total * 100) : 0
             const hasCarryOver = (w.carryOverRemaining ?? 0) > 0 && !!w.carryOverExpiryDate
             // ── 総合ステータス判定 (🟢 ok / 🟡 注意 / 🔴 警告) ──
             let statusColor = 'bg-emerald-500'
@@ -109,7 +110,7 @@ export default function ListTab({ visible, filteredWorkers, loading, onEdit, asO
             if (w.expiryStatus === 'expired' || w.carryOverExpiryStatus === 'expired') {
               statusColor = 'bg-red-500'
               statusLabel = '要対応'
-            } else if (w.remaining <= 3 || w.carryOverExpiryStatus === 'warning' || w.expiryStatus === 'warning') {
+            } else if (remOf(w) <= 5 || w.carryOverExpiryStatus === 'warning' || w.expiryStatus === 'warning') {
               statusColor = 'bg-amber-500'
               statusLabel = '注意'
             }

@@ -94,20 +94,28 @@ export default function PendingGrantsModal({ open, pendingGrants, pendingForm, s
             onClick={async () => {
               setPendingExecuting(true)
               try {
-                const grants = pendingGrants
-                  .filter(p => pendingForm[p.workerId]?.include)
-                  .map(p => {
-                    const f = pendingForm[p.workerId]
-                    const gd = new Date(f.grantDate)
-                    const fyYear = gd.getFullYear()
-                    return {
-                      workerId: p.workerId,
-                      fy: String(fyYear),
-                      grantDate: f.grantDate,
-                      grantDays: Number(f.grantDays) || 0,
-                    }
-                  })
-                  .filter(g => g.grantDays > 0)
+                const included = pendingGrants.filter(p => pendingForm[p.workerId]?.include)
+                // 2026-08-27 追加: 入力検証。付与日が空/不正・日数0以下の行は
+                //   無言でスキップせず、対象者名を挙げて実行前に止める
+                //   （旧: fy が "NaN" の壊れたレコードを送信 or 件数表示と実行数の食い違い）
+                const invalid = included.filter(p => {
+                  const f = pendingForm[p.workerId]
+                  return !/^\d{4}-\d{2}-\d{2}$/.test(f.grantDate || '') || !(Number(f.grantDays) > 0)
+                })
+                if (invalid.length > 0) {
+                  alert('付与日または日数が未入力・不正の行があります:\n' +
+                    invalid.map(p => `・${p.name}`).join('\n'))
+                  return
+                }
+                const grants = included.map(p => {
+                  const f = pendingForm[p.workerId]
+                  return {
+                    workerId: p.workerId,
+                    fy: f.grantDate.slice(0, 4),
+                    grantDate: f.grantDate,
+                    grantDays: Number(f.grantDays),
+                  }
+                })
                 if (grants.length === 0) return
                 const res = await fetch('/api/leave', {
                   method: 'POST',
