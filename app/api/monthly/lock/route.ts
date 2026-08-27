@@ -151,7 +151,10 @@ async function savePayrollSnapshot(ym: string, orgKey: 'hibi' | 'hfu' | 'all', l
     .map(w => ({
       id: w.id,
       name: w.name,
-      salaryNetPay: w.salaryNetPay || 0,
+      // 2026-08-27 修正（給与総点検）: 日本人日給月給は salaryNetPay を持たず netPay が
+      //   支給額。旧実装は 0 が保存され、締め後の変動（基本給・手当・運転手当）が
+      //   差分検出に一切かからなかった。netPay フォールバックで全員を検出対象にする
+      salaryNetPay: (w.salaryNetPay ?? w.netPay) || 0,
       totalCost: w.totalCost || 0,
     }))
   await setDoc(doc(db, 'payrollSnapshots', `${ym}_${orgKey}`), {

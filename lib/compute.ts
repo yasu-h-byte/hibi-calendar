@@ -1903,9 +1903,19 @@ export function computeMonthly(
       if (!usePayrollCost) {
         wm.cost += total
         wm.totalCost += total
+        // 出向中の日本人日給月給: 控除額(=出向先へ請求する人件費)にも手当分を反映。
+        //   実支給原価組(ベトナム人等)は後段の「原価=実支給」ブロックが手当込み pay で
+        //   dispatchDeduction を再設定するのに対し、こちらはエントリ積み上げ時点の
+        //   値のままだったため、手当分だけ控除漏れ=自社人件費過大になっていた（2026-08-27）
+        if (wm.isDispatched) {
+          wm.dispatchDeduction = (wm.dispatchDeduction || 0) + total
+        }
         for (const [sid, bs] of Object.entries(al.bySite)) {
           const site = siteMap.get(sid)
-          if (site) site.cost += bs.yen + (bs.driveYen || 0)
+          if (!site) continue
+          const amount = bs.yen + (bs.driveYen || 0)
+          site.cost += amount
+          if (wm.isDispatched) site.dispatchDeduction = (site.dispatchDeduction || 0) + amount
         }
       }
     }

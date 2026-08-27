@@ -78,32 +78,56 @@ export async function GET(request: NextRequest) {
   if (!snap.exists()) return NextResponse.json({ error: 'main not found' }, { status: 404 })
   const sites = (snap.data().sites || []) as Array<{ id: string; name: string; archived?: boolean; commute?: SiteCommuteData }>
 
-  const results: Record<string, number | null> = {}
-  let changed = false
-  const updated = sites.map(s => {
-    if (s.archived) return s
+  // 2026-08-27 修正（給与総点検）:
+  //   ① 朝夕そろったサンプルが規程の10営業日分たまったら自動測定を停止する
+  //      （旧: 凍結ボタンが押されるまで無期限に測定・課金が続き、規程の
+  //      「最初の10営業日」と判定材料が乖離していく）
+  //   ② 手入力(manual)サンプルを cron が上書きしない
+  //   ③ 書き戻しは「測定完了後に最新を読み直して該当現場だけ差し替え」方式にし、
+  //      Routes API 呼び出し中（数秒〜十数秒）の管理者編集を潰す競合窓を最小化する
+  const { COMMUTE_SAMPLE_TARGET } = await import('@/lib/allowance')
+  const measurable = sites.filter(s => {
+    if (s.archived) return false
     const c = s.commute
-    if (!c?.address || c.judgedMin !== undefined) return s
-    return s   // 実測は下の for で（map 内で await できないため印だけ）
+    if (!c?.address || c.judgedMin !== undefined) return false
+    const complete = (c.samples || []).filter(x => (x.am ?? 0) > 0 && (x.pm ?? 0) > 0).length
+    return complete < COMMUTE_SAMPLE_TARGET
   })
 
-  for (let i = 0; i < updated.length; i++) {
-    const s = updated[i]
-    const c = s.commute
-    if (s.archived || !c?.address || c.judgedMin !== undefined) continue
-    const origin = slot === 'am' ? ORIGIN_ADDRESS : c.address
-    const dest = slot === 'am' ? c.address : ORIGIN_ADDRESS
+  const results: Record<string, number | null> = {}
+  const measured = new Map<string, number>()
+  for (const s of measurable) {
+    const c = s.commute!
+    const addr = c.address || ''
+    const origin = slot === 'am' ? ORIGIN_ADDRESS : addr
+    const dest = slot === 'am' ? addr : ORIGIN_ADDRESS
     const min = await measureMinutes(apiKey, origin, dest)
     results[s.id] = min
-    if (min === null) continue
-    const samples: CommuteSample[] = [...(c.samples || [])]
-    const idx = samples.findIndex(x => x.date === todayIso)
-    if (idx >= 0) samples[idx] = { ...samples[idx], [slot]: min, source: 'auto' }
-    else samples.push({ date: todayIso, [slot]: min, source: 'auto' })
-    updated[i] = { ...s, commute: { ...c, samples } }
-    changed = true
+    if (min !== null) measured.set(s.id, min)
   }
 
-  if (changed) await updateDoc(ref, { sites: updated })
+  if (measured.size > 0) {
+    // 最新の sites を読み直してから該当現場のサンプルだけ差し替える
+    const snap2 = await getDoc(ref)
+    const fresh = (snap2.exists() ? snap2.data().sites || [] : []) as Array<{ id: string; archived?: boolean; commute?: SiteCommuteData }>
+    let changed = false
+    const updated = fresh.map(s => {
+      const min = measured.get(s.id)
+      const c = s.commute
+      if (min === undefined || s.archived || !c?.address || c.judgedMin !== undefined) return s
+      const samples: CommuteSample[] = [...(c.samples || [])]
+      const idx = samples.findIndex(x => x.date === todayIso)
+      if (idx >= 0) {
+        // 手入力済みの枠は尊重（管理者の判断を自動測定で潰さない）
+        if (samples[idx].source === 'manual' && samples[idx][slot] !== undefined) return s
+        samples[idx] = { ...samples[idx], [slot]: min }
+      } else {
+        samples.push({ date: todayIso, [slot]: min, source: 'auto' })
+      }
+      changed = true
+      return { ...s, commute: { ...c, samples } }
+    })
+    if (changed) await updateDoc(ref, { sites: updated })
+  }
   return NextResponse.json({ date: todayIso, slot, results })
 }

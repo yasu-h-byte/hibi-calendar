@@ -93,10 +93,15 @@ export async function GET(request: NextRequest) {
         const items: SnapDiffItem[] = []
         for (const w of result.workers) {
           if ((isHfuOrg(w.org) ? 'hfu' : 'hibi') !== orgKey) continue
-          const cur = w.salaryNetPay || 0
+          // 日本人日給月給は netPay が支給額（lock 側の保存値と同じフォールバック 2026-08-27）
+          const cur = (w.salaryNetPay ?? w.netPay) || 0
           const s = snapMap.get(w.id)
           snapMap.delete(w.id)
           const snapVal = s?.salaryNetPay || 0
+          // 後方互換: 2026-08-27 以前のスナップショットは日本人日給月給を 0 で保存している
+          //   （旧実装の取りこぼし）。旧スナップショットの 0 は「未記録」なので差分にしない
+          const isLegacySnap = (snapData.lockedAt || '') < '2026-08-28'
+          if (isLegacySnap && snapVal === 0) continue
           if (snapVal !== cur) items.push({ id: w.id, name: w.name, snapshot: snapVal, current: cur })
         }
         for (const s of snapMap.values()) {

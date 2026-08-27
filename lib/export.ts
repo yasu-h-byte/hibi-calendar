@@ -1,3 +1,4 @@
+import { ALLOWANCE_FROM_YM } from './allowance'
 import * as XLSX from 'xlsx'
 import {
   RawWorker,
@@ -814,7 +815,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const useNewRulesByMonth = ym >= '202605'
   // 遠方現場日当・運転手当（2026-10 施行）。施行前の月は列自体を出さない
   //   （過去月のExcelの列構成・列幅を1ミリも変えない＝奥寺さんの既存の見方を壊さない）
-  const withAllowance = ym >= '202610'
+  const withAllowance = ym >= ALLOWANCE_FROM_YM
   const isWorkerOldRules = (w: WorkerMonthly): boolean => {
     if (!useNewRulesByMonth) return true  // 月全体が旧ルール
     return (w as { useOldRules?: boolean }).useOldRules === true

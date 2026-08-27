@@ -202,8 +202,13 @@ export function calcMonthlyAllowances(
   for (const [key, entry] of Object.entries(attD)) {
     const p = key.split('_')
     const day = p[p.length - 1]
+    const keyYm = p[p.length - 2]
     const wid = Number(p[p.length - 3])
     const sid = p.slice(0, p.length - 3).join('_')
+    // 2026-08-27 追加（給与総点検）: キーの ym を検証。att ドキュメントに他月キーの
+    //   残骸が混入した事故歴があり（cleanup-attendance-residue.mjs 参照）、
+    //   computeMonthly は ym 不一致を弾くのに日当だけ支給される非対称があった
+    if (keyYm !== ym) continue
     if (excluded.has(wid)) continue
     if (!isAllowanceEligibleDay(entry)) continue
     const yen = dailyAllowanceYen(commutes[sid]?.judgedMin)
