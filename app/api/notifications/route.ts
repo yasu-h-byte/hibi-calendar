@@ -34,9 +34,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const now = new Date()
-    const currentYm = ymKey(now.getFullYear(), now.getMonth() + 1)
-    const today = now.getDate()
+    // JST基準の現在（2026-08-27: Vercel は UTC のため、JST 0〜9時に「前月扱い/日付が9時間遅れ」で
+    //   25日締切系の通知がズレていた）
+    const nowJstIso = todayJstIso()
+    const now = new Date(nowJstIso + 'T00:00:00')
+    const currentYm = nowJstIso.slice(0, 7).replace('-', '')
+    const today = Number(nowJstIso.slice(8, 10))
     const role = request.nextUrl.searchParams.get('role') || 'admin'
     const workerIdParam = request.nextUrl.searchParams.get('workerId')
     const requesterWorkerId = workerIdParam ? Number(workerIdParam) : null
