@@ -356,6 +356,11 @@ export default function WorkersPage() {
   const hibiCount = activeWorkers.filter(w => w.company !== 'HFU').length
   const hfuCount = activeWorkers.filter(w => w.company === 'HFU').length
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  // 職長はスタッフ入力画面ではなく職長画面へ（2026-08-28: 職長トークン配布に伴い追加）
+  const mobileUrl = (w: { token?: string; jobType?: string }) =>
+    (w.jobType === 'shokucho' || w.jobType === '職長')
+      ? `${baseUrl}/attendance/foreman/${w.token}`
+      : `${baseUrl}/attendance/${w.token}`
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -1261,7 +1266,7 @@ export default function WorkersPage() {
                     <code className="text-xs bg-white px-2 py-1 rounded border flex-1 truncate">{w.token}</code>
                     <button
                       onClick={() => {
-                        navigator.clipboard.writeText(`${baseUrl}/attendance/${w.token}`)
+                        navigator.clipboard.writeText(mobileUrl(w))
                         alert('URLをコピーしました')
                       }}
                       className="text-xs bg-hibi-navy text-white px-3 py-1 rounded"
@@ -1295,14 +1300,14 @@ export default function WorkersPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setQrWorker(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">{qrWorker.name}</h3>
-            <p className="text-xs text-gray-500 mb-4 break-all">{baseUrl}/attendance/{qrWorker.token}</p>
+            <p className="text-xs text-gray-500 mb-4 break-all">{mobileUrl(qrWorker)}</p>
             <div className="flex justify-center mb-4">
-              <QRCodeSVG value={`${baseUrl}/attendance/${qrWorker.token}`} size={200} level="M" />
+              <QRCodeSVG value={mobileUrl(qrWorker)} size={200} level="M" />
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(`${baseUrl}/attendance/${qrWorker.token}`)
+                  navigator.clipboard.writeText(mobileUrl(qrWorker))
                   alert('URLをコピーしました')
                 }}
                 className="flex-1 bg-hibi-navy text-white rounded-lg py-2 text-sm"
