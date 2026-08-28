@@ -58,6 +58,11 @@ interface StaffData {
     locked: boolean; dayOffset: number
     siteName?: string
   }[]
+  /** 過去14日の未入力稼働日（督促バナー用・2026-08-28 追加） */
+  missingDays: {
+    date: string; year: number; month: number; day: number
+    entry: null; status: 'none'; locked: boolean; dayOffset: number; siteName: string
+  }[]
 }
 
 const STATUS_LABELS: Record<AttendanceStatus, string> = {
@@ -329,11 +334,18 @@ export default function StaffAttendancePage() {
     }
   }
 
+  // 過去日編集モーダルの対象一覧。
+  //   先頭5件は「最近5日」リストと同じ index。6件目以降は督促バナー専用
+  //   （5日より前の未入力日をチップから直接開くため・2026-08-28 追加）
+  const allPastDays = data
+    ? [...data.pastDays, ...(data.missingDays || []).filter(md => md.dayOffset > 5)]
+    : []
+
   // Initialize past day time state when edit modal opens
   useEffect(() => {
-    if (editingPast !== null && data?.pastDays[editingPast]) {
-      const pd = data.pastDays[editingPast]
-      const ws: SiteWorkScheduleConfig = data.site?.workSchedule || DEFAULT_WORK_SCHEDULE
+    if (editingPast !== null && allPastDays[editingPast]) {
+      const pd = allPastDays[editingPast]
+      const ws: SiteWorkScheduleConfig = data?.site?.workSchedule || DEFAULT_WORK_SCHEDULE
       if (pd.entry && isTimeBasedEntry(pd.entry)) {
         setPastStartTime(pd.entry.st || ws.startTime)
         setPastEndTime(pd.entry.et || ws.endTime)
@@ -824,6 +836,45 @@ export default function StaffAttendancePage() {
           </div>
         )}
 
+        {/* ── 未入力の督促バナー（2026-08-28 追加）──
+            過去14日の未入力稼働日をチップで並べ、タップでその日の入力モーダルへ直行。
+            未入力=欠勤扱いになることを日越で明記する */}
+        {data.missingDays && data.missingDays.length > 0 && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+            <div className="text-base font-bold text-red-700">
+              ⚠️ 未入力が {data.missingDays.length}日 あります
+            </div>
+            <div className="text-sm font-bold text-red-700 mb-1">
+              Bạn còn {data.missingDays.length} ngày chưa nhập
+            </div>
+            <div className="text-xs text-red-600 mb-3">
+              入力しないと<b>欠勤</b>になります。日付を押して入力してください。<br />
+              Nếu không nhập sẽ bị tính là <b>nghỉ không phép</b>. Hãy bấm vào ngày để nhập.
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {data.missingDays.map(md => {
+                if (md.locked) {
+                  return (
+                    <span key={`${md.year}-${md.month}-${md.day}`}
+                      className="px-3 py-2 rounded-lg bg-gray-100 text-gray-500 text-sm font-bold">
+                      {md.month}/{md.day} 🔒 職長に相談 / Hỏi đốc công
+                    </span>
+                  )
+                }
+                const idx = allPastDays.findIndex(
+                  pd => pd.year === md.year && pd.month === md.month && pd.day === md.day)
+                return (
+                  <button key={`${md.year}-${md.month}-${md.day}`}
+                    onClick={() => idx >= 0 && setEditingPast(idx)}
+                    className="px-3 py-2 rounded-lg bg-white border-2 border-red-400 text-red-700 text-sm font-extrabold active:scale-95">
+                    {md.month}/{md.day} ✏️
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── カレンダー承認バナー（2026-05-27 追加 / 2026-06-XX 改) ── */}
         {/* 今月＋翌月の両方をチェックし、未署名 or 再署名要の月ごとにバナーを表示。
             - 未署名: 通常の承認バナー（オレンジ）
@@ -1253,8 +1304,8 @@ export default function StaffAttendancePage() {
       </div>
 
       {/* Past day edit modal */}
-      {editingPast !== null && data.pastDays[editingPast] && (() => {
-        const pd = data.pastDays[editingPast]
+      {editingPast !== null && allPastDays[editingPast] && (() => {
+        const pd = allPastDays[editingPast]
         const pastYm = `${pd.year}${String(pd.month).padStart(2, '0')}`
         const pastTimeBased = isTimeBasedMobile(pastYm)
         return (

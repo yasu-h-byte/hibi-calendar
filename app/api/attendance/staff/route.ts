@@ -153,6 +153,63 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // ── 未入力の過去稼働日（2026-08-28 追加: 入力督促バナー用）──
+    //   入力可能な過去14日のうち、承認済み現場カレンダーの稼働日で、どの現場にも
+    //   入力がない日を返す。未入力のまま締めに流れると欠勤扱いになるため、
+    //   スマホ画面の先頭で本人に見せて入力させる。
+    //   カレンダー未承認の月は日曜のみ非稼働として扱う（職長画面の俯瞰と同じ規則）。
+    const missingDays: {
+      date: string; year: number; month: number; day: number
+      entry: null; status: 'none'; locked: boolean; dayOffset: number; siteName: string
+    }[] = []
+    {
+      const attCache: Record<string, Record<string, AttendanceEntry>> = { [ym]: attData }
+      const calCache: Record<string, Record<string, string> | null> = {}
+      for (let off = 1; off <= 14; off++) {
+        const pd = new Date(y, m - 1, d - off)
+        const py = pd.getFullYear()
+        const pm = pd.getMonth() + 1
+        const pDay = pd.getDate()
+        const pym = ymKey(py, pm)
+        if (!(pym in attCache)) attCache[pym] = await getAttendanceDoc(pym)
+        const pAtt = attCache[pym]
+
+        const calKey = `${siteId}_${py}-${String(pm).padStart(2, '0')}`
+        if (!(calKey in calCache)) {
+          try {
+            const calSnap = await getDoc(doc(db, 'siteCalendar', calKey))
+            const cal = calSnap.exists() ? calSnap.data() : null
+            calCache[calKey] = (cal?.status === 'approved' && cal?.days)
+              ? (cal.days as Record<string, string>) : null
+          } catch { calCache[calKey] = null }
+        }
+        const calDays = calCache[calKey]
+        const isWorkDay = calDays ? calDays[String(pDay)] === 'work' : pd.getDay() !== 0
+        if (!isWorkDay) continue
+
+        // どの現場かを問わず入力があればスキップ（現場間違いは職長が移動する）
+        let hasEntry = false
+        for (const sid of Object.keys(siteNames)) {
+          if (getEntryStatus(pAtt[attKey(sid, worker.id, pym, pDay)]) !== 'none') {
+            hasEntry = true
+            break
+          }
+        }
+        if (hasEntry) continue
+
+        const pApproval = await getApprovalForDay(siteId, pym, pDay)
+        missingDays.push({
+          date: formatDateShort(pd),
+          year: py, month: pm, day: pDay,
+          entry: null,
+          status: 'none',
+          locked: !!(pApproval?.foreman),
+          dayOffset: off,
+          siteName: '',
+        })
+      }
+    }
+
     // Today's approval
     const todayApproval = await getApprovalForDay(siteId, ym, d)
 
@@ -342,6 +399,7 @@ export async function GET(request: NextRequest) {
       currentStatus: getEntryStatus(currentEntry),
       todayLocked: !!(todayApproval?.foreman),
       pastDays,
+      missingDays,
       toolBudgetRemaining,
       toolBudgetPeriodStart,
       toolBudgetPeriodEnd,
