@@ -23,6 +23,7 @@ import HeaderBar from './components/HeaderBar'
 import AttendanceGrid from './components/AttendanceGrid'
 import NightShiftModal, { NightShiftValue } from './components/NightShiftModal'
 import DriverModal from './components/DriverModal'
+import HistoryModal from './components/HistoryModal'
 import { canDriveDefault } from '@/lib/allowance'
 
 export default function AttendanceGridPage() {
@@ -62,6 +63,7 @@ export default function AttendanceGridPage() {
 
   // Assignment modal
   const [showAssignModal, setShowAssignModal] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   // 夜勤モーダル（台風待機など年数回のケース）
   const [nightTarget, setNightTarget] = useState<{ workerId: string; day: number } | null>(null)
   // 夜勤が発生した日（現場×月ごと）。指定した日だけスタッフのセルに夜勤バッジが出る
@@ -388,6 +390,22 @@ export default function AttendanceGridPage() {
   }, [focusNextWorkerStatus])
 
   const handleWorkChange = useCallback((workerId: string, day: number, value: string) => {
+    // 2026-08-28 追加: 本人がスマホで入力した記録を消す/変えるときだけ確認する。
+    //   8/27 IHI で誤削除が起き、当日入力のため日次バックアップでも救えなかった。
+    //   管理者が入れた記録の修正は従来どおり無確認（日常操作の邪魔をしない）。
+    const cur = workerEntries[workerId]?.[day] as (AttEntry & { s?: string }) | undefined
+    if (cur?.s === 'staff') {
+      const w = data?.workers.find(x => String(x.id) === String(workerId))
+      const desc = cur.p ? '有給' : cur.r ? '欠勤' : cur.h ? '現場休' : cur.hk ? '帰国中'
+        : cur.exam ? '試験' : cur.w === 0.6 ? '0.6補償'
+        : `出勤${cur.st && cur.et ? ` ${cur.st}〜${cur.et}` : ''}${cur.o ? ` 残業${cur.o}h` : ''}`
+      const verb = value === '' ? 'を削除' : 'を上書き'
+      if (!confirm(
+        `${w?.name || `ID ${workerId}`} さんが スマホで入力した ${day}日 の記録です。\n\n`
+        + `　現在: ${desc}\n\n`
+        + `この記録${verb}しますか？`
+      )) return
+    }
     setWorkerEntries(prev => {
       const next = { ...prev }
       if (!next[workerId]) next[workerId] = {}
@@ -426,7 +444,7 @@ export default function AttendanceGridPage() {
     scheduleSave(`w-${workerId}-${day}`, {
       type: 'worker', id: workerId, day, entry,
     })
-  }, [scheduleSave])
+  }, [scheduleSave, workerEntries, data?.workers])
 
   const handleOtChange = useCallback((workerId: string, day: number, otValue: string) => {
     const ot = parseFloat(otValue) || 0
@@ -982,6 +1000,7 @@ export default function AttendanceGridPage() {
         allSites={allSites}
         ymOptions={ymOptions}
         onOpenAssign={() => setShowAssignModal(true)}
+        onOpenHistory={() => setShowHistory(true)}
         onWorkDaysChange={handleWorkDaysChange}
         onSiteChange={setSiteId}
         onYmChange={setYm}
@@ -1108,6 +1127,15 @@ export default function AttendanceGridPage() {
         entry={nightTarget ? workerEntries[nightTarget.workerId]?.[nightTarget.day] : null}
         onSave={handleNightSave}
         onClose={() => setNightTarget(null)}
+      />
+
+      <HistoryModal
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
+        ym={ym}
+        password={password}
+        workerNames={Object.fromEntries((data?.workers || []).map(w => [w.id, w.name]))}
+        onRestored={() => { fetchData() }}
       />
 
       <DriverModal

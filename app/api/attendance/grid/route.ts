@@ -555,6 +555,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // 2026-08-28 追加: 既存エントリを壊す前に中身を履歴へ退避する。
+      //   操作ログには「削除した」事実しか残らず、日次バックアップは当日分を救えないため、
+      //   誤削除・誤上書きからの復元手段がなかった（8/27 IHI の事故）。
+      let prevEntry: AttendanceEntry | undefined
+      try {
+        const prevSnap = await getDoc(docRef)
+        const prevD = (prevSnap.exists() ? (prevSnap.data().d || {}) : {}) as Record<string, AttendanceEntry>
+        prevEntry = prevD[key]
+      } catch { /* 読めなくても本体処理は続行（履歴が残らないだけ） */ }
+
       if (entry && typeof entry === 'object') {
         // ⚠️ 空オブジェクト {} は禁止（既存エントリを空マップに置換すると 2026-05-07 事故の同種パターン）。
         //   有効なエントリであることを保証してから保存。
@@ -568,6 +578,12 @@ export async function POST(request: NextRequest) {
         const entryWithSource = { ...entry, s: 'admin' } as AttendanceEntry
         const { setAttendanceEntry, computeAttendanceDeleteFields } = await import('@/lib/attendance')
         const deleteFields = computeAttendanceDeleteFields(entryWithSource)
+        try {
+          const { recordAttendanceChange } = await import('@/lib/attendance-history')
+          await recordAttendanceChange({
+            siteId, workerId: Number(workerId), ym, day, before: prevEntry, after: entryWithSource, actor: 'admin',
+          })
+        } catch { /* 履歴は保険。失敗しても本体は続行 */ }
         await setAttendanceEntry(siteId, Number(workerId), ym, Number(day), entryWithSource, { deleteFields })
 
         // ⚠️ 2026-05-11 追加: 追跡可能性向上のため admin の出面書き込みを Activity log に記録
@@ -590,6 +606,12 @@ export async function POST(request: NextRequest) {
         } catch { /* ログ失敗は本体処理に影響させない */ }
       } else {
         // nullまたは無効なエントリ: フィールドを削除
+        try {
+          const { recordAttendanceChange } = await import('@/lib/attendance-history')
+          await recordAttendanceChange({
+            siteId, workerId: Number(workerId), ym, day, before: prevEntry, after: null, actor: 'admin',
+          })
+        } catch { /* 履歴は保険。失敗しても本体は続行 */ }
         const { deleteField } = await import('@/lib/fsdb')
         const { updateDoc } = await import('@/lib/fsdb')
         await updateDoc(docRef, { [`d.${key}`]: deleteField() })

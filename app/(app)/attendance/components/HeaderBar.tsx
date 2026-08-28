@@ -16,6 +16,7 @@ interface Props {
   allSites: { id: string; name: string; archived?: boolean }[]
   ymOptions: { ym: string; label: string }[]
   onOpenAssign: () => void
+  onOpenHistory: () => void
   onWorkDaysChange: (value: string) => void
   onSiteChange: (id: string) => void
   onYmChange: (ym: string) => void
@@ -24,7 +25,7 @@ interface Props {
 
 export default function HeaderBar({
   data, useTimeBased, saveStatus, workDaysInput, siteId, ym, showArchived, allSites, ymOptions,
-  onOpenAssign, onWorkDaysChange, onSiteChange, onYmChange, onShowArchivedChange,
+  onOpenAssign, onOpenHistory, onWorkDaysChange, onSiteChange, onYmChange, onShowArchivedChange,
 }: Props) {
   return (
     <div className="flex items-center gap-3 flex-wrap">
@@ -91,6 +92,16 @@ export default function HeaderBar({
         className="text-xs px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium transition"
       >
         配置編集
+      </button>
+
+      {/* 誤削除・誤上書きからの復元（2026-08-28 追加） */}
+      <button
+        type="button"
+        onClick={onOpenHistory}
+        title="消した・上書きした記録を元に戻せます（90日保持）"
+        className="text-xs px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium transition"
+      >
+        変更履歴
       </button>
 
       {/* 所定日数 input（5月以降はカレンダーで確定するため非表示） */}

@@ -186,6 +186,15 @@ export async function GET(request: NextRequest) {
       summary.errors.push(`toolBudget: ${e instanceof Error ? e.message : String(e)}`)
     }
 
+    // (2e) 出面の変更履歴を保持期間（90日）で間引く
+    try {
+      const { purgeOldHistory } = await import('@/lib/attendance-history')
+      const n = await purgeOldHistory()
+      if (n > 0) summary.deleted.push(`attendanceHistory×${n}`)
+    } catch (e) {
+      summary.errors.push(`attendanceHistory purge: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
     // (3) 古いバックアップを削除（30日保持）
     const cutoff = new Date(now)
     cutoff.setDate(cutoff.getDate() - RETENTION_DAYS)
