@@ -10,6 +10,17 @@ interface MisplacedEntry {
   entry: AttendanceEntry
 }
 
+interface OverviewDay {
+  day: number
+  dateISO: string
+  isWorkDay: boolean
+  approved: boolean
+  entered: number
+  missingNames: string[]
+}
+
+interface BreakSetting { enabled: boolean; minutes: number; mandatory: boolean }
+
 interface ForemanData {
   foreman: { id: number; name: string }
   site: { id: string; name: string }
@@ -24,6 +35,14 @@ interface ForemanData {
   summary: { workCount: number; noneCount: number; totalCount: number }
   approved: boolean
   pastDays: { date: string; dateISO: string; approved: boolean }[]
+  monthOverview: OverviewDay[]
+  schedule: {
+    startTime: string
+    endTime: string
+    morningBreak: BreakSetting
+    lunchBreak: BreakSetting
+    afternoonBreak: BreakSetting
+  }
 }
 
 const STATUS_LABELS: Record<AttendanceStatus, string> = {
@@ -52,6 +71,13 @@ export default function ForemanAttendancePage() {
   const [error, setError] = useState<string | null>(null)
   const [editingWorker, setEditingWorker] = useState<{ id: number; name: string; hasEntry: boolean } | null>(null)
   const [editOT, setEditOT] = useState(0)
+  // 時刻つき代理入力（2026-08-28 追加）。開くたびに entry または現場の勤務時間で初期化
+  const [editStart, setEditStart] = useState('08:00')
+  const [editEnd, setEditEnd] = useState('17:00')
+  const [editB1, setEditB1] = useState(true)
+  const [editB2, setEditB2] = useState(true)
+  const [editB3, setEditB3] = useState(true)
+  const [bulkApproving, setBulkApproving] = useState(false)
   const [saving, setSaving] = useState(false)
   const [fixingSite, setFixingSite] = useState<{
     workerId: number
@@ -140,6 +166,10 @@ export default function ForemanAttendancePage() {
           day: data.date.day,
           choice,
           overtimeHours: choice === 'work' ? editOT : 0,
+          ...(choice === 'work' ? {
+            startTime: editStart, endTime: editEnd,
+            break1: editB1, break2: editB2, break3: editB3,
+          } : {}),
         }),
       })
       if (!res.ok) {
@@ -152,6 +182,52 @@ export default function ForemanAttendancePage() {
       fetchData()
     } finally {
       setSaving(false)
+    }
+  }
+
+  // 代理入力モーダルを開く。時刻は 既存入力 > 現場の勤務時間 の順で初期化
+  const openEditor = (w: { id: number; name: string; entry: AttendanceEntry | null }) => {
+    const sch = data?.schedule
+    setEditingWorker({ id: w.id, name: w.name, hasEntry: !!w.entry })
+    setEditOT(w.entry?.o || 0)
+    setEditStart(w.entry?.st || sch?.startTime || '08:00')
+    setEditEnd(w.entry?.et || sch?.endTime || '17:00')
+    setEditB1(w.entry ? !!w.entry.b1 : (sch?.morningBreak.enabled ?? true))
+    setEditB2(w.entry ? !!w.entry.b2 : (sch?.lunchBreak.enabled ?? true))
+    setEditB3(w.entry ? !!w.entry.b3 : (sch?.afternoonBreak.enabled ?? true))
+  }
+
+  // ── まとめ承認（全員入力済み・未承認の稼働日だけ）──
+  const bulkTargets = (data?.monthOverview || []).filter(
+    o => o.isWorkDay && !o.approved && o.entered > 0 && o.missingNames.length === 0
+  )
+  const handleBulkApprove = async () => {
+    if (!data || bulkApproving || bulkTargets.length === 0) return
+    if (!confirm(
+      `${bulkTargets.map(o => `${o.day}日`).join('・')} の ${bulkTargets.length}日分をまとめて確認します。\n`
+      + `（全員の入力がそろっている日だけが対象です）\n\nよろしいですか？`
+    )) return
+    setBulkApproving(true)
+    try {
+      const res = await fetch('/api/attendance/foreman', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token, action: 'approve_bulk',
+          year: data.date.year, month: data.date.month,
+          days: bulkTargets.map(o => o.day),
+        }),
+      })
+      const d = await res.json().catch(() => null)
+      if (!res.ok) {
+        alert(d?.error || `まとめ確認に失敗しました (${res.status})`)
+      } else if (d?.skipped?.length) {
+        alert(`✅ ${d.approvedDays.length}日分を確認しました\n\n以下は確認できませんでした:\n`
+          + d.skipped.map((x: { day: number; reason: string }) => `・${x.day}日: ${x.reason}`).join('\n'))
+      }
+      fetchData()
+    } finally {
+      setBulkApproving(false)
     }
   }
 
@@ -243,6 +319,18 @@ export default function ForemanAttendancePage() {
       </div>
 
       <div className="max-w-lg mx-auto p-4 space-y-4">
+        {/* 未入力の警告（2026-08-28 追加: 未入力＝欠勤扱いを明記） */}
+        {data.summary.noneCount > 0 && (
+          <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3">
+            <div className="text-sm font-bold text-red-700">
+              ⚠️ この日は {data.summary.noneCount}名 が未入力です
+            </div>
+            <div className="text-xs text-red-600 mt-1">
+              未入力のままだと<b>欠勤扱い</b>になります。本人にスマホ入力を促してください。
+            </div>
+          </div>
+        )}
+
         {/* Summary */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 text-center">
@@ -271,6 +359,19 @@ export default function ForemanAttendancePage() {
         >
           {data.approved ? '✅ 確認済み' : '✅ この日を確認する'}
         </button>
+
+        {/* まとめ承認（2026-08-28 追加）: 全員入力済み・未確認の稼働日だけ */}
+        {bulkTargets.length > 0 && (
+          <button
+            onClick={handleBulkApprove}
+            disabled={bulkApproving}
+            className="w-full rounded-xl py-3 text-sm font-bold bg-white border-2 border-hibi-amber text-hibi-charcoal active:bg-amber-50 disabled:opacity-50"
+          >
+            {bulkApproving
+              ? '確認中...'
+              : `⚡ 入力がそろった ${bulkTargets.length}日分をまとめて確認する`}
+          </button>
+        )}
 
         {/* Worker list */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -311,7 +412,7 @@ export default function ForemanAttendancePage() {
                   key={w.id}
                   className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
                   title="現場都合休み・有給などは職長が代理入力できます"
-                  onClick={() => { setEditingWorker({ id: w.id, name: w.name, hasEntry: false }); setEditOT(0) }}
+                  onClick={() => openEditor(w)}
                 >
                   <span className="text-sm font-medium text-gray-700 truncate min-w-0">{w.name}</span>
                   <span className="text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 bg-gray-100 text-gray-500">
@@ -322,7 +423,7 @@ export default function ForemanAttendancePage() {
                 <div
                   key={w.id}
                   className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
-                  onClick={() => { setEditingWorker({ id: w.id, name: w.name, hasEntry: true }); setEditOT(w.entry?.o || 0) }}
+                  onClick={() => openEditor(w)}
                 >
                   <span className="text-sm font-medium text-gray-800 truncate min-w-0">{w.name}</span>
                   <span className={`text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 ${STATUS_COLORS[w.status]}`}>
@@ -335,23 +436,45 @@ export default function ForemanAttendancePage() {
           )}
         </div>
 
-        {/* Past days */}
+        {/* 月の俯瞰（2026-08-28 追加: 過去2日制限を撤廃し、月内のどの日でも開ける） */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-          <div className="text-sm text-gray-500 mb-2 font-bold">過去の確認状況</div>
-          {data.pastDays.map((pd, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between gap-2 py-2 cursor-pointer"
-              onClick={() => setDateISO(pd.dateISO)}
-            >
-              <span className="text-sm text-gray-600 truncate min-w-0">{pd.date}</span>
-              <span className={`text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 ${
-                pd.approved ? 'bg-[#1E9E52] text-white' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {pd.approved ? '✅ 確認済み' : '— 未確認'}
-              </span>
-            </div>
-          ))}
+          <div className="text-sm text-gray-500 mb-1 font-bold">
+            {data.date.month}月の確認状況
+          </div>
+          <div className="text-[11px] text-gray-400 mb-3">
+            日付をタップするとその日を開けます
+          </div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {data.monthOverview.map(o => {
+              const isCurrent = o.dateISO === data.date.dateISO
+              const missing = o.missingNames.length
+              let cls: string
+              let mark: string
+              if (!o.isWorkDay) { cls = 'bg-gray-100 text-gray-300'; mark = '休' }
+              else if (o.approved) { cls = 'bg-[#1E9E52] text-white'; mark = '✓' }
+              else if (missing > 0) { cls = 'bg-red-50 text-red-600 border border-red-200'; mark = `残${missing}` }
+              else if (o.entered > 0) { cls = 'bg-amber-100 text-amber-800 border border-amber-300'; mark = '未確認' }
+              else { cls = 'bg-gray-100 text-gray-400'; mark = '—' }
+              return (
+                <button
+                  key={o.day}
+                  onClick={() => setDateISO(o.dateISO)}
+                  className={`rounded-lg py-1.5 text-center active:scale-95 ${cls} ${
+                    isCurrent ? 'ring-2 ring-hibi-charcoal' : ''
+                  }`}
+                >
+                  <div className="text-sm font-bold tabular-nums leading-tight">{o.day}</div>
+                  <div className="text-[9px] font-bold leading-tight whitespace-nowrap overflow-hidden">{mark}</div>
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] text-gray-500">
+            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#1E9E52] align-middle mr-1" />確認済み</span>
+            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-200 align-middle mr-1" />入力そろい・未確認</span>
+            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-100 align-middle mr-1" />未入力あり（欠勤扱いに）</span>
+            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-200 align-middle mr-1" />非稼働日</span>
+          </div>
         </div>
       </div>
 
@@ -399,21 +522,46 @@ export default function ForemanAttendancePage() {
               })}
             </div>
 
-            {/* OT input for work */}
+            {/* 出勤時刻＋休憩（2026-08-28: 時刻なし残業ステッパーから置き換え。
+                スタッフのスマホ入力と同じ形式で保存され、残業は時刻から自動計算される） */}
             <div className="bg-gray-50 rounded-xl p-3 mb-4">
-              <div className="text-xs text-gray-500 text-center mb-2">残業時間（出勤の場合）</div>
+              <div className="text-xs text-gray-500 text-center mb-2">
+                勤務時刻（「出勤」で保存する内容・残業は自動計算）
+              </div>
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <input
+                  type="time"
+                  value={editStart}
+                  onChange={e => setEditStart(e.target.value)}
+                  className="border-2 border-gray-300 rounded-lg px-2 py-2 text-base font-bold tabular-nums bg-white"
+                />
+                <span className="text-gray-400 font-bold">〜</span>
+                <input
+                  type="time"
+                  value={editEnd}
+                  onChange={e => setEditEnd(e.target.value)}
+                  className="border-2 border-gray-300 rounded-lg px-2 py-2 text-base font-bold tabular-nums bg-white"
+                />
+              </div>
               <div className="flex items-center justify-center gap-3">
-                <button
-                  onClick={() => setEditOT(Math.max(0, editOT - 0.5))}
-                  className="w-10 h-10 bg-gray-200 text-hibi-charcoal rounded-lg text-lg font-bold active:bg-gray-300"
-                >−</button>
-                <span className="text-lg font-bold w-14 text-center text-orange-600 tabular-nums">
-                  {editOT.toFixed(1)}h
-                </span>
-                <button
-                  onClick={() => setEditOT(Math.min(8, editOT + 0.5))}
-                  className="w-10 h-10 bg-gray-200 text-hibi-charcoal rounded-lg text-lg font-bold active:bg-gray-300"
-                >＋</button>
+                {([
+                  { label: '午前休憩', v: editB1, set: setEditB1, s: data.schedule?.morningBreak },
+                  { label: '昼休憩', v: editB2, set: setEditB2, s: data.schedule?.lunchBreak },
+                  { label: '午後休憩', v: editB3, set: setEditB3, s: data.schedule?.afternoonBreak },
+                ] as const).map(b => (
+                  (b.s?.enabled ?? true) && (
+                    <label key={b.label} className="flex items-center gap-1 text-xs text-gray-600 font-medium">
+                      <input
+                        type="checkbox"
+                        checked={b.v}
+                        disabled={!!b.s?.mandatory}
+                        onChange={e => b.set(e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      {b.label}{b.s ? `(${b.s.minutes}分)` : ''}
+                    </label>
+                  )
+                ))}
               </div>
             </div>
 

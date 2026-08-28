@@ -13,7 +13,7 @@ import {
   formatDateKanji,
   formatDateShort,
 } from '@/lib/attendance'
-import { AttendanceEntry } from '@/types'
+import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 
 export async function GET(request: NextRequest) {
@@ -74,13 +74,16 @@ export async function GET(request: NextRequest) {
     // 当該 ym と day で他の siteId 配下のエントリを抽出
     const dayStr = String(d)
     const siteNameMap: Record<string, string> = {}
+    // 代理入力の初期値用（2026-08-28 追加: 時刻つき代理入力）
+    let siteSchedule: import('@/types').SiteWorkSchedule | undefined
     {
       const { db } = await import('@/lib/firebase')
       const { doc, getDoc } = await import('@/lib/fsdb')
       const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
       if (mainSnap.exists()) {
-        const sites = (mainSnap.data().sites || []) as { id: string; name: string }[]
+        const sites = (mainSnap.data().sites || []) as { id: string; name: string; workSchedule?: import('@/types').SiteWorkSchedule }[]
         for (const s of sites) siteNameMap[s.id] = s.name
+        siteSchedule = sites.find(x => x.id === site.id)?.workSchedule
       }
     }
 
@@ -130,6 +133,49 @@ export async function GET(request: NextRequest) {
     const approval = await getApprovalForDay(site.id, ym, d)
     const approved = !!(approval?.foreman)
 
+    // ── 月の俯瞰（2026-08-28 追加: 週ビュー・まとめ承認・未入力の見える化）──
+    //   その月の稼働日ごとに 承認状態・未入力者 を返す。
+    //   旧UIは「今日＋過去2日」しか辿れず、承認をため込むとスマホから消化できなかった。
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const todayJst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+    const todayDayNum = (todayJst.getFullYear() === y && todayJst.getMonth() + 1 === m)
+      ? todayJst.getDate()
+      : (new Date(y, m - 1, 1) < todayJst ? daysInMonth : 0)
+
+    // 現場カレンダー（承認済みのみ）。非稼働日は未入力を数えない
+    let calDays: Record<string, string> | null = null
+    try {
+      const { db } = await import('@/lib/firebase')
+      const { doc, getDoc } = await import('@/lib/fsdb')
+      const calSnap = await getDoc(doc(db, 'siteCalendar', `${site.id}_${y}-${String(m).padStart(2, '0')}`))
+      const cal = calSnap.exists() ? calSnap.data() : null
+      if (cal?.status === 'approved' && cal?.days) calDays = cal.days as Record<string, string>
+    } catch { /* カレンダー未取得でも俯瞰は出す（全日を稼働扱い） */ }
+
+    const dayNums = Array.from({ length: Math.max(0, todayDayNum) }, (_, i) => i + 1)
+    const monthApprovals = await Promise.all(dayNums.map(dd => getApprovalForDay(site.id, ym, dd)))
+    const monthOverview = dayNums.map((dd, i) => {
+      const calDay = calDays?.[String(dd)]
+      const isWorkDay = calDays ? calDay === 'work' : new Date(y, m - 1, dd).getDay() !== 0
+      const missingNames: string[] = []
+      let entered = 0
+      if (isWorkDay) {
+        for (const w of foreignWorkers) {
+          const e = attData[attKey(site.id, w.id, ym, dd)]
+          if (e && typeof e === 'object' && Object.keys(e).length > 0) entered++
+          else missingNames.push(w.name)
+        }
+      }
+      return {
+        day: dd,
+        dateISO: `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`,
+        isWorkDay,
+        approved: !!(monthApprovals[i]?.foreman),
+        entered,
+        missingNames: isWorkDay ? missingNames : [],
+      }
+    })
+
     // Past 2 days
     const pastDays = []
     for (let off = 1; off <= 2; off++) {
@@ -156,6 +202,14 @@ export async function GET(request: NextRequest) {
       summary: { workCount, noneCount, totalCount: workers.length },
       approved,
       pastDays,
+      monthOverview,
+      schedule: {
+        startTime: siteSchedule?.startTime || DEFAULT_WORK_SCHEDULE.startTime,
+        endTime: siteSchedule?.endTime || DEFAULT_WORK_SCHEDULE.endTime,
+        morningBreak: siteSchedule?.morningBreak ?? DEFAULT_WORK_SCHEDULE.morningBreak,
+        lunchBreak: siteSchedule?.lunchBreak ?? DEFAULT_WORK_SCHEDULE.lunchBreak,
+        afternoonBreak: siteSchedule?.afternoonBreak ?? DEFAULT_WORK_SCHEDULE.afternoonBreak,
+      },
     })
   } catch (error) {
     console.error('Foreman GET error:', error)
@@ -189,6 +243,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
+    // ── まとめ承認（2026-08-28 追加）──
+    //   「全員入力済みの日」だけをまとめて職長承認する。未入力が残る日は
+    //   サーバ側でも弾く（安全弁: 未入力＝欠勤のまま承認して締めに流れるのを防ぐ）。
+    if (action === 'approve_bulk') {
+      const { year, month, days } = body as { year: number; month: number; days: number[] }
+      if (!Array.isArray(days) || days.length === 0 || days.length > 31) {
+        return NextResponse.json({ error: 'days (1〜31件) を指定してください' }, { status: 400 })
+      }
+      const ym = ymKey(year, month)
+      const { getAttendanceDoc: getAtt } = await import('@/lib/attendance')
+      const attD = await getAtt(ym)
+      const workersForBulk = await getForeignWorkersForSite(site.id)
+      const approvedDays: number[] = []
+      const skipped: { day: number; reason: string }[] = []
+      const todayJstB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+      for (const dd of days) {
+        const dNum = Number(dd)
+        if (!Number.isInteger(dNum) || dNum < 1 || dNum > 31) { skipped.push({ day: dNum, reason: '不正な日付' }); continue }
+        if (new Date(year, month - 1, dNum) > todayJstB) { skipped.push({ day: dNum, reason: '未来日' }); continue }
+        const missing = workersForBulk.filter(w => {
+          const e = attD[attKey(site.id, w.id, ym, dNum)]
+          return !(e && typeof e === 'object' && Object.keys(e).length > 0)
+        })
+        if (missing.length > 0) {
+          skipped.push({ day: dNum, reason: `未入力: ${missing.map(w => w.name).join('、')}` })
+          continue
+        }
+        await setApprovalForDay(site.id, ym, dNum, foreman.id)
+        approvedDays.push(dNum)
+      }
+      return NextResponse.json({ success: true, approvedDays, skipped })
+    }
+
     if (action === 'edit') {
       const { workerId, year, month, day, choice, overtimeHours } = body
       const ym = ymKey(year, month)
@@ -204,9 +291,41 @@ export async function POST(request: NextRequest) {
       // Build entry with s:'foreman' source tracking
       // ⚠️ 2026-05-09 根本原因対処: ステータス変更時に古いフィールドを残さない
       //   computeAttendanceDeleteFields で「新エントリに含まれない既知フィールドを自動算出」
+      // 2026-08-28 追加: 出勤の代理入力を時刻対応に。
+      //   旧: 時刻なしのレガシー形式(w:1+o)のみ → スタッフ入力と形式が揃わず、
+      //   実労働の精密計算から外れて管理者がPCで入れ直していた。
+      //   startTime/endTime があれば時間ベース（スタッフのスマホ入力と同形式）で保存する。
+      const { startTime, endTime, break1, break2, break3 } = body as {
+        startTime?: string; endTime?: string; break1?: boolean; break2?: boolean; break3?: boolean
+      }
       let entry: AttendanceEntry
       switch (choice) {
         case 'work':
+          if (startTime && endTime && /^\d{1,2}:\d{2}$/.test(String(startTime)) && /^\d{1,2}:\d{2}$/.test(String(endTime))) {
+            entry = {
+              w: 1,
+              st: String(startTime), et: String(endTime),
+              b1: break1 ? 1 : 0, b2: break2 ? 1 : 0, b3: break3 ? 1 : 0,
+              s: 'foreman',
+            }
+            // 後方互換: o にも残業時間を入れる（既存集計ロジック用。staff route と同じ計算）
+            try {
+              const { db } = await import('@/lib/firebase')
+              const { doc, getDoc } = await import('@/lib/fsdb')
+              const mainSnap2 = await getDoc(doc(db, 'demmen', 'main'))
+              const siteWs = ((mainSnap2.exists() ? mainSnap2.data().sites || [] : []) as { id: string; workSchedule?: { morningBreak?: { enabled?: boolean; minutes?: number }; lunchBreak?: { enabled?: boolean; minutes?: number }; afternoonBreak?: { enabled?: boolean; minutes?: number } } }[])
+                .find(x => x.id === site.id)?.workSchedule
+              const stM = parseInt(String(startTime).split(':')[0]) * 60 + parseInt(String(startTime).split(':')[1])
+              const etM = parseInt(String(endTime).split(':')[0]) * 60 + parseInt(String(endTime).split(':')[1])
+              let mins = etM - stM
+              if (entry.b1 && (siteWs?.morningBreak?.enabled ?? true)) mins -= siteWs?.morningBreak?.minutes ?? 30
+              if (entry.b2 && (siteWs?.lunchBreak?.enabled ?? true)) mins -= siteWs?.lunchBreak?.minutes ?? 60
+              if (entry.b3 && (siteWs?.afternoonBreak?.enabled ?? true)) mins -= siteWs?.afternoonBreak?.minutes ?? 30
+              const otH = Math.max(0, Math.round((mins / 60 - 7) * 10) / 10)
+              if (otH > 0) entry.o = otH
+            } catch { /* o の補完に失敗しても st/et があれば給与計算は正しい */ }
+            break
+          }
           entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)), s: 'foreman' }
           break
         case 'rest': {
