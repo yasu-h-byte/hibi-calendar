@@ -1,4 +1,3 @@
-import { ALLOWANCE_FROM_YM } from './allowance'
 import * as XLSX from 'xlsx'
 import {
   RawWorker,
@@ -822,7 +821,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const useNewRulesByMonth = ym >= '202605'
   // 遠方現場日当・運転手当（2026-10 施行）。施行前の月は列自体を出さない
   //   （過去月のExcelの列構成・列幅を1ミリも変えない＝奥寺さんの既存の見方を壊さない）
-  const withAllowance = ym >= ALLOWANCE_FROM_YM
+  // 2026-08-28: 日当は保留・運転手当のみ施行のため、月ではなく「該当者がいるか」で列を出す。
+  //   日当が再開されたら自動的に列が復活する（ゲート定数を追わなくてよい）
+  const withAllowance = workers.some(w => (w.siteAllowance || 0) > 0 || (w.driveAllowance || 0) > 0)
   // 休憩短縮手当（2026-09〜）: 該当者がいる月だけ列を出す（現状フンさんのみ）
   const withBreakShorten = workers.some(w => ((w as { breakShortenAllowance?: number }).breakShortenAllowance || 0) > 0)
   const isWorkerOldRules = (w: WorkerMonthly): boolean => {

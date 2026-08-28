@@ -708,7 +708,9 @@ export default function MonthlyPage() {
   const showCompBaseDeduction = filteredWorkers.some(w => (w.compBaseDeduction || 0) > 0)
   // 休憩短縮手当は該当者がいる月だけ列を出す（2026-09〜・現状フンさんのみ）
   const showBreakShorten = filteredWorkers.some(w => (w.breakShortenAllowance || 0) > 0)
-  const salaryColCount = (ym >= '202605' ? 9 : 5) + (ym >= '202610' ? 2 : 0)
+  // 2026-08-28: 日当は保留・運転手当のみ施行。月ではなく「該当者がいるか」で列を出す
+  const showAllowance = filteredWorkers.some(w => (w.siteAllowance || 0) > 0 || (w.driveAllowance || 0) > 0)
+  const salaryColCount = (ym >= '202605' ? 9 : 5) + (showAllowance ? 2 : 0)
     + (showBreakShorten ? 1 : 0) + (showCompBaseDeduction ? 1 : 0)
   const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + salaryColCount
 
@@ -1278,7 +1280,7 @@ export default function MonthlyPage() {
                       <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="休憩短縮に伴う所定外労働（出勤日 × 短縮分 × 通常時給）。法定内のため割増なし">休憩短縮</th>
                     )}
                     {/* 遠方現場日当・運転手当（2026-10 施行、lib/allowance.ts） */}
-                    {ym >= '202610' && (
+                    {showAllowance && (
                       <>
                         <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="遠方現場日当（非課税・実費弁償）。判定値80分超500円/120分超1,500円、13ヶ月目から半額・25ヶ月目から0円">日当</th>
                         <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="運転手当（課税）。片道500円（判定値60分未満）/1,000円（60分以上）">運転手当</th>
@@ -1528,7 +1530,7 @@ export default function MonthlyPage() {
                               {(w.breakShortenAllowance || 0) > 0 ? fmtYen(w.breakShortenAllowance!) : '—'}
                             </td>
                           )}
-                          {ym >= '202610' && (
+                          {showAllowance && (
                             <>
                               <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.siteAllowance || 0) > 0 ? 'text-teal-600' : 'text-gray-400'}`}
                                 title={(w.siteAllowance || 0) > 0 ? `遠方現場日当 対象 ${w.allowanceDays || 0}日` : undefined}>
@@ -1656,7 +1658,7 @@ export default function MonthlyPage() {
                           })()}
                         </td>
                       )}
-                      {ym >= '202610' && (
+                      {showAllowance && (
                         <>
                           <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
                             {(() => {

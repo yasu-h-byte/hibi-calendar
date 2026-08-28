@@ -9,7 +9,7 @@ import { isStillActiveForMonth, isHiredByMonth } from './workers'
 import { isTobiGroup, isDokoGroup } from './jobs'
 import type { HomeLeaveEntry } from './homeLeave'
 import {
-  ALLOWANCE_FROM_YM, calcMonthlyAllowances, dailyAllowanceYen, isAllowanceEligibleDay,
+  DRIVE_ALLOWANCE_FROM_YM, SITE_ALLOWANCE_FROM_YM, calcMonthlyAllowances, dailyAllowanceYen, isAllowanceEligibleDay,
   type SiteCommute, type WorkerAllowanceMonthly,
 } from './allowance'
 
@@ -281,18 +281,26 @@ export async function loadMonthlyAllowances(
   // 呼び出し元が既に読んである月の出面（ダッシュボード等の複数月一括処理でクォータを増やさない）
   opts?: { preloadedAttD?: Record<string, Record<string, AttendanceEntry>> },
 ): Promise<Map<number, WorkerAllowanceMonthly> | undefined> {
-  if (ym < ALLOWANCE_FROM_YM) return undefined
+  // 日当と運転手当は別ゲート（2026-08-28 代表決定: 日当は保留、運転手当は10月施行）
+  const siteOn = SITE_ALLOWANCE_FROM_YM !== null && ym >= SITE_ALLOWANCE_FROM_YM
+  const driveOn = ym >= DRIVE_ALLOWANCE_FROM_YM
+  if (!siteOn && !driveOn) return undefined
 
+  // 日当が無効の間は判定値を渡さない → dailyAllowanceYen が 0 を返し日当は発生しない。
+  //   現場に住所や凍結済み判定値があっても確実に止まる（運用ではなくコードで保証）
   const commutes: Record<string, SiteCommute> = {}
-  for (const s of main.sites) {
-    const j = s.commute?.judgedMin
-    if (typeof j === 'number') commutes[s.id] = { judgedMin: j }
+  if (siteOn) {
+    for (const s of main.sites) {
+      const j = s.commute?.judgedMin
+      if (typeof j === 'number') commutes[s.id] = { judgedMin: j }
+    }
   }
   const excludeIds = main.workers.filter(w => w.job === 'yakuin').map(w => w.id)
 
-  // 履歴月（施行月〜前月・上限つき）。施行初月は空＝追加読み取りゼロ
-  const histStart = addYm(ym, -TENURE_HISTORY_MONTHS) > ALLOWANCE_FROM_YM
-    ? addYm(ym, -TENURE_HISTORY_MONTHS) : ALLOWANCE_FROM_YM
+  // 長期従事の履歴は日当専用。日当が無効なら過去月の出面を一切読まない（クォータ節約）
+  const histStart = !siteOn ? ym
+    : (addYm(ym, -TENURE_HISTORY_MONTHS) > SITE_ALLOWANCE_FROM_YM!
+        ? addYm(ym, -TENURE_HISTORY_MONTHS) : SITE_ALLOWANCE_FROM_YM!)
   const histMonths: string[] = []
   for (let m = histStart; m < ym; m = addYm(m, 1)) histMonths.push(m)
   const histAtts = histMonths.length

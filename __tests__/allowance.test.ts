@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   dailyAllowanceYen, isAllowanceEligibleDay, tenureRateOn, fullMonthsBetween,
-  calcMonthlyAllowances, ALLOWANCE_FROM_YM, driveAllowanceYen,
+  calcMonthlyAllowances, DRIVE_ALLOWANCE_FROM_YM, SITE_ALLOWANCE_FROM_YM, DRIVE_ALLOWANCE_YEN, driveAllowanceYen,
 } from '@/lib/allowance'
 import type { AttendanceEntry } from '@/types'
 
@@ -124,15 +124,15 @@ describe('calcMonthlyAllowances（実データ3ヶ月の検証値と一致）', 
     for (const v of r.values()) expect(v.bySite.sasazuka).toBeUndefined()
   })
 
-  it('適用開始月の定数（ゲートは computeMonthly 組み込み側で適用する）', () => {
-    expect(ALLOWANCE_FROM_YM).toBe('202610')
+  it('適用開始月の定数: 運転手当は2026-10、日当は保留(null)', () => {
+    // ゲートは loadMonthlyAllowances 側で適用する（純関数はどの月でも計算できる）
+    expect(DRIVE_ALLOWANCE_FROM_YM).toBe('202610')
+    expect(SITE_ALLOWANCE_FROM_YM).toBeNull()   // 2026-08-28 代表決定により日当は保留
   })
 
-  it('運転手当: 判定値で片道500/1,000円・便ごとに積む・役員も対象', () => {
-    expect(driveAllowanceYen(59)).toBe(500)
-    expect(driveAllowanceYen(60)).toBe(1000)   // 60分ちょうどは1,000円（「60分未満が500円」）
-    expect(driveAllowanceYen(116)).toBe(1000)
-    expect(driveAllowanceYen(undefined)).toBe(500)  // 未測定は暫定500円→凍結後に再計算
+  it('運転手当: 全現場一律 片道1,000円・便ごとに積む・役員も対象', () => {
+    expect(DRIVE_ALLOWANCE_YEN).toBe(1000)
+    expect(driveAllowanceYen()).toBe(1000)
 
     const drv = {
       'ihi_202606_2': { am: [2, 5], pm: [2, 11] },   // 2台: 行き2名・帰り2名
@@ -140,18 +140,29 @@ describe('calcMonthlyAllowances（実データ3ヶ月の検証値と一致）', 
     }
     const r = calcMonthlyAllowances(att('202606'), '202606', commutes1500, drv, YAKUIN)
     expect(r.get(2)!.driveLegs).toBe(2)
-    expect(r.get(2)!.driveAllowanceYen).toBe(2000)   // IHI判定値125分 → 片道1,000円
+    expect(r.get(2)!.driveAllowanceYen).toBe(2000)   // 1,000円 × 2便
     expect(r.get(5)!.driveAllowanceYen).toBe(1000)
     expect(r.get(11)!.driveAllowanceYen).toBe(1000)
     expect(r.get(1)!.driveAllowanceYen).toBe(2000)   // 日当は対象外でも運転手当は労働の対価
     expect(r.get(1)!.siteAllowanceYen).toBe(0)
   })
 
-  it('運転手当: 判定値60分未満の現場は片道500円', () => {
-    const near = { kinjo: { judgedMin: 45 } }
+  it('運転手当: 近い現場でも一律1,000円（判定値に依存しない）', () => {
+    const near = { kinjo: { judgedMin: 20 } }        // 判定値20分の近距離現場
     const drv = { 'kinjo_202606_2': { am: [2], pm: [2] } }
     const r = calcMonthlyAllowances({}, '202606', near, drv, [])
-    expect(r.get(2)!.driveAllowanceYen).toBe(1000)   // 500円 × 2便
+    expect(r.get(2)!.driveAllowanceYen).toBe(2000)   // 1,000円 × 2便（旧仕様は500円×2=1,000）
+  })
+
+  it('日当が保留の間: 判定値を渡さなければ日当0円・運転手当だけ出る', () => {
+    // loadMonthlyAllowances は日当オフのとき commutes を空で渡す（=この状態）
+    const drv = { 'ihi_202606_2': { am: [2], pm: [2] } }
+    const r = calcMonthlyAllowances(att('202606'), '202606', {}, drv, YAKUIN)
+    for (const v of r.values()) {
+      expect(v.siteAllowanceYen).toBe(0)
+      expect(v.allowanceDays).toBe(0)
+    }
+    expect(r.get(2)!.driveAllowanceYen).toBe(2000)
   })
 
   it('長期従事の履歴を渡すと逓減が効く', () => {

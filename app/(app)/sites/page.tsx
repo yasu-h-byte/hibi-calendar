@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { fmtYen } from '@/lib/format'
 import { todayJstIso } from '@/lib/date-utils'
-import { dailyAllowanceYen, driveAllowanceYen, judgeFromSamples, COMMUTE_SAMPLE_TARGET } from '@/lib/allowance'
+import { dailyAllowanceYen, DRIVE_ALLOWANCE_YEN, SITE_ALLOWANCE_FROM_YM, judgeFromSamples, COMMUTE_SAMPLE_TARGET } from '@/lib/allowance'
 
 interface RatePeriod {
   from: string
@@ -647,8 +647,11 @@ export default function SitesPage() {
                   <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-xs space-y-1">
                     <div>判定値 <b className="text-base tabular-nums">{formCommute.judgedMin}分</b>（{formCommute.frozenAt?.slice(0, 10)} 凍結）</div>
                     <div className="text-gray-600 dark:text-gray-300">
-                      遠方現場日当: <b>{dailyAllowanceYen(formCommute.judgedMin) > 0 ? `¥${dailyAllowanceYen(formCommute.judgedMin).toLocaleString()}/日` : '対象外'}</b>
-                      ／ 運転手当: <b>¥{driveAllowanceYen(formCommute.judgedMin).toLocaleString()}/片道</b>
+                      遠方現場日当: <b>{SITE_ALLOWANCE_FROM_YM === null ? '制度を再検討中のため保留（0円）'
+                        : dailyAllowanceYen(formCommute.judgedMin) > 0 ? `¥${dailyAllowanceYen(formCommute.judgedMin).toLocaleString()}/日` : '対象外'}</b>
+                    </div>
+                    <div className="text-[10px] text-gray-500">
+                      ※ 運転手当は全現場一律 ¥{DRIVE_ALLOWANCE_YEN.toLocaleString()}/片道 で、判定値とは関係ありません。
                     </div>
                     <div className="text-[10px] text-gray-400">凍結後は変更できません（非課税の根拠となる客観基準のため）。経路変更等の事由がある場合のみ、記録のうえ再測定してください。</div>
                   </div>
@@ -712,7 +715,10 @@ export default function SitesPage() {
                           {j.completeDays >= COMMUTE_SAMPLE_TARGET && j.judged !== null && (
                             <button type="button"
                               onClick={() => {
-                                if (confirm(`判定値を ${j.judged}分 で凍結します。\n\n日当: ${dailyAllowanceYen(j.judged!) > 0 ? `¥${dailyAllowanceYen(j.judged!).toLocaleString()}/日` : '対象外'}\n運転手当: ¥${driveAllowanceYen(j.judged!).toLocaleString()}/片道\n\n凍結後は変更できません。よろしいですか？`)) {
+                                const dailyMsg = SITE_ALLOWANCE_FROM_YM === null
+                                  ? '遠方現場日当は制度を再検討中のため現在は支給されません（0円）'
+                                  : (dailyAllowanceYen(j.judged!) > 0 ? `日当: ¥${dailyAllowanceYen(j.judged!).toLocaleString()}/日` : '日当: 対象外')
+                                if (confirm(`判定値を ${j.judged}分 で凍結します。\n\n${dailyMsg}\n\n※ 運転手当は全現場一律 ¥${DRIVE_ALLOWANCE_YEN.toLocaleString()}/片道で、判定値とは関係ありません。\n\n凍結後は変更できません。よろしいですか？`)) {
                                   setFormCommute({ ...formCommute, judgedMin: j.judged!, frozenAt: new Date().toISOString() })
                                 }
                               }}

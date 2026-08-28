@@ -15,13 +15,24 @@
 import type { AttendanceEntry } from '@/types'
 
 /**
- * 手当の適用開始月。
+ * 手当の適用開始月。**日当と運転手当で別のゲート**を持つ（2026-08-28 代表決定）。
  *
- * ⚠️ このゲートは**給与計算への組み込み側（computeMonthly）で適用する**。
+ * ⚠️ このゲートは**給与計算への組み込み側（loadMonthlyAllowances）で適用する**。
  *    calcMonthlyAllowances 自体は任意の月を計算できるようにしてある——
  *    施行前の実データ（2026-06〜08）でルールを検証・テストするため。
  */
-export const ALLOWANCE_FROM_YM = '202610'
+
+/** 運転手当の適用開始月。2026年10月施行 */
+export const DRIVE_ALLOWANCE_FROM_YM = '202610'
+
+/**
+ * 遠方現場日当の適用開始月。
+ *
+ * **2026-08-28 代表決定により制度を再検討中のため保留（null＝無効）**。
+ * 再開するときはここに 'YYYYMM' を入れるだけでよい。null の間は、現場に判定値が
+ * 凍結されていても日当は一切発生しない（住所登録の有無に依存しない確実な停止）。
+ */
+export const SITE_ALLOWANCE_FROM_YM: string | null = null
 
 /** 日当のしきい値（判定値・分）。施行後に動かさないこと。 */
 export const DAILY_ALLOWANCE_TIERS = [
@@ -30,18 +41,16 @@ export const DAILY_ALLOWANCE_TIERS = [
 ] as const
 
 /**
- * 運転手当（片道あたり・行きも帰りも同額）。
- * 現場の判定値（朝夕平均の片道換算）が60分未満なら500円、60分以上なら1,000円。
- * 未測定の現場は暫定500円——月次は毎回導出なので、判定値の凍結後に
- * その月を再計算すれば自動で正しい額になる（ロック前に凍結する運用）。
+ * 運転手当（片道あたり）。**全現場一律・定額**（2026-08-28 代表決定）。
+ *
+ * 行きも帰りも同額。所要時間・距離・現場を問わず一律なので、判定値（通勤時間の実測）に
+ * 依存しない＝運転手当のために現場の住所を登録する必要はない。
+ * 旧案（60分未満500円/60分以上1,000円の2区分）は廃止した。
  */
-export const DRIVE_ALLOWANCE_TIERS = { underMin: 60, underYen: 500, overYen: 1000 } as const
+export const DRIVE_ALLOWANCE_YEN = 1000
 
-export function driveAllowanceYen(judgedMin: number | undefined | null): number {
-  if (judgedMin == null) return DRIVE_ALLOWANCE_TIERS.underYen
-  return judgedMin < DRIVE_ALLOWANCE_TIERS.underMin
-    ? DRIVE_ALLOWANCE_TIERS.underYen
-    : DRIVE_ALLOWANCE_TIERS.overYen
+export function driveAllowanceYen(): number {
+  return DRIVE_ALLOWANCE_YEN
 }
 
 /** 長期従事: 起算日から満12ヶ月まで全額 → 満24ヶ月まで半額 → 以降0。 */
@@ -241,7 +250,7 @@ export function calcMonthlyAllowances(
   for (const [key, legs] of Object.entries(drv)) {
     if (!key.includes(`_${ym}_`)) continue
     const sid = key.slice(0, key.indexOf(`_${ym}_`))
-    const yenPerLeg = driveAllowanceYen(commutes[sid]?.judgedMin)
+    const yenPerLeg = driveAllowanceYen()
     for (const leg of ['am', 'pm'] as const) {
       for (const wid of legs[leg] || []) {
         const v = get(wid)
