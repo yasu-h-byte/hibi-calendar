@@ -66,33 +66,6 @@ export default function AttendanceGrid({
   const nightDaySet = useMemo(() => new Set(nightDays || []), [nightDays])
   const isNightDay = (day: number) => nightDaySet.has(day)
 
-  // 「現場都合休みの日」の判定（待機中セルの 0.6補 ボタンの表示条件）。
-  //
-  // ■ カレンダー休日(off/holiday)には出さない（2026-08-26 代表確認）
-  //   カレンダー休日に補償が必要なのは **旧制度の3名だけ**で、新制度の人は該当しない。
-  //   旧制度の人はそもそもレガシーUI（待機中セルを通らず最初から 0.6補 を選べる）なので、
-  //   このボタンの対象外。つまりカレンダー休日にこのボタンを出す必要はない。
-  //   ※ 8/1(off)に補償が入っているのを根拠に一度この条件を外したが、
-  //     その2名は useOldRules=true の旧制度（フン・フォン）で、判断の根拠として誤りだった。
-  //
-  // ■ 出勤日でも、その日の出勤者の有無でさらに絞る（過剰表示の抑制）
-  //   ・誰かに補償日が入っている日 → 現場都合休み確定。残りの人にも出す
-  //   ・まだ誰も出勤していない日   → 現場都合休みの可能性あり。1人目を入れられる
-  //   ・既に誰かが出勤している日   → 現場は動いているので出さない
-  const compDayInfo = useMemo(() => {
-    const hasComp = new Set<number>()
-    const hasWork = new Set<number>()
-    for (const entries of Object.values(workerEntries)) {
-      for (const [dayStr, e] of Object.entries(entries || {})) {
-        if (!e) continue
-        const day = Number(dayStr)
-        if (e.w === 0.6) hasComp.add(day)
-        else if ((e.w || 0) > 0) hasWork.add(day)
-      }
-    }
-    return { hasComp, hasWork }
-  }, [workerEntries])
-
   const unapprovedDays = days.filter(d => !localApprovals[d.day])
   // 職長承認済かつ最終未承認の日だけが最終承認の対象
   const finalizableDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day])
@@ -406,10 +379,15 @@ export default function AttendanceGrid({
                                 isLocked={isLocked}
                                 onStatusChange={onTimeStatusChange}
                                 showCompButton={
-                                  // カレンダー休日は対象外（新制度は該当しない。旧制度3名は別UI）
-                                  calDay !== 'off' && calDay !== 'holiday' &&
-                                  // 既に誰かに補償が入っている日 or その日まだ誰も出勤していない日
-                                  (compDayInfo.hasComp.has(d.day) || !compDayInfo.hasWork.has(d.day))
+                                  // カレンダー休日(off/holiday)だけ対象外（2026-08-26 代表確認）。
+                                  //   カレンダー休日に補償が要るのは旧制度の3名だけで、
+                                  //   その人たちはレガシーUI（待機中セルを通らない）なので対象外。
+                                  //
+                                  // 2026-08-28 修正: 「その日まだ誰も出勤していない日」という絞り込みを廃止。
+                                  //   現場は動いていても特定の人だけ休ませるケース（人員調整など）があり、
+                                  //   その人に 0.6補 を入れられなくなっていた。稼働日の未入力セルなら常に出す
+                                  //   （ホバー時のみ表示なので画面のノイズにはならない）。
+                                  calDay !== 'off' && calDay !== 'holiday'
                                 }
                               />
                             )
