@@ -42,6 +42,7 @@ const EMPTY_FORM = {
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', birthDate: '', retired: '', salary: '',
   jpGrade: '', jpStep: '',
   canDrive: undefined as boolean | undefined,
+  breakShortenMin: '', breakShortenFrom: '',
   visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '',
   useOldRules: false,
 }
@@ -203,6 +204,8 @@ export default function WorkersPage() {
       jpGrade: w.jpGrade || '',
       jpStep: w.jpStep ? String(w.jpStep) : '',
       canDrive: w.canDrive,
+      breakShortenMin: w.breakShortenMin ? String(w.breakShortenMin) : '',
+      breakShortenFrom: w.breakShortenFrom || '',
       retired: w.retired || '',
       salary: String(w.salary || ''),
       visaExpiry: w.visaExpiry || '',
@@ -264,8 +267,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId !== null
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -809,6 +812,29 @@ export default function WorkersPage() {
                     <input type="date" value={form.hireDate} onChange={e => setForm({ ...form, hireDate: e.target.value })}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                   </div>
+                  {/* 休憩短縮に伴う定例の所定外労働（個別契約のある人だけ） */}
+                  <div className="col-span-2 border-t border-gray-200 dark:border-gray-700 pt-2 mt-1">
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                      休憩短縮に伴う所定外労働（個別契約のある人だけ）
+                    </label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input type="number" min="0" max="120" value={form.breakShortenMin}
+                        onChange={e => setForm({ ...form, breakShortenMin: e.target.value })}
+                        placeholder="20"
+                        className="w-20 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
+                      <span className="text-xs text-gray-500">分/日　開始月</span>
+                      <input type="month"
+                        value={form.breakShortenFrom ? `${form.breakShortenFrom.slice(0, 4)}-${form.breakShortenFrom.slice(4, 6)}` : ''}
+                        onChange={e => setForm({ ...form, breakShortenFrom: e.target.value.replace('-', '') })}
+                        className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                      契約より休憩を短くした分を、出勤した日ごとに所定外労働として支払います。
+                      法定内（1日8時間以内）のため<b>割増なし（通常時給）</b>で計算します。
+                      有給・休み・補償日・帰国中の日は対象外。開始月より前の給与は変わりません。
+                    </p>
+                  </div>
+
                   {/* 運転者の選択肢に出すか。未設定なら日本人=あり／外国人=なし */}
                   <div className="col-span-2">
                     <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">

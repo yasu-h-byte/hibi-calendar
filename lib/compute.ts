@@ -84,6 +84,8 @@ export interface RawWorker {
   dispatchTo?: string  // 出向先名（空なら通常勤務）
   dispatchFrom?: string  // 出向開始月 YYYY-MM（空なら全期間出向扱い）
   useOldRules?: boolean  // 旧ルール（変形労働制以前）給与計算を継続するフラグ（個別対応）
+  breakShortenMin?: number   // 休憩短縮に伴う定例の所定外労働（分/日）。詳細は types/index.ts
+  breakShortenFrom?: string  // 上記の適用開始月 'YYYYMM'
 }
 
 export interface RawSite {
@@ -1101,6 +1103,11 @@ export interface WorkerMonthly {
   // ── 2026-08 追加: 遠方現場日当・運転手当（2026-10-01 施行、lib/allowance.ts が規則の唯一の置き場） ──
   //   netPay / salaryNetPay / totalCost には加算済みの状態で返る（内訳表示用にここへも分けて持つ）。
   //   施行前の月（ALLOWANCE_FROM_YM 未満）ではフィールド自体が付かない。
+  // ── 2026-09 追加: 休憩短縮に伴う定例の所定外労働（フン 104 の個別契約）──
+  //   休憩を40分×2 → 30分×2 に揃えた分（20分/日）を、出勤日ごとに所定外労働として
+  //   **割増なし（通常賃金1.0倍）** で支払う。法定内（1日8時間以内）のため割増不要。
+  breakShortenHours?: number      // 加算した時間（出勤日数 × 分 ÷ 60）
+  breakShortenAllowance?: number  // 休憩短縮手当 = 通常時給 × breakShortenHours
   siteAllowance?: number   // 遠方現場日当（非課税・実費弁償）。長期従事の逓減適用後
   allowanceDays?: number   // 日当の対象日数
   driveAllowance?: number  // 運転手当（課税。割増賃金基礎への算入は社労士レビュー後）
@@ -1467,6 +1474,20 @@ export function computeMonthly(
     }
   }
 
+  // ── 休憩短縮に伴う定例の所定外労働（2026-09 施行・フン 104 の個別契約）──
+  //   出勤した日にだけ加算する（有給・休み・補償日・帰国中は対象外＝actualWorkDays が
+  //   ちょうどその条件）。金額は下の給与ブランチで「通常時給 × 時間」（割増なし）で計算する。
+  //   ⚠️ 給与計算ループより前に確定させること（後ろに置くと各ブランチが読めない）
+  for (const wm of workerMap.values()) {
+    const src = main.workers.find(w => w.id === wm.id)
+    const min = src?.breakShortenMin ?? 0
+    const from = src?.breakShortenFrom
+    if (min > 0 && from && ym >= from && wm.actualWorkDays > 0) {
+      // 金額は丸めない正確な時間から算出する（3桁で丸めると1円ズレる）。表示側で丸める
+      wm.breakShortenHours = wm.actualWorkDays * min / 60
+    }
+  }
+
   // Calculate worker costs
   for (const wm of workerMap.values()) {
     wm.workAll = wm.workDays + wm.compDays * 0.6  // 出勤日数（0.6含む）
@@ -1778,8 +1799,12 @@ export function computeMonthly(
       const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays - wm.compDays)
       const absentDeduction = floorYen(hourlyRate * dailyHoursOld * absentDays)  // = 日給 × 欠勤日数（切捨: 過少払い防止）
       const compBaseDeduction = floorYen(hourlyRate * dailyHoursOld * wm.compDays)  // 補償日 通常分控除（満額・切捨）
-      const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
-      const salaryNet = basePay + compAllowance + otAllowance - absentDeduction - compBaseDeduction
+      // 休憩短縮分（20分/日など）は法定内の所定外労働なので**割増なしの通常時給**で支払う
+      const bsHours = wm.breakShortenHours || 0
+      const breakShortenAllowance = bsHours > 0 ? ceilYen(hourlyRate * bsHours) : 0
+      if (breakShortenAllowance > 0) wm.breakShortenAllowance = breakShortenAllowance
+      const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours + bsHours
+      const salaryNet = basePay + compAllowance + otAllowance + breakShortenAllowance - absentDeduction - compBaseDeduction
 
       wm.prescribedHours = prescribedH
       wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
@@ -1939,6 +1964,16 @@ export function computeMonthly(
           if (wm.isDispatched) site.dispatchDeduction = (site.dispatchDeduction || 0) + amount
         }
       }
+    }
+  }
+
+  // 未対応ブランチで黙って無視されるのを防ぐ（対応は旧ルール固定月給のみ。2026-09 時点でフン 104 だけ）
+  for (const wm of workerMap.values()) {
+    if ((wm.breakShortenHours || 0) > 0 && wm.breakShortenAllowance === undefined) {
+      console.error(
+        `[compute] 休憩短縮手当が未対応の給与区分です: ${wm.name} (${ym})。` +
+        `設定は旧ルール固定月給のスタッフにのみ対応しています。人員マスタの設定を確認してください。`
+      )
     }
   }
 

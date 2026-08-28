@@ -823,6 +823,8 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   // 遠方現場日当・運転手当（2026-10 施行）。施行前の月は列自体を出さない
   //   （過去月のExcelの列構成・列幅を1ミリも変えない＝奥寺さんの既存の見方を壊さない）
   const withAllowance = ym >= ALLOWANCE_FROM_YM
+  // 休憩短縮手当（2026-09〜）: 該当者がいる月だけ列を出す（現状フンさんのみ）
+  const withBreakShorten = workers.some(w => ((w as { breakShortenAllowance?: number }).breakShortenAllowance || 0) > 0)
   const isWorkerOldRules = (w: WorkerMonthly): boolean => {
     if (!useNewRulesByMonth) return true  // 月全体が旧ルール
     return (w as { useOldRules?: boolean }).useOldRules === true
@@ -854,6 +856,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const foreignHeadersOld = ['名前', '現場', '単価種別', '単価', '所定日数', '所定時間(h)',
     '実出勤日数', '補償日', '有給日数', '実労働時間', '残業時間',
     '基本給', '休業補償', '残業手当',
+    ...(withBreakShorten ? ['休憩短縮手当'] : []),
     ...(withAllowance ? ['遠方日当', '運転手当'] : []),
     '欠勤日数', '欠勤控除', '補償日控除', '支給額合計']
   // 日本人: 8列
@@ -939,6 +942,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
           w.fixedBasePay || w.basePay || 0,
           w.additionalAllowance || 0,  // 旧ルールでは休業補償（会社都合休の60%還元分）
           w.otAllowance || 0,
+          ...(withBreakShorten ? [(w as { breakShortenAllowance?: number }).breakShortenAllowance || 0] : []),
           ...(withAllowance ? [w.siteAllowance || 0, w.driveAllowance || 0] : []),
           w.absence || 0, w.absentDeduction || 0,
           w.compBaseDeduction || 0,    // 補償日控除（会社都合休の通常分・固定給は満額前提のため一旦控除）
@@ -987,6 +991,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         ws.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0),
         ws.reduce((s, w) => s + (w.additionalAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.otAllowance || 0), 0),
+        ...(withBreakShorten ? [ws.reduce((s, w) => s + ((w as { breakShortenAllowance?: number }).breakShortenAllowance || 0), 0)] : []),
         ...(withAllowance ? [
           ws.reduce((s, w) => s + (w.siteAllowance || 0), 0),
           ws.reduce((s, w) => s + (w.driveAllowance || 0), 0),
@@ -1013,7 +1018,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         8, 11, 14,
       ])
     } else {
-      setColWidths(sheet, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, ...(withAllowance ? [10, 10] : []), 8, 12, 12, 14])
+      setColWidths(sheet, [14, 16, 8, 10, 10, 10, 10, 8, 8, 10, 10, 12, 12, 10, ...(withBreakShorten ? [12] : []), ...(withAllowance ? [10, 10] : []), 8, 12, 12, 14])
     }
     return sheet
   }

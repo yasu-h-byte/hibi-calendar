@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive, breakShortenMin, breakShortenFrom } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -73,6 +73,10 @@ export async function POST(request: NextRequest) {
       }
       if (typeof canDrive === 'boolean') {
         (workerData as Record<string, unknown>).canDrive = canDrive
+      }
+      if (Number(breakShortenMin) > 0 && breakShortenFrom) {
+        (workerData as Record<string, unknown>).breakShortenMin = Number(breakShortenMin)
+        ;(workerData as Record<string, unknown>).breakShortenFrom = String(breakShortenFrom)
       }
       // 号俸制（日本人社員）。未設定だと年次改定が確定できない
       if (jpGrade) {

@@ -43,6 +43,8 @@ export async function getWorkers(): Promise<Worker[]> {
     jpGrade: (w.jpGrade as string) || undefined,
     jpStep: (w.jpStep as number) || undefined,
     canDrive: typeof w.canDrive === 'boolean' ? (w.canDrive as boolean) : undefined,
+    breakShortenMin: (w.breakShortenMin as number) || undefined,
+    breakShortenFrom: (w.breakShortenFrom as string) || undefined,
   }))
 
   return workers

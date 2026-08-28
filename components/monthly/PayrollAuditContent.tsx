@@ -69,6 +69,9 @@ export interface PayrollAuditWorker {
   nightHours?: number
   nightAllowance?: number
   compAllowance?: number
+  // 休憩短縮手当（2026-09 施行。支給額に加算済み）
+  breakShortenHours?: number
+  breakShortenAllowance?: number
   // 遠方現場日当・運転手当（2026-10 施行。支給額に加算済み）
   siteAllowance?: number
   allowanceDays?: number
@@ -194,6 +197,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
       + (w.paidLeaveAllowance || 0)
       + (w.legalHolidayAllowance || 0)
       + (w.otAllowance || 0)
+      + (w.breakShortenAllowance || 0)
       + (w.siteAllowance || 0)
       + (w.driveAllowance || 0)
       - (w.absentDeduction || 0)
@@ -207,6 +211,7 @@ export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDa
       + (w.legalHolidayAllowance || 0)
       + (w.nightAllowance || 0)
       + (w.compAllowance || 0)
+      + (w.breakShortenAllowance || 0)
       + (w.siteAllowance || 0)
       + (w.driveAllowance || 0)
       - (w.absentDeduction || 0)
@@ -513,6 +518,17 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 <td>深夜労働手当 (0.25倍)</td>
                 <td className="font-mono">
                   <div className="font-bold">{fmtYen(w.nightAllowance || 0)}</div>
+                </td>
+              </tr>
+            )}
+            {(w.breakShortenAllowance || 0) > 0 && (
+              <tr>
+                <td>休憩短縮手当 <span className="text-[10px] text-gray-500">(所定外・法定内のため割増なし)</span></td>
+                <td className="font-mono">
+                  <div className="text-[10px] text-gray-500">
+                    {fmtNum(w.breakShortenHours || 0)}h（出勤日 × 短縮分）× 通常時給
+                  </div>
+                  <div className="font-bold">{fmtYen(w.breakShortenAllowance || 0)}</div>
                 </td>
               </tr>
             )}
