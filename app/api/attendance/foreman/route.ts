@@ -162,7 +162,8 @@ export async function GET(request: NextRequest) {
       if (isWorkDay) {
         for (const w of foreignWorkers) {
           const e = attData[attKey(site.id, w.id, ym, dd)]
-          if (e && typeof e === 'object' && Object.keys(e).length > 0) entered++
+          // 判定はリスト表示と同じ getEntryStatus に統一（0.6補償=入力済み、残骸のみ=未入力）
+          if (getEntryStatus(e) !== 'none') entered++
           else missingNames.push(w.name)
         }
       }
@@ -262,10 +263,8 @@ export async function POST(request: NextRequest) {
         const dNum = Number(dd)
         if (!Number.isInteger(dNum) || dNum < 1 || dNum > 31) { skipped.push({ day: dNum, reason: '不正な日付' }); continue }
         if (new Date(year, month - 1, dNum) > todayJstB) { skipped.push({ day: dNum, reason: '未来日' }); continue }
-        const missing = workersForBulk.filter(w => {
-          const e = attD[attKey(site.id, w.id, ym, dNum)]
-          return !(e && typeof e === 'object' && Object.keys(e).length > 0)
-        })
+        const missing = workersForBulk.filter(w =>
+          getEntryStatus(attD[attKey(site.id, w.id, ym, dNum)]) === 'none')
         if (missing.length > 0) {
           skipped.push({ day: dNum, reason: `未入力: ${missing.map(w => w.name).join('、')}` })
           continue

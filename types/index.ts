@@ -373,7 +373,7 @@ export function isTimeBasedMobile(ym: string): boolean {
   return ym >= '202604'
 }
 
-export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_off' | 'home_leave' | 'exam' | 'none'
+export type AttendanceStatus = 'work' | 'overtime' | 'rest' | 'leave' | 'site_off' | 'home_leave' | 'exam' | 'comp' | 'none'
 
 /**
  * 出面の2段階承認データ

@@ -279,6 +279,9 @@ export function getEntryStatus(entry: AttendanceEntry | null | undefined): Atten
   if (entry.hk && entry.hk === 1) return 'home_leave'
   if (entry.w === 1 && entry.o && entry.o > 0) return 'overtime'
   if (entry.w === 1) return 'work'
+  // 0.6補償（現場都合休み）。w=1 だけを出勤とみなす旧判定では 'none' に落ち、
+  // スマホ・職長画面で「未入力」と誤表示されていた（2026-08-28 実機確認で発覚）
+  if (entry.w === 0.6) return 'comp'
   return 'none'
 }
 
@@ -291,6 +294,7 @@ export function getStatusLabel(status: AttendanceStatus): string {
     case 'site_off': return 'げんばやすみ'
     case 'home_leave': return 'きこくちゅう'
     case 'exam': return 'しけん'
+    case 'comp': return 'げんばやすみ（ほしょう）'
     case 'none': return 'みにゅうりょく'
   }
 }
@@ -304,6 +308,7 @@ export function getStatusEmoji(status: AttendanceStatus): string {
     case 'site_off': return '🚧'
     case 'home_leave': return '✈️'
     case 'exam': return '📝'
+    case 'comp': return '🚧'
     case 'none': return '—'
   }
 }
@@ -317,6 +322,7 @@ export function getStatusColor(status: AttendanceStatus): string {
     case 'site_off': return 'bg-yellow-100 text-yellow-700'
     case 'home_leave': return 'bg-cyan-100 text-cyan-700'
     case 'exam': return 'bg-purple-100 text-purple-700'
+    case 'comp': return 'bg-yellow-100 text-yellow-700'
     case 'none': return 'bg-red-50 text-red-400'
   }
 }
