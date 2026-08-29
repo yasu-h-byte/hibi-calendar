@@ -35,9 +35,10 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     // 人事・労務
     { label: '人員マスタ', icon: '👷', href: '/workers', section: '人事・労務', roles: ['admin', 'jimu'] },
     { label: '休暇管理', icon: '🌴', href: '/leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
-    { label: '評価管理', icon: '📋', href: '/evaluation', section: '人事・労務', roles: ['admin', 'approver'] },
-    { label: '昇給履歴', icon: '💰', href: '/workers?tab=raise-history', section: '人事・労務', roles: ['admin', 'approver'] },
-    { label: '賃金制度', icon: '💴', href: '/wage', section: '人事・労務', roles: ['admin', 'approver'] },
+    // 2026-08-28: 評価管理・昇給履歴・賃金制度の3本を「賃金・評価」ハブに集約。
+    //   名前から日本人向け/ベトナム人向けが分からなかったため、ハブで国籍別に分岐する。
+    //   旧ページ（/evaluation・/wage 等）はそのまま残っており、直リンクも有効。
+    { label: '賃金・評価', icon: '💴', href: '/compensation', section: '人事・労務', roles: ['admin', 'approver'] },
     // 「帰国・休暇情報」は「休暇管理 → 帰国情報タブ」に統合
     { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人事・労務', roles: ['admin', 'jimu'] },
     // 現場・外注
@@ -63,6 +64,7 @@ const MENU_ID_MAP: Record<string, string> = {
   // '/leave-requests': removed (merged into /leave)
   '/evaluation': 'evaluation',
   '/wage': 'wage',
+  '/compensation': 'compensation',
   // '/home-leave' は廃止（/leave?tab=homeleave に統合）
   '/tool-budget': 'tool-budget',
   '/access-log': 'access-log',
