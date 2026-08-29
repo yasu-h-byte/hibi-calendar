@@ -157,7 +157,17 @@ export default function RevisionPanel() {
   const totals = useMemo(() => {
     if (!data) return null
     const r = data.revision
-    return { raise: r.raisePerDay, annual: r.annualCost, ok: r.applied, blocked: r.blocked, ineligible: r.ineligible }
+    // 平均昇給率（2026-08-28 追加）:
+    //   総額ベース = 昇給合計 ÷ 名簿全員の現在日額合計（処遇固定も母数に含む＝人件費の伸び）
+    //   単純平均   = 昇給者ごとの率の平均（個人の体感に近い）
+    const oldSum = r.rows.reduce((s2, row) => s2 + (row.oldTotal ?? 0), 0)
+    const rates = r.rows.filter(row => row.result).map(row => row.result!.upRate)
+    return {
+      raise: r.raisePerDay, annual: r.annualCost,
+      ok: r.applied, blocked: r.blocked, ineligible: r.ineligible,
+      avgRateTotal: oldSum > 0 ? r.raisePerDay / oldSum : 0,
+      avgRateSimple: rates.length > 0 ? rates.reduce((a, b) => a + b, 0) / rates.length : 0,
+    }
   }, [data])
 
   if (allowed === null) return <div className="py-10 text-gray-500">読み込み中…</div>
@@ -201,8 +211,20 @@ export default function RevisionPanel() {
       <section className="grid gap-4 md:grid-cols-2">
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="text-xs text-gray-500">昇給額 合計</div>
-          <div className="text-2xl font-bold tabular-nums">{yen(totals.raise)}<span className="text-xs font-normal text-gray-400"> / 日</span></div>
-          <div className="text-xs text-gray-500 mt-0.5">年間 {yen(totals.annual)}（290日換算）</div>
+          <div className="flex flex-wrap items-baseline gap-x-3">
+            <div className="text-2xl font-bold tabular-nums">{yen(totals.raise)}<span className="text-xs font-normal text-gray-400"> / 日</span></div>
+            <div className="text-lg font-bold tabular-nums text-green-700 dark:text-green-400">
+              {(totals.avgRateTotal * 100).toFixed(2)}%
+              <span className="text-xs font-normal text-gray-400"> 平均昇給率</span>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 mt-0.5">
+            年間 {yen(totals.annual)}（290日換算）／
+            昇給者{totals.ok}名の単純平均 {(totals.avgRateSimple * 100).toFixed(2)}%
+          </div>
+          <div className="text-[11px] text-gray-400 mt-0.5">
+            平均昇給率 = 昇給合計 ÷ 名簿全員の現在日額合計（処遇固定・対象外も母数に含む）
+          </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
