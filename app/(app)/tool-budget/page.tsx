@@ -165,8 +165,10 @@ export default function ToolBudgetPage() {
                       onClick={() => setModalWorkerId(w.workerId)}>
                       <td className="px-4 py-3 font-medium text-hibi-navy">{w.workerName}</td>
                       <td className="text-center px-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">
-                          {visaLabel(w.visa)}
+                        {/* 2026-08-28: 日本人も対象になったので visa 無しは「日本人」バッジ */}
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                          visaLabel(w.visa) ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {visaLabel(w.visa) || '日本人'}
                         </span>
                       </td>
                       <td className="text-center px-2 tabular-nums">
@@ -360,8 +362,9 @@ function WorkerModal({
           <div>
             <h2 className="text-lg font-bold text-hibi-navy flex items-center gap-2">
               🔧 {worker.workerName}
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">
-                {visaLabel(worker.visa)}
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                visaLabel(worker.visa) ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                {visaLabel(worker.visa) || '日本人'}
               </span>
             </h2>
             {worker.period && (

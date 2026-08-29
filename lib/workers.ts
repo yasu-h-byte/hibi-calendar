@@ -172,6 +172,29 @@ export function isAlreadyRetired(
 }
 
 /**
+ * 道具代管理の対象者判定（2026-08-28 に日本人へ拡大）
+ *
+ * - 外国人（技能実習・特定技能）… 従来から対象
+ * - 日本人の現場スタッフ（visa 無し/none で、役員・事務を除く）… 2026-08-28 追加
+ * - 今日時点で退職済みは除外（退職「予定」日が未来なら在職中扱い）
+ *
+ * tool-budget API と スタッフスマホ画面の道具代カードの両方がこれを使う。
+ * 判定を変えるときはここだけ直す。
+ */
+export function isToolBudgetEligible(w: {
+  visa?: string | null
+  job?: string | null
+  retired?: string | null
+}): boolean {
+  if (isAlreadyRetired(w.retired)) return false
+  const visa = w.visa || 'none'
+  if (visa.startsWith('jisshu') || visa.startsWith('tokutei')) return true
+  // 日本人: 現場に出る職種のみ（役員・事務は道具代の対象外）
+  if (visa === 'none') return w.job !== 'yakuin' && w.job !== 'jimu'
+  return false
+}
+
+/**
  * カレンダー署名対象スタッフ判定の共通述語（2026-05-27 追加）
  *
  * 「外国人 × トークン保有 × 当該月在籍 × 当該月全期間帰国でない」の条件を

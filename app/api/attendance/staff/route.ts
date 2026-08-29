@@ -219,9 +219,9 @@ export async function GET(request: NextRequest) {
     let toolBudgetPeriodStart: string | null = null
     let toolBudgetPeriodEnd: string | null = null
     try {
-      const visa = worker.visaType
-      const isForeign = visa && (visa.startsWith('jisshu') || visa.startsWith('tokutei'))
-      if (isForeign) {
+      // 2026-08-28: 対象判定を isToolBudgetEligible に統一（日本人の現場スタッフも対象に）
+      const { isToolBudgetEligible } = await import('@/lib/workers')
+      if (isToolBudgetEligible({ visa: worker.visaType, job: worker.jobType, retired: worker.retired })) {
         const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
         if (tbSnap.exists()) {
           const tbData = tbSnap.data()
@@ -255,7 +255,7 @@ export async function GET(request: NextRequest) {
                 const tbUsed = (tbRecord.purchases || []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
                 toolBudgetRemaining = tbRecord.budget - tbUsed
               } else {
-                toolBudgetRemaining = tbData.budgetByVisa?.[visa] ?? tbData.defaultBudget ?? 30000
+                toolBudgetRemaining = tbData.budgetByVisa?.[worker.visaType || ''] ?? tbData.defaultBudget ?? 30000
               }
             }
           }
