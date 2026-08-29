@@ -435,13 +435,24 @@ export default function RevisionPanel() {
                                 <span className="text-[11px] text-gray-500">事由に当てはまらない分を直接動かす（上限なし）</span>
                               </div>
                               <div className="flex flex-wrap items-start gap-2">
+                                {/* 2026-08-28: number input の onChange 即保存は、1文字ごとに
+                                    保存→再取得→disabled が走って入力が消える・カーソルが飛ぶ
+                                    不安定さがあった。1クリック=1保存の ± ボタンに置き換える */}
                                 <div className="flex items-center gap-1">
-                                  <input
-                                    type="number" step={1} disabled={busy || applied}
-                                    value={e.discretionaryPitch ?? 0}
-                                    onChange={ev => setEntry(m.id, { discretionaryPitch: Number(ev.target.value) || 0 })}
-                                    className="w-20 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-lg px-2 py-2 text-sm tabular-nums"
-                                  />
+                                  <button
+                                    type="button" disabled={busy || applied}
+                                    onClick={() => setEntry(m.id, { discretionaryPitch: dp - 1 })}
+                                    className="w-9 h-9 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-base font-bold hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+                                  >−</button>
+                                  <span className={`w-12 text-center text-sm font-bold tabular-nums ${
+                                    dp > 0 ? 'text-green-700 dark:text-green-400' : dp < 0 ? 'text-red-600' : ''}`}>
+                                    {dp === 0 ? '0' : signedPitch(dp)}
+                                  </span>
+                                  <button
+                                    type="button" disabled={busy || applied}
+                                    onClick={() => setEntry(m.id, { discretionaryPitch: dp + 1 })}
+                                    className="w-9 h-9 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-base font-bold hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40"
+                                  >＋</button>
                                   <span className="text-xs text-gray-500">号</span>
                                 </div>
                                 <input
