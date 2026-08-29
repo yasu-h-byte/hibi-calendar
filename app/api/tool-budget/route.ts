@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
-import { getWorkerByToken, isToolBudgetEligible } from '@/lib/workers'
+import { getWorkerByToken, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
 
 // ────────────────────────────────────────
 // 各スタッフ個別の期間計算（入社日ベース、1年サイクル）
@@ -84,6 +84,8 @@ interface ToolBudgetRecord {
 interface ToolBudgetData {
   defaultBudget: number
   budgetByVisa?: Record<string, number>
+  /** 日本人の職種別既定予算（2026-08-28 追加。キーは job: 'tobi'|'shokucho'|'doko' 等） */
+  budgetByJob?: Record<string, number>
   periodAnchors?: Record<string, string>  // workerId(string) -> 期間起点日 YYYY-MM-DD
   records: Record<string, ToolBudgetRecord>
 }
@@ -97,6 +99,7 @@ async function getToolBudgetData(): Promise<ToolBudgetData> {
   return {
     defaultBudget: data.defaultBudget ?? 30000,
     budgetByVisa: data.budgetByVisa || {},
+    budgetByJob: data.budgetByJob || {},
     periodAnchors: data.periodAnchors || {},
     records: data.records || {},
   }
@@ -126,7 +129,7 @@ export async function GET(request: NextRequest) {
       const anchor = tbData.periodAnchors?.[String(worker.id)]
       if (!anchor) {
         // 期間未設定 → 初期値として予算のみ返す
-        const budget = (tbData.budgetByVisa?.[worker.visaType] ?? tbData.defaultBudget) || 30000
+        const budget = toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
         return NextResponse.json({ budget, used: 0, remaining: budget, purchases: [], period: null })
       }
 
@@ -136,7 +139,7 @@ export async function GET(request: NextRequest) {
       const key = `${worker.id}_${period.start}`
       const record = tbData.records[key]
 
-      const budget = record?.budget ?? ((tbData.budgetByVisa?.[worker.visaType] ?? tbData.defaultBudget) || 30000)
+      const budget = record?.budget ?? toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
       const purchases = record?.purchases || []
       const used = purchases.reduce((sum, p) => sum + p.amount, 0)
 
@@ -164,7 +167,7 @@ export async function GET(request: NextRequest) {
 
     const result = targetWorkers.map(w => {
       const anchor = tbData.periodAnchors?.[String(w.id)]
-      const defaultBudget = (tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000
+      const defaultBudget = toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
 
       if (!anchor) {
         // 期間未設定 → 予算のみ表示（登録不可）
@@ -207,6 +210,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       defaultBudget: tbData.defaultBudget,
       budgetByVisa: tbData.budgetByVisa || {},
+      budgetByJob: tbData.budgetByJob || {},
       workers: result,
     })
   } catch (error) {
@@ -248,7 +252,7 @@ export async function POST(request: NextRequest) {
         end.setDate(end.getDate() - 1)
         const hireDate = w.hireDate || periodStart
         const period = getCurrentPeriod(hireDate, start)
-        const budget = (tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000
+        const budget = toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
         tbData.records[key] = {
           workerId,
           periodStart,
@@ -341,10 +345,11 @@ export async function POST(request: NextRequest) {
 
     // デフォルト予算設定
     if (action === 'setDefaultBudget') {
-      const { defaultBudget, budgetByVisa } = body
+      const { defaultBudget, budgetByVisa, budgetByJob } = body
       const tbData = await getToolBudgetData()
       if (defaultBudget !== undefined) tbData.defaultBudget = Number(defaultBudget)
       if (budgetByVisa) tbData.budgetByVisa = budgetByVisa
+      if (budgetByJob) tbData.budgetByJob = budgetByJob
       await saveToolBudgetData(tbData)
       return NextResponse.json({ success: true })
     }
@@ -367,7 +372,7 @@ export async function POST(request: NextRequest) {
       const tbData = await getToolBudgetData()
       const key = `${workerId}_${period.start}`
       const record = tbData.records[key]
-      const budget = record?.budget ?? ((tbData.budgetByVisa?.[w.visa] ?? tbData.defaultBudget) || 30000)
+      const budget = record?.budget ?? toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
       const purchases = record?.purchases || []
       const used = purchases.reduce((sum: number, p: Purchase) => sum + p.amount, 0)
 

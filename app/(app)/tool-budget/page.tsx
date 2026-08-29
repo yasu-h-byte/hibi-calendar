@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { visaLabel } from '@/lib/labels'
+import { jobLabel } from '@/lib/jobs'
 
 interface Purchase {
   id: string
@@ -58,6 +59,13 @@ export default function ToolBudgetPage() {
   const [workers, setWorkers] = useState<WorkerBudget[]>([])
   const [loading, setLoading] = useState(false)
   const [modalWorkerId, setModalWorkerId] = useState<number | null>(null)
+  // 区分別の既定予算（2026-08-28 追加）。空欄 = 既定額を使う
+  const [showBudgetSettings, setShowBudgetSettings] = useState(false)
+  const [defaultBudget, setDefaultBudget] = useState('30000')
+  const [budgetByVisa, setBudgetByVisa] = useState<Record<string, string>>({})
+  const [budgetByJob, setBudgetByJob] = useState<Record<string, string>>({})
+  const [settingsSaving, setSettingsSaving] = useState(false)
+  const [settingsMsg, setSettingsMsg] = useState('')
 
   useEffect(() => {
     try {
@@ -79,6 +87,9 @@ export default function ToolBudgetPage() {
       if (res.ok) {
         const data = await res.json()
         setWorkers(data.workers || [])
+        setDefaultBudget(String(data.defaultBudget ?? 30000))
+        setBudgetByVisa(Object.fromEntries(Object.entries(data.budgetByVisa || {}).map(([k, v]) => [k, String(v)])))
+        setBudgetByJob(Object.fromEntries(Object.entries(data.budgetByJob || {}).map(([k, v]) => [k, String(v)])))
       }
     } catch { /* ignore */ }
     setLoading(false)
@@ -97,6 +108,39 @@ export default function ToolBudgetPage() {
 
   const currentWorker = modalWorkerId ? workers.find(w => w.workerId === modalWorkerId) || null : null
 
+  // 数字だけ残して number 化。空欄はその区分の設定なし
+  const toNumMap = (m: Record<string, string>) =>
+    Object.fromEntries(Object.entries(m).filter(([, v]) => v.trim() !== '').map(([k, v]) => [k, Number(v)]))
+
+  const saveBudgetSettings = async () => {
+    setSettingsSaving(true); setSettingsMsg('')
+    try {
+      const res = await fetch('/api/tool-budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({
+          action: 'setDefaultBudget',
+          defaultBudget: Number(defaultBudget) || 30000,
+          budgetByVisa: toNumMap(budgetByVisa),
+          budgetByJob: toNumMap(budgetByJob),
+        }),
+      })
+      if (!res.ok) throw new Error(`保存に失敗しました (${res.status})`)
+      setSettingsMsg('保存しました')
+      await fetchData()
+      setTimeout(() => setSettingsMsg(''), 2000)
+    } catch (e) {
+      setSettingsMsg(e instanceof Error ? e.message : '保存に失敗しました')
+    } finally { setSettingsSaving(false) }
+  }
+
+  // 設定欄に出す区分。外国人はまとめキー（jisshu/tokutei）、日本人は現場職種
+  const VISA_GROUPS = [
+    { key: 'jisshu', label: '技能実習' },
+    { key: 'tokutei', label: '特定技能' },
+  ]
+  const JOB_GROUPS = ['tobi', 'tobi_apprentice', 'shokucho', 'doko']
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
@@ -104,9 +148,61 @@ export default function ToolBudgetPage() {
           🔧 道具代管理
         </h1>
         <span className="text-xs text-gray-500">
-          技能実習生・特定技能が対象（入社日から1年サイクル）
+          外国人（技能実習・特定技能）＋日本人の現場スタッフが対象（入社日から1年サイクル）
         </span>
+        <button
+          onClick={() => setShowBudgetSettings(v => !v)}
+          className="ml-auto text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
+        >
+          ⚙️ 区分別の予算設定 {showBudgetSettings ? '▲' : '▼'}
+        </button>
       </div>
+
+      {/* ── 区分別の既定予算（2026-08-28 追加）──
+          在留資格・職種ごとに年間予算の既定額を変えられる。空欄の区分は既定額を使う。
+          個別に予算を変更した期間はそちらが優先（従来どおり） */}
+      {showBudgetSettings && (
+        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 space-y-3">
+          <div className="text-sm font-bold text-hibi-navy">区分別の既定予算（年間）</div>
+          <p className="text-xs text-gray-500">
+            空欄の区分は「既定額」を使います。個別に予算を変更したスタッフはそちらが優先されます。
+            変更は<b>次に開く期間や未設定の期間</b>から効きます（設定済みの期間の予算は変わりません）。
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="block">
+              <span className="text-xs text-gray-500">既定額（どの区分にも当てはまらない場合）</span>
+              <input type="text" inputMode="numeric" value={defaultBudget}
+                onChange={e => setDefaultBudget(e.target.value.replace(/[^0-9]/g, ''))}
+                className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm tabular-nums" />
+            </label>
+            {VISA_GROUPS.map(g => (
+              <label key={g.key} className="block">
+                <span className="text-xs text-orange-700">{g.label}（ベトナム人）</span>
+                <input type="text" inputMode="numeric" value={budgetByVisa[g.key] ?? ''}
+                  placeholder={`既定額 ¥${Number(defaultBudget || 0).toLocaleString()}`}
+                  onChange={e => setBudgetByVisa(m => ({ ...m, [g.key]: e.target.value.replace(/[^0-9]/g, '') }))}
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm tabular-nums" />
+              </label>
+            ))}
+            {JOB_GROUPS.map(j => (
+              <label key={j} className="block">
+                <span className="text-xs text-blue-700">{jobLabel(j)}（日本人）</span>
+                <input type="text" inputMode="numeric" value={budgetByJob[j] ?? ''}
+                  placeholder={`既定額 ¥${Number(defaultBudget || 0).toLocaleString()}`}
+                  onChange={e => setBudgetByJob(m => ({ ...m, [j]: e.target.value.replace(/[^0-9]/g, '') }))}
+                  className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm tabular-nums" />
+              </label>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={saveBudgetSettings} disabled={settingsSaving}
+              className="px-5 py-2 rounded-lg bg-hibi-navy text-white text-sm font-bold hover:opacity-90 disabled:opacity-50">
+              {settingsSaving ? '保存中...' : '保存'}
+            </button>
+            {settingsMsg && <span className="text-xs text-green-700">{settingsMsg}</span>}
+          </div>
+        </div>
+      )}
 
       {/* サマリー */}
       <div className="grid grid-cols-4 gap-3">

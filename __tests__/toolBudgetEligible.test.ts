@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isToolBudgetEligible } from '@/lib/workers'
+import { isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
 
 /**
  * 道具代管理の対象者判定（2026-08-28 に日本人へ拡大）
@@ -35,5 +35,28 @@ describe('isToolBudgetEligible', () => {
 
   it('未知の visa 値は対象外', () => {
     expect(isToolBudgetEligible({ visa: 'other', job: 'tobi' })).toBe(false)
+  })
+})
+
+describe('toolBudgetDefaultFor', () => {
+  const cfg = {
+    defaultBudget: 30000,
+    budgetByVisa: { jisshu: 20000, tokutei1: 25000 },
+    budgetByJob: { tobi: 50000, shokucho: 60000 },
+  }
+  it('外国人: visa完全一致 > 区分まとめ(jisshu/tokutei) > 既定額', () => {
+    expect(toolBudgetDefaultFor({ visa: 'tokutei1' }, cfg)).toBe(25000)  // 完全一致
+    expect(toolBudgetDefaultFor({ visa: 'jisshu2' }, cfg)).toBe(20000)   // まとめキー
+    expect(toolBudgetDefaultFor({ visa: 'tokutei2' }, cfg)).toBe(30000)  // どちらも無し → 既定額
+  })
+  it('日本人: 職種別 > 既定額', () => {
+    expect(toolBudgetDefaultFor({ visa: 'none', job: 'tobi' }, cfg)).toBe(50000)
+    expect(toolBudgetDefaultFor({ visa: 'none', job: 'shokucho' }, cfg)).toBe(60000)
+    expect(toolBudgetDefaultFor({ visa: 'none', job: 'doko' }, cfg)).toBe(30000)
+    expect(toolBudgetDefaultFor({ job: 'tobi' }, cfg)).toBe(50000)  // visa 未設定も日本人扱い
+  })
+  it('設定が空なら既定額（無指定は30000）', () => {
+    expect(toolBudgetDefaultFor({ visa: 'jisshu1' }, {})).toBe(30000)
+    expect(toolBudgetDefaultFor({ visa: 'none', job: 'tobi' }, { defaultBudget: 40000 })).toBe(40000)
   })
 })

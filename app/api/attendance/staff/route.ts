@@ -255,7 +255,8 @@ export async function GET(request: NextRequest) {
                 const tbUsed = (tbRecord.purchases || []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
                 toolBudgetRemaining = tbRecord.budget - tbUsed
               } else {
-                toolBudgetRemaining = tbData.budgetByVisa?.[worker.visaType || ''] ?? tbData.defaultBudget ?? 30000
+                const { toolBudgetDefaultFor } = await import('@/lib/workers')
+                toolBudgetRemaining = toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
               }
             }
           }

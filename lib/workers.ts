@@ -195,6 +195,31 @@ export function isToolBudgetEligible(w: {
 }
 
 /**
+ * 区分別の既定予算から、そのスタッフの道具代既定額を返す（2026-08-28 追加）。
+ *
+ * 優先順位:
+ *   外国人 … budgetByVisa[visaコード完全一致] → budgetByVisa['jisshu'/'tokutei'（区分まとめ）] → 既定額
+ *   日本人 … budgetByJob[職種] → 既定額
+ * 個別に setBudget した期間レコードがある場合はそちらが優先（呼び出し側で record?.budget ?? これ）。
+ */
+export function toolBudgetDefaultFor(
+  w: { visa?: string | null; job?: string | null },
+  cfg: {
+    defaultBudget?: number
+    budgetByVisa?: Record<string, number>
+    budgetByJob?: Record<string, number>
+  },
+): number {
+  const fallback = cfg.defaultBudget || 30000
+  const visa = w.visa || 'none'
+  if (visa !== 'none') {
+    const group = visa.startsWith('jisshu') ? 'jisshu' : visa.startsWith('tokutei') ? 'tokutei' : ''
+    return cfg.budgetByVisa?.[visa] ?? (group ? cfg.budgetByVisa?.[group] : undefined) ?? fallback
+  }
+  return cfg.budgetByJob?.[w.job || ''] ?? fallback
+}
+
+/**
  * カレンダー署名対象スタッフ判定の共通述語（2026-05-27 追加）
  *
  * 「外国人 × トークン保有 × 当該月在籍 × 当該月全期間帰国でない」の条件を
