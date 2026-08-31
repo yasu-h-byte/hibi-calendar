@@ -438,6 +438,19 @@ export default function ForemanAttendancePage() {
           )}
         </div>
 
+        {/* 職長自身の有給・道具代はマイページへ（2026-08-28 追加） */}
+        <a href={`/mypage/${token}`}
+          className="block bg-white rounded-xl border border-gray-200 shadow-sm p-4 active:bg-gray-50">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🌴</span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-bold text-hibi-charcoal">自分の有給・道具代</span>
+              <span className="block text-xs text-gray-500">有給の申請と残数、道具代の残額</span>
+            </span>
+            <span className="text-gray-300">›</span>
+          </div>
+        </a>
+
         {/* 月の俯瞰（2026-08-28 追加: 過去2日制限を撤廃し、月内のどの日でも開ける） */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <div className="text-sm text-gray-500 mb-1 font-bold">

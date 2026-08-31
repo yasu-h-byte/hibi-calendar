@@ -50,8 +50,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
       }
 
-      // Only foreign workers can request
-      if (!worker.visaType || worker.visaType === 'none') {
+      // 2026-08-28: 日本人スタッフの有給申請を解禁（マイページ /mypage/[token] から申請）。
+      //   旧: 外国人のみ。日本人は紙・口頭で運用していたため API で弾いていた。
+      //   役員・事務は有給管理の対象外なので従来どおり弾く（docs/paid-leave.md）。
+      if (worker.jobType === 'yakuin' || worker.jobType === 'jimu') {
         return NextResponse.json({ error: 'Not eligible' }, { status: 403 })
       }
 

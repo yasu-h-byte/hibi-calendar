@@ -36,6 +36,11 @@ export interface LeaveBalance {
   overdraft: number
   /** 付与レコードが存在しない（＝まだ付与されていない） */
   noGrant: boolean
+  /**
+   * 当期に実際に取得した有給日数（出面の p:1 のみ。調整・買取を含まない）。
+   * 年5日取得義務（労基法39条7項）の判定はこの値で行う（2026-08-28 追加）。
+   */
+  periodUsed?: number
 }
 
 /**
@@ -56,7 +61,7 @@ export async function getLeaveBalance(
 
   const rec = selectActiveGrantRecord(records, asOf)
   if (!rec || !rec.grantDate) {
-    return { grantDate: '', total: 0, used: 0, remaining: 0, overdraft: 0, noGrant: true }
+    return { grantDate: '', total: 0, used: 0, remaining: 0, overdraft: 0, noGrant: true, periodUsed: 0 }
   }
 
   const norm = normalizePLRecord(rec)
@@ -110,5 +115,6 @@ export async function getLeaveBalance(
     remaining: Math.max(0, total - used),
     overdraft: Math.max(0, used - total),
     noGrant: false,
+    periodUsed: days.size,
   }
 }
