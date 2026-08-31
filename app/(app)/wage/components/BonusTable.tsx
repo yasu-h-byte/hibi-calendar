@@ -265,7 +265,8 @@ export default function BonusTable() {
               <table className="w-full text-sm min-w-[1040px]">
                 <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
                   <tr>
-                    <th className={`${th} text-left`}>氏名</th>
+                    {/* 12列あり横スクロールするため、氏名列は左に固定する（2026-08-31） */}
+                    <th className={`${th} text-left sticky left-0 z-20 bg-gray-50 dark:bg-gray-700`}>氏名</th>
                     <th className={`${th} text-left`}>等級</th>
                     <th className={`${th} text-left`}>評語</th>
                     <th className={`${th} text-right`}>点</th>
@@ -282,7 +283,8 @@ export default function BonusTable() {
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {[...lines].sort((x, y) => y.totalAmount - x.totalAmount).map(l => (
                     <tr key={l.workerId} className={l.paidBy ? 'bg-gray-50 dark:bg-gray-700/30 text-gray-400' : ''}>
-                      <td className="px-2.5 py-2 whitespace-nowrap">
+                      <td className={`px-2.5 py-2 whitespace-nowrap sticky left-0 z-10 ${
+                        l.paidBy ? 'bg-gray-50 dark:bg-gray-700' : 'bg-white dark:bg-gray-800'}`}>
                         {l.name}
                         {l.paidBy && <span className="block text-[10px] text-gray-400">{l.paidBy} から支給</span>}
                       </td>
@@ -339,7 +341,7 @@ export default function BonusTable() {
                     </tr>
                   ))}
                   <tr className="bg-gray-50 dark:bg-gray-700/30 font-bold border-t-2 border-gray-200 dark:border-gray-600">
-                    <td className="px-2.5 py-2" colSpan={4}>合計（自社支給 {own.length}名）</td>
+                    <td className="px-2.5 py-2 sticky left-0 z-10 bg-gray-50 dark:bg-gray-700" colSpan={4}>合計（自社支給 {own.length}名）</td>
                     <td className={td}>{yen(sum(l => l.amount))}</td>
                     <td className={td}>{sum(l => l.attendanceDays)}日</td>
                     <td className={td}>—</td>

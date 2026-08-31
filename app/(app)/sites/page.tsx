@@ -105,6 +105,9 @@ export default function SitesPage() {
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  // 編集モーダルのタブ（2026-08-31）。6セクション・入力22個で縦に長すぎたため分割。
+  // 人員マスタと同じ考え方（危険な単価まわりを普段の編集から隔離する）。
+  const [modalTab, setModalTab] = useState<'basic' | 'schedule' | 'rate' | 'other'>('basic')
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -160,6 +163,7 @@ export default function SitesPage() {
     setFormWorkSchedule(DEFAULT_WORK_SCHEDULE)
     setFormCommute(EMPTY_COMMUTE)
     setShowDeleteConfirm(false)
+    setModalTab('basic')
     setShowModal(true)
   }
 
@@ -209,6 +213,7 @@ export default function SitesPage() {
     deps.sort((a, b) => b.ym.localeCompare(a.ym))
     setFormDeputies(deps)
     setShowDeleteConfirm(false)
+    setModalTab('basic')
     setShowModal(true)
   }
 
@@ -533,12 +538,35 @@ export default function SitesPage() {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-modalIn" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">
-              {editId ? '現場編集' : '現場追加'}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-modalIn" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-3">
+              {editId ? `現場編集 — ${form.name || ''}` : '現場追加'}
             </h3>
 
+            {/* タブ（2026-08-31）。保存ボタンはタブの外なので、どのタブで直しても1回で保存できる */}
+            <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-600">
+              {([
+                { key: 'basic', label: '基本' },
+                { key: 'schedule', label: '勤務時間' },
+                { key: 'rate', label: '単価' },
+                { key: 'other', label: 'その他' },
+              ] as const).map(t => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setModalTab(t.key)}
+                  className={`px-4 py-2 text-sm font-bold rounded-t-lg transition ${
+                    modalTab === t.key
+                      ? 'bg-hibi-navy text-white'
+                      : 'text-gray-500 hover:text-hibi-navy hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
             <div className="space-y-4">
+              {modalTab === 'basic' && (<div className="space-y-4">
               {/* Basic info */}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">現場名 *</label>
@@ -622,120 +650,9 @@ export default function SitesPage() {
                 </div>
               )}
 
-              {/* ── 通勤時間（遠方現場日当・運転手当の判定） ── */}
-              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400">🚗 通勤時間（手当の判定）</h4>
-                  {formCommute.judgedMin !== undefined ? (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 font-bold">
-                      凍結済み {formCommute.judgedMin}分
-                    </span>
-                  ) : (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-bold">測定中</span>
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
-                  朝5:30発（清瀬→現場）と夕17:30発（現場→清瀬）の所要時間を最初の10営業日で測り、
-                  平均の片道換算を「判定値」として凍結します。判定値から日当（80分超500円／120分超1,500円）と
-                  運転手当（60分以上1,000円／未満500円）が自動で決まります。
-                  <br />
-                  <b>電車通勤の現場（車で通う人がいない現場）は住所を入力しないでください</b>
-                  ——測定対象外のままとなり、日当・運転手当とも発生しません。
-                </p>
+              </div>)}
 
-                {formCommute.judgedMin !== undefined ? (
-                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-xs space-y-1">
-                    <div>判定値 <b className="text-base tabular-nums">{formCommute.judgedMin}分</b>（{formCommute.frozenAt?.slice(0, 10)} 凍結）</div>
-                    <div className="text-gray-600 dark:text-gray-300">
-                      遠方現場日当: <b>{SITE_ALLOWANCE_FROM_YM === null ? '制度を再検討中のため保留（0円）'
-                        : dailyAllowanceYen(formCommute.judgedMin) > 0 ? `¥${dailyAllowanceYen(formCommute.judgedMin).toLocaleString()}/日` : '対象外'}</b>
-                    </div>
-                    <div className="text-[10px] text-gray-500">
-                      ※ 運転手当は全現場一律 ¥{DRIVE_ALLOWANCE_YEN.toLocaleString()}/片道 で、判定値とは関係ありません。
-                    </div>
-                    <div className="text-[10px] text-gray-400">凍結後は変更できません（非課税の根拠となる客観基準のため）。経路変更等の事由がある場合のみ、記録のうえ再測定してください。</div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div>
-                      <label className="text-xs text-gray-500 block mb-1">現場住所（自動測定の目的地）</label>
-                      <input type="text" value={formCommute.address}
-                        onChange={e => setFormCommute({ ...formCommute, address: e.target.value })}
-                        placeholder="例: 群馬県富岡市…"
-                        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                    </div>
-
-                    {formCommute.samples.length > 0 && (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead><tr className="text-gray-500">
-                            <th className="text-left py-1">測定日</th><th className="text-right">朝(分)</th><th className="text-right">夕(分)</th><th className="text-center">方法</th><th />
-                          </tr></thead>
-                          <tbody>
-                            {formCommute.samples.map((sm, i) => (
-                              <tr key={i} className="border-t border-gray-100 dark:border-gray-700">
-                                <td className="py-1 tabular-nums">{sm.date}</td>
-                                <td className="text-right">
-                                  <input type="number" value={sm.am ?? ''} min={1}
-                                    onChange={e => setFormCommute({ ...formCommute, samples: formCommute.samples.map((x, j) => j === i ? { ...x, am: e.target.value ? Number(e.target.value) : undefined } : x) })}
-                                    className="w-16 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 rounded px-1 py-0.5 tabular-nums" />
-                                </td>
-                                <td className="text-right">
-                                  <input type="number" value={sm.pm ?? ''} min={1}
-                                    onChange={e => setFormCommute({ ...formCommute, samples: formCommute.samples.map((x, j) => j === i ? { ...x, pm: e.target.value ? Number(e.target.value) : undefined } : x) })}
-                                    className="w-16 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 rounded px-1 py-0.5 tabular-nums" />
-                                </td>
-                                <td className="text-center text-gray-400">{sm.source === 'auto' ? '自動' : '手入力'}</td>
-                                <td className="text-right">
-                                  <button type="button" onClick={() => setFormCommute({ ...formCommute, samples: formCommute.samples.filter((_, j) => j !== i) })}
-                                    className="text-gray-300 hover:text-red-400">×</button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {(() => {
-                      const j = judgeFromSamples(formCommute.samples)
-                      return (
-                        <div className="flex flex-wrap items-center gap-3">
-                          <button type="button"
-                            onClick={() => setFormCommute({ ...formCommute, samples: [...formCommute.samples, { date: todayJstIso(), source: 'manual' as const }] })}
-                            className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            + 今日の測定を追加
-                          </button>
-                          {j.completeDays > 0 && (
-                            <span className="text-[11px] text-gray-500 tabular-nums">
-                              朝夕そろった日 {j.completeDays}/{COMMUTE_SAMPLE_TARGET}日
-                              {j.judged !== null && <>／ 現時点の平均 <b>{j.judged}分</b></>}
-                            </span>
-                          )}
-                          {j.completeDays >= COMMUTE_SAMPLE_TARGET && j.judged !== null && (
-                            <button type="button"
-                              onClick={() => {
-                                const dailyMsg = SITE_ALLOWANCE_FROM_YM === null
-                                  ? '遠方現場日当は制度を再検討中のため現在は支給されません（0円）'
-                                  : (dailyAllowanceYen(j.judged!) > 0 ? `日当: ¥${dailyAllowanceYen(j.judged!).toLocaleString()}/日` : '日当: 対象外')
-                                if (confirm(`判定値を ${j.judged}分 で凍結します。\n\n${dailyMsg}\n\n※ 運転手当は全現場一律 ¥${DRIVE_ALLOWANCE_YEN.toLocaleString()}/片道で、判定値とは関係ありません。\n\n凍結後は変更できません。よろしいですか？`)) {
-                                  setFormCommute({ ...formCommute, judgedMin: j.judged!, frozenAt: new Date().toISOString() })
-                                }
-                              }}
-                              className="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white font-bold hover:opacity-90">
-                              判定値 {j.judged}分 で凍結する
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })()}
-                    {formCommute.samples.length > 0 && (
-                      <p className="text-[10px] text-gray-400">朝・夕の欄に Google マップの実測分数を入れてください（保存ボタンで保存されます）。自動測定を有効にすると毎営業日この表に追記されます。</p>
-                    )}
-                  </div>
-                )}
-              </div>
-
+              {modalTab === 'schedule' && (<div className="space-y-4">
               {/* ── 勤務時間設定 ── */}
               {editId && (
                 <div className="border-2 border-blue-300 rounded-xl p-4 space-y-3">
@@ -849,6 +766,9 @@ export default function SitesPage() {
                 </div>
               )}
 
+              </div>)}
+
+              {modalTab === 'rate' && (<div className="space-y-4">
               {/* ── 常用単価（税抜）── */}
               <div className="border-2 border-orange-300 rounded-xl p-4 space-y-3">
                 <h4 className="text-sm font-bold text-orange-700">常用単価（税抜）</h4>
@@ -1040,6 +960,123 @@ export default function SitesPage() {
                 </div>
               )}
 
+              </div>)}
+
+              {modalTab === 'other' && (<div className="space-y-4">
+              {/* ── 通勤時間（遠方現場日当・運転手当の判定） ── */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400">🚗 通勤時間（手当の判定）</h4>
+                  {formCommute.judgedMin !== undefined ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 font-bold">
+                      凍結済み {formCommute.judgedMin}分
+                    </span>
+                  ) : (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-bold">測定中</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
+                  朝5:30発（清瀬→現場）と夕17:30発（現場→清瀬）の所要時間を最初の10営業日で測り、
+                  平均の片道換算を「判定値」として凍結します。判定値から日当（80分超500円／120分超1,500円）と
+                  運転手当（60分以上1,000円／未満500円）が自動で決まります。
+                  <br />
+                  <b>電車通勤の現場（車で通う人がいない現場）は住所を入力しないでください</b>
+                  ——測定対象外のままとなり、日当・運転手当とも発生しません。
+                </p>
+
+                {formCommute.judgedMin !== undefined ? (
+                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-xs space-y-1">
+                    <div>判定値 <b className="text-base tabular-nums">{formCommute.judgedMin}分</b>（{formCommute.frozenAt?.slice(0, 10)} 凍結）</div>
+                    <div className="text-gray-600 dark:text-gray-300">
+                      遠方現場日当: <b>{SITE_ALLOWANCE_FROM_YM === null ? '制度を再検討中のため保留（0円）'
+                        : dailyAllowanceYen(formCommute.judgedMin) > 0 ? `¥${dailyAllowanceYen(formCommute.judgedMin).toLocaleString()}/日` : '対象外'}</b>
+                    </div>
+                    <div className="text-[10px] text-gray-500">
+                      ※ 運転手当は全現場一律 ¥{DRIVE_ALLOWANCE_YEN.toLocaleString()}/片道 で、判定値とは関係ありません。
+                    </div>
+                    <div className="text-[10px] text-gray-400">凍結後は変更できません（非課税の根拠となる客観基準のため）。経路変更等の事由がある場合のみ、記録のうえ再測定してください。</div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">現場住所（自動測定の目的地）</label>
+                      <input type="text" value={formCommute.address}
+                        onChange={e => setFormCommute({ ...formCommute, address: e.target.value })}
+                        placeholder="例: 群馬県富岡市…"
+                        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                    </div>
+
+                    {formCommute.samples.length > 0 && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead><tr className="text-gray-500">
+                            <th className="text-left py-1">測定日</th><th className="text-right">朝(分)</th><th className="text-right">夕(分)</th><th className="text-center">方法</th><th />
+                          </tr></thead>
+                          <tbody>
+                            {formCommute.samples.map((sm, i) => (
+                              <tr key={i} className="border-t border-gray-100 dark:border-gray-700">
+                                <td className="py-1 tabular-nums">{sm.date}</td>
+                                <td className="text-right">
+                                  <input type="number" value={sm.am ?? ''} min={1}
+                                    onChange={e => setFormCommute({ ...formCommute, samples: formCommute.samples.map((x, j) => j === i ? { ...x, am: e.target.value ? Number(e.target.value) : undefined } : x) })}
+                                    className="w-16 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 rounded px-1 py-0.5 tabular-nums" />
+                                </td>
+                                <td className="text-right">
+                                  <input type="number" value={sm.pm ?? ''} min={1}
+                                    onChange={e => setFormCommute({ ...formCommute, samples: formCommute.samples.map((x, j) => j === i ? { ...x, pm: e.target.value ? Number(e.target.value) : undefined } : x) })}
+                                    className="w-16 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 rounded px-1 py-0.5 tabular-nums" />
+                                </td>
+                                <td className="text-center text-gray-400">{sm.source === 'auto' ? '自動' : '手入力'}</td>
+                                <td className="text-right">
+                                  <button type="button" onClick={() => setFormCommute({ ...formCommute, samples: formCommute.samples.filter((_, j) => j !== i) })}
+                                    className="text-gray-300 hover:text-red-400">×</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {(() => {
+                      const j = judgeFromSamples(formCommute.samples)
+                      return (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button type="button"
+                            onClick={() => setFormCommute({ ...formCommute, samples: [...formCommute.samples, { date: todayJstIso(), source: 'manual' as const }] })}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            + 今日の測定を追加
+                          </button>
+                          {j.completeDays > 0 && (
+                            <span className="text-[11px] text-gray-500 tabular-nums">
+                              朝夕そろった日 {j.completeDays}/{COMMUTE_SAMPLE_TARGET}日
+                              {j.judged !== null && <>／ 現時点の平均 <b>{j.judged}分</b></>}
+                            </span>
+                          )}
+                          {j.completeDays >= COMMUTE_SAMPLE_TARGET && j.judged !== null && (
+                            <button type="button"
+                              onClick={() => {
+                                const dailyMsg = SITE_ALLOWANCE_FROM_YM === null
+                                  ? '遠方現場日当は制度を再検討中のため現在は支給されません（0円）'
+                                  : (dailyAllowanceYen(j.judged!) > 0 ? `日当: ¥${dailyAllowanceYen(j.judged!).toLocaleString()}/日` : '日当: 対象外')
+                                if (confirm(`判定値を ${j.judged}分 で凍結します。\n\n${dailyMsg}\n\n※ 運転手当は全現場一律 ¥${DRIVE_ALLOWANCE_YEN.toLocaleString()}/片道で、判定値とは関係ありません。\n\n凍結後は変更できません。よろしいですか？`)) {
+                                  setFormCommute({ ...formCommute, judgedMin: j.judged!, frozenAt: new Date().toISOString() })
+                                }
+                              }}
+                              className="text-xs px-3 py-1.5 rounded-lg bg-emerald-700 text-white font-bold hover:opacity-90">
+                              判定値 {j.judged}分 で凍結する
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()}
+                    {formCommute.samples.length > 0 && (
+                      <p className="text-[10px] text-gray-400">朝・夕の欄に Google マップの実測分数を入れてください（保存ボタンで保存されます）。自動測定を有効にすると毎営業日この表に追記されます。</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* ── 代理職長（月単位） ── */}
               {editId && (
                 <div className="border border-gray-300 rounded-xl p-4 space-y-3">
@@ -1087,6 +1124,7 @@ export default function SitesPage() {
                   </button>
                 </div>
               )}
+              </div>)}
             </div>
 
             {/* Buttons */}

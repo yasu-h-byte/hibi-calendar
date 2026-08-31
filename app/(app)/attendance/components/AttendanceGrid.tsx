@@ -17,6 +17,11 @@ interface Props {
   data: GridData
   days: { day: number; dow: number; label: string }[]
   cellWidth: number
+  /**
+   * 名前列の幅(px)。スマホでは狭くして日付を1日でも多く見せる（2026-08-31 追加）。
+   * 職長は専用画面ではなくこのPC画面をスマホで操作しているため、ここが効く。
+   */
+  nameWidth: number
   useTimeBased: boolean
   groupedWorkers: { org: string; label: string; workers: GridData['workers'] }[]
   workerEntries: Record<string, Record<number, AttEntry | null>>
@@ -53,7 +58,7 @@ interface Props {
 }
 
 export default function AttendanceGrid({
-  data, days, cellWidth, useTimeBased, groupedWorkers,
+  data, days, cellWidth, nameWidth, useTimeBased, groupedWorkers,
   workerEntries, subconEntries, footerSums, localApprovals, localFinalApprovals,
   canForemanApprove, canFinalize, startTimeOptions, endTimeOptions, workerTotals, subconTotals,
   onWorkChange, onOtChange, onTimeStatusChange, onStartTimeChange, onEndTimeChange, onBreakChange,
@@ -88,22 +93,48 @@ export default function AttendanceGrid({
     return () => window.removeEventListener('resize', measure)
   }, [days.length, cellWidth])
 
+  /**
+   * 「今日へ」ボタン（2026-08-31 追加）。
+   * スマホでは同時に3日分ほどしか見えないため、月の後半になるほど毎回大きく横スクロール
+   * することになっていた。今日の列が左端に来るところまで一気に飛ばす。
+   */
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const todayIdx = (() => {
+    const t = new Date()
+    const d = t.getDate()
+    return days.findIndex(x => x.day === d)
+  })()
+  const jumpToToday = () => {
+    if (!scrollRef.current || todayIdx < 0) return
+    scrollRef.current.scrollTo({ left: Math.max(0, todayIdx * cellWidth - 8), behavior: 'smooth' })
+  }
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
-      <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
+      {todayIdx >= 0 && (
+        <div className="flex justify-end px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
+          <button
+            type="button"
+            onClick={jumpToToday}
+            className="text-xs font-bold px-3 py-1 rounded-md border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition"
+          >
+            📍 今日へ
+          </button>
+        </div>
+      )}
+      <div ref={scrollRef} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
         <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 80}px` }}>
           <thead ref={theadRef} className="sticky top-0 z-30">
             {/* Day number row */}
             <tr className="border-b border-gray-200">
               <th
                 className="sticky left-0 z-40 bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1.5 text-left font-bold whitespace-nowrap"
-                style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 名前
               </th>
               <th
-                className="sticky left-[150px] z-40 bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1 py-1.5 text-center font-bold"
-                style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+                className="sticky z-40 bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1 py-1.5 text-center font-bold" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
               >
                 所属
               </th>
@@ -181,7 +212,7 @@ export default function AttendanceGrid({
             <tr ref={foremanRowRef} className="bg-orange-50 border-b border-orange-100 sticky z-[25]" style={{ top: approvalTops[0] }}>
               <td
                 className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px]"
-                style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 {data.site.foremanName ? `${data.site.foremanName} 職長承認` : '職長承認'}
                 {data.site.foremanNote ? <span className="text-[9px] text-gray-500 font-normal ml-1">({data.site.foremanNote})</span> : ''}
@@ -196,7 +227,7 @@ export default function AttendanceGrid({
                   <span className="ml-2 text-[9px] text-orange-600">全承認済</span>
                 ))}
               </td>
-              <td className="sticky left-[150px] z-20 bg-orange-50 px-1 py-1 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-orange-50 px-1 py-1 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => {
                 const approved = localApprovals[d.day]
                 // 既に最終承認済みの場合は職長承認も解除できない（先に最終を外す必要）
@@ -230,7 +261,7 @@ export default function AttendanceGrid({
             <tr className="bg-indigo-50 border-b border-indigo-200 sticky z-[25]" style={{ top: approvalTops[1] }}>
               <td
                 className="sticky left-0 z-20 bg-indigo-50 px-2 py-1 font-bold text-indigo-700 whitespace-nowrap text-[11px]"
-                style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 最終承認
                 {canFinalize && (finalizableDays.length > 0 ? (
@@ -242,7 +273,7 @@ export default function AttendanceGrid({
                   </button>
                 ) : null)}
               </td>
-              <td className="sticky left-[150px] z-20 bg-indigo-50 px-1 py-1 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-indigo-50 px-1 py-1 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => {
                 const foremanApproved = localApprovals[d.day]
                 const finalApproved = localFinalApprovals[d.day]
@@ -281,11 +312,11 @@ export default function AttendanceGrid({
                 <tr className="bg-gray-50">
                   <td
                     className="sticky left-0 z-20 bg-gray-50 px-2 py-1 font-bold text-[11px] text-hibi-navy border-t-2 border-hibi-navy"
-                    style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                    style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                   >
                     {group.label} ({group.workers.length}名)
                   </td>
-                  <td className="sticky left-[150px] z-20 bg-gray-50 border-t-2 border-hibi-navy" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }} />
+                  <td className="sticky z-20 bg-gray-50 border-t-2 border-hibi-navy" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }} />
                   {days.map(d => <td key={d.day} className="border-t-2 border-hibi-navy bg-gray-50" />)}
                   <td className="border-t-2 border-hibi-navy bg-gray-50" />
                   <td className="border-t-2 border-hibi-navy bg-gray-50" />
@@ -302,7 +333,7 @@ export default function AttendanceGrid({
                       {/* Worker name - sticky */}
                       <td
                         className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 text-xs"
-                        style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                        style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                       >
                         <div className="flex items-center gap-1 flex-wrap">
                           <span>{worker.name}</span>
@@ -323,8 +354,7 @@ export default function AttendanceGrid({
 
                       {/* Org badge - sticky (colored by visa) */}
                       <td
-                        className="sticky left-[150px] z-20 bg-white group-hover:bg-gray-50 px-1 py-0.5 text-center"
-                        style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+                        className="sticky z-20 bg-white group-hover:bg-gray-50 px-1 py-0.5 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                       >
                         <span className={`text-[10px] px-1 py-0.5 rounded-full font-medium whitespace-nowrap ${orgBadgeCls(worker.org, worker.visa)}`}>
                           {orgBadgeLabel(worker.org, worker.visa)}
@@ -464,11 +494,11 @@ export default function AttendanceGrid({
                 <tr className="bg-amber-50">
                   <td
                     className="sticky left-0 z-20 bg-amber-50 px-2 py-1 font-bold text-[11px] text-amber-800 border-t-2 border-amber-400"
-                    style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                    style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                   >
                     外注 ({data.subcons.length}社)
                   </td>
-                  <td className="sticky left-[150px] z-20 bg-amber-50 border-t-2 border-amber-400" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }} />
+                  <td className="sticky z-20 bg-amber-50 border-t-2 border-amber-400" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }} />
                   {days.map(d => <td key={d.day} className="border-t-2 border-amber-400 bg-amber-50" />)}
                   <td className="border-t-2 border-amber-400 bg-amber-50" />
                   <td className="border-t-2 border-amber-400 bg-amber-50" />
@@ -484,15 +514,14 @@ export default function AttendanceGrid({
                       {/* Subcon name - sticky */}
                       <td
                         className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 text-xs"
-                        style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                        style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                       >
                         {sc.name}
                       </td>
 
                       {/* Type badge - sticky */}
                       <td
-                        className="sticky left-[150px] z-20 bg-white group-hover:bg-gray-50 px-1 py-0.5 text-center"
-                        style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+                        className="sticky z-20 bg-white group-hover:bg-gray-50 px-1 py-0.5 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                       >
                         <span className="text-[10px] px-1 py-0.5 rounded-full font-medium whitespace-nowrap bg-amber-100 text-amber-700">
                           {sc.type === 'tobi' || sc.type === '鳶業者' ? '鳶' : sc.type === 'doko' || sc.type === '土工業者' ? '土工' : sc.type}
@@ -564,11 +593,11 @@ export default function AttendanceGrid({
             <tr className="border-t-2 border-[#1B2A4A]">
               <td
                 className="sticky left-0 z-20 bg-[#1B2A4A] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px]"
-                style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 鳶 合計
               </td>
-              <td className="sticky left-[150px] z-20 bg-[#1B2A4A] text-white px-1 py-1.5 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-[#1B2A4A] text-white px-1 py-1.5 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => (
                 <td
                   key={d.day}
@@ -591,11 +620,11 @@ export default function AttendanceGrid({
             <tr>
               <td
                 className="sticky left-0 z-20 bg-[#1B2A4A] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-[10px] border-t border-[#2A3B5C]"
-                style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 鳶 残業合計
               </td>
-              <td className="sticky left-[150px] z-20 bg-[#1B2A4A] px-1 py-1 text-center border-t border-[#2A3B5C]" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-[#1B2A4A] px-1 py-1 text-center border-t border-[#2A3B5C]" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => (
                 <td
                   key={d.day}
@@ -613,11 +642,11 @@ export default function AttendanceGrid({
             <tr>
               <td
                 className="sticky left-0 z-20 bg-[#243656] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px]"
-                style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 土工 合計
               </td>
-              <td className="sticky left-[150px] z-20 bg-[#243656] text-white px-1 py-1.5 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-[#243656] text-white px-1 py-1.5 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => (
                 <td
                   key={d.day}
@@ -640,11 +669,11 @@ export default function AttendanceGrid({
             <tr>
               <td
                 className="sticky left-0 z-20 bg-[#243656] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-[10px] border-t border-[#324867]"
-                style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 土工 残業合計
               </td>
-              <td className="sticky left-[150px] z-20 bg-[#243656] px-1 py-1 text-center border-t border-[#324867]" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-[#243656] px-1 py-1 text-center border-t border-[#324867]" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => (
                 <td
                   key={d.day}
@@ -662,11 +691,11 @@ export default function AttendanceGrid({
             <tr>
               <td
                 className="sticky left-0 z-20 bg-[#0F1D36] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px]"
-                style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 総合計
               </td>
-              <td className="sticky left-[150px] z-20 bg-[#0F1D36] text-white px-1 py-1.5 text-center" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-[#0F1D36] text-white px-1 py-1.5 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => (
                 <td
                   key={d.day}
@@ -689,11 +718,11 @@ export default function AttendanceGrid({
             <tr>
               <td
                 className="sticky left-0 z-20 bg-[#0F1D36] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-[10px] border-t border-[#1F2D44]"
-                style={{ width: 150, minWidth: 150, maxWidth: 150 }}
+                style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 総 残業合計
               </td>
-              <td className="sticky left-[150px] z-20 bg-[#0F1D36] px-1 py-1 text-center border-t border-[#1F2D44]" style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-[#0F1D36] px-1 py-1 text-center border-t border-[#1F2D44]" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => (
                 <td
                   key={d.day}

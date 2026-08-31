@@ -91,6 +91,21 @@ export default function AttendanceGridPage() {
   // 時間ベース入力月は始業・終業・休憩など情報が多いため広めに
   const cellWidth = useTimeBased ? 76 : 56
 
+  /**
+   * 名前列の幅（2026-08-31 追加）。
+   * 職長は専用のスマホ画面ではなく、このPC画面をスマホで操作している。
+   * 幅375pxで名前列150pxだと画面の4割を占め、日付が3日分しか見えなかったため、
+   * 狭い画面では90pxに縮めて表示日数を稼ぐ。
+   */
+  const [isNarrow, setIsNarrow] = useState(false)
+  useEffect(() => {
+    const check = () => setIsNarrow(window.innerWidth < 640)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+  const nameWidth = isNarrow ? 90 : 150
+
   // 時間選択肢は lib/attendance.ts の共通定数（スマホ入力と同一）
   const startTimeOptions = DAY_START_OPTIONS
   const endTimeOptions = DAY_END_OPTIONS
@@ -1058,6 +1073,7 @@ export default function AttendanceGridPage() {
           data={data}
           days={days}
           cellWidth={cellWidth}
+          nameWidth={nameWidth}
           useTimeBased={useTimeBased}
           groupedWorkers={groupedWorkers}
           workerEntries={workerEntries}
