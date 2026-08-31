@@ -1,7 +1,7 @@
 import { db } from './firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { Worker } from '@/types'
-import { todayJstIso } from './date-utils'
+import { todayJstIso, addMonthsSafe } from './date-utils'
 
 /**
  * 人員マスタの読み出し。
@@ -187,13 +187,32 @@ export function isToolBudgetEligible(w: {
   visa?: string | null
   job?: string | null
   retired?: string | null
-}): boolean {
+  hireDate?: string | null
+}, todayIso?: string): boolean {
   if (isAlreadyRetired(w.retired)) return false
   const visa = w.visa || 'none'
   if (visa.startsWith('jisshu') || visa.startsWith('tokutei')) return true
-  // 日本人: 現場に出る職種のみ（役員・事務は道具代の対象外）
-  if (visa === 'none') return w.job !== 'yakuin' && w.job !== 'jimu'
+  if (visa === 'none') {
+    // 役員・事務は対象外
+    if (w.job === 'yakuin' || w.job === 'jimu') return false
+    // 2026-08-31 代表決定: 日本人は**入社6ヶ月未満は対象外**。
+    //   有給の初回付与（入社6ヶ月後）と発生タイミングを揃える。
+    //   入社日が未登録の人は判定できないので対象に含める（従来どおり）。
+    if (w.hireDate) {
+      const today = todayIso || todayJstIso()
+      if (today < addMonthsSafe(w.hireDate, TOOL_BUDGET_JP_MIN_MONTHS)) return false
+    }
+    return true
+  }
   return false
+}
+
+/** 日本人の道具代が発生するまでの在籍月数（有給の初回付与と同じ6ヶ月） */
+export const TOOL_BUDGET_JP_MIN_MONTHS = 6
+
+/** 日本人の道具代が発生する日（入社6ヶ月後）。未登録なら null */
+export function toolBudgetStartFor(hireDate?: string | null): string | null {
+  return hireDate ? addMonthsSafe(hireDate, TOOL_BUDGET_JP_MIN_MONTHS) : null
 }
 
 /**

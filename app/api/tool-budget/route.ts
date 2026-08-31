@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
     if (token) {
       const worker = await getWorkerByToken(token)
       if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-      if (!isToolBudgetEligible({ visa: worker.visaType, job: worker.jobType, retired: worker.retired })) {
+      if (!isToolBudgetEligible({ visa: worker.visaType, job: worker.jobType, retired: worker.retired, hireDate: worker.hireDate })) {
         return NextResponse.json({ error: 'Not eligible' }, { status: 403 })
       }
 
@@ -163,7 +163,8 @@ export async function GET(request: NextRequest) {
     const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
     const workers: { id: number; name: string; visa: string; job?: string; org?: string; retired?: string; hireDate?: string }[] =
       mainSnap.exists() ? (mainSnap.data().workers || []) : []
-    const targetWorkers = workers.filter(isToolBudgetEligible)
+    // filter に直接渡すと第2引数(index)が todayIso と衝突するのでラップする
+    const targetWorkers = workers.filter(w => isToolBudgetEligible(w))
 
     const result = targetWorkers.map(w => {
       const anchor = tbData.periodAnchors?.[String(w.id)]

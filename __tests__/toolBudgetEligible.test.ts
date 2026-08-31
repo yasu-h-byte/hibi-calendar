@@ -36,6 +36,22 @@ describe('isToolBudgetEligible', () => {
   it('未知の visa 値は対象外', () => {
     expect(isToolBudgetEligible({ visa: 'other', job: 'tobi' })).toBe(false)
   })
+
+  // 2026-08-31 代表決定: 日本人は入社6ヶ月未満は対象外（有給の初回付与と同じタイミング）
+  it('日本人は入社6ヶ月未満なら対象外・6ヶ月経てば対象', () => {
+    const w = { visa: 'none', job: 'tobi', hireDate: '2026-06-01' }
+    expect(isToolBudgetEligible(w, '2026-11-30')).toBe(false)  // 5ヶ月29日
+    expect(isToolBudgetEligible(w, '2026-12-01')).toBe(true)   // ちょうど6ヶ月
+    expect(isToolBudgetEligible(w, '2027-03-01')).toBe(true)
+  })
+
+  it('入社日が未登録の日本人は対象に含める（判定できないため従来どおり）', () => {
+    expect(isToolBudgetEligible({ visa: 'none', job: 'tobi' }, '2026-08-31')).toBe(true)
+  })
+
+  it('外国人は6ヶ月ルールの対象外（従来どおり）', () => {
+    expect(isToolBudgetEligible({ visa: 'jisshu1', hireDate: '2026-08-01' }, '2026-08-31')).toBe(true)
+  })
 })
 
 describe('toolBudgetDefaultFor', () => {

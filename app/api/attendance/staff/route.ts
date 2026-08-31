@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
     try {
       // 2026-08-28: 対象判定を isToolBudgetEligible に統一（日本人の現場スタッフも対象に）
       const { isToolBudgetEligible } = await import('@/lib/workers')
-      if (isToolBudgetEligible({ visa: worker.visaType, job: worker.jobType, retired: worker.retired })) {
+      if (isToolBudgetEligible({ visa: worker.visaType, job: worker.jobType, retired: worker.retired, hireDate: worker.hireDate })) {
         const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
         if (tbSnap.exists()) {
           const tbData = tbSnap.data()
