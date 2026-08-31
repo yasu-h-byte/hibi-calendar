@@ -61,11 +61,30 @@ const STATUS_LABEL: Record<LeaveRequest['status'], { label: string; cls: string 
   cancelled: { label: '取り消し', cls: 'bg-gray-200 text-gray-500' },
 }
 
+/** 申請日など近い日付用: 「9月3日（木）」 */
 const fmtDate = (iso: string) => {
   if (!iso) return ''
-  const [y, m, d] = iso.split('-')
+  const [, m, d] = iso.split('-')
   const w = ['日', '月', '火', '水', '木', '金', '土'][new Date(`${iso}T00:00:00`).getDay()]
-  return `${Number(m)}月${Number(d)}日（${w}）${y === String(new Date().getFullYear()) ? '' : ` ${y}年`}`
+  return `${Number(m)}月${Number(d)}日（${w}）`
+}
+
+/** 年をまたぐ期間表示用: 「2025年10月1日」 */
+const fmtFull = (iso: string) => {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${y}年${Number(m)}月${Number(d)}日`
+}
+
+/**
+ * 付与期間の最終日。periodEnd は [grantDate, +12ヶ月) の**開いた端**なので、
+ * そのまま出すと「10月1日まで」と1日ずれる。1日戻して 9月30日 と表示する。
+ */
+const lastDayOf = (endExclusiveIso: string) => {
+  if (!endExclusiveIso) return ''
+  const d = new Date(`${endExclusiveIso}T00:00:00`)
+  d.setDate(d.getDate() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 export default function MyPage() {
@@ -213,7 +232,7 @@ export default function MyPage() {
               <div className="text-xs text-gray-500 mt-2">
                 今期 {lv.total}日 のうち {lv.used}日 取得済み
                 <span className="block mt-0.5">
-                  期間: {fmtDate(lv.grantDate)} 〜 {fmtDate(lv.periodEnd)} まで
+                  期間: {fmtFull(lv.grantDate)} 〜 {fmtFull(lastDayOf(lv.periodEnd))}
                 </span>
               </div>
 
@@ -224,7 +243,7 @@ export default function MyPage() {
                   </div>
                   <div className="text-xs text-red-600 mt-1">
                     法律で「年5日以上の取得」が義務づけられています。
-                    {fmtDate(lv.periodEnd)} までに取ってください。
+                    {fmtFull(lastDayOf(lv.periodEnd))} までに取ってください。
                   </div>
                 </div>
               )}
