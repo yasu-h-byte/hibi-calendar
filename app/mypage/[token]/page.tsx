@@ -9,6 +9,9 @@
  * ベトナム人向けの /attendance/[token] とは別ページにしている（あちらは
  * 出面入力が主役・日越2言語）。道具代の申請は載せない — 経費申請は
  * マネーフォワードで行うため、ここに置くと二重入力になる（2026-08-28 代表）。
+ *
+ * 職長もこのページを使う。職長専用の出面画面は用意してあるが、職長は従来どおり
+ * PC画面をスマホで操作する運用になったため、ここからは導線を張らない（2026-08-28 代表）。
  */
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
@@ -26,7 +29,6 @@ interface MyPageData {
     fiveDayShortfall: number
   }
   sites: { id: string; name: string }[]
-  foreman: { siteId: string; siteName: string } | null
 }
 
 interface LeaveRequest {
@@ -325,20 +327,6 @@ export default function MyPage() {
           )}
         </div>
 
-        {/* 職長は出面の確認画面へ */}
-        {data.foreman && (
-          <a href={`/attendance/foreman/${token}`}
-            className="block bg-white rounded-xl border border-gray-200 shadow-sm p-4 active:bg-gray-50">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">📋</span>
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm font-bold text-hibi-charcoal">出面の確認・承認</span>
-                <span className="block text-xs text-gray-500 truncate">{data.foreman.siteName}</span>
-              </span>
-              <span className="text-gray-300">›</span>
-            </div>
-          </a>
-        )}
       </div>
 
       {/* ── 有給申請モーダル ── */}

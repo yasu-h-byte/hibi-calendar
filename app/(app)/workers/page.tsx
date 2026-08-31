@@ -356,12 +356,12 @@ export default function WorkersPage() {
   const hibiCount = activeWorkers.filter(w => w.company !== 'HFU').length
   const hfuCount = activeWorkers.filter(w => w.company === 'HFU').length
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-  // スマホURLは役割で行き先が違う（2026-08-28）:
-  //   職長          → 出面の確認・承認画面
-  //   日本人スタッフ → マイページ（有給申請・道具代残。出面は職長が記録するため入力は無し）
-  //   外国人スタッフ → 出面入力画面
+  // スマホURLの行き先（2026-08-28）:
+  //   日本人（職長含む） → マイページ（有給・道具代の確認だけ）
+  //   外国人スタッフ     → 出面入力画面
+  // 職長専用の出面画面（/attendance/foreman/[token]）は残してあるが、職長は従来どおり
+  // PC画面をスマホで操作する運用になったため、配布URLとしては使わない（代表判断）。
   const mobileUrl = (w: { token?: string; jobType?: string; visaType?: string }) => {
-    if (w.jobType === 'shokucho' || w.jobType === '職長') return `${baseUrl}/attendance/foreman/${w.token}`
     const isJp = !w.visaType || w.visaType === 'none'
     return isJp ? `${baseUrl}/mypage/${w.token}` : `${baseUrl}/attendance/${w.token}`
   }

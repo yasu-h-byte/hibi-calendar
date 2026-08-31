@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getWorkerByToken } from '@/lib/workers'
-import { getStaffSites, getForemanSite } from '@/lib/attendance'
+import { getStaffSites } from '@/lib/attendance'
 import { getLeaveBalance } from '@/lib/leave-balance'
 import { judgeFiveDayObligation } from '@/lib/leave-compute'
 import { addMonthsSafe, todayJstIso } from '@/lib/date-utils'
@@ -33,10 +33,9 @@ export async function GET(request: NextRequest) {
     }).catch(() => {})
 
     const today = todayJstIso()
-    const [balance, sites, foremanSite] = await Promise.all([
+    const [balance, sites] = await Promise.all([
       getLeaveBalance(worker.id, today),
       getStaffSites(worker.id),
-      getForemanSite(worker.id),
     ])
 
     // 年5日取得義務（労基法39条7項）。本人にも「あと何日取る必要があるか」を見せる
@@ -72,8 +71,6 @@ export async function GET(request: NextRequest) {
         fiveDayShortfall,
       },
       sites,
-      // 職長は出面確認の画面も持っているので、そこへ戻るリンクを出す
-      foreman: foremanSite ? { siteId: foremanSite.id, siteName: foremanSite.name } : null,
     })
   } catch (e) {
     console.error('mypage GET error:', e)
