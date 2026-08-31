@@ -282,7 +282,9 @@ export default function MyPage() {
         {/* ── 道具代 ── */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <div className="text-sm font-bold text-gray-500 mb-3">🔧 道具代</div>
-          {!tool || tool.error ? (
+          {/* period が null = 期間起点日が未設定。この状態の budget は「既定額」でしかなく、
+              実際には何も管理されていない。残額として見せると誤解を招くので出さない */}
+          {!tool || tool.error || !tool.period ? (
             <div className="text-sm text-gray-500">
               道具代の枠がまだ設定されていません。事務担当にお問い合わせください。
             </div>
