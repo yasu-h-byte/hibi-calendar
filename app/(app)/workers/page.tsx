@@ -114,6 +114,9 @@ export default function WorkersPage() {
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoError, setPhotoError] = useState('')
   const [qrWorker, setQrWorker] = useState<Worker | null>(null)
+  // 編集モーダルのタブ（2026-08-31）。項目が30近くまで増えて縦スクロールが長くなったため、
+  // 4つに分けて1画面に収める。危険な項目（固定月給・旧ルール）を普段の編集から隔離する狙いもある。
+  const [modalTab, setModalTab] = useState<'basic' | 'pay' | 'allowance' | 'other'>('basic')
   const [sortKey, setSortKey] = useState<string>('id')
   const [sortAsc, setSortAsc] = useState(true)
   const [transferring, setTransferring] = useState<number | null>(null)
@@ -188,6 +191,7 @@ export default function WorkersPage() {
   const openAdd = () => {
     setEditId(null)
     setForm(EMPTY_FORM)
+    setModalTab('basic')
     setShowModal(true)
   }
 
@@ -218,6 +222,7 @@ export default function WorkersPage() {
       dispatchFrom: w.dispatchFrom || '',
       useOldRules: !!w.useOldRules,
     })
+    setModalTab('basic')
     setShowModal(true)
   }
 
@@ -700,12 +705,35 @@ export default function WorkersPage() {
       {/* Add/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto animate-modalIn" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">
-              {editId !== null ? '社員編集' : '社員追加'}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-modalIn" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-3">
+              {editId !== null ? `社員編集 — ${form.name || ''}` : '社員追加'}
             </h3>
 
+            {/* タブ（2026-08-31）。保存ボタンはタブの外にあるので、どのタブで直しても1回で保存できる */}
+            <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-600">
+              {([
+                { key: 'basic', label: '基本' },
+                { key: 'pay', label: '給与' },
+                { key: 'allowance', label: '手当・賞与' },
+                { key: 'other', label: 'その他' },
+              ] as const).map(t => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setModalTab(t.key)}
+                  className={`px-4 py-2 text-sm font-bold rounded-t-lg transition ${
+                    modalTab === t.key
+                      ? 'bg-hibi-navy text-white'
+                      : 'text-gray-500 hover:text-hibi-navy hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
             <div className="space-y-4">
+              {modalTab === 'basic' && (<div className="space-y-4">
               {/* ── 顔写真（2026-08-03 追加。保存は他項目と独立して即時反映） ──
                   新規追加時は workerId がまだ無いので出さない。先に保存してから登録する。 */}
               {editId !== null && (
@@ -840,102 +868,6 @@ export default function WorkersPage() {
                     <input type="date" value={form.hireDate} onChange={e => setForm({ ...form, hireDate: e.target.value })}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                   </div>
-                  {/* 休憩短縮に伴う定例の所定外労働（個別契約のある人だけ） */}
-                  <div className="col-span-2 border-t border-gray-200 dark:border-gray-700 pt-2 mt-1">
-                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
-                      休憩短縮に伴う所定外労働（個別契約のある人だけ）
-                    </label>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <input type="number" min="0" max="120" value={form.breakShortenMin}
-                        onChange={e => setForm({ ...form, breakShortenMin: e.target.value })}
-                        placeholder="20"
-                        className="w-20 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
-                      <span className="text-xs text-gray-500">分/日　開始月</span>
-                      <input type="month"
-                        value={form.breakShortenFrom ? `${form.breakShortenFrom.slice(0, 4)}-${form.breakShortenFrom.slice(4, 6)}` : ''}
-                        onChange={e => setForm({ ...form, breakShortenFrom: e.target.value.replace('-', '') })}
-                        className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
-                    </div>
-                    <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
-                      契約より休憩を短くした分を、出勤した日ごとに所定外労働として支払います。
-                      法定内（1日8時間以内）のため<b>割増なし（通常時給）</b>で計算します。
-                      有給・休み・補償日・帰国中の日は対象外。開始月より前の給与は変わりません。
-                    </p>
-                  </div>
-
-                  {/* 運転者の選択肢に出すか。未設定なら日本人=あり／外国人=なし */}
-                  <div className="col-span-2">
-                    <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={form.canDrive ?? (form.visa === 'none' || !form.visa)}
-                        onChange={e => setForm({ ...form, canDrive: e.target.checked })}
-                      />
-                      社有車を運転する可能性がある（出面の運転者の選択肢に出す）
-                      {form.canDrive === undefined && (
-                        <span className="text-[10px] text-gray-400">（既定: {form.visa === 'none' || !form.visa ? '日本人=あり' : '外国人=なし'}）</span>
-                      )}
-                    </label>
-                  </div>
-
-                  {/* 賞与の手当（2026-08-31 追加）。禁煙手当は年3万、子ども手当は
-                      第1子3万/第2子5万/第3子以降7万（18歳の誕生日を迎える年まで） */}
-                  <div className="col-span-2 border-t border-gray-200 dark:border-gray-600 pt-3">
-                    <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={form.nonSmoker}
-                        onChange={e => setForm({ ...form, nonSmoker: e.target.checked })}
-                      />
-                      煙草を吸わない（賞与に<b>禁煙手当 年3万円</b>を上乗せ）
-                    </label>
-                  </div>
-
-                  <div className="col-span-2">
-                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                      子ども（誕生年月）
-                      <span className="text-[10px] text-gray-400 ml-1.5">
-                        賞与の子ども手当に使います。第1子3万・第2子5万・第3子以降7万（年額）／18歳の誕生日を迎える年まで
-                      </span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {form.children.map((c, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400 w-10">第{i + 1}子</span>
-                          <input
-                            type="month"
-                            value={c}
-                            onChange={e => {
-                              const next = [...form.children]
-                              next[i] = e.target.value
-                              setForm({ ...form, children: next })
-                            }}
-                            className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-2 py-1.5 text-sm tabular-nums"
-                          />
-                          {c && /^\d{4}-\d{2}$/.test(c) && (
-                            <span className="text-[10px] text-gray-400">
-                              満18歳: {Number(c.slice(0, 4)) + 18}年{Number(c.slice(5, 7))}月
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setForm({ ...form, children: form.children.filter((_, j) => j !== i) })}
-                            className="text-xs text-red-500 hover:text-red-700"
-                          >
-                            削除
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, children: [...form.children, ''] })}
-                        className="text-xs font-bold px-3 py-1 rounded-md border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition"
-                      >
-                        ＋ 子どもを追加
-                      </button>
-                    </div>
-                  </div>
-
                   {/* 生年月日は労働者名簿の必須記載事項（労基法107条）。
                       日本人社員はさらに号俸制の年齢調整（docs/wage-system.md 第6節）に使う。 */}
                   <div>
@@ -1006,6 +938,9 @@ export default function WorkersPage() {
                 </div>
               )}
 
+              </div>)}
+
+              {modalTab === 'pay' && (<div className="space-y-4">
               {/* ── 単価・給与 ── */}
               <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-3 bg-blue-50/30 dark:bg-blue-900/10">
                 <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">単価・給与</h4>
@@ -1269,6 +1204,115 @@ export default function WorkersPage() {
                 )}
               </div>
 
+                  {/* 休憩短縮に伴う定例の所定外労働（個別契約のある人だけ） */}
+                  <div className="col-span-2 border-t border-gray-200 dark:border-gray-700 pt-2 mt-1">
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                      休憩短縮に伴う所定外労働（個別契約のある人だけ）
+                    </label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input type="number" min="0" max="120" value={form.breakShortenMin}
+                        onChange={e => setForm({ ...form, breakShortenMin: e.target.value })}
+                        placeholder="20"
+                        className="w-20 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
+                      <span className="text-xs text-gray-500">分/日　開始月</span>
+                      <input type="month"
+                        value={form.breakShortenFrom ? `${form.breakShortenFrom.slice(0, 4)}-${form.breakShortenFrom.slice(4, 6)}` : ''}
+                        onChange={e => setForm({ ...form, breakShortenFrom: e.target.value.replace('-', '') })}
+                        className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                      契約より休憩を短くした分を、出勤した日ごとに所定外労働として支払います。
+                      法定内（1日8時間以内）のため<b>割増なし（通常時給）</b>で計算します。
+                      有給・休み・補償日・帰国中の日は対象外。開始月より前の給与は変わりません。
+                    </p>
+                  </div>
+
+              </div>)}
+
+              {modalTab === 'allowance' && (<div className="space-y-4">
+                <div className="border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-3 bg-green-50/30 dark:bg-green-900/10">
+                  <h4 className="text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-wide">賞与の手当・出面の設定</h4>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                    禁煙手当と子ども手当は<b>賞与に上乗せ</b>されます（賃金制度 → 賞与タブで自動計算）。
+                    運転のチェックは出面の運転者の選択肢に使います。
+                  </p>
+                  {/* 運転者の選択肢に出すか。未設定なら日本人=あり／外国人=なし */}
+                  <div className="col-span-2">
+                    <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.canDrive ?? (form.visa === 'none' || !form.visa)}
+                        onChange={e => setForm({ ...form, canDrive: e.target.checked })}
+                      />
+                      社有車を運転する可能性がある（出面の運転者の選択肢に出す）
+                      {form.canDrive === undefined && (
+                        <span className="text-[10px] text-gray-400">（既定: {form.visa === 'none' || !form.visa ? '日本人=あり' : '外国人=なし'}）</span>
+                      )}
+                    </label>
+                  </div>
+
+                  {/* 賞与の手当（2026-08-31 追加）。禁煙手当は年3万、子ども手当は
+                      第1子3万/第2子5万/第3子以降7万（18歳の誕生日を迎える年まで） */}
+                  <div className="col-span-2 border-t border-gray-200 dark:border-gray-600 pt-3">
+                    <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.nonSmoker}
+                        onChange={e => setForm({ ...form, nonSmoker: e.target.checked })}
+                      />
+                      煙草を吸わない（賞与に<b>禁煙手当 年3万円</b>を上乗せ）
+                    </label>
+                  </div>
+
+                  <div className="col-span-2">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      子ども（誕生年月）
+                      <span className="text-[10px] text-gray-400 ml-1.5">
+                        賞与の子ども手当に使います。第1子3万・第2子5万・第3子以降7万（年額）／18歳の誕生日を迎える年まで
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {form.children.map((c, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-10">第{i + 1}子</span>
+                          <input
+                            type="month"
+                            value={c}
+                            onChange={e => {
+                              const next = [...form.children]
+                              next[i] = e.target.value
+                              setForm({ ...form, children: next })
+                            }}
+                            className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-2 py-1.5 text-sm tabular-nums"
+                          />
+                          {c && /^\d{4}-\d{2}$/.test(c) && (
+                            <span className="text-[10px] text-gray-400">
+                              満18歳: {Number(c.slice(0, 4)) + 18}年{Number(c.slice(5, 7))}月
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, children: form.children.filter((_, j) => j !== i) })}
+                            className="text-xs text-red-500 hover:text-red-700"
+                          >
+                            削除
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, children: [...form.children, ''] })}
+                        className="text-xs font-bold px-3 py-1 rounded-md border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition"
+                      >
+                        ＋ 子どもを追加
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              </div>)}
+
+              {modalTab === 'other' && (<div className="space-y-4">
               {/* ── 出向情報 ── */}
               <div className="border border-purple-200 dark:border-purple-800 rounded-lg p-3 space-y-2 bg-purple-50/30 dark:bg-purple-900/10">
                 <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide">🔁 出向情報</h4>
@@ -1311,57 +1355,57 @@ export default function WorkersPage() {
                   ※ 出向中にすると、開始月以降の人件費から実給与額（実出勤×日額＋残業）が自動で差し引かれます。
                 </p>
               </div>
-            </div>
-
-            {/* 旧ルール継続フラグ（個別対応用） */}
-            {isGaikoku(form.visa) && (
-              <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={form.useOldRules || false}
-                    onChange={e => setForm({ ...form, useOldRules: e.target.checked })}
-                    className="w-4 h-4 text-amber-600 focus:ring-amber-500"
-                  />
-                  <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
-                    旧ルール（変形労働制以前）で給与計算する
-                  </span>
-                </label>
-                <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                  ※ 通常、ベトナム人スタッフは 2026年5月から新ルール（変形労働時間制・3層構造給与）が
-                  自動適用されます。本人が新ルール移行を拒否した等の個別事情がある場合のみチェック。<br />
-                  チェックすると、5月以降も旧ルール（1日6h40min所定、月集計合計×1.25残業）で計算されます。
-                  退職時に退職日を設定すれば自動的に対象外になります。
-                </p>
-              </div>
-            )}
-
-            {/* Token management (edit only) */}
-            {editId !== null && (() => {
-              const w = workers.find(x => x.id === editId)
-              if (!w) return null
-              return w.token ? (
-                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                  <div className="text-xs text-gray-500 mb-2">モバイルトークン</div>
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs bg-white px-2 py-1 rounded border flex-1 truncate">{w.token}</code>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(mobileUrl(w))
-                        alert('URLをコピーしました')
-                      }}
-                      className="text-xs bg-hibi-navy text-white px-3 py-1 rounded"
-                    >
-                      URL
-                    </button>
-                    <button onClick={() => handleRevokeToken(w.id, w.name)} className="text-xs text-red-500 hover:text-red-700">
-                      無効化
-                    </button>
-                  </div>
+              {/* 旧ルール継続フラグ（個別対応用） */}
+              {isGaikoku(form.visa) && (
+                <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.useOldRules || false}
+                      onChange={e => setForm({ ...form, useOldRules: e.target.checked })}
+                      className="w-4 h-4 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                      旧ルール（変形労働制以前）で給与計算する
+                    </span>
+                  </label>
+                  <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                    ※ 通常、ベトナム人スタッフは 2026年5月から新ルール（変形労働時間制・3層構造給与）が
+                    自動適用されます。本人が新ルール移行を拒否した等の個別事情がある場合のみチェック。<br />
+                    チェックすると、5月以降も旧ルール（1日6h40min所定、月集計合計×1.25残業）で計算されます。
+                    退職時に退職日を設定すれば自動的に対象外になります。
+                  </p>
                 </div>
-              ) : null
-            })()}
+              )}
 
+              {/* Token management (edit only) */}
+              {editId !== null && (() => {
+                const w = workers.find(x => x.id === editId)
+                if (!w) return null
+                return w.token ? (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="text-xs text-gray-500 mb-2">モバイルトークン</div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs bg-white px-2 py-1 rounded border flex-1 truncate">{w.token}</code>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(mobileUrl(w))
+                          alert('URLをコピーしました')
+                        }}
+                        className="text-xs bg-hibi-navy text-white px-3 py-1 rounded"
+                      >
+                        URL
+                      </button>
+                      <button onClick={() => handleRevokeToken(w.id, w.name)} className="text-xs text-red-500 hover:text-red-700">
+                        無効化
+                      </button>
+                    </div>
+                  </div>
+                ) : null
+              })()}
+
+              </div>)}
+            </div>
             <div className="flex gap-2 mt-6">
               <button onClick={handleSave} disabled={saving}
                 className="flex-1 bg-hibi-navy text-white rounded-lg py-2.5 font-bold text-sm hover:bg-hibi-light transition disabled:opacity-50">
