@@ -514,7 +514,7 @@ export default function WorkersPage() {
                 単価 {sortKey === 'rate' && (sortAsc ? '↑' : '↓')}
               </th>
               <th className="px-3 py-3">月給目安</th>
-              <th className="px-3 py-3">📱</th>
+              <th className="px-3 py-3 whitespace-nowrap">📱 スマホURL</th>
               <th className="px-3 py-3">操作</th>
             </tr>
           </thead>
@@ -628,13 +628,28 @@ export default function WorkersPage() {
                   </td>
                   <td className="px-3 py-2.5">
                     {w.token ? (
-                      <div className="flex items-center gap-1">
-                        <span className="text-green-500 text-xs">✓</span>
-                        <button onClick={() => setQrWorker(w)} className="text-hibi-navy text-xs underline">QR</button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setQrWorker(w)}
+                          title="QRコードとURLを表示"
+                          className="text-xs font-bold px-2.5 py-1 rounded-md border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition whitespace-nowrap"
+                        >
+                          QR・URL
+                        </button>
+                        <button
+                          onClick={() => { navigator.clipboard.writeText(mobileUrl(w)); alert(`${w.name} さんのURLをコピーしました\n\n${mobileUrl(w)}`) }}
+                          title="URLをコピー"
+                          className="text-xs text-gray-500 hover:text-hibi-navy whitespace-nowrap"
+                        >
+                          コピー
+                        </button>
                       </div>
                     ) : (
-                      <button onClick={() => handleGenToken(w.id)} className="text-gray-400 text-xs hover:text-hibi-navy">
-                        発行
+                      <button
+                        onClick={() => handleGenToken(w.id)}
+                        className="text-xs font-bold px-3 py-1 rounded-md bg-hibi-navy text-white hover:opacity-90 whitespace-nowrap"
+                      >
+                        発行する
                       </button>
                     )}
                   </td>
