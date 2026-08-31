@@ -18,8 +18,38 @@ import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
 import { allocateBonus, nextRevisionDate, lastRevisionDate, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
 import { todayJstIso } from '@/lib/date-utils'
+import { getLeaveBalance } from '@/lib/leave-balance'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * 1人分の賞与の内訳（2026-08-31 拡張）。
+ * 実際の支給は「利益分配 + 精勤(有給買取) + 禁煙手当 + 子ども手当」の合算。
+ */
+interface BonusLine {
+  workerId: number
+  name: string
+  grade: string
+  hyogo: Hyogo
+  points: number
+  /** ① 利益分配賞与（点数配分の額。代表が個別に上書きすることがある） */
+  amount: number
+  /** ② 精勤賞与（有給の買取） */
+  attendanceDays?: number
+  attendanceRate?: number
+  attendanceAmount?: number
+  /** ③ 禁煙手当 */
+  nonSmokerAmount?: number
+  /** ④ 子ども手当 */
+  childCount?: number
+  childAmount?: number
+  /** ①〜④の合計 */
+  totalAmount?: number
+  /** 支給方法（振込 / 現金）。出向者は出向先から支給されることがある */
+  payMethod?: 'transfer' | 'cash'
+  /** 出向先から支給される場合の出向先名（合計から分ける） */
+  paidBy?: string
+}
 
 interface BonusRecord {
   id: string
@@ -28,8 +58,10 @@ interface BonusRecord {
   pool: number
   totalPoints: number
   unit: number
-  allocations: Array<{ workerId: number; name: string; grade: string; hyogo: Hyogo; points: number; amount: number }>
+  allocations: BonusLine[]
   total: number
+  /** 手当込みの支給総額（自社負担分。出向先が支給する人を除く） */
+  grandTotal?: number
   actor: string
   savedAt: string
 }
@@ -61,7 +93,32 @@ export async function GET(request: NextRequest) {
   const hyogo: Record<string, Hyogo> = {}
   for (const [id, e] of Object.entries(entries)) if (e.hyogo) hyogo[id] = e.hyogo
 
-  return NextResponse.json({ records, hyogoFrom: effective, hyogo })
+  // 賞与の手当を画面で自動計算するための材料（2026-08-31 追加）。
+  //   有給残は買取（精勤賞与）の日数、children/nonSmoker は手当の判定に使う。
+  const workers = await getWorkers()
+  const targets = workers
+    .filter(w => !w.retired)
+    .filter(w => !w.visaType || w.visaType === 'none')
+    .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
+  const memberInfo = await Promise.all(targets.map(async w => {
+    let leaveRemaining = 0
+    try {
+      const b = await getLeaveBalance(w.id, today)
+      leaveRemaining = b.noGrant ? 0 : b.remaining
+    } catch { /* 有給が読めなくても賞与の他の項目は出す */ }
+    return {
+      workerId: w.id,
+      name: w.name,
+      grade: w.jpGrade || '',
+      rate: w.rate || 0,
+      nonSmoker: w.nonSmoker === true,
+      children: w.children || [],
+      dispatchTo: w.dispatchTo || '',
+      leaveRemaining,
+    }
+  }))
+
+  return NextResponse.json({ records, hyogoFrom: effective, hyogo, members: memberInfo })
 }
 
 export async function POST(request: NextRequest) {
@@ -71,6 +128,8 @@ export async function POST(request: NextRequest) {
   const paidOn = String(body.paidOn || todayJstIso())
   const pool = Number(body.pool) || 0
   const hyogoMap = (body.hyogo || {}) as Record<string, Hyogo>
+  // 画面で組み立てた明細（手当込み）。未指定なら従来どおり点数配分だけで保存する
+  const linesIn = Array.isArray(body.lines) ? (body.lines as Partial<BonusLine>[]) : null
 
   if (!label) return NextResponse.json({ error: '支給名が必要です' }, { status: 400 })
   if (pool <= 0) return NextResponse.json({ error: '原資を入力してください' }, { status: 400 })
@@ -93,14 +152,37 @@ export async function POST(request: NextRequest) {
 
   const id = `${paidOn}-${Date.now()}`
   const auth = await getApiAuthUser(request)
+  const lines: BonusLine[] = allocations.map(a => {
+    const w = targets.find(x => x.id === a.workerId)
+    const sent = linesIn?.find(l => Number(l.workerId) === a.workerId)
+    const num = (v: unknown) => Math.max(0, Math.round(Number(v) || 0))
+    const profit = sent && sent.amount !== undefined ? num(sent.amount) : a.amount
+    const attendanceAmount = num(sent?.attendanceAmount)
+    const nonSmokerAmount = num(sent?.nonSmokerAmount)
+    const childAmount = num(sent?.childAmount)
+    return {
+      workerId: a.workerId,
+      name: w?.name || '',
+      grade: a.grade, hyogo: a.hyogo, points: a.points,
+      amount: profit,
+      attendanceDays: num(sent?.attendanceDays),
+      attendanceRate: num(sent?.attendanceRate),
+      attendanceAmount,
+      nonSmokerAmount,
+      childCount: num(sent?.childCount),
+      childAmount,
+      totalAmount: profit + attendanceAmount + nonSmokerAmount + childAmount,
+      payMethod: sent?.payMethod === 'cash' ? 'cash' : 'transfer',
+      paidBy: sent?.paidBy ? String(sent.paidBy) : (w?.dispatchTo || ''),
+    }
+  })
+
   const record: Omit<BonusRecord, 'id'> = {
     label, paidOn, pool, totalPoints, unit,
-    allocations: allocations.map(a => ({
-      workerId: a.workerId,
-      name: targets.find(w => w.id === a.workerId)?.name || '',
-      grade: a.grade, hyogo: a.hyogo, points: a.points, amount: a.amount,
-    })),
-    total: allocations.reduce((s, a) => s + a.amount, 0),
+    allocations: lines,
+    total: lines.reduce((s, a) => s + a.amount, 0),
+    // 出向先が支給する人は自社の支給総額から除く（2025年の大川さん＝山岡建設工業のケース）
+    grandTotal: lines.filter(l => !l.paidBy).reduce((s, l) => s + (l.totalAmount || 0), 0),
     actor: auth.authorized ? String(auth.actor) : 'unknown',
     savedAt: new Date().toISOString(),
   }
