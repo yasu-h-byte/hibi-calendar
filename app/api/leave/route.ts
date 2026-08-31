@@ -1577,7 +1577,8 @@ export async function GET(request: NextRequest) {
         if (grantDate && grantDays > 0) {
           const { requestedPeriodUsed } = computePeriodUsed(w.id, grantDate, allAtt, todayIso)
           const judge = judgeFiveDayObligation(
-            grantDate, grantDays, requestedPeriodUsed, w.retired, todayIso
+            grantDate, grantDays, requestedPeriodUsed, w.retired, todayIso,
+            { isJp: !w.visa || w.visa === 'none' },
           )
           if (judge.warning) {
             fiveDayShortfall = judge.shortfall

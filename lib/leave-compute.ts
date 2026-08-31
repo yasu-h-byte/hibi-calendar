@@ -14,6 +14,11 @@
  */
 
 import { addMonthsSafe, todayJstIso } from './date-utils'
+import {
+  FIVE_DAY_WARNING_AFTER_MONTHS,
+  FIVE_DAY_WARNING_AFTER_MONTHS_JP,
+  FIVE_DAY_WARNING_JP_FROM_GRANT_DATE,
+} from './constants'
 
 /**
  * 法定付与日数（労基法39条1項・2項）
@@ -363,6 +368,10 @@ export function judgeFiveDayObligation(
   requestedPeriodUsed: number,
   retiredIso?: string,
   todayIso?: string,
+  opts?: {
+    /** 日本人スタッフか（2026-08-31 追加: 日本人だけ判定タイミングが違う） */
+    isJp?: boolean
+  },
 ): {
   shortfall: number
   warning: boolean
@@ -370,8 +379,18 @@ export function judgeFiveDayObligation(
 } {
   const today = todayIso || todayJstIso()
   const periodEnd = addMonthsSafe(grantDate, 12)
-  const periodEnd9m = addMonthsSafe(grantDate, 9)
+  // 日本人は半年経過で警告（外国人は従来どおり9ヶ月）
+  const elapsedThreshold = addMonthsSafe(
+    grantDate,
+    opts?.isJp ? FIVE_DAY_WARNING_AFTER_MONTHS_JP : FIVE_DAY_WARNING_AFTER_MONTHS,
+  )
   const shortfall = Math.max(0, 5 - requestedPeriodUsed)
+
+  // 日本人の 2026-10-01 より前の付与期は監視対象外（代表判断・lib/constants.ts 参照）。
+  // 買取優先の運用が先行しており、今期は代表が個別に対応する。
+  if (opts?.isJp && grantDate < FIVE_DAY_WARNING_JP_FROM_GRANT_DATE) {
+    return { shortfall: 0, warning: false, reason: null }
+  }
 
   if (grantDays < 10) {
     return { shortfall: 0, warning: false, reason: null }
@@ -392,8 +411,8 @@ export function judgeFiveDayObligation(
   if (today >= threeMonthsBeforeEnd) {
     return { shortfall, warning: true, reason: 'urgent' }
   }
-  // 経過9ヶ月以上
-  if (today >= periodEnd9m) {
+  // 経過が規定月数（日本人6ヶ月 / 外国人9ヶ月）を超えた
+  if (today >= elapsedThreshold) {
     return { shortfall, warning: true, reason: 'late' }
   }
   return { shortfall, warning: false, reason: null }

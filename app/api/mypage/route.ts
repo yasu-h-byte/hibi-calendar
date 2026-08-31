@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
         balance.periodUsed ?? 0,
         worker.retired,
         today,
+        { isJp: !worker.visaType || worker.visaType === 'none' },
       )
       fiveDayShortfall = judge.shortfall
     }

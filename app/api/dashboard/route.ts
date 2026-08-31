@@ -1037,7 +1037,8 @@ export async function GET(request: NextRequest) {
       //   経路間で警告の有無が食い違っていた。少なく数える方＝警告が出る方に倒す）
       const periodUsed = seen.size
 
-      const judged = judgeFiveDayObligation(start, grantDays, periodUsed, w.retired, todayIsoForVisa)
+      const judged = judgeFiveDayObligation(start, grantDays, periodUsed, w.retired, todayIsoForVisa,
+        { isJp: !w.visa || w.visa === 'none' })
       if (judged.warning) {
         plShortfallCount++
         plShortfallNames.push(`${w.name}(残${judged.shortfall}日)`)

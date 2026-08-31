@@ -181,6 +181,42 @@ describe('computePeriodUsed', () => {
   })
 })
 
+describe('judgeFiveDayObligation — 日本人の特則（2026-08-31 代表決定）', () => {
+  it('日本人の 2026-10-01 より前の付与期は監視対象外（今期は代表が個別対応）', () => {
+    // 今期（2025-10-01付与）: 期限まで残1ヶ月・取得0日でも警告しない
+    const r = judgeFiveDayObligation('2025-10-01', 20, 0, undefined, '2026-08-31', { isJp: true })
+    expect(r.warning).toBe(false)
+    expect(r.shortfall).toBe(0)
+  })
+
+  it('日本人の 2026-10-01 付与期は半年経過で警告（外国人より3ヶ月早い）', () => {
+    // 半年経過直後（2027-04-01）で警告が立つ
+    const r = judgeFiveDayObligation('2026-10-01', 20, 1, undefined, '2027-04-01', { isJp: true })
+    expect(r.warning).toBe(true)
+    expect(r.reason).toBe('late')
+    expect(r.shortfall).toBe(4)
+  })
+
+  it('日本人でも半年経過前は警告しない', () => {
+    const r = judgeFiveDayObligation('2026-10-01', 20, 0, undefined, '2027-03-31', { isJp: true })
+    expect(r.warning).toBe(false)
+    expect(r.shortfall).toBe(5)   // 不足日数自体は出す（警告は出さない）
+  })
+
+  it('外国人は従来どおり9ヶ月経過まで警告しない（半年経過では出ない）', () => {
+    const half = judgeFiveDayObligation('2026-10-01', 20, 0, undefined, '2027-04-01')
+    expect(half.warning).toBe(false)
+    const nine = judgeFiveDayObligation('2026-10-01', 20, 0, undefined, '2027-07-01')
+    expect(nine.warning).toBe(true)
+  })
+
+  it('外国人は 2026-10-01 より前の付与期でも従来どおり監視する（抑止は日本人限定）', () => {
+    const r = judgeFiveDayObligation('2025-10-01', 20, 0, undefined, '2026-08-31')
+    expect(r.warning).toBe(true)
+    expect(r.shortfall).toBe(5)
+  })
+})
+
 describe('judgeFiveDayObligation', () => {
   test('10日未満付与は対象外', () => {
     const r = judgeFiveDayObligation('2026-04-01', 7, 0, undefined, '2026-12-01')
