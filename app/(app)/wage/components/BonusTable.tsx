@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   bonusPoints, allocateBonus, GRADE_LABELS, GRADES_IN_ORDER,
   childAllowance, attendanceBonusDays, attendanceBonusAmount,
-  NON_SMOKER_ALLOWANCE,
+  NON_SMOKER_ALLOWANCE, FIVE_DAY_RESERVE,
   type JpGrade, type Hyogo, type BonusMember,
 } from '@/lib/jp-wage'
 
@@ -36,6 +36,8 @@ interface MemberInfo {
   children: string[]
   dispatchTo: string
   leaveRemaining: number
+  /** 有効な有給付与レコードの付与日。買取上限（残−5日）の判定に使う */
+  leaveGrantDate: string
 }
 
 /** 画面上で手修正できる項目（自動計算の結果を上書きする） */
@@ -111,7 +113,12 @@ export default function BonusTable() {
     const inf = info[a.workerId]
     const o = ov[a.workerId] || {}
     const rate = inf?.rate || 0
-    const days = o.days !== undefined ? o.days : attendanceBonusDays(inf?.leaveRemaining || 0)
+    // 2026-10-01 付与期からは年5日を確保するため「残日数 − 5日」が買取の上限
+    // （代表決定 2026-08-31・docs/paid-leave.md）。それ以前の期は全額買取できる。
+    const capped = !!inf?.leaveGrantDate && inf.leaveGrantDate >= '2026-10-01'
+    const days = o.days !== undefined
+      ? o.days
+      : attendanceBonusDays(inf?.leaveRemaining || 0, { capForFiveDayObligation: capped })
     const attendanceAmount = attendanceBonusAmount(days, rate)
     const nonSmokerAmount = inf?.nonSmoker ? NON_SMOKER_ALLOWANCE : 0
     const child = childAllowance(inf?.children || [], paidOn)
@@ -125,6 +132,7 @@ export default function BonusTable() {
       totalAmount: profit + attendanceAmount + nonSmokerAmount + child.amount,
       payMethod: o.payMethod || 'transfer' as const,
       paidBy: inf?.dispatchTo || '',
+      capped,
       idx: i,
     }
   })
@@ -314,6 +322,9 @@ export default function BonusTable() {
                           onChange={e => setOverride(l.workerId, { days: Number(e.target.value.replace(/[^0-9]/g, '')) || 0 })}
                           className="w-14 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded px-1.5 py-1 text-right text-sm tabular-nums"
                         />
+                        {l.capped && (
+                          <span className="block text-[9px] text-gray-400">上限（残−{FIVE_DAY_RESERVE}日）</span>
+                        )}
                       </td>
                       <td className={`${td} text-gray-500`}>{l.attendanceRate ? yen(l.attendanceRate) : '—'}</td>
                       <td className={td}>{yen(l.attendanceAmount)}</td>

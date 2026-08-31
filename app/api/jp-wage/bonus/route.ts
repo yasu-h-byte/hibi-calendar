@@ -102,9 +102,11 @@ export async function GET(request: NextRequest) {
     .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
   const memberInfo = await Promise.all(targets.map(async w => {
     let leaveRemaining = 0
+    let leaveGrantDate = ''
     try {
       const b = await getLeaveBalance(w.id, today)
       leaveRemaining = b.noGrant ? 0 : b.remaining
+      leaveGrantDate = b.noGrant ? '' : b.grantDate
     } catch { /* 有給が読めなくても賞与の他の項目は出す */ }
     return {
       workerId: w.id,
@@ -115,6 +117,7 @@ export async function GET(request: NextRequest) {
       children: w.children || [],
       dispatchTo: w.dispatchTo || '',
       leaveRemaining,
+      leaveGrantDate,
     }
   }))
 
