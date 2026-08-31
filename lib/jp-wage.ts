@@ -604,6 +604,86 @@ export function nextRevisionDate(todayIso: string): string {
 }
 
 // ────────────────────────────────────────
+//  賞与に上乗せする手当（2026-08-31 追加）
+// ────────────────────────────────────────
+//
+// 賞与は「利益分配賞与」だけではなく、以下を合算して支給している（2025年の支給実績で確認）:
+//   ① 利益分配賞与 … 原資を等級×評語の点数で配分（allocateBonus）
+//   ② 精勤賞与     … 有給の買取（残日数 × 日額）
+//   ③ 禁煙手当     … 煙草を吸わない社員に年間3万円
+//   ④ 子ども手当   … 扶養している子が18歳の誕生日を迎える年まで、年額で支給
+
+/** 禁煙手当（年額）。煙草を吸わない社員に支給する。 */
+export const NON_SMOKER_ALLOWANCE = 30000
+
+/**
+ * 子ども手当（年額）。第1子・第2子・**第3子以降**の3段階。
+ * 配列の最後の値が「以降」すべてに適用される。
+ */
+export const CHILD_ALLOWANCE_BY_ORDER = [30000, 50000, 70000] as const
+
+/**
+ * 子ども手当の対象年齢の上限。
+ * 「18歳の誕生日を迎える**年**まで」なので、支給年 − 生年 ≤ 18 なら対象。
+ * 誕生日の前後で切り替わらない（年単位）点に注意。
+ */
+export const CHILD_ALLOWANCE_MAX_AGE = 18
+
+/** その年に子ども手当の対象となる子か（18歳の誕生日を迎える年まで） */
+export function isChildEligible(birthDate: string, paidOnIso: string): boolean {
+  if (!birthDate || !paidOnIso) return false
+  const birthYear = Number(birthDate.slice(0, 4))
+  const paidYear = Number(paidOnIso.slice(0, 4))
+  if (!birthYear || !paidYear) return false
+  return paidYear - birthYear <= CHILD_ALLOWANCE_MAX_AGE
+}
+
+/**
+ * 子ども手当の年額。
+ *
+ * 年長の子から第1子として数える（生年月日の昇順）。対象外になった子は詰めずに
+ * **対象の子だけを順に数える**（例: 上の子が19歳になったら、下の子が第1子になる）。
+ */
+export function childAllowance(
+  childBirthDates: string[],
+  paidOnIso: string,
+): { eligibleCount: number; amount: number; perChild: number[] } {
+  const eligible = childBirthDates
+    .filter(b => isChildEligible(b, paidOnIso))
+    .sort()   // 生年月日の昇順 = 年長から
+  const perChild = eligible.map((_, i) =>
+    CHILD_ALLOWANCE_BY_ORDER[Math.min(i, CHILD_ALLOWANCE_BY_ORDER.length - 1)])
+  return {
+    eligibleCount: eligible.length,
+    amount: perChild.reduce((s, v) => s + v, 0),
+    perChild,
+  }
+}
+
+/**
+ * 精勤賞与（有給の買取）。
+ *
+ * 買取日数 × 日額。2026-10-01 付与期からは **年5日の取得を確保するため
+ * 「残日数 − 5日」を上限**にする（代表決定 2026-08-31・docs/paid-leave.md）。
+ * それ以前の期は残日数の全部を買い取れる（従来の運用）。
+ */
+export const FIVE_DAY_RESERVE = 5
+
+export function attendanceBonusDays(
+  remainingDays: number,
+  opts?: { capForFiveDayObligation?: boolean },
+): number {
+  const raw = Math.max(0, Math.floor(remainingDays))
+  if (!opts?.capForFiveDayObligation) return raw
+  return Math.max(0, raw - FIVE_DAY_RESERVE)
+}
+
+/** 精勤賞与の金額 = 買取日数 × 日額 */
+export function attendanceBonusAmount(days: number, dailyRate: number): number {
+  return Math.max(0, Math.floor(days)) * Math.max(0, dailyRate)
+}
+
+// ────────────────────────────────────────
 //  給料表（本人へ渡す様式）の換算
 // ────────────────────────────────────────
 

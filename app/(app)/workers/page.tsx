@@ -42,6 +42,8 @@ const EMPTY_FORM = {
   rate: '', hourlyRate: '', otMul: '1.25', hireDate: '', birthDate: '', retired: '', salary: '',
   jpGrade: '', jpStep: '',
   canDrive: undefined as boolean | undefined,
+  nonSmoker: false,
+  children: [] as string[],
   breakShortenMin: '', breakShortenFrom: '',
   visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '',
   useOldRules: false,
@@ -204,6 +206,8 @@ export default function WorkersPage() {
       jpGrade: w.jpGrade || '',
       jpStep: w.jpStep ? String(w.jpStep) : '',
       canDrive: w.canDrive,
+      nonSmoker: w.nonSmoker ?? false,
+      children: w.children ?? [],
       breakShortenMin: w.breakShortenMin ? String(w.breakShortenMin) : '',
       breakShortenFrom: w.breakShortenFrom || '',
       retired: w.retired || '',
@@ -267,8 +271,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId !== null
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -872,6 +876,64 @@ export default function WorkersPage() {
                         <span className="text-[10px] text-gray-400">（既定: {form.visa === 'none' || !form.visa ? '日本人=あり' : '外国人=なし'}）</span>
                       )}
                     </label>
+                  </div>
+
+                  {/* 賞与の手当（2026-08-31 追加）。禁煙手当は年3万、子ども手当は
+                      第1子3万/第2子5万/第3子以降7万（18歳の誕生日を迎える年まで） */}
+                  <div className="col-span-2 border-t border-gray-200 dark:border-gray-600 pt-3">
+                    <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.nonSmoker}
+                        onChange={e => setForm({ ...form, nonSmoker: e.target.checked })}
+                      />
+                      煙草を吸わない（賞与に<b>禁煙手当 年3万円</b>を上乗せ）
+                    </label>
+                  </div>
+
+                  <div className="col-span-2">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      子ども（誕生年月）
+                      <span className="text-[10px] text-gray-400 ml-1.5">
+                        賞与の子ども手当に使います。第1子3万・第2子5万・第3子以降7万（年額）／18歳の誕生日を迎える年まで
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {form.children.map((c, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-10">第{i + 1}子</span>
+                          <input
+                            type="month"
+                            value={c}
+                            onChange={e => {
+                              const next = [...form.children]
+                              next[i] = e.target.value
+                              setForm({ ...form, children: next })
+                            }}
+                            className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-2 py-1.5 text-sm tabular-nums"
+                          />
+                          {c && /^\d{4}-\d{2}$/.test(c) && (
+                            <span className="text-[10px] text-gray-400">
+                              満18歳: {Number(c.slice(0, 4)) + 18}年{Number(c.slice(5, 7))}月
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, children: form.children.filter((_, j) => j !== i) })}
+                            className="text-xs text-red-500 hover:text-red-700"
+                          >
+                            削除
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, children: [...form.children, ''] })}
+                        className="text-xs font-bold px-3 py-1 rounded-md border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition"
+                      >
+                        ＋ 子どもを追加
+                      </button>
+                    </div>
                   </div>
 
                   {/* 生年月日は労働者名簿の必須記載事項（労基法107条）。

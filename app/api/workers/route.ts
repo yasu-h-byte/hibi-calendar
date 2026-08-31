@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive, breakShortenMin, breakShortenFrom } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive, breakShortenMin, breakShortenFrom, nonSmoker, children } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -73,6 +73,14 @@ export async function POST(request: NextRequest) {
       }
       if (typeof canDrive === 'boolean') {
         (workerData as Record<string, unknown>).canDrive = canDrive
+      }
+      // 賞与の手当（禁煙手当・子ども手当）。docs/wage-system.md
+      if (typeof nonSmoker === 'boolean') {
+        (workerData as Record<string, unknown>).nonSmoker = nonSmoker
+      }
+      if (Array.isArray(children)) {
+        (workerData as Record<string, unknown>).children =
+          (children as unknown[]).map(String).filter(c => /^\d{4}-\d{2}$/.test(c))
       }
       if (Number(breakShortenMin) > 0 && breakShortenFrom) {
         (workerData as Record<string, unknown>).breakShortenMin = Number(breakShortenMin)
@@ -116,6 +124,15 @@ export async function POST(request: NextRequest) {
       }
       if (updates.dispatchFrom !== undefined) {
         updates.dispatchFrom = String(updates.dispatchFrom || '').trim()
+      }
+      // 賞与の手当（2026-08-31 追加）。子は誕生年月 'YYYY-MM' のみ受け付ける
+      if (updates.nonSmoker !== undefined) {
+        updates.nonSmoker = updates.nonSmoker === true
+      }
+      if (updates.children !== undefined) {
+        updates.children = Array.isArray(updates.children)
+          ? (updates.children as unknown[]).map(String).filter(c => /^\d{4}-\d{2}$/.test(c))
+          : []
       }
       // 2026-06-12 (監査 Sprint2-C): 給与系フィールドの old→new を永続記録（更新前に現値を取得）
       const beforeWorkers = await getWorkers()
