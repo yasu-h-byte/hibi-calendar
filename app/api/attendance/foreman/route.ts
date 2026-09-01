@@ -307,22 +307,11 @@ export async function POST(request: NextRequest) {
               b1: break1 ? 1 : 0, b2: break2 ? 1 : 0, b3: break3 ? 1 : 0,
               s: 'foreman',
             }
-            // 後方互換: o にも残業時間を入れる（既存集計ロジック用。staff route と同じ計算）
-            try {
-              const { db } = await import('@/lib/firebase')
-              const { doc, getDoc } = await import('@/lib/fsdb')
-              const mainSnap2 = await getDoc(doc(db, 'demmen', 'main'))
-              const siteWs = ((mainSnap2.exists() ? mainSnap2.data().sites || [] : []) as { id: string; workSchedule?: { morningBreak?: { enabled?: boolean; minutes?: number }; lunchBreak?: { enabled?: boolean; minutes?: number }; afternoonBreak?: { enabled?: boolean; minutes?: number } } }[])
-                .find(x => x.id === site.id)?.workSchedule
-              const stM = parseInt(String(startTime).split(':')[0]) * 60 + parseInt(String(startTime).split(':')[1])
-              const etM = parseInt(String(endTime).split(':')[0]) * 60 + parseInt(String(endTime).split(':')[1])
-              let mins = etM - stM
-              if (entry.b1 && (siteWs?.morningBreak?.enabled ?? true)) mins -= siteWs?.morningBreak?.minutes ?? 30
-              if (entry.b2 && (siteWs?.lunchBreak?.enabled ?? true)) mins -= siteWs?.lunchBreak?.minutes ?? 60
-              if (entry.b3 && (siteWs?.afternoonBreak?.enabled ?? true)) mins -= siteWs?.afternoonBreak?.minutes ?? 30
-              const otH = Math.max(0, Math.round((mins / 60 - 7) * 10) / 10)
-              if (otH > 0) entry.o = otH
-            } catch { /* o の補完に失敗しても st/et があれば給与計算は正しい */ }
+            // ⚠️ o は保存しない（2026-08-31 総ざらいで修正）。
+            //   スタッフのスマホ入力も st/et のみで o を持たず、給与計算
+            //   (calculateVietnameseSalary) は st/et がある場合 o を無視する。
+            //   o を併記すると wm.otHours（表示・現場の残業合計）だけが
+            //   二重ソースで膨らみ、スタッフ入力と職長入力で数字が食い違う。
             break
           }
           entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)), s: 'foreman' }

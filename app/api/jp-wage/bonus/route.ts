@@ -100,11 +100,20 @@ export async function GET(request: NextRequest) {
     .filter(w => !w.retired)
     .filter(w => !w.visaType || w.visaType === 'none')
     .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
+  // ── 精勤賞与の基準日（2026-08-31 総ざらいで修正）──
+  //   精勤賞与は「期末（9/30）に残った有給」の買取（docs/paid-leave.md: 期末買取）。
+  //   賞与は例年10月末に作るため、「今日」を基準にすると 10/1 に付与されたばかりの
+  //   **新しい期の残日数（ほぼ満額）** を掴んでしまい、買い取る枠を取り違える。
+  //   10月以降に開いた場合は直前の期末 9/30 時点の残数・付与レコードで評価する。
+  //   これにより「残−5日」の上限判定（付与日 >= 2026-10-01）も
+  //   『買い取る期』基準になり、今年（2025-10-01付与分の買取）は上限なし・
+  //   来年（2026-10-01付与分の買取）から上限あり、という代表決定どおりに動く。
+  const bonusAsOf = today.slice(5) >= '10-01' ? `${today.slice(0, 4)}-09-30` : today
   const memberInfo = await Promise.all(targets.map(async w => {
     let leaveRemaining = 0
     let leaveGrantDate = ''
     try {
-      const b = await getLeaveBalance(w.id, today)
+      const b = await getLeaveBalance(w.id, bonusAsOf)
       leaveRemaining = b.noGrant ? 0 : b.remaining
       leaveGrantDate = b.noGrant ? '' : b.grantDate
     } catch { /* 有給が読めなくても賞与の他の項目は出す */ }

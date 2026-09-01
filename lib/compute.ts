@@ -1902,6 +1902,9 @@ export function computeMonthly(
       wm.legalHolidayAllowance = legalHolidayAllowanceM
       wm.absence = absentDaysM
       wm.absentCost = absentDeductionM
+      // 給与Excel（lib/export.ts）と検算は absentDeduction を読む。absentCost だけだと
+      // Excel の控除列が0のまま支給額だけ減り、内訳合計と一致しなくなる（2026-08-31 総ざらいで検出）
+      wm.absentDeduction = absentDeductionM
       wm.salaryNetPay = basePay + otPay + legalHolidayAllowanceM - absentDeductionM
       // netPay: 給与支給額（=月給+残業+法定休日手当）。
       //   原価(totalCost) と現場別配賦は後段の「原価＝実支給額」統一パスで処理する。

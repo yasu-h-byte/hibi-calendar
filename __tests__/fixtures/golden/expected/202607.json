@@ -40,6 +40,7 @@
    "legalHolidayDays": 0,
    "legalHolidayHours": 0,
    "legalHolidayAllowance": 0,
+   "absentDeduction": 0,
    "salaryNetPay": 1180000
   },
   {
@@ -418,6 +419,7 @@
    "legalHolidayDays": 0,
    "legalHolidayHours": 0,
    "legalHolidayAllowance": 0,
+   "absentDeduction": 0,
    "salaryNetPay": 235000
   },
   {
