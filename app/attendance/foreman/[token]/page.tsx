@@ -128,6 +128,12 @@ export default function ForemanAttendancePage() {
 
   const handleApprove = async () => {
     if (!data || saving) return
+    // 未入力が残る日の承認は誤操作の可能性が高い（9/1 誤承認事故の再発防止）
+    if (data.summary.noneCount > 0 && !confirm(
+      `まだ ${data.summary.noneCount}名 が未入力です。\n`
+      + `承認するとこの日はロックされ、スタッフは入力できなくなります。\n\n`
+      + `本当に確認済みにしますか？`
+    )) return
     setSaving(true)
     try {
       const res = await fetch('/api/attendance/foreman', {
@@ -351,7 +357,7 @@ export default function ForemanAttendancePage() {
 
         {/* Approve button */}
         <button
-          onClick={handleApprove}
+          onClick={data.approved ? undefined : handleApprove}
           disabled={data.approved || saving}
           className={`w-full rounded-xl py-4 text-base transition ${
             data.approved
@@ -361,6 +367,32 @@ export default function ForemanAttendancePage() {
         >
           {data.approved ? '✅ 確認済み' : '✅ この日を確認する'}
         </button>
+
+        {/* 承認の取り消し（2026-09-02 追加: 誤承認をスマホから自分で戻せるように） */}
+        {data.approved && (
+          <button
+            onClick={async () => {
+              if (saving) return
+              if (!confirm('この日の確認（承認）を取り消します。スタッフが再び入力できるようになります。よろしいですか？')) return
+              setSaving(true)
+              try {
+                const res = await fetch('/api/attendance/foreman', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ token, action: 'unapprove', year: data.date.year, month: data.date.month, day: data.date.day }),
+                })
+                if (!res.ok) {
+                  const d = await res.json().catch(() => null)
+                  alert(d?.error || `取り消しに失敗しました (${res.status})`)
+                }
+                fetchData()
+              } finally { setSaving(false) }
+            }}
+            className="w-full rounded-xl py-3 text-sm font-bold bg-white border-2 border-red-300 text-red-600 active:bg-red-50"
+          >
+            ↩️ この日の確認を取り消す
+          </button>
+        )}
 
         {/* まとめ承認（2026-08-28 追加）: 全員入力済み・未確認の稼働日だけ */}
         {bulkTargets.length > 0 && (

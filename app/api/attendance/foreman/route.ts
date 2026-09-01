@@ -240,7 +240,38 @@ export async function POST(request: NextRequest) {
     if (action === 'approve') {
       const { year, month, day } = body
       const ym = ymKey(year, month)
+      // 2026-09-02 追加（大川さんの 9/1 誤承認事故の再発防止）:
+      //   誰も入力していない日を承認するとスタッフ入力がロックされ、
+      //   「9月から入力できない」状態を作ってしまう。全員未入力の日は拒否する。
+      {
+        const attD = await getAttendanceDoc(ym)
+        const ws = await getForeignWorkersForSite(site.id)
+        const enteredCount = ws.filter(w =>
+          getEntryStatus(attD[attKey(site.id, w.id, ym, day)]) !== 'none').length
+        if (ws.length > 0 && enteredCount === 0) {
+          return NextResponse.json({
+            error: 'この日はまだ誰も入力していません。承認するとスタッフが入力できなくなるため、承認できません。',
+          }, { status: 409 })
+        }
+      }
       await setApprovalForDay(site.id, ym, day, foreman.id)
+      return NextResponse.json({ success: true })
+    }
+
+    // 2026-09-02 追加: 職長が自分で承認を取り消せるようにする。
+    //   従来は解除手段がPC画面にしかなく、誤承認するとスマホから復旧できなかった。
+    //   最終承認（政仁さん）が入った日は職長からは取り消せない。
+    if (action === 'unapprove') {
+      const { year, month, day } = body
+      const ym = ymKey(year, month)
+      const cur = await getApprovalForDay(site.id, ym, day)
+      if (cur?.final) {
+        return NextResponse.json({
+          error: 'この日は最終承認済みのため取り消せません。管理者に連絡してください。',
+        }, { status: 409 })
+      }
+      const { removeForemanApprovalForDay } = await import('@/lib/attendance')
+      await removeForemanApprovalForDay(site.id, ym, day)
       return NextResponse.json({ success: true })
     }
 
