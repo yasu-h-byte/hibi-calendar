@@ -536,7 +536,8 @@ export async function POST(request: NextRequest) {
               return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
             }
             // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
-            const conflict = detectMultiSiteConflict(curD, siteId, Number(workerId), ym, Number(day), main.sites)
+            const conflict = detectMultiSiteConflict(curD, siteId, Number(workerId), ym, Number(day), main.sites,
+              entry as AttendanceEntry)  // 合計人工判定（0.5+0.5 の2現場は許可・2026-08-31）
             if (conflict) {
               const cName = main.sites.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
               const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'

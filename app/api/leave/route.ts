@@ -273,7 +273,7 @@ export async function POST(request: NextRequest) {
             if (isNaN(d0.getTime())) continue
             const ymD = ymKey(d0.getFullYear(), d0.getMonth() + 1)
             if (!(ymD in attCache)) attCache[ymD] = await getAttendanceDoc(ymD)
-            const conflictD = detectMultiSiteConflict(attCache[ymD], siteId, Number(workerId), ymD, d0.getDate(), sitesAllD)
+            const conflictD = detectMultiSiteConflict(attCache[ymD], siteId, Number(workerId), ymD, d0.getDate(), sitesAllD, { w: 0, p: 1 })
             if (conflictD) {
               const cName = sitesAllD.find(s2 => s2.id === conflictD.conflictSiteId)?.name || conflictD.conflictSiteId
               return NextResponse.json({

@@ -203,13 +203,31 @@ export function getSiteShiftType(site: {
 }
 
 /**
+ * 出面エントリがその日の「日勤枠」をどれだけ占有するか（0〜1）。
+ *
+ * - 出勤 w         → 人工そのまま（1 / 0.5）
+ * - 0.6補償        → 1（全日の休業補償。他現場との併存はありえない）
+ * - 有給/試験/欠勤/帰国 → 1（全日ステータス）
+ * - 現場休(h)      → 0（その現場が休んだだけ。本人は別現場に出られる）
+ * - 夜勤のみ(nonly) → 0（日勤枠は空いている）
+ */
+export function dayShiftOccupancy(entry: AttendanceEntry | null | undefined): number {
+  if (!entry) return 0
+  if (entry.h) return 0
+  if (entry.p || entry.exam || entry.r || entry.hk) return 1
+  if (entry.nonly) return 0
+  if (entry.w === 0.6) return 1
+  return entry.w || 0
+}
+
+/**
  * 同一スタッフ・同日の「物理的に不可能」な多現場重複を検出するヘルパー。
  *
- * 「物理的に不可能」とは:
- *   - 同じ日に「日勤現場2件」または「夜勤現場2件」に出勤すること
- *
- * 許容するケース:
- *   - 日勤＋夜勤の同日併記（管理職が両方を確認した場合等）
+ * 判定は**合計人工ベース**（2026-08-31 改修・代表決定）:
+ *   - 同種シフトの現場間で、既存エントリの占有 ＋ 新規エントリの占有が **1 を超える** → conflict
+ *   - **半日×2現場（0.5+0.5）は許容**（旧実装は同種シフトの併記を一律ブロックしていた）
+ *   - 日勤＋夜勤の同日併記は従来どおり許容（枠が別）
+ *   - 現場休(h)の現場がある日に別現場へ出勤するのも許容（h は本人の枠を使わない）
  *
  * @param attData      att_YYYYMM の d フィールド全体
  * @param targetSiteId 書き込み先の現場ID
@@ -217,6 +235,8 @@ export function getSiteShiftType(site: {
  * @param ym           YYYYMM
  * @param day          日（数値または文字列）
  * @param sites        全現場のメタ情報（シフト種別判定用）
+ * @param newEntry     これから書き込むエントリ。省略時は全日（占有1）として扱う
+ *                     （スタッフ・職長経路は全日入力しかないため省略でも従来と同義）
  * @returns conflict があれば siteId/entry/shift を返す。なければ null
  */
 export function detectMultiSiteConflict(
@@ -226,11 +246,19 @@ export function detectMultiSiteConflict(
   ym: string,
   day: number | string,
   sites: { id: string; name?: string; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string } }[],
+  newEntry?: AttendanceEntry | null,
 ): { conflictSiteId: string; existing: AttendanceEntry; shiftType: 'day' | 'night' } | null {
   const dayStr = String(day)
   const targetSite = sites.find(s => s.id === targetSiteId)
   if (!targetSite) return null  // 現場が見つからなければ判定不能
   const targetShift = getSiteShiftType(targetSite)
+
+  // 新規エントリの占有。省略時は全日（=1）として安全側に判定
+  const newOcc = newEntry === undefined ? 1 : dayShiftOccupancy(newEntry)
+  if (newOcc <= 0) return null  // 現場休や削除など、枠を使わない書き込みは常に許可
+
+  let occupied = 0
+  let firstOther: { conflictSiteId: string; existing: AttendanceEntry } | null = null
 
   for (const [key, entry] of Object.entries(attData)) {
     if (!entry) continue
@@ -245,15 +273,20 @@ export function detectMultiSiteConflict(
     if (parseInt(keyWid, 10) !== workerId) continue
     if (keySid === targetSiteId) continue
 
-    // 他現場にエントリあり: シフト種別を比較
     const otherSite = sites.find(s => s.id === keySid)
     if (!otherSite) continue  // 不明な現場はスキップ（残骸データの可能性）
     const otherShift = getSiteShiftType(otherSite)
-    if (otherShift === targetShift) {
-      // 同じシフト種別 → 物理的に不可能 → conflict
-      return { conflictSiteId: keySid, existing: entry as AttendanceEntry, shiftType: targetShift }
-    }
-    // 異なるシフト種別（日勤+夜勤など）→ 許容
+    if (otherShift !== targetShift) continue  // 日勤+夜勤など枠が別 → 数えない
+
+    const occ = dayShiftOccupancy(entry as AttendanceEntry)
+    if (occ <= 0) continue
+    occupied += occ
+    if (!firstOther) firstOther = { conflictSiteId: keySid, existing: entry as AttendanceEntry }
+  }
+
+  // 浮動小数点の誤差を吸収（0.5+0.5 = 1.0 を確実に許可する）
+  if (firstOther && occupied + newOcc > 1.0001) {
+    return { ...firstOther, shiftType: targetShift }
   }
   return null
 }

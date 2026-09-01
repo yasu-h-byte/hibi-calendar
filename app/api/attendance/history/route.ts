@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
     const attDocR = await getAttendanceDoc(h.ym)
     const sitesAllR = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
-    const conflictR = detectMultiSiteConflict(attDocR, h.siteId, h.workerId, h.ym, h.day, sitesAllR)
+    const conflictR = detectMultiSiteConflict(attDocR, h.siteId, h.workerId, h.ym, h.day, sitesAllR, h.before)
     if (conflictR) {
       const cName = sitesAllR.find(s2 => s2.id === conflictR.conflictSiteId)?.name || conflictR.conflictSiteId
       return NextResponse.json({

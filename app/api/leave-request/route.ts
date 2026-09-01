@@ -418,7 +418,7 @@ export async function POST(request: NextRequest) {
         const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
         const attDocA = await getAttendanceDoc(data.ym)
         const sitesAllA = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
-        const conflictA = detectMultiSiteConflict(attDocA, data.siteId, data.workerId, data.ym, data.day, sitesAllA)
+        const conflictA = detectMultiSiteConflict(attDocA, data.siteId, data.workerId, data.ym, data.day, sitesAllA, { w: 0, p: 1 })
         if (conflictA) {
           const cName = sitesAllA.find(s2 => s2.id === conflictA.conflictSiteId)?.name || conflictA.conflictSiteId
           return NextResponse.json({
@@ -735,7 +735,7 @@ export async function POST(request: NextRequest) {
           const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
           const attDocM = await getAttendanceDoc(newYm)
           const sitesAllM = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
-          const conflictM = detectMultiSiteConflict(attDocM, data.siteId, data.workerId, newYm, newDay, sitesAllM)
+          const conflictM = detectMultiSiteConflict(attDocM, data.siteId, data.workerId, newYm, newDay, sitesAllM, { w: 0, p: 1 })
           if (conflictM) {
             const cName = sitesAllM.find(s2 => s2.id === conflictM.conflictSiteId)?.name || conflictM.conflictSiteId
             return NextResponse.json({
