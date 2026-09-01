@@ -23,7 +23,8 @@ function workerTypeFields(): string[] {
 /** `getWorkers()` が組み立てるオブジェクトのキーを拾う */
 function mappedFields(): string[] {
   const src = readFileSync(join(root, 'lib/workers.ts'), 'utf-8')
-  const body = src.match(/const workers: Worker\[\] = \(data\.workers \|\| \[\]\)\.map\([\s\S]*?\n  \}\)\)/)![1 - 1]
+  // 2026-09-02: 写像を mapRawWorkers に抽出（main の重複読み解消）。マッチ先を追随
+  const body = src.match(/const workers: Worker\[\] = \(raw as Record<string, unknown>\[\]\)\.map\([\s\S]*?\n  \}\)\)/)![1 - 1]
   return [...body.matchAll(/^\s{4}([a-zA-Z][a-zA-Z0-9]*):/gm)].map(m => m[1])
 }
 

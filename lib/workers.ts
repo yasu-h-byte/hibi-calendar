@@ -20,8 +20,20 @@ export async function getWorkers(): Promise<Worker[]> {
     return []
   }
 
-  const data = docSnap.data()
-  const workers: Worker[] = (data.workers || []).map((w: Record<string, unknown>) => ({
+  return mapRawWorkers(docSnap.data().workers || [])
+}
+
+/**
+ * demmen/main の workers 配列（生データ）を Worker 型へ写像する（2026-09-02 抽出）。
+ *
+ * main ドキュメントは約260KBあり、1リクエスト内で getWorkers / getStaffSites /
+ * getSites がそれぞれ再読すると読みだけで数秒かかる。API側で main を1回だけ読み、
+ * この関数で写像することで重複読みをなくす（スマホ出面が20秒かかった障害の対処）。
+ * 許可リスト方式なので Worker 型にフィールドを足したら必ずここにも足すこと
+ * （漏れは __tests__/workersMapping.test.ts が検出する）。
+ */
+export function mapRawWorkers(raw: unknown[]): Worker[] {
+  const workers: Worker[] = (raw as Record<string, unknown>[]).map((w: Record<string, unknown>) => ({
     id: w.id as number,
     name: w.name as string,
     nameVi: (w.nameVi as string) || '',

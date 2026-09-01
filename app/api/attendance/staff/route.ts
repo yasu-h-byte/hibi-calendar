@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkerByToken } from '@/lib/workers'
+import { getWorkerByToken, mapRawWorkers } from '@/lib/workers'
 import {
   getAttendanceDoc,
   setAttendanceEntry,
@@ -29,7 +29,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const worker = await getWorkerByToken(token)
+    // ── 2026-09-02 高速化 ──
+    //   main ドキュメント（約260KB）を getWorkerByToken / getStaffSites / getSites /
+    //   siteNames / workSchedule がそれぞれ再読しており、読みだけで数秒かかっていた。
+    //   1回だけ読んで全てをここから導出する（月初の「入力できない」障害の対処）。
+    const mainSnapOnce = await getDoc(doc(db, 'demmen', 'main'))
+    const mainRaw = (mainSnapOnce.exists() ? mainSnapOnce.data() : {}) as {
+      workers?: unknown[]
+      sites?: { id: string; name: string; archived?: boolean; workSchedule?: unknown }[]
+      assign?: Record<string, { workers?: number[] }>
+      massign?: Record<string, { workers?: number[] }>
+    }
+    const allWorkers = mapRawWorkers(mainRaw.workers || [])
+    const worker = allWorkers.find(w => w.token === token) || null
     if (!worker) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
@@ -43,7 +55,16 @@ export async function GET(request: NextRequest) {
       ip: getRequestIp(request),
     }).catch(() => {})
 
-    const assignedSites = await getStaffSites(worker.id)
+    // 配置現場（getStaffSites と同じ規則: 当月の月次配置があればそれ、無ければ既定配置）
+    const nowJst0 = new Date()
+    const curYm0 = ymKey(nowJst0.getFullYear(), nowJst0.getMonth() + 1)
+    const assignedSites: { id: string; name: string }[] = []
+    for (const site of mainRaw.sites || []) {
+      if (site.archived) continue
+      const monthAssign = mainRaw.massign?.[`${site.id}_${curYm0}`]
+      const eff = monthAssign ?? mainRaw.assign?.[site.id]
+      if ((eff?.workers || []).includes(worker.id)) assignedSites.push({ id: site.id, name: site.name })
+    }
     // 2026-07-22: 現場未配置（新入社員が配置前にQRを開いた等）でも入口で弾かない。
     //   従来は「未配置かつ現場指定なし」で 404 'No site assigned' を返し、新入社員の
     //   QRが必ずエラーになっていた。配置済みスタッフも元々ドロップダウンで全現場を選べる
@@ -51,8 +72,8 @@ export async function GET(request: NextRequest) {
     //   未配置は unassigned フラグで画面に「現場を選んでください」を促す。
     const unassigned = assignedSites.length === 0
 
-    // Get all active (non-archived) sites for the dropdown
-    const allActiveSites = await getSites()
+    // Get all active (non-archived) sites for the dropdown（main から導出）
+    const allActiveSites = (mainRaw.sites || []).filter(s2 => !s2.archived)
 
     // Build availableSites: all active sites, with primary flag for assigned ones
     const assignedIds = new Set(assignedSites.map(s => s.id))
@@ -84,8 +105,13 @@ export async function GET(request: NextRequest) {
     const d = Number(tIso.slice(8, 10))
     const ym = ymKey(y, m)
 
-    // Read attendance data
-    const attData = await getAttendanceDoc(ym)
+    // Read attendance data（過去14日の窓が前月にかかる月初は、前月も並列で先読み）
+    const prevMonthDate = new Date(y, m - 1, d - 14)
+    const prevYmStr = ymKey(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1)
+    const [attData, attPrevPre] = await Promise.all([
+      getAttendanceDoc(ym),
+      prevYmStr !== ym ? getAttendanceDoc(prevYmStr) : Promise.resolve(null),
+    ])
 
     // Today's entry
     const todayKey = attKey(siteId, worker.id, ym, d)
@@ -97,24 +123,19 @@ export async function GET(request: NextRequest) {
       entry: AttendanceEntry | null; status: ReturnType<typeof getEntryStatus>
       locked: boolean; dayOffset: number; siteName: string
     }[] = []
-    // Build site name lookup + 現在現場の workSchedule 取得
-    const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
+    // Build site name lookup + 現在現場の workSchedule 取得（main から導出・再読なし）
     const siteNames: Record<string, string> = {}
     let currentSiteWorkSchedule: unknown = null
-    if (mainDoc.exists()) {
-      const sites = mainDoc.data().sites || []
-      for (const s of sites) {
-        siteNames[s.id] = (s.name as string || '').slice(0, 3)
-        if (s.id === siteId) {
-          currentSiteWorkSchedule = s.workSchedule || null
-        }
-      }
+    for (const s of mainRaw.sites || []) {
+      siteNames[s.id] = (s.name || '').slice(0, 3)
+      if (s.id === siteId) currentSiteWorkSchedule = s.workSchedule || null
     }
 
     // 2026-09-02 高速化: 月をまたぐと att_前月 をループ内で最大4回再読していた
     //（9/1〜9/5 は過去5日の大半が前月）。月単位キャッシュ＋承認の並列取得に変更。
     //   月初にスマホ画面が17秒かかり「入力できない」報告が出た障害の対処。
     const attMonthCache: Record<string, Record<string, AttendanceEntry>> = { [ym]: attData }
+    if (attPrevPre) attMonthCache[prevYmStr] = attPrevPre
     const getAttCached = async (pym: string) => {
       if (!(pym in attMonthCache)) attMonthCache[pym] = await getAttendanceDoc(pym)
       return attMonthCache[pym]
@@ -143,8 +164,10 @@ export async function GET(request: NextRequest) {
       }
       pastDayInfos.push({ pd, pym, pDay, entry, entrySiteId, off })
     }
-    const pastApprovals = await Promise.all(
+    // ↓承認の取得は missingDays 側とまとめて1回の並列バッチで行う（2026-09-02）
+    const pastApprovalsPromise = Promise.all(
       pastDayInfos.map(i => getApprovalForDay(i.entrySiteId, i.pym, i.pDay)))
+    const pastApprovals = await pastApprovalsPromise
     pastDayInfos.forEach((i, idx) => {
       pastDays.push({
         date: formatDateShort(i.pd),
@@ -205,6 +228,7 @@ export async function GET(request: NextRequest) {
       }
       const missApprovals = await Promise.all(
         missingCands.map(c => getApprovalForDay(siteId, c.pym, c.pDay)))
+      // （today の承認・道具代はこの後の並列ブロックで取得）
       missingCands.forEach((c, idx) => {
         missingDays.push({
           date: formatDateShort(c.pd),
@@ -218,8 +242,13 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Today's approval
-    const todayApproval = await getApprovalForDay(siteId, ym, d)
+    // Today's approval と 道具代 doc を並列で取得（2026-09-02 高速化）
+    const { isToolBudgetEligible } = await import('@/lib/workers')
+    const tbEligible = isToolBudgetEligible({ visa: worker.visaType, job: worker.jobType, retired: worker.retired, hireDate: worker.hireDate })
+    const [todayApproval, tbSnapPre] = await Promise.all([
+      getApprovalForDay(siteId, ym, d),
+      tbEligible ? getDoc(doc(db, 'demmen', 'toolBudget')) : Promise.resolve(null),
+    ])
 
     // 道具代情報（技能実習生・特定技能のみ、佐藤さんが手動設定した期間起点から1年サイクル）
     // 2026-04-30 運用開始: データ整備完了に伴いガード撤廃（データが無ければ自然に非表示）
@@ -227,10 +256,8 @@ export async function GET(request: NextRequest) {
     let toolBudgetPeriodStart: string | null = null
     let toolBudgetPeriodEnd: string | null = null
     try {
-      // 2026-08-28: 対象判定を isToolBudgetEligible に統一（日本人の現場スタッフも対象に）
-      const { isToolBudgetEligible } = await import('@/lib/workers')
-      if (isToolBudgetEligible({ visa: worker.visaType, job: worker.jobType, retired: worker.retired, hireDate: worker.hireDate })) {
-        const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
+      if (tbEligible && tbSnapPre) {
+        const tbSnap = tbSnapPre
         if (tbSnap.exists()) {
           const tbData = tbSnap.data()
           const anchor = tbData.periodAnchors?.[String(worker.id)]
@@ -283,9 +310,10 @@ export async function GET(request: NextRequest) {
     let plGrantRemaining: number | null = null
     let plGrantExpiryDate: string | null = null
     try {
-      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-      if (mainSnap.exists()) {
-          const plData: Record<string, { fy?: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number; _archived?: boolean }[]> = mainSnap.data().plData || {}
+      {
+          // 2026-09-02: main の再読をやめ、冒頭で読んだ mainRaw を使う
+          const plData: Record<string, { fy?: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; used?: number; _archived?: boolean }[]> =
+            ((mainRaw as { plData?: Record<string, never[]> }).plData || {}) as never
           const plRecordsRaw = plData[String(worker.id)] || []
           const plRecords = plRecordsRaw.filter(r => !r._archived)
 
@@ -451,7 +479,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Check site exists and is active + 現場の勤務時間設定を取得
-    const allActiveSites = await getSites()
+    // 2026-09-02 高速化: POST でも main を1回だけ読んで全てを導出
+    const mainSnapPost = await getDoc(doc(db, 'demmen', 'main'))
+    const mainRawPost = (mainSnapPost.exists() ? mainSnapPost.data() : {}) as {
+      sites?: { id: string; name?: string; archived?: boolean; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string } }[]
+    }
+    const allActiveSites = (mainRawPost.sites || []).filter(s2 => !s2.archived).map(s2 => ({ id: s2.id, name: s2.name || '' }))
     if (!allActiveSites.find(s => s.id === siteId)) {
       return NextResponse.json({ error: 'Site not found or archived' }, { status: 403 })
     }
@@ -462,14 +495,10 @@ export async function POST(request: NextRequest) {
       morningBreak?: SiteBreakRaw; lunchBreak?: SiteBreakRaw; afternoonBreak?: SiteBreakRaw
     }
     let siteWorkSchedule: SiteWorkScheduleRaw | null = null
-    try {
-      const mainSnapForWS = await getDoc(doc(db, 'demmen', 'main'))
-      if (mainSnapForWS.exists()) {
-        const allSites = (mainSnapForWS.data().sites || []) as { id: string; workSchedule?: SiteWorkScheduleRaw }[]
-        const found = allSites.find(s => s.id === siteId)
-        siteWorkSchedule = found?.workSchedule || null
-      }
-    } catch { /* ignore */ }
+    {
+      const found = (mainRawPost.sites || []).find(s => s.id === siteId)
+      siteWorkSchedule = (found?.workSchedule as SiteWorkScheduleRaw | undefined) || null
+    }
     // デフォルト休憩分数（workSchedule未設定時に使用）
     const wsMorning   = siteWorkSchedule?.morningBreak   ?? { enabled: true, minutes: 30, mandatory: false }
     const wsLunch     = siteWorkSchedule?.lunchBreak     ?? { enabled: true, minutes: 60, mandatory: true }
@@ -533,10 +562,10 @@ export async function POST(request: NextRequest) {
         }
       }
       // 全現場リスト（アーカイブ済みも含む。過去の現場間違いを検出するため）
-      const sitesAll = (await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []
+      const sitesAll = mainRawPost.sites || []
       const conflict = detectMultiSiteConflict(attDoc, siteId, worker.id, ym, day, sitesAll)
       if (conflict) {
-        const found = sitesAll.find((s: { id: string; name: string }) => s.id === conflict.conflictSiteId)
+        const found = sitesAll.find(s => s.id === conflict.conflictSiteId)
         const conflictSiteName = found?.name || conflict.conflictSiteId
         const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
         return NextResponse.json({
