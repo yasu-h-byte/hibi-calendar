@@ -26,15 +26,15 @@ const ROLE_LABEL: Record<Role, string> = {
 // 全資料（フラットに保持。category は表示グループ用）
 const DOCS: (DocItem & { category: string })[] = [
   // ── 全員向けの入口 ──
-  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-07-03' },
+  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-08-31' },
 
   // ── 事務（奥寺さん） ──
-  { category: 'manual', roles: ['jimu'], title: '奥寺さん向けマニュアル', desc: '出面補助・月次集計・月締めロック・帳票出力（事務の日常運用。給与計算と有給は各専用マニュアルへ）', url: '/manual-okudera.html', icon: '📘', updated: '2026-08-04' },
+  { category: 'manual', roles: ['jimu'], title: '奥寺さん向けマニュアル', desc: '出面補助・月次集計・月締めロック・帳票出力（事務の日常運用。給与計算と有給は各専用マニュアルへ）', url: '/manual-okudera.html', icon: '📘', updated: '2026-08-31' },
   { category: 'manual', roles: ['jimu'], title: '給与計算マニュアル（奥寺さん用）', desc: '月次給与計算のすべて。雇用形態4区分・端数処理・自動検算に加え、8月改訂で 法定休日1.35倍・夜勤・濱上さんの欠勤控除・フンさんの休憩短縮・運転手当 を追加', url: '/manual-payroll-okudera.html', icon: '💰', badge: '8月改訂', updated: '2026-08-31' },
   { category: 'manual', roles: ['jimu'], title: '社労士提出用資料マニュアル', desc: 'HFU分を社労士に渡す資料の説明。変形労働時間制・3段階残業判定・有給日給・提出3資料の読み方・端数処理', url: '/manual-syaroshi.html', icon: '🏛', badge: 'NEW', updated: '2026-06-12' },
 
   // ── 事業責任者（政仁さん） ──
-  { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面の最終承認・有給/帰国申請の承認・就業カレンダー承認（事業責任者の承認業務に特化）', url: '/manual-masahito.html', icon: '📗', updated: '2026-07-03' },
+  { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面の最終承認・有給/帰国申請の承認・就業カレンダー承認（事業責任者の承認業務に特化）', url: '/manual-masahito.html', icon: '📗', updated: '2026-08-31' },
 
   // ── 職長 ──
   { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・就業カレンダー・夜勤の入力。8月改訂で スマホ操作の改善（今日へボタン等）・「欠」入力・同日多現場ガード を追加', url: '/manual-foreman.html', icon: '📕', badge: '8月改訂', updated: '2026-08-31' },
@@ -51,7 +51,7 @@ const DOCS: (DocItem & { category: string })[] = [
 
   // ── スタッフ向け（全員が内容を把握しておく／スタッフ本人はスマホから） ──
   { category: 'staff', title: 'マイページの使い方（日本人スタッフ向け）', desc: '有給の残数確認と申請・年5日ルール・道具代の残額確認（申請はマネーフォワード）。専用URLの配布時に一緒に渡す1枚もの', url: '/manual-mypage-jp.html', icon: '📱', badge: 'NEW', updated: '2026-08-31' },
-  { category: 'staff', title: 'スタッフ向けマニュアル（ベトナム人）', desc: '出勤登録・欠勤届・有給申請・帰国申請・残数確認・未入力の督促バナー（日本語＋ベトナム語）', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-07-30' },
+  { category: 'staff', title: 'スタッフ向けマニュアル（ベトナム人）', desc: '出勤登録・欠勤届・有給申請・帰国申請・残数確認・未入力の督促バナー（日本語＋ベトナム語）', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-08-31' },
   { category: 'staff', title: '変形労働時間制と残業のルール', desc: '変形労働時間制のしくみ・残業の3段階判定・給料の4層構造・計算例・FAQ（スタッフへの制度説明用）', url: '/manual-henkei-vi.html', icon: '⏰', badge: '日本語+ベトナム語', updated: '2026-08-01' },
   // ── 過去資料（役目を終えたが記録として残す）──
   { category: 'archive', title: '新しい給与制度の説明（スライド・2026年5月移行時）', desc: '旧制度→変形労働時間制への移行を対面説明したときのスライド。移行完了につき過去資料', url: '/manual-kyuyo-hikaku-vi.html', icon: '📦', updated: '2026-08-01' },
