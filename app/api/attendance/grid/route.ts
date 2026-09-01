@@ -520,6 +520,9 @@ export async function POST(request: NextRequest) {
       // 既存エントリがない場合は admin/foreman からの新規作成を原則拒否。
       // 例外: 事後申請性ステータス (p:有給 / hk:帰国中 / w=0.6:現場都合休み) は許容。
       // クリア（削除）と既存エントリの修正は許可。
+      // 2026-09-02 高速化: この後の履歴退避（prevEntry）と同じ doc を2度読みしていたので
+      //   1回の読みを共有する（オートセーブは1セルごとに走るため塵も積もる）
+      let sharedCurD: Record<string, AttendanceEntry> | null = null
       if (entry && typeof entry === 'object') {
         try {
           const { canAdminEditEntry, detectMultiSiteConflict } = await import('@/lib/attendance')
@@ -528,6 +531,7 @@ export async function POST(request: NextRequest) {
           if (worker) {
             const curSnap = await getDoc(docRef)
             const curD = (curSnap.exists() ? curSnap.data().d : {}) as Record<string, AttendanceEntry>
+            sharedCurD = curD
             const existing = curD?.[key]
             // 事後申請性ステータス（有給/帰国中/現場都合休み w=0.6）は ガード例外許容のため newEntry を渡す
             // ※ 2026-06-XX: w=0.6 (補償日) を例外に追加（lib/attendance.ts canAdminEditEntry 参照）
@@ -561,9 +565,13 @@ export async function POST(request: NextRequest) {
       //   誤削除・誤上書きからの復元手段がなかった（8/27 IHI の事故）。
       let prevEntry: AttendanceEntry | undefined
       try {
-        const prevSnap = await getDoc(docRef)
-        const prevD = (prevSnap.exists() ? (prevSnap.data().d || {}) : {}) as Record<string, AttendanceEntry>
-        prevEntry = prevD[key]
+        if (sharedCurD) {
+          prevEntry = sharedCurD[key]   // ガードで読んだ doc を共有（再読しない）
+        } else {
+          const prevSnap = await getDoc(docRef)
+          const prevD = (prevSnap.exists() ? (prevSnap.data().d || {}) : {}) as Record<string, AttendanceEntry>
+          prevEntry = prevD[key]
+        }
       } catch { /* 読めなくても本体処理は続行（履歴が残らないだけ） */ }
 
       if (entry && typeof entry === 'object') {
