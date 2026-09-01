@@ -415,12 +415,12 @@
    "restDays": 0,
    "siteOffDays": 0,
    "examDays": 0,
-   "cost": 225209,
+   "cost": 229360,
    "otCost": 0,
-   "totalCost": 225209,
+   "totalCost": 229360,
    "absence": 0.5,
-   "absentCost": 9791,
-   "netPay": 225209,
+   "absentCost": 5640,
+   "netPay": 229360,
    "isDispatched": false,
    "dispatchTo": "",
    "dispatchDeduction": 0,
@@ -433,7 +433,7 @@
    "legalHolidayDays": 0,
    "legalHolidayHours": 0,
    "legalHolidayAllowance": 0,
-   "salaryNetPay": 225209
+   "salaryNetPay": 229360
   },
   {
    "id": 101,
@@ -1416,10 +1416,10 @@
    "workDays": 118.5,
    "subWorkDays": 282,
    "otHours": 34,
-   "cost": 1572196,
+   "cost": 1576347,
    "subCost": 6414576,
    "billing": 0,
-   "profit": -7986772,
+   "profit": -7990923,
    "profitRate": 0,
    "dispatchDeduction": 422592
   },
@@ -1466,10 +1466,10 @@
  "totals": {
   "workDays": 368.5,
   "subWorkDays": 321,
-  "cost": 7563333,
+  "cost": 7567484,
   "subCost": 7530152,
   "billing": 0,
-  "profit": -15047805,
+  "profit": -15051956,
   "otHours": 220.5
  }
 }

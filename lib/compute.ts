@@ -26,7 +26,7 @@ const floorYen = (v: number): number => Math.floor(Math.round(v * 100) / 100)
 // 日本人・月給制の割増賃金算定基礎「月平均所定労働時間」(145h)。
 // 給与計算エンジンと人員マスタ画面の参考表示で同じ値を使うため lib/constants.ts に集約。
 export { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
-import { JP_SALARY_AVG_MONTHLY_HOURS, JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM } from './constants'
+import { JP_SALARY_AVG_MONTHLY_HOURS, JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM, JP_AVG_MONTHLY_WORK_DAYS } from './constants'
 
 /**
  * 日本人の1日所定労働時間。割増賃金の算定基礎（日額 ÷ 所定時間）の分母。
@@ -1864,11 +1864,15 @@ export function computeMonthly(
       //     笹塚は土曜もお盆初日も稼働日だが、濱上さん（年少者・週休2日）は出ない。
       //     カレンダー基準で計算すると、休むはずの土曜まで欠勤になり
       //     欠勤7.5日=83,928円 と過大に引いてしまう（実際は2.5日=36,718円）。
-      //   そこで:
-      //     欠勤日数 = 出面の「休み(r)」の日数 ＋ 出勤日の不足分（1 − 人工）
-      //     所定日数 = 実出勤日 ＋ 有給 ＋ 試験 ＋ 休み  ← 記録のある日＝その人の所定日
-      //   ブランクの日は「そもそも所定labor日ではない」とみなすので控除されない。
+      //   そこで **欠勤日数は出面の記録から数える**:
+      //     欠勤日数 = 出面の「欠(r)」の日数 ＋ 出勤日の不足分（1 − 人工）
+      //   ブランクの日は「そもそも所定労働日ではない」とみなすので控除されない。
       //   入力漏れがそのまま減給になる事故を防ぐ意味もある。
+      //
+      //   1日あたりの控除額は **月給 ÷ 月平均所定労働日数(20.83日)** で固定する
+      //   （2026-08-31 代表決定）。月ごとの所定日数で割ると、同じ1日の欠勤でも
+      //   7月10,681円 / 8月14,687円 と変わり、稼働日の少ない月に休むほど損をする。
+      //   分母の根拠は lib/constants.ts の JP_ANNUAL_WORK_DAYS を参照。
       //
       //   ⚠️ 役員（yakuin）は対象外。役員報酬は労働の対価ではなく、出面の日数で
       //   増減させるものではない。同じ「月給制ブランチ」に政仁さん（役員・月給118万）が
@@ -1880,11 +1884,12 @@ export function computeMonthly(
         // 出勤したが1日に満たない分（例: 午後から出勤 w=0.5 → 0.5日の欠勤）
         const partialShortfall = Math.max(0, wm.actualWorkDays - wm.workDays)
         absentDaysM = Math.round((wm.restDays + partialShortfall) * 100) / 100
-        // その人の所定日数 = 記録のある日（実出勤・有給・試験・休み）
-        const scheduledDays = wm.actualWorkDays + wm.plUsed + wm.examDays + wm.restDays
-        if (scheduledDays > 0 && absentDaysM > 0) {
+        if (absentDaysM > 0) {
           // 控除は基本給を超えない（マイナス支給にしない）
-          absentDeductionM = Math.min(basePay, floorYen((basePay / scheduledDays) * absentDaysM))
+          absentDeductionM = Math.min(
+            basePay,
+            floorYen((basePay / JP_AVG_MONTHLY_WORK_DAYS) * absentDaysM),
+          )
         }
       }
 
