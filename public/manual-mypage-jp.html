@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マイページの使い方（日本人スタッフ向け） - HIBI CONSTRUCTION</title>
+<style>
+  :root {
+    --charcoal: #20262F;
+    --amber: #F5A623;
+    --green: #1E9E52;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #20262F; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid var(--charcoal); padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #fff; background: var(--charcoal); padding: 8px 14px; margin-top: 40px; font-size: 18px; border-radius: 6px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; border-left: 4px solid var(--charcoal); padding-left: 10px; }
+  .box { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #eefaf1; border: 1px solid #9dd8b4; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: var(--charcoal); color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: var(--charcoal); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .toc { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: var(--charcoal); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  .btn-amber { display: inline-block; background: var(--amber); color: var(--charcoal); font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  .badge-done { display: inline-block; background: var(--green); color: #fff; font-weight: bold; padding: 4px 12px; border-radius: 20px; font-size: 13px; }
+  @media print { body { font-size: 13px; padding: 0; } h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 14px; }
+    table { font-size: 13px; }
+    th, td { padding: 6px 8px; }
+    .step-text { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>マイページの使い方<br><span style="font-size:16px;">（日本人スタッフ向け）</span></h1>
+<p>対象: 日本人の現場スタッフ全員（職長を含む）<br>
+最終更新: 2026年8月31日<br>
+発行: HIBI CONSTRUCTION</p>
+
+<div class="box box-ok">
+<strong>マイページでできることは2つだけです。</strong>
+<table style="margin-top:10px;">
+<tr><th>できること</th><th>内容</th></tr>
+<tr><td><strong>🌴 有給休暇</strong></td><td>残り日数の確認と、スマホからの<strong>有給申請</strong></td></tr>
+<tr><td><strong>🔧 道具代</strong></td><td>年間補助枠（10万円）の<strong>残額の確認</strong></td></tr>
+</table>
+<p style="margin:8px 0 0;">出勤の記録（出面）は職長がまとめて行うので、皆さんの入力は不要です。</p>
+</div>
+
+<h2>1. マイページを開く</h2>
+<div class="step"><div class="step-num">1</div><div class="step-text">会社から送られた <strong>自分専用のURL</strong> をスマホで開きます（ログイン・パスワードは不要です）</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">よく使うので<strong>ホーム画面に追加</strong>しておくと便利です<br>
+<span style="font-size:13px;color:#666;">iPhone: 共有ボタン →「ホーム画面に追加」／ Android: メニュー →「ホーム画面に追加」</span></div></div>
+<div class="box box-warn"><strong>⚠️ URLは自分専用です。</strong>他の人に教えたり、SNSに貼ったりしないでください。スマホを変えたときは会社に連絡すれば再発行できます。</div>
+
+<h2>2. 有給休暇</h2>
+<h3>残り日数の見方</h3>
+<p>画面の上に大きく<strong>残り日数</strong>が出ます。その下に「今期◯日のうち◯日取得済み」と期間（毎年10月1日〜翌年9月30日）が表示されます。</p>
+<div class="box box-red">
+<strong>⚠️ 赤い警告が出ている人へ</strong><br>
+「今期中にあと◯日取得が必要です」と出ている場合、法律で決まっている<strong>年5日の取得</strong>に足りていません。表示されている期限までに有給を取ってください。
+</div>
+
+<h3>有給を申請する</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text"><span class="btn-amber">🌴 有給を申請する</span> ボタンを押す</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text"><strong>取得したい日</strong>を選ぶ（今日以降の、現場が動いている日だけ選べます）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">理由（任意）を入れて「この日で申請する」を押す</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">職長の確認 → 政仁さんの承認が終わると「承認済み」になります。承認されるまでは自分で<strong>取り消し</strong>もできます</div></div>
+<div class="box">
+<strong>買取について</strong>: 期末（9月30日）に残った有給は、これまでどおり賞与で買い取ります。ただし<strong>2026年10月に付与される分からは「残り日数−5日」までが買取の上限</strong>になります。年5日は必ず取得してください（取らずに残した5日分は買取もされず消滅します）。
+</div>
+
+<h2>3. 道具代</h2>
+<p>年間の補助枠（<strong>10万円</strong>・2026年10月から）の残額と、購入の履歴が見られます。</p>
+<div class="box box-warn">
+<strong>⚠️ 道具の購入申請は今までどおりマネーフォワードから行ってください。</strong><br>
+マイページは「残りいくら使えるか」を確認する場所です。承認された購入が事務で登録されると、ここの残額に反映されます。
+</div>
+<table>
+<tr><th>やること</th><th>使うもの</th></tr>
+<tr><td>道具を買う・経費を申請する</td><td><strong>マネーフォワード</strong>（今までどおり）</td></tr>
+<tr><td>残額・履歴を確認する</td><td><strong>マイページ</strong></td></tr>
+</table>
+<p style="font-size:13px;color:#666;">※ 入社6ヶ月未満の人は、6ヶ月経過後（有給が発生するタイミング）から道具代の対象になります。</p>
+
+<h2>4. 困ったとき</h2>
+<table>
+<tr><th>症状</th><th>対処</th></tr>
+<tr><td>ページが開かない・エラーが出る</td><td>一度閉じて開き直す。直らなければ事務（奥寺さん）へ</td></tr>
+<tr><td>残り日数が実際と違う気がする</td><td>事務（奥寺さん）へ。管理簿と突き合わせて確認します</td></tr>
+<tr><td>申請を間違えた</td><td>「申請中」のうちは自分で取り消せます。承認後の取り消しは管理者へ連絡</td></tr>
+<tr><td>スマホを変えた・URLをなくした</td><td>会社に連絡（専用URLを再発行します）</td></tr>
+</table>
+
+<hr>
+<h2>改訂履歴</h2>
+<table>
+<tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-08-31</td><td>初版（マイページ公開・道具代10万円化にあわせて作成）</td></tr>
+</table>
+
+</body>
+</html>

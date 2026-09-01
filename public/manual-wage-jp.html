@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>賃金・評価 操作マニュアル（日本人・号俸制） - HIBI CONSTRUCTION</title>
+<style>
+  :root {
+    --charcoal: #20262F;
+    --amber: #F5A623;
+    --green: #1E9E52;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #20262F; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid var(--charcoal); padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #fff; background: var(--charcoal); padding: 8px 14px; margin-top: 40px; font-size: 18px; border-radius: 6px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; border-left: 4px solid var(--charcoal); padding-left: 10px; }
+  .box { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #eefaf1; border: 1px solid #9dd8b4; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: var(--charcoal); color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: var(--charcoal); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .toc { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: var(--charcoal); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  .btn-amber { display: inline-block; background: var(--amber); color: var(--charcoal); font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  .badge-done { display: inline-block; background: var(--green); color: #fff; font-weight: bold; padding: 4px 12px; border-radius: 20px; font-size: 13px; }
+  @media print { body { font-size: 13px; padding: 0; } h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 14px; }
+    table { font-size: 13px; }
+    th, td { padding: 6px 8px; }
+    .step-text { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>賃金・評価 操作マニュアル<br><span style="font-size:16px;">（日本人・号俸制／年次改定・賞与）</span></h1>
+<p>対象: 靖仁さん・政仁さん（賃金画面は代表・事業責任者のみ閲覧可）<br>
+最終更新: 2026年8月31日<br>
+制度の詳細: 資料タブ内「とび事業部給料表」／開発資料 docs/wage-system.md</p>
+
+<div class="toc"><strong>目次</strong>
+<ol>
+<li><a href="#sec1">画面の場所と全体像</a></li>
+<li><a href="#sec2">年次改定（毎年10月1日）の回し方</a></li>
+<li><a href="#sec3">賞与（例年10月末）の作り方 — 4区分</a></li>
+<li><a href="#sec4">必要な入力データ一覧</a></li>
+<li><a href="#sec5">FAQ</a></li>
+</ol></div>
+
+<h2 id="sec1">1. 画面の場所と全体像</h2>
+<p>サイドバー <strong>人事・労務 → 💴 賃金・評価</strong> → 「🇯🇵 日本人スタッフ」カード → <strong>賃金制度</strong>。
+5つのタブ（号俸表 / 調整の基準 / 賞与 / 年次改定 / 資料）があります。</p>
+<div class="box">
+<strong>制度の骨格</strong>: 全員が「等級（1G〜6G・土工）× 号（1〜60）」の給料表上に位置し、日額が決まる。
+年1回（10月1日）、評語と各種調整で号が進む。賞与は別途、原資を点数で配分する。
+</div>
+
+<h2 id="sec2">2. 年次改定（毎年10月1日）の回し方</h2>
+<div class="step"><div class="step-num">1</div><div class="step-text"><strong>9月中</strong>に「年次改定」タブを開く（基準日の60日前から下書きが作れます）</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">各人の<strong>評語</strong>（SS/S/A/B/C・基本はA）を選ぶ。S以上・B以下は理由の記録が必須</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">全員に厚めに報いたい年は、評語Aのまま<strong>代表加算</strong>（−／＋ボタン）で号を足す。理由も必須</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">上部カードで<strong>昇給額合計と平均昇給率</strong>を確認（総額ベース＝人件費の伸び率）</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">10月1日に<strong>「改定を確定する」</strong>。人員マスタの等級・号・日額へ自動反映され、確定後は編集不可</div></div>
+<div class="step"><div class="step-num">6</div><div class="step-text">確定後に「🖨 給料表を開く」→ 本人へ渡すA4を1枚ずつ印刷</div></div>
+<div class="box box-warn">
+<strong>自動で対象外になる人</strong>: 処遇固定（梶原さん）／在籍6ヶ月未満の中途・新卒。
+中途採用者は<strong>入社日を人員マスタに必ず登録</strong>してください（無いと対象に紛れ込みます）。
+</div>
+<div class="box">
+<strong>金額の仕組み（ざっくり）</strong>: 合計ピッチ = 評語（A=+4など）＋ 年齢調整（−4〜+3）＋ 特別調整（資格取得等・±3上限）＋ 代表加算。
+マイナス合計でも降給はしません（0止め）。若手・上位等級ほど1号の金額が大きいため、同じA評価でも昇給率に差が出ます（設計どおり）。
+</div>
+
+<h2 id="sec3">3. 賞与（例年10月末）の作り方 — 4区分</h2>
+<p>賞与タブの明細表は、支給明細と同じ形（奥寺さんの管理表と同じ並び）です。</p>
+<table>
+<tr><th>区分</th><th>決まり方</th><th>操作</th></tr>
+<tr><td><strong>① 利益分配賞与</strong></td><td>代表が決めた<strong>原資</strong>を等級×評語の点数で配分</td><td>原資を入力。1人ずつの金額は表の中で<strong>直接上書き可</strong></td></tr>
+<tr><td><strong>② 精勤賞与</strong>（有給買取）</td><td><strong>期末9/30の有給残 × 日額</strong>。2027年の賞与からは「残−5日」が上限</td><td>日数は自動表示・上書き可（「無し」にする人は0に）</td></tr>
+<tr><td><strong>③ 禁煙手当</strong></td><td>年 30,000円</td><td>人員マスタの「煙草を吸わない」チェックから自動</td></tr>
+<tr><td><strong>④ 子ども手当</strong></td><td>第1子3万・第2子5万・第3子以降7万（18歳の誕生日を迎える年まで）</td><td>人員マスタの子の誕生年月から自動</td></tr>
+</table>
+<ul>
+<li>支給方法（<strong>振込/現金</strong>）を人ごとに選ぶと、下部に振込計・現金計が出ます</li>
+<li><strong>出向者（大川さん）</strong>は出向先支給として自動で別枠になり、自社の合計から除かれます</li>
+</ul>
+<div class="box box-ok">
+<strong>確定すると、②の分は有給の買取記録として自動で台帳に入ります。</strong>休暇管理での手動記録は不要です。
+記録できなかった人がいれば画面に表示されるので、その人だけ休暇管理から手動で記録してください。
+</div>
+
+<h2 id="sec4">4. 必要な入力データ一覧</h2>
+<table>
+<tr><th>データ</th><th>どこで入れる</th><th>使われる場所</th></tr>
+<tr><td>等級・号</td><td>人員マスタ（給与タブ）</td><td>日額・改定・賞与点数</td></tr>
+<tr><td>生年月日</td><td>人員マスタ（基本タブ）</td><td>年齢調整（−4〜+3号）</td></tr>
+<tr><td>入社日</td><td>人員マスタ（基本タブ）</td><td>初回改定の対象判定・有給・道具代</td></tr>
+<tr><td>煙草を吸わない</td><td>人員マスタ（手当・賞与タブ）</td><td>禁煙手当3万</td></tr>
+<tr><td>子どもの誕生年月</td><td>人員マスタ（手当・賞与タブ）</td><td>子ども手当（満18歳の年まで自動）</td></tr>
+<tr><td>評語・代表加算</td><td>年次改定タブ（毎年9月）</td><td>昇給・賞与点数の初期値</td></tr>
+</table>
+
+<h2 id="sec5">5. FAQ</h2>
+<table>
+<tr><th>質問</th><th>答え</th></tr>
+<tr><td>全員S評価にしてはだめ？</td><td>金額は代表加算+1と同じになりますが、評語は相対評価が前提なので<strong>Aのまま代表加算</strong>を推奨（翌年の基準が崩れない）</td></tr>
+<tr><td>濱上さんが賞与の表に出ない</td><td>等級未設定のためです（入社1年目は月給制）。2027年に日給月給へ移行し等級を設定すると自動で入ります</td></tr>
+<tr><td>賞与を保存し直したら買取が二重にならない？</td><td>同じ期に買取記録が既にある人は自動でスキップされます。やり直す場合は先に休暇管理で既存の買取を取り消してください</td></tr>
+<tr><td>等級を上げたい（昇格）</td><td>人員マスタで等級を変えると号は自動で読み替わります（現在の日額を下回らない号へ）。昇格記録の画面は今後追加予定</td></tr>
+</table>
+
+<hr>
+<h2>改訂履歴</h2>
+<table>
+<tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-08-31</td><td>初版（賞与4区分・買取自動連動・平均昇給率の実装にあわせて作成）</td></tr>
+</table>
+</body>
+</html>
