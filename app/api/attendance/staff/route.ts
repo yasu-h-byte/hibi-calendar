@@ -326,13 +326,21 @@ export async function GET(request: NextRequest) {
               const gdStart = new Date(latest.grantDate + 'T00:00:00')
               if (!isNaN(gdStart.getTime())) {
                 const gdEnd = new Date(gdStart); gdEnd.setFullYear(gdEnd.getFullYear() + 1)
-                // 出面データは過去2年+当年で十分
+                // 2026-09-02 高速化（月初の「入力できない」障害の主犯）:
+                //   旧実装は「過去2年+当年 = 36ヶ月」の att を**逐次**読みしており、
+                //   これだけで15〜20秒かかっていた（スマホ回線ではタイムアウト）。
+                //   数えるのは付与期間 [grantDate, +1年) の P だけなので、
+                //   その期間の月（最大13ヶ月）だけを**並列**で読む。
                 const attEntries: Record<string, Record<string, unknown>> = {}
-                for (let yy = now.getFullYear() - 2; yy <= now.getFullYear(); yy++) {
-                  for (let mm = 1; mm <= 12; mm++) {
-                    const att = await getAttData(ymKey(yy, mm))
-                    Object.assign(attEntries, att.d)
+                {
+                  const periodYms: string[] = []
+                  const cur = new Date(gdStart.getFullYear(), gdStart.getMonth(), 1)
+                  while (cur < gdEnd && periodYms.length < 14) {
+                    periodYms.push(ymKey(cur.getFullYear(), cur.getMonth() + 1))
+                    cur.setMonth(cur.getMonth() + 1)
                   }
+                  const atts = await Promise.all(periodYms.map(pymL => getAttData(pymL)))
+                  for (const att of atts) Object.assign(attEntries, att.d)
                 }
                 // 同日複数現場の p は1日として数える（他経路と同じ dedup。2026-08-27）
                 const seenP = new Set<string>()
