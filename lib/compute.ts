@@ -26,7 +26,7 @@ const floorYen = (v: number): number => Math.floor(Math.round(v * 100) / 100)
 // 日本人・月給制の割増賃金算定基礎「月平均所定労働時間」(145h)。
 // 給与計算エンジンと人員マスタ画面の参考表示で同じ値を使うため lib/constants.ts に集約。
 export { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
-import { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
+import { JP_SALARY_AVG_MONTHLY_HOURS, JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM } from './constants'
 
 /**
  * 日本人の1日所定労働時間。割増賃金の算定基礎（日額 ÷ 所定時間）の分母。
@@ -1854,6 +1854,26 @@ export function computeMonthly(
       const otUnitRate = ceilYen(hourlyEquivalent * wm.otMul)
       const otPay = ceilYen(otUnitRate * otHoursExLhM)
       const legalHolidayAllowanceM = calcLegalHolidayAllowance(hourlyEquivalent, lhDayHoursM)
+
+      // ── 欠勤控除（2026-10 分から・代表決定 2026-08-31）──
+      //   従来は「出勤日数に関わらず月給は固定」で、欠勤しても引かれなかった。
+      //   過去の支給額を動かさないよう、適用開始月をゲートで区切る。
+      //
+      //   1日あたりの控除額 = **月給 ÷ その月の所定労働日数**
+      //   残業単価の分母（月平均145h）は「単価が法定を下回らないよう小さめに固定した値」で、
+      //   これを控除に転用すると 1日 12,965円（実際の日額相当 10,217円）と過大に引いてしまう。
+      //   控除は「全部欠勤したら月給が丸ごと無くなる」当月所定日数ベースが実態に合う。
+      //   有給・試験・補償日は欠勤に数えない（フンさんの旧ルールブランチと同じ扱い）。
+      let absentDaysM = 0
+      let absentDeductionM = 0
+      if (ym >= JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM && workerPrescribedDays > 0) {
+        absentDaysM = Math.max(0,
+          workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays - wm.compDays)
+        const dailyDeduction = basePay / workerPrescribedDays
+        // 控除は基本給を超えない（マイナス支給にしない）
+        absentDeductionM = Math.min(basePay, floorYen(dailyDeduction * absentDaysM))
+      }
+
       wm.basePay = basePay
       wm.prescribedHours = JP_SALARY_AVG_MONTHLY_HOURS  // 割増算定基礎の月平均所定時間
       wm.dailyOtHours = Math.round(otHoursExLhM * 10) / 10
@@ -1861,7 +1881,9 @@ export function computeMonthly(
       wm.legalHolidayDays = wm._lhDayHours?.size || 0
       wm.legalHolidayHours = Math.round(lhDayHoursM.reduce((a, b) => a + b, 0) * 10) / 10
       wm.legalHolidayAllowance = legalHolidayAllowanceM
-      wm.salaryNetPay = basePay + otPay + legalHolidayAllowanceM
+      wm.absence = absentDaysM
+      wm.absentCost = absentDeductionM
+      wm.salaryNetPay = basePay + otPay + legalHolidayAllowanceM - absentDeductionM
       // netPay: 給与支給額（=月給+残業+法定休日手当）。
       //   原価(totalCost) と現場別配賦は後段の「原価＝実支給額」統一パスで処理する。
       wm.netPay = wm.salaryNetPay
