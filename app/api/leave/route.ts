@@ -262,6 +262,26 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: `${dateStr} は出勤予定日ではないため有給にできません（休日・所定休は対象外）` }, { status: 400 })
           }
         }
+        // ③ 多現場重複ガード（2026-08-31 横展開）: 別現場に同日の出面がある日へ P を
+        //    入れると出勤と有給の二重払いになる（grid/staff/foreman/承認と同じガード）
+        {
+          const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
+          const sitesAllD = (data.sites || []) as { id: string; name?: string }[]
+          const attCache: Record<string, Awaited<ReturnType<typeof getAttendanceDoc>>> = {}
+          for (const dateStr of dates) {
+            const d0 = new Date(dateStr)
+            if (isNaN(d0.getTime())) continue
+            const ymD = ymKey(d0.getFullYear(), d0.getMonth() + 1)
+            if (!(ymD in attCache)) attCache[ymD] = await getAttendanceDoc(ymD)
+            const conflictD = detectMultiSiteConflict(attCache[ymD], siteId, Number(workerId), ymD, d0.getDate(), sitesAllD)
+            if (conflictD) {
+              const cName = sitesAllD.find(s2 => s2.id === conflictD.conflictSiteId)?.name || conflictD.conflictSiteId
+              return NextResponse.json({
+                error: `${dateStr} は「${cName}」に同日の出面が既にあるため有給を入力できません。先に出面を確認してください`,
+              }, { status: 409 })
+            }
+          }
+        }
       }
 
       for (const dateStr of dates) {

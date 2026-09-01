@@ -411,6 +411,21 @@ export async function POST(request: NextRequest) {
       //   - 残骸掃除: 既に出勤入力(w:1, o, st...)がある日を有給化すると残業等の
       //     フィールドが残り、誤集計の火種だった（staff 経路と同じ deleteFields 方式に統一）
       //   - reviewedBy は認証者から記録（body の approvedBy は表示用フォールバック）
+      // 2026-08-31 追加（多現場重複の横展開）: 別現場に同日の出面がある状態で承認すると
+      //   P と出勤が併存し、日給月給の日本人は「日給＋有給手当」の二重払いになる。
+      //   出面の直接入力（grid/staff/foreman）と同じガードを承認にも置く。
+      {
+        const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
+        const attDocA = await getAttendanceDoc(data.ym)
+        const sitesAllA = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
+        const conflictA = detectMultiSiteConflict(attDocA, data.siteId, data.workerId, data.ym, data.day, sitesAllA)
+        if (conflictA) {
+          const cName = sitesAllA.find(s2 => s2.id === conflictA.conflictSiteId)?.name || conflictA.conflictSiteId
+          return NextResponse.json({
+            error: `${data.date} は「${cName}」に同日の出面が既にあるため承認できません。先に出面を確認・削除してください`,
+          }, { status: 409 })
+        }
+      }
       const approveEntry = { w: 0, p: 1 }
       await setAttendanceEntry(data.siteId, data.workerId, data.ym, data.day, approveEntry,
         { deleteFields: computeAttendanceDeleteFields(approveEntry) })
@@ -716,6 +731,17 @@ export async function POST(request: NextRequest) {
         // 新日付に p=1 を書込
         // 残骸掃除つきで p を書く（approve と同方式・2026-08-27）
         {
+          // 多現場重複ガード（2026-08-31 横展開・approve と同じ）
+          const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
+          const attDocM = await getAttendanceDoc(newYm)
+          const sitesAllM = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
+          const conflictM = detectMultiSiteConflict(attDocM, data.siteId, data.workerId, newYm, newDay, sitesAllM)
+          if (conflictM) {
+            const cName = sitesAllM.find(s2 => s2.id === conflictM.conflictSiteId)?.name || conflictM.conflictSiteId
+            return NextResponse.json({
+              error: `変更先の日付は「${cName}」に同日の出面が既にあるため変更できません`,
+            }, { status: 409 })
+          }
           const mvEntry = { w: 0, p: 1 }
           await setAttendanceEntry(data.siteId, data.workerId, newYm, newDay, mvEntry,
             { deleteFields: computeAttendanceDeleteFields(mvEntry) })

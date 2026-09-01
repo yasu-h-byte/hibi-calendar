@@ -63,6 +63,21 @@ export async function POST(request: NextRequest) {
     before: current, after: h.before, actor: `${a.actor}(復元)`,
   })
 
+  // 多現場重複ガード（2026-08-31 横展開）: 復元の間に別現場へ入力が移っていた場合、
+  //   そのまま書き戻すと同日2現場の二重払いになる
+  {
+    const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
+    const attDocR = await getAttendanceDoc(h.ym)
+    const sitesAllR = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
+    const conflictR = detectMultiSiteConflict(attDocR, h.siteId, h.workerId, h.ym, h.day, sitesAllR)
+    if (conflictR) {
+      const cName = sitesAllR.find(s2 => s2.id === conflictR.conflictSiteId)?.name || conflictR.conflictSiteId
+      return NextResponse.json({
+        error: `「${cName}」に同日の出面が既にあるため復元できません。先にそちらを確認・削除してください`,
+      }, { status: 409 })
+    }
+  }
+
   // 書き戻し。残骸フィールドは computeAttendanceDeleteFields で掃除する
   await setAttendanceEntry(h.siteId, h.workerId, h.ym, h.day, h.before,
     { deleteFields: computeAttendanceDeleteFields(h.before) })
