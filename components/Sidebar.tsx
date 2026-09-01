@@ -19,15 +19,21 @@ interface MenuItem {
 const DEMMEN_URL = 'https://dedura-kanri.web.app'
 
 function buildMenuItems(user: AuthUser): MenuItem[] {
-  // 職長はforeman画面へ、admin/approverはPC出面入力へ
-  const attItem: MenuItem = user.role === 'foreman' && user.token
-    ? { label: '出面入力', icon: '📋', href: `/attendance/foreman/${user.token}`, section: 'メイン', roles: ['foreman'] }
-    : { label: '出面入力', icon: '📋', href: '/attendance', section: 'メイン', roles: ['admin', 'approver'] }
+  // 2026-09-02: 職長の「出面入力」も従来のPC出面入力画面に統一。
+  //   トークン発行を機にこのタブが職長スマホ画面へ切り替わり、大川職長が
+  //   「前と違う画面になって入力できない」状態になったため元の動線に戻した。
+  //   職長スマホ画面（確認・承認用）は別タブ「スタッフ入力の確認」として残す。
+  const attItem: MenuItem =
+    { label: '出面入力', icon: '📋', href: '/attendance', section: 'メイン', roles: ['admin', 'approver', 'foreman'] }
+  const foremanCheckItem: MenuItem | null = user.role === 'foreman' && user.token
+    ? { label: 'スタッフ入力の確認', icon: '✅', href: `/attendance/foreman/${user.token}`, section: 'メイン', roles: ['foreman'] }
+    : null
 
   return [
     // 日常業務
     { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: '日常業務', roles: ['admin', 'approver', 'jimu'] },
     { ...attItem, section: '日常業務' },
+    ...(foremanCheckItem ? [{ ...foremanCheckItem, section: '日常業務' }] : []),
     { label: '就業カレンダー', icon: '📅', href: '/calendar', section: '日常業務', roles: ['admin', 'approver', 'foreman'] },
     // 集計・分析
     { label: '月次集計・帳票', icon: '📋', href: '/monthly', section: '集計・分析', roles: ['admin', 'approver', 'jimu'] },
