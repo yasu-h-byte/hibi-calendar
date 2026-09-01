@@ -93,8 +93,10 @@ export async function getLeaveBalance(
       if (m > 12) { m = 1; y++ }
     }
   }
-  for (const ym of yms) {
-    const att = await getAttData(ym)
+  // 2026-09-02 高速化: 最大13ヶ月の att 読みを並列に（逐次だと preferRest の
+  //   レイテンシ×13 でこの関数だけで数秒かかり、スマホ画面のタイムアウトの一因だった）
+  const attList = await Promise.all(yms.map(ym => getAttData(ym)))
+  for (const att of attList) {
     for (const [key, entry] of Object.entries(att.d)) {
       const e = entry as { p?: number } | null
       if (!e?.p) continue

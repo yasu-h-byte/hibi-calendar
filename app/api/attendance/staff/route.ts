@@ -92,7 +92,11 @@ export async function GET(request: NextRequest) {
     const currentEntry = attData[todayKey] || null
 
     // Past 5 days (with site name)
-    const pastDays = []
+    const pastDays: {
+      date: string; year: number; month: number; day: number
+      entry: AttendanceEntry | null; status: ReturnType<typeof getEntryStatus>
+      locked: boolean; dayOffset: number; siteName: string
+    }[] = []
     // Build site name lookup + 現在現場の workSchedule 取得
     const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
     const siteNames: Record<string, string> = {}
@@ -107,23 +111,25 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 2026-09-02 高速化: 月をまたぐと att_前月 をループ内で最大4回再読していた
+    //（9/1〜9/5 は過去5日の大半が前月）。月単位キャッシュ＋承認の並列取得に変更。
+    //   月初にスマホ画面が17秒かかり「入力できない」報告が出た障害の対処。
+    const attMonthCache: Record<string, Record<string, AttendanceEntry>> = { [ym]: attData }
+    const getAttCached = async (pym: string) => {
+      if (!(pym in attMonthCache)) attMonthCache[pym] = await getAttendanceDoc(pym)
+      return attMonthCache[pym]
+    }
+    const pastDayInfos = [] as { pd: Date; pym: string; pDay: number; entry: AttendanceEntry | null; entrySiteId: string; off: number }[]
     for (let off = 1; off <= 5; off++) {
       const pd = new Date(y, m - 1, d - off)
       const pym = ymKey(pd.getFullYear(), pd.getMonth() + 1)
       const pDay = pd.getDate()
-
-      // May need to read a different month's doc
-      let pAttData = attData
-      if (pym !== ym) {
-        pAttData = await getAttendanceDoc(pym)
-      }
+      const pAttData = await getAttCached(pym)
 
       // Check current site first, then check all sites for this day
       const pk = attKey(siteId, worker.id, pym, pDay)
       let entry = pAttData[pk] || null
       let entrySiteId = siteId
-
-      // If no entry on current site, check other sites
       if (!entry) {
         for (const sid of Object.keys(siteNames)) {
           if (sid === siteId) continue
@@ -135,23 +141,23 @@ export async function GET(request: NextRequest) {
           }
         }
       }
-
-      const status = getEntryStatus(entry)
-      const approval = await getApprovalForDay(entrySiteId, pym, pDay)
-      const locked = !!(approval?.foreman)
-
-      pastDays.push({
-        date: formatDateShort(pd),
-        year: pd.getFullYear(),
-        month: pd.getMonth() + 1,
-        day: pDay,
-        entry,
-        status,
-        locked,
-        dayOffset: off,
-        siteName: siteNames[entrySiteId] || '',
-      })
+      pastDayInfos.push({ pd, pym, pDay, entry, entrySiteId, off })
     }
+    const pastApprovals = await Promise.all(
+      pastDayInfos.map(i => getApprovalForDay(i.entrySiteId, i.pym, i.pDay)))
+    pastDayInfos.forEach((i, idx) => {
+      pastDays.push({
+        date: formatDateShort(i.pd),
+        year: i.pd.getFullYear(),
+        month: i.pd.getMonth() + 1,
+        day: i.pDay,
+        entry: i.entry,
+        status: getEntryStatus(i.entry),
+        locked: !!(pastApprovals[idx]?.foreman),
+        dayOffset: i.off,
+        siteName: siteNames[i.entrySiteId] || '',
+      })
+    })
 
     // ── 未入力の過去稼働日（2026-08-28 追加: 入力督促バナー用）──
     //   入力可能な過去14日のうち、承認済み現場カレンダーの稼働日で、どの現場にも
@@ -163,16 +169,15 @@ export async function GET(request: NextRequest) {
       entry: null; status: 'none'; locked: boolean; dayOffset: number; siteName: string
     }[] = []
     {
-      const attCache: Record<string, Record<string, AttendanceEntry>> = { [ym]: attData }
       const calCache: Record<string, Record<string, string> | null> = {}
+      const missingCands = [] as { pd: Date; py: number; pm: number; pDay: number; pym: string; off: number }[]
       for (let off = 1; off <= 14; off++) {
         const pd = new Date(y, m - 1, d - off)
         const py = pd.getFullYear()
         const pm = pd.getMonth() + 1
         const pDay = pd.getDate()
         const pym = ymKey(py, pm)
-        if (!(pym in attCache)) attCache[pym] = await getAttendanceDoc(pym)
-        const pAtt = attCache[pym]
+        const pAtt = await getAttCached(pym)   // pastDays と同じ月キャッシュを共有（2026-09-02）
 
         const calKey = `${siteId}_${py}-${String(pm).padStart(2, '0')}`
         if (!(calKey in calCache)) {
@@ -196,18 +201,21 @@ export async function GET(request: NextRequest) {
           }
         }
         if (hasEntry) continue
-
-        const pApproval = await getApprovalForDay(siteId, pym, pDay)
+        missingCands.push({ pd, py, pm, pDay, pym, off })
+      }
+      const missApprovals = await Promise.all(
+        missingCands.map(c => getApprovalForDay(siteId, c.pym, c.pDay)))
+      missingCands.forEach((c, idx) => {
         missingDays.push({
-          date: formatDateShort(pd),
-          year: py, month: pm, day: pDay,
+          date: formatDateShort(c.pd),
+          year: c.py, month: c.pm, day: c.pDay,
           entry: null,
           status: 'none',
-          locked: !!(pApproval?.foreman),
-          dayOffset: off,
+          locked: !!(missApprovals[idx]?.foreman),
+          dayOffset: c.off,
           siteName: '',
         })
-      }
+      })
     }
 
     // Today's approval
