@@ -1864,9 +1864,15 @@ export function computeMonthly(
       //   これを控除に転用すると 1日 12,965円（実際の日額相当 10,217円）と過大に引いてしまう。
       //   控除は「全部欠勤したら月給が丸ごと無くなる」当月所定日数ベースが実態に合う。
       //   有給・試験・補償日は欠勤に数えない（フンさんの旧ルールブランチと同じ扱い）。
+      //
+      //   ⚠️ 役員（yakuin）は対象外。役員報酬は労働の対価ではなく、出面の日数で
+      //   増減させるものではない。同じ「月給制ブランチ」に政仁さん（役員・月給118万）が
+      //   入るため、除外しないと現場に出なかった日数ぶんが控除されてしまう
+      //   （2026-08-31 にゴールデンマスターが検知。IHIの原価が84万円ずれた）。
       let absentDaysM = 0
       let absentDeductionM = 0
-      if (ym >= JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM && workerPrescribedDays > 0) {
+      if (wm.job !== 'yakuin'
+        && ym >= JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM && workerPrescribedDays > 0) {
         absentDaysM = Math.max(0,
           workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays - wm.compDays)
         const dailyDeduction = basePay / workerPrescribedDays
