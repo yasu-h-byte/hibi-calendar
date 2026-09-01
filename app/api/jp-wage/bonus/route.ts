@@ -14,11 +14,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
 import { allocateBonus, nextRevisionDate, lastRevisionDate, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
 import { todayJstIso } from '@/lib/date-utils'
 import { getLeaveBalance } from '@/lib/leave-balance'
+import { selectActiveGrantRecord } from '@/lib/leave-compute'
+import { logActivity } from '@/lib/activity'
 
 export const dynamic = 'force-dynamic'
 
@@ -205,5 +207,61 @@ export async function POST(request: NextRequest) {
     console.error('[jp-wage/bonus] auditTrail 書込失敗:', e)
   }
 
-  return NextResponse.json({ ok: true, record: { id, ...record } })
+  // ── 精勤賞与 → 有給の買取記録へ自動連動（2026-08-31 代表決定）──
+  //   従来は賞与を確定しても plData の buyoutHistory に反映されず、
+  //   「買い取ったはずの日を期末までに有給として取得できる」二重取りの余地が残っていた。
+  //   確定と同時に、買い取る期（期末9/30時点で有効な付与レコード）へ買取を記録する。
+  //
+  //   安全弁:
+  //   - 同じ期に year-end の買取が既にある人はスキップ（賞与を保存し直しても二重記録しない）。
+  //     やり直したい場合は先に休暇管理から既存の買取記録を取り消すこと
+  //   - 買取記録の失敗は賞与の保存を巻き戻さない（結果を buyoutResults で返し画面に出す）
+  //   - 出向者（山岡支給の大川さん等）も記録する（有給の帳簿は日比側にあるため）
+  const bonusAsOf = paidOn.slice(5) >= '10-01' ? `${paidOn.slice(0, 4)}-09-30` : paidOn
+  const buyoutResults: Array<{ workerId: number; name: string; days: number; status: 'recorded' | 'skipped' | 'error'; note?: string }> = []
+  const actorStr = auth.authorized ? String(auth.actor) : 'unknown'
+  for (const line of lines) {
+    const days = line.attendanceDays || 0
+    if (days <= 0) continue
+    try {
+      const docRef = doc(db, 'demmen', 'main')
+      const snap = await getDoc(docRef)
+      const plData = (snap.exists() ? (snap.data().plData || {}) : {}) as Record<string, Record<string, unknown>[]>
+      const wRecords = plData[String(line.workerId)] || []
+      const rec = selectActiveGrantRecord(
+        wRecords as Parameters<typeof selectActiveGrantRecord>[0], bonusAsOf,
+      ) as Record<string, unknown> | null
+      if (!rec) {
+        buyoutResults.push({ workerId: line.workerId, name: line.name, days, status: 'skipped', note: '対象期の付与レコードが見つかりません' })
+        continue
+      }
+      type BuyoutEntry = { at: string; by: string; days: number; amount?: number; reason?: string; bonusId?: string }
+      const history = (rec.buyoutHistory as BuyoutEntry[] | undefined) ?? []
+      if (history.some(h => h.reason === 'year-end')) {
+        buyoutResults.push({ workerId: line.workerId, name: line.name, days, status: 'skipped', note: 'この期の期末買取は記録済み（二重記録を防止）' })
+        continue
+      }
+      const nowIso = new Date().toISOString()
+      history.push({
+        at: paidOn, by: actorStr, days,
+        amount: line.attendanceAmount || 0,
+        reason: 'year-end',
+        bonusId: id,
+      })
+      rec.buyoutHistory = history
+      rec.buyoutDays = history.reduce((sum, h) => sum + h.days, 0)
+      rec.lastEditedAt = nowIso
+      rec.lastEditedBy = actorStr
+      // race-fix: dot-notation で 1 worker 単位に局所化（/api/leave の buyout と同じパターン）
+      await updateDoc(docRef, { [`plData.${String(line.workerId)}`]: wRecords })
+      await logActivity('admin', 'leave.buyout',
+        `workerId=${line.workerId} 賞与「${label}」の精勤賞与から期末買取 ${days}日 ¥${line.attendanceAmount || 0}（操作者: ${actorStr}）`)
+      buyoutResults.push({ workerId: line.workerId, name: line.name, days, status: 'recorded' })
+    } catch (e) {
+      console.error(`[jp-wage/bonus] 買取記録失敗 workerId=${line.workerId}:`, e)
+      buyoutResults.push({ workerId: line.workerId, name: line.name, days, status: 'error', note: '記録に失敗しました。休暇管理から手動で記録してください' })
+    }
+  }
+
+  return NextResponse.json({ ok: true, record: { id, ...record }, buyoutResults })
 }

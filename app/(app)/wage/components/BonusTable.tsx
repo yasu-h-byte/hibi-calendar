@@ -152,7 +152,8 @@ export default function BonusTable() {
       + `子ども手当 ${yen(sum(l => l.childAmount))}\n`
       + `─────────────\n`
       + `支給総額 ${yen(sum(l => l.totalAmount))}\n\n`
-      + `記録として残ります。よろしいですか？`
+      + `確定すると、精勤賞与の分は有給の買取としても自動記録されます\n`
+      + `（休暇管理での手動記録は不要です）。よろしいですか？`
     )) return
     setBusy(true); setErr(''); setMsg('')
     try {
@@ -167,7 +168,16 @@ export default function BonusTable() {
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || `失敗しました（${res.status}）`)
-      setMsg(`「${label}」を保存しました`)
+      // 有給買取の自動記録の結果（2026-08-31 追加）
+      const br = (j.buyoutResults || []) as Array<{ name: string; days: number; status: string; note?: string }>
+      const recorded = br.filter(b => b.status === 'recorded')
+      const issues = br.filter(b => b.status !== 'recorded')
+      let m = `「${label}」を保存しました`
+      if (recorded.length > 0) m += `／有給の買取を${recorded.length}名分 自動記録しました`
+      if (issues.length > 0) {
+        m += `\n⚠️ 買取を記録できなかった人: ` + issues.map(b => `${b.name}（${b.note || b.status}）`).join('・')
+      }
+      setMsg(m)
       setLabel('')
       await load(pw)
     } catch (e) {
