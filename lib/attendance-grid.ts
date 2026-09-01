@@ -110,6 +110,9 @@ export function getWorkValue(entry: AttEntry | null | undefined): string {
   //   明示的なステータス（有給など）を帰国マーカーより優先表示する。
   if (entry.p && entry.p > 0) return 'P'
   if (entry.exam && entry.exam > 0) return 'E'
+  // 2026-08-31 追加: 欠勤(R)。月給者の欠勤控除は「記録された欠勤」だけを数えるため、
+  //   日本人の出面にも欠勤を入力する手段が必要になった（従来は表示値が無かった）。
+  if (entry.r && entry.r > 0) return 'R'
   if (entry.hk && entry.hk > 0) return 'HK'
   if (entry.w === 1) return '1'
   if (entry.w === 0.5) return '0.5'

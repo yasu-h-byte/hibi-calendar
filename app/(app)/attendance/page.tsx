@@ -438,6 +438,10 @@ export default function AttendanceGridPage() {
       } else if (value === 'E') {
         // 試験（実習生年次試験など。現場出勤にはカウントしないが給与計算では出勤と同等扱い）
         entry = { w: 0, exam: 1 }
+      } else if (value === 'R') {
+        // 欠勤（2026-08-31 追加）。月給者はこの記録がある日だけ欠勤控除される。
+        //   ブランクは「そもそも所定労働日ではない」扱いで控除されない。
+        entry = { w: 0, r: 1 }
       }
 
       if (entry) {
@@ -455,6 +459,7 @@ export default function AttendanceGridPage() {
     else if (value === '0.6') entry = { w: 0.6 }
     else if (value === 'P') entry = { w: 0, p: 1 }
     else if (value === 'E') entry = { w: 0, exam: 1 }
+    else if (value === 'R') entry = { w: 0, r: 1 }
 
     scheduleSave(`w-${workerId}-${day}`, {
       type: 'worker', id: workerId, day, entry,

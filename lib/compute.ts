@@ -1859,11 +1859,16 @@ export function computeMonthly(
       //   従来は「出勤日数に関わらず月給は固定」で、欠勤しても引かれなかった。
       //   過去の支給額を動かさないよう、適用開始月をゲートで区切る。
       //
-      //   1日あたりの控除額 = **月給 ÷ その月の所定労働日数**
-      //   残業単価の分母（月平均145h）は「単価が法定を下回らないよう小さめに固定した値」で、
-      //   これを控除に転用すると 1日 12,965円（実際の日額相当 10,217円）と過大に引いてしまう。
-      //   控除は「全部欠勤したら月給が丸ごと無くなる」当月所定日数ベースが実態に合う。
-      //   有給・試験・補償日は欠勤に数えない（フンさんの旧ルールブランチと同じ扱い）。
+      //   ── 欠勤日数は「出面に記録された欠勤」だけを数える（代表決定 2026-08-31）──
+      //   現場カレンダーの稼働日から引き算する方式にしない。理由:
+      //     笹塚は土曜もお盆初日も稼働日だが、濱上さん（年少者・週休2日）は出ない。
+      //     カレンダー基準で計算すると、休むはずの土曜まで欠勤になり
+      //     欠勤7.5日=83,928円 と過大に引いてしまう（実際は2.5日=36,718円）。
+      //   そこで:
+      //     欠勤日数 = 出面の「休み(r)」の日数 ＋ 出勤日の不足分（1 − 人工）
+      //     所定日数 = 実出勤日 ＋ 有給 ＋ 試験 ＋ 休み  ← 記録のある日＝その人の所定日
+      //   ブランクの日は「そもそも所定labor日ではない」とみなすので控除されない。
+      //   入力漏れがそのまま減給になる事故を防ぐ意味もある。
       //
       //   ⚠️ 役員（yakuin）は対象外。役員報酬は労働の対価ではなく、出面の日数で
       //   増減させるものではない。同じ「月給制ブランチ」に政仁さん（役員・月給118万）が
@@ -1871,13 +1876,16 @@ export function computeMonthly(
       //   （2026-08-31 にゴールデンマスターが検知。IHIの原価が84万円ずれた）。
       let absentDaysM = 0
       let absentDeductionM = 0
-      if (wm.job !== 'yakuin'
-        && ym >= JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM && workerPrescribedDays > 0) {
-        absentDaysM = Math.max(0,
-          workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays - wm.compDays)
-        const dailyDeduction = basePay / workerPrescribedDays
-        // 控除は基本給を超えない（マイナス支給にしない）
-        absentDeductionM = Math.min(basePay, floorYen(dailyDeduction * absentDaysM))
+      if (wm.job !== 'yakuin' && ym >= JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM) {
+        // 出勤したが1日に満たない分（例: 午後から出勤 w=0.5 → 0.5日の欠勤）
+        const partialShortfall = Math.max(0, wm.actualWorkDays - wm.workDays)
+        absentDaysM = Math.round((wm.restDays + partialShortfall) * 100) / 100
+        // その人の所定日数 = 記録のある日（実出勤・有給・試験・休み）
+        const scheduledDays = wm.actualWorkDays + wm.plUsed + wm.examDays + wm.restDays
+        if (scheduledDays > 0 && absentDaysM > 0) {
+          // 控除は基本給を超えない（マイナス支給にしない）
+          absentDeductionM = Math.min(basePay, floorYen((basePay / scheduledDays) * absentDaysM))
+        }
       }
 
       wm.basePay = basePay

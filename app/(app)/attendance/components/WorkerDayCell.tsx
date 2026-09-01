@@ -318,6 +318,7 @@ export function LegacyCell({
             ${workVal === '0.6' ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-300' : ''}
             ${workVal === 'P' ? 'text-violet-700 bg-violet-50 dark:bg-violet-900/30 dark:text-violet-300' : ''}
             ${workVal === 'E' ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300' : ''}
+            ${workVal === 'R' ? 'text-rose-700 bg-rose-50 dark:bg-rose-900/30 dark:text-rose-300' : ''}
             ${workVal === '' ? 'text-gray-300 font-normal bg-transparent border-b border-gray-100' : ''}
           `}
         >
@@ -327,6 +328,8 @@ export function LegacyCell({
           <option value="0.6">0.6補</option>
           <option value="P">有</option>
           <option value="E">試</option>
+          {/* 2026-08-31 追加: 欠勤。月給者（濱上さん等）はこの記録がある日だけ控除される */}
+          <option value="R">欠</option>
         </select>
 
         {/* OT input - 小さめ */}
