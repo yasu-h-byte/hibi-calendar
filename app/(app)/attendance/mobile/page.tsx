@@ -516,7 +516,7 @@ export default function ForemanMobilePage() {
     <button
       key={key}
       onClick={() => setTab(key)}
-      className={`relative flex-1 py-2.5 text-sm font-bold rounded-lg transition-colors ${
+      className={`relative flex-1 py-2.5 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${
         tab === key ? 'bg-hibi-navy text-white' : 'bg-white text-gray-500 border border-gray-200'
       }`}
     >
@@ -551,8 +551,8 @@ export default function ForemanMobilePage() {
       {/* タブバー */}
       <div className="flex gap-1.5 mt-3 sticky top-0 z-20 bg-gray-50 py-1.5">
         {tabBtn('day', '出面')}
-        {tabBtn('requests', '申請', pendingCount)}
-        {tabBtn('calendar', '休日')}
+        {tabBtn('requests', '承認', pendingCount)}
+        {tabBtn('calendar', '就業カレンダー')}
         {tabBtn('me', '自分')}
       </div>
 
