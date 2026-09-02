@@ -1192,105 +1192,113 @@ export default function MonthlyPage() {
         )
       })()}
 
-      {/* Worker Table (全体 / 日比建設 / HFU) */}
+      {/* Worker Table (全体 / 日比建設 / HFU)
+
+          2026-09-02: 縦スクロールでも見出し行・合計行が残るようにした。
+          sticky は「スクロールする祖先」を基準に効くため、横スクロールだけの
+          overflow-x-auto ではページ全体のスクロールに追随できない。高さ上限つきの
+          スクロール領域にしたうえで、thead/tfoot のセルを sticky にしている。 */}
       {!loading && data && isWorkerTab && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
+        <div
+          className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-auto"
+          style={{ maxHeight: 'calc(100vh - 180px)' }}
+        >
           <table className="w-full text-sm min-w-[1400px]">
             <thead>
               <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
                 <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap sticky left-0 z-20 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]"
+                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap sticky left-0 top-0 z-30 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]"
                   onClick={() => toggleWorkerSort('name')}
                 >
                   名前{sortArrow(workerSortKey === 'name', workerSortAsc)}
                 </th>
                 <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap"
+                  className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap"
                   onClick={() => toggleWorkerSort('org')}
                 >
                   所属{sortArrow(workerSortKey === 'org', workerSortAsc)}
                 </th>
-                <th className="px-3 py-3 whitespace-nowrap">現場</th>
+                <th className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 whitespace-nowrap">現場</th>
                 <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
+                  className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('workDays')}
                 >
                   出勤日数{sortArrow(workerSortKey === 'workDays', workerSortAsc)}
                 </th>
                 <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
+                  className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('plDays')}
                 >
                   有給{sortArrow(workerSortKey === 'plDays', workerSortAsc)}
                 </th>
                 <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
+                  className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('otHours')}
                   title="新ルール(ベトナム人): 所定外労働時間（所定7hを超えた実体の時間。法定外はこの内数で下段に表示）。日本人・旧ルール: 出面の残業欄合計"
                 >
                   残業(h){sortArrow(workerSortKey === 'otHours', workerSortAsc)}
                 </th>
                 <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
+                  className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('rate')}
                   title="日給月給=日額 / 完全月給・固定月給=月給 / ベトナム人=時給ベース（行に応じて表示）"
                 >
                   単価/月給{sortArrow(workerSortKey === 'rate', workerSortAsc)}
                 </th>
                 <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
+                  className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
                   onClick={() => toggleWorkerSort('totalCost')}
                 >
                   <span title="実際の支給額ベースの労務費（ベトナム人・完全月給は支給額、日本人日給月給は日額×日数）">労務費</span>{sortArrow(workerSortKey === 'totalCost', workerSortAsc)}
                 </th>
                 {showAbsenceColumns && (
                   <>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300">欠勤日数</th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300">欠勤控除</th>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300">差引支給</th>
+                    <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300">欠勤日数</th>
+                    <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300">欠勤控除</th>
+                    <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300">差引支給</th>
                   </>
                 )}
                 {showSalaryColumns && (
                   <>
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">基本給</th>
+                    <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">基本給</th>
                     {/* 4月以前は「休業補償」、5月以降は「追加所定」 */}
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                    <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
                       {ym >= '202605' ? '追加所定' : '休業補償'}
                     </th>
                     {/* 2026-06-XX 追加 (I-2): 所定外労働手当列を新ルール時に表示 */}
                     {ym >= '202605' && (
                       <th
-                        className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                        className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                         title="月所定140h超〜法定上限内の労働 × 通常賃金（労基法24条）"
                       >
                         所定外労働
                       </th>
                     )}
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                    <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
                       {ym >= '202605' ? '法定外残業' : '残業手当'}
                     </th>
                     {ym >= '202605' && (
                       <>
-                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="日曜出勤 1.35倍 (8h超は1.60倍)">法休手当</th>
-                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="22:00-5:00 +0.25倍">深夜手当</th>
-                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="補償日 60%">休業手当</th>
+                        <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="日曜出勤 1.35倍 (8h超は1.60倍)">法休手当</th>
+                        <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="22:00-5:00 +0.25倍">深夜手当</th>
+                        <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="補償日 60%">休業手当</th>
                       </>
                     )}
                     {showBreakShorten && (
-                      <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="休憩短縮に伴う所定外労働（出勤日 × 短縮分 × 通常時給）。法定内のため割増なし">休憩短縮</th>
+                      <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="休憩短縮に伴う所定外労働（出勤日 × 短縮分 × 通常時給）。法定内のため割増なし">休憩短縮</th>
                     )}
                     {/* 遠方現場日当・運転手当（2026-10 施行、lib/allowance.ts） */}
                     {showAllowance && (
                       <>
-                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="遠方現場日当（非課税・実費弁償）。判定値80分超500円/120分超1,500円、13ヶ月目から半額・25ヶ月目から0円">日当</th>
-                        <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="運転手当（課税）。片道500円（判定値60分未満）/1,000円（60分以上）">運転手当</th>
+                        <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="遠方現場日当（非課税・実費弁償）。判定値80分超500円/120分超1,500円、13ヶ月目から半額・25ヶ月目から0円">日当</th>
+                        <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="運転手当（課税）。片道500円（判定値60分未満）/1,000円（60分以上）">運転手当</th>
                       </>
                     )}
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">欠勤控除</th>
+                    <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">欠勤控除</th>
                     {showCompBaseDeduction && (
-                      <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="会社都合休(補償日)の通常分。固定給は満額前提のため一旦控除し、60%を休業補償で還元（正味 日給の40%控除）">補償日控除</th>
+                      <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="会社都合休(補償日)の通常分。固定給は満額前提のため一旦控除し、60%を休業補償で還元（正味 日給の40%控除）">補償日控除</th>
                     )}
-                    <th className="px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">支給額合計</th>
+                    <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">支給額合計</th>
                   </>
                 )}
               </tr>
@@ -1564,14 +1572,14 @@ export default function MonthlyPage() {
             {sortedWorkers.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy dark:text-white">
-                  <td className="px-3 py-3 sticky left-0 z-10 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">合計 ({filteredWorkers.length}名)</td>
-                  <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3 text-right tabular-nums">{workerTotals.workAll % 1 !== 0 ? workerTotals.workAll.toFixed(1) : workerTotals.workAll}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.plDays)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.otHours)}</td>
-                  <td className="px-3 py-3 text-right">—</td>
-                  <td className="px-3 py-3 text-right tabular-nums">
+                  <td className="px-3 py-3 sticky left-0 bottom-0 z-30 bg-gray-50 dark:bg-gray-700 border-r border-gray-200 dark:border-gray-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">合計 ({filteredWorkers.length}名)</td>
+                  <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3"></td>
+                  <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3"></td>
+                  <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums">{workerTotals.workAll % 1 !== 0 ? workerTotals.workAll.toFixed(1) : workerTotals.workAll}</td>
+                  <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.plDays)}</td>
+                  <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums">{fmtNum(workerTotals.otHours)}</td>
+                  <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right">—</td>
+                  <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums">
                     {workerTotals.dispatchDeduction > 0 ? (
                       <div>
                         <div>{fmtYen(Math.round(workerTotals.totalCost))}</div>
@@ -1585,29 +1593,29 @@ export default function MonthlyPage() {
                   </td>
                   {showAbsenceColumns && (
                     <>
-                      <td className="px-3 py-3 text-right tabular-nums bg-red-50/50">
+                      <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-red-50/50">
                         {(() => {
                           const totalAbsent = filteredWorkers.reduce((s, w) => s + calcAbsentDays(w), 0)
                           return totalAbsent > 0 ? Math.round(totalAbsent * 10) / 10 : '—'
                         })()}
                       </td>
-                      <td className="px-3 py-3 text-right tabular-nums bg-red-50/50 text-red-600">
+                      <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-red-50/50 text-red-600">
                         {(() => {
                           const totalDeduction = filteredWorkers.reduce((s, w) => s + calcAbsentDeduction(w), 0)
                           return totalDeduction > 0 ? `-${fmtYen(totalDeduction)}` : '—'
                         })()}
                       </td>
-                      <td className="px-3 py-3 text-right tabular-nums bg-red-50/50">
+                      <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-red-50/50">
                         {fmtYen(filteredWorkers.reduce((s, w) => s + calcNetPay(w), 0))}
                       </td>
                     </>
                   )}
                   {showSalaryColumns && (
                     <>
-                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                      <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                         {fmtYen(filteredWorkers.reduce((s, w) => s + (w.fixedBasePay || w.basePay || 0), 0))}
                       </td>
-                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                      <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                         {(() => {
                           const totalAddAllow = filteredWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0)
                           return totalAddAllow > 0 ? fmtYen(totalAddAllow) : '—'
@@ -1615,14 +1623,14 @@ export default function MonthlyPage() {
                       </td>
                       {/* 2026-06-XX 追加 (I-2): 所定外労働手当 合計列 */}
                       {ym >= '202605' && (
-                        <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                        <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                           {(() => {
                             const total = filteredWorkers.reduce((s, w) => s + (w.nonStatutoryOTAllowance || 0), 0)
                             return total > 0 ? fmtYen(total) : '—'
                           })()}
                         </td>
                       )}
-                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                      <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                         {(() => {
                           const totalOtAllow = filteredWorkers.reduce((s, w) => s + (w.otAllowance || 0), 0)
                           return totalOtAllow > 0 ? fmtYen(totalOtAllow) : '—'
@@ -1630,19 +1638,19 @@ export default function MonthlyPage() {
                       </td>
                       {ym >= '202605' && (
                         <>
-                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                          <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                             {(() => {
                               const total = filteredWorkers.reduce((s, w) => s + (w.legalHolidayAllowance || 0), 0)
                               return total > 0 ? fmtYen(total) : '—'
                             })()}
                           </td>
-                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                          <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                             {(() => {
                               const total = filteredWorkers.reduce((s, w) => s + (w.nightAllowance || 0), 0)
                               return total > 0 ? fmtYen(total) : '—'
                             })()}
                           </td>
-                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                          <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                             {(() => {
                               const total = filteredWorkers.reduce((s, w) => s + (w.compAllowance || 0), 0)
                               return total > 0 ? fmtYen(total) : '—'
@@ -1651,7 +1659,7 @@ export default function MonthlyPage() {
                         </>
                       )}
                       {showBreakShorten && (
-                        <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                        <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                           {(() => {
                             const total = filteredWorkers.reduce((s, w) => s + (w.breakShortenAllowance || 0), 0)
                             return total > 0 ? fmtYen(total) : '—'
@@ -1660,13 +1668,13 @@ export default function MonthlyPage() {
                       )}
                       {showAllowance && (
                         <>
-                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                          <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                             {(() => {
                               const total = filteredWorkers.reduce((s, w) => s + (w.siteAllowance || 0), 0)
                               return total > 0 ? fmtYen(total) : '—'
                             })()}
                           </td>
-                          <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                          <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                             {(() => {
                               const total = filteredWorkers.reduce((s, w) => s + (w.driveAllowance || 0), 0)
                               return total > 0 ? fmtYen(total) : '—'
@@ -1674,21 +1682,21 @@ export default function MonthlyPage() {
                           </td>
                         </>
                       )}
-                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50 text-red-600">
+                      <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50 text-red-600">
                         {(() => {
                           const totalAbsDed = filteredWorkers.reduce((s, w) => s + (w.absentDeduction || 0), 0)
                           return totalAbsDed > 0 ? `-${fmtYen(totalAbsDed)}` : '—'
                         })()}
                       </td>
                       {showCompBaseDeduction && (
-                        <td className="px-3 py-3 text-right tabular-nums bg-green-50/50 text-red-600">
+                        <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50 text-red-600">
                           {(() => {
                             const total = filteredWorkers.reduce((s, w) => s + (w.compBaseDeduction || 0), 0)
                             return total > 0 ? `-${fmtYen(total)}` : '—'
                           })()}
                         </td>
                       )}
-                      <td className="px-3 py-3 text-right tabular-nums bg-green-50/50">
+                      <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
                         {fmtYen(filteredWorkers.reduce((s, w) => s + (w.salaryNetPay || 0), 0))}
                       </td>
                     </>
