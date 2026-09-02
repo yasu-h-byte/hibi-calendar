@@ -52,6 +52,7 @@ interface ToolBudget {
   remaining: number
   purchases: Purchase[]
   period: { start: string; end: string; index: number } | null
+  notStarted?: boolean
   error?: string
 }
 
@@ -289,6 +290,16 @@ export default function MyPage() {
           {!tool || tool.error || !tool.period ? (
             <div className="text-sm text-gray-500">
               道具代の枠がまだ設定されていません。事務担当にお問い合わせください。
+            </div>
+          ) : tool.notStarted ? (
+            /* 制度開始前（例: 日本人は 2026-10-01 施行）。残額として見せず開始予告だけ出す */
+            <div className="text-sm text-gray-700">
+              <span className="font-bold">{fmtFull(tool.period.start)}</span> から
+              年間 <span className="font-bold tabular-nums">¥{tool.budget.toLocaleString()}</span> の
+              道具代補助が始まります。
+              <span className="block text-[11px] text-gray-400 mt-1.5">
+                それまでの購入申請は従来どおりマネーフォワードから行ってください。
+              </span>
             </div>
           ) : (
             <>

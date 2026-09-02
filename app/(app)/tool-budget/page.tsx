@@ -26,6 +26,7 @@ interface WorkerBudget {
   hireDate?: string
   periodAnchor?: string | null
   period: Period | null
+  notStarted?: boolean
   budget: number
   used: number
   remaining: number
@@ -269,7 +270,12 @@ export default function ToolBudgetPage() {
                       </td>
                       <td className="text-center px-2 tabular-nums">
                         {w.period ? (
-                          <span className="text-xs">{formatPeriod(w.period)}</span>
+                          <span className="text-xs">
+                            {formatPeriod(w.period)}
+                            {w.notStarted && (
+                              <span className="ml-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded px-1 py-0.5">開始前</span>
+                            )}
+                          </span>
                         ) : (
                           <span className="text-xs text-gray-400 italic">未設定</span>
                         )}

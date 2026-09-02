@@ -31,6 +31,11 @@ function getCurrentPeriod(hireDate: string, refDate: Date = new Date()): Period 
   const hire = new Date(hireDate + 'T00:00:00')
   if (isNaN(hire.getTime())) return null
 
+  // 起点日がまだ来ていない（例: 日本人の 2026-10-01 施行前）→ 「現在の期間」は存在しない。
+  // 2026-09-02 修正: 従来はこの場合も第1期をそのまま返してしまい、施行前なのに
+  // 来期の予算・期間が「現在の残額」としてマイページに表示されていた（白戸さん事案）。
+  if (hire > refDate) return null
+
   // 入社日から1年ごとの期間を計算し、refDateが含まれる期間を返す
   let start = new Date(hire)
   let index = 1
@@ -134,7 +139,17 @@ export async function GET(request: NextRequest) {
       }
 
       const period = getCurrentPeriod(anchor)
-      if (!period) return NextResponse.json({ error: 'Invalid anchor' }, { status: 400 })
+      if (!period) {
+        // 起点日が未来 = 制度開始前。開始日と予算を予告として返す（残額としては見せない）
+        const first = getPeriodByIndex(anchor, 1)
+        if (first) {
+          const budget = toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
+          return NextResponse.json({
+            budget, used: 0, remaining: 0, purchases: [], period: first, notStarted: true,
+          })
+        }
+        return NextResponse.json({ error: 'Invalid anchor' }, { status: 400 })
+      }
 
       const key = `${worker.id}_${period.start}`
       const record = tbData.records[key]
@@ -187,7 +202,10 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const period = getCurrentPeriod(anchor)
+      // 開始前（起点日が未来）は第1期を「予定」として返し、notStarted で区別する
+      const cur = getCurrentPeriod(anchor)
+      const period = cur ?? getPeriodByIndex(anchor, 1)
+      const notStarted = !cur && !!period
       const key = period ? `${w.id}_${period.start}` : ''
       const record = key ? tbData.records[key] : null
       const budget = record?.budget ?? defaultBudget
@@ -201,6 +219,7 @@ export async function GET(request: NextRequest) {
         hireDate: w.hireDate,
         periodAnchor: anchor,
         period,
+        notStarted,
         budget,
         used,
         remaining: budget - used,

@@ -482,7 +482,7 @@ export default function ForemanMobilePage() {
   // ══════════ 自分タブ ══════════
   const [myData, setMyData] = useState<{
     leave?: { noGrant: boolean; grantDate: string | null; periodEnd: string; total: number; used: number; remaining: number; fiveDayShortfall: number }
-    tool?: { budget: number; used: number; remaining: number; period?: unknown }
+    tool?: { budget: number; used: number; remaining: number; period?: { start: string } | null; notStarted?: boolean }
   } | null>(null)
 
   useEffect(() => {
@@ -990,7 +990,13 @@ export default function ForemanMobilePage() {
 
               <div className="bg-white rounded-xl border border-gray-200 p-4">
                 <div className="text-xs font-bold text-gray-500">🔧 道具代補助の残額</div>
-                {myData.tool && typeof myData.tool.remaining === 'number' ? (
+                {myData.tool?.notStarted && myData.tool.period ? (
+                  <div className="mt-1 text-sm text-gray-700">
+                    <b>{myData.tool.period.start.replace(/-/g, '/')}</b> から
+                    年間 <b className="tabular-nums">¥{myData.tool.budget.toLocaleString()}</b> の補助が始まります
+                    <span className="block text-[11px] text-gray-400 mt-1">それまでの購入申請は従来どおりマネーフォワードから</span>
+                  </div>
+                ) : myData.tool && myData.tool.period && typeof myData.tool.remaining === 'number' ? (
                   <div className="mt-1">
                     <span className="text-2xl font-bold tabular-nums text-hibi-navy">¥{myData.tool.remaining.toLocaleString()}</span>
                     <span className="text-xs text-gray-500 ml-2">年間 ¥{(myData.tool.budget || 0).toLocaleString()} のうち ¥{(myData.tool.used || 0).toLocaleString()} 使用</span>
