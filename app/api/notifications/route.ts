@@ -6,7 +6,7 @@ import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
 import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
-import { isAlreadyRetired } from '@/lib/workers'
+import { isAlreadyRetired, isCalendarSignTarget } from '@/lib/workers'
 import { calcLegalCarryOver, selectActiveGrantRecord } from '@/lib/leave-compute'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
 import { getWorkerLastAccessMap } from '@/lib/accessLog'
@@ -58,10 +58,6 @@ export async function GET(request: NextRequest) {
       // 帰国情報
       const homeLeaves = await getAllActiveHomeLeaves()
 
-      // 署名対象のスタッフ = 退職していない + トークン所持（実習生・特定技能）
-      const signEligibleWorkers = activeWorkers.filter(w => !!w.token)
-      const eligibleWorkerIdSet = new Set(signEligibleWorkers.map(w => w.id))
-
       // チェック対象: 現月 + 翌月（翌月カレンダーを月末に署名するため）
       // 注意: siteCalendar と calendarSign の ym はダッシュあり形式 "YYYY-MM"
       //       massign のキーはダッシュなし形式 "YYYYMM"
@@ -71,6 +67,21 @@ export async function GET(request: NextRequest) {
       const nextYm = ymKey(nextY, nextM)
       const ymsToCheck = [currentYm, nextYm]
       const calYmOf = (ym: string) => `${ym.slice(0, 4)}-${ym.slice(4, 6)}`
+
+      // 署名対象の判定は共通ヘルパー isCalendarSignTarget に一元化する（2026-09-02 修正）。
+      //   旧: activeWorkers.filter(w => !!w.token) — 「トークン所持＝ベトナム人」という
+      //   前提で書かれていたが、日本人スタッフにマイページ用トークンを発行した時点で崩れ、
+      //   署名対象外の日本人9名が「未署名」として通知に出ていた。
+      //   ヘルパーは visa（日本人除外）・当該月の在籍・全期間帰国もまとめて判定する。
+      const eligibleIdsByYm: Record<string, Set<number>> = {}
+      for (const ym of ymsToCheck) {
+        const fullMonthHlIds = new Set(
+          main.workers.map(w => w.id).filter(id => isFullMonthHomeLeave(id, ym, homeLeaves)),
+        )
+        eligibleIdsByYm[ym] = new Set(
+          main.workers.filter(w => isCalendarSignTarget(w, ym, fullMonthHlIds)).map(w => w.id),
+        )
+      }
 
       // 各月の承認済みカレンダーを一括取得
       const approvedCalendarsByYm: Record<string, Set<string>> = {}
@@ -120,8 +131,7 @@ export async function GET(request: NextRequest) {
           const workerIds = mAssign?.workers || dAssign?.workers || []
 
           for (const wid of workerIds) {
-            if (!eligibleWorkerIdSet.has(wid)) continue
-            if (isFullMonthHomeLeave(wid, ym, homeLeaves)) continue
+            if (!eligibleIdsByYm[ym].has(wid)) continue
             // calendarSignのドキュメントIDはダッシュあり形式
             const signId = `${wid}_${calYmOf(ym)}_${site.id}`
             if (!existingSignIds.has(signId)) {

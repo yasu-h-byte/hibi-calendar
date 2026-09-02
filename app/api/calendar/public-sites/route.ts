@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
+import { isCalendarSignTarget } from '@/lib/workers'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -15,7 +16,9 @@ export async function GET(request: Request) {
     const sites = m.sitesWithWorkers
       .filter(sw => m.approvedSiteIds.has(sw.site.id))
       .map(sw => {
-        const eligibleWorkers = sw.workers.filter(w => !!w.token && !m.fullMonthHlIds.has(w.id))
+        // 2026-09-02: `!!w.token` だけの判定は日本人のマイページ用トークン発行で崩れ、
+        //   公開ページの「署名済み N/M」の分母に日本人が混ざっていた
+        const eligibleWorkers = sw.workers.filter(w => isCalendarSignTarget(w, ym, m.fullMonthHlIds))
         const cal = m.siteCalendars[sw.site.id]
         return {
           id: sw.site.id,

@@ -259,17 +259,25 @@ export function toolBudgetDefaultFor(
  * 一箇所に集約。以前は3 つの API ルート (status / public-sites / sign-self) で
  * 微妙に違う条件を書いていたためズレが発生しやすかった。
  *
- * @param worker  Firestore raw worker (visa, token, retired を持つ)
+ * ⚠️ **「トークンを持っている＝ベトナム人」は成り立たない**（2026-09-02 事故）。
+ *   日本人スタッフにマイページ用トークンを発行した途端、`!!w.token` だけで
+ *   判定していた通知・公開ページが日本人9名を「未署名」に数えた。署名は
+ *   変形労働時間制（外国人のみ）の周知・同意なので、visa の判定が必須。
+ *   新しい呼び出し箇所を書くときは必ずこの述語を通すこと。
+ *
+ * @param worker  Firestore raw worker（`visa`）でも Worker 型（`visaType`）でも可
  * @param ym      "YYYY-MM" or "YYYYMM"
  * @param fullMonthHomeLeaveWorkerIds  当該月全期間帰国中のスタッフ ID 集合
  */
 export function isCalendarSignTarget(
-  worker: { id: number; visa?: string; token?: string; retired?: string },
+  worker: { id: number; visa?: string; visaType?: string; token?: string; retired?: string },
   ym: string,
   fullMonthHomeLeaveWorkerIds: Set<number>,
 ): boolean {
   if (!worker.token) return false
-  if (!worker.visa || worker.visa === 'none') return false  // 日本人は対象外
+  // raw worker は visa、Worker 型は visaType と名前が違うので両方を受ける
+  const visa = worker.visa ?? worker.visaType
+  if (!visa || visa === 'none') return false  // 日本人は対象外
   if (!isStillActiveForMonth(worker.retired, ym)) return false
   if (fullMonthHomeLeaveWorkerIds.has(worker.id)) return false
   return true

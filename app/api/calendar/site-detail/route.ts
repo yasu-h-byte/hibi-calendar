@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, collection, query, where, getDocs } from '@/lib/fsdb'
 import { getWorkersForSite, getSiteById } from '@/lib/sites'
+import { isCalendarSignTarget } from '@/lib/workers'
+import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
 import { ym7 } from '@/lib/ym'
 
 export async function GET(request: NextRequest) {
@@ -31,6 +33,12 @@ export async function GET(request: NextRequest) {
     // Get workers for this site
     const workers = await getWorkersForSite(siteId)
 
+    // 当該月まるごと帰国中のスタッフは署名対象外（/calendar 画面と同じ扱い）
+    const homeLeaves = await getAllActiveHomeLeaves()
+    const fullMonthHlIds = new Set(
+      workers.map(w => w.id).filter(id => isFullMonthHomeLeave(id, ym, homeLeaves)),
+    )
+
     // Get signatures
     const signQ = query(collection(db, 'calendarSign'), where('ym', '==', ym), where('siteId', '==', siteId))
     const signSnap = await getDocs(signQ)
@@ -44,7 +52,9 @@ export async function GET(request: NextRequest) {
       site: { id: site.id, name: site.name },
       days: calData.days,
       workers: workers
-        .filter(w => !!w.token) // 署名対象は実習生・特定技能生のみ
+        // 署名対象は実習生・特定技能生のみ。判定は共通ヘルパーへ統一（2026-09-02）。
+        //   旧 `!!w.token` は日本人のマイページ用トークン発行で崩れていた
+        .filter(w => isCalendarSignTarget(w, ym, fullMonthHlIds))
         .map(w => ({
           id: w.id,
           name: w.name,
