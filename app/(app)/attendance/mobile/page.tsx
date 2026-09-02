@@ -959,9 +959,18 @@ export default function ForemanMobilePage() {
       {tab === 'me' && (
         <div className="mt-3 space-y-3">
           {!userToken ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-4 text-sm text-gray-500">
-              スマホ用トークンが未発行のため表示できません。管理者に「人員マスタ → スマホURL発行」を依頼してください。
-            </div>
+            userRole !== 'foreman' ? (
+              /* 全体管理者パスワードのログインはワーカー情報（token）を持たない。
+                 また役員・管理者はそもそも有給・道具代の管理対象外なので、案内だけ出す */
+              <div className="bg-white rounded-xl border border-gray-200 p-4 text-sm text-gray-500">
+                このタブは職長・スタッフ本人用です（自分の有給残・道具代残を表示します）。
+                役員・管理者アカウントでは表示する情報がありません。
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 p-4 text-sm text-gray-500">
+                スマホ用トークンが未発行のため表示できません。管理者に「人員マスタ → スマホURL発行」を依頼してください。
+              </div>
+            )
           ) : !myData ? (
             <div className="py-10 text-center text-gray-400">読み込み中…</div>
           ) : (
