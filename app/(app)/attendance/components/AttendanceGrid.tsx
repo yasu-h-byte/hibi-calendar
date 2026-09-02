@@ -112,7 +112,14 @@ export default function AttendanceGrid({
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
       {todayIdx >= 0 && (
-        <div className="flex justify-end px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
+        <div className="flex justify-end items-center gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
+          {/* スマホ最適化画面との相互切替（2026-09-02 追加。スマホ幅のときだけ表示） */}
+          <a
+            href="/attendance/mobile"
+            className="sm:hidden text-xs font-bold px-3 py-1 rounded-md border border-blue-400 text-blue-600"
+          >
+            📱 スマホ版へ
+          </a>
           <button
             type="button"
             onClick={jumpToToday}

@@ -19,15 +19,15 @@ interface MenuItem {
 const DEMMEN_URL = 'https://dedura-kanri.web.app'
 
 function buildMenuItems(user: AuthUser): MenuItem[] {
-  // 2026-09-02: 職長の「出面入力」も従来のPC出面入力画面に統一。
-  //   トークン発行を機にこのタブが職長スマホ画面へ切り替わり、大川職長が
-  //   「前と違う画面になって入力できない」状態になったため元の動線に戻した。
-  //   職長スマホ画面（確認・承認用）は別タブ「スタッフ入力の確認」として残す。
+  // 2026-09-02: 職長の「出面入力」は従来のPC出面入力画面に統一
+  //   （トークン発行を機にタブが職長スマホ画面へ切り替わり、大川職長が
+  //    「前と違う画面になって入力できない」状態になった経緯がある）。
+  //   スマホ最適化版は /attendance/mobile（出面・申請承認・休日設定・自分の有給）を
+  //   別タブで用意し、両画面から相互に行き来できるようにしている。
   const attItem: MenuItem =
     { label: '出面入力', icon: '📋', href: '/attendance', section: 'メイン', roles: ['admin', 'approver', 'foreman'] }
-  const foremanCheckItem: MenuItem | null = user.role === 'foreman' && user.token
-    ? { label: 'スタッフ入力の確認', icon: '✅', href: `/attendance/foreman/${user.token}`, section: 'メイン', roles: ['foreman'] }
-    : null
+  const foremanCheckItem: MenuItem | null =
+    { label: 'スマホ入力', icon: '📱', href: '/attendance/mobile', section: 'メイン', roles: ['admin', 'approver', 'foreman'] }
 
   return [
     // 日常業務
@@ -61,6 +61,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
 const MENU_ID_MAP: Record<string, string> = {
   '/dashboard': 'dashboard',
   '/attendance': 'attendance',
+  '/attendance/mobile': 'attendance',
   '/calendar': 'calendar',
   '/monthly': 'monthly',
   '/workers': 'workers',
