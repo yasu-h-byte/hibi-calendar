@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>事務業務マニュアル（森田さん向け） - HIBI CONSTRUCTION</title>
+<style>
+  :root {
+    --charcoal: #20262F;
+    --amber: #F5A623;
+    --green: #1E9E52;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #20262F; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid var(--charcoal); padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #fff; background: var(--charcoal); padding: 8px 14px; margin-top: 40px; font-size: 18px; border-radius: 6px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; border-left: 4px solid var(--charcoal); padding-left: 10px; }
+  .box { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #eefaf1; border: 1px solid #9dd8b4; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: var(--charcoal); color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: var(--charcoal); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .toc { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: var(--charcoal); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  .btn-amber { display: inline-block; background: var(--amber); color: var(--charcoal); font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  @media print { body { font-size: 13px; padding: 0; } h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 14px; }
+    table { font-size: 13px; }
+    th, td { padding: 6px 8px; }
+    .step-text { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>HIBI CONSTRUCTION 就業管理システム<br>事務業務マニュアル（森田さん向け）</h1>
+<p>対象: 森田さん（事務担当）<br>
+最終更新: 2026年9月<br>
+システムURL: <code>https://hibi-calendar.vercel.app</code></p>
+
+<div class="box box-ok">
+<strong>このマニュアルの前提（2026年10月以降の体制）</strong>
+<table style="margin-top:10px;">
+<tr><th>担当</th><th>業務</th></tr>
+<tr><td><strong>森田さん</strong></td><td>出面の事務補助／有給・帰国申請の承認と有給付与／道具代の登録・残額管理／<strong>月次締め</strong>／<strong>キャシュモへの資料提出</strong></td></tr>
+<tr><td><strong>キャシュモ</strong></td><td>給与計算の最終確定・給与明細・振込（日比建設分・HFU分とも）</td></tr>
+<tr><td>職長</td><td>日々の出面入力・確認、就業カレンダー作成</td></tr>
+<tr><td>政仁さん</td><td>出面の最終承認・就業カレンダー承認・申請の最終承認</td></tr>
+<tr><td>靖仁さん</td><td>人員マスタ・システム管理・イレギュラー対応</td></tr>
+</table>
+<p style="margin:10px 0 0; font-size:13px;">給与の計算そのものはキャシュモの仕事です。森田さんは<strong>正しいデータを締めて、資料を渡すところまで</strong>が担当です。</p>
+</div>
+
+<!-- サマリー：毎月の流れ -->
+<div class="box box-ok">
+<strong>毎月の流れ（サマリー）</strong>
+<table style="margin-top:10px;">
+<tr><th>順番</th><th>やること</th><th>画面</th><th>目安</th></tr>
+<tr><td><strong>①</strong></td><td>前月の出面を最終確認（未入力・警告を潰す）</td><td>出面入力／月次集計「チェック」</td><td>月初すぐ</td></tr>
+<tr><td><strong>②</strong></td><td>月次集計で出勤・残業・有給・欠勤を確認</td><td>月次集計</td><td>月初</td></tr>
+<tr><td><strong>③</strong></td><td>🔒 月締めロック</td><td>月次集計</td><td>確認後</td></tr>
+<tr><td><strong>④</strong></td><td><strong>キャシュモ提出用の3資料を会社別に出力・送付</strong></td><td>月次集計「社労士提出用」</td><td>ロック後すぐ</td></tr>
+<tr><td><strong>⑤</strong></td><td>道具代: マネーフォワード承認分をシステムへ登録</td><td>道具代管理</td><td>随時</td></tr>
+</table>
+</div>
+
+<div class="box" style="font-size:13px;">
+<strong>📌 併用する資料：</strong>
+<ul style="margin: 6px 0; padding-left: 20px;">
+  <li><a href="/manual-yukyu.html">🌴 休暇管理マニュアル</a> — 有給・帰国の制度詳細（唯一の参照元）</li>
+  <li><a href="/manual-checklist.html">✅ ロール別やることチェックリスト</a> — 日次・月次のやること一覧</li>
+  <li><a href="/manual-syaroshi.html">🏛 社労士提出用資料マニュアル</a> — 提出3資料の読み方（キャシュモへの説明にも使えます）</li>
+</ul>
+</div>
+
+<div class="toc">
+<strong>目次</strong>
+<ol>
+  <li><a href="#sec1">ログイン</a></li>
+  <li><a href="#sec2">画面の見方（サイドバー）</a></li>
+  <li><a href="#sec3">日常業務（出面補助・申請承認・道具代）</a></li>
+  <li><a href="#sec4">月次締め</a></li>
+  <li><a href="#sec5">キャシュモへの資料提出</a></li>
+  <li><a href="#sec6">システムの給与計算画面の位置づけ</a></li>
+  <li><a href="#sec7">年間で知っておくこと</a></li>
+  <li><a href="#sec8">困ったとき</a></li>
+</ol>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec1">1. ログイン</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">ブラウザで <code>https://hibi-calendar.vercel.app</code> を開く</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text"><strong>森田さん専用の個人パスワード</strong>を入力して「ログイン」を押す（靖仁さんから共有。名前の選択は不要）</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">ダッシュボードが表示されればログイン完了。一度ログインすると同じブラウザでは次回から入力不要</div>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec2">2. 画面の見方（サイドバー）</h2>
+
+<table>
+<tr><th>メニュー</th><th>用途</th><th>頻度</th></tr>
+<tr><td>ダッシュボード</td><td>お知らせ・<strong>勤怠申請</strong>（有給・帰国の承認、欠勤届の確認）・稼働状況</td><td><strong>毎日</strong></td></tr>
+<tr><td><strong>出面入力</strong></td><td>日々の出勤・残業・有給の確認と事務補助</td><td><strong>毎日</strong></td></tr>
+<tr><td>就業カレンダー</td><td>各現場のカレンダー確認</td><td>確認用</td></tr>
+<tr><td><strong>月次集計</strong></td><td>集計・チェック・<strong>月締め・キャシュモ提出資料の出力</strong></td><td><strong>毎月</strong></td></tr>
+<tr><td>帳票出力</td><td>出面表・有給管理台帳などのExcel出力</td><td>毎月</td></tr>
+<tr><td><strong>休暇管理</strong></td><td>有給の付与・残数・申請の承認</td><td><strong>毎月</strong></td></tr>
+<tr><td><strong>道具代管理</strong></td><td>購入登録・残額管理</td><td>随時</td></tr>
+<tr><td>現場マスタ／外注先マスタ</td><td>現場・外注情報の確認（単価変更は速やかに反映）</td><td>随時</td></tr>
+</table>
+
+<div class="box box-warn">
+<strong>人員マスタ</strong>（入退社・ビザ更新・パスワード）は靖仁さんの担当です。変更が必要なときは連絡してください。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec3">3. 日常業務</h2>
+
+<h3>3-1. 出面の事務補助</h3>
+
+<p>ベトナム人は本人のスマホ入力、日本人は職長入力が基本です。森田さんは<strong>入力漏れのフォローと過去日の修正</strong>を担当します。</p>
+
+<table>
+<tr><th>入力値（日本人）</th><th>意味</th></tr>
+<tr><td><strong>1</strong> / <strong>0.5</strong></td><td>出勤（1日）／半日</td></tr>
+<tr><td><strong>有</strong> / <strong>試</strong></td><td>有給休暇／試験（出勤扱い）</td></tr>
+<tr><td><strong>欠</strong></td><td>欠勤。<strong>月給制（濱上さん）はこの記録がある日だけ欠勤控除</strong>されます（空欄では引かれません）</td></tr>
+<tr><td>下段の数字</td><td>残業時間（0.5h単位）</td></tr>
+<tr><td>空欄</td><td>休み／未入力</td></tr>
+</table>
+
+<div class="box box-ok">
+<strong>保存は自動</strong>（保存ボタンなし）。Enter で次の人の同じ日へ移動できます。
+</div>
+
+<div class="box">
+<strong>知っておく仕組み：</strong>
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>変更履歴と復元</strong>: 誤操作は出面画面右上「変更履歴」からワンクリックで復元（90日保持）</li>
+  <li><strong>同日多現場ガード</strong>: 同じ人を同日に合計1人工を超えて入れるとエラー（半日×2現場はOK）</li>
+  <li><strong>ベトナム人の新規入力は本人スマホが原則</strong>。事務が後付けできるのは 有給・欠勤・帰国中・0.6補（現場都合休みの休業補償）のみ</li>
+  <li>承認済みカレンダーの休日はグレー表示、帰国中は「✈帰国」と自動表示</li>
+</ul>
+</div>
+
+<h3>3-2. 有給・帰国申請の承認と有給付与</h3>
+
+<div class="box">
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>申請の流れ</strong>: スタッフ申請 → 職長承認 → <strong>森田さん or 政仁さんが最終承認</strong>（ダッシュボード「勤怠申請」カード or 休暇管理→申請タブ）</li>
+  <li>最終承認すると出面へ自動反映（有給=「有」、帰国=「帰国中」）</li>
+  <li><strong>有給の付与</strong>: 付与時期が来ると通知ベル（🔔）にアラート →「付与する」をワンクリック（自動付与はありません）</li>
+  <li>消化日数は出面の「有」から自動集計（直接編集不可）</li>
+</ul>
+</div>
+
+<div class="box box-ok">
+<strong>制度の詳細（残数計算・年5日義務・買取・HFU移籍の勤続通算など）は <a href="/manual-yukyu.html">休暇管理マニュアル</a> が唯一の参照元です。</strong>
+</div>
+
+<h3>3-3. 道具代の管理（佐藤さんから引き継ぎ）</h3>
+
+<table>
+<tr><th></th><th>ベトナム人</th><th>日本人（2026-10-01から）</th></tr>
+<tr><td>年間予算</td><td>30,000円</td><td><strong>100,000円</strong></td></tr>
+<tr><td>期間</td><td>入社日から1年サイクル（個別・自動切替）</td><td>10月1日〜翌9月30日（全員一律）</td></tr>
+<tr><td>対象外</td><td>—</td><td>役員・事務・<strong>入社6ヶ月未満</strong>（6ヶ月経過で自動的に対象入り）</td></tr>
+<tr><td>購入の申請</td><td colspan="2">従来どおり<strong>マネーフォワード</strong>（このシステムに申請機能はありません）</td></tr>
+</table>
+
+<div class="box box-warn">
+<strong>毎月の作業：</strong>マネーフォワードで承認された道具の購入を、道具代管理画面へ登録してください。<br>
+スタッフ名をクリック → モーダルの「新しい購入を登録」に <strong>購入日・品名・金額</strong> → 「+ 追加」。登録すると本人のスマホの残額に即反映されます。
+</div>
+
+<div class="box">
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>誤登録はモーダルの「購入履歴」で削除 → 再登録</li>
+  <li>予算超過は登録できますがマイナス表示になります。本人に追加購入を控えるよう案内</li>
+  <li><strong>期間の切替・予算リセットは全自動</strong>。年度初期化の作業は不要</li>
+  <li>開始前の人（起点日が未来）は本人画面に「10/1から始まります」と予告表示され、管理画面には「開始前」バッジが付きます</li>
+  <li>新入社員は起点日の設定が必要になったら靖仁さんに確認</li>
+</ul>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec4">4. 月次締め</h2>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">月次集計（対象月を選択）→<strong>「月次集計」タブ</strong>で出勤日数・残業・有給・欠勤を確認</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text"><strong>所定日数</strong>が就業カレンダーの稼働日数と一致しているか確認</div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text"><strong>「チェック」タブ</strong>の警告を潰す（未入力・未承認が残っていないこと）</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text"><span class="btn-amber">🔒 この月を締める</span> を押す（日比建設分とHFU分は別々にロックできます）</div>
+</div>
+
+<div class="box">
+<strong>ロックすると</strong>その月の出面が編集不可になります。間違いが見つかったら <strong>🔓 ロック解除</strong>で戻せます（→ 修正 → 再ロック）。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec5">5. キャシュモへの資料提出</h2>
+
+<p>月次集計画面の<strong>「社労士提出用」</strong>セクションから、<strong>会社別（日比建設／HFU）</strong>に3資料を出力して提出します。HFUで従来行っていた提出方法と同じ形です。</p>
+
+<table>
+<tr><th>資料</th><th>内容</th></tr>
+<tr><td>📅 勤務予定シフト表（Excel）</td><td>各日・各週の<strong>所定</strong>労働時間（変形労働時間制の「事前に定めた所定」）</td></tr>
+<tr><td>⏱ 実労働時間明細（Excel）</td><td>各日の始業・終業・実取得休憩・<strong>実労働時間</strong>と所定外</td></tr>
+<tr><td>🔍 計算根拠PDF</td><td>システムの自動計算の内訳（<strong>参考値</strong>。キャシュモの計算との突き合わせ用）</td></tr>
+</table>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-text">月締めロックまで完了していることを確認</div>
+</div>
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-text">月次集計 →「社労士提出用」→ <strong>会社を選んで3点を出力</strong></div>
+</div>
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-text">キャシュモへ送付（提出期限・提出方法はキャシュモとの取り決めに従う）</div>
+</div>
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-text">キャシュモの計算結果・振込完了の連絡を確認</div>
+</div>
+
+<div class="box box-ok">
+資料の読み方・変形労働時間制・3段階残業判定の説明は <a href="/manual-syaroshi.html">社労士提出用資料マニュアル</a> にまとまっています。キャシュモへの説明にもそのまま使えます。
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec6">6. システムの給与計算画面の位置づけ</h2>
+
+<div class="box">
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li>月次集計の「給与計算」タブは<strong>自動計算の参考値</strong>です。キャシュモの計算結果と大きくズレていないかの検算に使えます</li>
+  <li>森田さんが給与計算そのものを行う必要はありません</li>
+  <li>計算ロジックの詳細は旧・給与計算マニュアル（資料一覧の「過去資料」）に残してあります。通常業務で読む必要はありません</li>
+  <li>ズレや疑問があれば靖仁さんへ</li>
+</ul>
+</div>
+
+<!-- ================================================ -->
+<h2 id="sec7">7. 年間で知っておくこと</h2>
+
+<table>
+<tr><th>時期</th><th>できごと</th></tr>
+<tr><td><strong>10月1日</strong></td><td>日本人の有給一斉付与（🔔通知から付与）／日本人の道具代年度開始／東京都最低賃金の改定</td></tr>
+<tr><td>期中</td><td>年5日取得義務のアラート（未達者はダッシュボードに表示）</td></tr>
+<tr><td>賞与時期</td><td>賞与確定時に有給買取が自動記録される（操作は代表側）</td></tr>
+<tr><td>各人の入社記念日</td><td>ベトナム人の道具代期間が自動切替（作業不要）</td></tr>
+</table>
+
+<!-- ================================================ -->
+<h2 id="sec8">8. 困ったとき</h2>
+
+<table>
+<tr><th>症状</th><th>対処</th></tr>
+<tr><td>月締め後に間違いが見つかった</td><td>🔓 ロック解除 → 修正 → 再ロック。キャシュモ提出後なら差し替えの連絡も</td></tr>
+<tr><td>出面を誤って消した・上書きした</td><td>出面画面右上「変更履歴」から復元</td></tr>
+<tr><td>スタッフが「入力できない」と言う</td><td>その日が職長承認済み（ロック）でないか、月締め済みでないかを確認</td></tr>
+<tr><td>残数・金額がおかしい／画面の不具合</td><td>靖仁さんへ連絡</td></tr>
+</table>
+
+<div class="box box-ok">
+<strong>不明点は靖仁さんに気軽に聞いてください。</strong>
+</div>
+
+<hr>
+
+<h2>改訂履歴</h2>
+<table>
+<tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-02</td><td>新規作成。奥寺さん事務マニュアル・給与計算マニュアル（締め部分）・佐藤さん道具代マニュアル・休暇管理の事務パートを統合し、キャシュモ委託体制（締め＋資料提出まで）に再構成</td></tr>
+</table>
+
+<hr>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-09-02</p>
+
+</body>
+</html>

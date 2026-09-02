@@ -28,10 +28,9 @@ const DOCS: (DocItem & { category: string })[] = [
   // ── 全員向けの入口 ──
   { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-08-31' },
 
-  // ── 事務（奥寺さん） ──
-  { category: 'manual', roles: ['jimu'], title: '奥寺さん向けマニュアル', desc: '出面補助・月次集計・月締めロック・帳票出力（事務の日常運用。給与計算と有給は各専用マニュアルへ）', url: '/manual-okudera.html', icon: '📘', updated: '2026-08-31' },
-  { category: 'manual', roles: ['jimu'], title: '給与計算マニュアル（奥寺さん用）', desc: '月次給与計算のすべて。雇用形態4区分・端数処理・自動検算に加え、8月改訂で 法定休日1.35倍・夜勤・濱上さんの欠勤控除・フンさんの休憩短縮・運転手当 を追加', url: '/manual-payroll-okudera.html', icon: '💰', badge: '8月改訂', updated: '2026-08-31' },
-  { category: 'manual', roles: ['jimu'], title: '社労士提出用資料マニュアル', desc: 'HFU分を社労士に渡す資料の説明。変形労働時間制・3段階残業判定・有給日給・提出3資料の読み方・端数処理', url: '/manual-syaroshi.html', icon: '🏛', badge: 'NEW', updated: '2026-06-12' },
+  // ── 事務（森田さん・2026-10からキャシュモ委託体制） ──
+  { category: 'manual', roles: ['jimu'], title: '事務業務マニュアル（森田さん向け）', desc: '奥寺さん・佐藤さんの業務を統合した引き継ぎ版。出面補助・申請承認・道具代・月次締め・キャシュモへの資料提出まで（給与計算・振込はキャシュモ委託）', url: '/manual-morita.html', icon: '📘', badge: 'NEW', updated: '2026-09-02' },
+  { category: 'manual', roles: ['jimu'], title: '社労士提出用資料マニュアル', desc: '社労士・キャシュモに渡す3資料の説明。変形労働時間制・3段階残業判定・有給日給・提出3資料の読み方・端数処理', url: '/manual-syaroshi.html', icon: '🏛', updated: '2026-06-12' },
 
   // ── 事業責任者（政仁さん） ──
   { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面の最終承認・有給/帰国申請の承認・就業カレンダー承認（事業責任者の承認業務に特化）', url: '/manual-masahito.html', icon: '📗', updated: '2026-08-31' },
@@ -42,9 +41,6 @@ const DOCS: (DocItem & { category: string })[] = [
   // ── 有給担当（事務・事業責任者） ──
   { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元。8月改訂で 年5日の日本人特則・買取上限（残−5日）・買取の自動記録・HFU移籍の勤続通算 を追加', url: '/manual-yukyu.html', icon: '🌴', badge: '8月改訂', updated: '2026-08-31' },
 
-  // ── 経理（佐藤さん） ──
-  { category: 'manual', roles: ['jimu'], title: '道具代管理マニュアル（佐藤さん向け）', desc: '購入登録・残額管理。8月改訂で 日本人も対象（年10万円・入社6ヶ月から）・区分別予算・マネーフォワードとの役割分担 を追加', url: '/manual-sato.html', icon: '🔧', badge: '8月改訂', updated: '2026-08-31' },
-
   // ── 評価（運用前・管理者のみ） ──
   { category: 'manual', roles: ['admin'], title: '評価管理マニュアル（ベトナム人）', desc: '年次評価と時給改定（入社記念日サイクル）。5タブ構成・評価者ウェイト・スコア計算・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-05-09' },
   { category: 'manual', roles: ['admin', 'approver'], title: '賃金・評価 操作マニュアル（日本人）', desc: '号俸制の年次改定の回し方（評語・代表加算・平均昇給率）と賞与4区分（利益分配・精勤・禁煙・子ども手当）の作成〜確定〜有給買取の自動記録まで', url: '/manual-wage-jp.html', icon: '💴', badge: 'NEW', updated: '2026-08-31' },
@@ -54,6 +50,11 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'staff', title: 'スタッフ向けマニュアル（ベトナム人）', desc: '出勤登録・欠勤届・有給申請・帰国申請・残数確認・未入力の督促バナー（日本語＋ベトナム語）', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-08-31' },
   { category: 'staff', title: '変形労働時間制と残業のルール', desc: '変形労働時間制のしくみ・残業の3段階判定・給料の4層構造・計算例・FAQ（スタッフへの制度説明用）', url: '/manual-henkei-vi.html', icon: '⏰', badge: '日本語+ベトナム語', updated: '2026-08-01' },
   // ── 過去資料（役目を終えたが記録として残す）──
+  // 2026-09-02: 奥寺さん・佐藤さんの退職（9月末）とキャシュモ委託に伴い、個人名義の
+  //   3冊は「事務業務マニュアル（森田さん向け）」へ統合。原本は記録として残す。
+  { category: 'archive', title: '奥寺さん向けマニュアル（〜2026年9月）', desc: '森田さん向けマニュアルへ統合済み。出面補助・月次集計・月締め・帳票出力の旧版', url: '/manual-okudera.html', icon: '📦', updated: '2026-09-02' },
+  { category: 'archive', title: '給与計算マニュアル（奥寺さん用・〜2026年9月）', desc: '給与計算はキャシュモへ委託済み。システムの計算ロジック詳細の記録として保存（検算・保守時の参照用）', url: '/manual-payroll-okudera.html', icon: '📦', updated: '2026-09-02' },
+  { category: 'archive', title: '道具代管理マニュアル（佐藤さん向け・〜2026年9月）', desc: '森田さん向けマニュアルへ統合済み。購入登録・残額管理の旧版', url: '/manual-sato.html', icon: '📦', updated: '2026-09-02' },
   { category: 'archive', title: '新しい給与制度の説明（スライド・2026年5月移行時）', desc: '旧制度→変形労働時間制への移行を対面説明したときのスライド。移行完了につき過去資料', url: '/manual-kyuyo-hikaku-vi.html', icon: '📦', updated: '2026-08-01' },
 ]
 

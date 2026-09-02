@@ -14,7 +14,8 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 | [docs/company.md](docs/company.md) | 会社概要・組織構成・従業員構成 |
 | [docs/labor-rules.md](docs/labor-rules.md) | 労働時間・変形労働時間制・運用サイクル |
 | **[docs/payroll-manual.md](docs/payroll-manual.md)** | **給与計算 実務マニュアル（運用者向け・最重要）** |
-| **[docs/payroll-manual-okutera.md](docs/payroll-manual-okutera.md)** | **奥寺さん向け給与計算マニュアル（日比建設専用・実務担当者向け）** |
+| **[docs/manual-morita.md](docs/manual-morita.md)** | **事務業務マニュアル（森田さん向け・キャシュモ委託体制。奥寺さん・佐藤さんの業務を統合）** |
+| [docs/payroll-manual-okutera.md](docs/payroll-manual-okutera.md) | 給与計算マニュアル（奥寺さん用・アーカイブ。計算ロジックの記録として保存） |
 | [docs/manual-syaroshi.md](docs/manual-syaroshi.md) | 社労士提出用資料マニュアル（HFU分・キャシュモ向け） |
 | [docs/salary-calculation.md](docs/salary-calculation.md) | 給与計算の技術仕様（開発者向け） |
 | [docs/calc-examples.md](docs/calc-examples.md) | 給与計算例集（社労士確認用・8パターン） |
