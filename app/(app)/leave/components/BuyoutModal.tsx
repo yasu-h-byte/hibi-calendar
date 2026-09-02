@@ -61,7 +61,7 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
         </div>
 
         <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-[10px] text-amber-700 dark:text-amber-300">
-          ℹ️ 買取記録はこのレコードの buyoutHistory に追記されます。残日数の表示には影響しないため、別途「調整」欄で消化計上する運用です。
+          ℹ️ 買取記録はこのレコードの buyoutHistory に追記され、買取日数ぶん残日数が減ります。「調整」欄での二重計上は不要です。
         </div>
 
         <div className="flex gap-2 mt-4">

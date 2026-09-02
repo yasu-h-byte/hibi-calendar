@@ -74,6 +74,15 @@ export async function POST(request: NextRequest) {
       const day = parseInt(dayStr)
       const ym = ymKey(year, month)
 
+      // 締め済みの月への申請は入口で拒否（2026-09-02 追加。旧は承認時に初めて 409 だった）
+      {
+        const { checkMonthLocked } = await import('@/lib/locks')
+        const lockErr = await checkMonthLocked(ym, worker.company === 'HFU' ? 'hfu' : 'hibi')
+        if (lockErr) {
+          return NextResponse.json({ error: `${lockErr} / Tháng này đã khóa, không thể xin nghỉ phép` }, { status: 409 })
+        }
+      }
+
       // Determine siteId: use provided or first assigned site
       let resolvedSiteId = siteId
       if (!resolvedSiteId) {

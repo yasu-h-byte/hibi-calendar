@@ -7,7 +7,7 @@ import { LeaveRequest, SiteOption, MforemanMap } from '../types'
 // 読み込み表示に切り替わっても消えないよう、親（page）が保持する
 
 export interface RequestsUiState {
-  filter: 'all' | 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled'
+  filter: 'all' | 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled' | 'revoked'
   processingReq: string | null
   rejectingId: string | null
   rejectReason: string
@@ -109,6 +109,24 @@ export default function RequestsTab({
       if (!res.ok) {
         const err = await res.json().catch(() => null)
         alert(err?.error || `承認に失敗しました (${res.status})`)
+      }
+      onRefresh()
+    } catch {} finally { patchUi({ processingReq: null }) }
+  }
+  // 承認済み有給の取消（2026-09-02 追加）。API の revoke は以前からあったが UI が無く、
+  //   管理者が出面グリッドで p を消すしかなかった（申請は approved のまま残り再申請が 409 になる）
+  const handleRevoke = async (id: string) => {
+    const reason = prompt('承認済みの有給を取り消します。理由を入力してください\n（出面の「有」も消え、残数が戻ります）')
+    if (reason === null) return
+    patchUi({ processingReq: id })
+    try {
+      const res = await fetch('/api/leave-request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'revoke', requestId: id, reason }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        alert(err?.error || `取消に失敗しました (${res.status})`)
       }
       onRefresh()
     } catch {} finally { patchUi({ processingReq: null }) }
@@ -244,10 +262,10 @@ export default function RequestsTab({
   return (
     <div className="space-y-4">
       <div className="flex gap-2 flex-wrap">
-        {(['all','pending','foreman_approved','approved','rejected','cancelled'] as const).map(key => (
+        {(['all','pending','foreman_approved','approved','rejected','cancelled','revoked'] as const).map(key => (
           <button key={key} onClick={() => patchUi({ filter: key })}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${reqFilter === key ? 'bg-hibi-navy text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100'}`}>
-            {key === 'all' ? 'すべて' : key === 'pending' ? '職長待ち' : key === 'foreman_approved' ? '最終承認待ち' : key === 'approved' ? '承認済み' : key === 'cancelled' ? '取り消し' : '却下'}
+            {key === 'all' ? 'すべて' : key === 'pending' ? '職長待ち' : key === 'foreman_approved' ? '最終承認待ち' : key === 'approved' ? '承認済み' : key === 'cancelled' ? '取り消し' : key === 'revoked' ? '管理者取消' : '却下'}
             {key === 'pending' && leaveRequests.filter(r => r.status === 'pending').length > 0 && (
               <span className="ml-1 bg-red-500 text-white text-[10px] rounded-full px-1.5">{leaveRequests.filter(r => r.status === 'pending').length}</span>
             )}
@@ -345,9 +363,20 @@ export default function RequestsTab({
                                   📝 日付変更
                                 </button>
                               )}
+                              {(userRole === 'admin' || userRole === 'approver') && (
+                                <button
+                                  onClick={() => handleRevoke(req.id)}
+                                  disabled={processingReq === req.id}
+                                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 rounded-full text-[10px] font-bold disabled:opacity-50"
+                                  title="承認済み有給を取り消す（出面の「有」も消えて残数が戻る）"
+                                >
+                                  ↩️ 取消
+                                </button>
+                              )}
                             </>
                           )}
                           {req.status === 'rejected' && <span className="px-2 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold">却下</span>}
+                          {req.status === 'revoked' && <span className="px-2 py-1 bg-gray-200 text-gray-600 rounded-full text-xs font-bold">管理者取消</span>}
                           {req.status === 'cancelled' && <span className="px-2 py-1 bg-gray-200 text-gray-600 rounded-full text-xs font-bold">取り消し</span>}
                         </div>
                       </div>

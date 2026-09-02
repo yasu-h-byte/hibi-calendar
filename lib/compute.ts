@@ -1434,10 +1434,12 @@ export function computeMonthly(
     // 2026-08: 人工ベース。夜勤日は 1.5人工（日勤＋夜勤なら 2.5人工）で原価計上する。
     //   夜勤が無ければ calcManDays(entry) === entry.w なので従来と同額。
     const entryCost = (isComp ? entry.w : calcManDays(entry)) * entryDailyRate + otCost
-    // 原価=実支給額で集計するスタッフ（ベトナム人 + 日本人完全月給）は、エントリ単位の
-    // 概算(日数×日額)を site.cost に積まず、出勤日数だけ記録して後段で支給額を比例配賦する。
-    //   ※ 日本人日給月給(visa none & salary無)は totalCost=日数×日額=支給額 で一致 → 従来加算。
-    const usePayrollCost = (wm.visa !== 'none') || (!!wm.salary && wm.salary > 0)
+    // 原価=実支給額で集計する。エントリ単位の概算(日数×日額)を site.cost に積まず、
+    // 出勤日数だけ記録して後段で支給額を比例配賦する。
+    //   2026-09-02 修正（有給総点検・第4回）: 日本人日給月給も対象に統一。旧は「日数×日額＝支給額」の
+    //   前提で従来加算していたが、有給手当・法定休日手当がある月は totalCost(=支給額) と
+    //   現場原価の合計が食い違い、現場別利益が過大になっていた。
+    const usePayrollCost = true
     const site = siteMap.get(siteId)
     if (site) {
       site.workDays += workCount
@@ -2013,25 +2015,9 @@ export function computeMonthly(
       wm.driveLegs = al.driveLegs
       wm.netPay += total
       if (wm.salaryNetPay !== undefined) wm.salaryNetPay += total
-      const usePayrollCost = (wm.visa !== 'none') || (!!wm.salary && wm.salary > 0)
-      if (!usePayrollCost) {
-        wm.cost += total
-        wm.totalCost += total
-        // 出向中の日本人日給月給: 控除額(=出向先へ請求する人件費)にも手当分を反映。
-        //   実支給原価組(ベトナム人等)は後段の「原価=実支給」ブロックが手当込み pay で
-        //   dispatchDeduction を再設定するのに対し、こちらはエントリ積み上げ時点の
-        //   値のままだったため、手当分だけ控除漏れ=自社人件費過大になっていた（2026-08-27）
-        if (wm.isDispatched) {
-          wm.dispatchDeduction = (wm.dispatchDeduction || 0) + total
-        }
-        for (const [sid, bs] of Object.entries(al.bySite)) {
-          const site = siteMap.get(sid)
-          if (!site) continue
-          const amount = bs.yen + (bs.driveYen || 0)
-          site.cost += amount
-          if (wm.isDispatched) site.dispatchDeduction = (site.dispatchDeduction || 0) + amount
-        }
-      }
+      // 原価への反映は後段の「原価=実支給」ブロックが手当込みの支給額を現場へ配賦する
+      // （2026-09-02: 日本人日給月給も実支給配賦に統一したため、ここでの直接加算は廃止。
+      //   残すと手当が二重に原価計上される）
     }
   }
 
@@ -2051,8 +2037,7 @@ export function computeMonthly(
   //   - 出勤実績のない月（全休等）でも給与は発生するため、配置現場の先頭へ計上する。
   //   ※ 日本人日給月給は対象外（totalCost=日数×日額=支給額 で既に一致・エントリ加算済み）。
   for (const wm of workerMap.values()) {
-    const usePayrollCost = (wm.visa !== 'none') || (!!wm.salary && wm.salary > 0)
-    if (!usePayrollCost) continue
+    // 2026-09-02: 全員を実支給ベースで配賦（上のエントリループと対）
     // 実際の支給額。salaryNetPay 優先、無ければ netPay。
     const pay = (wm.salaryNetPay ?? wm.netPay ?? 0)
     wm.cost = pay

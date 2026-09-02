@@ -34,7 +34,7 @@ interface MyPageData {
 interface LeaveRequest {
   id: string
   date: string
-  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled'
+  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled' | 'revoked'
   reason?: string
   rejectedReason?: string
 }
@@ -62,6 +62,7 @@ const STATUS_LABEL: Record<LeaveRequest['status'], { label: string; cls: string 
   approved: { label: '承認済み', cls: 'bg-green-100 text-green-700' },
   rejected: { label: '却下', cls: 'bg-red-100 text-red-600' },
   cancelled: { label: '取り消し', cls: 'bg-gray-200 text-gray-500' },
+  revoked: { label: '管理者取消', cls: 'bg-gray-200 text-gray-500' },
 }
 
 /** 申請日など近い日付用: 「9月3日（木）」 */

@@ -44,9 +44,10 @@ export async function GET(request: NextRequest) {
     if (!balance.noGrant && balance.grantDate) {
       periodEnd = addMonthsSafe(balance.grantDate, 12)
       // 義務判定は「実際に取得した有給日数」で行う（used は買取・調整を含むため使わない）
+      // 2026-09-02 修正: 「10日以上付与」の判定には繰越を含まない付与日数を渡す（旧は total）
       const judge = judgeFiveDayObligation(
         balance.grantDate,
-        balance.total,
+        balance.grantDays,
         balance.periodUsed ?? 0,
         worker.retired,
         today,

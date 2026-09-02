@@ -131,7 +131,7 @@ export default function AttendanceActionBar({
     if (ids.length === 0) return
     setProcessing(`${apiPath}:${action}:${ids[0]}`)
     try {
-      await Promise.all(ids.map(id => fetch(apiPath, {
+      const results = await Promise.all(ids.map(id => fetch(apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({
@@ -141,9 +141,21 @@ export default function AttendanceActionBar({
           ...extra,
         }),
       })))
+      // 2026-09-02 修正: 旧は res.ok を見ておらず、残数超・ロック・権限エラーが無言で失敗して
+      //   「承認したのに残る」状態になっていた（dashboard / RequestsTab と同じく失敗を明示）
+      const failed: string[] = []
+      for (const r of results) {
+        if (!r.ok) {
+          const err = await r.json().catch(() => null)
+          failed.push(err?.error || `${r.status}`)
+        }
+      }
+      if (failed.length > 0) alert(`${failed.length} 件の処理に失敗しました\n\n${Array.from(new Set(failed)).join('\n')}`)
       await fetchData()
       onUpdate?.()
-    } catch { /* ignore */ }
+    } catch (e) {
+      alert(`通信エラーで処理できませんでした: ${e instanceof Error ? e.message : String(e)}`)
+    }
     finally { setProcessing(null) }
   }
 

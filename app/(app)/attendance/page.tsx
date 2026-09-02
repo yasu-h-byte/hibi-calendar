@@ -297,6 +297,17 @@ export default function AttendanceGridPage() {
               body: JSON.stringify({ ...body, allowOverdraft: true }),
             })
           }
+          // 非稼働日への有給（2026-09-02 追加）: 過払い防止のため既定は拒否、承知の場合だけ上書き
+          if (errData?.code === 'NON_WORKING_DAY') {
+            if (!confirm(`${errData.workerName} さんの ${data.ym}/${s.day} は現場カレンダーの非稼働日です。\n休日・所定休に有給を入れると有給日給の過払いになります。\n\nそれでも有給として登録しますか？（記録に残ります）`)) {
+              return { ok: false, save: s, error: '非稼働日のため有給を登録しませんでした', status: 409 }
+            }
+            res = await fetch('/api/attendance/grid', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+              body: JSON.stringify({ ...body, allowNonWorkingDay: true }),
+            })
+          }
         }
 
         if (!res.ok) {

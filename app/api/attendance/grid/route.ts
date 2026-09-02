@@ -332,6 +332,34 @@ export async function POST(request: NextRequest) {
         await logActivity('admin', 'leave.overdraft',
           `${wName} ${targetDate} 有給を残数超過で登録（枠 ${bal.total}日 / 消化 ${bal.used}日）`)
       }
+
+      // ── 退職日・稼働日ガード（2026-09-02 追加・有給総点検 第4回）──
+      //   申請・スタッフ・職長経路にはあるのに PC グリッドだけ無く、日曜・所定休や退職後の日に
+      //   p を置くと「20日枠超の有給日給」が過払いになっていた（2026-06 社労士対応の取り残し）。
+      //   管理者用の画面なので、非稼働日は確認つきで上書き可（activityLog に残す）。退職後は不可。
+      {
+        const main = await getMainData()
+        const w = main.workers.find(ww => ww.id === Number(body.workerId))
+        const wName = w?.name || `ID:${body.workerId}`
+        if (w?.retired && targetDate > w.retired) {
+          return NextResponse.json({
+            error: `${wName} さんは ${w.retired} で退職済みのため、それ以降の日に有給は登録できません`,
+            code: 'RETIRED',
+          }, { status: 409 })
+        }
+        const { isScheduledWorkDay } = await import('@/lib/attendance')
+        if (body.siteId && !await isScheduledWorkDay(String(body.siteId), targetDate)) {
+          if (!body.allowNonWorkingDay) {
+            return NextResponse.json({
+              error: `${targetDate} は現場カレンダーの非稼働日です（休日・所定休に有給を入れると有給日給の過払いになります）`,
+              code: 'NON_WORKING_DAY',
+              workerName: wName,
+            }, { status: 409 })
+          }
+          const { logActivity } = await import('@/lib/activity')
+          await logActivity('admin', 'leave.nonWorkingDay', `${wName} ${targetDate} 非稼働日に有給を登録（確認のうえ上書き）`)
+        }
+      }
     }
 
     // Action: save workDays

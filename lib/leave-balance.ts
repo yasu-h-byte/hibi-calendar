@@ -26,6 +26,8 @@ import { todayJstIso, addMonthsSafe } from './date-utils'
 export interface LeaveBalance {
   /** その日に有効な付与レコードの付与日。付与レコードが無ければ空文字 */
   grantDate: string
+  /** 当期の付与日数（繰越を含まない。年5日義務の「10日以上付与」判定に使う） */
+  grantDays: number
   /** 付与枠 = grantDays + carryOver */
   total: number
   /** 消化済み = adjustment + buyout + 出面の p:1 */
@@ -61,7 +63,7 @@ export async function getLeaveBalance(
 
   const rec = selectActiveGrantRecord(records, asOf)
   if (!rec || !rec.grantDate) {
-    return { grantDate: '', total: 0, used: 0, remaining: 0, overdraft: 0, noGrant: true, periodUsed: 0 }
+    return { grantDate: '', grantDays: 0, total: 0, used: 0, remaining: 0, overdraft: 0, noGrant: true, periodUsed: 0 }
   }
 
   const norm = normalizePLRecord(rec)
@@ -116,6 +118,7 @@ export async function getLeaveBalance(
   const used = norm.adjustment + buyoutDays + days.size
   return {
     grantDate: start,
+    grantDays: norm.grantDays,
     total,
     used,
     remaining: Math.max(0, total - used),

@@ -9,7 +9,7 @@
 export interface LeaveRequestData {
   id: string
   date: string
-  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled'
+  status: 'pending' | 'foreman_approved' | 'approved' | 'rejected' | 'cancelled' | 'revoked'
   reason: string
   rejectedReason?: string
   requestedAt: string

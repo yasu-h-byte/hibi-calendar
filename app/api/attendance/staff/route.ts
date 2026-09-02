@@ -387,7 +387,9 @@ export async function GET(request: NextRequest) {
             // 買取済み日数も消化側に含める（getLeaveBalance と同じ式。
             //   2026-08-17 総点検で判明: ここだけ買取を無視していたため、退職精算等で
             //   買取した人のスマホ残数が買取分だけ多く表示される）
-            const buyout = Number((latest as { buyoutDays?: number }).buyoutDays || 0)
+            // buyoutDays 未キャッシュの移行データは履歴合算へフォールバック（getLeaveBalance と統一・2026-09-02）
+            const latestB = latest as { buyoutDays?: number; buyoutHistory?: Array<{ days?: number }> }
+            const buyout = latestB.buyoutDays ?? (latestB.buyoutHistory || []).reduce((s2, b) => s2 + (b.days || 0), 0)
             const totalUsed = adj + buyout + periodUsed
 
             // FIFO 内訳: 繰越分→当期付与分の順に消費

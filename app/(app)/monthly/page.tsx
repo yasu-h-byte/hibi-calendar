@@ -1265,6 +1265,10 @@ export default function MonthlyPage() {
                     <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">
                       {ym >= '202605' ? '追加所定' : '休業補償'}
                     </th>
+                    {/* 2026-09-02 追加: 有給手当列（ベトナム人=20日枠超の有給日給、日本人日給月給=有給×日額）。
+                        従来は表に無く、可視列の合計が支給額と一致しなかった */}
+                    <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                      title="ベトナム人: 20日枠を超えた有給日数 × 時給 × 7h ／ 日本人日給月給: 有給日数 × 日額">有給手当</th>
                     {/* 2026-06-XX 追加 (I-2): 所定外労働手当列を新ルール時に表示 */}
                     {ym >= '202605' && (
                       <th
@@ -1508,6 +1512,10 @@ export default function MonthlyPage() {
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.additionalAllowance || 0) > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
                             {w.visa !== 'none' && (w.additionalAllowance || 0) > 0 ? fmtYen(w.additionalAllowance!) : '—'}
                           </td>
+                          <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.paidLeaveAllowance || 0) > 0 ? 'text-violet-600' : 'text-gray-400'}`}
+                            title={(w.paidLeaveDays || 0) > 0 ? `有給 ${w.paidLeaveDays}日分` : ''}>
+                            {(w.paidLeaveAllowance || 0) > 0 ? fmtYen(w.paidLeaveAllowance!) : '—'}
+                          </td>
                           {/* 2026-06-XX 追加 (I-2): 所定外労働手当 列（新ルール時のみ） */}
                           {ym >= '202605' && (
                             <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.nonStatutoryOTAllowance || 0) > 0 ? 'text-cyan-600' : 'text-gray-400'}`}
@@ -1619,6 +1627,12 @@ export default function MonthlyPage() {
                         {(() => {
                           const totalAddAllow = filteredWorkers.reduce((s, w) => s + (w.additionalAllowance || 0), 0)
                           return totalAddAllow > 0 ? fmtYen(totalAddAllow) : '—'
+                        })()}
+                      </td>
+                      <td className="sticky bottom-0 z-20 bg-gray-50 dark:bg-gray-700 px-3 py-3 text-right tabular-nums bg-green-50/50">
+                        {(() => {
+                          const totalPl = filteredWorkers.reduce((s, w) => s + (w.paidLeaveAllowance || 0), 0)
+                          return totalPl > 0 ? fmtYen(totalPl) : '—'
                         })()}
                       </td>
                       {/* 2026-06-XX 追加 (I-2): 所定外労働手当 合計列 */}

@@ -1396,8 +1396,9 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     const currentYear = now.getFullYear()
     const allMonths: string[] = []
-    // 過去2年 + 今年分をカバー
-    for (let y = currentYear - 2; y <= currentYear; y++) {
+    // 過去2年 + 今年分 + 来年分（2026-09-02: 承認済みの未来の有給＝翌年テト帰国前後の p を
+    //   読み落として残数が画面ごとに食い違っていた。getLeaveBalance は付与期間の月を読む）
+    for (let y = currentYear - 2; y <= currentYear + 1; y++) {
       for (let m = 1; m <= 12; m++) allMonths.push(ymKey(y, m))
     }
 
