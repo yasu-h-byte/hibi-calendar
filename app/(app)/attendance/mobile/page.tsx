@@ -552,7 +552,7 @@ export default function ForemanMobilePage() {
       <div className="flex gap-1.5 mt-3 sticky top-0 z-20 bg-gray-50 py-1.5">
         {tabBtn('day', '出面')}
         {tabBtn('requests', '承認', pendingCount)}
-        {tabBtn('calendar', '就業カレンダー')}
+        {tabBtn('calendar', '就業カレ')}
         {tabBtn('me', '自分')}
       </div>
 
