@@ -413,6 +413,30 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'ガード判定に失敗しました（一時的な障害の可能性）' }, { status: 503 })
       }
 
+      // ── 承認済み有給(p)の保護（2026-09-02 追加・有給総点検 第4回）──
+      //   承認済みの有給の日を職長が別ステータスで上書きすると p だけ消え、申請は approved の
+      //   まま残数が黙って戻る（staff 経路には 2026-08-27 から同じ保護がある）。
+      if (choice !== 'leave') {
+        const { getAttendanceDoc: gadP, attKey: akP } = await import('@/lib/attendance')
+        const curP = (await gadP(ym))[akP(site.id, workerId, ym, day)] as { p?: number | boolean } | undefined
+        if (curP?.p) {
+          return NextResponse.json({
+            error: 'この日は有給として登録済みです。変更が必要な場合は管理者に連絡してください',
+          }, { status: 409 })
+        }
+      }
+      // ── 稼働日ガード（2026-09-02 追加）: 申請・スタッフ経路と同じ基準。
+      //   所定休への有給は「20日枠超の有給日給」の過払いになる（2026-06 社労士対応）。
+      if (choice === 'leave') {
+        const { isScheduledWorkDay: iswd } = await import('@/lib/attendance')
+        const tIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+        if (!await iswd(site.id, tIso)) {
+          return NextResponse.json({
+            error: 'この日は現場の非稼働日のため有給にできません（休日・所定休は対象外）',
+          }, { status: 400 })
+        }
+      }
+
       // ── 有給の残数チェック（2026-08-04 追加 / 有給システム総点検）──
       //   職長の代理入力（choice='leave'）はこれまで残数を一切見ていなかった。
       //   出面グリッド・スタッフ入力・時季指定と同じ共通ヘルパーで判定する。
@@ -421,7 +445,8 @@ export async function POST(request: NextRequest) {
         try {
           const { getLeaveBalance } = await import('@/lib/leave-balance')
           const targetDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-          const bal = await getLeaveBalance(Number(workerId), undefined, targetDate)
+          // 2026-09-02 修正: 基準日を対象日に（今日の付与期で判定していた）
+          const bal = await getLeaveBalance(Number(workerId), targetDate, targetDate)
           if (bal.remaining <= 0) {
             return NextResponse.json({
               error: bal.noGrant

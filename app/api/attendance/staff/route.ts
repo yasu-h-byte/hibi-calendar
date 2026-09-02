@@ -640,7 +640,8 @@ export async function POST(request: NextRequest) {
           const { getLeaveBalance } = await import('@/lib/leave-balance')
           const targetDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
           // 同じ日の再送信で自分自身を二重カウントしないよう excludeDate を渡す
-          const bal = await getLeaveBalance(worker.id, undefined, targetDate)
+          // 2026-09-02 修正: 基準日も対象日に（今日の付与期で判定していた）
+          const bal = await getLeaveBalance(worker.id, targetDate, targetDate)
           if (bal.remaining <= 0) {
             return NextResponse.json(
               { error: '有給休暇の残日数がありません。管理者にご確認ください。 / Không còn ngày nghỉ phép. Vui lòng liên hệ quản lý.' },

@@ -16,7 +16,7 @@ import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from '@/lib/fsdb'
 import { getWorkers } from '@/lib/workers'
-import { allocateBonus, nextRevisionDate, lastRevisionDate, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
+import { allocateBonus, nextRevisionDate, lastRevisionDate, FIVE_DAY_RESERVE, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
 import { todayJstIso } from '@/lib/date-utils'
 import { getLeaveBalance } from '@/lib/leave-balance'
 import { selectActiveGrantRecord } from '@/lib/leave-compute'
@@ -191,6 +191,32 @@ export async function POST(request: NextRequest) {
     }
   })
 
+  // ── 精勤賞与（有給買取）のサーバ側検証（2026-09-02 追加・有給総点検 第4回）──
+  //   旧はクライアントの attendanceDays をそのまま記録していたため、残数超・年5日枠（残−5日）超・
+  //   期中（夏季賞与など）の year-end 記録が素通りだった。買い取る期は期末 9/30 時点の付与レコード。
+  const bonusAsOf = paidOn.slice(5) >= '10-01' ? `${paidOn.slice(0, 4)}-09-30` : paidOn
+  const isYearEndBonus = paidOn.slice(5) >= '10-01'
+  {
+    const errs: string[] = []
+    for (const line of lines) {
+      const days = line.attendanceDays || 0
+      if (days <= 0) continue
+      if (!isYearEndBonus) {
+        errs.push(`${line.name}: 期末(9/30)より前の支給日では精勤賞与（有給買取）を確定できません`)
+        continue
+      }
+      const bal = await getLeaveBalance(line.workerId, bonusAsOf)
+      if (bal.noGrant) { errs.push(`${line.name}: 買い取る期の付与レコードがありません`); continue }
+      const cap = bal.grantDate >= '2026-10-01' ? Math.max(0, bal.remaining - FIVE_DAY_RESERVE) : bal.remaining
+      if (days > cap) {
+        errs.push(`${line.name}: 買取 ${days}日 は上限 ${cap}日 を超えています（残 ${bal.remaining}日${bal.grantDate >= '2026-10-01' ? '・年5日分を除く' : ''}）`)
+      }
+    }
+    if (errs.length > 0) {
+      return NextResponse.json({ error: '精勤賞与（有給買取）の日数に問題があります', details: errs }, { status: 400 })
+    }
+  }
+
   const record: Omit<BonusRecord, 'id'> = {
     label, paidOn, pool, totalPoints, unit,
     allocations: lines,
@@ -217,7 +243,6 @@ export async function POST(request: NextRequest) {
   //     やり直したい場合は先に休暇管理から既存の買取記録を取り消すこと
   //   - 買取記録の失敗は賞与の保存を巻き戻さない（結果を buyoutResults で返し画面に出す）
   //   - 出向者（山岡支給の大川さん等）も記録する（有給の帳簿は日比側にあるため）
-  const bonusAsOf = paidOn.slice(5) >= '10-01' ? `${paidOn.slice(0, 4)}-09-30` : paidOn
   const buyoutResults: Array<{ workerId: number; name: string; days: number; status: 'recorded' | 'skipped' | 'error'; note?: string }> = []
   const actorStr = auth.authorized ? String(auth.actor) : 'unknown'
   for (const line of lines) {

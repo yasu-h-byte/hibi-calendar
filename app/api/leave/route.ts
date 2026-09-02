@@ -151,6 +151,23 @@ export async function POST(request: NextRequest) {
       // 買取記録を追加 (累積可能にする: buyoutHistory 配列で管理)
       type BuyoutEntry = { at: string; by: number | string; days: number; amount?: number; reason?: string }
       const history = (rec.buyoutHistory as BuyoutEntry[] | undefined) ?? []
+      // 2026-09-02 追加（有給総点検・第4回）: サーバ側の検証。旧はクライアント値をそのまま記録し、
+      //   残数超の買取・同じ期への year-end 二重記録が素通りだった
+      {
+        const { getLeaveBalance } = await import('@/lib/leave-balance')
+        const asOfB = (at || nowIso).slice(0, 10)
+        const bal = await getLeaveBalance(Number(workerId), asOfB)
+        if (!bal.noGrant && days > bal.remaining) {
+          return NextResponse.json({
+            error: `残数 ${bal.remaining}日 を超える買取（${days}日）はできません（枠 ${bal.total}日 / 消化 ${bal.used}日）`,
+          }, { status: 400 })
+        }
+        if (reason === 'year-end' && history.some(h => h.reason === 'year-end')) {
+          return NextResponse.json({
+            error: 'この期の期末買取は既に記録されています。やり直す場合は先に既存の買取記録を取り消してください',
+          }, { status: 409 })
+        }
+      }
       history.push({
         at: at || nowIso,
         by: actor,
@@ -210,7 +227,9 @@ export async function POST(request: NextRequest) {
       //   allowOverdraft:true を明示した場合のみ通し、activityLog に必ず残す。
       {
         const { getLeaveBalance } = await import('@/lib/leave-balance')
-        const bal = await getLeaveBalance(Number(workerId))
+        // 2026-09-02 修正: 基準日を「今日」から「指定日（最初の日）」に（来期日付を当期残で判定していた）
+        const firstDate = [...(dates as string[])].sort()[0]
+        const bal = await getLeaveBalance(Number(workerId), firstDate)
         if (bal.remaining < dates.length && body.allowOverdraft !== true) {
           const wName = (data.workers as { id: number; name?: string }[] | undefined)
             ?.find(w => w.id === Number(workerId))?.name || `ID:${workerId}`
@@ -1100,11 +1119,21 @@ export async function POST(request: NextRequest) {
         method: 'manual' as const,
       }
       if (idx >= 0) {
+        // 2026-09-02 追加（有給総点検・第4回）: 既存 fy への「付与」は明示の overwrite が無ければ拒否。
+        //   旧は黙って上書きし、record の adjustment:0 で移行調整が消え、grantDate も差し替わって
+        //   期間がズレた（通知ベルの古い付与通知から実行しても同じ）。
+        if (body.overwrite !== true) {
+          return NextResponse.json({
+            error: `FY${fy} の付与レコードは既にあります（付与日 ${records[idx].grantDate || '未設定'}）。上書きすると調整・買取の記録が消えるため、修正は編集画面から行ってください`,
+            code: 'GRANT_EXISTS',
+          }, { status: 409 })
+        }
         // 既存レコードの更新: 初回grantedAtは残す、method='manual-edit'に
-        const existing = records[idx] as { grantedAt?: string; grantedBy?: number | string; method?: string }
+        const existing = records[idx] as { grantedAt?: string; grantedBy?: number | string; method?: string; adjustment?: number }
         const merged = {
           ...records[idx],
           ...record,
+          adjustment: existing.adjustment ?? 0,  // 明示上書きでも調整値は保持
           grantedAt: existing.grantedAt || nowIso,  // 初回付与時刻を保持
           grantedBy: existing.grantedBy || actor,
           method: existing.method || 'manual',

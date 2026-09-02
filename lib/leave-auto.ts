@@ -1,6 +1,6 @@
 import { MainData, PLRecord, RawWorker } from './compute'
 import { isAlreadyRetired } from './workers'
-import { calcLegalPL } from './leave-compute'
+import { calcLegalPL, jpNextGrantAfter } from './leave-compute'
 import { addMonthsSafe, todayJstIso } from './date-utils'
 
 /**
@@ -172,7 +172,29 @@ export function getUpcomingGrants(
     const records = (main.plData[wKey] || []) as PLRecord[]
     const grantMonth = w.grantMonth
 
-    const nextGrant = calcNextGrantDate(w.hireDate, grantMonth, records)
+    // 2026-09-02 修正（有給総点検・第4回）: 日本人は 10/1 統一付与（初回だけ入社+6ヶ月、
+    //   2回目以降は前倒しで 10/1 に合流）。旧は入社応当日サイクルで計算しており、
+    //   /leave の付与予定（getPendingGrants）と通知ベルの日付が食い違っていた。
+    const isJpW = !w.visa || w.visa === 'none'
+    let nextGrant: Date | null
+    let deemedForDays: Date | null = null
+    if (isJpW) {
+      const latest = records
+        .filter(r => (r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)
+        .map(r => r.grantDate).filter((d): d is string => !!d).sort().slice(-1)[0]
+      if (latest) {
+        const nx = jpNextGrantAfter(latest)
+        nextGrant = new Date(nx.grantDate + 'T00:00:00')
+        deemedForDays = new Date(nx.deemedDate + 'T00:00:00')
+      } else {
+        nextGrant = new Date(addMonthsSafe(w.hireDate, 6) + 'T00:00:00')
+      }
+      // 同じ日の付与が既にあれば予定に出さない
+      const nextIso = `${nextGrant.getFullYear()}-${String(nextGrant.getMonth() + 1).padStart(2, '0')}-${String(nextGrant.getDate()).padStart(2, '0')}`
+      if (records.some(r => r.grantDate === nextIso && ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0))) continue
+    } else {
+      nextGrant = calcNextGrantDate(w.hireDate, grantMonth, records)
+    }
     if (!nextGrant) continue
 
     const diffMs = nextGrant.getTime() - today.getTime()
@@ -181,7 +203,7 @@ export function getUpcomingGrants(
     // 過去の付与日（まだ付与されていない分）も含む: diffDays >= -30
     // 未来30日以内も含む
     if (diffDays >= -30 && diffDays <= withinDays) {
-      const legalDays = calcLegalPLDays(w.hireDate, nextGrant)
+      const legalDays = calcLegalPLDays(w.hireDate, deemedForDays || nextGrant)
       if (legalDays <= 0) continue
 
       // 繰越の正確な値は出面データが必要（この関数は同期・軽量が前提のため計算しない）。

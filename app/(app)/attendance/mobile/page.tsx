@@ -351,13 +351,13 @@ export default function ForemanMobilePage() {
     if (!password || !siteId) return
     setReqLoading(true)
     try {
-      const nextYm = m === 12 ? `${y + 1}01` : `${y}${pad2(m + 1)}`
-      const [lr1, lr2, hr] = await Promise.all([
-        fetch(`/api/leave-request?ym=${ym}`, { headers: { 'x-admin-password': password } }).then(r => r.ok ? r.json() : null),
-        fetch(`/api/leave-request?ym=${nextYm}`, { headers: { 'x-admin-password': password } }).then(r => r.ok ? r.json() : null),
+      // 2026-09-02 修正: 表示月＋翌月だけでなく全件を取り、承認待ちで絞る
+      //   （2ヶ月より先の申請が職長画面に出ず放置されていた）
+      const [lr, hr] = await Promise.all([
+        fetch('/api/leave-request', { headers: { 'x-admin-password': password } }).then(r => r.ok ? r.json() : null),
         fetch('/api/home-long-leave', { headers: { 'x-admin-password': password } }).then(r => r.ok ? r.json() : null),
       ])
-      const all: LeaveReq[] = [...(lr1?.requests || []), ...(lr2?.requests || [])]
+      const all: LeaveReq[] = lr?.requests || []
       setLeaveReqs(all
         .filter(r => r.siteId === siteId && (r.status === 'pending' || r.status === 'foreman_approved'))
         .sort((a, b) => a.date.localeCompare(b.date)))
@@ -368,7 +368,7 @@ export default function ForemanMobilePage() {
     } catch { /* ignore */ } finally {
       setReqLoading(false)
     }
-  }, [password, siteId, ym, y, m, data])
+  }, [password, siteId, data])
 
   useEffect(() => { if (tab === 'requests') fetchRequests() }, [tab, fetchRequests])
 

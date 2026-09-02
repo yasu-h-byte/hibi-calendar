@@ -451,6 +451,12 @@ export async function GET(request: NextRequest) {
           realCarryOver = calcLegalCarryOver({ prevGrant, prevCarry, prevAdj, prevBuyout, periodUsed })
         }
 
+        // 日本人は繰越なし（期末買取制）。2026-09-02 修正: 旧は前期残を繰越として提示し、
+        //   validateGrantInput が carryOver>0 を拒否して「付与に失敗しました」になっていた
+        {
+          const wU = main.workers.find(x => x.id === u.workerId)
+          if (!wU?.visa || wU.visa === 'none') realCarryOver = 0
+        }
         const realTotal = u.days + realCarryOver
         const grantDateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
         notifications.push({

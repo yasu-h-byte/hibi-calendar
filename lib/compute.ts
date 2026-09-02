@@ -2764,13 +2764,19 @@ export function calculateVietnameseSalary(
 
   // ── 支給項目計算 ──
   const fixedBasePay = ceilYen(hourlyRate * baseDays * 7)  // 支給: 切り上げ（月給制: 20日固定）
-  const additionalDays = Math.max(0, regularWorkDays - baseDays)
+  // 2026-09-02 修正（有給総点検）: 試験日(exam)は「給与計算では出勤と同等」（types/index.ts）。
+  //   欠勤側（absentDays）は以前から試験を出勤扱いにしていたのに、枠超えの計算だけ
+  //   regularWorkDays しか見ておらず、出勤19＋試験1＋有給1 の月で有給日給が消えていた
+  //   （試験で20日枠が埋まった分、有給が「枠内に内包」扱いになる非対称）。
+  //   出勤＋試験を「枠を埋めた日数」として追加所定・有給日給の両方で使う。
+  const attendedDays = regularWorkDays + examDays
+  const additionalDays = Math.max(0, attendedDays - baseDays)
   const additionalAllowance = ceilYen(hourlyRate * additionalDays * 7)  // 支給: 切り上げ
   // 2026-06 社労士対応: 「20日(基本給枠)を超えた有給」を有給日給として別途支給。
   //   月給制(基本給20日固定)は維持しつつ、20日以上働いて有給も取った人の有給未払いを是正。
-  //   ・基本給枠(20日)を出勤で埋めた残りの有給日のみが対象（枠内の有給は基本給に内包）。
-  //   ・absentDays(欠勤控除) は worked+有給 < 20 のときだけ発生 → paidLeaveDays とは排他（二重計上なし）。
-  const totalBeyondBase = Math.max(0, (regularWorkDays + plUsed) - baseDays)
+  //   ・基本給枠(20日)を出勤(＋試験)で埋めた残りの有給日のみが対象（枠内の有給は基本給に内包）。
+  //   ・absentDays(欠勤控除) は worked+試験+有給 < 20 のときだけ発生 → paidLeaveDays とは排他（二重計上なし）。
+  const totalBeyondBase = Math.max(0, (attendedDays + plUsed) - baseDays)
   const paidLeaveDays = totalBeyondBase - additionalDays  // 20日枠を超えた有給日数
   const paidLeaveAllowance = ceilYen(hourlyRate * paidLeaveDays * 7)  // 有給日給: 切り上げ
 

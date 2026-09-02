@@ -404,6 +404,36 @@ export function computeAttendanceDeleteFields(entry: AttendanceEntry): string[] 
   return ALL_KNOWN_FIELDS.filter(f => !present.has(f))
 }
 
+/**
+ * その日の**全現場キー**から有給(p)を外す（2026-09-02 共通化・有給総点検 第4回）。
+ *
+ * 承認後に職長が「現場違い修正」で別現場へ移していると、「申請時の siteId」だけを
+ * 狙った削除は空振りして p が残る（残数が戻らず、給与では有給2日扱い）。
+ * revoke は 2026-08-27 に全現場走査へ直したが modify_date が取り残されていたため、
+ * 両者からこのヘルパーを呼ぶ形に統一した。
+ *
+ * @returns p を外したキー（0件なら対象日に p が無かった）
+ */
+export async function removePaidLeaveForDay(workerId: number, dateIso: string): Promise<string[]> {
+  const ym = dateIso.slice(0, 4) + dateIso.slice(5, 7)
+  const day = String(parseInt(dateIso.slice(8, 10), 10))
+  const ref = doc(db, 'demmen', `att_${ym}`)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return []
+  const d = (snap.data().d || {}) as Record<string, AttendanceEntry>
+  const suffix = `_${workerId}_${ym}_${day}`
+  const updates: Record<string, unknown> = {}
+  const removed: string[] = []
+  for (const [k, e] of Object.entries(d)) {
+    if (k.endsWith(suffix) && e?.p) {
+      updates[`d.${k}.p`] = deleteField()
+      removed.push(k)
+    }
+  }
+  if (removed.length > 0) await updateDoc(ref, updates)
+  return removed
+}
+
 export async function setAttendanceEntry(
   siteId: string,
   workerId: number,
@@ -545,7 +575,7 @@ export async function removeFinalApprovalForDay(
 //  スタッフの現場一覧取得（assign + massign対応）
 // ────────────────────────────────────────
 
-export async function getStaffSites(workerId: number): Promise<{ id: string; name: string }[]> {
+export async function getStaffSites(workerId: number, ymOverride?: string): Promise<{ id: string; name: string }[]> {
   const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
   if (!mainDoc.exists()) return []
 
@@ -554,8 +584,11 @@ export async function getStaffSites(workerId: number): Promise<{ id: string; nam
   const assign = (data.assign || {}) as Record<string, { workers?: number[] }>
   const massign = (data.massign || {}) as Record<string, { workers?: number[] }>
 
+  // 2026-09-02: 対象月（申請日の月）を渡せるようにした。旧は常に「今月」の配置で
+  //   現場を決めていたため、来月から別現場へ移る人の来月分の有給が旧現場に書かれ、
+  //   新現場の出面グリッド・職長画面に出ない（残数・給与には効く）状態になっていた
   const now = new Date()
-  const ym = ymKey(now.getFullYear(), now.getMonth() + 1)
+  const ym = ymOverride ? ymOverride.replace('-', '') : ymKey(now.getFullYear(), now.getMonth() + 1)
 
   const result: { id: string; name: string }[] = []
 
@@ -586,7 +619,10 @@ export async function getForemanSite(foremanId: number): Promise<Site | null> {
 
   const data = mainDoc.data()
   const sites = (data.sites || []) as Record<string, unknown>[]
-  const mforeman = (data.mforeman || {}) as Record<string, { foreman?: number }>
+  // 2026-09-02 修正: 月次職長交代の書き込み形式は { wid }（app/api/sites）なのに、ここは
+  //   .foreman しか見ておらず、交代後の職長がトークン職長画面で 403 になっていた
+  //   （lib/auth.ts computeForemanSites と同じく foreman ?? wid で両対応）
+  const mforeman = (data.mforeman || {}) as Record<string, { foreman?: number; wid?: number }>
 
   const now = new Date()
   const ym = ymKey(now.getFullYear(), now.getMonth() + 1)
@@ -597,7 +633,7 @@ export async function getForemanSite(foremanId: number): Promise<Site | null> {
 
     // Check monthly foreman override
     const monthKey = `${siteId}_${ym}`
-    const monthForeman = mforeman[monthKey]?.foreman
+    const monthForeman = mforeman[monthKey]?.foreman ?? mforeman[monthKey]?.wid
     const defaultForeman = s.foreman as number
 
     if ((monthForeman || defaultForeman) === foremanId) {

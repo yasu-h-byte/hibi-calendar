@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
+import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
-import { getStaffSites, ymKey, attKey, setAttendanceEntry, isScheduledWorkDay, computeAttendanceDeleteFields } from '@/lib/attendance'
-import { getMainData, getAttData, parseDKey } from '@/lib/compute'
+import { getStaffSites, ymKey, setAttendanceEntry, isScheduledWorkDay, computeAttendanceDeleteFields } from '@/lib/attendance'
+import { getMainData } from '@/lib/compute'
 import { isMonthLockedInLocks } from '@/lib/locks'
-import { ensureDocExists } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
-import { selectActiveGrantRecord } from '@/lib/leave-compute'
-import { todayJstIso } from '@/lib/date-utils'
 
 interface LeaveRequest {
   workerId: number
@@ -31,6 +28,8 @@ interface LeaveRequest {
   // スタッフによる取り消し
   cancelledAt?: string
 }
+
+const SELF_APPROVE_ERROR = '自分の有給申請は自分で職長承認できません。管理者・事業責任者に依頼してください'
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,11 +77,14 @@ export async function POST(request: NextRequest) {
       // Determine siteId: use provided or first assigned site
       let resolvedSiteId = siteId
       if (!resolvedSiteId) {
-        const sites = await getStaffSites(worker.id)
+        // 申請日の月の配置で現場を決める（2026-09-02: 旧は今月の配置）
+        const sites = await getStaffSites(worker.id, ym)
         if (sites.length > 0) {
           resolvedSiteId = sites[0].id
         } else {
-          return NextResponse.json({ error: 'No site assigned' }, { status: 400 })
+          return NextResponse.json({
+            error: '配置されている現場がないため有給を申請できません。会社に連絡してください / Chưa được phân công công trường nên không thể xin nghỉ phép. Vui lòng liên hệ công ty',
+          }, { status: 400 })
         }
       }
 
@@ -133,93 +135,36 @@ export async function POST(request: NextRequest) {
       }
 
       // ── 有給残日数チェック ──
-      // 各スタッフの最新PLレコードから残日数を計算
-      const main = await getMainData()
-      const wKey = String(worker.id)
-      const plRecords = (main.plData[wKey] || []) as { fy: string | number; grantDate?: string; grant?: number; grantDays?: number; carry?: number; carryOver?: number; adj?: number; adjustment?: number; _archived?: boolean }[]
-
-      // ★ 「その日に有効な付与レコード」を選ぶこと（2026-08-04 修正）
-      //   旧実装は配列の最後を取っていたため、次期の付与レコードが先に作られていると
-      //   「まだ来ていない未来の枠」で残数を判定し、当期の枠を使い切っていても
-      //   申請が通り続けた（グエン ミン トゥアン: 当期17日枠を21日消化）。
-      //   すべて未来なら null → 残0扱いで却下する。
-      const fyRecord = selectActiveGrantRecord(plRecords, todayJstIso())
-
-      if (fyRecord) {
-        // 新優先・旧フォールバック（GET側と統一）
-        const grantDays   = fyRecord.grantDays  ?? fyRecord.grant  ?? 0
-        const carryOver   = fyRecord.carryOver  ?? fyRecord.carry  ?? 0
-        const adjustment  = fyRecord.adjustment ?? fyRecord.adj    ?? 0
-        const total = grantDays + carryOver
-
-        // 付与日から1年間の出面データからPL消化日数を集計
-        let periodUsed = 0
-        const grantDate = fyRecord.grantDate ? new Date(fyRecord.grantDate) : null
-        if (grantDate && !isNaN(grantDate.getTime())) {
-          const gdEnd = new Date(grantDate)
-          gdEnd.setFullYear(gdEnd.getFullYear() + 1)
-          const startYm = ymKey(grantDate.getFullYear(), grantDate.getMonth() + 1)
-          const endYm = ymKey(gdEnd.getFullYear(), gdEnd.getMonth() + 1)
-
-          // 付与日から1年間の月をカバー
-          const checkMonths: string[] = []
-          let cur = new Date(grantDate.getFullYear(), grantDate.getMonth(), 1)
-          while (ymKey(cur.getFullYear(), cur.getMonth() + 1) <= endYm) {
-            checkMonths.push(ymKey(cur.getFullYear(), cur.getMonth() + 1))
-            cur.setMonth(cur.getMonth() + 1)
-          }
-
-          for (const fym of checkMonths) {
-            const att = await getAttData(fym)
-            for (const [key, entry] of Object.entries(att.d)) {
-              if (!entry) continue
-              const e = entry as { p?: number | boolean }
-              if (e.p) {  // truthy 判定（旧データの p:true 互換。他経路と統一 2026-08-27）
-                const pk = parseDKey(key)
-                if (parseInt(pk.wid) === worker.id) {
-                  const entryDate = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-                  if (entryDate >= grantDate && entryDate < gdEnd) periodUsed++
-                }
-              }
-            }
-          }
+      // 2026-09-02 修正（有給総点検・第4回）: 判定を共通の getLeaveBalance に一本化し、
+      //   基準日を「今日」ではなく「申請日」にした（PC グリッド経路と同じ）。
+      //   旧: 今日の付与期で判定 → 10/1 の新付与前に来期日付を申請すると当期残で判定され、
+      //       当期残0なら来期枠があっても却下・当期残があれば来期枠を超えても通った
+      //       （日本人は全員 10/1 付与なので 9 月中の 10 月分申請が全部この穴を通る）。
+      //   旧実装は買取(buyoutDays)も引いておらず、承認時に初めて LEAVE_OVERDRAFT で止まっていた。
+      //   申請中（pending/foreman_approved）は「申請日と同じ付与期」の分だけ上乗せして引く
+      //   （過剰申請の抑止・従来どおり）。
+      {
+        const { getLeaveBalance } = await import('@/lib/leave-balance')
+        const { addMonthsSafe } = await import('@/lib/date-utils')
+        const bal = await getLeaveBalance(worker.id, date, date)
+        if (bal.noGrant) {
+          return NextResponse.json({ error: 'No remaining leave' }, { status: 400 })
         }
-
-        // pending の申請もカウント
-        // 2026-06-XX 修正 (CR-6): 当期 (grantDate〜+1年) 内の pending のみカウント
-        //   旧: 全期間の pending → 来期分も控除 → 当期残あるのに却下されるバグ
-        //   新: 当期内日付の pending のみ
-        // 2026-08-27 修正（有給総点検・第3回）: foreman_approved も控除に含める。
-        //   職長承認済み（まだ p 未書込）は pending と同じ「確定前の枠取り」なのに
-        //   数えておらず、残1日で2件目の申請が通っていた（最終承認時に止まるが、
-        //   承認画面に矛盾した2件が並ぶ）
+        const periodStart = bal.grantDate
+        const periodEnd = addMonthsSafe(bal.grantDate, 12)
         const pendingQ = query(
           collection(db, 'leaveRequests'),
           where('workerId', '==', worker.id),
           where('status', 'in', ['pending', 'foreman_approved'])
         )
         const pendingSnap = await getDocs(pendingQ)
-        const gdStartIso = grantDate ? grantDate.toISOString().slice(0, 10) : ''
-        const gdEndIso = grantDate ? (() => {
-          const e = new Date(grantDate)
-          e.setFullYear(e.getFullYear() + 1)
-          return e.toISOString().slice(0, 10)
-        })() : ''
         const pendingCount = pendingSnap.docs.filter(d => {
-          const pd = d.data().date
-          if (!pd) return false
-          if (!gdStartIso || !gdEndIso) return true  // grantDate なし時は従来通り全カウント
-          return pd >= gdStartIso && pd < gdEndIso
+          const pd = d.data().date as string | undefined
+          return !!pd && pd !== date && pd >= periodStart && pd < periodEnd
         }).length
-
-        const used = adjustment + periodUsed + pendingCount
-        const remaining = Math.max(0, total - used)
-
-        if (remaining <= 0) {
+        if (bal.remaining - pendingCount <= 0) {
           return NextResponse.json({ error: 'No remaining leave' }, { status: 400 })
         }
-      } else {
-        return NextResponse.json({ error: 'No remaining leave' }, { status: 400 })
       }
 
       const leaveReq: LeaveRequest & { stateHistory?: unknown } = {
@@ -288,6 +233,10 @@ export async function POST(request: NextRequest) {
             siteForemen: foremenOfSite,
           }, { status: 403 })
         }
+        // 2026-09-02 追加: 自分の申請を自分で職長承認することは不可（管理者・事業責任者に依頼）
+        if (data.workerId === worker.id) {
+          return NextResponse.json({ error: SELF_APPROVE_ERROR }, { status: 403 })
+        }
         approvedBy = worker.id
       } else {
         // パスワード認証: actor 種別を確認
@@ -296,13 +245,22 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
         if (typeof authUser.actor === 'number') {
-          // 個人パスワード: 配置現場の foreman であることを assert
-          if (!foremenOfSite.includes(authUser.actor)) {
+          // 個人パスワード: 管理者・事業責任者（政仁さん・役員）は現場を問わず可。
+          //   それ以外は配置現場の foreman であることを assert。
+          // 2026-09-02 修正（有給総点検・第4回）: 旧は数値 actor を一律「現場職長」扱いにしていたため、
+          //   政仁さん（actor=1）や役員の個人パスワードがここで 403 になり、画面には職長承認ボタンが
+          //   出るのに押すと必ず失敗した（職長不在の現場・職長本人の申請を捌く経路が無かった）。
+          const roleFA = await getApiRole(request, data.ym)
+          const isManagerFA = !!roleFA && isManagerRole(roleFA.role)
+          if (!isManagerFA && !foremenOfSite.includes(authUser.actor)) {
             return NextResponse.json({
               error: `現場「${data.siteId}」の職長権限がありません`,
               yourId: authUser.actor,
               siteForemen: foremenOfSite,
             }, { status: 403 })
+          }
+          if (!isManagerFA && data.workerId === authUser.actor) {
+            return NextResponse.json({ error: SELF_APPROVE_ERROR }, { status: 403 })
           }
           approvedBy = authUser.actor
         } else {
@@ -331,9 +289,10 @@ export async function POST(request: NextRequest) {
       if (!authForApprove.authorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
-      const apIsAdmin = authForApprove.actor === 'admin' || authForApprove.actor === 'super-admin'
-      const apIsApprover = typeof authForApprove.actor === 'number' && authForApprove.actor === 1  // 政仁さん
-      if (!apIsAdmin && !apIsApprover) {
+      // 2026-09-02 修正: 判定を getApiRole/isManagerRole に統一（役員の個人パスワード＝admin ロールも可。
+      //   旧は admin パスワード or actor===1 のみで、役員の個人ログインは UI にボタンが出るのに 403 だった）
+      const apRole = await getApiRole(request)
+      if (!apRole || !isManagerRole(apRole.role)) {
         return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
       }
 
@@ -373,7 +332,8 @@ export async function POST(request: NextRequest) {
       //   意図的な超過は allowOverdraft:true でのみ通し、activityLog に残す。
       {
         const { getLeaveBalance } = await import('@/lib/leave-balance')
-        const bal = await getLeaveBalance(data.workerId, undefined, data.date)
+        // 2026-09-02 修正: 基準日を「今日」から「申請日」に（来期日付の承認を当期残で判定していた）
+        const bal = await getLeaveBalance(data.workerId, data.date, data.date)
         if (bal.remaining < 1 && body.allowOverdraft !== true) {
           return NextResponse.json({
             error: bal.noGrant
@@ -446,7 +406,9 @@ export async function POST(request: NextRequest) {
       }
 
       const data = snap.data() as LeaveRequest
-      if (data.status === 'approved' || data.status === 'rejected') {
+      // 2026-09-02 修正: 却下できるのは pending / foreman_approved のみ
+      //   （旧は approved/rejected だけ除外 → cancelled・revoked を却下でき履歴が「取消→却下」に化けた）
+      if (data.status !== 'pending' && data.status !== 'foreman_approved') {
         return NextResponse.json({ error: 'Already processed' }, { status: 409 })
       }
 
@@ -477,7 +439,10 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
         if (typeof authUser.actor === 'number') {
-          if (!rejForemen.includes(authUser.actor)) {
+          // 管理者・事業責任者は現場を問わず可（foreman_approve と同じ 2026-09-02 修正）
+          const roleRj = await getApiRole(request, data.ym)
+          const isManagerRj = !!roleRj && isManagerRole(roleRj.role)
+          if (!isManagerRj && !rejForemen.includes(authUser.actor)) {
             return NextResponse.json({ error: `現場「${data.siteId}」の職長権限がありません` }, { status: 403 })
           }
           authWorkerId = authUser.actor
@@ -560,9 +525,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
       // admin / super-admin / 承認者(政仁さん, workerId=1) のみ
-      const isAdmin = authUser.actor === 'admin' || authUser.actor === 'super-admin'
-      const isApprover = typeof authUser.actor === 'number' && authUser.actor === 1  // 政仁さん
-      if (!isAdmin && !isApprover) {
+      const rvRole = await getApiRole(request)
+      if (!rvRole || !isManagerRole(rvRole.role)) {
         return NextResponse.json({ error: 'Admin/approver only' }, { status: 403 })
       }
       const { requestId, reason } = body
@@ -591,20 +555,16 @@ export async function POST(request: NextRequest) {
       // 2026-08-27 修正（有給総点検・第3回）: 申請時の siteId 固定をやめ、
       //   その日の全現場キーから p を削除する。承認後に職長が現場を付け替えていると
       //   旧実装は削除が空振りし、「取消済みなのに p が残って残数が戻らない」状態になっていた
-      const attDay = data.date.slice(8, 10).replace(/^0/, '')
-      const attRef = doc(db, 'demmen', `att_${attYm}`)
+      // 2026-09-02 修正（有給総点検・第4回）: 削除を共通ヘルパー removePaidLeaveForDay に寄せ、
+      //   失敗したら revoked 化せずに中断する（旧: catch で握りつぶして revoked に更新 →
+      //   「取消済みなのに p が残り残数が戻らない」状態を作っていた）
       try {
-        const attSnap = await getDoc(attRef)
-        const attD = (attSnap.exists() ? attSnap.data().d : {}) as Record<string, { p?: number | boolean }>
-        const suffix = `_${data.workerId}_${attYm}_${attDay}`
-        const updates: Record<string, unknown> = {}
-        for (const [k, e] of Object.entries(attD)) {
-          if (k.endsWith(suffix) && e?.p) updates[`d.${k}.p`] = deleteField()
-        }
-        if (Object.keys(updates).length > 0) await updateDoc(attRef, updates)
-        else console.warn(`[revoke] 対象日に p が見つかりません: wid=${data.workerId} ${data.date}`)
+        const { removePaidLeaveForDay } = await import('@/lib/attendance')
+        const removed = await removePaidLeaveForDay(data.workerId, data.date)
+        if (removed.length === 0) console.warn(`[revoke] 対象日に p が見つかりません: wid=${data.workerId} ${data.date}`)
       } catch (delErr) {
-        console.warn('[revoke] att p 削除失敗:', delErr)
+        console.error('[revoke] att p 削除失敗:', delErr)
+        return NextResponse.json({ error: '出面の有給を消せなかったため取消を中断しました。もう一度お試しください' }, { status: 500 })
       }
       // leaveRequest doc を revoked 状態に
       const revokeHistory = (data as { revokeHistory?: unknown[] }).revokeHistory || []
@@ -639,9 +599,8 @@ export async function POST(request: NextRequest) {
       if (!authForModify.authorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
-      const mdIsAdmin = authForModify.actor === 'admin' || authForModify.actor === 'super-admin'
-      const mdIsApprover = typeof authForModify.actor === 'number' && authForModify.actor === 1
-      if (!mdIsAdmin && !mdIsApprover) {
+      const mdRole = await getApiRole(request)
+      if (!mdRole || !isManagerRole(mdRole.role)) {
         return NextResponse.json({ error: '日付変更は管理者・事業責任者のみ実行できます' }, { status: 403 })
       }
 
@@ -707,15 +666,32 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // ④ 付与期をまたぐ移動は、移動先の期の残数を確認（2026-09-02 追加）
+      {
+        const { getLeaveBalance } = await import('@/lib/leave-balance')
+        const balOld = await getLeaveBalance(data.workerId, data.date, data.date)
+        const balNew = await getLeaveBalance(data.workerId, newDate, newDate)
+        if (balNew.grantDate !== balOld.grantDate && balNew.remaining < 1 && body.allowOverdraft !== true) {
+          return NextResponse.json({
+            error: balNew.noGrant
+              ? `変更先の日付には有給が付与されていません（付与レコードなし）`
+              : `変更先の付与期の残数が 0 日です（枠 ${balNew.total}日 / 消化 ${balNew.used}日）`,
+            code: 'LEAVE_OVERDRAFT',
+            balance: balNew,
+          }, { status: 409 })
+        }
+      }
+
       // approved 状態の場合は att データの差し替えが必要
       if (data.status === 'approved') {
-        // 2026-06-XX 修正 (IM-11): p フィールドのみピンポイント削除
-        //   旧: エントリ全体を deleteField() → 併存フィールド (m, r, note 等) も巻添え消失
-        //   新: dot-notation で .p のみ削除 → 他フィールドは温存
-        const oldKey = attKey(data.siteId, data.workerId, data.ym, data.day)
-        const oldAttRef = doc(db, 'demmen', `att_${data.ym}`)
-        await ensureDocExists(oldAttRef)
-        await updateDoc(oldAttRef, { [`d.${oldKey}.p`]: deleteField() })
+        // 2026-09-02 修正（有給総点検・第4回）: 旧日の p は「申請時の siteId」だけでなく
+        //   その日の全現場から外す（revoke と同じ共通ヘルパー）。職長が現場を付け替えた後に
+        //   日付変更すると旧 p が残り、残数が1日余計に減って給与も有給2日扱いになっていた。
+        //   ヘルパーは dot-notation で .p だけ消す（併存フィールドは温存＝IM-11 の方針維持）
+        {
+          const { removePaidLeaveForDay } = await import('@/lib/attendance')
+          await removePaidLeaveForDay(data.workerId, data.date)
+        }
 
         // 新日付に p=1 を書込
         // 残骸掃除つきで p を書く（approve と同方式・2026-08-27）

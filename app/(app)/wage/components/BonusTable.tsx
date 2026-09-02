@@ -116,9 +116,12 @@ export default function BonusTable() {
     // 2026-10-01 付与期からは年5日を確保するため「残日数 − 5日」が買取の上限
     // （代表決定 2026-08-31・docs/paid-leave.md）。それ以前の期は全額買取できる。
     const capped = !!inf?.leaveGrantDate && inf.leaveGrantDate >= '2026-10-01'
+    // 期末(9/30)より前の支給日（夏季賞与など）では買取を自動セットしない（2026-09-02）。
+    //   サーバ側も期中の year-end 記録は拒否する
+    const isYearEndBonus = paidOn.slice(5) >= '10-01'
     const days = o.days !== undefined
       ? o.days
-      : attendanceBonusDays(inf?.leaveRemaining || 0, { capForFiveDayObligation: capped })
+      : (isYearEndBonus ? attendanceBonusDays(inf?.leaveRemaining || 0, { capForFiveDayObligation: capped }) : 0)
     const attendanceAmount = attendanceBonusAmount(days, rate)
     const nonSmokerAmount = inf?.nonSmoker ? NON_SMOKER_ALLOWANCE : 0
     const child = childAllowance(inf?.children || [], paidOn)

@@ -65,7 +65,11 @@ export async function getLeaveBalance(
   }
 
   const norm = normalizePLRecord(rec)
-  const total = norm.grantDays + norm.carryOver
+  // 日本人は期末買取制のため繰越なし（/api/leave GET と同じ扱いに統一・2026-09-02）。
+  //   移行データに carryOver が残っていても残数に足さない
+  const wRec = main.workers.find(w => w.id === workerId)
+  const isJp = !wRec?.visa || wRec.visa === 'none'
+  const total = norm.grantDays + (isJp ? 0 : norm.carryOver)
   // buyoutDays が未キャッシュの移行データは履歴合算へフォールバック（computeUsedDays と統一 2026-08-27）
   const recB = rec as { buyoutDays?: number; buyoutHistory?: Array<{ days?: number }> }
   const buyoutDays = recB.buyoutDays
