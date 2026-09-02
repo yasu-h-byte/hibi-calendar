@@ -651,17 +651,8 @@ export async function POST(request: NextRequest) {
           // 残チェックでエラーが出ても申請自体は通す（既存運用継続性）
           console.warn('[staff/leave] 残チェック失敗:', chkErr)
         }
-        // 2026-08-27 追加（休暇届総点検）: 帰国期間中は有給の直接入力も不可
-        {
-          const { isDateInApprovedHomeLeave } = await import('@/lib/homeLeave')
-          const targetDate0 = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-          if (await isDateInApprovedHomeLeave(worker.id, targetDate0)) {
-            return NextResponse.json(
-              { error: 'この日は帰国期間中のため有給にできません / Ngày này đang trong thời gian về nước, không thể lấy phép' },
-              { status: 400 }
-            )
-          }
-        }
+        // 2026-09-02（代表決定）: 帰国期間中でも有給にできる（旧: 一律ブロック）。
+        //   給与側の穴（有給を充てても賃金が出ない）は countHomeLeaveDaysInRange で根治済み。
         // 2026-08-27 追加（有給総点検・第3回）: 非稼働日ガード。
         //   申請経路(request)・時季指定・日付変更には isScheduledWorkDay があるのに
         //   この直接入力経路だけ無く、カレンダー休日への有給＝有給日給の過払いが

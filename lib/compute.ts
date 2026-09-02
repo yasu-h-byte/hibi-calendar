@@ -347,6 +347,7 @@ export function countHomeLeaveDaysInRange(
   rangeStartIso: string,
   rangeEndIso: string,
   workedDatesIso?: Set<string>,
+  paidLeaveDatesIso?: Set<string>,
 ): { days: number; earlyReturnDates: string[] } {
   if (!homeLeaves || homeLeaves.length === 0) return { days: 0, earlyReturnDates: [] }
   const days = new Set<string>()
@@ -377,6 +378,14 @@ export function countHomeLeaveDaysInRange(
       if (days.delete(d)) earlyReturnDates.push(d)
     }
     earlyReturnDates.sort()
+  }
+  // 2026-09-02 追加（帰国期間中の有給を解禁）: 有給を充てた日は帰国日として数えない。
+  //   帰国日は「無給・非欠勤」を在籍日数からの除外で表現しているため、有給の日まで
+  //   除外すると基本給・所定日数がその日ぶん縮み、**残数だけ減って賃金が出ない**。
+  //   有給は賃金が発生する日なので、出勤日と同じく在籍側に残す。
+  //   （早期復帰の警告とは意味が違うので earlyReturnDates には入れない）
+  if (paidLeaveDatesIso && paidLeaveDatesIso.size > 0) {
+    for (const d of paidLeaveDatesIso) days.delete(d)
   }
   return { days: days.size, earlyReturnDates }
 }
@@ -1577,7 +1586,14 @@ export function computeMonthly(
           if (!kym || !kday) continue
           workedIso.add(`${kym.slice(0, 4)}-${kym.slice(4, 6)}-${kday.padStart(2, '0')}`)
         }
-        const hk = countHomeLeaveDaysInRange(homeLeaves, wm.id, startIso, endIso, workedIso)
+        // 有給を充てた日（_plDaySeen は 'YYYYMM_D' 形式）。帰国日から除外するため ISO へ直す
+        const plIso = new Set<string>()
+        for (const k of wm._plDaySeen || []) {
+          const [kym, kday] = k.split('_')
+          if (!kym || !kday) continue
+          plIso.add(`${kym.slice(0, 4)}-${kym.slice(4, 6)}-${kday.padStart(2, '0')}`)
+        }
+        const hk = countHomeLeaveDaysInRange(homeLeaves, wm.id, startIso, endIso, workedIso, plIso)
         if (hk.earlyReturnDates.length > 0) {
           // 申請より早く復帰した日。給与は実データで正しく計算されるが、
           // 申請の終了日を直すべきなので月次画面に出して管理者に気づかせる。

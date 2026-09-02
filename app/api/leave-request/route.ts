@@ -98,17 +98,13 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // 2026-08-27 追加（休暇届総点検）: 帰国期間中の日は有給を申請できない。
-      //   帰国日は無給・非欠勤の扱いで、有給と両立しない（旧ルール者は残数だけ
-      //   消化して支給0になる計算穴もあった）。帰国期間の変更が先。
-      {
-        const { isDateInApprovedHomeLeave } = await import('@/lib/homeLeave')
-        if (await isDateInApprovedHomeLeave(worker.id, date)) {
-          return NextResponse.json({
-            error: 'この日は帰国期間中のため有給を申請できません。復帰日が変わった場合は会社に連絡してください / Ngày này đang trong thời gian về nước, không thể xin nghỉ phép. Nếu ngày trở lại thay đổi, vui lòng liên hệ công ty',
-          }, { status: 400 })
-        }
-      }
+      // 2026-09-02（代表決定）: 帰国期間中でも有給を申請できる。
+      //   一時帰国の日に有給を充てて賃金を受け取りたい、という運用要望に対応した。
+      //   旧: 2026-08-27 に一律ブロックしていた（帰国日は無給・非欠勤の扱いで、
+      //   有給を入れても旧ルール者は残数だけ減って支給0になる計算穴があったため）。
+      //   穴は lib/compute.ts の countHomeLeaveDaysInRange 側で根治済み
+      //   （有給を充てた日は帰国日数に数えない＝基本給・所定日数が縮まない）。
+      //   稼働日ガード（上の isScheduledWorkDay）は帰国中も従来どおり効く。
 
       // Check for duplicate
       // 却下 (rejected)・取り消し (cancelled)・管理者取消 (revoked) は上から再申請OK。
@@ -394,16 +390,9 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 2026-08-27 追加（休暇届総点検）: 申請後に帰国が承認されたケースを承認時にも再チェック。
-      //   ここを通すと computeAttendanceDeleteFields が hk を消して帰国期間と出面が食い違う
-      {
-        const { isDateInApprovedHomeLeave } = await import('@/lib/homeLeave')
-        if (await isDateInApprovedHomeLeave(data.workerId, data.date)) {
-          return NextResponse.json({
-            error: `${data.workerName} さんの ${data.date} は帰国期間中です。有給にする場合は先に休暇管理画面で帰国期間を修正してください`,
-          }, { status: 409 })
-        }
-      }
+      // 2026-09-02（代表決定）: 帰国期間中の承認も可。承認で出面へ p を書くと
+      //   computeAttendanceDeleteFields がその日の hk を落とすが、帰国期間
+      //   （homeLongLeave）自体は変えないため台帳は残る。給与も有給日として計算される。
 
       // 2026-08-27 修正（有給総点検・第3回）:
       //   - 出面を先に書く（att 書込失敗時に「承認済みなのに p 無し」の不整合を作らない。

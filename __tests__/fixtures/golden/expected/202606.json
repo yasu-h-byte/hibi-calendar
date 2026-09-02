@@ -621,19 +621,27 @@
    "restDays": 0,
    "siteOffDays": 0,
    "examDays": 0,
-   "cost": 0,
+   "cost": 66018,
    "otCost": 0,
-   "totalCost": 0,
+   "totalCost": 66018,
    "absence": 0,
    "absentCost": 0,
-   "netPay": 0,
+   "netPay": 66018,
    "isDispatched": false,
    "dispatchTo": "",
    "dispatchDeduction": 0,
-   "hkDays": 30,
-   "workerPrescribedDays": 0,
-   "basePay": 0,
-   "salaryNetPay": 0
+   "hkDays": 25,
+   "workerPrescribedDays": 4,
+   "prescribedHours": 26.666667,
+   "actualWorkHours": 0,
+   "legalOtHours": 0,
+   "dailyOtHours": 0,
+   "basePay": 66018,
+   "additionalAllowance": 0,
+   "otAllowance": 0,
+   "absentDeduction": 0,
+   "compBaseDeduction": 0,
+   "salaryNetPay": 66018
   },
   {
    "id": 105,
@@ -1361,11 +1369,11 @@
    "workDays": 330,
    "subWorkDays": 162.5,
    "otHours": 348,
-   "cost": 7055397,
+   "cost": 7121415,
    "subCost": 4980645,
    "billing": 18693000,
-   "profit": 6656958,
-   "profitRate": 35.6
+   "profit": 6590940,
+   "profitRate": 35.3
   },
   {
    "id": "sasazuka",
@@ -1423,10 +1431,10 @@
  "totals": {
   "workDays": 497,
   "subWorkDays": 588.5,
-  "cost": 9009228,
+  "cost": 9075246,
   "subCost": 14603202,
   "billing": 35689622,
-  "profit": 12077270,
+  "profit": 12011252,
   "otHours": 356.5
  }
 }

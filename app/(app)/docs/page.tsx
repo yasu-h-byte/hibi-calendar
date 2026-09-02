@@ -39,7 +39,7 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・就業カレンダー・夜勤の入力。8月改訂で スマホ操作の改善（今日へボタン等）・「欠」入力・同日多現場ガード を追加', url: '/manual-foreman.html', icon: '📕', badge: '8月改訂', updated: '2026-08-31' },
 
   // ── 有給担当（事務・事業責任者） ──
-  { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元。8月改訂で 年5日の日本人特則・買取上限（残−5日）・買取の自動記録・HFU移籍の勤続通算 を追加', url: '/manual-yukyu.html', icon: '🌴', badge: '8月改訂', updated: '2026-08-31' },
+  { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元。帰国期間中でも有給を使えるようになった点（2026-09）と、年5日の日本人特則・買取上限（残−5日）・買取の自動記録・HFU移籍の勤続通算', url: '/manual-yukyu.html', icon: '🌴', badge: '9月改訂', updated: '2026-09-02' },
 
   // ── 評価（運用前・管理者のみ） ──
   { category: 'manual', roles: ['admin'], title: '評価管理マニュアル（ベトナム人）', desc: '年次評価と時給改定（入社記念日サイクル）。5タブ構成・評価者ウェイト・スコア計算・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-05-09' },

@@ -161,6 +161,80 @@ describe('computeMonthly - 帰国中（固定月給・フン）', () => {
   })
 })
 
+/**
+ * 帰国期間中に有給を充てるケース（2026-09-02 追加・代表要望）
+ *
+ * 一時帰国の日に有給を使って賃金を受け取りたい、という運用に対応した。
+ * 帰国日は「無給・非欠勤」を在籍日数からの除外で表現しているため、有給の日まで
+ * 除外すると **残数だけ減って賃金が出ない**（2026-06 のフンさん: 有給5日を消化して
+ * 支給0円）。有給を充てた日は帰国日数に数えないことでこれを防ぐ。
+ */
+describe('帰国期間中の有給', () => {
+  test('countHomeLeaveDaysInRange: 有給を充てた日は帰国日数から外れる（早期復帰の警告とは別扱い）', () => {
+    const hl = [{ workerId: 1, startDate: '2026-06-01', endDate: '2026-06-30' }]
+    const pl = new Set(['2026-06-10', '2026-06-11', '2026-06-12'])
+    const r = countHomeLeaveDaysInRange(hl, 1, '2026-06-01', '2026-06-30', undefined, pl)
+    expect(r.days).toBe(27)                  // 30日 − 有給3日
+    expect(r.earlyReturnDates).toEqual([])   // 有給は「早期復帰」ではないので警告に出さない
+  })
+
+  test('旧ルール（フン）: まるごと帰国の月でも有給を充てた日は賃金が出る', () => {
+    const fun = {
+      id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1' as const, job: 'tobi',
+      rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25,
+      hireDate: '2017-10-01', token: 'h', useOldRules: true,
+    }
+    const main = buildMain({
+      workers: [fun],
+      assign: { site1: { workers: [104], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 26 } },
+    })
+    const homeLeaves = [{ workerId: 104, startDate: '2026-06-01', endDate: SENTINEL }]
+    // 帰国期間中の 6/8〜6/12 に有給5日
+    const attD: Record<string, AttendanceEntry> = {}
+    for (const d of [8, 9, 10, 11, 12]) {
+      attD[attKey('site1', 104, '202606', d)] = { w: 0, p: 1 } as AttendanceEntry
+    }
+    const w = computeMonthly(main, attD, {}, '202606', 26, { site1: 26 }, 20, undefined, homeLeaves)
+      .workers.find(x => x.id === 104)!
+
+    expect(w.plDays).toBe(5)                        // 有給は消化されている
+    expect(w.hkDays).toBe(25)                       // 30日 − 有給5日
+    expect(w.salaryNetPay ?? 0).toBeGreaterThan(0)  // ★ 旧実装はここが 0 円だった
+    expect(w.absence ?? 0).toBe(0)                  // 欠勤にはならない
+  })
+
+  test('新ルール時給: 帰国中の有給は「基本給＋有給日給」の内訳が変わるだけで総額は同じ', () => {
+    const worker = {
+      id: 101, name: 'トゥアン', org: 'hfu', visa: 'tokutei1' as const, job: 'tobi',
+      rate: 0, hourlyRate: 1500, otMul: 1.25, hireDate: '2025-01-01', token: 'abc',
+    }
+    const mkMain = () => buildMain({
+      workers: [worker],
+      assign: { site1: { workers: [101], subcons: [] } },
+      siteWorkDays: { '202606': { site1: 26 } },
+    })
+    const homeLeaves = [{ workerId: 101, startDate: '2026-06-08', endDate: '2026-06-30' }]
+    const attD: Record<string, AttendanceEntry> = {}
+    for (const d of [1, 2, 3, 4, 5]) Object.assign(attD, dayWork('site1', 101, '202606', d))
+    for (const d of [10, 11]) attD[attKey('site1', 101, '202606', d)] = { w: 0, p: 1 } as AttendanceEntry
+
+    const w = computeMonthly(mkMain(), attD, {}, '202606', 26, { site1: 26 }, 20, undefined, homeLeaves)
+      .workers.find(x => x.id === 101)!
+
+    expect(w.plDays).toBe(2)
+    expect(w.hkDays).toBe(21)   // 6/8〜6/30 = 23日 − 有給2日
+    // 内訳合計 = 支給額（有給日給の取りこぼしが無いこと）
+    const sum = (w.fixedBasePay || 0) + (w.additionalAllowance || 0) + (w.paidLeaveAllowance || 0)
+      + (w.nonStatutoryOTAllowance || 0) + (w.otAllowance || 0)
+      + (w.legalHolidayAllowance || 0) + (w.nightAllowance || 0) + (w.compAllowance || 0)
+      - (w.absentDeduction || 0)
+    expect(w.salaryNetPay).toBe(sum)
+    // 出勤5日 + 有給2日 = 7日分が賃金として出る（1日 = 時給×7h）
+    expect(w.salaryNetPay).toBe(1500 * 7 * 7)
+  })
+})
+
 // ─────────────────────────────────────────────────────────────
 // 回帰: homeLeaves 未指定なら従来どおり
 // ─────────────────────────────────────────────────────────────

@@ -513,12 +513,12 @@
    "dispatchTo": "",
    "dispatchDeduction": 0,
    "manDays": 13,
-   "hkDays": 12,
-   "workerPrescribedDays": 14,
-   "fixedBasePay": 210756,
-   "additionalAllowance": 17563,
-   "paidLeaveDays": 4,
-   "paidLeaveAllowance": 70252,
+   "hkDays": 8,
+   "workerPrescribedDays": 17,
+   "fixedBasePay": 263445,
+   "additionalAllowance": 0,
+   "paidLeaveDays": 2,
+   "paidLeaveAllowance": 35126,
    "nonStatutoryOTHours": 16,
    "nonStatutoryOTAllowance": 40144,
    "otAllowance": 2198,
@@ -539,7 +539,7 @@
    "actualWorkHours": 107,
    "legalOtHours": 3.5,
    "dailyOtHours": 16,
-   "basePay": 210756
+   "basePay": 263445
   },
   {
    "id": 103,
