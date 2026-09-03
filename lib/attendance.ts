@@ -430,7 +430,15 @@ export async function removePaidLeaveForDay(workerId: number, dateIso: string): 
       removed.push(k)
     }
   }
-  if (removed.length > 0) await updateDoc(ref, updates)
+  if (removed.length > 0) {
+    await updateDoc(ref, updates)
+    try {
+      const { recomputeNextCarryOver } = await import('./leave-carry')
+      await recomputeNextCarryOver(workerId, dateIso)
+    } catch (e) {
+      console.warn('[removePaidLeaveForDay] 繰越再計算に失敗（p の削除は完了）:', e)
+    }
+  }
   return removed
 }
 
@@ -468,7 +476,19 @@ export async function setAttendanceEntry(
     await updateDoc(docRef, updates)
   } else {
     await setDoc(docRef, { d: { [key]: entry } }, { merge: true })
+  
+  // ── 次期レコードの繰越を追随再計算（2026-09-02・lib/leave-carry.ts）──
+  //   有給(p)を書いた／消した日が属する付与期の「次の付与レコード」の繰越を計算し直す。
+  //   半自動付与が付与日の30日前に作った繰越や、承認済み未来有給の変更に追随させる。
+  if ((entry.p ?? 0) > 0 || options.deleteFields?.includes('p')) {
+    try {
+      const { recomputeNextCarryOver } = await import('./leave-carry')
+      await recomputeNextCarryOver(workerId, `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`)
+    } catch (e) {
+      console.warn('[setAttendanceEntry] 繰越再計算に失敗（出面の保存は完了）:', e)
+    }
   }
+}
 }
 
 // ────────────────────────────────────────

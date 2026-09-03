@@ -652,6 +652,13 @@ export async function POST(request: NextRequest) {
         const { deleteField } = await import('@/lib/fsdb')
         const { updateDoc } = await import('@/lib/fsdb')
         await updateDoc(docRef, { [`d.${key}`]: deleteField() })
+        // 有給を消した場合は次期レコードの繰越を追随再計算（2026-09-02）
+        if ((prevEntry as { p?: number | boolean } | undefined)?.p) {
+          try {
+            const { recomputeNextCarryOver } = await import('@/lib/leave-carry')
+            await recomputeNextCarryOver(Number(workerId), `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`)
+          } catch (e) { console.warn('[grid] 繰越再計算に失敗:', e) }
+        }
         try {
           const { logActivity } = await import('@/lib/activity')
           await logActivity(
