@@ -442,6 +442,8 @@ export async function setAttendanceEntry(
   entry: AttendanceEntry,
   options: { deleteFields?: string[] } = {}
 ): Promise<void> {
+  // 確定済み月の短期キャッシュ（ダッシュボード用）を同一インスタンス内で無効化
+  try { (await import('./compute')).invalidateAttDataCache(ym) } catch { /* ignore */ }
   const key = attKey(siteId, workerId, ym, day)
   const docRef = doc(db, 'demmen', `att_${ym}`)
   if (options.deleteFields && options.deleteFields.length > 0) {

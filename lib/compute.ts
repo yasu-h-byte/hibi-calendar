@@ -204,6 +204,36 @@ export async function getAttData(ym: string): Promise<{
   }
 }
 
+/**
+ * 出面ドキュメントの短期キャッシュ版（2026-09-02 追加・ダッシュボード高速化）。
+ *
+ * att_YYYYMM は1件 200〜300KB あり、ダッシュボード・通知ベル・サイドバーが同時に
+ * 数十回読むのが遅さの主因だった。**呼び出し側は「前月より前の確定済み月」にだけ使うこと**
+ * （当月・前月は入力中で、出面グリッドの再取得が古い値を返すと入力が消えて見える）。
+ * 同一インスタンス内の setAttendanceEntry で無効化するが、別インスタンスの書き込みは
+ * TTL（5分）まで反映されない。確定済み月の集計表示にはその遅延で十分。
+ */
+const ATT_CACHE_TTL_MS = 5 * 60_000
+const attDocCache = new Map<string, { at: number; data: Awaited<ReturnType<typeof getAttData>> }>()
+export async function getAttDataCached(ym: string): Promise<Awaited<ReturnType<typeof getAttData>>> {
+  const hit = attDocCache.get(ym)
+  if (hit && Date.now() - hit.at < ATT_CACHE_TTL_MS) return hit.data
+  const data = await getAttData(ym)
+  attDocCache.set(ym, { at: Date.now(), data })
+  return data
+}
+export function invalidateAttDataCache(ym?: string): void {
+  if (ym) attDocCache.delete(ym)
+  else attDocCache.clear()
+}
+/** 'YYYYMM' が「前月より前（確定済み扱い）」か。キャッシュ版を使ってよい月の判定 */
+export function isClosedMonthYm(ym: string, todayIso?: string): boolean {
+  const t = todayIso ? new Date(todayIso + 'T00:00:00') : new Date()
+  const prev = new Date(t.getFullYear(), t.getMonth() - 1, 1)
+  const prevYm = `${prev.getFullYear()}${String(prev.getMonth() + 1).padStart(2, '0')}`
+  return ym < prevYm
+}
+
 /** 複数月の出面データを読み込み・結合 */
 export async function getMultiMonthAttData(ymList: string[]): Promise<{
   d: Record<string, AttendanceEntry>

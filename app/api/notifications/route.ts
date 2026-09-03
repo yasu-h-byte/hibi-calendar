@@ -170,15 +170,21 @@ export async function GET(request: NextRequest) {
     // 出面データ（有給P消化の集計用）。ブロック2の残数計算とブロック6の繰越計算で共用する。
     // ⚠️ 読み取り回数を増やさないこと（クォータ障害歴あり）。従来ブロック6が読んでいた
     //   範囲をそのまま巻き上げただけで、読む月数は変えていない。
+    // 2026-09-02 高速化: 旧は「一昨年1月〜今年12月」の36ヶ月を**逐次**で読んでいた（1件 200〜300KB、
+    //   ベルは5分ごとにポーリング）。付与期間は最長でも前々期まで＝24ヶ月前で足り、承認済みの
+    //   未来の有給（翌年のテト帰国など）は12ヶ月先まで見れば十分。並列で読み、前月より前の
+    //   確定済み月は5分キャッシュ（getAttDataCached）を使う。
     const allAttForPL: Record<string, Record<string, unknown>> = {}
     {
-      const currentYear = now.getFullYear()
-      for (let y = currentYear - 2; y <= currentYear; y++) {
-        for (let m = 1; m <= 12; m++) {
-          const att = await getAttData(ymKey(y, m))
-          Object.assign(allAttForPL, att.d)
-        }
+      const { getAttDataCached, isClosedMonthYm } = await import('@/lib/compute')
+      const yms: string[] = []
+      for (let i = -24; i <= 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
+        yms.push(ymKey(d.getFullYear(), d.getMonth() + 1))
       }
+      const atts = await Promise.all(yms.map(m =>
+        (isClosedMonthYm(m) ? getAttDataCached(m) : getAttData(m)).catch(() => ({ d: {} as Record<string, unknown> }))))
+      for (const a of atts) Object.assign(allAttForPL, a.d)
     }
 
     // 2. PL remaining <= 3 days

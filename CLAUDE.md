@@ -208,6 +208,11 @@ await updateDoc(ref, { [`plData.${workerId}`]: records })
 - **読み取り回数を増やさない**: 高頻度アクセスは `getMainData`(30秒キャッシュ) /
   `loadCalendarMatrix`(20秒キャッシュ) 経由で。ポーリング間隔を短くしない
   （クォータ超過で全画面500になった障害歴あり。恒久対策は Blaze 化）
+- **出面ドキュメント（att_YYYYMM・1件200〜300KB）は同一リクエスト内で二度読まない**。
+  集計系（ダッシュボード・通知ベル）は「前月より前の確定済み月」だけ
+  `getAttDataCached`(5分キャッシュ) を使う（`isClosedMonthYm` で判定）。
+  当月・前月・出面グリッドの読みには**絶対に使わない**（入力直後の再取得が古い値になる）。
+  2026-09-02 にダッシュボードが同じ月を2〜3回ずつ計37回読んでいた件の対処
 - **Admin SDK は rules をバイパスする** → 誤消去ガードは rules でなくコード層
   （`lib/firestore-safe.ts`）+ `npm run lint:firestore` + 日次バックアップで担保
 - 診断: `GET /api/health`（adminMode / readOk / readError）。readError.code 8/429 は

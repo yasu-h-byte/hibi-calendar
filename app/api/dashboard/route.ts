@@ -6,7 +6,8 @@ import {
   compute,
   getMainData,
   getAttData,
-  getMultiMonthAttData,
+  getAttDataCached,
+  isClosedMonthYm,
   calcTobiEquiv,
   getSiteRates,
   getBillTotal,
@@ -318,6 +319,44 @@ export async function GET(request: NextRequest) {
     const baseY = parseInt(ym.slice(0, 4))
     const baseM = parseInt(ym.slice(4, 6))
 
+    // ═══ 出面読みの一元化（2026-09-02 高速化）═══
+    //   旧: 各セクション（出勤率6ヶ月・期間・売上単価の遡り3ヶ月・FY推移・前年同期・年5日・
+    //   欠勤届・当日）がそれぞれ getAttData を呼び、同じ月を2〜3回ずつ、合計 30〜40 回
+    //   読んでいた（1件 200〜300KB）。ここで月→Promise のメモを持ち、必要な月を最初に
+    //   まとめて並列で先読みする。前月より前の確定済み月は5分キャッシュ（getAttDataCached）。
+    type AttRes = Awaited<ReturnType<typeof getAttData>>
+    const attMemo = new Map<string, Promise<AttRes>>()
+    const loadAtt = (m: string): Promise<AttRes> => {
+      let pr = attMemo.get(m)
+      if (!pr) {
+        pr = (isClosedMonthYm(m) ? getAttDataCached(m) : getAttData(m)).catch(() => ({ d: {}, sd: {} }))
+        attMemo.set(m, pr)
+      }
+      return pr
+    }
+    const loadMulti = async (yms: string[]) => {
+      const results = await Promise.all(yms.map(loadAtt))
+      const merged = { d: {} as Record<string, AttendanceEntry>, sd: {} as Record<string, { n: number; on: number }> }
+      const perMonth = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }>; drv?: Record<string, { am?: number[]; pm?: number[] }> }>()
+      yms.forEach((m, i) => {
+        const att = results[i]
+        Object.assign(merged.d, att.d)
+        Object.assign(merged.sd, att.sd)
+        perMonth.set(m, { d: att.d, sd: att.sd, drv: att.drv })
+      })
+      return { ...merged, perMonth }
+    }
+    // 先読み対象: 出勤率の過去6ヶ月・期間・遡り3ヶ月・FY（10月〜当月）・前年同期・欠勤届の前後月・当月
+    {
+      const warm = new Set<string>([ym])
+      let wy = baseY, wm = baseM
+      for (let i = 0; i < 9; i++) { wm--; if (wm < 1) { wm = 12; wy-- }; warm.add(ymKey(wy, wm)) }
+      for (const x of buildYMList('fy', baseY, baseM)) warm.add(ymKey(x.y, x.m))
+      for (const x of buildYMList(period, baseY, baseM)) { warm.add(ymKey(x.y, x.m)); warm.add(ymKey(x.y - 1, x.m)) }
+      warm.add(ymKey(baseM === 12 ? baseY + 1 : baseY, baseM === 12 ? 1 : baseM + 1))
+      for (const m of warm) void loadAtt(m)
+    }
+
     // homeLongLeave はこのハンドラ内の3箇所が使う → 1回だけ読んで使い回す（性能改善 2026-07-09）
     let hlAllDocs: Awaited<ReturnType<typeof getDocs>>['docs'] = []
     try { hlAllDocs = (await getDocs(collection(db, 'homeLongLeave'))).docs } catch { /* 読取失敗時は空 */ }
@@ -327,7 +366,7 @@ export async function GET(request: NextRequest) {
     const ymStrList = ymListObj.map(x => ymKey(x.y, x.m))
 
     // ═══ Load all months' attendance data at once ═══
-    const mergedAtt = await getMultiMonthAttData(ymStrList)
+    const mergedAtt = await loadMulti(ymStrList)
 
     // ═══ Run compute() for the full period ═══
     const c = compute(main, mergedAtt.d, mergedAtt.sd, ymListObj)
@@ -374,7 +413,7 @@ export async function GET(request: NextRequest) {
         if (!ymStrList.includes(lStr)) lookbackYms.push(lStr)
       }
     }
-    const lookbackAtt = lookbackYms.length > 0 ? await getMultiMonthAttData(lookbackYms) : { d: {}, sd: {}, perMonth: new Map() as Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }> }
+    const lookbackAtt = lookbackYms.length > 0 ? await loadMulti(lookbackYms) : { d: {}, sd: {}, perMonth: new Map() as Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }> }
     // Merge lookback att with main att for getAvgRevenuePerEquiv
     const allAttD = { ...mergedAtt.d, ...lookbackAtt.d }
     const allAttSD = { ...mergedAtt.sd, ...lookbackAtt.sd }
@@ -493,7 +532,7 @@ export async function GET(request: NextRequest) {
     let prevTotalManDays = 0, prevBilling = 0, prevCost = 0, prevProfit = 0, prevBillingPerManDay = 0
     try {
       const cachedPrev = mergedAtt.perMonth.get(prevYm) || lookbackAtt.perMonth.get(prevYm)
-      const prevAtt = cachedPrev || await getAttData(prevYm)
+      const prevAtt = cachedPrev || await loadAtt(prevYm)
 
       // 前月同日比: 前月の1日〜当日の日付までの出面データのみ集計
       // 2026-05-12 修正: Vercel(UTC) 環境で JST 早朝の日付ずれを防止
@@ -599,7 +638,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch FY months not already loaded
     const missingFyMonths = fyYmStrList.filter(m => !ymStrList.includes(m))
-    const fyExtraAtt = missingFyMonths.length > 0 ? await getMultiMonthAttData(missingFyMonths) : { d: {}, sd: {}, perMonth: new Map() }
+    const fyExtraAtt = missingFyMonths.length > 0 ? await loadMulti(missingFyMonths) : { d: {}, sd: {}, perMonth: new Map() }
 
     // Build a combined per-month cache from all loaded data
     const attCache = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }>; drv?: Record<string, { am?: number[]; pm?: number[] }> }>()
@@ -615,7 +654,7 @@ export async function GET(request: NextRequest) {
 
       // Use cached per-month data instead of re-reading from Firestore
       const cached = attCache.get(mStr)
-      const att = cached || await getAttData(mStr)
+      const att = cached || await loadAtt(mStr)
 
       const mc = compute(main, att.d, att.sd, ymObj)
       // 実支給ベース化（メインKPIと同じ基準。カレンダー等は30秒メモで追加読み最小）
@@ -676,7 +715,7 @@ export async function GET(request: NextRequest) {
     let todayStatus = null
     try {
       const cachedTarget = attCache.get(targetYm)
-      const targetAtt = cachedTarget || await getAttData(targetYm)
+      const targetAtt = cachedTarget || await loadAtt(targetYm)
 
       // homeLongLeave コレクションから approved & 前日期間内のワーカーIDを集める
       const targetDateStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
@@ -749,7 +788,17 @@ export async function GET(request: NextRequest) {
     // ═══ PL Alert ═══
 
     // ═══ Foreign worker attendance rates ═══
-    const foreignWorkerRates = await computeForeignWorkerRates(main, ym, attCache)
+    const foreignWorkerRates = await computeForeignWorkerRates(main, ym, await (async () => {
+      // 出勤率の6ヶ月分はメモから渡す（従来はここで別途6回読んでいた）
+      const mp = new Map<string, { d: Record<string, AttendanceEntry>; sd: Record<string, { n: number; on: number }> }>()
+      let ry = baseY, rm = baseM - 1
+      if (rm < 1) { rm = 12; ry-- }
+      const six: string[] = []
+      for (let i = 0; i < 6; i++) { six.push(ymKey(ry, rm)); rm--; if (rm < 1) { rm = 12; ry-- } }
+      const rs = await Promise.all(six.map(loadAtt))
+      six.forEach((mm, i) => mp.set(mm, { d: rs[i].d, sd: rs[i].sd }))
+      return mp
+    })())
 
     // ═══ Site list for tab selector ═══
     // Include archived sites only if they have data in the period
@@ -903,7 +952,7 @@ export async function GET(request: NextRequest) {
       return ymKey(my - 1, mm)
     })
 
-    const prevYearAtt = await getMultiMonthAttData(prevYearYmStrList)
+    const prevYearAtt = await loadMulti(prevYearYmStrList)
     const prevYearYmObj = prevYearYmStrList.map(m => ({ y: parseInt(m.slice(0, 4)), m: parseInt(m.slice(4, 6)) }))
     const prevYearC = compute(main, prevYearAtt.d, prevYearAtt.sd, prevYearYmObj)
     // 前年同期も実支給ベースで比較（比較の両辺を同じ基準に）
@@ -1016,7 +1065,7 @@ export async function GET(request: NextRequest) {
       }
     }
     const extraAttD = extraYms.size > 0
-      ? (await getMultiMonthAttData([...extraYms])).d
+      ? (await loadMulti([...extraYms])).d
       : {}
     const attForObligation = { ...allAttD, ...extraAttD }
 
@@ -1119,7 +1168,7 @@ export async function GET(request: NextRequest) {
       ])
 
       for (const checkYm of monthsToCheck) {
-        const attDoc = await getAttData(checkYm)
+        const attDoc = await loadAtt(checkYm)
         for (const [key, entry] of Object.entries(attDoc.d)) {
           if (!entry || !entry.r || entry.r !== 1 || !entry.rReason) continue
           const pk = parseDKey(key)
@@ -1331,7 +1380,7 @@ export async function GET(request: NextRequest) {
         const { computeMonthly } = await import('@/lib/compute')
         const { getMonthlyCalendars } = await import('@/lib/repositories/calendarRepo')
         const { getAllActiveHomeLeaves } = await import('@/lib/homeLeave')
-        const attNow = await getAttData(ym)
+        const attNow = await loadAtt(ym)
         const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}
         const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
         const cals = await getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
