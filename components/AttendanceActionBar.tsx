@@ -186,7 +186,7 @@ export default function AttendanceActionBar({
   // 0件なら表示しない
   if (loading && total === 0) {
     return (
-      <div className="sticky top-0 z-30 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 border-b border-blue-200 dark:border-gray-700 px-3 py-2 text-xs text-gray-500">
+      <div className="sticky top-0 z-40 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 border-b border-blue-200 dark:border-gray-700 px-3 py-2 text-xs text-gray-500">
         勤怠申請を確認中...
       </div>
     )
@@ -194,7 +194,7 @@ export default function AttendanceActionBar({
   if (total === 0) return null
 
   return (
-    <div className="sticky top-0 z-30 bg-white dark:bg-gray-900 border-b-2 border-blue-300 dark:border-gray-700 shadow-sm">
+    <div className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b-2 border-blue-300 dark:border-gray-700 shadow-sm">
       {/* ── 折畳みヘッダ（タッチターゲット 大きめ） ── */}
       <button
         onClick={() => setExpanded(!expanded)}

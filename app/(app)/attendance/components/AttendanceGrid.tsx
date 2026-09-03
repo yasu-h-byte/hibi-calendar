@@ -110,7 +110,10 @@ export default function AttendanceGrid({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
+    {/* isolate: 見出し行・名前列の sticky(z-30/z-20) をこの枠内の重なり順に閉じ込める。
+        2026-09-02: 承認バー（ページ上部 sticky z-30）とグリッド見出し（枠内 sticky z-30）が
+        同じ重なり順で、上へスクロールすると見出し行が承認バーの上に描かれていた */}
+    <div className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
       {todayIdx >= 0 && (
         <div className="flex justify-end items-center gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
           {/* スマホ最適化画面との相互切替（2026-09-02 追加。スマホ幅のときだけ表示） */}

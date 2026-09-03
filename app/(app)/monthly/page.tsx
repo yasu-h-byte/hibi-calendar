@@ -1200,7 +1200,7 @@ export default function MonthlyPage() {
           スクロール領域にしたうえで、thead/tfoot のセルを sticky にしている。 */}
       {!loading && data && isWorkerTab && (
         <div
-          className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-auto"
+          className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-auto"
           style={{ maxHeight: 'calc(100vh - 180px)' }}
         >
           <table className="w-full text-sm min-w-[1400px]">
