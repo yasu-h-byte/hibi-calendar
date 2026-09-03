@@ -31,6 +31,16 @@ export interface Worker {
   jpGrade?: string
   jpStep?: number
   /**
+   * 現在の日額(rate)・号(jpStep)の適用開始日 'YYYY-MM-DD'（2026-09-03 追加）。
+   * 年次改定を基準日より前に確定しても、基準日より前の月の給与計算は prevRate で行う。
+   * 改定の確定（api/jp-wage/revision POST）が rate/jpStep と同時に書く。
+   */
+  rateFrom?: string
+  /** rateFrom より前の月に使う日額（直前の改定前の日額） */
+  prevRate?: number
+  /** rateFrom より前の号（表示・通知書用） */
+  prevJpStep?: number
+  /**
    * 休憩短縮に伴う定例の所定外労働（分/日）。
    *
    * 個別契約で休憩が長い人（フン 104: 40分×2）を現場の運用（30分×2）に揃えるとき、

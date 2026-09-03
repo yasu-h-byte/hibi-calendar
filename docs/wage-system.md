@@ -568,3 +568,16 @@ A評価・年齢調整なしの場合はこうなっていた。
 - [docs/salary-calculation.md](salary-calculation.md) — 給与計算の実装
 - [docs/labor-rules.md](labor-rules.md) — 就業規則関連
 - [docs/manual-syaroshi.md](manual-syaroshi.md) — 社労士向け資料
+
+## 2026-09-03 追記: 改定の「適用開始日」と確定後の画面
+
+- **確定は基準日より前でもよいが、給与計算は基準日から新日額**。確定（POST /api/jp-wage/revision）は
+  人員マスタの `rate`/`jpStep` を書き換えると同時に `rateFrom`（基準日）・`prevRate`・`prevJpStep`
+  （改定前の値）を書く。`computeMonthly` は `effectiveRateForYm(w, ym)`（lib/workers.ts）で
+  **基準日より前の月は prevRate** を使う。人員マスタの一覧は開始日前なら「¥旧額（10/1〜 ¥新額）」と表示。
+  - 経緯: 2026-10-01 の改定を 9/3 に確定したところ、9 月分の給与まで新日額になる構造だった
+- **確定後の年次改定画面は凍結値で表示**。旧はマスタの（反映後の）号を「現在」として再計算していたため
+  「現在13号→新19号」のように評価分をもう一度乗せて見え、二重昇給と誤認された（大介さん事案）。
+  GET は `frozen.oldStep` を現在値に差し戻して計算するので、確定時の数字がそのまま再現される。
+  マスタ自体は1回しか反映されない（POST は applied なら 409）。
+

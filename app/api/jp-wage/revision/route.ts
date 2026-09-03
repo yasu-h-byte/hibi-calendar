@@ -119,7 +119,18 @@ export async function GET(request: NextRequest) {
     }
   }
   const docData = await loadDoc(effective)
-  const { members } = await buildRoster(effective, docData.entries)
+  const { members: liveMembers } = await buildRoster(effective, docData.entries)
+  // 2026-09-03 修正: 確定済みの改定は「凍結した改定前の号」を現在値として再計算する。
+  //   旧: 人員マスタの（反映後の）号を現在値にして計算し直していたため、確定直後の画面が
+  //   「現在13号→新19号」のように評価分をもう一度乗せて見え、二重昇給と誤認された。
+  const frozenById = new Map(((docData.frozen || []) as { workerId: number; oldStep: number | null; grade?: string }[])
+    .map(f => [f.workerId, f]))
+  const members = docData.status === 'applied' && frozenById.size > 0
+    ? liveMembers.map(m => {
+        const f = frozenById.get(m.id)
+        return f ? { ...m, currentStep: f.oldStep, grade: (f.grade as JpGrade) || m.grade } : m
+      })
+    : liveMembers
   const revision = computeRosterRevision(members, { asOf: effective })
   // 給料表の推移グラフに使うので、履歴も一緒に返す
   const histSnap = await getDocs(collection(db, 'jpWageHistory'))
@@ -232,6 +243,11 @@ export async function POST(request: NextRequest) {
     await updateWorker(r.member.id, {
       jpStep: r.result.newStep,
       rate: r.newTotal!,   // 号俸額＋調整給。日額は下げない
+      // 2026-09-03 追加: 適用開始日と改定前の値。基準日より前の月の給与計算は prevRate で行う
+      //   （旧: 9/3 に確定すると 9 月分の給与まで 10/1 施行の日額になっていた）
+      rateFrom: effective,
+      prevRate: cur?.rate ?? r.oldTotal ?? null,
+      prevJpStep: cur?.jpStep ?? r.member.currentStep ?? null,
     } as Record<string, unknown>)
     applied.push(`${r.member.name}: ${r.member.currentStep}号→${r.result.newStep}号 ¥${r.oldTotal}→¥${r.newTotal}`)
   }

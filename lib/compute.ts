@@ -5,7 +5,7 @@ import {
   getNightRange, timeToMinutes, calcManDays, NIGHT_SHIFT_MANDAYS,
 } from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
-import { isStillActiveForMonth, isHiredByMonth } from './workers'
+import { isStillActiveForMonth, isHiredByMonth, effectiveRateForYm } from './workers'
 import { isTobiGroup, isDokoGroup } from './jobs'
 import type { HomeLeaveEntry } from './homeLeave'
 import {
@@ -84,6 +84,9 @@ export interface RawWorker {
   dispatchTo?: string  // 出向先名（空なら通常勤務）
   dispatchFrom?: string  // 出向開始月 YYYY-MM（空なら全期間出向扱い）
   useOldRules?: boolean  // 旧ルール（変形労働制以前）給与計算を継続するフラグ（個別対応）
+  rateFrom?: string      // 現在の rate/jpStep の適用開始日（年次改定の基準日）。types/index.ts 参照
+  prevRate?: number      // rateFrom より前の月に使う日額
+  prevJpStep?: number
   breakShortenMin?: number   // 休憩短縮に伴う定例の所定外労働（分/日）。詳細は types/index.ts
   breakShortenFrom?: string  // 上記の適用開始月 'YYYYMM'
 }
@@ -1243,7 +1246,9 @@ export function computeMonthly(
     const dispatchedThisMonth = isDispatchedAt(w, ym)
     workerMap.set(w.id, {
       id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
-      rate: w.rate, hourlyRate: w.hourlyRate, otMul: w.otMul, salary: w.salary,
+      // 2026-09-03: 年次改定を基準日より前に確定した月は、改定前の日額で計算する
+      //   （旧: 確定と同時に rate が新額になり、9月分の給与まで10/1施行の日額で計算されていた）
+      rate: effectiveRateForYm(w, ym), hourlyRate: w.hourlyRate, otMul: w.otMul, salary: w.salary,
       // 2026-06-XX 追加: 下流の表示層が「フン等の個別旧ルール継続者」を判別できるようにする
       useOldRules: w.useOldRules,
       sites: [],

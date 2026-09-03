@@ -54,6 +54,9 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     birthDate: (w.birthDate as string) || '',
     jpGrade: (w.jpGrade as string) || undefined,
     jpStep: (w.jpStep as number) || undefined,
+    rateFrom: (w.rateFrom as string) || undefined,
+    prevRate: typeof w.prevRate === 'number' ? (w.prevRate as number) : undefined,
+    prevJpStep: typeof w.prevJpStep === 'number' ? (w.prevJpStep as number) : undefined,
     canDrive: typeof w.canDrive === 'boolean' ? (w.canDrive as boolean) : undefined,
     nonSmoker: typeof w.nonSmoker === 'boolean' ? (w.nonSmoker as boolean) : undefined,
     children: Array.isArray(w.children) ? (w.children as string[]) : undefined,
@@ -282,3 +285,23 @@ export function isCalendarSignTarget(
   if (fullMonthHomeLeaveWorkerIds.has(worker.id)) return false
   return true
 }
+
+/**
+ * その月（'YYYYMM'）の給与計算に使う日額（2026-09-03 追加・年次改定の適用開始日対応）。
+ *
+ * 年次改定（基準日 10/1）を 9 月中に確定すると人員マスタの rate は新額になるが、
+ * 9 月分の給与は改定前の日額で計算しなければならない。確定時に rateFrom（適用開始日）と
+ * prevRate（直前の日額）を一緒に書き、基準日より前の月は prevRate を返す。
+ * rateFrom が無い（改定履歴の無い）人は従来どおり rate。
+ */
+export function effectiveRateForYm(
+  w: { rate?: number; rateFrom?: string; prevRate?: number },
+  ym: string,
+): number {
+  if (w.rateFrom && w.prevRate != null && /^\d{4}-\d{2}-\d{2}$/.test(w.rateFrom)) {
+    const fromYm = w.rateFrom.slice(0, 4) + w.rateFrom.slice(5, 7)
+    if (ym.replace('-', '') < fromYm) return w.prevRate
+  }
+  return w.rate || 0
+}
+

@@ -617,7 +617,15 @@ export default function WorkersPage() {
                     ) : (
                       w.rate ? (
                         <div>
-                          <div className="font-medium">{fmtYen(w.rate)}<span className="text-[10px] text-gray-400 font-normal">/日</span></div>
+                          {w.rateFrom && w.prevRate != null && w.rateFrom > new Date().toISOString().slice(0, 10) ? (
+                            /* 年次改定を確定済みだが適用開始日前: 現在の日額を主に、新額を予告として出す */
+                            <div className="font-medium">
+                              {fmtYen(w.prevRate)}<span className="text-[10px] text-gray-400 font-normal">/日</span>
+                              <div className="text-[10px] text-amber-600 font-normal">{w.rateFrom.slice(5).replace('-', '/')}〜 {fmtYen(w.rate)}</div>
+                            </div>
+                          ) : (
+                            <div className="font-medium">{fmtYen(w.rate)}<span className="text-[10px] text-gray-400 font-normal">/日</span></div>
+                          )}
                           <div className="text-[10px] text-gray-400">OT ×{w.otMul || 1.25}</div>
                         </div>
                       ) : '—'
