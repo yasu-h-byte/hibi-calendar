@@ -74,6 +74,11 @@ export async function recomputeNextCarryOver(
   const prev = records[t.prevIdx]
   const next = records[t.nextIdx]
   if (hasManualCarryOverOverride(next)) return { updated: false, reason: 'manual override' }
+  // 移行時に登録したレコード（legacy）の繰越は触らない（2026-09-02 代表確認）。
+  //   システムの出面データは実質 2025-10 からで、それ以前の期の消化は紙の管理簿にしかない。
+  //   legacy レコードの繰越は「8月末時点で管理簿と一致」と確認済みの値なので、
+  //   システム内の消化数だけで計算し直すと確認済みの値を壊す（タン・ケンの前期など）。
+  if (next.method === 'legacy') return { updated: false, reason: 'legacy record' }
 
   // 前期の実消化（出面の p・承認済みの未来分を含む・同日多現場は1日）
   const { getLeaveBalance } = await import('./leave-balance')
