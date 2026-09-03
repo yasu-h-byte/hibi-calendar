@@ -87,7 +87,7 @@ describe('通知ベルの付与予定（日本人は 10/1 統一）', () => {
     vi.setSystemTime(new Date('2026-09-15T03:00:00+09:00'))
     const main = buildMain({
       workers: [{ id: 10, name: '梶原', org: 'hibi', visa: 'none', job: 'tobi', rate: 18000, otMul: 1.25, hireDate: '2023-04-01', token: '' }],
-      plData: { '10': [{ fy: '2025', grantDate: '2025-10-01', grantDays: 12, carryOver: 0, adjustment: 0 }] },
+      plData: { '10': [{ fy: '2025', grantDate: '2025-10-01', grantDays: 12, carryOver: 0, adjustment: 0, used: 0 }] },
     })
     // 2026-09-15 時点（固定）: 30日先の 10/1 が予定に入る
     const up = getUpcomingGrants(main, 30).find(u => u.workerId === 10)
