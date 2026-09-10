@@ -100,6 +100,8 @@ export interface RawSite {
   commute?: import('@/types').SiteCommuteData
   tobiRate?: number; dokoRate?: number
   rates?: { from: string; tobiRate: number; dokoRate: number }[]
+  /** 現場の入り方。support（応援）は元請けを介さない直接支払いなので単価は100%受取（siteBaseRatio） */
+  siteType?: 'direct' | 'support'
   workSchedule?: {
     startTime?: string; endTime?: string
     morningBreak?: { enabled?: boolean; minutes?: number; mandatory?: boolean }
@@ -549,33 +551,43 @@ export function getSubconRate(
 }
 
 // ────────────────────────────────────────
-//  現場の常用単価・85%単価・換算係数取得
+//  現場の常用単価・受取単価（85% or 100%）・換算係数取得
 //  （旧アプリのgetSiteRatesと同等）
 // ────────────────────────────────────────
+
+/**
+ * 元請け（山岡）経由の現場で当社が実際に受け取る割合。常用単価 36,000 → 受取 30,600。
+ * 直（direct）現場はこの係数、応援（support）現場は元請けを介さず直接支払いなので 1.0。
+ */
+export const INTERMEDIARY_BASE_RATIO = 0.85
+
+/**
+ * 現場の「受取割合」（2026-09-11 追加）。
+ * - direct / 未設定 … 0.85（常用単価の85%が当社受取）
+ * - support（応援） … 1.0（入力した単価がそのまま受取額。例: 28,000・30,000）
+ * 現場マスタの単価表示・原価収益の請求単価基準・概算売上の単価は全てこれを通す。
+ */
+export function siteBaseRatio(site?: { siteType?: string } | null): number {
+  return site?.siteType === 'support' ? 1 : INTERMEDIARY_BASE_RATIO
+}
+
 export function getSiteRates(
   main: MainData,
   siteId?: string,
   ym?: string,
-): { tobiRate: number; dokoRate: number; tobiBase: number; dokoBase: number; dokoRatio: number } {
+): { tobiRate: number; dokoRate: number; tobiBase: number; dokoBase: number; dokoRatio: number; baseRatio: number } {
   const defTobi = main.defaultRates.tobiRate || 36000
   const defDoko = main.defaultRates.dokoRate || 28000
-  const defTobiBase = Math.round(defTobi * 0.85)
-  const defDokoRatio = defTobiBase > 0 ? Math.round(defDoko * 0.85) / defTobiBase : 0.778
+  const s = siteId ? main.sites.find(x => x.id === siteId) : undefined
+  const ratio = siteBaseRatio(s)
+  const defTobiBase = Math.round(defTobi * ratio)
+  const defDokoRatio = defTobiBase > 0 ? Math.round(defDoko * ratio) / defTobiBase : 0.778
 
-  if (!siteId) {
+  if (!siteId || !s || !s.rates || s.rates.length === 0) {
     return {
       tobiRate: defTobi, dokoRate: defDoko,
-      tobiBase: defTobiBase, dokoBase: Math.round(defDoko * 0.85),
-      dokoRatio: defDokoRatio,
-    }
-  }
-
-  const s = main.sites.find(x => x.id === siteId)
-  if (!s || !s.rates || s.rates.length === 0) {
-    return {
-      tobiRate: defTobi, dokoRate: defDoko,
-      tobiBase: defTobiBase, dokoBase: Math.round(defDoko * 0.85),
-      dokoRatio: defDokoRatio,
+      tobiBase: defTobiBase, dokoBase: Math.round(defDoko * ratio),
+      dokoRatio: defDokoRatio, baseRatio: ratio,
     }
   }
 
@@ -591,11 +603,11 @@ export function getSiteRates(
 
   const tr = ap.tobiRate || defTobi
   const dr = ap.dokoRate || defDoko
-  const tb = Math.round(tr * 0.85)
-  const db = Math.round(dr * 0.85)
+  const tb = Math.round(tr * ratio)
+  const db = Math.round(dr * ratio)
   return {
     tobiRate: tr, dokoRate: dr, tobiBase: tb, dokoBase: db,
-    dokoRatio: tb > 0 ? db / tb : defDokoRatio,
+    dokoRatio: tb > 0 ? db / tb : defDokoRatio, baseRatio: ratio,
   }
 }
 

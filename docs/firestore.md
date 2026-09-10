@@ -164,3 +164,18 @@ workSchedule?: {
 - 現場のforemanに設定 → foreman
 - それ以外 → admin
 
+## 現場の単価と「受取割合」（2026-09-11 追記）
+
+`sites[].rates[]`（期間別 `tobiRate`/`dokoRate`）は現場マスタ「単価」タブで入力する。
+当社が実際に受け取る1人工の額（`tobiBase`/`dokoBase`）は `lib/compute.ts getSiteRates` が
+`siteBaseRatio(site)` を掛けて返す。
+
+| `siteType` | 単価タブの意味 | 受取割合 |
+|---|---|---|
+| `direct` / 未設定 | 常用単価（元請け・山岡経由） | 0.85（`INTERMEDIARY_BASE_RATIO`） |
+| `support`（応援） | **受取単価**（元請けを介さない直接支払い。28,000・30,000 等をそのまま入力） | 1.0 |
+
+`tobiBase` の使われ先: 原価・収益ページの請求単価基準（`billingPerManDayBaseline`）、
+実売上未入力月の概算売上の単価（`avgSite || avgAll || tobiBase`）、現場マスタ一覧の表示。
+月々の実売上（`billing`）は従来どおり手入力で、この係数は掛からない。
+

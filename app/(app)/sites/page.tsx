@@ -501,14 +501,18 @@ export default function SitesPage() {
                   <td className="px-3 py-2.5 text-right tabular-nums">
                     <div>
                       <div className={`font-medium ${rate.isDefault ? 'text-gray-400' : ''}`}>{fmtYen(rate.tobiRate)}</div>
-                      <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.tobiRate * 0.85))}</div>
+                      {s.siteType === 'support'
+                        ? <div className="text-xs text-purple-500">直接受取 100%</div>
+                        : <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.tobiRate * 0.85))}</div>}
                       {rate.isDefault && <div className="text-[10px] text-gray-300">デフォルト</div>}
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">
                     <div>
                       <div className={`font-medium ${rate.isDefault ? 'text-gray-400' : ''}`}>{fmtYen(rate.dokoRate)}</div>
-                      <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.dokoRate * 0.85))}</div>
+                      {s.siteType === 'support'
+                        ? <div className="text-xs text-purple-500">直接受取 100%</div>
+                        : <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.dokoRate * 0.85))}</div>}
                       {rate.isDefault && <div className="text-[10px] text-gray-300">デフォルト</div>}
                     </div>
                   </td>
@@ -769,9 +773,19 @@ export default function SitesPage() {
               </div>)}
 
               {modalTab === 'rate' && (<div className="space-y-4">
-              {/* ── 常用単価（税抜）── */}
+              {/* ── 常用単価（税抜）／ 応援現場は受取単価 ── */}
               <div className="border-2 border-orange-300 rounded-xl p-4 space-y-3">
-                <h4 className="text-sm font-bold text-orange-700">常用単価（税抜）</h4>
+                <h4 className="text-sm font-bold text-orange-700">
+                  {form.siteType === 'support' ? '受取単価（税抜・直接支払い）' : '常用単価（税抜）'}
+                </h4>
+                {form.siteType === 'support' ? (
+                  <div className="text-xs text-purple-700 bg-purple-50 dark:bg-purple-900/20 dark:text-purple-300 rounded-md px-3 py-2">
+                    応援現場は元請けを介さず直接の支払いになるため、<strong>実際に受け取る1人工の金額</strong>（例: 28,000円・30,000円）をそのまま入力してください。
+                    85%の計算はしません。原価・収益の請求単価基準や概算売上もこの額で計算します。
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-500">元請け経由の現場。当社の受取は常用単価の85%として計算します。</div>
+                )}
 
                 {formRates.length === 0 ? (
                   <div className="text-xs text-gray-400">期間単価が設定されていません</div>
@@ -858,7 +872,9 @@ export default function SitesPage() {
                 {/* Latest rate summary */}
                 {latestFormRate && (
                   <div className="bg-orange-100 rounded-lg px-3 py-2 text-xs text-orange-800">
-                    最新85%: 鳶 ¥{Math.round(latestFormRate.tobiRate * 0.85).toLocaleString()} / 土工 ¥{Math.round(latestFormRate.dokoRate * 0.85).toLocaleString()}
+                    {form.siteType === 'support'
+                      ? <>最新受取（100%）: 鳶 ¥{latestFormRate.tobiRate.toLocaleString()} / 土工 ¥{latestFormRate.dokoRate.toLocaleString()}</>
+                      : <>最新85%: 鳶 ¥{Math.round(latestFormRate.tobiRate * 0.85).toLocaleString()} / 土工 ¥{Math.round(latestFormRate.dokoRate * 0.85).toLocaleString()}</>}
                     {latestFormRate.tobiRate > 0 && (
                       <span className="ml-2">
                         換算係数: {(latestFormRate.dokoRate / latestFormRate.tobiRate).toFixed(3)}
