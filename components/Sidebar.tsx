@@ -45,6 +45,10 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     //   名前から日本人向け/ベトナム人向けが分からなかったため、ハブで国籍別に分岐する。
     //   旧ページ（/evaluation・/wage 等）はそのまま残っており、直リンクも有効。
     { label: '賃金・評価', icon: '💴', href: '/compensation', section: '人事・労務', roles: ['admin', 'approver'] },
+    // 2026-09-10: 職長の評価入力の入口。ハブは admin/approver 専用で、職長は今まで直リンク
+    //   （/evaluation）しか無く、マニュアルの「サイドバー→評価管理」が職長には存在しなかった。
+    //   通知ベルの「評価入力をお願いします」もここから開く
+    { label: '評価入力', icon: '📝', href: '/evaluation', section: '人事・労務', roles: ['foreman'] },
     // 「帰国・休暇情報」は「休暇管理 → 帰国情報タブ」に統合
     { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人事・労務', roles: ['admin', 'jimu'] },
     // 現場・外注

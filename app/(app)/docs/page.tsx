@@ -42,7 +42,7 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元。帰国期間中でも有給を使えるようになった点（2026-09）と、年5日の日本人特則・買取上限（残−5日）・買取の自動記録・HFU移籍の勤続通算', url: '/manual-yukyu.html', icon: '🌴', badge: '9月改訂', updated: '2026-09-02' },
 
   // ── 評価（運用前・管理者のみ） ──
-  { category: 'manual', roles: ['admin'], title: '評価管理マニュアル（ベトナム人）', desc: '年次評価と時給改定（入社記念日サイクル）。5タブ構成・評価者ウェイト・スコア計算・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-05-09' },
+  { category: 'manual', roles: ['admin'], title: '評価管理マニュアル（ベトナム人）', desc: '年次評価と時給改定（入社記念日サイクル）。5タブ構成・評価者ウェイト・スコア計算・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-09-10' },
   { category: 'manual', roles: ['admin', 'approver'], title: '賃金・評価 操作マニュアル（日本人）', desc: '号俸制の年次改定の回し方（評語・代表加算・平均昇給率）と賞与4区分（利益分配・精勤・禁煙・子ども手当）の作成〜確定〜有給買取の自動記録まで', url: '/manual-wage-jp.html', icon: '💴', badge: 'NEW', updated: '2026-08-31' },
 
   // ── スタッフ向け（全員が内容を把握しておく／スタッフ本人はスマホから） ──

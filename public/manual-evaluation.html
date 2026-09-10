@@ -342,8 +342,12 @@ ELSE:
 <div class="box">
 <strong>共働日数の定義</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>対象スタッフが「その評価者が月の職長として責任を持っていた現場」で実出勤した日数</li>
-  <li>月の職長は <code>mforeman[siteId_ym]</code>（月別オーバーライド）→ <code>site.foreman</code>（デフォルト）の順で解決</li>
+  <li>対象スタッフの実出勤日のうち、次のどちらかを満たす日（1日1回で数える・2026-09-10 改訂）
+    <ul>
+      <li>(a) 評価者本人が<strong>同じ現場に同じ日に出勤</strong>している（出面ベース。担当現場のない期間の職長も拾える）</li>
+      <li>(b) その現場の<strong>その月の職長</strong>が評価者（<code>mforeman[siteId_ym]</code> → <code>site.foreman</code> の順で解決。職長が不在の日も数える）</li>
+    </ul>
+  </li>
   <li>有給・休み・帰国中・試験などは共働にカウントしない（実出勤のみ）</li>
 </ul>
 </div>
@@ -375,7 +379,11 @@ ELSE:
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">サイドバー「人事・労務」セクション →「📋 評価管理」</div>
+  <div class="step-text">
+    管理者・事業責任者: サイドバー「人事・労務」→「💴 賃金・評価」→ ベトナム人スタッフの「評価管理」<br>
+    職長: サイドバー「人事・労務」→「📝 評価入力」（2026-09-10 追加。個人パスワードでログインしていることが前提。
+    スマホからでも同じ画面が開きます）
+  </div>
 </div>
 
 <h3>画面の5タブ</h3>
@@ -469,7 +477,11 @@ ELSE:
 
 <h3>自動通知</h3>
 <p>
-7日以上提出のないセッションがあると、ダッシュボードに通知バナーが表示されます（管理者向け）。
+セッションを作成しても、メール・LINE 等の外部通知は<strong>送られません</strong>。通知は画面右上の通知ベル（🔔）だけです。<br>
+・評価者（職長・政仁さん・靖仁さん）が<strong>個人パスワードでログイン</strong>すると、未提出のセッションが「○○ の評価入力をお願いします（提出 n/5名）」として表示されます。<br>
+・7日以上提出のないセッションは、管理者・事業責任者に「○○ の評価が n日停滞中」として表示されます。<br>
+・評価対象のスタッフ本人には何も通知されません（本人は評価画面を見られません）。<br>
+したがって、セッションを作ったら<strong>職長にトークノート等で「評価入力をお願いします」と一声かける</strong>のが確実です。
 </p>
 
 <h2 id="sec-4-5">4.5 承認フロー <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
@@ -788,7 +800,7 @@ Body: { "action": "recalculateApproved", "all": true }</code></pre>
 
 <p style="text-align: center; color: #888; font-size: 13px; margin-top: 40px;">
 HIBI CONSTRUCTION 鳶事業部 — 評価管理マニュアル<br>
-最終更新: 2026年5月15日 / 全面改訂版<br>
+最終更新: 2026年9月10日（共働日数の出面ベース化・職長の入口と通知の説明を追記）<br>
 お問い合わせ・改訂提案: 管理者（靖仁さん）まで
 </p>
 
