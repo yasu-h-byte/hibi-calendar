@@ -591,7 +591,7 @@ export default function SitesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">元請け・取引先</label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">取引先</label>
                   <input
                     value={form.client}
                     onChange={e => setForm({ ...form, client: e.target.value })}
