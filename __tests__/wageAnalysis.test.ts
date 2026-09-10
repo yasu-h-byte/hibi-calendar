@@ -31,6 +31,8 @@ describe('minWageAt（東京都最低賃金）', () => {
 
   test('現在額', () => {
     expect(currentMinWage('2026-08-01')).toBe(1226)
+    expect(currentMinWage('2026-09-30')).toBe(1226)
+    expect(currentMinWage('2026-10-01')).toBe(1280)  // 2026-10 改定
   })
 })
 
