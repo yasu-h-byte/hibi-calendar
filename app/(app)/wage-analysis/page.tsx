@@ -481,7 +481,8 @@ function RevisionBanner({ a, onApplied, pw }: { a: WageAnalysis; onApplied: () =
 
   const apply = async (changeId: string) => {
     const list = pendingRows(changeId)
-    if (!list.length) return
+    const c = SCHEDULED_WAGE_CHANGES.find(x => x.id === changeId)
+    if (!list.length || !c) return
     setBusy(changeId); setApplyErr('')
     try {
       for (const { row, to } of list) {
@@ -492,6 +493,13 @@ function RevisionBanner({ a, onApplied, pw }: { a: WageAnalysis; onApplied: () =
             action: 'update', id: row.id,
             hourlyRate: to,
             rate: to * 7, // 所定7時間。日額表示を時給と揃える
+            // 2026-09-10 追加: 適用開始日と改定前の時給。給与計算は月ごとに
+            //   「その月に適用される時給」を使う（月途中は暦日按分）ので、
+            //   実施日より前に反映しても前月分・当月の実施日前が新時給にならない
+            hourlyRateFrom: c!.effective,
+            prevHourlyRate: row.currentHourly,
+            rateFrom: c!.effective,
+            prevRate: row.currentHourly * 7,
           }),
         })
         if (!res.ok) throw new Error(`${row.name} の更新に失敗しました（${res.status}）`)

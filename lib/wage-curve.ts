@@ -101,9 +101,11 @@ export interface ScheduledWageChange {
  * 「一律◯％」の話と「契約どおりの改定」の区別がつかなくなるので、事由ごとに分けて持つ。
  *
  * ## 反映方法
- * 実施日に人員マスタの `hourlyRate` を書き換える。それまでは本テーブルが「予定値」となり、
- * `/wage-analysis` で改定後の姿を先に確認できる。マスタが予定額になれば差分が 0 になるので、
- * テーブルを消さずに残しても表示は自然に「反映済み」へ変わる。
+ * `/wage-analysis` の「反映」で人員マスタの `hourlyRate` を書き換える。2026-09-10 からは
+ * `hourlyRateFrom`（実施日）と `prevHourlyRate`（改定前）も同時に書き、給与計算は月ごとに
+ * 適用時給を解決する（lib/workers.ts effectiveHourlyRateForYm: 前月まで旧時給・
+ * 実施月は暦日按分・翌月から新時給）。**実施日より前に反映して構わない**。
+ * マスタが予定額になれば差分が 0 になるので、テーブルを消さずに残しても表示は「反映済み」へ変わる。
  */
 export const SCHEDULED_WAGE_CHANGES: ScheduledWageChange[] = [
   {

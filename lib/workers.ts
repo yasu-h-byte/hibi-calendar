@@ -57,6 +57,8 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     rateFrom: (w.rateFrom as string) || undefined,
     prevRate: typeof w.prevRate === 'number' ? (w.prevRate as number) : undefined,
     prevJpStep: typeof w.prevJpStep === 'number' ? (w.prevJpStep as number) : undefined,
+    hourlyRateFrom: (w.hourlyRateFrom as string) || undefined,
+    prevHourlyRate: typeof w.prevHourlyRate === 'number' ? (w.prevHourlyRate as number) : undefined,
     canDrive: typeof w.canDrive === 'boolean' ? (w.canDrive as boolean) : undefined,
     nonSmoker: typeof w.nonSmoker === 'boolean' ? (w.nonSmoker as boolean) : undefined,
     children: Array.isArray(w.children) ? (w.children as string[]) : undefined,
@@ -303,5 +305,32 @@ export function effectiveRateForYm(
     if (ym.replace('-', '') < fromYm) return w.prevRate
   }
   return w.rate || 0
+}
+
+/**
+ * その月の給与計算に使う時給（2026-09-10 追加・時給の適用開始日対応）。
+ *
+ * - 適用開始日より前の月 … prevHourlyRate
+ * - 適用開始日を含む月 … **暦日按分**した時給（中途入退社の日割りと同じ考え方。
+ *   基本給が「時給×20日×7h」の月額固定なので日単位では分けられない）
+ *   例: 9/21 に 1,425→1,585 なら (1,425×20日 + 1,585×10日) ÷ 30日 = 1,478.33
+ * - 適用開始日以降の月 … hourlyRate
+ * hourlyRateFrom が無い人は従来どおり hourlyRate。
+ */
+export function effectiveHourlyRateForYm(
+  w: { hourlyRate?: number; hourlyRateFrom?: string; prevHourlyRate?: number },
+  ym: string,
+): number | undefined {
+  const cur = w.hourlyRate
+  if (!w.hourlyRateFrom || w.prevHourlyRate == null || !/^\d{4}-\d{2}-\d{2}$/.test(w.hourlyRateFrom)) return cur
+  const y = Number(ym.slice(0, 4)); const m = Number(ym.replace('-', '').slice(4, 6))
+  const fromY = Number(w.hourlyRateFrom.slice(0, 4)); const fromM = Number(w.hourlyRateFrom.slice(5, 7)); const fromD = Number(w.hourlyRateFrom.slice(8, 10))
+  if (y < fromY || (y === fromY && m < fromM)) return w.prevHourlyRate
+  if (y > fromY || (y === fromY && m > fromM)) return cur
+  // 同じ月: 暦日按分
+  const dim = new Date(y, m, 0).getDate()
+  const daysBefore = Math.max(0, Math.min(dim, fromD - 1))
+  const blended = ((w.prevHourlyRate * daysBefore) + ((cur || 0) * (dim - daysBefore))) / dim
+  return Math.round(blended * 100) / 100
 }
 

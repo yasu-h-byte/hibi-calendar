@@ -41,6 +41,14 @@ export interface Worker {
   /** rateFrom より前の号（表示・通知書用） */
   prevJpStep?: number
   /**
+   * 時給(hourlyRate)の適用開始日 'YYYY-MM-DD'（2026-09-10 追加・ベトナム人向け）。
+   * 月途中の変更（例: 3号移行 9/21）は暦日按分、翌月以降は新時給、前月までは prevHourlyRate。
+   * /wage-analysis の「反映」が hourlyRate と同時に書く。
+   */
+  hourlyRateFrom?: string
+  /** hourlyRateFrom より前に使う時給 */
+  prevHourlyRate?: number
+  /**
    * 休憩短縮に伴う定例の所定外労働（分/日）。
    *
    * 個別契約で休憩が長い人（フン 104: 40分×2）を現場の運用（30分×2）に揃えるとき、

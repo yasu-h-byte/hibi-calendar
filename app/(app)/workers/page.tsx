@@ -610,8 +610,17 @@ export default function WorkersPage() {
                     {w.visaType && isGaikoku(w.visaType) ? (
                       w.hourlyRate ? (
                         <div>
-                          <div className="font-medium">{fmtYen(w.hourlyRate)}<span className="text-[10px] text-gray-400 font-normal">/h</span></div>
-                          <div className="text-[10px] text-gray-400">日額 {fmtYen(w.hourlyRate * 7)}</div>
+                          {w.hourlyRateFrom && w.prevHourlyRate != null && w.hourlyRateFrom > new Date().toISOString().slice(0, 10) ? (
+                            <>
+                              <div className="font-medium">{fmtYen(w.prevHourlyRate)}<span className="text-[10px] text-gray-400 font-normal">/h</span></div>
+                              <div className="text-[10px] text-amber-600">{w.hourlyRateFrom.slice(5).replace('-', '/')}〜 {fmtYen(w.hourlyRate)}/h</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="font-medium">{fmtYen(w.hourlyRate)}<span className="text-[10px] text-gray-400 font-normal">/h</span></div>
+                              <div className="text-[10px] text-gray-400">日額 {fmtYen(w.hourlyRate * 7)}</div>
+                            </>
+                          )}
                         </div>
                       ) : '—'
                     ) : (

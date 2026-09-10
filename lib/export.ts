@@ -11,7 +11,7 @@ import {
 } from './compute'
 import { AttendanceEntry, calcActualHours, calcManDays } from '@/types'
 import { isWorkingDay } from './attendance'
-import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from './workers'
+import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth, effectiveHourlyRateForYm } from './workers'
 import { computePeriodUsed } from './leave-compute'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso } from './date-utils'
 // 2026-06-XX 追加: 自動検算を Excel にも反映
@@ -300,7 +300,8 @@ function appendOvertimeSummarySheet(
   const rows: (string | number)[][] = [titleRow, headers]
 
   for (const w of foreignWorkers) {
-    const hr = w.hourlyRate || 0
+    // 時給はその月の適用額（月途中の改定は暦日按分）。給与計算本体（compute.ts の worker map）と揃える
+    const hr = effectiveHourlyRateForYm(w, ym) || 0
     const summary = calculateOvertimeSummary(ym, w.id, hr, baseDays, attD, sites, calendarDays)
 
     rows.push([
