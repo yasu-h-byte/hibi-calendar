@@ -28,15 +28,21 @@
  *       → 「データのある月数」に按分してキャップを縮小し、主担当職長は
  *         8ヶ月分でも 100% （cap=133）になり得るよう調整。
  *
- * 共働日数の定義:
- *   対象スタッフが「その評価者が月の職長として責任を持っていた現場」で
- *   実出勤した日数。月の職長は mforeman[siteId_ym] → site.foreman の順で解決。
- *   出勤判定は isWorkingDay() を使用（残骸データの混入を防ぐ）。
+ * 共働日数の定義（2026-09-10 改訂: 出面ベース）:
+ *   対象スタッフの実出勤日のうち、次のどちらかを満たす日（1日1回・現場が違っても重複なし）
+ *     (a) 評価者本人が **同じ現場に同じ日に出勤** している（出面ベース）
+ *     (b) その現場の **その月の職長** が評価者（mforeman[siteId_ym] → site.foreman）
+ *   (a) を足したのは、担当現場のない期間の職長（例: 大介さんが白戸職長の現場で
+ *   一緒に働いていた期間）が「共働 0日 → 0.1」になっていたため。
+ *   (b) は職長が不在の日を落とさないために残す。
+ *   出勤判定はどちらも isWorkingDay() を使用（残骸データ・有給・休みを除外）。
+ *   評価者候補は従来どおり職長（job=shokucho）＋事業責任者＋代表。日本人全員には広げない。
  *
  * 履歴:
  *   2026-05-09: 旧 weight = 0.3 + 0.4×recent + 0.3×year ミックス式
  *   2026-05-12: 直近1年フラット式に簡素化
  *   2026-05-12: 動的キャップ導入（旧システム期間のデータ欠落補正）
+ *   2026-09-10: 共働の定義に「同じ現場に同じ日に出勤」を追加（出面ベース）
  */
 
 import { isWorkingDay } from './attendance'
@@ -125,9 +131,29 @@ export async function calcEvaluatorWeights(
   // dynamicCap: 最低 20日（極端な短期間データでも一定の基準を確保）
   const dynamicCap = Math.max(20, Math.round(200 * monthsWithData / 12))
 
-  // 各評価者ID -> 共働日数集計
-  const tally: Record<number, { recentDays: number; yearDays: number }> = {}
-  for (const id of evaluatorIds) tally[id] = { recentDays: 0, yearDays: 0 }
+  // 各評価者ID -> 共働日集合（'YYYYMM_D'。同じ日に複数現場でも1日として数える）
+  const coDays: Record<number, Set<string>> = {}
+  for (const id of evaluatorIds) coDays[id] = new Set()
+  const evaluatorIdSet = new Set(evaluatorIds)
+
+  // 評価者本人の出勤 'sid|ym|day' → 評価者ID の集合（出面ベースの共働判定用）
+  //   1回目の走査で組み立てる。読むデータは対象スタッフの走査と同じ att なので追加読みはない
+  const evaluatorPresence = new Map<string, Set<number>>()
+  for (let i = 0; i < ymList.length; i++) {
+    const ym = ymList[i]
+    const att = attResults[i]
+    for (const [key, entry] of Object.entries(att.d)) {
+      if (!entry) continue
+      const pk = parseDKey(key)
+      const eid = Number(pk.wid)
+      if (!evaluatorIdSet.has(eid) || pk.ym !== ym) continue
+      if (!isWorkingDay(entry as AttendanceEntry)) continue
+      const k = `${pk.sid}|${ym}|${parseInt(pk.day, 10)}`
+      let set = evaluatorPresence.get(k)
+      if (!set) { set = new Set(); evaluatorPresence.set(k, set) }
+      set.add(eid)
+    }
+  }
 
   // 月別 site → foreman 解決のヘルパー
   // 月単位の mforeman > 全体 site.foreman の順で解決
@@ -156,13 +182,29 @@ export async function calcEvaluatorWeights(
       const date = new Date(parseInt(ym.slice(0, 4)), parseInt(ym.slice(4, 6)) - 1, dayN)
       if (date < yearCut || date > evalDate) continue
 
+      const dayKey = `${ym}_${dayN}`
+      const matched = new Set<number>()
+      // (b) その月の職長として責任を持つ現場
       const foremanId = resolveForeman(pk.sid, ym)
-      if (foremanId === null) continue
-      if (!evaluatorIds.includes(foremanId)) continue
+      if (foremanId !== null && evaluatorIdSet.has(foremanId)) matched.add(foremanId)
+      // (a) 同じ現場に同じ日に出勤（出面ベース・2026-09-10）
+      const present = evaluatorPresence.get(`${pk.sid}|${ym}|${dayN}`)
+      if (present) for (const eid of present) matched.add(eid)
 
-      tally[foremanId].yearDays += 1
-      if (date >= recent90Cut) tally[foremanId].recentDays += 1
+      for (const eid of matched) {
+        // 本人が自分の評価者になることはないが、念のため自己共働は数えない
+        if (eid === workerId) continue
+        coDays[eid].add(date >= recent90Cut ? `r:${dayKey}` : `y:${dayKey}`)
+      }
     }
+  }
+
+  // 集合 → 日数（recent は year の部分集合）
+  const tally: Record<number, { recentDays: number; yearDays: number }> = {}
+  for (const id of evaluatorIds) {
+    let recent = 0
+    for (const k of coDays[id]) if (k.startsWith('r:')) recent++
+    tally[id] = { recentDays: recent, yearDays: coDays[id].size }
   }
 
   // ウェイト算出（動的キャップ適用）
