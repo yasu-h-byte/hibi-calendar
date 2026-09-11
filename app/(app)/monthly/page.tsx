@@ -1493,8 +1493,17 @@ export default function MonthlyPage() {
                       </td>
                       {showAbsenceColumns && (
                         <>
-                          <td className={`px-3 py-2.5 text-right tabular-nums bg-red-50/50 ${absentDays > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}`}>
+                          <td className={`px-3 py-2.5 text-right tabular-nums bg-red-50/50 ${absentDays > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}`}
+                            title="欠勤控除の日数 = 所定20日枠に対する不足日数。出面の「欠」だけでなく、補償日（会社都合休・0.6）も一旦欠勤として控除し、休業手当60%を別途支給します（労基法26条）。実労働時間明細の「欠勤日数」は「欠」の記録だけを数えます">
                             {absentDays > 0 ? absentDays : '—'}
+                            {/* 2026-09-11: 奥寺さん質問対応。実労働時間明細の「欠勤日数」（欠の記録のみ）と
+                                  ここの日数（20日枠の不足＝欠＋補償日＋その他不足）が食い違って見えるため内訳を併記 */}
+                            {absentDays > 0 && ((w.restDays || 0) > 0 || compDays > 0) && (
+                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">
+                                欠{w.restDays || 0}{compDays > 0 ? `・補${compDays}` : ''}
+                                {absentDays - (w.restDays || 0) - compDays > 0 ? `・他${absentDays - (w.restDays || 0) - compDays}` : ''}
+                              </div>
+                            )}
                           </td>
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-red-50/50 ${absentDeduction > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                             {absentDeduction > 0 ? `-${fmtYen(absentDeduction)}` : '—'}
