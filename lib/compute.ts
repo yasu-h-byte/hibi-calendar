@@ -1845,10 +1845,18 @@ export function computeMonthly(
       const v = calculateVietnameseSalary(
         wm.id, ym, derivedHourlyRate, proratedBaseDays, attD, main.sites,
         wm.plUsed, wm.compDays, wm.examDays, calendarDays,
+        // 2026-09-13: 保証枠 = min(20, 配置現場カレンダーの所定日数)（時給ブランチと同じ）
+        workerPrescribedDays > 0 ? workerPrescribedDays : undefined,
       )
+      wm.guaranteeDays = v.guaranteeDays
       // 基本給は月給値を採用（時給からの再計算による丸め誤差を避ける）
       // 2026-06-XX 修正 (I-7): 中途入退社時は按分した値を採用
       const fixedBase = proratedSalary
+      // 2026-09-13: 休憩短縮手当（フォン 207・タン 208 の 20分/日）。旧ルール固定月給ブランチと同じく
+      //   法定内の所定外労働なので割増なし。単価はこのブランチの時給（月給 ÷ 140h）で統一する
+      const bsHours = wm.breakShortenHours || 0
+      const breakShortenAllowance = bsHours > 0 ? ceilYen(derivedHourlyRate * bsHours) : 0
+      if (breakShortenAllowance > 0) wm.breakShortenAllowance = breakShortenAllowance
       // 2026-06-XX 修正: 所定外労働手当 (nonStatutoryOTAllowance) も加算
       // 2026-06-12 修正 (監査C1): 有給日給 (paidLeaveAllowance) の加算漏れを是正。
       //   時給ブランチは v.salaryNet（有給日給込み）を使うが、本ブランチは合算を
@@ -1856,6 +1864,7 @@ export function computeMonthly(
       const salaryNet = fixedBase + v.additionalAllowance + v.paidLeaveAllowance
                       + v.nonStatutoryOTAllowance + v.otAllowance
                       + v.legalHolidayAllowance + v.nightAllowance + v.compAllowance
+                      + breakShortenAllowance
                       - v.absentDeduction
 
       wm.fixedBasePay = fixedBase
@@ -1879,7 +1888,7 @@ export function computeMonthly(
       wm.monthlyStatutoryOT = v.monthlyStatutoryOT
       wm.legalLimit = v.legalLimit
       wm.prescribedHours = baseDays * 7
-      wm.actualWorkHours = v.actualWorkHours
+      wm.actualWorkHours = Math.round((v.actualWorkHours + bsHours) * 10) / 10
       wm.legalOtHours = v.statutoryOT
       wm.dailyOtHours = Math.round(wm.otHours * 10) / 10
       wm.basePay = fixedBase
@@ -2112,12 +2121,12 @@ export function computeMonthly(
     }
   }
 
-  // 未対応ブランチで黙って無視されるのを防ぐ（対応は旧ルール固定月給のみ。2026-09 時点でフン 104 だけ）
+  // 未対応ブランチで黙って無視されるのを防ぐ（対応は固定月給ブランチ（旧ルール=フン 104、新ルール=フォン 207・タン 208）。時給制は未対応）
   for (const wm of workerMap.values()) {
     if ((wm.breakShortenHours || 0) > 0 && wm.breakShortenAllowance === undefined) {
       console.error(
         `[compute] 休憩短縮手当が未対応の給与区分です: ${wm.name} (${ym})。` +
-        `設定は旧ルール固定月給のスタッフにのみ対応しています。人員マスタの設定を確認してください。`
+        `設定は固定月給（salary）のスタッフにのみ対応しています。人員マスタの設定を確認してください。`
       )
     }
   }
