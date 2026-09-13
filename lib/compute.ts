@@ -1907,11 +1907,21 @@ export function computeMonthly(
       //     残業手当 = 切上(残業単価 × 残業時間)
       //     欠勤控除 = 日給 × 欠勤日数（= 時給 × 6h40m × 欠勤日数、切捨）
       //   ※ 日給(rate)が無い場合のみ月給から逆算（後方互換）。
-      const dailyHoursOld = 20 / 3
+      // 2026-09-14 代表決定: 7時間契約の固定月給者（フォン 207・タン 208）は**契約時給**を単価にする。
+      //   判定: 日給(rate) = 契約時給(hourlyRate) × 7 のとき（= 1日7hの契約）。
+      //   旧来の「日給 ÷ 6h40m」だと 8,890 ÷ 6.667 = 1,333.5円となり、残業単価（1,667円）・休憩短縮手当が
+      //   契約時給 1,270円（残業 1,588円）より高く出ていた。日給・欠勤控除・休業補償は 1,270×7 = 8,890 で不変。
+      //   フン 104（日給15,693 ≠ 2,403×7）は該当せず、残業単価 2,943円 のまま。
+      //   締め済みの 2026-08 以前を動かさないよう 2026-09 分から適用。
+      const isSevenHourContract = ym >= '202609'
+        && !!wm.hourlyRate && wm.hourlyRate > 0 && !!wm.rate && wm.rate === wm.hourlyRate * 7
+      const dailyHoursOld = isSevenHourContract ? 7 : 20 / 3
       const prescribedH = workerPrescribedDays * dailyHoursOld
       // 後方互換フォールバックの時給換算は按分前のフル月所定で算出（単価は月で変えない）
       const fullPrescribedH = (unproratedPrescribedDays > 0 ? unproratedPrescribedDays : workerPrescribedDays) * dailyHoursOld
-      const hourlyRate = (wm.rate && wm.rate > 0) ? (wm.rate / dailyHoursOld) : (wm.salary / fullPrescribedH)
+      const hourlyRate = isSevenHourContract
+        ? wm.hourlyRate!
+        : (wm.rate && wm.rate > 0) ? (wm.rate / dailyHoursOld) : (wm.salary / fullPrescribedH)
       const otMul = wm.otMul && wm.otMul > 0 ? wm.otMul : 1.25
 
       // 2026-06-12 修正 (監査C5): 月途中入退社は固定月給を在籍日数で日割り（暦日比・切上）
