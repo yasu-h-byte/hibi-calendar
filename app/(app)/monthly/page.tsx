@@ -81,6 +81,8 @@ interface WorkerMonthly {
   nightShiftPaid?: number
   legalShortfall?: number
   lateNightRiskDays?: number
+  guaranteeDays?: number
+  calendarBlankDays?: number
   compAllowance?: number
   regularWorkDays?: number
   // 出向情報
@@ -1420,6 +1422,16 @@ export default function MonthlyPage() {
                             title={`残業時間から逆算すると22時を超えている日が ${w.lateNightRiskDays}日 ありますが、夜勤として登録されていません。22時以降の労働は夜勤（1.5人工）で登録する運用です。出面画面で確認してください。`}
                           >
                             ⚠ 夜勤未登録{w.lateNightRiskDays}日
+                          </span>
+                        )}
+                        {/* 2026-09-13: 配置現場カレンダーの稼働日に出面が無い日。閑散期に「現場都合休(0.6)」の
+                              入れ忘れがそのまま100%の欠勤控除になる事故を防ぐための警告（計算は変えない） */}
+                        {(w.calendarBlankDays || 0) > 0 && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            title={`配置現場のカレンダーでは稼働日なのに出面に何も記録が無い日が ${w.calendarBlankDays}日 あります。現場都合の休みなら「0.6補」、本人都合なら「欠」を入力してください。空欄のままだと欠勤（100%控除）として計算されます。`}
+                          >
+                            ⚠ 稼働日未入力{w.calendarBlankDays}日
                           </span>
                         )}
                       </td>

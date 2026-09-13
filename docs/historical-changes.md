@@ -145,6 +145,7 @@
 | 2026-05-27 | retired フラグ判定の二系統分離（isStillActiveForMonth / isAlreadyRetired）| `lib/workers.ts` |
 | 2026-06-01 | 退職予定者が月次集計から消えるバグ修正 | f937d9e |
 | 2026-06-02 | Phase M (16件) + Phase N (Workflow検出 11件) 一気修正 | a5831e1 〜 d345058 |
+| 2026-09-13 | 外国人時給制の欠勤控除の基準を「保証枠 = min(20日, 配置現場カレンダーの所定日数)」に変更（閑散月の最低20日保証）。2026-06〜08 の本番3ヶ月は金額不変（ゴールデンマスター確認）。月次集計に「稼働日未入力」警告を追加 | `lib/compute.ts` calculateVietnameseSalary |
 
 ---
 

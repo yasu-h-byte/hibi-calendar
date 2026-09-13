@@ -1031,7 +1031,7 @@ describe('computeMonthly - 半日勤務 w=0.5 の actualHours 整合 (Phase N C-
     // 5/4 月曜に半日勤務 (w=0.5, o=0)
     Object.assign(attD, { [attKey('site1', 101, '202605', 4)]: { w: 0.5 } })
 
-    const result = computeMonthly(main, attD, {}, '202605', 4, undefined, 20)
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)  // 2026-09-13: 同上
     const w = result.workers.find(x => x.id === 101)!
     // 実労働時間 = 3.5h (= 7 × 0.5)
     expect(w.actualWorkHours).toBeCloseTo(3.5, 1)
@@ -1097,7 +1097,7 @@ describe('computeMonthly - 補償日 (w=0.6) の労基法26条準拠 (Phase N �
     Object.assign(attD, { [attKey('site1', 101, '202605', 7)]: { w: 0.6 } })
     Object.assign(attD, { [attKey('site1', 101, '202605', 8)]: { w: 0.6 } })
 
-    const result = computeMonthly(main, attD, {}, '202605', 5, undefined, 20)
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)  // 2026-09-13: 全社所定を20に（保証枠=min(20,所定)。旧5日だと保証枠5になり20日枠の検証にならない）
     const w = result.workers.find(x => x.id === 101)!
 
     expect(w.compDays).toBe(5)
@@ -1136,7 +1136,7 @@ describe('computeMonthly - 所定外労働手当（割増なし）(Phase N で�
     Object.assign(attD, { [attKey('site1', 101, '202605', 6)]: { w: 1, o: 1 } })
     Object.assign(attD, { [attKey('site1', 101, '202605', 7)]: { w: 1, o: 1 } })
 
-    const result = computeMonthly(main, attD, {}, '202605', 4, undefined, 20)
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)  // 2026-09-13: 同上
     const w = result.workers.find(x => x.id === 101)!
 
     // 基本給は 20日 × 7h × 1,500 = 210,000（実出勤に関わらず固定）
@@ -1170,7 +1170,7 @@ describe('computeMonthly - 所定外労働手当（割増なし）(Phase N で�
     Object.assign(attD, { [attKey('site1', 101, '202605', 8)]: { w: 0, p: 1 } })
     Object.assign(attD, { [attKey('site1', 101, '202605', 11)]: { w: 0, p: 1 } })
 
-    const result = computeMonthly(main, attD, {}, '202605', 4, undefined, 20)
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)  // 2026-09-13: 同上
     const w = result.workers.find(x => x.id === 101)!
     // 有給は基本給枠を埋めるので、残業4hは全て所定外労働として支給
     expect(w.nonStatutoryOTHours).toBe(4)
@@ -1198,7 +1198,7 @@ describe('computeMonthly - 所定外労働手当（割増なし）(Phase N で�
     Object.assign(attD, { [attKey('site1', 101, '202605', 6)]: { w: 1, o: 1 } })  // 8h
     Object.assign(attD, { [attKey('site1', 101, '202605', 7)]: { w: 1, o: 1 } })  // 8h
 
-    const result = computeMonthly(main, attD, {}, '202605', 4, undefined, 20)
+    const result = computeMonthly(main, attD, {}, '202605', 20, undefined, 20)  // 2026-09-13: 同上
     const w = result.workers.find(x => x.id === 101)!
     expect(w.legalOtHours).toBeCloseTo(1.0, 1)  // 日次1.0h
     // 2026-06-XX 修正: nonStatutoryOTHours は totalDailyExcess 全部（statutoryOT 引かない）

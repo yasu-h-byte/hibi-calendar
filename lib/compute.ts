@@ -1082,6 +1082,13 @@ export interface WorkerMonthly {
   nightShiftPaid?: number   // 夜勤日に実際に支払う額 合計（人工 × 日額 ＋ 残業手当）
   legalShortfall?: number   // 法定必要額 − 実支給額（プラスなら不足 = 要是正）
   lateNightRiskDays?: number // 残業hから逆算すると22時を超えるが夜勤登録が無い日数（運用ルール違反の検出）
+  // 2026-09-13 追加: 保証枠（欠勤控除の基準日数）= min(基本給ベース20日, 配置現場カレンダーの所定日数)。
+  //   閑散期でカレンダーの稼働日が20日未満の月は、全日出勤なら欠勤控除ゼロ＝基本給20日分を保証する（月給制）。
+  guaranteeDays?: number
+  // 2026-09-13 追加: 配置現場カレンダーの稼働日なのに出面が何も無い日数（出勤・0.6・欠・有給・帰国のいずれも無し）。
+  //   入力漏れがそのまま100%控除になる事故の検出用（0.6補償の入れ忘れ等）。計算には影響しない
+  calendarBlankDays?: number
+  _entryDaySeen?: Set<string>
   plDays: number
   plUsed: number
   restDays: number
@@ -1309,6 +1316,9 @@ export function computeMonthly(
 
     const wm = workerMap.get(wid)
     if (!wm) continue
+    // 何らかの記録がある日（稼働日未入力の検出用・2026-09-13）
+    if (!wm._entryDaySeen) wm._entryDaySeen = new Set<string>()
+    wm._entryDaySeen.add(`${pk.ym}_${pk.day}`)
 
     // ★ 有給は人工にカウントしない → 即continue
     //   同一日複数現場は1日として数える（全日単位。actualWorkDays と同じ扱い）
@@ -1709,7 +1719,36 @@ export function computeMonthly(
       const v = calculateVietnameseSalary(
         wm.id, ym, wm.hourlyRate, proratedBaseDays, attD, main.sites,
         wm.plUsed, wm.compDays, wm.examDays, calendarDays,
+        // 2026-09-13: 保証枠 = min(20, 配置現場カレンダーの所定日数)。閑散期の月給保証
+        workerPrescribedDays > 0 ? workerPrescribedDays : undefined,
       )
+      wm.guaranteeDays = v.guaranteeDays
+      // 2026-09-13: 配置現場カレンダーの稼働日に出面が無い日を数える（入力漏れ→100%控除の事故検出）
+      //   複数現場に記録がある人は「その月に最も多く記録がある現場」（主現場）のカレンダーで判定する。
+      //   全現場の和集合にすると、別現場の稼働日まで未入力扱いになって過剰に警告が出るため。
+      if (calendarDays && wm.sites.length > 0) {
+        const hire = workerWm?.hireDate || ''
+        const ret = workerWm?.retired || ''
+        const ymY2 = parseInt(ym.slice(0, 4)); const ymM2 = parseInt(ym.slice(4, 6))
+        const dim = new Date(ymY2, ymM2, 0).getDate()
+        const perSite = new Map<string, number>()
+        for (const key of Object.keys(attD)) {
+          const pk2 = parseDKey(key)
+          if (pk2.ym !== ym || pk2.wid !== String(wm.id)) continue
+          perSite.set(pk2.sid, (perSite.get(pk2.sid) || 0) + 1)
+        }
+        const mainSite = [...perSite.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || wm.sites[0]
+        let blank = 0
+        for (let d = 1; d <= dim; d++) {
+          const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(d).padStart(2, '0')}`
+          if (hire && iso < hire) continue
+          if (ret && iso > ret) continue
+          if (calendarDays[mainSite]?.[String(d)] !== 'work') continue
+          if (wm._entryDaySeen?.has(`${ym}_${d}`)) continue
+          blank++
+        }
+        if (blank > 0) wm.calendarBlankDays = blank
+      }
 
       wm.fixedBasePay = v.fixedBasePay
       wm.additionalAllowance = v.additionalAllowance
@@ -2464,6 +2503,7 @@ export interface VietnameseSalaryResult {
   regularWorkDays: number       // 日曜出勤・補償日を除いた出勤日数（追加所定の対象）
   legalHolidayDays: number      // 日曜出勤日数
   absentDays: number            // 欠勤日数
+  guaranteeDays: number         // 欠勤控除の基準日数 = min(baseDays, カレンダー所定日数)（2026-09-13）
 
   // 残業内訳（3層判定: regular内）
   dailyStatutoryOT: number
@@ -2611,11 +2651,17 @@ export function calculateVietnameseSalary(
   //   （社労士提出Excel calculateOvertimeSummary と同一基準）。
   //   未指定時は従来どおり「実出勤日の所定合計」で判定（後方互換）。
   calendarDays?: Record<string, Record<string, string>>,
+  // 2026-09-13 追加: 配置現場カレンダーの所定日数（中途入退社・帰国で按分済み）。
+  //   欠勤控除の基準は min(baseDays, prescribedDays)。カレンダーが20日未満の閑散月に
+  //   全日出勤しても控除されない（月給制＝所定日数が減っても基本給は同額）。
+  //   未指定・0 のときは従来どおり baseDays（20日枠）を基準にする。
+  prescribedDays?: number,
 ): VietnameseSalaryResult {
   const ymY = parseInt(ym.slice(0, 4))
   const ymM = parseInt(ym.slice(4, 6))
   const numDays = new Date(ymY, ymM, 0).getDate()
   const legalLimit = numDays * 40 / 7
+  const guaranteeDays = prescribedDays && prescribedDays > 0 ? Math.min(baseDays, prescribedDays) : baseDays
 
   // ── 日次集計 ──
   // 各日の実労働時間・所定時間・休日種別を計算
@@ -2885,7 +2931,12 @@ export function calculateVietnameseSalary(
   //   旧: compDays を absentDays から除外 → 基本給で100%支払い + 60% 休業手当 = 160% (過払い)
   //   新: compDays を欠勤として算入 → 基本給から 1日分減額 + 60% 休業手当 = 60% (法令準拠)
   //   結果: 補償日 1日 = 基本給(時給×7h) を欠勤控除で減額し、休業手当(時給×7h×0.6) で 60% 補償
-  const absentDays = Math.max(0, baseDays - regularWorkDays - plUsed - examDays)
+  // 2026-09-13: 基準は「保証枠」guaranteeDays = min(20, カレンダー所定日数)。
+  //   例: カレンダー18日の閑散月に18日全部出勤 → 欠勤0（基本給20日分をそのまま保証）
+  //       同じ月に自己都合で1日休む → 欠勤1（19日分）
+  //       同じ月に現場都合休(0.6)が2日 → 欠勤2＋休業手当2×0.6（19.2日分）
+  //   追加所定・有給日給の枠（baseDays=20）はこれまでどおり
+  const absentDays = Math.max(0, guaranteeDays - regularWorkDays - plUsed - examDays)
   const absentDeduction = floorYen(hourlyRate * 7 * absentDays)  // 控除: 切り捨て（過少支払い防止）
 
   const salaryNet = fixedBasePay + additionalAllowance + paidLeaveAllowance + nonStatutoryOTAllowance + otAllowance
@@ -2900,6 +2951,7 @@ export function calculateVietnameseSalary(
     regularWorkDays,
     legalHolidayDays,
     absentDays,
+    guaranteeDays,
     dailyStatutoryOT: Math.round(totalDailyOT * 10) / 10,
     weeklyStatutoryOT: Math.round(totalWeeklyOT * 10) / 10,
     monthlyStatutoryOT: Math.round(monthlyStatutoryOT * 10) / 10,
