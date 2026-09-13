@@ -590,6 +590,20 @@ export default function WorkersPage() {
                             </div>
                           )
                         })()}
+                        {/* 2026-09-13: 外国人も生年月日と年齢（今日時点）を表示。未入力なら入力へ誘導 */}
+                        {w.birthDate ? (
+                          <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
+                            {w.birthDate}（{ageOn(w.birthDate, currentDateDash())}歳）
+                          </div>
+                        ) : !w.retired ? (
+                          <button
+                            type="button"
+                            onClick={() => openEdit(w)}
+                            className="mt-1 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-800 dark:bg-gray-700 dark:text-gray-400 transition"
+                          >
+                            生年月日 未入力
+                          </button>
+                        ) : null}
                       </div>
                     ) : w.birthDate ? (
                       <div>
@@ -901,7 +915,9 @@ export default function WorkersPage() {
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                     {form.birthDate && (
                       <p className="text-[11px] text-gray-500 mt-1">
-                        {jpDate(revisionBaseDate())}時点で {ageOn(form.birthDate, revisionBaseDate())}歳
+                        {form.visa === 'none'
+                          ? <>{jpDate(revisionBaseDate())}時点で {ageOn(form.birthDate, revisionBaseDate())}歳</>
+                          : <>今日時点で {ageOn(form.birthDate, currentDateDash())}歳（在留カードの生年月日を入力）</>}
                       </p>
                     )}
                   </div>
