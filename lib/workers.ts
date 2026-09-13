@@ -59,6 +59,8 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     prevJpStep: typeof w.prevJpStep === 'number' ? (w.prevJpStep as number) : undefined,
     hourlyRateFrom: (w.hourlyRateFrom as string) || undefined,
     prevHourlyRate: typeof w.prevHourlyRate === 'number' ? (w.prevHourlyRate as number) : undefined,
+    salaryFrom: (w.salaryFrom as string) || undefined,
+    prevSalary: typeof w.prevSalary === 'number' ? (w.prevSalary as number) : undefined,
     canDrive: typeof w.canDrive === 'boolean' ? (w.canDrive as boolean) : undefined,
     nonSmoker: typeof w.nonSmoker === 'boolean' ? (w.nonSmoker as boolean) : undefined,
     children: Array.isArray(w.children) ? (w.children as string[]) : undefined,
@@ -332,5 +334,26 @@ export function effectiveHourlyRateForYm(
   const daysBefore = Math.max(0, Math.min(dim, fromD - 1))
   const blended = ((w.prevHourlyRate * daysBefore) + ((cur || 0) * (dim - daysBefore))) / dim
   return Math.round(blended * 100) / 100
+}
+
+/**
+ * その月の給与計算に使う固定月給（2026-09-14 追加）。考え方は effectiveHourlyRateForYm と同じ。
+ * - 適用開始日より前の月 … prevSalary
+ * - 適用開始日を含む月 … 暦日按分（円未満切り上げ）
+ * - 適用開始日以降の月 … salary
+ */
+export function effectiveSalaryForYm(
+  w: { salary?: number; salaryFrom?: string; prevSalary?: number },
+  ym: string,
+): number | undefined {
+  const cur = w.salary
+  if (!w.salaryFrom || w.prevSalary == null || !/^\d{4}-\d{2}-\d{2}$/.test(w.salaryFrom)) return cur
+  const y = Number(ym.slice(0, 4)); const m = Number(ym.replace('-', '').slice(4, 6))
+  const fromY = Number(w.salaryFrom.slice(0, 4)); const fromM = Number(w.salaryFrom.slice(5, 7)); const fromD = Number(w.salaryFrom.slice(8, 10))
+  if (y < fromY || (y === fromY && m < fromM)) return w.prevSalary
+  if (y > fromY || (y === fromY && m > fromM)) return cur
+  const dim = new Date(y, m, 0).getDate()
+  const daysBefore = Math.max(0, Math.min(dim, fromD - 1))
+  return Math.ceil(((w.prevSalary * daysBefore) + ((cur || 0) * (dim - daysBefore))) / dim)
 }
 

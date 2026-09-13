@@ -49,6 +49,14 @@ export interface Worker {
   /** hourlyRateFrom より前に使う時給 */
   prevHourlyRate?: number
   /**
+   * 固定月給(salary)の適用開始日 'YYYY-MM-DD'（2026-09-14 追加）。
+   * 固定月給の外国人（フォン 207・タン 208 など）は時給・日給と同時に月給も変わるため、
+   * rateFrom / hourlyRateFrom と揃えて持つ。月途中の変更は暦日按分。
+   */
+  salaryFrom?: string
+  /** salaryFrom より前に使う月給 */
+  prevSalary?: number
+  /**
    * 休憩短縮に伴う定例の所定外労働（分/日）。
    *
    * 個別契約で休憩が長い人（フン 104: 40分×2）を現場の運用（30分×2）に揃えるとき、

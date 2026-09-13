@@ -5,7 +5,7 @@ import {
   getNightRange, timeToMinutes, calcManDays, NIGHT_SHIFT_MANDAYS,
 } from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
-import { isStillActiveForMonth, isHiredByMonth, effectiveRateForYm, effectiveHourlyRateForYm } from './workers'
+import { isStillActiveForMonth, isHiredByMonth, effectiveRateForYm, effectiveHourlyRateForYm, effectiveSalaryForYm } from './workers'
 import { isTobiGroup, isDokoGroup } from './jobs'
 import type { HomeLeaveEntry } from './homeLeave'
 import {
@@ -89,6 +89,8 @@ export interface RawWorker {
   prevJpStep?: number
   hourlyRateFrom?: string  // 時給の適用開始日（月途中は暦日按分）。types/index.ts 参照
   prevHourlyRate?: number
+  salaryFrom?: string      // 固定月給の適用開始日（月途中は暦日按分）。types/index.ts 参照
+  prevSalary?: number
   breakShortenMin?: number   // 休憩短縮に伴う定例の所定外労働（分/日）。詳細は types/index.ts
   breakShortenFrom?: string  // 上記の適用開始月 'YYYYMM'
 }
@@ -1272,7 +1274,9 @@ export function computeMonthly(
       rate: effectiveRateForYm(w, ym),
       // 時給も適用開始日で解決（2026-09-10）: 3号移行(9/21)など月途中の変更は暦日按分、
       //   10/1 の一律改定を先に反映しても 9 月分は旧時給で計算される
-      hourlyRate: effectiveHourlyRateForYm(w, ym), otMul: w.otMul, salary: w.salary,
+      hourlyRate: effectiveHourlyRateForYm(w, ym), otMul: w.otMul,
+      // 2026-09-14: 固定月給も適用開始日で解決（フォン・タンの 10/1 最賃対応を 9 月中に仕込むため）
+      salary: effectiveSalaryForYm(w, ym),
       // 2026-06-XX 追加: 下流の表示層が「フン等の個別旧ルール継続者」を判別できるようにする
       useOldRules: w.useOldRules,
       sites: [],

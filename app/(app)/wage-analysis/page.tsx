@@ -483,6 +483,8 @@ function RevisionBanner({ a, onApplied, pw }: { a: WageAnalysis; onApplied: () =
     const list = pendingRows(changeId)
     const c = SCHEDULED_WAGE_CHANGES.find(x => x.id === changeId)
     if (!list.length || !c) return
+    // ⚠️ このボタンは時給・日給だけを書く。固定月給（salary）の人は月給も変わるので、
+    //   人員マスタで salary / salaryFrom / prevSalary を別途反映すること（2026-09-14 フォン・タンは直接反映済み）
     setBusy(changeId); setApplyErr('')
     try {
       for (const { row, to } of list) {

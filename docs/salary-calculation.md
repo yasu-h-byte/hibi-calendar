@@ -545,3 +545,13 @@ npm run test:ui   # ブラウザUI付き
 - `WorkerMonthly.guaranteeDays`（保証枠）・`calendarBlankDays`（主現場カレンダーの稼働日に記録が無い日数。
   警告表示のみ・計算に影響しない）を追加。テスト: `__tests__/guaranteeDays.test.ts`
 
+## 2026-09-14 追記: 固定月給の「適用開始日」
+
+固定月給（`salary`）の外国人は、時給・日給と同時に月給も改定される。`salaryFrom` / `prevSalary` を追加し、
+`lib/workers.ts effectiveSalaryForYm(w, ym)` で月ごとに解決する（前月まで旧・開始月は暦日按分・以降は新）。
+`computeMonthly` の worker マップで `rate` / `hourlyRate` / `salary` の3つとも適用開始日で解決される。
+
+- 初適用: フォン(207)・タン(208) 2026-10-01 最賃対応（時給1,280・日給8,960・月給215,467）。人員マスタへ直接反映
+- `/wage-analysis` の反映ボタンは時給・日給だけを書く。固定月給の人は月給を別途反映すること
+- テスト: `__tests__/salaryEffectiveFrom.test.ts`
+
