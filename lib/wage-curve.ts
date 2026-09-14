@@ -176,7 +176,7 @@ export const SCHEDULED_WAGE_CHANGES: ScheduledWageChange[] = [
   },
   {
     id: 'anh-2026-11',
-    effective: '2026-11-01',
+    effective: '2026-11-27',  // 在留期間更新に合わせた新契約の開始日（代表確認 2026-09-14）。11月分は暦日按分
     label: '年次評価（契約更新）',
     reason: '在留期間更新（特定技能1号のまま）に伴う契約更新。評価A・新昇給テーブル（8回目の記念日 +104円）。再入社のブランクは残る（代表決定 2026-09-14）',
     targets: {
