@@ -359,3 +359,15 @@ export function effectiveSalaryForYm(
   return Math.ceil(((w.prevSalary * daysBefore) + ((cur || 0) * (dim - daysBefore))) / dim)
 }
 
+/**
+ * 指定日時点で有効な時給（月の按分をしない「その日の時給」）。2026-09-14 追加。
+ * 賃金分析など「今いくらか」を見る画面用。給与計算は effectiveHourlyRateForYm を使う。
+ */
+export function hourlyRateOn(
+  w: { hourlyRate?: number; hourlyRateFrom?: string; prevHourlyRate?: number },
+  dateIso: string,
+): number | undefined {
+  if (w.hourlyRateFrom && w.prevHourlyRate != null && dateIso < w.hourlyRateFrom) return w.prevHourlyRate
+  return w.hourlyRate
+}
+

@@ -148,7 +148,7 @@ export const WAGE_CONTEXT: Record<number, {
   105: {
     label: '再入社',
     detail: '2022-05-26 退社 → 2022-09-22 再入社（ブランク約4ヶ月）。ブランクの分だけ同時期入社の他スタッフより低い。'
-      + '在籍年数はブランクを除いた通算（serviceYears）で比較している。将来的に解消する方針（2026-10 改定で検討中）。',
+      + '在籍年数はブランクを除いた通算（serviceYears）で比較している。2026-11 の契約更新は評価A（+104円・2,270円）で、ブランク分は解消していない（代表判断）。',
     // 2018-11-01 入社 − 119日のブランク。2026-10-01 時点 7.59年（代表確認 2026-09-10）。
     //   ※固定値なので年が進んだら見直す（ブランク分 0.33年を引く、が本来の式）
     serviceYears: 7.6,
@@ -162,7 +162,9 @@ export interface WageRow {
   hireDate: string
   /** 分析に使っている時給（basis により現在値または改定後） */
   hourly: number
-  /** 人員マスタの現在値。basis に関わらず常に現在の額 */
+  /** 人員マスタに登録済みの最新の時給（適用開始日が先の改定を含む）。「反映済みか」の判定に使う */
+  masterHourly: number
+  /** 今日時点で有効な時給。basis に関わらず常に現在の額 */
   currentHourly: number
   /** 在籍年数 */
   years: number
@@ -349,7 +351,12 @@ export interface WageInput {
   name: string
   visaType: string
   hireDate: string
+  /** 今日時点で有効な時給（人員マスタに先の改定が入っていても、適用開始日前なら改定前の額） */
   hourlyRate?: number
+  /** 人員マスタに登録済みの最新の時給（適用開始日が先でもこちら）。未指定なら hourlyRate */
+  latestHourly?: number
+  /** 日付指定で切り替わる予定の在留資格（Worker.scheduledChanges の visa）。改定後の段階判定に使う */
+  nextVisaType?: string
   retired?: string
 }
 
@@ -394,18 +401,21 @@ export function buildWageAnalysis(
     const mw = minWageAt(w.hireDate || todayIso)
     const start = roundUp10(mw)
     const currentHourly = w.hourlyRate ?? 0
-    const revised = revisedHourly(w.id, currentHourly)
+    // 人員マスタに登録済みの最新額（適用開始日つきで先に書いた改定を含む）
+    const masterHourly = w.latestHourly ?? currentHourly
+    const revised = Math.max(revisedHourly(w.id, currentHourly), masterHourly)
     // 段階平均・傾向線・昇給率・逆転判定など、以降の集計はすべて h を使う。
     // basis を切り替えるとページ全体が改定後の姿で計算される。
     const h = basis === 'revised' ? revised : currentHourly
     // 在留資格が示す段階と、在籍年数が示す段階がズレる場合がある
     // （例: 試験不合格で実習3号に上がれず特定技能へ早期移行）。実態は在籍年数側。
-    const stage = stageOf(yr, w.visaType)
+    const visaType = basis === 'revised' && w.nextVisaType ? w.nextVisaType : w.visaType
+    const stage = stageOf(yr, visaType)
     const visaStage = ['実習1号', '実習2号', '実習3号', '特定1号', '特定2号']
-      .indexOf(VISA_LABEL[w.visaType] || '')
+      .indexOf(VISA_LABEL[visaType] || '')
     return {
-      id: w.id, name: w.name, visa: VISA_LABEL[w.visaType] || w.visaType,
-      hireDate: w.hireDate, hourly: h, currentHourly, revised, years: yr, stage,
+      id: w.id, name: w.name, visa: VISA_LABEL[visaType] || visaType,
+      hireDate: w.hireDate, hourly: h, currentHourly, masterHourly, revised, years: yr, stage,
       stageException: visaStage >= 0 && visaStage !== stage,
       context: ctx,
       hireMinWage: mw, startWage: start,
@@ -488,7 +498,7 @@ export function buildWageAnalysis(
         .reduce((v, p) => Math.max(v, p.targets[id] ?? 0), row.currentHourly)
       const gain = Math.max(0, c.targets[id] - prior)
       annualCost += gain * MONTHLY_HOURS * 12
-      if (c.targets[id] > row.currentHourly) pending++
+      if (c.targets[id] > row.masterHourly) pending++  // 人員マスタに未登録（適用開始日つきで登録済みなら数えない）
     }
     return {
       id: c.id, effective: c.effective, label: c.label, reason: c.reason, rate: c.rate,
@@ -509,7 +519,7 @@ export function buildWageAnalysis(
     revision: {
       changes,
       count: targets.length,
-      pending: targets.filter(r => r.revisionGain > 0).length,
+      pending: targets.filter(r => r.revised > r.masterHourly).length,
       annualCost: targets.reduce((s, r) => s + r.revisionGain * MONTHLY_HOURS * 12, 0),
     },
     tokuteiFloor: nowMw * KENSETSU_TOKUTEI.minWageMultiplier,

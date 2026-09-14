@@ -22,6 +22,8 @@ import {
   curveWage, curveRaiseAt, CURVE_BASE_RAISE, CURVE_DECAY, CURVE_MIN_RAISE,
   WAGE_REVISION_2026_10, SCHEDULED_WAGE_CHANGES, MONTHLY_HOURS,
 } from '@/lib/wage-curve'
+import { hourlyRateOn } from '@/lib/workers'
+import { WageMap } from './WageMap'
 
 const OWNER_ID = 0 // 日比靖仁
 
@@ -46,10 +48,23 @@ export default function WageAnalysisPage() {
         const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
         const target = (workers as Record<string, unknown>[])
           .filter(w => w.visaType && w.visaType !== 'none' && !w.retired && Number(w.hourlyRate) > 0)
-          .map(w => ({
-            id: Number(w.id), name: String(w.name), visaType: String(w.visaType),
-            hireDate: String(w.hireDate || ''), hourlyRate: Number(w.hourlyRate),
-          }))
+          .map(w => {
+            // 2026-09-14: 人員マスタには適用開始日つきで先の改定が入っている。
+            //   「現在」は今日時点で有効な額、「改定後」はマスタ登録済みの最新額＋予定表で見る
+            const rateInfo = {
+              hourlyRate: Number(w.hourlyRate),
+              hourlyRateFrom: (w.hourlyRateFrom as string) || undefined,
+              prevHourlyRate: w.prevHourlyRate != null ? Number(w.prevHourlyRate) : undefined,
+            }
+            const sched = Array.isArray(w.scheduledChanges) ? w.scheduledChanges as { field: string; value: string }[] : []
+            return {
+              id: Number(w.id), name: String(w.name), visaType: String(w.visaType),
+              hireDate: String(w.hireDate || ''),
+              hourlyRate: hourlyRateOn(rateInfo, todayIso) ?? Number(w.hourlyRate),
+              latestHourly: Number(w.hourlyRate),
+              nextVisaType: sched.find(c => c.field === 'visa')?.value,
+            }
+          })
         setRows(buildWageAnalysis(target, todayIso, 20, b))
       } catch (e) {
         setErr(e instanceof Error ? e.message : '不明なエラー')
@@ -137,8 +152,8 @@ function Report({ a, onApplied, pw, basis, onBasis }: {
         </div>
         <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
           {basis === 'revised'
-            ? <><b>9月21日の3号移行と10月1日の一律改定を反映した時給</b>で、①〜⑨とデータ表のすべてを計算しています。
-              人員マスタはまだ書き換えていないので、当面の給与計算には使われません。</>
+            ? <><b>契約済み・予定の改定をすべて反映した時給</b>（9/21 3号移行、10/1 一律改定・最賃対応・特定技能2号移行、11/1 アインの契約更新）で、
+              ①〜⑨とデータ表のすべてを計算しています。人員マスタには適用開始日つきで登録済みで、給与計算は各開始日から自動で切り替わります。</>
             : <><b>人員マスタの現在の時給</b>で計算しています。いま給与計算に使われている額です。</>}
         </p>
       </header>
@@ -151,8 +166,8 @@ function Report({ a, onApplied, pw, basis, onBasis }: {
         <Flag tone="high" title="3基準すべてで高い" items={highs} />
       </section>
 
-      <Card title="① 在籍年数 × 時給" note="緑の破線＝昇給カーブ（これが標準）。青の実線＝各段階の平均。灰の破線＝全体平均。赤＝一貫して低い人、青＝一貫して高い人。点にカーソルを合わせる（スマホはタップ）と氏名と内訳が出ます。">
-        <Scatter a={a} />
+      <Card title="① 賃金カーブ上の全員の位置（在籍年数 × 時給）" note="緑の線＝賃金カーブ（160円−8円×在籍年数。評価のA＝この線に沿う昇給）。白抜きの丸＝今日の時給、塗りの丸＝改定後（矢印が今回の動き）。丸の色＝在留資格。縦の細線＝カーブとの差（赤＝下回る、青＝上回る）。点にカーソルを合わせる（スマホはタップ）と内訳が出ます。">
+        <WageMap a={a} />
       </Card>
 
       <Card title="② 年平均昇給率（入社時の東京都最低賃金が起点）" note={`起点＝入社時の最低賃金を10円単位で切上げ。灰色の細い棒＝同期間の最賃上昇率。両者の差が実質的な昇給。平均 ${avgCagr.toFixed(2)}%（実質 +${avgReal.toFixed(2)}pt）。`}>
@@ -245,99 +260,6 @@ function Flag({ tone, title, items }: { tone: 'low' | 'high'; title: string; ite
         </div>
       )}
     </div>
-  )
-}
-
-/** 散布図のツールチップ。SVG内に描くので最後にレンダリングして最前面にする。 */
-function Tip({ r, x, y, W }: { r: WageRow; x: number; y: number; W: number }) {
-  const lines = [
-    `${r.years}年 ／ ${STAGES[r.stage].key}`,
-    `時給 ${yen(r.hourly)}（月額 ${yen(r.hourly * 140)}）`,
-    `段階内平均との差 ${signed(r.devStage)}`,
-    r.devCohort !== null ? `同期との差 ${signed(r.devCohort)}` : '同期なし',
-    `カーブとの差 ${signed(r.devCurve)}`,
-    ...(r.revisionTarget ? [`10月改定後 ${yen(r.revised)}（${signed(r.devCurveRevised)}）`] : []),
-  ]
-  // 名前(baseline by+17) + 明細(by+34 から 15px 間隔)。最終行の下に余白を残す
-  const w = 214, h = 30 + lines.length * 15
-  // 右端に近ければ左側に出す。上端に近ければ下に出す。
-  const flipX = x + w + 18 > W
-  const bx = flipX ? x - w - 14 : x + 14
-  const by = Math.max(2, y - h / 2)
-  return (
-    <g pointerEvents="none">
-      <rect x={bx} y={by} width={w} height={h} rx={6}
-        className="fill-gray-900/95 dark:fill-gray-100/95" />
-      <text x={bx + 10} y={by + 17} className="fill-white dark:fill-gray-900 text-[12px] font-semibold">{r.name}</text>
-      {lines.map((t, i) => (
-        <text key={i} x={bx + 10} y={by + 34 + i * 15} className="fill-gray-300 dark:fill-gray-600 text-[11px]">{t}</text>
-      ))}
-    </g>
-  )
-}
-
-function Scatter({ a }: { a: WageAnalysis }) {
-  const rows = a.rows
-  const [hover, setHover] = useState<WageRow | null>(null)
-  const W = 900, H = 420, ML = 74, MR = 20, MT = 14, MB = 62
-  const PW = W - ML - MR, PH = H - MT - MB
-  const x1 = Math.max(10.5, Math.ceil(Math.max(...rows.map(r => r.years)) + 0.7))
-  // カーブも重ねるので、点だけでなくカーブの到達点も y 範囲に入れる
-  const hs = [...rows.map(r => r.hourly), curveWage(a.curveStart, 0), curveWage(a.curveStart, x1)]
-  const y0 = Math.floor((Math.min(...hs) - 120) / 100) * 100
-  const y1 = Math.ceil((Math.max(...hs) + 120) / 100) * 100
-  const px = (v: number) => ML + ((v + 0.5) / (x1 + 0.5)) * PW
-  const py = (v: number) => MT + ((y1 - v) / (y1 - y0)) * PH
-  const ticks: number[] = []
-  for (let t = y0; t <= y1; t += 200) ticks.push(t)
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="在籍年数と時給の散布図">
-      {ticks.map(t => (
-        <g key={t}>
-          <line x1={ML} y1={py(t)} x2={ML + PW} y2={py(t)} stroke="currentColor" className="text-gray-200 dark:text-gray-700" strokeWidth={1} />
-          <text x={ML - 8} y={py(t) + 4} textAnchor="end" className="fill-gray-400 text-[11px]">{yen(t)}</text>
-        </g>
-      ))}
-      {Array.from({ length: Math.floor(x1 / 2) + 1 }, (_, i) => i * 2).map(t => (
-        <text key={t} x={px(t)} y={MT + PH + 18} textAnchor="middle" className="fill-gray-400 text-[11px]">{t}年</text>
-      ))}
-      {/* 昇給カーブ。在籍者がカーブのどちら側にいるかを一目で見えるようにする */}
-      <path
-        d={Array.from({ length: Math.ceil(x1 * 4) + 1 }, (_, i) => {
-          const yr = i / 4
-          return `${i === 0 ? 'M' : 'L'}${px(yr).toFixed(1)},${py(curveWage(a.curveStart, yr)).toFixed(1)}`
-        }).join(' ')}
-        fill="none" stroke="currentColor" strokeWidth={2.2}
-        className="text-emerald-600 dark:text-emerald-400" strokeDasharray="7 4" />
-      <text x={px(x1) - 4} y={py(curveWage(a.curveStart, x1)) - 9} textAnchor="end"
-        className="fill-emerald-600 dark:fill-emerald-400 text-[11px] font-semibold">昇給カーブ</text>
-      <line x1={ML} y1={py(a.overallAvg)} x2={ML + PW} y2={py(a.overallAvg)} stroke="currentColor" strokeDasharray="6 5" className="text-gray-400" strokeWidth={1.5} />
-      {STAGES.slice(0, 4).map((s, i) => a.stageAvg[i] > 0 && (
-        <g key={s.key}>
-          <line x1={px(s.from)} y1={py(a.stageAvg[i])} x2={px(Math.min(s.to, x1))} y2={py(a.stageAvg[i])} stroke="currentColor" className="text-blue-600 dark:text-blue-400" strokeWidth={2.5} />
-          <text x={(px(s.from) + px(Math.min(s.to, x1))) / 2} y={MT + PH + 36} textAnchor="middle" className="fill-gray-500 text-[11px] font-semibold">{s.key}</text>
-          <text x={(px(s.from) + px(Math.min(s.to, x1))) / 2} y={MT + PH + 50} textAnchor="middle" className="fill-blue-600 dark:fill-blue-400 text-[10px]">平均 {yen(a.stageAvg[i])}</text>
-        </g>
-      ))}
-      {rows.map(r => (
-        <g key={r.id}>
-          <circle cx={px(r.years)} cy={py(r.hourly)} r={hover?.id === r.id ? 10 : r.allLow || r.allHigh ? 8 : 6}
-            className={r.allLow ? 'fill-red-500' : r.allHigh ? 'fill-blue-600 dark:fill-blue-400' : 'fill-gray-400'}
-            stroke="white" strokeWidth={1.5} />
-          {(r.allLow || r.allHigh) && (
-            <text x={px(r.years) + 12} y={py(r.hourly) + 4}
-              className={`text-[11px] font-semibold ${r.allLow ? 'fill-red-600' : 'fill-blue-600 dark:fill-blue-400'}`}>{r.name}</text>
-          )}
-          {/* 当たり判定を広めに取る。点が小さいと拾いにくいため */}
-          <circle cx={px(r.years)} cy={py(r.hourly)} r={16} fill="transparent"
-            className="cursor-pointer"
-            onMouseEnter={() => setHover(r)} onMouseLeave={() => setHover(null)}
-            onClick={() => setHover(r)} />
-        </g>
-      ))}
-      {hover && <Tip r={hover} x={px(hover.years)} y={py(hover.hourly)} W={W} />}
-    </svg>
   )
 }
 
@@ -473,9 +395,9 @@ function RevisionBanner({ a, onApplied, pw }: { a: WageAnalysis; onApplied: () =
   const pendingRows = (changeId: string) => {
     const c = SCHEDULED_WAGE_CHANGES.find(x => x.id === changeId)
     if (!c) return []
-    // basis が 'revised' でも「まだ書き換わっていない人」を正しく拾うため currentHourly で判定
+    // 人員マスタに登録済み（適用開始日が先でも）なら対象外。masterHourly で判定する
     return a.rows
-      .filter(r => c.targets[r.id] !== undefined && r.currentHourly < c.targets[r.id])
+      .filter(r => c.targets[r.id] !== undefined && r.masterHourly < c.targets[r.id])
       .map(r => ({ row: r, to: c.targets[r.id] }))
   }
 
@@ -567,11 +489,9 @@ function RevisionBanner({ a, onApplied, pw }: { a: WageAnalysis; onApplied: () =
                 </div>
                 <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
                   変更は監査証跡（auditTrail）に記録され、取り消しはできません。
-                  当月の給与計算はこの新しい時給で行われます。
+                  適用開始日（{c.effective}）より前の月は改定前の時給で計算されます。
                   {c.effective.slice(-2) !== '01' && (
-                    <> この改定は月の途中（{c.effective}）が実施日です。
-                      システムは月内で時給を切り替えられないため、
-                      <b>実施月は全日がこの新しい時給で計算されます</b>。</>
+                    <> 月の途中が実施日なので、<b>実施月は暦日で按分した時給</b>になります。</>
                   )}
                 </p>
                 {applyErr && <p className="text-[11px] text-red-600 mb-2">{applyErr}</p>}
@@ -598,7 +518,7 @@ function RevisionBanner({ a, onApplied, pw }: { a: WageAnalysis; onApplied: () =
       </div>
       <p className="text-xs text-gray-600 dark:text-gray-300 mt-2 pt-2 border-t border-gray-300/60 dark:border-gray-600/60 leading-relaxed">
         {done
-          ? 'すべて人員マスタに反映済み。以下の分析は反映後の時給で計算しています。'
+          ? 'すべて人員マスタに反映済み（適用開始日つき。給与計算は各開始日から自動で切り替わります）。'
           : a.basis === 'revised'
             ? <><b>以下の分析は改定後の時給で計算しています</b>（上の「集計の基準」で切り替えられます）。
               人員マスタはまだ現在の額のままなので、給与計算には反映されていません。</>
@@ -625,14 +545,17 @@ function MinWageWatch({ a }: { a: WageAnalysis }) {
   for (let i = hist.length - 1; i > 0; i--) {
     if (hist[i].yen > hist[i - 1].yen) { lastRate = hist[i].yen / hist[i - 1].yen - 1; break }
   }
-  const projected = Math.round(mw * (1 + lastRate))
+  // 2026-09-14: 次の改定額が公示済み（TOKYO_MIN_WAGE に先の行がある）ならその額で判定する
+  const nextRow = hist.find(m => m.from > a.todayIso)
+  const projected = nextRow ? nextRow.yen : Math.round(mw * (1 + lastRate))
 
   // 現時点で最賃を下回っている人（あってはならない）
   const under = a.rows.filter(r => r.currentHourly < mw)
   // 次の改定で下回りうる人
   const atRisk = a.rows.filter(r => r.currentHourly >= mw && r.revised < projected)
   // 特定技能1号の報酬下限（最賃×1.1）
-  const tokuteiNg = a.rows.filter(r => r.visa.startsWith('特定') && r.revised < a.tokuteiFloor)
+  const tokuteiFloorNext = nextRow ? nextRow.yen * 1.1 : a.tokuteiFloor
+  const tokuteiNg = a.rows.filter(r => r.visa.startsWith('特定') && r.revised < tokuteiFloorNext)
 
   if (!under.length && !atRisk.length && !tokuteiNg.length) return null
 
@@ -652,16 +575,19 @@ function MinWageWatch({ a }: { a: WageAnalysis }) {
         )}
         {tokuteiNg.length > 0 && (
           <p className="text-red-700 dark:text-red-300">
-            <b>特定技能1号の報酬下限 {yen(a.tokuteiFloor)}（最賃×1.1）を下回っています</b>：
+            <b>特定技能の報酬下限 {yen(tokuteiFloorNext)}（最賃×1.1）を下回っています</b>：
             {tokuteiNg.map(r => `${r.name} ${yen(r.revised)}`).join('／')}
           </p>
         )}
         {atRisk.length > 0 && (
           <p>
-            <b>2026年10月の最賃改定で下回る可能性があります。</b>
-            直近の改定率 {(lastRate * 100).toFixed(1)}％（{yen(hist[hist.length - 2].yen)} → {yen(mw)}）が
-            もう一度あると最賃は <b>{yen(projected)}</b> になります。これを下回るのは
-            {atRisk.map(r => `${r.name} ${yen(r.revised)}`).join('／')}。
+            {nextRow
+              ? <><b>{nextRow.from} の最賃改定（{yen(nextRow.yen)}・公示済み）を下回ります。</b>
+                改定後の時給で下回るのは {atRisk.map(r => `${r.name} ${yen(r.revised)}`).join('／')}。</>
+              : <><b>次の最賃改定で下回る可能性があります。</b>
+                直近の改定率 {(lastRate * 100).toFixed(1)}％（{yen(hist[hist.length - 2].yen)} → {yen(mw)}）が
+                もう一度あると最賃は <b>{yen(projected)}</b> になります。これを下回るのは
+                {atRisk.map(r => `${r.name} ${yen(r.revised)}`).join('／')}。</>}
             <b>方針は「下回るなら速やかに上回るよう改定する」</b>（2026-08 代表確認）。
             改定額が公示されたら <code>lib/wage-analysis.ts</code> の <code>TOKYO_MIN_WAGE</code> に追記すれば、
             ここが自動で「下回っている」の判定に切り替わります。
