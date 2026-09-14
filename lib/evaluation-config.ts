@@ -15,6 +15,7 @@
  *    他の場所に同じ定数や関数を書いた場合は必ず壊れる。
  */
 import type { ABCGrade, EvaluationScores, EvaluationRank } from '@/types'
+import { curveRaiseAt, CURVE_BASE_RAISE, CURVE_DECAY, CURVE_MIN_RAISE } from './wage-curve'
 
 // ────────────────────────────────────────
 //  カテゴリ別 重み係数
@@ -134,13 +135,11 @@ export interface RaiseTableRow {
 }
 
 /**
- * 昇給テーブル（1,300円スタート → 10年目で S:2,700 A:2,380 B:2,060 C:1,740 到達）
- * D評価は現在時給の1%（法定最低限の昇給義務）
- *
- * `year` の意味: 入社からの完了年数（完了年数=N で N年目の行を引く）
- * 例: 2023-10 入社で 2026-05 評価 → 完了2年 → year=2 行を引く
+ * 旧昇給テーブル（〜2026-09-14）。記録として残す（計算には使わない）。
+ * 1,300円スタートの独自表で、賃金カーブ（160円−8円×年数）と最大24円ずれていた。
+ * `year` は「評価日時点の完了年数」だったため、記念日の前に評価すると1年前の行を引いていた。
  */
-export const RAISE_TABLE: RaiseTableRow[] = [
+export const LEGACY_RAISE_TABLE_2026_05: RaiseTableRow[] = [
   { year: 1, S: 220, A: 170, B: 120, C: 80 },
   { year: 2, S: 200, A: 160, B: 110, C: 65 },
   { year: 3, S: 180, A: 140, B: 100, C: 55 },
@@ -153,12 +152,41 @@ export const RAISE_TABLE: RaiseTableRow[] = [
 ]
 
 /**
+ * 評価ランクごとの倍率（A評価＝賃金カーブの昇給額 に対する比）。2026-09-14 代表決定で導入。
+ * 旧テーブルの平均的な比（S≒1.28 / B≒0.72 / C≒0.40）を丸めた値。
+ * 固定比にすることで、どの年も S > A > B > C かつ年数とともに単調に下がる。
+ */
+export const RANK_RAISE_RATIO = { S: 1.25, A: 1, B: 0.7, C: 0.4 } as const
+
+/** 5円単位に四捨五入 */
+function round5(v: number): number {
+  return Math.round(v / 5) * 5
+}
+
+/**
+ * 昇給テーブル（2026-09-14〜）。**A評価 = 賃金カーブ（lib/wage-curve.ts）の昇給額**そのもの。
+ * S/B/C は RANK_RAISE_RATIO を掛けて5円単位に丸める。D評価は現在時給の1%（法定最低限の昇給義務）。
+ *
+ * `year` の意味: **N回目の入社記念日の昇給**（評価日に最も近い記念日。raiseYearAt 参照）。
+ *   A = curveRaiseAt(N − 1)。1回目=160円、8回目=104円、11回目以降=80円（下限）。
+ */
+export const RAISE_TABLE: RaiseTableRow[] = (() => {
+  const lastYear = Math.ceil((CURVE_BASE_RAISE - CURVE_MIN_RAISE) / CURVE_DECAY) + 1  // 下限に達する年（=11）
+  const rows: RaiseTableRow[] = []
+  for (let year = 1; year <= lastYear; year++) {
+    const A = curveRaiseAt(year - 1)
+    rows.push({ year, S: round5(A * RANK_RAISE_RATIO.S), A, B: round5(A * RANK_RAISE_RATIO.B), C: round5(A * RANK_RAISE_RATIO.C) })
+  }
+  return rows
+})()
+
+/**
  * 昇給額を算出する。
  *
  * - S/A/B/C: テーブルから直接引く
  * - D: 現在時給の1%（法定最低限）
  *
- * `yearsFromHire` がテーブル最大年（9）を超えた場合は最大年でキャップする。
+ * `yearsFromHire`（＝N回目の記念日の昇給。raiseYearAt）がテーブル最大年（11）を超えた場合は最大年でキャップする。
  *
  * @param raiseTable オプション。指定しなければデフォルトテーブルを使用。
  *                   admin 設定からテーブルを上書きしたい場合のみ渡す。
@@ -249,6 +277,7 @@ export function applyLegalWageFloor(args: {
  * 例: 2023-10-23 → 2026-05-15 で 2 を返す（2026-10-23 未到達のため）。
  */
 export function yearsFromHire(hireDate: string): number {
+  // ⚠️ 表示用の「完了年数」。昇給テーブルを引くときは raiseYearAt(hireDate, evaluationDate) を使うこと
   if (!hireDate) return 1
   const hire = new Date(hireDate)
   const now = new Date()
@@ -257,3 +286,31 @@ export function yearsFromHire(hireDate: string): number {
   if (mDiff < 0 || (mDiff === 0 && now.getDate() < hire.getDate())) y--
   return Math.max(1, y)
 }
+
+/**
+ * 昇給テーブルを引く年（何回目の入社記念日の昇給か）を返す（2026-09-14 追加）。
+ *
+ * 評価は「入社記念日の前後1ヶ月」で行うため、評価日に**最も近い記念日**を採用する。
+ * 旧実装は評価日時点の完了年数だったので、記念日の前に評価すると1年前の行を引いていた
+ * （例: アイン 2018-11-01 入社・2026-09-10 評価 → 完了7年 → 7年目表。実際の昇給は 11/1 の8回目）。
+ *
+ * @param hireDate       入社日 'YYYY-MM-DD'
+ * @param evaluationDate 評価日 'YYYY-MM-DD'
+ */
+export function raiseYearAt(hireDate: string, evaluationDate: string): number {
+  if (!hireDate || !evaluationDate) return 1
+  const h = new Date(hireDate + 'T00:00:00Z')
+  const e = new Date(evaluationDate + 'T00:00:00Z')
+  let n = e.getUTCFullYear() - h.getUTCFullYear()
+  // 評価日の年の記念日、その前後の記念日のうち最も近いもの
+  let best = n
+  let bestDiff = Infinity
+  for (const k of [n - 1, n, n + 1]) {
+    const ann = Date.UTC(h.getUTCFullYear() + k, h.getUTCMonth(), h.getUTCDate())
+    const diff = Math.abs(ann - e.getTime())
+    if (diff < bestDiff) { bestDiff = diff; best = k }
+  }
+  n = best
+  return Math.max(1, n)
+}
+

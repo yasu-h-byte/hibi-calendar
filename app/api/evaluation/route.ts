@@ -14,7 +14,7 @@ import {
   calculateRank,
   getRaiseAmount,
   applyLegalWageFloor,
-  yearsFromHire as calcYearsFromHire,
+  raiseYearAt,
   RAISE_TABLE as DEFAULT_RAISE_TABLE,
   type RaiseTableRow,
 } from '@/lib/evaluation-config'
@@ -232,7 +232,9 @@ export async function POST(request: NextRequest) {
       // 詳細内訳を含む全フィールドを保存
       const metrics = { ...metricsRaw }
 
-      const yearsFromHire = calcYearsFromHire(worker.hireDate)
+      // 2026-09-14: 昇給テーブルを引く年は「評価日に最も近い入社記念日の回数」（raiseYearAt）。
+      //   フィールド名は互換のため yearsFromHire のまま（意味は N回目の記念日の昇給）
+      const yearsFromHire = raiseYearAt(worker.hireDate, evaluationDate)
       const evaluationId = `${workerId}_${evaluationDate}`
       const now = new Date().toISOString()
 

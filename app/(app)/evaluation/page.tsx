@@ -584,7 +584,8 @@ export default function EvaluationPage() {
     const totalScore = calc.total + bonus
     const rank = calculateRank(totalScore)
     const worker = workers.find(w => w.id === session.workerId)
-    const years = worker?.hireDate ? yearsFromDate(worker.hireDate) : 1
+    // 2026-09-14: サーバと同じくセッション作成時に保存した「記念日の回数」で引く（旧: 今日時点の完了年数でズレていた）
+    const years = session.yearsFromHire || (worker?.hireDate ? yearsFromDate(worker.hireDate) : 1)
     const raiseAmount = getRaiseAmount(rank, years, worker?.hourlyRate)
 
     setSaving(true)
@@ -1318,7 +1319,7 @@ export default function EvaluationPage() {
             </div>
             {session.raiseAmount != null && session.raiseAmount > 0 && (
               <p className="mt-3 text-sm font-bold text-green-600 dark:text-green-400">
-                推奨昇給: +{session.raiseAmount}円/h（{session.yearsFromHire}年目テーブル）
+                推奨昇給: +{session.raiseAmount}円/h（{session.yearsFromHire}回目の記念日の昇給）
               </p>
             )}
             {session.finalComment && (
@@ -2078,7 +2079,8 @@ export default function EvaluationPage() {
             const session = evaluations.find(e => e.id === approveSessionId)
             if (!session) return null
             const worker = workers.find(w => w.id === session.workerId)
-            const years = worker?.hireDate ? yearsFromDate(worker.hireDate) : 1
+            // 2026-09-14: サーバの確定値と同じ年で引く（セッション保存値）
+            const years = session.yearsFromHire || (worker?.hireDate ? yearsFromDate(worker.hireDate) : 1)
 
             // Calculate final score preview
             const finalCalc = calculateManualScore(finalScores)

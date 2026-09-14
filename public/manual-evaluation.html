@@ -654,20 +654,26 @@ manualScore  = japaneseSum × 1.0
 <h2 id="sec-5-4">5.4 昇給テーブル <span class="audience aud-all">全員</span></h2>
 
 <p>
-ランクと「勤続年数（完了年数）」から推奨昇給額（時給アップ／時間）を自動算出します。
+ランクと「何回目の入社記念日の昇給か」から推奨昇給額（時給アップ／時間）を自動算出します。<strong>2026年9月14日から、A評価＝賃金カーブ（160円−8円×在籍年数、下限80円）</strong>に一本化しました。
+S・B・C は A の 1.25倍・0.7倍・0.4倍（5円単位で四捨五入）です。
+</p>
+<p>
+年数は<strong>評価日に最も近い入社記念日</strong>で数えます（評価は記念日の前後1ヶ月で行うため）。例: 2018年11月1日入社で2026年9月10日に評価 → 11月1日の「8回目」の昇給。
 </p>
 
 <table>
-<tr><th>勤続年数</th><th><span class="rank-S">S</span></th><th><span class="rank-A">A</span></th><th><span class="rank-B">B</span></th><th><span class="rank-C">C</span></th></tr>
-<tr><td>1年目</td><td>+220</td><td>+170</td><td>+120</td><td>+80</td></tr>
-<tr><td>2年目</td><td>+200</td><td>+160</td><td>+110</td><td>+65</td></tr>
-<tr><td>3年目</td><td>+180</td><td>+140</td><td>+100</td><td>+55</td></tr>
-<tr><td>4年目</td><td>+170</td><td>+130</td><td>+90</td><td>+50</td></tr>
-<tr><td>5年目</td><td>+160</td><td>+120</td><td>+80</td><td>+50</td></tr>
-<tr><td>6年目</td><td>+140</td><td>+110</td><td>+75</td><td>+45</td></tr>
-<tr><td>7年目</td><td>+120</td><td>+90</td><td>+65</td><td>+35</td></tr>
-<tr><td>8年目</td><td>+110</td><td>+80</td><td>+60</td><td>+30</td></tr>
-<tr><td>9年目以降</td><td>+100</td><td>+80</td><td>+60</td><td>+30</td></tr>
+<tr><th>何回目の記念日</th><th><span class="rank-S">S</span></th><th><span class="rank-A">A</span></th><th><span class="rank-B">B</span></th><th><span class="rank-C">C</span></th></tr>
+<tr><td>1回目</td><td>+200</td><td>+160</td><td>+110</td><td>+65</td></tr>
+<tr><td>2回目</td><td>+190</td><td>+152</td><td>+105</td><td>+60</td></tr>
+<tr><td>3回目</td><td>+180</td><td>+144</td><td>+100</td><td>+60</td></tr>
+<tr><td>4回目</td><td>+170</td><td>+136</td><td>+95</td><td>+55</td></tr>
+<tr><td>5回目</td><td>+160</td><td>+128</td><td>+90</td><td>+50</td></tr>
+<tr><td>6回目</td><td>+150</td><td>+120</td><td>+85</td><td>+50</td></tr>
+<tr><td>7回目</td><td>+140</td><td>+112</td><td>+80</td><td>+45</td></tr>
+<tr><td>8回目</td><td>+130</td><td>+104</td><td>+75</td><td>+40</td></tr>
+<tr><td>9回目</td><td>+120</td><td>+96</td><td>+65</td><td>+40</td></tr>
+<tr><td>10回目</td><td>+110</td><td>+88</td><td>+60</td><td>+35</td></tr>
+<tr><td>11回目以降</td><td>+100</td><td>+80</td><td>+55</td><td>+30</td></tr>
 </table>
 
 <div class="box">
@@ -800,7 +806,7 @@ Body: { "action": "recalculateApproved", "all": true }</code></pre>
 
 <p style="text-align: center; color: #888; font-size: 13px; margin-top: 40px;">
 HIBI CONSTRUCTION 鳶事業部 — 評価管理マニュアル<br>
-最終更新: 2026年9月13日（職長のログイン方法＝共通パスワード＋名前選択を明記）<br>
+最終更新: 2026年9月14日（昇給テーブルを賃金カーブに一本化・年数を「評価日に最も近い記念日」で数える）<br>
 お問い合わせ・改訂提案: 管理者（靖仁さん）まで
 </p>
 
