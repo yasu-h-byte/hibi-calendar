@@ -1,6 +1,7 @@
 import { db } from './firebase'
 import { doc, getDoc, runTransaction } from '@/lib/fsdb'
 import { invalidateMainCache } from './compute'
+import type { ScheduledWorkerChange, ScheduledWorkerChangeField } from '@/types'
 
 export interface WorkerData {
   id: number
@@ -198,3 +199,68 @@ export async function revokeWorkerToken(id: number): Promise<void> {
   })
   invalidateMainCache()  // master data 変更を即反映
 }
+
+/* ────────────────────────────────────────────────
+   日付指定の人員マスタ変更（2026-09-14）
+   ──────────────────────────────────────────────── */
+
+/** 日付指定で書き換えてよい項目（給与計算に効く項目は適用開始日の仕組みを使うので含めない） */
+export const SCHEDULABLE_WORKER_FIELDS: ScheduledWorkerChangeField[] = ['visa', 'visaExpiry']
+
+type RawWorkerWithSchedule = Record<string, unknown> & {
+  id: number
+  name?: string
+  scheduledChanges?: ScheduledWorkerChange[]
+  appliedChanges?: (ScheduledWorkerChange & { appliedAt: string; prevValue: string })[]
+}
+
+/**
+ * workers 配列に「今日までに適用日を迎えた変更」を反映した新しい配列を返す（純粋関数）。
+ * 許可リスト外の項目・日付不正のものは反映せず残す。
+ */
+export function applyScheduledChangesToWorkers(
+  workers: RawWorkerWithSchedule[],
+  todayIso: string,
+  appliedAt: string,
+): { workers: RawWorkerWithSchedule[]; applied: { id: number; name: string; field: string; from: string; prevValue: string; value: string }[] } {
+  const applied: { id: number; name: string; field: string; from: string; prevValue: string; value: string }[] = []
+  const next = workers.map(w => {
+    const pending = Array.isArray(w.scheduledChanges) ? w.scheduledChanges : []
+    if (pending.length === 0) return w
+    const due = pending
+      .filter(c => SCHEDULABLE_WORKER_FIELDS.includes(c.field) && /^\d{4}-\d{2}-\d{2}$/.test(c.from) && c.from <= todayIso)
+      .sort((a, b) => a.from.localeCompare(b.from))
+    if (due.length === 0) return w
+    const copy: RawWorkerWithSchedule = { ...w }
+    const history = [...(w.appliedChanges || [])]
+    for (const c of due) {
+      const prevValue = String(copy[c.field] ?? '')
+      copy[c.field] = c.value
+      history.push({ ...c, appliedAt, prevValue })
+      applied.push({ id: w.id, name: w.name || '', field: c.field, from: c.from, prevValue, value: c.value })
+    }
+    const rest = pending.filter(c => !due.includes(c))
+    if (rest.length > 0) copy.scheduledChanges = rest
+    else delete copy.scheduledChanges
+    copy.appliedChanges = history
+    return copy
+  })
+  return { workers: next, applied }
+}
+
+/** 適用日を迎えた変更を Firestore の人員マスタへ反映する（日次 cron から呼ぶ） */
+export async function applyDueScheduledWorkerChanges(todayIso: string) {
+  const ref = MAIN_REF()
+  let applied: ReturnType<typeof applyScheduledChangesToWorkers>['applied'] = []
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists()) return
+    const workers = (snap.data().workers || []) as RawWorkerWithSchedule[]
+    const r = applyScheduledChangesToWorkers(workers, todayIso, new Date().toISOString())
+    applied = r.applied
+    if (r.applied.length > 0) tx.update(ref, { workers: r.workers })
+  })
+  if (applied.length > 0) invalidateMainCache()
+  return applied
+}
+

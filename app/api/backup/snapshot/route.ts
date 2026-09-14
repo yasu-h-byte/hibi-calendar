@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, deleteDoc, where } from '@/lib/fsdb'
+import { applyDueScheduledWorkerChanges } from '@/lib/worker-crud'
 
 /**
  * 出面・人員マスターデータの日次バックアップ
@@ -213,7 +214,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, ...summary })
+    // (最後) 日付指定の人員マスタ変更を反映（2026-09-14）。バックアップ取得後に行うので、
+    //   当日のスナップショットは「反映前」の状態になる（誤りがあれば戻せる）
+    let scheduledApplied: Awaited<ReturnType<typeof applyDueScheduledWorkerChanges>> = []
+    try {
+      scheduledApplied = await applyDueScheduledWorkerChanges(stamp.slice(0, 4) + '-' + stamp.slice(4, 6) + '-' + stamp.slice(6, 8))
+    } catch (e) {
+      summary.errors.push(`scheduledChanges: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
+    return NextResponse.json({ success: true, ...summary, scheduledApplied })
   } catch (error) {
     return NextResponse.json({
       error: 'Backup failed',

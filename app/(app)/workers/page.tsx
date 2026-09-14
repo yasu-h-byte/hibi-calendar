@@ -590,6 +590,12 @@ export default function WorkersPage() {
                             </div>
                           )
                         })()}
+                        {/* 2026-09-14: 日付指定の変更予定（在留資格の切替など） */}
+                        {(w.scheduledChanges || []).filter(c => c.field === 'visa').map(c => (
+                          <div key={c.from} className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
+                            {c.from.slice(5).replace('-', '/')}〜 {VISA_LABELS[c.value] || c.value}
+                          </div>
+                        ))}
                         {/* 2026-09-13: 外国人も生年月日と年齢（今日時点）を表示。未入力なら入力へ誘導 */}
                         {w.birthDate ? (
                           <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">

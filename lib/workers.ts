@@ -60,6 +60,8 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     hourlyRateFrom: (w.hourlyRateFrom as string) || undefined,
     prevHourlyRate: typeof w.prevHourlyRate === 'number' ? (w.prevHourlyRate as number) : undefined,
     salaryFrom: (w.salaryFrom as string) || undefined,
+    scheduledChanges: Array.isArray(w.scheduledChanges) ? (w.scheduledChanges as Worker['scheduledChanges']) : undefined,
+    appliedChanges: Array.isArray(w.appliedChanges) ? (w.appliedChanges as Worker['appliedChanges']) : undefined,
     prevSalary: typeof w.prevSalary === 'number' ? (w.prevSalary as number) : undefined,
     canDrive: typeof w.canDrive === 'boolean' ? (w.canDrive as boolean) : undefined,
     nonSmoker: typeof w.nonSmoker === 'boolean' ? (w.nonSmoker as boolean) : undefined,

@@ -57,6 +57,15 @@ export interface Worker {
   /** salaryFrom より前に使う月給 */
   prevSalary?: number
   /**
+   * 日付指定で切り替える人員マスタの変更（2026-09-14 追加）。
+   * 在留資格のように適用開始日の仕組みを持たない項目を、指定日に自動で書き換える。
+   * 毎日 JST 02:00 の日次バックアップ cron（/api/backup/snapshot）が、バックアップ取得後に
+   * from <= 今日 のものを反映して appliedChanges へ移す。例: ファン(103) 2026-10-01 tokutei1→tokutei2
+   */
+  scheduledChanges?: ScheduledWorkerChange[]
+  /** 反映済みの scheduledChanges（履歴） */
+  appliedChanges?: (ScheduledWorkerChange & { appliedAt: string; prevValue: string })[]
+  /**
    * 休憩短縮に伴う定例の所定外労働（分/日）。
    *
    * 個別契約で休憩が長い人（フン 104: 40分×2）を現場の運用（30分×2）に揃えるとき、
@@ -576,3 +585,14 @@ export interface RaiseTableRow {
   B: number
   C: number
 }
+
+/** 日付指定で切り替える人員マスタの項目（Worker.scheduledChanges）。対象は許可リストのみ */
+export type ScheduledWorkerChangeField = 'visa' | 'visaExpiry'
+export interface ScheduledWorkerChange {
+  field: ScheduledWorkerChangeField
+  value: string
+  /** 適用日 'YYYY-MM-DD'（この日の JST 02:00 の cron で反映） */
+  from: string
+  note?: string
+}
+
