@@ -14,7 +14,8 @@ const signed = (v: number) => (v >= 0 ? '+' : '−') + '¥' + Math.abs(Math.roun
 /** 散布図のツールチップ。SVG内に描くので最後にレンダリングして最前面にする。 */
 function Tip({ r, x, y, W }: { r: WageRow; x: number; y: number; W: number }) {
   const lines = [
-    `${r.years}年 ／ ${STAGES[r.stage].key}`,
+    `${r.years}年 ／ 在留資格 ${STAGES[r.visaStage >= 0 ? r.visaStage : r.stage].key}`,
+    ...(r.stageException ? [`（在籍年数では${STAGES[r.stage].key}の段階）`] : []),
     `時給 ${yen(r.hourly)}（月額 ${yen(r.hourly * 140)}）`,
     `段階内平均との差 ${signed(r.devStage)}`,
     r.devCohort !== null ? `同期との差 ${signed(r.devCohort)}` : '同期なし',
@@ -123,7 +124,7 @@ export function WageMap({ a }: { a: WageAnalysis }) {
     const nextGap = ci + 1 < clusters.length ? Math.min(...clusters[ci + 1].map(p => p.x)) - maxX : Infinity
     const prevGap = ci > 0 ? minX - Math.max(...clusters[ci - 1].map(p => p.x)) : Infinity
     const items = cl.map(p => {
-      const text = `${names.get(p.r.id)} ${yen(p.r.revised)}`
+      const text = `${names.get(p.r.id)} ${yen(p.r.revised)}${p.r.stageException ? ' ※' : ''}`
       return { p, text, w: textW(text) }
     })
     const colW = Math.max(...items.map(i => i.w))
@@ -142,7 +143,10 @@ export function WageMap({ a }: { a: WageAnalysis }) {
     return `${i === 0 ? 'M' : 'L'}${px(yr).toFixed(1)},${py(curveWage(a.curveStart, yr)).toFixed(1)}`
   }).join(' ')
 
-  const stageUsed = Array.from(new Set(rows.map(r => r.stage))).sort()
+  // 色分けは実際の在留資格（年数から推定した段階ではない）。例: 実習3号に合格せず特定1号へ移行した人
+  const colorStage = (r: WageRow) => (r.visaStage >= 0 ? r.visaStage : r.stage)
+  const stageUsed = Array.from(new Set(rows.map(colorStage))).sort()
+  const exceptions = rows.filter(r => r.stageException)
 
   return (
     <div className="overflow-x-auto">
@@ -213,7 +217,7 @@ export function WageMap({ a }: { a: WageAnalysis }) {
         {/* 改定後の点 */}
         {pts.map(({ r, x, y }) => (
           <g key={`pt-${r.id}`}>
-            <circle cx={x} cy={y} r={hover?.id === r.id ? 8.5 : 6.5} className={STAGE_FILL[r.stage] || 'fill-gray-400'} stroke="white" strokeWidth={1.5} />
+            <circle cx={x} cy={y} r={hover?.id === r.id ? 8.5 : 6.5} className={STAGE_FILL[colorStage(r)] || 'fill-gray-400'} stroke="white" strokeWidth={1.5} />
             <circle cx={x} cy={y} r={15} fill="transparent" className="cursor-pointer"
               onMouseEnter={() => setHover(r)} onMouseLeave={() => setHover(null)} onClick={() => setHover(r)} />
           </g>
@@ -263,8 +267,13 @@ export function WageMap({ a }: { a: WageAnalysis }) {
       </svg>
       <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
         名前の横の金額は改定後の時給。赤字はカーブを40円以上下回る人。縦の細線の長さがカーブとの差（ツールチップに金額）。
-        在籍年数は入社日からの年数（再入社のブランクがある人はブランクを除いた年数）。
+        在籍年数は入社日からの年数（再入社のブランクがある人はブランクを除いた年数）。丸の色は実際の在留資格。
       </p>
+      {exceptions.map(r => (
+        <p key={r.id} className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
+          ※ {r.name}：{r.context?.detail ?? `在留資格（${r.visa}）と在籍年数の段階（${STAGES[r.stage].key}）が一致しない。`}
+        </p>
+      ))}
     </div>
   )
 }

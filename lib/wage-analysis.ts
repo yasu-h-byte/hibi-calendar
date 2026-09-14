@@ -153,6 +153,11 @@ export const WAGE_CONTEXT: Record<number, {
     //   ※固定値なので年が進んだら見直す（ブランク分 0.33年を引く、が本来の式）
     serviceYears: 7.6,
   },
+  106: {
+    label: '3号不合格・特定1号へ早期移行',
+    detail: '技能実習3号の試験に合格できず、実習3号を経ずに特定技能1号へ移行したイレギュラーなケース。'
+      + '在留資格は特定技能1号だが、在籍年数では実習3号の段階にあたるため、段階平均・同期比較は実習3号の群と比べている。',
+  },
 }
 
 export interface WageRow {
@@ -172,6 +177,8 @@ export interface WageRow {
   stage: number
   /** 段階が在留資格と一致しない例外（試験不合格による早期移行など） */
   stageException?: boolean
+  /** 実際の在留資格の段階（STAGES の添字。不明は −1）。グラフの色分けはこちらを使う */
+  visaStage: number
   /** 個別事情の注記（再入社によるブランクなど）。WAGE_CONTEXT の該当分 */
   context?: (typeof WAGE_CONTEXT)[number]
   /** 入社時の東京都最低賃金 */
@@ -417,6 +424,7 @@ export function buildWageAnalysis(
       id: w.id, name: w.name, visa: VISA_LABEL[visaType] || visaType,
       hireDate: w.hireDate, hourly: h, currentHourly, masterHourly, revised, years: yr, stage,
       stageException: visaStage >= 0 && visaStage !== stage,
+      visaStage,
       context: ctx,
       hireMinWage: mw, startWage: start,
       cagr: yr > 0.5 && h > 0 ? (Math.pow(h / start, 1 / yr) - 1) * 100 : null,

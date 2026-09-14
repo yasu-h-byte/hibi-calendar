@@ -1122,7 +1122,7 @@ function DataTable({ a }: { a: WageAnalysis }) {
               <tr key={r.id}>
                 <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">
                   {r.name}
-                  {r.stageException && <span className="text-amber-600 ml-1" title="在留資格と制度上の段階が一致しない">※</span>}
+                  {r.stageException && <span className="text-amber-600 ml-1" title={r.context?.detail ?? '在留資格と制度上の段階が一致しない'}>※</span>}
                   {r.context && <span className="text-gray-500 ml-1" title={r.context.detail}>（{r.context.label}）</span>}
                 </td>
                 <td className={td}>{r.visa}</td>
