@@ -282,6 +282,14 @@ export default function AttendanceGridPage() {
           const errData = await res.clone().json().catch(() => null)
           if (errData?.code === 'LEAVE_OVERDRAFT') {
             const b = errData.balance
+            // 2026-09-14: 職長には残数超過の上書きを認めない（職長は共通パスワードのため
+            //   サーバ側では管理者と区別できず、ここで止めるしかない。職長トークン画面と同じ方針）
+            if (userRole === 'foreman') {
+              alert(b?.noGrant
+                ? `${errData.workerName} さんには有給が付与されていません。管理者に連絡してください。`
+                : `${errData.workerName} さんの有給残は 0 日です（枠 ${b?.total}日 / 消化 ${b?.used}日）。残数を超える有給は登録できません。管理者に連絡してください。`)
+              return { ok: false, save: s, error: '有給残数の超過のため登録できません（管理者へ）', status: 409 }
+            }
             const msg = b?.noGrant
               ? `${errData.workerName} さんには有給が付与されていません。\n\nこのまま有給として登録しますか？`
               : `${errData.workerName} さんの有給残は 0 日です。\n`

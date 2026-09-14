@@ -140,7 +140,7 @@
 |---|---|---|
 | スタッフの有給申請（leave-request request） | ✅ | 不可 |
 | 最終承認（leave-request approve）※Pを書く瞬間 | ✅ | 管理者が confirm で可（記録あり） |
-| 出面グリッドの直接入力（attendance/grid） | ✅ | 管理者が confirm で可（記録あり） |
+| 出面グリッドの直接入力（attendance/grid・PC出面／スマホ入力画面） | ✅ | 管理者・事業責任者が confirm で可（記録あり）。**職長は不可**（2026-09-14: 職長は共通パスワードでサーバ側は管理者と区別できないため、画面側で confirm を出さず拒否） |
 | スタッフのスマホ入力（attendance/staff） | ✅ | 不可 |
 | 職長の代理入力（attendance/foreman） | ✅ | 不可（例外は管理者が行う） |
 | 時季指定・管理者手動入力（leave designateLeaves） | ✅ | 管理者が confirm で可（記録あり） |
