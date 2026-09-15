@@ -14,6 +14,8 @@ import {
   AuthUser,
 } from '@/types'
 import { fmtYen } from '@/lib/format'
+import WorkerAvatar from '@/components/WorkerAvatar'
+import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { todayJstIso } from '@/lib/date-utils'
 // ⚠️ 評価ロジック（重み・テーブル・計算関数）は lib/evaluation-config.ts に集約。
 //   フロント・バックエンドで重複して定義すると過去のような不整合が再発する。
@@ -232,6 +234,8 @@ export default function EvaluationPage() {
   const [workers, setWorkers] = useState<Worker[]>([])
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
   const [apiEvaluators, setApiEvaluators] = useState<{ id: number; name: string; job: string }[]>([])
+  // 顔写真（2026-09-15 代表要望: 名前と顔がパッと分かるように）。無い人はイニシャル表示
+  const { photos } = useWorkerPhotos()
 
   // Review tab state
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null)
@@ -832,7 +836,9 @@ export default function EvaluationPage() {
         {/* ヘッダー */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
           <div className="flex items-start justify-between flex-wrap gap-2">
-            <div>
+            <div className="flex items-center gap-3">
+              <WorkerAvatar name={session.workerName} src={photos[String(session.workerId)]} size={56} />
+              <div>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                 {session.workerName}
               </h3>
@@ -840,6 +846,7 @@ export default function EvaluationPage() {
                 評価日: {session.evaluationDate}
                 {session.approvedAt && ` / 承認日時: ${new Date(session.approvedAt).toLocaleString('ja-JP')}`}
               </p>
+              </div>
             </div>
             <div className="text-right flex items-center gap-2">
               {session.status === 'approved' && (
@@ -1489,7 +1496,9 @@ export default function EvaluationPage() {
                       const youSubmitted = youAreEvaluator && showSession.reviews.some(r => r.evaluatorId === authUser?.workerId)
                       return (
                         <tr key={w.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">{w.name}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                            <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={32} className="mr-2" />{w.name}
+                          </td>
                           <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
                             {VISA_LABELS[w.visaType] || w.visaType}
                           </td>
@@ -1724,7 +1733,9 @@ export default function EvaluationPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
                       <div>
                         <span className="text-gray-500 dark:text-gray-400 block text-xs">名前</span>
-                        <span className="font-medium text-gray-900 dark:text-white">{sw.name}</span>
+                        <span className="font-medium text-gray-900 dark:text-white inline-flex items-center gap-2">
+                          <WorkerAvatar name={sw.name} src={photos[String(sw.id)]} size={40} />{sw.name}
+                        </span>
                       </div>
                       <div>
                         <span className="text-gray-500 dark:text-gray-400 block text-xs">在留資格</span>
@@ -2050,11 +2061,14 @@ export default function EvaluationPage() {
                     .filter(e => e.status === 'reviewing')
                     .map(session => (
                       <div key={session.id} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4 flex items-center justify-between">
-                        <div>
+                        <div className="flex items-center gap-3">
+                          <WorkerAvatar name={session.workerName} src={photos[String(session.workerId)]} size={40} />
+                          <div>
                           <p className="font-medium text-gray-900 dark:text-white">{session.workerName}</p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             評価日: {session.evaluationDate} / {session.reviews.length}名が提出
                           </p>
+                          </div>
                         </div>
                         <button
                           onClick={() => {
@@ -2109,7 +2123,8 @@ export default function EvaluationPage() {
 
                 {/* Worker info */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-3">
+                    <WorkerAvatar name={session.workerName} src={photos[String(session.workerId)]} size={48} />
                     {session.workerName} の評価
                   </h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
@@ -2388,7 +2403,9 @@ export default function EvaluationPage() {
                       }`}
                     >
                       <div className="flex items-start justify-between mb-2 flex-wrap gap-2">
-                        <div>
+                        <div className="flex items-center gap-3">
+                          <WorkerAvatar name={s.workerName} src={photos[String(s.workerId)]} size={40} />
+                          <div>
                           <h3 className="font-bold text-gray-900 dark:text-white">{s.workerName}</h3>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             評価日: {s.evaluationDate}
@@ -2401,6 +2418,7 @@ export default function EvaluationPage() {
                               )}
                             </span>
                           </p>
+                          </div>
                         </div>
                         <span
                           className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -2497,7 +2515,9 @@ export default function EvaluationPage() {
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                           {sorted.map(s => (
                             <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                              <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">{s.workerName}</td>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">
+                                <WorkerAvatar name={s.workerName} src={photos[String(s.workerId)]} size={28} className="mr-2" />{s.workerName}
+                              </td>
                               <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">{s.evaluationDate}</td>
                               <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300 whitespace-nowrap">{s.yearsFromHire}年</td>
                               <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-200 whitespace-nowrap font-medium">{s.totalScore?.toFixed(1) ?? '--'}</td>
