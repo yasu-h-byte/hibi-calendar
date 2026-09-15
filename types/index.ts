@@ -153,6 +153,10 @@ export interface Site {
   primeId?: string
   /** 担当の二次（'self' = 自社、それ以外は同業者の取引先 id）。これで自社現場／応援現場が決まる */
   ownerId?: string
+  /** 工種サイトの親現場 id（2026-09-15）。カレンダー・署名・職長・勤務時間・請負体制は親から引き継ぐ */
+  parentId?: string
+  /** 工種名（鉄骨・仮設など） */
+  workType?: string
   /**
    * 通勤時間の測定（遠方現場日当・運転手当の判定用。lib/allowance.ts 参照）。
    * 判定値 = 朝平均と夕平均の平均（片道換算・分）。凍結後は動かさない。

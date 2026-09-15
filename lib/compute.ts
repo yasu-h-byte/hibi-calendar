@@ -7,6 +7,7 @@ import {
 import { ymKey, isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isHiredByMonth, effectiveRateForYm, effectiveHourlyRateForYm, effectiveSalaryForYm } from './workers'
 import { isTobiGroup, isDokoGroup } from './jobs'
+import { withWorkTypeSiteCalendars } from './site-hierarchy'
 import type { HomeLeaveEntry } from './homeLeave'
 import {
   DRIVE_ALLOWANCE_FROM_YM, SITE_ALLOWANCE_FROM_YM, calcMonthlyAllowances, dailyAllowanceYen, isAllowanceEligibleDay,
@@ -104,6 +105,9 @@ export interface RawSite {
   rates?: { from: string; tobiRate: number; dokoRate: number }[]
   /** 現場の入り方。support（応援）は元請けを介さない直接支払いなので単価は100%受取（siteBaseRatio） */
   siteType?: 'direct' | 'support'
+  /** 工種サイトの親現場 id と工種名（2026-09-15・lib/site-hierarchy.ts） */
+  parentId?: string
+  workType?: string
   workSchedule?: {
     startTime?: string; endTime?: string
     morningBreak?: { enabled?: boolean; minutes?: number; mandatory?: boolean }
@@ -176,7 +180,9 @@ async function loadMainData(): Promise<MainData> {
     massign: (d.massign || {}) as Record<string, { workers?: number[]; subcons?: string[] }>,
     billing: normalizeBilling((d.billing || {}) as Record<string, unknown>),
     workDays: (d.workDays || {}) as Record<string, number>,
-    siteWorkDays: (d.siteWorkDays || {}) as Record<string, Record<string, number>>,
+    // 工種サイトは親現場の稼働日数を使う（2026-09-15・lib/site-hierarchy.ts）
+    siteWorkDays: Object.fromEntries(Object.entries((d.siteWorkDays || {}) as Record<string, Record<string, number>>)
+      .map(([ym, m]) => [ym, withWorkTypeSiteCalendars((d.sites || []) as RawSite[], m)])),
     locks: (d.locks || {}) as Record<string, boolean>,
     plData: (d.plData || {}) as Record<string, PLRecord[]>,
     defaultRates: (d.defaultRates || {}) as { tobiRate?: number; dokoRate?: number },
@@ -1239,6 +1245,10 @@ export function computeMonthly(
   sites: SiteSummary[]
   totals: { workDays: number; subWorkDays: number; cost: number; subCost: number; billing: number; profit: number; otHours: number }
 } {
+  // 2026-09-15: 工種サイト（親現場の下の入力先）は親のカレンダーを使う。
+  //   呼び出し元（月次・締め・Excel・ダッシュボード・サイドバー）がそれぞれ作るマップを、ここで一括して補う
+  siteWorkDaysMap = siteWorkDaysMap ? withWorkTypeSiteCalendars(main.sites, siteWorkDaysMap) : siteWorkDaysMap
+  calendarDays = calendarDays ? withWorkTypeSiteCalendars(main.sites, calendarDays) : calendarDays
   // Worker monthly map
   // ★ この月時点で出向中かどうかを ym で判定（dispatchFrom 以降のみ true）
   const workerMap = new Map<number, WorkerMonthly>()

@@ -28,6 +28,8 @@ export async function getSites(): Promise<Site[]> {
       end: (s.end as string) || '',
       foreman: (s.foreman as number) || 0,
       archived: (s.archived as boolean) || false,
+      parentId: (s.parentId as string) || undefined,
+      workType: (s.workType as string) || undefined,
     }))
     .filter(s => !s.archived)
 }
@@ -84,12 +86,18 @@ async function buildSitesWithWorkers(
 
   const workerMap = new Map(allWorkers.map(w => [w.id, w]))
 
-  return (data.sites as Record<string, unknown>[])
-    .filter(s => !(s.archived as boolean))
+  const rawSites = data.sites as Record<string, unknown>[]
+  return rawSites
+    // 工種サイトは親現場の行にまとめる（カレンダー・署名は親と共通・2026-09-15）
+    .filter(s => !(s.archived as boolean) && !s.parentId)
     .map(s => {
       const siteId = s.id as string
       const siteAssign = data.assign![siteId]
-      const workerIds = siteAssign ? (siteAssign.workers as number[]) || [] : []
+      const kidIds = rawSites.filter(k => k.parentId === siteId && !(k.archived as boolean)).map(k => k.id as string)
+      const workerIds = Array.from(new Set([
+        ...(siteAssign ? (siteAssign.workers as number[]) || [] : []),
+        ...kidIds.flatMap(kid => ((data.assign![kid]?.workers as number[]) || [])),
+      ]))
 
       return {
         site: {

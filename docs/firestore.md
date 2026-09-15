@@ -179,3 +179,26 @@ workSchedule?: {
 実売上未入力月の概算売上の単価（`avgSite || avgAll || tobiBase`）、現場マスタ一覧の表示。
 月々の実売上（`billing`）は従来どおり手入力で、この係数は掛からない。
 
+## 取引先マスタ・請負体制・工種サイト（2026-09-15）
+
+### 取引先マスタ（`demmen/main.subcons`）
+- 旧「外注先マスタ」をそのまま使う（id 不変）。`roles: ('gc'|'prime'|'peer'|'subcon')[]` を追加。未設定は `subcon` 扱い
+- 元請=gc、一次=prime、同業（二次・人を貸し借り）=peer、外注（専門業者）=subcon。出面の外注に配置できるのは peer/subcon
+- 定義と判定は `lib/companies.ts`
+
+### 現場の請負体制（`sites[]`）
+| フィールド | 意味 |
+|---|---|
+| `gcId` / `primeId` | 元請・一次（取引先 id） |
+| `ownerId` | 担当の二次。`'self'` = 自社、それ以外は同業者の取引先 id |
+| `siteType` / `client` | 保存時に自動導出（self → direct・請求先=一次、同業 → support・請求先=同業者）。受取率 85%/100% は従来どおり `siteType` で決まる |
+
+### 工種サイト（`sites[]` の `parentId` / `workType`）
+- 単価が工事の種類（鉄骨・仮設など）で変わる現場だけ、親現場の下に作る。出面・配置・受取単価（`rates`）・借りる単価（`assign[id].subconRates`）は工種サイトの id で持つ
+- **親から引き継ぐ**: 工期・職長（`foreman` と月別 `mforeman`）・勤務時間・請負体制 → `/api/sites` が親の保存時に子へ書き写す（`INHERITED_FIELDS`）
+- **親のものを読む**: 就業カレンダー（`siteCalendar`・`siteWorkDays`）と署名 → `lib/site-hierarchy.ts` の `calendarSiteIdOf` / `withWorkTypeSiteCalendars`。
+  適用箇所: `computeMonthly` の入口、`loadMainData` の siteWorkDays、`isScheduledWorkDay`、出面グリッド・スタッフ画面のカレンダー取得、
+  カレンダー・署名の現場一覧（`buildSitesWithWorkers`・`loadCalendarMatrix`。工種サイトの配置者は親の署名対象）、通知・サイドバーの未作成／未署名カウント、勤務予定シフト Excel
+- 工種サイトが残っている親現場は削除できない。工種の下に工種は作れない
+- 同業者別の請求・支払一覧: `lib/peer-statement.ts`・`/api/peer-statement`・画面 `/peer-statement`（相殺しない。請求=応援現場の工種ごとの人工×受取単価、支払=外注原価）
+

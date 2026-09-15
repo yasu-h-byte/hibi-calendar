@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
         const nextYm = `${nextMonth.getFullYear()}${String(nextMonth.getMonth() + 1).padStart(2, '0')}`
         const nextSiteWorkDays = main.siteWorkDays?.[nextYm] || {}
-        const activeSites = (main.sites || []).filter(s => !s.archived && s.end >= `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`)
+        const activeSites = (main.sites || []).filter(s => !s.archived && !(s as { parentId?: string }).parentId && s.end >= `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`)
         calendarPendingCount = activeSites.filter(s => !nextSiteWorkDays[s.id]).length
       }
     } catch (e) {

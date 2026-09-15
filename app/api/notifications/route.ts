@@ -123,12 +123,13 @@ export async function GET(request: NextRequest) {
         if (approvedSites.size === 0) continue
 
         for (const site of activeSites) {
+          // 工種サイトは親現場で数える（カレンダー・署名は親と共通・2026-09-15）
+          if ((site as { parentId?: string }).parentId) continue
           if (!approvedSites.has(site.id)) continue
 
-          const monthKey = `${site.id}_${ym}`
-          const mAssign = main.massign[monthKey]
-          const dAssign = main.assign[site.id]
-          const workerIds = mAssign?.workers || dAssign?.workers || []
+          const assignedOf = (sid: string) => main.massign[`${sid}_${ym}`]?.workers || main.assign[sid]?.workers || []
+          const kidIds = activeSites.filter(k => (k as { parentId?: string }).parentId === site.id).map(k => k.id)
+          const workerIds = Array.from(new Set([...assignedOf(site.id), ...kidIds.flatMap(assignedOf)]))
 
           for (const wid of workerIds) {
             if (!eligibleIdsByYm[ym].has(wid)) continue
@@ -497,7 +498,8 @@ export async function GET(request: NextRequest) {
         // ダッシュあり形式でクエリする必要がある（過去のバグ修正）
         const nextYmDashed = `${nextY}-${String(nextM).padStart(2, '0')}`
 
-        const activeSites = main.sites.filter(s => !s.archived)
+        // 工種サイトは親現場のカレンダーを使うので、作成期限の対象から外す（2026-09-15）
+        const activeSites = main.sites.filter(s => !s.archived && !(s as { parentId?: string }).parentId)
         const calQ = query(
           collection(db, 'siteCalendar'),
           where('ym', '==', nextYmDashed)

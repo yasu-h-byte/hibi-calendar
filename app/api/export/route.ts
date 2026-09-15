@@ -290,6 +290,11 @@ export async function GET(request: NextRequest) {
             siteCalendars[data.siteId] = data.days
           }
         })
+        {
+          // 工種サイトは親現場のカレンダー（2026-09-15）
+          const { withWorkTypeSiteCalendars } = await import('@/lib/site-hierarchy')
+          Object.assign(siteCalendars, withWorkTypeSiteCalendars(main.sites, siteCalendars))
+        }
         const wb = generatePlannedShiftExcel({
           ym: ymStr,
           workers: main.workers,

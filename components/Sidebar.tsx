@@ -54,6 +54,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     // 現場・外注
     { label: '現場マスタ', icon: '🏗', href: '/sites', section: '現場・外注', roles: ['admin', 'jimu'] },
     { label: '取引先マスタ', icon: '🏢', href: '/subcons', section: '現場・外注', roles: ['admin', 'jimu'] },
+    { label: '同業者との請求・支払', icon: '🤝', href: '/peer-statement', section: '現場・外注', roles: ['admin', 'approver', 'jimu'] },
     // システム
     { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
     { label: 'アクセス履歴', icon: '🔐', href: '/access-log', section: 'システム', roles: ['admin'] },
@@ -71,6 +72,7 @@ const MENU_ID_MAP: Record<string, string> = {
   '/workers': 'workers',
   '/sites': 'sites',
   '/subcons': 'subcons',
+  '/peer-statement': 'subcons',
   '/leave': 'leave',
   // '/leave-requests': removed (merged into /leave)
   '/evaluation': 'evaluation',

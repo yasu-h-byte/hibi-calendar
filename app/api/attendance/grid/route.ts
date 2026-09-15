@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiRole, isManagerRole } from '@/lib/auth'
+import { orderSitesWithWorkTypes } from '@/lib/site-hierarchy'
 import { getMainData, getAttData, getAssign } from '@/lib/compute'
 import { getApprovalForDay } from '@/lib/attendance'
 import { isStillActiveForMonth } from '@/lib/workers'
@@ -145,8 +146,10 @@ export async function GET(request: NextRequest) {
     const siteWorkDaysValue = siteWorkDaysForMonth[siteId] ?? null
 
     // Load approved site calendar for holiday work detection
+    //   工種サイトは親現場のカレンダーを使う（2026-09-15）
+    const { calendarSiteIdOf } = await import('@/lib/site-hierarchy')
     const calYm = `${String(y)}-${String(m).padStart(2, '0')}`
-    const calDocId = `${siteId}_${calYm}`
+    const calDocId = `${calendarSiteIdOf(main.sites, siteId)}_${calYm}`
     const calSnap = await getDoc(doc(db, 'siteCalendar', calDocId))
     const calData = calSnap.exists() ? calSnap.data() : null
     const calendarDays: Record<string, DayType> | null =
@@ -230,7 +233,8 @@ export async function GET(request: NextRequest) {
       drivers: driversForSite,
       allWorkers,
       allSubcons,
-      sites: main.sites.map(s => ({ id: s.id, name: s.name, archived: s.archived })),
+      // 工種サイトは親現場の直後に並べる（2026-09-15）
+      sites: orderSitesWithWorkTypes(main.sites).map(s => ({ id: s.id, name: s.name, archived: s.archived, parentId: s.parentId })),
       calendarDays,
       homeLeaves,
       // 2026-05-25 追加: 退職予定情報（今日から3ヶ月以内に退職予定の全スタッフ）

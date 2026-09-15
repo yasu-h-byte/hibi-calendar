@@ -16,6 +16,12 @@ import { ensureDocExists } from './firestore-safe'
 export async function isScheduledWorkDay(siteId: string, dateIso: string): Promise<boolean> {
   const [y, m, d] = dateIso.split('-').map(Number)
   if (!y || !m || !d) return false
+  // 2026-09-15: 工種サイトは親現場のカレンダーで判定する
+  {
+    const { getMainData } = await import('./compute')
+    const { calendarSiteIdOf } = await import('./site-hierarchy')
+    siteId = calendarSiteIdOf((await getMainData()).sites, siteId)
+  }
   const ymDash = dateIso.slice(0, 7)
   const calSnap = await getDocs(query(
     collection(db, 'siteCalendar'),
@@ -651,6 +657,8 @@ export async function getForemanSite(foremanId: number): Promise<Site | null> {
 
   for (const s of sites) {
     if (s.archived) continue
+    // 工種サイトは親と同じ職長を持つので、トークン職長画面では親現場を返す（2026-09-15）
+    if (s.parentId) continue
     const siteId = s.id as string
 
     // Check monthly foreman override

@@ -59,6 +59,9 @@ interface SiteData {
   gcId?: string
   primeId?: string
   ownerId?: string
+  /** 工種サイト（2026-09-15）。親現場の id と工種名 */
+  parentId?: string
+  workType?: string
 }
 
 interface SiteAssign {
@@ -95,6 +98,7 @@ const EMPTY_FORM = {
   gcId: '',
   primeId: '',
   ownerId: SELF_COMPANY_ID as string,
+  workType: '',
   start: '',
   end: '',
   foreman: '0',
@@ -182,6 +186,7 @@ export default function SitesPage() {
       name: s.name,
       siteType: s.siteType || 'direct',
       client: s.client || '',
+      workType: s.workType || '',
       gcId: s.gcId || '',
       primeId: s.primeId || '',
       // 旧データ（請負体制が未入力）は、種別と取引先名から推定して初期値にする
@@ -232,10 +237,28 @@ export default function SitesPage() {
     setShowModal(true)
   }
 
+  // 工種サイト（2026-09-15）
+  const editingSite = editId ? sites.find(x => x.id === editId) : undefined
+  const isChildEdit = !!editingSite?.parentId
+  const parentOfEditing = isChildEdit ? sites.find(x => x.id === editingSite!.parentId) : undefined
+  const childrenOfEditing = editId && !isChildEdit ? sites.filter(x => x.parentId === editId) : []
+  const addWorkType = async () => {
+    if (!editId) return
+    const wt = window.prompt('追加する工種名（例：鉄骨、仮設）')
+    if (!wt || !wt.trim()) return
+    const res = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'addWorkType', parentId: editId, workType: wt.trim() }) })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) { alert(data?.error || '追加に失敗しました'); return }
+    await fetchSites()
+    alert(`工種「${wt.trim()}」を追加しました。単価タブの受取単価は親現場の単価をコピーしてあります。工種の行から開いて単価を直してください。`)
+  }
+
   // 単価タブの表示切替用。請負体制から導いた種別（未入力の旧データは保存済みの種別）
-  const derivedSiteType = form.ownerId
-    ? resolveSiteParties({ gcId: form.gcId, primeId: form.primeId, ownerId: form.ownerId }, subcons).siteType
-    : (form.siteType === 'support' ? 'support' : 'direct')
+  const derivedSiteType = isChildEdit
+    ? (parentOfEditing?.siteType === 'support' ? 'support' : 'direct')
+    : form.ownerId
+      ? resolveSiteParties({ gcId: form.gcId, primeId: form.primeId, ownerId: form.ownerId }, subcons).siteType
+      : (form.siteType === 'support' ? 'support' : 'direct')
 
   /** 現場の編集画面から、一覧に無い会社をその場で取引先マスタに追加する */
   const addCompanyInline = async () => {
@@ -258,7 +281,9 @@ export default function SitesPage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { alert('現場名を入力してください'); return }
-    if (!form.ownerId) { alert('担当の二次（自社または同業者）を選んでください'); return }
+    const editingNow = editId ? sites.find(x => x.id === editId) : undefined
+    if (!editingNow?.parentId && !form.ownerId) { alert('担当の二次（自社または同業者）を選んでください'); return }
+    if (editingNow?.parentId && !form.workType.trim()) { alert('工種名を入力してください'); return }
     setSaving(true)
     try {
       // Compute latest tobiRate/dokoRate from rates array
@@ -285,6 +310,7 @@ export default function SitesPage() {
             action: 'update',
             id: editId,
             name: form.name,
+            workType: form.workType,
             gcId: form.gcId,
             primeId: form.primeId,
             ownerId: form.ownerId,
@@ -365,11 +391,16 @@ export default function SitesPage() {
     if (!editId) return
     setSaving(true)
     try {
-      await fetch('/api/sites', {
+      const res = await fetch('/api/sites', {
         method: 'POST',
         headers: headers(),
         body: JSON.stringify({ action: 'delete', id: editId }),
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        alert(err?.error || '削除に失敗しました')
+        return
+      }
       setShowModal(false)
       setShowDeleteConfirm(false)
       fetchSites()
@@ -395,12 +426,14 @@ export default function SitesPage() {
 
   const filtered = showArchived ? sites : sites.filter(s => !s.archived)
 
-  const sorted = [...filtered].sort((a, b) => {
+  const sortedParents = [...filtered].filter(s => !s.parentId || !filtered.some(p => p.id === s.parentId)).sort((a, b) => {
     const aActive = isActive(a)
     const bActive = isActive(b)
     if (aActive !== bActive) return aActive ? -1 : 1
     return (b.start || '').localeCompare(a.start || '')
   })
+  // 工種サイトは親現場の直後に並べる（2026-09-15）
+  const sorted = sortedParents.flatMap(p => [p, ...filtered.filter(c => c.parentId === p.id)])
 
   const activeCount = sites.filter(s => isActive(s)).length
   const archivedCount = sites.filter(s => s.archived).length
@@ -523,12 +556,12 @@ export default function SitesPage() {
 
               return (
                 <tr key={s.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${s.archived ? 'opacity-45' : ''}`}>
-                  <td className="px-3 py-2.5 font-medium">
-                    {s.name}
-                    {s.siteType === 'support' && (
+                  <td className={`px-3 py-2.5 font-medium ${s.parentId ? 'pl-8' : ''}`}>
+                    {s.parentId ? <span className="text-indigo-700 dark:text-indigo-300">└ 工種: {s.workType}</span> : s.name}
+                    {!s.parentId && s.siteType === 'support' && (
                       <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-bold">応援</span>
                     )}
-                    {(() => {
+                    {!s.parentId && (() => {
                       const nm = (id?: string) => (id ? subcons.find(c => c.id === id)?.name : undefined)
                       const chain = [nm(s.gcId), nm(s.primeId), s.ownerId === SELF_COMPANY_ID ? '自社' : nm(s.ownerId)].filter(Boolean)
                       return chain.length > 0
@@ -599,7 +632,7 @@ export default function SitesPage() {
             <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-600">
               {([
                 { key: 'basic', label: '基本' },
-                { key: 'schedule', label: '勤務時間' },
+                ...(isChildEdit ? [] : [{ key: 'schedule', label: '勤務時間' } as const]),
                 { key: 'rate', label: '単価' },
                 { key: 'other', label: 'その他' },
               ] as const).map(t => (
@@ -619,6 +652,21 @@ export default function SitesPage() {
 
             <div className="space-y-4">
               {modalTab === 'basic' && (<div className="space-y-4">
+              {/* 工種サイトの編集（2026-09-15） */}
+              {isChildEdit && (
+                <div className="rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 p-3 space-y-2">
+                  <div className="text-xs text-indigo-800 dark:text-indigo-200">
+                    <b>{parentOfEditing?.name}</b> の工種（出面の入力先）です。就業カレンダー・署名・職長・勤務時間・工期・請負体制は親現場と共通で、親現場の画面で変更します。
+                    単価タブで、この工種の受取単価と外注の借りる単価を設定してください。
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">工種名 *</label>
+                    <input value={form.workType} onChange={e => setForm({ ...form, workType: e.target.value })} placeholder="鉄骨"
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                  </div>
+                </div>
+              )}
+              {!isChildEdit && (<>
               {/* Basic info */}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">現場名 *</label>
@@ -694,6 +742,32 @@ export default function SitesPage() {
                   ))}
                 </select>
               </div>
+
+              {/* 工種（出面の入力先）。単価が工事の種類で変わる現場だけ作る（2026-09-15） */}
+              {editId && (
+                <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">工種（出面の入力先）</span>
+                    <button type="button" onClick={addWorkType} className="text-[11px] text-hibi-navy dark:text-blue-300 underline">＋ 工種を追加</button>
+                  </div>
+                  {childrenOfEditing.length === 0 ? (
+                    <p className="text-[11px] text-gray-400">
+                      工事の種類（鉄骨・仮設など）で単価が変わる現場だけ作ります。作ると出面の現場選択に「{form.name}（鉄骨）」のような入力先が並びます。
+                      カレンダー・署名・職長はこの現場と共通です。
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {childrenOfEditing.map(c => (
+                        <span key={c.id} className={`text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200 ${c.archived ? 'opacity-50' : ''}`}>
+                          {c.workType}{c.archived ? '（アーカイブ）' : ''}
+                        </span>
+                      ))}
+                      <span className="text-[11px] text-gray-400 self-center">単価は一覧の工種の行から開いて設定</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              </>)}
 
               {editId && (
                 <div className="pt-1">
@@ -1148,8 +1222,8 @@ export default function SitesPage() {
                 )}
               </div>
 
-              {/* ── 代理職長（月単位） ── */}
-              {editId && (
+              {/* ── 代理職長（月単位） ── 工種サイトは親現場と共通なので出さない */}
+              {editId && !isChildEdit && (
                 <div className="border border-gray-300 rounded-xl p-4 space-y-3">
                   <h4 className="text-sm font-bold text-hibi-navy">代理職長（月単位）</h4>
 

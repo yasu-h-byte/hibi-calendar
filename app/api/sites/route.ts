@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { resolveSiteParties } from '@/lib/companies'
+import { orderSitesWithWorkTypes } from '@/lib/site-hierarchy'
 
 interface RatePeriod {
   from: string
@@ -42,6 +43,27 @@ interface RawSite {
   gcId?: string
   primeId?: string
   ownerId?: string
+  /** 工種サイトの親現場 id（2026-09-15）。lib/site-hierarchy.ts 参照 */
+  parentId?: string
+  /** 工種名（鉄骨・仮設など） */
+  workType?: string
+}
+
+/**
+ * 工種サイトが親現場から引き継ぐ項目（2026-09-15 代表決定: カレンダー・署名・職長・勤務時間・請負体制は共通）。
+ * 親を保存するたびに子へ書き写す（読み取り側の改修を最小にするため、直接 site.foreman 等を読む箇所もそのまま正しくなる）。
+ */
+const INHERITED_FIELDS = ['start', 'end', 'foreman', 'workSchedule', 'siteType', 'client', 'gcId', 'primeId', 'ownerId'] as const
+
+function inheritFromParent(child: RawSite, parent: RawSite): RawSite {
+  const next: RawSite = { ...child }
+  for (const k of INHERITED_FIELDS) {
+    const v = (parent as unknown as Record<string, unknown>)[k]
+    if (v === undefined) delete (next as unknown as Record<string, unknown>)[k]
+    else (next as unknown as Record<string, unknown>)[k] = v
+  }
+  next.name = `${parent.name}（${child.workType || child.name}）`
+  return next
 }
 
 async function getMainDoc() {
@@ -63,7 +85,8 @@ export async function GET(request: NextRequest) {
     }
 
     const { data } = result
-    const rawSites = (data.sites || []) as RawSite[]
+    // 工種サイトは親現場の直後に並べる（出面の現場選択でも親の下に出る・2026-09-15）
+    const rawSites = orderSitesWithWorkTypes((data.sites || []) as RawSite[])
     const sites = rawSites.map(s => ({
       id: s.id,
       name: s.name,
@@ -84,6 +107,8 @@ export async function GET(request: NextRequest) {
       gcId: s.gcId || undefined,
       primeId: s.primeId || undefined,
       ownerId: s.ownerId || undefined,
+      parentId: s.parentId || undefined,
+      workType: s.workType || undefined,
     }))
 
     const assign: Record<string, { workers: number[]; subcons: string[]; subconRates?: Record<string, { rate: number; otRate: number }> }> = {}
@@ -201,6 +226,7 @@ export async function POST(request: NextRequest) {
       }
 
       const updated = [...sites]
+      const isChild = !!sites[idx].parentId
       updated[idx] = {
         ...updated[idx],
         ...(name !== undefined && { name }),
@@ -215,6 +241,19 @@ export async function POST(request: NextRequest) {
         // commute は素通しにしない（凍結後は不変・古い空フォームからの上書き消去を防ぐ）
         ...(commute !== undefined && { commute: mergeCommute(updated[idx].commute, commute) }),
         ...parties,
+      }
+      if (typeof body.workType === 'string' && body.workType.trim() && isChild) {
+        updated[idx].workType = body.workType.trim()
+      }
+      // 工種サイト: 引き継ぎ項目は親の値に戻す（子の画面から送られても変えない）
+      if (isChild) {
+        const parent = updated.find(x => x.id === sites[idx].parentId)
+        if (parent) updated[idx] = inheritFromParent(updated[idx], parent)
+      } else {
+        // 親現場: 工種サイトへ引き継ぎ項目を書き写す
+        for (let i = 0; i < updated.length; i++) {
+          if (updated[i].parentId === id) updated[i] = inheritFromParent(updated[i], updated[idx])
+        }
       }
 
       const updateData: Record<string, unknown> = { sites: updated }
@@ -252,6 +291,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'id required' }, { status: 400 })
       }
 
+      // 工種サイトが残っている親現場は削除できない（出面の入力先が宙に浮くため）
+      const kids = sites.filter(s => s.parentId === id)
+      if (kids.length > 0) {
+        return NextResponse.json({ error: `工種（${kids.map(k => k.workType || k.name).join('・')}）が残っているため削除できません。先に工種を削除またはアーカイブしてください` }, { status: 409 })
+      }
+
       // Remove from sites array
       const filtered = sites.filter(s => s.id !== id)
       if (filtered.length === sites.length) {
@@ -285,6 +330,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
+    // 工種（出面の入力先）を親現場の下に追加する（2026-09-15）
+    if (action === 'addWorkType') {
+      const { parentId, workType } = body as { parentId?: string; workType?: string }
+      const wt = String(workType || '').trim()
+      const parent = sites.find(x => x.id === parentId)
+      if (!parent || !wt) return NextResponse.json({ error: '親現場と工種名が必要です' }, { status: 400 })
+      if (parent.parentId) return NextResponse.json({ error: '工種の下に工種は作れません' }, { status: 400 })
+      if (sites.some(x => x.parentId === parent.id && (x.workType || '') === wt)) {
+        return NextResponse.json({ error: `「${wt}」は既にあります` }, { status: 409 })
+      }
+      const child = inheritFromParent({
+        id: 'site_' + Date.now(),
+        name: '',
+        parentId: parent.id,
+        workType: wt,
+        archived: false,
+        // 単価は親の単価を初期値にする（工種ごとに単価タブで変える）
+        tobiRate: parent.tobiRate || 0,
+        dokoRate: parent.dokoRate || 0,
+        rates: (parent.rates || []).map(r => ({ ...r })),
+      }, parent)
+      const updateData: Record<string, unknown> = { sites: [...sites, child] }
+      // 月別の職長（代理）も親と同じにする
+      const mforeman = (data.mforeman || {}) as Record<string, { wid: number }>
+      let mfChanged = false
+      for (const [k, v] of Object.entries(mforeman)) {
+        if (k.startsWith(parent.id + '_')) { mforeman[`${child.id}_${k.slice(parent.id.length + 1)}`] = v; mfChanged = true }
+      }
+      if (mfChanged) updateData.mforeman = mforeman
+      await updateDoc(ref, updateData)
+      await logActivity('admin', 'site.addWorkType', `${parent.name} に工種「${wt}」を追加`)
+      return NextResponse.json({ success: true, site: child })
+    }
+
     if (action === 'setDeputy') {
       const { siteId, ym, workerId } = body
       if (!siteId || !ym) {
@@ -293,6 +372,8 @@ export async function POST(request: NextRequest) {
       const mforeman = (data.mforeman || {}) as Record<string, { wid: number }>
       const key = `${siteId}_${ym}`
       mforeman[key] = { wid: Number(workerId) }
+      // 工種サイトにも同じ月の職長を設定（職長は親現場と共通）
+      for (const kid of sites.filter(x => x.parentId === siteId)) mforeman[`${kid.id}_${ym}`] = { wid: Number(workerId) }
       await updateDoc(ref, { mforeman })
       return NextResponse.json({ success: true })
     }
@@ -305,6 +386,7 @@ export async function POST(request: NextRequest) {
       const mforeman = (data.mforeman || {}) as Record<string, { wid: number }>
       const key = `${siteId}_${ym}`
       delete mforeman[key]
+      for (const kid of sites.filter(x => x.parentId === siteId)) delete mforeman[`${kid.id}_${ym}`]
       await updateDoc(ref, { mforeman })
       return NextResponse.json({ success: true })
     }

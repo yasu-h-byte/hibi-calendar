@@ -202,7 +202,9 @@ export async function GET(request: NextRequest) {
         const pym = ymKey(py, pm)
         const pAtt = await getAttCached(pym)   // pastDays と同じ月キャッシュを共有（2026-09-02）
 
-        const calKey = `${siteId}_${py}-${String(pm).padStart(2, '0')}`
+        // 工種サイトは親現場のカレンダー（2026-09-15）
+        const calParent = ((mainRaw.sites || []) as { id: string; parentId?: string }[]).find(x => x.id === siteId)?.parentId
+        const calKey = `${calParent || siteId}_${py}-${String(pm).padStart(2, '0')}`
         if (!(calKey in calCache)) {
           try {
             const calSnap = await getDoc(doc(db, 'siteCalendar', calKey))

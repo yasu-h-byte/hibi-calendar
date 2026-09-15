@@ -140,10 +140,12 @@ async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
   const massignMap = (mainData.massign || {}) as Record<string, { workers?: number[] }>
   const ymCompact = ym.replace('-', '')  // "YYYY-MM" → "YYYYMM"
   const assignedWorkerIdsBySite: Record<string, Set<number>> = {}
+  const rawSitesForKids = (mainData.sites || []) as { id: string; parentId?: string; archived?: boolean }[]
+  const assignedOf = (sid: string) => massignMap[`${sid}_${ymCompact}`]?.workers ?? assignMap[sid]?.workers ?? []
   for (const sw of sitesWithWorkers) {
-    const massignKey = `${sw.site.id}_${ymCompact}`
-    const source = massignMap[massignKey]?.workers ?? assignMap[sw.site.id]?.workers ?? []
-    assignedWorkerIdsBySite[sw.site.id] = new Set(source)
+    // 工種サイトに配置された人も親現場の署名対象に含める（2026-09-15）
+    const kidIds = rawSitesForKids.filter(k => k.parentId === sw.site.id && !k.archived).map(k => k.id)
+    assignedWorkerIdsBySite[sw.site.id] = new Set([...assignedOf(sw.site.id), ...kidIds.flatMap(assignedOf)])
   }
 
   // 全期間帰国 + 署名対象外国人
