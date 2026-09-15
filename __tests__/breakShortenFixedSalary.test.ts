@@ -11,7 +11,7 @@ import type { AttendanceEntry } from '@/types'
 function main(): MainData {
   return {
     workers: [
-      { id: 207, name: 'フォン', org: 'hfu', visa: 'jisshu1', job: 'tobi', rate: 8890, hourlyRate: 1270, salary: 213784, otMul: 1.25, hireDate: '2026-08-01', token: '', useOldRules: true, breakShortenMin: 20, breakShortenFrom: '202609' },
+      { id: 207, name: 'フォン', org: 'hfu', visa: 'jisshu1', job: 'tobi', rate: 8890, hourlyRate: 1270, salary: 213784, otMul: 1.25, hireDate: '2026-06-01', token: '', useOldRules: true, breakShortenMin: 20, breakShortenFrom: '202609' },
       { id: 104, name: 'フン', org: 'hibi', visa: 'tokutei1', job: 'tobi', rate: 15693, hourlyRate: 2403, salary: 396105, otMul: 1.25, hireDate: '2017-10-01', token: '', useOldRules: true, breakShortenMin: 20, breakShortenFrom: '202609' },
     ],
     sites: [{ id: 's', name: '現場', start: '', end: '', foreman: 0, archived: false }],
@@ -44,10 +44,14 @@ describe('7時間契約の固定月給者は契約時給で計算（2026-09分�
     const w = run('202609', 207)
     expect(w.absentDeduction).toBe(8890 * 11)
   })
-  test('締め済みの8月分は従来どおり（日給÷6h40m）で動かさない', () => {
-    const w = run('202608', 207)
+  test('7月分以前は従来どおり（日給÷6h40m）', () => {
+    const w = run('202607', 207)
     expect(w.otAllowance).toBe(Math.ceil(Math.ceil(8890 / (20 / 3) * 1.25) * 2))
     expect(w.breakShortenAllowance).toBeUndefined()
+  })
+  test('8月分から契約時給 1,270円（残業単価 1,588円）で計算する（2026-09-15 代表決定）', () => {
+    const w = run('202608', 207)
+    expect(w.otAllowance).toBe(1588 * 2)
   })
   test('フンは対象外: 残業単価 2,943円のまま', () => {
     const w = run('202609', 104)

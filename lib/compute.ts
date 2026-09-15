@@ -1942,8 +1942,9 @@ export function computeMonthly(
       //   旧来の「日給 ÷ 6h40m」だと 8,890 ÷ 6.667 = 1,333.5円となり、残業単価（1,667円）・休憩短縮手当が
       //   契約時給 1,270円（残業 1,588円）より高く出ていた。日給・欠勤控除・休業補償は 1,270×7 = 8,890 で不変。
       //   フン 104（日給15,693 ≠ 2,403×7）は該当せず、残業単価 2,943円 のまま。
-      //   締め済みの 2026-08 以前を動かさないよう 2026-09 分から適用。
-      const isSevenHourContract = ym >= '202609'
+      //   当初は締め済みの 2026-08 を動かさないよう 2026-09 分からとしたが、2026-09-15 代表決定で
+      //   8月分から適用（HFU の8月分は最低20日保証の変更で締め直すため、あわせて契約時給にそろえる）。
+      const isSevenHourContract = ym >= '202608'
         && !!wm.hourlyRate && wm.hourlyRate > 0 && !!wm.rate && wm.rate === wm.hourlyRate * 7
       const dailyHoursOld = isSevenHourContract ? 7 : 20 / 3
       const prescribedH = workerPrescribedDays * dailyHoursOld
