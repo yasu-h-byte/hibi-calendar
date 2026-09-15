@@ -606,13 +606,19 @@ export function getSiteRates(
   }
 
   // 期間別: from が <= ym の最後のエントリ
-  let ap = s.rates[0]
+  // 2026-09-15 修正: 現場マスタの単価タブは期間開始を 'YYYY-MM-DD'（日付入力）で保存するが、
+  //   旧データは 'YYYYMM'。文字列のまま 'YYYYMM' と比べると '-' が数字より小さいため
+  //   「2026-10-01 開始」が 9月分にも当たっていた。月（YYYYMM）に正規化し、開始順に並べてから選ぶ
+  const monthOf = (f: unknown) => String(f ?? '').replace(/-/g, '').slice(0, 6)
+  const periods = [...s.rates].sort((p, q) => monthOf(p.from).localeCompare(monthOf(q.from)))
+  let ap = periods[0]
   if (ym) {
-    for (const r of s.rates) {
-      if (r.from <= ym) ap = r; else break
+    const ymN = ym.replace(/-/g, '').slice(0, 6)
+    for (const r of periods) {
+      if (monthOf(r.from) <= ymN) ap = r; else break
     }
   } else {
-    ap = s.rates[s.rates.length - 1]
+    ap = periods[periods.length - 1]
   }
 
   const tr = ap.tobiRate || defTobi

@@ -51,3 +51,17 @@ describe('getSiteRates', () => {
     expect(getSiteRates(main).tobiBase).toBe(32300)
   })
 })
+
+describe('単価の期間開始の形式（2026-09-15）', () => {
+  const m = {
+    defaultRates: { tobiRate: 38000, dokoRate: 30000 },
+    sites: [{ id: 'x', name: 'x', start: '', end: '', foreman: 0, archived: false, siteType: 'support',
+      rates: [{ from: '2026-10-01', tobiRate: 30000, dokoRate: 20000 }, { from: '202607', tobiRate: 27000, dokoRate: 19000 }] }],
+  } as unknown as MainData
+  test('日付形式（YYYY-MM-DD）と月形式（YYYYMM）が混在しても月で正しく選ぶ', () => {
+    expect(getSiteRates(m, 'x', '202609').tobiBase).toBe(27000)
+    expect(getSiteRates(m, 'x', '202610').tobiBase).toBe(30000)
+    expect(getSiteRates(m, 'x').tobiBase).toBe(30000)
+  })
+})
+
