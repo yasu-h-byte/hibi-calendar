@@ -36,7 +36,7 @@ describe('7時間契約の固定月給者は契約時給で計算（2026-09分�
     const orig = console.error; console.error = (...a: unknown[]) => { errs.push(String(a[0])) }
     const w = run('202609', 207)
     console.error = orig
-    expect(w.breakShortenAllowance).toBe(Math.ceil(1270 * 11 * 20 / 60))
+    expect(w.breakShortenAllowance).toBe(Math.ceil(1588 * 11 * 20 / 60))  // 残業単価 1,588（所定超25%）
     expect(w.otAllowance).toBe(1588 * 2)
     expect(errs).toEqual([])
   })

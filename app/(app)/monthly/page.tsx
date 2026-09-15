@@ -1292,7 +1292,7 @@ export default function MonthlyPage() {
                       </>
                     )}
                     {showBreakShorten && (
-                      <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="休憩短縮に伴う所定外労働（出勤日 × 短縮分 × 通常時給）。法定内のため割増なし">休憩短縮</th>
+                      <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="休憩短縮に伴う所定外労働（出勤日 × 短縮分 × 残業単価）。雇用契約書の所定超25%に合わせて割増">休憩短縮</th>
                     )}
                     {/* 遠方現場日当・運転手当（2026-10 施行、lib/allowance.ts） */}
                     {showAllowance && (
@@ -1362,7 +1362,7 @@ export default function MonthlyPage() {
                             if ((w.compAllowance || 0) > 0)
                               lines.push(`休業手当:      ¥${(w.compAllowance || 0).toLocaleString()}`)
                             if ((w.breakShortenAllowance || 0) > 0)
-                              lines.push(`休憩短縮手当:  ¥${(w.breakShortenAllowance || 0).toLocaleString()}（${w.breakShortenHours}h・割増なし）`)
+                              lines.push(`休憩短縮手当:  ¥${(w.breakShortenAllowance || 0).toLocaleString()}（${w.breakShortenHours}h・25%割増）`)
                             if ((w.siteAllowance || 0) > 0)
                               lines.push(`遠方現場日当:  ¥${(w.siteAllowance || 0).toLocaleString()}（${w.allowanceDays || 0}日・非課税）`)
                             if ((w.driveAllowance || 0) > 0)
@@ -1586,7 +1586,7 @@ export default function MonthlyPage() {
                           )}
                           {showBreakShorten && (
                             <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.breakShortenAllowance || 0) > 0 ? 'text-cyan-600' : 'text-gray-400'}`}
-                              title={(w.breakShortenAllowance || 0) > 0 ? `休憩短縮 ${w.breakShortenHours}h ぶんの所定外労働（割増なし）` : undefined}>
+                              title={(w.breakShortenAllowance || 0) > 0 ? `休憩短縮 ${w.breakShortenHours}h ぶんの所定外労働（残業単価・25%割増）` : undefined}>
                               {(w.breakShortenAllowance || 0) > 0 ? fmtYen(w.breakShortenAllowance!) : '—'}
                             </td>
                           )}

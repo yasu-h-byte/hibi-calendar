@@ -1881,10 +1881,10 @@ export function computeMonthly(
       // 基本給は月給値を採用（時給からの再計算による丸め誤差を避ける）
       // 2026-06-XX 修正 (I-7): 中途入退社時は按分した値を採用
       const fixedBase = proratedSalary
-      // 2026-09-13: 休憩短縮手当（フォン 207・タン 208 の 20分/日）。旧ルール固定月給ブランチと同じく
-      //   法定内の所定外労働なので割増なし。単価はこのブランチの時給（月給 ÷ 140h）で統一する
+      // 2026-09-13: 休憩短縮手当（20分/日）。旧ルール固定月給ブランチと同じく所定超25%（2026-09-15）
+      //   単価はこのブランチの時給（契約時給。未登録なら月給÷140h）× 1.25（円未満切上）
       const bsHours = wm.breakShortenHours || 0
-      const breakShortenAllowance = bsHours > 0 ? ceilYen(derivedHourlyRate * bsHours) : 0
+      const breakShortenAllowance = bsHours > 0 ? ceilYen(ceilYen(derivedHourlyRate * 1.25) * bsHours) : 0
       if (breakShortenAllowance > 0) wm.breakShortenAllowance = breakShortenAllowance
       // 2026-06-XX 修正: 所定外労働手当 (nonStatutoryOTAllowance) も加算
       // 2026-06-12 修正 (監査C1): 有給日給 (paidLeaveAllowance) の加算漏れを是正。
@@ -1966,9 +1966,10 @@ export function computeMonthly(
       const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays - wm.compDays)
       const absentDeduction = floorYen(hourlyRate * dailyHoursOld * absentDays)  // = 日給 × 欠勤日数（切捨: 過少払い防止）
       const compBaseDeduction = floorYen(hourlyRate * dailyHoursOld * wm.compDays)  // 補償日 通常分控除（満額・切捨）
-      // 休憩短縮分（20分/日など）は法定内の所定外労働なので**割増なしの通常時給**で支払う
+      // 休憩短縮分（20分/日など）は所定外労働。法定内だが、雇用契約書の割増率「所定超 25%」に合わせて
+      //   **残業と同じ単価（時給×1.25・円未満切上）** で支払う（2026-09-15 代表決定・旧ルール3名の暫定措置）
       const bsHours = wm.breakShortenHours || 0
-      const breakShortenAllowance = bsHours > 0 ? ceilYen(hourlyRate * bsHours) : 0
+      const breakShortenAllowance = bsHours > 0 ? ceilYen(otUnitRate * bsHours) : 0
       if (breakShortenAllowance > 0) wm.breakShortenAllowance = breakShortenAllowance
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours + bsHours
       const salaryNet = basePay + compAllowance + otAllowance + breakShortenAllowance - absentDeduction - compBaseDeduction

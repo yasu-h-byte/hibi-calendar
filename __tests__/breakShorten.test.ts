@@ -47,17 +47,17 @@ describe('休憩短縮手当', () => {
     // 7月は出勤13日 → 13 × 20分 = 4.333h
     expect(w.actualWorkDays).toBe(13)
     expect(w.breakShortenHours).toBeCloseTo(13 * 20 / 60, 3)
-    // 通常時給（割増なし）= 日額15,693 ÷ 6h40m = 2,353.95
-    const hourly = 15693 / (20 / 3)
-    expect(w.breakShortenAllowance).toBe(Math.ceil(hourly * (13 * 20 / 60)))
+    // 残業単価（所定超25%・2026-09-15）= 切上(15,693 ÷ 6h40m × 1.25) = 2,943
+    const otUnit = Math.ceil(15693 / (20 / 3) * 1.25)
+    expect(w.breakShortenAllowance).toBe(Math.ceil(otUnit * (13 * 20 / 60)))
     expect(w.salaryNetPay! - base.salaryNetPay!).toBe(w.breakShortenAllowance)
   })
 
-  it('割増なし: 残業手当(1.25倍)の単価より安い', () => {
+  it('所定超25%: 残業手当と同じ単価（2,943円）で払う（2026-09-15 代表決定）', () => {
     const w = hung(run('202607', { min: 20, from: '202607' }))
     const perHour = w.breakShortenAllowance! / w.breakShortenHours!
-    expect(perHour).toBeLessThan(2943)      // 1.25倍の残業単価
-    expect(perHour).toBeGreaterThan(2353)   // 1.0倍の通常時給
+    expect(perHour).toBeGreaterThanOrEqual(2943)  // 1.25倍の残業単価
+    expect(perHour).toBeLessThan(2944)             // 円未満切上のぶんだけ
   })
 
   it('20日出勤ならちょうど所定1日分（6h40m）になる', () => {
