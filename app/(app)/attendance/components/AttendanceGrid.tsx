@@ -473,6 +473,8 @@ export default function AttendanceGrid({
                             onOtChange={onOtChange}
                             onCellKeyDown={onCellKeyDown}
                             onNightClick={isNightDay(d.day) ? onNightClick : undefined}
+                            // 旧契約継続者（外国人）はスマホ打刻の時刻・休憩も併せて表示する
+                            onBreakChange={worker.useOldRules && !!worker.visa && worker.visa !== 'none' ? onBreakChange : undefined}
                           />
                         )
                       })}

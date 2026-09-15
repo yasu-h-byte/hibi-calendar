@@ -278,16 +278,24 @@ interface LegacyCellProps {
   onOtChange: (workerId: string, day: number, otValue: string) => void
   onCellKeyDown: (e: React.KeyboardEvent, day: number, workerId: string) => void
   onNightClick?: (workerId: string, day: number) => void
+  /**
+   * 旧契約継続者（フン・フォン・タン）用: スマホ打刻の始業・終業と休憩を併せて表示する（2026-09-15）。
+   * 新ルールの人と見比べられず、休憩チェックの付け忘れ（8/12 フン・フォン）に気づけなかったため。
+   * 休憩の変更は時間ベースと同じ handleBreakChange（残業を時刻から再計算）を使う。
+   */
+  onBreakChange?: (workerId: string, day: number, breakKey: 'b1' | 'b2' | 'b3', checked: boolean) => void
 }
 
 export function LegacyCell({
   entry, wId, day, isLocked, isHolidayWork, colBg, cellWidth,
-  onWorkChange, onOtChange, onCellKeyDown, onNightClick,
+  onWorkChange, onOtChange, onCellKeyDown, onNightClick, onBreakChange,
 }: LegacyCellProps) {
   const workVal = getWorkValue(entry)
   const source = entry?.s
   const otVal = entry?.o || 0
   const canOt = entry && entry.w > 0 && entry.w !== 0.6
+  const showTimes = !!onBreakChange && !!canOt && !!entry?.st && !!entry?.et && !entry?.nonly
+  const actualH = showTimes && entry ? calcDayShiftHours(entry) : 0
 
   return (
     <td
@@ -331,6 +339,28 @@ export function LegacyCell({
           {/* 2026-08-31 追加: 欠勤。月給者（濱上さん等）はこの記録がある日だけ控除される */}
           <option value="R">欠</option>
         </select>
+
+        {showTimes && entry && (
+          <>
+            <div className="text-[10px] text-center text-gray-600 tabular-nums leading-tight">
+              {entry.st}–{entry.et}
+            </div>
+            <div className="flex items-center justify-center gap-1 w-full px-0.5 leading-tight">
+              <label className="flex items-center cursor-pointer" title="午前休憩(10:00-10:30)">
+                <input type="checkbox" checked={(entry.b1 ?? 1) === 1} onChange={e => onBreakChange?.(wId, day, 'b1', e.target.checked)} disabled={isLocked} className="w-3 h-3 rounded" />
+              </label>
+              <label className="flex items-center cursor-pointer" title="昼休憩(12:00-13:00)">
+                <input type="checkbox" checked={(entry.b2 ?? 1) === 1} onChange={e => onBreakChange?.(wId, day, 'b2', e.target.checked)} disabled={isLocked} className="w-3 h-3 rounded" />
+              </label>
+              <label className="flex items-center cursor-pointer" title="午後休憩(15:00-15:30)">
+                <input type="checkbox" checked={(entry.b3 ?? 1) === 1} onChange={e => onBreakChange?.(wId, day, 'b3', e.target.checked)} disabled={isLocked} className="w-3 h-3 rounded" />
+              </label>
+              <span className={`text-[10px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
+                {actualH.toFixed(1)}
+              </span>
+            </div>
+          </>
+        )}
 
         {/* OT input - 小さめ */}
         <input
