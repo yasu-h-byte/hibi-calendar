@@ -53,6 +53,7 @@ export interface PayrollSnapshot {
   actualWorkHours?: number        // = regularHours + legalHolidayHours
   regularWorkDays?: number        // 通常出勤日数（法定休日除く）
   compDays: number
+  compInGuaranteeDays?: number
   plDays: number
   examDays?: number
   legalHolidayHours?: number      // 法定休日(日曜)の実労働時間
@@ -104,6 +105,8 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
   const nightHours = w.nightHours || 0
   const legalOtHours = w.legalOtHours || 0
   const compDays = w.compDays || 0
+  // 2026-09-15: 保証枠の中の補償日は100%支給（休業手当60%の対象外）
+  const compAllowanceDays = compDays - (w.compInGuaranteeDays || 0)
 
   // ── 時間の0.1h丸め許容（2026-06-30 誤検知対策） ──
   // compute.ts は legalOtHours / legalHolidayHours / nightHours を return 時に
@@ -203,7 +206,7 @@ export function validatePayroll(w: PayrollSnapshot): PayrollValidationIssue[] {
   }
 
   // ── I7. compAllowance: 時給 × compDays × 7 × 0.6（誤差±2円） ──
-  const expectedComp = Math.round(hourlyRate * compDays * 7 * 0.6)
+  const expectedComp = Math.round(hourlyRate * compAllowanceDays * 7 * 0.6)
   const paidComp = w.compAllowance || 0
   if (Math.abs(paidComp - expectedComp) > 2) {
     push('critical', 'compAllowance',

@@ -555,3 +555,14 @@ npm run test:ui   # ブラウザUI付き
 - `/wage-analysis` の反映ボタンは時給・日給だけを書く。固定月給の人は月給を別途反映すること
 - テスト: `__tests__/salaryEffectiveFrom.test.ts`
 
+## 2026-09-15 追記: 現場都合休（0.6補償）は保証枠内で100%（2026年8月分〜）
+
+`calculateVietnameseSalary` で、`ym >= COMP_FULL_WITHIN_GUARANTEE_FROM_YM`（'202608'）のとき:
+
+- 枠内補償日 `compInGuaranteeDays = min(補償日, max(0, 保証枠 − 出勤 − 有給 − 試験))` → 基本給で100%支給（欠勤控除しない）
+- 休業手当 = 時給 × 7 × 0.6 × (補償日 − 枠内補償日)
+- 欠勤日数 = max(0, 保証枠 − 出勤 − 有給 − 試験 − 枠内補償日)
+
+それより前の月は従来（補償日を欠勤扱いで控除し、全補償日に60%）。`WorkerMonthly.compInGuaranteeDays` を追加し、
+検算（payroll-validator I7）も枠外の補償日だけを60%で照合する。旧ルール固定月給（フン・フォン・タン(新人)）は対象外。
+

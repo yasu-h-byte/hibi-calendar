@@ -51,17 +51,18 @@ describe('保証枠 = min(20, カレンダー所定日数)', () => {
     const { w, days } = run(18, 17, 0, 1, 0)
     expect(w.absence).toBe(1); expect(days).toBe(19)
   })
-  test('G: カレンダー18日・現場都合休2 → 欠勤2＋休業手当2×0.6（19.2日分）', () => {
+  test('G: カレンダー18日・現場都合休2 → 補償日は保証枠内なので100%（20日分・2026-08分〜）', () => {
     const { w, days } = run(18, 16, 2, 0, 0)
-    expect(w.absence).toBe(2); expect(w.compDays).toBe(2); expect(days).toBe(19.2)
+    expect(w.absence).toBe(0); expect(w.compDays).toBe(2); expect(w.compInGuaranteeDays).toBe(2)
+    expect(w.compAllowance).toBe(0); expect(days).toBe(20)
   })
   test('J: カレンダー18日・出16＋有給2 → 欠勤0（20日分）', () => {
     const { w, days } = run(18, 16, 0, 0, 2)
     expect(w.absence).toBe(0); expect(days).toBe(20)
   })
-  test('L: カレンダー18日・欠1＋現場都合休2 → 欠勤3（18.2日分）', () => {
+  test('L: カレンダー18日・欠1＋現場都合休2 → 本人欠勤1だけ控除（19日分）', () => {
     const { w, days } = run(18, 15, 2, 1, 0)
-    expect(w.absence).toBe(3); expect(days).toBe(18.2)
+    expect(w.absence).toBe(1); expect(days).toBe(19)
   })
 })
 
@@ -70,13 +71,21 @@ describe('カレンダー20日以上の月は従来どおり（20日枠）', () 
     const { w, days } = run(23, 23, 0, 0, 0)
     expect(w.guaranteeDays).toBe(20); expect(w.absence).toBe(0); expect(days).toBe(23)
   })
-  test('C: 23日中 出18＋現場都合休5 → 欠勤2＋休業手当5×0.6（21日分）', () => {
+  test('C: 23日中 出18＋現場都合休5 → 枠内2日は100%、残り3日は60%（21.8日分）', () => {
     const { w, days } = run(23, 18, 5, 0, 0)
-    expect(w.absence).toBe(2); expect(days).toBe(21)
+    expect(w.absence).toBe(0); expect(w.compInGuaranteeDays).toBe(2); expect(days).toBe(21.8)
   })
-  test('H: 20日中 出15＋現場都合休5 → 欠勤5＋休業手当5×0.6（18日分）', () => {
+  test('H: 20日中 出15＋現場都合休5 → 補償日5日すべて枠内で100%（20日分）', () => {
     const { days } = run(20, 15, 5, 0, 0)
-    expect(days).toBe(18)
+    expect(days).toBe(20)
+  })
+  test('リン（2026-08）: 21日中 出18＋現場都合休2＋欠1 → 20日分（欠1は枠外で吸収）', () => {
+    const { w, days } = run(21, 18, 2, 1, 0)
+    expect(w.absence).toBe(0); expect(w.compAllowance).toBe(0); expect(days).toBe(20)
+  })
+  test('21日中 出17＋現場都合休2＋欠2 → 本人欠勤のうち1日を控除（19日分）', () => {
+    const { w, days } = run(21, 17, 2, 2, 0)
+    expect(w.absence).toBe(1); expect(days).toBe(19)
   })
   test('I: 25日中 出20＋現場都合休5 → 欠勤0＋休業手当（23日分）', () => {
     const { days } = run(25, 20, 5, 0, 0)

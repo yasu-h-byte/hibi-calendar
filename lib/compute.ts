@@ -30,6 +30,12 @@ export { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
 import { JP_SALARY_AVG_MONTHLY_HOURS, JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM, JP_AVG_MONTHLY_WORK_DAYS } from './constants'
 
 /**
+ * 現場都合休（0.6補償）を「最低20日保証」の枠の中では100%支給にする適用開始月（2026-09-15 代表決定）。
+ * それより前の月は、補償日を一旦欠勤控除して休業手当60%を足す従来方式（2026-06 社労士確認）。
+ */
+export const COMP_FULL_WITHIN_GUARANTEE_FROM_YM = '202608'
+
+/**
  * 日本人の1日所定労働時間。割増賃金の算定基礎（日額 ÷ 所定時間）の分母。
  * docs/labor-rules.md「日本人は1日8時間（長年の運用。日給は8時間分の対価）」に対応。
  * 外国人は変形労働時間制で7h。
@@ -1093,6 +1099,8 @@ export interface WorkerMonthly {
   // 2026-09-13 追加: 保証枠（欠勤控除の基準日数）= min(基本給ベース20日, 配置現場カレンダーの所定日数)。
   //   閑散期でカレンダーの稼働日が20日未満の月は、全日出勤なら欠勤控除ゼロ＝基本給20日分を保証する（月給制）。
   guaranteeDays?: number
+  // 2026-09-15: 保証枠の中で100%支給にした補償日数（休業手当60%の対象外）
+  compInGuaranteeDays?: number
   // 2026-09-13 追加: 配置現場カレンダーの稼働日なのに出面が何も無い日数（出勤・0.6・欠・有給・帰国のいずれも無し）。
   //   入力漏れがそのまま100%控除になる事故の検出用（0.6補償の入れ忘れ等）。計算には影響しない
   calendarBlankDays?: number
@@ -1777,6 +1785,7 @@ export function computeMonthly(
       wm.nightHours = v.nightHours
       wm.nightAllowance = v.nightAllowance
       wm.compAllowance = v.compAllowance
+      wm.compInGuaranteeDays = v.compInGuaranteeDays || undefined
       wm.absentDeduction = v.absentDeduction
       wm.salaryNetPay = v.salaryNet
       wm.regularWorkDays = v.regularWorkDays
@@ -1894,6 +1903,7 @@ export function computeMonthly(
       wm.nightHours = v.nightHours
       wm.nightAllowance = v.nightAllowance
       wm.compAllowance = v.compAllowance
+      wm.compInGuaranteeDays = v.compInGuaranteeDays || undefined
       wm.absentDeduction = v.absentDeduction
       wm.salaryNetPay = salaryNet
       wm.regularWorkDays = v.regularWorkDays
@@ -2537,6 +2547,7 @@ export interface VietnameseSalaryResult {
   legalHolidayDays: number      // 日曜出勤日数
   absentDays: number            // 欠勤日数
   guaranteeDays: number         // 欠勤控除の基準日数 = min(baseDays, カレンダー所定日数)（2026-09-13）
+  compInGuaranteeDays: number   // 保証枠の中で100%支給にした補償日数（2026-08分〜。休業手当60%の対象外）
 
   // 残業内訳（3層判定: regular内）
   dailyStatutoryOT: number
@@ -2927,7 +2938,18 @@ export function calculateVietnameseSalary(
     .reduce((s, di) => s + Math.max(0, di.actualHours - 8), 0)
   const legalHolidayAllowance = ceilYen(hourlyRate * (1.35 * lhUnder8 + 1.60 * lhOver8))  // 支給: 切り上げ
   const nightAllowance = ceilYen(hourlyRate * 0.25 * nightHours)  // 支給: 切り上げ
-  const compAllowance = ceilYen(hourlyRate * 7 * 0.6 * compDays)  // 支給: 切り上げ
+  // ── 現場都合休（0.6補償）と最低20日保証（2026-09-15 代表決定・2026年8月分から）──
+  //   会社都合で休ませた日は、保証枠（min(20, カレンダー所定)）に届くまでは出勤と同じく100%支給。
+  //   枠を出勤・有給・試験・補償日で埋めた残りの補償日だけ、休業手当60%を足す。本人の欠勤は控除する。
+  //   例: 稼働21日に 出勤18・補償2・欠1 → 18+2 で枠20が埋まる → 20日分（欠1は枠外で吸収）
+  //       稼働20日に 出勤17・補償2・欠1 → 枠の不足1日は本人欠勤 → 19日分
+  //       稼働23日に 出勤18・補償5     → 枠内2日は100%、残り3日は60% → 21.8日分
+  //   それより前の月は従来どおり（補償日を欠勤扱いで控除し、全補償日に60%）
+  const compFullWithinGuarantee = ym >= COMP_FULL_WITHIN_GUARANTEE_FROM_YM
+  const compInGuaranteeDays = compFullWithinGuarantee
+    ? Math.min(compDays, Math.max(0, guaranteeDays - regularWorkDays - plUsed - examDays))
+    : 0
+  const compAllowance = ceilYen(hourlyRate * 7 * 0.6 * (compDays - compInGuaranteeDays))  // 支給: 切り上げ
 
   // 所定外労働手当（法定内・割増なし）
   // 労基法24条（賃金全額払い）に基づき、月所定時間を超えた労働で
@@ -2969,7 +2991,7 @@ export function calculateVietnameseSalary(
   //       同じ月に自己都合で1日休む → 欠勤1（19日分）
   //       同じ月に現場都合休(0.6)が2日 → 欠勤2＋休業手当2×0.6（19.2日分）
   //   追加所定・有給日給の枠（baseDays=20）はこれまでどおり
-  const absentDays = Math.max(0, guaranteeDays - regularWorkDays - plUsed - examDays)
+  const absentDays = Math.max(0, guaranteeDays - regularWorkDays - plUsed - examDays - compInGuaranteeDays)
   const absentDeduction = floorYen(hourlyRate * 7 * absentDays)  // 控除: 切り捨て（過少支払い防止）
 
   const salaryNet = fixedBasePay + additionalAllowance + paidLeaveAllowance + nonStatutoryOTAllowance + otAllowance
@@ -2985,6 +3007,7 @@ export function calculateVietnameseSalary(
     legalHolidayDays,
     absentDays,
     guaranteeDays,
+    compInGuaranteeDays,
     dailyStatutoryOT: Math.round(totalDailyOT * 10) / 10,
     weeklyStatutoryOT: Math.round(totalWeeklyOT * 10) / 10,
     monthlyStatutoryOT: Math.round(monthlyStatutoryOT * 10) / 10,
