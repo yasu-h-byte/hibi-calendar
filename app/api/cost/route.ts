@@ -199,7 +199,11 @@ export async function GET(request: NextRequest) {
     }).filter(s => s.workDays > 0 || s.subWorkDays > 0 || s.billing > 0)
 
     // Subcon cost details using compute().subcons and siteSubcons
-    const subconDetails = main.subcons.map(sc => {
+    const { canBorrowFrom } = await import('@/lib/companies')
+    const subconDetails = main.subcons
+      // 2026-09-15: 元請・一次だけの会社は外注原価の表に出さない（実績があれば出す）
+      .filter(sc => canBorrowFrom(sc as { id: string; name: string; roles?: string[] }) || (c.subcons[sc.id]?.work || 0) > 0)
+      .map(sc => {
       const cd = c.subcons[sc.id]
       const workDays = cd ? cd.work : 0
       const otCount = cd ? cd.ot : 0

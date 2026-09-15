@@ -159,7 +159,13 @@ export async function GET(request: NextRequest) {
       .map(w => ({ id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job }))
 
     // All subcons (for assignment modal) — 2026-05-18: 配置編集モーダルの「外注先」タブ用
-    const allSubcons = (main.subcons || []).map(sc => ({ id: sc.id, name: sc.name, type: sc.type }))
+    // 2026-09-15: 取引先マスタ化。元請・一次だけの会社は外注として配置できないので出さない
+    //   （既に配置済みの会社は外せるように残す）
+    const { canBorrowFrom } = await import('@/lib/companies')
+    const assignedScIds = new Set<string>(subconIds || [])
+    const allSubcons = (main.subcons || [])
+      .filter(sc => canBorrowFrom(sc as { id: string; name: string; roles?: string[] }) || assignedScIds.has(sc.id))
+      .map(sc => ({ id: sc.id, name: sc.name, type: sc.type }))
 
     // foremanOverride: non-null only when mforeman actually overrides the default
     const foremanOverride = mf

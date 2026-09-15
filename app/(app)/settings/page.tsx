@@ -53,7 +53,7 @@ const ALL_MENUS = [
   { id: 'tool-budget', label: '道具代管理', section: '人事・労務' },
   // 現場・外注
   { id: 'sites', label: '現場マスタ', section: '現場・外注' },
-  { id: 'subcons', label: '外注先マスタ', section: '現場・外注' },
+  { id: 'subcons', label: '取引先マスタ', section: '現場・外注' },
   // システム
   { id: 'settings', label: '管理者設定', section: 'システム' },
   { id: 'access-log', label: 'アクセス履歴', section: 'システム' },

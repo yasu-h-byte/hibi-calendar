@@ -3,6 +3,7 @@ import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
+import { resolveSiteParties } from '@/lib/companies'
 
 interface RatePeriod {
   from: string
@@ -38,6 +39,9 @@ interface RawSite {
   commute?: import('@/types').SiteCommuteData
   siteType?: 'direct' | 'support'
   client?: string
+  gcId?: string
+  primeId?: string
+  ownerId?: string
 }
 
 async function getMainDoc() {
@@ -77,6 +81,9 @@ export async function GET(request: NextRequest) {
       commute: s.commute || undefined,
       siteType: s.siteType || undefined,
       client: s.client ?? undefined,
+      gcId: s.gcId || undefined,
+      primeId: s.primeId || undefined,
+      ownerId: s.ownerId || undefined,
     }))
 
     const assign: Record<string, { workers: number[]; subcons: string[]; subconRates?: Record<string, { rate: number; otRate: number }> }> = {}
@@ -103,6 +110,7 @@ export async function GET(request: NextRequest) {
       type: (sc.type as string) || '',
       rate: (sc.rate as number) || 0,
       otRate: (sc.otRate as number) || 0,
+      roles: Array.isArray(sc.roles) ? (sc.roles as string[]) : undefined,
     }))
 
     // mforeman: entries like { siteId_ym: { wid: workerId } }
@@ -155,7 +163,8 @@ export async function POST(request: NextRequest) {
     const sites = (data.sites || []) as RawSite[]
 
     if (action === 'add') {
-      const { name, start, end, foreman, tobiRate, dokoRate, siteType, client } = body
+      const { name, start, end, foreman, tobiRate, dokoRate } = body
+      const parties = resolvePartiesFromBody(body, data)
       if (!name) {
         return NextResponse.json({ error: '現場名を入力してください' }, { status: 400 })
       }
@@ -171,8 +180,7 @@ export async function POST(request: NextRequest) {
         tobiRate: Number(tobiRate) || 0,
         dokoRate: Number(dokoRate) || 0,
         rates: [],
-        ...(siteType !== undefined && { siteType }),
-        ...(client !== undefined && { client }),
+        ...parties,
       }
 
       await updateDoc(ref, { sites: [...sites, newSite] })
@@ -181,7 +189,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'update') {
-      const { id, name, start, end, foreman, archived, tobiRate, dokoRate, rates, subconRates, workSchedule, commute, siteType, client } = body
+      const { id, name, start, end, foreman, archived, tobiRate, dokoRate, rates, subconRates, workSchedule, commute } = body
+      const parties = resolvePartiesFromBody(body, data)
       if (!id) {
         return NextResponse.json({ error: 'id required' }, { status: 400 })
       }
@@ -205,8 +214,7 @@ export async function POST(request: NextRequest) {
         ...(workSchedule !== undefined && { workSchedule: workSchedule as SiteWorkScheduleRaw | null }),
         // commute は素通しにしない（凍結後は不変・古い空フォームからの上書き消去を防ぐ）
         ...(commute !== undefined && { commute: mergeCommute(updated[idx].commute, commute) }),
-        ...(siteType !== undefined && { siteType }),
-        ...(client !== undefined && { client }),
+        ...parties,
       }
 
       const updateData: Record<string, unknown> = { sites: updated }
@@ -306,4 +314,28 @@ export async function POST(request: NextRequest) {
     console.error('Sites POST error:', error)
     return NextResponse.json({ error: String(error) }, { status: 500 })
   }
+}
+
+/**
+ * 請負体制（元請・一次・担当の二次）から siteType と client（請求先名）を導いて保存用に返す（2026-09-15）。
+ * ownerId が送られてこない旧クライアントは、送られてきた siteType / client をそのまま使う。
+ */
+function resolvePartiesFromBody(body: Record<string, unknown>, data: Record<string, unknown>): Partial<RawSite> {
+  const companies = ((data.subcons || []) as { id: string; name: string; roles?: string[] }[])
+  const out: Partial<RawSite> = {}
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : undefined)
+  if (body.gcId !== undefined) out.gcId = str(body.gcId) || ''
+  if (body.primeId !== undefined) out.primeId = str(body.primeId) || ''
+  if (body.ownerId !== undefined) {
+    out.ownerId = str(body.ownerId) || ''
+    if (out.ownerId) {
+      const r = resolveSiteParties({ gcId: out.gcId, primeId: out.primeId, ownerId: out.ownerId }, companies)
+      out.siteType = r.siteType
+      out.client = r.billToName
+      return out
+    }
+  }
+  if (body.siteType !== undefined) out.siteType = body.siteType as 'direct' | 'support'
+  if (body.client !== undefined) out.client = String(body.client)
+  return out
 }

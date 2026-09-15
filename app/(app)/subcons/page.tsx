@@ -3,19 +3,22 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
+import { COMPANY_ROLES, companyRoles, canBorrowFrom, type CompanyRole } from '@/lib/companies'
 
 interface Subcon {
   id: string; name: string; type: string; rate: number; otRate: number; note: string
   /** 兼業業者を1社としてまとめるためのグループ名（任意）
    *  例: 「株式会社A（鳶）」「株式会社A（土工）」を companyGroup="株式会社A" でグルーピング */
   companyGroup?: string
+  /** 役割（元請/一次/同業/外注）。2026-09-15 取引先マスタ化 */
+  roles?: string[]
 }
 
 interface SiteMinimal {
   id: string; name: string
 }
 
-const EMPTY_FORM = { name: '', type: '鳶業者', rate: '', otRate: '', note: '', companyGroup: '' }
+const EMPTY_FORM = { name: '', type: '鳶業者', rate: '', otRate: '', note: '', companyGroup: '', roles: ['peer'] as string[] }
 
 export default function SubconsPage() {
   const { ready } = useAuthPassword()
@@ -31,6 +34,8 @@ export default function SubconsPage() {
   const [saving, setSaving] = useState(false)
   // 表示モード: 'flat' = 区分別（鳶/土工）/ 'group' = 会社グループ別（兼業業者を1グループに集約）
   const [viewMode, setViewMode] = useState<'flat' | 'group'>('flat')
+  // 役割で絞り込み（2026-09-15）
+  const [roleFilter, setRoleFilter] = useState<'all' | CompanyRole>('all')
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
 
   const fetchData = useCallback(async () => {
@@ -51,12 +56,12 @@ export default function SubconsPage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const openAdd = () => {
-    if (subcons.length >= 20) { alert('外注先は最大20社までです'); return }
+    if (subcons.length >= 80) { alert('取引先は最大80社までです'); return }
     setEditId(null); setForm(EMPTY_FORM); setSiteRateForm({}); setShowModal(true)
   }
   const openEdit = (sc: Subcon) => {
     setEditId(sc.id)
-    setForm({ name: sc.name, type: sc.type, rate: String(sc.rate || ''), otRate: String(sc.otRate || ''), note: sc.note || '', companyGroup: sc.companyGroup || '' })
+    setForm({ name: sc.name, type: sc.type, rate: String(sc.rate || ''), otRate: String(sc.otRate || ''), note: sc.note || '', companyGroup: sc.companyGroup || '', roles: companyRoles(sc) })
     // 現在の現場別単価を初期値にセット
     const rateMap: Record<string, string> = {}
     const existingRates = subconRates[sc.id] || {}
@@ -69,13 +74,16 @@ export default function SubconsPage() {
 
   const handleSave = async () => {
     if (!form.name.trim()) { alert('名前を入力してください'); return }
+    if (!form.roles.length) { alert('役割を1つ以上選んでください'); return }
     setSaving(true)
     try {
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup }
+        ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup, roles: form.roles }
         : { action: 'add', ...form }
       const res = await postJson('/api/subcons', body)
-      if (!res.ok) { alert('保存に失敗しました'); setSaving(false); return }
+      if (!res.ok) {
+        alert(res.error || (res.data as { error?: string } | null)?.error || '保存に失敗しました'); setSaving(false); return
+      }
 
       // 編集モードで現場別単価が入力されている場合、updateSiteRates を呼ぶ
       if (editId) {
@@ -108,8 +116,11 @@ export default function SubconsPage() {
     return s ? s.name : siteId
   }
 
-  const tobiSubcons = subcons.filter(sc => sc.type === '鳶業者')
-  const dokoSubcons = subcons.filter(sc => sc.type === '土工業者')
+  const filtered = roleFilter === 'all' ? subcons : subcons.filter(sc => companyRoles(sc).includes(roleFilter))
+  const tobiSubcons = filtered.filter(sc => canBorrowFrom(sc) && sc.type !== '土工業者')
+  const dokoSubcons = filtered.filter(sc => canBorrowFrom(sc) && sc.type === '土工業者')
+  // 元請・一次だけの会社（人の貸し借りをしない）
+  const partyOnly = filtered.filter(sc => !canBorrowFrom(sc))
 
   const renderSubconRow = (sc: Subcon) => {
     const assignedSites = subconSites[sc.id] || []
@@ -117,8 +128,17 @@ export default function SubconsPage() {
     return (
       <tr key={sc.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
         <td className="px-3 py-2.5 font-medium">{sc.name}</td>
-        <td className="px-3 py-2.5 text-right">{`¥${(sc.rate || 0).toLocaleString()}`}</td>
-        <td className="px-3 py-2.5 text-right">{sc.otRate ? `¥${sc.otRate.toLocaleString()}/h` : '—'}</td>
+        <td className="px-3 py-2.5">
+          <div className="flex flex-wrap gap-1">
+            {companyRoles(sc).map(r => (
+              <span key={r} className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${ROLE_BADGE[r]}`}>
+                {COMPANY_ROLES.find(x => x.key === r)?.label}
+              </span>
+            ))}
+          </div>
+        </td>
+        <td className="px-3 py-2.5 text-right">{canBorrowFrom(sc) ? `¥${(sc.rate || 0).toLocaleString()}` : '—'}</td>
+        <td className="px-3 py-2.5 text-right">{canBorrowFrom(sc) && sc.otRate ? `¥${sc.otRate.toLocaleString()}/h` : '—'}</td>
         <td className="px-3 py-2.5">
           <div className="flex flex-wrap gap-1">
             {assignedSites.length > 0 ? assignedSites.map(siteId => {
@@ -178,13 +198,22 @@ export default function SubconsPage() {
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">外注先マスタ</h1>
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">取引先マスタ</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            鳶業者: {tobiSubcons.length}社 / 土工業者: {dokoSubcons.length}社 / 合計: {subcons.length}社
-            {multiBizCount > 0 && ` / 兼業: ${multiBizCount}社`}
+            {COMPANY_ROLES.map(r => `${r.label}: ${subcons.filter(sc => companyRoles(sc).includes(r.key)).length}社`).join(' / ')}
+            {' / '}合計: {subcons.length}社{multiBizCount > 0 && ` / 兼業: ${multiBizCount}社`}
+          </p>
+          <p className="text-[11px] text-gray-400 mt-0.5">
+            元請・一次は現場マスタの請負体制で選びます。人の貸し借りをする同業者と外注業者は、出面の外注として配置できます。
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 役割で絞り込み */}
+          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as 'all' | CompanyRole)}
+            className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-xs">
+            <option value="all">すべての役割</option>
+            {COMPANY_ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
           {/* 表示モード切替 */}
           <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
             <button
@@ -212,8 +241,9 @@ export default function SubconsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
-              <th className="px-3 py-3">外注先名</th>
-              <th className="px-3 py-3 text-right">人工単価</th>
+              <th className="px-3 py-3">取引先名</th>
+              <th className="px-3 py-3">役割</th>
+              <th className="px-3 py-3 text-right">人工単価（借りるとき）</th>
               <th className="px-3 py-3 text-right">残業単価</th>
               <th className="px-3 py-3">配置現場</th>
               <th className="px-3 py-3">備考</th>
@@ -222,14 +252,14 @@ export default function SubconsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
             ) : subcons.length === 0 ? (
-              <tr><td colSpan={6} className="px-3 py-8 text-center text-gray-400">外注先がありません</td></tr>
+              <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">取引先がありません</td></tr>
             ) : viewMode === 'flat' ? (
               <>
                 {/* 鳶業者グループ */}
                 <tr className="bg-yellow-50 dark:bg-yellow-900/20">
-                  <td colSpan={6} className="px-3 py-2 font-bold text-yellow-800 text-sm">
+                  <td colSpan={7} className="px-3 py-2 font-bold text-yellow-800 text-sm">
                     {`鳶業者（${tobiSubcons.length}社）`}
                   </td>
                 </tr>
@@ -237,11 +267,21 @@ export default function SubconsPage() {
 
                 {/* 土工業者グループ */}
                 <tr className="bg-yellow-50 dark:bg-yellow-900/20">
-                  <td colSpan={6} className="px-3 py-2 font-bold text-yellow-800 text-sm">
+                  <td colSpan={7} className="px-3 py-2 font-bold text-yellow-800 text-sm">
                     {`土工業者（${dokoSubcons.length}社）`}
                   </td>
                 </tr>
                 {dokoSubcons.map(renderSubconRow)}
+
+                {/* 元請・一次だけの会社 */}
+                {partyOnly.length > 0 && (
+                  <tr className="bg-slate-100 dark:bg-slate-800/60">
+                    <td colSpan={7} className="px-3 py-2 font-bold text-slate-700 dark:text-slate-200 text-sm">
+                      {`元請・一次（${partyOnly.length}社）`}
+                    </td>
+                  </tr>
+                )}
+                {partyOnly.map(renderSubconRow)}
               </>
             ) : (
               /* 会社グループ表示モード（兼業業者を1グループに集約） */
@@ -271,13 +311,28 @@ export default function SubconsPage() {
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">{editId ? '外注先編集' : '外注先追加'}</h3>
+            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">{editId ? '取引先編集' : '取引先追加'}</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">外注先名 *</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">取引先名 *</label>
                 <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="例：村田工業"
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
               </div>
+              {/* 役割（2026-09-15）。同じ会社が一次でも同業でもあり得るので複数選べる */}
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">役割 *（複数選択可）</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {COMPANY_ROLES.map(r => (
+                    <label key={r.key} className="flex items-start gap-1.5 text-sm cursor-pointer">
+                      <input type="checkbox" className="mt-1"
+                        checked={form.roles.includes(r.key)}
+                        onChange={e => setForm({ ...form, roles: e.target.checked ? [...form.roles, r.key] : form.roles.filter(x => x !== r.key) })} />
+                      <span>{r.label}<span className="block text-[10px] text-gray-400">{r.hint}</span></span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {(form.roles.includes('peer') || form.roles.includes('subcon')) && (<>
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">区分</label>
                 <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}
@@ -288,7 +343,7 @@ export default function SubconsPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">人工単価（円）</label>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">人工単価（円・応援をもらうとき）</label>
                   <input type="number" value={form.rate} onChange={e => setForm({ ...form, rate: e.target.value })} placeholder="25000"
                     className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                 </div>
@@ -298,6 +353,8 @@ export default function SubconsPage() {
                     className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                 </div>
               </div>
+              <p className="text-[10px] text-gray-400">応援に行くときの受取単価は、現場マスタの単価タブで現場ごとに入力します。</p>
+              </>)}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">備考</label>
                 <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })}
@@ -390,7 +447,7 @@ function RenderGroupedSubcon({
   return (
     <>
       <tr className="bg-blue-50 dark:bg-blue-900/20 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={onToggle}>
-        <td colSpan={6} className="px-3 py-2 font-bold text-blue-800 dark:text-blue-200 text-sm">
+        <td colSpan={7} className="px-3 py-2 font-bold text-blue-800 dark:text-blue-200 text-sm">
           <span className="inline-block w-4">{expanded ? '▼' : '▶'}</span>
           🏢 {group.companyGroup}（兼業 {group.members.length}件）
           <span className="ml-2 text-xs font-normal text-blue-600 dark:text-blue-300">
@@ -401,4 +458,12 @@ function RenderGroupedSubcon({
       {expanded && group.members.map(m => renderRow(m))}
     </>
   )
+}
+
+/** 役割バッジの色（クラス文字列は完全な形で書く：Tailwind の生成対象にするため） */
+const ROLE_BADGE: Record<CompanyRole, string> = {
+  gc: 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100',
+  prime: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  peer: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+  subcon: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
 }

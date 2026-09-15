@@ -3,6 +3,14 @@ import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
+import { COMPANY_ROLES } from '@/lib/companies'
+
+/** roles を検証して正規化（未知の値は捨てる。空なら undefined） */
+function normalizeRoles(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const ok = Array.from(new Set(v.filter(r => COMPANY_ROLES.some(x => x.key === r)))) as string[]
+  return ok.length ? ok : undefined
+}
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -58,6 +66,10 @@ export async function POST(request: NextRequest) {
     if (action === 'add') {
       const { name, type, rate, otRate, note, companyGroup } = body
       if (!name) return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
+      // 同名の取引先の二重登録を防ぐ（表記ゆれで同じ会社が2件になると集計が割れる）
+      const norm = (x: string) => String(x).replace(/[\s　]|株式会社|（株）|\(株\)|有限会社|（有）/g, '')
+      const dup = subcons.find(sc => norm(String(sc.name || '')) === norm(name))
+      if (dup) return NextResponse.json({ error: `「${dup.name}」が既に登録されています`, existingId: dup.id }, { status: 409 })
       const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20) + '_' + Date.now().toString(36).slice(-4)
       // companyGroup: 兼業業者を1社としてまとめるためのグループ名（任意）
       // 例: 「株式会社A（鳶）」「株式会社A（土工）」を companyGroup="株式会社A" でグルーピング
@@ -65,6 +77,8 @@ export async function POST(request: NextRequest) {
         id, name, type: type || '鳶業者',
         rate: Number(rate) || 0, otRate: Number(otRate) || 0, note: note || '',
       }
+      const roles = normalizeRoles(body.roles)
+      if (roles) newSubcon.roles = roles
       if (companyGroup && String(companyGroup).trim()) {
         newSubcon.companyGroup = String(companyGroup).trim()
       }
@@ -79,6 +93,11 @@ export async function POST(request: NextRequest) {
       delete updates.action
       const idx = subcons.findIndex(s => s.id === id)
       if (idx === -1) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      if (updates.roles !== undefined) {
+        const roles = normalizeRoles(updates.roles)
+        if (!roles) return NextResponse.json({ error: '役割を1つ以上選んでください' }, { status: 400 })
+        updates.roles = roles
+      }
       if (updates.rate !== undefined) updates.rate = Number(updates.rate)
       if (updates.otRate !== undefined) updates.otRate = Number(updates.otRate)
       // companyGroup: 空文字／null は「クリア指示」として扱う。

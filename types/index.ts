@@ -145,8 +145,14 @@ export interface Site {
    * 応援現場は今後増える見込み（2026-08-27 代表）。集計の切り口として使えるよう記録する。
    */
   siteType?: 'direct' | 'support'
-  /** 元請け・取引先名（Firestoreには以前から client として存在。UIに表出） */
+  /** 請求先の会社名（表示用・互換）。2026-09-15 以降は ownerId/primeId から自動で入る */
   client?: string
+  /** 元請（取引先マスタの id）。2026-09-15 追加 */
+  gcId?: string
+  /** 一次（取引先マスタの id） */
+  primeId?: string
+  /** 担当の二次（'self' = 自社、それ以外は同業者の取引先 id）。これで自社現場／応援現場が決まる */
+  ownerId?: string
   /**
    * 通勤時間の測定（遠方現場日当・運転手当の判定用。lib/allowance.ts 参照）。
    * 判定値 = 朝平均と夕平均の平均（片道換算・分）。凍結後は動かさない。

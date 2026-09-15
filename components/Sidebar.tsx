@@ -53,7 +53,7 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人事・労務', roles: ['admin', 'jimu'] },
     // 現場・外注
     { label: '現場マスタ', icon: '🏗', href: '/sites', section: '現場・外注', roles: ['admin', 'jimu'] },
-    { label: '外注先マスタ', icon: '🔧', href: '/subcons', section: '現場・外注', roles: ['admin', 'jimu'] },
+    { label: '取引先マスタ', icon: '🏢', href: '/subcons', section: '現場・外注', roles: ['admin', 'jimu'] },
     // システム
     { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
     { label: 'アクセス履歴', icon: '🔐', href: '/access-log', section: 'システム', roles: ['admin'] },

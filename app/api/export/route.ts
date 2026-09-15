@@ -131,7 +131,8 @@ export async function GET(request: NextRequest) {
           const XLSX = await import('xlsx')
           const wb = XLSX.utils.book_new()
 
-          for (const subcon of main.subcons) {
+          const { canBorrowFrom } = await import('@/lib/companies')
+          for (const subcon of main.subcons.filter(sc => canBorrowFrom(sc as { id: string; name: string; roles?: string[] }))) {
             const subWb = generateSubconConfirmation({
               ym: ymStr,
               subcon,

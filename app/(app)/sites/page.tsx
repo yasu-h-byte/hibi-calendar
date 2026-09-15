@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { COMPANY_ROLES, SELF_COMPANY_ID, SELF_COMPANY_LABEL, hasRole, resolveSiteParties, type CompanyRole } from '@/lib/companies'
 import { fmtYen } from '@/lib/format'
 import { todayJstIso } from '@/lib/date-utils'
 import { dailyAllowanceYen, DRIVE_ALLOWANCE_YEN, SITE_ALLOWANCE_FROM_YM, judgeFromSamples, COMMUTE_SAMPLE_TARGET } from '@/lib/allowance'
@@ -55,6 +56,9 @@ interface SiteData {
   commute?: CommuteState
   siteType?: 'direct' | 'support'
   client?: string
+  gcId?: string
+  primeId?: string
+  ownerId?: string
 }
 
 interface SiteAssign {
@@ -76,6 +80,7 @@ interface SubconMinimal {
   type: string
   rate: number
   otRate: number
+  roles?: string[]
 }
 
 interface MforemanEntry {
@@ -86,6 +91,10 @@ const EMPTY_FORM = {
   name: '',
   siteType: 'direct',
   client: '',
+  // 請負体制（2026-09-15）。担当の二次が自社なら自社現場、同業者なら応援現場
+  gcId: '',
+  primeId: '',
+  ownerId: SELF_COMPANY_ID as string,
   start: '',
   end: '',
   foreman: '0',
@@ -173,6 +182,12 @@ export default function SitesPage() {
       name: s.name,
       siteType: s.siteType || 'direct',
       client: s.client || '',
+      gcId: s.gcId || '',
+      primeId: s.primeId || '',
+      // 旧データ（請負体制が未入力）は、種別と取引先名から推定して初期値にする
+      ownerId: s.ownerId || (s.siteType === 'support'
+        ? (subcons.find(c => normCompany(c.name) === normCompany(s.client || ''))?.id || '')
+        : SELF_COMPANY_ID),
       start: s.start,
       end: s.end,
       foreman: String(s.foreman),
@@ -217,8 +232,33 @@ export default function SitesPage() {
     setShowModal(true)
   }
 
+  // 単価タブの表示切替用。請負体制から導いた種別（未入力の旧データは保存済みの種別）
+  const derivedSiteType = form.ownerId
+    ? resolveSiteParties({ gcId: form.gcId, primeId: form.primeId, ownerId: form.ownerId }, subcons).siteType
+    : (form.siteType === 'support' ? 'support' : 'direct')
+
+  /** 現場の編集画面から、一覧に無い会社をその場で取引先マスタに追加する */
+  const addCompanyInline = async () => {
+    const name = window.prompt('追加する会社名（例：鹿島建設株式会社）')
+    if (!name || !name.trim()) return
+    const roleText = window.prompt('役割を番号で入力（複数はカンマ区切り）\n1: 元請　2: 一次　3: 同業（二次）　4: 外注（専門業者）', '3')
+    if (!roleText) return
+    const map: Record<string, CompanyRole> = { '1': 'gc', '2': 'prime', '3': 'peer', '4': 'subcon' }
+    const roles = Array.from(new Set(roleText.split(/[,、\s]+/).map(x => map[x.trim()]).filter(Boolean)))
+    if (!roles.length) { alert('役割の番号が読み取れませんでした'); return }
+    const res = await fetch('/api/subcons', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'add', name: name.trim(), roles, type: '鳶業者' }) })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) { alert(data?.error || '追加に失敗しました'); return }
+    const added = data?.subcon as SubconMinimal | undefined
+    if (added) {
+      setSubcons(prev => [...prev, { ...added, roles }])
+      alert(`「${added.name}」を取引先マスタに追加しました（${roles.map(r => COMPANY_ROLES.find(x => x.key === r)?.label).join('・')}）`)
+    }
+  }
+
   const handleSave = async () => {
     if (!form.name.trim()) { alert('現場名を入力してください'); return }
+    if (!form.ownerId) { alert('担当の二次（自社または同業者）を選んでください'); return }
     setSaving(true)
     try {
       // Compute latest tobiRate/dokoRate from rates array
@@ -245,8 +285,9 @@ export default function SitesPage() {
             action: 'update',
             id: editId,
             name: form.name,
-            siteType: form.siteType,
-            client: form.client,
+            gcId: form.gcId,
+            primeId: form.primeId,
+            ownerId: form.ownerId,
             start: form.start,
             end: form.end,
             foreman: form.foreman,
@@ -261,8 +302,9 @@ export default function SitesPage() {
         : {
             action: 'add',
             name: form.name,
-            siteType: form.siteType,
-            client: form.client,
+            gcId: form.gcId,
+            primeId: form.primeId,
+            ownerId: form.ownerId,
             start: form.start,
             end: form.end,
             foreman: form.foreman,
@@ -486,7 +528,13 @@ export default function SitesPage() {
                     {s.siteType === 'support' && (
                       <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-bold">応援</span>
                     )}
-                    {s.client && <div className="text-[10px] text-gray-400 font-normal">{s.client}</div>}
+                    {(() => {
+                      const nm = (id?: string) => (id ? subcons.find(c => c.id === id)?.name : undefined)
+                      const chain = [nm(s.gcId), nm(s.primeId), s.ownerId === SELF_COMPANY_ID ? '自社' : nm(s.ownerId)].filter(Boolean)
+                      return chain.length > 0
+                        ? <div className="text-[10px] text-gray-400 font-normal">{chain.join(' → ')}{s.client ? `（請求先: ${s.client}）` : ''}</div>
+                        : s.client ? <div className="text-[10px] text-gray-400 font-normal">{s.client}</div> : null
+                    })()}
                   </td>
                   <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">
                     {s.start && s.end
@@ -582,27 +630,34 @@ export default function SitesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">種別</label>
-                  <select
-                    value={form.siteType}
-                    onChange={e => setForm({ ...form, siteType: e.target.value })}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
-                  >
-                    <option value="direct">直（自分たちが主体の現場）</option>
-                    <option value="support">応援（他社現場に応援で入る）</option>
-                  </select>
+              {/* 請負体制（2026-09-15）。元請 → 一次 → 担当の二次。担当が自社かどうかで自社現場／応援現場と請求先が決まる */}
+              <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-600 dark:text-gray-300">請負体制</span>
+                  <button type="button" onClick={() => addCompanyInline()}
+                    className="text-[11px] text-hibi-navy dark:text-blue-300 underline">＋ 一覧に無い会社を追加</button>
                 </div>
-                <div>
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">取引先</label>
-                  <input
-                    value={form.client}
-                    onChange={e => setForm({ ...form, client: e.target.value })}
-                    placeholder="例：山岡建設工業"
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <PartySelect label="元請" value={form.gcId} role="gc" companies={subcons}
+                    onChange={v => setForm({ ...form, gcId: v })} />
+                  <PartySelect label="一次" value={form.primeId} role="prime" companies={subcons}
+                    onChange={v => setForm({ ...form, primeId: v })} />
+                  <PartySelect label="担当の二次 *" value={form.ownerId} role="peer" companies={subcons} includeSelf
+                    onChange={v => setForm({ ...form, ownerId: v })} />
                 </div>
+                {(() => {
+                  const r = resolveSiteParties({ gcId: form.gcId, primeId: form.primeId, ownerId: form.ownerId }, subcons)
+                  if (!form.ownerId) return <p className="text-[11px] text-amber-600">担当の二次を選んでください</p>
+                  return (
+                    <p className="text-[11px] text-gray-600 dark:text-gray-300">
+                      {r.siteType === 'support'
+                        ? <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-bold">応援現場</span>
+                        : <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-bold">自社現場</span>}
+                      <span className="ml-2">請求先: <b>{r.billToName || '（一次を選ぶと決まります）'}</b></span>
+                      <span className="ml-2 text-gray-400">{r.siteType === 'support' ? '単価タブの受取単価を100%受け取る' : '常用単価の85%を受け取る'}</span>
+                    </p>
+                  )
+                })()}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -776,9 +831,9 @@ export default function SitesPage() {
               {/* ── 常用単価（税抜）／ 応援現場は受取単価 ── */}
               <div className="border-2 border-orange-300 rounded-xl p-4 space-y-3">
                 <h4 className="text-sm font-bold text-orange-700">
-                  {form.siteType === 'support' ? '受取単価（税抜・直接支払い）' : '常用単価（税抜）'}
+                  {derivedSiteType === 'support' ? '受取単価（税抜・直接支払い）' : '常用単価（税抜）'}
                 </h4>
-                {form.siteType === 'support' ? (
+                {derivedSiteType === 'support' ? (
                   <div className="text-xs text-purple-700 bg-purple-50 dark:bg-purple-900/20 dark:text-purple-300 rounded-md px-3 py-2">
                     応援現場は元請けを介さず直接の支払いになるため、<strong>実際に受け取る1人工の金額</strong>（例: 28,000円・30,000円）をそのまま入力してください。
                     85%の計算はしません。原価・収益の請求単価基準や概算売上もこの額で計算します。
@@ -872,7 +927,7 @@ export default function SitesPage() {
                 {/* Latest rate summary */}
                 {latestFormRate && (
                   <div className="bg-orange-100 rounded-lg px-3 py-2 text-xs text-orange-800">
-                    {form.siteType === 'support'
+                    {derivedSiteType === 'support'
                       ? <>最新受取（100%）: 鳶 ¥{latestFormRate.tobiRate.toLocaleString()} / 土工 ¥{latestFormRate.dokoRate.toLocaleString()}</>
                       : <>最新85%: 鳶 ¥{Math.round(latestFormRate.tobiRate * 0.85).toLocaleString()} / 土工 ¥{Math.round(latestFormRate.dokoRate * 0.85).toLocaleString()}</>}
                     {latestFormRate.tobiRate > 0 && (
@@ -1189,6 +1244,34 @@ export default function SitesPage() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/** 会社名の表記ゆれを吸収して比較する（株式会社・（株）・空白の違い） */
+function normCompany(name: string): string {
+  return String(name).replace(/[\s　]|株式会社|（株）|\(株\)|有限会社|（有）/g, '')
+}
+
+/** 請負体制のプルダウン（役割で候補を絞る。選択中の会社は役割が外れていても表示を残す） */
+function PartySelect({ label, value, role, companies, includeSelf, onChange }: {
+  label: string
+  value: string
+  role: CompanyRole
+  companies: { id: string; name: string; roles?: string[] }[]
+  includeSelf?: boolean
+  onChange: (v: string) => void
+}) {
+  const options = companies.filter(c => hasRole(c, role) || c.id === value)
+  return (
+    <div>
+      <label className="text-[11px] text-gray-500 dark:text-gray-400 block mb-1">{label}</label>
+      <select value={value} onChange={e => onChange(e.target.value)}
+        className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none">
+        <option value="">{includeSelf ? '選択してください' : '未設定'}</option>
+        {includeSelf && <option value={SELF_COMPANY_ID}>{SELF_COMPANY_LABEL}</option>}
+        {options.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
     </div>
   )
 }
