@@ -22,7 +22,16 @@
   .big { font-size: 17px; font-weight: bold; }
   .meta { color: #666; font-size: 13px; }
   .scroll { overflow-x: auto; }
-  @media print { body { font-size: 13px; padding: 0; } h2, th { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @page { size: A4; margin: 14mm 14mm 16mm; }
+  @media print {
+    body { font-size: 12.5px; padding: 0; max-width: none; line-height: 1.7; }
+    h1 { font-size: 20px; }
+    h2 { font-size: 15px; margin-top: 22px; break-after: avoid; page-break-after: avoid; }
+    h3 { break-after: avoid; page-break-after: avoid; }
+    table, .box, tr, .keep { break-inside: avoid; page-break-inside: avoid; }
+    th, td { padding: 5px 8px; }
+    h2, th, .box, .box-ok, .box-warn, .box-red, tr:nth-child(even) { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
   @media (max-width: 600px) { body { padding: 12px; font-size: 14px; } table { font-size: 13px; } th, td { padding: 6px 8px; } }
 </style>
 </head>
@@ -59,6 +68,7 @@
   <p style="margin:8px 0 0" class="meta">カレンダーの稼働日が20日を超える月（例: 21日）は、休んだ日のうち超えた分は控除も支払いもされません（20日分が保証の上限のため）。</p>
 </div>
 
+<div class="keep">
 <h2>2. 計算例</h2>
 <p class="meta">時給2,214円（日給15,498円・リンさん）で計算。金額は基本給・欠勤控除・休業手当の部分だけです（残業代などは別）。</p>
 
@@ -70,6 +80,7 @@
   <tr><td>現場都合休が多い</td><td>23日</td><td>18</td><td>5</td><td>0</td><td>21.8日分<br><span class="meta">枠内2日は100%、残り3日は60%</span></td><td class="num">337,857円</td></tr>
   <tr><td>閑散期のカレンダー</td><td>18日</td><td>16</td><td>2</td><td>0</td><td>20日分<br><span class="meta">稼働18日でも20日分を保証</span></td><td class="num">309,960円</td></tr>
 </table>
+</div>
 </div>
 
 <div class="box box-warn">
