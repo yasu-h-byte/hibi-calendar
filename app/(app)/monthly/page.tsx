@@ -91,6 +91,7 @@ interface WorkerMonthly {
   dispatchDeduction?: number
   // 旧ルール継続フラグ
   useOldRules?: boolean
+  workerPrescribedDays?: number
 }
 
 interface SubconMonthly {
@@ -1347,7 +1348,7 @@ export default function MonthlyPage() {
                             if ((w.fixedBasePay || w.basePay || 0) > 0)
                               lines.push(`基本給:        ¥${(w.fixedBasePay || w.basePay || 0).toLocaleString()}`)
                             if ((w.additionalAllowance || 0) > 0)
-                              lines.push(`追加所定:      ¥${(w.additionalAllowance || 0).toLocaleString()}`)
+                              lines.push(`${w.useOldRules ? '休業補償' : '追加所定'}:      ¥${(w.additionalAllowance || 0).toLocaleString()}`)
                             if ((w.paidLeaveAllowance || 0) > 0)
                               lines.push(`有給手当:      ¥${(w.paidLeaveAllowance || 0).toLocaleString()}`)
                             if ((w.nonStatutoryOTAllowance || 0) > 0)
@@ -1412,6 +1413,15 @@ export default function MonthlyPage() {
                             title={`夜勤日の法定必要額 ¥${Math.ceil(w.legalRequiredPay || 0).toLocaleString()} に対し支給 ¥${(w.nightShiftPaid || 0).toLocaleString()}。¥${(w.legalShortfall || 0).toLocaleString()} 不足しています（日曜の夜勤 または 長時間の通し勤務）。1.5人工の慣例では法定割増を満たさないケースです。`}
                           >
                             ⚠ 法定不足 ¥{(w.legalShortfall || 0).toLocaleString()}
+                          </span>
+                        )}
+                        {/* 2026-09-15: 旧ルール（固定月給）の人は計算の形が違うので、名前の横で分かるようにする */}
+                        {w.useOldRules && w.visa !== 'none' && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            title={`旧ルール（固定月給）で計算しています。\n・所定日数は会社の所定日数（${w.workerPrescribedDays ?? '—'}日）が基準（現場カレンダーではない）\n・現場都合休は一旦1日分を「補償日控除」し、60%を「休業補償」で戻す（正味40%減）\n・最低20日保証の対象外\n・フォン・タンは2026年12月頃に新ルールで契約更新予定、フンは2027年1月退職で旧ルールは終了`}
+                          >
+                            旧ルール
                           </span>
                         )}
                         {/* 「22時以降は必ず夜勤」の運用ルールから外れた日の検出。
@@ -1510,7 +1520,10 @@ export default function MonthlyPage() {
                             {absentDays > 0 ? absentDays : '—'}
                             {/* 2026-09-11: 奥寺さん質問対応。実労働時間明細の「欠勤日数」（欠の記録のみ）と
                                   ここの日数（20日枠の不足＝欠＋補償日＋その他不足）が食い違って見えるため内訳を併記 */}
-                            {absentDays > 0 && ((w.restDays || 0) > 0 || compDays > 0) && (
+                            {w.useOldRules && w.visa !== 'none' && (
+                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">所定{w.workerPrescribedDays ?? '—'}日基準</div>
+                            )}
+                            {!w.useOldRules && absentDays > 0 && ((w.restDays || 0) > 0 || compDays > 0) && (
                               <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">
                                 欠{w.restDays || 0}{compDays > 0 ? `・補${compDays}` : ''}
                                 {absentDays - (w.restDays || 0) - compDays > 0 ? `・他${absentDays - (w.restDays || 0) - compDays}` : ''}
@@ -1519,6 +1532,12 @@ export default function MonthlyPage() {
                           </td>
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-red-50/50 ${absentDeduction > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                             {absentDeduction > 0 ? `-${fmtYen(absentDeduction)}` : '—'}
+                            {/* 旧ルール: 本人欠勤の控除と補償日控除の合計なので内訳を出す（2026-09-15） */}
+                            {w.useOldRules && w.visa !== 'none' && absentDeduction > 0 && (
+                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">
+                                欠勤{fmtYen(w.absentDeduction || 0)}＋補償日{fmtYen(w.compBaseDeduction || 0)}
+                              </div>
+                            )}
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums bg-red-50/50 font-medium">
                             {fmtYen(netPay)}
@@ -1532,6 +1551,10 @@ export default function MonthlyPage() {
                           </td>
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.additionalAllowance || 0) > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
                             {w.visa !== 'none' && (w.additionalAllowance || 0) > 0 ? fmtYen(w.additionalAllowance!) : '—'}
+                            {/* 旧ルールの行はこの列に休業補償（補償日×日給×60%）が入る（2026-09-15 表示の明確化） */}
+                            {w.useOldRules && w.visa !== 'none' && (w.additionalAllowance || 0) > 0 && (
+                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">休業補償（補償日×60%）</div>
+                            )}
                           </td>
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.paidLeaveAllowance || 0) > 0 ? 'text-violet-600' : 'text-gray-400'}`}
                             title={(w.paidLeaveDays || 0) > 0 ? `有給 ${w.paidLeaveDays}日分` : ''}>
@@ -1581,6 +1604,9 @@ export default function MonthlyPage() {
                           )}
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.absentDeduction || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                             {w.visa !== 'none' && (w.absentDeduction || 0) > 0 ? `-${fmtYen(w.absentDeduction!)}` : '—'}
+                            {w.useOldRules && w.visa !== 'none' && (w.absentDeduction || 0) > 0 && (
+                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">本人欠勤{w.absence}日分</div>
+                            )}
                           </td>
                           {showCompBaseDeduction && (
                             <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.compBaseDeduction || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}
