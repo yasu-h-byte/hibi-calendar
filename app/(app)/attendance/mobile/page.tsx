@@ -717,6 +717,20 @@ export default function ForemanMobilePage() {
                           {!!entry.ns && <span className="text-[11px] font-bold text-indigo-600">夜勤あり（編集はPC）</span>}
                         </div>
                       )}
+                      {/* 旧契約継続者（外国人）: スマホ打刻の時刻と午前・午後の休憩も表示（PC出面と同じ・2026-09-15）。
+                          休憩の変更は時間ベースと同じく時刻から残業hを再計算する */}
+                      {!isTime && isVn && w.useOldRules && entry && entry.w > 0 && entry.w !== 0.6 && entry.st && entry.et && !entry.nonly && (
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="text-sm tabular-nums text-gray-700">{entry.st}〜{entry.et}</span>
+                          <label className="flex items-center gap-0.5 text-[11px] text-gray-500">
+                            <input type="checkbox" checked={(entry.b1 ?? 1) === 1} disabled={locked} onChange={e => changeTimeField(w.id, { b1: e.target.checked ? 1 : 0 })} className="w-4 h-4" />午前
+                          </label>
+                          <label className="flex items-center gap-0.5 text-[11px] text-gray-500">
+                            <input type="checkbox" checked={(entry.b3 ?? 1) === 1} disabled={locked} onChange={e => changeTimeField(w.id, { b3: e.target.checked ? 1 : 0 })} className="w-4 h-4" />午後
+                          </label>
+                          <span className="ml-auto text-xs font-bold tabular-nums text-gray-600">{calcDayShiftHours(entry).toFixed(1)}h</span>
+                        </div>
+                      )}
                     </div>
                   )
                 })}
