@@ -337,7 +337,13 @@ export default function SitesPage() {
             tobiRate: latestTobiRate,
             dokoRate: latestDokoRate,
           }
-      await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+      // 2026-09-15: 保存の失敗を画面に出す（以前は応答を見ておらず、失敗しても何も起きないように見えた）
+      const saveRes = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
+      if (!saveRes.ok) {
+        const err = await saveRes.json().catch(() => null)
+        alert(`保存に失敗しました。${err?.error ? `\n${err.error}` : ''}`)
+        return
+      }
 
       // Save deputy foreman entries
       if (editId) {

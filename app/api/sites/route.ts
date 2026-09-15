@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
         ...parties,
       }
 
-      await updateDoc(ref, { sites: [...sites, newSite] })
+      await updateDoc(ref, { sites: [...sites, newSite].map(stripUndefinedDeep) })
       await logActivity('admin', 'site.add', `${name} を追加`)
       return NextResponse.json({ success: true, site: newSite })
     }
@@ -239,7 +239,13 @@ export async function POST(request: NextRequest) {
         ...(rates !== undefined && { rates }),
         ...(workSchedule !== undefined && { workSchedule: workSchedule as SiteWorkScheduleRaw | null }),
         // commute は素通しにしない（凍結後は不変・古い空フォームからの上書き消去を防ぐ）
-        ...(commute !== undefined && { commute: mergeCommute(updated[idx].commute, commute) }),
+        // 2026-09-15 修正: 通勤データを持たない現場（笹塚など）で空フォームを送ると mergeCommute が undefined を返し、
+        //   `commute: undefined` を書こうとして Firestore が拒否 → 保存全体が 500 で失敗していた（画面は無反応）
+        ...(() => {
+          if (commute === undefined) return {}
+          const merged = mergeCommute(updated[idx].commute, commute)
+          return merged === undefined ? {} : { commute: merged }
+        })(),
         ...parties,
       }
       if (typeof body.workType === 'string' && body.workType.trim() && isChild) {
@@ -256,7 +262,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const updateData: Record<string, unknown> = { sites: updated }
+      const updateData: Record<string, unknown> = { sites: updated.map(stripUndefinedDeep) }
 
       // Save subconRates to assign[siteId].subconRates
       if (subconRates !== undefined) {
@@ -351,7 +357,7 @@ export async function POST(request: NextRequest) {
         dokoRate: parent.dokoRate || 0,
         rates: (parent.rates || []).map(r => ({ ...r })),
       }, parent)
-      const updateData: Record<string, unknown> = { sites: [...sites, child] }
+      const updateData: Record<string, unknown> = { sites: [...sites, child].map(stripUndefinedDeep) }
       // 月別の職長（代理）も親と同じにする
       const mforeman = (data.mforeman || {}) as Record<string, { wid: number }>
       let mfChanged = false
@@ -420,4 +426,23 @@ function resolvePartiesFromBody(body: Record<string, unknown>, data: Record<stri
   if (body.siteType !== undefined) out.siteType = body.siteType as 'direct' | 'support'
   if (body.client !== undefined) out.client = String(body.client)
   return out
+}
+
+/**
+ * Firestore は undefined の値を拒否する（保存全体が失敗する）。現場レコードは画面の任意項目が多く、
+ * 空のまま送られると undefined が混ざるため、書き込み直前に取り除く（2026-09-15・笹塚が保存できなかった件）。
+ * ※ グローバルの ignoreUndefinedProperties は使わない。updateDoc で { map: { k: undefined } } が
+ *   空マップ置換（データ消失）に化けるため（CLAUDE.md の Firestore 書き込み安全ルール）。
+ */
+function stripUndefinedDeep<T>(v: T): T {
+  if (Array.isArray(v)) return v.map(stripUndefinedDeep) as unknown as T
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
+    const out: Record<string, unknown> = {}
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      if (x === undefined) continue
+      out[k] = stripUndefinedDeep(x)
+    }
+    return out as T
+  }
+  return v
 }
