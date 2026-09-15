@@ -349,9 +349,6 @@ export function LegacyCell({
               <label className="flex items-center cursor-pointer" title="午前休憩(10:00-10:30)">
                 <input type="checkbox" checked={(entry.b1 ?? 1) === 1} onChange={e => onBreakChange?.(wId, day, 'b1', e.target.checked)} disabled={isLocked} className="w-3 h-3 rounded" />
               </label>
-              <label className="flex items-center cursor-pointer" title="昼休憩(12:00-13:00)">
-                <input type="checkbox" checked={(entry.b2 ?? 1) === 1} onChange={e => onBreakChange?.(wId, day, 'b2', e.target.checked)} disabled={isLocked} className="w-3 h-3 rounded" />
-              </label>
               <label className="flex items-center cursor-pointer" title="午後休憩(15:00-15:30)">
                 <input type="checkbox" checked={(entry.b3 ?? 1) === 1} onChange={e => onBreakChange?.(wId, day, 'b3', e.target.checked)} disabled={isLocked} className="w-3 h-3 rounded" />
               </label>
