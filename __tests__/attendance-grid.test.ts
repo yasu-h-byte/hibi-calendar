@@ -339,6 +339,15 @@ describe('警告の収集', () => {
     expect(warnings).toEqual([{ workerName: '日本 太郎', day: 7, dayType: '日曜' }])
   })
 
+  it('0.6補（現場都合休の休業補償）は出勤ではないので除外', () => {
+    // 2026-09-15 フン・フォンの 8/1・8/29（カレンダー休日の 0.6補）が警告に出ていた
+    const warnings = collectRestDayWorkWarnings(
+      2026, 6, 30, { '10': 'off' }, workers,
+      { '1': { 7: { w: 0.6 }, 10: { w: 0.6 } } },
+    )
+    expect(warnings).toEqual([])
+  })
+
   it('カレンダー休日・祝日の出勤を検出', () => {
     // 2026年6月10日=水, 11日=木, 12日=金（いずれも日曜ではない）
     const warnings = collectRestDayWorkWarnings(

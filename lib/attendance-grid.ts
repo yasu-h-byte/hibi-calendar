@@ -347,6 +347,11 @@ export function computeFooterSums(
 /** 休みの日に出勤していた場合の区分。強い順（法定休日 > 祝日 > 所定休日） */
 export type RestDayWorkType = '日曜' | '祝日' | '休日'
 
+/** 実際に出勤した記録か（有給・0.6補・帰国は出勤ではない）。休日出勤の警告・「休出」表示で共通に使う */
+export function isActualWorkEntry(entry: AttEntry | null | undefined): entry is AttEntry {
+  return !!entry && entry.w > 0 && entry.w !== 0.6 && !entry.p && !entry.hk
+}
+
 /**
  * 休日・日曜の出勤警告
  *
@@ -372,7 +377,8 @@ export function collectRestDayWorkWarnings(
     for (let d = 1; d <= daysInMonth; d++) {
       const entry = entries[d]
       // 有給(p)は出勤ではないので対象外（統合前の両関数と同じ条件）
-      if (!entry || !(entry.w > 0) || entry.p) continue
+      // 0.6補（現場都合休の休業補償 w=0.6）も実際の出勤ではないので対象外（代表 2026-09-15）
+      if (!isActualWorkEntry(entry)) continue
 
       const isSunday = getDow(year, month, d) === 0
       const calDay = calendarDays?.[String(d)]

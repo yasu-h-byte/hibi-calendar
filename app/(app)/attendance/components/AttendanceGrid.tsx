@@ -3,7 +3,7 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   dayColBg, dayHeaderBg, dayTextColor,
-  getWorkValue, getTimeStatusValue, retirementBadge,
+  getWorkValue, getTimeStatusValue, retirementBadge, isActualWorkEntry,
   FooterSums, WorkerTotals,
 } from '@/lib/attendance-grid'
 import { orgBadgeCls, orgBadgeLabel } from '@/lib/labels'
@@ -394,7 +394,7 @@ export default function AttendanceGrid({
                         }
                         // 休日出勤判定: カレンダーがoff/holidayなのに出勤あり
                         const calDay = data.calendarDays?.[String(d.day)]
-                        const isHolidayWork = !!(calDay && (calDay === 'off' || calDay === 'holiday') && entry && entry.w > 0 && !entry.p && !entry.hk)
+                        const isHolidayWork = !!(calDay && (calDay === 'off' || calDay === 'holiday') && isActualWorkEntry(entry))
                         const colBg = dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])
                         // 外国人のみ時間ベース（202605〜かつvisaあり）
                         // 2026-06-13: 旧契約継続者(フン等)はレガシーUI（日数+残業+0.6補・待機中ガードなし）
