@@ -64,8 +64,9 @@ function jpDate(iso: string): string {
 }
 
 /** 生年月日の入力が要る人か（外国人スタッフは号俸制の対象外／退職者は不要）。 */
-function needsBirthDate(w: { visaType?: string; retired?: string }): boolean {
-  return !isGaikoku(w.visaType || '') && !w.retired
+function needsBirthDate(w: { visaType?: string; retired?: string; jobType?: string }): boolean {
+  // 事務（チイ・奥寺・佐藤・森田）は号俸制の対象外なので生年月日を求めない（代表 2026-09-17）
+  return !isGaikoku(w.visaType || '') && !w.retired && w.jobType !== 'jimu'
 }
 
 /** 今日を 'YYYY-MM-DD' で返す（生年月日の未来日入力を防ぐ上限用）。 */
