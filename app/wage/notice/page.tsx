@@ -118,6 +118,7 @@ function SheetBody() {
   }
 
   const fy = Number(data.effective.slice(0, 4)) + 1   // 2026-10-01改定 → 2027年度
+  const HISTORY_YEARS = 10   // 給料表に載せる「ベース年収推移」の年度数（代表決定 2026-09-17）
   const targets = data.frozen.filter(f => f.newDaily != null && f.oldDaily != null)
 
   return (
@@ -150,8 +151,12 @@ function SheetBody() {
         // 2026-08-27 修正（給与総点検）: 補完点の年度が1年ズレていた。
         //   新年収(baseAnnual)は改定年度 fy の点、前年 fy-1 には改定前年収(prevBaseAnnual)。
         //   履歴に同年度の点が既にあれば dedupe（先勝ち）で履歴側を採用する
+        // 2026-09-17（代表決定）: 推移は直近10年度分だけ載せる（改定年度 fy を含む10点）。
+        //   履歴は年次改定のたびに積み上がるので、放置すると表と折れ線が横に伸び続けて
+        //   A4横1枚に収まらなくなる。データ自体（jpWageHistory）は全年度を保持する
         const points = [...hist, { year: fy - 1, baseAnnual: fig.prevBaseAnnual }, { year: fy, baseAnnual: fig.baseAnnual }]
           .filter((p, i, a) => a.findIndex(x => x.year === p.year) === i)
+          .filter(p => p.year > fy - HISTORY_YEARS)
           .sort((a, b) => a.year - b.year)
         const gradeLabel = GRADE_LABELS[f.grade as JpGrade] ?? f.grade
         const age = f.birthDate ? ageOn(f.birthDate, data.effective) : null
