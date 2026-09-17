@@ -86,3 +86,44 @@ describe('月次集計Excel 日本人シート（キャシュモ向けの内訳�
     expect(rows[2]).not.toContain('補償日')
   })
 })
+
+describe('月次集計Excel ベトナム人シート（202609〜 新旧統合）', () => {
+  const vn = (over: Record<string, unknown>): WorkerMonthly => ({
+    id: 101, name: 'グエン', org: 'hibi', visa: 'tokutei1', job: 'tobi', rate: 0, hourlyRate: 2000, otMul: 1.25,
+    sites: ['ihi'], workDays: 20, compDays: 0, plDays: 0, restDays: 0, actualWorkDays: 20, regularWorkDays: 20,
+    workerPrescribedDays: 21, legalLimit: 171.4, actualWorkHours: 140, legalOtHours: 0,
+    fixedBasePay: 280000, additionalAllowance: 0, paidLeaveAllowance: 0, nonStatutoryOTAllowance: 0, otAllowance: 0,
+    legalHolidayAllowance: 0, nightAllowance: 0, compAllowance: 0, absence: 0, absentDeduction: 0, salaryNetPay: 280000,
+    ...over,
+  } as unknown as WorkerMonthly)
+  const oldOne = vn({ id: 104, name: 'フン', useOldRules: true, salary: 396105, hourlyRate: 2830, prescribedHours: 161,
+    basePay: 396105, fixedBasePay: undefined, additionalAllowance: 0, otAllowance: 29430, breakShortenAllowance: 17658,
+    absentDeduction: 0, compBaseDeduction: 0, salaryNetPay: 443193 })
+
+  it('202609: 新旧が1シート「日比建設・ベトナム人」に載り、(旧)シートは無い。契約列で区別', () => {
+    const wb = generateMonthlyExcel({ ym: '202609', workers: [vn({}), oldOne], subcons: [], siteNames: { ihi: 'IHI' }, prescribedDays: 21 })
+    expect(wb.SheetNames).toEqual(['日比建設・ベトナム人'])
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets['日比建設・ベトナム人'], { header: 1 }) as (string | number)[][]
+    const h = rows[2]
+    expect(h[1]).toBe('契約')
+    expect(rows[3][0]).toBe('グエン'); expect(rows[3][1]).toBe('新')
+    expect(rows[4][0]).toBe('フン'); expect(rows[4][1]).toBe('旧')
+    // 旧の残業は「残業手当(旧・1.25倍)」列、新の残業は「法定外残業手当」列
+    expect(rows[4][h.indexOf('残業手当(旧・1.25倍)')]).toBe(29430)
+    expect(rows[4][h.indexOf('法定外残業手当')]).toBeUndefined()
+    expect(rows[4][h.indexOf('休憩短縮手当')]).toBe(17658)
+    expect(rows[4][h.indexOf('支給額合計')]).toBe(443193)
+    expect(rows.some(r => String(r[0]).startsWith('✓ 自動検算'))).toBe(true)
+  })
+
+  it('内訳が合わない行は ⚠ で名指し', () => {
+    const wb = generateMonthlyExcel({ ym: '202609', workers: [vn({ salaryNetPay: 281000 })], subcons: [], siteNames: {}, prescribedDays: 21 })
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets['日比建設・ベトナム人'], { header: 1 }) as (string | number)[][]
+    expect(String(rows.find(r => String(r[0]).startsWith('⚠ 自動検算'))?.[0])).toContain('グエン')
+  })
+
+  it('202608 以前は従来どおり 新・(旧) の2シート', () => {
+    const wb = generateMonthlyExcel({ ym: '202608', workers: [vn({}), oldOne], subcons: [], siteNames: {}, prescribedDays: 21 })
+    expect(wb.SheetNames).toEqual(['日比建設・ベトナム人', '日比建設・ベトナム人(旧)'])
+  })
+})

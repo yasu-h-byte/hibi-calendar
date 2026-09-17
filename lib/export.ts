@@ -689,6 +689,9 @@ export interface MonthlyExcelData {
  *   4月以前（旧ルール）: 所定日数 / 所定時間(h) / 基本給     / 休業補償
  *   5月以降（新ルール）: ベース日数 / 法定上限(h) / 基本給(固定) / 追加所定手当
  */
+/** 月次集計Excel でベトナム人の新旧ルールを 1 シートにまとめる最初の月（キャシュモ両社委託・代表決定 2026-09-17） */
+export const UNIFIED_VN_SHEET_FROM_YM = '202609'
+
 export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   const { ym, workers, subcons, siteNames, prescribedDays } = data
   const wb = XLSX.utils.book_new()
@@ -922,6 +925,95 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     return sheet
   }
 
+  // ── ベトナム人シート（新旧統合・2026-09-17）──
+  // キャシュモが MF 取込前の CSV を作る作業を楽にするため、9月分（キャシュモ両社委託の最初の月）から
+  // 新ルール・旧ルールを 1 シートにまとめる（代表決定 2026-09-17）。列は両方の和で、
+  // 該当しない項目は空欄。残業だけは建て方が違う（新: 所定外1.0倍＋法定外0.25倍／旧: 1.25倍）ので
+  // 列を分けたまま隣に置く。行ごとに「内訳合計＝支給額」の検算を付ける。
+  const unifiedHeaders = ['名前', '契約', '現場', '単価種別', '単価', '所定日数', '法定上限／所定時間(h)',
+    '通常出勤', '法休出勤', '補償日', '有給日数',
+    '実労働h', '所定外労働h', '法定残業h(新)／残業h(旧)', '法休労働h', '深夜労働h',
+    '基本給', '追加所定手当', '有給日給', '所定外労働手当', '法定外残業手当', '残業手当(旧・1.25倍)',
+    '法定休日手当', '深夜手当', '休業手当', '休憩短縮手当',
+    ...(withAllowance ? ['遠方日当', '運転手当'] : []),
+    '欠勤日数', '欠勤控除', '補償日控除(旧)', '支給額合計']
+  function buildUnifiedVnSheet(sheetName: string, ws: WorkerMonthly[]): XLSX.WorkSheet | null {
+    if (ws.length === 0) return null
+    const rows: (string | number | null)[][] = []
+    rows.push([`${sheetName} ${ymLabel(ym)}`])
+    rows.push([])
+    rows.push(unifiedHeaders)
+    const numericRows: (number | null)[][] = []
+    const mismatches: string[] = []
+    for (const w of ws) {
+      const old = isWorkerOldRules(w)
+      const wext = w as WorkerMonthly & { nonStatutoryOTHours?: number; nonStatutoryOTAllowance?: number; breakShortenAllowance?: number }
+      const siteList = w.sites.map(sid => siteNames[sid] || sid).join(', ')
+      const nameWithDispatch = w.isDispatched ? `🔁 ${w.name}（出向: ${w.dispatchTo || ''}）` : w.name
+      const rateKind = w.salary ? '月給' : (w.hourlyRate ? '時給' : '—')
+      const rateValue = w.salary || w.hourlyRate || 0
+      const basePay = w.fixedBasePay || w.basePay || 0
+      const otNewStat = old ? null : (w.otAllowance || 0)
+      const otOld = old ? (w.otAllowance || 0) : null
+      const compAllow = old ? (w.additionalAllowance || 0) : (w.compAllowance || 0)
+      const nums: (number | null)[] = [
+        w.workerPrescribedDays ?? prescribedDays,
+        Math.round((old ? (w.prescribedHours || 0) : (w.legalLimit || 0)) * 10) / 10,
+        old ? (w.actualWorkDays || 0) : (w.regularWorkDays || 0),
+        old ? null : (w.legalHolidayDays ?? 0),
+        w.compDays || 0, w.plDays || 0,
+        w.actualWorkHours || 0,
+        old ? null : (wext.nonStatutoryOTHours || 0),
+        w.legalOtHours || 0,
+        old ? null : (w.legalHolidayHours || 0),
+        old ? null : (w.nightHours || 0),
+        basePay,
+        old ? null : (w.additionalAllowance || 0),
+        old ? null : (w.paidLeaveAllowance || 0),
+        old ? null : (wext.nonStatutoryOTAllowance || 0),
+        otNewStat, otOld,
+        old ? null : (w.legalHolidayAllowance || 0),
+        old ? null : (w.nightAllowance || 0),
+        compAllow,
+        wext.breakShortenAllowance || 0,
+        ...(withAllowance ? [w.siteAllowance || 0, w.driveAllowance || 0] : []),
+        w.absence || 0, w.absentDeduction || 0,
+        old ? (w.compBaseDeduction || 0) : null,
+        w.salaryNetPay || 0,
+      ]
+      numericRows.push(nums)
+      rows.push([nameWithDispatch, old ? '旧' : '新', siteList, rateKind, rateValue, ...nums])
+      // 行ごとの内訳検算
+      const parts = basePay + (old ? 0 : (w.additionalAllowance || 0)) + (old ? 0 : (w.paidLeaveAllowance || 0))
+        + (old ? 0 : (wext.nonStatutoryOTAllowance || 0)) + (w.otAllowance || 0)
+        + (old ? 0 : (w.legalHolidayAllowance || 0)) + (old ? 0 : (w.nightAllowance || 0))
+        + compAllow + (wext.breakShortenAllowance || 0) + (w.siteAllowance || 0) + (w.driveAllowance || 0)
+        - (w.absentDeduction || 0) - (old ? (w.compBaseDeduction || 0) : 0)
+      if (parts !== (w.salaryNetPay || 0)) mismatches.push(w.name)
+    }
+    // 小計（数値列を縦に合計。所定日数・時間の列は合計しない）
+    const skip = new Set([0, 1])
+    const subtotal: (number | null)[] = numericRows[0].map((_, ci) =>
+      skip.has(ci) ? null : Math.round(numericRows.reduce((acc, r) => acc + (r[ci] || 0), 0) * 100) / 100)
+    rows.push(['小計', null, null, null, null, ...subtotal])
+    rows.push([])
+    rows.push([mismatches.length === 0
+      ? '✓ 自動検算: 全員 内訳合計（基本給＋各手当 − 欠勤控除 − 補償日控除）＝ 支給額合計'
+      : `⚠ 自動検算: ${mismatches.join('・')} の内訳合計が支給額合計と一致しません`])
+    // 新ルールの割増率チェック（validatePayrolls は内部で新ルールだけを判定する）
+    const newOnes = ws.filter(w => !isWorkerOldRules(w))
+    if (newOnes.length > 0) appendValidation(rows, newOnes, unifiedHeaders.length)
+    rows.push(['※ 契約「新」＝変形労働時間制（時給×20日×7hの固定基本給＋各手当）。「旧」＝固定月給の旧契約（残業1.25倍・現場都合休は補償日控除＋休業手当60%）。空欄はその契約に無い項目。'])
+    const sheet = XLSX.utils.aoa_to_sheet(rows)
+    const merges: XLSX.Range[] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: unifiedHeaders.length - 1 } }]
+    rows.forEach((r, i) => {
+      if (i > 2 && r.length === 1 && typeof r[0] === 'string') merges.push({ s: { r: i, c: 0 }, e: { r: i, c: unifiedHeaders.length - 1 } })
+    })
+    sheet['!merges'] = merges
+    setColWidths(sheet, [14, 5, 14, 8, 10, 8, 12, 8, 8, 8, 8, 9, 10, 12, 9, 9, 11, 11, 11, 12, 12, 12, 11, 10, 10, 11, ...(withAllowance ? [10, 10] : []), 8, 11, 12, 14])
+    return sheet
+  }
+
   // ── 日本人シート生成 ──
   function buildJapaneseSheet(sheetName: string, ws: WorkerMonthly[]): XLSX.WorkSheet | null {
     if (ws.length === 0) return null
@@ -1029,7 +1121,15 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
 
   // ── シート登録（順序固定: 日比 → HFU → 外注） ──
   // Excel のシートタブには 31文字制限あり。日本語短めなら問題なし
-  const sheetDefs: { name: string; sheet: XLSX.WorkSheet | null }[] = [
+  // 2026-09-17: 9月分からベトナム人は新旧を 1 シートに統合（キャシュモの要望）。8月分以前は従来の 2 シート
+  const unifiedVn = ym >= UNIFIED_VN_SHEET_FROM_YM
+  const sheetDefs: { name: string; sheet: XLSX.WorkSheet | null }[] = unifiedVn ? [
+    { name: '日比建設・日本人', sheet: buildJapaneseSheet('日比建設・日本人', hibiJapanese) },
+    { name: '日比建設・ベトナム人', sheet: buildUnifiedVnSheet('日比建設・ベトナム人', [...hibiForeignNew, ...hibiForeignOld]) },
+    { name: 'HFU・日本人', sheet: buildJapaneseSheet('HFU・日本人', hfuJapanese) },
+    { name: 'HFU・ベトナム人', sheet: buildUnifiedVnSheet('HFU・ベトナム人', [...hfuForeignNew, ...hfuForeignOld]) },
+    { name: '協力業者', sheet: buildSubconSheet() },
+  ] : [
     { name: '日比建設・日本人', sheet: buildJapaneseSheet('日比建設・日本人', hibiJapanese) },
     { name: '日比建設・ベトナム人', sheet: buildForeignSheet('日比建設・ベトナム人', hibiForeignNew, false) },
     { name: '日比建設・ベトナム人(旧)', sheet: buildForeignSheet('日比建設・ベトナム人', hibiForeignOld, true) },
