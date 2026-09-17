@@ -999,12 +999,12 @@ export default function MonthlyPage() {
             className="w-full flex items-center justify-between px-3 py-2 hover:bg-indigo-100/50 dark:hover:bg-indigo-900/30 transition"
           >
             <div className="flex items-center gap-2">
-              <span className="text-sm">📥</span>
+              <span className="text-sm">📤</span>
               <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300">
-                キャシュモ提出用資料（会社別）
+                キャシュモ提出（毎月の2点・会社別）
               </span>
               <span className="text-[10px] text-indigo-600 dark:text-indigo-400">
-                計算根拠 PDF / 勤務予定シフト / 実労働時間明細 ＋ 月次集計 Excel / 出面一覧
+                月次集計 Excel ＋ 計算根拠 PDF
               </span>
             </div>
             <span className="text-xs text-indigo-600 dark:text-indigo-400">
@@ -1013,9 +1013,10 @@ export default function MonthlyPage() {
           </button>
           {showSyaroshiSection && (() => {
             const ymClean = ym.replace('-', '')
-            // 2026-09-17: 9月分から日比建設・HFU とも給与計算をキャシュモに委託。
-            //   両社に同じ5点を出せるよう、ベトナム人用3点に加えて全員分（日本人含む）の
-            //   月次集計Excel・出面一覧もここから会社別に出力する
+            // 2026-09-17（代表決定）: キャシュモへ毎月送るのは「月次集計Excel＋計算根拠PDF」の2点だけ。
+            //   計算根拠PDFに日本人も載せたので、この2点で両社の全員の数字と日別の根拠が揃う。
+            //   勤務予定シフト・実労働時間明細・出面一覧は「根拠として持っておく書類」で、
+            //   求められたときに出す（下の折りたたみ）
             const downloadExcel = async (type: 'plannedShift' | 'actualHours' | 'monthlyExcel' | 'hibi' | 'hfu', org: 'hibi' | 'hfu', filename: string) => {
               const stored = localStorage.getItem('hibi_auth')
               const pw = stored ? JSON.parse(stored).password : ''
@@ -1038,38 +1039,42 @@ export default function MonthlyPage() {
               <div className="flex flex-wrap items-center gap-2 py-1.5">
                 <span className={`text-xs font-semibold min-w-[72px] ${colorClass}`}>{orgLabel}:</span>
                 <button
+                  onClick={() => downloadExcel('monthlyExcel', orgKey, `月次集計_${orgLabel}_${ymClean}.xlsx`)}
+                  className="px-2.5 py-1 text-[11px] rounded bg-green-600 text-white hover:bg-green-700 transition font-medium"
+                  title="月次集計 Excel（この会社の全員。日本人シート／ベトナム人シート。支給額の内訳）"
+                >
+                  📊 月次集計 Excel
+                </button>
+                <button
                   onClick={() => window.open(`/monthly/audit-print?ym=${ymClean}&org=${orgKey}`, '_blank')}
                   className="px-2.5 py-1 text-[11px] rounded bg-purple-600 text-white hover:bg-purple-700 transition font-medium"
-                  title="計算根拠 PDF を新タブで開く（Cmd+P → PDF保存）"
+                  title="計算根拠 PDF を新タブで開く（Cmd+P → PDF保存）。この会社の全員（ベトナム人＋日本人）1人1ページ＋日別カレンダー"
                 >
                   🔍 計算根拠 PDF
                 </button>
+              </div>
+            )
+            const renderEvidenceRow = (orgKey: 'hibi' | 'hfu', orgLabel: string, colorClass: string) => (
+              <div className="flex flex-wrap items-center gap-2 py-1">
+                <span className={`text-[11px] font-semibold min-w-[72px] ${colorClass}`}>{orgLabel}:</span>
                 <button
                   onClick={() => downloadExcel('plannedShift', orgKey, `勤務予定シフト_${orgLabel}_${ymClean}.xlsx`)}
-                  className="px-2.5 py-1 text-[11px] rounded bg-teal-600 text-white hover:bg-teal-700 transition font-medium"
-                  title="勤務予定シフト表 (Excel)"
+                  className="px-2 py-0.5 text-[10px] rounded border border-teal-500 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 transition"
+                  title="勤務予定シフト表（ベトナム人・変形労働時間制の事前に定めた所定）"
                 >
                   📅 勤務予定シフト
                 </button>
                 <button
                   onClick={() => downloadExcel('actualHours', orgKey, `実労働時間明細_${orgLabel}_${ymClean}.xlsx`)}
-                  className="px-2.5 py-1 text-[11px] rounded bg-emerald-600 text-white hover:bg-emerald-700 transition font-medium"
-                  title="実労働時間明細 (Excel)"
+                  className="px-2 py-0.5 text-[10px] rounded border border-emerald-500 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition"
+                  title="実労働時間明細（ベトナム人・日別の始業・終業・休憩・実労働h）"
                 >
                   ⏱ 実労働時間明細
                 </button>
-                <span className="text-[10px] text-indigo-400 px-1">｜ 全員分</span>
-                <button
-                  onClick={() => downloadExcel('monthlyExcel', orgKey, `月次集計_${orgLabel}_${ymClean}.xlsx`)}
-                  className="px-2.5 py-1 text-[11px] rounded bg-green-600 text-white hover:bg-green-700 transition font-medium"
-                  title="月次集計 Excel（この会社の日本人・ベトナム人。支給額の内訳）"
-                >
-                  📊 月次集計 Excel
-                </button>
                 <button
                   onClick={() => downloadExcel(orgKey, orgKey, `出面一覧_${orgLabel}_${ymClean}.xlsx`)}
-                  className="px-2.5 py-1 text-[11px] rounded bg-sky-600 text-white hover:bg-sky-700 transition font-medium"
-                  title="出面一覧 Excel（この会社の全員の日別 出勤・残業 ＋ 外国人の勤務時間一覧・勤怠サマリー）"
+                  className="px-2 py-0.5 text-[10px] rounded border border-sky-500 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 transition"
+                  title="出面一覧（全員の日別 出勤・残業 ＋ 外国人の勤務時間一覧・勤怠サマリー）"
                 >
                   📋 出面一覧
                 </button>
@@ -1080,8 +1085,20 @@ export default function MonthlyPage() {
                 {renderCompanyRow('hibi', '日比建設', 'text-teal-900 dark:text-teal-200')}
                 {renderCompanyRow('hfu', 'HFU', 'text-pink-900 dark:text-pink-200')}
                 <div className="text-[10px] text-indigo-700 dark:text-indigo-400 mt-1 pl-1">
-                  💡 会社ごとに別々に出力してキャシュモへ提出（2026年10月＝9月分から両社とも）。左3点はベトナム人のみ、右2点は日本人を含む全員分。PDF はブラウザの「PDFとして保存」、Excel は自動ダウンロード
+                  💡 月締めロック後に会社ごとに出してキャシュモへ送る（2026年10月＝9月分から両社とも）。PDF はブラウザの「PDFとして保存」、Excel は自動ダウンロード
                 </div>
+                <details className="mt-2 pl-1">
+                  <summary className="text-[11px] text-indigo-700 dark:text-indigo-400 cursor-pointer select-none">
+                    📁 根拠書類（毎月は送らない。キャシュモ・社労士・労基署に求められたら出す）
+                  </summary>
+                  <div className="mt-1 pl-2 border-l-2 border-indigo-200 dark:border-indigo-700">
+                    {renderEvidenceRow('hibi', '日比建設', 'text-teal-900 dark:text-teal-200')}
+                    {renderEvidenceRow('hfu', 'HFU', 'text-pink-900 dark:text-pink-200')}
+                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                      勤務予定シフト＝変形労働時間制で事前に定めた所定の記録／実労働時間明細＝残業時間の根拠／出面一覧＝全員の日別記録
+                    </div>
+                  </div>
+                </details>
               </div>
             )
           })()}
