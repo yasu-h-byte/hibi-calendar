@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     if (action === 'add') {
-      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive, breakShortenMin, breakShortenFrom, nonSmoker, children } = body
+      const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive, breakShortenMin, breakShortenFrom, nonSmoker, children, payrollNo } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
       }
@@ -66,6 +66,10 @@ export async function POST(request: NextRequest) {
       }
       if (visaExpiry) {
         (workerData as Record<string, unknown>).visaExpiry = visaExpiry
+      }
+      // キャシュモ管理の従業員番号（文字列・任意）
+      if (payrollNo !== undefined && String(payrollNo).trim()) {
+        (workerData as Record<string, unknown>).payrollNo = String(payrollNo).trim()
       }
       // 生年月日は労働者名簿の必須記載事項（労基法107条）。号俸制の年齢調整にも使う
       if (birthDate) {
@@ -121,6 +125,9 @@ export async function POST(request: NextRequest) {
       }
       if (updates.dispatchTo !== undefined) {
         updates.dispatchTo = String(updates.dispatchTo || '').trim()
+      }
+      if (updates.payrollNo !== undefined) {
+        updates.payrollNo = String(updates.payrollNo || '').trim()
       }
       if (updates.dispatchFrom !== undefined) {
         updates.dispatchFrom = String(updates.dispatchFrom || '').trim()

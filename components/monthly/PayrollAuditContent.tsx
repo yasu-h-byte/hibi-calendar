@@ -23,6 +23,8 @@ import { validatePayroll, type PayrollSnapshot } from '@/lib/payroll-validator'
 export interface PayrollAuditWorker {
   id: number
   name: string
+  /** キャシュモ管理の従業員番号（提出用PDFのヘッダーに載せる） */
+  payrollNo?: string
   org: string
   visa: string
   job: string

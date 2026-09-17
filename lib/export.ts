@@ -382,7 +382,8 @@ export function generateOrgAttendance(data: HfuAttendanceExportData, org: Attend
 
   // ── Sheet 1: 出面一覧（出勤値／残業h） ──
   {
-    const headers = ['名前', '区分']
+    // 従業員番号 = キャシュモ管理の番号（2026-09-17 追加。社員番号とは別）
+    const headers = ['名前', '従業員番号', '区分']
     for (let d = 1; d <= numDays; d++) headers.push(dayLabel(ym, d))
     headers.push('合計')
 
@@ -392,8 +393,8 @@ export function generateOrgAttendance(data: HfuAttendanceExportData, org: Attend
     const dailyOTTotals: number[] = new Array(numDays).fill(0)
 
     for (const w of orgWorkers) {
-      const workRow: (string | number)[] = [w.name, '出勤']
-      const otRow: (string | number)[] = ['', '残業h']
+      const workRow: (string | number)[] = [w.name, (w as { payrollNo?: string }).payrollNo || '', '出勤']
+      const otRow: (string | number)[] = ['', '', '残業h']
       let wWork = 0, wOT = 0
 
       for (let d = 1; d <= numDays; d++) {
@@ -429,8 +430,8 @@ export function generateOrgAttendance(data: HfuAttendanceExportData, org: Attend
     }
 
     // Footer: 日ごとの縦計
-    const footerWork: (string | number)[] = ['合計', '出勤']
-    const footerOT: (string | number)[] = ['', '残業h']
+    const footerWork: (string | number)[] = ['合計', '', '出勤']
+    const footerOT: (string | number)[] = ['', '', '残業h']
     for (let d = 0; d < numDays; d++) {
       footerWork.push(dailyWorkTotals[d] > 0 ? Math.round(dailyWorkTotals[d] * 10) / 10 : '')
       footerOT.push(dailyOTTotals[d] > 0 ? Math.round(dailyOTTotals[d] * 10) / 10 : '')
@@ -440,8 +441,8 @@ export function generateOrgAttendance(data: HfuAttendanceExportData, org: Attend
     rows.push(footerWork); rows.push(footerOT)
 
     const ws = XLSX.utils.aoa_to_sheet(rows)
-    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 2 } }]
-    const colWidths = [14, 6]; for (let d = 0; d < numDays; d++) colWidths.push(7); colWidths.push(6)
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 3 } }]
+    const colWidths = [14, 9, 6]; for (let d = 0; d < numDays; d++) colWidths.push(7); colWidths.push(6)
     setColWidths(ws, colWidths)
     XLSX.utils.book_append_sheet(wb, ws, '出面一覧')
   }
@@ -762,7 +763,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   //   欠勤日数・欠勤控除（完全月給の欠勤控除は 202608〜。列が無く内訳の合計と支給額が合わなかった）。
   //   過去月のExcelの列構成を変えないよう、欠勤控除の適用開始月からだけ列を出す
   const withJpDetail = ym >= JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM
-  const japaneseHeaders = ['名前', '現場', '雇用形態', '日額/月給', '出勤日数',
+  const japaneseHeaders = ['名前',
+    ...(withJpDetail ? ['従業員番号'] : []),
+    '現場', '雇用形態', '日額/月給', '出勤日数',
     ...(withJpDetail ? ['補償日'] : []),
     '有給日数', '残業時間(h)', '基本給', '有給手当', '残業手当',
     ...(withJpLegalHoliday ? ['法定休日手当'] : []),
@@ -930,7 +933,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   // 新ルール・旧ルールを 1 シートにまとめる（代表決定 2026-09-17）。列は両方の和で、
   // 該当しない項目は空欄。残業だけは建て方が違う（新: 所定外1.0倍＋法定外0.25倍／旧: 1.25倍）ので
   // 列を分けたまま隣に置く。行ごとに「内訳合計＝支給額」の検算を付ける。
-  const unifiedHeaders = ['名前', '契約', '現場', '単価種別', '単価', '所定日数', '法定上限／所定時間(h)',
+  const unifiedHeaders = ['名前', '従業員番号', '契約', '現場', '単価種別', '単価', '所定日数', '法定上限／所定時間(h)',
     '通常出勤', '法休出勤', '補償日', '有給日数',
     '実労働h', '所定外労働h', '法定残業h(新)／残業h(旧)', '法休労働h', '深夜労働h',
     '基本給', '追加所定手当', '有給日給', '所定外労働手当', '法定外残業手当', '残業手当(旧・1.25倍)',
@@ -982,7 +985,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         w.salaryNetPay || 0,
       ]
       numericRows.push(nums)
-      rows.push([nameWithDispatch, old ? '旧' : '新', siteList, rateKind, rateValue, ...nums])
+      rows.push([nameWithDispatch, w.payrollNo || '', old ? '旧' : '新', siteList, rateKind, rateValue, ...nums])
       // 行ごとの内訳検算
       const parts = basePay + (old ? 0 : (w.additionalAllowance || 0)) + (old ? 0 : (w.paidLeaveAllowance || 0))
         + (old ? 0 : (wext.nonStatutoryOTAllowance || 0)) + (w.otAllowance || 0)
@@ -995,7 +998,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     const skip = new Set([0, 1])
     const subtotal: (number | null)[] = numericRows[0].map((_, ci) =>
       skip.has(ci) ? null : Math.round(numericRows.reduce((acc, r) => acc + (r[ci] || 0), 0) * 100) / 100)
-    rows.push(['小計', null, null, null, null, ...subtotal])
+    rows.push(['小計', null, null, null, null, null, ...subtotal])
     rows.push([])
     rows.push([mismatches.length === 0
       ? '✓ 自動検算: 全員 内訳合計（基本給＋各手当 − 欠勤控除 − 補償日控除）＝ 支給額合計'
@@ -1010,7 +1013,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       if (i > 2 && r.length === 1 && typeof r[0] === 'string') merges.push({ s: { r: i, c: 0 }, e: { r: i, c: unifiedHeaders.length - 1 } })
     })
     sheet['!merges'] = merges
-    setColWidths(sheet, [14, 5, 14, 8, 10, 8, 12, 8, 8, 8, 8, 9, 10, 12, 9, 9, 11, 11, 11, 12, 12, 12, 11, 10, 10, 11, ...(withAllowance ? [10, 10] : []), 8, 11, 12, 14])
+    setColWidths(sheet, [14, 9, 5, 14, 8, 10, 8, 12, 8, 8, 8, 8, 9, 10, 12, 9, 9, 11, 11, 11, 12, 12, 12, 11, 10, 10, 11, ...(withAllowance ? [10, 10] : []), 8, 11, 12, 14])
     return sheet
   }
 
@@ -1030,7 +1033,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       const isFullMonthly = (w.salary || 0) > 0
       if (isFullMonthly) hasFullMonthly = true
       rows.push([
-        nameWithDispatch, siteList,
+        nameWithDispatch,
+        ...(withJpDetail ? [w.payrollNo || ''] : []),
+        siteList,
         isFullMonthly ? '完全月給' : '日給月給',
         isFullMonthly ? (w.salary || 0) : w.rate,
         w.workDays,
@@ -1045,7 +1050,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       ])
     }
     rows.push([
-      '小計', null, null, null,
+      '小計', ...(withJpDetail ? [null] : []), null, null, null,
       ws.reduce((s, w) => s + w.workDays, 0),
       ...(withJpDetail ? [ws.reduce((s, w) => s + (w.compDays || 0), 0)] : []),
       ws.reduce((s, w) => s + (w.plDays || 0), 0),
@@ -1090,7 +1095,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       if (i > 2 && r.length === 1 && typeof r[0] === 'string') merges.push({ s: { r: i, c: 0 }, e: { r: i, c: japaneseHeaders.length - 1 } })
     })
     sheet['!merges'] = merges
-    setColWidths(sheet, [14, 16, 10, 12, 8, ...(withJpDetail ? [8] : []), 8, 10, 12, 12, 12, ...(withJpLegalHoliday ? [11] : []), ...(withAllowance ? [10, 10] : []), ...(withJpDetail ? [8, 12] : []), 14])
+    setColWidths(sheet, [14, ...(withJpDetail ? [9] : []), 16, 10, 12, 8, ...(withJpDetail ? [8] : []), 8, 10, 12, 12, 12, ...(withJpLegalHoliday ? [11] : []), ...(withAllowance ? [10, 10] : []), ...(withJpDetail ? [8, 12] : []), 14])
     return sheet
   }
 
@@ -1692,7 +1697,7 @@ export function generatePlannedShiftExcel(data: PlannedShiftData): XLSX.WorkBook
     const rows: unknown[][] = []
     // ヘッダー
     rows.push([`勤務予定シフト表 ${ymLabel(ym)} - ${w.name}`])
-    rows.push([`スタッフ ID: ${w.id}  /  雇用区分: ${w.visa}`])
+    rows.push([`スタッフ ID: ${w.id}  /  従業員番号: ${(w as { payrollNo?: string }).payrollNo || '—'}  /  雇用区分: ${w.visa}`])
     rows.push([`配置現場: ${site?.name || '未確定'}`])
     rows.push([`勤務時間 (標準): ${schedule.start}-${schedule.end} / 休憩 ${schedule.breakMin}分 / 所定 ${schedule.workH}h`])
     rows.push([`制度: 1ヶ月単位の変形労働時間制 / 月の所定総枠 ${legalLimit}h (暦日数${daysInMonth}÷7×40)`])
@@ -1818,7 +1823,7 @@ export function generateActualHoursExcel(data: ActualHoursData): XLSX.WorkBook {
   for (const w of foreignWorkers) {
     const rows: unknown[][] = []
     rows.push([`実労働時間明細 ${ymLabel(ym)} - ${w.name}`])
-    rows.push([`スタッフ ID: ${w.id}  /  雇用区分: ${w.visa}`])
+    rows.push([`スタッフ ID: ${w.id}  /  従業員番号: ${(w as { payrollNo?: string }).payrollNo || '—'}  /  雇用区分: ${w.visa}`])
     rows.push([`※ 実労働(h) = 始業〜終業 − 実際に取得した休憩。給与計算と完全に同一の算出方法です`])
     rows.push([`※ 休憩(分)は実際に取得した分のみ。現場・作業内容により休憩を取れなかった場合は労働時間に算入されます`])
     rows.push([`※ 所定外(h) = 実労働 − 当日所定時間。始業/終業に「(推定)」がある日は時刻未記録のため標準時刻で推定`])

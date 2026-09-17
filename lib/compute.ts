@@ -91,6 +91,7 @@ export interface RawWorker {
   dispatchTo?: string  // 出向先名（空なら通常勤務）
   dispatchFrom?: string  // 出向開始月 YYYY-MM（空なら全期間出向扱い）
   useOldRules?: boolean  // 旧ルール（変形労働制以前）給与計算を継続するフラグ（個別対応）
+  payrollNo?: string     // キャシュモ管理の従業員番号（提出帳票用・2026-09-17）
   rateFrom?: string      // 現在の rate/jpStep の適用開始日（年次改定の基準日）。types/index.ts 参照
   prevRate?: number      // rateFrom より前の月に使う日額
   prevJpStep?: number
@@ -1084,6 +1085,8 @@ export interface WorkerMonthly {
   // 2026-06-XX 追加: 旧ルール継続フラグ（人員マスタの個別設定）
   //   下流（PayrollAuditModal / Excel出力）で表示分岐するために必要
   useOldRules?: boolean
+  /** キャシュモ管理の従業員番号（提出用Excel/PDFに載せる） */
+  payrollNo?: string
   sites: string[]
   workDays: number
   actualWorkDays: number
@@ -1303,6 +1306,7 @@ export function computeMonthly(
       salary: effectiveSalaryForYm(w, ym),
       // 2026-06-XX 追加: 下流の表示層が「フン等の個別旧ルール継続者」を判別できるようにする
       useOldRules: w.useOldRules,
+      payrollNo: w.payrollNo || undefined,
       sites: [],
       workDays: 0, actualWorkDays: 0, compDays: 0, workAll: 0, otHours: 0,
       plDays: 0, plUsed: 0, restDays: 0, siteOffDays: 0, examDays: 0,

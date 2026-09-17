@@ -22,6 +22,8 @@ export interface Worker {
    * 既定: 未設定（false 相当）= 5月以降は新ルール
    */
   useOldRules?: boolean
+  /** キャシュモ（給与計算委託先）が管理する従業員番号。社員番号(id)とは別。提出用の帳票に載せる（2026-09-17） */
+  payrollNo?: string
   /**
    * 日本人社員の号俸制（docs/wage-system.md）の現在位置。
    * jpGrade: '1G'〜'6G' または 'doko'（土工）。jpStep: 号数(1〜60)。

@@ -234,7 +234,7 @@ export default function AuditPrintPage() {
                   <div className="font-bold text-base">
                     {worker.name}
                     <span className="ml-2 text-xs opacity-80">
-                      ({worker.org === 'hfu' ? 'HFU' : '日比建設'}) — ID:{worker.id}
+                      ({worker.org === 'hfu' ? 'HFU' : '日比建設'}) — ID:{worker.id}{worker.payrollNo ? ` — 従業員番号:${worker.payrollNo}` : ''}
                     </span>
                   </div>
                 </div>

@@ -45,7 +45,7 @@ const EMPTY_FORM = {
   nonSmoker: false,
   children: [] as string[],
   breakShortenMin: '', breakShortenFrom: '',
-  visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '',
+  visaExpiry: '', memo: '', dispatchTo: '', dispatchFrom: '', payrollNo: '',
   useOldRules: false,
 }
 
@@ -218,6 +218,7 @@ export default function WorkersPage() {
       salary: String(w.salary || ''),
       visaExpiry: w.visaExpiry || '',
       memo: (w as unknown as { memo?: string }).memo || '',
+      payrollNo: (w as unknown as { payrollNo?: string }).payrollNo || '',
       dispatchTo: w.dispatchTo || '',
       dispatchFrom: w.dispatchFrom || '',
       useOldRules: !!w.useOldRules,
@@ -276,8 +277,8 @@ export default function WorkersPage() {
     setSaving(true)
     try {
       const body = editId !== null
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined }
-        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined }
+        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() }
+        : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() || undefined }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -966,6 +967,13 @@ export default function WorkersPage() {
                         <div className="mt-1 text-xs text-green-600">在留期限まで余裕があります</div>
                       )
                     })()}
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">キャシュモ従業員番号</label>
+                    <input type="text" value={form.payrollNo} onChange={e => setForm({ ...form, payrollNo: e.target.value })}
+                      placeholder="例: 1128（キャシュモの従業員情報CSVの番号。社員番号とは別）"
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none" />
+                    <p className="text-[11px] text-gray-400 mt-1">給与計算委託先（キャシュモ）に渡す月次集計Excel・出面一覧・勤務予定シフト・実労働時間明細・計算根拠PDFに載ります</p>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">メモ</label>

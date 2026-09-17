@@ -51,6 +51,7 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     dispatchTo: (w.dispatchTo as string) || '',
     dispatchFrom: (w.dispatchFrom as string) || '',
     useOldRules: (w.useOldRules as boolean) || undefined,
+    payrollNo: (w.payrollNo as string) || undefined,
     birthDate: (w.birthDate as string) || '',
     jpGrade: (w.jpGrade as string) || undefined,
     jpStep: (w.jpStep as number) || undefined,
