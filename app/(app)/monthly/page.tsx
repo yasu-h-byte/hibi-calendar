@@ -129,7 +129,7 @@ const EXPORT_CARDS: ExportCard[] = [
   {
     icon: '📊',
     title: '日比建設向け 出面一覧',
-    description: '日比建設所属の全社員・現場別の出面データをExcel形式で出力します。月次の勤怠集計に利用できます。',
+    description: '日比建設所属の全スタッフの日別出面（出勤・残業）＋外国人の勤務時間一覧・勤怠サマリー。キャシュモ提出用（HFU向けと同じ形式）。',
     format: 'Excel出力',
     type: 'hibi',
     needsYm: true,
@@ -137,7 +137,7 @@ const EXPORT_CARDS: ExportCard[] = [
   {
     icon: '📊',
     title: 'HFU向け 出面一覧',
-    description: 'HFU所属の実習生・特定技能生の出面データをExcel形式で出力します。管理団体への報告に利用できます。',
+    description: 'HFU所属の全スタッフの日別出面（出勤・残業）＋外国人の勤務時間一覧・勤怠サマリー。キャシュモ提出用（日比建設向けと同じ形式）。',
     format: 'Excel出力',
     type: 'hfu',
     needsYm: true,
@@ -1001,10 +1001,10 @@ export default function MonthlyPage() {
             <div className="flex items-center gap-2">
               <span className="text-sm">📥</span>
               <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300">
-                社労士提出用資料（ベトナム人スタッフのみ）
+                キャシュモ提出用資料（会社別）
               </span>
               <span className="text-[10px] text-indigo-600 dark:text-indigo-400">
-                計算根拠 PDF / 勤務予定シフト / 実労働時間明細
+                計算根拠 PDF / 勤務予定シフト / 実労働時間明細 ＋ 月次集計 Excel / 出面一覧
               </span>
             </div>
             <span className="text-xs text-indigo-600 dark:text-indigo-400">
@@ -1013,7 +1013,10 @@ export default function MonthlyPage() {
           </button>
           {showSyaroshiSection && (() => {
             const ymClean = ym.replace('-', '')
-            const downloadExcel = async (type: 'plannedShift' | 'actualHours', org: 'hibi' | 'hfu', filename: string) => {
+            // 2026-09-17: 9月分から日比建設・HFU とも給与計算をキャシュモに委託。
+            //   両社に同じ5点を出せるよう、ベトナム人用3点に加えて全員分（日本人含む）の
+            //   月次集計Excel・出面一覧もここから会社別に出力する
+            const downloadExcel = async (type: 'plannedShift' | 'actualHours' | 'monthlyExcel' | 'hibi' | 'hfu', org: 'hibi' | 'hfu', filename: string) => {
               const stored = localStorage.getItem('hibi_auth')
               const pw = stored ? JSON.parse(stored).password : ''
               const res = await fetch(`/api/export?type=${type}&ym=${ymClean}&org=${org}`, {
@@ -1055,6 +1058,21 @@ export default function MonthlyPage() {
                 >
                   ⏱ 実労働時間明細
                 </button>
+                <span className="text-[10px] text-indigo-400 px-1">｜ 全員分</span>
+                <button
+                  onClick={() => downloadExcel('monthlyExcel', orgKey, `月次集計_${orgLabel}_${ymClean}.xlsx`)}
+                  className="px-2.5 py-1 text-[11px] rounded bg-green-600 text-white hover:bg-green-700 transition font-medium"
+                  title="月次集計 Excel（この会社の日本人・ベトナム人。支給額の内訳）"
+                >
+                  📊 月次集計 Excel
+                </button>
+                <button
+                  onClick={() => downloadExcel(orgKey, orgKey, `出面一覧_${orgLabel}_${ymClean}.xlsx`)}
+                  className="px-2.5 py-1 text-[11px] rounded bg-sky-600 text-white hover:bg-sky-700 transition font-medium"
+                  title="出面一覧 Excel（この会社の全員の日別 出勤・残業 ＋ 外国人の勤務時間一覧・勤怠サマリー）"
+                >
+                  📋 出面一覧
+                </button>
               </div>
             )
             return (
@@ -1062,7 +1080,7 @@ export default function MonthlyPage() {
                 {renderCompanyRow('hibi', '日比建設', 'text-teal-900 dark:text-teal-200')}
                 {renderCompanyRow('hfu', 'HFU', 'text-pink-900 dark:text-pink-200')}
                 <div className="text-[10px] text-indigo-700 dark:text-indigo-400 mt-1 pl-1">
-                  💡 会社ごとに社労士が異なるため別々に出力。PDF はブラウザの「PDFとして保存」、Excel は自動ダウンロード
+                  💡 会社ごとに別々に出力してキャシュモへ提出（2026年10月＝9月分から両社とも）。左3点はベトナム人のみ、右2点は日本人を含む全員分。PDF はブラウザの「PDFとして保存」、Excel は自動ダウンロード
                 </div>
               </div>
             )

@@ -29,8 +29,8 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-08-31' },
 
   // ── 事務（森田さん・2026-10からキャシュモ委託体制） ──
-  { category: 'manual', roles: ['jimu'], title: '事務業務マニュアル（森田さん向け）', desc: '奥寺さん・佐藤さんの業務を統合した引き継ぎ版。出面補助・申請承認・道具代・月次締め・キャシュモへの資料提出まで（給与計算・振込はキャシュモ委託）', url: '/manual-morita.html', icon: '📘', badge: 'NEW', updated: '2026-09-02' },
-  { category: 'manual', roles: ['jimu'], title: '社労士提出用資料マニュアル', desc: '社労士・キャシュモに渡す3資料の説明。変形労働時間制・3段階残業判定・有給日給・提出3資料の読み方・端数処理', url: '/manual-syaroshi.html', icon: '🏛', updated: '2026-06-12' },
+  { category: 'manual', roles: ['jimu'], title: '事務業務マニュアル（森田さん向け）', desc: '奥寺さん・佐藤さんの業務を統合した引き継ぎ版。出面補助・申請承認・道具代・月次締め・キャシュモへの資料提出まで（給与計算・振込はキャシュモ委託）', url: '/manual-morita.html', icon: '📘', badge: 'NEW', updated: '2026-09-17' },
+  { category: 'manual', roles: ['jimu'], title: '社労士提出用資料マニュアル', desc: 'キャシュモに渡す会社別5資料（計算根拠PDF・勤務予定シフト・実労働時間明細・月次集計Excel・出面一覧）の説明。変形労働時間制・3段階残業判定・有給日給・日本人の計算方法・端数処理', url: '/manual-syaroshi.html', icon: '🏛', updated: '2026-09-17' },
 
   // ── お知らせ（計算ルールの変更） ──
   { category: 'manual', roles: ['jimu', 'approver'], title: '【お知らせ】最低20日保証と現場都合休の計算変更（8月分から）', desc: '現場都合休（0.6補）は20日に届くまで100%支給・超えた分だけ60%。計算例・8月分で金額が変わる人・月次集計の見方・出面入力のお願い・スタッフへの説明文（日本語＋ベトナム語）', url: '/notice-20day-guarantee.html', icon: '📣', badge: 'お知らせ', updated: '2026-09-15' },

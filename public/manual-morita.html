@@ -46,7 +46,7 @@
 
 <h1>HIBI CONSTRUCTION 就業管理システム<br>事務業務マニュアル（森田さん向け）</h1>
 <p>対象: 森田さん（事務担当）<br>
-最終更新: 2026年9月<br>
+最終更新: 2026年9月17日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <div class="box box-ok">
@@ -70,7 +70,7 @@
 <tr><td><strong>①</strong></td><td>前月の出面を最終確認（未入力・警告を潰す）</td><td>出面入力／月次集計「チェック」</td><td>月初すぐ</td></tr>
 <tr><td><strong>②</strong></td><td>月次集計で出勤・残業・有給・欠勤を確認</td><td>月次集計</td><td>月初</td></tr>
 <tr><td><strong>③</strong></td><td>🔒 月締めロック</td><td>月次集計</td><td>確認後</td></tr>
-<tr><td><strong>④</strong></td><td><strong>キャシュモ提出用の3資料を会社別に出力・送付</strong></td><td>月次集計「社労士提出用」</td><td>ロック後すぐ</td></tr>
+<tr><td><strong>④</strong></td><td><strong>キャシュモ提出用の5資料を会社別に出力・送付</strong></td><td>月次集計「キャシュモ提出用資料」</td><td>ロック後すぐ</td></tr>
 <tr><td><strong>⑤</strong></td><td>道具代: マネーフォワード承認分をシステムへ登録</td><td>道具代管理</td><td>随時</td></tr>
 </table>
 </div>
@@ -80,7 +80,7 @@
 <ul style="margin: 6px 0; padding-left: 20px;">
   <li><a href="/manual-yukyu.html">🌴 休暇管理マニュアル</a> — 有給・帰国の制度詳細（唯一の参照元）</li>
   <li><a href="/manual-checklist.html">✅ ロール別やることチェックリスト</a> — 日次・月次のやること一覧</li>
-  <li><a href="/manual-syaroshi.html">🏛 社労士提出用資料マニュアル</a> — 提出3資料の読み方（キャシュモへの説明にも使えます）</li>
+  <li><a href="/manual-syaroshi.html">🏛 社労士提出用資料マニュアル</a> — 提出5資料の読み方（キャシュモへの説明にも使えます）</li>
 </ul>
 </div>
 
@@ -230,14 +230,20 @@
 <!-- ================================================ -->
 <h2 id="sec5">5. キャシュモへの資料提出</h2>
 
-<p>月次集計画面の<strong>「社労士提出用」</strong>セクションから、<strong>会社別（日比建設／HFU）</strong>に3資料を出力して提出します。HFUで従来行っていた提出方法と同じ形です。</p>
+<p>月次集計画面の<strong>「キャシュモ提出用資料」</strong>セクションから、<strong>会社別（日比建設／HFU）</strong>に5資料を出力して提出します。両社とも同じ形式です（HFUで従来行っていた3点に、日本人を含む全員分の2点を加えたもの）。</p>
 
 <table>
-<tr><th>資料</th><th>内容</th></tr>
-<tr><td>📅 勤務予定シフト表（Excel）</td><td>各日・各週の<strong>所定</strong>労働時間（変形労働時間制の「事前に定めた所定」）</td></tr>
-<tr><td>⏱ 実労働時間明細（Excel）</td><td>各日の始業・終業・実取得休憩・<strong>実労働時間</strong>と所定外</td></tr>
-<tr><td>🔍 計算根拠PDF</td><td>システムの自動計算の内訳（<strong>参考値</strong>。キャシュモの計算との突き合わせ用）</td></tr>
+<tr><th>資料</th><th>対象</th><th>内容</th></tr>
+<tr><td>🔍 計算根拠PDF</td><td>ベトナム人</td><td>システムの自動計算の内訳（<strong>参考値</strong>。キャシュモの計算との突き合わせ用）</td></tr>
+<tr><td>📅 勤務予定シフト表（Excel）</td><td>ベトナム人</td><td>各日・各週の<strong>所定</strong>労働時間（変形労働時間制の「事前に定めた所定」）</td></tr>
+<tr><td>⏱ 実労働時間明細（Excel）</td><td>ベトナム人</td><td>各日の始業・終業・実取得休憩・<strong>実労働時間</strong>と所定外</td></tr>
+<tr><td>📊 月次集計 Excel</td><td>全員（日本人含む）</td><td>支給額の内訳（日本人シート／ベトナム人シート。<strong>参考値</strong>）</td></tr>
+<tr><td>📋 出面一覧（Excel）</td><td>全員（日本人含む）</td><td>日別の出勤・残業。日本人の勤怠の元データ</td></tr>
 </table>
+<ul>
+<li>日比建設には日本人スタッフ（日給月給・完全月給）がいるため、右の2点が日本人分の資料になります。HFUは全員ベトナム人ですが、同じ5点を出します</li>
+<li>道具代・立替などマネーフォワード側の項目は、これまでどおりマネーフォワードから</li>
+</ul>
 
 <div class="step">
   <div class="step-num">1</div>
@@ -245,7 +251,7 @@
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">月次集計 →「社労士提出用」→ <strong>会社を選んで3点を出力</strong></div>
+  <div class="step-text">月次集計 →「キャシュモ提出用資料」→ <strong>日比建設・HFUそれぞれの行で5点を出力</strong></div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
@@ -303,11 +309,12 @@
 <h2>改訂履歴</h2>
 <table>
 <tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-17</td><td>キャシュモ提出資料を両社とも5点（3点＋月次集計Excel・出面一覧）に統一。日本人分の資料を明記</td></tr>
 <tr><td>2026-09-02</td><td>新規作成。奥寺さん事務マニュアル・給与計算マニュアル（締め部分）・佐藤さん道具代マニュアル・休暇管理の事務パートを統合し、キャシュモ委託体制（締め＋資料提出まで）に再構成</td></tr>
 </table>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-09-02</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-09-17</p>
 
 </body>
 </html>

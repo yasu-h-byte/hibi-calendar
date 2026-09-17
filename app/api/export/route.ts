@@ -4,8 +4,8 @@ import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, getSubc
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
 import {
-  generateHibiAttendance,
-  generateHfuAttendance,
+  generateOrgAttendance,
+  ATTENDANCE_ORG_LABEL,
   generateSubconConfirmation,
   generateBukakeReport,
   generateLeaveLedger,
@@ -90,15 +90,10 @@ export async function GET(request: NextRequest) {
           calendarDays: calendarDaysMap,
           baseDays,
         }
-        if (type === 'hibi') {
-          const wb = generateHibiAttendance(exportData)
-          buffer = workbookToBuffer(wb)
-          filename = `日比建設_出面一覧_${ymStr}.xlsx`
-        } else {
-          const wb = generateHfuAttendance(exportData)
-          buffer = workbookToBuffer(wb)
-          filename = `HFU_出面一覧_${ymStr}.xlsx`
-        }
+        // 2026-09-17: 両社共通の生成関数に統一。ファイル名も他の帳票と同じ「帳票名_会社_年月」に
+        const wb = generateOrgAttendance(exportData, type)
+        buffer = workbookToBuffer(wb)
+        filename = `出面一覧_${ATTENDANCE_ORG_LABEL[type]}_${ymStr}.xlsx`
         break
       }
 

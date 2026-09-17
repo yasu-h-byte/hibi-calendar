@@ -16,6 +16,7 @@ import { computePeriodUsed } from './leave-compute'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso } from './date-utils'
 // 2026-06-XX 追加: 自動検算を Excel にも反映
 import { validatePayrolls, type PayrollSnapshot } from './payroll-validator'
+import { JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM } from './constants'
 
 // ────────────────────────────────────────
 //  共通ヘルパー
@@ -343,147 +344,26 @@ function appendOvertimeSummarySheet(
   XLSX.utils.book_append_sheet(wb, ws, sheetName)
 }
 
-export function generateHibiAttendance(data: HibiAttendanceData): XLSX.WorkBook {
-  const { ym, workers, attD, sites } = data
-  const numDays = daysInMonth(ym)
-  const wb = XLSX.utils.book_new()
+/**
+ * 会社別 出面一覧（日比建設・HFU 共通 — 2026-09-17 統一）
+ *
+ * 2026年10月（9月分）から日比建設・HFU とも給与計算をキャシュモに委託するため、
+ * 両社の出力を同じ形にそろえた。旧: 日比用と HFU 用が別関数で、日比は勤務時間一覧を
+ * カレンダーの有無で省略するなどの差があった。
+ *
+ * Sheet 1: 出面一覧（その会社の全スタッフ: 出勤値／残業h。日本人はこれと月次集計Excelが計算資料）
+ * Sheet 2: 勤務時間一覧（外国人のみ・時間換算: 実労働h／所定h／週番号／法定上限）
+ * Sheet 3: 勤怠サマリー（新ルールの外国人のみ・3段階残業判定。202605〜）
+ */
+export type AttendanceOrg = 'hibi' | 'hfu'
+export const ATTENDANCE_ORG_LABEL: Record<AttendanceOrg, string> = { hibi: '日比建設', hfu: 'HFU' }
 
-  // 退職月の在籍スタッフ（例: 6/30 退職予定）も当月分は集計対象に含める
-  const hibiWorkers = workers.filter(w => (w.org === '日比' || w.org === 'hibi') && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym))
-
-  // Header rows
-  const headers = ['名前', '区分']
-  for (let d = 1; d <= numDays; d++) {
-    headers.push(dayLabel(ym, d))
-  }
-  headers.push('合計')
-
-  const titleRow = [`日比建設 出面一覧 ${ymLabel(ym)}`]
-  const rows: (string | number)[][] = [titleRow, headers]
-
-  let totalWork = 0
-  let totalOT = 0
-  let totalPL = 0
-  const dailyWorkTotals: number[] = new Array(numDays).fill(0)
-  const dailyOTTotals: number[] = new Array(numDays).fill(0)
-
-  for (const w of hibiWorkers) {
-    const workRow: (string | number)[] = [w.name, '出勤']
-    const otRow: (string | number)[] = ['', '残業h']
-
-    let wWork = 0
-    let wOT = 0
-    let wPL = 0
-
-    for (let d = 1; d <= numDays; d++) {
-      const dd = String(d)
-      let dayWork: string | number = ''
-      let dayOT: number = 0
-      let isPL = false
-
-      for (const site of sites) {
-        const key = `${site.id}_${w.id}_${ym}_${dd}`
-        const entry = attD[key]
-        if (!entry) continue
-
-        if (entry.p) {
-          isPL = true
-          break
-        }
-        // ⚠️ 2026-05-09: 残骸データ対策。休み/現場休/帰国中/試験 では実労働を計上しない
-        if (!isWorkingDay(entry)) continue
-        if (entry.w && entry.w > 0) {
-          // 2026-08-13: 元請け請求ベース（出面入力ベース）に統一。夜勤がある日は
-          //   1.5人工 が乗るので calcManDays を使う（夜勤なしなら entry.w と同値）。
-          // 同日複数現場は加算（旧: 上書きで最後の現場だけになり過少 2026-08-27）
-          dayWork = (typeof dayWork === 'number' ? dayWork : 0) + calcManDays(entry) // 1, 0.5, 0.6 / 夜勤日は 1.5・2.0・2.5
-          if (entry.o && entry.o > 0) dayOT += entry.o
-        }
-      }
-
-      if (isPL) {
-        dayWork = '有'
-        wPL += 1
-      } else if (typeof dayWork === 'number' && dayWork > 0) {
-        wWork += dayWork
-      }
-
-      if (typeof dayWork === 'number' && dayWork > 0) {
-        dailyWorkTotals[d - 1] += dayWork
-      }
-      dailyOTTotals[d - 1] += dayOT
-
-      wOT += dayOT
-      workRow.push(dayWork || '')
-      otRow.push(dayOT > 0 ? dayOT : '')
-    }
-
-    workRow.push(wWork > 0 ? Math.round(wWork * 10) / 10 : '')
-    otRow.push(wOT > 0 ? Math.round(wOT * 10) / 10 : '')
-
-    totalWork += wWork
-    totalOT += wOT
-    totalPL += wPL
-
-    rows.push(workRow)
-    rows.push(otRow)
-  }
-
-  // Footer: 日ごとの縦計
-  const footerWork: (string | number)[] = ['合計', '出勤']
-  const footerOT: (string | number)[] = ['', '残業h']
-  for (let d = 0; d < numDays; d++) {
-    footerWork.push(dailyWorkTotals[d] > 0 ? Math.round(dailyWorkTotals[d] * 10) / 10 : '')
-    footerOT.push(dailyOTTotals[d] > 0 ? Math.round(dailyOTTotals[d] * 10) / 10 : '')
-  }
-  footerWork.push(Math.round(totalWork * 10) / 10)
-  footerOT.push(Math.round(totalOT * 10) / 10)
-  rows.push(footerWork)
-  rows.push(footerOT)
-
-  const ws = XLSX.utils.aoa_to_sheet(rows)
-
-  // Merge title row
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: numDays + 2 } }]
-
-  // Column widths
-  const colWidths = [14, 6]
-  for (let d = 0; d < numDays; d++) colWidths.push(7)
-  colWidths.push(6)
-  setColWidths(ws, colWidths)
-
-  XLSX.utils.book_append_sheet(wb, ws, '出面一覧')
-
-  // ── Sheet 2: 勤務時間一覧（日比建設所属の外国人スタッフのみ） ──
-  // 4月以前は1日6h40min、5月以降は1日7h で時間変換（appendTimeSheet 内で自動切替）
-  const hibiForeignWorkers = hibiWorkers.filter(w => w.visa && w.visa !== 'none' && w.visa !== '')
-  if (hibiForeignWorkers.length > 0 && data.calendarDays) {
-    appendTimeSheet(wb, '勤務時間一覧', '日比建設', ym, hibiForeignWorkers, attD, sites, data.calendarDays)
-    // ── Sheet 3: 勤怠サマリー（変形労働時間制専用、4月以前はスキップ） ──
-    if (ym >= '202605') {
-      const bd = (data as { baseDays?: number }).baseDays || 20
-      // 2026-06-12 修正 (監査): 旧ルール継続者(フン等)は変形労働の3層計算対象外のため除外。
-      //   含めると「基本給=時給×20日×7h」等、実際の給与（固定月給）と矛盾する行が社労士提出物に載る
-      const newRuleWorkers = hibiForeignWorkers.filter(w => !(w as { useOldRules?: boolean }).useOldRules)
-      if (newRuleWorkers.length > 0) {
-        appendOvertimeSummarySheet(wb, '勤怠サマリー', '日比建設', ym, newRuleWorkers, attD, sites, data.calendarDays, bd)
-      }
-    }
-  }
-
-  return wb
+/** org の表記ゆれ（'日比'/'hibi'・'HFU'/'hfu'）を吸収する */
+export function isWorkerOfOrg(w: { org?: string }, org: AttendanceOrg): boolean {
+  const o = (w.org || '').toLowerCase()
+  return org === 'hibi' ? (o === 'hibi' || o === '日比') : (o === 'hfu')
 }
 
-// ────────────────────────────────────────
-//  2. HFU向け出面一覧
-// ────────────────────────────────────────
-
-/**
- * HFU向け出面一覧（キャシュモ向け: 時間ベース変換付き）
- *
- * Sheet 1: 出面一覧（従来形式: 出勤1/残業h — 入力確認用）
- * Sheet 2: 勤務時間一覧（時間変換済み: 実労働h/所定h/週番号/法定上限 — 給与計算用）
- */
 export interface HfuAttendanceExportData extends HibiAttendanceData {
   /** カレンダーの日ごとの種別（siteId → { "1": "work", "2": "off", ... }） */
   calendarDays?: Record<string, Record<string, string>>
@@ -491,28 +371,27 @@ export interface HfuAttendanceExportData extends HibiAttendanceData {
   baseDays?: number
 }
 
-export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkBook {
+export function generateOrgAttendance(data: HfuAttendanceExportData, org: AttendanceOrg): XLSX.WorkBook {
   const { ym, workers, attD, sites, calendarDays } = data
+  const label = ATTENDANCE_ORG_LABEL[org]
   const numDays = daysInMonth(ym)
   const wb = XLSX.utils.book_new()
 
-  // 退職月の在籍スタッフも当月分は集計対象に含める
-  const hfuWorkers = workers.filter(w => (w.org === 'HFU' || w.org === 'hfu') && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym))
+  // 退職月の在籍スタッフ（例: 6/30 退職予定）も当月分は集計対象に含める
+  const orgWorkers = workers.filter(w => isWorkerOfOrg(w, org) && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym))
 
-  // ── Sheet 1: 従来形式（出面確認用） ──
+  // ── Sheet 1: 出面一覧（出勤値／残業h） ──
   {
     const headers = ['名前', '区分']
     for (let d = 1; d <= numDays; d++) headers.push(dayLabel(ym, d))
     headers.push('合計')
 
-    const titleRow = [`HFU 出面一覧 ${ymLabel(ym)}`]
-    const rows: (string | number)[][] = [titleRow, headers]
-
+    const rows: (string | number)[][] = [[`${label} 出面一覧 ${ymLabel(ym)}`], headers]
     let totalWork = 0, totalOT = 0
     const dailyWorkTotals: number[] = new Array(numDays).fill(0)
     const dailyOTTotals: number[] = new Array(numDays).fill(0)
 
-    for (const w of hfuWorkers) {
+    for (const w of orgWorkers) {
       const workRow: (string | number)[] = [w.name, '出勤']
       const otRow: (string | number)[] = ['', '残業h']
       let wWork = 0, wOT = 0
@@ -524,15 +403,14 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
         let isPL = false
 
         for (const site of sites) {
-          const key = `${site.id}_${w.id}_${ym}_${dd}`
-          const entry = attD[key]
+          const entry = attD[`${site.id}_${w.id}_${ym}_${dd}`]
           if (!entry) continue
           if (entry.p) { isPL = true; break }
-          // ⚠️ 2026-05-09: 残骸データ対策
+          // ⚠️ 2026-05-09: 残骸データ対策。休み/現場休/帰国中/試験 では実労働を計上しない
           if (!isWorkingDay(entry)) continue
           if (entry.w && entry.w > 0) {
             // 2026-08-13: 元請け請求ベース（出面入力ベース）に統一。夜勤日は 1.5人工 が乗る
-            // 同日複数現場は加算（2026-08-27）
+            // 同日複数現場は加算（旧: 上書きで最後の現場だけになり過少 2026-08-27）
             dayWork = (typeof dayWork === 'number' ? dayWork : 0) + calcManDays(entry)
             if (entry.o && entry.o > 0) dayOT += entry.o
           }
@@ -550,6 +428,7 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
       rows.push(workRow); rows.push(otRow)
     }
 
+    // Footer: 日ごとの縦計
     const footerWork: (string | number)[] = ['合計', '出勤']
     const footerOT: (string | number)[] = ['', '残業h']
     for (let d = 0; d < numDays; d++) {
@@ -567,23 +446,34 @@ export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkB
     XLSX.utils.book_append_sheet(wb, ws, '出面一覧')
   }
 
-  // ── Sheet 2: 勤務時間一覧（キャシュモ向け: 時間変換済み） ──
+  // ── Sheet 2: 勤務時間一覧（外国人のみ・時間換算） ──
   // 4月以前は1日6h40min、5月以降は1日7h で時間変換（appendTimeSheet 内で自動切替）
-  appendTimeSheet(wb, '勤務時間一覧', 'HFU', ym, hfuWorkers, attD, sites, calendarDays)
+  const foreignWorkers = orgWorkers.filter(w => w.visa && w.visa !== 'none' && w.visa !== '')
+  if (foreignWorkers.length > 0) {
+    appendTimeSheet(wb, '勤務時間一覧', label, ym, foreignWorkers, attD, sites, calendarDays)
 
-  // ── Sheet 3: 勤怠サマリー（キャシュモ向け: 3段階残業判定の結果） ──
-  // ⚠️ このシートは「1か月単位の変形労働時間制」専用の3段階残業分析。
-  //    4月以前（旧ルール）には適用されないため出力しない。
-  //    旧ルール継続者(useOldRules)も対象外（2026-06-12 監査: 固定月給と矛盾する行が載るため除外）
-  if (calendarDays && ym >= '202605') {
-    const bd = (data as { baseDays?: number }).baseDays || 20
-    const newRuleHfu = hfuWorkers.filter(w => !(w as { useOldRules?: boolean }).useOldRules)
-    if (newRuleHfu.length > 0) {
-      appendOvertimeSummarySheet(wb, '勤怠サマリー', 'HFU', ym, newRuleHfu, attD, sites, calendarDays, bd)
+    // ── Sheet 3: 勤怠サマリー（3段階残業判定の結果） ──
+    // ⚠️ 「1か月単位の変形労働時間制」専用。4月以前（旧ルール）には適用されないため出力しない。
+    //    旧ルール継続者(useOldRules)も対象外（2026-06-12 監査: 固定月給と矛盾する行が載るため除外）
+    if (calendarDays && ym >= '202605') {
+      const bd = data.baseDays || 20
+      const newRuleWorkers = foreignWorkers.filter(w => !(w as { useOldRules?: boolean }).useOldRules)
+      if (newRuleWorkers.length > 0) {
+        appendOvertimeSummarySheet(wb, '勤怠サマリー', label, ym, newRuleWorkers, attD, sites, calendarDays, bd)
+      }
     }
   }
 
   return wb
+}
+
+/** @deprecated generateOrgAttendance(data, 'hibi') を使う */
+export function generateHibiAttendance(data: HfuAttendanceExportData): XLSX.WorkBook {
+  return generateOrgAttendance(data, 'hibi')
+}
+/** @deprecated generateOrgAttendance(data, 'hfu') を使う */
+export function generateHfuAttendance(data: HfuAttendanceExportData): XLSX.WorkBook {
+  return generateOrgAttendance(data, 'hfu')
 }
 
 // ────────────────────────────────────────
@@ -865,9 +755,16 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   // 2026-08-27 追加（給与総点検）: 日本人にも法定休日割増を実装済み(202608〜)なのに
   //   この列だけ無く、日曜出勤者のいる月は内訳を足しても支給額合計に一致しなかった
   const withJpLegalHoliday = ym >= '202608'
-  const japaneseHeaders = ['名前', '現場', '雇用形態', '日額/月給', '出勤日数', '有給日数', '残業時間(h)', '基本給', '有給手当', '残業手当',
+  // 2026-09-17 追加（キャシュモ両社委託の準備）: 補償日（日給月給は0.6日分を基本給に含む）と
+  //   欠勤日数・欠勤控除（完全月給の欠勤控除は 202608〜。列が無く内訳の合計と支給額が合わなかった）。
+  //   過去月のExcelの列構成を変えないよう、欠勤控除の適用開始月からだけ列を出す
+  const withJpDetail = ym >= JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM
+  const japaneseHeaders = ['名前', '現場', '雇用形態', '日額/月給', '出勤日数',
+    ...(withJpDetail ? ['補償日'] : []),
+    '有給日数', '残業時間(h)', '基本給', '有給手当', '残業手当',
     ...(withJpLegalHoliday ? ['法定休日手当'] : []),
     ...(withAllowance ? ['遠方日当', '運転手当'] : []),
+    ...(withJpDetail ? ['欠勤日数', '欠勤控除'] : []),
     '支給額合計']
 
   // ── 検算結果のシート末尾追加（共通ヘルパー） ──
@@ -1045,17 +942,20 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         isFullMonthly ? '完全月給' : '日給月給',
         isFullMonthly ? (w.salary || 0) : w.rate,
         w.workDays,
+        ...(withJpDetail ? [w.compDays || 0] : []),
         w.plDays || 0,
         w.dailyOtHours || w.otHours || 0,
         w.basePay || 0, w.paidLeaveAllowance || 0, w.otAllowance || 0,
         ...(withJpLegalHoliday ? [w.legalHolidayAllowance || 0] : []),
         ...(withAllowance ? [w.siteAllowance || 0, w.driveAllowance || 0] : []),
+        ...(withJpDetail ? [w.absence || 0, w.absentDeduction || 0] : []),
         w.salaryNetPay || 0,
       ])
     }
     rows.push([
       '小計', null, null, null,
       ws.reduce((s, w) => s + w.workDays, 0),
+      ...(withJpDetail ? [ws.reduce((s, w) => s + (w.compDays || 0), 0)] : []),
       ws.reduce((s, w) => s + (w.plDays || 0), 0),
       ws.reduce((s, w) => s + (w.dailyOtHours || w.otHours || 0), 0),
       ws.reduce((s, w) => s + (w.basePay || 0), 0),
@@ -1066,20 +966,39 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         ws.reduce((s, w) => s + (w.siteAllowance || 0), 0),
         ws.reduce((s, w) => s + (w.driveAllowance || 0), 0),
       ] : []),
+      ...(withJpDetail ? [
+        ws.reduce((s, w) => s + (w.absence || 0), 0),
+        ws.reduce((s, w) => s + (w.absentDeduction || 0), 0),
+      ] : []),
       ws.reduce((s, w) => s + (w.salaryNetPay || 0), 0),
     ])
     if (hasFullMonthly) {
       rows.push([])
       rows.push(['※ 完全月給者は出勤日数に関わらず基本給（=月給）を固定支給。「日額/月給」列は月給額。'])
     }
+    if (withJpDetail) {
+      // 内訳の合計＝支給額合計 の自動検算（外国人シートの validatePayrolls に相当・2026-09-17）。
+      //   キャシュモが列を足し上げて確認できるよう、合わない行があれば明示する
+      const mismatches = ws.filter(w => {
+        const parts = (w.basePay || 0) + (w.paidLeaveAllowance || 0) + (w.otAllowance || 0)
+          + (withJpLegalHoliday ? (w.legalHolidayAllowance || 0) : 0)
+          + (w.siteAllowance || 0) + (w.driveAllowance || 0) - (w.absentDeduction || 0)
+        return parts !== (w.salaryNetPay || 0)
+      })
+      rows.push([])
+      rows.push([mismatches.length === 0
+        ? '✓ 自動検算: 全員 内訳合計（基本給＋有給手当＋残業手当＋法定休日手当＋手当 − 欠勤控除）＝ 支給額合計'
+        : `⚠ 自動検算: ${mismatches.map(w => w.name).join('・')} の内訳合計が支給額合計と一致しません`])
+      rows.push(['※ 日給月給の「補償日」（現場都合休）は日額の60%を基本給に含めて支給。「欠勤控除」は完全月給者のみ（2026年8月分〜）。'])
+    }
     const sheet = XLSX.utils.aoa_to_sheet(rows)
     const merges: XLSX.Range[] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: japaneseHeaders.length - 1 } }]
-    if (hasFullMonthly) {
-      const noteRow = rows.length - 1
-      merges.push({ s: { r: noteRow, c: 0 }, e: { r: noteRow, c: japaneseHeaders.length - 1 } })
-    }
+    // 注記・検算の1セル行（3行目以降で要素が1つだけの行）は横に結合して読みやすくする
+    rows.forEach((r, i) => {
+      if (i > 2 && r.length === 1 && typeof r[0] === 'string') merges.push({ s: { r: i, c: 0 }, e: { r: i, c: japaneseHeaders.length - 1 } })
+    })
     sheet['!merges'] = merges
-    setColWidths(sheet, [14, 16, 10, 12, 8, 8, 10, 12, 12, 12, ...(withJpLegalHoliday ? [11] : []), ...(withAllowance ? [10, 10] : []), 14])
+    setColWidths(sheet, [14, 16, 10, 12, 8, ...(withJpDetail ? [8] : []), 8, 10, 12, 12, 12, ...(withJpLegalHoliday ? [11] : []), ...(withAllowance ? [10, 10] : []), ...(withJpDetail ? [8, 12] : []), 14])
     return sheet
   }
 
