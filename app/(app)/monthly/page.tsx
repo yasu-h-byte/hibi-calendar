@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
-import { getYmOptions as getYmOptionsFromLib } from '@/lib/compute'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 
@@ -110,10 +109,13 @@ interface SubconMonthly {
 //  Export Types & Cards
 // ────────────────────────────────────────
 
-// 2026-08-04 帳票整理: 'monthly'（月次レポートPDF・未使用）と
-// 'auditPdf' | 'plannedShift' | 'actualHours'（社労士3点 — 集計タブ上部の
-// クイックアクセスと完全重複だったためカードを廃止。機能はクイックアクセスに一本化）を削除
-type ExportType = 'hibi' | 'hfu' | 'perSite' | 'subcon' | 'bukake' | 'pl'
+// 2026-09-17 帳票整理（代表指示）: 帳票の出口を「帳票出力」タブの1か所にまとめた。
+//   旧: 集計タブ上部の「月次集計Excel」ボタン／集計タブ内の「キャシュモ提出」セクション／
+//       帳票出力タブのカード（日比・HFU出面一覧を含む）と、同じ帳票が3か所から出せていた。
+//   新: 帳票出力タブに「キャシュモ提出（毎月の2点）」「根拠書類」「社内用」の3グループ。
+//       会社別の帳票（出面一覧・勤務予定シフト・実労働時間明細・月次集計Excel・計算根拠PDF）は
+//       上2グループの会社別の行から出す。ここ（カード）は社内用だけ。対象月はタブ上部で1つ選ぶ
+type ExportType = 'monthlyExcel' | 'perSite' | 'subcon' | 'bukake' | 'pl'
 
 interface ExportCard {
   icon: string
@@ -128,24 +130,16 @@ interface ExportCard {
 const EXPORT_CARDS: ExportCard[] = [
   {
     icon: '📊',
-    title: '日比建設向け 出面一覧',
-    description: '日比建設所属の全スタッフの日別出面（出勤・残業）＋外国人の勤務時間一覧・勤怠サマリー。キャシュモ提出用（HFU向けと同じ形式）。',
+    title: '月次集計 Excel（全社・外注込み）',
+    description: '日比建設・HFU・協力業者を1冊にまとめた社内用。キャシュモに送る会社別のものは上の「キャシュモ提出」から。',
     format: 'Excel出力',
-    type: 'hibi',
-    needsYm: true,
-  },
-  {
-    icon: '📊',
-    title: 'HFU向け 出面一覧',
-    description: 'HFU所属の全スタッフの日別出面（出勤・残業）＋外国人の勤務時間一覧・勤怠サマリー。キャシュモ提出用（日比建設向けと同じ形式）。',
-    format: 'Excel出力',
-    type: 'hfu',
+    type: 'monthlyExcel',
     needsYm: true,
   },
   {
     icon: '🏗',
     title: '現場別 出面一覧',
-    description: '現場ごとにシートを分け、日比建設・HFUのセクション別で出面データを出力します。社内給与計算用。',
+    description: '現場ごとにシートを分け、日比建設・HFUのセクション別で出面データを出力します。社内の原価確認用。',
     format: 'Excel出力',
     type: 'perSite',
     needsYm: true,
@@ -175,8 +169,6 @@ const EXPORT_CARDS: ExportCard[] = [
     needsYm: false,
     needsOrg: true,
   },
-  // 社労士提出用3点（計算根拠PDF・勤務予定シフト・実労働時間明細）は
-  // 集計タブ上部の「社労士クイックアクセス」から出力する（カードは重複のため2026-08-04廃止）
 ]
 
 type TopTab = 'summary' | 'export'
@@ -318,15 +310,10 @@ export default function MonthlyPage() {
 
   // Top-level tab
   const [topTab, setTopTab] = useState<TopTab>('summary')
-  // 2026-06-XX 追加: 社労士提出用資料セクションの開閉
-  const [showSyaroshiSection, setShowSyaroshiSection] = useState(false)
-
-  // Export states
-  const [exportSelectedYm, setExportSelectedYm] = useState<Record<string, string>>({})
+  // Export states（対象月は集計と共通の ym を使う。2026-09-17: カードごとの月選択を廃止）
   const [exportDownloading, setExportDownloading] = useState<string | null>(null)
   const [exportError, setExportError] = useState('')
   const [exportSelectedOrg, setExportSelectedOrg] = useState<Record<string, string>>({ pl: 'all' })
-  const exportYmOptions = useMemo(() => getYmOptionsFromLib(12), [])
 
   // Worker sort
   const [workerSortKey, setWorkerSortKey] = useState<WorkerSortKey>('name')
@@ -338,7 +325,7 @@ export default function MonthlyPage() {
 
   const ymOptions = useMemo(() => getYmOptions(12), [])
 
-  // Read auth + init export ym defaults
+  // Read auth
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
     if (stored) {
@@ -347,15 +334,7 @@ export default function MonthlyPage() {
         setPassword(pw)
       } catch { /* ignore */ }
     }
-
-    const defaults: Record<string, string> = {}
-    for (const card of EXPORT_CARDS) {
-      if (card.needsYm) {
-        defaults[card.type] = exportYmOptions[0]?.ym || ''
-      }
-    }
-    setExportSelectedYm(defaults)
-  }, [exportYmOptions])
+  }, [])
 
   // Fetch data
   const fetchData = useCallback(async () => {
@@ -418,35 +397,6 @@ export default function MonthlyPage() {
     }
   }, [password, data, ym, fetchData])
 
-  const handleExcelExport = useCallback(async () => {
-    if (!password || !ym) return
-    try {
-      // 2026-06-12 修正 (監査C3): 所定日数は送らない。サーバが保存値 main.workDays[ym] を
-      // 使うため、画面の未保存入力値で Excel だけ違う金額になる事故を防ぐ。
-      const orgFilter = tab === 'hibi' ? 'hibi' : tab === 'hfu' ? 'hfu' : tab === 'subcon' ? 'subcon' : 'all'
-      const res = await fetch(
-        `/api/export?type=monthlyExcel&ym=${ym}&org=${orgFilter}`,
-        { headers: { 'x-admin-password': password } },
-      )
-      if (!res.ok) {
-        alert('Excel出力に失敗しました')
-        return
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const tabLabel = orgFilter === 'hfu' ? '_HFU' : orgFilter === 'hibi' ? '_日比建設' : orgFilter === 'subcon' ? '_外注' : ''
-      a.download = `月次集計${tabLabel}_${ym}.xlsx`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch {
-      alert('Excel出力に失敗しました')
-    }
-  }, [password, ym, tab])
-
   // ── 所定日数の保存 ──
 
   const handleSaveWorkDays = useCallback(async () => {
@@ -498,7 +448,7 @@ export default function MonthlyPage() {
       return
     }
 
-    const eym = exportSelectedYm[card.type]
+    const eym = ym
     if (card.needsYm && !eym) {
       setExportError('対象月を選択してください')
       return
@@ -512,6 +462,7 @@ export default function MonthlyPage() {
         const params = new URLSearchParams({ type: card.type })
         if (card.needsYm && eym) params.set('ym', eym)
         if (card.needsOrg) params.set('org', exportSelectedOrg[card.type] || 'all')
+        if (card.type === 'monthlyExcel') params.set('org', 'all')
 
         const res = await fetch(`/api/export?${params}`, {
           headers: { 'x-admin-password': password },
@@ -543,7 +494,7 @@ export default function MonthlyPage() {
     } finally {
       setExportDownloading(null)
     }
-  }, [password, exportSelectedYm, exportSelectedOrg])
+  }, [password, ym, exportSelectedOrg])
 
   // Check if current month has data
   const hasCurrentData = useMemo(() => {
@@ -744,11 +695,68 @@ export default function MonthlyPage() {
       </div>
 
       {/* ═══════════════ 帳票出力 Tab ═══════════════ */}
-      {topTab === 'export' && (
+      {topTab === 'export' && (() => {
+        const ymClean = ym.replace('-', '')
+        const orgLabelOf = (o: 'hibi' | 'hfu') => (o === 'hibi' ? '日比建設' : 'HFU')
+        // 会社別の Excel をダウンロード（キャシュモ提出・根拠書類の両グループで共通）
+        const downloadOrgExcel = async (type: 'plannedShift' | 'actualHours' | 'monthlyExcel' | 'hibi' | 'hfu', org: 'hibi' | 'hfu', filename: string) => {
+          if (!password) { setExportError('管理者パスワードが設定されていません'); return }
+          setExportError('')
+          setExportDownloading(`${type}-${org}`)
+          try {
+            const res = await fetch(`/api/export?type=${type}&ym=${ymClean}&org=${org}`, { headers: { 'x-admin-password': password } })
+            if (!res.ok) { setExportError('ダウンロードに失敗しました'); return }
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = filename
+            a.click()
+            URL.revokeObjectURL(url)
+          } finally {
+            setExportDownloading(null)
+          }
+        }
+        const btn = (key: string, label: string, title: string, cls: string, onClick: () => void) => (
+          <button
+            key={key}
+            onClick={onClick}
+            disabled={exportDownloading === key}
+            title={title}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition disabled:opacity-50 ${cls}`}
+          >
+            {exportDownloading === key ? '…' : label}
+          </button>
+        )
+        const orgRow = (org: 'hibi' | 'hfu', buttons: React.ReactNode) => (
+          <div key={org} className="flex flex-wrap items-center gap-2 py-2">
+            <span className={`text-sm font-bold min-w-[80px] ${org === 'hibi' ? 'text-teal-900 dark:text-teal-200' : 'text-pink-900 dark:text-pink-200'}`}>{orgLabelOf(org)}</span>
+            {buttons}
+          </div>
+        )
+        return (
         <div className="space-y-6">
-          <div>
-            <h1 className="text-xl font-bold text-hibi-navy dark:text-white">帳票出力</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">各種帳票をExcel/PDF形式でダウンロードできます</p>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-xl font-bold text-hibi-navy dark:text-white">帳票出力</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">帳票はすべてここから出します。対象月は右で選びます（集計タブと共通）</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600 dark:text-gray-300">対象月</span>
+              <select
+                value={ym}
+                onChange={e => setYm(e.target.value)}
+                className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+              >
+                {ymOptions.map(o => (
+                  <option key={o.ym} value={o.ym}>{o.label}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-1.5">
+                {data?.lockedHibi && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">🔒 日比 締め済</span>}
+                {data?.lockedHfu && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">🔒 HFU 締め済</span>}
+              </div>
+            </div>
           </div>
 
           {exportError && (
@@ -757,70 +765,104 @@ export default function MonthlyPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {EXPORT_CARDS.map((card) => {
-              const isDownloading = exportDownloading === card.type
+          {/* ── ① キャシュモ提出（毎月の2点）── 2026-09-17 代表決定 */}
+          <section className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-xl p-4">
+            <h2 className="text-sm font-bold text-indigo-900 dark:text-indigo-200">📤 キャシュモ提出（毎月の2点・会社別）</h2>
+            <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-1 mb-2">
+              月締めロック後に会社ごとに出してキャシュモへ送る。この2点にその会社の全員（日本人・ベトナム人）が載ります。PDF はブラウザの「PDFとして保存」
+            </p>
+            {(['hibi', 'hfu'] as const).map(org => orgRow(org, (
+              <>
+                {btn(`monthlyExcel-${org}`, '📊 月次集計 Excel', '支給額の内訳（日本人シート／ベトナム人シート）。マネーフォワードに入れる数字',
+                  'bg-green-600 text-white hover:bg-green-700',
+                  () => downloadOrgExcel('monthlyExcel', org, `月次集計_${orgLabelOf(org)}_${ymClean}.xlsx`))}
+                <button
+                  onClick={() => window.open(`/monthly/audit-print?ym=${ymClean}&org=${org}`, '_blank')}
+                  className="px-3 py-1.5 text-xs rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 transition"
+                  title="1人1ページの内訳＋日別カレンダー＋自動検算。新タブで開く → Cmd+P で PDF 保存"
+                >
+                  🔍 計算根拠 PDF
+                </button>
+              </>
+            )))}
+          </section>
 
-              return (
-                <div key={card.type} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-5 flex flex-col">
-                  <div className="text-3xl mb-3">{card.icon}</div>
-                  <h3 className="font-bold text-hibi-navy dark:text-white text-sm mb-1">{card.title}</h3>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 flex-1">{card.description}</p>
+          {/* ── ② 根拠書類（求められたら出す）── */}
+          <section className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl p-4">
+            <h2 className="text-sm font-bold text-hibi-navy dark:text-white">📁 根拠書類（毎月は送らない・会社別）</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-2">
+              キャシュモ・社労士・労基署に求められたときに出す。勤務予定シフト＝変形労働時間制で事前に定めた所定の記録／実労働時間明細＝残業時間の根拠（ベトナム人）／出面一覧＝全員の日別記録
+            </p>
+            {(['hibi', 'hfu'] as const).map(org => orgRow(org, (
+              <>
+                {btn(`plannedShift-${org}`, '📅 勤務予定シフト', 'ベトナム人・各日各週の所定労働時間',
+                  'border border-teal-500 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30',
+                  () => downloadOrgExcel('plannedShift', org, `勤務予定シフト_${orgLabelOf(org)}_${ymClean}.xlsx`))}
+                {btn(`actualHours-${org}`, '⏱ 実労働時間明細', 'ベトナム人・日別の始業・終業・休憩・実労働h',
+                  'border border-emerald-500 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30',
+                  () => downloadOrgExcel('actualHours', org, `実労働時間明細_${orgLabelOf(org)}_${ymClean}.xlsx`))}
+                {btn(`${org}-${org}`, '📋 出面一覧', '全員の日別 出勤・残業 ＋ 外国人の勤務時間一覧・勤怠サマリー',
+                  'border border-sky-500 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30',
+                  () => downloadOrgExcel(org, org, `出面一覧_${orgLabelOf(org)}_${ymClean}.xlsx`))}
+              </>
+            )))}
+          </section>
 
-                  {card.needsYm && (
-                    <div className="mb-3">
-                      <select
-                        value={exportSelectedYm[card.type] || ''}
-                        onChange={(e) => setExportSelectedYm(prev => ({ ...prev, [card.type]: e.target.value }))}
-                        className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-hibi-navy"
-                      >
-                        {exportYmOptions.map(opt => (
-                          <option key={opt.ym} value={opt.ym}>{opt.label}</option>
-                        ))}
-                      </select>
+          {/* ── ③ 社内用 ── */}
+          <section>
+            <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-2">🏢 社内用（原価・外注・有給）</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {EXPORT_CARDS.map((card) => {
+                const isDownloading = exportDownloading === card.type
+                return (
+                  <div key={card.type} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-2xl">{card.icon}</span>
+                      <h3 className="font-bold text-hibi-navy dark:text-white text-sm">{card.title}</h3>
                     </div>
-                  )}
-                  {card.needsOrg && (
-                    <div className="mb-3">
-                      <select
-                        value={exportSelectedOrg[card.type] || 'all'}
-                        onChange={(e) => setExportSelectedOrg(prev => ({ ...prev, [card.type]: e.target.value }))}
-                        className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-hibi-navy"
-                      >
-                        <option value="all">全社</option>
-                        <option value="hibi">日比建設</option>
-                        <option value="hfu">HFU</option>
-                      </select>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => handleExportDownload(card)}
-                    disabled={isDownloading}
-                    className={`w-full rounded-lg py-2 text-sm font-medium transition flex items-center justify-center gap-2
-                      ${isDownloading
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-hibi-navy text-white hover:bg-hibi-light'
-                      }`}
-                  >
-                    {isDownloading ? (
-                      <>
-                        <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                        <span>ダウンロード中...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>{'📥'}</span>
-                        <span>{card.format}</span>
-                      </>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 flex-1">{card.description}</p>
+                    {card.needsOrg && (
+                      <div className="mb-2">
+                        <select
+                          value={exportSelectedOrg[card.type] || 'all'}
+                          onChange={(e) => setExportSelectedOrg(prev => ({ ...prev, [card.type]: e.target.value }))}
+                          className="w-full text-sm border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-hibi-navy"
+                        >
+                          <option value="all">全社</option>
+                          <option value="hibi">日比建設</option>
+                          <option value="hfu">HFU</option>
+                        </select>
+                      </div>
                     )}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
+                    <button
+                      onClick={() => handleExportDownload(card)}
+                      disabled={isDownloading}
+                      className={`w-full rounded-lg py-2 text-sm font-medium transition flex items-center justify-center gap-2
+                        ${isDownloading
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-hibi-navy text-white hover:bg-hibi-light'
+                        }`}
+                    >
+                      {isDownloading ? (
+                        <>
+                          <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                          <span>ダウンロード中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>📥</span>
+                          <span>{card.needsYm ? `${card.format}（${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月）` : card.format}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
         </div>
-      )}
+        )
+      })()}
 
       {/* ═══════════════ 月次集計 Tab ═══════════════ */}
       {topTab === 'summary' && <>
@@ -880,11 +922,11 @@ export default function MonthlyPage() {
             {data?.lockedHfu ? '🔓 HFU 解除' : '🔒 HFU 締め'}
           </button>
           <button
-            onClick={handleExcelExport}
+            onClick={() => setTopTab('export')}
             className="px-3 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition"
-            title="月次集計テーブルを Excel 出力（タブ別シート構成・自動検算結果込み）。給与計算のメイン帳票"
+            title="帳票はすべて「帳票出力」タブから（キャシュモ提出の2点・根拠書類・社内用）"
           >
-            📊 月次集計 Excel
+            📤 帳票出力
           </button>
           <select
             value={ym}
@@ -987,123 +1029,6 @@ export default function MonthlyPage() {
           </button>
         )}
       </div>
-
-      {/* 2026-06-XX 整理: 社労士提出用資料を 1セクションに統合 (折りたたみ式) */}
-      {/*   旧: 紫バナー (PDF) と 緑バナー (Excel) が並んでて画面を圧迫
-           新: 「📥 社労士提出用資料」1セクション、デフォルト折りたたみ
-                 開くと日比/HFU別に PDF + Excel × 2 を配置 */}
-      {isWorkerTab && data && (
-        <div className="mt-2 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-lg overflow-hidden">
-          <button
-            onClick={() => setShowSyaroshiSection(s => !s)}
-            className="w-full flex items-center justify-between px-3 py-2 hover:bg-indigo-100/50 dark:hover:bg-indigo-900/30 transition"
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-sm">📤</span>
-              <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300">
-                キャシュモ提出（毎月の2点・会社別）
-              </span>
-              <span className="text-[10px] text-indigo-600 dark:text-indigo-400">
-                月次集計 Excel ＋ 計算根拠 PDF
-              </span>
-            </div>
-            <span className="text-xs text-indigo-600 dark:text-indigo-400">
-              {showSyaroshiSection ? '▲ 閉じる' : '▼ 開く'}
-            </span>
-          </button>
-          {showSyaroshiSection && (() => {
-            const ymClean = ym.replace('-', '')
-            // 2026-09-17（代表決定）: キャシュモへ毎月送るのは「月次集計Excel＋計算根拠PDF」の2点だけ。
-            //   計算根拠PDFに日本人も載せたので、この2点で両社の全員の数字と日別の根拠が揃う。
-            //   勤務予定シフト・実労働時間明細・出面一覧は「根拠として持っておく書類」で、
-            //   求められたときに出す（下の折りたたみ）
-            const downloadExcel = async (type: 'plannedShift' | 'actualHours' | 'monthlyExcel' | 'hibi' | 'hfu', org: 'hibi' | 'hfu', filename: string) => {
-              const stored = localStorage.getItem('hibi_auth')
-              const pw = stored ? JSON.parse(stored).password : ''
-              const res = await fetch(`/api/export?type=${type}&ym=${ymClean}&org=${org}`, {
-                headers: { 'x-admin-password': pw },
-              })
-              if (!res.ok) {
-                alert('ダウンロードに失敗しました')
-                return
-              }
-              const blob = await res.blob()
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = filename
-              a.click()
-              URL.revokeObjectURL(url)
-            }
-            const renderCompanyRow = (orgKey: 'hibi' | 'hfu', orgLabel: string, colorClass: string) => (
-              <div className="flex flex-wrap items-center gap-2 py-1.5">
-                <span className={`text-xs font-semibold min-w-[72px] ${colorClass}`}>{orgLabel}:</span>
-                <button
-                  onClick={() => downloadExcel('monthlyExcel', orgKey, `月次集計_${orgLabel}_${ymClean}.xlsx`)}
-                  className="px-2.5 py-1 text-[11px] rounded bg-green-600 text-white hover:bg-green-700 transition font-medium"
-                  title="月次集計 Excel（この会社の全員。日本人シート／ベトナム人シート。支給額の内訳）"
-                >
-                  📊 月次集計 Excel
-                </button>
-                <button
-                  onClick={() => window.open(`/monthly/audit-print?ym=${ymClean}&org=${orgKey}`, '_blank')}
-                  className="px-2.5 py-1 text-[11px] rounded bg-purple-600 text-white hover:bg-purple-700 transition font-medium"
-                  title="計算根拠 PDF を新タブで開く（Cmd+P → PDF保存）。この会社の全員（ベトナム人＋日本人）1人1ページ＋日別カレンダー"
-                >
-                  🔍 計算根拠 PDF
-                </button>
-              </div>
-            )
-            const renderEvidenceRow = (orgKey: 'hibi' | 'hfu', orgLabel: string, colorClass: string) => (
-              <div className="flex flex-wrap items-center gap-2 py-1">
-                <span className={`text-[11px] font-semibold min-w-[72px] ${colorClass}`}>{orgLabel}:</span>
-                <button
-                  onClick={() => downloadExcel('plannedShift', orgKey, `勤務予定シフト_${orgLabel}_${ymClean}.xlsx`)}
-                  className="px-2 py-0.5 text-[10px] rounded border border-teal-500 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-900/30 transition"
-                  title="勤務予定シフト表（ベトナム人・変形労働時間制の事前に定めた所定）"
-                >
-                  📅 勤務予定シフト
-                </button>
-                <button
-                  onClick={() => downloadExcel('actualHours', orgKey, `実労働時間明細_${orgLabel}_${ymClean}.xlsx`)}
-                  className="px-2 py-0.5 text-[10px] rounded border border-emerald-500 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition"
-                  title="実労働時間明細（ベトナム人・日別の始業・終業・休憩・実労働h）"
-                >
-                  ⏱ 実労働時間明細
-                </button>
-                <button
-                  onClick={() => downloadExcel(orgKey, orgKey, `出面一覧_${orgLabel}_${ymClean}.xlsx`)}
-                  className="px-2 py-0.5 text-[10px] rounded border border-sky-500 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 transition"
-                  title="出面一覧（全員の日別 出勤・残業 ＋ 外国人の勤務時間一覧・勤怠サマリー）"
-                >
-                  📋 出面一覧
-                </button>
-              </div>
-            )
-            return (
-              <div className="px-3 pb-3 border-t border-indigo-200/50 dark:border-indigo-700/50">
-                {renderCompanyRow('hibi', '日比建設', 'text-teal-900 dark:text-teal-200')}
-                {renderCompanyRow('hfu', 'HFU', 'text-pink-900 dark:text-pink-200')}
-                <div className="text-[10px] text-indigo-700 dark:text-indigo-400 mt-1 pl-1">
-                  💡 月締めロック後に会社ごとに出してキャシュモへ送る（2026年10月＝9月分から両社とも）。PDF はブラウザの「PDFとして保存」、Excel は自動ダウンロード
-                </div>
-                <details className="mt-2 pl-1">
-                  <summary className="text-[11px] text-indigo-700 dark:text-indigo-400 cursor-pointer select-none">
-                    📁 根拠書類（毎月は送らない。キャシュモ・社労士・労基署に求められたら出す）
-                  </summary>
-                  <div className="mt-1 pl-2 border-l-2 border-indigo-200 dark:border-indigo-700">
-                    {renderEvidenceRow('hibi', '日比建設', 'text-teal-900 dark:text-teal-200')}
-                    {renderEvidenceRow('hfu', 'HFU', 'text-pink-900 dark:text-pink-200')}
-                    <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
-                      勤務予定シフト＝変形労働時間制で事前に定めた所定の記録／実労働時間明細＝残業時間の根拠／出面一覧＝全員の日別記録
-                    </div>
-                  </div>
-                </details>
-              </div>
-            )
-          })()}
-        </div>
-      )}
 
       {/* Loading / Error */}
       {loading && (
