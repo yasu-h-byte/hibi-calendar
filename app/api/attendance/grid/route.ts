@@ -273,6 +273,18 @@ export async function POST(request: NextRequest) {
     const { doc, setDoc, getDoc } = await import('@/lib/fsdb')
     const { db } = await import('@/lib/firebase')
 
+    // ⚠️ 担当現場チェック（2026-09-15 追加）
+    //   職長承認・出面保存は「担当現場の職長」に限る。UI だけの制限で API 直叩きなら他現場を
+    //   承認・上書きできた。個人パスワードの職長のみ判定可（共通パスワード経由は識別不可で従来どおり）。
+    //   詳細・限界は lib/attendance-authz.ts。main は 30秒キャッシュ経由（読み取り回数を増やさない）
+    {
+      const { isForemanScopedGridAction, checkGridForemanScope } = await import('@/lib/attendance-authz')
+      if (isForemanScopedGridAction(action)) {
+        const scope = await checkGridForemanScope(request, await getMainData(), body.siteId, body.ym)
+        if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status })
+      }
+    }
+
     // ⚠️ 月次ロックチェック（2026-05-08 追加）
     //   出面エントリの編集は ym がロックされている場合は API レベルで拒否。
     //   UIレベルでは表示済みだが、UI を介さず直接 POST する経路を塞ぐ。
