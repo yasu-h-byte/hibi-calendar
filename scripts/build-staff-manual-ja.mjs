@@ -2,7 +2,7 @@
 /**
  * スタッフ向けマニュアル（日本語＋ベトナム語）から、ベトナム語を抜いた日本語版 HTML を生成する。
  *
- *   node scripts/build-staff-manual-ja.mjs [出力先.html]
+ *   node scripts/build-staff-manual-ja.mjs [--jp] [出力先.html]
  *
  * 原本は public/staff-manual-vi.html の1本だけ。日本語版を別ファイルで手で持つと
  * 改訂のたびに2本直すことになり必ずズレるので、配布用（PDF化）のときにこのスクリプトで作る。
@@ -20,7 +20,11 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const src = resolve(root, 'public/staff-manual-vi.html')
-const out = resolve(process.argv[2] || 'staff-manual-ja.html')
+const args = process.argv.slice(2)
+// --jp: 日本人スタッフ向けの体裁にする（宛名・画面見本の名前をダミーの日本人に、
+//       「日本語がわからない」の行を外す）。内容（章・手順）は変えない
+const forJapanese = args.includes('--jp')
+const out = resolve(args.find(a => !a.startsWith('--')) || 'staff-manual-ja.html')
 
 // ベトナム語にしか出ない文字（声調つき母音と đ）
 const VI_CHARS = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđĐ]/i
@@ -54,6 +58,19 @@ const stripInline = (text) => text
   // 画面見本の名前行「Nguyễn Văn Nam ／ 7月3日」→ 日付だけ
   .replace(/[A-Za-zÀ-ỹĐđ ]+\s*／\s*/g, (m) => (VI_CHARS.test(m) ? '' : m))
 body = body.split(/(<[^>]+>)/).map(part => (part.startsWith('<') ? part : stripInline(part))).join('')
+
+if (forJapanese) {
+  const must = (from, to) => {
+    if (!body.includes(from)) { console.error(`❌ --jp: 置換対象が見つかりません: ${from}`); process.exit(1) }
+    body = body.replace(from, to)
+  }
+  must('技能実習生・特定技能の皆さまへ', 'スタッフの皆さまへ')
+  must('グエン ヴァン ナム さん', '山田 太郎 さん')
+  // 「日本語がわからない → チイさんに相談」の行
+  const before = body
+  body = body.replace(/\s*<tr><td>日本語がわからない[\s\S]*?<\/tr>/, '')
+  if (body === before) { console.error('❌ --jp: 「日本語がわからない」の行が見つかりません'); process.exit(1) }
+}
 
 // 末尾が <br> だけになった段落を整える（<br>\s*</p> → </p>）
 body = body.replace(/<br\s*\/?>\s*(<\/(?:p|td|li|div)>)/g, '$1')
