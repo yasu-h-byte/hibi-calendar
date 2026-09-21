@@ -44,4 +44,12 @@ describe('isCalendarSignTarget', () => {
     expect(isCalendarSignTarget(w, '202609', new Set([101]))).toBe(false)
     expect(isCalendarSignTarget(w, '202609', new Set([999]))).toBe(true)
   })
+
+  it('入社前の月は署名対象外（8/1 入社のフォン・タンが7月の未署名に出ていた）', () => {
+    const w = { id: 207, visa: 'jisshu1', token: 'abc', hireDate: '2026-08-01' }
+    expect(isCalendarSignTarget(w, '202607', NO_HL)).toBe(false)
+    expect(isCalendarSignTarget(w, '2026-08', NO_HL)).toBe(true)
+    // 入社日が未登録の人は従来どおり対象
+    expect(isCalendarSignTarget({ id: 101, visa: 'tokutei1', token: 'abc' }, '202607', NO_HL)).toBe(true)
+  })
 })

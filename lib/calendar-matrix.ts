@@ -14,6 +14,7 @@
 import { db } from './firebase'
 import { doc, getDoc, collection, query, where, getDocs } from '@/lib/fsdb'
 import { getAllSitesWithWorkersForMonth } from './sites'
+import { isSiteStartedByMonth } from './site-hierarchy'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm, type HomeLeaveEntry } from './homeLeave'
 import { isCalendarSignTarget } from './workers'
 import type { Site, SiteAssign, Worker } from '@/types'
@@ -97,7 +98,7 @@ export async function loadCalendarMatrix(ym: string): Promise<CalendarMatrix> {
  * loadCalendarMatrix が担当。
  */
 async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
-  const [siteCalSnap, signSnap, sitesWithWorkers, homeLeaves, mainDoc] = await Promise.all([
+  const [siteCalSnap, signSnap, allSitesWithWorkers, homeLeaves, mainDoc] = await Promise.all([
     getDocs(query(collection(db, 'siteCalendar'), where('ym', '==', ym))),
     getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ym))),
     getAllSitesWithWorkersForMonth(ym),
@@ -123,6 +124,12 @@ async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
     }
     if (status === 'approved') approvedSiteIds.add(data.siteId)
   })
+
+  // その月にまだ始まっていない現場は外す（後から追加した現場が過去月に混ざらないように）。
+  //   ただし、その月のカレンダーが既に作られている現場は工期の登録に関わらず残す
+  //   （工期の開始日より前から入っていた・開始日の登録が遅れた、などで消さないため）
+  const sitesWithWorkers = allSitesWithWorkers.filter(sw =>
+    isSiteStartedByMonth(sw.site, ym) || !!siteCalendars[sw.site.id])
 
   // calendarSign
   const signaturesBySite: Record<string, string> = {}
@@ -163,6 +170,7 @@ async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
         visa: w.visa as string,
         token: w.token as string,
         retired: w.retired as string | undefined,
+        hireDate: w.hireDate as string | undefined,
       },
       ym,
       fullMonthHlIds,

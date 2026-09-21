@@ -11,6 +11,7 @@
  * クライアント側で 5分キャッシュする想定。
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { isSiteStartedByMonth } from '@/lib/site-hierarchy'
 import { checkApiAuth } from '@/lib/auth'
 import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
         const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
         const nextYm = `${nextMonth.getFullYear()}${String(nextMonth.getMonth() + 1).padStart(2, '0')}`
         const nextSiteWorkDays = main.siteWorkDays?.[nextYm] || {}
-        const activeSites = (main.sites || []).filter(s => !s.archived && !(s as { parentId?: string }).parentId && s.end >= `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`)
+        const activeSites = (main.sites || []).filter(s => !s.archived && !(s as { parentId?: string }).parentId && isSiteStartedByMonth(s, nextYm) && s.end >= `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`)
         calendarPendingCount = activeSites.filter(s => !nextSiteWorkDays[s.id]).length
       }
     } catch (e) {

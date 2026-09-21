@@ -57,6 +57,7 @@ export async function getWorkersForSite(siteId: string): Promise<Worker[]> {
       visaType: (w.visa as string) || '',
       token: (w.token as string) || '',
       retired: (w.retired as string) || undefined,
+      hireDate: (w.hireDate as string) || undefined,
     }))
 }
 
@@ -82,6 +83,7 @@ async function buildSitesWithWorkers(
       token: (w.token as string) || '',
       // 署名対象判定（isCalendarSignTarget）が当該月の在籍を見るために必要
       retired: (w.retired as string) || undefined,
+      hireDate: (w.hireDate as string) || undefined,
     }))
 
   const workerMap = new Map(allWorkers.map(w => [w.id, w]))

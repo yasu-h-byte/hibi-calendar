@@ -38,6 +38,23 @@ export function calendarSiteIdOf(sites: HierarchySite[], siteId: string): string
   return sites.some(x => x.id === s.parentId) ? s.parentId : siteId
 }
 
+/**
+ * その月に現場が始まっているか（工期の開始月 <= 対象月）。2026-09-21 追加。
+ *
+ * 就業カレンダーの月別一覧・全体状況で、後から追加した現場（出光 10/1〜・川崎 9/25〜）が
+ * 過去月にも「未作成の現場」として数えられ、7〜8月が 2/4 のまま「対応中」になっていた。
+ * 終了側（end）は見ない: 工期の終了日は延長されても直されないことが多く、見ると稼働中の現場の
+ * カレンダーが消える。終わった現場は「アーカイブ」で外す運用。
+ * start は 'YYYY-MM' / 'YYYY-MM-DD'。未設定なら常に対象。
+ */
+export function isSiteStartedByMonth(site: { start?: string } | undefined | null, ym: string): boolean {
+  const start = (site?.start || '').slice(0, 7)
+  if (!/^\d{4}-\d{2}$/.test(start)) return true
+  const n = (ym || '').replace('-', '')
+  if (!/^\d{6}$/.test(n)) return true
+  return start <= `${n.slice(0, 4)}-${n.slice(4, 6)}`
+}
+
 /** 親現場の工種サイト一覧（アーカイブを含むかは呼び出し側で絞る） */
 export function workTypeSitesOf<T extends HierarchySite>(sites: T[], parentId: string): T[] {
   return sites.filter(s => s.parentId === parentId)

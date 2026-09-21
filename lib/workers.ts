@@ -280,7 +280,7 @@ export function toolBudgetDefaultFor(
  * @param fullMonthHomeLeaveWorkerIds  当該月全期間帰国中のスタッフ ID 集合
  */
 export function isCalendarSignTarget(
-  worker: { id: number; visa?: string; visaType?: string; token?: string; retired?: string },
+  worker: { id: number; visa?: string; visaType?: string; token?: string; retired?: string; hireDate?: string },
   ym: string,
   fullMonthHomeLeaveWorkerIds: Set<number>,
 ): boolean {
@@ -289,6 +289,9 @@ export function isCalendarSignTarget(
   const visa = worker.visa ?? worker.visaType
   if (!visa || visa === 'none') return false  // 日本人は対象外
   if (!isStillActiveForMonth(worker.retired, ym)) return false
+  // 入社前の月は署名対象外（2026-09-21）。旧: 入社日を見ておらず、8/1 入社のフォン・タンが
+  //   7月の「未署名 2名」として全体状況に出続けていた。入社日が未登録の人は従来どおり対象
+  if (!isHiredByMonth(worker.hireDate, ym)) return false
   if (fullMonthHomeLeaveWorkerIds.has(worker.id)) return false
   return true
 }

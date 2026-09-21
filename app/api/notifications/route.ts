@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isSiteStartedByMonth } from '@/lib/site-hierarchy'
 import { checkApiAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs } from '@/lib/fsdb'
@@ -499,7 +500,8 @@ export async function GET(request: NextRequest) {
         const nextYmDashed = `${nextY}-${String(nextM).padStart(2, '0')}`
 
         // 工種サイトは親現場のカレンダーを使うので、作成期限の対象から外す（2026-09-15）
-        const activeSites = main.sites.filter(s => !s.archived && !(s as { parentId?: string }).parentId)
+        //   まだ始まっていない現場（工期の開始が翌月より後）も対象外（2026-09-21）
+        const activeSites = main.sites.filter(s => !s.archived && !(s as { parentId?: string }).parentId && isSiteStartedByMonth(s, nextYmDashed))
         const calQ = query(
           collection(db, 'siteCalendar'),
           where('ym', '==', nextYmDashed)

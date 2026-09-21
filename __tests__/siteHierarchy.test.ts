@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { calendarSiteIdOf, siteDisplayName, withWorkTypeSiteCalendars, orderSitesWithWorkTypes } from '@/lib/site-hierarchy'
+import { calendarSiteIdOf, siteDisplayName, withWorkTypeSiteCalendars, orderSitesWithWorkTypes, isSiteStartedByMonth } from '@/lib/site-hierarchy'
 import { computeMonthly, type MainData } from '@/lib/compute'
 import { buildPeerStatements } from '@/lib/peer-statement'
 import { compute } from '@/lib/compute'
@@ -90,5 +90,20 @@ describe('同業者別の請求・支払', () => {
     const ha = st.find(x => x.companyId === 'hatakeyama')!
     expect(ha.billing).toEqual([])
     expect(ha.payments[0]).toMatchObject({ siteName: '出光（仮設）', days: 2, amount: 52000 })
+  })
+})
+
+describe('isSiteStartedByMonth（後から追加した現場を過去月に混ぜない）', () => {
+  test('工期の開始月より前の月は対象外、開始月以降は対象', () => {
+    const idemitsu = { start: '2026-10-01' }
+    expect(isSiteStartedByMonth(idemitsu, '2026-09')).toBe(false)
+    expect(isSiteStartedByMonth(idemitsu, '202610')).toBe(true)
+    // 月の途中から始まる現場（川崎 9/25〜）はその月から対象
+    expect(isSiteStartedByMonth({ start: '2026-09-25' }, '2026-09')).toBe(true)
+    expect(isSiteStartedByMonth({ start: '2026-09-25' }, '2026-08')).toBe(false)
+    // 'YYYY-MM' 形式・未設定
+    expect(isSiteStartedByMonth({ start: '2023-12' }, '2026-07')).toBe(true)
+    expect(isSiteStartedByMonth({}, '2026-07')).toBe(true)
+    expect(isSiteStartedByMonth({ start: '' }, '2026-07')).toBe(true)
   })
 })
