@@ -501,6 +501,13 @@ Chon ten -> Xem lich -> Ky
                   {overview.months.map(mo => {
                     const [yy, mm] = mo.ym.split('-')
                     const signPct = mo.workers.target > 0 ? Math.round(mo.workers.fullySigned / mo.workers.target * 100) : 0
+                    // 過去月は、未完了でも「対応中」にしない（代表決定 2026-09-21）。済んだ月をいまから
+                    //   署名・承認してもらう意味は薄く、黄色のまま残ると本当に対応が要る月が埋もれる。
+                    //   灰色の「終了」にして、残った件数だけ記録として見せる。通知文ボタンも出さない
+                    const isPast = !mo.isCurrent && !mo.isFuture
+                    const leftSites = Math.max(0, mo.sites.total - mo.sites.approved)
+                    const leftSigns = Math.max(0, mo.workers.target - mo.workers.fullySigned)
+                    const pastLeft = [leftSites > 0 ? `未承認の現場${leftSites}` : '', leftSigns > 0 ? `未署名${leftSigns}名` : ''].filter(Boolean).join('・')
                     return (
                       <tr key={mo.ym} className={`border-b dark:border-gray-700/50 ${mo.atRisk ? 'bg-red-50 dark:bg-red-900/20' : mo.isCurrent ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}>
                         <td className="py-1.5 pr-2 font-medium whitespace-nowrap">
@@ -520,11 +527,16 @@ Chon ten -> Xem lich -> Ky
                           {mo.complete ? <span className="text-green-600 dark:text-green-400">✅ 完了</span>
                             : mo.atRisk ? <span className="text-red-600 dark:text-red-400 font-bold">⚠ 締切間近・未完了</span>
                             : mo.sites.total === 0 ? <span className="text-gray-400">未作成</span>
+                            : isPast ? (
+                              <span className="text-gray-400 dark:text-gray-500" title={mo.unsignedNames.length > 0 ? `未署名: ${mo.unsignedNames.join('、')}` : undefined}>
+                                終了{pastLeft ? `（${pastLeft}）` : ''}
+                              </span>
+                            )
                             : <span className="text-yellow-600 dark:text-yellow-400">対応中</span>}
                         </td>
                         <td className="py-1.5 pr-2 whitespace-nowrap text-right">
                           <button onClick={() => setYm(mo.ym)} className="text-xs text-blue-600 dark:text-blue-400 underline mr-2">開く</button>
-                          {!mo.complete && mo.sites.approved > 0 && mo.unsignedNames.length > 0 && (
+                          {!isPast && !mo.complete && mo.sites.approved > 0 && mo.unsignedNames.length > 0 && (
                             <button onClick={() => copyReminder(mo)} className="text-xs text-emerald-700 dark:text-emerald-400 underline">
                               {copiedReminderYm === mo.ym ? '✓コピー済' : '📋通知文'}
                             </button>
@@ -536,7 +548,7 @@ Chon ten -> Xem lich -> Ky
                 </tbody>
               </table>
               <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
-                「📋通知文」= 未承認者へのお願い文をコピー（個人リンクから承認してもらう）。赤=翌月が締切間近で未完了。
+                「📋通知文」= 未承認者へのお願い文をコピー（個人リンクから承認してもらう）。赤=翌月が締切間近で未完了。灰色の「終了」=過去月で未完了のまま終わった月（件数は記録。名前はカーソルを合わせると出ます）。
               </p>
             </div>
           )}
