@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkIntegrationKey, setSubconSiteRate } from '@/lib/integration'
 
 /**
- * 経営ダッシュボードから、現場ごとの外注単価を書く（唯一の書き込み窓口）。
+ * 経営コックピットから、現場ごとの外注単価を書く（唯一の書き込み窓口）。
  * POST { subconId, siteId, rate, reason? }・ヘッダ x-integration-key。詳細は docs/integration.md。
  */
 export const dynamic = 'force-dynamic'

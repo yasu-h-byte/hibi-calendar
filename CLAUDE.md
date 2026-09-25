@@ -28,7 +28,7 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 | [docs/ui-design.md](docs/ui-design.md) | UI・デザイン・色分け・言語表示ルール |
 | [docs/firestore.md](docs/firestore.md) | Firestoreデータ構造・コレクション定義 |
 | [docs/roles-auth.md](docs/roles-auth.md) | ロール・認証・権限管理 |
-| [docs/integration.md](docs/integration.md) | 経営ダッシュボードとの連携（読むだけの窓口・合言葉・税抜の約束） |
+| [docs/integration.md](docs/integration.md) | 経営コックピットとの連携（読むだけの窓口・合言葉・税抜の約束） |
 
 ## 開発の基本ルール
 

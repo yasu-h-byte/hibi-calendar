@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkIntegrationKey, buildIntegrationMonth } from '@/lib/integration'
 
 /**
- * 経営ダッシュボード向けの月次データ（読むだけ）。GET ?ym=YYYYMM
+ * 経営コックピット向けの月次データ（読むだけ）。GET ?ym=YYYYMM
  * ヘッダ x-integration-key = 環境変数 DEDURA_INTEGRATION_KEY。詳細は docs/integration.md。
  */
 export const dynamic = 'force-dynamic'

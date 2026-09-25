@@ -38,8 +38,8 @@ function buildMenuItems(user: AuthUser): MenuItem[] {
     // 集計・分析
     { label: '月次集計・帳票', icon: '📋', href: '/monthly', section: '集計・分析', roles: ['admin', 'approver', 'jimu'] },
     { label: '原価・収益管理', icon: '💰', href: '/cost', section: '集計・分析', roles: ['admin', 'jimu'] },
-    // 2026-09-25: 経営ダッシュボードと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）。代表のみ
-    { label: '経営ダッシュボード', icon: '📈', external: 'https://keieidashboard.vercel.app/genba', section: '集計・分析', roles: ['admin'] },
+    // 2026-09-25: 経営コックピットと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）。代表のみ
+    { label: '経営コックピット', icon: '📈', external: 'https://keieidashboard.vercel.app/genba', section: '集計・分析', roles: ['admin'] },
     // 人事・労務
     { label: '人員マスタ', icon: '👷', href: '/workers', section: '人事・労務', roles: ['admin', 'jimu'] },
     { label: '休暇管理', icon: '🌴', href: '/leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },

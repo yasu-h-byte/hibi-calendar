@@ -1,8 +1,8 @@
 /**
- * 経営ダッシュボード（keiei_dashboard）との連携（2026-09-25）
+ * 経営コックピット（keiei_dashboard）との連携（2026-09-25）
  *
- * DEDURA＋ と経営ダッシュボードを一体で使うための「読むだけ」の窓口。
- * 経営ダッシュボードのサーバーが、共通の合言葉（環境変数 DEDURA_INTEGRATION_KEY・両方の Vercel に同じ値）を
+ * DEDURA＋ と経営コックピットを一体で使うための「読むだけ」の窓口。
+ * 経営コックピットのサーバーが、共通の合言葉（環境変数 DEDURA_INTEGRATION_KEY・両方の Vercel に同じ値）を
  * ヘッダ x-integration-key に付けて呼ぶ。人のパスワード（ADMIN_PASSWORD など）とは別物で、書き込みは一切できない。
  *
  * 返すもの（1か月分・金額はすべて税抜の円）:
@@ -157,7 +157,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
 // ─────────────────────────────────────────────
 
 /**
- * 経営ダッシュボードの「請求書の取り込み」で、請求書の単価が DEDURA＋ と違うと分かったときに、
+ * 経営コックピットの「請求書の取り込み」で、請求書の単価が DEDURA＋ と違うと分かったときに、
  * 社長がボタンで押した単価をここに書く（現場マスタの「現場別単価」と同じ場所 assign[siteId].subconRates）。
  * 残業単価は書かない（getSubconRate 側で 日額 ÷ 8 × 1.25 を自動計算）。
  * 書いた記録は activity に「integration」として残す。
@@ -187,6 +187,6 @@ export async function setSubconSiteRate(input: { subconId: string; siteId: strin
   assign[siteId] = siteAssign
   // assign だけを差し替える（他のフィールドは触らない）
   await updateDoc(ref, { assign })
-  await logActivity('integration', 'subcon.updateSiteRates', `${sc.name} の ${site.name} の単価を ${previous ?? sc.rate ?? '未設定'} → ${rate} に（経営ダッシュボードの請求書照合${reason ? `: ${reason}` : ''}）`)
+  await logActivity('integration', 'subcon.updateSiteRates', `${sc.name} の ${site.name} の単価を ${previous ?? sc.rate ?? '未設定'} → ${rate} に（経営コックピットの請求書照合${reason ? `: ${reason}` : ''}）`)
   return { ok: true, previous }
 }
