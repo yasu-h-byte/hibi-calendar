@@ -63,7 +63,14 @@ export interface MainData {
   workers: RawWorker[]
   sites: RawSite[]
   subcons: RawSubcon[]
-  assign: Record<string, { workers?: number[]; subcons?: string[]; dispatch?: number[]; subconRates?: Record<string, { rate?: number; otRate?: number }> }>
+  assign: Record<string, {
+    workers?: number[]; subcons?: string[]; dispatch?: number[]
+    subconRates?: Record<string, { rate?: number; otRate?: number }>
+    /** 工種サイトを持つ親現場だけで使う: 作業員ごとの既定の入力先（工種サイト id）。2026-09-25 */
+    defaultWorkType?: Record<string, string>
+    /** 同上、外注先ごと */
+    defaultWorkTypeSubcon?: Record<string, string>
+  }>
   massign: Record<string, { workers?: number[]; subcons?: string[]; dispatch?: number[] }>
   billing: Record<string, number[]>
   workDays: Record<string, number>

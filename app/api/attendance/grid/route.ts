@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiRole, isManagerRole } from '@/lib/auth'
-import { orderSitesWithWorkTypes } from '@/lib/site-hierarchy'
+import {
+  orderSitesWithWorkTypes, isWorkTypeSite, workTypeSitesOf, parentAndWorkTypeSiteIds,
+  findWorkTypeDuplicates, type WorkTypeDuplicate,
+} from '@/lib/site-hierarchy'
 import { getMainData, getAttData, getAssign } from '@/lib/compute'
 import { getApprovalForDay } from '@/lib/attendance'
 import { isStillActiveForMonth } from '@/lib/workers'
@@ -97,6 +100,100 @@ export async function GET(request: NextRequest) {
         const key = `${siteId}_${sc.id}_${ym}_${String(d)}`
         if (att.sd[key]) subconEntries[sc.id][d] = att.sd[key]
       }
+    }
+
+    // ── 工種サイト（鉄骨・仮設など単価が違う工事の出し分け・2026-09-25）──
+    //   親現場に非アーカイブの工種サイトがある場合だけ、配置（誰が働くか）は親のものを
+    //   使ったまま、入力済みエントリは「親 + 工種サイト」の全 id を合わせて見せる（union）。
+    //   同一リクエスト内で既に読んだ att ドキュメント（att.d / att.sd）だけで組み立てるので
+    //   追加の Firestore 読み取りは発生しない。工種の無い現場・工種サイト自体を選んだ場合は
+    //   このブロックが丸ごとスキップされ、これまでと完全に同じ挙動になる。
+    const workTypeChildren = isWorkTypeSite(site)
+      ? []
+      : workTypeSitesOf(main.sites, siteId).filter(s => !s.archived)
+    let workTypeSites: { id: string; name: string; workType: string }[] = []
+    let defaultWorkType: Record<string, string> = {}
+    let defaultWorkTypeSubcon: Record<string, string> = {}
+    const entrySiteByWorkerDay: Record<string, Record<number, string>> = {}
+    const entrySiteBySubconDay: Record<string, Record<number, string>> = {}
+    let workTypeDuplicates: WorkTypeDuplicate[] = []
+
+    if (workTypeChildren.length > 0) {
+      workTypeSites = workTypeChildren.map(s => ({ id: s.id, name: s.name, workType: s.workType || s.name }))
+      const allIds = parentAndWorkTypeSiteIds(main.sites, siteId)
+      defaultWorkType = { ...(main.assign[siteId]?.defaultWorkType || {}) }
+      defaultWorkTypeSubcon = { ...(main.assign[siteId]?.defaultWorkTypeSubcon || {}) }
+
+      // 配置は「親現場の配置」を主に使うが、工種を後から足した現場では工種サイト側だけに
+      // 配置済みの作業員・外注がいることがある（移行ギャップの対策）。取りこぼさないよう
+      // 各工種サイトの配置も合わせる（main は既に取得済みなので追加読み取りにはならない）
+      const mergedWorkerIds = new Set<number>(filteredWorkerIds)
+      const mergedSubconIds = new Set<string>(subconIds)
+      for (const child of workTypeChildren) {
+        const cAssign = getAssign(main, child.id, ym)
+        for (const wid of cAssign.workers) mergedWorkerIds.add(wid)
+        for (const sid of cAssign.subcons) mergedSubconIds.add(sid)
+      }
+
+      const existingWorkerIdSet = new Set(workers.map(w => w.id))
+      for (const w of main.workers) {
+        if (!mergedWorkerIds.has(w.id) || existingWorkerIdSet.has(w.id)) continue
+        if (!isStillActiveForMonth(w.retired, ym)) continue
+        workers.push({
+          id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
+          retired: w.retired || undefined,
+          useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
+          canDrive: (w as { canDrive?: boolean }).canDrive,
+        })
+        workerEntries[w.id] = {}
+      }
+      const existingSubconIdSet = new Set(subcons.map(sc => sc.id))
+      for (const sc of main.subcons) {
+        if (!mergedSubconIds.has(sc.id) || existingSubconIdSet.has(sc.id)) continue
+        subcons.push({ id: sc.id, name: sc.name, type: sc.type })
+        subconEntries[sc.id] = {}
+      }
+
+      // union: 各 worker/subcon の各日について、親 + 工種サイトのどれかにエントリがあれば
+      // 採用する（複数の id に入っていれば workTypeDuplicates で別途フラグを立てる。
+      // 代表値は allIds の並び＝親→工種の順で最初に見つかったもの）。
+      // ⚠️ ここより前の「親現場だけの初期スキャン」で workerEntries[w.id] が
+      //   既に埋まっている日もあるが、それがどの id 由来か（=親現場）を
+      //   entrySiteByWorkerDay に残す必要があるため、att.d を直接見て作り直す
+      //   （読み取りは増えない。既に取得済みの att をメモリ上でなぞるだけ）。
+      for (const w of workers) {
+        const perDay: Record<number, string> = {}
+        for (let d = 1; d <= daysInMonth; d++) {
+          for (const sid of allIds) {
+            const key = `${sid}_${w.id}_${ym}_${String(d)}`
+            if (att.d[key]) {
+              workerEntries[w.id][d] = att.d[key]
+              perDay[d] = sid
+              break
+            }
+          }
+        }
+        entrySiteByWorkerDay[String(w.id)] = perDay
+      }
+      for (const sc of subcons) {
+        const perDay: Record<number, string> = {}
+        for (let d = 1; d <= daysInMonth; d++) {
+          for (const sid of allIds) {
+            const key = `${sid}_${sc.id}_${ym}_${String(d)}`
+            if (att.sd[key]) {
+              subconEntries[sc.id][d] = att.sd[key]
+              perDay[d] = sid
+              break
+            }
+          }
+        }
+        entrySiteBySubconDay[sc.id] = perDay
+      }
+
+      workTypeDuplicates = [
+        ...findWorkTypeDuplicates(att.d, allIds, ym, 'worker'),
+        ...findWorkTypeDuplicates(att.sd, allIds, ym, 'subcon'),
+      ]
     }
 
     // 組織別ロック状態（後方互換: 旧 locks[ym] もチェック）
@@ -237,6 +334,14 @@ export async function GET(request: NextRequest) {
       sites: orderSitesWithWorkTypes(main.sites).map(s => ({ id: s.id, name: s.name, archived: s.archived, parentId: s.parentId })),
       calendarDays,
       homeLeaves,
+      // 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25）。
+      // workTypeSites が空 = この現場には工種が無い（今までどおりの画面のまま）
+      workTypeSites,
+      defaultWorkType,
+      defaultWorkTypeSubcon,
+      entrySiteByWorkerDay,
+      entrySiteBySubconDay,
+      workTypeDuplicates,
       // 2026-05-25 追加: 退職予定情報（今日から3ヶ月以内に退職予定の全スタッフ）
       //   出面入力画面のバナー表示用。職長が他現場のスタッフも含めて全社の退職予定を把握できる。
       upcomingRetirements: (() => {
@@ -497,6 +602,130 @@ export async function POST(request: NextRequest) {
 
       await setDoc(docRef, updatePayload, { merge: true })
       return NextResponse.json({ success: true })
+    }
+
+    // Action: 工種の既定を保存（2026-09-25・鉄骨/仮設など単価が違う工種の出し分け）
+    //
+    //   作業員（または外注先）ごとに「新しく入力した日はどの工種サイトに保存するか」の
+    //   既定を、親現場の assign[siteId] の下に持つ。saveAssign（配置の保存）はこのキーを
+    //   spread で保持するので基本的には壊れないが、それとは無関係に単独でも安全に更新
+    //   できるよう、ここでは assign.{siteId}.defaultWorkType.{workerId} のような
+    //   ドット記法の狭い更新にする（Firestore 書き込みの安全ルール）。
+    if (action === 'saveDefaultWorkType') {
+      const { siteId: parentSiteId, workerId: dwtWorkerId, subconId: dwtSubconId, workTypeSiteId } = body
+      if (!parentSiteId) return NextResponse.json({ error: 'siteId required' }, { status: 400 })
+      if (dwtWorkerId === undefined && dwtSubconId === undefined) {
+        return NextResponse.json({ error: 'workerId または subconId が必要です' }, { status: 400 })
+      }
+      const main = await getMainData()
+      const children = workTypeSitesOf(main.sites, parentSiteId).filter(s => !s.archived)
+      if (children.length === 0) {
+        return NextResponse.json({ error: 'この現場には工種がありません' }, { status: 400 })
+      }
+      if (workTypeSiteId && !children.some(c => c.id === workTypeSiteId)) {
+        return NextResponse.json({ error: '指定した工種が見つかりません' }, { status: 400 })
+      }
+      const { updateDoc, deleteField } = await import('@/lib/fsdb')
+      const { ensureDocExists } = await import('@/lib/firestore-safe')
+      const mainRef = doc(db, 'demmen', 'main')
+      await ensureDocExists(mainRef)
+      const field = dwtWorkerId !== undefined
+        ? `assign.${parentSiteId}.defaultWorkType.${dwtWorkerId}`
+        : `assign.${parentSiteId}.defaultWorkTypeSubcon.${dwtSubconId}`
+      // workTypeSiteId が無ければ「親現場に戻す」= マップから削除（既定=親、という従来の状態）
+      await updateDoc(mainRef, { [field]: workTypeSiteId || deleteField() })
+      return NextResponse.json({ success: true })
+    }
+
+    // Action: 工種の切り替え（2026-09-25）
+    //
+    //   1日分の出面エントリを、親現場 ⇄ 工種サイトの間で「移動」する。
+    //   lib/attendance.ts の setAttendanceEntry + computeAttendanceDeleteFields で
+    //   移動先へ書き込み、移動元は d.{key}（外注なら sd.{key}）を deleteField で消す
+    //   （app/api/attendance/foreman/route.ts の fix_site と同じ考え方）。
+    //   重複（同じ人・同じ日が既に2箇所に入っている）はクライアント側の事前チェックだけに
+    //   頼らず、ここでも必ず拒否する。
+    if (action === 'moveWorkType') {
+      const {
+        siteId: parentSiteId, ym: mwtYm, day: mwtDay,
+        workerId: mwtWorkerId, subconId: mwtSubconId, toSiteId,
+      } = body
+      if (!parentSiteId || !mwtYm || !mwtDay || !toSiteId || (mwtWorkerId === undefined && mwtSubconId === undefined)) {
+        return NextResponse.json({ error: 'siteId, ym, day, workerId/subconId, toSiteId は必須です' }, { status: 400 })
+      }
+      const { checkMonthLocked } = await import('@/lib/locks')
+      const lockErr = await checkMonthLocked(String(mwtYm))
+      if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
+
+      const main = await getMainData()
+      const children = workTypeSitesOf(main.sites, parentSiteId).filter(s => !s.archived)
+      const allowedIds = new Set([parentSiteId, ...children.map(c => c.id)])
+      if (!allowedIds.has(toSiteId)) {
+        return NextResponse.json({ error: '移動先の工種が見つかりません' }, { status: 400 })
+      }
+
+      const mwtDayNum = Number(mwtDay)
+      const attData = await getAttData(String(mwtYm))
+      const { updateDoc, deleteField } = await import('@/lib/fsdb')
+      const attRef = doc(db, 'demmen', `att_${mwtYm}`)
+
+      if (mwtWorkerId !== undefined) {
+        const wid = Number(mwtWorkerId)
+        const foundSiteIds = Array.from(allowedIds).filter(sid => !!attData.d[`${sid}_${wid}_${mwtYm}_${mwtDayNum}`])
+        if (foundSiteIds.length === 0) {
+          return NextResponse.json({ error: '移動元のエントリが見つかりません' }, { status: 404 })
+        }
+        if (foundSiteIds.length > 1) {
+          return NextResponse.json({ error: 'この日はすでに複数の工種に入力されています。先に重複を解消してください。' }, { status: 409 })
+        }
+        const fromSiteId = foundSiteIds[0]
+        if (fromSiteId === toSiteId) {
+          return NextResponse.json({ success: true, entry: attData.d[`${fromSiteId}_${wid}_${mwtYm}_${mwtDayNum}`] })
+        }
+        const toKey = `${toSiteId}_${wid}_${mwtYm}_${mwtDayNum}`
+        if (attData.d[toKey]) {
+          return NextResponse.json({ error: '移動先の工種に既にエントリがあります。先にそちらを確認してください。' }, { status: 409 })
+        }
+        const sourceEntry = attData.d[`${fromSiteId}_${wid}_${mwtYm}_${mwtDayNum}`] as AttendanceEntry
+        const movedEntry: AttendanceEntry = { ...sourceEntry }
+        const { computeAttendanceDeleteFields, setAttendanceEntry } = await import('@/lib/attendance')
+        const deleteFields = computeAttendanceDeleteFields(movedEntry)
+        await setAttendanceEntry(toSiteId, wid, String(mwtYm), mwtDayNum, movedEntry, { deleteFields })
+        await updateDoc(attRef, { [`d.${fromSiteId}_${wid}_${mwtYm}_${mwtDayNum}`]: deleteField() })
+        try {
+          const { logActivity } = await import('@/lib/activity')
+          const wname = main.workers.find(w => w.id === wid)?.name || `ID:${wid}`
+          await logActivity('admin', 'attendance.moveWorkType', `${wname} ${mwtYm}/${mwtDayNum} 工種切替: ${fromSiteId} → ${toSiteId}`)
+        } catch { /* ログ失敗は本体処理に影響させない */ }
+        return NextResponse.json({ success: true, entry: movedEntry })
+      }
+
+      // 外注（subcon）の移動
+      const scid = String(mwtSubconId)
+      const foundSiteIds = Array.from(allowedIds).filter(sid => !!attData.sd[`${sid}_${scid}_${mwtYm}_${mwtDayNum}`])
+      if (foundSiteIds.length === 0) {
+        return NextResponse.json({ error: '移動元のエントリが見つかりません' }, { status: 404 })
+      }
+      if (foundSiteIds.length > 1) {
+        return NextResponse.json({ error: 'この日はすでに複数の工種に入力されています。先に重複を解消してください。' }, { status: 409 })
+      }
+      const fromSiteId = foundSiteIds[0]
+      if (fromSiteId === toSiteId) {
+        return NextResponse.json({ success: true, entry: attData.sd[`${fromSiteId}_${scid}_${mwtYm}_${mwtDayNum}`] })
+      }
+      const toKey = `${toSiteId}_${scid}_${mwtYm}_${mwtDayNum}`
+      if (attData.sd[toKey]) {
+        return NextResponse.json({ error: '移動先の工種に既にエントリがあります。先にそちらを確認してください。' }, { status: 409 })
+      }
+      const sourceEntry = attData.sd[`${fromSiteId}_${scid}_${mwtYm}_${mwtDayNum}`]
+      await updateDoc(attRef, { [`sd.${toKey}`]: sourceEntry })
+      await updateDoc(attRef, { [`sd.${fromSiteId}_${scid}_${mwtYm}_${mwtDayNum}`]: deleteField() })
+      try {
+        const { logActivity } = await import('@/lib/activity')
+        const scname = main.subcons.find(s => s.id === scid)?.name || scid
+        await logActivity('admin', 'attendance.moveWorkType', `${scname}（外注） ${mwtYm}/${mwtDayNum} 工種切替: ${fromSiteId} → ${toSiteId}`)
+      } catch { /* ログ失敗は本体処理に影響させない */ }
+      return NextResponse.json({ success: true, entry: sourceEntry })
     }
 
     // ── 承認系アクション ──

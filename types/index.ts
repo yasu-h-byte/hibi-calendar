@@ -189,6 +189,16 @@ export interface SiteCommuteData {
 export interface SiteAssign {
   workers: number[]
   subcons: string[]
+  /**
+   * 工種サイトを持つ親現場だけで使う: 作業員ごとの既定の入力先（工種サイトの id）。
+   * key = workerId を文字列化したもの。未設定（=このマップに無い）の作業員は、
+   * 出面入力で新規に入力した日が従来どおり親現場 id にそのまま保存される
+   * （工種の使い分けを設定していない現場・作業員は完全に今までどおり）。
+   * 2026-09-25 追加（工種の出し分け・畠山組・川崎 応援）。
+   */
+  defaultWorkType?: Record<string, string>
+  /** 同上、外注先（subconId）ごと */
+  defaultWorkTypeSubcon?: Record<string, string>
 }
 
 export type DayType = 'work' | 'off' | 'holiday'

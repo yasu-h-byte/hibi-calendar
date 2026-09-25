@@ -95,3 +95,69 @@ export function orderSitesWithWorkTypes<T extends HierarchySite>(sites: T[]): T[
   }
   return out
 }
+
+/**
+ * 親現場 id + その工種サイト id 一覧（親を先頭に含む）。
+ * 出面グリッドで「この親現場の下ならどの id に入力されていても良い」という
+ * 対象範囲を作るのに使う（2026-09-25・工種の出し分け）。
+ */
+export function parentAndWorkTypeSiteIds<T extends HierarchySite>(sites: T[], parentId: string): string[] {
+  return [parentId, ...workTypeSitesOf(sites, parentId).map(s => s.id)]
+}
+
+/** 親現場+工種サイトをまたいだ「同じ人・同じ日」の重複入力 */
+export interface WorkTypeDuplicate {
+  kind: 'worker' | 'subcon'
+  /** workerId（文字列化）または subconId */
+  id: string
+  day: number
+  /** 入力が見つかった現場 id（2件以上） */
+  siteIds: string[]
+}
+
+/**
+ * 親現場 + 工種サイトをまたいで、同じ作業員（または外注先）・同じ日に
+ * 複数の現場へ入力されているものを検出する（純関数・2026-09-25）。
+ *
+ * `entries` は出面ドキュメントの `d`（作業員）または `sd`（外注）マップをそのまま渡す
+ * （`{siteId}_{entryId}_{ym}_{day}` 形式のキー。`lib/attendance.ts` の `attKey` と同形式）。
+ * 既に取得済みの att ドキュメントから絞り込むだけなので、呼び出し側で Firestore を
+ * 読み直す必要はない（読み取り回数を増やさない）。
+ *
+ * 対象 `siteIds` は `parentAndWorkTypeSiteIds` で作った「親 + その工種」の一覧を渡す。
+ * 現場 id 自体に `_` を含み得るため、候補 id を長い順に試して前方一致させる。
+ */
+export function findWorkTypeDuplicates(
+  entries: Record<string, unknown>,
+  siteIds: string[],
+  ym: string,
+  kind: 'worker' | 'subcon',
+): WorkTypeDuplicate[] {
+  const candidates = [...siteIds].sort((a, b) => b.length - a.length)
+  const groups = new Map<string, Set<string>>()
+
+  for (const key of Object.keys(entries)) {
+    if (entries[key] == null) continue
+    const matchedSiteId = candidates.find(sid => key.startsWith(`${sid}_`))
+    if (!matchedSiteId) continue
+    const rest = key.slice(matchedSiteId.length + 1) // `${entryId}_${ym}_${day}`
+    const parts = rest.split('_')
+    if (parts.length < 3) continue
+    const day = parts[parts.length - 1]
+    const keyYm = parts[parts.length - 2]
+    if (keyYm !== ym) continue
+    if (!/^\d+$/.test(day)) continue
+    const entryId = parts.slice(0, parts.length - 2).join('_')
+    const groupKey = `${entryId}\u0000${day}`
+    if (!groups.has(groupKey)) groups.set(groupKey, new Set())
+    groups.get(groupKey)!.add(matchedSiteId)
+  }
+
+  const out: WorkTypeDuplicate[] = []
+  for (const [groupKey, sids] of groups) {
+    if (sids.size < 2) continue
+    const [entryId, dayStr] = groupKey.split('\u0000')
+    out.push({ kind, id: entryId, day: Number(dayStr), siteIds: Array.from(sids) })
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id) || a.day - b.day)
+}
