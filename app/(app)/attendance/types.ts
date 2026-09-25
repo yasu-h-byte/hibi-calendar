@@ -101,6 +101,21 @@ export interface GridData {
   upcomingRetirements?: UpcomingRetirement[]
   /** 運転記録（day → {am,pm}）。運転手当の元データ */
   drivers?: Record<number, { am: number[]; pm: number[] }>
+
+  // ── 工種の出し分け（鉄骨・仮設など単価が違う工事・2026-09-25） ──
+  //   workTypeSites が空 = この現場には工種が無い（画面は今までどおり）
+  /** 選択中の現場（親）が持つ、非アーカイブの工種サイト一覧 */
+  workTypeSites?: { id: string; name: string; workType: string }[]
+  /** 作業員ごとの既定の入力先（workerId(文字列) → 工種サイト id）。未設定=親現場 */
+  defaultWorkType?: Record<string, string>
+  /** 外注先ごとの既定の入力先（subconId → 工種サイト id）。未設定=親現場 */
+  defaultWorkTypeSubcon?: Record<string, string>
+  /** workerId → day → その日のエントリが実際に入っている現場 id（親 or 工種サイト） */
+  entrySiteByWorkerDay?: Record<string, Record<number, string>>
+  /** subconId → day → 同上 */
+  entrySiteBySubconDay?: Record<string, Record<number, string>>
+  /** 同じ人・同じ日が2つ以上の工種に入力されている件（要解消） */
+  workTypeDuplicates?: { kind: 'worker' | 'subcon'; id: string; day: number; siteIds: string[] }[]
 }
 
 export interface PendingSave {

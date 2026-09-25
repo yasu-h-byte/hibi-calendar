@@ -8,7 +8,7 @@ import {
 } from '@/lib/attendance-grid'
 import { orgBadgeCls, orgBadgeLabel } from '@/lib/labels'
 import { GridData, AttEntry, SubconDayEntry } from '../types'
-import { TimeBasedCell, LegacyCell, HomeLeaveCell, WaitingCell } from './WorkerDayCell'
+import { TimeBasedCell, LegacyCell, HomeLeaveCell, WaitingCell, WorkTypeTag, type WorkTypeTagProps } from './WorkerDayCell'
 
 // 出面グリッド本体: ヘッダー行・職長承認行・最終承認行・ワーカー行・
 // 外注行・フッター合計6行・凡例
@@ -55,6 +55,18 @@ interface Props {
   onToggleForemanApproval: (day: number) => void
   onFinalApproveAll: () => void
   onToggleFinalApproval: (day: number) => void
+
+  // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） ──
+  //   workTypeSites が空/未指定 = この現場には工種が無い（何も表示しない・従来どおり）
+  workTypeSites?: { id: string; name: string; workType: string }[]
+  defaultWorkType?: Record<string, string>
+  defaultWorkTypeSubcon?: Record<string, string>
+  entrySiteByWorkerDay?: Record<string, Record<number, string>>
+  entrySiteBySubconDay?: Record<string, Record<number, string>>
+  onChangeDefaultWorkType?: (workerId: string, siteId: string | null) => void
+  onChangeDefaultWorkTypeSubcon?: (subconId: string, siteId: string | null) => void
+  onMoveWorkType?: (workerId: string, day: number, toSiteId: string) => void
+  onMoveWorkTypeSubcon?: (subconId: string, day: number, toSiteId: string) => void
 }
 
 export default function AttendanceGrid({
@@ -66,10 +78,50 @@ export default function AttendanceGrid({
   nightDays, onToggleNightDay,
   drivers, onDriverClick,
   onForemanApproveAll, onToggleForemanApproval, onFinalApproveAll, onToggleFinalApproval,
+  workTypeSites, defaultWorkType, defaultWorkTypeSubcon,
+  entrySiteByWorkerDay, entrySiteBySubconDay,
+  onChangeDefaultWorkType, onChangeDefaultWorkTypeSubcon, onMoveWorkType, onMoveWorkTypeSubcon,
 }: Props) {
   // 夜勤が発生した日の判定（台風待機など）。指定日だけスタッフのセルに夜勤バッジを出す
   const nightDaySet = useMemo(() => new Set(nightDays || []), [nightDays])
   const isNightDay = (day: number) => nightDaySet.has(day)
+
+  // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） ──
+  const hasWorkTypes = !!workTypeSites && workTypeSites.length > 0
+  // 「入力先」の選択肢: 親現場 + 各工種（親現場を先頭に）
+  const workTypeOptions = useMemo(() => {
+    if (!hasWorkTypes) return []
+    return [
+      { id: data.site.id, label: '親現場' },
+      ...(workTypeSites || []).map(s => ({ id: s.id, label: s.workType })),
+    ]
+  }, [hasWorkTypes, workTypeSites, data.site.id])
+  const workTypeDupSet = useMemo(() => {
+    const set = new Set<string>()
+    for (const d of data.workTypeDuplicates || []) set.add(`${d.kind}-${d.id}-${d.day}`)
+    return set
+  }, [data.workTypeDuplicates])
+  /** 作業員の日別セル用の工種タグ（その日にエントリが無ければ null＝タグを出さない） */
+  const workerWorkTypeTag = (wId: string, day: number, hasEntry: boolean): WorkTypeTagProps | undefined => {
+    if (!hasWorkTypes || !hasEntry || !onMoveWorkType) return undefined
+    const value = entrySiteByWorkerDay?.[wId]?.[day] || data.site.id
+    return {
+      value,
+      options: workTypeOptions,
+      isDuplicate: workTypeDupSet.has(`worker-${wId}-${day}`),
+      onChange: siteId => { if (siteId !== value) onMoveWorkType(wId, day, siteId) },
+    }
+  }
+  const subconWorkTypeTag = (scId: string, day: number, hasEntry: boolean): WorkTypeTagProps | undefined => {
+    if (!hasWorkTypes || !hasEntry || !onMoveWorkTypeSubcon) return undefined
+    const value = entrySiteBySubconDay?.[scId]?.[day] || data.site.id
+    return {
+      value,
+      options: workTypeOptions,
+      isDuplicate: workTypeDupSet.has(`subcon-${scId}-${day}`),
+      onChange: siteId => { if (siteId !== value) onMoveWorkTypeSubcon(scId, day, siteId) },
+    }
+  }
 
   const unapprovedDays = days.filter(d => !localApprovals[d.day])
   // 職長承認済かつ最終未承認の日だけが最終承認の対象
@@ -360,6 +412,18 @@ export default function AttendanceGrid({
                             )
                           })()}
                         </div>
+                        {hasWorkTypes && onChangeDefaultWorkType && (
+                          <select
+                            value={defaultWorkType?.[wId] || data.site.id}
+                            onChange={e => onChangeDefaultWorkType(wId, e.target.value === data.site.id ? null : e.target.value)}
+                            disabled={isLocked}
+                            title="この人の新しい入力は、既定でどの工種に入るか"
+                            className={`mt-0.5 w-full text-[9px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-0.5 py-0
+                              ${isLocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                          >
+                            {workTypeOptions.map(o => <option key={o.id} value={o.id}>既定: {o.label}</option>)}
+                          </select>
+                        )}
                       </td>
 
                       {/* Org badge - sticky (colored by visa) */}
@@ -450,6 +514,7 @@ export default function AttendanceGrid({
                               onBreakChange={onBreakChange}
                               onCellKeyDown={onCellKeyDown}
                               onNightClick={isNightDay(d.day) ? onNightClick : undefined}
+                              workTypeTag={workerWorkTypeTag(wId, d.day, !!entries[d.day])}
                             />
                           )
                         }
@@ -475,6 +540,7 @@ export default function AttendanceGrid({
                             onNightClick={isNightDay(d.day) ? onNightClick : undefined}
                             // 旧契約継続者（外国人）はスマホ打刻の時刻・休憩も併せて表示する
                             onBreakChange={worker.useOldRules && !!worker.visa && worker.visa !== 'none' ? onBreakChange : undefined}
+                            workTypeTag={workerWorkTypeTag(wId, d.day, !!entries[d.day])}
                           />
                         )
                       })}
@@ -529,6 +595,18 @@ export default function AttendanceGrid({
                         style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                       >
                         {sc.name}
+                        {hasWorkTypes && onChangeDefaultWorkTypeSubcon && (
+                          <select
+                            value={defaultWorkTypeSubcon?.[sc.id] || data.site.id}
+                            onChange={e => onChangeDefaultWorkTypeSubcon(sc.id, e.target.value === data.site.id ? null : e.target.value)}
+                            disabled={isLocked}
+                            title="この外注先の新しい入力は、既定でどの工種に入るか"
+                            className={`mt-0.5 w-full text-[9px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-0.5 py-0
+                              ${isLocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                          >
+                            {workTypeOptions.map(o => <option key={o.id} value={o.id}>既定: {o.label}</option>)}
+                          </select>
+                        )}
                       </td>
 
                       {/* Type badge - sticky */}
@@ -549,9 +627,10 @@ export default function AttendanceGrid({
                         return (
                           <td
                             key={d.day}
-                            className={`px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
+                            className={`relative px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
                             style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                           >
+                            <WorkTypeTag workTypeTag={subconWorkTypeTag(sc.id, d.day, !!entries[d.day])} isLocked={isLocked} />
                             <div className="flex flex-col">
                               {/* People count - 大きめ */}
                               <input

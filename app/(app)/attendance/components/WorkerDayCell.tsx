@@ -51,6 +51,44 @@ function CellMarkers({
   )
 }
 
+/**
+ * 工種タグ（鉄骨・仮設など単価が違う工種の出し分け・2026-09-25）。
+ * その日のエントリが実際にどの現場 id に入っているかを表す小さなセレクトで、
+ * 選び直すとその日だけ親現場⇄工種サイトの間で入力を移動する。
+ * 工種の無い現場（data.workTypeSites が空）では props ごと渡されないので何も出ない。
+ */
+export interface WorkTypeTagProps {
+  /** 現在の入力先（親現場 id または工種サイト id） */
+  value: string
+  /** 選べる入力先（親現場を含む） */
+  options: { id: string; label: string }[]
+  onChange: (siteId: string) => void
+  /** この日はすでに2箇所に入力されている（要解消） */
+  isDuplicate?: boolean
+}
+
+export function WorkTypeTag({ workTypeTag, isLocked }: { workTypeTag?: WorkTypeTagProps; isLocked: boolean }) {
+  if (!workTypeTag) return null
+  return (
+    <select
+      value={workTypeTag.value}
+      onChange={e => workTypeTag.onChange(e.target.value)}
+      onClick={e => e.stopPropagation()}
+      onKeyDown={e => e.stopPropagation()}
+      disabled={isLocked}
+      title={workTypeTag.isDuplicate
+        ? 'この日は2つの工種に入力されています（要確認）。ここで工種を選び直せます'
+        : '工種（クリックで切替）'}
+      className={`absolute bottom-0 left-0 w-full text-[8px] font-bold text-center border-0 rounded-t-none appearance-none cursor-pointer leading-tight py-0
+        ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
+        ${workTypeTag.isDuplicate ? 'bg-red-600 text-white' : 'bg-slate-600/90 text-white'}
+      `}
+    >
+      {workTypeTag.options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+    </select>
+  )
+}
+
 /** 帰国中の特別表示セル */
 export function HomeLeaveCell({ colBg, cellWidth }: { colBg: string; cellWidth: number }) {
   return (
@@ -131,13 +169,15 @@ interface TimeBasedCellProps {
   onBreakChange: (workerId: string, day: number, breakKey: 'b1' | 'b2' | 'b3', checked: boolean) => void
   onCellKeyDown: (e: React.KeyboardEvent, day: number, workerId: string) => void
   onNightClick?: (workerId: string, day: number) => void
+  /** 工種タグ（工種のある現場・かつこの日にエントリがある場合だけ渡される） */
+  workTypeTag?: WorkTypeTagProps
 }
 
 export function TimeBasedCell({
   entry, wId, day, isLocked, isHolidayWork, colBg, cellWidth,
   startTimeOptions, endTimeOptions,
   onStatusChange, onStartTimeChange, onEndTimeChange, onBreakChange, onCellKeyDown,
-  onNightClick,
+  onNightClick, workTypeTag,
 }: TimeBasedCellProps) {
   const statusVal = getTimeStatusValue(entry)
   const source = entry?.s
@@ -164,6 +204,7 @@ export function TimeBasedCell({
         canEditNight={!isLocked && isWorking && !!onNightClick}
         onNightClick={() => onNightClick?.(wId, day)}
       />
+      <WorkTypeTag workTypeTag={workTypeTag} isLocked={isLocked} />
       <div className="flex flex-col items-center">
         {/* ステータス選択 */}
         <select
@@ -284,11 +325,13 @@ interface LegacyCellProps {
    * 休憩の変更は時間ベースと同じ handleBreakChange（残業を時刻から再計算）を使う。
    */
   onBreakChange?: (workerId: string, day: number, breakKey: 'b1' | 'b2' | 'b3', checked: boolean) => void
+  /** 工種タグ（工種のある現場・かつこの日にエントリがある場合だけ渡される） */
+  workTypeTag?: WorkTypeTagProps
 }
 
 export function LegacyCell({
   entry, wId, day, isLocked, isHolidayWork, colBg, cellWidth,
-  onWorkChange, onOtChange, onCellKeyDown, onNightClick, onBreakChange,
+  onWorkChange, onOtChange, onCellKeyDown, onNightClick, onBreakChange, workTypeTag,
 }: LegacyCellProps) {
   const workVal = getWorkValue(entry)
   const source = entry?.s
@@ -309,6 +352,7 @@ export function LegacyCell({
         canEditNight={!isLocked && !!canOt && !!onNightClick}
         onNightClick={() => onNightClick?.(wId, day)}
       />
+      <WorkTypeTag workTypeTag={workTypeTag} isLocked={isLocked} />
       <div className="flex flex-col">
         {/* Work dropdown - 大きめ */}
         <select

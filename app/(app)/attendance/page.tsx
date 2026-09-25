@@ -974,6 +974,26 @@ export default function AttendanceGridPage() {
     )
   }, [data, workerEntries])
 
+  /**
+   * 工種の重複（同じ人・同じ日が2つ以上の工種に入っている）警告（2026-09-25）。
+   * 数字での自動判定なので lib/site-hierarchy.ts の findWorkTypeDuplicates の結果を
+   * そのまま使う（サーバ側で親+工種サイトの att をなぞって作っている）。
+   */
+  const workTypeSiteName = useCallback((sid: string) => {
+    if (!data) return sid
+    if (sid === data.site.id) return '親現場'
+    return data.workTypeSites?.find(s => s.id === sid)?.workType || sid
+  }, [data])
+  const workTypeWarnings = useMemo(() => {
+    if (!data?.workTypeDuplicates?.length) return []
+    return data.workTypeDuplicates.map(d => {
+      const name = d.kind === 'worker'
+        ? data.workers.find(w => String(w.id) === d.id)?.name || `ID:${d.id}`
+        : data.subcons.find(sc => sc.id === d.id)?.name || d.id
+      return { workerName: name, day: d.day, suffix: d.siteIds.map(workTypeSiteName).join('と') }
+    })
+  }, [data, workTypeSiteName])
+
   // ── Assignment modal handlers ──
 
   const handleSaveAssign = useCallback(async (
@@ -1021,6 +1041,103 @@ export default function AttendanceGridPage() {
     } catch (e) {
       console.error('Save assign error:', e)
       setSaveStatus(null)
+    }
+  }, [password, data, ym, fetchData])
+
+  // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） ──
+  //
+  // 作業員ごとの「既定の工種」（新しく入力した日をどの工種サイトに保存するか）を保存する。
+  // workerEntries（セルの中身）はどの id 由来でも同じ値を表示しているだけなので、
+  // ここで書き換わるのは data.defaultWorkType / defaultWorkTypeSubcon だけでよい。
+  const handleChangeDefaultWorkType = useCallback(async (
+    workerId: string, workTypeSiteId: string | null, kind: 'worker' | 'subcon' = 'worker',
+  ) => {
+    if (!password || !data) return
+    const prevMap = kind === 'worker' ? data.defaultWorkType : data.defaultWorkTypeSubcon
+    setData(prev => {
+      if (!prev) return prev
+      const key = kind === 'worker' ? 'defaultWorkType' : 'defaultWorkTypeSubcon'
+      const nextMap = { ...(prev[key] || {}) }
+      if (workTypeSiteId) nextMap[workerId] = workTypeSiteId
+      else delete nextMap[workerId]
+      return { ...prev, [key]: nextMap }
+    })
+    try {
+      const res = await fetch('/api/attendance/grid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({
+          action: 'saveDefaultWorkType',
+          siteId: data.site.id,
+          ym,
+          ...(kind === 'worker' ? { workerId } : { subconId: workerId }),
+          workTypeSiteId: workTypeSiteId || undefined,
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+    } catch (e) {
+      console.error('Save default work type error:', e)
+      // 失敗したら戻す
+      setData(prev => {
+        if (!prev) return prev
+        const key = kind === 'worker' ? 'defaultWorkType' : 'defaultWorkTypeSubcon'
+        return { ...prev, [key]: prevMap }
+      })
+      alert('既定の工種の保存に失敗しました')
+    }
+  }, [password, data, ym])
+
+  /**
+   * 1日分の出面エントリを、親現場 ⇄ 工種サイトの間で移動する（日付のタグをタップ）。
+   * エントリの中身（workerEntries の値）はそのままで、「どの id に入っているか」
+   * （data.entrySiteByWorkerDay / entrySiteBySubconDay）だけが変わる。
+   */
+  const handleMoveWorkType = useCallback(async (
+    entryId: string, day: number, toSiteId: string, kind: 'worker' | 'subcon' = 'worker',
+  ) => {
+    if (!password || !data) return
+    const mapKey = kind === 'worker' ? 'entrySiteByWorkerDay' : 'entrySiteBySubconDay'
+    const prevSite = (data[mapKey] || {})[entryId]?.[day]
+    setData(prev => {
+      if (!prev) return prev
+      const outer = { ...(prev[mapKey] || {}) }
+      outer[entryId] = { ...(outer[entryId] || {}), [day]: toSiteId }
+      return { ...prev, [mapKey]: outer }
+    })
+    setSaveStatus('saving')
+    try {
+      const res = await fetch('/api/attendance/grid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({
+          action: 'moveWorkType',
+          siteId: data.site.id,
+          ym,
+          day,
+          ...(kind === 'worker' ? { workerId: entryId } : { subconId: entryId }),
+          toSiteId,
+        }),
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.error || `保存に失敗しました (${res.status})`)
+      }
+      setSaveStatus('saved')
+      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+      saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
+    } catch (e) {
+      console.error('Move work type error:', e)
+      // 失敗したら戻して再取得（重複ガード等でサーバ側が拒否した場合に画面を確実に合わせる）
+      setData(prev => {
+        if (!prev) return prev
+        const outer = { ...(prev[mapKey] || {}) }
+        if (prevSite) outer[entryId] = { ...(outer[entryId] || {}), [day]: prevSite }
+        else if (outer[entryId]) { const { [day]: _omit, ...rest } = outer[entryId]; outer[entryId] = rest }
+        return { ...prev, [mapKey]: outer }
+      })
+      setSaveStatus(null)
+      alert(e instanceof Error ? e.message : '工種の切替に失敗しました')
+      fetchData()
     }
   }, [password, data, ym, fetchData])
 
@@ -1085,6 +1202,13 @@ export default function AttendanceGridPage() {
         tone="orange"
       />
 
+      {/* 工種の重複（同じ人・同じ日が2つ以上の工種に入っている・2026-09-25） */}
+      <AttendanceWarningBanner
+        title="工種の重複あり（両方に入力されています）"
+        items={workTypeWarnings}
+        tone="warning"
+      />
+
       {/* 帰国情報バナー（components/attendance/HomeLeaveBanner.tsx に集約） */}
       <HomeLeaveBanner homeLeaves={data?.homeLeaves} />
 
@@ -1129,6 +1253,15 @@ export default function AttendanceGridPage() {
           onToggleForemanApproval={handleToggleForemanApproval}
           onFinalApproveAll={handleFinalApproveAll}
           onToggleFinalApproval={handleToggleFinalApproval}
+          workTypeSites={data.workTypeSites}
+          defaultWorkType={data.defaultWorkType}
+          defaultWorkTypeSubcon={data.defaultWorkTypeSubcon}
+          entrySiteByWorkerDay={data.entrySiteByWorkerDay}
+          entrySiteBySubconDay={data.entrySiteBySubconDay}
+          onChangeDefaultWorkType={(workerId, siteId) => handleChangeDefaultWorkType(workerId, siteId, 'worker')}
+          onChangeDefaultWorkTypeSubcon={(subconId, siteId) => handleChangeDefaultWorkType(subconId, siteId, 'subcon')}
+          onMoveWorkType={(workerId, day, toSiteId) => handleMoveWorkType(workerId, day, toSiteId, 'worker')}
+          onMoveWorkTypeSubcon={(subconId, day, toSiteId) => handleMoveWorkType(subconId, day, toSiteId, 'subcon')}
         />
       )}
 
