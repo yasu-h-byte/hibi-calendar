@@ -60,6 +60,14 @@ interface GridData {
   calendarDays: Record<string, DayType> | null
   sites: { id: string; name: string; archived?: boolean }[]
   homeLeaves: { workerId: number; startDate: string; endDate: string }[]
+
+  // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25）。空=この現場には工種が無い ──
+  workTypeSites?: { id: string; name: string; workType: string }[]
+  defaultWorkType?: Record<string, string>
+  defaultWorkTypeSubcon?: Record<string, string>
+  entrySiteByWorkerDay?: Record<string, Record<number, string>>
+  entrySiteBySubconDay?: Record<string, Record<number, string>>
+  workTypeDuplicates?: { kind: 'worker' | 'subcon'; id: string; day: number; siteIds: string[] }[]
 }
 
 interface LeaveReq {
@@ -230,10 +238,78 @@ export default function ForemanMobilePage() {
     })
   }, [day])
 
+  // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） ──
+  //
+  // 「まだその日の入力が無い作業員／外注先」について、次に入力する内容をどの工種に
+  // 保存するかだけを覚えておく（選んだだけでは何も保存しない・入力して初めて保存される）。
+  // 日付や現場を切り替えたら選択はリセットする（別の日に前の選択が残らないように）。
+  const [pendingWorkType, setPendingWorkType] = useState<Record<number, string>>({})
+  const [pendingWorkTypeSubcon, setPendingWorkTypeSubcon] = useState<Record<string, string>>({})
+  useEffect(() => { setPendingWorkType({}); setPendingWorkTypeSubcon({}) }, [day, siteId])
+
+  /**
+   * その作業員の「今」の入力先。
+   * ⚠️ 既にその日のエントリがあれば、必ずそのエントリが実際にある現場を返す
+   *   （工種セレクタで新しい選択をしていても、既存分への書き込み先は変えない。
+   *   変えてしまうと別の id に新しいエントリができ、古いエントリが取り残されて
+   *   二重入力になる）。まだ入力が無い日だけ、選んだ既定・工種の既定・親現場の順で決まる。
+   */
+  const workTypeSiteFor = useCallback((workerId: number): string => {
+    const existingSite = data?.entrySiteByWorkerDay?.[String(workerId)]?.[day]
+    if (existingSite) return existingSite
+    return pendingWorkType[workerId] || data?.defaultWorkType?.[String(workerId)] || siteId
+  }, [data, day, pendingWorkType, siteId])
+
+  const workTypeSiteForSubcon = useCallback((subconId: string): string => {
+    const existingSite = data?.entrySiteBySubconDay?.[subconId]?.[day]
+    if (existingSite) return existingSite
+    return pendingWorkTypeSubcon[subconId] || data?.defaultWorkTypeSubcon?.[subconId] || siteId
+  }, [data, day, pendingWorkTypeSubcon, siteId])
+
+  /** 工種タグの選択肢（親現場を含む）。工種の無い現場では空 */
+  const workTypeOptions = useMemo(() => {
+    if (!data?.workTypeSites?.length) return []
+    return [{ id: siteId, label: '親現場' }, ...data.workTypeSites.map(s => ({ id: s.id, label: s.workType }))]
+  }, [data, siteId])
+
+  /** 工種セレクタの変更。既に入力済みの日は移動、未入力の日は次回保存先を覚えるだけ */
+  const handleWorkTypeChange = useCallback(async (workerId: number, toSiteId: string) => {
+    const existingSite = data?.entrySiteByWorkerDay?.[String(workerId)]?.[day]
+    if (!existingSite) {
+      setPendingWorkType(prev => ({ ...prev, [workerId]: toSiteId }))
+      return
+    }
+    if (existingSite === toSiteId) return
+    setData(prev => {
+      if (!prev) return prev
+      const outer = { ...(prev.entrySiteByWorkerDay || {}) }
+      outer[String(workerId)] = { ...(outer[String(workerId)] || {}), [day]: toSiteId }
+      return { ...prev, entrySiteByWorkerDay: outer }
+    })
+    // 失敗時（重複ガード等）は postGrid が内部で再取得して画面を合わせる
+    await postGrid({ action: 'moveWorkType', day, workerId, toSiteId })
+  }, [data, day, postGrid])
+
+  const handleWorkTypeChangeSubcon = useCallback(async (subconId: string, toSiteId: string) => {
+    const existingSite = data?.entrySiteBySubconDay?.[subconId]?.[day]
+    if (!existingSite) {
+      setPendingWorkTypeSubcon(prev => ({ ...prev, [subconId]: toSiteId }))
+      return
+    }
+    if (existingSite === toSiteId) return
+    setData(prev => {
+      if (!prev) return prev
+      const outer = { ...(prev.entrySiteBySubconDay || {}) }
+      outer[subconId] = { ...(outer[subconId] || {}), [day]: toSiteId }
+      return { ...prev, entrySiteBySubconDay: outer }
+    })
+    await postGrid({ action: 'moveWorkType', day, subconId, toSiteId })
+  }, [data, day, postGrid])
+
   const saveEntry = useCallback((workerId: number, entry: AttendanceEntry | null) => {
     applyLocal(workerId, entry)
-    postGrid({ day, workerId, entry })
-  }, [applyLocal, postGrid, day])
+    postGrid({ day, workerId, entry, siteId: workTypeSiteFor(workerId) })
+  }, [applyLocal, postGrid, day, workTypeSiteFor])
 
   // ── エントリ構築（PCグリッドと同じ規則） ──
   const buildTimeStatus = useCallback((value: string): AttendanceEntry | null => {
@@ -283,8 +359,8 @@ export default function ForemanMobilePage() {
       se[subconId] = mine
       return { ...prev, subconEntries: se }
     })
-    postGrid({ day, subconId, subconEntry: n > 0 || on > 0 ? { n, on } : null })
-  }, [postGrid, day])
+    postGrid({ day, subconId, subconEntry: n > 0 || on > 0 ? { n, on } : null, siteId: workTypeSiteForSubcon(subconId) })
+  }, [postGrid, day, workTypeSiteForSubcon])
 
   // ── 日別の派生情報 ──
   const dayType: DayType | null = data?.calendarDays ? (data.calendarDays[String(day)] || 'work') : null
@@ -665,6 +741,24 @@ export default function ForemanMobilePage() {
                         )}
                       </div>
 
+                      {/* 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25）。工種の無い現場では出ない */}
+                      {workTypeOptions.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <select
+                            value={workTypeSiteFor(w.id)}
+                            disabled={locked}
+                            onChange={e => handleWorkTypeChange(w.id, e.target.value)}
+                            title="この日の工種（新規入力の保存先／既存日は選ぶと移動）"
+                            className="rounded-lg border border-slate-300 px-1.5 py-1 text-[11px] bg-slate-50 text-slate-600"
+                          >
+                            {workTypeOptions.map(o => <option key={o.id} value={o.id}>工種: {o.label}</option>)}
+                          </select>
+                          {data.workTypeDuplicates?.some(d => d.kind === 'worker' && d.id === String(w.id) && d.day === day) && (
+                            <span className="text-[10px] font-bold text-red-600">⚠ 2つの工種に入力あり</span>
+                          )}
+                        </div>
+                      )}
+
                       {/* ベトナム人・未入力: 後付けできるステータスだけボタンで出す */}
                       {isTime && !entry && !locked && (
                         <div className="flex gap-1.5 mt-2">
@@ -747,24 +841,43 @@ export default function ForemanMobilePage() {
                       const on = se?.on || 0
                       const locked = finalApproved || (data.lockedHibi && data.lockedHfu)
                       return (
-                        <div key={sc.id} className="bg-white rounded-xl border border-gray-200 px-3 py-2.5 flex items-center justify-between gap-2">
-                          <span className="font-bold text-sm truncate">{sc.name}</span>
-                          <div className="flex items-center gap-1.5">
-                            <button disabled={locked || n <= 0} onClick={() => saveSubcon(sc.id, n - 1, on)} className="w-9 h-9 rounded-lg border border-gray-300 font-bold text-lg disabled:opacity-30">−</button>
-                            <span className="w-8 text-center font-bold tabular-nums">{n}<span className="text-[10px] text-gray-400">人</span></span>
-                            <button disabled={locked} onClick={() => saveSubcon(sc.id, n + 1, on)} className="w-9 h-9 rounded-lg border border-gray-300 font-bold text-lg disabled:opacity-30">＋</button>
-                            <select
-                              value={String(on)}
-                              disabled={locked || n <= 0}
-                              onChange={e => saveSubcon(sc.id, n, parseFloat(e.target.value))}
-                              className="rounded-lg border border-gray-300 px-1 py-1.5 text-xs tabular-nums bg-white"
-                              title="残業h"
-                            >
-                              {[0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4].map(v => (
-                                <option key={v} value={v}>{v === 0 ? '残業なし' : `残業${v}h`}</option>
-                              ))}
-                            </select>
+                        <div key={sc.id} className="bg-white rounded-xl border border-gray-200 px-3 py-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-sm truncate">{sc.name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button disabled={locked || n <= 0} onClick={() => saveSubcon(sc.id, n - 1, on)} className="w-9 h-9 rounded-lg border border-gray-300 font-bold text-lg disabled:opacity-30">−</button>
+                              <span className="w-8 text-center font-bold tabular-nums">{n}<span className="text-[10px] text-gray-400">人</span></span>
+                              <button disabled={locked} onClick={() => saveSubcon(sc.id, n + 1, on)} className="w-9 h-9 rounded-lg border border-gray-300 font-bold text-lg disabled:opacity-30">＋</button>
+                              <select
+                                value={String(on)}
+                                disabled={locked || n <= 0}
+                                onChange={e => saveSubcon(sc.id, n, parseFloat(e.target.value))}
+                                className="rounded-lg border border-gray-300 px-1 py-1.5 text-xs tabular-nums bg-white"
+                                title="残業h"
+                              >
+                                {[0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4].map(v => (
+                                  <option key={v} value={v}>{v === 0 ? '残業なし' : `残業${v}h`}</option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
+                          {/* 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） */}
+                          {workTypeOptions.length > 0 && (
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <select
+                                value={workTypeSiteForSubcon(sc.id)}
+                                disabled={locked}
+                                onChange={e => handleWorkTypeChangeSubcon(sc.id, e.target.value)}
+                                title="この日の工種（新規入力の保存先／既存日は選ぶと移動）"
+                                className="rounded-lg border border-slate-300 px-1.5 py-1 text-[11px] bg-slate-50 text-slate-600"
+                              >
+                                {workTypeOptions.map(o => <option key={o.id} value={o.id}>工種: {o.label}</option>)}
+                              </select>
+                              {data.workTypeDuplicates?.some(d => d.kind === 'subcon' && d.id === sc.id && d.day === day) && (
+                                <span className="text-[10px] font-bold text-red-600">⚠ 2つの工種に入力あり</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
