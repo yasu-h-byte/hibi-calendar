@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest'
 import {
   parentAndWorkTypeSiteIds, findWorkTypeDuplicates,
   isWorkTypeSite, siteDisplayName, workTypeSitesOf,
-  resolveWorkTypeSiteId, planDayWorkTypeMoves,, siteBillingName } from '@/lib/site-hierarchy'
+  resolveWorkTypeSiteId, planDayWorkTypeMoves, siteBillingName } from '@/lib/site-hierarchy'
 
 /** 工種サイト（親現場の下の「鉄骨」「仮設」など）の重複検出（2026-09-25） */
 
@@ -169,13 +169,13 @@ describe('siteBillingName（親現場の「工種を選ばない日の呼び方�
     { id: 'c', name: '川崎（鉄骨工事）', parentId: 'p', workType: '鉄骨工事' },
     { id: 'q', name: '笹塚', workType: '使われない' },
   ]
-  it('工種サイトを持つ親現場は「親現場名（呼び方）」', () => {
+  test('工種サイトを持つ親現場は「親現場名（呼び方）」', () => {
     expect(siteBillingName(sites, 'p')).toBe('川崎（仮設工事）')
   })
-  it('工種サイトは今までどおり「親現場名（工種）」', () => {
+  test('工種サイトは今までどおり「親現場名（工種）」', () => {
     expect(siteBillingName(sites, 'c')).toBe('川崎（鉄骨工事）')
   })
-  it('工種サイトを持たない現場は名前だけ', () => {
+  test('工種サイトを持たない現場は名前だけ', () => {
     expect(siteBillingName(sites, 'q')).toBe('笹塚')
   })
 })
