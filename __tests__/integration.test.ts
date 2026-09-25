@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { isValidIntegrationKey } from '@/lib/integration'
+import { summarizePeerInvoiceSites, type PeerInvoiceLine } from '@/lib/peer-invoice'
 
 const KEY = 'k'.repeat(31) + 'X'
 
@@ -14,4 +15,21 @@ describe('isValidIntegrationKey', () => {
   it('ヘッダが無ければ通さない', () => expect(isValidIntegrationKey(null, KEY)).toBe(false))
   it('長さが違えば通さない', () => expect(isValidIntegrationKey(KEY + 'a', KEY)).toBe(false))
   it('1文字違いは通さない', () => expect(isValidIntegrationKey('k'.repeat(31) + 'Y', KEY)).toBe(false))
+})
+
+describe('summarizePeerInvoiceSites（peerInvoices[].sites の内訳集計）', () => {
+  it('同じ現場の鳶・土工の2行を1件に合算する', () => {
+    const lines: PeerInvoiceLine[] = [
+      { siteId: 'siteA', siteName: '現場A', role: '鳶', days: 5, rate: 28000, amount: 140000 },
+      { siteId: 'siteA', siteName: '現場A', role: '土工', days: 1, rate: 22000, amount: 22000 },
+      { siteId: 'siteB', siteName: '現場B', role: '鳶', days: 2, rate: 28000, amount: 56000 },
+    ]
+    expect(summarizePeerInvoiceSites(lines)).toEqual([
+      { siteId: 'siteA', siteName: '現場A', amount: 162000 },
+      { siteId: 'siteB', siteName: '現場B', amount: 56000 },
+    ])
+  })
+  it('明細が無ければ空配列', () => {
+    expect(summarizePeerInvoiceSites([])).toEqual([])
+  })
 })

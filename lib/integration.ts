@@ -19,6 +19,8 @@ import { applyPayrollCosts } from '@/lib/payroll-cost'
 import { resolveSiteParties, type CompanyLike } from '@/lib/companies'
 import { calendarSiteIdOf } from '@/lib/site-hierarchy'
 import { buildPeerStatements } from '@/lib/peer-statement'
+import { summarizePeerInvoiceSites } from '@/lib/peer-invoice'
+import { listPeerInvoicesForYm } from '@/lib/peer-invoice-store'
 
 /** 合言葉の照合（長さの違い・未設定も安全に false） */
 export function isValidIntegrationKey(given: string | null | undefined, expected: string | undefined = process.env.DEDURA_INTEGRATION_KEY): boolean {
@@ -67,6 +69,23 @@ export interface IntegrationSubcon {
   sites: { siteId: string; siteName: string; workDays: number; otCount: number; cost: number; rate: number; otRate: number }[]
 }
 
+/** 発行済み・取り消し済みの「応援の請求書」（app/api/peer-invoice・2026-09-25）。peerBilling は見込み、こちらは実際に出した請求書 */
+export interface IntegrationPeerInvoice {
+  no: string
+  companyId: string
+  companyName: string
+  ym: string
+  issueDate: string
+  dueDate: string
+  /** 税抜 */
+  subtotal: number
+  tax: number
+  /** 税込 */
+  total: number
+  status: 'issued' | 'void'
+  sites: { siteId: string; siteName: string; amount: number }[]
+}
+
 export interface IntegrationMonth {
   ym: string
   generatedAt: string
@@ -75,6 +94,7 @@ export interface IntegrationMonth {
   sites: IntegrationSite[]
   subcons: IntegrationSubcon[]
   peerBilling: { companyId: string; companyName: string; amount: number }[]
+  peerInvoices: IntegrationPeerInvoice[]
   totals: { billing: number; billingEnteredSites: number; ownLaborCost: number; subconCost: number }
 }
 
@@ -136,6 +156,14 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     .filter(p => p.billingTotal > 0)
     .map(p => ({ companyId: p.companyId, companyName: p.companyName, amount: Math.round(p.billingTotal) }))
 
+  const peerInvoiceRecords = await listPeerInvoicesForYm(ym)
+  const peerInvoices: IntegrationPeerInvoice[] = peerInvoiceRecords.map(inv => ({
+    no: inv.no, companyId: inv.companyId, companyName: inv.companyName, ym: inv.ym,
+    issueDate: inv.issueDate, dueDate: inv.dueDate,
+    subtotal: inv.subtotal, tax: inv.tax, total: inv.total,
+    status: inv.status, sites: summarizePeerInvoiceSites(inv.lines),
+  }))
+
   return {
     ym,
     generatedAt: new Date().toISOString(),
@@ -143,6 +171,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     sites,
     subcons,
     peerBilling,
+    peerInvoices,
     totals: {
       billing: sites.reduce((t, s) => t + s.billing, 0),
       billingEnteredSites: sites.filter(s => s.billingEntered).length,
