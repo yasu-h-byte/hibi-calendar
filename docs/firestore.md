@@ -244,6 +244,14 @@ workSchedule?: {
     `assign.{親現場id}.defaultWorkType.{workerId}` へのドット記法の狭い更新（`workTypeSiteId` を送らなければ `deleteField()` で「親に戻す」）。
     配置の保存（`saveAssign`）は `assign[siteId]` を read-and-preserve で更新するのでこのマップを壊さないが、
     それとは無関係に単独でも安全に効くよう、あえて独立したドット記法にしてある
+- **日ごとの工種指定**（`assign[親現場id].dayWorkType[ym][day] = 工種サイトid`・2026-09-25 社長「鉄骨は毎日あるとは限らない」）:
+  「26〜30日は鉄骨工事」のように日単位で決める。`POST /api/attendance/grid { action: 'setDayWorkType', siteId: 親現場id, ym, days: number[], toSiteId }`
+  が (1) `assign.{親}.dayWorkType.{ym}.{day}` をドット記法で書き（親に戻す日は `deleteField()`）、(2) その日に入力済みの全員（作業員 `d`・外注 `sd`）を
+  `lib/site-hierarchy.ts planDayWorkTypeMoves` の計画どおり同じ工種へまとめて移す（出面 doc は1回読み・1回 `updateDoc`。
+  `d.{新キー}` にエントリ、`d.{旧キー}` に `deleteField()`）。2箇所に入っている人は移さず `skipped` で返す（画面で名前を知らせる）。
+  画面: 日付の見出しのチップ（1日）と「期間で工種を切り替え」（from〜to）。列は工種の色で塗る
+- **新規入力の保存先の優先順位**（`resolveWorkTypeSiteId`・PC/スマホ共通）:
+  既にその日のエントリがある現場 ＞ その日の工種指定（`dayWorkType`） ＞ 本人の既定（`defaultWorkType`） ＞ 親現場
 - **1日分の切り替え（移動）**: `POST /api/attendance/grid { action: 'moveWorkType', siteId: 親現場id, ym, day, workerId または subconId, toSiteId }`。
   `app/api/attendance/foreman/route.ts` の `fix_site`（現場違い修正）と同じ考え方で、
   `setAttendanceEntry` + `computeAttendanceDeleteFields` で移動先へ書き込み、移動元は `d.{key}`（外注なら `sd.{key}`）を `deleteField()` で消す。
@@ -251,7 +259,7 @@ workSchedule?: {
 - **表示（GET）**: 選択中の現場が非アーカイブの工種サイトを持つ親なら、配置は親のものを使ったまま、
   出面エントリは「親 + 工種サイトの全 id」を合わせて見せる（union）。追加の Firestore 読み取りは発生しない
   （同一リクエストで読んだ `att_YYYYMM` をそのままなぞるだけ）。レスポンスに `workTypeSites` / `defaultWorkType` /
-  `defaultWorkTypeSubcon` / `entrySiteByWorkerDay` / `entrySiteBySubconDay` / `workTypeDuplicates` を追加。
+  `defaultWorkTypeSubcon` / `dayWorkType`（その月分）/ `entrySiteByWorkerDay` / `entrySiteBySubconDay` / `workTypeDuplicates` を追加。
   工種の無い現場・工種サイト自身を選んだ場合はこれらが空になり、画面は完全に従来どおり
 - **重複ガード**: 同じ人・同じ日が2つ以上の工種に入力されている状態は `lib/site-hierarchy.ts` の
   `findWorkTypeDuplicates`（純関数・`__tests__/site-hierarchy.test.ts`）で検出し、画面に警告を出す。
