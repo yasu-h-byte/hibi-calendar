@@ -63,7 +63,7 @@ export function isForemanScopedGridAction(action: unknown): boolean {
     || action === 'unapprove' || action === 'unapprove_foreman'
     // 工種の出し分け（2026-09-25）: 既定の工種の設定・日別の工種切替も
     // 担当現場（親現場 id）の職長のみに限る
-    || action === 'saveDefaultWorkType' || action === 'moveWorkType'
+    || action === 'saveDefaultWorkType' || action === 'moveWorkType' || action === 'setDayWorkType'
 }
 
 /** ルートから呼ぶ入口: 認証 → ロール解決 → 担当現場チェック */

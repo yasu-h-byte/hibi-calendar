@@ -70,6 +70,8 @@ export interface MainData {
     defaultWorkType?: Record<string, string>
     /** 同上、外注先ごと */
     defaultWorkTypeSubcon?: Record<string, string>
+    /** 日ごとの工種指定（ym → day → 工種サイト id）。作業員の既定より優先。2026-09-25 */
+    dayWorkType?: Record<string, Record<string, string>>
   }>
   massign: Record<string, { workers?: number[]; subcons?: string[]; dispatch?: number[] }>
   billing: Record<string, number[]>

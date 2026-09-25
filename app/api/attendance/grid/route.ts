@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiRole, isManagerRole } from '@/lib/auth'
 import {
   orderSitesWithWorkTypes, isWorkTypeSite, workTypeSitesOf, parentAndWorkTypeSiteIds,
-  findWorkTypeDuplicates, type WorkTypeDuplicate,
+  findWorkTypeDuplicates, planDayWorkTypeMoves, type WorkTypeDuplicate,
 } from '@/lib/site-hierarchy'
-import { getMainData, getAttData, getAssign } from '@/lib/compute'
+import { getMainData, getAttData, getAssign, invalidateAttDataCache } from '@/lib/compute'
 import { getApprovalForDay } from '@/lib/attendance'
 import { isStillActiveForMonth } from '@/lib/workers'
 import { AttendanceEntry, DayType } from '@/types'
@@ -114,6 +114,8 @@ export async function GET(request: NextRequest) {
     let workTypeSites: { id: string; name: string; workType: string }[] = []
     let defaultWorkType: Record<string, string> = {}
     let defaultWorkTypeSubcon: Record<string, string> = {}
+    /** その月の日ごとの工種指定（day（文字列）→ 工種サイト id）。日の指定 > 作業員の既定 > 親 */
+    let dayWorkType: Record<string, string> = {}
     const entrySiteByWorkerDay: Record<string, Record<number, string>> = {}
     const entrySiteBySubconDay: Record<string, Record<number, string>> = {}
     let workTypeDuplicates: WorkTypeDuplicate[] = []
@@ -121,6 +123,7 @@ export async function GET(request: NextRequest) {
     if (workTypeChildren.length > 0) {
       workTypeSites = workTypeChildren.map(s => ({ id: s.id, name: s.name, workType: s.workType || s.name }))
       const allIds = parentAndWorkTypeSiteIds(main.sites, siteId)
+      dayWorkType = { ...(main.assign[siteId]?.dayWorkType?.[ym] || {}) }
       defaultWorkType = { ...(main.assign[siteId]?.defaultWorkType || {}) }
       defaultWorkTypeSubcon = { ...(main.assign[siteId]?.defaultWorkTypeSubcon || {}) }
 
@@ -311,7 +314,7 @@ export async function GET(request: NextRequest) {
     homeLeaves.sort((a, b) => a.startDate.localeCompare(b.startDate))
 
     return NextResponse.json({
-      site: { id: site.id, name: site.name, foreman: effectiveForeman, foremanName, foremanNote },
+      site: { id: site.id, name: site.name, workType: site.workType || undefined, foreman: effectiveForeman, foremanName, foremanNote },
       foremanOverride,
       year: y, month: m, daysInMonth, ym,
       workers, subcons,
@@ -337,6 +340,7 @@ export async function GET(request: NextRequest) {
       // 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25）。
       // workTypeSites が空 = この現場には工種が無い（今までどおりの画面のまま）
       workTypeSites,
+      dayWorkType,
       defaultWorkType,
       defaultWorkTypeSubcon,
       entrySiteByWorkerDay,
@@ -635,6 +639,83 @@ export async function POST(request: NextRequest) {
       // workTypeSiteId が無ければ「親現場に戻す」= マップから削除（既定=親、という従来の状態）
       await updateDoc(mainRef, { [field]: workTypeSiteId || deleteField() })
       return NextResponse.json({ success: true })
+    }
+
+    // Action: 日ごとの工種指定（2026-09-25・社長「鉄骨は毎日あるとは限らない」）
+    //
+    //   「26〜30日は鉄骨工事」のように、日付単位（複数日も可）で工種を決める。
+    //   1) assign.{親}.dayWorkType.{ym}.{day} に工種サイト id を保存（親に戻すなら deleteField）
+    //      → その日の新しい入力はここに保存される（作業員の既定より優先）
+    //   2) その日に既に入っている全員（作業員・外注）のエントリを、同じ工種へまとめて移動
+    //      （lib/site-hierarchy.ts planDayWorkTypeMoves。2箇所に入っている人は移さず報告）
+    //   出面ドキュメントは1回読み・1回書き（同一リクエストで二度読まない）。
+    if (action === 'setDayWorkType') {
+      const { siteId: parentSiteId, ym: sdwYm, toSiteId } = body
+      const daysRaw: unknown[] = Array.isArray(body.days) ? body.days : [body.day]
+      const days: number[] = Array.from(new Set(daysRaw.map(v => Number(v))))
+        .filter(n => Number.isInteger(n) && n >= 1 && n <= 31)
+        .sort((a, b) => a - b)
+      if (!parentSiteId || !sdwYm || !toSiteId || days.length === 0) {
+        return NextResponse.json({ error: 'siteId, ym, days, toSiteId は必須です' }, { status: 400 })
+      }
+      const { checkMonthLocked } = await import('@/lib/locks')
+      const lockErr = await checkMonthLocked(String(sdwYm))
+      if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
+
+      const main = await getMainData()
+      const children = workTypeSitesOf(main.sites, parentSiteId).filter(s => !s.archived)
+      if (children.length === 0) {
+        return NextResponse.json({ error: 'この現場には工種がありません' }, { status: 400 })
+      }
+      const allIds = [parentSiteId, ...children.map(c => c.id)]
+      if (!allIds.includes(toSiteId)) {
+        return NextResponse.json({ error: '指定した工種が見つかりません' }, { status: 400 })
+      }
+      const toParent = toSiteId === parentSiteId
+
+      const attData = await getAttData(String(sdwYm))
+      const { updateDoc, deleteField } = await import('@/lib/fsdb')
+      const { ensureDocExists } = await import('@/lib/firestore-safe')
+
+      const attUpdates: Record<string, unknown> = {}
+      const mainUpdates: Record<string, unknown> = {}
+      const skipped: { kind: 'worker' | 'subcon'; id: string; name: string; day: number }[] = []
+      let moved = 0
+      for (const day of days) {
+        mainUpdates[`assign.${parentSiteId}.dayWorkType.${sdwYm}.${day}`] = toParent ? deleteField() : toSiteId
+        const plan = planDayWorkTypeMoves(attData.d, attData.sd, allIds, String(sdwYm), day, toSiteId)
+        for (const m of plan.moves) {
+          const map = m.kind === 'worker' ? 'd' : 'sd'
+          const src = m.kind === 'worker' ? attData.d[m.fromKey] : attData.sd[m.fromKey]
+          if (!src || Object.keys(src).length === 0) continue   // 空マップは書かない（安全ルール）
+          attUpdates[`${map}.${m.toKey}`] = src
+          attUpdates[`${map}.${m.fromKey}`] = deleteField()
+          moved++
+        }
+        for (const s of plan.skipped) {
+          const name = s.kind === 'worker'
+            ? main.workers.find(w => String(w.id) === s.id)?.name || `ID:${s.id}`
+            : main.subcons.find(sc => sc.id === s.id)?.name || s.id
+          skipped.push({ kind: s.kind, id: s.id, name, day })
+        }
+      }
+
+      const mainRef = doc(db, 'demmen', 'main')
+      await ensureDocExists(mainRef)
+      await updateDoc(mainRef, mainUpdates)
+      if (Object.keys(attUpdates).length > 0) {
+        const attRef = doc(db, 'demmen', `att_${sdwYm}`)
+        await ensureDocExists(attRef)
+        await updateDoc(attRef, attUpdates)
+        invalidateAttDataCache(String(sdwYm))
+      }
+      try {
+        const { logActivity } = await import('@/lib/activity')
+        const label = toParent ? '親現場' : (children.find(c => c.id === toSiteId)?.workType || toSiteId)
+        await logActivity('admin', 'attendance.setDayWorkType',
+          `${parentSiteId} ${sdwYm} ${days.join(',')}日 → ${label}（${moved}件移動${skipped.length ? `・${skipped.length}件は重複のため未移動` : ''}）`)
+      } catch { /* ログ失敗は本体処理に影響させない */ }
+      return NextResponse.json({ success: true, days, toSiteId, moved, skipped })
     }
 
     // Action: 工種の切り替え（2026-09-25）

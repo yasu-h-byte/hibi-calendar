@@ -199,6 +199,13 @@ export interface SiteAssign {
   defaultWorkType?: Record<string, string>
   /** 同上、外注先（subconId）ごと */
   defaultWorkTypeSubcon?: Record<string, string>
+  /**
+   * 日ごとの工種指定（ym 'YYYYMM' → day（文字列）→ 工種サイト id）。
+   * 「26〜30日は鉄骨工事」のように日単位で決める。その日の新規入力はこの工種に保存され、
+   * 作業員ごとの既定より優先される（lib/site-hierarchy.ts resolveWorkTypeSiteId）。
+   * 親現場に戻した日はキーごと消す。2026-09-25 追加（社長: 鉄骨は毎日あるとは限らない）。
+   */
+  dayWorkType?: Record<string, Record<string, string>>
 }
 
 export type DayType = 'work' | 'off' | 'holiday'

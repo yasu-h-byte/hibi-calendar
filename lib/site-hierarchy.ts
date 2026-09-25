@@ -138,19 +138,11 @@ export function findWorkTypeDuplicates(
 
   for (const key of Object.keys(entries)) {
     if (entries[key] == null) continue
-    const matchedSiteId = candidates.find(sid => key.startsWith(`${sid}_`))
-    if (!matchedSiteId) continue
-    const rest = key.slice(matchedSiteId.length + 1) // `${entryId}_${ym}_${day}`
-    const parts = rest.split('_')
-    if (parts.length < 3) continue
-    const day = parts[parts.length - 1]
-    const keyYm = parts[parts.length - 2]
-    if (keyYm !== ym) continue
-    if (!/^\d+$/.test(day)) continue
-    const entryId = parts.slice(0, parts.length - 2).join('_')
-    const groupKey = `${entryId}\u0000${day}`
+    const parsed = parseAttKeyForSites(key, candidates)
+    if (!parsed || parsed.ym !== ym) continue
+    const groupKey = `${parsed.entryId}\u0000${parsed.day}`
     if (!groups.has(groupKey)) groups.set(groupKey, new Set())
-    groups.get(groupKey)!.add(matchedSiteId)
+    groups.get(groupKey)!.add(parsed.siteId)
   }
 
   const out: WorkTypeDuplicate[] = []
@@ -160,4 +152,85 @@ export function findWorkTypeDuplicates(
     out.push({ kind, id: entryId, day: Number(dayStr), siteIds: Array.from(sids) })
   }
   return out.sort((a, b) => a.id.localeCompare(b.id) || a.day - b.day)
+}
+
+/**
+ * `{siteId}_{entryId}_{ym}_{day}` 形式のキーを、候補の現場 id（長い順に並べ済み）で
+ * 前方一致させて分解する。合わなければ null。
+ */
+function parseAttKeyForSites(
+  key: string,
+  candidatesLongestFirst: string[],
+): { siteId: string; entryId: string; ym: string; day: number } | null {
+  const siteId = candidatesLongestFirst.find(sid => key.startsWith(`${sid}_`))
+  if (!siteId) return null
+  const parts = key.slice(siteId.length + 1).split('_')
+  if (parts.length < 3) return null
+  const day = parts[parts.length - 1]
+  const ym = parts[parts.length - 2]
+  if (!/^\d+$/.test(day)) return null
+  return { siteId, entryId: parts.slice(0, parts.length - 2).join('_'), ym, day: Number(day) }
+}
+
+/**
+ * 新しく入力する日の保存先を決める（2026-09-25・純関数）。
+ *
+ * 優先順位（上ほど強い）:
+ *   1. その日のエントリが既にある現場（`existingSite`）— 既存分の書き込み先は動かさない
+ *   2. その日の工種指定（`dayWorkType`。日付の見出し／期間で「この日は鉄骨」と決めたもの）
+ *   3. 作業員／外注先ごとの既定の工種（`workerDefault`）
+ *   4. 親現場そのもの（代表決定 2026-09-25: 親現場＝仮設の単価、鉄骨工事だけ工種サイトを作る）
+ */
+export function resolveWorkTypeSiteId(
+  parentId: string,
+  opts: { existingSite?: string | null; dayWorkType?: string | null; workerDefault?: string | null } = {},
+): string {
+  return opts.existingSite || opts.dayWorkType || opts.workerDefault || parentId
+}
+
+/** 1日まるごと工種を切り替えるときの移動計画（純関数・実際の書き込みは呼び出し側） */
+export interface DayWorkTypeMovePlan {
+  moves: { kind: 'worker' | 'subcon'; id: string; fromSiteId: string; fromKey: string; toKey: string }[]
+  skipped: { kind: 'worker' | 'subcon'; id: string; reason: 'duplicate' }[]
+}
+
+/**
+ * 親 + 工種サイトの出面マップから、指定日の全エントリ（作業員 `d`・外注 `sd`）を
+ * `toSiteId` へ移す計画を作る。
+ * - 既に `toSiteId` に入っているものは触らない
+ * - 同じ人が2箇所以上に入っている（重複）ものは移さず `skipped` に載せる（先に解消してもらう）
+ */
+export function planDayWorkTypeMoves(
+  d: Record<string, unknown>,
+  sd: Record<string, unknown>,
+  siteIds: string[],
+  ym: string,
+  day: number,
+  toSiteId: string,
+): DayWorkTypeMovePlan {
+  const candidates = [...siteIds].sort((a, b) => b.length - a.length)
+  const plan: DayWorkTypeMovePlan = { moves: [], skipped: [] }
+  const scan = (map: Record<string, unknown>, kind: 'worker' | 'subcon') => {
+    const found = new Map<string, string[]>() // entryId → siteIds
+    for (const key of Object.keys(map)) {
+      if (map[key] == null) continue
+      const p = parseAttKeyForSites(key, candidates)
+      if (!p || p.ym !== ym || p.day !== day) continue
+      if (!found.has(p.entryId)) found.set(p.entryId, [])
+      found.get(p.entryId)!.push(p.siteId)
+    }
+    for (const [entryId, sids] of found) {
+      if (sids.length > 1) { plan.skipped.push({ kind, id: entryId, reason: 'duplicate' }); continue }
+      const fromSiteId = sids[0]
+      if (fromSiteId === toSiteId) continue
+      plan.moves.push({
+        kind, id: entryId, fromSiteId,
+        fromKey: `${fromSiteId}_${entryId}_${ym}_${day}`,
+        toKey: `${toSiteId}_${entryId}_${ym}_${day}`,
+      })
+    }
+  }
+  scan(d, 'worker')
+  scan(sd, 'subcon')
+  return plan
 }
