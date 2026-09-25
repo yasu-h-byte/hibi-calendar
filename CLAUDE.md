@@ -29,6 +29,7 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 | [docs/firestore.md](docs/firestore.md) | Firestoreデータ構造・コレクション定義 |
 | [docs/roles-auth.md](docs/roles-auth.md) | ロール・認証・権限管理 |
 | [docs/integration.md](docs/integration.md) | 経営コックピットとの連携（読むだけの窓口・合言葉・税抜の約束） |
+| [docs/peer-invoice.md](docs/peer-invoice.md) | 応援の請求書（同業者へ送る請求書 + 出面明細を印刷。/peer-invoice。発行で凍結・取り消しは欠番） |
 
 ## 開発の基本ルール
 

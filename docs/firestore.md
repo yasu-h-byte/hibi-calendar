@@ -26,6 +26,7 @@
 | mforeman | map | 月別代理職長 |
 | nightDays | map | 夜勤が発生した日 `{ "siteId_YYYYMM": [11, 12] }`。出面画面で夜勤バッジを出す日を絞るUIフィルタ。給与計算・所定日数には影響しない（誰が夜勤したかはエントリの `ns`） |
 | nextWorkerId | number | 次のワーカーID |
+| companyProfile | map\|null | 応援の請求書の発行者情報（`CompanyProfile`。2026-09-25）。設定画面「請求書の自社情報」で編集。未設定なら請求書は発行できない（`docs/peer-invoice.md`） |
 
 #### MainData.homeLeaves
 
@@ -159,6 +160,29 @@ workSchedule?: {
 ### evaluations/{workerId_evaluationDate}
 評価データ（複数評価者対応）。
 
+### peerInvoices/{auto}
+応援の請求書（2026-09-25・`docs/peer-invoice.md`）。「発行」した瞬間の金額・出面明細・宛先・
+自社情報をまるごと凍結したスナップショット。`demmen/main` には入れない独立コレクション。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `no` | string | `${接頭辞}-${ym}-${連番}`（例 `HC-202609-01`）。会社をまたいで月内で連番 |
+| `companyId` / `companyName` | string | 宛先の同業者（取引先マスタの id） |
+| `ym` | string | 対象月 YYYYMM |
+| `period` | `{from,to}` | 請求対象期間（月初〜月末） |
+| `company` | `{postal,address,honorific}` | 発行時点の宛先スナップショット |
+| `issuer` | `CompanyProfile` | 発行時点の自社情報スナップショット（`main.companyProfile`） |
+| `lines` | 配列 | 現場×鳶/土工の行（`siteId,siteName,role,days,rate,amount`） |
+| `detail` | 配列 | 現場ごとの出面明細マトリクス（人×日） |
+| `subtotal` / `tax` / `total` | number | 税抜・消費税（10%・円未満切り捨て）・税込 |
+| `dueDate` | string | 支払期日（取引先の支払条件から算出・土日祝は前営業日） |
+| `status` | `'issued'\|'void'` | 取り消しても行は残る（欠番のまま・再利用しない） |
+| `issueDate` / `issuedAt` / `issuedBy` | | 発行日・発行時刻・発行者 |
+| `voidedAt` / `voidedBy` / `voidReason` | | 取り消し時のみ |
+
+読み書きは `lib/peer-invoice-store.ts`。日次バックアップ（`app/api/backup/snapshot`）の対象外
+（他の業務系コレクションと同様。財務記録としての保全は Firestore 標準の耐久性に依る）。
+
 ## ロール判定
 - workerId === 1 → approver（政仁さん、ハードコード）
 - jobType === 'jimu' → jimu
@@ -186,6 +210,9 @@ workSchedule?: {
 - 旧「外注先マスタ」をそのまま使う（id 不変）。`roles: ('gc'|'prime'|'peer'|'subcon')[]` を追加。未設定は `subcon` 扱い
 - 元請=gc、一次=prime、同業（二次・人を貸し借り）=peer、外注（専門業者）=subcon。出面の外注に配置できるのは peer/subcon
 - 定義と判定は `lib/companies.ts`
+- `postal` / `address` / `honorific` / `paymentTerms`（2026-09-25）: 応援の請求書の宛名用。
+  gc/prime/peer の編集画面にのみ表示。`paymentTerms = { closing: 'end', payMonthOffset: 1|2, payDay: number|'end' }`。
+  詳細は `docs/peer-invoice.md`
 
 ### 現場の請負体制（`sites[]`）
 | フィールド | 意味 |
