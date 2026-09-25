@@ -230,3 +230,34 @@ workSchedule?: {
 - 工種サイトが残っている親現場は削除できない。工種の下に工種は作れない
 - 同業者別の請求・支払一覧: `lib/peer-statement.ts`・`/api/peer-statement`・画面 `/peer-statement`（相殺しない。請求=応援現場の工種ごとの人工×受取単価、支払=外注原価）
 
+### 工種の出し分け（出面入力で工種を選ぶ・2026-09-25）
+
+同じ現場でも担当する工事によって単価が違うケース（鉄骨と仮設で単価が違う畠山組・川崎の応援など）向けに、
+出面入力（`/attendance` の PC グリッド・スマホの職長画面）は親現場を選んだまま、日ごとに「どの工種か」を
+選んで入力できる。工種ごとに別グリッドを開いて配置し直す必要はない。
+
+- **既定の工種**（`demmen/main.assign[親現場id]` の下）:
+  - `defaultWorkType: Record<workerId(文字列), 工種サイトid>` … 作業員ごとの既定の入力先
+  - `defaultWorkTypeSubcon: Record<subconId, 工種サイトid>` … 外注先ごとの既定の入力先
+  - 未設定（マップに無い）の作業員・外注先は、これまでどおり親現場 id にそのまま保存される（後方互換）
+  - 保存は `POST /api/attendance/grid { action: 'saveDefaultWorkType', siteId: 親現場id, workerId または subconId, workTypeSiteId }`。
+    `assign.{親現場id}.defaultWorkType.{workerId}` へのドット記法の狭い更新（`workTypeSiteId` を送らなければ `deleteField()` で「親に戻す」）。
+    配置の保存（`saveAssign`）は `assign[siteId]` を read-and-preserve で更新するのでこのマップを壊さないが、
+    それとは無関係に単独でも安全に効くよう、あえて独立したドット記法にしてある
+- **1日分の切り替え（移動）**: `POST /api/attendance/grid { action: 'moveWorkType', siteId: 親現場id, ym, day, workerId または subconId, toSiteId }`。
+  `app/api/attendance/foreman/route.ts` の `fix_site`（現場違い修正）と同じ考え方で、
+  `setAttendanceEntry` + `computeAttendanceDeleteFields` で移動先へ書き込み、移動元は `d.{key}`（外注なら `sd.{key}`）を `deleteField()` で消す。
+  月次ロック中は拒否。移動先に既にエントリがあれば拒否（上書き事故防止）
+- **表示（GET）**: 選択中の現場が非アーカイブの工種サイトを持つ親なら、配置は親のものを使ったまま、
+  出面エントリは「親 + 工種サイトの全 id」を合わせて見せる（union）。追加の Firestore 読み取りは発生しない
+  （同一リクエストで読んだ `att_YYYYMM` をそのままなぞるだけ）。レスポンスに `workTypeSites` / `defaultWorkType` /
+  `defaultWorkTypeSubcon` / `entrySiteByWorkerDay` / `entrySiteBySubconDay` / `workTypeDuplicates` を追加。
+  工種の無い現場・工種サイト自身を選んだ場合はこれらが空になり、画面は完全に従来どおり
+- **重複ガード**: 同じ人・同じ日が2つ以上の工種に入力されている状態は `lib/site-hierarchy.ts` の
+  `findWorkTypeDuplicates`（純関数・`__tests__/site-hierarchy.test.ts`）で検出し、画面に警告を出す。
+  `moveWorkType` は移動先に既にエントリがあれば拒否、移動元が2箇所以上に見つかった場合も
+  「先に重複を解消してください」で拒否する（サーバ側で必ず見る。クライアントの事前チェックだけに頼らない）
+- 工種を**後から**足した現場（既に親 id で出面が入っている状態から工種サイトを作った場合）は、
+  過去分は親 id のまま union に混ざって表示され、`moveWorkType` でいつでも工種サイト側へ移動できる。
+  データの移行処理は無い（自然に union に入るので追加対応は不要）
+
