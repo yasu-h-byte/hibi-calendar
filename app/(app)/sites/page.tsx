@@ -762,6 +762,13 @@ export default function SitesPage() {
                       カレンダー・署名・職長はこの現場と共通です。
                     </p>
                   ) : (
+                    <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap">工種を選ばない日の呼び方</label>
+                      <input value={form.workType} onChange={e => setForm({ ...form, workType: e.target.value })} placeholder="例: 仮設工事"
+                        className="flex-1 rounded border border-gray-300 dark:border-gray-600 px-2 py-1 text-xs bg-white dark:bg-gray-700" />
+                    </div>
+                    <p className="text-[11px] text-gray-400">出面のタグと請求書の行に、この名前で出ます（空なら「親現場」）。</p>
                     <div className="flex flex-wrap gap-1.5">
                       {childrenOfEditing.map(c => (
                         <span key={c.id} className={`text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200 ${c.archived ? 'opacity-50' : ''}`}>
@@ -769,6 +776,7 @@ export default function SitesPage() {
                         </span>
                       ))}
                       <span className="text-[11px] text-gray-400 self-center">単価は一覧の工種の行から開いて設定</span>
+                    </div>
                     </div>
                   )}
                 </div>

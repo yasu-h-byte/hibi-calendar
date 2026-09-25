@@ -96,8 +96,8 @@ export default function AttendanceGrid({
   // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） ──
   const hasWorkTypes = !!workTypeSites && workTypeSites.length > 0
   // 「入力先」の選択肢: 親現場 + 各工種（親現場を先頭に）。色は並び順で固定
-  //   親現場の呼び方: 親現場そのものに工種名（例: 仮設）が付いていれば「仮設（親）」、無ければ「親現場」
-  const parentLabel = data.site.workType ? `${data.site.workType}（親）` : '親現場'
+  //   親現場の呼び方: 親現場に「工種を選ばない日の呼び方」（例: 仮設工事）が付いていればそれ、無ければ「親現場」
+  const parentLabel = data.site.workType || '親現場'
   const workTypeOptions: WorkTypeOption[] = useMemo(() => {
     if (!hasWorkTypes) return []
     return [

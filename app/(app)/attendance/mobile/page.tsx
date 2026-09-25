@@ -45,7 +45,7 @@ interface GridWorker {
 }
 interface GridSubcon { id: string; name: string }
 interface GridData {
-  site: { id: string; name: string }
+  site: { id: string; name: string; workType?: string }
   year: number
   month: number
   daysInMonth: number
@@ -278,7 +278,7 @@ export default function ForemanMobilePage() {
   /** 工種タグの選択肢（親現場を含む）。工種の無い現場では空 */
   const workTypeOptions = useMemo(() => {
     if (!data?.workTypeSites?.length) return []
-    return [{ id: siteId, label: '親現場' }, ...data.workTypeSites.map(s => ({ id: s.id, label: s.workType }))]
+    return [{ id: siteId, label: data.site?.workType || '親現場' }, ...data.workTypeSites.map(s => ({ id: s.id, label: s.workType }))]
   }, [data, siteId])
 
   /** 工種セレクタの変更。既に入力済みの日は移動、未入力の日は次回保存先を覚えるだけ */

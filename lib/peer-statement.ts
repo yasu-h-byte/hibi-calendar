@@ -10,7 +10,7 @@
  */
 import { calcTobiEquiv, getSiteRates, type MainData, type ComputeResult } from './compute'
 import { resolveSiteParties, type CompanyLike } from './companies'
-import { siteDisplayName, calendarSiteIdOf } from './site-hierarchy'
+import { siteBillingName, calendarSiteIdOf } from './site-hierarchy'
 import type { AttendanceEntry } from '@/types'
 
 export interface PeerBillingLine {
@@ -80,7 +80,7 @@ export function buildPeerStatements(
     const amount = Math.round(tobiDays * rates.tobiBase + dokoDays * rates.dokoBase)
     const e = entry(parties.billToId)
     e.billing.push({
-      siteId: s.id, siteName: siteDisplayName(sites, s.id),
+      siteId: s.id, siteName: siteBillingName(sites, s.id),
       tobiDays: round1(tobiDays), dokoDays: round1(dokoDays),
       tobiRate: rates.tobiBase, dokoRate: rates.dokoBase, amount,
     })
@@ -96,7 +96,7 @@ export function buildPeerStatements(
     const siteId = key.slice(0, key.length - sc.id.length - 1)
     const e = entry(sc.id)
     e.payments.push({
-      siteId, siteName: siteDisplayName(sites, siteId),
+      siteId, siteName: siteBillingName(sites, siteId),
       days: round1(v.work), otHours: round1(v.ot), amount: Math.round(v.cost),
     })
     e.paymentTotal += Math.round(v.cost)

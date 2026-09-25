@@ -251,6 +251,13 @@ export async function POST(request: NextRequest) {
       if (typeof body.workType === 'string' && body.workType.trim() && isChild) {
         updated[idx].workType = body.workType.trim()
       }
+      // 親現場の「自分の工種名」（例: 仮設工事・社長 2026-09-26）。工種サイトを持つ親現場で、
+      //   工種を選ばない日の呼び方（出面のタグ・請求書の行）に使う。空で送れば消す
+      if (!isChild && typeof body.workType === 'string') {
+        const wt = body.workType.trim()
+        if (wt) updated[idx].workType = wt
+        else delete updated[idx].workType
+      }
       // 工種サイト: 引き継ぎ項目は親の値に戻す（子の画面から送られても変えない）
       if (isChild) {
         const parent = updated.find(x => x.id === sites[idx].parentId)

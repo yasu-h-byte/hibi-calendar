@@ -60,6 +60,16 @@ export function workTypeSitesOf<T extends HierarchySite>(sites: T[], parentId: s
   return sites.filter(s => s.parentId === parentId)
 }
 
+/**
+ * 請求書・請求一覧用の現場名。工種サイトは「親現場名（工種）」、
+ * 工種サイトを持つ親現場に「工種を選ばない日の呼び方」（workType・例: 仮設工事）があれば「親現場名（仮設工事）」。
+ */
+export function siteBillingName(sites: HierarchySite[], siteId: string): string {
+  const s = sites.find(x => x.id === siteId)
+  if (s && !s.parentId && s.workType && sites.some(x => x.parentId === s.id)) return `${s.name}（${s.workType}）`
+  return siteDisplayName(sites, siteId)
+}
+
 /** 画面表示用の現場名。工種サイトは「親現場名（工種）」 */
 export function siteDisplayName(sites: HierarchySite[], siteId: string): string {
   const s = sites.find(x => x.id === siteId)

@@ -1009,7 +1009,7 @@ export default function AttendanceGridPage() {
    */
   const workTypeSiteName = useCallback((sid: string) => {
     if (!data) return sid
-    if (sid === data.site.id) return '親現場'
+    if (sid === data.site.id) return data.site.workType || '親現場'
     return data.workTypeSites?.find(s => s.id === sid)?.workType || sid
   }, [data])
   const workTypeWarnings = useMemo(() => {
@@ -1302,14 +1302,14 @@ export default function AttendanceGridPage() {
           <select value={rangeSiteId} onChange={e => setRangeSiteId(e.target.value)}
             className="rounded-lg border border-gray-300 px-2 py-1.5 bg-white dark:bg-gray-700 dark:border-gray-600 font-bold">
             {data.workTypeSites.map(s => <option key={s.id} value={s.id}>{s.workType}</option>)}
-            <option value={data.site.id}>親現場（{data.site.name}）</option>
+            <option value={data.site.id}>{data.site.workType || '親現場'}</option>
           </select>
           <button
             type="button"
             onClick={() => {
               const from = Math.min(rangeFrom, rangeTo), to = Math.max(rangeFrom, rangeTo)
               const days = Array.from({ length: to - from + 1 }, (_, i) => from + i)
-              const label = rangeSiteId === data.site.id ? '親現場' : (data.workTypeSites?.find(s => s.id === rangeSiteId)?.workType || '')
+              const label = rangeSiteId === data.site.id ? (data.site.workType || '親現場') : (data.workTypeSites?.find(s => s.id === rangeSiteId)?.workType || '')
               if (!confirm(`${from}日〜${to}日を「${label}」にします。\nこの期間に入力済みの人の出面も全員まとめて「${label}」へ移ります。\nよろしいですか？`)) return
               handleSetDayWorkType(days, rangeSiteId || data.site.id)
             }}

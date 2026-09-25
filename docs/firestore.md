@@ -222,6 +222,7 @@ workSchedule?: {
 | `siteType` / `client` | 保存時に自動導出（self → direct・請求先=一次、同業 → support・請求先=同業者）。受取率 85%/100% は従来どおり `siteType` で決まる |
 
 ### 工種サイト（`sites[]` の `parentId` / `workType`）
+- 親現場自身の `workType`（2026-09-26）: 工種サイトを持つ親現場の「工種を選ばない日の呼び方」（例: 仮設工事）。現場マスタの工種欄で入れる。出面のタグ・期間指定・スマホ入力の選択肢と、請求書の行（`siteBillingName` → 「川崎（仮設工事）」）に使う。空なら「親現場」
 - 単価が工事の種類（鉄骨・仮設など）で変わる現場だけ、親現場の下に作る。出面・配置・受取単価（`rates`）・借りる単価（`assign[id].subconRates`）は工種サイトの id で持つ
 - **親から引き継ぐ**: 工期・職長（`foreman` と月別 `mforeman`）・勤務時間・請負体制 → `/api/sites` が親の保存時に子へ書き写す（`INHERITED_FIELDS`）
 - **親のものを読む**: 就業カレンダー（`siteCalendar`・`siteWorkDays`）と署名 → `lib/site-hierarchy.ts` の `calendarSiteIdOf` / `withWorkTypeSiteCalendars`。
