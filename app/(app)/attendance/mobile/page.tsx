@@ -30,6 +30,7 @@ import {
 } from '@/types'
 import { getWorkValue, getTimeStatusValue, DOW_JA } from '@/lib/attendance-grid'
 import { generateDefaultDays } from '@/lib/calendar'
+import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
 
 // ── 型 ──
 
@@ -63,6 +64,8 @@ interface GridData {
 
   // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25）。空=この現場には工種が無い ──
   workTypeSites?: { id: string; name: string; workType: string }[]
+  /** その月の日ごとの工種指定（day（文字列）→ 工種サイト id）。作業員の既定より優先 */
+  dayWorkType?: Record<string, string>
   defaultWorkType?: Record<string, string>
   defaultWorkTypeSubcon?: Record<string, string>
   entrySiteByWorkerDay?: Record<string, Record<number, string>>
@@ -254,16 +257,22 @@ export default function ForemanMobilePage() {
    *   変えてしまうと別の id に新しいエントリができ、古いエントリが取り残されて
    *   二重入力になる）。まだ入力が無い日だけ、選んだ既定・工種の既定・親現場の順で決まる。
    */
+  //   優先順位は PC 画面と同じ lib/site-hierarchy.ts resolveWorkTypeSiteId:
+  //   既にある現場 > （この画面で選んだ保存先） > その日の工種指定 > 本人の既定 > 親現場
   const workTypeSiteFor = useCallback((workerId: number): string => {
-    const existingSite = data?.entrySiteByWorkerDay?.[String(workerId)]?.[day]
-    if (existingSite) return existingSite
-    return pendingWorkType[workerId] || data?.defaultWorkType?.[String(workerId)] || siteId
+    return resolveWorkTypeSiteId(siteId, {
+      existingSite: data?.entrySiteByWorkerDay?.[String(workerId)]?.[day],
+      dayWorkType: pendingWorkType[workerId] || data?.dayWorkType?.[String(day)],
+      workerDefault: data?.defaultWorkType?.[String(workerId)],
+    })
   }, [data, day, pendingWorkType, siteId])
 
   const workTypeSiteForSubcon = useCallback((subconId: string): string => {
-    const existingSite = data?.entrySiteBySubconDay?.[subconId]?.[day]
-    if (existingSite) return existingSite
-    return pendingWorkTypeSubcon[subconId] || data?.defaultWorkTypeSubcon?.[subconId] || siteId
+    return resolveWorkTypeSiteId(siteId, {
+      existingSite: data?.entrySiteBySubconDay?.[subconId]?.[day],
+      dayWorkType: pendingWorkTypeSubcon[subconId] || data?.dayWorkType?.[String(day)],
+      workerDefault: data?.defaultWorkTypeSubcon?.[subconId],
+    })
   }, [data, day, pendingWorkTypeSubcon, siteId])
 
   /** 工種タグの選択肢（親現場を含む）。工種の無い現場では空 */
