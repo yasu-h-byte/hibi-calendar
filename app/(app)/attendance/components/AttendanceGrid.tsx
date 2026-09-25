@@ -8,7 +8,10 @@ import {
 } from '@/lib/attendance-grid'
 import { orgBadgeCls, orgBadgeLabel } from '@/lib/labels'
 import { GridData, AttEntry, SubconDayEntry } from '../types'
-import { TimeBasedCell, LegacyCell, HomeLeaveCell, WaitingCell, WorkTypeTag, type WorkTypeTagProps } from './WorkerDayCell'
+import {
+  TimeBasedCell, LegacyCell, HomeLeaveCell, WaitingCell, WorkTypeTag,
+  workTypeChipCls, workTypeColumnBg, type WorkTypeTagProps, type WorkTypeOption,
+} from './WorkerDayCell'
 
 // 出面グリッド本体: ヘッダー行・職長承認行・最終承認行・ワーカー行・
 // 外注行・フッター合計6行・凡例
@@ -59,6 +62,10 @@ interface Props {
   // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） ──
   //   workTypeSites が空/未指定 = この現場には工種が無い（何も表示しない・従来どおり）
   workTypeSites?: { id: string; name: string; workType: string }[]
+  /** その月の日ごとの工種指定（day（文字列）→ 工種サイト id）。列の色と見出しのチップに使う */
+  dayWorkType?: Record<string, string>
+  /** 日付の見出しのチップで、その日の全員の工種を決める（新規の保存先＋入力済みの一括移動） */
+  onSetDayWorkType?: (day: number, toSiteId: string) => void
   defaultWorkType?: Record<string, string>
   defaultWorkTypeSubcon?: Record<string, string>
   entrySiteByWorkerDay?: Record<string, Record<number, string>>
@@ -78,7 +85,7 @@ export default function AttendanceGrid({
   nightDays, onToggleNightDay,
   drivers, onDriverClick,
   onForemanApproveAll, onToggleForemanApproval, onFinalApproveAll, onToggleFinalApproval,
-  workTypeSites, defaultWorkType, defaultWorkTypeSubcon,
+  workTypeSites, dayWorkType, onSetDayWorkType, defaultWorkType, defaultWorkTypeSubcon,
   entrySiteByWorkerDay, entrySiteBySubconDay,
   onChangeDefaultWorkType, onChangeDefaultWorkTypeSubcon, onMoveWorkType, onMoveWorkTypeSubcon,
 }: Props) {
@@ -88,14 +95,28 @@ export default function AttendanceGrid({
 
   // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） ──
   const hasWorkTypes = !!workTypeSites && workTypeSites.length > 0
-  // 「入力先」の選択肢: 親現場 + 各工種（親現場を先頭に）
-  const workTypeOptions = useMemo(() => {
+  // 「入力先」の選択肢: 親現場 + 各工種（親現場を先頭に）。色は並び順で固定
+  //   親現場の呼び方: 親現場そのものに工種名（例: 仮設）が付いていれば「仮設（親）」、無ければ「親現場」
+  const parentLabel = data.site.workType ? `${data.site.workType}（親）` : '親現場'
+  const workTypeOptions: WorkTypeOption[] = useMemo(() => {
     if (!hasWorkTypes) return []
     return [
-      { id: data.site.id, label: '親現場' },
-      ...(workTypeSites || []).map(s => ({ id: s.id, label: s.workType })),
+      { id: data.site.id, label: parentLabel, cls: workTypeChipCls(-1) },
+      ...(workTypeSites || []).map((s, i) => ({ id: s.id, label: s.workType, cls: workTypeChipCls(i) })),
     ]
-  }, [hasWorkTypes, workTypeSites, data.site.id])
+  }, [hasWorkTypes, workTypeSites, data.site.id, parentLabel])
+  /** その日に工種指定があれば workTypeSites 内の並び番号（列の色用）。無ければ -1 */
+  const dayWorkTypeIndex = (day: number): number => {
+    if (!hasWorkTypes) return -1
+    const sid = dayWorkType?.[String(day)]
+    if (!sid) return -1
+    return (workTypeSites || []).findIndex(s => s.id === sid)
+  }
+  /** 曜日色より工種の色を優先（鉄骨の日が続いているのがひと目で分かるように） */
+  const columnBg = (day: number, fallback: string): string => {
+    const i = dayWorkTypeIndex(day)
+    return i >= 0 ? workTypeColumnBg(i) : fallback
+  }
   const workTypeDupSet = useMemo(() => {
     const set = new Set<string>()
     for (const d of data.workTypeDuplicates || []) set.add(`${d.kind}-${d.id}-${d.day}`)
@@ -211,13 +232,37 @@ export default function AttendanceGrid({
                 return (
                 <th
                   key={d.day}
-                  className={`px-0 py-1 text-center font-bold ${dayHeaderBg(data.year, data.month, d.day, calDayType)} ${isWeekdayOff ? 'text-gray-400' : dayTextColor(d.dow)} border-l border-gray-200`}
+                  className={`px-0 py-1 text-center font-bold ${columnBg(d.day, dayHeaderBg(data.year, data.month, d.day, calDayType))} ${isWeekdayOff ? 'text-gray-400' : dayTextColor(d.dow)} border-l border-gray-200`}
                   style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                   title={isCalOff ? 'カレンダー休日' : data.calendarDays ? 'カレンダー出勤日' : ''}
                 >
                   <div className="leading-tight">
                     <div className="text-[11px]">{d.day}</div>
                     <div className="text-[9px] opacity-70">{d.label}{showOffMark ? ' 休' : ''}</div>
+                    {/* この日の工種（工種のある現場だけ・2026-09-25）。押すとその日の全員の工種が変わる
+                        （新しい入力の保存先＋入力済みの一括移動）。ロック中は色だけ見せる */}
+                    {hasWorkTypes && (() => {
+                      const cur = dayWorkType?.[String(d.day)] || data.site.id
+                      const opt = workTypeOptions.find(o => o.id === cur) || workTypeOptions[0]
+                      if (data.locked || !onSetDayWorkType) {
+                        return <div className={`mt-1 w-full min-h-[24px] text-[12px] font-bold leading-tight rounded-md py-1 ${opt.cls}`}>{opt.label}</div>
+                      }
+                      return (
+                        <select
+                          value={cur}
+                          onChange={e => {
+                            const to = workTypeOptions.find(o => o.id === e.target.value)
+                            if (!to || to.id === cur) return
+                            if (!confirm(`${d.day}日を「${to.label}」にします。\nこの日に入力済みの人の出面も全員「${to.label}」へ移ります。\nよろしいですか？`)) return
+                            onSetDayWorkType(d.day, to.id)
+                          }}
+                          title={`${d.day}日の工種（押して選ぶ）`}
+                          className={`mt-1 w-full min-h-[24px] text-[12px] font-bold leading-tight rounded-md py-1 px-0.5 appearance-none cursor-pointer shadow-sm ${opt.cls}`}
+                        >
+                          {workTypeOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                        </select>
+                      )
+                    })()}
                     {/* 夜勤日の指定（台風待機など年数回）。ここで指定した日だけ
                         スタッフのセルに「夜」バッジが出る。未指定日はホバーで薄く出る */}
                     {onToggleNightDay && !data.locked && (
@@ -459,7 +504,7 @@ export default function AttendanceGrid({
                         // 休日出勤判定: カレンダーがoff/holidayなのに出勤あり
                         const calDay = data.calendarDays?.[String(d.day)]
                         const isHolidayWork = !!(calDay && (calDay === 'off' || calDay === 'holiday') && isActualWorkEntry(entry))
-                        const colBg = dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])
+                        const colBg = columnBg(d.day, dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)]))
                         // 外国人のみ時間ベース（202605〜かつvisaあり）
                         // 2026-06-13: 旧契約継続者(フン等)はレガシーUI（日数+残業+0.6補・待機中ガードなし）
                         const isWorkerTimeBased = useTimeBased && !!worker.visa && worker.visa !== 'none' && worker.visa !== '' && !worker.useOldRules
@@ -627,10 +672,9 @@ export default function AttendanceGrid({
                         return (
                           <td
                             key={d.day}
-                            className={`relative px-0 py-0 border-l border-gray-100 ${dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)])}`}
+                            className={`px-0 py-0 border-l border-gray-100 ${columnBg(d.day, dayColBg(data.year, data.month, d.day, data.calendarDays?.[String(d.day)]))}`}
                             style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                           >
-                            <WorkTypeTag workTypeTag={subconWorkTypeTag(sc.id, d.day, !!entries[d.day])} isLocked={isLocked} />
                             <div className="flex flex-col">
                               {/* People count - 大きめ */}
                               <input
@@ -662,6 +706,7 @@ export default function AttendanceGrid({
                                 `}
                               />
                             </div>
+                            <WorkTypeTag workTypeTag={subconWorkTypeTag(sc.id, d.day, !!entries[d.day])} isLocked={isLocked} />
                           </td>
                         )
                       })}
@@ -842,6 +887,16 @@ export default function AttendanceGrid({
           <span className="inline-block w-3 h-3 rounded bg-blue-50 border border-blue-200" /> 土曜
         </span>
         <span className="mx-2 border-l border-gray-300 h-3" />
+        {hasWorkTypes && (
+          <>
+            <span className="text-hibi-navy font-medium">工種:</span>
+            {workTypeOptions.map(o => (
+              <span key={o.id} className={`px-1.5 py-0.5 rounded-md font-bold text-[11px] ${o.cls}`}>{o.label}</span>
+            ))}
+            <span>日付の見出しのチップ＝その日の全員の工種。色付きの列＝その工種の日。マスのタグ＝その人だけの例外</span>
+            <span className="mx-2 border-l border-gray-300 h-3" />
+          </>
+        )}
         <span><strong className="text-green-700">1</strong> = 出勤</span>
         <span><strong className="text-yellow-700">0.5</strong> = 半日</span>
         <span><strong className="text-purple-600">有</strong> = 有給</span>

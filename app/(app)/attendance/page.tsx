@@ -25,6 +25,7 @@ import NightShiftModal, { NightShiftValue } from './components/NightShiftModal'
 import DriverModal from './components/DriverModal'
 import HistoryModal from './components/HistoryModal'
 import { canDriveDefault } from '@/lib/allowance'
+import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
 
 export default function AttendanceGridPage() {
   const [password, setPassword] = useState('')
@@ -253,8 +254,20 @@ export default function AttendanceGridPage() {
     try {
       // Send all pending saves and inspect each response
       const promises = saves.map(async s => {
+        // 工種のある現場では保存先が日ごと・人ごとに変わる（2026-09-25）:
+        //   既にその日のエントリがある現場 > その日の工種指定 > 本人の既定 > 親現場
+        //   工種の無い現場は全部 undefined なので親現場（= data.site.id）のまま
+        const existingSite = s.type === 'worker'
+          ? data.entrySiteByWorkerDay?.[s.id]?.[s.day]
+          : data.entrySiteBySubconDay?.[s.id]?.[s.day]
+        const workerDefault = s.type === 'worker'
+          ? data.defaultWorkType?.[s.id]
+          : data.defaultWorkTypeSubcon?.[s.id]
+        const targetSiteId = resolveWorkTypeSiteId(data.site.id, {
+          existingSite, dayWorkType: data.dayWorkType?.[String(s.day)], workerDefault,
+        })
         const body: Record<string, unknown> = {
-          siteId: data.site.id,
+          siteId: targetSiteId,
           ym: data.ym,
           day: s.day,
         }
@@ -326,6 +339,21 @@ export default function AttendanceGridPage() {
             if (errData?.error) errMsg = errData.error
           } catch { /* JSON でないレスポンスの場合 */ }
           return { ok: false, save: s, error: errMsg, status: res.status }
+        }
+        // 保存できたら「この日のエントリはこの現場にある」を覚える（次の編集も同じ現場へ）。
+        // 消した（entry null）ならその記録も消す
+        if (data.workTypeSites?.length) {
+          const hasValue = s.type === 'worker' ? !!s.entry : !!s.subconEntry
+          setData(prev => {
+            if (!prev) return prev
+            const mapKey = s.type === 'worker' ? 'entrySiteByWorkerDay' : 'entrySiteBySubconDay'
+            const outer = { ...(prev[mapKey] || {}) }
+            const inner = { ...(outer[s.id] || {}) }
+            if (hasValue) inner[s.day] = targetSiteId
+            else delete inner[s.day]
+            outer[s.id] = inner
+            return { ...prev, [mapKey]: outer }
+          })
         }
         return { ok: true as const, save: s }
       })
@@ -1141,6 +1169,53 @@ export default function AttendanceGridPage() {
     }
   }, [password, data, ym, fetchData])
 
+  /**
+   * 日単位（複数日も可）で工種を決める（2026-09-25・社長「鉄骨は毎日あるとは限らない」）。
+   * その日の新しい入力の保存先を変え、既に入っている全員のその日の入力も同じ工種へ移す。
+   * 2箇所に入っている人はサーバが移さずに返してくるので、その名前を知らせる。
+   * 移動件数が多いので楽観更新はせず、終わったら取り直す。
+   */
+  const handleSetDayWorkType = useCallback(async (days: number[], toSiteId: string) => {
+    if (!password || !data || days.length === 0) return
+    setSaveStatus('saving')
+    try {
+      const res = await fetch('/api/attendance/grid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'setDayWorkType', siteId: data.site.id, ym, days, toSiteId }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(json?.error || `保存に失敗しました (${res.status})`)
+      setSaveStatus('saved')
+      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+      saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
+      const skipped = (json?.skipped || []) as { name: string; day: number }[]
+      if (skipped.length > 0) {
+        alert(
+          `工種を切り替えましたが、次の人は2つの工種の両方に入力があるため動かしていません。\n` +
+          `マスのタグでどちらかを選び直してください。\n\n` +
+          skipped.map(s => `  ${s.day}日 ${s.name}`).join('\n'),
+        )
+      }
+    } catch (e) {
+      console.error('Set day work type error:', e)
+      setSaveStatus(null)
+      alert(e instanceof Error ? e.message : '工種の切替に失敗しました')
+    }
+    fetchData()
+  }, [password, data, ym, fetchData])
+
+  // 「期間で切り替え」の入力（from 日・to 日・工種）
+  const [rangeFrom, setRangeFrom] = useState(1)
+  const [rangeTo, setRangeTo] = useState(1)
+  const [rangeSiteId, setRangeSiteId] = useState('')
+  useEffect(() => {
+    // 現場・月が変わったら範囲を1日〜末日に戻し、工種は先頭の工種サイトにする
+    setRangeFrom(1)
+    setRangeTo(data?.daysInMonth || 1)
+    setRangeSiteId(data?.workTypeSites?.[0]?.id || '')
+  }, [data?.site.id, data?.ym, data?.daysInMonth, data?.workTypeSites])
+
   // ── Render ──
 
   return (
@@ -1209,6 +1284,45 @@ export default function AttendanceGridPage() {
         tone="warning"
       />
 
+      {/* 期間で工種を切り替える（工種のある現場だけ・2026-09-25）。
+          「26日〜30日は鉄骨工事」のように日をまとめて決める。1日だけなら日付の見出しのチップでもよい */}
+      {!loading && data && !!data.workTypeSites?.length && !data.locked && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm px-4 py-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-bold text-hibi-navy dark:text-gray-200">期間で工種を切り替え</span>
+          <select value={rangeFrom} onChange={e => setRangeFrom(Number(e.target.value))}
+            className="rounded-lg border border-gray-300 px-2 py-1.5 bg-white dark:bg-gray-700 dark:border-gray-600">
+            {Array.from({ length: data.daysInMonth }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}日</option>)}
+          </select>
+          <span className="text-gray-500">〜</span>
+          <select value={rangeTo} onChange={e => setRangeTo(Number(e.target.value))}
+            className="rounded-lg border border-gray-300 px-2 py-1.5 bg-white dark:bg-gray-700 dark:border-gray-600">
+            {Array.from({ length: data.daysInMonth }, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}日</option>)}
+          </select>
+          <span className="text-gray-500">は</span>
+          <select value={rangeSiteId} onChange={e => setRangeSiteId(e.target.value)}
+            className="rounded-lg border border-gray-300 px-2 py-1.5 bg-white dark:bg-gray-700 dark:border-gray-600 font-bold">
+            {data.workTypeSites.map(s => <option key={s.id} value={s.id}>{s.workType}</option>)}
+            <option value={data.site.id}>親現場（{data.site.name}）</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              const from = Math.min(rangeFrom, rangeTo), to = Math.max(rangeFrom, rangeTo)
+              const days = Array.from({ length: to - from + 1 }, (_, i) => from + i)
+              const label = rangeSiteId === data.site.id ? '親現場' : (data.workTypeSites?.find(s => s.id === rangeSiteId)?.workType || '')
+              if (!confirm(`${from}日〜${to}日を「${label}」にします。\nこの期間に入力済みの人の出面も全員まとめて「${label}」へ移ります。\nよろしいですか？`)) return
+              handleSetDayWorkType(days, rangeSiteId || data.site.id)
+            }}
+            className="px-4 py-1.5 rounded-lg bg-hibi-navy text-white font-bold hover:bg-[#243656] transition"
+          >
+            適用
+          </button>
+          <span className="text-xs text-gray-500 basis-full sm:basis-auto">
+            1日だけなら、日付の見出しのチップを押して選べます。個別の例外はマスのタグで。
+          </span>
+        </div>
+      )}
+
       {/* 帰国情報バナー（components/attendance/HomeLeaveBanner.tsx に集約） */}
       <HomeLeaveBanner homeLeaves={data?.homeLeaves} />
 
@@ -1254,6 +1368,8 @@ export default function AttendanceGridPage() {
           onFinalApproveAll={handleFinalApproveAll}
           onToggleFinalApproval={handleToggleFinalApproval}
           workTypeSites={data.workTypeSites}
+          dayWorkType={data.dayWorkType}
+          onSetDayWorkType={(day, toSiteId) => handleSetDayWorkType([day], toSiteId)}
           defaultWorkType={data.defaultWorkType}
           defaultWorkTypeSubcon={data.defaultWorkTypeSubcon}
           entrySiteByWorkerDay={data.entrySiteByWorkerDay}

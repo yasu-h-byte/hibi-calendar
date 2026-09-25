@@ -57,18 +57,53 @@ function CellMarkers({
  * 選び直すとその日だけ親現場⇄工種サイトの間で入力を移動する。
  * 工種の無い現場（data.workTypeSites が空）では props ごと渡されないので何も出ない。
  */
+export interface WorkTypeOption {
+  id: string
+  label: string
+  /** チップの色（Tailwind クラス。工種ごとに固定の色・親現場は白地に枠） */
+  cls: string
+}
+
 export interface WorkTypeTagProps {
   /** 現在の入力先（親現場 id または工種サイト id） */
   value: string
   /** 選べる入力先（親現場を含む） */
-  options: { id: string; label: string }[]
+  options: WorkTypeOption[]
   onChange: (siteId: string) => void
   /** この日はすでに2箇所に入力されている（要解消） */
   isDuplicate?: boolean
 }
 
+/**
+ * 工種チップの色。親現場（index -1）は白地に枠、工種サイトは並び順で固定の色。
+ * 動的なクラス組み立て禁止のため完全なクラス名を並べる（CLAUDE.md Tailwind ルール）。
+ * 日付の見出しのチップ・マスのタグ・凡例で同じ色を使う。
+ */
+export function workTypeChipCls(index: number): string {
+  if (index < 0) return 'bg-white text-gray-700 border border-gray-400 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-500'
+  const palette = [
+    'bg-amber-400 text-amber-950 border border-amber-500',
+    'bg-sky-400 text-sky-950 border border-sky-500',
+    'bg-emerald-400 text-emerald-950 border border-emerald-500',
+    'bg-fuchsia-400 text-fuchsia-950 border border-fuchsia-500',
+  ]
+  return palette[index % palette.length]
+}
+
+/** 工種の日の列の色（見出し以外のマス）。チップと同じ系統で、曜日色より優先して見せる */
+export function workTypeColumnBg(index: number): string {
+  const palette = ['bg-amber-100', 'bg-sky-100', 'bg-emerald-100', 'bg-fuchsia-100']
+  return palette[index % palette.length]
+}
+
+/**
+ * マスの下の工種タグ（2026-09-25 社長: 小さくて読めない・押せない → 12px・24px 高・色付き）。
+ * 通常フローに置く（絶対配置にしない）ので、入力欄と重ならない。
+ */
 export function WorkTypeTag({ workTypeTag, isLocked }: { workTypeTag?: WorkTypeTagProps; isLocked: boolean }) {
   if (!workTypeTag) return null
+  const current = workTypeTag.options.find(o => o.id === workTypeTag.value)
+  const cls = workTypeTag.isDuplicate ? 'bg-red-600 text-white border border-red-700' : (current?.cls || workTypeChipCls(-1))
   return (
     <select
       value={workTypeTag.value}
@@ -78,11 +113,9 @@ export function WorkTypeTag({ workTypeTag, isLocked }: { workTypeTag?: WorkTypeT
       disabled={isLocked}
       title={workTypeTag.isDuplicate
         ? 'この日は2つの工種に入力されています（要確認）。ここで工種を選び直せます'
-        : '工種（クリックで切替）'}
-      className={`absolute bottom-0 left-0 w-full text-[8px] font-bold text-center border-0 rounded-t-none appearance-none cursor-pointer leading-tight py-0
-        ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
-        ${workTypeTag.isDuplicate ? 'bg-red-600 text-white' : 'bg-slate-600/90 text-white'}
-      `}
+        : 'この日の工種（押して切替）'}
+      className={`block w-full mt-0.5 min-h-[24px] text-[12px] font-bold text-center rounded-md appearance-none cursor-pointer leading-tight py-0.5 px-0.5
+        ${isLocked ? 'opacity-60 cursor-not-allowed' : ''} ${cls}`}
     >
       {workTypeTag.options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
     </select>
@@ -204,7 +237,6 @@ export function TimeBasedCell({
         canEditNight={!isLocked && isWorking && !!onNightClick}
         onNightClick={() => onNightClick?.(wId, day)}
       />
-      <WorkTypeTag workTypeTag={workTypeTag} isLocked={isLocked} />
       <div className="flex flex-col items-center">
         {/* ステータス選択 */}
         <select
@@ -301,6 +333,7 @@ export function TimeBasedCell({
           </div>
         ) : null}
       </div>
+      <WorkTypeTag workTypeTag={workTypeTag} isLocked={isLocked} />
     </td>
   )
 }
@@ -352,7 +385,6 @@ export function LegacyCell({
         canEditNight={!isLocked && !!canOt && !!onNightClick}
         onNightClick={() => onNightClick?.(wId, day)}
       />
-      <WorkTypeTag workTypeTag={workTypeTag} isLocked={isLocked} />
       <div className="flex flex-col">
         {/* Work dropdown - 大きめ */}
         <select
@@ -425,6 +457,7 @@ export function LegacyCell({
           </div>
         )}
       </div>
+      <WorkTypeTag workTypeTag={workTypeTag} isLocked={isLocked} />
     </td>
   )
 }

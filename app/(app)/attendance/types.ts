@@ -3,6 +3,8 @@
 export interface SiteOption {
   id: string
   name: string
+  /** 親現場そのものに付いた工種名（あれば「仮設（親）」のように表示） */
+  workType?: string
   foreman?: number
   foremanName?: string
   foremanNote?: string
@@ -106,6 +108,8 @@ export interface GridData {
   //   workTypeSites が空 = この現場には工種が無い（画面は今までどおり）
   /** 選択中の現場（親）が持つ、非アーカイブの工種サイト一覧 */
   workTypeSites?: { id: string; name: string; workType: string }[]
+  /** その月の日ごとの工種指定（day（文字列）→ 工種サイト id）。日の指定 > 作業員の既定 > 親現場 */
+  dayWorkType?: Record<string, string>
   /** 作業員ごとの既定の入力先（workerId(文字列) → 工種サイト id）。未設定=親現場 */
   defaultWorkType?: Record<string, string>
   /** 外注先ごとの既定の入力先（subconId → 工種サイト id）。未設定=親現場 */
