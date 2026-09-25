@@ -151,3 +151,42 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     },
   }
 }
+
+// ─────────────────────────────────────────────
+// 書き込み（1つだけ）: 現場ごとの外注単価の上書き
+// ─────────────────────────────────────────────
+
+/**
+ * 経営ダッシュボードの「請求書の取り込み」で、請求書の単価が DEDURA＋ と違うと分かったときに、
+ * 社長がボタンで押した単価をここに書く（現場マスタの「現場別単価」と同じ場所 assign[siteId].subconRates）。
+ * 残業単価は書かない（getSubconRate 側で 日額 ÷ 8 × 1.25 を自動計算）。
+ * 書いた記録は activity に「integration」として残す。
+ */
+export async function setSubconSiteRate(input: { subconId: string; siteId: string; rate: number; reason?: string }): Promise<{ ok: true; previous: number | null } | { ok: false; error: string }> {
+  const { subconId, siteId, rate, reason } = input
+  if (!subconId || !siteId) return { ok: false, error: 'subconId と siteId が必要です' }
+  if (!Number.isInteger(rate) || rate < 5_000 || rate > 100_000) return { ok: false, error: '単価は 5,000〜100,000 円の整数で' }
+
+  const { db } = await import('@/lib/firebase')
+  const { doc, getDoc, updateDoc } = await import('@/lib/fsdb')
+  const { logActivity } = await import('@/lib/activity')
+  const ref = doc(db, 'demmen', 'main')
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return { ok: false, error: 'main が見つかりません' }
+  const data = snap.data() as { subcons?: { id: string; name: string; rate?: number }[]; sites?: { id: string; name: string }[]; assign?: Record<string, Record<string, unknown>> }
+  const sc = (data.subcons || []).find(s => s.id === subconId)
+  const site = (data.sites || []).find(s => s.id === siteId)
+  if (!sc || !site) return { ok: false, error: '外注先か現場が見つかりません' }
+
+  const assign = (data.assign || {}) as Record<string, { subconRates?: Record<string, { rate?: number; otRate?: number }> } & Record<string, unknown>>
+  const siteAssign = assign[siteId] || { workers: [], subcons: [] }
+  const current = siteAssign.subconRates || {}
+  const previous = current[subconId]?.rate ?? null
+  current[subconId] = { rate }
+  siteAssign.subconRates = current
+  assign[siteId] = siteAssign
+  // assign だけを差し替える（他のフィールドは触らない）
+  await updateDoc(ref, { assign })
+  await logActivity('integration', 'subcon.updateSiteRates', `${sc.name} の ${site.name} の単価を ${previous ?? sc.rate ?? '未設定'} → ${rate} に（経営ダッシュボードの請求書照合${reason ? `: ${reason}` : ''}）`)
+  return { ok: true, previous }
+}
