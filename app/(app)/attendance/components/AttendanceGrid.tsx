@@ -245,7 +245,7 @@ export default function AttendanceGrid({
                       const cur = dayWorkType?.[String(d.day)] || data.site.id
                       const opt = workTypeOptions.find(o => o.id === cur) || workTypeOptions[0]
                       if (data.locked || !onSetDayWorkType) {
-                        return <div className={`mt-1 w-full min-h-[24px] text-[12px] font-bold leading-tight rounded-md py-1 ${opt.cls}`}>{opt.label}</div>
+                        return <div className={`mt-1 w-full min-h-[24px] text-[12px] font-bold leading-tight rounded-md py-1 text-center ${opt.cls}`}>{opt.label}</div>
                       }
                       return (
                         <select
@@ -257,7 +257,7 @@ export default function AttendanceGrid({
                             onSetDayWorkType(d.day, to.id)
                           }}
                           title={`${d.day}日の工種（押して選ぶ）`}
-                          className={`mt-1 w-full min-h-[24px] text-[12px] font-bold leading-tight rounded-md py-1 px-0.5 appearance-none cursor-pointer shadow-sm ${opt.cls}`}
+                          className={`mt-1 w-full min-h-[24px] text-[12px] font-bold leading-tight rounded-md py-1 px-0.5 appearance-none cursor-pointer shadow-sm text-center [text-align-last:center] ${opt.cls}`}
                         >
                           {workTypeOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                         </select>

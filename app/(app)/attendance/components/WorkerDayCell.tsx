@@ -114,7 +114,7 @@ export function WorkTypeTag({ workTypeTag, isLocked }: { workTypeTag?: WorkTypeT
       title={workTypeTag.isDuplicate
         ? 'この日は2つの工種に入力されています（要確認）。ここで工種を選び直せます'
         : 'この日の工種（押して切替）'}
-      className={`block w-full mt-0.5 min-h-[24px] text-[12px] font-bold text-center rounded-md appearance-none cursor-pointer leading-tight py-0.5 px-0.5
+      className={`block w-full mt-0.5 min-h-[24px] text-[12px] font-bold text-center [text-align-last:center] rounded-md appearance-none cursor-pointer leading-tight py-0.5 px-0.5
         ${isLocked ? 'opacity-60 cursor-not-allowed' : ''} ${cls}`}
     >
       {workTypeTag.options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}

@@ -259,8 +259,8 @@ function PeerInvoiceDocument({ view }: {
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, letterSpacing: 2, color: '#1B2A4A' }}>HIBI CONSTRUCTION</div>
-              <div style={{ fontSize: 10, color: '#666' }}>株式会社日比建設</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#1B2A4A' }}>{view.issuer.name || '株式会社日比建設'}</div>
+              <div style={{ fontSize: 10, letterSpacing: 2, color: '#666' }}>{view.issuer.nameEn || 'HIBI CONSTRUCTION'}</div>
             </div>
             <div style={{ fontSize: 24, fontWeight: 800, color: '#1B2A4A' }}>請求書</div>
           </div>
