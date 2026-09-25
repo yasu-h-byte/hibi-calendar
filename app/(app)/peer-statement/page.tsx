@@ -12,6 +12,11 @@ import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import type { PeerStatement } from '@/lib/peer-statement'
 
+/** その月に発行・取り消しされた応援の請求書（app/api/peer-invoice） */
+interface PeerInvoiceSummary {
+  id: string; no: string; companyId: string; total: number; status: 'issued' | 'void'
+}
+
 const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
 function currentYm(): string {
@@ -30,16 +35,29 @@ export default function PeerStatementPage() {
   const [ym, setYm] = useState(currentYm())
   const [rows, setRows] = useState<PeerStatement[] | null>(null)
   const [err, setErr] = useState('')
+  const [invoices, setInvoices] = useState<PeerInvoiceSummary[]>([])
 
   const load = useCallback(async () => {
     if (!ready) return
     setRows(null); setErr('')
-    const res = await fetchWithAuth(`/api/peer-statement?ym=${ym}`)
-    if (!res.ok) { setErr('読み込みに失敗しました'); return }
-    const data = await res.json()
+    const [stmtRes, invRes] = await Promise.all([
+      fetchWithAuth(`/api/peer-statement?ym=${ym}`),
+      fetchWithAuth(`/api/peer-invoice?ym=${ym}`),
+    ])
+    if (!stmtRes.ok) { setErr('読み込みに失敗しました'); return }
+    const data = await stmtRes.json()
     setRows(data.statements || [])
+    if (invRes.ok) {
+      const invData = await invRes.json()
+      setInvoices(invData.invoices || [])
+    } else {
+      setInvoices([])
+    }
   }, [ready, ym])
   useEffect(() => { load() }, [load])
+
+  /** 会社の最新の発行済み請求書（取り消されていないもの） */
+  const issuedInvoiceFor = (companyId: string) => invoices.find(i => i.companyId === companyId && i.status === 'issued')
 
   const billingSum = (rows || []).reduce((s, r) => s + r.billingTotal, 0)
   const paymentSum = (rows || []).reduce((s, r) => s + r.paymentTotal, 0)
@@ -79,9 +97,22 @@ export default function PeerStatementPage() {
         <section key={r.companyId} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 space-y-3">
           <div className="flex items-baseline justify-between flex-wrap gap-2">
             <h2 className="text-base font-bold">{r.companyName}</h2>
-            <div className="text-xs text-gray-500 tabular-nums space-x-3">
+            <div className="text-xs text-gray-500 tabular-nums space-x-3 flex items-center gap-3">
               {r.billingTotal > 0 && <span className="text-blue-700 dark:text-blue-300">請求 {yen(r.billingTotal)}</span>}
               {r.paymentTotal > 0 && <span className="text-amber-700 dark:text-amber-300">支払 {yen(r.paymentTotal)}</span>}
+              {r.billingTotal > 0 && (
+                issuedInvoiceFor(r.companyId) ? (
+                  <a href={`/peer-invoice?company=${r.companyId}&ym=${ym}`}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold no-underline">
+                    ✓ 発行済み {issuedInvoiceFor(r.companyId)!.no}
+                  </a>
+                ) : (
+                  <a href={`/peer-invoice?company=${r.companyId}&ym=${ym}`}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-hibi-navy text-white font-bold no-underline hover:bg-hibi-light">
+                    請求書を作る
+                  </a>
+                )
+              )}
             </div>
           </div>
 
