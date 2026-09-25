@@ -14,7 +14,7 @@
  */
 import { timingSafeEqual } from 'node:crypto'
 import type { NextRequest } from 'next/server'
-import { compute, getMainData, getAttData, getAttDataCached, isClosedMonthYm, getBillTotal } from '@/lib/compute'
+import { compute, getMainData, getAttData, getAttDataCached, isClosedMonthYm, getBillTotal, getSubconRate } from '@/lib/compute'
 import { applyPayrollCosts } from '@/lib/payroll-cost'
 import { resolveSiteParties, type CompanyLike } from '@/lib/companies'
 import { calendarSiteIdOf } from '@/lib/site-hierarchy'
@@ -60,7 +60,11 @@ export interface IntegrationSubcon {
   otCount: number
   /** 支払見込み（税抜・円）= 出面 × 単価 */
   cost: number
-  sites: { siteId: string; siteName: string; workDays: number; otCount: number; cost: number }[]
+  /** 取引先マスタの単価（税抜・1人工あたり）と残業単価（1人あたり） */
+  rate: number
+  otRate: number
+  /** 現場ごと。rate/otRate は現場・月の上書きを反映した、実際に使った単価 */
+  sites: { siteId: string; siteName: string; workDays: number; otCount: number; cost: number; rate: number; otRate: number }[]
 }
 
 export interface IntegrationMonth {
@@ -120,9 +124,12 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     const breakdown: IntegrationSubcon['sites'] = []
     for (const s of main.sites) {
       const ss = c.siteSubcons[`${s.id}_${sc.id}`]
-      if (ss && ss.work > 0) breakdown.push({ siteId: s.id, siteName: s.name, workDays: r1(ss.work), otCount: r1(ss.ot), cost: Math.round(ss.cost) })
+      if (ss && ss.work > 0) {
+        const r = getSubconRate(main, sc.id, s.id, ym)
+        breakdown.push({ siteId: s.id, siteName: s.name, workDays: r1(ss.work), otCount: r1(ss.ot), cost: Math.round(ss.cost), rate: r.rate, otRate: r.otRate })
+      }
     }
-    subcons.push({ id: sc.id, name: sc.name, workDays: r1(cd.work), otCount: r1(cd.ot), cost: Math.round(cd.cost), sites: breakdown })
+    subcons.push({ id: sc.id, name: sc.name, workDays: r1(cd.work), otCount: r1(cd.ot), cost: Math.round(cd.cost), rate: sc.rate, otRate: sc.otRate, sites: breakdown })
   }
 
   const peerBilling = buildPeerStatements(main, c, att.d, att.sd, ym)
