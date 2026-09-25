@@ -82,6 +82,11 @@ export async function POST(request: NextRequest) {
       if (companyGroup && String(companyGroup).trim()) {
         newSubcon.companyGroup = String(companyGroup).trim()
       }
+      // 応援の請求書（2026-09-25）の宛名用データ。元請・一次・同業のみ意味を持つ
+      if (body.postal && String(body.postal).trim()) newSubcon.postal = String(body.postal).trim()
+      if (body.address && String(body.address).trim()) newSubcon.address = String(body.address).trim()
+      if (body.honorific && String(body.honorific).trim()) newSubcon.honorific = String(body.honorific).trim()
+      if (body.paymentTerms && typeof body.paymentTerms === 'object') newSubcon.paymentTerms = body.paymentTerms
       subcons.push(newSubcon)
       await updateDoc(docRef, { subcons })
       await logActivity('admin', 'subcon.add', `${name} を追加`)

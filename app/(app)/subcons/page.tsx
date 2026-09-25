@@ -5,6 +5,12 @@ import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { COMPANY_ROLES, companyRoles, canBorrowFrom, type CompanyRole } from '@/lib/companies'
 
+interface PaymentTerms {
+  closing: 'end'
+  payMonthOffset: 1 | 2
+  payDay: number | 'end'
+}
+
 interface Subcon {
   id: string; name: string; type: string; rate: number; otRate: number; note: string
   /** 兼業業者を1社としてまとめるためのグループ名（任意）
@@ -12,13 +18,21 @@ interface Subcon {
   companyGroup?: string
   /** 役割（元請/一次/同業/外注）。2026-09-15 取引先マスタ化 */
   roles?: string[]
+  /** 応援の請求書（2026-09-25）の宛名用。gc/prime/peer のみ編集画面に表示 */
+  postal?: string
+  address?: string
+  honorific?: string
+  paymentTerms?: PaymentTerms
 }
 
 interface SiteMinimal {
   id: string; name: string
 }
 
-const EMPTY_FORM = { name: '', type: '鳶業者', rate: '', otRate: '', note: '', companyGroup: '', roles: ['peer'] as string[] }
+const EMPTY_FORM = {
+  name: '', type: '鳶業者', rate: '', otRate: '', note: '', companyGroup: '', roles: ['peer'] as string[],
+  postal: '', address: '', honorific: '御中', payMonthOffset: '1' as '1' | '2', payDay: 'end' as string,
+}
 
 export default function SubconsPage() {
   const { ready } = useAuthPassword()
@@ -61,7 +75,12 @@ export default function SubconsPage() {
   }
   const openEdit = (sc: Subcon) => {
     setEditId(sc.id)
-    setForm({ name: sc.name, type: sc.type, rate: String(sc.rate || ''), otRate: String(sc.otRate || ''), note: sc.note || '', companyGroup: sc.companyGroup || '', roles: companyRoles(sc) })
+    setForm({
+      name: sc.name, type: sc.type, rate: String(sc.rate || ''), otRate: String(sc.otRate || ''), note: sc.note || '', companyGroup: sc.companyGroup || '', roles: companyRoles(sc),
+      postal: sc.postal || '', address: sc.address || '', honorific: sc.honorific || '御中',
+      payMonthOffset: (sc.paymentTerms?.payMonthOffset === 2 ? '2' : '1'),
+      payDay: sc.paymentTerms?.payDay === undefined ? 'end' : String(sc.paymentTerms.payDay),
+    })
     // 現在の現場別単価を初期値にセット
     const rateMap: Record<string, string> = {}
     const existingRates = subconRates[sc.id] || {}
@@ -77,9 +96,15 @@ export default function SubconsPage() {
     if (!form.roles.length) { alert('役割を1つ以上選んでください'); return }
     setSaving(true)
     try {
+      // 元請・一次・同業のみ、応援の請求書の宛名用データを一緒に送る
+      const isParty = form.roles.includes('gc') || form.roles.includes('prime') || form.roles.includes('peer')
+      const partyFields = isParty ? {
+        postal: form.postal, address: form.address, honorific: form.honorific || '御中',
+        paymentTerms: { closing: 'end' as const, payMonthOffset: Number(form.payMonthOffset) as 1 | 2, payDay: form.payDay === 'end' ? 'end' as const : (Number(form.payDay) || 'end' as const) },
+      } : {}
       const body = editId
-        ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup, roles: form.roles }
-        : { action: 'add', ...form }
+        ? { action: 'update', id: editId, name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup, roles: form.roles, ...partyFields }
+        : { action: 'add', name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup, roles: form.roles, ...partyFields }
       const res = await postJson('/api/subcons', body)
       if (!res.ok) {
         alert(res.error || (res.data as { error?: string } | null)?.error || '保存に失敗しました'); setSaving(false); return
@@ -332,6 +357,37 @@ export default function SubconsPage() {
                   ))}
                 </div>
               </div>
+              {/* 応援の請求書（2026-09-25）の宛名用データ。元請・一次・同業のみ */}
+              {(form.roles.includes('gc') || form.roles.includes('prime') || form.roles.includes('peer')) && (
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-lg p-3 border border-emerald-200 dark:border-emerald-800 space-y-2">
+                  <label className="text-xs text-emerald-700 dark:text-emerald-300 block font-medium">
+                    請求書の宛名（応援の請求書用・任意）
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input value={form.postal} onChange={e => setForm({ ...form, postal: e.target.value })} placeholder="郵便番号 123-4567"
+                      className="col-span-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
+                    <input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="住所"
+                      className="col-span-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 items-center">
+                    <input value={form.honorific} onChange={e => setForm({ ...form, honorific: e.target.value })} placeholder="敬称（御中）"
+                      className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
+                    <select value={form.payMonthOffset} onChange={e => setForm({ ...form, payMonthOffset: e.target.value as '1' | '2' })}
+                      className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm">
+                      <option value="1">翌月払い</option>
+                      <option value="2">翌々月払い</option>
+                    </select>
+                    <select value={form.payDay} onChange={e => setForm({ ...form, payDay: e.target.value })}
+                      className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm">
+                      <option value="end">月末払い</option>
+                      {[5, 10, 15, 20, 25].map(d => <option key={d} value={String(d)}>{d}日払い</option>)}
+                    </select>
+                  </div>
+                  <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/70">
+                    月末締め固定。支払日が土日祝なら前営業日に繰り上げて請求書に印字します。
+                  </p>
+                </div>
+              )}
               {(form.roles.includes('peer') || form.roles.includes('subcon')) && (<>
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">区分</label>

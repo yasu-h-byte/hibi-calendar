@@ -8,6 +8,26 @@ interface DefaultRates {
   baseDays: number
 }
 
+/** 応援の請求書（/peer-invoice）に印字する自社情報。docs/peer-invoice.md 参照 */
+interface CompanyProfile {
+  name: string
+  nameEn: string
+  postal: string
+  address: string
+  tel: string
+  fax: string
+  email: string
+  invoiceRegNo: string
+  bank: { bankName: string; branch: string; accountType: '普通' | '当座'; accountNo: string; holder: string }
+  invoicePrefix: string
+}
+
+const EMPTY_COMPANY_PROFILE: CompanyProfile = {
+  name: '株式会社日比建設', nameEn: 'HIBI CONSTRUCTION', postal: '', address: '', tel: '', fax: '', email: '',
+  invoiceRegNo: '', bank: { bankName: '', branch: '', accountType: '普通', accountNo: '', holder: '' },
+  invoicePrefix: 'HC',
+}
+
 interface BackupPreview {
   workerCount: number
   siteCount: number
@@ -165,6 +185,10 @@ export default function SettingsPage() {
   // Default rates
   const [rates, setRates] = useState<DefaultRates>({ tobiRate: 0, dokoRate: 0, baseDays: 20 })
 
+  // 請求書の自社情報（応援の請求書用）
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(EMPTY_COMPANY_PROFILE)
+  const [savingProfile, setSavingProfile] = useState(false)
+
   // User passwords
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({})
   const [pwWorkers, setPwWorkers] = useState<{ id: number; name: string; jobType: string }[]>([])
@@ -230,6 +254,16 @@ export default function SettingsPage() {
     } finally {
       setLoading(false)
     }
+  }, [password])
+
+  const fetchCompanyProfile = useCallback(async () => {
+    if (!password) return
+    try {
+      const res = await fetch('/api/settings?action=getCompanyProfile', { headers: { 'x-admin-password': password } })
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.companyProfile) setCompanyProfile({ ...EMPTY_COMPANY_PROFILE, ...data.companyProfile, bank: { ...EMPTY_COMPANY_PROFILE.bank, ...(data.companyProfile.bank || {}) } })
+    } catch { /* ignore */ }
   }, [password])
 
   const fetchUserPasswords = useCallback(async () => {
@@ -337,8 +371,8 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    if (password) { fetchRates(); fetchUserPasswords() }
-  }, [password, fetchRates, fetchUserPasswords])
+    if (password) { fetchRates(); fetchUserPasswords(); fetchCompanyProfile() }
+  }, [password, fetchRates, fetchUserPasswords, fetchCompanyProfile])
 
   // Fetch activity when tab is switched or filters change
   useEffect(() => {
@@ -449,6 +483,23 @@ export default function SettingsPage() {
       showMessage('error', '保存に失敗しました')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveCompanyProfile = async () => {
+    setSavingProfile(true)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'saveCompanyProfile', companyProfile }),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      showMessage('success', '請求書の自社情報を保存しました')
+    } catch {
+      showMessage('error', '保存に失敗しました（管理者パスワードでログインしているか確認してください）')
+    } finally {
+      setSavingProfile(false)
     }
   }
 
@@ -733,6 +784,116 @@ export default function SettingsPage() {
               className="mt-4 w-full bg-hibi-navy text-white py-2.5 rounded-lg font-medium hover:bg-hibi-navy/90 disabled:opacity-50 transition"
             >
               {saving ? '保存中...' : '保存'}
+            </button>
+          </div>
+
+          {/* 請求書の自社情報（応援の請求書 /peer-invoice 用） */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
+            <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">請求書の自社情報</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              「応援の請求書」（同業者へ送る請求書。/peer-statement から作成）に印字する発行者情報です。
+              住所・登録番号・振込先は未入力のままにしています。届いた請求書を見ながらご自身で入力してください。
+            </p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">会社名</label>
+                  <input value={companyProfile.name} onChange={e => setCompanyProfile(p => ({ ...p, name: e.target.value }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">会社名（英字・帳票用）</label>
+                  <input value={companyProfile.nameEn} onChange={e => setCompanyProfile(p => ({ ...p, nameEn: e.target.value }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">郵便番号</label>
+                  <input value={companyProfile.postal} onChange={e => setCompanyProfile(p => ({ ...p, postal: e.target.value }))}
+                    placeholder="例: 123-4567"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">住所</label>
+                  <input value={companyProfile.address} onChange={e => setCompanyProfile(p => ({ ...p, address: e.target.value }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">電話番号</label>
+                  <input value={companyProfile.tel} onChange={e => setCompanyProfile(p => ({ ...p, tel: e.target.value }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">FAX（任意）</label>
+                  <input value={companyProfile.fax} onChange={e => setCompanyProfile(p => ({ ...p, fax: e.target.value }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">メール（任意）</label>
+                  <input value={companyProfile.email} onChange={e => setCompanyProfile(p => ({ ...p, email: e.target.value }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">適格請求書発行事業者の登録番号</label>
+                  <input value={companyProfile.invoiceRegNo} onChange={e => setCompanyProfile(p => ({ ...p, invoiceRegNo: e.target.value }))}
+                    placeholder="例: T1234567890123"
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm font-mono" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">請求書番号の接頭辞</label>
+                  <input value={companyProfile.invoicePrefix} onChange={e => setCompanyProfile(p => ({ ...p, invoicePrefix: e.target.value.toUpperCase() }))}
+                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">振込先</label>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">銀行名</label>
+                    <input value={companyProfile.bank.bankName} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, bankName: e.target.value } }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">支店名</label>
+                    <input value={companyProfile.bank.branch} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, branch: e.target.value } }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">種別</label>
+                    <select value={companyProfile.bank.accountType} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, accountType: e.target.value as '普通' | '当座' } }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
+                      <option value="普通">普通</option>
+                      <option value="当座">当座</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">口座番号</label>
+                    <input value={companyProfile.bank.accountNo} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, accountNo: e.target.value } }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">口座名義</label>
+                    <input value={companyProfile.bank.holder} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, holder: e.target.value } }))}
+                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSaveCompanyProfile}
+              disabled={savingProfile}
+              className="mt-4 w-full bg-hibi-navy text-white py-2.5 rounded-lg font-medium hover:bg-hibi-navy/90 disabled:opacity-50 transition"
+            >
+              {savingProfile ? '保存中...' : '保存'}
             </button>
           </div>
 

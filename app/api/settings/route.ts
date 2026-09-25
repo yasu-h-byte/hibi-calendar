@@ -50,6 +50,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ userPasswords })
     }
 
+    if (action === 'getCompanyProfile') {
+      const companyProfile = result.data.companyProfile || null
+      return NextResponse.json({ companyProfile })
+    }
+
     const defaultRates = (result.data.defaultRates as { tobiRate: number; dokoRate: number; baseDays?: number }) || { tobiRate: 0, dokoRate: 0 }
     return NextResponse.json({ defaultRates: { ...defaultRates, baseDays: defaultRates.baseDays ?? 20 } })
   } catch (error) {
@@ -123,6 +128,23 @@ export async function POST(request: NextRequest) {
       //   condition があった。defaultRates のみピンポイント更新に変更（2026-05-07 修正）。
       await updateDoc(docRef, { defaultRates: { tobiRate, dokoRate, baseDays: newBaseDays } })
       await logActivity('admin', 'rates.default', `鳶 ¥${oldRates.tobiRate}→¥${tobiRate}, 土工 ¥${oldRates.dokoRate}→¥${dokoRate}, ベース日数 ${oldRates.baseDays ?? 20}→${newBaseDays}`)
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'saveCompanyProfile') {
+      // 応援の請求書（docs/peer-invoice.md）の発行者情報。銀行口座を含むため管理者パスワード限定
+      const tier = await getAdminTier(request)
+      if (tier !== 'super-admin' && tier !== 'admin') {
+        return NextResponse.json({ error: 'この操作には管理者パスワードが必要です' }, { status: 403 })
+      }
+      const { companyProfile } = body
+      if (!companyProfile || typeof companyProfile !== 'object') {
+        return NextResponse.json({ error: 'companyProfile required' }, { status: 400 })
+      }
+      const docRef = doc(db, 'demmen', 'main')
+      const { updateDoc } = await import('@/lib/fsdb')
+      await updateDoc(docRef, { companyProfile })
+      await logActivity('admin', 'settings.companyProfile', `請求書の自社情報を更新 (${tier})`)
       return NextResponse.json({ success: true })
     }
 

@@ -81,6 +81,44 @@ export interface MainData {
   nightDays: Record<string, number[]>
   // 2026-05-13: 旧 main.homeLeaves 配列は廃止（homeLongLeave コレクションに統合）
   //   フィールド自体は demmen/main 上に空配列として残るが、production 読み取りはしない。
+  /**
+   * 応援の請求書（lib/peer-invoice.ts）に載せる自社情報（2026-09-25）。
+   * 未設定（null/undefined）なら空欄のまま印刷される — 住所・登録番号・口座は社長が settings
+   * 画面で自分で入力するまで**先回りで埋めない**（代表指示）。
+   */
+  companyProfile?: CompanyProfile | null
+}
+
+/** 応援の請求書に印字する自社（発行者）情報。settings 画面「請求書の自社情報」で編集 */
+export interface CompanyProfile {
+  name: string
+  nameEn: string
+  postal: string
+  address: string
+  tel: string
+  fax?: string
+  email?: string
+  /** 適格請求書発行事業者の登録番号 "T" + 13桁 */
+  invoiceRegNo: string
+  bank: {
+    bankName: string
+    branch: string
+    accountType: '普通' | '当座'
+    accountNo: string
+    holder: string
+  }
+  /** 請求書番号の接頭辞。既定 "HC" */
+  invoicePrefix: string
+}
+
+/** 取引先の支払条件（月末締め固定・何ヶ月後の何日払いか） */
+export interface CompanyPaymentTerms {
+  /** 締め日。当面は月末固定のみ */
+  closing: 'end'
+  /** 対象月の何ヶ月後に払うか（1=翌月払い、2=翌々月払い） */
+  payMonthOffset: 1 | 2
+  /** 支払日。数値 or 'end'（月末）。休日なら前営業日に繰り上げ */
+  payDay: number | 'end'
 }
 
 export interface RawWorker {
@@ -125,6 +163,14 @@ export interface RawSite {
 
 export interface RawSubcon {
   id: string; name: string; type: string; rate: number; otRate: number; note: string
+  /**
+   * 応援の請求書（2026-09-25）の宛名用データ。gc/prime/peer の取引先のみ編集画面に表示。
+   * 郵便番号・住所・敬称（既定「御中」）・支払条件。未設定の会社は請求書を作れない。
+   */
+  postal?: string
+  address?: string
+  honorific?: string
+  paymentTerms?: CompanyPaymentTerms
 }
 
 export interface PLRecord {
@@ -195,6 +241,7 @@ async function loadMainData(): Promise<MainData> {
     defaultRates: (d.defaultRates || {}) as { tobiRate?: number; dokoRate?: number },
     mforeman: (d.mforeman || {}) as Record<string, { foreman?: number; wid?: number; note?: string }>,
     nightDays: (d.nightDays || {}) as Record<string, number[]>,
+    companyProfile: (d.companyProfile || null) as CompanyProfile | null,
   }
 }
 
