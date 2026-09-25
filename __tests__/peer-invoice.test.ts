@@ -143,3 +143,114 @@ describe('buildPeerInvoiceDraft', () => {
     expect(buildPeerInvoiceDraft(main, c, attD, attSD, ym, 'no-such-company')).toBeNull()
   })
 })
+
+// ─────────────────────────────────────────────
+// 工種サイト（親現場の下の「鉄骨」「仮設」など単価が違う工事の出し分け・2026-09-25）
+// ─────────────────────────────────────────────
+describe('buildPeerInvoiceDraft（工種サイトで単価が違う応援現場・畠山組パターン）', () => {
+  const ym = '202609'
+  // 親現場「川崎」の下に、単価の違う「鉄骨」「仮設」の工種サイトを作る。
+  // 親現場自身には出面を一切入れない（畠山組・川崎 応援と同じ形）。
+  const main = buildMain({
+    workers: [
+      { id: 30, name: '梶原', org: 'hibi', visa: 'none', job: 'tobi', rate: 18000, otMul: 1.25, hireDate: '2020-01-01', token: '' },
+    ],
+    sites: [
+      {
+        id: 'kawasaki', name: '川崎', start: '', end: '', foreman: 0, archived: false,
+        siteType: 'support', ownerId: 'peerco', primeId: undefined, gcId: undefined,
+      },
+      // 工種サイトは /api/sites が親保存時に siteType/ownerId 等（INHERITED_FIELDS）を
+      // 書き写す（docs/firestore.md）。テストの main もその後の状態を再現する。
+      {
+        id: 'kawasaki_tekkotsu', name: '川崎（鉄骨）', parentId: 'kawasaki', workType: '鉄骨',
+        start: '', end: '', foreman: 0, archived: false,
+        siteType: 'support', ownerId: 'peerco', primeId: undefined, gcId: undefined,
+        rates: [{ from: '2026-01', tobiRate: 30000, dokoRate: 20000 }],
+      },
+      {
+        id: 'kawasaki_kasetsu', name: '川崎（仮設）', parentId: 'kawasaki', workType: '仮設',
+        start: '', end: '', foreman: 0, archived: false,
+        siteType: 'support', ownerId: 'peerco', primeId: undefined, gcId: undefined,
+        rates: [{ from: '2026-01', tobiRate: 24000, dokoRate: 20000 }],
+      },
+    ],
+    subcons: [
+      {
+        id: 'peerco', name: '畠山組', type: '鳶業者', rate: 25000, otRate: 4000, note: '', roles: ['peer'],
+        postal: '111-2222', address: '東京都○○区2-2-2', honorific: '御中',
+        paymentTerms: { closing: 'end', payMonthOffset: 1, payDay: 'end' },
+      },
+    ],
+  })
+
+  function attKeyEntries(siteId: string, workerId: number, ymv: string, days: number[]): Record<string, AttendanceEntry> {
+    const out: Record<string, AttendanceEntry> = {}
+    for (const d of days) out[attKey(siteId, workerId, ymv, d)] = { w: 1 }
+    return out
+  }
+
+  // 梶原さん: 1〜2日は鉄骨、3日は仮設で工事の種類を切り分けて入力（今回の指示のシナリオ）
+  const attD: Record<string, AttendanceEntry> = {
+    ...attKeyEntries('kawasaki_tekkotsu', 30, ym, [1, 2]),
+    ...attKeyEntries('kawasaki_kasetsu', 30, ym, [3]),
+  }
+  const attSD: Record<string, { n: number; on: number }> = {}
+
+  const y = parseInt(ym.slice(0, 4)), m = parseInt(ym.slice(4, 6))
+  const c = compute(main, attD, attSD, [{ y, m }])
+
+  test('工種ごとに別の行・別の単価になる（合計は buildPeerStatements と1円までズレない）', () => {
+    const stmt = buildPeerStatements(main, c, attD, attSD, ym).find(s => s.companyId === 'peerco')!
+    const draft = buildPeerInvoiceDraft(main, c, attD, attSD, ym, 'peerco')!
+
+    expect(draft.subtotal).toBe(stmt.billingTotal)
+    expect(draft.lines.reduce((s, l) => s + l.amount, 0)).toBe(stmt.billingTotal)
+
+    expect(draft.lines).toHaveLength(2)
+    const tekkotsu = draft.lines.find(l => l.siteId === 'kawasaki_tekkotsu')!
+    const kasetsu = draft.lines.find(l => l.siteId === 'kawasaki_kasetsu')!
+    expect(tekkotsu.role).toBe('鳶')
+    expect(tekkotsu.days).toBe(2)
+    expect(tekkotsu.rate).toBe(30000)
+    expect(tekkotsu.amount).toBe(2 * 30000)
+    expect(tekkotsu.siteName).toBe('川崎（鉄骨）')
+    expect(kasetsu.role).toBe('鳶')
+    expect(kasetsu.days).toBe(1)
+    expect(kasetsu.rate).toBe(24000)
+    expect(kasetsu.amount).toBe(1 * 24000)
+    expect(kasetsu.siteName).toBe('川崎（仮設）')
+
+    expect(draft.subtotal).toBe(2 * 30000 + 1 * 24000)
+  })
+
+  test('出面明細は工種ごとに別テーブルになり、出面が無い親現場（川崎）の行・明細は出ない', () => {
+    const draft = buildPeerInvoiceDraft(main, c, attD, attSD, ym, 'peerco')!
+
+    expect(draft.detail).toHaveLength(2)
+    const siteIds = draft.detail.map(d => d.siteId).sort()
+    expect(siteIds).toEqual(['kawasaki_kasetsu', 'kawasaki_tekkotsu'])
+    expect(draft.detail.some(d => d.siteId === 'kawasaki')).toBe(false)
+    expect(draft.lines.some(l => l.siteId === 'kawasaki')).toBe(false)
+
+    const tekkotsuDetail = draft.detail.find(d => d.siteId === 'kawasaki_tekkotsu')!
+    expect(tekkotsuDetail.siteName).toBe('川崎（鉄骨）')
+    expect(tekkotsuDetail.rows.map(r => r.label)).toEqual(['梶原'])
+    expect(tekkotsuDetail.siteTotal).toBe(2)
+    expect(tekkotsuDetail.rows[0].cells[1]?.md).toBe(1)
+    expect(tekkotsuDetail.rows[0].cells[2]?.md).toBe(1)
+    expect(tekkotsuDetail.rows[0].cells[3]).toBeUndefined()
+
+    const kasetsuDetail = draft.detail.find(d => d.siteId === 'kawasaki_kasetsu')!
+    expect(kasetsuDetail.siteName).toBe('川崎（仮設）')
+    expect(kasetsuDetail.rows.map(r => r.label)).toEqual(['梶原'])
+    expect(kasetsuDetail.siteTotal).toBe(1)
+    expect(kasetsuDetail.rows[0].cells[3]?.md).toBe(1)
+
+    // 明細の行合計を足すと、それぞれの請求書本体の人工に一致する
+    const tekkotsuLine = draft.lines.find(l => l.siteId === 'kawasaki_tekkotsu')!
+    const kasetsuLine = draft.lines.find(l => l.siteId === 'kawasaki_kasetsu')!
+    expect(tekkotsuDetail.siteTotal).toBe(tekkotsuLine.days)
+    expect(kasetsuDetail.siteTotal).toBe(kasetsuLine.days)
+  })
+})
