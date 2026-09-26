@@ -13,7 +13,8 @@ function normalizeRoles(v: unknown): string[] | undefined {
 }
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 2026-09-26: 読み取りも権限表どおり（lib/permissions.ts masters.view）。旧: ログインしていれば職長でも読めた
+  { const denied = await requireCap(request, 'masters.view'); if (denied) return denied }
   try {
     const snap = await getDoc(doc(db, 'demmen', 'main'))
     if (!snap.exists()) return NextResponse.json({ subcons: [], siteAssign: {}, sites: [] })

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { getMainData, getMultiMonthAttData, compute } from '@/lib/compute'
 import { buildPeerStatements } from '@/lib/peer-statement'
 
@@ -8,7 +8,8 @@ import { buildPeerStatements } from '@/lib/peer-statement'
  * 出面の実績から、応援現場の請求見込み（同業者へ）と、応援をもらった分の支払見込み（同業者・外注へ）を返す。
  */
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 2026-09-26: 読み取りも権限表どおり（lib/permissions.ts invoice.view）。旧: ログインしていれば職長でも読めた
+  { const denied = await requireCap(request, 'invoice.view'); if (denied) return denied }
   const ym = request.nextUrl.searchParams.get('ym') || ''
   if (!/^\d{6}$/.test(ym)) return NextResponse.json({ error: 'ym (YYYYMM) required' }, { status: 400 })
   try {

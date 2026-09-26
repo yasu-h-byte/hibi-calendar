@@ -128,9 +128,8 @@ interface HomeLeaveRecord {
 
 export async function GET(request: NextRequest) {
   try {
-    if (!await checkApiAuth(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // 2026-09-26: 読み取りも権限表どおり（lib/permissions.ts leave.view）。旧: ログインしていれば職長でも読めた
+    { const denied = await requireCap(request, 'leave.view'); if (denied) return denied }
 
     // homeLongLeave コレクションから approved のものだけ取得
     // workerName は人員マスタから都度ルックアップして最新名を返す

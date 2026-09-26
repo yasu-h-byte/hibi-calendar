@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, getCallerPermRole } from '@/lib/auth'
+import { roleCan } from '@/lib/permissions'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from '@/lib/fsdb'
 import { getMainData } from '@/lib/compute'
@@ -166,6 +167,25 @@ export async function GET(request: NextRequest) {
     // 評価設定
     stage = 'get-settings'
     const settings = await getEvaluationSettings()
+
+    // 2026-09-26: 評価の中身（ほかの評価者の点数・最終点・昇給額）は wage.view（事業責任者・役員・代表）だけ。
+    //   職長など評価者本人には、自分の出したレビューだけを残す（評価入力に必要な分）。旧: 全員分が見えた
+    stage = 'shape-by-role'
+    const callerRole = await getCallerPermRole(request)
+    if (!roleCan(callerRole, 'wage.view')) {
+      const me = await getApiAuthUser(request)
+      const myId = me.authorized && typeof me.actor === 'number' ? me.actor : -1
+      const HIDDEN = ['finalScores', 'finalComment', 'manualScore', 'totalScore', 'rank', 'raiseAmount', 'evaluatorWeights'] as const
+      evaluations = evaluations
+        // 旧形式（評価者1人・scores 直下）は自分が評価者のものだけ
+        .filter(e => { const x = e as { evaluatorId?: number; reviews?: unknown }; return Array.isArray(x.reviews) || x.evaluatorId === myId })
+        .map(e => {
+          const o: Record<string, unknown> = { ...e }
+          for (const k of HIDDEN) delete o[k]
+          if (Array.isArray(o.reviews)) o.reviews = (o.reviews as { evaluatorId: number }[]).filter(r => r.evaluatorId === myId)
+          return o as typeof e
+        })
+    }
 
     stage = 'response'
     return NextResponse.json({

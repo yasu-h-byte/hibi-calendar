@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, getApiRole, requireExecutiveAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, getApiRole, requireExecutiveAuth, requireCap } from '@/lib/auth'
 import { getMainData, getMultiMonthAttData, compute } from '@/lib/compute'
 import {
   resolveInvoiceDraft, requestPeerInvoice, approvePeerInvoice, rejectPeerInvoice, listPeerInvoicesForYm, getPeerInvoicesForCompanyYm, issuePeerInvoice, voidPeerInvoice,
@@ -20,7 +20,8 @@ import {
  * 承認フロー: 事務（森田さん）が作って申請 → 政仁さんが承認（2026-09-26 代表指示）
  */
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 2026-09-26: 読み取りも権限表どおり（lib/permissions.ts invoice.view）。旧: ログインしていれば職長でも読めた
+  { const denied = await requireCap(request, 'invoice.view'); if (denied) return denied }
   const ym = request.nextUrl.searchParams.get('ym') || ''
   if (!/^\d{6}$/.test(ym)) return NextResponse.json({ error: 'ym (YYYYMM) required' }, { status: 400 })
   const companyId = request.nextUrl.searchParams.get('companyId')

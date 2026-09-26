@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, getCallerPermRole } from '@/lib/auth'
+import { roleCan } from '@/lib/permissions'
 import { getWorkers } from '@/lib/workers'
 import {
   addWorker,
@@ -44,7 +45,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const workers = await getWorkers()
-    return NextResponse.json({ workers })
+    // 2026-09-26: 給与欄は workers.view（事務所の人）だけ、電話URLのトークンは workers.edit（事務・代表）だけに返す。
+    //   旧: 職長の画面（評価入力）からも全員の時給・月給・電話URLが取れた
+    const role = await getCallerPermRole(request)
+    const canSeePay = roleCan(role, 'workers.view')
+    const canSeeToken = roleCan(role, 'workers.edit')
+    const PAY_KEYS = ['rate', 'hourlyRate', 'hourlyRateFrom', 'prevHourlyRate', 'salary', 'otMul', 'jpGrade', 'jpStep', 'payrollNo', 'children', 'nonSmoker', 'birthDate', 'useOldRules'] as const
+    const shaped = workers.map(w => {
+      const o: Record<string, unknown> = { ...w }
+      if (!canSeePay) for (const k of PAY_KEYS) delete o[k]
+      if (!canSeeToken) delete o.token
+      return o
+    })
+    return NextResponse.json({ workers: shaped })
   } catch (error) {
     console.error('Failed to fetch workers:', error)
     return NextResponse.json({ error: 'Failed to fetch workers' }, { status: 500 })

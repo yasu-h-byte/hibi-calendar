@@ -1382,7 +1382,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 2026-09-26: 読み取りも権限表どおり（lib/permissions.ts leave.view）。旧: ログインしていれば職長でも読めた
+  { const denied = await requireCap(request, 'leave.view'); if (denied) return denied }
 
   const calendarMode = request.nextUrl.searchParams.get('calendar') === 'true'
   const debugMode = request.nextUrl.searchParams.get('debug') === 'true'

@@ -8,9 +8,8 @@ import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: 読み取りも権限表どおり（lib/permissions.ts monthly.view）。旧: ログインしていれば職長でも読めた
+  { const denied = await requireCap(request, 'monthly.view'); if (denied) return denied }
 
   const { searchParams } = new URL(request.url)
   const ym = searchParams.get('ym')

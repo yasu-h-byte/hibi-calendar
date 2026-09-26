@@ -167,10 +167,8 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // 管理者/事務: 全外国人スタッフ一覧
-    if (!await checkApiAuth(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // 管理者/事務: 全スタッフ一覧（2026-09-26: 権限表の toolBudget.view。旧: 職長でも読めた）
+    { const denied = await requireCap(request, 'toolBudget.view'); if (denied) return denied }
 
     const tbData = await getToolBudgetData()
 

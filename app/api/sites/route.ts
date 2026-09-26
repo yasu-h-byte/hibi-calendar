@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, requireCap } from '@/lib/auth'
+import { checkApiAuth, requireCap, getCallerPermRole } from '@/lib/auth'
+import { roleCan } from '@/lib/permissions'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
@@ -143,6 +144,17 @@ export async function GET(request: NextRequest) {
 
     const defaultRates = (data.defaultRates || { tobiRate: 38000, dokoRate: 30000 }) as { tobiRate: number; dokoRate: number }
 
+    // 2026-09-26: 単価（受取・常用・外注）は masters.view（事務所の人）だけ。職長の出面画面には現場名・工期・勤務時間だけ
+    if (!roleCan(await getCallerPermRole(request), 'masters.view')) {
+      return NextResponse.json({
+        sites: sites.map(s => ({ ...s, tobiRate: 0, dokoRate: 0, rates: [] })),
+        assign: Object.fromEntries(Object.entries(assign).map(([k, v]) => [k, { workers: v.workers, subcons: v.subcons }])),
+        workers,
+        subcons: subcons.map(sc => ({ id: sc.id, name: sc.name, type: sc.type })),
+        mforeman,
+        defaultRates: { tobiRate: 0, dokoRate: 0 },
+      })
+    }
     return NextResponse.json({ sites, assign, workers, subcons, mforeman, defaultRates })
   } catch (error) {
     console.error('Failed to fetch sites:', error)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs, doc, getDoc } from '@/lib/fsdb'
 import {
@@ -302,9 +302,8 @@ async function computeForeignWorkerRates(
 // --- Main handler ---
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: 読み取りも権限表どおり（lib/permissions.ts dashboard.view）。旧: ログインしていれば職長でも読めた
+  { const denied = await requireCap(request, 'dashboard.view'); if (denied) return denied }
 
   const ym = request.nextUrl.searchParams.get('ym')
   if (!ym || !/^\d{6}$/.test(ym)) {

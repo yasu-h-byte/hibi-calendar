@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { isForemanTokenShape, verifyForemanToken } from '@/lib/session-token'
-import { CAPABILITIES, permRoleOf, roleCan, type Capability } from '@/lib/permissions'
+import { CAPABILITIES, permRoleOf, roleCan, type Capability, type PermRole } from '@/lib/permissions'
 import { mapRawWorkers } from '@/lib/workers'
 
 // 個人パスワードのキャッシュ（APIリクエストごとにFirestore読み取りを避ける）
@@ -248,6 +248,22 @@ export async function requireSuperAdmin(request: NextRequest): Promise<Response 
   if (!auth.authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (auth.actor !== 'super-admin') return NextResponse.json({ error: 'この操作は代表のみ実行できます' }, { status: 403 })
   return null
+}
+
+/**
+ * 読み取り API で「中身を役割に合わせて絞る」ための役割（2026-09-26）。
+ * main（30秒キャッシュ）を使うので Firestore 読み取りを増やさない。不明なら null。
+ */
+export async function getCallerPermRole(request: NextRequest): Promise<PermRole | null> {
+  const auth = await getApiAuthUser(request)
+  if (!auth.authorized) return null
+  if (auth.actor === 'super-admin') return 'owner'
+  const { getMainData } = await import('@/lib/compute')
+  const main = await getMainData()
+  const workers = mapRawWorkers((main.workers || []) as unknown[])
+  const w = workers.find(x => x.id === auth.actor)
+  if (!w) return null
+  return permRoleOf({ role: buildAuthUser(w, main.sites as unknown as Site[], main.mforeman).role })
 }
 
 export function isManagerRole(role: string): boolean {
