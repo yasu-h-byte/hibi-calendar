@@ -48,8 +48,8 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ', cap: 'masters.view' },
   { label: '取引先マスタ', icon: '🏢', href: '/subcons', section: 'マスタ', cap: 'masters.view' },
   // ── 管理 ──
-  { label: '管理者設定', icon: '⚙️', href: '/settings', section: '管理', cap: 'system.admin' },
-  { label: 'アクセス履歴', icon: '🔐', href: '/access-log', section: '管理', cap: 'system.admin' },
+  // 会社・請求書／単価の既定値／ログイン・権限／お知らせ／バックアップ・履歴（アクセス履歴もここから）
+  { label: '管理者設定', icon: '⚙️', href: '/settings', section: '管理', cap: 'system.admin', activePrefixes: ['/access-log'] },
   { label: '資料一覧', icon: '📁', href: '/docs', section: '管理', cap: 'docs.view' },
 ]
 
@@ -86,7 +86,7 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   // 請求
   { label: '応援の請求書（同業者へ）', where: '請求書・支払 → 会社ごと', href: '/peer-statement', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者' },
   { label: 'HFU → 日比建設 の請求書', where: '請求書・支払 → HFU', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
-  { label: '請求書の自社情報・振込先', where: '管理者設定', href: '/settings', cap: 'system.admin', keywords: '登録番号 インボイス 口座 振込' },
+  { label: '請求書の自社情報・振込先', where: '管理者設定 → 会社・請求書', href: '/settings?tab=company', cap: 'system.admin', keywords: '登録番号 インボイス 口座 振込' },
   // 経営
   { label: '現場の請求額の入力', where: '原価・収益 → 現場別', href: '/cost', cap: 'cost.edit', keywords: 'せいきゅうがく 売上 粗利' },
   // 人・賃金
@@ -102,11 +102,14 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: '通勤時間・運転手当', where: '現場マスタ → 編集 → その他', href: '/sites', cap: 'masters.view', keywords: 'つうきん 運転手当' },
   { label: '外注単価', where: '取引先マスタ', href: '/subcons', cap: 'masters.view', keywords: 'がいちゅう たんか' },
   // 管理
-  { label: '個人パスワード', where: '管理者設定', href: '/settings', cap: 'system.admin', keywords: 'ぱすわーど ログイン' },
-  { label: '役割ごとの権限', where: '管理者設定 → ユーザー', href: '/settings?tab=users', cap: 'system.admin', keywords: 'けんげん ろーる' },
+  { label: '個人パスワード', where: '管理者設定 → ログイン・権限', href: '/settings?tab=users', cap: 'system.admin', keywords: 'ぱすわーど ログイン' },
+  { label: '役割ごとの権限', where: '管理者設定 → ログイン・権限', href: '/settings?tab=users', cap: 'system.admin', keywords: 'けんげん ろーる' },
   { label: 'お知らせの投稿', where: '管理者設定 → お知らせ', href: '/settings?tab=announcements', cap: 'system.admin', keywords: 'おしらせ' },
-  { label: 'バックアップ・復元', where: '管理者設定', href: '/settings', cap: 'system.admin', keywords: 'ばっくあっぷ リストア' },
-  { label: '操作の記録（アクティビティ）', where: '管理者設定 → アクティビティ', href: '/settings?tab=activity', cap: 'system.admin', keywords: 'ろぐ 履歴 操作' },
+  { label: 'バックアップ・復元', where: '管理者設定 → バックアップ・履歴', href: '/settings?tab=activity', cap: 'system.admin', keywords: 'ばっくあっぷ リストア' },
+  { label: '操作の記録（アクティビティ）', where: '管理者設定 → バックアップ・履歴', href: '/settings?tab=activity', cap: 'system.admin', keywords: 'ろぐ 履歴 操作' },
+  { label: 'スタッフのアクセス履歴', where: '管理者設定 → バックアップ・履歴', href: '/access-log', cap: 'system.admin', keywords: 'あくせす ログイン 未アクセス' },
+  { label: 'HFU → 日比建設 の請求書の設定（単価・HFUの会社情報）', where: '管理者設定 → 会社・請求書', href: '/settings?tab=company', cap: 'system.admin', keywords: 'えいちえふゆー hfu 単価' },
+  { label: '既定の単価（鳶・土工）・基本給ベース日数', where: '管理者設定 → 単価の既定値', href: '/settings?tab=settings', cap: 'system.admin', keywords: 'でふぉると たんか ベース日数' },
   { label: 'マニュアル', where: '資料一覧', href: '/docs', cap: 'docs.view', keywords: 'まにゅある 使い方 手順' },
 ]
 

@@ -298,7 +298,18 @@ function formatTimestamp(ts: string): string {
   return `${m}/${day} ${h}:${min}`
 }
 
-type Tab = 'settings' | 'activity' | 'users' | 'announcements'
+/**
+ * 設定画面のタブ（2026-09-26 整理）。旧は「設定」タブに単価・請求書・HFU・パスワード・バックアップが混在していた
+ * company=会社・請求書 / settings=単価の既定値 / users=ログイン・権限 / announcements=お知らせ / activity=バックアップ・履歴
+ */
+type Tab = 'company' | 'settings' | 'users' | 'announcements' | 'activity'
+const SETTINGS_TABS: { key: Tab; label: string }[] = [
+  { key: 'company', label: '🏢 会社・請求書' },
+  { key: 'settings', label: '💴 単価の既定値' },
+  { key: 'users', label: '🔑 ログイン・権限' },
+  { key: 'announcements', label: '📢 お知らせ' },
+  { key: 'activity', label: '🗄 バックアップ・履歴' },
+]
 
 interface Announcement {
   id: string
@@ -320,11 +331,11 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
-  const [activeTab, setActiveTab] = useState<Tab>('settings')
+  const [activeTab, setActiveTab] = useState<Tab>('company')
   // メニュー検索などから ?tab=users / activity / announcements で直接開けるように（2026-09-26）
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t === 'activity' || t === 'users' || t === 'announcements' || t === 'settings') setActiveTab(t)
+    if (SETTINGS_TABS.some(x => x.key === t)) setActiveTab(t as Tab)
   }, [])
 
   // Default rates
@@ -767,47 +778,20 @@ export default function SettingsPage() {
       <h1 className="text-2xl font-bold text-hibi-navy dark:text-white mb-4">管理者設定</h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition ${
-            activeTab === 'settings'
-              ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          ⚙️ 設定
-        </button>
-        <button
-          onClick={() => setActiveTab('activity')}
-          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition ${
-            activeTab === 'activity'
-              ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          📝 アクティビティ
-        </button>
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition ${
-            activeTab === 'users'
-              ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          👤 ユーザー
-        </button>
-        <button
-          onClick={() => setActiveTab('announcements')}
-          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition ${
-            activeTab === 'announcements'
-              ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          📢 お知らせ
-        </button>
+      <div className="flex gap-1 mb-4 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 overflow-x-auto">
+        {SETTINGS_TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={`flex-1 whitespace-nowrap py-2 px-3 rounded-md text-sm font-medium transition ${
+              activeTab === t.key
+                ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {/* Message toast */}
@@ -819,9 +803,10 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* ===== Settings Tab ===== */}
-      {activeTab === 'settings' && (
-        <div className="max-w-2xl space-y-6">
+      {/* ===== 設定系のカード（タブごとに出し分け・2026-09-26） ===== */}
+      {(activeTab === 'settings' || activeTab === 'company' || activeTab === 'users' || activeTab === 'activity') && (
+        <div className="max-w-2xl space-y-6 mb-6">
+          {activeTab === 'settings' && (<>
           {/* Default Rates Card */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">デフォルト単価エディタ</h2>
@@ -920,7 +905,9 @@ export default function SettingsPage() {
               {saving ? '保存中...' : '保存'}
             </button>
           </div>
+          </>)}
 
+          {activeTab === 'company' && (<>
           {/* 請求書の自社情報（応援の請求書 /peer-invoice 用） */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">請求書の自社情報</h2>
@@ -938,7 +925,9 @@ export default function SettingsPage() {
               {savingProfile ? '保存中...' : '保存'}
             </button>
           </div>
+          </>)}
 
+          {activeTab === 'company' && (<>
           {/* HFU → 日比建設 の請求書（/peer-invoice?company=__hfu_to_hibi__） */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">HFU → 日比建設 の請求書</h2>
@@ -988,7 +977,9 @@ export default function SettingsPage() {
               {savingHfu ? '保存中...' : '保存'}
             </button>
           </div>
+          </>)}
 
+          {activeTab === 'users' && (<>
           {/* User Passwords Card */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">個人パスワード設定</h2>
@@ -1044,7 +1035,9 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
+          </>)}
 
+          {activeTab === 'activity' && (<>
           {/* Backup Card */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">バックアップ</h2>
@@ -1061,7 +1054,9 @@ export default function SettingsPage() {
               {exporting ? 'エクスポート中...' : 'JSONエクスポート'}
             </button>
           </div>
+          </>)}
 
+          {activeTab === 'activity' && (<>
           {/* Restore Card */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">リストア</h2>
@@ -1128,12 +1123,17 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+          </>)}
         </div>
       )}
 
       {/* ===== Activity Tab ===== */}
       {activeTab === 'activity' && (
         <div>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-bold text-hibi-navy dark:text-white">操作の記録</h2>
+            <a href="/access-log" className="text-sm text-hibi-navy dark:text-blue-300 underline">スタッフのアクセス履歴を見る →</a>
+          </div>
           {/* Filters */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1241,7 +1241,7 @@ export default function SettingsPage() {
         <div className="space-y-6">
           <div>
             <p className="text-sm text-gray-500 dark:text-gray-400">ログインユーザー・ロール別権限の管理</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">※ ロールは人員マスタの職種で決まります（役員→管理者、職長→職長、事務→事務）。変更するには人員マスタで職種を変更してください。</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">※ 役割は人員マスタの職種で決まります（役員→役員（見るだけ）、職長→職長、事務→事務。政仁さんは事業責任者）。変えるときは人員マスタで職種を変更してください。</p>
           </div>
 
           {/* Summary */}
