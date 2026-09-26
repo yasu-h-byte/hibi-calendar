@@ -744,8 +744,8 @@ export async function GET(request: NextRequest) {
         // 自分宛の評価入力依頼 + カレンダー期限のみ
         return n.id === 'calendar-deadline' || n.id.startsWith('evaluation-todo-')
       }
-      // jimu: カレンダー署名系のみ
-      return ['unsigned-calendar', 'calendar-deadline'].includes(n.id)
+      // jimu: カレンダー署名系 + 有給の付与アラート（2026-09-26: 有給の付与は事務の仕事・lib/permissions.ts leave.manage）
+      return ['unsigned-calendar', 'calendar-deadline'].includes(n.id) || n.id.startsWith('pl-grant')
     })
 
     return NextResponse.json({ notifications: filtered })
