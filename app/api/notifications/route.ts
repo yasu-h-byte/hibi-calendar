@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSiteStartedByMonth } from '@/lib/site-hierarchy'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs } from '@/lib/fsdb'
-import { getMainData, getAttData, parseDKey } from '@/lib/compute'
+import { getMainData, getAttData, parseDKey, getAssign } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
 import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
@@ -41,12 +42,17 @@ export async function GET(request: NextRequest) {
     const now = new Date(nowJstIso + 'T00:00:00')
     const currentYm = nowJstIso.slice(0, 7).replace('-', '')
     const today = Number(nowJstIso.slice(8, 10))
-    const role = request.nextUrl.searchParams.get('role') || 'admin'
-    const workerIdParam = request.nextUrl.searchParams.get('workerId')
-    const requesterWorkerId = workerIdParam ? Number(workerIdParam) : null
     const notifications: Notification[] = []
 
     const main = await getMainData()
+    // 2026-09-26: 役割と本人はサーバーで決める（旧: 画面が ?role=&workerId= を自己申告しており、
+    //   職長が role=admin を送れば管理者向けの通知が見えた）。main はキャッシュ済みのものを使い読み取りを増やさない
+    const apiRole = resolveApiRoleFromMain(await getApiAuthUser(request), main, currentYm)
+    const role = !apiRole ? 'none' : apiRole.role === 'super-admin' ? 'admin' : apiRole.role
+    const requesterWorkerId = apiRole?.workerId ?? null
+    const myForemanSites = apiRole?.role === 'foreman' ? apiRole.foremanSites : []
+    /** 職長の担当現場（今月の配置）にいる人か。職長ベルの「職長承認待ち」を自分の現場に絞るため */
+    const myForemanWorkers = new Set(myForemanSites.flatMap(sid => getAssign(main, sid, currentYm).workers))
     // 2026-08-27 修正（有給総点検・第3回）: 「退職日が入っているだけ」で全通知から
     //   即日消えていた（例: 12/31退職予定を登録した瞬間に有給残・付与予定・未署名等の
     //   通知が全部止まる）。dashboard/ledger と同じく「今日時点で退職済み」のみ除外
@@ -602,6 +608,22 @@ export async function GET(request: NextRequest) {
           count: total,
         })
       }
+      // 職長: 自分の現場の人の「職長承認待ち」だけ（自分の申請は自分で承認できないので除く）。2026-09-26
+      if (role === 'foreman') {
+        const mine = lrPendingSnaps.docs.filter(d => {
+          const wid = Number(d.data().workerId)
+          return myForemanWorkers.has(wid) && wid !== requesterWorkerId
+        }).length
+        if (mine > 0) {
+          notifications.push({
+            id: 'foreman-pending-leave',
+            icon: '📝',
+            message: `有給申請の職長承認待ち ${mine}件（出面入力 → スマホ版「承認」タブ）`,
+            type: 'info',
+            count: mine,
+          })
+        }
+      }
     } catch (e) {
       console.error('Leave request check error:', e)
     }
@@ -627,6 +649,21 @@ export async function GET(request: NextRequest) {
           type: 'info',
           count: total,
         })
+      }
+      if (role === 'foreman') {
+        const mine = hlPendingSnaps.docs.filter(d => {
+          const wid = Number(d.data().workerId)
+          return myForemanWorkers.has(wid) && wid !== requesterWorkerId
+        }).length
+        if (mine > 0) {
+          notifications.push({
+            id: 'foreman-pending-home-leave',
+            icon: '✈️',
+            message: `帰国申請の職長承認待ち ${mine}件（出面入力 → スマホ版「承認」タブ）`,
+            type: 'info',
+            count: mine,
+          })
+        }
       }
     } catch (e) {
       console.error('Home long leave request check error:', e)
@@ -741,8 +778,13 @@ export async function GET(request: NextRequest) {
             || n.id.startsWith('evaluation-stale-')
       }
       if (role === 'foreman') {
-        // 自分宛の評価入力依頼 + カレンダー期限のみ
+        // 自分宛の評価入力依頼 + カレンダー期限 + 自分の現場の有給・帰国の職長承認待ち（2026-09-26）
         return n.id === 'calendar-deadline' || n.id.startsWith('evaluation-todo-')
+          || n.id === 'foreman-pending-leave' || n.id === 'foreman-pending-home-leave'
+      }
+      if (role !== 'jimu') {
+        // 役員（見るだけ）・不明: カレンダー署名系のみ
+        return ['unsigned-calendar', 'calendar-deadline'].includes(n.id)
       }
       // jimu: カレンダー署名系 + 有給の付与アラート（2026-09-26: 有給の付与は事務の仕事・lib/permissions.ts leave.manage）
       return ['unsigned-calendar', 'calendar-deadline'].includes(n.id) || n.id.startsWith('pl-grant')

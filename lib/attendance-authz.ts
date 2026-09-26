@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server'
 import type { Site, Worker } from '@/types'
 import { buildAuthUser, computeForemanSites, getApiAuthUser, type ApiAuthResult, type ApiRole } from '@/lib/auth'
+import { mapRawWorkers } from '@/lib/workers'
 
 /**
  * 出面グリッド POST（職長承認・出面保存）の「担当現場」サーバ側チェック（2026-09-15 追加）。
@@ -36,7 +37,8 @@ export function resolveApiRoleFromMain(auth: ApiAuthResult, main: GridMainLike, 
   if (!auth.authorized) return null
   if (auth.actor === 'super-admin') return { role: 'super-admin', workerId: 0, foremanSites: [] }
 
-  const workers = main.workers as Worker[]
+  // ⚠️ main.workers は生データ（職種が `job`）。mapRawWorkers で Worker（`jobType`）に写像する（2026-09-26）
+  const workers = mapRawWorkers(main.workers as unknown[])
   const sites = main.sites as Site[]
   const worker = workers.find(w => w.id === auth.actor)
   if (!worker) return null

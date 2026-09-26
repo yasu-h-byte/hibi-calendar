@@ -6,11 +6,11 @@ import {
 /** 出面グリッド POST の担当現場チェック（2026-09-15） */
 const main = {
   workers: [
-    { id: 1, name: '政仁', jobType: 'yakuin' },
-    { id: 10, name: '職長A', jobType: 'shokucho' },
-    { id: 11, name: '職長B', jobType: 'shokucho' },
-    { id: 20, name: '事務', jobType: 'jimu' },
-    { id: 30, name: '役員', jobType: 'yakuin' },
+    { id: 1, name: '政仁', job: 'yakuin' },
+    { id: 10, name: '職長A', job: 'shokucho' },
+    { id: 11, name: '職長B', job: 'shokucho' },
+    { id: 20, name: '事務', job: 'jimu' },
+    { id: 30, name: '役員', job: 'yakuin' },
   ],
   sites: [
     { id: 'idemitsu', name: '出光', foreman: 10, archived: false },

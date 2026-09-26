@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { isForemanTokenShape, verifyForemanToken } from '@/lib/session-token'
 import { CAPABILITIES, permRoleOf, roleCan, type Capability } from '@/lib/permissions'
+import { mapRawWorkers } from '@/lib/workers'
 
 // 個人パスワードのキャッシュ（APIリクエストごとにFirestore読み取りを避ける）
 let cachedUserPasswords: Record<string, string> | null = null
@@ -261,7 +262,9 @@ export async function getApiRole(request: NextRequest, ym?: string): Promise<Api
   // 個人パスワード → 人員マスタから実ロールを解決
   const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
   const main = mainSnap.exists() ? mainSnap.data() : {}
-  const workers = (main.workers || []) as Worker[]
+  // ⚠️ Firestore の生データは職種が `job`（Worker 型は `jobType`）。必ず mapRawWorkers で写像してから
+  //   buildAuthUser に渡す（2026-09-26: 生のまま渡すと jobType が空になり、事務・役員の役割を取り違えた）
+  const workers = mapRawWorkers((main.workers || []) as unknown[])
   const sites = (main.sites || []) as Site[]
   const mforeman = (main.mforeman || {}) as Record<string, { foreman?: number; wid?: number }>
   const worker = workers.find(w => w.id === auth.actor)
