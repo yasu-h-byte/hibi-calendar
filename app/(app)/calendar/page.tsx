@@ -312,12 +312,8 @@ export default function CalendarManagePage() {
   // 未承認者へのお願い文をクリップボードにコピー（個人リンクから承認してもらう運用）
   const copyReminder = async (mo: OverviewMonth) => {
     const [yy, mm] = mo.ym.split('-')
-    const names = mo.unsignedNames.join('、')
-    const text =
-      `【${parseInt(yy)}年${parseInt(mm)}月の勤務カレンダー承認のお願い / Xác nhận lịch tháng ${parseInt(mm)}/${yy}】\n` +
-      `未承認の方は、ご自身の個人リンク（出面入力と同じQR/リンク）から承認してください。\n` +
-      `Vui lòng ký xác nhận lịch từ link cá nhân của bạn (giống link chấm công).` +
-      (names ? `\n\n未承認 / Chưa ký: ${names}` : '')
+    // 文面は送信文コピー・ベルと共通（lib/calendar-sign-status.ts）。名前は未署名＋一部だけ署名の人
+    const text = buildSignRequestMessage(parseInt(yy), parseInt(mm), mo.unsignedNames)
     try {
       await navigator.clipboard.writeText(text)
       setCopiedReminderYm(mo.ym)

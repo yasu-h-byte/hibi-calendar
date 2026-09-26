@@ -12,7 +12,8 @@
  */
 import { checkApiAuth, requireCap } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
-import { loadCalendarMatrix } from '@/lib/calendar-matrix'
+import { loadCalendarMatrix, projectSignSites } from '@/lib/calendar-matrix'
+import { summarizeSignStatus } from '@/lib/calendar-sign-status'
 import { ym7 } from '@/lib/ym'
 
 export const dynamic = 'force-dynamic'
@@ -64,28 +65,16 @@ export async function GET(request: NextRequest) {
         else siteCounts.draft++
       }
 
-      // 署名状況（/calendar 署名状況パネルと同じ判定: 修正後の再確認未済は未完了扱い）
+      // 署名状況は lib/calendar-sign-status.ts（就業カレンダー画面・ベルと同じ決まり・2026-09-26）。
+      //   旧: 独自の数え方で、通知文の名前に「1つも署名していない人」しか入れず、
+      //   一部の現場だけ署名した人（新しい現場の署名漏れ）が抜けていた
       const target = m.eligibleForeignWorkers.length
-      let fullySigned = 0, partial = 0
-      const unsignedNames: string[] = []
-      for (const w of m.eligibleForeignWorkers) {
-        let signedCount = 0
-        for (const siteId of approvedSiteIds) {
-          const sigVal = m.signaturesBySite[`${w.id}_${siteId}`]
-          const signed = !!sigVal
-          const signedAt = sigVal && sigVal !== 'true' ? sigVal : null
-          const cal = m.siteCalendars[siteId]
-          const wasRevised = !!(cal?.status === 'approved' && cal.approvedAt && cal.updatedAt && cal.updatedAt > cal.approvedAt)
-          const assignedHere = m.assignedWorkerIdsBySite[siteId]?.has(w.id) || false
-          const reconfirmed = !!(wasRevised && signed && signedAt && cal!.updatedAt && signedAt > cal!.updatedAt)
-          const effectivelySigned = signed && !(wasRevised && assignedHere && !reconfirmed)
-          if (effectivelySigned) signedCount++
-        }
-        if (approvedSiteIds.length > 0 && signedCount === approvedSiteIds.length) fullySigned++
-        else if (signedCount > 0) partial++
-        else { if (approvedSiteIds.length > 0) unsignedNames.push(w.name) }
-      }
+      const summary = summarizeSignStatus(projectSignSites(m))
+      const fullySigned = approvedSiteIds.length > 0 ? summary.signedCount : 0
+      const partial = summary.unsigned.filter(w => w.signed > 0).length
       const unsigned = Math.max(0, target - fullySigned - partial)
+      // 通知文に載せる「まだ終わっていない人」＝未署名＋一部だけ署名（残りの現場が多い順）
+      const unsignedNames = summary.unsigned.map(w => w.name)
 
       const complete = siteCounts.total > 0 && siteCounts.approved === siteCounts.total && fullySigned === target && target > 0
 
