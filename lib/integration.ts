@@ -161,7 +161,9 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     .filter(p => p.billingTotal > 0)
     .map(p => ({ companyId: p.companyId, companyName: p.companyName, amount: Math.round(p.billingTotal) }))
 
-  const peerInvoiceRecords = await listPeerInvoicesForYm(ym)
+  // 申請中・差し戻し・取り下げはまだ請求書として出ていないので渡さない（発行済み・取り消し済みだけ）
+  const peerInvoiceRecords = (await listPeerInvoicesForYm(ym))
+    .filter((inv): inv is typeof inv & { status: 'issued' | 'void' } => inv.status === 'issued' || inv.status === 'void')
   const toIntegration = (inv: (typeof peerInvoiceRecords)[number]): IntegrationPeerInvoice => ({
     no: inv.no, companyId: inv.companyId, companyName: inv.companyName, ym: inv.ym,
     issueDate: inv.issueDate, dueDate: inv.dueDate,

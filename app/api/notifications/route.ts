@@ -632,6 +632,25 @@ export async function GET(request: NextRequest) {
       console.error('Home long leave request check error:', e)
     }
 
+    // 8c. 承認待ちの請求書（事務が発行を申請 → 事業責任者・管理者が承認。2026-09-26）
+    if (role === 'admin' || role === 'approver') {
+      try {
+        const { listPendingPeerInvoices } = await import('@/lib/peer-invoice-store')
+        const pendingInv = await listPendingPeerInvoices()
+        if (pendingInv.length > 0) {
+          notifications.push({
+            id: 'pending-invoices',
+            icon: '🧾',
+            message: `請求書の発行承認待ち ${pendingInv.length}件（${pendingInv.map(i => i.companyName).join('・')}）`,
+            type: 'info',
+            count: pendingInv.length,
+          })
+        }
+      } catch (e) {
+        console.error('Pending invoice check error:', e)
+      }
+    }
+
     // 9. お知らせ（最新1件のみ）
     try {
       const annSnap = await getDocs(collection(db, 'announcements'))
@@ -714,7 +733,7 @@ export async function GET(request: NextRequest) {
         // 2026-08-27 追加: 最終承認者に承認待ち（有給・帰国）を配信
         //   （旧: admin 限定で、承認フローの当事者にベルが出なかった）
         return ['unsigned-calendar', 'calendar-deadline', 'month-unlocked-hibi', 'month-unlocked-hfu',
-                'pending-leave-requests', 'pending-home-long-leave'].includes(n.id)
+                'pending-leave-requests', 'pending-home-long-leave', 'pending-invoices'].includes(n.id)
             || n.id.startsWith('pl-grant')
             || n.id.startsWith('evaluation-due')
             || n.id.startsWith('evaluation-todo-')

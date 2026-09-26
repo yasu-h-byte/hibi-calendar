@@ -47,15 +47,24 @@ interface PeerInvoiceDraft {
 }
 interface PeerInvoiceRecord extends PeerInvoiceDraft {
   id: string; no: string; issuer: CompanyProfile
-  status: 'issued' | 'void'
+  status: 'pending' | 'issued' | 'void' | 'rejected' | 'withdrawn'
   issueDate: string; issuedAt: string; issuedBy: string
+  requestedAt?: string; requestedByName?: string
+  rejectedAt?: string; rejectReason?: string
   voidedAt?: string; voidedBy?: string; voidReason?: string
 }
 type ApiResponse =
-  | { status: 'issued'; record: PeerInvoiceRecord; history: PeerInvoiceRecord[] }
+  | { status: 'issued' | 'pending'; record: PeerInvoiceRecord; history: PeerInvoiceRecord[] }
   | { status: 'draft'; draft: PeerInvoiceDraft; issuer: CompanyProfile | null; history: PeerInvoiceRecord[] }
   | { status: 'empty'; history: PeerInvoiceRecord[] }
   | { error: string }
+
+/** 画面に描く1件。isDraft = 番号がまだ無い（下書き・承認待ち） */
+type InvoiceView = PeerInvoiceDraft & {
+  isDraft: boolean; no: string; issuer: CompanyProfile; issueDate: string; id: string
+  status: 'draft' | PeerInvoiceRecord['status']
+  requestedAt?: string; requestedByName?: string
+}
 
 const BLANK_ISSUER: CompanyProfile = {
   name: '', nameEn: '', postal: '', address: '', tel: '', fax: '', email: '',
@@ -114,15 +123,38 @@ function PeerInvoicePageInner() {
   }, [ready, ym, companyId])
   useEffect(() => { load() }, [load])
 
+  // 承認フロー（2026-09-26）: 事務（森田さん）が申請 → 事業責任者（政仁さん）・管理者が承認して発行
   const canIssue = user?.role === 'admin' || user?.role === 'approver'
+  const canRequest = user?.role === 'jimu'
+
+  const post = async (payload: Record<string, unknown>, failMsg: string) => {
+    setBusy(true)
+    const res = await postJson<{ error?: string }>('/api/peer-invoice', payload)
+    setBusy(false)
+    if (!res.ok) { alert(res.error || res.data?.error || failMsg); return }
+    load()
+  }
 
   const handleIssue = async () => {
     if (!confirm('この内容で発行します。発行すると金額・明細を凍結し、その後は取り消してからでないと作り直せません。よろしいですか？')) return
-    setBusy(true)
-    const res = await postJson<{ error?: string }>('/api/peer-invoice', { action: 'issue', ym, companyId })
-    setBusy(false)
-    if (!res.ok) { alert(res.error || res.data?.error || '発行に失敗しました'); return }
-    load()
+    post({ action: 'issue', ym, companyId }, '発行に失敗しました')
+  }
+  const handleRequest = async () => {
+    if (!confirm('この内容で発行を申請します。事業責任者が承認すると請求書番号が付いて発行されます。よろしいですか？')) return
+    post({ action: 'request', ym, companyId }, '申請に失敗しました')
+  }
+  const handleApprove = async (id: string) => {
+    if (!confirm('この申請を承認して発行します。よろしいですか？')) return
+    post({ action: 'approve', id }, '承認に失敗しました')
+  }
+  const handleReject = async (id: string) => {
+    const reason = window.prompt('差し戻す理由（申請した人に表示されます）')
+    if (reason === null) return
+    post({ action: 'reject', id, reason }, '差し戻しに失敗しました')
+  }
+  const handleWithdraw = async (id: string) => {
+    if (!confirm('この申請を取り下げますか？ 取り下げたあと、内容を直してもう一度申請できます。')) return
+    post({ action: 'withdraw', id }, '取り下げに失敗しました')
   }
 
   const handleVoid = async (id: string) => {
@@ -143,15 +175,19 @@ function PeerInvoicePageInner() {
     )
   }
 
-  const view: (PeerInvoiceDraft & { isDraft: boolean; no: string; issuer: CompanyProfile; status: 'draft' | 'issued' | 'void'; issueDate: string; id: string }) | null =
+  const view: InvoiceView | null =
     data && !('error' in data) && data.status !== 'empty'
-      ? data.status === 'issued'
-        ? { ...data.record, isDraft: false }
+      ? 'record' in data
+        ? { ...data.record, isDraft: data.status === 'pending' }
         : { ...data.draft, issuer: data.issuer || BLANK_ISSUER, isDraft: true, no: '', status: 'draft', issueDate: '', id: '' }
       : null
   const history = data && !('error' in data) ? data.history : []
   const isEmpty = data && !('error' in data) && data.status === 'empty'
   const isHfuInvoice = companyId === HFU_INVOICE_COMPANY_ID
+  const isPending = view?.status === 'pending'
+  const isFreshDraft = view?.status === 'draft'
+  // 直近の差し戻し（その後に申請・発行していなければ、下書きの上に理由を出す）
+  const lastRejected = isFreshDraft ? [...history].reverse().find(h => h.status === 'rejected') : undefined
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -170,8 +206,15 @@ function PeerInvoicePageInner() {
         </div>
 
         {view && (
-          <div className={`rounded-lg px-3 py-2 text-sm font-bold ${view.isDraft ? 'bg-amber-50 text-amber-800 border border-amber-300' : 'bg-emerald-50 text-emerald-800 border border-emerald-300'}`}>
-            {view.isDraft ? '下書き（未発行）— 出面の実績から見込みを計算しています' : `発行済み ${view.no}（${jpDate(view.issueDate)}）`}
+          <div className={`rounded-lg px-3 py-2 text-sm font-bold ${isPending ? 'bg-blue-50 text-blue-800 border border-blue-300' : view.isDraft ? 'bg-amber-50 text-amber-800 border border-amber-300' : 'bg-emerald-50 text-emerald-800 border border-emerald-300'}`}>
+            {isPending
+              ? `承認待ち — ${view.requestedByName || ''}さんが ${jpDate(view.requestedAt || '')} に申請。申請した時点の内容で表示しています`
+              : view.isDraft ? '下書き（未発行）— 出面の実績から見込みを計算しています' : `発行済み ${view.no}（${jpDate(view.issueDate)}）`}
+          </div>
+        )}
+        {lastRejected && (
+          <div className="rounded-lg px-3 py-2 text-sm bg-red-50 text-red-800 border border-red-300">
+            差し戻されました（{jpDate(lastRejected.rejectedAt || '')}）{lastRejected.rejectReason ? `: ${lastRejected.rejectReason}` : ''}。直してからもう一度申請してください。
           </div>
         )}
 
@@ -180,28 +223,58 @@ function PeerInvoicePageInner() {
             className="px-4 py-2 bg-hibi-navy text-white rounded-lg text-sm font-bold hover:bg-hibi-light transition disabled:opacity-40">
             🖨 印刷 / PDF保存
           </button>
-          {view?.isDraft && canIssue && (
+          {isFreshDraft && canIssue && (
             <button onClick={handleIssue} disabled={busy}
               className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 transition disabled:opacity-40">
               この内容で発行
             </button>
           )}
-          {view && !view.isDraft && canIssue && (
+          {isFreshDraft && canRequest && (
+            <button onClick={handleRequest} disabled={busy}
+              className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 transition disabled:opacity-40">
+              発行を申請（承認へ回す）
+            </button>
+          )}
+          {view && isPending && canIssue && (
+            <>
+              <button onClick={() => handleApprove(view.id)} disabled={busy}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition disabled:opacity-40">
+                承認して発行
+              </button>
+              <button onClick={() => handleReject(view.id)} disabled={busy}
+                className="px-4 py-2 bg-white text-red-600 border border-red-300 rounded-lg text-sm font-bold hover:bg-red-50 transition disabled:opacity-40">
+                差し戻し
+              </button>
+            </>
+          )}
+          {view && isPending && canRequest && (
+            <button onClick={() => handleWithdraw(view.id)} disabled={busy}
+              className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded-lg text-sm font-bold hover:bg-gray-50 transition disabled:opacity-40">
+              申請を取り下げ
+            </button>
+          )}
+          {view && view.status === 'issued' && canIssue && (
             <button onClick={() => handleVoid(view.id)} disabled={busy}
               className="px-4 py-2 bg-white text-red-600 border border-red-300 rounded-lg text-sm font-bold hover:bg-red-50 transition disabled:opacity-40">
               取り消し
             </button>
           )}
-          {view?.isDraft && !canIssue && (
-            <span className="text-xs text-gray-400">発行は管理者・事業責任者のみ行えます</span>
+          {isFreshDraft && !canIssue && !canRequest && (
+            <span className="text-xs text-gray-400">発行の申請は事務、承認は事業責任者・管理者が行います</span>
           )}
         </div>
 
         {history.length > 0 && (
           <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg p-2">
             この会社・この月の発行履歴: {history.map(h => (
-              <span key={h.id} className={`inline-block mr-2 ${h.status === 'void' ? 'line-through text-gray-400' : ''}`}>
-                {h.no}（{h.status === 'void' ? `取消 ${jpDate(h.voidedAt || '')}` : jpDate(h.issueDate)}）
+              <span key={h.id} className={`inline-block mr-2 ${h.status === 'issued' || h.status === 'pending' ? '' : 'line-through text-gray-400'}`}>
+                {h.no || '番号なし'}（{
+                  h.status === 'void' ? `取消 ${jpDate(h.voidedAt || '')}`
+                  : h.status === 'pending' ? `承認待ち ${jpDate(h.requestedAt || '')}`
+                  : h.status === 'rejected' ? `差し戻し ${jpDate(h.rejectedAt || '')}`
+                  : h.status === 'withdrawn' ? `取り下げ ${jpDate(h.rejectedAt || '')}`
+                  : jpDate(h.issueDate)
+                }）
               </span>
             ))}
           </div>
@@ -249,9 +322,7 @@ function PeerInvoicePageInner() {
   )
 }
 
-function PeerInvoiceDocument({ view }: {
-  view: PeerInvoiceDraft & { isDraft: boolean; no: string; issuer: CompanyProfile; status: 'draft' | 'issued' | 'void'; issueDate: string; id: string }
-}) {
+function PeerInvoiceDocument({ view }: { view: InvoiceView }) {
   const isHfu = view.kind === 'hfu'
   const nDays = daysInYm(view.ym)
   const days = Array.from({ length: nDays }, (_, i) => i + 1)
@@ -260,7 +331,7 @@ function PeerInvoiceDocument({ view }: {
     <div className="pi-root">
       {/* ── ページ1: 請求書本体 ── */}
       <div className="pi-page">
-        {view.isDraft && <div className="pi-watermark">DRAFT 下書き</div>}
+        {view.isDraft && <div className="pi-watermark">{view.status === 'pending' ? '承認待ち' : 'DRAFT 下書き'}</div>}
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <div>

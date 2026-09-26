@@ -15,7 +15,7 @@ import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
 
 /** その月に発行・取り消しされた応援の請求書（app/api/peer-invoice） */
 interface PeerInvoiceSummary {
-  id: string; no: string; companyId: string; total: number; status: 'issued' | 'void'
+  id: string; no: string; companyId: string; total: number; status: 'pending' | 'issued' | 'void' | 'rejected' | 'withdrawn'
 }
 
 const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
@@ -60,6 +60,19 @@ export default function PeerStatementPage() {
   /** 会社の最新の発行済み請求書（取り消されていないもの） */
   const issuedInvoiceFor = (companyId: string) => invoices.find(i => i.companyId === companyId && i.status === 'issued')
 
+  /** 会社ごとの請求書の状態バッジ（発行済み／承認待ち／未作成）。事務が申請 → 事業責任者が承認（2026-09-26） */
+  const InvoiceBadge = ({ companyId }: { companyId: string }) => {
+    const href = `/peer-invoice?company=${companyId}&ym=${ym}`
+    const issued = issuedInvoiceFor(companyId)
+    if (issued) {
+      return <a href={href} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold no-underline">✓ 発行済み {issued.no}</a>
+    }
+    if (invoices.some(i => i.companyId === companyId && i.status === 'pending')) {
+      return <a href={href} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold no-underline">承認待ち</a>
+    }
+    return <a href={href} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-hibi-navy text-white text-xs font-bold no-underline hover:bg-hibi-light">請求書を作る</a>
+  }
+
   const billingSum = (rows || []).reduce((s, r) => s + r.billingTotal, 0)
   const paymentSum = (rows || []).reduce((s, r) => s + r.paymentTotal, 0)
 
@@ -96,17 +109,7 @@ export default function PeerStatementPage() {
           <h2 className="text-base font-bold">HFU → 日比建設</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400">グループ内の請求。HFU 所属の作業員が働いた人工（全現場）× 社内単価。上の合計には含みません。</p>
         </div>
-        {issuedInvoiceFor(HFU_INVOICE_COMPANY_ID) ? (
-          <a href={`/peer-invoice?company=${HFU_INVOICE_COMPANY_ID}&ym=${ym}`}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold no-underline">
-            ✓ 発行済み {issuedInvoiceFor(HFU_INVOICE_COMPANY_ID)!.no}（{yen(issuedInvoiceFor(HFU_INVOICE_COMPANY_ID)!.total)}）
-          </a>
-        ) : (
-          <a href={`/peer-invoice?company=${HFU_INVOICE_COMPANY_ID}&ym=${ym}`}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-hibi-navy text-white text-xs font-bold no-underline hover:bg-hibi-light">
-            請求書を作る
-          </a>
-        )}
+        <InvoiceBadge companyId={HFU_INVOICE_COMPANY_ID} />
       </section>
 
       {err && <p className="text-sm text-red-600">{err}</p>}
@@ -120,19 +123,7 @@ export default function PeerStatementPage() {
             <div className="text-xs text-gray-500 tabular-nums space-x-3 flex items-center gap-3">
               {r.billingTotal > 0 && <span className="text-blue-700 dark:text-blue-300">請求 {yen(r.billingTotal)}</span>}
               {r.paymentTotal > 0 && <span className="text-amber-700 dark:text-amber-300">支払 {yen(r.paymentTotal)}</span>}
-              {r.billingTotal > 0 && (
-                issuedInvoiceFor(r.companyId) ? (
-                  <a href={`/peer-invoice?company=${r.companyId}&ym=${ym}`}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold no-underline">
-                    ✓ 発行済み {issuedInvoiceFor(r.companyId)!.no}
-                  </a>
-                ) : (
-                  <a href={`/peer-invoice?company=${r.companyId}&ym=${ym}`}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-hibi-navy text-white font-bold no-underline hover:bg-hibi-light">
-                    請求書を作る
-                  </a>
-                )
-              )}
+              {r.billingTotal > 0 && <InvoiceBadge companyId={r.companyId} />}
             </div>
           </div>
 

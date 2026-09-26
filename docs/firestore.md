@@ -178,7 +178,9 @@ workSchedule?: {
 | `detail` | 配列 | 現場ごとの出面明細マトリクス（人×日） |
 | `subtotal` / `tax` / `total` | number | 税抜・消費税（10%・円未満切り捨て）・税込 |
 | `dueDate` | string | 支払期日（取引先の支払条件から算出・土日祝は前営業日） |
-| `status` | `'issued'\|'void'` | 取り消しても行は残る（欠番のまま・再利用しない） |
+| `status` | `'pending'\|'issued'\|'void'\|'rejected'\|'withdrawn'` | pending=事務が申請（番号なし）→ 承認で issued。取り消し(void)・差し戻し(rejected)・取り下げ(withdrawn)しても行は残る（欠番のまま・再利用しない） |
+| `requestedAt` / `requestedBy` / `requestedByName` | | 申請時のみ（2026-09-26〜） |
+| `rejectedAt` / `rejectedBy` / `rejectReason` | | 差し戻し・取り下げ時のみ |
 | `issueDate` / `issuedAt` / `issuedBy` | | 発行日・発行時刻・発行者 |
 | `voidedAt` / `voidedBy` / `voidReason` | | 取り消し時のみ |
 
