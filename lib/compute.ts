@@ -107,7 +107,7 @@ export interface MainData {
 /** HFU → 日比建設 の請求書の設定（settings 画面「HFU → 日比建設 の請求書」で編集） */
 export interface HfuInvoiceSettings {
   profile: CompanyProfile
-  /** 鳶 1人工あたりの単価（税抜） */
+  /** 鳶 1人工あたりの単価（税抜）。残業は 単価÷8×1.25（円未満四捨五入）× 時間で別行 */
   tobiRate: number
   /** 土工 1人工あたりの単価（税抜） */
   dokoRate: number
@@ -119,6 +119,8 @@ export interface HfuInvoiceSettings {
 export interface CompanyProfile {
   name: string
   nameEn: string
+  /** 代表者（例: 代表取締役 日比 靖仁）。任意。発行者欄に印字 */
+  representative?: string
   postal: string
   address: string
   tel: string

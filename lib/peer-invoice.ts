@@ -83,8 +83,13 @@ export interface PeerInvoiceLine {
   siteId: string
   siteName: string
   role: '鳶' | '土工'
-  /** 人工（残業の換算分を含む） */
+  /** 人工（残業の換算分を含む）。unit === 'h' の行は残業時間 */
   days: number
+  /**
+   * 'h' = 残業の行（HFU → 日比建設 の請求書・2026-09-26）。数量は時間、単価は残業単価。
+   * 無ければ人工の行
+   */
+  unit?: 'h'
   rate: number
   amount: number
 }

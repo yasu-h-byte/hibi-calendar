@@ -25,13 +25,13 @@ import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
 
 // ── API レスポンスと同じ形の型（lib/peer-invoice.ts・lib/peer-invoice-store.ts 参照） ──
-interface PeerInvoiceLine { siteId: string; siteName: string; role: '鳶' | '土工'; days: number; rate: number; amount: number }
+interface PeerInvoiceLine { siteId: string; siteName: string; role: '鳶' | '土工'; days: number; rate: number; amount: number; unit?: 'h' }
 interface PeerInvoiceDetailCell { md: number; ot?: number; night?: boolean }
 interface PeerInvoiceDetailRow { key: string; label: string; isSubcon: boolean; cells: Record<number, PeerInvoiceDetailCell>; total: number }
 interface PeerInvoiceSiteDetail { siteId: string; siteName: string; rows: PeerInvoiceDetailRow[]; dayTotals: Record<number, number>; siteTotal: number }
 interface PeerInvoiceCompanyInfo { postal: string; address: string; honorific: string }
 interface CompanyProfile {
-  name: string; nameEn: string; postal: string; address: string; tel: string; fax?: string; email?: string
+  name: string; nameEn: string; representative?: string; postal: string; address: string; tel: string; fax?: string; email?: string
   invoiceRegNo: string
   bank: { bankName: string; branch: string; accountType: string; accountNo: string; holder: string }
   invoicePrefix: string
@@ -304,7 +304,7 @@ function PeerInvoiceDocument({ view }: {
               <tr style={{ background: '#F2F4F9' }}>
                 <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #1B2A4A' }}>現場</th>
                 <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #1B2A4A' }}>内容</th>
-                <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #1B2A4A' }}>数量（人工）</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #1B2A4A' }}>{isHfu ? '数量' : '数量（人工）'}</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #1B2A4A' }}>単価</th>
                 <th style={{ textAlign: 'right', padding: '6px 8px', borderBottom: '2px solid #1B2A4A' }}>金額</th>
               </tr>
@@ -313,8 +313,8 @@ function PeerInvoiceDocument({ view }: {
               {view.lines.map((l, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid #E6E9F0' }}>
                   <td style={{ padding: '6px 8px' }}>{l.siteName}</td>
-                  <td style={{ padding: '6px 8px' }}>{l.role}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtMd(l.days)}</td>
+                  <td style={{ padding: '6px 8px' }}>{l.unit === 'h' ? `${l.role} 残業` : l.role}</td>
+                  <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtMd(l.days)}{l.unit === 'h' ? ' h' : isHfu ? ' 人工' : ''}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{yen(l.rate)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>{yen(l.amount)}</td>
                 </tr>
@@ -343,6 +343,7 @@ function PeerInvoiceDocument({ view }: {
           <div style={{ marginTop: 14, paddingTop: 8, borderTop: '1px solid #E6E9F0', fontSize: 9.5, color: '#444', display: 'flex', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontWeight: 700 }}>{view.issuer.name || '（自社情報 未入力）'}{view.issuer.nameEn && `（${view.issuer.nameEn}）`}</div>
+              {view.issuer.representative && <div>{view.issuer.representative}</div>}
               {view.issuer.postal && <div>〒{view.issuer.postal} {view.issuer.address}</div>}
               <div>{view.issuer.tel && `TEL ${view.issuer.tel}`} {view.issuer.fax && `　FAX ${view.issuer.fax}`}</div>
             </div>
@@ -403,8 +404,9 @@ function PeerInvoiceDocument({ view }: {
           </div>
           <p style={{ fontSize: 8, color: '#888', marginTop: 6 }}>
             人工は 1=日勤／0.5=半日／1.5=夜勤／2.5=日勤+夜勤 の単位です（背景色のセルは夜勤を含む日）。
-            残業計の時間は 7時間（日本人・外注は8時間）で1人工に換算し、請求書本体の人工に含めています。
-            {!isHfu && '「（外注）」は応援先へ連れて行った外注先の人工です。'}
+            {isHfu
+              ? '残業計の時間は、請求書本体の「残業」の行（時間 × 残業単価）に載せています。'
+              : '残業計の時間は 7時間（日本人・外注は8時間）で1人工に換算し、請求書本体の人工に含めています。「（外注）」は応援先へ連れて行った外注先の人工です。'}
           </p>
         </div>
       ))}

@@ -9,11 +9,12 @@
  * 人工の数え方は応援の請求書（calcTobiEquiv）と同じ:
  *   - 有給/欠勤/現場休/帰国中/試験・出向者・休業補償(0.6)・鳶土工以外の職種は除外
  *   - 夜勤は 1.5 人工（日勤＋夜勤 2.5）
- *   - 残業は人工に換算して足す（外国人 7h・日本人 8h で 1 人工）
- * 請求額は出面明細（buildSiteDetail）の行から直接積み上げるので、明細と本体の人工は必ず一致する。
+ * 残業は人工に換算せず、HFU がこれまで手作りしていた請求書（2025-12 分の現物）に合わせて
+ * 「鳶 残業 ◯h × 残業単価」の別行にする。残業単価 = 1人工の単価 ÷ 8 × 1.25（円未満四捨五入。30,000 → 4,688）。
+ * 請求額は出面明細（buildSiteDetail）の行から直接積み上げるので、明細と本体の人工・残業時間は必ず一致する。
  */
 import type { AttendanceEntry } from '@/types'
-import type { MainData, HfuInvoiceSettings } from './compute'
+import type { MainData } from './compute'
 import { parseDKey } from './compute'
 import { isTobiGroup, isDokoGroup } from './jobs'
 import { isWorkerOfOrg } from './orgs'
@@ -32,12 +33,21 @@ export const HFU_DEFAULT_INVOICE_PREFIX = 'HFU'
 
 export const isHfuInvoiceCompanyId = (id: string) => id === HFU_INVOICE_COMPANY_ID
 
-const round1 = (v: number) => Math.round(v * 10) / 10
+const round2 = (v: number) => Math.round(v * 100) / 100
 
-/** HFU 側の設定が発行に足りているか（単価 0 の請求書は出さない）。自社情報の必須項目は別途チェック */
-export function checkHfuRates(s: HfuInvoiceSettings | null | undefined): { ok: true } | { ok: false; error: string } {
-  if (!s || !(s.tobiRate > 0) || !(s.dokoRate > 0)) {
-    return { ok: false, error: 'HFU → 日比建設 の単価（鳶・土工）が未入力です。設定 → HFU → 日比建設 の請求書 から入力してください' }
+/** 残業単価 = 1人工の単価 ÷ 8h × 1.25（円未満四捨五入）。HFU の従来の請求書と同じ（30,000 → 4,688） */
+export function hfuOtRate(dayRate: number): number {
+  return Math.round(dayRate / 8 * 1.25)
+}
+
+/**
+ * 下書きの単価が発行に足りているか（単価 0 の行がある請求書は出さない）。
+ * 土工がいない月は土工の単価が未入力でもよい。
+ */
+export function checkHfuRates(draft: PeerInvoiceDraft): { ok: true } | { ok: false; error: string } {
+  const missing = [...new Set(draft.lines.filter(l => !(l.rate > 0)).map(l => l.role))]
+  if (missing.length > 0) {
+    return { ok: false, error: `HFU → 日比建設 の単価（${missing.join('・')}）が未入力です。設定 → HFU → 日比建設 の請求書 から入力してください` }
   }
   return { ok: true }
 }
@@ -75,26 +85,33 @@ export function buildHfuInvoiceDraft(
     if (d.rows.length === 0) continue
     detail.push(d)
 
-    // 明細の行から鳶/土工の人工（残業換算込み）を積み上げる
-    let tobi = 0, doko = 0
+    // 明細の行から鳶/土工の人工と残業時間を積み上げる
+    const sum = { 鳶: { days: 0, ot: 0 }, 土工: { days: 0, ot: 0 } }
     for (const row of d.rows) {
       const w = workerById.get(parseInt(row.key.slice(1), 10))
       if (!w) continue
-      const stdH = w.visa === 'none' ? 8 : 7
-      const otEq = Object.values(row.cells).reduce((s, c) => s + (c.ot || 0), 0) / stdH
-      if (isDokoGroup(w.job)) doko += row.total + otEq
-      else if (isTobiGroup(w.job)) tobi += row.total + otEq
+      const role = isDokoGroup(w.job) ? '土工' : isTobiGroup(w.job) ? '鳶' : null
+      if (!role) continue
+      sum[role].days += row.total
+      sum[role].ot += Object.values(row.cells).reduce((s, c) => s + (c.ot || 0), 0)
     }
-    // 人工は 0.1 単位に丸めてから単価を掛ける（受け取った側が 人工×単価 で検算できるように）
-    const tobiDays = round1(tobi), dokoDays = round1(doko)
-    if (tobiDays > 0) lines.push({ siteId, siteName, role: '鳶', days: tobiDays, rate: tobiRate, amount: Math.round(tobiDays * tobiRate) })
-    if (dokoDays > 0) lines.push({ siteId, siteName, role: '土工', days: dokoDays, rate: dokoRate, amount: Math.round(dokoDays * dokoRate) })
+    for (const role of ['鳶', '土工'] as const) {
+      const rate = role === '鳶' ? tobiRate : dokoRate
+      const days = round2(sum[role].days), ot = round2(sum[role].ot)
+      if (days > 0) lines.push({ siteId, siteName, role, days, rate, amount: Math.round(days * rate) })
+      if (ot > 0) {
+        const otRate = hfuOtRate(rate)
+        lines.push({ siteId, siteName, role, unit: 'h', days: ot, rate: otRate, amount: Math.round(ot * otRate) })
+      }
+    }
   }
   if (detail.length === 0) return null
 
   const byName = (a: { siteName: string }, b: { siteName: string }) => a.siteName.localeCompare(b.siteName, 'ja')
   detail.sort(byName)
-  lines.sort((a, b) => byName(a, b) || (a.role === '鳶' ? -1 : 1))
+  // 現場ごとに まとめて、その中は 鳶 → 鳶 残業 → 土工 → 土工 残業 の順（lines は現場の順に push 済み）
+  const siteOrder = new Map(detail.map((d, i) => [d.siteId, i]))
+  lines.sort((a, b) => (siteOrder.get(a.siteId)! - siteOrder.get(b.siteId)!))
 
   const subtotal = lines.reduce((s, l) => s + l.amount, 0)
   const taxRate = 0.10

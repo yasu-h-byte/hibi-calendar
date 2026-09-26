@@ -12,6 +12,7 @@ interface DefaultRates {
 interface CompanyProfile {
   name: string
   nameEn: string
+  representative?: string
   postal: string
   address: string
   tel: string
@@ -37,9 +38,20 @@ interface HfuInvoiceForm {
   payDay: 'end' | number
 }
 
+/**
+ * 未保存時の初期値は、HFU がこれまで手作りしていた請求書（2025-12 分・代表提供 2026-09-26）の記載どおり。
+ * 保存ボタンを押すまで Firestore には入らない。土工の単価はその請求書に無いので空欄
+ */
 const EMPTY_HFU_INVOICE: HfuInvoiceForm = {
-  profile: { ...EMPTY_COMPANY_PROFILE, name: '', nameEn: '', invoicePrefix: 'HFU' },
-  tobiRate: 0, dokoRate: 0, payMonthOffset: 1, payDay: 'end',
+  profile: {
+    ...EMPTY_COMPANY_PROFILE,
+    name: 'エイチエフユナイテッド株式会社', nameEn: '', representative: '代表取締役 日比 靖仁',
+    postal: '204-0003', address: '東京都清瀬市中里2-1620-1', tel: '042-493-9978', fax: '',
+    invoiceRegNo: 'T5012701011352',
+    bank: { bankName: '青梅信用金庫', branch: '秋津', accountType: '普通', accountNo: '0086328', holder: 'エイチエフユナイテッド株式会社 代表取締役 日比 靖仁' },
+    invoicePrefix: 'HFU',
+  },
+  tobiRate: 30000, dokoRate: 0, payMonthOffset: 1, payDay: 'end',
 }
 
 /** 請求書の発行者情報の入力欄（日比建設の自社情報・HFU の情報で共通） */
@@ -60,6 +72,11 @@ function CompanyProfileFields({ value, onChange }: {
           <input value={value.nameEn} onChange={e => onChange(p => ({ ...p, nameEn: e.target.value }))}
             className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
         </div>
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">代表者（任意・例: 代表取締役 日比 靖仁）</label>
+        <input value={value.representative || ''} onChange={e => onChange(p => ({ ...p, representative: e.target.value }))}
+          className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
       </div>
       <div className="grid grid-cols-3 gap-3">
         <div>
@@ -965,7 +982,8 @@ export default function SettingsPage() {
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">HFU → 日比建設 の請求書</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
               HFU 所属の作業員が働いた人工（全現場）を、HFU から日比建設へ請求する請求書の設定です。
-              金額は 人工 × 下の単価（税抜）。宛先には上の「請求書の自社情報」（日比建設）の住所を印字します。
+              金額は 人工 × 下の単価（税抜）。残業は「時間 × 残業単価（単価÷8×1.25）」の別の行になります（従来の請求書と同じ）。
+              土工のいない月は土工の単価が空欄でも発行できます。宛先には上の「請求書の自社情報」（日比建設）の住所を印字します。
             </p>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>

@@ -144,18 +144,16 @@ export async function issuePeerInvoice(args: {
   const { draft, issuer } = resolveInvoiceDraft({ main, c, attD, attSD, ym, companyId })
   const profileCheck = isCompanyProfileReadyForInvoice(issuer, isHfu ? '設定 → HFU → 日比建設 の請求書' : undefined)
   if (!profileCheck.ok) return { ok: false, error: profileCheck.error }
-  if (isHfu) {
-    const rateCheck = checkHfuRates(main.hfuInvoice)
-    if (!rateCheck.ok) return { ok: false, error: rateCheck.error }
-    // 宛先（日比建設）の住所も印字するので、日比建設の自社情報が空なら止める
-    const hibiCheck = isCompanyProfileReadyForInvoice(main.companyProfile)
-    if (!hibiCheck.ok) return { ok: false, error: `宛先（日比建設）の${hibiCheck.error}` }
-  }
   if (!draft || !issuer) return { ok: false, error: isHfu ? 'この月は HFU の人工がありません' : 'この会社・この月に応援の請求はありません' }
 
   const existing = await getPeerInvoicesForCompanyYm(ym, companyId)
   if (existing.some(inv => inv.status === 'issued')) {
     return { ok: false, error: 'この会社・この月はすでに発行済みです。作り直す場合は先に取り消してください' }
+  }
+
+  if (isHfu) {
+    const rateCheck = checkHfuRates(draft)
+    if (!rateCheck.ok) return { ok: false, error: rateCheck.error }
   }
 
   // 番号は発行者ごとに別の接頭辞で採番する（HFU と日比建設で連番を混ぜない）
@@ -183,7 +181,8 @@ export async function issuePeerInvoice(args: {
     total: draft.total,
     dueDate: draft.dueDate,
     status: 'issued',
-    issueDate: todayIso(),
+    // HFU → 日比建設 は従来の請求書どおり対象月の末日付け（2025-12 分は 令和7年12月31日）
+    issueDate: isHfu ? draft.period.to : todayIso(),
     issuedAt: now,
     issuedBy: actor,
   }
