@@ -2,6 +2,7 @@ import { AuthUser, UserRole, Site, Worker } from '@/types'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
+import { isForemanTokenShape, verifyForemanToken } from '@/lib/session-token'
 
 // 個人パスワードのキャッシュ（APIリクエストごとにFirestore読み取りを避ける）
 let cachedUserPasswords: Record<string, string> | null = null
@@ -26,27 +27,14 @@ async function getUserPasswords(): Promise<Record<string, string>> {
 
 /**
  * API認証チェック（共通）
- * ADMIN_PASSWORD、SUPER_ADMIN_PASSWORD、または個人パスワードのいずれかに一致すればOK
+ * SUPER_ADMIN_PASSWORD、職長の通行証（lib/session-token.ts）、または個人パスワードのいずれかに一致すればOK。
+ * ⚠️ 2026-09-26: 共通パスワード（ADMIN_PASSWORD）そのものは API では通さない。
+ *   職長は共通パスワード＋名前選択でログインし、以降は通行証を送る（旧: 共通パスワード＝誰か分からない管理者扱い）
  */
 export async function checkApiAuth(request: NextRequest): Promise<boolean> {
-  const authHeader = request.headers.get('x-admin-password')
-  if (!authHeader) return false
-
-  // 管理者パスワードチェック（高速）
-  const adminPw = process.env.ADMIN_PASSWORD
-  const superPw = process.env.SUPER_ADMIN_PASSWORD
-  if ((!!adminPw && authHeader === adminPw) || (!!superPw && authHeader === superPw)) {
-    return true
-  }
-
-  // 個人パスワードチェック（役員・事務）
-  const userPasswords = await getUserPasswords()
-  for (const pw of Object.values(userPasswords)) {
-    if (pw && authHeader === pw) return true
-  }
-
-  return false
+  return (await getApiAuthUser(request)).authorized
 }
+
 
 /** パスワード変更時にキャッシュをクリアする */
 export function clearPasswordCache(): void {
@@ -57,11 +45,12 @@ export function clearPasswordCache(): void {
 /**
  * 認証 + 操作者の識別子取得（監査ログ用）
  * - super-admin: 日比靖仁 (workerId=0)
- * - admin: 共通管理者パスワード → 識別不可のため 'admin' 文字列
- * - personal: 個人パスワード → workerId (number)
+ * - number: 個人パスワード、または職長の通行証 → workerId
+ * 2026-09-26: 旧 'admin'（共通パスワード＝誰か分からない管理者）は廃止。型からも外して、
+ *   共通パスワードを特権扱いする分岐が二度と書けないようにしている
  */
 export type ApiAuthResult =
-  | { authorized: true; actor: number | 'admin' | 'super-admin' }
+  | { authorized: true; actor: number | 'super-admin' }
   | { authorized: false }
 
 export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResult> {
@@ -74,11 +63,14 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
     return { authorized: true, actor: 'super-admin' }
   }
 
-  // 共通管理者パスワード（誰か特定不可）
-  const adminPw = process.env.ADMIN_PASSWORD
-  if (adminPw && authHeader === adminPw) {
-    return { authorized: true, actor: 'admin' }
+  // 職長の通行証（共通パスワード＋名前選択でログインした職長。lib/session-token.ts）
+  if (isForemanTokenShape(authHeader)) {
+    const wid = verifyForemanToken(authHeader)
+    return wid === null ? { authorized: false } : { authorized: true, actor: wid }
   }
+
+  // ⚠️ 共通パスワード（ADMIN_PASSWORD）そのものは通さない（2026-09-26）。
+  //   旧: actor 'admin' として管理者扱い → 職長が管理者専用の API を叩けた
 
   // 個人パスワード
   const userPasswords = await getUserPasswords()
@@ -224,7 +216,7 @@ export async function requireExecutiveAuth(request: NextRequest): Promise<Respon
   if (!auth.authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const ok = auth.actor === 'admin' || auth.actor === 'super-admin' || auth.actor === 1
+  const ok = auth.actor === 'super-admin' || auth.actor === 1
   if (!ok) {
     return NextResponse.json({ error: 'この操作は管理者・事業責任者のみ実行できます' }, { status: 403 })
   }
@@ -266,7 +258,6 @@ export async function getApiRole(request: NextRequest, ym?: string): Promise<Api
   const auth = await getApiAuthUser(request)
   if (!auth.authorized) return null
   if (auth.actor === 'super-admin') return { role: 'super-admin', workerId: 0, foremanSites: [] }
-  if (auth.actor === 'admin') return { role: 'admin', workerId: null, foremanSites: [] }
 
   // 個人パスワード → 人員マスタから実ロールを解決
   const mainSnap = await getDoc(doc(db, 'demmen', 'main'))

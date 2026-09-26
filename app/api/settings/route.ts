@@ -11,7 +11,7 @@ async function getAdminTier(request: NextRequest): Promise<'super-admin' | 'admi
   const auth = await getApiAuthUser(request)
   if (!auth.authorized) return null
   if (auth.actor === 'super-admin') return 'super-admin'
-  if (auth.actor === 'admin') return 'admin'
+  // 共通パスワード（旧 'admin'）は API では通らない（2026-09-26・lib/session-token.ts）
   return 'personal'
 }
 

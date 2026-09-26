@@ -21,7 +21,7 @@ const main = {
   mforeman: { sasazuka_202610: { foreman: 10 } },
 }
 
-const scope = (actor: number | 'admin' | 'super-admin', siteId: unknown, ym = '202609') =>
+const scope = (actor: number | 'super-admin', siteId: unknown, ym = '202609') =>
   checkForemanSiteScope(resolveApiRoleFromMain({ authorized: true, actor }, main, ym), siteId)
 
 describe('attendance-authz', () => {
@@ -48,7 +48,6 @@ describe('attendance-authz', () => {
     expect(scope(10, '').ok).toBe(false)
   })
   test('管理者系・事業責任者・事務・役員は制限しない', () => {
-    expect(scope('admin', 'sasazuka')).toEqual({ ok: true })       // 共通パスワード（職長も含み識別不可）
     expect(scope('super-admin', 'sasazuka')).toEqual({ ok: true })
     expect(scope(1, 'sasazuka')).toEqual({ ok: true })
     expect(scope(20, 'sasazuka')).toEqual({ ok: true })

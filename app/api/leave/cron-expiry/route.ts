@@ -25,10 +25,10 @@ export async function GET(request: NextRequest) {
   }
 
   // processExpiry アクションを内部で実行
-  // ADMIN_PASSWORD で認証済みとして /api/leave を叩く
-  const adminPassword = process.env.ADMIN_PASSWORD
+  // 代表（SUPER_ADMIN_PASSWORD）として /api/leave を叩く。2026-09-26: 共通パスワードは API で通らなくなったため
+  const adminPassword = process.env.SUPER_ADMIN_PASSWORD
   if (!adminPassword) {
-    return NextResponse.json({ error: 'ADMIN_PASSWORD not configured' }, { status: 500 })
+    return NextResponse.json({ error: 'SUPER_ADMIN_PASSWORD not configured' }, { status: 500 })
   }
 
   // ベースURLを取得（Vercelの自動環境変数から）

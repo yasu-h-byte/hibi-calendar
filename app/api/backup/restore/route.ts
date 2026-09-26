@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   if (!authResult.authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (authResult.actor !== 'admin' && authResult.actor !== 'super-admin') {
+  if (authResult.actor !== 'super-admin') {
     return NextResponse.json({ error: 'admin 権限が必要です' }, { status: 403 })
   }
   const action = request.nextUrl.searchParams.get('action') || 'list'
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
   if (!authResult.authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  if (authResult.actor !== 'admin' && authResult.actor !== 'super-admin') {
+  if (authResult.actor !== 'super-admin') {
     return NextResponse.json({ error: 'admin 権限が必要です' }, { status: 403 })
   }
   const actor = String(authResult.actor)

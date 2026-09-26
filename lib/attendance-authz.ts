@@ -35,7 +35,6 @@ export interface GridMainLike {
 export function resolveApiRoleFromMain(auth: ApiAuthResult, main: GridMainLike, ym: string): ApiRole | null {
   if (!auth.authorized) return null
   if (auth.actor === 'super-admin') return { role: 'super-admin', workerId: 0, foremanSites: [] }
-  if (auth.actor === 'admin') return { role: 'admin', workerId: null, foremanSites: [] }
 
   const workers = main.workers as Worker[]
   const sites = main.sites as Site[]

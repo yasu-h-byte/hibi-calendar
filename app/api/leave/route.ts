@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
   //   旧実装は「誰のパスワードでも可」で、個人パスワードを持つ職長が自分に付与→
   //   時季指定で出面に p を書くまで一人で完結できた（承認フロー原則違反）。
   //   revoke（leave-request 側）と同一基準。
-  if (!(actor === 'admin' || actor === 'super-admin' || actor === 1)) {
+  if (!(actor === 'super-admin' || actor === 1)) {
     return NextResponse.json({ error: '有給の管理操作は管理者・事業責任者のみ実行できます' }, { status: 403 })
   }
   try {

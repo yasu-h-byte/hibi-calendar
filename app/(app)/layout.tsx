@@ -41,6 +41,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             workerName: parsed.user.name,
             role: parsed.user.role,
           }),
+        }).then(res => {
+          // 401 = 保存しているパスワード・通行証がもう使えない（通行証導入前の職長のログイン、
+          //   パスワード変更、通行証の期限切れ）。ログインし直してもらう（2026-09-26）
+          if (res.status === 401) {
+            localStorage.removeItem('hibi_auth')
+            router.push('/?relogin=1')
+          }
         }).catch(() => { /* ignore */ })
       }
     } catch {

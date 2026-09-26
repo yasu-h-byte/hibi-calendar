@@ -5,6 +5,7 @@ import { buildAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { recordAccess, getRequestIp, AccessRole } from '@/lib/accessLog'
+import { createForemanToken } from '@/lib/session-token'
 
 export async function POST(request: NextRequest) {
   const { password, workerId } = await request.json()
@@ -82,6 +83,11 @@ export async function POST(request: NextRequest) {
   if (!worker) {
     return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
   }
+  // 共通パスワードで選べるのは職長だけ（名前選択リストと同じ条件）。
+  //   旧: workerId を書き換えれば政仁さん・役員として入れた
+  if (worker.jobType !== 'shokucho' || worker.retired) {
+    return NextResponse.json({ error: 'この方は個人パスワードでログインしてください' }, { status: 403 })
+  }
 
   // 月別職長 override を反映するため main.mforeman を取得
   const mainSnap2 = await getDoc(doc(db, 'demmen', 'main'))
@@ -96,5 +102,6 @@ export async function POST(request: NextRequest) {
     org: worker.company === 'HFU' ? 'hfu' : 'hibi',
     ip: getRequestIp(request),
   }).catch(() => {})
-  return NextResponse.json({ user: authUser })
+  // 以降の API には共通パスワードではなく、この職長の通行証を送る（lib/session-token.ts）
+  return NextResponse.json({ user: authUser, sessionToken: createForemanToken(worker.id) })
 }

@@ -18,7 +18,7 @@ import type { AttendanceEntry } from '@/types'
 async function requireAdmin(request: NextRequest) {
   const auth = await getApiAuthUser(request)
   if (!auth.authorized) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  const ok = auth.actor === 'admin' || auth.actor === 'super-admin' || auth.actor === 1
+  const ok = auth.actor === 'super-admin' || auth.actor === 1
   if (!ok) return { error: NextResponse.json({ error: '管理者・事業責任者のみ実行できます' }, { status: 403 }) }
   return { actor: String(auth.actor) }
 }

@@ -201,7 +201,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const actorLabel = auth.actor === 'super-admin' ? 'super-admin'
-    : auth.actor === 'admin' ? 'admin(共通PW)'
     : `workerId=${auth.actor}`
 
   try {

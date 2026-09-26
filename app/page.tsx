@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AuthUser } from '@/types'
 import { DeduraWordmark, DEDURA_TAGLINE, DEDURA_BYLINE } from '@/components/Brand'
@@ -11,6 +11,12 @@ export default function LoginPage() {
   const [step, setStep] = useState<'password' | 'select'>('password')
   const [workers, setWorkers] = useState<{ id: number; name: string }[]>([])
   const [error, setError] = useState('')
+  // 管理画面が「保存している通行証・パスワードがもう使えない」と判断して戻したとき（app/(app)/layout.tsx）
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('relogin')) {
+      setError('セキュリティ強化のため、もう一度ログインしてください')
+    }
+  }, [])
   const [loading, setLoading] = useState(false)
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -57,7 +63,8 @@ export default function LoginPage() {
       }
       const data = await res.json()
       const user: AuthUser = data.user
-      localStorage.setItem('hibi_auth', JSON.stringify({ password, user }))
+      // 職長は共通パスワードではなく、サーバーが発行した本人の通行証を保存して API に送る（2026-09-26）
+      localStorage.setItem('hibi_auth', JSON.stringify({ password: data.sessionToken || password, user }))
       router.push('/calendar')
     } catch {
       setError('通信エラーが発生しました')
