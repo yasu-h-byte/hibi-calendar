@@ -145,7 +145,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
               if (e.key === 'Enter' && results[0]) openEntry(results[0].href)
               if (e.key === 'Escape') setQuery('')
             }}
-            placeholder="🔍 メニューを検索（例: 有給台帳）"
+            placeholder="🔍 検索（例: 有給台帳）"
             className="w-full rounded-lg bg-white/10 placeholder-white/40 text-white text-[12px] px-2.5 py-1.5 outline-none focus:bg-white/15 focus:ring-1 focus:ring-white/30"
           />
         </div>
