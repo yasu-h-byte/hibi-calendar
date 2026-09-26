@@ -131,11 +131,15 @@ export default function DocsPage() {
     }
   }, [])
 
-  const mine = DOCS.filter(d => isForRole(d, role))
-  const others = DOCS.filter(d => !isForRole(d, role))
+  // 過去資料（役目を終えたもの）は一覧に出さない。代表だけ一番下の折りたたみから開ける（2026-09-26）。
+  //   ファイル自体は残すので、仕様書などからのリンクは切れない（各ページの先頭に「過去資料」の帯あり）
+  const current = DOCS.filter(d => d.category !== 'archive')
+  const archived = DOCS.filter(d => d.category === 'archive')
+  const mine = current.filter(d => isForRole(d, role))
+  const others = current.filter(d => !isForRole(d, role))
 
   // 「あなた向け」をカテゴリ順に並べる
-  const categoryOrder = ['guide', 'manual', 'staff', 'archive']
+  const categoryOrder = ['guide', 'manual', 'staff']
   const mineByCategory = categoryOrder
     .map(cat => ({ cat, items: mine.filter(d => d.category === cat) }))
     .filter(g => g.items.length > 0)
@@ -221,6 +225,17 @@ export default function DocsPage() {
           </summary>
           <div className="space-y-3 mt-3">
             {others.map(item => <DocCard key={item.url} item={item} />)}
+          </div>
+        </details>
+      )}
+
+      {isOwner && archived.length > 0 && (
+        <details className="group">
+          <summary className="cursor-pointer text-sm font-bold text-gray-400 dark:text-gray-500 hover:text-hibi-navy dark:hover:text-white select-none">
+            📦 過去資料（代表のみ・{archived.length}件）
+          </summary>
+          <div className="space-y-3 mt-3">
+            {archived.map(item => <DocCard key={item.url} item={item} />)}
           </div>
         </details>
       )}
