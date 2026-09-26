@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
+import { summarizeSignStatus, buildSignRequestMessage } from '@/lib/calendar-sign-status'
 import CalendarEditor from '@/components/CalendarEditor'
 import { AuthUser, DayType, CalendarStatus } from '@/types'
 import { getNextMonth, generateDefaultDays, getHoliday } from '@/lib/calendar'
@@ -348,16 +349,8 @@ export default function CalendarManagePage() {
   }
 
   const copyMessage = () => {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-    const calUrl = `${baseUrl}/calendar/public?ym=${ym}`
-    const msg = `HIBI CONSTRUCTION
-Lich lam viec thang ${m}/${y}
-就業カレンダー ${y}年${m}月
-
-${calUrl}
-
-Chon ten -> Xem lich -> Ky
-名前を選んで → カレンダー確認 → 署名`
+    // 文面は通知ベルと共通（lib/calendar-sign-status.ts）。署名は各自の出面入力リンクから
+    const msg = buildSignRequestMessage(y, m, unsignedWorkers.map(w => w.name))
     navigator.clipboard.writeText(msg).then(() => {
       setCopiedMsg(true)
       setTimeout(() => setCopiedMsg(false), 2000)
@@ -403,32 +396,14 @@ Chon ten -> Xem lich -> Ky
     ymOptions.push({ value, label: baseLabel + suffix })
   }
 
-  // Signature summary (2026-05-27: 人毎ユニーク集計に変更)
-  //   「全員が全現場のカレンダーに署名する」モデルに合わせ、
-  //   人 × 現場ペアではなく「ユニークなスタッフ数」で集計する。
-  //   - 完了 = そのスタッフが対象となる全現場で署名済み
-  //   - 未署名件数 = そのスタッフがまだ署名していない現場数
-  const workerStatusMap = new Map<number, { name: string; total: number; signed: number }>()
-  visibleSites.forEach(s => {
-    s.workers.forEach(w => {
-      const cur = workerStatusMap.get(w.id) || { name: w.name, total: 0, signed: 0 }
-      cur.total += 1
-      // 「承認後に修正された現場の配置者で、まだ再確認していない」場合は、
-      //   過去の署名があっても未完了として扱う（下の「再確認状況」パネルと数字を一致させる）。
-      //   = 署名済み(古い)だが needsResign 相当のスタッフを「署名済み」に数えない。
-      const needsReconfirm = !!(s.wasRevised && w.assignedHere && w.signed && !w.reconfirmedAfterRevision)
-      if (w.signed && !needsReconfirm) cur.signed += 1
-      workerStatusMap.set(w.id, cur)
-    })
-  })
-  const allWorkersStatus = Array.from(workerStatusMap.entries())
-    .map(([id, s]) => ({ id, name: s.name, total: s.total, signed: s.signed, remaining: s.total - s.signed }))
-  const totalWorkers = allWorkersStatus.length
-  const signedWorkers = allWorkersStatus.filter(w => w.remaining === 0).length
+  // 署名状況（人ごと）。「未署名」の決まりは lib/calendar-sign-status.ts だけ（通知ベルと同じ数字になる・2026-09-26）。
+  //   承認済みの現場だけを数える／全員×全現場／承認後の修正は配置者だけ再確認
+  const signSummary = summarizeSignStatus(visibleSites)
+  const allWorkersStatus = signSummary.workers
+  const totalWorkers = signSummary.total
+  const signedWorkers = signSummary.signedCount
   // 未署名スタッフ一覧（残件数の多い順）
-  const unsignedWorkers = allWorkersStatus
-    .filter(w => w.remaining > 0)
-    .sort((a, b) => b.remaining - a.remaining || a.name.localeCompare(b.name))
+  const unsignedWorkers = signSummary.unsigned
 
   // Check if any site has legal limit exceeded
   const hasLegalExceed = visibleSites.some(site => {

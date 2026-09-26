@@ -195,3 +195,34 @@ async function loadCalendarMatrixUncached(ym: string): Promise<CalendarMatrix> {
     assignedWorkerIdsBySite,
   }
 }
+
+/**
+ * 行列を「現場 × 署名対象スタッフ × 署名状態」に投影する（2026-09-26 共通化）。
+ * /api/calendar/status（就業カレンダー画面）と通知ベルが同じものを使い、
+ * 集計は lib/calendar-sign-status.ts summarizeSignStatus で行う（数字が必ず一致する）。
+ */
+export function projectSignSites(m: CalendarMatrix) {
+  return m.sitesWithWorkers.map(sw => {
+    const cal = m.siteCalendars[sw.site.id]
+    // 「承認後に修正された」判定 — approvedAt 以降に updatedAt が動いた
+    const wasRevised = !!(cal?.status === 'approved' && cal.approvedAt && cal.updatedAt && cal.updatedAt > cal.approvedAt)
+    const assignedHere = m.assignedWorkerIdsBySite[sw.site.id]
+    return {
+      siteId: sw.site.id,
+      siteName: sw.site.name,
+      cal,
+      status: cal?.status || null,
+      wasRevised,
+      // 全現場に対して同じ署名対象スタッフ（全員×全現場モデル）
+      workers: m.eligibleForeignWorkers.map(w => {
+        const sigVal = m.signaturesBySite[`${w.id}_${sw.site.id}`]
+        const signed = !!sigVal
+        const signedAt = sigVal && sigVal !== 'true' ? sigVal : null
+        // 修正後に再確認したか: 署名時刻が updatedAt より後（= 修正後にサインした）
+        const reconfirmedAfterRevision = !!(wasRevised && signed && signedAt && cal!.updatedAt && signedAt > cal!.updatedAt)
+        return { id: w.id, name: w.name, signed, signedAt, assignedHere: assignedHere?.has(w.id) || false, reconfirmedAfterRevision }
+      }),
+    }
+  })
+}
+

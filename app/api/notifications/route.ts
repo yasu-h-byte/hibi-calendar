@@ -60,117 +60,40 @@ export async function GET(request: NextRequest) {
     //   通知が全部止まる）。dashboard/ledger と同じく「今日時点で退職済み」のみ除外
     const activeWorkers = main.workers.filter(w => !isAlreadyRetired(w.retired, todayJstIso()))
 
-    // 1. Calendar unsigned workers (承認済みカレンダーのみ、現月＋翌月をチェック)
+    // 1. 就業カレンダー未署名（今月＋翌月）。2026-09-26: 就業カレンダー画面と同じ集計に一本化
+    //   （lib/calendar-matrix.ts projectSignSites ＋ lib/calendar-sign-status.ts summarizeSignStatus）。
+    //   旧: ベルだけ「その現場の配置者」しか数えず、全員×全現場モデルの署名漏れ（新しい現場の分など）が抜けて
+    //   画面 8名・ベル 1名 と食い違った。loadCalendarMatrix は20秒キャッシュ（読み取りを増やさない）
     try {
-      const activeSites = main.sites.filter(s => !s.archived)
-
-      // 帰国情報
-      const homeLeaves = await getAllActiveHomeLeaves()
-
-      // チェック対象: 現月 + 翌月（翌月カレンダーを月末に署名するため）
-      // 注意: siteCalendar と calendarSign の ym はダッシュあり形式 "YYYY-MM"
-      //       massign のキーはダッシュなし形式 "YYYYMM"
+      const { loadCalendarMatrix, projectSignSites } = await import('@/lib/calendar-matrix')
+      const { summarizeSignStatus, buildSignRequestMessage } = await import('@/lib/calendar-sign-status')
       let nextY = now.getFullYear()
       let nextM = now.getMonth() + 2
       if (nextM > 12) { nextM = 1; nextY++ }
       const nextYm = ymKey(nextY, nextM)
-      const ymsToCheck = [currentYm, nextYm]
       const calYmOf = (ym: string) => `${ym.slice(0, 4)}-${ym.slice(4, 6)}`
+      const monthLabel = (ym: string) => `${parseInt(ym.slice(4, 6))}月`
 
-      // 署名対象の判定は共通ヘルパー isCalendarSignTarget に一元化する（2026-09-02 修正）。
-      //   旧: activeWorkers.filter(w => !!w.token) — 「トークン所持＝ベトナム人」という
-      //   前提で書かれていたが、日本人スタッフにマイページ用トークンを発行した時点で崩れ、
-      //   署名対象外の日本人9名が「未署名」として通知に出ていた。
-      //   ヘルパーは visa（日本人除外）・当該月の在籍・全期間帰国もまとめて判定する。
-      const eligibleIdsByYm: Record<string, Set<number>> = {}
-      for (const ym of ymsToCheck) {
-        const fullMonthHlIds = new Set(
-          main.workers.map(w => w.id).filter(id => isFullMonthHomeLeave(id, ym, homeLeaves)),
-        )
-        eligibleIdsByYm[ym] = new Set(
-          main.workers.filter(w => isCalendarSignTarget(w, ym, fullMonthHlIds)).map(w => w.id),
-        )
+      const perMonth: { ym: string; unsigned: { id: number; name: string }[] }[] = []
+      for (const ym of [currentYm, nextYm]) {
+        const summary = summarizeSignStatus(projectSignSites(await loadCalendarMatrix(calYmOf(ym))))
+        perMonth.push({ ym, unsigned: summary.unsigned })
       }
-
-      // 各月の承認済みカレンダーを一括取得
-      const approvedCalendarsByYm: Record<string, Set<string>> = {}
-      for (const ym of ymsToCheck) {
-        const calQuery = query(
-          collection(db, 'siteCalendar'),
-          where('ym', '==', calYmOf(ym)),
-          where('status', '==', 'approved'),
-        )
-        const calSnaps = await getDocs(calQuery)
-        const approvedSet = new Set<string>()
-        calSnaps.forEach(snap => {
-          const data = snap.data()
-          if (data.siteId) approvedSet.add(data.siteId as string)
-        })
-        approvedCalendarsByYm[ym] = approvedSet
-      }
-
-      // 各月の署名状況を一括取得（calendarSignのymはダッシュあり形式）
-      const signaturesByYm: Record<string, Set<string>> = {}
-      for (const ym of ymsToCheck) {
-        const signQuery = query(collection(db, 'calendarSign'), where('ym', '==', calYmOf(ym)))
-        const signSnaps = await getDocs(signQuery)
-        const existing = new Set<string>()
-        // ドキュメントIDは ${workerId}_${ym-with-dash}_${siteId} 形式
-        signSnaps.forEach(snap => existing.add(snap.id))
-        signaturesByYm[ym] = existing
-      }
-
-      // 未署名集計
-      const expectedUnsignedWorkerIds = new Set<number>()
-      const unsignedByYm: Record<string, Set<number>> = {}
-
-      for (const ym of ymsToCheck) {
-        const approvedSites = approvedCalendarsByYm[ym]
-        const existingSignIds = signaturesByYm[ym]
-        unsignedByYm[ym] = new Set<number>()
-
-        if (approvedSites.size === 0) continue
-
-        for (const site of activeSites) {
-          // 工種サイトは親現場で数える（カレンダー・署名は親と共通・2026-09-15）
-          if ((site as { parentId?: string }).parentId) continue
-          if (!approvedSites.has(site.id)) continue
-
-          const assignedOf = (sid: string) => main.massign[`${sid}_${ym}`]?.workers || main.assign[sid]?.workers || []
-          const kidIds = activeSites.filter(k => (k as { parentId?: string }).parentId === site.id).map(k => k.id)
-          const workerIds = Array.from(new Set([...assignedOf(site.id), ...kidIds.flatMap(assignedOf)]))
-
-          for (const wid of workerIds) {
-            if (!eligibleIdsByYm[ym].has(wid)) continue
-            // calendarSignのドキュメントIDはダッシュあり形式
-            const signId = `${wid}_${calYmOf(ym)}_${site.id}`
-            if (!existingSignIds.has(signId)) {
-              expectedUnsignedWorkerIds.add(wid)
-              unsignedByYm[ym].add(wid)
-            }
-          }
-        }
-      }
-
-      if (expectedUnsignedWorkerIds.size > 0) {
-        const unsignedNames: string[] = []
-        for (const wid of expectedUnsignedWorkerIds) {
-          const w = activeWorkers.find(x => x.id === wid)
-          if (w) unsignedNames.push(w.name)
-        }
-        // Messengerテキストは未署名が多い方の月を対象にする（翌月優先）
-        const targetYm = unsignedByYm[nextYm].size > 0 ? nextYm : currentYm
-        const ymLabel = `${targetYm.slice(0, 4)}年${parseInt(targetYm.slice(4, 6))}月`
-        const calYm = `${targetYm.slice(0, 4)}-${targetYm.slice(4, 6)}`
-        const calUrl = `https://hibi-calendar.vercel.app/calendar/public?ym=${calYm}`
-        const unsignedCount = expectedUnsignedWorkerIds.size
+      const withUnsigned = perMonth.filter(p => p.unsigned.length > 0)
+      if (withUnsigned.length > 0) {
+        // 通知文は月ごとの人数（画面は月を選んで見るので、月ごとに数字が一致する）
+        const detail = withUnsigned.map(p => `${monthLabel(p.ym)} ${p.unsigned.length}名`).join('・')
+        const count = Math.max(...withUnsigned.map(p => p.unsigned.length))
+        // Messenger 用の文面は翌月を優先
+        const target = withUnsigned.find(p => p.ym === nextYm) || withUnsigned[0]
+        const targetYm = target.ym
         notifications.push({
           id: 'unsigned-calendar',
           icon: '\uD83D\uDCC5',
-          message: `就業カレンダー未署名: ${unsignedCount}名が未完了です`,
+          message: `就業カレンダー未署名: ${detail}`,
           type: 'warning',
-          count: unsignedCount,
-          messengerText: `HIBI CONSTRUCTION\n就業カレンダー ${ymLabel}\nLịch làm việc tháng ${parseInt(targetYm.slice(4, 6))}\n\n${calUrl}\n\n名前を選んで → カレンダー確認 → 署名\nChọn tên → Xem lịch → Ký\n\n未署名 / Chưa ký:\n${unsignedNames.join(', ')}`,
+          count,
+          messengerText: buildSignRequestMessage(Number(targetYm.slice(0, 4)), Number(targetYm.slice(4, 6)), target.unsigned.map(w => w.name)),
         })
       }
     } catch (e) {

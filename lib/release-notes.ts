@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260926_calendar_sign',
+    title: '【修正】ベルの「カレンダー未署名」の人数を画面と同じに',
+    content:
+      'ベルの未署名の人数が、就業カレンダー画面より少なく出ていました（新しい現場のカレンダーへの署名漏れを数えていなかったため）。今は画面と同じ人数を「10月 8名」のように月ごとに出します。\n'
+      + 'スタッフへ送る文面も「いつもの出面入力のリンク（QR）から署名」に直しました（名前を選ぶ古いページは使いません）。',
+    category: 'fix',
+    publishedAt: '2026-09-26T20:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20260926_security',
     title: 'セキュリティ強化: もう一度ログインしてください',
     content:
