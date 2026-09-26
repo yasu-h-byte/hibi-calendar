@@ -116,7 +116,7 @@ interface SubconMonthly {
 //   新: 帳票出力タブに「キャシュモ提出（毎月の2点）」「根拠書類」「社内用」の3グループ。
 //       会社別の帳票（出面一覧・勤務予定シフト・実労働時間明細・月次集計Excel・計算根拠PDF）は
 //       上2グループの会社別の行から出す。ここ（カード）は社内用だけ。対象月はタブ上部で1つ選ぶ
-type ExportType = 'monthlyExcel' | 'perSite' | 'subcon' | 'bukake' | 'pl'
+type ExportType = 'monthlyExcel' | 'perSite' | 'subcon' | 'bukake' | 'pl' | 'consentLedger'
 
 interface ExportCard {
   icon: string
@@ -169,6 +169,15 @@ const EXPORT_CARDS: ExportCard[] = [
     type: 'pl',
     needsYm: false,
     needsOrg: true,
+  },
+  // 2026-09-26: 帳票はすべてここから（就業カレンダー画面の下にも同じボタンあり）
+  {
+    icon: '✍️',
+    title: 'カレンダー 周知・同意台帳',
+    description: '変形労働時間制の周知・同意の記録（誰がいつどの現場のカレンダーを承認したか）。労基署対応用。過去の月もいつでも出力できます。',
+    format: 'Excel出力',
+    type: 'consentLedger',
+    needsYm: true,
   },
 ]
 
@@ -256,7 +265,6 @@ function displayLegalOtHours(w: OtDisplayable): number {
 }
 
 type WorkerSortKey = 'name' | 'org' | 'workDays' | 'plDays' | 'otHours' | 'rate' | 'totalCost'
-type SubconSortKey = 'name' | 'type' | 'workDays' | 'otCount' | 'rate' | 'cost'
 
 // ────────────────────────────────────────
 //  Tabs
@@ -266,7 +274,6 @@ const TABS = [
   { key: 'all', label: '全体' },
   { key: 'hibi', label: '日比建設' },
   { key: 'hfu', label: 'HFU' },
-  { key: 'subcon', label: '外注' },
 ] as const
 
 type TabKey = typeof TABS[number]['key']
@@ -336,8 +343,6 @@ function MonthlyPageInner() {
   const [workerSortAsc, setWorkerSortAsc] = useState(true)
 
   // Subcon sort
-  const [subconSortKey, setSubconSortKey] = useState<SubconSortKey>('name')
-  const [subconSortAsc, setSubconSortAsc] = useState(true)
 
   const ymOptions = useMemo(() => getYmOptions(12), [])
 
@@ -589,39 +594,6 @@ function MonthlyPageInner() {
     else { setWorkerSortKey(key); setWorkerSortAsc(true) }
   }
 
-  // ── Subcon sorting ──
-
-  const sortedSubcons = useMemo(() => {
-    if (!data) return []
-    const list = [...data.subcons]
-    list.sort((a, b) => {
-      let cmp = 0
-      switch (subconSortKey) {
-        case 'name': cmp = a.name.localeCompare(b.name); break
-        case 'type': cmp = a.type.localeCompare(b.type); break
-        case 'workDays': cmp = a.workDays - b.workDays; break
-        case 'otCount': cmp = a.otCount - b.otCount; break
-        case 'rate': cmp = a.rate - b.rate; break
-        case 'cost': cmp = a.cost - b.cost; break
-      }
-      return subconSortAsc ? cmp : -cmp
-    })
-    return list
-  }, [data, subconSortKey, subconSortAsc])
-
-  const subconTotals = useMemo(() => {
-    if (!data) return { workDays: 0, otCount: 0, cost: 0 }
-    return {
-      workDays: data.subcons.reduce((s, sc) => s + sc.workDays, 0),
-      otCount: data.subcons.reduce((s, sc) => s + sc.otCount, 0),
-      cost: data.subcons.reduce((s, sc) => s + sc.cost, 0),
-    }
-  }, [data])
-
-  const toggleSubconSort = (key: SubconSortKey) => {
-    if (subconSortKey === key) setSubconSortAsc(!subconSortAsc)
-    else { setSubconSortKey(key); setSubconSortAsc(true) }
-  }
 
   // ── Sort indicator ──
 
@@ -669,7 +641,7 @@ function MonthlyPageInner() {
 
   // ── Render ──
 
-  const isWorkerTab = tab !== 'subcon'
+  // 2026-09-26: 旧「外注」タブは原価・収益の「外注先別原価明細」と同じ表だったので廃止（原価・収益へ一本化）
 
   // Dynamic column count for empty state
   // 給与列: 旧ルール=5列, 新ルール=9列（+所定外労働/法休手当/深夜手当/休業手当）
@@ -971,17 +943,18 @@ function MonthlyPageInner() {
             {t.label}
           </button>
         ))}
+        <a href="/cost" className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-hibi-navy underline">外注の人工・金額は「原価・収益」へ →</a>
 
         {/* 所定日数: カレンダーデータがある月は自動取得、ない月は手入力。
             2026-06-12 (監査 Sprint2): 旧ルール継続者（フン）が在籍する月は、カレンダーが
             あっても全社所定の入力欄を常時表示する（フンの欠勤控除は main.workDays[ym] を
             使うため毎月の設定が必要。旧: 欄が消えて Firestore 直編集が必要だった） */}
-        {isWorkerTab && data?.hasCalendarData && !data?.hasOldRulesWorkers && (
+        {data?.hasCalendarData && !data?.hasOldRulesWorkers && (
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600">
             <span className="text-xs text-green-600 dark:text-green-400 font-medium whitespace-nowrap">📅 所定日数: カレンダーから自動取得</span>
           </div>
         )}
-        {isWorkerTab && (!data?.hasCalendarData || data?.hasOldRulesWorkers) && (
+        {(!data?.hasCalendarData || data?.hasOldRulesWorkers) && (
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-300 dark:border-gray-600 flex-wrap">
             <label className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap" title={data?.hasCalendarData ? '新ルールのスタッフは現場カレンダーから自動取得。この欄は旧ルール継続者（フン等）の所定日数（日曜以外−祝日）' : undefined}>
               {data?.hasCalendarData ? '所定日数(旧ルール用):' : '所定日数:'}
@@ -1026,7 +999,7 @@ function MonthlyPageInner() {
         )}
 
         {/* 2026-06-XX 追加 (UI #3): 異常スタッフのみフィルタ */}
-        {isWorkerTab && validationOnTab.affectedWorkerIds.length > 0 && (
+        {validationOnTab.affectedWorkerIds.length > 0 && (
           <button
             onClick={() => setShowAnomalyOnly(s => !s)}
             className={`ml-4 pl-4 border-l border-gray-300 dark:border-gray-600 flex items-center gap-2 transition ${
@@ -1062,7 +1035,7 @@ function MonthlyPageInner() {
       {/* 2026-06-12 (監査 Sprint2-D): 締め後に支給額が変わった場合の警告バナー。
           締め時に保存したスナップショットと現行計算を突合し、単価変更・出面修正等で
           「支払った金額」と画面の金額がズレたことを検知する */}
-      {!loading && data && isWorkerTab && (data.snapshotDiffs?.length || 0) > 0 && (
+      {!loading && data && (data.snapshotDiffs?.length || 0) > 0 && (
         <div className="rounded-xl p-4 border bg-red-50 dark:bg-red-900/20 border-red-400 dark:border-red-700">
           <div className="flex items-start gap-3">
             <span className="text-2xl">🚨</span>
@@ -1101,7 +1074,7 @@ function MonthlyPageInner() {
       )}
 
       {/* 給与計算の自動検算バナー（2026-06-XX 追加） */}
-      {!loading && data && isWorkerTab && validationResult.total > 0 && (
+      {!loading && data && validationResult.total > 0 && (
         <div className={`rounded-xl p-4 border ${
           validationResult.critical > 0
             ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700'
@@ -1151,7 +1124,7 @@ function MonthlyPageInner() {
       {/* 2026-06-12 (監査 Sprint2-C): 異常0件でも検算の実施状況を常時表示。
           旧: 異常時のみバナー → 「検算対象外（日本人・フン・完全月給）も含めて全員OK」と
           誤認するリスクがあった。対象/対象外の人数を明示する */}
-      {!loading && data && isWorkerTab && validationResult.total === 0 && (() => {
+      {!loading && data && validationResult.total === 0 && (() => {
         const targets = tabFilteredWorkers.filter(w =>
           w.visa && w.visa !== 'none' && (w.hourlyRate || 0) > 0 && !(w.salary && w.salary > 0) && !w.useOldRules)
         const exempt = tabFilteredWorkers.length - targets.length
@@ -1177,7 +1150,7 @@ function MonthlyPageInner() {
           sticky は「スクロールする祖先」を基準に効くため、横スクロールだけの
           overflow-x-auto ではページ全体のスクロールに追随できない。高さ上限つきの
           スクロール領域にしたうえで、thead/tfoot のセルを sticky にしている。 */}
-      {!loading && data && isWorkerTab && (
+      {!loading && data && (
         <div
           className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-auto"
           style={{ maxHeight: 'calc(100vh - 180px)' }}
@@ -1745,96 +1718,6 @@ function MonthlyPageInner() {
         </div>
       )}
 
-      {/* Subcon Table (外注) */}
-      {!loading && data && !isWorkerTab && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
-                <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap"
-                  onClick={() => toggleSubconSort('name')}
-                >
-                  外注先{sortArrow(subconSortKey === 'name', subconSortAsc)}
-                </th>
-                <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
-                  onClick={() => toggleSubconSort('rate')}
-                >
-
-                  人工単価{sortArrow(subconSortKey === 'rate', subconSortAsc)}
-                </th>
-                <th className="px-3 py-3 whitespace-nowrap text-right">残業単価</th>
-                <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
-                  onClick={() => toggleSubconSort('workDays')}
-                >
-                  人工数{sortArrow(subconSortKey === 'workDays', subconSortAsc)}
-                </th>
-                <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
-                  onClick={() => toggleSubconSort('otCount')}
-                >
-                  残業人数{sortArrow(subconSortKey === 'otCount', subconSortAsc)}
-                </th>
-                <th
-                  className="px-3 py-3 cursor-pointer hover:text-hibi-navy whitespace-nowrap text-right"
-                  onClick={() => toggleSubconSort('cost')}
-                >
-                  合計金額{sortArrow(subconSortKey === 'cost', subconSortAsc)}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedSubcons.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-gray-400">
-                    データがありません
-                  </td>
-                </tr>
-              ) : (
-                sortedSubcons.map(sc => (
-                  <tr key={sc.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
-                    <td className="px-3 py-2.5 font-medium whitespace-nowrap">
-                      {sc.name}
-                      <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${sc.type === 'tobi' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {TYPE_LABELS[sc.type] || sc.type}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                      {fmtYen(sc.rate)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                      {sc.otRate > 0 ? fmtYen(sc.otRate) : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.workDays)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">
-                      {sc.otCount > 0 ? fmtNum(sc.otCount) : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">
-                      {fmtYen(Math.round(sc.cost))}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-            {sortedSubcons.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold text-hibi-navy dark:text-white">
-                  <td className="px-3 py-3">合計 ({data!.subcons.length}社)</td>
-                  <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3"></td>
-                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(subconTotals.workDays)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{fmtNum(subconTotals.otCount)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">
-                    {fmtYen(Math.round(subconTotals.cost))}
-                  </td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      )}
       </>}
 
       {/* 給与計算根拠モーダル（透明化・監査用） */}

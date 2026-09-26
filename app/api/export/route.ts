@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { requireCap } from '@/lib/auth'
 import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, getSubconRate } from '@/lib/compute'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
@@ -21,9 +21,10 @@ import { db } from '@/lib/firebase'
 import { collection, getDocs, query, where } from '@/lib/fsdb'
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: 帳票（給与・出面・有給・同意台帳）は事務所の人だけ（lib/permissions.ts monthly.view）。
+  //   旧: パスワードがあれば職長でも給与の Excel を出せた
+  const denied = await requireCap(request, 'monthly.view')
+  if (denied) return denied
 
   const { searchParams } = new URL(request.url)
   const type = searchParams.get('type')
