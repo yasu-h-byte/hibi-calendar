@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, clearPasswordCache, getApiAuthUser, requireCap } from '@/lib/auth'
+import { hashPassword, isHashed, verifyPassword } from '@/lib/password'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
@@ -47,8 +48,10 @@ export async function GET(request: NextRequest) {
       if (tier !== 'super-admin' && tier !== 'admin') {
         return NextResponse.json({ error: 'この操作には管理者パスワードが必要です' }, { status: 403 })
       }
+      // 2026-09-26: パスワードそのものは返さない（保存はハッシュ・lib/password.ts）。設定済みかどうかだけ
       const userPasswords = (result.data.userPasswords as Record<string, string>) || {}
-      return NextResponse.json({ userPasswords })
+      const status = Object.fromEntries(Object.entries(userPasswords).filter(([, v]) => !!v).map(([k]) => [k, true]))
+      return NextResponse.json({ passwordSet: status })
     }
 
     if (action === 'getCompanyProfile') {
@@ -91,13 +94,31 @@ export async function POST(request: NextRequest) {
       if (tier !== 'super-admin' && tier !== 'admin') {
         return NextResponse.json({ error: 'この操作には管理者パスワードが必要です' }, { status: 403 })
       }
-      const { userPasswords } = body
-      if (!userPasswords || typeof userPasswords !== 'object') {
-        return NextResponse.json({ error: 'userPasswords required' }, { status: 400 })
+      // 2026-09-26: changes = { workerId: 新しいパスワード | null（削除） }。触れていない人はそのまま。
+      //   保存はすべてハッシュ（平文で残っていた古い値もこのときハッシュ化する）
+      const { changes } = body as { changes?: Record<string, string | null> }
+      if (!changes || typeof changes !== 'object') {
+        return NextResponse.json({ error: 'changes required' }, { status: 400 })
+      }
+      const current = await getMainDoc()
+      const stored = ((current?.data.userPasswords as Record<string, string>) || {})
+      const next: Record<string, string> = {}
+      for (const [wid, v] of Object.entries(stored)) if (v) next[wid] = isHashed(v) ? v : hashPassword(v)
+      for (const [wid, v] of Object.entries(changes)) {
+        if (v === null || v === '') { delete next[wid]; continue }
+        if (typeof v !== 'string' || v.length < 8) {
+          return NextResponse.json({ error: 'パスワードは8文字以上にしてください' }, { status: 400 })
+        }
+        // 他の人・代表・職長の共通パスワードと同じだと、ログインで誰か決められない
+        if (v === process.env.SUPER_ADMIN_PASSWORD || v === process.env.ADMIN_PASSWORD
+          || Object.entries(stored).some(([other, sv]) => other !== wid && verifyPassword(v, sv))) {
+          return NextResponse.json({ error: 'ほかの人（または代表・職長の共通パスワード）と同じパスワードは使えません' }, { status: 400 })
+        }
+        next[wid] = hashPassword(v)
       }
       const docRef = doc(db, 'demmen', 'main')
       const { updateDoc } = await import('@/lib/fsdb')
-      await updateDoc(docRef, { userPasswords })
+      await updateDoc(docRef, { userPasswords: next })
       clearPasswordCache()  // キャッシュを即時無効化して新パスワードを即座に有効にする
       await logActivity('admin', 'settings.userPasswords', `個人パスワードを更新 (${tier})`)
       return NextResponse.json({ success: true })

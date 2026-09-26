@@ -19,6 +19,7 @@ import { doc, getDoc } from '@/lib/fsdb'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  // auth: public — 稼働確認（個人情報なし）
   let adminMode = false
   let diag: ReturnType<typeof getAdminStatus> | null = null
   try {

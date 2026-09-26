@@ -12,9 +12,8 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, getDocs, collection } from '@/lib/fsdb'
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: 権限表（lib/permissions.ts attendance.view）
+  { const denied = await requireCap(request, 'attendance.view'); if (denied) return denied }
 
   const siteId = request.nextUrl.searchParams.get('siteId')
   const ym = request.nextUrl.searchParams.get('ym')

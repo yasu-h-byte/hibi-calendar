@@ -8,7 +8,7 @@
  * - POST（管理者・body.resolve）: 管理者が「解決済み」に更新
  * - GET（管理者）: 当月の質問一覧を取得
  */
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { collection, addDoc, getDocs, query, where, doc, updateDoc } from '@/lib/fsdb'
@@ -60,9 +60,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: 権限表（lib/permissions.ts calendar.view）
+  { const denied = await requireCap(request, 'calendar.view'); if (denied) return denied }
   const ym = request.nextUrl.searchParams.get('ym')
   if (!ym) return NextResponse.json({ error: 'ym required' }, { status: 400 })
   try {

@@ -350,8 +350,10 @@ export default function SettingsPage() {
   const [savingHfu, setSavingHfu] = useState(false)
 
   // User passwords
-  const [userPasswords, setUserPasswords] = useState<Record<string, string>>({})
-  const [pwWorkers, setPwWorkers] = useState<{ id: number; name: string; jobType: string }[]>([])
+  // 2026-09-26: パスワードそのものは画面に出さない（保存はハッシュ）。設定済みかどうかと、今回の変更だけを持つ
+  const [passwordSet, setPasswordSet] = useState<Record<string, boolean>>({})
+  const [pwChanges, setPwChanges] = useState<Record<string, string | null>>({})
+  const [pwWorkers, setPwWorkers] = useState<{ id: number; name: string; jobType: string; retired?: string }[]>([])
   const [savingPw, setSavingPw] = useState(false)
 
   // Backup/Restore
@@ -449,17 +451,18 @@ export default function SettingsPage() {
       ])
       if (pwRes.ok) {
         const data = await pwRes.json()
-        setUserPasswords(data.userPasswords || {})
+        setPasswordSet(data.passwordSet || {})
       }
       if (wRes.ok) {
         const data = await wRes.json()
         setPwWorkers(
           (data.workers || [])
             // 個人パスワードでログインする対象: 役員(yakuin) / 事務(jimu) / 事業責任者=approver(workerId=1, 政仁さん)
+            // 退職済みでもパスワードが残っている人は出す（消せるように）
             .filter((w: { id?: number; retired?: string; jobType?: string }) =>
-              !w.retired && (w.jobType === 'yakuin' || w.jobType === 'jimu' || w.id === 1)
+              w.jobType === 'yakuin' || w.jobType === 'jimu' || w.id === 1
             )
-            .map((w: { id: number; name: string; jobType: string }) => ({ id: w.id, name: w.name, jobType: w.jobType }))
+            .map((w: { id: number; name: string; jobType: string; retired?: string }) => ({ id: w.id, name: w.name, jobType: w.jobType, retired: w.retired }))
         )
       }
     } catch { /* ignore */ }
@@ -985,10 +988,15 @@ export default function SettingsPage() {
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
             <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">個人パスワード設定</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-              役員・事務スタッフの個人ログインパスワード。設定すると名前選択なしで直接ログインできます。
+              役員・事務スタッフの個人ログインパスワード（名前選択なしで直接ログイン）。
+              パスワードは暗号化して保存し、画面には表示しません。変えるときは新しいパスワードを入れて「保存」（8文字以上・名前や誕生日など推測されやすいものは避ける）。
+              変えた人・消した人は、使っている端末でログインし直しになります。
             </p>
             <div className="space-y-3">
-              {pwWorkers.map(w => {
+              {pwWorkers
+                .filter(w => !w.retired || passwordSet[String(w.id)])
+                .map(w => {
+                const key = String(w.id)
                 // 政仁さん（workerId=1）は事業責任者ロール
                 const isApprover = w.id === 1
                 const badgeClass = isApprover
@@ -997,19 +1005,30 @@ export default function SettingsPage() {
                     ? 'bg-red-100 text-red-700'
                     : 'bg-purple-100 text-purple-700'
                 const badgeLabel = isApprover ? '事業責任者' : w.jobType === 'yakuin' ? '役員' : '事務'
+                const change = pwChanges[key]
+                const isSet = !!passwordSet[key]
                 return (
-                <div key={w.id} className="flex items-center gap-3">
-                  <span className="text-sm font-medium w-28">{w.name}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${badgeClass}`}>
-                    {badgeLabel}
+                <div key={w.id} className="flex items-center gap-3 flex-wrap">
+                  <span className="text-sm font-medium w-28">{w.name}{w.retired && <span className="text-[10px] text-gray-400">（退職）</span>}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${badgeClass}`}>{badgeLabel}</span>
+                  <span className={`text-[11px] w-16 ${change === null ? 'text-red-600' : isSet ? 'text-emerald-600' : 'text-gray-400'}`}>
+                    {change === null ? '削除する' : isSet ? '✓ 設定済み' : '未設定'}
                   </span>
                   <input
                     type="text"
-                    value={userPasswords[String(w.id)] || ''}
-                    onChange={e => setUserPasswords(prev => ({ ...prev, [String(w.id)]: e.target.value }))}
-                    placeholder="パスワード未設定"
-                    className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                    autoComplete="off"
+                    value={typeof change === 'string' ? change : ''}
+                    onChange={e => setPwChanges(prev => ({ ...prev, [key]: e.target.value }))}
+                    placeholder={isSet ? '変えるときだけ新しいパスワードを入力' : '新しいパスワード（8文字以上）'}
+                    className="flex-1 min-w-[12rem] border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                   />
+                  {isSet && (
+                    <button type="button"
+                      onClick={() => setPwChanges(prev => { const n = { ...prev }; if (n[key] === null) delete n[key]; else n[key] = null; return n })}
+                      className="text-xs text-red-600 border border-red-200 rounded px-2 py-1 hover:bg-red-50">
+                      {change === null ? '取り消し' : 'ログインできなくする'}
+                    </button>
+                  )}
                 </div>
                 )
               })}
@@ -1017,15 +1036,22 @@ export default function SettingsPage() {
             {pwWorkers.length > 0 && (
               <button
                 onClick={async () => {
+                  // 空欄は「変更なし」。null は削除
+                  const changes = Object.fromEntries(Object.entries(pwChanges).filter(([, v]) => v === null || (typeof v === 'string' && v !== '')))
+                  if (Object.keys(changes).length === 0) { showMessage('error', '変更がありません'); return }
                   setSavingPw(true)
                   try {
                     const res = await fetch('/api/settings', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                      body: JSON.stringify({ action: 'saveUserPasswords', userPasswords }),
+                      body: JSON.stringify({ action: 'saveUserPasswords', changes }),
                     })
-                    if (res.ok) showMessage('success', '個人パスワードを保存しました')
-                    else showMessage('error', '保存に失敗しました')
+                    const data = await res.json().catch(() => ({}))
+                    if (res.ok) {
+                      showMessage('success', '個人パスワードを保存しました（本人に口頭で伝えてください）')
+                      setPwChanges({})
+                      fetchUserPasswords()
+                    } else showMessage('error', data.error || '保存に失敗しました')
                   } catch { showMessage('error', 'エラーが発生しました') }
                   finally { setSavingPw(false) }
                 }}

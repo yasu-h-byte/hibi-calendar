@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260926_security',
+    title: 'セキュリティ強化: もう一度ログインしてください',
+    content:
+      'パスワードの守り方を強くしました。アプリを開くと一度だけ「もう一度ログインしてください」と出ます。いつものパスワードでログインすれば大丈夫です。\n'
+      + '職長のみなさんが見られる情報も整理しました（全員の給与や売上などは、事務所の人だけが見られます）。',
+    category: 'info',
+    publishedAt: '2026-09-26T19:00:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20260926_foreman',
     title: '職長のみなさんへ: ログインし直しと、承認待ちのお知らせ',
     content:

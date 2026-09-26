@@ -39,6 +39,7 @@ function changesPayFields(updates: Record<string, unknown>, before: Record<strin
 }
 
 export async function GET(request: NextRequest) {
+  // auth: any-login — 中身は役割で絞る（給与欄は workers.view、トークンは workers.edit のみ）
   if (!await checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

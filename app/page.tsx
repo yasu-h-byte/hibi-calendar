@@ -36,7 +36,8 @@ export default function LoginPage() {
       const data = await res.json()
       // Super admin or 個人パスワード: 名前選択なしで直接ログイン
       if (data.superAdmin || data.directLogin) {
-        localStorage.setItem('hibi_auth', JSON.stringify({ password, user: data.user }))
+        // パスワードではなくサーバーが発行した通行証を保存して API に送る（2026-09-26）
+        localStorage.setItem('hibi_auth', JSON.stringify({ password: data.sessionToken || password, user: data.user }))
         router.push('/dashboard')
         return
       }

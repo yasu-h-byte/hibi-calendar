@@ -22,7 +22,19 @@ vi.mock('@/lib/fsdb', () => ({
   getDoc: async () => ({ exists: () => true, data: () => structuredClone(main) }),
 }))
 
-const req = (pw: string) => ({ headers: new Headers({ 'x-admin-password': pw }) }) as never
+/**
+ * ログイン後に API へ届くのは通行証（2026-09-26〜）。テストでもパスワードから通行証を作って送る
+ * （代表 → 代表の通行証、個人パスワード → その人の通行証、共通パスワード・不明 → そのまま＝拒否される）
+ */
+const req = async (pw: string) => {
+  const { createOwnerToken, createPersonalToken } = await import('@/lib/session-token')
+  const { passwordFingerprint } = await import('@/lib/password')
+  let header = pw
+  if (pw === 'pw-super') header = createOwnerToken()
+  const hit = Object.entries(main.userPasswords).find(([, v]) => v === pw)
+  if (hit) header = createPersonalToken(Number(hit[0]), passwordFingerprint(hit[1]))
+  return ({ headers: new Headers({ 'x-admin-password': header }) }) as never
+}
 
 beforeAll(() => {
   process.env.ADMIN_PASSWORD = 'pw-common'
@@ -40,7 +52,7 @@ describe("requireCap('monthly.close')（月締め）", () => {
     ['不明', 'nope', false],
   ])('%s → %s', async (_label, pw, ok) => {
     const { requireCap } = await import('@/lib/auth')
-    expect(await requireCap(req(pw), 'monthly.close') === null).toBe(ok)
+    expect(await requireCap(await req(pw), 'monthly.close') === null).toBe(ok)
   })
 })
 
@@ -52,6 +64,6 @@ describe('requireSuperAdmin（出面データの保守ツール）', () => {
     ['共通パスワード', 'pw-common', false],
   ])('%s → %s', async (_label, pw, ok) => {
     const { requireSuperAdmin } = await import('@/lib/auth')
-    expect(await requireSuperAdmin(req(pw)) === null).toBe(ok)
+    expect(await requireSuperAdmin(await req(pw)) === null).toBe(ok)
   })
 })

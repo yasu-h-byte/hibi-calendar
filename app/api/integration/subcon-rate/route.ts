@@ -8,6 +8,7 @@ import { checkIntegrationKey, setSubconSiteRate } from '@/lib/integration'
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
+  // auth: 経営コックピットの合言葉（checkIntegrationKey）
   if (!checkIntegrationKey(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const body = (await request.json()) as { subconId?: string; siteId?: string; rate?: number; reason?: string }

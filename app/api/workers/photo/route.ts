@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDocs, collection, setDoc, deleteDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
@@ -35,6 +35,7 @@ interface PhotoDoc {
 }
 
 export async function GET(request: NextRequest) {
+  // auth: any-login — 顔写真（出面・評価の画面で表示）
   try {
     if (!await checkApiAuth(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -62,9 +63,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!await checkApiAuth(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // 2026-09-26: 権限表（lib/permissions.ts workers.edit）
+    { const denied = await requireCap(request, 'workers.edit'); if (denied) return denied }
 
     const body = await request.json().catch(() => ({}))
     const { action, workerId, workerName } = body

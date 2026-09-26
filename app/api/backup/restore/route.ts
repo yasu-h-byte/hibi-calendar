@@ -19,6 +19,7 @@ import { logActivity } from '@/lib/activity'
  * 認証: x-admin-password ヘッダ（admin/super-admin のみ）
  */
 export async function GET(request: NextRequest) {
+  // auth: 代表だけ（actor === super-admin を下で確認）
   // バックアップ一覧・プレビューも admin 限定（中身に給与情報等が含まれるため）
   const authResult = await getApiAuthUser(request)
   if (!authResult.authorized) {
@@ -75,6 +76,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // auth: 代表だけ（actor === super-admin を下で確認）
   // ⚠️ 復元は admin / super-admin (靖仁さん) 限定。職長・事務・経理の個人パスワードでは拒否。
   // 任意のスナップショットで demmen/main や att_YYYYMM を全置換できる強力な操作のため。
   const authResult = await getApiAuthUser(request)

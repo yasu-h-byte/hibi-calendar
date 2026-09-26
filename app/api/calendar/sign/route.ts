@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(_request: NextRequest) {
+  // auth: public — 廃止済み（常に 410）
   return NextResponse.json(
     {
       error: 'この承認方法は廃止されました。各自の個人リンク（出面と同じQR/リンク）から承認してください。 / Phương thức này đã ngừng. Vui lòng ký từ link cá nhân của bạn.',

@@ -3,6 +3,7 @@ import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 import { isCalendarSignTarget } from '@/lib/workers'
 
 export async function GET(request: Request) {
+  // auth: public — 公開カレンダー（個人情報なし）
   const url = new URL(request.url)
   const ym = url.searchParams.get('ym')
   if (!ym) {

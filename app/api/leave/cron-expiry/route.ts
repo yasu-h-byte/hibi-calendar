@@ -25,9 +25,12 @@ export async function GET(request: NextRequest) {
   }
 
   // processExpiry アクションを内部で実行
-  // 代表（SUPER_ADMIN_PASSWORD）として /api/leave を叩く。2026-09-26: 共通パスワードは API で通らなくなったため
-  const adminPassword = process.env.SUPER_ADMIN_PASSWORD
-  if (!adminPassword) {
+  // 代表の通行証で /api/leave を叩く（2026-09-26: API はパスワードそのものを受け付けなくなったため）
+  const { createOwnerToken } = await import('@/lib/session-token')
+  let adminPassword: string
+  try {
+    adminPassword = createOwnerToken()
+  } catch {
     return NextResponse.json({ error: 'SUPER_ADMIN_PASSWORD not configured' }, { status: 500 })
   }
 

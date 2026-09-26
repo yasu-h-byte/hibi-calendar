@@ -55,3 +55,60 @@ export function verifyForemanToken(token: string, nowSec = Math.floor(Date.now()
   if (parseInt(expStr, 10) < nowSec) return null
   return parseInt(widStr, 10)
 }
+
+// ─────────────────────────────────────────────
+// 事務・役員・事業責任者（個人パスワード）と代表の通行証（2026-09-26）
+//   ログイン後はパスワードをブラウザに残さず、この通行証を送る。
+//   個人: `pt1.<workerId>.<有効期限>.<パスワードの指紋>.<署名>` — パスワードを変える・消すと指紋が変わり無効
+//   代表: `st1.<有効期限>.<署名>` — 鍵に SUPER_ADMIN_PASSWORD を含むので、代表パスワードを変えると無効
+// ─────────────────────────────────────────────
+/** 有効期間 30日 */
+export const OFFICE_TOKEN_TTL_SEC = 30 * 24 * 60 * 60
+
+export function isPersonalTokenShape(v: string): boolean {
+  return v.startsWith('pt1.')
+}
+export function isOwnerTokenShape(v: string): boolean {
+  return v.startsWith('st1.')
+}
+
+export function createPersonalToken(workerId: number, fingerprint: string, nowSec = Math.floor(Date.now() / 1000)): string {
+  const k = key()
+  if (!k) throw new Error('SUPER_ADMIN_PASSWORD / ADMIN_PASSWORD not configured')
+  const body = `pt1.${workerId}.${nowSec + OFFICE_TOKEN_TTL_SEC}.${fingerprint}`
+  return `${body}.${sign(body, k)}`
+}
+
+/** 署名・期限が正しければ { workerId, fingerprint }（指紋が今の保存値と合うかは呼び出し側で確かめる） */
+export function readPersonalToken(token: string, nowSec = Math.floor(Date.now() / 1000)): { workerId: number; fingerprint: string } | null {
+  const k = key()
+  if (!k) return null
+  const parts = token.split('.')
+  if (parts.length !== 5 || parts[0] !== 'pt1') return null
+  const [, widStr, expStr, fp, sig] = parts
+  if (!/^\d+$/.test(widStr) || !/^\d+$/.test(expStr) || !/^[A-Za-z0-9_-]+$/.test(fp)) return null
+  const expected = sign(`pt1.${widStr}.${expStr}.${fp}`, k)
+  const a = Buffer.from(sig), b = Buffer.from(expected)
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null
+  if (parseInt(expStr, 10) < nowSec) return null
+  return { workerId: parseInt(widStr, 10), fingerprint: fp }
+}
+
+export function createOwnerToken(nowSec = Math.floor(Date.now() / 1000)): string {
+  const k = key()
+  if (!k) throw new Error('SUPER_ADMIN_PASSWORD / ADMIN_PASSWORD not configured')
+  const body = `st1.${nowSec + OFFICE_TOKEN_TTL_SEC}`
+  return `${body}.${sign(body, k)}`
+}
+
+export function verifyOwnerToken(token: string, nowSec = Math.floor(Date.now() / 1000)): boolean {
+  const k = key()
+  if (!k) return false
+  const parts = token.split('.')
+  if (parts.length !== 3 || parts[0] !== 'st1' || !/^\d+$/.test(parts[1])) return false
+  const expected = sign(`st1.${parts[1]}`, k)
+  const a = Buffer.from(parts[2]), b = Buffer.from(expected)
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return false
+  return parseInt(parts[1], 10) >= nowSec
+}
+

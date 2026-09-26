@@ -18,6 +18,7 @@ import { getApiAuthUser } from '@/lib/auth'
  *   管理画面（app/(app)/layout.tsx）は 401 を受けるとログイン画面へ戻す＝ログインし直しで通行証に切り替わる
  */
 export async function POST(request: NextRequest) {
+  // auth: any-login — 本人のアクセス記録（本人はサーバーで特定）
   try {
     const auth = await getApiAuthUser(request)
     if (!auth.authorized) {

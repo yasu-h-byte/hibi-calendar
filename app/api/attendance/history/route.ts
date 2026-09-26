@@ -24,6 +24,7 @@ async function requireAdmin(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  // auth: requireAdmin() の中で attendance.history
   const a = await requireAdmin(request)
   if (a.error) return a.error
   const ym = request.nextUrl.searchParams.get('ym') || undefined
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // auth: requireAdmin() の中で attendance.history
   const a = await requireAdmin(request)
   if (a.error) return a.error
   const { id } = (await request.json()) as { id?: string }

@@ -8,6 +8,7 @@ import { checkIntegrationKey, buildIntegrationMonth } from '@/lib/integration'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  // auth: 経営コックピットの合言葉（checkIntegrationKey）
   if (!checkIntegrationKey(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const ym = request.nextUrl.searchParams.get('ym') || ''
   if (!/^\d{6}$/.test(ym)) return NextResponse.json({ error: 'ym (YYYYMM) required' }, { status: 400 })

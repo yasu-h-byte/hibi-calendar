@@ -7,6 +7,7 @@ import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
 import { ym7 } from '@/lib/ym'
 
 export async function GET(request: NextRequest) {
+  // auth: public — 公開カレンダー（個人情報なし）
   const siteId = request.nextUrl.searchParams.get('siteId')
   const ymParam = request.nextUrl.searchParams.get('ym')
   if (!siteId || !ymParam) {

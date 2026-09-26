@@ -67,6 +67,7 @@ function relativeYm(d: Date, monthsOffset: number): string {
 }
 
 export async function GET(request: NextRequest) {
+  // auth: Vercel Cron の CRON_SECRET
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

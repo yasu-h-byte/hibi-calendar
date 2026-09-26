@@ -17,6 +17,7 @@ import { getMainData, getAttData, computeMonthly } from '@/lib/compute'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 
 export async function GET(request: NextRequest) {
+  // auth: any-login — メニューの件数バッジ（件数のみ）
   if (!await checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

@@ -43,11 +43,26 @@ describe('通行証', () => {
     process.env.ADMIN_PASSWORD = 'pw-common'
   })
 
-  test('共通パスワードそのものは API で通らない・代表と個人パスワードは通る', async () => {
+  test('パスワードそのもの（共通・代表・個人）は API で通らない。通行証だけが通る', async () => {
     const { getApiAuthUser, checkApiAuth } = await import('@/lib/auth')
     expect(await getApiAuthUser(req('pw-common'))).toEqual({ authorized: false })
     expect(await checkApiAuth(req('pw-common'))).toBe(false)
-    expect(await getApiAuthUser(req('pw-super'))).toEqual({ authorized: true, actor: 'super-admin' })
-    expect(await getApiAuthUser(req('pw-jimu'))).toEqual({ authorized: true, actor: 50 })
+    expect(await getApiAuthUser(req('pw-super'))).toEqual({ authorized: false })
+    expect(await getApiAuthUser(req('pw-jimu'))).toEqual({ authorized: false })
+    const { createOwnerToken, createPersonalToken } = await import('@/lib/session-token')
+    const { passwordFingerprint } = await import('@/lib/password')
+    expect(await getApiAuthUser(req(createOwnerToken()))).toEqual({ authorized: true, actor: 'super-admin' })
+    expect(await getApiAuthUser(req(createPersonalToken(50, passwordFingerprint('pw-jimu'))))).toEqual({ authorized: true, actor: 50 })
+  })
+
+  test('個人の通行証: パスワードを変えると（指紋が変わり）使えない・なりすまし不可', async () => {
+    const { createPersonalToken } = await import('@/lib/session-token')
+    const { passwordFingerprint } = await import('@/lib/password')
+    const { getApiAuthUser } = await import('@/lib/auth')
+    const old = createPersonalToken(50, passwordFingerprint('pw-jimu-OLD'))
+    expect(await getApiAuthUser(req(old))).toEqual({ authorized: false })
+    const t = createPersonalToken(50, passwordFingerprint('pw-jimu'))
+    const [p, , exp, fp, sig] = t.split('.')
+    expect(await getApiAuthUser(req(`${p}.1.${exp}.${fp}.${sig}`))).toEqual({ authorized: false })
   })
 })

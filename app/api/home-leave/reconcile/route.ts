@@ -182,9 +182,8 @@ function resolveWindow(request: NextRequest): { fromYm: string; toYm: string } {
 
 export async function GET(request: NextRequest) {
   try {
-    if (!await checkApiAuth(request)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // 2026-09-26: 権限表（lib/permissions.ts homeLeave.delete）
+    { const denied = await requireCap(request, 'homeLeave.delete'); if (denied) return denied }
     const { fromYm, toYm } = resolveWindow(request)
     const { orphans, scannedMonths, rangeCount } = await detectOrphans(fromYm, toYm)
     // 2026-08-20 追加: 逆方向（帰国期間内に出勤打刻）も同時に点検する

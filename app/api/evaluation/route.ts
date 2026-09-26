@@ -113,6 +113,7 @@ async function calcMetricsForEvaluation(opts: {
 // ────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
+  // auth: any-login — 中身は役割で絞る（wage.view が無ければ自分のレビューのみ）
   if (!await checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

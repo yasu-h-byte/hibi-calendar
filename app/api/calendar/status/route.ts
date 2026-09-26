@@ -4,6 +4,7 @@ import { ym7 } from '@/lib/ym'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 
 export async function GET(request: NextRequest) {
+  // auth: any-login — 出面入力の画面（職長・事務）がカレンダーの状態を読む
 
   if (!await checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

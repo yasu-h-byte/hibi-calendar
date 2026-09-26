@@ -21,6 +21,7 @@ import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween } fr
 import { getAttData, parseDKey } from '@/lib/compute'
 
 export async function GET(request: NextRequest) {
+  // auth: スタッフ本人のトークン（getWorkerByToken）
   const token = request.nextUrl.searchParams.get('token')
   const siteIdParam = request.nextUrl.searchParams.get('siteId')
 

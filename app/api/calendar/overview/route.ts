@@ -10,7 +10,7 @@
  *     （/calendar の署名状況パネルと同じ all-workers × all-sites + 再確認考慮ロジック）
  *   - complete: 全現場承認済み かつ 全対象者が署名完了
  */
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 import { ym7 } from '@/lib/ym'
@@ -28,9 +28,8 @@ function clampInt(v: string | null, def: number, min: number, max: number): numb
 }
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: 権限表（lib/permissions.ts calendar.view）
+  { const denied = await requireCap(request, 'calendar.view'); if (denied) return denied }
 
   try {
     const sp = request.nextUrl.searchParams

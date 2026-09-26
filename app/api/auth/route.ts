@@ -5,9 +5,11 @@ import { buildAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { recordAccess, getRequestIp, AccessRole } from '@/lib/accessLog'
-import { createForemanToken } from '@/lib/session-token'
+import { createForemanToken, createOwnerToken, createPersonalToken } from '@/lib/session-token'
+import { verifyPassword, passwordFingerprint } from '@/lib/password'
 
 export async function POST(request: NextRequest) {
+  // auth: public — ログインそのもの（ここで通行証を発行する）
   const { password, workerId } = await request.json()
   const adminPassword = process.env.ADMIN_PASSWORD
   const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD
@@ -27,7 +29,8 @@ export async function POST(request: NextRequest) {
       org: 'hibi',
       ip: getRequestIp(request),
     }).catch(() => {})
-    return NextResponse.json({ user, superAdmin: true })
+    // 以降はパスワードではなく代表の通行証を送る（ブラウザにパスワードを残さない・2026-09-26）
+    return NextResponse.json({ user, superAdmin: true, sessionToken: createOwnerToken() })
   }
 
   // 個人パスワードチェック（役員・事務は個別パスワードで直接ログイン）
@@ -41,8 +44,9 @@ export async function POST(request: NextRequest) {
     const userPasswords = (mainData.userPasswords || {}) as Record<string, string>
 
     // 入力されたパスワードが個人パスワードにマッチするか
+    // 保存値はハッシュ（古い平文も照合可・lib/password.ts）
     for (const [wid, pw] of Object.entries(userPasswords)) {
-      if (pw && password === pw) {
+      if (pw && verifyPassword(password, pw)) {
         const [workers, sites] = await Promise.all([getWorkers(), getSites()])
         const worker = workers.find(w => w.id === Number(wid))
         if (worker) {
@@ -56,7 +60,8 @@ export async function POST(request: NextRequest) {
             org: worker.company === 'HFU' ? 'hfu' : 'hibi',
             ip: getRequestIp(request),
           }).catch(() => {})
-          return NextResponse.json({ user: authUser, directLogin: true })
+          // 以降はパスワードではなく本人の通行証（パスワードの指紋入り）を送る
+          return NextResponse.json({ user: authUser, directLogin: true, sessionToken: createPersonalToken(worker.id, passwordFingerprint(pw)) })
         }
       }
     }

@@ -2,7 +2,10 @@ import { AuthUser, UserRole, Site, Worker } from '@/types'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
-import { isForemanTokenShape, verifyForemanToken } from '@/lib/session-token'
+import {
+  isForemanTokenShape, verifyForemanToken, isOwnerTokenShape, verifyOwnerToken, isPersonalTokenShape, readPersonalToken,
+} from '@/lib/session-token'
+import { passwordFingerprint } from '@/lib/password'
 import { CAPABILITIES, permRoleOf, roleCan, type Capability, type PermRole } from '@/lib/permissions'
 import { mapRawWorkers } from '@/lib/workers'
 
@@ -28,10 +31,9 @@ async function getUserPasswords(): Promise<Record<string, string>> {
 }
 
 /**
- * API認証チェック（共通）
- * SUPER_ADMIN_PASSWORD、職長の通行証（lib/session-token.ts）、または個人パスワードのいずれかに一致すればOK。
- * ⚠️ 2026-09-26: 共通パスワード（ADMIN_PASSWORD）そのものは API では通さない。
- *   職長は共通パスワード＋名前選択でログインし、以降は通行証を送る（旧: 共通パスワード＝誰か分からない管理者扱い）
+ * API認証チェック（共通）。正しい通行証（代表・職長・個人。lib/session-token.ts）ならOK。
+ * ⚠️ 2026-09-26: パスワードそのものは API では通さない（ログイン /api/auth だけが受け付けて通行証を発行する）。
+ *   旧: 共通パスワード＝誰か分からない管理者扱い、個人・代表のパスワードは毎回平文で送っていた
  */
 export async function checkApiAuth(request: NextRequest): Promise<boolean> {
   return (await getApiAuthUser(request)).authorized
@@ -59,27 +61,27 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
   const authHeader = request.headers.get('x-admin-password')
   if (!authHeader) return { authorized: false }
 
-  // スーパー管理者: 日比靖仁
-  const superPw = process.env.SUPER_ADMIN_PASSWORD
-  if (superPw && authHeader === superPw) {
-    return { authorized: true, actor: 'super-admin' }
+  // 2026-09-26: API に届くのは通行証だけ（lib/session-token.ts）。パスワードそのもの
+  //   （代表・個人・職長の共通）はログイン（/api/auth）でしか受け付けない。ブラウザにもパスワードを残さない。
+
+  // 代表の通行証
+  if (isOwnerTokenShape(authHeader)) {
+    return verifyOwnerToken(authHeader) ? { authorized: true, actor: 'super-admin' } : { authorized: false }
   }
 
-  // 職長の通行証（共通パスワード＋名前選択でログインした職長。lib/session-token.ts）
+  // 職長の通行証（共通パスワード＋名前選択でログインした職長）
   if (isForemanTokenShape(authHeader)) {
     const wid = verifyForemanToken(authHeader)
     return wid === null ? { authorized: false } : { authorized: true, actor: wid }
   }
 
-  // ⚠️ 共通パスワード（ADMIN_PASSWORD）そのものは通さない（2026-09-26）。
-  //   旧: actor 'admin' として管理者扱い → 職長が管理者専用の API を叩けた
-
-  // 個人パスワード
-  const userPasswords = await getUserPasswords()
-  for (const [wid, pw] of Object.entries(userPasswords)) {
-    if (pw && authHeader === pw) {
-      return { authorized: true, actor: Number(wid) }
-    }
+  // 事務・役員・事業責任者の通行証。パスワードを変える・消すと指紋が合わなくなり使えない
+  if (isPersonalTokenShape(authHeader)) {
+    const t = readPersonalToken(authHeader)
+    if (!t) return { authorized: false }
+    const stored = (await getUserPasswords())[String(t.workerId)]
+    if (!stored || passwordFingerprint(stored) !== t.fingerprint) return { authorized: false }
+    return { authorized: true, actor: t.workerId }
   }
 
   return { authorized: false }
