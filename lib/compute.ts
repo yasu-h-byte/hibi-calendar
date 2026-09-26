@@ -102,6 +102,8 @@ export interface MainData {
    * 未設定なら請求書は下書きのみ（単価 0・発行は拒否）。
    */
   hfuInvoice?: HfuInvoiceSettings | null
+  /** 管理者設定で投稿したお知らせ（表示はリリースノートと合わせて lib/release-notes.ts mergeAnnouncements） */
+  announcements?: import('./release-notes').Announcement[]
 }
 
 /** HFU → 日比建設 の請求書の設定（settings 画面「HFU → 日比建設 の請求書」で編集） */
@@ -271,6 +273,7 @@ async function loadMainData(): Promise<MainData> {
     nightDays: (d.nightDays || {}) as Record<string, number[]>,
     companyProfile: (d.companyProfile || null) as CompanyProfile | null,
     hfuInvoice: (d.hfuInvoice || null) as HfuInvoiceSettings | null,
+    announcements: (d.announcements || []) as import('./release-notes').Announcement[],
   }
 }
 

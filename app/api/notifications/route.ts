@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isSiteStartedByMonth } from '@/lib/site-hierarchy'
 import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
 import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
+import { mergeAnnouncements } from '@/lib/release-notes'
+import { permRoleOf } from '@/lib/permissions'
 import { db } from '@/lib/firebase'
 import { collection, query, where, getDocs } from '@/lib/fsdb'
 import { getMainData, getAttData, parseDKey, getAssign } from '@/lib/compute'
@@ -688,19 +690,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 9. お知らせ（最新1件のみ）
+    // 9. お知らせ（最新1件・7日以内）。投稿分＋リリースノートを役割に合わせて（lib/release-notes.ts）。
+    //   2026-09-26: 旧は存在しない 'announcements' コレクションを読んでいて、ベルに一度も出ていなかった
     try {
-      const annSnap = await getDocs(collection(db, 'announcements'))
-      const anns: { title: string; publishedAt: string }[] = []
-      annSnap.forEach(d => {
-        const data = d.data()
-        if (data.publishedAt) anns.push({ title: data.title, publishedAt: data.publishedAt })
-      })
-      anns.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
-      const recent = anns[0]
+      const recent = mergeAnnouncements(main.announcements || [], permRoleOf(apiRole ? { role: apiRole.role } : null))[0]
       if (recent) {
-        const pubDate = new Date(recent.publishedAt)
-        const daysSince = Math.floor((now.getTime() - pubDate.getTime()) / (1000 * 60 * 60 * 24))
+        const daysSince = Math.floor((now.getTime() - new Date(recent.publishedAt).getTime()) / (1000 * 60 * 60 * 24))
         if (daysSince <= 7) {
           notifications.push({
             id: 'announcement',
@@ -770,7 +765,7 @@ export async function GET(request: NextRequest) {
         // 2026-08-27 追加: 最終承認者に承認待ち（有給・帰国）を配信
         //   （旧: admin 限定で、承認フローの当事者にベルが出なかった）
         return ['unsigned-calendar', 'calendar-deadline', 'month-unlocked-hibi', 'month-unlocked-hfu',
-                'pending-leave-requests', 'pending-home-long-leave', 'pending-invoices'].includes(n.id)
+                'pending-leave-requests', 'pending-home-long-leave', 'pending-invoices', 'announcement'].includes(n.id)
             || n.id.startsWith('pl-grant')
             || n.id.startsWith('evaluation-due')
             || n.id.startsWith('evaluation-todo-')
@@ -780,14 +775,14 @@ export async function GET(request: NextRequest) {
       if (role === 'foreman') {
         // 自分宛の評価入力依頼 + カレンダー期限 + 自分の現場の有給・帰国の職長承認待ち（2026-09-26）
         return n.id === 'calendar-deadline' || n.id.startsWith('evaluation-todo-')
-          || n.id === 'foreman-pending-leave' || n.id === 'foreman-pending-home-leave'
+          || n.id === 'foreman-pending-leave' || n.id === 'foreman-pending-home-leave' || n.id === 'announcement'
       }
       if (role !== 'jimu') {
         // 役員（見るだけ）・不明: カレンダー署名系のみ
-        return ['unsigned-calendar', 'calendar-deadline'].includes(n.id)
+        return ['unsigned-calendar', 'calendar-deadline', 'announcement'].includes(n.id)
       }
       // jimu: カレンダー署名系 + 有給の付与アラート（2026-09-26: 有給の付与は事務の仕事・lib/permissions.ts leave.manage）
-      return ['unsigned-calendar', 'calendar-deadline'].includes(n.id) || n.id.startsWith('pl-grant')
+      return ['unsigned-calendar', 'calendar-deadline', 'announcement'].includes(n.id) || n.id.startsWith('pl-grant')
     })
 
     return NextResponse.json({ notifications: filtered })

@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 
-interface Announcement {
-  id: string
-  title: string
-  content: string
-  category: 'new' | 'fix' | 'info'
-  publishedAt: string
-  publishedBy: string
-}
+import { mergeAnnouncements, type Announcement } from '@/lib/release-notes'
+import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
+import { permRoleOf } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -21,9 +16,14 @@ export async function GET(request: NextRequest) {
     const snap = await getDoc(doc(db, 'demmen', 'main'))
     const data = snap.exists() ? snap.data() : {}
     const announcements = (data.announcements || []) as Announcement[]
-    // publishedAt の降順でソート
-    const sorted = [...announcements].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
-    return NextResponse.json({ announcements: sorted })
+    // 管理者設定の一覧（投稿の編集・削除）は投稿したものだけ
+    if (request.nextUrl.searchParams.get('scope') === 'posted') {
+      return NextResponse.json({ announcements: [...announcements].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) })
+    }
+    // 投稿したお知らせ ＋ リリースノート（lib/release-notes.ts）を、その人の役割に合わせて新しい順に（2026-09-26）
+    const ym = new Date().toISOString().slice(0, 7).replace('-', '')
+    const r = resolveApiRoleFromMain(await getApiAuthUser(request), { workers: data.workers || [], sites: data.sites || [], mforeman: data.mforeman || {} }, ym)
+    return NextResponse.json({ announcements: mergeAnnouncements(announcements, permRoleOf(r ? { role: r.role } : null)) })
   } catch (error) {
     console.error('Announcements GET error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

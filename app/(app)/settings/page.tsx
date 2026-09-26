@@ -523,7 +523,8 @@ export default function SettingsPage() {
     if (!password) return
     setAnnLoading(true)
     try {
-      const res = await fetch('/api/announcements', {
+      // 投稿の編集・削除用なので、投稿したものだけ（リリースノートはコード側・lib/release-notes.ts）
+      const res = await fetch('/api/announcements?scope=posted', {
         headers: { 'x-admin-password': password },
       })
       if (res.ok) {
