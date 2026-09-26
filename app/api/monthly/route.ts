@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances } from '@/lib/compute'
@@ -153,9 +153,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: 所定日数の保存・前月コピーは締めと同じ monthly.close（事務・事業責任者・代表）
+  const denied = await requireCap(request, 'monthly.close')
+  if (denied) return denied
 
   try {
     const body = await request.json()

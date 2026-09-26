@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiAuthUser } from '@/lib/auth'
+import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { getAttendanceHistory, recordAttendanceChange } from '@/lib/attendance-history'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
@@ -13,14 +13,14 @@ import type { AttendanceEntry } from '@/types'
  * GET  ?ym=YYYYMM   … 直近の変更履歴（既定100件）
  * POST { id }       … その履歴の「変更前の内容」を書き戻す
  *
- * 認証: 管理者・事業責任者のみ（給与に直結するデータを書き戻すため）
+ * 認証: lib/permissions.ts の attendance.history（事務・事業責任者・代表）
  */
 async function requireAdmin(request: NextRequest) {
+  // 2026-09-26: 権限表の attendance.history（事務・事業責任者・代表）。事務は誤操作の復元を担当（manual-morita §3-1）
+  const denied = await requireCap(request, 'attendance.history')
+  if (denied) return { error: denied }
   const auth = await getApiAuthUser(request)
-  if (!auth.authorized) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  const ok = auth.actor === 'super-admin' || auth.actor === 1
-  if (!ok) return { error: NextResponse.json({ error: '管理者・事業責任者のみ実行できます' }, { status: 403 }) }
-  return { actor: String(auth.actor) }
+  return { actor: auth.authorized ? String(auth.actor) : 'unknown' }
 }
 
 export async function GET(request: NextRequest) {

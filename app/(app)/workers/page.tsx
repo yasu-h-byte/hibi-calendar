@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { can } from '@/lib/permissions'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { QRCodeSVG } from 'qrcode.react'
 import { Worker, AuthUser } from '@/types'
@@ -149,6 +150,8 @@ export default function WorkersPage() {
   }, [searchParams, workers])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const isAdminOrApprover = authUser?.role === 'admin' || authUser?.role === 'approver'
+  // 給与欄の直接の書き換えは代表だけ（lib/permissions.ts workers.editPay・サーバーも同じ判定）
+  const canEditPay = can(authUser, 'workers.editPay')
 
   const headers = useCallback(() => ({
     'x-admin-password': password,
@@ -988,7 +991,12 @@ export default function WorkersPage() {
 
               </div>)}
 
-              {modalTab === 'pay' && (<div className="space-y-4">
+              {modalTab === 'pay' && (<fieldset disabled={!canEditPay} className="space-y-4 min-w-0">
+                {!canEditPay && (
+                  <div className="rounded-lg px-3 py-2 text-xs bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
+                    給与欄は見るだけです。時給・号俸・日額は「賃金・評価」（評価の承認・号俸の改定）から変わります。直接の書き換えは代表のみです。
+                  </div>
+                )}
               {/* ── 単価・給与 ── */}
               <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-3 bg-blue-50/30 dark:bg-blue-900/10">
                 <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">単価・給与</h4>
@@ -1275,7 +1283,7 @@ export default function WorkersPage() {
                     </p>
                   </div>
 
-              </div>)}
+              </fieldset>)}
 
               {modalTab === 'allowance' && (<div className="space-y-4">
                 <div className="border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-3 bg-green-50/30 dark:bg-green-900/10">

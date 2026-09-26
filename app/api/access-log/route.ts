@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { getWorkerLastAccessMap, getAccessLogsInRange, AccessRole, WorkerLastAccess } from '@/lib/accessLog'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
@@ -25,9 +25,9 @@ function determineRoleFromJob(w: WorkerEntry): AccessRole {
 }
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: アクセス履歴・操作記録は代表（lib/permissions.ts system.admin）
+  const denied = await requireCap(request, 'system.admin')
+  if (denied) return denied
 
   try {
     const days = parseInt(request.nextUrl.searchParams.get('days') || '30')

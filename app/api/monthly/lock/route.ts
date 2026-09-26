@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiAuthUser, requireOfficeAuth } from '@/lib/auth'
+import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
@@ -193,8 +193,8 @@ export async function POST(request: NextRequest) {
   // 2026-06-12 (監査 Sprint2-B): 操作者を識別して記録。
   //   旧: checkApiAuth + 'admin' 固定名義 → 誰が締め/解除したか追跡不能で、
   //   「締め→こっそり解除→改竄→再締め」が無痕跡で可能だった
-  // 2026-09-26: 締め/解除は事務所の人だけ（職長＝共通パスワードは不可）
-  const denied = await requireOfficeAuth(request)
+  // 2026-09-26: 締め/解除は権限表の monthly.close（事務・事業責任者・代表）
+  const denied = await requireCap(request, 'monthly.close')
   if (denied) return denied
   const auth = await getApiAuthUser(request)
   if (!auth.authorized) {

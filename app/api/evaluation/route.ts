@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from '@/lib/fsdb'
 import { getMainData } from '@/lib/compute'
@@ -194,6 +194,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { action } = body
+
+    // 2026-09-26: 権限表（lib/permissions.ts）。評価の入力は評価者本人（下の本人性チェック）、
+    //   それ以外（セッション作成・承認＝昇給額の確定・再計算・設定）は wage.decide（事業責任者・代表）。
+    //   旧: 承認にサーバー側の役割チェックが無く、パスワードを持つ誰でも昇給を確定できた
+    {
+      const denied = await requireCap(request, action === 'submitReview' ? 'evaluation.input' : 'wage.decide')
+      if (denied) return denied
+    }
 
     // ── セッション作成 ──
     if (action === 'create') {

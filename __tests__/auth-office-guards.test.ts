@@ -2,7 +2,7 @@
  * 事務所の人だけ・代表だけの認証（lib/auth.ts・2026-09-26）
  *
  * 職長は共通パスワード＋名前選択でログインするため、サーバーからは共通パスワード（actor='admin'）＝職長。
- * 月締め・請求額の編集（requireOfficeAuth）と保守ツール（requireSuperAdmin）は共通パスワードを通さない。
+ * 月締め（requireCap monthly.close）と保守ツール（requireSuperAdmin）は共通パスワードを通さない。
  */
 import { describe, test, expect, vi, beforeAll } from 'vitest'
 
@@ -29,18 +29,18 @@ beforeAll(() => {
   process.env.SUPER_ADMIN_PASSWORD = 'pw-super'
 })
 
-describe('requireOfficeAuth（月締め・請求額の編集）', () => {
+describe("requireCap('monthly.close')（月締め）", () => {
   test.each([
     ['代表', 'pw-super', true],
     ['事務', 'pw-jimu', true],
     ['事業責任者', 'pw-masahito', true],
-    ['役員', 'pw-yakuin', true],
+    ['役員（見るだけ）', 'pw-yakuin', false],
     ['職長（個人パスワード）', 'pw-shokucho', false],
     ['共通パスワード（＝職長）', 'pw-common', false],
     ['不明', 'nope', false],
   ])('%s → %s', async (_label, pw, ok) => {
-    const { requireOfficeAuth } = await import('@/lib/auth')
-    expect(await requireOfficeAuth(req(pw)) === null).toBe(ok)
+    const { requireCap } = await import('@/lib/auth')
+    expect(await requireCap(req(pw), 'monthly.close') === null).toBe(ok)
   })
 })
 

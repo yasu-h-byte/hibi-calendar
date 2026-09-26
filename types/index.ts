@@ -245,7 +245,11 @@ export interface CalendarDay {
   holidayNameVi?: string
 }
 
-export type UserRole = 'admin' | 'approver' | 'foreman' | 'jimu'
+/**
+ * 'admin' = 代表（super-admin・workerId 0）だけ。'officer' = 政仁さん以外の役員（見るだけ・2026-09-26）。
+ * 何ができるかは lib/permissions.ts の CAPABILITIES が決める
+ */
+export type UserRole = 'admin' | 'approver' | 'officer' | 'foreman' | 'jimu'
 
 export interface AuthUser {
   workerId: number

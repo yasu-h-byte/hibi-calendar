@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, clearPasswordCache, getApiAuthUser } from '@/lib/auth'
+import { checkApiAuth, clearPasswordCache, getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
@@ -30,14 +30,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const action = request.nextUrl.searchParams.get('action')
+    // 2026-09-26: 既定単価（action なし・現場マスタが読む）以外はすべて代表だけ（lib/permissions.ts system.admin）。
+    //   旧: 自社・HFU の振込先などをどの個人パスワードでも読めた
+    if (action) {
+      const denied = await requireCap(request, 'system.admin')
+      if (denied) return denied
+    }
     const result = await getMainDoc()
     if (!result) {
       return NextResponse.json({ defaultRates: { tobiRate: 0, dokoRate: 0 } })
-    }
-
-    if (action === 'getPermissions') {
-      const rolePermissions = (result.data.rolePermissions as Record<string, string[]>) || {}
-      return NextResponse.json({ rolePermissions })
     }
 
     if (action === 'getUserPasswords') {
@@ -74,26 +75,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // 2026-09-26: 設定の変更はすべて代表だけ（lib/permissions.ts system.admin）
+  const denied = await requireCap(request, 'system.admin')
+  if (denied) return denied
+
   try {
     const body = await request.json()
     const { action } = body
 
-    if (action === 'savePermissions') {
-      // 監査S3: 権限設定の変更は管理者パスワード限定
-      const tier = await getAdminTier(request)
-      if (tier !== 'super-admin' && tier !== 'admin') {
-        return NextResponse.json({ error: 'この操作には管理者パスワードが必要です' }, { status: 403 })
-      }
-      const { rolePermissions } = body
-      if (!rolePermissions || typeof rolePermissions !== 'object') {
-        return NextResponse.json({ error: 'rolePermissions required' }, { status: 400 })
-      }
-      const docRef = doc(db, 'demmen', 'main')
-      const { updateDoc } = await import('@/lib/fsdb')
-      await updateDoc(docRef, { rolePermissions })
-      await logActivity('admin', 'settings.permissions', `権限設定を更新 (${tier})`)
-      return NextResponse.json({ success: true })
-    }
+    // 旧 savePermissions（役割ごとのメニュー表示の編集）は廃止。権限は lib/permissions.ts に一本化（2026-09-26）
 
     if (action === 'saveUserPasswords') {
       // 監査S3: 全員のパスワード変更は管理者パスワード限定（個人パスワードからの全員ロックアウト防止）

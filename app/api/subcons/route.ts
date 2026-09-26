@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
@@ -54,7 +54,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 2026-09-26: 取引先マスタの編集は事務・代表（lib/permissions.ts masters.edit）
+  const denied = await requireCap(request, 'masters.edit')
+  if (denied) return denied
   try {
     const body = await request.json()
     const { action } = body

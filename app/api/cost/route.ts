@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, requireOfficeAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import {
@@ -33,8 +33,8 @@ function toMode(period: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  // 2026-09-26: 請求額の編集は事務所の人だけ（職長＝共通パスワードは不可）
-  const denied = await requireOfficeAuth(request)
+  // 2026-09-26: 請求額の編集は権限表の cost.edit（事務・事業責任者・代表）
+  const denied = await requireCap(request, 'cost.edit')
   if (denied) return denied
   try {
     const { siteId, ym, amounts } = await request.json()

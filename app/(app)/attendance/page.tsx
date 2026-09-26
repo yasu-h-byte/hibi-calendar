@@ -6,6 +6,7 @@
 // 純粋な計算（フッター合計・警告収集・退職バッジ等）は lib/attendance-grid.ts を参照。
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { permRoleOf, roleCan } from '@/lib/permissions'
 import { isTimeBasedMonth, calcDayShiftHours, DAY_START_OPTIONS, DAY_END_OPTIONS } from '@/types'
 import {
   currentYm, getYmOptions, getDow, DOW_JA,
@@ -1220,6 +1221,11 @@ export default function AttendanceGridPage() {
 
   return (
     <div className="space-y-4">
+      {userRole && !roleCan(permRoleOf({ role: userRole }), 'attendance.input') && (
+        <div className="rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
+          この画面は見るだけです。出面の入力は職長・事務が行います（最終承認は下の「最終承認」行から）。
+        </div>
+      )}
       <HeaderBar
         data={data}
         useTimeBased={useTimeBased}

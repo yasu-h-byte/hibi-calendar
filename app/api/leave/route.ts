@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
@@ -104,8 +104,11 @@ export async function POST(request: NextRequest) {
   //   旧実装は「誰のパスワードでも可」で、個人パスワードを持つ職長が自分に付与→
   //   時季指定で出面に p を書くまで一人で完結できた（承認フロー原則違反）。
   //   revoke（leave-request 側）と同一基準。
-  if (!(actor === 'super-admin' || actor === 1)) {
-    return NextResponse.json({ error: '有給の管理操作は管理者・事業責任者のみ実行できます' }, { status: 403 })
+  // 2026-09-26: 権限表の leave.manage（事務・事業責任者・代表。代表決定: 付与・記録は森田さん、最終承認は政仁さん）
+  void actor
+  {
+    const denied = await requireCap(request, 'leave.manage')
+    if (denied) return denied
   }
   try {
     const body = await request.json()

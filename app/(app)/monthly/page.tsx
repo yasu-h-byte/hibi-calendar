@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
@@ -275,6 +276,15 @@ type TabKey = typeof TABS[number]['key']
 // ────────────────────────────────────────
 
 export default function MonthlyPage() {
+  // useSearchParams を使うため Suspense で包む（Next.js の静的生成の決まり）
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-400">読み込み中…</div>}>
+      <MonthlyPageInner />
+    </Suspense>
+  )
+}
+
+function MonthlyPageInner() {
   const [password, setPassword] = useState('')
   const [ym, setYm] = useState(currentYm)
   const [tab, setTab] = useState<TabKey>('all')
@@ -310,6 +320,12 @@ export default function MonthlyPage() {
 
   // Top-level tab
   const [topTab, setTopTab] = useState<TopTab>('summary')
+  // サイドメニュー「帳票出力」・メニュー検索から ?tab=export で直接開く（2026-09-26）。
+  //   メニューの切り替えは同じ画面の中なので、URL が変わるたびに合わせる
+  const tabParam = useSearchParams().get('tab')
+  useEffect(() => {
+    setTopTab(tabParam === 'export' ? 'export' : 'summary')
+  }, [tabParam])
   // Export states（対象月は集計と共通の ym を使う。2026-09-17: カードごとの月選択を廃止）
   const [exportDownloading, setExportDownloading] = useState<string | null>(null)
   const [exportError, setExportError] = useState('')

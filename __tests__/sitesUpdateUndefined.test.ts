@@ -15,7 +15,7 @@ const mainData = {
   ],
   assign: {}, mforeman: {},
 }
-vi.mock('@/lib/auth', () => ({ checkApiAuth: async () => true }))
+vi.mock('@/lib/auth', () => ({ checkApiAuth: async () => true, requireCap: async () => null }))
 vi.mock('@/lib/activity', () => ({ logActivity: async () => {} }))
 vi.mock('@/lib/firebase', () => ({ db: {} }))
 vi.mock('@/lib/fsdb', () => ({

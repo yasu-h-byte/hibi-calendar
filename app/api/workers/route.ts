@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
 import { getWorkers } from '@/lib/workers'
 import {
   addWorker,
@@ -21,6 +21,22 @@ import { doc, setDoc, getDocs, collection } from '@/lib/fsdb'
 //    falsy のため「id required」で弾かれる（2026-08-26 に発生）。undefined/null/'' で判定する。
 const PAY_FIELDS = ['rate', 'hourlyRate', 'salary', 'otMul', 'useOldRules', 'retired', 'birthDate', 'jpGrade', 'jpStep'] as const
 
+/**
+ * 直接の書き換えを代表だけに限る給与欄（lib/permissions.ts workers.editPay・2026-09-26 代表決定）。
+ * 事業責任者は評価の承認・号俸の改定を通して決める（それぞれのAPIがサーバー側で書き込む）。
+ * 事務は基本情報（名前・在留・退職日・電話URL等）を編集できるが、ここに入る欄は変えられない。
+ */
+const OWNER_ONLY_PAY_FIELDS = ['rate', 'hourlyRate', 'hourlyRateFrom', 'prevHourlyRate', 'salary', 'otMul', 'useOldRules', 'jpGrade', 'jpStep'] as const
+
+/** 給与欄に「値が変わる」書き込みが含まれるか（同じ値を送り返すだけなら含まない） */
+function changesPayFields(updates: Record<string, unknown>, before: Record<string, unknown> | undefined): string[] {
+  return OWNER_ONLY_PAY_FIELDS.filter(f => {
+    if (!(f in updates)) return false
+    const norm = (v: unknown) => (v === undefined || v === null || v === '' ? null : typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)) ? Number(v) : v)
+    return JSON.stringify(norm(updates[f])) !== JSON.stringify(norm(before?.[f]))
+  })
+}
+
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,9 +52,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: 人員マスタの編集は権限表の workers.edit（事務・代表）。給与欄は下で workers.editPay（代表）
+  const denied = await requireCap(request, 'workers.edit')
+  if (denied) return denied
 
   try {
     const body = await request.json()
@@ -144,6 +160,15 @@ export async function POST(request: NextRequest) {
       // 2026-06-12 (監査 Sprint2-C): 給与系フィールドの old→new を永続記録（更新前に現値を取得）
       const beforeWorkers = await getWorkers()
       const beforeW = beforeWorkers.find(w => w.id === Number(id)) as Record<string, unknown> | undefined
+
+      // 給与欄の直接の書き換えは代表だけ（画面は全項目を送り返すので「値が変わるとき」だけ判定）
+      const payChanged = changesPayFields({ ...updates, ...('useOldRules' in body ? { useOldRules: body.useOldRules === true || undefined } : {}) }, beforeW)
+      if (payChanged.length > 0) {
+        const payDenied = await requireCap(request, 'workers.editPay')
+        if (payDenied) {
+          return NextResponse.json({ error: `給与欄（${payChanged.join('・')}）の変更は代表のみです。評価の承認・号俸の改定から行ってください` }, { status: 403 })
+        }
+      }
 
       // useOldRules: true なら保存、false/undefined ならフィールドを削除
       // 2026-06-13 (監査 Sprint3): deleteField() は配列要素内では機能しないため、

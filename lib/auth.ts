@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { isForemanTokenShape, verifyForemanToken } from '@/lib/session-token'
+import { CAPABILITIES, permRoleOf, roleCan, type Capability } from '@/lib/permissions'
 
 // 個人パスワードのキャッシュ（APIリクエストごとにFirestore読み取りを避ける）
 let cachedUserPasswords: Record<string, string> | null = null
@@ -132,7 +133,8 @@ export function determineRole(
     return { role: 'foreman', foremanSites }
   }
 
-  return { role: 'admin', foremanSites: [] }
+  // 2026-09-26: 旧は 'admin'（何でもできる）に落ちていた。役割の決まらない人は最小権限（担当現場なしの職長）
+  return { role: 'foreman', foremanSites: [] }
 }
 
 export function buildAuthUser(
@@ -153,13 +155,13 @@ export function buildAuthUser(
   }
 
   // 役員ロールはjobTypeで直接判定。ただし政仁さん（APPROVER_ID=1）は事業責任者ロール
-  // 役員が現場の foreman として登録されていても admin として扱う
+  // 2026-09-26: 政仁さん以外の役員は 'officer'（事業責任者と同じものを見るだけ）。旧は 'admin'（何でもできる）
   if (worker.jobType === 'yakuin') {
     const foremanSites = computeForemanSites(worker.id, sites, mforeman, ym)
     return {
       workerId: worker.id,
       name: worker.name,
-      role: worker.id === APPROVER_ID ? 'approver' : 'admin',
+      role: worker.id === APPROVER_ID ? 'approver' : 'officer',
       foremanSites,
       token: worker.token || undefined,
     }
@@ -224,6 +226,20 @@ export async function requireExecutiveAuth(request: NextRequest): Promise<Respon
 }
 
 /**
+ * 権限表（lib/permissions.ts）でサーバー側の可否を決める（2026-09-26）。
+ * 代表 = super-admin、それ以外は本人（個人パスワード・職長の通行証）の役割。通れば null。
+ * 担当現場の制限（職長は自分の現場だけ）は呼び出し側で別途チェックする。
+ */
+export async function requireCap(request: NextRequest, cap: Capability): Promise<Response | null> {
+  const auth = await getApiAuthUser(request)
+  if (!auth.authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const r = await getApiRole(request)
+  const role = permRoleOf(r ? { role: r.role } : null)
+  if (roleCan(role, cap)) return null
+  return NextResponse.json({ error: `この操作の権限がありません（${CAPABILITIES[cap].label}）` }, { status: 403 })
+}
+
+/**
  * 代表（super-admin パスワード）だけ（2026-09-26）。本番データを直接書き換える保守ツール（/api/debug/*）用。
  */
 export async function requireSuperAdmin(request: NextRequest): Promise<Response | null> {
@@ -231,23 +247,6 @@ export async function requireSuperAdmin(request: NextRequest): Promise<Response 
   if (!auth.authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (auth.actor !== 'super-admin') return NextResponse.json({ error: 'この操作は代表のみ実行できます' }, { status: 403 })
   return null
-}
-
-/**
- * 事務所の人（事務・役員・事業責任者の個人パスワード、または代表）だけ（2026-09-26）。
- * 月締め・請求額の編集など「職長はやらない事務作業」用。
- * ⚠️ 共通パスワード（actor='admin'）は通さない。職長は共通パスワード＋名前選択でログインするため、
- *    サーバーからは共通パスワード＝職長とみなす（app/api/auth/route.ts の名前選択は職長のみ）。
- */
-export async function requireOfficeAuth(request: NextRequest): Promise<Response | null> {
-  const auth = await getApiAuthUser(request)
-  if (!auth.authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  if (auth.actor === 'super-admin') return null
-  if (typeof auth.actor === 'number') {
-    const r = await getApiRole(request)
-    if (r && (r.role === 'jimu' || r.role === 'admin' || r.role === 'approver')) return null
-  }
-  return NextResponse.json({ error: 'この操作は事務・役員・事業責任者のみ実行できます' }, { status: 403 })
 }
 
 export function isManagerRole(role: string): boolean {

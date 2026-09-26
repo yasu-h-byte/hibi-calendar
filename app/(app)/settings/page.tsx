@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useState, useCallback } from 'react'
+import { CAPABILITIES, PERM_ROLES, PERM_ROLE_LABEL, type Capability, type PermRole } from '@/lib/permissions'
 
 interface DefaultRates {
   tobiRate: number
@@ -189,46 +190,52 @@ interface UserWorker {
   retired: string
 }
 
-// All menu items that can be controlled
-const ALL_MENUS = [
-  // 日常業務
-  { id: 'dashboard', label: 'ダッシュボード', section: '日常業務' },
-  { id: 'attendance', label: '出面入力', section: '日常業務' },
-  { id: 'calendar', label: '就業カレンダー', section: '日常業務' },
-  // 集計・分析
-  { id: 'monthly', label: '月次集計・帳票', section: '集計・分析' },
-  { id: 'cost', label: '原価・収益管理', section: '集計・分析' },
-  // 人事・労務
-  { id: 'workers', label: '人員マスタ', section: '人事・労務' },
-  { id: 'leave', label: '休暇管理（有給・帰国情報）', section: '人事・労務' },
-  { id: 'evaluation', label: '評価管理', section: '人事・労務' },
-  { id: 'wage', label: '賃金制度（日本人社員）', section: '人事・労務' },
-  { id: 'tool-budget', label: '道具代管理', section: '人事・労務' },
-  // 現場・外注
-  { id: 'sites', label: '現場マスタ', section: '現場・外注' },
-  { id: 'subcons', label: '取引先マスタ', section: '現場・外注' },
-  // システム
-  { id: 'settings', label: '管理者設定', section: 'システム' },
-  { id: 'access-log', label: 'アクセス履歴', section: 'システム' },
-  { id: 'docs', label: '資料一覧', section: 'システム' },
-]
-
-// Configurable roles (admin always has full access)
-const CONFIGURABLE_ROLES = [
-  { id: 'approver', label: '役員' },
-  { id: 'foreman', label: '職長' },
-  { id: 'jimu', label: '事務' },
-]
-
-// Default permissions (used when no Firestore data exists)
-const DEFAULT_PERMISSIONS: Record<string, string[]> = {
-  approver: ['dashboard', 'attendance', 'calendar', 'monthly', 'leave', 'evaluation', 'wage', 'sites', 'subcons', 'cost', 'docs'],
-  foreman: ['attendance', 'calendar', 'docs'],
-  jimu: ['dashboard', 'monthly', 'workers', 'sites', 'subcons', 'leave', 'tool-budget', 'cost', 'docs'],
+// 役割ごとの権限は lib/permissions.ts に一本化（2026-09-26）。ここは表示するだけ
+function PermissionMatrix() {
+  const caps = Object.entries(CAPABILITIES) as [Capability, (typeof CAPABILITIES)[Capability]][]
+  const groups = Array.from(new Set(caps.map(([, c]) => c.group)))
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
+      <h2 className="text-lg font-bold text-hibi-navy dark:text-white">役割ごとの権限</h2>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 mb-4">
+        メニューの表示・画面のボタン・サーバーのチェックはすべてこの表で決まります（2026-09-26 代表決定）。
+        原則: 現場の作業は職長、事務処理は事務、最終承認は事業責任者、システムは代表。役員（政仁さん以外）は見るだけ。
+        担当現場の制限（職長は自分の現場だけ）は別にかかります。変更はシステム管理者（コード）で行います。
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b-2 dark:border-gray-600">
+              <th className="text-left px-2 py-2 text-gray-600 dark:text-gray-400">できること</th>
+              {PERM_ROLES.map(r => <th key={r} className="text-center px-2 py-2 text-xs whitespace-nowrap">{PERM_ROLE_LABEL[r]}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map(g => (
+              <Fragment key={g}>
+                <tr><td colSpan={1 + PERM_ROLES.length} className="px-2 pt-4 pb-1 text-xs font-bold text-gray-400">{g}</td></tr>
+                {caps.filter(([, c]) => c.group === g).map(([key, c]) => (
+                  <tr key={key} className="border-t dark:border-gray-700/50">
+                    <td className="px-2 py-1.5 text-gray-700 dark:text-gray-300">{c.label}</td>
+                    {PERM_ROLES.map(r => (
+                      <td key={r} className="text-center px-2 py-1.5">
+                        {(c.roles as readonly PermRole[]).includes(r) ? <span className="text-emerald-600 font-bold">○</span> : <span className="text-gray-300">—</span>}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
+
 const ROLE_BADGES: Record<string, { label: string; cls: string }> = {
-  yakuin: { label: '役員（admin）', cls: 'bg-red-100 text-red-700' },
+  yakuin: { label: '役員（見るだけ）', cls: 'bg-red-100 text-red-700' },
   shokucho: { label: '職長（foreman）', cls: 'bg-blue-100 text-blue-700' },
   jimu: { label: '事務', cls: 'bg-purple-100 text-purple-700' },
 }
@@ -314,6 +321,11 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('settings')
+  // メニュー検索などから ?tab=users / activity / announcements で直接開けるように（2026-09-26）
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'activity' || t === 'users' || t === 'announcements' || t === 'settings') setActiveTab(t)
+  }, [])
 
   // Default rates
   const [rates, setRates] = useState<DefaultRates>({ tobiRate: 0, dokoRate: 0, baseDays: 20 })
@@ -357,9 +369,6 @@ export default function SettingsPage() {
   // Users
   const [userWorkers, setUserWorkers] = useState<UserWorker[]>([])
   const [usersLoading, setUsersLoading] = useState(true)
-  const [permissions, setPermissions] = useState<Record<string, string[]> | null>(null)
-  const [savingPermissions, setSavingPermissions] = useState(false)
-  const [savedPermissions, setSavedPermissions] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
@@ -473,56 +482,16 @@ export default function SettingsPage() {
     if (!password) return
     setUsersLoading(true)
     try {
-      const [workersRes, permRes] = await Promise.all([
-        fetch('/api/workers', { headers: { 'x-admin-password': password } }),
-        fetch('/api/settings?action=getPermissions', { headers: { 'x-admin-password': password } }),
-      ])
+      const workersRes = await fetch('/api/workers', { headers: { 'x-admin-password': password } })
       if (workersRes.ok) {
         const data = await workersRes.json()
         const all: UserWorker[] = data.workers || []
         setUserWorkers(all.filter(w => ['yakuin', 'shokucho', 'jimu'].includes(w.jobType) && !w.retired))
       }
-      if (permRes.ok) {
-        const data = await permRes.json()
-        if (data.rolePermissions && Object.keys(data.rolePermissions).length > 0) {
-          setPermissions(data.rolePermissions)
-        } else {
-          setPermissions(DEFAULT_PERMISSIONS)
-        }
-      } else {
-        setPermissions(DEFAULT_PERMISSIONS)
-      }
     } finally {
       setUsersLoading(false)
     }
   }, [password])
-
-  const togglePermission = (roleId: string, menuId: string) => {
-    setPermissions(prev => {
-      if (!prev) return prev
-      const current = prev[roleId] || []
-      const next = current.includes(menuId)
-        ? current.filter(m => m !== menuId)
-        : [...current, menuId]
-      return { ...prev, [roleId]: next }
-    })
-    setSavedPermissions(false)
-  }
-
-  const savePermissions = async () => {
-    setSavingPermissions(true)
-    try {
-      await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'savePermissions', rolePermissions: permissions }),
-      })
-      setSavedPermissions(true)
-      setTimeout(() => setSavedPermissions(false), 2000)
-    } finally {
-      setSavingPermissions(false)
-    }
-  }
 
   useEffect(() => {
     if (password) { fetchRates(); fetchUserPasswords(); fetchCompanyProfile(); fetchHfuInvoice() }
@@ -792,13 +761,6 @@ export default function SettingsPage() {
   // Activity tab unique values for filters
   const uniqueUsers = Array.from(new Set(activityEntries.map(e => e.userId)))
   const uniqueActions = Array.from(new Set(activityEntries.map(e => e.action)))
-
-  // Users tab: group menus by section
-  const permissionSections = ALL_MENUS.reduce<Record<string, typeof ALL_MENUS>>((acc, m) => {
-    if (!acc[m.section]) acc[m.section] = []
-    acc[m.section].push(m)
-    return acc
-  }, {})
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -1351,86 +1313,8 @@ export default function SettingsPage() {
             </table>
           </div>
 
-          {/* Role Permissions */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-bold text-hibi-navy dark:text-white">ロール別権限設定</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  adminロールは常に全権限を持ちます。チェックを変更後「保存」を押してください。
-                </p>
-              </div>
-              <button
-                onClick={savePermissions}
-                disabled={savingPermissions || !permissions}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
-                  savedPermissions
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-hibi-navy text-white hover:bg-hibi-light'
-                } disabled:opacity-50`}
-              >
-                {savingPermissions ? '保存中...' : savedPermissions ? '✓ 保存済み' : '保存'}
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm table-fixed">
-                <colgroup>
-                  <col className="w-40" />
-                  <col className="w-20" />
-                  <col className="w-20" />
-                  <col className="w-20" />
-                  <col className="w-20" />
-                </colgroup>
-                <thead>
-                  <tr className="border-b-2 dark:border-gray-600">
-                    <th className="text-left px-3 py-3 text-gray-600 dark:text-gray-400">メニュー</th>
-                    <th className="text-center px-3 py-3">
-                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">admin</span>
-                    </th>
-                    {CONFIGURABLE_ROLES.map(r => (
-                      <th key={r.id} className="text-center px-3 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          r.id === 'approver' ? 'bg-orange-100 text-orange-700' :
-                          r.id === 'foreman' ? 'bg-blue-100 text-blue-700' :
-                          'bg-purple-100 text-purple-700'
-                        }`}>{r.label.split('（')[0]}</span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(permissionSections).map(([section, menus]) => (
-                    <>
-                      <tr key={`section-${section}`}>
-                        <td colSpan={2 + CONFIGURABLE_ROLES.length} className="px-3 pt-4 pb-1 text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                          {section}
-                        </td>
-                      </tr>
-                      {menus.map(menu => (
-                        <tr key={menu.id} className="border-t dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                          <td className="px-3 py-2.5 text-gray-700 dark:text-gray-300">{menu.label}</td>
-                          <td className="text-center px-3 py-2.5">
-                            <input type="checkbox" checked disabled className="w-4 h-4 accent-red-600 cursor-not-allowed opacity-50" />
-                          </td>
-                          {CONFIGURABLE_ROLES.map(r => (
-                            <td key={r.id} className="text-center px-3 py-2.5">
-                              <input
-                                type="checkbox"
-                                checked={permissions ? (permissions[r.id] || []).includes(menu.id) : false}
-                                onChange={() => togglePermission(r.id, menu.id)}
-                                className="w-4 h-4 accent-hibi-navy cursor-pointer"
-                              />
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* 役割ごとの権限（lib/permissions.ts を表示するだけ。変えるときはコードを直す） */}
+          <PermissionMatrix />
         </div>
       )}
 

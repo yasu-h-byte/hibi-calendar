@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { getWorkerByToken, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
@@ -247,6 +247,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { action } = body
+
+    // 2026-09-26: 登録・予算変更は toolBudget.edit（事務・代表）。getPeriod（履歴を見る）は閲覧
+    if (action !== 'getPeriod') {
+      const denied = await requireCap(request, 'toolBudget.edit')
+      if (denied) return denied
+    }
 
     // 購入登録
     if (action === 'addPurchase') {

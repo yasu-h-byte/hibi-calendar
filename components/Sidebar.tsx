@@ -6,87 +6,22 @@ import { AuthUser } from '@/types'
 import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
 import NotificationBell from './NotificationBell'
 import { DeduraWordmark, DEDURA_BYLINE } from './Brand'
+import { MENU_ITEMS, MENU_SECTIONS, SEARCH_ENTRIES, searchMenu, type MenuItem, type SearchEntry } from '@/lib/menu'
+import { can, permRoleOf, PERM_ROLE_LABEL } from '@/lib/permissions'
 
-interface MenuItem {
-  label: string
-  icon: string
-  href?: string
-  external?: string
-  section: string
-  roles: string[]
-}
+// メニューの中身と並び・メニュー検索の近道は lib/menu.ts、誰に見せるかは lib/permissions.ts（2026-09-26）。
+//   旧: ここに役割を直書き＋MENU_ID_MAP＋設定画面の権限（Firestore rolePermissions）の3か所で食い違っていた
 
-const DEMMEN_URL = 'https://dedura-kanri.web.app'
-
-function buildMenuItems(user: AuthUser): MenuItem[] {
-  // 2026-09-02: 職長の「出面入力」は従来のPC出面入力画面に統一
-  //   （トークン発行を機にタブが職長スマホ画面へ切り替わり、大川職長が
-  //    「前と違う画面になって入力できない」状態になった経緯がある）。
-  //   スマホ最適化版は /attendance/mobile（出面・申請承認・休日設定・自分の有給）を
-  //   別タブで用意し、両画面から相互に行き来できるようにしている。
-  const attItem: MenuItem =
-    { label: '出面入力', icon: '📋', href: '/attendance', section: 'メイン', roles: ['admin', 'approver', 'foreman'] }
-  const foremanCheckItem: MenuItem | null =
-    { label: 'スマホ入力', icon: '📱', href: '/attendance/mobile', section: 'メイン', roles: ['admin', 'approver', 'foreman'] }
-
-  return [
-    // 日常業務
-    { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: '日常業務', roles: ['admin', 'approver', 'jimu'] },
-    { ...attItem, section: '日常業務' },
-    ...(foremanCheckItem ? [{ ...foremanCheckItem, section: '日常業務' }] : []),
-    { label: '就業カレンダー', icon: '📅', href: '/calendar', section: '日常業務', roles: ['admin', 'approver', 'foreman'] },
-    // 集計・分析
-    { label: '月次集計・帳票', icon: '📋', href: '/monthly', section: '集計・分析', roles: ['admin', 'approver', 'jimu'] },
-    { label: '原価・収益管理', icon: '💰', href: '/cost', section: '集計・分析', roles: ['admin', 'jimu'] },
-    // 2026-09-25: 経営コックピットと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）。代表のみ
-    { label: '経営コックピット', icon: '📈', external: 'https://keieidashboard.vercel.app/genba', section: '集計・分析', roles: ['admin'] },
-    // 人事・労務
-    { label: '人員マスタ', icon: '👷', href: '/workers', section: '人事・労務', roles: ['admin', 'jimu'] },
-    { label: '休暇管理', icon: '🌴', href: '/leave', section: '人事・労務', roles: ['admin', 'approver', 'jimu'] },
-    // 2026-08-28: 評価管理・昇給履歴・賃金制度の3本を「賃金・評価」ハブに集約。
-    //   名前から日本人向け/ベトナム人向けが分からなかったため、ハブで国籍別に分岐する。
-    //   旧ページ（/evaluation・/wage 等）はそのまま残っており、直リンクも有効。
-    { label: '賃金・評価', icon: '💴', href: '/compensation', section: '人事・労務', roles: ['admin', 'approver'] },
-    // 2026-09-10: 職長の評価入力の入口。ハブは admin/approver 専用で、職長は今まで直リンク
-    //   （/evaluation）しか無く、マニュアルの「サイドバー→評価管理」が職長には存在しなかった。
-    //   通知ベルの「評価入力をお願いします」もここから開く
-    { label: '評価入力', icon: '📝', href: '/evaluation', section: '人事・労務', roles: ['foreman'] },
-    // 「帰国・休暇情報」は「休暇管理 → 帰国情報タブ」に統合
-    { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人事・労務', roles: ['admin', 'jimu'] },
-    // 現場・外注
-    { label: '現場マスタ', icon: '🏗', href: '/sites', section: '現場・外注', roles: ['admin', 'jimu'] },
-    { label: '取引先マスタ', icon: '🏢', href: '/subcons', section: '現場・外注', roles: ['admin', 'jimu'] },
-    { label: '同業者との請求・支払', icon: '🤝', href: '/peer-statement', section: '現場・外注', roles: ['admin', 'approver', 'jimu'] },
-    // システム
-    { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'システム', roles: ['admin'] },
-    { label: 'アクセス履歴', icon: '🔐', href: '/access-log', section: 'システム', roles: ['admin'] },
-    { label: '資料一覧', icon: '📁', href: '/docs', section: 'システム', roles: ['admin', 'approver', 'jimu', 'foreman'] },
-  ]
-}
-
-// Menu ID mapping for permission check
-const MENU_ID_MAP: Record<string, string> = {
-  '/dashboard': 'dashboard',
-  '/attendance': 'attendance',
-  '/attendance/mobile': 'attendance',
-  '/calendar': 'calendar',
-  '/monthly': 'monthly',
-  '/workers': 'workers',
-  '/sites': 'sites',
-  '/subcons': 'subcons',
-  '/peer-statement': 'subcons',
-  '/leave': 'leave',
-  // '/leave-requests': removed (merged into /leave)
-  '/evaluation': 'evaluation',
-  '/wage': 'wage',
-  '/compensation': 'compensation',
-  // '/home-leave' は廃止（/leave?tab=homeleave に統合）
-  '/tool-budget': 'tool-budget',
-  '/access-log': 'access-log',
-  '/cost': 'cost',
-  '/settings': 'settings',
-  '/guide': 'guide',
-  '/docs': 'docs',
+/** メニュー項目が今の画面か（/monthly と /monthly?tab=export のように同じ画面の別タブも区別する） */
+function isItemActive(item: MenuItem, pathname: string, search: string): boolean {
+  if (!item.href) return false
+  const [path, query] = item.href.split('?')
+  if (query) return pathname === path && search.includes(query)
+  if (pathname === path) {
+    // 同じ画面に ?tab= 付きの別項目があるときは、そちらのタブを開いている間は選択しない
+    return !MENU_ITEMS.some(o => o !== item && o.href?.startsWith(`${path}?`) && search.includes(o.href.split('?')[1]))
+  }
+  return (item.activePrefixes || []).some(p => pathname === p || pathname.startsWith(`${p}/`))
 }
 
 /** Text size icon (Aa) */
@@ -103,32 +38,21 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
   const pathname = usePathname()
   const router = useRouter()
   const [fontSize, setFontSizeState] = useState<FontSize>('normal')
-  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]> | null>(null)
   // 2026-06-XX 追加 (UI #2): メニュー項目の未対応件数バッジ
   const [badges, setBadges] = useState<{ monthly: number; calendar: number; leave: number } | null>(null)
+  // メニュー検索（2026-09-26）
+  const [query, setQuery] = useState('')
+  const [search, setSearch] = useState('')
+  useEffect(() => { setSearch(window.location.search) }, [pathname])
 
   useEffect(() => {
     initTheme()
     setFontSizeState(getFontSize())
-    // Load role permissions from localStorage (set during login or settings save)
-    try {
-      const stored = localStorage.getItem('hibi_role_permissions')
-      if (stored) setRolePermissions(JSON.parse(stored))
-    } catch { /* ignore */ }
-    // Also fetch from API to get latest
+    // 旧: 設定画面の権限（rolePermissions）を読んでいた。権限は lib/permissions.ts に一本化したので不要
+    try { localStorage.removeItem('hibi_role_permissions') } catch { /* ignore */ }
     const auth = localStorage.getItem('hibi_auth')
     if (auth) {
       const { password } = JSON.parse(auth)
-      fetch('/api/settings?action=getPermissions', { headers: { 'x-admin-password': password } })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.rolePermissions && Object.keys(data.rolePermissions).length > 0) {
-            setRolePermissions(data.rolePermissions)
-            localStorage.setItem('hibi_role_permissions', JSON.stringify(data.rolePermissions))
-          }
-        })
-        .catch(() => {})
-
       // 2026-06-XX 追加 (UI #2): バッジ件数を非同期取得
       //   重い処理を含むので失敗しても他は表示されるよう catch で握り潰す
       fetch('/api/sidebar-badges', { headers: { 'x-admin-password': password } })
@@ -140,29 +64,26 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
     }
   }, [])
 
-  const menuItems = buildMenuItems(user)
+  const filteredItems = MENU_ITEMS.filter(item => can(user, item.cap))
+  // 検索の対象 = 見えるメニュー項目 ＋ 画面の中の近道（権限のあるものだけ）
+  const searchable: SearchEntry[] = [
+    ...filteredItems.filter(i => i.href).map(i => ({ label: i.label, where: i.section, href: i.href!, cap: i.cap })),
+    ...SEARCH_ENTRIES.filter(e => can(user, e.cap)),
+  ]
+  const results = query.trim() ? searchMenu(query, searchable).slice(0, 12) : []
+  const openEntry = (href: string) => {
+    setQuery('')
+    setSearch(href.includes('?') ? `?${href.split('?')[1]}` : '')
+    router.push(href)
+    onClose()
+  }
 
-  // Apply permission filtering
-  const filteredItems = menuItems.filter(item => {
-    // admin always sees everything
-    if (user.role === 'admin') return true
-    // Use static role list as default, override with Firestore permissions if available
-    const perms = rolePermissions?.[user.role]
-    if (perms) {
-      const menuId = item.href ? MENU_ID_MAP[item.href] : null
-      if (menuId) return perms.includes(menuId)
-      // For foreman attendance with token URL, check 'attendance'
-      if (item.href?.startsWith('/attendance/foreman/')) return perms.includes('attendance')
-      return false
-    }
-    // Fallback to hardcoded roles
-    return item.roles.includes(user.role)
-  })
-
-  const sections = Array.from(new Set(filteredItems.map(i => i.section)))
+  const sections = MENU_SECTIONS.filter(sec => filteredItems.some(i => i.section === sec))
 
   const handleClick = (item: MenuItem) => {
     if (item.href) {
+      // 同じ画面の別タブ（/monthly ↔ /monthly?tab=export）は pathname が変わらないので、選択表示をここで合わせる
+      setSearch(item.href.includes('?') ? `?${item.href.split('?')[1]}` : '')
       router.push(item.href)
     } else if (item.external) {
       window.open(item.external, '_blank')
@@ -208,15 +129,42 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
           <div>
             <div className="text-sm font-medium">{user.name}</div>
             <div className="text-xs text-white/50 mt-0.5">
-              {user.role === 'approver' ? '事業責任者' : user.role === 'foreman' ? '職長' : user.role === 'jimu' ? '事務' : '管理者'}
+              {(() => { const r = permRoleOf(user); return r ? PERM_ROLE_LABEL[r] : '' })()}
             </div>
           </div>
           <NotificationBell role={user.role} workerId={user.workerId} />
         </div>
 
+        {/* メニュー検索: 画面の中のタブ・機能まで直接飛べる（lib/menu.ts SEARCH_ENTRIES） */}
+        <div className="px-3 pt-3">
+          <input
+            type="search"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && results[0]) openEntry(results[0].href)
+              if (e.key === 'Escape') setQuery('')
+            }}
+            placeholder="🔍 メニューを検索（例: 有給台帳）"
+            className="w-full rounded-lg bg-white/10 placeholder-white/40 text-white text-[12px] px-2.5 py-1.5 outline-none focus:bg-white/15 focus:ring-1 focus:ring-white/30"
+          />
+        </div>
+
         {/* Menu */}
         <nav className="flex-1 overflow-y-auto py-2 px-1.5">
-          {sections.map(section => (
+          {query.trim() && (
+            <div className="mb-2">
+              {results.length === 0 && <div className="px-2 py-2 text-[12px] text-white/50">見つかりません</div>}
+              {results.map(r => (
+                <button key={`${r.href}|${r.label}`} onClick={() => openEntry(r.href)}
+                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/10 transition">
+                  <div className="text-[13px] text-white">{r.label}</div>
+                  <div className="text-[10px] text-white/45">{r.where}</div>
+                </button>
+              ))}
+            </div>
+          )}
+          {!query.trim() && sections.map(section => (
             <div key={section}>
               <div className="px-1.5 py-1.5 text-[10px] text-white/40 uppercase tracking-wider">
                 {section}
@@ -224,7 +172,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
               {filteredItems
                 .filter(item => item.section === section)
                 .map(item => {
-                  const isActive = item.href && pathname === item.href
+                  const isActive = isItemActive(item, pathname, search)
                   const isExternal = !!item.external
                   // 2026-06-XX 追加 (UI #2): URL別バッジ件数
                   //   /monthly → 検算違反スタッフ数

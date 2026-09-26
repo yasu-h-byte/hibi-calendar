@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { getActivityLog } from '@/lib/activity'
 
 export async function GET(request: NextRequest) {
-  if (!await checkApiAuth(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: アクセス履歴・操作記録は代表（lib/permissions.ts system.admin）
+  const denied = await requireCap(request, 'system.admin')
+  if (denied) return denied
 
   try {
     const { searchParams } = request.nextUrl

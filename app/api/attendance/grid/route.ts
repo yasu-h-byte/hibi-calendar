@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiRole, isManagerRole } from '@/lib/auth'
+import { checkApiAuth, getApiRole, isManagerRole, requireCap } from '@/lib/auth'
 import {
   orderSitesWithWorkTypes, isWorkTypeSite, workTypeSitesOf, parentAndWorkTypeSiteIds,
   findWorkTypeDuplicates, planDayWorkTypeMoves, type WorkTypeDuplicate,
@@ -381,6 +381,17 @@ export async function POST(request: NextRequest) {
 
     const { doc, setDoc, getDoc } = await import('@/lib/fsdb')
     const { db } = await import('@/lib/firebase')
+
+    // 権限表（lib/permissions.ts・2026-09-26）: 入力・配置など → attendance.input（職長・事務・代表）、
+    //   職長承認 → attendance.foremanApprove（職長・代表）、最終承認 → 下の approve_final で isManagerRole
+    {
+      const foremanApproveActions = ['approve', 'approve_foreman', 'unapprove', 'unapprove_foreman']
+      const cap = foremanApproveActions.includes(action) ? 'attendance.foremanApprove'
+        : (action === 'approve_final' || action === 'unapprove_final') ? 'attendance.finalApprove'
+        : 'attendance.input'
+      const denied = await requireCap(request, cap)
+      if (denied) return denied
+    }
 
     // ⚠️ 担当現場チェック（2026-09-15 追加）
     //   職長承認・出面保存は「担当現場の職長」に限る。UI だけの制限で API 直叩きなら他現場を
