@@ -55,6 +55,7 @@
 対象: 管理者（靖仁さん）・事業責任者（政仁さん）・職長<br>
 作成日: 2026年4月14日<br>
 全面改訂: <strong>2026年5月15日</strong>（評価制度・ロジック刷新を反映してゼロベース書き直し）<br>
+最終更新: 2026年9月26日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code>
 </p>
 
@@ -168,9 +169,19 @@
 <table>
 <tr><th>区分</th><th>担当者</th><th>役割</th></tr>
 <tr><td>管理者</td><td><strong>靖仁さん</strong>（workerId=0）</td><td>セッション作成・承認・<strong>生活態度の評価</strong></td></tr>
-<tr><td>事業責任者</td><td><strong>政仁さん</strong>（workerId=1）</td><td>最終承認・業務評価3カテゴリ</td></tr>
+<tr><td>事業責任者</td><td><strong>政仁さん</strong>（workerId=1）</td><td>セッション作成・最終承認・業務評価3カテゴリ</td></tr>
 <tr><td>職長 3名</td><td><strong>白戸さん・大川さん・大介さん</strong></td><td>業務評価3カテゴリ</td></tr>
 </table>
+
+<div class="box box-warn">
+<strong>誰が何をできるか（2026年9月26日〜・サーバー側でも制限）</strong>
+<ul style="margin: 8px 0 0">
+  <li><strong>評価の入力</strong>: 評価者本人（役職職長・政仁さん・靖仁さん）</li>
+  <li><strong>セッション作成・承認（昇給額の確定）・ウェイト再計算・再計算API</strong>: 政仁さん・靖仁さん（代表）だけ</li>
+  <li><strong>役員（政仁さん以外）</strong>: 見るだけ（作成・承認・再計算はできません）</li>
+  <li><strong>事務（森田さん）</strong>: 賃金・評価の画面は開けません。なお人員マスタの給与欄（時給など）の直接の書き換えは代表だけです</li>
+</ul>
+</div>
 
 <div class="box box-warn">
 <strong>なぜ生活態度だけ靖仁さんが評価？</strong><br>
@@ -189,7 +200,7 @@
 <div class="box box-ok">
 <table>
 <tr><th>ステップ</th><th>担当</th><th>やること</th><th>該当タブ</th></tr>
-<tr><td><strong>①</strong></td><td>管理者</td><td>評価セッション作成（対象スタッフと評価者を選択）</td><td>一覧</td></tr>
+<tr><td><strong>①</strong></td><td>靖仁さん／政仁さん</td><td>評価セッション作成（対象スタッフと評価者を選択）</td><td>一覧</td></tr>
 <tr><td><strong>②〜⑥</strong></td><td>職長3名 + 政仁さん + 靖仁さん</td><td>各自ABC評価を入力して提出</td><td>評価入力</td></tr>
 <tr><td colspan="4" style="text-align:center; background:#e6f4ea; font-weight:bold;">↓ 全員提出が完了すると、自動で「最終確認待ち」に遷移 ↓</td></tr>
 <tr><td><strong>⑦</strong></td><td>政仁さん／管理者</td><td>各評価者の結果を横並びで比較 → 加重平均でプリフィルされた最終ABCを確認・修正 → 承認</td><td>承認</td></tr>
@@ -380,8 +391,8 @@ ELSE:
 <div class="step">
   <div class="step-num">2</div>
   <div class="step-text">
-    管理者・事業責任者: サイドバー「人事・労務」→「💴 賃金・評価」→ ベトナム人スタッフの「評価管理」<br>
-    職長: 共通パスワードでログイン → 名前一覧から自分を選ぶ → サイドバー「人事・労務」→「📝 評価入力」
+    管理者・事業責任者: サイドバー「人・賃金」→「💴 賃金・評価」→ ベトナム人スタッフの「評価管理」<br>
+    職長: 共通パスワードでログイン → 名前一覧から自分を選ぶ → サイドバー「人・賃金」→「📝 評価入力」
     （2026-09-10 追加。職長に個人パスワードはなく、名前選択で本人が決まります。スマホからでも同じ画面が開きます）
   </div>
 </div>
@@ -391,12 +402,12 @@ ELSE:
 <tr><th>タブ</th><th>主な用途</th><th>権限</th></tr>
 <tr><td><strong>一覧</strong></td><td>全スタッフの評価状況を横断的に確認・操作の入口</td><td>全員</td></tr>
 <tr><td><strong>評価入力</strong></td><td>自分が評価者になっているセッションで ABC を入力</td><td>全員</td></tr>
-<tr><td><strong>進捗監視</strong></td><td>進行中セッションのみを集約表示</td><td>管理者・事業責任者</td></tr>
-<tr><td><strong>承認</strong></td><td>全員提出済みセッションの最終確認 → 承認</td><td>管理者・事業責任者</td></tr>
-<tr><td><strong>履歴</strong></td><td>承認済み評価の閲覧・A4印刷</td><td>管理者・事業責任者</td></tr>
+<tr><td><strong>進捗監視</strong></td><td>進行中セッションのみを集約表示</td><td>管理者・事業責任者（役員は見るだけ）</td></tr>
+<tr><td><strong>承認</strong></td><td>全員提出済みセッションの最終確認 → 承認</td><td>管理者・事業責任者のみ（役員は見るだけ）</td></tr>
+<tr><td><strong>履歴</strong></td><td>承認済み評価の閲覧・A4印刷</td><td>管理者・事業責任者（役員は見るだけ）</td></tr>
 </table>
 
-<h2 id="sec-4-2">4.2 評価セッションの作成 <span class="audience aud-admin">管理者</span></h2>
+<h2 id="sec-4-2">4.2 評価セッションの作成 <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
 
 <div class="step">
   <div class="step-num">1</div>
@@ -523,7 +534,7 @@ weighted_avg = (3×0.7 + 2×0.1 + 3×1.0 + 2×0.1) / (0.7+0.1+1.0+0.1) = 5.5 / 1
 </div>
 
 <div class="box box-warn">
-<strong>承認権限：</strong>承認は <strong>管理者（靖仁さん）または事業責任者（政仁さん）</strong> のみ可能。職長は承認できない。
+<strong>承認権限：</strong>承認は <strong>管理者（靖仁さん）または事業責任者（政仁さん）</strong> のみ可能。職長・事務・役員（政仁さん以外）は承認できない（2026年9月26日からサーバー側でも拒否）。
 </div>
 
 <h2 id="sec-4-6">4.6 詳細モーダル・A4印刷 <span class="audience aud-all">全員</span></h2>
@@ -571,7 +582,7 @@ weighted_avg = (3×0.7 + 2×0.1 + 3×1.0 + 2×0.1) / (0.7+0.1+1.0+0.1) = 5.5 / 1
 </p>
 
 <div class="box">
-<strong>使用例（管理者がブラウザDevToolsで実行 or curl）：</strong>
+<strong>使用例（管理者がブラウザDevToolsで実行 or curl。実行できるのは代表・政仁さんのみ）：</strong>
 <pre><code># 個別セッション再計算
 POST /api/evaluation
 { "action": "recalculateApproved", "evaluationId": "204_2026-05-07" }
@@ -696,7 +707,7 @@ S・B・C は A の 1.25倍・0.7倍・0.4倍（5円単位で四捨五入）で�
 <h2 id="sec-5-5">5.5 昇給履歴の確認 <span class="audience aud-admin">管理者</span><span class="audience aud-approver">事業責任者</span></h2>
 
 <p>
-人員マスタ（<code>/workers</code>）の「💰 昇給履歴」タブで、各スタッフの昇給遍歴を一覧表示できます。
+サイドバー「人・賃金」→「💴 賃金・評価」→「昇給履歴」（人員マスタ <code>/workers</code> の「💰 昇給履歴」タブ）で、各スタッフの昇給遍歴を一覧表示できます。
 </p>
 <ul>
   <li>勤続年数・在留資格・時給・所属会社などでソート可能</li>
@@ -704,7 +715,7 @@ S・B・C は A の 1.25倍・0.7倍・0.4倍（5円単位で四捨五入）で�
 </ul>
 
 <div class="box box-warn">
-<strong>職長は昇給履歴を見られません。</strong>給与情報は管理職層（管理者・事業責任者）のみアクセス可能。
+<strong>職長は昇給履歴を見られません。</strong>給与情報は管理職層（管理者・事業責任者・役員）のみアクセス可能（役員は見るだけ）。
 </div>
 
 <!-- ============================================================ -->
@@ -802,11 +813,18 @@ Body: { "action": "recalculateApproved", "all": true }</code></pre>
 <code>EVALUATION_WEIGHTS</code>、<code>RAISE_TABLE</code>、<code>calculateManualScore</code>、<code>calculateRank</code>、<code>getRaiseAmount</code> がここで定義されています。
 </div>
 
+<h2>改訂履歴</h2>
+<table>
+<tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-26</td><td>権限の整理を反映（入力は評価者本人、セッション作成・承認・再計算は政仁さん・代表だけ、役員は見るだけ）。サイドバーの区分名を「人・賃金」に、昇給履歴の場所を「賃金・評価 → 昇給履歴」に更新</td></tr>
+<tr><td>2026-09-14</td><td>昇給テーブルを賃金カーブに一本化・年数を「評価日に最も近い記念日」で数える</td></tr>
+</table>
+
 <hr>
 
 <p style="text-align: center; color: #888; font-size: 13px; margin-top: 40px;">
 HIBI CONSTRUCTION 鳶事業部 — 評価管理マニュアル<br>
-最終更新: 2026年9月14日（昇給テーブルを賃金カーブに一本化・年数を「評価日に最も近い記念日」で数える）<br>
+最終更新: 2026年9月26日（権限の整理・サイドバーの新しい並びを反映）<br>
 お問い合わせ・改訂提案: 管理者（靖仁さん）まで
 </p>
 

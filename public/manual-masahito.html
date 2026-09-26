@@ -47,17 +47,18 @@
 
 <h1>HIBI CONSTRUCTION 就業管理システム<br>業務マニュアル（事業責任者）</h1>
 <p>対象: 日比政仁さん（事業責任者）<br>
-最終更新: 2026年8月31日<br>
+最終更新: 2026年9月26日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <!-- サマリー：承認業務は3つ -->
 <div class="box box-ok">
-<strong>政仁さんの仕事は「最終承認」です。大きく3つだけです。</strong>
+<strong>政仁さんの仕事は「最終承認」です。大きく4つです。</strong>
 <table style="margin-top:10px;">
 <tr><th>承認すること</th><th>いつ</th><th>どこで</th></tr>
 <tr><td><strong>① 出面の最終承認</strong><br>職長が確認・ロックした日を最終承認する</td><td><strong>毎日</strong></td><td>出面入力（PC）</td></tr>
 <tr><td><strong>② 有給・帰国申請の最終承認</strong><br>職長が承認した申請を最終承認する</td><td>申請が来たとき</td><td>ダッシュボード「勤怠申請」カード</td></tr>
 <tr><td><strong>③ 翌月カレンダーの承認</strong><br>職長が提出した就業カレンダーを承認する</td><td><strong>毎月</strong></td><td>就業カレンダー（PC）</td></tr>
+<tr><td><strong>④ 請求書の承認・発行</strong><br>森田さんが申請した請求書を確認して発行する</td><td>申請が来たとき</td><td>請求書・支払（PC）</td></tr>
 </table>
 <p style="margin:10px 0 0; font-size:13px;"><strong>原則：現場レベルの作業は職長が「確認・提出」まで、最終承認は政仁さんが行います。</strong></p>
 </div>
@@ -66,6 +67,7 @@
 <strong>📌 関連資料：</strong>
 <a href="/manual-checklist.html">✅ ロール別チェックリスト</a> ／
 <a href="/manual-yukyu.html">🌴 休暇管理マニュアル</a> ／
+<a href="/manual-invoice.html">🧾 請求書の発行マニュアル</a> ／
 <a href="/guide">📖 運用ガイド</a>
 </div>
 
@@ -76,9 +78,11 @@
   <li><a href="#sec2">出面の最終承認（毎日）</a></li>
   <li><a href="#sec3">有給・帰国申請の最終承認</a></li>
   <li><a href="#sec4">就業カレンダーの承認（毎月）</a></li>
-  <li><a href="#sec5">その他の確認（稼働状況・通知・月次）</a></li>
-  <li><a href="#sec6">見られる画面／見られない画面</a></li>
+  <li><a href="#sec-invoice">請求書の承認・発行</a></li>
+  <li><a href="#sec5">その他の確認（稼働状況・通知・月次・原価）</a></li>
+  <li><a href="#sec6">使える画面／使えない画面</a></li>
   <li><a href="#sec7">毎日・毎月のルーティン</a></li>
+  <li><a href="#sec-history">改訂履歴</a></li>
 </ol>
 </div>
 
@@ -91,6 +95,19 @@
 
 <div class="box">
 <strong>パスワードについて：</strong>政仁さん専用の個人パスワードが割り当てられています（靖仁さんから共有）。<strong>名前の選択は不要で、パスワードを入力するだけで直接ログイン</strong>できます。一度ログインすれば、同じブラウザでは次回から入力不要です。
+</div>
+
+<div class="box">
+<strong>サイドメニューの並び（2026年9月26日〜）：</strong>「いつ使うか」の順です。
+<ul style="margin: 8px 0 0; padding-left: 20px;">
+  <li><strong>毎日</strong>: ダッシュボード／出面入力</li>
+  <li><strong>毎月</strong>: 就業カレンダー／月次集計・締め／帳票出力／休暇管理／請求書・支払</li>
+  <li><strong>経営</strong>: 原価・収益</li>
+  <li><strong>人・賃金</strong>: 人員マスタ／賃金・評価／評価入力／道具代管理</li>
+  <li><strong>マスタ</strong>: 現場マスタ／取引先マスタ</li>
+  <li><strong>管理</strong>: 資料一覧</li>
+</ul>
+<p style="margin:8px 0 0;">メニューの一番上の<strong>検索欄</strong>に「請求書」「同意台帳」「有給台帳」などと打つと、その画面・タブへすぐ行けます。</p>
 </div>
 
 <!-- ================================================ -->
@@ -216,58 +233,78 @@
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec5">5. その他の確認（稼働状況・通知・月次）</h2>
+<h2 id="sec-invoice">5. 請求書の承認・発行（申請が来たら）</h2>
+
+<p>同業者への応援の請求書と、HFU → 日比建設 の請求書は、<strong>森田さんが「発行を申請」→ 政仁さんが「承認して発行」</strong>という流れで出します。金額・人工・出面明細は出面から自動で作られます。</p>
+
+<div class="step"><div class="step-num">1</div><div class="step-text">通知ベル（🔔）に<strong>「請求書の発行承認待ち」</strong>と出たら申請が来ています</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">サイドバー「毎月」→<strong>「請求書・支払」</strong>→ 対象の月 → バッジが<strong>「承認待ち」</strong>の会社を開く</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">宛先・対象の月・支払期日、現場ごとの人工 × 単価 ＝ 金額、出面明細を確認する（表示されている内容がそのまま発行されます）</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">よければ <span class="btn-amber">承認して発行</span> → 請求書番号が付いて「発行済み」になる（印刷・送付は森田さん）</div></div>
+
+<div class="box box-warn">
+<ul style="margin: 0; padding-left: 20px;">
+  <li><strong>直してほしいとき</strong>：「差し戻し」を押して理由を入れる。森田さんが直して再申請すると、また通知ベルに出ます</li>
+  <li><strong>発行後に間違いに気づいたとき</strong>：発行済みの請求書を開いて「取り消し」（理由を入れる）。取り消した番号は欠番のまま残ります。作り直しは森田さんに再申請を頼んでください</li>
+</ul>
+</div>
+
+<div class="box" style="font-size:13px;">詳しい手順は <a href="/manual-invoice.html">🧾 請求書の発行マニュアル</a> を見てください。</div>
+
+<!-- ================================================ -->
+<h2 id="sec5">6. その他の確認（稼働状況・通知・月次・原価）</h2>
 
 <table>
 <tr><th>いつ</th><th>確認すること</th><th>どこで</th></tr>
 <tr><td><strong>毎日</strong></td><td>本日の稼働状況（誰がどの現場に出ているか）</td><td>ダッシュボード</td></tr>
 <tr><td>随時</td><td>通知ベル（🔔）で承認待ち・未署名などの<strong>滞留チェック</strong></td><td>サイドバー上部のベル</td></tr>
-<tr><td><strong>月末</strong></td><td>売上・人工数のサマリー</td><td>月次集計・帳票</td></tr>
+<tr><td><strong>月末</strong></td><td>売上・人工数のサマリー</td><td>月次集計・締め</td></tr>
+<tr><td><strong>月締め後</strong></td><td>現場ごとの売上・原価・利益（外注の金額もここ）</td><td>原価・収益</td></tr>
 </table>
 
 <div class="box">
-詳しい原価分析（現場ごとの利益・原価内訳など）は<strong>奥寺さんの担当</strong>です。政仁さんは月次の売上・人工数のサマリーを「月次集計・帳票」で確認できます。
+<strong>【2026年9月26日〜】政仁さんも「原価・収益」を使えるようになりました。</strong>現場ごとの利益・原価内訳（外注先別の原価明細を含む）を確認でき、<strong>現場の請求額の入力</strong>もできます（ふだんの入力は森田さん）。月次集計の「外注」タブは無くなり、外注の金額は「原価・収益」で見ます。
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec6">6. 見られる画面／見られない画面</h2>
+<h2 id="sec6">7. 使える画面／使えない画面</h2>
 
 <div class="box box-warn">
-<strong>【重要・実装確認済み】</strong>政仁さん（approver 権限）でアクセスできる画面と、できない画面は以下の通りです。見られない画面は管理者（admin）・事務（jimu）のみが操作します。
+<strong>【2026年9月26日 改訂】</strong>役割ごとにできることを1つの表に整理しました（サーバー側でも同じ決まりでチェックします）。原則は「現場の作業は職長、事務処理は事務（森田さん）、<strong>最終承認は政仁さん</strong>、システムは代表」です。
 </div>
 
-<h3>6-1. 政仁さんが見られる画面</h3>
+<h3>7-1. 政仁さんが使う画面</h3>
 
 <table>
-<tr><th>画面</th><th>用途</th></tr>
+<tr><th>画面</th><th>政仁さんができること</th></tr>
 <tr><td>ダッシュボード</td><td>稼働状況・勤怠申請カード</td></tr>
-<tr><td>出面入力</td><td>出面の最終承認</td></tr>
-<tr><td>就業カレンダー</td><td>翌月カレンダーの承認</td></tr>
-<tr><td>月次集計・帳票</td><td>売上・人工数の月次確認</td></tr>
-<tr><td>休暇管理</td><td>有給・帰国申請の承認</td></tr>
-<tr><td>評価管理・昇給履歴</td><td>年次評価の確認・承認</td></tr>
+<tr><td>出面入力</td><td>出面の最終承認・変更履歴の確認（入力は職長・森田さん）</td></tr>
+<tr><td>就業カレンダー</td><td>翌月カレンダーの承認・周知同意台帳</td></tr>
+<tr><td>月次集計・締め</td><td>売上・人工数の月次確認。<strong>月次の締めもできます</strong>（ふだんは森田さん）</td></tr>
+<tr><td>帳票出力</td><td>出面一覧・有給管理台帳・周知同意台帳などの出力</td></tr>
+<tr><td>休暇管理</td><td>有給・帰国申請の<strong>最終承認</strong>（付与・記録は森田さん）</td></tr>
+<tr><td>請求書・支払</td><td>請求書の<strong>承認・発行・差し戻し・取り消し</strong></td></tr>
+<tr><td>原価・収益</td><td>現場ごとの売上・原価・利益の確認、<strong>請求額の入力</strong></td></tr>
+<tr><td>人員マスタ</td><td>見るだけ（給与欄も見るだけ。書き換えは代表）</td></tr>
+<tr><td>賃金・評価／評価入力</td><td>評価の承認・号俸改定・賞与の確定・評価の入力</td></tr>
+<tr><td>道具代管理・現場マスタ・取引先マスタ</td><td>見るだけ（登録・編集は森田さん）</td></tr>
 <tr><td>資料一覧</td><td>各種マニュアル・ガイド</td></tr>
 </table>
 
-<h3>6-2. 見られない画面（admin / jimu のみ）</h3>
+<h3>7-2. 使えない画面（代表のみ）</h3>
 
 <table>
 <tr><th>画面</th><th>担当</th></tr>
-<tr><td>人員マスタ</td><td>管理者・事務</td></tr>
-<tr><td>現場マスタ</td><td>管理者・事務</td></tr>
-<tr><td>外注先マスタ</td><td>管理者・事務</td></tr>
-<tr><td>原価・収益管理</td><td>管理者・事務（奥寺さん）</td></tr>
-<tr><td>道具代管理</td><td>管理者・事務</td></tr>
-<tr><td>帳票 Excel 出力</td><td>管理者・事務</td></tr>
-<tr><td>管理者設定・アクセス履歴</td><td>管理者</td></tr>
+<tr><td>管理者設定（会社・請求書／単価の既定値／ログイン・権限／お知らせ／バックアップ・履歴。アクセス履歴もこの中）</td><td>代表（靖仁さん）</td></tr>
+<tr><td>経営コックピット</td><td>代表（靖仁さん）</td></tr>
 </table>
 
-<div class="box box-red">
-<strong>※ 訂正：</strong>旧マニュアルには「原価・収益管理で確認」との記載がありましたが、<strong>実装では原価・収益管理は approver ではアクセスできません</strong>（<code>roles: ['admin','jimu']</code>）。原価分析は奥寺さんに確認してください。
+<div class="box">
+<strong>※ 以前との違い：</strong>2026年9月25日までは「原価・収益管理」は政仁さんの権限では開けませんでしたが、<strong>9月26日から使えるようになりました</strong>（請求額の入力を含む）。
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec7">7. 毎日・毎月のルーティン</h2>
+<h2 id="sec7">8. 毎日・毎月のルーティン</h2>
 
 <h3>毎日</h3>
 <div class="box">
@@ -283,12 +320,21 @@
 <tr><th>タイミング</th><th>作業</th></tr>
 <tr><td><strong>20〜25日頃</strong></td><td>職長が提出した翌月の就業カレンダーを<strong>承認</strong>する</td></tr>
 <tr><td>承認後</td><td>署名状況を確認し、未署名者に Messenger で再送</td></tr>
-<tr><td><strong>月末</strong></td><td>月次集計・帳票で売上・人工数を確認</td></tr>
+<tr><td>申請が来たら</td><td>請求書を確認して<strong>「承認して発行」</strong>（または差し戻し）</td></tr>
+<tr><td><strong>月末</strong></td><td>月次集計・締めで売上・人工数を確認</td></tr>
+<tr><td>月締め後</td><td>原価・収益で現場ごとの利益を確認</td></tr>
 </table>
 </div>
 
+<!-- ================================================ -->
+<h2 id="sec-history">改訂履歴</h2>
+<table>
+<tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-26</td><td>「5. 請求書の承認・発行」を追加。新しいサイドメニュー・検索欄の案内、役割の整理に合わせて使える画面を改訂（原価・収益・月次の締めが政仁さんも可に）。事務の担当を森田さんに</td></tr>
+</table>
+
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-08-31</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-09-26</p>
 
 </body>
 </html>

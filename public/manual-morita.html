@@ -70,7 +70,7 @@
 <tr><td><strong>①</strong></td><td>前月の出面を最終確認（未入力・警告を潰す）</td><td>出面入力／月次集計「チェック」</td><td>月初すぐ</td></tr>
 <tr><td><strong>②</strong></td><td>月次集計で出勤・残業・有給・欠勤を確認</td><td>月次集計</td><td>月初</td></tr>
 <tr><td><strong>③</strong></td><td>🔒 月締めロック</td><td>月次集計</td><td>確認後</td></tr>
-<tr><td><strong>④</strong></td><td><strong>キャシュモ提出用の2資料（月次集計Excel・計算根拠PDF）を会社別に出力・送付</strong></td><td>月次集計 →「帳票出力」タブ</td><td>ロック後すぐ</td></tr>
+<tr><td><strong>④</strong></td><td><strong>キャシュモ提出用の2資料（月次集計Excel・計算根拠PDF）を会社別に出力・送付</strong></td><td>帳票出力</td><td>ロック後すぐ</td></tr>
 <tr><td><strong>⑤</strong></td><td>道具代: マネーフォワード承認分をシステムへ登録</td><td>道具代管理</td><td>随時</td></tr>
 </table>
 </div>
@@ -117,20 +117,24 @@
 <!-- ================================================ -->
 <h2 id="sec2">2. 画面の見方（サイドバー）</h2>
 
+<p>メニューは「いつ使うか」の順に並んでいます（2026-09-26 見直し）。<strong>一番上の検索欄</strong>に「有給台帳」「請求書」「締め」などと打つと、その画面・タブへ直接行けます。</p>
+
 <table>
-<tr><th>メニュー</th><th>用途</th><th>頻度</th></tr>
-<tr><td>ダッシュボード</td><td>お知らせ・<strong>勤怠申請</strong>（有給・帰国の承認、欠勤届の確認）・稼働状況</td><td><strong>毎日</strong></td></tr>
-<tr><td><strong>出面入力</strong></td><td>日々の出勤・残業・有給の確認と事務補助</td><td><strong>毎日</strong></td></tr>
-<tr><td>就業カレンダー</td><td>各現場のカレンダー確認</td><td>確認用</td></tr>
-<tr><td><strong>月次集計</strong></td><td>集計・チェック・<strong>月締め・キャシュモ提出資料の出力</strong></td><td><strong>毎月</strong></td></tr>
-<tr><td>帳票出力</td><td>出面表・有給管理台帳などのExcel出力</td><td>毎月</td></tr>
-<tr><td><strong>休暇管理</strong></td><td>有給の付与・残数・申請の承認</td><td><strong>毎月</strong></td></tr>
-<tr><td><strong>道具代管理</strong></td><td>購入登録・残額管理</td><td>随時</td></tr>
-<tr><td>現場マスタ／外注先マスタ</td><td>現場・外注情報の確認（単価変更は速やかに反映）</td><td>随時</td></tr>
+<tr><th>見出し</th><th>メニュー</th><th>用途</th></tr>
+<tr><td>毎日</td><td>ダッシュボード</td><td>お知らせ・<strong>勤怠申請の状況</strong>（承認は政仁さん）・稼働状況</td></tr>
+<tr><td>毎日</td><td><strong>出面入力</strong></td><td>入力漏れのフォロー・過去日の修正・変更履歴からの復元（§3-1）</td></tr>
+<tr><td>毎月</td><td><strong>月次集計・締め</strong></td><td>集計・チェック・<strong>月締め</strong></td></tr>
+<tr><td>毎月</td><td><strong>帳票出力</strong></td><td><strong>キャシュモ提出資料</strong>・出面一覧・有給管理台帳・周知同意台帳などのExcel/PDF</td></tr>
+<tr><td>毎月</td><td><strong>休暇管理</strong></td><td>有給の付与・時季指定・買取の記録・残数（§3-2）</td></tr>
+<tr><td>毎月</td><td><strong>請求書・支払</strong></td><td>請求書の発行申請（§3-4）</td></tr>
+<tr><td>経営</td><td>原価・収益</td><td>現場の請求額の入力・外注の人工と金額</td></tr>
+<tr><td>人・賃金</td><td>人員マスタ</td><td>入退社・在留期限・電話URL などの基本情報（給与欄は見るだけ）</td></tr>
+<tr><td>人・賃金</td><td><strong>道具代管理</strong></td><td>購入登録・残額管理（§3-3）</td></tr>
+<tr><td>マスタ</td><td>現場マスタ／取引先マスタ</td><td>現場・取引先の情報（単価変更は速やかに反映）</td></tr>
 </table>
 
 <div class="box box-warn">
-<strong>人員マスタ</strong>（入退社・ビザ更新・パスワード）は靖仁さんの担当です。変更が必要なときは連絡してください。
+給与欄（時給・号俸・日額）の変更とパスワードの発行は<strong>靖仁さん（代表）</strong>、申請の最終承認・請求書の承認は<strong>政仁さん</strong>の担当です。
 </div>
 
 <!-- ================================================ -->
@@ -209,7 +213,7 @@
 <div class="box box-warn">
 <strong>手順：</strong>
 <ol style="margin: 8px 0 0; padding-left: 20px;">
-  <li>サイドバー「同業者との請求・支払」を開き、月を選ぶ</li>
+  <li>サイドバー「毎月」→「請求書・支払」を開き、月を選ぶ</li>
   <li>会社（または上の「HFU → 日比建設」）の「請求書を作る」を押す</li>
   <li>下書きの金額・人工・出面明細を確認し、<strong>「発行を申請（承認へ回す）」</strong>を押す → バッジが「承認待ち」になる</li>
   <li>政仁さんが「承認して発行」すると請求書番号が付き、バッジが「✓ 発行済み」に変わる</li>
@@ -270,7 +274,7 @@
 </div>
 <div class="step">
   <div class="step-num">2</div>
-  <div class="step-text">月次集計 →「📑 帳票出力」タブ →「キャシュモ提出（毎月の2点）」→ <strong>日比建設・HFUそれぞれの行で2点を出力</strong></div>
+  <div class="step-text">サイドバー「帳票出力」（月次集計の「📑 帳票出力」タブと同じ）→「キャシュモ提出（毎月の2点）」→ <strong>日比建設・HFUそれぞれの行で2点を出力</strong></div>
 </div>
 <div class="step">
   <div class="step-num">3</div>
@@ -328,6 +332,7 @@
 <h2>改訂履歴</h2>
 <table>
 <tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-26</td><td>§2 をメニューの見直し（毎日／毎月／経営…の順・検索欄・帳票出力の独立・請求書・支払）に合わせて全面更新。人員マスタの基本情報は森田さんも編集可（給与欄は代表）</td></tr>
 <tr><td>2026-09-26</td><td>§3-2 を「有給の付与・記録」に改め、申請の最終承認は政仁さんと明記（役割ごとの権限の整理）。有給付与のアラートが事務の通知ベルにも出るように</td></tr>
 <tr><td>2026-09-26</td><td>§3-4「請求書の発行申請」を追加（森田さんが申請 → 政仁さんが承認して発行）</td></tr>
 <tr><td>2026-09-17</td><td>キャシュモ提出資料を両社とも「月次集計Excel＋計算根拠PDF」の2点に確定（計算根拠PDFに日本人も掲載）。残り3点は根拠書類として求められたときに出す</td></tr>

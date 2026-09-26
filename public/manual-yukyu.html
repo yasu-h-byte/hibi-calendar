@@ -48,8 +48,8 @@
 <div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
 
 <h1>HIBI CONSTRUCTION 就業管理システム<br>有給・休暇管理マニュアル</h1>
-<p>対象: 事務・管理者<br>
-最終更新: 2026年9月2日<br>
+<p>対象: 事務（森田さん）・事業責任者（政仁さん）・代表<br>
+最終更新: 2026年9月26日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <div class="box box-ok">
@@ -60,8 +60,18 @@
 
 <div class="box box-red">
 <strong>承認は2段階です。</strong>職長が「職長承認」まで、最終承認は事業責任者（政仁さん）が行います。
-有給も帰国も同じ2段階承認です。
+有給も帰国も同じ2段階承認です。<br>
+<strong>最終承認ができるのは政仁さんと代表だけです</strong>（2026年9月26日からサーバー側でも制限）。事務（森田さん）は最終承認をしません。
 </div>
+
+<table>
+<tr><th>作業</th><th>担当（2026年9月26日〜）</th></tr>
+<tr><td>申請</td><td>スタッフ（スマホ）</td></tr>
+<tr><td>職長承認</td><td>その現場の職長（職長不在・職長本人の申請は政仁さん・代表）</td></tr>
+<tr><td>最終承認・却下・承認済みの取消</td><td><strong>政仁さん・代表</strong>（却下は職長も可）</td></tr>
+<tr><td>付与・時季指定・買取の記録・管理簿出力</td><td><strong>事務（森田さん）</strong>・政仁さん・代表</td></tr>
+<tr><td>見るだけ</td><td>役員（政仁さん以外）</td></tr>
+</table>
 
 <div class="box" style="font-size:13px;">
 <strong>📌 関連資料：</strong>
@@ -87,23 +97,23 @@
 <!-- ================================================ -->
 <h2 id="sec1">1. このマニュアルについて・全体像</h2>
 
-<p>サイドバーの <strong>「🌴 休暇管理」（/leave）</strong> を開くと、有給と帰国の管理画面が表示されます。画面は<strong>6つのタブ</strong>で構成されています。</p>
+<p>サイドバーの <strong>毎月 → 「🌴 休暇管理」（/leave）</strong> を開くと、有給と帰国の管理画面が表示されます。画面は<strong>6つのタブ</strong>で構成されています。</p>
 
 <table>
 <tr><th>タブ</th><th>内容</th></tr>
-<tr><td><strong>一覧</strong></td><td>スタッフごとの付与/繰越/消化/残日数の一覧。ここから編集・買取も行う</td></tr>
+<tr><td><strong>一覧</strong></td><td>スタッフごとの付与/繰越/消化/残日数の一覧。ここから編集・時季指定・買取も行う</td></tr>
+<tr><td><strong>📅 基準日</strong></td><td>付与の起点となる基準日の確認・設定</td></tr>
 <tr><td><strong>申請</strong></td><td>有給・帰国の申請を承認/却下する（職長承認・最終承認）</td></tr>
-<tr><td><strong>基準日</strong></td><td>付与の起点となる基準日の確認・設定</td></tr>
-<tr><td><strong>付与</strong></td><td>有給付与の実行（半自動バナー経由が主流）</td></tr>
-<tr><td><strong>帰国</strong></td><td>帰国申請・帰国期間の管理</td></tr>
-<tr><td><strong>月次</strong></td><td>月ごとの消化状況を会社別（<span class="tag tag-hibi">日比建設</span>／<span class="tag tag-hfu">HFU</span>）に集計表示</td></tr>
+<tr><td><strong>月別</strong></td><td>月ごとの消化状況を会社別（<span class="tag tag-hibi">日比建設</span>／<span class="tag tag-hfu">HFU</span>）に集計表示</td></tr>
+<tr><td><strong>カレンダー</strong></td><td>誰がいつ休むかをカレンダーで表示</td></tr>
+<tr><td><strong>✈️ 帰国情報</strong></td><td>帰国申請・帰国期間の管理</td></tr>
 </table>
 
 <div class="box">
 <strong>ヘッダーの主なボタン：</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li><span class="btn-amber">📊 有給管理簿を出力</span> — 労基法準拠の法定様式Excelをダウンロード</li>
-  <li><strong>時効処理を実行</strong> — 2年経過分を手動で失効記録（通常は自動。admin のみ）</li>
+  <li><span class="btn-amber">📊 管理簿出力</span> — 労基法準拠の法定様式Excelをダウンロード（サイドバー「📑 帳票出力」からも出せます）</li>
+  <li><strong>時効処理を実行</strong> — 2年経過分を手動で失効記録（通常は自動。事務・政仁さん・代表のみ）</li>
 </ul>
 <p style="margin:8px 0 0; font-size:13px;">※ 繰越再計算・データ正規化などの保守ツールも用意されていますが、通常運用では使いません（移行完了済み）。</p>
 </div>
@@ -212,8 +222,8 @@
 
 <table>
 <tr><th>段階</th><th>誰が</th><th>操作</th></tr>
-<tr style="background:#eefaf1;"><td><strong>第1段階</strong></td><td><strong>職長</strong></td><td>内容を確認 →「職長承認」（押せるのは admin / approver / foreman）</td></tr>
-<tr><td><strong>第2段階</strong></td><td>政仁さん</td><td>職長承認済みを「最終承認」（押せるのは admin / approver）</td></tr>
+<tr style="background:#eefaf1;"><td><strong>第1段階</strong></td><td><strong>職長</strong></td><td>内容を確認 →「職長承認」（押せるのは担当現場の職長・政仁さん・代表）</td></tr>
+<tr><td><strong>第2段階</strong></td><td>政仁さん</td><td>職長承認済みを「最終承認」（押せるのは<strong>政仁さん・代表だけ</strong>。事務は押せません）</td></tr>
 </table>
 
 <div class="box">
@@ -254,7 +264,7 @@
 </table>
 
 <div class="box box-warn">
-<strong>職長承認後の取り消しはスマホからできません。</strong>スタッフから相談があったら、管理者が休暇管理画面で<strong>却下処理</strong>してください。却下後は同じ日付で再申請できます。
+<strong>職長承認後の取り消しはスマホからできません。</strong>スタッフから相談があったら、政仁さん（または代表）が休暇管理画面で<strong>却下処理</strong>します。事務（森田さん）は政仁さんに回してください。却下後は同じ日付で再申請できます。
 </div>
 
 <!-- ================================================ -->
@@ -328,7 +338,7 @@
 
 <p>労働基準法施行規則24条の7準拠の管理簿を、1クリックでダウンロードできます（労基署監査対応の法定様式）。</p>
 
-<div class="step"><div class="step-num">1</div><div class="step-text">ヘッダー右上の <span class="btn-amber">📊 有給管理簿を出力</span> をクリック</div></div>
+<div class="step"><div class="step-num">1</div><div class="step-text">休暇管理のヘッダー右上の <span class="btn-amber">📊 管理簿出力</span> をクリック（サイドバー「📑 帳票出力」からも出せます。メニュー上の検索欄に「有給台帳」と入れても飛べます）</div></div>
 <div class="step"><div class="step-num">2</div><div class="step-text">自動的に Excelファイル（<code>有給管理簿_YYYYMMDD.xlsx</code>）がダウンロードされる</div></div>
 
 <h3>Excelファイルの構成（4シート）</h3>
@@ -351,16 +361,16 @@
 <tr><td>間違えて「有」を入力した</td><td>出面入力画面で該当セルを「-」（空欄）に戻す</td></tr>
 <tr><td>終了した現場が出面入力画面に出ない</td><td>現場セレクタ右の「終了現場を表示」チェックをONに</td></tr>
 <tr><td>誰がいつ調整したか確認したい</td><td>編集モーダルの「📋 監査情報」で付与日時・操作者・履歴を確認</td></tr>
-<tr><td>スタッフが間違えて有給申請を出した</td><td>職長承認前ならスタッフ本人がスマホで取り消し可。承認後は管理者が却下処理</td></tr>
+<tr><td>スタッフが間違えて有給申請を出した</td><td>職長承認前ならスタッフ本人がスマホで取り消し可。承認後は政仁さん・代表が却下処理</td></tr>
 <tr><td>出向中スタッフの有給は？</td><td>人員マスタで <code>dispatchTo</code>／<code>dispatchFrom</code> を設定すると開始日以降は全タブから自動除外</td></tr>
-<tr><td>月次タブで日比建設とHFUを混ぜて見たい</td><td>月次は会社別に表が分かれる仕様。混在表示は不可（バッジで識別）</td></tr>
+<tr><td>月別タブで日比建設とHFUを混ぜて見たい</td><td>月別は会社別に表が分かれる仕様。混在表示は不可（バッジで識別）</td></tr>
 <tr><td>退職したスタッフの処理</td><td>編集モーダル →「💰 買取を記録」→ 理由「退職時清算」</td></tr>
 </table>
 
 <h3>承認まわりの補足（2026年9月）</h3>
 <ul>
-  <li><strong>職長承認</strong>はその現場の職長のほか、管理者・政仁さんも行えます（職長不在の現場や、職長本人の申請はこちらで）。<strong>自分の申請を自分で職長承認することはできません</strong></li>
-  <li><strong>承認済みの有給を取り消す</strong>: 申請タブの承認済み行の「↩️ 取消」（管理者・政仁さん）。出面の「有」も消えて残数が戻ります。出面グリッドで「有」を直接消すと申請だけ承認済みのまま残るので、必ずこのボタンから</li>
+  <li><strong>職長承認</strong>はその現場の職長のほか、代表・政仁さんも行えます（職長不在の現場や、職長本人の申請はこちらで）。<strong>自分の申請を自分で職長承認することはできません</strong></li>
+  <li><strong>承認済みの有給を取り消す</strong>: 申請タブの承認済み行の「↩️ 取消」（政仁さん・代表）。出面の「有」も消えて残数が戻ります。出面グリッドで「有」を直接消すと申請だけ承認済みのまま残るので、必ずこのボタンから</li>
   <li>10月1日より前に来期（10月以降）の日付を申請した場合、来期の枠で残数を判定します</li>
 </ul>
 
@@ -368,7 +378,7 @@
 
 <div class="box box-ok">
 <strong>一時帰国している期間でも、有給を充てられます。</strong>本人がスマホの「有給申請」から
-申請でき（職長 → 最終承認の流れは通常と同じ）、管理者が代わりに入力することもできます。
+申請でき（職長 → 最終承認の流れは通常と同じ）、事務（森田さん）・政仁さん・代表が代わりに入力することもできます。
 </div>
 
 <table>
@@ -419,6 +429,7 @@
 <h2>改訂履歴</h2>
 <table>
 <tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-26</td><td>担当の整理を反映: 最終承認・却下・取消は政仁さんと代表だけ（事務は最終承認しない）、付与・時季指定・買取の記録は事務（森田さん）・政仁さん・代表。サイドバーの新しい並び・ボタン名「📊 管理簿出力」（帳票出力からも可）に合わせて修正。タブの一覧を今の画面（一覧／基準日／申請／月別／カレンダー／帰国情報）に合わせた</td></tr>
 <tr><td>2026-09-02</td><td>帰国期間中でも有給を申請・取得できるようになった旨を追加（賃金が出ない計算不具合を修正のうえ解禁）。総点検（第4回）: 承認済み有給の「取消」ボタン追加、職長承認は管理者・事業責任者も可（自分の申請は自分で職長承認不可）、来期日付の申請は来期の残数で判定、精勤賞与の買取はサーバで残数・年5日枠を検証</td></tr>
 <tr><td>2026-08-31</td><td>年5日の日本人特則・買取上限（残−5日）・買取の自動記録・HFU移籍の勤続通算を追加</td></tr>
 </table>

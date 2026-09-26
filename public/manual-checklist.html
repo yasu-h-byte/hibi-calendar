@@ -55,6 +55,10 @@
 
   .box { background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 10px; padding: 14px 18px; margin: 14px 0; }
   .box-tip { background: #e0f7e9; border: 1px solid #80c080; }
+  .tbl-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 13px; }
+  th, td { border: 1px solid #d0d7e2; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #f1f5f9; }
   .home-link { background: #20262F; color: white; padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 13px; display: inline-block; }
 
   @media (max-width: 600px) {
@@ -78,11 +82,23 @@
 
 <h1>📅 月次タイムライン・やることガイド</h1>
 <p>HIBI CONSTRUCTION 就業管理システム<br>
-最終更新: 2026年8月31日</p>
+最終更新: 2026年9月26日</p>
 
 <div class="box">
   <strong>このページの使い方：</strong>1ヶ月の業務の流れを「いつ・誰が・何をするか」で時系列に把握するための入口ページです。<br>
   まず下の<strong>月次タイムライン</strong>で全体の流れをつかみ、詳しい操作方法は各ステップからリンクされている<strong>担当マニュアル</strong>を開いてください。
+</div>
+
+<div class="box box-warn" style="background:#fff8e0;border:1px solid #f0d060;border-radius:8px;padding:16px;margin:16px 0;">
+<strong>【2026年9月26日 更新】担当とメニューが変わりました</strong>
+<ul style="margin:8px 0 0;padding-left:20px;">
+<li><strong>事務は森田さん</strong>: 奥寺さん・佐藤さんの事務はすべて森田さんが引き継ぎました。給与の計算そのものはキャシュモ、森田さんは<strong>締めと資料提出</strong>まで（<a href="/manual-morita.html">森田さんマニュアル</a>）</li>
+<li><strong>請求書の発行</strong>: 森田さんが「発行を申請」→ 政仁さんが「承認して発行」（<a href="/manual-invoice.html">請求書の発行マニュアル</a>）</li>
+<li><strong>サイドメニュー</strong>: 「毎日／毎月／経営／人・賃金／マスタ／管理」の順に並べ替え。<strong>帳票出力</strong>は独立したメニューに、「同業者との請求・支払」は<strong>請求書・支払</strong>、「原価・収益管理」は<strong>原価・収益</strong>に名前が変わりました</li>
+<li><strong>メニューの検索欄</strong>: メニューの一番上に「有給台帳」「同意台帳」「請求書」などと打つと、その画面・タブへすぐ行けます</li>
+<li><strong>スマホで出面</strong>: 「スマホ入力」メニューは無くなりました。スマホで「出面入力」を開き「📱 スマホ版へ」を押します</li>
+<li><strong>できることの整理</strong>: 下の<a href="#roles-table">役割ごとの分担表</a>のとおり（サーバーでも同じ決まりでチェックします）</li>
+</ul>
 </div>
 
 <div class="box box-warn" style="background:#fff8e0;border:1px solid #f0d060;border-radius:8px;padding:16px;margin:16px 0;">
@@ -170,10 +186,10 @@
   <div class="tl-step">
     <div class="tl-when">当月 随時</div>
     <div class="tl-card jimu">
-      <span class="tl-role jimu">🟣 事務（奥寺さん）</span>
+      <span class="tl-role jimu">🟣 事務（森田さん）</span>
       <div class="tl-do">入力補助・休暇アラート対応</div>
-      <div class="tl-sub">スタッフが入力できなかった分の代理入力・過去日修正。「年5日未達」「繰越時効間近」等に対応。</div>
-      <a class="tl-link" href="/manual-okudera.html">→ 奥寺さんマニュアル</a>
+      <div class="tl-sub">入力漏れのフォロー・過去日修正（誤って消した場合は変更履歴から復元）。「年5日未達」「繰越時効間近」等に対応。</div>
+      <a class="tl-link" href="/manual-morita.html">→ 森田さんマニュアル</a>
     </div>
   </div>
 
@@ -183,22 +199,42 @@
 <div class="timeline">
 
   <div class="tl-step">
-    <div class="tl-when">翌月 1日〜10日</div>
+    <div class="tl-when">翌月 月初</div>
     <div class="tl-card jimu">
-      <span class="tl-role jimu">🟣 事務（奥寺さん）</span>
-      <div class="tl-do">月次集計・給与計算・帳票出力</div>
-      <div class="tl-sub">前月の出面を月次集計画面で確認し、給与額を確定。出面表・給与明細・有給台帳をExcel出力。</div>
-      <a class="tl-link" href="/manual-payroll-okudera.html">→ 給与計算マニュアル（奥寺さん用）</a>
+      <span class="tl-role jimu">🟣 事務（森田さん）</span>
+      <div class="tl-do">月次集計で確認 → 月締めロック</div>
+      <div class="tl-sub">前月の出面の未入力・警告を潰し、「月次集計・締め」で出勤・残業・有給・欠勤を確認してからロック（以後変更不可）。</div>
+      <a class="tl-link" href="/manual-morita.html">→ 森田さんマニュアル</a>
     </div>
   </div>
 
   <div class="tl-step">
-    <div class="tl-when">翌月 10日ごろ</div>
+    <div class="tl-when">翌月 ロック後すぐ</div>
     <div class="tl-card jimu">
-      <span class="tl-role jimu">🟣 事務（奥寺さん）</span>
-      <div class="tl-do">月締めロック</div>
-      <div class="tl-sub">給与計算が終わったら前月の出面をロックし、以後変更不可にする。</div>
-      <a class="tl-link" href="/manual-okudera.html">→ 奥寺さんマニュアル</a>
+      <span class="tl-role jimu">🟣 事務（森田さん）</span>
+      <div class="tl-do">キャシュモへ資料提出</div>
+      <div class="tl-sub">「帳票出力」からキャシュモ提出資料を会社別（日比建設／HFU）に出して送付。給与の計算・明細・振込はキャシュモ。</div>
+      <a class="tl-link" href="/manual-morita.html">→ 森田さんマニュアル</a>
+    </div>
+  </div>
+
+  <div class="tl-step">
+    <div class="tl-when">翌月 締め後</div>
+    <div class="tl-card jimu">
+      <span class="tl-role jimu">🟣 事務（森田さん）</span>
+      <div class="tl-do">請求書の発行を申請</div>
+      <div class="tl-sub">「請求書・支払」で請求書の下書きを確認して「発行を申請」。政仁さんが承認すると発行済みになるので、印刷（PDF保存）して送る。</div>
+      <a class="tl-link" href="/manual-invoice.html">→ 請求書の発行マニュアル</a>
+    </div>
+  </div>
+
+  <div class="tl-step">
+    <div class="tl-when">申請が来たら</div>
+    <div class="tl-card approver">
+      <span class="tl-role approver">🟠 政仁さん</span>
+      <div class="tl-do">請求書を承認して発行</div>
+      <div class="tl-sub">通知ベル（🔔）の「請求書の発行承認待ち」→「請求書・支払」で内容を確認し「承認して発行」。直すところがあれば理由を書いて「差し戻し」。</div>
+      <a class="tl-link" href="/manual-invoice.html">→ 請求書の発行マニュアル</a>
     </div>
   </div>
 
@@ -207,7 +243,8 @@
     <div class="tl-card approver">
       <span class="tl-role approver">🟠 政仁さん</span>
       <div class="tl-do">原価・収益を確認</div>
-      <div class="tl-sub">月締め後、原価収益管理ページで現場別の利益率を確認する。</div>
+      <div class="tl-sub">月締め後、「原価・収益」で現場別の利益率を確認する（請求額の入力は森田さん。政仁さんも入力できます）。</div>
+      <a class="tl-link" href="/manual-masahito.html">→ 政仁さんマニュアル</a>
     </div>
   </div>
 
@@ -228,10 +265,10 @@
 
   <div class="tl-step">
     <div class="tl-when">付与月</div>
-    <div class="tl-card admin">
-      <span class="tl-role admin">🔴 管理者</span>
+    <div class="tl-card jimu">
+      <span class="tl-role jimu">🟣 事務（森田さん）</span>
       <div class="tl-do">有給の半自動付与</div>
-      <div class="tl-sub">「N名に有給付与の時期が来ています」のバナーが出たら、内容を確認しワンクリック付与。</div>
+      <div class="tl-sub">通知ベル（🔔）やバナーに「有給付与の時期が来ています」と出たら、内容を確認しワンクリック付与。</div>
       <a class="tl-link" href="/manual-yukyu.html#normal-flow">→ 休暇管理マニュアル §4</a>
     </div>
   </div>
@@ -243,8 +280,8 @@
 
   <div class="tl-step">
     <div class="tl-when">10月1日（9月末基準）</div>
-    <div class="tl-card admin">
-      <span class="tl-role admin">🔴 管理者</span>
+    <div class="tl-card jimu">
+      <span class="tl-role jimu">🟣 事務（森田さん）</span>
       <div class="tl-do">日本人スタッフの新年度付与＋期末買取記録</div>
       <div class="tl-sub">日本人スタッフに新FY分を半自動付与。9月末の残日数を「💰買取を記録」で期末買取として入力。</div>
       <a class="tl-link" href="/manual-yukyu.html#buyout">→ 休暇管理マニュアル §6</a>
@@ -253,8 +290,8 @@
 
   <div class="tl-step">
     <div class="tl-when">各人の付与日</div>
-    <div class="tl-card admin">
-      <span class="tl-role admin">🔴 管理者</span>
+    <div class="tl-card jimu">
+      <span class="tl-role jimu">🟣 事務（森田さん）</span>
       <div class="tl-do">外国人スタッフの新年度付与</div>
       <div class="tl-sub">入社日基準で各人の付与日が来たら半自動付与する。</div>
       <a class="tl-link" href="/manual-yukyu.html">→ 休暇管理マニュアル</a>
@@ -267,17 +304,17 @@
       <span class="tl-role jimu">🟣 事務</span>
       <div class="tl-do">試験ステータス入力</div>
       <div class="tl-sub">実習生の年次試験日に、出面のドロップダウンから「試」を選択する。</div>
-      <a class="tl-link" href="/manual-okudera.html">→ 奥寺さんマニュアル</a>
+      <a class="tl-link" href="/manual-morita.html">→ 森田さんマニュアル</a>
     </div>
   </div>
 
   <div class="tl-step">
-    <div class="tl-when">10月（年度切替）</div>
+    <div class="tl-when">10月1日（年度切替）</div>
     <div class="tl-card jimu">
-      <span class="tl-role jimu">🟣 事務（佐藤さん）</span>
-      <div class="tl-do">道具代の年度切り替え</div>
-      <div class="tl-sub">道具代補助の年度予算3万円を新しい期間に設定する。</div>
-      <a class="tl-link" href="/manual-sato.html">→ 佐藤さんマニュアル</a>
+      <span class="tl-role jimu">🟣 事務（森田さん）</span>
+      <div class="tl-do">道具代の年度切り替えを確認</div>
+      <div class="tl-sub">日本人の道具代は10月1日から新年度。ベトナム人は各人の入社記念日に期間が自動で切り替わる（作業不要）。</div>
+      <a class="tl-link" href="/manual-morita.html">→ 森田さんマニュアル</a>
     </div>
   </div>
 
@@ -300,23 +337,23 @@
 <p>各ロールが「毎日・毎月・年次」に何をするかの早見表です。詳しい手順は各カードの担当マニュアルへ。</p>
 
 <div class="role-card admin">
-  <div class="role-title">🔴 管理者（靖仁さん）</div>
-  <div class="role-sub">システム設定・スーパー操作・有給付与の運用</div>
+  <div class="role-title">🔴 管理者（代表・靖仁さん）</div>
+  <div class="role-sub">システム設定（管理者設定）・パスワード・バックアップ・イレギュラー対応</div>
   <ul>
     <li><span class="lbl">毎日</span>ダッシュボードで全体状況を確認、通知ベルでアラート対応</li>
-    <li><span class="lbl">毎月</span>有給の半自動付与（バナー確認→ワンクリック）／時効処理は自動</li>
-    <li><span class="lbl">年次</span>日本人の新FY付与・9月末買取記録、有給管理簿Excel出力（労基監査）、退職・採用の設定変更</li>
+    <li><span class="lbl">随時</span>管理者設定（会社・請求書／単価の既定値／ログイン・権限／お知らせ／バックアップ・履歴）。アクセス履歴は「バックアップ・履歴」タブの中</li>
+    <li><span class="lbl">年次</span>有給管理簿Excel出力（労基監査）の確認、退職・採用の設定変更、給与欄（時給・号俸など）の書き換え</li>
   </ul>
   <div class="role-link">→ <a href="/manual-yukyu.html">休暇管理マニュアル</a></div>
 </div>
 
 <div class="role-card approver">
   <div class="role-title">🟠 政仁さん（事業責任者）</div>
-  <div class="role-sub">最終承認・原価管理・経営判断</div>
+  <div class="role-sub">すべての最終承認・原価管理・経営判断</div>
   <ul>
     <li><span class="lbl">毎日</span>稼働状況の把握、出面の最終承認、休暇申請の最終承認（勤怠申請カードで対応待ちを確認）</li>
-    <li><span class="lbl">毎月</span>翌月カレンダーの承認、月締め後の原価・収益の確認</li>
-    <li><span class="lbl">年次</span>評価の最終承認・昇給決定 <span class="note">（評価制度の運用開始後）</span></li>
+    <li><span class="lbl">毎月</span>翌月カレンダーの承認、<strong>請求書の承認・発行</strong>（申請が来たら）、月締め後の「原価・収益」の確認</li>
+    <li><span class="lbl">年次</span>評価の承認・号俸改定・賞与の確定</li>
   </ul>
   <div class="role-link">→ <a href="/manual-masahito.html">政仁さんマニュアル</a></div>
 </div>
@@ -328,29 +365,20 @@
     <li><span class="lbl">毎日</span>自分の出勤入力、担当現場の出面を確認・職長承認</li>
     <li><span class="lbl">随時</span>休暇申請の職長承認（第1段階。最終承認は政仁さん）</li>
     <li><span class="lbl">毎月</span>翌月カレンダーを25日までに作成・提出</li>
-    <li><span class="lbl">年次</span>担当スタッフの評価入力（第1段階）<span class="note">（評価制度の運用開始後）</span></li>
+    <li><span class="lbl">年次</span>担当スタッフの評価入力（メニュー「評価入力」）</li>
   </ul>
   <div class="role-link">→ <a href="/manual-foreman.html">職長マニュアル</a></div>
 </div>
 
 <div class="role-card jimu">
-  <div class="role-title">🟣 事務（奥寺さん）</div>
-  <div class="role-sub">給与計算・帳票出力・各種データ管理</div>
+  <div class="role-title">🟣 事務（森田さん）</div>
+  <div class="role-sub">月次の締め・キャシュモへの資料提出・有給の付与と記録・道具代・請求書の発行申請（奥寺さん・佐藤さんの業務を引き継ぎ）</div>
   <ul>
-    <li><span class="lbl">毎日</span>出面入力の補助・修正、休暇アラート対応、試験日は「試」入力</li>
-    <li><span class="lbl">月次</span>月次集計・給与計算（翌月1〜10日）、帳票Excel出力、月締めロック</li>
+    <li><span class="lbl">毎日</span>出面の入力漏れフォロー・過去日の修正（変更履歴から復元も可）、休暇アラート対応、試験日は「試」入力</li>
+    <li><span class="lbl">月次</span>月次集計・締め（月締めロック）→ 帳票出力からキャシュモへ資料提出（給与計算そのものはキャシュモ）、請求書の発行申請、原価・収益の請求額入力</li>
+    <li><span class="lbl">随時</span>有給の付与・時季指定・買取の記録（申請の最終承認は政仁さん）、道具代の登録、人員マスタの基本情報・電話URL、現場・取引先マスタ</li>
   </ul>
-  <div class="role-link">→ <a href="/manual-okudera.html">奥寺さんマニュアル</a>／<a href="/manual-payroll-okudera.html">給与計算マニュアル</a></div>
-</div>
-
-<div class="role-card jimu">
-  <div class="role-title">🟣 事務（佐藤さん・道具代担当）</div>
-  <div class="role-sub">道具代補助の管理</div>
-  <ul>
-    <li><span class="lbl">随時</span>領収書を受け取り、道具代補助の購入記録を登録</li>
-    <li><span class="lbl">年次</span>10月に年度予算3万円を新しい期間へ切り替え</li>
-  </ul>
-  <div class="role-link">→ <a href="/manual-sato.html">佐藤さんマニュアル</a></div>
+  <div class="role-link">→ <a href="/manual-morita.html">森田さんマニュアル</a>／<a href="/manual-invoice.html">請求書の発行マニュアル</a></div>
 </div>
 
 <div class="role-card staff">
@@ -362,6 +390,27 @@
     <li><span class="lbl">毎月</span>翌月カレンダーの署名、有給・道具代の残数確認</li>
   </ul>
   <div class="role-link">→ <a href="/staff-manual-vi.html">スタッフ向けマニュアル（ベトナム語）</a></div>
+</div>
+
+<h2 id="roles-table">🗂 役割ごとの分担表（2026年9月26日〜）</h2>
+<p>「現場の作業は職長、事務処理は事務、最終承認は事業責任者、システムは代表」が原則です。この表と同じ決まりでメニューの表示もサーバー側のチェックも行われます（できない操作は画面に出ないか、押してもエラーになります）。</p>
+<div class="tbl-wrap">
+<table>
+<tr><th>役割</th><th>できること</th><th>しないこと・できないこと</th></tr>
+<tr><td>🔵 職長</td><td>出面の入力・職長承認（担当現場）／就業カレンダーの作成・提出（担当現場）／有給・帰国申請の職長承認（担当現場）／評価入力</td><td>最終承認はしない。帳票Excelのダウンロードは不可</td></tr>
+<tr><td>🟣 事務（森田さん）</td><td>出面の入力漏れフォロー・過去日の修正・変更履歴からの復元／月次集計・締め・帳票出力／有給の付与・時季指定・買取の記録／人員マスタの基本情報・電話URL／道具代／現場・取引先マスタ／原価・収益（請求額の入力）／請求書の発行申請</td><td>有給・帰国申請の最終承認はしない（政仁さん）。人員マスタの給与欄は書き換えない</td></tr>
+<tr><td>🟠 事業責任者（政仁さん）</td><td>すべての最終承認（出面・就業カレンダー・有給/帰国・請求書・評価の承認・号俸改定・賞与確定）／原価・収益（請求額の入力も可）／月次の締め</td><td>人員マスタの給与欄は見るだけ</td></tr>
+<tr><td>役員（政仁さん以外）</td><td>見るだけ</td><td>入力・承認はしない</td></tr>
+<tr><td>🔴 代表（靖仁さん）</td><td>すべて（管理者設定・経営コックピット・給与欄の書き換えを含む）</td><td>—</td></tr>
+</table>
+</div>
+
+<h2>改訂履歴</h2>
+<div class="tbl-wrap">
+<table>
+<tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-26</td><td>事務の担当を森田さんに一本化（リンクを森田さんマニュアルへ）・キャシュモ委託の締め／資料提出の流れ・請求書の発行申請→承認の手順・新しいサイドメニュー・役割ごとの分担表を追加</td></tr>
+</table>
 </div>
 
 <hr>

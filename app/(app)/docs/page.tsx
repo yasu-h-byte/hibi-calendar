@@ -26,7 +26,7 @@ const ROLE_LABEL: Record<Role, string> = {
 // 全資料（フラットに保持。category は表示グループ用）
 const DOCS: (DocItem & { category: string })[] = [
   // ── 全員向けの入口 ──
-  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-08-31' },
+  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-09-26' },
 
   // ── 事務（森田さん・2026-10からキャシュモ委託体制） ──
   { category: 'manual', roles: ['jimu', 'approver', 'admin'], title: '請求書の発行マニュアル（森田さん・政仁さん）', desc: '応援の請求書・HFU→日比建設の請求書を、森田さんが申請→政仁さんが承認して発行する手順。最初の準備（個人パスワードの発行・会社情報の保存）・初回ログイン・差し戻し・取り消し・困ったとき', url: '/manual-invoice.html', icon: '🧾', badge: 'NEW', updated: '2026-09-26' },
@@ -37,22 +37,22 @@ const DOCS: (DocItem & { category: string })[] = [
   { category: 'manual', roles: ['jimu', 'approver'], title: '【お知らせ】最低20日保証と現場都合休の計算変更（8月分から）', desc: '現場都合休（0.6補）は20日に届くまで100%支給・超えた分だけ60%。計算例・8月分で金額が変わる人・月次集計の見方・出面入力のお願い・スタッフへの説明文（日本語＋ベトナム語）', url: '/notice-20day-guarantee.html', icon: '📣', badge: 'お知らせ', updated: '2026-09-15' },
 
   // ── 事業責任者（政仁さん） ──
-  { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面の最終承認・有給/帰国申請の承認・就業カレンダー承認（事業責任者の承認業務に特化）', url: '/manual-masahito.html', icon: '📗', updated: '2026-08-31' },
+  { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面の最終承認・有給/帰国申請の承認・就業カレンダー承認（事業責任者の承認業務に特化）', url: '/manual-masahito.html', icon: '📗', updated: '2026-09-26' },
 
   // ── 職長 ──
-  { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・就業カレンダー・夜勤の入力。8月改訂で スマホ操作の改善（今日へボタン等）・「欠」入力・同日多現場ガード を追加', url: '/manual-foreman.html', icon: '📕', badge: '8月改訂', updated: '2026-08-31' },
+  { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・就業カレンダー・夜勤の入力。8月改訂で スマホ操作の改善（今日へボタン等）・「欠」入力・同日多現場ガード を追加', url: '/manual-foreman.html', icon: '📕', badge: '8月改訂', updated: '2026-09-26' },
 
   // ── 有給担当（事務・事業責任者） ──
-  { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元。帰国期間中でも有給を使えるようになった点（2026-09）と、年5日の日本人特則・買取上限（残−5日）・買取の自動記録・HFU移籍の勤続通算', url: '/manual-yukyu.html', icon: '🌴', badge: '9月改訂', updated: '2026-09-02' },
+  { category: 'manual', roles: ['jimu', 'approver'], title: '休暇管理マニュアル', desc: '有給・帰国休暇の唯一の参照元。帰国期間中でも有給を使えるようになった点（2026-09）と、年5日の日本人特則・買取上限（残−5日）・買取の自動記録・HFU移籍の勤続通算', url: '/manual-yukyu.html', icon: '🌴', badge: '9月改訂', updated: '2026-09-26' },
 
   // ── 評価（運用前・管理者のみ） ──
-  { category: 'manual', roles: ['admin'], title: '評価管理マニュアル（ベトナム人）', desc: '年次評価と時給改定（入社記念日サイクル）。5タブ構成・評価者ウェイト・スコア計算・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-09-14' },
-  { category: 'manual', roles: ['admin', 'approver'], title: '賃金・評価 操作マニュアル（日本人）', desc: '号俸制の年次改定の回し方（評語・代表加算・平均昇給率）と賞与4区分（利益分配・精勤・禁煙・子ども手当）の作成〜確定〜有給買取の自動記録まで', url: '/manual-wage-jp.html', icon: '💴', badge: 'NEW', updated: '2026-08-31' },
+  { category: 'manual', roles: ['admin'], title: '評価管理マニュアル（ベトナム人）', desc: '年次評価と時給改定（入社記念日サイクル）。5タブ構成・評価者ウェイト・スコア計算・昇給テーブル', url: '/manual-evaluation.html', icon: '📋', updated: '2026-09-26' },
+  { category: 'manual', roles: ['admin', 'approver'], title: '賃金・評価 操作マニュアル（日本人）', desc: '号俸制の年次改定の回し方（評語・代表加算・平均昇給率）と賞与4区分（利益分配・精勤・禁煙・子ども手当）の作成〜確定〜有給買取の自動記録まで', url: '/manual-wage-jp.html', icon: '💴', badge: 'NEW', updated: '2026-09-26' },
 
   // ── スタッフ向け（全員が内容を把握しておく／スタッフ本人はスマホから） ──
-  { category: 'staff', title: 'マイページの使い方（日本人スタッフ向け）', desc: '有給の残数確認と申請・年5日ルール・道具代の残額確認（申請はマネーフォワード）。専用URLの配布時に一緒に渡す1枚もの', url: '/manual-mypage-jp.html', icon: '📱', badge: 'NEW', updated: '2026-08-31' },
+  { category: 'staff', title: 'マイページの使い方（日本人スタッフ向け）', desc: '有給の残数確認と申請・年5日ルール・道具代の残額確認（申請はマネーフォワード）。専用URLの配布時に一緒に渡す1枚もの', url: '/manual-mypage-jp.html', icon: '📱', badge: 'NEW', updated: '2026-09-26' },
   { category: 'staff', title: 'スタッフ向けマニュアル（ベトナム人）', desc: '出勤登録・欠勤届・有給申請・帰国申請・残数確認・未入力の督促バナー（日本語＋ベトナム語）', url: '/staff-manual-vi.html', icon: '👷', badge: '日本語+ベトナム語', updated: '2026-08-31' },
-  { category: 'staff', title: '変形労働時間制と残業のルール', desc: '変形労働時間制のしくみ・残業の3段階判定・給料の4層構造・計算例・FAQ（スタッフへの制度説明用）', url: '/manual-henkei-vi.html', icon: '⏰', badge: '日本語+ベトナム語', updated: '2026-08-01' },
+  { category: 'staff', title: '変形労働時間制と残業のルール', desc: '変形労働時間制のしくみ・残業の3段階判定・給料の4層構造・計算例・FAQ（スタッフへの制度説明用）', url: '/manual-henkei-vi.html', icon: '⏰', badge: '日本語+ベトナム語', updated: '2026-09-26' },
   // ── 過去資料（役目を終えたが記録として残す）──
   // 2026-09-02: 奥寺さん・佐藤さんの退職（9月末）とキャシュモ委託に伴い、個人名義の
   //   3冊は「事務業務マニュアル（森田さん向け）」へ統合。原本は記録として残す。
