@@ -106,3 +106,9 @@ export const SPECIAL_OVERTIME_MAX_TIMES = 6
  *    両方がこの定数を参照する。変更時は docs/salary-calculation.md と賃金規程も更新すること。
  */
 export const JP_SALARY_AVG_MONTHLY_HOURS = 145
+
+/**
+ * HFU → 日比建設 の請求書（lib/hfu-invoice.ts・2026-09-26）を peerInvoices で扱うときの固定 companyId。
+ * 取引先マスタの id とは衝突しない。画面（クライアント）からも参照するのでここに置く。
+ */
+export const HFU_INVOICE_COMPANY_ID = '__hfu_to_hibi__'

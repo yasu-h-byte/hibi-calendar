@@ -27,6 +27,7 @@
 | nightDays | map | 夜勤が発生した日 `{ "siteId_YYYYMM": [11, 12] }`。出面画面で夜勤バッジを出す日を絞るUIフィルタ。給与計算・所定日数には影響しない（誰が夜勤したかはエントリの `ns`） |
 | nextWorkerId | number | 次のワーカーID |
 | companyProfile | map\|null | 応援の請求書の発行者情報（`CompanyProfile`。2026-09-25）。設定画面「請求書の自社情報」で編集。未設定なら請求書は発行できない（`docs/peer-invoice.md`） |
+| hfuInvoice | map\|null | HFU → 日比建設 の請求書の設定（`HfuInvoiceSettings`。2026-09-26）。`profile`（HFU の発行者情報・`CompanyProfile`）・`tobiRate`/`dokoRate`（1人工の社内単価・税抜）・`paymentTerms`。設定画面「HFU → 日比建設 の請求書」で編集（`docs/peer-invoice.md`） |
 
 #### MainData.homeLeaves
 
@@ -166,12 +167,13 @@ workSchedule?: {
 
 | フィールド | 型 | 説明 |
 |---|---|---|
-| `no` | string | `${接頭辞}-${ym}-${連番}`（例 `HC-202609-01`）。会社をまたいで月内で連番 |
-| `companyId` / `companyName` | string | 宛先の同業者（取引先マスタの id） |
+| `kind` | `'peer'\|'hfu'` | `'hfu'` = HFU → 日比建設 の請求書。無ければ応援の請求書（2026-09-26 より前の記録） |
+| `no` | string | `${接頭辞}-${ym}-${連番}`（例 `HC-202609-01`・`HFU-202609-01`）。接頭辞ごと（発行者ごと）に月内で連番 |
+| `companyId` / `companyName` | string | 宛先の同業者（取引先マスタの id）。HFU → 日比建設 は固定 id `__hfu_to_hibi__`・宛名は日比建設 |
 | `ym` | string | 対象月 YYYYMM |
 | `period` | `{from,to}` | 請求対象期間（月初〜月末） |
 | `company` | `{postal,address,honorific}` | 発行時点の宛先スナップショット |
-| `issuer` | `CompanyProfile` | 発行時点の自社情報スナップショット（`main.companyProfile`） |
+| `issuer` | `CompanyProfile` | 発行時点の発行者情報スナップショット（`main.companyProfile`、HFU → 日比建設 は `main.hfuInvoice.profile`） |
 | `lines` | 配列 | 現場×鳶/土工の行（`siteId,siteName,role,days,rate,amount`） |
 | `detail` | 配列 | 現場ごとの出面明細マトリクス（人×日） |
 | `subtotal` / `tax` / `total` | number | 税抜・消費税（10%・円未満切り捨て）・税込 |

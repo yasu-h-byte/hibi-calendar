@@ -95,6 +95,11 @@ export interface IntegrationMonth {
   subcons: IntegrationSubcon[]
   peerBilling: { companyId: string; companyName: string; amount: number }[]
   peerInvoices: IntegrationPeerInvoice[]
+  /**
+   * HFU → 日比建設 の請求書（lib/hfu-invoice.ts・2026-09-26）。グループ内の請求なので peerInvoices
+   * （日比建設が同業者から受け取る入金）とは分ける。日比建設から見ると支払い、HFU から見ると入金。
+   */
+  hfuInvoices: IntegrationPeerInvoice[]
   totals: { billing: number; billingEnteredSites: number; ownLaborCost: number; subconCost: number }
 }
 
@@ -157,12 +162,14 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     .map(p => ({ companyId: p.companyId, companyName: p.companyName, amount: Math.round(p.billingTotal) }))
 
   const peerInvoiceRecords = await listPeerInvoicesForYm(ym)
-  const peerInvoices: IntegrationPeerInvoice[] = peerInvoiceRecords.map(inv => ({
+  const toIntegration = (inv: (typeof peerInvoiceRecords)[number]): IntegrationPeerInvoice => ({
     no: inv.no, companyId: inv.companyId, companyName: inv.companyName, ym: inv.ym,
     issueDate: inv.issueDate, dueDate: inv.dueDate,
     subtotal: inv.subtotal, tax: inv.tax, total: inv.total,
     status: inv.status, sites: summarizePeerInvoiceSites(inv.lines),
-  }))
+  })
+  const peerInvoices = peerInvoiceRecords.filter(inv => inv.kind !== 'hfu').map(toIntegration)
+  const hfuInvoices = peerInvoiceRecords.filter(inv => inv.kind === 'hfu').map(toIntegration)
 
   return {
     ym,
@@ -172,6 +179,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     subcons,
     peerBilling,
     peerInvoices,
+    hfuInvoices,
     totals: {
       billing: sites.reduce((t, s) => t + s.billing, 0),
       billingEnteredSites: sites.filter(s => s.billingEntered).length,

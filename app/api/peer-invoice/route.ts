@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { getMainData, getMultiMonthAttData, compute } from '@/lib/compute'
-import { buildPeerInvoiceDraft } from '@/lib/peer-invoice'
 import {
-  listPeerInvoicesForYm, getPeerInvoicesForCompanyYm, issuePeerInvoice, voidPeerInvoice,
+  resolveInvoiceDraft, listPeerInvoicesForYm, getPeerInvoicesForCompanyYm, issuePeerInvoice, voidPeerInvoice,
 } from '@/lib/peer-invoice-store'
 
 /**
@@ -11,6 +10,7 @@ import {
  *
  * GET ?ym=YYYYMM             → その月に発行・取り消しされた請求書の一覧（/peer-statement のバッジ用）
  * GET ?ym=YYYYMM&companyId=X → 会社×月の1件。発行済みがあればそのスナップショット、無ければ下書き
+ *   companyId が HFU_INVOICE_COMPANY_ID（lib/hfu-invoice.ts）なら HFU → 日比建設 の請求書
  * POST { action:'issue', ym, companyId }  → 発行（事業責任者・管理者のみ）
  * POST { action:'void', id, reason? }     → 取り消し（事業責任者・管理者のみ）
  */
@@ -36,9 +36,9 @@ export async function GET(request: NextRequest) {
     const att = await getMultiMonthAttData([ym])
     const y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(4, 6), 10)
     const c = compute(main, att.d, att.sd, [{ y, m }])
-    const draft = buildPeerInvoiceDraft(main, c, att.d, att.sd, ym, companyId)
+    const { draft, issuer } = resolveInvoiceDraft({ main, c, attD: att.d, attSD: att.sd, ym, companyId })
     if (!draft) return NextResponse.json({ status: 'empty', history })
-    return NextResponse.json({ status: 'draft', draft, issuer: main.companyProfile || null, history })
+    return NextResponse.json({ status: 'draft', draft, issuer, history })
   } catch (e) {
     console.error('[peer-invoice] GET error', e)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

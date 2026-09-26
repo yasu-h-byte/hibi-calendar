@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import type { PeerStatement } from '@/lib/peer-statement'
+import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
 
 /** その月に発行・取り消しされた応援の請求書（app/api/peer-invoice） */
 interface PeerInvoiceSummary {
@@ -88,6 +89,25 @@ export default function PeerStatementPage() {
           <div className="text-lg font-bold tabular-nums text-amber-900 dark:text-amber-100">{yen(paymentSum)}</div>
         </div>
       </div>
+
+      {/* グループ内: HFU 所属の作業員の人工を HFU から日比建設へ請求する（lib/hfu-invoice.ts） */}
+      <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-base font-bold">HFU → 日比建設</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400">グループ内の請求。HFU 所属の作業員が働いた人工（全現場）× 社内単価。上の合計には含みません。</p>
+        </div>
+        {issuedInvoiceFor(HFU_INVOICE_COMPANY_ID) ? (
+          <a href={`/peer-invoice?company=${HFU_INVOICE_COMPANY_ID}&ym=${ym}`}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold no-underline">
+            ✓ 発行済み {issuedInvoiceFor(HFU_INVOICE_COMPANY_ID)!.no}（{yen(issuedInvoiceFor(HFU_INVOICE_COMPANY_ID)!.total)}）
+          </a>
+        ) : (
+          <a href={`/peer-invoice?company=${HFU_INVOICE_COMPANY_ID}&ym=${ym}`}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-hibi-navy text-white text-xs font-bold no-underline hover:bg-hibi-light">
+            請求書を作る
+          </a>
+        )}
+      </section>
 
       {err && <p className="text-sm text-red-600">{err}</p>}
       {!rows && !err && <p className="text-sm text-gray-400">集計中…</p>}

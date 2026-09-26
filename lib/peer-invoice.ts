@@ -122,7 +122,14 @@ export interface PeerInvoiceCompanyInfo {
   honorific: string
 }
 
+/**
+ * 請求書の種類。'peer' = 同業者への応援の請求書、'hfu' = HFU → 日比建設 の請求書（lib/hfu-invoice.ts）。
+ * 2026-09-26 より前に発行した記録には無い（= 'peer'）。
+ */
+export type InvoiceKind = 'peer' | 'hfu'
+
 export interface PeerInvoiceDraft {
+  kind?: InvoiceKind
   companyId: string
   companyName: string
   company: PeerInvoiceCompanyInfo
@@ -150,13 +157,15 @@ function daysInYm(ym: string): number {
  * ⚠️ ここでの除外条件（有給/欠勤/現場休/帰国中/試験・出向者・休業補償(0.6)・鳶土工以外の職種）
  *    は calcTobiEquiv と完全に揃えること。ズレると明細の合計と請求書本体の人工が合わなくなる。
  */
-function buildSiteDetail(
+export function buildSiteDetail(
   main: MainData,
   attD: Record<string, AttendanceEntry>,
   attSD: Record<string, { n: number; on: number }>,
   ym: string,
   siteId: string,
   siteName: string,
+  /** HFU → 日比建設 の請求書は HFU 所属の作業員だけ・外注なしで作る（lib/hfu-invoice.ts） */
+  opts?: { workerFilter?: (w: MainData['workers'][number]) => boolean; includeSubcons?: boolean },
 ): PeerInvoiceSiteDetail {
   const nDays = daysInYm(ym)
   const dispatchList = getAssign(main, siteId, ym).dispatch
@@ -170,6 +179,7 @@ function buildSiteDetail(
     if ((v.r ?? 0) > 0 || (v.h ?? 0) > 0 || (v.hk ?? 0) > 0 || ((v as { exam?: number }).exam ?? 0) > 0) continue
     const w = main.workers.find(x => x.id === parseInt(pk.wid, 10))
     if (!w) continue
+    if (opts?.workerFilter && !opts.workerFilter(w)) continue
     if (dispatchList.includes(w.id)) continue
     const isComp = v.w === 0.6 && w.visa !== 'none'
     if (isComp) continue
@@ -184,7 +194,7 @@ function buildSiteDetail(
     row.total = Math.round((row.total + md) * 100) / 100
   }
 
-  for (const [k, v] of Object.entries(attSD)) {
+  for (const [k, v] of Object.entries(opts?.includeSubcons === false ? {} : attSD)) {
     if (!v || !v.n) continue
     const pk = parseDKey(k)
     if (pk.ym !== ym || pk.sid !== siteId) continue
@@ -262,6 +272,7 @@ export function buildPeerInvoiceDraft(
   const detail = stmt.billing.map(b => buildSiteDetail(main, attD, attSD, ym, b.siteId, b.siteName))
 
   return {
+    kind: 'peer',
     companyId,
     companyName: company.name,
     company: {

@@ -96,6 +96,23 @@ export interface MainData {
    * 画面で自分で入力するまで**先回りで埋めない**（代表指示）。
    */
   companyProfile?: CompanyProfile | null
+  /**
+   * HFU → 日比建設 の請求書（lib/hfu-invoice.ts・2026-09-26）の設定。
+   * HFU 側の発行者情報と、日比建設へ請求する社内単価（鳶/土工・1人工あたり税抜）。
+   * 未設定なら請求書は下書きのみ（単価 0・発行は拒否）。
+   */
+  hfuInvoice?: HfuInvoiceSettings | null
+}
+
+/** HFU → 日比建設 の請求書の設定（settings 画面「HFU → 日比建設 の請求書」で編集） */
+export interface HfuInvoiceSettings {
+  profile: CompanyProfile
+  /** 鳶 1人工あたりの単価（税抜） */
+  tobiRate: number
+  /** 土工 1人工あたりの単価（税抜） */
+  dokoRate: number
+  /** 未設定なら翌月末払い */
+  paymentTerms?: CompanyPaymentTerms
 }
 
 /** 応援の請求書に印字する自社（発行者）情報。settings 画面「請求書の自社情報」で編集 */
@@ -251,6 +268,7 @@ async function loadMainData(): Promise<MainData> {
     mforeman: (d.mforeman || {}) as Record<string, { foreman?: number; wid?: number; note?: string }>,
     nightDays: (d.nightDays || {}) as Record<string, number[]>,
     companyProfile: (d.companyProfile || null) as CompanyProfile | null,
+    hfuInvoice: (d.hfuInvoice || null) as HfuInvoiceSettings | null,
   }
 }
 

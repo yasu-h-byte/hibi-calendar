@@ -55,6 +55,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ companyProfile })
     }
 
+    if (action === 'getHfuInvoice') {
+      // HFU → 日比建設 の請求書の設定（lib/hfu-invoice.ts）
+      const hfuInvoice = result.data.hfuInvoice || null
+      return NextResponse.json({ hfuInvoice })
+    }
+
     const defaultRates = (result.data.defaultRates as { tobiRate: number; dokoRate: number; baseDays?: number }) || { tobiRate: 0, dokoRate: 0 }
     return NextResponse.json({ defaultRates: { ...defaultRates, baseDays: defaultRates.baseDays ?? 20 } })
   } catch (error) {
@@ -145,6 +151,29 @@ export async function POST(request: NextRequest) {
       const { updateDoc } = await import('@/lib/fsdb')
       await updateDoc(docRef, { companyProfile })
       await logActivity('admin', 'settings.companyProfile', `請求書の自社情報を更新 (${tier})`)
+      return NextResponse.json({ success: true })
+    }
+
+    if (action === 'saveHfuInvoice') {
+      // HFU → 日比建設 の請求書（docs/peer-invoice.md）。HFU の銀行口座を含むため管理者パスワード限定
+      const tier = await getAdminTier(request)
+      if (tier !== 'super-admin' && tier !== 'admin') {
+        return NextResponse.json({ error: 'この操作には管理者パスワードが必要です' }, { status: 403 })
+      }
+      const { hfuInvoice } = body
+      if (!hfuInvoice || typeof hfuInvoice !== 'object' || !hfuInvoice.profile || typeof hfuInvoice.profile !== 'object') {
+        return NextResponse.json({ error: 'hfuInvoice required' }, { status: 400 })
+      }
+      const tobiRate = Math.max(0, Math.round(Number(hfuInvoice.tobiRate) || 0))
+      const dokoRate = Math.max(0, Math.round(Number(hfuInvoice.dokoRate) || 0))
+      const pt = hfuInvoice.paymentTerms
+      const paymentTerms = pt && (pt.payMonthOffset === 1 || pt.payMonthOffset === 2)
+        ? { closing: 'end', payMonthOffset: pt.payMonthOffset, payDay: pt.payDay === 'end' ? 'end' : Math.min(28, Math.max(1, Number(pt.payDay) || 25)) }
+        : { closing: 'end', payMonthOffset: 1, payDay: 'end' }
+      const docRef = doc(db, 'demmen', 'main')
+      const { updateDoc } = await import('@/lib/fsdb')
+      await updateDoc(docRef, { hfuInvoice: { profile: hfuInvoice.profile, tobiRate, dokoRate, paymentTerms } })
+      await logActivity('admin', 'settings.hfuInvoice', `HFU → 日比建設 の請求書設定を更新（鳶 ¥${tobiRate.toLocaleString()}・土工 ¥${dokoRate.toLocaleString()}）(${tier})`)
       return NextResponse.json({ success: true })
     }
 

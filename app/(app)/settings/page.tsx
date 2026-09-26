@@ -28,6 +28,122 @@ const EMPTY_COMPANY_PROFILE: CompanyProfile = {
   invoicePrefix: 'HC',
 }
 
+/** HFU → 日比建設 の請求書の設定（lib/hfu-invoice.ts）。docs/peer-invoice.md 参照 */
+interface HfuInvoiceForm {
+  profile: CompanyProfile
+  tobiRate: number
+  dokoRate: number
+  payMonthOffset: 1 | 2
+  payDay: 'end' | number
+}
+
+const EMPTY_HFU_INVOICE: HfuInvoiceForm = {
+  profile: { ...EMPTY_COMPANY_PROFILE, name: '', nameEn: '', invoicePrefix: 'HFU' },
+  tobiRate: 0, dokoRate: 0, payMonthOffset: 1, payDay: 'end',
+}
+
+/** 請求書の発行者情報の入力欄（日比建設の自社情報・HFU の情報で共通） */
+function CompanyProfileFields({ value, onChange }: {
+  value: CompanyProfile
+  onChange: (update: (p: CompanyProfile) => CompanyProfile) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">会社名</label>
+          <input value={value.name} onChange={e => onChange(p => ({ ...p, name: e.target.value }))}
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">会社名（英字・帳票用）</label>
+          <input value={value.nameEn} onChange={e => onChange(p => ({ ...p, nameEn: e.target.value }))}
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">郵便番号</label>
+          <input value={value.postal} onChange={e => onChange(p => ({ ...p, postal: e.target.value }))}
+            placeholder="例: 123-4567"
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">住所</label>
+          <input value={value.address} onChange={e => onChange(p => ({ ...p, address: e.target.value }))}
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">電話番号</label>
+          <input value={value.tel} onChange={e => onChange(p => ({ ...p, tel: e.target.value }))}
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">FAX（任意）</label>
+          <input value={value.fax} onChange={e => onChange(p => ({ ...p, fax: e.target.value }))}
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">メール（任意）</label>
+          <input value={value.email} onChange={e => onChange(p => ({ ...p, email: e.target.value }))}
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">適格請求書発行事業者の登録番号</label>
+          <input value={value.invoiceRegNo} onChange={e => onChange(p => ({ ...p, invoiceRegNo: e.target.value }))}
+            placeholder="例: T1234567890123"
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm font-mono" />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">請求書番号の接頭辞</label>
+          <input value={value.invoicePrefix} onChange={e => onChange(p => ({ ...p, invoicePrefix: e.target.value.toUpperCase() }))}
+            className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+        </div>
+      </div>
+
+      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">振込先</label>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">銀行名</label>
+            <input value={value.bank.bankName} onChange={e => onChange(p => ({ ...p, bank: { ...p.bank, bankName: e.target.value } }))}
+              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">支店名</label>
+            <input value={value.bank.branch} onChange={e => onChange(p => ({ ...p, bank: { ...p.bank, branch: e.target.value } }))}
+              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">種別</label>
+            <select value={value.bank.accountType} onChange={e => onChange(p => ({ ...p, bank: { ...p.bank, accountType: e.target.value as '普通' | '当座' } }))}
+              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
+              <option value="普通">普通</option>
+              <option value="当座">当座</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">口座番号</label>
+            <input value={value.bank.accountNo} onChange={e => onChange(p => ({ ...p, bank: { ...p.bank, accountNo: e.target.value } }))}
+              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">口座名義</label>
+            <input value={value.bank.holder} onChange={e => onChange(p => ({ ...p, bank: { ...p.bank, holder: e.target.value } }))}
+              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface BackupPreview {
   workerCount: number
   siteCount: number
@@ -189,6 +305,10 @@ export default function SettingsPage() {
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(EMPTY_COMPANY_PROFILE)
   const [savingProfile, setSavingProfile] = useState(false)
 
+  // HFU → 日比建設 の請求書
+  const [hfuInvoice, setHfuInvoice] = useState<HfuInvoiceForm>(EMPTY_HFU_INVOICE)
+  const [savingHfu, setSavingHfu] = useState(false)
+
   // User passwords
   const [userPasswords, setUserPasswords] = useState<Record<string, string>>({})
   const [pwWorkers, setPwWorkers] = useState<{ id: number; name: string; jobType: string }[]>([])
@@ -254,6 +374,23 @@ export default function SettingsPage() {
     } finally {
       setLoading(false)
     }
+  }, [password])
+
+  const fetchHfuInvoice = useCallback(async () => {
+    if (!password) return
+    try {
+      const res = await fetch('/api/settings?action=getHfuInvoice', { headers: { 'x-admin-password': password } })
+      if (!res.ok) return
+      const h = (await res.json()).hfuInvoice
+      if (!h) return
+      setHfuInvoice({
+        profile: { ...EMPTY_HFU_INVOICE.profile, ...(h.profile || {}), bank: { ...EMPTY_HFU_INVOICE.profile.bank, ...(h.profile?.bank || {}) } },
+        tobiRate: h.tobiRate || 0,
+        dokoRate: h.dokoRate || 0,
+        payMonthOffset: h.paymentTerms?.payMonthOffset === 2 ? 2 : 1,
+        payDay: h.paymentTerms?.payDay ?? 'end',
+      })
+    } catch { /* ignore */ }
   }, [password])
 
   const fetchCompanyProfile = useCallback(async () => {
@@ -371,8 +508,8 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    if (password) { fetchRates(); fetchUserPasswords(); fetchCompanyProfile() }
-  }, [password, fetchRates, fetchUserPasswords, fetchCompanyProfile])
+    if (password) { fetchRates(); fetchUserPasswords(); fetchCompanyProfile(); fetchHfuInvoice() }
+  }, [password, fetchRates, fetchUserPasswords, fetchCompanyProfile, fetchHfuInvoice])
 
   // Fetch activity when tab is switched or filters change
   useEffect(() => {
@@ -500,6 +637,24 @@ export default function SettingsPage() {
       showMessage('error', '保存に失敗しました（管理者パスワードでログインしているか確認してください）')
     } finally {
       setSavingProfile(false)
+    }
+  }
+
+  const handleSaveHfuInvoice = async () => {
+    setSavingHfu(true)
+    try {
+      const { profile, tobiRate, dokoRate, payMonthOffset, payDay } = hfuInvoice
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({ action: 'saveHfuInvoice', hfuInvoice: { profile, tobiRate, dokoRate, paymentTerms: { closing: 'end', payMonthOffset, payDay } } }),
+      })
+      if (!res.ok) throw new Error('Save failed')
+      showMessage('success', 'HFU → 日比建設 の請求書の設定を保存しました')
+    } catch {
+      showMessage('error', '保存に失敗しました（管理者パスワードでログインしているか確認してください）')
+    } finally {
+      setSavingHfu(false)
     }
   }
 
@@ -794,99 +949,7 @@ export default function SettingsPage() {
               「応援の請求書」（同業者へ送る請求書。/peer-statement から作成）に印字する発行者情報です。
               住所・登録番号・振込先は未入力のままにしています。届いた請求書を見ながらご自身で入力してください。
             </p>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">会社名</label>
-                  <input value={companyProfile.name} onChange={e => setCompanyProfile(p => ({ ...p, name: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">会社名（英字・帳票用）</label>
-                  <input value={companyProfile.nameEn} onChange={e => setCompanyProfile(p => ({ ...p, nameEn: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">郵便番号</label>
-                  <input value={companyProfile.postal} onChange={e => setCompanyProfile(p => ({ ...p, postal: e.target.value }))}
-                    placeholder="例: 123-4567"
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">住所</label>
-                  <input value={companyProfile.address} onChange={e => setCompanyProfile(p => ({ ...p, address: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">電話番号</label>
-                  <input value={companyProfile.tel} onChange={e => setCompanyProfile(p => ({ ...p, tel: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">FAX（任意）</label>
-                  <input value={companyProfile.fax} onChange={e => setCompanyProfile(p => ({ ...p, fax: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">メール（任意）</label>
-                  <input value={companyProfile.email} onChange={e => setCompanyProfile(p => ({ ...p, email: e.target.value }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">適格請求書発行事業者の登録番号</label>
-                  <input value={companyProfile.invoiceRegNo} onChange={e => setCompanyProfile(p => ({ ...p, invoiceRegNo: e.target.value }))}
-                    placeholder="例: T1234567890123"
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm font-mono" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">請求書番号の接頭辞</label>
-                  <input value={companyProfile.invoicePrefix} onChange={e => setCompanyProfile(p => ({ ...p, invoicePrefix: e.target.value.toUpperCase() }))}
-                    className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">振込先</label>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">銀行名</label>
-                    <input value={companyProfile.bank.bankName} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, bankName: e.target.value } }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">支店名</label>
-                    <input value={companyProfile.bank.branch} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, branch: e.target.value } }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">種別</label>
-                    <select value={companyProfile.bank.accountType} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, accountType: e.target.value as '普通' | '当座' } }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
-                      <option value="普通">普通</option>
-                      <option value="当座">当座</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">口座番号</label>
-                    <input value={companyProfile.bank.accountNo} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, accountNo: e.target.value } }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">口座名義</label>
-                    <input value={companyProfile.bank.holder} onChange={e => setCompanyProfile(p => ({ ...p, bank: { ...p.bank, holder: e.target.value } }))}
-                      className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <CompanyProfileFields value={companyProfile} onChange={setCompanyProfile} />
 
             <button
               onClick={handleSaveCompanyProfile}
@@ -894,6 +957,55 @@ export default function SettingsPage() {
               className="mt-4 w-full bg-hibi-navy text-white py-2.5 rounded-lg font-medium hover:bg-hibi-navy/90 disabled:opacity-50 transition"
             >
               {savingProfile ? '保存中...' : '保存'}
+            </button>
+          </div>
+
+          {/* HFU → 日比建設 の請求書（/peer-invoice?company=__hfu_to_hibi__） */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-6">
+            <h2 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">HFU → 日比建設 の請求書</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              HFU 所属の作業員が働いた人工（全現場）を、HFU から日比建設へ請求する請求書の設定です。
+              金額は 人工 × 下の単価（税抜）。宛先には上の「請求書の自社情報」（日比建設）の住所を印字します。
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">鳶 1人工の単価（税抜・円）</label>
+                <input type="number" min={0} value={hfuInvoice.tobiRate || ''} onChange={e => setHfuInvoice(h => ({ ...h, tobiRate: Number(e.target.value) || 0 }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm tabular-nums" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">土工 1人工の単価（税抜・円）</label>
+                <input type="number" min={0} value={hfuInvoice.dokoRate || ''} onChange={e => setHfuInvoice(h => ({ ...h, dokoRate: Number(e.target.value) || 0 }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm tabular-nums" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">支払月（月末締め）</label>
+                <select value={hfuInvoice.payMonthOffset} onChange={e => setHfuInvoice(h => ({ ...h, payMonthOffset: Number(e.target.value) === 2 ? 2 : 1 }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
+                  <option value={1}>翌月払い</option>
+                  <option value={2}>翌々月払い</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">支払日</label>
+                <select value={String(hfuInvoice.payDay)} onChange={e => setHfuInvoice(h => ({ ...h, payDay: e.target.value === 'end' ? 'end' : Number(e.target.value) }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
+                  <option value="end">月末</option>
+                  {[5, 10, 15, 20, 25].map(d => <option key={d} value={d}>{d}日</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">HFU の会社情報（発行者として印字）</label>
+              <CompanyProfileFields value={hfuInvoice.profile} onChange={update => setHfuInvoice(h => ({ ...h, profile: update(h.profile) }))} />
+              <p className="text-[11px] text-gray-400 mt-2">請求書番号の接頭辞は日比建設（{companyProfile.invoicePrefix || 'HC'}）と別にしてください。番号は会社ごとに別々に数えます。</p>
+            </div>
+            <button
+              onClick={handleSaveHfuInvoice}
+              disabled={savingHfu}
+              className="mt-4 w-full bg-hibi-navy text-white py-2.5 rounded-lg font-medium hover:bg-hibi-navy/90 disabled:opacity-50 transition"
+            >
+              {savingHfu ? '保存中...' : '保存'}
             </button>
           </div>
 

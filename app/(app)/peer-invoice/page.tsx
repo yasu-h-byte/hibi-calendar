@@ -22,6 +22,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
+import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
 
 // ── API レスポンスと同じ形の型（lib/peer-invoice.ts・lib/peer-invoice-store.ts 参照） ──
 interface PeerInvoiceLine { siteId: string; siteName: string; role: '鳶' | '土工'; days: number; rate: number; amount: number }
@@ -36,6 +37,8 @@ interface CompanyProfile {
   invoicePrefix: string
 }
 interface PeerInvoiceDraft {
+  /** 'hfu' = HFU → 日比建設（lib/hfu-invoice.ts）。無ければ応援の請求書 */
+  kind?: 'peer' | 'hfu'
   companyId: string; companyName: string; company: PeerInvoiceCompanyInfo; ym: string
   period: { from: string; to: string }
   lines: PeerInvoiceLine[]
@@ -148,6 +151,7 @@ function PeerInvoicePageInner() {
       : null
   const history = data && !('error' in data) ? data.history : []
   const isEmpty = data && !('error' in data) && data.status === 'empty'
+  const isHfuInvoice = companyId === HFU_INVOICE_COMPANY_ID
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -155,7 +159,7 @@ function PeerInvoicePageInner() {
       <div className="no-print space-y-3 mb-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h1 className="text-xl font-bold text-hibi-navy dark:text-white">応援の請求書</h1>
+            <h1 className="text-xl font-bold text-hibi-navy dark:text-white">{isHfuInvoice ? 'HFU → 日比建設 の請求書' : '応援の請求書'}</h1>
             {view && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{view.companyName} ／ {jpYm(ym)}分</p>}
           </div>
           <div className="flex items-center gap-2">
@@ -205,7 +209,7 @@ function PeerInvoicePageInner() {
 
         {err && <p className="text-sm text-red-600">{err}</p>}
         {!data && !err && <p className="text-sm text-gray-400">読み込み中…</p>}
-        {isEmpty && <p className="text-sm text-gray-400">この会社・この月は応援の請求がありません。</p>}
+        {isEmpty && <p className="text-sm text-gray-400">{isHfuInvoice ? 'この月は HFU の人工がありません。' : 'この会社・この月は応援の請求がありません。'}</p>}
       </div>
 
       {/* ── 印刷対象 ── */}
@@ -248,6 +252,7 @@ function PeerInvoicePageInner() {
 function PeerInvoiceDocument({ view }: {
   view: PeerInvoiceDraft & { isDraft: boolean; no: string; issuer: CompanyProfile; status: 'draft' | 'issued' | 'void'; issueDate: string; id: string }
 }) {
+  const isHfu = view.kind === 'hfu'
   const nDays = daysInYm(view.ym)
   const days = Array.from({ length: nDays }, (_, i) => i + 1)
 
@@ -259,8 +264,8 @@ function PeerInvoiceDocument({ view }: {
         <div style={{ position: 'relative', zIndex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#1B2A4A' }}>{view.issuer.name || '株式会社日比建設'}</div>
-              <div style={{ fontSize: 10, letterSpacing: 2, color: '#666' }}>{view.issuer.nameEn || 'HIBI CONSTRUCTION'}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#1B2A4A' }}>{view.issuer.name || (isHfu ? '（HFU の会社名 未入力）' : '株式会社日比建設')}</div>
+              <div style={{ fontSize: 10, letterSpacing: 2, color: '#666' }}>{view.issuer.nameEn || (isHfu ? '' : 'HIBI CONSTRUCTION')}</div>
             </div>
             <div style={{ fontSize: 24, fontWeight: 800, color: '#1B2A4A' }}>請求書</div>
           </div>
@@ -284,7 +289,7 @@ function PeerInvoiceDocument({ view }: {
             </table>
           </div>
 
-          <div style={{ marginTop: 10, fontSize: 12 }}>件名: {jpYm(view.ym)}分 応援作業費</div>
+          <div style={{ marginTop: 10, fontSize: 12 }}>件名: {jpYm(view.ym)}分 {isHfu ? '作業費' : '応援作業費'}</div>
 
           <div style={{
             marginTop: 12, padding: '10px 16px', background: '#1B2A4A', color: 'white', borderRadius: 8,
@@ -331,7 +336,7 @@ function PeerInvoiceDocument({ view }: {
             <div style={{ fontWeight: 700, marginBottom: 3 }}>お振込先</div>
             {view.issuer.bank.bankName
               ? <div>{view.issuer.bank.bankName} {view.issuer.bank.branch}支店　{view.issuer.bank.accountType}　{view.issuer.bank.accountNo}　名義　{view.issuer.bank.holder}</div>
-              : <div style={{ color: '#b91c1c' }}>振込先が未登録です（設定 → 請求書の自社情報）</div>}
+              : <div style={{ color: '#b91c1c' }}>振込先が未登録です（設定 → {isHfu ? 'HFU → 日比建設 の請求書' : '請求書の自社情報'}）</div>}
             <div style={{ color: '#666', marginTop: 3 }}>恐れ入りますが、振込手数料は貴社にてご負担いただけますと幸いです。</div>
           </div>
 
@@ -397,8 +402,9 @@ function PeerInvoiceDocument({ view }: {
             </table>
           </div>
           <p style={{ fontSize: 8, color: '#888', marginTop: 6 }}>
-            人工は 1=日勤／0.5=半日／1.5=夜勤／2.5=日勤+夜勤 の単位です（背景色のセルは夜勤を含む日）。残業計は参考時間で、人工には含んでいません。
-            「（外注）」は応援先へ連れて行った外注先の人工です。
+            人工は 1=日勤／0.5=半日／1.5=夜勤／2.5=日勤+夜勤 の単位です（背景色のセルは夜勤を含む日）。
+            残業計の時間は 7時間（日本人・外注は8時間）で1人工に換算し、請求書本体の人工に含めています。
+            {!isHfu && '「（外注）」は応援先へ連れて行った外注先の人工です。'}
           </p>
         </div>
       ))}

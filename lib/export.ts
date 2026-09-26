@@ -355,14 +355,8 @@ function appendOvertimeSummarySheet(
  * Sheet 2: 勤務時間一覧（外国人のみ・時間換算: 実労働h／所定h／週番号／法定上限）
  * Sheet 3: 勤怠サマリー（新ルールの外国人のみ・3段階残業判定。202605〜）
  */
-export type AttendanceOrg = 'hibi' | 'hfu'
-export const ATTENDANCE_ORG_LABEL: Record<AttendanceOrg, string> = { hibi: '日比建設', hfu: 'HFU' }
-
-/** org の表記ゆれ（'日比'/'hibi'・'HFU'/'hfu'）を吸収する */
-export function isWorkerOfOrg(w: { org?: string }, org: AttendanceOrg): boolean {
-  const o = (w.org || '').toLowerCase()
-  return org === 'hibi' ? (o === 'hibi' || o === '日比') : (o === 'hfu')
-}
+import { isWorkerOfOrg, ATTENDANCE_ORG_LABEL, type AttendanceOrg } from './orgs'
+export { isWorkerOfOrg, ATTENDANCE_ORG_LABEL, type AttendanceOrg } from './orgs'
 
 export interface HfuAttendanceExportData extends HibiAttendanceData {
   /** カレンダーの日ごとの種別（siteId → { "1": "work", "2": "off", ... }） */
