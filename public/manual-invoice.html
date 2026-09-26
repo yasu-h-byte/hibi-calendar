@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>請求書の発行マニュアル - DEDURA＋</title>
+<style>
+  :root {
+    --charcoal: #20262F;
+    --amber: #F5A623;
+    --green: #1E9E52;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 850px; margin: 0 auto; padding: 20px; color: #20262F; line-height: 1.8; font-size: 15px; }
+  h1 { border-bottom: 3px solid var(--charcoal); padding-bottom: 10px; font-size: 22px; }
+  h2 { color: #fff; background: var(--charcoal); padding: 8px 14px; margin-top: 40px; font-size: 18px; border-radius: 6px; }
+  h3 { color: #333; font-size: 16px; margin-top: 24px; border-left: 4px solid var(--charcoal); padding-left: 10px; }
+  .box { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px; margin: 16px 0; }
+  .box-warn { background: #fff8e0; border: 1px solid #f0d060; }
+  .box-ok { background: #eefaf1; border: 1px solid #9dd8b4; }
+  .box-red { background: #fff0f0; border: 1px solid #f0a0a0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; }
+  th { background: var(--charcoal); color: white; }
+  tr:nth-child(even) { background: #f8f8f8; }
+  .step { display: flex; gap: 12px; margin: 12px 0; align-items: flex-start; }
+  .step-num { background: var(--charcoal); color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+  .step-text { flex: 1; }
+  code { background: #e8e8e8; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  .toc { background: #f4f6f8; border: 1px solid #d5dbe2; border-radius: 8px; padding: 16px 24px; margin: 20px 0; }
+  .toc a { color: var(--charcoal); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc li { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid #ddd; margin: 30px 0; }
+  .btn-amber { display: inline-block; background: var(--amber); color: var(--charcoal); font-weight: bold; padding: 6px 14px; border-radius: 6px; font-size: 14px; }
+  @media print { body { font-size: 13px; padding: 0; } h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+  @media (max-width: 600px) {
+    body { padding: 12px; font-size: 14px; }
+    table { font-size: 13px; }
+    th, td { padding: 6px 8px; }
+    .step-text { font-size: 14px; }
+  }
+</style>
+</head>
+<body>
+<div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
+
+<h1>DEDURA＋<br>請求書の発行マニュアル（森田さん・政仁さん）</h1>
+<p>対象: 森田さん（申請）・政仁さん（承認）・靖仁さん（最初の準備）<br>
+最終更新: 2026年9月26日<br>
+システムURL: <code>https://hibi-calendar.vercel.app</code></p>
+
+<div class="box box-ok"><strong>ひとことで言うと</strong>: 月締めのあと、<strong>森田さんが「発行を申請」</strong> → <strong>政仁さんが「承認して発行」</strong> → 森田さんが印刷して送る。金額・人工・出面明細は出面から自動で作られます。</div>
+
+<div class="toc"><strong>目次</strong><ul style="list-style:none;padding-left:8px"><li><a href="#sec1">0. 全体の流れ</a></li><li><a href="#sec2">1. 最初に一度だけ（靖仁さん）</a></li><li><a href="#sec3">2. はじめてログインする（森田さん・政仁さん）</a></li><li><a href="#sec4">3. 森田さんの作業（毎月・月締めのあと）</a></li><li><a href="#sec5">4. 政仁さんの作業（申請が来たら）</a></li><li><a href="#sec6">5. 画面の表示の見方</a></li><li><a href="#sec7">6. 困ったとき</a></li></ul></div>
+
+<hr>
+<h2 id="sec1">0. 全体の流れ</h2>
+<table>
+<tr><th>順番</th><th>誰が</th><th>やること</th><th>画面</th></tr>
+<tr><td>準備</td><td>靖仁さん</td><td>2人の個人パスワードを発行・請求書の会社情報を確認して保存（最初の1回だけ）</td><td>管理者設定</td></tr>
+<tr><td>①</td><td>森田さん</td><td>月締めのあと、請求書の下書きを確認して「発行を申請」</td><td>請求書・支払</td></tr>
+<tr><td>②</td><td>政仁さん</td><td>通知ベルで気づく → 内容を確認して「承認して発行」（直すところがあれば「差し戻し」）</td><td>請求書・支払</td></tr>
+<tr><td>③</td><td>森田さん</td><td>発行済みになったら印刷（PDF保存）して送る</td><td>請求書・支払</td></tr>
+</table>
+<div class="box"><ul style="margin:0;padding-left:20px;"><li>金額・人工・出面明細は<strong>出面から自動で作られます</strong>。手で計算することはありません</li><li>請求書は2種類。<strong>応援の請求書</strong>（応援に行った同業者へ）と、<strong>HFU → 日比建設 の請求書</strong>（HFU所属の人が働いた分・グループ内）</li><li>申請した時点の内容で止まります（あとで出面を直しても、申請中の請求書は変わりません）。政仁さんが見た金額がそのまま発行されます</li></ul></div>
+<hr>
+<h2 id="sec2">1. 最初に一度だけ（靖仁さん）</h2>
+<h3>1-1. 森田さん・政仁さんの個人パスワードを発行する</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">代表のパスワードでログインする</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">サイドメニュー「管理」→「管理者設定」→ 上のタブ「🔑 ログイン・権限」</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">「個人パスワード設定」の欄に、<strong>森田さん（事務）</strong>と<strong>日比政仁（事業責任者）</strong>の行がある → それぞれにパスワードを入力</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">下の「保存」を押す（1分ほどで使えるようになります）</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">本人に<strong>口頭か紙で</strong>伝える（グループLINEなど、他の人が見られる場所には書かない）</div></div>
+
+<div class="box"><ul style="margin:0;padding-left:20px;"><li>パスワードは<strong>他の人と同じにしない</strong>。職長さんたちが使っている共通パスワードとも別にする</li><li>森田さんの行が出てこないとき → 人員マスタで森田さんの「職種」が「事務」になっているか確認</li><li>本人が忘れたときは、同じ画面で新しいパスワードに書き換えて「保存」</li></ul></div>
+<h3>1-2. 請求書に印字する会社情報を確認して保存する</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">「管理者設定」→ 上のタブ「🏢 会社・請求書」</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text"><strong>請求書の自社情報</strong>（日比建設）: 住所・登録番号・振込先を入力して「保存」<br><span style="color:#555;font-size:14px">・（HFU → 日比建設 の請求書の宛先にも、ここの住所が使われます）</span></div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text"><strong>HFU → 日比建設 の請求書</strong>: 最初からこれまでの請求書の内容（会社名・代表者・住所・電話・登録番号・振込先・鳶 30,000円）が入っています。確かめて「保存」<br><span style="color:#555;font-size:14px">・FAX 番号は読み取れなかったので空欄です。必要なら入力</span><br><span style="color:#555;font-size:14px">・土工のいない月は、土工の単価が空欄でも発行できます</span></div></div>
+
+<p><strong>保存しないと発行できません</strong>（足りない項目があると、発行・申請のときに何が足りないかが表示されます）。</p>
+<hr>
+<h2 id="sec3">2. はじめてログインする（森田さん・政仁さん）</h2>
+<div class="step"><div class="step-num">1</div><div class="step-text">ブラウザで <code>https://hibi-calendar.vercel.app</code> を開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「パスワード」の欄に、靖仁さんから受け取った<strong>自分のパスワード</strong>を入れて「ログイン」<br><span style="color:#555;font-size:14px">・（名前を選ぶ画面は出ません。そのまま入れます）</span></div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">左上に自分の名前と役割（森田さん＝<strong>事務</strong>、政仁さん＝<strong>事業責任者</strong>）が出ていれば OK</div></div>
+
+<div class="box"><ul style="margin:0;padding-left:20px;"><li>メニューの一番上の<strong>検索欄</strong>に「請求書」と打つと、請求書の画面へすぐ行けます</li></ul></div>
+<hr>
+<h2 id="sec4">3. 森田さんの作業（毎月・月締めのあと）</h2>
+<h3>3-1. 請求書の下書きを確認して申請する</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">サイドメニュー「毎月」→「<strong>請求書・支払</strong>」を開き、◀ ▶ で対象の月にする</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">請求する会社の右の「<strong>請求書を作る</strong>」を押す<br><span style="color:#555;font-size:14px">・HFU → 日比建設 の請求書は、画面の上の「HFU → 日比建設」の欄から</span></div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">下書き（「DRAFT 下書き」の透かし入り）が出る。次を確かめる<br><span style="color:#555;font-size:14px">・宛先の会社名・住所</span><br><span style="color:#555;font-size:14px">・現場ごとの人工・単価・金額（HFU の請求書は「鳶 残業 ◯h」の行もあります）</span><br><span style="color:#555;font-size:14px">・2ページ目以降の出面明細（人・日ごとの人工）</span></div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">よければ「<strong>発行を申請（承認へ回す）</strong>」を押す → 確認で「OK」</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">画面が青い帯「<strong>承認待ち</strong>」になる。一覧のバッジも「承認待ち」になる（政仁さんの通知ベルに届きます）</div></div>
+
+<h3>3-2. 出面を直したい・申請をやめたいとき</h3>
+<div class="box"><ul style="margin:0;padding-left:20px;"><li>申請中の請求書を開いて「<strong>申請を取り下げ</strong>」→ 出面を直す → もう一度 3-1 から</li><li>取り下げた分は番号を使いません（記録だけ残ります）</li></ul></div>
+<h3>3-3. 差し戻されたとき</h3>
+<div class="box"><ul style="margin:0;padding-left:20px;"><li>請求書を開くと、下書きの上に<strong>赤い帯で差し戻しの理由</strong>が出ています</li><li>理由に沿って出面などを直し、もう一度「発行を申請」</li></ul></div>
+<h3>3-4. 発行済みになったら送る</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">一覧のバッジが「<strong>✓ 発行済み HC-202609-01</strong>」（HFU は <code>HFU-…</code>）に変わったら開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「<strong>🖨 印刷 / PDF保存</strong>」→ 印刷画面で「PDFに保存」→ 相手へ送る<br><span style="color:#555;font-size:14px">・応援の請求書 → 相手の同業者へ</span><br><span style="color:#555;font-size:14px">・HFU → 日比建設 の請求書 → 社内の経理へ</span></div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">発行済みの請求書は、あとで出面を直しても内容は変わりません（発行した時点のまま）</div></div>
+
+<hr>
+<h2 id="sec5">4. 政仁さんの作業（申請が来たら）</h2>
+<h3>4-1. 申請に気づく</h3>
+<div class="box"><ul style="margin:0;padding-left:20px;"><li>左上の名前の横の<strong>通知ベル（🔔）</strong>に「<strong>請求書の発行承認待ち ◯件（会社名）</strong>」と出ます</li></ul></div>
+<h3>4-2. 内容を確認して承認する</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">サイドメニュー「毎月」→「<strong>請求書・支払</strong>」→ 対象の月 → バッジが「<strong>承認待ち</strong>」の会社を押す</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">青い帯に「◯◯さんが ◯月◯日 に申請」と出ています。ここに表示されている内容が、そのまま発行されます</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">確認するところ<br><span style="color:#555;font-size:14px">・宛先・対象の月・支払期日</span><br><span style="color:#555;font-size:14px">・現場ごとの人工 × 単価 ＝ 金額（おかしな現場・人が入っていないか）</span><br><span style="color:#555;font-size:14px">・出面明細（誰が何日出たか）</span></div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">よければ「<strong>承認して発行</strong>」→ 確認で「OK」<br><span style="color:#555;font-size:14px">・→ 請求書番号が付いて「発行済み」になります（森田さんが印刷して送ります）</span></div></div>
+
+<h3>4-3. 直してほしいときは差し戻す</h3>
+<div class="box"><ul style="margin:0;padding-left:20px;"><li>「<strong>差し戻し</strong>」を押し、理由（例:「◯日の白戸さんの人工を確認して」）を入れて「OK」</li><li>森田さんの画面に理由が赤い帯で出ます。直して再申請されたら、また通知ベルに出ます</li></ul></div>
+<h3>4-4. 発行したあとで間違いに気づいたとき</h3>
+<div class="box"><ul style="margin:0;padding-left:20px;"><li>発行済みの請求書を開いて「<strong>取り消し</strong>」→ 理由を入れる</li><li>取り消した番号は<strong>欠番のまま</strong>残ります（使い回しません）。森田さんに作り直し（再申請）を頼む</li></ul></div>
+<hr>
+<h2 id="sec6">5. 画面の表示の見方</h2>
+<table>
+<tr><th>表示</th><th>意味</th><th>次にやる人</th></tr>
+<tr><td>請求書を作る</td><td>まだ申請していない</td><td>森田さん</td></tr>
+<tr><td>承認待ち（青）</td><td>森田さんが申請済み。番号はまだ無い</td><td>政仁さん</td></tr>
+<tr><td>✓ 発行済み HC-… / HFU-…</td><td>政仁さんが承認済み。番号が付いた</td><td>森田さん（印刷・送付）</td></tr>
+<tr><td>赤い帯「差し戻されました」</td><td>政仁さんが差し戻した</td><td>森田さん（直して再申請）</td></tr>
+<tr><td>「承認待ち」の透かし</td><td>申請中の請求書（印刷には使わない）</td><td>—</td></tr>
+</table>
+<hr>
+<h2 id="sec7">6. 困ったとき</h2>
+<table>
+<tr><th>困りごと</th><th>対処</th></tr>
+<tr><td>ログインできない</td><td>パスワードの打ち間違い（大文字・小文字）を確認。だめなら靖仁さんに新しいパスワードを発行してもらう</td></tr>
+<tr><td>「もう一度ログインしてください」と出た</td><td>セキュリティ強化のための表示。もう一度ログインすれば普段どおり使える</td></tr>
+<tr><td>「自社情報が未入力です」と出て申請できない</td><td>靖仁さんに「管理者設定 → 会社・請求書」の入力・保存を頼む（1-2）</td></tr>
+<tr><td>「単価（鳶）が未入力です」と出る（HFU）</td><td>靖仁さんに「HFU → 日比建設 の請求書」の単価の保存を頼む</td></tr>
+<tr><td>「承認待ちの申請があります」と出る</td><td>すでに申請中。政仁さんの承認か、取り下げを待つ</td></tr>
+<tr><td>「すでに発行済みです」と出る</td><td>その月は発行済み。作り直すなら政仁さんに取り消してもらってから再申請</td></tr>
+<tr><td>請求書を作るボタンが出ない</td><td>その月にその会社への応援がない（出面を確認）</td></tr>
+<tr><td>画面の不具合</td><td>靖仁さんへ連絡</td></tr>
+</table>
+<hr>
+<h2 id="sec8">改訂履歴</h2>
+<table>
+<tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-26</td><td>新規作成。個人パスワードの発行（靖仁さん）・会社情報の保存・初回ログイン・森田さんの申請・政仁さんの承認／差し戻し／取り消し・画面の見方・困ったとき</td></tr>
+</table>
+
+<p style="text-align:center; color:#999; font-size:12px;">DEDURA＋ / 最終更新: 2026-09-26</p>
+</body>
+</html>

@@ -27,8 +27,9 @@ HIBI CONSTRUCTION**。両者は別物なので、タブ・PWA・アプリ内表�
 | [docs/attendance.md](docs/attendance.md) | 出面入力・PC/スマホ画面・フッター合計ルール |
 | [docs/ui-design.md](docs/ui-design.md) | UI・デザイン・色分け・言語表示ルール |
 | [docs/firestore.md](docs/firestore.md) | Firestoreデータ構造・コレクション定義 |
-| [docs/roles-auth.md](docs/roles-auth.md) | ロール・認証・権限管理 |
 | [docs/integration.md](docs/integration.md) | 経営コックピットとの連携（読むだけの窓口・合言葉・税抜の約束） |
+| [docs/manual-invoice.md](docs/manual-invoice.md) | 請求書の発行マニュアル（森田さんが申請→政仁さんが承認。個人パスワードの発行・初回ログインから。公開版 public/manual-invoice.html） |
+| [docs/roles-auth.md](docs/roles-auth.md) | 役割・認証・権限（**権限の唯一の決まりは lib/permissions.ts**。職長の通行証） |
 | [docs/peer-invoice.md](docs/peer-invoice.md) | 応援の請求書（同業者へ送る請求書 + 出面明細を印刷。/peer-invoice。発行で凍結・取り消しは欠番）＋ HFU → 日比建設 の請求書（HFU所属の人工 × 社内単価） |
 
 ## 開発の基本ルール
