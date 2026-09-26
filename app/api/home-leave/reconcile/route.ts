@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, requireExecutiveAuth } from '@/lib/auth'
+import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDocs, collection, updateDoc, deleteField } from '@/lib/fsdb'
 import { getAttendanceDoc, ymKey } from '@/lib/attendance'
@@ -211,7 +211,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // hk の一括削除は給与に直結するため代表・管理者のみ（2026-08-27）
-    { const denied = await requireExecutiveAuth(request); if (denied) return denied }
+    // 残っている帰国表示の整理（削除を伴う）は lib/permissions.ts homeLeave.delete（事業責任者・代表）
+    { const denied = await requireCap(request, 'homeLeave.delete'); if (denied) return denied }
     const body = await request.json().catch(() => ({}))
     if (body.fix !== true) {
       return NextResponse.json({ error: '削除するには {"fix": true} を明示してください' }, { status: 400 })

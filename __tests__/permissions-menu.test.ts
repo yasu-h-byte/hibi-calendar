@@ -46,6 +46,12 @@ describe('原則どおりか', () => {
     const writes = ['attendance.input', 'monthly.close', 'cost.edit', 'workers.edit', 'masters.edit', 'toolBudget.edit', 'leave.manage', 'invoice.request'] as const
     for (const cap of writes) expect(roleCan('officer', cap)).toBe(false)
   })
+  test('帰国情報: 登録・変更は事務も可（補助）、削除は事業責任者・代表だけ', () => {
+    expect(roleCan('jimu', 'homeLeave.edit')).toBe(true)
+    expect(roleCan('jimu', 'homeLeave.delete')).toBe(false)
+    expect(roleCan('approver', 'homeLeave.delete')).toBe(true)
+    expect(roleCan('foreman', 'homeLeave.edit')).toBe(false)
+  })
   test('給与欄の直接の書き換えは代表だけ', () => {
     expect(roleCan('owner', 'workers.editPay')).toBe(true)
     for (const r of ['approver', 'officer', 'jimu', 'foreman'] as const) expect(roleCan(r, 'workers.editPay')).toBe(false)

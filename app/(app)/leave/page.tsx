@@ -6,6 +6,7 @@
 // 保守操作（繰越再計算・正規化・時効処理・手動付与の入口）は components/leave/MaintenanceButton に集約済み。
 
 import { useEffect, useState, useCallback } from 'react'
+import { permRoleOf, roleCan } from '@/lib/permissions'
 import MaintenanceButton from '@/components/leave/MaintenanceButton'
 import { PLWorker, OrgFilter, LeaveTab, HomeLeave, PendingGrant, PendingGrantForm, LeaveRequest, SiteOption, MforemanMap } from './types'
 import AlertBanners from './components/AlertBanners'
@@ -290,6 +291,7 @@ export default function LeavePage() {
         ui={homeLeaveUi}
         patchUi={patchHomeLeaveUi}
         onRefresh={fetchData}
+        canDelete={roleCan(permRoleOf({ role: userRole }), 'homeLeave.delete')}
       />
 
       {/* モーダル */}

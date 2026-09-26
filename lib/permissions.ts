@@ -66,6 +66,9 @@ export const CAPABILITIES = {
   'leave.foremanApprove':    { group: '毎月', label: '有給・帰国申請の職長承認（担当現場）', roles: ['foreman', 'approver', 'owner'] },
   'leave.finalApprove':      { group: '毎月', label: '有給・帰国申請の最終承認', roles: ['approver', 'owner'] },
   'leave.manage':            { group: '毎月', label: '有給の付与・時季指定・買取の記録', roles: ['jimu', 'approver', 'owner'] },
+  // 2026-09-26 代表: 帰国情報は森田さんも補助的に登録・変更（復帰日の登録を含む）。削除は事業責任者・代表だけ
+  'homeLeave.edit':          { group: '毎月', label: '帰国情報の登録・変更・復帰日の登録', roles: ['jimu', 'approver', 'owner'] },
+  'homeLeave.delete':        { group: '毎月', label: '帰国情報の削除・残っている帰国表示の整理', roles: ['approver', 'owner'] },
   'monthly.view':            { group: '毎月', label: '月次集計・帳票を見る', roles: ALL_OFFICE },
   'monthly.close':           { group: '毎月', label: '月次の締め・帳票出力', roles: ['jimu', 'approver', 'owner'] },
   'invoice.view':            { group: '毎月', label: '請求書・支払を見る', roles: ALL_OFFICE },

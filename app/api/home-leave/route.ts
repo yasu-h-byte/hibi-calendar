@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, updateDoc, deleteDoc, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
@@ -175,16 +175,18 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // 2026-08-27（休暇届総点検）: 帰国記録の登録・変更・削除は給与（基本給の按分）に
-    //   直結するため、代表・管理者のみに制限（旧: 任意の個人パスワードで可能だった）
-    { const denied = await requireExecutiveAuth(request); if (denied) return denied }
+    // 2026-08-27（休暇届総点検）: 帰国記録は給与（基本給の按分）に直結するため役割で制限（旧: 任意の個人パスワードで可能だった）
+    // 2026-09-26 代表: 登録・変更（復帰日を含む）は事務（森田さん）も補助的に可 → homeLeave.edit。削除は homeLeave.delete
+    const body = await request.json()
+    const { action } = body
+    {
+      const denied = await requireCap(request, action === 'delete' ? 'homeLeave.delete' : 'homeLeave.edit')
+      if (denied) return denied
+    }
     const authUser = await getApiAuthUser(request)
     const actorLabel = authUser.authorized
       ? (typeof authUser.actor === 'number' ? `worker:${authUser.actor}` : String(authUser.actor))
       : 'admin'
-
-    const body = await request.json()
-    const { action } = body
 
     // ── 管理者の手動追加 ──
     // 旧UI が action='create' を送ってきていた経緯があるので両方受け付ける

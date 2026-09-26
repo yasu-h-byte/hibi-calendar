@@ -63,9 +63,11 @@ interface Props {
   ui: HomeLeaveUiState
   patchUi: (patch: Partial<HomeLeaveUiState>) => void
   onRefresh: () => void
+  /** 削除・残っている帰国表示の整理ができるか（lib/permissions.ts homeLeave.delete。事務は登録・変更だけ） */
+  canDelete: boolean
 }
 
-export default function HomeLeaveTab({ visible, homeLeaves, workers, password, ui, patchUi, onRefresh }: Props) {
+export default function HomeLeaveTab({ visible, homeLeaves, workers, password, ui, patchUi, onRefresh, canDelete }: Props) {
   const [hlSaving, setHlSaving] = useState(false)
   // 出面の帰国フラグ突合（2026-08-03 追加）。詳細は app/api/home-leave/reconcile/route.ts
   const [reconcile, setReconcile] = useState<ReconcileState>({ status: 'idle' })
@@ -389,7 +391,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           )}
           <button onClick={() => startHlEdit(h)}
             className="px-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200">編集</button>
-          {ui.deleteConfirm === h.id ? (
+          {!canDelete ? null : ui.deleteConfirm === h.id ? (
             <div className="flex gap-1">
               <button onClick={() => handleHlDelete(h.id)} disabled={hlSaving}
                 className="px-3 py-1 text-xs font-bold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">削除する</button>
@@ -536,6 +538,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           帰国フラグは承認時に出面へ実際に書き込まれる実体データ。2026-08-03 以前は
           期間変更・削除が出面へ同期されず、どの申請にも紐づかない残骸が発生していた。
           書き込み側は lib/home-leave-sync.ts で根治済みだが、過去データの掃除用に残す。 */}
+      {canDelete && (
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
         <h3 className="font-bold text-hibi-navy dark:text-gray-200 flex items-center gap-2">
           🔍 出面の帰国表示を点検
@@ -627,6 +630,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           </div>
         )}
       </div>
+      )}
     </div>
   )
 }
