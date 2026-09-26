@@ -1282,7 +1282,8 @@ export default function SettingsPage() {
                 ) : userWorkers.length === 0 ? (
                   <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">対象ユーザーがいません</td></tr>
                 ) : userWorkers.map(w => {
-                  const badge = roleBadge(w.jobType)
+                  // 政仁さん（workerId 1）は職種が役員でも事業責任者（lib/auth.ts buildAuthUser と同じ判定）
+                  const badge = w.id === 1 ? { label: '事業責任者', cls: 'bg-orange-100 text-orange-700' } : roleBadge(w.jobType)
                   const hasToken = !!w.token
                   return (
                     <tr key={w.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
