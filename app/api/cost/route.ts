@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { checkApiAuth, requireOfficeAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import {
@@ -33,7 +33,9 @@ function toMode(period: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  if (!await checkApiAuth(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // 2026-09-26: 請求額の編集は事務所の人だけ（職長＝共通パスワードは不可）
+  const denied = await requireOfficeAuth(request)
+  if (denied) return denied
   try {
     const { siteId, ym, amounts } = await request.json()
     if (!siteId || !ym) return NextResponse.json({ error: 'siteId and ym required' }, { status: 400 })

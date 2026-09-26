@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { requireSuperAdmin } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 
@@ -17,7 +17,8 @@ import { doc, getDoc } from '@/lib/fsdb'
  *   }).then(r => r.json()).then(console.log)
  */
 export async function POST(request: NextRequest) {
-  if (!(await checkApiAuth(request))) {
+  // 2026-09-26: 保守ツールは代表のみ
+  if (await requireSuperAdmin(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

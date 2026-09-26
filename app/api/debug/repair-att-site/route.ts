@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { requireSuperAdmin, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, deleteField } from '@/lib/fsdb'
 import { attKey } from '@/lib/attendance'
@@ -20,9 +20,9 @@ import { attKey } from '@/lib/attendance'
  * 認証: x-admin-password ヘッダ (admin/super-admin)
  */
 export async function POST(request: NextRequest) {
-  if (!(await checkApiAuth(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // 2026-09-26: 本番の出面を移し替える保守ツール。代表のみ（旧: どの個人パスワードでも実行できた）
+  const denied = await requireSuperAdmin(request)
+  if (denied) return denied
   const actor = (await getApiAuthUser(request)) || 'admin'
 
   const body = await request.json() as {

@@ -231,6 +231,33 @@ export async function requireExecutiveAuth(request: NextRequest): Promise<Respon
   return null
 }
 
+/**
+ * 代表（super-admin パスワード）だけ（2026-09-26）。本番データを直接書き換える保守ツール（/api/debug/*）用。
+ */
+export async function requireSuperAdmin(request: NextRequest): Promise<Response | null> {
+  const auth = await getApiAuthUser(request)
+  if (!auth.authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (auth.actor !== 'super-admin') return NextResponse.json({ error: 'この操作は代表のみ実行できます' }, { status: 403 })
+  return null
+}
+
+/**
+ * 事務所の人（事務・役員・事業責任者の個人パスワード、または代表）だけ（2026-09-26）。
+ * 月締め・請求額の編集など「職長はやらない事務作業」用。
+ * ⚠️ 共通パスワード（actor='admin'）は通さない。職長は共通パスワード＋名前選択でログインするため、
+ *    サーバーからは共通パスワード＝職長とみなす（app/api/auth/route.ts の名前選択は職長のみ）。
+ */
+export async function requireOfficeAuth(request: NextRequest): Promise<Response | null> {
+  const auth = await getApiAuthUser(request)
+  if (!auth.authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (auth.actor === 'super-admin') return null
+  if (typeof auth.actor === 'number') {
+    const r = await getApiRole(request)
+    if (r && (r.role === 'jimu' || r.role === 'admin' || r.role === 'approver')) return null
+  }
+  return NextResponse.json({ error: 'この操作は事務・役員・事業責任者のみ実行できます' }, { status: 403 })
+}
+
 export function isManagerRole(role: string): boolean {
   return role === 'super-admin' || role === 'admin' || role === 'approver'
 }

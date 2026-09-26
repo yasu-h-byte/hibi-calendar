@@ -208,7 +208,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
           <div>
             <div className="text-sm font-medium">{user.name}</div>
             <div className="text-xs text-white/50 mt-0.5">
-              {user.role === 'approver' ? '事業責任者' : user.role === 'foreman' ? '職長' : '管理者'}
+              {user.role === 'approver' ? '事業責任者' : user.role === 'foreman' ? '職長' : user.role === 'jimu' ? '事務' : '管理者'}
             </div>
           </div>
           <NotificationBell role={user.role} workerId={user.workerId} />

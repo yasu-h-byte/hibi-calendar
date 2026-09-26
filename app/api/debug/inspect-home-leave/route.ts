@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth } from '@/lib/auth'
+import { requireSuperAdmin } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, getDocs, collection } from '@/lib/fsdb'
 
@@ -18,11 +18,12 @@ export async function GET(request: NextRequest) {
     const headers = new Headers(request.headers)
     headers.set('x-admin-password', passwordFromQuery)
     const authReq = new NextRequest(request.url, { headers, method: request.method })
-    if (!(await checkApiAuth(authReq))) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-  } else if (!(await checkApiAuth(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // 2026-09-26: 保守ツールは代表のみ
+    const denied = await requireSuperAdmin(authReq)
+    if (denied) return denied
+  } else {
+    const denied = await requireSuperAdmin(request)
+    if (denied) return denied
   }
 
   // 今日の日付
