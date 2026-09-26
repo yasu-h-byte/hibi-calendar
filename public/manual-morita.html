@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>事務業務マニュアル（森田さん向け） - HIBI CONSTRUCTION</title>
+<title>事務業務マニュアル（森田さん向け） - DEDURA＋</title>
 <style>
   :root {
     --charcoal: #20262F;
@@ -44,294 +44,563 @@
 <body>
 <div style="margin-bottom: 16px;"><a href="/docs" style="color: #20262F; text-decoration: none; font-size: 13px;">← システムに戻る</a></div>
 
-<h1>HIBI CONSTRUCTION 就業管理システム<br>事務業務マニュアル（森田さん向け）</h1>
+<h1>DEDURA＋<br>事務業務マニュアル（森田さん向け）</h1>
 <p>対象: 森田さん（事務担当）<br>
 最終更新: 2026年9月26日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <div class="box box-ok">
-<strong>このマニュアルの前提（2026年10月以降の体制）</strong>
-<table style="margin-top:10px;">
-<tr><th>担当</th><th>業務</th></tr>
-<tr><td><strong>森田さん</strong></td><td>出面の事務補助／有給の付与・時季指定・買取の記録（申請の最終承認は政仁さん）／道具代の登録・残額管理／<strong>月次締め</strong>／<strong>キャシュモへの資料提出</strong></td></tr>
-<tr><td><strong>キャシュモ</strong></td><td>給与計算の最終確定・給与明細・振込（日比建設分・HFU分とも）</td></tr>
-<tr><td>職長</td><td>日々の出面入力・確認、就業カレンダー作成</td></tr>
-<tr><td>政仁さん</td><td>出面の最終承認・就業カレンダー承認・申請の最終承認</td></tr>
-<tr><td>靖仁さん</td><td>人員マスタ・システム管理・イレギュラー対応</td></tr>
-</table>
-<p style="margin:10px 0 0; font-size:13px;">給与の計算そのものはキャシュモの仕事です。森田さんは<strong>正しいデータを締めて、資料を渡すところまで</strong>が担当です。</p>
-</div>
-
-<!-- サマリー：毎月の流れ -->
-<div class="box box-ok">
-<strong>毎月の流れ（サマリー）</strong>
-<table style="margin-top:10px;">
-<tr><th>順番</th><th>やること</th><th>画面</th><th>目安</th></tr>
-<tr><td><strong>①</strong></td><td>前月の出面を最終確認（未入力・警告を潰す）</td><td>出面入力／月次集計「チェック」</td><td>月初すぐ</td></tr>
-<tr><td><strong>②</strong></td><td>月次集計で出勤・残業・有給・欠勤を確認</td><td>月次集計</td><td>月初</td></tr>
-<tr><td><strong>③</strong></td><td>🔒 月締めロック</td><td>月次集計</td><td>確認後</td></tr>
-<tr><td><strong>④</strong></td><td><strong>キャシュモ提出用の2資料（月次集計Excel・計算根拠PDF）を会社別に出力・送付</strong></td><td>帳票出力</td><td>ロック後すぐ</td></tr>
-<tr><td><strong>⑤</strong></td><td>道具代: マネーフォワード承認分をシステムへ登録</td><td>道具代管理</td><td>随時</td></tr>
-</table>
-</div>
-
-<div class="box" style="font-size:13px;">
-<strong>📌 併用する資料：</strong>
-<ul style="margin: 6px 0; padding-left: 20px;">
-  <li><a href="/manual-yukyu.html">🌴 休暇管理マニュアル</a> — 有給・帰国の制度詳細（唯一の参照元）</li>
-  <li><a href="/manual-checklist.html">✅ ロール別やることチェックリスト</a> — 日次・月次のやること一覧</li>
-  <li><a href="/manual-syaroshi.html">🏛 社労士提出用資料マニュアル</a> — 提出資料の読み方（キャシュモへの説明にも使えます）</li>
-</ul>
+<strong>このマニュアルの前提</strong><br>
+給与計算・給与明細・振込は、日比建設・HFU とも<strong>キャシュモへ委託</strong>しています（9月分から）。
+森田さんの担当は「システムでの日常事務」「月次の締め」「キャシュモへの資料提出」「請求書の発行申請」までです。<br>
+このマニュアルだけで日々の仕事ができるように書いてあります。制度の細かい決まりを知りたいときだけ、各章の最後の参考資料を開いてください。
 </div>
 
 <div class="toc">
 <strong>目次</strong>
-<ol>
-  <li><a href="#sec1">ログイン</a></li>
-  <li><a href="#sec2">画面の見方（サイドバー）</a></li>
-  <li><a href="#sec3">日常業務（出面補助・申請承認・道具代）</a></li>
-  <li><a href="#sec4">月次締め</a></li>
-  <li><a href="#sec5">キャシュモへの資料提出</a></li>
-  <li><a href="#sec6">システムの給与計算画面の位置づけ</a></li>
-  <li><a href="#sec7">年間で知っておくこと</a></li>
-  <li><a href="#sec8">困ったとき</a></li>
+<ol start="0">
+  <li><a href="#sec0">このマニュアルについて（4つの仕事・担当・毎月のカレンダー）</a></li>
+  <li><a href="#sec1">ログインとメニュー</a></li>
+  <li><a href="#sec2">給与締め（出面の事務補助 → 月次集計 → 月締め → キャシュモ提出）</a></li>
+  <li><a href="#sec3">有給まわり（付与・時季指定・買取・管理簿・申請の確認）</a></li>
+  <li><a href="#sec4">道具代管理</a></li>
+  <li><a href="#sec5">請求まわり（請求書の申請〜送付・請求額の入力）</a></li>
+  <li><a href="#sec6">年間で知っておくこと</a></li>
+  <li><a href="#sec7">困ったとき</a></li>
 </ol>
+<ul style="list-style:none; padding-left: 20px; margin: 0;">
+  <li><a href="#appA">付録A. 最初に一度だけ（靖仁さんの作業）</a></li>
+  <li><a href="#history">改訂履歴</a></li>
+</ul>
 </div>
 
 <!-- ================================================ -->
-<h2 id="sec1">1. ログイン</h2>
+<h2 id="sec0">0. このマニュアルについて</h2>
 
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">ブラウザで <code>https://hibi-calendar.vercel.app</code> を開く</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text"><strong>森田さん専用の個人パスワード</strong>を入力して「ログイン」を押す（靖仁さんから共有。名前の選択は不要）</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">ダッシュボードが表示されればログイン完了。一度ログインすると同じブラウザでは次回から入力不要</div>
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec2">2. 画面の見方（サイドバー）</h2>
-
-<p>メニューは「いつ使うか」の順に並んでいます（2026-09-26 見直し）。<strong>一番上の検索欄</strong>に「有給台帳」「請求書」「締め」などと打つと、その画面・タブへ直接行けます。</p>
-
+<h3>0-1. 引き継いだ4つの仕事</h3>
 <table>
-<tr><th>見出し</th><th>メニュー</th><th>用途</th></tr>
-<tr><td>毎日</td><td>ダッシュボード</td><td>お知らせ・<strong>勤怠申請の状況</strong>（承認は政仁さん）・稼働状況</td></tr>
-<tr><td>毎日</td><td><strong>出面入力</strong></td><td>入力漏れのフォロー・過去日の修正・変更履歴からの復元（§3-1）</td></tr>
-<tr><td>毎月</td><td><strong>月次集計・締め</strong></td><td>集計・チェック・<strong>月締め</strong></td></tr>
-<tr><td>毎月</td><td><strong>帳票出力</strong></td><td><strong>キャシュモ提出資料</strong>・出面一覧・有給管理台帳・周知同意台帳などのExcel/PDF</td></tr>
-<tr><td>毎月</td><td><strong>休暇管理</strong></td><td>有給の付与・時季指定・買取の記録・残数（§3-2）</td></tr>
-<tr><td>毎月</td><td><strong>請求書・支払</strong></td><td>請求書の発行申請（§3-4）</td></tr>
-<tr><td>経営</td><td>原価・収益</td><td>現場の請求額の入力・外注の人工と金額</td></tr>
-<tr><td>人・賃金</td><td>人員マスタ</td><td>入退社・在留期限・電話URL などの基本情報（給与欄は見るだけ）</td></tr>
-<tr><td>人・賃金</td><td><strong>道具代管理</strong></td><td>購入登録・残額管理（§3-3）</td></tr>
-<tr><td>マスタ</td><td>現場マスタ／取引先マスタ</td><td>現場・取引先の情報（単価変更は速やかに反映）</td></tr>
+<tr><th>分野</th><th>前の担当</th><th>森田さんがやること</th><th>章</th></tr>
+<tr><td><strong>給与締め</strong></td><td>奥寺さん</td><td>出面の入力漏れフォロー → 月次集計のチェック → 月締め → キャシュモへ資料を送る</td><td><a href="#sec2">§2</a></td></tr>
+<tr><td><strong>有給まわり</strong></td><td>奥寺さん</td><td>有給の付与・時季指定・買取の記録・年5日の確認・管理簿の出力・申請が止まっていないかの確認</td><td><a href="#sec3">§3</a></td></tr>
+<tr><td><strong>道具代管理</strong></td><td>佐藤さん</td><td>マネーフォワードで承認された購入をシステムに登録・残額の確認</td><td><a href="#sec4">§4</a></td></tr>
+<tr><td><strong>請求まわり</strong></td><td>奥寺さん</td><td>請求書（応援の請求書・HFU → 日比建設）の発行申請と送付・現場の請求額の入力</td><td><a href="#sec5">§5</a></td></tr>
 </table>
 
-<div class="box box-warn">
-給与欄（時給・号俸・日額）の変更とパスワードの発行は<strong>靖仁さん（代表）</strong>、申請の最終承認・請求書の承認は<strong>政仁さん</strong>の担当です。
-</div>
+<h3>0-2. 誰が何をするか</h3>
+<table>
+<tr><th>担当</th><th>仕事</th></tr>
+<tr><td><strong>森田さん（事務）</strong></td><td>上の4分野の事務作業。<strong>申請（有給・帰国・請求書）の最終承認はしない</strong></td></tr>
+<tr><td><strong>政仁さん（事業責任者）</strong></td><td>出面の最終承認・就業カレンダーの承認・有給／帰国申請の最終承認・<strong>請求書の承認と発行</strong>・帰国情報の登録や変更</td></tr>
+<tr><td><strong>靖仁さん（代表）</strong></td><td>人員マスタの給与欄・パスワードの発行・管理者設定・システムの不具合対応</td></tr>
+<tr><td>職長</td><td>日々の出面入力と職長承認・就業カレンダーの作成</td></tr>
+<tr><td>キャシュモ</td><td>給与計算の確定・給与明細・振込（両社とも）</td></tr>
+</table>
+
+<h3>0-3. 毎月のカレンダー（いつ何をするか）</h3>
+<table>
+<tr><th>時期</th><th>やること</th><th>画面</th><th>章</th></tr>
+<tr><td><strong>月初（1〜5日ごろ）</strong></td><td>前月の出面の入力漏れ・職長承認漏れをフォロー。有給・帰国申請が止まっていたら職長・政仁さんに声かけ</td><td>出面入力／休暇管理 → 申請</td><td>§2-1・§3-7</td></tr>
+<tr><td>月初</td><td>前月の月次集計をチェック（警告・所定日数）</td><td>月次集計・締め</td><td>§2-2・§2-3</td></tr>
+<tr><td>月初</td><td><strong>🔒 月締め</strong>（日比建設・HFU それぞれ）</td><td>月次集計・締め</td><td>§2-4</td></tr>
+<tr><td>締めたらすぐ</td><td><strong>キャシュモへ2点ずつ送る</strong>（会社別）</td><td>帳票出力</td><td>§2-5</td></tr>
+<tr><td>締めたあと</td><td>請求書の発行を申請 → 政仁さんの承認後に印刷して送る</td><td>請求書・支払</td><td>§5</td></tr>
+<tr><td>締めたあと</td><td>現場の請求額を入力</td><td>原価・収益</td><td>§5-7</td></tr>
+<tr><td><strong>月の途中（随時）</strong></td><td>道具代: マネーフォワードで承認された購入を登録</td><td>道具代管理</td><td>§4</td></tr>
+<tr><td>随時</td><td>🔔 に有給付与のお知らせが出たら付与する</td><td>通知ベル／休暇管理</td><td>§3-2</td></tr>
+<tr><td>随時</td><td>キャシュモ・社労士から資料を求められたら出す</td><td>帳票出力</td><td>§2-5</td></tr>
+<tr><td><strong>月末</strong></td><td>道具代の残額が少ない人・マイナスの人がいないか確認</td><td>道具代管理</td><td>§4-7</td></tr>
+<tr><td>月末</td><td>年5日が取れていない人がいないか確認</td><td>ダッシュボード</td><td>§3-4</td></tr>
+</table>
 
 <!-- ================================================ -->
-<h2 id="sec3">3. 日常業務</h2>
+<h2 id="sec1">1. ログインとメニュー</h2>
 
-<h3>3-1. 出面の事務補助</h3>
+<h3>1-1. ログイン</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">ブラウザで <code>https://hibi-calendar.vercel.app</code> を開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「パスワード」の欄に<strong>森田さん専用の個人パスワード</strong>（靖仁さんから口頭か紙で受け取ったもの）を入れて「ログイン」（名前を選ぶ画面は出ません）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">左上に「森田」と役割「事務」が出ていれば OK。同じブラウザなら次回から入力不要です</div></div>
+<ul>
+<li>「もう一度ログインしてください」と出たら、もう一度パスワードを入れれば普段どおり使えます</li>
+<li>パスワードを忘れたら靖仁さんに新しいものを発行してもらいます（<a href="#appA">付録A</a>）</li>
+</ul>
 
-<p>ベトナム人は本人のスマホ入力、日本人は職長入力が基本です。森田さんは<strong>入力漏れのフォローと過去日の修正</strong>を担当します。</p>
+<h3>1-2. メニュー（森田さんに見える画面）</h3>
+<p>メニューは「いつ使うか」の順に並んでいます。<strong>メニューの一番上の検索欄</strong>に「有給台帳」「請求書」「締め」「キャシュモ」などと打つと、その画面・タブへ直接行けます。</p>
+<table>
+<tr><th>見出し</th><th>メニュー</th><th>森田さんの使い方</th></tr>
+<tr><td>毎日</td><td>ダッシュボード</td><td>お知らせ・申請の状況・年5日の未達人数・稼働状況</td></tr>
+<tr><td>毎日</td><td><strong>出面入力</strong></td><td>入力漏れのフォロー・過去日の修正・変更履歴からの復元（§2-1）</td></tr>
+<tr><td>毎月</td><td><strong>月次集計・締め</strong></td><td>集計のチェック・所定日数・月締め（§2-2〜2-4）</td></tr>
+<tr><td>毎月</td><td><strong>帳票出力</strong></td><td>キャシュモ提出の2点・根拠書類・有給管理台帳・周知同意台帳など（§2-5）</td></tr>
+<tr><td>毎月</td><td><strong>休暇管理</strong></td><td>有給の付与・時季指定・買取の記録・管理簿・申請の状況（§3）</td></tr>
+<tr><td>毎月</td><td><strong>請求書・支払</strong></td><td>請求書の発行申請・印刷（§5）</td></tr>
+<tr><td>経営</td><td>原価・収益</td><td>現場の請求額の入力（§5-7）</td></tr>
+<tr><td>人・賃金</td><td>人員マスタ</td><td>入退社・在留期限・電話URL・キャシュモ従業員番号などの基本情報（給与欄は見るだけ）</td></tr>
+<tr><td>人・賃金</td><td><strong>道具代管理</strong></td><td>購入の登録・残額の確認（§4）</td></tr>
+<tr><td>マスタ</td><td>現場マスタ／取引先マスタ</td><td>現場・取引先の情報（単価が変わったら早めに反映）</td></tr>
+<tr><td>管理</td><td>資料一覧</td><td>マニュアル類</td></tr>
+</table>
 
+<h3>1-3. できること・できないこと</h3>
+<table>
+<tr><th>森田さんができる</th><th>森田さんはしない（担当者）</th></tr>
+<tr><td>出面の入力漏れフォロー・過去日の修正・変更履歴から復元</td><td>出面の職長承認（職長）・最終承認（政仁さん）</td></tr>
+<tr><td>月次集計・所定日数・月締め／締め解除</td><td>—</td></tr>
+<tr><td>帳票の出力（キャシュモ提出・根拠書類・有給管理台帳 ほか）</td><td>—</td></tr>
+<tr><td>有給の付与・時季指定・買取の記録・管理簿の出力</td><td>有給・帰国申請の<strong>最終承認</strong>・却下・承認済みの取消（政仁さん）</td></tr>
+<tr><td>休暇管理の「帰国情報」を見る</td><td>帰国情報の登録・変更・復帰日の登録（政仁さん・靖仁さん）</td></tr>
+<tr><td>人員マスタの基本情報・電話URL</td><td>給与欄（時給・号俸・日額）の変更・パスワードの発行（靖仁さん）</td></tr>
+<tr><td>道具代の登録</td><td>—</td></tr>
+<tr><td>現場マスタ・取引先マスタの編集</td><td>—</td></tr>
+<tr><td>原価・収益の請求額の入力</td><td>—</td></tr>
+<tr><td>請求書の<strong>発行申請・取り下げ</strong></td><td>請求書の<strong>承認・発行・差し戻し・取り消し</strong>（政仁さん）</td></tr>
+<tr><td>—</td><td>賃金・評価、管理者設定（靖仁さん・政仁さん）</td></tr>
+</table>
+
+<h3>1-4. 通知ベル（🔔）</h3>
+<p>左上の名前の横の 🔔 に、森田さんの仕事に関係するお知らせが出ます。</p>
+<ul>
+<li><strong>有給の付与日が近い／付与が未処理</strong> → <a href="#sec3">§3-2</a></li>
+<li><strong>月締め未完了</strong>（前月がまだ締められていない） → <a href="#sec2">§2-4</a></li>
+<li><strong>有給申請 ◯件／帰国申請 ◯件</strong>（承認待ち。承認は職長と政仁さん。森田さんは止まっていないかを見る） → §3-7</li>
+<li><strong>在留期限</strong>が近い人 → 本人・職長・靖仁さんに知らせる</li>
+</ul>
+
+<!-- ================================================ -->
+<h2 id="sec2">2. 給与締め</h2>
+
+<div class="box box-ok">給与の計算そのものはキャシュモの仕事です。森田さんは<strong>正しい出面で月を締めて、資料を渡すところまで</strong>が担当です。</div>
+
+<h3>2-1. 出面の事務補助（月の途中〜月初）</h3>
+<p>ベトナム人は本人のスマホ入力、日本人は職長の入力が基本です。森田さんは<strong>入力漏れのフォローと過去日の修正</strong>をします。</p>
+<p><strong>入力のしかた</strong>: メニュー「毎日」→「出面入力」→ 現場と月を選び、人と日のマスに入力。</p>
 <table>
 <tr><th>入力値（日本人）</th><th>意味</th></tr>
 <tr><td><strong>1</strong> / <strong>0.5</strong></td><td>出勤（1日）／半日</td></tr>
-<tr><td><strong>有</strong> / <strong>試</strong></td><td>有給休暇／試験（出勤扱い）</td></tr>
-<tr><td><strong>欠</strong></td><td>欠勤。<strong>月給制（濱上さん）はこの記録がある日だけ欠勤控除</strong>されます（空欄では引かれません）</td></tr>
-<tr><td>下段の数字</td><td>残業時間（0.5h単位）</td></tr>
+<tr><td><strong>有</strong></td><td>有給休暇</td></tr>
+<tr><td><strong>試</strong></td><td>試験（出勤扱い）</td></tr>
+<tr><td><strong>欠</strong></td><td>欠勤。<strong>月給制の人（濱上さん）はこの記録がある日だけ欠勤控除</strong>されます（空欄では引かれません）</td></tr>
+<tr><td>下段の数字</td><td>残業時間（0.5時間単位）</td></tr>
 <tr><td>空欄</td><td>休み／未入力</td></tr>
 </table>
-
-<div class="box box-ok">
-<strong>保存は自動</strong>（保存ボタンなし）。Enter で次の人の同じ日へ移動できます。
-</div>
-
+<div class="box box-ok"><strong>保存は自動</strong>です（保存ボタンはありません）。Enter で次の人の同じ日へ移動します。</div>
 <div class="box">
-<strong>知っておく仕組み：</strong>
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li><strong>変更履歴と復元</strong>: 誤操作は出面画面右上「変更履歴」からワンクリックで復元（90日保持）</li>
-  <li><strong>同日多現場ガード</strong>: 同じ人を同日に合計1人工を超えて入れるとエラー（半日×2現場はOK）</li>
-  <li><strong>ベトナム人の新規入力は本人スマホが原則</strong>。事務が後付けできるのは 有給・欠勤・帰国中・0.6補（現場都合休みの休業補償）のみ</li>
-  <li>承認済みカレンダーの休日はグレー表示、帰国中は「✈帰国」と自動表示</li>
+<ul style="margin: 0; padding-left: 20px;">
+  <li><strong>変更履歴と復元</strong>: 消した・上書きした記録は、画面右上の「<strong>変更履歴</strong>」→ 該当行の「<strong>元に戻す</strong>」で復元できます（90日保持。復元も履歴に残るのでやり直せます）</li>
+  <li><strong>同じ日に複数現場</strong>: 同じ人を同じ日に合計1人工を超えて入れるとエラーになります（半日×2現場は OK）</li>
+  <li><strong>ベトナム人の新規入力は本人のスマホが原則</strong>。事務があとから入れられるのは 有給・欠勤・帰国中・0.6補（現場都合休みの休業補償）だけです</li>
+  <li>承認済みカレンダーの休日はグレー、帰国中は「✈帰国」と自動で表示されます</li>
+  <li>「入力できない」と言われたら、その日が職長承認済みでないか・その月が締め済みでないかを確認します</li>
 </ul>
 </div>
 
-<h3>3-2. 有給の付与・記録（申請の最終承認は政仁さん）</h3>
-
-<div class="box">
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li><strong>申請の流れ</strong>: スタッフ申請 → 職長承認 → <strong>政仁さんが最終承認</strong>（2026-09-26 代表決定。森田さんは申請の状況を見て、止まっていれば声をかける）</li>
-  <li>最終承認すると出面へ自動反映（有給=「有」、帰国=「帰国中」）</li>
-  <li><strong>有給の付与</strong>: 付与時期が来ると通知ベル（🔔）にアラート →「付与する」をワンクリック（自動付与はありません）</li>
-  <li><strong>時季指定・買取の記録</strong>も森田さんの担当（休暇管理 → 一覧 → 編集）</li>
-  <li>消化日数は出面の「有」から自動集計（直接編集不可）</li>
-</ul>
-</div>
-
-<div class="box box-ok">
-<strong>制度の詳細（残数計算・年5日義務・買取・HFU移籍の勤続通算など）は <a href="/manual-yukyu.html">休暇管理マニュアル</a> が唯一の参照元です。</strong>
-</div>
-
-<h3>3-3. 道具代の管理（佐藤さんから引き継ぎ）</h3>
-
-<table>
-<tr><th></th><th>ベトナム人</th><th>日本人（2026-10-01から）</th></tr>
-<tr><td>年間予算</td><td>30,000円</td><td><strong>100,000円</strong></td></tr>
-<tr><td>期間</td><td>入社日から1年サイクル（個別・自動切替）</td><td>10月1日〜翌9月30日（全員一律）</td></tr>
-<tr><td>対象外</td><td>—</td><td>役員・事務・<strong>入社6ヶ月未満</strong>（6ヶ月経過で自動的に対象入り）</td></tr>
-<tr><td>購入の申請</td><td colspan="2">従来どおり<strong>マネーフォワード</strong>（このシステムに申請機能はありません）</td></tr>
-</table>
-
+<h3>2-2. 月次集計のチェック（月初）</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">メニュー「毎月」→「<strong>月次集計・締め</strong>」を開き、上のタブが「📋 月次集計」になっていることを確認</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">対象の月（前月）を選ぶ</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">「全体／日比建設／HFU」を切り替えて、一人ずつ<strong>出勤日数・残業・有給・欠勤</strong>がおかしくないか見る</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">上に黄色や赤の帯「<strong>給与計算に異常（または注意点）があります</strong>」が出ていたら、名前が出ている人の行をクリック →「計算根拠」で内容を確認。出面の入力ミスなら出面を直す。分からなければ靖仁さんへ</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">「締め（給与確定）後に支給額が変わっています」という帯が出ていたら <a href="#sec2-6">§2-6</a> を見る</div></div>
 <div class="box box-warn">
-<strong>毎月の作業：</strong>マネーフォワードで承認された道具の購入を、道具代管理画面へ登録してください。<br>
-スタッフ名をクリック → モーダルの「新しい購入を登録」に <strong>購入日・品名・金額</strong> → 「+ 追加」。登録すると本人のスマホの残額に即反映されます。
-</div>
-
-<div class="box">
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>誤登録はモーダルの「購入履歴」で削除 → 再登録</li>
-  <li>予算超過は登録できますがマイナス表示になります。本人に追加購入を控えるよう案内</li>
-  <li><strong>期間の切替・予算リセットは全自動</strong>。年度初期化の作業は不要</li>
-  <li>開始前の人（起点日が未来）は本人画面に「10/1から始まります」と予告表示され、管理画面には「開始前」バッジが付きます</li>
-  <li>新入社員は起点日の設定が必要になったら靖仁さんに確認</li>
+<ul style="margin: 0; padding-left: 20px;">
+  <li>「📋 前月コピー」ボタンは<strong>押さない</strong>でください（前月の出面を丸ごと写す保守用のボタンです）</li>
+  <li>外注の人工・金額は、この画面ではなく「原価・収益」で見ます</li>
 </ul>
 </div>
 
-<h3>3-4. 請求書の発行申請（応援の請求書・HFU → 日比建設）</h3>
-<p>請求書は<strong>森田さんが申請 → 政仁さんが承認すると発行</strong>されます（2026年9月〜）。金額・出面明細は出面から自動で作られます。詳しい手順・困ったときは <a href="/manual-invoice.html">請求書の発行マニュアル</a>。</p>
-<div class="box box-warn">
-<strong>手順：</strong>
-<ol style="margin: 8px 0 0; padding-left: 20px;">
-  <li>サイドバー「毎月」→「請求書・支払」を開き、月を選ぶ</li>
-  <li>会社（または上の「HFU → 日比建設」）の「請求書を作る」を押す</li>
-  <li>下書きの金額・人工・出面明細を確認し、<strong>「発行を申請（承認へ回す）」</strong>を押す → バッジが「承認待ち」になる</li>
-  <li>政仁さんが「承認して発行」すると請求書番号が付き、バッジが「✓ 発行済み」に変わる</li>
-  <li>「印刷 / PDF保存」で PDF にして相手へ送る（HFU → 日比建設 は社内の経理へ）</li>
-</ol>
-</div>
-<div class="box">
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>申請した時点の内容で凍結されます。出面を直したら「申請を取り下げ」→ もう一度申請</li>
-  <li>差し戻されたら、下書きの上に赤字で理由が出ます。直してからもう一度申請</li>
-  <li>発行済みの取り消しは政仁さん・管理者だけができます</li>
-</ul>
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec4">4. 月次締め</h2>
-
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">月次集計（対象月を選択）→<strong>「月次集計」タブ</strong>で出勤日数・残業・有給・欠勤を確認</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text"><strong>所定日数</strong>が就業カレンダーの稼働日数と一致しているか確認</div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text"><strong>「チェック」タブ</strong>の警告を潰す（未入力・未承認が残っていないこと）</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text"><span class="btn-amber">🔒 この月を締める</span> を押す（日比建設分とHFU分は別々にロックできます）</div>
-</div>
-
-<div class="box">
-<strong>ロックすると</strong>その月の出面が編集不可になります。間違いが見つかったら <strong>🔓 ロック解除</strong>で戻せます（→ 修正 → 再ロック）。
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec5">5. キャシュモへの資料提出</h2>
-
-<p>月次集計画面の<strong>「📑 帳票出力」</strong>タブ →<strong>「キャシュモ提出（毎月の2点）」</strong>の枠から、<strong>会社別（日比建設／HFU）</strong>に2資料を出力して提出します。両社とも同じ形式で、この2点にその会社の全員（日本人・ベトナム人）が載ります。</p>
-
-<table>
-<tr><th>毎月送る資料</th><th>対象</th><th>内容</th></tr>
-<tr><td>📊 月次集計 Excel</td><td>全員</td><td>支給額の内訳（日本人シート／ベトナム人シート。<strong>参考値</strong>。マネーフォワードに入れる数字）</td></tr>
-<tr><td>🔍 計算根拠PDF</td><td>全員</td><td>1人1ページの内訳＋日別カレンダー（有給・欠勤の日付）＋自動検算（<strong>参考値</strong>。Excelの裏付け）</td></tr>
-</table>
+<h3>2-3. 所定日数の確認</h3>
+<p>月次集計の画面の上のほうに所定日数の表示があります。</p>
 <ul>
-<li>勤務予定シフト表・実労働時間明細・出面一覧の3点は<strong>根拠書類</strong>です。毎月は送りません。キャシュモ・社労士・労基署から求められたときに、同じタブの「📁 根拠書類」の枠から出します（帳票はすべてこのタブにまとまっています）</li>
-<li>各資料にはキャシュモ管理の従業員番号が載ります。新しく入った人は、キャシュモから番号をもらったら人員マスタの「キャシュモ従業員番号」欄に入れてください</li>
-<li>道具代・立替などマネーフォワード側の項目は、これまでどおりマネーフォワードから</li>
+<li>「📅 所定日数: カレンダーから自動取得」と出ていれば、ベトナム人の所定日数は現場の就業カレンダーから自動で入っています</li>
+<li>その横の「<strong>所定日数(旧ルール用)</strong>」の欄は、旧ルールで計算している固定月給の人（フンさん等）の欠勤控除に使います。毎月入れて「保存」
+  <ul>
+  <li>「📅 基準値: ◯日 (日曜以外)」を押すと日曜以外の日数に戻ります。特別休暇がある月はそこから手で引きます</li>
+  <li>赤字で「⚠ 未設定（フンさんの欠勤控除が計算できません）」と出ていたら、必ず入れて保存</li>
+  </ul>
+</li>
 </ul>
 
-<div class="step">
-  <div class="step-num">1</div>
-  <div class="step-text">月締めロックまで完了していることを確認</div>
-</div>
-<div class="step">
-  <div class="step-num">2</div>
-  <div class="step-text">サイドバー「帳票出力」（月次集計の「📑 帳票出力」タブと同じ）→「キャシュモ提出（毎月の2点）」→ <strong>日比建設・HFUそれぞれの行で2点を出力</strong></div>
-</div>
-<div class="step">
-  <div class="step-num">3</div>
-  <div class="step-text">キャシュモへ送付（提出期限・提出方法はキャシュモとの取り決めに従う）</div>
-</div>
-<div class="step">
-  <div class="step-num">4</div>
-  <div class="step-text">キャシュモの計算結果・振込完了の連絡を確認</div>
-</div>
+<h3>2-4. 月締め（ロック）</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">「月次集計・締め」の画面右上の <span class="btn-amber">🔒 日比 締め</span> を押す →「◯◯ の日比建設を月締めしますか？」で「OK」</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">続けて <span class="btn-amber">🔒 HFU 締め</span> も同じように押す（会社ごとに別々に締めます）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">上に「🔒 日比 締め済」「🔒 HFU 締め済」の赤いバッジが出れば完了</div></div>
 
-<div class="box box-ok">
-資料の読み方・変形労働時間制・3段階残業判定の説明は <a href="/manual-syaroshi.html">社労士提出用資料マニュアル</a> にまとまっています。キャシュモへの説明にもそのまま使えます。
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec6">6. システムの給与計算画面の位置づけ</h2>
-
-<div class="box">
-<ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li>月次集計の「給与計算」タブは<strong>自動計算の参考値</strong>です。キャシュモの計算結果と大きくズレていないかの検算に使えます</li>
-  <li>森田さんが給与計算そのものを行う必要はありません</li>
-  <li>計算ロジックの詳細は旧・給与計算マニュアル（資料一覧の「過去資料」）に残してあります。通常業務で読む必要はありません</li>
-  <li>ズレや疑問があれば靖仁さんへ</li>
-</ul>
-</div>
-
-<!-- ================================================ -->
-<h2 id="sec7">7. 年間で知っておくこと</h2>
-
+<p><strong>締められないとき</strong>は、理由がメッセージで出ます。次の5つがそろっていないと締められません。</p>
 <table>
-<tr><th>時期</th><th>できごと</th></tr>
-<tr><td><strong>10月1日</strong></td><td>日本人の有給一斉付与（🔔通知から付与）／日本人の道具代年度開始／東京都最低賃金の改定</td></tr>
-<tr><td>期中</td><td>年5日取得義務のアラート（未達者はダッシュボードに表示）</td></tr>
-<tr><td>賞与時期</td><td>賞与確定時に有給買取が自動記録される（操作は代表側）</td></tr>
-<tr><td>各人の入社記念日</td><td>ベトナム人の道具代期間が自動切替（作業不要）</td></tr>
+<tr><th>メッセージの内容</th><th>やること</th></tr>
+<tr><td>まだ終わっていない月</td><td>月が終わってから（翌月になってから）締める</td></tr>
+<tr><td>職長チェック（日次承認）が完了していない（現場名と日付が出る）</td><td>その現場の職長に出面の職長承認を頼む</td></tr>
+<tr><td>給与計算の自動検算で異常が残っている</td><td>§2-2 の手順4で原因を直す。分からなければ靖仁さんへ</td></tr>
+<tr><td>未処理の有給申請が残っている</td><td>職長承認・政仁さんの最終承認（または却下）を頼む（§3-7）</td></tr>
+<tr><td>対象月に重なる未処理の帰国申請が残っている</td><td>同上</td></tr>
+</table>
+<div class="box">
+締めると、その月の出面は編集できなくなります。🔔 に「月締め未完了」が出ている間は、まだ締めていない会社があります。
+</div>
+
+<h3>2-5. キャシュモへの資料提出（締めたらすぐ）</h3>
+<p>メニュー「毎月」→「<strong>帳票出力</strong>」（月次集計・締めの上のタブ「📑 帳票出力」と同じ画面）を開き、右上で対象月を選びます。</p>
+<p><strong>毎月送るのは会社ごとに2点</strong>です。この2点に、その会社の全員（日本人・ベトナム人）が載ります。</p>
+<table>
+<tr><th>毎月送る資料</th><th>ボタン</th><th>中身</th></tr>
+<tr><td>月次集計 Excel</td><td>「📊 月次集計 Excel」</td><td>支給額の内訳（日本人シート／ベトナム人シート）。<strong>参考値</strong>。マネーフォワードに入れる数字</td></tr>
+<tr><td>計算根拠 PDF</td><td>「🔍 計算根拠 PDF」</td><td>1人1ページの内訳＋日別カレンダー（有給・欠勤の日付）＋自動検算。<strong>参考値</strong>。Excel の裏付け</td></tr>
+</table>
+
+<div class="step"><div class="step-num">1</div><div class="step-text">「🔒 日比 締め済」「🔒 HFU 締め済」になっていることを確認</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「📤 キャシュモ提出（毎月の2点・会社別）」の枠で、<strong>日比建設の行</strong>の「📊 月次集計 Excel」を押す → Excel がダウンロードされる</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">同じ行の「🔍 計算根拠 PDF」を押す → 新しいタブが開くので、印刷（Mac は ⌘+P、Windows は Ctrl+P）→ 送信先「PDFに保存」で保存</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text"><strong>HFU の行</strong>でも 2〜3 を繰り返す</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">4つのファイルをキャシュモへ送る（期限・送り方はキャシュモとの取り決めどおり）</div></div>
+<div class="step"><div class="step-num">6</div><div class="step-text">キャシュモから計算結果・振込完了の連絡が来たら確認する。システムの参考値と大きくずれていたら靖仁さんへ</div></div>
+
+<p><strong>求められたときだけ出す資料</strong>（同じ画面の「📁 根拠書類（毎月は送らない・会社別）」の枠）:</p>
+<table>
+<tr><th>ボタン</th><th>中身</th></tr>
+<tr><td>📅 勤務予定シフト</td><td>ベトナム人の各日・各週の所定労働時間（変形労働時間制の事前の予定）</td></tr>
+<tr><td>⏱ 実労働時間明細</td><td>ベトナム人の日別の始業・終業・休憩・実労働時間（残業の根拠）</td></tr>
+<tr><td>📋 出面一覧</td><td>全員の日別の出勤・残業＋勤務時間一覧</td></tr>
+</table>
+<p>キャシュモ・社労士・労基署から求められたら出します。同じ画面の下の「🏢 社内用」の枠には、有給管理台帳・カレンダー 周知・同意台帳・外注先向け 出面確認書・歩掛管理表などがあります。</p>
+<div class="box">
+<ul style="margin: 0; padding-left: 20px;">
+  <li>各資料にはキャシュモの従業員番号が載ります。新しく入った人の番号をキャシュモからもらったら、「人員マスタ」→ その人の「編集」→「<strong>キャシュモ従業員番号</strong>」に入れてください</li>
+  <li>道具代・立替などマネーフォワード側の項目は、これまでどおりマネーフォワードから</li>
+</ul>
+</div>
+<div class="box box-ok">資料の読み方・変形労働時間制・残業判定の説明は <a href="/manual-syaroshi.html">社労士提出用資料マニュアル</a> にあります（キャシュモへの説明にも使えます）。</div>
+
+<h3 id="sec2-6">2-6. 締めたあとで直すとき（解除）</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">「月次集計・締め」で対象月を選び、「<strong>🔓 日比 解除</strong>」（HFU なら「🔓 HFU 解除」）を押す →「OK」</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">出面などを直す</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">§2-2 のチェックをして、もう一度「🔒 日比 締め」</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">キャシュモへ提出済みなら、2点を出し直して<strong>差し替えの連絡</strong>をする</div></div>
+<div class="box box-warn">締めたあとに単価・出面・有給などが変わると、月次集計に「締め（給与確定）後に支給額が変わっています」という帯が出ます。間違いなら元に戻し、正しい修正なら「解除 → 確認 → 締め直し」をしてください。</div>
+
+<h3>2-7. システムの「給与計算」の位置づけ</h3>
+<ul>
+<li>月次集計に出る支給額や提出資料の金額は、<strong>システムの自動計算（参考値）</strong>です。キャシュモの計算結果と大きくずれていないかの確認に使います</li>
+<li>森田さんが給与を計算する必要はありません。ずれや疑問は靖仁さんへ</li>
+</ul>
+
+<!-- ================================================ -->
+<h2 id="sec3">3. 有給まわり</h2>
+
+<div class="box box-ok"><strong>付与・時季指定・買取の記録・管理簿は森田さんの仕事。申請の最終承認は政仁さんの仕事</strong>です。</div>
+
+<h3>3-1. 画面の場所</h3>
+<p>メニュー「毎月」→「<strong>休暇管理</strong>」。タブは6つです。</p>
+<table>
+<tr><th>タブ</th><th>使い方</th></tr>
+<tr><td>一覧</td><td>スタッフごとの付与・繰越・消化・残日数。行の「<strong>編集</strong>」から時季指定（有給日の直接入力）・買取の記録</td></tr>
+<tr><td>📅 基準日</td><td>付与の起点になる日の確認</td></tr>
+<tr><td>申請</td><td>有給・帰国の申請と、その状況（承認するのは職長と政仁さん）</td></tr>
+<tr><td>月別</td><td>月ごとの消化状況（日比建設／HFU 別）</td></tr>
+<tr><td>カレンダー</td><td>誰がいつ休むか</td></tr>
+<tr><td>✈️ 帰国情報</td><td>帰国中・帰国予定・過去の帰国（見るだけ。登録・変更は政仁さん・靖仁さん）</td></tr>
+</table>
+<p>右上のボタン: 「🔧 メニュー」（手動付与など例外の操作）／「📊 管理簿出力」。</p>
+<ul>
+<li>役員・事務は有給管理の対象外なので一覧に出ません。出向中の人も出ません</li>
+<li>消化日数は出面の「有」から自動で数えます（直接は変えられません）</li>
+</ul>
+
+<h3>3-2. 有給の付与（お知らせが来たら）</h3>
+<p>付与の時期が来ると、2か所にお知らせが出ます。どちらから付与しても同じです。<strong>自動では付与されません</strong>。</p>
+<p><strong>A. 休暇管理の画面上のバナーから（まとめて付与。10月1日の日本人一斉付与もこれ）</strong></p>
+<div class="step"><div class="step-num">1</div><div class="step-text">「休暇管理」を開くと、上に「🌴 <strong>◯名 に有給付与の時期が来ています</strong>」と出ている</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「<strong>内容を確認する →</strong>」を押す →「有給付与対象（◯名）」の画面が開く</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">一人ずつ<strong>付与日</strong>と<strong>付与日数</strong>（勤続年数から法定の日数が入っています）を確認。「⚠️ 要確認」が付いている人は入社日などを確認してから。今回付与しない人は「付与する」のチェックを外す</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text"><span class="btn-amber">一括付与する（◯名）</span> を押す</div></div>
+
+<p><strong>B. 🔔 通知ベルから（一人ずつ）</strong></p>
+<ul>
+<li>付与日が近い人は「◯◯の有給付与日が近づいています」と出ます（まだ押すボタンはありません）</li>
+<li>付与日を過ぎると「◯◯の有給付与が未処理です」に変わり、「<strong>◯日付与する</strong>」ボタンが出るので押します</li>
+</ul>
+<div class="box">付与日数（法定）: 勤続6ヶ月 10日／1年6ヶ月 11日／2年6ヶ月 12日／3年6ヶ月 14日／4年6ヶ月 16日／5年6ヶ月 18日／6年6ヶ月〜 20日。繰越は自動で計算されます（日本人は繰越なし）。</div>
+
+<h3>3-3. 手動付与（例外のときだけ）</h3>
+<p>過去分のさかのぼり・特別な付与・補正のときだけ使います。通常の付与は §3-2 で行います。</p>
+<div class="step"><div class="step-num">1</div><div class="step-text">「休暇管理」右上の「<strong>🔧 メニュー</strong>」→「✏️ 例外オペレーション」の「手動有給付与」→「<strong>+ 付与する</strong>」</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">対象者・付与日・付与日数を入れる（下に自動計算のプレビューが出ます）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">「<strong>付与</strong>」を押す</div></div>
+<div class="box box-warn">同じ画面の「保守ツール」（データ正規化・繰越再計算・時効処理）は通常使いません。触る前に靖仁さんへ。</div>
+
+<h3>3-4. 年5日の確認と時季指定</h3>
+<p>年10日以上付与された人には、1年で最低5日の有給を取らせる義務があります。</p>
+<p><strong>確認のしかた</strong></p>
+<ul>
+<li>「ダッシュボード」に「<strong>有給5日義務が未達 ◯名</strong>」と出ます（取得期限が近いのに5日に届いていない人）</li>
+<li>「休暇管理」→「一覧」の消化日数でも確認できます</li>
+<li>日本人は 2026年10月1日付与分から「付与から半年たって5日未満」で警告が出ます。ベトナム人は従来どおりです</li>
+</ul>
+<p><strong>時季指定（会社が日を決めて有給を取らせる）のしかた</strong></p>
+<div class="step"><div class="step-num">1</div><div class="step-text">本人・職長と相談して休む日を決める</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「休暇管理」→「一覧」→ その人の行の「<strong>編集</strong>」</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">「<strong>🗓 有給日を直接入力</strong>」を押す</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">指定日（「+ 日付を追加」で複数日）・対象現場（その日の所属現場）を入れ、備考に「<strong>年5日取得義務対応（時季指定）</strong>」と書く</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">「帰国期間(✈️)を上書きする」は、帰国中の日でなければ関係ありません（そのままで可）</div></div>
+<div class="step"><div class="step-num">6</div><div class="step-text">「<strong>有給を記録する</strong>」→ 確認で「OK」→ 出面に有給が自動で入り、履歴に残ります</div></div>
+<div class="box">
+<ul style="margin: 0; padding-left: 20px;">
+  <li>その日に別の現場の出面が入っているとエラーになります（出勤と有給の二重払い防止）。先に出面を確認してください</li>
+  <li>帰国期間中の日でも、現場カレンダーの稼働日なら有給を入れられます（本人のスマホ申請でも、この手順での代理入力でも可）</li>
+</ul>
+</div>
+
+<h3>3-5. 買取の記録</h3>
+<ul>
+<li><strong>日本人の期末買取（9月30日時点）</strong>は、政仁さん・靖仁さんが賞与を確定すると<strong>自動で記録</strong>されます。森田さんの手入力は不要です
+  <ul>
+  <li>自動記録に失敗した人だけ画面に表示されるので、その人だけ下の手順で記録します</li>
+  <li>2026年10月1日付与分からは、買取できるのは「<strong>残日数 − 5日</strong>」まで（5日は必ず取らせる）</li>
+  </ul>
+</li>
+<li><strong>退職時の清算</strong>（日本人・ベトナム人とも）は森田さんが記録します</li>
+</ul>
+<div class="step"><div class="step-num">1</div><div class="step-text">「休暇管理」→「一覧」→ その人の行の「<strong>編集</strong>」</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「<strong>💰 買取を記録</strong>」を押す</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">買取理由（「期末買取（9/30時点）」「退職時清算」「その他」）・買取日数・買取金額（任意）を入れる</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">「<strong>買取を記録する</strong>」→ 確認で「OK」</div></div>
+<div class="box box-warn">同じ期に買取が二重に入らないよう、編集画面の「💰 買取記録」の履歴を先に確認してください。</div>
+
+<h3>3-6. 有給管理簿（台帳）の出力</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">「休暇管理」右上の「<strong>📊 管理簿出力</strong>」を押す（「帳票出力」→「🏢 社内用」の「有給管理台帳」からも、会社別に出せます）</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">Excel（有給管理簿_日付.xlsx）がダウンロードされる</div></div>
+<p>中身は4シート: ①管理簿（付与・繰越・消化・残・失効・買取・有効期限）／②取得日一覧／③買取記録／④時季指定。労基署の調査や年1回の確認に使います。</p>
+
+<h3>3-7. 申請の状況確認と声かけ</h3>
+<p>申請は <strong>スタッフ（スマホ）→ 職長承認 → 政仁さんが最終承認</strong> の2段階です。森田さんは承認しませんが、<strong>止まっている申請がないか</strong>を見て声をかけます。</p>
+<div class="step"><div class="step-num">1</div><div class="step-text">「休暇管理」→「<strong>申請</strong>」タブ（または「ダッシュボード」の申請の状況、🔔 の「有給申請 ◯件／帰国申請 ◯件」）</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「職長承認待ち」が続いている → その現場の職長に声かけ</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">「最終承認待ち」が続いている → 政仁さんに声かけ</div></div>
+<div class="box">
+<ul style="margin: 0; padding-left: 20px;">
+  <li>最終承認されると出面に自動で入ります（有給＝「有」、帰国＝「帰国中」）</li>
+  <li><strong>未処理の申請が残っていると月締めができません</strong>（§2-4）。月初の締めの前に必ず確認</li>
+  <li>スタッフが「間違えて申請した」と言ってきたら: 職長承認の前なら本人がスマホで取り消せます。職長承認のあとは政仁さんに回してください（森田さんは却下・取消をしません）</li>
+  <li>出面の「有」を出面入力で直接消すと、申請だけ承認済みのまま残ります。承認済みの有給をやめるときは、政仁さんに申請タブの「↩️ 取消」を頼んでください</li>
+</ul>
+</div>
+
+<h3>3-8. 帰国まわり</h3>
+<ul>
+<li>帰国の申請も有給と同じ2段階承認です。最終承認されると、帰国期間の出勤日に「帰国中」が自動で入ります（人工にも欠勤にも数えません）</li>
+<li>「✈️ 帰国情報」タブで、帰国中・帰国予定・過去の帰国を確認できます</li>
+<li><strong>帰国情報の登録・期間の変更・「復帰日を登録」は政仁さん・靖仁さんの操作</strong>です（給与の按分に直結するため）。急な帰国で申請が出せない・戻る日が決まった、などの連絡を受けたら、政仁さんか靖仁さんに伝えてください</li>
+</ul>
+<div class="box box-ok">制度の詳しい決まり（付与日数の計算・繰越と時効・HFU から移籍した人の勤続通算・帰国中の有給など）は <a href="/manual-yukyu.html">休暇管理マニュアル</a> を見てください。</div>
+
+<!-- ================================================ -->
+<h2 id="sec4">4. 道具代管理</h2>
+
+<h3>4-1. 決まり</h3>
+<table>
+<tr><th></th><th>ベトナム人</th><th>日本人（2026年10月1日から）</th></tr>
+<tr><td>年間予算</td><td>30,000円</td><td><strong>100,000円</strong></td></tr>
+<tr><td>期間</td><td>入社日から1年ごと（一人ずつ。自動で切り替わる）</td><td>10月1日〜翌年9月30日（全員一律）</td></tr>
+<tr><td>対象外</td><td>—</td><td>役員・事務・<strong>入社6ヶ月未満</strong>の人（6ヶ月たつと自動で対象に入る）</td></tr>
+</table>
+<div class="box box-warn">
+<ul style="margin: 0; padding-left: 20px;">
+  <li><strong>購入の申請はマネーフォワード</strong>で行います。このシステムに申請機能はありません</li>
+  <li>このシステムの役割は「<strong>承認された購入を登録して、残額を管理し、本人のスマホに見せる</strong>」ことです</li>
+  <li>期間の切り替え・予算のリセットは<strong>全自動</strong>。年度の初期化作業はありません</li>
+</ul>
+</div>
+
+<h3>4-2. 画面の見方</h3>
+<p>メニュー「人・賃金」→「<strong>道具代管理</strong>」。</p>
+<ul>
+<li>上のカード: 対象人数／期間設定済／使用済み合計／残額合計</li>
+<li>一覧: 会社ごと（日比建設／HFU）に、スタッフ・在留資格（日本人は「日本人」）・現在の期間・予算・使用済・残額・操作</li>
+<li>「現在の期間」に「開始前」のバッジが付いている人は、まだ期間が始まっていない人です（本人の画面には「◯/◯から始まります」と予告が出ます）</li>
+<li>スタッフ名（または「管理」ボタン）を押すと、その人の管理画面が開きます</li>
+</ul>
+
+<h3>4-3. 毎月の作業: 購入を登録する</h3>
+<p>マネーフォワードで承認された道具の購入を、1件ずつ登録します。</p>
+<div class="step"><div class="step-num">1</div><div class="step-text">「道具代管理」→ スタッフ名を押す</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">いちばん下の「<strong>新しい購入を登録</strong>」に入れる<br>
+<strong>購入日</strong>: 領収書の日付／<strong>品名</strong>: 安全帯、工具セット など／<strong>金額（円）</strong>: 領収書の金額（税込）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text"><span class="btn-amber">+ 追加</span> を押す → 上の「購入履歴」に出て、残額が減る。本人のスマホの残額にもすぐ反映されます</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">「閉じる」で次の人へ</div></div>
+<div class="box">
+<ul style="margin: 0; padding-left: 20px;">
+  <li>予算を超える登録もできますが、残額がマイナスで表示されます。本人に追加の購入を控えるよう伝えてください</li>
+  <li>管理画面の「予算と使用状況」のバーは、80%以上でオレンジ、100%を超えると赤になります</li>
+</ul>
+</div>
+
+<h3>4-4. 間違えて登録したとき</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">スタッフ名を押して管理画面を開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「<strong>購入履歴</strong>」の該当行の「<strong>削除</strong>」→「この購入記録を削除しますか？」で「OK」</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">正しい内容で登録し直す（§4-3）</div></div>
+
+<h3>4-5. 新しく対象になった人（期間の起点日の設定）</h3>
+<p>新しく入ったベトナム人や、入社6ヶ月を過ぎて対象になった日本人は、一覧の「現在の期間」が「<strong>未設定</strong>」、操作が「<strong>設定</strong>」になっています。<strong>起点日を決めるまで購入を登録できません</strong>。</p>
+<div class="step"><div class="step-num">1</div><div class="step-text">スタッフ名（または「設定」）を押す</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">いちばん上の「<strong>期間の起点日</strong>」に日付を入れて「<strong>保存</strong>」→「✓ 保存しました」<br>
+ベトナム人: 通常は<strong>入社日</strong>／日本人: 起点日をどの日にするか迷ったら靖仁さんに確認</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">期間が「◯年◯月◯日 〜 ◯年◯月◯日」と表示されれば OK。以後は1年ごとに自動で切り替わります</div></div>
+<div class="box"><strong>すでに使った分があるとき（初回だけ）</strong>: 購入履歴が0件のときだけ「<strong>既存使用分のまとめ登録（初回のみ）</strong>」の黄色い欄が出ます。日付（通常は起点日のまま）・摘要（「既存使用分」）・合計金額を入れて「<strong>まとめて計上</strong>」。</div>
+
+<h3>4-6. 予算額について</h3>
+<ul>
+<li>予算は区分ごとに決まっています（右上の「⚙️ 区分別の予算設定」）。個人ごとに変えることもできます（管理画面の「予算額（個別変更）」→「予算変更」）</li>
+<li><strong>予算額は会社の決まりなので、変える必要があるときは靖仁さんに相談</strong>してから変更してください</li>
+<li>管理画面の「デフォルト: ¥30,000」という表示はベトナム人の既定額です。日本人は 100,000円が正しい予算です</li>
+</ul>
+
+<h3>4-7. 月末のチェック</h3>
+<table>
+<tr><th>タイミング</th><th>作業</th></tr>
+<tr><td>領収書・MF の承認を受けたとき</td><td>購入を登録（§4-3）</td></tr>
+<tr><td>月末</td><td>残額が少ない人・マイナスの人がいないか一覧で確認</td></tr>
+<tr><td>期間の終わりが近い人</td><td>「現在の期間」の終わりが近い人に、残額の案内</td></tr>
+<tr><td>期間の切り替え</td><td>作業なし（自動）</td></tr>
+</table>
+<p>退職した人は自動で一覧から消えます。</p>
+
+<!-- ================================================ -->
+<h2 id="sec5">5. 請求まわり</h2>
+
+<p>請求書は<strong>森田さんが申請 → 政仁さんが承認すると発行</strong>されます。金額・人工・出面明細は<strong>出面から自動で作られる</strong>ので、手で計算することはありません。</p>
+<p>請求書は2種類あります。</p>
+<ul>
+<li><strong>応援の請求書</strong>: 応援に行った同業者（会社ごと）へ</li>
+<li><strong>HFU → 日比建設 の請求書</strong>: HFU 所属の人が働いた分（グループ内）</li>
+</ul>
+
+<h3>5-1. 全体の流れ</h3>
+<table>
+<tr><th>順番</th><th>誰が</th><th>やること</th></tr>
+<tr><td>①</td><td>森田さん</td><td>月締めのあと、下書きを確認して「発行を申請」</td></tr>
+<tr><td>②</td><td>政仁さん</td><td>🔔 で気づく → 内容を確認して「承認して発行」（直すところがあれば「差し戻し」）</td></tr>
+<tr><td>③</td><td>森田さん</td><td>「✓ 発行済み」になったら印刷（PDF保存）して送る</td></tr>
+</table>
+<div class="box">申請した時点の内容で止まります（あとで出面を直しても、申請中の請求書は変わりません）。政仁さんが見た内容がそのまま発行されます。</div>
+
+<h3>5-2. 下書きを確認して申請する（月締めのあと）</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">メニュー「毎月」→「<strong>請求書・支払</strong>」を開き、◀ ▶ で対象の月にする</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「請求する（応援に行った分）」の表で、請求する会社の右の「<strong>請求書を作る</strong>」を押す<br>
+HFU → 日比建設 の請求書は、画面の上の「<strong>HFU → 日比建設</strong>」の欄の「請求書を作る」から</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">下書き（「DRAFT 下書き」の透かし入り）が開く。宛先の会社名・住所／現場ごとの人工・単価・金額（HFU の請求書は「鳶 残業 ◯h」の行もあります）／2ページ目以降の出面明細（人・日ごとの人工）を確認する</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">よければ <span class="btn-amber">発行を申請（承認へ回す）</span> → 確認で「OK」</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">画面の帯が「<strong>承認待ち — 森田さんが ◯月◯日 に申請</strong>」になり、一覧のバッジも「<strong>承認待ち</strong>」になる（政仁さんの 🔔 に届きます）</div></div>
+<p>「請求書を作る」が出ない → その月にその会社への応援がありません（出面を確認）。</p>
+
+<h3>5-3. 申請を取り下げる（出面を直したい・申請をやめたい）</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">申請中の請求書を開いて「<strong>申請を取り下げ</strong>」→ 確認で「OK」</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">出面などを直す</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">もう一度 §5-2 から申請する</div></div>
+<p>取り下げた分は番号を使いません（記録だけ残ります）。</p>
+
+<h3>5-4. 差し戻されたとき</h3>
+<div class="box box-red">請求書を開くと、上に<strong>赤い帯</strong>で「差し戻されました（日付）: 理由。直してからもう一度申請してください。」と出ます。理由に沿って出面などを直し、もう一度「発行を申請（承認へ回す）」を押します。</div>
+
+<h3>5-5. 発行済みになったら送る</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">一覧のバッジが「<strong>✓ 発行済み HC-202609-01</strong>」（HFU は <code>HFU-…</code>）に変わったら、バッジを押して開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">「<strong>🖨 印刷 / PDF保存</strong>」→ 印刷画面で送信先「PDFに保存」</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">送る — 応援の請求書は<strong>相手の同業者へ</strong>、HFU → 日比建設 の請求書は<strong>社内の経理へ</strong></div></div>
+<div class="box">
+<ul style="margin: 0; padding-left: 20px;">
+  <li>発行済みの請求書は、あとで出面を直しても内容は変わりません</li>
+  <li>発行後に間違いが分かったら、政仁さんに「取り消し」を頼みます（取り消した番号は欠番のまま残ります）。そのあと §5-2 から作り直して申請します</li>
+</ul>
+</div>
+
+<h3>5-6. 表示の見方</h3>
+<table>
+<tr><th>表示</th><th>意味</th><th>次にやる人</th></tr>
+<tr><td>請求書を作る</td><td>まだ申請していない</td><td>森田さん</td></tr>
+<tr><td>承認待ち（青）</td><td>申請済み。番号はまだ無い</td><td>政仁さん</td></tr>
+<tr><td>✓ 発行済み HC-… / HFU-…</td><td>承認済み。番号が付いた</td><td>森田さん（印刷・送付）</td></tr>
+<tr><td>赤い帯「差し戻されました」</td><td>政仁さんが差し戻した</td><td>森田さん（直して再申請）</td></tr>
+<tr><td>「承認待ち」の透かし</td><td>申請中の請求書（印刷して送らない）</td><td>—</td></tr>
+</table>
+<p>請求書の画面の下には「この会社・この月の発行履歴」（取消・承認待ち・差し戻し・取り下げ）が出ます。</p>
+
+<h3>5-7. 原価・収益に請求額を入れる</h3>
+<p>元請などへの請求額（売上）は、「原価・収益」に入れると現場ごとの粗利が出ます。</p>
+<div class="step"><div class="step-num">1</div><div class="step-text">メニュー「経営」→「<strong>原価・収益</strong>」→ 対象の月にする</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">下の現場別の表で、その現場の「<strong>請求額</strong>」の欄を押す → 入力欄が開く</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">請求額（<strong>税抜</strong>）を入れて Enter（または欄の外をクリック）で保存。同じ現場に請求書が複数あるときは「<strong>+ 行追加</strong>」で行を増やす（下に合計が出ます）</div></div>
+
+<!-- ================================================ -->
+<h2 id="sec6">6. 年間で知っておくこと</h2>
+<table>
+<tr><th>時期</th><th>できごと</th><th>森田さんの作業</th></tr>
+<tr><td><strong>9月30日</strong></td><td>日本人の有給の期末（残りは買取。賞与の確定で自動記録）</td><td>自動記録に失敗した人だけ手で記録（§3-5）</td></tr>
+<tr><td><strong>10月1日</strong></td><td>日本人の有給一斉付与</td><td>休暇管理のバナーから一括付与（§3-2）</td></tr>
+<tr><td>10月1日</td><td>日本人の道具代の年度開始（100,000円）</td><td>作業なし（自動）</td></tr>
+<tr><td>10月</td><td>東京都の最低賃金の改定</td><td>作業なし（賃金は靖仁さん）</td></tr>
+<tr><td>各人の入社記念日など</td><td>ベトナム人の有給付与（🔔でお知らせ）・道具代の期間の切り替え</td><td>有給は付与する（§3-2）。道具代は作業なし</td></tr>
+<tr><td>入社6ヶ月</td><td>日本人の有給の初回付与・道具代の対象入り</td><td>有給を付与・道具代の起点日を設定（§4-5）</td></tr>
+<tr><td>期中</td><td>年5日の未達（ダッシュボード）</td><td>時季指定を相談（§3-4）</td></tr>
+<tr><td>毎月1日</td><td>付与から2年たった有給の時効処理</td><td>作業なし（自動）</td></tr>
 </table>
 
 <!-- ================================================ -->
-<h2 id="sec8">8. 困ったとき</h2>
-
+<h2 id="sec7">7. 困ったとき</h2>
 <table>
-<tr><th>症状</th><th>対処</th></tr>
-<tr><td>月締め後に間違いが見つかった</td><td>🔓 ロック解除 → 修正 → 再ロック。キャシュモ提出後なら差し替えの連絡も</td></tr>
-<tr><td>出面を誤って消した・上書きした</td><td>出面画面右上「変更履歴」から復元</td></tr>
-<tr><td>スタッフが「入力できない」と言う</td><td>その日が職長承認済み（ロック）でないか、月締め済みでないかを確認</td></tr>
+<tr><th>困りごと</th><th>対処</th></tr>
+<tr><td>ログインできない</td><td>パスワードの打ち間違い（大文字・小文字）を確認。だめなら靖仁さんに新しいパスワードを発行してもらう</td></tr>
+<tr><td>「もう一度ログインしてください」と出た</td><td>もう一度ログインすれば普段どおり使える</td></tr>
+<tr><td><strong>出面</strong>を誤って消した・上書きした</td><td>出面入力の右上「変更履歴」→「元に戻す」</td></tr>
+<tr><td>スタッフが「入力できない」と言う</td><td>その日が職長承認済みでないか、その月が締め済みでないかを確認</td></tr>
+<tr><td><strong>月締め</strong>ができない</td><td>出てきたメッセージを見る（§2-4 の表）。職長承認・申請の処理が残っていることが多い</td></tr>
+<tr><td>月締めのあとで間違いが見つかった</td><td>🔓 解除 → 修正 → 再び 🔒 締め。キャシュモへ提出済みなら差し替えの連絡も（§2-6）</td></tr>
+<tr><td>「締め（給与確定）後に支給額が変わっています」と出た</td><td>間違いなら元に戻す。正しい修正なら 解除 → 確認 → 締め直し → キャシュモへ差し替え</td></tr>
+<tr><td>「給与計算に異常があります」と出た</td><td>名前の出ている人の行を押して計算根拠を確認。分からなければ靖仁さんへ</td></tr>
+<tr><td><strong>有給</strong>の付与のお知らせが出ない・日数がおかしい</td><td>人員マスタの入社日を確認。それでも違えば靖仁さんへ</td></tr>
+<tr><td>有給の「有」を入れたのに休暇管理に出ない</td><td>画面を再読み込み</td></tr>
+<tr><td>時季指定でエラーになる</td><td>その日に別の現場の出面が入っていないか確認</td></tr>
+<tr><td>申請がずっと止まっている</td><td>職長承認待ち → 職長へ、最終承認待ち → 政仁さんへ声かけ</td></tr>
+<tr><td>スタッフが有給・帰国の申請を取り消したい</td><td>職長承認前なら本人がスマホで取り消し。承認後は政仁さんへ</td></tr>
+<tr><td>帰国の日程が変わった・戻る日が決まった</td><td>政仁さんか靖仁さんに登録を頼む</td></tr>
+<tr><td><strong>道具代</strong>の一覧で「未設定」になっている</td><td>管理画面の「期間の起点日」を設定（§4-5）</td></tr>
+<tr><td>道具代を間違えて登録した</td><td>購入履歴の「削除」→ 登録し直し</td></tr>
+<tr><td>道具代の残額がマイナス</td><td>予算超過。本人に追加購入を控えるよう伝える</td></tr>
+<tr><td><strong>請求書</strong>で「自社情報が未入力です」と出て申請できない</td><td>靖仁さんに「管理者設定 → 会社・請求書」の入力・保存を頼む（付録A-2）</td></tr>
+<tr><td>「単価（鳶）が未入力です」と出る（HFU）</td><td>靖仁さんに「HFU → 日比建設 の請求書」の単価の保存を頼む</td></tr>
+<tr><td>「承認待ちの申請があります」と出る</td><td>すでに申請中。政仁さんの承認か、取り下げを待つ</td></tr>
+<tr><td>「すでに発行済みです」と出る</td><td>その月は発行済み。作り直すなら政仁さんに取り消してもらってから再申請</td></tr>
+<tr><td>請求書を作るボタンが出ない</td><td>その月にその会社への応援がない（出面を確認）</td></tr>
 <tr><td>残数・金額がおかしい／画面の不具合</td><td>靖仁さんへ連絡</td></tr>
 </table>
+<div class="box box-ok"><strong>不明点は靖仁さんに気軽に聞いてください。</strong></div>
 
-<div class="box box-ok">
-<strong>不明点は靖仁さんに気軽に聞いてください。</strong>
+<!-- ================================================ -->
+<h2 id="appA">付録A. 最初に一度だけ（靖仁さんの作業）</h2>
+<p>森田さんが使い始める前に、靖仁さんが一度だけ行う準備です。</p>
+
+<h3>A-1. 森田さんの個人パスワードを発行する</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">代表のパスワードでログインする</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">メニュー「管理」→「管理者設定」→ 上のタブ「<strong>🔑 ログイン・権限</strong>」</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">「<strong>個人パスワード設定</strong>」の欄の<strong>森田さん（事務）</strong>の行にパスワードを入れる（政仁さんの分もここで発行）</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">下の「<strong>保存</strong>」を押す（1分ほどで使えるようになります）</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">本人に<strong>口頭か紙で</strong>伝える（グループLINEなど、ほかの人が見られる場所には書かない）</div></div>
+<div class="box box-warn">
+<ul style="margin: 0; padding-left: 20px;">
+  <li>パスワードは<strong>ほかの人と同じにしない</strong>。職長さんたちが使っている共通パスワードとも別にする</li>
+  <li>森田さんの行が出てこないとき → 人員マスタで森田さんの「職種」が「事務」になっているか確認</li>
+  <li>本人が忘れたときは、同じ画面で新しいパスワードに書き換えて「保存」</li>
+</ul>
 </div>
+
+<h3>A-2. 請求書に印字する会社情報を保存する</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">「管理者設定」→ 上のタブ「<strong>🏢 会社・請求書</strong>」</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text"><strong>請求書の自社情報</strong>（日比建設）: 住所・登録番号・振込先を入れて「保存」（HFU → 日比建設 の請求書の宛先にも、ここの住所が使われます）</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text"><strong>HFU → 日比建設 の請求書</strong>: これまでの請求書の内容（会社名・代表者・住所・電話・登録番号・振込先・鳶 30,000円）が入っています。確かめて「保存」。FAX 番号は空欄なので必要なら入力。土工のいない月は、土工の単価が空欄でも発行できます</div></div>
+<div class="box box-red"><strong>保存しないと請求書を申請・発行できません</strong>（足りない項目があると、申請のときに何が足りないかが表示されます）。</div>
 
 <hr>
 
-<h2>改訂履歴</h2>
+<h2 id="history">改訂履歴</h2>
 <table>
 <tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-26</td><td>全面改訂: 奥寺さん・佐藤さんから引き継ぐ4分野（給与締め・有給・道具代・請求）を1冊に統合。請求書の発行マニュアル・佐藤さん道具代マニュアルの内容を取り込み</td></tr>
 <tr><td>2026-09-26</td><td>§2 をメニューの見直し（毎日／毎月／経営…の順・検索欄・帳票出力の独立・請求書・支払）に合わせて全面更新。人員マスタの基本情報は森田さんも編集可（給与欄は代表）</td></tr>
 <tr><td>2026-09-26</td><td>§3-2 を「有給の付与・記録」に改め、申請の最終承認は政仁さんと明記（役割ごとの権限の整理）。有給付与のアラートが事務の通知ベルにも出るように</td></tr>
 <tr><td>2026-09-26</td><td>§3-4「請求書の発行申請」を追加（森田さんが申請 → 政仁さんが承認して発行）</td></tr>
@@ -340,7 +609,7 @@
 </table>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 最終更新: 2026-09-26</p>
+<p style="text-align:center; color:#999; font-size:12px;">DEDURA＋ / 事務業務マニュアル（森田さん向け） / 最終更新: 2026-09-26</p>
 
 </body>
 </html>

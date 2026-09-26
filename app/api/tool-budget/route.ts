@@ -196,6 +196,7 @@ export async function GET(request: NextRequest) {
           periodAnchor: null,
           period: null,
           budget: defaultBudget,
+          defaultBudget,
           used: 0,
           remaining: defaultBudget,
           purchases: [],
@@ -221,6 +222,8 @@ export async function GET(request: NextRequest) {
         period,
         notStarted,
         budget,
+        // この人の区分の既定額（日本人 10万・外国人 3万など）。画面の「デフォルト」表示用
+        defaultBudget,
         used,
         remaining: budget - used,
         purchases,

@@ -78,7 +78,7 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: '外注先向け 出面確認書', where: '帳票出力 → 社内用', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'がいちゅう 確認書' },
   { label: '歩掛管理表', where: '帳票出力 → 社内用', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'ぶがかり' },
   { label: '有給管理台帳（Excel）', where: '休暇管理 → 管理簿出力', href: '/leave', cap: 'leave.view', keywords: 'ゆうきゅう 台帳 管理簿' },
-  { label: '周知・同意台帳（Excel）', where: '就業カレンダー → 下の方', href: '/calendar', cap: 'calendar.approve', keywords: 'どうい しゅうち 署名 台帳' },
+  { label: '周知・同意台帳（Excel）', where: '帳票出力 → 社内用（就業カレンダーの下にも）', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'どうい しゅうち 署名 台帳' },
   // 休暇
   { label: '有給・帰国の申請一覧（承認）', where: '休暇管理 → 申請', href: '/leave?tab=requests', cap: 'leave.view', keywords: 'しょうにん 申請 ゆうきゅう' },
   { label: '帰国情報', where: '休暇管理 → 帰国情報', href: '/leave?tab=homeleave', cap: 'leave.view', keywords: 'きこく 一時帰国 長期' },

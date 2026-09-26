@@ -28,6 +28,8 @@ interface WorkerBudget {
   period: Period | null
   notStarted?: boolean
   budget: number
+  /** この人の区分の既定額（API が区分別設定から算出） */
+  defaultBudget?: number
   used: number
   remaining: number
   purchases: Purchase[]
@@ -561,7 +563,7 @@ function WorkerModal({
                       {budgetSaving ? '保存中...' : '予算変更'}
                     </button>
                     {budgetSaved && <span className="text-xs text-green-600 font-bold">✓ 保存しました</span>}
-                    <span className="text-[11px] text-gray-400 ml-auto">デフォルト: ¥30,000</span>
+                    <span className="text-[11px] text-gray-400 ml-auto">デフォルト: ¥{(worker.defaultBudget ?? worker.budget).toLocaleString()}</span>
                   </div>
                 </div>
               </section>
