@@ -72,10 +72,13 @@ export async function computePayrollCostForMonths(
   bySite: Record<string, { cost: number; dispatchDeduction: number }>
   totalCost: number
   totalDispatchDeduction: number
+  /** 月ごとの作業員の給与計算の結果（経営コックピット連携で HFU 所属の人件費を数えるため・2026-09-27） */
+  workersByYm: Record<string, ReturnType<typeof computeMonthly>['workers']>
 }> {
   const bySite: Record<string, { cost: number; dispatchDeduction: number }> = {}
   let totalCost = 0
   let totalDispatchDeduction = 0
+  const workersByYm: Record<string, ReturnType<typeof computeMonthly>['workers']> = {}
 
   // 手当の長期従事履歴は、渡された月の出面を再利用して追加読みを避ける
   const preloadedAttD: Record<string, Record<string, AttendanceEntry>> = {}
@@ -102,13 +105,14 @@ export async function computePayrollCostForMonths(
       agg.cost += site.cost + dd
       agg.dispatchDeduction += dd
     }
+    workersByYm[ym] = r.workers
     const monthDd = r.workers.reduce((s, w) => s + (w.dispatchDeduction || 0), 0)
     totalDispatchDeduction += monthDd
     // totals.cost は控除済み → 控除前に戻す（compute() の totalCost と同じ意味に）
     totalCost += r.totals.cost + monthDd
   }
 
-  return { bySite, totalCost, totalDispatchDeduction }
+  return { bySite, totalCost, totalDispatchDeduction, workersByYm }
 }
 
 /**
@@ -120,8 +124,8 @@ export async function applyPayrollCosts(
   c: ComputeLikeResult,
   main: MainData,
   months: MonthAtt[],
-): Promise<void> {
-  const { bySite, totalCost, totalDispatchDeduction } = await computePayrollCostForMonths(main, months)
+): Promise<{ workersByYm: Awaited<ReturnType<typeof computePayrollCostForMonths>>['workersByYm'] }> {
+  const { bySite, totalCost, totalDispatchDeduction, workersByYm } = await computePayrollCostForMonths(main, months)
   for (const sid of Object.keys(c.sites)) {
     c.sites[sid].cost = bySite[sid]?.cost || 0
     c.sites[sid].dispatchDeduction = bySite[sid]?.dispatchDeduction || 0
@@ -133,4 +137,5 @@ export async function applyPayrollCosts(
   }
   c.totalCost = totalCost
   c.totalDispatchDeduction = totalDispatchDeduction
+  return { workersByYm }
 }

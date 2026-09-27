@@ -128,9 +128,22 @@ export interface IntegrationHfuWorkforce {
   dokoRate: number
   /** 出面が入っている最後の日（YYYY-MM-DD）。まだ無ければ null */
   lastDate: string | null
+  /**
+   * HFU 所属の作業員のその月の人件費（給与計算の支給額・残業や手当を含む・会社負担の社会保険は含まない・円）と、
+   * その人工（夜勤1.5など給与計算の人工）。1人工あたりの人件費 = laborCost ÷ laborManDays（2026-09-27）
+   */
+  laborCost: number
+  laborManDays: number
+  /** 日額の平均（その月に人工がある人・円） */
+  dailyRateAvg: number
 }
 
-function buildHfuWorkforce(main: Awaited<ReturnType<typeof getMainData>>, attD: Parameters<typeof buildHfuInvoiceDraft>[1], ym: string): IntegrationHfuWorkforce {
+function buildHfuWorkforce(
+  main: Awaited<ReturnType<typeof getMainData>>,
+  attD: Parameters<typeof buildHfuInvoiceDraft>[1],
+  ym: string,
+  payrollWorkers: { org: string; rate: number; totalCost: number; manDays?: number; workDays: number }[],
+): IntegrationHfuWorkforce {
   const y = parseInt(ym.slice(0, 4)), m = parseInt(ym.slice(4, 6))
   const monthEnd = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
   const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
@@ -147,6 +160,7 @@ function buildHfuWorkforce(main: Awaited<ReturnType<typeof getMainData>>, attD: 
     lastDay = Math.max(lastDay, parseInt(pk.day, 10) || 0)
   }
   const lines = draft?.lines || []
+  const paid = payrollWorkers.filter(w => isWorkerOfOrg(w, 'hfu') && (w.manDays ?? w.workDays) > 0)
   return {
     heads,
     workingHeads: working.size,
@@ -156,6 +170,9 @@ function buildHfuWorkforce(main: Awaited<ReturnType<typeof getMainData>>, attD: 
     tobiRate: main.hfuInvoice?.tobiRate || 0,
     dokoRate: main.hfuInvoice?.dokoRate || 0,
     lastDate: lastDay > 0 ? `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(lastDay).padStart(2, '0')}` : null,
+    laborCost: Math.round(paid.reduce((t, w) => t + (w.totalCost || 0), 0)),
+    laborManDays: r1(paid.reduce((t, w) => t + (w.manDays ?? w.workDays), 0)),
+    dailyRateAvg: paid.length ? Math.round(paid.reduce((t, w) => t + (w.rate || 0), 0) / paid.length) : 0,
   }
 }
 
@@ -168,7 +185,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
   const att = closed ? await getAttDataCached(ym) : await getAttData(ym)
   const y = parseInt(ym.slice(0, 4)), m = parseInt(ym.slice(4, 6))
   const c = compute(main, att.d, att.sd, [{ y, m }])
-  await applyPayrollCosts(c, main, [{ ym, d: att.d, sd: att.sd, drv: att.drv }])
+  const payroll = await applyPayrollCosts(c, main, [{ ym, d: att.d, sd: att.sd, drv: att.drv }])
 
   const companies = main.subcons as unknown as CompanyLike[]
   const allSites = main.sites as unknown as (Parameters<typeof resolveSiteParties>[0] & { id: string; name: string; parentId?: string })[]
@@ -238,7 +255,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     peerBilling,
     peerInvoices,
     hfuInvoices,
-    hfuWorkforce: buildHfuWorkforce(main, att.d, ym),
+    hfuWorkforce: buildHfuWorkforce(main, att.d, ym, payroll.workersByYm[ym] || []),
     totals: {
       billing: sites.reduce((t, s) => t + s.billing, 0),
       billingEnteredSites: sites.filter(s => s.billingEntered).length,
