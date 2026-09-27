@@ -10,6 +10,7 @@
  *   - 現場ごとの自社人件費（実支給ベース）・外注費（出面 × 単価）
  *   - 外注・同業者ごとの支払見込み（出面 × 単価）
  *   - 応援現場で同業者へ請求する見込み
+ *   - HFU 所属の作業員の人数と稼働（人工・残業・社内単価での額。HFU の鳶の売上の見込みに使う・2026-09-27）
  * 詳細は docs/integration.md。
  */
 import { timingSafeEqual } from 'node:crypto'
@@ -21,6 +22,9 @@ import { calendarSiteIdOf } from '@/lib/site-hierarchy'
 import { buildPeerStatements } from '@/lib/peer-statement'
 import { summarizePeerInvoiceSites } from '@/lib/peer-invoice'
 import { listPeerInvoicesForYm } from '@/lib/peer-invoice-store'
+import { buildHfuInvoiceDraft } from '@/lib/hfu-invoice'
+import { isWorkerOfOrg } from '@/lib/orgs'
+import { parseDKey } from '@/lib/compute'
 
 /** 合言葉の照合（長さの違い・未設定も安全に false） */
 export function isValidIntegrationKey(given: string | null | undefined, expected: string | undefined = process.env.DEDURA_INTEGRATION_KEY): boolean {
@@ -100,7 +104,59 @@ export interface IntegrationMonth {
    * （日比建設が同業者から受け取る入金）とは分ける。日比建設から見ると支払い、HFU から見ると入金。
    */
   hfuInvoices: IntegrationPeerInvoice[]
+  /**
+   * HFU 所属の作業員の人数と稼働（2026-09-27・経営コックピットの HFU 黒字化シミュレーター用）。
+   * 人工・残業・額は HFU → 日比建設 の請求書の下書き（buildHfuInvoiceDraft）と同じ数え方。締まっていない月は途中の数字
+   */
+  hfuWorkforce: IntegrationHfuWorkforce
   totals: { billing: number; billingEnteredSites: number; ownLaborCost: number; subconCost: number }
+}
+
+export interface IntegrationHfuWorkforce {
+  /** その月の末に在籍している HFU 所属の作業員（退職日がその月の末より前の人は除く） */
+  heads: number
+  /** その月に人工がある HFU 所属の作業員 */
+  workingHeads: number
+  /** 人工（鳶・土工。夜勤1.5・休業補償などは請求書と同じ扱い） */
+  workDays: number
+  /** 残業（時間） */
+  otHours: number
+  /** 社内単価での額（税抜・円。単価が未設定なら 0） */
+  amount: number
+  /** 社内単価（鳶・土工。未設定は 0） */
+  tobiRate: number
+  dokoRate: number
+  /** 出面が入っている最後の日（YYYY-MM-DD）。まだ無ければ null */
+  lastDate: string | null
+}
+
+function buildHfuWorkforce(main: Awaited<ReturnType<typeof getMainData>>, attD: Parameters<typeof buildHfuInvoiceDraft>[1], ym: string): IntegrationHfuWorkforce {
+  const y = parseInt(ym.slice(0, 4)), m = parseInt(ym.slice(4, 6))
+  const monthEnd = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+  const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
+  const hfuWorkers = main.workers.filter(w => isWorkerOfOrg(w as { org?: string }, 'hfu'))
+  const heads = hfuWorkers.filter(w => !w.retired || w.retired >= monthStart).filter(w => !w.hireDate || w.hireDate <= monthEnd).length
+  const draft = buildHfuInvoiceDraft(main, attD, ym)
+  const working = new Set<string>()
+  for (const d of draft?.detail || []) for (const row of d.rows) if (row.total > 0) working.add(row.key)
+  const hfuIds = new Set(hfuWorkers.map(w => String(w.id)))
+  let lastDay = 0
+  for (const k of Object.keys(attD)) {
+    const pk = parseDKey(k)
+    if (pk.ym !== ym || !hfuIds.has(pk.wid)) continue
+    lastDay = Math.max(lastDay, parseInt(pk.day, 10) || 0)
+  }
+  const lines = draft?.lines || []
+  return {
+    heads,
+    workingHeads: working.size,
+    workDays: r1(lines.filter(l => l.unit !== 'h').reduce((t, l) => t + l.days, 0)),
+    otHours: r1(lines.filter(l => l.unit === 'h').reduce((t, l) => t + l.days, 0)),
+    amount: draft?.subtotal || 0,
+    tobiRate: main.hfuInvoice?.tobiRate || 0,
+    dokoRate: main.hfuInvoice?.dokoRate || 0,
+    lastDate: lastDay > 0 ? `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(lastDay).padStart(2, '0')}` : null,
+  }
 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10
@@ -182,6 +238,7 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
     peerBilling,
     peerInvoices,
     hfuInvoices,
+    hfuWorkforce: buildHfuWorkforce(main, att.d, ym),
     totals: {
       billing: sites.reduce((t, s) => t + s.billing, 0),
       billingEnteredSites: sites.filter(s => s.billingEntered).length,

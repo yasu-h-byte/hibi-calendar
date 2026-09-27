@@ -18,6 +18,7 @@
 | `peerBilling[]` | 応援現場で同業者へ請求する**見込み**（同業者との請求・支払一覧と同じ計算。まだ請求書を発行していない金額も含む） |
 | `peerInvoices[]` | 実際に発行・取り消しした「応援の請求書」（`no`・`companyId`・`issueDate`・`dueDate`・`subtotal`（税抜）・`tax`・`total`（税込）・`status`（`issued`\|`void`）・`sites[]`（現場ごとの内訳））。発行済みがあればこちらを確定額として使う（docs/peer-invoice.md） |
 | `hfuInvoices[]` | HFU → 日比建設 の請求書（2026-09-26・グループ内。形は `peerInvoices[]` と同じ）。`peerInvoices[]` には含まれない。日比建設から見ると支払い、HFU から見ると入金（docs/peer-invoice.md「HFU → 日比建設 の請求書」） |
+| `hfuWorkforce` | HFU 所属の作業員の人数と稼働（2026-09-27）: 在籍人数 `heads`・その月に人工がある人数 `workingHeads`・人工 `workDays`・残業 `otHours`・社内単価での額 `amount`（税抜）・単価 `tobiRate`/`dokoRate`・出面が入っている最後の日 `lastDate`。人工の数え方は HFU → 日比建設 の請求書の下書きと同じ。締まっていない月は途中の数字。経営コックピットの HFU 黒字化シミュレーター（鳶の売上の見込み）で使う |
 | `closed` | 出面が締まった月か（前月より前）。締まっていない月は数字が動く |
 
 - 請求額は「未入力なら 0」。原価・収益管理画面の**見込み請求（人工 × 平均単価）は返さない**（資金繰りに確定額と見込みが混ざらないように）
