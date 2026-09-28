@@ -11,6 +11,8 @@ describe('書類庫の共通ロジック', () => {
     expect(safeFileName('C:\\scan\\在留カード 表.pdf')).toBe('在留カード 表.pdf')
     expect(safeFileName('a#b?c[1]*.pdf')).toBe('abc1.pdf')
     expect(safeFileName('')).toBe('file')
+    // Mac の分解された濁点（NFD）は NFC にそろえる
+    expect(safeFileName('在留カート\u3099.pdf')).toBe('在留カード.pdf')
   })
 
   test('日付の妥当性（13月などは不正）', () => {

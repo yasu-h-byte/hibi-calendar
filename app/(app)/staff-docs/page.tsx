@@ -509,6 +509,9 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
 
         <DocFields type={type} setType={setType} title={title} setTitle={setTitle} validFrom={validFrom} setValidFrom={setValidFrom}
           expiresOn={expiresOn} setExpiresOn={setExpiresOn} note={note} setNote={setNote} />
+        {staffDocTypeDef(type).hasExpiry && !expiresOn && (
+          <p className="text-[11px] text-amber-700">{staffDocTypeDef(type).expiryLabel}を入れると、期限切れの警告と人員マスタとの食い違いのチェックが効きます</p>
+        )}
         {type === 'residence_card' && w && (
           <p className="text-[11px] text-gray-500">人員マスタの在留期限: {w.visaExpiry || '未登録'}（カードの期限と違えば、登録後に「食い違い」に出ます）</p>
         )}
