@@ -288,7 +288,7 @@ workSchedule?: {
 | フィールド | 型 | 説明 |
 |---|---|---|
 | workerId | number | スタッフ |
-| type | string | `residence_card` / `contract` / `passport` / `visa_permit` / `certificate` / `health` / `other` |
+| type | string | `residence_card` / `contract` / `visa_permit` / `certificate` / `health` / `other`（パスポートは扱わない・2026-09-28） |
 | title | string? | 見出し（例: 2026年10月 賃金改定） |
 | files | {path,name,contentType,size}[] | Storage 上のファイル（在留カードの表裏は1件に2ファイル） |
 | validFrom / expiresOn | string? | 'YYYY-MM-DD'（開始日・交付日 / 在留期限・契約満了日・有効期限） |

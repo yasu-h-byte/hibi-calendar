@@ -45,7 +45,7 @@ describe('書類庫の共通ロジック', () => {
     expect(missingRequiredTypes([
       { type: 'residence_card', status: 'current' },
       { type: 'contract', status: 'old' },
-    ])).toEqual(['contract', 'passport'])
+    ])).toEqual(['contract'])
   })
 
   test('ファイル名から種類を推し量る（フォンの契約書が在留カードで登録された件）', async () => {
@@ -53,7 +53,8 @@ describe('書類庫の共通ロジック', () => {
     expect(inferDocType('雇用契約書及び雇用条件書_NGUYEN HUU PHONG.pdf')).toBe('contract')
     expect(inferDocType('在留カード_NGUYEN THANH HOANG.pdf')).toBe('residence_card')
     expect(inferDocType('在留カート\u3099_表.jpg')).toBe('residence_card')   // Mac の NFD
-    expect(inferDocType('passport_scan.pdf')).toBe('passport')
+    // パスポートは扱わない（2026-09-28）
+    expect(inferDocType('passport_scan.pdf')).toBeNull()
     expect(inferDocType('scan_0012.pdf')).toBeNull()
   })
 

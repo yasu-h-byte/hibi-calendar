@@ -14,9 +14,9 @@
  * クライアント・サーバー両方から import する（サーバー専用の依存を入れないこと）。
  */
 
+// パスポートは扱わない（代表決定 2026-09-28: このシステムでは不要。保存・不足の表示とも対象外）
 export type StaffDocType =
   | 'residence_card'
-  | 'passport'
   | 'contract'
   | 'visa_permit'
   | 'certificate'
@@ -36,7 +36,6 @@ export interface StaffDocTypeDef {
 export const STAFF_DOC_TYPES: StaffDocTypeDef[] = [
   { key: 'residence_card', label: '在留カード', hasExpiry: true, expiryLabel: '在留期限', hint: '表・裏をまとめて1件で入れる' },
   { key: 'contract', label: '雇用契約書・雇用条件書', hasExpiry: true, expiryLabel: '契約満了日', hint: '更新・賃金改定のたびに新しいものを入れる' },
-  { key: 'passport', label: 'パスポート', hasExpiry: true, expiryLabel: '有効期限', hint: '顔写真のページ' },
   { key: 'visa_permit', label: '在留資格の許可・申請書類', hasExpiry: false, hint: '許可通知・申請の控えなど' },
   { key: 'certificate', label: '資格・合格証', hasExpiry: false, hint: '技能検定・特別教育の修了証など' },
   { key: 'health', label: '健康診断', hasExpiry: false, hint: '雇入れ時・定期健診の結果' },
@@ -57,7 +56,6 @@ export function inferDocType(fileName: string): StaffDocType | null {
   const n = (fileName || '').normalize('NFC').toLowerCase()
   if (/契約|条件書|contract|hop ?dong|hợp đồng/.test(n)) return 'contract'
   if (/在留カード|在留卡|residence|zairyu|the cu tru|thẻ cư trú/.test(n)) return 'residence_card'
-  if (/パスポート|旅券|passport|ho chieu|hộ chiếu/.test(n)) return 'passport'
   if (/健康診断|健診|health/.test(n)) return 'health'
   if (/許可|申請|通知書|permit/.test(n)) return 'visa_permit'
   if (/合格|修了|技能検定|資格|certificate/.test(n)) return 'certificate'
@@ -65,7 +63,7 @@ export function inferDocType(fileName: string): StaffDocType | null {
 }
 
 /** ベトナム人スタッフ全員にそろっているべき書類（「不足」の表示に使う） */
-export const REQUIRED_STAFF_DOC_TYPES: StaffDocType[] = ['residence_card', 'contract', 'passport']
+export const REQUIRED_STAFF_DOC_TYPES: StaffDocType[] = ['residence_card', 'contract']
 
 export interface StaffDocFile {
   /** Storage 上のパス（staff-docs/{workerId}/{docId}/{index}-{name}） */

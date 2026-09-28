@@ -167,7 +167,7 @@ function StaffDocsInner() {
         <div>
           <h1 className="text-xl font-bold text-hibi-navy dark:text-white">🗂 書類庫</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            在留カード・雇用契約書・パスポートなど。新しい書類を入れると前のものは「旧版」として残ります。
+            在留カード・雇用契約書など。新しい書類を入れると前のものは「旧版」として残ります。
           </p>
         </div>
         <div className="flex items-center gap-2">
