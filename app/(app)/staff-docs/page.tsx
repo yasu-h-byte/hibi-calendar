@@ -18,7 +18,7 @@ import { visaLabel } from '@/lib/labels'
 import { todayJstIso } from '@/lib/date-utils'
 import {
   STAFF_DOC_TYPES, STAFF_DOC_ALLOWED_TYPES, STAFF_DOC_MAX_FILE_BYTES, STAFF_DOC_MAX_FILES, EXPIRY_WARN_DAYS,
-  staffDocTypeDef, expiryState, daysUntil, masterMismatches, missingRequiredTypes,
+  staffDocTypeDef, expiryState, daysUntil, masterMismatches, missingRequiredTypes, inferDocType,
   type StaffDoc, type StaffDocType,
 } from '@/lib/staff-docs'
 
@@ -362,7 +362,7 @@ function DocRow({ d, today, canEdit, canDelete, onOpen, onEdit, onStatus, onDele
 }
 
 function DocFields({ type, setType, title, setTitle, validFrom, setValidFrom, expiresOn, setExpiresOn, note, setNote }: {
-  type: StaffDocType; setType: (t: StaffDocType) => void
+  type: StaffDocType | ''; setType: (t: StaffDocType) => void
   title: string; setTitle: (v: string) => void
   validFrom: string; setValidFrom: (v: string) => void
   expiresOn: string; setExpiresOn: (v: string) => void
@@ -374,7 +374,8 @@ function DocFields({ type, setType, title, setTitle, validFrom, setValidFrom, ex
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <label className="block sm:col-span-2">
         <span className="text-xs text-gray-500">種類</span>
-        <select value={type} onChange={e => setType(e.target.value as StaffDocType)} className={input}>
+        <select value={type} onChange={e => setType(e.target.value as StaffDocType)} className={`${input} ${type ? '' : 'border-amber-400'}`}>
+          {!type && <option value="">選んでください</option>}
           {STAFF_DOC_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
         <span className="text-[11px] text-gray-400">{def.hint}</span>
@@ -418,7 +419,8 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
   onClose: () => void; onDone: () => void
 }) {
   const [workerId, setWorkerId] = useState<number | null>(initialWorkerId)
-  const [type, setType] = useState<StaffDocType>(initialType || 'residence_card')
+  // 既定の種類は置かない（2026-09-28: 既定の「在留カード」のまま契約書が登録された）。ファイル名で見当がつけば自動で選ぶ
+  const [type, setType] = useState<StaffDocType | ''>(initialType || '')
   const [title, setTitle] = useState('')
   const [validFrom, setValidFrom] = useState('')
   const [expiresOn, setExpiresOn] = useState('')
@@ -438,10 +440,15 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
     if (big.length) { setErr(`25MBを超えています: ${big.map(f => f.name).join('、')}`); return }
     setErr('')
     setFiles(prev => [...prev, ...arr].slice(0, STAFF_DOC_MAX_FILES))
+    if (!type) {
+      const guess = arr.map(f => inferDocType(f.name)).find(Boolean)
+      if (guess) setType(guess)
+    }
   }
 
   const submit = async () => {
     if (!workerId) { setErr('スタッフを選んでください'); return }
+    if (!type) { setErr('書類の種類を選んでください'); return }
     if (files.length === 0) { setErr('ファイルを選んでください'); return }
     setErr('')
     try {
@@ -509,7 +516,14 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
 
         <DocFields type={type} setType={setType} title={title} setTitle={setTitle} validFrom={validFrom} setValidFrom={setValidFrom}
           expiresOn={expiresOn} setExpiresOn={setExpiresOn} note={note} setNote={setNote} />
-        {staffDocTypeDef(type).hasExpiry && !expiresOn && (
+        {(() => {
+          const guesses = Array.from(new Set(files.map(f => inferDocType(f.name)).filter(Boolean))) as StaffDocType[]
+          const other = guesses.find(g => type && g !== type)
+          return other ? (
+            <p className="text-[11px] font-bold text-red-600">⚠ ファイル名は「{staffDocTypeDef(other).label}」のようですが、種類が「{staffDocTypeDef(type).label}」になっています。確認してください</p>
+          ) : null
+        })()}
+        {type && staffDocTypeDef(type).hasExpiry && !expiresOn && (
           <p className="text-[11px] text-amber-700">{staffDocTypeDef(type).expiryLabel}を入れると、期限切れの警告と人員マスタとの食い違いのチェックが効きます</p>
         )}
         {type === 'residence_card' && w && (

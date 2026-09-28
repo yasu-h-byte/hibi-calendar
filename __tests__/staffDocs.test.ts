@@ -48,6 +48,15 @@ describe('書類庫の共通ロジック', () => {
     ])).toEqual(['contract', 'passport'])
   })
 
+  test('ファイル名から種類を推し量る（フォンの契約書が在留カードで登録された件）', async () => {
+    const { inferDocType } = await import('@/lib/staff-docs')
+    expect(inferDocType('雇用契約書及び雇用条件書_NGUYEN HUU PHONG.pdf')).toBe('contract')
+    expect(inferDocType('在留カード_NGUYEN THANH HOANG.pdf')).toBe('residence_card')
+    expect(inferDocType('在留カート\u3099_表.jpg')).toBe('residence_card')   // Mac の NFD
+    expect(inferDocType('passport_scan.pdf')).toBe('passport')
+    expect(inferDocType('scan_0012.pdf')).toBeNull()
+  })
+
   test('知らない種類は「その他」', () => {
     expect(staffDocTypeDef('xxx').key).toBe('other')
   })

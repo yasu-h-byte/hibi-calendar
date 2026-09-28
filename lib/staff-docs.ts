@@ -47,6 +47,23 @@ export function staffDocTypeDef(t: string): StaffDocTypeDef {
   return STAFF_DOC_TYPES.find(d => d.key === t) || STAFF_DOC_TYPES[STAFF_DOC_TYPES.length - 1]
 }
 
+/**
+ * ファイル名から書類の種類を推し量る（2026-09-28）。
+ * 登録フォームの種類が既定の「在留カード」のままで、フォンの雇用契約書が在留カードとして
+ * 登録された。種類は空から選ばせ、ファイル名で見当がつくときは自動で選び、
+ * 選んだ種類とファイル名が食い違えば警告する。見当がつかなければ null。
+ */
+export function inferDocType(fileName: string): StaffDocType | null {
+  const n = (fileName || '').normalize('NFC').toLowerCase()
+  if (/契約|条件書|contract|hop ?dong|hợp đồng/.test(n)) return 'contract'
+  if (/在留カード|在留卡|residence|zairyu|the cu tru|thẻ cư trú/.test(n)) return 'residence_card'
+  if (/パスポート|旅券|passport|ho chieu|hộ chiếu/.test(n)) return 'passport'
+  if (/健康診断|健診|health/.test(n)) return 'health'
+  if (/許可|申請|通知書|permit/.test(n)) return 'visa_permit'
+  if (/合格|修了|技能検定|資格|certificate/.test(n)) return 'certificate'
+  return null
+}
+
 /** ベトナム人スタッフ全員にそろっているべき書類（「不足」の表示に使う） */
 export const REQUIRED_STAFF_DOC_TYPES: StaffDocType[] = ['residence_card', 'contract', 'passport']
 
