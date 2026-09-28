@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * 旧 /evaluation/raise-history → /evaluation?tab=raise-history へリダイレクト
+ * 旧 /evaluation/raise-history → /workers?tab=raise-history（人員マスタの昇給履歴タブ）へリダイレクト
  *
  * 2026-05-12: 昇給履歴を /evaluation のタブに統合したため、独立ページは廃止。
  * 既存リンク・ブックマークの後方互換のためリダイレクトのみ残す。

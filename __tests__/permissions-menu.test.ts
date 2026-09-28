@@ -6,7 +6,7 @@
  */
 import { describe, test, expect } from 'vitest'
 import { can, permRoleOf, roleCan } from '@/lib/permissions'
-import { MENU_ITEMS, SEARCH_ENTRIES, searchMenu, normalizeForSearch } from '@/lib/menu'
+import { MENU_ITEMS, SEARCH_ENTRIES, searchMenu, normalizeForSearch, activeMenuItem } from '@/lib/menu'
 
 const menuFor = (role: string, workerId = 50) =>
   MENU_ITEMS.filter(i => can({ role, workerId }, i.cap)).map(i => i.label)
@@ -17,14 +17,14 @@ describe('役割ごとのメニュー', () => {
   })
   test('事務（森田さん）', () => {
     expect(menuFor('jimu')).toEqual([
-      'ダッシュボード', '出面入力', '月次集計・締め', '帳票出力', '休暇管理', '請求書・支払',
-      '原価・収益', '人員マスタ', '道具代管理', '書類庫', '現場マスタ', '取引先マスタ', '資料一覧',
+      'ダッシュボード', '出面入力', '休暇管理', '月次集計・締め', '帳票出力', '請求書・支払',
+      '原価・収益', '人員マスタ', '書類庫', '道具代管理', '現場マスタ', '取引先マスタ', '資料一覧',
     ])
   })
   test('事業責任者（政仁さん）', () => {
     expect(menuFor('approver', 1)).toEqual([
-      'ダッシュボード', '出面入力', '就業カレンダー', '月次集計・締め', '帳票出力', '休暇管理', '請求書・支払',
-      '原価・収益', '人員マスタ', '賃金・評価', '評価入力', '道具代管理', '書類庫', '現場マスタ', '取引先マスタ', '資料一覧',
+      'ダッシュボード', '出面入力', '就業カレンダー', '休暇管理', '月次集計・締め', '帳票出力', '請求書・支払',
+      '原価・収益', '人員マスタ', '書類庫', '道具代管理', '賃金・評価', '評価入力', '現場マスタ', '取引先マスタ', '資料一覧',
     ])
   })
   test('代表はすべて', () => {
@@ -73,5 +73,26 @@ describe('メニュー検索', () => {
   })
   test('近道の飛び先はすべてアプリ内の画面', () => {
     for (const e of SEARCH_ENTRIES) expect(e.href.startsWith('/')).toBe(true)
+  })
+})
+
+describe('選択中のメニュー（activeMenuItem・2026-09-28）', () => {
+  const at = (path: string, search = '') => activeMenuItem(MENU_ITEMS, path, search)?.label
+  test('同じ画面でも1つだけ光る', () => {
+    expect(at('/evaluation', '?tab=review')).toBe('評価入力')
+    expect(at('/evaluation', '')).toBe('賃金・評価')
+    expect(at('/evaluation', '?tab=approve')).toBe('賃金・評価')
+  })
+  test('人員マスタの昇給履歴タブは「賃金・評価」、一覧は「人員マスタ」', () => {
+    expect(at('/workers', '?tab=raise-history')).toBe('賃金・評価')
+    expect(at('/workers', '')).toBe('人員マスタ')
+  })
+  test('月次集計と帳票出力はタブで分かれる', () => {
+    expect(at('/monthly', '')).toBe('月次集計・締め')
+    expect(at('/monthly', '?tab=export')).toBe('帳票出力')
+    expect(at('/monthly/audit-print', '?ym=202609')).toBe('月次集計・締め')
+  })
+  test('請求書の印刷画面は「請求書・支払」', () => {
+    expect(at('/peer-invoice', '?company=x')).toBe('請求書・支払')
   })
 })

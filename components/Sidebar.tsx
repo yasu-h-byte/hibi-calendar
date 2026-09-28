@@ -6,23 +6,11 @@ import { AuthUser } from '@/types'
 import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
 import NotificationBell from './NotificationBell'
 import { DeduraWordmark, DEDURA_BYLINE } from './Brand'
-import { MENU_ITEMS, MENU_SECTIONS, SEARCH_ENTRIES, searchMenu, type MenuItem, type SearchEntry } from '@/lib/menu'
+import { MENU_ITEMS, MENU_SECTIONS, MENU_HOME_SECTION, SEARCH_ENTRIES, searchMenu, activeMenuItem, type MenuItem, type SearchEntry } from '@/lib/menu'
 import { can, permRoleOf, PERM_ROLE_LABEL } from '@/lib/permissions'
 
 // メニューの中身と並び・メニュー検索の近道は lib/menu.ts、誰に見せるかは lib/permissions.ts（2026-09-26）。
 //   旧: ここに役割を直書き＋MENU_ID_MAP＋設定画面の権限（Firestore rolePermissions）の3か所で食い違っていた
-
-/** メニュー項目が今の画面か（/monthly と /monthly?tab=export のように同じ画面の別タブも区別する） */
-function isItemActive(item: MenuItem, pathname: string, search: string): boolean {
-  if (!item.href) return false
-  const [path, query] = item.href.split('?')
-  if (query) return pathname === path && search.includes(query)
-  if (pathname === path) {
-    // 同じ画面に ?tab= 付きの別項目があるときは、そちらのタブを開いている間は選択しない
-    return !MENU_ITEMS.some(o => o !== item && o.href?.startsWith(`${path}?`) && search.includes(o.href.split('?')[1]))
-  }
-  return (item.activePrefixes || []).some(p => pathname === p || pathname.startsWith(`${p}/`))
-}
 
 /** Text size icon (Aa) */
 function TextSizeIcon() {
@@ -44,6 +32,14 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
   useEffect(() => { setSearch(window.location.search) }, [pathname])
+  // 画面の中でタブを切り替えて URL の ?tab= だけ変わったとき（history.replaceState）も選択表示を合わせる。
+  //   画面側は window.dispatchEvent(new Event('hibi:urlchange')) を投げる（例: 月次集計 ↔ 帳票出力）
+  useEffect(() => {
+    const sync = () => setSearch(window.location.search)
+    window.addEventListener('hibi:urlchange', sync)
+    window.addEventListener('popstate', sync)
+    return () => { window.removeEventListener('hibi:urlchange', sync); window.removeEventListener('popstate', sync) }
+  }, [])
 
   useEffect(() => {
     initTheme()
@@ -65,6 +61,8 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
   }, [])
 
   const filteredItems = MENU_ITEMS.filter(item => can(user, item.cap))
+  // 選択中は1項目だけ（lib/menu.ts activeMenuItem）
+  const activeItem = activeMenuItem(filteredItems, pathname, search)
   // 検索の対象 = 見えるメニュー項目 ＋ 画面の中の近道（権限のあるものだけ）
   const searchable: SearchEntry[] = [
     ...filteredItems.filter(i => i.href).map(i => ({ label: i.label, where: i.section, href: i.href!, cap: i.cap })),
@@ -165,14 +163,16 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
             </div>
           )}
           {!query.trim() && sections.map(section => (
-            <div key={section}>
-              <div className="px-1.5 py-1.5 text-[10px] text-white/40 uppercase tracking-wider">
-                {section}
-              </div>
+            <div key={section} className={section === MENU_HOME_SECTION ? '' : 'mt-1'}>
+              {section !== MENU_HOME_SECTION && (
+                <div className="px-1.5 pt-2 pb-1 text-[10px] text-white/40 uppercase tracking-wider border-t border-white/5">
+                  {section}
+                </div>
+              )}
               {filteredItems
                 .filter(item => item.section === section)
                 .map(item => {
-                  const isActive = isItemActive(item, pathname, search)
+                  const isActive = item === activeItem
                   const isExternal = !!item.external
                   // 2026-06-XX 追加 (UI #2): URL別バッジ件数
                   //   /monthly → 検算違反スタッフ数

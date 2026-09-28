@@ -33,7 +33,12 @@ function shiftYm(ym: string, delta: number): string {
 
 export default function PeerStatementPage() {
   const { ready } = useAuthPassword()
-  const [ym, setYm] = useState(currentYm())
+  // 請求書の画面から「戻る」で来たときは、その月を開く（?ym=YYYYMM）
+  const [ym, setYm] = useState(() => {
+    if (typeof window === 'undefined') return currentYm()
+    const q = new URLSearchParams(window.location.search).get('ym')
+    return q && /^\d{6}$/.test(q) ? q : currentYm()
+  })
   const [rows, setRows] = useState<PeerStatement[] | null>(null)
   const [err, setErr] = useState('')
   const [invoices, setInvoices] = useState<PeerInvoiceSummary[]>([])
@@ -80,9 +85,9 @@ export default function PeerStatementPage() {
     <div className="max-w-5xl mx-auto space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">同業者との請求・支払</h1>
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">請求書・支払</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            相殺はしません。応援に行った分は「請求する」、応援をもらった分は「支払う」に分けて出します。金額は出面の実績から出した見込みです。
+            同業者との貸し借り（応援）と、HFU → 日比建設 の請求。相殺はしません。応援に行った分は「請求する」、応援をもらった分は「支払う」に分けて出します。金額は出面の実績から出した見込みです。
           </p>
         </div>
         <div className="flex items-center gap-2">

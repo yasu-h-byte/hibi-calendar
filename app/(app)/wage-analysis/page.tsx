@@ -90,7 +90,7 @@ export default function WageAnalysisPage() {
     <div className="p-6">
       <h1 className="text-lg font-semibold mb-2">閲覧権限がありません</h1>
       <p className="text-sm text-gray-500">この資料は代表のみが閲覧できます。</p>
-      <Link href="/docs" className="text-sm text-blue-600 mt-3 inline-block">← 資料一覧へ</Link>
+      <Link href="/compensation" className="text-sm text-blue-600 mt-3 inline-block">← 賃金・評価へ</Link>
     </div>
   )
   if (err) return <div className="p-6 text-red-600">エラー: {err}</div>

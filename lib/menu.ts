@@ -1,7 +1,11 @@
 /**
- * サイドメニューとメニュー検索（2026-09-26・メニュー見直し）。
+ * サイドメニューとメニュー検索（2026-09-26 初版・2026-09-28 業務ごとのまとまりに組み替え）。
  *
- * 並びは「いつ使うか」の順（毎日 → 毎月 → 経営 → 人・賃金 → マスタ → 管理）。
+ * まとまりは「何の仕事か」で分ける（代表 2026-09-28「どこに何があるか分かりづらい」）。
+ *   旧: 毎日／毎月（使う頻度）と 経営／人・賃金（業務の種類）の2つの軸が混ざっていて、
+ *       請求書は「毎月」、原価は「経営」、書類庫は「人・賃金」のように置き場所の理屈が見えなかった。
+ *   新: ホーム → 出面・勤怠 → 給与・締め → 請求・原価 → 人・書類 → 賃金・評価 → マスタ・管理。
+ *       まとまりの中は、よく使うものを上に置く。
  * 誰に見せるかは lib/permissions.ts の権限（cap）だけで決める（メニュー側に役割を書かない）。
  *
  * SEARCH_ENTRIES はメニュー検索用。画面の中のタブ・機能まで直接飛べるようにする
@@ -16,43 +20,69 @@ export interface MenuItem {
   external?: string
   section: string
   cap: Capability
-  /** 同じ画面の別 URL（?tab= 等）もこの項目を選択中にする */
+  /**
+   * 同じ画面の別 URL もこの項目を選択中にする。パス（'/wage'）または
+   * パス＋タブ（'/workers?tab=raise-history'）。タブ付きは、そのタブを開いている間だけ一致する
+   */
   activePrefixes?: string[]
 }
 
-export const MENU_SECTIONS = ['毎日', '毎月', '経営', '人・賃金', 'マスタ', '管理'] as const
+/** 見出しを出さないまとまり（ダッシュボードだけの先頭） */
+export const MENU_HOME_SECTION = 'ホーム'
+
+export const MENU_SECTIONS = [MENU_HOME_SECTION, '出面・勤怠', '給与・締め', '請求・原価', '人・書類', '賃金・評価', 'マスタ・管理'] as const
 
 export const MENU_ITEMS: MenuItem[] = [
-  // ── 毎日 ──
-  { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: '毎日', cap: 'dashboard.view' },
+  { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: MENU_HOME_SECTION, cap: 'dashboard.view' },
+  // ── 出面・勤怠（毎日の出面 → 月ごとのカレンダー → 有給・帰国）──
   // PC 版とスマホ版は画面の中で切り替える（両方から相互リンクあり）。メニューは1つ
-  { label: '出面入力', icon: '📋', href: '/attendance', section: '毎日', cap: 'attendance.view', activePrefixes: ['/attendance/mobile'] },
-  // ── 毎月 ──
-  { label: '就業カレンダー', icon: '📅', href: '/calendar', section: '毎月', cap: 'calendar.view' },
-  { label: '月次集計・締め', icon: '🗓', href: '/monthly', section: '毎月', cap: 'monthly.view' },
-  { label: '帳票出力', icon: '📑', href: '/monthly?tab=export', section: '毎月', cap: 'monthly.view' },
-  { label: '休暇管理', icon: '🌴', href: '/leave', section: '毎月', cap: 'leave.view' },
-  { label: '請求書・支払', icon: '🧾', href: '/peer-statement', section: '毎月', cap: 'invoice.view', activePrefixes: ['/peer-invoice'] },
-  // ── 経営 ──
-  { label: '原価・収益', icon: '💰', href: '/cost', section: '経営', cap: 'cost.view' },
+  { label: '出面入力', icon: '📋', href: '/attendance', section: '出面・勤怠', cap: 'attendance.view', activePrefixes: ['/attendance/mobile'] },
+  { label: '就業カレンダー', icon: '📅', href: '/calendar', section: '出面・勤怠', cap: 'calendar.view' },
+  { label: '休暇管理', icon: '🌴', href: '/leave', section: '出面・勤怠', cap: 'leave.view' },
+  // ── 給与・締め ──
+  { label: '月次集計・締め', icon: '🗓', href: '/monthly', section: '給与・締め', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
+  { label: '帳票出力', icon: '📑', href: '/monthly?tab=export', section: '給与・締め', cap: 'monthly.view' },
+  // ── 請求・原価 ──
+  { label: '請求書・支払', icon: '🧾', href: '/peer-statement', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice'] },
+  { label: '原価・収益', icon: '💰', href: '/cost', section: '請求・原価', cap: 'cost.view' },
   // 経営コックピットと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）
-  { label: '経営コックピット', icon: '📈', external: 'https://keieidashboard.vercel.app/genba', section: '経営', cap: 'cockpit.view' },
-  // ── 人・賃金 ──
-  { label: '人員マスタ', icon: '👷', href: '/workers', section: '人・賃金', cap: 'workers.view' },
-  // 評価管理・昇給履歴・賃金制度・賃金分析はハブで国籍別に分岐
-  { label: '賃金・評価', icon: '💴', href: '/compensation', section: '人・賃金', cap: 'wage.view', activePrefixes: ['/wage', '/evaluation', '/wage-analysis'] },
+  { label: '経営コックピット', icon: '📈', external: 'https://keieidashboard.vercel.app/genba', section: '請求・原価', cap: 'cockpit.view' },
+  // ── 人・書類 ──
+  { label: '人員マスタ', icon: '👷', href: '/workers', section: '人・書類', cap: 'workers.view' },
+  { label: '書類庫', icon: '🗂', href: '/staff-docs', section: '人・書類', cap: 'staffDocs.view' },
+  { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人・書類', cap: 'toolBudget.view' },
+  // ── 賃金・評価 ──
+  // 評価管理・昇給履歴・賃金制度・賃金分析はハブで国籍別に分岐。昇給履歴は人員マスタのタブだが、こちらを選択中にする
+  { label: '賃金・評価', icon: '💴', href: '/compensation', section: '賃金・評価', cap: 'wage.view', activePrefixes: ['/wage', '/evaluation', '/wage-analysis', '/workers?tab=raise-history'] },
   // 職長の評価入力の入口（ハブは職長には見せない）。通知ベルの「評価入力をお願いします」もここから
-  { label: '評価入力', icon: '📝', href: '/evaluation', section: '人・賃金', cap: 'evaluation.input' },
-  { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人・賃金', cap: 'toolBudget.view' },
-  { label: '書類庫', icon: '🗂', href: '/staff-docs', section: '人・賃金', cap: 'staffDocs.view' },
-  // ── マスタ ──
-  { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ', cap: 'masters.view' },
-  { label: '取引先マスタ', icon: '🏢', href: '/subcons', section: 'マスタ', cap: 'masters.view' },
-  // ── 管理 ──
+  { label: '評価入力', icon: '📝', href: '/evaluation?tab=review', section: '賃金・評価', cap: 'evaluation.input' },
+  // ── マスタ・管理 ──
+  { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ・管理', cap: 'masters.view' },
+  { label: '取引先マスタ', icon: '🏢', href: '/subcons', section: 'マスタ・管理', cap: 'masters.view' },
   // 会社・請求書／単価の既定値／ログイン・権限／お知らせ／バックアップ・履歴（アクセス履歴もここから）
-  { label: '管理者設定', icon: '⚙️', href: '/settings', section: '管理', cap: 'system.admin', activePrefixes: ['/access-log'] },
-  { label: '資料一覧', icon: '📁', href: '/docs', section: '管理', cap: 'docs.view' },
+  { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'マスタ・管理', cap: 'system.admin', activePrefixes: ['/access-log'] },
+  { label: '資料一覧', icon: '📁', href: '/docs', section: 'マスタ・管理', cap: 'docs.view' },
 ]
+
+/**
+ * 今の画面で選択中にするメニュー項目（1つだけ）。2026-09-28。
+ *   旧: 項目ごとに判定していたので、/evaluation では「評価入力」と「賃金・評価」が同時に光り、
+ *       人員マスタの昇給履歴タブでは「賃金・評価」が光らなかった。
+ * 優先順: ① href がタブまで一致 ② activePrefixes のタブ付きが一致 ③ href のパスが一致 ④ activePrefixes のパスが一致
+ */
+export function activeMenuItem(items: MenuItem[], pathname: string, search: string): MenuItem | null {
+  const split = (h: string) => { const [path, query] = h.split('?'); return { path, query } }
+  const hasQuery = (q?: string) => !!q && search.includes(q)
+  return (
+    items.find(i => { if (!i.href) return false; const { path, query } = split(i.href); return !!query && pathname === path && hasQuery(query) }) ||
+    items.find(i => (i.activePrefixes || []).some(p => { const { path, query } = split(p); return !!query && pathname === path && hasQuery(query) })) ||
+    items.find(i => { if (!i.href) return false; const { path, query } = split(i.href); return !query && pathname === path }) ||
+    items.find(i => (i.activePrefixes || []).some(p => { const { path, query } = split(p); return !query && (pathname === path || pathname.startsWith(`${path}/`)) })) ||
+    // タブ付き href しか無い画面（/evaluation の別タブなど）はパスだけでも拾う
+    items.find(i => (i.activePrefixes || []).some(p => split(p).path === pathname)) ||
+    null
+  )
+}
 
 export interface SearchEntry {
   /** 検索結果に出す名前 */
@@ -92,8 +122,9 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: '現場の請求額の入力', where: '原価・収益 → 現場別', href: '/cost', cap: 'cost.edit', keywords: 'せいきゅうがく 売上 粗利' },
   // 人・賃金
   { label: '電話URL・QR（スタッフのスマホ）', where: '人員マスタ → 編集', href: '/workers', cap: 'workers.edit', keywords: 'とーくん url qr マイページ' },
-  { label: '昇給履歴', where: '賃金・評価 → 昇給履歴', href: '/workers?tab=raise-history', cap: 'wage.view', keywords: 'しょうきゅう りれき' },
-  { label: '評価管理（ベトナム人）', where: '賃金・評価', href: '/evaluation', cap: 'wage.view', keywords: 'ひょうか 評価 セッション' },
+  { label: '昇給履歴', where: '賃金・評価 → 昇給履歴（人員マスタのタブ）', href: '/workers?tab=raise-history', cap: 'wage.view', keywords: 'しょうきゅう りれき' },
+  { label: '評価管理（ベトナム人）', where: '賃金・評価 → 評価管理', href: '/evaluation', cap: 'wage.view', keywords: 'ひょうか 評価 セッション' },
+  { label: '在留カード・雇用契約書', where: '書類庫', href: '/staff-docs', cap: 'staffDocs.view', keywords: 'ざいりゅう けいやく 在留期限 書類' },
   { label: '号俸表・年次改定（日本人）', where: '賃金・評価 → 賃金制度', href: '/wage', cap: 'wage.decide', keywords: 'ごうほう 号俸 改定' },
   { label: '賞与（日本人）', where: '賃金・評価 → 賃金制度 → 賞与', href: '/wage?tab=bonus', cap: 'wage.decide', keywords: 'しょうよ ぼーなす' },
   { label: '賃金分析', where: '賃金・評価（代表のみ）', href: '/wage-analysis', cap: 'wageAnalysis.view', keywords: 'ちんぎん ぶんせき カーブ' },

@@ -68,7 +68,7 @@ export default function CompensationHubPage() {
 
   const jpLinks: HubLink[] = [
     {
-      href: '/wage', emoji: '💴', title: '賃金制度（号俸制）',
+      href: '/wage', emoji: '💴', title: '賃金制度（日本人社員・号俸制）',
       desc: '号俸表・年次改定（評語の入力もここ）・賞与の配分・本人へ渡す給料表',
     },
   ]

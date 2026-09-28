@@ -226,11 +226,11 @@ function StaffDocsInner() {
                     <li key={i} className="text-xs">
                       <button onClick={() => setFilterWorker(m.w.id)} className="font-bold text-hibi-navy dark:text-blue-300 hover:underline mr-1">{m.w.name}</button>
                       <span className="text-red-700 dark:text-red-300">{m.msg}</span>
+                      <a href={`/workers?edit=${m.w.id}`} className="ml-1 text-blue-600 dark:text-blue-400 hover:underline">人員マスタを直す →</a>
                     </li>
                   ))}
                 </ul>
               )}
-              <p className="text-[10px] text-gray-400 mt-2">人員マスタ側を直すときは 人員マスタ → 編集 から</p>
             </div>
             <div className={cardCls('p-4')}>
               <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-2">📭 まだ入っていない書類</h2>

@@ -330,6 +330,18 @@ function MonthlyPageInner() {
   // サイドメニュー「帳票出力」・メニュー検索から ?tab=export で直接開く（2026-09-26）。
   //   メニューの切り替えは同じ画面の中なので、URL が変わるたびに合わせる
   const tabParam = useSearchParams().get('tab')
+  // 月次集計 ↔ 帳票出力 の切り替えは URL の ?tab= にも書く（2026-09-28）。
+  //   旧: 画面の中だけで切り替わり、サイドメニューの選択表示が逆の項目を指したままだった
+  const switchTopTab = useCallback((t: TopTab) => {
+    setTopTab(t)
+    try {
+      const u = new URL(window.location.href)
+      if (t === 'export') u.searchParams.set('tab', 'export'); else u.searchParams.delete('tab')
+      window.history.replaceState(null, '', `${u.pathname}${u.search}`)
+      window.dispatchEvent(new Event('hibi:urlchange'))
+    } catch { /* 表示だけの話なので失敗しても続ける */ }
+  }, [])
+
   useEffect(() => {
     setTopTab(tabParam === 'export' ? 'export' : 'summary')
   }, [tabParam])
@@ -661,7 +673,7 @@ function MonthlyPageInner() {
       {/* Top-level pill tabs */}
       <div className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded-full p-1 w-fit">
         <button
-          onClick={() => setTopTab('summary')}
+          onClick={() => switchTopTab('summary')}
           className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
             topTab === 'summary'
               ? 'bg-white dark:bg-gray-800 text-hibi-navy dark:text-white shadow-sm'
@@ -671,7 +683,7 @@ function MonthlyPageInner() {
           📋 月次集計
         </button>
         <button
-          onClick={() => setTopTab('export')}
+          onClick={() => switchTopTab('export')}
           className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
             topTab === 'export'
               ? 'bg-white dark:bg-gray-800 text-hibi-navy dark:text-white shadow-sm'
@@ -858,7 +870,7 @@ function MonthlyPageInner() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-xl font-bold text-hibi-navy dark:text-white">月次集計</h1>
+            <h1 className="text-xl font-bold text-hibi-navy dark:text-white">月次集計・締め</h1>
             {data && (
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 出勤延べ {fmtNum(data.totals.workDays)}人日 / 外注 {fmtNum(data.totals.subWorkDays)}人工 / 残業 {fmtNum(Math.round(data.workers.reduce((s, w) => s + displayOtHours(w), 0) * 10) / 10)}h
@@ -910,7 +922,7 @@ function MonthlyPageInner() {
             {data?.lockedHfu ? '🔓 HFU 解除' : '🔒 HFU 締め'}
           </button>
           <button
-            onClick={() => setTopTab('export')}
+            onClick={() => switchTopTab('export')}
             className="px-3 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition"
             title="帳票はすべて「帳票出力」タブから（キャシュモ提出の2点・根拠書類・社内用）"
           >

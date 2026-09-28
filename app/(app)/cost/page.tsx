@@ -283,7 +283,7 @@ export default function CostPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-4 flex-wrap">
-          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">原価・収益管理</h1>
+          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">原価・収益</h1>
           {/* Site filter */}
           {data && data.siteList && data.siteList.length > 0 && (
             <div className="flex items-center gap-1">
