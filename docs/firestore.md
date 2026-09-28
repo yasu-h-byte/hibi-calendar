@@ -274,3 +274,18 @@ workSchedule?: {
   過去分は親 id のまま union に混ざって表示され、`moveWorkType` でいつでも工種サイト側へ移動できる。
   データの移行処理は無い（自然に union に入るので追加対応は不要）
 
+
+## 書類庫 `staffDocs/{docId}`（2026-09-28）
+
+ファイル本体は Firebase Storage（`staff-docs/{workerId}/{docId}/…`）。ここは書類の情報だけ。詳細は [staff-docs.md](staff-docs.md)。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| workerId | number | スタッフ |
+| type | string | `residence_card` / `contract` / `passport` / `visa_permit` / `certificate` / `health` / `other` |
+| title | string? | 見出し（例: 2026年10月 賃金改定） |
+| files | {path,name,contentType,size}[] | Storage 上のファイル（在留カードの表裏は1件に2ファイル） |
+| validFrom / expiresOn | string? | 'YYYY-MM-DD'（開始日・交付日 / 在留期限・契約満了日・有効期限） |
+| note | string? | メモ |
+| status | 'current' \| 'old' | 同じ人・同じ種類で最新は1件。新しいものを最新で入れると前のものは old（消さない） |
+| uploadedAt / uploadedBy / updatedAt | string | 登録日時・登録者（super-admin / worker:ID） |

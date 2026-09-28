@@ -18,6 +18,7 @@ const nextConfig = {
         'firebase-admin': false,
         'firebase-admin/app': false,
         'firebase-admin/firestore': false,
+        'firebase-admin/storage': false,
       }
     }
     return config

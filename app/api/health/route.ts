@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { isAdminSdkActive, getAdminStatus } from '@/lib/firebase-admin'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
+import { probeStaffDocsBucket } from '@/lib/storage-admin'
 
 /**
  * ヘルス／稼働モード確認エンドポイント（Admin SDK 移行の検証・障害診断用・2026-06〜）
@@ -12,6 +13,7 @@ import { doc, getDoc } from '@/lib/fsdb'
  *   - readOk / readError: 実際に1件 getDoc して読み取り経路が生きているか（2026-07 追加）
  *       adminMode:true なのに readOk:false のときが「初期化はOKだが読み取りが落ちる」障害。
  *       readError.message/code に生の例外を出す（demmen/toolBudget を1件読むだけ・データは返さない）。
+ *   - storageOk / storageError: 書類庫のファイル置き場（Firebase Storage）に届くか（2026-09-28・中身は読まない）
  *   - time: サーバ時刻（ISO）
  *
  * 認証不要（公開GET）。
@@ -44,12 +46,16 @@ export async function GET() {
     }
   }
 
+  const storage = await probeStaffDocsBucket()
+
   return NextResponse.json({
     ok: true,
     adminMode,
     ...diag,
     readOk,
     readError,
+    storageOk: storage.ok,
+    storageError: storage.error,
     time: new Date().toISOString(),
   })
 }

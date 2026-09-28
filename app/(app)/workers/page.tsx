@@ -595,6 +595,12 @@ export default function WorkersPage() {
                             </div>
                           )
                         })()}
+                        {/* 2026-09-28: 書類庫（在留カード・契約書）への入口。見られる人にだけ出す */}
+                        {can(authUser, 'staffDocs.view') && (
+                          <a href={`/staff-docs?worker=${w.id}`} className="mt-1 inline-block text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 hover:bg-hibi-navy hover:text-white transition">
+                            🗂 書類
+                          </a>
+                        )}
                         {/* 2026-09-14: 日付指定の変更予定（在留資格の切替など） */}
                         {(w.scheduledChanges || []).filter(c => c.field === 'visa').map(c => (
                           <div key={c.from} className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">

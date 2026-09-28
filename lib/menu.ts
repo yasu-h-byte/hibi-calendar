@@ -44,6 +44,7 @@ export const MENU_ITEMS: MenuItem[] = [
   // 職長の評価入力の入口（ハブは職長には見せない）。通知ベルの「評価入力をお願いします」もここから
   { label: '評価入力', icon: '📝', href: '/evaluation', section: '人・賃金', cap: 'evaluation.input' },
   { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人・賃金', cap: 'toolBudget.view' },
+  { label: '書類庫', icon: '🗂', href: '/staff-docs', section: '人・賃金', cap: 'staffDocs.view' },
   // ── マスタ ──
   { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ', cap: 'masters.view' },
   { label: '取引先マスタ', icon: '🏢', href: '/subcons', section: 'マスタ', cap: 'masters.view' },

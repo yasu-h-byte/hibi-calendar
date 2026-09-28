@@ -88,6 +88,10 @@ export const CAPABILITIES = {
   'wage.view':               { group: '人・賃金', label: '賃金・評価を見る', roles: VIEWERS },
   'wage.decide':             { group: '人・賃金', label: '評価の承認・号俸の改定・賞与の確定', roles: ['approver', 'owner'] },
   'wageAnalysis.view':       { group: '人・賃金', label: '賃金分析', roles: ['owner'] },
+  // 書類庫（在留カード・雇用契約書など）。機微な個人情報なので職長・役員には見せない（代表 2026-09-28）
+  'staffDocs.view':          { group: '人・賃金', label: '書類庫を見る（在留カード・契約書など）', roles: ['jimu', 'approver', 'owner'] },
+  'staffDocs.edit':          { group: '人・賃金', label: '書類庫への登録・旧版への切り替え', roles: ['jimu', 'approver', 'owner'] },
+  'staffDocs.delete':        { group: '人・賃金', label: '書類庫の書類の削除', roles: ['owner'] },
   // ── マスタ ──
   'masters.view':            { group: 'マスタ', label: '現場・取引先マスタを見る', roles: ALL_OFFICE },
   'masters.edit':            { group: 'マスタ', label: '現場・取引先マスタの編集', roles: ['jimu', 'owner'] },
