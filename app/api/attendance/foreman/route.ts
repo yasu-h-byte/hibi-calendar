@@ -9,12 +9,32 @@ import {
   getForeignWorkersForSite,
   getEntryStatus,
   ymKey,
-  attKey,
   formatDateKanji,
   formatDateShort,
 } from '@/lib/attendance'
 import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
+import { workTypeFamilyIds, familyEntrySiteId, staffEntryTarget, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
+
+/**
+ * 工種（鉄骨・仮設など）を持つ現場の「同じ現場」の範囲（親＋工種サイト）と、工種の指定（2026-09-28）。
+ * 職長が出面画面で鉄骨へ移したエントリを、この画面が「未入力」「別現場の入力」と見なさないために使う。
+ * 書き込み先の工種を決めるので、main は毎回読み直す（30秒キャッシュを使わない）。
+ */
+async function loadSiteFamily(siteId: string): Promise<{ sites: HierarchySite[]; assign?: WorkTypeAssignMap; family: string[] }> {
+  const { db } = await import('@/lib/firebase')
+  const { doc, getDoc } = await import('@/lib/fsdb')
+  const snap = await getDoc(doc(db, 'demmen', 'main'))
+  const data = snap.exists() ? snap.data() : {}
+  const sites = (data.sites || []) as HierarchySite[]
+  return { sites, assign: data.assign as WorkTypeAssignMap | undefined, family: workTypeFamilyIds(sites, siteId) }
+}
+
+/** 同じ現場（親＋工種）のどこかに入っているその人・その日のエントリ */
+function familyEntry(att: Record<string, AttendanceEntry>, family: string[], wid: number | string, ym: string, day: number | string): AttendanceEntry | undefined {
+  const sid = familyEntrySiteId(att, family, wid, ym, day)
+  return sid ? att[`${sid}_${wid}_${ym}_${day}`] : undefined
+}
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
@@ -74,6 +94,8 @@ export async function GET(request: NextRequest) {
     // 当該 ym と day で他の siteId 配下のエントリを抽出
     const dayStr = String(d)
     const siteNameMap: Record<string, string> = {}
+    // 同じ現場（親＋工種サイト）。工種の無い現場は [site.id] だけ
+    let family: string[] = [site.id]
     // 代理入力の初期値用（2026-08-28 追加: 時刻つき代理入力）
     let siteSchedule: import('@/types').SiteWorkSchedule | undefined
     {
@@ -84,6 +106,7 @@ export async function GET(request: NextRequest) {
         const sites = (mainSnap.data().sites || []) as { id: string; name: string; workSchedule?: import('@/types').SiteWorkSchedule }[]
         for (const s of sites) siteNameMap[s.id] = s.name
         siteSchedule = sites.find(x => x.id === site.id)?.workSchedule
+        family = workTypeFamilyIds(sites as unknown as HierarchySite[], site.id)
       }
     }
 
@@ -100,7 +123,7 @@ export async function GET(request: NextRequest) {
       const keySid = parts.slice(0, parts.length - 3).join('_')
       if (keyYm !== ym) continue
       if (keyDay !== dayStr) continue
-      if (keySid === site.id) continue   // 自現場は除外
+      if (family.includes(keySid)) continue   // 自現場（工種サイトを含む）は除外
       const wid = parseInt(keyWid, 10)
       if (!Number.isFinite(wid)) continue
       if (!crossSiteEntries[wid]) crossSiteEntries[wid] = []
@@ -113,8 +136,7 @@ export async function GET(request: NextRequest) {
 
     // Build worker list with status
     const workers = foreignWorkers.map(w => {
-      const key = attKey(site.id, w.id, ym, d)
-      const entry = attData[key] || null
+      const entry = familyEntry(attData, family, w.id, ym, d) || null
       const misplaced = crossSiteEntries[w.id] || []
       return {
         id: w.id,
@@ -161,7 +183,7 @@ export async function GET(request: NextRequest) {
       let entered = 0
       if (isWorkDay) {
         for (const w of foreignWorkers) {
-          const e = attData[attKey(site.id, w.id, ym, dd)]
+          const e = familyEntry(attData, family, w.id, ym, dd)
           // 判定はリスト表示と同じ getEntryStatus に統一（0.6補償=入力済み、残骸のみ=未入力）
           if (getEntryStatus(e) !== 'none') entered++
           else missingNames.push(w.name)
@@ -246,8 +268,9 @@ export async function POST(request: NextRequest) {
       {
         const attD = await getAttendanceDoc(ym)
         const ws = await getForeignWorkersForSite(site.id)
+        const { family } = await loadSiteFamily(site.id)
         const enteredCount = ws.filter(w =>
-          getEntryStatus(attD[attKey(site.id, w.id, ym, day)]) !== 'none').length
+          getEntryStatus(familyEntry(attD, family, w.id, ym, day)) !== 'none').length
         if (ws.length > 0 && enteredCount === 0) {
           return NextResponse.json({
             error: 'この日はまだ誰も入力していません。承認するとスタッフが入力できなくなるため、承認できません。',
@@ -287,6 +310,7 @@ export async function POST(request: NextRequest) {
       const { getAttendanceDoc: getAtt } = await import('@/lib/attendance')
       const attD = await getAtt(ym)
       const workersForBulk = await getForeignWorkersForSite(site.id)
+      const { family: bulkFamily } = await loadSiteFamily(site.id)
       const approvedDays: number[] = []
       const skipped: { day: number; reason: string }[] = []
       const todayJstB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
@@ -295,7 +319,7 @@ export async function POST(request: NextRequest) {
         if (!Number.isInteger(dNum) || dNum < 1 || dNum > 31) { skipped.push({ day: dNum, reason: '不正な日付' }); continue }
         if (new Date(year, month - 1, dNum) > todayJstB) { skipped.push({ day: dNum, reason: '未来日' }); continue }
         const missing = workersForBulk.filter(w =>
-          getEntryStatus(attD[attKey(site.id, w.id, ym, dNum)]) === 'none')
+          getEntryStatus(familyEntry(attD, bulkFamily, w.id, ym, dNum)) === 'none')
         if (missing.length > 0) {
           skipped.push({ day: dNum, reason: `未入力: ${missing.map(w => w.name).join('、')}` })
           continue
@@ -352,9 +376,10 @@ export async function POST(request: NextRequest) {
           // 2026-08-27（休暇届総点検）: スタッフが出した欠勤届の理由(rReason/rNote)を
           //   職長の「休み」確認で消さない。旧: 残骸掃除が理由も削除し、
           //   ダッシュボードの欠勤届一覧から届が黙って消えていた
-          const { getAttendanceDoc, attKey } = await import('@/lib/attendance')
+          const { getAttendanceDoc } = await import('@/lib/attendance')
           const attDocF = await getAttendanceDoc(ym)
-          const prevEntry = attDocF[attKey(site.id, workerId, ym, day)] as { rReason?: string; rNote?: string } | undefined
+          const { family: famF } = await loadSiteFamily(site.id)
+          const prevEntry = familyEntry(attDocF, famF, workerId, ym, day) as { rReason?: string; rNote?: string } | undefined
           if (prevEntry?.rReason) (entry as { rReason?: string }).rReason = prevEntry.rReason
           if (prevEntry?.rNote) (entry as { rNote?: string }).rNote = prevEntry.rNote
           break
@@ -375,6 +400,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
       }
 
+      // 書き込み先の工種（鉄骨・仮設など）。スタッフのスマホと同じ決め方（lib/site-hierarchy.ts staffEntryTarget）
+      let editTarget = site.id
       // ベトナム人スタッフのガード: 「最初の入力はスタッフ本人から」を強制。
       // ただし事後申請性ステータス（有給/帰国中）は admin/foreman の後付け入力を許容。
       try {
@@ -388,7 +415,11 @@ export async function POST(request: NextRequest) {
           const targetWorker = workers.find(w => w.id === Number(workerId))
           if (targetWorker) {
             const dData = await getAttendanceDoc(ym)
-            const key = `${site.id}_${workerId}_${ym}_${String(day)}`
+            editTarget = staffEntryTarget(
+              (mainSnap.data().sites || []) as HierarchySite[], mainSnap.data().assign as WorkTypeAssignMap | undefined,
+              dData, site.id, Number(workerId), ym, Number(day),
+            ).targetSiteId
+            const key = `${editTarget}_${workerId}_${ym}_${String(day)}`
             const existing = dData[key]
             // 事後申請性ステータス例外を許容するため newEntry を渡す
             const check = canAdminEditEntry({ visa: targetWorker.visa }, existing, entry)
@@ -396,7 +427,7 @@ export async function POST(request: NextRequest) {
               return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
             }
             // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
-            const conflict = detectMultiSiteConflict(dData, site.id, Number(workerId), ym, day, sitesAll)
+            const conflict = detectMultiSiteConflict(dData, editTarget, Number(workerId), ym, day, sitesAll)
             if (conflict) {
               const cName = sitesAll.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
               const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
@@ -418,7 +449,7 @@ export async function POST(request: NextRequest) {
       //   まま残数が黙って戻る（staff 経路には 2026-08-27 から同じ保護がある）。
       if (choice !== 'leave') {
         const { getAttendanceDoc: gadP, attKey: akP } = await import('@/lib/attendance')
-        const curP = (await gadP(ym))[akP(site.id, workerId, ym, day)] as { p?: number | boolean } | undefined
+        const curP = (await gadP(ym))[akP(editTarget, workerId, ym, day)] as { p?: number | boolean } | undefined
         if (curP?.p) {
           return NextResponse.json({
             error: 'この日は有給として登録済みです。変更が必要な場合は管理者に連絡してください',
@@ -462,7 +493,7 @@ export async function POST(request: NextRequest) {
 
       const { computeAttendanceDeleteFields } = await import('@/lib/attendance')
       const deleteFields = computeAttendanceDeleteFields(entry)
-      await setAttendanceEntry(site.id, workerId, ym, day, entry, { deleteFields })
+      await setAttendanceEntry(editTarget, workerId, ym, day, entry, { deleteFields })
       return NextResponse.json({ success: true, entry })
     }
 
@@ -480,8 +511,10 @@ export async function POST(request: NextRequest) {
       if (!workerId || !year || !month || !day || !fromSiteId) {
         return NextResponse.json({ error: 'workerId, year, month, day, fromSiteId は必須です' }, { status: 400 })
       }
-      if (fromSiteId === site.id) {
-        return NextResponse.json({ error: '自現場のエントリは移動できません' }, { status: 400 })
+      const famFix = await loadSiteFamily(site.id)
+      if (famFix.family.includes(fromSiteId)) {
+        // 工種（鉄骨・仮設）の切り替えは現場違いではない。PC・職長スマホの出面画面の工種タグで行う
+        return NextResponse.json({ error: '自現場（工種を含む）のエントリは移動できません。工種の切り替えは出面画面の工種タグから行ってください' }, { status: 400 })
       }
       const ym = ymKey(year, month)
 
@@ -518,9 +551,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'ベトナムスタッフ以外は対象外です' }, { status: 403 })
       }
 
-      // 自現場に既存エントリがあれば移動拒否（上書き事故を防ぐ）
-      const toKey = `${site.id}_${workerId}_${ym}_${String(day)}`
-      if (attData[toKey]) {
+      // 自現場（工種を含む）に既存エントリがあれば移動拒否（上書き事故を防ぐ）
+      if (familyEntrySiteId(attData, famFix.family, workerId, ym, day)) {
         return NextResponse.json({ error: '移動先の現場に既にエントリがあります。先にそちらを削除してください。' }, { status: 409 })
       }
 
@@ -530,7 +562,9 @@ export async function POST(request: NextRequest) {
       // 1. 自現場に書き込み
       const { computeAttendanceDeleteFields } = await import('@/lib/attendance')
       const deleteFields = computeAttendanceDeleteFields(movedEntry)
-      await setAttendanceEntry(site.id, workerId, ym, day, movedEntry, { deleteFields })
+      // 移動先の工種は、その日の工種指定・本人の既定に従う（無ければ親現場）
+      const fixTarget = staffEntryTarget(famFix.sites, famFix.assign, attData, site.id, Number(workerId), ym, Number(day)).targetSiteId
+      await setAttendanceEntry(fixTarget, workerId, ym, day, movedEntry, { deleteFields })
 
       // 2. 元現場のエントリを削除（dot-notation で安全に削除）
       const docRef = doc(db, 'demmen', `att_${ym}`)

@@ -56,6 +56,8 @@ export const CAPABILITIES = {
   // 事務は入力漏れのフォローと過去日の修正（docs/manual-morita.md §3-1）。職長承認は職長が担当現場で行う
   'attendance.input':        { group: '毎日', label: '出面の入力（職長は担当現場・事務は漏れのフォローと修正）', roles: ['foreman', 'jimu', 'owner'] },
   'attendance.foremanApprove': { group: '毎日', label: '出面の職長承認（担当現場）', roles: ['foreman', 'owner'] },
+  // 工種（鉄骨・仮設など）の決定は職長と事業責任者（代表決定 2026-09-28）。スタッフ本人には選ばせない
+  'attendance.workType':     { group: '毎日', label: '出面の工種（鉄骨・仮設など）の切り替え・日ごとの工種指定', roles: ['foreman', 'jimu', 'approver', 'owner'] },
   'attendance.history':      { group: '毎日', label: '出面の変更履歴を見る・復元', roles: ['jimu', 'approver', 'owner'] },
   'attendance.finalApprove': { group: '毎日', label: '出面の最終承認', roles: ['approver', 'owner'] },
   // ── 毎月 ──

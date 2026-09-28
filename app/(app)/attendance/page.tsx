@@ -1223,7 +1223,7 @@ export default function AttendanceGridPage() {
     <div className="space-y-4">
       {userRole && !roleCan(permRoleOf({ role: userRole }), 'attendance.input') && (
         <div className="rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
-          この画面は見るだけです。出面の入力は職長・事務が行います（最終承認は下の「最終承認」行から）。
+          出面の入力は職長・事務が行います（最終承認は下の「最終承認」行から）。{roleCan(permRoleOf({ role: userRole }), 'attendance.workType') && '工種（鉄骨・仮設など）の切り替えはできます。'}
         </div>
       )}
       <HeaderBar

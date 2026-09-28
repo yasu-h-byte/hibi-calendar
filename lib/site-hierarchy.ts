@@ -198,6 +198,63 @@ export function resolveWorkTypeSiteId(
   return opts.existingSite || opts.dayWorkType || opts.workerDefault || parentId
 }
 
+/**
+ * 親現場と、その工種サイト（アーカイブ除く）の id 一覧。工種が無い現場は [自分] だけ。
+ * 工種サイトの id を渡しても親から数える（2026-09-28）。
+ */
+export function workTypeFamilyIds(sites: HierarchySite[], anySiteId: string): string[] {
+  const parentId = calendarSiteIdOf(sites, anySiteId)
+  return [parentId, ...sites.filter(s => s.parentId === parentId && !s.archived).map(s => s.id)]
+}
+
+/** その人・その日のエントリが入っている、同じ現場（親＋工種）の id。無ければ null */
+export function familyEntrySiteId(
+  att: Record<string, unknown>,
+  family: string[],
+  workerId: number | string,
+  ym: string,
+  day: number | string,
+): string | null {
+  return family.find(sid => !!att[`${sid}_${workerId}_${ym}_${day}`]) ?? null
+}
+
+/** demmen/main.assign の、工種に関わる部分だけ */
+export type WorkTypeAssignMap = Record<string, {
+  defaultWorkType?: Record<string, string>
+  dayWorkType?: Record<string, Record<string, string>>
+} | undefined>
+
+/**
+ * スタッフのスマホ・職長のトークン画面から入る出面の保存先（2026-09-28）。
+ *
+ * 工種（鉄骨・仮設など）は **本人に選ばせない**。職長・政仁さんが出面画面で決めたとおりに入れる（代表決定）。
+ * 保存先は resolveWorkTypeSiteId と同じ優先順位:
+ *   その日にエントリがある工種 ＞ その日の工種指定（dayWorkType）＞ 本人の既定（defaultWorkType）＞ 親現場
+ * 旧: スマホからの打刻は常に親現場（＝仮設）に入り、「26〜30日は鉄骨」と決めてあっても反映されなかった。
+ * さらに職長が鉄骨へ移した日をスマホは「未入力」と見なし、もう一度打つと仮設にも入って二重になり得た。
+ * 工種の指定・既定が同じ現場の工種サイトでなければ無視する（消えた工種を指していた場合の安全弁）。
+ */
+export function staffEntryTarget(
+  sites: HierarchySite[],
+  assignMap: WorkTypeAssignMap | undefined,
+  att: Record<string, unknown>,
+  chosenSiteId: string,
+  workerId: number,
+  ym: string,
+  day: number,
+): { parentId: string; targetSiteId: string; family: string[] } {
+  const family = workTypeFamilyIds(sites, chosenSiteId)
+  const parentId = family[0]
+  const a = assignMap?.[parentId]
+  const inFamily = (sid?: string | null) => (sid && family.includes(sid) ? sid : null)
+  const targetSiteId = resolveWorkTypeSiteId(parentId, {
+    existingSite: familyEntrySiteId(att, family, workerId, ym, day),
+    dayWorkType: inFamily(a?.dayWorkType?.[ym]?.[String(day)]),
+    workerDefault: inFamily(a?.defaultWorkType?.[String(workerId)]),
+  })
+  return { parentId, targetSiteId, family }
+}
+
 /** 1日まるごと工種を切り替えるときの移動計画（純関数・実際の書き込みは呼び出し側） */
 export interface DayWorkTypeMovePlan {
   moves: { kind: 'worker' | 'subcon'; id: string; fromSiteId: string; fromKey: string; toKey: string }[]

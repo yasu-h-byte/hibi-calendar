@@ -107,3 +107,51 @@ describe('isSiteStartedByMonth（後から追加した現場を過去月に混�
     expect(isSiteStartedByMonth({ start: '' }, '2026-07')).toBe(true)
   })
 })
+
+describe('スマホ打刻の工種（staffEntryTarget・2026-09-28）', () => {
+  const sites = [
+    { id: 'kawasaki', name: '川崎製作所' },
+    { id: 'kawasaki_s', name: '鉄骨', parentId: 'kawasaki', workType: '鉄骨工事' },
+    { id: 'kawasaki_old', name: '旧工種', parentId: 'kawasaki', workType: '旧', archived: true },
+    { id: 'ihi', name: 'IHI' },
+  ]
+  const ym = '202610'
+
+  test('同じ現場の範囲 = 親＋アーカイブされていない工種。工種の id から引いても親から数える', async () => {
+    const { workTypeFamilyIds } = await import('@/lib/site-hierarchy')
+    expect(workTypeFamilyIds(sites, 'kawasaki')).toEqual(['kawasaki', 'kawasaki_s'])
+    expect(workTypeFamilyIds(sites, 'kawasaki_s')).toEqual(['kawasaki', 'kawasaki_s'])
+    expect(workTypeFamilyIds(sites, 'ihi')).toEqual(['ihi'])
+  })
+
+  test('何も決まっていなければ親現場（仮設）', async () => {
+    const { staffEntryTarget } = await import('@/lib/site-hierarchy')
+    expect(staffEntryTarget(sites, {}, {}, 'kawasaki', 109, ym, 1).targetSiteId).toBe('kawasaki')
+  })
+
+  test('その日の工種指定（26〜30日は鉄骨）があればスマホの打刻もそこへ入る', async () => {
+    const { staffEntryTarget } = await import('@/lib/site-hierarchy')
+    const assign = { kawasaki: { dayWorkType: { [ym]: { '26': 'kawasaki_s' } } } }
+    expect(staffEntryTarget(sites, assign, {}, 'kawasaki', 109, ym, 26).targetSiteId).toBe('kawasaki_s')
+    expect(staffEntryTarget(sites, assign, {}, 'kawasaki', 109, ym, 25).targetSiteId).toBe('kawasaki')
+  })
+
+  test('本人の既定が鉄骨なら鉄骨。ただし日の指定のほうが強い', async () => {
+    const { staffEntryTarget } = await import('@/lib/site-hierarchy')
+    const assign = { kawasaki: { defaultWorkType: { '109': 'kawasaki_s' }, dayWorkType: { [ym]: { '3': 'kawasaki' } } } }
+    expect(staffEntryTarget(sites, assign, {}, 'kawasaki', 109, ym, 2).targetSiteId).toBe('kawasaki_s')
+    expect(staffEntryTarget(sites, assign, {}, 'kawasaki', 109, ym, 3).targetSiteId).toBe('kawasaki')
+  })
+
+  test('職長が鉄骨へ移した日にスマホで打ち直しても、鉄骨のエントリを更新する（仮設に二重に入らない）', async () => {
+    const { staffEntryTarget } = await import('@/lib/site-hierarchy')
+    const att = { [`kawasaki_s_109_${ym}_5`]: { w: 1 } }
+    expect(staffEntryTarget(sites, {}, att, 'kawasaki', 109, ym, 5).targetSiteId).toBe('kawasaki_s')
+  })
+
+  test('工種の指定が別の現場やアーカイブ済みの工種を指していたら無視する', async () => {
+    const { staffEntryTarget } = await import('@/lib/site-hierarchy')
+    const assign = { kawasaki: { dayWorkType: { [ym]: { '7': 'ihi' } }, defaultWorkType: { '109': 'kawasaki_old' } } }
+    expect(staffEntryTarget(sites, assign, {}, 'kawasaki', 109, ym, 7).targetSiteId).toBe('kawasaki')
+  })
+})

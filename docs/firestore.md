@@ -257,6 +257,12 @@ workSchedule?: {
   画面: 日付の見出しのチップ（1日）と「期間で工種を切り替え」（from〜to）。列は工種の色で塗る
 - **新規入力の保存先の優先順位**（`resolveWorkTypeSiteId`・PC/スマホ共通）:
   既にその日のエントリがある現場 ＞ その日の工種指定（`dayWorkType`） ＞ 本人の既定（`defaultWorkType`） ＞ 親現場
+- **スタッフのスマホ打刻・職長のトークン画面（2026-09-28・代表決定）**: 工種は**本人に選ばせない**。
+  スマホの現場の選択肢から工種サイトを外し、保存先はサーバが上と同じ優先順位で決める（`lib/site-hierarchy.ts staffEntryTarget`）。
+  旧: スマホの打刻は常に親現場（＝仮設）に入り、「26〜30日は鉄骨」と決めても反映されなかった。職長が鉄骨へ移した日を
+  スマホ・トークン画面が「未入力」「別現場の入力」と見なし、打ち直しで仮設にも入って二重になり得た
+  （いまは `workTypeFamilyIds` / `familyEntrySiteId` で親＋工種をひとつの現場として見る。承認は親現場の単位）
+- **切り替えられる人**: `attendance.workType`（職長・事務・事業責任者・代表）。出面の入力権限が無い政仁さんも工種だけは切り替えられる
 - **1日分の切り替え（移動）**: `POST /api/attendance/grid { action: 'moveWorkType', siteId: 親現場id, ym, day, workerId または subconId, toSiteId }`。
   `app/api/attendance/foreman/route.ts` の `fix_site`（現場違い修正）と同じ考え方で、
   `setAttendanceEntry` + `computeAttendanceDeleteFields` で移動先へ書き込み、移動元は `d.{key}`（外注なら `sd.{key}`）を `deleteField()` で消す。

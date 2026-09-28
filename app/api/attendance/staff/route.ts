@@ -15,6 +15,7 @@ import {
 import { getSites } from '@/lib/sites'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
+import { calendarSiteIdOf, workTypeFamilyIds, familyEntrySiteId, staffEntryTarget, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
 import { AttendanceEntry } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween } from '@/lib/date-utils'
@@ -37,8 +38,8 @@ export async function GET(request: NextRequest) {
     const mainSnapOnce = await getDoc(doc(db, 'demmen', 'main'))
     const mainRaw = (mainSnapOnce.exists() ? mainSnapOnce.data() : {}) as {
       workers?: unknown[]
-      sites?: { id: string; name: string; archived?: boolean; workSchedule?: unknown }[]
-      assign?: Record<string, { workers?: number[] }>
+      sites?: { id: string; name: string; archived?: boolean; workSchedule?: unknown; parentId?: string; workType?: string }[]
+      assign?: Record<string, { workers?: number[]; defaultWorkType?: Record<string, string>; dayWorkType?: Record<string, Record<string, string>> }>
       massign?: Record<string, { workers?: number[] }>
     }
     const allWorkers = mapRawWorkers(mainRaw.workers || [])
@@ -74,7 +75,9 @@ export async function GET(request: NextRequest) {
     const unassigned = assignedSites.length === 0
 
     // Get all active (non-archived) sites for the dropdown（main から導出）
-    const allActiveSites = (mainRaw.sites || []).filter(s2 => !s2.archived)
+    // 工種サイト（鉄骨など）は選択肢に出さない（2026-09-28 代表決定: 工種は本人に選ばせず、
+    //   職長・政仁さんが出面画面で決める。保存先は POST で staffEntryTarget が決める）
+    const allActiveSites = (mainRaw.sites || []).filter(s2 => !s2.archived && !s2.parentId)
 
     // Build availableSites: all active sites, with primary flag for assigned ones
     const assignedIds = new Set(assignedSites.map(s => s.id))
@@ -90,7 +93,12 @@ export async function GET(request: NextRequest) {
       return a.name.localeCompare(b.name, 'ja')
     })
 
-    const siteId = siteIdParam || (assignedSites.length > 0 ? assignedSites[0].id : allActiveSites[0]?.id)
+    // 工種サイトの id が来ても親現場として扱う（古いブックマーク・以前の選択の残り）
+    const rawSitesH = (mainRaw.sites || []) as import('@/lib/site-hierarchy').HierarchySite[]
+    const siteIdRaw = siteIdParam || (assignedSites.length > 0 ? assignedSites[0].id : allActiveSites[0]?.id)
+    const siteId = siteIdRaw ? calendarSiteIdOf(rawSitesH, siteIdRaw) : siteIdRaw
+    // 同じ現場（親＋工種）のどこかに入っていれば、その現場の入力とみなす
+    const family = siteId ? workTypeFamilyIds(rawSitesH, siteId) : []
     const site = availableSites.find(s => s.id === siteId) || availableSites[0]
     if (!site) {
       return NextResponse.json({ error: 'No sites available' }, { status: 404 })
@@ -115,8 +123,8 @@ export async function GET(request: NextRequest) {
     ])
 
     // Today's entry
-    const todayKey = attKey(siteId, worker.id, ym, d)
-    const currentEntry = attData[todayKey] || null
+    const todaySite = familyEntrySiteId(attData, family, worker.id, ym, d) || siteId
+    const currentEntry = attData[attKey(todaySite, worker.id, ym, d)] || null
 
     // Past 5 days (with site name)
     const pastDays: {
@@ -148,10 +156,10 @@ export async function GET(request: NextRequest) {
       const pDay = pd.getDate()
       const pAttData = await getAttCached(pym)
 
-      // Check current site first, then check all sites for this day
-      const pk = attKey(siteId, worker.id, pym, pDay)
-      let entry = pAttData[pk] || null
-      let entrySiteId = siteId
+      // Check current site (親＋工種) first, then check all sites for this day
+      const famSite = familyEntrySiteId(pAttData, family, worker.id, pym, pDay)
+      let entry = famSite ? pAttData[attKey(famSite, worker.id, pym, pDay)] || null : null
+      let entrySiteId = famSite || siteId
       if (!entry) {
         for (const sid of Object.keys(siteNames)) {
           if (sid === siteId) continue
@@ -167,7 +175,8 @@ export async function GET(request: NextRequest) {
     }
     // ↓承認の取得は missingDays 側とまとめて1回の並列バッチで行う（2026-09-02）
     const pastApprovalsPromise = Promise.all(
-      pastDayInfos.map(i => getApprovalForDay(i.entrySiteId, i.pym, i.pDay)))
+      // 承認は親現場の単位（工種サイトのエントリでも親の承認を見る）
+      pastDayInfos.map(i => getApprovalForDay(calendarSiteIdOf(rawSitesH, i.entrySiteId), i.pym, i.pDay)))
     const pastApprovals = await pastApprovalsPromise
     pastDayInfos.forEach((i, idx) => {
       pastDays.push({
@@ -470,11 +479,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { token, siteId, year, month, day, choice, overtimeHours,
+    const { token, siteId: siteIdIn, year, month, day, choice, overtimeHours,
             startTime, endTime, break1, break2, break3,
             restReason, restNote } = await request.json()
 
-    if (!token || !siteId || !year || !month || !day || !choice) {
+    if (!token || !siteIdIn || !year || !month || !day || !choice) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     }
 
@@ -487,8 +496,13 @@ export async function POST(request: NextRequest) {
     // 2026-09-02 高速化: POST でも main を1回だけ読んで全てを導出
     const mainSnapPost = await getDoc(doc(db, 'demmen', 'main'))
     const mainRawPost = (mainSnapPost.exists() ? mainSnapPost.data() : {}) as {
-      sites?: { id: string; name?: string; archived?: boolean; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string } }[]
+      sites?: { id: string; name?: string; archived?: boolean; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string }; parentId?: string }[]
+      assign?: WorkTypeAssignMap
     }
+    // 工種サイトの id が来ても親現場として扱う（承認・勤務時間・カレンダーは親の単位）
+    const siteId = calendarSiteIdOf((mainRawPost.sites || []) as import('@/lib/site-hierarchy').HierarchySite[], String(siteIdIn))
+    // 実際に書き込む現場（工種）。下の同日多現場ガードの中で出面を読んだときに決める
+    let targetSiteId = siteId
     const allActiveSites = (mainRawPost.sites || []).filter(s2 => !s2.archived).map(s2 => ({ id: s2.id, name: s2.name || '' }))
     if (!allActiveSites.find(s => s.id === siteId)) {
       return NextResponse.json({ error: 'Site not found or archived' }, { status: 403 })
@@ -558,8 +572,14 @@ export async function POST(request: NextRequest) {
       //   別ステータスで上書きすると、p だけが消えて申請レコードは approved のまま残り、
       //   残数が黙って1日戻っていた（承認↔出面の対の崩れ）。有給の変更は管理者の
       //   取消(revoke)経由に限定する。
+      // 保存先の工種: その日の入力がある工種 ＞ その日の工種指定 ＞ 本人の既定 ＞ 親現場（本人には選ばせない）
+      targetSiteId = staffEntryTarget(
+        (mainRawPost.sites || []) as import('@/lib/site-hierarchy').HierarchySite[],
+        mainRawPost.assign, attDoc, siteId, worker.id, ym, Number(day),
+      ).targetSiteId
+
       if (choice !== 'leave') {
-        const existing = attDoc[attKey(siteId, worker.id, ym, day)] as { p?: number | boolean } | undefined
+        const existing = attDoc[attKey(targetSiteId, worker.id, ym, day)] as { p?: number | boolean } | undefined
         if (existing?.p) {
           return NextResponse.json({
             error: 'この日は有給として登録済みです。変更が必要な場合は管理者に連絡してください / Ngày này đã đăng ký nghỉ phép. Vui lòng liên hệ quản lý nếu cần thay đổi',
@@ -568,7 +588,7 @@ export async function POST(request: NextRequest) {
       }
       // 全現場リスト（アーカイブ済みも含む。過去の現場間違いを検出するため）
       const sitesAll = mainRawPost.sites || []
-      const conflict = detectMultiSiteConflict(attDoc, siteId, worker.id, ym, day, sitesAll)
+      const conflict = detectMultiSiteConflict(attDoc, targetSiteId, worker.id, ym, day, sitesAll)
       if (conflict) {
         const found = sitesAll.find(s => s.id === conflict.conflictSiteId)
         const conflictSiteName = found?.name || conflict.conflictSiteId
@@ -692,7 +712,7 @@ export async function POST(request: NextRequest) {
 
     // 残骸消去: entry に含まれない既知フィールドを全て削除
     const deleteFields = computeAttendanceDeleteFields(entry)
-    await setAttendanceEntry(siteId, worker.id, ym, day, entry, { deleteFields })
+    await setAttendanceEntry(targetSiteId, worker.id, ym, day, entry, { deleteFields })
 
     return NextResponse.json({ success: true, entry })
   } catch (error) {

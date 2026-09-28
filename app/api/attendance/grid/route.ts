@@ -385,8 +385,11 @@ export async function POST(request: NextRequest) {
     //   職長承認 → attendance.foremanApprove（職長・代表）、最終承認 → 下の approve_final で isManagerRole
     {
       const foremanApproveActions = ['approve', 'approve_foreman', 'unapprove', 'unapprove_foreman']
+      // 工種（鉄骨・仮設）の切り替えは職長に加えて事業責任者（政仁さん）もできる（代表 2026-09-28）
+      const workTypeActions = ['saveDefaultWorkType', 'setDayWorkType', 'moveWorkType']
       const cap = foremanApproveActions.includes(action) ? 'attendance.foremanApprove'
         : (action === 'approve_final' || action === 'unapprove_final') ? 'attendance.finalApprove'
+        : workTypeActions.includes(action) ? 'attendance.workType'
         : 'attendance.input'
       const denied = await requireCap(request, cap)
       if (denied) return denied
