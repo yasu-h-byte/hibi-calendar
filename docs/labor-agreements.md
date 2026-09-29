@@ -132,7 +132,7 @@
 |---|---|
 | 始業終業時刻 | 現場カレンダー (`siteCalendar/`) |
 | 休憩時間 | 現場マスタ (`workSchedule.{morning,lunch,afternoon}Break`) |
-| 法定休日 | 日曜（`isLegalHoliday = dow === 0`） |
+| 法定休日 | 日曜（`isLegalHoliday = dow === 0`）。⚠️ 日本人は 2026-10 分から日曜の割増を付けない運用（代表決定 2026-09-30・`docs/historical-changes.md`）。就業規則が法定休日を日曜に特定しているなら37条違反になるため、原文の確認が必要（TODO） |
 | 所定休日 | 土曜（カレンダー設定で変更可） |
 | 賃金計算期間 | 毎月1日〜末日 |
 | 賃金支払日 | 翌月25日 |

@@ -80,6 +80,7 @@ interface WorkerMonthly {
   legalRequiredPay?: number
   nightShiftPaid?: number
   legalShortfall?: number
+  sundayNoRestDays?: number[]
   lateNightRiskDays?: number
   guaranteeDays?: number
   calendarBlankDays?: number
@@ -1374,6 +1375,16 @@ function MonthlyPageInner() {
                             title={`夜勤日の法定必要額 ¥${Math.ceil(w.legalRequiredPay || 0).toLocaleString()} に対し支給 ¥${(w.nightShiftPaid || 0).toLocaleString()}。¥${(w.legalShortfall || 0).toLocaleString()} 不足しています（日曜の夜勤 または 長時間の通し勤務）。1.5人工の慣例では法定割増を満たさないケースです。`}
                           >
                             ⚠ 法定不足 ¥{(w.legalShortfall || 0).toLocaleString()}
+                          </span>
+                        )}
+                        {/* 2026-09-30: 日本人は日曜の割増なし（代表決定）。ただし週に休みが無いまま日曜に出た日は
+                            法律上の割増が要るので知らせる（支給額は変えない） */}
+                        {(w.sundayNoRestDays?.length || 0) > 0 && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            title={`${(w.sundayNoRestDays || []).join('・')}日の日曜は、前の6日すべて出勤しています（その週に休みがありません）。この場合の日曜出勤は法定休日の労働になり、35%の割増が法律上必要です。日比では日本人の日曜割増を付けない運用のため、支給額には入れていません。振替休日を取らせるか、キャシュモ・社労士に扱いを確認してください。`}
+                          >
+                            ⚠ 休みなし週の日曜 {(w.sundayNoRestDays || []).join('・')}日
                           </span>
                         )}
                         {/* 2026-09-15: 旧ルール（固定月給）の人は計算の形が違うので、名前の横で分かるようにする */}

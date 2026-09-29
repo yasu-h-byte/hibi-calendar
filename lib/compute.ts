@@ -54,6 +54,17 @@ const JP_PRESCRIBED_HOURS_PER_DAY = 8
  * 実施とセットで判断すること。
  */
 const JP_LEGAL_HOLIDAY_FROM_YM = '202608'
+/**
+ * 日本人の日曜割増の最終月（2026-09-30 代表決定: 政仁さんを含め日本人は日曜の割増なし＝従来の運用に戻す）。
+ * 10月分からは日曜の出勤も「日額 × 人工 ＋ 残業h × 1.25」の通常計算。
+ * 8〜9月分は実際にこの計算で締めているので、その2か月は割増ありのまま再現する（historical-changes.md）。
+ * 法定休日（週1日の休み）が取れていない週の日曜出勤は割増が法律上必要なので、
+ * 「前の6日すべて出勤した日曜」を sundayNoRestDays で警告する（支給額は変えない・夜勤の法定割れと同じ扱い）。
+ */
+const JP_LEGAL_HOLIDAY_UNTIL_YM = '202609'
+export function jpSundayPremiumApplies(ym: string): boolean {
+  return ym >= JP_LEGAL_HOLIDAY_FROM_YM && ym <= JP_LEGAL_HOLIDAY_UNTIL_YM
+}
 
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
@@ -1184,6 +1195,7 @@ export interface WorkerMonthly {
   nightShiftPaid?: number   // 夜勤日に実際に支払う額 合計（人工 × 日額 ＋ 残業手当）
   legalShortfall?: number   // 法定必要額 − 実支給額（プラスなら不足 = 要是正）
   lateNightRiskDays?: number // 残業hから逆算すると22時を超えるが夜勤登録が無い日数（運用ルール違反の検出）
+  sundayNoRestDays?: number[] // 日本人: 前の6日すべて出勤した日曜（その週に休みが無い＝法定休日の割増が必要になり得る）。2026-10〜の警告用
   // 2026-09-13 追加: 保証枠（欠勤控除の基準日数）= min(基本給ベース20日, 配置現場カレンダーの所定日数)。
   //   閑散期でカレンダーの稼働日が20日未満の月は、全日出勤なら欠勤控除ゼロ＝基本給20日分を保証する（月給制）。
   guaranteeDays?: number
@@ -1214,6 +1226,7 @@ export interface WorkerMonthly {
   legalHolidayManDays?: number   // 法定休日の人工（基本給から除外する分）
   legalHolidayOtHours?: number   // 法定休日の残業h（残業手当から除外する分）
   _lhDayHours?: Map<string, number>  // ym_day → 法定休日の実労働時間
+  _jpWorkedDays?: Set<number>  // 日本人の出勤日（日曜の警告用）
   // 2026-07-06 追加: 有給/試験/休業補償も同一日複数現場で重複排除する（全日単位の概念）。
   //   これがないと同日2現場に p/exam/w=0.6 が入っている人で plUsed 等が2倍になり、
   //   有給手当の過払い・欠勤控除の漏れが発生していた（actualWorkDays と同じ扱いに統一）。
@@ -1523,7 +1536,12 @@ export function computeMonthly(
     //   ※ 夜勤(ns)のある日は対象外（2026-08-27 代表決定）: 日曜夜勤は「夜勤1回=1.5人工」の
     //     慣例支給を維持する（1.35×実時間に置換しない）。法定必要額との差は
     //     legalRequiredPay/legalShortfall（日曜は1.35倍で算定済み）の警告で監視する。
-    if (wm.visa === 'none' && !isComp && !entry.ns && ym >= JP_LEGAL_HOLIDAY_FROM_YM) {
+    // 日本人の出勤日（日曜の警告用・2026-09-30）。補償日・休みは含めない
+    if (wm.visa === 'none' && !isComp && calcManDays(entry) > 0) {
+      if (!wm._jpWorkedDays) wm._jpWorkedDays = new Set<number>()
+      wm._jpWorkedDays.add(Number(pk.day))
+    }
+    if (wm.visa === 'none' && !isComp && !entry.ns && jpSundayPremiumApplies(ym)) {
       const dow0 = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, Number(pk.day)).getDay()
       if (dow0 === 0) {
         wm.legalHolidayManDays = Math.round(((wm.legalHolidayManDays || 0) + calcManDays(entry)) * 100) / 100
@@ -1677,6 +1695,24 @@ export function computeMonthly(
     if (min > 0 && from && ym >= from && wm.actualWorkDays > 0) {
       // 金額は丸めない正確な時間から算出する（3桁で丸めると1円ズレる）。表示側で丸める
       wm.breakShortenHours = wm.actualWorkDays * min / 60
+    }
+  }
+
+  // 日本人: 割増を付けない月（2026-10〜）に、前の6日すべて出勤した日曜（＝その週に休みが無い）を警告する。
+  //   月をまたぐ週は前月の出勤が分からないので判定しない（誤警報を出さない）
+  if (!jpSundayPremiumApplies(ym)) {
+    const yN = parseInt(ym.slice(0, 4)), mN = parseInt(ym.slice(4, 6))
+    for (const wm of workerMap.values()) {
+      if (wm.visa !== 'none' || !wm._jpWorkedDays || wm.job === 'yakuin') continue
+      const worked = wm._jpWorkedDays
+      const hits: number[] = []
+      for (const d of worked) {
+        if (d < 7 || new Date(yN, mN - 1, d).getDay() !== 0) continue
+        let all = true
+        for (let k = d - 6; k < d; k++) if (!worked.has(k)) { all = false; break }
+        if (all) hits.push(d)
+      }
+      if (hits.length > 0) wm.sundayNoRestDays = hits.sort((a, b) => a - b)
     }
   }
 

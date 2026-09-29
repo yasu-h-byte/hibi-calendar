@@ -67,7 +67,7 @@ interface HomeLongLeaveItem {
 }
 
 interface QuietIssue {
-  kind: 'nightUnregistered' | 'legalShortfall' | 'earlyReturn' | 'staleAttendance'
+  kind: 'nightUnregistered' | 'legalShortfall' | 'sundayNoRest' | 'earlyReturn' | 'staleAttendance'
     | 'wageRevisionPending'
   workerName: string
   detail: string
@@ -652,6 +652,7 @@ export default function DashboardPage() {
         const KIND_LABEL: Record<string, string> = {
           nightUnregistered: '夜勤未登録',
           legalShortfall: '法定割れ',
+          sundayNoRest: '日曜（休みなし週）',
           earlyReturn: '帰国申請',
           staleAttendance: '出面未入力',
           wageRevisionPending: '賃金改定未反映',

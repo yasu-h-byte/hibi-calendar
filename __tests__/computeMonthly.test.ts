@@ -1509,3 +1509,47 @@ describe('calculateVietnameseSalary - 週残業しきい値（監査④: カレ�
     expect(v.statutoryOT).toBe(0)
   })
 })
+
+describe('computeMonthly - 日本人の日曜割増は 2026-10 分からなし（代表決定 2026-09-30）', () => {
+  // 2026年10月の日曜: 4, 11, 18, 25
+  const YM = '202610'
+  const jp = (job = 'tobi', salary?: number) => buildMain({
+    workers: [{
+      id: 4, name: '本田文人', org: 'hibi', visa: 'none', job,
+      rate: salary ? 0 : 18120, ...(salary ? { salary } : {}), otMul: 1.25, hireDate: '', token: '',
+    }],
+    assign: { site1: { workers: [4], subcons: [] } },
+    siteWorkDays: { [YM]: { site1: 20 } },
+  })
+
+  test('日曜出勤も日額×1日（割増なし）。8〜9月分は割増ありのまま', () => {
+    const attD: Record<string, { w: number; o?: number }> = {}
+    Object.assign(attD, dayWork('site1', 4, YM, 4))
+    const w = computeMonthly(jp(), attD, {}, YM, 20).workers.find(x => x.id === 4)!
+    expect(w.legalHolidayAllowance || 0).toBe(0)
+    expect(w.basePay).toBe(18120)
+    expect(w.salaryNetPay).toBe(18120)
+    // 9月までは割増あり（既に締めた月の再現）
+    const sep: Record<string, { w: number; o?: number }> = {}
+    Object.assign(sep, dayWork('site1', 4, '202609', 6))  // 2026-09-06 は日曜
+    const s = computeMonthly(jp(), sep, {}, '202609', 20).workers.find(x => x.id === 4)!
+    expect(s.legalHolidayAllowance).toBeGreaterThan(0)
+  })
+
+  test('役員（政仁さん）も日曜の割増なし', () => {
+    const attD: Record<string, { w: number; o?: number }> = {}
+    Object.assign(attD, dayWork('site1', 4, YM, 4))
+    const w = computeMonthly(jp('yakuin', 1180000), attD, {}, YM, 20).workers.find(x => x.id === 4)!
+    expect(w.legalHolidayAllowance || 0).toBe(0)
+    expect(w.salaryNetPay).toBe(1180000)
+  })
+
+  test('前の6日すべて出勤した日曜だけ警告する（支給額は変えない）', () => {
+    const attD: Record<string, { w: number; o?: number }> = {}
+    for (let d = 5; d <= 11; d++) Object.assign(attD, dayWork('site1', 4, YM, d))   // 5(月)〜11(日) 連続
+    Object.assign(attD, dayWork('site1', 4, YM, 18))                                // 18(日) だけ・前週は休みあり
+    const w = computeMonthly(jp(), attD, {}, YM, 20).workers.find(x => x.id === 4)!
+    expect(w.sundayNoRestDays).toEqual([11])
+    expect(w.salaryNetPay).toBe(18120 * 8)
+  })
+})

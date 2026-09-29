@@ -1358,11 +1358,12 @@ export async function GET(request: NextRequest) {
       hkDays?: number
       lateNightRiskDays?: number
       legalShortfall?: number
+      sundayNoRestDays?: number[]
       hkEarlyReturnDays?: number
       hkEarlyReturnFirstDate?: string
     }
     interface QuietIssue {
-      kind: 'nightUnregistered' | 'legalShortfall' | 'earlyReturn' | 'staleAttendance'
+      kind: 'nightUnregistered' | 'legalShortfall' | 'sundayNoRest' | 'earlyReturn' | 'staleAttendance'
         | 'wageRevisionPending'
       workerName: string
       detail: string
@@ -1408,6 +1409,14 @@ export async function GET(request: NextRequest) {
             kind: 'legalShortfall',
             workerName: w.name,
             detail: `夜勤の法定割増が ¥${(w.legalShortfall || 0).toLocaleString()} 不足`,
+            href: `/monthly?ym=${ym}`,
+          })
+        }
+        if ((w.sundayNoRestDays?.length || 0) > 0) {
+          quietIssues.push({
+            kind: 'sundayNoRest',
+            workerName: w.name,
+            detail: `休みの無い週の日曜出勤 ${(w.sundayNoRestDays || []).join('・')}日（法定休日の割増が必要になり得る。振替休日を検討）`,
             href: `/monthly?ym=${ym}`,
           })
         }
