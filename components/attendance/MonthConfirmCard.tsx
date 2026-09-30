@@ -92,12 +92,18 @@ export default function MonthConfirmCard({ token }: { token: string }) {
           </div>
           {done ? (
             <span className="text-xs font-bold text-green-700 bg-white rounded-full px-2 py-1">
-              {c!.status === 'ok' ? '✓ 確認ずみ / Đã xác nhận' : '✉ 連絡ずみ / Đã báo'}
+              {c!.status === 'ok' ? '✓ 確認ずみ / Đã xác nhận' : c!.resolvedAt ? '✓ 会社が対応 / Công ty đã xử lý' : '✉ 連絡ずみ / Đã báo'}
             </span>
           ) : (
             <span className="text-xs font-bold text-hibi-charcoal bg-hibi-amber rounded-full px-2 py-1">確認してください</span>
           )}
         </div>
+        {/* 会社からの返事（事務所が「対応済み」にしたとき・2026-09-30） */}
+        {done && c!.status === 'issue' && c!.resolvedAt && (
+          <p className="mt-2 text-xs text-sky-800 bg-sky-50 rounded-lg px-3 py-2 whitespace-pre-wrap">
+            会社が確認しました / Công ty đã kiểm tra.{c!.reply ? `\n会社から / Từ công ty: ${c!.reply}` : ''}
+          </p>
+        )}
         {data.stale && (
           <p className="mt-2 text-xs font-bold text-red-600">
             確認したあとで出面が変わりました。もう一度確認してください。<br />

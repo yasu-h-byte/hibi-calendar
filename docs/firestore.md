@@ -171,6 +171,8 @@ workSchedule?: {
 | `at` | string | ISO 時刻 |
 | `asOf` / `fpAsOf` | string | 確認した日（JST）と、その日より前の範囲の指紋。「確認のあとで変わったか」はこれで判定 |
 | `afterApproval` | boolean | 職長承認・最終承認がそろってからの確認か。無い記録は「未確認」扱い（月締めのチェックも） |
+| `issueOpen` | boolean | 「まちがいがある」の連絡が未対応（通知ベルはこれで絞って読む） |
+| `resolvedAt` / `resolvedBy` / `reply` | string | 事務所が対応済みにした日時・人・本人への返事（本人のスマホに出る） |
 
 ### evaluations/{workerId_evaluationDate}
 評価データ（複数評価者対応）。

@@ -22,6 +22,8 @@ interface Notification {
   type: 'warning' | 'error' | 'info'
   count?: number
   messengerText?: string
+  /** 押すと開く画面（2026-09-30〜） */
+  href?: string
   action?: {
     type: string
     workerId: number
@@ -613,6 +615,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // 8d. 本人からの出面の連絡（スマホの確認で「まちがいがある」・未対応。2026-09-30）
+    //   attConfirm の issueOpen だけを読む（未対応が無ければ0件の読み取り）。
+    //   事務・事業責任者・代表は全員分、職長は自分の現場の人だけ
+    try {
+      const qs = await getDocs(query(collection(db, 'attConfirm'), where('issueOpen', '==', true)))
+      const open = qs.docs.map(d => d.data() as { ym: string; workerId: number; workerName: string })
+      const mine = role === 'foreman' ? open.filter(c => myForemanWorkers.has(c.workerId)) : open
+      if (mine.length > 0) {
+        const byYm = new Map<string, string[]>()
+        for (const c of mine) byYm.set(c.ym, [...(byYm.get(c.ym) || []), c.workerName])
+        const latestYm = [...byYm.keys()].sort().reverse()[0]
+        notifications.push({
+          id: role === 'foreman' ? 'foreman-staff-confirm-issues' : 'staff-confirm-issues',
+          icon: '✉️',
+          message: `本人から出面の連絡（未対応）: ${[...byYm.entries()].sort().map(([ym, names]) => `${parseInt(ym.slice(4, 6))}月 ${names.join('・')}`).join(' ／ ')}`,
+          type: 'warning',
+          count: mine.length,
+          // 職長は月次集計を見られないので出面の画面へ
+          href: role === 'foreman' ? '/attendance' : `/monthly?ym=${latestYm}`,
+        })
+      }
+    } catch (e) {
+      console.error('Staff confirm issue check error:', e)
+    }
+
     // 9. お知らせ（最新1件・7日以内）。投稿分＋リリースノートを役割に合わせて（lib/release-notes.ts）。
     //   2026-09-26: 旧は存在しない 'announcements' コレクションを読んでいて、ベルに一度も出ていなかった
     try {
@@ -688,7 +715,8 @@ export async function GET(request: NextRequest) {
         // 2026-08-27 追加: 最終承認者に承認待ち（有給・帰国）を配信
         //   （旧: admin 限定で、承認フローの当事者にベルが出なかった）
         return ['unsigned-calendar', 'calendar-deadline', 'month-unlocked-hibi', 'month-unlocked-hfu',
-                'pending-leave-requests', 'pending-home-long-leave', 'pending-invoices', 'announcement'].includes(n.id)
+                'pending-leave-requests', 'pending-home-long-leave', 'pending-invoices', 'announcement',
+                'staff-confirm-issues'].includes(n.id)
             || n.id.startsWith('pl-grant')
             || n.id.startsWith('evaluation-due')
             || n.id.startsWith('evaluation-todo-')
@@ -699,13 +727,15 @@ export async function GET(request: NextRequest) {
         // 自分宛の評価入力依頼 + カレンダー期限 + 自分の現場の有給・帰国の職長承認待ち（2026-09-26）
         return n.id === 'calendar-deadline' || n.id.startsWith('evaluation-todo-')
           || n.id === 'foreman-pending-leave' || n.id === 'foreman-pending-home-leave' || n.id === 'announcement'
+          || n.id === 'foreman-staff-confirm-issues'
       }
       if (role !== 'jimu') {
         // 役員（見るだけ）・不明: カレンダー署名系のみ
         return ['unsigned-calendar', 'calendar-deadline', 'announcement'].includes(n.id)
       }
       // jimu: カレンダー署名系 + 有給の付与アラート（2026-09-26: 有給の付与は事務の仕事・lib/permissions.ts leave.manage）
-      return ['unsigned-calendar', 'calendar-deadline', 'announcement'].includes(n.id) || n.id.startsWith('pl-grant')
+      //   + 本人からの出面の連絡（2026-09-30: 月締めの前に事務が対応する）
+      return ['unsigned-calendar', 'calendar-deadline', 'announcement', 'staff-confirm-issues'].includes(n.id) || n.id.startsWith('pl-grant')
     })
 
     return NextResponse.json({ notifications: filtered })

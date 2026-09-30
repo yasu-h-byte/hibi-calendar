@@ -6,6 +6,7 @@
  * GET  ?token=...        スタッフ本人: 確認する月の数字と、確認済みかどうか（承認待ちなら waiting）
  * POST {token, ym, status, note}  スタッフ本人: 「正しい」「まちがいがある」を記録（承認がそろっているときだけ）
  * GET  ?ym=YYYYMM        事務所（monthly.view）: その月の確認状況の一覧
+ * POST {action:'resolve', ym, workerId, reply?}  事務所（monthly.close）: 「まちがいがある」の連絡を対応済みにする
  *
  * 記録先: attConfirm/{ym}_{workerId}（1人1か月1件・上書き）。出面そのものは変えない。
  */
@@ -97,10 +98,43 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * 事務所: 本人からの「まちがいがある」の連絡を対応済みにする（2026-09-30）。
+ * 出面を直した場合は本人のスマホに「もう一度確認してください」が出る。直さなかった場合も、
+ * 返事（reply）を書けば本人のスマホに出る。対応済みにすると通知ベル・月締めのチェックから外れる。
+ */
+async function resolveIssue(request: NextRequest, body: Record<string, unknown>) {
+  const denied = await requireCap(request, 'monthly.close')
+  if (denied) return denied
+  const ym = String(body.ym || '')
+  const workerId = Number(body.workerId)
+  const reply = String(body.reply ?? '').trim().slice(0, 500)
+  if (!/^\d{6}$/.test(ym) || !Number.isFinite(workerId)) return NextResponse.json({ error: 'ym と workerId が必要です' }, { status: 400 })
+  const ref = doc(db, 'attConfirm', `${ym}_${workerId}`)
+  const snap = await getDoc(ref)
+  const c = snap.exists() ? (snap.data() as AttConfirmDoc) : null
+  if (!c || c.status !== 'issue') return NextResponse.json({ error: '本人からの連絡がありません' }, { status: 404 })
+  const { getApiAuthUser } = await import('@/lib/auth')
+  const auth = await getApiAuthUser(request)
+  const main = await getMainData()
+  const by = !auth.authorized ? 'unknown'
+    : auth.actor === 'super-admin' ? '代表'
+    : (main.workers.find(w => w.id === auth.actor)?.name || `ID${auth.actor}`)
+  const resolvedAt = new Date().toISOString()
+  await setDoc(ref, { issueOpen: false, resolvedAt, resolvedBy: by, ...(reply ? { reply } : {}) }, { merge: true })
+  try {
+    const { logActivity } = await import('@/lib/activity')
+    await logActivity('admin', 'attendance.confirm.resolve', `${c.workerName} ${ym} 本人の連絡を対応済み（${by}）${reply ? `: ${reply}` : ''}`)
+  } catch { /* ログ失敗は本体に影響させない */ }
+  return NextResponse.json({ success: true, resolvedAt, resolvedBy: by })
+}
+
 export async function POST(request: NextRequest) {
-  // auth: スタッフ本人のトークン（loadByToken）。記録するのは本人の確認だけ
+  // auth: スタッフ本人のトークン（loadByToken）。記録するのは本人の確認だけ。
+  //   action:'resolve' は事務所（resolveIssue の中で requireCap('monthly.close')）
   try {
     const body = await request.json().catch(() => ({}))
+    if ((body as { action?: string }).action === 'resolve') return await resolveIssue(request, body as Record<string, unknown>)
     const { token, ym, status } = body as { token?: string; ym?: string; status?: string }
     const note = String((body as { note?: unknown }).note ?? '').trim().slice(0, 500)
     if (!token || !ym || (status !== 'ok' && status !== 'issue')) {
@@ -130,6 +164,7 @@ export async function POST(request: NextRequest) {
       ...(status === 'issue' ? { note } : {}),
       summary, fingerprint: summaryFingerprint(summary), at: new Date().toISOString(),
       asOf: todayIso, fpAsOf: summaryFingerprint(range), afterApproval: true,
+      ...(status === 'issue' ? { issueOpen: true } : {}),
     }
     await setDoc(doc(db, 'attConfirm', `${ym}_${worker.id}`), rec)
     return NextResponse.json({ success: true, confirmation: rec })

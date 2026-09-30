@@ -243,6 +243,15 @@ export interface AttConfirmDoc {
   fpAsOf?: string
   /** 職長承認・最終承認がそろってからの確認か（2026-09-30〜）。無い記録（承認前の確認）は「未確認」と同じに扱う */
   afterApproval?: boolean
+  /**
+   * 「まちがいがある」の連絡が未対応か（2026-09-30）。通知ベルはこれで絞って読む。
+   * 事務所が「対応済み」にすると false ＋ resolvedAt/resolvedBy/reply（本人のスマホに返事として出る）
+   */
+  issueOpen?: boolean
+  resolvedAt?: string
+  resolvedBy?: string
+  /** 会社からの返事（本人のスマホに出す・任意） */
+  reply?: string
 }
 
 /** 確認の記録が古くなったか（確認した範囲の出面が変わったか） */

@@ -163,6 +163,12 @@ PC出面画面（/attendance）とは相互リンクで切り替えられる（P
 - **月締めのチェック**（`app/api/monthly/lock` の ⑥）: その月に記録があるベトナム人スタッフで「確認ずみ」でない人
   （未確認・承認前の確認だけ・要再確認・本人から連絡あり）がいれば 409 `STAFF_CONFIRM_PENDING` で一覧を返す。
   画面で一覧を見せ、承知のうえなら `allowUnconfirmed` で締められる（名前を操作ログ `monthly.lock.unconfirmed` に残す）
+- **本人からの連絡の対応**（2026-09-30）: 「まちがいがある」を送ると `issueOpen: true`。
+  - 通知ベル（`app/api/notifications` 8d）に「本人から出面の連絡（未対応）」。事務・事業責任者・代表は全員分、職長は自分の現場の人だけ。
+    「開く →」で月次集計のその月（`/monthly?ym=`）。読むのは `issueOpen == true` の記録だけ
+  - 月次集計の「⚠ 本人から連絡あり」を押すと中身が見え、`monthly.close` の人が **対応済み** にできる
+    （POST `{action:'resolve'}` → `issueOpen:false`・`resolvedAt/By`・任意の `reply`）。返事は本人のスマホの確認カードに出る
+  - 対応済みの連絡は月締めのチェックで「確認ずみ」と同じ扱い。出面を直した場合は「要再確認」で本人に再確認が出る
 - 出勤・残業・有給・会社の都合の休み・自分の都合の休み・未入力の仕事の日を数えて見せ、
   自分の都合の休みの日（理由・メモつき）と未入力の日を並べる。数え方は `summarizeWorkerMonth()`（主現場の承認済みカレンダー。無ければ日曜以外）
 - 「正しい」／「まちがいがある（どこが）」を押すと `attConfirm/{ym}_{workerId}` に記録（API: `app/api/attendance/confirm`）。

@@ -5,6 +5,8 @@ import { useSearchParams } from 'next/navigation'
 import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
+import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
+import { can } from '@/lib/permissions'
 
 // ────────────────────────────────────────
 //  Types
@@ -333,6 +335,9 @@ function MonthlyPageInner() {
   // サイドメニュー「帳票出力」・メニュー検索から ?tab=export で直接開く（2026-09-26）。
   //   メニューの切り替えは同じ画面の中なので、URL が変わるたびに合わせる
   const tabParam = useSearchParams().get('tab')
+  // 通知ベルから ?ym=YYYYMM で月を指定して開く（本人からの連絡・2026-09-30）
+  const ymParam = useSearchParams().get('ym')
+  useEffect(() => { if (ymParam && /^\d{6}$/.test(ymParam)) setYm(ymParam) }, [ymParam])
   // 月次集計 ↔ 帳票出力 の切り替えは URL の ?tab= にも書く（2026-09-28）。
   //   旧: 画面の中だけで切り替わり、サイドメニューの選択表示が逆の項目を指したままだった
   const switchTopTab = useCallback((t: TopTab) => {
@@ -366,8 +371,9 @@ function MonthlyPageInner() {
     const stored = localStorage.getItem('hibi_auth')
     if (stored) {
       try {
-        const { password: pw } = JSON.parse(stored)
+        const { password: pw, user } = JSON.parse(stored)
         setPassword(pw)
+        setCanResolveConfirm(can(user, 'monthly.close'))
       } catch { /* ignore */ }
     }
   }, [])
@@ -404,21 +410,24 @@ function MonthlyPageInner() {
   useEffect(() => { fetchData() }, [fetchData])
 
   // 月末の本人確認（スタッフがスマホで「正しい／まちがいがある」を押した記録・2026-09-30）
-  const [staffConfirms, setStaffConfirms] = useState<Record<number, { status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean; early?: boolean }>>({})
+  const [staffConfirms, setStaffConfirms] = useState<Record<number, StaffConfirmInfo>>({})
+  const [confirmsVersion, setConfirmsVersion] = useState(0)
+  // 本人からの連絡を「対応済み」にできる人（月締めと同じ monthly.close）
+  const [canResolveConfirm, setCanResolveConfirm] = useState(false)
   useEffect(() => {
     if (!password || !ym) return
     let alive = true
     fetch(`/api/attendance/confirm?ym=${ym}`, { headers: { 'x-admin-password': password } })
       .then(r => (r.ok ? r.json() : { items: [] }))
-      .then((j: { items?: { workerId: number; status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean; early?: boolean }[] }) => {
+      .then((j: { items?: (StaffConfirmInfo & { workerId: number })[] }) => {
         if (!alive) return
-        const m: Record<number, { status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean; early?: boolean }> = {}
-        for (const it of j.items || []) m[it.workerId] = { status: it.status, note: it.note, at: it.at, stale: it.stale, early: it.early }
+        const m: Record<number, StaffConfirmInfo> = {}
+        for (const it of j.items || []) m[it.workerId] = it
         setStaffConfirms(m)
       })
       .catch(() => { if (alive) setStaffConfirms({}) })
     return () => { alive = false }
-  }, [password, ym])
+  }, [password, ym, confirmsVersion])
 
   // ── Lock toggle ──
 
@@ -1450,26 +1459,10 @@ function MonthlyPageInner() {
                             ⚠ 会社都合の休み？ {(w.suspectCompRestDays || []).join('・')}日
                           </span>
                         )}
-                        {/* 2026-09-30: 月末の本人確認（スタッフのスマホ） */}
+                        {/* 2026-09-30: 本人の出面確認（スタッフのスマホ）。連絡は押すと中身を見て対応済みにできる */}
                         {w.visa !== 'none' && staffConfirms[w.id] && (
-                          <span
-                            className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold align-middle ${staffConfirms[w.id].early && staffConfirms[w.id].status === 'ok'
-                              ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-                              : staffConfirms[w.id].stale
-                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                              : staffConfirms[w.id].status === 'ok'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}
-                            title={staffConfirms[w.id].early && staffConfirms[w.id].status === 'ok'
-                              ? `承認がそろう前に「正しい」と押した記録です（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）。職長承認と最終承認がそろうと、本人のスマホにもう一度確認が出ます。`
-                              : staffConfirms[w.id].stale
-                              ? `本人が確認したあとで出面が変わりました（確認: ${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}${staffConfirms[w.id].note ? ` / 連絡: ${staffConfirms[w.id].note}` : ''}）。本人のスマホに「もう一度確認してください」と出ています。`
-                              : staffConfirms[w.id].status === 'ok'
-                              ? `本人がスマホで「正しい」と確認しました（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）`
-                              : `本人から「まちがいがある」と連絡がありました（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）:\n${staffConfirms[w.id].note || ''}\n出面を直すと、本人のスマホに「もう一度確認してください」と出ます。`}
-                          >
-                            {staffConfirms[w.id].early && staffConfirms[w.id].status === 'ok' ? '本人 承認前に確認' : staffConfirms[w.id].stale ? '本人 要再確認' : staffConfirms[w.id].status === 'ok' ? '本人確認 ✓' : '⚠ 本人から連絡あり'}
-                          </span>
+                          <StaffConfirmBadge info={staffConfirms[w.id]} workerId={w.id} workerName={w.name} ym={ym}
+                            password={password} canResolve={canResolveConfirm} onChanged={() => setConfirmsVersion(v => v + 1)} />
                         )}
                         {(w.calendarBlankDays || 0) > 0 && (
                           <span

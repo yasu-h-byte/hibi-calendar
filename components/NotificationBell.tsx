@@ -20,6 +20,8 @@ interface Notification {
   message: string
   type: 'warning' | 'error' | 'info'
   count?: number
+  /** 押すと開く画面 */
+  href?: string
   action?: NotificationAction
 }
 
@@ -157,6 +159,12 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
                     </div>
                   </div>
                   <div className="mt-2 flex gap-2">
+                    {n.href && (
+                      <a href={n.href} onClick={() => setOpen(false)}
+                        className="flex-1 text-center text-xs font-bold rounded-lg py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 transition">
+                        開く →
+                      </a>
+                    )}
                     {n.action && (
                       <button
                         onClick={() => handleAction(n)}

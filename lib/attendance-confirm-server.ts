@@ -109,7 +109,7 @@ export const STAFF_CONFIRM_STATE_LABEL: Record<StaffConfirmState, string> = {
   none: '未確認',
   early: '未確認（承認前に確認しただけ）',
   stale: '要再確認（確認のあとで出面が変わった）',
-  issue: '本人から「まちがいがある」の連絡',
+  issue: '本人から「まちがいがある」の連絡（未対応）',
 }
 
 export async function staffConfirmStateOf(
@@ -118,5 +118,6 @@ export async function staffConfirmStateOf(
   if (!c) return 'none'
   if (!c.afterApproval) return 'early'
   if (await ctx.staleOf(c, worker)) return 'stale'
-  return c.status === 'issue' ? 'issue' : 'ok'
+  // 連絡は事務所が「対応済み」にしたら確認ずみと同じ（出面を直した場合は上の stale で再確認になる）
+  return c.status === 'issue' && !c.resolvedAt ? 'issue' : 'ok'
 }
