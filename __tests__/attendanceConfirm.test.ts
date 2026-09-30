@@ -83,3 +83,28 @@ describe('1人・1か月の数え方', () => {
     expect(mainSiteOfMonth(d, 999, ym)).toBeNull()
   })
 })
+
+import { breakShortenMinFor } from '@/lib/attendance-confirm'
+describe('休憩短縮（旧契約の毎日20分）', () => {
+  test('出勤した日だけ数える（現場都合休・休み・有給は除く・同じ日の2現場は1日）', () => {
+    const d = {
+      a_207_202610_1: { w: 1, st: '08:00', et: '17:00' },
+      a_207_202610_2: { w: 1 },
+      b_207_202610_2: { w: 0.5 },
+      a_207_202610_3: { w: 0.6 },
+      a_207_202610_5: { w: 0, r: 1 },
+      a_207_202610_6: { w: 0, p: 1 },
+    }
+    const s = summarizeWorkerMonth({ d, workerId: 207, ym: '202610', calDays: null, todayIso: '2026-10-31', breakShortenMin: 20 })
+    expect(s.breakShorten).toEqual({ minPerDay: 20, days: 2, minutes: 40 })
+  })
+  test('設定が無ければ出さない', () => {
+    const s = summarizeWorkerMonth({ d: { a_1_202610_1: { w: 1 } }, workerId: 1, ym: '202610', calDays: null, todayIso: '2026-10-31' })
+    expect(s.breakShorten).toBeUndefined()
+  })
+  test('適用開始月より前は0', () => {
+    expect(breakShortenMinFor({ breakShortenMin: 20, breakShortenFrom: '202610' }, '202609')).toBe(0)
+    expect(breakShortenMinFor({ breakShortenMin: 20, breakShortenFrom: '202610' }, '2026-10')).toBe(20)
+    expect(breakShortenMinFor({}, '202610')).toBe(0)
+  })
+})

@@ -50,6 +50,8 @@ interface StaffData {
   plRemaining: number | null
   /** 自分の都合で1日休むと減る給料の目安（円・新ルールの時給制のみ） */
   absenceDayPay?: number | null
+  /** 休憩短縮（旧契約の毎日20分など）。出面には記録せず給与計算で足す分（2026-09-30） */
+  breakShorten?: { min: number; from: string } | null
   plExpiryDate: string | null
   // Phase 8: FIFO内訳
   plCarryOverRemaining?: number | null
@@ -710,6 +712,14 @@ export default function StaffAttendancePage() {
     setShowRestModal(true)
   }
 
+  // 休憩短縮（分/日）がその月に付くか（旧契約の毎日20分など・2026-09-30）
+  const bsMinForYm = (ym: string) => (data?.breakShorten && ym >= data.breakShorten.from ? data.breakShorten.min : 0)
+  const bsMinForDate = (y: number, m: number) => bsMinForYm(`${y}${String(m).padStart(2, '0')}`)
+  /** 「＋20分（休憩短縮）」の小さな印 */
+  const BsTag = ({ min }: { min: number }) => min > 0
+    ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800 font-bold whitespace-nowrap">＋{min}分 休憩短縮</span>
+    : null
+
   // 有給申請ができる最初の日（明日。LeaveRequestModal・サーバの lib/leave-rules.ts と同じ）
   const leaveMinDateStr = () => {
     const d0 = new Date(); d0.setDate(d0.getDate() + 1)
@@ -1014,6 +1024,9 @@ export default function StaffAttendancePage() {
               {data.currentEntry?.st && data.currentEntry?.et && (
                 <span className="block text-xs mt-0.5 tabular-nums">{data.currentEntry.st}〜{data.currentEntry.et}</span>
               )}
+              {(currentStatus === 'work' || currentStatus === 'overtime') && bsMinForYm(data.today.ym) > 0 && (
+                <span className="block text-xs mt-0.5">＋ 休憩短縮 {bsMinForYm(data.today.ym)}分</span>
+              )}
             </div>
           </div>
         ) : useTimeBased ? (
@@ -1100,6 +1113,12 @@ export default function StaffAttendancePage() {
                 const ot = Math.max(0, mins / 60 - 7)
                 return ot > 0 ? <p className="text-sm text-orange-600 font-bold tabular-nums mt-1">うち所定外: {ot.toFixed(1)}h</p> : null
               })()}
+              {bsMinForYm(data.today.ym) > 0 && (
+                <p className="text-xs text-sky-800 font-bold mt-1.5">
+                  ＋ 休憩短縮 {bsMinForYm(data.today.ym)}分（出勤した日は毎日。残業と同じ単価で給料に入ります）<br />
+                  <span className="font-normal">+ {bsMinForYm(data.today.ym)} phút rút ngắn nghỉ (mỗi ngày đi làm, trả như làm thêm giờ)</span>
+                </p>
+              )}
             </div>
 
             {/* Submit button */}
@@ -1345,6 +1364,7 @@ export default function StaffAttendancePage() {
                       {(pd.status === 'work' || pd.status === 'overtime') && pd.entry?.o ? ` +${pd.entry.o}h` : ''}
                     </span>
                   )}
+                  {(pd.status === 'work' || pd.status === 'overtime') && (pd.entry?.w ?? 0) > 0 && <BsTag min={bsMinForDate(pd.year, pd.month)} />}
                   {pd.locked && <span className="text-xs">🔒</span>}
                 </div>
               </div>

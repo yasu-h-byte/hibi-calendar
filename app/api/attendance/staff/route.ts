@@ -450,6 +450,9 @@ export async function GET(request: NextRequest) {
       missingDays,
       toolBudgetRemaining,
       toolBudgetCarry,
+      // 休憩短縮（旧契約の毎日20分など）。出面には記録せず給与計算で足している分を、画面で見せるため（2026-09-30）
+      breakShorten: (worker.breakShortenMin ?? 0) > 0 && worker.breakShortenFrom
+        ? { min: worker.breakShortenMin, from: worker.breakShortenFrom } : null,
       // 自分の都合で1日休むと減る給料の目安（時給 × 7時間）。新ルールの時給制の人だけ（2026-09-30）
       absenceDayPay: (() => {
         if (!worker.visaType || worker.visaType === 'none' || worker.useOldRules) return null

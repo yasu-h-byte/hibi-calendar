@@ -56,6 +56,11 @@ export interface StaffMonthSummary {
   restList: MonthRestItem[]
   /** カレンダーの仕事の日なのに、何も入力が無い日（今日まで） */
   missingDays: number[]
+  /**
+   * 休憩短縮（旧契約の定例の所定外・毎日20分など・2026-09-30）。設定がある人だけ。
+   * 日数は給与計算（lib/compute.ts の actualWorkDays）と同じ数え方＝実際に出勤した日（w>0・現場都合休を除く・1日1回）
+   */
+  breakShorten?: { minPerDay: number; days: number; minutes: number }
 }
 
 type DayKind = 'leave' | 'exam' | 'rest' | 'site_off' | 'home_leave' | 'comp' | 'work' | 'none'
@@ -86,8 +91,10 @@ export function summarizeWorkerMonth(args: {
   hireDate?: string
   retired?: string
   todayIso: string
+  /** 休憩短縮（分/日）。この月に適用がある人だけ渡す */
+  breakShortenMin?: number
 }): StaffMonthSummary {
-  const { d, workerId, ym, calDays, hireDate, retired, todayIso } = args
+  const { d, workerId, ym, calDays, hireDate, retired, todayIso, breakShortenMin } = args
   const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6))
   const dim = new Date(y, m, 0).getDate()
   const perDay = new Map<number, { kind: DayKind; entry: AttendanceEntry }>()
@@ -123,6 +130,11 @@ export function summarizeWorkerMonth(args: {
         ...(isSuspectCompanyRest(entry) ? { suspect: true } : {}),
       })
     }
+  }
+  if (breakShortenMin && breakShortenMin > 0) {
+    let bsDays = 0
+    for (const { kind, entry } of perDay.values()) if (kind === 'work' && (entry.w || 0) > 0) bsDays++
+    s.breakShorten = { minPerDay: breakShortenMin, days: bsDays, minutes: bsDays * breakShortenMin }
   }
   for (let day = 1; day <= dim; day++) {
     const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
@@ -167,4 +179,11 @@ export interface AttConfirmDoc {
   summary: StaffMonthSummary
   fingerprint: string
   at: string
+}
+
+/** その月に休憩短縮（分/日）が適用されるか。人員マスタの breakShortenMin・breakShortenFrom（'YYYYMM'）から */
+export function breakShortenMinFor(w: { breakShortenMin?: number; breakShortenFrom?: string }, ym: string): number {
+  const min = w.breakShortenMin ?? 0
+  const from = w.breakShortenFrom
+  return min > 0 && from && ym.replace('-', '') >= from ? min : 0
 }

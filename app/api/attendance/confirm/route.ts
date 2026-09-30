@@ -16,7 +16,7 @@ import { calendarSiteIdOf, type HierarchySite } from '@/lib/site-hierarchy'
 import { todayJstIso } from '@/lib/date-utils'
 import { requireCap } from '@/lib/auth'
 import {
-  confirmTargetYm, summarizeWorkerMonth, summaryFingerprint, mainSiteOfMonth,
+  confirmTargetYm, summarizeWorkerMonth, summaryFingerprint, mainSiteOfMonth, breakShortenMinFor,
   type AttConfirmDoc, type StaffMonthSummary,
 } from '@/lib/attendance-confirm'
 import type { AttendanceEntry } from '@/types'
@@ -29,7 +29,7 @@ async function loadWorkerByToken(token: string) {
 }
 
 async function buildSummary(
-  worker: { id: number; hireDate?: string; retired?: string },
+  worker: { id: number; hireDate?: string; retired?: string; breakShortenMin?: number; breakShortenFrom?: string },
   sites: HierarchySite[], ym: string, todayIso: string,
 ): Promise<StaffMonthSummary> {
   const d = (await getAttendanceDoc(ym)) as Record<string, AttendanceEntry | null>
@@ -46,6 +46,7 @@ async function buildSummary(
   return summarizeWorkerMonth({
     d, workerId: worker.id, ym, calDays,
     hireDate: worker.hireDate, retired: worker.retired, todayIso,
+    breakShortenMin: breakShortenMinFor(worker, ym) || undefined,
   })
 }
 

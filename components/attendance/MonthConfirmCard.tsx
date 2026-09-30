@@ -96,6 +96,24 @@ export default function MonthConfirmCard({ token, reloadKey }: { token: string; 
           <div className="bg-white rounded-xl px-3">
             <Row ja="出勤" vi="Đi làm" v={s.workDays} />
             {s.otHours > 0 && <Row ja="残業" vi="Làm thêm giờ" v={s.otHours} unit="時間" />}
+            {/* 休憩短縮（旧契約の毎日20分など・2026-09-30）: 出面には記録せず給与計算で足している分を見せる */}
+            {s.breakShorten && s.breakShorten.minutes > 0 && (
+              <div className="py-1.5 border-b border-gray-100 last:border-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">休憩短縮（毎日{s.breakShorten.minPerDay}分）
+                    <span className="block text-[11px] text-gray-400">Rút ngắn nghỉ ({s.breakShorten.minPerDay} phút/ngày)</span>
+                  </span>
+                  <span className="text-lg font-extrabold tabular-nums">
+                    {Math.floor(s.breakShorten.minutes / 60)}<span className="text-xs font-bold ml-0.5">時間</span>
+                    {s.breakShorten.minutes % 60 > 0 && <>{s.breakShorten.minutes % 60}<span className="text-xs font-bold ml-0.5">分</span></>}
+                  </span>
+                </div>
+                <div className="text-[11px] text-gray-500 mt-0.5">
+                  出勤{s.breakShorten.days}日 × {s.breakShorten.minPerDay}分。残業と同じ単価で給料に入ります。<br />
+                  {s.breakShorten.days} ngày × {s.breakShorten.minPerDay} phút. Được trả lương như làm thêm giờ.
+                </div>
+              </div>
+            )}
             <Row ja="有給" vi="Nghỉ phép có lương" v={s.plDays} />
             <Row ja="会社の都合の休み" vi="Nghỉ do công ty" v={s.compDays} />
             <Row ja="自分の都合の休み" vi="Nghỉ vì lý do cá nhân" v={s.restDays} tone={s.restDays > 0 ? 'text-red-700' : ''} />
