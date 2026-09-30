@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260930_jp_wage_laborcost',
+    title: '日本人の年次改定: 新旧比較と人件費の増加（法定福利費込み）',
+    content:
+      '賃金制度 → 年次改定に、1人ずつの改定前（今払っている日額）と改定後の比較と、年間の人件費の増加を出しました。\n'
+      + '給与の増加に、会社負担の社会保険料・雇用保険料（法定福利費）を足した額です。料率は画面で変えられるので、加入先の実際の料率に合わせてください。',
+    category: 'new',
+    publishedAt: '2026-09-30T23:30:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['owner'],
+  },
+  {
     id: 'rn_20260930_jp_wage_undo',
     title: '日本人の年次改定: 確定の取り消し・未確定の給料表',
     content:

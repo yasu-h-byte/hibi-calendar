@@ -124,7 +124,17 @@ export async function GET(request: NextRequest) {
     }
   }
   const docData = await loadDoc(effective)
-  const { members: liveMembers } = await buildRoster(effective, docData.entries)
+  const { members: liveMembers, workers: rosterWorkers } = await buildRoster(effective, docData.entries)
+  // 改定前に実際に払っている日額（新旧比較・人件費の見込み用・2026-09-30）。
+  //   号俸表の改定前の額は移行時の乗せ替えで実払いと数十〜百数十円ずれるので、比較は実払いで行う。
+  //   確定済みで基準日が来ていない人は prevRate、それ以外は rate
+  const paidBefore: Record<string, number> = {}
+  for (const m of liveMembers) {
+    const w = rosterWorkers.find(x => x.id === m.id)
+    if (!w) continue
+    const v = w.rateFrom === effective && w.prevRate != null ? w.prevRate : w.rate
+    if (typeof v === 'number' && v > 0) paidBefore[String(m.id)] = v
+  }
   // 2026-09-03 修正: 確定済みの改定は「凍結した改定前の号」を現在値として再計算する。
   //   旧: 人員マスタの（反映後の）号を現在値にして計算し直していたため、確定直後の画面が
   //   「現在13号→新19号」のように評価分をもう一度乗せて見え、二重昇給と誤認された。
@@ -151,6 +161,7 @@ export async function GET(request: NextRequest) {
     entries: docData.entries,
     frozen: docData.frozen ?? null,
     revision,
+    paidBefore,
     meta: {
       specialReasons: SPECIAL_REASONS,
       hyogoPitch: HYOGO_PITCH,

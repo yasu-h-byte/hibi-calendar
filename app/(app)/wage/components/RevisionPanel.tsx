@@ -12,6 +12,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import type { Hyogo, RosterStatus, SpecialReason } from '@/lib/jp-wage'
+import LaborCostPanel from './LaborCostPanel'
 
 const ALLOWED_VIEWERS = [0, 1]   // 代表・事業責任者
 
@@ -58,6 +59,8 @@ interface Payload {
     applied: number; blocked: number; ineligible: number
     raisePerDay: number; annualCost: number
   }
+  /** 改定前に実際に払っている日額（workerId → 円） */
+  paidBefore?: Record<string, number>
   meta: { specialReasons: SpecialReason[]; hyogoPitch: Record<Hyogo, number>; firstRevisionMinMonths: number }
 }
 
@@ -538,6 +541,17 @@ export default function RevisionPanel() {
           </tbody>
         </table>
       </div>
+
+      {/* ── 新旧比較と人件費の増加（2026-09-30）── */}
+      <LaborCostPanel
+        effective={data.effective}
+        rows={data.revision.rows.filter(r => r.status === 'ok' && r.result).map(r => ({
+          id: r.member.id, name: r.member.name, hyogo: r.member.hyogo, birthDate: r.member.birthDate,
+          oldStep: r.member.currentStep, newStep: r.result!.newStep,
+          paidBefore: data.paidBefore?.[String(r.member.id)] ?? r.oldTotal,
+          newDaily: r.newTotal,
+        }))}
+      />
 
       {/* ── 確定後: 本人へ渡す通知書 ── */}
       {applied && (
