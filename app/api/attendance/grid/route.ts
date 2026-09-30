@@ -10,6 +10,7 @@ import { isStillActiveForMonth } from '@/lib/workers'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, getDocs, collection } from '@/lib/fsdb'
+import { jstToday } from '@/lib/date-utils'
 
 export async function GET(request: NextRequest) {
   // 2026-09-26: 権限表（lib/permissions.ts attendance.view）
@@ -364,7 +365,7 @@ export async function GET(request: NextRequest) {
       // 2026-05-25 追加: 退職予定情報（今日から3ヶ月以内に退職予定の全スタッフ）
       //   出面入力画面のバナー表示用。職長が他現場のスタッフも含めて全社の退職予定を把握できる。
       upcomingRetirements: (() => {
-        const today = new Date()
+        const today = jstToday()
         today.setHours(0, 0, 0, 0)
         const horizon = new Date(today)
         horizon.setMonth(horizon.getMonth() + 3)

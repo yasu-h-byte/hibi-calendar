@@ -220,5 +220,9 @@ await updateDoc(ref, { [`plData.${workerId}`]: records })
   2026-09-02 にダッシュボードが同じ月を2〜3回ずつ計37回読んでいた件の対処
 - **Admin SDK は rules をバイパスする** → 誤消去ガードは rules でなくコード層
   （`lib/firestore-safe.ts`）+ `npm run lint:firestore` + 日次バックアップで担保
+- **サーバで「今日・今月・今年度」を決めるときは JST のヘルパーを使う**（`lib/date-utils.ts` の
+  `jstToday()` / `todayJstIso()`）。`new Date().getMonth()` 等は Vercel(UTC) では月初・年度初めの
+  0〜9時が前月・前年度になる（2026-10-01 に有給一覧が朝9時まで前の期を表示）。
+  `npm run lint:jst` と `__tests__/jstToday.test.ts` が検出する
 - 診断: `GET /api/health`（adminMode / readOk / readError）。readError.code 8/429 は
   クォータ超過（コードのバグではない）

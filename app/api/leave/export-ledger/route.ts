@@ -4,6 +4,7 @@ import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { generateLeaveLedger, workbookToBuffer, LeaveLedgerWorker, LeaveLedgerRecord } from '@/lib/export'
 import { AttendanceEntry } from '@/types'
+import { jstToday } from '@/lib/date-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
     const main = await getMainData()
 
     // 全期間の出面データ (過去3年+当年)
-    const now = new Date()
+    const now = jstToday()
     const currentYear = now.getFullYear()
     const allAtt: Record<string, AttendanceEntry> = {}
     for (let y = currentYear - 3; y <= currentYear; y++) {

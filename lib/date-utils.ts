@@ -127,6 +127,22 @@ export function todayJstIso(): string {
 }
 
 /**
+ * JST の「今日 0:00」をローカル時刻として組み立てた Date（2026-10-01 追加）
+ *
+ * - getFullYear() / getMonth() / getDate() / getDay() が、ホストの TZ に関係なく JST の暦日を返す
+ * - サーバ（Vercel=UTC）で「今日・今月・今年度」を決めるときは new Date() ではなくこれを使う。
+ *   new Date() のままだと 月初・年度初めの 0〜9時（JST）が前月・前年度になる
+ *   （2026-10-01 に /api/leave が 10/1 朝9時まで前の期の有給残数を出していた）
+ * - 時刻は常に 0:00。時刻の比較・経過時間の計算には使わない
+ * - `new Date(jstToday().getFullYear(), jstToday().getMonth() + i, 1)` のような月の加減算はそのまま使える
+ *
+ * 検出: npm run lint:jst（scripts/lint-jst-today.mjs）
+ */
+export function jstToday(): Date {
+  return new Date(todayJstIso() + 'T00:00:00')
+}
+
+/**
  * 安全な月加算（2026-06-XX 追加・行政解釈準拠）
  *
  * JavaScript の `Date.setMonth(+n)` は「翌n月後の同日が存在しない場合、

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSuperAdmin } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
+import { jstToday } from '@/lib/date-utils'
 
 /**
  * デバッグ用API: 特定ワーカーの特定月の出面データと有給履歴を生で返す
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     // 過去3年分の出面データを取得（前期や前々期も対応）
     const allAttForWorker: { date: Date; count: number }[] = []
-    const now = new Date()
+    const now = jstToday()
     for (let yy = now.getFullYear() - 3; yy <= now.getFullYear() + 1; yy++) {
       for (let mm = 1; mm <= 12; mm++) {
         const yymm = `${yy}${String(mm).padStart(2, '0')}`

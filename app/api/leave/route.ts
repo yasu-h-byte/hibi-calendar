@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
-import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
+import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, jstToday } from '@/lib/date-utils'
 import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap , jpNextGrantAfter } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
@@ -82,7 +82,7 @@ function calcCarryOverForWorker(
  *   読み取り増（+12 doc）は許容範囲。
  */
 function relevantAttMonths(): string[] {
-  const now = new Date()
+  const now = jstToday()
   const y = now.getFullYear()
   const out: string[] = []
   for (let yy = y - 3; yy <= y; yy++) {
@@ -122,11 +122,7 @@ export async function POST(request: NextRequest) {
     const nowIso = new Date().toISOString()
 
     // 本日のJST日付を YYYY-MM-DD で返す（Vercelサーバーは UTC のため補正）
-    const todayJST = () => {
-      const now = new Date()
-      const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
-      return jst.toISOString().slice(0, 10)
-    }
+    const todayJST = () => todayJstIso()
 
     if (action === 'recordBuyout') {
       // Phase 6: 買取記録（日本人期末買取 or 退職時清算）
@@ -1397,7 +1393,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 全期間の出面データからPL消化を集計（付与日から1年間はスタッフごとに異なるため、広めに取得）
-    const now = new Date()
+    const now = jstToday()
     const currentYear = now.getFullYear()
     const allMonths: string[] = []
     // 過去2年 + 今年分 + 来年分（2026-09-02: 承認済みの未来の有給＝翌年テト帰国前後の p を
@@ -1414,7 +1410,7 @@ export async function GET(request: NextRequest) {
     main.workers.forEach(w => { workerNames[w.id] = w.name })
 
     // 出向中の判定用に現在のYM
-    const nowForDispatch = new Date()
+    const nowForDispatch = jstToday()
     const currentYm = ymKey(nowForDispatch.getFullYear(), nowForDispatch.getMonth() + 1)
 
     // Build worker PL data — 現在FYに該当するレコードを優先して使用

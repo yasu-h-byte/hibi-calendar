@@ -30,6 +30,7 @@ const floorYen = (v: number): number => Math.floor(Math.round(v * 100) / 100)
 // 給与計算エンジンと人員マスタ画面の参考表示で同じ値を使うため lib/constants.ts に集約。
 export { JP_SALARY_AVG_MONTHLY_HOURS } from './constants'
 import { JP_SALARY_AVG_MONTHLY_HOURS, JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM, JP_AVG_MONTHLY_WORK_DAYS } from './constants'
+import { jstToday } from '@/lib/date-utils'
 
 /**
  * 現場都合休（0.6補償）を「最低20日保証」の枠の中では100%支給にする適用開始月（2026-09-15 代表決定）。
@@ -1127,7 +1128,7 @@ export function buildYMList(mode: string, y: number, m: number): { y: number; m:
     list.push({ y, m })
   } else if (mode === 'fy') {
     const fy = getFiscalYear(y, m)
-    const now = new Date()
+    const now = jstToday()
     const nowYM = ymKey(now.getFullYear(), now.getMonth() + 1)
     for (let i = 0; i < 12; i++) {
       const mm = ((10 - 1 + i) % 12) + 1
@@ -3254,7 +3255,7 @@ export function isLockedForOrg(locks: Record<string, boolean>, ym: string, org: 
 
 export function getYmOptions(count: number = 6): { ym: string; label: string }[] {
   const result: { ym: string; label: string }[] = []
-  const now = new Date()
+  const now = jstToday()
   for (let i = 0; i < count; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const y = d.getFullYear()

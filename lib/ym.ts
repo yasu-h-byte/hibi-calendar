@@ -8,6 +8,8 @@
  * どちらの形式を要求するAPIかを明示し、必要に応じて toYm6()/toYm7() で変換する。
  */
 
+import { jstToday } from '@/lib/date-utils'
+
 export type Ym6 = string // "YYYYMM"
 export type Ym7 = string // "YYYY-MM"
 
@@ -62,33 +64,33 @@ export function ym7(ym: Ym6 | Ym7): Ym7 {
 
 /** 現在の年月を YYYYMM で取得 */
 export function currentYm6(): Ym6 {
-  const now = new Date()
+  const now = jstToday()
   return toYm6(now.getFullYear(), now.getMonth() + 1)
 }
 
 /** 現在の年月を YYYY-MM で取得 */
 export function currentYm7(): Ym7 {
-  const now = new Date()
+  const now = jstToday()
   return toYm7(now.getFullYear(), now.getMonth() + 1)
 }
 
 /** 翌月を YYYYMM で取得 */
 export function nextYm6(): Ym6 {
-  const now = new Date()
+  const now = jstToday()
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   return toYm6(next.getFullYear(), next.getMonth() + 1)
 }
 
 /** 翌月を YYYY-MM で取得（就業カレンダー等で使用） */
 export function nextYm7(): Ym7 {
-  const now = new Date()
+  const now = jstToday()
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   return toYm7(next.getFullYear(), next.getMonth() + 1)
 }
 
 /** 前月を YYYYMM で取得 */
 export function prevYm6(): Ym6 {
-  const now = new Date()
+  const now = jstToday()
   const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   return toYm6(prev.getFullYear(), prev.getMonth() + 1)
 }
@@ -127,7 +129,7 @@ export function legalLimitHours(ym: Ym6 | Ym7): number {
 /** 過去 N 月分の YYYYMM リストを降順で返す（現在月を含む） */
 export function getPastMonthsYm6(count: number): Ym6[] {
   const result: Ym6[] = []
-  const now = new Date()
+  const now = jstToday()
   for (let i = 0; i < count; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     result.push(toYm6(d.getFullYear(), d.getMonth() + 1))
@@ -141,7 +143,7 @@ export function getYmSelectOptions(
   format: 6 | 7 = 6,
 ): Array<{ ym: string; label: string }> {
   const result: Array<{ ym: string; label: string }> = []
-  const now = new Date()
+  const now = jstToday()
   for (let i = 0; i < count; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const ym = format === 6 ? toYm6(d.getFullYear(), d.getMonth() + 1) : toYm7(d.getFullYear(), d.getMonth() + 1)

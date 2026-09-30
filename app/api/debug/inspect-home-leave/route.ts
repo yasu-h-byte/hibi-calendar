@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSuperAdmin } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, getDocs, collection } from '@/lib/fsdb'
+import { jstToday } from '@/lib/date-utils'
 
 /**
  * デバッグ用: 帰国情報のソース2つを生で返す
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
   }
 
   // 今日の日付
-  const now = new Date()
+  const now = jstToday()
   const todayDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   // ① main.homeLeaves

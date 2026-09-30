@@ -20,6 +20,7 @@ import { ymKey } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
 import { AttendanceEntry } from '@/types'
+import { jstToday } from '@/lib/date-utils'
 
 /** Map frontend period param to compute buildYMList mode */
 function toMode(period: string): string {
@@ -283,7 +284,7 @@ export async function GET(request: NextRequest) {
       // 2026-06-XX 修正 (I3): 月跨ぎ境界（前月日数を考慮）
       //   旧: 今日が6/30で前月5月(31日)と比較すると5/31が欠ける/混乱する
       //   新: 前月の日数を上限として min を取る → 対称性を担保
-      const today = new Date()
+      const today = jstToday()
       const prevMonthLastDay = new Date(today.getFullYear(), today.getMonth(), 0).getDate()
       const sameDayLimit = Math.min(today.getDate(), prevMonthLastDay)
       const filteredPrevD: Record<string, AttendanceEntry> = {}

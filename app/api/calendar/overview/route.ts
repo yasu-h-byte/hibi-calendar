@@ -15,12 +15,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { loadCalendarMatrix, projectSignSites } from '@/lib/calendar-matrix'
 import { summarizeSignStatus } from '@/lib/calendar-sign-status'
 import { ym7 } from '@/lib/ym'
+import { jstToday } from '@/lib/date-utils'
 
 export const dynamic = 'force-dynamic'
-
-function jstNow(): Date {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-}
 
 function clampInt(v: string | null, def: number, min: number, max: number): number {
   const n = parseInt(v ?? '', 10)
@@ -37,7 +34,7 @@ export async function GET(request: NextRequest) {
     const back = clampInt(sp.get('back'), 2, 0, 12)
     const fwd = clampInt(sp.get('fwd'), 1, 0, 6)
 
-    const now = jstNow()
+    const now = jstToday()
     const curYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const dayOfMonth = now.getDate()
 

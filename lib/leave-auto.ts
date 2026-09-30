@@ -1,7 +1,7 @@
 import { MainData, PLRecord, RawWorker } from './compute'
 import { isAlreadyRetired } from './workers'
 import { calcLegalPL, jpNextGrantAfter } from './leave-compute'
-import { addMonthsSafe, todayJstIso } from './date-utils'
+import { addMonthsSafe, todayJstIso, jstToday } from './date-utils'
 
 /**
  * ⚠️ 2026-08-04 有給システム総点検での整理:
@@ -20,10 +20,7 @@ import { addMonthsSafe, todayJstIso } from './date-utils'
  * Returns a Date object adjusted to JST.
  */
 function getJSTDate(): Date {
-  const now = new Date()
-  // Convert to JST by using toLocaleDateString with timezone
-  const jstStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Tokyo' }) // YYYY-MM-DD
-  return new Date(jstStr + 'T00:00:00')
+  return jstToday()
 }
 
 /**

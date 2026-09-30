@@ -137,14 +137,14 @@ export interface WorkerLastAccess {
 export async function getWorkerLastAccessMap(days: number = 90): Promise<Map<number, WorkerLastAccess>> {
   const to = getJstDate(new Date())
   const fromDate = new Date()
-  fromDate.setDate(fromDate.getDate() - days)
+  fromDate.setDate(fromDate.getDate() - days)  // jst-ok: 経過日数の計算（日付化は getJstDate）
   const from = getJstDate(fromDate)
 
   const logs = await getAccessLogsInRange(from, to)
   const map = new Map<number, WorkerLastAccess>()
 
   const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)  // jst-ok: 同上
   const sevenAgoStr = getJstDate(sevenDaysAgo)
 
   for (const log of logs) {
@@ -180,7 +180,7 @@ export async function getWorkerLastAccessMap(days: number = 90): Promise<Map<num
  */
 export async function cleanupOldAccessLogs(retainDays: number = 90): Promise<number> {
   const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - retainDays)
+  cutoff.setDate(cutoff.getDate() - retainDays)  // jst-ok: 同上
   const cutoffStr = getJstDate(cutoff)
 
   const q = query(collection(db, 'accessLog'), where('date', '<', cutoffStr))

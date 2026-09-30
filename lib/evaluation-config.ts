@@ -16,6 +16,7 @@
  */
 import type { ABCGrade, EvaluationScores, EvaluationRank } from '@/types'
 import { curveRaiseAt, CURVE_BASE_RAISE, CURVE_DECAY, CURVE_MIN_RAISE } from './wage-curve'
+import { jstToday } from '@/lib/date-utils'
 
 // ────────────────────────────────────────
 //  カテゴリ別 重み係数
@@ -280,7 +281,7 @@ export function yearsFromHire(hireDate: string): number {
   // ⚠️ 表示用の「完了年数」。昇給テーブルを引くときは raiseYearAt(hireDate, evaluationDate) を使うこと
   if (!hireDate) return 1
   const hire = new Date(hireDate)
-  const now = new Date()
+  const now = jstToday()
   let y = now.getFullYear() - hire.getFullYear()
   const mDiff = now.getMonth() - hire.getMonth()
   if (mDiff < 0 || (mDiff === 0 && now.getDate() < hire.getDate())) y--

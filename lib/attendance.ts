@@ -2,6 +2,7 @@ import { db } from './firebase'
 import { doc, getDoc, setDoc, updateDoc, deleteField, collection, getDocs, query, where } from '@/lib/fsdb'
 import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site } from '@/types'
 import { ensureDocExists } from './firestore-safe'
+import { jstToday } from '@/lib/date-utils'
 
 /**
  * カレンダー上の「出勤予定日」かを判定（2026-06-12 監査 Sprint2-B で共通化）。
@@ -615,7 +616,7 @@ export async function getStaffSites(workerId: number, ymOverride?: string): Prom
   // 2026-09-02: 対象月（申請日の月）を渡せるようにした。旧は常に「今月」の配置で
   //   現場を決めていたため、来月から別現場へ移る人の来月分の有給が旧現場に書かれ、
   //   新現場の出面グリッド・職長画面に出ない（残数・給与には効く）状態になっていた
-  const now = new Date()
+  const now = jstToday()
   const ym = ymOverride ? ymOverride.replace('-', '') : ymKey(now.getFullYear(), now.getMonth() + 1)
 
   const result: { id: string; name: string }[] = []
@@ -652,7 +653,7 @@ export async function getForemanSite(foremanId: number): Promise<Site | null> {
   //   （lib/auth.ts computeForemanSites と同じく foreman ?? wid で両対応）
   const mforeman = (data.mforeman || {}) as Record<string, { foreman?: number; wid?: number }>
 
-  const now = new Date()
+  const now = jstToday()
   const ym = ymKey(now.getFullYear(), now.getMonth() + 1)
 
   for (const s of sites) {
@@ -697,7 +698,7 @@ export async function getForeignWorkersForSite(
   const assign = (data.assign || {}) as Record<string, { workers?: number[] }>
   const massign = (data.massign || {}) as Record<string, { workers?: number[] }>
 
-  const now = new Date()
+  const now = jstToday()
   const ym = ymKey(now.getFullYear(), now.getMonth() + 1)
 
   const monthKey = `${siteId}_${ym}`

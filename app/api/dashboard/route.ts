@@ -21,7 +21,7 @@ import {
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from '@/lib/workers'
-import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe } from '@/lib/date-utils'
+import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe, jstToday } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
 import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter } from '@/lib/leave-compute'
 import { applyPayrollCosts, type MonthAtt } from '@/lib/payroll-cost'
@@ -1370,7 +1370,7 @@ export async function GET(request: NextRequest) {
       href: string
     }
     const quietIssues: QuietIssue[] = []
-    const nowYm = ymKey(new Date().getFullYear(), new Date().getMonth() + 1)
+    const nowYm = todayJstIso().slice(0, 7).replace('-', '')  // JST の今月（UTC だと月初0〜9時が前月になる）
     try {
       // 給与明細レベルの検出（法定割れ・夜勤未登録・早期復帰）は computeMonthly が必要。
       // ⚠️ 読み取りを増やさないため **当月を表示しているときだけ** 走らせる。
@@ -1462,7 +1462,7 @@ export async function GET(request: NextRequest) {
       // 出面が数日入っていないスタッフ（当月・稼働中の人だけ。直近5日で1件も入力が無い）
       // ※ 当月を表示しているときだけ意味があるので、過去月を見ているときは出さない
       if (ym === nowYm) {
-        const todayD = new Date()
+        const todayD = jstToday()
         const recentIso: string[] = []
         for (let i = 1; i <= 5; i++) {
           const d = new Date(todayD)

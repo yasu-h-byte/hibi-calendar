@@ -10,6 +10,7 @@
     "lint:firestore": "node scripts/lint-firestore-safety.mjs",
     "lint:tobi": "node scripts/lint-tobi-group.mjs",
     "lint:retired": "node scripts/lint-retired-flag.mjs",
+    "lint:jst": "node scripts/lint-jst-today.mjs",
     "diagnose:firestore": "node scripts/diagnose-merge-empty-map.mjs",
     "diagnose:hours": "node scripts/diagnose-working-hours.mjs",
     "audit:pl": "node scripts/audit-pl-attendance.mjs",
