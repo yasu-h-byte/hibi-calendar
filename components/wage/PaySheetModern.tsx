@@ -258,13 +258,13 @@ export default function PaySheetModern({
             {disc !== 0 && p.discretionaryReason?.trim() && (
               <div style={{ borderLeft: `4px solid ${AMBER}`, background: '#fffbeb', borderRadius: '0 10px 10px 0', padding: '7px 11px' }}>
                 <div style={{ fontSize: 9.5, fontWeight: 700, color: '#92400e' }}>代表加算 {signed(disc)}号 について</div>
-                <div style={{ fontSize: 10, lineHeight: 1.65, whiteSpace: 'pre-wrap', marginTop: 2 }}>{p.discretionaryReason}</div>
+                <div style={{ fontSize: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap', marginTop: 1 }}>{p.discretionaryReason}</div>
               </div>
             )}
             {p.comment?.trim() && (
               <div style={{ borderLeft: `4px solid ${NAVY}`, background: '#f1f5f9', borderRadius: '0 10px 10px 0', padding: '7px 11px' }}>
                 <div style={{ fontSize: 9.5, fontWeight: 700, color: NAVY }}>会社から</div>
-                <div style={{ fontSize: 10, lineHeight: 1.65, whiteSpace: 'pre-wrap', marginTop: 2 }}>{p.comment}</div>
+                <div style={{ fontSize: 10, lineHeight: 1.5, whiteSpace: 'pre-wrap', marginTop: 1 }}>{p.comment}</div>
               </div>
             )}
           </div>
@@ -312,13 +312,9 @@ export default function PaySheetModern({
               </tr>
             </tbody>
           </table>
-          <div style={{ marginTop: 8, padding: '6px 8px', background: '#f8fafc', borderRadius: 6, color: MUTED, lineHeight: 1.6 }}>
+          <div style={{ marginTop: 6, padding: '5px 8px', background: '#f8fafc', borderRadius: 6, color: MUTED, lineHeight: 1.5 }}>
             実質日給 ＝ ベース年収 ÷ {ANNUAL_DAYS}日 ＝ <b style={{ color: INK }}>{yen(fig.effectiveDaily)}</b>
-            <br />
-            （有給の買取分 {yen(fig.leavePerDay)} を1日あたりに上乗せした額）
-          </div>
-          <div style={{ marginTop: 6, color: MUTED, fontSize: 8.5, lineHeight: 1.5 }}>
-            ※ ベース年収は稼働{ANNUAL_DAYS}日・有給{PAID_LEAVE_DAYS}日で計算した目安です。残業代・手当・賞与は含みません。
+            <span style={{ fontSize: 9 }}>（有給分 {yen(fig.leavePerDay)} を上乗せ）</span>
           </div>
         </div>
       </div>
@@ -326,7 +322,7 @@ export default function PaySheetModern({
       {/* フッター */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 5, borderTop: `2px solid ${NAVY}`, fontSize: 8.5, color: MUTED }}>
         <span style={{ letterSpacing: '0.18em', fontWeight: 700, color: NAVY }}>HIBI CONSTRUCTION</span>
-        <span>この給料表は、{effectiveLabel}改定の内容をお知らせするものです。</span>
+        <span>{effectiveLabel}改定。ベース年収は稼働{ANNUAL_DAYS}日・有給{PAID_LEAVE_DAYS}日で計算した目安です（残業代・手当・賞与は含みません）。</span>
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>No.{p.workerId} ／ {num(fig.daily)}</span>
       </div>
     </div>
