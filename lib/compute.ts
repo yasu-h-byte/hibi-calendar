@@ -1227,6 +1227,9 @@ export interface WorkerMonthly {
   plDays: number
   plUsed: number
   restDays: number
+  /** 保証から引く本人の欠勤（カレンダーの仕事の日に「欠」の日数・2026-09-30） */
+  personalAbsenceDays?: number
+  _absenceDaySeen?: Set<string>
   /** 「その他」の休みでメモが会社都合を指している日（0.6補の選び間違いの疑い・2026-09-30）。計算は変えない */
   suspectCompRestDays?: number[]
   siteOffDays: number
@@ -1494,6 +1497,19 @@ export function computeMonthly(
     if (entry.hk) continue
     if (entry.r) {
       wm.restDays += 1
+      // 保証から引く「本人の欠勤」は、カレンダーで仕事の日に休んだ分だけ（2026-09-30 総点検で修正）。
+      //   祝日・所定休日に本人が「休み」を入れても欠勤ではない（ファン 9/21・22、サン 9/6 の事例）。
+      //   カレンダーが無い現場は日曜以外を仕事の日とみなす。同じ日に2現場あっても1日
+      {
+        const dt = calendarDays?.[siteId]?.[String(pk.day)]
+        const dow = new Date(parseInt(ym.slice(0, 4)), parseInt(ym.slice(4, 6)) - 1, parseInt(pk.day)).getDay()
+        const isWorkDay = dt !== undefined ? dt === 'work' : dow !== 0
+        if (isWorkDay) {
+          if (!wm._absenceDaySeen) wm._absenceDaySeen = new Set<string>()
+          const k = `${pk.ym}_${pk.day}`
+          if (!wm._absenceDaySeen.has(k)) { wm._absenceDaySeen.add(k); wm.personalAbsenceDays = (wm.personalAbsenceDays || 0) + 1 }
+        }
+      }
       // 「その他」の休みでメモが会社都合（60%・現場休み）を指すもの＝本人の選び間違いの疑い（2026-09-30）
       if (isSuspectCompanyRest(entry)) (wm.suspectCompRestDays ||= []).push(Number(pk.day))
       continue
@@ -1916,7 +1932,7 @@ export function computeMonthly(
         if (blank > 0) wm.calendarBlankDays = blank
       }
       // 2026-09-30（案A・9月分〜）: 本人の欠勤（出面の「欠」）を保証日数から引く
-      const personalAbsence1 = ym >= PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm ? wm.restDays : undefined
+      const personalAbsence1 = ym >= PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm ? (wm.personalAbsenceDays || 0) : undefined
       const v = calculateVietnameseSalary(
         wm.id, ym, wm.hourlyRate, proratedBaseDays, attD, main.sites,
         wm.plUsed, wm.compDays, wm.examDays, calendarDays,
@@ -2025,7 +2041,7 @@ export function computeMonthly(
         // 2026-09-13: 保証枠 = min(20, 配置現場カレンダーの所定日数)（時給ブランチと同じ）
         workerPrescribedDays > 0 ? workerPrescribedDays : undefined,
         // 2026-09-30（案A）: 月給ブランチも同じく本人の「欠」を保証から引く
-        ym >= PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm ? wm.restDays : undefined,
+        ym >= PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm ? (wm.personalAbsenceDays || 0) : undefined,
       )
       wm.guaranteeDays = v.guaranteeDays
       // 基本給は月給値を採用（時給からの再計算による丸め誤差を避ける）

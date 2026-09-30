@@ -122,6 +122,9 @@ export function summarizeWorkerMonth(args: {
     else if (kind === 'exam') s.examDays++
     else if (kind === 'home_leave') s.homeLeaveDays++
     else if (kind === 'rest') {
+      // カレンダーで休みの日に「休み」を入れた日は、自分都合の休み（欠勤）に数えない（給与計算と同じ・2026-09-30）
+      const isWork = calDays ? calDays[String(day)] === 'work' : new Date(y, m - 1, day).getDay() !== 0
+      if (!isWork) continue
       s.restDays++
       s.restList.push({
         day,
