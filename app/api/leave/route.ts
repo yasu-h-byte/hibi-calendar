@@ -1439,8 +1439,12 @@ export async function GET(request: NextRequest) {
         // - 日本人社員（職長・とび等）: 全員「10/1起点」（決算期サイクル統一）
         // - 外国人（実習生・特定技能）: 個別の grantDate..+1年 に今日が含まれるレコードのfy
         const isJp = !w.visa || w.visa === 'none'
-        const nowY = now.getFullYear()
-        const nowM = now.getMonth() + 1
+        // 2026-10-01 修正: 年月は JST の基準日（asOfIso）から取る。
+        //   旧: new Date() のまま（Vercel は UTC）→ 10/1 の 0〜9時（JST）は「まだ9月」と判定し、
+        //   日本人全員が前の期（2025-10-01 付与）の残数で表示されていた（梶原さん 12/12・残0 など）。
+        //   基準日を指定したときも、今日の期で表示していた
+        const nowY = Number(asOfIso.slice(0, 4))
+        const nowM = Number(asOfIso.slice(5, 7))
 
         let targetFy: string | null = null
         if (isJp) {
@@ -1448,12 +1452,11 @@ export async function GET(request: NextRequest) {
           targetFy = String(nowM >= 10 ? nowY : nowY - 1)
         } else {
           // 外国人: grantDate..+1y に今日を含むレコードのfyを使用
+          //   日付は JST の文字列（YYYY-MM-DD）どうしで比べる（UTC の Date と比べると朝9時まで1日ずれる）
           const activeRec = plRecords.find(r => {
-            if (!r.grantDate) return false
-            const gd = new Date(r.grantDate)
-            if (isNaN(gd.getTime())) return false
-            const end = new Date(gd); end.setFullYear(end.getFullYear() + 1)
-            return now >= gd && now < end
+            if (!r.grantDate || !/^\d{4}-\d{2}-\d{2}$/.test(r.grantDate)) return false
+            const end = `${Number(r.grantDate.slice(0, 4)) + 1}${r.grantDate.slice(4)}`
+            return asOfIso >= r.grantDate && asOfIso < end
           })
           if (activeRec) targetFy = String(activeRec.fy)
         }
@@ -1500,8 +1503,8 @@ export async function GET(request: NextRequest) {
         // 日本人社員（visa='none'）でgrantDate未設定の場合、決算期サイクル(10/1起点)をデフォルト適用
         // ただし「Pエントリがある期」を優先して選ぶ（過去のデータを失わないため）
         if (!grantDate && (!w.visa || w.visa === 'none')) {
-          const m = now.getMonth() + 1
-          const currentFyStartYear = m >= 10 ? now.getFullYear() : now.getFullYear() - 1
+          // JST の基準日から（UTC の now だと 10/1 朝9時まで前年度になる・2026-10-01）
+          const currentFyStartYear = nowM >= 10 ? nowY : nowY - 1
 
           // 10/1起点でPエントリのFYを判定
           const fyCandidates = new Set<number>()
