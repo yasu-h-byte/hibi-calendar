@@ -404,16 +404,16 @@ function MonthlyPageInner() {
   useEffect(() => { fetchData() }, [fetchData])
 
   // 月末の本人確認（スタッフがスマホで「正しい／まちがいがある」を押した記録・2026-09-30）
-  const [staffConfirms, setStaffConfirms] = useState<Record<number, { status: 'ok' | 'issue'; note?: string; at: string }>>({})
+  const [staffConfirms, setStaffConfirms] = useState<Record<number, { status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean }>>({})
   useEffect(() => {
     if (!password || !ym) return
     let alive = true
     fetch(`/api/attendance/confirm?ym=${ym}`, { headers: { 'x-admin-password': password } })
       .then(r => (r.ok ? r.json() : { items: [] }))
-      .then((j: { items?: { workerId: number; status: 'ok' | 'issue'; note?: string; at: string }[] }) => {
+      .then((j: { items?: { workerId: number; status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean }[] }) => {
         if (!alive) return
-        const m: Record<number, { status: 'ok' | 'issue'; note?: string; at: string }> = {}
-        for (const it of j.items || []) m[it.workerId] = { status: it.status, note: it.note, at: it.at }
+        const m: Record<number, { status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean }> = {}
+        for (const it of j.items || []) m[it.workerId] = { status: it.status, note: it.note, at: it.at, stale: it.stale }
         setStaffConfirms(m)
       })
       .catch(() => { if (alive) setStaffConfirms({}) })
@@ -1439,14 +1439,18 @@ function MonthlyPageInner() {
                         {/* 2026-09-30: 月末の本人確認（スタッフのスマホ） */}
                         {w.visa !== 'none' && staffConfirms[w.id] && (
                           <span
-                            className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold align-middle ${staffConfirms[w.id].status === 'ok'
+                            className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold align-middle ${staffConfirms[w.id].stale
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                              : staffConfirms[w.id].status === 'ok'
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                               : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}
-                            title={staffConfirms[w.id].status === 'ok'
+                            title={staffConfirms[w.id].stale
+                              ? `本人が確認したあとで出面が変わりました（確認: ${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}${staffConfirms[w.id].note ? ` / 連絡: ${staffConfirms[w.id].note}` : ''}）。本人のスマホに「もう一度確認してください」と出ています。`
+                              : staffConfirms[w.id].status === 'ok'
                               ? `本人がスマホで「正しい」と確認しました（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）`
                               : `本人から「まちがいがある」と連絡がありました（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）:\n${staffConfirms[w.id].note || ''}\n出面を直すと、本人のスマホに「もう一度確認してください」と出ます。`}
                           >
-                            {staffConfirms[w.id].status === 'ok' ? '本人確認 ✓' : '⚠ 本人から連絡あり'}
+                            {staffConfirms[w.id].stale ? '本人 要再確認' : staffConfirms[w.id].status === 'ok' ? '本人確認 ✓' : '⚠ 本人から連絡あり'}
                           </span>
                         )}
                         {(w.calendarBlankDays || 0) > 0 && (

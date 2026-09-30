@@ -54,7 +54,7 @@ export interface StaffMonthSummary {
   homeLeaveDays: number
   /** 休みの日の一覧（本人が理由を見直せるように） */
   restList: MonthRestItem[]
-  /** カレンダーの仕事の日なのに、何も入力が無い日（今日まで） */
+  /** カレンダーの仕事の日なのに、何も入力が無い日（昨日まで） */
   missingDays: number[]
   /**
    * 休憩短縮（旧契約の定例の所定外・毎日20分など・2026-09-30）。設定がある人だけ。
@@ -81,7 +81,7 @@ function kindOf(e: AttendanceEntry): DayKind {
  * 1人・1か月の出面を数える。
  * @param d        att_YYYYMM の d マップ（キー: `${siteId}_${workerId}_${ym}_${day}`）
  * @param calDays  主現場の承認済みカレンダー（day → 'work'|'off'|'holiday'）。無ければ日曜以外を仕事の日とみなす
- * @param todayIso 未入力はこの日まで数える（先の日は数えない）
+ * @param todayIso 未入力はこの日の前日まで数える（今日と先の日は数えない）
  */
 export function summarizeWorkerMonth(args: {
   d: Record<string, AttendanceEntry | null | undefined>
@@ -93,12 +93,17 @@ export function summarizeWorkerMonth(args: {
   todayIso: string
   /** 休憩短縮（分/日）。この月に適用がある人だけ渡す */
   breakShortenMin?: number
+  /** この日より前の日だけ数える（YYYY-MM-DD・確認した日までの範囲で「変わったか」を見るため） */
+  beforeIso?: string
 }): StaffMonthSummary {
-  const { d, workerId, ym, calDays, hireDate, retired, todayIso, breakShortenMin } = args
+  const { d, workerId, ym, calDays, hireDate, retired, todayIso, breakShortenMin, beforeIso } = args
+  const isoOf = (day: number) => `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
   const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6))
   const dim = new Date(y, m, 0).getDate()
   const perDay = new Map<number, { kind: DayKind; entry: AttendanceEntry }>()
   let otHours = 0
+  // 休憩短縮の日数は優先度と別に数える（給与計算 actualWorkDays と同じ: その日に w>0・現場都合休でない記録が1件でもあれば1日）
+  const bsDaySet = new Set<number>()
   const suffix = `_${workerId}_${ym}_`
   for (const [key, entry] of Object.entries(d)) {
     if (!entry) continue
@@ -106,8 +111,10 @@ export function summarizeWorkerMonth(args: {
     if (i < 0) continue
     const day = Number(key.slice(i + suffix.length))
     if (!Number.isFinite(day) || day < 1 || day > dim) continue
+    if (beforeIso && isoOf(day) >= beforeIso) continue
     const kind = kindOf(entry)
     if (kind === 'work') otHours += Number(entry.o || 0)
+    if ((entry.w || 0) > 0 && entry.w !== 0.6) bsDaySet.add(day)
     const cur = perDay.get(day)
     if (!cur || PRIORITY.indexOf(kind) < PRIORITY.indexOf(cur.kind)) perDay.set(day, { kind, entry })
   }
@@ -135,13 +142,14 @@ export function summarizeWorkerMonth(args: {
     }
   }
   if (breakShortenMin && breakShortenMin > 0) {
-    let bsDays = 0
-    for (const { kind, entry } of perDay.values()) if (kind === 'work' && (entry.w || 0) > 0) bsDays++
+    const bsDays = bsDaySet.size
     s.breakShorten = { minPerDay: breakShortenMin, days: bsDays, minutes: bsDays * breakShortenMin }
   }
   for (let day = 1; day <= dim; day++) {
-    const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-    if (iso > todayIso) break
+    const iso = isoOf(day)
+    // 今日はまだ入力する前のことが多いので未入力に数えない（点検 2026-09-30: 毎朝「変わりました」と出ていた）
+    if (iso >= todayIso) break
+    if (beforeIso && iso >= beforeIso) break
     if (hireDate && iso < hireDate) continue
     if (retired && iso > retired) continue
     const isWork = calDays ? calDays[String(day)] === 'work' : new Date(y, m - 1, day).getDay() !== 0
@@ -182,6 +190,22 @@ export interface AttConfirmDoc {
   summary: StaffMonthSummary
   fingerprint: string
   at: string
+  /**
+   * 確認した日（日本時間 YYYY-MM-DD）と、その日より前の範囲だけで作った指紋（2026-09-30 点検で追加）。
+   * 「確認したあとで変わったか」はこの範囲だけで見る（確認した日以降に入力が増えても再確認にしない）
+   */
+  asOf?: string
+  fpAsOf?: string
+}
+
+/** 確認の記録が古くなったか（確認した範囲の出面が変わったか） */
+export function isConfirmStale(c: AttConfirmDoc, rangeSummary: StaffMonthSummary): boolean {
+  return !!c.fpAsOf && c.fpAsOf !== summaryFingerprint(rangeSummary)
+}
+
+/** ISO 時刻 → 日本時間の日付 */
+export function jstDateOf(isoTime: string): string {
+  return new Date(new Date(isoTime).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10)
 }
 
 /** その月に休憩短縮（分/日）が適用されるか。人員マスタの breakShortenMin・breakShortenFrom（'YYYYMM'）から */

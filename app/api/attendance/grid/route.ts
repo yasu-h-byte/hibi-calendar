@@ -399,7 +399,8 @@ export async function POST(request: NextRequest) {
       // 2026-09-30（代表）: 応援現場の出面は事業責任者（政仁さん）が一括で入力する。
       //   出面の保存・配置・運転の記録に限り、応援現場なら attendance.inputSupport でも許す
       //   職長承認（とその解除）も、応援現場なら事業責任者ができる（政仁さんが入力〜承認までまとめて見る・2026-09-30）
-      const supportActions = [undefined, '', 'saveAttendance', 'saveAssign', 'saveDrivers', ...foremanApproveActions]
+      //   夜勤の日の指定（saveNightDays）も同じ（現場IDは body.siteId・2026-09-30 点検）
+      const supportActions = [undefined, '', 'saveAttendance', 'saveAssign', 'saveDrivers', 'saveNightDays', ...foremanApproveActions]
       if (denied && (cap === 'attendance.input' || cap === 'attendance.foremanApprove') && supportActions.includes(action) && body.siteId) {
         const { isSupportSite } = await import('@/lib/companies')
         const mainS = await getMainData()
@@ -469,6 +470,28 @@ export async function POST(request: NextRequest) {
     //   上書きした場合は誰がいつ超過させたかを activityLog に必ず残す。
     if (isAttendanceWriteAction && body.entry?.p && body.workerId !== undefined && body.ym && body.day) {
       const targetDate = `${body.ym.slice(0, 4)}-${body.ym.slice(4, 6)}-${String(body.day).padStart(2, '0')}`
+
+      // ── 前日までルール（2026-09-30 点検）──
+      //   職長は出面グリッド（PC・職長モバイル）から当日・過ぎた日に有給を新しく入れられない。
+      //   申請 API・職長トークンの代理入力と同じ lib/leave-rules.ts。事務・事業責任者・代表の修正は対象外。
+      //   すでに有給が入っているマスの保存し直し（時刻の修正など）は止めない。
+      {
+        const { getCallerPermRole } = await import('@/lib/auth')
+        const permRole = await getCallerPermRole(request)
+        if (permRole === 'foreman') {
+          const { leaveRequestDateError } = await import('@/lib/leave-rules')
+          const { todayJstIso } = await import('@/lib/date-utils')
+          const dateErr = leaveRequestDateError(targetDate, todayJstIso())
+          if (dateErr) {
+            const { getAttendanceDoc } = await import('@/lib/attendance')
+            const cur = (await getAttendanceDoc(body.ym)) as Record<string, { p?: number } | null>
+            const had = cur[`${body.siteId}_${body.workerId}_${body.ym}_${body.day}`]?.p
+            if (!had) {
+              return NextResponse.json({ error: `有給は前日までに申請してください（当日・過ぎた日は、事務所か事業責任者が入力します）` }, { status: 400 })
+            }
+          }
+        }
+      }
       const { getLeaveBalance } = await import('@/lib/leave-balance')
       // その日自身の p は除外して数える（同じ日を編集し直したときの二重計上を防ぐ）
       const bal = await getLeaveBalance(Number(body.workerId), targetDate, targetDate)

@@ -64,3 +64,16 @@ describe('期間の番号', () => {
     expect(periodIndexOf('2025-10-01', '2026-09-30')).toBeNull()
   })
 })
+
+describe('点検（2026-09-30）: 日本時間・2/29 起点', () => {
+  test('文字列の基準日（日本時間の今日）で判定する', () => {
+    expect(getCurrentPeriod('2025-10-01', '2026-10-01')).toEqual({ start: '2026-10-01', end: '2027-09-30', index: 2 })
+    expect(getCurrentPeriod('2025-10-01', '2026-09-30')?.index).toBe(1)
+    expect(getCurrentPeriod('2026-10-01', '2026-10-01')?.index).toBe(1)
+  })
+  test('2/29 起点でも getPeriodByIndex と同じ区切り（2028年に戻る）', () => {
+    const p = getCurrentPeriod('2024-02-29', '2028-03-01')
+    expect(p).toEqual(getPeriodByIndex('2024-02-29', p!.index))
+    expect(p?.start).toBe('2028-02-29')
+  })
+})

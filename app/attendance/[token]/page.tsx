@@ -8,6 +8,8 @@ import LeaveRequestModal from '@/components/attendance/LeaveRequestModal'
 import HomeLongLeaveModal from '@/components/attendance/HomeLongLeaveModal'
 import RestReportModal, { COMPANY_REST } from '@/components/attendance/RestReportModal'
 import MonthConfirmCard from '@/components/attendance/MonthConfirmCard'
+import { leaveRequestEarliestDate } from '@/lib/leave-rules'
+import { todayJstIso } from '@/lib/date-utils'
 
 interface SiteBreakConfig {
   enabled: boolean
@@ -381,11 +383,8 @@ export default function StaffAttendancePage() {
     if (showLeaveModal) {
       fetchLeaveRequests()
       // 既定は明日（欠勤届から来たときはその日）
-      const minD = new Date()
-      minD.setDate(minD.getDate() + 1)  // 有給は前日まで（2026-09-30。旧: 5日後から）
-      const y = minD.getFullYear()
-      const m = String(minD.getMonth() + 1).padStart(2, '0')
-      const d = String(minD.getDate()).padStart(2, '0')
+      // 有給は前日まで（2026-09-30。旧: 5日後から）。端末の時差に左右されないよう日本時間で求める
+      const [y, m, d] = leaveRequestEarliestDate(todayJstIso()).split('-')
       const preset = leavePresetDate.current
       leavePresetDate.current = null
       setLeaveDateFrom(preset || `${y}-${m}-${d}`)
@@ -575,11 +574,8 @@ export default function StaffAttendancePage() {
   }
 
   const getMinDate = () => {
-    const minD = new Date()
-    minD.setDate(minD.getDate() + 1)  // 有給は前日まで（2026-09-30。旧: 5日後から）
-    const y = minD.getFullYear()
-    const m = String(minD.getMonth() + 1).padStart(2, '0')
-    const d = String(minD.getDate()).padStart(2, '0')
+    // 有給は前日まで（2026-09-30。旧: 5日後から）。日本時間で求める
+    const [y, m, d] = leaveRequestEarliestDate(todayJstIso()).split('-')
     return `${y}-${m}-${d}`
   }
 
@@ -721,10 +717,7 @@ export default function StaffAttendancePage() {
     : null
 
   // 有給申請ができる最初の日（明日。LeaveRequestModal・サーバの lib/leave-rules.ts と同じ）
-  const leaveMinDateStr = () => {
-    const d0 = new Date(); d0.setDate(d0.getDate() + 1)
-    return `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`
-  }
+  const leaveMinDateStr = () => leaveRequestEarliestDate(todayJstIso())
 
   // 今日の日付を YYYY-MM-DD で返す（欠勤届モーダルの初期値・最小日）
   const todayDateStr = () => {

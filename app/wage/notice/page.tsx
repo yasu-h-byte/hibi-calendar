@@ -40,6 +40,8 @@ interface Frozen {
   newDaily: number | null
   raisePerDay: number
   adjustment: number | null
+  /** 改定前に実際に払っていた日額（確定時に凍結・2026-09-30 点検）。無い古い記録は API の paidBefore で補う */
+  paidBefore?: number | null
 }
 /** 下書き（未確定）のときに、確定前の計算結果から給料表を組み立てるための形（2026-09-30） */
 interface DraftRow {
@@ -57,6 +59,8 @@ interface Payload {
   entries?: Record<string, { comment?: string }>
   /** workerId → 過去のベース年収 [{year, baseAnnual}] */
   history?: Record<string, { year: number; baseAnnual: number }[]>
+  /** workerId → 改定前に実際に払っている日額 */
+  paidBefore?: Record<string, number>
 }
 
 const jpDate = (iso: string) => {
@@ -99,6 +103,12 @@ function TrendChart({ points }: { points: { year: number; baseAnnual: number }[]
   )
 }
 
+/** PDF 保存時のファイル名になるタブの題名（描画中に document を触らないよう effect で設定・2026-09-30 点検） */
+function DocTitle({ title }: { title: string }) {
+  useEffect(() => { document.title = title }, [title])
+  return null
+}
+
 function SheetBody() {
   const params = useSearchParams()
   const [data, setData] = useState<Payload | null>(null)
@@ -122,15 +132,16 @@ function SheetBody() {
   // 2026-09-30: 下書きでも「未確定」と印字して見られるようにする（コメントを書きながら仕上がりを確認するため）
   const isDraft = data.status !== 'applied' || !data.frozen
   const sheets: Frozen[] = !isDraft ? data.frozen! : (data.revision?.rows || [])
-    .filter(r => r.status === 'ok' && r.result)
+    // 確定後と同じく処遇固定の人も含める（「送る」一覧の給料表の有無と揃える・2026-09-30 点検）
+    .filter(r => (r.status === 'ok' && r.result) || r.status === 'fixed')
     .map(r => ({
       workerId: r.member.id, name: r.member.name, status: r.status, grade: r.member.grade,
-      oldStep: r.member.currentStep, newStep: r.result!.newStep, hyogo: r.member.hyogo,
+      oldStep: r.member.currentStep, newStep: r.result?.newStep ?? r.member.currentStep, hyogo: r.member.hyogo,
       comment: data.entries?.[String(r.member.id)]?.comment ?? null,
       discretionaryReason: r.member.discretionaryReason ?? null,
       birthDate: r.member.birthDate,
-      pitches: { hyogo: r.result!.hyogoPitch, age: r.result!.agePitch, special: r.result!.specialPitch, discretionary: r.result!.discretionaryPitch, total: r.result!.totalPitch },
-      oldDaily: r.oldTotal, newDaily: r.newTotal, raisePerDay: r.result!.raisePerDay, adjustment: r.member.adjustment ?? null,
+      pitches: r.result ? { hyogo: r.result.hyogoPitch, age: r.result.agePitch, special: r.result.specialPitch, discretionary: r.result.discretionaryPitch, total: r.result.totalPitch } : null,
+      oldDaily: r.oldTotal, newDaily: r.newTotal, raisePerDay: r.result?.raisePerDay ?? 0, adjustment: r.member.adjustment ?? null,
     }))
   if (sheets.length === 0) {
     return (
@@ -149,10 +160,20 @@ function SheetBody() {
   const onlyWorker = params.get('worker')
   const targets = sheets.filter(f => f.newDaily != null && f.oldDaily != null)
     .filter(f => !onlyWorker || String(f.workerId) === onlyWorker)
-  if (typeof document !== 'undefined') {
-    const one = onlyWorker ? targets[0] : null
-    document.title = one ? `給料表_${one.name.replace(/\s/g, '')}_${fy}年度` : `給料表_${fy}年度`
+  if (onlyWorker && targets.length === 0) {
+    return (
+      <div style={{ padding: 24, maxWidth: 640 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>この人の給料表はありません</h1>
+        <p style={{ fontSize: 14, color: '#555', lineHeight: 1.9 }}>
+          今回の改定の対象外か、評語などの入力がまだの人です（No.{onlyWorker}）。賃金制度 → 年次改定 で確認してください。
+        </p>
+      </div>
+    )
   }
+  const oneForTitle = onlyWorker ? targets[0] : null
+  const pageTitle = oneForTitle ? `給料表_${oneForTitle.name.replace(/\s/g, '')}_${fy}年度` : `給料表_${fy}年度`
+  // 改定前は「実際に払っていた日額」（2026-09-30 点検: 号俸表の改定前の額は実払いと数十〜百数十円ずれていた）
+  const beforeOf = (f: Frozen) => f.paidBefore ?? data.paidBefore?.[String(f.workerId)] ?? f.oldDaily!
   // 2026-09-30: 新デザインが標準。?style=classic で従来（Excel 様式）
   const classic = params.get('style') === 'classic'
   // 2026-09-30: 各人の給料表の後ろに「給料のしくみ」を1枚付ける（?guide=0 で付けない）
@@ -170,6 +191,7 @@ function SheetBody() {
 
   return (
     <>
+      <DocTitle title={pageTitle} />
       <style jsx global>{`
         @page { size: A4 landscape; margin: 10mm; }
         @media print {
@@ -207,7 +229,7 @@ function SheetBody() {
       </div>
 
       {targets.map(f => {
-        const fig = paySheetFigures(f.newDaily!, f.oldDaily!)
+        const fig = paySheetFigures(f.newDaily!, beforeOf(f))
         const hist = data.history?.[String(f.workerId)] ?? []
         // 2026-08-27 修正（給与総点検）: 補完点の年度が1年ズレていた。
         //   新年収(baseAnnual)は改定年度 fy の点、前年 fy-1 には改定前年収(prevBaseAnnual)。
@@ -217,7 +239,7 @@ function SheetBody() {
         //   A4横1枚に収まらなくなる。データ自体（jpWageHistory）は全年度を保持する
         const points = [...hist, { year: fy - 1, baseAnnual: fig.prevBaseAnnual }, { year: fy, baseAnnual: fig.baseAnnual }]
           .filter((p, i, a) => a.findIndex(x => x.year === p.year) === i)
-          .filter(p => p.year > fy - HISTORY_YEARS)
+          .filter(p => p.year > fy - HISTORY_YEARS && p.year <= fy)  // 次の年度以降の点は載せない（2026-09-30 点検）
           .sort((a, b) => a.year - b.year)
         const gradeLabel = GRADE_LABELS[f.grade as JpGrade] ?? f.grade
         const age = f.birthDate ? ageOn(f.birthDate, data.effective) : null

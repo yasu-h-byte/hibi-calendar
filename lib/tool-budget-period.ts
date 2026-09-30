@@ -10,6 +10,8 @@
  * 以前はスマホ側だけ別の計算を持っていて、起点日が先の人に「来期」を今の残額として出していた。
  */
 
+import { todayJstIso } from './date-utils'
+
 export interface ToolBudgetPeriod {
   start: string  // YYYY-MM-DD
   end: string    // YYYY-MM-DD
@@ -27,23 +29,25 @@ function addYears(date: Date, years: number): Date {
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-/** refDate を含む期間。起点日がまだ来ていなければ null */
-export function getCurrentPeriod(anchor: string, refDate: Date = new Date()): ToolBudgetPeriod | null {
+/**
+ * refDate を含む期間。起点日がまだ来ていなければ null
+ *
+ * 既定の基準日は**日本時間の今日**（2026-09-30 点検: サーバは UTC なので new Date() だと
+ * 切り替わる日の 0:00〜8:59 に前の期間のままになり、画面ごとに残高が食い違った）。
+ * 期間の区切りは getPeriodByIndex と同じ計算で求める（2/29 起点の人でも区切りが一通りになるように）。
+ */
+export function getCurrentPeriod(anchor: string, refDate: Date | string = todayJstIso()): ToolBudgetPeriod | null {
   if (!anchor) return null
   const a = new Date(anchor + 'T00:00:00')
   if (isNaN(a.getTime())) return null
-  if (a > refDate) return null
-  let start = new Date(a)
-  let index = 1
-  while (true) {
-    const next = addYears(start, 1)
-    if (next > refDate) break
-    start = next
-    index++
+  const ref = typeof refDate === 'string' ? refDate : iso(refDate)
+  if (iso(a) > ref) return null
+  for (let i = 1; i <= 200; i++) {
+    const p = getPeriodByIndex(anchor, i)
+    if (!p) return null
+    if (p.end >= ref) return p
   }
-  const end = addYears(start, 1)
-  end.setDate(end.getDate() - 1)
-  return { start: iso(start), end: iso(end), index }
+  return null
 }
 
 /** index 番目（1始まり）の期間 */

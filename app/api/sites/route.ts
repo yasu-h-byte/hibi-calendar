@@ -190,7 +190,13 @@ function mergeCommute(
 
 export async function POST(request: NextRequest) {
   // 2026-09-26: 現場マスタの編集は事務・代表（lib/permissions.ts masters.edit）
-  const denied = await requireCap(request, 'masters.edit')
+  //   例外: 「運転手当を出さない現場」の指定だけは事業責任者も（sites.noDriveAllowance・action setNoDriveAllowance）。
+  //   2026-09-30 点検: 入口で masters.edit だけを見ていたため、政仁さんは必ず 403 になっていた
+  let denied = await requireCap(request, 'masters.edit')
+  if (denied) {
+    const peek = await request.clone().json().catch(() => ({}))
+    if (peek?.action === 'setNoDriveAllowance') denied = await requireCap(request, 'sites.noDriveAllowance')
+  }
   if (denied) return denied
 
   try {
@@ -337,6 +343,25 @@ export async function POST(request: NextRequest) {
         await logActivity('admin', 'site.commute', `${updated[idx].name || id} 通勤時間を凍結: 判定値${commute.judgedMin}分`)
       }
       await logActivity('admin', 'site.update', `${id} を更新`)
+      return NextResponse.json({ success: true })
+    }
+
+    // 運転手当を出さない現場の指定だけを変える（事業責任者の画面から・2026-09-30 点検）。工種サイトへも書き写す
+    if (action === 'setNoDriveAllowance') {
+      const { id, value } = body as { id?: string; value?: unknown }
+      if (!id || typeof value !== 'boolean') return NextResponse.json({ error: 'id と value が必要です' }, { status: 400 })
+      const idx = sites.findIndex(s => s.id === id)
+      if (idx === -1) return NextResponse.json({ error: 'Site not found' }, { status: 404 })
+      if (sites[idx].parentId) return NextResponse.json({ error: '工種サイトは親現場の指定に従います' }, { status: 400 })
+      const updated = [...sites]
+      updated[idx] = { ...updated[idx] }
+      if (value) updated[idx].noDriveAllowance = true
+      else delete updated[idx].noDriveAllowance
+      for (let i = 0; i < updated.length; i++) {
+        if (updated[i].parentId === id) updated[i] = inheritFromParent(updated[i], updated[idx])
+      }
+      await updateDoc(ref, { sites: updated.map(stripUndefinedDeep) })
+      await logActivity('admin', 'site.update', `${updated[idx].name || id} 運転手当なし: ${value ? '指定' : '解除'}`)
       return NextResponse.json({ success: true })
     }
 

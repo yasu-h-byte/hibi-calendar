@@ -15,7 +15,7 @@ import {
 import { getSites } from '@/lib/sites'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
-import { calendarSiteIdOf, workTypeFamilyIds, familyEntrySiteId, staffEntryTarget, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
+import { calendarSiteIdOf, workTypeFamilyIds, familyEntrySiteId, staffEntryTarget, siteNeedsCalendar, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
 import { AttendanceEntry } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween } from '@/lib/date-utils'
@@ -213,8 +213,17 @@ export async function GET(request: NextRequest) {
         const pAtt = await getAttCached(pym)   // pastDays と同じ月キャッシュを共有（2026-09-02）
 
         // 工種サイトは親現場のカレンダー（2026-09-15）
-        const calParent = ((mainRaw.sites || []) as { id: string; parentId?: string }[]).find(x => x.id === siteId)?.parentId
-        const calKey = `${calParent || siteId}_${py}-${String(pm).padStart(2, '0')}`
+        const rawSitesM = (mainRaw.sites || []) as { id: string; parentId?: string; start?: string; calendarFromYm?: string }[]
+        const calParent = rawSitesM.find(x => x.id === siteId)?.parentId
+        let calSiteId = calParent || siteId
+        // 選んでいる現場がこの月カレンダーを作らない現場（スポットなど）なら、その月に一番多く入力している現場の
+        //   カレンダーで判定する（2026-09-30 点検: スポット現場を選ぶと土曜・祝日まで「未入力」と赤く出ていた）
+        if (!siteNeedsCalendar(rawSitesM.find(x => x.id === calSiteId), pym)) {
+          const { mainSiteOfMonth } = await import('@/lib/attendance-confirm')
+          const ms = mainSiteOfMonth(pAtt as Record<string, unknown>, worker.id, pym)
+          if (ms) calSiteId = rawSitesM.find(x => x.id === ms)?.parentId || ms
+        }
+        const calKey = `${calSiteId}_${py}-${String(pm).padStart(2, '0')}`
         if (!(calKey in calCache)) {
           try {
             const calSnap = await getDoc(doc(db, 'siteCalendar', calKey))

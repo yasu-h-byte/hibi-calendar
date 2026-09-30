@@ -66,9 +66,9 @@ describe('1人・1か月の数え方', () => {
     expect(s.restList.find(r => r.day === 10)?.suspect).toBe(true)
     expect(s.missingDays).toEqual([8, 9, 12])
   })
-  test('未入力は今日までしか数えない・入社前は数えない', () => {
+  test('未入力は昨日までしか数えない（今日はまだ入力前）・入社前は数えない', () => {
     const s = summarizeWorkerMonth({ d, workerId: 201, ym, calDays: cal, todayIso: '2026-08-09' })
-    expect(s.missingDays).toEqual([8, 9])
+    expect(s.missingDays).toEqual([8])
     const s2 = summarizeWorkerMonth({ d: {}, workerId: 201, ym, calDays: cal, hireDate: '2026-08-10', todayIso: '2026-08-31' })
     expect(s2.missingDays).toEqual([10, 11, 12])
   })
@@ -106,5 +106,35 @@ describe('休憩短縮（旧契約の毎日20分）', () => {
     expect(breakShortenMinFor({ breakShortenMin: 20, breakShortenFrom: '202610' }, '202609')).toBe(0)
     expect(breakShortenMinFor({ breakShortenMin: 20, breakShortenFrom: '202610' }, '2026-10')).toBe(20)
     expect(breakShortenMinFor({}, '202610')).toBe(0)
+  })
+})
+
+import { isConfirmStale, jstDateOf, type AttConfirmDoc } from '@/lib/attendance-confirm'
+describe('点検（2026-09-30）: 確認した範囲だけで「変わったか」を見る', () => {
+  const cal: Record<string, string> = {}
+  for (let i = 1; i <= 30; i++) cal[String(i)] = new Date(2026, 8, i).getDay() === 0 ? 'off' : 'work'
+  const base = { a_201_202609_28: { w: 1 }, a_201_202609_29: { w: 1 } } as Record<string, { w: number }>
+  const conf = (d: Record<string, unknown>) => {
+    const range = summarizeWorkerMonth({ d: d as never, workerId: 201, ym: '202609', calDays: cal, todayIso: '2026-09-29', beforeIso: '2026-09-29' })
+    return { fpAsOf: summaryFingerprint(range), asOf: '2026-09-29' } as AttConfirmDoc
+  }
+  const rangeNow = (d: Record<string, unknown>, asOf: string) =>
+    summarizeWorkerMonth({ d: d as never, workerId: 201, ym: '202609', calDays: cal, todayIso: asOf, beforeIso: asOf })
+  test('確認した日以降に入力が増えても古くならない', () => {
+    const c = conf(base)
+    expect(isConfirmStale(c, rangeNow({ ...base, a_201_202609_30: { w: 1 } }, c.asOf!))).toBe(false)
+  })
+  test('確認した日より前が変わると古くなる', () => {
+    const c = conf(base)
+    expect(isConfirmStale(c, rangeNow({ ...base, a_201_202609_28: { w: 0, r: 1 } }, c.asOf!))).toBe(true)
+  })
+  test('日本時間の日付', () => {
+    expect(jstDateOf('2026-09-29T16:00:00.000Z')).toBe('2026-09-30')
+    expect(jstDateOf('2026-09-29T14:59:00.000Z')).toBe('2026-09-29')
+  })
+  test('休憩短縮: 夜勤のみの記録と日勤が同じ日にあっても1日（給与計算と同じ）', () => {
+    const d = { a_207_202610_1: { w: 0, nonly: 1 }, b_207_202610_1: { w: 1 }, a_207_202610_2: { w: 0, r: 1 }, b_207_202610_2: { w: 1 } }
+    const s = summarizeWorkerMonth({ d: d as never, workerId: 207, ym: '202610', calDays: null, todayIso: '2026-10-31', breakShortenMin: 20 })
+    expect(s.breakShorten?.days).toBe(2)
   })
 })

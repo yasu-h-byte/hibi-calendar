@@ -261,7 +261,9 @@ export default function AttendanceGridPage() {
 
     try {
       // Send all pending saves and inspect each response
-      const promises = saves.map(async s => {
+      //   同時に送るのは4件まで（2026-09-30 点検: 一括入力で数百件を一度に送ると、1件ごとに
+      //   出面ドキュメント（200〜300KB）を読むため読み取りと同一文書への書き込みが集中する）
+      const saveOne = async (s: PendingSave) => {
         // 工種のある現場では保存先が日ごと・人ごとに変わる（2026-09-25）:
         //   既にその日のエントリがある現場 > その日の工種指定 > 本人の既定 > 親現場
         //   工種の無い現場は全部 undefined なので親現場（= data.site.id）のまま
@@ -364,8 +366,11 @@ export default function AttendanceGridPage() {
           })
         }
         return { ok: true as const, save: s }
-      })
-      const results = await Promise.all(promises)
+      }
+      const results: Awaited<ReturnType<typeof saveOne>>[] = []
+      for (let i = 0; i < saves.length; i += 4) {
+        results.push(...await Promise.all(saves.slice(i, i + 4).map(saveOne)))
+      }
       const failures = results.filter(r => !r.ok) as { ok: false; save: PendingSave; error: string; status: number }[]
 
       if (failures.length === 0) {
@@ -392,6 +397,9 @@ export default function AttendanceGridPage() {
         )
         if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
         saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 5000)
+        // 保存できなかったマスが画面に入力済みのまま残らないよう、サーバの内容で表示を戻す（2026-09-30 点検）。
+        //   続けて入力された未保存の分があるときは、それを消さないよう読み直さない
+        if (pendingSaves.current.size === 0) fetchData()
       }
     } catch (e) {
       console.error('Save error:', e)
@@ -400,7 +408,7 @@ export default function AttendanceGridPage() {
       if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
       saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 5000)
     }
-  }, [password, data])
+  }, [password, data, fetchData])
 
   const scheduleSave = useCallback((key: string, save: PendingSave) => {
     pendingSaves.current.set(key, save)
@@ -849,7 +857,7 @@ export default function AttendanceGridPage() {
       if (!password || !data) return
       setSaveStatus('saving')
       try {
-        await fetch('/api/attendance/grid', {
+        const res = await fetch('/api/attendance/grid', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -861,6 +869,13 @@ export default function AttendanceGridPage() {
             value: parseFloat(value) || 0,
           }),
         })
+        // 権限が無いなどで保存できなかったときに「保存しました」と出さない（2026-09-30 点検）
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          setSaveStatus('error')
+          alert(`所定日数を保存できませんでした: ${j.error || res.status}`)
+          return
+        }
         setSaveStatus('saved')
         if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
         saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
@@ -1479,6 +1494,7 @@ export default function AttendanceGridPage() {
         lockedDays={lockedDays}
         timeBasedFor={w => useTimeBased && !!w.visa && w.visa !== 'none' && w.visa !== '' && !w.useOldRules}
         onApply={applyBulk}
+        homeLeaves={data?.homeLeaves}
       />
       <HistoryModal
         open={showHistory}

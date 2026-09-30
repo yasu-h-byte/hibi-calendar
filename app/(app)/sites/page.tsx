@@ -142,6 +142,7 @@ export default function SitesPage() {
   const [formCalMode, setFormCalMode] = useState<'normal' | 'spot' | 'from'>('normal')
   const [formCalFrom, setFormCalFrom] = useState('')
   const [canSetNoDrive, setCanSetNoDrive] = useState(false)
+  const [canEditMaster, setCanEditMaster] = useState(true)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   useEffect(() => {
@@ -150,6 +151,7 @@ export default function SitesPage() {
       const { password: pw, user } = JSON.parse(stored)
       setPassword(pw)
       setCanSetNoDrive(can(user, 'sites.noDriveAllowance'))
+      setCanEditMaster(can(user, 'masters.edit'))
     }
   }, [])
 
@@ -311,6 +313,10 @@ export default function SitesPage() {
     const editingNow = editId ? sites.find(x => x.id === editId) : undefined
     if (!editingNow?.parentId && !form.ownerId) { alert('担当の二次（自社または同業者）を選んでください'); return }
     if (editingNow?.parentId && !form.workType.trim()) { alert('工種名を入力してください'); return }
+    // 「この月から作る」で月が空欄のまま保存すると、黙って「通常」になっていた（2026-09-30 点検）
+    if (!editingNow?.parentId && formCalMode === 'from' && !/^\d{4}-\d{2}$/.test(formCalFrom)) {
+      alert('就業カレンダーを作り始める月を選んでください'); return
+    }
     setSaving(true)
     try {
       // Compute latest tobiRate/dokoRate from rates array
@@ -330,6 +336,19 @@ export default function SitesPage() {
         if (r || ot) {
           subconRates[scId] = { rate: r, otRate: ot }
         }
+      }
+
+      // 現場マスタの編集権限が無く「運転手当なし」だけ変えられる人（事業責任者）は、その指定だけを保存する（2026-09-30 点検）
+      if (editId && !canEditMaster && canSetNoDrive) {
+        const r = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'setNoDriveAllowance', id: editId, value: formNoDrive }) })
+        if (!r.ok) {
+          const err = await r.json().catch(() => null)
+          alert(`保存に失敗しました。${err?.error ? `\n${err.error}` : ''}`)
+          return
+        }
+        setShowModal(false)
+        fetchSites()
+        return
       }
 
       const body = editId

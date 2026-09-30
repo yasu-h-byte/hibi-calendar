@@ -1579,7 +1579,8 @@ export function computeMonthly(
     //     慣例支給を維持する（1.35×実時間に置換しない）。法定必要額との差は
     //     legalRequiredPay/legalShortfall（日曜は1.35倍で算定済み）の警告で監視する。
     // 日本人の出勤日（日曜の警告用・2026-09-30）。補償日・休みは含めない
-    if (wm.visa === 'none' && !isComp && calcManDays(entry) > 0) {
+    //   isComp はベトナム人だけが真なので、日本人の現場都合休（w=0.6）はここで除く（2026-09-30 点検）
+    if (wm.visa === 'none' && !isComp && entry.w !== 0.6 && calcManDays(entry) > 0) {
       if (!wm._jpWorkedDays) wm._jpWorkedDays = new Set<number>()
       wm._jpWorkedDays.add(Number(pk.day))
     }

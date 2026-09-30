@@ -205,6 +205,15 @@ export async function POST(request: NextRequest) {
   if (docData.status === 'applied') {
     return NextResponse.json({ error: 'この改定は既に適用済みです', appliedAt: docData.appliedAt }, { status: 409 })
   }
+  // 改定月以降の給与を締めていたら確定しない（取り消し→再確定で締めた月の単価が変わるのを防ぐ・2026-09-30 点検）
+  {
+    const lockedYms = await lockedMonthsFrom(effective)
+    if (lockedYms.length > 0) {
+      return NextResponse.json({
+        error: `改定月以降の給与が締め済みのため確定できません（${lockedYms.join('、')}）。先に締めを解除してください`,
+      }, { status: 409 })
+    }
+  }
   const { members } = await buildRoster(effective, docData.entries)
   const revision = computeRosterRevision(members, { asOf: effective })
 
@@ -222,8 +231,17 @@ export async function POST(request: NextRequest) {
 
   const auth = await getApiAuthUser(request)
   const actor = auth.authorized ? String(auth.actor) : 'unknown'
+  const currentWorkers = await getWorkers()
+  // 改定前に実際に払っていた日額（給料表の「改定前」に使う・2026-09-30 点検）。
+  //   号俸表の改定前の額（oldDaily）は移行時の乗せ替えで実払いと数十〜百数十円ずれるため、確定時に凍結しておく
+  const paidBeforeOf = (id: number): number | null => {
+    const w = currentWorkers.find(x => x.id === id)
+    const v = w ? (w.rateFrom === effective && w.prevRate != null ? w.prevRate : w.rate) : null
+    return typeof v === 'number' && v > 0 ? v : null
+  }
   const frozen = revision.rows.map(r => ({
     workerId: r.member.id,
+    paidBefore: paidBeforeOf(r.member.id),
     name: r.member.name,
     status: r.status,
     grade: r.member.grade,
@@ -253,8 +271,6 @@ export async function POST(request: NextRequest) {
   // 2026-08-27 追加（給与総点検）: 冪等化。確定処理が途中失敗した後の再実行で、
   //   前回反映済みの人（jpStep と rate が既に新値）にもう一度ピッチが乗る
   //   「二重昇給」を防ぐ。マスタの現在値と付き合わせてから書く
-  const { getWorkers } = await import('@/lib/workers')
-  const currentWorkers = await getWorkers()
   const applied: string[] = []
   const skippedAlready: string[] = []
   for (const r of revision.rows) {
@@ -317,6 +333,19 @@ export async function POST(request: NextRequest) {
  * - 改定のドキュメントは下書きに戻す。評語・理由・コメントは残し、凍結結果は undoLog に残す
  * - 改定月（基準日の月）以降の給与をどちらかの会社で締めていたら取り消せない
  */
+/**
+ * 改定月以降で締め済みの月（会社別キー `YYYYMM_hibi` と、古い全体キー `YYYYMM` の両方を見る・2026-09-30 点検）。
+ * 確定・取り消しの両方で使う（締めた給与と人員マスタの単価が食い違わないように）
+ */
+async function lockedMonthsFrom(effective: string): Promise<string[]> {
+  const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+  const locks = ((mainSnap.exists() ? mainSnap.data() : {}) as { locks?: Record<string, boolean> }).locks || {}
+  const fromYm = effective.slice(0, 4) + effective.slice(5, 7)
+  return Object.entries(locks)
+    .filter(([k, v]) => v === true && /^\d{6}(_|$)/.test(k) && k.slice(0, 6) >= fromYm)
+    .map(([k]) => k)
+}
+
 export async function DELETE(request: NextRequest) {
   { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ
   const effective = effectiveOf(request)
@@ -329,12 +358,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   // 改定月以降の給与を締めていたら止める（締めた給与と人員マスタが食い違うため）
-  const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-  const locks = ((mainSnap.exists() ? mainSnap.data() : {}) as { locks?: Record<string, boolean> }).locks || {}
-  const fromYm = effective.slice(0, 4) + effective.slice(5, 7)
-  const lockedYms = Object.entries(locks)
-    .filter(([k, v]) => v === true && /^\d{6}_/.test(k) && k.slice(0, 6) >= fromYm)
-    .map(([k]) => k)
+  const lockedYms = await lockedMonthsFrom(effective)
   if (lockedYms.length > 0) {
     return NextResponse.json({
       error: `改定月以降の給与が締め済みのため取り消せません（${lockedYms.join('、')}）。先に締めを解除してください`,
@@ -352,6 +376,8 @@ export async function DELETE(request: NextRequest) {
     if (f.status !== 'ok' || !f.raisePerDay) continue
     const w = workers.find(x => x.id === f.workerId)
     if (!w) { conflicts.push(`${f.name}: 人員マスタに見つかりません`); continue }
+    // 前回の取り消しが途中で止まり、もう改定前に戻っている人は飛ばす（再実行で残りを戻せるように・2026-09-30 点検）
+    if (w.rateFrom !== effective && w.jpStep === f.oldStep && w.rate !== f.newDaily) continue
     if (w.jpStep !== f.newStep || w.rate !== f.newDaily || w.rateFrom !== effective) {
       conflicts.push(`${f.name}: 確定後にマスタが変わっています（現在 ${w.jpStep ?? '—'}号・¥${w.rate ?? '—'}）`)
       continue

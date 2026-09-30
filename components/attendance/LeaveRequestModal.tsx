@@ -5,6 +5,8 @@
  * 日本語＋ベトナム語の二言語表記。日付範囲指定 + 任意理由。
  */
 'use client'
+import { leaveRequestEarliestDate } from '@/lib/leave-rules'
+import { todayJstIso } from '@/lib/date-utils'
 
 export interface LeaveRequestData {
   id: string
@@ -40,10 +42,9 @@ interface Props {
 }
 
 // 最短申請日 = 明日（2026-09-30 代表決定: 有給は前日までに申請。旧: 今日 + 5日）
+//   端末の時差（ベトナム時間など）に左右されないよう日本時間の今日から求める（2026-09-30 点検）
 function getMinDate(): string {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return leaveRequestEarliestDate(todayJstIso())
 }
 
 function formatLeaveDate(dateStr: string): string {

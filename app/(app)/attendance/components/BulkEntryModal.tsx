@@ -20,7 +20,7 @@ export interface BulkItem { workerId: string; day: number; entry: AttEntry | nul
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
 
 export default function BulkEntryModal({
-  open, onClose, ym, daysInMonth, workers, entries, calendarDays, lockedDays, timeBasedFor, onApply,
+  open, onClose, ym, daysInMonth, workers, entries, calendarDays, lockedDays, timeBasedFor, onApply, homeLeaves,
 }: {
   open: boolean
   onClose: () => void
@@ -34,6 +34,8 @@ export default function BulkEntryModal({
   /** この人は時刻で入力するか（ベトナム人・新ルール） */
   timeBasedFor: (w: Worker) => boolean
   onApply: (items: BulkItem[]) => void
+  /** 帰国申請（承認済みの期間は、出面が空でも「帰国中」なので一括入力しない） */
+  homeLeaves?: { workerId: number; startDate: string; endDate: string; status: string }[]
 }) {
   const [who, setWho] = useState<Set<string>>(new Set())
   const [days, setDays] = useState<Set<number>>(new Set())
@@ -51,13 +53,22 @@ export default function BulkEntryModal({
 
   const plan = useMemo(() => {
     const items: BulkItem[] = []
-    let skipLocked = 0, skipExisting = 0, skipForeignWork = 0
+    let skipLocked = 0, skipExisting = 0, skipForeignWork = 0, skipAbsent = 0, skipProtected = 0, overwriteStaff = 0
+    const isoOf = (d: number) => `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(d).padStart(2, '0')}`
     for (const w of workers) {
       if (!who.has(String(w.id))) continue
       for (const d of [...days].sort((a, b) => a - b)) {
         if (lockedDays.has(d)) { skipLocked++; continue }
         const cur = entries[String(w.id)]?.[d]
+        // 帰国中・退職後の日は入れない（2026-09-30 点検: 帰国中の日に0.6補が入り休業補償の過払いになる）
+        const iso = isoOf(d)
+        const onHomeLeave = (homeLeaves || []).some(hl =>
+          String(hl.workerId) === String(w.id) && hl.status === 'approved' && iso >= hl.startDate && iso <= hl.endDate)
+        if (kind !== 'clear' && (onHomeLeave || (w.retired && iso > w.retired))) { skipAbsent++; continue }
+        // 有給・帰国・試験のマスは「入力済みを変えない」を外しても上書きしない（有給の取り消しは申請の画面から）
+        if (cur && (cur.p || cur.hk || cur.exam)) { skipProtected++; continue }
         if (keepExisting && cur && kind !== 'clear') { skipExisting++; continue }
+        if (cur && cur.s === 'staff') overwriteStaff++
         if (kind === 'clear') { if (cur) items.push({ workerId: String(w.id), day: d, entry: null }); continue }
         if (kind === 'rest') { items.push({ workerId: String(w.id), day: d, entry: { w: 0, r: 1, s: 'admin' } }); continue }
         if (kind === 'comp') { items.push({ workerId: String(w.id), day: d, entry: { w: 0.6, s: 'admin' } }); continue }
@@ -76,8 +87,8 @@ export default function BulkEntryModal({
         items.push({ workerId: String(w.id), day: d, entry })
       }
     }
-    return { items, skipLocked, skipExisting, skipForeignWork }
-  }, [workers, who, days, kind, st, et, breaks, ot, keepExisting, entries, lockedDays, timeBasedFor])
+    return { items, skipLocked, skipExisting, skipForeignWork, skipAbsent, skipProtected, overwriteStaff }
+  }, [workers, who, days, kind, st, et, breaks, ot, keepExisting, entries, lockedDays, timeBasedFor, homeLeaves, ym])
 
   if (!open) return null
   const toggle = <T,>(set: Set<T>, v: T) => { const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); return n }
@@ -178,12 +189,14 @@ export default function BulkEntryModal({
         {/* 確認 */}
         <div className="rounded-lg bg-gray-50 dark:bg-gray-700/40 p-3 text-sm">
           <b>{plan.items.length}マス</b>に入れます
-          {(plan.skipExisting + plan.skipLocked + plan.skipForeignWork) > 0 && (
+          {(plan.skipExisting + plan.skipLocked + plan.skipForeignWork + plan.skipAbsent + plan.skipProtected) > 0 && (
             <span className="text-xs text-gray-500 ml-2">
               （除外: {[
                 plan.skipExisting ? `入力済み ${plan.skipExisting}` : '',
                 plan.skipLocked ? `承認済みの日 ${plan.skipLocked}` : '',
                 plan.skipForeignWork ? `ベトナム人スタッフの出勤 ${plan.skipForeignWork}（本人のスマホ入力が必要）` : '',
+                plan.skipAbsent ? `帰国中・退職後 ${plan.skipAbsent}` : '',
+                plan.skipProtected ? `有給・帰国・試験 ${plan.skipProtected}` : '',
               ].filter(Boolean).join('・')}）
             </span>
           )}
@@ -194,6 +207,10 @@ export default function BulkEntryModal({
           <button disabled={plan.items.length === 0}
             onClick={() => {
               if (kind === 'clear' && !confirm(`${plan.items.length}マスの入力を消します。よろしいですか？`)) return
+              if (kind !== 'clear' && plan.overwriteStaff > 0 &&
+                !confirm(`本人がスマホで入れた ${plan.overwriteStaff}マスを上書きします（始業・終業の時刻も置き換わります）。よろしいですか？`)) return
+              if (plan.items.length > 150 &&
+                !confirm(`${plan.items.length}マスは多めです。保存に少し時間がかかります（4件ずつ送ります）。続けますか？`)) return
               onApply(plan.items); onClose()
             }}
             className="px-5 py-2 rounded-lg bg-hibi-navy text-white text-sm font-bold disabled:opacity-40">

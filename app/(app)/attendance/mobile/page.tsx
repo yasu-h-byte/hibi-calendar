@@ -103,6 +103,8 @@ interface CalInfo {
   days: CalDays | null
   status: string | null
   rejectedReason: string | null
+  /** この月は就業カレンダーを作らない現場（スポット・工期外。PC のカレンダー画面と同じ判定 siteNeedsCalendar） */
+  notNeeded?: boolean
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -516,7 +518,7 @@ export default function ForemanMobilePage() {
       const mine = d?.sites?.find((s: { siteId: string }) => s.siteId === siteId)
       const info: CalInfo = mine
         ? { days: mine.days, status: mine.status, rejectedReason: mine.rejectedReason }
-        : { days: null, status: null, rejectedReason: null }
+        : { days: null, status: null, rejectedReason: null, notNeeded: true }
       setCalInfo(info)
       // 未作成の月は PC 画面と同じ既定値（日曜=off・祝日=holiday・それ以外=work）
       const defaults = generateDefaultDays(calY, calM)
@@ -1037,7 +1039,14 @@ export default function ForemanMobilePage() {
 
           {calLoading && <div className="py-10 text-center text-gray-400">読み込み中…</div>}
 
-          {!calLoading && calInfo && (
+          {/* スポット現場など、この月はカレンダーを作らない（PC のカレンダー画面と揃える・2026-09-30 点検） */}
+          {!calLoading && calInfo?.notNeeded && (
+            <div className="mt-3 p-3 rounded-lg bg-gray-50 text-gray-600 text-sm">
+              この現場は、この月の就業カレンダーを作りません（スポット現場・工期外）。<br />
+              常駐が決まったら、現場マスタで「この月から作る」に変えると作れるようになります。
+            </div>
+          )}
+          {!calLoading && calInfo && !calInfo.notNeeded && (
             <>
               <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <span className={`text-xs font-bold rounded-md px-2 py-1 ${
