@@ -17,6 +17,8 @@ interface Props {
   ymOptions: { ym: string; label: string }[]
   onOpenAssign: () => void
   onOpenHistory: () => void
+  /** 一括入力（入力できる人だけ。応援現場は事業責任者も・2026-09-30） */
+  onOpenBulk?: () => void
   onWorkDaysChange: (value: string) => void
   onSiteChange: (id: string) => void
   onYmChange: (ym: string) => void
@@ -25,7 +27,7 @@ interface Props {
 
 export default function HeaderBar({
   data, useTimeBased, saveStatus, workDaysInput, siteId, ym, showArchived, allSites, ymOptions,
-  onOpenAssign, onOpenHistory, onWorkDaysChange, onSiteChange, onYmChange, onShowArchivedChange,
+  onOpenAssign, onOpenHistory, onOpenBulk, onWorkDaysChange, onSiteChange, onYmChange, onShowArchivedChange,
 }: Props) {
   return (
     <div className="flex items-center gap-3 flex-wrap">
@@ -94,6 +96,17 @@ export default function HeaderBar({
         配置編集
       </button>
 
+      {onOpenBulk && (
+        <button
+          type="button"
+          onClick={onOpenBulk}
+          title="人と日にちをまとめて選び、同じ内容を一度に入れます"
+          className="text-xs px-3 py-1.5 bg-hibi-navy text-white hover:opacity-90 rounded-lg font-bold transition"
+        >
+          一括入力
+        </button>
+      )}
+
       {/* 誤削除・誤上書きからの復元（2026-08-28 追加） */}
       <button
         type="button"
@@ -157,7 +170,9 @@ export default function HeaderBar({
           onChange={e => onSiteChange(e.target.value)}
           className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none flex-1 min-w-0 sm:min-w-[180px]"
         >
-          {(data?.sites || allSites).filter(s => showArchived || !(s as { archived?: boolean }).archived).map(s => (
+          {/* 工種サイト（鉄骨など）は出さない。親現場の画面で日ごと・人ごとに工種を切り替える（2026-09-30 代表） */}
+          {(data?.sites || allSites).filter(s => !(s as { parentId?: string }).parentId)
+            .filter(s => showArchived || !(s as { archived?: boolean }).archived).map(s => (
             <option key={s.id} value={s.id}>{s.name}{(s as { archived?: boolean }).archived ? '（終了）' : ''}</option>
           ))}
         </select>

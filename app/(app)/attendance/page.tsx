@@ -25,6 +25,7 @@ import AttendanceGrid from './components/AttendanceGrid'
 import NightShiftModal, { NightShiftValue } from './components/NightShiftModal'
 import DriverModal from './components/DriverModal'
 import HistoryModal from './components/HistoryModal'
+import BulkEntryModal, { type BulkItem } from './components/BulkEntryModal'
 import { canDriveDefault } from '@/lib/allowance'
 import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
 
@@ -66,6 +67,7 @@ export default function AttendanceGridPage() {
   // Assignment modal
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showBulk, setShowBulk] = useState(false)
   // 夜勤モーダル（台風待機など年数回のケース）
   const [nightTarget, setNightTarget] = useState<{ workerId: string; day: number } | null>(null)
   // 夜勤が発生した日（現場×月ごと）。指定した日だけスタッフのセルに夜勤バッジが出る
@@ -192,9 +194,14 @@ export default function AttendanceGridPage() {
           const json = await res.json()
           const sites = json.sites || []
           setAllSites(sites)
+          // 工種サイト（鉄骨など）が選ばれていたら親現場へ（選択欄には親だけ出す・2026-09-30）
+          const cur = sites.find((s: { id: string; parentId?: string }) => s.id === siteId) as { parentId?: string } | undefined
+          if (cur?.parentId && sites.some((s: { id: string }) => s.id === cur.parentId)) {
+            setSiteId(cur.parentId)
+          } else
           // siteId が空、または保存値がサイトリストに存在しない場合のみデフォルト設定
           if (!siteId || !sites.some((s: { id: string }) => s.id === siteId)) {
-            const activeSites = sites.filter((s: { archived?: boolean }) => !s.archived)
+            const activeSites = sites.filter((s: { archived?: boolean; parentId?: string }) => !s.archived && !s.parentId)
             if (activeSites.length > 0) {
               setSiteId(activeSites[0].id)
             }
@@ -1217,13 +1224,47 @@ export default function AttendanceGridPage() {
     setRangeSiteId(data?.workTypeSites?.[0]?.id || '')
   }, [data?.site.id, data?.ym, data?.daysInMonth, data?.workTypeSites])
 
+  // ── 一括入力（2026-09-30）──
+  //   入力できるのは attendance.input の人、または応援現場での attendance.inputSupport（事業責任者）
+  const canInputHere = !!userRole && (
+    roleCan(permRoleOf({ role: userRole }), 'attendance.input')
+    || (!!data?.isSupportSite && roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport'))
+  )
+  const lockedDays = useMemo(() => {
+    const s = new Set<number>()
+    for (const [d, v] of Object.entries(localApprovals)) if (v) s.add(Number(d))
+    for (const [d, v] of Object.entries(localFinalApprovals)) if (v) s.add(Number(d))
+    if (data?.locked) for (let d = 1; d <= (data?.daysInMonth || 0); d++) s.add(d)
+    return s
+  }, [localApprovals, localFinalApprovals, data?.locked, data?.daysInMonth])
+  const applyBulk = useCallback((items: BulkItem[]) => {
+    setWorkerEntries(prev => {
+      const next = { ...prev }
+      for (const it of items) {
+        const row = { ...(next[it.workerId] || {}) }
+        if (it.entry) row[it.day] = it.entry; else delete row[it.day]
+        next[it.workerId] = row
+      }
+      return next
+    })
+    for (const it of items) {
+      scheduleSave(`w-${it.workerId}-${it.day}`, { type: 'worker', id: it.workerId, day: it.day, entry: it.entry })
+    }
+  }, [scheduleSave])
+
   // ── Render ──
 
   return (
     <div className="space-y-4">
-      {userRole && !roleCan(permRoleOf({ role: userRole }), 'attendance.input') && (
+      {userRole && !canInputHere && (
         <div className="rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
           出面の入力は職長・事務が行います（最終承認は下の「最終承認」行から）。{roleCan(permRoleOf({ role: userRole }), 'attendance.workType') && '工種（鉄骨・仮設など）の切り替えはできます。'}
+          {roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport') && ' 応援現場では出面を入力できます（一括入力あり）。'}
+        </div>
+      )}
+      {userRole && data?.isSupportSite && roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport') && !roleCan(permRoleOf({ role: userRole }), 'attendance.input') && (
+        <div className="rounded-lg px-3 py-2 text-sm bg-amber-50 text-amber-900 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800">
+          応援現場です。出面の入力・配置・運転の記録ができます。まとめて入れるときは「一括入力」を使ってください。
         </div>
       )}
       <HeaderBar
@@ -1238,6 +1279,7 @@ export default function AttendanceGridPage() {
         ymOptions={ymOptions}
         onOpenAssign={() => setShowAssignModal(true)}
         onOpenHistory={() => setShowHistory(true)}
+        onOpenBulk={canInputHere ? () => setShowBulk(true) : undefined}
         onWorkDaysChange={handleWorkDaysChange}
         onSiteChange={setSiteId}
         onYmChange={setYm}
@@ -1424,6 +1466,18 @@ export default function AttendanceGridPage() {
         onClose={() => setNightTarget(null)}
       />
 
+      <BulkEntryModal
+        open={showBulk}
+        onClose={() => setShowBulk(false)}
+        ym={data?.ym || ym}
+        daysInMonth={data?.daysInMonth || 31}
+        workers={data?.workers || []}
+        entries={workerEntries}
+        calendarDays={data?.calendarDays || null}
+        lockedDays={lockedDays}
+        timeBasedFor={w => useTimeBased && !!w.visa && w.visa !== 'none' && w.visa !== '' && !w.useOldRules}
+        onApply={applyBulk}
+      />
       <HistoryModal
         open={showHistory}
         onClose={() => setShowHistory(false)}

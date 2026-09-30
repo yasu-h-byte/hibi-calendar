@@ -122,6 +122,8 @@ export interface GridData {
   entrySiteBySubconDay?: Record<string, Record<number, string>>
   /** 同じ人・同じ日が2つ以上の工種に入力されている件（要解消） */
   workTypeDuplicates?: { kind: 'worker' | 'subcon'; id: string; day: number; siteIds: string[] }[]
+  /** 応援現場か（事業責任者が一括入力できる・2026-09-30） */
+  isSupportSite?: boolean
 }
 
 export interface PendingSave {

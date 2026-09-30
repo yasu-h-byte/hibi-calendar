@@ -347,6 +347,8 @@ export async function GET(request: NextRequest) {
       entrySiteByWorkerDay,
       entrySiteBySubconDay,
       workTypeDuplicates,
+      // 応援現場か（事業責任者が一括で入力する運用・2026-09-30）
+      isSupportSite: (await import('@/lib/companies')).isSupportSite(site as never, main.sites as never),
       // 2026-05-25 追加: 退職予定情報（今日から3ヶ月以内に退職予定の全スタッフ）
       //   出面入力画面のバナー表示用。職長が他現場のスタッフも含めて全社の退職予定を把握できる。
       upcomingRetirements: (() => {
@@ -393,7 +395,19 @@ export async function POST(request: NextRequest) {
         : (action === 'approve_final' || action === 'unapprove_final') ? 'attendance.finalApprove'
         : workTypeActions.includes(action) ? 'attendance.workType'
         : 'attendance.input'
-      const denied = await requireCap(request, cap)
+      let denied = await requireCap(request, cap)
+      // 2026-09-30（代表）: 応援現場の出面は事業責任者（政仁さん）が一括で入力する。
+      //   出面の保存・配置・運転の記録に限り、応援現場なら attendance.inputSupport でも許す
+      const supportActions = [undefined, '', 'saveAttendance', 'saveAssign', 'saveDrivers']
+      if (denied && cap === 'attendance.input' && supportActions.includes(action) && body.siteId) {
+        const { isSupportSite } = await import('@/lib/companies')
+        const mainS = await getMainData()
+        const siteS = mainS.sites.find(s => s.id === body.siteId)
+        if (isSupportSite(siteS as never, mainS.sites as never)) {
+          const denied2 = await requireCap(request, 'attendance.inputSupport')
+          if (!denied2) denied = null
+        }
+      }
       if (denied) return denied
     }
 

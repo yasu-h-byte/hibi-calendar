@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260930_support_bulk',
+    title: '応援現場の出面は事業責任者が一括入力／工種サイトを選択欄から外しました',
+    content:
+      '応援現場（川崎・出光など）の出面を、事業責任者が入力できるようにしました。出面画面の「一括入力」で、人と日にちをまとめて選び、出勤・欠勤・現場都合休を一度に入れられます（ベトナム人スタッフの出勤は本人のスマホ入力が必要なので除きます）。\n'
+      + '現場の選択欄から、鉄骨工事などの工種の現場を外しました。工種は親の現場の画面で、日ごと・人ごとに切り替えてください。',
+    category: 'new',
+    publishedAt: '2026-10-01T00:20:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['approver', 'jimu', 'owner', 'foreman'],
+  },
+  {
     id: 'rn_20260930_tool_check',
     title: '道具代の登録時に残高を確認します',
     content:

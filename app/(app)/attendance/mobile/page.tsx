@@ -150,6 +150,12 @@ export default function ForemanMobilePage() {
     } catch { /* ignore */ }
   }, [])
 
+  // 工種サイト（鉄骨など）が選ばれていたら親現場へ（選択欄には親だけ出す・2026-09-30）
+  useEffect(() => {
+    const cur = (data?.sites || []).find(x => x.id === siteId) as { parentId?: string } | undefined
+    if (cur?.parentId) setSiteId(cur.parentId)
+  }, [data, siteId])
+
   // 管理者で担当現場が無い場合: カレンダーAPIから現場一覧を取って先頭を選ぶ
   useEffect(() => {
     if (!password || siteId || foremanSites.length > 0) return
@@ -593,8 +599,9 @@ export default function ForemanMobilePage() {
     return <div className="p-6 text-center text-gray-500">ログイン情報が見つかりません。再ログインしてください。</div>
   }
 
+  // 工種サイト（鉄骨など）は出さない。親現場の画面で工種を切り替える（2026-09-30 代表）
   const siteOptions = (data?.sites || [])
-    .filter(s => !s.archived && (foremanSites.length === 0 || foremanSites.includes(s.id)))
+    .filter(s => !s.archived && !(s as { parentId?: string }).parentId && (foremanSites.length === 0 || foremanSites.includes(s.id)))
 
   const dow = new Date(y, m - 1, day).getDay()
 

@@ -81,3 +81,16 @@ export function resolveSiteParties(site: SitePartiesInput, companies: CompanyLik
   const owner = byId(site.ownerId)
   return { siteType: 'support', billToId: owner?.id ?? null, billToName: owner?.name ?? '' }
 }
+
+/**
+ * 応援現場か（2026-09-30）。工種サイト（鉄骨など）は親現場の請負体制で判定する。
+ * 応援現場の出面は事業責任者（政仁さん）が一括で入力する運用（attendance.inputSupport）。
+ */
+export function isSupportSite(
+  site: (SitePartiesInput & { parentId?: string }) | undefined,
+  sites: (SitePartiesInput & { id: string; parentId?: string })[],
+): boolean {
+  if (!site) return false
+  const root = site.parentId ? (sites.find(x => x.id === site.parentId) || site) : site
+  return resolveSiteParties(root, []).siteType === 'support'
+}
