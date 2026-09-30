@@ -22,8 +22,10 @@ import {
   computeRosterRevision, nextRevisionDate, lastRevisionDate, dailyForStep,
   SPECIAL_REASONS, HYOGO_PITCH, FIRST_REVISION_MIN_MONTHS,
   type RosterMember, type Hyogo, type JpGrade,
-  TOTAL_PAID_DAYS,
+  ANNUAL_DAYS, normalizePaidLeaveDays,
 } from '@/lib/jp-wage'
+import { getMainData } from '@/lib/compute'
+import { selectActiveGrantRecord } from '@/lib/leave-compute'
 import { MIGRATION_2026 } from '@/lib/jp-wage-migration'
 import { todayJstIso } from '@/lib/date-utils'
 
@@ -135,6 +137,7 @@ export async function GET(request: NextRequest) {
     const v = w.rateFrom === effective && w.prevRate != null ? w.prevRate : w.rate
     if (typeof v === 'number' && v > 0) paidBefore[String(m.id)] = v
   }
+  const paidLeaveDays = await paidLeaveDaysAt(effective, liveMembers.map(m => m.id))
   // 本人へ送る「マイページ」の合言葉（2026-09-30: 給料表と一緒に一人ずつ送るため）。
   //   この API は代表・事業責任者だけが呼べる（requireExecutiveAuth）。在籍中の日本人（役員・事務を除く）全員分
   const mypageTokens: Record<string, { name: string; token: string }> = {}
@@ -162,6 +165,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     effective,
     history,
+    paidLeaveDays,
     status: docData.status,
     profitRatePercent: docData.profitRatePercent,
     appliedAt: docData.appliedAt ?? null,
@@ -294,13 +298,15 @@ export async function POST(request: NextRequest) {
 
   // 確定した年度のベース年収を履歴へ積む（次回以降の推移グラフの元になる）
   const fiscalYear = Number(effective.slice(0, 4)) + 1
+  // 推移グラフの点も本人の有給の付与日数で（給料表と同じ計算・2026-10-01）
+  const leaveDays = await paidLeaveDaysAt(effective, revision.rows.map(r => r.member.id))
   for (const r of revision.rows) {
     if (r.newTotal == null) continue
     const ref = doc(db, 'jpWageHistory', String(r.member.id))
     const cur = await getDoc(ref)
     const points = (cur.exists() ? ((cur.data() as { points?: { year: number; baseAnnual: number }[] }).points || []) : [])
       .filter(p => p.year !== fiscalYear)
-    points.push({ year: fiscalYear, baseAnnual: r.newTotal * TOTAL_PAID_DAYS })
+    points.push({ year: fiscalYear, baseAnnual: r.newTotal * (ANNUAL_DAYS + normalizePaidLeaveDays(leaveDays[String(r.member.id)])) })
     points.sort((a, b) => a.year - b.year)
     await setDoc(ref, { workerId: r.member.id, points, updatedAt: new Date().toISOString() })
   }
@@ -432,4 +438,24 @@ export async function DELETE(request: NextRequest) {
     console.error('[jp-wage/revision] auditTrail 書込失敗:', e)
   }
   return NextResponse.json({ ok: true, effective, restored, count: restored.length })
+}
+
+/**
+ * 給料表の「有給日数」＝ 本人のその改定期の付与日数（2026-10-01）。
+ * 有給管理の付与レコードのうち、基準日（10/1）時点で有効なもの（selectActiveGrantRecord）。
+ * 付与レコードが無い人は返さない（給料表は既定の20日で計算する）。
+ * 旧: 全員一律20日 → 付与12日の人の年収に、もらえない8日分の買取が載っていた
+ */
+async function paidLeaveDaysAt(effective: string, workerIds: number[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {}
+  try {
+    const main = await getMainData()
+    for (const id of workerIds) {
+      const recs = (main.plData?.[String(id)] || []) as { grantDate?: string; grantDays?: number; grant?: number; _archived?: boolean }[]
+      const rec = selectActiveGrantRecord(recs, effective)
+      const days = rec ? (rec.grantDays ?? rec.grant) : undefined
+      if (typeof days === 'number' && days > 0) out[String(id)] = days
+    }
+  } catch { /* 読めなければ既定の20日で表示する */ }
+  return out
 }

@@ -61,6 +61,8 @@ interface Payload {
   history?: Record<string, { year: number; baseAnnual: number }[]>
   /** workerId → 改定前に実際に払っている日額 */
   paidBefore?: Record<string, number>
+  /** workerId → その改定期の有給の付与日数（無い人は既定の20日・2026-10-01） */
+  paidLeaveDays?: Record<string, number>
 }
 
 const jpDate = (iso: string) => {
@@ -229,7 +231,8 @@ function SheetBody() {
       </div>
 
       {targets.map(f => {
-        const fig = paySheetFigures(f.newDaily!, beforeOf(f))
+        // 有給は本人の付与日数で（旧: 全員20日 → 付与12日の梶原さんに8日分多い年収が載っていた・2026-10-01）
+        const fig = paySheetFigures(f.newDaily!, beforeOf(f), data.paidLeaveDays?.[String(f.workerId)] ?? PAID_LEAVE_DAYS)
         const hist = data.history?.[String(f.workerId)] ?? []
         // 2026-08-27 修正（給与総点検）: 補完点の年度が1年ズレていた。
         //   新年収(baseAnnual)は改定年度 fy の点、前年 fy-1 には改定前年収(prevBaseAnnual)。
@@ -257,7 +260,7 @@ function SheetBody() {
               }}
               fig={fig} points={points} fy={fy} effectiveLabel={jpDate(data.effective)} isDraft={isDraft}
             />
-            {withGuide && <WageSystemGuide grade={f.grade} age={age} fy={fy} effectiveLabel={jpDate(data.effective)} />}
+            {withGuide && <WageSystemGuide grade={f.grade} age={age} fy={fy} effectiveLabel={jpDate(data.effective)} paidLeaveDays={fig.paidLeaveDays} />}
             </Fragment>
           )
         }
@@ -338,7 +341,7 @@ function SheetBody() {
                   <td>{f.newStep}号</td>
                   <td className="num" style={{ background: '#d9e2f3', fontWeight: 700 }}>{n0(fig.daily)}</td>
                   <td className="num">{n0(fig.prevDaily)}</td>
-                  <td>{PAID_LEAVE_DAYS}</td>
+                  <td>{fig.paidLeaveDays}</td>
                   <td className="num">{n0(fig.leaveBuyout)}</td>
                   <td className="num">{n0(fig.leavePerDay)}</td>
                   <td className="num">{n0(fig.prevEffectiveDaily)}</td>

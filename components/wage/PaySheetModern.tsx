@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { PaySheetFigures } from '@/lib/jp-wage'
-import { ANNUAL_DAYS, PAID_LEAVE_DAYS, TOTAL_PAID_DAYS, MAX_STEP } from '@/lib/jp-wage'
+import { ANNUAL_DAYS, MAX_STEP } from '@/lib/jp-wage'
 
 const NAVY = '#1B2A4A'
 const AMBER = '#F5A623'
@@ -297,7 +297,7 @@ export default function PaySheetModern({
             <tbody>
               {[
                 ['日給', `${yen(fig.daily)} × ${ANNUAL_DAYS}日`, yen(fig.daily * ANNUAL_DAYS)],
-                ['有給（買取込み）', `${yen(fig.daily)} × ${PAID_LEAVE_DAYS}日`, yen(fig.leaveBuyout)],
+                ['有給（買取込み）', `${yen(fig.daily)} × ${fig.paidLeaveDays}日`, yen(fig.leaveBuyout)],
               ].map(([a, b, c]) => (
                 <tr key={a} style={{ borderBottom: `1px solid ${LINE}` }}>
                   <td style={{ padding: '4px 0', color: MUTED }}>{a}</td>
@@ -307,7 +307,7 @@ export default function PaySheetModern({
               ))}
               <tr>
                 <td style={{ padding: '5px 0', fontWeight: 700 }}>ベース年収</td>
-                <td style={{ padding: '5px 0', textAlign: 'right', color: MUTED }}>{TOTAL_PAID_DAYS}日分</td>
+                <td style={{ padding: '5px 0', textAlign: 'right', color: MUTED }}>{fig.totalPaidDays}日分</td>
                 <td style={{ padding: '5px 0', textAlign: 'right', fontWeight: 800, color: NAVY }}>{yen(fig.baseAnnual)}</td>
               </tr>
             </tbody>
@@ -322,7 +322,7 @@ export default function PaySheetModern({
       {/* フッター */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 5, borderTop: `2px solid ${NAVY}`, fontSize: 8.5, color: MUTED }}>
         <span style={{ letterSpacing: '0.18em', fontWeight: 700, color: NAVY }}>HIBI CONSTRUCTION</span>
-        <span>{effectiveLabel}改定。ベース年収は稼働{ANNUAL_DAYS}日・有給{PAID_LEAVE_DAYS}日で計算した目安です（残業代・手当・賞与は含みません）。</span>
+        <span>{effectiveLabel}改定。ベース年収は稼働{ANNUAL_DAYS}日・有給{fig.paidLeaveDays}日（今期の付与日数）で計算した目安です（残業代・手当・賞与は含みません）。</span>
         <span style={{ fontVariantNumeric: 'tabular-nums' }}>No.{p.workerId} ／ {num(fig.daily)}</span>
       </div>
     </div>

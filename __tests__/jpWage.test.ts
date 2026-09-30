@@ -672,3 +672,25 @@ describe('代表加算（裁量での昇給）', () => {
     expect(r.discretionaryPitch).toBe(2)
   })
 })
+
+describe('給料表の有給日数は本人の付与日数（2026-10-01 梶原さん 12日の件）', () => {
+  it('付与12日の人は 290＋12＝302日分で計算し、20日分の買取を載せない', () => {
+    const f = paySheetFigures(28000, 28000, 12)
+    expect(f.paidLeaveDays).toBe(12)
+    expect(f.totalPaidDays).toBe(302)
+    expect(f.leaveBuyout).toBe(28000 * 12)
+    expect(f.baseAnnual).toBe(28000 * 302)
+    expect(f.prevBaseAnnual).toBe(28000 * 302)
+    expect(f.effectiveDaily).toBeCloseTo((28000 * 302) / 290)
+  })
+  it('付与日数が無ければ従来どおり20日（310日）', () => {
+    const f = paySheetFigures(23550, 22650)
+    expect(f.paidLeaveDays).toBe(20)
+    expect(f.totalPaidDays).toBe(310)
+    expect(f.baseAnnual).toBe(23550 * 310)
+  })
+  it('改定前後は同じ日数で比べる（日給の伸びだけが昇給額に出る）', () => {
+    expect(paySheetFigures(19620, 19100, 20).raisePerYear).toBe(520 * 310)
+    expect(paySheetFigures(19620, 19100, 14).raisePerYear).toBe(520 * 304)
+  })
+})
