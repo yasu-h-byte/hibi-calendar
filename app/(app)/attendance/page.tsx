@@ -1306,7 +1306,7 @@ export default function AttendanceGridPage() {
 
       {/* ── Loading / Error ── */}
       {loading && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-12 text-center text-gray-400">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-12 text-center text-gray-400">
           <svg className="animate-spin h-6 w-6 mx-auto mb-2 text-hibi-navy" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -1353,7 +1353,7 @@ export default function AttendanceGridPage() {
       {/* 期間で工種を切り替える（工種のある現場だけ・2026-09-25）。
           「26日〜30日は鉄骨工事」のように日をまとめて決める。1日だけなら日付の見出しのチップでもよい */}
       {!loading && data && !!data.workTypeSites?.length && !data.locked && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm px-4 py-3 flex flex-wrap items-center gap-2 text-sm">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-3 flex flex-wrap items-center gap-2 text-sm">
           <span className="font-bold text-hibi-navy dark:text-gray-200">期間で工種を切り替え</span>
           <select value={rangeFrom} onChange={e => setRangeFrom(Number(e.target.value))}
             className="rounded-lg border border-gray-300 px-2 py-1.5 bg-white dark:bg-gray-700 dark:border-gray-600">
@@ -1451,7 +1451,7 @@ export default function AttendanceGridPage() {
 
       {/* No data placeholder */}
       {!loading && !error && !data && !siteId && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-12 text-center text-gray-400">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-12 text-center text-gray-400">
           現場を選択してください
         </div>
       )}

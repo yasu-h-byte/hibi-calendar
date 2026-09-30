@@ -7,6 +7,7 @@ import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
 import { can } from '@/lib/permissions'
+import { Icon } from '@/components/ui/Icon'
 
 // ────────────────────────────────────────
 //  Types
@@ -783,7 +784,7 @@ function MonthlyPageInner() {
         <div className="space-y-6">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 className="text-xl font-bold text-hibi-navy dark:text-white">帳票出力</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">帳票出力</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">帳票はすべてここから出します。対象月は右で選びます（集計タブと共通）</p>
               {(!data?.lockedHibi || !data?.lockedHfu) && (
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
@@ -866,7 +867,7 @@ function MonthlyPageInner() {
               {EXPORT_CARDS.map((card) => {
                 const isDownloading = exportDownloading === card.type
                 return (
-                  <div key={card.type} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col">
+                  <div key={card.type} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 hover:shadow-md transition-shadow p-4 flex flex-col">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-2xl">{card.icon}</span>
                       <h3 className="font-bold text-hibi-navy dark:text-white text-sm">{card.title}</h3>
@@ -921,22 +922,22 @@ function MonthlyPageInner() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="text-xl font-bold text-hibi-navy dark:text-white">月次集計・締め</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">月次集計・締め</h1>
             {data && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-[13px] text-hibi-sub dark:text-gray-400 mt-1">
                 出勤延べ {fmtNum(data.totals.workDays)}人日 / 外注 {fmtNum(data.totals.subWorkDays)}人工 / 残業 {fmtNum(Math.round(data.workers.reduce((s, w) => s + displayOtHours(w), 0) * 10) / 10)}h
               </p>
             )}
           </div>
           <div className="flex items-center gap-1.5">
             {data?.lockedHibi && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">
-                🔒 日比 締め済
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs font-bold rounded-md">
+                <Icon name="lock" size={13} strokeWidth={2.2} />日比 締め済み
               </span>
             )}
             {data?.lockedHfu && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">
-                🔒 HFU 締め済
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs font-bold rounded-md">
+                <Icon name="lock" size={13} strokeWidth={2.2} />HFU 締め済み
               </span>
             )}
           </div>
@@ -945,39 +946,41 @@ function MonthlyPageInner() {
           <button
             onClick={handleCopyPrevMonth}
             disabled={hasCurrentData}
-            className="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
             title={hasCurrentData ? '既にデータが存在します' : '前月の出勤データをコピー'}
           >
-            📋 前月コピー
+            <Icon name="copy" size={15} />前月コピー
           </button>
           <button
             onClick={() => handleToggleLock('hibi')}
             disabled={lockToggling || !data}
-            className={`px-2.5 py-2 rounded-lg text-xs font-medium transition ${
+            className={`inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold transition ${
               data?.lockedHibi
-                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                : 'bg-red-100 text-red-700 hover:bg-red-200'
+                ? 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'
+                : 'bg-hibi-navy text-white hover:bg-hibi-light'
             } disabled:opacity-50`}
           >
-            {data?.lockedHibi ? '🔓 日比 解除' : '🔒 日比 締め'}
+            <Icon name={data?.lockedHibi ? 'unlock' : 'lock'} size={15} />
+            {data?.lockedHibi ? '日比 締めを解除' : '日比 を締める'}
           </button>
           <button
             onClick={() => handleToggleLock('hfu')}
             disabled={lockToggling || !data}
-            className={`px-2.5 py-2 rounded-lg text-xs font-medium transition ${
+            className={`inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold transition ${
               data?.lockedHfu
-                ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                : 'bg-red-100 text-red-700 hover:bg-red-200'
+                ? 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'
+                : 'bg-hibi-navy text-white hover:bg-hibi-light'
             } disabled:opacity-50`}
           >
-            {data?.lockedHfu ? '🔓 HFU 解除' : '🔒 HFU 締め'}
+            <Icon name={data?.lockedHfu ? 'unlock' : 'lock'} size={15} />
+            {data?.lockedHfu ? 'HFU 締めを解除' : 'HFU を締める'}
           </button>
           <button
             onClick={() => switchTopTab('export')}
-            className="px-3 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition"
+            className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition"
             title="帳票はすべて「帳票出力」タブから（キャシュモ提出の2点・根拠書類・社内用）"
           >
-            📤 帳票出力
+            <Icon name="download" size={15} />帳票出力
           </button>
           <select
             value={ym}
@@ -1084,7 +1087,7 @@ function MonthlyPageInner() {
 
       {/* Loading / Error */}
       {loading && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-8 text-center text-gray-400 dark:text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-8 text-center text-gray-400 dark:text-gray-500">
           読み込み中...
         </div>
       )}
@@ -1215,7 +1218,7 @@ function MonthlyPageInner() {
           スクロール領域にしたうえで、thead/tfoot のセルを sticky にしている。 */}
       {!loading && data && (
         <div
-          className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-auto"
+          className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-auto"
           style={{ maxHeight: 'calc(100vh - 180px)' }}
         >
           <table className="w-full text-sm min-w-[1400px]">

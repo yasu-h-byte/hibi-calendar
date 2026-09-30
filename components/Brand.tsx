@@ -45,7 +45,7 @@ export function DeduraWordmark({
   size?: 'sm' | 'md' | 'lg' | 'xl'
   variant?: 'navy' | 'white'
 }) {
-  // xl はサイドバー用。内寸 176px に対し実測 約151px で、フォントが変わって
+  // xl はサイドバー用。内寸 184px（2026-09-30 から w-56）に対し実測 約151px で、フォントが変わって
   // 1割膨らんでも収まる上限。これ以上大きくすると運営表記と干渉する。
   const text =
     size === 'xl' ? 'text-[28px]' : size === 'lg' ? 'text-2xl' : size === 'sm' ? 'text-sm' : 'text-lg'

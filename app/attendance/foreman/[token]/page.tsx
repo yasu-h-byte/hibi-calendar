@@ -4,6 +4,7 @@ import { siteLeaderLabel } from '@/lib/companies'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus } from '@/types'
+import StaffHeader from '@/components/StaffHeader'
 
 interface MisplacedEntry {
   siteId: string
@@ -275,7 +276,7 @@ export default function ForemanAttendancePage() {
 
   if (loading && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5]">
+      <div className="min-h-screen flex items-center justify-center bg-hibi-bg">
         <div className="text-hibi-charcoal text-lg font-bold">読み込み中...</div>
       </div>
     )
@@ -283,7 +284,7 @@ export default function ForemanAttendancePage() {
 
   if (error && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5] p-4">
+      <div className="min-h-screen flex items-center justify-center bg-hibi-bg p-4">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center max-w-sm w-full">
           <div className="text-red-500 text-lg font-bold mb-2">エラー</div>
           <div className="text-gray-700">{error}</div>
@@ -295,15 +296,9 @@ export default function ForemanAttendancePage() {
   if (!data) return null
 
   return (
-    <div className="min-h-screen bg-[#F1F2F5]">
+    <div className="min-h-screen bg-hibi-bg">
       {/* Header */}
-      <div className="bg-hibi-charcoal text-white px-4 py-4">
-        <div className="max-w-lg mx-auto">
-          <div className="text-sm opacity-70">{siteLeaderLabel(data.site.isSupport)}</div>
-          <div className="text-lg sm:text-xl font-bold truncate">{data.foreman.name}</div>
-          <div className="text-sm opacity-80 mt-1 truncate">{data.site.name}</div>
-        </div>
-      </div>
+      <StaffHeader label={siteLeaderLabel(data.site.isSupport)} name={data.foreman.name} sub={data.site.name} />
 
       {/* Date nav */}
       <div className="bg-white border-b px-3 py-3">

@@ -834,7 +834,7 @@ export default function EvaluationPage() {
     return (
       <div className="space-y-4">
         {/* ヘッダー */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
           <div className="flex items-start justify-between flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <WorkerAvatar name={session.workerName} src={photos[String(session.workerId)]} size={56} />
@@ -905,7 +905,7 @@ export default function EvaluationPage() {
         </div>
 
         {/* 提出状況 */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
           <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">提出状況</h4>
           <EvaluatorBadgeList session={session} />
           {pendingIds.length > 0 && session.status !== 'approved' && (
@@ -918,7 +918,7 @@ export default function EvaluationPage() {
 
         {/* 評価者ウェイト */}
         {(session.evaluatorWeights || isAdmin) && session.status !== 'approved' && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">
                 評価者ウェイト
@@ -1025,7 +1025,7 @@ export default function EvaluationPage() {
 
         {/* 出席指標（詳細内訳付き） */}
         {session.metrics && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">
                 出勤実績（過去1年）
@@ -1183,7 +1183,7 @@ export default function EvaluationPage() {
 
         {/* 評価者比較表（reviews が1件以上ある場合のみ） */}
         {session.reviews.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900">
               <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">評価者比較</h4>
             </div>
@@ -1282,7 +1282,7 @@ export default function EvaluationPage() {
 
         {/* コメント */}
         {session.reviews.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
             <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">評価者コメント</h4>
             <div className="space-y-3">
               {session.reviews.map((r, idx) => (
@@ -1455,7 +1455,7 @@ export default function EvaluationPage() {
             </div>
           )}
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-900">
@@ -1697,7 +1697,7 @@ export default function EvaluationPage() {
       {activeTab === 'review' && (
         <div className="space-y-6">
           {/* Worker selector */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               対象スタッフ
             </label>
@@ -1728,7 +1728,7 @@ export default function EvaluationPage() {
                 if (!sw) return null
                 const years = sw.hireDate ? yearsFromDate(sw.hireDate) : 1
                 return (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                     <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">スタッフ情報</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-sm">
                       <div>
@@ -1756,7 +1756,7 @@ export default function EvaluationPage() {
               })()}
 
               {/* Session status */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-sm text-gray-500 dark:text-gray-400">セッション状況: </span>
@@ -1784,7 +1784,7 @@ export default function EvaluationPage() {
                 <>
                   {/* Attendance metrics */}
                   {reviewSession.metrics && (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                       <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">出勤実績（過去1年）</h3>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                         <div>
@@ -1816,7 +1816,7 @@ export default function EvaluationPage() {
                       const bgColor = cat.color === 'blue' ? 'bg-blue-500' : cat.color === 'green' ? 'bg-green-500' : cat.color === 'teal' ? 'bg-teal-500' : 'bg-orange-500'
                       const catScores = myReview[cat.key]
                       return (
-                        <div key={cat.key} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
+                        <div key={cat.key} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
                           <div className={`${bgColor} px-4 py-2`}>
                             <h3 className="text-white font-bold text-sm">
                               {cat.icon} {cat.label} (重み {cat.weightLabel}{cat.key === 'attitude' ? ' — 最重要' : ''})
@@ -1844,7 +1844,7 @@ export default function EvaluationPage() {
                   </div>
 
                   {/* Comment */}
-                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       コメント
                     </label>
@@ -1858,7 +1858,7 @@ export default function EvaluationPage() {
                   </div>
 
                   {/* Score preview — 担当カテゴリのみ表示 */}
-                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                     <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
                       スコアプレビュー
                       <span className="ml-2 text-[11px] font-normal text-gray-500">
@@ -1951,7 +1951,7 @@ export default function EvaluationPage() {
                   </div>
 
                   {/* My submitted review (read-only) */}
-                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                     <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">自分の評価</h3>
                     <div className="space-y-2">
                       {/* 自分の担当カテゴリの項目のみ表示 */}
@@ -1972,7 +1972,7 @@ export default function EvaluationPage() {
 
                   {/* Other evaluators' reviews (only visible after submitting own) */}
                   {reviewSession.reviews.filter(r => r.evaluatorId !== authUser?.workerId).length > 0 && (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                       <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">他の評価者の結果</h3>
                       <div className="space-y-4">
                         {reviewSession.reviews
@@ -2008,7 +2008,7 @@ export default function EvaluationPage() {
                     const pending = reviewSession.evaluatorIds.filter(id => !submittedIds.includes(id))
                     if (pending.length === 0) return null
                     return (
-                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                         <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">未提出の評価者</h3>
                         <div className="flex flex-wrap gap-2">
                           {pending.map(id => {
@@ -2060,7 +2060,7 @@ export default function EvaluationPage() {
                   {evaluations
                     .filter(e => e.status === 'reviewing')
                     .map(session => (
-                      <div key={session.id} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4 flex items-center justify-between">
+                      <div key={session.id} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <WorkerAvatar name={session.workerName} src={photos[String(session.workerId)]} size={40} />
                           <div>
@@ -2122,7 +2122,7 @@ export default function EvaluationPage() {
                 </button>
 
                 {/* Worker info */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-3">
                     <WorkerAvatar name={session.workerName} src={photos[String(session.workerId)]} size={48} />
                     {session.workerName} の評価
@@ -2145,7 +2145,7 @@ export default function EvaluationPage() {
                 </div>
 
                 {/* Comparison table */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
                   <div className="px-4 py-3 bg-gray-50 dark:bg-gray-900">
                     <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">評価者比較</h3>
                   </div>
@@ -2257,7 +2257,7 @@ export default function EvaluationPage() {
                 </div>
 
                 {/* Evaluator comments */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                   <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">評価者コメント</h3>
                   <div className="space-y-3">
                     {session.reviews.map((review, idx) => (
@@ -2274,7 +2274,7 @@ export default function EvaluationPage() {
                 </div>
 
                 {/* Final comment */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     最終コメント（政仁さん）
                   </label>
@@ -2288,7 +2288,7 @@ export default function EvaluationPage() {
                 </div>
 
                 {/* Score preview */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                   <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">最終スコアプレビュー</h3>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between text-gray-600 dark:text-gray-300">
@@ -2378,7 +2378,7 @@ export default function EvaluationPage() {
               })
             if (inProgress.length === 0) {
               return (
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-8 text-center text-gray-400 dark:text-gray-500">
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-8 text-center text-gray-400 dark:text-gray-500">
                   進行中の評価セッションはありません
                 </div>
               )
@@ -2493,11 +2493,11 @@ export default function EvaluationPage() {
                 </div>
 
                 {sorted.length === 0 ? (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-8 text-center text-gray-400 dark:text-gray-500">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-8 text-center text-gray-400 dark:text-gray-500">
                     承認済みの評価がありません
                   </div>
                 ) : (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-900">

@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import defaultTheme from 'tailwindcss/defaultTheme'
 
 const config: Config = {
   darkMode: 'class',
@@ -11,13 +12,19 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // 字は BIZ UDPゴシック（読み間違えにくいユニバーサルデザイン書体）。app/layout.tsx で読み込む
+      fontFamily: {
+        sans: ['var(--font-ud)', ...defaultTheme.fontFamily.sans],
+      },
       colors: {
         hibi: {
           navy: '#1B2A4A',
           light: '#2A3F6A',
-          // デザイン刷新トークン（案A: 管理画面 / 案C: スタッフスマホ画面）
-          bg: '#F6F7FA',        // 管理画面のページ背景（旧 gray-100 より明るくわずかに青み）
-          line: '#E6E9F0',      // カードの細枠線
+          // デザイン刷新トークン（2026-09-30 第2次刷新「案1 UDホワイト」。旧: 案A/案C 2026-07-03）
+          bg: '#F3F5F8',        // ページ背景（白いサイドバー・白いカードとの差がわかる薄いグレー）
+          line: '#E3E7EE',      // カード・サイドバーの細枠線
+          sub: '#5B6475',       // 補足の文字（ラベル・単位）。gray-500 より濃く、白地で 4.5:1 以上
+          active: '#EAF0FA',    // サイドバーの選択中・情報ピルの地
           thead: '#F2F4F9',     // グリッド日付ヘッダー背景
           charcoal: '#20262F',  // スマホ画面のヘッダー・文字色（案C チャコール）
           amber: '#F5A623',     // スマホ画面の主役ボタン（案C 工事アンバー）

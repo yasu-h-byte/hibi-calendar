@@ -15,9 +15,9 @@
 //  Card
 // ────────────────────────────────────────
 
-/** 標準カード（bg-white + border + shadow-sm + rounded） */
+/** 標準カード（白地 + 細枠線 + 角丸。影は付けない＝案1 UDホワイト 2026-09-30） */
 export function cardCls(extra = ''): string {
-  return `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm ${extra}`.trim()
+  return `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 ${extra}`.trim()
 }
 
 /** 境界線ありカード */

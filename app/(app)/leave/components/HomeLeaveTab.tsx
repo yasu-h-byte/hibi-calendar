@@ -410,7 +410,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
   return (
     <div className="space-y-6 max-w-2xl">
       {/* 新規登録 */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700">
         <button onClick={() => patchUi({ formOpen: !ui.formOpen })}
           className="w-full px-4 py-3 flex items-center justify-between text-left">
           <span className="font-medium text-gray-900 dark:text-white">＋ 新規登録</span>
@@ -539,7 +539,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           期間変更・削除が出面へ同期されず、どの申請にも紐づかない残骸が発生していた。
           書き込み側は lib/home-leave-sync.ts で根治済みだが、過去データの掃除用に残す。 */}
       {canDelete && (
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
         <h3 className="font-bold text-hibi-navy dark:text-gray-200 flex items-center gap-2">
           🔍 出面の帰国表示を点検
         </h3>

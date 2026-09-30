@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { fmtYenMan, fmtNum as fmtNumShared } from '@/lib/format'
 import EvaluationCard from '@/components/EvaluationCard'
 import { AuthUser } from '@/types'
+import { Icon, type IconName } from '@/components/ui/Icon'
 
 // ─── Types ───
 
@@ -609,13 +610,12 @@ export default function DashboardPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold text-hibi-navy dark:text-white">ダッシュボード</h1>
-        <div className="flex items-center gap-2">
-          <button onClick={() => navigateMonth(-1)} className="px-2 py-1 text-sm text-gray-500 hover:text-hibi-navy dark:text-gray-400">◀</button>
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[70px] text-center">{ymToLabel(ym)}</span>
-          <button onClick={() => navigateMonth(1)} className="px-2 py-1 text-sm text-gray-500 hover:text-hibi-navy dark:text-gray-400">▶</button>
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div>
+          <div className="text-[13px] text-hibi-sub dark:text-gray-400">{todayStr}</div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">ダッシュボード</h1>
         </div>
+        <MonthStepper label={ymToLabel(ym)} onPrev={() => navigateMonth(-1)} onNext={() => navigateMonth(1)} />
       </div>
 
       {error && (
@@ -639,8 +639,8 @@ export default function DashboardPage() {
 
         if (total === 0) {
           return (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-xl p-4 flex items-center gap-3">
-              <span className="text-2xl">✓</span>
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl p-4 flex items-center gap-3">
+              <span className="w-10 h-10 rounded-[10px] bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 flex items-center justify-center shrink-0"><Icon name="check" size={20} strokeWidth={2.4} /></span>
               <div>
                 <div className="font-bold text-green-800 dark:text-green-300">対応が必要なことはありません</div>
                 <div className="text-xs text-green-700 dark:text-green-400 mt-0.5">承認・給与計算・期限・異常検知すべて健全です</div>
@@ -659,77 +659,39 @@ export default function DashboardPage() {
         }
 
         return (
-          <div className="bg-white dark:bg-gray-800 border-2 border-hibi-navy dark:border-blue-500 rounded-xl overflow-hidden">
-            <div className="bg-hibi-navy dark:bg-blue-900 px-4 py-2.5 flex items-center justify-between">
-              <h2 className="font-bold text-white text-sm">今日の判断</h2>
-              <span className="text-white/90 text-xs tabular-nums">{total}件</span>
+          <div className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-hibi-line dark:border-gray-700 flex items-center justify-between">
+              <h2 className="font-bold text-lg text-gray-900 dark:text-white">今日の判断</h2>
+              <span className="text-[13px] text-hibi-sub dark:text-gray-400 tabular-nums">{total}件</span>
             </div>
-            <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            <div className="divide-y divide-hibi-line dark:divide-gray-700">
 
               {/* ① 承認・確認 */}
               {actionBadges && actionBadges.monthly > 0 && (
-                <a href={`/monthly?ym=${ym}`} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                  <span className="w-1.5 h-8 rounded-full bg-red-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-red-700 dark:text-red-300">給与計算の検算で異常 {actionBadges.monthly}名</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">月次集計を開いて確認する</div>
-                  </div>
-                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
-                </a>
+                <JudgeRow href={`/monthly?ym=${ym}`} tone="urgent" icon="alert" kind="給与計算の検算"
+                  main={`異常 ${actionBadges.monthly}名`} sub="月次集計を開いて確認する" />
               )}
               {actionBadges && actionBadges.calendar > 0 && (
-                <a href="/calendar" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                  <span className="w-1.5 h-8 rounded-full bg-orange-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-orange-700 dark:text-orange-300">就業カレンダー 未承認 {actionBadges.calendar}件</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">来月分の承認待ち</div>
-                  </div>
-                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
-                </a>
+                <JudgeRow href="/calendar" tone="warn" icon="calendar" kind="就業カレンダー"
+                  main={`未承認 ${actionBadges.calendar}件`} sub="来月分の承認待ち" />
               )}
 
               {/* ② 静かな異常 */}
               {(q?.items || []).map((it, i) => (
-                <a key={`q${i}`} href={it.href} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                  <span className="w-1.5 h-8 rounded-full bg-amber-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-gray-800 dark:text-gray-100">
-                      <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-1.5 py-0.5 rounded mr-2 align-middle">
-                        {KIND_LABEL[it.kind] || '確認'}
-                      </span>
-                      {it.workerName}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{it.detail}</div>
-                  </div>
-                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
-                </a>
+                <JudgeRow key={`q${i}`} href={it.href} tone="warn" icon="clock" kind={KIND_LABEL[it.kind] || '確認'}
+                  main={it.workerName} sub={it.detail} />
               ))}
 
               {/* ③ 期限接近 */}
               {visaN > 0 && (
-                <a href="/workers" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                  <span className="w-1.5 h-8 rounded-full bg-purple-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-purple-700 dark:text-purple-300">在留期限が近い {visaN}名</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {(visa?.items || []).slice(0, 3).map(v => `${v.name}(あと${v.daysLeft}日)`).join('、')}
-                      {visaN > 3 ? ` 他${visaN - 3}名` : ''}
-                    </div>
-                  </div>
-                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
-                </a>
+                <JudgeRow href="/workers" tone="info" icon="user" kind="在留期限"
+                  main={`期限が近い人 ${visaN}名`}
+                  sub={`${(visa?.items || []).slice(0, 3).map(v => `${v.name}(あと${v.daysLeft}日)`).join('、')}${visaN > 3 ? ` 他${visaN - 3}名` : ''}`} />
               )}
               {plN > 0 && (
-                <a href="/leave" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
-                  <span className="w-1.5 h-8 rounded-full bg-teal-500 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm text-teal-700 dark:text-teal-300">有給5日義務が未達 {plN}名</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {(pl?.names || []).slice(0, 3).join('、')}{plN > 3 ? ` 他${plN - 3}名` : ''}
-                    </div>
-                  </div>
-                  <span className="text-gray-300 dark:text-gray-500 shrink-0">›</span>
-                </a>
+                <JudgeRow href="/leave" tone="urgent" icon="umbrella" kind="有給 年5日の義務"
+                  main={`未達 ${plN}名`}
+                  sub={`${(pl?.names || []).slice(0, 3).join('、')}${plN > 3 ? ` 他${plN - 3}名` : ''}`} />
               )}
             </div>
           </div>
@@ -766,7 +728,7 @@ export default function DashboardPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-hibi-navy text-white">
+                      <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300 text-xs">
                         <th className="px-3 py-2 text-left">現場</th>
                         <th className="px-3 py-2 text-right">鳶</th>
                         <th className="px-3 py-2 text-right">土工</th>
@@ -777,8 +739,8 @@ export default function DashboardPage() {
                     </thead>
                     <tbody>
                       {data.todayStatus.siteStatus.map((s) => (
-                        <tr key={s.siteId} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                          <td className="px-3 py-2 font-medium text-hibi-navy">{s.siteName}</td>
+                        <tr key={s.siteId} className="border-b border-hibi-line dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                          <td className="px-3 py-2.5 font-bold text-gray-900 dark:text-gray-100">{s.siteName}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{s.tobi}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{s.doko}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{s.subTobi}</td>
@@ -816,7 +778,7 @@ export default function DashboardPage() {
                       休み {data.todayStatus.absentWorkers.length}名:
                     </span>
                     {data.todayStatus.absentWorkers.map(w => (
-                      <span key={w.id} className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded-full text-xs">
+                      <span key={w.id} className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md text-xs font-bold">
                         {w.name}
                       </span>
                     ))}
@@ -834,28 +796,30 @@ export default function DashboardPage() {
           {/* ═══ 今月サマリー ═══ */}
           {data.summary && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
-                <div className="flex items-center gap-1 text-xs font-semibold mb-1">
-                  <span className="text-gray-500 dark:text-gray-400">総人工数</span>
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
+                <div className="flex items-center gap-1 text-[13px] mb-1">
+                  <span className="text-hibi-sub dark:text-gray-400">総人工数</span>
                   {data.summary.prevTotalManDays > 0 && data.summary.pctWork !== 0 && (
                     <span className={`text-[10px] font-bold ${data.summary.pctWork > 0 ? 'text-green-600' : 'text-red-600'}`} title="前月同日比">
                       {data.summary.pctWork > 0 ? '▲' : '▼'}{Math.abs(Math.round(data.summary.pctWork))}%
                     </span>
                   )}
                 </div>
-                <div className="text-2xl font-bold text-hibi-navy dark:text-white tabular-nums">
-                  {fmtNum(data.summary.totalManDays)}
+                <div className="flex items-baseline gap-1">
+                  <span className="text-[32px] leading-tight font-bold text-gray-900 dark:text-white tabular-nums">{fmtNum(data.summary.totalManDays)}</span>
+                  <span className="text-sm text-hibi-sub dark:text-gray-400">人工</span>
                 </div>
-                <div className="text-xs text-gray-400 dark:text-gray-500">人工</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
-                <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold mb-1">
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
+                <div className="text-[13px] text-hibi-sub dark:text-gray-400 mb-1">
                   {data.summary.billing > 0 ? '売上' : '売上（概算）'}
                 </div>
-                <div className={`text-2xl font-bold tabular-nums ${data.summary.billing === 0 ? 'text-gray-400' : 'text-hibi-navy dark:text-white'}`}>
-                  {data.summary.billing === 0 ? '未入力' : fmtYenMan(data.summary.billing)}
+                <div className="flex items-baseline gap-1">
+                  <span className={`text-[32px] leading-tight font-bold tabular-nums ${data.summary.billing === 0 ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                    {data.summary.billing === 0 ? '未入力' : fmtYenMan(data.summary.billing)}
+                  </span>
+                  {data.summary.billing > 0 && <span className="text-sm text-hibi-sub dark:text-gray-400">万円</span>}
                 </div>
-                {data.summary.billing > 0 && <div className="text-xs text-gray-400 dark:text-gray-500">万円</div>}
               </div>
             </div>
           )}
@@ -934,14 +898,61 @@ export default function DashboardPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 bg-white">
-        <h2 className="font-bold text-hibi-navy dark:text-blue-300 text-sm">{title}</h2>
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+      <div className="px-5 py-4 border-b border-hibi-line dark:border-gray-700">
+        <h2 className="font-bold text-gray-900 dark:text-white text-base">{title}</h2>
       </div>
-      <div className="p-4">
+      <div className="p-5">
         {children}
       </div>
     </div>
   )
 }
 
+
+/** 月の切り替え（‹ 2026/9 ›）。案1 UDホワイトの枠つきセグメント */
+function MonthStepper({ label, onPrev, onNext }: { label: string; onPrev: () => void; onNext: () => void }) {
+  return (
+    <div className="flex items-center h-10 rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+      <button onClick={onPrev} aria-label="前の月" className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
+        <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
+      </button>
+      <span className="px-2 text-[15px] font-bold text-gray-900 dark:text-white min-w-[72px] text-center tabular-nums">{label}</span>
+      <button onClick={onNext} aria-label="次の月" className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
+        <Icon name="chevronRight" size={18} strokeWidth={2.2} />
+      </button>
+    </div>
+  )
+}
+
+/** 急ぎ度ごとの色（地・文字）。色だけに頼らず、種類ラベルとアイコンでも区別する */
+const JUDGE_TONE = {
+  urgent: { chip: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', kind: 'text-red-700 dark:text-red-300' },
+  warn: { chip: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', kind: 'text-amber-800 dark:text-amber-300' },
+  info: { chip: 'bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300', kind: 'text-hibi-navy dark:text-blue-300' },
+} as const
+
+/** 今日の判断の1行（2026-09-30 案1 UDホワイト）。行全体が該当画面へのリンク */
+function JudgeRow({ href, tone, icon, kind, main, sub }: {
+  href: string
+  tone: keyof typeof JUDGE_TONE
+  icon: IconName
+  kind: string
+  main: string
+  sub?: string
+}) {
+  const t = JUDGE_TONE[tone]
+  return (
+    <a href={href} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition group">
+      <span className={`w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 ${t.chip}`}>
+        <Icon name={icon} size={20} />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className={`text-xs font-bold ${t.kind}`}>{kind}</div>
+        <div className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{main}</div>
+        {sub && <div className="text-xs text-hibi-sub dark:text-gray-400 truncate">{sub}</div>}
+      </div>
+      <Icon name="chevronRight" size={18} className="text-gray-400 group-hover:text-hibi-navy dark:group-hover:text-white" />
+    </a>
+  )
+}

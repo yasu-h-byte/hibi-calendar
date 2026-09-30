@@ -1,17 +1,25 @@
 # UI・デザインルール
 
-## デザイン方針（2026-07-03 刷新）
+## デザイン方針（2026-09-30 第2次刷新「案1 UDホワイト」）
 
-- **管理者画面 = 案A「モダン・ネイビー」**: HIBIネイビーを保ったまま、カード・表・ラベルを磨き上げ
-- **スタッフ・職長スマホ画面 = 案C「フィールド・コントラスト」**: 直射日光下の視認性最優先。チャコール＋工事アンバー、濃色ベタ＋太字
+- **全画面 = 案1「UDホワイト」**: 白いサイドバー・白いカード・薄いグレーの地。読みやすさ最優先
+  - 3案（案1 UDホワイト／案2 ブランド直結＝上部メニュー／案3 帳場＝紙と墨）の見本から代表が選択（2026-09-30）
+  - 前回（2026-07-03 管理画面=案A「モダン・ネイビー」／スマホ=案C「フィールド・コントラスト」）は控えめすぎて
+    「全く変わってない」と見えた反省から、ひと目で変わる方向にした
+- **字は BIZ UDPゴシック**（`app/layout.tsx` の next/font → Tailwind `font-sans`）。数字の 1/l・3/8 や濁点を読み間違えにくい
+- **アイコンは線のアイコン**（`components/ui/Icon.tsx`）。メニューに絵文字は使わない（OSで絵柄が変わる・白地で色がうるさい）
+- **紺（hibi-navy）は錨として絞って使う**: 主役ボタン・選択中の字・出面グリッドの所属区切り行と合計行・頭文字アイコン
+- **スマホ画面**: 上の帯は白地＋濃い文字（`components/StaffHeader.tsx`）。主役ボタン（出勤登録）は工事アンバーのまま
 
 ## カラー（Tailwind トークン: tailwind.config.ts の `hibi.*`）
-- `hibi-navy` #1B2A4A（メインカラー・サイドバー・フッター合計行）
+- `hibi-navy` #1B2A4A（主役ボタン・選択中の字・グリッドの所属区切り行と合計行）
 - `hibi-light` #2A3F6A（navy のホバー色）
-- `hibi-bg` #F6F7FA（管理画面ページ背景。globals.css で body に適用）
-- `hibi-line` #E6E9F0（カードの細枠線）
+- `hibi-bg` #F3F5F8（ページ背景。globals.css で body に適用）
+- `hibi-line` #E3E7EE（カード・サイドバーの細枠線）
+- `hibi-sub` #5B6475（補足の文字。白地で 4.5:1 以上）
+- `hibi-active` #EAF0FA（サイドバーの選択中・情報ピルの地）
 - `hibi-thead` #F2F4F9（グリッド日付ヘッダー背景）
-- `hibi-charcoal` #20262F（スマホのヘッダー・文字）
+- `hibi-charcoal` #20262F（スマホの文字。ヘッダーの地には使わない＝2026-09-30 から白）
 - `hibi-amber` #F5A623 / `hibi-amberDark` #DD9314（スマホ主役ボタン）
 - ダークモード対応（管理画面のみ。スマホ画面は非対応）
 
@@ -32,8 +40,8 @@
 
 運営表記に **`Managed by` は使わない**。英語では「他社に代わって運用受託している」含みが出るため。
 自社グループが自社のために運営しているシステムなので `Operated by` が正確。
-サイドバーの内寸は 176px しかないので、9px・字間標準・`whitespace-nowrap` で1行に収める。
-`DEDURA＋` との間隔（`mt-1`）と明るさ（`white/50`）はロックアップとして成立する下限値で、
+サイドバーの内寸は 184px（w-56・左右 px-5）なので、9px・字間標準・`whitespace-nowrap` で1行に収める。
+`DEDURA＋` との間隔（`mt-1`）と明るさ（白地では `gray-500`・ダークでは `white/50`）はロックアップとして成立する下限値で、
 広げると別物に見え、暗くすると 9px では読めなくなる。
 なお `Sidebar` は `print:hidden` なので、この変更は印刷物・帳票に一切影響しない。
 
@@ -68,7 +76,7 @@ cd public/brand && qlmanage -t -s 512 -o . dedura-icon.svg && mv dedura-icon.svg
 ```
 
 ## カード様式（管理画面共通）
-- `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm`
+- `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700`（影は付けない＝2026-09-30）
 - 共通ヘルパー: `lib/styles.ts` の `cardCls()` / `modalContentCls()`
 - `border-l-4` の意味色アクセント付きカード（ダッシュボード等）は左アクセント維持＋`shadow-sm` のみ
 - モーダル・ドロップダウン等の浮遊要素は `shadow-lg/xl` 維持
@@ -89,7 +97,8 @@ cd public/brand && qlmanage -t -s 512 -o . dedura-icon.svg && mv dedura-icon.svg
 
 ## 管理者画面
 - PCレイアウト優先
-- サイドバー幅: w-52（208px）
+- サイドバー幅: w-56（224px）。白地・右に細線・メニュー14px・線のアイコン（2026-09-30）
+- 画面の見出し（H1）: `text-2xl font-bold text-gray-900`（紺でなく黒。紺はボタンと選択中に絞る）
 - ヘッダーバーなし（サイドバーにロゴ・通知・ユーザー情報を集約）
 - モバイル時: 左上のフローティングハンバーガーメニュー
 - サイドメニューの中身・並びは `lib/menu.ts`（誰に見せるかは `lib/permissions.ts`）。**仕事のまとまりごと**に分ける
@@ -99,9 +108,9 @@ cd public/brand && qlmanage -t -s 512 -o . dedura-icon.svg && mv dedura-icon.svg
   `history.replaceState` のあと `window.dispatchEvent(new Event('hibi:urlchange'))` を投げてメニューの選択を合わせる
 - 画面の見出し（H1）はメニューの名前とそろえる（例: 請求書・支払／原価・収益／月次集計・締め）
 
-## スタッフ画面（案C フィールド・コントラスト）
-- スマホ最適化・ページ背景 #F1F2F5
-- ヘッダー: `bg-hibi-charcoal text-white`
+## スタッフ画面（案1 UDホワイト・2026-09-30 から。旧 案C フィールド・コントラスト）
+- スマホ最適化・ページ背景 `bg-hibi-bg`
+- ヘッダー: `components/StaffHeader.tsx`（白地・頭文字の紺丸・名前・ベトナム語名・DEDURA＋マーク）
 - 主役ボタン（出勤登録）: `bg-hibi-amber text-hibi-charcoal rounded-xl font-extrabold` + amberシャドウ
 - 脇役ボタン（休み・キャンセル等）: 白ベタ + `border-2 border-gray-300 text-hibi-charcoal font-bold`
 - 実労働時間カード: `bg-[#FFF6E3] border-[#F2D9A0]`、数値 `text-[#8A5A00] font-extrabold tabular-nums`

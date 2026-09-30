@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { getAuthPasswordSync } from '@/lib/hooks/useAuthPassword'
+import { Icon } from './ui/Icon'
 
 interface NotificationAction {
   type: string
@@ -112,14 +113,12 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => { setOpen(prev => !prev); if (!open) fetchNotifications() }}
-        className="relative p-2 rounded-lg hover:bg-white/10 transition-colors duration-150"
+        className="relative w-9 h-9 flex items-center justify-center rounded-[10px] border border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-active dark:hover:bg-gray-700 transition-colors duration-150"
         aria-label="通知"
       >
-        <span className="text-xl" role="img" aria-label="bell">
-          {'\uD83D\uDD14'}
-        </span>
+        <Icon name="bell" size={17} />
         {notifications.length > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 text-xs font-bold text-white bg-red-500 rounded-full shadow-sm">
+          <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 flex items-center justify-center px-1 text-xs font-bold text-white bg-red-500 rounded-full shadow-sm">
             {notifications.length}
           </span>
         )}

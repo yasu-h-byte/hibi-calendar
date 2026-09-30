@@ -91,7 +91,7 @@ export default function CompensationHubPage() {
   return (
     <div className="space-y-5 max-w-4xl">
       <header>
-        <h1 className="text-lg font-bold text-hibi-navy dark:text-white flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
           💴 賃金・評価
         </h1>
         <p className="text-sm text-gray-500 mt-1">

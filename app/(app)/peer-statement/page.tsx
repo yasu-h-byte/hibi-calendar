@@ -85,7 +85,7 @@ export default function PeerStatementPage() {
     <div className="max-w-5xl mx-auto space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">請求書・支払</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">請求書・支払</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
             同業者との貸し借り（応援）と、HFU → 日比建設 の請求。相殺はしません。応援に行った分は「請求する」、応援をもらった分は「支払う」に分けて出します。金額は出面の実績から出した見込みです。
           </p>
