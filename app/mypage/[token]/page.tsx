@@ -16,6 +16,7 @@
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
+import StaffHeader from '@/components/StaffHeader'
 
 interface MyPageData {
   worker: { id: number; name: string; jobType: string }
@@ -183,14 +184,14 @@ export default function MyPage() {
 
   if (loading && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5]">
+      <div className="min-h-screen flex items-center justify-center bg-hibi-bg">
         <div className="text-hibi-charcoal font-bold">読み込み中...</div>
       </div>
     )
   }
   if (error && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5] p-4">
+      <div className="min-h-screen flex items-center justify-center bg-hibi-bg p-4">
         <div className="bg-white rounded-xl border border-gray-200 p-6 text-center max-w-sm w-full">
           <div className="text-red-500 font-bold mb-2">エラー</div>
           <div className="text-gray-700 text-sm">{error}</div>
@@ -207,13 +208,8 @@ export default function MyPage() {
     && r.date >= data.today)
 
   return (
-    <div className="min-h-screen bg-[#F1F2F5] pb-10">
-      <div className="bg-hibi-charcoal text-white px-4 py-4">
-        <div className="max-w-lg mx-auto">
-          <div className="text-sm opacity-70">マイページ</div>
-          <div className="text-lg sm:text-xl font-bold truncate">{data.worker.name} さん</div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-hibi-bg pb-10">
+      <StaffHeader label="マイページ" name={`${data.worker.name} さん`} />
 
       <div className="max-w-lg mx-auto p-4 space-y-4">
         {msg && (

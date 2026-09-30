@@ -385,7 +385,7 @@ export default function WorkersPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">人員マスタ</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">人員マスタ</h1>
           {mainTab === 'list' && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               在籍: {activeWorkers.length}名（日比 {hibiCount} / HFU {hfuCount}）{retiredWorkers.length > 0 && ` / 退職: ${retiredWorkers.length}名`}
@@ -509,7 +509,7 @@ export default function WorkersPage() {
       })()}
 
       {/* Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">

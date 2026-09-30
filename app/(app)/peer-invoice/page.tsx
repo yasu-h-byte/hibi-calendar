@@ -200,7 +200,7 @@ function PeerInvoicePageInner() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <a href={`/peer-statement${ym ? `?ym=${ym}` : ''}`} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">← 請求書・支払へ戻る</a>
-            <h1 className="text-xl font-bold text-hibi-navy dark:text-white">{isHfuInvoice ? 'HFU → 日比建設 の請求書' : '応援の請求書'}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{isHfuInvoice ? 'HFU → 日比建設 の請求書' : '応援の請求書'}</h1>
             {view && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{view.companyName} ／ {jpYm(ym)}分</p>}
           </div>
           <div className="flex items-center gap-2">

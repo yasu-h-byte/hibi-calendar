@@ -160,7 +160,7 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
 
   if (!isAdmin) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-8 text-center text-gray-400 dark:text-gray-500">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-8 text-center text-gray-400 dark:text-gray-500">
         管理者・事業責任者のみ閲覧できます
       </div>
     )
@@ -185,7 +185,7 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
         </p>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-900">

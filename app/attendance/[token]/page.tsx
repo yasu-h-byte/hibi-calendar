@@ -10,6 +10,7 @@ import RestReportModal, { COMPANY_REST } from '@/components/attendance/RestRepor
 import MonthConfirmCard from '@/components/attendance/MonthConfirmCard'
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { todayJstIso } from '@/lib/date-utils'
+import StaffHeader from '@/components/StaffHeader'
 
 interface SiteBreakConfig {
   enabled: boolean
@@ -793,7 +794,7 @@ export default function StaffAttendancePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5]">
+      <div className="min-h-screen flex items-center justify-center bg-hibi-bg">
         <div className="text-hibi-charcoal text-lg font-bold">よみこみちゅう... / Đang tải...</div>
       </div>
     )
@@ -801,7 +802,7 @@ export default function StaffAttendancePage() {
 
   if (error && !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F1F2F5] p-4">
+      <div className="min-h-screen flex items-center justify-center bg-hibi-bg p-4">
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center max-w-sm w-full">
           <div className="text-red-500 text-lg font-bold mb-2">エラー / Lỗi</div>
           <div className="text-gray-700">{error}</div>
@@ -817,17 +818,9 @@ export default function StaffAttendancePage() {
   const useTimeBased = isTimeBasedMobile(currentYm)
 
   return (
-    <div className="min-h-screen bg-[#F1F2F5]">
+    <div className="min-h-screen bg-hibi-bg">
       {/* Header */}
-      <div className="bg-hibi-charcoal text-white px-4 py-4">
-        <div className="max-w-lg mx-auto">
-          <div className="text-xl font-bold">{data.worker.name} さん</div>
-          {data.worker.nameVi && (
-            <div className="text-sm opacity-80">{data.worker.nameVi}</div>
-          )}
-          <div className="text-sm opacity-60 mt-1">{data.today.dateLabel}</div>
-        </div>
-      </div>
+      <StaffHeader name={`${data.worker.name} さん`} sub={data.worker.nameVi} note={data.today.dateLabel} />
 
       {/* Site selector dropdown */}
       <div className="bg-white border-b px-4 py-3">

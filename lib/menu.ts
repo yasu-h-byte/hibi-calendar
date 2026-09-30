@@ -12,10 +12,12 @@
  * （「どこにあったっけ」を無くすため）。画面やタブを足したら、ここにも1行足すこと。
  */
 import type { Capability } from './permissions'
+import type { IconName } from '@/components/ui/Icon'
 
 export interface MenuItem {
   label: string
-  icon: string
+  /** 線のアイコン（components/ui/Icon.tsx）。絵文字は使わない（2026-09-30 案1 UDホワイト） */
+  icon: IconName
   href?: string
   external?: string
   section: string
@@ -33,35 +35,35 @@ export const MENU_HOME_SECTION = 'ホーム'
 export const MENU_SECTIONS = [MENU_HOME_SECTION, '出面・勤怠', '給与・締め', '請求・原価', '人・書類', '賃金・評価', 'マスタ・管理'] as const
 
 export const MENU_ITEMS: MenuItem[] = [
-  { label: 'ダッシュボード', icon: '📊', href: '/dashboard', section: MENU_HOME_SECTION, cap: 'dashboard.view' },
+  { label: 'ダッシュボード', icon: 'home', href: '/dashboard', section: MENU_HOME_SECTION, cap: 'dashboard.view' },
   // ── 出面・勤怠（毎日の出面 → 月ごとのカレンダー → 有給・帰国）──
   // PC 版とスマホ版は画面の中で切り替える（両方から相互リンクあり）。メニューは1つ
-  { label: '出面入力', icon: '📋', href: '/attendance', section: '出面・勤怠', cap: 'attendance.view', activePrefixes: ['/attendance/mobile'] },
-  { label: '就業カレンダー', icon: '📅', href: '/calendar', section: '出面・勤怠', cap: 'calendar.view' },
-  { label: '休暇管理', icon: '🌴', href: '/leave', section: '出面・勤怠', cap: 'leave.view' },
+  { label: '出面入力', icon: 'clipboard', href: '/attendance', section: '出面・勤怠', cap: 'attendance.view', activePrefixes: ['/attendance/mobile'] },
+  { label: '就業カレンダー', icon: 'calendar', href: '/calendar', section: '出面・勤怠', cap: 'calendar.view' },
+  { label: '休暇管理', icon: 'umbrella', href: '/leave', section: '出面・勤怠', cap: 'leave.view' },
   // ── 給与・締め ──
-  { label: '月次集計・締め', icon: '🗓', href: '/monthly', section: '給与・締め', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
-  { label: '帳票出力', icon: '📑', href: '/monthly?tab=export', section: '給与・締め', cap: 'monthly.view' },
+  { label: '月次集計・締め', icon: 'chart', href: '/monthly', section: '給与・締め', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
+  { label: '帳票出力', icon: 'doc', href: '/monthly?tab=export', section: '給与・締め', cap: 'monthly.view' },
   // ── 請求・原価 ──
-  { label: '請求書・支払', icon: '🧾', href: '/peer-statement', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice'] },
-  { label: '原価・収益', icon: '💰', href: '/cost', section: '請求・原価', cap: 'cost.view' },
+  { label: '請求書・支払', icon: 'receipt', href: '/peer-statement', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice'] },
+  { label: '原価・収益', icon: 'yen', href: '/cost', section: '請求・原価', cap: 'cost.view' },
   // 経営コックピットと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）
-  { label: '経営コックピット', icon: '📈', external: 'https://keieidashboard.vercel.app/genba', section: '請求・原価', cap: 'cockpit.view' },
+  { label: '経営コックピット', icon: 'trend', external: 'https://keieidashboard.vercel.app/genba', section: '請求・原価', cap: 'cockpit.view' },
   // ── 人・書類 ──
-  { label: '人員マスタ', icon: '👷', href: '/workers', section: '人・書類', cap: 'workers.view' },
-  { label: '書類庫', icon: '🗂', href: '/staff-docs', section: '人・書類', cap: 'staffDocs.view' },
-  { label: '道具代管理', icon: '🔧', href: '/tool-budget', section: '人・書類', cap: 'toolBudget.view' },
+  { label: '人員マスタ', icon: 'users', href: '/workers', section: '人・書類', cap: 'workers.view' },
+  { label: '書類庫', icon: 'folder', href: '/staff-docs', section: '人・書類', cap: 'staffDocs.view' },
+  { label: '道具代管理', icon: 'wrench', href: '/tool-budget', section: '人・書類', cap: 'toolBudget.view' },
   // ── 賃金・評価 ──
   // 評価管理・昇給履歴・賃金制度・賃金分析はハブで国籍別に分岐。昇給履歴は人員マスタのタブだが、こちらを選択中にする
-  { label: '賃金・評価', icon: '💴', href: '/compensation', section: '賃金・評価', cap: 'wage.view', activePrefixes: ['/wage', '/evaluation', '/wage-analysis', '/workers?tab=raise-history'] },
+  { label: '賃金・評価', icon: 'star', href: '/compensation', section: '賃金・評価', cap: 'wage.view', activePrefixes: ['/wage', '/evaluation', '/wage-analysis', '/workers?tab=raise-history'] },
   // 職長の評価入力の入口（ハブは職長には見せない）。通知ベルの「評価入力をお願いします」もここから
-  { label: '評価入力', icon: '📝', href: '/evaluation?tab=review', section: '賃金・評価', cap: 'evaluation.input' },
+  { label: '評価入力', icon: 'pen', href: '/evaluation?tab=review', section: '賃金・評価', cap: 'evaluation.input' },
   // ── マスタ・管理 ──
-  { label: '現場マスタ', icon: '🏗', href: '/sites', section: 'マスタ・管理', cap: 'masters.view' },
-  { label: '取引先マスタ', icon: '🏢', href: '/subcons', section: 'マスタ・管理', cap: 'masters.view' },
+  { label: '現場マスタ', icon: 'site', href: '/sites', section: 'マスタ・管理', cap: 'masters.view' },
+  { label: '取引先マスタ', icon: 'building', href: '/subcons', section: 'マスタ・管理', cap: 'masters.view' },
   // 会社・請求書／単価の既定値／ログイン・権限／お知らせ／バックアップ・履歴（アクセス履歴もここから）
-  { label: '管理者設定', icon: '⚙️', href: '/settings', section: 'マスタ・管理', cap: 'system.admin', activePrefixes: ['/access-log'] },
-  { label: '資料一覧', icon: '📁', href: '/docs', section: 'マスタ・管理', cap: 'docs.view' },
+  { label: '管理者設定', icon: 'gear', href: '/settings', section: 'マスタ・管理', cap: 'system.admin', activePrefixes: ['/access-log'] },
+  { label: '資料一覧', icon: 'book', href: '/docs', section: 'マスタ・管理', cap: 'docs.view' },
 ]
 
 /**

@@ -6,6 +6,7 @@ import { AuthUser } from '@/types'
 import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/theme'
 import NotificationBell from './NotificationBell'
 import { DeduraWordmark, DEDURA_BYLINE } from './Brand'
+import { Icon } from './ui/Icon'
 import { MENU_ITEMS, MENU_SECTIONS, MENU_HOME_SECTION, SEARCH_ENTRIES, searchMenu, activeMenuItem, type MenuItem, type SearchEntry } from '@/lib/menu'
 import { can, permRoleOf, PERM_ROLE_LABEL } from '@/lib/permissions'
 
@@ -106,8 +107,11 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />
       )}
 
+      {/* 2026-09-30 第2次デザイン刷新「案1 UDホワイト」: 白いサイドバー＋線のアイコン。
+          旧（2026-07 案A）は紺ベタで、メニューの字が白抜き・10〜13px と小さく読みにくかった。
+          紺は「主役ボタン」「選択中の字」「グリッドの職別行・合計行」に絞ってブランドの錨にする */}
       <aside
-        className={`fixed top-0 left-0 h-full w-52 bg-hibi-navy dark:bg-gray-950 text-white z-50 transform transition-transform duration-200 lg:translate-x-0 flex flex-col print:hidden ${
+        className={`fixed top-0 left-0 h-full w-56 bg-white dark:bg-gray-950 border-r border-hibi-line dark:border-gray-800 text-gray-800 dark:text-gray-100 z-50 transform transition-transform duration-200 lg:translate-x-0 flex flex-col print:hidden ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -115,18 +119,21 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
             会社ロゴは外してある: 見るのは社内4ロールだけで常時掲げる情報価値が薄く、
             白カードがメニューより目立って視線の優先順位が逆になっていたため。
             会社名 HIBI CONSTRUCTION はログイン画面・公開カレンダー・帳票に残っている。 */}
-        <div className="px-4 pt-4 pb-3 border-b border-white/10">
-          <DeduraWordmark size="xl" variant="white" />
-          {/* mt-1 / 50% / 9px はロックアップとして成立させるための値。
-              広げると DEDURA＋ と別物に見え、暗くすると 9px では読めなくなる。 */}
-          <div className="text-[9px] text-white/50 mt-1 whitespace-nowrap">{DEDURA_BYLINE}</div>
+        <div className="px-5 pt-5 pb-3">
+          <span className="dark:hidden"><DeduraWordmark size="xl" variant="navy" /></span>
+          <span className="hidden dark:inline"><DeduraWordmark size="xl" variant="white" /></span>
+          {/* mt-1 / 9px はロックアップとして成立させるための値。広げると DEDURA＋ と別物に見える */}
+          <div className="text-[9px] text-gray-500 dark:text-white/50 mt-1 whitespace-nowrap">{DEDURA_BYLINE}</div>
         </div>
 
         {/* User info */}
-        <div className="px-4 py-3 border-b border-white/10 bg-white/5 flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium">{user.name}</div>
-            <div className="text-xs text-white/50 mt-0.5">
+        <div className="mx-3 mb-2 px-3 py-2.5 rounded-xl bg-hibi-bg dark:bg-white/5 flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-hibi-navy text-white text-sm font-bold flex items-center justify-center shrink-0">
+            {user.name.slice(0, 1)}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] font-bold truncate">{user.name}</div>
+            <div className="text-[11px] text-hibi-sub dark:text-white/50">
               {(() => { const r = permRoleOf(user); return r ? PERM_ROLE_LABEL[r] : '' })()}
             </div>
           </div>
@@ -134,38 +141,42 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
         </div>
 
         {/* メニュー検索: 画面の中のタブ・機能まで直接飛べる（lib/menu.ts SEARCH_ENTRIES） */}
-        <div className="px-3 pt-3">
-          <input
-            type="search"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && results[0]) openEntry(results[0].href)
-              if (e.key === 'Escape') setQuery('')
-            }}
-            placeholder="🔍 検索（例: 有給台帳）"
-            className="w-full rounded-lg bg-white/10 placeholder-white/40 text-white text-[12px] px-2.5 py-1.5 outline-none focus:bg-white/15 focus:ring-1 focus:ring-white/30"
-          />
+        <div className="px-3 pb-1">
+          <label className="flex items-center gap-2 h-9 px-3 rounded-[10px] border border-hibi-line dark:border-gray-700 bg-[#F7F8FA] dark:bg-white/5 text-gray-500 dark:text-white/50 focus-within:border-hibi-navy focus-within:bg-white dark:focus-within:border-gray-500">
+            <Icon name="search" size={15} />
+            <input
+              type="search"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && results[0]) openEntry(results[0].href)
+                if (e.key === 'Escape') setQuery('')
+              }}
+              placeholder="メニューを探す"
+              aria-label="メニューを探す"
+              className="flex-1 min-w-0 bg-transparent text-[13px] text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-white/40 outline-none"
+            />
+          </label>
         </div>
 
         {/* Menu */}
-        <nav className="flex-1 overflow-y-auto py-2 px-1.5">
+        <nav className="flex-1 overflow-y-auto py-1 px-3">
           {query.trim() && (
             <div className="mb-2">
-              {results.length === 0 && <div className="px-2 py-2 text-[12px] text-white/50">見つかりません</div>}
+              {results.length === 0 && <div className="px-2 py-2 text-[13px] text-hibi-sub dark:text-white/50">見つかりません</div>}
               {results.map(r => (
                 <button key={`${r.href}|${r.label}`} onClick={() => openEntry(r.href)}
-                  className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-white/10 transition">
-                  <div className="text-[13px] text-white">{r.label}</div>
-                  <div className="text-[10px] text-white/45">{r.where}</div>
+                  className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-hibi-bg dark:hover:bg-white/10 transition">
+                  <div className="text-[13px] text-gray-900 dark:text-white">{r.label}</div>
+                  <div className="text-[11px] text-hibi-sub dark:text-white/45">{r.where}</div>
                 </button>
               ))}
             </div>
           )}
           {!query.trim() && sections.map(section => (
-            <div key={section} className={section === MENU_HOME_SECTION ? '' : 'mt-1'}>
+            <div key={section}>
               {section !== MENU_HOME_SECTION && (
-                <div className="px-1.5 pt-2 pb-1 text-[10px] text-white/40 uppercase tracking-wider border-t border-white/5">
+                <div className="px-2.5 pt-3 pb-1 text-[11px] font-bold text-gray-500 dark:text-white/40 tracking-wider">
                   {section}
                 </div>
               )}
@@ -188,24 +199,25 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
                     <button
                       key={item.label}
                       onClick={() => handleClick(item)}
-                      className={`w-full text-left px-2 py-2 rounded-lg flex items-center gap-2.5 text-[13px] transition ${
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`w-full text-left px-2.5 h-9 rounded-lg flex items-center gap-2.5 text-[14px] transition ${
                         isActive
-                          ? 'bg-white/15 text-white font-semibold'
-                          : 'text-white/80 hover:bg-white/10'
+                          ? 'bg-hibi-active text-hibi-navy font-bold dark:bg-white/15 dark:text-white'
+                          : 'text-gray-700 hover:bg-hibi-bg dark:text-white/80 dark:hover:bg-white/10'
                       }`}
                     >
-                      <span>{item.icon}</span>
-                      <span className="flex-1">{item.label}</span>
+                      <Icon name={item.icon} size={17} />
+                      <span className="flex-1 truncate">{item.label}</span>
                       {badgeCount > 0 && (
                         <span
-                          className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-500 text-white text-[11px] font-bold rounded-full"
+                          className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 bg-red-600 text-white text-[11px] font-bold rounded-full"
                           title={`未対応 ${badgeCount}件`}
                         >
                           {badgeCount > 99 ? '99+' : badgeCount}
                         </span>
                       )}
                       {isExternal && (
-                        <span className="text-white/30 text-xs">↗</span>
+                        <Icon name="external" size={13} className="text-gray-400 dark:text-white/30" />
                       )}
                     </button>
                   )
@@ -215,20 +227,22 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
         </nav>
 
         {/* Font size + Logout */}
-        <div className="p-4 border-t border-white/10 space-y-3">
+        <div className="px-3 py-3 border-t border-hibi-line dark:border-gray-800 space-y-1">
           {/* Font size toggle */}
           <button
             onClick={handleToggleFontSize}
-            className="w-full flex items-center justify-between px-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition"
+            role="switch"
+            aria-checked={fontSize === 'large'}
+            className="w-full flex items-center justify-between px-2.5 h-9 rounded-lg hover:bg-hibi-bg dark:hover:bg-white/10 transition"
           >
-            <div className="flex items-center gap-2 text-sm text-white/70">
+            <div className="flex items-center gap-2.5 text-[13px] text-gray-700 dark:text-white/70">
               <TextSizeIcon />
               <span>大きい文字</span>
             </div>
             {/* Toggle switch */}
             <div
               className={`relative w-10 h-5 rounded-full transition-colors ${
-                fontSize === 'large' ? 'bg-blue-500' : 'bg-white/20'
+                fontSize === 'large' ? 'bg-hibi-navy dark:bg-blue-500' : 'bg-gray-300 dark:bg-white/20'
               }`}
             >
               <div
@@ -241,11 +255,12 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
 
           <button
             onClick={handleLogout}
-            className="w-full text-left text-sm text-white/60 hover:text-white transition"
+            className="w-full flex items-center gap-2.5 px-2.5 h-9 rounded-lg text-[13px] text-gray-600 hover:bg-hibi-bg hover:text-gray-900 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white transition"
           >
+            <Icon name="logout" size={16} />
             ログアウト
           </button>
-          <div className="text-xs text-white/30 text-center mt-2">v2.0</div>
+          <div className="text-[10px] text-gray-400 dark:text-white/30 text-center pt-1">v2.1</div>
         </div>
       </aside>
     </>

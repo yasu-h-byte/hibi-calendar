@@ -13,7 +13,7 @@ export default function GuidePage() {
   return (
     <div className="max-w-2xl mx-auto py-16 px-4 text-center space-y-6">
       <div className="text-4xl">📦</div>
-      <h1 className="text-xl font-bold text-hibi-navy dark:text-white">運用ガイドは統合されました</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white">運用ガイドは統合されました</h1>
       <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
         このページの内容は以下の2つの資料に引き継がれています。<br />
         お手数ですがブックマークの変更をお願いします。

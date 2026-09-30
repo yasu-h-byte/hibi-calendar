@@ -73,11 +73,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Main content */}
         {/* 2026-06-XX: print:ml-0 print:p-0 で印刷時のサイドバー余白とハンバーガーを完全排除 */}
-        <div className="lg:ml-52 print:ml-0">
+        <div className="lg:ml-56 print:ml-0">
           {/* Mobile hamburger button */}
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden fixed top-3 left-3 z-40 bg-hibi-navy text-white p-2 rounded-lg shadow-lg print:hidden"
+            className="lg:hidden fixed top-3 left-3 z-40 bg-white dark:bg-gray-800 text-hibi-navy dark:text-white border border-hibi-line dark:border-gray-700 p-2 rounded-[10px] shadow-md print:hidden"
+            aria-label="メニューを開く"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />

@@ -187,7 +187,7 @@ export default function AttendanceGrid({
   //   2026-09-02: 承認バー（ページ上部 sticky z-30）とグリッド見出し（枠内 sticky z-30）が
   //   同じ重なり順で、上へスクロールすると見出し行が承認バーの上に描かれていた
   return (
-    <div className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
+    <div className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
       {todayIdx >= 0 && (
         <div className="flex justify-end items-center gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
           {/* スマホ最適化画面との相互切替（2026-09-02 追加。スマホ幅のときだけ表示） */}
@@ -238,8 +238,8 @@ export default function AttendanceGrid({
                   title={isCalOff ? 'カレンダー休日' : data.calendarDays ? 'カレンダー出勤日' : ''}
                 >
                   <div className="leading-tight">
-                    <div className="text-[11px]">{d.day}</div>
-                    <div className="text-[9px] opacity-70">{d.label}{showOffMark ? ' 休' : ''}</div>
+                    <div className="text-[13px]">{d.day}</div>
+                    <div className="text-[10px] font-normal">{d.label}{showOffMark ? ' 休' : ''}</div>
                     {/* この日の工種（工種のある現場だけ・2026-09-25）。押すとその日の全員の工種が変わる
                         （新しい入力の保存先＋入力済みの一括移動）。ロック中は色だけ見せる */}
                     {hasWorkTypes && (() => {
@@ -417,17 +417,18 @@ export default function AttendanceGrid({
             {groupedWorkers.map(group => (
               <React.Fragment key={`group-${group.org}`}>
                 {/* Group header */}
-                <tr className="bg-gray-50">
+                {/* 所属の区切り行は紺ベタ＝ブランドの錨（案1 UDホワイトでも合計行とそろえて維持） */}
+                <tr className="bg-hibi-navy dark:bg-gray-950">
                   <td
-                    className="sticky left-0 z-20 bg-gray-50 px-2 py-1 font-bold text-[11px] text-hibi-navy border-t-2 border-hibi-navy"
+                    className="sticky left-0 z-20 bg-hibi-navy dark:bg-gray-950 px-2.5 py-1.5 font-bold text-xs tracking-wider text-white"
                     style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                   >
-                    {group.label} ({group.workers.length}名)
+                    {group.label}　{group.workers.length}名
                   </td>
-                  <td className="sticky z-20 bg-gray-50 border-t-2 border-hibi-navy" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }} />
-                  {days.map(d => <td key={d.day} className="border-t-2 border-hibi-navy bg-gray-50" />)}
-                  <td className="border-t-2 border-hibi-navy bg-gray-50" />
-                  <td className="border-t-2 border-hibi-navy bg-gray-50" />
+                  <td className="sticky z-20 bg-hibi-navy dark:bg-gray-950" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }} />
+                  {days.map(d => <td key={d.day} className="bg-hibi-navy dark:bg-gray-950" />)}
+                  <td className="bg-hibi-navy dark:bg-gray-950" />
+                  <td className="bg-hibi-navy dark:bg-gray-950" />
                 </tr>
 
                 {group.workers.map(worker => {
@@ -437,10 +438,10 @@ export default function AttendanceGrid({
                   const isLocked = data.locked
 
                   return (
-                    <tr key={worker.id} className="border-t-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50/50 group">
+                    <tr key={worker.id} className="border-t border-gray-300 dark:border-gray-600 hover:bg-gray-50/50 group">
                       {/* Worker name - sticky */}
                       <td
-                        className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 text-xs"
+                        className="sticky left-0 z-20 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700 px-2.5 py-0.5 font-bold text-gray-900 dark:text-gray-100 text-[13px]"
                         style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                       >
                         <div className="flex items-center gap-1 flex-wrap">
@@ -634,10 +635,10 @@ export default function AttendanceGrid({
                   const isLocked = data.locked
 
                   return (
-                    <tr key={sc.id} className="border-t-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50/50 group">
+                    <tr key={sc.id} className="border-t border-gray-300 dark:border-gray-600 hover:bg-gray-50/50 group">
                       {/* Subcon name - sticky */}
                       <td
-                        className="sticky left-0 z-20 bg-white group-hover:bg-gray-50 px-2 py-0.5 font-medium text-gray-800 text-xs"
+                        className="sticky left-0 z-20 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700 px-2.5 py-0.5 font-bold text-gray-900 dark:text-gray-100 text-[13px]"
                         style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                       >
                         {sc.name}

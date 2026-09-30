@@ -422,7 +422,7 @@ export default function CalendarManagePage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-hibi-navy dark:text-white">就業カレンダー</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">就業カレンダー</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {user.role === 'foreman' ? '担当現場のカレンダー管理' : '全現場のカレンダー管理'}
           </p>
@@ -452,7 +452,7 @@ export default function CalendarManagePage() {
 
       {/* 全体状況（月またぎ運用ダッシュボード・管理者のみ） */}
       {user.role !== 'foreman' && overview && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
           <div className="flex items-center justify-between mb-2">
             <button onClick={() => setShowOverview(v => !v)} className="font-bold text-hibi-navy dark:text-white flex items-center gap-2">
               📊 全体状況（月またぎ）<span className="text-xs text-gray-400">{showOverview ? '▲' : '▼'}</span>
@@ -531,7 +531,7 @@ export default function CalendarManagePage() {
 
       {/* スタッフからの質問・相談（当月・管理者のみ） */}
       {user.role !== 'foreman' && questions.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
           <h3 className="font-bold text-hibi-navy dark:text-white mb-2">
             ❓ スタッフからの質問・相談（{y}年{m}月）
             <span className="ml-2 text-xs font-normal text-gray-400">未解決 {questions.filter(q => !q.resolved).length}件</span>
@@ -576,7 +576,7 @@ export default function CalendarManagePage() {
             const isReadOnly = (isApproved && !isRevising) || (isSubmitted && user.role === 'foreman')
 
             return (
-              <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm overflow-hidden">
+              <div key={site.siteId} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
                 {/* Site header */}
                 <div className="p-4 border-b dark:border-gray-700 flex items-center justify-between">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -975,7 +975,7 @@ export default function CalendarManagePage() {
 
       {/* Bulk confirm button (admin only, when multiple unconfirmed sites exist) */}
       {!loading && visibleSites.length > 1 && !allApproved && user.role !== 'foreman' && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
           <button
             onClick={() => setShowConfirmDialog(true)}
             disabled={saving || hasLegalExceed}
@@ -991,7 +991,7 @@ export default function CalendarManagePage() {
 
       {/* Signature status summary */}
       {!loading && visibleSites.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-sm p-4 space-y-3">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 space-y-3">
           <h3 className="font-bold text-hibi-navy dark:text-white">署名状況</h3>
           <div className="text-sm text-gray-700 dark:text-gray-300">
             署名状況: <span className="font-bold">{signedWorkers}/{totalWorkers}名</span> 署名済み

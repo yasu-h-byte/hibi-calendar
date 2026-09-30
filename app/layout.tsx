@@ -1,5 +1,17 @@
 import type { Metadata } from 'next'
+import { BIZ_UDPGothic } from 'next/font/google'
 import './globals.css'
+
+// 全画面の字（2026-09-30 第2次デザイン刷新「案1 UDホワイト」）。
+//   数字の 1/l/I・3/8 や、濁点・半濁点を読み間違えにくい UD 書体。事務の数字確認とスタッフのスマホの両方に効く。
+//   Tailwind の font-sans が var(--font-ud) を先頭に持つ（tailwind.config.ts）
+const udFont = BIZ_UDPGothic({
+  weight: ['400', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  preload: false,
+  variable: '--font-ud',
+})
 
 // タブ・PWA はシステム名（DEDURA＋）、画面内の見出し・帳票は会社名（HIBI CONSTRUCTION）。
 // 使い分けの基準は components/Brand.tsx を参照。
@@ -32,7 +44,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ja">
+    <html lang="ja" className={udFont.variable}>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#1B2A4A" />
