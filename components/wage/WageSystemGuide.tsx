@@ -91,17 +91,17 @@ export default function WageSystemGuide({
         {/* ① 等級と日給 */}
         <Card n="1" title="等級と日給の範囲（1〜60号）" style={{ flex: 1.35 }}>
           <div style={{ fontSize: 12.8, color: MUTED, marginBottom: 4 }}>
-            等級は<b style={{ color: INK }}>役割</b>で決まります。1年ごとに号が進み、上の等級ほど1号あたりの昇給額と上限が大きくなります。
+            等級は<b style={{ color: INK }}>役割</b>で決まります。右の数字は1号あたりの昇給額（号が進むと小さくなる）。
           </div>
           {LADDER.map(g => {
             const lo = dailyForStep(g, 1)
             const hi = capDaily(g)
             const mine = grade === g
-            const [p1] = pitchOf(g)
+            const [p1, p2, p3] = pitchOf(g)
             return (
               <div key={g}>
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '3px 5px', borderRadius: 6,
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '2px 5px', borderRadius: 6,
                   background: mine ? '#fff7e6' : 'transparent', outline: mine ? `1.5px solid ${AMBER}` : 'none',
                 }}>
                   <span style={{ width: 26, fontSize: 14.2, fontWeight: 800, color: NAVY }}>{g}</span>
@@ -113,13 +113,13 @@ export default function WageSystemGuide({
                   <span style={{ fontSize: 12.1, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: MUTED, whiteSpace: 'nowrap' }}>
                     {yen(lo)}〜<b style={{ color: INK }}>{yen(hi)}</b>
                   </span>
-                  <span style={{ fontSize: 11.3, textAlign: 'right', color: MUTED, whiteSpace: 'nowrap' }}>1号 {p1}円</span>
+                  <span style={{ fontSize: 10.6, textAlign: 'right', color: MUTED, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{p1}→{p2}→{p3}円</span>
                   {mine && <span style={{ fontSize: 12.1, fontWeight: 800, color: '#b45309', whiteSpace: 'nowrap' }}>あなた</span>}
                 </div>
                 {g === '5G' && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '2px 0' }}>
                     <div style={{ flex: 1, borderTop: `1.5px dashed ${AMBER}` }} />
-                    <span style={{ fontSize: 12.1, color: '#b45309', fontWeight: 700 }}>職長の壁：職長という役割に就いて上がる（年数では超えない）</span>
+                    <span style={{ fontSize: 12.1, color: '#b45309', fontWeight: 700 }}>職長の壁：役割に就いて上がる（年数では超えない）</span>
                     <div style={{ width: 16, borderTop: `1.5px dashed ${AMBER}` }} />
                   </div>
                 )}
@@ -127,16 +127,35 @@ export default function WageSystemGuide({
             )
           })}
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '3px 5px', borderRadius: 6, marginTop: 2,
+            display: 'flex', alignItems: 'center', gap: 6, padding: '2px 5px', borderRadius: 6, marginTop: 2,
             background: grade === 'doko' ? '#fff7e6' : 'transparent', outline: grade === 'doko' ? `1.5px solid ${AMBER}` : 'none',
           }}>
             <span style={{ width: 26, fontSize: 14.2, fontWeight: 800, color: NAVY, whiteSpace: 'nowrap' }}>土工</span>
-            <span style={{ fontSize: 12.8, color: MUTED, flex: 1 }}>3G（班長）の90%の号俸表。{yen(dailyForStep('doko', 1))}〜{yen(capDaily('doko'))}</span>
+            <span style={{ fontSize: 12.8, color: MUTED, flex: 1 }}>3Gの90%　{yen(dailyForStep('doko', 1))}〜{yen(capDaily('doko'))}</span>
             {grade === 'doko' && <span style={{ fontSize: 12.1, fontWeight: 800, color: '#b45309' }}>あなた</span>}
           </div>
-          <div style={{ marginTop: 5, fontSize: 12.1, color: MUTED, lineHeight: 1.55 }}>
-            昇格に必要な資格　3G：{REQUIRED['3G']}　／　5G：{REQUIRED['5G']}<br />
-            昇格すると、1号あたりの昇給額と上限が上がります。{MAX_STEP}号に届いた後は、昇格か号俸表の改定で上がります。
+          {/* 逓減のしくみ（2026-09-30 代表依頼）: 同じ等級の中では、号が上がるほど1号あたりの昇給額が小さくなる */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '6px 9px' }}>
+            <svg viewBox="0 -8 96 54" style={{ width: 88, height: 48, flexShrink: 0 }} aria-label="逓減">
+              {[[0, 100, '1〜25'], [1, 80, '26〜45'], [2, 60, '46〜60']].map(([i, pct, lb]) => {
+                const x = 4 + (i as number) * 31
+                const h = ((pct as number) / 100) * 30
+                return (
+                  <g key={i as number}>
+                    <rect x={x} y={34 - h} width={26} height={h} rx={2} fill={(i as number) === 0 ? NAVY : (i as number) === 1 ? '#64748b' : '#cbd5e1'} />
+                    <text x={x + 13} y={34 - h - 2} textAnchor="middle" fontSize={7} fontWeight={700} fill={INK}>{pct as number}%</text>
+                    <text x={x + 13} y={43} textAnchor="middle" fontSize={6.2} fill={MUTED}>{lb as string}号</text>
+                  </g>
+                )
+              })}
+            </svg>
+            <div style={{ fontSize: 10.9, lineHeight: 1.45 }}>
+              <b style={{ color: '#92400e' }}>逓減のしくみ</b>　同じ等級の中では、号が上がるほど1号あたりの昇給額が小さくなります
+（26号から8割、46号から6割）。<b>上の等級に上がると、また大きく伸びます。</b>
+            </div>
+          </div>
+          <div style={{ marginTop: 2, fontSize: 11.4, color: MUTED, lineHeight: 1.5 }}>
+            昇格に必要な資格　3G：{REQUIRED['3G']}／5G：{REQUIRED['5G']}
           </div>
           {/* 計算例（2026-09-30）: 左の列の下の余白を、いちばん伝わりやすい「具体例」で使う */}
           <div style={{ background: '#f8fafc', border: `1px dashed #cbd5e1`, borderRadius: 8, padding: '6px 9px' }}>
