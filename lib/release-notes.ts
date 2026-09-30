@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260930_tool_carry',
+    title: '道具代の繰り越し／有給の申請は全員「前日まで」',
+    content:
+      '道具代の使い切れなかった分を、次の期間に1年だけ繰り越すようにしました（次の期間は「予算＋繰越」まで使え、繰越分から先に使います）。使いすぎた分は次の期間の枠から差し引きます。9月30日以降に終わる期間から対象です。\n'
+      + 'ベトナム人スタッフの有給申請も、日本人と同じく「前日まで」にそろえました（旧: 5日前まで）。',
+    category: 'info',
+    publishedAt: '2026-10-01T00:05:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20260930_leave_deadline',
     title: '有給は前日までに申請／署名後もカレンダーを見られる／道具代の期間',
     content:

@@ -28,3 +28,30 @@ describe('起点日', () => {
     expect(toolBudgetAnchorOf({ id: 12, visa: 'none', hireDate: '2026-06-01' }, {})).toEqual({ anchor: null, fromHireDate: false })
   })
 })
+
+import { carryOut, toolBudgetCarryIn } from '@/lib/tool-budget-period'
+describe('道具代の繰り越し', () => {
+  test('余りは翌期へ・繰越分から先に使う', () => {
+    expect(carryOut(30000, 0, 20466)).toBe(9534)          // ラップ
+    expect(carryOut(30000, 9534, 5000)).toBe(30000)       // 繰越だけで足りた → 予算は丸ごと翌期へ（繰越の残り4,534は消える）
+    expect(carryOut(30000, 9534, 20000)).toBe(19534)      // 繰越9,534を使い切り、予算から10,466
+  })
+  test('使いすぎはマイナスで翌期へ', () => {
+    expect(carryOut(30000, 0, 33666)).toBe(-3666)         // フウ
+    expect(carryOut(30000, -3666, 26334)).toBe(0)
+    expect(carryOut(30000, -3666, 20000)).toBe(6334)
+  })
+  test('運用開始（2026-09-30）より前に終わった期間は繰り越さない', () => {
+    const recs = { '105_2025-09-07': { budget: 30000, purchases: [] } }
+    // アイン: 2025-09-07〜2026-09-06 は 9/30 より前に終わる → 2期目（2026-09-07〜）への繰越は0
+    expect(toolBudgetCarryIn('2025-09-07', 2, 105, recs, 30000)).toBe(0)
+  })
+  test('9/30 に終わる期間の余りは翌期へ・フウのマイナスは次の期間へ', () => {
+    expect(toolBudgetCarryIn('2025-10-01', 2, 202, { '202_2025-10-01': { budget: 30000, purchases: [{ amount: 20466 }] } }, 30000)).toBe(9534)
+    expect(toolBudgetCarryIn('2026-01-13', 2, 101, { '101_2026-01-13': { budget: 30000, purchases: [{ amount: 33666 }] } }, 30000)).toBe(-3666)
+  })
+  test('記録の無い期間は予算を丸ごと翌期へ（1回だけ）', () => {
+    expect(toolBudgetCarryIn('2026-05-14', 2, 107, {}, 30000)).toBe(30000)
+    expect(toolBudgetCarryIn('2026-05-14', 3, 107, {}, 30000)).toBe(30000)   // 2期目も使わなければ、繰越分は消えて予算3万だけ
+  })
+})

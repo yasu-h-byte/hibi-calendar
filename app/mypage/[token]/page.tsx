@@ -48,6 +48,8 @@ interface Purchase {
 }
 
 interface ToolBudget {
+  /** 前の期間からの繰越（2026-09-30）。マイナスは使いすぎの持ち越し */
+  carry?: number
   budget: number
   used: number
   remaining: number
@@ -312,7 +314,7 @@ export default function MyPage() {
                 <div className="text-sm text-gray-500 pb-0.5">残り</div>
               </div>
               <div className="text-xs text-gray-500 mt-2">
-                年間 ¥{tool.budget.toLocaleString()} のうち ¥{tool.used.toLocaleString()} 使用
+                年間 ¥{tool.budget.toLocaleString()}{(tool.carry ?? 0) !== 0 && <>（前期からの繰越 {(tool.carry ?? 0) > 0 ? '+' : '−'}¥{Math.abs(tool.carry ?? 0).toLocaleString()}）</>} のうち ¥{tool.used.toLocaleString()} 使用
                 {tool.period && (
                   <span className="block mt-0.5">
                     期間: {tool.period.start.replace(/-/g, '/')} 〜 {tool.period.end.replace(/-/g, '/')}

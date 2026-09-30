@@ -28,6 +28,8 @@ interface WorkerBudget {
   period: Period | null
   notStarted?: boolean
   budget: number
+  /** 前の期間からの繰越（2026-09-30）。マイナスは使いすぎの持ち越し */
+  carry?: number
   /** この人の区分の既定額（API が区分別設定から算出） */
   defaultBudget?: number
   used: number
@@ -282,7 +284,14 @@ export default function ToolBudgetPage() {
                           <span className="text-xs text-gray-400 italic">未設定</span>
                         )}
                       </td>
-                      <td className="text-right px-3 tabular-nums">¥{w.budget.toLocaleString()}</td>
+                      <td className="text-right px-3 tabular-nums">
+                        ¥{w.budget.toLocaleString()}
+                        {(w.carry ?? 0) !== 0 && (
+                          <div className={`text-[10px] ${(w.carry ?? 0) > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                            繰越 {(w.carry ?? 0) > 0 ? '+' : '−'}¥{Math.abs(w.carry ?? 0).toLocaleString()}
+                          </div>
+                        )}
+                      </td>
                       <td className="text-right px-3 tabular-nums text-orange-600">¥{w.used.toLocaleString()}</td>
                       <td className="text-right px-3 tabular-nums font-bold text-green-600">¥{w.remaining.toLocaleString()}</td>
                       <td className="text-center px-2">
@@ -456,7 +465,7 @@ function WorkerModal({
   }
 
   const sortedPurchases = [...worker.purchases].sort((a, b) => b.date.localeCompare(a.date))
-  const pct = worker.budget > 0 ? Math.min(100, (worker.used / worker.budget) * 100) : 0
+  const pct = worker.budget + (worker.carry ?? 0) > 0 ? Math.min(100, (worker.used / (worker.budget + (worker.carry ?? 0))) * 100) : 100
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -542,6 +551,7 @@ function WorkerModal({
                     </div>
                     <div className="text-[11px] text-gray-500 mt-1 text-right">
                       {pct.toFixed(0)}% 使用中 / 予算 ¥{worker.budget.toLocaleString()}
+                      {(worker.carry ?? 0) !== 0 && <>（前期からの繰越 {(worker.carry ?? 0) > 0 ? '+' : '−'}¥{Math.abs(worker.carry ?? 0).toLocaleString()}）</>}
                     </div>
                   </div>
 

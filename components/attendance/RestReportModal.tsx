@@ -45,7 +45,7 @@ interface Props {
   dayPay?: number | null
   /** 有給の残り日数 */
   plRemaining?: number | null
-  /** 有給申請を開く（休む日を渡す）。有給は5日前までの申請 */
+  /** 有給申請を開く（休む日を渡す）。有給は前日までの申請 */
   onChooseLeave?: (date: string) => void
   /** 有給申請ができる最初の日（YYYY-MM-DD） */
   leaveMinDate?: string
@@ -166,8 +166,8 @@ export default function RestReportModal({
                     </button>
                   ) : (
                     <p className="mt-1 text-xs text-gray-500">
-                      有給は5日前までに申請してください。次に休む予定があるときは、早めに有給を申請しましょう。<br />
-                      Nghỉ phép phải xin trước 5 ngày. Lần sau hãy xin nghỉ phép sớm.
+                      有給は前日までに申請してください。当日・過ぎた日は有給にできません。次に休む予定があるときは、前もって有給を申請しましょう。<br />
+                      Nghỉ phép phải xin trước 1 ngày. Không thể xin cho hôm nay hoặc ngày đã qua. Lần sau hãy xin nghỉ phép trước.
                     </p>
                   )}
                 </div>

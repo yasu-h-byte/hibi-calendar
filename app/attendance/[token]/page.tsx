@@ -44,6 +44,8 @@ interface StaffData {
   todayLocked: boolean
   toolBudgetRemaining: number | null
   toolBudgetPeriodStart?: string | null
+  /** 前の期間からの繰越（マイナスは使いすぎの持ち越し） */
+  toolBudgetCarry?: number
   toolBudgetPeriodEnd: string | null
   plRemaining: number | null
   /** 自分の都合で1日休むと減る給料の目安（円・新ルールの時給制のみ） */
@@ -376,9 +378,9 @@ export default function StaffAttendancePage() {
   useEffect(() => {
     if (showLeaveModal) {
       fetchLeaveRequests()
-      // Set default date to 5 days from now（欠勤届から来たときはその日）
+      // 既定は明日（欠勤届から来たときはその日）
       const minD = new Date()
-      minD.setDate(minD.getDate() + 5)
+      minD.setDate(minD.getDate() + 1)  // 有給は前日まで（2026-09-30。旧: 5日後から）
       const y = minD.getFullYear()
       const m = String(minD.getMonth() + 1).padStart(2, '0')
       const d = String(minD.getDate()).padStart(2, '0')
@@ -572,7 +574,7 @@ export default function StaffAttendancePage() {
 
   const getMinDate = () => {
     const minD = new Date()
-    minD.setDate(minD.getDate() + 5)
+    minD.setDate(minD.getDate() + 1)  // 有給は前日まで（2026-09-30。旧: 5日後から）
     const y = minD.getFullYear()
     const m = String(minD.getMonth() + 1).padStart(2, '0')
     const d = String(minD.getDate()).padStart(2, '0')
@@ -708,9 +710,9 @@ export default function StaffAttendancePage() {
     setShowRestModal(true)
   }
 
-  // 有給申請ができる最初の日（今日 + 5日。LeaveRequestModal と同じ）
+  // 有給申請ができる最初の日（明日。LeaveRequestModal・サーバの lib/leave-rules.ts と同じ）
   const leaveMinDateStr = () => {
-    const d0 = new Date(); d0.setDate(d0.getDate() + 5)
+    const d0 = new Date(); d0.setDate(d0.getDate() + 1)
     return `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`
   }
 
@@ -1272,6 +1274,11 @@ export default function StaffAttendancePage() {
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
                 <div className="text-xs text-gray-400 mb-1">🔧 道具代残り / Tiền dụng cụ còn</div>
                 <div className="text-2xl font-bold text-blue-600 tabular-nums">¥{Math.max(0, data.toolBudgetRemaining).toLocaleString()}</div>
+                {(data.toolBudgetCarry ?? 0) !== 0 && (
+                  <div className={`text-[11px] font-bold ${(data.toolBudgetCarry ?? 0) > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                    前の期間から {(data.toolBudgetCarry ?? 0) > 0 ? '+' : '−'}¥{Math.abs(data.toolBudgetCarry ?? 0).toLocaleString()} / Chuyển từ kỳ trước
+                  </div>
+                )}
                 {data.toolBudgetRemaining < 0 && (
                   <div className="text-[11px] text-red-600 font-bold">¥{(-data.toolBudgetRemaining).toLocaleString()} 超過 / Vượt</div>
                 )}

@@ -574,7 +574,7 @@ export default function ForemanMobilePage() {
   // ══════════ 自分タブ ══════════
   const [myData, setMyData] = useState<{
     leave?: { noGrant: boolean; grantDate: string | null; periodEnd: string; total: number; used: number; remaining: number; fiveDayShortfall: number }
-    tool?: { budget: number; used: number; remaining: number; period?: { start: string } | null; notStarted?: boolean }
+    tool?: { budget: number; carry?: number; used: number; remaining: number; period?: { start: string } | null; notStarted?: boolean }
   } | null>(null)
 
   useEffect(() => {
@@ -1151,7 +1151,7 @@ export default function ForemanMobilePage() {
                 ) : myData.tool && myData.tool.period && typeof myData.tool.remaining === 'number' ? (
                   <div className="mt-1">
                     <span className="text-2xl font-bold tabular-nums text-hibi-navy">¥{myData.tool.remaining.toLocaleString()}</span>
-                    <span className="text-xs text-gray-500 ml-2">年間 ¥{(myData.tool.budget || 0).toLocaleString()} のうち ¥{(myData.tool.used || 0).toLocaleString()} 使用</span>
+                    <span className="text-xs text-gray-500 ml-2">年間 ¥{(myData.tool.budget || 0).toLocaleString()}{(myData.tool.carry ?? 0) !== 0 && <>（繰越 {(myData.tool.carry ?? 0) > 0 ? '+' : '−'}¥{Math.abs(myData.tool.carry ?? 0).toLocaleString()}）</>} のうち ¥{(myData.tool.used || 0).toLocaleString()} 使用</span>
                   </div>
                 ) : (
                   <div className="mt-1 text-sm text-gray-400">道具代の設定がありません</div>

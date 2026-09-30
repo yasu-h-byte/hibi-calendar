@@ -3,7 +3,7 @@ import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { getWorkerByToken, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
-import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
+import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
 
 // 期間の計算は lib/tool-budget-period.ts（スタッフのスマホと共通・2026-09-30）
 type Period = ToolBudgetPeriod
@@ -93,14 +93,18 @@ export async function GET(request: NextRequest) {
       const key = `${worker.id}_${period.start}`
       const record = tbData.records[key]
 
-      const budget = record?.budget ?? toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
+      const defaultBudgetT = toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
+      const budget = record?.budget ?? defaultBudgetT
       const purchases = record?.purchases || []
       const used = purchases.reduce((sum, p) => sum + p.amount, 0)
+      // 前の期間からの繰越（2026-09-30）。マイナスは使いすぎの持ち越し
+      const carry = toolBudgetCarryIn(anchor, period.index, worker.id, tbData.records, defaultBudgetT)
 
       return NextResponse.json({
         budget,
+        carry,
         used,
-        remaining: budget - used,
+        remaining: budget + carry - used,
         purchases,
         period,
       })
@@ -150,6 +154,8 @@ export async function GET(request: NextRequest) {
       const budget = record?.budget ?? defaultBudget
       const purchases = record?.purchases || []
       const used = purchases.reduce((sum: number, p: Purchase) => sum + p.amount, 0)
+      // 前の期間からの繰越（2026-09-30）。開始前の人は0
+      const carry = period && !notStarted ? toolBudgetCarryIn(anchor, period.index, w.id, tbData.records, defaultBudget) : 0
       return {
         workerId: w.id,
         workerName: w.name,
@@ -163,8 +169,9 @@ export async function GET(request: NextRequest) {
         budget,
         // この人の区分の既定額（日本人 10万・外国人 3万など）。画面の「デフォルト」表示用
         defaultBudget,
+        carry,
         used,
-        remaining: budget - used,
+        remaining: budget + carry - used,
         purchases,
       }
     })
@@ -332,23 +339,29 @@ export async function POST(request: NextRequest) {
       const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
       const workers = mainSnap.exists() ? (mainSnap.data().workers || []) : []
       const w = workers.find((wk: { id: number }) => wk.id === workerId)
-      if (!w || !w.hireDate) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
+      if (!w) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
 
-      const period = getPeriodByIndex(w.hireDate, Number(periodIndex))
+      // 2026-09-30 修正: 履歴も「起点日」から数える（旧: 入社日で数えていて、起点日が入社日と違う人は別の期間を出していた）
+      const tbData = await getToolBudgetData()
+      const anchor = toolBudgetAnchorOf({ id: w.id, visa: w.visa, hireDate: w.hireDate }, tbData.periodAnchors).anchor
+      if (!anchor) return NextResponse.json({ error: '期間の起点日が未設定です' }, { status: 400 })
+      const period = getPeriodByIndex(anchor, Number(periodIndex))
       if (!period) return NextResponse.json({ error: 'Invalid period' }, { status: 400 })
 
-      const tbData = await getToolBudgetData()
       const key = `${workerId}_${period.start}`
       const record = tbData.records[key]
-      const budget = record?.budget ?? toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
+      const defaultBudgetP = toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
+      const budget = record?.budget ?? defaultBudgetP
       const purchases = record?.purchases || []
       const used = purchases.reduce((sum: number, p: Purchase) => sum + p.amount, 0)
+      const carry = toolBudgetCarryIn(anchor, period.index, w.id, tbData.records, defaultBudgetP)
 
       return NextResponse.json({
         period,
         budget,
+        carry,
         used,
-        remaining: budget - used,
+        remaining: budget + carry - used,
         purchases,
       })
     }

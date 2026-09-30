@@ -267,6 +267,7 @@ export async function GET(request: NextRequest) {
     let toolBudgetRemaining: number | null = null
     let toolBudgetPeriodStart: string | null = null
     let toolBudgetPeriodEnd: string | null = null
+    let toolBudgetCarry = 0
     try {
       if (tbEligible && tbSnapPre) {
         const tbSnap = tbSnapPre
@@ -285,13 +286,14 @@ export async function GET(request: NextRequest) {
 
               const tbKey = `${worker.id}_${periodStartStr}`
               const tbRecord = tbData.records?.[tbKey]
-              if (tbRecord) {
-                const tbUsed = (tbRecord.purchases || []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-                toolBudgetRemaining = tbRecord.budget - tbUsed
-              } else {
-                const { toolBudgetDefaultFor } = await import('@/lib/workers')
-                toolBudgetRemaining = toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
-              }
+              const { toolBudgetDefaultFor } = await import('@/lib/workers')
+              const { toolBudgetCarryIn } = await import('@/lib/tool-budget-period')
+              const tbDefault = toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
+              const tbBudget = tbRecord?.budget ?? tbDefault
+              const tbUsed = (tbRecord?.purchases || []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
+              // 前の期間からの繰越（2026-09-30）。マイナスは使いすぎの持ち越し
+              toolBudgetCarry = toolBudgetCarryIn(anchor!, period.index, worker.id, tbData.records || {}, tbDefault)
+              toolBudgetRemaining = tbBudget + toolBudgetCarry - tbUsed
             }
           }
         }
@@ -447,6 +449,7 @@ export async function GET(request: NextRequest) {
       pastDays,
       missingDays,
       toolBudgetRemaining,
+      toolBudgetCarry,
       // 自分の都合で1日休むと減る給料の目安（時給 × 7時間）。新ルールの時給制の人だけ（2026-09-30）
       absenceDayPay: (() => {
         if (!worker.visaType || worker.visaType === 'none' || worker.useOldRules) return null

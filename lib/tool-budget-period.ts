@@ -69,3 +69,47 @@ export function toolBudgetAnchorOf(
   if (foreign && w.hireDate && /^\d{4}-\d{2}-\d{2}$/.test(w.hireDate)) return { anchor: w.hireDate, fromHireDate: true }
   return { anchor: null, fromHireDate: false }
 }
+
+// ────────────────────────────────────────
+//  繰り越し（2026-09-30 代表決定）
+// ────────────────────────────────────────
+//
+// - 使い切れなかった分は**翌期に1回だけ**繰り越す。翌期は「予算＋繰越」まで使え、使うときは繰越分から先に減る
+//   （＝翌期も使われずに残った繰越分はそこで消える。何年も積み上がらない）
+// - 使いすぎ（予算＋繰越を超えた分）は、翌期にマイナスで繰り越す（翌期の枠から差し引く）
+// - 繰り越すのは、終了日が TOOL_BUDGET_CARRY_FROM 以降の期間から。それより前に終わった期間はさかのぼらない
+
+/** この日以降に終わる期間から繰り越す（運用開始 2026-09-30） */
+export const TOOL_BUDGET_CARRY_FROM = '2026-09-30'
+
+export interface ToolBudgetRecordLike {
+  budget?: number
+  purchases?: { amount: number }[]
+}
+
+/** ある期間が終わったときに翌期へ繰り越す額（予算 B・繰越 C・使用 U） */
+export function carryOut(budget: number, carryIn: number, used: number): number {
+  if (used > budget + carryIn) return budget + carryIn - used        // 使いすぎ → マイナスで繰り越す
+  return Math.max(0, budget - Math.max(0, used - carryIn))           // 繰越分から先に使う。残った「予算」だけ繰り越す
+}
+
+/**
+ * index 番目（1始まり）の期間に入ってくる繰越額。前の期間を1期目から順にたどる。
+ * 記録の無い期間は「既定の予算・使用0」とみなす。
+ */
+export function toolBudgetCarryIn(
+  anchor: string, index: number, workerId: number,
+  records: Record<string, ToolBudgetRecordLike | undefined>, defaultBudget: number,
+): number {
+  let carry = 0
+  for (let i = 1; i < index; i++) {
+    const p = getPeriodByIndex(anchor, i)
+    if (!p) return 0
+    if (p.end < TOOL_BUDGET_CARRY_FROM) { carry = 0; continue }
+    const rec = records[`${workerId}_${p.start}`]
+    const budget = rec?.budget ?? defaultBudget
+    const used = (rec?.purchases || []).reduce((s, x) => s + (Number(x.amount) || 0), 0)
+    carry = carryOut(budget, carry, used)
+  }
+  return carry
+}

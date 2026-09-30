@@ -39,10 +39,10 @@ interface Props {
   plRemaining?: number | null
 }
 
-// 最短申請日 = 今日 + 5日
+// 最短申請日 = 明日（2026-09-30 代表決定: 有給は前日までに申請。旧: 今日 + 5日）
 function getMinDate(): string {
   const d = new Date()
-  d.setDate(d.getDate() + 5)
+  d.setDate(d.getDate() + 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
@@ -170,7 +170,7 @@ export default function LeaveRequestModal({
             </p>
           )}
           <p className="text-xs text-gray-400 mt-1">
-            ※ 5日前から選べます / Chọn được từ 5 ngày trước
+            ※ 前日までに申請してください（明日から選べます）/ Xin trước 1 ngày (chọn được từ ngày mai)
           </p>
         </div>
 
