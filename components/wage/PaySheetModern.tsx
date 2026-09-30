@@ -110,15 +110,23 @@ function TrendBars({ points, fy }: { points: { year: number; baseAnnual: number 
           <polygon points={arrow.split(' ').map(q => { const [a, b] = q.split(',').map(Number); return `${a},${b - 3}` }).join(' ')} fill={AMBER} />
         </>
       )}
-      {/* 値ラベル（最初と今年度だけ大きく、他は小さく） */}
+      {/* 値ラベル（2026-09-30 改）: 途中の年は棒の中の上端に入れて、右肩上がりの線と重ならないようにする。
+          今年度だけ棒の上に大きく（矢印の左）。棒が低すぎて入らないときは棒の上に出す */}
       {points.map((p, i) => {
         const cur = p.year === fy
-        const first = i === 0
+        const t = tops[i]
+        const barH = base - t.y
+        const label = `${(p.baseAnnual / 10000).toFixed(0)}万`
+        if (cur) {
+          return (
+            <text key={`v${p.year}`} x={t.x - 4} y={t.y - 15} textAnchor="end" fontSize={13} fontWeight={800} fill={NAVY}>{label}</text>
+          )
+        }
+        const inside = barH >= 30
+        const dark = i / Math.max(1, n - 1) > 0.55
         return (
-          <text key={`v${p.year}`} x={cur ? tops[i].x - 4 : tops[i].x} y={tops[i].y - (cur ? 15 : 10)} textAnchor={cur ? 'end' : 'middle'}
-            fontSize={cur ? 12 : first ? 9.5 : 8} fontWeight={cur ? 800 : 500} fill={cur ? NAVY : MUTED}>
-            {(p.baseAnnual / 10000).toFixed(0)}万
-          </text>
+          <text key={`v${p.year}`} x={t.x} y={inside ? t.y + 15 : t.y - 10} textAnchor="middle"
+            fontSize={9} fontWeight={700} fill={inside ? (dark ? 'white' : INK) : MUTED}>{label}</text>
         )
       })}
     </svg>
