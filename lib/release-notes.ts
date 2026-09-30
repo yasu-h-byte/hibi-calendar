@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260930_tool_check',
+    title: '道具代の登録時に残高を確認します',
+    content:
+      '道具代の購入を登録するとき、残高（予算＋繰越−使用済み）を超えると止まるようにしました。例外として登録する場合は、確認画面で「登録する」を選ぶと、超過分が次の期間の枠から差し引かれます（一覧に「超過」と出ます）。\n'
+      + '購入日がその人の期間の外になっている登録も止めます。',
+    category: 'info',
+    publishedAt: '2026-10-01T00:10:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20260930_tool_carry',
     title: '道具代の繰り越し／有給の申請は全員「前日まで」',
     content:

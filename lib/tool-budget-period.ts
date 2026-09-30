@@ -113,3 +113,14 @@ export function toolBudgetCarryIn(
   }
   return carry
 }
+
+/** 起点日から数えて、periodStart で始まる期間が何番目か（該当しなければ null） */
+export function periodIndexOf(anchor: string, periodStart: string): number | null {
+  for (let i = 1; i <= 100; i++) {
+    const p = getPeriodByIndex(anchor, i)
+    if (!p) return null
+    if (p.start === periodStart) return i
+    if (p.start > periodStart) return null
+  }
+  return null
+}

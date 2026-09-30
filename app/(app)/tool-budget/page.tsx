@@ -10,6 +10,8 @@ interface Purchase {
   amount: number
   item: string
   registeredAt: string
+  /** 残高を超えて登録した */
+  over?: boolean
 }
 
 interface Period {
@@ -403,23 +405,45 @@ function WorkerModal({
     setBudgetSaving(false)
   }
 
+  // 2026-09-30: 登録時に残高・期間をサーバで確認する。残高を超えるときは確認してから通す
   const addPurchase = async (date: string, amount: number, item: string) => {
     if (!worker.period) return false
+    const post = (allowOver: boolean) => fetch('/api/tool-budget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({
+        action: 'addPurchase',
+        workerId: worker.workerId,
+        periodStart: worker.period!.start,
+        date,
+        amount,
+        item,
+        allowOver,
+      }),
+    })
     try {
-      const res = await fetch('/api/tool-budget', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({
-          action: 'addPurchase',
-          workerId: worker.workerId,
-          periodStart: worker.period.start,
-          date,
-          amount,
-          item,
-        }),
-      })
-      return res.ok
-    } catch { return false }
+      let res = await post(false)
+      if (res.status === 409) {
+        const j = await res.json().catch(() => ({}))
+        if (j.code === 'over_budget') {
+          const okOver = confirm(`${worker.workerName} さんの道具代の残高を超えます。\n\n${j.error}\n\n超過分は、次の期間の枠から差し引かれます。\nそれでも登録しますか？`)
+          if (!okOver) return false
+          res = await post(true)
+        } else {
+          alert(j.error || '登録できませんでした')
+          return false
+        }
+      }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        alert(j.error || '登録できませんでした')
+        return false
+      }
+      return true
+    } catch {
+      alert('通信エラーで登録できませんでした')
+      return false
+    }
   }
 
   const handleBulkRegister = async () => {
@@ -653,7 +677,10 @@ function WorkerModal({
                         {sortedPurchases.map(p => (
                           <tr key={p.id} className="border-b border-gray-100 last:border-b-0">
                             <td className="py-1.5 px-3 tabular-nums text-xs">{p.date}</td>
-                            <td className="py-1.5 px-3">{p.item || '—'}</td>
+                            <td className="py-1.5 px-3">
+                              {p.item || '—'}
+                              {p.over && <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">超過（翌期から差し引き）</span>}
+                            </td>
                             <td className="py-1.5 px-3 text-right tabular-nums">¥{p.amount.toLocaleString()}</td>
                             <td className="py-1.5 px-3 text-center">
                               <button

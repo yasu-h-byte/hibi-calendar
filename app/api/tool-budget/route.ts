@@ -3,7 +3,7 @@ import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { getWorkerByToken, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
-import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
+import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, periodIndexOf, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
 
 // 期間の計算は lib/tool-budget-period.ts（スタッフのスマホと共通・2026-09-30）
 type Period = ToolBudgetPeriod
@@ -14,6 +14,8 @@ interface Purchase {
   amount: number
   item: string
   registeredAt: string
+  /** 残高を超えて登録した（事務が確認のうえ通した・2026-09-30）。超過分は翌期の枠から引かれる */
+  over?: boolean
 }
 
 interface ToolBudgetRecord {
@@ -205,9 +207,12 @@ export async function POST(request: NextRequest) {
 
     // 購入登録
     if (action === 'addPurchase') {
-      const { workerId, periodStart, date, amount, item } = body
+      const { workerId, periodStart, date, amount, item, allowOver } = body
       if (!workerId || !periodStart || !date || !amount) {
         return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      }
+      if (!(Number(amount) > 0)) {
+        return NextResponse.json({ error: '金額が正しくありません' }, { status: 400 })
       }
 
       // worker情報から期間を検証
@@ -219,21 +224,45 @@ export async function POST(request: NextRequest) {
       const tbData = await getToolBudgetData()
       const key = `${workerId}_${periodStart}`
 
-      if (!tbData.records[key]) {
-        // 新規作成: periodStartから1年後を計算
-        const start = new Date(periodStart + 'T00:00:00')
-        const end = new Date(start)
-        end.setFullYear(end.getFullYear() + 1)
-        end.setDate(end.getDate() - 1)
-        const hireDate = w.hireDate || periodStart
-        const period = getCurrentPeriod(hireDate, start)
-        const budget = toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
+      // ── 登録時のチェック（2026-09-30 代表依頼）──
+      //   ① 期間はその人の起点日から数えた期間であること（旧: 入社日で期間番号を出していた）
+      //   ② 購入日がその期間の中であること（打ち間違いで別の期間に入るのを防ぐ）
+      //   ③ 残高（予算＋前期からの繰越−使用済み）を超えないこと。超える場合は allowOver で明示したときだけ通し、
+      //      購入に over を残す（超過分は翌期の枠から差し引かれる・toolBudgetCarryIn）
+      const { anchor } = toolBudgetAnchorOf({ id: w.id, visa: w.visa, hireDate: w.hireDate }, tbData.periodAnchors)
+      const idx = anchor ? periodIndexOf(anchor, String(periodStart)) : null
+      const period = anchor && idx ? getPeriodByIndex(anchor, idx) : null
+      if (!period) {
+        return NextResponse.json({ error: 'この人の道具代の期間ではありません（起点日を確認してください）' }, { status: 400 })
+      }
+      if (String(date) < period.start || String(date) > period.end) {
+        return NextResponse.json({
+          error: `購入日 ${date} がこの期間（${period.start}〜${period.end}）の外です。日付を確認してください`,
+        }, { status: 400 })
+      }
+      const defaultBudget = toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
+      const cur = tbData.records[key]
+      const budgetNow = cur?.budget ?? defaultBudget
+      const usedNow = (cur?.purchases || []).reduce((sum: number, p: Purchase) => sum + p.amount, 0)
+      const carryNow = toolBudgetCarryIn(anchor!, period.index, w.id, tbData.records, defaultBudget)
+      const remainingNow = budgetNow + carryNow - usedNow
+      const over = Number(amount) > remainingNow
+      if (over && !allowOver) {
+        return NextResponse.json({
+          error: `残高 ¥${Math.max(0, remainingNow).toLocaleString()} を超えています（¥${(Number(amount) - Math.max(0, remainingNow)).toLocaleString()} 超過）`,
+          code: 'over_budget',
+          remaining: remainingNow,
+          overBy: Number(amount) - Math.max(0, remainingNow),
+        }, { status: 409 })
+      }
+
+      if (!cur) {
         tbData.records[key] = {
           workerId,
-          periodStart,
-          periodEnd: end.toISOString().slice(0, 10),
-          periodIndex: period?.index || 1,
-          budget,
+          periodStart: period.start,
+          periodEnd: period.end,
+          periodIndex: period.index,
+          budget: defaultBudget,
           purchases: [],
         }
       }
@@ -244,6 +273,7 @@ export async function POST(request: NextRequest) {
         amount: Number(amount),
         item: item || '',
         registeredAt: new Date().toISOString(),
+        ...(over ? { over: true } : {}),
       })
 
       await saveToolBudgetData(tbData)

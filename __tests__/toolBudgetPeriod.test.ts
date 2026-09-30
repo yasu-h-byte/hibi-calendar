@@ -55,3 +55,12 @@ describe('道具代の繰り越し', () => {
     expect(toolBudgetCarryIn('2026-05-14', 3, 107, {}, 30000)).toBe(30000)   // 2期目も使わなければ、繰越分は消えて予算3万だけ
   })
 })
+
+import { periodIndexOf } from '@/lib/tool-budget-period'
+describe('期間の番号', () => {
+  test('起点日から数える', () => {
+    expect(periodIndexOf('2025-10-01', '2025-10-01')).toBe(1)
+    expect(periodIndexOf('2025-10-01', '2026-10-01')).toBe(2)
+    expect(periodIndexOf('2025-10-01', '2026-09-30')).toBeNull()
+  })
+})
