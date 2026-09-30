@@ -61,6 +61,8 @@ interface Payload {
   }
   /** 改定前に実際に払っている日額（workerId → 円） */
   paidBefore?: Record<string, number>
+  /** その改定期の有給の付与日数（workerId → 日。無い人は既定の20日） */
+  paidLeaveDays?: Record<string, number>
   /** 本人のマイページの合言葉（workerId → {name, token}） */
   mypageTokens?: Record<string, { name: string; token: string }>
   meta: { specialReasons: SpecialReason[]; hyogoPitch: Record<Hyogo, number>; firstRevisionMinMonths: number }
@@ -552,6 +554,7 @@ export default function RevisionPanel() {
           oldStep: r.member.currentStep, newStep: r.result!.newStep,
           paidBefore: data.paidBefore?.[String(r.member.id)] ?? r.oldTotal,
           newDaily: r.newTotal,
+          paidLeaveDays: data.paidLeaveDays?.[String(r.member.id)],
         }))}
       />
 

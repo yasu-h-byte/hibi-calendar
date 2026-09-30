@@ -50,8 +50,10 @@ function Card({ title, n, children, style }: { title: string; n: string; childre
 }
 
 export default function WageSystemGuide({
-  grade, age, fy, effectiveLabel,
+  grade, age, fy, effectiveLabel, paidLeaveDays,
 }: {
+  /** その人の今期の有給の付与日数（ベース年収の式に使う・無ければ20日） */
+  paidLeaveDays?: number
   /** その人の等級（印を付ける）。未指定なら印なし */
   grade?: string | null
   /** その人の基準日時点の年齢（年齢調整の表に印を付ける） */
@@ -59,6 +61,7 @@ export default function WageSystemGuide({
   fy: number
   effectiveLabel: string
 }) {
+  const leaveDays = paidLeaveDays ?? PAID_LEAVE_DAYS
   const scaleMin = 10000
   const scaleMax = Math.max(...LADDER.map(g => capDaily(g))) * 1.02
   const pos = (v: number) => ((v - scaleMin) / (scaleMax - scaleMin)) * 100
@@ -217,7 +220,8 @@ export default function WageSystemGuide({
           </Card>
           {/* ⑥ 年収 */}
           <div style={{ borderRadius: 10, padding: '7px 11px', background: NAVY, color: 'white', fontSize: 11.8, lineHeight: 1.6 }}>
-            <b>ベース年収</b> ＝ 日給 ×（稼働{ANNUAL_DAYS}日 ＋ 有給{PAID_LEAVE_DAYS}日）<br />＝ 日給 × {TOTAL_PAID_DAYS}日
+            <b>ベース年収</b> ＝ 日給 ×（稼働{ANNUAL_DAYS}日 ＋ 有給{leaveDays}日）<br />＝ 日給 × {ANNUAL_DAYS + leaveDays}日
+            <span style={{ opacity: 0.75, display: 'block', fontSize: 10.4 }}>※ 有給はあなたの今期の付与日数（勤続6年半以上は20日）</span>
             <span style={{ opacity: 0.75, display: 'block', fontSize: 10.4 }}>※ 残業代・手当・賞与は含みません</span>
           </div>
         </div>

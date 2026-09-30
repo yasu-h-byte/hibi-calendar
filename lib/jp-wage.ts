@@ -688,31 +688,41 @@ export function attendanceBonusAmount(days: number, dailyRate: number): number {
 // ────────────────────────────────────────
 
 /**
- * 年間の有給付与日数。給料表ではこの日数を「買取」として年収に含めている。
+ * 年間の有給付与日数の**既定値**（勤続6年半以上の法定上限 20日）。
+ * 給料表ではこの日数を「買取」として年収に含めている。
  *
- * ⚠️ 実際の付与日数は勤続年数で変わるが、給料表は全員 20日 で計算している
- *    （2025年10月改定版の実物で確認）。個人の付与実績ではなく、年収を比較する
- *    ための共通の物差しとして使っているため、ここも定数で持つ。
+ * 2026-10-01 修正（代表指摘「梶原さんの有給は20日で合ってる？管理表だと12日」）:
+ *   旧: 給料表は全員一律 20日（2025年10月改定版の実物をまねた「共通の物差し」）。
+ *       付与が20日に満たない人（梶原さん 12日）の給料表に、もらえない有給8日分の
+ *       買取が年収として載り、マイページ・有給管理表の日数とも食い違っていた。
+ *   新: 本人の**その改定期の付与日数**（有給管理の付与レコード＝基準日時点で有効なもの）を使う。
+ *       付与レコードが無い人だけこの既定値。付与日数は API（/api/jp-wage/revision GET の
+ *       paidLeaveDays）で渡す。
  */
 export const PAID_LEAVE_DAYS = 20
 
-/** ベース年収の計算日数 = 稼働290日 + 有給20日。 */
+/** ベース年収の計算日数の既定値 = 稼働290日 + 有給20日。本人の付与日数があればそちらを使う */
 export const TOTAL_PAID_DAYS = ANNUAL_DAYS + PAID_LEAVE_DAYS
 
+/** 有給の付与日数を給料表で使える値にそろえる（無い・不正なら既定の20日） */
+export function normalizePaidLeaveDays(days: number | null | undefined): number {
+  return typeof days === 'number' && Number.isFinite(days) && days >= 0 ? Math.floor(days) : PAID_LEAVE_DAYS
+}
+
 /**
- * ベース年収 = 確定日給 × 310。
- * 稼働290日分に有給20日分の買取を足したもの。給料表の「ベース年収概算」。
+ * ベース年収 = 確定日給 ×（稼働290日 ＋ 有給の付与日数）。
+ * 有給20日の人は ×310。給料表の「ベース年収概算」。
  */
-export function baseAnnualWithLeave(daily: number): number {
-  return daily * TOTAL_PAID_DAYS
+export function baseAnnualWithLeave(daily: number, paidLeaveDays: number = PAID_LEAVE_DAYS): number {
+  return daily * (ANNUAL_DAYS + normalizePaidLeaveDays(paidLeaveDays))
 }
 
 /**
  * 実質日給 = ベース年収 ÷ 稼働日数。
  * 有給の買取分を稼働日にならすと1日いくらになるか、という指標。
  */
-export function effectiveDaily(daily: number): number {
-  return (daily * TOTAL_PAID_DAYS) / ANNUAL_DAYS
+export function effectiveDaily(daily: number, paidLeaveDays: number = PAID_LEAVE_DAYS): number {
+  return baseAnnualWithLeave(daily, paidLeaveDays) / ANNUAL_DAYS
 }
 
 export interface PaySheetFigures {
@@ -720,7 +730,10 @@ export interface PaySheetFigures {
   daily: number
   /** 改訂前の日額 */
   prevDaily: number
+  /** 本人の有給の付与日数（無ければ既定の20日） */
   paidLeaveDays: number
+  /** ベース年収の計算日数 = 稼働290日 + paidLeaveDays */
+  totalPaidDays: number
   /** 有給買取額 = 日額 × 付与日数 */
   leaveBuyout: number
   /** 買取額の日給換算 = 買取額 ÷ 稼働日数 */
@@ -737,16 +750,21 @@ export interface PaySheetFigures {
   upRate: number
 }
 
-/** 給料表に載せる数値を一括で出す。 */
-export function paySheetFigures(daily: number, prevDaily: number): PaySheetFigures {
-  const leaveBuyout = daily * PAID_LEAVE_DAYS
-  const eff = effectiveDaily(daily)
-  const prevEff = effectiveDaily(prevDaily)
-  const base = baseAnnualWithLeave(daily)
-  const prevBase = baseAnnualWithLeave(prevDaily)
+/**
+ * 給料表に載せる数値を一括で出す。
+ * paidLeaveDays は本人の付与日数（改定前・改定後とも同じ日数で比べる＝日給の伸びだけが差に出る）
+ */
+export function paySheetFigures(daily: number, prevDaily: number, paidLeaveDays: number = PAID_LEAVE_DAYS): PaySheetFigures {
+  const days = normalizePaidLeaveDays(paidLeaveDays)
+  const leaveBuyout = daily * days
+  const eff = effectiveDaily(daily, days)
+  const prevEff = effectiveDaily(prevDaily, days)
+  const base = baseAnnualWithLeave(daily, days)
+  const prevBase = baseAnnualWithLeave(prevDaily, days)
   return {
     daily, prevDaily,
-    paidLeaveDays: PAID_LEAVE_DAYS,
+    paidLeaveDays: days,
+    totalPaidDays: ANNUAL_DAYS + days,
     leaveBuyout,
     leavePerDay: leaveBuyout / ANNUAL_DAYS,
     effectiveDaily: eff,

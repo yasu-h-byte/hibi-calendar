@@ -4,11 +4,11 @@
  *
  * 1人ずつ「改定前（今払っている日額）→ 改定後」の日額・年収を並べ、
  * 会社負担の法定福利費を含めた人件費が年間いくら増えるかを出す。
- * 年収は給料表と同じ「日額 × 310日（稼働290日＋有給20日）」。計算は lib/labor-cost.ts。
+ * 年収は給料表と同じ「日額 ×（稼働290日＋その人の有給の付与日数）」（20日の人は310日・2026-10-01 から本人の付与日数）。計算は lib/labor-cost.ts。
  * 料率は加入先・年度で変わるので、画面で変えられる（この端末に保存）。
  */
 import { useEffect, useMemo, useState } from 'react'
-import { ageOn, TOTAL_PAID_DAYS } from '@/lib/jp-wage'
+import { ageOn, ANNUAL_DAYS, normalizePaidLeaveDays } from '@/lib/jp-wage'
 import {
   DEFAULT_WELFARE_RATES, WELFARE_RATE_LABELS, laborCostDelta, totalWelfarePercent, type WelfareRates,
 } from '@/lib/labor-cost'
@@ -28,6 +28,8 @@ export interface LaborCostInputRow {
   paidBefore: number | null
   /** 改定後の日額 */
   newDaily: number | null
+  /** その改定期の有給の付与日数（無ければ既定の20日） */
+  paidLeaveDays?: number
 }
 
 export default function LaborCostPanel({ rows, effective }: { rows: LaborCostInputRow[]; effective: string }) {
@@ -49,7 +51,7 @@ export default function LaborCostPanel({ rows, effective }: { rows: LaborCostInp
     .filter(r => r.paidBefore != null && r.newDaily != null)
     .map(r => {
       const age = r.birthDate ? ageOn(r.birthDate, effective) : null
-      return { r, age, d: laborCostDelta(r.paidBefore!, r.newDaily!, TOTAL_PAID_DAYS, age, rates) }
+      return { r, age, d: laborCostDelta(r.paidBefore!, r.newDaily!, ANNUAL_DAYS + normalizePaidLeaveDays(r.paidLeaveDays), age, rates) }
     }), [rows, rates, effective])
 
   const sum = calc.reduce((a, { d }) => ({
@@ -151,7 +153,7 @@ export default function LaborCostPanel({ rows, effective }: { rows: LaborCostInp
         </table>
       </div>
       <p className="text-[11px] text-gray-400 leading-relaxed">
-        改定前は「今払っている日額」（号俸表の額ではなく実際の支払額）。年収は給料表と同じ 日額 × {TOTAL_PAID_DAYS}日（稼働290日＋有給20日）。
+        改定前は「今払っている日額」（号俸表の額ではなく実際の支払額）。年収は給料表と同じ 日額 ×（稼働290日＋その人の有給の付与日数。20日の人は310日）。
         法定福利費は年収÷12を月額とみなした概算で、厚生年金は標準報酬の上限（月65万円）で頭打ち、介護保険は40〜64歳だけ。
         残業代・賞与・労災保険（下請は元請の現場労災）は含みません。実際の保険料は標準報酬の等級と改定時期で前後します。
       </p>

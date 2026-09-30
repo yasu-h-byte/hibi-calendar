@@ -28,6 +28,15 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_paysheet_leave_days',
+    title: '給料表の有給日数を、本人の付与日数で計算するようにしました',
+    content: '給料表の「有給（買取込み）」とベース年収が、これまで全員20日で計算されていました。有給管理の付与日数（20日に満たない人はその日数）で計算するように直しました。すでに作った給料表のPDFは、作り直してから配ってください。',
+    category: 'fix',
+    publishedAt: '2026-10-01T09:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['owner', 'approver'],
+  },
+  {
     id: 'rn_20260930_design_ud_white',
     title: '画面の見た目を新しくしました（白い画面・読みやすい字）',
     content:
