@@ -2,11 +2,12 @@
  * 本人確認（lib/attendance-confirm.ts）のサーバ側の共通処理（2026-09-30）
  *
  * - 本人確認 API（app/api/attendance/confirm）と月締め（app/api/monthly/lock）で同じ判定を使う
- * - 出面ドキュメントは呼び出し側で1回だけ読んで渡す。カレンダーは現場ごとに1回、承認は2分キャッシュ
+ * - 出面ドキュメントは呼び出し側で1回だけ読んで渡す。カレンダーは現場ごとに1回、承認は lib/approval-gap.ts（2分キャッシュ）
  */
 import { db } from './firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
+import { approvalGap } from './approval-gap'
 import {
   summarizeWorkerMonth, summaryFingerprint, mainSiteOfMonth, breakShortenMinFor,
   isConfirmStale, jstDateOf, requiredApprovalKeys,
@@ -16,22 +17,6 @@ import type { AttendanceEntry } from '@/types'
 
 export type ConfirmWorker = {
   id: number; hireDate?: string; retired?: string; breakShortenMin?: number; breakShortenFrom?: string
-}
-
-// 承認（attendanceApprovals）の短時間キャッシュ。同じ現場のスタッフが同じ日を見るので、
-//   スマホを開くたびに30件ずつ読まないようにする（最終承認のあと最大2分で反映）
-const AP_TTL_MS = 2 * 60 * 1000
-const apCache = new Map<string, { v: { foreman?: unknown; final?: unknown } | null; ts: number }>()
-async function approvalOf(key: string) {
-  const hit = apCache.get(key)
-  if (hit && Date.now() - hit.ts < AP_TTL_MS) return hit.v
-  let v: { foreman?: unknown; final?: unknown } | null = null
-  try {
-    const s = await getDoc(doc(db, 'attendanceApprovals', key))
-    v = s.exists() ? (s.data() as { foreman?: unknown; final?: unknown }) : null
-  } catch { v = null }
-  apCache.set(key, { v, ts: Date.now() })
-  return v
 }
 
 export interface ConfirmReadiness {
@@ -77,9 +62,12 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
       hireDate: worker.hireDate, retired: worker.retired,
     })
     if (keys.length === 0) return { noEntries: true, foremanMissing: 0, finalMissing: 0, ready: false }
-    const aps = await Promise.all(keys.map(approvalOf))
-    const foremanMissing = aps.filter(a => !a?.foreman).length
-    const finalMissing = aps.filter(a => !a?.final).length
+    // 承認の判定は請求書と共通（lib/approval-gap.ts。工種サイトの子で承認した記録も数える・2分キャッシュ）
+    const sep = `_${ym}_`
+    const famDays = keys.map(k => { const i = k.lastIndexOf(sep); return { familyId: k.slice(0, i), day: Number(k.slice(i + sep.length)) } })
+    const gap = await approvalGap(sites as { id: string; parentId?: string }[], ym, famDays)
+    const foremanMissing = gap.foremanMissing.length
+    const finalMissing = gap.finalMissing.length
     return { noEntries: false, foremanMissing, finalMissing, ready: foremanMissing === 0 && finalMissing === 0 }
   }
 

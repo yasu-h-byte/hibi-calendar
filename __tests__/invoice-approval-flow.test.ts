@@ -53,7 +53,25 @@ const main = {
 const attD: Record<string, AttendanceEntry> = { [`own_201_${ym}_1`]: { w: 1 }, [`own_201_${ym}_2`]: { w: 1 } }
 const args = { main, c: {} as never, attD, attSD: {}, ym, companyId: '__hfu_to_hibi__' }
 
-beforeEach(() => { store.clear(); seq = 0 })
+// 請求する日は職長承認・最終承認がそろっている（2026-09-30〜 そろわないと発行できない・lib/approval-gap.ts）
+beforeEach(() => {
+  store.clear(); seq = 0
+  store.set(`own_${ym}_1`, { foreman: { by: 1 }, final: { by: 2 } })
+  store.set(`own_${ym}_2`, { foreman: { by: 1 }, final: { by: 2 } })
+})
+
+describe('承認がそろってから発行（2026-09-30）', () => {
+  test('最終承認の無い日があると、申請も直接発行もできない', async () => {
+    const s = await import('@/lib/peer-invoice-store')
+    const attD3 = { ...attD, [`own_201_${ym}_3`]: { w: 1 } }
+    store.set(`own_${ym}_3`, { foreman: { by: 1 } })
+    const r1 = await s.requestPeerInvoice({ ...args, attD: attD3, actor: '50' })
+    expect(r1.ok).toBe(false)
+    if (!r1.ok) expect(r1.error).toContain('最終承認がない日: 自社現場 3日')
+    const r2 = await s.issuePeerInvoice({ ...args, attD: attD3, actor: '1' })
+    expect(r2.ok).toBe(false)
+  })
+})
 
 describe('申請 → 承認（lib/peer-invoice-store.ts）', () => {
   test('申請は承認待ち・番号なし → 承認で HFU-202609-01・月末日付で発行', async () => {

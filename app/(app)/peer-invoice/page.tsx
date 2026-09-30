@@ -53,9 +53,11 @@ interface PeerInvoiceRecord extends PeerInvoiceDraft {
   rejectedAt?: string; rejectReason?: string
   voidedAt?: string; voidedBy?: string; voidReason?: string
 }
+/** 請求する日の職長承認・最終承認のそろい具合（2026-09-30。そろうまで発行・申請・承認できない） */
+interface ApprovalStatus { required: boolean; foremanMissing: number; finalMissing: number; message: string }
 type ApiResponse =
-  | { status: 'issued' | 'pending'; record: PeerInvoiceRecord; history: PeerInvoiceRecord[] }
-  | { status: 'draft'; draft: PeerInvoiceDraft; issuer: CompanyProfile | null; history: PeerInvoiceRecord[] }
+  | { status: 'issued' | 'pending'; record: PeerInvoiceRecord; history: PeerInvoiceRecord[]; approval?: ApprovalStatus }
+  | { status: 'draft'; draft: PeerInvoiceDraft; issuer: CompanyProfile | null; history: PeerInvoiceRecord[]; approval?: ApprovalStatus }
   | { status: 'empty'; history: PeerInvoiceRecord[] }
   | { error: string }
 
@@ -186,6 +188,8 @@ function PeerInvoicePageInner() {
   const isHfuInvoice = companyId === HFU_INVOICE_COMPANY_ID
   const isPending = view?.status === 'pending'
   const isFreshDraft = view?.status === 'draft'
+  const approval = data && 'approval' in data ? data.approval : undefined
+  const approvalBlocked = !!approval?.required && (approval.foremanMissing > 0 || approval.finalMissing > 0)
   // 直近の差し戻し（その後に申請・発行していなければ、下書きの上に理由を出す）
   const lastRejected = isFreshDraft ? [...history].reverse().find(h => h.status === 'rejected') : undefined
 
@@ -219,26 +223,35 @@ function PeerInvoicePageInner() {
           </div>
         )}
 
+        {/* 請求する日の承認がそろっていなければ発行できない（2026-09-30） */}
+        {approvalBlocked && approval && (
+          <div className="rounded-lg px-3 py-2 text-sm bg-red-50 text-red-800 border border-red-300">
+            <b>請求する日の中に、職長承認・最終承認が済んでいない日があるため、まだ発行できません。</b>
+            <span className="block text-xs mt-1 whitespace-pre-line">{approval.message}</span>
+            <span className="block text-xs mt-1">出面の画面で承認を済ませると発行できるようになります。</span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => window.print()} disabled={!view}
             className="px-4 py-2 bg-hibi-navy text-white rounded-lg text-sm font-bold hover:bg-hibi-light transition disabled:opacity-40">
             🖨 印刷 / PDF保存
           </button>
           {isFreshDraft && canIssue && (
-            <button onClick={handleIssue} disabled={busy}
+            <button onClick={handleIssue} disabled={busy || approvalBlocked}
               className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 transition disabled:opacity-40">
               この内容で発行
             </button>
           )}
           {isFreshDraft && canRequest && (
-            <button onClick={handleRequest} disabled={busy}
+            <button onClick={handleRequest} disabled={busy || approvalBlocked}
               className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 transition disabled:opacity-40">
               発行を申請（承認へ回す）
             </button>
           )}
           {view && isPending && canIssue && (
             <>
-              <button onClick={() => handleApprove(view.id)} disabled={busy}
+              <button onClick={() => handleApprove(view.id)} disabled={busy || approvalBlocked}
                 className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition disabled:opacity-40">
                 承認して発行
               </button>

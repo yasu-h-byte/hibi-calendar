@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, getApiRole, requireExecutiveAuth, requireCap } from '@/lib/auth'
 import { getMainData, getMultiMonthAttData, compute } from '@/lib/compute'
 import {
-  resolveInvoiceDraft, requestPeerInvoice, approvePeerInvoice, rejectPeerInvoice, listPeerInvoicesForYm, getPeerInvoicesForCompanyYm, issuePeerInvoice, voidPeerInvoice,
+  resolveInvoiceDraft, invoiceApprovalGap, requestPeerInvoice, approvePeerInvoice, rejectPeerInvoice, listPeerInvoicesForYm, getPeerInvoicesForCompanyYm, issuePeerInvoice, voidPeerInvoice,
 } from '@/lib/peer-invoice-store'
 
 /**
@@ -39,17 +39,22 @@ export async function GET(request: NextRequest) {
     }
     // 申請中は凍結した内容を表示する（承認者が見る内容 = 発行される内容）
     const pending = history.find(inv => inv.status === 'pending')
+    const main = await getMainData()
+    // 全部の日の職長承認・最終承認がそろっているか（2026-09-30）。画面はこれでボタンを止める
+    const approvalOf = async (detail: import('@/lib/peer-invoice').PeerInvoiceSiteDetail[]) => {
+      const r = await invoiceApprovalGap(main, ym, detail)
+      return { required: r.required, foremanMissing: r.gap.foremanMissing.length, finalMissing: r.gap.finalMissing.length, message: r.message }
+    }
     if (pending) {
-      return NextResponse.json({ status: 'pending', record: pending, history })
+      return NextResponse.json({ status: 'pending', record: pending, history, approval: await approvalOf(pending.detail || []) })
     }
 
-    const main = await getMainData()
     const att = await getMultiMonthAttData([ym])
     const y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(4, 6), 10)
     const c = compute(main, att.d, att.sd, [{ y, m }])
     const { draft, issuer } = resolveInvoiceDraft({ main, c, attD: att.d, attSD: att.sd, ym, companyId })
     if (!draft) return NextResponse.json({ status: 'empty', history })
-    return NextResponse.json({ status: 'draft', draft, issuer, history })
+    return NextResponse.json({ status: 'draft', draft, issuer, history, approval: await approvalOf(draft.detail) })
   } catch (e) {
     console.error('[peer-invoice] GET error', e)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

@@ -79,6 +79,17 @@ export const RELEASE_NOTES: Announcement[] = [
     publishedBy: '日比靖仁',
   },
   {
+    id: 'rn_20260930_invoice_after_approval',
+    title: '請求書は全部の日の承認がそろってから発行',
+    content:
+      '応援の請求書・HFU → 日比建設 の請求書は、請求する全部の日に職長承認と最終承認がそろうまで、発行・申請・承認ができなくなりました（2026年9月分から）。\n'
+      + '請求書の画面の赤い欄に、承認が済んでいない現場と日が出ます。出面の画面で承認を済ませると発行できます。',
+    category: 'info',
+    publishedAt: '2026-10-01T02:30:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['owner', 'approver', 'jimu'],
+  },
+  {
     id: 'rn_20260930_rest_mismatch',
     title: '休みの区別の取り違えを知らせる警告',
     content:

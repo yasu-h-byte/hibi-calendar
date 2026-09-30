@@ -21,6 +21,8 @@ import {
 } from './hfu-invoice'
 import type { CompanyProfile, MainData, ComputeResult } from './compute'
 import type { AttendanceEntry } from '@/types'
+import { approvalGap, describeApprovalGap, type ApprovalGap } from './approval-gap'
+import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
 
 const COLLECTION = 'peerInvoices'
 
@@ -173,6 +175,33 @@ function prefixFor(main: MainData, rec: { companyId: string; issuer: CompanyProf
 }
 
 /**
+ * 請求書は、請求する全部の日に職長承認と最終承認（事業責任者）がそろってから発行する（2026-09-30 代表決定）。
+ * 本人の出面確認と同じ考え方（lib/approval-gap.ts）。対象は出面明細（detail）に人工がある「現場×日」。
+ * これより前の月は承認の運用が違う（HFU → 日比建設 は過去の月をさかのぼって発行することがある）ので見ない。
+ */
+export const INVOICE_APPROVAL_REQUIRED_FROM_YM = '202609'
+
+export async function invoiceApprovalGap(
+  main: MainData, ym: string, detail: PeerInvoiceSiteDetail[],
+): Promise<{ required: boolean; gap: ApprovalGap; message: string }> {
+  const empty = { foremanMissing: [], finalMissing: [] }
+  if (ym < INVOICE_APPROVAL_REQUIRED_FROM_YM) return { required: false, gap: empty, message: '' }
+  const sites = main.sites as unknown as HierarchySite[]
+  const famDays = detail.flatMap(sd => Object.entries(sd.dayTotals || {})
+    .filter(([, v]) => Number(v) > 0)
+    .map(([day]) => ({ familyId: calendarSiteIdOf(sites, sd.siteId), day: Number(day) })))
+  const gap = await approvalGap(sites as { id: string; parentId?: string }[], ym, famDays)
+  const nameOf = (id: string) => main.sites.find(x => x.id === id)?.name || id
+  return { required: true, gap, message: describeApprovalGap(gap, nameOf) }
+}
+
+async function approvalError(main: MainData, ym: string, detail: PeerInvoiceSiteDetail[]): Promise<IssuePeerInvoiceError | null> {
+  const r = await invoiceApprovalGap(main, ym, detail)
+  if (!r.required || (!r.gap.foremanMissing.length && !r.gap.finalMissing.length)) return null
+  return { ok: false, error: `請求する日の中に、職長承認・最終承認が済んでいない日があるため発行できません。\n${r.message}\n出面の画面で承認を済ませてから発行してください` }
+}
+
+/**
  * 下書きをその場で再計算し、発行できるか確かめて凍結用の内容を作る（クライアントの古い draft を信用しない）。
  * 同じ会社・同じ月に発行済み・申請中のものがあれば拒否。
  */
@@ -197,6 +226,9 @@ async function buildFrozenInvoice(args: InvoiceCalcArgs): Promise<
     const rateCheck = checkHfuRates(draft)
     if (!rateCheck.ok) return { ok: false, error: rateCheck.error }
   }
+  // 全部の日の承認がそろっているか（2026-09-30）
+  const apErr = await approvalError(main, ym, draft.detail)
+  if (apErr) return apErr
   const prefixCheck = prefixFor(main, { companyId, issuer })
   if (!prefixCheck.ok) return prefixCheck
 
@@ -274,6 +306,9 @@ export async function approvePeerInvoice(args: { main: MainData; id: string; act
   if (existing.some(inv => inv.status === 'issued')) {
     return { ok: false, error: 'この会社・この月はすでに発行済みです。先に取り消すか、この申請を差し戻してください' }
   }
+  // 申請のあとで承認が外された（出面を直している途中）なら発行しない（2026-09-30）
+  const apErr = await approvalError(main, data.ym, data.detail || [])
+  if (apErr) return { ok: false, error: `${apErr.error}\n（申請のあとで承認が外されています。直し終わったら、この申請を差し戻して作り直してください）` }
   const pf = prefixFor(main, data)
   if (!pf.ok) return pf
   const no = await nextInvoiceNo(data.ym, pf.prefix)
