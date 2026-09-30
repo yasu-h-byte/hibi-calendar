@@ -155,3 +155,21 @@ describe('スマホ打刻の工種（staffEntryTarget・2026-09-28）', () => {
     expect(staffEntryTarget(sites, assign, {}, 'kawasaki', 109, ym, 7).targetSiteId).toBe('kawasaki')
   })
 })
+
+import { siteNeedsCalendar, SPOT_CALENDAR_FROM } from '@/lib/site-hierarchy'
+describe('就業カレンダーが必要な月（スポット現場）', () => {
+  test('通常は工期の始まりから', () => {
+    expect(siteNeedsCalendar({ start: '2026-10-01' }, '202610')).toBe(true)
+    expect(siteNeedsCalendar({ start: '2026-11-01' }, '202610')).toBe(false)
+  })
+  test('スポットは作らない', () => {
+    expect(siteNeedsCalendar({ start: '2026-10-01', calendarFromYm: SPOT_CALENDAR_FROM }, '202610')).toBe(false)
+    expect(siteNeedsCalendar({ start: '2026-10-01', calendarFromYm: SPOT_CALENDAR_FROM }, '2027-03')).toBe(false)
+  })
+  test('常駐開始の月から必要（それより前は不要）', () => {
+    const s = { start: '2026-10-01', calendarFromYm: '202612' }
+    expect(siteNeedsCalendar(s, '202610')).toBe(false)
+    expect(siteNeedsCalendar(s, '202611')).toBe(false)
+    expect(siteNeedsCalendar(s, '2026-12')).toBe(true)
+  })
+})

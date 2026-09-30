@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260930_spot_site',
+    title: 'スポット現場は就業カレンダーを作らなくてよくなりました',
+    content:
+      '現場マスタの「就業カレンダー」で「スポット（常駐が決まるまで作らない）」を選ぶと、その現場はカレンダー画面・翌月カレンダーの注意・通知ベルに出なくなります（出面はいつもどおり入力できます）。\n'
+      + '常駐が決まったら「この月から作る」にして、その月からカレンダーを作ってください。',
+    category: 'new',
+    publishedAt: '2026-10-01T00:30:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['approver', 'jimu', 'owner', 'foreman'],
+  },
+  {
     id: 'rn_20260930_support_bulk',
     title: '応援現場の出面は事業責任者が一括入力／工種サイトを選択欄から外しました',
     content:

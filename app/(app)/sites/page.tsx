@@ -56,6 +56,8 @@ interface SiteData {
   workSchedule?: SiteWorkScheduleConfig | null
   commute?: CommuteState
   noDriveAllowance?: boolean
+  /** 就業カレンダーが必要になる月（YYYYMM）。'999912' = スポット */
+  calendarFromYm?: string
   siteType?: 'direct' | 'support'
   client?: string
   gcId?: string
@@ -135,6 +137,9 @@ export default function SitesPage() {
   const [formCommute, setFormCommute] = useState<CommuteState>(EMPTY_COMMUTE)
   // 運転手当を出さない現場（代表・事業責任者だけが変更できる・2026-09-30）
   const [formNoDrive, setFormNoDrive] = useState(false)
+  // 就業カレンダー（2026-09-30）: normal=工期から必要／spot=スポット（今は作らない）／from=この月から必要（常駐開始）
+  const [formCalMode, setFormCalMode] = useState<'normal' | 'spot' | 'from'>('normal')
+  const [formCalFrom, setFormCalFrom] = useState('')
   const [canSetNoDrive, setCanSetNoDrive] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
@@ -173,6 +178,10 @@ export default function SitesPage() {
 
   useEffect(() => { fetchSites() }, [fetchSites])
 
+  /** 保存用の「カレンダーが必要になる月」（'' = 通常） */
+  const calFromForSave = () => formCalMode === 'spot' ? '999912'
+    : formCalMode === 'from' && /^\d{4}-\d{2}$/.test(formCalFrom) ? formCalFrom.replace('-', '') : ''
+
   const openAdd = () => {
     setEditId(null)
     setForm(EMPTY_FORM)
@@ -182,6 +191,7 @@ export default function SitesPage() {
     setFormWorkSchedule(DEFAULT_WORK_SCHEDULE)
     setFormCommute(EMPTY_COMMUTE)
     setFormNoDrive(false)
+    setFormCalMode('normal'); setFormCalFrom('')
     setShowDeleteConfirm(false)
     setModalTab('basic')
     setShowModal(true)
@@ -211,6 +221,12 @@ export default function SitesPage() {
     setFormWorkSchedule(s.workSchedule || DEFAULT_WORK_SCHEDULE)
     setFormCommute(s.commute ? { address: s.commute.address || '', samples: s.commute.samples || [], judgedMin: s.commute.judgedMin, frozenAt: s.commute.frozenAt } : EMPTY_COMMUTE)
     setFormNoDrive(!!s.noDriveAllowance)
+    {
+      const cf = s.calendarFromYm || ''
+      if (!cf) { setFormCalMode('normal'); setFormCalFrom('') }
+      else if (cf === '999912') { setFormCalMode('spot'); setFormCalFrom('') }
+      else { setFormCalMode('from'); setFormCalFrom(`${cf.slice(0, 4)}-${cf.slice(4, 6)}`) }
+    }
     // Load rates
     setFormRates(s.rates && s.rates.length > 0 ? [...s.rates] : [])
 
@@ -333,6 +349,7 @@ export default function SitesPage() {
             workSchedule: formWorkSchedule,
             commute: formCommute,
             noDriveAllowance: formNoDrive,
+            calendarFromYm: calFromForSave(),
           }
         : {
             action: 'add',
@@ -345,6 +362,7 @@ export default function SitesPage() {
             foreman: form.foreman,
             tobiRate: latestTobiRate,
             dokoRate: latestDokoRate,
+            calendarFromYm: calFromForSave(),
           }
       // 2026-09-15: 保存の失敗を画面に出す（以前は応答を見ておらず、失敗しても何も起きないように見えた）
       const saveRes = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
@@ -573,6 +591,12 @@ export default function SitesPage() {
                 <tr key={s.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${s.archived ? 'opacity-45' : ''}`}>
                   <td className={`px-3 py-2.5 font-medium ${s.parentId ? 'pl-8' : ''}`}>
                     {s.parentId ? <span className="text-indigo-700 dark:text-indigo-300">└ 工種: {s.workType}</span> : s.name}
+                    {!s.parentId && s.calendarFromYm && (
+                      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 font-bold align-middle"
+                        title={s.calendarFromYm === '999912' ? '就業カレンダーを作らない（スポット）' : `就業カレンダーは ${s.calendarFromYm.slice(0, 4)}年${Number(s.calendarFromYm.slice(4, 6))}月から`}>
+                        {s.calendarFromYm === '999912' ? 'スポット' : `カレンダー ${Number(s.calendarFromYm.slice(4, 6))}月〜`}
+                      </span>
+                    )}
                     {!s.parentId && s.siteType === 'support' && (
                       <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-bold">応援</span>
                     )}
@@ -743,6 +767,31 @@ export default function SitesPage() {
                   />
                 </div>
               </div>
+
+              {/* ── 就業カレンダー（スポット現場の取っ掛かり・2026-09-30）── */}
+              {!isChildEdit && (
+                <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3 space-y-1.5">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">就業カレンダー</div>
+                  {([
+                    ['normal', '工期の始まりから作る（通常）'],
+                    ['spot', 'スポット（数日だけ入る。常駐が決まるまで作らない）'],
+                    ['from', 'この月から作る（常駐開始）'],
+                  ] as const).map(([v, label]) => (
+                    <label key={v} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="radio" name="calMode" checked={formCalMode === v} onChange={() => setFormCalMode(v)} />
+                      {label}
+                      {v === 'from' && formCalMode === 'from' && (
+                        <input type="month" value={formCalFrom} onChange={e => setFormCalFrom(e.target.value)}
+                          className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded px-2 py-1 text-sm" />
+                      )}
+                    </label>
+                  ))}
+                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                    スポット・常駐前の月は、カレンダー画面・翌月カレンダーの注意・通知ベルに出ません（催促しません）。出面はいつもどおり入力できます。
+                    常駐が決まったら「この月から作る」にして、カレンダーを作ってください。
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">職長</label>

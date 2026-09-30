@@ -293,6 +293,13 @@ workSchedule?: {
   データの移行処理は無い（自然に union に入るので追加対応は不要）
 
 
+### スポット現場・就業カレンダーが必要になる月（`sites[].calendarFromYm`・2026-09-30）
+
+- 'YYYYMM'。この月より前は就業カレンダーを作らない（カレンダー画面・翌月の注意・通知ベル・サイドバーの件数に出さない）。
+  `'999912'` = スポット（常駐が決まるまで作らない）。未設定＝工期の始まりから必要（従来どおり）
+- 判定は `siteNeedsCalendar()`（lib/site-hierarchy.ts）。calendar-matrix・notifications・sidebar-badges が使う。出面の入力には影響しない
+- 現場マスタの基本タブ「就業カレンダー」: 通常／スポット／この月から作る（常駐開始）。一覧に「スポット」「カレンダー ○月〜」の印
+
 ### 運転手当なしの現場（`sites[].noDriveAllowance`・2026-09-30）
 
 `true` の現場は出面の「運」ボタンを出さず、運転記録を保存させず、運転手当を計算しない。代表・事業責任者だけが変更できる（`/api/sites` update で権限 `sites.noDriveAllowance` を確認）。工種サイトは `INHERITED_FIELDS` で親の値を書き写す。

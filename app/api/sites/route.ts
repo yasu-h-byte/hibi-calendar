@@ -40,6 +40,8 @@ interface RawSite {
   workSchedule?: SiteWorkScheduleRaw | null
   commute?: import('@/types').SiteCommuteData
   noDriveAllowance?: boolean
+  /** 就業カレンダーが必要になる月（YYYYMM）。'999912' = スポット */
+  calendarFromYm?: string
   siteType?: 'direct' | 'support'
   client?: string
   gcId?: string
@@ -106,6 +108,7 @@ export async function GET(request: NextRequest) {
       //   その状態で再保存すると空値で上書き消去」が起きた（2026-08-26 修正）
       commute: s.commute || undefined,
       noDriveAllowance: s.noDriveAllowance || undefined,
+      calendarFromYm: s.calendarFromYm || undefined,
       siteType: s.siteType || undefined,
       client: s.client ?? undefined,
       gcId: s.gcId || undefined,
@@ -221,6 +224,9 @@ export async function POST(request: NextRequest) {
         dokoRate: Number(dokoRate) || 0,
         rates: [],
         ...parties,
+        // スポットで入る現場（就業カレンダーを作らない月）・2026-09-30
+        ...(typeof body.calendarFromYm === 'string' && /^\d{6}$/.test(body.calendarFromYm.replace('-', ''))
+          ? { calendarFromYm: body.calendarFromYm.replace('-', '') } : {}),
       }
 
       await updateDoc(ref, { sites: [...sites, newSite].map(stripUndefinedDeep) })
@@ -276,6 +282,13 @@ export async function POST(request: NextRequest) {
           if (body.noDriveAllowance) updated[idx].noDriveAllowance = true
           else delete updated[idx].noDriveAllowance
         }
+      }
+      // 就業カレンダーが必要になる月（スポット現場の取っ掛かり・2026-09-30）。'' で解除（通常どおり工期から必要）
+      if (typeof body.calendarFromYm === 'string' && !isChild) {
+        const v = body.calendarFromYm.replace('-', '')
+        if (v === '') delete updated[idx].calendarFromYm
+        else if (/^\d{6}$/.test(v)) updated[idx].calendarFromYm = v
+        else return NextResponse.json({ error: 'カレンダーが必要になる月の形式が正しくありません' }, { status: 400 })
       }
       if (typeof body.workType === 'string' && body.workType.trim() && isChild) {
         updated[idx].workType = body.workType.trim()

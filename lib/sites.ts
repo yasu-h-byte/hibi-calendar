@@ -28,6 +28,7 @@ export async function getSites(): Promise<Site[]> {
       end: (s.end as string) || '',
       foreman: (s.foreman as number) || 0,
       archived: (s.archived as boolean) || false,
+      calendarFromYm: (s.calendarFromYm as string) || undefined,
       parentId: (s.parentId as string) || undefined,
       workType: (s.workType as string) || undefined,
     }))
@@ -109,6 +110,7 @@ async function buildSitesWithWorkers(
           end: (s.end as string) || '',
           foreman: (s.foreman as number) || 0,
           archived: false,
+          calendarFromYm: (s.calendarFromYm as string) || undefined,
         },
         workers: workerIds.map(id => workerMap.get(id)).filter(Boolean) as Worker[],
         assign: {

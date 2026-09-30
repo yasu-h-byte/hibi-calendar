@@ -55,6 +55,24 @@ export function isSiteStartedByMonth(site: { start?: string } | undefined | null
   return start <= `${n.slice(0, 4)}-${n.slice(4, 6)}`
 }
 
+/** スポット現場（常駐が決まるまで就業カレンダーを作らない）の印 */
+export const SPOT_CALENDAR_FROM = '999912'
+
+/**
+ * その月に就業カレンダーが必要か（2026-09-30）。工期が始まっていて、かつ calendarFromYm（カレンダーが必要になる月）以降。
+ * スポットで入る現場は calendarFromYm を先の月（または SPOT_CALENDAR_FROM）にしておくと、カレンダー画面・翌月の注意・
+ * 通知ベル・サイドバーの件数に出ない。常駐が決まったらその月を入れる（それより前の月は必要のないまま）。
+ */
+export function siteNeedsCalendar(
+  site: { start?: string; calendarFromYm?: string } | undefined | null, ym: string,
+): boolean {
+  if (!isSiteStartedByMonth(site, ym)) return false
+  const from = (site?.calendarFromYm || '').replace('-', '')
+  if (!/^\d{6}$/.test(from)) return true
+  const n = (ym || '').replace('-', '')
+  return !/^\d{6}$/.test(n) || n >= from
+}
+
 /** 親現場の工種サイト一覧（アーカイブを含むかは呼び出し側で絞る） */
 export function workTypeSitesOf<T extends HierarchySite>(sites: T[], parentId: string): T[] {
   return sites.filter(s => s.parentId === parentId)
