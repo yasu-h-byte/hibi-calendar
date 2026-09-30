@@ -1,5 +1,6 @@
 'use client'
 
+import { siteLeaderLabel } from '@/lib/companies'
 import { useEffect, useState, useCallback } from 'react'
 import { can } from '@/lib/permissions'
 import { COMPANY_ROLES, SELF_COMPANY_ID, SELF_COMPANY_LABEL, hasRole, resolveSiteParties, type CompanyRole } from '@/lib/companies'
@@ -264,6 +265,8 @@ export default function SitesPage() {
   // 工種サイト（2026-09-15）
   const editingSite = editId ? sites.find(x => x.id === editId) : undefined
   const isChildEdit = !!editingSite?.parentId
+  // 応援現場は取りまとめ役を「責任者」と呼ぶ（2026-09-30 代表）。担当の二次が自社以外なら応援現場
+  const formLeader = siteLeaderLabel(form.ownerId ? form.ownerId !== 'self' : editingSite?.siteType === 'support')
   const parentOfEditing = isChildEdit ? sites.find(x => x.id === editingSite!.parentId) : undefined
   const childrenOfEditing = editId && !isChildEdit ? sites.filter(x => x.parentId === editId) : []
   const addWorkType = async () => {
@@ -566,7 +569,7 @@ export default function SitesPage() {
             <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
               <th className="px-3 py-3">現場名</th>
               <th className="px-3 py-3">工期</th>
-              <th className="px-3 py-3">職長</th>
+              <th className="px-3 py-3">職長／責任者</th>
               <th className="px-3 py-3 text-right">鳶単価</th>
               <th className="px-3 py-3 text-right">土工単価</th>
               <th className="px-3 py-3 text-center">自社人数</th>
@@ -794,7 +797,7 @@ export default function SitesPage() {
               )}
 
               <div>
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">職長</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">{formLeader}</label>
                 <select
                   value={form.foreman}
                   onChange={e => setForm({ ...form, foreman: e.target.value })}
@@ -1313,10 +1316,10 @@ export default function SitesPage() {
               {/* ── 代理職長（月単位） ── 工種サイトは親現場と共通なので出さない */}
               {editId && !isChildEdit && (
                 <div className="border border-gray-300 rounded-xl p-4 space-y-3">
-                  <h4 className="text-sm font-bold text-hibi-navy">代理職長（月単位）</h4>
+                  <h4 className="text-sm font-bold text-hibi-navy">代理{formLeader}（月単位）</h4>
 
                   {formDeputies.length === 0 ? (
-                    <div className="text-xs text-gray-400">代理職長が設定されていません</div>
+                    <div className="text-xs text-gray-400">代理{formLeader}が設定されていません</div>
                   ) : (
                     <div className="space-y-2">
                       {formDeputies.map((dep, idx) => (

@@ -1,5 +1,6 @@
 'use client'
 
+import { siteLeaderLabel } from '@/lib/companies'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus } from '@/types'
@@ -23,7 +24,7 @@ interface BreakSetting { enabled: boolean; minutes: number; mandatory: boolean }
 
 interface ForemanData {
   foreman: { id: number; name: string }
-  site: { id: string; name: string }
+  site: { id: string; name: string; isSupport?: boolean }
   date: { year: number; month: number; day: number; ym: string; dateLabel: string; dateISO: string }
   workers: {
     id: number
@@ -298,7 +299,7 @@ export default function ForemanAttendancePage() {
       {/* Header */}
       <div className="bg-hibi-charcoal text-white px-4 py-4">
         <div className="max-w-lg mx-auto">
-          <div className="text-sm opacity-70">職長</div>
+          <div className="text-sm opacity-70">{siteLeaderLabel(data.site.isSupport)}</div>
           <div className="text-lg sm:text-xl font-bold truncate">{data.foreman.name}</div>
           <div className="text-sm opacity-80 mt-1 truncate">{data.site.name}</div>
         </div>
@@ -445,7 +446,7 @@ export default function ForemanAttendancePage() {
                 <div
                   key={w.id}
                   className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
-                  title="現場都合休み・有給などは職長が代理入力できます"
+                  title={`現場都合休み・有給などは${siteLeaderLabel(data.site.isSupport)}が代理入力できます`}
                   onClick={() => openEditor(w)}
                 >
                   <span className="text-sm font-medium text-gray-700 truncate min-w-0">{w.name}</span>
@@ -539,7 +540,7 @@ export default function ForemanAttendancePage() {
                   💡 スタッフ未入力の状態です
                 </p>
                 <p className="text-xs text-yellow-700">
-                  「現場都合休み」「有給」のみ職長が代理入力できます。出勤・休みは
+                  「現場都合休み」「有給」のみ{siteLeaderLabel(data.site.isSupport)}が代理入力できます。出勤・休みは
                   スタッフ本人のスマホ入力をお待ちください。
                 </p>
               </div>

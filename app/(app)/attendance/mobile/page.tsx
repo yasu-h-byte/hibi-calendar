@@ -22,6 +22,7 @@
  * この画面では PC グリッドと同じく「有給・欠勤・0.6補の後付け」と「既存エントリの修正」だけ許す。
  */
 
+import { siteLeaderLabel } from '@/lib/companies'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   AttendanceEntry, DayType,
@@ -45,6 +46,8 @@ interface GridWorker {
 }
 interface GridSubcon { id: string; name: string }
 interface GridData {
+  /** 応援現場か（取りまとめ役を「責任者」と呼ぶ・2026-09-30） */
+  isSupportSite?: boolean
   site: { id: string; name: string; workType?: string }
   year: number
   month: number
@@ -418,7 +421,7 @@ export default function ForemanMobilePage() {
 
   const handleUnapprove = useCallback(async () => {
     if (finalApproved) { alert('最終承認済みのため取り消せません。管理者に連絡してください。'); return }
-    if (!confirm('この日の職長確認を取り消します。スタッフが再び入力できるようになります。よろしいですか？')) return
+    if (!confirm(`この日の${siteLeaderLabel(data?.isSupportSite)}確認を取り消します。スタッフが再び入力できるようになります。よろしいですか？`)) return
     const ok = await postGrid({ action: 'unapprove_foreman', day })
     if (ok) fetchGrid()
   }, [finalApproved, postGrid, day, fetchGrid])
@@ -690,7 +693,7 @@ export default function ForemanMobilePage() {
               {finalApproved ? (
                 <div className="mt-3 p-2.5 rounded-lg bg-gray-100 text-gray-600 text-sm font-bold text-center">🔒 最終承認済み（編集できません）</div>
               ) : foremanApproved ? (
-                <div className="mt-3 p-2.5 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm font-bold text-center">✅ 職長確認済み</div>
+                <div className="mt-3 p-2.5 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm font-bold text-center">✅ {siteLeaderLabel(data?.isSupportSite)}確認済み</div>
               ) : missingWorkers.length > 0 && !isRestDay ? (
                 <div className="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
                   ⚠️ <b>{missingWorkers.length}名が未入力</b>: {missingWorkers.map(w => w.name).join('・')}
@@ -907,7 +910,7 @@ export default function ForemanMobilePage() {
                   {foremanApproved ? (
                     <button onClick={handleUnapprove} className="w-full rounded-xl py-3 text-sm font-bold bg-white border-2 border-red-300 text-red-600">↩️ この日の確認を取り消す</button>
                   ) : (
-                    <button onClick={handleApprove} className="w-full rounded-xl py-3 text-sm font-bold bg-amber-500 text-white shadow">✅ この日を確認する（職長承認）</button>
+                    <button onClick={handleApprove} className="w-full rounded-xl py-3 text-sm font-bold bg-amber-500 text-white shadow">✅ この日を確認する（{siteLeaderLabel(data?.isSupportSite)}承認）</button>
                   )}
                 </div>
               )}

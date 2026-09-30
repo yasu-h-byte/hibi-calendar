@@ -198,6 +198,13 @@ PC出面画面（/attendance）とは相互リンクで切り替えられる（P
 - 応援現場では事業責任者も**職長承認**ができる（approve / approve_foreman と解除）。入力〜職長承認〜最終承認を政仁さんがまとめて見られる。
   現場の職長（出光=大介・川崎=梶原）の職長承認もこれまでどおり有効
 
+### 応援現場の取りまとめ役は「責任者」（2026-09-30 代表）
+
+- 応援現場では「職長」を「責任者」と表示する（`siteLeaderLabel(isSupport)`・lib/companies.ts）。表示だけで、権限・承認の流れ（職長承認→最終承認）は同じ
+- 対象: 出面PCの承認行と案内・職長スマホの日ごとの確認・トークン版の職長画面・現場マスタの入力欄と代理・カレンダー画面の提出取消／差し戻し。
+  人ごとの手続き（有給申請の職長承認など）は「職長」のまま。データ上の名前（foreman / mforeman / attendance.foremanApprove）も変えない
+- 判定に使う印: grid GET `isSupportSite`、calendar status の `sites[].isSupport`、foreman token GET の `site.isSupport`
+
 ### 工種サイトは現場の選択欄に出さない（2026-09-30 代表）
 
 - 出面画面（PC）・職長のスマホ画面の現場の選択欄から、工種サイト（`parentId` のある現場・例: 川崎の鉄骨工事）を外した。

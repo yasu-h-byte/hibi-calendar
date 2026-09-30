@@ -674,6 +674,8 @@ export async function getForemanSite(foremanId: number): Promise<Site | null> {
         end: (s.end as string) || '',
         foreman: foremanId,
         archived: false,
+        ownerId: (s.ownerId as string) || undefined,
+        siteType: (s.siteType as 'direct' | 'support') || undefined,
       }
     }
   }

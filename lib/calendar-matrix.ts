@@ -15,6 +15,7 @@ import { db } from './firebase'
 import { doc, getDoc, collection, query, where, getDocs } from '@/lib/fsdb'
 import { getAllSitesWithWorkersForMonth } from './sites'
 import { siteNeedsCalendar } from './site-hierarchy'
+import { isSupportSite } from './companies'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave, normalizeYm, type HomeLeaveEntry } from './homeLeave'
 import { isCalendarSignTarget } from './workers'
 import type { Site, SiteAssign, Worker } from '@/types'
@@ -210,6 +211,8 @@ export function projectSignSites(m: CalendarMatrix) {
     return {
       siteId: sw.site.id,
       siteName: sw.site.name,
+      // 応援現場か（取りまとめ役を「責任者」と呼ぶ・2026-09-30）
+      isSupport: isSupportSite(sw.site as never, []),
       cal,
       status: cal?.status || null,
       wasRevised,

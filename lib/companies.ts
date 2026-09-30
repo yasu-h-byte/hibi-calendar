@@ -94,3 +94,11 @@ export function isSupportSite(
   const root = site.parentId ? (sites.find(x => x.id === site.parentId) || site) : site
   return resolveSiteParties(root, []).siteType === 'support'
 }
+
+/**
+ * 現場の取りまとめ役の呼び方（2026-09-30 代表）。応援現場は「責任者」、自社現場は「職長」。
+ * 画面の表示だけの違いで、権限や承認の流れ（職長承認→最終承認）は同じ。
+ */
+export function siteLeaderLabel(isSupport?: boolean | null): '責任者' | '職長' {
+  return isSupport ? '責任者' : '職長'
+}

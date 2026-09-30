@@ -215,7 +215,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       foreman: { id: foreman.id, name: foreman.name },
-      site: { id: site.id, name: site.name },
+      // 応援現場か（取りまとめ役を「責任者」と呼ぶ・2026-09-30）
+      site: { id: site.id, name: site.name, isSupport: (await import('@/lib/companies')).isSupportSite(site as never, []) },
       date: {
         year: y, month: m, day: d, ym,
         dateLabel: formatDateKanji(viewDate),

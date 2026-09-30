@@ -28,3 +28,12 @@ describe('応援現場の出面入力の権限', () => {
     expect(roleCan('foreman', 'attendance.inputSupport')).toBe(false)
   })
 })
+
+import { siteLeaderLabel } from '@/lib/companies'
+describe('取りまとめ役の呼び方', () => {
+  test('応援現場は責任者・自社現場は職長', () => {
+    expect(siteLeaderLabel(true)).toBe('責任者')
+    expect(siteLeaderLabel(false)).toBe('職長')
+    expect(siteLeaderLabel(undefined)).toBe('職長')
+  })
+})

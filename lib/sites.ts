@@ -29,6 +29,8 @@ export async function getSites(): Promise<Site[]> {
       foreman: (s.foreman as number) || 0,
       archived: (s.archived as boolean) || false,
       calendarFromYm: (s.calendarFromYm as string) || undefined,
+      ownerId: (s.ownerId as string) || undefined,
+      siteType: (s.siteType as 'direct' | 'support') || undefined,
       parentId: (s.parentId as string) || undefined,
       workType: (s.workType as string) || undefined,
     }))
@@ -111,6 +113,8 @@ async function buildSitesWithWorkers(
           foreman: (s.foreman as number) || 0,
           archived: false,
           calendarFromYm: (s.calendarFromYm as string) || undefined,
+      ownerId: (s.ownerId as string) || undefined,
+      siteType: (s.siteType as 'direct' | 'support') || undefined,
         },
         workers: workerIds.map(id => workerMap.get(id)).filter(Boolean) as Worker[],
         assign: {

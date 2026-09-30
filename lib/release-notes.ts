@@ -28,6 +28,14 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260930_support_leader',
+    title: '応援現場では「職長」を「責任者」と表示します',
+    content: '応援現場（川崎・出光など）では、出面の承認行・スマホの確認・カレンダーの提出取消や差し戻し・現場マスタの表示を「責任者」にしました。できることや承認の流れは変わりません。',
+    category: 'info',
+    publishedAt: '2026-10-01T00:40:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20260930_spot_site',
     title: 'スポット現場は就業カレンダーを作らなくてよくなりました',
     content:

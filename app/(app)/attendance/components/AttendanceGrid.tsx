@@ -1,5 +1,6 @@
 'use client'
 
+import { siteLeaderLabel } from '@/lib/companies'
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   dayColBg, dayHeaderBg, dayTextColor,
@@ -321,7 +322,7 @@ export default function AttendanceGrid({
                 className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px]"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
-                {data.site.foremanName ? `${data.site.foremanName} 職長承認` : '職長承認'}
+                {data.site.foremanName ? `${data.site.foremanName} ${siteLeaderLabel(data.isSupportSite)}承認` : `${siteLeaderLabel(data.isSupportSite)}承認`}
                 {data.site.foremanNote ? <span className="text-[9px] text-gray-500 font-normal ml-1">({data.site.foremanNote})</span> : ''}
                 {canForemanApprove && (unapprovedDays.length > 0 ? (
                   <button
@@ -349,8 +350,8 @@ export default function AttendanceGrid({
                     onClick={clickable ? () => onToggleForemanApproval(d.day) : undefined}
                     title={
                       cellLocked ? '最終承認済のため解除不可（先に最終承認を外す）'
-                      : canForemanApprove ? (approved ? 'クリックで承認解除' : 'クリックで職長承認')
-                      : '担当現場の職長のみ操作可'
+                      : canForemanApprove ? (approved ? 'クリックで承認解除' : `クリックで${siteLeaderLabel(data.isSupportSite)}承認`)
+                      : `担当現場の${siteLeaderLabel(data.isSupportSite)}のみ操作可`
                     }
                   >
                     {approved ? (
@@ -395,7 +396,7 @@ export default function AttendanceGrid({
                     title={
                       finalApproved ? 'クリックで最終承認解除'
                       : !canFinalize ? '管理者・事業責任者のみ操作可'
-                      : !foremanApproved ? '職長承認後に押せます'
+                      : !foremanApproved ? `${siteLeaderLabel(data.isSupportSite)}承認後に押せます`
                       : 'クリックで最終承認'
                     }
                   >

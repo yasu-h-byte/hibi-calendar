@@ -1,5 +1,6 @@
 'use client'
 
+import { siteLeaderLabel } from '@/lib/companies'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { summarizeSignStatus, buildSignRequestMessage } from '@/lib/calendar-sign-status'
 import CalendarEditor from '@/components/CalendarEditor'
@@ -34,6 +35,8 @@ interface CalQuestion {
 interface SiteCalendarData {
   siteId: string
   siteName: string
+  /** 応援現場か（取りまとめ役を「責任者」と呼ぶ・2026-09-30） */
+  isSupport?: boolean
   days: Record<string, DayType> | null
   status: CalendarStatus | null
   submittedBy: number | null
@@ -718,7 +721,7 @@ export default function CalendarManagePage() {
                         {isSubmitted && user.role !== 'foreman' && (
                           <button
                             onClick={async () => {
-                              if (!confirm(`${site.siteName} の提出を取消しますか？\n職長が再編集できるようになります。`)) return
+                              if (!confirm(`${site.siteName} の提出を取消しますか？\n${siteLeaderLabel(site.isSupport)}が再編集できるようになります。`)) return
                               setSaving(true)
                               try {
                                 const res = await fetch('/api/calendar/revert', {
@@ -734,7 +737,7 @@ export default function CalendarManagePage() {
                             disabled={saving}
                             className="w-full text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 py-2 rounded-lg text-xs hover:bg-yellow-100 transition disabled:opacity-50"
                           >
-                            ↩ 提出を取消す（職長に差戻し）
+                            ↩ 提出を取消す（{siteLeaderLabel(site.isSupport)}に差戻し）
                           </button>
                         )}
 
@@ -742,7 +745,7 @@ export default function CalendarManagePage() {
                         {isSubmitted && user.role !== 'foreman' && (
                           <button
                             onClick={async () => {
-                              const reason = prompt(`${site.siteName} を職長へ差し戻します。\n理由を入力してください（職長の画面に表示されます）:`)
+                              const reason = prompt(`${site.siteName} を${siteLeaderLabel(site.isSupport)}へ差し戻します。\n理由を入力してください（${siteLeaderLabel(site.isSupport)}の画面に表示されます）:`)
                               if (reason === null) return
                               setSaving(true)
                               try {
