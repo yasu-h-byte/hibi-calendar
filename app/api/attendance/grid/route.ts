@@ -398,8 +398,9 @@ export async function POST(request: NextRequest) {
       let denied = await requireCap(request, cap)
       // 2026-09-30（代表）: 応援現場の出面は事業責任者（政仁さん）が一括で入力する。
       //   出面の保存・配置・運転の記録に限り、応援現場なら attendance.inputSupport でも許す
-      const supportActions = [undefined, '', 'saveAttendance', 'saveAssign', 'saveDrivers']
-      if (denied && cap === 'attendance.input' && supportActions.includes(action) && body.siteId) {
+      //   職長承認（とその解除）も、応援現場なら事業責任者ができる（政仁さんが入力〜承認までまとめて見る・2026-09-30）
+      const supportActions = [undefined, '', 'saveAttendance', 'saveAssign', 'saveDrivers', ...foremanApproveActions]
+      if (denied && (cap === 'attendance.input' || cap === 'attendance.foremanApprove') && supportActions.includes(action) && body.siteId) {
         const { isSupportSite } = await import('@/lib/companies')
         const mainS = await getMainData()
         const siteS = mainS.sites.find(s => s.id === body.siteId)

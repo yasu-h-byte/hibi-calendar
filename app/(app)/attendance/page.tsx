@@ -874,7 +874,9 @@ export default function AttendanceGridPage() {
   // ── Approval handlers（楽観的UI） ──
 
   // 職長承認は「該当現場の職長」のみ操作可。adminは閲覧のみ。
-  const canForemanApprove = userRole === 'foreman' && userForemanSites.includes(siteId)
+  // 応援現場は事業責任者も職長承認できる（入力〜承認をまとめて見る・2026-09-30）
+  const canForemanApprove = (userRole === 'foreman' && userForemanSites.includes(siteId))
+    || (!!data?.isSupportSite && !!userRole && roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport'))
   const canFinalize = userRole === 'admin' || userRole === 'approver'
 
   const handleForemanApproveAll = useCallback(() => {
