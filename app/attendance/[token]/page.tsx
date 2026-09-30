@@ -146,8 +146,6 @@ export default function StaffAttendancePage() {
   const [restLockDate, setRestLockDate] = useState(false)
   // 欠勤届から「有給を申請する」を選んだときの日付（有給モーダルの初期値）
   const leavePresetDate = useRef<string | null>(null)
-  // 出面を読み直すたびに増やす（月末の本人確認カードも読み直す）
-  const [dataVersion, setDataVersion] = useState(0)
 
   // ── 翌月カレンダー承認用 state（2026-05-27 追加） ──
   // 旧 /calendar/public は「名前を選んで」方式で他人になりすませる脆弱性があったため、
@@ -194,7 +192,6 @@ export default function StaffAttendancePage() {
       }
       const d: StaffData = await res.json()
       setData(d)
-      setDataVersion(v => v + 1)
       setSiteId(d.site.id)
 
       // Restore OT state from current entry
@@ -876,8 +873,8 @@ export default function StaffAttendancePage() {
           </div>
         )}
 
-        {/* ── 月末の本人確認（2026-09-30）── 月末3日と月初10日だけ出る */}
-        <MonthConfirmCard token={token} reloadKey={dataVersion} />
+        {/* ── 本人の出面確認（2026-09-30）── 前の月の職長承認・最終承認がそろってから締めるまで出る */}
+        <MonthConfirmCard token={token} />
 
         {/* ── 未入力の督促バナー（2026-08-28 追加）──
             過去14日の未入力稼働日をチップで並べ、タップでその日の入力モーダルへ直行。

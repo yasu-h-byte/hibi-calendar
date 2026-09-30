@@ -404,16 +404,16 @@ function MonthlyPageInner() {
   useEffect(() => { fetchData() }, [fetchData])
 
   // 月末の本人確認（スタッフがスマホで「正しい／まちがいがある」を押した記録・2026-09-30）
-  const [staffConfirms, setStaffConfirms] = useState<Record<number, { status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean }>>({})
+  const [staffConfirms, setStaffConfirms] = useState<Record<number, { status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean; early?: boolean }>>({})
   useEffect(() => {
     if (!password || !ym) return
     let alive = true
     fetch(`/api/attendance/confirm?ym=${ym}`, { headers: { 'x-admin-password': password } })
       .then(r => (r.ok ? r.json() : { items: [] }))
-      .then((j: { items?: { workerId: number; status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean }[] }) => {
+      .then((j: { items?: { workerId: number; status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean; early?: boolean }[] }) => {
         if (!alive) return
-        const m: Record<number, { status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean }> = {}
-        for (const it of j.items || []) m[it.workerId] = { status: it.status, note: it.note, at: it.at, stale: it.stale }
+        const m: Record<number, { status: 'ok' | 'issue'; note?: string; at: string; stale?: boolean; early?: boolean }> = {}
+        for (const it of j.items || []) m[it.workerId] = { status: it.status, note: it.note, at: it.at, stale: it.stale, early: it.early }
         setStaffConfirms(m)
       })
       .catch(() => { if (alive) setStaffConfirms({}) })
@@ -431,11 +431,25 @@ function MonthlyPageInner() {
     if (!confirm(msg)) return
     setLockToggling(true)
     try {
-      const res = await fetch('/api/monthly/lock', {
+      const post = (extra: Record<string, unknown> = {}) => fetch('/api/monthly/lock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ ym, locked: newLocked, org }),
+        body: JSON.stringify({ ym, locked: newLocked, org, ...extra }),
       })
+      let res = await post()
+      // 2026-09-30: 本人確認（ベトナム人スタッフのスマホ）が残っていれば一覧を見せ、承知のうえでだけ締める
+      if (res.status === 409) {
+        const j = await res.clone().json().catch(() => null) as { code?: string; pending?: { name: string; state: string; note?: string }[] } | null
+        if (j?.code === 'STAFF_CONFIRM_PENDING' && j.pending) {
+          const list = j.pending.slice(0, 15).map(p => `・${p.name}: ${p.state}${p.note ? `「${p.note}」` : ''}`).join('\n')
+          const more = j.pending.length > 15 ? `\n…他 ${j.pending.length - 15}名` : ''
+          if (!confirm(
+            `本人の出面確認が済んでいないスタッフが ${j.pending.length}名 います。\n\n${list}${more}\n\n`
+            + `連絡があった人は出面を見直してください。確認は、その月の職長承認と最終承認がそろうとスマホに出ます。\n\n`
+            + `それでも締めますか？（締めた人と名前が記録に残ります）`)) return
+          res = await post({ allowUnconfirmed: true })
+        }
+      }
       // 2026-06-13: 締め前チェック（月未了・職長未承認）の 409 メッセージを表示
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '締め処理に失敗しました' }))
@@ -1439,18 +1453,22 @@ function MonthlyPageInner() {
                         {/* 2026-09-30: 月末の本人確認（スタッフのスマホ） */}
                         {w.visa !== 'none' && staffConfirms[w.id] && (
                           <span
-                            className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold align-middle ${staffConfirms[w.id].stale
+                            className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold align-middle ${staffConfirms[w.id].early && staffConfirms[w.id].status === 'ok'
+                              ? 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                              : staffConfirms[w.id].stale
                               ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
                               : staffConfirms[w.id].status === 'ok'
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                               : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}
-                            title={staffConfirms[w.id].stale
+                            title={staffConfirms[w.id].early && staffConfirms[w.id].status === 'ok'
+                              ? `承認がそろう前に「正しい」と押した記録です（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）。職長承認と最終承認がそろうと、本人のスマホにもう一度確認が出ます。`
+                              : staffConfirms[w.id].stale
                               ? `本人が確認したあとで出面が変わりました（確認: ${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}${staffConfirms[w.id].note ? ` / 連絡: ${staffConfirms[w.id].note}` : ''}）。本人のスマホに「もう一度確認してください」と出ています。`
                               : staffConfirms[w.id].status === 'ok'
                               ? `本人がスマホで「正しい」と確認しました（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）`
                               : `本人から「まちがいがある」と連絡がありました（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）:\n${staffConfirms[w.id].note || ''}\n出面を直すと、本人のスマホに「もう一度確認してください」と出ます。`}
                           >
-                            {staffConfirms[w.id].stale ? '本人 要再確認' : staffConfirms[w.id].status === 'ok' ? '本人確認 ✓' : '⚠ 本人から連絡あり'}
+                            {staffConfirms[w.id].early && staffConfirms[w.id].status === 'ok' ? '本人 承認前に確認' : staffConfirms[w.id].stale ? '本人 要再確認' : staffConfirms[w.id].status === 'ok' ? '本人確認 ✓' : '⚠ 本人から連絡あり'}
                           </span>
                         )}
                         {(w.calendarBlankDays || 0) > 0 && (

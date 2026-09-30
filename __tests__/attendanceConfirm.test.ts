@@ -3,22 +3,12 @@ import {
   confirmTargetYm, isSuspectCompanyRest, summarizeWorkerMonth, summaryFingerprint, mainSiteOfMonth,
 } from '@/lib/attendance-confirm'
 
-describe('確認する月（月末3日は当月・1〜10日は前月）', () => {
-  test('9/28〜9/30 は 9月', () => {
-    expect(confirmTargetYm('2026-09-28')).toBe('202609')
-    expect(confirmTargetYm('2026-09-30')).toBe('202609')
-  })
-  test('10/1〜10/10 は 9月、10/11〜10/28 は出さない', () => {
+describe('確認する月（前の月・2026-09-30 変更）', () => {
+  test('いつでも前の月（出すかどうかは承認と締めで決める）', () => {
+    expect(confirmTargetYm('2026-09-30')).toBe('202608')
     expect(confirmTargetYm('2026-10-01')).toBe('202609')
-    expect(confirmTargetYm('2026-10-10')).toBe('202609')
-    expect(confirmTargetYm('2026-10-11')).toBeNull()
-    expect(confirmTargetYm('2026-10-28')).toBeNull()
-    expect(confirmTargetYm('2026-10-29')).toBe('202610')
-  })
-  test('1月上旬は前年12月・2月末（28日の年）は26日から', () => {
+    expect(confirmTargetYm('2026-10-20')).toBe('202609')
     expect(confirmTargetYm('2027-01-05')).toBe('202612')
-    expect(confirmTargetYm('2027-02-26')).toBe('202702')
-    expect(confirmTargetYm('2027-02-25')).toBeNull()
   })
 })
 
@@ -136,5 +126,31 @@ describe('点検（2026-09-30）: 確認した範囲だけで「変わったか�
     const d = { a_207_202610_1: { w: 0, nonly: 1 }, b_207_202610_1: { w: 1 }, a_207_202610_2: { w: 0, r: 1 }, b_207_202610_2: { w: 1 } }
     const s = summarizeWorkerMonth({ d: d as never, workerId: 207, ym: '202610', calDays: null, todayIso: '2026-10-31', breakShortenMin: 20 })
     expect(s.breakShorten?.days).toBe(2)
+  })
+})
+
+import { requiredApprovalKeys } from '@/lib/attendance-confirm'
+describe('本人確認の前にそろうべき承認', () => {
+  // 9月: 1〜5日だけ見る簡単なカレンダー（1〜4日 仕事・5日 休み）
+  const cal: Record<string, string> = {}
+  for (let i = 1; i <= 30; i++) cal[String(i)] = i <= 4 ? 'work' : 'off'
+  const parentOf = (sid: string) => (sid === 'ihi_tekkotsu' ? 'ihi' : sid)
+  test('記録がある日はその現場（工種サイトは親）、無い仕事の日は主現場', () => {
+    const d = {
+      ihi_201_202609_1: { w: 1 },
+      ihi_tekkotsu_201_202609_2: { w: 1 },
+      kasai_201_202609_3: { w: 1 },
+      // 4日は記録なし（仕事の日）→ 主現場 ihi
+      ihi_201_202609_6: { w: 0, r: 1 },  // 休みの日の記録も対象
+      ihi_999_202609_4: { w: 1 },        // 別の人は関係ない
+    }
+    const keys = requiredApprovalKeys({ d, workerId: 201, ym: '202609', calDays: cal, approvalSiteOf: parentOf })
+    expect(keys.sort()).toEqual(['ihi_202609_1', 'ihi_202609_2', 'ihi_202609_4', 'ihi_202609_6', 'kasai_202609_3'].sort())
+  })
+  test('記録が1件も無い月は空（確認を出さない）・入社前は対象外', () => {
+    expect(requiredApprovalKeys({ d: {}, workerId: 201, ym: '202609', calDays: cal, approvalSiteOf: parentOf })).toEqual([])
+    const d = { ihi_201_202609_3: { w: 1 } }
+    const keys = requiredApprovalKeys({ d, workerId: 201, ym: '202609', calDays: cal, approvalSiteOf: parentOf, hireDate: '2026-09-03' })
+    expect(keys.sort()).toEqual(['ihi_202609_3', 'ihi_202609_4'])
   })
 })

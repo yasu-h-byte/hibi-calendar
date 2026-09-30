@@ -148,6 +148,49 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
 }
 
 /**
+ * 締め前の本人確認チェック（2026-09-30 代表決定）
+ *
+ * その月に出面の記録があるベトナム人スタッフ（在籍中・対象の会社）のうち、スマホの本人確認が
+ * 「確認ずみ」になっていない人を返す（未確認・承認前の確認だけ・要再確認・本人から連絡あり）。
+ * 締めを止めるのではなく一覧を見せて確認を求める（帰国中でスマホを見られない人などがいるため、
+ * allowUnconfirmed で承知のうえ締められる。その場合は操作ログに名前を残す）。
+ */
+async function staffConfirmPending(ym: string, org?: string): Promise<{ id: number; name: string; state: string; note?: string }[]> {
+  const { mapRawWorkers } = await import('@/lib/workers')
+  const { getAttendanceDoc } = await import('@/lib/attendance')
+  const { confirmMonthContext, staffConfirmStateOf, STAFF_CONFIRM_STATE_LABEL } = await import('@/lib/attendance-confirm-server')
+  const main = await getMainData()
+  const d = (await getAttendanceDoc(ym)) as Record<string, import('@/types').AttendanceEntry | null>
+  const orgKey = org === 'hibi' || org === 'hfu' ? org : 'all'
+  const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
+  const withEntries = new Set<number>()
+  for (const [key, e] of Object.entries(d)) {
+    if (!e) continue
+    const pk = parseDKey(key)
+    if (pk.ym === ym) withEntries.add(Number(pk.wid))
+  }
+  const targets = mapRawWorkers(main.workers as unknown[]).filter(w =>
+    withEntries.has(w.id) && !!w.visaType && w.visaType !== 'none'
+    && !(w.retired && w.retired < monthStart)
+    && (orgKey === 'all' || (w.company === 'HFU' ? 'hfu' : 'hibi') === orgKey))
+  if (targets.length === 0) return []
+  const qs = await getDocs(query(collection(db, 'attConfirm'), where('ym', '==', ym)))
+  const confs = new Map(qs.docs.map(x => {
+    const c = x.data() as import('@/lib/attendance-confirm').AttConfirmDoc
+    return [c.workerId, c] as const
+  }))
+  const ctx = confirmMonthContext(main.sites as unknown as import('@/lib/site-hierarchy').HierarchySite[], ym, d)
+  const out: { id: number; name: string; state: string; note?: string }[] = []
+  for (const w of targets) {
+    const c = confs.get(w.id)
+    const st = await staffConfirmStateOf(c, w, ctx)
+    if (st === 'ok') continue
+    out.push({ id: w.id, name: w.name, state: STAFF_CONFIRM_STATE_LABEL[st], ...(c?.note ? { note: c.note } : {}) })
+  }
+  return out
+}
+
+/**
  * 締め時点の支給額スナップショットを保存（2026-06-12 監査 Sprint2-D）。
  *
  * 背景: 月次集計は表示のたびに「現在の」単価・出面で再計算されるため、
@@ -204,7 +247,7 @@ export async function POST(request: NextRequest) {
     : `workerId=${auth.actor}`
 
   try {
-    const { ym, locked, org } = await request.json()
+    const { ym, locked, org, allowUnconfirmed } = await request.json()
     if (!ym) {
       return NextResponse.json({ error: 'ym required' }, { status: 400 })
     }
@@ -215,6 +258,19 @@ export async function POST(request: NextRequest) {
       const notReady = await checkReadyToLock(ym, org)
       if (notReady) {
         return NextResponse.json({ error: notReady }, { status: 409 })
+      }
+      // ⑥ 本人確認（ベトナム人スタッフのスマホ）。残っていれば一覧を返し、承知のうえ（allowUnconfirmed）でだけ締める
+      const pending = await staffConfirmPending(ym, org)
+      if (pending.length > 0 && !allowUnconfirmed) {
+        return NextResponse.json({
+          error: `本人の出面確認が済んでいないスタッフが ${pending.length}名 います`,
+          code: 'STAFF_CONFIRM_PENDING',
+          pending,
+        }, { status: 409 })
+      }
+      if (pending.length > 0) {
+        await logActivity('admin', 'monthly.lock.unconfirmed',
+          `${ym} 本人確認が済んでいないまま締め（操作者: ${actorLabel}）: ${pending.map(p => `${p.name}=${p.state}`).join('、')}`)
       }
     }
 

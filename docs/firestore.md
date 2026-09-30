@@ -159,7 +159,7 @@ workSchedule?: {
 お知らせ（ダッシュボード表示用）。
 
 ### attConfirm/{ym}_{workerId}
-月末の本人確認（2026-09-30・`docs/attendance.md`）。1人1か月1件（上書き）。出面そのものは変えない。
+本人の出面確認（前の月・承認がそろってから。2026-09-30・`docs/attendance.md`）。1人1か月1件（上書き）。出面そのものは変えない。
 
 | フィールド | 型 | 説明 |
 |---|---|---|
@@ -167,8 +167,10 @@ workSchedule?: {
 | `status` | `'ok'\|'issue'` | 正しい／まちがいがある |
 | `note` | string | まちがいの内容（issue のときだけ） |
 | `summary` | `StaffMonthSummary` | 記録時にサーバで数えた数字（`lib/attendance-confirm.ts`） |
-| `fingerprint` | string | 出面が後で変わったかの判定用 |
+| `fingerprint` | string | 記録時の月全体の指紋（参考） |
 | `at` | string | ISO 時刻 |
+| `asOf` / `fpAsOf` | string | 確認した日（JST）と、その日より前の範囲の指紋。「確認のあとで変わったか」はこれで判定 |
+| `afterApproval` | boolean | 職長承認・最終承認がそろってからの確認か。無い記録は「未確認」扱い（月締めのチェックも） |
 
 ### evaluations/{workerId_evaluationDate}
 評価データ（複数評価者対応）。

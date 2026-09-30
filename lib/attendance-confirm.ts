@@ -10,19 +10,64 @@
  */
 import type { AttendanceEntry } from '@/types'
 
-/** 確認を出す期間: 月末3日は当月、1〜10日は前月。それ以外は出さない */
-export function confirmTargetYm(todayIso: string): string | null {
+/**
+ * 確認する月 = 前の月（2026-09-30 代表決定で変更）。
+ * 旧: 月末3日（その月）と月初1〜10日（前の月）。確認のあとも職長・事業責任者の修正で数が変わり、
+ * 再確認が何度も出ていたため、「その月の全部の日に職長承認と最終承認がそろってから」出すことにした。
+ * 出すかどうか（承認がそろったか・締めていないか）はサーバ（lib/attendance-confirm-server.ts）で判定する。
+ */
+export function confirmTargetYm(todayIso: string): string {
   const y = Number(todayIso.slice(0, 4))
   const m = Number(todayIso.slice(5, 7))
-  const d = Number(todayIso.slice(8, 10))
+  const py = m === 1 ? y - 1 : y
+  const pm = m === 1 ? 12 : m - 1
+  return `${py}${String(pm).padStart(2, '0')}`
+}
+
+/**
+ * 本人確認の前にそろっていなければならない承認（attendanceApprovals のドキュメントID `${siteId}_${ym}_${day}`）。
+ *
+ * - その人の記録がある日 → 記録がある現場（工種サイトは親現場＝approvalSiteOf）のその日
+ * - 記録が無い日でも、主現場のカレンダーで仕事の日なら → 主現場のその日（職長がその日の出面を見て承認したか）
+ * - 入社前・退職後の日は対象外。記録が1件も無い月は空（＝確認を出さない）
+ */
+export function requiredApprovalKeys(args: {
+  d: Record<string, AttendanceEntry | null | undefined>
+  workerId: number
+  ym: string
+  calDays: Record<string, string> | null
+  approvalSiteOf: (siteId: string) => string
+  hireDate?: string
+  retired?: string
+}): string[] {
+  const { d, workerId, ym, calDays, approvalSiteOf, hireDate, retired } = args
+  const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6))
   const dim = new Date(y, m, 0).getDate()
-  if (d >= dim - 2) return `${y}${String(m).padStart(2, '0')}`
-  if (d <= 10) {
-    const py = m === 1 ? y - 1 : y
-    const pm = m === 1 ? 12 : m - 1
-    return `${py}${String(pm).padStart(2, '0')}`
+  const suffix = `_${workerId}_${ym}_`
+  const sitesByDay = new Map<number, Set<string>>()
+  for (const [key, entry] of Object.entries(d)) {
+    if (!entry) continue
+    const i = key.indexOf(suffix)
+    if (i <= 0) continue
+    const day = Number(key.slice(i + suffix.length))
+    if (!Number.isFinite(day) || day < 1 || day > dim) continue
+    if (!sitesByDay.has(day)) sitesByDay.set(day, new Set())
+    sitesByDay.get(day)!.add(approvalSiteOf(key.slice(0, i)))
   }
-  return null
+  if (sitesByDay.size === 0) return []
+  const main = mainSiteOfMonth(d as Record<string, unknown>, workerId, ym)
+  const mainAp = main ? approvalSiteOf(main) : null
+  const keys = new Set<string>()
+  for (let day = 1; day <= dim; day++) {
+    const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+    if (hireDate && iso < hireDate) continue
+    if (retired && iso > retired) continue
+    const sites = sitesByDay.get(day)
+    if (sites) { for (const sid of sites) keys.add(`${sid}_${ym}_${day}`); continue }
+    const isWork = calDays ? calDays[String(day)] === 'work' : new Date(y, m - 1, day).getDay() !== 0
+    if (isWork && mainAp) keys.add(`${mainAp}_${ym}_${day}`)
+  }
+  return [...keys]
 }
 
 /**
@@ -196,6 +241,8 @@ export interface AttConfirmDoc {
    */
   asOf?: string
   fpAsOf?: string
+  /** 職長承認・最終承認がそろってからの確認か（2026-09-30〜）。無い記録（承認前の確認）は「未確認」と同じに扱う */
+  afterApproval?: boolean
 }
 
 /** 確認の記録が古くなったか（確認した範囲の出面が変わったか） */

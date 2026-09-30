@@ -1,8 +1,10 @@
 /**
- * 月末の本人確認（2026-09-30）— 詳細は lib/attendance-confirm.ts
+ * 本人確認（2026-09-30）— 詳細は lib/attendance-confirm.ts
  *
- * GET  ?token=...        スタッフ本人: 確認する月の数字と、確認済みかどうか
- * POST {token, ym, status, note}  スタッフ本人: 「正しい」「まちがいがある」を記録
+ * 確認するのは**前の月**。その月の全部の日に職長承認と最終承認（事業責任者）がそろってから出し、締めたら出さない。
+ *
+ * GET  ?token=...        スタッフ本人: 確認する月の数字と、確認済みかどうか（承認待ちなら waiting）
+ * POST {token, ym, status, note}  スタッフ本人: 「正しい」「まちがいがある」を記録（承認がそろっているときだけ）
  * GET  ?ym=YYYYMM        事務所（monthly.view）: その月の確認状況の一覧
  *
  * 記録先: attConfirm/{ym}_{workerId}（1人1か月1件・上書き）。出面そのものは変えない。
@@ -13,65 +15,35 @@ import { doc, getDoc, setDoc, collection, query, where, getDocs } from '@/lib/fs
 import { mapRawWorkers } from '@/lib/workers'
 import { getMainData } from '@/lib/compute'
 import { getAttendanceDoc } from '@/lib/attendance'
-import { calendarSiteIdOf, type HierarchySite } from '@/lib/site-hierarchy'
+import { type HierarchySite } from '@/lib/site-hierarchy'
 import { todayJstIso } from '@/lib/date-utils'
 import { requireCap } from '@/lib/auth'
-import {
-  confirmTargetYm, summarizeWorkerMonth, summaryFingerprint, mainSiteOfMonth, breakShortenMinFor,
-  isConfirmStale, jstDateOf, type AttConfirmDoc, type StaffMonthSummary,
-} from '@/lib/attendance-confirm'
+import { isMonthLockedInLocks } from '@/lib/locks'
+import { confirmTargetYm, summaryFingerprint, type AttConfirmDoc } from '@/lib/attendance-confirm'
+import { confirmMonthContext } from '@/lib/attendance-confirm-server'
 import type { AttendanceEntry } from '@/types'
 
-async function loadWorkerByToken(token: string) {
-  // demmen/main は 30秒キャッシュ経由（点検 2026-09-30: 保存のたびに直接読んでいた）
+async function loadByToken(token: string) {
+  // demmen/main は 30秒キャッシュ経由
   const main = await getMainData()
   const worker = mapRawWorkers(main.workers || []).find(w => w.token === token) || null
-  return { worker, sites: (main.sites || []) as unknown as HierarchySite[] }
+  return { main, worker, sites: (main.sites || []) as unknown as HierarchySite[] }
 }
 
-type SummaryWorker = { id: number; hireDate?: string; retired?: string; breakShortenMin?: number; breakShortenFrom?: string }
-
-/** 出面ドキュメントは1回だけ読み、カレンダーは現場ごとに1回だけ読む */
-function makeSummarizer(sites: HierarchySite[], ym: string, d: Record<string, AttendanceEntry | null>) {
-  const calCache = new Map<string, Promise<Record<string, string> | null>>()
-  const calOf = (mainSite: string) => {
-    const calId = `${calendarSiteIdOf(sites, mainSite)}_${ym.slice(0, 4)}-${ym.slice(4, 6)}`
-    if (!calCache.has(calId)) {
-      calCache.set(calId, getDoc(doc(db, 'siteCalendar', calId)).then(c => {
-        const cal = c.exists() ? c.data() : null
-        return cal?.status === 'approved' && cal?.days ? cal.days as Record<string, string> : null
-      }).catch(() => null))  // カレンダーが読めなければ日曜以外を仕事の日とみなす
-    }
-    return calCache.get(calId)!
-  }
-  return async (worker: SummaryWorker, todayIso: string, beforeIso?: string): Promise<StaffMonthSummary> => {
-    const mainSite = mainSiteOfMonth(d, worker.id, ym)
-    const calDays = mainSite ? await calOf(mainSite) : null
-    return summarizeWorkerMonth({
-      d, workerId: worker.id, ym, calDays,
-      hireDate: worker.hireDate, retired: worker.retired, todayIso, beforeIso,
-      breakShortenMin: breakShortenMinFor(worker, ym) || undefined,
-    })
-  }
+const monthRange = (ym: string) => {
+  const y = Number(ym.slice(0, 4)), m = Number(ym.slice(4, 6))
+  return { start: `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`, end: `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}` }
 }
 
-/**
- * 確認の記録が古くなったか。確認した日より前の範囲だけで比べる。
- * asOf の無い古い記録（2026-09-30 の初日分）は、確認した時刻から asOf を補って保存し直す（その時点では古くない扱い）
- */
-async function staleOf(
-  c: AttConfirmDoc, worker: SummaryWorker,
-  summarize: (w: SummaryWorker, todayIso: string, beforeIso?: string) => Promise<StaffMonthSummary>,
-): Promise<boolean> {
-  const asOf = c.asOf || jstDateOf(c.at)
-  const range = await summarize(worker, asOf, asOf)
-  if (!c.fpAsOf) {
-    const fpAsOf = summaryFingerprint(range)
-    await setDoc(doc(db, 'attConfirm', `${c.ym}_${c.workerId}`), { asOf, fpAsOf }, { merge: true })
-    c.asOf = asOf; c.fpAsOf = fpAsOf
-    return false
-  }
-  return isConfirmStale(c, range)
+/** スタッフ本人に確認を出す月か（締めていない・在籍していた）。出さないなら null */
+function staffTargetYm(main: { locks?: Record<string, boolean> }, worker: { hireDate?: string; retired?: string; company?: string }, todayIso: string): string | null {
+  const ym = confirmTargetYm(todayIso)
+  const org = worker.company === 'HFU' ? 'hfu' : 'hibi'
+  if (isMonthLockedInLocks(main.locks, ym, org)) return null   // 締めたあとは出さない
+  const r = monthRange(ym)
+  if (worker.hireDate && worker.hireDate > r.end) return null
+  if (worker.retired && worker.retired < r.start) return null
+  return ym
 }
 
 export async function GET(request: NextRequest) {
@@ -79,24 +51,30 @@ export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
   try {
     if (token) {
-      const todayIso = todayJstIso()
-      const ym = confirmTargetYm(todayIso)
-      // 確認の期間外は何も読まない（人の照合もしない・読み取りを増やさない）
-      if (!ym) return NextResponse.json({ ym: null })
-      const { worker, sites } = await loadWorkerByToken(token)
+      const { main, worker, sites } = await loadByToken(token)
       if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      const todayIso = todayJstIso()
+      const ym = staffTargetYm(main, worker, todayIso)
+      if (!ym) return NextResponse.json({ ym: null })
       const [d, confSnap] = await Promise.all([
         getAttendanceDoc(ym) as Promise<Record<string, AttendanceEntry | null>>,
         getDoc(doc(db, 'attConfirm', `${ym}_${worker.id}`)),
       ])
-      const summarize = makeSummarizer(sites, ym, d)
-      const summary = await summarize(worker, todayIso)
-      const confirmation = confSnap.exists() ? (confSnap.data() as AttConfirmDoc) : null
-      const stale = confirmation ? await staleOf(confirmation, worker, summarize) : false
-      return NextResponse.json({ ym, summary, confirmation, stale })
+      const ctx = confirmMonthContext(sites, ym, d)
+      const ready = await ctx.readiness(worker)
+      if (ready.noEntries) return NextResponse.json({ ym: null })
+      // 承認前にした確認（2026-09-30 の初日分など）は数えない＝もう一度確認してもらう
+      const raw = confSnap.exists() ? (confSnap.data() as AttConfirmDoc) : null
+      const confirmation = raw?.afterApproval ? raw : null
+      if (!ready.ready && !confirmation) {
+        return NextResponse.json({ ym, waiting: true })
+      }
+      const summary = await ctx.summarize(worker, todayIso)
+      const stale = confirmation ? await ctx.staleOf(confirmation, worker) : false
+      return NextResponse.json({ ym, summary, confirmation, stale, ready: ready.ready })
     }
 
-    // 事務所向け一覧（確認したあとで出面が変わった人は stale: true → 月次集計で「要再確認」）
+    // 事務所向け一覧（確認したあとで出面が変わった人は stale: true → 月次集計で「要再確認」。承認前の確認は early: true）
     const denied = await requireCap(request, 'monthly.view')
     if (denied) return denied
     const ym = request.nextUrl.searchParams.get('ym') || ''
@@ -106,11 +84,11 @@ export async function GET(request: NextRequest) {
     if (confs.length === 0) return NextResponse.json({ ym, items: [] })
     const [main, d] = await Promise.all([getMainData(), getAttendanceDoc(ym) as Promise<Record<string, AttendanceEntry | null>>])
     const workers = mapRawWorkers(main.workers || [])
-    const summarize = makeSummarizer((main.sites || []) as unknown as HierarchySite[], ym, d)
+    const ctx = confirmMonthContext((main.sites || []) as unknown as HierarchySite[], ym, d)
     const items = await Promise.all(confs.map(async c => {
       const w = workers.find(x => x.id === c.workerId)
-      const stale = w ? await staleOf(c, w, summarize) : false
-      return { ...c, stale }
+      const stale = w ? await ctx.staleOf(c, w) : false
+      return { ...c, stale, early: !c.afterApproval }
     }))
     return NextResponse.json({ ym, items })
   } catch (e) {
@@ -120,7 +98,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // auth: スタッフ本人のトークン（loadWorkerByToken）。記録するのは本人の確認だけ
+  // auth: スタッフ本人のトークン（loadByToken）。記録するのは本人の確認だけ
   try {
     const body = await request.json().catch(() => ({}))
     const { token, ym, status } = body as { token?: string; ym?: string; status?: string }
@@ -131,21 +109,27 @@ export async function POST(request: NextRequest) {
     if (status === 'issue' && !note) {
       return NextResponse.json({ error: 'どこがまちがっているか書いてください / Hãy viết chỗ sai' }, { status: 400 })
     }
-    const { worker, sites } = await loadWorkerByToken(token)
+    const { main, worker, sites } = await loadByToken(token)
     if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     const todayIso = todayJstIso()
-    if (confirmTargetYm(todayIso) !== ym) {
+    if (staffTargetYm(main, worker, todayIso) !== ym) {
       return NextResponse.json({ error: 'いまは確認できない月です / Hiện không thể xác nhận tháng này' }, { status: 400 })
     }
-    // 数字は画面から受け取らず、サーバでもう一度数えて残す（あとで出面が変わったかを見分ける）
     const d = (await getAttendanceDoc(ym)) as Record<string, AttendanceEntry | null>
-    const summarize = makeSummarizer(sites, ym, d)
-    const [summary, range] = await Promise.all([summarize(worker, todayIso), summarize(worker, todayIso, todayIso)])
+    const ctx = confirmMonthContext(sites, ym, d)
+    const ready = await ctx.readiness(worker)
+    if (!ready.ready) {
+      return NextResponse.json({
+        error: '職長と事業責任者のチェックが終わってから確認してください / Hãy xác nhận sau khi tổ trưởng và người phụ trách kiểm tra xong',
+      }, { status: 409 })
+    }
+    // 数字は画面から受け取らず、サーバでもう一度数えて残す（あとで出面が変わったかを見分ける）
+    const [summary, range] = await Promise.all([ctx.summarize(worker, todayIso), ctx.summarize(worker, todayIso, todayIso)])
     const rec: AttConfirmDoc = {
       ym, workerId: worker.id, workerName: worker.name, status,
       ...(status === 'issue' ? { note } : {}),
       summary, fingerprint: summaryFingerprint(summary), at: new Date().toISOString(),
-      asOf: todayIso, fpAsOf: summaryFingerprint(range),
+      asOf: todayIso, fpAsOf: summaryFingerprint(range), afterApproval: true,
     }
     await setDoc(doc(db, 'attConfirm', `${ym}_${worker.id}`), rec)
     return NextResponse.json({ success: true, confirmation: rec })

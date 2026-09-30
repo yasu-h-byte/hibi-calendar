@@ -1,11 +1,12 @@
 'use client'
 /**
- * 月末の本人確認カード（2026-09-30）
+ * 本人の出面確認カード（2026-09-30）
  *
- * 月末3日（その月）と月初10日（前の月）に、スタッフのスマホの上のほうに出る。
+ * 前の月の全部の日に職長承認と最終承認（事業責任者）がそろったら、スタッフのスマホの上のほうに出る
+ * （そろうまでは「チェックが終わったらここに出ます」の1行だけ。締めたら出ない）。
  * 出勤・有給・会社の都合の休み・自分の都合の休み・未入力の数を見せ、
- * 「正しい」「まちがいがある（どこが）」を押してもらう。記録は事務所の月次集計に出る。
- * 数え方は lib/attendance-confirm.ts。
+ * 「正しい」「まちがいがある（どこが）」を押してもらう。記録は事務所の月次集計と月締めのチェックに出る。
+ * 数え方は lib/attendance-confirm.ts。前の月の出面は承認でロックされているので、毎日の保存では読み直さない。
  */
 import { useCallback, useEffect, useState } from 'react'
 import type { StaffMonthSummary, AttConfirmDoc } from '@/lib/attendance-confirm'
@@ -13,12 +14,16 @@ import { REST_REASONS } from '@/components/attendance/RestReportModal'
 
 interface ConfirmData {
   ym: string | null
+  /** 職長・事業責任者のチェック待ち */
+  waiting?: boolean
   summary?: StaffMonthSummary
   confirmation?: AttConfirmDoc | null
   stale?: boolean
+  /** 承認がそろっている（false なら押せない＝事務所が直している途中） */
+  ready?: boolean
 }
 
-export default function MonthConfirmCard({ token, reloadKey }: { token: string; reloadKey?: number }) {
+export default function MonthConfirmCard({ token }: { token: string }) {
   const [data, setData] = useState<ConfirmData | null>(null)
   const [mode, setMode] = useState<'view' | 'issue'>('view')
   const [note, setNote] = useState('')
@@ -32,9 +37,19 @@ export default function MonthConfirmCard({ token, reloadKey }: { token: string; 
       if (res.ok) setData(await res.json())
     } catch { /* 表示しないだけ */ }
   }, [token])
-  useEffect(() => { load() }, [load, reloadKey])
+  useEffect(() => { load() }, [load])
 
-  if (!data?.ym || !data.summary) return null
+  if (!data?.ym) return null
+  if (data.waiting) {
+    const wm = parseInt(data.ym.slice(4, 6))
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 mb-4 text-xs text-gray-500">
+        📋 {wm}月の出面の確認は、職長と事業責任者のチェックが全部終わったら、ここに出ます。<br />
+        Xác nhận chấm công tháng {wm} sẽ hiện ở đây sau khi tổ trưởng và người phụ trách kiểm tra xong.
+      </div>
+    )
+  }
+  if (!data.summary) return null
   const s = data.summary
   const c = data.confirmation
   const month = parseInt(data.ym.slice(4, 6))
@@ -148,7 +163,12 @@ export default function MonthConfirmCard({ token, reloadKey }: { token: string; 
             Lương sẽ được tính theo số này. Nếu có sai, hãy báo ngay.
           </p>
 
-          {mode === 'view' ? (
+          {data.ready === false ? (
+            <p className="mt-3 text-xs font-bold text-gray-500">
+              事務所が出面を直しています。チェックが終わったら、もう一度確認できます。<br />
+              Công ty đang sửa chấm công. Sau khi kiểm tra xong, bạn có thể xác nhận lại.
+            </p>
+          ) : mode === 'view' ? (
             <div className="grid grid-cols-2 gap-2 mt-3">
               <button type="button" disabled={sending} onClick={() => send('ok')}
                 className="bg-green-600 text-white rounded-xl py-3 font-bold active:bg-green-700 disabled:opacity-50">
