@@ -18,6 +18,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { paySheetFigures, PAID_LEAVE_DAYS, GRADE_LABELS, ageOn, type JpGrade } from '@/lib/jp-wage'
+import PaySheetModern from '@/components/wage/PaySheetModern'
 
 const n0 = (v: number) => Math.round(v).toLocaleString()
 
@@ -144,6 +145,13 @@ function SheetBody() {
   const fy = Number(data.effective.slice(0, 4)) + 1   // 2026-10-01改定 → 2027年度
   const HISTORY_YEARS = 10   // 給料表に載せる「ベース年収推移」の年度数（代表決定 2026-09-17）
   const targets = sheets.filter(f => f.newDaily != null && f.oldDaily != null)
+  // 2026-09-30: 新デザインが標準。?style=classic で従来（Excel 様式）
+  const classic = params.get('style') === 'classic'
+  const styleHref = (c: boolean) => {
+    const q = new URLSearchParams(params.toString())
+    if (c) q.set('style', 'classic'); else q.delete('style')
+    return `?${q.toString()}`
+  }
 
   return (
     <>
@@ -168,6 +176,11 @@ function SheetBody() {
         <span style={{ fontSize: 12, opacity: .85 }}>{jpDate(data.effective)} 改定 ／ {targets.length}名</span>
         <button onClick={() => window.print()} style={{ padding: '6px 14px', background: 'white', color: '#1B2A4A', borderRadius: 4, fontSize: 13, border: 'none', cursor: 'pointer', fontWeight: 700 }}>🖨 印刷 / PDF保存</button>
         <span style={{ fontSize: 11, opacity: .7 }}>1名につきA4横1枚</span>
+        <span style={{ fontSize: 12, marginLeft: 8 }}>
+          {classic
+            ? <a href={styleHref(false)} style={{ color: '#fde7b8' }}>新しいデザインで見る</a>
+            : <a href={styleHref(true)} style={{ color: '#cbd5e1' }}>従来の様式（Excel型）で見る</a>}
+        </span>
         {isDraft && <span style={{ fontSize: 12, fontWeight: 700, background: '#b91c1c', padding: '3px 10px', borderRadius: 4 }}>下書き（未確定）— 確定前の見本です。本人には配らないでください</span>}
       </div>
 
@@ -186,6 +199,19 @@ function SheetBody() {
           .sort((a, b) => a.year - b.year)
         const gradeLabel = GRADE_LABELS[f.grade as JpGrade] ?? f.grade
         const age = f.birthDate ? ageOn(f.birthDate, data.effective) : null
+
+        if (!classic) {
+          return (
+            <PaySheetModern key={f.workerId}
+              p={{
+                workerId: f.workerId, name: f.name, grade: f.grade, gradeLabel,
+                oldStep: f.oldStep, newStep: f.newStep, hyogo: f.hyogo, age,
+                pitches: f.pitches, comment: f.comment, discretionaryReason: f.discretionaryReason,
+              }}
+              fig={fig} points={points} fy={fy} effectiveLabel={jpDate(data.effective)} isDraft={isDraft}
+            />
+          )
+        }
 
         return (
           <div key={f.workerId} className="sheet">
