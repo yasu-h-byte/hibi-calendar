@@ -233,11 +233,13 @@ function SheetBody() {
         const hist = data.history?.[String(f.workerId)] ?? []
         // 2026-08-27 修正（給与総点検）: 補完点の年度が1年ズレていた。
         //   新年収(baseAnnual)は改定年度 fy の点、前年 fy-1 には改定前年収(prevBaseAnnual)。
-        //   履歴に同年度の点が既にあれば dedupe（先勝ち）で履歴側を採用する
+        //   同じ年度の点は dedupe（先勝ち）。fy-1・fy はこの計算値、それより前は履歴
         // 2026-09-17（代表決定）: 推移は直近10年度分だけ載せる（改定年度 fy を含む10点）。
         //   履歴は年次改定のたびに積み上がるので、放置すると表と折れ線が横に伸び続けて
         //   A4横1枚に収まらなくなる。データ自体（jpWageHistory）は全年度を保持する
-        const points = [...hist, { year: fy - 1, baseAnnual: fig.prevBaseAnnual }, { year: fy, baseAnnual: fig.baseAnnual }]
+        // 2026-09-30 点検: 前年度・改定年度の点は、上の数字（改定前＝実払いの日額）と同じ値を優先する
+        //   （履歴の前年度の点を先に採ると、グラフと「前年度 ¥…」が食い違っていた）
+        const points = [{ year: fy - 1, baseAnnual: fig.prevBaseAnnual }, { year: fy, baseAnnual: fig.baseAnnual }, ...hist]
           .filter((p, i, a) => a.findIndex(x => x.year === p.year) === i)
           .filter(p => p.year > fy - HISTORY_YEARS && p.year <= fy)  // 次の年度以降の点は載せない（2026-09-30 点検）
           .sort((a, b) => a.year - b.year)
