@@ -312,6 +312,17 @@ export async function GET(request: NextRequest) {
     // 開始日順にソート（帰国中→予定の順で見やすく）
     homeLeaves.sort((a, b) => a.startDate.localeCompare(b.startDate))
 
+    // 会社都合休と自分都合の休みの取り違えの疑い（lib/rest-mismatch.ts・2026-09-30）。
+    //   この現場（工種サイトは親にまとめる）の分だけ。職長承認の前に画面で気づけるように
+    const familyId = calendarSiteIdOf(main.sites, siteId)
+    const { detectRestMismatches } = await import('@/lib/rest-mismatch')
+    const restMismatch = detectRestMismatches(
+      (att.d || {}) as Record<string, import('@/types').AttendanceEntry>, ym,
+      sid => calendarSiteIdOf(main.sites, sid),
+      (fam, day) => fam === familyId && calendarDays ? calendarDays[String(day)] === 'work' : new Date(y, m - 1, day).getDay() !== 0,
+    ).filter(x => x.familyId === familyId)
+      .map(x => ({ workerId: x.workerId, day: x.day, comp: x.comp, worked: x.worked }))
+
     return NextResponse.json({
       site: { id: site.id, name: site.name, workType: site.workType || undefined, foreman: effectiveForeman, foremanName, foremanNote,
         // 運転手当を出さない現場（工種サイトは親の指定に従う・2026-09-30）
@@ -338,6 +349,7 @@ export async function GET(request: NextRequest) {
       sites: orderSitesWithWorkTypes(main.sites).map(s => ({ id: s.id, name: s.name, archived: s.archived, parentId: s.parentId })),
       calendarDays,
       homeLeaves,
+      restMismatch,
       // 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25）。
       // workTypeSites が空 = この現場には工種が無い（今までどおりの画面のまま）
       workTypeSites,

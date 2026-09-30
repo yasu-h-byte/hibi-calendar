@@ -22,6 +22,7 @@
  * この画面では PC グリッドと同じく「有給・欠勤・0.6補の後付け」と「既存エントリの修正」だけ許す。
  */
 
+import RestMismatchBanner from '../components/RestMismatchBanner'
 import { siteLeaderLabel } from '@/lib/companies'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
@@ -64,6 +65,8 @@ interface GridData {
   calendarDays: Record<string, DayType> | null
   sites: { id: string; name: string; archived?: boolean }[]
   homeLeaves: { workerId: number; startDate: string; endDate: string }[]
+  /** 休みの区別の取り違えの疑い（lib/rest-mismatch.ts・2026-09-30） */
+  restMismatch?: { workerId: number; day: number; comp: number; worked: number }[]
 
   // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25）。空=この現場には工種が無い ──
   workTypeSites?: { id: string; name: string; workType: string }[]
@@ -668,6 +671,12 @@ export default function ForemanMobilePage() {
       {/* ═══ 出面タブ ═══ */}
       {tab === 'day' && (
         <>
+          {/* 休みの区別の取り違えの疑い（承認の前に気づけるように・2026-09-30） */}
+          {data && (data.restMismatch?.length || 0) > 0 && (
+            <div className="mt-3">
+              <RestMismatchBanner items={data.restMismatch} workers={data.workers} month={m} />
+            </div>
+          )}
           {/* 日付ナビ */}
           <div className="flex items-center justify-between mt-3 bg-white rounded-xl border border-gray-200 px-2 py-2">
             <button onClick={() => navDay(-1)} className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-bold">◀ 前日</button>

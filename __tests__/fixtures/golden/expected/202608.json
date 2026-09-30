@@ -711,6 +711,9 @@
    "suspectCompRestDays": [
     20
    ],
+   "restMismatchDays": [
+    20
+   ],
    "workerPrescribedDays": 21,
    "calendarBlankDays": 7,
    "guaranteeDays": 20,
@@ -1027,6 +1030,9 @@
     25,
     26
    ],
+   "restMismatchDays": [
+    20
+   ],
    "workerPrescribedDays": 21,
    "calendarBlankDays": 3,
    "guaranteeDays": 20,
@@ -1090,6 +1096,9 @@
    "dispatchDeduction": 0,
    "manDays": 13,
    "personalAbsenceDays": 1,
+   "restMismatchDays": [
+    20
+   ],
    "workerPrescribedDays": 21,
    "calendarBlankDays": 5,
    "guaranteeDays": 20,
@@ -1276,6 +1285,9 @@
    "manDays": 12,
    "personalAbsenceDays": 1,
    "suspectCompRestDays": [
+    20
+   ],
+   "restMismatchDays": [
     20
    ],
    "workerPrescribedDays": 21,

@@ -88,6 +88,7 @@ interface WorkerMonthly {
   calendarBlankDays?: number
   /** 「その他」の休みでメモが会社都合を指している日（0.6補の選び間違いの疑い） */
   suspectCompRestDays?: number[]
+  restMismatchDays?: number[]
   compAllowance?: number
   regularWorkDays?: number
   // 出向情報
@@ -1457,6 +1458,15 @@ function MonthlyPageInner() {
                             title={`${(w.suspectCompRestDays || []).join('・')}日は「その他」の休み（欠勤）で登録されていますが、メモが会社都合（60%・現場休みなど）を指しています。会社の都合の休みなら、出面を「0.6補」に直してください。このままだと欠勤として計算されます。`}
                           >
                             ⚠ 会社都合の休み？ {(w.suspectCompRestDays || []).join('・')}日
+                          </span>
+                        )}
+                        {/* 2026-09-30: 自分の都合の休みの日に、同じ現場でほかの人が0.6補（人数調整）＝取り違えの疑い */}
+                        {(w.restMismatchDays?.length || 0) > 0 && (
+                          <span
+                            className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold align-middle bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                            title={`${(w.restMismatchDays || []).join('・')}日は「自分の都合の休み」ですが、同じ日に同じ現場でほかの人が現場休み（0.6補）です。人数調整で休ませたのなら、出面を「0.6補」に直してください。このままだと欠勤として最低保証から引かれます。`}
+                          >
+                            ⚠ 休みの区別？ {(w.restMismatchDays || []).join('・')}日
                           </span>
                         )}
                         {/* 2026-09-30: 本人の出面確認（スタッフのスマホ）。連絡は押すと中身を見て対応済みにできる */}

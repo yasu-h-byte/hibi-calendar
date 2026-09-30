@@ -1,5 +1,6 @@
 import { db } from './firebase'
 import { isSuspectCompanyRest } from './attendance-confirm'
+import { detectRestMismatches } from './rest-mismatch'
 import { doc, getDoc, registerMainWriteHook } from '@/lib/fsdb'
 import {
   AttendanceEntry, calcActualHours, calcDayShiftHours, calcNightShiftHours,
@@ -1232,6 +1233,8 @@ export interface WorkerMonthly {
   _absenceDaySeen?: Set<string>
   /** 「その他」の休みでメモが会社都合を指している日（0.6補の選び間違いの疑い・2026-09-30）。計算は変えない */
   suspectCompRestDays?: number[]
+  /** 自分の都合の休みなのに、同じ日・同じ現場でほかの人が現場休み（0.6補）だった日（取り違えの疑い・lib/rest-mismatch.ts・2026-09-30） */
+  restMismatchDays?: number[]
   siteOffDays: number
   examDays: number     // 試験日数（給与計算では欠勤控除対象から除外、原価には計上しない）
   cost: number
@@ -1738,6 +1741,20 @@ export function computeMonthly(
     if (min > 0 && from && ym >= from && wm.actualWorkDays > 0) {
       // 金額は丸めない正確な時間から算出する（3桁で丸めると1円ズレる）。表示側で丸める
       wm.breakShortenHours = wm.actualWorkDays * min / 60
+    }
+  }
+
+  // 会社都合休と自分都合の休みの取り違えの疑い（lib/rest-mismatch.ts・2026-09-30）。表示だけで金額は変えない
+  {
+    const parentOf = new Map(main.sites.map(st => [st.id, (st as { parentId?: string }).parentId || st.id]))
+    const yN = parseInt(ym.slice(0, 4)), mN = parseInt(ym.slice(4, 6))
+    const mism = detectRestMismatches(attD, ym, sid => parentOf.get(sid) || sid, (fam, day) => {
+      const cal = calendarDays?.[fam]
+      return cal ? cal[String(day)] === 'work' : new Date(yN, mN - 1, day).getDay() !== 0
+    })
+    for (const mm of mism) {
+      const wm = workerMap.get(mm.workerId)
+      if (wm) (wm.restMismatchDays ||= []).push(mm.day)
     }
   }
 

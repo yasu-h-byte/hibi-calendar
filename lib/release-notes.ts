@@ -79,6 +79,16 @@ export const RELEASE_NOTES: Announcement[] = [
     publishedBy: '日比靖仁',
   },
   {
+    id: 'rn_20260930_rest_mismatch',
+    title: '休みの区別の取り違えを知らせる警告',
+    content:
+      '「自分の都合の休み」なのに、同じ日に同じ現場でほかの人が現場休み（0.6補）で休んでいる記録を、出面の画面（PC・職長スマホ）の上と月次集計の名前の横（⚠ 休みの区別？）に出します。\n'
+      + '人数調整で休ませた日なら、その人も現場休み（0.6補）に直してください。自分の都合のままだと、欠勤として最低保証から引かれます。',
+    category: 'new',
+    publishedAt: '2026-10-01T02:00:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20260930_confirm_issue_bell',
     title: '本人からの出面の連絡を通知ベルに／対応済みにできるように',
     content:

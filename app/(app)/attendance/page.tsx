@@ -26,6 +26,7 @@ import NightShiftModal, { NightShiftValue } from './components/NightShiftModal'
 import DriverModal from './components/DriverModal'
 import HistoryModal from './components/HistoryModal'
 import BulkEntryModal, { type BulkItem } from './components/BulkEntryModal'
+import RestMismatchBanner from './components/RestMismatchBanner'
 import { canDriveDefault } from '@/lib/allowance'
 import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
 
@@ -1390,6 +1391,8 @@ export default function AttendanceGridPage() {
 
       {/* 帰国情報バナー（components/attendance/HomeLeaveBanner.tsx に集約） */}
       <HomeLeaveBanner homeLeaves={data?.homeLeaves} />
+      {/* 休みの区別の取り違えの疑い（職長承認の前に気づけるように・2026-09-30） */}
+      {data && <RestMismatchBanner items={data.restMismatch} workers={data.workers} month={data.month} />}
 
       {/* 退職予定バナー（components/attendance/UpcomingRetirementsBanner.tsx に集約） */}
       <UpcomingRetirementsBanner retirements={data?.upcomingRetirements} />

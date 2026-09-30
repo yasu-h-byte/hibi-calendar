@@ -102,6 +102,8 @@ export interface GridData {
   foremanOverride: { name: string; note: string } | null
   calendarDays: Record<string, DayType> | null
   homeLeaves?: HomeLeaveInfo[]
+  /** 自分の都合の休みなのに、同じ日・同じ現場でほかの人が現場休み（0.6補）だった記録（取り違えの疑い・lib/rest-mismatch.ts） */
+  restMismatch?: { workerId: number; day: number; comp: number; worked: number }[]
   upcomingRetirements?: UpcomingRetirement[]
   /** 運転記録（day → {am,pm}）。運転手当の元データ */
   drivers?: Record<number, { am: number[]; pm: number[] }>
