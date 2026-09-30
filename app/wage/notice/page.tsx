@@ -260,7 +260,8 @@ function SheetBody() {
               }}
               fig={fig} points={points} fy={fy} effectiveLabel={jpDate(data.effective)} isDraft={isDraft}
             />
-            {withGuide && <WageSystemGuide grade={f.grade} age={age} fy={fy} effectiveLabel={jpDate(data.effective)} paidLeaveDays={fig.paidLeaveDays} />}
+            {/* 処遇固定の人（梶原さん）は号俸制の外なので「給料のしくみ」は付けない（代表 2026-10-01） */}
+            {withGuide && f.status !== 'fixed' && <WageSystemGuide grade={f.grade} age={age} fy={fy} effectiveLabel={jpDate(data.effective)} paidLeaveDays={fig.paidLeaveDays} />}
             </Fragment>
           )
         }

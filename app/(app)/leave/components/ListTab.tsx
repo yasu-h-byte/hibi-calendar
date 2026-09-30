@@ -204,6 +204,22 @@ export default function ListTab({ visible, filteredWorkers, loading, onEdit, asO
                         </span>
                       </div>
                     )}
+                    {/* 日本人の前の期の残り＝賞与で買取（2026-10-01）。今の期の残数とは別に出す */}
+                    {w.prevPeriod && (w.prevPeriod.remaining > 0 || w.prevPeriod.buyoutDays > 0) && (
+                      <div className="flex items-center gap-2 text-xs" title={`前の期（${w.prevPeriod.grantDate}〜${w.prevPeriod.endDate}）: もらった ${w.prevPeriod.grantDays}日・取った ${w.prevPeriod.taken}日`}>
+                        <span className={`px-1.5 py-0.5 rounded font-bold text-[10px] whitespace-nowrap ${
+                          w.prevPeriod.remaining > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                        }`}>
+                          前の期
+                        </span>
+                        <span className="tabular-nums font-medium text-gray-700 dark:text-gray-200 min-w-[32px] text-right">
+                          {w.prevPeriod.remaining > 0 ? w.prevPeriod.remaining : w.prevPeriod.buyoutDays}<span className="text-[10px] text-gray-400 ml-0.5">日</span>
+                        </span>
+                        <span className={`text-[10px] ${w.prevPeriod.remaining > 0 ? 'text-amber-700 dark:text-amber-400 font-semibold' : 'text-gray-400'}`}>
+                          {w.prevPeriod.remaining > 0 ? '賞与で買取予定' : '賞与で買取済み'}
+                        </span>
+                      </div>
+                    )}
                     {/* 調整がある場合のみ副次情報として */}
                     {w.adjustment > 0 && (
                       <div className="text-[10px] text-gray-400">

@@ -28,6 +28,8 @@ export interface PLWorker {
   grantRemaining?: number
   grantExpiryDate?: string
   grantExpiryStatus?: 'ok' | 'warning' | 'expired'
+  /** 日本人の前の期（〜9/30）の残り＝賞与で買い取る日数。remaining が買取待ち、buyoutDays が買取済み（2026-10-01） */
+  prevPeriod?: { grantDate: string; endDate: string; grantDays: number; taken: number; buyoutDays: number; remaining: number }
 }
 
 export type OrgFilter = 'all' | 'hibi' | 'hfu'

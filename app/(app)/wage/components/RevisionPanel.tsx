@@ -581,7 +581,7 @@ export default function RevisionPanel() {
           effective={data.effective}
           rows={Object.entries(data.mypageTokens).map(([id, v]) => {
             const r = data.revision.rows.find(x => String(x.member.id) === id)
-            return { id, name: v.name, token: v.token, hasSheet: !!r && r.newTotal != null && (r.status === 'ok' || r.status === 'fixed') }
+            return { id, name: v.name, token: v.token, hasSheet: !!r && r.newTotal != null && (r.status === 'ok' || r.status === 'fixed'), fixed: r?.status === 'fixed' }
           })}
         />
       )}
@@ -646,18 +646,19 @@ function ageAt(birthDate: string, onDateIso: string): number {
 /** 本人へ送る一覧。給料表は一人分を開いて「印刷 → PDFに保存」、URLと文面はコピーしてLINE等で送る */
 function SendList({ effective, rows }: {
   effective: string
-  rows: { id: string; name: string; token: string; hasSheet: boolean }[]
+  rows: { id: string; name: string; token: string; hasSheet: boolean; fixed?: boolean }[]
 }) {
   const [copied, setCopied] = useState<string | null>(null)
   const fy = Number(effective.slice(0, 4)) + 1
   const [y, m, d] = effective.split('-').map(Number)
   const url = (t: string) => `${typeof window !== 'undefined' ? window.location.origin : ''}/mypage/${t}`
-  const message = (r: { name: string; token: string; hasSheet: boolean }) => [
+  const message = (r: { name: string; token: string; hasSheet: boolean; fixed?: boolean }) => [
     `${r.name.replace(/\s/g, '')}さん`,
     'お疲れさまです。',
     ...(r.hasSheet ? [
       `${fy}年度（${y}年${m}月${d}日改定）の給料表をお送りします。`,
-      'あわせて、給料のしくみを説明した1枚も付けています。',
+      // 処遇固定の人は号俸制の外なので「給料のしくみ」は付けない（代表 2026-10-01）
+      ...(r.fixed ? [] : ['あわせて、給料のしくみを説明した1枚も付けています。']),
       '',
     ] : []),
     '有給の残り日数や道具代の残りを確認できる「マイページ」を用意しました。',
