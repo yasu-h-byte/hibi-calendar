@@ -561,7 +561,8 @@ npm run test:ui   # ブラウザUI付き
 `calculateVietnameseSalary` の引数 `personalAbsenceDays`（出面の「欠」の日数 = `wm.restDays`）。9月分以降だけ渡す（`PAYROLL_RULES`）。
 - 本人の保証日数 `personalGuarantee = 保証枠 − min(欠, 保証枠)`
 - 枠内補償日 `compInGuaranteeDays = min(補償日, max(0, personalGuarantee − 出勤 − 有給 − 試験))`
-- 欠勤日数 = 欠（保証から引いた分）＋ max(0, personalGuarantee − 出勤 − 有給 − 試験 − 枠内補償日)
+- 欠勤日数 = min( 欠 ＋ max(0, personalGuarantee − 算入日数), max(0, 20 − 算入日数) )。算入日数 = 出勤 ＋ 有給 ＋ 試験 ＋ 枠内補償日
+  - 後ろの上限は「保証は最低ライン」の意味。実際に働いた日より少なく払わない（2026-09-30 修正。上限なしだと稼働21日に 出20＋欠1 が19日分、稼働22日に 出21＋欠1 が20日分になっていた）
 - 稼働日の空欄は `personalAbsenceDays` に入れない（誤検出があり得るため。従来どおり不足分として控除）
 
 ## 2026-09-15 追記: 現場都合休（0.6補償）は保証枠内で100%（2026年8月分〜）

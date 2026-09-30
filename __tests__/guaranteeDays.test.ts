@@ -88,9 +88,26 @@ describe('カレンダー20日以上の月は従来どおり（20日枠）', () 
     const { w, days } = run(21, 17, 2, 2, 0)
     expect(w.absence).toBe(2); expect(days).toBe(18.6)
   })
-  test('21日中 出20＋欠1 → 19日保証（旧ルールでは20日分だった自己都合の欠勤を控除）', () => {
+  // 保証は最低ライン。実際に働いた日より少なく払わない（2026-09-30 修正）
+  test('21日中 出20＋欠1 → 働いた20日分（全日出勤の21日分より1日少ない）', () => {
     const { w, days } = run(21, 20, 0, 1, 0)
-    expect(w.absence).toBe(1); expect(days).toBe(19)
+    expect(w.absence).toBe(0); expect(days).toBe(20)
+  })
+  test('22日中 出21＋欠1 → 働いた21日分（20日分に削らない）', () => {
+    const { days } = run(22, 21, 0, 1, 0)
+    expect(days).toBe(21)
+  })
+  test('22日中 出20＋欠2 → 働いた20日分', () => {
+    const { days } = run(22, 20, 0, 2, 0)
+    expect(days).toBe(20)
+  })
+  test('18日中 出17＋欠1 → 19日分（閑散月の保証から1日減る）', () => {
+    const { days } = run(18, 17, 0, 1, 0)
+    expect(days).toBe(19)
+  })
+  test('21日中 出19＋現場都合休1＋欠1 → 19.6日分（全日出勤20＋現場都合休1の20.6日分より1日少ない）', () => {
+    const { days } = run(21, 19, 1, 1, 0)
+    expect(days).toBe(19.6)
   })
   test('8月分（202608）は旧ルール: 21日中 出18＋現場都合休2＋欠1 → 20日分', async () => {
     const { PAYROLL_RULES } = await import('@/lib/compute')

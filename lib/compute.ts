@@ -3149,7 +3149,14 @@ export function calculateVietnameseSalary(
   //   追加所定・有給日給の枠（baseDays=20）はこれまでどおり
   // 2026-09-30（案A・9月分〜）: 欠勤日数 = 本人の欠勤（保証から引いた分）＋ その人の保証日数に届かなかった分。
   //   personalAbsenceDays 未指定（8月分まで）は personalAbsence=0 なので従来の式と同じ
-  const absentDays = personalAbsence + Math.max(0, personalGuarantee - regularWorkDays - plUsed - examDays - compInGuaranteeDays)
+  //   ただし保証は「最低ライン」。実際に出勤・有給・試験などで埋めた日数より少なく払うことはしない
+  //   （2026-09-30 修正: 稼働21日に 出20＋欠1 が19日分、稼働22日に 出21＋欠1 が20日分になり、
+  //    働いた日の賃金まで削っていた。上限 = 20日枠に届かなかった日数）
+  const countedDays = regularWorkDays + plUsed + examDays + compInGuaranteeDays
+  const absentDays = Math.min(
+    personalAbsence + Math.max(0, personalGuarantee - countedDays),
+    Math.max(0, baseDays - countedDays),
+  )
   const absentDeduction = floorYen(hourlyRate * 7 * absentDays)  // 控除: 切り捨て（過少支払い防止）
 
   const salaryNet = fixedBasePay + additionalAllowance + paidLeaveAllowance + nonStatutoryOTAllowance + otAllowance

@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260930_personal_absence',
+    title: 'ベトナム人の20日保証から、自分の都合の欠勤を引きます（9月分から）',
+    content:
+      '9月分の給与から、出面の「欠」1日ごとに20日保証が1日減ります（欠1日で19日保証）。会社の都合の休み（0.6補）は今までどおり保証の中で100%です。\n'
+      + '働いた日の分は必ず払います（20日以上働いた人が欠で減ることはありません）。8月分までの支払いはそのままです。\n'
+      + 'スタッフ向けの説明（日本語＋ベトナム語）は「資料」の「給料の計算のしかた（2026年9月分から）」にあります。',
+    category: 'info',
+    publishedAt: '2026-09-30T21:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20260926_calendar_sign',
     title: '【修正】ベルの「カレンダー未署名」の人数を画面と同じに',
     content:
