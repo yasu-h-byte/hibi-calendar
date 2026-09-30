@@ -30,6 +30,8 @@ interface Frozen {
   newStep: number | null
   hyogo: string
   comment: string | null
+  /** 代表加算の理由（本人向けのメッセージとして給料表に載せる・2026-09-30） */
+  discretionaryReason?: string | null
   birthDate: string | null
   pitches: null | { hyogo: number; age: number; special: number; discretionary: number; total: number }
   oldDaily: number | null
@@ -40,7 +42,7 @@ interface Frozen {
 /** 下書き（未確定）のときに、確定前の計算結果から給料表を組み立てるための形（2026-09-30） */
 interface DraftRow {
   status: string
-  member: { id: number; name: string; grade: string; currentStep: number | null; birthDate: string | null; hyogo: string; adjustment?: number }
+  member: { id: number; name: string; grade: string; currentStep: number | null; birthDate: string | null; hyogo: string; adjustment?: number; discretionaryReason?: string }
   result: null | { hyogoPitch: number; agePitch: number; specialPitch: number; discretionaryPitch: number; totalPitch: number; newStep: number; raisePerDay: number }
   oldTotal: number | null
   newTotal: number | null
@@ -123,6 +125,7 @@ function SheetBody() {
       workerId: r.member.id, name: r.member.name, status: r.status, grade: r.member.grade,
       oldStep: r.member.currentStep, newStep: r.result!.newStep, hyogo: r.member.hyogo,
       comment: data.entries?.[String(r.member.id)]?.comment ?? null,
+      discretionaryReason: r.member.discretionaryReason ?? null,
       birthDate: r.member.birthDate,
       pitches: { hyogo: r.result!.hyogoPitch, age: r.result!.agePitch, special: r.result!.specialPitch, discretionary: r.result!.discretionaryPitch, total: r.result!.totalPitch },
       oldDaily: r.oldTotal, newDaily: r.newTotal, raisePerDay: r.result!.raisePerDay, adjustment: r.member.adjustment ?? null,
@@ -206,7 +209,18 @@ function SheetBody() {
                 <div>所属　　<span style={{ marginLeft: 14 }}>とび事業部</span></div>
                 <div>役職　　<span style={{ marginLeft: 14 }}>{gradeLabel}（{f.grade === 'doko' ? '土工' : f.grade}）</span></div>
               </div>
-              <div style={{ flex: 1 }} />
+              {/* 代表加算のメッセージ（2026-09-30）: 号数の表の左隣の余白に置く（段の高さを増やさず、A4横1枚に収める）。
+                  代表加算がある人だけ。文章は年次改定の「代表加算」欄に書いたもの */}
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
+                {(f.pitches?.discretionary ?? 0) !== 0 && f.discretionaryReason?.trim() && (
+                  <div style={{ border: '1px solid #2F5597', padding: '4px 8px', fontSize: 9.5, lineHeight: 1.6, maxWidth: 380 }}>
+                    <div style={{ fontWeight: 700, color: '#2F5597' }}>
+                      代表加算 {(f.pitches!.discretionary > 0 ? '+' : '') + f.pitches!.discretionary}号 について
+                    </div>
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{f.discretionaryReason}</div>
+                  </div>
+                )}
+              </div>
               {/* 調整の内訳 */}
               <table className="g" style={{ borderCollapse: 'collapse' }}>
                 <thead>

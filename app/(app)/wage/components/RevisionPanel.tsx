@@ -516,7 +516,7 @@ export default function RevisionPanel() {
                                 <input
                                   type="text" disabled={busy || applied}
                                   defaultValue={e.discretionaryReason || ''}
-                                  placeholder={dp !== 0 ? '理由（必須）' : '理由'}
+                                  placeholder={dp !== 0 ? '本人へのメッセージ（必須・給料表に載ります）' : '本人へのメッセージ'}
                                   onBlur={ev => { if (ev.target.value !== (e.discretionaryReason || '')) setEntry(m.id, { discretionaryReason: ev.target.value }) }}
                                   className={`flex-1 min-w-[200px] border rounded-lg px-3 py-2 text-xs dark:bg-gray-800 ${
                                     dp !== 0 && !e.discretionaryReason?.trim()
@@ -526,7 +526,7 @@ export default function RevisionPanel() {
                               </div>
                               {dp !== 0 && (
                                 <p className="text-[11px] text-gray-500 mt-1.5">
-                                  号を {signedPitch(dp)} 動かします。<b>理由は給料表と監査証跡に残ります。</b>
+                                  号を {signedPitch(dp)} 動かします。<b>この文章は本人へのメッセージとして、給料表の号数の表の下にそのまま載ります</b>（監査証跡にも残ります）。
                                 </p>
                               )}
                             </div>
