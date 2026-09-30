@@ -61,6 +61,8 @@ interface Payload {
   }
   /** 改定前に実際に払っている日額（workerId → 円） */
   paidBefore?: Record<string, number>
+  /** 本人のマイページの合言葉（workerId → {name, token}） */
+  mypageTokens?: Record<string, { name: string; token: string }>
   meta: { specialReasons: SpecialReason[]; hyogoPitch: Record<Hyogo, number>; firstRevisionMinMonths: number }
 }
 
@@ -570,6 +572,17 @@ export default function RevisionPanel() {
         </section>
       )}
 
+      {/* ── 本人へ送る（2026-09-30）── 一人ずつ、給料表（PDF）とマイページのURLを送る */}
+      {applied && data.mypageTokens && (
+        <SendList
+          effective={data.effective}
+          rows={Object.entries(data.mypageTokens).map(([id, v]) => {
+            const r = data.revision.rows.find(x => String(x.member.id) === id)
+            return { id, name: v.name, token: v.token, hasSheet: !!r && r.newTotal != null && (r.status === 'ok' || r.status === 'fixed') }
+          })}
+        />
+      )}
+
       {/* ── 確定の取り消し（2026-09-30）── */}
       {applied && (
         <section className="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900/50 p-4 flex flex-wrap items-center justify-between gap-3">
@@ -625,4 +638,65 @@ function ageAt(birthDate: string, onDateIso: string): number {
   let age = oy - by
   if (om < bm || (om === bm && od < bd)) age -= 1
   return age
+}
+
+/** 本人へ送る一覧。給料表は一人分を開いて「印刷 → PDFに保存」、URLと文面はコピーしてLINE等で送る */
+function SendList({ effective, rows }: {
+  effective: string
+  rows: { id: string; name: string; token: string; hasSheet: boolean }[]
+}) {
+  const [copied, setCopied] = useState<string | null>(null)
+  const fy = Number(effective.slice(0, 4)) + 1
+  const [y, m, d] = effective.split('-').map(Number)
+  const url = (t: string) => `${typeof window !== 'undefined' ? window.location.origin : ''}/mypage/${t}`
+  const message = (r: { name: string; token: string; hasSheet: boolean }) => [
+    `${r.name.replace(/\s/g, '')}さん`,
+    'お疲れさまです。',
+    ...(r.hasSheet ? [
+      `${fy}年度（${y}年${m}月${d}日改定）の給料表をお送りします。`,
+      'あわせて、給料のしくみを説明した1枚も付けています。',
+      '',
+    ] : []),
+    '有給の残り日数や道具代の残りを確認できる「マイページ」を用意しました。',
+    '下のURLをスマホで開いて、ブックマーク（ホーム画面に追加）しておいてください。',
+    url(r.token),
+    '※ このURLはご本人専用です。ほかの人には送らないでください。',
+    '',
+    'わからないことがあれば、いつでも聞いてください。',
+  ].join('\n')
+  const copy = async (key: string, text: string) => {
+    try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 1500) }
+    catch { alert('コピーできませんでした') }
+  }
+  const btn = 'px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-xs font-bold hover:bg-gray-50 dark:hover:bg-gray-700 whitespace-nowrap'
+  return (
+    <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+      <div>
+        <b className="text-sm">本人へ送る</b>
+        <div className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
+          一人ずつ「給料表を開く」→ 印刷 →「PDFに保存」（ファイル名に名前が入ります）。送る文面にはマイページのURLが入っています。
+          URLはご本人専用の合言葉なので、グループではなく1対1で送ってください。
+        </div>
+      </div>
+      <div className="divide-y divide-gray-100 dark:divide-gray-700">
+        {rows.map(r => (
+          <div key={r.id} className="flex flex-wrap items-center gap-2 py-2">
+            <span className="w-28 text-sm font-bold">{r.name}</span>
+            {r.hasSheet ? (
+              <a href={`/wage/notice?effective=${effective}&worker=${r.id}`} target="_blank" rel="noopener noreferrer"
+                className={`${btn} bg-hibi-navy text-white border-hibi-navy hover:opacity-90 hover:bg-hibi-navy`}>🖨 給料表を開く</a>
+            ) : (
+              <span className="text-[11px] text-gray-400 w-[104px]">給料表なし</span>
+            )}
+            <button type="button" className={btn} onClick={() => copy(`u${r.id}`, url(r.token))}>
+              {copied === `u${r.id}` ? '✓ コピーしました' : '🔗 URLをコピー'}
+            </button>
+            <button type="button" className={btn} onClick={() => copy(`m${r.id}`, message(r))}>
+              {copied === `m${r.id}` ? '✓ コピーしました' : '✉ 送る文面をコピー'}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
 }

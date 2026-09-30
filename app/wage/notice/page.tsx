@@ -145,7 +145,14 @@ function SheetBody() {
 
   const fy = Number(data.effective.slice(0, 4)) + 1   // 2026-10-01改定 → 2027年度
   const HISTORY_YEARS = 10   // 給料表に載せる「ベース年収推移」の年度数（代表決定 2026-09-17）
+  // 2026-09-30: 一人分だけ開く（?worker=ID）。本人へ個別に送るため。PDF保存時のファイル名に名前が入るよう title も変える
+  const onlyWorker = params.get('worker')
   const targets = sheets.filter(f => f.newDaily != null && f.oldDaily != null)
+    .filter(f => !onlyWorker || String(f.workerId) === onlyWorker)
+  if (typeof document !== 'undefined') {
+    const one = onlyWorker ? targets[0] : null
+    document.title = one ? `給料表_${one.name.replace(/\s/g, '')}_${fy}年度` : `給料表_${fy}年度`
+  }
   // 2026-09-30: 新デザインが標準。?style=classic で従来（Excel 様式）
   const classic = params.get('style') === 'classic'
   // 2026-09-30: 各人の給料表の後ろに「給料のしくみ」を1枚付ける（?guide=0 で付けない）

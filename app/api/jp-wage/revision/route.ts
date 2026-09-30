@@ -135,6 +135,13 @@ export async function GET(request: NextRequest) {
     const v = w.rateFrom === effective && w.prevRate != null ? w.prevRate : w.rate
     if (typeof v === 'number' && v > 0) paidBefore[String(m.id)] = v
   }
+  // 本人へ送る「マイページ」の合言葉（2026-09-30: 給料表と一緒に一人ずつ送るため）。
+  //   この API は代表・事業責任者だけが呼べる（requireExecutiveAuth）。在籍中の日本人（役員・事務を除く）全員分
+  const mypageTokens: Record<string, { name: string; token: string }> = {}
+  for (const w of rosterWorkers) {
+    if (w.retired || (w.visaType && w.visaType !== 'none') || w.jobType === 'yakuin' || w.jobType === 'jimu') continue
+    if (w.token) mypageTokens[String(w.id)] = { name: w.name, token: w.token }
+  }
   // 2026-09-03 修正: 確定済みの改定は「凍結した改定前の号」を現在値として再計算する。
   //   旧: 人員マスタの（反映後の）号を現在値にして計算し直していたため、確定直後の画面が
   //   「現在13号→新19号」のように評価分をもう一度乗せて見え、二重昇給と誤認された。
@@ -162,6 +169,7 @@ export async function GET(request: NextRequest) {
     frozen: docData.frozen ?? null,
     revision,
     paidBefore,
+    mypageTokens,
     meta: {
       specialReasons: SPECIAL_REASONS,
       hyogoPitch: HYOGO_PITCH,
