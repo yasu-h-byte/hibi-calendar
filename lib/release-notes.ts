@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260930_jp_wage_undo',
+    title: '日本人の年次改定: 確定の取り消し・未確定の給料表',
+    content:
+      '賃金制度 → 年次改定で、確定した改定を「確定を取り消す」で下書きに戻せるようにしました（人員マスタの日額も改定前に戻ります。評語・コメントは残ります）。\n'
+      + '確定は「確定」と入力しないと進まないようにしました。評語・コメントの入力は自動で保存されるので、保存のために確定を押す必要はありません。\n'
+      + '確定前でも「給料表の見本（未確定）」で仕上がりを確認できます。',
+    category: 'new',
+    publishedAt: '2026-09-30T23:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['owner'],
+  },
+  {
     id: 'rn_20260930_staff_confirm',
     title: 'スタッフのスマホ: 会社の都合の休み・欠勤の金額・月末の本人確認',
     content:

@@ -37,10 +37,20 @@ interface Frozen {
   raisePerDay: number
   adjustment: number | null
 }
+/** 下書き（未確定）のときに、確定前の計算結果から給料表を組み立てるための形（2026-09-30） */
+interface DraftRow {
+  status: string
+  member: { id: number; name: string; grade: string; currentStep: number | null; birthDate: string | null; hyogo: string; adjustment?: number }
+  result: null | { hyogoPitch: number; agePitch: number; specialPitch: number; discretionaryPitch: number; totalPitch: number; newStep: number; raisePerDay: number }
+  oldTotal: number | null
+  newTotal: number | null
+}
 interface Payload {
   effective: string
   status: 'draft' | 'applied'
   frozen: Frozen[] | null
+  revision?: { rows: DraftRow[] }
+  entries?: Record<string, { comment?: string }>
   /** workerId → 過去のベース年収 [{year, baseAnnual}] */
   history?: Record<string, { year: number; baseAnnual: number }[]>
 }
@@ -105,13 +115,24 @@ function SheetBody() {
 
   if (err) return <div style={{ padding: 24, color: '#b91c1c' }}>エラー: {err}</div>
   if (!data) return <div style={{ padding: 24, color: '#666' }}>読み込み中…</div>
-  if (data.status !== 'applied' || !data.frozen) {
+  // 2026-09-30: 下書きでも「未確定」と印字して見られるようにする（コメントを書きながら仕上がりを確認するため）
+  const isDraft = data.status !== 'applied' || !data.frozen
+  const sheets: Frozen[] = !isDraft ? data.frozen! : (data.revision?.rows || [])
+    .filter(r => r.status === 'ok' && r.result)
+    .map(r => ({
+      workerId: r.member.id, name: r.member.name, status: r.status, grade: r.member.grade,
+      oldStep: r.member.currentStep, newStep: r.result!.newStep, hyogo: r.member.hyogo,
+      comment: data.entries?.[String(r.member.id)]?.comment ?? null,
+      birthDate: r.member.birthDate,
+      pitches: { hyogo: r.result!.hyogoPitch, age: r.result!.agePitch, special: r.result!.specialPitch, discretionary: r.result!.discretionaryPitch, total: r.result!.totalPitch },
+      oldDaily: r.oldTotal, newDaily: r.newTotal, raisePerDay: r.result!.raisePerDay, adjustment: r.member.adjustment ?? null,
+    }))
+  if (sheets.length === 0) {
     return (
       <div style={{ padding: 24, maxWidth: 640 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>まだ確定していません</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>表示できる人がいません</h1>
         <p style={{ fontSize: 14, color: '#555', lineHeight: 1.9 }}>
-          給料表は確定した改定の内容から作ります。<br />
-          賃金制度 → 年次改定 で確定してから、もう一度開いてください。
+          賃金制度 → 年次改定 で、評語などの入力が済んでいる人から給料表を作ります。
         </p>
       </div>
     )
@@ -119,7 +140,7 @@ function SheetBody() {
 
   const fy = Number(data.effective.slice(0, 4)) + 1   // 2026-10-01改定 → 2027年度
   const HISTORY_YEARS = 10   // 給料表に載せる「ベース年収推移」の年度数（代表決定 2026-09-17）
-  const targets = data.frozen.filter(f => f.newDaily != null && f.oldDaily != null)
+  const targets = sheets.filter(f => f.newDaily != null && f.oldDaily != null)
 
   return (
     <>
@@ -132,7 +153,8 @@ function SheetBody() {
           .sheet:last-child { page-break-after: auto; }
         }
         body { background: #f5f5f5; margin: 0; font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif; color: #111; }
-        .sheet { width: 277mm; min-height: 190mm; background: white; margin: 12px auto; padding: 8mm 10mm; box-shadow: 0 1px 6px rgba(0,0,0,.15); }
+        .sheet { position: relative; width: 277mm; min-height: 190mm; background: white; margin: 12px auto; padding: 8mm 10mm; box-shadow: 0 1px 6px rgba(0,0,0,.15); }
+        .draft-mark { position: absolute; top: 6mm; left: 10mm; border: 2px solid #b91c1c; color: #b91c1c; font-weight: 700; font-size: 12px; padding: 2px 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .g td, .g th { border: 1px solid #808080; padding: 3px 6px; font-size: 10px; text-align: center; }
         .g th { background: #f2f2f2; font-weight: 700; }
         .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -143,6 +165,7 @@ function SheetBody() {
         <span style={{ fontSize: 12, opacity: .85 }}>{jpDate(data.effective)} 改定 ／ {targets.length}名</span>
         <button onClick={() => window.print()} style={{ padding: '6px 14px', background: 'white', color: '#1B2A4A', borderRadius: 4, fontSize: 13, border: 'none', cursor: 'pointer', fontWeight: 700 }}>🖨 印刷 / PDF保存</button>
         <span style={{ fontSize: 11, opacity: .7 }}>1名につきA4横1枚</span>
+        {isDraft && <span style={{ fontSize: 12, fontWeight: 700, background: '#b91c1c', padding: '3px 10px', borderRadius: 4 }}>下書き（未確定）— 確定前の見本です。本人には配らないでください</span>}
       </div>
 
       {targets.map(f => {
@@ -163,6 +186,7 @@ function SheetBody() {
 
         return (
           <div key={f.workerId} className="sheet">
+            {isDraft && <div className="draft-mark">下書き（未確定）</div>}
             {/* ヘッダ */}
             <div style={{ display: 'flex', alignItems: 'baseline' }}>
               <div style={{ flex: 1 }} />

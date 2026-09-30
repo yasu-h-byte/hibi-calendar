@@ -133,7 +133,15 @@ export default function RevisionPanel() {
 
   const apply = async () => {
     if (!data) return
-    if (!confirm(`${data.effective} の改定を確定し、人員マスタへ反映します。\n\n昇給額 合計 ${yen(data.revision.raisePerDay)}/日（年 ${yen(data.revision.annualCost)}）\n\n確定後は編集できません。よろしいですか？`)) return
+    // 2026-09-30: 評価を保存するつもりで押され、全員Aのまま確定された事故の再発防止。
+    //   入力は自動保存なので、このボタンは「最後に1回」だけ。文字を打たないと進めない
+    const typed = prompt(
+      `${data.effective} の改定を確定し、人員マスタの号と日額を書き換えます。\n`
+      + `評語・コメントの入力は自動で保存されています。保存のためにこのボタンを押す必要はありません。\n\n`
+      + `昇給額 合計 ${yen(data.revision.raisePerDay)}/日（年 ${yen(data.revision.annualCost)}）\n\n`
+      + `確定する場合は「確定」と入力してください。`)
+    if (typed === null) return
+    if (typed.trim() !== '確定') { setErr('「確定」と入力されなかったので、確定しませんでした'); return }
     setBusy(true); setMsg('')
     try {
       const res = await fetch('/api/jp-wage/revision', {
@@ -151,6 +159,31 @@ export default function RevisionPanel() {
       setMsg(`確定しました（${j.count}名に反映）`)
     } catch (e) {
       setErr(e instanceof Error ? e.message : '確定に失敗しました')
+    } finally { setBusy(false) }
+  }
+
+  /** 確定の取り消し（2026-09-30）。人員マスタを改定前に戻し、下書きに戻す。評語・コメントは残る */
+  const unapply = async () => {
+    if (!data) return
+    const typed = prompt(
+      `${data.effective} の改定の確定を取り消します。\n\n`
+      + `・人員マスタの号と日額を、改定前（9月まで払っていた額）に戻します\n`
+      + `・評語・理由・コメントは残り、下書きとして入力し直せます\n`
+      + `・入れ直したら、もう一度「改定を確定する」を押してください\n\n`
+      + `取り消す場合は「取り消し」と入力してください。`)
+    if (typed === null) return
+    if (typed.trim() !== '取り消し') { setErr('「取り消し」と入力されなかったので、取り消しませんでした'); return }
+    setBusy(true); setMsg(''); setErr('')
+    try {
+      const res = await fetch(`/api/jp-wage/revision?effective=${data.effective}`, {
+        method: 'DELETE', headers: { 'x-admin-password': pw },
+      })
+      const j = await res.json()
+      if (!res.ok) throw new Error([j.error, ...(j.conflicts || [])].join('\n'))
+      await load(pw)
+      setMsg(`確定を取り消しました（${j.count}名を改定前に戻しました）。評語・コメントを入れ直して、もう一度確定してください`)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : '取り消しに失敗しました')
     } finally { setBusy(false) }
   }
 
@@ -523,19 +556,43 @@ export default function RevisionPanel() {
         </section>
       )}
 
+      {/* ── 確定の取り消し（2026-09-30）── */}
+      {applied && (
+        <section className="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900/50 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm text-gray-600 dark:text-gray-300">
+            <b>評価を入れ直す</b>
+            <div className="text-[11px] text-gray-400 mt-0.5">
+              確定を取り消すと、人員マスタの号と日額が改定前に戻り、下書きとして評語・コメントを入れ直せます。
+              改定月以降の給与を締めた後は取り消せません。
+            </div>
+          </div>
+          <button onClick={unapply} disabled={busy}
+            className="px-5 py-2.5 rounded-lg border-2 border-red-300 text-red-700 dark:text-red-300 font-bold text-sm hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-40">
+            {busy ? '処理中…' : '確定を取り消す'}
+          </button>
+        </section>
+      )}
+
       {/* ── 確定 ── */}
       {!applied && (
         <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-gray-600 dark:text-gray-300">
-            確定すると人員マスタの号と日額が書き換わり、<b>以後この改定は編集できません</b>。
+            評語・コメントの入力は<b>自動で保存</b>されています。このボタンは、全員の評価が決まったあと最後に1回だけ押します。<br />
+            確定すると人員マスタの号と日額が書き換わり、編集できなくなります（取り消しはできます）。
             <div className="text-[11px] text-gray-400 mt-0.5">
               要入力が残っている・評語のバランスが取れていない場合は確定できません。
             </div>
           </div>
+          <div className="flex flex-wrap gap-2">
+          <a href={`/wage/notice?effective=${data.effective}`} target="_blank" rel="noopener noreferrer"
+            className="px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 font-bold text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
+            🖨 給料表の見本（未確定）
+          </a>
           <button onClick={apply} disabled={busy || totals.blocked > 0 || !data.revision.balance.ok}
             className="px-5 py-2.5 rounded-lg bg-hibi-navy text-white font-bold text-sm hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
             {busy ? '処理中…' : '改定を確定する'}
           </button>
+          </div>
         </section>
       )}
 

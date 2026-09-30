@@ -8,6 +8,9 @@
  * - GET    … 名簿＋保存済みの下書き＋計算結果
  * - PUT    … 下書きの保存（評語・理由・特別事由・利益率・対象者の上書き）
  * - POST   … 確定して人員マスタへ反映。結果を凍結し auditTrail に残す
+ * - DELETE … 確定の取り消し（2026-09-30 追加）。人員マスタを改定前の号・日額に戻し、
+ *            下書きに戻す（評語・理由・コメントは残る）。凍結結果は undoLog に残す。
+ *            その改定月以降の給与が締め済みなら取り消せない
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
@@ -48,6 +51,8 @@ interface RevisionDoc {
   /** 適用時に凍結した結果。以後は計算し直さない */
   frozen?: unknown[]
   updatedAt?: string
+  /** 確定を取り消した記録（取り消した時点の凍結結果ごと残す） */
+  undoLog?: { appliedAt?: string; appliedBy?: string; undoneAt: string; undoneBy: string; frozen: unknown[] }[]
 }
 
 const DEFAULT_ENTRY: Entry = { hyogo: 'A' }
@@ -279,4 +284,107 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, effective, applied, count: applied.length, annualCost: revision.annualCost })
+}
+
+/**
+ * 確定の取り消し（2026-09-30 代表依頼）。
+ *
+ * 9/3 に評価を保存するつもりで「改定を確定する」を押し、全員A（下書きの既定値）で
+ * 確定されていた。確定後は編集できない作りなのに、戻す手段が無かった。
+ *
+ * - 人員マスタは「確定で書き換えた人」だけ、改定前の号・日額（prevJpStep / prevRate）に戻す。
+ *   確定の後にマスタが別の理由で変わっている人が1人でもいたら、何も変えずに止める（部分的に戻すのが一番困る）
+ * - 推移グラフの履歴から、その年度の点を外す（確定し直すとまた積まれる）
+ * - 改定のドキュメントは下書きに戻す。評語・理由・コメントは残し、凍結結果は undoLog に残す
+ * - 改定月（基準日の月）以降の給与をどちらかの会社で締めていたら取り消せない
+ */
+export async function DELETE(request: NextRequest) {
+  { const denied = await requireExecutiveAuth(request); if (denied) return denied }  // 賃金は代表・管理者のみ
+  const effective = effectiveOf(request)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(effective)) {
+    return NextResponse.json({ error: 'effective が必要です' }, { status: 400 })
+  }
+  const docData = await loadDoc(effective)
+  if (docData.status !== 'applied') {
+    return NextResponse.json({ error: 'この改定は確定されていません' }, { status: 409 })
+  }
+
+  // 改定月以降の給与を締めていたら止める（締めた給与と人員マスタが食い違うため）
+  const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
+  const locks = ((mainSnap.exists() ? mainSnap.data() : {}) as { locks?: Record<string, boolean> }).locks || {}
+  const fromYm = effective.slice(0, 4) + effective.slice(5, 7)
+  const lockedYms = Object.entries(locks)
+    .filter(([k, v]) => v === true && /^\d{6}_/.test(k) && k.slice(0, 6) >= fromYm)
+    .map(([k]) => k)
+  if (lockedYms.length > 0) {
+    return NextResponse.json({
+      error: `改定月以降の給与が締め済みのため取り消せません（${lockedYms.join('、')}）。先に締めを解除してください`,
+    }, { status: 409 })
+  }
+
+  type Frozen = { workerId: number; name: string; status: string; oldStep: number | null; newStep: number | null; oldDaily: number | null; newDaily: number | null; raisePerDay?: number }
+  const frozen = (docData.frozen || []) as Frozen[]
+  const workers = await getWorkers()
+
+  // 1) 戻す人と、確定の後にマスタが変わってしまった人を先に洗い出す
+  const plan: { f: Frozen; step: number | null; rate: number }[] = []
+  const conflicts: string[] = []
+  for (const f of frozen) {
+    if (f.status !== 'ok' || !f.raisePerDay) continue
+    const w = workers.find(x => x.id === f.workerId)
+    if (!w) { conflicts.push(`${f.name}: 人員マスタに見つかりません`); continue }
+    if (w.jpStep !== f.newStep || w.rate !== f.newDaily || w.rateFrom !== effective) {
+      conflicts.push(`${f.name}: 確定後にマスタが変わっています（現在 ${w.jpStep ?? '—'}号・¥${w.rate ?? '—'}）`)
+      continue
+    }
+    const rate = w.prevRate ?? f.oldDaily
+    if (rate == null) { conflicts.push(`${f.name}: 改定前の日額が分かりません`); continue }
+    plan.push({ f, step: w.prevJpStep ?? f.oldStep, rate })
+  }
+  if (conflicts.length > 0) {
+    return NextResponse.json({ error: '取り消せない人がいるため、何も変更していません', conflicts }, { status: 409 })
+  }
+
+  // 2) 人員マスタを改定前へ
+  const restored: string[] = []
+  for (const p of plan) {
+    await updateWorker(p.f.workerId, { jpStep: p.step, rate: p.rate } as Record<string, unknown>,
+      ['rateFrom', 'prevRate', 'prevJpStep'])
+    restored.push(`${p.f.name}: ${p.f.newStep}号→${p.step}号 ¥${p.f.newDaily}→¥${p.rate}`)
+  }
+
+  // 3) 推移グラフの履歴から、この年度の点を外す
+  const fiscalYear = Number(effective.slice(0, 4)) + 1
+  for (const f of frozen) {
+    if (f.newDaily == null) continue
+    const ref = doc(db, 'jpWageHistory', String(f.workerId))
+    const cur = await getDoc(ref)
+    if (!cur.exists()) continue
+    const points = ((cur.data() as { points?: { year: number; baseAnnual: number }[] }).points || [])
+    const kept = points.filter(pt => pt.year !== fiscalYear)
+    if (kept.length === points.length) continue
+    await setDoc(ref, { workerId: f.workerId, points: kept, updatedAt: new Date().toISOString() })
+  }
+
+  // 4) 下書きに戻す（評語・理由・コメントは entries に残る）
+  const auth = await getApiAuthUser(request)
+  const actor = auth.authorized ? String(auth.actor) : 'unknown'
+  const undoneAt = new Date().toISOString()
+  const { frozen: _f, appliedAt, appliedBy, ...rest } = docData
+  void _f
+  await setDoc(doc(db, 'jpWageRevisions', effective), {
+    ...rest,
+    effective,
+    status: 'draft',
+    undoLog: [...(docData.undoLog || []), { appliedAt, appliedBy, undoneAt, undoneBy: actor, frozen }],
+    updatedAt: undoneAt,
+  })
+  try {
+    await setDoc(doc(db, 'auditTrail', `jpwage-revision-undo-${effective}-${Date.now()}`), {
+      type: 'jpWage.revision.undo', effective, restored, actor, at: undoneAt,
+    })
+  } catch (e) {
+    console.error('[jp-wage/revision] auditTrail 書込失敗:', e)
+  }
+  return NextResponse.json({ ok: true, effective, restored, count: restored.length })
 }
