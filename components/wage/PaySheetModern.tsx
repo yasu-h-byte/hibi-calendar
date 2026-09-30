@@ -1,3 +1,4 @@
+'use client'
 /**
  * 給料表（新デザイン・2026-09-30 代表依頼「Excel の様式にとらわれず、かっこよくて見やすく」）
  *
@@ -9,7 +10,7 @@
  * 色は紺（#1B2A4A）とアンバー（#F5A623）の2色。白黒印刷でも読める濃さにしている。
  * 数値は lib/jp-wage.ts の paySheetFigures（旧様式と同じ）。
  */
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { PaySheetFigures } from '@/lib/jp-wage'
 import { ANNUAL_DAYS, PAID_LEAVE_DAYS, TOTAL_PAID_DAYS, MAX_STEP } from '@/lib/jp-wage'
 
@@ -44,8 +45,23 @@ export interface PaySheetPerson {
  *   - 棒の上をアンバーの線で結び、最後に矢印。棒の色は古い年ほど薄く、今年度は紺
  */
 function TrendBars({ points, fy }: { points: { year: number; baseAnnual: number }[]; fy: number }) {
+  // 置いた枠の大きさ（px）に合わせて描く。viewBox を枠と同じ比率にするので文字がゆがまない（2026-09-30）
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ w: 520, h: 190 })
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const measure = () => {
+      const r = el.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) setSize({ w: Math.round(r.width), h: Math.round(r.height) })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   if (points.length === 0) return null
-  const W = 520, H = 190, ML = 14, MR = 14, MT = 24, MB = 22
+  const W = size.w, H = Math.max(140, size.h), ML = 14, MR = 14, MT = 26, MB = 22
   const vals = points.map(p => p.baseAnnual)
   const max = Math.max(...vals)
   const min = Math.min(...vals)
@@ -54,7 +70,7 @@ function TrendBars({ points, fy }: { points: { year: number; baseAnnual: number 
   const hi = max + span * 0.12
   const n = points.length
   const slot = (W - ML - MR) / n
-  const bw = Math.min(34, slot * 0.6)
+  const bw = Math.min(46, slot * 0.6)
   const y = (v: number) => MT + (1 - (v - lo) / (hi - lo)) * (H - MT - MB)
   const base = H - MB
   const shade = (i: number) => {
@@ -70,7 +86,8 @@ function TrendBars({ points, fy }: { points: { year: number; baseAnnual: number 
   const ah = 9
   const arrow = `${last.x + Math.cos(ang) * 4},${last.y + Math.sin(ang) * 4} ${last.x + Math.cos(ang) * 4 - Math.cos(ang - 0.5) * ah},${last.y + Math.sin(ang) * 4 - Math.sin(ang - 0.5) * ah} ${last.x + Math.cos(ang) * 4 - Math.cos(ang + 0.5) * ah},${last.y + Math.sin(ang) * 4 - Math.sin(ang + 0.5) * ah}`
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="ベース年収の推移">
+    <div ref={boxRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }} role="img" aria-label="ベース年収の推移">
       <line x1={ML} y1={base} x2={W - MR} y2={base} stroke="#cbd5e1" strokeWidth={1} />
       {/* 縦軸の途中省略（0から始めていない印） */}
       <path d={`M ${ML - 8} ${base - 9} l 4 -3 l 4 6 l 4 -6 l 4 3`} fill="none" stroke="#94a3b8" strokeWidth={1} />
@@ -105,6 +122,7 @@ function TrendBars({ points, fy }: { points: { year: number; baseAnnual: number 
         )
       })}
     </svg>
+    </div>
   )
 }
 
@@ -151,28 +169,33 @@ export default function PaySheetModern({
   const hasMsg = (disc !== 0 && !!p.discretionaryReason?.trim()) || !!p.comment?.trim()
 
   return (
-    <div className="sheet" style={{ padding: '9mm 11mm', color: INK }}>
+    <div className="sheet" style={{ padding: '8mm 10mm', color: INK, height: '190mm', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       {isDraft && <div className="draft-mark">下書き（未確定）</div>}
 
-      {/* ① ヘッダー */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', borderBottom: `3px solid ${NAVY}`, paddingBottom: 8 }}>
-        <div>
-          <div style={{ fontSize: 9.5, letterSpacing: '0.18em', color: MUTED }}>HIBI CONSTRUCTION ｜ とび事業部</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 2 }}>
-            <div style={{ fontSize: 24, fontWeight: 800, color: NAVY, letterSpacing: '0.06em' }}>給料表</div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>{fy}年度</div>
-            <div style={{ fontSize: 10, color: MUTED }}>{effectiveLabel} 改定</div>
+      {/* ① ヘッダー（紺の帯・2026-09-30） */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: NAVY, color: 'white',
+        borderRadius: 12, padding: '10px 18px', position: 'relative', overflow: 'hidden',
+      }}>
+        {/* 右端のアンバーの斜めの帯（飾り） */}
+        <div style={{ position: 'absolute', right: -30, top: 0, bottom: 0, width: 90, background: AMBER, transform: 'skewX(-20deg)', opacity: 0.95 }} />
+        <div style={{ position: 'relative' }}>
+          <div style={{ fontSize: 9.5, letterSpacing: '0.22em', opacity: 0.75 }}>HIBI CONSTRUCTION ｜ とび事業部</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 1 }}>
+            <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '0.08em' }}>給料表</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#fde7b8' }}>{fy}年度</div>
+            <div style={{ fontSize: 10, opacity: 0.75 }}>{effectiveLabel} 改定</div>
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '0.08em' }}>{p.name}<span style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>様</span></div>
+        <div style={{ textAlign: 'right', position: 'relative', marginRight: 64 }}>
+          <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '0.1em' }}>{p.name}<span style={{ fontSize: 12, fontWeight: 400, marginLeft: 6, opacity: 0.85 }}>様</span></div>
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 3 }}>
             {[
               `${p.gradeLabel}（${p.grade === 'doko' ? '土工' : p.grade}）`,
               `${p.newStep ?? '—'}号`,
               p.age === null ? null : `${p.age}歳`,
             ].filter(Boolean).map(t => (
-              <span key={t as string} style={{ fontSize: 10, border: `1px solid ${NAVY}`, color: NAVY, borderRadius: 999, padding: '1px 9px' }}>{t}</span>
+              <span key={t as string} style={{ fontSize: 10, border: '1px solid rgba(255,255,255,0.6)', borderRadius: 999, padding: '1px 9px' }}>{t}</span>
             ))}
           </div>
         </div>
@@ -241,8 +264,8 @@ export default function PaySheetModern({
       </div>
 
       {/* ④ 推移 ＋ 数字の出し方 */}
-      <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'stretch' }}>
-        <div style={{ flex: 1.45, border: `1px solid ${LINE}`, borderRadius: 10, padding: '9px 12px' }}>
+      <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'stretch', flex: 1, minHeight: 0 }}>
+        <div style={{ flex: 1.45, border: `1px solid ${LINE}`, borderRadius: 10, padding: '9px 12px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <div style={{ fontSize: 10.5, fontWeight: 700, color: NAVY }}>ベース年収の推移</div>
             {points.length >= 2 && points[points.length - 1].baseAnnual > points[0].baseAnnual && (
@@ -260,7 +283,7 @@ export default function PaySheetModern({
           <TrendBars points={points} fy={fy} />
           <div style={{ fontSize: 7.5, color: '#9ca3af', textAlign: 'right' }}>※ 縦軸は途中から表示しています</div>
         </div>
-        <div style={{ flex: 1, border: `1px solid ${LINE}`, borderRadius: 10, padding: '9px 12px', fontSize: 10 }}>
+        <div style={{ flex: 1, border: `1px solid ${LINE}`, borderRadius: 10, padding: '9px 12px', fontSize: 10.5, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>数字の出し方</div>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
             <tbody>
@@ -292,8 +315,11 @@ export default function PaySheetModern({
         </div>
       </div>
 
-      <div style={{ position: 'absolute', right: '11mm', bottom: '5mm', fontSize: 8, color: '#9ca3af' }}>
-        No.{p.workerId} ／ {num(fig.daily)} ／ {effectiveLabel}改定
+      {/* フッター */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 5, borderTop: `2px solid ${NAVY}`, fontSize: 8.5, color: MUTED }}>
+        <span style={{ letterSpacing: '0.18em', fontWeight: 700, color: NAVY }}>HIBI CONSTRUCTION</span>
+        <span>この給料表は、{effectiveLabel}改定の内容をお知らせするものです。</span>
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>No.{p.workerId} ／ {num(fig.daily)}</span>
       </div>
     </div>
   )
