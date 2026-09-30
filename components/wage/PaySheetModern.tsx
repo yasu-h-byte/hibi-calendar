@@ -37,33 +37,71 @@ export interface PaySheetPerson {
   discretionaryReason?: string | null
 }
 
-/** ベース年収の推移（棒グラフ）。印刷で崩れないよう依存なしのSVG */
+/**
+ * ベース年収の推移（棒グラフ）。印刷で崩れないよう依存なしのSVG。
+ * 2026-09-30（代表依頼）: 右肩上がりを強く見せる。
+ *   - 縦軸は0からではなく、最小年の少し下から（年ごとの差が見える）。軸の下端に「途中省略」の波線を入れる
+ *   - 棒の上をアンバーの線で結び、最後に矢印。棒の色は古い年ほど薄く、今年度は紺
+ */
 function TrendBars({ points, fy }: { points: { year: number; baseAnnual: number }[]; fy: number }) {
   if (points.length === 0) return null
-  const W = 520, H = 190, ML = 8, MR = 8, MT = 22, MB = 22
-  const max = Math.max(...points.map(p => p.baseAnnual))
+  const W = 520, H = 190, ML = 14, MR = 14, MT = 24, MB = 22
+  const vals = points.map(p => p.baseAnnual)
+  const max = Math.max(...vals)
+  const min = Math.min(...vals)
+  const span = Math.max(max - min, max * 0.04)
+  const lo = Math.max(0, min - span * 0.45)           // 最小年の棒も少し高さが残るように
+  const hi = max + span * 0.12
   const n = points.length
   const slot = (W - ML - MR) / n
-  const bw = Math.min(34, slot * 0.62)
-  const y = (v: number) => MT + (1 - v / (max * 1.08)) * (H - MT - MB)
+  const bw = Math.min(34, slot * 0.6)
+  const y = (v: number) => MT + (1 - (v - lo) / (hi - lo)) * (H - MT - MB)
+  const base = H - MB
+  const shade = (i: number) => {
+    // 古い年 #dbe3ee → 新しい年 #7b8ba3（今年度は紺）
+    const t = n <= 1 ? 1 : i / (n - 1)
+    const mix = (a: number, b: number) => Math.round(a + (b - a) * t)
+    return `rgb(${mix(219, 123)},${mix(227, 139)},${mix(238, 163)})`
+  }
+  const tops = points.map((p, i) => ({ x: ML + slot * i + slot / 2, y: y(p.baseAnnual) }))
+  const last = tops[tops.length - 1]
+  const prev = tops[tops.length - 2]
+  const ang = prev ? Math.atan2(last.y - prev.y, last.x - prev.x) : -Math.PI / 4
+  const ah = 9
+  const arrow = `${last.x + Math.cos(ang) * 4},${last.y + Math.sin(ang) * 4} ${last.x + Math.cos(ang) * 4 - Math.cos(ang - 0.5) * ah},${last.y + Math.sin(ang) * 4 - Math.sin(ang - 0.5) * ah} ${last.x + Math.cos(ang) * 4 - Math.cos(ang + 0.5) * ah},${last.y + Math.sin(ang) * 4 - Math.sin(ang + 0.5) * ah}`
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }} role="img" aria-label="ベース年収の推移">
-      <line x1={ML} y1={H - MB} x2={W - MR} y2={H - MB} stroke={LINE} strokeWidth={1} />
+      <line x1={ML} y1={base} x2={W - MR} y2={base} stroke="#cbd5e1" strokeWidth={1} />
+      {/* 縦軸の途中省略（0から始めていない印） */}
+      <path d={`M ${ML - 8} ${base - 9} l 4 -3 l 4 6 l 4 -6 l 4 3`} fill="none" stroke="#94a3b8" strokeWidth={1} />
       {points.map((p, i) => {
-        const cx = ML + slot * i + slot / 2
-        const top = y(p.baseAnnual)
+        const cx = tops[i].x
+        const top = tops[i].y
         const cur = p.year === fy
         return (
           <g key={p.year}>
-            <rect x={cx - bw / 2} y={top} width={bw} height={H - MB - top} rx={3}
-              fill={cur ? NAVY : '#cbd5e1'} />
-            <text x={cx} y={top - 5} textAnchor="middle" fontSize={cur ? 11 : 9} fontWeight={cur ? 700 : 400} fill={cur ? NAVY : MUTED}>
-              {(p.baseAnnual / 10000).toFixed(0)}万
-            </text>
-            <text x={cx} y={H - 7} textAnchor="middle" fontSize={9} fill={cur ? NAVY : MUTED} fontWeight={cur ? 700 : 400}>
-              {p.year}
-            </text>
+            <rect x={cx - bw / 2} y={top} width={bw} height={base - top} rx={3} fill={cur ? NAVY : shade(i)} />
+            <text x={cx} y={H - 7} textAnchor="middle" fontSize={9} fill={cur ? NAVY : MUTED} fontWeight={cur ? 700 : 400}>{p.year}</text>
           </g>
+        )
+      })}
+      {/* 右肩上がりの線（棒の上を結ぶ）と矢印 */}
+      {tops.length >= 2 && (
+        <>
+          <polyline points={tops.map(t => `${t.x},${t.y - 3}`).join(' ')} fill="none" stroke={AMBER} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+          {tops.slice(0, -1).map((t, i) => <circle key={i} cx={t.x} cy={t.y - 3} r={2.6} fill="white" stroke={AMBER} strokeWidth={1.6} />)}
+          <polygon points={arrow.split(' ').map(q => { const [a, b] = q.split(',').map(Number); return `${a},${b - 3}` }).join(' ')} fill={AMBER} />
+        </>
+      )}
+      {/* 値ラベル（最初と今年度だけ大きく、他は小さく） */}
+      {points.map((p, i) => {
+        const cur = p.year === fy
+        const first = i === 0
+        return (
+          <text key={`v${p.year}`} x={cur ? tops[i].x - 4 : tops[i].x} y={tops[i].y - (cur ? 15 : 10)} textAnchor={cur ? 'end' : 'middle'}
+            fontSize={cur ? 12 : first ? 9.5 : 8} fontWeight={cur ? 800 : 500} fill={cur ? NAVY : MUTED}>
+            {(p.baseAnnual / 10000).toFixed(0)}万
+          </text>
         )
       })}
     </svg>
@@ -205,8 +243,22 @@ export default function PaySheetModern({
       {/* ④ 推移 ＋ 数字の出し方 */}
       <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'stretch' }}>
         <div style={{ flex: 1.45, border: `1px solid ${LINE}`, borderRadius: 10, padding: '9px 12px' }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: NAVY }}>ベース年収の推移</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: NAVY }}>ベース年収の推移</div>
+            {points.length >= 2 && points[points.length - 1].baseAnnual > points[0].baseAnnual && (
+              <div style={{ fontSize: 10, color: MUTED }}>
+                {points[0].year}年から{' '}
+                <b style={{ fontSize: 13, color: NAVY }}>
+                  +{Math.round((points[points.length - 1].baseAnnual - points[0].baseAnnual) / 10000).toLocaleString()}万円
+                </b>
+                <span style={{ marginLeft: 4, color: '#b45309', fontWeight: 700 }}>
+                  （+{((points[points.length - 1].baseAnnual / points[0].baseAnnual - 1) * 100).toFixed(1)}%）
+                </span>
+              </div>
+            )}
+          </div>
           <TrendBars points={points} fy={fy} />
+          <div style={{ fontSize: 7.5, color: '#9ca3af', textAlign: 'right' }}>※ 縦軸は途中から表示しています</div>
         </div>
         <div style={{ flex: 1, border: `1px solid ${LINE}`, borderRadius: 10, padding: '9px 12px', fontSize: 10 }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>数字の出し方</div>
