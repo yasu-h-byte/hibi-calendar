@@ -1,0 +1,248 @@
+/**
+ * 給料のしくみ（日本人社員の賃金制度を1枚で説明する・2026-09-30 代表依頼）
+ *
+ * 給料表（PaySheetModern）と同じデザインで、各人の給料表の後ろに1枚付ける。
+ * その人の等級・年齢に印を付けて「自分はここ」が分かるようにする（未指定なら印なし＝全員共通の1枚）。
+ * 中身はすべて lib/jp-wage.ts の値から作る（号俸表・評語・年齢調整・特別調整）。制度を変えればこの紙も変わる。
+ * 仕様の正は docs/wage-system.md。
+ */
+import type { ReactNode, CSSProperties } from 'react'
+import {
+  GRADE_LABELS, HYOGO_PITCH, SPECIAL_REASONS, SPECIAL_CAP, MAX_STEP, ANNUAL_DAYS, PAID_LEAVE_DAYS, TOTAL_PAID_DAYS,
+  dailyForStep, capDaily, pitchOf, ageTableForDisplay, type JpGrade, type Hyogo,
+} from '@/lib/jp-wage'
+
+const NAVY = '#1B2A4A'
+const AMBER = '#F5A623'
+const INK = '#1f2937'
+const MUTED = '#6b7280'
+const LINE = '#e5e7eb'
+const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
+
+const LADDER: Exclude<JpGrade, 'doko'>[] = ['6G', '5G', '4G', '3G', '2G', '1G']
+const REQUIRED: Partial<Record<JpGrade, string>> = {
+  '3G': '鉄骨・足場の作業主任者（両方）',
+  '5G': '職長・安全衛生責任者教育',
+}
+
+function Card({ title, n, children, style }: { title: string; n: string; children: ReactNode; style?: CSSProperties }) {
+  return (
+    <div style={{ border: `1px solid ${LINE}`, borderRadius: 10, padding: '8px 11px', ...style }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+        <span style={{ width: 17, height: 17, borderRadius: 999, background: NAVY, color: 'white', fontSize: 12.7, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{n}</span>
+        <span style={{ fontSize: 14.7, fontWeight: 800, color: NAVY }}>{title}</span>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+export default function WageSystemGuide({
+  grade, age, fy, effectiveLabel,
+}: {
+  /** その人の等級（印を付ける）。未指定なら印なし */
+  grade?: string | null
+  /** その人の基準日時点の年齢（年齢調整の表に印を付ける） */
+  age?: number | null
+  fy: number
+  effectiveLabel: string
+}) {
+  const scaleMin = 10000
+  const scaleMax = Math.max(...LADDER.map(g => capDaily(g))) * 1.02
+  const pos = (v: number) => ((v - scaleMin) / (scaleMax - scaleMin)) * 100
+  const ageRows = ageTableForDisplay()
+  const ageBandIndex = age == null ? -1
+    : age <= 25 ? 0 : age <= 30 ? 1 : age <= 35 ? 2 : age <= 40 ? 3 : age <= 45 ? 4 : age <= 50 ? 5 : age <= 55 ? 6 : age <= 59 ? 7 : 8
+  // 土工は年齢調整を3G相当で扱う
+  const ageCol = grade === 'doko' ? 2 : ['1G', '2G', '3G', '4G', '5G', '6G'].indexOf(grade || '')
+  const hyogoOrder: Hyogo[] = ['SS', 'S', 'A', 'B', 'C']
+
+  return (
+    <div className="sheet" style={{ padding: '9mm 11mm', color: INK, lineHeight: 1.55 }}>
+      {/* ヘッダー */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', borderBottom: `3px solid ${NAVY}`, paddingBottom: 7 }}>
+        <div>
+          <div style={{ fontSize: 12.7, letterSpacing: '0.18em', color: MUTED }}>HIBI CONSTRUCTION ｜ とび事業部</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 2 }}>
+            <div style={{ fontSize: 24, fontWeight: 800, color: NAVY, letterSpacing: '0.06em' }}>給料のしくみ</div>
+            <div style={{ fontSize: 16.1, fontWeight: 700 }}>{fy}年度版</div>
+            <div style={{ fontSize: 13.4, color: MUTED }}>{effectiveLabel} 改定</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: NAVY, textAlign: 'right', lineHeight: 1.5, marginLeft: 16 }}>
+          日給は「<span style={{ color: '#b45309' }}>等級</span> × <span style={{ color: '#b45309' }}>号</span>」で決まり、<br />
+          毎年10月1日、評価に応じて号が上がります。<span style={{ background: '#fef3c7', padding: '0 4px' }}>日給が下がることはありません。</span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+        {/* ① 等級と日給 */}
+        <Card n="1" title="等級と日給の範囲（1〜60号）" style={{ flex: 1.35 }}>
+          <div style={{ fontSize: 12.1, color: MUTED, marginBottom: 4 }}>
+            等級は<b style={{ color: INK }}>役割</b>で決まります。1年ごとに号が進み、上の等級ほど1号あたりの昇給額と上限が大きくなります。
+          </div>
+          {LADDER.map(g => {
+            const lo = dailyForStep(g, 1)
+            const hi = capDaily(g)
+            const mine = grade === g
+            const [p1] = pitchOf(g)
+            return (
+              <div key={g}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '3px 5px', borderRadius: 6,
+                  background: mine ? '#fff7e6' : 'transparent', outline: mine ? `1.5px solid ${AMBER}` : 'none',
+                }}>
+                  <span style={{ width: 26, fontSize: 13.4, fontWeight: 800, color: NAVY }}>{g}</span>
+                  <span style={{ width: 58, fontSize: 12.7, whiteSpace: 'nowrap' }}>{GRADE_LABELS[g]}</span>
+                  <div style={{ flex: 1, minWidth: 40, position: 'relative', height: 12 }}>
+                    <div style={{ position: 'absolute', top: 3, height: 6, left: 0, right: 0, background: '#f1f5f9', borderRadius: 999 }} />
+                    <div style={{ position: 'absolute', top: 3, height: 6, left: `${pos(lo)}%`, width: `${pos(hi) - pos(lo)}%`, background: mine ? AMBER : g === '5G' || g === '6G' ? NAVY : '#94a3b8', borderRadius: 999 }} />
+                  </div>
+                  <span style={{ fontSize: 11.4, textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: MUTED, whiteSpace: 'nowrap' }}>
+                    {yen(lo)}〜<b style={{ color: INK }}>{yen(hi)}</b>
+                  </span>
+                  <span style={{ fontSize: 10.7, textAlign: 'right', color: MUTED, whiteSpace: 'nowrap' }}>1号 {p1}円</span>
+                  {mine && <span style={{ fontSize: 11.4, fontWeight: 800, color: '#b45309', whiteSpace: 'nowrap' }}>あなた</span>}
+                </div>
+                {g === '5G' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '2px 0' }}>
+                    <div style={{ flex: 1, borderTop: `1.5px dashed ${AMBER}` }} />
+                    <span style={{ fontSize: 11.4, color: '#b45309', fontWeight: 700 }}>職長の壁：職長という役割に就いて上がる（年数では超えない）</span>
+                    <div style={{ width: 16, borderTop: `1.5px dashed ${AMBER}` }} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '3px 5px', borderRadius: 6, marginTop: 2,
+            background: grade === 'doko' ? '#fff7e6' : 'transparent', outline: grade === 'doko' ? `1.5px solid ${AMBER}` : 'none',
+          }}>
+            <span style={{ width: 26, fontSize: 13.4, fontWeight: 800, color: NAVY, whiteSpace: 'nowrap' }}>土工</span>
+            <span style={{ fontSize: 12.1, color: MUTED, flex: 1 }}>3G（班長）の90%の号俸表。{yen(dailyForStep('doko', 1))}〜{yen(capDaily('doko'))}</span>
+            {grade === 'doko' && <span style={{ fontSize: 11.4, fontWeight: 800, color: '#b45309' }}>あなた</span>}
+          </div>
+          <div style={{ marginTop: 5, fontSize: 11.4, color: MUTED, lineHeight: 1.55 }}>
+            昇格に必要な資格　3G：{REQUIRED['3G']}　／　5G：{REQUIRED['5G']}<br />
+            昇格すると、1号あたりの昇給額と上限が上がります。{MAX_STEP}号に届いた後は、昇格か号俸表の改定で上がります。
+          </div>
+        </Card>
+
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* ② 毎年の改定 */}
+          <Card n="2" title="毎年10月1日の改定">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+              {[
+                ['評価', '1〜6'], ['年齢調整', '−4〜+3'], ['特別調整', `±${SPECIAL_CAP}まで`], ['代表加算', '代表の判断'],
+              ].map(([t, v], i) => (
+                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {i > 0 && <span style={{ color: MUTED, fontSize: 16.1 }}>＋</span>}
+                  <div style={{ background: '#f1f5f9', borderRadius: 7, padding: '3px 7px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 12.7, fontWeight: 800 }}>{t}</div>
+                    <div style={{ fontSize: 10.1, color: MUTED }}>{v}</div>
+                  </div>
+                </div>
+              ))}
+              <span style={{ color: MUTED, fontSize: 16.1 }}>＝</span>
+              <div style={{ background: AMBER, borderRadius: 7, padding: '3px 9px', textAlign: 'center' }}>
+                <div style={{ fontSize: 12.7, fontWeight: 800, color: NAVY }}>上がる号</div>
+                <div style={{ fontSize: 10.1, color: NAVY }}>0より下にならない</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 11.4, color: MUTED, marginTop: 5, lineHeight: 1.55 }}>
+              新しい号 ＝ 今の号 ＋ 上がる号（{MAX_STEP}号まで）。日給は号俸表のその号の額になります。
+              入社6か月未満の人は、翌年の10月から対象です。
+            </div>
+          </Card>
+
+          {/* ③ 評価 */}
+          <Card n="3" title="評価（5段階・基本はA）">
+            <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', marginTop: 2 }}>
+              {hyogoOrder.map(h => {
+                const v = HYOGO_PITCH[h]
+                return (
+                  <div key={h} style={{ flex: 1, textAlign: 'center' }}>
+                    <div style={{ fontSize: 12.1, fontWeight: 800, color: h === 'A' ? NAVY : MUTED }}>+{v}号</div>
+                    <div style={{ height: v * 8, background: h === 'A' ? NAVY : '#cbd5e1', borderRadius: '4px 4px 0 0' }} />
+                    <div style={{ fontSize: 13.4, fontWeight: 800, marginTop: 1 }}>{h}{h === 'A' && <span style={{ fontSize: 10.1, color: MUTED, fontWeight: 400 }}> 標準</span>}</div>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: 11.4, color: MUTED, marginTop: 4, lineHeight: 1.55 }}>
+              役割どおりの働きならA。Sを1人出すときはBを1人、SSのときはCを1人、と上下をペアで出して全体をA中心に保ちます。
+              S以上・B以下は理由を記録します。Cでも1号は進みます。
+            </div>
+          </Card>
+          {/* ⑥ 年収 */}
+          <div style={{ borderRadius: 10, padding: '7px 11px', background: NAVY, color: 'white', fontSize: 12.1, lineHeight: 1.6 }}>
+            <b>ベース年収</b> ＝ 日給 ×（稼働{ANNUAL_DAYS}日 ＋ 有給{PAID_LEAVE_DAYS}日）<br />＝ 日給 × {TOTAL_PAID_DAYS}日
+            <span style={{ opacity: 0.75, display: 'block', fontSize: 10.7 }}>※ 残業代・手当・賞与は含みません</span>
+          </div>
+        </div>
+
+        <div style={{ flex: 1.05, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* ④ 年齢調整 */}
+          <Card n="4" title="年齢調整（号）">
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10.7, lineHeight: 1.5, fontVariantNumeric: 'tabular-nums' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', color: MUTED, fontWeight: 400, padding: '1px 2px' }}></th>
+                  {['1G', '2G', '3G', '4G', '5G', '6G'].map((g, ci) => (
+                    <th key={g} style={{ padding: '1px 2px', color: ci === ageCol ? '#b45309' : NAVY }}>{g}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ageRows.map((r, ri) => (
+                  <tr key={r.band}>
+                    <td style={{ padding: '1px 2px', color: ri === ageBandIndex ? '#b45309' : MUTED, fontWeight: ri === ageBandIndex ? 800 : 400, whiteSpace: 'nowrap' }}>{r.band}</td>
+                    {r.pitches.map((v, ci) => {
+                      const me = ri === ageBandIndex && ci === ageCol
+                      return (
+                        <td key={ci} style={{
+                          textAlign: 'center', padding: '1px 0',
+                          background: v > 0 ? '#dcfce7' : v < 0 ? `rgba(239,68,68,${0.08 + Math.abs(v) * 0.07})` : '#f8fafc',
+                          outline: me ? `2px solid ${AMBER}` : 'none', fontWeight: me ? 800 : 400,
+                        }}>
+                          {v > 0 ? `+${v}` : v}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ fontSize: 11.4, color: MUTED, marginTop: 4, lineHeight: 1.55 }}>
+              職人としての身体の力を映す調整です。若いうちは加点、年を重ねると減点。班長より上はまとめる力が中心なので影響が小さく、
+              職長・上級職長は50歳まで減点しません。
+            </div>
+          </Card>
+
+          {/* ⑤ 特別調整・代表加算 */}
+          <Card n="5" title="特別調整と代表加算">
+            <div style={{ fontSize: 10, color: MUTED, marginBottom: 3 }}>特別調整は合計 ±{SPECIAL_CAP} まで</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 0, columnGap: 6, fontSize: 11.4, lineHeight: 1.4 }}>
+              {SPECIAL_REASONS.map(r => (
+                <FragmentRow key={r.key} label={r.label} pitch={r.pitch} />
+              ))}
+            </div>
+            <div style={{ fontSize: 11.4, color: MUTED, marginTop: 4, lineHeight: 1.55 }}>
+              <b style={{ color: INK }}>代表加算</b>は、上の事由に当てはまらない働きを代表の判断で加える枠です。理由は給料表に載せます。
+            </div>
+          </Card>
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FragmentRow({ label, pitch }: { label: string; pitch: number }) {
+  return (
+    <>
+      <span>{label}</span>
+      <b style={{ textAlign: 'right', color: pitch > 0 ? '#15803d' : '#b91c1c' }}>{pitch > 0 ? `+${pitch}` : pitch}</b>
+    </>
+  )
+}

@@ -15,10 +15,11 @@
  * 本人に渡した給料表の数字は動かない。
  */
 
-import { Suspense, useEffect, useState } from 'react'
+import { Fragment, Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { paySheetFigures, PAID_LEAVE_DAYS, GRADE_LABELS, ageOn, type JpGrade } from '@/lib/jp-wage'
 import PaySheetModern from '@/components/wage/PaySheetModern'
+import WageSystemGuide from '@/components/wage/WageSystemGuide'
 
 const n0 = (v: number) => Math.round(v).toLocaleString()
 
@@ -147,6 +148,13 @@ function SheetBody() {
   const targets = sheets.filter(f => f.newDaily != null && f.oldDaily != null)
   // 2026-09-30: 新デザインが標準。?style=classic で従来（Excel 様式）
   const classic = params.get('style') === 'classic'
+  // 2026-09-30: 各人の給料表の後ろに「給料のしくみ」を1枚付ける（?guide=0 で付けない）
+  const withGuide = params.get('guide') !== '0'
+  const guideHref = (on: boolean) => {
+    const q = new URLSearchParams(params.toString())
+    if (on) q.delete('guide'); else q.set('guide', '0')
+    return `?${q.toString()}`
+  }
   const styleHref = (c: boolean) => {
     const q = new URLSearchParams(params.toString())
     if (c) q.set('style', 'classic'); else q.delete('style')
@@ -181,6 +189,13 @@ function SheetBody() {
             ? <a href={styleHref(false)} style={{ color: '#fde7b8' }}>新しいデザインで見る</a>
             : <a href={styleHref(true)} style={{ color: '#cbd5e1' }}>従来の様式（Excel型）で見る</a>}
         </span>
+        {!classic && (
+          <span style={{ fontSize: 12, marginLeft: 8 }}>
+            {withGuide
+              ? <>「給料のしくみ」を各人に付けています（2枚1組）<a href={guideHref(false)} style={{ color: '#cbd5e1', marginLeft: 6 }}>付けない</a></>
+              : <a href={guideHref(true)} style={{ color: '#fde7b8' }}>「給料のしくみ」を付ける</a>}
+          </span>
+        )}
         {isDraft && <span style={{ fontSize: 12, fontWeight: 700, background: '#b91c1c', padding: '3px 10px', borderRadius: 4 }}>下書き（未確定）— 確定前の見本です。本人には配らないでください</span>}
       </div>
 
@@ -202,7 +217,8 @@ function SheetBody() {
 
         if (!classic) {
           return (
-            <PaySheetModern key={f.workerId}
+            <Fragment key={f.workerId}>
+            <PaySheetModern
               p={{
                 workerId: f.workerId, name: f.name, grade: f.grade, gradeLabel,
                 oldStep: f.oldStep, newStep: f.newStep, hyogo: f.hyogo, age,
@@ -210,6 +226,8 @@ function SheetBody() {
               }}
               fig={fig} points={points} fy={fy} effectiveLabel={jpDate(data.effective)} isDraft={isDraft}
             />
+            {withGuide && <WageSystemGuide grade={f.grade} age={age} fy={fy} effectiveLabel={jpDate(data.effective)} />}
+            </Fragment>
           )
         }
 
