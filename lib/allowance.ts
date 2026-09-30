@@ -197,6 +197,8 @@ export function calcMonthlyAllowances(
   drv: Record<string, { am?: number[]; pm?: number[] }> = {},
   excludeWorkerIds: number[] = [],
   eligibleHistory?: Record<string, string[]>,
+  /** 運転手当を出さない現場（現場マスタの noDriveAllowance・2026-09-30） */
+  noDriveSiteIds?: Set<string>,
 ): Map<number, WorkerAllowanceMonthly> {
   const out = new Map<number, WorkerAllowanceMonthly>()
   const excluded = new Set(excludeWorkerIds)
@@ -250,6 +252,7 @@ export function calcMonthlyAllowances(
   for (const [key, legs] of Object.entries(drv)) {
     if (!key.includes(`_${ym}_`)) continue
     const sid = key.slice(0, key.indexOf(`_${ym}_`))
+    if (noDriveSiteIds?.has(sid)) continue
     const yenPerLeg = driveAllowanceYen()
     for (const leg of ['am', 'pm'] as const) {
       for (const wid of legs[leg] || []) {

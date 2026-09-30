@@ -39,6 +39,7 @@ interface RawSite {
   rates?: RatePeriod[]
   workSchedule?: SiteWorkScheduleRaw | null
   commute?: import('@/types').SiteCommuteData
+  noDriveAllowance?: boolean
   siteType?: 'direct' | 'support'
   client?: string
   gcId?: string
@@ -54,7 +55,7 @@ interface RawSite {
  * 工種サイトが親現場から引き継ぐ項目（2026-09-15 代表決定: カレンダー・署名・職長・勤務時間・請負体制は共通）。
  * 親を保存するたびに子へ書き写す（読み取り側の改修を最小にするため、直接 site.foreman 等を読む箇所もそのまま正しくなる）。
  */
-const INHERITED_FIELDS = ['start', 'end', 'foreman', 'workSchedule', 'siteType', 'client', 'gcId', 'primeId', 'ownerId'] as const
+const INHERITED_FIELDS = ['start', 'end', 'foreman', 'workSchedule', 'siteType', 'client', 'gcId', 'primeId', 'ownerId', 'noDriveAllowance'] as const
 
 function inheritFromParent(child: RawSite, parent: RawSite): RawSite {
   const next: RawSite = { ...child }
@@ -104,6 +105,7 @@ export async function GET(request: NextRequest) {
       //   commute/siteType/client が漏れていて「保存したのに開き直すと消えて見える →
       //   その状態で再保存すると空値で上書き消去」が起きた（2026-08-26 修正）
       commute: s.commute || undefined,
+      noDriveAllowance: s.noDriveAllowance || undefined,
       siteType: s.siteType || undefined,
       client: s.client ?? undefined,
       gcId: s.gcId || undefined,
@@ -260,6 +262,20 @@ export async function POST(request: NextRequest) {
           return merged === undefined ? {} : { commute: merged }
         })(),
         ...parties,
+      }
+      // 運転手当を出さない現場の指定（代表・事業責任者だけ・2026-09-30）。
+      //   変えようとしたのが権限の無い人なら拒否（黙って無視すると「保存したのに戻る」になるため）
+      if (typeof body.noDriveAllowance === 'boolean' && !isChild) {
+        const before = !!sites[idx].noDriveAllowance
+        if (body.noDriveAllowance !== before) {
+          const { getCallerPermRole } = await import('@/lib/auth')
+          const { roleCan } = await import('@/lib/permissions')
+          if (!roleCan(await getCallerPermRole(request), 'sites.noDriveAllowance')) {
+            return NextResponse.json({ error: '運転手当を出さない現場の指定は、代表・事業責任者だけが変更できます' }, { status: 403 })
+          }
+          if (body.noDriveAllowance) updated[idx].noDriveAllowance = true
+          else delete updated[idx].noDriveAllowance
+        }
       }
       if (typeof body.workType === 'string' && body.workType.trim() && isChild) {
         updated[idx].workType = body.workType.trim()

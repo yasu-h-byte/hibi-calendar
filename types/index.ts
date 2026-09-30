@@ -140,6 +140,8 @@ export interface Site {
    * detectMultiSiteConflict で同日同種シフトの重複を防ぐために使用。
    */
   shiftType?: 'day' | 'night'
+  /** 運転手当を出さない現場（ごく近い現場など。代表・事業責任者が指定・2026-09-30） */
+  noDriveAllowance?: boolean
   /**
    * 現場の入り方。
    * - direct: 直（元請け直下で自分たちが主体でやる現場。例: 山岡直下）

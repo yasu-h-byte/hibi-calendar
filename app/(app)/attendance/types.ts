@@ -8,6 +8,8 @@ export interface SiteOption {
   foreman?: number
   foremanName?: string
   foremanNote?: string
+  /** 運転手当を出さない現場（「運」ボタンを出さない・2026-09-30） */
+  noDriveAllowance?: boolean
 }
 
 export interface Worker {

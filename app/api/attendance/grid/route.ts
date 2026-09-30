@@ -313,7 +313,9 @@ export async function GET(request: NextRequest) {
     homeLeaves.sort((a, b) => a.startDate.localeCompare(b.startDate))
 
     return NextResponse.json({
-      site: { id: site.id, name: site.name, workType: site.workType || undefined, foreman: effectiveForeman, foremanName, foremanNote },
+      site: { id: site.id, name: site.name, workType: site.workType || undefined, foreman: effectiveForeman, foremanName, foremanNote,
+        // 運転手当を出さない現場（工種サイトは親の指定に従う・2026-09-30）
+        noDriveAllowance: !!(site.noDriveAllowance || (site.parentId && main.sites.find(p => p.id === site.parentId)?.noDriveAllowance)) || undefined },
       foremanOverride,
       year: y, month: m, daysInMonth, ym,
       workers, subcons,
@@ -574,6 +576,15 @@ export async function POST(request: NextRequest) {
       }
       const clean = (v: unknown) => Array.isArray(v) ? [...new Set(v.map(Number).filter(Number.isFinite))] : []
       const amIds = clean(am); const pmIds = clean(pm)
+      // 運転手当を出さない現場には記録させない（消す操作は通す・2026-09-30）
+      if (amIds.length > 0 || pmIds.length > 0) {
+        const mainD = await getMainData()
+        const sD = mainD.sites.find(s => s.id === dsid)
+        const pD = sD?.parentId ? mainD.sites.find(s => s.id === sD.parentId) : undefined
+        if (sD?.noDriveAllowance || pD?.noDriveAllowance) {
+          return NextResponse.json({ error: 'この現場は運転手当なしに指定されています（現場マスタ → その他）' }, { status: 409 })
+        }
+      }
       const key = `drv.${dsid}_${dym}_${Number(day)}`
       const { doc, updateDoc, deleteField } = await import('@/lib/fsdb')
       const { ensureDocExists } = await import('@/lib/firestore-safe')

@@ -187,6 +187,8 @@ export interface RawSite {
   foreman: number; archived: boolean
   /** 通勤時間の測定（手当判定）。types/index.ts の SiteCommuteData と同形 */
   commute?: import('@/types').SiteCommuteData
+  /** 運転手当を出さない現場（ごく近い現場など・代表／事業責任者が指定・2026-09-30） */
+  noDriveAllowance?: boolean
   tobiRate?: number; dokoRate?: number
   rates?: { from: string; tobiRate: number; dokoRate: number }[]
   /** 現場の入り方。support（応援）は元請けを介さない直接支払いなので単価は100%受取（siteBaseRatio） */
@@ -468,7 +470,10 @@ export async function loadMonthlyAllowances(
   push(attD)
   for (const k of Object.keys(eligibleHistory)) eligibleHistory[k].sort()
 
-  return calcMonthlyAllowances(attD, ym, commutes, drv || {}, excludeIds, eligibleHistory)
+  // 運転手当を出さない現場（工種サイトは親の指定に従う）。記録が残っていても手当にしない（下流の防御）
+  const noDriveSiteIds = new Set(main.sites.filter(s => s.noDriveAllowance).map(s => s.id))
+  for (const s of main.sites) if (s.parentId && noDriveSiteIds.has(s.parentId)) noDriveSiteIds.add(s.id)
+  return calcMonthlyAllowances(attD, ym, commutes, drv || {}, excludeIds, eligibleHistory, noDriveSiteIds)
 }
 
 // ────────────────────────────────────────

@@ -154,6 +154,13 @@ describe('calcMonthlyAllowances（実データ3ヶ月の検証値と一致）', 
     expect(r.get(2)!.driveAllowanceYen).toBe(2000)   // 1,000円 × 2便（旧仕様は500円×2=1,000）
   })
 
+  it('運転手当なしの現場（清瀬市役所のようなごく近い現場）は、記録があっても手当にしない（2026-09-30）', () => {
+    const drv = { 'kiyose_202610_2': { am: [2], pm: [2] }, 'ihi_202610_2': { am: [5], pm: [] } }
+    const r = calcMonthlyAllowances({}, '202610', {}, drv, [], undefined, new Set(['kiyose']))
+    expect(r.get(2)?.driveAllowanceYen ?? 0).toBe(0)
+    expect(r.get(5)!.driveAllowanceYen).toBe(1000)
+  })
+
   it('日当が保留の間: 判定値を渡さなければ日当0円・運転手当だけ出る', () => {
     // loadMonthlyAllowances は日当オフのとき commutes を空で渡す（=この状態）
     const drv = { 'ihi_202606_2': { am: [2], pm: [2] } }

@@ -97,6 +97,8 @@ export const CAPABILITIES = {
   // ── マスタ ──
   'masters.view':            { group: 'マスタ', label: '現場・取引先マスタを見る', roles: ALL_OFFICE },
   'masters.edit':            { group: 'マスタ', label: '現場・取引先マスタの編集', roles: ['jimu', 'owner'] },
+  // 運転手当を出さない現場の指定（ごく近い現場など）は代表と事業責任者の判断（代表 2026-09-30）
+  'sites.noDriveAllowance':  { group: 'マスタ', label: '運転手当を出さない現場の指定', roles: ['approver', 'owner'] },
   // ── 管理 ──
   'system.admin':            { group: '管理', label: 'システム設定・パスワード・バックアップ・アクセス履歴', roles: ['owner'] },
   'docs.view':               { group: '管理', label: '資料一覧', roles: ['foreman', ...ALL_OFFICE] },

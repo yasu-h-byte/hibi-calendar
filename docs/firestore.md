@@ -281,6 +281,10 @@ workSchedule?: {
   データの移行処理は無い（自然に union に入るので追加対応は不要）
 
 
+### 運転手当なしの現場（`sites[].noDriveAllowance`・2026-09-30）
+
+`true` の現場は出面の「運」ボタンを出さず、運転記録を保存させず、運転手当を計算しない。代表・事業責任者だけが変更できる（`/api/sites` update で権限 `sites.noDriveAllowance` を確認）。工種サイトは `INHERITED_FIELDS` で親の値を書き写す。
+
 ## 書類庫 `staffDocs/{docId}`（2026-09-28）
 
 ファイル本体は Firebase Storage（`staff-docs/{workerId}/{docId}/…`）。ここは書類の情報だけ。詳細は [staff-docs.md](staff-docs.md)。

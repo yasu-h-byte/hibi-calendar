@@ -1368,7 +1368,7 @@ export default function AttendanceGridPage() {
           nightDays={nightDays}
           onToggleNightDay={handleToggleNightDay}
           drivers={drivers}
-          onDriverClick={setDriverDay}
+          onDriverClick={data.site.noDriveAllowance ? undefined : setDriverDay}
           onForemanApproveAll={handleForemanApproveAll}
           onToggleForemanApproval={handleToggleForemanApproval}
           onFinalApproveAll={handleFinalApproveAll}

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { can } from '@/lib/permissions'
 import { COMPANY_ROLES, SELF_COMPANY_ID, SELF_COMPANY_LABEL, hasRole, resolveSiteParties, type CompanyRole } from '@/lib/companies'
 import { fmtYen } from '@/lib/format'
 import { todayJstIso } from '@/lib/date-utils'
@@ -54,6 +55,7 @@ interface SiteData {
   rates: RatePeriod[]
   workSchedule?: SiteWorkScheduleConfig | null
   commute?: CommuteState
+  noDriveAllowance?: boolean
   siteType?: 'direct' | 'support'
   client?: string
   gcId?: string
@@ -131,13 +133,17 @@ export default function SitesPage() {
   const [formDeputies, setFormDeputies] = useState<{ ym: string; wid: string }[]>([])
   const [formWorkSchedule, setFormWorkSchedule] = useState<SiteWorkScheduleConfig>(DEFAULT_WORK_SCHEDULE)
   const [formCommute, setFormCommute] = useState<CommuteState>(EMPTY_COMMUTE)
+  // 運転手当を出さない現場（代表・事業責任者だけが変更できる・2026-09-30）
+  const [formNoDrive, setFormNoDrive] = useState(false)
+  const [canSetNoDrive, setCanSetNoDrive] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
     if (stored) {
-      const { password: pw } = JSON.parse(stored)
+      const { password: pw, user } = JSON.parse(stored)
       setPassword(pw)
+      setCanSetNoDrive(can(user, 'sites.noDriveAllowance'))
     }
   }, [])
 
@@ -175,6 +181,7 @@ export default function SitesPage() {
     setFormDeputies([])
     setFormWorkSchedule(DEFAULT_WORK_SCHEDULE)
     setFormCommute(EMPTY_COMMUTE)
+    setFormNoDrive(false)
     setShowDeleteConfirm(false)
     setModalTab('basic')
     setShowModal(true)
@@ -203,6 +210,7 @@ export default function SitesPage() {
     // Load workSchedule (未設定ならデフォルト)
     setFormWorkSchedule(s.workSchedule || DEFAULT_WORK_SCHEDULE)
     setFormCommute(s.commute ? { address: s.commute.address || '', samples: s.commute.samples || [], judgedMin: s.commute.judgedMin, frozenAt: s.commute.frozenAt } : EMPTY_COMMUTE)
+    setFormNoDrive(!!s.noDriveAllowance)
     // Load rates
     setFormRates(s.rates && s.rates.length > 0 ? [...s.rates] : [])
 
@@ -324,6 +332,7 @@ export default function SitesPage() {
             subconRates,
             workSchedule: formWorkSchedule,
             commute: formCommute,
+            noDriveAllowance: formNoDrive,
           }
         : {
             action: 'add',
@@ -1122,6 +1131,22 @@ export default function SitesPage() {
               </div>)}
 
               {modalTab === 'other' && (<div className="space-y-4">
+              {/* ── 運転手当の対象（2026-09-30）── */}
+              {!isChildEdit && (
+                <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 p-3">
+                  <label className={`flex items-start gap-2 text-sm ${canSetNoDrive ? 'cursor-pointer' : 'opacity-70'}`}>
+                    <input type="checkbox" className="mt-0.5" checked={formNoDrive} disabled={!canSetNoDrive}
+                      onChange={e => setFormNoDrive(e.target.checked)} />
+                    <span>
+                      <b>この現場は運転手当なし</b>（ごく近い現場など）
+                      <span className="block text-[11px] text-gray-500 mt-0.5">
+                        チェックすると、出面の「運」ボタンが出なくなり、運転手当（片道 ¥{DRIVE_ALLOWANCE_YEN.toLocaleString()}）が付きません。工種にも同じ設定が効きます。
+                        {!canSetNoDrive && ' 変更できるのは代表・事業責任者だけです。'}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
               {/* ── 通勤時間（遠方現場日当・運転手当の判定） ── */}
               <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                 <div className="flex items-center gap-2 mb-1">
@@ -1136,11 +1161,11 @@ export default function SitesPage() {
                 </div>
                 <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
                   朝5:30発（清瀬→現場）と夕17:30発（現場→清瀬）の所要時間を最初の10営業日で測り、
-                  平均の片道換算を「判定値」として凍結します。判定値から日当（80分超500円／120分超1,500円）と
-                  運転手当（60分以上1,000円／未満500円）が自動で決まります。
+                  平均の片道換算を「判定値」として凍結します。判定値から遠方現場日当（80分超500円／120分超1,500円・現在は保留）が決まります。
+                  運転手当は判定値とは関係なく片道 ¥{DRIVE_ALLOWANCE_YEN.toLocaleString()}（上の「運転手当なし」の現場を除く）。
                   <br />
                   <b>電車通勤の現場（車で通う人がいない現場）は住所を入力しないでください</b>
-                  ——測定対象外のままとなり、日当・運転手当とも発生しません。
+                  ——測定対象外のままとなり、日当は発生しません。
                 </p>
 
                 {formCommute.judgedMin !== undefined ? (
