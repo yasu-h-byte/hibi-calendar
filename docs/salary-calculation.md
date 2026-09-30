@@ -556,6 +556,14 @@ npm run test:ui   # ブラウザUI付き
 - `/wage-analysis` の反映ボタンは時給・日給だけを書く。固定月給の人は月給を別途反映すること
 - テスト: `__tests__/salaryEffectiveFrom.test.ts`
 
+## 2026-09-30 追記: 保証日数から本人の欠勤を引く（案A・2026年9月分〜）
+
+`calculateVietnameseSalary` の引数 `personalAbsenceDays`（出面の「欠」の日数 = `wm.restDays`）。9月分以降だけ渡す（`PAYROLL_RULES`）。
+- 本人の保証日数 `personalGuarantee = 保証枠 − min(欠, 保証枠)`
+- 枠内補償日 `compInGuaranteeDays = min(補償日, max(0, personalGuarantee − 出勤 − 有給 − 試験))`
+- 欠勤日数 = 欠（保証から引いた分）＋ max(0, personalGuarantee − 出勤 − 有給 − 試験 − 枠内補償日)
+- 稼働日の空欄は `personalAbsenceDays` に入れない（誤検出があり得るため。従来どおり不足分として控除）
+
 ## 2026-09-15 追記: 現場都合休（0.6補償）は保証枠内で100%（2026年8月分〜）
 
 `calculateVietnameseSalary` で、`ym >= COMP_FULL_WITHIN_GUARANTEE_FROM_YM`（'202608'）のとき:

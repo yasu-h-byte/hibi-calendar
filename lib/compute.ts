@@ -36,6 +36,19 @@ import { JP_SALARY_AVG_MONTHLY_HOURS, JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM, JP_A
 export const COMP_FULL_WITHIN_GUARANTEE_FROM_YM = '202608'
 
 /**
+ * 最低20日保証から本人の欠勤を引く（2026-09-30 代表決定「案A」・2026年9月分から）。
+ *   保証日数 = 20日（閑散月はカレンダー所定）− 本人の欠勤日数（出面の「欠」の日数）
+ *   稼働日の入力漏れ（空欄）はここに入れない: 複数現場の人は主現場のカレンダーで数えるため誤検出があり得る。
+ *   空欄はこれまでどおり「保証に届かない分」として控除され、月次集計に ⚠ 稼働日未入力 が出る
+ *   例: 欠勤1日 → 19日保証、欠勤2日 → 18日保証
+ * 保証日数を超えた現場都合休（0.6補）は、これまでどおり休業手当60%。
+ * 旧（8月分まで）: 稼働日が20日を超える月は、欠勤しても出勤＋有給＋現場都合休で20日に届けば控除なし
+ *   （例: 稼働21日に欠勤1日でも20日分）。自己都合の欠勤が控除されないのはおかしい、との判断で改めた。
+ * オブジェクトにしているのは、影響の試算（過去月に当てはめたら）で書き換えられるようにするため。本番では変えない。
+ */
+export const PAYROLL_RULES = { personalAbsenceReducesGuaranteeFromYm: '202609' }
+
+/**
  * 日本人の1日所定労働時間。割増賃金の算定基礎（日額 ÷ 所定時間）の分母。
  * docs/labor-rules.md「日本人は1日8時間（長年の運用。日給は8時間分の対価）」に対応。
  * 外国人は変形労働時間制で7h。
@@ -1868,13 +1881,6 @@ export function computeMonthly(
       // 所定休日(土・カレンダーoff)労働は別枠1.25倍を支払わず、週40h超過分のみ
       // 法定外残業として1.25倍が自動適用される（法令最低・最適コスト）。
       // 2026-06-XX 修正 (I-7): 中途入退社時は proratedBaseDays を使用
-      const v = calculateVietnameseSalary(
-        wm.id, ym, wm.hourlyRate, proratedBaseDays, attD, main.sites,
-        wm.plUsed, wm.compDays, wm.examDays, calendarDays,
-        // 2026-09-13: 保証枠 = min(20, 配置現場カレンダーの所定日数)。閑散期の月給保証
-        workerPrescribedDays > 0 ? workerPrescribedDays : undefined,
-      )
-      wm.guaranteeDays = v.guaranteeDays
       // 2026-09-13: 配置現場カレンダーの稼働日に出面が無い日を数える（入力漏れ→100%控除の事故検出）
       //   複数現場に記録がある人は「その月に最も多く記録がある現場」（主現場）のカレンダーで判定する。
       //   全現場の和集合にすると、別現場の稼働日まで未入力扱いになって過剰に警告が出るため。
@@ -1901,6 +1907,16 @@ export function computeMonthly(
         }
         if (blank > 0) wm.calendarBlankDays = blank
       }
+      // 2026-09-30（案A・9月分〜）: 本人の欠勤（出面の「欠」）を保証日数から引く
+      const personalAbsence1 = ym >= PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm ? wm.restDays : undefined
+      const v = calculateVietnameseSalary(
+        wm.id, ym, wm.hourlyRate, proratedBaseDays, attD, main.sites,
+        wm.plUsed, wm.compDays, wm.examDays, calendarDays,
+        // 2026-09-13: 保証枠 = min(20, 配置現場カレンダーの所定日数)。閑散期の月給保証
+        workerPrescribedDays > 0 ? workerPrescribedDays : undefined,
+        personalAbsence1,
+      )
+      wm.guaranteeDays = v.guaranteeDays
 
       wm.fixedBasePay = v.fixedBasePay
       wm.additionalAllowance = v.additionalAllowance
@@ -2000,6 +2016,8 @@ export function computeMonthly(
         wm.plUsed, wm.compDays, wm.examDays, calendarDays,
         // 2026-09-13: 保証枠 = min(20, 配置現場カレンダーの所定日数)（時給ブランチと同じ）
         workerPrescribedDays > 0 ? workerPrescribedDays : undefined,
+        // 2026-09-30（案A）: 月給ブランチも同じく本人の「欠」を保証から引く
+        ym >= PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm ? wm.restDays : undefined,
       )
       wm.guaranteeDays = v.guaranteeDays
       // 基本給は月給値を採用（時給からの再計算による丸め誤差を避ける）
@@ -2832,6 +2850,9 @@ export function calculateVietnameseSalary(
   //   全日出勤しても控除されない（月給制＝所定日数が減っても基本給は同額）。
   //   未指定・0 のときは従来どおり baseDays（20日枠）を基準にする。
   prescribedDays?: number,
+  // 2026-09-30 追加: 本人の欠勤日数（出面の「欠」）。渡されたときは保証日数から引く（案A）。
+  //   未指定なら従来どおり（8月分まで）
+  personalAbsenceDays?: number,
 ): VietnameseSalaryResult {
   const ymY = parseInt(ym.slice(0, 4))
   const ymM = parseInt(ym.slice(4, 6))
@@ -3078,8 +3099,11 @@ export function calculateVietnameseSalary(
   //       稼働23日に 出勤18・補償5     → 枠内2日は100%、残り3日は60% → 21.8日分
   //   それより前の月は従来どおり（補償日を欠勤扱いで控除し、全補償日に60%）
   const compFullWithinGuarantee = ym >= COMP_FULL_WITHIN_GUARANTEE_FROM_YM
+  // 本人の欠勤を引いた「その人の保証日数」（2026-09分〜・案A）。未指定なら保証枠そのもの
+  const personalAbsence = personalAbsenceDays !== undefined ? Math.min(Math.max(0, personalAbsenceDays), guaranteeDays) : 0
+  const personalGuarantee = guaranteeDays - personalAbsence
   const compInGuaranteeDays = compFullWithinGuarantee
-    ? Math.min(compDays, Math.max(0, guaranteeDays - regularWorkDays - plUsed - examDays))
+    ? Math.min(compDays, Math.max(0, personalGuarantee - regularWorkDays - plUsed - examDays))
     : 0
   const compAllowance = ceilYen(hourlyRate * 7 * 0.6 * (compDays - compInGuaranteeDays))  // 支給: 切り上げ
 
@@ -3123,7 +3147,9 @@ export function calculateVietnameseSalary(
   //       同じ月に自己都合で1日休む → 欠勤1（19日分）
   //       同じ月に現場都合休(0.6)が2日 → 欠勤2＋休業手当2×0.6（19.2日分）
   //   追加所定・有給日給の枠（baseDays=20）はこれまでどおり
-  const absentDays = Math.max(0, guaranteeDays - regularWorkDays - plUsed - examDays - compInGuaranteeDays)
+  // 2026-09-30（案A・9月分〜）: 欠勤日数 = 本人の欠勤（保証から引いた分）＋ その人の保証日数に届かなかった分。
+  //   personalAbsenceDays 未指定（8月分まで）は personalAbsence=0 なので従来の式と同じ
+  const absentDays = personalAbsence + Math.max(0, personalGuarantee - regularWorkDays - plUsed - examDays - compInGuaranteeDays)
   const absentDeduction = floorYen(hourlyRate * 7 * absentDays)  // 控除: 切り捨て（過少支払い防止）
 
   const salaryNet = fixedBasePay + additionalAllowance + paidLeaveAllowance + nonStatutoryOTAllowance + otAllowance

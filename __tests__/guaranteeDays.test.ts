@@ -79,13 +79,22 @@ describe('カレンダー20日以上の月は従来どおり（20日枠）', () 
     const { days } = run(20, 15, 5, 0, 0)
     expect(days).toBe(20)
   })
-  test('リン（2026-08）: 21日中 出18＋現場都合休2＋欠1 → 20日分（欠1は枠外で吸収）', () => {
+  // 2026-09-30（案A・9月分〜）: 保証日数 = 20 − 本人の欠勤。保証を超えた現場都合休は60%
+  test('21日中 出18＋現場都合休2＋欠1 → 19日保証。現場都合休1日は100%・1日は60%（19.6日分）', () => {
     const { w, days } = run(21, 18, 2, 1, 0)
-    expect(w.absence).toBe(0); expect(w.compAllowance).toBe(0); expect(days).toBe(20)
+    expect(w.absence).toBe(1); expect(w.compInGuaranteeDays).toBe(1); expect(days).toBe(19.6)
   })
-  test('21日中 出17＋現場都合休2＋欠2 → 本人欠勤のうち1日を控除（19日分）', () => {
+  test('21日中 出17＋現場都合休2＋欠2 → 18日保証（18.6日分）', () => {
     const { w, days } = run(21, 17, 2, 2, 0)
+    expect(w.absence).toBe(2); expect(days).toBe(18.6)
+  })
+  test('21日中 出20＋欠1 → 19日保証（旧ルールでは20日分だった自己都合の欠勤を控除）', () => {
+    const { w, days } = run(21, 20, 0, 1, 0)
     expect(w.absence).toBe(1); expect(days).toBe(19)
+  })
+  test('8月分（202608）は旧ルール: 21日中 出18＋現場都合休2＋欠1 → 20日分', async () => {
+    const { PAYROLL_RULES } = await import('@/lib/compute')
+    expect(PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm).toBe('202609')
   })
   test('I: 25日中 出20＋現場都合休5 → 欠勤0＋休業手当（23日分）', () => {
     const { days } = run(25, 20, 5, 0, 0)
