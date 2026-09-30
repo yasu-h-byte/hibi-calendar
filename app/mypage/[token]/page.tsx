@@ -13,6 +13,7 @@
  * 職長もこのページを使う。職長専用の出面画面は用意してあるが、職長は従来どおり
  * PC画面をスマホで操作する運用になったため、ここからは導線を張らない（2026-08-28 代表）。
  */
+import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 
@@ -351,11 +352,11 @@ export default function MyPage() {
 
             <label className="block mb-3">
               <span className="text-xs text-gray-500 font-bold">取得する日</span>
-              <input type="date" value={applyDate} min={data.today}
+              <input type="date" value={applyDate} min={leaveRequestEarliestDate(data.today)}
                 onChange={e => setApplyDate(e.target.value)}
                 className="mt-1 w-full border-2 border-gray-300 rounded-lg px-3 py-3 text-base tabular-nums" />
               <span className="text-[11px] text-gray-400 mt-1 block">
-                当日・未来の日を選べます（現場が稼働している日のみ）
+                前日までに申請してください。当日・過ぎた日は申請できません（現場が稼働している日のみ）
               </span>
             </label>
 

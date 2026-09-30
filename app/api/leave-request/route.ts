@@ -62,9 +62,11 @@ export async function POST(request: NextRequest) {
       const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
       const todayStr = `${jstNow.getFullYear()}-${String(jstNow.getMonth() + 1).padStart(2, '0')}-${String(jstNow.getDate()).padStart(2, '0')}`
 
-      // 過去日は不可。当日と未来日はOK（当日有給申請に対応）
-      if (date < todayStr) {
-        return NextResponse.json({ error: 'Date must be today or future' }, { status: 400 })
+      // 2026-09-30（代表決定）: 有給は前日までに申請。当日・過ぎた日は不可（旧: 当日OK）
+      {
+        const { leaveRequestDateError } = await import('@/lib/leave-rules')
+        const dErr = leaveRequestDateError(String(date), todayStr)
+        if (dErr) return NextResponse.json({ error: dErr }, { status: 400 })
       }
 
       // Parse date

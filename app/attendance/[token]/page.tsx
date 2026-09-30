@@ -913,6 +913,29 @@ export default function StaffAttendancePage() {
           </div>
         )}
 
+        {/* ── 署名ずみのカレンダーを見る（2026-09-30）── 承認後もいつでも現場の休みを確認できるように */}
+        {(() => {
+          const viewable = pendingCalendars.filter(pc => !pc.fullMonthHomeLeave
+            && pc.sites.some(s => s.status === 'approved')
+            && !pc.sites.some(s => s.status === 'approved' && (!s.signed || s.needsResign)))
+          if (viewable.length === 0) return null
+          return (
+            <div className="flex gap-2 mb-3">
+              {viewable.map(pc => {
+                const mm = parseInt(pc.ym.split('-')[1])
+                return (
+                  <button key={`view-${pc.ym}`} type="button"
+                    onClick={() => { setActivePendingCalendar(pc); setShowCalendarModal(true); setCalendarReviewed(false); setCalendarErrorMsg(null) }}
+                    className="flex-1 bg-white border-2 border-gray-200 rounded-xl py-2.5 px-3 text-left active:scale-[0.98]">
+                    <div className="text-sm font-bold text-hibi-charcoal">📅 {mm}月のカレンダー</div>
+                    <div className="text-[11px] text-gray-500">Xem lịch tháng {mm}</div>
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })()}
+
         {/* ── カレンダー承認バナー（2026-05-27 追加 / 2026-06-XX 改) ── */}
         {/* 今月＋翌月の両方をチェックし、未署名 or 再署名要の月ごとにバナーを表示。
             - 未署名: 通常の承認バナー（オレンジ）
@@ -1248,7 +1271,10 @@ export default function StaffAttendancePage() {
             {data.toolBudgetRemaining !== null && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
                 <div className="text-xs text-gray-400 mb-1">🔧 道具代残り / Tiền dụng cụ còn</div>
-                <div className="text-2xl font-bold text-blue-600 tabular-nums">¥{data.toolBudgetRemaining.toLocaleString()}</div>
+                <div className="text-2xl font-bold text-blue-600 tabular-nums">¥{Math.max(0, data.toolBudgetRemaining).toLocaleString()}</div>
+                {data.toolBudgetRemaining < 0 && (
+                  <div className="text-[11px] text-red-600 font-bold">¥{(-data.toolBudgetRemaining).toLocaleString()} 超過 / Vượt</div>
+                )}
                 {(data.toolBudgetPeriodStart || data.toolBudgetPeriodEnd) && (
                   <div className="text-[10px] text-gray-500 mt-1 leading-tight">
                     <div className="text-gray-400">期間 / Kỳ</div>

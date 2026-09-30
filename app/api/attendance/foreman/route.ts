@@ -458,6 +458,14 @@ export async function POST(request: NextRequest) {
       }
       // ── 稼働日ガード（2026-09-02 追加）: 申請・スタッフ経路と同じ基準。
       //   所定休への有給は「20日枠超の有給日給」の過払いになる（2026-06 社労士対応）。
+      // 2026-09-30（代表決定）: 有給は前日まで。職長の代理入力でも当日・過ぎた日は入れられない
+      if (choice === 'leave') {
+        const { leaveRequestDateError } = await import('@/lib/leave-rules')
+        const { todayJstIso: tj } = await import('@/lib/date-utils')
+        const dIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+        const dErr = leaveRequestDateError(dIso, tj())
+        if (dErr) return NextResponse.json({ error: dErr }, { status: 400 })
+      }
       if (choice === 'leave') {
         const { isScheduledWorkDay: iswd } = await import('@/lib/attendance')
         const tIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`

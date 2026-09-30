@@ -3,71 +3,10 @@ import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { getWorkerByToken, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
+import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
 
-// ────────────────────────────────────────
-// 各スタッフ個別の期間計算（入社日ベース、1年サイクル）
-// ────────────────────────────────────────
-
-interface Period {
-  start: string  // YYYY-MM-DD
-  end: string    // YYYY-MM-DD
-  index: number  // 1 = 1年目, 2 = 2年目, ...
-}
-
-// 年数を加算する際、2/29 → 2/28 に正規化（うるう年問題回避）
-function addYears(date: Date, years: number): Date {
-  const d = new Date(date)
-  const origMonth = d.getMonth()
-  d.setFullYear(d.getFullYear() + years)
-  // setFullYearで翌月に繰り上がった場合（例: 2/29 → 3/1）、月末に戻す
-  if (d.getMonth() !== origMonth) {
-    d.setDate(0)
-  }
-  return d
-}
-
-function getCurrentPeriod(hireDate: string, refDate: Date = new Date()): Period | null {
-  if (!hireDate) return null
-  const hire = new Date(hireDate + 'T00:00:00')
-  if (isNaN(hire.getTime())) return null
-
-  // 起点日がまだ来ていない（例: 日本人の 2026-10-01 施行前）→ 「現在の期間」は存在しない。
-  // 2026-09-02 修正: 従来はこの場合も第1期をそのまま返してしまい、施行前なのに
-  // 来期の予算・期間が「現在の残額」としてマイページに表示されていた（白戸さん事案）。
-  if (hire > refDate) return null
-
-  // 入社日から1年ごとの期間を計算し、refDateが含まれる期間を返す
-  let start = new Date(hire)
-  let index = 1
-  while (true) {
-    const next = addYears(start, 1)
-    if (next > refDate) break
-    start = next
-    index++
-  }
-  const end = addYears(start, 1)
-  end.setDate(end.getDate() - 1)
-
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-    index,
-  }
-}
-
-function getPeriodByIndex(hireDate: string, index: number): Period | null {
-  if (!hireDate || index < 1) return null
-  const hire = new Date(hireDate + 'T00:00:00')
-  if (isNaN(hire.getTime())) return null
-  const start = addYears(hire, index - 1)
-  const end = addYears(start, 1)
-  end.setDate(end.getDate() - 1)
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-    index,
-  }
-}
+// 期間の計算は lib/tool-budget-period.ts（スタッフのスマホと共通・2026-09-30）
+type Period = ToolBudgetPeriod
 
 interface Purchase {
   id: string
@@ -131,7 +70,7 @@ export async function GET(request: NextRequest) {
       }
 
       const tbData = await getToolBudgetData()
-      const anchor = tbData.periodAnchors?.[String(worker.id)]
+      const anchor = toolBudgetAnchorOf({ id: worker.id, visa: worker.visaType, hireDate: worker.hireDate }, tbData.periodAnchors).anchor
       if (!anchor) {
         // 期間未設定 → 初期値として予算のみ返す
         const budget = toolBudgetDefaultFor({ visa: worker.visaType, job: worker.jobType }, tbData)
@@ -180,7 +119,8 @@ export async function GET(request: NextRequest) {
     const targetWorkers = workers.filter(w => isToolBudgetEligible(w))
 
     const result = targetWorkers.map(w => {
-      const anchor = tbData.periodAnchors?.[String(w.id)]
+      // 起点日が未設定のベトナム人は入社日を起点にする（2026-09-30）
+      const { anchor, fromHireDate: anchorFromHireDate } = toolBudgetAnchorOf({ id: w.id, visa: w.visa, hireDate: w.hireDate }, tbData.periodAnchors)
       const defaultBudget = toolBudgetDefaultFor({ visa: w.visa, job: w.job }, tbData)
 
       if (!anchor) {
@@ -217,6 +157,7 @@ export async function GET(request: NextRequest) {
         org: w.org || 'hibi',
         hireDate: w.hireDate,
         periodAnchor: anchor,
+        periodAnchorFromHireDate: anchorFromHireDate,
         period,
         notStarted,
         budget,

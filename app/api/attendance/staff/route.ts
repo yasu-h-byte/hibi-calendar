@@ -272,29 +272,16 @@ export async function GET(request: NextRequest) {
         const tbSnap = tbSnapPre
         if (tbSnap.exists()) {
           const tbData = tbSnap.data()
-          const anchor = tbData.periodAnchors?.[String(worker.id)]
-          if (anchor) {
-            const anchorDate = new Date(anchor + 'T00:00:00')
-            if (!isNaN(anchorDate.getTime())) {
-              // 年加算のヘルパー（うるう年 2/29 → 2/28 に正規化）
-              const addYears = (d: Date, y: number): Date => {
-                const r = new Date(d)
-                const m = r.getMonth()
-                r.setFullYear(r.getFullYear() + y)
-                if (r.getMonth() !== m) r.setDate(0)
-                return r
-              }
-              let periodStart = new Date(anchorDate)
-              while (true) {
-                const next = addYears(periodStart, 1)
-                if (next > now) break
-                periodStart = next
-              }
-              const periodEnd = addYears(periodStart, 1)
-              periodEnd.setDate(periodEnd.getDate() - 1)
-              const periodStartStr = periodStart.toISOString().slice(0, 10)
-              toolBudgetPeriodStart = periodStartStr
-              toolBudgetPeriodEnd = periodEnd.toISOString().slice(0, 10)
+          // 期間の計算は道具代の管理画面と共通（lib/tool-budget-period.ts・2026-09-30）。
+          //   起点日が未設定のベトナム人は入社日を起点にする。起点日が先（入社前）なら出さない
+          const { getCurrentPeriod, toolBudgetAnchorOf } = await import('@/lib/tool-budget-period')
+          const anchor = toolBudgetAnchorOf({ id: worker.id, visa: worker.visaType, hireDate: worker.hireDate }, tbData.periodAnchors).anchor
+          const period = anchor ? getCurrentPeriod(anchor, now) : null
+          if (period) {
+            {
+              const periodStartStr = period.start
+              toolBudgetPeriodStart = period.start
+              toolBudgetPeriodEnd = period.end
 
               const tbKey = `${worker.id}_${periodStartStr}`
               const tbRecord = tbData.records?.[tbKey]
@@ -618,6 +605,12 @@ export async function POST(request: NextRequest) {
     //   merge:true で残り続けるバグの根治。
     //   computeAttendanceDeleteFields(entry) で「新エントリに含まれない既知フィールドを
     //   自動算出して削除」することで、漏れなく残骸を消す。
+    // 2026-09-30（代表決定）: 有給は前日までに「有給申請」から。出面画面からの直接入力は受け付けない
+    //   （旧: 当日・過去14日の日にも有給を入れられ、申請・承認を通らずに有給になった）
+    if (choice === 'leave') {
+      const { LEAVE_REQUEST_DEADLINE_MESSAGE } = await import('@/lib/leave-rules')
+      return NextResponse.json({ error: LEAVE_REQUEST_DEADLINE_MESSAGE + '（有給申請から申請してください / Hãy xin qua mục Xin phép）' }, { status: 400 })
+    }
     let entry: AttendanceEntry
     const isTimeBased = !!(startTime && endTime) // 時間ベース入力（202605〜）
     switch (choice) {
@@ -660,56 +653,7 @@ export async function POST(request: NextRequest) {
         entry = restEntry
         break
       }
-      case 'leave': {
-        // 2026-08-04 修正（有給システム総点検）: 残数チェックを getLeaveBalance に統一
-        //   旧実装は2つの穴があった:
-        //   ① 「grantDate 降順の先頭」= 先に作られた未来の付与レコードを掴み、
-        //      未消化の未来枠で判定してすり抜ける（トゥアン事案と同型）
-        //   ② 付与レコードが1件も無いスタッフは latest=undefined でチェック自体を素通り
-        //   また 36ヶ月分の出面を読んでおり、クォータ超過事故歴のある読み取り量だった
-        //   （共通ヘルパーは付与期間の12〜13ヶ月分のみ）。
-        try {
-          const { getLeaveBalance } = await import('@/lib/leave-balance')
-          const targetDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-          // 同じ日の再送信で自分自身を二重カウントしないよう excludeDate を渡す
-          // 2026-09-02 修正: 基準日も対象日に（今日の付与期で判定していた）
-          const bal = await getLeaveBalance(worker.id, targetDate, targetDate)
-          if (bal.remaining <= 0) {
-            return NextResponse.json(
-              { error: '有給休暇の残日数がありません。管理者にご確認ください。 / Không còn ngày nghỉ phép. Vui lòng liên hệ quản lý.' },
-              { status: 400 }
-            )
-          }
-        } catch (chkErr) {
-          // 残チェックでエラーが出ても申請自体は通す（既存運用継続性）
-          console.warn('[staff/leave] 残チェック失敗:', chkErr)
-        }
-        // 2026-09-02（代表決定）: 帰国期間中でも有給にできる（旧: 一律ブロック）。
-        //   給与側の穴（有給を充てても賃金が出ない）は countHomeLeaveDaysInRange で根治済み。
-        // 2026-08-27 追加（有給総点検・第3回）: 非稼働日ガード。
-        //   申請経路(request)・時季指定・日付変更には isScheduledWorkDay があるのに
-        //   この直接入力経路だけ無く、カレンダー休日への有給＝有給日給の過払いが
-        //   ここからだけ通ってしまっていた（2026-06 社労士対応の取り残し）。
-        {
-          const { isScheduledWorkDay } = await import('@/lib/attendance')
-          const targetDate2 = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-          if (!await isScheduledWorkDay(siteId, targetDate2)) {
-            return NextResponse.json(
-              { error: 'この日は現場の非稼働日のため有給を取得できません / Ngày này công trường nghỉ, không thể lấy phép' },
-              { status: 400 }
-            )
-          }
-        }
-        // 2026-06-XX 追加 (IM-3): 退職日跨ぎガード
-        if (worker.retired && `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}` > worker.retired) {
-          return NextResponse.json(
-            { error: '退職日以降は有給を申請できません。' },
-            { status: 400 }
-          )
-        }
-        entry = { w: 0, p: 1, s: 'staff' }
-        break
-      }
+      // case 'leave' は 2026-09-30 に廃止（有給は前日までに「有給申請」から。switch の手前で弾く）
       case 'site_off':
         entry = { w: 0, h: 1, s: 'staff' }
         break

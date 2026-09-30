@@ -92,10 +92,10 @@ export default function CalendarApprovalModal({
         <div className="bg-hibi-navy text-white px-4 py-3 rounded-t-xl flex items-center justify-between">
           <div>
             <div className="font-bold text-lg leading-tight">
-              {yearNum}年{monthNum}月 カレンダー承認
+              {yearNum}年{monthNum}月 {sitesNeedingAction.length === 0 ? 'カレンダー' : 'カレンダー承認'}
             </div>
             <div className="text-xs opacity-80">
-              Xác nhận lịch tháng {monthNum}/{yearNum}
+              {sitesNeedingAction.length === 0 ? `Lịch tháng ${monthNum}/${yearNum}` : `Xác nhận lịch tháng ${monthNum}/${yearNum}`}
             </div>
           </div>
           <button
@@ -109,7 +109,14 @@ export default function CalendarApprovalModal({
 
         {/* 本文 */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-          {hasRevisions ? (
+          {sitesNeedingAction.length === 0 ? (
+            // 署名ずみ（2026-09-30）: 休みの日をいつでも見られるように、承認後も開ける
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">
+              署名ずみです。現場の休みの日を確認できます（グレー＝休み）。
+              <br />
+              Đã ký. Bạn có thể xem ngày nghỉ của công trường (màu xám = nghỉ).
+            </div>
+          ) : hasRevisions ? (
             <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-xs text-amber-900">
               <div className="font-bold mb-1">🔄 カレンダーが更新されました / Lịch đã được cập nhật</div>
               前回サインしたあとに、出勤日や休日が変更されている現場があります。

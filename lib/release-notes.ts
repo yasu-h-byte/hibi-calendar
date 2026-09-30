@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20260930_leave_deadline',
+    title: '有給は前日までに申請／署名後もカレンダーを見られる／道具代の期間',
+    content:
+      '有給は前日までに申請するルールにしました。当日・過ぎた日の申請はできません（日本人・ベトナム人とも。職長の代理入力も同じ。事務の出面修正は対象外）。\n'
+      + 'スタッフのスマホで、署名したあとも「📅 ○月のカレンダー」から現場の休みを見られるようにしました。\n'
+      + '道具代の期間が未設定のベトナム人は入社日を起点にし、スマホに期間と残りが出るようにしました。',
+    category: 'info',
+    publishedAt: '2026-10-01T00:00:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20260930_jp_wage_laborcost',
     title: '日本人の年次改定: 新旧比較と人件費の増加（法定福利費込み）',
     content:
