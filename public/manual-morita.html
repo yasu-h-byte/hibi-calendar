@@ -46,7 +46,7 @@
 
 <h1>DEDURA＋<br>事務業務マニュアル（森田さん向け）</h1>
 <p>対象: 森田さん（事務担当）<br>
-最終更新: 2026年9月28日<br>
+最終更新: 2026年9月30日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <div class="box box-ok">
@@ -229,11 +229,14 @@
 <table>
 <tr><th>メッセージの内容</th><th>やること</th></tr>
 <tr><td>まだ終わっていない月</td><td>月が終わってから（翌月になってから）締める</td></tr>
-<tr><td>職長チェック（日次承認）が完了していない（現場名と日付が出る）</td><td>その現場の職長に出面の職長承認を頼む</td></tr>
+<tr><td>出面の承認が済んでいない（職長承認なし・最終承認なしの現場名と日付が出る。9月分から最終承認も必須）</td><td>職長承認はその現場の職長へ、最終承認は政仁さんへ頼む</td></tr>
 <tr><td>給与計算の自動検算で異常が残っている</td><td>§2-2 の手順4で原因を直す。分からなければ靖仁さんへ</td></tr>
 <tr><td>未処理の有給申請が残っている</td><td>職長承認・政仁さんの最終承認（または却下）を頼む（§3-7）</td></tr>
 <tr><td>対象月に重なる未処理の帰国申請が残っている</td><td>同上</td></tr>
 </table>
+<div class="box box-warn">
+5つがそろっていても、<strong>ベトナム人スタッフの本人確認</strong>（スマホの「○月の出面の確認」）が済んでいない人がいると、名前と状態（未確認・要再確認・本人から連絡あり）の一覧が出ます。連絡があった人は出面を見直し、月次集計のバッジから「対応済み」にしてください。帰国中などでどうしても確認できない人がいれば、そのまま「OK」で締められます（記録に残ります）。
+</div>
 <div class="box">
 締めると、その月の出面は編集できなくなります。🔔 に「月締め未完了」が出ている間は、まだ締めていない会社があります。
 </div>
@@ -247,7 +250,7 @@
 <tr><td>計算根拠 PDF</td><td>「🔍 計算根拠 PDF」</td><td>1人1ページの内訳＋日別カレンダー（有給・欠勤の日付）＋自動検算。<strong>参考値</strong>。Excel の裏付け</td></tr>
 </table>
 
-<div class="step"><div class="step-num">1</div><div class="step-text">「🔒 日比 締め済」「🔒 HFU 締め済」になっていることを確認</div></div>
+<div class="step"><div class="step-num">1</div><div class="step-text">「🔒 日比 締め済」「🔒 HFU 締め済」になっていることを確認（締める前に出した Excel は、先頭に「未確定（締め前）」のシートが入り、ファイル名に【未確定】が付きます。<strong>【未確定】の付いたファイルはキャシュモに送らない</strong>）</div></div>
 <div class="step"><div class="step-num">2</div><div class="step-text">「📤 キャシュモ提出（毎月の2点・会社別）」の枠で、<strong>日比建設の行</strong>の「📊 月次集計 Excel」を押す → Excel がダウンロードされる</div></div>
 <div class="step"><div class="step-num">3</div><div class="step-text">同じ行の「🔍 計算根拠 PDF」を押す → 新しいタブが開くので、印刷（Mac は ⌘+P、Windows は Ctrl+P）→ 送信先「PDFに保存」で保存</div></div>
 <div class="step"><div class="step-num">4</div><div class="step-text"><strong>HFU の行</strong>でも 2〜3 を繰り返す</div></div>
@@ -493,7 +496,7 @@
 <div class="step"><div class="step-num">2</div><div class="step-text">「請求する（応援に行った分）」の表で、請求する会社の右の「<strong>請求書を作る</strong>」を押す<br>
 HFU → 日比建設 の請求書は、画面の上の「<strong>HFU → 日比建設</strong>」の欄の「請求書を作る」から</div></div>
 <div class="step"><div class="step-num">3</div><div class="step-text">下書き（「DRAFT 下書き」の透かし入り）が開く。宛先の会社名・住所／現場ごとの人工・単価・金額（HFU の請求書は「鳶 残業 ◯h」の行もあります）／2ページ目以降の出面明細（人・日ごとの人工）を確認する</div></div>
-<div class="step"><div class="step-num">4</div><div class="step-text">よければ <span class="btn-amber">発行を申請（承認へ回す）</span> → 確認で「OK」</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">よければ <span class="btn-amber">発行を申請（承認へ回す）</span> → 確認で「OK」（請求する日の中に職長承認・最終承認が済んでいない日があると、赤い欄に現場と日が出てボタンを押せません。9月分から）</div></div>
 <div class="step"><div class="step-num">5</div><div class="step-text">画面の帯が「<strong>承認待ち — 森田さんが ◯月◯日 に申請</strong>」になり、一覧のバッジも「<strong>承認待ち</strong>」になる（政仁さんの 🔔 に届きます）</div></div>
 <p>「請求書を作る」が出ない → その月にその会社への応援がありません（出面を確認）。</p>
 
@@ -607,6 +610,7 @@ HFU → 日比建設 の請求書は、画面の上の「<strong>HFU → 日比�
 <h2 id="history">改訂履歴</h2>
 <table>
 <tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-09-30</td><td>§2-4 締めの条件に最終承認（9月分から）と本人確認の一覧を追記。§2-5 締め前に出した Excel の【未確定】の印を追記。§5 請求書は承認がそろってから申請・発行できる旨を追記</td></tr>
 <tr><td>2026-09-28</td><td>メニューを仕事のまとまりごと（出面・勤怠／給与・締め／請求・原価／人・書類／賃金・評価／マスタ・管理）に並べ替えたのに合わせて、メニューの場所の案内を更新。書類庫を追加</td></tr>
 <tr><td>2026-09-26</td><td>§3-8 帰国情報の登録・期間の変更・復帰日の登録を森田さんも補助的にできるように（削除・帰国表示の整理は政仁さん・靖仁さん）</td></tr>
 <tr><td>2026-09-26</td><td>全面改訂: 奥寺さん・佐藤さんから引き継ぐ4分野（給与締め・有給・道具代・請求）を1冊に統合。請求書の発行マニュアル・佐藤さん道具代マニュアルの内容を取り込み</td></tr>
@@ -618,7 +622,7 @@ HFU → 日比建設 の請求書は、画面の上の「<strong>HFU → 日比�
 </table>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">DEDURA＋ / 事務業務マニュアル（森田さん向け） / 最終更新: 2026-09-28</p>
+<p style="text-align:center; color:#999; font-size:12px;">DEDURA＋ / 事務業務マニュアル（森田さん向け） / 最終更新: 2026-09-30</p>
 
 </body>
 </html>

@@ -21,7 +21,7 @@ import {
 } from './hfu-invoice'
 import type { CompanyProfile, MainData, ComputeResult } from './compute'
 import type { AttendanceEntry } from '@/types'
-import { approvalGap, describeApprovalGap, type ApprovalGap } from './approval-gap'
+import { approvalGap, describeApprovalGap, FINAL_APPROVAL_REQUIRED_FROM_YM, type ApprovalGap } from './approval-gap'
 import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
 
 const COLLECTION = 'peerInvoices'
@@ -179,7 +179,7 @@ function prefixFor(main: MainData, rec: { companyId: string; issuer: CompanyProf
  * 本人の出面確認と同じ考え方（lib/approval-gap.ts）。対象は出面明細（detail）に人工がある「現場×日」。
  * これより前の月は承認の運用が違う（HFU → 日比建設 は過去の月をさかのぼって発行することがある）ので見ない。
  */
-export const INVOICE_APPROVAL_REQUIRED_FROM_YM = '202609'
+export const INVOICE_APPROVAL_REQUIRED_FROM_YM = FINAL_APPROVAL_REQUIRED_FROM_YM
 
 export async function invoiceApprovalGap(
   main: MainData, ym: string, detail: PeerInvoiceSiteDetail[],

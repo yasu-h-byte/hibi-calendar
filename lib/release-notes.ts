@@ -79,6 +79,17 @@ export const RELEASE_NOTES: Announcement[] = [
     publishedBy: '日比靖仁',
   },
   {
+    id: 'rn_20260930_lock_final_approval',
+    title: '月締めは最終承認まで必須／締め前の帳票に【未確定】の印',
+    content:
+      '9月分から、月締めには職長承認に加えて最終承認（事業責任者）も必要になりました。済んでいない現場と日がメッセージに出ます。\n'
+      + '帳票出力で、締める前に出した提出用の帳票（出面一覧・月次集計・実労働時間明細・現場別出面一覧・外注確認書）は、先頭に「未確定（締め前）」のシートが入り、ファイル名に【未確定】が付きます。キャシュモ・社労士・外注先への提出には、締めたあとに出し直したものを使ってください。',
+    category: 'info',
+    publishedAt: '2026-10-01T03:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['owner', 'approver', 'jimu'],
+  },
+  {
     id: 'rn_20260930_invoice_after_approval',
     title: '請求書は全部の日の承認がそろってから発行',
     content:

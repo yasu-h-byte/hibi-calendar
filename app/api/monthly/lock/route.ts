@@ -29,6 +29,7 @@ function currentYmJst(): string {
  * ① 月の完了: 進行中・未来の月は締め不可（月が終わって翌月になってから）
  * ② 職長チェック: 労働実績（出勤 w>0 / 残業 o>0）のある全「現場×日」に
  *    職長の日次承認（attendanceApprovals の foreman）が付いていること。
+ *    2026-09 分からは最終承認（final・事業責任者）も必須（lib/approval-gap.ts・2026-09-30 代表決定）。
  *    組織別締めの場合は、その組織のスタッフの実績がある現場×日のみ対象。
  *    ※ 有給(p)・休み(r)・現場都合(h)・帰国(hk) のみの日は管理プロセス由来のため対象外
  *
@@ -65,26 +66,42 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
 
   if (needed.size === 0) return null  // 実績ゼロ（対象者なし月）は承認チェック不要
 
-  // 当月の職長承認済み (現場_ym_日) を収集
-  const approved = new Set<string>()
-  const apSnap = await getDocs(collection(db, 'attendanceApprovals'))
-  apSnap.forEach(s => {
-    if (!s.id.includes(`_${ym}_`)) return
-    const d = s.data() as { foreman?: unknown }
-    if (d.foreman) approved.add(s.id)
-  })
+  // 2026-09 分からは職長承認に加えて最終承認（事業責任者）も必須（2026-09-30 代表決定）。
+  //   判定は本人の出面確認・請求書と共通（lib/approval-gap.ts。工種サイトは親にまとめ、子で承認した古い記録も数える）
+  const { approvalGap, describeApprovalGap, FINAL_APPROVAL_REQUIRED_FROM_YM } = await import('@/lib/approval-gap')
+  if (ym >= FINAL_APPROVAL_REQUIRED_FROM_YM) {
+    const { calendarSiteIdOf } = await import('@/lib/site-hierarchy')
+    const sitesH = main.sites as unknown as import('@/lib/site-hierarchy').HierarchySite[]
+    const famDays = [...needed.entries()].flatMap(([sid, days]) =>
+      [...days].map(day => ({ familyId: calendarSiteIdOf(sitesH, sid), day })))
+    const gap = await approvalGap(sitesH as { id: string; parentId?: string }[], ym, famDays)
+    if (gap.foremanMissing.length || gap.finalMissing.length) {
+      const nameOf = (id: string) => main.sites.find(s => s.id === id)?.name || id
+      return `出面の承認が済んでいない日があるため締められません（職長承認なし ${gap.foremanMissing.length}日・最終承認なし ${gap.finalMissing.length}日）。\n`
+        + `${describeApprovalGap(gap, nameOf)}\n出面画面で職長承認・最終承認を済ませてから締めてください`
+    }
+  } else {
+    // 2026-08 分まで: 職長承認だけ（当月の職長承認済み (現場_ym_日) を収集）
+    const approved = new Set<string>()
+    const apSnap = await getDocs(collection(db, 'attendanceApprovals'))
+    apSnap.forEach(s => {
+      if (!s.id.includes(`_${ym}_`)) return
+      const d = s.data() as { foreman?: unknown }
+      if (d.foreman) approved.add(s.id)
+    })
 
-  const siteNames = new Map(main.sites.map(s => [s.id, s.name]))
-  const missing: string[] = []
-  let missingTotal = 0
-  for (const [sid, days] of needed) {
-    const md = [...days].filter(d => !approved.has(`${sid}_${ym}_${String(d)}`)).sort((a, b) => a - b)
-    if (md.length === 0) continue
-    missingTotal += md.length
-    missing.push(`${siteNames.get(sid) || sid}: ${md.slice(0, 8).join(',')}日${md.length > 8 ? ` 他${md.length - 8}日` : ''}`)
-  }
-  if (missing.length > 0) {
-    return `職長チェック（日次承認）が完了していないため締められません（未承認 ${missingTotal}日分）。\n${missing.join('\n')}\n出面画面で職長承認を完了してから締めてください`
+    const siteNames = new Map(main.sites.map(s => [s.id, s.name]))
+    const missing: string[] = []
+    let missingTotal = 0
+    for (const [sid, days] of needed) {
+      const md = [...days].filter(d => !approved.has(`${sid}_${ym}_${String(d)}`)).sort((a, b) => a - b)
+      if (md.length === 0) continue
+      missingTotal += md.length
+      missing.push(`${siteNames.get(sid) || sid}: ${md.slice(0, 8).join(',')}日${md.length > 8 ? ` 他${md.length - 8}日` : ''}`)
+    }
+    if (missing.length > 0) {
+      return `職長チェック（日次承認）が完了していないため締められません（未承認 ${missingTotal}日分）。\n${missing.join('\n')}\n出面画面で職長承認を完了してから締めてください`
+    }
   }
 
   // ③ 給与計算の自動検算で critical が残っていないこと（給与が法令準拠で計算できている）

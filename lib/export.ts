@@ -1312,6 +1312,30 @@ export function generatePerSiteAttendance(data: PerSiteAttendanceData): XLSX.Wor
 //  Workbook → Buffer
 // ────────────────────────────────────────
 
+/**
+ * 締める前（未確定）に出した帳票の印（2026-09-30 代表決定）。
+ * 先頭に「未確定（締め前）」のシートを差し込み、開いたときに最初に目に入るようにする。
+ * キャシュモ・社労士・外注先へ、締める前の数字を提出してしまう事故を防ぐ（出すこと自体は止めない）。
+ */
+export const UNCONFIRMED_SHEET_NAME = '未確定（締め前）'
+export function markUnconfirmedWorkbook(wb: XLSX.WorkBook, info: { ymLabel: string; orgLabel: string; docLabel: string; at: string }): XLSX.WorkBook {
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['⚠ この帳票は、月締めの前（未確定）に出したものです'],
+    [],
+    [`対象: ${info.ymLabel}・${info.orgLabel}（${info.docLabel}）`],
+    [`出力日時: ${info.at}`],
+    [],
+    ['まだ月締めしていないため、出面の修正や承認によって数字が変わることがあります。'],
+    ['キャシュモ・社労士・外注先への提出には使わず、月締めのあとに出し直したものを使ってください。'],
+    [],
+    ['数字は2枚目以降のシートにあります。'],
+  ])
+  ws['!cols'] = [{ wch: 90 }]
+  XLSX.utils.book_append_sheet(wb, ws, UNCONFIRMED_SHEET_NAME)
+  wb.SheetNames = [UNCONFIRMED_SHEET_NAME, ...wb.SheetNames.filter(n => n !== UNCONFIRMED_SHEET_NAME)]
+  return wb
+}
+
 export function workbookToBuffer(wb: XLSX.WorkBook): Buffer {
   const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' })
   return Buffer.from(buf)

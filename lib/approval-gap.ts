@@ -13,6 +13,13 @@
 import { db } from './firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 
+/**
+ * 最終承認（事業責任者）まで必須にする月の始まり（2026-09-30 代表決定）。
+ * 月締め・請求書の発行はこの月から「職長承認＋最終承認」がそろっていることを求める。
+ * それより前の月は最終承認の運用が無かった（締め直し・さかのぼりの請求書を止めない）
+ */
+export const FINAL_APPROVAL_REQUIRED_FROM_YM = '202609'
+
 type Approval = { foreman?: unknown; final?: unknown } | null
 
 const AP_TTL_MS = 2 * 60 * 1000

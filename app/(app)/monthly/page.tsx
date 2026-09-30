@@ -754,7 +754,8 @@ function MonthlyPageInner() {
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
             a.href = url
-            a.download = filename
+            // 締める前に出した帳票は、ファイル名の頭に【未確定】（サーバが X-Unconfirmed で知らせる・2026-09-30）
+            a.download = res.headers.get('X-Unconfirmed') === '1' ? `【未確定】${filename}` : filename
             a.click()
             URL.revokeObjectURL(url)
           } finally {
@@ -784,6 +785,12 @@ function MonthlyPageInner() {
             <div>
               <h1 className="text-xl font-bold text-hibi-navy dark:text-white">帳票出力</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">帳票はすべてここから出します。対象月は右で選びます（集計タブと共通）</p>
+              {(!data?.lockedHibi || !data?.lockedHfu) && (
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                  ⚠ 月締めの前に出した提出用の帳票（出面一覧・月次集計・実労働時間明細・現場別出面一覧・外注確認書）は、
+                  先頭に「未確定（締め前）」のシートが入り、ファイル名に【未確定】が付きます。提出には締めたあとに出し直したものを使ってください。
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600 dark:text-gray-300">対象月</span>

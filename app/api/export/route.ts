@@ -15,7 +15,9 @@ import {
   generateActualHoursExcel,
   generateConsentLedger,
   workbookToBuffer,
+  markUnconfirmedWorkbook,
 } from '@/lib/export'
+import { isMonthLockedInLocks } from '@/lib/locks'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 import { db } from '@/lib/firebase'
 import { collection, getDocs, query, where } from '@/lib/fsdb'
@@ -71,6 +73,25 @@ export async function GET(request: NextRequest) {
     let buffer: Buffer
     let filename: string
 
+    // ── 締める前の帳票には「未確定」の印（2026-09-30 代表決定）──
+    //   提出に使う帳票（出面一覧・月次集計・実労働時間明細・現場別出面一覧・外注確認書）は、その月を締める前に出すと
+    //   先頭に「未確定（締め前）」のシートを差し込み、ファイル名の頭に【未確定】を付ける（出すこと自体は止めない）。
+    //   会社別の帳票はその会社の締め、両社まとめの帳票は両社の締めで判定（lib/locks.ts）
+    const orgParam = searchParams.get('org')
+    const scopeOrg = type === 'hibi' || type === 'hfu' ? type
+      : (type === 'monthlyExcel' || type === 'actualHours') && (orgParam === 'hibi' || orgParam === 'hfu') ? orgParam
+      : undefined
+    const unconfirmed = !!ymStr && !isMonthLockedInLocks(main.locks as Record<string, unknown>, ymStr, scopeOrg)
+    const finalizeWb = (wb: Parameters<typeof workbookToBuffer>[0], docLabel: string) => unconfirmed
+      ? markUnconfirmedWorkbook(wb, {
+          ymLabel: `${ymStr.slice(0, 4)}年${parseInt(ymStr.slice(4, 6))}月分`,
+          orgLabel: scopeOrg === 'hibi' ? '日比建設' : scopeOrg === 'hfu' ? 'HFU' : '両社',
+          docLabel,
+          at: new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
+        })
+      : wb
+    const UNCONFIRMED_PREFIX = '【未確定】'
+
     switch (type) {
       case 'hibi':
       case 'hfu': {
@@ -93,8 +114,8 @@ export async function GET(request: NextRequest) {
         }
         // 2026-09-17: 両社共通の生成関数に統一。ファイル名も他の帳票と同じ「帳票名_会社_年月」に
         const wb = generateOrgAttendance(exportData, type)
-        buffer = workbookToBuffer(wb)
-        filename = `出面一覧_${ATTENDANCE_ORG_LABEL[type]}_${ymStr}.xlsx`
+        buffer = workbookToBuffer(finalizeWb(wb, '出面一覧'))
+        filename = `${unconfirmed ? UNCONFIRMED_PREFIX : ''}出面一覧_${ATTENDANCE_ORG_LABEL[type]}_${ymStr}.xlsx`
         break
       }
 
@@ -119,8 +140,8 @@ export async function GET(request: NextRequest) {
             sites: activeSites,
             siteRates: buildSiteRates(subcon.id),
           })
-          buffer = workbookToBuffer(wb)
-          filename = `外注確認書_${subcon.name}_${ymStr}.xlsx`
+          buffer = workbookToBuffer(finalizeWb(wb, '外注確認書'))
+          filename = `${unconfirmed ? UNCONFIRMED_PREFIX : ''}外注確認書_${subcon.name}_${ymStr}.xlsx`
         } else {
           // Generate for all subcons in one workbook
           // We'll create individual workbooks merged: one sheet per subcon
@@ -142,8 +163,8 @@ export async function GET(request: NextRequest) {
             XLSX.utils.book_append_sheet(wb, ws, sheetName)
           }
 
-          buffer = workbookToBuffer(wb)
-          filename = `外注確認書_全社_${ymStr}.xlsx`
+          buffer = workbookToBuffer(finalizeWb(wb, '外注確認書'))
+          filename = `${unconfirmed ? UNCONFIRMED_PREFIX : ''}外注確認書_全社_${ymStr}.xlsx`
         }
         break
       }
@@ -250,8 +271,8 @@ export async function GET(request: NextRequest) {
           siteNames: monthSiteNames,
           prescribedDays,
         })
-        buffer = workbookToBuffer(wb)
-        filename = `月次集計${tabLabel}_${ymStr}.xlsx`
+        buffer = workbookToBuffer(finalizeWb(wb, '月次集計'))
+        filename = `${unconfirmed ? UNCONFIRMED_PREFIX : ''}月次集計${tabLabel}_${ymStr}.xlsx`
         break
       }
 
@@ -265,8 +286,8 @@ export async function GET(request: NextRequest) {
           assign: main.assign,
           massign: main.massign,
         })
-        buffer = workbookToBuffer(wb)
-        filename = `現場別出面一覧_${ymStr}.xlsx`
+        buffer = workbookToBuffer(finalizeWb(wb, '現場別出面一覧'))
+        filename = `${unconfirmed ? UNCONFIRMED_PREFIX : ''}現場別出面一覧_${ymStr}.xlsx`
         break
       }
 
@@ -326,8 +347,8 @@ export async function GET(request: NextRequest) {
           })),
           org: orgFilter,
         })
-        buffer = workbookToBuffer(wb)
-        filename = `実労働時間明細${orgLabel}_${ymStr}.xlsx`
+        buffer = workbookToBuffer(finalizeWb(wb, '実労働時間明細'))
+        filename = `${unconfirmed ? UNCONFIRMED_PREFIX : ''}実労働時間明細${orgLabel}_${ymStr}.xlsx`
         break
       }
 
@@ -418,6 +439,9 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
         'Content-Length': String(buffer.length),
+        // 画面がファイル名（【未確定】の印を含む）をそのまま使えるように
+        'Access-Control-Expose-Headers': 'Content-Disposition',
+        'X-Unconfirmed': unconfirmed ? '1' : '0',
       },
     })
   } catch (error) {
