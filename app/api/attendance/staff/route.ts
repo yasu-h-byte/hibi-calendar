@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkerByToken, mapRawWorkers } from '@/lib/workers'
+import { getWorkerByToken, mapRawWorkers, hourlyRateOn } from '@/lib/workers'
 import {
   getAttendanceDoc,
   setAttendanceEntry,
@@ -460,6 +460,12 @@ export async function GET(request: NextRequest) {
       pastDays,
       missingDays,
       toolBudgetRemaining,
+      // 自分の都合で1日休むと減る給料の目安（時給 × 7時間）。新ルールの時給制の人だけ（2026-09-30）
+      absenceDayPay: (() => {
+        if (!worker.visaType || worker.visaType === 'none' || worker.useOldRules) return null
+        const rate = hourlyRateOn(worker, tIso)
+        return rate && rate > 0 ? Math.round(rate * 7) : null
+      })(),
       toolBudgetPeriodStart,
       toolBudgetPeriodEnd,
       plRemaining,
@@ -551,9 +557,10 @@ export async function POST(request: NextRequest) {
       const { todayJstIso, addDaysIso } = await import('@/lib/date-utils')
       const dateIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
       const today = todayJstIso()
-      const futureLimit = choice === 'rest' ? addDaysIso(today, 30) : today
+      // 会社都合の休み（comp・2026-09-30）も「明日は現場が休み」と言われた日を先に入れられるよう、休みと同じ30日先まで
+      const futureLimit = (choice === 'rest' || choice === 'comp') ? addDaysIso(today, 30) : today
       if (dateIso > futureLimit) {
-        return NextResponse.json({ error: choice === 'rest'
+        return NextResponse.json({ error: (choice === 'rest' || choice === 'comp')
           ? '欠勤届は30日先まで提出できます / Đơn xin nghỉ chỉ nộp được trước tối đa 30 ngày'
           : '未来の日付には入力できません / Không thể nhập cho ngày trong tương lai' }, { status: 400 })
       }
@@ -706,6 +713,22 @@ export async function POST(request: NextRequest) {
       case 'site_off':
         entry = { w: 0, h: 1, s: 'staff' }
         break
+      case 'comp': {
+        // 会社の都合の休み（現場が休みになった日）＝ 0.6補（2026-09-30 追加）。
+        //   以前はスマホに選択肢が無く、本人が「その他」＋メモ「60%」で出して欠勤扱いになっていた
+        //   （201・2026-08-26）。本人の入力 → 職長の確認、の流れは出勤と同じ。
+        //   カレンダーの休みの日は給料の対象外なので入れさせない
+        const { isScheduledWorkDay } = await import('@/lib/attendance')
+        const compDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+        if (!await isScheduledWorkDay(siteId, compDate)) {
+          return NextResponse.json(
+            { error: 'この日はカレンダーで休みの日です。「会社の都合の休み」は仕事の日だけ選べます / Ngày này là ngày nghỉ theo lịch. Chỉ chọn "nghỉ do công ty" cho ngày làm việc' },
+            { status: 400 }
+          )
+        }
+        entry = { w: 0.6, s: 'staff' }
+        break
+      }
       default:
         return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
     }

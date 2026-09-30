@@ -84,6 +84,8 @@ interface WorkerMonthly {
   lateNightRiskDays?: number
   guaranteeDays?: number
   calendarBlankDays?: number
+  /** 「その他」の休みでメモが会社都合を指している日（0.6補の選び間違いの疑い） */
+  suspectCompRestDays?: number[]
   compAllowance?: number
   regularWorkDays?: number
   // 出向情報
@@ -400,6 +402,23 @@ function MonthlyPageInner() {
   }, [password, ym, calcDefaultPrescribedDays])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // 月末の本人確認（スタッフがスマホで「正しい／まちがいがある」を押した記録・2026-09-30）
+  const [staffConfirms, setStaffConfirms] = useState<Record<number, { status: 'ok' | 'issue'; note?: string; at: string }>>({})
+  useEffect(() => {
+    if (!password || !ym) return
+    let alive = true
+    fetch(`/api/attendance/confirm?ym=${ym}`, { headers: { 'x-admin-password': password } })
+      .then(r => (r.ok ? r.json() : { items: [] }))
+      .then((j: { items?: { workerId: number; status: 'ok' | 'issue'; note?: string; at: string }[] }) => {
+        if (!alive) return
+        const m: Record<number, { status: 'ok' | 'issue'; note?: string; at: string }> = {}
+        for (const it of j.items || []) m[it.workerId] = { status: it.status, note: it.note, at: it.at }
+        setStaffConfirms(m)
+      })
+      .catch(() => { if (alive) setStaffConfirms({}) })
+    return () => { alive = false }
+  }, [password, ym])
 
   // ── Lock toggle ──
 
@@ -1408,6 +1427,28 @@ function MonthlyPageInner() {
                         )}
                         {/* 2026-09-13: 配置現場カレンダーの稼働日に出面が無い日。閑散期に「現場都合休(0.6)」の
                               入れ忘れがそのまま100%の欠勤控除になる事故を防ぐための警告（計算は変えない） */}
+                        {/* 2026-09-30: 「その他」の休みでメモが「60%」「現場」など＝会社の都合の休みの選び間違いの疑い */}
+                        {(w.suspectCompRestDays?.length || 0) > 0 && (
+                          <span
+                            className="ml-1.5 text-[10px] bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            title={`${(w.suspectCompRestDays || []).join('・')}日は「その他」の休み（欠勤）で登録されていますが、メモが会社都合（60%・現場休みなど）を指しています。会社の都合の休みなら、出面を「0.6補」に直してください。このままだと欠勤として計算されます。`}
+                          >
+                            ⚠ 会社都合の休み？ {(w.suspectCompRestDays || []).join('・')}日
+                          </span>
+                        )}
+                        {/* 2026-09-30: 月末の本人確認（スタッフのスマホ） */}
+                        {w.visa !== 'none' && staffConfirms[w.id] && (
+                          <span
+                            className={`ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold align-middle ${staffConfirms[w.id].status === 'ok'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}
+                            title={staffConfirms[w.id].status === 'ok'
+                              ? `本人がスマホで「正しい」と確認しました（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）`
+                              : `本人から「まちがいがある」と連絡がありました（${new Date(staffConfirms[w.id].at).toLocaleString('ja-JP')}）:\n${staffConfirms[w.id].note || ''}\n出面を直すと、本人のスマホに「もう一度確認してください」と出ます。`}
+                          >
+                            {staffConfirms[w.id].status === 'ok' ? '本人確認 ✓' : '⚠ 本人から連絡あり'}
+                          </span>
+                        )}
                         {(w.calendarBlankDays || 0) > 0 && (
                           <span
                             className="ml-1.5 text-[10px] bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"

@@ -158,6 +158,18 @@ workSchedule?: {
 ### announcements/{auto}
 お知らせ（ダッシュボード表示用）。
 
+### attConfirm/{ym}_{workerId}
+月末の本人確認（2026-09-30・`docs/attendance.md`）。1人1か月1件（上書き）。出面そのものは変えない。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `ym` / `workerId` / `workerName` | | 対象月・本人 |
+| `status` | `'ok'\|'issue'` | 正しい／まちがいがある |
+| `note` | string | まちがいの内容（issue のときだけ） |
+| `summary` | `StaffMonthSummary` | 記録時にサーバで数えた数字（`lib/attendance-confirm.ts`） |
+| `fingerprint` | string | 出面が後で変わったかの判定用 |
+| `at` | string | ISO 時刻 |
+
 ### evaluations/{workerId_evaluationDate}
 評価データ（複数評価者対応）。
 

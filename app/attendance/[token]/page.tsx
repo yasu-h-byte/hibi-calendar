@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus, isTimeBasedMobile, isTimeBasedEntry } from '@/types'
 import CalendarApprovalModal, { type PendingCalendarData } from '@/components/attendance/CalendarApprovalModal'
 import LeaveRequestModal from '@/components/attendance/LeaveRequestModal'
 import HomeLongLeaveModal from '@/components/attendance/HomeLongLeaveModal'
-import RestReportModal from '@/components/attendance/RestReportModal'
+import RestReportModal, { COMPANY_REST } from '@/components/attendance/RestReportModal'
+import MonthConfirmCard from '@/components/attendance/MonthConfirmCard'
 
 interface SiteBreakConfig {
   enabled: boolean
@@ -45,6 +46,8 @@ interface StaffData {
   toolBudgetPeriodStart?: string | null
   toolBudgetPeriodEnd: string | null
   plRemaining: number | null
+  /** 自分の都合で1日休むと減る給料の目安（円・新ルールの時給制のみ） */
+  absenceDayPay?: number | null
   plExpiryDate: string | null
   // Phase 8: FIFO内訳
   plCarryOverRemaining?: number | null
@@ -133,6 +136,12 @@ export default function StaffAttendancePage() {
   const [restNote, setRestNote] = useState('')
   // 欠勤届の対象日 (YYYY-MM-DD)。デフォルトは今日、未来の日付も選択可
   const [restDate, setRestDate] = useState('')
+  // 過去の日から開いた欠勤届（日付を固定・最小日をその日に）
+  const [restLockDate, setRestLockDate] = useState(false)
+  // 欠勤届から「有給を申請する」を選んだときの日付（有給モーダルの初期値）
+  const leavePresetDate = useRef<string | null>(null)
+  // 出面を読み直すたびに増やす（月末の本人確認カードも読み直す）
+  const [dataVersion, setDataVersion] = useState(0)
 
   // ── 翌月カレンダー承認用 state（2026-05-27 追加） ──
   // 旧 /calendar/public は「名前を選んで」方式で他人になりすませる脆弱性があったため、
@@ -179,6 +188,7 @@ export default function StaffAttendancePage() {
       }
       const d: StaffData = await res.json()
       setData(d)
+      setDataVersion(v => v + 1)
       setSiteId(d.site.id)
 
       // Restore OT state from current entry
@@ -366,14 +376,16 @@ export default function StaffAttendancePage() {
   useEffect(() => {
     if (showLeaveModal) {
       fetchLeaveRequests()
-      // Set default date to 5 days from now
+      // Set default date to 5 days from now（欠勤届から来たときはその日）
       const minD = new Date()
       minD.setDate(minD.getDate() + 5)
       const y = minD.getFullYear()
       const m = String(minD.getMonth() + 1).padStart(2, '0')
       const d = String(minD.getDate()).padStart(2, '0')
-      setLeaveDateFrom(`${y}-${m}-${d}`)
-      setLeaveDateTo(`${y}-${m}-${d}`)
+      const preset = leavePresetDate.current
+      leavePresetDate.current = null
+      setLeaveDateFrom(preset || `${y}-${m}-${d}`)
+      setLeaveDateTo(preset || `${y}-${m}-${d}`)
       setLeaveReason('')
       setLeaveError(null)
       setLeaveSuccess(null)
@@ -678,11 +690,28 @@ export default function StaffAttendancePage() {
       // 欠勤届モーダルを開く
       setShowOT(false)
       setRestDate(todayDateStr())
+      setRestLockDate(false)
       setShowRestModal(true)
     } else {
       setShowOT(false)
       submitEntry(choice)
     }
+  }
+
+  // 過去の日（または今日）の「休み」から欠勤届を開く。日付は固定（2026-09-30）
+  const openRestModalForDay = (yy: number, mm: number, dd: number) => {
+    setShowOT(false)
+    setRestReason('personal')
+    setRestNote('')
+    setRestDate(`${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`)
+    setRestLockDate(true)
+    setShowRestModal(true)
+  }
+
+  // 有給申請ができる最初の日（今日 + 5日。LeaveRequestModal と同じ）
+  const leaveMinDateStr = () => {
+    const d0 = new Date(); d0.setDate(d0.getDate() + 5)
+    return `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`
   }
 
   // 今日の日付を YYYY-MM-DD で返す（欠勤届モーダルの初期値・最小日）
@@ -700,7 +729,11 @@ export default function StaffAttendancePage() {
     const parts = restDate.split('-').map(n => parseInt(n, 10))
     const validDate = parts.length === 3 && parts.every(n => Number.isFinite(n) && n > 0)
     const [ry, rm, rd] = validDate ? parts : [data.today.year, data.today.month, data.today.day]
-    const body: Record<string, unknown> = {
+    // 「現場が休み（会社の都合）」は欠勤ではなく 0.6補（choice: 'comp'）として登録する（2026-09-30）
+    const isCompany = restReason === COMPANY_REST
+    const body: Record<string, unknown> = isCompany ? {
+      token, siteId: data.site.id, year: ry, month: rm, day: rd, choice: 'comp',
+    } : {
       token,
       siteId: data.site.id,
       year: ry,
@@ -718,6 +751,8 @@ export default function StaffAttendancePage() {
       })
       if (res.ok) {
         setShowRestModal(false)
+        setRestLockDate(false)
+        setEditingPast(null)
         setRestReason('sick')
         setRestNote('')
         setSuccessMsg('✓')
@@ -835,6 +870,9 @@ export default function StaffAttendancePage() {
             {calendarSuccessMsg}
           </div>
         )}
+
+        {/* ── 月末の本人確認（2026-09-30）── 月末3日と月初10日だけ出る */}
+        <MonthConfirmCard token={token} reloadKey={dataVersion} />
 
         {/* ── 未入力の督促バナー（2026-08-28 追加）──
             過去14日の未入力稼働日をチップで並べ、タップでその日の入力モーダルへ直行。
@@ -1050,7 +1088,7 @@ export default function StaffAttendancePage() {
 
             {/* Rest / Leave buttons */}
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={() => { setRestDate(todayDateStr()); setShowRestModal(true) }}
+              <button onClick={() => { setRestDate(todayDateStr()); setRestLockDate(false); setShowRestModal(true) }}
                 disabled={saving}
                 className="bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-base font-bold active:bg-gray-100 transition disabled:opacity-50">
                 欠勤届 / Xin nghi
@@ -1380,43 +1418,9 @@ export default function StaffAttendancePage() {
                     出勤登録
                   </button>
 
-                  {/* Rest button */}
+                  {/* Rest button — 理由（会社の都合／自分の都合）を選ぶ画面を通す（2026-09-30） */}
                   <button
-                    onClick={async () => {
-                      if (!data || saving) return
-                      setSaving(true)
-                      setSuccessMsg(null)
-                      try {
-                        const res = await fetch('/api/attendance/staff', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            token,
-                            siteId: data.site.id,
-                            year: pd.year,
-                            month: pd.month,
-                            day: pd.day,
-                            choice: 'rest',
-                            restReason: 'personal',
-                          }),
-                        })
-                        if (res.ok) {
-                          setSuccessMsg('✓')
-                          setTimeout(() => setSuccessMsg(null), 1500)
-                          setEditingPast(null)
-                          fetchData()
-                        } else {
-                          const d = await res.json()
-                          setError(d.error || 'エラー')
-                          setTimeout(() => setError(null), 3000)
-                        }
-                      } catch {
-                        setError('つうしん エラー / Lỗi kết nối')
-                        setTimeout(() => setError(null), 3000)
-                      } finally {
-                        setSaving(false)
-                      }
-                    }}
+                    onClick={() => openRestModalForDay(pd.year, pd.month, pd.day)}
                     disabled={saving}
                     className="w-full bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 font-bold active:bg-gray-100 active:scale-95 disabled:opacity-50"
                   >
@@ -1435,40 +1439,8 @@ export default function StaffAttendancePage() {
                       key={btn.choice}
                       onClick={async () => {
                         if (btn.choice === 'rest') {
-                          // 過去日の休みはrestReason='personal'をデフォルト送信
-                          if (!data || saving) return
-                          setSaving(true)
-                          setSuccessMsg(null)
-                          try {
-                            const res = await fetch('/api/attendance/staff', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                token,
-                                siteId: data.site.id,
-                                year: pd.year,
-                                month: pd.month,
-                                day: pd.day,
-                                choice: 'rest',
-                                restReason: 'personal',
-                              }),
-                            })
-                            if (res.ok) {
-                              setSuccessMsg('✓')
-                              setTimeout(() => setSuccessMsg(null), 1500)
-                              setEditingPast(null)
-                              fetchData()
-                            } else {
-                              const d = await res.json()
-                              setError(d.error || 'エラー')
-                              setTimeout(() => setError(null), 3000)
-                            }
-                          } catch {
-                            setError('つうしん エラー / Lỗi kết nối')
-                            setTimeout(() => setError(null), 3000)
-                          } finally {
-                            setSaving(false)
-                          }
+                          // 過去日の休みも理由（会社の都合／自分の都合）を選ぶ画面を通す（2026-09-30）
+                          openRestModalForDay(pd.year, pd.month, pd.day)
                         } else {
                           submitEntry(btn.choice, 0, pd.year, pd.month, pd.day)
                         }
@@ -1496,16 +1468,26 @@ export default function StaffAttendancePage() {
       {/* 欠勤届モーダル（components/attendance/RestReportModal.tsx に集約） */}
       <RestReportModal
         isOpen={showRestModal}
-        onClose={() => setShowRestModal(false)}
+        onClose={() => { setShowRestModal(false); setRestLockDate(false) }}
         reason={restReason}
         setReason={setRestReason}
         note={restNote}
         setNote={setRestNote}
         date={restDate}
         setDate={setRestDate}
-        minDate={todayDateStr()}
+        minDate={restLockDate ? restDate : todayDateStr()}
+        lockDate={restLockDate}
         saving={saving}
         onSubmit={handleRestSubmit}
+        dayPay={data?.absenceDayPay ?? null}
+        plRemaining={data?.plRemaining ?? null}
+        leaveMinDate={leaveMinDateStr()}
+        onChooseLeave={(dt) => {
+          leavePresetDate.current = dt
+          setShowRestModal(false)
+          setRestLockDate(false)
+          setShowLeaveModal(true)
+        }}
       />
 
       {/* 有給申請モーダル（components/attendance/LeaveRequestModal.tsx に集約） */}

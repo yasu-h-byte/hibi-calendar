@@ -1,4 +1,5 @@
 import { db } from './firebase'
+import { isSuspectCompanyRest } from './attendance-confirm'
 import { doc, getDoc, registerMainWriteHook } from '@/lib/fsdb'
 import {
   AttendanceEntry, calcActualHours, calcDayShiftHours, calcNightShiftHours,
@@ -1226,6 +1227,8 @@ export interface WorkerMonthly {
   plDays: number
   plUsed: number
   restDays: number
+  /** 「その他」の休みでメモが会社都合を指している日（0.6補の選び間違いの疑い・2026-09-30）。計算は変えない */
+  suspectCompRestDays?: number[]
   siteOffDays: number
   examDays: number     // 試験日数（給与計算では欠勤控除対象から除外、原価には計上しない）
   cost: number
@@ -1489,7 +1492,12 @@ export function computeMonthly(
     }
     // ★ 帰国中は実出勤にも欠勤にもカウントしない
     if (entry.hk) continue
-    if (entry.r) { wm.restDays += 1; continue }
+    if (entry.r) {
+      wm.restDays += 1
+      // 「その他」の休みでメモが会社都合（60%・現場休み）を指すもの＝本人の選び間違いの疑い（2026-09-30）
+      if (isSuspectCompanyRest(entry)) (wm.suspectCompRestDays ||= []).push(Number(pk.day))
+      continue
+    }
     if (entry.h) { wm.siteOffDays += 1; continue }
     if (!entry.w) continue
 
