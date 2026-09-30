@@ -1685,6 +1685,32 @@ export async function GET(request: NextRequest) {
         const grantExpiryDate = expiryDate
         const grantExpiryStatus = expiryStatus
 
+        // ═════════════════════════════════════════════════════════════
+        // 日本人の「前の期の残り」＝賞与で買い取る日数（2026-10-01 代表指示「未消化の有給は賞与で買い取るので記録残して」）
+        // ═════════════════════════════════════════════════════════════
+        //   日本人は 10/1 一律付与・繰越なし・期末の残りは賞与（精勤賞与）で買取。10/1 に今の期へ切り替わると
+        //   一覧から前の期の残りが見えなくなっていた。前の期の付与レコード（plData は消さない）と出面の P から
+        //   毎回計算して出す。賞与の確定で買取が記録されると（jp-wage/bonus → buyoutHistory）「買取済み」になる。
+        let prevPeriod: { grantDate: string; endDate: string; grantDays: number; taken: number; buyoutDays: number; remaining: number } | undefined
+        if (isJp && grantDate && /^\d{4}-\d{2}-\d{2}$/.test(grantDate)) {
+          const prevGrant = `${Number(grantDate.slice(0, 4)) - 1}${grantDate.slice(4)}`
+          const prevRec = plRecordsRaw.find(r => r.grantDate === prevGrant) as (typeof plRecordsRaw[number] & { buyoutDays?: number; buyoutHistory?: { days?: number }[] }) | undefined
+          const prevDays = prevRec ? (prevRec.grantDays ?? prevRec.grant ?? 0) : 0
+          if (prevRec && prevDays > 0) {
+            const { requestedPeriodUsed } = computePeriodUsed(w.id, prevGrant, allAtt, todayIso)
+            const prevCarry = prevRec.carryOver ?? prevRec.carry ?? 0
+            const buyoutDays = prevRec.buyoutDays ?? (prevRec.buyoutHistory || []).reduce((sum, h) => sum + (h.days || 0), 0)
+            prevPeriod = {
+              grantDate: prevGrant,
+              endDate: `${grantDate.slice(0, 4)}-09-30`,
+              grantDays: prevDays + prevCarry,
+              taken: requestedPeriodUsed,
+              buyoutDays,
+              remaining: computeRemainingDays(prevDays + prevCarry, prevRec as Parameters<typeof computeUsedDays>[0], requestedPeriodUsed),
+            }
+          }
+        }
+
         return {
           id: w.id,
           name: w.name,
@@ -1731,6 +1757,7 @@ export async function GET(request: NextRequest) {
           grantRemaining,
           grantExpiryDate,
           grantExpiryStatus,
+          prevPeriod,
         }
       })
       // Show all eligible workers (including those with no PL data yet)
