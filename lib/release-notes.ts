@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_dashboard_ux',
+    title: 'ダッシュボードを見やすくしました',
+    content:
+      '上に「今やること」（承認待ち・給与の検算・在留期限・年5日）を並べました。'
+      + '左に「申請」（1件1行・職長承認待ち／最終承認待ちで絞り込み）と「気になること」（配置の見直し・出面未入力など）、'
+      + '右に前日の稼働・今月の数字・お知らせ・評価の進み具合をまとめています。',
+    category: 'new',
+    publishedAt: '2026-10-01T17:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261001_manager_mypage_approvals',
     title: '政仁さんのマイページから最終承認できるようになりました',
     content:

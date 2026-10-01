@@ -100,17 +100,18 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
   const canApprove = user.role === 'admin' || user.role === 'approver'
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-900 rounded-xl shadow-sm overflow-hidden">
-      <div className="px-4 py-3 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-100 dark:border-indigo-900 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-200">📋 評価管理</h3>
+    <section className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl overflow-hidden">
+      {/* 2026-10-01 ダッシュボード改修: 他のカードと同じ見出し・絵文字をやめる */}
+      <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex items-center justify-between">
+        <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">評価の進み具合</h2>
         <button
           onClick={() => router.push('/evaluation')}
-          className="text-xs text-indigo-700 dark:text-indigo-300 hover:underline"
+          className="text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline"
         >
-          評価管理を開く →
+          評価管理を開く
         </button>
       </div>
-      <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+      <ul className="divide-y divide-hibi-line dark:divide-gray-700">
         {sessions.map(s => {
           const total = s.evaluatorIds.length
           const submittedSet = new Set(s.reviews.map(r => r.evaluatorId))
@@ -124,25 +125,25 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
           const isStale = ageDays >= 7 && !isReviewing
 
           return (
-            <li key={s.id} className="px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+            <li key={s.id} className="px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-gray-900 dark:text-white truncate">
+                    <span className="font-bold text-gray-900 dark:text-white truncate">
                       {s.workerName} さん
                     </span>
                     {isReviewing ? (
-                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                        ⚖️ 最終承認待ち
+                      <span className="px-2 py-0.5 text-xs font-bold rounded-md bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300">
+                        最終承認待ち
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                        📝 評価入力中
+                      <span className="px-2 py-0.5 text-xs font-bold rounded-md bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                        評価入力中
                       </span>
                     )}
                     {isStale && (
-                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
-                        🕒 {ageDays}日経過
+                      <span className="px-2 py-0.5 text-xs font-bold rounded-md bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                        {ageDays}日経過
                       </span>
                     )}
                   </div>
@@ -171,7 +172,7 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
                           title={tip}
                           className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border ${cls} ${ring}`}
                         >
-                          {isMe && <span className="opacity-70">👤</span>}
+                          {isMe && <span className="opacity-70">自分</span>}
                           <span className="opacity-70">{isSubmittedByThis ? '✓' : '○'}</span>
                           <span className="max-w-[5rem] truncate">{evalName}</span>
                         </span>
@@ -198,24 +199,24 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
                   {userIsEvaluator && !isReviewing && (
                     <div className="mt-1 text-xs">
                       {userSubmitted ? (
-                        <span className="text-green-600 dark:text-green-400">✅ あなたは提出済</span>
+                        <span className="text-green-700 dark:text-green-400">あなたは提出済み</span>
                       ) : (
                         <span className="text-orange-600 dark:text-orange-400 font-medium">
-                          ⏳ あなたの評価がまだです
+                          あなたの評価がまだです
                         </span>
                       )}
                     </div>
                   )}
                   {isReviewing && canApprove && (
                     <div className="mt-1 text-xs text-amber-700 dark:text-amber-400 font-medium">
-                      ⚖️ 最終承認をお願いします
+                      最終承認をお願いします
                     </div>
                   )}
                 </div>
 
                 <button
                   onClick={() => router.push('/evaluation')}
-                  className="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 transition-colors"
+                  className="flex-shrink-0 h-9 px-3.5 text-[13px] font-bold rounded-[9px] bg-hibi-navy text-white hover:bg-hibi-light transition-colors"
                 >
                   {isReviewing && canApprove
                     ? '承認する'
@@ -228,6 +229,6 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
           )
         })}
       </ul>
-    </div>
+    </section>
   )
 }

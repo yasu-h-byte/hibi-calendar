@@ -1,10 +1,21 @@
 'use client'
 
+// ダッシュボード（2026-10-01 改修・UI順次改修 波1・見本キャンバス6段目「ダッシュボード 改善案」）
+//
+//   旧: 「今日の判断」→ 勤怠申請 → お知らせ → 評価 → 前日の稼働 → 今月の数字 → グラフ が縦に1列。
+//       勤怠申請・お知らせ・評価は絵文字と色帯の古い見た目のままで、読む順番もばらばらだった。
+//   新: ① 上に「今やること」4枚（承認待ち・給与の検算・期限・年5日）
+//       ② 左＝やること（申請を1件1行・気になること）／右＝数字を見るもの（前日の稼働・今月の数字・お知らせ・評価）
+//   計算・権限・承認の処理は変えない（見せ方だけ）。承認ボタンの出し分けは旧 AttendanceRequestCard と同じ。
+
 import { useEffect, useState, useCallback } from 'react'
-import { fmtYenMan, fmtNum as fmtNumShared } from '@/lib/format'
+import { useRouter } from 'next/navigation'
+import { fmtYenMan, fmtNum } from '@/lib/format'
 import EvaluationCard from '@/components/EvaluationCard'
 import { AuthUser } from '@/types'
-import { Icon, type IconName } from '@/components/ui/Icon'
+import { Icon } from '@/components/ui/Icon'
+import { PageHeader, TodoCard, Segment, Chip, type ChipTone } from '@/components/ui/PageParts'
+import { currentYmJst, todayJstIso, addDaysIso } from '@/lib/date-utils'
 
 // ─── Types ───
 
@@ -69,7 +80,7 @@ interface HomeLongLeaveItem {
 
 interface QuietIssue {
   kind: 'nightUnregistered' | 'legalShortfall' | 'sundayNoRest' | 'earlyReturn' | 'staleAttendance'
-    | 'wageRevisionPending'
+    | 'wageRevisionPending' | 'staleAssignment'
   workerName: string
   detail: string
   href: string
@@ -79,12 +90,6 @@ interface ActionItems {
   pendingLeaveRequests: { count: number; items: LeaveRequestItem[] }
   absenceReports?: AbsenceReport[]
   homeLongLeaveRequests?: HomeLongLeaveItem[]
-  // 5月運用対応で追加
-  homeLeaveCurrentCount?: number
-  homeLeaveUpcomingCount?: number
-  pendingHomeLeaveApprovalCount?: number
-  pendingGrantsCount?: number
-  carryOverExpiringCount?: number
   plShortfall?: { count: number; names?: string[] }
   quietIssues?: { count: number; items: QuietIssue[] }
   visaExpiry?: { count: number; items: { name: string; daysLeft: number; expiry: string }[] }
@@ -101,29 +106,76 @@ interface DashboardData {
 
 // ─── Helpers ───
 
-function fmtNum(value: number): string {
-  return fmtNumShared(value)
-}
-
-function currentYm(): string {
-  const now = new Date()
-  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
-}
-
 const SITE_COLORS = [
   'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-purple-500',
   'bg-rose-500', 'bg-cyan-500', 'bg-orange-500', 'bg-indigo-500',
 ]
+const siteColor = (index: number) => SITE_COLORS[(index < 0 ? 0 : index) % SITE_COLORS.length]
 
-function siteColor(index: number): string {
-  return SITE_COLORS[index % SITE_COLORS.length]
+const DOW = ['日', '月', '火', '水', '木', '金', '土']
+/** 2026-10-01 → 10/1（木） */
+const mdw = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}（${DOW[new Date(`${iso}T00:00:00`).getDay()]}）`
+/** 2026-10-01 → 10/1 */
+const md = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}`
+
+const KIND_LABEL: Record<string, { label: string; tone: ChipTone }> = {
+  staleAssignment: { label: '配置の見直し', tone: 'amber' },
+  staleAttendance: { label: '出面未入力', tone: 'amber' },
+  nightUnregistered: { label: '夜勤未登録', tone: 'amber' },
+  legalShortfall: { label: '法定割れ', tone: 'red' },
+  sundayNoRest: { label: '日曜（休みなし週）', tone: 'amber' },
+  earlyReturn: { label: '帰国申請', tone: 'amber' },
+  wageRevisionPending: { label: '賃金改定未反映', tone: 'blue' },
 }
 
-// ─── Announcements ───
+/** カードの外枠と見出し（案1 UDホワイト） */
+function Card({ title, sub, right, children, id }: {
+  title: React.ReactNode
+  sub?: React.ReactNode
+  right?: React.ReactNode
+  children: React.ReactNode
+  id?: string
+}) {
+  return (
+    <section id={id} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden scroll-mt-4">
+      <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex items-center justify-between gap-3">
+        <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">
+          {title}{sub && <span className="ml-2 text-[13px] font-normal text-hibi-sub dark:text-gray-400">{sub}</span>}
+        </h2>
+        {right}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function MoreLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a href={href} className="text-[13px] font-bold text-hibi-navy dark:text-blue-300 inline-flex items-center gap-0.5 hover:underline whitespace-nowrap">
+      {children}<Icon name="chevronRight" size={13} />
+    </a>
+  )
+}
+
+// ─── お知らせ ───
 
 interface DashboardAnnouncement {
   id: string; title: string; content: string
   category: 'new' | 'fix' | 'info'; publishedAt: string
+}
+
+const CAT: Record<string, { label: string; tone: ChipTone }> = {
+  new: { label: '新機能', tone: 'blue' },
+  fix: { label: '修正', tone: 'green' },
+  info: { label: 'お知らせ', tone: 'gray' },
+}
+
+function relTime(iso: string) {
+  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (diff < 60) return `${Math.max(diff, 0)}分前`
+  if (diff < 1440) return `${Math.floor(diff / 60)}時間前`
+  const days = Math.floor(diff / 1440)
+  return days === 1 ? '昨日' : days < 7 ? `${days}日前` : `${new Date(iso).getMonth() + 1}/${new Date(iso).getDate()}`
 }
 
 function AnnouncementsCard({ password }: { password: string }) {
@@ -139,401 +191,374 @@ function AnnouncementsCard({ password }: { password: string }) {
   }, [password])
 
   if (!loaded || items.length === 0) return null
-
-  const catStyle: Record<string, { label: string; cls: string }> = {
-    new: { label: '新機能', cls: 'bg-blue-100 text-blue-700' },
-    fix: { label: '修正', cls: 'bg-green-100 text-green-700' },
-    info: { label: 'お知らせ', cls: 'bg-gray-100 text-gray-700' },
-  }
-
-  const relTime = (iso: string) => {
-    const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
-    if (diff < 60) return `${diff}分前`
-    if (diff < 1440) return `${Math.floor(diff / 60)}時間前`
-    const days = Math.floor(diff / 1440)
-    return days === 1 ? '昨日' : days < 7 ? `${days}日前` : `${new Date(iso).getMonth() + 1}/${new Date(iso).getDate()}`
-  }
-
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-hibi-navy">
-      <h3 className="text-sm font-bold text-hibi-navy dark:text-white mb-3">📢 お知らせ</h3>
-      <div className="divide-y divide-gray-100 dark:divide-gray-700">
+    <Card title="お知らせ">
+      <ul className="divide-y divide-hibi-line dark:divide-gray-700">
         {items.map(a => {
-          const c = catStyle[a.category] || catStyle.info
+          const c = CAT[a.category] || CAT.info
           return (
-            <div key={a.id} className="py-2.5 first:pt-0 last:pb-0">
+            <li key={a.id} className="px-5 py-3">
               <div className="flex items-center gap-2 mb-1">
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${c.cls}`}>{c.label}</span>
-                <span className="text-[11px] text-gray-400">{relTime(a.publishedAt)}</span>
+                <Chip tone={c.tone}>{c.label}</Chip>
+                <span className="text-xs text-hibi-sub dark:text-gray-400">{relTime(a.publishedAt)}</span>
               </div>
-              <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200 mb-0.5">{a.title}</h4>
-              <p className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap line-clamp-3">{a.content}</p>
-            </div>
+              <div className="text-sm font-bold text-gray-900 dark:text-gray-100">{a.title}</div>
+              <p className="text-xs text-hibi-sub dark:text-gray-400 whitespace-pre-wrap line-clamp-2 mt-0.5">{a.content}</p>
+            </li>
           )
         })}
-      </div>
-    </div>
+      </ul>
+    </Card>
   )
 }
 
-// ─── Attendance Request Card (有給申請 + 欠勤届) ───
+// ─── 申請（有給・帰国）＋ 欠勤届 ───
 
-function AttendanceRequestCard({ leaveItems, absenceReports, homeLongLeaveItems, password, userRole, userForemanSites, onUpdate }: {
+type ReqFilter = 'all' | 'foreman' | 'final'
+
+function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password, userRole, userForemanSites, onUpdate }: {
   leaveItems: LeaveRequestItem[]
   absenceReports: AbsenceReport[]
   homeLongLeaveItems: HomeLongLeaveItem[]
   password: string
-  userRole: string  // 'admin' | 'approver' | 'foreman' | 'jimu'
+  userRole: string  // 'admin' | 'approver' | 'foreman' | 'jimu' | 'officer'
   userForemanSites: string[]  // 職長の場合、担当現場のIDリスト
   onUpdate: () => void
 }) {
   const [processing, setProcessing] = useState<string | null>(null)
+  const [filter, setFilter] = useState<ReqFilter>('all')
 
-  // 権限制御:
+  // 権限制御（旧 AttendanceRequestCard と同じ）:
   //   - 職長承認: admin / approver は全件、foreman は自分の担当現場のみ
   //   - 最終承認: admin / approver のみ（事業責任者）
-  //   - 却下: 全員可（ただし最終承認後の却下は実質意味なし）
+  //   - 却下: 全員可
   const isAdminLike = userRole === 'admin' || userRole === 'approver'
   const isForeman = userRole === 'foreman'
   const canFinalApprove = isAdminLike
-
-  // siteId ベースで「この申請に対して職長承認できるか」を判定
-  // - admin/approver: 常に true
-  // - foreman: req.siteId が user.foremanSites に含まれる
-  // - その他: false
   const canForemanApproveFor = (siteId?: string): boolean => {
     if (isAdminLike) return true
-    if (isForeman && siteId && userForemanSites.includes(siteId)) return true
-    return false
+    return isForeman && !!siteId && userForemanSites.includes(siteId)
   }
 
-  const hasLeave = leaveItems.length > 0
-  const hasAbsence = absenceReports.length > 0
-  const hasHomeLongLeave = homeLongLeaveItems.length > 0
-  if (!hasLeave && !hasAbsence && !hasHomeLongLeave) return null
+  const postOne = async (id: string, action: string, apiPath: string, wid: number) => fetch(apiPath, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+    body: JSON.stringify({
+      action,
+      requestId: id,
+      ...(action === 'foreman_approve' ? { foremanId: wid } : { approvedBy: wid }),
+    }),
+  })
 
-  const handleAction = async (id: string, action: string, apiPath: string = '/api/leave-request') => {
-    setProcessing(id)
-    try {
-      const stored = localStorage.getItem('hibi_auth')
-      const user = stored ? JSON.parse(stored).user : null
-      const res = await fetch(apiPath, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({
-          action,
-          requestId: id,
-          ...(action === 'foreman_approve' ? { foremanId: user?.workerId || 0 } : { approvedBy: user?.workerId || 0 }),
-        }),
-      })
-      // 2026-08-27（休暇届総点検）: 失敗（出勤実績との矛盾409・ロック409・権限403等）を
-      //   必ず表示する。旧: 応答を見ずに再読込 → 承認したつもりがリストに残り理由不明
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        alert(err?.message || err?.error || `処理に失敗しました (${res.status})`)
-      }
-      onUpdate()
-    } catch { alert('通信エラーが発生しました') }
-    finally { setProcessing(null) }
-  }
-
-  const fmtDate = (d: string) => { const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}` }
-  const todayStr = (() => { const t = new Date(); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}` })()
-
-  const pending = leaveItems.filter(i => i.status === 'pending')
-  const foremanApproved = leaveItems.filter(i => i.status === 'foreman_approved')
-  const todayAbsence = absenceReports.filter(a => a.date === todayStr)
-  const pastAbsence = absenceReports.filter(a => a.date !== todayStr)
-
-  const hlPending = homeLongLeaveItems.filter(i => i.status === 'pending')
-  const hlForemanApproved = homeLongLeaveItems.filter(i => i.status === 'foreman_approved')
-
-  // ── 一括処理（2026-05-15 追加） ──
-  // 同一スタッフ + 同一reason の申請を1ボタンで処理する。
-  // 並列リクエストで全件投げ、最後に onUpdate() で再読込。
-  const handleBulkAction = async (ids: string[], action: string, apiPath: string = '/api/leave-request') => {
+  /** 1件でも複数件でも同じ（同じ人・同じ理由の有給はまとめて1行＝まとめて処理） */
+  const act = async (ids: string[], action: string, apiPath: string = '/api/leave-request') => {
     if (ids.length === 0) return
-    setProcessing(`bulk:${action}:${ids[0]}`)
+    setProcessing(`${action}:${ids[0]}`)
     try {
       const stored = localStorage.getItem('hibi_auth')
-      const user = stored ? JSON.parse(stored).user : null
-      const wid = user?.workerId || 0
-      const results = await Promise.all(ids.map(async id => ({
-        id,
-        res: await fetch(apiPath, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-          body: JSON.stringify({
-            action,
-            requestId: id,
-            ...(action === 'foreman_approve' ? { foremanId: wid } : { approvedBy: wid }),
-          }),
-        }),
-      })))
+      const wid = (stored ? JSON.parse(stored).user?.workerId : 0) || 0
+      const results = await Promise.all(ids.map(id => postOne(id, action, apiPath, wid)))
+      // 2026-08-27（休暇届総点検）: 失敗（出勤実績との矛盾409・ロック409・権限403等）を必ず表示する
       const failures: string[] = []
-      for (const { res } of results) {
+      for (const res of results) {
         if (res.ok) continue
         const err = await res.json().catch(() => null)
-        failures.push(err?.message || err?.error || `HTTP ${res.status}`)
+        failures.push(err?.message || err?.error || `処理に失敗しました (${res.status})`)
       }
       if (failures.length > 0) {
-        alert(`${ids.length}件中 ${failures.length}件が失敗しました:\n` +
-          [...new Set(failures)].slice(0, 4).map(f => `・${f}`).join('\n'))
+        alert(ids.length > 1
+          ? `${ids.length}件中 ${failures.length}件が失敗しました:\n${[...new Set(failures)].slice(0, 4).map(f => `・${f}`).join('\n')}`
+          : failures[0])
       }
       onUpdate()
     } catch { alert('通信エラーが発生しました') }
     finally { setProcessing(null) }
   }
 
-  // 有給申請を「スタッフ + reason」でグループ化（同じ status 内で）
-  // ※ reason は trim() で正規化（末尾スペース等の入力ゆれを吸収）
-  function groupLeaves(list: LeaveRequestItem[]): { key: string; items: LeaveRequestItem[] }[] {
-    const groups: { key: string; items: LeaveRequestItem[] }[] = []
+  // 有給は「スタッフ + 理由」でまとめる（同じ段階の中で。理由は前後の空白を無視）
+  function groupLeaves(list: LeaveRequestItem[]): LeaveRequestItem[][] {
+    const groups: LeaveRequestItem[][] = []
     const idx: Record<string, number> = {}
     for (const r of list) {
-      const normReason = (r.reason || '').trim()
-      const k = `${r.workerName}_${normReason}`
-      if (idx[k] === undefined) {
-        idx[k] = groups.length
-        groups.push({ key: k, items: [] })
-      }
-      groups[idx[k]].items.push(r)
+      const k = `${r.workerName}_${(r.reason || '').trim()}`
+      if (idx[k] === undefined) { idx[k] = groups.length; groups.push([]) }
+      groups[idx[k]].push(r)
     }
     return groups
   }
-  const pendingGroups = groupLeaves(pending)
-  const foremanApprovedGroups = groupLeaves(foremanApproved)
 
+  interface Row {
+    key: string
+    kind: 'leave' | 'home'
+    stage: 'foreman' | 'final'
+    name: string
+    dates: string
+    reason: string
+    count: number
+    ids: string[]
+    siteId?: string
+    foremanName?: string
+  }
+  const rows: Row[] = []
+  for (const stage of ['foreman', 'final'] as const) {
+    const status = stage === 'foreman' ? 'pending' : 'foreman_approved'
+    for (const g of groupLeaves(leaveItems.filter(i => i.status === status))) {
+      rows.push({
+        key: `l_${g[0].id}`, kind: 'leave', stage, name: g[0].workerName,
+        dates: g.map(r => r.date).sort().map(mdw).join('・'),
+        reason: (g[0].reason || '').trim(), count: g.length, ids: g.map(r => r.id),
+        siteId: g[0].siteId, foremanName: g[0].siteForemanName,
+      })
+    }
+    for (const r of homeLongLeaveItems.filter(i => i.status === status)) {
+      rows.push({
+        key: `h_${r.id}`, kind: 'home', stage, name: r.workerName,
+        dates: `${mdw(r.startDate)} 〜 ${mdw(r.endDate)}`, reason: r.reason || '', count: 1, ids: [r.id],
+        foremanName: r.siteForemanName,
+      })
+    }
+  }
+  const foremanN = rows.filter(r => r.stage === 'foreman').length
+  const finalN = rows.length - foremanN
+  const shown = filter === 'all' ? rows : rows.filter(r => r.stage === filter)
+
+  const today = todayJstIso()
+  const todayAbsence = absenceReports.filter(a => a.date === today)
+  const pastAbsence = absenceReports.filter(a => a.date !== today)
+
+  const btn = 'h-9 px-3.5 rounded-[9px] text-[13px] font-bold whitespace-nowrap disabled:opacity-50'
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-blue-400">
-      <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3">📋 勤怠申請</h3>
-
-      {/* 有給申請 */}
-      {hasLeave && (
-        <div className="mb-3">
-          <p className="text-[10px] text-green-600 font-bold mb-1.5 flex items-center gap-1">🌴 有給申請（{leaveItems.length}件）</p>
-          {/* 内訳サブ見出し（管理者・承認者のみ表示。職長は pending のみなので不要） */}
-          {canFinalApprove && pending.length > 0 && (
-            <p className="text-[10px] text-yellow-700 dark:text-yellow-400 font-medium mb-1 ml-1">⏳ 職長承認待ち（{pending.length}件）</p>
-          )}
-          <div className="space-y-1">
-            {pendingGroups.map(group => {
-              const items = group.items
-              const first = items[0]
-              const ids = items.map(r => r.id)
-              if (items.length === 1) {
-                const req = first
-                return (
-                  <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                    <div className="min-w-0">
-                      <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
-                      <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
-                      {req.reason && <span className="text-gray-400 text-xs ml-2">{req.reason}</span>}
-                    </div>
-                    <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                      {canForemanApproveFor(req.siteId) && (
-                        <button onClick={() => handleAction(req.id, 'foreman_approve')} disabled={processing === req.id}
-                          className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">{req.siteForemanName ? `${req.siteForemanName} 職長承認` : '職長承認'}</button>
-                      )}
-                      <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
-                        className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
-                    </div>
-                  </div>
-                )
-              }
-              // 集約表示
-              const bulkKey = `bulk:foreman_approve:${ids[0]}`
-              const dates = items.map(r => r.date).sort().map(fmtDate).join('・')
-              return (
-                <div key={group.key} className="py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-hibi-navy dark:text-white">{first.workerName}</span>
-                        <span className="text-[10px] bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded-full font-bold">{items.length}件</span>
-                        {first.reason && <span className="text-gray-400 text-xs">{first.reason}</span>}
-                      </div>
-                      <div className="text-xs text-gray-600 dark:text-gray-300 mt-0.5 break-words">{dates}</div>
-                    </div>
-                    <div className="flex gap-1.5 flex-shrink-0">
-                      {canForemanApproveFor(first.siteId) && (
-                        <button onClick={() => handleBulkAction(ids, 'foreman_approve')} disabled={processing === bulkKey}
-                          className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">
-                          {first.siteForemanName ? `${first.siteForemanName} 一括職長承認` : '一括職長承認'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-            {/* 最終承認待ちサブ見出し（管理者向け、件数があるときのみ） */}
-            {canFinalApprove && foremanApproved.length > 0 && pending.length > 0 && (
-              <p className="text-[10px] text-blue-700 dark:text-blue-400 font-medium mt-2 mb-1 ml-1">⏳ 最終承認待ち（{foremanApproved.length}件）</p>
-            )}
-            {foremanApprovedGroups.map(group => {
-              const items = group.items
-              const first = items[0]
-              const ids = items.map(r => r.id)
-              if (items.length === 1) {
-                const req = first
-                return (
-                  <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <div className="min-w-0">
-                      <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
-                      <span className="text-gray-500 text-sm ml-2">{fmtDate(req.date)}</span>
-                      <span className="text-[10px] text-blue-600 ml-2">{req.siteForemanName ? `${req.siteForemanName} 職長済` : '職長済'}</span>
-                    </div>
-                    <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                      {canFinalApprove ? (
-                        <>
-                          <button onClick={() => handleAction(req.id, 'approve')} disabled={processing === req.id}
-                            className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
-                          <button onClick={() => handleAction(req.id, 'reject')} disabled={processing === req.id}
-                            className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
-                        </>
-                      ) : (
-                        <span className="text-[10px] text-gray-500">最終承認待ち</span>
-                      )}
-                    </div>
-                  </div>
-                )
-              }
-              const bulkKey = `bulk:approve:${ids[0]}`
-              const dates = items.map(r => r.date).sort().map(fmtDate).join('・')
-              return (
-                <div key={group.key} className="py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-hibi-navy dark:text-white">{first.workerName}</span>
-                        <span className="text-[10px] bg-blue-200 text-blue-900 px-1.5 py-0.5 rounded-full font-bold">{items.length}件</span>
-                        <span className="text-[10px] text-blue-600">{first.siteForemanName ? `${first.siteForemanName} 職長済` : '職長済'}</span>
-                        {first.reason && <span className="text-gray-400 text-xs">{first.reason}</span>}
-                      </div>
-                      <div className="text-xs text-gray-600 dark:text-gray-300 mt-0.5 break-words">{dates}</div>
-                    </div>
-                    <div className="flex gap-1.5 flex-shrink-0">
-                      {canFinalApprove && (
-                        <button onClick={() => handleBulkAction(ids, 'approve')} disabled={processing === bulkKey}
-                          className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">一括最終承認</button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+    <Card id="requests" title="申請（有給・帰国）" right={<MoreLink href="/leave?tab=requests">休暇管理を開く</MoreLink>}>
+      {rows.length > 0 && (
+        <div className="px-5 py-3 flex flex-wrap items-center gap-3">
+          <Segment value={filter} onChange={setFilter} items={[
+            ['all', `すべて ${rows.length}`], ['foreman', `職長承認待ち ${foremanN}`], ['final', `最終承認待ち ${finalN}`],
+          ]} />
+          <span className="ml-auto text-xs text-hibi-sub dark:text-gray-400">同じ人・同じ理由の有給はまとめて1行</span>
         </div>
       )}
-
-      {/* 帰国申請 */}
-      {hasHomeLongLeave && (
-        <div className="mb-3">
-          {hasLeave && <hr className="my-2 border-gray-100 dark:border-gray-700" />}
-          <p className="text-[10px] text-purple-600 font-bold mb-1.5">✈️ 帰国申請（{homeLongLeaveItems.length}件）</p>
-          {canFinalApprove && hlPending.length > 0 && (
-            <p className="text-[10px] text-yellow-700 dark:text-yellow-400 font-medium mb-1 ml-1">⏳ 職長承認待ち（{hlPending.length}件）</p>
-          )}
-          <div className="space-y-1">
-            {hlPending.map(req => (
-              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                <div className="min-w-0">
-                  <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
-                  <span className="text-gray-500 text-sm ml-2">{fmtDate(req.startDate)}〜{fmtDate(req.endDate)}</span>
-                  <span className="text-gray-400 text-xs ml-2">{req.reason}</span>
-                </div>
-                <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  {/* 帰国申請には siteId が無いため、職長は「いずれかの担当現場あり」で押せる扱い */}
-                  {(isAdminLike || (isForeman && userForemanSites.length > 0)) && (
-                    <button onClick={() => handleAction(req.id, 'foreman_approve', '/api/home-long-leave')} disabled={processing === req.id}
-                      className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">{req.siteForemanName ? `${req.siteForemanName} 職長承認` : '職長承認'}</button>
-                  )}
-                  <button onClick={() => handleAction(req.id, 'reject', '/api/home-long-leave')} disabled={processing === req.id}
-                    className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
-                </div>
-              </div>
-            ))}
-            {/* 最終承認待ちサブ見出し（管理者向け、件数があるときのみ） */}
-            {canFinalApprove && hlForemanApproved.length > 0 && hlPending.length > 0 && (
-              <p className="text-[10px] text-blue-700 dark:text-blue-400 font-medium mt-2 mb-1 ml-1">⏳ 最終承認待ち（{hlForemanApproved.length}件）</p>
-            )}
-            {hlForemanApproved.map(req => (
-              <div key={req.id} className="flex items-center justify-between py-2 px-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="min-w-0">
-                  <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
-                  <span className="text-gray-500 text-sm ml-2">{fmtDate(req.startDate)}〜{fmtDate(req.endDate)}</span>
-                  <span className="text-[10px] text-blue-600 ml-2">{req.siteForemanName ? `${req.siteForemanName} 職長済` : '職長済'}</span>
-                </div>
-                <div className="flex gap-1.5 flex-shrink-0 ml-2">
-                  {canFinalApprove ? (
-                    <>
-                      <button onClick={() => handleAction(req.id, 'approve', '/api/home-long-leave')} disabled={processing === req.id}
-                        className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
-                      <button onClick={() => handleAction(req.id, 'reject', '/api/home-long-leave')} disabled={processing === req.id}
-                        className="px-2.5 py-1 bg-red-400 hover:bg-red-500 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
-                    </>
-                  ) : (
-                    <span className="text-[10px] text-gray-500">最終承認待ち</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+      {rows.length === 0 ? (
+        <div className="px-5 py-6 text-sm text-hibi-sub dark:text-gray-400 flex items-center gap-2">
+          <Icon name="check" size={16} className="text-green-600" />承認待ちの申請はありません
         </div>
-      )}
-
-      {/* 欠勤届 */}
-      {hasAbsence && (
-        <div>
-          {(hasLeave || hasHomeLongLeave) && <hr className="my-2 border-gray-100 dark:border-gray-700" />}
+      ) : shown.length === 0 ? (
+        <div className="px-5 py-6 text-sm text-hibi-sub dark:text-gray-400">この絞り込みに当てはまる申請はありません</div>
+      ) : shown.map(r => {
+        const api = r.kind === 'home' ? '/api/home-long-leave' : '/api/leave-request'
+        // 帰国申請には siteId が無いため、職長は「いずれかの担当現場あり」で押せる扱い（旧と同じ）
+        const canForeman = r.kind === 'home' ? (isAdminLike || (isForeman && userForemanSites.length > 0)) : canForemanApproveFor(r.siteId)
+        const busy = processing !== null
+        return (
+          <div key={r.key} className="border-t border-hibi-line dark:border-gray-700 px-5 py-3 grid grid-cols-1 sm:grid-cols-[150px_minmax(0,1fr)_auto] gap-2 sm:gap-3.5 items-center">
+            <div className="text-[15px] font-bold text-gray-900 dark:text-gray-100">{r.name}</div>
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Chip tone={r.kind === 'home' ? 'cyan' : 'gray'}>{r.kind === 'home' ? '帰国' : '有給'}</Chip>
+                <span className="text-sm font-bold tabular-nums text-gray-900 dark:text-gray-100 break-words">{r.dates}</span>
+                {r.count > 1 && <Chip tone="gray">{r.count}件まとめて</Chip>}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {r.stage === 'foreman'
+                  ? <Chip tone="amber">職長承認待ち{r.foremanName ? `（${r.foremanName}）` : ''}</Chip>
+                  : <Chip tone="blue">職長承認済み・最終承認待ち</Chip>}
+                {r.reason && <span className="text-xs text-hibi-sub dark:text-gray-400">{r.reason}</span>}
+              </div>
+            </div>
+            <div className="flex gap-2 sm:justify-end">
+              {r.stage === 'foreman' ? (
+                canForeman && (
+                  <button onClick={() => act(r.ids, 'foreman_approve', api)} disabled={busy}
+                    className={`${btn} bg-hibi-navy text-white hover:bg-hibi-light`}>{r.count > 1 ? 'まとめて職長承認' : '職長承認'}</button>
+                )
+              ) : canFinalApprove ? (
+                <button onClick={() => act(r.ids, 'approve', api)} disabled={busy}
+                  className={`${btn} bg-green-700 text-white hover:bg-green-800`}>{r.count > 1 ? 'まとめて最終承認' : '最終承認'}</button>
+              ) : (
+                <span className="text-xs text-hibi-sub dark:text-gray-400 self-center">最終承認待ち</span>
+              )}
+              {(r.stage === 'foreman' || canFinalApprove) && (
+                <button onClick={() => act(r.ids, 'reject', api)} disabled={busy}
+                  className={`${btn} border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20`}>却下</button>
+              )}
+            </div>
+          </div>
+        )
+      })}
+      {(todayAbsence.length > 0 || pastAbsence.length > 0) && (
+        <div className="border-t border-hibi-line dark:border-gray-700 px-5 py-3 space-y-2">
           {todayAbsence.length > 0 && (
-            <div className="mb-2">
-              <p className="text-[10px] text-red-500 font-bold mb-1.5">🏠 本日の欠勤届</p>
-              <div className="space-y-1">
-                {todayAbsence.map((a, i) => (
-                  <div key={i} className="flex items-center justify-between py-1.5 px-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                    <span className="font-bold text-sm text-hibi-navy dark:text-white">{a.workerName}</span>
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {a.reasonLabel}{a.note ? `（${a.note}）` : ''}
-                    </span>
-                  </div>
-                ))}
+            <div>
+              <div className="text-[13px] font-bold text-gray-900 dark:text-gray-100 mb-1.5">今日の欠勤届</div>
+              <div className="flex flex-wrap gap-1.5">
+                {todayAbsence.map((a, i) => <Chip key={i} tone="red">{a.workerName}・{a.reasonLabel}{a.note ? `（${a.note}）` : ''}</Chip>)}
               </div>
             </div>
           )}
           {pastAbsence.length > 0 && (
             <div>
-              <p className="text-[10px] text-gray-400 font-bold mb-1.5">📅 過去7日の欠勤</p>
-              <div className="space-y-0.5">
+              <div className="text-[13px] font-bold text-gray-900 dark:text-gray-100 mb-1">過去7日の欠勤</div>
+              <ul className="text-xs text-hibi-sub dark:text-gray-400 space-y-0.5">
                 {pastAbsence.map((a, i) => (
-                  <div key={i} className="flex items-center gap-2 py-1 px-3 text-xs text-gray-500">
-                    <span className="tabular-nums">{fmtDate(a.date)}</span>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">{a.workerName}</span>
-                    <span className="text-gray-400">{a.reasonLabel}{a.note ? `（${a.note}）` : ''}</span>
-                  </div>
+                  <li key={i}><span className="tabular-nums">{md(a.date)}</span> <b className="text-gray-700 dark:text-gray-300">{a.workerName}</b> {a.reasonLabel}{a.note ? `（${a.note}）` : ''}</li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
-// ─── Main Component ───
+// ─── 気になること ───
+
+function IssuesCard({ issues, calendarPending }: { issues: QuietIssue[]; calendarPending: number }) {
+  if (issues.length === 0 && calendarPending === 0) return null
+  const row = (key: string, href: string, label: string, tone: ChipTone, name: string, detail: string) => (
+    <a key={key} href={href}
+      className="border-t border-hibi-line dark:border-gray-700 first:border-t-0 px-5 py-3 grid grid-cols-1 sm:grid-cols-[130px_150px_minmax(0,1fr)_auto] gap-1 sm:gap-3.5 items-center hover:bg-gray-50 dark:hover:bg-gray-700/40 transition group">
+      <span><Chip tone={tone}>{label}</Chip></span>
+      <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{name}</span>
+      <span className="text-[13px] text-hibi-sub dark:text-gray-400">{detail}</span>
+      <Icon name="chevronRight" size={16} className="hidden sm:block text-gray-400 group-hover:text-hibi-navy dark:group-hover:text-white" />
+    </a>
+  )
+  return (
+    <Card title="気になること" sub="急がないが、締めまでに見ておくこと">
+      <div>
+        {calendarPending > 0 && row('cal', '/calendar', '就業カレンダー', 'amber', `未承認 ${calendarPending}件`, '来月分の承認待ち')}
+        {issues.map((it, i) => {
+          const k = KIND_LABEL[it.kind] || { label: '確認', tone: 'amber' as ChipTone }
+          return row(`q${i}`, it.href, k.label, k.tone, it.workerName, it.detail)
+        })}
+      </div>
+    </Card>
+  )
+}
+
+// ─── 前日の稼働 ───
+
+function YesterdayCard({ data, siteList }: { data: DashboardData['todayStatus']; siteList: SiteOption[] }) {
+  const yIso = addDaysIso(todayJstIso(), -1)
+  const sites = (data?.siteStatus || []).filter(s => s.total > 0)
+  const sum = (k: keyof TodaySiteStatus) => sites.reduce((s, r) => s + (r[k] as number), 0)
+  return (
+    <Card title="前日の稼働" sub={mdw(yIso)}>
+      {sites.length === 0 ? (
+        <div className="px-5 py-6 text-center">
+          <p className="text-sm text-hibi-sub dark:text-gray-400">前日の出面入力がありません</p>
+          <p className="text-xs text-gray-400 mt-1">出面入力画面で入力するとここに反映されます</p>
+        </div>
+      ) : (
+        <>
+          <div className="px-5 py-2 grid grid-cols-[minmax(0,1fr)_40px_40px_48px_52px] gap-2 text-xs font-bold text-hibi-sub dark:text-gray-300 bg-hibi-thead dark:bg-gray-700">
+            <span>現場</span><span className="text-right">鳶</span><span className="text-right">土工</span><span className="text-right">外注</span><span className="text-right">合計</span>
+          </div>
+          {sites.map(s => (
+            <div key={s.siteId} className="border-t border-hibi-line dark:border-gray-700 px-5 py-2 grid grid-cols-[minmax(0,1fr)_40px_40px_48px_52px] gap-2 items-center text-sm tabular-nums">
+              <span className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100 min-w-0">
+                <span className={`w-2.5 h-2.5 rounded-sm shrink-0 ${siteColor(siteList.findIndex(x => x.id === s.siteId))}`} />
+                <span className="truncate">{s.siteName}</span>
+              </span>
+              <span className="text-right">{s.tobi}</span>
+              <span className="text-right">{s.doko}</span>
+              <span className="text-right text-hibi-sub dark:text-gray-400">{s.subTobi + s.subDoko}</span>
+              <span className="text-right font-bold text-base">{s.total}</span>
+            </div>
+          ))}
+          <div className="border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 flex flex-wrap items-baseline justify-between gap-2">
+            <span className="text-[13px] text-hibi-sub dark:text-gray-400 min-w-0">
+              {(data.absentWorkers || []).length > 0 ? `休み ${data.absentWorkers.length}名：${data.absentWorkers.map(w => w.name).join('、')}` : '休みの人はいません'}
+            </span>
+            <span className="text-[13px] text-hibi-sub dark:text-gray-400 whitespace-nowrap">合計 <b className="text-lg text-gray-900 dark:text-white tabular-nums">{fmtNum(sum('total'))}</b> 人工</span>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
+// ─── 今月の数字（総人工・売上・日別の稼働人数） ───
+
+function MonthCard({ data, ym, onPrev, onNext }: { data: DashboardData; ym: string; onPrev: () => void; onNext: () => void }) {
+  const s = data.summary
+  const days = data.dailyAttendance || []
+  const maxDaily = Math.max(1, ...days.map(d => d.sites.reduce((a, st) => a + st.count, 0)))
+  return (
+    <Card title="今月の数字" sub={`${ym.slice(0, 4)}年${Number(ym.slice(4, 6))}月`} right={
+      <div className="flex items-center h-9 rounded-[9px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+        <button onClick={onPrev} aria-label="前の月" className="w-8 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[9px]"><Icon name="chevronLeft" size={16} strokeWidth={2.2} /></button>
+        <span className="px-1 text-[13px] font-bold tabular-nums">{Number(ym.slice(4, 6))}月</span>
+        <button onClick={onNext} aria-label="次の月" className="w-8 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[9px]"><Icon name="chevronRight" size={16} strokeWidth={2.2} /></button>
+      </div>
+    }>
+      {s && (
+        <div className="px-5 pt-4 pb-3 grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-[13px] text-hibi-sub dark:text-gray-400">総人工</div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-[30px] leading-tight font-bold tabular-nums text-gray-900 dark:text-white">{fmtNum(s.totalManDays)}</span>
+              <span className="text-sm text-hibi-sub dark:text-gray-400">人工</span>
+            </div>
+            {s.prevTotalManDays > 0 && s.pctWork !== 0 && (
+              <span title="前月同日比"><Chip tone={s.pctWork > 0 ? 'green' : 'red'}>前月より {s.pctWork > 0 ? '+' : '−'}{Math.abs(Math.round(s.pctWork))}%</Chip></span>
+            )}
+          </div>
+          <div>
+            <div className="text-[13px] text-hibi-sub dark:text-gray-400">{s.billing > 0 ? '売上' : '売上（概算）'}</div>
+            <div className="flex items-baseline gap-1">
+              <span className={`text-[30px] leading-tight font-bold tabular-nums ${s.billing === 0 ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                {s.billing === 0 ? '未入力' : fmtYenMan(s.billing)}
+              </span>
+              {s.billing > 0 && <span className="text-sm text-hibi-sub dark:text-gray-400">万円</span>}
+            </div>
+            <MoreLink href="/cost">原価・収益へ</MoreLink>
+          </div>
+        </div>
+      )}
+      {days.length > 0 && (
+        <div className="px-5 pb-4">
+          <div className="text-xs text-hibi-sub dark:text-gray-400 mb-1.5">日別の稼働人数（現場ごと）</div>
+          <div className="flex items-end gap-[2px] h-[120px] border-b border-hibi-line dark:border-gray-700">
+            {days.map(da => {
+              const total = da.sites.reduce((a, st) => a + st.count, 0)
+              return (
+                <div key={da.day} className="flex-1 min-w-0 h-full flex flex-col justify-end" title={`${da.day}日 ${total}名`}>
+                  {da.sites.map(st => (
+                    <div key={st.siteId} className={`w-full ${siteColor(data.siteList.findIndex(x => x.id === st.siteId))}`}
+                      style={{ height: `${(st.count / maxDaily) * 112}px` }} title={`${da.day}日 ${st.siteName}: ${st.count}名`} />
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex justify-between text-[11px] text-hibi-sub dark:text-gray-400 mt-1 tabular-nums">
+            <span>1</span><span>10</span><span>20</span><span>{days.length}</span>
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-hibi-sub dark:text-gray-400">
+            {data.siteList.map((st, i) => (
+              <span key={st.id} className="flex items-center gap-1.5"><span className={`w-2.5 h-2.5 rounded-sm ${siteColor(i)}`} />{st.name}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// ─── Main ───
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [password, setPassword] = useState('')
   const [userRole, setUserRole] = useState<string>('')
   const [userForemanSites, setUserForemanSites] = useState<string[]>([])
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
-  const [ym, setYm] = useState(currentYm)
+  const [ym, setYm] = useState(currentYmJst)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [data, setData] = useState<DashboardData | null>(null)
-  // 2026-06-XX 追加 (UI #1): 「今すぐ対応が必要」集約パネル用バッジ件数
+  // 「給与の検算」「就業カレンダー」の件数（サイドバーのバッジと同じ）
   const [actionBadges, setActionBadges] = useState<{ monthly: number; calendar: number; leave: number } | null>(null)
 
   useEffect(() => {
@@ -555,14 +580,10 @@ export default function DashboardPage() {
       const params = new URLSearchParams({ ym, period: 'month', site: 'all' })
       const res = await fetch(`/api/dashboard?${params}`, {
         headers: { 'x-admin-password': password },
-        cache: 'no-store',  // 常に最新を取得
+        cache: 'no-store',
       })
-      if (!res.ok) {
-        setError('データの取得に失敗しました')
-        return
-      }
-      const json = await res.json()
-      setData(json)
+      if (!res.ok) { setError('データの取得に失敗しました'); return }
+      setData(await res.json())
     } catch {
       setError('通信エラーが発生しました')
     } finally {
@@ -570,22 +591,16 @@ export default function DashboardPage() {
     }
   }, [password, ym])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  useEffect(() => { fetchData() }, [fetchData])
 
-  // 2026-06-XX 追加 (UI #1): 「今すぐ対応が必要」のバッジ件数を取得
   useEffect(() => {
     if (!password) return
     fetch('/api/sidebar-badges', { headers: { 'x-admin-password': password } })
       .then(r => r.ok ? r.json() : null)
-      .then(j => {
-        if (j?.badges) setActionBadges(j.badges)
-      })
+      .then(j => { if (j?.badges) setActionBadges(j.badges) })
       .catch(() => {})
   }, [password])
 
-  // Period navigation
   const navigateMonth = (direction: -1 | 1) => {
     const y = parseInt(ym.slice(0, 4))
     const m = parseInt(ym.slice(4, 6))
@@ -593,366 +608,93 @@ export default function DashboardPage() {
     setYm(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
-  const today = new Date()
-  const dowJa = ['日', '月', '火', '水', '木', '金', '土']
-  const todayStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日(${dowJa[today.getDay()]})`
-  // 前日の表示用文字列（API は実習生の入力タイミングに合わせて前日のデータを返す）
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
-  const yesterdayStr = `${yesterday.getFullYear()}年${yesterday.getMonth() + 1}月${yesterday.getDate()}日(${dowJa[yesterday.getDay()]})`
-
-  const ymToLabel = (v: string) => {
-    const y = v.slice(0, 4)
-    const m = parseInt(v.slice(4, 6))
-    return `${y}/${m}`
-  }
+  const today = todayJstIso()
+  const ai = data?.actionItems
+  const leaveItems = ai?.pendingLeaveRequests?.items || []
+  const homeItems = ai?.homeLongLeaveRequests || []
+  const reqN = leaveItems.length + homeItems.length
+  const reqForemanN = leaveItems.filter(i => i.status === 'pending').length + homeItems.filter(i => i.status === 'pending').length
+  const monthlyN = actionBadges?.monthly || 0
+  const visa = ai?.visaExpiry
+  const pl = ai?.plShortfall
+  const scrollToRequests = () => document.getElementById('requests')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-3">
-        <div>
-          <div className="text-[13px] text-hibi-sub dark:text-gray-400">{todayStr}</div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">ダッシュボード</h1>
-        </div>
-        <MonthStepper label={ymToLabel(ym)} onPrev={() => navigateMonth(-1)} onNext={() => navigateMonth(1)} />
-      </div>
+      <PageHeader group={`${today.slice(0, 4)}年${Number(today.slice(5, 7))}月${Number(today.slice(8, 10))}日（${DOW[new Date(`${today}T00:00:00`).getDay()]}）`} title="ダッシュボード" />
 
-      {error && (
-        <div className="bg-red-50 text-red-600 rounded-lg p-4 text-sm">{error}</div>
+      {error && <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">{error}</div>}
+
+      {/* ① 今やること */}
+      {data && (
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <TodoCard
+            icon="check" tone={reqN > 0 ? 'urgent' : 'ok'}
+            title="承認待ち"
+            big={reqN > 0 ? `${reqN}件` : 'ありません'}
+            sub={reqN > 0
+              ? `有給 ${leaveItems.length}件・帰国 ${homeItems.length}件（職長承認待ち ${reqForemanN}・最終承認待ち ${reqN - reqForemanN}）`
+              : '有給・帰国の申請が来るとここに出ます'}
+            action={reqN > 0 ? '申請を見る' : undefined}
+            onClick={reqN > 0 ? scrollToRequests : undefined}
+          />
+          <TodoCard
+            icon="chart" tone={monthlyN > 0 ? 'urgent' : 'ok'}
+            title="給与の検算"
+            big={monthlyN > 0 ? `要確認 ${monthlyN}名` : 'いまは問題なし'}
+            sub={monthlyN > 0 ? '自動検算で異常が見つかった人がいます。締める前に計算根拠を確認' : '自動検算で異常が出たらここに出ます'}
+            action={monthlyN > 0 ? '月次集計を開く' : undefined}
+            onClick={monthlyN > 0 ? () => router.push('/monthly') : undefined}
+          />
+          <TodoCard
+            icon="clock" tone={(visa?.count || 0) > 0 ? 'warn' : 'ok'}
+            title="在留期限"
+            big={(visa?.count || 0) > 0 ? `期限が近い人 ${visa!.count}名` : 'いまは問題なし'}
+            sub={(visa?.count || 0) > 0
+              ? `${visa!.items.slice(0, 3).map(v => `${v.name}（あと${v.daysLeft}日）`).join('、')}${visa!.count > 3 ? ` ほか${visa!.count - 3}名` : ''}`
+              : '期限が近い人が出たらここに出ます'}
+            action={(visa?.count || 0) > 0 ? '人員マスタを開く' : undefined}
+            onClick={(visa?.count || 0) > 0 ? () => router.push('/workers') : undefined}
+          />
+          <TodoCard
+            icon="umbrella" tone={(pl?.count || 0) > 0 ? 'urgent' : 'ok'}
+            title="年5日の取得義務"
+            big={(pl?.count || 0) > 0 ? `未達 ${pl!.count}名` : 'いまは問題なし'}
+            sub={(pl?.count || 0) > 0
+              ? `${(pl!.names || []).slice(0, 3).join('、')}${pl!.count > 3 ? ` ほか${pl!.count - 3}名` : ''}`
+              : '期限が近づいて未達の人が出たらここに出ます'}
+            action={(pl?.count || 0) > 0 ? '休暇管理を開く' : undefined}
+            onClick={(pl?.count || 0) > 0 ? () => router.push('/leave') : undefined}
+          />
+        </section>
       )}
 
-      {/* ═══ 今日の判断（2026-08-21 再設計・第1弾） ═══
-          代表が最初に見るのは「実績の要約」ではなく「自分の判断待ち」。
-          ① 承認・確認が必要なもの ② 静かな異常 ③ 期限接近 を1枚に集約し、
-          すべてクリックで該当画面へ飛べるようにする（従来は件数表示のみで導線が無かった）。 */}
-      {(() => {
-        if (!actionBadges && !data) return null
-        const q = data?.actionItems?.quietIssues
-        const visa = data?.actionItems?.visaExpiry
-        const pl = data?.actionItems?.plShortfall
-        const approvals = (actionBadges?.monthly || 0) + (actionBadges?.calendar || 0)
-        const quietN = q?.count || 0
-        const visaN = visa?.count || 0
-        const plN = pl?.count || 0
-        const total = approvals + quietN + visaN + plN
-
-        if (total === 0) {
-          return (
-            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl p-4 flex items-center gap-3">
-              <span className="w-10 h-10 rounded-[10px] bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 flex items-center justify-center shrink-0"><Icon name="check" size={20} strokeWidth={2.4} /></span>
-              <div>
-                <div className="font-bold text-green-800 dark:text-green-300">対応が必要なことはありません</div>
-                <div className="text-xs text-green-700 dark:text-green-400 mt-0.5">承認・給与計算・期限・異常検知すべて健全です</div>
-              </div>
-            </div>
-          )
-        }
-
-        const KIND_LABEL: Record<string, string> = {
-          nightUnregistered: '夜勤未登録',
-          legalShortfall: '法定割れ',
-          sundayNoRest: '日曜（休みなし週）',
-          earlyReturn: '帰国申請',
-          staleAttendance: '出面未入力',
-          wageRevisionPending: '賃金改定未反映',
-        }
-
-        return (
-          <div className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-hibi-line dark:border-gray-700 flex items-center justify-between">
-              <h2 className="font-bold text-lg text-gray-900 dark:text-white">今日の判断</h2>
-              <span className="text-[13px] text-hibi-sub dark:text-gray-400 tabular-nums">{total}件</span>
-            </div>
-            <div className="divide-y divide-hibi-line dark:divide-gray-700">
-
-              {/* ① 承認・確認 */}
-              {actionBadges && actionBadges.monthly > 0 && (
-                <JudgeRow href={`/monthly?ym=${ym}`} tone="urgent" icon="alert" kind="給与計算の検算"
-                  main={`異常 ${actionBadges.monthly}名`} sub="月次集計を開いて確認する" />
-              )}
-              {actionBadges && actionBadges.calendar > 0 && (
-                <JudgeRow href="/calendar" tone="warn" icon="calendar" kind="就業カレンダー"
-                  main={`未承認 ${actionBadges.calendar}件`} sub="来月分の承認待ち" />
-              )}
-
-              {/* ② 静かな異常 */}
-              {(q?.items || []).map((it, i) => (
-                <JudgeRow key={`q${i}`} href={it.href} tone="warn" icon="clock" kind={KIND_LABEL[it.kind] || '確認'}
-                  main={it.workerName} sub={it.detail} />
-              ))}
-
-              {/* ③ 期限接近 */}
-              {visaN > 0 && (
-                <JudgeRow href="/workers" tone="info" icon="user" kind="在留期限"
-                  main={`期限が近い人 ${visaN}名`}
-                  sub={`${(visa?.items || []).slice(0, 3).map(v => `${v.name}(あと${v.daysLeft}日)`).join('、')}${visaN > 3 ? ` 他${visaN - 3}名` : ''}`} />
-              )}
-              {plN > 0 && (
-                <JudgeRow href="/leave" tone="urgent" icon="umbrella" kind="有給 年5日の義務"
-                  main={`未達 ${plN}名`}
-                  sub={`${(pl?.names || []).slice(0, 3).join('、')}${plN > 3 ? ` 他${plN - 3}名` : ''}`} />
-              )}
-            </div>
-          </div>
-        )
-      })()}
-
-      {loading ? (
+      {loading && !data ? (
         <div className="text-center py-12 text-gray-400">読み込み中...</div>
       ) : data ? (
-        <>
-          {/* ═══ 勤怠申請（有給＋帰国＋欠勤届）— 対応待ちがある時のみ最上部に表示 ═══ */}
-          <AttendanceRequestCard
-            leaveItems={data.actionItems?.pendingLeaveRequests?.items || []}
-            absenceReports={data.actionItems?.absenceReports || []}
-            homeLongLeaveItems={data.actionItems?.homeLongLeaveRequests || []}
-            password={password}
-            userRole={userRole}
-            userForemanSites={userForemanSites}
-            onUpdate={fetchData}
-          />
-
-          {/* 🌴 休暇状況サマリーは出面入力画面に統合済みのためダッシュボードからは撤去 (2026-05-07) */}
-
-          {/* ═══ お知らせ ═══ */}
-          <AnnouncementsCard password={password} />
-
-          {/* ═══ 評価管理（進行中セッション） ═══ */}
-          {authUser && <EvaluationCard user={authUser} />}
-
-          {/* ═══ 1. Today's Status Table ═══ */}
-          <Section title={`前日の稼働状況 (${yesterdayStr})`}>
-            {data.todayStatus && data.todayStatus.siteStatus.length > 0 && data.todayStatus.siteStatus.some(s => s.total > 0) ? (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300 text-xs">
-                        <th className="px-3 py-2 text-left">現場</th>
-                        <th className="px-3 py-2 text-right">鳶</th>
-                        <th className="px-3 py-2 text-right">土工</th>
-                        <th className="px-3 py-2 text-right">外注鳶</th>
-                        <th className="px-3 py-2 text-right">外注土工</th>
-                        <th className="px-3 py-2 text-right">合計</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.todayStatus.siteStatus.map((s) => (
-                        <tr key={s.siteId} className="border-b border-hibi-line dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                          <td className="px-3 py-2.5 font-bold text-gray-900 dark:text-gray-100">{s.siteName}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{s.tobi}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{s.doko}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{s.subTobi}</td>
-                          <td className="px-3 py-2 text-right tabular-nums">{s.subDoko}</td>
-                          <td className="px-3 py-2 text-right tabular-nums font-bold">{s.total}</td>
-                        </tr>
-                      ))}
-                      <tr className="bg-gray-50 dark:bg-gray-700 font-bold">
-                        <td className="px-3 py-2">合計</td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {data.todayStatus.siteStatus.reduce((s, r) => s + r.tobi, 0)}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {data.todayStatus.siteStatus.reduce((s, r) => s + r.doko, 0)}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {data.todayStatus.siteStatus.reduce((s, r) => s + r.subTobi, 0)}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {data.todayStatus.siteStatus.reduce((s, r) => s + r.subDoko, 0)}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {data.todayStatus.siteStatus.reduce((s, r) => s + r.total, 0)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                {/* 前日の休みスタッフ表示
-                    実習生は作業終わりに自己入力する運用のため、前日のデータは確定済み。
-                    休んだ人を一覧で確認できる。 */}
-                {data.todayStatus.absentWorkers.length > 0 && (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
-                      休み {data.todayStatus.absentWorkers.length}名:
-                    </span>
-                    {data.todayStatus.absentWorkers.map(w => (
-                      <span key={w.id} className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md text-xs font-bold">
-                        {w.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="py-6 text-center">
-                <p className="text-gray-400 text-sm">前日の出面入力がありません</p>
-                <p className="text-gray-300 text-xs mt-1">出面入力画面で入力するとここに反映されます</p>
-              </div>
-            )}
-          </Section>
-
-          {/* ═══ 今月サマリー ═══ */}
-          {data.summary && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
-                <div className="flex items-center gap-1 text-[13px] mb-1">
-                  <span className="text-hibi-sub dark:text-gray-400">総人工数</span>
-                  {data.summary.prevTotalManDays > 0 && data.summary.pctWork !== 0 && (
-                    <span className={`text-[10px] font-bold ${data.summary.pctWork > 0 ? 'text-green-600' : 'text-red-600'}`} title="前月同日比">
-                      {data.summary.pctWork > 0 ? '▲' : '▼'}{Math.abs(Math.round(data.summary.pctWork))}%
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-[32px] leading-tight font-bold text-gray-900 dark:text-white tabular-nums">{fmtNum(data.summary.totalManDays)}</span>
-                  <span className="text-sm text-hibi-sub dark:text-gray-400">人工</span>
-                </div>
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
-                <div className="text-[13px] text-hibi-sub dark:text-gray-400 mb-1">
-                  {data.summary.billing > 0 ? '売上' : '売上（概算）'}
-                </div>
-                <div className="flex items-baseline gap-1">
-                  <span className={`text-[32px] leading-tight font-bold tabular-nums ${data.summary.billing === 0 ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
-                    {data.summary.billing === 0 ? '未入力' : fmtYenMan(data.summary.billing)}
-                  </span>
-                  {data.summary.billing > 0 && <span className="text-sm text-hibi-sub dark:text-gray-400">万円</span>}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Link to cost page */}
-          <div className="text-center">
-            <a href="/cost" className="text-sm text-hibi-navy dark:text-blue-400 hover:underline font-medium">
-              詳しくは原価・収益管理へ →
-            </a>
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-4 items-start">
+          {/* ② 左: やること */}
+          <div className="space-y-4 min-w-0">
+            <RequestsCard
+              leaveItems={leaveItems}
+              absenceReports={ai?.absenceReports || []}
+              homeLongLeaveItems={homeItems}
+              password={password}
+              userRole={userRole}
+              userForemanSites={userForemanSites}
+              onUpdate={fetchData}
+            />
+            <IssuesCard issues={ai?.quietIssues?.items || []} calendarPending={actionBadges?.calendar || 0} />
           </div>
-
-          {/* ═══ Daily Attendance Bar Chart ═══ */}
-          {data.dailyAttendance && data.dailyAttendance.length > 0 && (
-            <Section title="日別稼働人数">
-              <div className="overflow-x-auto">
-                <div className="flex items-end gap-0.5" style={{ minWidth: `${data.dailyAttendance.length * 24}px`, height: '150px' }}>
-                  {data.dailyAttendance.map((da) => {
-                    const maxDaily = Math.max(
-                      ...data.dailyAttendance.map(d => d.sites.reduce((s, st) => s + st.count, 0)),
-                      1
-                    )
-                    return (
-                      <div key={da.day} className="flex flex-col justify-end" style={{ width: '22px', height: '150px' }}>
-                        {da.sites.map((st) => {
-                          const segPct = maxDaily > 0 ? (st.count / maxDaily) * 140 : 0
-                          return (
-                            <div
-                              key={st.siteId}
-                              className={`w-full ${siteColor(data.siteList.findIndex(s => s.id === st.siteId))}`}
-                              style={{ height: `${segPct}px` }}
-                              title={`${st.siteName}: ${st.count}名`}
-                            />
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
-                <div className="flex gap-0.5" style={{ minWidth: `${data.dailyAttendance.length * 24}px` }}>
-                  {data.dailyAttendance.map((da) => (
-                    <div key={da.day} className="text-[10px] text-gray-500 text-center" style={{ width: '22px' }}>{da.day}</div>
-                  ))}
-                </div>
-                <div className="flex gap-0.5" style={{ minWidth: `${data.dailyAttendance.length * 24}px` }}>
-                  {data.dailyAttendance.map((da) => {
-                    const totalCount = da.sites.reduce((s, st) => s + st.count, 0)
-                    return (
-                      <div key={da.day} className="text-[9px] text-gray-400 text-center" style={{ width: '22px' }}>
-                        {totalCount > 0 ? totalCount : ''}
-                      </div>
-                    )
-                  })}
-                </div>
-                <div className="flex items-center gap-3 pt-2 mt-2 text-xs text-gray-500 dark:text-gray-400 border-t flex-wrap">
-                  {data.siteList.map((s, i) => (
-                    <span key={s.id} className="flex items-center gap-1">
-                      <span className={`inline-block w-3 h-3 rounded ${siteColor(i)}`} />
-                      {s.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </Section>
-          )}
-
-          {/* 有給残少は通知ベルに統合済み */}
-
-          {/* 出勤率は通知ベルに統合済み — 詳細は人員マスタや月次集計で確認 */}
-        </>
+          {/* ③ 右: 数字を見るもの */}
+          <div className="space-y-4 min-w-0">
+            <YesterdayCard data={data.todayStatus} siteList={data.siteList || []} />
+            <MonthCard data={data} ym={ym} onPrev={() => navigateMonth(-1)} onNext={() => navigateMonth(1)} />
+            <AnnouncementsCard password={password} />
+            {authUser && <EvaluationCard user={authUser} />}
+          </div>
+        </div>
       ) : null}
     </div>
-  )
-}
-
-// ─── Sub-components ───
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
-      <div className="px-5 py-4 border-b border-hibi-line dark:border-gray-700">
-        <h2 className="font-bold text-gray-900 dark:text-white text-base">{title}</h2>
-      </div>
-      <div className="p-5">
-        {children}
-      </div>
-    </div>
-  )
-}
-
-
-/** 月の切り替え（‹ 2026/9 ›）。案1 UDホワイトの枠つきセグメント */
-function MonthStepper({ label, onPrev, onNext }: { label: string; onPrev: () => void; onNext: () => void }) {
-  return (
-    <div className="flex items-center h-10 rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
-      <button onClick={onPrev} aria-label="前の月" className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
-        <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
-      </button>
-      <span className="px-2 text-[15px] font-bold text-gray-900 dark:text-white min-w-[72px] text-center tabular-nums">{label}</span>
-      <button onClick={onNext} aria-label="次の月" className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
-        <Icon name="chevronRight" size={18} strokeWidth={2.2} />
-      </button>
-    </div>
-  )
-}
-
-/** 急ぎ度ごとの色（地・文字）。色だけに頼らず、種類ラベルとアイコンでも区別する */
-const JUDGE_TONE = {
-  urgent: { chip: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', kind: 'text-red-700 dark:text-red-300' },
-  warn: { chip: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', kind: 'text-amber-800 dark:text-amber-300' },
-  info: { chip: 'bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300', kind: 'text-hibi-navy dark:text-blue-300' },
-} as const
-
-/** 今日の判断の1行（2026-09-30 案1 UDホワイト）。行全体が該当画面へのリンク */
-function JudgeRow({ href, tone, icon, kind, main, sub }: {
-  href: string
-  tone: keyof typeof JUDGE_TONE
-  icon: IconName
-  kind: string
-  main: string
-  sub?: string
-}) {
-  const t = JUDGE_TONE[tone]
-  return (
-    <a href={href} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition group">
-      <span className={`w-10 h-10 rounded-[10px] flex items-center justify-center shrink-0 ${t.chip}`}>
-        <Icon name={icon} size={20} />
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className={`text-xs font-bold ${t.kind}`}>{kind}</div>
-        <div className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{main}</div>
-        {sub && <div className="text-xs text-hibi-sub dark:text-gray-400 truncate">{sub}</div>}
-      </div>
-      <Icon name="chevronRight" size={18} className="text-gray-400 group-hover:text-hibi-navy dark:group-hover:text-white" />
-    </a>
   )
 }

@@ -1363,7 +1363,7 @@ export async function GET(request: NextRequest) {
     }
     interface QuietIssue {
       kind: 'nightUnregistered' | 'legalShortfall' | 'sundayNoRest' | 'earlyReturn' | 'staleAttendance'
-        | 'wageRevisionPending'
+        | 'wageRevisionPending' | 'staleAssignment'
       workerName: string
       detail: string
       href: string
@@ -1491,6 +1491,19 @@ export async function GET(request: NextRequest) {
               href: `/attendance?ym=${ym}`,
             })
           }
+        }
+      }
+      // 配置の見直し（2026-10-01 代表決定）: 現場を移動したのに前の現場の配置に残っている人。
+      //   当月表示のときだけ。出面は上で読んだ allAttD（表示月＋遡り3か月）を使い、読み取りを増やさない
+      if (ym === nowYm) {
+        const { findStaleAssignments } = await import('@/lib/foreman-todo')
+        for (const s of findStaleAssignments(main, allAttD as never, todayJstIso())) {
+          quietIssues.push({
+            kind: 'staleAssignment',
+            workerName: s.workerName,
+            detail: `${s.siteName} の配置に残っています（2週間入力なし・いまは ${s.workingAt.join('・')}）。移動したなら配置から外してください`,
+            href: `/attendance`,
+          })
         }
       }
     } catch (e) {
