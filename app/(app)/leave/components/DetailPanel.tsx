@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { PLWorker } from '../types'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { Icon } from '@/components/ui/Icon'
+import { SidePanel, CloseButton } from '@/components/ui/PageParts'
 import { addMonthsSafe, addDaysIso } from '@/lib/date-utils'
 
 // 一人の有給の詳細（2026-10-01 休暇管理の改善・代表依頼）。一覧の行を押すと右から開く。
@@ -27,16 +26,6 @@ interface Props {
 }
 
 export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesignate, onBuyout }: Props) {
-  // 画面の中身は animate-fadeIn（transform）の中にあり、fixed がその枠に閉じ込められる（サイドバーが暗くならない）。
-  //   body 直下に出して画面全体に重ねる
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   const jp = !w.visa || w.visa === 'none'
   const end = w.grantDate ? addDaysIso(addMonthsSafe(w.grantDate, 12), -1) : ''
   const taken = w.periodUsed ?? 0
@@ -61,11 +50,8 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
   for (const h of w.adjustmentHistory ?? []) records.push({ at: h.at?.slice(0, 10) || '', text: `${h.field === 'grantDays' ? '付与日数' : h.field === 'adjustment' ? '調整' : h.field === 'carryOver' ? '繰越' : h.field} を ${h.before || '—'} → ${h.after} に変更` })
   records.sort((a, b) => b.at.localeCompare(a.at))
 
-  if (!mounted) return null
-  return createPortal(
-    <div className="fixed inset-0 z-[60] print:hidden" role="dialog" aria-modal="true" aria-label={`${w.name} の有給`}>
-      <button className="absolute inset-0 bg-black/30 animate-fadeIn" onClick={onClose} aria-label="閉じる" />
-      <aside className="absolute right-0 top-0 h-full w-full max-w-[640px] bg-white dark:bg-gray-800 border-l border-hibi-line dark:border-gray-700 shadow-xl overflow-y-auto animate-slideInRight">
+  return (
+    <SidePanel label={`${w.name} の有給`} onClose={onClose}>
         <div className="p-6 space-y-6">
           {/* 見出し */}
           <div className="flex items-start gap-3">
@@ -80,8 +66,7 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
                 今の期間 {w.grantDate ? `${slash(w.grantDate)}〜${slash(end)}` : '付与日が未設定'}
               </div>
             </div>
-            <button onClick={onClose} aria-label="閉じる"
-              className="w-9 h-9 rounded-[10px] border border-hibi-line dark:border-gray-600 flex items-center justify-center text-gray-500 hover:bg-hibi-bg dark:hover:bg-gray-700 text-lg leading-none">×</button>
+            <CloseButton onClick={onClose} />
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -155,9 +140,7 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
             </section>
           )}
         </div>
-      </aside>
-    </div>,
-    document.body,
+    </SidePanel>
   )
 }
 

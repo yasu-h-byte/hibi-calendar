@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react'
 import { PLWorker, PendingGrant } from '../types'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
-import { Icon, type IconName } from '@/components/ui/Icon'
+import { Icon } from '@/components/ui/Icon'
+import { TodoCard, Segment, SearchBox } from '@/components/ui/PageParts'
 import { addMonthsSafe, addDaysIso, todayJstIso } from '@/lib/date-utils'
 
 // 一覧タブ（2026-10-01 改善「ひと目で分かる有給」・代表依頼）
@@ -164,7 +165,7 @@ export default function ListTab({
     {/* 絞り込み・並べ替え */}
     <div className="flex flex-wrap items-center gap-3">
       <Segment
-        value={group} onChange={v => setGroup(v as Group)}
+        value={group} onChange={setGroup}
         items={[
           ['all', `全員 ${groups.all.length}`],
           ['jp', `日本人 ${groups.jp.length}`],
@@ -173,17 +174,10 @@ export default function ListTab({
         ]}
       />
       <Segment
-        value={sort} onChange={v => setSort(v as SortKey)}
+        value={sort} onChange={setSort}
         items={[['attention', '要対応を上に'], ['name', '名前順'], ['remaining', '残りが少ない順']]}
       />
-      <label className="ml-auto flex items-center gap-2 h-9 px-3 rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-500 w-full sm:w-52">
-        <Icon name="search" size={15} />
-        <input
-          type="search" value={query} onChange={e => setQuery(e.target.value)}
-          placeholder="名前で探す" aria-label="名前で探す"
-          className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 dark:text-white outline-none"
-        />
-      </label>
+      <SearchBox value={query} onChange={setQuery} />
     </div>
 
     {/* 一覧 */}
@@ -213,66 +207,6 @@ export default function ListTab({
 }
 
 // ─── 部品 ───────────────────────────────────────
-
-const TONE = {
-  urgent: { chip: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300', title: 'text-red-700 dark:text-red-300' },
-  warn: { chip: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', title: 'text-amber-800 dark:text-amber-300' },
-  info: { chip: 'bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300', title: 'text-hibi-navy dark:text-blue-300' },
-  ok: { chip: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300', title: 'text-gray-600 dark:text-gray-300' },
-} as const
-
-function TodoCard({ icon, tone, title, big, sub, action, onClick, active }: {
-  icon: IconName
-  tone: keyof typeof TONE
-  title: string
-  big: string
-  sub: string
-  action?: string
-  onClick?: () => void
-  active?: boolean
-}) {
-  const t = TONE[tone]
-  const body = (
-    <>
-      <div className="flex items-center gap-2.5">
-        <span className={`w-8 h-8 rounded-[9px] flex items-center justify-center ${t.chip}`}>
-          <Icon name={tone === 'ok' ? 'check' : icon} size={17} />
-        </span>
-        <span className={`text-[13px] font-bold ${t.title}`}>{title}</span>
-      </div>
-      <div className={`text-xl font-bold ${tone === 'ok' ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>{big}</div>
-      <div className="text-xs text-hibi-sub dark:text-gray-400 leading-relaxed line-clamp-2">{sub}</div>
-      {action && (
-        <div className="mt-auto pt-1 text-[13px] font-bold text-hibi-navy dark:text-blue-300 flex items-center gap-1">
-          {action}<Icon name="chevronRight" size={14} />
-        </div>
-      )}
-    </>
-  )
-  const cls = `text-left bg-white dark:bg-gray-800 border rounded-xl p-4 flex flex-col gap-2 ${
-    active ? 'border-hibi-navy ring-1 ring-hibi-navy dark:border-blue-400 dark:ring-blue-400' : 'border-hibi-line dark:border-gray-700'
-  }`
-  return onClick
-    ? <button onClick={onClick} className={`${cls} hover:border-hibi-navy dark:hover:border-blue-400 transition`}>{body}</button>
-    : <div className={cls}>{body}</div>
-}
-
-function Segment({ value, onChange, items }: { value: string; onChange: (v: string) => void; items: [string, string][] }) {
-  return (
-    <div className="flex gap-1 p-1 rounded-[10px] bg-gray-200/70 dark:bg-gray-800 w-fit">
-      {items.map(([k, label]) => (
-        <button key={k} onClick={() => onChange(k)} aria-pressed={value === k}
-          className={`h-8 px-3.5 rounded-lg text-[13px] transition ${
-            value === k
-              ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white font-bold shadow-sm'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-          }`}>
-          {label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 function Row({ w, rem, photo, onOpen }: { w: PLWorker; rem: number; photo?: string; onOpen: () => void }) {
   const jp = isJp(w)

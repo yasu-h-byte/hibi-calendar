@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon } from '@/components/ui/Icon'
+import { Chip, AmountChip, type ChipTone } from '@/components/ui/PageParts'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './StaffConfirmBadge'
 
 // 月次集計・締めの「見やすい一覧」と「締めの準備カード」（2026-10-01 代表依頼・見本キャンバス5段目）
@@ -215,8 +216,8 @@ function payChips(w: OverviewWorker, ym: string): { label: string; amount: numbe
 }
 
 /** 名前の横に出す印（旧表の警告と同じ条件。詳しい説明は押して開く計算根拠と全項目の表で） */
-function badgesOf(w: OverviewWorker, auditIds: Set<number>): { text: string; tone: 'gray' | 'cyan' | 'blue' | 'amber' | 'red'; title?: string }[] {
-  const b: { text: string; tone: 'gray' | 'cyan' | 'blue' | 'amber' | 'red'; title?: string }[] = []
+function badgesOf(w: OverviewWorker, auditIds: Set<number>): { text: string; tone: ChipTone; title?: string }[] {
+  const b: { text: string; tone: ChipTone; title?: string }[] = []
   if (auditIds.has(w.id)) b.push({ text: '検算 要確認', tone: 'red', title: '自動検算で要確認。押して計算根拠を確認してください' })
   if ((w.calendarBlankDays || 0) > 0) b.push({ text: `稼働日未入力 ${w.calendarBlankDays}日`, tone: 'red', title: '空欄のままだと欠勤（100%控除）として計算されます' })
   if ((w.legalShortfall || 0) > 0) b.push({ text: `法定不足 ${yen(w.legalShortfall!)}`, tone: 'red' })
@@ -228,14 +229,6 @@ function badgesOf(w: OverviewWorker, auditIds: Set<number>): { text: string; ton
   if (w.isDispatched) b.push({ text: '出向中', tone: 'blue', title: w.dispatchTo ? `出向先: ${w.dispatchTo}` : undefined })
   if (w.useOldRules && w.visa !== 'none') b.push({ text: '旧ルール', tone: 'gray' })
   return b
-}
-
-const BADGE: Record<string, string> = {
-  gray: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
-  cyan: 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
-  blue: 'bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300',
-  amber: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-  red: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
 }
 
 /** 要確認（並べ替え・「要確認だけ」に使う） */
@@ -284,7 +277,7 @@ export function OverviewList({
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100">{w.name}</span>
                 {badges.map((b, i) => (
-                  <span key={i} title={b.title} className={`px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap ${BADGE[b.tone]}`}>{b.text}</span>
+                  <Chip key={i} tone={b.tone} title={b.title}>{b.text}</Chip>
                 ))}
               </div>
               <div className="text-xs text-hibi-sub dark:text-gray-400 truncate">
@@ -301,9 +294,7 @@ export function OverviewList({
               {chips.length === 0
                 ? <span className="text-xs text-gray-400">支給なし</span>
                 : chips.map((c, i) => (
-                  <span key={i} className="inline-flex items-baseline gap-1.5 px-2 py-0.5 rounded-md bg-hibi-bg dark:bg-gray-700/60 text-xs text-hibi-sub dark:text-gray-400 whitespace-nowrap">
-                    {c.label}<b className={`tabular-nums ${c.neg ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}`}>{c.neg ? '−' : ''}{Math.round(c.amount).toLocaleString()}</b>
-                  </span>
+                  <AmountChip key={i} label={c.label} amount={Math.round(c.amount).toLocaleString()} neg={c.neg} />
                 ))}
               {w.isDispatched && <span className="text-xs text-hibi-navy dark:text-blue-300 whitespace-nowrap">出向先が支給（原価から控除）</span>}
             </div>

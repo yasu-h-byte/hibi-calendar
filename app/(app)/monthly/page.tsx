@@ -8,6 +8,7 @@ import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
 import { can } from '@/lib/permissions'
 import { Icon } from '@/components/ui/Icon'
+import { UnderlineTabs, ToolButton, Segment, SearchBox } from '@/components/ui/PageParts'
 import { CloseCard, OverviewList, needsAttention } from './components/MonthlyOverview'
 
 // ────────────────────────────────────────
@@ -738,18 +739,12 @@ function MonthlyPageInner() {
   return (
     <div className="max-w-7xl mx-auto space-y-5">
       {/* 月次集計 ↔ 帳票出力（2026-10-01: 下線タブに・絵文字をやめる） */}
-      <nav className="flex gap-1 border-b border-hibi-line dark:border-gray-700" aria-label="月次集計のタブ">
-        {([['summary', '月次集計・締め'], ['export', '帳票出力']] as const).map(([k, label]) => (
-          <button key={k} onClick={() => switchTopTab(k)} aria-current={topTab === k ? 'page' : undefined}
-            className={`px-4 py-2.5 text-[15px] whitespace-nowrap border-b-[3px] -mb-px transition ${
-              topTab === k
-                ? 'border-hibi-navy text-hibi-navy font-bold dark:border-blue-400 dark:text-white'
-                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}>
-            {label}
-          </button>
-        ))}
-      </nav>
+      <UnderlineTabs
+        label="月次集計のタブ"
+        active={topTab}
+        onChange={switchTopTab}
+        tabs={[{ key: 'summary', label: '月次集計・締め' }, { key: 'export', label: '帳票出力' }]}
+      />
 
       {/* ═══════════════ 帳票出力 Tab ═══════════════ */}
       {topTab === 'export' && (() => {
@@ -943,21 +938,10 @@ function MonthlyPageInner() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleCopyPrevMonth}
-            disabled={hasCurrentData}
-            className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
-            title={hasCurrentData ? '既にデータが存在します' : '前月の出勤データをコピー'}
-          >
-            <Icon name="copy" size={15} />前月コピー
-          </button>
-          <button
-            onClick={() => switchTopTab('export')}
-            className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition"
-            title="帳票はすべて「帳票出力」タブから（キャシュモ提出の2点・根拠書類・社内用）"
-          >
-            <Icon name="download" size={15} />帳票出力
-          </button>
+          <ToolButton icon="copy" onClick={handleCopyPrevMonth} disabled={hasCurrentData}
+            title={hasCurrentData ? '既にデータが存在します' : '前月の出勤データをコピー'}>前月コピー</ToolButton>
+          <ToolButton icon="download" onClick={() => switchTopTab('export')}
+            title="帳票はすべて「帳票出力」タブから（キャシュモ提出の2点・根拠書類・社内用）">帳票出力</ToolButton>
           <select
             value={ym}
             onChange={e => setYm(e.target.value)}
@@ -1232,33 +1216,15 @@ function MonthlyPageInner() {
       {/* 見せ方の切り替え（2026-10-01）＋ 見やすい一覧の絞り込み */}
       {!loading && data && (
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 p-1 rounded-[10px] bg-gray-200/70 dark:bg-gray-800">
-            {([['list', '見やすい一覧'], ['table', '全項目の表']] as const).map(([k, label]) => (
-              <button key={k} onClick={() => setView(k)} aria-pressed={view === k}
-                className={`h-8 px-3.5 rounded-lg text-[13px] transition ${view === k ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white font-bold shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}>
-                {label}
-              </button>
-            ))}
-          </div>
+          <Segment value={view} onChange={setView} items={[['list', '見やすい一覧'], ['table', '全項目の表']]} />
           {view === 'list' && (
             <>
-              <div className="flex gap-1 p-1 rounded-[10px] bg-gray-200/70 dark:bg-gray-800">
-                {([
+              <Segment value={listFilter} onChange={setListFilter} items={[
                   ['all', 'すべて'],
                   ['attention', `要確認だけ ${tabFilteredWorkers.filter(w => needsAttention(w, new Set(validationOnTab.affectedWorkerIds))).length}`],
                   ['unconfirmed', `本人確認まだ ${tabFilteredWorkers.filter(w => w.visa !== 'none' && !(staffConfirms[w.id] && (staffConfirms[w.id].status === 'ok' || staffConfirms[w.id].resolvedAt))).length}`],
-                ] as const).map(([k, label]) => (
-                  <button key={k} onClick={() => setListFilter(k)} aria-pressed={listFilter === k}
-                    className={`h-8 px-3.5 rounded-lg text-[13px] transition ${listFilter === k ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white font-bold shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <label className="ml-auto flex items-center gap-2 h-9 px-3 rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-500 w-full sm:w-52">
-                <input type="search" value={listQuery} onChange={e => setListQuery(e.target.value)}
-                  placeholder="名前で探す" aria-label="名前で探す"
-                  className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 dark:text-white outline-none" />
-              </label>
+                ]} />
+              <SearchBox value={listQuery} onChange={setListQuery} />
             </>
           )}
         </div>

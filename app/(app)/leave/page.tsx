@@ -9,7 +9,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { permRoleOf, roleCan } from '@/lib/permissions'
 import MaintenanceButton from '@/components/leave/MaintenanceButton'
 import { PLWorker, OrgFilter, LeaveTab, HomeLeave, PendingGrant, PendingGrantForm, LeaveRequest, SiteOption, MforemanMap } from './types'
-import { Icon } from '@/components/ui/Icon'
+import { PageHeader, ToolButton, UnderlineTabs, Segment } from '@/components/ui/PageParts'
 import ListTab from './components/ListTab'
 import GrantDatesTab from './components/GrantDatesTab'
 import RequestsTab, { RequestsUiState, initialRequestsUi } from './components/RequestsTab'
@@ -158,12 +158,10 @@ export default function LeavePage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div className="text-[13px] text-hibi-sub dark:text-gray-400">出面・勤怠</div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">休暇管理</h1>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        group="出面・勤怠"
+        title="休暇管理"
+        actions={<>
           {/* 2026-06-XX 改善: 「+ 有給付与」緑ボタンを🔧メニュー内へ移動
               - 通常運用は「🌴 半自動付与バナー」が main flow
               - 手動付与は例外オペレーションなので 🔧メニュー > 例外オペレーション に隠す
@@ -173,7 +171,7 @@ export default function LeavePage() {
             onChanged={fetchData}
             onOpenGrantModal={() => setShowGrantModal(true)}
           />
-          <button onClick={async () => {
+          <ToolButton icon="download" title="労基法施行規則24条の7準拠の有給管理簿をExcelで出力" onClick={async () => {
             const res = await fetch('/api/leave/export-ledger', {
               headers: { 'x-admin-password': password },
             })
@@ -185,52 +183,32 @@ export default function LeavePage() {
             a.download = `有給管理簿_${todayJstIso().replace(/-/g, '')}.xlsx`
             a.click()
             URL.revokeObjectURL(url)
-          }}
-            className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition disabled:opacity-50"
-            title="労基法施行規則24条の7準拠の有給管理簿をExcelで出力">
-            <Icon name="download" size={15} />管理簿（Excel）
-          </button>
-        </div>
-      </div>
+          }}>管理簿（Excel）</ToolButton>
+        </>}
+      />
 
-      {/* Main tabs */}
       {/* タブ（2026-10-01: 下線タブに。絵文字はやめる） */}
-      <nav className="flex gap-1 border-b border-hibi-line dark:border-gray-700 overflow-x-auto" aria-label="休暇管理のタブ">
-        {([
-          { key: 'list' as const, label: '有給' },
-          { key: 'requests' as const, label: '申請', badge: pendingCount },
-          { key: 'calendar' as const, label: 'カレンダー' },
-          { key: 'monthly' as const, label: '月別' },
-          { key: 'grantdates' as const, label: '付与日' },
-          { key: 'homeleave' as const, label: '帰国' },
-        ]).map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            aria-current={activeTab === tab.key ? 'page' : undefined}
-            className={`px-4 py-2.5 text-[15px] whitespace-nowrap flex items-center gap-1.5 border-b-[3px] -mb-px transition ${
-              activeTab === tab.key
-                ? 'border-hibi-navy text-hibi-navy font-bold dark:border-blue-400 dark:text-white'
-                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-            }`}>
-            {tab.label}
-            {tab.badge ? <span className="bg-red-600 text-white text-[11px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{tab.badge}</span> : null}
-          </button>
-        ))}
-      </nav>
+      <UnderlineTabs
+        label="休暇管理のタブ"
+        active={activeTab}
+        onChange={setActiveTab}
+        tabs={[
+          { key: 'list', label: '有給' },
+          { key: 'requests', label: '申請', badge: pendingCount },
+          { key: 'calendar', label: 'カレンダー' },
+          { key: 'monthly', label: '月別' },
+          { key: 'grantdates', label: '付与日' },
+          { key: 'homeleave', label: '帰国' },
+        ]}
+      />
 
       {/* Org filter (一覧・基準日タブ) + 残数の基準日（一覧タブのみ） */}
       {(activeTab === 'list' || activeTab === 'grantdates') && (
         <div className="flex flex-wrap items-center gap-3">
           {/* 有給タブは中で「日本人／外国人・日比／HFU」に分けるので、所属の切り替えは付与日タブだけ */}
-          {activeTab === 'grantdates' && <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
-            {([['all', '全員'], ['hibi', '日比建設'], ['hfu', 'HFU']] as [OrgFilter, string][]).map(([key, label]) => (
-              <button key={key} onClick={() => setOrgFilter(key)}
-                className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
-                  orgFilter === key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                }`}>
-                {label}
-              </button>
-            ))}
-          </div>}
+          {activeTab === 'grantdates' && (
+            <Segment value={orgFilter} onChange={setOrgFilter} items={[['all', '全員'], ['hibi', '日比建設'], ['hfu', 'HFU']]} />
+          )}
           {activeTab === 'list' && (
             <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-lg px-3 py-1.5">
               <span className="text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">残数の基準日</span>
