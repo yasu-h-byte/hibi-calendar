@@ -686,7 +686,9 @@ export async function getForemanSite(foremanId: number): Promise<Site | null> {
 // ────────────────────────────────────────
 
 export async function getForeignWorkersForSite(
-  siteId: string
+  siteId: string,
+  /** 対象月 'YYYYMM'（省略=今月）。前月の承認では前月の配置で数える（2026-10-01） */
+  ymOverride?: string,
 ): Promise<{ id: number; name: string; nameVi?: string; visa: string }[]> {
   const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
   if (!mainDoc.exists()) return []
@@ -696,7 +698,7 @@ export async function getForeignWorkersForSite(
   const assign = (data.assign || {}) as Record<string, { workers?: number[] }>
   const massign = (data.massign || {}) as Record<string, { workers?: number[] }>
 
-  const ym = currentYmJst()
+  const ym = ymOverride ? ymOverride.replace('-', '') : currentYmJst()
 
   const monthKey = `${siteId}_${ym}`
   const monthAssign = massign[monthKey]

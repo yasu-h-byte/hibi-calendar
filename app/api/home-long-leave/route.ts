@@ -1,25 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole } from '@/lib/auth'
+import { currentYmJst } from '@/lib/date-utils'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
-import { getStaffSites, ymKey } from '@/lib/attendance'
+import { ymKey } from '@/lib/attendance'
+import { getForemenOfWorkerSites, managerByToken } from '@/lib/foreman-todo'
 
-/**
- * 申請者の配置現場を担当する職長の workerId 集合を返す（権限判定用）。
- * 2026-06-12 (監査 Sprint2-B): leave-request の foreman_approve 権限チェックの横展開。
- */
-async function getForemenOfWorkerSites(workerId: number): Promise<Set<number>> {
-  const result = new Set<number>()
-  const staffSites = await getStaffSites(workerId)
-  const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-  const sites = (mainSnap.exists() ? mainSnap.data().sites || [] : []) as { id: string; foremen?: number[]; foreman?: number }[]
-  for (const ss of staffSites) {
-    const site = sites.find(s => s.id === ss.id)
-    if (!site) continue
-    for (const f of site.foremen || (site.foreman ? [site.foreman] : [])) result.add(f)
-  }
-  return result
+// 申請者の配置現場の職長（月別職長込み）は lib/foreman-todo.ts getForemenOfWorkerSites（マイページの一覧と共通）
+
+/** ログインした人が管理者・事業責任者か（現場を問わず職長承認・却下できる人） */
+async function isManagerActor(request: NextRequest): Promise<boolean> {
+  const r = await getApiRole(request, currentYmJst())
+  return !!r && isManagerRole(r.role)
 }
 
 interface HomeLongLeave {
@@ -172,7 +165,7 @@ export async function POST(request: NextRequest) {
         if (!authUser.authorized) {
           return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
-        if (typeof authUser.actor === 'number' && !allowedForemen.has(authUser.actor)) {
+        if (typeof authUser.actor === 'number' && !allowedForemen.has(authUser.actor) && !(await isManagerActor(request))) {
           return NextResponse.json({ error: '申請者の配置現場の職長権限がありません' }, { status: 403 })
         }
         authWorkerId = authUser.actor
@@ -193,8 +186,17 @@ export async function POST(request: NextRequest) {
       // 2026-08-27（休暇届総点検）: 最終承認は代表・事業責任者のみ
       //   （旧: 任意の個人パスワードで最終承認できた。有給 approve と同一基準に統一）
       const { requireExecutiveAuth, getApiAuthUser } = await import('@/lib/auth')
-      { const denied = await requireExecutiveAuth(request); if (denied) return denied }
-      const authForApprove = await getApiAuthUser(request)
+      // 2026-10-01: 政仁さん・代表はマイページ（個人URL＝token）からも最終承認できる
+      let authForApprove: Awaited<ReturnType<typeof getApiAuthUser>>
+      if (body.token) {
+        const { managerByToken } = await import('@/lib/foreman-todo')
+        const mgr = await managerByToken(body.token)
+        if (!mgr) return NextResponse.json({ error: '最終承認は代表・事業責任者のみ実行できます' }, { status: 403 })
+        authForApprove = { authorized: true, actor: mgr.id }
+      } else {
+        { const denied = await requireExecutiveAuth(request); if (denied) return denied }
+        authForApprove = await getApiAuthUser(request)
+      }
 
       const { requestId, approvedBy } = body
       if (!requestId) {
@@ -309,7 +311,8 @@ export async function POST(request: NextRequest) {
         const worker = await getWorkerByToken(rejectToken)
         if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
         const allowedForemen = await getForemenOfWorkerSites(data.workerId)
-        if (!allowedForemen.has(worker.id)) {
+        // 政仁さん・代表はマイページから現場を問わず却下できる（2026-10-01）
+        if (!allowedForemen.has(worker.id) && !(await managerByToken(rejectToken))) {
           return NextResponse.json({ error: '申請者の配置現場の職長権限がありません' }, { status: 403 })
         }
         authWorkerId = worker.id
@@ -317,6 +320,14 @@ export async function POST(request: NextRequest) {
         const authUser = await getApiAuthUser(request)
         if (!authUser.authorized) {
           return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+        // 2026-10-01: ログインした職長は自分の現場の人の申請だけ却下できる（旧: 現場を問わず却下できた）。
+        //   管理者・事業責任者は現場を問わない
+        if (typeof authUser.actor === 'number' && !(await isManagerActor(request))) {
+          const allowedForemen = await getForemenOfWorkerSites(data.workerId)
+          if (!allowedForemen.has(authUser.actor)) {
+            return NextResponse.json({ error: '申請者の配置現場の職長権限がありません' }, { status: 403 })
+          }
         }
         authWorkerId = authUser.actor
       }

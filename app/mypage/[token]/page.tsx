@@ -12,14 +12,21 @@
  *
  * 職長もこのページを使う。職長専用の出面画面は用意してあるが、職長は従来どおり
  * PC画面をスマホで操作する運用になったため、ここからは導線を張らない（2026-08-28 代表）。
+ *
+ * 2026-10-01（代表）: 職長・政仁さん・代表には先頭に「承認すること」を出す。
+ *   職長 = 出面のまとめ承認・有給／帰国申請の職長承認。政仁さん・代表 = 最終承認・職長がいない現場の代行・配置の見直し。
+ *   components/mypage/ForemanApprovals.tsx。それ以外の人には何も出ない。
  */
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import StaffHeader from '@/components/StaffHeader'
+import ForemanApprovals from '@/components/mypage/ForemanApprovals'
 
 interface MyPageData {
   worker: { id: number; name: string; jobType: string }
+  /** 「承認すること」を出す人か（職長・政仁さん・代表） */
+  canApprove?: boolean
   today: string
   leave: {
     noGrant: boolean
@@ -100,7 +107,8 @@ export default function MyPage() {
 
   const [data, setData] = useState<MyPageData | null>(null)
   const [requests, setRequests] = useState<LeaveRequest[]>([])
-  const [tool, setTool] = useState<ToolBudget | null>(null)
+  // undefined = 読み込み中、null = 取得できなかった（読み込み中に「枠が未設定」と誤表示しないため）
+  const [tool, setTool] = useState<ToolBudget | null | undefined>(undefined)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -216,6 +224,9 @@ export default function MyPage() {
           <div className="bg-green-100 text-green-800 rounded-xl p-3 text-center font-bold text-sm">{msg}</div>
         )}
 
+        {/* ── 承認すること（職長だけ） ── */}
+        <ForemanApprovals token={token} canApprove={!!data.canApprove} />
+
         {/* ── 有給 ── */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
           <div className="text-sm font-bold text-gray-500 mb-3">🌴 有給休暇</div>
@@ -287,7 +298,9 @@ export default function MyPage() {
           <div className="text-sm font-bold text-gray-500 mb-3">🔧 道具代</div>
           {/* period が null = 期間起点日が未設定。この状態の budget は「既定額」でしかなく、
               実際には何も管理されていない。残額として見せると誤解を招くので出さない */}
-          {!tool || tool.error || !tool.period ? (
+          {tool === undefined ? (
+            <div className="text-sm text-gray-400">読み込み中...</div>
+          ) : !tool || tool.error || !tool.period ? (
             <div className="text-sm text-gray-500">
               道具代の枠がまだ設定されていません。事務担当にお問い合わせください。
             </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiRole, isManagerRole, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, requireCap, approvingForemenOfSite, isProxyApprovalSite } from '@/lib/auth'
 import {
   orderSitesWithWorkTypes, isWorkTypeSite, workTypeSitesOf, parentAndWorkTypeSiteIds,
   findWorkTypeDuplicates, planDayWorkTypeMoves, type WorkTypeDuplicate,
@@ -362,6 +362,8 @@ export async function GET(request: NextRequest) {
       workTypeDuplicates,
       // 応援現場か（事業責任者が一括で入力する運用・2026-09-30）
       isSupportSite: (await import('@/lib/companies')).isSupportSite(site as never, main.sites as never),
+      // 職長承認を政仁さんが代行する現場か（職種が職長の人が現場の職長に登録されていない・2026-10-01 代表）
+      proxyApproval: isProxyApprovalSite(site as never, main.mforeman || {}, ym, main.workers as never),
       // 2026-05-25 追加: 退職予定情報（今日から3ヶ月以内に退職予定の全スタッフ）
       //   出面入力画面のバナー表示用。職長が他現場のスタッフも含めて全社の退職予定を把握できる。
       upcomingRetirements: (() => {
@@ -413,6 +415,15 @@ export async function POST(request: NextRequest) {
       //   職長承認（とその解除）も、応援現場なら事業責任者ができる（政仁さんが入力〜承認までまとめて見る・2026-09-30）
       //   夜勤の日の指定（saveNightDays）も同じ（現場IDは body.siteId・2026-09-30 点検）
       const supportActions = [undefined, '', 'saveAttendance', 'saveAssign', 'saveDrivers', 'saveNightDays', ...foremanApproveActions]
+      // 2026-10-01 代表: 職長でない人が現場の職長に登録されている現場は、政仁さんが職長承認を代行する
+      if (denied && cap === 'attendance.foremanApprove' && body.siteId && body.ym) {
+        const mainP = await getMainData()
+        const siteP = mainP.sites.find(s => s.id === body.siteId)
+        if (siteP && isProxyApprovalSite(siteP as never, mainP.mforeman || {}, String(body.ym), mainP.workers as never)) {
+          const deniedP = await requireCap(request, 'attendance.foremanApproveProxy')
+          if (!deniedP) denied = null
+        }
+      }
       if (denied && (cap === 'attendance.input' || cap === 'attendance.foremanApprove') && supportActions.includes(action) && body.siteId) {
         const { isSupportSite } = await import('@/lib/companies')
         const mainS = await getMainData()
@@ -434,6 +445,17 @@ export async function POST(request: NextRequest) {
       if (isForemanScopedGridAction(action)) {
         const scope = await checkGridForemanScope(request, await getMainData(), body.siteId, body.ym)
         if (!scope.ok) return NextResponse.json({ error: scope.error }, { status: scope.status })
+      }
+      // 職長承認は職種が職長の人だけ（現場の職長に登録されていても、とび・役員などは承認しない。
+      //   その現場は政仁さんが代行・2026-10-01 代表）。入力の権限は変えない
+      if (['approve', 'approve_foreman', 'unapprove', 'unapprove_foreman'].includes(action) && body.siteId && body.ym) {
+        const roleA = await getApiRole(request, String(body.ym))
+        if (roleA?.role === 'foreman' && roleA.workerId !== null) {
+          const mainA = await getMainData()
+          const siteA = mainA.sites.find(s => s.id === body.siteId)
+          const ok = !!siteA && approvingForemenOfSite(siteA as never, mainA.mforeman || {}, String(body.ym), mainA.workers as never).includes(roleA.workerId)
+          if (!ok) return NextResponse.json({ error: 'この現場の職長承認は、政仁さんが代行します（職長として登録されている人の職種が「職長」ではないため）' }, { status: 403 })
+        }
       }
     }
 
@@ -891,16 +913,27 @@ export async function POST(request: NextRequest) {
     //   approve_final     / unapprove_final   : 最終承認 (admin/approver)
 
     if (action === 'approve' || action === 'approve_foreman') {
-      const { siteId, ym, day, approvedBy } = body
+      const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       const { setForemanApprovalForDay } = await import('@/lib/attendance')
-      await setForemanApprovalForDay(siteId, ym, day, approvedBy || 0)
+      // 承認者はログインした本人（2026-10-01。旧: 画面から送られた approvedBy をそのまま記録していた）
+      const au = await getApiAuthUser(request)
+      await setForemanApprovalForDay(siteId, ym, day, au.authorized && typeof au.actor === 'number' ? au.actor : 0)
       return NextResponse.json({ success: true })
     }
 
     if (action === 'unapprove' || action === 'unapprove_foreman') {
       const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      // 最終承認が入った日は、職長からは取り消せない（スマホの職長画面・マイページと同じ・2026-10-01）。
+      //   旧: PC から職長が取り消すと政仁さんの最終承認まで黙って消えていた。管理者・事業責任者は従来どおり可
+      {
+        const cur = await getApprovalForDay(siteId, ym, day)
+        const role = await getApiRole(request)
+        if (cur?.final && !(role && isManagerRole(role.role))) {
+          return NextResponse.json({ error: 'この日は最終承認済みのため取り消せません。管理者に連絡してください。' }, { status: 409 })
+        }
+      }
       const { removeForemanApprovalForDay } = await import('@/lib/attendance')
       await removeForemanApprovalForDay(siteId, ym, day)
       return NextResponse.json({ success: true })
@@ -913,7 +946,7 @@ export async function POST(request: NextRequest) {
       if (!role || !isManagerRole(role.role)) {
         return NextResponse.json({ error: '最終承認の権限がありません（管理者・事業責任者のみ）' }, { status: 403 })
       }
-      const { siteId, ym, day, approvedBy } = body
+      const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       // 「職長承認済み」を必須要件としてサーバ側でチェック（クライアントUIだけでなく二重に保護）
       const existing = await getApprovalForDay(siteId, ym, day)
@@ -921,7 +954,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '職長承認が先に必要です' }, { status: 400 })
       }
       const { setFinalApprovalForDay } = await import('@/lib/attendance')
-      await setFinalApprovalForDay(siteId, ym, day, approvedBy || 0)
+      // 承認者はログインした本人（職長承認と同じ・2026-10-01）
+      const au = await getApiAuthUser(request)
+      await setFinalApprovalForDay(siteId, ym, day, au.authorized && typeof au.actor === 'number' ? au.actor : 0)
       return NextResponse.json({ success: true })
     }
 

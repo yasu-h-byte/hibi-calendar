@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, approvingForemenOfSite } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
@@ -222,14 +222,9 @@ export async function POST(request: NextRequest) {
       const mainData = mainDocSnap.exists() ? mainDocSnap.data() : {}
       const sites = (mainData.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
       const site = sites.find(s => s.id === data.siteId)
-      const foremenOfSite = site?.foremen || (site?.foreman ? [site.foreman] : [])
-      // 2026-08-27 修正（有給総点検・第3回）: 月次職長交代 (mforeman) を権限判定に反映。
-      //   交代後の新職長が 403 になり、旧職長だけが承認できる状態だった
-      {
-        const mf = (mainData.mforeman || {}) as Record<string, { wid?: number }>
-        const ov = mf[`${data.siteId}_${data.ym}`]?.wid
-        if (ov !== undefined && !foremenOfSite.includes(ov)) foremenOfSite.push(ov)
-      }
+      // 月別職長込み・職種が職長の人だけ（出面・帰国申請と同じ共通ヘルパー・2026-10-01）。
+      //   職長でない人が登録されている現場は政仁さん（管理者）が代行する
+      const foremenOfSite = site ? approvingForemenOfSite(site, mainData.mforeman || {}, data.ym, mainData.workers || []) : []
 
       // 認証 + 権限チェック
       let approvedBy: number | string = 'unknown'
@@ -296,15 +291,24 @@ export async function POST(request: NextRequest) {
       //   旧実装は checkApiAuth（誰のパスワードでも可）だったため、職長が個人パスワードで
       //   最終承認を直叩きできた（CLAUDE.md「職長は提出・確認まで」の原則違反）。
       //   revoke と同じ判定に統一する。reviewedBy も body 値でなく認証者から記録する
-      const authForApprove = await getApiAuthUser(request)
-      if (!authForApprove.authorized) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-      // 2026-09-02 修正: 判定を getApiRole/isManagerRole に統一（役員の個人パスワード＝admin ロールも可。
-      //   旧は admin パスワード or actor===1 のみで、役員の個人ログインは UI にボタンが出るのに 403 だった）
-      const apRole = await getApiRole(request)
-      if (!apRole || !isManagerRole(apRole.role)) {
-        return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+      // 2026-10-01: 政仁さん・代表はマイページ（個人URL＝token）からも最終承認できる
+      let authForApprove: Awaited<ReturnType<typeof getApiAuthUser>>
+      if (body.token) {
+        const { managerByToken } = await import('@/lib/foreman-todo')
+        const mgr = await managerByToken(body.token)
+        if (!mgr) return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+        authForApprove = { authorized: true, actor: mgr.id }
+      } else {
+        authForApprove = await getApiAuthUser(request)
+        if (!authForApprove.authorized) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+        // 2026-09-02 修正: 判定を getApiRole/isManagerRole に統一（役員の個人パスワード＝admin ロールも可。
+        //   旧は admin パスワード or actor===1 のみで、役員の個人ログインは UI にボタンが出るのに 403 だった）
+        const apRole = await getApiRole(request)
+        if (!apRole || !isManagerRole(apRole.role)) {
+          return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+        }
       }
 
       const { requestId, approvedBy } = body
@@ -428,19 +432,16 @@ export async function POST(request: NextRequest) {
       const rejMain = rejMainSnap.exists() ? rejMainSnap.data() : {}
       const rejSites = (rejMain.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
       const rejSite = rejSites.find(s => s.id === data.siteId)
-      const rejForemen = rejSite?.foremen || (rejSite?.foreman ? [rejSite.foreman] : [])
-      {
-        // mforeman（月次職長交代）も却下権限に反映（foreman_approve と対）
-        const mf = (rejMain.mforeman || {}) as Record<string, { wid?: number }>
-        const ov = mf[`${data.siteId}_${data.ym}`]?.wid
-        if (ov !== undefined && !rejForemen.includes(ov)) rejForemen.push(ov)
-      }
+      // 月別職長込み・職種が職長の人だけ。foreman_approve と同じ共通ヘルパー
+      const rejForemen = rejSite ? approvingForemenOfSite(rejSite, rejMain.mforeman || {}, data.ym, rejMain.workers || []) : []
 
       let authWorkerId: number | string = rejectedBy || 0
       if (rejectToken) {
         const worker = await getWorkerByToken(rejectToken)
         if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-        if (!rejForemen.includes(worker.id)) {
+        // 政仁さん・代表はマイページから現場を問わず却下できる（2026-10-01）
+        const { managerByToken } = await import('@/lib/foreman-todo')
+        if (!rejForemen.includes(worker.id) && !(await managerByToken(rejectToken))) {
           return NextResponse.json({ error: `現場「${data.siteId}」の職長権限がありません` }, { status: 403 })
         }
         authWorkerId = worker.id

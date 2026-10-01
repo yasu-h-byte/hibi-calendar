@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { siteNeedsCalendar } from '@/lib/site-hierarchy'
-import { checkApiAuth, getApiAuthUser } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, approvingForemenOfSite } from '@/lib/auth'
 import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { mergeAnnouncements } from '@/lib/release-notes'
 import { permRoleOf } from '@/lib/permissions'
@@ -57,6 +57,14 @@ export async function GET(request: NextRequest) {
     const myForemanSites = apiRole?.role === 'foreman' ? apiRole.foremanSites : []
     /** 職長の担当現場（今月の配置）にいる人か。職長ベルの「職長承認待ち」を自分の現場に絞るため */
     const myForemanWorkers = new Set(myForemanSites.flatMap(sid => getAssign(main, sid, currentYm).workers))
+    /** 職長承認ができる現場の人（職種が職長の人だけ。職長でない人が登録されている現場は政仁さんが代行・2026-10-01） */
+    const myApprovalWorkers = new Set(myForemanSites
+      .filter(sid => {
+        const s = main.sites.find(x => x.id === sid)
+        return !!s && requesterWorkerId !== null
+          && approvingForemenOfSite(s as never, main.mforeman || {}, currentYm, main.workers as never).includes(requesterWorkerId)
+      })
+      .flatMap(sid => getAssign(main, sid, currentYm).workers))
     // 2026-08-27 修正（有給総点検・第3回）: 「退職日が入っているだけ」で全通知から
     //   即日消えていた（例: 12/31退職予定を登録した瞬間に有給残・付与予定・未署名等の
     //   通知が全部止まる）。dashboard/ledger と同じく「今日時点で退職済み」のみ除外
@@ -512,6 +520,32 @@ export async function GET(request: NextRequest) {
       console.error('Visa expiry check error:', e)
     }
 
+    // 7b. 配置の見直し（2026-10-01 代表決定）: 現場を移動したのに前の現場の配置に残っている人。
+    //   政仁さん・事務・代表に知らせる（配置は自動では外さない）。出面は上で読んだもの（前月・今月）を使い、読み取りを増やさない
+    if (role === 'admin' || role === 'approver' || role === 'jimu') {
+      try {
+        const { findStaleAssignments } = await import('@/lib/foreman-todo')
+        const prevYm = addMonthsSafe(nowJstIso.slice(0, 8) + '01', -1).slice(0, 7).replace('-', '')
+        const recent: Record<string, import('@/types').AttendanceEntry> = {}
+        for (const [k, v] of Object.entries(allAttForPL)) {
+          if (k.includes(`_${currentYm}_`) || k.includes(`_${prevYm}_`)) recent[k] = v as unknown as import('@/types').AttendanceEntry
+        }
+        const stale = findStaleAssignments(main, recent, nowJstIso)
+        if (stale.length > 0) {
+          notifications.push({
+            id: 'stale-assignments',
+            icon: '🔀',
+            message: `配置の見直し ${stale.length}件: ${stale.slice(0, 3).map(s => `${s.workerName}（${s.siteName}→${s.workingAt.join('・')}）`).join('、')}${stale.length > 3 ? ' ほか' : ''}。前の現場の配置から外してください（出面入力 → 配置）`,
+            type: 'warning',
+            count: stale.length,
+            href: '/attendance',
+          })
+        }
+      } catch (e) {
+        console.error('Stale assignment check error:', e)
+      }
+    }
+
     // 8. 承認待ち有給申請（職長承認待ち + 最終承認待ち の両方をカウント）
     try {
       const [lrPendingSnaps, lrForemanSnaps] = await Promise.all([
@@ -538,7 +572,7 @@ export async function GET(request: NextRequest) {
       if (role === 'foreman') {
         const mine = lrPendingSnaps.docs.filter(d => {
           const wid = Number(d.data().workerId)
-          return myForemanWorkers.has(wid) && wid !== requesterWorkerId
+          return myApprovalWorkers.has(wid) && wid !== requesterWorkerId
         }).length
         if (mine > 0) {
           notifications.push({
@@ -579,7 +613,7 @@ export async function GET(request: NextRequest) {
       if (role === 'foreman') {
         const mine = hlPendingSnaps.docs.filter(d => {
           const wid = Number(d.data().workerId)
-          return myForemanWorkers.has(wid) && wid !== requesterWorkerId
+          return myApprovalWorkers.has(wid) && wid !== requesterWorkerId
         }).length
         if (mine > 0) {
           notifications.push({

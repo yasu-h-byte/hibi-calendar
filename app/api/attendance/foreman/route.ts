@@ -14,28 +14,11 @@ import {
 } from '@/lib/attendance'
 import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
-import { workTypeFamilyIds, familyEntrySiteId, staffEntryTarget, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
+import { staffEntryTarget, workTypeFamilyIds, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
+import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays } from '@/lib/foreman-todo'
 import { todayJstDate } from '@/lib/date-utils'
 
-/**
- * 工種（鉄骨・仮設など）を持つ現場の「同じ現場」の範囲（親＋工種サイト）と、工種の指定（2026-09-28）。
- * 職長が出面画面で鉄骨へ移したエントリを、この画面が「未入力」「別現場の入力」と見なさないために使う。
- * 書き込み先の工種を決めるので、main は毎回読み直す（30秒キャッシュを使わない）。
- */
-async function loadSiteFamily(siteId: string): Promise<{ sites: HierarchySite[]; assign?: WorkTypeAssignMap; family: string[] }> {
-  const { db } = await import('@/lib/firebase')
-  const { doc, getDoc } = await import('@/lib/fsdb')
-  const snap = await getDoc(doc(db, 'demmen', 'main'))
-  const data = snap.exists() ? snap.data() : {}
-  const sites = (data.sites || []) as HierarchySite[]
-  return { sites, assign: data.assign as WorkTypeAssignMap | undefined, family: workTypeFamilyIds(sites, siteId) }
-}
-
-/** 同じ現場（親＋工種）のどこかに入っているその人・その日のエントリ */
-function familyEntry(att: Record<string, AttendanceEntry>, family: string[], wid: number | string, ym: string, day: number | string): AttendanceEntry | undefined {
-  const sid = familyEntrySiteId(att, family, wid, ym, day)
-  return sid ? att[`${sid}_${wid}_${ym}_${day}`] : undefined
-}
+// 工種（親＋工種サイト）の範囲・まとめ承認の判定はマイページと共通（lib/foreman-todo.ts・2026-10-01）
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
@@ -51,7 +34,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const site = await getForemanSite(foreman.id)
+    // 職種が職長の人だけ（職長でない人が現場の職長に登録されている現場は政仁さんが代行・2026-10-01 代表）
+    const site = foreman.jobType === 'shokucho' ? await getForemanSite(foreman.id) : null
     if (!site) {
       return NextResponse.json({ error: 'Not a foreman' }, { status: 403 })
     }
@@ -155,46 +139,16 @@ export async function GET(request: NextRequest) {
     // ── 月の俯瞰（2026-08-28 追加: 週ビュー・まとめ承認・未入力の見える化）──
     //   その月の稼働日ごとに 承認状態・未入力者 を返す。
     //   旧UIは「今日＋過去2日」しか辿れず、承認をため込むとスマホから消化できなかった。
-    const daysInMonth = new Date(y, m, 0).getDate()
-    const todayJst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-    const todayDayNum = (todayJst.getFullYear() === y && todayJst.getMonth() + 1 === m)
-      ? todayJst.getDate()
-      : (new Date(y, m - 1, 1) < todayJst ? daysInMonth : 0)
-
-    // 現場カレンダー（承認済みのみ）。非稼働日は未入力を数えない
-    let calDays: Record<string, string> | null = null
-    try {
-      const { db } = await import('@/lib/firebase')
-      const { doc, getDoc } = await import('@/lib/fsdb')
-      const calSnap = await getDoc(doc(db, 'siteCalendar', `${site.id}_${y}-${String(m).padStart(2, '0')}`))
-      const cal = calSnap.exists() ? calSnap.data() : null
-      if (cal?.status === 'approved' && cal?.days) calDays = cal.days as Record<string, string>
-    } catch { /* カレンダー未取得でも俯瞰は出す（全日を稼働扱い） */ }
-
-    const dayNums = Array.from({ length: Math.max(0, todayDayNum) }, (_, i) => i + 1)
-    const monthApprovals = await Promise.all(dayNums.map(dd => getApprovalForDay(site.id, ym, dd)))
-    const monthOverview = dayNums.map((dd, i) => {
-      const calDay = calDays?.[String(dd)]
-      const isWorkDay = calDays ? calDay === 'work' : new Date(y, m - 1, dd).getDay() !== 0
-      const missingNames: string[] = []
-      let entered = 0
-      if (isWorkDay) {
-        for (const w of foreignWorkers) {
-          const e = familyEntry(attData, family, w.id, ym, dd)
-          // 判定はリスト表示と同じ getEntryStatus に統一（0.6補償=入力済み、残骸のみ=未入力）
-          if (getEntryStatus(e) !== 'none') entered++
-          else missingNames.push(w.name)
-        }
-      }
-      return {
-        day: dd,
-        dateISO: `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`,
-        isWorkDay,
-        approved: !!(monthApprovals[i]?.foreman),
-        entered,
-        missingNames: isWorkDay ? missingNames : [],
-      }
-    })
+    // 日ごとの状態はマイページの「承認すること」と共通（lib/foreman-todo.ts）。
+    //   別の現場で入力している人（移動・掛け持ち）は未入力に数えない（2026-10-01 代表決定）
+    const monthOverview = (await siteMonthDays(site.id, ym, { att: attData, family, workers: foreignWorkers })).map(dd => ({
+      day: dd.day,
+      dateISO: dd.dateISO,
+      isWorkDay: dd.isWorkDay,
+      approved: dd.approved,
+      entered: dd.entered,
+      missingNames: dd.isWorkDay ? dd.missingNames : [],
+    }))
 
     // Past 2 days
     const pastDays = []
@@ -252,7 +206,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const site = await getForemanSite(foreman.id)
+    // 職種が職長の人だけ（職長でない人が現場の職長に登録されている現場は政仁さんが代行・2026-10-01 代表）
+    const site = foreman.jobType === 'shokucho' ? await getForemanSite(foreman.id) : null
     if (!site) {
       return NextResponse.json({ error: 'Not a foreman' }, { status: 403 })
     }
@@ -305,26 +260,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'days (1〜31件) を指定してください' }, { status: 400 })
       }
       const ym = ymKey(year, month)
-      const { getAttendanceDoc: getAtt } = await import('@/lib/attendance')
-      const attD = await getAtt(ym)
-      const workersForBulk = await getForeignWorkersForSite(site.id)
-      const { family: bulkFamily } = await loadSiteFamily(site.id)
-      const approvedDays: number[] = []
-      const skipped: { day: number; reason: string }[] = []
-      const todayJstB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-      for (const dd of days) {
-        const dNum = Number(dd)
-        if (!Number.isInteger(dNum) || dNum < 1 || dNum > 31) { skipped.push({ day: dNum, reason: '不正な日付' }); continue }
-        if (new Date(year, month - 1, dNum) > todayJstB) { skipped.push({ day: dNum, reason: '未来日' }); continue }
-        const missing = workersForBulk.filter(w =>
-          getEntryStatus(familyEntry(attD, bulkFamily, w.id, ym, dNum)) === 'none')
-        if (missing.length > 0) {
-          skipped.push({ day: dNum, reason: `未入力: ${missing.map(w => w.name).join('、')}` })
-          continue
-        }
-        await setApprovalForDay(site.id, ym, dNum, foreman.id)
-        approvedDays.push(dNum)
-      }
+      const { approvedDays, skipped } = await approveDaysForSite(site.id, ym, days, foreman.id)
       return NextResponse.json({ success: true, approvedDays, skipped })
     }
 

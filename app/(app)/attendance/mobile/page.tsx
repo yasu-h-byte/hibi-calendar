@@ -49,6 +49,8 @@ interface GridSubcon { id: string; name: string }
 interface GridData {
   /** 応援現場か（取りまとめ役を「責任者」と呼ぶ・2026-09-30） */
   isSupportSite?: boolean
+  /** 職長承認を政仁さんが代行する現場（2026-10-01） */
+  proxyApproval?: boolean
   site: { id: string; name: string; workType?: string }
   year: number
   month: number
@@ -915,8 +917,11 @@ export default function ForemanMobilePage() {
                 </div>
               )}
 
-              {/* 職長確認 */}
-              {!finalApproved && (
+              {/* 職長確認（職長でない人が職長に登録されている現場は政仁さんが代行・2026-10-01 代表） */}
+              {!finalApproved && userRole === 'foreman' && data?.proxyApproval && (
+                <div className="mt-4 p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 text-sm text-center">この現場の確認（職長承認）は政仁さんが行います</div>
+              )}
+              {!finalApproved && !(userRole === 'foreman' && data?.proxyApproval) && (
                 <div className="mt-4">
                   {foremanApproved ? (
                     <button onClick={handleUnapprove} className="w-full rounded-xl py-3 text-sm font-bold bg-white border-2 border-red-300 text-red-600">↩️ この日の確認を取り消す</button>

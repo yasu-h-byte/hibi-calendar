@@ -81,6 +81,9 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
     if (!t) return { authorized: false }
     const stored = (await getUserPasswords())[String(t.workerId)]
     if (!stored || passwordFingerprint(stored) !== t.fingerprint) return { authorized: false }
+    // 日比靖仁さん（代表・開発者）は個人パスワードでも代表（全権限）。2026-10-01 代表指示。
+    //   旧: 職種が役員なので「役員（見るだけ）」になり、電話URLの発行状況などが見えなかった
+    if (t.workerId === OWNER_WORKER_ID) return { authorized: true, actor: 'super-admin' }
     return { authorized: true, actor: t.workerId }
   }
 
@@ -88,6 +91,8 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
 }
 
 const APPROVER_ID = 1 // 日比政仁
+/** 日比靖仁（代表・開発者）。どのパスワードで入っても代表（全権限）として扱う（2026-10-01） */
+export const OWNER_WORKER_ID = 0
 
 /** 当月の YYYYMM を返す（JST 基準） */
 function currentYm(): string {
@@ -112,12 +117,57 @@ export function computeForemanSites(
   const result: string[] = []
   for (const site of sites) {
     if (site.archived) continue
-    const monthKey = `${site.id}_${ym}`
-    const override = mforeman[monthKey]?.foreman ?? mforeman[monthKey]?.wid
-    const effective = override ?? site.foreman
-    if (effective === workerId) result.push(site.id)
+    if (foremenOfSiteForMonth(site, mforeman, ym).includes(workerId)) result.push(site.id)
   }
   return result
+}
+
+/**
+ * その月にその現場の職長である人（承認の権限判定はすべてこれを通す・2026-10-01）。
+ *
+ * 月別の職長（mforeman[siteId_ym]. foreman ?? wid）があればその人だけ、無ければ現場の職長。
+ * 旧: 出面・有給・帰国申請で別々に書いていて、有給は月別職長を「足す」（旧職長も承認できる）、
+ *     帰国申請は月別職長を見ない、と食い違っていた。
+ * `foremen`（配列）は書き込む画面が無い古い項目。残っているデータのために読むだけ読む。
+ */
+export function foremenOfSiteForMonth(
+  site: { id: string; foreman?: number; foremen?: number[] },
+  mforeman: Record<string, { foreman?: number; wid?: number }>,
+  ym: string,
+): number[] {
+  const monthKey = `${site.id}_${ym.replace('-', '')}`
+  const override = mforeman[monthKey]?.foreman ?? mforeman[monthKey]?.wid
+  if (override !== undefined && override !== null) return [override]
+  if (site.foremen && site.foremen.length > 0) return site.foremen
+  return site.foreman !== undefined && site.foreman !== null ? [site.foreman] : []
+}
+
+/**
+ * 職長承認ができる人（2026-10-01 代表決定）。
+ *
+ * 「その月の現場の職長として登録されている」かつ「人員マスタの職種が職長（jobType='shokucho'）」の人だけ。
+ * 職長でない人（とび・役員など）が現場マスタの職長に登録されている現場は、事業責任者（政仁さん）が
+ * 職長承認を代行する（{@link isProxyApprovalSite}）。出面の入力などの権限は変えない（承認だけの決まり）。
+ */
+export function approvingForemenOfSite(
+  site: { id: string; foreman?: number; foremen?: number[] },
+  mforeman: Record<string, { foreman?: number; wid?: number }>,
+  ym: string,
+  workers: { id: number; jobType?: string; job?: string }[],
+): number[] {
+  // 職種は Firestore の生データでは job、lib/workers で整形後は jobType
+  return foremenOfSiteForMonth(site, mforeman, ym)
+    .filter(id => { const w = workers.find(x => x.id === id); return (w?.jobType ?? w?.job) === 'shokucho' })
+}
+
+/** 職長承認を政仁さんが代行する現場か（承認できる職長がいない現場） */
+export function isProxyApprovalSite(
+  site: { id: string; foreman?: number; foremen?: number[] },
+  mforeman: Record<string, { foreman?: number; wid?: number }>,
+  ym: string,
+  workers: { id: number; jobType?: string; job?: string }[],
+): boolean {
+  return approvingForemenOfSite(site, mforeman, ym, workers).length === 0
 }
 
 export function determineRole(
@@ -146,6 +196,17 @@ export function buildAuthUser(
   mforeman: Record<string, { foreman?: number; wid?: number }> = {},
 ): AuthUser {
   const ym = currentYm()
+  // 日比靖仁さん（代表・開発者）は代表（全権限）。代表パスワードでのログインと同じ役割（2026-10-01）
+  if (worker.id === OWNER_WORKER_ID) {
+    return {
+      workerId: worker.id,
+      name: worker.name,
+      role: 'admin',
+      foremanSites: computeForemanSites(worker.id, sites, mforeman, ym),
+      token: worker.token || undefined,
+    }
+  }
+
   // 事務ロールはjobTypeで直接判定
   if (worker.jobType === 'jimu') {
     return {
