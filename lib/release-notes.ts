@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_calendar_ux',
+    title: '就業カレンダーを見やすくしました',
+    content:
+      '上に「今やること」（承認待ち・未作成と差し戻し・署名がまだの人・スタッフからの質問）を並べました。'
+      + '全現場が縦に並んでいたのをやめ、左の一覧で現場を選ぶと右にその現場のカレンダーが開きます（開いたときは対応が必要な現場が選ばれています）。'
+      + '提出・承認・差し戻しのやり方は今までどおりです。',
+    category: 'new',
+    publishedAt: '2026-10-01T14:30:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20261001_attendance_pc_ux',
     title: '出面入力（PC）を見やすくしました',
     content:
