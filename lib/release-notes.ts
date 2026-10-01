@@ -35,7 +35,7 @@ export const RELEASE_NOTES: Announcement[] = [
       + '名前・番号で探す欄を付けました。行を押すと右にその人の内容が開き、スマホURL・転籍・書類庫・退職にする、もそこから操作します。'
       + '退職させるときは「退職にする」（退職日を入れる）を使い、登録を完全に消すのは出面の記録がない人だけです。',
     category: 'new',
-    publishedAt: '2026-10-01T16:00:00+09:00',
+    publishedAt: '2026-10-01T15:50:00+09:00',
     publishedBy: '日比靖仁',
     roles: ['jimu', 'approver', 'officer', 'owner'],
   },
