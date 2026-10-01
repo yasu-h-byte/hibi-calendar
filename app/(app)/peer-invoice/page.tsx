@@ -287,6 +287,10 @@ function PeerInvoicePageInner() {
               取り消し
             </button>
           )}
+          {/* 押せない理由をボタンの横にも出す（薄いボタンだけだと「発行ボタンがない」と見える・2026-10-01 代表） */}
+          {isFreshDraft && (canIssue || canRequest) && approvalBlocked && (
+            <span className="text-[13px] font-bold text-red-700 dark:text-red-300">← 上の赤い枠の承認がそろうと押せます</span>
+          )}
           {isFreshDraft && !canIssue && !canRequest && (
             <span className="text-[13px] text-hibi-sub dark:text-gray-400">発行の申請は事務、承認は事業責任者・管理者が行います</span>
           )}
