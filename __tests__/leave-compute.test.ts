@@ -4,7 +4,7 @@
  * Workflow CR-1 で検出された「年5日義務監視ロジックが多重破綻」の解消検証。
  */
 import { describe, test, it, expect } from 'vitest'
-import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, jpNextGrantAfter } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, isSameFiscalYear, calcLegalPL, normalizePLRecord, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, jpNextGrantAfter, jpDeemedDate } from '@/lib/leave-compute'
 import { addMonthsSafe, calcExpiryIso, addDaysIso, calcLastUsableDayIso, isLeaveExpiredAsOf } from '@/lib/date-utils'
 
 describe('addMonthsSafe', () => {
@@ -478,5 +478,27 @@ describe('jpNextGrantAfter（日本人の次回付与日・前倒し合流）', 
     const r = jpNextGrantAfter('2026-09-30')
     expect(r.grantDate).toBe('2026-10-01')
     expect(r.deemedDate).toBe('2027-09-30')
+  })
+})
+
+describe('jpDeemedDate（前倒し付与のみなし勤続・2026-10-01 梶原さん）', () => {
+  it('入社 2023-05-15・前回 2025-10-01 → 2026-10-01 付与は 11/15 の勤続（3年6ヶ月）で14日', () => {
+    const r = jpNextGrantAfter('2025-10-01', '2023-05-15')
+    expect(r).toEqual({ grantDate: '2026-10-01', deemedDate: '2026-11-15' })
+    expect(calcLegalPL('2023-05-15', r.deemedDate)).toBe(14)
+  })
+  it('入社日が 4/1（法定の付与日が 10/1 と一致）なら付与日そのまま', () => {
+    expect(jpNextGrantAfter('2025-10-01', '2020-04-01').deemedDate).toBe('2026-10-01')
+  })
+  it('濱上さん型: 入社 2026-06-01・前回 2027-10-01 → 2028-10-01 は 12/1 の勤続（2年6ヶ月）で12日', () => {
+    const r = jpNextGrantAfter('2027-10-01', '2026-06-01')
+    expect(r.deemedDate).toBe('2028-12-01')
+    expect(calcLegalPL('2026-06-01', r.deemedDate)).toBe(12)
+  })
+  it('初回付与（入社+6ヶ月の日）はその日のまま', () => {
+    expect(jpDeemedDate('2026-06-01', '2026-12-01')).toBe('2026-12-01')
+  })
+  it('hireDate なしは従来どおり', () => {
+    expect(jpNextGrantAfter('2025-10-01')).toEqual({ grantDate: '2026-10-01', deemedDate: '2026-10-01' })
   })
 })
