@@ -31,7 +31,7 @@ import { TodoStrip } from '@/components/ui/PageParts'
 import { Icon } from '@/components/ui/Icon'
 import { canDriveDefault } from '@/lib/allowance'
 import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
-import { todayJstIso, addDaysIso } from '@/lib/date-utils'
+import { todayJstIso } from '@/lib/date-utils'
 
 export default function AttendanceGridPage() {
   const [password, setPassword] = useState('')
@@ -1301,7 +1301,10 @@ export default function AttendanceGridPage() {
   const nmSites = nextMonthCalCheck?.sites || []
   const nmNotReady = nmSites.filter(s => !s.status || s.status === 'draft' || s.status === 'rejected').length
   const nmSubmitted = nmSites.filter(s => s.status === 'submitted').length
-  const homeLeaveShown = (data?.homeLeaves || []).filter(h => h.endDate >= addDaysIso(todayIsoA, -7)).length
+  // 帰国の予定は「確認すること」に数えない（2026-10-02 代表: 会社全体の帰国予定が全現場に出て、毎回開く必要がなかった）。
+  //   帰国中はセルに「帰国中」と出る。開いた中の帰国情報は、この現場に配置されている人だけにする
+  const siteWorkerIds = new Set((data?.workers || []).map(w => w.id))
+  const siteHomeLeaves = (data?.homeLeaves || []).filter(h => siteWorkerIds.has(h.workerId))
   const checkItems: string[] = []
   if (nmNotReady > 0) checkItems.push(`翌月の就業カレンダー 未作成 ${nmNotReady}件`)
   else if (nmSubmitted > 0) checkItems.push(`翌月の就業カレンダー 承認待ち ${nmSubmitted}件`)
@@ -1309,7 +1312,6 @@ export default function AttendanceGridPage() {
   if (workTypeWarnings.length > 0) checkItems.push(`工種の重複 ${workTypeWarnings.length}件`)
   if ((data?.restMismatch?.length || 0) > 0) checkItems.push(`休みの区別 ${data!.restMismatch!.length}件`)
   if ((data?.upcomingRetirements?.length || 0) > 0) checkItems.push(`退職予定 ${data!.upcomingRetirements!.length}名`)
-  if (homeLeaveShown > 0) checkItems.push(`帰国 ${homeLeaveShown}名`)
   const reqTotal = reqCounts.leave + reqCounts.home
   const scrollToGrid = () => document.getElementById('att-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
@@ -1429,7 +1431,7 @@ export default function AttendanceGridPage() {
               />
 
               {/* 帰国情報バナー（components/attendance/HomeLeaveBanner.tsx に集約） */}
-              <HomeLeaveBanner homeLeaves={data?.homeLeaves} />
+              <HomeLeaveBanner homeLeaves={siteHomeLeaves} />
               {/* 休みの区別の取り違えの疑い（職長承認の前に気づけるように・2026-09-30） */}
               {data && <RestMismatchBanner items={data.restMismatch} workers={data.workers} month={data.month} />}
 
