@@ -3,6 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { visaLabel } from '@/lib/labels'
 import { jobLabel } from '@/lib/jobs'
+import { PageHeader, ToolButton, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
+import WorkerAvatar from '@/components/WorkerAvatar'
+import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 
 interface Purchase {
   id: string
@@ -61,11 +64,19 @@ function formatPeriodFull(p: Period | null): string {
   return `${fmt(p.start)} 〜 ${fmt(p.end)}`
 }
 
+type TbFilter = 'all' | 'over' | 'low' | 'noperiod'
+const TB_FILTER_LABEL: Record<Exclude<TbFilter, 'all'>, string> = { over: '使いすぎの人', low: '残りが少ない人', noperiod: '期間が決まっていない人' }
+const TB_COLS = 'lg:grid-cols-[minmax(0,1fr)_100px_190px_minmax(0,1.2fr)_110px]'
+
 export default function ToolBudgetPage() {
   const [password, setPassword] = useState('')
   const [workers, setWorkers] = useState<WorkerBudget[]>([])
   const [loading, setLoading] = useState(false)
   const [modalWorkerId, setModalWorkerId] = useState<number | null>(null)
+  const [query, setQuery] = useState('')
+  const [listFilter, setListFilter] = useState<TbFilter>('all')
+  const [org, setOrg] = useState<'all' | 'hibi' | 'hfu'>('all')
+  const { photos } = useWorkerPhotos()
   // 区分別の既定予算（2026-08-28 追加）。空欄 = 既定額を使う
   const [showBudgetSettings, setShowBudgetSettings] = useState(false)
   const [defaultBudget, setDefaultBudget] = useState('30000')
@@ -104,7 +115,7 @@ export default function ToolBudgetPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  const totalBudget = workers.reduce((s, w) => s + w.budget, 0)
+  const totalBudget = workers.reduce((s, w) => s + w.budget + (w.carry ?? 0), 0)
   const totalUsed = workers.reduce((s, w) => s + w.used, 0)
   const setupCount = workers.filter(w => w.period).length
 
@@ -114,6 +125,22 @@ export default function ToolBudgetPage() {
   ]
 
   const currentWorker = modalWorkerId ? workers.find(w => w.workerId === modalWorkerId) || null : null
+
+  // 今やること・絞り込み（2026-10-01 改修）
+  const isLow = (w: WorkerBudget) => {
+    const cap = w.budget + (w.carry ?? 0)
+    return !!w.period && w.remaining >= 0 && cap > 0 && w.remaining < cap * 0.2
+  }
+  const overList = workers.filter(w => w.remaining < 0)
+  const lowList = workers.filter(isLow).sort((a, b) => a.remaining - b.remaining)
+  const noPeriod = workers.filter(w => !w.period)
+  const totalRemaining = workers.reduce((s, w) => s + w.remaining, 0)
+  const toggleFilter = (f: Exclude<TbFilter, 'all'>) => { setOrg('all'); setListFilter(listFilter === f ? 'all' : f) }
+  const q = query.trim().replace(/[\s　]/g, '').toLowerCase()
+  const shown = workers
+    .filter(w => org === 'all' || w.org === org)
+    .filter(w => listFilter === 'all' || (listFilter === 'over' ? w.remaining < 0 : listFilter === 'low' ? isLow(w) : !w.period))
+    .filter(w => !q || w.workerName.replace(/[\s　]/g, '').toLowerCase().includes(q))
 
   // 数字だけ残して number 化。空欄はその区分の設定なし
   const toNumMap = (m: Record<string, string>) =>
@@ -149,28 +176,20 @@ export default function ToolBudgetPage() {
   const JOB_GROUPS = ['tobi', 'tobi_apprentice', 'shokucho', 'doko']
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-4">
-        <h1 className="text-lg font-bold text-hibi-navy flex items-center gap-2">
-          🔧 道具代管理
-        </h1>
-        <span className="text-xs text-gray-500">
-          外国人（技能実習・特定技能）＋日本人の現場スタッフが対象（入社日から1年サイクル）
-        </span>
-        <button
-          onClick={() => setShowBudgetSettings(v => !v)}
-          className="ml-auto text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 font-medium"
-        >
-          ⚙️ 区分別の予算設定 {showBudgetSettings ? '▲' : '▼'}
-        </button>
-      </div>
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="人・書類"
+        title="道具代管理"
+        sub="外国人スタッフ（技能実習・特定技能）と日本人の現場スタッフが対象。入社日から1年ごとの期間で管理します"
+        actions={<ToolButton icon="gear" onClick={() => setShowBudgetSettings(v => !v)}>{showBudgetSettings ? '区分ごとの予算を閉じる' : '区分ごとの予算'}</ToolButton>}
+      />
 
       {/* ── 区分別の既定予算（2026-08-28 追加）──
           在留資格・職種ごとに年間予算の既定額を変えられる。空欄の区分は既定額を使う。
           個別に予算を変更した期間はそちらが優先（従来どおり） */}
       {showBudgetSettings && (
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 space-y-3">
-          <div className="text-sm font-bold text-hibi-navy">区分別の既定予算（年間）</div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5 space-y-3">
+          <div className="text-[17px] font-bold text-gray-900 dark:text-white">区分ごとの予算（年間の既定額）</div>
           <p className="text-xs text-gray-500">
             空欄の区分は「既定額」を使います。個別に予算を変更したスタッフはそちらが優先されます。
             変更は<b>次に開く期間や未設定の期間</b>から効きます（設定済みの期間の予算は変わりません）。
@@ -211,109 +230,108 @@ export default function ToolBudgetPage() {
         </div>
       )}
 
-      {/* サマリー */}
-      <div className="grid grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
-          <div className="text-xs text-gray-500">対象人数</div>
-          <div className="text-2xl font-bold text-hibi-navy">{workers.length}名</div>
-        </div>
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
-          <div className="text-xs text-gray-500">期間設定済</div>
-          <div className="text-2xl font-bold text-hibi-navy">{setupCount} / {workers.length}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
-          <div className="text-xs text-gray-500">使用済み合計</div>
-          <div className="text-2xl font-bold text-orange-600">¥{totalUsed.toLocaleString()}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-4 text-center">
-          <div className="text-xs text-gray-500">残額合計</div>
-          <div className="text-2xl font-bold text-green-600">¥{(totalBudget - totalUsed).toLocaleString()}</div>
-        </div>
-      </div>
+      {/* ① 今やること（2026-10-01 改修） */}
+      {!loading && workers.length > 0 && (
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <TodoCard icon="alert" tone={overList.length > 0 ? 'urgent' : 'ok'} title="使いすぎ（残りがマイナス）"
+            big={overList.length > 0 ? `${overList.length}名` : 'ありません'}
+            sub={overList.length > 0 ? overList.slice(0, 3).map(w => `${w.workerName} −¥${Math.abs(w.remaining).toLocaleString()}`).join('・') + '。次の期間の予算から差し引かれます' : '予算をこえている人はいません'}
+            action={overList.length > 0 ? '見る' : undefined} active={listFilter === 'over'}
+            onClick={overList.length > 0 ? () => toggleFilter('over') : undefined} />
+          <TodoCard icon="alert" tone={lowList.length > 0 ? 'warn' : 'ok'} title="残りが少ない（2割未満）"
+            big={lowList.length > 0 ? `${lowList.length}名` : 'ありません'}
+            sub={lowList.length > 0 ? lowList.slice(0, 3).map(w => `${w.workerName} 残り¥${w.remaining.toLocaleString()}`).join('・') + (lowList.length > 3 ? ` ほか${lowList.length - 3}名` : '') : '残りが2割を切った人はいません'}
+            action={lowList.length > 0 ? '見る' : undefined} active={listFilter === 'low'}
+            onClick={lowList.length > 0 ? () => toggleFilter('low') : undefined} />
+          <TodoCard icon="clock" tone={noPeriod.length > 0 ? 'warn' : 'ok'} title="期間が決まっていない"
+            big={noPeriod.length > 0 ? `${noPeriod.length}名` : 'ありません'}
+            sub={noPeriod.length > 0 ? `${noPeriod.slice(0, 3).map(w => w.workerName).join('・')}。行を押して期間の起算日を決めてください` : '全員、入社日などから期間が決まっています'}
+            action={noPeriod.length > 0 ? '見る' : undefined} active={listFilter === 'noperiod'}
+            onClick={noPeriod.length > 0 ? () => toggleFilter('noperiod') : undefined} />
+        </section>
+      )}
+
+      {/* ② 合計 */}
+      {!loading && workers.length > 0 && (
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <TbStat label={`予算（${workers.length}名）`} value={`¥${totalBudget.toLocaleString()}`} sub={`今の期間の予算の合計（繰り越し込み）${setupCount < workers.length ? `／期間が決まっている ${setupCount}名` : ''}`} />
+          <TbStat label="使った" value={`¥${totalUsed.toLocaleString()}`} sub="今の期間に買ったものの合計" />
+          <TbStat label="残り" value={`¥${totalRemaining.toLocaleString()}`} sub={overList.length > 0 ? `使いすぎ ${overList.length}名を含む` : '予算 − 使った'} />
+        </section>
+      )}
 
       {loading ? (
         <div className="text-center py-8 text-gray-400">読み込み中...</div>
       ) : workers.length === 0 ? (
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm p-8 text-center text-gray-400">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-8 text-center text-gray-400">
           <p>対象スタッフがいません。</p>
           <p className="text-sm mt-2">技能実習生・特定技能のスタッフが登録されているか、人員マスタをご確認ください。</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-hibi-line shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-hibi-navy text-white">
-                <th className="text-left px-4 py-2">スタッフ</th>
-                <th className="text-center px-2 py-2 w-20">在留資格</th>
-                <th className="text-center px-2 py-2 w-52">現在の期間</th>
-                <th className="text-right px-3 py-2 w-24">予算</th>
-                <th className="text-right px-3 py-2 w-24">使用済</th>
-                <th className="text-right px-3 py-2 w-24">残額</th>
-                <th className="text-center px-2 py-2 w-24">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companyGroups.map(company => {
-                const companyWorkers = workers.filter(w => w.org === company.key)
-                if (companyWorkers.length === 0) return null
-                return [
-                  <tr key={`sec-${company.key}`}>
-                    <td colSpan={7} className={`${company.bg} px-4 py-1.5 text-xs font-bold ${company.text} border-b`}>
-                      {company.label}（{companyWorkers.length}名）
-                    </td>
-                  </tr>,
-                  ...companyWorkers.map(w => (
-                    <tr key={w.workerId}
-                      className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setModalWorkerId(w.workerId)}>
-                      <td className="px-4 py-3 font-medium text-hibi-navy">{w.workerName}</td>
-                      <td className="text-center px-2">
-                        {/* 2026-08-28: 日本人も対象になったので visa 無しは「日本人」バッジ */}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                          visaLabel(w.visa) ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                          {visaLabel(w.visa) || '日本人'}
+        <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
+            <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">一人ずつ</h2>
+            <Segment value={org} onChange={v => { setOrg(v); setListFilter('all') }} items={[
+              ['all', `全員 ${workers.length}`], ['hibi', `日比建設 ${workers.filter(w => w.org === 'hibi').length}`], ['hfu', `HFU ${workers.filter(w => w.org === 'hfu').length}`],
+            ]} />
+            {listFilter !== 'all' && (
+              <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+                {TB_FILTER_LABEL[listFilter]}だけ表示中 ×
+              </button>
+            )}
+            <SearchBox value={query} onChange={setQuery} placeholder="名前で探す" />
+          </div>
+          <div className={`hidden lg:grid ${TB_COLS} gap-3 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300`}>
+            <span>名前</span><span>区分</span><span>今の期間</span><span>使った ／ 予算</span><span className="text-right">残り</span>
+          </div>
+          {companyGroups.map(company => {
+            const rows = shown.filter(w => w.org === company.key)
+            if (rows.length === 0) return null
+            return (
+              <div key={company.key}>
+                <div className="px-5 py-2 text-xs font-bold text-hibi-sub dark:text-gray-400 bg-gray-50 dark:bg-gray-700/40 border-t border-hibi-line dark:border-gray-700">{company.label}（{rows.length}名）</div>
+                {rows.map(w => {
+                  const cap = w.budget + (w.carry ?? 0)
+                  const pct = cap > 0 ? Math.min(100, (w.used / cap) * 100) : (w.used > 0 ? 100 : 0)
+                  const over = w.remaining < 0
+                  const low = isLow(w)
+                  return (
+                    <div key={w.workerId} role="button" tabIndex={0}
+                      onClick={() => setModalWorkerId(w.workerId)}
+                      onKeyDown={e => { if (e.key === 'Enter') setModalWorkerId(w.workerId) }}
+                      className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${TB_COLS} gap-x-3 gap-y-1.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums`}>
+                      <span className="col-span-2 lg:col-span-1 flex items-center gap-2.5 min-w-0">
+                        <WorkerAvatar name={w.workerName} src={photos[String(w.workerId)]} size={36} />
+                        <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{w.workerName}</span>
+                      </span>
+                      <span><Chip tone={visaLabel(w.visa) ? 'gray' : 'blue'}>{visaLabel(w.visa) || '日本人'}</Chip></span>
+                      <span className="text-[13px] text-hibi-sub dark:text-gray-400">
+                        {w.period ? formatPeriod(w.period) : <Chip tone="amber">期間が決まっていない</Chip>}
+                        {w.notStarted && <span className="ml-1"><Chip tone="amber">開始前</Chip></span>}
+                      </span>
+                      <span className="col-span-2 lg:col-span-1 flex flex-col gap-1">
+                        <span className="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                          <span className={`block h-full ${over ? 'bg-red-600' : low ? 'bg-amber-500' : 'bg-hibi-navy dark:bg-blue-400'}`} style={{ width: `${pct}%` }} />
                         </span>
-                      </td>
-                      <td className="text-center px-2 tabular-nums">
-                        {w.period ? (
-                          <span className="text-xs">
-                            {formatPeriod(w.period)}
-                            {w.notStarted && (
-                              <span className="ml-1 text-[10px] font-bold text-amber-600 bg-amber-50 rounded px-1 py-0.5">開始前</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400 italic">未設定</span>
-                        )}
-                      </td>
-                      <td className="text-right px-3 tabular-nums">
-                        ¥{w.budget.toLocaleString()}
-                        {(w.carry ?? 0) !== 0 && (
-                          <div className={`text-[10px] ${(w.carry ?? 0) > 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                            繰越 {(w.carry ?? 0) > 0 ? '+' : '−'}¥{Math.abs(w.carry ?? 0).toLocaleString()}
-                          </div>
-                        )}
-                      </td>
-                      <td className="text-right px-3 tabular-nums text-orange-600">¥{w.used.toLocaleString()}</td>
-                      <td className="text-right px-3 tabular-nums font-bold text-green-600">¥{w.remaining.toLocaleString()}</td>
-                      <td className="text-center px-2">
-                        <button
-                          onClick={e => { e.stopPropagation(); setModalWorkerId(w.workerId) }}
-                          className="text-xs bg-blue-50 text-blue-700 px-3 py-1 rounded hover:bg-blue-100 transition"
-                        >
-                          {w.period ? '管理' : '設定'}
-                        </button>
-                      </td>
-                    </tr>
-                  )),
-                ]
-              })}
-            </tbody>
-          </table>
-        </div>
+                        <span className="text-xs text-hibi-sub dark:text-gray-400">
+                          ¥{w.used.toLocaleString()} ／ ¥{w.budget.toLocaleString()}
+                          {(w.carry ?? 0) !== 0 && <span className={(w.carry ?? 0) > 0 ? 'text-blue-700 dark:text-blue-300' : 'text-red-700 dark:text-red-400'}>（繰越 {(w.carry ?? 0) > 0 ? '+' : '−'}¥{Math.abs(w.carry ?? 0).toLocaleString()}）</span>}
+                        </span>
+                      </span>
+                      <span className={`lg:text-right text-base font-bold ${over ? 'text-red-700 dark:text-red-400' : low ? 'text-amber-700 dark:text-amber-400' : 'text-gray-900 dark:text-white'}`}>
+                        {over ? `−¥${Math.abs(w.remaining).toLocaleString()}` : `¥${w.remaining.toLocaleString()}`}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+          {shown.length === 0 && <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">当てはまる人はいません</div>}
+        </section>
       )}
 
-      {/* モーダル */}
+      {/* 一人の道具代（右から開く） */}
       {currentWorker && (
         <WorkerModal
           worker={currentWorker}
@@ -322,6 +340,16 @@ export default function ToolBudgetPage() {
           onRefresh={fetchData}
         />
       )}
+    </div>
+  )
+}
+
+function TbStat({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1">
+      <span className="text-[13px] text-hibi-sub dark:text-gray-400">{label}</span>
+      <span className="text-[26px] font-bold tabular-nums text-gray-900 dark:text-white">{value}</span>
+      <span className="text-xs text-hibi-sub dark:text-gray-400">{sub}</span>
     </div>
   )
 }
@@ -492,25 +520,19 @@ function WorkerModal({
   const pct = worker.budget + (worker.carry ?? 0) > 0 ? Math.min(100, (worker.used / (worker.budget + (worker.carry ?? 0))) * 100) : 100
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <SidePanel label={`${worker.workerName} の道具代`} onClose={onClose}>
+      <div className="flex flex-col min-h-full bg-white dark:bg-gray-800">
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
-          <div>
-            <h2 className="text-lg font-bold text-hibi-navy flex items-center gap-2">
-              🔧 {worker.workerName}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                visaLabel(worker.visa) ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                {visaLabel(worker.visa) || '日本人'}
-              </span>
-            </h2>
-            {worker.period && (
-              <p className="text-xs text-gray-500 mt-0.5">
-                期間: {formatPeriodFull(worker.period)}
-              </p>
-            )}
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-hibi-line dark:border-gray-700 px-6 py-5 flex items-start gap-3 z-10">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{worker.workerName}</h2>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+              <Chip tone={visaLabel(worker.visa) ? 'gray' : 'blue'}>{visaLabel(worker.visa) || '日本人'}</Chip>
+              {worker.period && <span>期間 {formatPeriodFull(worker.period)}</span>}
+              {worker.remaining < 0 && <Chip tone="red">予算を ¥{Math.abs(worker.remaining).toLocaleString()} こえています</Chip>}
+            </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <CloseButton onClick={onClose} />
         </div>
 
         <div className="p-6 space-y-5">
@@ -750,15 +772,15 @@ function WorkerModal({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-3 flex justify-end">
+        <div className="sticky bottom-0 mt-auto bg-white dark:bg-gray-800 border-t border-hibi-line dark:border-gray-700 px-6 py-3.5 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300 transition"
+            className="h-11 px-5 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700"
           >
             閉じる
           </button>
         </div>
       </div>
-    </div>
+    </SidePanel>
   )
 }
