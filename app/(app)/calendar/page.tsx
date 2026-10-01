@@ -7,6 +7,9 @@ import CalendarEditor from '@/components/CalendarEditor'
 import { AuthUser, DayType, CalendarStatus } from '@/types'
 import { getNextMonth, generateDefaultDays, getHoliday } from '@/lib/calendar'
 import { checkCalendarLegal } from '@/lib/calendar-legal'
+import { PageHeader, ToolButton, TodoCard, Chip } from '@/components/ui/PageParts'
+import { Icon } from '@/components/ui/Icon'
+import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
 
 interface OverviewMonth {
   ym: string
@@ -154,11 +157,14 @@ export default function CalendarManagePage() {
   const [copiedMsg, setCopiedMsg] = useState(false)
   // 月またぎ運用ダッシュボード（全体状況）
   const [overview, setOverview] = useState<OverviewResp | null>(null)
-  const [showOverview, setShowOverview] = useState(true)
+  // 月ごとの状況はふだん閉じておく（2026-10-01。上の「今やること」で足りるため）
+  const [showOverview, setShowOverview] = useState(false)
   const [copiedReminderYm, setCopiedReminderYm] = useState<string | null>(null)
   // スタッフからの質問・異議（当月）
   const [questions, setQuestions] = useState<CalQuestion[]>([])
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  // 2026-10-01 改修: 全現場を縦に並べず、左の一覧で選んだ1現場だけを右に出す（未選択＝対応が必要な現場を自動で）
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null)
 
   const [y, m] = ym.split('-').map(Number)
 
@@ -239,6 +245,7 @@ export default function CalendarManagePage() {
   useEffect(() => {
     setEditingDays({})
     setArmedDanger({})
+    setSelectedSiteId(null)
   }, [ym])
 
   const getEditDays = (siteId: string, currentDays: Record<string, DayType> | null) => {
@@ -281,7 +288,7 @@ export default function CalendarManagePage() {
     const data = await res.json().catch(() => ({}))
     if (data.requiresAcknowledge && !ack) {
       const ok = confirm(
-        `⚠️ 法令上の確認事項があります:\n\n${(data.warnings || []).join('\n')}\n\n` +
+        `法令上の確認事項があります:\n\n${(data.warnings || []).join('\n')}\n\n` +
         `（4週4日制など正当な例外がある場合のみ）この内容で承認しますか？`,
       )
       if (!ok) return false
@@ -302,7 +309,7 @@ export default function CalendarManagePage() {
     const data = await res.json().catch(() => ({}))
     if (data.requiresAcknowledge && !ack) {
       const ok = confirm(
-        `⚠️ 法令上の確認事項があります:\n\n${(data.warnings || []).join('\n')}\n\n` +
+        `法令上の確認事項があります:\n\n${(data.warnings || []).join('\n')}\n\n` +
         `（4週4日制など正当な例外がある場合のみ）この内容で承認しますか？`,
       )
       if (!ok) return false
@@ -361,18 +368,13 @@ export default function CalendarManagePage() {
     ? sites
     : sites
 
-  // Status badge (simplified: only 未作成 or 確定済み)
+  // 状態の札（承認済み・提出済み・差し戻し・作成中・未作成）
   const statusBadge = (site: SiteCalendarData) => {
-    if (site.status === 'approved') {
-      return <span className="bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-xs font-bold px-2 py-0.5 rounded-full">承認済み</span>
-    }
-    if (site.status === 'submitted') {
-      return <span className="bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 text-xs font-bold px-2 py-0.5 rounded-full">提出済み（承認待ち）</span>
-    }
-    if (site.status === 'rejected') {
-      return <span className="bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 text-xs font-bold px-2 py-0.5 rounded-full">差し戻し（要修正）</span>
-    }
-    return <span className="bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 rounded-full">未作成</span>
+    if (site.status === 'approved') return <Chip tone="green">承認済み</Chip>
+    if (site.status === 'submitted') return <Chip tone="blue">提出済み・承認待ち</Chip>
+    if (site.status === 'rejected') return <Chip tone="red">差し戻し（要修正）</Chip>
+    if (site.status === 'draft') return <Chip tone="amber">作成中（未提出）</Chip>
+    return <Chip tone="gray">未作成</Chip>
   }
 
   // Ym options
@@ -417,145 +419,97 @@ export default function CalendarManagePage() {
 
   if (!user) return null
 
+  // ── 今やること・一覧の選択（2026-10-01）──
+  const canApproveRole = user.role === 'admin' || user.role === 'approver'
+  const submittedSites = visibleSites.filter(s => s.status === 'submitted')
+  const notReadySites = visibleSites.filter(s => !s.status || s.status === 'rejected' || s.status === 'draft')
+  const openQuestions = questions.filter(q => !q.resolved).length
+  const ymPos = ymOptions.findIndex(o => o.value === ym)
+  // 締切（前月の月末）までの日数。来月分を見ているときだけ出す
+  const deadlineNote = (() => {
+    const t = todayJstIso()
+    const next = addMonthsSafe(t.slice(0, 8) + '01', 1).slice(0, 7)
+    if (ym !== next) return ''
+    const lastDay = new Date(Number(t.slice(0, 4)), Number(t.slice(5, 7)), 0).getDate()
+    return `。${m}月分の締切（今月末）まであと ${lastDay - Number(t.slice(8, 10))}日`
+  })()
+  // 何も選んでいないときは「自分が対応する現場」を先に開く（政仁さん=承認待ち、職長=未作成・差し戻し）
+  const activeSiteId = (selectedSiteId && visibleSites.some(s => s.siteId === selectedSiteId) ? selectedSiteId : null)
+    ?? (canApproveRole ? submittedSites[0]?.siteId : notReadySites[0]?.siteId)
+    ?? notReadySites[0]?.siteId ?? submittedSites[0]?.siteId ?? visibleSites[0]?.siteId ?? null
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">就業カレンダー</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {user.role === 'foreman' ? '担当現場のカレンダー管理' : '全現場のカレンダー管理'}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={ym}
-            onChange={e => setYm(e.target.value)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white"
-          >
-            {ymOptions.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+    <div className="max-w-7xl mx-auto space-y-5">
+      {/* 見出し（2026-10-01 改修・見本キャンバス8段目） */}
+      <PageHeader
+        group="出面・勤怠"
+        title="就業カレンダー"
+        sub={user.role === 'foreman' ? '担当現場のカレンダーを作って提出します。承認は政仁さんです' : '各現場のカレンダーを確認して承認します。承認されると、スタッフが本人のスマホで署名します'}
+        actions={<>
+          <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+            <button type="button" aria-label="前の月" disabled={ymPos <= 0} onClick={() => ymPos > 0 && setYm(ymOptions[ymPos - 1].value)}
+              className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px] disabled:opacity-30">
+              <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
+            </button>
+            <select value={ym} onChange={e => setYm(e.target.value)} aria-label="年月"
+              className="h-full bg-transparent text-[15px] font-bold text-gray-900 dark:text-white focus:outline-none px-1">
+              {ymOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <button type="button" aria-label="次の月" disabled={ymPos < 0 || ymPos >= ymOptions.length - 1} onClick={() => ymPos >= 0 && ymPos < ymOptions.length - 1 && setYm(ymOptions[ymPos + 1].value)}
+              className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px] disabled:opacity-30">
+              <Icon name="chevronRight" size={18} strokeWidth={2.2} />
+            </button>
+          </div>
           {user.role !== 'foreman' && (
-            <button
-              onClick={copyMessage}
-              className={`px-4 py-2 rounded-lg text-sm transition ${
-                copiedMsg ? 'bg-green-500 text-white' : 'bg-purple-600 text-white hover:bg-purple-700'
-              }`}
-            >
-              {copiedMsg ? '✓ コピー済み' : '📋 送信文コピー'}
-            </button>
+            <ToolButton icon="copy" onClick={copyMessage} title="署名がまだの人へのお願い文をコピーします">
+              {copiedMsg ? 'コピーしました' : '署名のお願い文をコピー'}
+            </ToolButton>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
-      {/* 全体状況（月またぎ運用ダッシュボード・管理者のみ） */}
-      {user.role !== 'foreman' && overview && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <button onClick={() => setShowOverview(v => !v)} className="font-bold text-hibi-navy dark:text-white flex items-center gap-2">
-              📊 全体状況（月またぎ）<span className="text-xs text-gray-400">{showOverview ? '▲' : '▼'}</span>
-            </button>
-            <button onClick={fetchOverview} className="text-xs text-blue-600 dark:text-blue-400 underline">🔄 更新</button>
-          </div>
-          {showOverview && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
-                    <th className="py-1 pr-2">月</th>
-                    <th className="py-1 pr-2">現場(承認/全)</th>
-                    <th className="py-1 pr-2">署名(完了/対象)</th>
-                    <th className="py-1 pr-2">状態</th>
-                    <th className="py-1 pr-2 text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overview.months.map(mo => {
-                    const [yy, mm] = mo.ym.split('-')
-                    const signPct = mo.workers.target > 0 ? Math.round(mo.workers.fullySigned / mo.workers.target * 100) : 0
-                    // 過去月は、未完了でも「対応中」にしない（代表決定 2026-09-21）。済んだ月をいまから
-                    //   署名・承認してもらう意味は薄く、黄色のまま残ると本当に対応が要る月が埋もれる。
-                    //   灰色の「終了」にして、残った件数だけ記録として見せる。通知文ボタンも出さない
-                    const isPast = !mo.isCurrent && !mo.isFuture
-                    const leftSites = Math.max(0, mo.sites.total - mo.sites.approved)
-                    const leftSigns = Math.max(0, mo.workers.target - mo.workers.fullySigned)
-                    const pastLeft = [leftSites > 0 ? `未承認の現場${leftSites}` : '', leftSigns > 0 ? `未署名${leftSigns}名` : ''].filter(Boolean).join('・')
-                    return (
-                      <tr key={mo.ym} className={`border-b dark:border-gray-700/50 ${mo.atRisk ? 'bg-red-50 dark:bg-red-900/20' : mo.isCurrent ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}>
-                        <td className="py-1.5 pr-2 font-medium whitespace-nowrap">
-                          {parseInt(yy)}/{parseInt(mm)}月
-                          {mo.isCurrent && <span className="text-[10px] text-blue-500 ml-1">今月</span>}
-                          {mo.isFuture && <span className="text-[10px] text-gray-400 ml-1">先</span>}
-                        </td>
-                        <td className="py-1.5 pr-2 whitespace-nowrap">
-                          {mo.sites.approved}/{mo.sites.total}
-                          {mo.sites.submitted > 0 && <span className="text-yellow-600 dark:text-yellow-400 ml-1">提{mo.sites.submitted}</span>}
-                          {mo.sites.rejected > 0 && <span className="text-orange-600 dark:text-orange-400 ml-1">差{mo.sites.rejected}</span>}
-                        </td>
-                        <td className="py-1.5 pr-2 whitespace-nowrap">
-                          {mo.workers.fullySigned}/{mo.workers.target}<span className="text-gray-400 ml-1">({signPct}%)</span>
-                        </td>
-                        <td className="py-1.5 pr-2 whitespace-nowrap">
-                          {mo.complete ? <span className="text-green-600 dark:text-green-400">✅ 完了</span>
-                            : mo.atRisk ? <span className="text-red-600 dark:text-red-400 font-bold">⚠ 締切間近・未完了</span>
-                            : mo.sites.total === 0 ? <span className="text-gray-400">未作成</span>
-                            : isPast ? (
-                              <span className="text-gray-400 dark:text-gray-500" title={mo.unsignedNames.length > 0 ? `未署名: ${mo.unsignedNames.join('、')}` : undefined}>
-                                終了{pastLeft ? `（${pastLeft}）` : ''}
-                              </span>
-                            )
-                            : <span className="text-yellow-600 dark:text-yellow-400">対応中</span>}
-                        </td>
-                        <td className="py-1.5 pr-2 whitespace-nowrap text-right">
-                          <button onClick={() => setYm(mo.ym)} className="text-xs text-blue-600 dark:text-blue-400 underline mr-2">開く</button>
-                          {!isPast && !mo.complete && mo.sites.approved > 0 && mo.unsignedNames.length > 0 && (
-                            <button onClick={() => copyReminder(mo)} className="text-xs text-emerald-700 dark:text-emerald-400 underline">
-                              {copiedReminderYm === mo.ym ? '✓コピー済' : '📋通知文'}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
-                「📋通知文」= 未承認者へのお願い文をコピー（個人リンクから承認してもらう）。赤=翌月が締切間近で未完了。灰色の「終了」=過去月で未完了のまま終わった月（件数は記録。名前はカーソルを合わせると出ます）。
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* スタッフからの質問・相談（当月・管理者のみ） */}
-      {user.role !== 'foreman' && questions.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
-          <h3 className="font-bold text-hibi-navy dark:text-white mb-2">
-            ❓ スタッフからの質問・相談（{y}年{m}月）
-            <span className="ml-2 text-xs font-normal text-gray-400">未解決 {questions.filter(q => !q.resolved).length}件</span>
-          </h3>
-          <div className="space-y-2">
-            {questions.map(q => (
-              <div key={q.id} className={`border rounded-lg p-2 text-sm ${q.resolved ? 'bg-gray-50 dark:bg-gray-700/40 border-gray-200 dark:border-gray-600 opacity-70' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="font-medium text-gray-800 dark:text-gray-100">
-                    {q.workerName}
-                    {q.kind === 'objection' && <span className="ml-1 text-orange-600 dark:text-orange-400 text-xs">(異議)</span>}
-                  </div>
-                  <div className="text-[10px] text-gray-400">{(q.createdAt || '').slice(0, 16).replace('T', ' ')}</div>
-                </div>
-                <div className="text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">{q.message}</div>
-                <div className="text-right mt-1">
-                  {q.resolved
-                    ? <span className="text-xs text-green-600 dark:text-green-400">✓ 解決済み</span>
-                    : <button onClick={() => resolveQuestion(q.id)} className="text-xs text-blue-600 dark:text-blue-400 underline">解決済みにする</button>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* 今やること（2026-10-01） */}
+      {!loading && !error && visibleSites.length > 0 && (
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          <TodoCard
+            icon="check" tone={submittedSites.length > 0 ? (canApproveRole ? 'urgent' : 'info') : 'ok'}
+            title="承認待ち"
+            big={submittedSites.length > 0 ? `${submittedSites.length}現場` : 'ありません'}
+            sub={submittedSites.length > 0
+              ? `${submittedSites.map(s => s.siteName).join('・')}が提出済み。${canApproveRole ? '中身を見て承認するか、理由をつけて差し戻す' : '政仁さんの承認を待っています'}`
+              : '職長が提出するとここに出ます'}
+            action={submittedSites.length > 0 ? '開く' : undefined}
+            onClick={submittedSites.length > 0 ? () => setSelectedSiteId(submittedSites[0].siteId) : undefined}
+          />
+          <TodoCard
+            icon="alert" tone={notReadySites.length > 0 ? 'warn' : 'ok'}
+            title="未作成・差し戻し"
+            big={notReadySites.length > 0 ? `${notReadySites.length}現場` : 'ありません'}
+            sub={notReadySites.length > 0
+              ? `${notReadySites.map(s => `${s.siteName}（${s.status === 'rejected' ? '差し戻し' : '未作成'}）`).join('・')}${deadlineNote}`
+              : `${m}月分はすべて提出・承認済みです`}
+            action={notReadySites.length > 0 ? '開く' : undefined}
+            onClick={notReadySites.length > 0 ? () => setSelectedSiteId(notReadySites[0].siteId) : undefined}
+          />
+          <TodoCard
+            icon="user" tone={unsignedWorkers.length > 0 ? 'warn' : 'ok'}
+            title="署名がまだ"
+            big={unsignedWorkers.length > 0 ? `${unsignedWorkers.length}名` : (totalWorkers > 0 ? '全員署名済み' : 'まだ対象なし')}
+            sub={unsignedWorkers.length > 0
+              ? `${unsignedWorkers.slice(0, 3).map(w => w.name).join('、')}${unsignedWorkers.length > 3 ? ` ほか${unsignedWorkers.length - 3}名` : ''}（承認された現場の分を本人がスマホで署名）`
+              : '承認された現場の分を、スタッフが本人のスマホで署名します'}
+            action={unsignedWorkers.length > 0 ? '署名の状況へ' : undefined}
+            onClick={unsignedWorkers.length > 0 ? () => document.getElementById('cal-sign')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined}
+          />
+          <TodoCard
+            icon="bell" tone={openQuestions > 0 ? 'warn' : 'ok'}
+            title="スタッフからの質問"
+            big={openQuestions > 0 ? `${openQuestions}件` : 'ありません'}
+            sub={openQuestions > 0 ? '質問・異議が届いています。答えたら「解決済み」に' : '質問・異議が来るとここに出ます'}
+            action={openQuestions > 0 ? '質問を見る' : undefined}
+            onClick={openQuestions > 0 ? () => document.getElementById('cal-questions')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) : undefined}
+          />
+        </section>
       )}
 
       {/* Site calendars - all expanded */}
@@ -566,8 +520,38 @@ export default function CalendarManagePage() {
       ) : visibleSites.length === 0 ? (
         <div className="text-center py-8 text-gray-400 dark:text-gray-500">現場データがありません</div>
       ) : (
-        <div className="space-y-6">
-          {visibleSites.map(site => {
+        <div className="grid grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)] gap-4 items-start">
+          {/* 左: 現場の一覧（1現場1行・押すと右に開く） */}
+          <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">現場（{m}月分）</h2>
+              <span className="text-xs text-hibi-sub dark:text-gray-400">押すと右に開く</span>
+            </div>
+            {visibleSites.map(site => {
+              const d = getEditDays(site.siteId, site.days)
+              const work = Object.values(d).filter(x => x === 'work').length
+              const total = new Date(y, m, 0).getDate()
+              const over = work * 7 > total * 40 / 7
+              const selected = site.siteId === activeSiteId
+              return (
+                <button key={site.siteId} type="button" onClick={() => setSelectedSiteId(site.siteId)} aria-current={selected ? 'true' : undefined}
+                  className={`w-full text-left border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-4 py-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 border-l-[3px] transition ${
+                    selected ? 'bg-hibi-active/60 dark:bg-blue-900/20 border-l-hibi-navy dark:border-l-blue-400' : 'border-l-transparent hover:bg-gray-50 dark:hover:bg-gray-700/40'
+                  }`}>
+                  <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{site.siteName}</span>
+                  <span>{statusBadge(site)}</span>
+                  <span className="text-[13px] text-hibi-sub dark:text-gray-400">
+                    {site.status || editingDays[site.siteId] ? <>出勤 <b className="text-base text-gray-900 dark:text-white">{work}</b>日・休み {total - work}日</> : 'まだ作られていません'}
+                  </span>
+                  <span className="text-right">{over && <Chip tone="red">法定の上限超え</Chip>}</span>
+                </button>
+              )
+            })}
+          </section>
+
+          {/* 右: 選んだ現場のカレンダー（編集・提出・承認・差し戻しは旧と同じ） */}
+          <div className="min-w-0">
+          {visibleSites.filter(s => s.siteId === activeSiteId).map(site => {
             const days = getEditDays(site.siteId, site.days)
             const isApproved = site.status === 'approved'
             const isSubmitted = site.status === 'submitted'
@@ -588,7 +572,7 @@ export default function CalendarManagePage() {
                 {/* 差し戻し理由（職長が修正理由を確認できる） */}
                 {site.status === 'rejected' && (
                   <div className="mx-4 mt-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 rounded-lg p-3 text-sm text-orange-800 dark:text-orange-300">
-                    <div className="font-bold">📝 差し戻されました（要修正）</div>
+                    <div className="font-bold">差し戻されました（要修正）</div>
                     {site.rejectedReason && <div className="mt-1">理由: {site.rejectedReason}</div>}
                     <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">内容を修正して、もう一度提出してください。</div>
                   </div>
@@ -613,7 +597,7 @@ export default function CalendarManagePage() {
                       >
                         日・祝のみ休み
                       </button>
-                      <span className="text-[10px] text-gray-400">適用後に下の法令チェックをご確認ください</span>
+                      <span className="text-xs text-gray-400">適用後に下の法令チェックをご確認ください</span>
                     </div>
                   )}
                   <CalendarEditor
@@ -636,7 +620,7 @@ export default function CalendarManagePage() {
                     if (warns.length === 0 && infos.length === 0) {
                       return (
                         <div className="text-xs text-green-700 dark:text-green-400 flex items-center gap-1">
-                          ✅ 法定休日・連続勤務 問題なし（最大{legal.maxConsecutive}連勤）
+                          法定休日・連続勤務は問題なし（最大{legal.maxConsecutive}連勤）
                         </div>
                       )
                     }
@@ -644,12 +628,12 @@ export default function CalendarManagePage() {
                       <div className="space-y-1">
                         {warns.map((f, i) => (
                           <div key={`w${i}`} className="text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 rounded px-2 py-1">
-                            ⚠️ {f.message}
+                            {f.message}
                           </div>
                         ))}
                         {infos.map((f, i) => (
                           <div key={`i${i}`} className="text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
-                            ⏱ {f.message}
+                            {f.message}
                           </div>
                         ))}
                       </div>
@@ -706,14 +690,14 @@ export default function CalendarManagePage() {
                             disabled={saving || exceedsLimit}
                             className="w-full bg-blue-600 text-white py-4 rounded-lg text-base font-bold hover:bg-blue-700 transition disabled:opacity-50 min-h-[48px]"
                           >
-                            {saving ? '提出中...' : `📋 ${site.siteName} を提出する`}
+                            {saving ? '提出中...' : `${site.siteName} を提出する`}
                           </button>
                         )}
 
                         {/* 提出済み表示（職長向け） */}
                         {isSubmitted && user.role === 'foreman' && (
                           <div className="text-center text-yellow-600 dark:text-yellow-400 text-sm font-bold py-2">
-                            📋 提出済み — 承認待ち
+                            提出済み — 承認待ち
                           </div>
                         )}
 
@@ -737,7 +721,7 @@ export default function CalendarManagePage() {
                             disabled={saving}
                             className="w-full text-yellow-700 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 py-2 rounded-lg text-xs hover:bg-yellow-100 transition disabled:opacity-50"
                           >
-                            ↩ 提出を取消す（{siteLeaderLabel(site.isSupport)}に差戻し）
+                            提出を取り消す（{siteLeaderLabel(site.isSupport)}に差戻し）
                           </button>
                         )}
 
@@ -762,7 +746,7 @@ export default function CalendarManagePage() {
                             disabled={saving}
                             className="w-full text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 py-2 rounded-lg text-xs hover:bg-orange-100 transition disabled:opacity-50"
                           >
-                            📝 理由をつけて差し戻す
+                            理由をつけて差し戻す
                           </button>
                         )}
 
@@ -781,7 +765,7 @@ export default function CalendarManagePage() {
                             disabled={saving}
                             className="w-full bg-green-600 text-white py-4 rounded-lg text-base font-bold hover:bg-green-700 transition disabled:opacity-50 min-h-[48px]"
                           >
-                            {saving ? '承認中...' : `✅ ${site.siteName} を承認する`}
+                            {saving ? '承認中...' : `${site.siteName} を承認する`}
                           </button>
                         )}
 
@@ -813,7 +797,7 @@ export default function CalendarManagePage() {
                             {!isRevising ? (
                               <>
                                 <div className="text-center text-green-600 dark:text-green-400 text-sm font-bold py-2">
-                                  ✅ 承認済み
+                                  承認済み
                                 </div>
                                 {/* approver/admin: 破壊的操作（修正・承認取消）を「最小化＋2段階」で誤操作防止
                                     - 既定は折りたたみ（⚙️ 管理操作）→ カードの誤タップで発火しない
@@ -827,8 +811,8 @@ export default function CalendarManagePage() {
                                       onToggle={(e) => { if (!(e.currentTarget as HTMLDetailsElement).open) disarm() }}
                                     >
                                       <summary className="cursor-pointer select-none list-none px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center justify-between">
-                                        <span>⚙️ 管理操作（カレンダー修正・承認の取消）</span>
-                                        <span className="text-[10px] text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+                                        <span>その他の操作（承認済みカレンダーの修正・承認の取消）</span>
+                                        <span className="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
                                       </summary>
                                       <div className="px-3 pb-3 pt-1 space-y-2 border-t border-gray-100 dark:border-gray-700">
                                         <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
@@ -839,7 +823,7 @@ export default function CalendarManagePage() {
                                         {armed !== 'unapprove' && (armed === 'revise' ? (
                                           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 rounded-lg p-2 space-y-2">
                                             <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
-                                              ⚠️ 修正モードにすると、保存時に<b>署名済みの配置スタッフへ再確認依頼</b>が出ます。本当に修正しますか？
+                                              修正モードにすると、保存時に<b>署名済みの配置スタッフへ再確認依頼</b>が出ます。本当に修正しますか？
                                             </p>
                                             <div className="grid grid-cols-2 gap-2">
                                               <button onClick={disarm} disabled={saving}
@@ -850,7 +834,7 @@ export default function CalendarManagePage() {
                                                 onClick={() => { disarm(); setRevisingApproved(prev => ({ ...prev, [site.siteId]: true })) }}
                                                 disabled={saving}
                                                 className="bg-amber-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-amber-700 transition disabled:opacity-50">
-                                                ✓ 修正モードにする
+                                                修正モードにする
                                               </button>
                                             </div>
                                           </div>
@@ -859,7 +843,7 @@ export default function CalendarManagePage() {
                                             onClick={() => setArmedDanger(prev => ({ ...prev, [site.siteId]: 'revise' }))}
                                             disabled={saving}
                                             className="w-full text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-800 py-2 rounded-lg text-xs hover:bg-amber-100 transition disabled:opacity-50 font-medium">
-                                            ✏️ 承認済みカレンダーを修正する
+                                            承認済みカレンダーを修正する
                                           </button>
                                         ))}
 
@@ -867,7 +851,7 @@ export default function CalendarManagePage() {
                                         {armed !== 'revise' && (armed === 'unapprove' ? (
                                           <div className="bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded-lg p-2 space-y-2">
                                             <p className="text-xs text-red-700 dark:text-red-300 leading-relaxed">
-                                              ⚠️ 承認を取消すと<b>この現場の署名データが全件削除</b>されます。再承認後に全員の再署名が必要です。本当に取消しますか？
+                                              承認を取り消すと<b>この現場の署名データが全件削除</b>されます。再承認後に全員の再署名が必要です。本当に取消しますか？
                                             </p>
                                             <div className="grid grid-cols-2 gap-2">
                                               <button onClick={disarm} disabled={saving}
@@ -891,7 +875,7 @@ export default function CalendarManagePage() {
                                                 }}
                                                 disabled={saving}
                                                 className="bg-red-600 text-white py-2 rounded-lg text-xs font-bold hover:bg-red-700 transition disabled:opacity-50">
-                                                ✓ 承認を取消す
+                                                承認を取り消す
                                               </button>
                                             </div>
                                           </div>
@@ -900,7 +884,7 @@ export default function CalendarManagePage() {
                                             onClick={() => setArmedDanger(prev => ({ ...prev, [site.siteId]: 'unapprove' }))}
                                             disabled={saving}
                                             className="w-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 py-2 rounded-lg text-xs hover:bg-red-100 transition disabled:opacity-50">
-                                            ↩ 承認を取消す（署名も全削除）
+                                            承認を取り消す（署名も全削除）
                                           </button>
                                         ))}
                                       </div>
@@ -911,10 +895,10 @@ export default function CalendarManagePage() {
                             ) : (
                               <>
                                 <div className="text-center text-amber-700 dark:text-amber-400 text-sm font-bold py-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-300">
-                                  ✏️ 修正モード（承認済みカレンダーを編集中）
+                                  修正モード（承認済みカレンダーを編集中）
                                 </div>
                                 <p className="text-xs text-gray-600 leading-relaxed px-1">
-                                  カレンダーを編集して「保存」を押すと、署名済みのスタッフは個人ページで「🔄 更新あり」バナーが表示され、再確認が必要になります。
+                                  カレンダーを編集して「保存」を押すと、署名済みのスタッフは個人ページで「更新あり」バナーが表示され、再確認が必要になります。
                                 </p>
                                 <div className="grid grid-cols-2 gap-2">
                                   <button
@@ -956,7 +940,7 @@ export default function CalendarManagePage() {
                                     disabled={saving || exceedsLimit}
                                     className="bg-amber-600 text-white py-3 rounded-lg text-sm font-bold hover:bg-amber-700 transition disabled:opacity-50"
                                   >
-                                    💾 修正を保存
+                                    修正を保存
                                   </button>
                                 </div>
                               </>
@@ -970,6 +954,115 @@ export default function CalendarManagePage() {
               </div>
             )
           })}
+          </div>
+        </div>
+      )}
+
+      {/* 全体状況（月またぎ運用ダッシュボード・管理者のみ） */}
+      {user.role !== 'foreman' && overview && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => setShowOverview(v => !v)} className="font-bold text-hibi-navy dark:text-white flex items-center gap-2">
+              月ごとの状況<span className="text-xs font-normal text-hibi-sub">{showOverview ? '閉じる' : '開く'}</span>
+            </button>
+            <button onClick={fetchOverview} className="text-xs text-blue-600 dark:text-blue-400 underline">更新</button>
+          </div>
+          {showOverview && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 dark:text-gray-400 border-b dark:border-gray-700">
+                    <th className="py-1 pr-2">月</th>
+                    <th className="py-1 pr-2">現場(承認/全)</th>
+                    <th className="py-1 pr-2">署名(完了/対象)</th>
+                    <th className="py-1 pr-2">状態</th>
+                    <th className="py-1 pr-2 text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overview.months.map(mo => {
+                    const [yy, mm] = mo.ym.split('-')
+                    const signPct = mo.workers.target > 0 ? Math.round(mo.workers.fullySigned / mo.workers.target * 100) : 0
+                    // 過去月は、未完了でも「対応中」にしない（代表決定 2026-09-21）。済んだ月をいまから
+                    //   署名・承認してもらう意味は薄く、黄色のまま残ると本当に対応が要る月が埋もれる。
+                    //   灰色の「終了」にして、残った件数だけ記録として見せる。通知文ボタンも出さない
+                    const isPast = !mo.isCurrent && !mo.isFuture
+                    const leftSites = Math.max(0, mo.sites.total - mo.sites.approved)
+                    const leftSigns = Math.max(0, mo.workers.target - mo.workers.fullySigned)
+                    const pastLeft = [leftSites > 0 ? `未承認の現場${leftSites}` : '', leftSigns > 0 ? `未署名${leftSigns}名` : ''].filter(Boolean).join('・')
+                    return (
+                      <tr key={mo.ym} className={`border-b dark:border-gray-700/50 ${mo.atRisk ? 'bg-red-50 dark:bg-red-900/20' : mo.isCurrent ? 'bg-blue-50/40 dark:bg-blue-900/10' : ''}`}>
+                        <td className="py-1.5 pr-2 font-medium whitespace-nowrap">
+                          {parseInt(yy)}/{parseInt(mm)}月
+                          {mo.isCurrent && <span className="text-xs text-blue-500 ml-1">今月</span>}
+                          {mo.isFuture && <span className="text-xs text-gray-400 ml-1">先</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          {mo.sites.approved}/{mo.sites.total}
+                          {mo.sites.submitted > 0 && <span className="text-yellow-600 dark:text-yellow-400 ml-1">提{mo.sites.submitted}</span>}
+                          {mo.sites.rejected > 0 && <span className="text-orange-600 dark:text-orange-400 ml-1">差{mo.sites.rejected}</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          {mo.workers.fullySigned}/{mo.workers.target}<span className="text-gray-400 ml-1">({signPct}%)</span>
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap">
+                          {mo.complete ? <span className="text-green-700 dark:text-green-400 font-bold">完了</span>
+                            : mo.atRisk ? <span className="text-red-700 dark:text-red-400 font-bold">締切間近・未完了</span>
+                            : mo.sites.total === 0 ? <span className="text-gray-400">未作成</span>
+                            : isPast ? (
+                              <span className="text-gray-400 dark:text-gray-500" title={mo.unsignedNames.length > 0 ? `未署名: ${mo.unsignedNames.join('、')}` : undefined}>
+                                終了{pastLeft ? `（${pastLeft}）` : ''}
+                              </span>
+                            )
+                            : <span className="text-yellow-600 dark:text-yellow-400">対応中</span>}
+                        </td>
+                        <td className="py-1.5 pr-2 whitespace-nowrap text-right">
+                          <button onClick={() => setYm(mo.ym)} className="text-xs text-blue-600 dark:text-blue-400 underline mr-2">開く</button>
+                          {!isPast && !mo.complete && mo.sites.approved > 0 && mo.unsignedNames.length > 0 && (
+                            <button onClick={() => copyReminder(mo)} className="text-xs text-emerald-700 dark:text-emerald-400 underline">
+                              {copiedReminderYm === mo.ym ? 'コピー済み' : 'お願い文'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
+                「お願い文」= 未署名の人へのお願い文をコピー（個人リンクから承認してもらう）。赤=翌月が締切間近で未完了。灰色の「終了」=過去月で未完了のまま終わった月（件数は記録。名前はカーソルを合わせると出ます）。
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* スタッフからの質問・相談（当月・管理者のみ） */}
+      {user.role !== 'foreman' && questions.length > 0 && (
+        <div id="cal-questions" className="scroll-mt-4 bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
+          <h3 className="font-bold text-hibi-navy dark:text-white mb-2">
+            スタッフからの質問・相談（{y}年{m}月）
+            <span className="ml-2 text-xs font-normal text-gray-400">未解決 {questions.filter(q => !q.resolved).length}件</span>
+          </h3>
+          <div className="space-y-2">
+            {questions.map(q => (
+              <div key={q.id} className={`border rounded-lg p-2 text-sm ${q.resolved ? 'bg-gray-50 dark:bg-gray-700/40 border-gray-200 dark:border-gray-600 opacity-70' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-medium text-gray-800 dark:text-gray-100">
+                    {q.workerName}
+                    {q.kind === 'objection' && <span className="ml-1 text-orange-600 dark:text-orange-400 text-xs">(異議)</span>}
+                  </div>
+                  <div className="text-xs text-gray-400">{(q.createdAt || '').slice(0, 16).replace('T', ' ')}</div>
+                </div>
+                <div className="text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-wrap">{q.message}</div>
+                <div className="text-right mt-1">
+                  {q.resolved
+                    ? <span className="text-xs font-bold text-green-700 dark:text-green-400">解決済み</span>
+                    : <button onClick={() => resolveQuestion(q.id)} className="text-xs text-blue-600 dark:text-blue-400 underline">解決済みにする</button>}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -991,8 +1084,8 @@ export default function CalendarManagePage() {
 
       {/* Signature status summary */}
       {!loading && visibleSites.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 space-y-3">
-          <h3 className="font-bold text-hibi-navy dark:text-white">署名状況</h3>
+        <div id="cal-sign" className="scroll-mt-4 bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 space-y-3">
+          <h3 className="text-[17px] font-bold text-gray-900 dark:text-white">署名の状況</h3>
           <div className="text-sm text-gray-700 dark:text-gray-300">
             署名状況: <span className="font-bold">{signedWorkers}/{totalWorkers}名</span> 署名済み
           </div>
@@ -1016,7 +1109,7 @@ export default function CalendarManagePage() {
             </div>
           )}
           <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-800 dark:text-blue-300 leading-relaxed">
-            🔐 承認は各スタッフ<b>本人の個人リンク</b>（出面入力と同じQR/リンク）から行います。氏名入力＋同意チェックで本人確認します。
+            承認は各スタッフ<b>本人の個人リンク</b>（出面入力と同じQR/リンク）から行います。氏名入力＋同意チェックで本人確認します。
             個人リンク・QRは <a href="/workers" className="underline font-medium hover:text-blue-900 dark:hover:text-blue-200">人員マスタ</a> から配布できます。
             <span className="text-blue-500 dark:text-blue-400">（名前選択式の旧ページは廃止しました）</span>
           </div>
@@ -1054,7 +1147,7 @@ export default function CalendarManagePage() {
                   className="inline-flex items-center gap-1 text-sm bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition disabled:opacity-50"
                   title="変形労働の周知・同意記録（誰がいつどの現場のカレンダーを承認したか）をExcelで出力。過去の月もいつでも出力できます。"
                 >
-                  📋 {downloadingLedger ? '出力中...' : '周知・同意台帳をExcel出力'}
+                  {downloadingLedger ? '出力中...' : '周知・同意台帳をExcel出力'}
                 </button>
               </div>
             )}
@@ -1063,7 +1156,7 @@ export default function CalendarManagePage() {
       )}
 
       {/* ── カレンダー修正後の再確認状況パネル（2026-06-XX 追加） ── */}
-      {/* 「✏️ 承認済みカレンダーを修正する」を行った現場について、
+      {/* 「承認済みカレンダーを修正する」を行った現場について、
           配置者が再確認したかを一覧表示。職長が「まだ確認していない人」を
           把握して個別に声かけする運用を想定 */}
       {(() => {
@@ -1083,7 +1176,6 @@ export default function CalendarManagePage() {
         return (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl shadow-sm p-4 space-y-3">
             <h3 className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
-              <span>✏️</span>
               <span>カレンダー修正後の再確認状況</span>
               <span className="text-xs bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded-full font-normal">
                 {revisedSites.length}現場
@@ -1091,7 +1183,7 @@ export default function CalendarManagePage() {
             </h3>
             <p className="text-xs text-amber-700 dark:text-amber-400">
               承認済みカレンダーを修正した現場の、配置者ごとの再確認状況です。<br/>
-              未確認のスタッフには個人ページで「🔄 更新あり」バナーが表示されています。職長から声をかけて確認をお願いします。
+              未確認のスタッフには個人ページで「更新あり」バナーが表示されています。職長から声をかけて確認をお願いします。
             </p>
             <div className="space-y-3">
               {revisedSites.map(site => {
@@ -1125,10 +1217,10 @@ export default function CalendarManagePage() {
                         {pendingWorkers.map(w => (
                           <div key={w.id} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-900/30 rounded text-sm">
                             <div className="flex items-center gap-2">
-                              <span className="text-yellow-600">⏳</span>
+                              <span className="text-amber-700 font-bold">まだ</span>
                               <span className="font-medium text-gray-800 dark:text-gray-200">{w.name}</span>
                             </div>
-                            <span className="text-[10px] text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/50 px-2 py-0.5 rounded-full">
+                            <span className="text-xs text-yellow-700 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/50 px-2 py-0.5 rounded-full">
                               未再確認（通知中）
                             </span>
                           </div>
@@ -1137,10 +1229,10 @@ export default function CalendarManagePage() {
                         {assignedWorkers.filter(w => w.reconfirmedAfterRevision).map(w => (
                           <div key={w.id} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-green-50 dark:bg-green-900/30 rounded text-sm">
                             <div className="flex items-center gap-2">
-                              <span className="text-green-600">✓</span>
+                              <span className="text-green-700 font-bold">済</span>
                               <span className="font-medium text-gray-800 dark:text-gray-200">{w.name}</span>
                             </div>
-                            <span className="text-[10px] text-green-700 dark:text-green-400">
+                            <span className="text-xs text-green-700 dark:text-green-400">
                               再確認済み ({fmtTime(w.signedAt)})
                             </span>
                           </div>

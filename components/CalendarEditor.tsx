@@ -104,7 +104,7 @@ export default function CalendarEditor({ year, month, days, onChange, readOnly }
                 {isWork ? '出勤' : '休み'}
               </div>
               {holiday && (
-                <div className={`text-[9px] leading-tight truncate w-full px-0.5 text-center ${isWork ? 'text-white/80' : 'text-gray-400'}`}>
+                <div className={`text-[10px] leading-tight truncate w-full px-0.5 text-center ${isWork ? 'text-white/80' : 'text-gray-400'}`}>
                   {holiday.name}
                 </div>
               )}
