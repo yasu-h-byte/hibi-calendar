@@ -253,21 +253,21 @@ function PeerInvoicePageInner() {
           </button>
           {isFreshDraft && canIssue && (
             <button onClick={handleIssue} disabled={busy || approvalBlocked}
-              className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-hibi-navy text-white hover:bg-hibi-light">
-              この内容で発行
+              className={approvalBlocked ? LOCKED_BTN : 'h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 bg-hibi-navy text-white hover:bg-hibi-light'}>
+              {approvalBlocked && <Icon name="lock" size={14} strokeWidth={2.4} />}この内容で発行
             </button>
           )}
           {isFreshDraft && canRequest && (
             <button onClick={handleRequest} disabled={busy || approvalBlocked}
-              className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-hibi-navy text-white hover:bg-hibi-light">
-              発行を申請（承認へ回す）
+              className={approvalBlocked ? LOCKED_BTN : 'h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 bg-hibi-navy text-white hover:bg-hibi-light'}>
+              {approvalBlocked && <Icon name="lock" size={14} strokeWidth={2.4} />}発行を申請（承認へ回す）
             </button>
           )}
           {view && isPending && canIssue && (
             <>
               <button onClick={() => handleApprove(view.id)} disabled={busy || approvalBlocked}
-                className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-green-700 text-white hover:bg-green-800">
-                承認して発行
+                className={approvalBlocked ? LOCKED_BTN : 'h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 bg-green-700 text-white hover:bg-green-800'}>
+                {approvalBlocked && <Icon name="lock" size={14} strokeWidth={2.4} />}承認して発行
               </button>
               <button onClick={() => handleReject(view.id)} disabled={busy}
                 className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-white dark:bg-gray-800 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20">
@@ -289,7 +289,7 @@ function PeerInvoicePageInner() {
           )}
           {/* 押せない理由をボタンの横にも出す（薄いボタンだけだと「発行ボタンがない」と見える・2026-10-01 代表） */}
           {isFreshDraft && (canIssue || canRequest) && approvalBlocked && (
-            <span className="text-[13px] font-bold text-red-700 dark:text-red-300">← 上の赤い枠の承認がそろうと押せます</span>
+            <span className="text-[13px] font-bold text-red-700 dark:text-red-300">上の赤い枠の承認がそろうと押せます</span>
           )}
           {isFreshDraft && !canIssue && !canRequest && (
             <span className="text-[13px] text-hibi-sub dark:text-gray-400">発行の申請は事務、承認は事業責任者・管理者が行います</span>
@@ -516,6 +516,9 @@ function PeerInvoiceDocument({ view }: { view: InvoiceView }) {
     </div>
   )
 }
+
+/** 承認がそろわず押せないボタン。薄くするだけだと「ボタンがない」と見える（2026-10-01 代表）ので、鍵つきの点線で出す */
+const LOCKED_BTN = 'h-10 px-4 rounded-[10px] text-sm font-bold inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 border-2 border-dashed border-gray-400 cursor-not-allowed dark:bg-gray-800 dark:text-gray-300'
 
 export default function PeerInvoicePage() {
   return (
