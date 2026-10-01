@@ -1,0 +1,331 @@
+'use client'
+
+import { Icon } from '@/components/ui/Icon'
+import StaffConfirmBadge, { type StaffConfirmInfo } from './StaffConfirmBadge'
+
+// 月次集計・締めの「見やすい一覧」と「締めの準備カード」（2026-10-01 代表依頼・見本キャンバス5段目）
+//
+//   旧: 19列の表（ほとんどが「—」）だけで、締めボタン・締め済みの印・本人確認・自動検算がばらばらの場所にあり、
+//       「この会社はもう締めていいか」を一か所で判断できなかった。
+//   新: ① 会社ごとのカード（人数・支給額の合計・締める前のチェック3つ・締めるボタン）
+//       ② 1人1行。出勤・有給・残業／単価／0円でない内訳だけを札で／支給額を大きく／本人確認
+//   全項目の表（Excel と突き合わせる用）は「全項目の表」に切り替えて今までどおり見られる。
+//   金額はサーバの計算値をそのまま出す（ここで再計算しない＝出力層の原則）。
+
+/** page.tsx の WorkerMonthly のうち、ここで使う項目だけ */
+export interface OverviewWorker {
+  id: number
+  name: string
+  org: string
+  visa: string
+  rate: number
+  hourlyRate?: number
+  salary?: number
+  sites: string[]
+  workDays: number
+  workAll: number
+  plDays: number
+  otHours: number
+  useOldRules?: boolean
+  basePay?: number
+  fixedBasePay?: number
+  additionalAllowance?: number
+  paidLeaveDays?: number
+  paidLeaveAllowance?: number
+  nonStatutoryOTHours?: number
+  nonStatutoryOTAllowance?: number
+  legalOtHours?: number
+  otAllowance?: number
+  legalHolidayAllowance?: number
+  nightHours?: number
+  nightAllowance?: number
+  compAllowance?: number
+  breakShortenAllowance?: number
+  siteAllowance?: number
+  driveAllowance?: number
+  driveLegs?: number
+  absentDeduction?: number
+  compBaseDeduction?: number
+  absence?: number
+  salaryNetPay?: number
+  isDispatched?: boolean
+  dispatchTo?: string
+  hkDays?: number
+  hkEarlyReturnDays?: number
+  legalShortfall?: number
+  sundayNoRestDays?: number[]
+  calendarBlankDays?: number
+  suspectCompRestDays?: number[]
+  restMismatchDays?: number[]
+}
+
+const yen = (n: number) => `¥${Math.round(n).toLocaleString()}`
+const num = (n: number) => (Math.round(n * 10) / 10).toLocaleString()
+
+// ─── 締めの準備カード ───────────────────────────────
+
+export interface CloseCardProps {
+  org: 'hibi' | 'hfu'
+  label: string
+  ymLabel: string
+  people: number
+  total: number
+  locked: boolean
+  /** 本人確認の対象（外国人）と、その内訳 */
+  confirm: { target: number; ok: number; issue: number }
+  /** 自動検算の対象人数と、異常のある人数（null＝検算しない月） */
+  audit: { target: number; affected: number } | null
+  /** 締めたあとに支給額が変わった人数 */
+  changedAfterLock: number
+  canClose: boolean
+  busy: boolean
+  onToggleLock: () => void
+  onShowConfirm: () => void
+  onShowAudit: () => void
+}
+
+export function CloseCard(p: CloseCardProps) {
+  const confirmLeft = p.confirm.target - p.confirm.ok
+  return (
+    <section className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl p-5 flex flex-col gap-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">{p.label}</h2>
+          <div className="text-[13px] text-hibi-sub dark:text-gray-400">{p.people}名</div>
+        </div>
+        {p.locked
+          ? <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"><Icon name="lock" size={13} strokeWidth={2.2} />締め済み</span>
+          : <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">締め前</span>}
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-[13px] text-hibi-sub dark:text-gray-400">支給額の合計</span>
+        <span className="text-[30px] leading-none font-bold tabular-nums text-gray-900 dark:text-white">{yen(p.total)}</span>
+      </div>
+
+      <div className="rounded-[10px] border border-hibi-line dark:border-gray-700 divide-y divide-hibi-line dark:divide-gray-700">
+        <Check state="ok" label="出面の承認（職長・最終）" note="締めるときに全現場・全日を自動で確認します（そろっていないと締められません）" />
+        {p.confirm.target > 0 ? (
+          <Check
+            state={confirmLeft === 0 ? 'ok' : 'warn'}
+            label="本人確認"
+            note={confirmLeft === 0
+              ? `${p.confirm.target}名 全員が確認済み`
+              : `${p.confirm.target}名中 ${p.confirm.ok}名が確認済み・まだ ${confirmLeft - p.confirm.issue}名${p.confirm.issue > 0 ? `・連絡あり ${p.confirm.issue}名` : ''}`}
+            action={confirmLeft > 0 ? '一覧で見る' : undefined}
+            onAction={p.onShowConfirm}
+          />
+        ) : (
+          <Check state="none" label="本人確認" note="対象の人がいません（日本人はスマホ確認の対象外）" />
+        )}
+        {p.audit ? (
+          <Check
+            state={p.audit.affected === 0 ? 'ok' : 'warn'}
+            label="自動検算"
+            note={p.audit.affected === 0
+              ? `対象 ${p.audit.target}名に異常なし（日本人・月給・旧ルールの人は計算根拠で目で確認）`
+              : `${p.audit.affected}名に要確認があります`}
+            action={p.audit.affected > 0 ? '確認する' : undefined}
+            onAction={p.onShowAudit}
+          />
+        ) : (
+          <Check state="none" label="自動検算" note="この月は自動検算の対象外です（2026年5月より前）" />
+        )}
+        {p.locked && p.changedAfterLock > 0 && (
+          <Check state="warn" label="締めたあとに支給額が変わった人" note={`${p.changedAfterLock}名（下のお知らせを確認してください）`} />
+        )}
+      </div>
+
+      {p.locked ? (
+        <div className="flex gap-2">
+          <span className="flex-1 h-11 rounded-[10px] bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm font-bold flex items-center justify-center gap-1.5">
+            <Icon name="check" size={16} strokeWidth={2.6} />{p.ymLabel}は締め済み
+          </span>
+          {p.canClose && (
+            <button onClick={p.onToggleLock} disabled={p.busy}
+              className="h-11 px-4 rounded-[10px] text-sm font-bold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+              <Icon name="unlock" size={15} />締めを解除
+            </button>
+          )}
+        </div>
+      ) : p.canClose ? (
+        <button onClick={p.onToggleLock} disabled={p.busy}
+          className="h-11 rounded-[10px] bg-hibi-navy hover:bg-hibi-light text-white text-[15px] font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2">
+          <Icon name="lock" size={16} />{p.label} の{p.ymLabel}を締める
+        </button>
+      ) : (
+        <div className="text-xs text-hibi-sub dark:text-gray-400">締めは代表・事業責任者・事務が行います</div>
+      )}
+    </section>
+  )
+}
+
+function Check({ state, label, note, action, onAction }: {
+  state: 'ok' | 'warn' | 'none'
+  label: string
+  note: string
+  action?: string
+  onAction?: () => void
+}) {
+  return (
+    <div className="px-3.5 py-2.5 flex items-center gap-2.5">
+      {state === 'ok'
+        ? <span className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center shrink-0"><Icon name="check" size={14} strokeWidth={3} /></span>
+        : state === 'warn'
+          ? <span className="w-6 h-6 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 flex items-center justify-center shrink-0"><Icon name="alert" size={14} strokeWidth={2.4} /></span>
+          : <span className="w-6 h-6 rounded-full border-2 border-gray-300 dark:border-gray-600 shrink-0" />}
+      <div className="min-w-0">
+        <div className="text-sm font-bold text-gray-900 dark:text-gray-100">{label}</div>
+        <div className={`text-xs ${state === 'warn' ? 'text-amber-800 dark:text-amber-300' : 'text-hibi-sub dark:text-gray-400'}`}>{note}</div>
+      </div>
+      {action && onAction && (
+        <button onClick={onAction} className="ml-auto shrink-0 text-[13px] font-bold text-hibi-navy dark:text-blue-300 inline-flex items-center gap-0.5 hover:underline">
+          {action}<Icon name="chevronRight" size={13} />
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── 見やすい一覧 ──────────────────────────────────
+
+/** 0円でない支給・控除の項目だけを札にする（並びは給与明細の順） */
+function payChips(w: OverviewWorker, ym: string): { label: string; amount: number; neg?: boolean; note?: string }[] {
+  const out: { label: string; amount: number; neg?: boolean; note?: string }[] = []
+  const foreign = w.visa !== 'none'
+  const base = (w.fixedBasePay || 0) > 0 ? w.fixedBasePay! : (w.basePay || 0)
+  if (base > 0) {
+    out.push({
+      label: (w.salary || 0) > 0 ? '月給' : foreign ? '基本給' : `日給 ${num(w.workAll || w.workDays)}日`,
+      amount: base,
+    })
+  }
+  if (foreign && (w.additionalAllowance || 0) > 0) out.push({ label: w.useOldRules ? '休業補償' : '追加所定', amount: w.additionalAllowance! })
+  if ((w.paidLeaveAllowance || 0) > 0) out.push({ label: `有給手当${(w.paidLeaveDays || 0) > 0 ? ` ${num(w.paidLeaveDays!)}日` : ''}`, amount: w.paidLeaveAllowance! })
+  if (foreign && (w.nonStatutoryOTAllowance || 0) > 0) out.push({ label: `所定外 ${num(w.nonStatutoryOTHours || 0)}h`, amount: w.nonStatutoryOTAllowance! })
+  if ((w.otAllowance || 0) > 0) out.push({ label: ym >= '202605' ? `法定外残業${foreign && (w.legalOtHours || 0) > 0 ? ` ${num(w.legalOtHours!)}h` : ''}` : '残業手当', amount: w.otAllowance! })
+  if ((w.legalHolidayAllowance || 0) > 0) out.push({ label: '法休手当', amount: w.legalHolidayAllowance! })
+  if (foreign && (w.nightAllowance || 0) > 0) out.push({ label: `深夜${(w.nightHours || 0) > 0 ? ` ${num(w.nightHours!)}h` : ''}`, amount: w.nightAllowance! })
+  if (foreign && (w.compAllowance || 0) > 0) out.push({ label: '休業手当', amount: w.compAllowance! })
+  if ((w.breakShortenAllowance || 0) > 0) out.push({ label: '休憩短縮', amount: w.breakShortenAllowance! })
+  if ((w.siteAllowance || 0) > 0) out.push({ label: '日当', amount: w.siteAllowance! })
+  if ((w.driveAllowance || 0) > 0) out.push({ label: `運転手当${(w.driveLegs || 0) > 0 ? ` ${w.driveLegs}便` : ''}`, amount: w.driveAllowance! })
+  if (foreign && (w.absentDeduction || 0) > 0) out.push({ label: `欠勤控除${w.useOldRules && (w.absence || 0) > 0 ? ` ${num(w.absence!)}日` : ''}`, amount: w.absentDeduction!, neg: true })
+  if ((w.compBaseDeduction || 0) > 0) out.push({ label: '補償日控除', amount: w.compBaseDeduction!, neg: true })
+  return out
+}
+
+/** 名前の横に出す印（旧表の警告と同じ条件。詳しい説明は押して開く計算根拠と全項目の表で） */
+function badgesOf(w: OverviewWorker, auditIds: Set<number>): { text: string; tone: 'gray' | 'cyan' | 'blue' | 'amber' | 'red'; title?: string }[] {
+  const b: { text: string; tone: 'gray' | 'cyan' | 'blue' | 'amber' | 'red'; title?: string }[] = []
+  if (auditIds.has(w.id)) b.push({ text: '検算 要確認', tone: 'red', title: '自動検算で要確認。押して計算根拠を確認してください' })
+  if ((w.calendarBlankDays || 0) > 0) b.push({ text: `稼働日未入力 ${w.calendarBlankDays}日`, tone: 'red', title: '空欄のままだと欠勤（100%控除）として計算されます' })
+  if ((w.legalShortfall || 0) > 0) b.push({ text: `法定不足 ${yen(w.legalShortfall!)}`, tone: 'red' })
+  if ((w.suspectCompRestDays?.length || 0) > 0) b.push({ text: `会社都合の休み？ ${w.suspectCompRestDays!.join('・')}日`, tone: 'amber' })
+  if ((w.restMismatchDays?.length || 0) > 0) b.push({ text: `休みの区別？ ${w.restMismatchDays!.join('・')}日`, tone: 'amber' })
+  if ((w.sundayNoRestDays?.length || 0) > 0) b.push({ text: `休みなし週の日曜 ${w.sundayNoRestDays!.join('・')}日`, tone: 'amber' })
+  if ((w.hkEarlyReturnDays || 0) > 0) b.push({ text: `早期復帰 ${w.hkEarlyReturnDays}日`, tone: 'amber' })
+  if ((w.hkDays || 0) > 0) b.push({ text: `帰国中 ${w.hkDays}日`, tone: 'cyan' })
+  if (w.isDispatched) b.push({ text: '出向中', tone: 'blue', title: w.dispatchTo ? `出向先: ${w.dispatchTo}` : undefined })
+  if (w.useOldRules && w.visa !== 'none') b.push({ text: '旧ルール', tone: 'gray' })
+  return b
+}
+
+const BADGE: Record<string, string> = {
+  gray: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  cyan: 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300',
+  blue: 'bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300',
+  amber: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+  red: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+}
+
+/** 要確認（並べ替え・「要確認だけ」に使う） */
+export function needsAttention(w: OverviewWorker, auditIds: Set<number>): boolean {
+  return badgesOf(w, auditIds).some(b => b.tone === 'red' || b.tone === 'amber')
+}
+
+export function OverviewList({
+  workers, ym, auditIds, staffConfirms, password, canResolveConfirm, onConfirmChanged, onOpen, siteNameOf,
+}: {
+  workers: OverviewWorker[]
+  ym: string
+  auditIds: Set<number>
+  staffConfirms: Record<number, StaffConfirmInfo>
+  password: string
+  canResolveConfirm: boolean
+  onConfirmChanged: () => void
+  onOpen: (id: number) => void
+  siteNameOf: (siteId: string) => string
+}) {
+  const cols = 'lg:grid-cols-[230px_200px_120px_minmax(0,1fr)_130px_96px]'
+  const total = workers.reduce((s, w) => s + (w.salaryNetPay || 0), 0)
+  const workAll = workers.reduce((s, w) => s + (w.workAll || w.workDays), 0)
+  const ot = workers.reduce((s, w) => s + (w.otHours || 0), 0)
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+      <div className={`hidden lg:grid ${cols} gap-3.5 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300`}>
+        <span>名前</span><span>出勤・有給・残業</span><span>単価</span><span>内訳（0円の項目は出さない）</span><span className="text-right">支給額</span><span>本人確認</span>
+      </div>
+      {workers.length === 0 ? (
+        <div className="px-5 py-10 text-center text-gray-400">該当する人がいません</div>
+      ) : workers.map(w => {
+        const badges = badgesOf(w, auditIds)
+        const chips = payChips(w, ym)
+        const attention = badges.some(b => b.tone === 'red')
+        const rateText = (w.salary || 0) > 0 ? `月給 ${yen(w.salary!)}` : (w.hourlyRate || 0) > 0 ? `時給 ${yen(w.hourlyRate!)}` : (w.rate || 0) > 0 ? `日給 ${yen(w.rate)}` : '—'
+        const conf = w.visa !== 'none' ? staffConfirms[w.id] : undefined
+        return (
+          <div key={w.id} role="button" tabIndex={0}
+            onClick={() => onOpen(w.id)}
+            onKeyDown={e => { if (e.key === 'Enter') onOpen(w.id) }}
+            className={`grid grid-cols-1 ${cols} gap-2 lg:gap-3.5 items-center px-5 py-3 border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 cursor-pointer transition ${
+              attention ? 'bg-amber-50/40 dark:bg-amber-900/10 hover:bg-amber-50 dark:hover:bg-amber-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'
+            }`}>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100">{w.name}</span>
+                {badges.map((b, i) => (
+                  <span key={i} title={b.title} className={`px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap ${BADGE[b.tone]}`}>{b.text}</span>
+                ))}
+              </div>
+              <div className="text-xs text-hibi-sub dark:text-gray-400 truncate">
+                {w.org === 'hfu' ? 'HFU' : '日比'}{w.sites.length > 0 && `・${w.sites.map(siteNameOf).join('・')}`}
+              </div>
+            </div>
+            <div className="flex gap-3 tabular-nums text-xs text-hibi-sub dark:text-gray-400 whitespace-nowrap">
+              <span>出勤 <b className="text-base text-gray-900 dark:text-white">{num(w.workAll || w.workDays)}</b></span>
+              <span>有給 <b className="text-base text-gray-900 dark:text-white">{num(w.plDays)}</b></span>
+              <span>残業 <b className="text-base text-gray-900 dark:text-white">{num(w.otHours)}</b></span>
+            </div>
+            <div className="text-[13px] text-gray-700 dark:text-gray-300 tabular-nums">{rateText}</div>
+            <div className="flex flex-wrap gap-1.5 min-w-0">
+              {chips.length === 0
+                ? <span className="text-xs text-gray-400">支給なし</span>
+                : chips.map((c, i) => (
+                  <span key={i} className="inline-flex items-baseline gap-1.5 px-2 py-0.5 rounded-md bg-hibi-bg dark:bg-gray-700/60 text-xs text-hibi-sub dark:text-gray-400 whitespace-nowrap">
+                    {c.label}<b className={`tabular-nums ${c.neg ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}`}>{c.neg ? '−' : ''}{Math.round(c.amount).toLocaleString()}</b>
+                  </span>
+                ))}
+              {w.isDispatched && <span className="text-xs text-hibi-navy dark:text-blue-300 whitespace-nowrap">出向先が支給（原価から控除）</span>}
+            </div>
+            <div className="lg:text-right text-lg font-bold tabular-nums text-gray-900 dark:text-white">{(w.salaryNetPay || 0) > 0 ? yen(w.salaryNetPay!) : '—'}</div>
+            <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+              {w.visa === 'none'
+                ? <span className="text-xs text-gray-400">対象外</span>
+                : conf
+                  ? <StaffConfirmBadge info={conf} workerId={w.id} workerName={w.name} ym={ym} password={password} canResolve={canResolveConfirm} onChanged={onConfirmChanged} />
+                  : <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">まだ</span>}
+            </div>
+          </div>
+        )
+      })}
+      {workers.length > 0 && (
+        <div className="px-5 py-3 border-t border-hibi-line dark:border-gray-700 flex flex-wrap gap-x-5 gap-y-1 items-baseline text-[13px] text-hibi-sub dark:text-gray-400">
+          <span>{workers.length}名</span>
+          <span>出勤延べ {num(workAll)}人日</span>
+          <span>残業 {num(ot)}h</span>
+          <span className="ml-auto">支給額の合計 <b className="text-lg text-gray-900 dark:text-white tabular-nums">{yen(total)}</b></span>
+        </div>
+      )}
+    </div>
+  )
+}

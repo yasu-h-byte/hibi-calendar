@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_monthly_ux',
+    title: '月次集計・締めを見やすくしました',
+    content:
+      '開くと「締める月」（前月）が出ます。会社ごとのカードに、支給額の合計・本人確認・自動検算のチェックと「締める」ボタンをまとめました。'
+      + '一覧は一人一行で、0円でない項目だけを並べます。今までの全部の列の表は「全項目の表」に切り替えると見られます。行を押すと計算根拠が開きます。',
+    category: 'new',
+    publishedAt: '2026-10-01T11:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261001_leave_ux',
     title: '休暇管理（有給）を見やすくしました',
     content:
