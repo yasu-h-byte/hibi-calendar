@@ -4,6 +4,7 @@ import { ensureDocExists } from './firestore-safe'
 import { getAttendanceDoc, attKey, getStaffSites, ymKey } from './attendance'
 import { checkMonthLocked } from './locks'
 import type { AttendanceEntry } from '@/types'
+import { currentYmJst } from '@/lib/date-utils'
 
 /**
  * 帰国期間 ⇄ 出面の帰国フラグ(hk) 同期（2026-08-03 追加）
@@ -266,8 +267,7 @@ export async function syncHomeLeaveAttendance(
   }
   if (starts.length === 0) return result
 
-  const now = new Date()
-  const horizonYm = addMonths(ymKey(now.getFullYear(), now.getMonth() + 1), HK_STAMP_HORIZON_MONTHS)
+  const horizonYm = addMonths(currentYmJst(), HK_STAMP_HORIZON_MONTHS)
   const fromYm = starts.slice().sort()[0]
   let toYm = ends.slice().sort().reverse()[0]
   if (toYm > horizonYm) toYm = horizonYm

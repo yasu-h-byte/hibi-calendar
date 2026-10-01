@@ -13,7 +13,7 @@ import { AttendanceEntry, calcActualHours, calcManDays } from '@/types'
 import { isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth, effectiveHourlyRateForYm } from './workers'
 import { computePeriodUsed } from './leave-compute'
-import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso } from './date-utils'
+import { calcLastUsableDayIso, isLeaveExpiredAsOf } from './date-utils'
 // 2026-06-XX 追加: 自動検算を Excel にも反映
 import { validatePayrolls, type PayrollSnapshot } from './payroll-validator'
 import { JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM } from './constants'
@@ -356,6 +356,7 @@ function appendOvertimeSummarySheet(
  * Sheet 3: 勤怠サマリー（新ルールの外国人のみ・3段階残業判定。202605〜）
  */
 import { isWorkerOfOrg, ATTENDANCE_ORG_LABEL, type AttendanceOrg } from './orgs'
+import { todayJstIso } from '@/lib/date-utils'
 export { isWorkerOfOrg, ATTENDANCE_ORG_LABEL, type AttendanceOrg } from './orgs'
 
 export interface HfuAttendanceExportData extends HibiAttendanceData {
@@ -1423,7 +1424,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
   // ─── シート1: 管理簿 ───
   const ledgerRows: unknown[][] = []
   ledgerRows.push([`有給休暇管理簿${orgFilter ? `（${orgFilter === 'hfu' ? 'HFU' : '日比建設'}）` : '（全社）'}`])
-  ledgerRows.push([`作成日: ${fmtDate(new Date().toISOString())}`])
+  ledgerRows.push([`作成日: ${fmtDate(todayJstIso())}`])
   ledgerRows.push([])
   ledgerRows.push([
     'ID', '氏名', '区分', 'ビザ', '入社日',
@@ -1496,7 +1497,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
   // ─── シート2: 取得日一覧 ───
   const consumptionRows: unknown[][] = []
   consumptionRows.push(['有給取得日一覧'])
-  consumptionRows.push([`作成日: ${fmtDate(new Date().toISOString())}`])
+  consumptionRows.push([`作成日: ${fmtDate(todayJstIso())}`])
   consumptionRows.push([])
   consumptionRows.push(['ID', '氏名', '取得日', 'ビザ', '備考'])
 
@@ -1538,7 +1539,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
   // ─── シート3: 買取記録 ───
   const buyoutRows: unknown[][] = []
   buyoutRows.push(['有給買取記録'])
-  buyoutRows.push([`作成日: ${fmtDate(new Date().toISOString())}`])
+  buyoutRows.push([`作成日: ${fmtDate(todayJstIso())}`])
   buyoutRows.push([])
   buyoutRows.push(['ID', '氏名', 'FY', '買取日', '日数', '金額(¥)', '理由'])
 
@@ -1563,7 +1564,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
   // ─── シート4: 時季指定記録 ───
   const designRows: unknown[][] = []
   designRows.push(['時季指定記録 (年5日取得義務対応)'])
-  designRows.push([`作成日: ${fmtDate(new Date().toISOString())}`])
+  designRows.push([`作成日: ${fmtDate(todayJstIso())}`])
   designRows.push([])
   designRows.push(['ID', '氏名', 'FY', '指定日', '指定日時', '備考'])
 

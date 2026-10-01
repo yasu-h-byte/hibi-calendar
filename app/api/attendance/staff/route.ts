@@ -18,7 +18,7 @@ import { doc, getDoc } from '@/lib/fsdb'
 import { calendarSiteIdOf, workTypeFamilyIds, familyEntrySiteId, staffEntryTarget, siteNeedsCalendar, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
 import { AttendanceEntry } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
-import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween } from '@/lib/date-utils'
+import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween, currentYmJst } from '@/lib/date-utils'
 import { getAttData, parseDKey } from '@/lib/compute'
 
 export async function GET(request: NextRequest) {
@@ -58,8 +58,7 @@ export async function GET(request: NextRequest) {
     }).catch(() => {})
 
     // 配置現場（getStaffSites と同じ規則: 当月の月次配置があればそれ、無ければ既定配置）
-    const nowJst0 = new Date()
-    const curYm0 = ymKey(nowJst0.getFullYear(), nowJst0.getMonth() + 1)
+    const curYm0 = currentYmJst()
     const assignedSites: { id: string; name: string }[] = []
     for (const site of mainRaw.sites || []) {
       if (site.archived) continue

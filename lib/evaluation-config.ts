@@ -16,6 +16,7 @@
  */
 import type { ABCGrade, EvaluationScores, EvaluationRank } from '@/types'
 import { curveRaiseAt, CURVE_BASE_RAISE, CURVE_DECAY, CURVE_MIN_RAISE } from './wage-curve'
+import { todayJstDate } from '@/lib/date-utils'
 
 // ────────────────────────────────────────
 //  カテゴリ別 重み係数
@@ -279,8 +280,9 @@ export function applyLegalWageFloor(args: {
 export function yearsFromHire(hireDate: string): number {
   // ⚠️ 表示用の「完了年数」。昇給テーブルを引くときは raiseYearAt(hireDate, evaluationDate) を使うこと
   if (!hireDate) return 1
-  const hire = new Date(hireDate)
-  const now = new Date()
+  // 両方ローカル0時でそろえ、「今日」は日本時間（サーバ＝UTC でも記念日の 0〜9時に1年少なくならない）
+  const hire = new Date(hireDate.slice(0, 10) + 'T00:00:00')
+  const now = todayJstDate()
   let y = now.getFullYear() - hire.getFullYear()
   const mDiff = now.getMonth() - hire.getMonth()
   if (mDiff < 0 || (mDiff === 0 && now.getDate() < hire.getDate())) y--

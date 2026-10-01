@@ -7,6 +7,7 @@ import { logActivity } from '@/lib/activity'
 import { mergeAnnouncements, type Announcement } from '@/lib/release-notes'
 import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { permRoleOf } from '@/lib/permissions'
+import { currentYmJst } from '@/lib/date-utils'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ announcements: [...announcements].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) })
     }
     // 投稿したお知らせ ＋ リリースノート（lib/release-notes.ts）を、その人の役割に合わせて新しい順に（2026-09-26）
-    const ym = new Date().toISOString().slice(0, 7).replace('-', '')
+    const ym = currentYmJst()
     const r = resolveApiRoleFromMain(await getApiAuthUser(request), { workers: data.workers || [], sites: data.sites || [], mforeman: data.mforeman || {} }, ym)
     return NextResponse.json({ announcements: mergeAnnouncements(announcements, permRoleOf(r ? { role: r.role } : null)) })
   } catch (error) {

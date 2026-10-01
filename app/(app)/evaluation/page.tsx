@@ -16,7 +16,7 @@ import {
 import { fmtYen } from '@/lib/format'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
-import { todayJstIso } from '@/lib/date-utils'
+import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
 // ⚠️ 評価ロジック（重み・テーブル・計算関数）は lib/evaluation-config.ts に集約。
 //   フロント・バックエンドで重複して定義すると過去のような不整合が再発する。
 //   修正時は必ず lib/evaluation-config.ts だけを編集すること。
@@ -60,18 +60,13 @@ function nextEvalDate(hireDate: string, evaluations: Evaluation[]): string {
     const latestDate = approved
       .map(e => e.evaluationDate)
       .sort((a, b) => b.localeCompare(a))[0]
-    const d = new Date(latestDate)
-    d.setFullYear(d.getFullYear() + 1)
-    return d.toISOString().slice(0, 10)
+    return addMonthsSafe(latestDate, 12)
   }
   // 未評価: 入社日の次の記念日を表示（アラートは出さない）
   if (!hireDate) return '--'
-  const hire = new Date(hireDate)
   const currentYears = yearsFromDate(hireDate)
   const nextY = Math.max(1, currentYears + 1)
-  const d = new Date(hire)
-  d.setFullYear(d.getFullYear() + nextY)
-  return d.toISOString().slice(0, 10)
+  return addMonthsSafe(hireDate, 12 * nextY)
 }
 
 /** システムで評価済みかどうか */

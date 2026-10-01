@@ -1,4 +1,5 @@
 import { CalendarDay, DayType } from '@/types'
+import { todayJstDate } from '@/lib/date-utils'
 
 // 日本の祝日マスタ（2026〜2029年分。次は cabinet office の発表に合わせて拡張）
 // データソース: https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html
@@ -162,7 +163,7 @@ export function buildCalendarDays(year: number, month: number, days: Record<stri
 }
 
 export function getNextMonth(): { year: number; month: number; ym: string } {
-  const now = new Date()
+  const now = todayJstDate()
   let year = now.getFullYear()
   let month = now.getMonth() + 2
   if (month > 12) {

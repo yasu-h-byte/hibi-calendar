@@ -4,6 +4,7 @@ import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { generateLeaveLedger, workbookToBuffer, LeaveLedgerWorker, LeaveLedgerRecord } from '@/lib/export'
 import { AttendanceEntry } from '@/types'
+import { currentYearJst, todayJstIso } from '@/lib/date-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,8 +16,7 @@ export async function GET(request: NextRequest) {
     const main = await getMainData()
 
     // 全期間の出面データ (過去3年+当年)
-    const now = new Date()
-    const currentYear = now.getFullYear()
+    const currentYear = currentYearJst()
     const allAtt: Record<string, AttendanceEntry> = {}
     for (let y = currentYear - 3; y <= currentYear; y++) {
       for (let m = 1; m <= 12; m++) {
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     const wb = generateLeaveLedger({ workers, plData, allAtt, org })
     const buffer = workbookToBuffer(wb)
 
-    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+    const dateStr = todayJstIso().replace(/-/g, '')
     const orgLabel = org === 'hibi' ? '_日比建設' : org === 'hfu' ? '_HFU' : ''
     const filename = `有給管理簿${orgLabel}_${dateStr}.xlsx`
 

@@ -17,6 +17,7 @@ import RaiseHistoryTab from './RaiseHistoryTab'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
+import { todayJstIso } from '@/lib/date-utils'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
 const VISA_LABELS: Record<string, string> = {
@@ -641,7 +642,7 @@ export default function WorkersPage() {
                     {w.visaType && isGaikoku(w.visaType) ? (
                       w.hourlyRate ? (
                         <div>
-                          {w.hourlyRateFrom && w.prevHourlyRate != null && w.hourlyRateFrom > new Date().toISOString().slice(0, 10) ? (
+                          {w.hourlyRateFrom && w.prevHourlyRate != null && w.hourlyRateFrom > todayJstIso() ? (
                             <>
                               <div className="font-medium">{fmtYen(w.prevHourlyRate)}<span className="text-[10px] text-gray-400 font-normal">/h</span></div>
                               <div className="text-[10px] text-amber-600">{w.hourlyRateFrom.slice(5).replace('-', '/')}〜 {fmtYen(w.hourlyRate)}/h</div>
@@ -657,7 +658,7 @@ export default function WorkersPage() {
                     ) : (
                       w.rate ? (
                         <div>
-                          {w.rateFrom && w.prevRate != null && w.rateFrom > new Date().toISOString().slice(0, 10) ? (
+                          {w.rateFrom && w.prevRate != null && w.rateFrom > todayJstIso() ? (
                             /* 年次改定を確定済みだが適用開始日前: 現在の日額を主に、新額を予告として出す */
                             <div className="font-medium">
                               {fmtYen(w.prevRate)}<span className="text-[10px] text-gray-400 font-normal">/日</span>

@@ -6,6 +6,7 @@ import { getAttendanceDoc, ymKey } from '@/lib/attendance'
 import { ensureDocExists } from '@/lib/firestore-safe'
 import { checkMonthLocked } from '@/lib/locks'
 import type { AttendanceEntry } from '@/types'
+import { currentYmJst } from '@/lib/date-utils'
 
 /**
  * 出面の帰国フラグ(hk) と帰国申請(homeLongLeave) の突合・掃除（2026-08-03 追加）
@@ -172,11 +173,10 @@ async function detectRangeConflicts(): Promise<RangeConflict[]> {
 
 function resolveWindow(request: NextRequest): { fromYm: string; toYm: string } {
   const sp = request.nextUrl.searchParams
-  const now = new Date()
   const fromYm = sp.get('from') && /^\d{6}$/.test(sp.get('from')!) ? sp.get('from')! : '202512'
   const toYm = sp.get('to') && /^\d{6}$/.test(sp.get('to')!)
     ? sp.get('to')!
-    : addMonths(ymKey(now.getFullYear(), now.getMonth() + 1), 12)
+    : addMonths(currentYmJst(), 12)
   return { fromYm, toYm }
 }
 
