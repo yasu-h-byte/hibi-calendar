@@ -81,6 +81,9 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
     if (!t) return { authorized: false }
     const stored = (await getUserPasswords())[String(t.workerId)]
     if (!stored || passwordFingerprint(stored) !== t.fingerprint) return { authorized: false }
+    // 日比靖仁さん（代表・開発者）は個人パスワードでも代表（全権限）。2026-10-01 代表指示。
+    //   旧: 職種が役員なので「役員（見るだけ）」になり、電話URLの発行状況などが見えなかった
+    if (t.workerId === OWNER_WORKER_ID) return { authorized: true, actor: 'super-admin' }
     return { authorized: true, actor: t.workerId }
   }
 
@@ -88,6 +91,8 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
 }
 
 const APPROVER_ID = 1 // 日比政仁
+/** 日比靖仁（代表・開発者）。どのパスワードで入っても代表（全権限）として扱う（2026-10-01） */
+export const OWNER_WORKER_ID = 0
 
 /** 当月の YYYYMM を返す（JST 基準） */
 function currentYm(): string {
@@ -191,6 +196,17 @@ export function buildAuthUser(
   mforeman: Record<string, { foreman?: number; wid?: number }> = {},
 ): AuthUser {
   const ym = currentYm()
+  // 日比靖仁さん（代表・開発者）は代表（全権限）。代表パスワードでのログインと同じ役割（2026-10-01）
+  if (worker.id === OWNER_WORKER_ID) {
+    return {
+      workerId: worker.id,
+      name: worker.name,
+      role: 'admin',
+      foremanSites: computeForemanSites(worker.id, sites, mforeman, ym),
+      token: worker.token || undefined,
+    }
+  }
+
   // 事務ロールはjobTypeで直接判定
   if (worker.jobType === 'jimu') {
     return {
