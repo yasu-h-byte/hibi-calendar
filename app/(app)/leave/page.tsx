@@ -9,7 +9,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { permRoleOf, roleCan } from '@/lib/permissions'
 import MaintenanceButton from '@/components/leave/MaintenanceButton'
 import { PLWorker, OrgFilter, LeaveTab, HomeLeave, PendingGrant, PendingGrantForm, LeaveRequest, SiteOption, MforemanMap } from './types'
-import AlertBanners from './components/AlertBanners'
+import { Icon } from '@/components/ui/Icon'
 import ListTab from './components/ListTab'
 import GrantDatesTab from './components/GrantDatesTab'
 import RequestsTab, { RequestsUiState, initialRequestsUi } from './components/RequestsTab'
@@ -21,6 +21,8 @@ import EditModal from './components/EditModal'
 import BuyoutModal from './components/BuyoutModal'
 import DesignateModal from './components/DesignateModal'
 import PendingGrantsModal from './components/PendingGrantsModal'
+import DetailPanel from './components/DetailPanel'
+import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { todayJstIso } from '@/lib/date-utils'
 
 export default function LeavePage() {
@@ -52,6 +54,9 @@ export default function LeavePage() {
   const [buyoutWorker, setBuyoutWorker] = useState<PLWorker | null>(null)
   const [designate, setDesignate] = useState<{ worker: PLWorker; kind: 'designation' | 'manual-entry' } | null>(null)
   const [pendingModal, setPendingModal] = useState(false)
+  // 一人の詳細（一覧の行を押すと右から開く・2026-10-01）。再取得後も最新の値を出すため id で持つ
+  const [detailId, setDetailId] = useState<number | null>(null)
+  const { photos } = useWorkerPhotos()
 
   // タブ内UI状態（データ再取得で消えないよう親で保持）
   const [requestsUi, setRequestsUi] = useState<RequestsUiState>(initialRequestsUi)
@@ -148,13 +153,15 @@ export default function LeavePage() {
   if (error) return <div className="max-w-5xl mx-auto py-10"><div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center text-red-700">{error}</div></div>
 
   const pendingCount = leaveRequests.filter(r => r.status === 'pending').length
+  // 承認待ち＝職長承認待ち＋最終承認待ち（「今やること」のカード用）
+  const awaitingCount = leaveRequests.filter(r => r.status === 'pending' || r.status === 'foreman_approved').length
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">🌴 休暇管理</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">有給休暇の付与・消化状況</p>
+          <div className="text-[13px] text-hibi-sub dark:text-gray-400">出面・勤怠</div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">休暇管理</h1>
         </div>
         <div className="flex items-center gap-2">
           {/* 2026-06-XX 改善: 「+ 有給付与」緑ボタンを🔧メニュー内へ移動
@@ -179,43 +186,42 @@ export default function LeavePage() {
             a.click()
             URL.revokeObjectURL(url)
           }}
-            className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition disabled:opacity-50"
             title="労基法施行規則24条の7準拠の有給管理簿をExcelで出力">
-            📊 管理簿出力
+            <Icon name="download" size={15} />管理簿（Excel）
           </button>
         </div>
       </div>
 
-      <AlertBanners
-        workers={workers}
-        pendingGrants={pendingGrants}
-        onOpenPendingModal={() => setPendingModal(true)}
-      />
-
       {/* Main tabs */}
-      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
+      {/* タブ（2026-10-01: 下線タブに。絵文字はやめる） */}
+      <nav className="flex gap-1 border-b border-hibi-line dark:border-gray-700 overflow-x-auto" aria-label="休暇管理のタブ">
         {([
-          { key: 'list' as const, label: '一覧' },
-          { key: 'grantdates' as const, label: '📅 基準日' },
+          { key: 'list' as const, label: '有給' },
           { key: 'requests' as const, label: '申請', badge: pendingCount },
-          { key: 'monthly' as const, label: '月別' },
           { key: 'calendar' as const, label: 'カレンダー' },
-          { key: 'homeleave' as const, label: '✈️ 帰国情報' },
+          { key: 'monthly' as const, label: '月別' },
+          { key: 'grantdates' as const, label: '付与日' },
+          { key: 'homeleave' as const, label: '帰国' },
         ]).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-1 ${
-              activeTab === tab.key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            aria-current={activeTab === tab.key ? 'page' : undefined}
+            className={`px-4 py-2.5 text-[15px] whitespace-nowrap flex items-center gap-1.5 border-b-[3px] -mb-px transition ${
+              activeTab === tab.key
+                ? 'border-hibi-navy text-hibi-navy font-bold dark:border-blue-400 dark:text-white'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
             }`}>
             {tab.label}
-            {tab.badge ? <span className="bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5">{tab.badge}</span> : null}
+            {tab.badge ? <span className="bg-red-600 text-white text-[11px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{tab.badge}</span> : null}
           </button>
         ))}
-      </div>
+      </nav>
 
       {/* Org filter (一覧・基準日タブ) + 残数の基準日（一覧タブのみ） */}
       {(activeTab === 'list' || activeTab === 'grantdates') && (
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
+          {/* 有給タブは中で「日本人／外国人・日比／HFU」に分けるので、所属の切り替えは付与日タブだけ */}
+          {activeTab === 'grantdates' && <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 w-fit">
             {([['all', '全員'], ['hibi', '日比建設'], ['hfu', 'HFU']] as [OrgFilter, string][]).map(([key, label]) => (
               <button key={key} onClick={() => setOrgFilter(key)}
                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
@@ -224,7 +230,7 @@ export default function LeavePage() {
                 {label}
               </button>
             ))}
-          </div>
+          </div>}
           {activeTab === 'list' && (
             <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-lg px-3 py-1.5">
               <span className="text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">残数の基準日</span>
@@ -264,10 +270,14 @@ export default function LeavePage() {
       />
       <ListTab
         visible={activeTab === 'list'}
-        filteredWorkers={filteredWorkers}
+        workers={workers}
         loading={loading}
-        onEdit={w => setEditWorker(w)}
+        onEdit={w => setDetailId(w.id)}
         asOfDate={asOfDate}
+        pendingGrants={pendingGrants}
+        pendingRequestCount={awaitingCount}
+        onOpenPendingGrants={() => setPendingModal(true)}
+        onOpenRequests={() => setActiveTab('requests')}
       />
       <GrantDatesTab
         visible={activeTab === 'grantdates'}
@@ -293,6 +303,23 @@ export default function LeavePage() {
         onRefresh={fetchData}
         canDelete={roleCan(permRoleOf({ role: userRole }), 'homeLeave.delete')}
       />
+
+      {/* 一人の詳細（見るだけ。直す・時季指定・買取は既存のモーダルを開く） */}
+      {(() => {
+        // 直す・時季指定・買取のモーダルを開いている間は隠す（閉じると最新の値で戻ってくる）
+        const modalOpen = !!editWorker || !!buyoutWorker || !!designate
+        const dw = detailId !== null && !modalOpen ? workers.find(w => w.id === detailId) : undefined
+        return dw ? (
+          <DetailPanel
+            worker={dw}
+            photo={photos[String(dw.id)]}
+            onClose={() => setDetailId(null)}
+            onEdit={w => setEditWorker(w)}
+            onDesignate={w => setDesignate({ worker: w, kind: 'designation' })}
+            onBuyout={w => setBuyoutWorker(w)}
+          />
+        ) : null
+      })()}
 
       {/* モーダル */}
       <GrantModal
