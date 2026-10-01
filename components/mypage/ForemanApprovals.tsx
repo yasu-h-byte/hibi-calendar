@@ -96,7 +96,12 @@ export default function ForemanApprovals({ token, canApprove }: {
             // 最終承認（職長がいない現場は代行して最終承認まで）
             : { action: 'approve', requestId: id, token }),
       })
-      if (!res.ok) { alert((await res.json().catch(() => null))?.error || 'できませんでした'); return }
+      if (!res.ok) {
+        // 理由の文（message）を優先して出す（帰国申請の期間内に出勤がある 409 は error がコード名だけ・2026-10-01）
+        const j = await res.json().catch(() => null)
+        alert(j?.message ?? j?.error ?? 'できませんでした')
+        return
+      }
       flash(!approve ? '却下しました。' : stage === 'foreman' ? '承認しました。政仁さんの最終承認を待ちます。' : '承認しました。')
       load()
     } catch { alert('通信エラーが発生しました') } finally { setBusy('') }

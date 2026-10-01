@@ -6,7 +6,6 @@ import {
   getApprovalForDay,
   setApprovalForDay,
   getForemanSite,
-  getForeignWorkersForSite,
   getEntryStatus,
   ymKey,
   formatDateKanji,
@@ -14,8 +13,9 @@ import {
 } from '@/lib/attendance'
 import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
-import { staffEntryTarget, workTypeFamilyIds, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
-import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays } from '@/lib/foreman-todo'
+import { staffEntryTarget, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
+import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays, siteRosterFromMain, loadSiteRoster } from '@/lib/foreman-todo'
+import { getMainData } from '@/lib/compute'
 import { todayJstDate } from '@/lib/date-utils'
 
 // 工種（親＋工種サイト）の範囲・まとめ承認の判定はマイページと共通（lib/foreman-todo.ts・2026-10-01）
@@ -62,9 +62,6 @@ export async function GET(request: NextRequest) {
     const d = viewDate.getDate()
     const ym = ymKey(y, m)
 
-    // Get foreign workers for this site
-    const foreignWorkers = await getForeignWorkersForSite(site.id)
-
     // Get attendance data
     const attData = await getAttendanceDoc(ym)
 
@@ -74,22 +71,16 @@ export async function GET(request: NextRequest) {
     // attData の key 形式: "{siteId}_{workerId}_{ym}_{day}"
     // 当該 ym と day で他の siteId 配下のエントリを抽出
     const dayStr = String(d)
+    // main は最新を1回だけ読む（名簿・工種の範囲・現場名・勤務時間をここから作る）
+    const main = await getMainData({ fresh: true })
     const siteNameMap: Record<string, string> = {}
-    // 同じ現場（親＋工種サイト）。工種の無い現場は [site.id] だけ
-    let family: string[] = [site.id]
+    for (const s of main.sites) siteNameMap[s.id] = s.name
     // 代理入力の初期値用（2026-08-28 追加: 時刻つき代理入力）
-    let siteSchedule: import('@/types').SiteWorkSchedule | undefined
-    {
-      const { db } = await import('@/lib/firebase')
-      const { doc, getDoc } = await import('@/lib/fsdb')
-      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-      if (mainSnap.exists()) {
-        const sites = (mainSnap.data().sites || []) as { id: string; name: string; workSchedule?: import('@/types').SiteWorkSchedule }[]
-        for (const s of sites) siteNameMap[s.id] = s.name
-        siteSchedule = sites.find(x => x.id === site.id)?.workSchedule
-        family = workTypeFamilyIds(sites as unknown as HierarchySite[], site.id)
-      }
-    }
+    const siteSchedule = main.sites.find(x => x.id === site.id)?.workSchedule as import('@/types').SiteWorkSchedule | undefined
+    // 表示している日の月の名簿（2026-10-01: 旧は常に今月の配置で、前月を開くと俯瞰とまとめ承認で名簿が食い違った）。
+    //   名簿の決まりはマイページ・まとめ承認と共通（lib/foreman-todo.ts siteRosterFromMain）。
+    //   同じ現場（親＋工種サイト）。工種の無い現場は [site.id] だけ
+    const { workers: foreignWorkers, family } = siteRosterFromMain(main, site.id, ym)
 
     // workerId → { siteId, name, entry } のマップを構築
     const crossSiteEntries: Record<number, { siteId: string; siteName: string; entry: AttendanceEntry }[]> = {}
@@ -220,8 +211,8 @@ export async function POST(request: NextRequest) {
       //   「9月から入力できない」状態を作ってしまう。全員未入力の日は拒否する。
       {
         const attD = await getAttendanceDoc(ym)
-        const ws = await getForeignWorkersForSite(site.id)
-        const { family } = await loadSiteFamily(site.id)
+        // 名簿はその日の月の配置（一覧・まとめ承認と同じ決まり・2026-10-01）
+        const { workers: ws, family } = await loadSiteRoster(site.id, ym)
         const enteredCount = ws.filter(w =>
           getEntryStatus(familyEntry(attD, family, w.id, ym, day)) !== 'none').length
         if (ws.length > 0 && enteredCount === 0) {

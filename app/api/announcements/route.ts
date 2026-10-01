@@ -8,17 +8,21 @@ import { mergeAnnouncements, type Announcement } from '@/lib/release-notes'
 import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { permRoleOf } from '@/lib/permissions'
 import { currentYmJst } from '@/lib/date-utils'
+import { getMainData } from '@/lib/compute'
 
 export async function GET(request: NextRequest) {
   if (!await checkApiAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    const snap = await getDoc(doc(db, 'demmen', 'main'))
-    const data = snap.exists() ? snap.data() : {}
+    // 2026-10-01: demmen/main は getMainData（30秒キャッシュ・main への書き込みで即無効化）経由で読む。
+    //   旧: ダッシュボードを開くたびに main（大きい1件）をキャッシュなしで読んでいた。
+    //   管理者設定の一覧（scope=posted・投稿の編集・削除）だけは投稿直後の状態を見せるため最新を読む
+    const posted = request.nextUrl.searchParams.get('scope') === 'posted'
+    const data = await getMainData(posted ? { fresh: true } : undefined)
     const announcements = (data.announcements || []) as Announcement[]
     // 管理者設定の一覧（投稿の編集・削除）は投稿したものだけ
-    if (request.nextUrl.searchParams.get('scope') === 'posted') {
+    if (posted) {
       return NextResponse.json({ announcements: [...announcements].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) })
     }
     // 投稿したお知らせ ＋ リリースノート（lib/release-notes.ts）を、その人の役割に合わせて新しい順に（2026-09-26）

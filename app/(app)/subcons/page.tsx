@@ -230,6 +230,12 @@ export default function SubconsPage() {
     return groups
   })()
   const multiBizCount = companyGroups.filter(g => g.members.length >= 2).length
+  // 会社ごと表示でも、役割の絞り込み（roleFilter）と検索・絞り込み（pass）を会社ひとつずつに効かせる
+  //   （グループの誰か1社が当てはまったら全員出す、にしない）
+  const filteredIds = new Set(filtered.map(sc => sc.id))
+  const shownGroups = companyGroups
+    .map(g => ({ ...g, members: g.members.filter(m => filteredIds.has(m.id) && pass(m)) }))
+    .filter(g => g.members.length > 0)
 
   const groupHead = (label: string) => (
     <div className="px-5 py-2 text-xs font-bold text-hibi-sub dark:text-gray-400 bg-gray-50 dark:bg-gray-700/40 border-t border-hibi-line dark:border-gray-700">{label}</div>
@@ -305,7 +311,10 @@ export default function SubconsPage() {
         ) : (
           /* 会社グループ表示モード（兼業業者を1グループに集約） */
           <>
-            {companyGroups.filter(g => g.members.some(pass)).map(g => {
+            {shownGroups.length === 0 && (
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub">当てはまる会社はありません</div>
+            )}
+            {shownGroups.map(g => {
               if (g.members.length === 1) return renderSubconRow(g.members[0])
               const expanded = expandedGroups[g.key] !== false  // デフォルト展開
               return (

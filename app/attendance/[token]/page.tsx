@@ -1466,7 +1466,7 @@ export default function StaffAttendancePage() {
                     disabled={saving}
                     className="w-full bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 font-bold active:bg-gray-100 active:scale-95 disabled:opacity-50"
                   >
-                    休み / Nghi
+                    休み / Nghỉ
                   </button>
                 </div>
               ) : (

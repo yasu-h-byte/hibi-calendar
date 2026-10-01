@@ -18,6 +18,7 @@ import WorkerAvatar from '@/components/WorkerAvatar'
 import { PageHeader, ToolButton, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
+import { can } from '@/lib/permissions'
 // ⚠️ 評価ロジック（重み・テーブル・計算関数）は lib/evaluation-config.ts に集約。
 //   フロント・バックエンドで重複して定義すると過去のような不整合が再発する。
 //   修正時は必ず lib/evaluation-config.ts だけを編集すること。
@@ -1355,6 +1356,8 @@ export default function EvaluationPage() {
   ]
 
   const visibleTabs = tabs.filter(t => !t.adminOnly || isAdmin)
+  // ?tab=approve などで見られないタブが選ばれたら一覧に戻す（何も出ない画面にしない）
+  const effectiveTab: TabId = visibleTabs.some(t => t.id === activeTab) ? activeTab : 'list'
 
   if (loading) {
     return (
@@ -1388,13 +1391,15 @@ export default function EvaluationPage() {
   const collecting = evalRows.filter(r => r.state === 'collecting')
   const myPending = collecting.filter(r => r.youAreEvaluator && !r.youSubmitted)
   const reviewing = evalRows.filter(r => r.state === 'reviewing')
-  const soonRows = evalRows.filter(r => r.soon || r.isOverdue)
+  // 評価を始めている人（評価中・承認待ち）は「もうすぐ評価日」に数えない（評価日を過ぎていても）
+  const isSoonRow = (r: EvRow) => !r.active && (r.soon || r.isOverdue)
+  const soonRows = evalRows.filter(isSoonRow)
   const missingNames = (s: Evaluation) => {
     const done = new Set(s.reviews.map(r => r.evaluatorId))
     return s.evaluatorIds.filter(id => !done.has(id)).map(id => evaluatorNameLookup(id, apiEvaluators, workers))
   }
   const shownRows = evalRows
-    .filter(r => evFilter === 'all' || (evFilter === 'soon' ? (r.soon || r.isOverdue) : evFilter === 'mine' ? (r.youAreEvaluator && !r.youSubmitted && r.state === 'collecting') : r.state === evFilter))
+    .filter(r => evFilter === 'all' || (evFilter === 'soon' ? isSoonRow(r) : evFilter === 'mine' ? (r.youAreEvaluator && !r.youSubmitted && r.state === 'collecting') : r.state === evFilter))
     .filter(r => !evQuery.trim() || r.w.name.replace(/[\s　]/g, '').toLowerCase().includes(evQuery.replace(/[\s　]/g, '').toLowerCase()))
   const openRow = evalRows.find(r => r.w.id === evOpenId) || null
   const STATE_CHIP: Record<EvState, { label: string; tone: ChipTone }> = {
@@ -1403,7 +1408,16 @@ export default function EvaluationPage() {
     approved: { label: '承認済み', tone: 'green' },
     none: { label: 'まだ評価していない', tone: 'gray' },
   }
+  // wage.view のない人（職長など）には、API が自分のレビューしか返さない（route.ts の shape-by-role）。
+  //   ほかの評価者の入力状況は分からないので、件数・点・「まだ」を出さず、自分の状況だけ出す
+  const seesAllReviews = can(authUser, 'wage.view')
   const progressDots = (s: Evaluation) => {
+    if (!seesAllReviews) {
+      const mine = !!authUser && s.evaluatorIds.includes(authUser.workerId)
+      if (!mine) return null
+      const done = s.reviews.some(r => r.evaluatorId === authUser!.workerId)
+      return <span className="text-xs text-hibi-sub dark:text-gray-400">あなた: {done ? '入力済み' : 'まだ'}</span>
+    }
     const done = new Set(s.reviews.map(r => r.evaluatorId))
     const n = s.evaluatorIds.filter(id => done.has(id)).length
     return (
@@ -1447,7 +1461,7 @@ export default function EvaluationPage() {
         group="賃金・評価"
         title="評価管理"
         sub="ベトナム人スタッフの年次評価。入社記念日ごとに評価して、時給を改定します"
-        actions={isAdmin && activeTab === 'list' ? <>
+        actions={isAdmin && effectiveTab === 'list' ? <>
           <ToolButton icon="chart" onClick={handleRecalculateAllMetrics} disabled={recalculatingWeights} title="進行中の評価の出勤率・残業平均・ボーナスを計算し直します">
             {recalculatingWeights ? '計算中...' : '出勤の指標を計算し直す'}
           </ToolButton>
@@ -1487,13 +1501,13 @@ export default function EvaluationPage() {
         </div>
       )}
 
-      <UnderlineTabs label="評価管理のタブ" active={activeTab} onChange={setActiveTab}
+      <UnderlineTabs label="評価管理のタブ" active={effectiveTab} onChange={setActiveTab}
         tabs={visibleTabs.map(t => ({ key: t.id, label: t.label }))} />
 
       {/* ═══════════════════════════════════════ */}
       {/* Tab 1: 一覧 (List)                      */}
       {/* ═══════════════════════════════════════ */}
-      {activeTab === 'list' && (
+      {effectiveTab === 'list' && (
         <div className="space-y-5">
           {/* ① 今やること */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1610,7 +1624,7 @@ export default function EvaluationPage() {
                     <>
                       <div className="flex flex-wrap items-center gap-2">
                         <Chip tone={STATE_CHIP[r.state].tone}>{STATE_CHIP[r.state].label}</Chip>
-                        {r.state === 'collecting' && (
+                        {r.state === 'collecting' && seesAllReviews && (
                           <span className="text-[13px] text-hibi-sub dark:text-gray-400">
                             {s.evaluatorIds.length}人中{s.reviews.filter(rv => s.evaluatorIds.includes(rv.evaluatorId)).length}人が入力済み（始めてから{daysSince(s.createdAt)}日）
                           </span>
@@ -1629,6 +1643,7 @@ export default function EvaluationPage() {
                             <div key={id} className="flex items-center gap-2 py-2 border-t border-hibi-line dark:border-gray-700 text-sm">
                               <span className="flex-1 font-bold">{evaluatorNameLookup(id, apiEvaluators, workers)}{authUser?.workerId === id && <span className="ml-1.5 text-xs font-normal text-hibi-sub">（あなた）</span>}</span>
                               {rv ? <Chip tone="green">入力済み {fmtDateShort(rv.submittedAt)}</Chip>
+                                : !seesAllReviews && authUser?.workerId !== id ? <span className="text-xs text-hibi-sub dark:text-gray-400">—</span>
                                 : s.status === 'collecting' ? <Chip tone={days >= 7 ? 'red' : 'amber'}>まだ（{days}日）</Chip>
                                 : <Chip tone="gray">入力なし</Chip>}
                             </div>
@@ -1762,7 +1777,7 @@ export default function EvaluationPage() {
       {/* ═══════════════════════════════════════ */}
       {/* Tab 2: 評価入力 (My Review)              */}
       {/* ═══════════════════════════════════════ */}
-      {activeTab === 'review' && (
+      {effectiveTab === 'review' && (
         <div className="space-y-6">
           {/* Worker selector */}
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
@@ -2113,7 +2128,7 @@ export default function EvaluationPage() {
       {/* ═══════════════════════════════════════ */}
       {/* Tab 3: 承認 (Approval) - admin only      */}
       {/* ═══════════════════════════════════════ */}
-      {activeTab === 'approve' && isAdmin && (
+      {effectiveTab === 'approve' && isAdmin && (
         <div className="space-y-6">
           {/* Sessions in reviewing status */}
           {!approveSessionId && (
@@ -2428,7 +2443,7 @@ export default function EvaluationPage() {
       {/* ═══════════════════════════════════════ */}
       {/* Tab 4: 進捗監視 (Monitor) — admin only   */}
       {/* ═══════════════════════════════════════ */}
-      {activeTab === 'monitor' && isAdmin && (
+      {effectiveTab === 'monitor' && isAdmin && (
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">進行中の評価セッション</h2>
@@ -2532,7 +2547,7 @@ export default function EvaluationPage() {
       {/* ═══════════════════════════════════════ */}
       {/* Tab 5: 履歴 (History) — admin only       */}
       {/* ═══════════════════════════════════════ */}
-      {activeTab === 'history' && isAdmin && (
+      {effectiveTab === 'history' && isAdmin && (
         <div className="space-y-4">
           {(() => {
             const approved = evaluations.filter(e => e.status === 'approved')

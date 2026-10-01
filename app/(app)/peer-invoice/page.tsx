@@ -25,6 +25,7 @@ import { useSearchParams } from 'next/navigation'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
+import { latestPeerInvoiceRecord } from '@/lib/peer-invoice-latest'
 
 // ── API レスポンスと同じ形の型（lib/peer-invoice.ts・lib/peer-invoice-store.ts 参照） ──
 interface PeerInvoiceLine { siteId: string; siteName: string; role: '鳶' | '土工'; days: number; rate: number; amount: number; unit?: 'h' }
@@ -193,7 +194,9 @@ function PeerInvoicePageInner() {
   const approval = data && 'approval' in data ? data.approval : undefined
   const approvalBlocked = !!approval?.required && (approval.foremanMissing > 0 || approval.finalMissing > 0)
   // 直近の差し戻し（その後に申請・発行していなければ、下書きの上に理由を出す）
-  const lastRejected = isFreshDraft ? [...history].reverse().find(h => h.status === 'rejected') : undefined
+  //   「最後に動いた記録」が差し戻しのときだけ（差し戻し → 再申請 → 発行 → 取り消し なら出さない）
+  const latestRecord = latestPeerInvoiceRecord(history)
+  const lastRejected = isFreshDraft && latestRecord?.status === 'rejected' ? latestRecord : undefined
 
   return (
     <div className="max-w-4xl mx-auto">

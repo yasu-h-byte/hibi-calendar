@@ -69,7 +69,9 @@ function StaffDocsInner() {
   const canDelete = can(user, 'staffDocs.delete')
   const today = todayJstIso()
   const search = useSearchParams()
-  const focusWorker = Number(search.get('worker') || 0) || null
+  // ?worker=0（代表）も有効な id。「0 は無し」と扱わないよう、パラメータの有無で判定する
+  const workerParam = search.get('worker')
+  const focusWorker = workerParam !== null && workerParam !== '' && Number.isFinite(Number(workerParam)) ? Number(workerParam) : null
 
   const [workers, setWorkers] = useState<W[]>([])
   const [docs, setDocs] = useState<StaffDoc[]>([])

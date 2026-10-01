@@ -281,6 +281,10 @@ export default function CostPage() {
   //   billing だけ見ると入力済みに見えるので、入力した額（billingRaw）で判定する
   const noBilling = (s: SiteProfit) => (s.billingRaw ?? 0) === 0 && (s.totalCost > 0 || s.billing > 0)
   const isEstimate = (s: SiteProfit) => noBilling(s) && s.billing > 0
+  //   複数月の期間で「入れた月」と「まだの月」が混ざる現場は、billing = 入力額 ＋ まだの月の見込み額。
+  //   入力済みの確定額に見えないよう「見込み込み」と表示する（判定・計算は変えない）
+  const estPart = (s: SiteProfit) => noBilling(s) ? 0 : Math.max(0, s.billing - (s.billingRaw ?? 0))
+  const hasEstPart = (s: SiteProfit) => estPart(s) >= 1
   const lowProfit = (s: SiteProfit) => !noBilling(s) && s.billing > 0 && s.profitRate < LOW_RATE
   const sites = data?.sites || []
   const noBillingSites = sites.filter(noBilling)
@@ -452,7 +456,11 @@ export default function CostPage() {
                   <span className="col-span-2 lg:col-span-1 text-[15px] font-bold text-gray-900 dark:text-gray-100">{s.name}</span>
                   <span className="lg:text-right text-base font-bold">{isEstimate(s)
                     ? <span className="text-gray-400 dark:text-gray-500" title="請求額が入るまでは、人工 × 過去の平均単価の見込み額です"><span className="text-[11px] font-normal mr-1">見込み</span>{fmtYen(s.billing)}</span>
-                    : s.billing > 0 ? fmtYen(s.billing) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                    : s.billing > 0
+                      ? (hasEstPart(s)
+                        ? <span title={`入力した請求額 ${fmtYen(s.billingRaw ?? 0)} ＋ 請求額まだの月の見込み ${fmtYen(estPart(s))}`}><span className="text-[11px] font-normal text-gray-400 dark:text-gray-500 mr-1">見込み込み</span>{fmtYen(s.billing)}</span>
+                        : fmtYen(s.billing))
+                      : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
                   <span className="lg:text-right text-[15px]">{fmtYen(s.totalCost)}</span>
                   <span className="lg:text-right text-base font-bold">{nb
                     ? (isEstimate(s) ? <span className="text-gray-400 dark:text-gray-500">{fmtYen(s.profit)}</span> : <span className="text-gray-300 dark:text-gray-600">—</span>)
@@ -596,8 +604,13 @@ export default function CostPage() {
                     )
                   })}
                   <div className="flex justify-between px-3 py-2.5 border-t-2 border-gray-300 dark:border-gray-600">
-                    <span className="font-bold">合計</span><span className="text-lg font-bold tabular-nums">{fmtYen(openSite.billing)}</span>
+                    <span className="font-bold">合計{(isEstimate(openSite) || hasEstPart(openSite)) ? '（見込み込み）' : ''}</span><span className="text-lg font-bold tabular-nums">{fmtYen(openSite.billing)}</span>
                   </div>
+                  {(isEstimate(openSite) || hasEstPart(openSite)) && (
+                    <div className="px-3 py-2 text-xs text-hibi-sub dark:text-gray-400 border-t border-hibi-line dark:border-gray-700 tabular-nums">
+                      入れた請求額 {fmtYen(openSite.billingRaw ?? 0)} ＋ 「まだ」の月の見込み {fmtYen(isEstimate(openSite) ? openSite.billing : estPart(openSite))}（人工 × 過去の平均単価）
+                    </div>
+                  )}
                   <div className="px-3 py-2 text-xs text-hibi-sub dark:text-gray-400 border-t border-hibi-line dark:border-gray-700">請求額を入れるときは、上の期間を「1か月」にして、その月を開いてください</div>
                 </div>
               ) : (
@@ -629,7 +642,7 @@ export default function CostPage() {
             {openSite.billing > 0 && (
               <section className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-3">
-                  <div className="text-xs text-hibi-sub dark:text-gray-400">粗利{isEstimate(openSite) ? '（見込み）' : ''}</div>
+                  <div className="text-xs text-hibi-sub dark:text-gray-400">粗利{isEstimate(openSite) ? '（見込み）' : hasEstPart(openSite) ? '（見込み込み）' : ''}</div>
                   <div className={`text-xl font-bold tabular-nums ${openSite.profit < 0 ? 'text-red-700 dark:text-red-400' : ''}`}>{fmtYen(openSite.profit)}</div>
                   <div className="mt-1"><Chip tone={rateTone(openSite)}>粗利率 {fmtPct(openSite.profitRate)}</Chip></div>
                 </div>

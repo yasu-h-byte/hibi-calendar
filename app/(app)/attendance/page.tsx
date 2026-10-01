@@ -1286,8 +1286,12 @@ export default function AttendanceGridPage() {
   const todayIsoA = todayJstIso()
   const dayIsoOf = (d: number) => data ? `${data.year}-${String(data.month).padStart(2, '0')}-${String(d).padStart(2, '0')}` : ''
   const daysWithInput = new Set<number>()
-  for (const ent of Object.values(data?.workerEntries || {})) {
+  // 入力に合わせて変わる state から数える（data.workerEntries は読み込み時点のまま）。外注の人工だけの日も含める
+  for (const ent of Object.values(workerEntries)) {
     for (const [d, e] of Object.entries(ent || {})) if (e) daysWithInput.add(Number(d))
+  }
+  for (const ent of Object.values(subconEntries)) {
+    for (const [d, e] of Object.entries(ent || {})) if (e && ((e.n || 0) > 0 || (e.on || 0) > 0)) daysWithInput.add(Number(d))
   }
   // 職長承認がまだ = 今日までで、誰かの入力があって、職長承認が付いていない日
   const foremanWaitDays = days.filter(d => daysWithInput.has(d.day) && dayIsoOf(d.day) <= todayIsoA && !localApprovals[d.day]).map(d => d.day)

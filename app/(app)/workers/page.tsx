@@ -506,12 +506,27 @@ export default function WorkersPage() {
                     <Chip tone={w.company === 'HFU' ? 'cyan' : 'blue'}>{w.company === 'HFU' ? 'HFU' : '日比建設'}</Chip>
                     <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${jb.cls}`}>{jb.label}</span>
                     {gaikoku && <Chip tone="gray">{VISA_LABELS[w.visaType || ''] || w.visaType}</Chip>}
+                    {/* 日付指定の在留資格の切り替え予定（2026-09-14 scheduledChanges） */}
+                    {(w.scheduledChanges || []).filter(c => c.field === 'visa').map(c => (
+                      <span key={c.from} className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                        {c.from.slice(5).replace('-', '/')}〜 {VISA_LABELS[String(c.value)] || String(c.value)}
+                      </span>
+                    ))}
                   </span>
                   <span className="text-sm">
-                    {vs ? <Chip tone={vs.priority <= 1 ? 'red' : vs.priority === 2 ? 'amber' : 'gray'}>{vs.priority === 0 ? '在留期限切れ' : `在留 ${vs.label}`}</Chip>
-                      : gaikoku && w.visaExpiry ? <span className="text-hibi-sub dark:text-gray-400">在留 {w.visaExpiry}</span>
-                      : w.birthDate ? <span>{ageOn(w.birthDate, gaikoku ? currentDateDash() : revisionBaseDate())}歳</span>
-                      : needsBirthDate(w) || (gaikoku && !w.retired) ? <Chip tone="amber">生年月日まだ</Chip>
+                    {gaikoku ? (
+                      // 外国人は在留期限と生年月日（年齢）を2行で並べる（どちらか一方だけにしない）
+                      <span className="flex flex-col items-start gap-0.5">
+                        {vs ? <Chip tone={vs.priority <= 1 ? 'red' : vs.priority === 2 ? 'amber' : 'gray'}>{vs.priority === 0 ? '在留期限切れ' : `在留 ${vs.label}`}</Chip>
+                          : w.visaExpiry ? <span className="text-hibi-sub dark:text-gray-400">在留 {w.visaExpiry}</span>
+                          : null}
+                        {w.birthDate ? <span>{ageOn(w.birthDate, currentDateDash())}歳</span>
+                          : !w.retired ? <Chip tone="amber">生年月日まだ</Chip>
+                          : !vs && !w.visaExpiry ? <span className="text-gray-300 dark:text-gray-600">—</span>
+                          : null}
+                      </span>
+                    ) : w.birthDate ? <span>{ageOn(w.birthDate, revisionBaseDate())}歳</span>
+                      : needsBirthDate(w) ? <Chip tone="amber">生年月日まだ</Chip>
                       : <span className="text-gray-300 dark:text-gray-600">—</span>}
                   </span>
                   <span className="lg:text-right text-sm">
@@ -581,7 +596,7 @@ export default function WorkersPage() {
                     転籍（{editWorker.company === 'HFU' ? '日比建設' : 'HFU'}へ）
                   </button>
                 )}
-                {can(authUser, 'staffDocs.view') && (
+                {can(authUser, 'staffDocs.view') && isGaikoku(editWorker.visaType || '') && (
                   <a href={`/staff-docs?worker=${editWorker.id}`} className={`${PANEL_BTN} inline-flex items-center`}>書類庫で見る</a>
                 )}
                 {isAdminOrApprover && isGaikoku(editWorker.visaType || '') && (

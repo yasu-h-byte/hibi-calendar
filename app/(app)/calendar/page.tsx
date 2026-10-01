@@ -486,7 +486,7 @@ export default function CalendarManagePage() {
             title="未作成・差し戻し"
             big={notReadySites.length > 0 ? `${notReadySites.length}現場` : 'ありません'}
             sub={notReadySites.length > 0
-              ? `${notReadySites.map(s => `${s.siteName}（${s.status === 'rejected' ? '差し戻し' : '未作成'}）`).join('・')}${deadlineNote}`
+              ? `${notReadySites.map(s => `${s.siteName}（${s.status === 'rejected' ? '差し戻し' : s.status === 'draft' ? '作成中' : '未作成'}）`).join('・')}${deadlineNote}`
               : `${m}月分はすべて提出・承認済みです`}
             action={notReadySites.length > 0 ? '開く' : undefined}
             onClick={notReadySites.length > 0 ? () => setSelectedSiteId(notReadySites[0].siteId) : undefined}
