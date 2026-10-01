@@ -324,21 +324,21 @@ export default function AttendanceGrid({
             <tr ref={foremanRowRef} className="bg-white dark:bg-gray-800 sticky z-[25]" style={{ top: approvalTops[0] }}>
               {/* 2026-10-01: 誰が押す行かを2行で・ボタンを大きく（旧: 9px の「一括承認」） */}
               <td
-                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 whitespace-nowrap shadow-[inset_0_-1px_0_#E3E7EE]"
+                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 shadow-[inset_0_-1px_0_#E3E7EE]"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <div className="min-w-0 whitespace-nowrap">
                     <div className="text-[13px] font-bold text-gray-900 dark:text-white">{siteLeaderLabel(data.isSupportSite)}承認</div>
                     <div className="text-[11px] text-hibi-sub dark:text-gray-400 truncate">{data.site.foremanName || '—'}{data.site.foremanNote ? `（${data.site.foremanNote}）` : ''}</div>
                   </div>
                   {canForemanApprove && (unapprovedDays.length > 0 ? (
                     <button onClick={onForemanApproveAll}
-                      className="ml-auto shrink-0 h-7 px-2.5 rounded-md bg-hibi-navy text-white text-xs font-bold hover:bg-hibi-light transition">
+                      className="shrink-0 h-7 px-2.5 rounded-md bg-hibi-navy text-white text-xs font-bold whitespace-nowrap hover:bg-hibi-light transition">
                       まとめて承認
                     </button>
                   ) : (
-                    <span className="ml-auto shrink-0 text-xs font-bold text-green-700 dark:text-green-400">全日承認済み</span>
+                    <span className="shrink-0 text-xs font-bold text-green-700 dark:text-green-400 whitespace-nowrap">全日承認済み</span>
                   ))}
                 </div>
               </td>
@@ -375,17 +375,17 @@ export default function AttendanceGrid({
             {/* ── 最終承認 row（事業責任者・管理者: 職長承認後のみ操作可） ── */}
             <tr className="bg-white dark:bg-gray-800 sticky z-[25]" style={{ top: approvalTops[1] }}>
               <td
-                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 whitespace-nowrap shadow-[inset_0_-2px_0_#D1D5DB]"
+                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 shadow-[inset_0_-2px_0_#D1D5DB]"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <div className="min-w-0 whitespace-nowrap">
                     <div className="text-[13px] font-bold text-gray-900 dark:text-white">最終承認</div>
                     <div className="text-[11px] text-hibi-sub dark:text-gray-400">事業責任者</div>
                   </div>
                   {canFinalize && finalizableDays.length > 0 && (
                     <button onClick={onFinalApproveAll}
-                      className="ml-auto shrink-0 h-7 px-2.5 rounded-md bg-green-700 text-white text-xs font-bold hover:bg-green-800 transition">
+                      className="shrink-0 h-7 px-2.5 rounded-md bg-green-700 text-white text-xs font-bold whitespace-nowrap hover:bg-green-800 transition">
                       まとめて最終承認
                     </button>
                   )}
