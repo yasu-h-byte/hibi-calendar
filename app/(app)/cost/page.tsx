@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
 import { visaLabel } from '@/lib/labels'
 import { isTobiGroup, jobLabel as jobLabelLib } from '@/lib/jobs'
+import { currentYmJst, todayJstDate } from '@/lib/date-utils'
+import { Icon } from '@/components/ui/Icon'
+import { PageHeader, TodoCard, Segment, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
 
 // ─── Types ───
 
@@ -149,10 +152,16 @@ export default function CostPage() {
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<PeriodType>('monthly')
   const [siteFilter, setSiteFilter] = useState('all')
+  // 最初に開く月: 毎月10日までは前の月（月初は今月の数字がほとんどなく、大きな赤字に見えるため・2026-10-01 代表）
   const [ym, setYm] = useState(() => {
-    const now = new Date()
-    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+    const today = todayJstDate()
+    if (today.getDate() > 10) return currentYmJst()
+    const d = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+    return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`
   })
+  const [listFilter, setListFilter] = useState<'all' | 'nobill' | 'low'>('all')
+  const [openSiteId, setOpenSiteId] = useState<string | null>(null)
+  const [showIdleSubcons, setShowIdleSubcons] = useState(false)
   // Local billing edits: siteId_ym -> number[]
   const [billingEdits, setBillingEdits] = useState<Record<string, number[]>>({})
   // 行を削除したときに入力群を作り直すための世代番号。
@@ -160,7 +169,6 @@ export default function CostPage() {
   // 上の行に残ってしまう。削除時だけ世代を上げて丸ごと再マウントする
   // （追加は末尾に足すだけで既存 index が動かないため、上げない＝フォーカスを守る）。
   const [billingRowsVersion, setBillingRowsVersion] = useState<Record<string, number>>({})
-  const [expandedBilling, setExpandedBilling] = useState<string | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('hibi_auth')
@@ -207,16 +215,6 @@ export default function CostPage() {
   }, [password, ym, period, siteFilter])
 
   useEffect(() => { fetchData() }, [fetchData])
-
-  const profitColor = (r: number) => r > 15 ? 'text-green-600' : r > 0 ? 'text-yellow-600' : 'text-red-600'
-
-  const ymOptions: { value: string; label: string }[] = []
-  const now = new Date()
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const y = d.getFullYear(); const m = d.getMonth() + 1
-    ymOptions.push({ value: `${y}${String(m).padStart(2, '0')}`, label: `${y}年${m}月` })
-  }
 
   const ymLabel = (m: string) => `${parseInt(m.slice(4))}月`
 
@@ -276,176 +274,396 @@ export default function CostPage() {
 
   const t = data?.totals
   const kpi = data?.kpiExtended
-  // Max total cost for bar chart scaling
-  const maxCost = data ? Math.max(...data.sites.map(s => s.cost + s.subCost), 1) : 1
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-4 flex-wrap">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">原価・収益</h1>
-          {/* Site filter */}
-          {data && data.siteList && data.siteList.length > 0 && (
-            <div className="flex items-center gap-1">
-              <button onClick={() => setSiteFilter('all')}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
-                  siteFilter === 'all' ? 'bg-hibi-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
-                }`}>全現場</button>
-              {data.siteList.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => setSiteFilter(s.id)}
-                  title={s.name}  // 2026-06-XX 修正 (U9): 省略表示の元名をtooltipで確認可能に
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition ${
-                    siteFilter === s.id ? 'bg-hibi-navy text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {s.name.substring(0, 10) + (s.name.length > 10 ? '...' : '')}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-            {([['monthly', '月次'], ['3months', '3ヶ月'], ['6months', '6ヶ月'], ['fiscal', '決算期'], ['yearly', '年間']] as [PeriodType, string][]).map(([key, label]) => (
-              <button key={key} onClick={() => setPeriod(key)}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition ${
-                  period === key ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
-                }`}>
-                {label}
-              </button>
-            ))}
+  // 現場ごとの状態（2026-10-01 改修）: 請求額まだ（原価だけある）／粗利が薄い（15%未満）
+  const LOW_RATE = 15
+  const noBilling = (s: SiteProfit) => s.billing === 0 && s.totalCost > 0
+  const lowProfit = (s: SiteProfit) => s.billing > 0 && s.profitRate < LOW_RATE
+  const sites = data?.sites || []
+  const noBillingSites = sites.filter(noBilling)
+  const lowSites = sites.filter(lowProfit)
+  const shownSites = sites.filter(s => listFilter === 'all' || (listFilter === 'nobill' ? noBilling(s) : lowProfit(s)))
+  const openSite = sites.find(s => s.id === openSiteId) || null
+  const siteNames = (arr: SiteProfit[]) => arr.slice(0, 3).map(s => s.name.length > 12 ? s.name.slice(0, 12) + '…' : s.name).join('・') + (arr.length > 3 ? ` ほか${arr.length - 3}` : '')
+  const rateTone = (s: SiteProfit): ChipTone => s.profitRate >= LOW_RATE ? 'green' : s.profitRate >= 0 ? 'amber' : 'red'
+  const perManDay = (s: SiteProfit) => s.tobiEquiv > 0 && s.billing > 0 ? Math.round(s.billing / s.tobiEquiv) : 0
+  const activeSubcons = (data?.subconDetails || []).filter(sc => sc.workDays > 0 || sc.cost > 0)
+  const idleSubcons = (data?.subconDetails || []).length - activeSubcons.length
+  const periodLabel = isMultiMonth ? `${ymRange.length}か月` : ymLabel(ym)
+  const SITE_COLS = 'lg:grid-cols-[minmax(0,1fr)_130px_130px_130px_84px_70px_130px_130px]'
+
+  const monthStepper = (
+    <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+      <button type="button" aria-label="前の月" onClick={() => navigateMonth(-1)}
+        className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
+        <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
+      </button>
+      <span className="px-1.5 text-[15px] font-bold tabular-nums whitespace-nowrap">{ymDisplayLabel}</span>
+      <button type="button" aria-label="次の月" onClick={() => navigateMonth(1)}
+        className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
+        <Icon name="chevronRight" size={18} strokeWidth={2.2} />
+      </button>
+    </div>
+  )
+
+  // 請求額の入力欄（1か月のとき。右のパネルの中で使う）
+  const billingInputs = (s: SiteProfit) => {
+    const key = `${s.id}_${ym}`
+    const rows = billingEdits[key] || [0]
+    const ver = billingRowsVersion[key] || 0
+    return (
+      <div className="space-y-2">
+        {rows.map((val, ri) => (
+          <div key={`${ver}:${ri}`} className="flex items-center gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              aria-label={`請求額 ${ri + 1}行目`}
+              defaultValue={val ? val.toLocaleString() : ''}
+              placeholder="金額を入れる"
+              onFocus={(e) => { e.target.value = String(Number(e.target.value.replace(/,/g, '')) || '') }}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+              onBlur={(e) => {
+                const v = Number(e.target.value.replace(/,/g, '')) || 0
+                e.target.value = v ? v.toLocaleString() : ''
+                updateBillingRow(s.id, ym, ri, v)
+                const updated = [...rows]
+                updated[ri] = v
+                saveBilling(s.id, ym, updated)
+              }}
+              className="flex-1 h-11 text-right border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-[10px] px-3 text-base font-bold tabular-nums focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+            />
+            {rows.length > 1 && (
+              <button onClick={() => { removeBillingRow(s.id, ym, ri); const updated = [...rows]; updated.splice(ri, 1); saveBilling(s.id, ym, updated.length > 0 ? updated : [0]) }}
+                aria-label="この行を消す"
+                className="w-9 h-9 rounded-lg border border-hibi-line dark:border-gray-600 text-gray-400 hover:text-red-600 hover:border-red-300">×</button>
+            )}
           </div>
-          <button onClick={() => navigateMonth(-1)} className="px-2 py-1 text-sm text-gray-500 hover:text-hibi-navy dark:text-gray-400">◀前</button>
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300 min-w-[80px] text-center">{ymDisplayLabel}</span>
-          <button onClick={() => navigateMonth(1)} className="px-2 py-1 text-sm text-gray-500 hover:text-hibi-navy dark:text-gray-400">次▶</button>
-          <select value={ym} onChange={e => setYm(e.target.value)} className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
-            {ymOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+        ))}
+        <div className="flex items-center justify-between">
+          <button onClick={() => addBillingRow(s.id, ym)} className="text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline">＋ 請求書が複数あるときは行を足す</button>
+          {rows.length > 1 && <span className="text-sm font-bold tabular-nums">計 {fmtYen(rows.reduce((a, b) => a + b, 0))}</span>}
         </div>
       </div>
+    )
+  }
 
-      {/* 出向控除バナー */}
-      {/* ⚠️ `t.dispatchDeduction &&` の形は、値が 0 のとき数値の 0 がそのまま描画される
-          （タイトル下に謎の「0」が出た原因）。数値は必ず比較式にしてから && に使う */}
-      {t && (t.dispatchDeduction ?? 0) > 0 && (
-        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl px-4 py-3 text-xs text-purple-700 dark:text-purple-300">
-          出向中スタッフの人件費 <span className="font-bold">{fmtYen(t.dispatchDeduction ?? 0)}</span> を人件費から差し引いています（売上は既に控除済みの値が入力されています）。
-          {(t.billingRaw ?? 0) > 0 && <span className="ml-2 text-gray-500">（控除前: 売上 {fmtYen(t.billingRaw ?? 0)} / 人件費 {fmtYen(t.costRaw || 0)}）</span>}
+  return (
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="請求・原価"
+        title="原価・収益"
+        sub="現場ごとの売上（請求額）と原価（人件費・外注費）から、儲けを見ます。金額は税抜"
+        actions={<>
+          <Segment value={period} onChange={setPeriod} items={[
+            ['monthly', '1か月'], ['3months', '3か月'], ['6months', '6か月'], ['fiscal', '決算期'], ['yearly', '1年'],
+          ]} />
+          {monthStepper}
+        </>}
+      />
+
+      {/* 現場の絞り込み（全現場／1現場。1現場のときはメンバー・職種・推移のグラフが出る） */}
+      {data && data.siteList && data.siteList.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={siteFilter} onChange={e => { setSiteFilter(e.target.value); setListFilter('all') }} aria-label="現場"
+            className="h-[42px] border border-gray-300 dark:border-gray-600 rounded-[10px] px-3 text-[15px] font-bold bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none min-w-[260px]">
+            <option value="all">全現場</option>
+            {data.siteList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          {siteFilter !== 'all' && (
+            <button onClick={() => setSiteFilter('all')} className="text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline">全現場にもどす</button>
+          )}
+          {!isMultiMonth && ym === currentYmJst() && (
+            <Chip tone="amber">今月は途中までの数字です</Chip>
+          )}
         </div>
       )}
 
-      {/* ═══ KPI Cards (expanded) ═══ */}
-      {kpi && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 hover:shadow-md transition-shadow p-4 text-center">
-            <div className="text-2xl font-bold text-hibi-navy tabular-nums">{fmtYenMan(kpi.billing)}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              {kpi.estMonths > 0 ? '概算売上' : '確定売上'}
-              {kpi.estMonths > 0 && <span className="text-orange-500 ml-1">(概算{kpi.estMonths}ヶ月含)</span>}
+      {loading && !data && <div className="text-center py-12 text-gray-400">集計中...</div>}
+
+      {data && t && kpi && (
+        <>
+          {/* ① 今やること */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <TodoCard icon="pen" tone={noBillingSites.length > 0 ? 'urgent' : 'ok'} title="請求額が入っていない"
+              big={noBillingSites.length > 0 ? `${noBillingSites.length}現場` : 'ありません'}
+              sub={noBillingSites.length > 0 ? `${siteNames(noBillingSites)}。入れるまで粗利が正しく出ません` : 'すべての現場に請求額が入っています'}
+              action={noBillingSites.length > 0 ? '入れる' : undefined}
+              active={listFilter === 'nobill'}
+              onClick={noBillingSites.length > 0 ? () => setListFilter(listFilter === 'nobill' ? 'all' : 'nobill') : undefined} />
+            <TodoCard icon="alert" tone={lowSites.length > 0 ? 'warn' : 'ok'} title="赤字・粗利が薄い"
+              big={lowSites.length > 0 ? `${lowSites.length}現場` : 'ありません'}
+              sub={lowSites.length > 0 ? `${siteNames(lowSites)}。粗利率の目安は${LOW_RATE}%以上` : `請求額が入った現場は、どこも粗利率${LOW_RATE}%以上です`}
+              action={lowSites.length > 0 ? '見る' : undefined}
+              active={listFilter === 'low'}
+              onClick={lowSites.length > 0 ? () => setListFilter(listFilter === 'low' ? 'all' : 'low') : undefined} />
+            {/* ⚠️ `t.dispatchDeduction &&` の形は値が 0 のとき「0」が描画される。必ず比較式にする */}
+            <TodoCard icon="user" tone={(t.dispatchDeduction ?? 0) > 0 ? 'info' : 'ok'} title="出向の差し引き"
+              big={(t.dispatchDeduction ?? 0) > 0 ? fmtYen(t.dispatchDeduction ?? 0) : 'ありません'}
+              sub={(t.dispatchDeduction ?? 0) > 0
+                ? `出向中スタッフの人件費を原価から差し引いています（差し引く前の人件費 ${fmtYen(t.costRaw || 0)}）。売上は差し引き済みの額を入れます`
+                : 'この期間に出向中のスタッフはいません'} />
+          </section>
+
+          {/* ② 合計 */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <Stat label={kpi.estMonths > 0 ? `売上（請求額・見込み${kpi.estMonths}か月を含む）` : '売上（請求額）'} value={fmtYen(kpi.billing)}
+              sub={kpi.prevBilling > 0
+                ? `前月の同じ日まで ${fmtYenMan(kpi.prevBilling)}（${kpi.billing >= kpi.prevBilling ? '+' : ''}${(((kpi.billing - kpi.prevBilling) / kpi.prevBilling) * 100).toFixed(1)}%）`
+                : '請求額の合計'} />
+            <Stat label="原価" value={fmtYen(kpi.cost)}
+              sub={`社員 ${fmtYenMan(t.cost)} ／ 外注 ${fmtYenMan(t.subCost)}（外注率 ${fmtPct(kpi.subconRate)}）`} />
+            <Stat label="粗利" value={fmtYen(kpi.profit)} tone={kpi.profit >= 0 ? 'green' : 'red'}
+              sub={`粗利率 ${fmtPct(kpi.profitRate)}${noBillingSites.length > 0 ? '（請求額まだの現場の原価も含む）' : ''}`} />
+            <Stat label="人工あたり売上" value={(() => { const v = kpi.estMonths > 0 ? kpi.perWEst : kpi.perW; return v > 0 ? fmtYen(v) : '—' })()}
+              sub={`基準 ${fmtYen(kpi.billingPerManDayBaseline)} ／ 1人あたり労務費 ${fmtYen(kpi.laborCostPerPersonAll)}`} />
+          </section>
+
+          {/* ③ 現場ごと */}
+          <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
+              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">現場ごと（{periodLabel}）</h2>
+              <Segment value={listFilter} onChange={setListFilter} items={[
+                ['all', `すべて ${sites.length}`], ['nobill', `請求額まだ ${noBillingSites.length}`], ['low', `粗利が薄い ${lowSites.length}`],
+              ]} />
+              <span className="ml-auto text-xs text-hibi-sub dark:text-gray-400">
+                {isMultiMonth ? '行を押すと、月ごとの請求額と原価の内訳が右に開きます' : '行を押すと、請求額の入力と原価の内訳が右に開きます'}
+              </span>
             </div>
-            {kpi.billing > 0 && (
-              <div className="text-[11px] text-gray-500 mt-1">
-                <span className={kpi.profit >= 0 ? 'text-green-600' : 'text-red-600'}>
-                  粗利{fmtYenMan(kpi.profit)}({fmtPct(kpi.profitRate)})
-                </span>
+            <div className={`hidden lg:grid ${SITE_COLS} gap-3 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300`}>
+              <span>現場</span><span className="text-right">売上</span><span className="text-right">原価</span><span className="text-right">粗利</span>
+              <span className="text-right">粗利率</span><span className="text-right">人工</span><span className="text-right">人工あたり売上</span><span />
+            </div>
+            {sites.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">この期間のデータはありません</div>
+            ) : shownSites.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">この絞り込みに当てはまる現場はありません</div>
+            ) : shownSites.map(s => {
+              const nb = noBilling(s)
+              const pm = perManDay(s)
+              return (
+                <div key={s.id} role="button" tabIndex={0}
+                  onClick={() => setOpenSiteId(s.id)}
+                  onKeyDown={e => { if (e.key === 'Enter') setOpenSiteId(s.id) }}
+                  className={`border-t border-hibi-line dark:border-gray-700 px-5 py-3 grid grid-cols-2 ${SITE_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums`}>
+                  <span className="col-span-2 lg:col-span-1 text-[15px] font-bold text-gray-900 dark:text-gray-100">{s.name}</span>
+                  <span className="lg:text-right text-base font-bold">{s.billing > 0 ? fmtYen(s.billing) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                  <span className="lg:text-right text-[15px]">{fmtYen(s.totalCost)}</span>
+                  <span className="lg:text-right text-base font-bold">{nb ? <span className="text-gray-300 dark:text-gray-600">—</span> : <span className={s.profit < 0 ? 'text-red-700 dark:text-red-400' : ''}>{fmtYen(s.profit)}</span>}</span>
+                  <span className="lg:text-right">{nb ? <span className="text-gray-300 dark:text-gray-600">—</span> : <Chip tone={rateTone(s)}>{fmtPct(s.profitRate)}</Chip>}</span>
+                  <span className="lg:text-right text-sm">{s.tobiEquiv > 0 ? fmtNum(s.tobiEquiv) : '—'}</span>
+                  <span className="lg:text-right text-sm">
+                    {pm > 0 ? <>{fmtYen(pm)}{s.tobiBase > 0 && <span className={`ml-1 text-xs font-bold ${pm >= s.tobiBase ? 'text-blue-700 dark:text-blue-300' : 'text-red-700 dark:text-red-400'}`}>{Math.round(pm / s.tobiBase * 100)}%</span>}</> : '—'}
+                  </span>
+                  <span className="lg:text-right flex lg:justify-end gap-1 flex-wrap">
+                    {nb && <Chip tone="red">請求額まだ</Chip>}
+                    {lowProfit(s) && <Chip tone={s.profitRate < 0 ? 'red' : 'amber'}>{s.profitRate < 0 ? '赤字' : '粗利が薄い'}</Chip>}
+                    {(s.dispatchDeduction ?? 0) > 0 && <Chip tone="gray" title="出向中スタッフの人件費を差し引いています">出向 −{fmtYen(s.dispatchDeduction ?? 0)}</Chip>}
+                  </span>
+                </div>
+              )
+            })}
+            {sites.length > 0 && (
+              <div className={`border-t-2 border-gray-300 dark:border-gray-600 px-5 py-3 grid grid-cols-2 ${SITE_COLS} gap-x-3 gap-y-1 font-bold tabular-nums text-[15px]`}>
+                <span className="col-span-2 lg:col-span-1">合計</span>
+                <span className="lg:text-right">{fmtYen(t.billing)}</span>
+                <span className="lg:text-right">{fmtYen(t.totalCost)}</span>
+                <span className={`lg:text-right ${t.profit < 0 ? 'text-red-700 dark:text-red-400' : ''}`}>{fmtYen(t.profit)}</span>
+                <span className="lg:text-right">{fmtPct(t.profitRate)}</span>
+                <span className="lg:text-right">—</span>
+                <span className="lg:text-right">{(t.workDays + t.subWorkDays) > 0 ? fmtYen(Math.round(t.billing / (t.workDays + t.subWorkDays))) : '—'}</span>
+                <span />
               </div>
             )}
-            {/* 2026-06-XX 追加 (U1): 前月同日比 */}
-            {kpi.prevBilling > 0 && (() => {
-              const diff = kpi.billing - kpi.prevBilling
-              const pct = (diff / kpi.prevBilling) * 100
-              const positive = diff >= 0
-              return (
-                <div className={`text-[10px] mt-1 ${positive ? 'text-green-600' : 'text-red-600'}`}>
-                  前月同日比 {positive ? '↑' : '↓'} {fmtYenMan(Math.abs(diff))} ({positive ? '+' : ''}{pct.toFixed(1)}%)
+          </section>
+
+          {/* 1現場のとき: メンバー・職種構成・推移 */}
+          {siteFilter !== 'all' && data.siteMembers && data.siteMembers.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Section title="メンバー一覧">
+                <SiteMemberList members={data.siteMembers} />
+              </Section>
+              <Section title="職種構成">
+                <DonutChart members={data.siteMembers} />
+              </Section>
+            </div>
+          )}
+          {siteFilter !== 'all' && data.siteTrend && data.siteTrend.length > 1 && (
+            <Section title="月ごとの推移（人数・原価）">
+              <SiteTrendChart data={data.siteTrend} />
+            </Section>
+          )}
+
+          {/* ④ 月ごとの推移 */}
+          {data.monthlyTrend && data.monthlyTrend.length > 1 && (
+            <MonthlyTrendSection trend={data.monthlyTrend} title={`月ごとの推移（売上・原価・粗利）${siteFilter === 'all' ? '（全現場）' : ''}`} />
+          )}
+
+          {/* 人工あたりの推移 */}
+          {data.monthlyTrend && data.monthlyTrend.length > 0 && (
+            <Section title={`人工あたりの推移${siteFilter === 'all' ? '（全現場）' : ''}（${(() => {
+              const firstYm = data.monthlyTrend[0].ym
+              const m = parseInt(firstYm.slice(4, 6))
+              const y = parseInt(firstYm.slice(0, 4))
+              return `${m >= 10 ? y : y - 1}年度`
+            })()}）`}>
+              <KPILineChart data={data.monthlyTrend} baseline={kpi.billingPerManDayBaseline} />
+            </Section>
+          )}
+
+          {/* 累積（決算期） */}
+          {data.cumulativeData && data.cumulativeData.length > 0 && (
+            <CumulativeSection data={data.cumulativeData} />
+          )}
+
+          {/* ⑤ 外注先（来てもらった会社だけ。来ていない会社は隠す） */}
+          {data.subconDetails && data.subconDetails.length > 0 && (
+            <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700">
+                <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">外注先（{periodLabel}に来てもらった会社）</h2>
+              </div>
+              <div className="hidden md:grid grid-cols-[minmax(0,1fr)_80px_100px_100px_70px_70px_120px] gap-3 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
+                <span>会社</span><span>職種</span><span className="text-right">人工単価</span><span className="text-right">残業単価</span><span className="text-right">人工</span><span className="text-right">残業</span><span className="text-right">金額</span>
+              </div>
+              {(showIdleSubcons ? data.subconDetails : activeSubcons).map(sc => {
+                const idle = !(sc.workDays > 0 || sc.cost > 0)
+                return (
+                  <div key={sc.id} className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_80px_100px_100px_70px_70px_120px] gap-x-3 gap-y-1 items-center text-sm tabular-nums ${idle ? 'text-gray-400' : ''}`}>
+                    <span className="col-span-2 md:col-span-1 font-bold">{sc.name}</span>
+                    <span><Chip tone="gray">{sc.type.replace('業者', '')}</Chip></span>
+                    <span className="md:text-right text-hibi-sub dark:text-gray-400">{fmtYen(sc.rate)}</span>
+                    <span className="md:text-right text-hibi-sub dark:text-gray-400">{sc.otRate ? fmtYen(sc.otRate) : '—'}</span>
+                    <span className="md:text-right">{fmtNum(sc.workDays)}</span>
+                    <span className="md:text-right">{fmtNum(sc.otCount)}</span>
+                    <span className="md:text-right font-bold">{fmtYen(sc.cost)}</span>
+                  </div>
+                )
+              })}
+              <div className="border-t-2 border-gray-300 dark:border-gray-600 px-5 py-2.5 flex items-center gap-3 text-sm">
+                <span className="font-bold">合計 {fmtNum(activeSubcons.reduce((a, sc) => a + sc.workDays, 0))}人工</span>
+                <span className="ml-auto text-base font-bold tabular-nums">{fmtYen(activeSubcons.reduce((a, sc) => a + sc.cost, 0))}</span>
+              </div>
+              {idleSubcons > 0 && (
+                <div className="border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 text-xs text-hibi-sub dark:text-gray-400">
+                  {showIdleSubcons ? '来ていない会社も出しています' : `来ていない${idleSubcons}社は隠しています`}
+                  <button onClick={() => setShowIdleSubcons(v => !v)} className="ml-2 font-bold text-hibi-navy dark:text-blue-300 hover:underline">
+                    {showIdleSubcons ? '隠す' : 'すべて出す'}
+                  </button>
                 </div>
-              )
-            })()}
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 hover:shadow-md transition-shadow p-4 text-center">
-            <div className={`text-2xl font-bold tabular-nums ${profitColor(kpi.profitRate)}`}>{fmtYenMan(kpi.profit)}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              粗利（{fmtPct(kpi.profitRate)}）
-            </div>
-            <div className="text-[11px] text-gray-500 mt-1">
-              原価{fmtYenMan(kpi.cost)}
-            </div>
-            {/* 2026-06-XX 追加 (U1): 前月同日比 粗利率 */}
-            {kpi.prevBilling > 0 && kpi.prevProfitRate !== undefined && (() => {
-              const diff = kpi.profitRate - kpi.prevProfitRate
-              const positive = diff >= 0
-              return (
-                <div className={`text-[10px] mt-1 ${positive ? 'text-green-600' : 'text-red-600'}`}>
-                  前月同日比 {positive ? '↑' : '↓'} {Math.abs(diff).toFixed(1)}pt
+              )}
+            </section>
+          )}
+        </>
+      )}
+
+      {/* 現場の内訳（右から開く） */}
+      {openSite && (
+        <SidePanel label={`${openSite.name} の原価・収益`} onClose={() => setOpenSiteId(null)}>
+          <div className="p-6 space-y-6">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{openSite.name}</h2>
+                <div className="text-[13px] text-hibi-sub dark:text-gray-400 tabular-nums">
+                  {isMultiMonth ? `${ymLabel(ymRange[0])}〜${ymLabel(ymRange[ymRange.length - 1])}` : ymDisplayLabel} ／ 人工 {fmtNum(openSite.tobiEquiv)} ／ 原価 {fmtYen(openSite.totalCost)}
                 </div>
-              )
-            })()}
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 hover:shadow-md transition-shadow p-4 text-center">
-            <div className="text-2xl font-bold text-hibi-navy tabular-nums">
-              {(() => {
-                const displayValue = kpi.estMonths > 0 ? kpi.perWEst : kpi.perW
-                return displayValue > 0 ? fmtYen(displayValue) : '-'
-              })()}
+              </div>
+              <CloseButton onClick={() => setOpenSiteId(null)} />
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">人工あたり売上</div>
-            <div className="text-[11px] text-gray-500 mt-1">
-              基準{fmtYen(kpi.billingPerManDayBaseline)}
-            </div>
+
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">{isMultiMonth ? '請求額（月ごと）' : `請求額（${ymLabel(ym)}分）`}</h3>
+                {noBilling(openSite) && <Chip tone="red">まだ入っていない</Chip>}
+              </div>
+              {isMultiMonth ? (
+                <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-sm">
+                  {ymRange.map(m => {
+                    const rows = billingEdits[`${openSite.id}_${m}`] || [0]
+                    const sum = rows.reduce((a: number, b: number) => a + b, 0)
+                    return (
+                      <div key={m} className="flex justify-between px-3 py-2 border-t first:border-t-0 border-hibi-line dark:border-gray-700 tabular-nums">
+                        <span>{ymLabel(m)}</span><span className={sum > 0 ? 'font-bold' : 'text-gray-400'}>{sum > 0 ? fmtYen(sum) : 'まだ'}</span>
+                      </div>
+                    )
+                  })}
+                  <div className="flex justify-between px-3 py-2.5 border-t-2 border-gray-300 dark:border-gray-600">
+                    <span className="font-bold">合計</span><span className="text-lg font-bold tabular-nums">{fmtYen(openSite.billing)}</span>
+                  </div>
+                  <div className="px-3 py-2 text-xs text-hibi-sub dark:text-gray-400 border-t border-hibi-line dark:border-gray-700">請求額を入れるときは、上の期間を「1か月」にして、その月を開いてください</div>
+                </div>
+              ) : (
+                <>
+                  {billingInputs(openSite)}
+                  <p className="text-xs text-hibi-sub dark:text-gray-400">入れると自動で保存し、粗利を計算し直します。出向中スタッフの分は差し引いた額を入れてください</p>
+                </>
+              )}
+            </section>
+
+            <section className="space-y-1">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">原価の内訳</h3>
+              <div className="flex justify-between py-2 border-t border-hibi-line dark:border-gray-700 text-sm tabular-nums"><span>社員の人件費（{fmtNum(openSite.workDays)}人工）</span><span>{fmtYen(openSite.cost)}</span></div>
+              {(openSite.dispatchDeduction ?? 0) > 0 && (
+                <div className="flex justify-between py-2 border-t border-hibi-line dark:border-gray-700 text-sm tabular-nums text-hibi-sub dark:text-gray-400"><span>（出向の差し引き済み・差し引いた額）</span><span>−{fmtYen(openSite.dispatchDeduction ?? 0)}</span></div>
+              )}
+              {(data?.subconDetails || []).flatMap(sc => sc.siteBreakdown.filter(b => b.siteId === openSite.id && b.cost > 0).map(b => (
+                <div key={sc.id} className="flex justify-between py-2 border-t border-hibi-line dark:border-gray-700 text-sm tabular-nums"><span>外注 {sc.name}（{fmtNum(b.workDays)}人工）</span><span>{fmtYen(b.cost)}</span></div>
+              )))}
+              {openSite.subCost > 0 && !(data?.subconDetails || []).some(sc => sc.siteBreakdown.some(b => b.siteId === openSite.id && b.cost > 0)) && (
+                <div className="flex justify-between py-2 border-t border-hibi-line dark:border-gray-700 text-sm tabular-nums"><span>外注費（{fmtNum(openSite.subWorkDays)}人工）</span><span>{fmtYen(openSite.subCost)}</span></div>
+              )}
+              <div className="flex justify-between py-2.5 border-t-2 border-gray-300 dark:border-gray-600"><span className="font-bold">原価 合計</span><span className="text-lg font-bold tabular-nums">{fmtYen(openSite.totalCost)}</span></div>
+            </section>
+
+            {!noBilling(openSite) && openSite.billing > 0 && (
+              <section className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-3">
+                  <div className="text-xs text-hibi-sub dark:text-gray-400">粗利</div>
+                  <div className={`text-xl font-bold tabular-nums ${openSite.profit < 0 ? 'text-red-700 dark:text-red-400' : ''}`}>{fmtYen(openSite.profit)}</div>
+                  <div className="mt-1"><Chip tone={rateTone(openSite)}>粗利率 {fmtPct(openSite.profitRate)}</Chip></div>
+                </div>
+                <div className="rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-3">
+                  <div className="text-xs text-hibi-sub dark:text-gray-400">人工あたり売上</div>
+                  <div className="text-xl font-bold tabular-nums">{perManDay(openSite) > 0 ? fmtYen(perManDay(openSite)) : '—'}</div>
+                  {openSite.tobiBase > 0 && <div className="text-xs text-hibi-sub dark:text-gray-400 mt-1">基準 {fmtYen(openSite.tobiBase)}</div>}
+                </div>
+              </section>
+            )}
+
+            {siteFilter !== openSite.id && (
+              <button onClick={() => { setSiteFilter(openSite.id); setListFilter('all'); setOpenSiteId(null) }}
+                className="w-full h-11 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+                この現場だけの画面で詳しく見る（メンバー・グラフ）
+              </button>
+            )}
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 hover:shadow-md transition-shadow p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600 tabular-nums">{fmtYen(kpi.laborCostPerPersonAll)}</div>
-            <div className="text-xs text-gray-500 dark:text-gray-400">1人あたり労務費</div>
-            <div className="text-[11px] text-gray-500 mt-1 space-y-0.5">
-              <div>外注率 {fmtPct(kpi.subconRate)}</div>
-            </div>
-          </div>
-        </div>
+        </SidePanel>
       )}
+    </div>
+  )
+}
 
-      {/* ═══ KPI Trend Chart ═══ */}
-      {data && data.monthlyTrend && data.monthlyTrend.length > 0 && kpi && (
-        <Section title={`人工あたり KPI${siteFilter === 'all' ? '（全現場）' : ''}（${(() => {
-          const firstYm = data.monthlyTrend[0].ym
-          const m = parseInt(firstYm.slice(4, 6))
-          const y = parseInt(firstYm.slice(0, 4))
-          const fy = m >= 10 ? y : y - 1
-          return `${fy}年度`
-        })()}）`}>
-          <KPILineChart data={data.monthlyTrend} baseline={kpi.billingPerManDayBaseline} />
-        </Section>
-      )}
+// ─── Sub-components ───
 
-      {/* ═══ Site Members + Donut (when site filter active) ═══ */}
-      {siteFilter !== 'all' && data?.siteMembers && data.siteMembers.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Section title="メンバー一覧">
-            <SiteMemberList members={data.siteMembers} />
-          </Section>
-          <Section title="職種構成">
-            <DonutChart members={data.siteMembers} />
-          </Section>
-        </div>
-      )}
+function Stat({ label, value, sub, tone }: { label: string; value: string; sub: string; tone?: 'green' | 'red' }) {
+  const c = tone === 'green' ? 'text-green-700 dark:text-green-400' : tone === 'red' ? 'text-red-700 dark:text-red-400' : 'text-gray-900 dark:text-white'
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1">
+      <span className="text-[13px] text-hibi-sub dark:text-gray-400">{label}</span>
+      <span className={`text-[26px] font-bold tabular-nums ${c}`}>{value}</span>
+      <span className="text-xs text-hibi-sub dark:text-gray-400">{sub}</span>
+    </div>
+  )
+}
 
-      {/* ═══ Site Trend Chart (when site filter active) ═══ */}
-      {siteFilter !== 'all' && data?.siteTrend && data.siteTrend.length > 1 && (
-        <Section title="月次推移（人数・原価）">
-          <SiteTrendChart data={data.siteTrend} />
-        </Section>
-      )}
-
-      {/* ═══ Monthly Revenue Trend Chart ═══ */}
-      {data && data.monthlyTrend && data.monthlyTrend.length > 1 && (
-        <Section title={`月次推移（売上・原価・粗利）${siteFilter === 'all' ? '（全現場）' : ''}`}>
+function MonthlyTrendSection({ trend, title }: { trend: MonthlyTrend[]; title: string }) {
+  return (
+        <Section title={title}>
           <div className="overflow-x-auto">
             {/* Bar chart */}
-            <div className="flex items-end gap-2" style={{ minWidth: `${data.monthlyTrend.length * 70}px`, height: '260px' }}>
-              {data.monthlyTrend.map((m) => {
+            <div className="flex items-end gap-2" style={{ minWidth: `${trend.length * 70}px`, height: '260px' }}>
+              {trend.map((m) => {
                 const maxVal = Math.max(
-                  ...data.monthlyTrend.map(t => Math.max(t.billing, t.cost, Math.abs(t.profit))),
+                  ...trend.map(t => Math.max(t.billing, t.cost, Math.abs(t.profit))),
                   1
                 )
                 const billingH = (m.billing / maxVal) * 180
@@ -520,7 +738,7 @@ export default function CostPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.monthlyTrend.map(m => {
+                {trend.map(m => {
                   const profitRate = m.billing > 0 ? (m.profit / m.billing) * 100 : 0
                   return (
                     <tr key={m.ym} className="border-t dark:border-gray-700">
@@ -539,7 +757,7 @@ export default function CostPage() {
                 })}
                 {/* 合計行 */}
                 {(() => {
-                  const tot = data.monthlyTrend.reduce((acc, m) => ({
+                  const tot = trend.reduce((acc, m) => ({
                     billing: acc.billing + m.billing,
                     cost: acc.cost + m.cost,
                     profit: acc.profit + m.profit,
@@ -565,16 +783,17 @@ export default function CostPage() {
             </table>
           </div>
         </Section>
-      )}
+  )
+}
 
-      {/* ═══ Cumulative FY Chart ═══ */}
-      {data && data.cumulativeData && data.cumulativeData.length > 0 && (
+function CumulativeSection({ data }: { data: CumulativeData[] }) {
+  return (
         <Section title="累積推移（決算期）">
           <div className="overflow-x-auto">
-            <div className="flex items-end gap-1" style={{ minWidth: `${data.cumulativeData.length * 60}px`, height: '220px' }}>
-              {data.cumulativeData.map((cd) => {
+            <div className="flex items-end gap-1" style={{ minWidth: `${data.length * 60}px`, height: '220px' }}>
+              {data.map((cd) => {
                 const maxCum = Math.max(
-                  ...data.cumulativeData.map(c => Math.max(c.cumBilling, c.cumCost)),
+                  ...data.map(c => Math.max(c.cumBilling, c.cumCost)),
                   1
                 )
                 const billingH = (cd.cumBilling / maxCum) * 180
@@ -615,273 +834,8 @@ export default function CostPage() {
             </div>
           </div>
         </Section>
-      )}
-
-      {/* ═══ Site profit table ═══ */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
-              <th className="px-3 py-3 whitespace-nowrap">現場</th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">
-                請求額
-                {isMultiMonth && <span className="text-xs text-gray-400 ml-1">（合計）</span>}
-              </th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">社員人件費</th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">外注費</th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">原価計</th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">粗利</th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">粗利率</th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">鳶換算人工</th>
-              <th className="px-3 py-3 text-right whitespace-nowrap">人工あたり売上</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
-            ) : !data || data.sites.length === 0 ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
-            ) : (
-              <>
-                {data.sites.map(s => {
-                  return (
-                    <tr key={s.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 align-top">
-                      <td className="px-3 py-2.5 font-medium">
-                        {s.name}
-                        {(s.dispatchDeduction ?? 0) > 0 && (
-                          <span
-                            className="ml-1.5 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold"
-                            title={`出向控除: -${fmtYen(s.dispatchDeduction ?? 0)}（人件費から差引）`}
-                          >
-                            -{fmtYen(s.dispatchDeduction ?? 0)}
-                          </span>
-                        )}
-                      </td>
-                      {/* Billing column with multiple rows */}
-                      <td className="px-3 py-2 text-right">
-                        {isMultiMonth ? (
-                          /* Multi-month: show total, click to expand monthly detail */
-                          <div>
-                            <button
-                              onClick={() => setExpandedBilling(prev => prev === s.id ? null : s.id)}
-                              className="text-right w-full font-bold tabular-nums hover:text-hibi-navy transition"
-                            >
-                              {fmtYen(s.billing)}
-                              <span className="text-[10px] text-gray-400 ml-1">{expandedBilling === s.id ? '▲' : '▼'}</span>
-                            </button>
-                            {expandedBilling === s.id && (
-                              <div className="mt-2 border-t border-gray-100 dark:border-gray-700 pt-2 space-y-1">
-                                {ymRange.map(m => {
-                                  const key = `${s.id}_${m}`
-                                  const rows = billingEdits[key] || [0]
-                                  const monthTotal = rows.reduce((a: number, b: number) => a + b, 0)
-                                  return (
-                                    <div key={m} className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-500 w-8">{ymLabel(m)}</span>
-                                      <span className="tabular-nums">{monthTotal > 0 ? fmtYen(monthTotal) : '—'}</span>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          /* Single month: show billing rows with add/remove */
-                          <div className="space-y-0.5">
-                            {(() => {
-                              const key = `${s.id}_${ym}`
-                              const rows = billingEdits[key] || [0]
-                              const ver = billingRowsVersion[key] || 0
-                              return (
-                                <>
-                                  {rows.map((val, ri) => (
-                                    <div key={`${ver}:${ri}`} className="flex items-center justify-end gap-1">
-                                      <input
-                                        type="text"
-                                        defaultValue={val ? val.toLocaleString() : ''}
-                                        placeholder="0"
-                                        onFocus={(e) => { e.target.value = String(Number(e.target.value.replace(/,/g, '')) || '') }}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                                        onBlur={(e) => {
-                                          const v = Number(e.target.value.replace(/,/g, '')) || 0
-                                          e.target.value = v ? v.toLocaleString() : ''
-                                          updateBillingRow(s.id, ym, ri, v)
-                                          const updated = [...rows]
-                                          updated[ri] = v
-                                          saveBilling(s.id, ym, updated)
-                                        }}
-                                        className="w-28 text-right border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-sm tabular-nums focus:ring-1 focus:ring-hibi-navy focus:outline-none"
-                                      />
-                                      {rows.length > 1 && (
-                                        <button onClick={() => { removeBillingRow(s.id, ym, ri); const updated = [...rows]; updated.splice(ri, 1); saveBilling(s.id, ym, updated.length > 0 ? updated : [0]) }}
-                                          className="text-gray-300 hover:text-red-400 text-sm leading-none w-4">x</button>
-                                      )}
-                                    </div>
-                                  ))}
-                                  <button onClick={() => addBillingRow(s.id, ym)}
-                                    className="text-[11px] text-blue-400 hover:text-blue-600">+ 行追加</button>
-                                  {rows.length > 1 && (
-                                    <div className="text-xs text-gray-500 dark:text-gray-400 tabular-nums border-t border-gray-100 pt-0.5">
-                                      計: {fmtYen(rows.reduce((a, b) => a + b, 0))}
-                                    </div>
-                                  )}
-                                </>
-                              )
-                            })()}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(s.cost)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(s.subCost)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(s.totalCost)}</td>
-                      <td className={`px-3 py-2.5 text-right font-bold tabular-nums ${profitColor(s.profitRate)}`}>{fmtYen(s.profit)}</td>
-                      <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(s.profitRate)}`}>{fmtPct(s.profitRate)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">
-                        {s.tobiEquiv > 0 ? fmtNum(s.tobiEquiv) : '—'}
-                      </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">
-                        {s.tobiEquiv > 0 ? (
-                          <span>
-                            {fmtYen(Math.round(s.billing / s.tobiEquiv))}
-                            {s.tobiBase > 0 && (
-                              <span className={`ml-1 text-xs font-medium ${Math.round(s.billing / s.tobiEquiv) >= s.tobiBase ? 'text-blue-600' : 'text-red-600'}`}>
-                                {Math.round(s.billing / s.tobiEquiv / s.tobiBase * 100)}%
-                              </span>
-                            )}
-                          </span>
-                        ) : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-                {t && (
-                  <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold">
-                    <td className="px-3 py-2.5">合計</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(t.billing)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(t.cost)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(t.subCost)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(t.totalCost)}</td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(t.profitRate)}`}>{fmtYen(t.profit)}</td>
-                    <td className={`px-3 py-2.5 text-right tabular-nums ${profitColor(t.profitRate)}`}>{fmtPct(t.profitRate)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">—</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">
-                      {(t.workDays + t.subWorkDays) > 0
-                        ? fmtYen(Math.round(t.billing / (t.workDays + t.subWorkDays)))
-                        : '—'}
-                    </td>
-                  </tr>
-                )}
-              </>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Cost Bar Chart */}
-      {data && data.sites.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
-          <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-3">現場別原価バーチャート</h2>
-          <div className="space-y-2">
-            {data.sites
-              .filter(s => s.cost > 0 || s.subCost > 0)
-              .sort((a, b) => (b.cost + b.subCost) - (a.cost + a.subCost))
-              .map(s => {
-                const total = s.cost + s.subCost
-                return (
-                  <div key={s.id} className="flex items-center gap-2">
-                    <div className="w-24 text-xs text-gray-700 truncate text-right flex-shrink-0">{s.name}</div>
-                    <div className="flex-1 flex items-center h-6">
-                      <div className="flex h-full rounded-lg overflow-hidden transition-all duration-500 ease-out"
-                        style={{ width: `${Math.max((total / maxCost) * 100, 2)}%` }}>
-                        {s.cost > 0 && (
-                          <div
-                            className="bg-blue-500 h-full transition-all duration-500"
-                            style={{ width: `${total > 0 ? (s.cost / total) * 100 : 0}%` }}
-                            title={`自社: ${fmtYen(s.cost)}`}
-                          />
-                        )}
-                        {s.subCost > 0 && (
-                          <div
-                            className="bg-orange-400 h-full transition-all duration-500"
-                            style={{ width: `${total > 0 ? (s.subCost / total) * 100 : 0}%` }}
-                            title={`外注: ${fmtYen(s.subCost)}`}
-                          />
-                        )}
-                      </div>
-                    </div>
-                    <div className="w-24 text-xs text-gray-600 dark:text-gray-400 tabular-nums text-right flex-shrink-0">{fmtYen(total)}</div>
-                  </div>
-                )
-              })}
-          </div>
-          <div className="flex gap-4 mt-3 pt-2 border-t border-gray-100">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm bg-blue-500" />
-              <span className="text-xs text-gray-600 dark:text-gray-400">自社人件費</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm bg-orange-400" />
-              <span className="text-xs text-gray-600 dark:text-gray-400">外注費</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Subcon cost detail table */}
-      {data && data.subconDetails && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-x-auto">
-          <div className="px-4 py-3 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-700">
-            <h2 className="text-sm font-bold text-hibi-navy dark:text-white">外注先別原価明細</h2>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
-                <th className="px-3 py-3">外注先</th>
-                <th className="px-3 py-3 text-right">人工単価</th>
-                <th className="px-3 py-3 text-right">残業単価</th>
-                <th className="px-3 py-3 text-right">人工数</th>
-                <th className="px-3 py-3 text-right">残業人数</th>
-                <th className="px-3 py-3 text-right">合計金額</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.subconDetails.map(sc => {
-                const hasWork = sc.workDays > 0
-                return (
-                  <tr key={sc.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${!hasWork ? 'opacity-50' : ''}`}>
-                    <td className={`px-3 py-2.5 font-medium ${!hasWork ? 'italic text-gray-400' : ''}`}>
-                      {sc.name}
-                      <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full ${sc.type === '鳶業者' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>{sc.type}</span>
-                      {!hasWork && <span className="ml-2 text-xs text-gray-400">稼働なし</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtYen(sc.rate)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{sc.otRate ? fmtYen(sc.otRate) : '—'}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.workDays)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(sc.otCount)}</td>
-                    <td className="px-3 py-2.5 text-right font-bold tabular-nums">{fmtYen(sc.cost)}</td>
-                  </tr>
-                )
-              })}
-              {/* Grand total footer */}
-              <tr className="border-t-2 border-hibi-navy dark:border-blue-400 bg-gray-50 dark:bg-gray-700 font-bold">
-                <td className="px-3 py-2.5">合計</td>
-                <td className="px-3 py-2.5"></td>
-                <td className="px-3 py-2.5"></td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data.subconDetails.reduce((s, sc) => s + sc.workDays, 0))}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data.subconDetails.reduce((s, sc) => s + sc.otCount, 0))}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">
-                  {fmtYen(data.subconDetails.reduce((s, sc) => s + sc.cost, 0))}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
   )
 }
-
-// ─── Sub-components ───
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
