@@ -5,7 +5,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
 import { ymKey } from '@/lib/attendance'
-import { getForemenOfWorkerSites } from '@/lib/foreman-todo'
+import { getForemenOfWorkerSites, managerByToken } from '@/lib/foreman-todo'
 
 // 申請者の配置現場の職長（月別職長込み）は lib/foreman-todo.ts getForemenOfWorkerSites（マイページの一覧と共通）
 
@@ -186,8 +186,17 @@ export async function POST(request: NextRequest) {
       // 2026-08-27（休暇届総点検）: 最終承認は代表・事業責任者のみ
       //   （旧: 任意の個人パスワードで最終承認できた。有給 approve と同一基準に統一）
       const { requireExecutiveAuth, getApiAuthUser } = await import('@/lib/auth')
-      { const denied = await requireExecutiveAuth(request); if (denied) return denied }
-      const authForApprove = await getApiAuthUser(request)
+      // 2026-10-01: 政仁さん・代表はマイページ（個人URL＝token）からも最終承認できる
+      let authForApprove: Awaited<ReturnType<typeof getApiAuthUser>>
+      if (body.token) {
+        const { managerByToken } = await import('@/lib/foreman-todo')
+        const mgr = await managerByToken(body.token)
+        if (!mgr) return NextResponse.json({ error: '最終承認は代表・事業責任者のみ実行できます' }, { status: 403 })
+        authForApprove = { authorized: true, actor: mgr.id }
+      } else {
+        { const denied = await requireExecutiveAuth(request); if (denied) return denied }
+        authForApprove = await getApiAuthUser(request)
+      }
 
       const { requestId, approvedBy } = body
       if (!requestId) {
@@ -302,7 +311,8 @@ export async function POST(request: NextRequest) {
         const worker = await getWorkerByToken(rejectToken)
         if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
         const allowedForemen = await getForemenOfWorkerSites(data.workerId)
-        if (!allowedForemen.has(worker.id)) {
+        // 政仁さん・代表はマイページから現場を問わず却下できる（2026-10-01）
+        if (!allowedForemen.has(worker.id) && !(await managerByToken(rejectToken))) {
           return NextResponse.json({ error: '申請者の配置現場の職長権限がありません' }, { status: 403 })
         }
         authWorkerId = worker.id

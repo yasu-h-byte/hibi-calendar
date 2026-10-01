@@ -35,7 +35,7 @@ const DOCS: (DocItem & { category: string })[] = [
   // ── お知らせ（計算ルールの変更） ──
 
   // ── 事業責任者（政仁さん） ──
-  { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面の最終承認・有給/帰国申請の承認・就業カレンダー承認（事業責任者の承認業務に特化）', url: '/manual-masahito.html', icon: '📗', updated: '2026-09-28' },
+  { category: 'manual', roles: ['approver'], title: '政仁さん向けマニュアル', desc: '出面の最終承認・有給/帰国申請の承認・就業カレンダー承認（事業責任者の承認業務に特化）。10月改訂で スマホのマイページからの最終承認・代行 を追加', url: '/manual-masahito.html', icon: '📗', updated: '2026-10-01' },
 
   // ── 職長 ──
   { category: 'manual', roles: ['foreman'], title: '職長向けマニュアル', desc: '毎日の出面確認・就業カレンダー・夜勤の入力。10月改訂で マイページからの承認（出面のまとめ承認・有給・帰国申請）を追加', url: '/manual-foreman.html', icon: '📕', badge: '10月改訂', updated: '2026-10-01' },

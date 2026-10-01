@@ -56,12 +56,17 @@ export async function GET(request: NextRequest) {
       fiveDayShortfall = judge.shortfall
     }
 
+    // 「承認すること」を出す人か（職種が職長・政仁さん・代表）。読み込み中の枠を先に出すために使う（2026-10-01）
+    const { managerByToken } = await import('@/lib/foreman-todo')
+    const canApprove = worker.jobType === 'shokucho' || !!(await managerByToken(token))
+
     return NextResponse.json({
       worker: {
         id: worker.id,
         name: worker.name,
         jobType: worker.jobType || '',
       },
+      canApprove,
       today,
       leave: {
         noGrant: balance.noGrant ?? false,

@@ -520,6 +520,32 @@ export async function GET(request: NextRequest) {
       console.error('Visa expiry check error:', e)
     }
 
+    // 7b. 配置の見直し（2026-10-01 代表決定）: 現場を移動したのに前の現場の配置に残っている人。
+    //   政仁さん・事務・代表に知らせる（配置は自動では外さない）。出面は上で読んだもの（前月・今月）を使い、読み取りを増やさない
+    if (role === 'admin' || role === 'approver' || role === 'jimu') {
+      try {
+        const { findStaleAssignments } = await import('@/lib/foreman-todo')
+        const prevYm = addMonthsSafe(nowJstIso.slice(0, 8) + '01', -1).slice(0, 7).replace('-', '')
+        const recent: Record<string, import('@/types').AttendanceEntry> = {}
+        for (const [k, v] of Object.entries(allAttForPL)) {
+          if (k.includes(`_${currentYm}_`) || k.includes(`_${prevYm}_`)) recent[k] = v as unknown as import('@/types').AttendanceEntry
+        }
+        const stale = findStaleAssignments(main, recent, nowJstIso)
+        if (stale.length > 0) {
+          notifications.push({
+            id: 'stale-assignments',
+            icon: '🔀',
+            message: `配置の見直し ${stale.length}件: ${stale.slice(0, 3).map(s => `${s.workerName}（${s.siteName}→${s.workingAt.join('・')}）`).join('、')}${stale.length > 3 ? ' ほか' : ''}。前の現場の配置から外してください（出面入力 → 配置）`,
+            type: 'warning',
+            count: stale.length,
+            href: '/attendance',
+          })
+        }
+      } catch (e) {
+        console.error('Stale assignment check error:', e)
+      }
+    }
+
     // 8. 承認待ち有給申請（職長承認待ち + 最終承認待ち の両方をカウント）
     try {
       const [lrPendingSnaps, lrForemanSnaps] = await Promise.all([

@@ -15,7 +15,7 @@ import {
 import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { staffEntryTarget, workTypeFamilyIds, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
-import { loadSiteFamily, familyEntry, approveDaysForSite } from '@/lib/foreman-todo'
+import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays } from '@/lib/foreman-todo'
 import { todayJstDate } from '@/lib/date-utils'
 
 // 工種（親＋工種サイト）の範囲・まとめ承認の判定はマイページと共通（lib/foreman-todo.ts・2026-10-01）
@@ -139,46 +139,16 @@ export async function GET(request: NextRequest) {
     // ── 月の俯瞰（2026-08-28 追加: 週ビュー・まとめ承認・未入力の見える化）──
     //   その月の稼働日ごとに 承認状態・未入力者 を返す。
     //   旧UIは「今日＋過去2日」しか辿れず、承認をため込むとスマホから消化できなかった。
-    const daysInMonth = new Date(y, m, 0).getDate()
-    const todayJst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-    const todayDayNum = (todayJst.getFullYear() === y && todayJst.getMonth() + 1 === m)
-      ? todayJst.getDate()
-      : (new Date(y, m - 1, 1) < todayJst ? daysInMonth : 0)
-
-    // 現場カレンダー（承認済みのみ）。非稼働日は未入力を数えない
-    let calDays: Record<string, string> | null = null
-    try {
-      const { db } = await import('@/lib/firebase')
-      const { doc, getDoc } = await import('@/lib/fsdb')
-      const calSnap = await getDoc(doc(db, 'siteCalendar', `${site.id}_${y}-${String(m).padStart(2, '0')}`))
-      const cal = calSnap.exists() ? calSnap.data() : null
-      if (cal?.status === 'approved' && cal?.days) calDays = cal.days as Record<string, string>
-    } catch { /* カレンダー未取得でも俯瞰は出す（全日を稼働扱い） */ }
-
-    const dayNums = Array.from({ length: Math.max(0, todayDayNum) }, (_, i) => i + 1)
-    const monthApprovals = await Promise.all(dayNums.map(dd => getApprovalForDay(site.id, ym, dd)))
-    const monthOverview = dayNums.map((dd, i) => {
-      const calDay = calDays?.[String(dd)]
-      const isWorkDay = calDays ? calDay === 'work' : new Date(y, m - 1, dd).getDay() !== 0
-      const missingNames: string[] = []
-      let entered = 0
-      if (isWorkDay) {
-        for (const w of foreignWorkers) {
-          const e = familyEntry(attData, family, w.id, ym, dd)
-          // 判定はリスト表示と同じ getEntryStatus に統一（0.6補償=入力済み、残骸のみ=未入力）
-          if (getEntryStatus(e) !== 'none') entered++
-          else missingNames.push(w.name)
-        }
-      }
-      return {
-        day: dd,
-        dateISO: `${y}-${String(m).padStart(2, '0')}-${String(dd).padStart(2, '0')}`,
-        isWorkDay,
-        approved: !!(monthApprovals[i]?.foreman),
-        entered,
-        missingNames: isWorkDay ? missingNames : [],
-      }
-    })
+    // 日ごとの状態はマイページの「承認すること」と共通（lib/foreman-todo.ts）。
+    //   別の現場で入力している人（移動・掛け持ち）は未入力に数えない（2026-10-01 代表決定）
+    const monthOverview = (await siteMonthDays(site.id, ym, { att: attData, family, workers: foreignWorkers })).map(dd => ({
+      day: dd.day,
+      dateISO: dd.dateISO,
+      isWorkDay: dd.isWorkDay,
+      approved: dd.approved,
+      entered: dd.entered,
+      missingNames: dd.isWorkDay ? dd.missingNames : [],
+    }))
 
     // Past 2 days
     const pastDays = []

@@ -291,15 +291,24 @@ export async function POST(request: NextRequest) {
       //   旧実装は checkApiAuth（誰のパスワードでも可）だったため、職長が個人パスワードで
       //   最終承認を直叩きできた（CLAUDE.md「職長は提出・確認まで」の原則違反）。
       //   revoke と同じ判定に統一する。reviewedBy も body 値でなく認証者から記録する
-      const authForApprove = await getApiAuthUser(request)
-      if (!authForApprove.authorized) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-      // 2026-09-02 修正: 判定を getApiRole/isManagerRole に統一（役員の個人パスワード＝admin ロールも可。
-      //   旧は admin パスワード or actor===1 のみで、役員の個人ログインは UI にボタンが出るのに 403 だった）
-      const apRole = await getApiRole(request)
-      if (!apRole || !isManagerRole(apRole.role)) {
-        return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+      // 2026-10-01: 政仁さん・代表はマイページ（個人URL＝token）からも最終承認できる
+      let authForApprove: Awaited<ReturnType<typeof getApiAuthUser>>
+      if (body.token) {
+        const { managerByToken } = await import('@/lib/foreman-todo')
+        const mgr = await managerByToken(body.token)
+        if (!mgr) return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+        authForApprove = { authorized: true, actor: mgr.id }
+      } else {
+        authForApprove = await getApiAuthUser(request)
+        if (!authForApprove.authorized) {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+        // 2026-09-02 修正: 判定を getApiRole/isManagerRole に統一（役員の個人パスワード＝admin ロールも可。
+        //   旧は admin パスワード or actor===1 のみで、役員の個人ログインは UI にボタンが出るのに 403 だった）
+        const apRole = await getApiRole(request)
+        if (!apRole || !isManagerRole(apRole.role)) {
+          return NextResponse.json({ error: '最終承認は管理者・事業責任者のみ実行できます' }, { status: 403 })
+        }
       }
 
       const { requestId, approvedBy } = body
@@ -430,7 +439,9 @@ export async function POST(request: NextRequest) {
       if (rejectToken) {
         const worker = await getWorkerByToken(rejectToken)
         if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
-        if (!rejForemen.includes(worker.id)) {
+        // 政仁さん・代表はマイページから現場を問わず却下できる（2026-10-01）
+        const { managerByToken } = await import('@/lib/foreman-todo')
+        if (!rejForemen.includes(worker.id) && !(await managerByToken(rejectToken))) {
           return NextResponse.json({ error: `現場「${data.siteId}」の職長権限がありません` }, { status: 403 })
         }
         authWorkerId = worker.id
