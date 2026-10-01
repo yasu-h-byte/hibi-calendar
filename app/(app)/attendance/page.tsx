@@ -1293,8 +1293,9 @@ export default function AttendanceGridPage() {
   for (const ent of Object.values(subconEntries)) {
     for (const [d, e] of Object.entries(ent || {})) if (e && ((e.n || 0) > 0 || (e.on || 0) > 0)) daysWithInput.add(Number(d))
   }
-  // 職長承認がまだ = 今日までで、誰かの入力があって、職長承認が付いていない日
-  const foremanWaitDays = days.filter(d => daysWithInput.has(d.day) && dayIsoOf(d.day) <= todayIsoA && !localApprovals[d.day]).map(d => d.day)
+  // 職長承認がまだ = 昨日までで、誰かの入力があって、職長承認が付いていない日。
+  //   今日の分は出さない（2026-10-02 代表: ベトナム人スタッフは作業後にスマホで打刻するので、承認は翌日でよい）
+  const foremanWaitDays = days.filter(d => daysWithInput.has(d.day) && dayIsoOf(d.day) < todayIsoA && !localApprovals[d.day]).map(d => d.day)
   // 最終承認待ち = 職長承認済みで最終承認がまだの日（表の「まとめて最終承認」と同じ）
   const finalWaitDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day]).map(d => d.day)
   const daysLabel = (ds: number[]) => ds.length <= 3 ? ds.map(d => `${data?.month}/${d}`).join('・') : `${data?.month}/${ds[0]}〜${ds[ds.length - 1]}`
