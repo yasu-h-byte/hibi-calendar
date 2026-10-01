@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from 'react'
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fmtYen, fmtNum, fmtPct } from '@/lib/format'
 import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
@@ -8,6 +8,7 @@ import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
 import { can } from '@/lib/permissions'
 import { Icon } from '@/components/ui/Icon'
+import { CloseCard, OverviewList, needsAttention } from './components/MonthlyOverview'
 
 // ────────────────────────────────────────
 //  Types
@@ -248,6 +249,13 @@ function currentYm(): string {
   return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** 前月（＝ふつう締める月）。開いたときはこの月を出す（2026-10-01: 旧は今月＝途中の月が出ていた） */
+function prevYm(): string {
+  const now = new Date()
+  const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
 // 表示用の「時間外労働(h)」を返す。
 // - 新ルール（変形労働）ベトナム人: 所定外労働時間（=所定を超えた実体の時間。法定内+法定外を含む）
 //   ※ 生の o 欄合計(otHours)は、st/et 入力月では実態とズレるため使わない
@@ -300,7 +308,11 @@ export default function MonthlyPage() {
 
 function MonthlyPageInner() {
   const [password, setPassword] = useState('')
-  const [ym, setYm] = useState(currentYm)
+  const [ym, setYm] = useState(prevYm)
+  // 一覧の見せ方（2026-10-01）: list=見やすい一覧（1人1行・0円でない内訳だけ） / table=全項目の表（Excel と突き合わせる用）
+  const [view, setView] = useState<'list' | 'table'>('list')
+  const [listFilter, setListFilter] = useState<'all' | 'attention' | 'unconfirmed'>('all')
+  const [listQuery, setListQuery] = useState('')
   const [tab, setTab] = useState<TabKey>('all')
   // 2026-06-XX 追加 (UI #3): 自動検算で違反のあったスタッフだけ絞り込むフィルタ
   const [showAnomalyOnly, setShowAnomalyOnly] = useState(false)
@@ -380,6 +392,8 @@ function MonthlyPageInner() {
     }
   }, [])
 
+  const autoMonthDone = useRef(false)
+
   // Fetch data
   const fetchData = useCallback(async () => {
     if (!password || !ym) return
@@ -396,6 +410,14 @@ function MonthlyPageInner() {
         return
       }
       const json: MonthlyData = await res.json()
+      // 前月を開いたが、もう両社とも締め済みなら今月へ（「締める月」を出す・最初の1回だけ）
+      if (!autoMonthDone.current) {
+        autoMonthDone.current = true
+        if (!ymParam && ym === prevYm() && json.lockedHibi && json.lockedHfu) {
+          setYm(currentYm())
+          return
+        }
+      }
       setData(json)
       // 2026-06-XX: 未設定 (0/null) 月は「日曜以外の日数」を自動初期値に
       //   旧ルール継続者の所定日数は通常この値が基準（特別休暇分を手動で減算）
@@ -407,7 +429,7 @@ function MonthlyPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [password, ym, calcDefaultPrescribedDays])
+  }, [password, ym, calcDefaultPrescribedDays, ymParam])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -714,30 +736,20 @@ function MonthlyPageInner() {
   const workerColCount = 8 + (showAbsenceColumns ? 3 : 0) + salaryColCount
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Top-level pill tabs */}
-      <div className="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded-full p-1 w-fit">
-        <button
-          onClick={() => switchTopTab('summary')}
-          className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
-            topTab === 'summary'
-              ? 'bg-white dark:bg-gray-800 text-hibi-navy dark:text-white shadow-sm'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          📋 月次集計
-        </button>
-        <button
-          onClick={() => switchTopTab('export')}
-          className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
-            topTab === 'export'
-              ? 'bg-white dark:bg-gray-800 text-hibi-navy dark:text-white shadow-sm'
-              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          📑 帳票出力
-        </button>
-      </div>
+    <div className="max-w-7xl mx-auto space-y-5">
+      {/* 月次集計 ↔ 帳票出力（2026-10-01: 下線タブに・絵文字をやめる） */}
+      <nav className="flex gap-1 border-b border-hibi-line dark:border-gray-700" aria-label="月次集計のタブ">
+        {([['summary', '月次集計・締め'], ['export', '帳票出力']] as const).map(([k, label]) => (
+          <button key={k} onClick={() => switchTopTab(k)} aria-current={topTab === k ? 'page' : undefined}
+            className={`px-4 py-2.5 text-[15px] whitespace-nowrap border-b-[3px] -mb-px transition ${
+              topTab === k
+                ? 'border-hibi-navy text-hibi-navy font-bold dark:border-blue-400 dark:text-white'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}>
+            {label}
+          </button>
+        ))}
+      </nav>
 
       {/* ═══════════════ 帳票出力 Tab ═══════════════ */}
       {topTab === 'export' && (() => {
@@ -929,18 +941,6 @@ function MonthlyPageInner() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1.5">
-            {data?.lockedHibi && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs font-bold rounded-md">
-                <Icon name="lock" size={13} strokeWidth={2.2} />日比 締め済み
-              </span>
-            )}
-            {data?.lockedHfu && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-xs font-bold rounded-md">
-                <Icon name="lock" size={13} strokeWidth={2.2} />HFU 締め済み
-              </span>
-            )}
-          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -950,30 +950,6 @@ function MonthlyPageInner() {
             title={hasCurrentData ? '既にデータが存在します' : '前月の出勤データをコピー'}
           >
             <Icon name="copy" size={15} />前月コピー
-          </button>
-          <button
-            onClick={() => handleToggleLock('hibi')}
-            disabled={lockToggling || !data}
-            className={`inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold transition ${
-              data?.lockedHibi
-                ? 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'
-                : 'bg-hibi-navy text-white hover:bg-hibi-light'
-            } disabled:opacity-50`}
-          >
-            <Icon name={data?.lockedHibi ? 'unlock' : 'lock'} size={15} />
-            {data?.lockedHibi ? '日比 締めを解除' : '日比 を締める'}
-          </button>
-          <button
-            onClick={() => handleToggleLock('hfu')}
-            disabled={lockToggling || !data}
-            className={`inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] text-sm font-bold transition ${
-              data?.lockedHfu
-                ? 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'
-                : 'bg-hibi-navy text-white hover:bg-hibi-light'
-            } disabled:opacity-50`}
-          >
-            <Icon name={data?.lockedHfu ? 'unlock' : 'lock'} size={15} />
-            {data?.lockedHfu ? 'HFU 締めを解除' : 'HFU を締める'}
           </button>
           <button
             onClick={() => switchTopTab('export')}
@@ -991,6 +967,8 @@ function MonthlyPageInner() {
               <option key={o.ym} value={o.ym}>{o.label}</option>
             ))}
           </select>
+          {ym === prevYm() && <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 whitespace-nowrap">締める月</span>}
+          {ym === currentYm() && <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 whitespace-nowrap">今月（途中）</span>}
         </div>
       </div>
 
@@ -1098,6 +1076,41 @@ function MonthlyPageInner() {
         </div>
       )}
 
+      {/* 会社ごとの締めの準備（2026-10-01）: 人数・支給額の合計・締める前のチェック・締めるボタンを1枚に */}
+      {!loading && data && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {(['hibi', 'hfu'] as const).map(org => {
+            const ws = data.workers.filter(w => w.org === org)
+            const foreign = ws.filter(w => w.visa !== 'none')
+            const confOk = foreign.filter(w => { const c = staffConfirms[w.id]; return !!c && (c.status === 'ok' || !!c.resolvedAt) }).length
+            const confIssue = foreign.filter(w => { const c = staffConfirms[w.id]; return !!c && c.status === 'issue' && !c.resolvedAt }).length
+            const auditTargets = ws.filter(w => w.visa && w.visa !== 'none' && (w.hourlyRate || 0) > 0 && !(w.salary && w.salary > 0) && !w.useOldRules)
+            const auditAll = ym >= '202605' ? validatePayrolls(ws as unknown as PayrollSnapshot[]) : null
+            const diff = data.snapshotDiffs?.find(d => d.org === org)
+            const ymLabel = `${Number(ym.slice(4, 6))}月分`
+            return (
+              <CloseCard
+                key={org}
+                org={org}
+                label={org === 'hibi' ? '日比建設' : 'HFU'}
+                ymLabel={ymLabel}
+                people={ws.length}
+                total={ws.reduce((sum, w) => sum + (w.salaryNetPay || 0), 0)}
+                locked={org === 'hibi' ? data.lockedHibi : data.lockedHfu}
+                confirm={{ target: foreign.length, ok: confOk, issue: confIssue }}
+                audit={auditAll ? { target: auditTargets.length, affected: auditAll.affectedWorkerIds.length } : null}
+                changedAfterLock={diff?.count || 0}
+                canClose={canResolveConfirm}
+                busy={lockToggling}
+                onToggleLock={() => handleToggleLock(org)}
+                onShowConfirm={() => { setTab(org); setView('list'); setListFilter('unconfirmed') }}
+                onShowAudit={() => { setTab(org); setView('list'); setListFilter('attention') }}
+              />
+            )
+          })}
+        </div>
+      )}
+
       {/* 2026-06-12 (監査 Sprint2-D): 締め後に支給額が変わった場合の警告バナー。
           締め時に保存したスナップショットと現行計算を突合し、単価変更・出面修正等で
           「支払った金額」と画面の金額がズレたことを検知する */}
@@ -1190,7 +1203,7 @@ function MonthlyPageInner() {
       {/* 2026-06-12 (監査 Sprint2-C): 異常0件でも検算の実施状況を常時表示。
           旧: 異常時のみバナー → 「検算対象外（日本人・フン・完全月給）も含めて全員OK」と
           誤認するリスクがあった。対象/対象外の人数を明示する */}
-      {!loading && data && validationResult.total === 0 && (() => {
+      {!loading && data && validationResult.total === 0 && view === 'table' && (() => {
         const targets = tabFilteredWorkers.filter(w =>
           w.visa && w.visa !== 'none' && (w.hourlyRate || 0) > 0 && !(w.salary && w.salary > 0) && !w.useOldRules)
         const exempt = tabFilteredWorkers.length - targets.length
@@ -1216,7 +1229,68 @@ function MonthlyPageInner() {
           sticky は「スクロールする祖先」を基準に効くため、横スクロールだけの
           overflow-x-auto ではページ全体のスクロールに追随できない。高さ上限つきの
           スクロール領域にしたうえで、thead/tfoot のセルを sticky にしている。 */}
+      {/* 見せ方の切り替え（2026-10-01）＋ 見やすい一覧の絞り込み */}
       {!loading && data && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-1 p-1 rounded-[10px] bg-gray-200/70 dark:bg-gray-800">
+            {([['list', '見やすい一覧'], ['table', '全項目の表']] as const).map(([k, label]) => (
+              <button key={k} onClick={() => setView(k)} aria-pressed={view === k}
+                className={`h-8 px-3.5 rounded-lg text-[13px] transition ${view === k ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white font-bold shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {view === 'list' && (
+            <>
+              <div className="flex gap-1 p-1 rounded-[10px] bg-gray-200/70 dark:bg-gray-800">
+                {([
+                  ['all', 'すべて'],
+                  ['attention', `要確認だけ ${tabFilteredWorkers.filter(w => needsAttention(w, new Set(validationOnTab.affectedWorkerIds))).length}`],
+                  ['unconfirmed', `本人確認まだ ${tabFilteredWorkers.filter(w => w.visa !== 'none' && !(staffConfirms[w.id] && (staffConfirms[w.id].status === 'ok' || staffConfirms[w.id].resolvedAt))).length}`],
+                ] as const).map(([k, label]) => (
+                  <button key={k} onClick={() => setListFilter(k)} aria-pressed={listFilter === k}
+                    className={`h-8 px-3.5 rounded-lg text-[13px] transition ${listFilter === k ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white font-bold shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <label className="ml-auto flex items-center gap-2 h-9 px-3 rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-500 w-full sm:w-52">
+                <input type="search" value={listQuery} onChange={e => setListQuery(e.target.value)}
+                  placeholder="名前で探す" aria-label="名前で探す"
+                  className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 dark:text-white outline-none" />
+              </label>
+            </>
+          )}
+        </div>
+      )}
+
+      {!loading && data && view === 'list' && (() => {
+        const auditIds = new Set(validationOnTab.affectedWorkerIds)
+        const q = listQuery.trim().replace(/\s/g, '')
+        let list = tabFilteredWorkers
+        if (q) list = list.filter(w => w.name.replace(/\s/g, '').includes(q))
+        if (listFilter === 'attention') list = list.filter(w => needsAttention(w, auditIds))
+        if (listFilter === 'unconfirmed') list = list.filter(w => w.visa !== 'none' && !(staffConfirms[w.id] && (staffConfirms[w.id].status === 'ok' || staffConfirms[w.id].resolvedAt)))
+        // 要確認を上に、そのあと会社・名前の順
+        const sorted = [...list].sort((a, b) =>
+          Number(needsAttention(b, auditIds)) - Number(needsAttention(a, auditIds))
+          || a.org.localeCompare(b.org) || a.name.localeCompare(b.name, 'ja'))
+        return (
+          <OverviewList
+            workers={sorted.map(w => ({ ...w, otHours: displayOtHours(w) }))}
+            ym={ym}
+            auditIds={auditIds}
+            staffConfirms={staffConfirms}
+            password={password}
+            canResolveConfirm={canResolveConfirm}
+            onConfirmChanged={() => setConfirmsVersion(v => v + 1)}
+            onOpen={id => { const w = data.workers.find(x => x.id === id); if (w) setAuditingWorker(w) }}
+            siteNameOf={sid => (data.siteNames?.[sid] || sid)}
+          />
+        )
+      })()}
+
+      {!loading && data && view === 'table' && (
         <div
           className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-auto"
           style={{ maxHeight: 'calc(100vh - 180px)' }}
