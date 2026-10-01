@@ -535,7 +535,9 @@ export async function GET(request: NextRequest) {
 
       // 前月同日比: 前月の1日〜当日の日付までの出面データのみ集計
       // 2026-05-12 修正: Vercel(UTC) 環境で JST 早朝の日付ずれを防止
-      const sameDayLimit = getJstNow().getDate() // 当月の日付（例: 8日なら8）
+      // 2026-10-01 修正: 当月を見ているときだけ「今日の日付まで」で比べる。過ぎた月は前月の1か月分と比べる
+      //   （旧: 過去月でも今日の日付で前月を切っていたため、10/1 に9月を見ると「8月1日分」と比べて +3418% と出た）
+      const sameDayLimit = ym === currentYmJst() ? getJstNow().getDate() : 31 // 当月の日付（例: 8日なら8）
       const filteredPrevD: Record<string, AttendanceEntry> = {}
       const filteredPrevSD: Record<string, { n: number; on: number }> = {}
       for (const [k, v] of Object.entries(prevAtt.d)) {
@@ -1363,7 +1365,7 @@ export async function GET(request: NextRequest) {
     }
     interface QuietIssue {
       kind: 'nightUnregistered' | 'legalShortfall' | 'sundayNoRest' | 'earlyReturn' | 'staleAttendance'
-        | 'wageRevisionPending'
+        | 'wageRevisionPending' | 'staleAssignment'
       workerName: string
       detail: string
       href: string
@@ -1491,6 +1493,19 @@ export async function GET(request: NextRequest) {
               href: `/attendance?ym=${ym}`,
             })
           }
+        }
+      }
+      // 配置の見直し（2026-10-01 代表決定）: 現場を移動したのに前の現場の配置に残っている人。
+      //   当月表示のときだけ。出面は上で読んだ allAttD（表示月＋遡り3か月）を使い、読み取りを増やさない
+      if (ym === nowYm) {
+        const { findStaleAssignments } = await import('@/lib/foreman-todo')
+        for (const s of findStaleAssignments(main, allAttD as never, todayJstIso())) {
+          quietIssues.push({
+            kind: 'staleAssignment',
+            workerName: s.workerName,
+            detail: `${s.siteName} の配置に残っています（2週間入力なし・いまは ${s.workingAt.join('・')}）`,
+            href: `/attendance`,
+          })
         }
       }
     } catch (e) {
