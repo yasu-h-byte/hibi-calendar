@@ -16,6 +16,9 @@ export interface RequestsUiState {
   modifyNewDate: string
   // 一括承認用: 展開中グループ集合（key = `${workerId}_${status}_${reason}`）
   expandedGroups: Set<string>
+  /** 有給を取る日の月で絞る（'YYYY-MM'・空=すべて）。2026-10-01: 先の予定（翌年の帰国中の有給など）が
+   *  上に並び、過去の月の申請が見つけにくかった（代表「4〜9月が全然記録ない」）ため */
+  month: string
 }
 
 export const initialRequestsUi: RequestsUiState = {
@@ -26,6 +29,7 @@ export const initialRequestsUi: RequestsUiState = {
   modifyingId: null,
   modifyNewDate: '',
   expandedGroups: new Set<string>(),
+  month: '',
 }
 
 interface Props {
@@ -50,8 +54,17 @@ export default function RequestsTab({
 
   const { filter: reqFilter, processingReq, rejectingId, rejectReason, modifyingId, modifyNewDate, expandedGroups } = ui
 
-  const filtered = reqFilter === 'all' ? leaveRequests
+  const byStatus = reqFilter === 'all' ? leaveRequests
     : leaveRequests.filter(r => r.status === reqFilter)
+  const monthFilter = ui.month || ''
+  const filtered = monthFilter ? byStatus.filter(r => (r.date || '').slice(0, 7) === monthFilter) : byStatus
+  // 月ごとの件数（有給を取る日の月・新しい月が左）
+  const monthCounts = byStatus.reduce<Record<string, number>>((acc, r) => {
+    const k = (r.date || '').slice(0, 7)
+    if (k) acc[k] = (acc[k] || 0) + 1
+    return acc
+  }, {})
+  const months = Object.keys(monthCounts).sort((a, b) => b.localeCompare(a))
   const getSiteName = (siteId: string) => sites.find(s => s.id === siteId)?.name || siteId
   const fmtDate = (d: string) => { const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}` }
   const fmtTs = (ts: string) => { const d = new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }
@@ -275,6 +288,18 @@ export default function RequestsTab({
           </button>
         ))}
       </div>
+      {/* 月で絞る（有給を取る日の月）。先の予定と過去の申請が混ざって探しにくいため */}
+      {months.length > 1 && (
+        <div className="flex gap-1.5 flex-wrap items-center">
+          <span className="text-xs font-bold text-hibi-sub dark:text-gray-400 mr-1">取る日の月</span>
+          {[['', `すべて ${byStatus.length}`] as [string, string], ...months.map(m => [m, `${Number(m.slice(0, 4))}年${Number(m.slice(5, 7))}月 ${monthCounts[m]}`] as [string, string])].map(([k, label]) => (
+            <button key={k || 'all'} onClick={() => patchUi({ month: k })}
+              className={`px-2.5 py-1 rounded-md text-xs transition ${monthFilter === k ? 'bg-hibi-navy text-white font-bold' : 'bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {filtered.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center text-gray-400">申請はありません</div>
       ) : (
