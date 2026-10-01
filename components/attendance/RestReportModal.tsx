@@ -11,6 +11,8 @@
  */
 'use client'
 
+import { Icon } from '@/components/ui/Icon'
+
 interface RestReason {
   value: string
   label: string
@@ -119,7 +121,7 @@ export default function RestReportModal({
                   checked={isCompany}
                   onChange={() => setReason(COMPANY_REST)}
                   className="hidden" />
-                <span className="text-xl">🚧</span>
+                <Icon name="calendar" size={20} strokeWidth={2} />
                 <span>
                   <span className="font-bold block">現場が休み（会社の都合）</span>
                   <span className="text-xs opacity-80">Công trường nghỉ (do công ty)</span>
@@ -162,7 +164,7 @@ export default function RestReportModal({
                   {canLeave ? (
                     <button type="button" onClick={() => onChooseLeave!(date)}
                       className="mt-2 w-full bg-green-600 text-white rounded-xl py-3 font-bold active:bg-green-700">
-                      🌴 有給を申請する / Xin nghỉ phép
+                      有給を申請する / Xin nghỉ phép
                     </button>
                   ) : (
                     <p className="mt-1 text-xs text-gray-500">

@@ -11,6 +11,7 @@ import MonthConfirmCard from '@/components/attendance/MonthConfirmCard'
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { todayJstIso } from '@/lib/date-utils'
 import StaffHeader from '@/components/StaffHeader'
+import { Icon, type IconName } from '@/components/ui/Icon'
 
 interface SiteBreakConfig {
   enabled: boolean
@@ -80,9 +81,14 @@ const STATUS_LABELS: Record<AttendanceStatus, string> = {
   leave: '有給', site_off: '現場休み', home_leave: '帰国中', exam: '試験',
   comp: '現場休み', none: '未入力',
 }
-const STATUS_EMOJI: Record<AttendanceStatus, string> = {
-  work: '🔨', overtime: '🔨', rest: '🏠', leave: '🌴', site_off: '🚧',
-  home_leave: '✈️', exam: '📝', comp: '🚧', none: '—',
+// 絵文字はやめて線のアイコン（2026-10-01 UI改修・PCの画面とそろえる）
+const STATUS_ICON: Record<AttendanceStatus, IconName | null> = {
+  work: 'site', overtime: 'site', rest: 'home', leave: 'umbrella', site_off: 'calendar',
+  home_leave: 'plane', exam: 'pen', comp: 'calendar', none: null,
+}
+function StatusLabel({ s, size = 13 }: { s: AttendanceStatus; size?: number }) {
+  const icon = STATUS_ICON[s]
+  return <span className="inline-flex items-center gap-1">{icon && <Icon name={icon} size={size} strokeWidth={2} />}{STATUS_LABELS[s]}</span>
 }
 const STATUS_COLORS: Record<AttendanceStatus, string> = {
   work: 'bg-blue-100 text-blue-700', overtime: 'bg-orange-100 text-orange-700',
@@ -875,7 +881,7 @@ export default function StaffAttendancePage() {
         {data.missingDays && data.missingDays.length > 0 && (
           <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
             <div className="text-base font-bold text-red-700">
-              ⚠️ 未入力が {data.missingDays.length}日 あります
+              <span className="inline-flex items-center gap-1.5"><Icon name="alert" size={18} strokeWidth={2.2} />未入力が {data.missingDays.length}日 あります</span>
             </div>
             <div className="text-sm font-bold text-red-700 mb-1">
               Bạn còn {data.missingDays.length} ngày chưa nhập
@@ -890,7 +896,7 @@ export default function StaffAttendancePage() {
                   return (
                     <span key={`${md.year}-${md.month}-${md.day}`}
                       className="px-3 py-2 rounded-lg bg-gray-100 text-gray-500 text-sm font-bold">
-                      {md.month}/{md.day} 🔒 職長に相談 / Hỏi đốc công
+                      <span className="inline-flex items-center gap-1">{md.month}/{md.day}<Icon name="lock" size={13} />職長に相談 / Hỏi đốc công</span>
                     </span>
                   )
                 }
@@ -900,7 +906,7 @@ export default function StaffAttendancePage() {
                   <button key={`${md.year}-${md.month}-${md.day}`}
                     onClick={() => idx >= 0 && setEditingPast(idx)}
                     className="px-3 py-2 rounded-lg bg-white border-2 border-red-400 text-red-700 text-sm font-extrabold active:scale-95">
-                    {md.month}/{md.day} ✏️
+                    <span className="inline-flex items-center gap-1">{md.month}/{md.day}<Icon name="pen" size={13} strokeWidth={2.2} /></span>
                   </button>
                 )
               })}
@@ -922,7 +928,7 @@ export default function StaffAttendancePage() {
                   <button key={`view-${pc.ym}`} type="button"
                     onClick={() => { setActivePendingCalendar(pc); setShowCalendarModal(true); setCalendarReviewed(false); setCalendarErrorMsg(null) }}
                     className="flex-1 bg-white border-2 border-gray-200 rounded-xl py-2.5 px-3 text-left active:scale-[0.98]">
-                    <div className="text-sm font-bold text-hibi-charcoal">📅 {mm}月のカレンダー</div>
+                    <div className="text-sm font-bold text-hibi-charcoal inline-flex items-center gap-1.5"><Icon name="calendar" size={15} />{mm}月のカレンダー</div>
                     <div className="text-[11px] text-gray-500">Xem lịch tháng {mm}</div>
                   </button>
                 )
@@ -950,7 +956,7 @@ export default function StaffAttendancePage() {
             : 'bg-gradient-to-r from-amber-50 to-orange-50 border-orange-400'
           const headingCls = isResignOnly ? 'text-amber-900' : 'text-orange-800'
           const subCls = isResignOnly ? 'text-amber-800' : 'text-orange-700'
-          const emoji = isResignOnly ? '🔄' : '📋'
+          const bannerIcon: IconName = isResignOnly ? 'alert' : 'calendar'
           const headlineJa = isResignOnly
             ? `${parseInt(y)}年${parseInt(m)}月 カレンダー更新あり`
             : `${parseInt(y)}年${parseInt(m)}月のカレンダー承認`
@@ -976,7 +982,7 @@ export default function StaffAttendancePage() {
               className={`w-full ${containerCls} border-2 rounded-xl p-4 text-left active:scale-[0.98] transition shadow-md`}
             >
               <div className="flex items-start gap-3">
-                <div className="text-3xl">{emoji}</div>
+                <div className={headingCls}><Icon name={bannerIcon} size={30} strokeWidth={2} /></div>
                 <div className="flex-1">
                   <div className={`font-bold ${headingCls} text-base leading-tight`}>
                     {headlineJa}
@@ -1000,9 +1006,9 @@ export default function StaffAttendancePage() {
         {/* Today's status */}
         {data.todayLocked ? (
           <div className={`${currentStatus === 'rest' ? 'bg-gray-500' : 'bg-[#1E9E52]'} rounded-xl p-4 text-center`}>
-            <div className="text-white font-bold text-lg">🔒 かくにんずみ</div>
+            <div className="text-white font-bold text-lg inline-flex items-center gap-1.5"><Icon name="lock" size={18} strokeWidth={2.2} />かくにんずみ / Đã xác nhận</div>
             <div className="text-white/90 text-sm mt-1 font-bold">
-              {STATUS_EMOJI[currentStatus]} {STATUS_LABELS[currentStatus]}
+              <StatusLabel s={currentStatus} />
               {currentStatus === 'overtime' && data.currentEntry?.o ? ` +${data.currentEntry.o}h` : ''}
               {data.currentEntry?.st && data.currentEntry?.et && (
                 <span className="block text-xs mt-0.5 tabular-nums">{data.currentEntry.st}〜{data.currentEntry.et}</span>
@@ -1018,7 +1024,7 @@ export default function StaffAttendancePage() {
             {/* Start/End time pickers */}
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
-                <p className="text-xs text-gray-500 mb-1">始業 / Bat dau</p>
+                <p className="text-xs text-gray-500 mb-1">始業 / Bắt đầu</p>
                 <select value={startTime} onChange={e => setStartTime(e.target.value)}
                   className="text-2xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
                   {/* 5:00〜13:00 30分刻み (現場ごとの始業時刻に対応) */}
@@ -1031,7 +1037,7 @@ export default function StaffAttendancePage() {
                 </select>
               </div>
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
-                <p className="text-xs text-gray-500 mb-1">終業 / Ket thuc</p>
+                <p className="text-xs text-gray-500 mb-1">終業 / Kết thúc</p>
                 <select value={endTime} onChange={e => setEndTime(e.target.value)}
                   className="text-2xl font-bold text-hibi-charcoal tabular-nums text-center w-full border-none bg-transparent">
                   {Array.from({length: 17}, (_, i) => {
@@ -1072,7 +1078,7 @@ export default function StaffAttendancePage() {
 
             {/* Actual hours display */}
             <div className="bg-[#FFF6E3] border border-[#F2D9A0] rounded-xl p-4 text-center">
-              <p className="text-xs text-gray-500">実労働時間 / Gio lam thuc te</p>
+              <p className="text-xs text-gray-500">実労働時間 / Giờ làm thực tế</p>
               <p className="text-3xl font-extrabold text-[#8A5A00] tabular-nums">
                 {(() => {
                   const start = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
@@ -1110,7 +1116,7 @@ export default function StaffAttendancePage() {
               disabled={saving}
               className="w-full bg-hibi-amber text-hibi-charcoal rounded-xl py-4 text-lg font-extrabold shadow-[0_4px_12px_rgba(245,166,35,0.4)] active:bg-hibi-amberDark transition disabled:opacity-50"
             >
-              出勤登録 / Xac nhan di lam
+              出勤登録 / Xác nhận đi làm
             </button>
 
             {/* Rest / Leave buttons */}
@@ -1118,12 +1124,12 @@ export default function StaffAttendancePage() {
               <button onClick={() => { setRestDate(todayDateStr()); setRestLockDate(false); setShowRestModal(true) }}
                 disabled={saving}
                 className="bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-base font-bold active:bg-gray-100 transition disabled:opacity-50">
-                欠勤届 / Xin nghi
+                欠勤届 / Xin nghỉ
               </button>
               <button onClick={() => setShowLeaveModal(true)}
                 disabled={saving}
                 className="bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl py-3 text-base font-bold active:bg-gray-100 transition disabled:opacity-50">
-                有給申請 / Xin phep
+                有給申請 / Xin phép
               </button>
             </div>
           </div>
@@ -1132,9 +1138,9 @@ export default function StaffAttendancePage() {
             {/* 4 Buttons (legacy: ~202604) */}
             <div className="grid grid-cols-3 gap-3">
               {([
-                { choice: 'work', emoji: '🔨', label: '出勤 / Đi làm', color: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' },
-                { choice: 'rest', emoji: '🏠', label: '欠勤届\nXin nghi', color: 'bg-gray-400 hover:bg-gray-500 active:bg-gray-600' },
-                { choice: 'leave', emoji: '🌴', label: 'ゆうきゅう\nしんせい', color: 'bg-green-500 hover:bg-green-600 active:bg-green-700' },
+                { choice: 'work', icon: 'site', label: '出勤 / Đi làm', color: 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' },
+                { choice: 'rest', icon: 'home', label: '欠勤届\nXin nghỉ', color: 'bg-gray-400 hover:bg-gray-500 active:bg-gray-600' },
+                { choice: 'leave', icon: 'umbrella', label: 'ゆうきゅう\nしんせい', color: 'bg-green-500 hover:bg-green-600 active:bg-green-700' },
                 // site_off（げんばやすみ）は変形労働時間制導入により非表示
                 // 過去データの表示・集計には影響なし
               ] as const).map(btn => {
@@ -1152,7 +1158,7 @@ export default function StaffAttendancePage() {
                       isActive ? 'ring-4 ring-offset-2 ring-hibi-navy' : ''
                     }`}
                   >
-                    <div className="text-3xl mb-1">{btn.emoji}</div>
+                    <div className="flex justify-center mb-1.5"><Icon name={btn.icon} size={30} strokeWidth={2} /></div>
                     <div className="text-sm font-bold whitespace-pre-line leading-tight">{btn.label}</div>
                   </button>
                 )
@@ -1209,7 +1215,7 @@ export default function StaffAttendancePage() {
                     {req.status === 'pending' && (
                       <>
                         <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
-                          ⏳ 承認待ち / Đang chờ
+                          承認待ち / Đang chờ
                         </span>
                         <button
                           onClick={() => cancelLeaveRequest(req.id)}
@@ -1221,7 +1227,7 @@ export default function StaffAttendancePage() {
                     )}
                     {req.status === 'foreman_approved' && (
                       <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
-                        🔵 職長済 / Đốc công đã duyệt
+                        職長済 / Đốc công đã duyệt
                       </span>
                     )}
                   </div>
@@ -1236,7 +1242,7 @@ export default function StaffAttendancePage() {
           <div className="grid grid-cols-2 gap-3">
             {data.plRemaining !== null && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
-                <div className="text-xs text-gray-400 mb-1">🌴 有給残り / Nghỉ phép còn</div>
+                <div className="text-xs text-gray-500 mb-1 inline-flex items-center gap-1"><Icon name="umbrella" size={13} />有給残り / Nghỉ phép còn</div>
                 <div className="text-2xl font-bold text-green-600 tabular-nums">{data.plRemaining}<span className="text-sm font-normal text-gray-400 ml-1">日</span></div>
                 {/* Phase 8: FIFO内訳表示（繰越分と当期付与分） */}
                 {((data.plCarryOverRemaining ?? 0) > 0 || (data.plGrantRemaining ?? 0) > 0) ? (
@@ -1274,7 +1280,7 @@ export default function StaffAttendancePage() {
             )}
             {data.toolBudgetRemaining !== null && (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
-                <div className="text-xs text-gray-400 mb-1">🔧 道具代残り / Tiền dụng cụ còn</div>
+                <div className="text-xs text-gray-500 mb-1 inline-flex items-center gap-1"><Icon name="wrench" size={13} />道具代残り / Tiền dụng cụ còn</div>
                 <div className="text-2xl font-bold text-blue-600 tabular-nums">¥{Math.max(0, data.toolBudgetRemaining).toLocaleString()}</div>
                 {(data.toolBudgetCarry ?? 0) !== 0 && (
                   <div className={`text-[11px] font-bold ${(data.toolBudgetCarry ?? 0) > 0 ? 'text-blue-600' : 'text-red-600'}`}>
@@ -1343,12 +1349,12 @@ export default function StaffAttendancePage() {
                     </span>
                   ) : (
                     <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_COLORS[pd.status]}`}>
-                      {STATUS_EMOJI[pd.status]} {STATUS_LABELS[pd.status]}
+                      <StatusLabel s={pd.status} size={12} />
                       {(pd.status === 'work' || pd.status === 'overtime') && pd.entry?.o ? ` +${pd.entry.o}h` : ''}
                     </span>
                   )}
                   {(pd.status === 'work' || pd.status === 'overtime') && (pd.entry?.w ?? 0) > 0 && <BsTag min={bsMinForDate(pd.year, pd.month)} />}
-                  {pd.locked && <span className="text-xs">🔒</span>}
+                  {pd.locked && <span className="text-gray-400" title="締めた日 / Đã khóa"><Icon name="lock" size={14} /></span>}
                 </div>
               </div>
             ))}
@@ -1359,7 +1365,7 @@ export default function StaffAttendancePage() {
         <div className="text-center py-3">
           <button onClick={() => setShowHomeLongLeaveModal(true)}
             className="inline-flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-xl text-sm font-bold active:bg-gray-100 transition">
-            ✈️ 帰国申請 / Xin về nước
+            <Icon name="plane" size={16} />帰国申請 / Xin về nước
           </button>
         </div>
 
@@ -1367,7 +1373,7 @@ export default function StaffAttendancePage() {
         <div className="text-center py-3">
           <a href="/briefing-20260419.html" target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-xl text-sm font-medium hover:bg-blue-100 transition">
-            📖 給与・勤怠ガイド / Hướng dẫn lương & chấm công
+            <Icon name="book" size={16} />給与・勤怠ガイド / Hướng dẫn lương & chấm công
           </a>
         </div>
 
@@ -1466,8 +1472,8 @@ export default function StaffAttendancePage() {
               ) : (
                 <div className="grid grid-cols-2 gap-3">
                   {([
-                    { choice: 'work', emoji: '🔨', label: '出勤', color: 'bg-blue-500' },
-                    { choice: 'rest', emoji: '🏠', label: 'やすみ', color: 'bg-gray-400' },
+                    { choice: 'work', icon: 'site', label: '出勤 / Đi làm', color: 'bg-blue-500' },
+                    { choice: 'rest', icon: 'home', label: 'やすみ / Nghỉ', color: 'bg-gray-400' },
                     // 有給は申請フロー経由のため過去日の直接入力は不可
                     // 管理者がPC出面入力画面から修正する
                   ] as const).map(btn => (
@@ -1483,7 +1489,7 @@ export default function StaffAttendancePage() {
                       }}
                       className={`${btn.color} text-white rounded-xl py-4 text-center active:scale-95`}
                     >
-                      <div className="text-2xl mb-1">{btn.emoji}</div>
+                      <div className="flex justify-center mb-1"><Icon name={btn.icon} size={26} strokeWidth={2} /></div>
                       <div className="text-sm font-bold">{btn.label}</div>
                     </button>
                   ))}
