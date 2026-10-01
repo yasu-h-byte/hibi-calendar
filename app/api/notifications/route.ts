@@ -190,7 +190,9 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. Monthly lock status（前月が未締めの場合のみ警告。組織別にチェック）
-    try {
+    //   2026-10-02 代表: 締めは翌月10日ごろまでに行うので、11日になっても締まっていないときだけ出す
+    //   （月初からずっと出ていると、毎日見るだけのお知らせになっていた）
+    if (now.getDate() > 10) try {
       const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       const prevYm = ymKey(prevDate.getFullYear(), prevDate.getMonth() + 1)
       const y = prevDate.getFullYear()
