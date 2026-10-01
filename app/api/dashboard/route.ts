@@ -1501,7 +1501,7 @@ export async function GET(request: NextRequest) {
           quietIssues.push({
             kind: 'staleAssignment',
             workerName: s.workerName,
-            detail: `${s.siteName} の配置に残っています（2週間入力なし・いまは ${s.workingAt.join('・')}）。移動したなら配置から外してください`,
+            detail: `${s.siteName} の配置に残っています（2週間入力なし・いまは ${s.workingAt.join('・')}）`,
             href: `/attendance`,
           })
         }

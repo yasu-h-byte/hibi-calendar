@@ -35,7 +35,7 @@ export const RELEASE_NOTES: Announcement[] = [
       + '左に「申請」（1件1行・職長承認待ち／最終承認待ちで絞り込み）と「気になること」（配置の見直し・出面未入力など）、'
       + '右に前日の稼働・今月の数字・お知らせ・評価の進み具合をまとめています。',
     category: 'new',
-    publishedAt: '2026-10-01T17:00:00+09:00',
+    publishedAt: '2026-10-01T12:45:00+09:00',
     publishedBy: '日比靖仁',
     roles: ['jimu', 'approver', 'officer', 'owner'],
   },
@@ -47,7 +47,7 @@ export const RELEASE_NOTES: Announcement[] = [
       + '職長がいない現場（出光・川崎・葛西）の職長承認の代行もここからできます。'
       + '現場を移動したのに前の現場の配置に残っている人は「配置の見直し」に出ます。',
     category: 'new',
-    publishedAt: '2026-10-01T16:00:00+09:00',
+    publishedAt: '2026-10-01T12:30:00+09:00',
     publishedBy: '日比靖仁',
     roles: ['approver', 'owner'],
   },
@@ -61,7 +61,7 @@ export const RELEASE_NOTES: Announcement[] = [
       + '職長承認は、職種が「職長」の人が現場の職長に登録されている現場だけです。それ以外の現場（とび・役員が登録されている現場）は政仁さんが代行します。'
       + '別の現場で入力している人（移動・掛け持ち）は、前の現場の「未入力」には数えません。',
     category: 'new',
-    publishedAt: '2026-10-01T15:00:00+09:00',
+    publishedAt: '2026-10-01T12:15:00+09:00',
     publishedBy: '日比靖仁',
     roles: ['foreman', 'owner', 'approver'],
   },

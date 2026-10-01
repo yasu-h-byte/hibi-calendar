@@ -424,7 +424,7 @@ function IssuesCard({ issues, calendarPending }: { issues: QuietIssue[]; calenda
     </a>
   )
   return (
-    <Card title="気になること" sub="急がないが、締めまでに見ておくこと">
+    <Card title="気になること" sub="急がないが、締めまでに見ておくこと。配置の見直しは、移動した人なら出面入力の配置から外す">
       <div>
         {calendarPending > 0 && row('cal', '/calendar', '就業カレンダー', 'amber', `未承認 ${calendarPending}件`, '来月分の承認待ち')}
         {issues.map((it, i) => {
