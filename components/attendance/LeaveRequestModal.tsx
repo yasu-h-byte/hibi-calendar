@@ -105,7 +105,7 @@ export default function LeaveRequestModal({
                 ? 'bg-yellow-50 text-yellow-800 border border-yellow-300'
                 : 'bg-green-50 text-green-700 border border-green-200'
           }`}>
-            <div className="text-xs">🌴 有給残り / Nghỉ phép còn</div>
+            <div className="text-xs">有給残り / Nghỉ phép còn</div>
             <div className="text-2xl font-bold">
               {plRemaining}<span className="text-sm font-normal ml-1">日</span>
             </div>
@@ -229,18 +229,18 @@ export default function LeaveRequestModal({
                   <div className="flex items-center gap-2">
                     {req.status === 'approved' && (
                       <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 font-bold">
-                        ✅ 承認済 / Đã duyệt
+                        承認済 / Đã duyệt
                       </span>
                     )}
                     {req.status === 'foreman_approved' && (
                       <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
-                        🔵 職長済 / Đốc công đã duyệt
+                        職長済 / Đốc công đã duyệt
                       </span>
                     )}
                     {req.status === 'pending' && (
                       <>
                         <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
-                          ⏳ 承認待ち / Đang chờ
+                          承認待ち / Đang chờ
                         </span>
                         <button
                           onClick={() => onCancelRequest(req.id)}
@@ -252,12 +252,12 @@ export default function LeaveRequestModal({
                     )}
                     {req.status === 'rejected' && (
                       <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold" title={req.rejectedReason || ''}>
-                        ❌ 却下 / Từ chối
+                        却下 / Từ chối
                       </span>
                     )}
                     {req.status === 'cancelled' && (
                       <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-500 font-medium">
-                        🚫 取り消し済 / Đã hủy
+                        取り消し済 / Đã hủy
                       </span>
                     )}
                   </div>

@@ -118,7 +118,7 @@ export default function CalendarApprovalModal({
             </div>
           ) : hasRevisions ? (
             <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-xs text-amber-900">
-              <div className="font-bold mb-1">🔄 カレンダーが更新されました / Lịch đã được cập nhật</div>
+              <div className="font-bold mb-1">カレンダーが更新されました / Lịch đã được cập nhật</div>
               前回サインしたあとに、出勤日や休日が変更されている現場があります。
               内容を確認してから、もう一度サインしてください。
               <br />
@@ -143,7 +143,7 @@ export default function CalendarApprovalModal({
                 <div className="font-bold text-sm text-hibi-navy">{site.siteName}</div>
                 {site.needsResign ? (
                   <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
-                    🔄 更新あり / Đã cập nhật
+                    更新あり / Đã cập nhật
                   </span>
                 ) : site.signed ? (
                   <span className="text-[10px] bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-bold">
@@ -264,7 +264,7 @@ export default function CalendarApprovalModal({
                 onClick={() => setShowQuestion(true)}
                 className="text-xs text-blue-600 underline"
               >
-                ❓ 質問・相談・変更してほしい点がある方はこちら / Có thắc mắc hoặc đề nghị?
+                質問・相談・変更してほしい点がある方はこちら / Có thắc mắc hoặc đề nghị?
               </button>
             ) : (
               <div className="space-y-2">

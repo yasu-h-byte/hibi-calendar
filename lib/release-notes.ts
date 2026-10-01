@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_mobile_ux',
+    title: 'スタッフのスマホ画面の表記をそろえました',
+    content:
+      '出面入力（ベトナム人スタッフ）・マイページの絵文字を、PCと同じ線のアイコンにしました。'
+      + 'ベトナム語の表記で声調記号が抜けていたところ（Bat dau → Bắt đầu、Xin nghi → Xin nghỉ など）を直しました。入力のしかたは変わりません。',
+    category: 'fix',
+    publishedAt: '2026-10-01T16:45:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner', 'foreman'],
+  },
+  {
     id: 'rn_20261001_masters_ux',
     title: '現場マスタ・取引先マスタ・管理者設定を見やすくしました',
     content:

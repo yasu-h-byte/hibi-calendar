@@ -44,7 +44,7 @@ export default function MonthConfirmCard({ token }: { token: string }) {
     const wm = parseInt(data.ym.slice(4, 6))
     return (
       <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2.5 mb-4 text-xs text-gray-500">
-        📋 {wm}月の出面の確認は、職長と事業責任者のチェックが全部終わったら、ここに出ます。<br />
+        {wm}月の出面の確認は、職長と事業責任者のチェックが全部終わったら、ここに出ます。<br />
         Xác nhận chấm công tháng {wm} sẽ hiện ở đây sau khi tổ trưởng và người phụ trách kiểm tra xong.
       </div>
     )
@@ -87,7 +87,7 @@ export default function MonthConfirmCard({ token }: { token: string }) {
       <button type="button" onClick={() => done && setOpen(!open)} className="w-full text-left">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <div className="font-extrabold text-hibi-charcoal">📋 {month}月の出面の確認</div>
+            <div className="font-extrabold text-hibi-charcoal">{month}月の出面の確認</div>
             <div className="text-xs text-gray-500">Xác nhận chấm công tháng {month}</div>
           </div>
           {done ? (
