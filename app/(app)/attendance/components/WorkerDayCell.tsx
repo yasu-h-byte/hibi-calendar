@@ -130,7 +130,7 @@ export function HomeLeaveCell({ colBg, cellWidth }: { colBg: string; cellWidth: 
       style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
     >
       <div className="flex items-center justify-center h-full py-2">
-        <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-md">✈帰国</span>
+        <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-md">帰国</span>
       </div>
     </td>
   )
@@ -167,7 +167,7 @@ export function WaitingCell({
       title={canAddComp ? 'スタッフ本人のスマホ入力待ち（現場都合休みは 0.6補 を代理入力できます）' : 'スタッフ本人のスマホ入力待ち'}
     >
       <div className="flex flex-col items-center justify-center h-full py-1.5 gap-1">
-        <span className="text-[10px] text-gray-400 opacity-50">📱待機中</span>
+        <span className="text-[10px] text-gray-400 opacity-50">入力待ち</span>
         {canAddComp && (
           <button
             type="button"

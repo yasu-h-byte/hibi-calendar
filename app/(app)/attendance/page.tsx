@@ -27,8 +27,11 @@ import DriverModal from './components/DriverModal'
 import HistoryModal from './components/HistoryModal'
 import BulkEntryModal, { type BulkItem } from './components/BulkEntryModal'
 import RestMismatchBanner from './components/RestMismatchBanner'
+import { TodoStrip } from '@/components/ui/PageParts'
+import { Icon } from '@/components/ui/Icon'
 import { canDriveDefault } from '@/lib/allowance'
 import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
+import { todayJstIso, addDaysIso } from '@/lib/date-utils'
 
 export default function AttendanceGridPage() {
   const [password, setPassword] = useState('')
@@ -68,6 +71,10 @@ export default function AttendanceGridPage() {
   // Assignment modal
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  // 2026-10-01 出面入力の改修: 申請は右から開くパネル、注意書きは「確認すること」にまとめて開閉
+  const [requestsOpen, setRequestsOpen] = useState(false)
+  const [checksOpen, setChecksOpen] = useState(false)
+  const [reqCounts, setReqCounts] = useState<{ leave: number; home: number; foreman: number; final: number }>({ leave: 0, home: 0, foreman: 0, final: 0 })
   const [showBulk, setShowBulk] = useState(false)
   // 夜勤モーダル（台風待機など年数回のケース）
   const [nightTarget, setNightTarget] = useState<{ workerId: string; day: number } | null>(null)
@@ -1274,6 +1281,34 @@ export default function AttendanceGridPage() {
 
   // ── Render ──
 
+  // ── 今やること・確認すること（2026-10-01 出面入力の改修・見本キャンバス7段目）──
+  //   数え方は表の承認行・各注意書きと同じ。表示のための集計だけで、保存・承認の処理は変えない
+  const todayIsoA = todayJstIso()
+  const dayIsoOf = (d: number) => data ? `${data.year}-${String(data.month).padStart(2, '0')}-${String(d).padStart(2, '0')}` : ''
+  const daysWithInput = new Set<number>()
+  for (const ent of Object.values(data?.workerEntries || {})) {
+    for (const [d, e] of Object.entries(ent || {})) if (e) daysWithInput.add(Number(d))
+  }
+  // 職長承認がまだ = 今日までで、誰かの入力があって、職長承認が付いていない日
+  const foremanWaitDays = days.filter(d => daysWithInput.has(d.day) && dayIsoOf(d.day) <= todayIsoA && !localApprovals[d.day]).map(d => d.day)
+  // 最終承認待ち = 職長承認済みで最終承認がまだの日（表の「まとめて最終承認」と同じ）
+  const finalWaitDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day]).map(d => d.day)
+  const daysLabel = (ds: number[]) => ds.length <= 3 ? ds.map(d => `${data?.month}/${d}`).join('・') : `${data?.month}/${ds[0]}〜${ds[ds.length - 1]}`
+  const nmSites = nextMonthCalCheck?.sites || []
+  const nmNotReady = nmSites.filter(s => !s.status || s.status === 'draft' || s.status === 'rejected').length
+  const nmSubmitted = nmSites.filter(s => s.status === 'submitted').length
+  const homeLeaveShown = (data?.homeLeaves || []).filter(h => h.endDate >= addDaysIso(todayIsoA, -7)).length
+  const checkItems: string[] = []
+  if (nmNotReady > 0) checkItems.push(`翌月の就業カレンダー 未作成 ${nmNotReady}件`)
+  else if (nmSubmitted > 0) checkItems.push(`翌月の就業カレンダー 承認待ち ${nmSubmitted}件`)
+  if (restDayWarnings.length > 0) checkItems.push(`休日の出勤 ${restDayWarnings.length}件`)
+  if (workTypeWarnings.length > 0) checkItems.push(`工種の重複 ${workTypeWarnings.length}件`)
+  if ((data?.restMismatch?.length || 0) > 0) checkItems.push(`休みの区別 ${data!.restMismatch!.length}件`)
+  if ((data?.upcomingRetirements?.length || 0) > 0) checkItems.push(`退職予定 ${data!.upcomingRetirements!.length}名`)
+  if (homeLeaveShown > 0) checkItems.push(`帰国 ${homeLeaveShown}名`)
+  const reqTotal = reqCounts.leave + reqCounts.home
+  const scrollToGrid = () => document.getElementById('att-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
   return (
     <div className="space-y-4">
       {userRole && !canInputHere && (
@@ -1323,11 +1358,30 @@ export default function AttendanceGridPage() {
         </div>
       )}
 
-      {/* 翌月カレンダー未確定アラート（components/attendance/NextMonthCalendarBanner.tsx に集約） */}
-      <NextMonthCalendarBanner check={nextMonthCalCheck} />
+      {/* ── 今やること（2026-10-01）。表が上のほうから始まるよう、低い帯にする ── */}
+      {!loading && data && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+          <TodoStrip icon="check" tone={foremanWaitDays.length > 0 ? 'urgent' : 'ok'}
+            title="職長承認がまだ"
+            big={foremanWaitDays.length > 0 ? `${foremanWaitDays.length}日（${daysLabel(foremanWaitDays)}）` : 'ありません'}
+            onClick={foremanWaitDays.length > 0 ? scrollToGrid : undefined} label="表の職長承認の行へ" />
+          <TodoStrip icon="check" tone={finalWaitDays.length > 0 ? 'info' : 'ok'}
+            title="最終承認待ち"
+            big={finalWaitDays.length > 0 ? `${finalWaitDays.length}日` : 'ありません'}
+            onClick={finalWaitDays.length > 0 ? scrollToGrid : undefined} label="表の最終承認の行へ" />
+          <TodoStrip icon="doc" tone={reqTotal > 0 ? 'warn' : 'ok'}
+            title="申請（有給・帰国）"
+            big={reqTotal > 0 ? `${reqTotal}件` : 'ありません'}
+            onClick={reqTotal > 0 ? () => setRequestsOpen(true) : undefined} label="申請を開く" />
+          <TodoStrip icon="alert" tone={checkItems.length > 0 ? 'warn' : 'ok'}
+            title="確認すること"
+            big={checkItems.length > 0 ? `${checkItems.length}件` : 'ありません'}
+            onClick={checkItems.length > 0 ? () => setChecksOpen(v => !v) : undefined} label="確認することを開く" />
+        </div>
+      )}
 
-      {/* ── 勤怠申請のアクションバー（2026-05-18 追加） ── */}
-      {/* 出面入力画面で有給承認・帰国承認まで完結できるようにする。スマホ操作前提。 */}
+      {/* ── 勤怠申請（2026-05-18 追加）。2026-10-01: 上に張り付くバーをやめ、「申請」の帯から右に開くパネルに。
+          閉じていても件数は取りに行く（上の帯に出すため） ── */}
       {password && userRole && (
         <AttendanceActionBar
           password={password}
@@ -1335,22 +1389,53 @@ export default function AttendanceGridPage() {
           userWorkerId={userId}
           userForemanSites={userForemanSites}
           onUpdate={fetchData}
+          variant="panel"
+          open={requestsOpen}
+          onClose={() => setRequestsOpen(false)}
+          onCounts={setReqCounts}
         />
       )}
 
-      {/* 休日・日曜の出勤警告。1日につき1件だけ出す（日曜と休日で二重表示しない） */}
-      <AttendanceWarningBanner
-        title="休日・日曜の出勤あり"
-        items={restDayWarnings.map(w => ({ workerName: w.workerName, day: w.day, suffix: w.dayType }))}
-        tone="orange"
-      />
+      {/* ── 確認すること: ふだんは1行の要約。開くと今までの注意書きを並べる（中身・動きは旧と同じ） ── */}
+      {!loading && data && checkItems.length > 0 && (
+        <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/15 overflow-hidden">
+          <button type="button" onClick={() => setChecksOpen(v => !v)} aria-expanded={checksOpen}
+            className="w-full px-4 py-2.5 flex items-center gap-2.5 text-left">
+            <Icon name="alert" size={16} className="text-amber-700 dark:text-amber-300 shrink-0" />
+            <span className="text-sm font-bold text-gray-900 dark:text-white whitespace-nowrap">確認すること {checkItems.length}件</span>
+            <span className="text-[13px] text-amber-900 dark:text-amber-200 truncate min-w-0">{checkItems.join('・')}</span>
+            <span className="ml-auto text-[13px] font-bold text-hibi-navy dark:text-blue-300 whitespace-nowrap">{checksOpen ? '閉じる' : '開く'}</span>
+          </button>
+          {checksOpen && (
+            <div className="px-3 pb-3 space-y-2">
+              {/* 翌月カレンダー未確定アラート（components/attendance/NextMonthCalendarBanner.tsx に集約） */}
+              <NextMonthCalendarBanner check={nextMonthCalCheck} />
+              {/* 休日・日曜の出勤警告。1日につき1件だけ出す（日曜と休日で二重表示しない） */}
+              <AttendanceWarningBanner
+                title="休日・日曜の出勤あり"
+                items={restDayWarnings.map(w => ({ workerName: w.workerName, day: w.day, suffix: w.dayType }))}
+                tone="orange"
+              />
 
-      {/* 工種の重複（同じ人・同じ日が2つ以上の工種に入っている・2026-09-25） */}
-      <AttendanceWarningBanner
-        title="工種の重複あり（両方に入力されています）"
-        items={workTypeWarnings}
-        tone="warning"
-      />
+              {/* 工種の重複（同じ人・同じ日が2つ以上の工種に入っている・2026-09-25） */}
+              <AttendanceWarningBanner
+                title="工種の重複あり（両方に入力されています）"
+                items={workTypeWarnings}
+                tone="warning"
+              />
+
+              {/* 帰国情報バナー（components/attendance/HomeLeaveBanner.tsx に集約） */}
+              <HomeLeaveBanner homeLeaves={data?.homeLeaves} />
+              {/* 休みの区別の取り違えの疑い（職長承認の前に気づけるように・2026-09-30） */}
+              {data && <RestMismatchBanner items={data.restMismatch} workers={data.workers} month={data.month} />}
+
+              {/* 退職予定バナー（components/attendance/UpcomingRetirementsBanner.tsx に集約） */}
+              <UpcomingRetirementsBanner retirements={data?.upcomingRetirements} />
+
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 期間で工種を切り替える（工種のある現場だけ・2026-09-25）。
           「26日〜30日は鉄骨工事」のように日をまとめて決める。1日だけなら日付の見出しのチップでもよい */}
@@ -1391,16 +1476,9 @@ export default function AttendanceGridPage() {
         </div>
       )}
 
-      {/* 帰国情報バナー（components/attendance/HomeLeaveBanner.tsx に集約） */}
-      <HomeLeaveBanner homeLeaves={data?.homeLeaves} />
-      {/* 休みの区別の取り違えの疑い（職長承認の前に気づけるように・2026-09-30） */}
-      {data && <RestMismatchBanner items={data.restMismatch} workers={data.workers} month={data.month} />}
-
-      {/* 退職予定バナー（components/attendance/UpcomingRetirementsBanner.tsx に集約） */}
-      <UpcomingRetirementsBanner retirements={data?.upcomingRetirements} />
-
       {/* ── Grid Table ── */}
       {!loading && data && (
+        <div id="att-grid" className="scroll-mt-4">
         <AttendanceGrid
           data={data}
           days={days}
@@ -1449,6 +1527,7 @@ export default function AttendanceGridPage() {
           onMoveWorkType={(workerId, day, toSiteId) => handleMoveWorkType(workerId, day, toSiteId, 'worker')}
           onMoveWorkTypeSubcon={(subconId, day, toSiteId) => handleMoveWorkType(subconId, day, toSiteId, 'subcon')}
         />
+        </div>
       )}
 
       {/* No data placeholder */}

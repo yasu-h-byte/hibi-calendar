@@ -11,6 +11,6 @@ export { Button } from './Button'
 export { EmptyState, LoadingState } from './EmptyState'
 export { Icon } from './Icon'
 export {
-  PageHeader, ToolButton, UnderlineTabs, Segment, SearchBox, TodoCard, Chip, AmountChip, SidePanel, CloseButton,
+  PageHeader, ToolButton, UnderlineTabs, Segment, SearchBox, TodoCard, TodoStrip, Chip, AmountChip, SidePanel, CloseButton,
 } from './PageParts'
 export type { UnderlineTab, TodoTone, ChipTone } from './PageParts'

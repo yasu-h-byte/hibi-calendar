@@ -171,6 +171,38 @@ export function TodoCard({ icon, tone, title, big, sub, action, onClick, active 
     : <div className={cls}>{body}</div>
 }
 
+/**
+ * 低い「今やること」の帯（2026-10-01 出面入力）。入力の表のように画面の主役が下にある画面で、
+ * 大きなカードの代わりに使う（表が上のほうから始まるように）。押すとその作業へ。
+ */
+export function TodoStrip({ icon, tone, title, big, onClick, label }: {
+  icon: IconName
+  tone: TodoTone
+  title: string
+  big: string
+  onClick?: () => void
+  /** 読み上げ用（押すと何が起きるか） */
+  label?: string
+}) {
+  const t = TODO_TONE[tone]
+  const body = (
+    <>
+      <span className={`w-[30px] h-[30px] rounded-lg flex items-center justify-center shrink-0 ${t.chip}`}>
+        <Icon name={tone === 'ok' ? 'check' : icon} size={16} />
+      </span>
+      <span className="flex flex-col min-w-0 flex-1 text-left">
+        <span className={`text-xs font-bold ${t.title}`}>{title}</span>
+        <span className={`text-[17px] font-bold leading-tight ${tone === 'ok' ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>{big}</span>
+      </span>
+      {onClick && <Icon name="chevronRight" size={16} className="text-hibi-navy dark:text-blue-300 shrink-0" />}
+    </>
+  )
+  const cls = 'bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl px-3.5 py-2.5 flex items-center gap-2.5'
+  return onClick
+    ? <button type="button" onClick={onClick} aria-label={label} className={`${cls} hover:border-hibi-navy dark:hover:border-blue-400 transition`}>{body}</button>
+    : <div className={cls}>{body}</div>
+}
+
 // ─── 札 ─────────────────────────────────────────
 
 const CHIP_TONE = {

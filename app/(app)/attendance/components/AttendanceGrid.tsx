@@ -1,5 +1,6 @@
 'use client'
 
+import { Icon } from '@/components/ui/Icon'
 import { siteLeaderLabel } from '@/lib/companies'
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -188,24 +189,18 @@ export default function AttendanceGrid({
   //   同じ重なり順で、上へスクロールすると見出し行が承認バーの上に描かれていた
   return (
     <div className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
-      {todayIdx >= 0 && (
-        <div className="flex justify-end items-center gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700">
-          {/* スマホ最適化画面との相互切替（2026-09-02 追加。スマホ幅のときだけ表示） */}
-          <a
-            href="/attendance/mobile"
-            className="sm:hidden text-xs font-bold px-3 py-1 rounded-md border border-blue-400 text-blue-600"
-          >
-            📱 スマホ版へ
-          </a>
-          <button
-            type="button"
-            onClick={jumpToToday}
-            className="text-xs font-bold px-3 py-1 rounded-md border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition"
-          >
-            📍 今日へ
+      {/* 2026-10-01: 上部の案内と「今日へ」。絵文字をやめる */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-hibi-line dark:border-gray-700">
+        <span className="hidden sm:inline text-[13px] text-hibi-sub dark:text-gray-400">セルを押して入力。外国人スタッフは本人のスマホ入力が入ります</span>
+        {/* スマホ最適化画面との相互切替（2026-09-02 追加。スマホ幅のときだけ表示） */}
+        <a href="/attendance/mobile" className="sm:hidden text-xs font-bold px-3 py-1.5 rounded-lg border border-hibi-navy text-hibi-navy">スマホ版へ</a>
+        {todayIdx >= 0 && (
+          <button type="button" onClick={jumpToToday}
+            className="ml-auto text-[13px] font-bold px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition">
+            今日へ
           </button>
-        </div>
-      )}
+        )}
+      </div>
       <div ref={scrollRef} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
         <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 80}px` }}>
           <thead ref={theadRef} className="sticky top-0 z-30">
@@ -317,25 +312,28 @@ export default function AttendanceGrid({
             {/* ── 職長承認 row（1次承認: 担当現場の職長のみ）──
                  職長名はこの承認行に集約表示（旧: 上部に空セルだけの黄色「職長行」があったが
                  情報が無く名前も二重だったため 2026-07-09 に削除。代理メモはここへ移設）。 */}
-            <tr ref={foremanRowRef} className="bg-orange-50 border-b border-orange-100 sticky z-[25]" style={{ top: approvalTops[0] }}>
+            <tr ref={foremanRowRef} className="bg-white dark:bg-gray-800 border-b border-hibi-line dark:border-gray-700 sticky z-[25]" style={{ top: approvalTops[0] }}>
+              {/* 2026-10-01: 誰が押す行かを2行で・ボタンを大きく（旧: 9px の「一括承認」） */}
               <td
-                className="sticky left-0 z-20 bg-orange-50 px-2 py-1 font-bold text-orange-700 whitespace-nowrap text-[11px]"
+                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 whitespace-nowrap"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
-                {data.site.foremanName ? `${data.site.foremanName} ${siteLeaderLabel(data.isSupportSite)}承認` : `${siteLeaderLabel(data.isSupportSite)}承認`}
-                {data.site.foremanNote ? <span className="text-[9px] text-gray-500 font-normal ml-1">({data.site.foremanNote})</span> : ''}
-                {canForemanApprove && (unapprovedDays.length > 0 ? (
-                  <button
-                    onClick={onForemanApproveAll}
-                    className="ml-2 text-[9px] bg-orange-500 text-white px-1.5 py-0.5 rounded hover:bg-orange-600 transition"
-                  >
-                    一括承認
-                  </button>
-                ) : (
-                  <span className="ml-2 text-[9px] text-orange-600">全承認済</span>
-                ))}
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-bold text-gray-900 dark:text-white">{siteLeaderLabel(data.isSupportSite)}承認</div>
+                    <div className="text-[11px] text-hibi-sub dark:text-gray-400 truncate">{data.site.foremanName || '—'}{data.site.foremanNote ? `（${data.site.foremanNote}）` : ''}</div>
+                  </div>
+                  {canForemanApprove && (unapprovedDays.length > 0 ? (
+                    <button onClick={onForemanApproveAll}
+                      className="ml-auto shrink-0 h-7 px-2.5 rounded-md bg-hibi-navy text-white text-xs font-bold hover:bg-hibi-light transition">
+                      まとめて承認
+                    </button>
+                  ) : (
+                    <span className="ml-auto shrink-0 text-xs font-bold text-green-700 dark:text-green-400">全日承認済み</span>
+                  ))}
+                </div>
               </td>
-              <td className="sticky z-20 bg-orange-50 px-1 py-1 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-white dark:bg-gray-800 px-1 py-1 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => {
                 const approved = localApprovals[d.day]
                 // 既に最終承認済みの場合は職長承認も解除できない（先に最終を外す必要）
@@ -345,7 +343,7 @@ export default function AttendanceGrid({
                 return (
                   <td
                     key={d.day}
-                    className={`px-0 py-1 border-l border-orange-100 bg-orange-50 text-center ${clickable ? 'cursor-pointer hover:bg-orange-100' : ''}`}
+                    className={`px-0 py-1 border-l border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 text-center ${clickable ? 'cursor-pointer hover:bg-hibi-active dark:hover:bg-gray-700' : ''}`}
                     style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                     onClick={clickable ? () => onToggleForemanApproval(d.day) : undefined}
                     title={
@@ -355,33 +353,36 @@ export default function AttendanceGrid({
                     }
                   >
                     {approved ? (
-                      <span className="text-orange-600 text-[11px] font-bold">&#x2713;</span>
-                    ) : (
-                      <span className={`text-[11px] ${clickable ? 'text-orange-400' : 'text-orange-300'}`}>-</span>
-                    )}
+                      <Icon name="check" size={15} strokeWidth={3} className="mx-auto text-hibi-navy dark:text-blue-300" />
+                    ) : clickable ? (
+                      <span className="inline-block w-4 h-4 rounded border-2 border-hibi-navy/50 dark:border-blue-400/60" />
+                    ) : null}
                   </td>
                 )
               })}
-              <td className="px-1 py-1 text-center border-l-2 border-orange-200 bg-orange-50" style={{ width: 80, minWidth: 80 }}></td>
+              <td className="px-1 py-1 text-center border-l-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" style={{ width: 80, minWidth: 80 }}></td>
             </tr>
 
             {/* ── 最終承認 row（事業責任者・管理者: 職長承認後のみ操作可） ── */}
-            <tr className="bg-indigo-50 border-b border-indigo-200 sticky z-[25]" style={{ top: approvalTops[1] }}>
+            <tr className="bg-white dark:bg-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky z-[25]" style={{ top: approvalTops[1] }}>
               <td
-                className="sticky left-0 z-20 bg-indigo-50 px-2 py-1 font-bold text-indigo-700 whitespace-nowrap text-[11px]"
+                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 whitespace-nowrap"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
-                最終承認
-                {canFinalize && (finalizableDays.length > 0 ? (
-                  <button
-                    onClick={onFinalApproveAll}
-                    className="ml-2 text-[9px] bg-indigo-600 text-white px-1.5 py-0.5 rounded hover:bg-indigo-700 transition"
-                  >
-                    一括最終承認
-                  </button>
-                ) : null)}
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-bold text-gray-900 dark:text-white">最終承認</div>
+                    <div className="text-[11px] text-hibi-sub dark:text-gray-400">事業責任者</div>
+                  </div>
+                  {canFinalize && finalizableDays.length > 0 && (
+                    <button onClick={onFinalApproveAll}
+                      className="ml-auto shrink-0 h-7 px-2.5 rounded-md bg-green-700 text-white text-xs font-bold hover:bg-green-800 transition">
+                      まとめて最終承認
+                    </button>
+                  )}
+                </div>
               </td>
-              <td className="sticky z-20 bg-indigo-50 px-1 py-1 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-white dark:bg-gray-800 px-1 py-1 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => {
                 const foremanApproved = localApprovals[d.day]
                 const finalApproved = localFinalApprovals[d.day]
@@ -390,7 +391,7 @@ export default function AttendanceGrid({
                 return (
                   <td
                     key={d.day}
-                    className={`px-0 py-1 border-l border-indigo-100 bg-indigo-50 text-center ${clickable ? 'cursor-pointer hover:bg-indigo-100' : ''}`}
+                    className={`px-0 py-1 border-l border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 text-center ${clickable ? 'cursor-pointer hover:bg-green-50 dark:hover:bg-gray-700' : ''}`}
                     style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                     onClick={clickable ? () => onToggleFinalApproval(d.day) : undefined}
                     title={
@@ -401,16 +402,14 @@ export default function AttendanceGrid({
                     }
                   >
                     {finalApproved ? (
-                      <span className="text-indigo-700 text-[11px] font-bold">&#x2713;&#x2713;</span>
+                      <Icon name="check" size={15} strokeWidth={3} className="mx-auto text-green-700 dark:text-green-400" />
                     ) : foremanApproved && canFinalize ? (
-                      <span className="text-[11px] text-indigo-400">-</span>
-                    ) : (
-                      <span className="text-[11px] text-indigo-200">·</span>
-                    )}
+                      <span className="inline-block w-4 h-4 rounded border-2 border-green-700/50 dark:border-green-400/60" />
+                    ) : null}
                   </td>
                 )
               })}
-              <td className="px-1 py-1 text-center border-l-2 border-indigo-200 bg-indigo-50" style={{ width: 80, minWidth: 80 }}></td>
+              <td className="px-1 py-1 text-center border-l-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" style={{ width: 80, minWidth: 80 }}></td>
             </tr>
 
             {/* ── Worker groups ── */}
@@ -878,7 +877,7 @@ export default function AttendanceGrid({
       </div>
 
       {/* Legend */}
-      <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 flex items-center gap-4 text-[10px] text-gray-500 dark:text-gray-400 flex-wrap">
+      <div className="px-4 py-2.5 bg-white dark:bg-gray-800 border-t border-hibi-line dark:border-gray-700 flex items-center gap-x-4 gap-y-1.5 text-xs text-hibi-sub dark:text-gray-400 flex-wrap">
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded bg-amber-50 border border-amber-200" /> 今日
         </span>
@@ -888,7 +887,7 @@ export default function AttendanceGrid({
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 h-3 rounded bg-blue-50 border border-blue-200" /> 土曜
         </span>
-        <span className="mx-2 border-l border-gray-300 h-3" />
+        <span className="mx-1 border-l border-hibi-line dark:border-gray-600 h-3" />
         {hasWorkTypes && (
           <>
             <span className="text-hibi-navy font-medium">工種:</span>
@@ -896,19 +895,20 @@ export default function AttendanceGrid({
               <span key={o.id} className={`px-1.5 py-0.5 rounded-md font-bold text-[11px] ${o.cls}`}>{o.label}</span>
             ))}
             <span>日付の見出しのチップ＝その日の全員の工種。色付きの列＝その工種の日。マスのタグ＝その人だけの例外</span>
-            <span className="mx-2 border-l border-gray-300 h-3" />
+            <span className="mx-1 border-l border-hibi-line dark:border-gray-600 h-3" />
           </>
         )}
         <span><strong className="text-green-700">1</strong> = 出勤</span>
         <span><strong className="text-yellow-700">0.5</strong> = 半日</span>
         <span><strong className="text-purple-600">有</strong> = 有給</span>
         <span className="text-amber-700">下段 = 残業h</span>
+        {(canForemanApprove || canFinalize) && <span className="sm:ml-auto">承認の行の四角＝押すと承認できる日</span>}
         {useTimeBased && data.workers.some(w => w.visa && w.visa !== 'none' && w.visa !== '') && (
           <>
-            <span className="mx-2 border-l border-gray-300 h-3" />
+            <span className="mx-1 border-l border-hibi-line dark:border-gray-600 h-3" />
             <span className="text-orange-600 font-medium">外国人:</span>
             <span><strong className="text-green-700">出</strong> = 時間入力</span>
-            <span>休憩: ☐午前30分 / ☐午後30分（昼60分は固定）</span>
+            <span>休憩: 午前30分・午後30分のチェック（昼60分は固定）</span>
             <span className="text-amber-600">7h超=残業</span>
           </>
         )}

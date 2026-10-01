@@ -26,7 +26,7 @@ const ROLE_LABEL: Record<Role, string> = {
 // 全資料（フラットに保持。category は表示グループ用）
 const DOCS: (DocItem & { category: string })[] = [
   // ── 全員向けの入口 ──
-  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-09-26' },
+  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-10-01' },
 
   // ── 事務（森田さん・2026-10からキャシュモ委託体制） ──
   { category: 'manual', roles: ['jimu'], title: '事務業務マニュアル（森田さん向け）', desc: '奥寺さん・佐藤さんの業務を統合した引き継ぎ版。出面補助・申請承認・道具代・月次締め・キャシュモへの資料提出まで（給与計算・振込はキャシュモ委託）', url: '/manual-morita.html', icon: '📘', badge: 'NEW', updated: '2026-10-01' },

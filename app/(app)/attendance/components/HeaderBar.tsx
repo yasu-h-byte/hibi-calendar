@@ -1,9 +1,13 @@
 'use client'
 
 import { GridData } from '../types'
+import { Icon } from '@/components/ui/Icon'
+import { PageHeader, ToolButton, Chip } from '@/components/ui/PageParts'
 
-// ヘッダー行: タイトル・ショートカット案内・ロック表示・人数バッジ・配置編集・
-// 所定日数・保存状態・現場/年月選択
+// 見出し（2026-10-01 出面入力の改修・見本キャンバス7段目）
+//   1段目: 題名（ロック中の印・ショートカット案内）と、右に保存状態・配置・一括入力・変更履歴
+//   2段目: 現場・月の切り替え・終了した現場も出す・所定日数（2026年4月以前のみ）と、右に人数
+//   処理（保存・切り替え）は旧と同じ。見せ方だけ変えた。
 
 interface Props {
   data: GridData | null
@@ -25,172 +29,114 @@ interface Props {
   onShowArchivedChange: (checked: boolean) => void
 }
 
+const SHORTCUTS = [
+  'キーボードショートカット',
+  '',
+  '【セル内】',
+  ' W → 出勤 / P → 有給 / R → 休み',
+  ' E → 試験 / H → 現場休',
+  ' (select の標準動作: 文字キーで該当オプションへジャンプ)',
+  '',
+  '【ナビゲーション】',
+  ' Enter → 同じ日の次のスタッフへ移動',
+  ' Shift+Enter → 同じ日の前のスタッフへ移動',
+  ' Tab → 同じ行の次のセル',
+  ' Shift+Tab → 同じ行の前のセル',
+  '',
+  '【その他】',
+  ' Esc → フォーカス解除（誤入力時）',
+  ' Cmd+S (Mac) / Ctrl+S (Win) → 自動保存中なので何も起きません',
+  '   （ブラウザのページ保存ダイアログを抑制）',
+].join('\n')
+
+const selectCls = 'h-[42px] border border-gray-300 dark:border-gray-600 rounded-[10px] px-3 text-[15px] font-bold bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none'
+
 export default function HeaderBar({
   data, useTimeBased, saveStatus, workDaysInput, siteId, ym, showArchived, allSites, ymOptions,
   onOpenAssign, onOpenHistory, onOpenBulk, onWorkDaysChange, onSiteChange, onYmChange, onShowArchivedChange,
 }: Props) {
+  // 月の選択肢は新しい月が上（attendance-grid の getYmOptions）。前の月＝下の項目
+  const ymIdx = ymOptions.findIndex(o => o.ym === ym)
+  const prevYm = ymIdx >= 0 ? ymOptions[ymIdx + 1]?.ym : undefined
+  const nextYm = ymIdx > 0 ? ymOptions[ymIdx - 1]?.ym : undefined
+
+  const saveChip = saveStatus === 'saving' ? <Chip tone="blue">保存中...</Chip>
+    : saveStatus === 'saved' ? <Chip tone="green">保存済み</Chip>
+    : saveStatus === 'error' ? <Chip tone="red">保存失敗 — 内容を確認してください</Chip>
+    : null
+
   return (
-    <div className="flex items-center gap-3 flex-wrap">
-      <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-        出面入力
-        {/* 2026-06-XX 追加 (UI #5): キーボードショートカット案内 */}
-        <span
-          className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-normal bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full cursor-help"
-          title={[
-            '⌨️ キーボードショートカット',
-            '',
-            '【セル内】',
-            ' W → 出勤 / P → 有給 / R → 休み',
-            ' E → 試験 / H → 現場休',
-            ' (select の標準動作: 文字キーで該当オプションへジャンプ)',
-            '',
-            '【ナビゲーション】',
-            ' Enter → 同じ日の次のスタッフへ移動',
-            ' Shift+Enter → 同じ日の前のスタッフへ移動',
-            ' Tab → 同じ行の次のセル',
-            ' Shift+Tab → 同じ行の前のセル',
-            '',
-            '【その他】',
-            ' Esc → フォーカス解除（誤入力時）',
-            ' Cmd+S (Mac) / Ctrl+S (Win) → 自動保存中なので何も起きません',
-            '   （ブラウザのページ保存ダイアログを抑制）',
-          ].join('\n')}
-        >
-          ショートカット
-        </span>
-      </h1>
+    <div className="space-y-3">
+      <PageHeader
+        group="出面・勤怠"
+        title={<span className="inline-flex items-center gap-2 flex-wrap">
+          出面入力
+          {data?.locked && <Chip tone="red"><span className="inline-flex items-center gap-1"><Icon name="lock" size={12} strokeWidth={2.4} />ロック中</span></Chip>}
+          <span title={SHORTCUTS} className="cursor-help px-2 py-0.5 text-[11px] font-normal rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">ショートカット</span>
+        </span>}
+        actions={<>
+          {saveChip}
+          <ToolButton icon="users" onClick={onOpenAssign} title="この現場に入る人・外注を選びます">配置</ToolButton>
+          {onOpenBulk && <ToolButton icon="pen" onClick={onOpenBulk} title="人と日にちをまとめて選び、同じ内容を一度に入れます">一括入力</ToolButton>}
+          {/* 誤削除・誤上書きからの復元（2026-08-28 追加） */}
+          <ToolButton icon="clock" onClick={onOpenHistory} title="消した・上書きした記録を元に戻せます（90日保持）">変更履歴</ToolButton>
+        </>}
+      />
 
-      {data?.locked && (
-        <span className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">
-          <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-          </svg>
-          ロック中
-        </span>
-      )}
-
-      {/* Organization count badges */}
-      {data && (
-        <div className="flex items-center gap-2 text-xs">
-          <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-            日比建設 {data.workers.filter(w => w.org === 'hibi').length}名
-          </span>
-          <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-            HFU {data.workers.filter(w => w.org === 'hfu').length}名
-          </span>
-          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
-            外注 {data.subcons.length}社
-          </span>
-        </div>
-      )}
-
-      {/* 配置編集 button */}
-      <button
-        onClick={onOpenAssign}
-        className="text-xs px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium transition"
-      >
-        配置編集
-      </button>
-
-      {onOpenBulk && (
-        <button
-          type="button"
-          onClick={onOpenBulk}
-          title="人と日にちをまとめて選び、同じ内容を一度に入れます"
-          className="text-xs px-3 py-1.5 bg-hibi-navy text-white hover:opacity-90 rounded-lg font-bold transition"
-        >
-          一括入力
-        </button>
-      )}
-
-      {/* 誤削除・誤上書きからの復元（2026-08-28 追加） */}
-      <button
-        type="button"
-        onClick={onOpenHistory}
-        title="消した・上書きした記録を元に戻せます（90日保持）"
-        className="text-xs px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium transition"
-      >
-        変更履歴
-      </button>
-
-      {/* 所定日数 input（5月以降はカレンダーで確定するため非表示） */}
-      {data && !useTimeBased && (
-        <div className="flex items-center gap-1.5 text-xs">
-          <label className="text-gray-600 font-medium whitespace-nowrap">所定日数:</label>
-          <input
-            type="number"
-            min="0"
-            max="31"
-            step="1"
-            value={workDaysInput}
-            onChange={e => onWorkDaysChange(e.target.value)}
-            className="w-14 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-1.5 py-1 text-center text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
-            placeholder="-"
-          />
-          <span className="text-gray-400">日</span>
-          {data.siteWorkDays != null && (
-            <span className="text-green-600 dark:text-green-400 whitespace-nowrap" title="就業カレンダーから自動算出">
-              (カレンダー: {data.siteWorkDays}日)
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Save status indicator */}
-      {saveStatus && (
-        <span className={`text-xs flex items-center gap-1 font-bold px-2.5 py-1 rounded-full ${
-          saveStatus === 'saving' ? 'bg-blue-50 text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300' :
-          saveStatus === 'saved' ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-          'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-        }`}>
-          {saveStatus === 'saving' ? (
-            <>
-              <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              保存中...
-            </>
-          ) : saveStatus === 'saved' ? (
-            <>&#x2713; 保存済み</>
-          ) : (
-            <>⚠️ 保存失敗 — 内容を確認してください</>
-          )}
-        </span>
-      )}
-
-      <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto sm:ml-auto">
-        {/* Site selector */}
-        <select
-          value={siteId}
-          onChange={e => onSiteChange(e.target.value)}
-          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none flex-1 min-w-0 sm:min-w-[180px]"
-        >
-          {/* 工種サイト（鉄骨など）は出さない。親現場の画面で日ごと・人ごとに工種を切り替える（2026-09-30 代表） */}
+      <div className="flex items-center gap-2.5 flex-wrap">
+        {/* 工種サイト（鉄骨など）は出さない。親現場の画面で日ごと・人ごとに工種を切り替える（2026-09-30 代表） */}
+        <select value={siteId} onChange={e => onSiteChange(e.target.value)} aria-label="現場" className={`${selectCls} flex-1 min-w-0 sm:flex-none sm:min-w-[260px]`}>
           {(data?.sites || allSites).filter(s => !(s as { parentId?: string }).parentId)
             .filter(s => showArchived || !(s as { archived?: boolean }).archived).map(s => (
             <option key={s.id} value={s.id}>{s.name}{(s as { archived?: boolean }).archived ? '（終了）' : ''}</option>
           ))}
         </select>
-        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer whitespace-nowrap">
+
+        <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+          <button type="button" onClick={() => prevYm && onYmChange(prevYm)} disabled={!prevYm} aria-label="前の月"
+            className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px] disabled:opacity-30">
+            <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
+          </button>
+          <select value={ym} onChange={e => onYmChange(e.target.value)} aria-label="年月"
+            className="h-full bg-transparent text-[15px] font-bold text-gray-900 dark:text-white focus:outline-none px-1">
+            {ymOptions.map(o => <option key={o.ym} value={o.ym}>{o.label}</option>)}
+          </select>
+          <button type="button" onClick={() => nextYm && onYmChange(nextYm)} disabled={!nextYm} aria-label="次の月"
+            className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px] disabled:opacity-30">
+            <Icon name="chevronRight" size={18} strokeWidth={2.2} />
+          </button>
+        </div>
+
+        <label className="flex items-center gap-1.5 text-[13px] text-hibi-sub dark:text-gray-400 cursor-pointer whitespace-nowrap">
           <input type="checkbox" checked={showArchived} onChange={e => onShowArchivedChange(e.target.checked)} className="rounded" />
-          終了現場
+          終了した現場も出す
         </label>
 
-        {/* Year/Month selector */}
-        <select
-          value={ym}
-          onChange={e => onYmChange(e.target.value)}
-          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none shrink-0"
-        >
-          {ymOptions.map(o => (
-            <option key={o.ym} value={o.ym}>{o.label}</option>
-          ))}
-        </select>
+        {/* 所定日数 input（5月以降はカレンダーで確定するため非表示） */}
+        {data && !useTimeBased && (
+          <div className="flex items-center gap-1.5 text-[13px]">
+            <label className="text-hibi-sub dark:text-gray-400 font-bold whitespace-nowrap">所定日数</label>
+            <input
+              type="number" min="0" max="31" step="1"
+              value={workDaysInput}
+              onChange={e => onWorkDaysChange(e.target.value)}
+              className="w-14 h-9 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-1.5 text-center text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+              placeholder="-"
+            />
+            <span className="text-hibi-sub">日</span>
+            {data.siteWorkDays != null && (
+              <span className="text-green-700 dark:text-green-400 whitespace-nowrap" title="就業カレンダーから自動算出">（カレンダー: {data.siteWorkDays}日）</span>
+            )}
+          </div>
+        )}
+
+        {data && (
+          <div className="flex items-center gap-1.5 sm:ml-auto">
+            <Chip tone="blue">日比建設 {data.workers.filter(w => w.org === 'hibi').length}名</Chip>
+            <Chip tone="gray">HFU {data.workers.filter(w => w.org === 'hfu').length}名</Chip>
+            <Chip tone="gray">外注 {data.subcons.length}社</Chip>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -23,6 +23,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react'
+import { SidePanel, CloseButton, Chip } from '@/components/ui/PageParts'
 
 interface LeaveRequestItem {
   id: string
@@ -57,6 +58,14 @@ interface Props {
   userForemanSites: string[]
   /** 親の出面ページが再フェッチしたい時のフック（承認後など） */
   onUpdate?: () => void
+  /**
+   * 2026-10-01 出面入力の改修: 'panel' は上に張り付くバーをやめ、右から開くパネルで出す。
+   * 開くかどうかは親（「申請」の帯）が決める。閉じていても件数は取りに行き onCounts で親へ返す
+   */
+  variant?: 'bar' | 'panel'
+  open?: boolean
+  onClose?: () => void
+  onCounts?: (c: { leave: number; home: number; foreman: number; final: number }) => void
 }
 
 const fmtDate = (d: string) => {
@@ -71,6 +80,10 @@ export default function AttendanceActionBar({
   userWorkerId,
   userForemanSites,
   onUpdate,
+  variant = 'bar',
+  open = false,
+  onClose,
+  onCounts,
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -182,59 +195,26 @@ export default function AttendanceActionBar({
   const leaveTotal = leaveRequests.length
   const hlTotal = homeLongLeaves.length
   const total = leaveTotal + hlTotal
+  const foremanWaiting = leaveRequests.filter(r => r.status === 'pending').length + hlPending.length
+  useEffect(() => {
+    onCounts?.({ leave: leaveTotal, home: hlTotal, foreman: foremanWaiting, final: total - foremanWaiting })
+  }, [leaveTotal, hlTotal, foremanWaiting, total, onCounts])
 
-  // 0件なら表示しない
-  if (loading && total === 0) {
-    return (
-      <div className="sticky top-0 z-40 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 border-b border-blue-200 dark:border-gray-700 px-3 py-2 text-xs text-gray-500">
-        勤怠申請を確認中...
-      </div>
-    )
-  }
-  if (total === 0) return null
-
-  return (
-    <div className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b-2 border-blue-300 dark:border-gray-700 shadow-sm">
-      {/* ── 折畳みヘッダ（タッチターゲット 大きめ） ── */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full px-3 py-3 flex items-center justify-between gap-2 active:bg-blue-50 dark:active:bg-gray-800 transition"
-        style={{ minHeight: 48 }}
-      >
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-bold text-sm text-hibi-navy dark:text-white">📋 要対応</span>
-          <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5">
-            {total}件
-          </span>
-          {leaveTotal > 0 && (
-            <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full dark:bg-green-900/40 dark:text-green-200">
-              🌴 {leaveTotal}
-            </span>
-          )}
-          {hlTotal > 0 && (
-            <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full dark:bg-purple-900/40 dark:text-purple-200">
-              ✈️ {hlTotal}
-            </span>
-          )}
-        </div>
-        <span className="text-blue-600 dark:text-blue-300 text-sm">{expanded ? '▲ 閉じる' : '▼ 開く'}</span>
-      </button>
-
-      {/* ── 展開時のパネル ── */}
-      {expanded && (
-        <div className="px-3 pb-3 space-y-3 max-h-[60vh] overflow-y-auto bg-blue-50/30 dark:bg-gray-800/50">
+  // 中身（バーを開いたとき・右のパネル 共通）
+  const body = (
+    <>
           {/* 🌴 有給申請 */}
           {leaveTotal > 0 && (
             <div className="pt-3">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-bold text-green-700 dark:text-green-300">🌴 有給申請</span>
-                <span className="text-[10px] bg-green-200 text-green-900 px-1.5 py-0.5 rounded-full font-bold">{leaveTotal}件</span>
+                <span className="text-[15px] font-bold text-gray-900 dark:text-white">有給の申請</span>
+                <Chip tone="gray">{leaveTotal}件</Chip>
               </div>
 
               {/* 職長承認待ち */}
               {leavePending.length > 0 && (
                 <div className="mb-2">
-                  <p className="text-[10px] text-yellow-700 dark:text-yellow-400 font-medium mb-1">⏳ 職長承認待ち（{leavePending.reduce((s, g) => s + g.items.length, 0)}件）</p>
+                  <p className="text-xs text-amber-800 dark:text-amber-300 font-bold mb-1.5">職長承認待ち（{leavePending.reduce((s, g) => s + g.items.length, 0)}件）</p>
                   <div className="space-y-2">
                     {leavePending.map(group => (
                       <LeaveCard
@@ -254,7 +234,7 @@ export default function AttendanceActionBar({
               {/* 最終承認待ち */}
               {leaveForemanApproved.length > 0 && (
                 <div>
-                  <p className="text-[10px] text-blue-700 dark:text-blue-400 font-medium mb-1">⏳ 最終承認待ち（{leaveForemanApproved.reduce((s, g) => s + g.items.length, 0)}件）</p>
+                  <p className="text-xs text-hibi-navy dark:text-blue-300 font-bold mb-1.5">最終承認待ち（{leaveForemanApproved.reduce((s, g) => s + g.items.length, 0)}件）</p>
                   <div className="space-y-2">
                     {leaveForemanApproved.map(group => (
                       <LeaveCard
@@ -275,16 +255,16 @@ export default function AttendanceActionBar({
 
           {/* ✈️ 帰国申請 */}
           {hlTotal > 0 && (
-            <div className={leaveTotal > 0 ? 'border-t border-blue-200 dark:border-gray-700 pt-3' : 'pt-3'}>
+            <div className={leaveTotal > 0 ? 'border-t border-hibi-line dark:border-gray-700 pt-3' : 'pt-3'}>
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-bold text-purple-700 dark:text-purple-300">✈️ 帰国申請</span>
-                <span className="text-[10px] bg-purple-200 text-purple-900 px-1.5 py-0.5 rounded-full font-bold">{hlTotal}件</span>
+                <span className="text-[15px] font-bold text-gray-900 dark:text-white">帰国の申請</span>
+                <Chip tone="cyan">{hlTotal}件</Chip>
               </div>
 
               {/* 職長承認待ち */}
               {hlPending.length > 0 && (
                 <div className="mb-2">
-                  <p className="text-[10px] text-yellow-700 dark:text-yellow-400 font-medium mb-1">⏳ 職長承認待ち（{hlPending.length}件）</p>
+                  <p className="text-xs text-amber-800 dark:text-amber-300 font-bold mb-1.5">職長承認待ち（{hlPending.length}件）</p>
                   <div className="space-y-2">
                     {hlPending.map(req => (
                       <HomeLeaveCard
@@ -304,7 +284,7 @@ export default function AttendanceActionBar({
               {/* 最終承認待ち */}
               {hlForemanApproved.length > 0 && (
                 <div>
-                  <p className="text-[10px] text-blue-700 dark:text-blue-400 font-medium mb-1">⏳ 最終承認待ち（{hlForemanApproved.length}件）</p>
+                  <p className="text-xs text-hibi-navy dark:text-blue-300 font-bold mb-1.5">最終承認待ち（{hlForemanApproved.length}件）</p>
                   <div className="space-y-2">
                     {hlForemanApproved.map(req => (
                       <HomeLeaveCard
@@ -322,6 +302,73 @@ export default function AttendanceActionBar({
               )}
             </div>
           )}
+    </>
+  )
+
+  // 右から開くパネル（2026-10-01）
+  if (variant === 'panel') {
+    if (!open) return null
+    return (
+      <SidePanel label="申請（有給・帰国）" onClose={() => onClose?.()} width="max-w-[520px]">
+        <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[20px] font-bold text-gray-900 dark:text-white">申請（有給・帰国）</h2>
+            <CloseButton onClick={() => onClose?.()} />
+          </div>
+          {loading && total === 0 ? (
+            <div className="text-sm text-hibi-sub">読み込み中...</div>
+          ) : total === 0 ? (
+            <div className="text-sm text-hibi-sub">承認待ちの申請はありません</div>
+          ) : (
+            <div className="space-y-3">{body}</div>
+          )}
+          <p className="text-xs text-hibi-sub dark:text-gray-400">職長が職長承認、政仁さんが最終承認。同じ人・同じ理由の有給は1枚にまとめて承認できます</p>
+        </div>
+      </SidePanel>
+    )
+  }
+
+  // 0件なら表示しない
+  if (loading && total === 0) {
+    return (
+      <div className="sticky top-0 z-40 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 border-b border-blue-200 dark:border-gray-700 px-3 py-2 text-xs text-gray-500">
+        勤怠申請を確認中...
+      </div>
+    )
+  }
+  if (total === 0) return null
+
+  return (
+    <div className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b-2 border-blue-300 dark:border-gray-700 shadow-sm">
+      {/* ── 折畳みヘッダ（タッチターゲット 大きめ） ── */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full px-3 py-3 flex items-center justify-between gap-2 active:bg-blue-50 dark:active:bg-gray-800 transition"
+        style={{ minHeight: 48 }}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-bold text-sm text-hibi-navy dark:text-white">要対応</span>
+          <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5">
+            {total}件
+          </span>
+          {leaveTotal > 0 && (
+            <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full dark:bg-green-900/40 dark:text-green-200">
+              有給 {leaveTotal}
+            </span>
+          )}
+          {hlTotal > 0 && (
+            <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full dark:bg-purple-900/40 dark:text-purple-200">
+              帰国 {hlTotal}
+            </span>
+          )}
+        </div>
+        <span className="text-blue-600 dark:text-blue-300 text-sm">{expanded ? '▲ 閉じる' : '▼ 開く'}</span>
+      </button>
+
+      {/* ── 展開時のパネル ── */}
+      {expanded && (
+        <div className="px-3 pb-3 space-y-3 max-h-[60vh] overflow-y-auto bg-blue-50/30 dark:bg-gray-800/50">
+          {body}
         </div>
       )}
     </div>
@@ -350,25 +397,24 @@ function LeaveCard({ group, actionMode, canAct, processing, onApprove, onReject 
   const dates = group.items.map(r => r.date).sort().map(fmtDate).join('・')
   const fName = first.siteForemanName
 
-  const bgClass = group.status === 'pending'
-    ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800'
-    : 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
+  // 2026-10-01: 色の地をやめて白いカードに（段階は見出しで分かる）
+  const bgClass = 'bg-white border-hibi-line dark:bg-gray-800 dark:border-gray-700'
 
   return (
-    <div className={`rounded-lg border p-2.5 ${bgClass}`}>
+    <div className={`rounded-xl border p-3 ${bgClass}`}>
       <div className="flex items-start gap-2 flex-wrap mb-1">
-        <span className="font-bold text-sm text-hibi-navy dark:text-white">{first.workerName}</span>
+        <span className="font-bold text-[15px] text-gray-900 dark:text-white">{first.workerName}</span>
         {isMulti && (
-          <span className="text-[10px] bg-yellow-200 text-yellow-900 px-1.5 py-0.5 rounded-full font-bold">{group.items.length}件</span>
+          <Chip tone="gray">{group.items.length}件まとめて</Chip>
         )}
         {group.status === 'foreman_approved' && fName && (
-          <span className="text-[10px] text-blue-600">{fName} 職長済</span>
+          <Chip tone="blue">{fName} 職長承認済み</Chip>
         )}
         {first.reason && (
-          <span className="text-[10px] text-gray-500 dark:text-gray-400 break-words flex-1 min-w-0">{first.reason}</span>
+          <span className="text-xs text-hibi-sub dark:text-gray-400 break-words flex-1 min-w-0">{first.reason}</span>
         )}
       </div>
-      <div className="text-xs text-gray-700 dark:text-gray-300 mb-2 break-words">{isMulti ? dates : fmtDate(first.date)}</div>
+      <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-gray-100 mb-2 break-words">{isMulti ? dates : fmtDate(first.date)}</div>
 
       {/* タップターゲット 大きめ・縦並びでスマホ操作しやすく */}
       <div className="flex gap-2 flex-wrap">
@@ -377,7 +423,7 @@ function LeaveCard({ group, actionMode, canAct, processing, onApprove, onReject 
             onClick={() => onApprove(ids)}
             disabled={processing !== null}
             className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-50 ${
-              actionMode === 'foreman' ? 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' : 'bg-green-500 hover:bg-green-600 active:bg-green-700'
+              actionMode === 'foreman' ? 'bg-hibi-navy hover:bg-hibi-light' : 'bg-green-700 hover:bg-green-800'
             } text-white`}
             style={{ minHeight: 36 }}
           >
@@ -386,17 +432,18 @@ function LeaveCard({ group, actionMode, canAct, processing, onApprove, onReject 
               : (isMulti ? '一括最終承認' : '最終承認')}
           </button>
         )}
-        <button
+        {/* 却下は承認できる人だけ（2026-10-01。旧: 権限のない人にも出て、押すとサーバに断られた） */}
+        {canAct && <button
           onClick={() => {
             if (rejecting) onReject(ids, rejectReason)
             else setRejecting(true)
           }}
           disabled={processing !== null}
-          className="px-3 py-2 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+          className="px-3 py-2 border border-red-200 bg-white hover:bg-red-50 text-red-700 dark:bg-gray-800 dark:border-red-800 dark:text-red-300 rounded-lg text-xs font-bold disabled:opacity-50"
           style={{ minHeight: 36 }}
         >
           {isMulti ? '全て却下' : '却下'}
-        </button>
+        </button>}
       </div>
 
       {rejecting && (
@@ -448,23 +495,22 @@ function HomeLeaveCard({ req, actionMode, canAct, processing, onApprove, onRejec
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const fName = req.siteForemanName
-  const bgClass = req.status === 'pending'
-    ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800'
-    : 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
+  // 2026-10-01: 色の地をやめて白いカードに（段階は見出しで分かる）
+  const bgClass = 'bg-white border-hibi-line dark:bg-gray-800 dark:border-gray-700'
 
   return (
-    <div className={`rounded-lg border p-2.5 ${bgClass}`}>
+    <div className={`rounded-xl border p-3 ${bgClass}`}>
       <div className="flex items-start gap-2 flex-wrap mb-1">
-        <span className="font-bold text-sm text-hibi-navy dark:text-white">{req.workerName}</span>
+        <span className="font-bold text-[15px] text-gray-900 dark:text-white">{req.workerName}</span>
         {req.status === 'foreman_approved' && fName && (
-          <span className="text-[10px] text-blue-600">{fName} 職長済</span>
+          <Chip tone="blue">{fName} 職長承認済み</Chip>
         )}
       </div>
-      <div className="text-xs text-gray-700 dark:text-gray-300 mb-1 break-words">
+      <div className="text-sm font-bold tabular-nums text-gray-900 dark:text-gray-100 mb-1 break-words">
         {fmtDate(req.startDate)} 〜 {fmtDate(req.endDate)}
       </div>
       {req.reason && (
-        <div className="text-[10px] text-gray-500 dark:text-gray-400 mb-2 break-words">{req.reason}</div>
+        <div className="text-xs text-hibi-sub dark:text-gray-400 mb-2 break-words">{req.reason}</div>
       )}
 
       <div className="flex gap-2 flex-wrap">
@@ -473,7 +519,7 @@ function HomeLeaveCard({ req, actionMode, canAct, processing, onApprove, onRejec
             onClick={onApprove}
             disabled={processing !== null}
             className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-50 ${
-              actionMode === 'foreman' ? 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700' : 'bg-green-500 hover:bg-green-600 active:bg-green-700'
+              actionMode === 'foreman' ? 'bg-hibi-navy hover:bg-hibi-light' : 'bg-green-700 hover:bg-green-800'
             } text-white`}
             style={{ minHeight: 36 }}
           >
@@ -482,17 +528,17 @@ function HomeLeaveCard({ req, actionMode, canAct, processing, onApprove, onRejec
               : '最終承認'}
           </button>
         )}
-        <button
+        {canAct && <button
           onClick={() => {
             if (rejecting) onReject(rejectReason)
             else setRejecting(true)
           }}
           disabled={processing !== null}
-          className="px-3 py-2 bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+          className="px-3 py-2 border border-red-200 bg-white hover:bg-red-50 text-red-700 dark:bg-gray-800 dark:border-red-800 dark:text-red-300 rounded-lg text-xs font-bold disabled:opacity-50"
           style={{ minHeight: 36 }}
         >
           却下
-        </button>
+        </button>}
       </div>
 
       {rejecting && (

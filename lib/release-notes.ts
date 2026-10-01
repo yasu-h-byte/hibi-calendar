@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_attendance_pc_ux',
+    title: '出面入力（PC）を見やすくしました',
+    content:
+      '表の上に「今やること」の帯（職長承認がまだの日・最終承認待ちの日・申請・確認すること）を並べました。'
+      + '承認は表の上の「職長承認」「最終承認」の行で、全員の入力がそろった日には四角が出ます（「まとめて承認」で一度に）。'
+      + '有給・帰国の申請は「申請」の帯を押すと右から開きます。帰国・退職予定などの注意書きは「確認すること」1行にまとめました。入力のやり方は今までどおりです。',
+    category: 'new',
+    publishedAt: '2026-10-01T14:00:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20261001_dashboard_ux',
     title: 'ダッシュボードを見やすくしました',
     content:

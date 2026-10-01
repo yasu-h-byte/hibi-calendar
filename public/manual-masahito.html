@@ -121,7 +121,7 @@
 <tr><th>段階</th><th>誰が</th><th>やること</th></tr>
 <tr><td>1</td><td>スタッフ</td><td>スマホから出勤（開始/終了時刻・休憩）を入力</td></tr>
 <tr><td>2</td><td>職長</td><td>スマホ職長画面で確認・修正 →「この日を確認する」でロック</td></tr>
-<tr style="background:#eefaf1;"><td><strong>3</strong></td><td><strong>政仁さん</strong></td><td>PC出面画面の<strong>【最終承認行】</strong>で最終承認</td></tr>
+<tr style="background:#eefaf1;"><td><strong>3</strong></td><td><strong>政仁さん</strong></td><td>PC出面画面の表の上の<strong>「最終承認」の行</strong>で最終承認</td></tr>
 </table>
 </div>
 
@@ -130,8 +130,8 @@
 <div class="step"><div class="step-num">1</div><div class="step-text">サイドバー →<strong>「出面入力」</strong>を開く</div></div>
 <div class="step"><div class="step-num">2</div><div class="step-text">右上の<strong>現場セレクタ・年月セレクタ</strong>で現場と月を選ぶ（前回の選択は自動で復元されます）</div></div>
 <div class="step"><div class="step-num">3</div><div class="step-text">その日の全スタッフの出勤状況を確認する</div></div>
-<div class="step"><div class="step-num">4</div><div class="step-text"><strong>【最終承認行】で、職長承認済みの日のセルをクリック</strong> → 緑の <strong style="color:var(--green);">✓</strong> が付く（自動保存）</div></div>
-<div class="step"><div class="step-num">5</div><div class="step-text">複数日をまとめて承認するときは、画面上部の<strong>「一括最終承認」</strong>ボタンを使う</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text"><strong>表の上の「最終承認」の行で、四角が出ている日（職長承認済み）のマスをクリック</strong> → 緑の <strong style="color:var(--green);">✓</strong> が付く（自動保存）</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">複数日をまとめて承認するときは、「最終承認」の行の左の<strong>「まとめて最終承認」</strong>ボタンを使う（画面上の「最終承認待ち」の帯を押すと表の承認行へ移ります）</div></div>
 
 <div class="box box-ok"><strong>保存は自動です。</strong>セルをクリックするだけで承認状態が保存されます。保存ボタンはありません。</div>
 
@@ -151,7 +151,8 @@
 <table>
 <tr><th>表示</th><th>意味</th></tr>
 <tr><td><strong style="color:var(--green);">✓</strong> 緑</td><td>承認済み（もう一度クリックで解除できます）</td></tr>
-<tr><td><strong style="color:#888;">−</strong> グレー</td><td>未承認。<strong>職長が「確認する」を押す前の日は押せません</strong>（職長のロック後に承認可）</td></tr>
+<tr><td>四角（枠だけ）</td><td>職長承認済みで、最終承認できる日</td></tr>
+<tr><td>空白</td><td>未承認。<strong>職長が承認する前の日は押せません</strong>（職長承認のあとに承認可）</td></tr>
 </table>
 
 <div class="box box-warn">
@@ -342,7 +343,7 @@
 <h2 id="sec-history">改訂履歴</h2>
 <table>
 <tr><th>日付</th><th>内容</th></tr>
-<tr><td>2026-10-01</td><td>「2-1b. スマホのマイページから最終承認する」を追加（出面の最終承認・職長がいない現場の代行・有給／帰国申請の最終承認・配置の見直し）</td></tr>
+<tr><td>2026-10-01</td><td>出面入力（PC）の新しい見た目に合わせて最終承認の手順を更新（「最終承認」の行・まとめて最終承認・四角＝承認できる日）。「2-1b. スマホのマイページから最終承認する」を追加（出面の最終承認・職長がいない現場の代行・有給／帰国申請の最終承認・配置の見直し）</td></tr>
 <tr><td>2026-09-28</td><td>メニューを仕事のまとまりごと（出面・勤怠／給与・締め／請求・原価／人・書類／賃金・評価／マスタ・管理）に並べ替えたのに合わせて、メニューの場所の案内を更新</td></tr>
 <tr><td>2026-09-26</td><td>「5. 請求書の承認・発行」を追加。新しいサイドメニュー・検索欄の案内、役割の整理に合わせて使える画面を改訂（原価・収益・月次の締めが政仁さんも可に）。事務の担当を森田さんに</td></tr>
 </table>
