@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_cost_ux',
+    title: '原価・収益を見やすくしました',
+    content:
+      '上に「今やること」（請求額が入っていない現場・赤字や粗利が薄い現場・出向の差し引き）と合計を並べました。'
+      + '現場ごとに1行で売上・原価・粗利・粗利率が分かり、行を押すと右に請求額の入力欄と原価の内訳が開きます。'
+      + '毎月10日までは、開くと前の月が出ます（月初は今月の数字がまだ少ないため）。外注先は来てもらった会社だけを出します。',
+    category: 'new',
+    publishedAt: '2026-10-01T15:40:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261001_invoice_ux',
     title: '請求書・支払を見やすくしました',
     content:
