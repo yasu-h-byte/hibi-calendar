@@ -277,8 +277,11 @@ export default function CostPage() {
 
   // 現場ごとの状態（2026-10-01 改修）: 請求額まだ（原価だけある）／粗利が薄い（15%未満）
   const LOW_RATE = 15
-  const noBilling = (s: SiteProfit) => s.billing === 0 && s.totalCost > 0
-  const lowProfit = (s: SiteProfit) => s.billing > 0 && s.profitRate < LOW_RATE
+  //   請求額が入っていない現場の売上は、API が「人工 × 過去の平均単価」の見込み額で埋めている。
+  //   billing だけ見ると入力済みに見えるので、入力した額（billingRaw）で判定する
+  const noBilling = (s: SiteProfit) => (s.billingRaw ?? 0) === 0 && (s.totalCost > 0 || s.billing > 0)
+  const isEstimate = (s: SiteProfit) => noBilling(s) && s.billing > 0
+  const lowProfit = (s: SiteProfit) => !noBilling(s) && s.billing > 0 && s.profitRate < LOW_RATE
   const sites = data?.sites || []
   const noBillingSites = sites.filter(noBilling)
   const lowSites = sites.filter(lowProfit)
@@ -387,7 +390,7 @@ export default function CostPage() {
           <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <TodoCard icon="pen" tone={noBillingSites.length > 0 ? 'urgent' : 'ok'} title="請求額が入っていない"
               big={noBillingSites.length > 0 ? `${noBillingSites.length}現場` : 'ありません'}
-              sub={noBillingSites.length > 0 ? `${siteNames(noBillingSites)}。入れるまで粗利が正しく出ません` : 'すべての現場に請求額が入っています'}
+              sub={noBillingSites.length > 0 ? `${siteNames(noBillingSites)}。入れるまでは、人工 × 過去の平均単価の見込みで計算しています` : 'すべての現場に請求額が入っています'}
               action={noBillingSites.length > 0 ? '入れる' : undefined}
               active={listFilter === 'nobill'}
               onClick={noBillingSites.length > 0 ? () => setListFilter(listFilter === 'nobill' ? 'all' : 'nobill') : undefined} />
@@ -414,7 +417,7 @@ export default function CostPage() {
             <Stat label="原価" value={fmtYen(kpi.cost)}
               sub={`社員 ${fmtYenMan(t.cost)} ／ 外注 ${fmtYenMan(t.subCost)}（外注率 ${fmtPct(kpi.subconRate)}）`} />
             <Stat label="粗利" value={fmtYen(kpi.profit)} tone={kpi.profit >= 0 ? 'green' : 'red'}
-              sub={`粗利率 ${fmtPct(kpi.profitRate)}${noBillingSites.length > 0 ? '（請求額まだの現場の原価も含む）' : ''}`} />
+              sub={`粗利率 ${fmtPct(kpi.profitRate)}${noBillingSites.length > 0 ? '（請求額まだの現場は見込みで計算）' : ''}`} />
             <Stat label="人工あたり売上" value={(() => { const v = kpi.estMonths > 0 ? kpi.perWEst : kpi.perW; return v > 0 ? fmtYen(v) : '—' })()}
               sub={`基準 ${fmtYen(kpi.billingPerManDayBaseline)} ／ 1人あたり労務費 ${fmtYen(kpi.laborCostPerPersonAll)}`} />
           </section>
@@ -447,10 +450,16 @@ export default function CostPage() {
                   onKeyDown={e => { if (e.key === 'Enter') setOpenSiteId(s.id) }}
                   className={`border-t border-hibi-line dark:border-gray-700 px-5 py-3 grid grid-cols-2 ${SITE_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums`}>
                   <span className="col-span-2 lg:col-span-1 text-[15px] font-bold text-gray-900 dark:text-gray-100">{s.name}</span>
-                  <span className="lg:text-right text-base font-bold">{s.billing > 0 ? fmtYen(s.billing) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                  <span className="lg:text-right text-base font-bold">{isEstimate(s)
+                    ? <span className="text-gray-400 dark:text-gray-500" title="請求額が入るまでは、人工 × 過去の平均単価の見込み額です"><span className="text-[11px] font-normal mr-1">見込み</span>{fmtYen(s.billing)}</span>
+                    : s.billing > 0 ? fmtYen(s.billing) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
                   <span className="lg:text-right text-[15px]">{fmtYen(s.totalCost)}</span>
-                  <span className="lg:text-right text-base font-bold">{nb ? <span className="text-gray-300 dark:text-gray-600">—</span> : <span className={s.profit < 0 ? 'text-red-700 dark:text-red-400' : ''}>{fmtYen(s.profit)}</span>}</span>
-                  <span className="lg:text-right">{nb ? <span className="text-gray-300 dark:text-gray-600">—</span> : <Chip tone={rateTone(s)}>{fmtPct(s.profitRate)}</Chip>}</span>
+                  <span className="lg:text-right text-base font-bold">{nb
+                    ? (isEstimate(s) ? <span className="text-gray-400 dark:text-gray-500">{fmtYen(s.profit)}</span> : <span className="text-gray-300 dark:text-gray-600">—</span>)
+                    : <span className={s.profit < 0 ? 'text-red-700 dark:text-red-400' : ''}>{fmtYen(s.profit)}</span>}</span>
+                  <span className="lg:text-right">{nb
+                    ? (isEstimate(s) ? <span className="text-sm text-gray-400 dark:text-gray-500">{fmtPct(s.profitRate)}</span> : <span className="text-gray-300 dark:text-gray-600">—</span>)
+                    : <Chip tone={rateTone(s)}>{fmtPct(s.profitRate)}</Chip>}</span>
                   <span className="lg:text-right text-sm">{s.tobiEquiv > 0 ? fmtNum(s.tobiEquiv) : '—'}</span>
                   <span className="lg:text-right text-sm">
                     {pm > 0 ? <>{fmtYen(pm)}{s.tobiBase > 0 && <span className={`ml-1 text-xs font-bold ${pm >= s.tobiBase ? 'text-blue-700 dark:text-blue-300' : 'text-red-700 dark:text-red-400'}`}>{Math.round(pm / s.tobiBase * 100)}%</span>}</> : '—'}
@@ -593,6 +602,9 @@ export default function CostPage() {
                 </div>
               ) : (
                 <>
+                  {isEstimate(openSite) && (
+                    <p className="text-[13px] text-hibi-sub dark:text-gray-400">いまは見込み <b className="tabular-nums text-gray-700 dark:text-gray-200">{fmtYen(openSite.billing)}</b>（人工 × 過去の平均単価）で計算しています。請求額を入れると置き換わります</p>
+                  )}
                   {billingInputs(openSite)}
                   <p className="text-xs text-hibi-sub dark:text-gray-400">入れると自動で保存し、粗利を計算し直します。出向中スタッフの分は差し引いた額を入れてください</p>
                 </>
@@ -614,10 +626,10 @@ export default function CostPage() {
               <div className="flex justify-between py-2.5 border-t-2 border-gray-300 dark:border-gray-600"><span className="font-bold">原価 合計</span><span className="text-lg font-bold tabular-nums">{fmtYen(openSite.totalCost)}</span></div>
             </section>
 
-            {!noBilling(openSite) && openSite.billing > 0 && (
+            {openSite.billing > 0 && (
               <section className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-3">
-                  <div className="text-xs text-hibi-sub dark:text-gray-400">粗利</div>
+                  <div className="text-xs text-hibi-sub dark:text-gray-400">粗利{isEstimate(openSite) ? '（見込み）' : ''}</div>
                   <div className={`text-xl font-bold tabular-nums ${openSite.profit < 0 ? 'text-red-700 dark:text-red-400' : ''}`}>{fmtYen(openSite.profit)}</div>
                   <div className="mt-1"><Chip tone={rateTone(openSite)}>粗利率 {fmtPct(openSite.profitRate)}</Chip></div>
                 </div>
