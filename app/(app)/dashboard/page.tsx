@@ -501,7 +501,7 @@ function MonthCard({ data, ym, onPrev, onNext }: { data: DashboardData; ym: stri
               <span className="text-sm text-hibi-sub dark:text-gray-400">人工</span>
             </div>
             {s.prevTotalManDays > 0 && s.pctWork !== 0 && (
-              <span title="前月同日比"><Chip tone={s.pctWork > 0 ? 'green' : 'red'}>前月より {s.pctWork > 0 ? '+' : '−'}{Math.abs(Math.round(s.pctWork))}%</Chip></span>
+              <span title={ym === currentYmJst() ? '前月の同じ日までとの比較' : '前月1か月との比較'}><Chip tone={s.pctWork > 0 ? 'green' : 'red'}>前月より {s.pctWork > 0 ? '+' : '−'}{Math.abs(Math.round(s.pctWork))}%</Chip></span>
             )}
           </div>
           <div>
@@ -510,7 +510,8 @@ function MonthCard({ data, ym, onPrev, onNext }: { data: DashboardData; ym: stri
               <span className={`text-[30px] leading-tight font-bold tabular-nums ${s.billing === 0 ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
                 {s.billing === 0 ? '未入力' : fmtYenMan(s.billing)}
               </span>
-              {s.billing > 0 && <span className="text-sm text-hibi-sub dark:text-gray-400">万円</span>}
+              {/* fmtYenMan は「¥2,719万」まで返すので、足すのは「円」だけ（旧は「万円」で万が二重だった） */}
+              {s.billing > 0 && <span className="text-sm text-hibi-sub dark:text-gray-400">円</span>}
             </div>
             <MoreLink href="/cost">原価・収益へ</MoreLink>
           </div>
