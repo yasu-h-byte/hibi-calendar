@@ -286,8 +286,8 @@ export default function AttendanceGrid({
                         夜
                       </button>
                     )}
-                    {/* 便ごとの運転者（運転手当）。記録がある日は 運N で常時表示、
-                        無い日はホバーで薄く出る（夜バッジと同じ流儀） */}
+                    {/* 便ごとの運転者（運転手当）。記録がある日は 運N（塗り）、無い日も枠つきの「運」で常に出す。
+                        夜勤と違い毎日使ううえ、職長はスマホで開くのでホバーでは出せない（2026-10-02 代表） */}
                     {onDriverClick && !data.locked && (() => {
                       const dr = drivers?.[d.day]
                       const cnt = (dr?.am.length || 0) + (dr?.pm.length || 0)
@@ -298,8 +298,8 @@ export default function AttendanceGrid({
                           title={cnt > 0 ? `${d.day}日の運転者（行き${dr!.am.length}・帰り${dr!.pm.length}）` : `${d.day}日の運転者を記録`}
                           className={`mt-0.5 w-full text-[10px] font-bold leading-tight rounded py-0.5 transition-opacity ${
                             cnt > 0
-                              ? 'bg-emerald-600 text-white opacity-100'
-                              : 'text-emerald-600 opacity-0 hover:opacity-100'
+                              ? 'bg-emerald-600 text-white'
+                              : 'border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
                           }`}
                         >
                           {cnt > 0 ? `運${cnt}` : '運'}
