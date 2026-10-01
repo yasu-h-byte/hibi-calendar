@@ -5,7 +5,8 @@ import { useEffect, useState, useCallback } from 'react'
 import { can } from '@/lib/permissions'
 import { COMPANY_ROLES, SELF_COMPANY_ID, SELF_COMPANY_LABEL, hasRole, resolveSiteParties, type CompanyRole } from '@/lib/companies'
 import { fmtYen } from '@/lib/format'
-import { todayJstIso } from '@/lib/date-utils'
+import { todayJstIso, addDaysIso } from '@/lib/date-utils'
+import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
 import { dailyAllowanceYen, DRIVE_ALLOWANCE_YEN, SITE_ALLOWANCE_FROM_YM, judgeFromSamples, COMMUTE_SAMPLE_TARGET } from '@/lib/allowance'
 
 interface RatePeriod {
@@ -112,6 +113,10 @@ const EMPTY_FORM = {
   dokoRate: '',
 }
 
+type SiteFilter = 'all' | 'ending' | 'foreman' | 'rate'
+const SITE_FILTER_LABEL: Record<Exclude<SiteFilter, 'all'>, string> = { ending: '工期の終わりが近い現場', foreman: '職長がいない現場', rate: '既定の単価の現場' }
+const SITE_COLS = 'lg:grid-cols-[minmax(0,1.6fr)_170px_110px_160px_110px_minmax(0,0.9fr)]'
+
 export default function SitesPage() {
   const [sites, setSites] = useState<SiteData[]>([])
   const [assign, setAssign] = useState<Record<string, SiteAssign>>({})
@@ -122,6 +127,8 @@ export default function SitesPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
+  const [query, setQuery] = useState('')
+  const [listFilter, setListFilter] = useState<SiteFilter>('all')
   const [showModal, setShowModal] = useState(false)
   // 編集モーダルのタブ（2026-08-31）。6セクション・入力22個で縦に長すぎたため分割。
   // 人員マスタと同じ考え方（危険な単価まわりを普段の編集から隔離する）。
@@ -553,144 +560,148 @@ export default function SitesPage() {
       .filter((sc): sc is SubconMinimal => !!sc)
   }
 
+  // 今やること（2026-10-01 改修）
+  const today = todayJstIso()
+  const soonLimit = addDaysIso(today, 90)
+  const endKey = (e: string) => (e.length === 7 ? `${e}-31` : e)
+  const live = sites.filter(s => !s.archived)
+  const endingSites = live.filter(s => !s.parentId && s.end && endKey(s.end) <= soonLimit)
+  const noForeman = live.filter(s => !s.parentId && isActive(s) && !s.foreman)
+  const defaultRateSites = live.filter(s => isActive(s) && s.siteType !== 'support' && getLatestRate(s).isDefault)
+  const filterIds: Record<Exclude<SiteFilter, 'all'>, Set<string>> = {
+    ending: new Set(endingSites.map(s => s.id)), foreman: new Set(noForeman.map(s => s.id)), rate: new Set(defaultRateSites.map(s => s.id)),
+  }
+  const toggleFilter = (f: Exclude<SiteFilter, 'all'>) => { setShowArchived(false); setListFilter(listFilter === f ? 'all' : f) }
+  const q = query.trim().replace(/[\s　]/g, '').toLowerCase()
+  const shownSites = sorted
+    .filter(s => (showArchived ? s.archived : !s.archived))
+    .filter(s => listFilter === 'all' || filterIds[listFilter].has(s.id))
+    .filter(s => !q || `${s.name}${s.workType || ''}`.replace(/[\s　]/g, '').toLowerCase().includes(q))
+  const names = (arr: SiteData[]) => arr.slice(0, 2).map(s => s.name.length > 14 ? s.name.slice(0, 14) + '…' : s.name).join('・') + (arr.length > 2 ? ` ほか${arr.length - 2}件` : '')
+  const periodText = (s: SiteData) => s.start && s.end ? `${s.start} 〜 ${s.end}` : s.start ? `${s.start} 〜` : s.end ? `〜 ${s.end}` : '—'
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">現場マスタ</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            稼働中: {activeCount}件 / アーカイブ: {archivedCount}件 / 合計: {sites.length}件
-          </p>
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="マスタ・管理"
+        title="現場マスタ"
+        sub="現場ごとの請負体制・工期・職長・単価。出面・カレンダー・請求・原価のもとになります"
+        actions={
+          <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
+            <span className="text-lg leading-none">＋</span>現場を追加
+          </button>
+        }
+      />
+
+      {/* ① 今やること */}
+      {!loading && (
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <TodoCard icon="clock" tone={endingSites.length > 0 ? 'warn' : 'ok'} title="工期の終わりが近い・過ぎた"
+            big={endingSites.length > 0 ? `${endingSites.length}件` : 'ありません'}
+            sub={endingSites.length > 0 ? `${names(endingSites)}（90日以内）。終わったら「終了」にすると、出面などの選択欄から消えます` : '90日以内に工期が終わる現場はありません'}
+            action={endingSites.length > 0 ? '見る' : undefined} active={listFilter === 'ending'}
+            onClick={endingSites.length > 0 ? () => toggleFilter('ending') : undefined} />
+          <TodoCard icon="user" tone={noForeman.length > 0 ? 'urgent' : 'ok'} title="職長が決まっていない"
+            big={noForeman.length > 0 ? `${noForeman.length}件` : 'ありません'}
+            sub={noForeman.length > 0 ? `${names(noForeman)}。職長がいないと、出面の職長承認ができません` : 'どの現場にも職長が登録されています'}
+            action={noForeman.length > 0 ? '見る' : undefined} active={listFilter === 'foreman'}
+            onClick={noForeman.length > 0 ? () => toggleFilter('foreman') : undefined} />
+          <TodoCard icon="yen" tone={defaultRateSites.length > 0 ? 'info' : 'ok'} title="単価が既定値のまま"
+            big={defaultRateSites.length > 0 ? `${defaultRateSites.length}件` : 'ありません'}
+            sub={defaultRateSites.length > 0 ? `${names(defaultRateSites)}。契約単価が決まったら「単価」に入れてください` : 'どの現場にも単価が入っています'}
+            action={defaultRateSites.length > 0 ? '見る' : undefined} active={listFilter === 'rate'}
+            onClick={defaultRateSites.length > 0 ? () => toggleFilter('rate') : undefined} />
+        </section>
+      )}
+
+      {/* ② 一覧 */}
+      <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
+          <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">現場</h2>
+          <Segment value={showArchived ? 'archived' : 'live'} onChange={v => { setShowArchived(v === 'archived'); setListFilter('all') }} items={[
+            ['live', `使っている ${sites.length - archivedCount}`], ['archived', `終了 ${archivedCount}`],
+          ]} />
+          {listFilter !== 'all' && (
+            <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+              {SITE_FILTER_LABEL[listFilter]}だけ表示中 ×
+            </button>
+          )}
+          <SearchBox value={query} onChange={setQuery} placeholder="現場名で探す" />
         </div>
-        <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">
-          + 新規追加
-        </button>
-      </div>
+        <div className={`hidden lg:grid ${SITE_COLS} gap-3 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300`}>
+          <span>現場</span><span>工期</span><span>職長</span><span className="text-right">単価（鳶／土工）</span><span className="text-right">人数（自社＋外注）</span><span>状態</span>
+        </div>
+        {loading ? (
+          <div className="px-5 py-8 text-center text-sm text-gray-400">読み込み中...</div>
+        ) : shownSites.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">当てはまる現場はありません</div>
+        ) : shownSites.map(s => {
+          const siteAssign = assign[s.id]
+          const workerCount = siteAssign ? siteAssign.workers.length : 0
+          const subconCount = siteAssign ? siteAssign.subcons.length : 0
+          const active = isActive(s)
+          const rate = getLatestRate(s)
+          const nm = (id?: string) => (id ? subcons.find(c => c.id === id)?.name : undefined)
+          const chain = [nm(s.gcId), nm(s.primeId), s.ownerId === SELF_COMPANY_ID ? '自社' : nm(s.ownerId)].filter(Boolean)
+          const ending = filterIds.ending.has(s.id)
+          return (
+            <div key={s.id} role="button" tabIndex={0}
+              onClick={() => openEdit(s)}
+              onKeyDown={e => { if (e.key === 'Enter') openEdit(s) }}
+              className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${SITE_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums ${s.archived ? 'opacity-60' : ''}`}>
+              <span className={`col-span-2 lg:col-span-1 min-w-0 ${s.parentId ? 'pl-5' : ''}`}>
+                <span className="block text-[15px] font-bold text-gray-900 dark:text-gray-100">
+                  {s.parentId ? <span className="text-indigo-700 dark:text-indigo-300">└ 工種: {s.workType}</span> : s.name}
+                </span>
+                {!s.parentId && (chain.length > 0 || s.client) && (
+                  <span className="block text-xs text-hibi-sub dark:text-gray-400 truncate">
+                    {chain.length > 0 ? `${chain.join(' → ')}${s.client ? `（請求先: ${s.client}）` : ''}` : s.client}
+                  </span>
+                )}
+              </span>
+              <span className={`text-[13px] ${ending ? 'text-amber-700 dark:text-amber-400 font-bold' : ''}`}>{periodText(s)}</span>
+              <span className="text-sm">{s.parentId ? <span className="text-hibi-sub">親現場と同じ</span> : s.foreman ? getWorkerName(s.foreman) : <Chip tone="red">まだ</Chip>}</span>
+              <span className="lg:text-right text-sm">
+                <span className={`font-bold ${rate.isDefault ? 'text-gray-400' : ''}`}>{fmtYen(rate.tobiRate)} ／ {fmtYen(rate.dokoRate)}</span>
+                <span className="block text-[11px] text-hibi-sub dark:text-gray-400">{s.siteType === 'support' ? '直接受け取り 100%' : rate.isDefault ? '既定値（85%で計算）' : '85%で計算'}</span>
+              </span>
+              <span className="lg:text-right text-sm">{workerCount} ＋ {subconCount}</span>
+              <span className="flex flex-wrap gap-1">
+                {s.archived ? <Chip tone="gray">終了</Chip> : active ? <Chip tone="green">稼働中</Chip> : <Chip tone="amber">工期が過ぎた</Chip>}
+                {!s.parentId && s.siteType === 'support' && <Chip tone="gray">応援</Chip>}
+                {!s.parentId && s.calendarFromYm && <Chip tone="cyan">{s.calendarFromYm === '999912' ? 'スポット' : `カレンダー ${Number(s.calendarFromYm.slice(4, 6))}月〜`}</Chip>}
+                {s.parentId && <Chip tone="gray">工種</Chip>}
+                {rate.isDefault && !s.archived && s.siteType !== 'support' && <Chip tone="blue">既定の単価</Chip>}
+              </span>
+            </div>
+          )
+        })}
+      </section>
 
-      {/* Show archived toggle */}
-      <div className="flex items-center gap-2">
-        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={e => setShowArchived(e.target.checked)}
-            className="rounded border-gray-300 text-hibi-navy focus:ring-hibi-navy"
-          />
-          アーカイブ済みを表示
-        </label>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
-              <th className="px-3 py-3">現場名</th>
-              <th className="px-3 py-3">工期</th>
-              <th className="px-3 py-3">職長／責任者</th>
-              <th className="px-3 py-3 text-right">鳶単価</th>
-              <th className="px-3 py-3 text-right">土工単価</th>
-              <th className="px-3 py-3 text-center">自社人数</th>
-              <th className="px-3 py-3 text-center">外注数</th>
-              <th className="px-3 py-3 text-center">状態</th>
-              <th className="px-3 py-3">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
-            ) : sorted.length === 0 ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
-            ) : sorted.map(s => {
-              const siteAssign = assign[s.id]
-              const workerCount = siteAssign ? siteAssign.workers.length : 0
-              const subconCount = siteAssign ? siteAssign.subcons.length : 0
-              const active = isActive(s)
-              const rate = getLatestRate(s)
-
-              return (
-                <tr key={s.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${s.archived ? 'opacity-45' : ''}`}>
-                  <td className={`px-3 py-2.5 font-medium ${s.parentId ? 'pl-8' : ''}`}>
-                    {s.parentId ? <span className="text-indigo-700 dark:text-indigo-300">└ 工種: {s.workType}</span> : s.name}
-                    {!s.parentId && s.calendarFromYm && (
-                      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300 font-bold align-middle"
-                        title={s.calendarFromYm === '999912' ? '就業カレンダーを作らない（スポット）' : `就業カレンダーは ${s.calendarFromYm.slice(0, 4)}年${Number(s.calendarFromYm.slice(4, 6))}月から`}>
-                        {s.calendarFromYm === '999912' ? 'スポット' : `カレンダー ${Number(s.calendarFromYm.slice(4, 6))}月〜`}
-                      </span>
-                    )}
-                    {!s.parentId && s.siteType === 'support' && (
-                      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-bold">応援</span>
-                    )}
-                    {!s.parentId && (() => {
-                      const nm = (id?: string) => (id ? subcons.find(c => c.id === id)?.name : undefined)
-                      const chain = [nm(s.gcId), nm(s.primeId), s.ownerId === SELF_COMPANY_ID ? '自社' : nm(s.ownerId)].filter(Boolean)
-                      return chain.length > 0
-                        ? <div className="text-[10px] text-gray-400 font-normal">{chain.join(' → ')}{s.client ? `（請求先: ${s.client}）` : ''}</div>
-                        : s.client ? <div className="text-[10px] text-gray-400 font-normal">{s.client}</div> : null
-                    })()}
-                  </td>
-                  <td className="px-3 py-2.5 text-gray-600 text-xs whitespace-nowrap">
-                    {s.start && s.end
-                      ? `${s.start} ~ ${s.end}`
-                      : s.start
-                        ? `${s.start} ~`
-                        : s.end
-                          ? `~ ${s.end}`
-                          : '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-gray-600">{getWorkerName(s.foreman)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
-                    <div>
-                      <div className={`font-medium ${rate.isDefault ? 'text-gray-400' : ''}`}>{fmtYen(rate.tobiRate)}</div>
-                      {s.siteType === 'support'
-                        ? <div className="text-xs text-purple-500">直接受取 100%</div>
-                        : <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.tobiRate * 0.85))}</div>}
-                      {rate.isDefault && <div className="text-[10px] text-gray-300">デフォルト</div>}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
-                    <div>
-                      <div className={`font-medium ${rate.isDefault ? 'text-gray-400' : ''}`}>{fmtYen(rate.dokoRate)}</div>
-                      {s.siteType === 'support'
-                        ? <div className="text-xs text-purple-500">直接受取 100%</div>
-                        : <div className="text-xs text-gray-400">85%: {fmtYen(Math.round(rate.dokoRate * 0.85))}</div>}
-                      {rate.isDefault && <div className="text-[10px] text-gray-300">デフォルト</div>}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-center text-gray-600">{workerCount}</td>
-                  <td className="px-3 py-2.5 text-center text-gray-600">{subconCount}</td>
-                  <td className="px-3 py-2.5 text-center">
-                    {s.archived ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">アーカイブ</span>
-                    ) : active ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">稼働中</span>
-                    ) : (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">終了</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <button onClick={() => openEdit(s)} className="text-hibi-navy text-xs underline hover:text-hibi-light">
-                      編集
-                    </button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Add/Edit Modal */}
+      {/* 現場の編集（右から開く・2026-10-01 改修。旧: 中央のモーダル） */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-modalIn" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-3">
-              {editId ? `現場編集 — ${form.name || ''}` : '現場追加'}
-            </h3>
+        <SidePanel label={editId ? `${form.name} の編集` : '現場を追加'} onClose={() => setShowModal(false)} width="max-w-[760px]">
+          <div className="flex flex-col min-h-full">
+            <div className="px-6 py-5 border-b border-hibi-line dark:border-gray-700 flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{editId ? (form.name || '（名前なし）') : '現場を追加'}</h2>
+                {editingSite && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+                    {form.archived ? <Chip tone="gray">終了（保存すると選択欄から消えます）</Chip> : isActive(editingSite) ? <Chip tone="green">稼働中</Chip> : <Chip tone="amber">工期が過ぎた</Chip>}
+                    <span>工期 {periodText(editingSite)}</span>
+                    {!editingSite.parentId && <span>／ 職長 {getWorkerName(editingSite.foreman)}</span>}
+                  </div>
+                )}
+              </div>
+              {editId && !form.archived && (
+                <button type="button" onClick={() => { setForm({ ...form, archived: true }); setModalTab('basic') }}
+                  className="h-9 px-3.5 rounded-[9px] border border-red-300 dark:border-red-800 bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 text-[13px] font-bold hover:bg-red-50 dark:hover:bg-red-900/20">終了にする</button>
+              )}
+              <CloseButton onClick={() => setShowModal(false)} />
+            </div>
 
             {/* タブ（2026-08-31）。保存ボタンはタブの外なので、どのタブで直しても1回で保存できる */}
-            <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-600">
+            <div className="px-6 flex gap-5 border-b border-hibi-line dark:border-gray-700">
               {([
                 { key: 'basic', label: '基本' },
                 ...(isChildEdit ? [] : [{ key: 'schedule', label: '勤務時間' } as const]),
@@ -701,17 +712,17 @@ export default function SitesPage() {
                   key={t.key}
                   type="button"
                   onClick={() => setModalTab(t.key)}
-                  className={`px-4 py-2 text-sm font-bold rounded-t-lg transition ${
+                  className={`py-2.5 text-sm -mb-px border-b-[3px] transition ${
                     modalTab === t.key
-                      ? 'bg-hibi-navy text-white'
-                      : 'text-gray-500 hover:text-hibi-navy hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                      ? 'border-hibi-navy text-hibi-navy dark:border-blue-400 dark:text-blue-300 font-bold'
+                      : 'border-transparent text-hibi-sub dark:text-gray-400 hover:text-hibi-navy'}`}
                 >
                   {t.label}
                 </button>
               ))}
             </div>
 
-            <div className="space-y-4">
+            <div className="px-6 py-5 flex-1 space-y-4">
               {modalTab === 'basic' && (<div className="space-y-4">
               {/* 工種サイトの編集（2026-09-15） */}
               {isChildEdit && (
@@ -872,7 +883,7 @@ export default function SitesPage() {
                       onChange={e => setForm({ ...form, archived: e.target.checked })}
                       className="rounded border-gray-300 text-hibi-navy focus:ring-hibi-navy"
                     />
-                    アーカイブ（非表示にする）
+                    終了にする（出面などの選択欄から消す。データは残ります）
                   </label>
                 </div>
               )}
@@ -1382,51 +1393,41 @@ export default function SitesPage() {
               </div>)}
             </div>
 
-            {/* Buttons */}
-            <div className="flex gap-2 mt-6">
-              <button onClick={handleSave} disabled={saving}
-                className="flex-1 bg-hibi-navy text-white rounded-lg py-2.5 font-bold text-sm hover:bg-hibi-light transition disabled:opacity-50">
-                {saving ? '保存中...' : '保存'}
-              </button>
-              <button onClick={() => setShowModal(false)}
-                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm hover:bg-gray-300 transition">
-                キャンセル
-              </button>
-              {editId && (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="bg-red-500 text-white rounded-lg px-4 py-2.5 text-sm font-bold hover:bg-red-600 transition"
-                >
-                  削除
-                </button>
-              )}
-            </div>
-
             {/* Delete confirmation */}
             {showDeleteConfirm && (
-              <div className="mt-4 bg-red-50 border border-red-300 rounded-lg p-4">
-                <p className="text-sm text-red-700 font-medium mb-3">
-                  「{form.name}」を削除しますか？この操作は取り消せません。
+              <div className="mx-6 mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
+                <p className="text-sm text-red-800 dark:text-red-200 font-bold mb-3">
+                  「{form.name}」を削除しますか？この操作は取り消せません。終わった現場は「終了にする」で残しておけます。
                 </p>
                 <div className="flex gap-2">
-                  <button
-                    onClick={handleDelete}
-                    disabled={saving}
-                    className="bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-red-700 transition disabled:opacity-50"
-                  >
+                  <button onClick={handleDelete} disabled={saving}
+                    className="h-10 px-4 rounded-[10px] bg-red-700 text-white text-sm font-bold hover:bg-red-800 disabled:opacity-50">
                     {saving ? '削除中...' : '削除する'}
                   </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="bg-gray-200 text-gray-700 rounded-lg px-4 py-2 text-sm hover:bg-gray-300 transition"
-                  >
+                  <button onClick={() => setShowDeleteConfirm(false)}
+                    className="h-10 px-4 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold">
                     やめる
                   </button>
                 </div>
               </div>
             )}
+
+            <div className="sticky bottom-0 px-6 py-3.5 border-t border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2.5">
+              {editId && (
+                <button type="button" onClick={() => setShowDeleteConfirm(true)}
+                  className="text-xs text-hibi-sub dark:text-gray-400 hover:text-red-700 underline">現場を削除する</button>
+              )}
+              <button onClick={() => setShowModal(false)}
+                className="ml-auto h-11 px-5 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+                閉じる
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                className="h-11 px-6 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50">
+                {saving ? '保存中...' : '保存する'}
+              </button>
+            </div>
           </div>
-        </div>
+        </SidePanel>
       )}
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
+import { PageHeader, UnderlineTabs } from '@/components/ui/PageParts'
 import { CAPABILITIES, PERM_ROLES, PERM_ROLE_LABEL, type Capability, type PermRole } from '@/lib/permissions'
 
 interface DefaultRates {
@@ -304,11 +305,11 @@ function formatTimestamp(ts: string): string {
  */
 type Tab = 'company' | 'settings' | 'users' | 'announcements' | 'activity'
 const SETTINGS_TABS: { key: Tab; label: string }[] = [
-  { key: 'company', label: '🏢 会社・請求書' },
-  { key: 'settings', label: '💴 単価の既定値' },
-  { key: 'users', label: '🔑 ログイン・権限' },
-  { key: 'announcements', label: '📢 お知らせ' },
-  { key: 'activity', label: '🗄 バックアップ・履歴' },
+  { key: 'company', label: '会社・請求書' },
+  { key: 'settings', label: '単価の既定値' },
+  { key: 'users', label: 'ログイン・権限' },
+  { key: 'announcements', label: 'お知らせ' },
+  { key: 'activity', label: 'バックアップ・履歴' },
 ]
 
 interface Announcement {
@@ -778,25 +779,11 @@ export default function SettingsPage() {
   const uniqueActions = Array.from(new Set(activityEntries.map(e => e.action)))
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-hibi-navy dark:text-white mb-4">管理者設定</h1>
+    <div className="max-w-5xl mx-auto space-y-5">
+      <PageHeader group="マスタ・管理" title="管理者設定" sub="会社・請求書の情報、単価の既定値、ログインと権限、お知らせ、バックアップと履歴" />
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 overflow-x-auto">
-        {SETTINGS_TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setActiveTab(t.key)}
-            className={`flex-1 whitespace-nowrap py-2 px-3 rounded-md text-sm font-medium transition ${
-              activeTab === t.key
-                ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white shadow-sm'
-                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <UnderlineTabs label="管理者設定のタブ" active={activeTab} onChange={setActiveTab}
+        tabs={SETTINGS_TABS.map(t => ({ key: t.key, label: t.label }))} />
 
       {/* Message toast */}
       {message && (
