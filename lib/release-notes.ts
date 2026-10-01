@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_masters_ux',
+    title: '現場マスタ・取引先マスタ・管理者設定を見やすくしました',
+    content:
+      '現場マスタ: 上に「今やること」（工期の終わりが近い・職長が決まっていない・単価が既定値のまま）。1現場1行で、行を押すと右に編集画面が開きます。「アーカイブ」は「終了にする」に名前を変えました（データは残り、選択欄から消えます）。'
+      + '取引先マスタ: 上に「今やること」（単価が入っていない・請求書の宛先がない・どの現場にも配置していない）。会社名を1行で表示し、行を押すと右に編集画面が開きます。',
+    category: 'new',
+    publishedAt: '2026-10-01T16:30:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261001_wage_eval_ux',
     title: '賃金・評価と評価管理を見やすくしました',
     content:

@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { COMPANY_ROLES, companyRoles, canBorrowFrom, type CompanyRole } from '@/lib/companies'
+import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
 
 interface PaymentTerms {
   closing: 'end'
@@ -34,6 +35,10 @@ const EMPTY_FORM = {
   postal: '', address: '', honorific: '御中', payMonthOffset: '1' as '1' | '2', payDay: 'end' as string,
 }
 
+type ScFilter = 'all' | 'norate' | 'unassigned' | 'noaddr'
+const SC_FILTER_LABEL: Record<Exclude<ScFilter, 'all'>, string> = { norate: '単価がない会社', unassigned: '配置していない会社', noaddr: '住所がない会社' }
+const SC_COLS = 'lg:grid-cols-[minmax(0,1fr)_170px_130px_100px_minmax(0,1.3fr)]'
+
 export default function SubconsPage() {
   const { ready } = useAuthPassword()
   const [subcons, setSubcons] = useState<Subcon[]>([])
@@ -51,6 +56,8 @@ export default function SubconsPage() {
   // 役割で絞り込み（2026-09-15）
   const [roleFilter, setRoleFilter] = useState<'all' | CompanyRole>('all')
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  const [query, setQuery] = useState('')
+  const [scFilter, setScFilter] = useState<ScFilter>('all')
 
   const fetchData = useCallback(async () => {
     if (!ready) return
@@ -130,10 +137,11 @@ export default function SubconsPage() {
     } finally { setSaving(false) }
   }
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`${name} を削除しますか？`)) return
+  const handleDelete = async (id: string, name: string): Promise<boolean> => {
+    if (!confirm(`${name} を削除しますか？`)) return false
     await postJson('/api/subcons', { action: 'delete', id })
     fetchData()
+    return true
   }
 
   const getSiteName = (siteId: string) => {
@@ -141,56 +149,60 @@ export default function SubconsPage() {
     return s ? s.name : siteId
   }
 
-  const filtered = roleFilter === 'all' ? subcons : subcons.filter(sc => companyRoles(sc).includes(roleFilter))
-  const tobiSubcons = filtered.filter(sc => canBorrowFrom(sc) && sc.type !== '土工業者')
-  const dokoSubcons = filtered.filter(sc => canBorrowFrom(sc) && sc.type === '土工業者')
-  // 元請・一次だけの会社（人の貸し借りをしない）
-  const partyOnly = filtered.filter(sc => !canBorrowFrom(sc))
-
   const renderSubconRow = (sc: Subcon) => {
     const assignedSites = subconSites[sc.id] || []
     const siteRateMap = subconRates[sc.id] || {}
+    const borrow = canBorrowFrom(sc)
     return (
-      <tr key={sc.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30">
-        <td className="px-3 py-2.5 font-medium">{sc.name}</td>
-        <td className="px-3 py-2.5">
-          <div className="flex flex-wrap gap-1">
-            {companyRoles(sc).map(r => (
-              <span key={r} className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${ROLE_BADGE[r]}`}>
-                {COMPANY_ROLES.find(x => x.key === r)?.label}
-              </span>
-            ))}
-          </div>
-        </td>
-        <td className="px-3 py-2.5 text-right">{canBorrowFrom(sc) ? `¥${(sc.rate || 0).toLocaleString()}` : '—'}</td>
-        <td className="px-3 py-2.5 text-right">{canBorrowFrom(sc) && sc.otRate ? `¥${sc.otRate.toLocaleString()}/h` : '—'}</td>
-        <td className="px-3 py-2.5">
-          <div className="flex flex-wrap gap-1">
-            {assignedSites.length > 0 ? assignedSites.map(siteId => {
-              const override = siteRateMap[siteId]?.rate
-              const hasOverride = !!override && override > 0
-              return (
-                <span
-                  key={siteId}
-                  className={`text-xs px-1.5 py-0.5 rounded ${hasOverride ? 'bg-orange-100 text-orange-700' : 'bg-indigo-100 text-indigo-700'}`}
-                  title={hasOverride ? `現場別単価: ¥${override.toLocaleString()}` : '基本単価'}
-                >
-                  {getSiteName(siteId)}{hasOverride && ` (¥${override.toLocaleString()})`}
-                </span>
-              )
-            }) : <span className="text-xs text-gray-300">未配置</span>}
-          </div>
-        </td>
-        <td className="px-3 py-2.5 text-gray-500 text-xs">{sc.note}</td>
-        <td className="px-3 py-2.5">
-          <div className="flex gap-2">
-            <button onClick={() => openEdit(sc)} className="text-hibi-navy text-xs underline">編集</button>
-            <button onClick={() => handleDelete(sc.id, sc.name)} className="text-red-400 text-xs hover:text-red-600">削除</button>
-          </div>
-        </td>
-      </tr>
+      <div key={sc.id} role="button" tabIndex={0}
+        onClick={() => openEdit(sc)}
+        onKeyDown={e => { if (e.key === 'Enter') openEdit(sc) }}
+        className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${SC_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums`}>
+        <span className="col-span-2 lg:col-span-1 min-w-0">
+          <span className="block text-[15px] font-bold text-gray-900 dark:text-gray-100">{sc.name}</span>
+          {sc.note && <span className="block text-xs text-hibi-sub dark:text-gray-400 truncate">{sc.note}</span>}
+        </span>
+        <span className="flex flex-wrap gap-1">
+          {companyRoles(sc).map(r => (
+            <span key={r} className={`text-xs px-2 py-0.5 rounded-md font-bold ${ROLE_BADGE[r]}`}>
+              {COMPANY_ROLES.find(x => x.key === r)?.label}
+            </span>
+          ))}
+        </span>
+        <span className={`lg:text-right text-[15px] font-bold ${borrow && !sc.rate ? 'text-red-700 dark:text-red-400' : ''}`}>{borrow ? `¥${(sc.rate || 0).toLocaleString()}` : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+        <span className="lg:text-right text-[13px] text-hibi-sub dark:text-gray-400">{borrow && sc.otRate ? `¥${sc.otRate.toLocaleString()}/h` : '—'}</span>
+        <span className="col-span-2 lg:col-span-1 flex flex-wrap gap-1">
+          {assignedSites.length > 0 ? assignedSites.map(siteId => {
+            const override = siteRateMap[siteId]?.rate
+            const hasOverride = !!override && override > 0
+            return (
+              <Chip key={siteId} tone={hasOverride ? 'amber' : 'gray'} title={hasOverride ? `この現場の単価: ¥${override.toLocaleString()}` : 'この会社の単価'}>
+                {getSiteName(siteId)}{hasOverride && `（¥${override.toLocaleString()}）`}
+              </Chip>
+            )
+          }) : borrow ? <span className="text-xs text-hibi-sub dark:text-gray-400">配置なし</span> : <span className="text-xs text-hibi-sub dark:text-gray-400">現場マスタの請負体制で選ぶ</span>}
+        </span>
+      </div>
     )
   }
+
+  // 今やること（2026-10-01 改修）
+  const noRate = subcons.filter(sc => canBorrowFrom(sc) && !sc.rate)
+  const unassigned = subcons.filter(sc => canBorrowFrom(sc) && (subconSites[sc.id] || []).length === 0)
+  const noAddress = subcons.filter(sc => companyRoles(sc).includes('peer') && !(sc.address || '').trim())
+  const scNames = (arr: Subcon[]) => arr.slice(0, 3).map(sc => sc.name).join('・') + (arr.length > 3 ? ` ほか${arr.length - 3}社` : '')
+  const scFilterIds: Record<Exclude<ScFilter, 'all'>, Set<string>> = {
+    norate: new Set(noRate.map(sc => sc.id)), unassigned: new Set(unassigned.map(sc => sc.id)), noaddr: new Set(noAddress.map(sc => sc.id)),
+  }
+  const toggleScFilter = (f: Exclude<ScFilter, 'all'>) => { setRoleFilter('all'); setViewMode('flat'); setScFilter(scFilter === f ? 'all' : f) }
+  const q = query.trim().replace(/[\s　]/g, '').toLowerCase()
+  const pass = (sc: Subcon) => (scFilter === 'all' || scFilterIds[scFilter].has(sc.id)) && (!q || sc.name.replace(/[\s　]/g, '').toLowerCase().includes(q))
+
+  const filtered = roleFilter === 'all' ? subcons : subcons.filter(sc => companyRoles(sc).includes(roleFilter))
+  const tobiSubcons = filtered.filter(sc => canBorrowFrom(sc) && sc.type !== '土工業者').filter(sc => pass(sc))
+  const dokoSubcons = filtered.filter(sc => canBorrowFrom(sc) && sc.type === '土工業者').filter(sc => pass(sc))
+  // 元請・一次だけの会社（人の貸し借りをしない）
+  const partyOnly = filtered.filter(sc => !canBorrowFrom(sc)).filter(sc => pass(sc))
 
   // ── 会社グループ表示用の集計 ──
   // companyGroup が同じ業者をまとめる。グループ無しの単独業者は1社扱い。
@@ -219,125 +231,115 @@ export default function SubconsPage() {
   })()
   const multiBizCount = companyGroups.filter(g => g.members.length >= 2).length
 
+  const groupHead = (label: string) => (
+    <div className="px-5 py-2 text-xs font-bold text-hibi-sub dark:text-gray-400 bg-gray-50 dark:bg-gray-700/40 border-t border-hibi-line dark:border-gray-700">{label}</div>
+  )
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">取引先マスタ</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {COMPANY_ROLES.map(r => `${r.label}: ${subcons.filter(sc => companyRoles(sc).includes(r.key)).length}社`).join(' / ')}
-            {' / '}合計: {subcons.length}社{multiBizCount > 0 && ` / 兼業: ${multiBizCount}社`}
-          </p>
-          <p className="text-[11px] text-gray-400 mt-0.5">
-            元請・一次は現場マスタの請負体制で選びます。人の貸し借りをする同業者と外注業者は、出面の外注として配置できます。
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* 役割で絞り込み */}
-          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as 'all' | CompanyRole)}
-            className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-xs">
-            <option value="all">すべての役割</option>
-            {COMPANY_ROLES.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-          </select>
-          {/* 表示モード切替 */}
-          <div className="inline-flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">
-            <button
-              onClick={() => setViewMode('flat')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                viewMode === 'flat' ? 'bg-white dark:bg-gray-600 text-hibi-navy shadow-sm' : 'text-gray-500'
-              }`}
-            >
-              区分別
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="マスタ・管理"
+        title="取引先マスタ"
+        sub="元請・一次は現場マスタの請負体制で選びます。人の貸し借りをする同業者と外注業者は、出面の外注として配置できます"
+        actions={
+          <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
+            <span className="text-lg leading-none">＋</span>取引先を追加
+          </button>
+        }
+      />
+
+      {/* ① 今やること */}
+      {!loading && (
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <TodoCard icon="yen" tone={noRate.length > 0 ? 'urgent' : 'ok'} title="単価が入っていない"
+            big={noRate.length > 0 ? `${noRate.length}社` : 'ありません'}
+            sub={noRate.length > 0 ? `${scNames(noRate)}。人工単価が ¥0 のまま出面に入れると、原価が0円になります` : '人を借りる会社は、全社に単価が入っています'}
+            action={noRate.length > 0 ? '見る' : undefined} active={scFilter === 'norate'}
+            onClick={noRate.length > 0 ? () => toggleScFilter('norate') : undefined} />
+          <TodoCard icon="doc" tone={noAddress.length > 0 ? 'warn' : 'ok'} title="請求書の宛先（住所）がない"
+            big={noAddress.length > 0 ? `${noAddress.length}社` : 'ありません'}
+            sub={noAddress.length > 0 ? `${scNames(noAddress)}。応援の請求書の宛名に使います` : '同業者は全社、住所が入っています'}
+            action={noAddress.length > 0 ? '見る' : undefined} active={scFilter === 'noaddr'}
+            onClick={noAddress.length > 0 ? () => toggleScFilter('noaddr') : undefined} />
+          <TodoCard icon="site" tone={unassigned.length > 0 ? 'info' : 'ok'} title="どの現場にも配置していない"
+            big={unassigned.length > 0 ? `${unassigned.length}社` : 'ありません'}
+            sub={unassigned.length > 0 ? `${scNames(unassigned)}。配置は出面入力の「配置」から` : '人を借りる会社は、どこかの現場に配置されています'}
+            action={unassigned.length > 0 ? '見る' : undefined} active={scFilter === 'unassigned'}
+            onClick={unassigned.length > 0 ? () => toggleScFilter('unassigned') : undefined} />
+        </section>
+      )}
+
+      <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
+          <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">取引先（{subcons.length}社）</h2>
+          <Segment value={roleFilter} onChange={v => { setRoleFilter(v); setScFilter('all') }} items={[
+            ['all', `すべて ${subcons.length}`],
+            ...COMPANY_ROLES.map(r => [r.key, `${r.label} ${subcons.filter(sc => companyRoles(sc).includes(r.key)).length}`] as const),
+          ]} />
+          {multiBizCount > 0 && (
+            <Segment value={viewMode} onChange={setViewMode} items={[['flat', '区分ごと'], ['group', '会社ごと（兼業をまとめる）']]} />
+          )}
+          {scFilter !== 'all' && (
+            <button onClick={() => setScFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+              {SC_FILTER_LABEL[scFilter]}だけ表示中 ×
             </button>
-            <button
-              onClick={() => setViewMode('group')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                viewMode === 'group' ? 'bg-white dark:bg-gray-600 text-hibi-navy shadow-sm' : 'text-gray-500'
-              }`}
-            >
-              会社グループ
-            </button>
-          </div>
-          <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">+ 新規追加</button>
+          )}
+          <SearchBox value={query} onChange={setQuery} placeholder="会社名で探す" />
         </div>
-      </div>
-
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
-              <th className="px-3 py-3">取引先名</th>
-              <th className="px-3 py-3">役割</th>
-              <th className="px-3 py-3 text-right">人工単価（借りるとき）</th>
-              <th className="px-3 py-3 text-right">残業単価</th>
-              <th className="px-3 py-3">配置現場</th>
-              <th className="px-3 py-3">備考</th>
-              <th className="px-3 py-3">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
-            ) : subcons.length === 0 ? (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">取引先がありません</td></tr>
-            ) : viewMode === 'flat' ? (
-              <>
-                {/* 鳶業者グループ */}
-                <tr className="bg-yellow-50 dark:bg-yellow-900/20">
-                  <td colSpan={7} className="px-3 py-2 font-bold text-yellow-800 text-sm">
-                    {`鳶業者（${tobiSubcons.length}社）`}
-                  </td>
-                </tr>
-                {tobiSubcons.map(renderSubconRow)}
-
-                {/* 土工業者グループ */}
-                <tr className="bg-yellow-50 dark:bg-yellow-900/20">
-                  <td colSpan={7} className="px-3 py-2 font-bold text-yellow-800 text-sm">
-                    {`土工業者（${dokoSubcons.length}社）`}
-                  </td>
-                </tr>
-                {dokoSubcons.map(renderSubconRow)}
-
-                {/* 元請・一次だけの会社 */}
-                {partyOnly.length > 0 && (
-                  <tr className="bg-slate-100 dark:bg-slate-800/60">
-                    <td colSpan={7} className="px-3 py-2 font-bold text-slate-700 dark:text-slate-200 text-sm">
-                      {`元請・一次（${partyOnly.length}社）`}
-                    </td>
-                  </tr>
-                )}
-                {partyOnly.map(renderSubconRow)}
-              </>
-            ) : (
-              /* 会社グループ表示モード（兼業業者を1グループに集約） */
-              <>
-                {companyGroups.map(g => {
-                  if (g.members.length === 1) {
-                    return renderSubconRow(g.members[0])
-                  }
-                  // 兼業業者: グループヘッダ + メンバー行
-                  const expanded = expandedGroups[g.key] !== false  // デフォルト展開
-                  return (
-                    <RenderGroupedSubcon
-                      key={g.key}
-                      group={g}
-                      expanded={expanded}
-                      onToggle={() => setExpandedGroups(prev => ({ ...prev, [g.key]: !expanded }))}
-                      renderRow={renderSubconRow}
-                    />
-                  )
-                })}
-              </>
+        <div className={`hidden lg:grid ${SC_COLS} gap-3 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300`}>
+          <span>会社</span><span>役割</span><span className="text-right">人工単価（借りる）</span><span className="text-right">残業単価</span><span>配置している現場</span>
+        </div>
+        {loading ? (
+          <div className="px-5 py-8 text-center text-sm text-gray-400">読み込み中...</div>
+        ) : subcons.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-hibi-sub">取引先がありません</div>
+        ) : viewMode === 'flat' ? (
+          <>
+            {tobiSubcons.length > 0 && <>{groupHead(`鳶業者（${tobiSubcons.length}社）`)}{tobiSubcons.map(renderSubconRow)}</>}
+            {dokoSubcons.length > 0 && <>{groupHead(`土工業者（${dokoSubcons.length}社）`)}{dokoSubcons.map(renderSubconRow)}</>}
+            {partyOnly.length > 0 && <>{groupHead(`元請・一次（${partyOnly.length}社）`)}{partyOnly.map(renderSubconRow)}</>}
+            {tobiSubcons.length + dokoSubcons.length + partyOnly.length === 0 && (
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub">当てはまる会社はありません</div>
             )}
-          </tbody>
-        </table>
-      </div>
+          </>
+        ) : (
+          /* 会社グループ表示モード（兼業業者を1グループに集約） */
+          <>
+            {companyGroups.filter(g => g.members.some(pass)).map(g => {
+              if (g.members.length === 1) return renderSubconRow(g.members[0])
+              const expanded = expandedGroups[g.key] !== false  // デフォルト展開
+              return (
+                <RenderGroupedSubcon
+                  key={g.key}
+                  group={g}
+                  expanded={expanded}
+                  onToggle={() => setExpandedGroups(prev => ({ ...prev, [g.key]: !expanded }))}
+                  renderRow={renderSubconRow}
+                />
+              )
+            })}
+          </>
+        )}
+      </section>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-4">{editId ? '取引先編集' : '取引先追加'}</h3>
-            <div className="space-y-3">
+        <SidePanel label={editId ? `${form.name} の編集` : '取引先を追加'} onClose={() => setShowModal(false)}>
+          <div className="flex flex-col min-h-full">
+            <div className="px-6 py-5 border-b border-hibi-line dark:border-gray-700 flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{editId ? (form.name || '（名前なし）') : '取引先を追加'}</h2>
+                {editId && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    {form.roles.map(r => (
+                      <span key={r} className={`text-xs px-2 py-0.5 rounded-md font-bold ${ROLE_BADGE[r as CompanyRole] || ''}`}>{COMPANY_ROLES.find(x => x.key === r)?.label}</span>
+                    ))}
+                    <span className="text-[13px] text-hibi-sub dark:text-gray-400">{form.type}</span>
+                  </div>
+                )}
+              </div>
+              <CloseButton onClick={() => setShowModal(false)} />
+            </div>
+            <div className="px-6 py-5 flex-1 space-y-3">
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">取引先名 *</label>
                 <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="例：村田工業"
@@ -473,16 +475,20 @@ export default function SubconsPage() {
                 </div>
               )}
             </div>
-            <div className="flex gap-2 mt-6">
-              <button onClick={handleSave} disabled={saving}
-                className="flex-1 bg-hibi-navy text-white rounded-lg py-2.5 font-bold text-sm hover:bg-hibi-light transition disabled:opacity-50">
-                {saving ? '保存中...' : '保存'}
-              </button>
+            <div className="sticky bottom-0 mt-auto px-6 py-3.5 border-t border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2.5">
+              {editId && (
+                <button type="button" onClick={async () => { const ok = await handleDelete(editId, form.name); if (ok) setShowModal(false) }}
+                  className="text-xs text-hibi-sub dark:text-gray-400 hover:text-red-700 underline">取引先を削除する</button>
+              )}
               <button onClick={() => setShowModal(false)}
-                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm hover:bg-gray-300 transition">キャンセル</button>
+                className="ml-auto h-11 px-5 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">閉じる</button>
+              <button onClick={handleSave} disabled={saving}
+                className="h-11 px-6 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50">
+                {saving ? '保存中...' : '保存する'}
+              </button>
             </div>
           </div>
-        </div>
+        </SidePanel>
       )}
     </div>
   )
@@ -502,15 +508,12 @@ function RenderGroupedSubcon({
 }) {
   return (
     <>
-      <tr className="bg-blue-50 dark:bg-blue-900/20 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30" onClick={onToggle}>
-        <td colSpan={7} className="px-3 py-2 font-bold text-blue-800 dark:text-blue-200 text-sm">
-          <span className="inline-block w-4">{expanded ? '▼' : '▶'}</span>
-          🏢 {group.companyGroup}（兼業 {group.members.length}件）
-          <span className="ml-2 text-xs font-normal text-blue-600 dark:text-blue-300">
-            {group.members.map(m => m.type).join(' / ')}
-          </span>
-        </td>
-      </tr>
+      <button type="button" onClick={onToggle}
+        className="w-full text-left px-5 py-2 border-t border-hibi-line dark:border-gray-700 bg-gray-50 dark:bg-gray-700/40 text-sm font-bold text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700">
+        <span className="inline-block w-4 text-hibi-sub">{expanded ? '▾' : '▸'}</span>
+        {group.companyGroup}（兼業 {group.members.length}件）
+        <span className="ml-2 text-xs font-normal text-hibi-sub dark:text-gray-400">{group.members.map(m => m.type).join(' / ')}</span>
+      </button>
       {expanded && group.members.map(m => renderRow(m))}
     </>
   )
