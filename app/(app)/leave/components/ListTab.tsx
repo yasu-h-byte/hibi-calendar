@@ -5,7 +5,7 @@ import { PLWorker, PendingGrant } from '../types'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { Icon, type IconName } from '@/components/ui/Icon'
-import { addMonthsSafe, addDaysIso } from '@/lib/date-utils'
+import { addMonthsSafe, addDaysIso, todayJstIso } from '@/lib/date-utils'
 
 // 一覧タブ（2026-10-01 改善「ひと目で分かる有給」・代表依頼）
 //
@@ -54,7 +54,8 @@ function attentionOf(w: PLWorker): { five: boolean; expiring: boolean; expired: 
     five: (w.fiveDayShortfall ?? 0) > 0,
     expiring: ((w.carryOverRemaining ?? 0) > 0 && w.carryOverExpiryStatus === 'warning') || w.expiryStatus === 'warning',
     expired: w.expiryStatus === 'expired' || w.carryOverExpiryStatus === 'expired',
-    noGrant: !w.grantDate,
+    // 付与日が無いのが問題なのは、入社から6か月を過ぎたのにまだ付与が無い人だけ（新人は正常・2026-10-01）
+    noGrant: !w.grantDate && !!w.hireDate && addMonthsSafe(w.hireDate, 6) <= todayJstIso(),
   }
 }
 
@@ -305,7 +306,8 @@ function Row({ w, rem, photo, onOpen }: { w: PLWorker; rem: number; photo?: stri
 
       {/* 内訳: 繰越 → 今期（先に使われる順）。日本人は前の期の残り（賞与で買取）を点線で */}
       <div className="flex flex-col gap-1.5 min-w-0">
-        {(w.carryOver ?? 0) > 0 && (
+        {/* 繰越は残っているときだけ（使い切った繰越の「0日」行は出さない・2026-10-01） */}
+        {(w.carryOverRemaining ?? 0) > 0 && (
           <Bucket
             label="前の期からの繰越"
             rem={w.carryOverRemaining ?? 0}
@@ -353,7 +355,9 @@ function Row({ w, rem, photo, onOpen }: { w: PLWorker; rem: number; photo?: stri
         {!a.expired && w.carryOverExpiryStatus === 'warning' && (w.carryOverRemaining ?? 0) > 0 && (
           <Chip cls="bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"><Icon name="clock" size={12} />繰越{w.carryOverRemaining}日 {md(w.carryOverExpiryDate)}に消える</Chip>
         )}
-        {!w.grantDate && <Chip cls="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">付与日が未設定</Chip>}
+        {!w.grantDate && (a.noGrant
+          ? <Chip cls="bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">付与日が未設定</Chip>
+          : <Chip cls="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">入社6か月で付与</Chip>)}
       </div>
 
       <span className="hidden lg:flex justify-self-end items-center gap-1 text-[13px] font-bold text-hibi-navy dark:text-blue-300">
