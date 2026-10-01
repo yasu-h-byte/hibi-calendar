@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, foremenOfSiteForMonth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
@@ -222,14 +222,8 @@ export async function POST(request: NextRequest) {
       const mainData = mainDocSnap.exists() ? mainDocSnap.data() : {}
       const sites = (mainData.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
       const site = sites.find(s => s.id === data.siteId)
-      const foremenOfSite = site?.foremen || (site?.foreman ? [site.foreman] : [])
-      // 2026-08-27 修正（有給総点検・第3回）: 月次職長交代 (mforeman) を権限判定に反映。
-      //   交代後の新職長が 403 になり、旧職長だけが承認できる状態だった
-      {
-        const mf = (mainData.mforeman || {}) as Record<string, { wid?: number }>
-        const ov = mf[`${data.siteId}_${data.ym}`]?.wid
-        if (ov !== undefined && !foremenOfSite.includes(ov)) foremenOfSite.push(ov)
-      }
+      // 月別職長（mforeman）込みの判定は出面・帰国申請と同じ共通ヘルパーで（2026-10-01 一本化）
+      const foremenOfSite = site ? foremenOfSiteForMonth(site, mainData.mforeman || {}, data.ym) : []
 
       // 認証 + 権限チェック
       let approvedBy: number | string = 'unknown'
@@ -428,13 +422,8 @@ export async function POST(request: NextRequest) {
       const rejMain = rejMainSnap.exists() ? rejMainSnap.data() : {}
       const rejSites = (rejMain.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
       const rejSite = rejSites.find(s => s.id === data.siteId)
-      const rejForemen = rejSite?.foremen || (rejSite?.foreman ? [rejSite.foreman] : [])
-      {
-        // mforeman（月次職長交代）も却下権限に反映（foreman_approve と対）
-        const mf = (rejMain.mforeman || {}) as Record<string, { wid?: number }>
-        const ov = mf[`${data.siteId}_${data.ym}`]?.wid
-        if (ov !== undefined && !rejForemen.includes(ov)) rejForemen.push(ov)
-      }
+      // 月別職長（mforeman）込み。foreman_approve と同じ共通ヘルパー
+      const rejForemen = rejSite ? foremenOfSiteForMonth(rejSite, rejMain.mforeman || {}, data.ym) : []
 
       let authWorkerId: number | string = rejectedBy || 0
       if (rejectToken) {

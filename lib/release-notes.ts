@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_foreman_mypage_approvals',
+    title: '職長のマイページから承認できるようになりました',
+    content:
+      'マイページ（自分専用のURL）のいちばん上に「承認すること」が出ます。'
+      + '出面は全員の入力がそろった日をまとめて承認でき、有給・帰国の申請も1件ずつ承認・却下できます。'
+      + '最終承認はこれまでどおり政仁さんです。',
+    category: 'new',
+    publishedAt: '2026-10-01T15:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['foreman', 'owner', 'approver'],
+  },
+  {
     id: 'rn_20261001_jst_today',
     title: '夜中から朝9時までの「今日」「今月」のずれを直しました',
     content:

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiRole, isManagerRole, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, requireCap } from '@/lib/auth'
 import {
   orderSitesWithWorkTypes, isWorkTypeSite, workTypeSitesOf, parentAndWorkTypeSiteIds,
   findWorkTypeDuplicates, planDayWorkTypeMoves, type WorkTypeDuplicate,
@@ -891,16 +891,27 @@ export async function POST(request: NextRequest) {
     //   approve_final     / unapprove_final   : 最終承認 (admin/approver)
 
     if (action === 'approve' || action === 'approve_foreman') {
-      const { siteId, ym, day, approvedBy } = body
+      const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       const { setForemanApprovalForDay } = await import('@/lib/attendance')
-      await setForemanApprovalForDay(siteId, ym, day, approvedBy || 0)
+      // 承認者はログインした本人（2026-10-01。旧: 画面から送られた approvedBy をそのまま記録していた）
+      const au = await getApiAuthUser(request)
+      await setForemanApprovalForDay(siteId, ym, day, au.authorized && typeof au.actor === 'number' ? au.actor : 0)
       return NextResponse.json({ success: true })
     }
 
     if (action === 'unapprove' || action === 'unapprove_foreman') {
       const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      // 最終承認が入った日は、職長からは取り消せない（スマホの職長画面・マイページと同じ・2026-10-01）。
+      //   旧: PC から職長が取り消すと政仁さんの最終承認まで黙って消えていた。管理者・事業責任者は従来どおり可
+      {
+        const cur = await getApprovalForDay(siteId, ym, day)
+        const role = await getApiRole(request)
+        if (cur?.final && !(role && isManagerRole(role.role))) {
+          return NextResponse.json({ error: 'この日は最終承認済みのため取り消せません。管理者に連絡してください。' }, { status: 409 })
+        }
+      }
       const { removeForemanApprovalForDay } = await import('@/lib/attendance')
       await removeForemanApprovalForDay(siteId, ym, day)
       return NextResponse.json({ success: true })
@@ -913,7 +924,7 @@ export async function POST(request: NextRequest) {
       if (!role || !isManagerRole(role.role)) {
         return NextResponse.json({ error: '最終承認の権限がありません（管理者・事業責任者のみ）' }, { status: 403 })
       }
-      const { siteId, ym, day, approvedBy } = body
+      const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
       // 「職長承認済み」を必須要件としてサーバ側でチェック（クライアントUIだけでなく二重に保護）
       const existing = await getApprovalForDay(siteId, ym, day)
@@ -921,7 +932,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '職長承認が先に必要です' }, { status: 400 })
       }
       const { setFinalApprovalForDay } = await import('@/lib/attendance')
-      await setFinalApprovalForDay(siteId, ym, day, approvedBy || 0)
+      // 承認者はログインした本人（職長承認と同じ・2026-10-01）
+      const au = await getApiAuthUser(request)
+      await setFinalApprovalForDay(siteId, ym, day, au.authorized && typeof au.actor === 'number' ? au.actor : 0)
       return NextResponse.json({ success: true })
     }
 

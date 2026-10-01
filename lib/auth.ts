@@ -112,12 +112,29 @@ export function computeForemanSites(
   const result: string[] = []
   for (const site of sites) {
     if (site.archived) continue
-    const monthKey = `${site.id}_${ym}`
-    const override = mforeman[monthKey]?.foreman ?? mforeman[monthKey]?.wid
-    const effective = override ?? site.foreman
-    if (effective === workerId) result.push(site.id)
+    if (foremenOfSiteForMonth(site, mforeman, ym).includes(workerId)) result.push(site.id)
   }
   return result
+}
+
+/**
+ * その月にその現場の職長である人（承認の権限判定はすべてこれを通す・2026-10-01）。
+ *
+ * 月別の職長（mforeman[siteId_ym]. foreman ?? wid）があればその人だけ、無ければ現場の職長。
+ * 旧: 出面・有給・帰国申請で別々に書いていて、有給は月別職長を「足す」（旧職長も承認できる）、
+ *     帰国申請は月別職長を見ない、と食い違っていた。
+ * `foremen`（配列）は書き込む画面が無い古い項目。残っているデータのために読むだけ読む。
+ */
+export function foremenOfSiteForMonth(
+  site: { id: string; foreman?: number; foremen?: number[] },
+  mforeman: Record<string, { foreman?: number; wid?: number }>,
+  ym: string,
+): number[] {
+  const monthKey = `${site.id}_${ym.replace('-', '')}`
+  const override = mforeman[monthKey]?.foreman ?? mforeman[monthKey]?.wid
+  if (override !== undefined && override !== null) return [override]
+  if (site.foremen && site.foremen.length > 0) return site.foremen
+  return site.foreman !== undefined && site.foreman !== null ? [site.foreman] : []
 }
 
 export function determineRole(

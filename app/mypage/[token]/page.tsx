@@ -12,11 +12,15 @@
  *
  * 職長もこのページを使う。職長専用の出面画面は用意してあるが、職長は従来どおり
  * PC画面をスマホで操作する運用になったため、ここからは導線を張らない（2026-08-28 代表）。
+ *
+ * 2026-10-01（代表）: 職長には先頭に「承認すること」を出す（出面のまとめ承認・有給申請・帰国申請の職長承認）。
+ *   components/mypage/ForemanApprovals.tsx。職長でない人には何も出ない。最終承認は政仁さんが PC で行う。
  */
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import StaffHeader from '@/components/StaffHeader'
+import ForemanApprovals from '@/components/mypage/ForemanApprovals'
 
 interface MyPageData {
   worker: { id: number; name: string; jobType: string }
@@ -215,6 +219,9 @@ export default function MyPage() {
         {msg && (
           <div className="bg-green-100 text-green-800 rounded-xl p-3 text-center font-bold text-sm">{msg}</div>
         )}
+
+        {/* ── 承認すること（職長だけ） ── */}
+        <ForemanApprovals token={token} />
 
         {/* ── 有給 ── */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">

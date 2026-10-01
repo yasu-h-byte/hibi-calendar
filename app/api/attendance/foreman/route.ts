@@ -14,28 +14,11 @@ import {
 } from '@/lib/attendance'
 import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
-import { workTypeFamilyIds, familyEntrySiteId, staffEntryTarget, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
+import { staffEntryTarget, workTypeFamilyIds, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
+import { loadSiteFamily, familyEntry, approveDaysForSite } from '@/lib/foreman-todo'
 import { todayJstDate } from '@/lib/date-utils'
 
-/**
- * 工種（鉄骨・仮設など）を持つ現場の「同じ現場」の範囲（親＋工種サイト）と、工種の指定（2026-09-28）。
- * 職長が出面画面で鉄骨へ移したエントリを、この画面が「未入力」「別現場の入力」と見なさないために使う。
- * 書き込み先の工種を決めるので、main は毎回読み直す（30秒キャッシュを使わない）。
- */
-async function loadSiteFamily(siteId: string): Promise<{ sites: HierarchySite[]; assign?: WorkTypeAssignMap; family: string[] }> {
-  const { db } = await import('@/lib/firebase')
-  const { doc, getDoc } = await import('@/lib/fsdb')
-  const snap = await getDoc(doc(db, 'demmen', 'main'))
-  const data = snap.exists() ? snap.data() : {}
-  const sites = (data.sites || []) as HierarchySite[]
-  return { sites, assign: data.assign as WorkTypeAssignMap | undefined, family: workTypeFamilyIds(sites, siteId) }
-}
-
-/** 同じ現場（親＋工種）のどこかに入っているその人・その日のエントリ */
-function familyEntry(att: Record<string, AttendanceEntry>, family: string[], wid: number | string, ym: string, day: number | string): AttendanceEntry | undefined {
-  const sid = familyEntrySiteId(att, family, wid, ym, day)
-  return sid ? att[`${sid}_${wid}_${ym}_${day}`] : undefined
-}
+// 工種（親＋工種サイト）の範囲・まとめ承認の判定はマイページと共通（lib/foreman-todo.ts・2026-10-01）
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
@@ -305,26 +288,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'days (1〜31件) を指定してください' }, { status: 400 })
       }
       const ym = ymKey(year, month)
-      const { getAttendanceDoc: getAtt } = await import('@/lib/attendance')
-      const attD = await getAtt(ym)
-      const workersForBulk = await getForeignWorkersForSite(site.id)
-      const { family: bulkFamily } = await loadSiteFamily(site.id)
-      const approvedDays: number[] = []
-      const skipped: { day: number; reason: string }[] = []
-      const todayJstB = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-      for (const dd of days) {
-        const dNum = Number(dd)
-        if (!Number.isInteger(dNum) || dNum < 1 || dNum > 31) { skipped.push({ day: dNum, reason: '不正な日付' }); continue }
-        if (new Date(year, month - 1, dNum) > todayJstB) { skipped.push({ day: dNum, reason: '未来日' }); continue }
-        const missing = workersForBulk.filter(w =>
-          getEntryStatus(familyEntry(attD, bulkFamily, w.id, ym, dNum)) === 'none')
-        if (missing.length > 0) {
-          skipped.push({ day: dNum, reason: `未入力: ${missing.map(w => w.name).join('、')}` })
-          continue
-        }
-        await setApprovalForDay(site.id, ym, dNum, foreman.id)
-        approvedDays.push(dNum)
-      }
+      const { approvedDays, skipped } = await approveDaysForSite(site.id, ym, days, foreman.id)
       return NextResponse.json({ success: true, approvedDays, skipped })
     }
 
