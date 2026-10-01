@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_docs_tools_ux',
+    title: '書類庫・道具代管理を見やすくしました',
+    content:
+      '書類庫: 上に「今やること」（期限が近い・人員マスタとの食い違い・まだ入っていない書類）、一覧は1人1行で書類を札で表示。行を押すと右にその人の書類が開きます。'
+      + '道具代管理: 上に「今やること」（使いすぎ・残りが少ない・期間が決まっていない）と合計、一覧は使った割合の棒で表示。行を押すと右に買ったものの登録・一覧が開きます。',
+    category: 'new',
+    publishedAt: '2026-10-01T16:05:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261001_workers_ux',
     title: '人員マスタを見やすくしました',
     content:

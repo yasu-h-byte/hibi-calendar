@@ -16,6 +16,9 @@ import { can } from '@/lib/permissions'
 import { cardCls } from '@/lib/styles'
 import { visaLabel } from '@/lib/labels'
 import { todayJstIso } from '@/lib/date-utils'
+import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
+import WorkerAvatar from '@/components/WorkerAvatar'
+import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import {
   STAFF_DOC_TYPES, STAFF_DOC_ALLOWED_TYPES, STAFF_DOC_MAX_FILE_BYTES, STAFF_DOC_MAX_FILES, EXPIRY_WARN_DAYS,
   staffDocTypeDef, expiryState, daysUntil, masterMismatches, missingRequiredTypes, inferDocType,
@@ -47,6 +50,11 @@ function ExpiryBadge({ expiresOn, today }: { expiresOn?: string; today: string }
   return <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[11px]">あと{n}日</span>
 }
 
+type SdFilter = 'all' | 'expiring' | 'mismatch' | 'missing'
+const SD_FILTER_LABEL: Record<Exclude<SdFilter, 'all'>, string> = {
+  expiring: '期限が近い人', mismatch: '人員マスタと違う人', missing: '書類が足りない人',
+}
+
 export default function StaffDocsPage() {
   return (
     <Suspense fallback={<div className="p-8 text-center text-gray-400">読み込み中...</div>}>
@@ -68,7 +76,11 @@ function StaffDocsInner() {
   const [storageReady, setStorageReady] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filterWorker, setFilterWorker] = useState<number | null>(focusWorker)
+  const [openId, setOpenId] = useState<number | null>(focusWorker)
+  const [query, setQuery] = useState('')
+  const [listFilter, setListFilter] = useState<SdFilter>('all')
+  const [scope, setScope] = useState<'active' | 'retired'>('active')
+  const { photos } = useWorkerPhotos()
   const [showOld, setShowOld] = useState<Record<number, boolean>>({})
   const [uploadFor, setUploadFor] = useState<{ workerId: number | null; type?: StaffDocType } | null>(null)
   const [editing, setEditing] = useState<StaffDoc | null>(null)
@@ -159,150 +171,217 @@ function StaffDocsInner() {
     load()
   }
 
-  const shown = filterWorker ? targets.filter(w => w.id === filterWorker) : targets
+  // 一覧の絞り込み（2026-10-01 改修）: 今やることのカード → その人たちだけ
+  const filterIds: Record<Exclude<SdFilter, 'all'>, Set<number>> = {
+    expiring: new Set(summary.expiring.map(e => e.w.id)),
+    mismatch: new Set(summary.mismatches.map(m => m.w.id)),
+    missing: new Set(summary.missing.map(m => m.w.id)),
+  }
+  const toggleFilter = (f: Exclude<SdFilter, 'all'>) => { setScope('active'); setListFilter(listFilter === f ? 'all' : f) }
+  const q = query.trim().replace(/[\s　]/g, '').toLowerCase()
+  const activeTargets = targets.filter(w => !w.retired)
+  const retiredTargets = targets.filter(w => !!w.retired)
+  const shown = (scope === 'retired' ? retiredTargets : activeTargets)
+    .filter(w => listFilter === 'all' || filterIds[listFilter].has(w.id))
+    .filter(w => !q || w.name.replace(/[\s　]/g, '').toLowerCase().includes(q))
+  const openWorker = targets.find(w => w.id === openId) || null
 
   return (
-    <div className="max-w-6xl mx-auto space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">🗂 書類庫</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            在留カード・雇用契約書など。新しい書類を入れると前のものは「旧版」として残ります。
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select
-            value={filterWorker ?? ''}
-            onChange={e => setFilterWorker(e.target.value ? Number(e.target.value) : null)}
-            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 dark:text-white"
-          >
-            <option value="">全員</option>
-            {targets.map(w => <option key={w.id} value={w.id}>{w.name}{w.retired ? '（退職）' : ''}</option>)}
-          </select>
-          {canEdit && (
-            <button
-              onClick={() => setUploadFor({ workerId: filterWorker })}
-              disabled={!storageReady}
-              className="px-4 py-2 rounded-lg text-sm font-bold bg-hibi-navy text-white hover:bg-hibi-light disabled:opacity-40"
-            >
-              ＋ 書類を入れる
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="人・書類"
+        title="書類庫"
+        sub="在留カード・雇用契約書など。新しい書類を入れると、前のものは「旧版」として残ります"
+        actions={canEdit ? (
+          <button onClick={() => setUploadFor({ workerId: null })} disabled={!storageReady}
+            className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light disabled:opacity-40 inline-flex items-center gap-1.5">
+            <span className="text-lg leading-none">＋</span>書類を入れる
+          </button>
+        ) : undefined}
+      />
 
       {!storageReady && (
-        <div className="rounded-lg border border-red-300 bg-red-50 text-red-700 text-sm p-3">
+        <div className="rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm px-4 py-3">
           ファイルの置き場に接続できません。書類の一覧は見られますが、登録と閲覧はできません（サーバー設定の確認が必要です）。
         </div>
       )}
-      {error && <div className="rounded-lg border border-red-300 bg-red-50 text-red-700 text-sm p-3">{error}</div>}
+      {error && <div className="rounded-xl border border-red-200 bg-red-50 text-red-800 text-sm px-4 py-3">{error}</div>}
       {loading && <div className={cardCls('p-8 text-center text-gray-400')}>読み込み中...</div>}
 
       {!loading && !error && (
         <>
-          {/* ── まとめ ── */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className={cardCls('p-4')}>
-              <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-2">⏰ 期限が近い・切れている（{EXPIRY_WARN_DAYS}日以内）</h2>
-              {summary.expiring.length === 0 ? <p className="text-xs text-gray-400">ありません</p> : (
-                <ul className="space-y-1.5">
-                  {summary.expiring.map((e, i) => (
-                    <li key={i} className="text-xs flex items-center gap-2 flex-wrap">
-                      <button onClick={() => setFilterWorker(e.w.id)} className="font-bold text-hibi-navy dark:text-blue-300 hover:underline">{e.w.name}</button>
-                      <span className="text-gray-600 dark:text-gray-300">{e.label} {e.expiresOn}</span>
-                      <ExpiryBadge expiresOn={e.expiresOn} today={today} />
-                      {e.source === '人員マスタ' && <span className="text-[10px] text-gray-400">（人員マスタ・カード未登録）</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className={cardCls('p-4')}>
-              <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-2">⚠ 人員マスタとの食い違い</h2>
-              {summary.mismatches.length === 0 ? <p className="text-xs text-gray-400">ありません</p> : (
-                <ul className="space-y-1.5">
-                  {summary.mismatches.map((m, i) => (
-                    <li key={i} className="text-xs">
-                      <button onClick={() => setFilterWorker(m.w.id)} className="font-bold text-hibi-navy dark:text-blue-300 hover:underline mr-1">{m.w.name}</button>
-                      <span className="text-red-700 dark:text-red-300">{m.msg}</span>
-                      <a href={`/workers?edit=${m.w.id}`} className="ml-1 text-blue-600 dark:text-blue-400 hover:underline">人員マスタを直す →</a>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className={cardCls('p-4')}>
-              <h2 className="text-sm font-bold text-hibi-navy dark:text-white mb-2">📭 まだ入っていない書類</h2>
-              {summary.missing.length === 0 ? <p className="text-xs text-gray-400">全員そろっています</p> : (
-                <ul className="space-y-1.5">
-                  {summary.missing.map((m, i) => (
-                    <li key={i} className="text-xs">
-                      <button onClick={() => setFilterWorker(m.w.id)} className="font-bold text-hibi-navy dark:text-blue-300 hover:underline mr-1">{m.w.name}</button>
-                      <span className="text-gray-600 dark:text-gray-300">{m.types.map(t => staffDocTypeDef(t).label).join('・')}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
+          {/* ① 今やること（旧: まとめの3つの箱） */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <TodoCard icon="alert" tone={summary.expiring.length > 0 ? 'urgent' : 'ok'} title="期限が近い・切れている"
+              big={summary.expiring.length > 0 ? `${summary.expiring.length}件` : 'ありません'}
+              sub={summary.expiring.length > 0
+                ? summary.expiring.slice(0, 2).map(e => {
+                    const n = daysUntil(e.expiresOn, today) ?? 0
+                    return `${e.w.name} ${e.label}（${n < 0 ? `${-n}日前に切れた` : `残り${n}日`}）`
+                  }).join('・') + (summary.expiring.length > 2 ? ` ほか${summary.expiring.length - 2}件` : '')
+                : `${EXPIRY_WARN_DAYS}日以内に期限が来る書類はありません`}
+              action={summary.expiring.length > 0 ? '見る' : undefined} active={listFilter === 'expiring'}
+              onClick={summary.expiring.length > 0 ? () => toggleFilter('expiring') : undefined} />
+            <TodoCard icon="alert" tone={summary.mismatches.length > 0 ? 'warn' : 'ok'} title="人員マスタとの食い違い"
+              big={summary.mismatches.length > 0 ? `${summary.mismatches.length}件` : 'ありません'}
+              sub={summary.mismatches.length > 0 ? `${summary.mismatches[0].w.name}：${summary.mismatches[0].msg}${summary.mismatches.length > 1 ? ` ほか${summary.mismatches.length - 1}件` : ''}` : '書類と人員マスタの内容は合っています'}
+              action={summary.mismatches.length > 0 ? '見る' : undefined} active={listFilter === 'mismatch'}
+              onClick={summary.mismatches.length > 0 ? () => toggleFilter('mismatch') : undefined} />
+            <TodoCard icon="folder" tone={summary.missing.length > 0 ? 'info' : 'ok'} title="まだ入っていない書類"
+              big={summary.missing.length > 0 ? `${summary.missing.length}名` : 'ありません'}
+              sub={summary.missing.length > 0
+                ? `${summary.missing[0].w.name}（${summary.missing[0].types.map(t => staffDocTypeDef(t).label).join('・')}）${summary.missing.length > 1 ? ` ほか${summary.missing.length - 1}名` : ''}`
+                : '必要な書類は全員そろっています'}
+              action={summary.missing.length > 0 ? '見る' : undefined} active={listFilter === 'missing'}
+              onClick={summary.missing.length > 0 ? () => toggleFilter('missing') : undefined} />
+          </section>
 
-          {/* ── スタッフごと ── */}
-          <div className="space-y-3">
-            {shown.map(w => {
+          {/* ② スタッフごと（1人1行・書類は札で） */}
+          <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
+              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">スタッフごとの書類</h2>
+              {retiredTargets.length > 0 && (
+                <Segment value={scope} onChange={v => { setScope(v); setListFilter('all') }} items={[
+                  ['active', `在籍 ${activeTargets.length}`], ['retired', `退職 ${retiredTargets.length}`],
+                ]} />
+              )}
+              {listFilter !== 'all' && (
+                <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+                  {SD_FILTER_LABEL[listFilter]}だけ表示中 ×
+                </button>
+              )}
+              <SearchBox value={query} onChange={setQuery} placeholder="名前で探す" />
+            </div>
+            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_110px_minmax(0,1.6fr)_80px] gap-3 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
+              <span>名前</span><span>在留資格</span><span>入っている書類</span><span className="text-right">書類</span>
+            </div>
+            {shown.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">当てはまる人はいません</div>
+            ) : shown.map(w => {
               const ds = docsOf(w.id)
               const current = ds.filter(d => d.status === 'current')
                 .sort((a, b) => STAFF_DOC_TYPES.findIndex(t => t.key === a.type) - STAFF_DOC_TYPES.findIndex(t => t.key === b.type))
-              const old = ds.filter(d => d.status === 'old')
-              const miss = missingRequiredTypes(ds)
+              const miss = w.retired ? [] : missingRequiredTypes(ds)
+              const mismatch = !w.retired && masterMismatches(w, ds).length > 0
               return (
-                <div key={w.id} className={cardCls('p-4')}>
-                  <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-hibi-navy dark:text-white">{w.name}</span>
-                      <span className="text-xs text-gray-500">{visaLabel(w.visaType ?? w.visa)}</span>
-                      {w.retired && <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">退職 {w.retired}</span>}
-                      <span className="text-xs text-gray-500">人員マスタの在留期限: {w.visaExpiry || '未登録'}</span>
-                      {!w.retired && miss.map(t => (
-                        <span key={t} className="text-[11px] px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200">{staffDocTypeDef(t).label} なし</span>
-                      ))}
-                    </div>
-                    {canEdit && storageReady && (
-                      <button onClick={() => setUploadFor({ workerId: w.id })} className="text-xs px-3 py-1.5 rounded-lg border border-hibi-navy text-hibi-navy dark:text-blue-300 hover:bg-hibi-navy hover:text-white transition">
-                        ＋ 書類を入れる
-                      </button>
-                    )}
-                  </div>
-                  {current.length === 0 && <p className="text-xs text-gray-400">書類はまだありません</p>}
-                  <div className="divide-y divide-gray-100 dark:divide-gray-700">
-                    {current.map(d => (
-                      <DocRow key={d.id} d={d} today={today} canEdit={canEdit} canDelete={canDelete}
-                        onOpen={openFile} onEdit={setEditing} onStatus={setStatus} onDelete={remove} />
-                    ))}
-                  </div>
-                  {old.length > 0 && (
-                    <div className="mt-2">
-                      <button onClick={() => setShowOld(s => ({ ...s, [w.id]: !s[w.id] }))} className="text-[11px] text-gray-500 hover:text-hibi-navy">
-                        {showOld[w.id] ? '▲' : '▼'} 旧版 {old.length}件
-                      </button>
-                      {showOld[w.id] && (
-                        <div className="mt-1 pl-3 border-l-2 border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700 opacity-80">
-                          {old.map(d => (
-                            <DocRow key={d.id} d={d} today={today} canEdit={canEdit} canDelete={canDelete}
-                              onOpen={openFile} onEdit={setEditing} onStatus={setStatus} onDelete={remove} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                <div key={w.id} role="button" tabIndex={0}
+                  onClick={() => setOpenId(w.id)}
+                  onKeyDown={e => { if (e.key === 'Enter') setOpenId(w.id) }}
+                  className="border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_110px_minmax(0,1.6fr)_80px] gap-x-3 gap-y-1.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={36} />
+                    <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</span>
+                    {w.retired && <Chip tone="gray">退職</Chip>}
+                  </span>
+                  <span><Chip tone="gray">{visaLabel(w.visaType ?? w.visa)}</Chip></span>
+                  <span className="flex flex-wrap gap-1.5">
+                    {current.map(d => {
+                      const st = expiryState(d.expiresOn, today)
+                      const n = daysUntil(d.expiresOn, today) ?? 0
+                      const label = staffDocTypeDef(d.type).label
+                      return st === 'expired' ? <Chip key={d.id} tone="red">{label} 期限切れ</Chip>
+                        : st === 'soon' ? <Chip key={d.id} tone={n <= 30 ? 'red' : 'amber'}>{label} 残り{n}日</Chip>
+                        : <Chip key={d.id} tone="gray">{label}</Chip>
+                    })}
+                    {miss.map(t => <Chip key={t} tone="red">{staffDocTypeDef(t).label} なし</Chip>)}
+                    {mismatch && <Chip tone="amber">マスタと違う</Chip>}
+                    {current.length === 0 && miss.length === 0 && <span className="text-xs text-hibi-sub">書類はまだありません</span>}
+                  </span>
+                  <span className="lg:text-right text-sm text-hibi-sub dark:text-gray-400 tabular-nums">{ds.length}件</span>
                 </div>
               )
             })}
-          </div>
+          </section>
         </>
       )}
 
+      {/* 一人の書類（右から開く） */}
+      {openWorker && (() => {
+        const w = openWorker
+        const ds = docsOf(w.id)
+        const current = ds.filter(d => d.status === 'current')
+          .sort((a, b) => STAFF_DOC_TYPES.findIndex(t => t.key === a.type) - STAFF_DOC_TYPES.findIndex(t => t.key === b.type))
+        const old = ds.filter(d => d.status === 'old')
+        const miss = w.retired ? [] : missingRequiredTypes(ds)
+        const mism = w.retired ? [] : masterMismatches(w, ds)
+        return (
+          <SidePanel label={`${w.name} の書類`} onClose={() => setOpenId(null)}>
+            <div className="p-6 space-y-5">
+              <div className="flex items-center gap-3">
+                <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={52} />
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{w.name}</h2>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+                    <Chip tone="gray">{visaLabel(w.visaType ?? w.visa)}</Chip>
+                    {w.retired && <Chip tone="gray">退職 {w.retired}</Chip>}
+                    <span>人員マスタの在留期限 {w.visaExpiry || '未登録'}</span>
+                  </div>
+                </div>
+                <CloseButton onClick={() => setOpenId(null)} />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {canEdit && storageReady && !w.retired && (
+                  <button onClick={() => setUploadFor({ workerId: w.id })}
+                    className="h-10 px-4 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
+                    <span className="text-base leading-none">＋</span>この人に書類を入れる
+                  </button>
+                )}
+                <a href={`/workers?edit=${w.id}`} className="ml-auto text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline">人員マスタで開く</a>
+              </div>
+
+              {mism.length > 0 && (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-900 dark:text-amber-200 space-y-1">
+                  <b>人員マスタとの食い違い</b>
+                  {mism.map((m, i) => <div key={i}>{m}</div>)}
+                  <a href={`/workers?edit=${w.id}`} className="inline-block text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline">人員マスタを直す</a>
+                </div>
+              )}
+              {miss.length > 0 && (
+                <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-800 dark:text-red-200 flex flex-wrap items-center gap-2">
+                  <b>まだ入っていない:</b>
+                  {miss.map(t => (
+                    canEdit && storageReady
+                      ? <button key={t} onClick={() => setUploadFor({ workerId: w.id, type: t })} className="underline font-bold">{staffDocTypeDef(t).label}を入れる</button>
+                      : <span key={t}>{staffDocTypeDef(t).label}</span>
+                  ))}
+                </div>
+              )}
+
+              <section className="space-y-2.5">
+                {current.length === 0 && <p className="text-sm text-hibi-sub">書類はまだありません</p>}
+                {current.map(d => (
+                  <div key={d.id} className="rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-1">
+                    <DocRow d={d} today={today} canEdit={canEdit} canDelete={canDelete}
+                      onOpen={openFile} onEdit={setEditing} onStatus={setStatus} onDelete={remove} />
+                  </div>
+                ))}
+              </section>
+
+              {old.length > 0 && (
+                <section>
+                  <button onClick={() => setShowOld(s => ({ ...s, [w.id]: !s[w.id] }))} className="text-[13px] font-bold text-hibi-sub hover:text-hibi-navy">
+                    {showOld[w.id] ? '旧版を隠す' : `旧版 ${old.length}件を見る`}
+                  </button>
+                  {showOld[w.id] && (
+                    <div className="mt-2 space-y-2 opacity-80">
+                      {old.map(d => (
+                        <div key={d.id} className="rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-1">
+                          <DocRow d={d} today={today} canEdit={canEdit} canDelete={canDelete}
+                            onOpen={openFile} onEdit={setEditing} onStatus={setStatus} onDelete={remove} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+            </div>
+          </SidePanel>
+        )
+      })()}
+
       {uploadFor && (
+
         <UploadModal
           workers={targets.filter(w => !w.retired)}
           initialWorkerId={uploadFor.workerId}
@@ -339,13 +418,13 @@ function DocRow({ d, today, canEdit, canDelete, onOpen, onEdit, onStatus, onDele
           {d.validFrom && <span>開始 {d.validFrom}</span>}
           {d.expiresOn && <span>{def.expiryLabel || '期限'} {d.expiresOn}</span>}
           <span>登録 {d.uploadedAt.slice(0, 10)}</span>
-          {d.note && <span className="text-gray-600 dark:text-gray-300">📝 {d.note}</span>}
+          {d.note && <span className="text-gray-600 dark:text-gray-300">メモ: {d.note}</span>}
         </div>
         <div className="flex gap-1.5 flex-wrap mt-1">
           {d.files.map((f, i) => (
             <button key={i} onClick={() => onOpen(d, i)} title={`${f.name}（${fmtSize(f.size)}）`}
               className="text-[11px] px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-hibi-navy hover:text-hibi-navy max-w-[220px] truncate">
-              {f.contentType === 'application/pdf' ? '📄' : '🖼'} {f.name}
+              {f.contentType === 'application/pdf' ? 'PDF' : '画像'}・{f.name}
             </button>
           ))}
         </div>
@@ -402,7 +481,7 @@ function DocFields({ type, setType, title, setTitle, validFrom, setValidFrom, ex
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-hibi-navy dark:text-white">{title}</h3>
