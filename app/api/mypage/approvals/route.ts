@@ -9,6 +9,7 @@ import {
   siteMonthDays, approveDaysForSite, foremanParentSites, foremanTodoMonths, getForemenOfWorkerSites,
 } from '@/lib/foreman-todo'
 import type { Site } from '@/types'
+import { todayJstIso } from '@/lib/date-utils'
 
 /**
  * 職長のマイページの「承認すること」（2026-10-01 代表依頼）
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
     const sites = main.sites as unknown as Site[]
     const mforeman = (main.mforeman || {}) as Mforeman
     const months = foremanTodoMonths()
+    const todayIso = todayJstIso()
 
     // ── 出面: 担当現場 × 前月・今月 ──
     const attendance: {
@@ -54,7 +56,8 @@ export async function GET(request: NextRequest) {
         const days = await siteMonthDays(site.id, ym, { att })
         const open = days.filter(d => !d.approved && (d.isWorkDay || d.entered > 0))
         const ready = open.filter(d => d.total > 0 && d.entered === d.total)
-        const missing = open.filter(d => d.entered < d.total)
+        // 今日はまだ入力の途中なので「そろっていない」に出さない（全員そろえば承認には出る）
+        const missing = open.filter(d => d.entered < d.total && d.dateISO < todayIso)
         // 誰も配置されていない現場・何も無い月は出さない
         if (ready.length === 0 && missing.length === 0 && !days.some(d => d.approved)) continue
         attendance.push({
