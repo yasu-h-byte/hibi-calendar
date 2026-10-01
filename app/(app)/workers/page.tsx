@@ -1,5 +1,6 @@
 'use client'
 
+import { staffLinkOrigin } from '@/lib/public-origin'
 import { useEffect, useState, useCallback } from 'react'
 import { can } from '@/lib/permissions'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -370,7 +371,8 @@ export default function WorkersPage() {
 
   const hibiCount = activeWorkers.filter(w => w.company !== 'HFU').length
   const hfuCount = activeWorkers.filter(w => w.company === 'HFU').length
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  // 配るURLは本番のドメイン（お試しサイトで開いていても・2026-10-01）
+  const baseUrl = staffLinkOrigin()
   // スマホURLの行き先（2026-08-28）:
   //   日本人（職長含む） → マイページ（有給・道具代の確認だけ）
   //   外国人スタッフ     → 出面入力画面

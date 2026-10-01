@@ -10,6 +10,7 @@
  *    評価を決めるのはこの2名と定められている（第4節）。
  */
 
+import { staffLinkOrigin } from '@/lib/public-origin'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import type { Hyogo, RosterStatus, SpecialReason } from '@/lib/jp-wage'
 import LaborCostPanel from './LaborCostPanel'
@@ -651,7 +652,8 @@ function SendList({ effective, rows }: {
   const [copied, setCopied] = useState<string | null>(null)
   const fy = Number(effective.slice(0, 4)) + 1
   const [y, m, d] = effective.split('-').map(Number)
-  const url = (t: string) => `${typeof window !== 'undefined' ? window.location.origin : ''}/mypage/${t}`
+  // 配るURLは本番のドメイン（お試しサイトで開いていても・2026-10-01）
+  const url = (t: string) => `${staffLinkOrigin()}/mypage/${t}`
   const message = (r: { name: string; token: string; hasSheet: boolean; fixed?: boolean }) => [
     `${r.name.replace(/\s/g, '')}さん`,
     'お疲れさまです。',
