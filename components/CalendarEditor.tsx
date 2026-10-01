@@ -75,7 +75,7 @@ export default function CalendarEditor({ year, month, days, onChange, readOnly }
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-1">
         {cells.map((d, i) => {
-          if (d === null) return <div key={i} className="aspect-square" />
+          if (d === null) return <div key={i} className="h-14 sm:h-16" />
 
           const key = String(d)
           const dayType = days[key] || 'work'
@@ -93,14 +93,14 @@ export default function CalendarEditor({ year, month, days, onChange, readOnly }
               key={i}
               onClick={() => toggleDay(d)}
               disabled={readOnly}
-              className={`aspect-square rounded-lg flex flex-col items-center justify-center border-2 ${bg} ${
+              className={`h-14 sm:h-16 rounded-lg flex flex-col items-center justify-center border-2 ${bg} ${
                 readOnly ? 'cursor-default' : 'cursor-pointer hover:opacity-80 active:scale-95'
               } transition-all`}
             >
-              <div className={`font-bold text-2xl ${(dow === 0 || holiday) ? (isWork ? 'text-red-200' : 'text-red-400') : ''}`}>
+              <div className={`font-bold text-xl leading-tight ${(dow === 0 || holiday) ? (isWork ? 'text-red-200' : 'text-red-400') : ''}`}>
                 {d}
               </div>
-              <div className="text-sm font-medium">
+              <div className="text-xs font-medium">
                 {isWork ? '出勤' : '休み'}
               </div>
               {holiday && (
