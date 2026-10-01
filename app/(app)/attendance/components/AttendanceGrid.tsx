@@ -165,7 +165,14 @@ export default function AttendanceGrid({
     }
     measure()
     window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
+    // 2026-10-01: 見出し・職長承認行の高さが後から変わる（字の読み込み・工種チップ等）と
+    //   測った値がずれ、承認行と見出しのすき間から下の行が透けた。大きさが変わるたびに測り直す
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    if (ro) {
+      if (theadRef.current) ro.observe(theadRef.current)
+      if (foremanRowRef.current) ro.observe(foremanRowRef.current)
+    }
+    return () => { window.removeEventListener('resize', measure); ro?.disconnect() }
   }, [days.length, cellWidth])
 
   /**
@@ -205,15 +212,17 @@ export default function AttendanceGrid({
         <table className="text-xs border-collapse table-fixed" style={{ width: `${180 + days.length * 48 + 80}px` }}>
           <thead ref={theadRef} className="sticky top-0 z-30">
             {/* Day number row */}
-            <tr className="border-b border-gray-200">
+            {/* 2026-10-01: 貼り付く行の線は border でなく内側の影で描く（border-collapse の線は貼り付いて動かず、
+                スクロールすると線のすき間から下の濃紺の行が透けて黒い縦線に見えた） */}
+            <tr>
               <th
-                className="sticky left-0 z-40 bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1.5 text-left font-bold whitespace-nowrap"
+                className="sticky left-0 z-40 bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1.5 text-left font-bold whitespace-nowrap shadow-[inset_0_-1px_0_#E3E7EE]"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 名前
               </th>
               <th
-                className="sticky z-40 bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1 py-1.5 text-center font-bold" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+                className="sticky z-40 bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1 py-1.5 text-center font-bold shadow-[inset_0_-1px_0_#E3E7EE]" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
               >
                 所属
               </th>
@@ -228,7 +237,7 @@ export default function AttendanceGrid({
                 return (
                 <th
                   key={d.day}
-                  className={`px-0 py-1 text-center font-bold ${columnBg(d.day, dayHeaderBg(data.year, data.month, d.day, calDayType))} ${isWeekdayOff ? 'text-gray-400' : dayTextColor(d.dow)} border-l border-gray-200`}
+                  className={`px-0 py-1 text-center font-bold ${columnBg(d.day, dayHeaderBg(data.year, data.month, d.day, calDayType))} ${isWeekdayOff ? 'text-gray-400' : dayTextColor(d.dow)} shadow-[inset_1px_-1px_0_#E3E7EE]`}
                   style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                   title={isCalOff ? 'カレンダー休日' : data.calendarDays ? 'カレンダー出勤日' : ''}
                 >
@@ -301,7 +310,7 @@ export default function AttendanceGrid({
                 </th>
                 )
               })}
-              <th className="bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1.5 text-center font-bold border-l-2 border-gray-400" style={{ width: 80, minWidth: 80 }}>
+              <th className="bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1.5 text-center font-bold shadow-[inset_2px_-1px_0_#9CA3AF]" style={{ width: 80, minWidth: 80 }}>
                 <div>計</div>
                 <div className="text-[8px] opacity-70 font-normal">上:人工 / 下:残業h</div>
               </th>
@@ -312,10 +321,10 @@ export default function AttendanceGrid({
             {/* ── 職長承認 row（1次承認: 担当現場の職長のみ）──
                  職長名はこの承認行に集約表示（旧: 上部に空セルだけの黄色「職長行」があったが
                  情報が無く名前も二重だったため 2026-07-09 に削除。代理メモはここへ移設）。 */}
-            <tr ref={foremanRowRef} className="bg-white dark:bg-gray-800 border-b border-hibi-line dark:border-gray-700 sticky z-[25]" style={{ top: approvalTops[0] }}>
+            <tr ref={foremanRowRef} className="bg-white dark:bg-gray-800 sticky z-[25]" style={{ top: approvalTops[0] }}>
               {/* 2026-10-01: 誰が押す行かを2行で・ボタンを大きく（旧: 9px の「一括承認」） */}
               <td
-                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 whitespace-nowrap"
+                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 whitespace-nowrap shadow-[inset_0_-1px_0_#E3E7EE]"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 <div className="flex items-center gap-2">
@@ -333,7 +342,7 @@ export default function AttendanceGrid({
                   ))}
                 </div>
               </td>
-              <td className="sticky z-20 bg-white dark:bg-gray-800 px-1 py-1 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-white dark:bg-gray-800 px-1 py-1 text-center shadow-[inset_0_-1px_0_#E3E7EE]" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => {
                 const approved = localApprovals[d.day]
                 // 既に最終承認済みの場合は職長承認も解除できない（先に最終を外す必要）
@@ -343,7 +352,7 @@ export default function AttendanceGrid({
                 return (
                   <td
                     key={d.day}
-                    className={`px-0 py-1 border-l border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 text-center ${clickable ? 'cursor-pointer hover:bg-hibi-active dark:hover:bg-gray-700' : ''}`}
+                    className={`px-0 py-1 shadow-[inset_1px_-1px_0_#E3E7EE] bg-white dark:bg-gray-800 text-center ${clickable ? 'cursor-pointer hover:bg-hibi-active dark:hover:bg-gray-700' : ''}`}
                     style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                     onClick={clickable ? () => onToggleForemanApproval(d.day) : undefined}
                     title={
@@ -360,13 +369,13 @@ export default function AttendanceGrid({
                   </td>
                 )
               })}
-              <td className="px-1 py-1 text-center border-l-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" style={{ width: 80, minWidth: 80 }}></td>
+              <td className="px-1 py-1 text-center shadow-[inset_2px_-1px_0_#D1D5DB] bg-white dark:bg-gray-800" style={{ width: 80, minWidth: 80 }}></td>
             </tr>
 
             {/* ── 最終承認 row（事業責任者・管理者: 職長承認後のみ操作可） ── */}
-            <tr className="bg-white dark:bg-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky z-[25]" style={{ top: approvalTops[1] }}>
+            <tr className="bg-white dark:bg-gray-800 sticky z-[25]" style={{ top: approvalTops[1] }}>
               <td
-                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 whitespace-nowrap"
+                className="sticky left-0 z-20 bg-white dark:bg-gray-800 px-2 py-1.5 whitespace-nowrap shadow-[inset_0_-2px_0_#D1D5DB]"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 <div className="flex items-center gap-2">
@@ -382,7 +391,7 @@ export default function AttendanceGrid({
                   )}
                 </div>
               </td>
-              <td className="sticky z-20 bg-white dark:bg-gray-800 px-1 py-1 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
+              <td className="sticky z-20 bg-white dark:bg-gray-800 px-1 py-1 text-center shadow-[inset_0_-2px_0_#D1D5DB]" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}></td>
               {days.map(d => {
                 const foremanApproved = localApprovals[d.day]
                 const finalApproved = localFinalApprovals[d.day]
@@ -391,7 +400,7 @@ export default function AttendanceGrid({
                 return (
                   <td
                     key={d.day}
-                    className={`px-0 py-1 border-l border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 text-center ${clickable ? 'cursor-pointer hover:bg-green-50 dark:hover:bg-gray-700' : ''}`}
+                    className={`px-0 py-1 shadow-[inset_1px_-2px_0_#D1D5DB] bg-white dark:bg-gray-800 text-center ${clickable ? 'cursor-pointer hover:bg-green-50 dark:hover:bg-gray-700' : ''}`}
                     style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                     onClick={clickable ? () => onToggleFinalApproval(d.day) : undefined}
                     title={
@@ -409,7 +418,7 @@ export default function AttendanceGrid({
                   </td>
                 )
               })}
-              <td className="px-1 py-1 text-center border-l-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" style={{ width: 80, minWidth: 80 }}></td>
+              <td className="px-1 py-1 text-center shadow-[inset_2px_-2px_0_#D1D5DB] bg-white dark:bg-gray-800" style={{ width: 80, minWidth: 80 }}></td>
             </tr>
 
             {/* ── Worker groups ── */}
