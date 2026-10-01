@@ -221,7 +221,7 @@ export default function MyPage() {
         )}
 
         {/* ── 承認すること（職長だけ） ── */}
-        <ForemanApprovals token={token} />
+        <ForemanApprovals token={token} isShokucho={data.worker.jobType === 'shokucho'} />
 
         {/* ── 有給 ── */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">

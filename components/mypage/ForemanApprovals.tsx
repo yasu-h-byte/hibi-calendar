@@ -24,7 +24,11 @@ const WEEK = ['日', '月', '火', '水', '木', '金', '土']
 /** 2026-09-03 → 9/3（木） */
 const md = (iso: string) => `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}（${WEEK[new Date(`${iso}T00:00:00`).getDay()]}）`
 
-export default function ForemanApprovals({ token }: { token: string }) {
+export default function ForemanApprovals({ token, isShokucho }: {
+  token: string
+  /** 職種が職長か（読み込み中の枠を出すかどうか。出すかどうかの最終判断はサーバの isForeman） */
+  isShokucho: boolean
+}) {
   const [data, setData] = useState<Data | null>(null)
   const [busy, setBusy] = useState<string>('')
   const [msg, setMsg] = useState('')
@@ -79,7 +83,16 @@ export default function ForemanApprovals({ token }: { token: string }) {
     } catch { alert('通信エラーが発生しました') } finally { setBusy('') }
   }
 
-  if (!data || !data.isForeman) return null
+  if (!data) {
+    // 読み込み中（数秒かかることがある）。職長にだけ枠を先に出しておく（あとから急にカードが出て画面がずれないように）
+    return isShokucho ? (
+      <div className="bg-white rounded-xl border-2 border-hibi-navy/20 shadow-sm p-4">
+        <div className="text-base font-extrabold text-hibi-charcoal">承認すること</div>
+        <div className="text-sm text-gray-400 mt-2">読み込み中...</div>
+      </div>
+    ) : null
+  }
+  if (!data.isForeman) return null
 
   const readyDays = data.attendance.reduce((s, b) => s + b.ready.length, 0)
   const total = readyDays + data.leaveRequests.length + data.homeLeaves.length

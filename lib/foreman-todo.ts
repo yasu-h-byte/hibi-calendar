@@ -18,6 +18,7 @@ import { workTypeFamilyIds, familyEntrySiteId, type HierarchySite, type WorkType
 import { computeForemanSites, approvingForemenOfSite } from './auth'
 import { todayJstIso, addMonthsSafe } from './date-utils'
 import type { AttendanceEntry, Site } from '@/types'
+import { getAssign, type MainData } from './compute'
 
 /**
  * 工種（鉄骨・仮設など）を持つ現場の「同じ現場」の範囲（親＋工種サイト）と、工種の指定（2026-09-28）。
@@ -63,6 +64,8 @@ const isoOf = (ym: string, day: number) => `${ym.slice(0, 4)}-${ym.slice(4, 6)}-
 export async function siteMonthDays(siteId: string, ym: string, preloaded?: {
   att?: Record<string, AttendanceEntry>
   family?: string[]
+  /** 対象の外国人スタッフ（読むだけの一覧ではキャッシュ済みの main から渡して読み取りを減らす） */
+  workers?: { id: number; name: string }[]
 }): Promise<ForemanDay[]> {
   const today = todayJstIso()
   const y = Number(ym.slice(0, 4))
@@ -75,7 +78,7 @@ export async function siteMonthDays(siteId: string, ym: string, preloaded?: {
   const [att, family, workers, calSnap] = await Promise.all([
     preloaded?.att ? Promise.resolve(preloaded.att) : getAttendanceDoc(ym),
     preloaded?.family ? Promise.resolve(preloaded.family) : loadSiteFamily(siteId).then(f => f.family),
-    getForeignWorkersForSite(siteId, ym),
+    preloaded?.workers ? Promise.resolve(preloaded.workers) : getForeignWorkersForSite(siteId, ym),
     getDoc(doc(db, 'siteCalendar', `${siteId}_${ym.slice(0, 4)}-${ym.slice(4, 6)}`)).catch(() => null),
   ])
   const cal = calSnap && calSnap.exists() ? calSnap.data() : null
@@ -163,6 +166,19 @@ export async function getForemenOfWorkerSites(workerId: number): Promise<Set<num
     for (const f of approvingForemenOfSite(site, main.mforeman || {}, ym, main.workers || [])) result.add(f)
   }
   return result
+}
+
+/**
+ * キャッシュ済みの main（getMainData・30秒）から、現場×月の外国人スタッフと工種の範囲を作る。
+ * getForeignWorkersForSite / loadSiteFamily と同じ決まり（月別配置 massign → 既定配置 assign・在留資格あり）。
+ * 一覧（読むだけ）用。承認の書き込み判定は approveDaysForSite が最新の main を読み直す。
+ */
+export function siteRosterFromMain(main: MainData, siteId: string, ym: string): { workers: { id: number; name: string }[]; family: string[] } {
+  const ids = new Set(getAssign(main, siteId, ym).workers)
+  return {
+    workers: main.workers.filter(w => ids.has(w.id) && w.visa && w.visa !== 'none').map(w => ({ id: w.id, name: w.name })),
+    family: workTypeFamilyIds(main.sites as unknown as HierarchySite[], siteId),
+  }
 }
 
 /** 見る月: 今月と前月（前月は締めまでに承認が要る） */

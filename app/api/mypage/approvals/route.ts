@@ -6,7 +6,7 @@ import { approvingForemenOfSite } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { getDocs, collection, query, where } from '@/lib/fsdb'
 import {
-  siteMonthDays, approveDaysForSite, foremanParentSites, foremanTodoMonths, getForemenOfWorkerSites,
+  siteMonthDays, approveDaysForSite, siteRosterFromMain, foremanParentSites, foremanTodoMonths, getForemenOfWorkerSites,
 } from '@/lib/foreman-todo'
 import type { Site } from '@/types'
 import { todayJstIso } from '@/lib/date-utils'
@@ -47,31 +47,37 @@ export async function GET(request: NextRequest) {
       missing: { day: number; dateISO: string; missingNames: string[] }[]
       approvedCount: number
     }[] = []
-    for (const ym of months) {
+    // 有給・帰国申請の確認待ちは出面と同時に読み始める
+    const leavePromise = getDocs(query(collection(db, 'leaveRequests'), where('status', '==', 'pending')))
+    const hlPromise = getDocs(query(collection(db, 'homeLongLeave'), where('status', '==', 'pending')))
+
+    // 2か月を同時に読む（旧: 順番に読んで表示まで約5秒かかった）。出面ドキュメントは月ごとに1回だけ
+    const perMonth = await Promise.all(months.map(async ym => {
       const mySites = foremanParentSites(worker, sites, mforeman, ym)
-      if (mySites.length === 0) continue
-      // 出面ドキュメント（1件200〜300KB）は月ごとに1回だけ読む（CLAUDE.md の読み取りルール）
+      if (mySites.length === 0) return []
       const att = await getAttendanceDoc(ym)
-      for (const site of mySites) {
-        const days = await siteMonthDays(site.id, ym, { att })
+      return Promise.all(mySites.map(async site => {
+        const roster = siteRosterFromMain(main, site.id, ym)
+        const days = await siteMonthDays(site.id, ym, { att, ...roster })
         const open = days.filter(d => !d.approved && (d.isWorkDay || d.entered > 0))
         const ready = open.filter(d => d.total > 0 && d.entered === d.total)
         // 今日はまだ入力の途中なので「そろっていない」に出さない（全員そろえば承認には出る）
         const missing = open.filter(d => d.entered < d.total && d.dateISO < todayIso)
         // 誰も配置されていない現場・何も無い月は出さない
-        if (ready.length === 0 && missing.length === 0 && !days.some(d => d.approved)) continue
-        attendance.push({
+        if (ready.length === 0 && missing.length === 0 && !days.some(d => d.approved)) return null
+        return {
           siteId: site.id, siteName: site.name, ym, ymLabel: ymLabel(ym),
           ready: ready.map(d => ({ day: d.day, dateISO: d.dateISO, entered: d.entered })),
           missing: missing.map(d => ({ day: d.day, dateISO: d.dateISO, missingNames: d.missingNames })),
           approvedCount: days.filter(d => d.approved).length,
-        })
-      }
-    }
+        }
+      }))
+    }))
+    for (const blocks of perMonth) for (const b of blocks) if (b) attendance.push(b)
 
     // ── 有給申請: 職長の確認待ち（自分の申請は除く・自分で自分は承認できない） ──
     const siteName = (id: string) => sites.find(s => s.id === id)?.name || id
-    const leaveSnap = await getDocs(query(collection(db, 'leaveRequests'), where('status', '==', 'pending')))
+    const leaveSnap = await leavePromise
     const leaveRequests: { id: string; workerName: string; date: string; reason: string; siteName: string }[] = []
     leaveSnap.forEach(d => {
       const r = d.data() as { workerId: number; workerName: string; date: string; reason?: string; siteId: string; ym: string }
@@ -83,14 +89,13 @@ export async function GET(request: NextRequest) {
     leaveRequests.sort((a, b) => a.date.localeCompare(b.date))
 
     // ── 帰国申請: 職長の確認待ち ──
-    const hlSnap = await getDocs(query(collection(db, 'homeLongLeave'), where('status', '==', 'pending')))
-    const homeLeaves: { id: string; workerName: string; startDate: string; endDate: string; reason: string }[] = []
-    for (const d of hlSnap.docs) {
+    const hlSnap = await hlPromise
+    const homeLeaves = (await Promise.all(hlSnap.docs.map(async d => {
       const r = d.data() as { workerId: number; workerName: string; startDate: string; endDate: string; reason?: string }
-      if (r.workerId === worker.id) continue
-      if (!(await getForemenOfWorkerSites(r.workerId)).has(worker.id)) continue
-      homeLeaves.push({ id: d.id, workerName: r.workerName, startDate: r.startDate, endDate: r.endDate, reason: r.reason || '' })
-    }
+      if (r.workerId === worker.id) return null
+      if (!(await getForemenOfWorkerSites(r.workerId)).has(worker.id)) return null
+      return { id: d.id, workerName: r.workerName, startDate: r.startDate, endDate: r.endDate, reason: r.reason || '' }
+    }))).filter((x): x is { id: string; workerName: string; startDate: string; endDate: string; reason: string } => !!x)
     homeLeaves.sort((a, b) => a.startDate.localeCompare(b.startDate))
 
     return NextResponse.json({ isForeman: true, attendance, leaveRequests, homeLeaves })
