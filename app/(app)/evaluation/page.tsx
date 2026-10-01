@@ -15,6 +15,7 @@ import {
 } from '@/types'
 import { fmtYen } from '@/lib/format'
 import WorkerAvatar from '@/components/WorkerAvatar'
+import { PageHeader, ToolButton, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
 // ⚠️ 評価ロジック（重み・テーブル・計算関数）は lib/evaluation-config.ts に集約。
@@ -201,6 +202,9 @@ function daysSince(iso: string): number {
 }
 
 type TabId = 'list' | 'review' | 'monitor' | 'approve' | 'history'
+type EvState = 'collecting' | 'reviewing' | 'approved' | 'none'
+type EvFilter = 'all' | 'collecting' | 'reviewing' | 'approved' | 'soon' | 'mine'
+const EV_COLS = 'lg:grid-cols-[minmax(0,1fr)_100px_60px_minmax(0,1fr)_60px_150px]'
 
 const EMPTY_SCORES: EvaluationScores = {
   japanese: { understanding: 'B' as ABCGrade, reporting: 'B' as ABCGrade, safety: 'B' as ABCGrade },
@@ -231,6 +235,9 @@ export default function EvaluationPage() {
   const [apiEvaluators, setApiEvaluators] = useState<{ id: number; name: string; job: string }[]>([])
   // 顔写真（2026-09-15 代表要望: 名前と顔がパッと分かるように）。無い人はイニシャル表示
   const { photos } = useWorkerPhotos()
+  const [evFilter, setEvFilter] = useState<EvFilter>('all')
+  const [evQuery, setEvQuery] = useState('')
+  const [evOpenId, setEvOpenId] = useState<number | null>(null)
 
   // Review tab state
   const [selectedWorkerId, setSelectedWorkerId] = useState<number | null>(null)
@@ -1357,9 +1364,102 @@ export default function EvaluationPage() {
     )
   }
 
+  // ── 一覧の行（2026-10-01 改修: 今やること・1人1行・右から開く）──
+  const today = todayJstIso()
+  const soonLimit = addMonthsSafe(today, 2)
+  const evalRows = workers.map(w => {
+    const wEvals = evaluations.filter(e => e.workerId === w.id)
+    const latest = [...wEvals].sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))[0]
+    const nextDate = nextEvalDate(w.hireDate || '', wEvals)
+    const isOverdue = hasBeenEvaluated(wEvals) && nextDate !== '--' && nextDate <= today
+    // 進行中（collecting/reviewing）優先、なければ最新（承認済み）
+    const active = wEvals.filter(e => e.status !== 'approved').sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))[0]
+    const session = active || latest
+    const youAreEvaluator = !!(session && authUser && session.evaluatorIds.includes(authUser.workerId))
+    const youSubmitted = youAreEvaluator && !!session?.reviews.some(r => r.evaluatorId === authUser?.workerId)
+    const state: EvState = active ? (active.status === 'reviewing' ? 'reviewing' : 'collecting') : latest?.status === 'approved' ? 'approved' : 'none'
+    const soon = !active && nextDate !== '--' && nextDate <= soonLimit
+    return { w, latest, nextDate, isOverdue, active, session, youAreEvaluator, youSubmitted, state, soon }
+  }).sort((a, b) => {
+    if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1
+    return a.nextDate.localeCompare(b.nextDate)
+  })
+  type EvRow = typeof evalRows[number]
+  const collecting = evalRows.filter(r => r.state === 'collecting')
+  const myPending = collecting.filter(r => r.youAreEvaluator && !r.youSubmitted)
+  const reviewing = evalRows.filter(r => r.state === 'reviewing')
+  const soonRows = evalRows.filter(r => r.soon || r.isOverdue)
+  const missingNames = (s: Evaluation) => {
+    const done = new Set(s.reviews.map(r => r.evaluatorId))
+    return s.evaluatorIds.filter(id => !done.has(id)).map(id => evaluatorNameLookup(id, apiEvaluators, workers))
+  }
+  const shownRows = evalRows
+    .filter(r => evFilter === 'all' || (evFilter === 'soon' ? (r.soon || r.isOverdue) : evFilter === 'mine' ? (r.youAreEvaluator && !r.youSubmitted && r.state === 'collecting') : r.state === evFilter))
+    .filter(r => !evQuery.trim() || r.w.name.replace(/[\s　]/g, '').toLowerCase().includes(evQuery.replace(/[\s　]/g, '').toLowerCase()))
+  const openRow = evalRows.find(r => r.w.id === evOpenId) || null
+  const STATE_CHIP: Record<EvState, { label: string; tone: ChipTone }> = {
+    collecting: { label: '評価中', tone: 'red' },
+    reviewing: { label: '承認待ち', tone: 'blue' },
+    approved: { label: '承認済み', tone: 'green' },
+    none: { label: 'まだ評価していない', tone: 'gray' },
+  }
+  const progressDots = (s: Evaluation) => {
+    const done = new Set(s.reviews.map(r => r.evaluatorId))
+    const n = s.evaluatorIds.filter(id => done.has(id)).length
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="inline-flex gap-[3px]">
+          {s.evaluatorIds.map((id, i) => <span key={i} className={`w-2.5 h-2.5 rounded-full ${i < n ? 'bg-green-700 dark:bg-green-400' : 'bg-gray-300 dark:bg-gray-600'}`} />)}
+        </span>
+        <span className="text-xs text-hibi-sub dark:text-gray-400 tabular-nums">{n}/{s.evaluatorIds.length}</span>
+      </span>
+    )
+  }
+  const openCreate = async (workerId: number | null) => {
+    // 最新の評価者リストを取得してからモーダルを開く
+    const { password } = getAuth()
+    try {
+      const res = await fetch('/api/evaluation', { headers: { 'x-admin-password': password } })
+      if (res.ok) {
+        const d = await res.json()
+        const evals = d.evaluators || []
+        setApiEvaluators(evals)
+        setCreateEvaluatorIds(evals.map((e: { id: number }) => e.id))
+      }
+    } catch { /* ignore */ }
+    setCreateWorkerId(workerId)
+    setEvOpenId(null)
+    setShowCreateModal(true)
+  }
+  const goReview = (r: EvRow) => { setEvOpenId(null); setSelectedWorkerId(r.w.id); setActiveTab('review') }
+  const goApprove = (s: Evaluation) => {
+    setEvOpenId(null)
+    setApproveSessionId(s.id)
+    setFinalScores(computePrefillScores(s))
+    setFinalComment('')
+    setActiveTab('approve')
+  }
+  const toggleEvFilter = (f: EvFilter) => setEvFilter(evFilter === f ? 'all' : f)
+
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">評価管理</h1>
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="賃金・評価"
+        title="評価管理"
+        sub="ベトナム人スタッフの年次評価。入社記念日ごとに評価して、時給を改定します"
+        actions={isAdmin && activeTab === 'list' ? <>
+          <ToolButton icon="chart" onClick={handleRecalculateAllMetrics} disabled={recalculatingWeights} title="進行中の評価の出勤率・残業平均・ボーナスを計算し直します">
+            {recalculatingWeights ? '計算中...' : '出勤の指標を計算し直す'}
+          </ToolButton>
+          <ToolButton icon="users" onClick={handleRecalculateAllWeights} disabled={recalculatingWeights} title="進行中の評価の、評価者ごとの重みを出面から計算し直します">
+            {recalculatingWeights ? '計算中...' : '評価者の重みを計算し直す'}
+          </ToolButton>
+          <button onClick={() => openCreate(null)}
+            className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
+            <span className="text-lg leading-none">＋</span>評価を始める
+          </button>
+        </> : undefined}
+      />
 
       {/* 提出成功トースト — 8秒で自動フェード */}
       {submitSuccess && (
@@ -1387,222 +1487,195 @@ export default function EvaluationPage() {
         </div>
       )}
 
-      {/* Tab Bar */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
-        {visibleTabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === t.id
-                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <UnderlineTabs label="評価管理のタブ" active={activeTab} onChange={setActiveTab}
+        tabs={visibleTabs.map(t => ({ key: t.id, label: t.label }))} />
 
       {/* ═══════════════════════════════════════ */}
       {/* Tab 1: 一覧 (List)                      */}
       {/* ═══════════════════════════════════════ */}
       {activeTab === 'list' && (
-        <div className="space-y-4">
-          {/* Create session button (admin only) */}
-          {isAdmin && (
-            <div className="flex justify-end gap-2 flex-wrap">
-              <button
-                onClick={handleRecalculateAllMetrics}
-                disabled={recalculatingWeights}
-                className="px-3 py-2 text-sm font-medium rounded-lg border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors disabled:opacity-50"
-                title="進行中セッションの出勤率・残業平均・ボーナスを新ロジックで再計算"
-              >
-                {recalculatingWeights ? '再計算中...' : '📊 出勤指標 一括再計算'}
-              </button>
-              <button
-                onClick={handleRecalculateAllWeights}
-                disabled={recalculatingWeights}
-                className="px-3 py-2 text-sm font-medium rounded-lg border border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors disabled:opacity-50"
-                title="進行中セッションのウェイトを過去出勤データから再計算"
-              >
-                {recalculatingWeights ? '再計算中...' : '🔄 ウェイト一括再計算'}
-              </button>
-              <button
-                onClick={async () => {
-                  // 最新の評価者リストを取得してからモーダルを開く
-                  const { password } = getAuth()
-                  try {
-                    const res = await fetch('/api/evaluation', { headers: { 'x-admin-password': password } })
-                    if (res.ok) {
-                      const d = await res.json()
-                      const evals = d.evaluators || []
-                      setApiEvaluators(evals)
-                      setCreateEvaluatorIds(evals.map((e: { id: number }) => e.id))
-                    }
-                  } catch { /* ignore */ }
-                  setShowCreateModal(true)
-                }}
-                className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
-              >
-                評価セッション作成
-              </button>
-            </div>
-          )}
+        <div className="space-y-5">
+          {/* ① 今やること */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {isAdmin ? (
+              <TodoCard icon="pen" tone={collecting.length > 0 ? 'urgent' : 'ok'} title="評価中（入力が残っている）"
+                big={collecting.length > 0 ? `${collecting.length}名` : 'ありません'}
+                sub={collecting.length > 0
+                  ? collecting.slice(0, 2).map(r => `${r.w.name}（まだ: ${missingNames(r.active!).join('・')}）`).join('／') + (collecting.length > 2 ? ` ほか${collecting.length - 2}名` : '')
+                  : '入力を待っている評価はありません'}
+                action={collecting.length > 0 ? '見る' : undefined} active={evFilter === 'collecting'}
+                onClick={collecting.length > 0 ? () => toggleEvFilter('collecting') : undefined} />
+            ) : (
+              <TodoCard icon="pen" tone={myPending.length > 0 ? 'urgent' : 'ok'} title="あなたの入力待ち"
+                big={myPending.length > 0 ? `${myPending.length}名` : 'ありません'}
+                sub={myPending.length > 0 ? `${myPending.slice(0, 3).map(r => r.w.name).join('・')}。行を押して「評価を入力する」` : 'あなたが入力する評価はありません'}
+                action={myPending.length > 0 ? '見る' : undefined} active={evFilter === 'mine'}
+                onClick={myPending.length > 0 ? () => toggleEvFilter('mine') : undefined} />
+            )}
+            <TodoCard icon="check" tone={reviewing.length > 0 ? 'info' : 'ok'} title="承認待ち"
+              big={reviewing.length > 0 ? `${reviewing.length}名` : 'ありません'}
+              sub={reviewing.length > 0 ? `${reviewing.slice(0, 3).map(r => r.w.name).join('・')}。入力がそろいました。承認すると時給が決まります` : '承認を待っている評価はありません'}
+              action={reviewing.length > 0 ? '見る' : undefined} active={evFilter === 'reviewing'}
+              onClick={reviewing.length > 0 ? () => toggleEvFilter('reviewing') : undefined} />
+            <TodoCard icon="clock" tone={soonRows.some(r => r.isOverdue) ? 'warn' : soonRows.length > 0 ? 'info' : 'ok'} title="もうすぐ評価日（60日以内）"
+              big={soonRows.length > 0 ? `${soonRows.length}名` : 'ありません'}
+              sub={soonRows.length > 0
+                ? soonRows.slice(0, 3).map(r => `${r.w.name} ${r.nextDate}${r.isOverdue ? '（過ぎています）' : ''}`).join('・')
+                : (() => { const next = evalRows.find(r => r.state !== 'collecting' && r.state !== 'reviewing' && r.nextDate !== '--'); return next ? `次は ${next.nextDate} の ${next.w.name}。近づくとここに出ます` : '近い評価日はありません' })()}
+              action={soonRows.length > 0 ? '見る' : undefined} active={evFilter === 'soon'}
+              onClick={soonRows.length > 0 ? () => toggleEvFilter('soon') : undefined} />
+          </section>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-900">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">名前</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">在留資格</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">勤続</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase min-w-[260px]">提出状況</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">自分</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">ランク</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">次回評価日</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {workers
-                    .map(w => {
-                      const wEvals = evaluations.filter(e => e.workerId === w.id)
-                      const latest = wEvals.sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))[0]
-                      const nextDate = nextEvalDate(w.hireDate || '', wEvals)
-                      // アラートは「システムで評価済み＆1年経過」の場合のみ
-                      const evaluated = hasBeenEvaluated(wEvals)
-                      const isOverdue = evaluated && nextDate !== '--' && nextDate <= todayJstIso()
-                      return { worker: w, latest, nextDate, isOverdue }
-                    })
-                    .sort((a, b) => {
-                      if (a.isOverdue !== b.isOverdue) return a.isOverdue ? -1 : 1
-                      return a.nextDate.localeCompare(b.nextDate)
-                    })
-                    .map(({ worker: w, latest, nextDate, isOverdue }) => {
-                      const yrs = w.hireDate ? yearsFromDate(w.hireDate) : 0
-                      // アクティブセッション（collecting/reviewing）優先、なければ最新の承認済み
-                      const activeSession = evaluations
-                        .filter(e => e.workerId === w.id && e.status !== 'approved')
-                        .sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))[0]
-                      const showSession = activeSession || latest
-                      const youAreEvaluator = showSession && authUser && showSession.evaluatorIds.includes(authUser.workerId)
-                      const youSubmitted = youAreEvaluator && showSession.reviews.some(r => r.evaluatorId === authUser?.workerId)
-                      return (
-                        <tr key={w.id} className="hover:bg-gray-50 dark:hover:bg-gray-750">
-                          <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white whitespace-nowrap">
-                            <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={32} className="mr-2" />{w.name}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                            {VISA_LABELS[w.visaType] || w.visaType}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-gray-300 whitespace-nowrap">
-                            {yrs > 0 ? `${yrs}年` : '--'}
-                          </td>
-                          <td className="px-4 py-3">
-                            {showSession ? (
-                              <EvaluatorBadgeList session={showSession} compact />
-                            ) : (
-                              <span className="text-xs text-gray-400 dark:text-gray-500">未評価</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center whitespace-nowrap">
-                            {!showSession || showSession.status === 'approved' || !youAreEvaluator ? (
-                              <span className="text-xs text-gray-400 dark:text-gray-500">―</span>
-                            ) : youSubmitted ? (
-                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                                ✓ 提出済
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
-                                ⏳ 未提出
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center whitespace-nowrap">
-                            {latest?.rank ? (
-                              <button
-                                onClick={() => setDetailSessionId(latest.id)}
-                                className={`font-bold hover:underline ${rankColor(latest.rank)}`}
-                                title="承認時の詳細を表示"
-                              >
-                                {latest.rank}
-                              </button>
-                            ) : '--'}
-                          </td>
-                          <td className="px-4 py-3 text-sm whitespace-nowrap">
-                            <span className={isOverdue ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-600 dark:text-gray-300'}>
-                              {nextDate}
-                            </span>
-                            {isOverdue && (
-                              <span className="ml-1 inline-block px-1.5 py-0.5 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 text-xs rounded-full font-bold">
-                                期限超過
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1 flex-wrap">
-                              {showSession && showSession.status !== 'approved' && youAreEvaluator && (
-                                <button
-                                  onClick={() => {
-                                    setSelectedWorkerId(w.id)
-                                    setActiveTab('review')
-                                  }}
-                                  className={`px-3 py-1 text-xs font-medium rounded-lg ${
-                                    youSubmitted
-                                      ? 'border border-blue-300 text-blue-600 dark:border-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30'
-                                      : 'bg-blue-500 text-white hover:bg-blue-600'
-                                  } transition-colors`}
-                                >
-                                  {youSubmitted ? '修正' : '評価入力'}
-                                </button>
-                              )}
-                              {showSession && showSession.status === 'reviewing' && isAdmin && (
-                                <button
-                                  onClick={() => {
-                                    setApproveSessionId(showSession.id)
-                                    setFinalScores(computePrefillScores(showSession))
-                                    setFinalComment('')
-                                    setActiveTab('approve')
-                                  }}
-                                  className="px-3 py-1 text-xs font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors"
-                                >
-                                  承認へ
-                                </button>
-                              )}
-                              {showSession && isAdmin && (
-                                <button
-                                  onClick={() => setDetailSessionId(showSession.id)}
-                                  className="px-3 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                >
-                                  詳細
-                                </button>
-                              )}
+          {/* ② 一覧 */}
+          <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
+              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">ベトナム人スタッフ（{workers.length}名）</h2>
+              <Segment value={(['all', 'collecting', 'reviewing', 'approved'] as const).includes(evFilter as 'all') ? evFilter as 'all' | 'collecting' | 'reviewing' | 'approved' : 'all'}
+                onChange={v => setEvFilter(v)} items={[
+                  ['all', `すべて ${evalRows.length}`], ['collecting', `評価中 ${collecting.length}`],
+                  ['reviewing', `承認待ち ${reviewing.length}`], ['approved', `承認済み ${evalRows.filter(r => r.state === 'approved').length}`],
+                ]} />
+              {(evFilter === 'soon' || evFilter === 'mine') && (
+                <button onClick={() => setEvFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+                  {evFilter === 'soon' ? 'もうすぐ評価日の人' : 'あなたの入力待ち'}だけ表示中 ×
+                </button>
+              )}
+              <SearchBox value={evQuery} onChange={setEvQuery} placeholder="名前で探す" />
+            </div>
+            <div className={`hidden lg:grid ${EV_COLS} gap-3 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300`}>
+              <span>名前</span><span>在留資格</span><span>勤続</span><span>今回の評価</span><span>ランク</span><span>次の評価日</span>
+            </div>
+            {workers.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">外国人スタッフが登録されていません</div>
+            ) : shownRows.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">当てはまる人はいません</div>
+            ) : shownRows.map(r => {
+              const yrs = r.w.hireDate ? yearsFromDate(r.w.hireDate) : 0
+              const st = STATE_CHIP[r.state]
+              return (
+                <div key={r.w.id} role="button" tabIndex={0}
+                  onClick={() => setEvOpenId(r.w.id)}
+                  onKeyDown={e => { if (e.key === 'Enter') setEvOpenId(r.w.id) }}
+                  className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${EV_COLS} gap-x-3 gap-y-1.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums`}>
+                  <span className="col-span-2 lg:col-span-1 flex items-center gap-2.5 min-w-0">
+                    <WorkerAvatar name={r.w.name} src={photos[String(r.w.id)]} size={36} />
+                    <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{r.w.name}</span>
+                    {r.youAreEvaluator && r.state === 'collecting' && (r.youSubmitted ? <Chip tone="green">入力済み</Chip> : <Chip tone="amber">あなたの入力待ち</Chip>)}
+                  </span>
+                  <span><Chip tone="gray">{VISA_LABELS[r.w.visaType] || r.w.visaType}</Chip></span>
+                  <span className="text-sm">{yrs > 0 ? `${yrs}年` : '—'}</span>
+                  <span className="flex flex-wrap items-center gap-2">
+                    {r.state === 'none' ? <span className="text-[13px] text-hibi-sub dark:text-gray-400">{r.isOverdue ? '' : '次の評価日まで'}</span> : <Chip tone={st.tone}>{st.label}</Chip>}
+                    {r.state === 'collecting' && r.active && progressDots(r.active)}
+                  </span>
+                  <span className={`text-lg font-bold ${r.latest?.rank ? rankColor(r.latest.rank) : 'text-gray-300 dark:text-gray-600'}`}>{r.latest?.rank || '—'}</span>
+                  <span className="text-sm">
+                    <span className={r.isOverdue ? 'text-red-700 dark:text-red-400 font-bold' : ''}>{r.nextDate}</span>
+                    {r.isOverdue && <span className="ml-1"><Chip tone="red">過ぎています</Chip></span>}
+                  </span>
+                </div>
+              )
+            })}
+          </section>
+
+          {/* 一人の評価（右から開く） */}
+          {openRow && (() => {
+            const r = openRow
+            const s = r.session
+            const yrs = r.w.hireDate ? yearsFromDate(r.w.hireDate) : 0
+            return (
+              <SidePanel label={`${r.w.name} の評価`} onClose={() => setEvOpenId(null)}>
+                <div className="p-6 space-y-5">
+                  <div className="flex items-center gap-3">
+                    <WorkerAvatar name={r.w.name} src={photos[String(r.w.id)]} size={52} />
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{r.w.name}</h2>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+                        <Chip tone="gray">{VISA_LABELS[r.w.visaType] || r.w.visaType}</Chip>
+                        {yrs > 0 && <span>勤続{yrs}年</span>}
+                        {s && <span>／ 評価日 {s.evaluationDate}</span>}
+                      </div>
+                    </div>
+                    <CloseButton onClick={() => setEvOpenId(null)} />
+                  </div>
+
+                  {!s ? (
+                    <div className="rounded-xl border border-hibi-line dark:border-gray-700 px-4 py-4 space-y-3">
+                      <div className="text-sm">まだシステムで評価していません。次の評価日は <b className="tabular-nums">{r.nextDate}</b> です。</div>
+                      {isAdmin && (
+                        <button onClick={() => openCreate(r.w.id)} className="h-10 px-4 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light">この人の評価を始める</button>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Chip tone={STATE_CHIP[r.state].tone}>{STATE_CHIP[r.state].label}</Chip>
+                        {r.state === 'collecting' && (
+                          <span className="text-[13px] text-hibi-sub dark:text-gray-400">
+                            {s.evaluatorIds.length}人中{s.reviews.filter(rv => s.evaluatorIds.includes(rv.evaluatorId)).length}人が入力済み（始めてから{daysSince(s.createdAt)}日）
+                          </span>
+                        )}
+                        {r.state === 'approved' && s.rank && (
+                          <span className="text-[13px] text-hibi-sub dark:text-gray-400">ランク <b className={`text-base ${rankColor(s.rank)}`}>{s.rank}</b>{s.raiseAmount != null && <>（昇給 {fmtYen(s.raiseAmount)}/時）</>}</span>
+                        )}
+                      </div>
+
+                      <section>
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white mb-1">評価する人</h3>
+                        {s.evaluatorIds.map(id => {
+                          const rv = s.reviews.find(x => x.evaluatorId === id)
+                          const days = daysSince(s.createdAt)
+                          return (
+                            <div key={id} className="flex items-center gap-2 py-2 border-t border-hibi-line dark:border-gray-700 text-sm">
+                              <span className="flex-1 font-bold">{evaluatorNameLookup(id, apiEvaluators, workers)}{authUser?.workerId === id && <span className="ml-1.5 text-xs font-normal text-hibi-sub">（あなた）</span>}</span>
+                              {rv ? <Chip tone="green">入力済み {fmtDateShort(rv.submittedAt)}</Chip>
+                                : s.status === 'collecting' ? <Chip tone={days >= 7 ? 'red' : 'amber'}>まだ（{days}日）</Chip>
+                                : <Chip tone="gray">入力なし</Chip>}
                             </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  {workers.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-gray-400 dark:text-gray-500">
-                        外国人スタッフが登録されていません
-                      </td>
-                    </tr>
+                          )
+                        })}
+                      </section>
+
+                      {s.metrics && (
+                        <section>
+                          <h3 className="text-base font-bold text-gray-900 dark:text-white mb-2">出勤の指標（この1年）</h3>
+                          <div className="grid grid-cols-3 gap-2.5">
+                            {[
+                              ['出勤率', `${(s.metrics.attendanceRate ?? 0).toFixed(1)}%`],
+                              ['残業の平均', `${(s.metrics.overtimeAvg ?? 0).toFixed(1)}時間/月`],
+                              ['欠勤', s.metrics.restDays != null ? `${s.metrics.restDays}日` : '—'],
+                            ].map(([l, v]) => (
+                              <div key={l} className="rounded-xl border border-hibi-line dark:border-gray-700 px-3.5 py-2.5">
+                                <div className="text-xs text-hibi-sub dark:text-gray-400">{l}</div>
+                                <div className="text-lg font-bold tabular-nums">{v}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+
+                      <div className="flex flex-wrap gap-2">
+                        {s.status === 'collecting' && r.youAreEvaluator && (
+                          <button onClick={() => goReview(r)} className="flex-1 h-11 px-4 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light">
+                            {r.youSubmitted ? '自分の評価を直す' : '自分の評価を入力する'}
+                          </button>
+                        )}
+                        {s.status === 'reviewing' && isAdmin && (
+                          <button onClick={() => goApprove(s)} className="flex-1 h-11 px-4 rounded-[10px] bg-green-700 text-white text-sm font-bold hover:bg-green-800">承認へ進む</button>
+                        )}
+                        {isAdmin && (
+                          <button onClick={() => { setEvOpenId(null); setDetailSessionId(s.id) }}
+                            className="h-11 px-4 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+                            くわしい内容（点数・コメント）
+                          </button>
+                        )}
+                      </div>
+                    </>
                   )}
-                </tbody>
-              </table>
-            </div>
-            {/* 凡例 */}
-            <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400">
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-green-50 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-300 dark:border-green-700">✓提出済</span>
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-gray-50 text-gray-500 dark:bg-gray-700/50 dark:text-gray-400 border-dashed border-gray-300 dark:border-gray-600">○未提出</span>
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 border-orange-300 dark:border-orange-800">○未提出(7日+)</span>
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-gray-900 bg-gray-50 dark:bg-gray-700/50">👤あなた</span>
-              <span className="text-[10px] text-gray-400 ml-auto">バッジ・ランク・詳細ボタンで詳細表示</span>
-            </div>
-          </div>
+                </div>
+              </SidePanel>
+            )
+          })()}
 
           {/* Create Session Modal */}
           {showCreateModal && (
