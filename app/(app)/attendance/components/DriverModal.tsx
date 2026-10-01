@@ -83,7 +83,7 @@ export default function DriverModal({ isOpen, day, siteName, workers, current, o
           )}
           {(am.length > 0 || pm.length > 0) && (
             <p className="text-[11px] text-gray-500 mt-3">
-              行き {am.length}名・帰り {pm.length}名。運転手当は片道単位で自動計算されます（判定値60分以上の現場は1,000円/片道、未満は500円）。
+              行き {am.length}名・帰り {pm.length}名。運転手当は片道1,000円で自動計算されます（同乗者を乗せた便だけ記録してください）。
             </p>
           )}
         </div>
