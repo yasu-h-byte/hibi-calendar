@@ -75,7 +75,7 @@ export default function HomeLeaveBanner({ homeLeaves, recentReturnDays = 7 }: Pr
   return (
     <div className="bg-cyan-50 border border-cyan-200 rounded-xl px-4 py-3 text-sm">
       <div className="flex items-center gap-2 font-bold text-cyan-800 mb-2 flex-wrap">
-        <span>✈️ 帰国情報</span>
+        <span>帰国情報</span>
         {currentCount > 0 && (
           <span className="text-xs bg-cyan-200 text-cyan-900 px-1.5 py-0.5 rounded-full">
             帰国中 {currentCount}名

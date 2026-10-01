@@ -34,8 +34,7 @@ export default function NextMonthCalendarBanner({ check }: Props) {
   return (
     <div className={`${isUrgent ? 'bg-red-50 border-red-300' : 'bg-yellow-50 border-yellow-300'} border-2 rounded-xl px-4 py-3 text-sm shadow-sm`}>
       <div className={`flex items-center gap-2 font-bold mb-2 flex-wrap ${isUrgent ? 'text-red-800' : 'text-yellow-800'}`}>
-        <span className="text-base">{isUrgent ? '🚨' : '⏳'}</span>
-        <span>翌月（{ymLabel}）の就業カレンダー未確定</span>
+                <span>翌月（{ymLabel}）の就業カレンダー未確定</span>
         <span className="text-xs font-normal text-gray-600">
           月末まであと{check.daysToMonthEnd}日
         </span>

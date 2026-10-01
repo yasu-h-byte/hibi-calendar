@@ -47,7 +47,7 @@ export default function DriverModal({ isOpen, day, siteName, workers, current, o
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="font-bold text-hibi-navy dark:text-white">🚗 {day}日の運転者 — {siteName}</h3>
+          <h3 className="font-bold text-hibi-navy dark:text-white">{day}日の運転者 — {siteName}</h3>
           <p className="text-[11px] text-gray-500 mt-1">
             会社集合後に社有車を運転した人を、行き・帰りそれぞれ選んでください（車2台なら各2名）。
             同乗者がいない単独移動は対象外です。

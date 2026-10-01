@@ -36,7 +36,7 @@ export default function UpcomingRetirementsBanner({ retirements }: Props) {
   return (
     <div className={`${urgent.length > 0 ? 'bg-red-50 border-red-300' : 'bg-orange-50 border-orange-200'} border rounded-xl px-4 py-3 text-sm`}>
       <div className={`flex items-center gap-2 font-bold mb-2 flex-wrap ${urgent.length > 0 ? 'text-red-800' : 'text-orange-800'}`}>
-        <span>🏁 退職予定（3ヶ月以内）</span>
+        <span>退職予定（3か月以内）</span>
         {urgent.length > 0 && (
           <span className="text-xs bg-red-200 text-red-900 px-1.5 py-0.5 rounded-full">
             30日以内 {urgent.length}名

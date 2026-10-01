@@ -137,7 +137,7 @@ export default function AssignModal({
             }`}
             style={{ minHeight: 44 }}
           >
-            👷 作業員 ({assignedWorkerIds.size})
+            作業員（{assignedWorkerIds.size}）
           </button>
           <button
             onClick={() => { setTab('subcon'); setSearch('') }}
@@ -148,7 +148,7 @@ export default function AssignModal({
             }`}
             style={{ minHeight: 44 }}
           >
-            🔧 外注先 ({assignedSubconIds.size})
+            外注先（{assignedSubconIds.size}）
           </button>
         </div>
 
