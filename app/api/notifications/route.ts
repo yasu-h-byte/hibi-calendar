@@ -9,7 +9,7 @@ import { collection, query, where, getDocs } from '@/lib/fsdb'
 import { getMainData, getAttData, parseDKey, getAssign } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
-import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
+import { todayJstIso, addMonthsSafe, todayJstDate, localMidnight } from '@/lib/date-utils'
 import { isAlreadyRetired, isCalendarSignTarget } from '@/lib/workers'
 import { calcLegalCarryOver, selectActiveGrantRecord } from '@/lib/leave-compute'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
@@ -367,7 +367,7 @@ export async function GET(request: NextRequest) {
 
         let realCarryOver = u.carryOver // フォールバック
         if (prevRecord && prevRecord.grantDate) {
-          const gd = new Date(prevRecord.grantDate)
+          const gd = localMidnight(prevRecord.grantDate)  // 出面日付（ローカル0時）とそろえる
           const gdEnd = new Date(gd)
           gdEnd.setFullYear(gdEnd.getFullYear() + 1)
           // 出面からP消化を集計（同日複数現場は1日として数える = multi-site dedup）
@@ -486,8 +486,7 @@ export async function GET(request: NextRequest) {
     // 7. 在留期限アラート（90日以内）
     try {
       const foreignWorkers = activeWorkers.filter(w => w.visa && w.visa !== 'none' && w.visa !== '')
-      const todayDate = new Date()
-      todayDate.setHours(0, 0, 0, 0)
+      const todayDate = todayJstDate()
       const visaAlerts: string[] = []
       for (const w of foreignWorkers) {
         const expiry = (w as unknown as { visaExpiry?: string }).visaExpiry
@@ -664,10 +663,8 @@ export async function GET(request: NextRequest) {
       if (role === 'admin') {
         const homeLeaves = await getAllActiveHomeLeaves()
         const accessMap = await getWorkerLastAccessMap(30)
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const todayJst = new Date(today.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-        todayJst.setHours(0, 0, 0, 0)
+        // 旧: UTC の0時に切ってから JST へ変換していたため、0〜9時は前日になっていた（2026-10-01）
+        const todayJst = todayJstDate()
 
         const inactiveNames: { name: string; lastAccess: string | null; days: number | null }[] = []
         for (const w of activeWorkers) {

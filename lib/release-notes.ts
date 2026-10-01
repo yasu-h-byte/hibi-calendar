@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_jst_today',
+    title: '夜中から朝9時までの「今日」「今月」のずれを直しました',
+    content:
+      '夜0時から朝9時までのあいだ、いくつかの画面が「今日」を前の日、「今月」を前の月として扱っていました'
+      + '（職長画面で今日の出面が開けない、月の初日の朝に先月の現場配置で判断される、帳票の作成日が前日になる、など）。'
+      + 'いつ開いても日本の今日・今月で動くように、まとめて直しました。操作は今までどおりで大丈夫です。',
+    category: 'fix',
+    publishedAt: '2026-10-01T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20261001_monthly_ux',
     title: '月次集計・締めを見やすくしました',
     content:

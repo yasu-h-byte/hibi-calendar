@@ -5,7 +5,7 @@ import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
-import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween } from '@/lib/date-utils'
+import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, currentYearJst, currentYmJst, localMidnight, addDaysIso } from '@/lib/date-utils'
 import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap , jpNextGrantAfter } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
@@ -40,7 +40,9 @@ function calcCarryOverForWorker(
   const prevRec = prevRecs[prevRecs.length - 1]
   if (!prevRec) return 0
 
-  const prevStart = new Date(prevRec.grantDate!)
+  // 出面の日付（new Date(y, m-1, d)＝ローカル0時）とそろえてローカル0時で読む。
+  //   'YYYY-MM-DD' をそのまま new Date すると UTC 0時になり、JST で動かすと付与日当日が期間外になる
+  const prevStart = localMidnight(prevRec.grantDate!)
   const prevEnd = new Date(prevStart)
   prevEnd.setFullYear(prevEnd.getFullYear() + 1)
 
@@ -82,8 +84,7 @@ function calcCarryOverForWorker(
  *   読み取り増（+12 doc）は許容範囲。
  */
 function relevantAttMonths(): string[] {
-  const now = new Date()
-  const y = now.getFullYear()
+  const y = currentYearJst()
   const out: string[] = []
   for (let yy = y - 3; yy <= y; yy++) {
     for (let mm = 1; mm <= 12; mm++) out.push(ymKey(yy, mm))
@@ -367,7 +368,7 @@ export async function POST(request: NextRequest) {
           //   両者は数学的に等価だが、ヘルパー経由にすることで定義の食い違いを構造的に防ぐ
           const grantDays = (r.grantDays as number | undefined) ?? 0
           const carryOver = (r.carryOver as number | undefined) ?? 0
-          const periodStart = new Date(r.grantDate as string)
+          const periodStart = localMidnight(r.grantDate as string)  // 出面日付とそろえる（上の prevStart と同じ）
           const periodEnd = new Date(periodStart)
           periodEnd.setFullYear(periodEnd.getFullYear() + 1)
           // 多現場の同日重複を排除して1日1カウントに正規化
@@ -662,11 +663,8 @@ export async function POST(request: NextRequest) {
       //   (旧: 付与日が来てから通知 → 直前まで気付かない問題があった)
       const ALERT_LEAD_DAYS = 30
       const isWithinAlertWindow = (grantDateStr: string): boolean => {
-        const grant = new Date(grantDateStr)
-        if (isNaN(grant.getTime())) return false
-        const alertStart = new Date(grant)
-        alertStart.setDate(alertStart.getDate() - ALERT_LEAD_DAYS)
-        const alertStartStr = alertStart.toISOString().slice(0, 10)
+        if (isNaN(new Date(grantDateStr).getTime())) return false
+        const alertStartStr = addDaysIso(grantDateStr, -ALERT_LEAD_DAYS)
         return alertStartStr <= today
       }
 
@@ -851,11 +849,9 @@ export async function POST(request: NextRequest) {
 
           const lastGrant = new Date(lastRec.grantDate!)
           if (isNaN(lastGrant.getTime())) continue
-          const nextGrant = new Date(lastGrant)
-          nextGrant.setFullYear(nextGrant.getFullYear() + 1)
-          const nextGrantStr = nextGrant.toISOString().slice(0, 10)
+          const nextGrantStr = addMonthsSafe(lastRec.grantDate!, 12)  // 1年後の応当日（うるう日入社は2/28）
 
-          const nextFyForCheck = String(nextGrant.getFullYear())
+          const nextFyForCheck = nextGrantStr.slice(0, 4)
           // アラートウィンドウ (付与日の30日前～) かつ未付与なら対象に
           if (isWithinAlertWindow(nextGrantStr) && !hasGrantForExpected(records, nextFyForCheck, nextGrantStr)) {
             const nextFy = nextFyForCheck
@@ -1397,8 +1393,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 全期間の出面データからPL消化を集計（付与日から1年間はスタッフごとに異なるため、広めに取得）
-    const now = new Date()
-    const currentYear = now.getFullYear()
+    const currentYear = currentYearJst()
     const allMonths: string[] = []
     // 過去2年 + 今年分 + 来年分（2026-09-02: 承認済みの未来の有給＝翌年テト帰国前後の p を
     //   読み落として残数が画面ごとに食い違っていた。getLeaveBalance は付与期間の月を読む）
@@ -1414,8 +1409,7 @@ export async function GET(request: NextRequest) {
     main.workers.forEach(w => { workerNames[w.id] = w.name })
 
     // 出向中の判定用に現在のYM
-    const nowForDispatch = new Date()
-    const currentYm = ymKey(nowForDispatch.getFullYear(), nowForDispatch.getMonth() + 1)
+    const currentYm = currentYmJst()
 
     // Build worker PL data — 現在FYに該当するレコードを優先して使用
     // 2026-06-XX 修正 (CR-2): 出向中スタッフも年5日義務の監視対象に含める
@@ -1544,7 +1538,7 @@ export async function GET(request: NextRequest) {
         const monthlyUsage: Record<string, number> = {} // YYYYMM -> count（全期間、重複排除済）
 
         const hasPeriod = !!grantDate
-        const gd = hasPeriod ? new Date(grantDate) : null
+        const gd = hasPeriod ? localMidnight(grantDate) : null  // 出面日付（ローカル0時）とそろえる
         const gdEnd = hasPeriod ? new Date(gd!) : null
         if (gdEnd) gdEnd.setFullYear(gdEnd.getFullYear() + 1)
 

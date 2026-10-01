@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { getWorkerByToken, isToolBudgetEligible, toolBudgetDefaultFor } from '@/lib/workers'
 import { getCurrentPeriod, getPeriodByIndex, toolBudgetAnchorOf, toolBudgetCarryIn, periodIndexOf, type ToolBudgetPeriod } from '@/lib/tool-budget-period'
+import { addDaysIso, addMonthsSafe } from '@/lib/date-utils'
 
 // 期間の計算は lib/tool-budget-period.ts（スタッフのスマホと共通・2026-09-30）
 type Period = ToolBudgetPeriod
@@ -308,14 +309,11 @@ export async function POST(request: NextRequest) {
 
       // レコード未作成の場合は初期化してから予算を設定
       if (!tbData.records[key]) {
-        const start = new Date(periodStart + 'T00:00:00')
-        const end = new Date(start)
-        end.setFullYear(end.getFullYear() + 1)
-        end.setDate(end.getDate() - 1)
         tbData.records[key] = {
           workerId: Number(workerId),
           periodStart,
-          periodEnd: end.toISOString().slice(0, 10),
+          // 開始日から1年の前日（旧: ローカル0時を toISOString して JST 環境では1日早くなった）
+          periodEnd: addDaysIso(addMonthsSafe(periodStart, 12), -1),
           periodIndex: 1,
           budget: Number(budget),
           purchases: [],

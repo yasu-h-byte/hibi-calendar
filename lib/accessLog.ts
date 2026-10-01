@@ -6,6 +6,7 @@
 
 import { db } from './firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, orderBy, deleteDoc } from '@/lib/fsdb'
+import { todayJstIso, addDaysIso } from '@/lib/date-utils'
 
 export type AccessRole = 'admin' | 'approver' | 'foreman' | 'jimu' | 'staff'
 
@@ -135,17 +136,13 @@ export interface WorkerLastAccess {
  * 直近N日のアクセスログから、各ワーカーの最終アクセス情報を集計
  */
 export async function getWorkerLastAccessMap(days: number = 90): Promise<Map<number, WorkerLastAccess>> {
-  const to = getJstDate(new Date())
-  const fromDate = new Date()
-  fromDate.setDate(fromDate.getDate() - days)
-  const from = getJstDate(fromDate)
+  const to = todayJstIso()
+  const from = addDaysIso(to, -days)
 
   const logs = await getAccessLogsInRange(from, to)
   const map = new Map<number, WorkerLastAccess>()
 
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-  const sevenAgoStr = getJstDate(sevenDaysAgo)
+  const sevenAgoStr = addDaysIso(to, -7)
 
   for (const log of logs) {
     const existing = map.get(log.workerId)
@@ -179,9 +176,7 @@ export async function getWorkerLastAccessMap(days: number = 90): Promise<Map<num
  * 古いアクセスログを削除（90日より前）
  */
 export async function cleanupOldAccessLogs(retainDays: number = 90): Promise<number> {
-  const cutoff = new Date()
-  cutoff.setDate(cutoff.getDate() - retainDays)
-  const cutoffStr = getJstDate(cutoff)
+  const cutoffStr = addDaysIso(todayJstIso(), -retainDays)
 
   const q = query(collection(db, 'accessLog'), where('date', '<', cutoffStr))
   const snap = await getDocs(q)

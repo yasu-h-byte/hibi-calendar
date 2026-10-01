@@ -15,6 +15,7 @@ import {
 import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { workTypeFamilyIds, familyEntrySiteId, staffEntryTarget, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
+import { todayJstDate } from '@/lib/date-utils'
 
 /**
  * 工種（鉄骨・仮設など）を持つ現場の「同じ現場」の範囲（親＋工種サイト）と、工種の指定（2026-09-28）。
@@ -65,15 +66,11 @@ export async function GET(request: NextRequest) {
     }).catch(() => {})
 
     // Parse date (default: today)
-    let viewDate: Date
-    if (dateParam) {
-      viewDate = new Date(dateParam + 'T00:00:00')
-    } else {
-      viewDate = new Date()
-    }
+    // 「今日」は日本時間（サーバは UTC。旧: 0〜9時に今日を開くと前日へ戻されていた・2026-10-01）
+    const today = todayJstDate()
+    let viewDate: Date = dateParam ? new Date(dateParam + 'T00:00:00') : today
 
     // Don't go past today
-    const today = new Date()
     if (viewDate > today) viewDate = today
 
     const y = viewDate.getFullYear()

@@ -65,6 +65,19 @@ Tailwind は `tailwind.config.ts` の `content` に列挙したディレクト�
 **ロジックの移動だけでも見た目が壊れる**ため、クラス文字列を含む関数を
 別ファイルへ動かしたときは移動先が `content` 対象か必ず確認すること。
 
+### 日付は日本時間で取る（2026-10-01 一括修正）
+
+サーバ（Vercel）は **UTC** で動く。日本時間 0〜9時は UTC ではまだ前日なので、
+`new Date().getMonth()` や `new Date().toISOString().slice(0, 10)` で「今日・今月・今年」を
+取ると、その時間帯だけ前日・前月になる（ブラウザでも toISOString は UTC）。
+2026-10-01 に約40か所をまとめて直した（職長画面で今日が開けない・月初に前月の配置で判定・帳票の作成日が前日 等）。
+
+- 今日 `'YYYY-MM-DD'` → `todayJstIso()` ／ 今月 `'YYYYMM'` → `currentYmJst()` ／ 今年 → `currentYearJst()`
+- 今日の Date（getDate/getDay/setDate で前後させる用・ローカル0時）→ `todayJstDate()`
+- 出面の日付（`new Date(y, m-1, d)`）と比べる境界日 → `localMidnight('YYYY-MM-DD')`（`new Date('YYYY-MM-DD')` は UTC 0時）
+- 日付の加減 → `addDaysIso()` / `addMonthsSafe()`（`setFullYear(+1)` + `toISOString` はしない）
+- すべて `lib/date-utils.ts`。コミット前に `npm run lint:utc`（意図して UTC を使う行は `// utc-ok`）
+
 ### 旧アプリとの関係
 - 旧アプリ（dedura-kanri）の保存機能は**完全無効化済み**
 - Firestoreは共有だが、旧アプリからの書き込みは発生しない

@@ -21,6 +21,7 @@ import { isMonthLockedInLocks } from '@/lib/locks'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
 import { db } from '@/lib/firebase'
 import { collection, getDocs, query, where } from '@/lib/fsdb'
+import { currentYearJst } from '@/lib/date-utils'
 
 export async function GET(request: NextRequest) {
   // 2026-09-26: 帳票（給与・出面・有給・同意台帳）は事務所の人だけ（lib/permissions.ts monthly.view）。
@@ -200,9 +201,9 @@ export async function GET(request: NextRequest) {
         // 2026-08-04 帳票整理: 旧 generatePLLedger（2シート・サマリー版）を廃止し、
         // /api/leave/export-ledger と同じ generateLeaveLedger（4シート・買取/時季指定付き）に統一。
         // 同じ法定帳簿（年次有給休暇管理簿）の二重実装で修正ドリフトが起きかけていたため。
-        const now = new Date()
+        const nowY = currentYearJst()
         const allAttPl: Record<string, import('@/types').AttendanceEntry> = {}
-        for (let y = now.getFullYear() - 3; y <= now.getFullYear(); y++) {
+        for (let y = nowY - 3; y <= nowY; y++) {
           for (let m = 1; m <= 12; m++) {
             const att = await getAttData(`${y}${String(m).padStart(2, '0')}`)
             if (att.d) Object.assign(allAttPl, att.d)

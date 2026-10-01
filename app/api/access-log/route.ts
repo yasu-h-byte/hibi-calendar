@@ -3,6 +3,7 @@ import { checkApiAuth, requireCap } from '@/lib/auth'
 import { getWorkerLastAccessMap, getAccessLogsInRange, AccessRole, WorkerLastAccess } from '@/lib/accessLog'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
+import { todayJstDate } from '@/lib/date-utils'
 
 interface WorkerEntry {
   id: number
@@ -43,10 +44,10 @@ export async function GET(request: NextRequest) {
 
     // detail モード: 期間内のログをそのまま返す
     if (mode === 'detail') {
-      const from = new Date()
+      const from = todayJstDate()
       from.setDate(from.getDate() - days)
       const fromStr = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`
-      const today = new Date()
+      const today = todayJstDate()
       const toStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
       const logs = await getAccessLogsInRange(fromStr, toStr)
       return NextResponse.json({ logs })

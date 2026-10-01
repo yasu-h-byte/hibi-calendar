@@ -8,20 +8,20 @@ import { calcActualHours, calcDayShiftHours, calcNightShiftHours, calcManDays } 
 import { isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { AttEntry, SubconDayEntry, DayType, Worker, Subcon } from '@/app/(app)/attendance/types'
+import { currentYmJst, todayJstDate } from '@/lib/date-utils'
 
 // ── 日付・スタイルヘルパー ──
 
 export const DOW_JA = ['日', '月', '火', '水', '木', '金', '土']
 
 export function currentYm(): string {
-  const now = new Date()
-  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`
+  return currentYmJst()
 }
 
 /** 年月選択肢（2ヶ月先〜過去count-1ヶ月分） */
 export function getYmOptions(count: number): { ym: string; label: string }[] {
   const result: { ym: string; label: string }[] = []
-  const now = new Date()
+  const now = todayJstDate()
   for (let i = -2; i < count; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const y = d.getFullYear()
@@ -39,7 +39,7 @@ export function getDow(year: number, month: number, day: number): number {
 }
 
 export function isToday(year: number, month: number, day: number): boolean {
-  const now = new Date()
+  const now = todayJstDate()
   return now.getFullYear() === year && now.getMonth() + 1 === month && now.getDate() === day
 }
 
@@ -82,8 +82,7 @@ export function dayTextColor(dow: number): string {
  */
 export function retirementBadge(retired: string | undefined): { label: string; cls: string; title: string } | null {
   if (!retired) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const today = todayJstDate()
   const retiredDate = new Date(retired + 'T00:00:00')
   const diffDays = Math.floor((retiredDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
   const m = retiredDate.getMonth() + 1

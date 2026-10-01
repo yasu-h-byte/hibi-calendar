@@ -107,9 +107,13 @@ export function yearsFromDate(isoDate: string, asOf?: Date): number {
   return Math.floor((now.getTime() - hire.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
 }
 
-/** 今日のISO日付 "YYYY-MM-DD" */
+/**
+ * 今日のISO日付 "YYYY-MM-DD"（日本時間）。
+ * 2026-10-01: 旧実装はホストの時刻帯の日付で、Vercel（UTC）では 0〜9時に前日になった。
+ * 呼び出し元が「今日」と言えば日本の今日しかないので JST に統一（{@link todayJstIso} と同じ）。
+ */
 export function todayIso(): string {
-  return formatIsoDate(new Date())
+  return todayJstIso()
 }
 
 /**
@@ -124,6 +128,38 @@ export function todayJstIso(): string {
   const now = new Date()
   const jstMs = now.getTime() + 9 * 60 * 60 * 1000
   return new Date(jstMs).toISOString().slice(0, 10)
+}
+
+/** 日本時間の当月 "YYYYMM"（サーバ＝UTC でも 1日 0〜9時に前月にならない） */
+export function currentYmJst(): string {
+  return todayJstIso().slice(0, 7).replace('-', '')
+}
+
+/** 日本時間の今年（1/1 0〜9時に前年にならない） */
+export function currentYearJst(): number {
+  return Number(todayJstIso().slice(0, 4))
+}
+
+/**
+ * 日本時間の「今日」の 0時を表す Date（ホスト時刻帯のローカル0時）。
+ *
+ * getFullYear()/getMonth()/getDate()/getDay() が、サーバ（UTC）でもブラウザ（JST）でも
+ * 日本の今日を返す。`new Date(y, m-1, d)` で作った日付と比べる・setDate で前後へ動かす用。
+ * ⚠️ toISOString() はしないこと（JST のブラウザでは前日になる）。文字列が要るときは todayJstIso() / addDaysIso()。
+ */
+export function todayJstDate(): Date {
+  return new Date(todayJstIso() + 'T00:00:00')
+}
+
+/**
+ * 'YYYY-MM-DD' をホスト時刻帯の 0時の Date にする。
+ *
+ * `new Date('2026-10-01')` は UTC 0時（JST では 9時）になり、`new Date(y, m-1, d)`（ローカル0時）と
+ * 比べると JST で動かしたときに当日が範囲外になる。出面の日付と大小比較する境界日はこれで作る。
+ * Vercel（UTC）では従来の `new Date('YYYY-MM-DD')` と同じ値なので本番の結果は変わらない。
+ */
+export function localMidnight(dateIso: string): Date {
+  return new Date(dateIso.slice(0, 10) + 'T00:00:00')
 }
 
 /**
