@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const site = await getForemanSite(foreman.id)
+    // 職種が職長の人だけ（職長でない人が現場の職長に登録されている現場は政仁さんが代行・2026-10-01 代表）
+    const site = foreman.jobType === 'shokucho' ? await getForemanSite(foreman.id) : null
     if (!site) {
       return NextResponse.json({ error: 'Not a foreman' }, { status: 403 })
     }
@@ -235,7 +236,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
 
-    const site = await getForemanSite(foreman.id)
+    // 職種が職長の人だけ（職長でない人が現場の職長に登録されている現場は政仁さんが代行・2026-10-01 代表）
+    const site = foreman.jobType === 'shokucho' ? await getForemanSite(foreman.id) : null
     if (!site) {
       return NextResponse.json({ error: 'Not a foreman' }, { status: 403 })
     }

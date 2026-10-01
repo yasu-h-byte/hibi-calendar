@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { foremenOfSiteForMonth } from '@/lib/auth'
+import { foremenOfSiteForMonth, approvingForemenOfSite, isProxyApprovalSite } from '@/lib/auth'
 
 // 承認の権限判定（出面・有給・帰国申請）で共通の「その月の現場の職長」（2026-10-01 一本化）
 describe('foremenOfSiteForMonth', () => {
@@ -18,5 +18,25 @@ describe('foremenOfSiteForMonth', () => {
   })
   test('職長未設定の現場は空', () => {
     expect(foremenOfSiteForMonth({ id: 's2' }, {}, '202610')).toEqual([])
+  })
+})
+
+// 2026-10-01 代表決定: 職長承認は「現場の職長に登録」かつ「職種が職長」の人だけ。いなければ政仁さんが代行
+describe('approvingForemenOfSite / isProxyApprovalSite', () => {
+  const workers = [{ id: 2, jobType: 'shokucho' }, { id: 5, job: 'tobi' }, { id: 0, job: 'yakuin' }, { id: 3, job: 'shokucho' }]
+  test('職長（職種）が登録されている現場はその人が承認・代行なし', () => {
+    expect(approvingForemenOfSite({ id: 'a', foreman: 2 }, {}, '202610', workers)).toEqual([2])
+    expect(isProxyApprovalSite({ id: 'a', foreman: 2 }, {}, '202610', workers)).toBe(false)
+  })
+  test('とび・役員が登録されている現場は承認できる人がいない＝政仁さんが代行', () => {
+    expect(approvingForemenOfSite({ id: 'b', foreman: 5 }, {}, '202610', workers)).toEqual([])
+    expect(isProxyApprovalSite({ id: 'b', foreman: 5 }, {}, '202610', workers)).toBe(true)
+    expect(isProxyApprovalSite({ id: 'c', foreman: 0 }, {}, '202610', workers)).toBe(true)
+  })
+  test('生データの job でも判定する・月別職長が職長ならその月は代行なし', () => {
+    expect(approvingForemenOfSite({ id: 'b', foreman: 5 }, { b_202610: { wid: 3 } }, '202610', workers)).toEqual([3])
+  })
+  test('職長未設定の現場も代行', () => {
+    expect(isProxyApprovalSite({ id: 'd' }, {}, '202610', workers)).toBe(true)
   })
 })

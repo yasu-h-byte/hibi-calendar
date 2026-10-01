@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, foremenOfSiteForMonth } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, approvingForemenOfSite } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
@@ -222,8 +222,9 @@ export async function POST(request: NextRequest) {
       const mainData = mainDocSnap.exists() ? mainDocSnap.data() : {}
       const sites = (mainData.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
       const site = sites.find(s => s.id === data.siteId)
-      // 月別職長（mforeman）込みの判定は出面・帰国申請と同じ共通ヘルパーで（2026-10-01 一本化）
-      const foremenOfSite = site ? foremenOfSiteForMonth(site, mainData.mforeman || {}, data.ym) : []
+      // 月別職長込み・職種が職長の人だけ（出面・帰国申請と同じ共通ヘルパー・2026-10-01）。
+      //   職長でない人が登録されている現場は政仁さん（管理者）が代行する
+      const foremenOfSite = site ? approvingForemenOfSite(site, mainData.mforeman || {}, data.ym, mainData.workers || []) : []
 
       // 認証 + 権限チェック
       let approvedBy: number | string = 'unknown'
@@ -422,8 +423,8 @@ export async function POST(request: NextRequest) {
       const rejMain = rejMainSnap.exists() ? rejMainSnap.data() : {}
       const rejSites = (rejMain.sites || []) as { id: string; foremen?: number[]; foreman?: number }[]
       const rejSite = rejSites.find(s => s.id === data.siteId)
-      // 月別職長（mforeman）込み。foreman_approve と同じ共通ヘルパー
-      const rejForemen = rejSite ? foremenOfSiteForMonth(rejSite, rejMain.mforeman || {}, data.ym) : []
+      // 月別職長込み・職種が職長の人だけ。foreman_approve と同じ共通ヘルパー
+      const rejForemen = rejSite ? approvingForemenOfSite(rejSite, rejMain.mforeman || {}, data.ym, rejMain.workers || []) : []
 
       let authWorkerId: number | string = rejectedBy || 0
       if (rejectToken) {

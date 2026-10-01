@@ -126,6 +126,8 @@ export interface GridData {
   workTypeDuplicates?: { kind: 'worker' | 'subcon'; id: string; day: number; siteIds: string[] }[]
   /** 応援現場か（事業責任者が一括入力できる・2026-09-30） */
   isSupportSite?: boolean
+  /** 職長承認を政仁さんが代行する現場（職種が職長の人が職長に登録されていない・2026-10-01） */
+  proxyApproval?: boolean
 }
 
 export interface PendingSave {

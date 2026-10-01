@@ -61,6 +61,8 @@ export const CAPABILITIES = {
   'attendance.workType':     { group: '毎日', label: '出面の工種（鉄骨・仮設など）の切り替え・日ごとの工種指定', roles: ['foreman', 'jimu', 'approver', 'owner'] },
   'attendance.history':      { group: '毎日', label: '出面の変更履歴を見る・復元', roles: ['jimu', 'approver', 'owner'] },
   'attendance.finalApprove': { group: '毎日', label: '出面の最終承認', roles: ['approver', 'owner'] },
+  // 2026-10-01 代表: 職長でない人が現場の職長に登録されている現場は、政仁さんが職長承認を代行する
+  'attendance.foremanApproveProxy': { group: '毎日', label: '職長がいない現場（職長でない人が登録）の出面の職長承認（代行）', roles: ['approver', 'owner'] },
   // ── 毎月 ──
   'calendar.view':           { group: '毎月', label: '就業カレンダーを見る', roles: ['foreman', ...VIEWERS] },
   'calendar.edit':           { group: '毎月', label: '就業カレンダーの作成・提出（担当現場）', roles: ['foreman', 'owner'] },

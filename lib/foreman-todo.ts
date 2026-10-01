@@ -15,7 +15,7 @@ import {
   getAttendanceDoc, getApprovalForDay, setApprovalForDay, getForeignWorkersForSite, getEntryStatus, getStaffSites,
 } from './attendance'
 import { workTypeFamilyIds, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from './site-hierarchy'
-import { computeForemanSites, foremenOfSiteForMonth } from './auth'
+import { computeForemanSites, approvingForemenOfSite } from './auth'
 import { todayJstIso, addMonthsSafe } from './date-utils'
 import type { AttendanceEntry, Site } from '@/types'
 
@@ -137,16 +137,18 @@ export async function approveDaysForSite(siteId: string, ym: string, days: numbe
 
 /**
  * その人が職長として承認する現場（親現場のみ。工種サイトは親にまとめる）。
- * 月別職長（mforeman）込みで、その月ごとに決める（lib/auth.ts foremenOfSiteForMonth）。
+ * 月別職長（mforeman）込みで、その月ごとに決める。職種が職長の人だけ（lib/auth.ts approvingForemenOfSite と同じ決まり）。
  */
-export function foremanParentSites(workerId: number, sites: Site[], mforeman: Record<string, { foreman?: number; wid?: number }>, ym: string): Site[] {
-  const ids = new Set(computeForemanSites(workerId, sites, mforeman, ym))
+export function foremanParentSites(worker: { id: number; jobType?: string }, sites: Site[], mforeman: Record<string, { foreman?: number; wid?: number }>, ym: string): Site[] {
+  // 職種が職長でない人は、現場の職長に登録されていても承認しない（政仁さんが代行・2026-10-01 代表）
+  if (worker.jobType !== 'shokucho') return []
+  const ids = new Set(computeForemanSites(worker.id, sites, mforeman, ym))
   return sites.filter(s => ids.has(s.id) && !(s as { parentId?: string }).parentId)
 }
 
 /**
  * 申請者（外国人スタッフ）の配置現場を、今月担当する職長の workerId 集合（帰国申請の権限判定・一覧の絞り込み）。
- * 月別職長（mforeman）込み（2026-10-01。旧は /api/home-long-leave の中で月別職長を見ずに判定していた）。
+ * 月別職長（mforeman）込み・職種が職長の人だけ（2026-10-01。旧は月別職長を見ずに判定していた）。
  */
 export async function getForemenOfWorkerSites(workerId: number): Promise<Set<number>> {
   const result = new Set<number>()
@@ -158,7 +160,7 @@ export async function getForemenOfWorkerSites(workerId: number): Promise<Set<num
   for (const ss of staffSites) {
     const site = sites.find(s => s.id === ss.id)
     if (!site) continue
-    for (const f of foremenOfSiteForMonth(site, main.mforeman || {}, ym)) result.add(f)
+    for (const f of approvingForemenOfSite(site, main.mforeman || {}, ym, main.workers || [])) result.add(f)
   }
   return result
 }

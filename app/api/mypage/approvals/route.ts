@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getWorkerByToken } from '@/lib/workers'
 import { getMainData } from '@/lib/compute'
 import { getAttendanceDoc } from '@/lib/attendance'
-import { foremenOfSiteForMonth } from '@/lib/auth'
+import { approvingForemenOfSite } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { getDocs, collection, query, where } from '@/lib/fsdb'
 import {
@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
     const worker = await getWorkerByToken(token)
     if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
 
+    // 承認欄を出すのは職種が職長の人だけ（職長でない人が現場の職長に登録されている現場は政仁さんが代行・2026-10-01 代表）
+    if (worker.jobType !== 'shokucho') return NextResponse.json({ isForeman: false, attendance: [], leaveRequests: [], homeLeaves: [] })
+
     const main = await getMainData()
     const sites = main.sites as unknown as Site[]
     const mforeman = (main.mforeman || {}) as Mforeman
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest) {
       approvedCount: number
     }[] = []
     for (const ym of months) {
-      const mySites = foremanParentSites(worker.id, sites, mforeman, ym)
+      const mySites = foremanParentSites(worker, sites, mforeman, ym)
       if (mySites.length === 0) continue
       // 出面ドキュメント（1件200〜300KB）は月ごとに1回だけ読む（CLAUDE.md の読み取りルール）
       const att = await getAttendanceDoc(ym)
@@ -71,7 +74,7 @@ export async function GET(request: NextRequest) {
       const r = d.data() as { workerId: number; workerName: string; date: string; reason?: string; siteId: string; ym: string }
       if (r.workerId === worker.id) return
       const site = sites.find(s => s.id === r.siteId)
-      if (!site || !foremenOfSiteForMonth(site, mforeman, r.ym).includes(worker.id)) return
+      if (!site || !approvingForemenOfSite(site, mforeman, r.ym, main.workers).includes(worker.id)) return
       leaveRequests.push({ id: d.id, workerName: r.workerName, date: r.date, reason: r.reason || '', siteName: siteName(r.siteId) })
     })
     leaveRequests.sort((a, b) => a.date.localeCompare(b.date))
@@ -87,9 +90,7 @@ export async function GET(request: NextRequest) {
     }
     homeLeaves.sort((a, b) => a.startDate.localeCompare(b.startDate))
 
-    const isForeman = worker.jobType === 'shokucho' || attendance.length > 0
-      || months.some(ym => foremanParentSites(worker.id, sites, mforeman, ym).length > 0)
-    return NextResponse.json({ isForeman, attendance, leaveRequests, homeLeaves })
+    return NextResponse.json({ isForeman: true, attendance, leaveRequests, homeLeaves })
   } catch (error) {
     console.error('mypage approvals GET error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -112,7 +113,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '前月と今月の出面だけ承認できます' }, { status: 400 })
     }
     const main = await getMainData()
-    const mine = foremanParentSites(worker.id, main.sites as unknown as Site[], (main.mforeman || {}) as Mforeman, ym)
+    const mine = foremanParentSites(worker, main.sites as unknown as Site[], (main.mforeman || {}) as Mforeman, ym)
     if (!mine.some(s => s.id === siteId)) {
       return NextResponse.json({ error: 'この現場の職長ではありません' }, { status: 403 })
     }

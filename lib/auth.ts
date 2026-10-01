@@ -137,6 +137,34 @@ export function foremenOfSiteForMonth(
   return site.foreman !== undefined && site.foreman !== null ? [site.foreman] : []
 }
 
+/**
+ * 職長承認ができる人（2026-10-01 代表決定）。
+ *
+ * 「その月の現場の職長として登録されている」かつ「人員マスタの職種が職長（jobType='shokucho'）」の人だけ。
+ * 職長でない人（とび・役員など）が現場マスタの職長に登録されている現場は、事業責任者（政仁さん）が
+ * 職長承認を代行する（{@link isProxyApprovalSite}）。出面の入力などの権限は変えない（承認だけの決まり）。
+ */
+export function approvingForemenOfSite(
+  site: { id: string; foreman?: number; foremen?: number[] },
+  mforeman: Record<string, { foreman?: number; wid?: number }>,
+  ym: string,
+  workers: { id: number; jobType?: string; job?: string }[],
+): number[] {
+  // 職種は Firestore の生データでは job、lib/workers で整形後は jobType
+  return foremenOfSiteForMonth(site, mforeman, ym)
+    .filter(id => { const w = workers.find(x => x.id === id); return (w?.jobType ?? w?.job) === 'shokucho' })
+}
+
+/** 職長承認を政仁さんが代行する現場か（承認できる職長がいない現場） */
+export function isProxyApprovalSite(
+  site: { id: string; foreman?: number; foremen?: number[] },
+  mforeman: Record<string, { foreman?: number; wid?: number }>,
+  ym: string,
+  workers: { id: number; jobType?: string; job?: string }[],
+): boolean {
+  return approvingForemenOfSite(site, mforeman, ym, workers).length === 0
+}
+
 export function determineRole(
   workerId: number,
   sites: Site[],
