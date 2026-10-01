@@ -5,25 +5,34 @@
  *
  * 二次業者同士の人の貸し借りは相殺せず、互いに請求書を送り合う。
  * 月ごと・会社ごとに「請求する側」と「支払う側」を分けて並べ、届いた請求書・送る請求書と突き合わせる。
- * 金額は出面の実績から出した見込み。請求書の作成は次の段階。
+ * 金額は出面の実績から出した見込み。
+ *
+ * 2026-10-01 改修（UI順次改修 波2・見本キャンバス9段目）:
+ *   旧: 会社ごとの大きな表が縦に並び、請求書を作ったかどうかは小さな札だけ。
+ *   新: ① 上に「今やること」（請求書を作る・承認待ち・差し戻し／取り下げ・発行済み）
+ *       ② 合計3枚（請求する・支払う・HFU→日比建設）
+ *       ③ 会社ごとに1行（請求額・支払額・請求書の状態・次の操作）。行を押すと右に現場ごとの内訳
+ *   金額の計算・請求書の状態の決め方は変えない（見せ方だけ）。
  */
 import { useCallback, useEffect, useState } from 'react'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import type { PeerStatement } from '@/lib/peer-statement'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
+import { currentYmJst } from '@/lib/date-utils'
+import { Icon } from '@/components/ui/Icon'
+import { PageHeader, TodoCard, Segment, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
 
 /** その月に発行・取り消しされた応援の請求書（app/api/peer-invoice） */
 interface PeerInvoiceSummary {
   id: string; no: string; companyId: string; total: number; status: 'pending' | 'issued' | 'void' | 'rejected' | 'withdrawn'
 }
 
+type InvState = 'issued' | 'pending' | 'returned' | 'none'
+type Filter = 'all' | 'billing' | 'payment'
+
 const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
-function currentYm(): string {
-  const d = new Date()
-  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`
-}
 function shiftYm(ym: string, delta: number): string {
   let y = parseInt(ym.slice(0, 4)), m = parseInt(ym.slice(4, 6)) + delta
   while (m < 1) { m += 12; y-- }
@@ -35,13 +44,15 @@ export default function PeerStatementPage() {
   const { ready } = useAuthPassword()
   // 請求書の画面から「戻る」で来たときは、その月を開く（?ym=YYYYMM）
   const [ym, setYm] = useState(() => {
-    if (typeof window === 'undefined') return currentYm()
+    if (typeof window === 'undefined') return currentYmJst()
     const q = new URLSearchParams(window.location.search).get('ym')
-    return q && /^\d{6}$/.test(q) ? q : currentYm()
+    return q && /^\d{6}$/.test(q) ? q : currentYmJst()
   })
   const [rows, setRows] = useState<PeerStatement[] | null>(null)
   const [err, setErr] = useState('')
   const [invoices, setInvoices] = useState<PeerInvoiceSummary[]>([])
+  const [filter, setFilter] = useState<Filter>('all')
+  const [openId, setOpenId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!ready) return
@@ -61,132 +72,236 @@ export default function PeerStatementPage() {
     }
   }, [ready, ym])
   useEffect(() => { load() }, [load])
+  useEffect(() => { setOpenId(null) }, [ym])
 
-  /** 会社の最新の発行済み請求書（取り消されていないもの） */
-  const issuedInvoiceFor = (companyId: string) => invoices.find(i => i.companyId === companyId && i.status === 'issued')
-
-  /** 会社ごとの請求書の状態バッジ（発行済み／承認待ち／未作成）。事務が申請 → 事業責任者が承認（2026-09-26） */
-  const InvoiceBadge = ({ companyId }: { companyId: string }) => {
-    const href = `/peer-invoice?company=${companyId}&ym=${ym}`
-    const issued = issuedInvoiceFor(companyId)
-    if (issued) {
-      return <a href={href} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold no-underline">✓ 発行済み {issued.no}</a>
-    }
-    if (invoices.some(i => i.companyId === companyId && i.status === 'pending')) {
-      return <a href={href} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold no-underline">承認待ち</a>
-    }
-    return <a href={href} className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-hibi-navy text-white text-xs font-bold no-underline hover:bg-hibi-light">請求書を作る</a>
+  /** 会社の請求書の状態（発行済み → 承認待ち → 差し戻し・取り下げ → まだ）。事務が申請 → 事業責任者が承認（2026-09-26） */
+  const invStateOf = (companyId: string): { state: InvState; issued?: PeerInvoiceSummary } => {
+    const issued = invoices.find(i => i.companyId === companyId && i.status === 'issued')
+    if (issued) return { state: 'issued', issued }
+    if (invoices.some(i => i.companyId === companyId && i.status === 'pending')) return { state: 'pending' }
+    if (invoices.some(i => i.companyId === companyId && (i.status === 'rejected' || i.status === 'withdrawn'))) return { state: 'returned' }
+    return { state: 'none' }
+  }
+  const hrefOf = (companyId: string) => `/peer-invoice?company=${companyId}&ym=${ym}`
+  const STATE: Record<InvState, { label: string; tone: ChipTone }> = {
+    issued: { label: '発行済み', tone: 'green' },
+    pending: { label: '承認待ち', tone: 'blue' },
+    returned: { label: '差し戻し・取り下げ', tone: 'amber' },
+    none: { label: 'まだ作っていない', tone: 'red' },
   }
 
-  const billingSum = (rows || []).reduce((s, r) => s + r.billingTotal, 0)
-  const paymentSum = (rows || []).reduce((s, r) => s + r.paymentTotal, 0)
+  const list = rows || []
+  const billingSum = list.reduce((s, r) => s + r.billingTotal, 0)
+  const paymentSum = list.reduce((s, r) => s + r.paymentTotal, 0)
+  const billingCos = list.filter(r => r.billingTotal > 0)
+  const hfu = invStateOf(HFU_INVOICE_COMPANY_ID)
+  // 請求書の対象: 請求のある会社 ＋ HFU → 日比建設
+  const targets = [...billingCos.map(r => ({ id: r.companyId, name: r.companyName })), { id: HFU_INVOICE_COMPANY_ID, name: 'HFU → 日比建設' }]
+  const byState = (st: InvState) => targets.filter(t => invStateOf(t.id).state === st)
+  const toMake = byState('none'), pending = byState('pending'), returned = byState('returned'), issued = byState('issued')
+  const names = (xs: { name: string }[]) => xs.slice(0, 3).map(x => x.name).join('・') + (xs.length > 3 ? ` ほか${xs.length - 3}社` : '')
+  const ymLabel = `${parseInt(ym.slice(4, 6))}月`
+
+  const shown = list.filter(r => filter === 'all' || (filter === 'billing' ? r.billingTotal > 0 : r.paymentTotal > 0))
+  const open = list.find(r => r.companyId === openId) || null
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">請求書・支払</h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            同業者との貸し借り（応援）と、HFU → 日比建設 の請求。相殺はしません。応援に行った分は「請求する」、応援をもらった分は「支払う」に分けて出します。金額は出面の実績から出した見込みです。
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setYm(shiftYm(ym, -1))} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-sm">◀</button>
-          <span className="text-sm font-bold tabular-nums">{ym.slice(0, 4)}年{parseInt(ym.slice(4, 6))}月</span>
-          <button onClick={() => setYm(shiftYm(ym, 1))} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-sm">▶</button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-          <div className="text-xs text-blue-700 dark:text-blue-300">請求する（応援に行った分）</div>
-          <div className="text-lg font-bold tabular-nums text-blue-900 dark:text-blue-100">{yen(billingSum)}</div>
-        </div>
-        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3">
-          <div className="text-xs text-amber-700 dark:text-amber-300">支払う（応援をもらった分）</div>
-          <div className="text-lg font-bold tabular-nums text-amber-900 dark:text-amber-100">{yen(paymentSum)}</div>
-        </div>
-      </div>
-
-      {/* グループ内: HFU 所属の作業員の人工を HFU から日比建設へ請求する（lib/hfu-invoice.ts） */}
-      <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h2 className="text-base font-bold">HFU → 日比建設</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400">グループ内の請求。HFU 所属の作業員が働いた人工（全現場）× 社内単価。上の合計には含みません。</p>
-        </div>
-        <InvoiceBadge companyId={HFU_INVOICE_COMPANY_ID} />
-      </section>
-
-      {err && <p className="text-sm text-red-600">{err}</p>}
-      {!rows && !err && <p className="text-sm text-gray-400">集計中…</p>}
-      {rows && rows.length === 0 && <p className="text-sm text-gray-400">この月の貸し借りはありません。</p>}
-
-      {rows?.map(r => (
-        <section key={r.companyId} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 space-y-3">
-          <div className="flex items-baseline justify-between flex-wrap gap-2">
-            <h2 className="text-base font-bold">{r.companyName}</h2>
-            <div className="text-xs text-gray-500 tabular-nums space-x-3 flex items-center gap-3">
-              {r.billingTotal > 0 && <span className="text-blue-700 dark:text-blue-300">請求 {yen(r.billingTotal)}</span>}
-              {r.paymentTotal > 0 && <span className="text-amber-700 dark:text-amber-300">支払 {yen(r.paymentTotal)}</span>}
-              {r.billingTotal > 0 && <InvoiceBadge companyId={r.companyId} />}
-            </div>
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="請求・原価"
+        title="請求書・支払"
+        sub="応援に出した分は請求、来てもらった分は支払。出面から計算した金額です（相殺しません）"
+        actions={
+          <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+            <button type="button" aria-label="前の月" onClick={() => setYm(shiftYm(ym, -1))}
+              className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
+              <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
+            </button>
+            <span className="px-1.5 text-[15px] font-bold tabular-nums">{ym.slice(0, 4)}年{parseInt(ym.slice(4, 6))}月分</span>
+            <button type="button" aria-label="次の月" onClick={() => setYm(shiftYm(ym, 1))}
+              className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
+              <Icon name="chevronRight" size={18} strokeWidth={2.2} />
+            </button>
           </div>
+        }
+      />
 
-          {r.billing.length > 0 && (
-            <div className="overflow-x-auto">
-              <div className="text-xs font-bold text-blue-700 dark:text-blue-300 mb-1">請求する（{r.companyName} の現場へ応援）</div>
-              <table className="w-full text-xs border-collapse">
-                <thead><tr className="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                  <th className="px-2 py-1.5 text-left">現場（工種）</th>
-                  <th className="px-2 py-1.5 text-right">鳶 人工</th><th className="px-2 py-1.5 text-right">鳶 単価</th>
-                  <th className="px-2 py-1.5 text-right">土工 人工</th><th className="px-2 py-1.5 text-right">土工 単価</th>
-                  <th className="px-2 py-1.5 text-right">金額</th>
-                </tr></thead>
-                <tbody>
-                  {r.billing.map(l => (
-                    <tr key={l.siteId} className="border-t border-gray-100 dark:border-gray-700 tabular-nums">
-                      <td className="px-2 py-1.5">{l.siteName}</td>
-                      <td className="px-2 py-1.5 text-right">{l.tobiDays || '—'}</td>
-                      <td className="px-2 py-1.5 text-right text-gray-500">{l.tobiDays ? yen(l.tobiRate) : '—'}</td>
-                      <td className="px-2 py-1.5 text-right">{l.dokoDays || '—'}</td>
-                      <td className="px-2 py-1.5 text-right text-gray-500">{l.dokoDays ? yen(l.dokoRate) : '—'}</td>
-                      <td className="px-2 py-1.5 text-right font-bold">{yen(l.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {err && <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">{err}</div>}
+      {!rows && !err && <div className="text-center py-12 text-gray-400">集計中...</div>}
+
+      {rows && (
+        <>
+          {/* ① 今やること */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <TodoCard icon="doc" tone={toMake.length > 0 ? 'urgent' : 'ok'} title="請求書を作る"
+              big={toMake.length > 0 ? `${toMake.length}社` : 'ありません'}
+              sub={toMake.length > 0 ? `${names(toMake)}の${ymLabel}分がまだ。出面の承認がそろっていれば作れます` : `${ymLabel}分はすべて作成済みです`}
+              action={toMake.length > 0 ? '作る' : undefined}
+              onClick={toMake.length > 0 ? () => { window.location.href = hrefOf(toMake[0].id) } : undefined} />
+            <TodoCard icon="check" tone={pending.length > 0 ? 'info' : 'ok'} title="承認待ち"
+              big={pending.length > 0 ? `${pending.length}件` : 'ありません'}
+              sub={pending.length > 0 ? `${names(pending)}。事務が申請した請求書を、政仁さん・代表が承認して発行` : '事務が発行を申請するとここに出ます'}
+              action={pending.length > 0 ? '開く' : undefined}
+              onClick={pending.length > 0 ? () => { window.location.href = hrefOf(pending[0].id) } : undefined} />
+            <TodoCard icon="alert" tone={returned.length > 0 ? 'warn' : 'ok'} title="差し戻し・取り下げ"
+              big={returned.length > 0 ? `${returned.length}件` : 'ありません'}
+              sub={returned.length > 0 ? `${names(returned)}。理由を見て直し、もう一度申請` : '差し戻されると、ここに出ます'}
+              action={returned.length > 0 ? '開く' : undefined}
+              onClick={returned.length > 0 ? () => { window.location.href = hrefOf(returned[0].id) } : undefined} />
+            <TodoCard icon="check" tone="ok" title="発行済み"
+              big={issued.length > 0 ? `${issued.length}件` : 'まだありません'}
+              sub={issued.length > 0 ? names(issued) : `${ymLabel}分で発行した請求書がここに出ます`} />
+          </section>
+
+          {/* ② 合計 */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Stat label={`請求する（${billingCos.length}社）`} value={yen(billingSum)} sub="応援に出した人工 × 単価（税抜）" />
+            <Stat label={`支払う（${list.filter(r => r.paymentTotal > 0).length}社）`} value={yen(paymentSum)} sub="来てもらった人工 × 単価（税抜）" />
+            <a href={hrefOf(HFU_INVOICE_COMPANY_ID)} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1 hover:border-hibi-navy dark:hover:border-blue-400 transition">
+              <span className="text-[13px] text-hibi-sub dark:text-gray-400">HFU → 日比建設</span>
+              <span className="text-[26px] font-bold tabular-nums text-gray-900 dark:text-white">{hfu.issued ? yen(hfu.issued.total) : '—'}</span>
+              <span className="flex items-center gap-2 text-xs text-hibi-sub dark:text-gray-400">
+                <Chip tone={STATE[hfu.state].tone}>{STATE[hfu.state].label}{hfu.issued ? ` ${hfu.issued.no}` : ''}</Chip>
+                グループ内の請求。上の合計には入れない
+              </span>
+            </a>
+          </section>
+
+          {/* ③ 会社ごと */}
+          <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
+              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">会社ごと（{ymLabel}分）</h2>
+              <Segment value={filter} onChange={setFilter} items={[
+                ['all', `すべて ${list.length}`], ['billing', `請求あり ${billingCos.length}`], ['payment', `支払あり ${list.filter(r => r.paymentTotal > 0).length}`],
+              ]} />
+              <span className="ml-auto text-xs text-hibi-sub dark:text-gray-400">行を押すと、現場ごとの内訳が右に開きます</span>
             </div>
-          )}
-
-          {r.payments.length > 0 && (
-            <div className="overflow-x-auto">
-              <div className="text-xs font-bold text-amber-700 dark:text-amber-300 mb-1">支払う（{r.companyName} から応援をもらった分）</div>
-              <table className="w-full text-xs border-collapse">
-                <thead><tr className="bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                  <th className="px-2 py-1.5 text-left">現場（工種）</th>
-                  <th className="px-2 py-1.5 text-right">人工</th><th className="px-2 py-1.5 text-right">残業(h)</th>
-                  <th className="px-2 py-1.5 text-right">金額</th>
-                </tr></thead>
-                <tbody>
-                  {r.payments.map(l => (
-                    <tr key={l.siteId} className="border-t border-gray-100 dark:border-gray-700 tabular-nums">
-                      <td className="px-2 py-1.5">{l.siteName}</td>
-                      <td className="px-2 py-1.5 text-right">{l.days}</td>
-                      <td className="px-2 py-1.5 text-right">{l.otHours || '—'}</td>
-                      <td className="px-2 py-1.5 text-right font-bold">{yen(l.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_150px_150px_200px_150px] gap-3.5 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
+              <span>会社</span><span className="text-right">請求する</span><span className="text-right">支払う</span><span>請求書</span><span />
             </div>
-          )}
-        </section>
-      ))}
+            {list.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">この月の貸し借りはありません</div>
+            ) : shown.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">この絞り込みに当てはまる会社はありません</div>
+            ) : shown.map(r => {
+              const st = r.billingTotal > 0 ? invStateOf(r.companyId) : null
+              return (
+                <div key={r.companyId} role="button" tabIndex={0}
+                  onClick={() => setOpenId(r.companyId)}
+                  onKeyDown={e => { if (e.key === 'Enter') setOpenId(r.companyId) }}
+                  className="border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-5 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_150px_150px_200px_150px] gap-2 lg:gap-3.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
+                  <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100">{r.companyName}</span>
+                  <span className="lg:text-right text-[17px] font-bold tabular-nums text-gray-900 dark:text-white">{r.billingTotal > 0 ? yen(r.billingTotal) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                  <span className="lg:text-right text-[17px] font-bold tabular-nums text-gray-900 dark:text-white">{r.paymentTotal > 0 ? yen(r.paymentTotal) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                  <span>{st ? <Chip tone={STATE[st.state].tone}>{STATE[st.state].label}{st.issued ? ` ${st.issued.no}` : ''}</Chip> : <Chip tone="gray">支払のみ</Chip>}</span>
+                  <span className="lg:text-right" onClick={e => e.stopPropagation()}>
+                    {st && (
+                      <a href={hrefOf(r.companyId)}
+                        className={`inline-flex items-center h-9 px-3.5 rounded-[9px] text-[13px] font-bold whitespace-nowrap ${
+                          st.state === 'none' ? 'bg-hibi-navy text-white hover:bg-hibi-light'
+                          : st.state === 'pending' ? 'bg-green-700 text-white hover:bg-green-800'
+                          : 'border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'
+                        }`}>
+                        {st.state === 'none' ? '請求書を作る' : st.state === 'pending' ? '開いて承認' : '請求書を開く'}
+                      </a>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
+          </section>
 
-      <p className="text-[11px] text-gray-400 leading-relaxed">
-        請求の人工には、その応援現場へ連れて行った外注の人工も含みます。残業は時間を人工に換算して加えています（鳶・外注は8時間、外国人は7時間で1人工）。
-        単価は現場マスタの単価タブ（工種ごと）の受取単価、支払は出面の外注原価（借りる単価）です。
-      </p>
+          <p className="text-xs text-hibi-sub dark:text-gray-400 leading-relaxed">
+            請求の人工には、その応援現場へ連れて行った外注の人工も含みます。残業は時間を人工に換算して加えています（鳶・外注は8時間、外国人は7時間で1人工）。
+            単価は現場マスタの単価タブ（工種ごと）の受取単価、支払は出面の外注原価（借りる単価）です。
+          </p>
+        </>
+      )}
+
+      {/* 会社の内訳（右から開く） */}
+      {open && (
+        <SidePanel label={`${open.companyName} の内訳`} onClose={() => setOpenId(null)}>
+          <div className="p-6 space-y-6">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{open.companyName}</h2>
+                <div className="text-[13px] text-hibi-sub dark:text-gray-400">
+                  {ym.slice(0, 4)}年{ymLabel}分{open.billingTotal > 0 && ` ／ 請求 ${yen(open.billingTotal)}`}{open.paymentTotal > 0 && ` ／ 支払 ${yen(open.paymentTotal)}`}（税抜）
+                </div>
+              </div>
+              <CloseButton onClick={() => setOpenId(null)} />
+            </div>
+
+            {open.billing.length > 0 && (() => {
+              const st = invStateOf(open.companyId)
+              return (
+                <section className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-gray-900 dark:text-white">請求する（応援に出した分）</h3>
+                    <Chip tone={STATE[st.state].tone}>{STATE[st.state].label}{st.issued ? ` ${st.issued.no}` : ''}</Chip>
+                  </div>
+                  <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-sm">
+                    <div className="grid grid-cols-[minmax(0,1fr)_56px_76px_56px_76px_100px] gap-2 px-3 py-2 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
+                      <span>現場（工種）</span><span className="text-right">鳶 人工</span><span className="text-right">単価</span><span className="text-right">土工</span><span className="text-right">単価</span><span className="text-right">金額</span>
+                    </div>
+                    {open.billing.map(l => (
+                      <div key={l.siteId} className="grid grid-cols-[minmax(0,1fr)_56px_76px_56px_76px_100px] gap-2 px-3 py-2 border-t border-hibi-line dark:border-gray-700 tabular-nums">
+                        <span className="font-bold truncate">{l.siteName}</span>
+                        <span className="text-right">{l.tobiDays || '—'}</span>
+                        <span className="text-right text-hibi-sub">{l.tobiDays ? yen(l.tobiRate) : '—'}</span>
+                        <span className="text-right">{l.dokoDays || '—'}</span>
+                        <span className="text-right text-hibi-sub">{l.dokoDays ? yen(l.dokoRate) : '—'}</span>
+                        <span className="text-right font-bold">{yen(l.amount)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between px-3 py-2.5 border-t-2 border-gray-300 dark:border-gray-600">
+                      <span className="font-bold">合計</span><span className="text-lg font-bold tabular-nums">{yen(open.billingTotal)}</span>
+                    </div>
+                  </div>
+                  <a href={hrefOf(open.companyId)}
+                    className={`flex items-center justify-center h-11 rounded-[10px] text-[15px] font-bold ${st.state === 'none' ? 'bg-hibi-navy text-white hover:bg-hibi-light' : st.state === 'pending' ? 'bg-green-700 text-white hover:bg-green-800' : 'border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'}`}>
+                    {st.state === 'none' ? '請求書を作る（下書きを開く）' : st.state === 'pending' ? '請求書を開いて承認する' : '請求書を開く'}
+                  </a>
+                  <p className="text-xs text-hibi-sub dark:text-gray-400">事務は「発行を申請」、政仁さん・代表は「承認して発行」。発行すると番号が付き、内容が固定されます</p>
+                </section>
+              )
+            })()}
+
+            {open.payments.length > 0 && (
+              <section className="space-y-2">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">支払う（来てもらった分）</h3>
+                <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-sm">
+                  <div className="grid grid-cols-[minmax(0,1fr)_64px_72px_110px] gap-2 px-3 py-2 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
+                    <span>現場（工種）</span><span className="text-right">人工</span><span className="text-right">残業(h)</span><span className="text-right">金額</span>
+                  </div>
+                  {open.payments.map(l => (
+                    <div key={l.siteId} className="grid grid-cols-[minmax(0,1fr)_64px_72px_110px] gap-2 px-3 py-2 border-t border-hibi-line dark:border-gray-700 tabular-nums">
+                      <span className="font-bold truncate">{l.siteName}</span>
+                      <span className="text-right">{l.days}</span>
+                      <span className="text-right text-hibi-sub">{l.otHours || '—'}</span>
+                      <span className="text-right font-bold">{yen(l.amount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between px-3 py-2.5 border-t-2 border-gray-300 dark:border-gray-600">
+                    <span className="font-bold">合計</span><span className="text-lg font-bold tabular-nums">{yen(open.paymentTotal)}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-hibi-sub dark:text-gray-400">相手の会社から届く請求書と、この金額を突き合わせてください</p>
+              </section>
+            )}
+          </div>
+        </SidePanel>
+      )}
+    </div>
+  )
+}
+
+function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1">
+      <span className="text-[13px] text-hibi-sub dark:text-gray-400">{label}</span>
+      <span className="text-[26px] font-bold tabular-nums text-gray-900 dark:text-white">{value}</span>
+      <span className="text-xs text-hibi-sub dark:text-gray-400">{sub}</span>
     </div>
   )
 }

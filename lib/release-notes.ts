@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_invoice_ux',
+    title: '請求書・支払を見やすくしました',
+    content:
+      '上に「今やること」（請求書を作る・承認待ち・差し戻し／取り下げ・発行済み）と合計を並べました。'
+      + '会社ごとに1行で、請求額・支払額・請求書の状態と次の操作（請求書を作る／開いて承認）が分かります。行を押すと右に現場ごとの内訳が開きます。'
+      + '請求書そのもの（印刷・PDF）は変わりません。',
+    category: 'new',
+    publishedAt: '2026-10-01T15:30:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261001_calendar_ux',
     title: '就業カレンダーを見やすくしました',
     content:

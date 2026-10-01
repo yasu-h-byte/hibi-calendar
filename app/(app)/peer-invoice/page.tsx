@@ -18,6 +18,8 @@
  * 縦横混在させる案は Chrome の印刷崩れリスクがあるため見送り。出面明細は31日分を
  * 小さいフォントで縦向きに収める）。
  */
+import { Icon } from '@/components/ui/Icon'
+import { Chip } from '@/components/ui/PageParts'
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
@@ -197,35 +199,47 @@ function PeerInvoicePageInner() {
     <div className="max-w-4xl mx-auto">
       {/* ── 画面のみのツールバー ── */}
       <div className="no-print space-y-3 mb-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
+        {/* 2026-10-01 改修: 見出し・状態・操作をほかの画面と同じ見た目に（請求書の本文＝印刷部分は変えない） */}
+        <div className="flex items-end justify-between flex-wrap gap-3">
           <div>
-            <a href={`/peer-statement${ym ? `?ym=${ym}` : ''}`} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">← 請求書・支払へ戻る</a>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{isHfuInvoice ? 'HFU → 日比建設 の請求書' : '応援の請求書'}</h1>
-            {view && <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{view.companyName} ／ {jpYm(ym)}分</p>}
+            <a href={`/peer-statement${ym ? `?ym=${ym}` : ''}`} className="text-[13px] text-hibi-sub dark:text-gray-400 hover:text-hibi-navy inline-flex items-center gap-1">
+              <Icon name="chevronLeft" size={14} />請求書・支払へ戻る
+            </a>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1 flex items-center gap-2 flex-wrap">
+              {isHfuInvoice ? 'HFU → 日比建設 の請求書' : '応援の請求書'}
+              {view && (isPending ? <Chip tone="blue">承認待ち</Chip> : view.isDraft ? <Chip tone="amber">下書き（未発行）</Chip> : <Chip tone="green">発行済み {view.no}</Chip>)}
+            </h1>
+            {view && <p className="text-[13px] text-hibi-sub dark:text-gray-400 mt-1">{view.companyName} ／ {jpYm(ym)}分</p>}
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setYm(shiftYm(ym, -1))} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-sm">◀</button>
-            <span className="text-sm font-bold tabular-nums">{jpYm(ym)}</span>
-            <button onClick={() => setYm(shiftYm(ym, 1))} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-600 text-sm">▶</button>
+          <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+            <button type="button" aria-label="前の月" onClick={() => setYm(shiftYm(ym, -1))}
+              className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
+              <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
+            </button>
+            <span className="px-1.5 text-[15px] font-bold tabular-nums">{jpYm(ym)}</span>
+            <button type="button" aria-label="次の月" onClick={() => setYm(shiftYm(ym, 1))}
+              className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
+              <Icon name="chevronRight" size={18} strokeWidth={2.2} />
+            </button>
           </div>
         </div>
 
         {view && (
-          <div className={`rounded-lg px-3 py-2 text-sm font-bold ${isPending ? 'bg-blue-50 text-blue-800 border border-blue-300' : view.isDraft ? 'bg-amber-50 text-amber-800 border border-amber-300' : 'bg-emerald-50 text-emerald-800 border border-emerald-300'}`}>
+          <div className="rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 text-gray-700 dark:text-gray-200">
             {isPending
               ? `承認待ち — ${view.requestedByName || ''}さんが ${jpDate(view.requestedAt || '')} に申請。申請した時点の内容で表示しています`
               : view.isDraft ? '下書き（未発行）— 出面の実績から見込みを計算しています' : `発行済み ${view.no}（${jpDate(view.issueDate)}）`}
           </div>
         )}
         {lastRejected && (
-          <div className="rounded-lg px-3 py-2 text-sm bg-red-50 text-red-800 border border-red-300">
+          <div className="rounded-xl px-4 py-2.5 text-sm bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800">
             差し戻されました（{jpDate(lastRejected.rejectedAt || '')}）{lastRejected.rejectReason ? `: ${lastRejected.rejectReason}` : ''}。直してからもう一度申請してください。
           </div>
         )}
 
         {/* 請求する日の承認がそろっていなければ発行できない（2026-09-30） */}
         {approvalBlocked && approval && (
-          <div className="rounded-lg px-3 py-2 text-sm bg-red-50 text-red-800 border border-red-300">
+          <div className="rounded-xl px-4 py-2.5 text-sm bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800">
             <b>請求する日の中に、職長承認・最終承認が済んでいない日があるため、まだ発行できません。</b>
             <span className="block text-xs mt-1 whitespace-pre-line">{approval.message}</span>
             <span className="block text-xs mt-1">出面の画面で承認を済ませると発行できるようになります。</span>
@@ -234,53 +248,53 @@ function PeerInvoicePageInner() {
 
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => window.print()} disabled={!view}
-            className="px-4 py-2 bg-hibi-navy text-white rounded-lg text-sm font-bold hover:bg-hibi-light transition disabled:opacity-40">
-            🖨 印刷 / PDF保存
+            className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+            <Icon name="download" size={15} />印刷 / PDF保存
           </button>
           {isFreshDraft && canIssue && (
             <button onClick={handleIssue} disabled={busy || approvalBlocked}
-              className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 transition disabled:opacity-40">
+              className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-hibi-navy text-white hover:bg-hibi-light">
               この内容で発行
             </button>
           )}
           {isFreshDraft && canRequest && (
             <button onClick={handleRequest} disabled={busy || approvalBlocked}
-              className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-bold hover:bg-amber-600 transition disabled:opacity-40">
+              className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-hibi-navy text-white hover:bg-hibi-light">
               発行を申請（承認へ回す）
             </button>
           )}
           {view && isPending && canIssue && (
             <>
               <button onClick={() => handleApprove(view.id)} disabled={busy || approvalBlocked}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 transition disabled:opacity-40">
+                className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-green-700 text-white hover:bg-green-800">
                 承認して発行
               </button>
               <button onClick={() => handleReject(view.id)} disabled={busy}
-                className="px-4 py-2 bg-white text-red-600 border border-red-300 rounded-lg text-sm font-bold hover:bg-red-50 transition disabled:opacity-40">
+                className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-white dark:bg-gray-800 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20">
                 差し戻し
               </button>
             </>
           )}
           {view && isPending && canRequest && (
             <button onClick={() => handleWithdraw(view.id)} disabled={busy}
-              className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded-lg text-sm font-bold hover:bg-gray-50 transition disabled:opacity-40">
+              className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-hibi-bg dark:hover:bg-gray-700">
               申請を取り下げ
             </button>
           )}
           {view && view.status === 'issued' && canIssue && (
             <button onClick={() => handleVoid(view.id)} disabled={busy}
-              className="px-4 py-2 bg-white text-red-600 border border-red-300 rounded-lg text-sm font-bold hover:bg-red-50 transition disabled:opacity-40">
+              className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-white dark:bg-gray-800 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20">
               取り消し
             </button>
           )}
           {isFreshDraft && !canIssue && !canRequest && (
-            <span className="text-xs text-gray-400">発行の申請は事務、承認は事業責任者・管理者が行います</span>
+            <span className="text-[13px] text-hibi-sub dark:text-gray-400">発行の申請は事務、承認は事業責任者・管理者が行います</span>
           )}
         </div>
 
         {history.length > 0 && (
-          <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg p-2">
-            この会社・この月の発行履歴: {history.map(h => (
+          <div className="text-xs text-hibi-sub dark:text-gray-400 bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl px-4 py-2.5">
+            この会社・この月の発行の記録: {history.map(h => (
               <span key={h.id} className={`inline-block mr-2 ${h.status === 'issued' || h.status === 'pending' ? '' : 'line-through text-gray-400'}`}>
                 {h.no || '番号なし'}（{
                   h.status === 'void' ? `取消 ${jpDate(h.voidedAt || '')}`
