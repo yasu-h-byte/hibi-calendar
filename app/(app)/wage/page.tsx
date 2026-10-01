@@ -11,6 +11,7 @@
  */
 
 import { Suspense, useEffect, useState } from 'react'
+import { PageHeader } from '@/components/ui/PageParts'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { GRADE_LABELS } from '@/lib/jp-wage'
 import GradeTable from './components/GradeTable'
@@ -90,7 +91,6 @@ function WageHub() {
   if (!allowed) {
     return (
       <div className="max-w-lg mx-auto p-8 text-center space-y-2">
-        <div className="text-3xl">🔒</div>
         <p className="font-bold">このページは代表・事業責任者のみ閲覧できます</p>
         <p className="text-sm text-gray-500">賃金制度の内容（等級・日額・賞与）は機密情報のため、閲覧を制限しています。</p>
       </div>
@@ -98,17 +98,15 @@ function WageHub() {
   }
 
   return (
-    <div className="max-w-[1180px] mx-auto p-4 sm:p-6 space-y-5">
-      <header>
-        <h1 className="text-xl font-bold mb-1">賃金制度（日本人社員）</h1>
-        <p className="text-sm text-gray-500">
-          等級は<b>役割</b>を表します。在籍年数で自動的に上がるものではなく、役割が変わったときに変わります。
-          外国人スタッフは時給制の別制度です。
-        </p>
-      </header>
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="賃金・評価"
+        title="賃金制度（日本人社員）"
+        sub="等級は役割を表します。在籍年数で自動的に上がるものではなく、役割が変わったときに変わります。外国人スタッフは時給制の別制度です"
+      />
 
       {unset.length > 0 && (
-        <section className="rounded-xl border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-900/20 p-4">
+        <section className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-5 py-4">
           <h2 className="text-sm font-bold text-amber-800 dark:text-amber-300 mb-1">
             等級・号数が未設定 {unset.length}名
           </h2>

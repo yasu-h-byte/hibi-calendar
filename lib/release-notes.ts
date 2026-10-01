@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_wage_eval_ux',
+    title: '賃金・評価と評価管理を見やすくしました',
+    content:
+      '賃金・評価の入口に「今やること」（評価の入力が残っている・承認待ち・等級が決まっていない）を出しました。'
+      + '評価管理の一覧は1人1行で、評価の進み具合を点と数字（例: 3/5）で表示します。行を押すと右に、誰が入力済みで誰がまだか（日数つき）と出勤の指標が開き、そこから評価の入力・承認に進めます。',
+    category: 'new',
+    publishedAt: '2026-10-01T16:20:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['approver', 'officer', 'owner', 'foreman'],
+  },
+  {
     id: 'rn_20261001_docs_tools_ux',
     title: '書類庫・道具代管理を見やすくしました',
     content:
