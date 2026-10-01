@@ -6,7 +6,7 @@ import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/
 import { ymKey, setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, currentYearJst, currentYmJst, localMidnight, addDaysIso } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap , jpNextGrantAfter } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap , jpNextGrantAfter, jpDeemedDate } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
@@ -774,7 +774,8 @@ export async function POST(request: NextRequest) {
               expectedFy = String(currentFyStart)
               reason = `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`
             }
-            deemedDateForDays = expectedGrantDate
+            // 初回でも、付与日から1年以内に来る法定の付与日があればその勤続で数える（前倒しの斉一的取扱い）
+            deemedDateForDays = w.hireDate ? jpDeemedDate(w.hireDate, expectedGrantDate) : expectedGrantDate
           } else {
             // ── 2回目以降: 前回付与日の後の最初の 10/1 へ「前倒し合流」──
             // 2026-08-27 修正（有給総点検・第3回）:
@@ -785,7 +786,7 @@ export async function POST(request: NextRequest) {
             //   例: 初回 2026-12-01 → 次回は 2027-10-01（2ヶ月前倒しで統一基準日へ合流）
             //   前倒し分の勤続は本来の応当日まで勤続したものとみなす（斉一的取扱い）
             //   ため、法定日数は max(合流日, 前回+1年) 時点の勤続で計算する。
-            const next = jpNextGrantAfter(latestGrant)
+            const next = jpNextGrantAfter(latestGrant, w.hireDate || undefined)
             expectedGrantDate = next.grantDate
             expectedFy = expectedGrantDate.slice(0, 4)
             deemedDateForDays = next.deemedDate
@@ -1612,7 +1613,8 @@ export async function GET(request: NextRequest) {
         }
 
         // Legal PL calculation info
-        const legalPL = w.hireDate ? calcLegalPL(w.hireDate, grantDate || todayJstIso()) : 0
+        const legalBase = grantDate || todayJstIso()
+        const legalPL = w.hireDate ? calcLegalPL(w.hireDate, isJp ? jpDeemedDate(w.hireDate, legalBase) : legalBase) : 0
 
         // 年5日取得義務チェック（労基法第39条第7項）
         // 2026-06-XX 改訂: requestedPeriodUsed（承認済み未来日も含む申請ベース）で判定

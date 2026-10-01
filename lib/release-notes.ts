@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_jp_grant_deemed',
+    title: '日本人の有給の付与日数の数え方を直しました（梶原さん 12日→14日）',
+    content:
+      '10/1 にそろえて付与するとき、本来の付与日（入社6ヶ月後から1年ごと）がその後に来る人は、本来の付与日の勤続で日数を数えるのが正しい扱いです。'
+      + 'これまで 10/1 時点の勤続で数えていたため、梶原さん（本来の付与日 11/15）が 14日のところ 12日になっていました。付与の予定・上限のチェック・手動付与の画面を直しました。',
+    category: 'fix',
+    publishedAt: '2026-10-01T19:50:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
+  {
     id: 'rn_20261001_audit_speed',
     title: 'ダッシュボードを速くしました・細かい不具合をまとめて直しました',
     content:

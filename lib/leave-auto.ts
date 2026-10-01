@@ -183,7 +183,7 @@ export function getUpcomingGrants(
         .filter(r => (r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)
         .map(r => r.grantDate).filter((d): d is string => !!d).sort().slice(-1)[0]
       if (latest) {
-        const nx = jpNextGrantAfter(latest)
+        const nx = jpNextGrantAfter(latest, w.hireDate)
         nextGrant = new Date(nx.grantDate + 'T00:00:00')
         deemedForDays = new Date(nx.deemedDate + 'T00:00:00')
       } else {

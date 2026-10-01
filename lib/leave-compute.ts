@@ -186,7 +186,8 @@ export function validateGrantInput(args: {
     return { ok: false, error: `付与日数 ${grantDays}日 は法定最大（20日）を超えています` }
   }
   if (hireDate && grantDate) {
-    const legal = calcLegalPL(hireDate, grantDate)
+    // 日本人は 10/1 への前倒し付与なので、1年以内に来る本来の付与日の勤続で上限を見る（梶原さん 14日）
+    const legal = calcLegalPL(hireDate, isJapanese ? jpDeemedDate(hireDate, grantDate) : grantDate)
     if (legal === 0 && grantDays > 0) {
       return { ok: false, error: `入社（${hireDate}）から6ヶ月未満の ${grantDate} には付与できません。入社日が正しいか確認してください` }
     }
@@ -471,11 +472,38 @@ export function isSameFiscalYear(
  * - `deemedDate` は法定日数の勤続計算に使う「みなし基準日」。前倒し分の勤続は
  *   本来の応当日（前回+1年）まで勤務したものとみなす（斉一的取扱いの行政解釈）。
  */
-export function jpNextGrantAfter(latestGrantIso: string): { grantDate: string; deemedDate: string } {
+export function jpNextGrantAfter(latestGrantIso: string, hireDate?: string): { grantDate: string; deemedDate: string } {
   const mergeYear = Number(latestGrantIso.slice(0, 4)) + (latestGrantIso.slice(5) >= '10-01' ? 1 : 0)
   const grantDate = `${mergeYear}-10-01`
   const anniversary = addMonthsSafe(latestGrantIso, 12)
-  return { grantDate, deemedDate: anniversary > grantDate ? anniversary : grantDate }
+  const base = anniversary > grantDate ? anniversary : grantDate
+  return { grantDate, deemedDate: hireDate ? jpDeemedDate(hireDate, grantDate, base) : base }
+}
+
+/**
+ * 統一基準日（10/1）に前倒しで付与するときの「みなし勤続」基準日（2026-10-01 追加）。
+ *
+ * ■ なぜ必要か（梶原さん 12日→14日）
+ *   入社 2023-05-15 の人の法定の付与日は 入社+6ヶ月の応当日（毎年 11/15）。
+ *   2026-10-01 に前倒しで付与するなら、本来 2026-11-15 にもらえる日数（勤続3年6ヶ月＝14日）を
+ *   10/1 に付ける必要がある（斉一的取扱い：短縮した期間は全期間出勤したものとみなす）。
+ *   旧実装は前回付与が 10/1 のとき 10/1 時点の勤続（3年4ヶ月＝12日）で数えており、2日不足していた。
+ *
+ * ■ 判定
+ *   付与日から1年のあいだに来る法定の付与日（入社+6ヶ月+12ヶ月×k）があれば、その日の勤続で数える。
+ *   `floor`（既存のみなし日）より前にはしない。
+ */
+export function jpDeemedDate(hireDate: string, grantDate: string, floor?: string): string {
+  const base = floor && floor > grantDate ? floor : grantDate
+  if (!hireDate) return base
+  const windowEnd = addMonthsSafe(grantDate, 12)
+  for (let k = 0; k < 80; k++) {
+    const d = addMonthsSafe(hireDate, 6 + 12 * k)
+    if (d < grantDate) continue
+    if (d < windowEnd && d > base) return d
+    break
+  }
+  return base
 }
 
 export function grantPeriodsOverlap(aGrantDate: string, bGrantDate: string): boolean {

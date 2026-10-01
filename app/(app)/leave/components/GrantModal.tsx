@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { calcGrantMonthFromHire, calcLegalPL } from '@/lib/leave-utils'
 import { calcLastUsableDayIso, todayJstIso } from '@/lib/date-utils'
+import { jpDeemedDate } from '@/lib/leave-compute'
 import { PLWorker } from '../types'
 
 // 有給付与モーダル
@@ -27,7 +28,9 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
       const w = workers.find(w => w.id === Number(grantForm.workerId))
       if (w?.hireDate) {
         const grantDate = grantForm.grantDate || todayJstIso()   // UTC日付だとJST早朝に前日の付与になる
-        const info = calcLegalPL(w.hireDate, grantDate)
+        // 日本人は 10/1 への前倒し付与なので、1年以内に来る本来の付与日の勤続で数える（2026-10-01 梶原さん 14日）
+        const isJp = !w.visa || w.visa === 'none'
+        const info = calcLegalPL(w.hireDate, isJp ? jpDeemedDate(w.hireDate, grantDate) : grantDate)
         setLegalPLInfo(info)
         // Auto-fill grant days from legal calculation
         setGrantForm(prev => {
