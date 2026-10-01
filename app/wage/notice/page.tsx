@@ -134,7 +134,7 @@ function SheetBody() {
   // 2026-09-30: 下書きでも「未確定」と印字して見られるようにする（コメントを書きながら仕上がりを確認するため）
   const isDraft = data.status !== 'applied' || !data.frozen
   const sheets: Frozen[] = !isDraft ? data.frozen! : (data.revision?.rows || [])
-    // 確定後と同じく処遇固定の人も含める（「送る」一覧の給料表の有無と揃える・2026-09-30 点検）
+    // 確定後と同じく処遇固定の人も含める（年度の比較用）。印刷する人（targets）では処遇固定の人を外す（2026-10-01）
     .filter(r => (r.status === 'ok' && r.result) || r.status === 'fixed')
     .map(r => ({
       workerId: r.member.id, name: r.member.name, status: r.status, grade: r.member.grade,
@@ -160,14 +160,15 @@ function SheetBody() {
   const HISTORY_YEARS = 10   // 給料表に載せる「ベース年収推移」の年度数（代表決定 2026-09-17）
   // 2026-09-30: 一人分だけ開く（?worker=ID）。本人へ個別に送るため。PDF保存時のファイル名に名前が入るよう title も変える
   const onlyWorker = params.get('worker')
-  const targets = sheets.filter(f => f.newDaily != null && f.oldDaily != null)
+  // 処遇固定の人（梶原さん）には給料表を出さない（号俸制の外。マイページのURLだけ送る・2026-10-01 代表決定）
+  const targets = sheets.filter(f => f.newDaily != null && f.oldDaily != null && f.status !== 'fixed')
     .filter(f => !onlyWorker || String(f.workerId) === onlyWorker)
   if (onlyWorker && targets.length === 0) {
     return (
       <div style={{ padding: 24, maxWidth: 640 }}>
         <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>この人の給料表はありません</h1>
         <p style={{ fontSize: 14, color: '#555', lineHeight: 1.9 }}>
-          今回の改定の対象外か、評語などの入力がまだの人です（No.{onlyWorker}）。賃金制度 → 年次改定 で確認してください。
+          今回の改定の対象外か、評語などの入力がまだの人、または処遇固定の人（給料表は配らない）です（No.{onlyWorker}）。賃金制度 → 年次改定 で確認してください。
         </p>
       </div>
     )

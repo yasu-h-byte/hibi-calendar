@@ -582,7 +582,8 @@ export default function RevisionPanel() {
           effective={data.effective}
           rows={Object.entries(data.mypageTokens).map(([id, v]) => {
             const r = data.revision.rows.find(x => String(x.member.id) === id)
-            return { id, name: v.name, token: v.token, hasSheet: !!r && r.newTotal != null && (r.status === 'ok' || r.status === 'fixed'), fixed: r?.status === 'fixed' }
+            // 処遇固定の人には給料表を出さない（マイページのURLだけ送る・2026-10-01 代表決定）
+            return { id, name: v.name, token: v.token, hasSheet: !!r && r.newTotal != null && r.status === 'ok', fixed: r?.status === 'fixed' }
           })}
         />
       )}
@@ -692,7 +693,7 @@ function SendList({ effective, rows }: {
               <a href={`/wage/notice?effective=${effective}&worker=${r.id}`} target="_blank" rel="noopener noreferrer"
                 className={`${btn} bg-hibi-navy text-white border-hibi-navy hover:opacity-90 hover:bg-hibi-navy`}>🖨 給料表を開く</a>
             ) : (
-              <span className="text-[11px] text-gray-400 w-[104px]">給料表なし</span>
+              <span className="text-[11px] text-gray-400 w-[104px]">{r.fixed ? '給料表は配らない（処遇固定）' : '給料表なし'}</span>
             )}
             <button type="button" className={btn} onClick={() => copy(`u${r.id}`, url(r.token))}>
               {copied === `u${r.id}` ? '✓ コピーしました' : '🔗 URLをコピー'}
