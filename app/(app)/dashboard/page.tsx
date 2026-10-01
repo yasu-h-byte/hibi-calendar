@@ -8,7 +8,7 @@
 //       ② 左＝やること（申請を1件1行・気になること）／右＝数字を見るもの（前日の稼働・今月の数字・お知らせ・評価）
 //   計算・権限・承認の処理は変えない（見せ方だけ）。承認ボタンの出し分けは旧 AttendanceRequestCard と同じ。
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { fmtYenMan, fmtNum } from '@/lib/format'
 import EvaluationCard from '@/components/EvaluationCard'
@@ -16,6 +16,7 @@ import { AuthUser } from '@/types'
 import { Icon } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Segment, Chip, type ChipTone } from '@/components/ui/PageParts'
 import { currentYmJst, todayJstIso, addDaysIso } from '@/lib/date-utils'
+import { fetchSidebarBadges } from '@/components/Sidebar'
 
 // ─── Types ───
 
@@ -480,9 +481,14 @@ function YesterdayCard({ data, siteList }: { data: DashboardData['todayStatus'];
 
 // ─── 今月の数字（総人工・売上・日別の稼働人数） ───
 
-function MonthCard({ data, ym, onPrev, onNext }: { data: DashboardData; ym: string; onPrev: () => void; onNext: () => void }) {
-  const s = data.summary
-  const days = data.dailyAttendance || []
+function MonthCard({ data, ym, loading, error, onPrev, onNext }: {
+  data: DashboardData; ym: string; loading: boolean; error: boolean; onPrev: () => void; onNext: () => void
+}) {
+  // 2026-10-01: 月を切り替えた直後・取得に失敗したときに、前の月の数字が新しい月の見出しの下に出ていた。
+  //   数字は「応答の月（selectedYm）＝ 選んでいる月」のときだけ出し、それ以外は読み込み中／失敗を出す
+  const ready = data.selectedYm === ym
+  const s = ready ? data.summary : null
+  const days = ready ? (data.dailyAttendance || []) : []
   const maxDaily = Math.max(1, ...days.map(d => d.sites.reduce((a, st) => a + st.count, 0)))
   return (
     <Card title="今月の数字" sub={`${ym.slice(0, 4)}年${Number(ym.slice(4, 6))}月`} right={
@@ -492,6 +498,11 @@ function MonthCard({ data, ym, onPrev, onNext }: { data: DashboardData; ym: stri
         <button onClick={onNext} aria-label="次の月" className="w-8 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[9px]"><Icon name="chevronRight" size={16} strokeWidth={2.2} /></button>
       </div>
     }>
+      {!ready && (
+        <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">
+          {loading || !error ? '読み込み中...' : 'この月の数字を取得できませんでした'}
+        </div>
+      )}
       {s && (
         <div className="px-5 pt-4 pb-3 grid grid-cols-2 gap-4">
           <div>
@@ -573,8 +584,13 @@ export default function DashboardPage() {
     }
   }, [])
 
+  // 月を素早く切り替えたとき、古い月の応答が後から届いて上書きしないよう、前の取得は取り消す（2026-10-01）
+  const abortRef = useRef<AbortController | null>(null)
   const fetchData = useCallback(async () => {
     if (!password) return
+    abortRef.current?.abort()
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
     setLoading(true)
     setError('')
     try {
@@ -582,24 +598,28 @@ export default function DashboardPage() {
       const res = await fetch(`/api/dashboard?${params}`, {
         headers: { 'x-admin-password': password },
         cache: 'no-store',
+        signal: ctrl.signal,
       })
+      if (ctrl.signal.aborted) return
       if (!res.ok) { setError('データの取得に失敗しました'); return }
-      setData(await res.json())
+      const json = await res.json()
+      if (ctrl.signal.aborted || json?.selectedYm !== ym) return  // 別の月の応答は捨てる
+      setData(json)
     } catch {
+      if (ctrl.signal.aborted) return
       setError('通信エラーが発生しました')
     } finally {
-      setLoading(false)
+      if (abortRef.current === ctrl) setLoading(false)
     }
   }, [password, ym])
 
   useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => () => abortRef.current?.abort(), [])
 
+  // サイドバーと同じ件数 → 同じ取得を共有する（API を2本同時に走らせない・2026-10-01）
   useEffect(() => {
     if (!password) return
-    fetch('/api/sidebar-badges', { headers: { 'x-admin-password': password } })
-      .then(r => r.ok ? r.json() : null)
-      .then(j => { if (j?.badges) setActionBadges(j.badges) })
-      .catch(() => {})
+    fetchSidebarBadges(password).then(b => { if (b) setActionBadges(b) })
   }, [password])
 
   const navigateMonth = (direction: -1 | 1) => {
@@ -670,32 +690,39 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {loading && !data ? (
-        <div className="text-center py-12 text-gray-400">読み込み中...</div>
-      ) : data ? (
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-4 items-start">
-          {/* ② 左: やること */}
-          <div className="space-y-4 min-w-0">
-            <RequestsCard
-              leaveItems={leaveItems}
-              absenceReports={ai?.absenceReports || []}
-              homeLongLeaveItems={homeItems}
-              password={password}
-              userRole={userRole}
-              userForemanSites={userForemanSites}
-              onUpdate={fetchData}
-            />
-            <IssuesCard issues={ai?.quietIssues?.items || []} calendarPending={actionBadges?.calendar || 0} />
-          </div>
-          {/* ③ 右: 数字を見るもの */}
-          <div className="space-y-4 min-w-0">
-            <YesterdayCard data={data.todayStatus} siteList={data.siteList || []} />
-            <MonthCard data={data} ym={ym} onPrev={() => navigateMonth(-1)} onNext={() => navigateMonth(1)} />
-            <AnnouncementsCard password={password} />
-            {authUser && <EvaluationCard user={authUser} />}
-          </div>
+      {/* お知らせ・評価は本体（/api/dashboard）を待たずに最初から出す（2026-10-01 高速化。旧: 本体の応答後に取得が始まっていた） */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-4 items-start">
+        {/* ② 左: やること */}
+        <div className="space-y-4 min-w-0">
+          {data ? (
+            <>
+              <RequestsCard
+                leaveItems={leaveItems}
+                absenceReports={ai?.absenceReports || []}
+                homeLongLeaveItems={homeItems}
+                password={password}
+                userRole={userRole}
+                userForemanSites={userForemanSites}
+                onUpdate={fetchData}
+              />
+              <IssuesCard issues={ai?.quietIssues?.items || []} calendarPending={actionBadges?.calendar || 0} />
+            </>
+          ) : loading ? (
+            <div className="text-center py-12 text-gray-400">読み込み中...</div>
+          ) : null}
         </div>
-      ) : null}
+        {/* ③ 右: 数字を見るもの */}
+        <div className="space-y-4 min-w-0">
+          {data && (
+            <>
+              <YesterdayCard data={data.todayStatus} siteList={data.siteList || []} />
+              <MonthCard data={data} ym={ym} loading={loading} error={!!error} onPrev={() => navigateMonth(-1)} onNext={() => navigateMonth(1)} />
+            </>
+          )}
+          <AnnouncementsCard password={password} />
+          {authUser && <EvaluationCard user={authUser} />}
+        </div>
+      </div>
     </div>
   )
 }

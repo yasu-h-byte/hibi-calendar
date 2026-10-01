@@ -693,7 +693,8 @@ export default function SitesPage() {
                   </div>
                 )}
               </div>
-              {editId && !form.archived && (
+              {/* 終了にするのは現場マスタを編集できる人だけ（事業責任者の保存は運転手当の設定しか送らないため、押しても反映されない） */}
+              {editId && canEditMaster && !form.archived && (
                 <button type="button" onClick={() => { setForm({ ...form, archived: true }); setModalTab('basic') }}
                   className="h-9 px-3.5 rounded-[9px] border border-red-300 dark:border-red-800 bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 text-[13px] font-bold hover:bg-red-50 dark:hover:bg-red-900/20">終了にする</button>
               )}
@@ -874,7 +875,7 @@ export default function SitesPage() {
               )}
               </>)}
 
-              {editId && (
+              {editId && canEditMaster && (
                 <div className="pt-1">
                   <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
                     <input

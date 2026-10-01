@@ -119,7 +119,7 @@ export default function LeaveRequestModal({
 
         {successMsg && (
           <div className="bg-green-100 text-green-700 rounded-xl p-3 text-center font-bold mb-3 animate-pulse">
-            しんせい しました / Da gui don
+            しんせい しました / Đã gửi đơn
           </div>
         )}
         {errorMsg && (

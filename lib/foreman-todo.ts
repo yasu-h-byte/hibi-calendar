@@ -10,14 +10,14 @@
  * サーバ専用（Firestore を読む）。
  */
 import { db } from './firebase'
-import { doc, getDoc } from './fsdb'
+import { doc, getDoc, getDocs, collection, query, where } from './fsdb'
 import {
-  getAttendanceDoc, getApprovalForDay, setApprovalForDay, getForeignWorkersForSite, getEntryStatus, getStaffSites,
+  getAttendanceDoc, getApprovalForDay, setApprovalForDay, getEntryStatus, getStaffSites,
 } from './attendance'
 import { workTypeFamilyIds, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from './site-hierarchy'
 import { computeForemanSites, approvingForemenOfSite, buildAuthUser, isManagerRole } from './auth'
 import { todayJstIso, addMonthsSafe, addDaysIso } from './date-utils'
-import type { AttendanceEntry, Site } from '@/types'
+import type { AttendanceEntry, AttendanceApproval, Site } from '@/types'
 import { getAssign, parseDKey, getMainData, type MainData } from './compute'
 import { getWorkerByToken } from './workers'
 
@@ -92,15 +92,101 @@ export function entryPlace(att: Record<string, AttendanceEntry>, family: string[
 const isoOf = (ym: string, day: number) => `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
 
 /**
+ * 現場 × 月 の「稼働日か」の判定を作る（siteCalendar を1回だけ読む）。
+ * 稼働日 = 承認済みの就業カレンダーの「出勤」。カレンダーが未承認なら日曜以外。
+ */
+export async function loadSiteWorkDayFn(siteId: string, ym: string): Promise<(day: number) => boolean> {
+  const calSnap = await getDoc(doc(db, 'siteCalendar', `${siteId}_${ym.slice(0, 4)}-${ym.slice(4, 6)}`)).catch(() => null)
+  const cal = calSnap && calSnap.exists() ? calSnap.data() : null
+  return workDayFnOf(cal?.status === 'approved' && cal?.days ? cal.days as Record<string, string> : null, ym)
+}
+function workDayFnOf(calDays: Record<string, string> | null, ym: string): (day: number) => boolean {
+  const y = Number(ym.slice(0, 4))
+  const m = Number(ym.slice(4, 6))
+  return (d: number) => calDays ? calDays[String(d)] === 'work' : new Date(y, m - 1, d).getDay() !== 0
+}
+
+/**
+ * 現場 × 月 の職長承認・最終承認（attendanceApprovals）をまとめて読む（2026-10-01）。
+ * ドキュメントIDは `${siteId}_${ym}_${day}`（lib/attendance.ts setForemanApprovalForDay）なので、
+ * ID の範囲クエリ1回で、その現場×月に「存在する」承認だけを読む。
+ * 旧: 日数ぶん getDoc（存在しない日も1件ずつ読みに数えられる）。範囲クエリは
+ * 「ヒットした件数（0件でも1）」の読みなので、日ごとに読むより増えることはない。
+ * クエリが使えない環境では、旧と同じ日ごとの getDoc に戻す。
+ */
+export async function loadApprovalsForSiteMonth(siteId: string, ym: string, lastDay: number): Promise<Map<number, AttendanceApproval>> {
+  const out = new Map<number, AttendanceApproval>()
+  if (lastDay <= 0) return out
+  const prefix = `${siteId}_${ym}_`
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'attendanceApprovals'),
+      where('__name__', '>=', prefix),
+      where('__name__', '<', prefix + '\uf8ff'),
+    ))
+    snap.forEach(d => {
+      const rest = d.id.slice(prefix.length)
+      // 日付部分がちょうど 1〜lastDay の数字のものだけ（他の現場IDの前方一致などを拾わない）
+      if (!/^[1-9]\d?$/.test(rest)) return
+      const day = Number(rest)
+      if (day >= 1 && day <= lastDay) out.set(day, d.data() as AttendanceApproval)
+    })
+    return out
+  } catch (e) {
+    console.warn('[foreman-todo] 承認の範囲読みに失敗。日ごとの読みに戻します:', e)
+    const days = Array.from({ length: lastDay }, (_, i) => i + 1)
+    const res = await Promise.all(days.map(d => getApprovalForDay(siteId, ym, d)))
+    res.forEach((a, i) => { if (a) out.set(days[i], a) })
+    return out
+  }
+}
+
+/**
+ * 現場（親＋工種）× 1日 の入力のそろい具合。一覧（siteMonthDays）と承認（approveDaysForSite）の共通の決まり。
+ *   - 別の現場で入力している人（移動・掛け持ち）は未入力に数えず、この日の対象からも外す（2026-10-01 代表決定）
+ *   - 非稼働日（日曜・カレンダーの休み）は、入力した人だけが対象。入力が無い人は休みとして正常
+ *     （旧: 一覧は非稼働日も全員を対象に数え、一部の人だけ出勤した日曜が名前なしの
+ *       「入力がそろっていない日」に出続け、承認もできなかった・2026-10-01）
+ * 純粋関数。
+ */
+export function evaluateSiteDay(
+  att: Record<string, AttendanceEntry>, family: string[], workers: { id: number; name: string }[],
+  ym: string, day: number, isWorkDay: boolean,
+): { entered: number; total: number; missingNames: string[]; elsewhere: { name: string; siteIds: string[] }[] } {
+  const missingNames: string[] = []
+  const elsewhere: { name: string; siteIds: string[] }[] = []
+  let entered = 0
+  for (const w of workers) {
+    // 判定は職長画面のリストと同じ getEntryStatus（0.6補償=入力済み、残骸のみ=未入力）
+    const p = entryPlace(att, family, w.id, ym, day)
+    if (p.place === 'here') entered++
+    else if (p.place === 'elsewhere') elsewhere.push({ name: w.name, siteIds: p.siteIds })
+    else if (isWorkDay) missingNames.push(w.name)
+  }
+  return {
+    entered,
+    // 稼働日: 配置の全員（別の現場で入力している人を除く）／非稼働日: 入力した人だけ
+    total: isWorkDay ? workers.length - elsewhere.length : entered,
+    missingNames,
+    elsewhere,
+  }
+}
+
+/**
  * 現場 × 月 の日ごとの状態（1日〜今日まで。過ぎた月は月末まで）。
  * 稼働日 = 承認済みの就業カレンダーの「出勤」。カレンダーが未承認なら日曜以外。
- * 非稼働日は未入力を数えない（休みの日に入力が無いのは正常）。
+ * 非稼働日は未入力を数えない（休みの日に入力が無いのは正常・evaluateSiteDay）。
  */
 export async function siteMonthDays(siteId: string, ym: string, preloaded?: {
   att?: Record<string, AttendanceEntry>
   family?: string[]
   /** 対象の外国人スタッフ（読むだけの一覧ではキャッシュ済みの main から渡して読み取りを減らす） */
   workers?: { id: number; name: string }[]
+  /**
+   * 対象の外国人スタッフが0人なら就業カレンダーを読まない（マイページの一覧用。読み取りを減らす）。
+   * 0人の現場は稼働日かどうかで一覧の中身が変わらない（承認の有無だけを見る）ため。
+   */
+  skipCalendarIfNoWorkers?: boolean
 }): Promise<ForemanDay[]> {
   const today = todayJstIso()
   const y = Number(ym.slice(0, 4))
@@ -110,40 +196,28 @@ export async function siteMonthDays(siteId: string, ym: string, preloaded?: {
   const lastDay = ym < curYm ? daysInMonth : ym === curYm ? Number(today.slice(8, 10)) : 0
   if (lastDay === 0) return []
 
-  const [att, family, workers, calSnap] = await Promise.all([
+  const roster = preloaded?.workers && preloaded?.family ? null : await loadSiteRoster(siteId, ym)
+  const family = preloaded?.family ?? roster!.family
+  const workers = preloaded?.workers ?? roster!.workers
+  const skipCal = !!preloaded?.skipCalendarIfNoWorkers && workers.length === 0
+  const [att, isWorkDayOf, approvals] = await Promise.all([
     preloaded?.att ? Promise.resolve(preloaded.att) : getAttendanceDoc(ym),
-    preloaded?.family ? Promise.resolve(preloaded.family) : loadSiteFamily(siteId).then(f => f.family),
-    preloaded?.workers ? Promise.resolve(preloaded.workers) : getForeignWorkersForSite(siteId, ym),
-    getDoc(doc(db, 'siteCalendar', `${siteId}_${ym.slice(0, 4)}-${ym.slice(4, 6)}`)).catch(() => null),
+    skipCal ? Promise.resolve(workDayFnOf(null, ym)) : loadSiteWorkDayFn(siteId, ym),
+    loadApprovalsForSiteMonth(siteId, ym, lastDay),
   ])
-  const cal = calSnap && calSnap.exists() ? calSnap.data() : null
-  const calDays = cal?.status === 'approved' && cal?.days ? cal.days as Record<string, string> : null
 
   const dayNums = Array.from({ length: lastDay }, (_, i) => i + 1)
-  const approvals = await Promise.all(dayNums.map(d => getApprovalForDay(siteId, ym, d)))
-  return dayNums.map((d, i) => {
-    const isWorkDay = calDays ? calDays[String(d)] === 'work' : new Date(y, m - 1, d).getDay() !== 0
-    const missingNames: string[] = []
-    const elsewhere: { name: string; siteIds: string[] }[] = []
-    let entered = 0
-    for (const w of workers) {
-      // 判定は職長画面のリストと同じ getEntryStatus（0.6補償=入力済み、残骸のみ=未入力）
-      const p = entryPlace(att, family, w.id, ym, d)
-      if (p.place === 'here') entered++
-      else if (p.place === 'elsewhere') elsewhere.push({ name: w.name, siteIds: p.siteIds })
-      else if (isWorkDay) missingNames.push(w.name)
-    }
+  return dayNums.map(d => {
+    const isWorkDay = isWorkDayOf(d)
+    const ev = evaluateSiteDay(att, family, workers, ym, d, isWorkDay)
+    const ap = approvals.get(d)
     return {
       day: d,
       dateISO: isoOf(ym, d),
       isWorkDay,
-      approved: !!approvals[i]?.foreman,
-      final: !!approvals[i]?.final,
-      entered,
-      // 別の現場で入力している人は、この現場の対象から外す（全員そろったかの判定に使う）
-      total: workers.length - elsewhere.length,
-      missingNames,
-      elsewhere,
+      approved: !!ap?.foreman,
+      final: !!ap?.final,
+      ...ev,
     }
   })
 }
@@ -151,15 +225,17 @@ export async function siteMonthDays(siteId: string, ym: string, preloaded?: {
 /**
  * まとめて職長承認する。全員入力済み・今日まで の日だけ承認し、それ以外は理由つきで返す。
  * 誰も入力していない日を承認するとスタッフ入力がロックされる（2026-09-02 大川さんの 9/1 誤承認事故）ため、
- * 未入力が1人でも残る日は承認しない。
+ * 未入力が1人でも残る日・誰も入力していない日は承認しない。
+ * 名簿・稼働日・そろい具合の判定は一覧（siteMonthDays）と同じ（loadSiteRoster・evaluateSiteDay）。
+ * 非稼働日は入力した人だけが対象（入力のある人がそろっていれば承認できる）。
  */
 export async function approveDaysForSite(siteId: string, ym: string, days: number[], foremanId: number): Promise<{
   approvedDays: number[]
   skipped: { day: number; reason: string }[]
 }> {
   const today = todayJstIso()
-  const [att, { family }, workers] = await Promise.all([
-    getAttendanceDoc(ym), loadSiteFamily(siteId), getForeignWorkersForSite(siteId, ym),
+  const [att, { family, workers }, isWorkDayOf] = await Promise.all([
+    getAttendanceDoc(ym), loadSiteRoster(siteId, ym), loadSiteWorkDayFn(siteId, ym),
   ])
   const approvedDays: number[] = []
   const skipped: { day: number; reason: string }[] = []
@@ -167,10 +243,14 @@ export async function approveDaysForSite(siteId: string, ym: string, days: numbe
     const d = Number(dd)
     if (!Number.isInteger(d) || d < 1 || d > 31) { skipped.push({ day: d, reason: '不正な日付' }); continue }
     if (isoOf(ym, d) > today) { skipped.push({ day: d, reason: '未来日' }); continue }
-    // 別の現場で入力している人（移動・掛け持ち）は未入力に数えない（siteMonthDays と同じ決まり）
-    const missing = workers.filter(w => entryPlace(att, family, w.id, ym, d).place === 'none')
-    if (missing.length > 0) {
-      skipped.push({ day: d, reason: `未入力: ${missing.map(w => w.name).join('、')}` })
+    const ev = evaluateSiteDay(att, family, workers, ym, d, isWorkDayOf(d))
+    if (ev.missingNames.length > 0) {
+      skipped.push({ day: d, reason: `未入力: ${ev.missingNames.join('、')}` })
+      continue
+    }
+    // 職長画面の1日ずつの承認と同じ: 配置の人がいるのに誰も入力していない日は承認しない
+    if (workers.length > 0 && ev.entered === 0) {
+      skipped.push({ day: d, reason: 'まだ誰も入力していない' })
       continue
     }
     await setApprovalForDay(siteId, ym, d, foremanId)
@@ -209,17 +289,31 @@ export async function getForemenOfWorkerSites(workerId: number): Promise<Set<num
   return result
 }
 
+/** 名簿を決めるのに使う main の部分 */
+export type RosterSource = Pick<MainData, 'workers' | 'sites' | 'assign' | 'massign'>
+
 /**
- * キャッシュ済みの main（getMainData・30秒）から、現場×月の外国人スタッフと工種の範囲を作る。
- * getForeignWorkersForSite / loadSiteFamily と同じ決まり（月別配置 massign → 既定配置 assign・在留資格あり）。
- * 一覧（読むだけ）用。承認の書き込み判定は approveDaysForSite が最新の main を読み直す。
+ * 現場×月の外国人スタッフ（名簿）と工種の範囲。**名簿の決まりはここだけ**（2026-10-01 一本化）。
+ *   配置 = getAssign（その月の月別配置 massign → なければ過去12か月の月別配置をさかのぼる → 既定配置 assign）。
+ *   PC の出面画面・給与計算と同じ決まり。在留資格あり（外国人スタッフ）だけ。
+ * マイページの一覧・職長画面の月の俯瞰・まとめ承認・1日ずつの承認がすべてこれを使う。
+ * 旧: 承認だけ getForeignWorkersForSite（massign[当月] → assign。さかのぼらない）で数えていて、
+ *   一覧で「全員入力済み」の日が承認では「未入力」で弾かれる食い違いがあった。
  */
-export function siteRosterFromMain(main: MainData, siteId: string, ym: string): { workers: { id: number; name: string }[]; family: string[] } {
-  const ids = new Set(getAssign(main, siteId, ym).workers)
+export function siteRosterFromMain(main: RosterSource, siteId: string, ym: string): { workers: { id: number; name: string }[]; family: string[] } {
+  const ids = new Set(getAssign(main as MainData, siteId, ym).workers)
   return {
     workers: main.workers.filter(w => ids.has(w.id) && w.visa && w.visa !== 'none').map(w => ({ id: w.id, name: w.name })),
     family: workTypeFamilyIds(main.sites as unknown as HierarchySite[], siteId),
   }
+}
+
+/**
+ * 最新の main（30秒キャッシュを使わない）で名簿を作る。承認の書き込み判定など、
+ * 配置を直した直後でも最新で数えたいところで使う。
+ */
+export async function loadSiteRoster(siteId: string, ym: string): Promise<{ workers: { id: number; name: string }[]; family: string[] }> {
+  return siteRosterFromMain(await getMainData({ fresh: true }), siteId, ym)
 }
 
 export interface StaleAssignment {

@@ -47,6 +47,7 @@ interface FinalBlock {
 
 /** 職長承認の一覧（1現場×1か月） */
 function foremanBlock(site: Site, ym: string, days: ForemanDay[], todayIso: string, proxy = false): ForemanBlock | null {
+  // 非稼働日は入力のあった日だけ。対象は入力した人だけなので（evaluateSiteDay）、入力がそろえば承認に出る
   const open = days.filter(d => !d.approved && (d.isWorkDay || d.entered > 0))
   const ready = open.filter(d => d.total > 0 && d.entered === d.total)
   // 今日はまだ入力の途中なので「そろっていない」に出さない（全員そろえば承認には出る）
@@ -101,7 +102,8 @@ export async function GET(request: NextRequest) {
         const proxy = isProxyApprovalSite(site, mforeman, ym, main.workers)
         // 管理者が職長承認するのは代行の現場だけ
         const needForeman = !manager || proxy
-        const days = await siteMonthDays(site.id, ym, { att, ...siteRosterFromMain(main, site.id, ym) })
+        // 承認は現場×月まとめて1回の範囲読み・外国人スタッフ0人の現場はカレンダーも読まない（読み取りを減らす・2026-10-01）
+        const days = await siteMonthDays(site.id, ym, { att, ...siteRosterFromMain(main, site.id, ym), skipCalendarIfNoWorkers: true })
         const fb = needForeman ? foremanBlock(site, ym, days, todayIso, !!manager && proxy) : null
         let final: FinalBlock | null = null
         if (manager) {

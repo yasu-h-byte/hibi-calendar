@@ -19,6 +19,7 @@ import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import type { PeerStatement } from '@/lib/peer-statement'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
+import { latestPeerInvoiceRecord } from '@/lib/peer-invoice-latest'
 import { currentYmJst } from '@/lib/date-utils'
 import { Icon } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Segment, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
@@ -26,6 +27,7 @@ import { PageHeader, TodoCard, Segment, Chip, SidePanel, CloseButton, type ChipT
 /** その月に発行・取り消しされた応援の請求書（app/api/peer-invoice） */
 interface PeerInvoiceSummary {
   id: string; no: string; companyId: string; total: number; status: 'pending' | 'issued' | 'void' | 'rejected' | 'withdrawn'
+  issuedAt?: string; requestedAt?: string; rejectedAt?: string; voidedAt?: string
 }
 
 type InvState = 'issued' | 'pending' | 'returned' | 'none'
@@ -79,7 +81,9 @@ export default function PeerStatementPage() {
     const issued = invoices.find(i => i.companyId === companyId && i.status === 'issued')
     if (issued) return { state: 'issued', issued }
     if (invoices.some(i => i.companyId === companyId && i.status === 'pending')) return { state: 'pending' }
-    if (invoices.some(i => i.companyId === companyId && (i.status === 'rejected' || i.status === 'withdrawn'))) return { state: 'returned' }
+    // 差し戻し・取り下げは「最後の動き」がそうなときだけ（その後に発行→取り消しなら作り直し＝まだ）
+    const latest = latestPeerInvoiceRecord(invoices.filter(i => i.companyId === companyId))
+    if (latest && (latest.status === 'rejected' || latest.status === 'withdrawn')) return { state: 'returned' }
     return { state: 'none' }
   }
   const hrefOf = (companyId: string) => `/peer-invoice?company=${companyId}&ym=${ym}`

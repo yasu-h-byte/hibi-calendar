@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261001_audit_speed',
+    title: 'ダッシュボードを速くしました・細かい不具合をまとめて直しました',
+    content:
+      'ダッシュボードで画面に出していない重い計算をやめ、同じデータの読み直しをなくしました。サーバを東京で動かすようにしたので、ほかの画面も速くなります。'
+      + 'あわせて、マイページの承認（一覧と承認の人数の数え方をそろえる・休みの日の扱い）、原価の請求額を入れてすぐ閉じると消える、請求書の状態の表示、人員マスタで外国人の生年月日・在留資格の変更予定が見えない、などを直しました。',
+    category: 'fix',
+    publishedAt: '2026-10-01T17:20:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'officer', 'owner', 'foreman'],
+  },
+  {
     id: 'rn_20261001_mobile_ux',
     title: 'スタッフのスマホ画面の表記をそろえました',
     content:

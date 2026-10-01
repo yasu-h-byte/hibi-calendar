@@ -15,6 +15,7 @@ import Link from 'next/link'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Chip } from '@/components/ui/PageParts'
 import type { Evaluation } from '@/types'
+import { can } from '@/lib/permissions'
 
 // 賃金分析は個人の賃金を一覧するため代表のみ（/wage-analysis 側のガードと同一基準）
 const ANALYSIS_OWNER_ID = 0
@@ -57,12 +58,16 @@ function HubCard({ title, subtitle, links }: { title: string; subtitle: string; 
 interface EvalData {
   evaluations: Evaluation[]
   evaluators: { id: number; name: string }[]
+  /** 評価の対象（在籍中の外国人。API の workers ＝ /evaluation の一覧と同じ人たち） */
+  workerIds: number[]
 }
 
 export default function CompensationHubPage() {
   const [workerId, setWorkerId] = useState<number | null>(null)
   const [evalData, setEvalData] = useState<EvalData | null>(null)
   const [unset, setUnset] = useState<{ id: number; name: string }[] | null>(null)
+  // 評価の承認（/evaluation の「承認」タブ）を開ける人だけに「承認へ」を出す
+  const [canDecide, setCanDecide] = useState(false)
 
   useEffect(() => {
     let pw = ''
@@ -73,12 +78,16 @@ export default function CompensationHubPage() {
       // workerId 0（代表）は falsy — 真偽判定せず型で見る
       if (typeof parsed?.user?.workerId === 'number') wid = parsed.user.workerId
       pw = parsed?.password || ''
+      setCanDecide(can(parsed?.user, 'wage.decide'))
     } catch { /* 未ログイン扱い */ }
     setWorkerId(wid)
     if (!pw) return
     const h = { headers: { 'x-admin-password': pw } }
     fetch('/api/evaluation', h).then(r => r.ok ? r.json() : null).then(j => {
-      if (j) setEvalData({ evaluations: j.evaluations || [], evaluators: j.evaluators || [] })
+      if (j) setEvalData({
+        evaluations: j.evaluations || [], evaluators: j.evaluators || [],
+        workerIds: ((j.workers || []) as { id: number }[]).map(w => Number(w.id)),
+      })
     }).catch(() => {})
     // 等級・号数が未設定の日本人社員（/wage のお知らせと同じ判定）。賃金制度を開ける人にだけ出す
     if (wid !== null && WAGE_VIEWERS.includes(wid)) {
@@ -97,8 +106,13 @@ export default function CompensationHubPage() {
   const canWage = workerId !== null && WAGE_VIEWERS.includes(workerId)
   const evals = evalData?.evaluations || []
   const nameOf = (id: number) => evalData?.evaluators.find(e => e.id === id)?.name || `ID ${id}`
-  const collecting = evals.filter(e => e.status === 'collecting')
-  const reviewing = evals.filter(e => e.status === 'reviewing')
+  // /evaluation の一覧と同じ数え方: 在籍中の対象者1人につき、進行中（承認前）の最新の評価1件
+  const activeEvals = (evalData?.workerIds || []).map(id => evals
+    .filter(e => e.workerId === id && e.status !== 'approved')
+    .sort((a, b) => b.evaluationDate.localeCompare(a.evaluationDate))[0])
+    .filter((e): e is Evaluation => !!e)
+  const collecting = activeEvals.filter(e => e.status !== 'reviewing')
+  const reviewing = activeEvals.filter(e => e.status === 'reviewing')
   const missingOf = (e: Evaluation) => {
     const done = new Set((e.reviews || []).map(r => r.evaluatorId))
     return (e.evaluatorIds || []).filter(id => !done.has(id)).map(nameOf)
@@ -145,8 +159,8 @@ export default function CompensationHubPage() {
         <TodoCard icon="check" tone={reviewing.length > 0 ? 'info' : 'ok'} title="承認待ち"
           big={!evalData ? '…' : reviewing.length > 0 ? `${reviewing.length}名` : 'ありません'}
           sub={reviewing.length > 0 ? `${reviewing.slice(0, 3).map(e => e.workerName).join('・')}。入力がそろいました。承認すると時給が決まります` : '承認を待っている評価はありません'}
-          action={reviewing.length > 0 ? '承認へ' : undefined}
-          onClick={reviewing.length > 0 ? () => { window.location.href = '/evaluation?tab=approve' } : undefined} />
+          action={reviewing.length > 0 ? (canDecide ? '承認へ' : '評価管理へ') : undefined}
+          onClick={reviewing.length > 0 ? () => { window.location.href = canDecide ? '/evaluation?tab=approve' : '/evaluation' } : undefined} />
         {canWage && (
           <TodoCard icon="alert" tone={unset && unset.length > 0 ? 'warn' : 'ok'} title="等級・号数が決まっていない"
             big={!unset ? '…' : unset.length > 0 ? `${unset.length}名` : 'ありません'}

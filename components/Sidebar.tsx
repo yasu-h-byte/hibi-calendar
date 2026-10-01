@@ -23,12 +23,32 @@ function TextSizeIcon() {
   )
 }
 
+export type SidebarBadges = { monthly: number; calendar: number; leave: number }
+
+// /api/sidebar-badges を同じ画面の中で1回にまとめる（2026-10-01 高速化）。
+//   サイドバーとダッシュボードが同時に同じ API を呼び、当月の出面（300KB）と給与計算を2回ずつ走らせていた。
+//   進行中・取得直後（数秒以内）の結果を共有する。中身は同じ API の同じ応答なので表示は変わらない
+const BADGES_SHARE_MS = 5_000
+let _badgesShared: { password: string; at: number; promise: Promise<SidebarBadges | null> } | null = null
+export function fetchSidebarBadges(password: string): Promise<SidebarBadges | null> {
+  const now = Date.now()
+  if (_badgesShared && _badgesShared.password === password && now - _badgesShared.at < BADGES_SHARE_MS) {
+    return _badgesShared.promise
+  }
+  const promise = fetch('/api/sidebar-badges', { headers: { 'x-admin-password': password } })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => (data?.badges as SidebarBadges | undefined) ?? null)
+    .catch(() => null)
+  _badgesShared = { password, at: now, promise }
+  return promise
+}
+
 export default function Sidebar({ user, open, onClose }: { user: AuthUser; open: boolean; onClose: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const [fontSize, setFontSizeState] = useState<FontSize>('normal')
   // 2026-06-XX 追加 (UI #2): メニュー項目の未対応件数バッジ
-  const [badges, setBadges] = useState<{ monthly: number; calendar: number; leave: number } | null>(null)
+  const [badges, setBadges] = useState<SidebarBadges | null>(null)
   // メニュー検索（2026-09-26）
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
@@ -52,12 +72,8 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
       const { password } = JSON.parse(auth)
       // 2026-06-XX 追加 (UI #2): バッジ件数を非同期取得
       //   重い処理を含むので失敗しても他は表示されるよう catch で握り潰す
-      fetch('/api/sidebar-badges', { headers: { 'x-admin-password': password } })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.badges) setBadges(data.badges)
-        })
-        .catch(() => {})
+      //   ダッシュボードも同じ件数を使うので fetchSidebarBadges で1回にまとめる
+      fetchSidebarBadges(password).then(b => { if (b) setBadges(b) })
     }
   }, [])
 

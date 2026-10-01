@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
 
@@ -244,15 +244,24 @@ export function SidePanel({ label, onClose, children, width = 'max-w-[640px]' }:
   width?: 'max-w-[640px]' | 'max-w-[760px]' | 'max-w-[520px]'
 }) {
   const [mounted, setMounted] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    // Escape で閉じる前に、パネル内で入力中の欄から focus を外す。
+    // 「離れたら保存」（onBlur）の欄は、focus したまま閉じる（＝消える）と blur が届かず
+    // 入れた値が保存されずに消えるため（2026-10-01 原価の請求額）。blur() は同期で onBlur を呼ぶ
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const el = document.activeElement
+      if (el instanceof HTMLElement && panelRef.current?.contains(el)) el.blur()
+      onClose()
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   if (!mounted) return null
   return createPortal(
-    <div className="fixed inset-0 z-[60] print:hidden" role="dialog" aria-modal="true" aria-label={label}>
+    <div ref={panelRef} className="fixed inset-0 z-[60] print:hidden" role="dialog" aria-modal="true" aria-label={label}>
       <button className="absolute inset-0 bg-black/30 animate-fadeIn" onClick={onClose} aria-label="閉じる" />
       <aside className={`absolute right-0 top-0 h-full w-full ${width} bg-white dark:bg-gray-800 border-l border-hibi-line dark:border-gray-700 shadow-xl overflow-y-auto animate-slideInRight`}>
         {children}
