@@ -19,6 +19,7 @@ import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
 import { todayJstIso } from '@/lib/date-utils'
+import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
 const VISA_LABELS: Record<string, string> = {
@@ -96,6 +97,13 @@ function visaExpiryStatus(expiry: string): { label: string; cls: string; priorit
   return null
 }
 
+type ListFilter = 'all' | 'visa' | 'url' | 'birth' | 'sched'
+const FILTER_LABEL: Record<Exclude<ListFilter, 'all'>, string> = {
+  visa: '在留期限が近い人', url: 'スマホのURLがまだの人', birth: '生年月日が入っていない人', sched: '単価の改定予定がある人',
+}
+const ROW_COLS = 'lg:grid-cols-[44px_minmax(0,1fr)_220px_140px_130px_120px_100px]'
+const PANEL_BTN = 'h-9 px-3.5 rounded-[9px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 text-[13px] font-bold hover:bg-hibi-bg dark:hover:bg-gray-700 disabled:opacity-50'
+
 export default function WorkersPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -103,7 +111,7 @@ export default function WorkersPage() {
   const [password, setPassword] = useState('')
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('all')
+  const [tab, setTab] = useState<'all' | 'hibi' | 'hfu' | 'retired'>('all')
   // メインタブ: 'list' (人員一覧) / 'raise-history' (昇給履歴)
   const [mainTab, setMainTab] = useState<'list' | 'raise-history'>('list')
   const [showModal, setShowModal] = useState(false)
@@ -121,8 +129,8 @@ export default function WorkersPage() {
   // 編集モーダルのタブ（2026-08-31）。項目が30近くまで増えて縦スクロールが長くなったため、
   // 4つに分けて1画面に収める。危険な項目（固定月給・旧ルール）を普段の編集から隔離する狙いもある。
   const [modalTab, setModalTab] = useState<'basic' | 'pay' | 'allowance' | 'other'>('basic')
-  const [sortKey, setSortKey] = useState<string>('id')
-  const [sortAsc, setSortAsc] = useState(true)
+  const [query, setQuery] = useState('')
+  const [listFilter, setListFilter] = useState<ListFilter>('all')
   const [transferring, setTransferring] = useState<number | null>(null)
 
   useEffect(() => {
@@ -188,6 +196,8 @@ export default function WorkersPage() {
         headers: headers(),
         body: JSON.stringify({ action: 'update', id: w.id, org: newOrg }),
       })
+      // 右のパネルで開いている人なら、フォームの所属も合わせる（古い所属のまま保存し直さないように）
+      if (editId === w.id) setForm(f => ({ ...f, org: newOrg }))
       fetchWorkers()
     } finally {
       setTransferring(null)
@@ -319,6 +329,7 @@ export default function WorkersPage() {
       alert(err.error || '削除に失敗しました')
       return
     }
+    setShowModal(false)
     fetchWorkers()
   }
 
@@ -349,24 +360,42 @@ export default function WorkersPage() {
     return !w.retired // 「全員」タブでも退職者は非表示
   })
 
-  const sorted = [...filtered].sort((a, b) => {
-    // 退職者は常に末尾（「退職者」タブ以外）
-    if (tab !== 'retired') {
-      const aR = a.retired ? 1 : 0
-      const bR = b.retired ? 1 : 0
-      if (aR !== bR) return aR - bR
-    }
-    let cmp = 0
-    if (sortKey === 'id') cmp = a.id - b.id
-    else if (sortKey === 'name') cmp = a.name.localeCompare(b.name)
-    else if (sortKey === 'rate') cmp = (a.rate || 0) - (b.rate || 0)
-    else if (sortKey === 'jobType') cmp = (a.jobType || '').localeCompare(b.jobType || '')
-    return sortAsc ? cmp : -cmp
-  })
-
-  const toggleSort = (key: string) => {
-    if (sortKey === key) setSortAsc(!sortAsc)
-    else { setSortKey(key); setSortAsc(true) }
+  // 今やることの絞り込み（2026-10-01）
+  const today = todayJstIso()
+  const schedOf = (w: Worker): { from: string } | null => {
+    const gaikoku = isGaikoku(w.visaType || '')
+    if (gaikoku && w.hourlyRateFrom && w.prevHourlyRate != null && w.hourlyRateFrom > today) return { from: w.hourlyRateFrom }
+    if (!gaikoku && w.rateFrom && w.prevRate != null && w.rateFrom > today) return { from: w.rateFrom }
+    return null
+  }
+  const visaSoon = activeWorkers
+    .filter(w => w.visaExpiry && isGaikoku(w.visaType || ''))
+    .map(w => ({ ...w, status: visaExpiryStatus(w.visaExpiry!) }))
+    .filter((w): w is typeof w & { status: NonNullable<typeof w.status> } => !!w.status && w.status.priority <= 2)
+    .sort((a, b) => a.status.priority - b.status.priority || (a.visaExpiry || '').localeCompare(b.visaExpiry || ''))
+  const noUrl = activeWorkers.filter(w => !w.token)
+  const noBirth = activeWorkers.filter(w => needsBirthDate(w) && !w.birthDate)
+  const scheduled = activeWorkers.filter(w => schedOf(w)).sort((a, b) => schedOf(a)!.from.localeCompare(schedOf(b)!.from))
+  const names = (arr: Worker[]) => arr.slice(0, 3).map(w => w.name).join('・') + (arr.length > 3 ? ` ほか${arr.length - 3}名` : '')
+  const toggleFilter = (f: ListFilter) => { setTab('all'); setListFilter(listFilter === f ? 'all' : f) }
+  const filterIds: Record<Exclude<ListFilter, 'all'>, Set<number>> = {
+    visa: new Set(visaSoon.map(w => w.id)), url: new Set(noUrl.map(w => w.id)),
+    birth: new Set(noBirth.map(w => w.id)), sched: new Set(scheduled.map(w => w.id)),
+  }
+  const q = query.trim().replace(/[\s　]/g, '').toLowerCase()
+  const sorted = filtered
+    .filter(w => listFilter === 'all' || filterIds[listFilter].has(w.id))
+    .filter(w => !q || w.name.replace(/[\s　]/g, '').toLowerCase().includes(q) || String(w.id) === q)
+    .sort((a, b) => a.id - b.id)
+  const editWorker = editId !== null ? workers.find(w => w.id === editId) || null : null
+  const startRetire = () => {
+    setModalTab('basic')
+    // 基本タブの「退職日」へ移って入力できるようにする
+    setTimeout(() => {
+      const el = document.getElementById('worker-retired') as HTMLInputElement | null
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      el?.focus()
+    }, 50)
   }
 
   const hibiCount = activeWorkers.filter(w => w.company !== 'HFU').length
@@ -384,54 +413,22 @@ export default function WorkersPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">人員マスタ</h1>
-          {mainTab === 'list' && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              在籍: {activeWorkers.length}名（日比 {hibiCount} / HFU {hfuCount}）{retiredWorkers.length > 0 && ` / 退職: ${retiredWorkers.length}名`}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <a href="/leave" className="text-hibi-navy dark:text-blue-400 text-sm underline hover:text-hibi-light transition">
-            休暇管理
-          </a>
-          {mainTab === 'list' && (
-            <button onClick={openAdd} className="bg-hibi-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-hibi-light transition">
-              + 新規追加
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Main Tabs: 一覧 / 昇給履歴 */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700">
-        <button
-          onClick={() => setMainTab('list')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            mainTab === 'list'
-              ? 'border-hibi-navy text-hibi-navy dark:border-blue-400 dark:text-blue-400'
-              : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-          }`}
-        >
-          人員一覧
-        </button>
-        {isAdminOrApprover && (
-          <button
-            onClick={() => setMainTab('raise-history')}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              mainTab === 'raise-history'
-                ? 'border-hibi-navy text-hibi-navy dark:border-blue-400 dark:text-blue-400'
-                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}
-          >
-            💰 昇給履歴
+    <div className="max-w-7xl mx-auto space-y-5">
+      <PageHeader
+        group="人・書類"
+        title="人員マスタ"
+        sub={`在籍 ${activeWorkers.length}名（日比建設 ${hibiCount}・HFU ${hfuCount}）${retiredWorkers.length > 0 ? ` ／ 退職 ${retiredWorkers.length}名` : ''}`}
+        actions={mainTab === 'list' ? (
+          <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light transition inline-flex items-center gap-1.5">
+            <span className="text-lg leading-none">＋</span>人を追加
           </button>
-        )}
-      </div>
+        ) : undefined}
+      />
+
+      {isAdminOrApprover && (
+        <UnderlineTabs label="人員マスタのタブ" active={mainTab} onChange={setMainTab}
+          tabs={[{ key: 'list', label: '人員一覧' }, { key: 'raise-history', label: '昇給の記録' }]} />
+      )}
 
       {mainTab === 'raise-history' && (
         <RaiseHistoryTab authUser={authUser} />
@@ -439,330 +436,166 @@ export default function WorkersPage() {
 
       {mainTab === 'list' && (
         <>
-      {/* Tabs */}
-      <div className="flex gap-2">
-        {[
-          { key: 'all', label: '全員' },
-          { key: 'hibi', label: '日比建設' },
-          { key: 'hfu', label: 'HFU' },
-          ...(retiredWorkers.length > 0 ? [{ key: 'retired', label: `退職者 (${retiredWorkers.length})` }] : []),
-        ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-              tab === t.key ? 'bg-hibi-navy text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+          {/* ① 今やること（2026-10-01 改修。旧: 在留期限アラート・生年月日未入力の帯） */}
+          <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            <TodoCard icon="alert" tone={visaSoon.length > 0 ? 'urgent' : 'ok'} title="在留期限が近い"
+              big={visaSoon.length > 0 ? `${visaSoon.length}名` : 'ありません'}
+              sub={visaSoon.length > 0 ? visaSoon.slice(0, 3).map(w => `${w.name}（${w.status.label}）`).join('・') + (visaSoon.length > 3 ? ` ほか${visaSoon.length - 3}名` : '') : '90日以内に期限が来る人はいません'}
+              action={visaSoon.length > 0 ? '見る' : undefined} active={listFilter === 'visa'}
+              onClick={visaSoon.length > 0 ? () => toggleFilter('visa') : undefined} />
+            <TodoCard icon="copy" tone={noUrl.length > 0 ? 'warn' : 'ok'} title="スマホのURLがまだ"
+              big={noUrl.length > 0 ? `${noUrl.length}名` : 'ありません'}
+              sub={noUrl.length > 0 ? `${names(noUrl)}。発行すると、マイページ・出面入力のURLを配れます` : '在籍している人は全員発行済みです'}
+              action={noUrl.length > 0 ? '見る' : undefined} active={listFilter === 'url'}
+              onClick={noUrl.length > 0 ? () => toggleFilter('url') : undefined} />
+            <TodoCard icon="user" tone={noBirth.length > 0 ? 'warn' : 'ok'} title="生年月日が入っていない"
+              big={noBirth.length > 0 ? `${noBirth.length}名` : 'ありません'}
+              sub={noBirth.length > 0 ? `${names(noBirth)}。号俸制の年齢調整（${jpDate(revisionBaseDate())} 基準）に必要です` : '号俸制の対象者は全員入っています'}
+              action={noBirth.length > 0 ? '見る' : undefined} active={listFilter === 'birth'}
+              onClick={noBirth.length > 0 ? () => toggleFilter('birth') : undefined} />
+            <TodoCard icon="clock" tone={scheduled.length > 0 ? 'info' : 'ok'} title="単価の改定予定"
+              big={scheduled.length > 0 ? `${scheduled.length}名` : 'ありません'}
+              sub={scheduled.length > 0 ? scheduled.slice(0, 3).map(w => `${w.name} ${schedOf(w)!.from.slice(5).replace('-', '/')}〜`).join('・') + '。その日から自動で切り替わります' : 'これから単価が変わる人はいません'}
+              action={scheduled.length > 0 ? '見る' : undefined} active={listFilter === 'sched'}
+              onClick={scheduled.length > 0 ? () => toggleFilter('sched') : undefined} />
+          </section>
 
-      {/* 生年月日の未入力（号俸制の年齢調整に必要）。全員入れば消える。 */}
-      {(() => {
-        const missing = activeWorkers.filter(w => needsBirthDate(w) && !w.birthDate)
-        if (missing.length === 0) return null
-        return (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-amber-500">
-            <h3 className="text-sm font-bold text-amber-700 dark:text-amber-400 mb-1">
-              生年月日が未入力 {missing.length}名
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 leading-relaxed">
-              号俸制の年齢調整（{jpDate(revisionBaseDate())} 基準）に必要です。
-              未入力のままだと改定額を確定できません。名前を押すと編集画面が開きます。
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {missing.map(w => (
-                <button key={w.id} onClick={() => openEdit(w)}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800 dark:hover:bg-amber-900/50 transition">
-                  {w.name}
+          {/* ② 一覧 */}
+          <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
+              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">{tab === 'retired' ? '退職した人' : '在籍している人'}</h2>
+              <Segment value={tab} onChange={v => { setTab(v); setListFilter('all') }} items={[
+                ['all', `在籍 ${activeWorkers.length}`], ['hibi', `日比建設 ${hibiCount}`], ['hfu', `HFU ${hfuCount}`],
+                ...(retiredWorkers.length > 0 ? [['retired', `退職 ${retiredWorkers.length}`] as const] : []),
+              ]} />
+              {listFilter !== 'all' && (
+                <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+                  {FILTER_LABEL[listFilter]}だけ表示中 ×
                 </button>
-              ))}
+              )}
+              <SearchBox value={query} onChange={setQuery} placeholder="名前・番号で探す" />
             </div>
-          </div>
-        )
-      })()}
-
-      {/* Visa expiry alerts */}
-      {(() => {
-        const alerts = activeWorkers
-          .filter(w => w.visaExpiry && isGaikoku(w.visaType || ''))
-          .map(w => ({ ...w, status: visaExpiryStatus(w.visaExpiry!) }))
-          .filter(w => w.status)
-          .sort((a, b) => a.status!.priority - b.status!.priority)
-        if (alerts.length === 0) return null
-        return (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-l-4 border-red-500">
-            <h3 className="text-sm font-bold text-red-700 dark:text-red-400 mb-2">在留期限アラート</h3>
-            <div className="flex flex-wrap gap-2">
-              {alerts.map(w => (
-                <button key={w.id} onClick={() => openEdit(w)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition text-sm">
-                  <span className="font-medium">{w.name}</span>
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${w.status!.cls}`}>
-                    {w.status!.label}
-                  </span>
-                  <span className="text-xs text-gray-400">{w.visaExpiry}</span>
-                </button>
-              ))}
+            <div className={`hidden lg:grid ${ROW_COLS} gap-3 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300`}>
+              <span>番号</span><span>名前</span><span>所属・職種</span><span>在留期限／年齢</span>
+              <span className="text-right">単価</span><span className="text-right">月給の目安</span><span>スマホURL</span>
             </div>
-          </div>
-        )
-      })()}
-
-      {/* Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 dark:bg-gray-700 text-left text-gray-600 dark:text-gray-300">
-              <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('id')}>
-                ID {sortKey === 'id' && (sortAsc ? '↑' : '↓')}
-              </th>
-              <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('name')}>
-                名前 {sortKey === 'name' && (sortAsc ? '↑' : '↓')}
-              </th>
-              <th className="px-3 py-3">所属</th>
-              <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('jobType')}>
-                職種 {sortKey === 'jobType' && (sortAsc ? '↑' : '↓')}
-              </th>
-              <th className="px-3 py-3">在留・生年月日</th>
-              <th className="px-3 py-3 cursor-pointer hover:text-hibi-navy" onClick={() => toggleSort('rate')}>
-                単価 {sortKey === 'rate' && (sortAsc ? '↑' : '↓')}
-              </th>
-              <th className="px-3 py-3">月給目安</th>
-              <th className="px-3 py-3 whitespace-nowrap">📱 スマホURL</th>
-              <th className="px-3 py-3">操作</th>
-            </tr>
-          </thead>
-          <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">読み込み中...</td></tr>
+              <div className="px-5 py-8 text-center text-sm text-gray-400">読み込み中...</div>
             ) : sorted.length === 0 ? (
-              <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">データがありません</td></tr>
+              <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">当てはまる人はいません</div>
             ) : sorted.map(w => {
               const jb = jobBadge(w.jobType)
+              const gaikoku = isGaikoku(w.visaType || '')
+              const vs = gaikoku && w.visaExpiry ? visaExpiryStatus(w.visaExpiry) : null
+              const memo = (w as unknown as { memo?: string }).memo
               return (
-                <tr key={w.id} className={`border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 even:bg-gray-50/50 dark:even:bg-gray-700/30 ${w.retired ? 'opacity-45' : ''}`}>
-                  <td className="px-3 py-2.5 text-gray-400">{w.id}</td>
-                  <td className="px-3 py-2.5 font-medium">
-                    <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={48} className="mr-2" />
-                    {w.name}
-                    {w.dispatchTo && (
-                      <span
-                        className="ml-2 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold"
-                        title={`出向先: ${w.dispatchTo}${w.dispatchFrom ? ` / 開始: ${w.dispatchFrom}` : ''}`}
-                      >
-                        🔁 出向中{w.dispatchFrom && ` (${w.dispatchFrom}〜)`}
-                      </span>
-                    )}
-                    {w.retired && <span className="ml-2 text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">{w.retired && w.retired !== 'true' && w.retired.length >= 7 ? `退職 ${w.retired.slice(0, 7)}` : '退職'}</span>}
-                    {(w as unknown as { memo?: string }).memo && (
-                      <span className="ml-1.5 relative group cursor-default" title={(w as unknown as { memo?: string }).memo}>
-                        <span className="text-xs text-orange-400">&#128221;</span>
-                        <span className="absolute left-0 top-full mt-1 z-50 hidden group-hover:block bg-gray-800 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-pre-wrap max-w-xs">
-                          {(w as unknown as { memo?: string }).memo}
-                        </span>
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      w.company === 'HFU' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {w.company === 'HFU' ? 'HFU' : '日比'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${jb.cls}`}>
-                      {jb.label}
-                    </span>
-                  </td>
-                  {/* 外国人は在留資格＋在留期限、日本人は生年月日＋改定基準日の年齢。
-                      日本人にとって在留欄は常に空だったため、その枠を生年月日に充てている。 */}
-                  <td className="px-3 py-2.5">
-                    {isGaikoku(w.visaType || '') ? (
-                      <div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          isJisshu(w.visaType || '') ? 'bg-orange-100 text-orange-700' : 'bg-teal-100 text-teal-700'
-                        }`}>
-                          {VISA_LABELS[w.visaType || ''] || w.visaType}
-                        </span>
-                        {w.visaExpiry && (() => {
-                          const s = visaExpiryStatus(w.visaExpiry!)
-                          return (
-                            <div className="mt-1">
-                              {s
-                                ? <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-bold ${s.cls}`}>{s.label}</span>
-                                : <span className="text-[10px] text-gray-400 tabular-nums">{w.visaExpiry}</span>}
-                            </div>
-                          )
-                        })()}
-                        {/* 2026-09-28: 書類庫（在留カード・契約書）への入口。見られる人にだけ出す */}
-                        {can(authUser, 'staffDocs.view') && (
-                          <a href={`/staff-docs?worker=${w.id}`} className="mt-1 inline-block text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 hover:bg-hibi-navy hover:text-white transition">
-                            🗂 書類
-                          </a>
-                        )}
-                        {/* 2026-09-14: 日付指定の変更予定（在留資格の切替など） */}
-                        {(w.scheduledChanges || []).filter(c => c.field === 'visa').map(c => (
-                          <div key={c.from} className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
-                            {c.from.slice(5).replace('-', '/')}〜 {VISA_LABELS[c.value] || c.value}
-                          </div>
-                        ))}
-                        {/* 2026-09-13: 外国人も生年月日と年齢（今日時点）を表示。未入力なら入力へ誘導 */}
-                        {w.birthDate ? (
-                          <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
-                            {w.birthDate}（{ageOn(w.birthDate, currentDateDash())}歳）
-                          </div>
-                        ) : !w.retired ? (
-                          <button
-                            type="button"
-                            onClick={() => openEdit(w)}
-                            className="mt-1 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 hover:bg-amber-100 hover:text-amber-800 dark:bg-gray-700 dark:text-gray-400 transition"
-                          >
-                            生年月日 未入力
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : w.birthDate ? (
-                      <div>
-                        <div className="text-xs text-gray-600 dark:text-gray-300 tabular-nums">{w.birthDate}</div>
-                        <div className="text-[10px] text-gray-400">{ageOn(w.birthDate, revisionBaseDate())}歳</div>
-                      </div>
-                    ) : needsBirthDate(w) ? (
-                      <button
-                        type="button"
-                        onClick={() => openEdit(w)}
-                        className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60 transition"
-                      >
-                        生年月日 未入力
-                      </button>
-                    ) : '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                    {w.visaType && isGaikoku(w.visaType) ? (
-                      w.hourlyRate ? (
-                        <div>
-                          {w.hourlyRateFrom && w.prevHourlyRate != null && w.hourlyRateFrom > todayJstIso() ? (
-                            <>
-                              <div className="font-medium">{fmtYen(w.prevHourlyRate)}<span className="text-[10px] text-gray-400 font-normal">/h</span></div>
-                              <div className="text-[10px] text-amber-600">{w.hourlyRateFrom.slice(5).replace('-', '/')}〜 {fmtYen(w.hourlyRate)}/h</div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="font-medium">{fmtYen(w.hourlyRate)}<span className="text-[10px] text-gray-400 font-normal">/h</span></div>
-                              <div className="text-[10px] text-gray-400">日額 {fmtYen(w.hourlyRate * 7)}</div>
-                            </>
-                          )}
-                        </div>
-                      ) : '—'
-                    ) : (
-                      w.rate ? (
-                        <div>
-                          {w.rateFrom && w.prevRate != null && w.rateFrom > todayJstIso() ? (
-                            /* 年次改定を確定済みだが適用開始日前: 現在の日額を主に、新額を予告として出す */
-                            <div className="font-medium">
-                              {fmtYen(w.prevRate)}<span className="text-[10px] text-gray-400 font-normal">/日</span>
-                              <div className="text-[10px] text-amber-600 font-normal">{w.rateFrom.slice(5).replace('-', '/')}〜 {fmtYen(w.rate)}</div>
-                            </div>
-                          ) : (
-                            <div className="font-medium">{fmtYen(w.rate)}<span className="text-[10px] text-gray-400 font-normal">/日</span></div>
-                          )}
-                          <div className="text-[10px] text-gray-400">OT ×{w.otMul || 1.25}</div>
-                        </div>
-                      ) : '—'
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                    {w.salary && w.salary > 0 ? (
-                      // 固定月給が設定されている人（日本人・外国人問わず）は実際の月給を表示
-                      <div>
-                        <div className="font-medium">{fmtYen(w.salary)}</div>
-                        <div className="text-[10px] text-gray-400">固定月給</div>
-                      </div>
-                    ) : w.visaType && isGaikoku(w.visaType) && w.hourlyRate ? (
-                      // 外国人・時給者は時給×168hの月給目安
-                      fmtYen(w.hourlyRate * 168)
-                    ) : '—'}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {w.token ? (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => setQrWorker(w)}
-                          title="QRコードとURLを表示"
-                          className="text-xs font-bold px-2.5 py-1 rounded-md border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition whitespace-nowrap"
-                        >
-                          QR・URL
-                        </button>
-                        <button
-                          onClick={() => { navigator.clipboard.writeText(mobileUrl(w)); alert(`${w.name} さんのURLをコピーしました\n\n${mobileUrl(w)}`) }}
-                          title="URLをコピー"
-                          className="text-xs text-gray-500 hover:text-hibi-navy whitespace-nowrap"
-                        >
-                          コピー
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleGenToken(w.id)}
-                        className="text-xs font-bold px-3 py-1 rounded-md bg-hibi-navy text-white hover:opacity-90 whitespace-nowrap"
-                      >
-                        発行する
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex gap-1 items-center">
-                      <button onClick={() => openEdit(w)} className="text-hibi-navy text-xs underline hover:text-hibi-light">
-                        編集
-                      </button>
-                      {isGaikoku(w.visaType) && (
-                        <a
-                          href={`/workers?tab=raise-history&worker=${w.id}`}
-                          className="text-emerald-600 text-xs hover:text-emerald-800 ml-1"
-                          title="昇給履歴を表示"
-                        >
-                          💰 履歴
-                        </a>
-                      )}
-                      {!w.retired && (
-                        <button
-                          onClick={() => handleTransfer(w)}
-                          disabled={transferring === w.id}
-                          className="text-amber-600 text-xs hover:text-amber-800 ml-1 disabled:opacity-50"
-                          title={`${w.company === 'HFU' ? '日比建設' : 'HFU'} に転籍`}
-                        >
-                          ⇄ 転籍
-                        </button>
-                      )}
-                      {!w.retired && (
-                        <button onClick={() => handleDelete(w.id, w.name)} className="text-red-400 text-xs hover:text-red-600 ml-2">
-                          削除
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                <div key={w.id} role="button" tabIndex={0}
+                  onClick={() => openEdit(w)}
+                  onKeyDown={e => { if (e.key === 'Enter') openEdit(w) }}
+                  className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${ROW_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums ${w.retired ? 'opacity-60' : ''}`}>
+                  <span className="hidden lg:block text-sm text-hibi-sub dark:text-gray-400">{w.id}</span>
+                  <span className="col-span-2 lg:col-span-1 flex items-center gap-2.5 min-w-0">
+                    <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={40} />
+                    <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</span>
+                    <span className="lg:hidden text-xs text-hibi-sub">{w.id}</span>
+                    {w.dispatchTo && <Chip tone="gray" title={`出向先: ${w.dispatchTo}${w.dispatchFrom ? ` / 開始: ${w.dispatchFrom}` : ''}`}>出向中</Chip>}
+                    {w.retired && <Chip tone="gray">{w.retired !== 'true' && w.retired.length >= 7 ? `退職 ${w.retired.slice(0, 7)}` : '退職'}</Chip>}
+                    {memo && <span title={memo} className="text-xs text-hibi-sub dark:text-gray-400 border border-hibi-line dark:border-gray-600 rounded px-1">メモ</span>}
+                  </span>
+                  <span className="flex flex-wrap gap-1.5">
+                    <Chip tone={w.company === 'HFU' ? 'cyan' : 'blue'}>{w.company === 'HFU' ? 'HFU' : '日比建設'}</Chip>
+                    <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${jb.cls}`}>{jb.label}</span>
+                    {gaikoku && <Chip tone="gray">{VISA_LABELS[w.visaType || ''] || w.visaType}</Chip>}
+                  </span>
+                  <span className="text-sm">
+                    {vs ? <Chip tone={vs.priority <= 1 ? 'red' : vs.priority === 2 ? 'amber' : 'gray'}>{vs.priority === 0 ? '在留期限切れ' : `在留 ${vs.label}`}</Chip>
+                      : gaikoku && w.visaExpiry ? <span className="text-hibi-sub dark:text-gray-400">在留 {w.visaExpiry}</span>
+                      : w.birthDate ? <span>{ageOn(w.birthDate, gaikoku ? currentDateDash() : revisionBaseDate())}歳</span>
+                      : needsBirthDate(w) || (gaikoku && !w.retired) ? <Chip tone="amber">生年月日まだ</Chip>
+                      : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                  </span>
+                  <span className="lg:text-right text-sm">
+                    {(() => {
+                      const sc = schedOf(w)
+                      if (gaikoku) {
+                        if (!w.hourlyRate) return <span className="text-gray-300 dark:text-gray-600">—</span>
+                        return <>
+                          <span className="font-bold text-[15px]">{fmtYen(sc ? (w.prevHourlyRate ?? w.hourlyRate) : w.hourlyRate)}</span><span className="text-xs text-hibi-sub">/時</span>
+                          {sc && <div className="text-[11px] text-amber-700 dark:text-amber-400">{sc.from.slice(5).replace('-', '/')}〜 {fmtYen(w.hourlyRate)}</div>}
+                        </>
+                      }
+                      if (!w.rate) return <span className="text-gray-300 dark:text-gray-600">—</span>
+                      return <>
+                        <span className="font-bold text-[15px]">{fmtYen(sc ? (w.prevRate ?? w.rate) : w.rate)}</span><span className="text-xs text-hibi-sub">/日</span>
+                        {sc && <div className="text-[11px] text-amber-700 dark:text-amber-400">{sc.from.slice(5).replace('-', '/')}〜 {fmtYen(w.rate)}</div>}
+                      </>
+                    })()}
+                  </span>
+                  <span className="lg:text-right text-sm">
+                    {w.salary && w.salary > 0 ? <>{fmtYen(w.salary)}<div className="text-[11px] text-hibi-sub">固定月給</div></>
+                      : gaikoku && w.hourlyRate ? fmtYen(w.hourlyRate * 168)
+                      : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                  </span>
+                  <span>{w.retired ? null : w.token ? <Chip tone="green">配布できる</Chip> : <Chip tone="red">まだ</Chip>}</span>
+                </div>
               )
             })}
-          </tbody>
-        </table>
-      </div>
+          </section>
         </>
       )}
 
-      {/* Add/Edit Modal */}
+      {/* 一人の内容（右から開く・2026-10-01 改修。旧: 中央のモーダル） */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto animate-modalIn" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-3">
-              {editId !== null ? `社員編集 — ${form.name || ''}` : '社員追加'}
-            </h3>
+        <SidePanel label={editId !== null ? `${form.name} の内容` : '人を追加'} onClose={() => setShowModal(false)} width="max-w-[760px]">
+          <div className="flex flex-col min-h-full">
+            <div className="px-6 py-5 border-b border-hibi-line dark:border-gray-700 flex items-center gap-4">
+              {editWorker && <WorkerAvatar name={editWorker.name} src={photos[String(editWorker.id)]} size={56} />}
+              <div className="flex-1 min-w-0">
+                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{editId !== null ? (form.name || '（名前なし）') : '人を追加'}</h2>
+                {editWorker && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+                    <span className="tabular-nums">{editWorker.id}</span>
+                    <Chip tone={editWorker.company === 'HFU' ? 'cyan' : 'blue'}>{editWorker.company === 'HFU' ? 'HFU' : '日比建設'}</Chip>
+                    <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${jobBadge(editWorker.jobType).cls}`}>{jobBadge(editWorker.jobType).label}</span>
+                    {editWorker.retired && <Chip tone="gray">退職</Chip>}
+                    {(() => {
+                      const vs = isGaikoku(editWorker.visaType || '') && editWorker.visaExpiry ? visaExpiryStatus(editWorker.visaExpiry) : null
+                      return vs && vs.priority <= 2 ? <Chip tone={vs.priority <= 1 ? 'red' : 'amber'}>{vs.priority === 0 ? '在留期限切れ' : `在留期限まで${vs.label.replace('残', '')}`}</Chip> : null
+                    })()}
+                  </div>
+                )}
+              </div>
+              <CloseButton onClick={() => setShowModal(false)} />
+            </div>
+
+            {/* よく使う操作（旧: 一覧の行ごとに並んでいたボタン） */}
+            {editWorker && (
+              <div className="px-6 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-2">
+                {editWorker.token ? (
+                  <button type="button" onClick={() => setQrWorker(editWorker)} className={PANEL_BTN}>スマホURL・QR</button>
+                ) : !editWorker.retired && (
+                  <button type="button" onClick={() => handleGenToken(editWorker.id)} className="h-9 px-3.5 rounded-[9px] bg-hibi-navy text-white text-[13px] font-bold hover:bg-hibi-light">スマホURLを発行する</button>
+                )}
+                {!editWorker.retired && (
+                  <button type="button" onClick={() => handleTransfer(editWorker)} disabled={transferring === editWorker.id} className={PANEL_BTN}>
+                    転籍（{editWorker.company === 'HFU' ? '日比建設' : 'HFU'}へ）
+                  </button>
+                )}
+                {can(authUser, 'staffDocs.view') && (
+                  <a href={`/staff-docs?worker=${editWorker.id}`} className={`${PANEL_BTN} inline-flex items-center`}>書類庫で見る</a>
+                )}
+                {isAdminOrApprover && isGaikoku(editWorker.visaType || '') && (
+                  <a href={`/workers?tab=raise-history&worker=${editWorker.id}`} className={`${PANEL_BTN} inline-flex items-center`}>昇給の記録</a>
+                )}
+                {!editWorker.retired && (
+                  <button type="button" onClick={startRetire}
+                    className="sm:ml-auto h-9 px-3.5 rounded-[9px] border border-red-300 dark:border-red-800 bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 text-[13px] font-bold hover:bg-red-50 dark:hover:bg-red-900/20">退職にする</button>
+                )}
+              </div>
+            )}
 
             {/* タブ（2026-08-31）。保存ボタンはタブの外にあるので、どのタブで直しても1回で保存できる */}
-            <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-600">
+            <div className="px-6 flex gap-5 border-b border-hibi-line dark:border-gray-700">
               {([
                 { key: 'basic', label: '基本' },
                 { key: 'pay', label: '給与' },
@@ -773,16 +606,17 @@ export default function WorkersPage() {
                   key={t.key}
                   type="button"
                   onClick={() => setModalTab(t.key)}
-                  className={`px-4 py-2 text-sm font-bold rounded-t-lg transition ${
+                  className={`py-2.5 text-sm -mb-px border-b-[3px] transition ${
                     modalTab === t.key
-                      ? 'bg-hibi-navy text-white'
-                      : 'text-gray-500 hover:text-hibi-navy hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                      ? 'border-hibi-navy text-hibi-navy dark:border-blue-400 dark:text-blue-300 font-bold'
+                      : 'border-transparent text-hibi-sub dark:text-gray-400 hover:text-hibi-navy'}`}
                 >
                   {t.label}
                 </button>
               ))}
             </div>
 
+            <div className="px-6 py-5 flex-1">
             <div className="space-y-4">
               {modalTab === 'basic' && (<div className="space-y-4">
               {/* ── 顔写真（2026-08-03 追加。保存は他項目と独立して即時反映） ──
@@ -945,7 +779,7 @@ export default function WorkersPage() {
                     <div>
                       <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">退職日</label>
                       <div className="flex gap-2">
-                        <input type="date" value={form.retired} onChange={e => setForm({ ...form, retired: e.target.value })}
+                        <input id="worker-retired" type="date" value={form.retired} onChange={e => setForm({ ...form, retired: e.target.value })}
                           className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                         {form.retired && (
                           <button type="button" onClick={() => setForm({ ...form, retired: '' })}
@@ -1471,23 +1305,29 @@ export default function WorkersPage() {
 
               </div>)}
             </div>
-            <div className="flex gap-2 mt-6">
-              <button onClick={handleSave} disabled={saving}
-                className="flex-1 bg-hibi-navy text-white rounded-lg py-2.5 font-bold text-sm hover:bg-hibi-light transition disabled:opacity-50">
-                {saving ? '保存中...' : '保存'}
-              </button>
+            </div>
+            <div className="sticky bottom-0 px-6 py-3.5 border-t border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2.5">
+              {/* 完全に消すのは出面実績のない人だけ（サーバが実績ありを止める）。ふだんは「退職にする」 */}
+              {editWorker && !editWorker.retired && (
+                <button type="button" onClick={() => handleDelete(editWorker.id, editWorker.name)}
+                  className="text-xs text-hibi-sub dark:text-gray-400 hover:text-red-700 underline">登録を完全に消す</button>
+              )}
               <button onClick={() => setShowModal(false)}
-                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2.5 text-sm hover:bg-gray-300 dark:hover:bg-gray-500 transition">
-                キャンセル
+                className="ml-auto h-11 px-5 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+                閉じる
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                className="h-11 px-6 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50">
+                {saving ? '保存中...' : '保存する'}
               </button>
             </div>
           </div>
-        </div>
+        </SidePanel>
       )}
 
       {/* QR Modal */}
       {qrWorker && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setQrWorker(null)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70]" onClick={() => setQrWorker(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-2">{qrWorker.name}</h3>
             <p className="text-xs text-gray-500 mb-4 break-all">{mobileUrl(qrWorker)}</p>
