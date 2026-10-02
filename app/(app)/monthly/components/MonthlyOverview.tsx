@@ -74,6 +74,8 @@ export interface ApprovalStatus {
   finalRequired: boolean
   /** どの現場の何日が足りないか（例「職長承認がない日: 笹塚 29日」） */
   detail?: string
+  /** 月が終わっていない（当月・先の月）ので数えていない */
+  notEnded?: boolean
 }
 
 export interface CloseCardProps {
@@ -191,8 +193,13 @@ function ApprovalCheck({ locked, approval }: { locked: boolean; approval: Approv
   const label = '出面の承認（職長・最終）'
   if (locked) return <Check state="ok" label={label} note="締めたときにそろっていることを確認済み" />
   if (!approval) return <Check state="none" label={label} note="承認の状況を読み込めませんでした（締めるときにもう一度確認します）" />
+  if (approval.notEnded) return <Check state="none" label={label} note="月が終わってから数えます（月の途中は締められません）" />
   if (approval.needed === 0) return <Check state="none" label={label} note="この月は出勤の記録がありません" />
-  if (approval.complete) return <Check state="ok" label={label} note={`休み・有給の日も含め、全現場・全日（${approval.needed}件）の承認がそろっています`} />
+  if (approval.complete) {
+    return <Check state="ok" label={label} note={approval.finalRequired
+      ? `全現場・全日（${approval.needed}件・外国人スタッフは休み・有給の日も）の承認がそろっています`
+      : `出勤・残業のある全現場・全日（${approval.needed}件）の職長承認がそろっています`} />
+  }
   const parts: string[] = []
   if (approval.foremanMissing > 0) parts.push(`職長承認がまだ ${approval.foremanMissing}件`)
   if (approval.finalMissing > 0) parts.push(`最終承認がまだ ${approval.finalMissing}件`)

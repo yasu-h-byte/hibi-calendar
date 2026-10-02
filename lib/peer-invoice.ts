@@ -17,7 +17,7 @@ import {
   calcManDays, type AttendanceEntry,
 } from '@/types'
 import {
-  calcTobiEquiv, getAssign, getSiteRates, parseDKey,
+  calcTobiEquiv, getAssign, getSiteRates, parseDKey, parseSdKey,
   type MainData, type ComputeResult, type CompanyPaymentTerms, type RawSubcon,
 } from './compute'
 import { buildPeerStatements } from './peer-statement'
@@ -201,7 +201,7 @@ export function buildSiteDetail(
 
   for (const [k, v] of Object.entries(opts?.includeSubcons === false ? {} : attSD)) {
     if (!v || !v.n) continue
-    const pk = parseDKey(k)
+    const pk = parseSdKey(k, main.subcons.map(x => x.id))   // 外注IDの「_」に対応（2026-10-02）
     if (pk.ym !== ym || pk.sid !== siteId) continue
     const sc = main.subcons.find(x => x.id === pk.wid)
     if (!sc) continue

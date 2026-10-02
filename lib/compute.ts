@@ -396,6 +396,26 @@ export function parseDKey(k: string): { sid: string; wid: string; ym: string; da
   return { sid, wid, ym, day }
 }
 
+/**
+ * 外注の人工（sd）のキー `{siteId}_{外注ID}_{ym}_{day}` を解析する（2026-10-02 点検で追加）。
+ *
+ * 外注 ID は社名から作るので「_」を含むことがある（例: 鈴高組（とび）= `________99u1`）。
+ * parseDKey は後ろから3つ目だけを ID とみなすため、こうした外注の人工が原価・月次集計・請求書の集計から丸ごと抜けていた
+ * （2026-06 に笹塚で8日分）。既知の外注 ID と後ろから照合し、一番長く一致したものを採る。見つからなければ parseDKey と同じ。
+ */
+export function parseSdKey(k: string, subconIds: string[]): { sid: string; wid: string; ym: string; day: string } {
+  const p = k.split('_')
+  const day = p[p.length - 1]
+  const ym = p[p.length - 2]
+  const head = p.slice(0, p.length - 2).join('_')   // `${siteId}_${外注ID}`
+  let best = ''
+  for (const id of subconIds) {
+    if (id.length > best.length && head.length > id.length + 1 && head.endsWith(`_${id}`)) best = id
+  }
+  if (!best) return parseDKey(k)
+  return { sid: head.slice(0, head.length - best.length - 1), wid: best, ym, day }
+}
+
 // ────────────────────────────────────────
 //  遠方現場日当・運転手当（2026-10-01 施行）のデータ読み込み（2026-08 追加）
 //  規則そのものは lib/allowance.ts。ここは Firestore からの材料集めと
@@ -809,7 +829,7 @@ export function calcTobiEquiv(
   // 外注
   for (const [k, v] of Object.entries(attSD)) {
     if (!v) continue
-    const pk = parseDKey(k)
+    const pk = parseSdKey(k, main.subcons.map(x => x.id))   // 外注IDの「_」に対応（2026-10-02）
     if (!ymSet.has(pk.ym)) continue
     if (siteId && pk.sid !== siteId) continue
     const sc = main.subcons.find(x => x.id === pk.wid)
@@ -1006,7 +1026,7 @@ export function compute(
   // ─── 外注の出面データ処理 ───
   for (const [k, v] of Object.entries(attSD)) {
     if (!v) continue
-    const pk = parseDKey(k)
+    const pk = parseSdKey(k, main.subcons.map(x => x.id))   // 外注IDの「_」に対応（2026-10-02）
     const sid = pk.sid
     const scid = pk.wid
     const entryYm = pk.ym
@@ -1700,7 +1720,7 @@ export function computeMonthly(
   // Process subcon data
   for (const [key, entry] of Object.entries(attSD)) {
     if (!entry) continue
-    const pk = parseDKey(key)
+    const pk = parseSdKey(key, main.subcons.map(x => x.id))   // 外注IDの「_」に対応（2026-10-02）
     const siteId = pk.sid
     const scid = pk.wid
     if (pk.ym !== ym) continue

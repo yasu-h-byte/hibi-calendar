@@ -35,7 +35,10 @@ function currentYmJst(): string {
  *
  * 戻り値: エラーメッセージ（null = 締めOK）
  */
-async function checkReadyToLock(ym: string, org?: string): Promise<string | null> {
+type AttDataT = Awaited<ReturnType<typeof getAttData>>
+
+/** att: POST で1回だけ読んだ出面（2026-10-02 点検: 1回の締めで att_YYYYMM を3回読んでいた） */
+async function checkReadyToLock(ym: string, org: string | undefined, att: AttDataT): Promise<string | null> {
   // ① 進行中・未来の月
   if (ym >= currentYmJst()) {
     return `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月はまだ終わっていないため締められません。月が終わり、入力と職長チェックがすべて完了してから締めてください`
@@ -43,7 +46,6 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
 
   // ② 職長の日次承認チェック
   const main = await getMainData()
-  const att = await getAttData(ym)
   const isHfu = (o?: string) => o === 'hfu' || o === 'HFU'
   const orgKey = org === 'hibi' || org === 'hfu' ? org : 'all'
   const workerOrg = new Map(main.workers.map(w => [w.id, isHfu(w.org) ? 'hfu' : 'hibi']))
@@ -52,8 +54,10 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
   //   判定は月次集計画面の「締めの準備」カードと共通（lib/month-approval-status.ts → lib/approval-gap.ts）
   const { monthApprovalStatus } = await import('@/lib/month-approval-status')
   const { describeApprovalGap } = await import('@/lib/approval-gap')
-  const ap = await monthApprovalStatus(main, att.d, ym, orgKey)
-  if (ap.needed === 0) return null  // 実績ゼロ（対象者なし月）は承認チェック不要
+  // 締めの判定はキャッシュを使わず読み直す（承認を外した直後に締めると、古い「承認あり」で通ってしまうため・2026-10-02）
+  const ap = await monthApprovalStatus(main, att.d, ym, orgKey, { fresh: true })
+  // 実績ゼロ（対象者なし月）は承認チェックだけ飛ばす（needed===0 なら complete）。
+  //   2026-10-02 点検: 旧は return null で ③〜⑤（自動検算・未処理の有給・帰国申請）まで飛ばしていた
   if (!ap.complete) {
     const nameOf = (id: string) => main.sites.find(s => s.id === id)?.name || id
     if (ap.finalRequired) {
@@ -132,20 +136,18 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
  * 締めを止めるのではなく一覧を見せて確認を求める（帰国中でスマホを見られない人などがいるため、
  * allowUnconfirmed で承知のうえ締められる。その場合は操作ログに名前を残す）。
  */
-async function staffConfirmPending(ym: string, org?: string): Promise<{ id: number; name: string; state: string; note?: string }[]> {
+async function staffConfirmPending(ym: string, org: string | undefined, att: AttDataT): Promise<{ id: number; name: string; state: string; note?: string }[]> {
   // 対象者と状態の決め方は月次集計の画面と共通（lib/attendance-confirm-server.ts staffConfirmRows・2026-10-02 一本化）
-  const { getAttendanceDoc } = await import('@/lib/attendance')
   const { staffConfirmRows, STAFF_CONFIRM_STATE_LABEL } = await import('@/lib/attendance-confirm-server')
   const { todayJstIso } = await import('@/lib/date-utils')
   const main = await getMainData()
   const orgKey = org === 'hibi' || org === 'hfu' ? org : 'all'
-  const [d, qs] = await Promise.all([
-    getAttendanceDoc(ym) as Promise<Record<string, import('@/types').AttendanceEntry | null>>,
-    getDocs(query(collection(db, 'attConfirm'), where('ym', '==', ym))),
-  ])
+  const d = att.d as unknown as Record<string, import('@/types').AttendanceEntry | null>
+  const qs = await getDocs(query(collection(db, 'attConfirm'), where('ym', '==', ym)))
   const rows = await staffConfirmRows({
     main, d, ym, org: orgKey, todayIso: todayJstIso(),
     confirmations: qs.docs.map(x => x.data() as import('@/lib/attendance-confirm').AttConfirmDoc),
+    fresh: true,   // 締めの判定はキャッシュを使わない
   })
   return rows.filter(r => r.state !== 'ok').map(r => ({
     id: r.workerId, name: r.name, state: STAFF_CONFIRM_STATE_LABEL[r.state],
@@ -162,9 +164,8 @@ async function staffConfirmPending(ym: string, org?: string): Promise<{ id: numb
  * 締め時に worker 別支給額を凍結保存し、/api/monthly が現行計算と突合して
  * 差分があれば画面に警告する。
  */
-async function savePayrollSnapshot(ym: string, orgKey: 'hibi' | 'hfu' | 'all', lockedBy: string): Promise<void> {
+async function savePayrollSnapshot(ym: string, orgKey: 'hibi' | 'hfu' | 'all', lockedBy: string, att: AttDataT): Promise<void> {
   const main = await getMainData()
-  const att = await getAttData(ym)
   const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ym] || {}
   const hasCal = Object.keys(siteWorkDaysMap).length > 0
   const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
@@ -217,13 +218,15 @@ export async function POST(request: NextRequest) {
 
     // 2026-06-13: 締め（locked=true）は「月が終了 + 職長チェック全完了」が前提条件。
     //   進行中の月や未承認日が残る月は締められない（解除には条件なし）
+    let attOnce: AttDataT | null = null
     if (locked) {
-      const notReady = await checkReadyToLock(ym, org)
+      attOnce = await getAttData(ym)
+      const notReady = await checkReadyToLock(ym, org, attOnce)
       if (notReady) {
         return NextResponse.json({ error: notReady }, { status: 409 })
       }
       // ⑥ 本人確認（ベトナム人スタッフのスマホ）。残っていれば一覧を返し、承知のうえ（allowUnconfirmed）でだけ締める
-      const pending = await staffConfirmPending(ym, org)
+      const pending = await staffConfirmPending(ym, org, attOnce)
       if (pending.length > 0 && !allowUnconfirmed) {
         return NextResponse.json({
           error: `本人の出面確認が済んでいないスタッフが ${pending.length}名 います`,
@@ -254,7 +257,7 @@ export async function POST(request: NextRequest) {
     // 締め時のみ: 支給額スナップショットを凍結保存（解除時は最後の締め時点を保持）
     if (locked) {
       try {
-        await savePayrollSnapshot(ym, org === 'hibi' || org === 'hfu' ? org : 'all', actorLabel)
+        await savePayrollSnapshot(ym, org === 'hibi' || org === 'hfu' ? org : 'all', actorLabel, attOnce || await getAttData(ym))
       } catch (e) {
         // スナップショット失敗で締め自体は妨げない（締めは成立し、差分検知が無効になるだけ）
         console.error('[lock] payrollSnapshot 保存失敗:', e)

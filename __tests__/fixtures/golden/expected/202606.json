@@ -1314,6 +1314,19 @@
  ],
  "subcons": [
   {
+   "id": "________99u1",
+   "name": "鈴高組（とび）",
+   "type": "鳶業者",
+   "rate": 26000,
+   "otRate": 4063,
+   "sites": [
+    "sasazuka"
+   ],
+   "workDays": 8,
+   "otCount": 0.5,
+   "cost": 210032
+  },
+  {
    "id": "hatakeyama",
    "name": "株式会社 畠山組",
    "type": "鳶業者",
@@ -1398,13 +1411,13 @@
    "id": "sasazuka",
    "name": "笹塚駅南口東地区開発計画",
    "workDays": 167,
-   "subWorkDays": 426,
+   "subWorkDays": 434,
    "otHours": 8.5,
    "cost": 1953755,
-   "subCost": 9622557,
+   "subCost": 9832589,
    "billing": 16996622,
-   "profit": 5420310,
-   "profitRate": 31.9,
+   "profit": 5210279,
+   "profitRate": 30.7,
    "dispatchDeduction": 636872
   },
   {
@@ -1449,11 +1462,11 @@
  ],
  "totals": {
   "workDays": 497,
-  "subWorkDays": 588.5,
+  "subWorkDays": 596.5,
   "cost": 9075246,
-  "subCost": 14603202,
+  "subCost": 14813234,
   "billing": 35689622,
-  "profit": 12011174,
+  "profit": 11801143,
   "otHours": 356.5
  }
 }

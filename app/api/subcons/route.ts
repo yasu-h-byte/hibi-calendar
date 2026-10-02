@@ -73,7 +73,9 @@ export async function POST(request: NextRequest) {
       const norm = (x: string) => String(x).replace(/[\s　]|株式会社|（株）|\(株\)|有限会社|（有）/g, '')
       const dup = subcons.find(sc => norm(String(sc.name || '')) === norm(name))
       if (dup) return NextResponse.json({ error: `「${dup.name}」が既に登録されています`, existingId: dup.id }, { status: 409 })
-      const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 20) + '_' + Date.now().toString(36).slice(-4)
+      // ID に「_」を入れない（出面のキー `{現場}_{外注ID}_{年月}_{日}` は「_」区切りで、旧の ID（例 `________99u1`）は
+      //   集計で外注を見つけられず原価・請求から抜けていた・2026-10-02 点検。読む側は parseSdKey で旧 ID にも対応済み）
+      const id = (name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 16) || 'sc') + Date.now().toString(36).slice(-6)
       // companyGroup: 兼業業者を1社としてまとめるためのグループ名（任意）
       // 例: 「株式会社A（鳶）」「株式会社A（土工）」を companyGroup="株式会社A" でグルーピング
       const newSubcon: Record<string, unknown> = {

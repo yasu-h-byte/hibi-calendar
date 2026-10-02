@@ -1,4 +1,5 @@
 import { db } from './firebase'
+import { invalidateApprovalCache } from './approval-gap'
 import { doc, getDoc, setDoc, updateDoc, deleteField, collection, getDocs, query, where } from '@/lib/fsdb'
 import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site } from '@/types'
 import { ensureDocExists } from './firestore-safe'
@@ -154,9 +155,14 @@ export function canAdminEditEntry(
   if (!isVietnameseWorker(worker.visa)) {
     return { editable: true }
   }
+  // 2026-10-02 点検: 旧は「既存エントリがあれば何でも可」だったため、欠勤や 0.6補 をいったん入れてから
+  //   出勤に変える「2回の保存」で、本人の入力が無い出勤を職長・事務でも作れた。
+  //   出勤（賃金が増える入力）にするのは、その日に本人の入力（s:'staff'）か出勤の記録が既にあるときだけ。
+  //   それ以外は本人のスマホ入力待ち（代表・事業責任者のさかのぼり入力は呼び出し側で attendance.backfill を見る）
   if (existingEntry) {
-    // 既存エントリがあれば修正・削除いずれも可能
-    return { editable: true }
+    if (!newEntry || !createsWork(newEntry)) return { editable: true }   // 削除・休み系への変更は可
+    if (existingEntry.s === 'staff' || createsWork(existingEntry)) return { editable: true }
+    return { editable: false, reason: 'スタッフ本人の入力が無い日は、出勤に変えられません（休み・有給・0.6補から出勤への変更を含む）' }
   }
   // 既存エントリなし: 事後申請性ステータスは admin/foreman の後付け入力を許容
   //   - 有給 (p): スタッフが事前申請するが、当日体調不良の事後申請もある
@@ -175,6 +181,18 @@ export function canAdminEditEntry(
     }
   }
   return { editable: false, reason: 'スタッフ本人のスマホ入力待ち（有給・欠勤・帰国中・現場都合休みは後付け入力可）' }
+}
+
+/**
+ * 賃金が出る「出勤」扱いの記録か（canAdminEditEntry の判定用・2026-10-02）。
+ * 出勤（w>0。ただし 0.6補＝w:0.6 は会社都合の補償なので除く）・試験・夜勤。休み・有給・帰国中は含めない
+ */
+export function createsWork(e: AttendanceEntry): boolean {
+  if ((e.p ?? 0) > 0 || (e.r ?? 0) > 0 || (e.h ?? 0) > 0 || (e.hk ?? 0) > 0) return false
+  const ex = e as { exam?: number; ns?: unknown }
+  if ((ex.exam ?? 0) > 0 || !!ex.ns) return true
+  const w = e.w ?? 0
+  return w > 0 && w !== 0.6
 }
 
 /**
@@ -540,6 +558,7 @@ export async function setForemanApprovalForDay(
 ): Promise<void> {
   const docId = `${siteId}_${ym}_${String(day)}`
   const docRef = doc(db, 'attendanceApprovals', docId)
+  invalidateApprovalCache(docId)   // 承認の判定キャッシュ（lib/approval-gap.ts）を消す・2026-10-02
   await setDoc(docRef, {
     foreman: { by: foremanId, at: new Date().toISOString() }
   }, { merge: true })
@@ -558,6 +577,7 @@ export async function removeForemanApprovalForDay(
 ): Promise<void> {
   const docId = `${siteId}_${ym}_${String(day)}`
   const docRef = doc(db, 'attendanceApprovals', docId)
+  invalidateApprovalCache(docId)   // 承認の判定キャッシュ（lib/approval-gap.ts）を消す・2026-10-02
   // ドキュメント未存在時に updateDoc が失敗するのを防ぐため、まず存在保証
   await ensureDocExists(docRef)
   await updateDoc(docRef, {
@@ -579,6 +599,7 @@ export async function setFinalApprovalForDay(
 ): Promise<void> {
   const docId = `${siteId}_${ym}_${String(day)}`
   const docRef = doc(db, 'attendanceApprovals', docId)
+  invalidateApprovalCache(docId)   // 承認の判定キャッシュ（lib/approval-gap.ts）を消す・2026-10-02
   await setDoc(docRef, {
     final: { by: approverId, at: new Date().toISOString() }
   }, { merge: true })
@@ -594,6 +615,7 @@ export async function removeFinalApprovalForDay(
 ): Promise<void> {
   const docId = `${siteId}_${ym}_${String(day)}`
   const docRef = doc(db, 'attendanceApprovals', docId)
+  invalidateApprovalCache(docId)   // 承認の判定キャッシュ（lib/approval-gap.ts）を消す・2026-10-02
   await ensureDocExists(docRef)
   await updateDoc(docRef, {
     final: deleteField(),

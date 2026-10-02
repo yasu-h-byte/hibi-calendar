@@ -125,9 +125,16 @@ export async function GET(request: NextRequest) {
     const { monthApprovalStatus } = await import('@/lib/month-approval-status')
     const { describeApprovalGap } = await import('@/lib/approval-gap')
     const siteNameOf = (id: string) => main.sites.find(s => s.id === id)?.name || id
-    const approvalStatus: Record<string, { needed: number; foremanMissing: number; finalMissing: number; complete: boolean; finalRequired: boolean; detail: string }> = {}
+    const approvalStatus: Record<string, { needed: number; foremanMissing: number; finalMissing: number; complete: boolean; finalRequired: boolean; detail: string; notEnded?: boolean }> = {}
+    // 月が終わっていない（当月・先の月）は数えない。まだ来ていない日の承認まで読み、「承認がまだ 600件」のように出ていた（2026-10-02 点検）
+    const { currentYmJst } = await import('@/lib/date-utils')
+    const monthNotEnded = ym >= currentYmJst()
     await Promise.all((['hibi', 'hfu'] as const).map(async orgKey => {
       if (orgKey === 'hibi' ? lockedHibi : lockedHfu) return
+      if (monthNotEnded) {
+        approvalStatus[orgKey] = { needed: 0, foremanMissing: 0, finalMissing: 0, complete: false, finalRequired: false, detail: '', notEnded: true }
+        return
+      }
       try {
         const ap = await monthApprovalStatus(main, att.d, ym, orgKey)
         approvalStatus[orgKey] = {

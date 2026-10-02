@@ -69,11 +69,12 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
     return keys.map(k => { const i = k.lastIndexOf(sep); return { familyId: k.slice(0, i), day: Number(k.slice(i + sep.length)) } })
   }
 
-  const readiness = async (worker: ConfirmWorker): Promise<ConfirmReadiness> => {
+  /** fresh: 承認をキャッシュを使わず読み直す（本人の確認を記録するとき・月締めで使う・2026-10-02） */
+  const readiness = async (worker: ConfirmWorker, opts?: { fresh?: boolean }): Promise<ConfirmReadiness> => {
     const famDays = await requiredFamilyDays(worker)
     if (famDays.length === 0) return { noEntries: true, foremanMissing: 0, finalMissing: 0, ready: false }
     // 承認の判定は請求書と共通（lib/approval-gap.ts。工種サイトの子で承認した記録も数える・2分キャッシュ）
-    const gap = await approvalGap(sites as { id: string; parentId?: string }[], ym, famDays)
+    const gap = await approvalGap(sites as { id: string; parentId?: string }[], ym, famDays, opts)
     const foremanMissing = gap.foremanMissing.length
     const finalMissing = gap.finalMissing.length
     return { noEntries: false, foremanMissing, finalMissing, ready: foremanMissing === 0 && finalMissing === 0 }
@@ -145,11 +146,15 @@ export interface StaffConfirmEval {
 /** 1人分の状態を決める（ここ以外で状態を決めない） */
 export async function evalStaffConfirm(
   c: AttConfirmDoc | null | undefined, worker: ConfirmWorker, ctx: ReturnType<typeof confirmMonthContext>,
-  opts: { ym: string; todayIso: string; locked: boolean },
+  opts: { ym: string; todayIso: string; locked: boolean; fresh?: boolean },
 ): Promise<StaffConfirmEval> {
-  const readiness = await ctx.readiness(worker)
   // 本人からの連絡（未対応）は、承認の前後にかかわらず残す（事務所が中身を見て対応する）
   const openIssue = !!c && c.status === 'issue' && !c.resolvedAt
+  // 進行中の月（来月になると確認の月になる）は、まだ来ていない日の承認まで読むことになるので承認を数えない（2026-10-02 点検・読み取り削減）
+  if (opts.ym > confirmTargetYm(opts.todayIso) && !isValidConfirmation(c) && !openIssue) {
+    return { state: 'waiting', readiness: { noEntries: false, foremanMissing: 0, finalMissing: 0, ready: false }, stale: false }
+  }
+  const readiness = await ctx.readiness(worker, { fresh: opts.fresh })
   if (isValidConfirmation(c)) {
     const stale = await ctx.staleOf(c, worker)
     if (stale) return { state: 'stale', readiness, stale }
@@ -210,6 +215,8 @@ export async function staffConfirmRows(args: {
   org: 'hibi' | 'hfu' | 'all'
   todayIso: string
   confirmations: AttConfirmDoc[]
+  /** fresh: 承認をキャッシュを使わず読み直す（月締めの判定で使う） */
+  fresh?: boolean
 }): Promise<StaffConfirmRow[]> {
   const { mapRawWorkers } = await import('./workers')
   const { isMonthLockedInLocks } = await import('./locks')
@@ -221,7 +228,7 @@ export async function staffConfirmRows(args: {
   const rows = await Promise.all(targets.map(async w => {
     const o: 'hibi' | 'hfu' = w.company === 'HFU' ? 'hfu' : 'hibi'
     const c = confs.get(w.id) || null
-    const ev = await evalStaffConfirm(c, w, ctx, { ym, todayIso, locked: isMonthLockedInLocks(main.locks, ym, o) })
+    const ev = await evalStaffConfirm(c, w, ctx, { ym, todayIso, locked: isMonthLockedInLocks(main.locks, ym, o), fresh: args.fresh })
     // 記録が1件も無い月は対象外（スマホにも出さない）。対象者の選び方と同じだが、入社前・退職後だけの記録はここで落ちる
     if (ev.readiness.noEntries && !c) return null
     return {
