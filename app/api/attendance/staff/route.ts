@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkerByToken, mapRawWorkers, hourlyRateOn } from '@/lib/workers'
+import { getWorkerByToken, mapRawWorkers, hourlyRateOn, isEmployedOn } from '@/lib/workers'
 import {
   getAttendanceDoc,
   setAttendanceEntry,
@@ -209,6 +209,8 @@ export async function GET(request: NextRequest) {
         const pm = pd.getMonth() + 1
         const pDay = pd.getDate()
         const pym = ymKey(py, pm)
+        // 入社前・退職後の日は督促しない（2026-10-02・入社したばかりの人に入社前の日まで「未入力」と出ていた）
+        if (!isEmployedOn(worker, `${py}-${String(pm).padStart(2, '0')}-${String(pDay).padStart(2, '0')}`)) continue
         const pAtt = await getAttCached(pym)   // pastDays と同じ月キャッシュを共有（2026-09-02）
 
         // 工種サイトは親現場のカレンダー（2026-09-15）

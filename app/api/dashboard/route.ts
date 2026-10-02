@@ -19,7 +19,7 @@ import {
 } from '@/lib/compute'
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
-import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth } from '@/lib/workers'
+import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth, isEmployedOn } from '@/lib/workers'
 import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe, addDaysIso, currentYmJst, todayJstDate } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
 import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter } from '@/lib/leave-compute'
@@ -137,7 +137,8 @@ function computeTodayStatus(
     if (isHomeLeaveByEntry) continue
 
     // 2026-06-XX 修正: 当該月在籍中のスタッフを欠勤者候補に
-    const worker = main.workers.find(w => w.id === wid && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym))
+    // 2026-10-02: 月ではなくその日で在籍を見る（10/26 入社の人が10月初めから「休み」に出ていた）
+    const worker = main.workers.find(w => w.id === wid && isEmployedOn(w, todayDateStr))
     if (worker) absentWorkers.push({ id: worker.id, name: worker.name })
   }
 
@@ -739,7 +740,11 @@ export async function GET(request: NextRequest) {
             (((r.grantDays as number | undefined) ?? (r.grant as number | undefined) ?? 0) > 0))
           const latestG = grantedRecs.map(effD).filter(Boolean).sort().slice(-1)[0] || null
           const curFy = m >= 10 ? y : y - 1
-          const expDate = latestG ? jpNextGrantAfter(latestG).grantDate : `${curFy}-10-01`
+          // 初回は「10/1」と「入社＋6ヶ月」の遅いほう（休暇管理 /api/leave の getPendingGrants と同じ・労基法39条1項）。
+          //   2026-10-02: 旧は 10/1 固定で、入社6ヶ月前の人・入社前の人（10/26 入社のホアンさん）まで付与待ちに数えていた
+          const fyGrant = `${curFy}-10-01`
+          const hirePlus6 = w.hireDate ? addMonthsSafe(w.hireDate, 6) : ''
+          const expDate = latestG ? jpNextGrantAfter(latestG).grantDate : (hirePlus6 && hirePlus6 > fyGrant ? hirePlus6 : fyGrant)
           if (expDate <= todayIsoP) {
             const hasGrant = grantedRecs.some(r => effD(r) >= expDate)
             if (!hasGrant) pendingGrantsCount++
@@ -932,14 +937,19 @@ export async function GET(request: NextRequest) {
             seenByWorker.set(wid, (seenByWorker.get(wid) || 0) + 1)
           }
           for (const w of payrollWorkers) {
-            if (isAlreadyRetired(w.retired, todayIsoForVisa)) continue
             if (w.job === 'jimu' || w.job === 'yakuin') continue // 事務・役員は出面対象外
             if ((w.hkDays || 0) > 0) continue                    // 帰国中は入力が無くて当然
+            // 在籍していた日だけで数える（2026-10-02 代表指摘: 10/26 入社のホアンさんに10月初めから出ていた）。
+            //   月次集計は入社月・退職月の人を含めるので、ここで日単位に絞る（入社日・退職日は人員マスタから。
+            //   旧の isAlreadyRetired(w.retired) は月次集計の行に retired が無く、効いていなかった）
+            const raw = main.workers.find(x => x.id === w.id)
+            const daysSinceHire = recentIso.filter(iso => !raw || isEmployedOn(raw, iso))
+            if (daysSinceHire.length === 0) continue
             if ((seenByWorker.get(w.id) || 0) > 0) continue
             quietIssues.push({
               kind: 'staleAttendance',
               workerName: w.name,
-              detail: `直近${recentIso.length}稼働日に出面の入力がありません`,
+              detail: `直近${daysSinceHire.length}稼働日に出面の入力がありません`,
               href: `/attendance?ym=${ym}`,
             })
           }

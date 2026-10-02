@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261002_pre_hire_alerts',
+    title: '入社前の人に「出面の入力がありません」などが出ないようにしました',
+    content:
+      '月の途中で入社する人（例: 10/26 入社）が、入社前の日の分まで「入力がありません」「未入力」「休み」「アクセスがない」と出ていました。'
+      + 'ダッシュボード・お知らせベル・職長画面・スタッフのスマホで、入社日より前（退職日より後）の日は数えないようにしました。'
+      + '職長のまとめ承認も、入社前の人がいる日で止まらなくなります。',
+    category: 'fix',
+    publishedAt: '2026-10-02T12:00:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20261002_close_all_days_approval',
     title: '9月分から、月締めの前に「休み・有給・0.6補の日」の承認もそろえるようになりました',
     content:

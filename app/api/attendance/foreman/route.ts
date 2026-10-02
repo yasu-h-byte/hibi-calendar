@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkerByToken } from '@/lib/workers'
+import { getWorkerByToken, isEmployedOn } from '@/lib/workers'
 import {
   getAttendanceDoc,
   setAttendanceEntry,
@@ -107,7 +107,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Build worker list with status
-    const workers = foreignWorkers.map(w => {
+    //   その日に在籍していない人（入社前・退職後）は出さない（2026-10-02・未入力に数えていた）
+    const viewIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(d).padStart(2, '0')}`
+    const workers = foreignWorkers.filter(w => isEmployedOn(w, viewIso)).map(w => {
       const entry = familyEntry(attData, family, w.id, ym, d) || null
       const misplaced = crossSiteEntries[w.id] || []
       return {
@@ -212,7 +214,9 @@ export async function POST(request: NextRequest) {
       {
         const attD = await getAttendanceDoc(ym)
         // 名簿はその日の月の配置（一覧・まとめ承認と同じ決まり・2026-10-01）
-        const { workers: ws, family } = await loadSiteRoster(site.id, ym)
+        const { workers: roster, family } = await loadSiteRoster(site.id, ym)
+        const dayIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
+        const ws = roster.filter(w => isEmployedOn(w, dayIso))   // その日に在籍している人だけ（入社前・退職後を除く）
         const enteredCount = ws.filter(w =>
           getEntryStatus(familyEntry(attD, family, w.id, ym, day)) !== 'none').length
         if (ws.length > 0 && enteredCount === 0) {

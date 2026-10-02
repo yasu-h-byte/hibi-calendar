@@ -19,6 +19,7 @@ export interface Worker {
   visa: string
   job: string
   retired?: string  // YYYY-MM-DD 退職日（バッジ表示用）
+  hireDate?: string // YYYY-MM-DD 入社日（入社前の日を未入力に数えない・2026-10-02）
   useOldRules?: boolean  // 旧契約継続者（フン等）。出面UIをレガシー（日数+残業+0.6補）にする
   canDrive?: boolean  // 運転者の選択肢に出すか。未設定は canDriveDefault()（日本人=あり）
 }

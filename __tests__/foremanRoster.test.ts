@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import { siteRosterFromMain, evaluateSiteDay } from '@/lib/foreman-todo'
+import { isEmployedOn } from '@/lib/workers'
 import type { MainData } from '@/lib/compute'
 
 // 2026-10-01 マイページの一覧・職長画面の俯瞰・まとめ承認で名簿とそろい具合の決まりを1つにした
@@ -51,5 +52,39 @@ describe('evaluateSiteDay（そろい具合）', () => {
   })
   test('非稼働日に誰も入力が無ければ対象0人（一覧に出ない）', () => {
     expect(evaluateSiteDay(att, ['a'], workers, '202609', 13, false)).toMatchObject({ entered: 0, total: 0, missingNames: [] })
+  })
+})
+
+describe('入社前・退職後の人（2026-10-02 代表指摘: 10/26 入社の人が10月初めから未入力に出ていた）', () => {
+  const att = { a_101_202610_2: { w: 1 } } as never
+  const workers = [
+    { id: 101, name: 'X' },
+    { id: 200, name: 'ホアン', hireDate: '2026-10-26' },
+    { id: 104, name: 'W', retired: '2026-10-01' },
+  ]
+  test('入社前・退職後の日は未入力に数えず、対象の人数からも外す（まとめ承認が止まらない）', () => {
+    expect(evaluateSiteDay(att, ['a'], workers, '202610', 2, true)).toMatchObject({ entered: 1, total: 1, missingNames: [] })
+  })
+  test('入社日からは対象（入力が無ければ未入力）', () => {
+    expect(evaluateSiteDay(att, ['a'], workers, '202610', 26, true)).toMatchObject({ entered: 0, total: 2, missingNames: ['X', 'ホアン'] })
+  })
+  test('名簿: 入社前の月・退職後の月の人は入れない', () => {
+    const m = {
+      sites: [{ id: 'a', name: 'A' }],
+      workers: [{ id: 200, name: 'ホアン', visa: 'jisshu1', hireDate: '2026-10-26' }, { id: 104, name: 'W', visa: 'tokutei1', retired: '2026-09-30' }],
+      assign: { a: { workers: [200, 104], subcons: [] } }, massign: {},
+    } as unknown as MainData
+    expect(siteRosterFromMain(m, 'a', '202609').workers.map(w => w.id)).toEqual([104])
+    expect(siteRosterFromMain(m, 'a', '202610').workers.map(w => w.id)).toEqual([200])
+  })
+})
+
+describe('isEmployedOn（その日に在籍しているか）', () => {
+  test('入社日・退職日の当日は在籍', () => {
+    expect(isEmployedOn({ hireDate: '2026-10-26' }, '2026-10-25')).toBe(false)
+    expect(isEmployedOn({ hireDate: '2026-10-26' }, '2026-10-26')).toBe(true)
+    expect(isEmployedOn({ retired: '2026-09-30' }, '2026-09-30')).toBe(true)
+    expect(isEmployedOn({ retired: '2026-09-30' }, '2026-10-01')).toBe(false)
+    expect(isEmployedOn({ hireDate: '', retired: undefined }, '2026-10-01')).toBe(true)
   })
 })

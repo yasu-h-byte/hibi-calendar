@@ -19,7 +19,7 @@ import { computeForemanSites, approvingForemenOfSite, buildAuthUser, isManagerRo
 import { todayJstIso, addMonthsSafe, addDaysIso } from './date-utils'
 import type { AttendanceEntry, AttendanceApproval, Site } from '@/types'
 import { getAssign, parseDKey, getMainData, type MainData } from './compute'
-import { getWorkerByToken } from './workers'
+import { getWorkerByToken, isEmployedOn, isHiredByMonth, isStillActiveForMonth } from './workers'
 
 /**
  * 工種（鉄骨・仮設など）を持つ現場の「同じ現場」の範囲（親＋工種サイト）と、工種の指定（2026-09-28）。
@@ -150,23 +150,26 @@ export async function loadApprovalsForSiteMonth(siteId: string, ym: string, last
  * 純粋関数。
  */
 export function evaluateSiteDay(
-  att: Record<string, AttendanceEntry>, family: string[], workers: { id: number; name: string }[],
+  att: Record<string, AttendanceEntry>, family: string[], workers: RosterWorker[],
   ym: string, day: number, isWorkDay: boolean,
 ): { entered: number; total: number; missingNames: string[]; elsewhere: { name: string; siteIds: string[] }[] } {
   const missingNames: string[] = []
   const elsewhere: { name: string; siteIds: string[] }[] = []
   let entered = 0
+  let notEmployed = 0
+  const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
   for (const w of workers) {
     // 判定は職長画面のリストと同じ getEntryStatus（0.6補償=入力済み、残骸のみ=未入力）
     const p = entryPlace(att, family, w.id, ym, day)
     if (p.place === 'here') entered++
+    else if (!isEmployedOn(w, iso)) notEmployed++   // 入社前・退職後の日は対象外（2026-10-02・未入力に数えると承認もできなかった）
     else if (p.place === 'elsewhere') elsewhere.push({ name: w.name, siteIds: p.siteIds })
     else if (isWorkDay) missingNames.push(w.name)
   }
   return {
     entered,
-    // 稼働日: 配置の全員（別の現場で入力している人を除く）／非稼働日: 入力した人だけ
-    total: isWorkDay ? workers.length - elsewhere.length : entered,
+    // 稼働日: 配置の全員（別の現場で入力している人・入社前／退職後の人を除く）／非稼働日: 入力した人だけ
+    total: isWorkDay ? workers.length - elsewhere.length - notEmployed : entered,
     missingNames,
     elsewhere,
   }
@@ -289,6 +292,9 @@ export async function getForemenOfWorkerSites(workerId: number): Promise<Set<num
   return result
 }
 
+/** 名簿の1人（入社日・退職日は日ごとの対象判定に使う） */
+export interface RosterWorker { id: number; name: string; hireDate?: string; retired?: string }
+
 /** 名簿を決めるのに使う main の部分 */
 export type RosterSource = Pick<MainData, 'workers' | 'sites' | 'assign' | 'massign'>
 
@@ -300,10 +306,13 @@ export type RosterSource = Pick<MainData, 'workers' | 'sites' | 'assign' | 'mass
  * 旧: 承認だけ getForeignWorkersForSite（massign[当月] → assign。さかのぼらない）で数えていて、
  *   一覧で「全員入力済み」の日が承認では「未入力」で弾かれる食い違いがあった。
  */
-export function siteRosterFromMain(main: RosterSource, siteId: string, ym: string): { workers: { id: number; name: string }[]; family: string[] } {
+export function siteRosterFromMain(main: RosterSource, siteId: string, ym: string): { workers: RosterWorker[]; family: string[] } {
   const ids = new Set(getAssign(main as MainData, siteId, ym).workers)
   return {
-    workers: main.workers.filter(w => ids.has(w.id) && w.visa && w.visa !== 'none').map(w => ({ id: w.id, name: w.name })),
+    // その月に在籍していない人（入社前の月・退職後の月）は名簿に入れない。月の途中の入社・退職は evaluateSiteDay が日で外す（2026-10-02）
+    workers: main.workers
+      .filter(w => ids.has(w.id) && w.visa && w.visa !== 'none' && isHiredByMonth(w.hireDate, ym) && isStillActiveForMonth(w.retired, ym))
+      .map(w => ({ id: w.id, name: w.name, hireDate: w.hireDate || undefined, retired: w.retired || undefined })),
     family: workTypeFamilyIds(main.sites as unknown as HierarchySite[], siteId),
   }
 }
@@ -312,7 +321,7 @@ export function siteRosterFromMain(main: RosterSource, siteId: string, ym: strin
  * 最新の main（30秒キャッシュを使わない）で名簿を作る。承認の書き込み判定など、
  * 配置を直した直後でも最新で数えたいところで使う。
  */
-export async function loadSiteRoster(siteId: string, ym: string): Promise<{ workers: { id: number; name: string }[]; family: string[] }> {
+export async function loadSiteRoster(siteId: string, ym: string): Promise<{ workers: RosterWorker[]; family: string[] }> {
   return siteRosterFromMain(await getMainData({ fresh: true }), siteId, ym)
 }
 
@@ -356,7 +365,7 @@ export function findStaleAssignments(main: MainData, attD: Record<string, Attend
     for (const wid of getAssign(main, site.id, curYm).workers) {
       const w = main.workers.find(x => x.id === wid)
       if (!w || !w.visa || w.visa === 'none') continue
-      if (w.retired && w.retired < todayIso) continue
+      if (!isEmployedOn(w, todayIso)) continue   // 入社前・退職後は配置の見直しに出さない
       let here = 0
       const workingAt = new Set<string>()
       for (const { ym, day } of dates) {
