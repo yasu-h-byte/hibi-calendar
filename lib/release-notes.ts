@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261002_close_all_days_approval',
+    title: '9月分から、月締めの前に「休み・有給・0.6補の日」の承認もそろえるようになりました',
+    content:
+      'これまで月締めのチェックは、出勤・残業のあった日の承認だけを見ていました。0.6補や欠勤は給料の額に直接関わるため、9月分からは休み・有給・0.6補だけの日や、'
+      + '入力のない仕事の日も、職長承認と最終承認がそろってから締めるようにしました（スタッフの本人確認と同じ範囲）。'
+      + '月次集計の「出面の承認」に、どの現場の何日が足りないかが出ます。',
+    category: 'info',
+    publishedAt: '2026-10-02T11:20:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261002_close_card_approval',
     title: '月次集計の「締めの準備」が、出面の承認の実際の状況を出すようになりました',
     content:

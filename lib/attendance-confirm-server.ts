@@ -7,7 +7,7 @@
 import { db } from './firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
-import { approvalGap } from './approval-gap'
+import { approvalGap, type FamilyDay } from './approval-gap'
 import {
   summarizeWorkerMonth, summaryFingerprint, mainSiteOfMonth, breakShortenMinFor,
   isConfirmStale, jstDateOf, requiredApprovalKeys, confirmTargetYm,
@@ -55,16 +55,24 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
       breakShortenMin: breakShortenMinFor(worker, ym) || undefined,
     })
 
-  const readiness = async (worker: ConfirmWorker): Promise<ConfirmReadiness> => {
+  /**
+   * その人について承認が必要な「現場（親）×日」。本人確認と月締め（lib/month-approval-status.ts・2026-09分〜）が同じものを使う。
+   * 記録がある日（出勤・残業・有給・休み・0.6補…すべて）＋記録が無い主現場の仕事の日
+   */
+  const requiredFamilyDays = async (worker: ConfirmWorker): Promise<FamilyDay[]> => {
     const keys = requiredApprovalKeys({
       d, workerId: worker.id, ym, calDays: await calOfWorker(worker.id),
       approvalSiteOf: sid => calendarSiteIdOf(sites, sid),
       hireDate: worker.hireDate, retired: worker.retired,
     })
-    if (keys.length === 0) return { noEntries: true, foremanMissing: 0, finalMissing: 0, ready: false }
-    // 承認の判定は請求書と共通（lib/approval-gap.ts。工種サイトの子で承認した記録も数える・2分キャッシュ）
     const sep = `_${ym}_`
-    const famDays = keys.map(k => { const i = k.lastIndexOf(sep); return { familyId: k.slice(0, i), day: Number(k.slice(i + sep.length)) } })
+    return keys.map(k => { const i = k.lastIndexOf(sep); return { familyId: k.slice(0, i), day: Number(k.slice(i + sep.length)) } })
+  }
+
+  const readiness = async (worker: ConfirmWorker): Promise<ConfirmReadiness> => {
+    const famDays = await requiredFamilyDays(worker)
+    if (famDays.length === 0) return { noEntries: true, foremanMissing: 0, finalMissing: 0, ready: false }
+    // 承認の判定は請求書と共通（lib/approval-gap.ts。工種サイトの子で承認した記録も数える・2分キャッシュ）
     const gap = await approvalGap(sites as { id: string; parentId?: string }[], ym, famDays)
     const foremanMissing = gap.foremanMissing.length
     const finalMissing = gap.finalMissing.length
@@ -87,7 +95,7 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
     return isConfirmStale(c, range)
   }
 
-  return { summarize, readiness, staleOf }
+  return { summarize, readiness, staleOf, requiredFamilyDays }
 }
 
 /**

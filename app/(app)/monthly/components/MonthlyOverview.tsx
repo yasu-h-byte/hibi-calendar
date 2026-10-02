@@ -72,6 +72,8 @@ export interface ApprovalStatus {
   finalMissing: number
   complete: boolean
   finalRequired: boolean
+  /** どの現場の何日が足りないか（例「職長承認がない日: 笹塚 29日」） */
+  detail?: string
 }
 
 export interface CloseCardProps {
@@ -190,17 +192,22 @@ function ApprovalCheck({ locked, approval }: { locked: boolean; approval: Approv
   if (locked) return <Check state="ok" label={label} note="締めたときにそろっていることを確認済み" />
   if (!approval) return <Check state="none" label={label} note="承認の状況を読み込めませんでした（締めるときにもう一度確認します）" />
   if (approval.needed === 0) return <Check state="none" label={label} note="この月は出勤の記録がありません" />
-  if (approval.complete) return <Check state="ok" label={label} note={`全現場・全日（${approval.needed}件）の承認がそろっています`} />
+  if (approval.complete) return <Check state="ok" label={label} note={`休み・有給の日も含め、全現場・全日（${approval.needed}件）の承認がそろっています`} />
   const parts: string[] = []
   if (approval.foremanMissing > 0) parts.push(`職長承認がまだ ${approval.foremanMissing}件`)
   if (approval.finalMissing > 0) parts.push(`最終承認がまだ ${approval.finalMissing}件`)
-  return <Check state="warn" label={label} note={`${parts.join('・')}（現場×日。そろうまで締められません）`} />
+  return (
+    <Check state="warn" label={label} note={`${parts.join('・')}（現場×日。そろうまで締められません）`}
+      detail={approval.detail} />
+  )
 }
 
-function Check({ state, label, note, action, onAction }: {
+function Check({ state, label, note, detail, action, onAction }: {
   state: 'ok' | 'warn' | 'none'
   label: string
   note: string
+  /** note の下に小さく出す補足（改行ごとに1行） */
+  detail?: string
   action?: string
   onAction?: () => void
 }) {
@@ -214,6 +221,7 @@ function Check({ state, label, note, action, onAction }: {
       <div className="min-w-0">
         <div className="text-sm font-bold text-gray-900 dark:text-gray-100">{label}</div>
         <div className={`text-xs ${state === 'warn' ? 'text-amber-800 dark:text-amber-300' : 'text-hibi-sub dark:text-gray-400'}`}>{note}</div>
+        {detail && <div className="mt-0.5 text-[11px] text-hibi-sub dark:text-gray-400 whitespace-pre-line">{detail}</div>}
       </div>
       {action && onAction && (
         <button onClick={onAction} className="ml-auto shrink-0 text-[13px] font-bold text-hibi-navy dark:text-blue-300 inline-flex items-center gap-0.5 hover:underline">

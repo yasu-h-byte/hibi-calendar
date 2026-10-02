@@ -5,18 +5,27 @@
  *   旧: カードの「出面の承認」は締めるまで常に緑のチェック（実際の承認状況を見ていなかった）
  *       → 承認が残っているのに「済み」に見え、本人確認だけが警告になっていた（代表指摘）
  *
- * 対象: 労働実績（出勤 w>0 / 残業 o>0）のある「現場×日」。有給・休み・現場都合・帰国だけの日は対象外。
+ * 対象の日（2026-09 分から・ALL_DAYS_APPROVAL_FROM_YM）: 本人確認と同じ（lib/attendance-confirm-server.ts の requiredFamilyDays）。
+ *   その会社の人それぞれの「記録がある日（出勤・残業・有給・休み・0.6補…すべて）＋記録が無い主現場の仕事の日」の和。
+ *   2026-10-02 代表決定（案B）: 0.6補・欠勤は給料の額に直接関わるので、休みだけの日も職長・事業責任者が見てから締める。
+ *   旧: 出勤・残業（w>0 / o>0）のある日だけ → 締めが通っても本人確認が「承認待ち」のまま残ることがあった
+ * 2026-08 分まで: 出勤・残業のある日だけ・職長承認だけ（当時の決まりのまま。締め直しを止めない）。
  * 判定は lib/approval-gap.ts（工種サイトは親にまとめ、子で承認した古い記録も数える・2分キャッシュ）。
- * 2026-09 分から最終承認（事業責任者）も必須。それより前の月は職長承認だけを見る。
  */
-import { approvalGap, FINAL_APPROVAL_REQUIRED_FROM_YM, type ApprovalGap } from './approval-gap'
+import { approvalGap, FINAL_APPROVAL_REQUIRED_FROM_YM, type ApprovalGap, type FamilyDay } from './approval-gap'
 import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
 import { parseDKey } from './compute'
+import { mapRawWorkers } from './workers'
+import { confirmMonthContext } from './attendance-confirm-server'
+import type { AttendanceEntry } from '@/types'
+
+/** 休み・有給・0.6補だけの日や未入力の仕事の日まで承認を求める月の始まり（2026-10-02 代表決定・案B） */
+export const ALL_DAYS_APPROVAL_FROM_YM = '202609'
 
 export type OrgKey = 'hibi' | 'hfu'
 
 export interface MonthApprovalStatus {
-  /** 承認が必要な「現場×日」の数（0＝実績なし） */
+  /** 承認が必要な「現場×日」の数（0＝記録なし） */
   needed: number
   /** 最終承認まで求める月か */
   finalRequired: boolean
@@ -28,15 +37,12 @@ export interface MonthApprovalStatus {
 
 const isHfu = (o?: string) => o === 'hfu' || o === 'HFU'
 
-export async function monthApprovalStatus(
-  main: { workers: { id: number; org?: string }[]; sites: unknown[] },
-  attD: Record<string, unknown>,
-  ym: string,
-  org: OrgKey | 'all',
-): Promise<MonthApprovalStatus> {
+/** 旧（2026-08 分まで）: 出勤・残業のある「現場（親）×日」 */
+function workedFamilyDays(
+  main: { workers: { id: number; org?: string }[] }, sitesH: HierarchySite[], attD: Record<string, unknown>, ym: string, org: OrgKey | 'all',
+): FamilyDay[] {
   const workerOrg = new Map(main.workers.map(w => [w.id, isHfu(w.org) ? 'hfu' : 'hibi']))
-  const sitesH = main.sites as unknown as HierarchySite[]
-  const famDays = new Map<string, { familyId: string; day: number }>()
+  const out: FamilyDay[] = []
   for (const [key, entry] of Object.entries(attD || {})) {
     if (!entry || typeof entry !== 'object') continue
     const pk = parseDKey(key)
@@ -46,9 +52,33 @@ export async function monthApprovalStatus(
     if (org !== 'all' && wOrg !== org) continue
     const e = entry as { w?: number; o?: number }
     if (!((e.w || 0) > 0 || (e.o || 0) > 0)) continue
-    const fd = { familyId: calendarSiteIdOf(sitesH, pk.sid), day: Number(pk.day) }
-    famDays.set(`${fd.familyId}|${fd.day}`, fd)
+    out.push({ familyId: calendarSiteIdOf(sitesH, pk.sid), day: Number(pk.day) })
   }
+  return out
+}
+
+/** 2026-09 分から: その会社の人それぞれについて、本人確認と同じ「承認が必要な日」の和 */
+async function allFamilyDays(
+  main: { workers: unknown[] }, sitesH: HierarchySite[], attD: Record<string, unknown>, ym: string, org: OrgKey | 'all',
+): Promise<FamilyDay[]> {
+  const ctx = confirmMonthContext(sitesH, ym, attD as Record<string, AttendanceEntry | null>)
+  const workers = mapRawWorkers(main.workers).filter(w => org === 'all' || (w.company === 'HFU' ? 'hfu' : 'hibi') === org)
+  const lists = await Promise.all(workers.map(w => ctx.requiredFamilyDays(w)))
+  return lists.flat()
+}
+
+export async function monthApprovalStatus(
+  main: { workers: { id: number; org?: string }[]; sites: unknown[] },
+  attD: Record<string, unknown>,
+  ym: string,
+  org: OrgKey | 'all',
+): Promise<MonthApprovalStatus> {
+  const sitesH = main.sites as unknown as HierarchySite[]
+  const list = ym >= ALL_DAYS_APPROVAL_FROM_YM
+    ? await allFamilyDays(main as { workers: unknown[] }, sitesH, attD, ym, org)
+    : workedFamilyDays(main, sitesH, attD, ym, org)
+  const famDays = new Map<string, FamilyDay>()
+  for (const fd of list) famDays.set(`${fd.familyId}|${fd.day}`, fd)
   const finalRequired = ym >= FINAL_APPROVAL_REQUIRED_FROM_YM
   if (famDays.size === 0) return { needed: 0, finalRequired, gap: { foremanMissing: [], finalMissing: [] }, complete: true }
   const raw = await approvalGap(sitesH as { id: string; parentId?: string }[], ym, [...famDays.values()])
