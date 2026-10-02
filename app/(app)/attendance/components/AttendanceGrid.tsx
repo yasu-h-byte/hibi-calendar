@@ -9,6 +9,7 @@ import {
   FooterSums, WorkerTotals,
 } from '@/lib/attendance-grid'
 import { orgBadgeCls, orgBadgeLabel } from '@/lib/labels'
+import { todayJstIso } from '@/lib/date-utils'
 import { GridData, AttEntry, SubconDayEntry } from '../types'
 import {
   TimeBasedCell, LegacyCell, HomeLeaveCell, WaitingCell, WorkTypeTag,
@@ -76,6 +77,8 @@ interface Props {
   onChangeDefaultWorkTypeSubcon?: (subconId: string, siteId: string | null) => void
   onMoveWorkType?: (workerId: string, day: number, toSiteId: string) => void
   onMoveWorkTypeSubcon?: (subconId: string, day: number, toSiteId: string) => void
+  /** さかのぼり入力ができる人か（代表・事業責任者・lib/permissions.ts attendance.backfill・2026-10-02） */
+  canBackfill?: boolean
 }
 
 export default function AttendanceGrid({
@@ -90,7 +93,12 @@ export default function AttendanceGrid({
   workTypeSites, dayWorkType, onSetDayWorkType, defaultWorkType, defaultWorkTypeSubcon,
   entrySiteByWorkerDay, entrySiteBySubconDay,
   onChangeDefaultWorkType, onChangeDefaultWorkTypeSubcon, onMoveWorkType, onMoveWorkTypeSubcon,
+  canBackfill,
 }: Props) {
+  // さかのぼり入力は昨日までの日だけ（当日は本人がスマホで打刻する）。サーバも同じ判定（grid POST の isPastDay）
+  const todayIsoG = todayJstIso()
+  const isPastDayG = (day: number) =>
+    `${data.year}-${String(data.month).padStart(2, '0')}-${String(day).padStart(2, '0')}` < todayIsoG
   // 夜勤が発生した日の判定（台風待機など）。指定日だけスタッフのセルに夜勤バッジを出す
   const nightDaySet = useMemo(() => new Set(nightDays || []), [nightDays])
   const isNightDay = (day: number) => nightDaySet.has(day)
@@ -544,6 +552,7 @@ export default function AttendanceGrid({
                                 day={d.day}
                                 isLocked={isLocked}
                                 onStatusChange={onTimeStatusChange}
+                                canBackfill={!!canBackfill && isPastDayG(d.day)}
                                 showCompButton={
                                   // カレンダー休日(off/holiday)だけ対象外（2026-08-26 代表確認）。
                                   //   カレンダー休日に補償が要るのは旧制度の3名だけで、

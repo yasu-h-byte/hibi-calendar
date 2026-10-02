@@ -147,7 +147,7 @@ export function HomeLeaveCell({ colBg, cellWidth }: { colBg: string; cellWidth: 
  * 許可していたので、塞いでいたのは画面だけだった。
  */
 export function WaitingCell({
-  colBg, cellWidth, wId, day, isLocked, onStatusChange, showCompButton,
+  colBg, cellWidth, wId, day, isLocked, onStatusChange, showCompButton, canBackfill,
 }: {
   colBg: string
   cellWidth: number
@@ -157,9 +157,35 @@ export function WaitingCell({
   onStatusChange?: (workerId: string, day: number, value: string) => void
   /** 現場都合休みの可能性がある日だけ true。未入力の全日程に出すと過剰なため絞る */
   showCompButton?: boolean
+  /** さかのぼり入力（代表・事業責任者・昨日までの日・2026-10-02）。本人の入力が無い日に出勤などを選べる */
+  canBackfill?: boolean
 }) {
   const canAddComp = showCompButton !== false
     && !isLocked && !!onStatusChange && wId !== undefined && day !== undefined
+  if (canBackfill && !isLocked && onStatusChange && wId !== undefined && day !== undefined) {
+    return (
+      <td
+        className={`px-0 py-0 border-l border-gray-100 ${colBg}`}
+        style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
+        title="本人の入力がありません。代表・事業責任者は、さかのぼって入れられます（操作ログに残ります）"
+      >
+        <div className="flex flex-col items-center justify-center h-full py-1 gap-0.5">
+          <span className="text-[9px] text-gray-400">入力なし</span>
+          <select
+            value=""
+            onChange={e => { if (e.target.value) onStatusChange(wId, day, e.target.value) }}
+            className="w-full text-[10px] border border-gray-300 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
+          >
+            <option value="">入れる…</option>
+            <option value="W">出勤</option>
+            <option value="P">有給</option>
+            <option value="R">欠勤</option>
+            <option value="C">0.6補</option>
+          </select>
+        </div>
+      </td>
+    )
+  }
   return (
     <td
       className={`group px-0 py-0 border-l border-gray-100 ${colBg}`}

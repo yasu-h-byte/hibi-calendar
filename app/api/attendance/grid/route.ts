@@ -10,7 +10,7 @@ import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, getDocs, collection } from '@/lib/fsdb'
-import { todayJstDate } from '@/lib/date-utils'
+import { todayJstDate, todayJstIso } from '@/lib/date-utils'
 
 export async function GET(request: NextRequest) {
   // 2026-09-26: 権限表（lib/permissions.ts attendance.view）
@@ -486,6 +486,11 @@ export async function POST(request: NextRequest) {
           const denied2 = await requireCap(request, 'attendance.inputSupport')
           if (!denied2) denied = null
         }
+      }
+      // 2026-10-02 代表決定: さかのぼり入力（attendance.backfill・代表と事業責任者）は、昨日までの日の出面の保存ができる。
+      //   政仁さんは attendance.input を持たないので、ここで過ぎた日の保存だけ通す
+      if (denied && cap === 'attendance.input' && (!action || action === 'saveAttendance') && isPastDay(body.ym, body.day)) {
+        if (!(await requireCap(request, 'attendance.backfill'))) denied = null
       }
       if (denied) return denied
     }
@@ -1046,6 +1051,8 @@ export async function POST(request: NextRequest) {
       // 2026-09-02 高速化: この後の履歴退避（prevEntry）と同じ doc を2度読みしていたので
       //   1回の読みを共有する（オートセーブは1セルごとに走るため塵も積もる）
       let sharedCurD: Record<string, AttendanceEntry> | null = null
+      /** 本人の入力が無い日を、代表・事業責任者がさかのぼって入れた（操作ログに別の名前で残す） */
+      let backfilled = false
       if (entry && typeof entry === 'object') {
         try {
           const { canAdminEditEntry, detectMultiSiteConflict } = await import('@/lib/attendance')
@@ -1060,7 +1067,14 @@ export async function POST(request: NextRequest) {
             // ※ 2026-06-XX: w=0.6 (補償日) を例外に追加（lib/attendance.ts canAdminEditEntry 参照）
             const check = canAdminEditEntry({ visa: worker.visa }, existing, entry as AttendanceEntry)
             if (!check.editable) {
-              return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
+              // さかのぼり入力（2026-10-02 代表決定）: 代表と事業責任者だけ、昨日までの日なら本人の入力が無くても入れられる
+              if (isPastDay(ym, day) && !(await requireCap(request, 'attendance.backfill'))) {
+                backfilled = true
+              } else {
+                return NextResponse.json({
+                  error: `${check.reason || '編集不可'}（本人の入力が無い日を、さかのぼって入れられるのは代表と事業責任者だけです・昨日までの日）`,
+                }, { status: 403 })
+              }
             }
             // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
             const conflict = detectMultiSiteConflict(curD, siteId, Number(workerId), ym, Number(day), main.sites,
@@ -1130,10 +1144,15 @@ export async function POST(request: NextRequest) {
             : entryWithSource.ns ? `${entryWithSource.nonly ? '夜勤のみ' : '日勤+夜勤'} ${entryWithSource.nst}-${entryWithSource.net}${entryWithSource.nnote ? `(${entryWithSource.nnote})` : ''}`
             : entryWithSource.w ? (entryWithSource.o ? `出勤+${entryWithSource.o}h` : '出勤')
             : '不在'
+          let who = ''
+          if (backfilled) {
+            const u = await getApiAuthUser(request)
+            who = `（さかのぼり入力・本人の入力なし・操作者 ${u.authorized ? u.actor : '不明'}）`
+          }
           await logActivity(
             'admin',
-            'attendance.gridEdit',
-            `${siteId}/wid:${workerId} ${ym}/${day} → ${status}`,
+            backfilled ? 'attendance.backfill' : 'attendance.gridEdit',
+            `${siteId}/wid:${workerId} ${ym}/${day} → ${status}${who}`,
           )
         } catch { /* ログ失敗は本体処理に影響させない */ }
       } else {
@@ -1184,4 +1203,12 @@ export async function POST(request: NextRequest) {
     console.error('Grid POST error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
+}
+
+/** 昨日までの日か（日本時間）。さかのぼり入力（attendance.backfill）は当日を含めない（当日は本人がスマホで打刻する） */
+function isPastDay(ym: unknown, day: unknown): boolean {
+  const y = String(ym || ''), d = Number(day)
+  if (!/^\d{6}$/.test(y) || !Number.isFinite(d) || d < 1) return false
+  const iso = `${y.slice(0, 4)}-${y.slice(4, 6)}-${String(d).padStart(2, '0')}`
+  return iso < todayJstIso()
 }

@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261002_backfill',
+    title: '本人の入力が無い日を、代表と事業責任者がさかのぼって入れられるようになりました',
+    content:
+      'スタッフがスマホで打刻し忘れた・現場を選び間違えた日は、これまで誰も「出勤」を入れられませんでした。'
+      + '代表と事業責任者（政仁さん）だけ、昨日までの日なら、出面入力の「入力なし」のマスから出勤・有給・欠勤・0.6補を入れられます。'
+      + '事務・職長は今までどおりです（打刻し忘れに気づいたら、代表か政仁さんに伝えてください）。',
+    category: 'new',
+    publishedAt: '2026-10-02T12:30:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['foreman', 'jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261002_off_roster_entries',
     title: '出面入力に「配置外」の行が出るようになりました（現場の選び間違いに気づくため）',
     content:
