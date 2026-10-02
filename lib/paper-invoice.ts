@@ -42,13 +42,14 @@ export interface PaperInvoice {
   companyId: string     // 取引先マスタの id（HFU → 日比建設 は HFU_INVOICE_COMPANY_ID）
   companyName: string
   ym: string            // 対象月 YYYYMM
-  no?: string           // 請求書番号
-  issueDate?: string    // 発行日 YYYY-MM-DD
-  subtotal?: number     // 税抜小計
-  tax?: number          // 消費税
-  total: number         // 税込合計
-  lines?: PaperInvoiceLine[]
-  note?: string
+  // 任意項目は「修正で空にした」とき Firestore に null が入る（app/api/paper-invoice の update）
+  no?: string | null           // 請求書番号
+  issueDate?: string | null    // 発行日 YYYY-MM-DD
+  subtotal?: number | null     // 税抜小計
+  tax?: number | null          // 消費税
+  total: number                // 税込合計
+  lines?: PaperInvoiceLine[] | null
+  note?: string | null
   files: PaperInvoiceFile[]
   uploadedAt: string
   uploadedBy: string
@@ -122,23 +123,38 @@ export function comparePaperWithSystem(paper: Pick<PaperInvoice, 'subtotal' | 't
   }
 }
 
-/** 明細の入力を整える（空行は捨てる・数値でないものは 0）。不正なら error */
+/**
+ * 請求書に書いてある数字を読む（純粋）。全角数字・全角カンマ・全角マイナス・「¥」「円」・空白を許す。
+ * 先に NFKC で半角にそろえてから記号を外す（「３００，０００円」→ 300000）。
+ * 空欄は 0（呼び出し側で「空欄かどうか」は isBlankNumberInput で別に見る）。読めなければ NaN。
+ */
+export function parsePaperNumber(v: unknown): number {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : NaN
+  const s = String(v ?? '').normalize('NFKC').replace(/[,¥￥円\s]/g, '').replace(/[−‐–—]/g, '-')
+  const n = Number(s)
+  return Number.isFinite(n) ? n : NaN
+}
+/** 数字の欄が空欄か（空白だけも空欄） */
+export const isBlankNumberInput = (v: unknown) =>
+  v === undefined || v === null || (typeof v === 'string' && v.normalize('NFKC').trim() === '')
+
+/**
+ * 明細の入力を整える（純粋）。不正なら error。
+ * 空行として捨てるのは「現場・内容が空 かつ 数量・単価・金額がすべて空欄」の行だけ。
+ * 数字の欄に何か書いてあって読めないときは捨てずにエラーにする（黙って消えると見比べが狂う）。
+ */
 export function sanitizePaperLines(raw: unknown): { ok: true; lines: PaperInvoiceLine[] } | { ok: false; error: string } {
   if (raw === undefined || raw === null) return { ok: true, lines: [] }
   if (!Array.isArray(raw)) return { ok: false, error: '明細の形式が不正です' }
-  const num = (v: unknown) => {
-    const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(/[,，¥円\s]/g, ''))
-    return Number.isFinite(n) ? n : NaN
-  }
   const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
   const out: PaperInvoiceLine[] = []
   for (const r of raw as Record<string, unknown>[]) {
     if (!r || typeof r !== 'object') continue
     const line = {
       site: text(r.site, 80), item: text(r.item, 40), unit: text(r.unit, 10),
-      qty: num(r.qty), rate: num(r.rate), amount: num(r.amount),
+      qty: parsePaperNumber(r.qty), rate: parsePaperNumber(r.rate), amount: parsePaperNumber(r.amount),
     }
-    const empty = !line.site && !line.item && !(line.amount) && !(line.qty)
+    const empty = !line.site && !line.item && isBlankNumberInput(r.qty) && isBlankNumberInput(r.rate) && isBlankNumberInput(r.amount)
     if (empty) continue
     if ([line.qty, line.rate, line.amount].some(n => Number.isNaN(n))) {
       return { ok: false, error: `明細の数字が読めません（${line.site || line.item || '行'}）` }
@@ -148,3 +164,22 @@ export function sanitizePaperLines(raw: unknown): { ok: true; lines: PaperInvoic
   if (out.length > PAPER_INVOICE_MAX_LINES) return { ok: false, error: `明細は${PAPER_INVOICE_MAX_LINES}行までです` }
   return { ok: true, lines: out }
 }
+
+/** その会社・その月に入れた紙の請求書の件数と税込合計（純粋） */
+export function paperSummaryFor(records: Pick<PaperInvoice, 'companyId' | 'ym' | 'total'>[], ym: string, companyId: string): { count: number; total: number } {
+  const xs = records.filter(r => r.ym === ym && r.companyId === companyId)
+  return { count: xs.length, total: xs.reduce((s, r) => s + (r.total || 0), 0) }
+}
+
+/**
+ * 二重請求の防止（純粋）。同じ会社・同じ月に紙の請求書を入れてあれば、システムからの申請・発行を止める文言を返す。
+ * 紙で出した月をシステムからも出すと、相手に同じ月の請求書が2枚届く（2026-10-02 レビュー指摘）。
+ */
+export function paperDoubleBillingError(records: Pick<PaperInvoice, 'companyId' | 'ym' | 'total'>[], ym: string, companyId: string): string | null {
+  const { count } = paperSummaryFor(records, ym, companyId)
+  if (count === 0) return null
+  return `この会社の${parseInt(ym.slice(4, 6), 10)}月分は紙の請求書を登録済みです。二重請求になるので、システムからは発行できません（紙の請求書を削除してから）`
+}
+
+/** 紙の請求書のドキュメント id（prepare で randomUUID() が作る形） */
+export const PAPER_INVOICE_DOC_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/

@@ -5,10 +5,12 @@
  * GET  /api/paper-invoice?ym=YYYYMM&lite=1     → その月の記録だけ（請求書・支払の画面の「紙で発行済み」表示用・集計しない）
  * GET  /api/paper-invoice?all=1                → 全部の月の記録（一覧用・見比べなし）
  * GET  /api/paper-invoice?open=ID&i=0          → そのファイルを見るための署名つきURL（15分）
- * POST { action: 'prepare', files:[{name,contentType,size}] } → 置き場のパスと署名つきURL（まだ記録は作らない）
+ * POST { action: 'prepare', files:[{name,contentType,size}], ...（commit と同じ項目）} → 項目を確かめてから、置き場のパスと署名つきURL
+ *      （まだ記録は作らない。項目が不正なら何もアップロードさせない）
  * POST { action: 'commit', docId, files, companyId, ym, total, subtotal?, tax?, no?, issueDate?, lines?, note? }
  * POST { action: 'update', docId, ...（commit と同じ項目。files 以外）}
- * POST { action: 'delete', docId }               → ファイルごと削除（invoice.approve）
+ * POST { action: 'discard', docId }              → 登録できなかったアップロードの後片付け（記録が無い docId のファイルだけ消す）
+ * POST { action: 'delete', docId }               → ファイルごと削除（invoice.approve）。記録を先に消し、ファイルはそのあと
  *
  * 権限: 見る = invoice.view ／ 登録・修正 = invoice.paper ／ 削除 = invoice.approve（lib/permissions.ts）
  */
@@ -24,11 +26,11 @@ import { hasRole } from '@/lib/companies'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
 import { resolveInvoiceDraft, listPeerInvoicesForYm } from '@/lib/peer-invoice-store'
 import {
-  PAPER_INVOICE_ALLOWED_TYPES, PAPER_INVOICE_MAX_FILE_BYTES, PAPER_INVOICE_MAX_FILES,
-  sanitizePaperLines, comparePaperWithSystem,
+  PAPER_INVOICE_ALLOWED_TYPES, PAPER_INVOICE_MAX_FILE_BYTES, PAPER_INVOICE_MAX_FILES, PAPER_INVOICE_DOC_ID_RE,
+  sanitizePaperLines, comparePaperWithSystem, parsePaperNumber, isBlankNumberInput,
   type PaperInvoice, type PaperInvoiceFile, type SystemInvoiceFigures,
 } from '@/lib/paper-invoice'
-import { signedUploadUrl, signedReadUrl, fileMeta, deleteFile, getStaffDocsBucket } from '@/lib/storage-admin'
+import { signedUploadUrl, signedReadUrl, fileMeta, deleteFile, deleteFilesWithPrefix, getStaffDocsBucket } from '@/lib/storage-admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,11 +65,14 @@ function snapToList(snap: { forEach: (cb: (d: { id: string; data: () => Record<s
   return out.sort((a, b) => a.ym.localeCompare(b.ym) || a.companyName.localeCompare(b.companyName, 'ja') || (a.uploadedAt || '').localeCompare(b.uploadedAt || ''))
 }
 
+/** 任意の金額欄。空欄は undefined、読めなければ 'invalid'（全角数字・カンマ・円も読む＝lib/paper-invoice.ts parsePaperNumber） */
 const optNum = (v: unknown): number | undefined | 'invalid' => {
-  if (v === undefined || v === null || v === '') return undefined
-  const n = typeof v === 'number' ? v : Number(String(v).replace(/[,，¥円\s]/g, ''))
+  if (isBlankNumberInput(v)) return undefined
+  const n = parsePaperNumber(v)
   return Number.isFinite(n) ? Math.round(n) : 'invalid'
 }
+const badDocId = () => NextResponse.json({ error: 'docId が不正です' }, { status: 400 })
+const isDocId = (v: unknown): v is string => typeof v === 'string' && PAPER_INVOICE_DOC_ID_RE.test(v)
 const optText = (v: unknown, max: number) => {
   if (typeof v !== 'string') return undefined
   const t = v.trim().slice(0, max)
@@ -147,7 +152,9 @@ export async function GET(request: NextRequest) {
 
   const open = sp.get('open')
   if (open) {
+    if (!isDocId(open)) return badDocId()
     const i = Number(sp.get('i') || 0)
+    if (!Number.isInteger(i) || i < 0) return NextResponse.json({ error: 'ファイルの指定が不正です' }, { status: 400 })
     const snap = await getDoc(doc(db, COL, open))
     if (!snap.exists()) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
     const f = (snap.data() as PaperInvoice).files?.[i]
@@ -184,8 +191,13 @@ export async function POST(request: NextRequest) {
   const denied = await requireCap(request, action === 'delete' ? 'invoice.approve' : 'invoice.paper')
   if (denied) return denied
 
+  const main = await getMainData()
+
   // ── アップロード準備（署名つきURLを出すだけ）──
   if (action === 'prepare') {
+    // commit と同じ項目チェックを先にする（commit で落ちる内容なら、そもそもアップロードさせない）
+    const parsed = parseFields(body, main, false)
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
     const files = Array.isArray(body.files) ? body.files as { name?: string; contentType?: string; size?: number }[] : []
     if (files.length === 0) return NextResponse.json({ error: 'ファイルを選んでください' }, { status: 400 })
     if (files.length > PAPER_INVOICE_MAX_FILES) return NextResponse.json({ error: `ファイルは1件につき${PAPER_INVOICE_MAX_FILES}個までです` }, { status: 400 })
@@ -207,15 +219,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ docId, uploads })
   }
 
-  const main = await getMainData()
   const by = await actorLabel(request)
   const now = new Date().toISOString()
   const label = (r: { companyName: string; ym: string }) => `${r.companyName} ${r.ym.slice(0, 4)}年${parseInt(r.ym.slice(4, 6), 10)}月分`
 
+  // ── 登録できなかったアップロードの後片付け（2026-10-02）──
+  // commit が失敗したとき画面から呼ぶ。記録（Firestore）がある docId のファイルは絶対に消さない
+  if (action === 'discard') {
+    if (!isDocId(body.docId)) return badDocId()
+    const docId = body.docId
+    if ((await getDoc(doc(db, COL, docId))).exists()) {
+      return NextResponse.json({ error: 'この請求書は登録済みのため、後片付けの対象ではありません' }, { status: 409 })
+    }
+    if (!getStaffDocsBucket()) return storageUnavailable()
+    const n = await deleteFilesWithPrefix(`paper-invoices/${docId}/`)
+    return NextResponse.json({ ok: true, deleted: n })
+  }
+
   // ── 記録を作る（アップロード済みを確認してから）──
   if (action === 'commit') {
-    const docId = String(body.docId || '')
-    if (!/^[0-9a-f-]{36}$/.test(docId)) return NextResponse.json({ error: 'docId が不正です' }, { status: 400 })
+    if (!isDocId(body.docId)) return badDocId()
+    const docId = body.docId
     const parsed = parseFields(body, main, false)
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
     const prefix = `paper-invoices/${docId}/`
@@ -224,22 +248,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'ファイルの指定が不正です' }, { status: 400 })
     }
     if (!getStaffDocsBucket()) return storageUnavailable()
+    if (reqFiles.length > PAPER_INVOICE_MAX_FILES) return NextResponse.json({ error: `ファイルは1件につき${PAPER_INVOICE_MAX_FILES}個までです` }, { status: 400 })
+    const ref = doc(db, COL, docId)
+    if ((await getDoc(ref)).exists()) return NextResponse.json({ error: 'この請求書は既に登録されています' }, { status: 409 })
     const files: PaperInvoiceFile[] = []
     for (const f of reqFiles) {
       const m = await fileMeta(f.path)
       if (!m.exists) return NextResponse.json({ error: `アップロードが完了していません: ${f.name}` }, { status: 409 })
-      files.push({ path: f.path, name: safeFileName(f.name), contentType: m.contentType || f.contentType, size: m.size })
+      files.push({ path: f.path, name: safeFileName(String(f.name)), contentType: m.contentType || f.contentType, size: m.size })
     }
-    const ref = doc(db, COL, docId)
-    if ((await getDoc(ref)).exists()) return NextResponse.json({ error: 'この請求書は既に登録されています' }, { status: 409 })
+    // 実際に置かれたファイルで大きさ・形式を確かめる（prepare の申告を信用しない）。だめならこの記録のファイルを全部消す
+    const bad = files.find(f => f.size > PAPER_INVOICE_MAX_FILE_BYTES || !PAPER_INVOICE_ALLOWED_TYPES.includes(f.contentType))
+    if (bad) {
+      await deleteFilesWithPrefix(prefix).catch(e => console.error('[paper-invoice] commit cleanup failed', docId, e))
+      const why = bad.size > PAPER_INVOICE_MAX_FILE_BYTES ? '25MBを超えています' : '入れられない形式です（PDF・写真だけ）'
+      return NextResponse.json({ error: `${bad.name} は${why}。アップロードしたファイルは消しました` }, { status: 400 })
+    }
     const record = compact({ ...parsed.fields, files, uploadedAt: now, uploadedBy: by }) as Omit<PaperInvoice, 'id'>
     await setDoc(ref, record)
     await logActivity(by, 'paperInvoice.add', `紙の請求書を登録：${label(record)}（税込 ${record.total.toLocaleString()}円・${files.length}ファイル）`)
     return NextResponse.json({ ok: true, record: { ...record, id: docId } })
   }
 
-  const docId = String(body.docId || '')
-  if (!docId) return NextResponse.json({ error: 'docId が必要です' }, { status: 400 })
+  if (action !== 'update' && action !== 'delete') return NextResponse.json({ error: 'unknown action' }, { status: 400 })
+  if (!isDocId(body.docId)) return badDocId()
+  const docId = body.docId
   const ref = doc(db, COL, docId)
   const snap = await getDoc(ref)
   if (!snap.exists()) return NextResponse.json({ error: '請求書が見つかりません' }, { status: 404 })
@@ -261,9 +294,13 @@ export async function POST(request: NextRequest) {
 
   if (action === 'delete') {
     if (!getStaffDocsBucket()) return storageUnavailable()
-    for (const f of cur.files || []) await deleteFile(f.path)
+    // 記録を先に消す（途中で失敗しても「記録はあるのにファイルが無い」状態を作らない）。ファイルはそのあと消せるだけ消す
     await deleteDoc(ref)
-    await logActivity(by, 'paperInvoice.delete', `紙の請求書を削除：${label(cur)}`)
+    const failed: string[] = []
+    for (const f of cur.files || []) {
+      try { await deleteFile(f.path) } catch (e) { failed.push(f.path); console.error('[paper-invoice] file delete failed', f.path, e) }
+    }
+    await logActivity(by, 'paperInvoice.delete', `紙の請求書を削除：${label(cur)}${failed.length ? `（ファイル${failed.length}個は消せず残っています）` : ''}`)
     return NextResponse.json({ ok: true })
   }
 

@@ -3,6 +3,7 @@ import { checkApiAuth, getApiAuthUser, getApiRole, requireExecutiveAuth, require
 import { getMainData, getMultiMonthAttData, compute } from '@/lib/compute'
 import {
   resolveInvoiceDraft, invoiceApprovalGap, requestPeerInvoice, approvePeerInvoice, rejectPeerInvoice, listPeerInvoicesForYm, getPeerInvoicesForCompanyYm, issuePeerInvoice, voidPeerInvoice,
+  paperSummaryForCompanyYm,
 } from '@/lib/peer-invoice-store'
 
 /**
@@ -11,6 +12,7 @@ import {
  * GET ?ym=YYYYMM             → その月に発行・取り消しされた請求書の一覧（/peer-statement のバッジ用）
  * GET ?ym=YYYYMM&companyId=X → 会社×月の1件。発行済みがあればそのスナップショット、無ければ下書き
  *   companyId が HFU_INVOICE_COMPANY_ID（lib/hfu-invoice.ts）なら HFU → 日比建設 の請求書
+ *   未発行のときは paper: { count, total }（同じ会社・月に紙の請求書を入れてあれば、画面で二重請求の警告を出す）
  * POST { action:'request', ym, companyId } → 発行を申請（事務。内容を凍結・番号はまだ）
  * POST { action:'withdraw', id }           → 申請の取り下げ（事務・事業責任者・管理者）
  * POST { action:'approve', id }            → 申請を承認して発行（事業責任者・管理者のみ）
@@ -39,22 +41,23 @@ export async function GET(request: NextRequest) {
     }
     // 申請中は凍結した内容を表示する（承認者が見る内容 = 発行される内容）
     const pending = history.find(inv => inv.status === 'pending')
-    const main = await getMainData()
+    // 紙（手作り）で出した請求書があれば、二重請求の警告を出す（申請・発行はサーバでも止める・2026-10-02）
+    const [main, paper] = await Promise.all([getMainData(), paperSummaryForCompanyYm(ym, companyId)])
     // 全部の日の職長承認・最終承認がそろっているか（2026-09-30）。画面はこれでボタンを止める
     const approvalOf = async (detail: import('@/lib/peer-invoice').PeerInvoiceSiteDetail[]) => {
       const r = await invoiceApprovalGap(main, ym, detail)
       return { required: r.required, foremanMissing: r.gap.foremanMissing.length, finalMissing: r.gap.finalMissing.length, message: r.message }
     }
     if (pending) {
-      return NextResponse.json({ status: 'pending', record: pending, history, approval: await approvalOf(pending.detail || []) })
+      return NextResponse.json({ status: 'pending', record: pending, history, paper, approval: await approvalOf(pending.detail || []) })
     }
 
     const att = await getMultiMonthAttData([ym])
     const y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(4, 6), 10)
     const c = compute(main, att.d, att.sd, [{ y, m }])
     const { draft, issuer } = resolveInvoiceDraft({ main, c, attD: att.d, attSD: att.sd, ym, companyId })
-    if (!draft) return NextResponse.json({ status: 'empty', history })
-    return NextResponse.json({ status: 'draft', draft, issuer, history, approval: await approvalOf(draft.detail) })
+    if (!draft) return NextResponse.json({ status: 'empty', history, paper })
+    return NextResponse.json({ status: 'draft', draft, issuer, history, paper, approval: await approvalOf(draft.detail) })
   } catch (e) {
     console.error('[peer-invoice] GET error', e)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
