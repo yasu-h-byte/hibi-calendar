@@ -10,6 +10,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './'),
+      // サーバー専用モジュール（lib/wage-plan.server.ts など）をテストから読むため、目印の server-only を空にする
+      'server-only': resolve(__dirname, 'node_modules/next/dist/compiled/server-only/empty.js'),
     },
   },
 })

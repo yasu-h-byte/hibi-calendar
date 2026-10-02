@@ -8,6 +8,8 @@
  *
  * ⚠️ 個人の賃金を一覧するため、代表（workerId=0）以外には表示しない。
  *    データ取得も /api/workers（管理者パスワード必須）経由のみ。
+ *    改定の予定・個別事情は /api/wage-analysis/plan（代表だけ）から受け取る。
+ *    このファイルの JS はログインなしでも取れるので、個人の時給・事情をここに書かないこと（2026-10-02）。
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -16,11 +18,11 @@ import {
   buildWageAnalysis, modelWage, findInversions, stageIQROutliers,
   STAGES, TOKYO_MIN_WAGE, MODEL_RAISE_RATE,
   MARKET_REFERENCE, KENSETSU_TOKUTEI,
-  type WageAnalysis, type WageRow, type WageBasis,
+  type WageAnalysis, type WageRow, type WageBasis, type WagePlan,
 } from '@/lib/wage-analysis'
 import {
   curveWage, curveRaiseAt, CURVE_BASE_RAISE, CURVE_DECAY, CURVE_MIN_RAISE,
-  WAGE_REVISION_2026_10, SCHEDULED_WAGE_CHANGES, MONTHLY_HOURS,
+  MONTHLY_HOURS,
 } from '@/lib/wage-curve'
 import { hourlyRateOn } from '@/lib/workers'
 import { WageMap } from './WageMap'
@@ -33,6 +35,7 @@ const signed = (v: number) => (v >= 0 ? '+' : '−') + '¥' + Math.abs(Math.roun
 export default function WageAnalysisPage() {
   const [allowed, setAllowed] = useState<boolean | null>(null)
   const [rows, setRows] = useState<WageAnalysis | null>(null)
+  const [plan, setPlan] = useState<WagePlan | null>(null)
   const [err, setErr] = useState('')
   const [pw, setPw] = useState('')
   // 既定は「改定後」。10月以降どうなるかを見るのが今の主目的のため（2026-08-25 代表指示）
@@ -41,9 +44,14 @@ export default function WageAnalysisPage() {
   const load = useCallback(async (password: string, b: WageBasis) => {
     {
       try {
-        const res = await fetch('/api/workers', { headers: { 'x-admin-password': password } })
-        if (!res.ok) throw new Error('取得に失敗しました')
+        const headers = { 'x-admin-password': password }
+        const [res, planRes] = await Promise.all([
+          fetch('/api/workers', { headers }),
+          fetch('/api/wage-analysis/plan', { headers }),
+        ])
+        if (!res.ok || !planRes.ok) throw new Error('取得に失敗しました')
         const { workers } = await res.json()
+        const wagePlan = await planRes.json() as WagePlan
         const today = new Date()
         const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
         const target = (workers as Record<string, unknown>[])
@@ -65,7 +73,8 @@ export default function WageAnalysisPage() {
               nextVisaType: sched.find(c => c.field === 'visa')?.value,
             }
           })
-        setRows(buildWageAnalysis(target, todayIso, 20, b))
+        setPlan(wagePlan)
+        setRows(buildWageAnalysis(target, todayIso, 20, b, wagePlan))
       } catch (e) {
         setErr(e instanceof Error ? e.message : '不明なエラー')
       }
@@ -94,11 +103,12 @@ export default function WageAnalysisPage() {
     </div>
   )
   if (err) return <div className="p-6 text-red-600">エラー: {err}</div>
-  if (!rows) return <div className="p-6 text-gray-500">集計中…</div>
+  if (!rows || !plan) return <div className="p-6 text-gray-500">集計中…</div>
 
   return (
     <Report
       a={rows}
+      plan={plan}
       onApplied={() => load(pw, basis)}
       pw={pw}
       basis={basis}
@@ -107,8 +117,8 @@ export default function WageAnalysisPage() {
   )
 }
 
-function Report({ a, onApplied, pw, basis, onBasis }: {
-  a: WageAnalysis; onApplied: () => void; pw: string
+function Report({ a, plan, onApplied, pw, basis, onBasis }: {
+  a: WageAnalysis; plan: WagePlan; onApplied: () => void; pw: string
   basis: WageBasis; onBasis: (b: WageBasis) => void
 }) {
   const rows = a.rows
@@ -152,13 +162,13 @@ function Report({ a, onApplied, pw, basis, onBasis }: {
         </div>
         <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
           {basis === 'revised'
-            ? <><b>契約済み・予定の改定をすべて反映した時給</b>（9/21 3号移行、10/1 一律改定・最賃対応・特定技能2号移行、11/1 アインの契約更新）で、
+            ? <><b>契約済み・予定の改定をすべて反映した時給</b>（{plan.changes.map(c => `${Number(c.effective.slice(5, 7))}/${Number(c.effective.slice(8, 10))} ${c.label}`).join('、')}）で、
               ①〜⑨とデータ表のすべてを計算しています。人員マスタには適用開始日つきで登録済みで、給与計算は各開始日から自動で切り替わります。</>
             : <><b>人員マスタの現在の時給</b>で計算しています。いま給与計算に使われている額です。</>}
         </p>
       </header>
 
-      <RevisionBanner a={a} onApplied={onApplied} pw={pw} />
+      <RevisionBanner a={a} plan={plan} onApplied={onApplied} pw={pw} />
       <MinWageWatch a={a} />
 
       <section className="grid sm:grid-cols-2 gap-3">
@@ -194,8 +204,8 @@ function Report({ a, onApplied, pw, basis, onBasis }: {
       </Card>
 
       <Card title="⑦ 賃金改定の影響"
-        note={`事由の異なる改定を分けて表示している。一律改定の率（${((WAGE_REVISION_2026_10.rate ?? 0) * 100).toFixed(3)}％）はタンの要望額（月+2万円）から逆算したもの。月額は所定 ${MONTHLY_HOURS} 時間換算。`}>
-        <RevisionTable a={a} />
+        note={`事由の異なる改定を分けて表示している。一律の率で決めた改定は、率の決め方を各改定の説明に書いている。月額は所定 ${MONTHLY_HOURS} 時間換算。`}>
+        <RevisionTable a={a} plan={plan} />
       </Card>
 
       <Card title="⑧ 参考データ（外部・法令）"
@@ -384,7 +394,8 @@ function StageTable({ a }: { a: WageAnalysis }) {
  * 日額 `rate` も一緒に更新する。給与計算自体は `hourlyRate × 7` から日額を導くので
  * `rate` は使われないが、人員マスタの表示が古い日額のまま残ると混乱するため揃える。
  */
-function RevisionBanner({ a, onApplied, pw }: { a: WageAnalysis; onApplied: () => void; pw: string }) {
+function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: WagePlan; onApplied: () => void; pw: string }) {
+  const schedule = plan.changes
   const { changes, pending, annualCost } = a.revision
   const [busy, setBusy] = useState('')
   const [confirming, setConfirming] = useState<string | null>(null)
@@ -393,7 +404,7 @@ function RevisionBanner({ a, onApplied, pw }: { a: WageAnalysis; onApplied: () =
 
   /** その改定で実際に上がる人（すでに予定額以上なら対象外） */
   const pendingRows = (changeId: string) => {
-    const c = SCHEDULED_WAGE_CHANGES.find(x => x.id === changeId)
+    const c = schedule.find(x => x.id === changeId)
     if (!c) return []
     // 人員マスタに登録済み（適用開始日が先でも）なら対象外。masterHourly で判定する
     return a.rows
@@ -403,7 +414,7 @@ function RevisionBanner({ a, onApplied, pw }: { a: WageAnalysis; onApplied: () =
 
   const apply = async (changeId: string) => {
     const list = pendingRows(changeId)
-    const c = SCHEDULED_WAGE_CHANGES.find(x => x.id === changeId)
+    const c = schedule.find(x => x.id === changeId)
     if (!list.length || !c) return
     // ⚠️ このボタンは時給・日給だけを書く。固定月給（salary）の人は月給も変わるので、
     //   人員マスタで salary / salaryFrom / prevSalary を別途反映すること（2026-09-14 フォン・タンは直接反映済み）
@@ -846,7 +857,8 @@ function CurveGap({ a }: { a: WageAnalysis }) {
 }
 
 /** 賃金改定の明細。事由ごとに表を分け、前後比較と積み残しを示す。 */
-function RevisionTable({ a }: { a: WageAnalysis }) {
+function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
+  const schedule = plan.changes
   const th = 'border border-gray-300 dark:border-gray-600 px-2 py-1.5'
   const td = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
   const tl = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5'
@@ -859,11 +871,11 @@ function RevisionTable({ a }: { a: WageAnalysis }) {
   return (
     <div className="space-y-5">
       {a.revision.changes.map(c => {
-        const change = SCHEDULED_WAGE_CHANGES.find(x => x.id === c.id)!
+        const change = schedule.find(x => x.id === c.id)!
         // この改定の直前に確定している額（先行する改定があればその額）
         // 「改定前」は basis に左右されないよう、常にマスタの現在値から積む
-        const priorOf = (id: number, current: number) => SCHEDULED_WAGE_CHANGES
-          .slice(0, SCHEDULED_WAGE_CHANGES.indexOf(change))
+        const priorOf = (id: number, current: number) => schedule
+          .slice(0, schedule.indexOf(change))
           .reduce((v, p) => Math.max(v, p.targets[id] ?? 0), current)
         const list = a.rows
           .filter(r => change.targets[r.id] !== undefined)

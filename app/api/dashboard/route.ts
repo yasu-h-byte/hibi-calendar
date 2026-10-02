@@ -894,7 +894,7 @@ export async function GET(request: NextRequest) {
         const auth = await getApiAuthUser(request)
         const isOwner = auth.authorized && (auth.actor === 0 || auth.actor === 'super-admin')
         if (isOwner) {
-          const { SCHEDULED_WAGE_CHANGES } = await import('@/lib/wage-curve')
+          const { SCHEDULED_WAGE_CHANGES } = await import('@/lib/wage-plan.server')
           const todayIso = todayJstIso()
           for (const c of SCHEDULED_WAGE_CHANGES) {
             if (c.effective > todayIso) continue  // まだ実施日前

@@ -78,6 +78,19 @@ Tailwind は `tailwind.config.ts` の `content` に列挙したディレクト�
 - 日付の加減 → `addDaysIso()` / `addMonthsSafe()`（`setFullYear(+1)` + `toISOString` はしない）
 - すべて `lib/date-utils.ts`。コミット前に `npm run lint:utc`（意図して UTC を使う行は `// utc-ok`）
 
+### 個人の金額を画面の JS に書かない（2026-10-02）
+
+`/_next/static` の JS チャンクは**ログインなしで誰でも取れる**。画面（`'use client'`）から
+import される `lib/` に個人の時給・予定額・事情を書くと、権限チェックと関係なく丸見えになる。
+2026-10-02 まで `lib/wage-curve.ts` の予定表と `lib/wage-analysis.ts` の個別事情が
+/wage-analysis・/evaluation の共有チャンクに載っていた。
+
+- 個人のデータはサーバー専用モジュール（`import 'server-only'`。例 `lib/wage-plan.server.ts`）か
+  Firestore に置き、権限（`lib/permissions.ts`）をチェックする API から渡す
+- 画面側の lib には純粋な計算と制度の定数（最賃・カーブ）だけを置く
+- `npm run build` の後に `scripts/check-client-bundle-secrets.mjs`（postbuild）が
+  チャンクに予定額・注記が無いかを調べ、見つかればビルドを失敗させる
+
 ### 旧アプリとの関係
 - 旧アプリ（dedura-kanri）の保存機能は**完全無効化済み**
 - Firestoreは共有だが、旧アプリからの書き込みは発生しない
