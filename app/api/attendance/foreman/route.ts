@@ -476,7 +476,9 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
               error: bal.noGrant
                 ? 'このスタッフは有給が付与されていません。管理者に連絡してください。'
-                : `有給の残日数が 0 日です（枠 ${bal.total}日 / 消化 ${bal.used}日）。管理者に連絡してください。`,
+                : bal.periodOver
+                  ? '有給の期が終わり、次の付与の手続きがまだです。事務所に連絡してください。'
+                  : `有給の残日数が 0 日です（枠 ${bal.total}日 / 消化 ${bal.used}日）。管理者に連絡してください。`,
             }, { status: 409 })
           }
         } catch (chkErr) {

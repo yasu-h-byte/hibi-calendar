@@ -319,6 +319,8 @@ export async function GET(request: NextRequest) {
     let plCarryOverExpiryStatus: 'ok' | 'warning' | 'expired' | null = null
     let plGrantRemaining: number | null = null
     let plGrantExpiryDate: string | null = null
+    /** 期が終わって次の付与がまだ（申請は止まる。画面に「付与の手続き待ち」を出す・2026-10-02） */
+    let plPeriodOver = false
     try {
       {
           // 2026-09-02: main の再読をやめ、冒頭で読んだ mainRaw を使う
@@ -337,90 +339,46 @@ export async function GET(request: NextRequest) {
           //   判定して弾くため、「17日あるのに申請できない」というUX不整合になっていた。
           //   ※ 判定は lib/leave-compute.ts の selectActiveGrantRecord に一元化する。
           //     「配列の最後」「fyの数値比較」で代用しないこと（どちらも未来レコードを掴む）。
-          const { selectActiveGrantRecord } = await import('@/lib/leave-compute')
-          const latest = selectActiveGrantRecord(plRecords, todayJstIso())
-
-          if (latest) {
-            const grant = latest.grantDays ?? latest.grant ?? 0
-            const carry = latest.carryOver ?? latest.carry ?? 0
-            const adj = latest.adjustment ?? latest.adj ?? 0
-
-            // periodUsed を出面から動的計算（grantDate..+1年の範囲内のPエントリ数）
-            //
-            // 設計ポリシー（2026-05-18 確定）:
-            //   スタッフ画面の残日数は「申請可能な日数」を示す → 未来日付の予定も「使用済み」扱いに含める
-            //   （対比: 管理画面/Excelは「実消化日数」基準なので未来日付は除外）
-            //
-            // 含めるもの:
-            //   - 過去P（実際に消化済み）
-            //   - 未来P（承認済みの帰国予定など、出面に既に書き込まれている）
-            // 含めないもの:
-            //   - pending状態の申請（まだ承認されていない、leave-request API側で別途算入）
-            //
-            // この設計により、スタッフが「あと15日ある」と思って追加申請したら拒否される、
-            // という UX 不整合を防ぐ。
-            let periodUsed = 0
-            if (latest.grantDate) {
-              const gdStart = new Date(latest.grantDate + 'T00:00:00')
-              if (!isNaN(gdStart.getTime())) {
-                const gdEnd = new Date(gdStart); gdEnd.setFullYear(gdEnd.getFullYear() + 1)
-                // 2026-09-02 高速化（月初の「入力できない」障害の主犯）:
-                //   旧実装は「過去2年+当年 = 36ヶ月」の att を**逐次**読みしており、
-                //   これだけで15〜20秒かかっていた（スマホ回線ではタイムアウト）。
-                //   数えるのは付与期間 [grantDate, +1年) の P だけなので、
-                //   その期間の月（最大13ヶ月）だけを**並列**で読む。
-                const attEntries: Record<string, Record<string, unknown>> = {}
-                {
-                  const periodYms: string[] = []
-                  const cur = new Date(gdStart.getFullYear(), gdStart.getMonth(), 1)
-                  while (cur < gdEnd && periodYms.length < 14) {
-                    periodYms.push(ymKey(cur.getFullYear(), cur.getMonth() + 1))
-                    cur.setMonth(cur.getMonth() + 1)
-                  }
-                  const atts = await Promise.all(periodYms.map(pymL => getAttData(pymL)))
-                  for (const att of atts) Object.assign(attEntries, att.d)
-                }
-                // 同日複数現場の p は1日として数える（他経路と同じ dedup。2026-08-27）
-                const seenP = new Set<string>()
-                for (const [key, entry] of Object.entries(attEntries)) {
-                  if (!entry) continue
-                  const e = entry as { p?: number | boolean }
-                  if (!e.p) continue
-                  const pk = parseDKey(key)
-                  if (parseInt(pk.wid) !== worker.id) continue
-                  const d = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, parseInt(pk.day))
-                  if (d >= gdStart && d < gdEnd) seenP.add(`${pk.ym}_${pk.day}`)
-                }
-                periodUsed = seenP.size
+          // 2026-10-02 総合点検: 残数の計算を lib/leave-compute.ts の computeLeaveBalanceFromAtt に一本化。
+          //   旧: ここで FIFO・買取・期の範囲を自前で計算していて、申請の判定（getLeaveBalance）と「期を過ぎて次の付与が
+          //   まだ」のとき（申請は残0で止まるのに画面は残があるように見える）などで食い違った。
+          //   読むのは当期 [付与日, +1年) の月だけ（最大13か月・並列。2026-09-02 の高速化と同じ）
+          const { selectActiveGrantRecord, computeLeaveBalanceFromAtt, grantPeriodEndExclusive } = await import('@/lib/leave-compute')
+          const todayStr = todayJstIso()
+          const latest = selectActiveGrantRecord(plRecords, todayStr)
+          if (latest && latest.grantDate) {
+            const gdStart = new Date(latest.grantDate + 'T00:00:00')
+            const attEntries: Record<string, Record<string, unknown>> = {}
+            if (!isNaN(gdStart.getTime())) {
+              const gdEnd = new Date(gdStart); gdEnd.setFullYear(gdEnd.getFullYear() + 1)
+              const periodYms: string[] = []
+              const cur = new Date(gdStart.getFullYear(), gdStart.getMonth(), 1)
+              while (cur < gdEnd && periodYms.length < 14) {
+                periodYms.push(ymKey(cur.getFullYear(), cur.getMonth() + 1))
+                cur.setMonth(cur.getMonth() + 1)
               }
+              const atts = await Promise.all(periodYms.map(pymL => getAttData(pymL)))
+              for (const att of atts) Object.assign(attEntries, att.d)
             }
-            // 買取済み日数も消化側に含める（getLeaveBalance と同じ式。
-            //   2026-08-17 総点検で判明: ここだけ買取を無視していたため、退職精算等で
-            //   買取した人のスマホ残数が買取分だけ多く表示される）
-            // buyoutDays 未キャッシュの移行データは履歴合算へフォールバック（getLeaveBalance と統一・2026-09-02）
-            const latestB = latest as { buyoutDays?: number; buyoutHistory?: Array<{ days?: number }> }
-            const buyout = latestB.buyoutDays ?? (latestB.buyoutHistory || []).reduce((s2, b) => s2 + (b.days || 0), 0)
-            const totalUsed = adj + buyout + periodUsed
-
-            // FIFO 内訳: 繰越分→当期付与分の順に消費
-            const fromCarryOver = Math.min(totalUsed, carry)
-            const fromGrant = Math.max(0, totalUsed - carry)
-            plCarryOverRemaining = Math.max(0, carry - fromCarryOver)
-            plGrantRemaining = Math.max(0, grant - fromGrant)
-            plRemaining = plCarryOverRemaining + plGrantRemaining
+            const bal = computeLeaveBalanceFromAtt(worker.id, plRecords as never[], attEntries, todayStr, {
+              isJp: !worker.visaType || worker.visaType === 'none', todayIso: todayStr,
+            })
+            plPeriodOver = !!bal.periodOver
+            const carry = Math.max(0, bal.total - bal.grantDays)
+            // FIFO 内訳（表示用）: 繰越分 → 当期付与分の順に消費
+            const fromCarryOver = Math.min(bal.used, carry)
+            const fromGrant = Math.max(0, bal.used - carry)
+            plCarryOverRemaining = bal.periodOver ? 0 : Math.max(0, carry - fromCarryOver)
+            plGrantRemaining = bal.periodOver ? 0 : Math.max(0, bal.grantDays - fromGrant)
+            plRemaining = bal.remaining
 
             // 当期付与分の最終利用可能日 = 付与日 + 2年 - 1日
-            if (latest.grantDate) {
-              const lastUsable = calcLastUsableDayIso(latest.grantDate)
-              if (lastUsable) {
-                plExpiryDate = lastUsable
-                plGrantExpiryDate = plExpiryDate
-              }
-            }
+            const lastUsable = calcLastUsableDayIso(latest.grantDate)
+            if (lastUsable) { plExpiryDate = lastUsable; plGrantExpiryDate = lastUsable }
 
             // 繰越分の時効 = 前期レコード.grantDate + 2年 - 1日
-            if (plCarryOverRemaining > 0 && latest.grantDate) {
-              const curTime = new Date(latest.grantDate + 'T00:00:00').getTime()
+            if (plCarryOverRemaining > 0) {
+              const curTime = gdStart.getTime()
               const prevCandidates = plRecordsRaw
                 .filter(r => r.grantDate)
                 .map(r => ({ rec: r, time: new Date(r.grantDate as string + 'T00:00:00').getTime() }))
@@ -431,13 +389,13 @@ export async function GET(request: NextRequest) {
                 const prevGrant = prev.rec.grantDate as string
                 const prevLastUsable = calcLastUsableDayIso(prevGrant)
                 plCarryOverExpiryDate = prevLastUsable
-                const todayStr = todayJstIso()
                 if (isLeaveExpiredAsOf(prevGrant, todayStr)) plCarryOverExpiryStatus = 'expired'
                 else if (daysBetween(todayStr, prevLastUsable) <= 90) plCarryOverExpiryStatus = 'warning'
                 else plCarryOverExpiryStatus = 'ok'
                 if (plCarryOverExpiryStatus === 'expired') plCarryOverRemaining = 0
               }
             }
+            void grantPeriodEndExclusive
           }
         }
     } catch { /* ignore */ }
@@ -471,6 +429,8 @@ export async function GET(request: NextRequest) {
       toolBudgetPeriodStart,
       toolBudgetPeriodEnd,
       plRemaining,
+      // 期が終わって次の付与がまだ（申請は止まる）。画面で「付与の手続き待ち / Đang chờ cấp phép」を出す（2026-10-02）
+      plPeriodOver,
       plExpiryDate,
       // Phase 8: FIFO内訳
       plCarryOverRemaining,

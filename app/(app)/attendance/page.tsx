@@ -1090,7 +1090,8 @@ export default function AttendanceGridPage() {
     const worker = data?.workers.find(w => String(w.id) === workerId)
     const foreign = !!worker?.visa && worker.visa !== 'none' && worker.visa !== ''
     const timeBased = useTimeBased && foreign && !worker?.useOldRules
-    return computeWorkerTotals(entries, { timeBased, foreign })
+    // 行の残業合計も現場の休憩設定で数える（保存時の計算・フッターと同じ・2026-10-02 総合点検）
+    return computeWorkerTotals(entries, { timeBased, foreign, workSchedule: data?.site.workSchedule })
   }, [workerEntries, useTimeBased, data])
 
   const subconTotals = useCallback((subconId: string) => {

@@ -593,7 +593,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           error: bal.noGrant
             ? `${wName} さんは有給が付与されていません（付与レコードなし）`
-            : `${wName} さんの有給残は 0 日です（枠 ${bal.total}日 / 消化 ${bal.used}日）`,
+            : bal.periodOver
+              ? `${wName} さんは有給の期が終わり、次の付与の手続きがまだです（休暇管理の「付与待ち」から付与してください）`
+              : `${wName} さんの有給残は 0 日です（枠 ${bal.total}日 / 消化 ${bal.used}日）`,
           code: 'LEAVE_OVERDRAFT',
           balance: bal,
           workerName: wName,

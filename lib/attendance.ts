@@ -30,13 +30,11 @@ export async function isScheduledWorkDay(siteId: string, dateIso: string): Promi
     where('ym', '==', ymDash),
     where('siteId', '==', siteId),
   ))
-  let dayType: string | undefined
-  calSnap.forEach(s => {
-    const days = s.data().days as Record<string, string> | undefined
-    if (days && days[String(d)] !== undefined) dayType = days[String(d)]
-  })
-  const dow = new Date(y, m - 1, d).getDay()
-  return (dayType ?? (dow === 0 ? 'off' : 'work')) === 'work'
+  let days: Record<string, string> | undefined
+  calSnap.forEach(s => { days = (s.data().days as Record<string, string> | undefined) ?? days })
+  // 欠けた日の扱いは法令チェック・画面・所定日数と同じ resolveDayType（日曜は休み・ほかは出勤。2026-10-02 総合点検で一本化）
+  const { resolveDayType } = await import('./calendar')
+  return resolveDayType(days, y, m, d) === 'work'
 }
 
 // ────────────────────────────────────────

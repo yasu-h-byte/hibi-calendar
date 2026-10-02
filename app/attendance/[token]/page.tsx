@@ -53,6 +53,8 @@ interface StaffData {
   toolBudgetCarry?: number
   toolBudgetPeriodEnd: string | null
   plRemaining: number | null
+  /** 期が終わって次の付与がまだ（申請は止まる・2026-10-02） */
+  plPeriodOver?: boolean
   /** 自分の都合で1日休むと減る給料の目安（円・新ルールの時給制のみ） */
   absenceDayPay?: number | null
   /** 休憩短縮（旧契約の毎日20分など）。出面には記録せず給与計算で足す分（2026-09-30） */
@@ -1377,6 +1379,9 @@ export default function StaffAttendancePage() {
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
                 <div className="text-xs text-gray-500 mb-1 inline-flex items-center gap-1"><Icon name="umbrella" size={13} />有給残り / Nghỉ phép còn</div>
                 <div className="text-2xl font-bold text-green-600 tabular-nums">{data.plRemaining}<span className="text-sm font-normal text-gray-400 ml-1">日</span></div>
+                {data.plPeriodOver && (
+                  <div className="text-xs text-orange-700 mt-1">次の付与の手続き待ち / Đang chờ cấp phép năm mới</div>
+                )}
                 {/* Phase 8: FIFO内訳表示（繰越分と当期付与分） */}
                 {/* 内訳・期限は 12px 以上（2026-10-02 総合点検。旧: 10px / 9px） */}
                 {((data.plCarryOverRemaining ?? 0) > 0 || (data.plGrantRemaining ?? 0) > 0) ? (
