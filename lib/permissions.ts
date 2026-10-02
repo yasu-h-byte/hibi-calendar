@@ -44,6 +44,12 @@ export function permRoleOf(user: { role?: string | null; workerId?: number | nul
 
 const ALL_OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 const VIEWERS: PermRole[] = ['approver', 'officer', 'owner']
+/**
+ * 個人の給与（時給・日額・月給・支給額・昇給額）に関わる権限の役割（2026-10-02 代表）。
+ * 給与を見られるのは 代表（靖仁さん）・事業責任者（政仁さん）・事務（森田さん）だけ。役員（officer）・職長は外す。
+ * さらに役割だけでなく本人も確かめる（PAY_VIEWER_WORKER_IDS）＝二重の鍵。事務の役割は奥寺さん・佐藤さんにも付くため
+ */
+const PAY_ROLES: PermRole[] = ['jimu', 'approver', 'owner']
 
 /**
  * できること → できる役割。label は設定画面の権限表にそのまま出る。
@@ -78,13 +84,13 @@ export const CAPABILITIES = {
   // 2026-09-26 代表: 帰国情報は森田さんも補助的に登録・変更（復帰日の登録を含む）。削除は事業責任者・代表だけ
   'homeLeave.edit':          { group: '毎月', label: '帰国情報の登録・変更・復帰日の登録', roles: ['jimu', 'approver', 'owner'] },
   'homeLeave.delete':        { group: '毎月', label: '帰国情報の削除・残っている帰国表示の整理', roles: ['approver', 'owner'] },
-  'monthly.view':            { group: '毎月', label: '月次集計・帳票を見る', roles: ALL_OFFICE },
+  'monthly.view':            { group: '毎月', label: '月次集計・帳票を見る（給与を含む）', roles: PAY_ROLES },
   'monthly.close':           { group: '毎月', label: '月次の締め・帳票出力', roles: ['jimu', 'approver', 'owner'] },
   'invoice.view':            { group: '毎月', label: '請求書・支払を見る', roles: ALL_OFFICE },
   'invoice.request':         { group: '毎月', label: '請求書の発行を申請', roles: ['jimu'] },
   'invoice.approve':         { group: '毎月', label: '請求書の承認・発行・取り消し', roles: ['approver', 'owner'] },
   // ── 経営 ──
-  'cost.view':               { group: '経営', label: '原価・収益を見る', roles: ALL_OFFICE },
+  'cost.view':               { group: '経営', label: '原価・収益を見る（人件費を含む）', roles: PAY_ROLES },
   'cost.edit':               { group: '経営', label: '現場の請求額を入力', roles: ['jimu', 'approver', 'owner'] },
   'cockpit.view':            { group: '経営', label: '経営コックピット', roles: ['owner'] },
   // ── 人・賃金 ──
@@ -94,7 +100,8 @@ export const CAPABILITIES = {
   'toolBudget.view':         { group: '人・賃金', label: '道具代を見る', roles: ALL_OFFICE },
   'toolBudget.edit':         { group: '人・賃金', label: '道具代の登録', roles: ['jimu', 'owner'] },
   'evaluation.input':        { group: '人・賃金', label: '評価の入力', roles: ['foreman', 'approver', 'owner'] },
-  'wage.view':               { group: '人・賃金', label: '賃金・評価を見る', roles: VIEWERS },
+  'pay.view':                { group: '人・賃金', label: '個人の給与（時給・日額・月給・支給額）を見る', roles: PAY_ROLES },
+  'wage.view':               { group: '人・賃金', label: '賃金・評価を見る', roles: ['approver', 'owner'] },
   'wage.decide':             { group: '人・賃金', label: '評価の承認・号俸の改定・賞与の確定', roles: ['approver', 'owner'] },
   'wageAnalysis.view':       { group: '人・賃金', label: '賃金分析', roles: ['owner'] },
   // 書類庫（在留カード・雇用契約書など）。機微な個人情報なので職長・役員には見せない（代表 2026-09-28）
@@ -118,7 +125,30 @@ export function roleCan(role: PermRole | null, cap: Capability): boolean {
   return (CAPABILITIES[cap].roles as readonly PermRole[]).includes(role)
 }
 
+/**
+ * 給与を見られる本人（2026-10-02 代表「僕と政仁と森田以外は見られないように」）。
+ * 0 = 日比靖仁（代表・代表パスワードのログインも workerId 0）／ 1 = 日比政仁（事業責任者）／ 303 = 森田陽子（事務）。
+ * ⚠️ 人を足すときは代表の指示があるときだけ。役割（PAY_ROLES）と本人（ここ）の両方がそろわないと給与は見えない
+ */
+export const PAY_VIEWER_WORKER_IDS: readonly number[] = [0, 1, 303]
+
+/** 個人の給与が見える権限（役割に加えて本人も確かめる）。画面の鍵・API の鍵の両方がこれを使う */
+export const PAY_CAPS: ReadonlySet<Capability> = new Set<Capability>([
+  'pay.view', 'monthly.view', 'monthly.close', 'cost.view', 'cost.edit',
+  'wage.view', 'wage.decide', 'wageAnalysis.view', 'workers.editPay', 'cockpit.view',
+])
+
+export const isPayViewerId = (workerId: unknown): boolean =>
+  typeof workerId === 'number' && PAY_VIEWER_WORKER_IDS.includes(workerId)
+
+/** 役割と本人（給与の権限のときだけ）の両方で判定する。サーバーは lib/auth.ts の requireCap / callerCan が同じ判定 */
+export function capAllowed(role: PermRole | null, workerId: unknown, cap: Capability): boolean {
+  if (!roleCan(role, cap)) return false
+  if (PAY_CAPS.has(cap) && !isPayViewerId(workerId)) return false
+  return true
+}
+
 /** 画面用: ログインユーザーがそのことをできるか */
 export function can(user: Parameters<typeof permRoleOf>[0], cap: Capability): boolean {
-  return roleCan(permRoleOf(user), cap)
+  return capAllowed(permRoleOf(user), user?.workerId, cap)
 }

@@ -6,7 +6,7 @@ import {
   isForemanTokenShape, verifyForemanToken, isOwnerTokenShape, verifyOwnerToken, isPersonalTokenShape, readPersonalToken,
 } from '@/lib/session-token'
 import { passwordFingerprint } from '@/lib/password'
-import { CAPABILITIES, permRoleOf, roleCan, type Capability, type PermRole } from '@/lib/permissions'
+import { CAPABILITIES, permRoleOf, roleCan, capAllowed, type Capability, type PermRole } from '@/lib/permissions'
 import { mapRawWorkers } from '@/lib/workers'
 
 // 個人パスワードのキャッシュ（APIリクエストごとにFirestore読み取りを避ける）
@@ -297,10 +297,22 @@ export async function requireExecutiveAuth(request: NextRequest): Promise<Respon
 export async function requireCap(request: NextRequest, cap: Capability): Promise<Response | null> {
   const auth = await getApiAuthUser(request)
   if (!auth.authorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (await callerCan(request, cap)) return null
+  return NextResponse.json({ error: `この操作の権限がありません（${CAPABILITIES[cap].label}）` }, { status: 403 })
+}
+
+/**
+ * リクエスト元がそのことをできるか（requireCap と同じ判定を真偽で返す）。
+ * 給与の権限（PAY_CAPS）は役割に加えて本人（PAY_VIEWER_WORKER_IDS）も確かめる（2026-10-02 代表）。
+ * 代表パスワード・代表の通行証は workerId 0 として扱う。
+ */
+export async function callerCan(request: NextRequest, cap: Capability): Promise<boolean> {
+  const auth = await getApiAuthUser(request)
+  if (!auth.authorized) return false
   const r = await getApiRole(request)
   const role = permRoleOf(r ? { role: r.role } : null)
-  if (roleCan(role, cap)) return null
-  return NextResponse.json({ error: `この操作の権限がありません（${CAPABILITIES[cap].label}）` }, { status: 403 })
+  const workerId = auth.actor === 'super-admin' ? OWNER_WORKER_ID : auth.actor
+  return capAllowed(role, workerId, cap)
 }
 
 /**

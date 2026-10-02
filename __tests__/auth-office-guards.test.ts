@@ -7,9 +7,9 @@
 import { describe, test, expect, vi, beforeAll } from 'vitest'
 
 const main = {
-  userPasswords: { '50': 'pw-jimu', '1': 'pw-masahito', '7': 'pw-yakuin', '30': 'pw-shokucho' },
+  userPasswords: { '303': 'pw-jimu', '1': 'pw-masahito', '7': 'pw-yakuin', '30': 'pw-shokucho' },
   workers: [
-    { id: 50, name: '森田', job: 'jimu' },
+    { id: 303, name: '森田', job: 'jimu' },
     { id: 1, name: '日比政仁', job: 'yakuin' },
     { id: 7, name: '役員', job: 'yakuin' },
     { id: 30, name: '職長', job: 'shokucho' },

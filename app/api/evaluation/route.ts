@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap, getCallerPermRole } from '@/lib/auth'
-import { roleCan } from '@/lib/permissions'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from '@/lib/fsdb'
 import { getMainData } from '@/lib/compute'
@@ -172,8 +171,8 @@ export async function GET(request: NextRequest) {
     // 2026-09-26: 評価の中身（ほかの評価者の点数・最終点・昇給額）は wage.view（事業責任者・役員・代表）だけ。
     //   職長など評価者本人には、自分の出したレビューだけを残す（評価入力に必要な分）。旧: 全員分が見えた
     stage = 'shape-by-role'
-    const callerRole = await getCallerPermRole(request)
-    if (!roleCan(callerRole, 'wage.view')) {
+    const canSeeWage = await callerCan(request, 'wage.view')
+    if (!canSeeWage) {
       const me = await getApiAuthUser(request)
       const myId = me.authorized && typeof me.actor === 'number' ? me.actor : -1
       // 2026-10-02: 昇給・最終点・ランクに関わる項目は名前の形で消す（raise* / final* / totalScore / manualScore / rank / evaluatorWeights）。
@@ -202,7 +201,7 @@ export async function GET(request: NextRequest) {
       workers: foreignWorkers,
       evaluators,
       // 昇給テーブルは賃金を見られる人だけ（評価入力には要らない・2026-10-02）
-      settings: roleCan(callerRole, 'wage.view') ? settings : { raiseTable: [] },
+      settings: canSeeWage ? settings : { raiseTable: [] },
     })
   } catch (error) {
     console.error(`Evaluation GET error at stage [${stage}]:`, error)
