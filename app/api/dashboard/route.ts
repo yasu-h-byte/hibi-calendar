@@ -815,6 +815,8 @@ export async function GET(request: NextRequest) {
       href: string
     }
     const quietIssues: QuietIssue[] = []
+    // 月次集計を見られない人（給与の鍵）には、月次集計ではなく出面の画面へのリンクを出す
+    const canSeeMonthly = await callerCan(request, 'monthly.view')
     const nowYm = currentYmJst()
     try {
       // 給与明細レベルの検出（法定割れ・夜勤未登録・早期復帰）は computeMonthly が必要。
@@ -869,7 +871,7 @@ export async function GET(request: NextRequest) {
             kind: 'sundayNoRest',
             workerName: w.name,
             detail: `休みの無い週の日曜出勤 ${(w.sundayNoRestDays || []).join('・')}日（法定休日の割増が必要になり得る。振替休日を検討）`,
-            href: `/monthly?ym=${ym}`,
+            href: canSeeMonthly ? `/monthly?ym=${ym}` : `/attendance?ym=${ym}`,
           })
         }
         if ((w.hkEarlyReturnDays || 0) > 0) {

@@ -60,6 +60,11 @@
 | `cost.view` / `cost.edit` | 原価・収益（人件費を含む） |
 | `wage.view` / `wage.decide` / `wageAnalysis.view` | 賃金・評価・昇給・賃金分析 |
 | `workers.editPay` / `cockpit.view` | 給与欄の書き換え・経営コックピット |
+| `workers.edit` | 人員マスタの編集・スタッフのスマホURL（本人ページに欠勤控除の日額などが出るため・2026-10-02 総点検） |
+| `staffDocs.view` / `staffDocs.edit` / `staffDocs.delete` | 書類庫（雇用契約書に賃金が書いてあるため） |
+
+ほかに、休暇管理の有給買取の金額（精勤賞与の額）は `pay.view` の人にだけ返す。
+`/api/workers` は相手ごとに返す項目を許可リストで決める（`lib/workers.ts` の WORKER_PAY_KEYS / WORKER_OFFICE_KEYS / WORKER_PUBLIC_KEYS）。
 
 - 役員（officer）・職長・奥寺さん（301）・佐藤さん（302）は、役割に関係なく給与を見られない
 - 画面は `lib/page-guard.ts` が入口で止め、API は `requireCap` / `callerCan` が止める。資料は `npm run lint:pay`

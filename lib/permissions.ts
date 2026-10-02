@@ -138,6 +138,11 @@ export const PAY_VIEWER_WORKER_IDS: readonly number[] = [0, 1, 303]
 export const PAY_CAPS: ReadonlySet<Capability> = new Set<Capability>([
   'pay.view', 'monthly.view', 'monthly.close', 'cost.view', 'cost.edit',
   'wage.view', 'wage.decide', 'wageAnalysis.view', 'workers.editPay', 'cockpit.view',
+  // スタッフのスマホURL（token）で本人のページを開くと、欠勤控除の日額（時給×7）などが見える。
+  //   URL を扱える人員マスタの編集も3人だけにする（2026-10-02 総点検: 奥寺さん・佐藤さんが時給を逆算できた）
+  'workers.edit',
+  // 書類庫には雇用契約書（賃金が書いてある）がある。見る・入れる・消すも3人だけ（代表 2026-09-28 の決まりどおり）
+  'staffDocs.view', 'staffDocs.edit', 'staffDocs.delete',
 ])
 
 export const isPayViewerId = (workerId: unknown): boolean =>

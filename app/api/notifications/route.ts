@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { siteNeedsCalendar } from '@/lib/site-hierarchy'
-import { checkApiAuth, getApiAuthUser, approvingForemenOfSite } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, approvingForemenOfSite, callerCan } from '@/lib/auth'
 import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { mergeAnnouncements } from '@/lib/release-notes'
 import { permRoleOf } from '@/lib/permissions'
@@ -670,7 +670,8 @@ export async function GET(request: NextRequest) {
           type: 'warning',
           count: mine.length,
           // 職長は月次集計を見られないので出面の画面へ
-          href: role === 'foreman' ? '/attendance' : `/monthly?ym=${latestYm}`,
+          //   月次集計を見られない人（給与の鍵・2026-10-02）も出面の画面へ
+          href: (role === 'foreman' || !(await callerCan(request, 'monthly.view'))) ? '/attendance' : `/monthly?ym=${latestYm}`,
         })
       }
     } catch (e) {

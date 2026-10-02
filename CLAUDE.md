@@ -127,7 +127,7 @@ Tailwind は `tailwind.config.ts` の `content` に列挙したディレクト�
 職長・役員・ほかの事務（奥寺さん・佐藤さん）・スタッフには、画面でも API でも資料でも絶対に見せない。
 
 - 鍵は三重。新しい画面・API・資料を作るときは**3つとも**守ること
-  1. **役割と本人の鍵**（`lib/permissions.ts`）: 給与の権限（`PAY_CAPS`: pay.view・monthly.*・cost.*・wage.*・workers.editPay など）は
+  1. **役割と本人の鍵**（`lib/permissions.ts`）: 給与の権限（`PAY_CAPS`: pay.view・monthly.*・cost.*・wage.*・workers.edit/editPay・staffDocs.* など）は
      役割（事務・事業責任者・代表）に加えて本人（`PAY_VIEWER_WORKER_IDS` = 0・1・303）も確かめる。サーバーは `requireCap` / `callerCan`、画面は `can()` が同じ判定
   2. **画面の入口の鍵**（`lib/page-guard.ts`）: 新しい画面は必要な権限を1行足す（足し忘れはテストが落とす）
   3. **データの鍵**: 給与を含む API は `requireCap(…給与の権限…)` で止める。権限の無い人にも返す API は**許可リスト**で項目を絞る

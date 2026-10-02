@@ -27,6 +27,13 @@ describe('給与の鍵: 役割と本人', () => {
     expect(capAllowed('jimu', 301, 'pay.view')).toBe(false)
     expect(capAllowed('jimu', 302, 'monthly.view')).toBe(false)
   })
+  test('スマホURL（人員マスタの編集）と書類庫（雇用契約書）も3人だけ（総点検 2026-10-02）', () => {
+    for (const cap of ['workers.edit', 'staffDocs.view', 'staffDocs.edit'] as const) {
+      expect(capAllowed('jimu', 303, cap), cap).toBe(true)
+      expect(capAllowed('jimu', 301, cap), cap).toBe(false)
+      expect(capAllowed('jimu', 302, cap), cap).toBe(false)
+    }
+  })
   test('政仁さん・代表は見られる。職長・役員は本人に関係なく見られない', () => {
     expect(can({ role: 'approver', workerId: 1 }, 'wage.view')).toBe(true)
     expect(can({ role: 'admin', workerId: 0 }, 'pay.view')).toBe(true)
