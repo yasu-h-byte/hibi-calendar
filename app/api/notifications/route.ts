@@ -80,11 +80,15 @@ export async function GET(request: NextRequest) {
         const last = (sysSnap.exists() ? sysSnap.data().lastBackup : null) as LastBackupInfo | null
         const h = backupHealth(last, Date.now())
         if (!h.ok && h.reason) {
+          // 記録が無いだけ（この仕組みを入れた直後・今夜の実行でできる）は知らせるだけ。止まっている・失敗は赤
+          const firstTime = !last?.at
           notifications.push({
             id: 'backup-stale',
             icon: '\u26A0\uFE0F',
-            message: `${h.reason}。管理者設定 → バックアップ・履歴 で確認してください`,
-            type: 'error',
+            message: firstTime
+              ? 'バックアップの実行記録はまだありません（今夜の実行から記録され、止まったときにここに出ます）'
+              : `${h.reason}。管理者設定 → バックアップ・履歴 で確認してください`,
+            type: firstTime ? 'info' : 'error',
             href: '/settings?tab=activity',
           })
         }
