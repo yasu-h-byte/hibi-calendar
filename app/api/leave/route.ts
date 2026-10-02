@@ -1478,7 +1478,9 @@ export async function GET(request: NextRequest) {
 
         // 日本人社員（visa='none'）でgrantDate未設定の場合、決算期サイクル(10/1起点)をデフォルト適用
         // ただし「Pエントリがある期」を優先して選ぶ（過去のデータを失わないため）
-        if (!grantDate && (!w.visa || w.visa === 'none')) {
+        //   2026-10-02: 付与の記録が1件も無い人（入社6ヶ月前の新人など）には当てない。10/1 統一をやめたので、
+        //   濱上さん（初回 2026-12-01）に「2026-10-01 付与・0日」と出ていた。付与日の無い古い記録がある人だけの救済にする
+        if (!grantDate && (!w.visa || w.visa === 'none') && plRecords.length > 0) {
           // JST の基準日から（UTC の now だと 10/1 朝9時まで前年度になる・2026-10-01）
           const currentFyStartYear = nowM >= 10 ? nowY : nowY - 1
 
