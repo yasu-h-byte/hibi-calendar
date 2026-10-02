@@ -99,6 +99,10 @@ export async function GET(request: NextRequest) {
         for (const child of workTypeSitesOf(main.sites, siteId).filter(c => !c.archived)) {
           for (const wid of getAssign(main, child.id, ym).workers) onRoster.add(wid)
         }
+      } else {
+        // 工種サイトそのものを開いたとき: 工種サイトは親の配置で動く（鉄骨工事など）ので、親の配置の人は配置外にしない
+        const parentId = (site as { parentId?: string }).parentId
+        if (parentId) for (const wid of getAssign(main, parentId, ym).workers) onRoster.add(wid)
       }
       const tail = `_${ym}_`
       for (const [key, e] of Object.entries(att.d)) {
