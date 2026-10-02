@@ -22,7 +22,7 @@ import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth, isEmployedOn } from '@/lib/workers'
 import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe, addDaysIso, currentYmJst, todayJstDate } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
-import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter } from '@/lib/leave-compute'
+import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter, jpExpectedGrantWithoutRecords } from '@/lib/leave-compute'
 import type { HomeLeaveEntry } from '@/lib/homeLeave'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
@@ -739,8 +739,9 @@ export async function GET(request: NextRequest) {
           // 初回は入社＋6ヶ月、2回目以降は前回付与日から1年（休暇管理 /api/leave の getPendingGrants と同じ・労基法39条）。
           //   2026-10-02 代表決定で 10/1 統一をやめた。入社日が無い人だけ 10/1 を目安にする
           const fyGrant = `${curFy}-10-01`
-          const hirePlus6 = w.hireDate ? addMonthsSafe(w.hireDate, 6) : ''
-          const expDate = latestG ? jpNextGrantAfter(latestG).grantDate : (hirePlus6 || fyGrant)
+          //   付与の記録が無い古い入社の人は、何年も前の入社6ヶ月後ではなく今続いている期の付与日（2026-10-02・/api/leave と共通）
+          const firstExp = w.hireDate ? jpExpectedGrantWithoutRecords(w.hireDate, todayIsoP)?.grantDate : undefined
+          const expDate = latestG ? jpNextGrantAfter(latestG).grantDate : (firstExp || fyGrant)
           if (expDate <= todayIsoP) {
             const hasGrant = grantedRecs.some(r => effD(r) >= expDate)
             if (!hasGrant) pendingGrantsCount++

@@ -893,7 +893,8 @@ export async function POST(request: NextRequest) {
         const movedEntry: AttendanceEntry = { ...sourceEntry }
         const { computeAttendanceDeleteFields, setAttendanceEntry } = await import('@/lib/attendance')
         const deleteFields = computeAttendanceDeleteFields(movedEntry)
-        await setAttendanceEntry(toSiteId, wid, String(mwtYm), mwtDayNum, movedEntry, { deleteFields })
+        // 同じ日の中で工種を移すだけなので、その人のその日の有給の有無は変わらない（繰越の再計算は不要）
+        await setAttendanceEntry(toSiteId, wid, String(mwtYm), mwtDayNum, movedEntry, { deleteFields, prevEntry: sourceEntry })
         await updateDoc(attRef, { [`d.${fromSiteId}_${wid}_${mwtYm}_${mwtDayNum}`]: deleteField() })
         try {
           const { logActivity } = await import('@/lib/activity')
@@ -1081,6 +1082,7 @@ export async function POST(request: NextRequest) {
       //   操作ログには「削除した」事実しか残らず、日次バックアップは当日分を救えないため、
       //   誤削除・誤上書きからの復元手段がなかった（8/27 IHI の事故）。
       let prevEntry: AttendanceEntry | undefined
+      let prevLoaded = false   // 保存前の中身を読めたか（読めたときだけ繰越再計算を有給の増減に絞る）
       try {
         if (sharedCurD) {
           prevEntry = sharedCurD[key]   // ガードで読んだ doc を共有（再読しない）
@@ -1089,6 +1091,7 @@ export async function POST(request: NextRequest) {
           const prevD = (prevSnap.exists() ? (prevSnap.data().d || {}) : {}) as Record<string, AttendanceEntry>
           prevEntry = prevD[key]
         }
+        prevLoaded = true
       } catch { /* 読めなくても本体処理は続行（履歴が残らないだけ） */ }
 
       if (entry && typeof entry === 'object') {
@@ -1110,7 +1113,11 @@ export async function POST(request: NextRequest) {
             siteId, workerId: Number(workerId), ym, day, before: prevEntry, after: entryWithSource, actor: 'admin',
           })
         } catch { /* 履歴は保険。失敗しても本体は続行 */ }
-        await setAttendanceEntry(siteId, Number(workerId), ym, Number(day), entryWithSource, { deleteFields })
+        await setAttendanceEntry(siteId, Number(workerId), ym, Number(day), entryWithSource, {
+          deleteFields,
+          // 有給の有無が変わったときだけ次期繰越を再計算（読めなかったときは従来どおり保守的に）
+          prevEntry: prevLoaded ? (prevEntry ?? null) : undefined,
+        })
 
         // ⚠️ 2026-05-11 追加: 追跡可能性向上のため admin の出面書き込みを Activity log に記録
         //   政仁さんの「4月後付けPL消失」事案でログ無しで原因追跡できなかったため。

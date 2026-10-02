@@ -579,6 +579,8 @@ export async function POST(request: NextRequest) {
 
     // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
     // （日勤+夜勤は許容、日勤+日勤や夜勤+夜勤は拒否）
+    // 保存前のこの日のエントリ（ガードで読んだ出面を使い回す。次期繰越の再計算を有給の増減に絞るため）
+    let prevStaffEntry: AttendanceEntry | null | undefined
     try {
       const { detectMultiSiteConflict, getAttendanceDoc, attKey } = await import('@/lib/attendance')
       const attDoc = await getAttendanceDoc(ym)
@@ -592,6 +594,7 @@ export async function POST(request: NextRequest) {
         (mainRawPost.sites || []) as import('@/lib/site-hierarchy').HierarchySite[],
         mainRawPost.assign, attDoc, siteId, worker.id, ym, Number(day),
       ).targetSiteId
+      prevStaffEntry = (attDoc[attKey(targetSiteId, worker.id, ym, day)] as AttendanceEntry | undefined) ?? null
 
       if (choice !== 'leave') {
         const existing = attDoc[attKey(targetSiteId, worker.id, ym, day)] as { p?: number | boolean } | undefined
@@ -692,7 +695,7 @@ export async function POST(request: NextRequest) {
 
     // 残骸消去: entry に含まれない既知フィールドを全て削除
     const deleteFields = computeAttendanceDeleteFields(entry)
-    await setAttendanceEntry(targetSiteId, worker.id, ym, day, entry, { deleteFields })
+    await setAttendanceEntry(targetSiteId, worker.id, ym, day, entry, { deleteFields, prevEntry: prevStaffEntry })
 
     return NextResponse.json({ success: true, entry })
   } catch (error) {

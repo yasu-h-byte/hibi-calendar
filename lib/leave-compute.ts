@@ -149,6 +149,60 @@ export function selectActiveGrantRecord<T extends {
 }
 
 /**
+ * 基準日を「付与期間 [付与日, 付与日+1年) の中に含む」いちばん新しい付与レコード（2026-10-02 追加）。
+ *
+ * ■ なぜ必要か（日本人の付与日が前に動いた人）
+ *   休暇管理の一覧は「grantDate..+1年 に基準日を含むレコード」を配列の先頭から find() で探していた。
+ *   付与日を前に寄せた日本人（例: 2025-12-01 付与 → 次を 2026-10-01 に付与）は 10/1〜11/30 に
+ *   両方の期間に入り、古い方（2025-12-01）が勝って、新しい期の残数が 11/30 まで出なかった。
+ *   次の付与があった時点で前の期は終わり、という考え方（selectActiveGrantRecord と同じ）にそろえる。
+ *
+ * ■ 選び方
+ *   selectActiveGrantRecord（付与日 ≤ 基準日のうち最新）を取り、その期間（+1年）がまだ続いているときだけ返す。
+ *   1年を過ぎていれば null（＝今の期の付与なし）。
+ */
+export function selectCurrentPeriodRecord<T extends {
+  grantDate?: string
+  grantDays?: number
+  grant?: number
+  _archived?: boolean
+}>(records: T[], asOfIso: string): T | null {
+  const rec = selectActiveGrantRecord(records, asOfIso)
+  if (!rec || !rec.grantDate || !/^\d{4}-\d{2}-\d{2}$/.test(rec.grantDate)) return null
+  return asOfIso < addMonthsSafe(rec.grantDate, 12) ? rec : null
+}
+
+/**
+ * 付与レコードが1件も無い日本人の「付与予定日」（2026-10-02 追加）。
+ *
+ * ■ なぜ必要か
+ *   付与待ち一覧（/api/leave getPendingGrants・ダッシュボード）は、付与レコードが無い日本人に
+ *   入社6ヶ月後の日をそのまま出していた。入社が古い人（例: 2015-04-01 入社）だと
+ *   「初回付与 2015-10-01」と、何年も前の日付が出ていた（システム移行前の付与が記録に無いだけ）。
+ *
+ * ■ 決め方
+ *   入社6ヶ月後が今日から1年以上前なら、入社6ヶ月後 + 12ヶ月×k のうち今日以前で最も新しい日
+ *   （＝今まさに続いている期の付与日）を目安にする（catchUp: true）。
+ *   それ以外は入社6ヶ月後（未来でも、1年以内の過去でもそのまま）。
+ *   日付は入社日から addMonthsSafe(入社日, 6+12k) で出す（月末入社でも応当日がずれない）。
+ */
+export function jpExpectedGrantWithoutRecords(
+  hireDate: string,
+  todayIso: string,
+): { grantDate: string; catchUp: boolean } | null {
+  if (!hireDate || !/^\d{4}-\d{2}-\d{2}$/.test(hireDate)) return null
+  const first = addMonthsSafe(hireDate, 6)
+  if (addMonthsSafe(first, 12) > todayIso) return { grantDate: first, catchUp: false }
+  let latest = first
+  for (let k = 1; k < 80; k++) {
+    const d = addMonthsSafe(hireDate, 6 + 12 * k)
+    if (d > todayIso) break
+    latest = d
+  }
+  return { grantDate: latest, catchUp: latest !== first }
+}
+
+/**
  * 付与・編集の入力値バリデーション（2026-08-04 追加）
  *
  * ■ なぜ必要か（有給システム総点検）
@@ -280,6 +334,14 @@ export function computePeriodUsed(
   grantDate: string,
   allAtt: Record<string, unknown>,
   todayIso?: string,
+  opts?: {
+    /**
+     * 期間の終わり（この日を含まない）を早める（2026-10-02 追加）。
+     * 次の付与が1年より前に来た人（付与日を前に寄せた日本人）の前の期は、次の付与日の前日で終わる。
+     * 省略時・1年後より遅い日を渡したときは従来どおり [付与日, 付与日+1年)。
+     */
+    periodEndExclusive?: string
+  },
 ): {
   actualPeriodUsed: number
   requestedPeriodUsed: number
@@ -289,7 +351,10 @@ export function computePeriodUsed(
   const today = todayIso || todayJstIso()
   // 付与期間 = [grantDate, grantDate + 1年)
   const periodStart = grantDate
-  const periodEnd = addMonthsSafe(grantDate, 12)
+  const fullYearEnd = addMonthsSafe(grantDate, 12)
+  const periodEnd = opts?.periodEndExclusive && opts.periodEndExclusive < fullYearEnd
+    ? opts.periodEndExclusive
+    : fullYearEnd
 
   const actualDates = new Set<string>()
   const requestedDates = new Set<string>()
