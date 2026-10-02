@@ -6,7 +6,6 @@
  */
 import { describe, test, expect } from 'vitest'
 import { capAllowed, can, PAY_CAPS, PAY_VIEWER_WORKER_IDS, CAPABILITIES } from '@/lib/permissions'
-// @ts-expect-error -- .mjs スクリプト（型なし）
 import { findPayInDocs } from '../scripts/lint-pay-in-docs.mjs'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
