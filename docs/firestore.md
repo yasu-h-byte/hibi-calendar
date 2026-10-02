@@ -95,6 +95,16 @@ workSchedule?: {
 | d | map | 個人出面 key: `{siteId}_{workerId}_{ym}_{day}` → `{w, o, p, s}` |
 | sd | map | 外注出面 key: `{siteId}_{subconId}_{ym}_{day}` → `{n, on}` |
 
+### demmen/system
+システムの小さな状態を置く1ドキュメント（2026-10-02 総合点検で用途を集約）。日次バックアップの対象。
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| invoiceLock | map `{ [ym]: number }` | 請求書の採番・申請・承認を月ごとに直列化する合図（`withInvoiceMonthLock`・`lib/peer-invoice-store.ts`）。番号は数えない（番号は `peerInvoices` の最大値から出す）。消えても番号は狂わない |
+| lastBackup | map | 日次バックアップの最終実行（時刻・件数・失敗した項目。`app/api/backup/snapshot`）。`/api/health` の `backupOk` と代表の通知ベルが見る |
+
+書くときは子値を非空マップにして `merge: true`（空マップ置換の罠は踏まない）。
+
 ### siteCalendar/{siteId}_{ym}
 就業カレンダー。
 
@@ -153,7 +163,19 @@ workSchedule?: {
 - 退職者の写真は人員マスターの編集画面から手動で削除する（自動削除は誤消去のリスクがあるため入れていない）
 
 ### activityLog/{auto}
-アクティビティログ。
+操作ログ（`lib/activity.ts` `logActivity`）。`{ userId, action, details, timestamp }`。
+
+**保ち方（2026-10-02 総合点検）**: 書くときは `addDoc` だけ（旧: 1件書くたびに新しい順550件を読んで500件超を消していた＝PC の出面1マスごとに約500件の読み取り）。
+間引きは日次バックアップの cron（`app/api/backup/snapshot` → `pruneActivityLog()`）が行う:
+- 出面の入力の記録（`attendance.*`・毎日大量）は新しい **500件**（`NOISY_KEEP`）
+- それ以外（請求・単価・マスタ・有給・カレンダー等）は別枠で新しい **1,000件**（`IMPORTANT_KEEP`）＝出面の記録に押し出されない
+- 1回の間引きで消すのは400件まで（cron の時間切れを防ぐ。残りは翌日）
+
+### auditTrail/{id}
+削除処理を持たない監査記録。日次バックアップの対象。
+- 給与欄の変更記録（`/api/workers` の給与欄の書き換え）
+- **`type: 'activity'`**（2026-10-02）: お金・マスタの操作ログ（`DURABLE_PREFIXES` に当たる action）は `activityLog` と同じ内容を
+  `auditTrail/activity-<時刻>-<乱数>` にも残す（`{ type: 'activity', action, userId, details, at }`）。`activityLog` が間引かれても消えない
 
 ### announcements/{auto}
 お知らせ（ダッシュボード表示用）。

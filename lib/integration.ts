@@ -3,7 +3,8 @@
  *
  * DEDURA＋ と経営コックピットを一体で使うための「読むだけ」の窓口。
  * 経営コックピットのサーバーが、共通の合言葉（環境変数 DEDURA_INTEGRATION_KEY・両方の Vercel に同じ値）を
- * ヘッダ x-integration-key に付けて呼ぶ。人のパスワード（ADMIN_PASSWORD など）とは別物で、書き込みは一切できない。
+ * ヘッダ x-integration-key に付けて呼ぶ。人のパスワード（ADMIN_PASSWORD など）とは別物。
+ * 書き込みは現場別の外注単価の上書き（setSubconSiteRate・/api/integration/subcon-rate）の1つだけ（docs/integration.md）。
  *
  * 返すもの（1か月分・金額はすべて税抜の円）:
  *   - 現場ごとの請求額（入力済みの額だけ。未入力の月は billingEntered=false で見込みは入れない）と請求先

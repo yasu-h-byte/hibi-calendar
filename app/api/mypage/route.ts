@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
   if (!token) return NextResponse.json({ error: 'token required' }, { status: 400 })
 
   try {
-    const worker = await getWorkerByToken(token)
+    // 退職した月の翌月末までは「見るだけ」で開ける（出面画面・本人確認と同じ猶予・2026-10-03）。承認（POST）は在籍中だけ
+    const worker = await getWorkerByToken(token, { allowGrace: true })
     if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
 
     recordAccess({
