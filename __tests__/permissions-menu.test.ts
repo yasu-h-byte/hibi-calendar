@@ -96,3 +96,13 @@ describe('選択中のメニュー（activeMenuItem・2026-09-28）', () => {
     expect(at('/peer-invoice', '?company=x')).toBe('請求書・支払')
   })
 })
+
+describe('さかのぼり入力（2026-10-02 代表決定）', () => {
+  test('本人の入力が無い日をさかのぼって入れられるのは代表と事業責任者だけ', () => {
+    expect(roleCan('owner', 'attendance.backfill')).toBe(true)
+    expect(roleCan('approver', 'attendance.backfill')).toBe(true)
+    expect(roleCan('jimu', 'attendance.backfill')).toBe(false)
+    expect(roleCan('foreman', 'attendance.backfill')).toBe(false)
+    expect(roleCan('officer', 'attendance.backfill')).toBe(false)
+  })
+})

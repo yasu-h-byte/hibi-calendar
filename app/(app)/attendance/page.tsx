@@ -1322,6 +1322,7 @@ export default function AttendanceGridPage() {
         <div className="rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
           出面の入力は職長・事務が行います（最終承認は下の「最終承認」行から）。{roleCan(permRoleOf({ role: userRole }), 'attendance.workType') && '工種（鉄骨・仮設など）の切り替えはできます。'}
           {roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport') && ' 応援現場では出面を入力できます（一括入力あり）。'}
+          {roleCan(permRoleOf({ role: userRole }), 'attendance.backfill') && ' 昨日までの日は、本人の入力が無い日もさかのぼって入れられます（「入力なし」のマスから）。'}
         </div>
       )}
       {userRole && data?.isSupportSite && roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport') && !roleCan(permRoleOf({ role: userRole }), 'attendance.input') && (
@@ -1507,6 +1508,7 @@ export default function AttendanceGridPage() {
           onWorkChange={handleWorkChange}
           onOtChange={handleOtChange}
           onTimeStatusChange={handleTimeStatusChange}
+          canBackfill={!!userRole && roleCan(permRoleOf({ role: userRole }), 'attendance.backfill')}
           onStartTimeChange={handleStartTimeChange}
           onEndTimeChange={handleEndTimeChange}
           onBreakChange={handleBreakChange}
