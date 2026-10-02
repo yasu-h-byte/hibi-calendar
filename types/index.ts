@@ -439,14 +439,30 @@ export function calcDayShiftHours(entry: AttendanceEntry, workSchedule?: SiteWor
 }
 
 /**
- * 時間ベースエントリの残業時間（所定7hを超えた分）を計算
- * @param entry 出面エントリ
- * @param workSchedule 現場の勤務時間設定
+ * 1日の残業時間（h）= 日勤の実働 − 所定7h（0.1h 単位）。**残業時間の決まりはこの関数だけ**。
+ * - 実働は始業〜終業から「取った休憩」だけを引く（取らずに働いた分はそのまま残業に入る）
+ * - 休憩の長さは**現場の workSchedule**（未指定なら 30/60/30 分）。画面ごとに違う休憩で数えない（2026-10-02）
+ * - 夜勤ブロックは含めない（夜勤は 1.5人工で別に数えるので、混ぜると二重になる）
+ * - 時刻の無い日（日本人の日給月給・2026-04 以前）は入力された o をそのまま返す
  */
 export function calcOvertimeHours(entry: AttendanceEntry, workSchedule?: SiteWorkSchedule): number {
   if (!entry.st || !entry.et) return entry.o || 0
-  const actual = calcActualHours(entry, workSchedule)
+  const actual = calcDayShiftHours(entry, workSchedule)
   return Math.max(0, Math.round((actual - 7) * 10) / 10)
+}
+
+/**
+ * 時刻のある日の o（残業h）を calcOvertimeHours で付け直したエントリを返す（時刻の無い日はそのまま）。
+ * 保存の共通入口（lib/attendance.ts の setAttendanceEntry）が必ず通すので、どの画面から入れても
+ * o は同じ決まりで入る。旧: 職長画面は o を保存せず、PC・職長スマホは現場の休憩設定を見ていなかった。
+ */
+export function withDerivedOvertime<T extends AttendanceEntry>(entry: T, workSchedule?: SiteWorkSchedule): T {
+  if (!entry.st || !entry.et) return entry
+  const ot = calcOvertimeHours(entry, workSchedule)
+  const next = { ...entry }
+  if (ot > 0) next.o = ot
+  else delete next.o
+  return next
 }
 
 /** PC出面入力が時間ベースかどうか（5月以降） */

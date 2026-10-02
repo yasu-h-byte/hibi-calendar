@@ -16,7 +16,7 @@ import { getSites } from '@/lib/sites'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { calendarSiteIdOf, workTypeFamilyIds, familyEntrySiteId, staffEntryTarget, siteNeedsCalendar, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
-import { AttendanceEntry } from '@/types'
+import { AttendanceEntry, SiteWorkSchedule, withDerivedOvertime } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween, currentYmJst } from '@/lib/date-utils'
 import { getAttData, parseDKey } from '@/lib/compute'
@@ -529,10 +529,6 @@ export async function POST(request: NextRequest) {
       const found = (mainRawPost.sites || []).find(s => s.id === siteId)
       siteWorkSchedule = (found?.workSchedule as SiteWorkScheduleRaw | undefined) || null
     }
-    // デフォルト休憩分数（workSchedule未設定時に使用）
-    const wsMorning   = siteWorkSchedule?.morningBreak   ?? { enabled: true, minutes: 30, mandatory: false }
-    const wsLunch     = siteWorkSchedule?.lunchBreak     ?? { enabled: true, minutes: 60, mandatory: true }
-    const wsAfternoon = siteWorkSchedule?.afternoonBreak ?? { enabled: true, minutes: 30, mandatory: false }
 
     // Check approval lock
     const ym = ymKey(year, month)
@@ -651,17 +647,9 @@ export async function POST(request: NextRequest) {
             b3: break3 ? 1 : 0,
             s: 'staff',
           }
-          // 後方互換: o フィールドにも残業時間を入れる（既存の集計ロジック用）
-          // 休憩時間は現場の workSchedule に従う
-          const startMin = parseInt(String(startTime).split(':')[0]) * 60 + parseInt(String(startTime).split(':')[1] || '0')
-          const endMin = parseInt(String(endTime).split(':')[0]) * 60 + parseInt(String(endTime).split(':')[1] || '0')
-          let actualMin = endMin - startMin
-          if (entry.b1 && wsMorning.enabled)   actualMin -= wsMorning.minutes   ?? 30
-          if (entry.b2 && wsLunch.enabled)     actualMin -= wsLunch.minutes     ?? 60
-          if (entry.b3 && wsAfternoon.enabled) actualMin -= wsAfternoon.minutes ?? 30
-          const actualH = Math.max(0, actualMin / 60)
-          const otH = Math.max(0, Math.round((actualH - 7) * 10) / 10)
-          if (otH > 0) entry.o = otH
+          // o（残業h）は保存の共通入口 setAttendanceEntry が現場の休憩設定で付け直す（calcOvertimeHours）。
+          //   ここで先に付けておくのは、下の操作ログ等が保存前の entry を見るため
+          entry = withDerivedOvertime(entry, (siteWorkSchedule || undefined) as SiteWorkSchedule | undefined)
         } else {
           // レガシー入力（202604以前）
           entry = { w: 1, o: Math.max(0, Math.min(8, overtimeHours || 0)), s: 'staff' }

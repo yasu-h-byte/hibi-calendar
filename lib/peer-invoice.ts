@@ -14,7 +14,7 @@
  * ので、明細の行合計を足すと請求書本体の人工と一致する。
  */
 import {
-  calcManDays, type AttendanceEntry,
+  calcManDays, calcOvertimeHours, type AttendanceEntry, type SiteWorkSchedule,
 } from '@/types'
 import {
   calcTobiEquiv, getAssign, getSiteRates, parseDKey, parseSdKey,
@@ -174,6 +174,7 @@ export function buildSiteDetail(
 ): PeerInvoiceSiteDetail {
   const nDays = daysInYm(ym)
   const dispatchList = getAssign(main, siteId, ym).dispatch
+  const siteWs = main.sites.find(s => s.id === siteId)?.workSchedule as SiteWorkSchedule | undefined
   const rows = new Map<string, PeerInvoiceDetailRow>()
 
   for (const [k, v] of Object.entries(attD)) {
@@ -195,7 +196,9 @@ export function buildSiteDetail(
     const key = `w${w.id}`
     let row = rows.get(key)
     if (!row) { row = { key, label: w.name, isSubcon: false, cells: {}, total: 0 }; rows.set(key, row) }
-    row.cells[day] = { md, ot: v.o || undefined, night: !!v.ns }
+    // 残業h は時刻から数え直す（保存済みの o が古い・無い日でも請求がずれない。calcOvertimeHours が唯一の決まり）
+    const ot = calcOvertimeHours(v, siteWs)
+    row.cells[day] = { md, ot: ot || undefined, night: !!v.ns }
     row.total = Math.round((row.total + md) * 100) / 100
   }
 

@@ -1,7 +1,7 @@
 import { db } from './firebase'
 import { invalidateApprovalCache } from './approval-gap'
 import { doc, getDoc, setDoc, updateDoc, deleteField, collection, getDocs, query, where } from '@/lib/fsdb'
-import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site } from '@/types'
+import { AttendanceEntry, AttendanceStatus, AttendanceApproval, Site, withDerivedOvertime } from '@/types'
 import { ensureDocExists } from './firestore-safe'
 import { currentYmJst } from '@/lib/date-utils'
 
@@ -477,6 +477,23 @@ export async function setAttendanceEntry(
 ): Promise<void> {
   // 確定済み月の短期キャッシュ（ダッシュボード用）を同一インスタンス内で無効化
   try { (await import('./compute')).invalidateAttDataCache(ym) } catch { /* ignore */ }
+  // 時刻のある日は o（残業h）を現場の休憩設定で付け直す（2026-10-02・calcOvertimeHours が唯一の決まり）。
+  //   旧: 職長画面は o を保存せず、PC・職長スマホは標準の休憩で数えていたため、入れた画面で残業が変わり、
+  //   o を読む請求書（HFU → 日比建設・応援）や月次集計に職長が入れた日の残業が乗らなかった。
+  if (entry.st && entry.et) {
+    let ws: Site['workSchedule']
+    try {
+      const { getMainData } = await import('./compute')
+      ws = (await getMainData()).sites.find(s => s.id === siteId)?.workSchedule as Site['workSchedule']
+    } catch { /* 読めなければ標準の休憩で数える */ }
+    entry = withDerivedOvertime(entry, ws)
+    if (entry.o === undefined) {
+      // 残業が無くなった日は、前の o を消す（merge 書き込みだと残骸が残る）
+      options = { ...options, deleteFields: [...new Set([...(options.deleteFields || []), 'o'])] }
+    } else if (options.deleteFields?.includes('o')) {
+      options = { ...options, deleteFields: options.deleteFields.filter(f => f !== 'o') }
+    }
+  }
   const key = attKey(siteId, workerId, ym, day)
   const docRef = doc(db, 'demmen', `att_${ym}`)
   if (options.deleteFields && options.deleteFields.length > 0) {

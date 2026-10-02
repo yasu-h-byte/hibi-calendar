@@ -380,6 +380,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       site: { id: site.id, name: site.name, workType: site.workType || undefined, foreman: effectiveForeman, foremanName, foremanNote,
+        // 残業時間を画面でも現場の休憩設定で数えるため（calcOvertimeHours・2026-10-02）
+        workSchedule: site.workSchedule || undefined,
         // 運転手当を出さない現場（工種サイトは親の指定に従う・2026-09-30）
         noDriveAllowance: !!(site.noDriveAllowance || (site.parentId && main.sites.find(p => p.id === site.parentId)?.noDriveAllowance)) || undefined },
       foremanOverride,
