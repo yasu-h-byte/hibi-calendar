@@ -16,7 +16,7 @@ import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { staffEntryTarget, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
 import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays, siteRosterFromMain, loadSiteRoster } from '@/lib/foreman-todo'
 import { getMainData, getAttData } from '@/lib/compute'
-import { canDriveDefault } from '@/lib/allowance'
+import { canDriveDefault, driversByDayForSite } from '@/lib/allowance'
 import { todayJstDate } from '@/lib/date-utils'
 
 // 工種（親＋工種サイト）の範囲・まとめ承認の判定はマイページと共通（lib/foreman-todo.ts・2026-10-01）
@@ -182,7 +182,8 @@ export async function GET(request: NextRequest) {
       pastDays,
       monthOverview,
       // 運転者（運転手当）: その日の記録と、運転手当を出さない現場か（2026-10-02）
-      drivers: ((attRaw as { drv?: Record<string, { am?: number[]; pm?: number[] }> }).drv || {})[`${site.id}_${ym}_${d}`] || null,
+      // 親＋工種のキーをまとめて見せる（PC の工種画面で記録した分も見える・2026-10-02）
+      drivers: driversByDayForSite((attRaw as { drv?: Record<string, { am?: number[]; pm?: number[] }> }).drv, main.sites, site.id, ym)[d] || null,
       // 運転者の候補: その日この現場（親＋工種）で出勤（0.6補・休みを除く）した、運転しうる人（日本人を含む・PC と同じ）
       driverCandidates: (() => {
         const out: { id: number; name: string }[] = []

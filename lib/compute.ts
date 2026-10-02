@@ -509,7 +509,7 @@ export async function loadMonthlyAllowances(
   // 運転手当を出さない現場（工種サイトは親の指定に従う）。記録が残っていても手当にしない（下流の防御）
   const noDriveSiteIds = new Set(main.sites.filter(s => s.noDriveAllowance).map(s => s.id))
   for (const s of main.sites) if (s.parentId && noDriveSiteIds.has(s.parentId)) noDriveSiteIds.add(s.id)
-  return calcMonthlyAllowances(attD, ym, commutes, drv || {}, excludeIds, eligibleHistory, noDriveSiteIds)
+  return calcMonthlyAllowances(attD, ym, commutes, drv || {}, excludeIds, eligibleHistory, noDriveSiteIds, main.sites)
 }
 
 // ────────────────────────────────────────
