@@ -153,6 +153,8 @@ export async function GET(request: NextRequest) {
       const pd = new Date(y, m - 1, d - off)
       const pym = ymKey(pd.getFullYear(), pd.getMonth() + 1)
       const pDay = pd.getDate()
+      // 入社前・退職後の日は入力できる日に出さない（保存も POST で弾く・2026-10-02）
+      if (!isEmployedOn(worker, `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, '0')}-${String(pDay).padStart(2, '0')}`)) continue
       const pAttData = await getAttCached(pym)
 
       // Check current site (親＋工種) first, then check all sites for this day
@@ -534,6 +536,13 @@ export async function POST(request: NextRequest) {
 
     // Check approval lock
     const ym = ymKey(year, month)
+    // 入社前・退職後の日には入れない（2026-10-02 点検: 書けると承認・本人確認の対象外のまま給与に入った）
+    {
+      const isoP = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      if (!isEmployedOn(worker, isoP)) {
+        return NextResponse.json({ error: 'この日は在籍期間の外です / Ngày này nằm ngoài thời gian làm việc' }, { status: 400 })
+      }
+    }
     const approval = await getApprovalForDay(siteId, ym, day)
     if (approval?.foreman) {
       return NextResponse.json({ error: 'Day is locked (approved)' }, { status: 409 })

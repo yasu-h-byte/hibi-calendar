@@ -23,18 +23,26 @@ export const FINAL_APPROVAL_REQUIRED_FROM_YM = '202609'
 type Approval = { foreman?: unknown; final?: unknown } | null
 
 const AP_TTL_MS = 2 * 60 * 1000
-const apCache = new Map<string, { v: Approval; ts: number }>()
+// 読み取り中の Promise もそのまま持つ（2026-10-02 点検: 値だけを持っていたため、同時に何人分も判定すると
+//   同じ承認ドキュメントを人数ぶん重ねて読んでいた）
+const apCache = new Map<string, { p: Promise<Approval>; ts: number }>()
 
-async function approvalOfKey(key: string): Promise<Approval> {
+async function approvalOfKey(key: string, fresh = false): Promise<Approval> {
   const hit = apCache.get(key)
-  if (hit && Date.now() - hit.ts < AP_TTL_MS) return hit.v
-  let v: Approval = null
-  try {
-    const s = await getDoc(doc(db, 'attendanceApprovals', key))
-    v = s.exists() ? (s.data() as Approval) : null
-  } catch { v = null }
-  apCache.set(key, { v, ts: Date.now() })
-  return v
+  if (!fresh && hit && Date.now() - hit.ts < AP_TTL_MS) return hit.p
+  const p = getDoc(doc(db, 'attendanceApprovals', key))
+    .then(s => (s.exists() ? (s.data() as Approval) : null))
+    .catch(() => null)
+  apCache.set(key, { p, ts: Date.now() })
+  return p
+}
+
+/**
+ * 承認を書いた・消したときに呼ぶ（同じサーバの中のキャッシュを消す）。
+ * 別のサーバ（Vercel の別インスタンス）には届かないので、締めの判定は fresh で読み直す
+ */
+export function invalidateApprovalCache(key: string): void {
+  apCache.delete(key)
 }
 
 export interface FamilyDay { familyId: string; day: number }
@@ -52,13 +60,15 @@ export interface ApprovalGap {
  */
 export async function approvalGap(
   sites: { id: string; parentId?: string }[], ym: string, famDays: FamilyDay[],
+  /** fresh: キャッシュを使わず読み直す（月締め・本人確認の記録など、判定を確定させるところで使う・2026-10-02） */
+  opts?: { fresh?: boolean },
 ): Promise<ApprovalGap> {
   const uniq = new Map<string, FamilyDay>()
   for (const fd of famDays) uniq.set(`${fd.familyId}|${fd.day}`, fd)
   const children = (fam: string) => sites.filter(s => s.parentId === fam).map(s => s.id)
   const results = await Promise.all([...uniq.values()].map(async fd => {
     const ids = [fd.familyId, ...children(fd.familyId)]
-    const aps = await Promise.all(ids.map(id => approvalOfKey(`${id}_${ym}_${fd.day}`)))
+    const aps = await Promise.all(ids.map(id => approvalOfKey(`${id}_${ym}_${fd.day}`, !!opts?.fresh)))
     return { fd, foreman: aps.some(a => !!a?.foreman), final: aps.some(a => !!a?.final) }
   }))
   const byOrder = (a: FamilyDay, b: FamilyDay) => a.familyId.localeCompare(b.familyId) || a.day - b.day

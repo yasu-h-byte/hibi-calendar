@@ -339,7 +339,7 @@ export async function POST(request: NextRequest) {
         const { doc, getDoc } = await import('@/lib/fsdb')
         const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
         if (mainSnap.exists()) {
-          const workers = (mainSnap.data().workers || []) as { id: number; visa?: string }[]
+          const workers = (mainSnap.data().workers || []) as { id: number; visa?: string; hireDate?: string; retired?: string }[]
           const sitesAll = (mainSnap.data().sites || []) as { id: string; name: string; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string } }[]
           const targetWorker = workers.find(w => w.id === Number(workerId))
           if (targetWorker) {
@@ -350,6 +350,10 @@ export async function POST(request: NextRequest) {
             ).targetSiteId
             const key = `${editTarget}_${workerId}_${ym}_${String(day)}`
             const existing = dData[key]
+            // 入社前・退職後の日には入れない（PC・スタッフのスマホと同じ・2026-10-02 点検）
+            if (!isEmployedOn(targetWorker, `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`)) {
+              return NextResponse.json({ error: 'この人はこの日に在籍していません（入社前・退職後）' }, { status: 400 })
+            }
             // 事後申請性ステータス例外を許容するため newEntry を渡す
             const check = canAdminEditEntry({ visa: targetWorker.visa }, existing, entry)
             if (!check.editable) {

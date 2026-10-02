@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     }
     const d = (await getAttendanceDoc(ym)) as Record<string, AttendanceEntry | null>
     const ctx = confirmMonthContext(sites, ym, d)
-    const ready = await ctx.readiness(worker)
+    const ready = await ctx.readiness(worker, { fresh: true })   // 記録する前はキャッシュを使わない（承認を外した直後に「承認後の確認」と記録しない）
     if (!ready.ready) {
       return NextResponse.json({
         error: '職長と事業責任者のチェックが終わってから確認してください / Hãy xác nhận sau khi tổ trưởng và người phụ trách kiểm tra xong',

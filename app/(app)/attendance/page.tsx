@@ -76,6 +76,8 @@ export default function AttendanceGridPage() {
   const [checksOpen, setChecksOpen] = useState(false)
   const [reqCounts, setReqCounts] = useState<{ leave: number; home: number; foreman: number; final: number }>({ leave: 0, home: 0, foreman: 0, final: 0 })
   const [showBulk, setShowBulk] = useState(false)
+  // さかのぼり入力の「今から変更する」（代表・事業責任者だけ。押したときだけ入力なしのマスに選択を出す・2026-10-02）
+  const [backfillMode, setBackfillMode] = useState(false)
   // 夜勤モーダル（台風待機など年数回のケース）
   const [nightTarget, setNightTarget] = useState<{ workerId: string; day: number } | null>(null)
   // 夜勤が発生した日（現場×月ごと）。指定した日だけスタッフのセルに夜勤バッジが出る
@@ -1257,6 +1259,8 @@ export default function AttendanceGridPage() {
     roleCan(permRoleOf({ role: userRole }), 'attendance.input')
     || (!!data?.isSupportSite && roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport'))
   )
+  /** さかのぼり入力ができる人（代表・事業責任者。lib/permissions.ts attendance.backfill） */
+  const canBackfillRole = !!userRole && roleCan(permRoleOf({ role: userRole }), 'attendance.backfill')
   const lockedDays = useMemo(() => {
     const s = new Set<number>()
     for (const [d, v] of Object.entries(localApprovals)) if (v) s.add(Number(d))
@@ -1322,7 +1326,7 @@ export default function AttendanceGridPage() {
         <div className="rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
           出面の入力は職長・事務が行います（最終承認は下の「最終承認」行から）。{roleCan(permRoleOf({ role: userRole }), 'attendance.workType') && '工種（鉄骨・仮設など）の切り替えはできます。'}
           {roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport') && ' 応援現場では出面を入力できます（一括入力あり）。'}
-          {roleCan(permRoleOf({ role: userRole }), 'attendance.backfill') && ' 昨日までの日は、本人の入力が無い日もさかのぼって入れられます（「入力なし」のマスから）。'}
+          {roleCan(permRoleOf({ role: userRole }), 'attendance.backfill') && ' 本人の入力が無い昨日までの日は、表の上の「今から変更する」を押すと入れられます。'}
         </div>
       )}
       {userRole && data?.isSupportSite && roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport') && !roleCan(permRoleOf({ role: userRole }), 'attendance.input') && (
@@ -1487,6 +1491,27 @@ export default function AttendanceGridPage() {
       {/* ── Grid Table ── */}
       {!loading && data && (
         <div id="att-grid" className="scroll-mt-4">
+        {/* さかのぼり入力（代表・事業責任者だけ・2026-10-02）: ふだんは出さず、「今から変更する」を押したときだけ
+             本人の入力が無い昨日までのマスに選択を出す（代表: 常に出すのは too much） */}
+        {canBackfillRole && (
+          <div className={`mb-2 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-sm border ${
+            backfillMode
+              ? 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-200'
+              : 'bg-white border-gray-200 text-gray-600 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300'
+          }`}>
+            {backfillMode
+              ? <span>変更中: 本人の入力が無い昨日までのマスに「入れる…」が出ています（入れた内容は操作ログに残ります）</span>
+              : <span>本人の入力が無い日を、さかのぼって入れるとき</span>}
+            <button type="button" onClick={() => setBackfillMode(v => !v)}
+              className={`ml-auto px-3 py-1 rounded-lg text-sm font-bold ${
+                backfillMode
+                  ? 'bg-white border border-amber-400 text-amber-800 hover:bg-amber-100 dark:bg-gray-800 dark:text-amber-200'
+                  : 'bg-hibi-navy text-white hover:bg-hibi-light'
+              }`}>
+              {backfillMode ? '変更を終える' : '今から変更する'}
+            </button>
+          </div>
+        )}
         <AttendanceGrid
           data={data}
           days={days}
@@ -1508,7 +1533,7 @@ export default function AttendanceGridPage() {
           onWorkChange={handleWorkChange}
           onOtChange={handleOtChange}
           onTimeStatusChange={handleTimeStatusChange}
-          canBackfill={!!userRole && roleCan(permRoleOf({ role: userRole }), 'attendance.backfill')}
+          canBackfill={canBackfillRole && backfillMode}
           onStartTimeChange={handleStartTimeChange}
           onEndTimeChange={handleEndTimeChange}
           onBreakChange={handleBreakChange}
@@ -1582,7 +1607,8 @@ export default function AttendanceGridPage() {
         onClose={() => setShowBulk(false)}
         ym={data?.ym || ym}
         daysInMonth={data?.daysInMonth || 31}
-        workers={data?.workers || []}
+        // 配置外の入力の人（offRoster）は一括入力の対象にしない（選び間違えた現場にまとめて出勤が入ってしまう・2026-10-02 点検）
+        workers={(data?.workers || []).filter(w => !w.offRoster)}
         entries={workerEntries}
         calendarDays={data?.calendarDays || null}
         lockedDays={lockedDays}

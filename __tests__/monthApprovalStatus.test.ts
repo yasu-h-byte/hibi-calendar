@@ -42,3 +42,12 @@ describe('月締めの承認範囲', () => {
     expect(ap.complete).toBe(true)
   })
 })
+
+describe('月締めの承認範囲: 日本人（2026-10-02 代表決定・外国人だけ本人確認と同じ範囲）', () => {
+  const mainJp = { workers: [{ id: 1, org: 'hibi', visa: 'none' }], sites: [{ id: 's' }] }
+  test('日本人は出勤・残業のある日だけ（休みだけの日・空欄の仕事の日は承認の対象外）', async () => {
+    const ap = await monthApprovalStatus(mainJp, { s_1_202609_1: { w: 1 }, s_1_202609_2: { r: 1 } }, '202609', 'hibi')
+    expect(ap.needed).toBe(1)
+    expect(ap.complete).toBe(true)
+  })
+})

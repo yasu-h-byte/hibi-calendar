@@ -21,10 +21,20 @@ describe('canAdminEditEntry - ベトナム人スタッフ：既存エントリ�
   test('既存エントリがあれば任意の修正・削除が可能', () => {
     const w = { visa: 'tokutei1' }
     expect(canAdminEditEntry(w, { w: 1 }, { w: 0, r: 1 }).editable).toBe(true)
-    expect(canAdminEditEntry(w, { w: 0, p: 1 }, { w: 1 }).editable).toBe(true)
     expect(canAdminEditEntry(w, { w: 1 }, { w: 0.6 }).editable).toBe(true)
+    // 出勤の記録の修正（時刻など）は可
+    expect(canAdminEditEntry(w, { w: 1, st: '08:00' }, { w: 1, st: '07:30' }).editable).toBe(true)
     // 削除（newEntry が null/undefined）も既存があれば可能
     expect(canAdminEditEntry(w, { w: 1 }, null).editable).toBe(true)
+  })
+
+  test('2026-10-02: 会社が入れた休み・有給・0.6補から出勤への変更は不可（2回の保存で本人の入力が無い出勤を作れた抜け道）', () => {
+    const w = { visa: 'tokutei1' }
+    expect(canAdminEditEntry(w, { w: 0, p: 1, s: 'admin' }, { w: 1 }).editable).toBe(false)
+    expect(canAdminEditEntry(w, { w: 0, r: 1, s: 'foreman' }, { w: 1 }).editable).toBe(false)
+    expect(canAdminEditEntry(w, { w: 0.6, s: 'admin' }, { w: 1, st: '08:00', et: '17:00' }).editable).toBe(false)
+    // 本人がスマホで入れた休みを出勤に直すのは可（本人の申告がある日）
+    expect(canAdminEditEntry(w, { w: 0, r: 1, s: 'staff' }, { w: 1 }).editable).toBe(true)
   })
 })
 

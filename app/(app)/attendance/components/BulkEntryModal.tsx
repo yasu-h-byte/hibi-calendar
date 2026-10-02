@@ -64,7 +64,8 @@ export default function BulkEntryModal({
         const iso = isoOf(d)
         const onHomeLeave = (homeLeaves || []).some(hl =>
           String(hl.workerId) === String(w.id) && hl.status === 'approved' && iso >= hl.startDate && iso <= hl.endDate)
-        if (kind !== 'clear' && (onHomeLeave || (w.retired && iso > w.retired))) { skipAbsent++; continue }
+        // 入社前の日も入れない（2026-10-02 点検: 10/26 入社の人の 10/1〜25 に 0.6補 が入り過払いになりえた）
+        if (kind !== 'clear' && (onHomeLeave || (w.retired && iso > w.retired) || (w.hireDate && iso < w.hireDate))) { skipAbsent++; continue }
         // 有給・帰国・試験のマスは「入力済みを変えない」を外しても上書きしない（有給の取り消しは申請の画面から）
         if (cur && (cur.p || cur.hk || cur.exam)) { skipProtected++; continue }
         if (keepExisting && cur && kind !== 'clear') { skipExisting++; continue }
@@ -73,7 +74,8 @@ export default function BulkEntryModal({
         if (kind === 'rest') { items.push({ workerId: String(w.id), day: d, entry: { w: 0, r: 1, s: 'admin' } }); continue }
         if (kind === 'comp') { items.push({ workerId: String(w.id), day: d, entry: { w: 0.6, s: 'admin' } }); continue }
         // 出勤
-        if (isForeign(w) && !cur) { skipForeignWork++; continue }
+        // 外国人スタッフの出勤は、その日に本人の入力（s:'staff'）か出勤の記録があるときだけ（サーバの canAdminEditEntry と同じ・2026-10-02）
+        if (isForeign(w) && !(cur && (cur.s === 'staff' || ((cur.w || 0) > 0 && cur.w !== 0.6 && !cur.p && !cur.r && !cur.h && !cur.hk)))) { skipForeignWork++; continue }
         let entry: AttEntry
         if (timeBasedFor(w)) {
           entry = { w: 1, st, et, b1: breaks.b1 ? 1 : 0, b2: breaks.b2 ? 1 : 0, b3: breaks.b3 ? 1 : 0, s: 'admin' }
