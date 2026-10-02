@@ -4,8 +4,11 @@ import {
   orderSitesWithWorkTypes, isWorkTypeSite, workTypeSitesOf, parentAndWorkTypeSiteIds,
   findWorkTypeDuplicates, planDayWorkTypeMoves, type WorkTypeDuplicate,
 } from '@/lib/site-hierarchy'
-import { getMainData, getAttData, getAssign, invalidateAttDataCache } from '@/lib/compute'
+import { getMainData, getAttData, getAssign, invalidateAttDataCache, parseDKey } from '@/lib/compute'
+import { isMonthLockedInLocks } from '@/lib/locks'
+import { entryPlace } from '@/lib/foreman-todo'
 import { approvalDateError } from '@/lib/attendance-authz'
+import { attendanceDateError, dayApprovalOf, finalApprovedEditError, writeAttendanceEntry, COMP_NON_WORKING_DAY_MESSAGE } from '@/lib/attendance-save'
 import { getApprovalForDay } from '@/lib/attendance'
 import { isStillActiveForMonth, isHiredByMonth, isEmployedOn } from '@/lib/workers'
 import { AttendanceEntry, DayType } from '@/types'
@@ -100,16 +103,12 @@ export async function GET(request: NextRequest) {
         const parentId = (site as { parentId?: string }).parentId
         if (parentId) for (const wid of getAssign(main, parentId, ym).workers) onRoster.add(wid)
       }
-      const tail = `_${ym}_`
       for (const [key, e] of Object.entries(att.d)) {
         if (!e) continue
-        const i = key.lastIndexOf(tail)
-        if (i < 0) continue
-        const head = key.slice(0, i)
-        const j = head.lastIndexOf('_')
-        const sid = head.slice(0, j)
-        const wid = Number(head.slice(j + 1))
-        if (!familyIds.includes(sid) || onRoster.has(wid) || !Number.isFinite(wid)) continue
+        const pk = parseDKey(key)   // キーの分解は共通（2026-10-02 総合点検。旧: lastIndexOf で自前に分けていた）
+        if (pk.ym !== ym) continue
+        const wid = Number(pk.wid)
+        if (!familyIds.includes(pk.sid) || onRoster.has(wid) || !Number.isFinite(wid)) continue
         offRosterIds.add(wid)
       }
     }
@@ -250,9 +249,9 @@ export async function GET(request: NextRequest) {
     }
 
     // 組織別ロック状態（後方互換: 旧 locks[ym] もチェック）
-    const lockedLegacy = !!(main.locks[ym])
-    const lockedHibi = !!(main.locks[`${ym}_hibi`]) || lockedLegacy
-    const lockedHfu = !!(main.locks[`${ym}_hfu`]) || lockedLegacy
+    //   判定は lib/locks.ts（2026-10-02 総合点検: 旧は locks[ym] を自前に読んでいた）
+    const lockedHibi = isMonthLockedInLocks(main.locks, ym, 'hibi')
+    const lockedHfu = isMonthLockedInLocks(main.locks, ym, 'hfu')
     const locked = lockedHibi && lockedHfu
 
     // Foreman name (check mforeman for monthly override)
@@ -403,6 +402,16 @@ export async function GET(request: NextRequest) {
       calendarDays,
       homeLeaves,
       restMismatch,
+      // 日ごとに「別の現場に入力がある人」（配置に残っているが移動・掛け持ちの人）。職長スマホ（ログイン版）が
+      //   未入力に数えないために使う（マイページ・トークン版と同じ決まり lib/foreman-todo.ts entryPlace・2026-10-02 総合点検）
+      elsewhereByDay: (() => {
+        const out: Record<number, number[]> = {}
+        for (let d = 1; d <= daysInMonth; d++) {
+          const ids = workers.filter(w => !w.offRoster && entryPlace(att.d, familyIds, w.id, ym, d).place === 'elsewhere').map(w => w.id)
+          if (ids.length > 0) out[d] = ids
+        }
+        return out
+      })(),
       // 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25）。
       // workTypeSites が空 = この現場には工種が無い（今までどおりの画面のまま）
       workTypeSites,
@@ -800,42 +809,49 @@ export async function POST(request: NextRequest) {
       }
       const toParent = toSiteId === parentSiteId
 
-      const attData = await getAttData(String(sdwYm))
-      const { updateDoc, deleteField } = await import('@/lib/fsdb')
+      const { updateDoc, deleteField, runTransaction } = await import('@/lib/fsdb')
       const { ensureDocExists } = await import('@/lib/firestore-safe')
 
-      const attUpdates: Record<string, unknown> = {}
       const mainUpdates: Record<string, unknown> = {}
-      const skipped: { kind: 'worker' | 'subcon'; id: string; name: string; day: number }[] = []
-      let moved = 0
       for (const day of days) {
         mainUpdates[`assign.${parentSiteId}.dayWorkType.${sdwYm}.${day}`] = toParent ? deleteField() : toSiteId
-        const plan = planDayWorkTypeMoves(attData.d, attData.sd, allIds, String(sdwYm), day, toSiteId)
-        for (const m of plan.moves) {
-          const map = m.kind === 'worker' ? 'd' : 'sd'
-          const src = m.kind === 'worker' ? attData.d[m.fromKey] : attData.sd[m.fromKey]
-          if (!src || Object.keys(src).length === 0) continue   // 空マップは書かない（安全ルール）
-          attUpdates[`${map}.${m.toKey}`] = src
-          attUpdates[`${map}.${m.fromKey}`] = deleteField()
-          moved++
-        }
-        for (const s of plan.skipped) {
-          const name = s.kind === 'worker'
-            ? main.workers.find(w => String(w.id) === s.id)?.name || `ID:${s.id}`
-            : main.subcons.find(sc => sc.id === s.id)?.name || s.id
-          skipped.push({ kind: s.kind, id: s.id, name, day })
-        }
       }
+      // 出面の移動はトランザクションで（2026-10-02 総合点検）: 旧は「読んでから、読んだ写しを書いて元を消す」だったので、
+      //   その間に本人がスマホで直した分が古い写しで上書きされた。読みと書きを同じトランザクションにし、
+      //   書きと消しは1回の update にまとめる（2回目の失敗で二重に残らない）
+      const attRef = doc(db, 'demmen', `att_${sdwYm}`)
+      await ensureDocExists(attRef)
+      const { moved, skipped } = await runTransaction(db, async tx => {
+        const snap = await tx.get(attRef)
+        const attData = (snap.exists() ? snap.data() : {}) as { d?: Record<string, unknown>; sd?: Record<string, unknown> }
+        const attUpdates: Record<string, unknown> = {}
+        const skipped: { kind: 'worker' | 'subcon'; id: string; name: string; day: number }[] = []
+        let moved = 0
+        for (const day of days) {
+          const plan = planDayWorkTypeMoves(attData.d || {}, attData.sd || {}, allIds, String(sdwYm), day, toSiteId)
+          for (const m of plan.moves) {
+            const map = m.kind === 'worker' ? 'd' : 'sd'
+            const src = (m.kind === 'worker' ? attData.d?.[m.fromKey] : attData.sd?.[m.fromKey]) as Record<string, unknown> | undefined
+            if (!src || Object.keys(src).length === 0) continue   // 空マップは書かない（安全ルール）
+            attUpdates[`${map}.${m.toKey}`] = src
+            attUpdates[`${map}.${m.fromKey}`] = deleteField()
+            moved++
+          }
+          for (const s of plan.skipped) {
+            const name = s.kind === 'worker'
+              ? main.workers.find(w => String(w.id) === s.id)?.name || `ID:${s.id}`
+              : main.subcons.find(sc => sc.id === s.id)?.name || s.id
+            skipped.push({ kind: s.kind, id: s.id, name, day })
+          }
+        }
+        if (Object.keys(attUpdates).length > 0) tx.update(attRef, attUpdates)
+        return { moved, skipped }
+      })
+      invalidateAttDataCache(String(sdwYm))
 
       const mainRef = doc(db, 'demmen', 'main')
       await ensureDocExists(mainRef)
       await updateDoc(mainRef, mainUpdates)
-      if (Object.keys(attUpdates).length > 0) {
-        const attRef = doc(db, 'demmen', `att_${sdwYm}`)
-        await ensureDocExists(attRef)
-        await updateDoc(attRef, attUpdates)
-        invalidateAttDataCache(String(sdwYm))
-      }
       try {
         const { logActivity } = await import('@/lib/activity')
         const label = toParent ? '親現場' : (children.find(c => c.id === toSiteId)?.workType || toSiteId)
@@ -898,12 +914,12 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: '移動先の工種に既にエントリがあります。先にそちらを確認してください。' }, { status: 409 })
         }
         const sourceEntry = attData.d[`${fromSiteId}_${wid}_${mwtYm}_${mwtDayNum}`] as AttendanceEntry
-        const movedEntry: AttendanceEntry = { ...sourceEntry }
-        const { computeAttendanceDeleteFields, setAttendanceEntry } = await import('@/lib/attendance')
-        const deleteFields = computeAttendanceDeleteFields(movedEntry)
-        // 同じ日の中で工種を移すだけなので、その人のその日の有給の有無は変わらない（繰越の再計算は不要）
-        await setAttendanceEntry(toSiteId, wid, String(mwtYm), mwtDayNum, movedEntry, { deleteFields, prevEntry: sourceEntry })
-        await updateDoc(attRef, { [`d.${fromSiteId}_${wid}_${mwtYm}_${mwtDayNum}`]: deleteField() })
+        // 書きと消しを1回の updateDoc で（2026-10-02 総合点検・lib/attendance-save.ts。旧: 2回に分け、2回目の失敗で二重に残った）。
+        //   同じ日の中で工種を移すだけなので、その人のその日の有給の有無は変わらない（繰越の再計算は不要）
+        const { moveAttendanceEntry } = await import('@/lib/attendance-save')
+        const movedEntry = await moveAttendanceEntry({
+          fromSiteId, toSiteId, workerId: wid, ym: String(mwtYm), day: mwtDayNum, entry: sourceEntry, actor: 'admin(工種切替)',
+        })
         try {
           const { logActivity } = await import('@/lib/activity')
           const wname = main.workers.find(w => w.id === wid)?.name || `ID:${wid}`
@@ -930,8 +946,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '移動先の工種に既にエントリがあります。先にそちらを確認してください。' }, { status: 409 })
       }
       const sourceEntry = attData.sd[`${fromSiteId}_${scid}_${mwtYm}_${mwtDayNum}`]
-      await updateDoc(attRef, { [`sd.${toKey}`]: sourceEntry })
-      await updateDoc(attRef, { [`sd.${fromSiteId}_${scid}_${mwtYm}_${mwtDayNum}`]: deleteField() })
+      if (!sourceEntry || Object.keys(sourceEntry).length === 0) {
+        return NextResponse.json({ error: '移動元のエントリが空のため移動できません' }, { status: 409 })
+      }
+      // 書きと消しを1回の updateDoc で（2026-10-02 総合点検。旧: 2回に分け、2回目の失敗で二重に残った）
+      await updateDoc(attRef, { [`sd.${toKey}`]: sourceEntry, [`sd.${fromSiteId}_${scid}_${mwtYm}_${mwtDayNum}`]: deleteField() })
+      invalidateAttDataCache(String(mwtYm))
       try {
         const { logActivity } = await import('@/lib/activity')
         const scname = main.subcons.find(s => s.id === scid)?.name || scid
@@ -1026,13 +1046,21 @@ export async function POST(request: NextRequest) {
     if (!siteId || !ym || !day) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     }
-    // 日付の形を確かめる（2026-10-02 点検: " 5" や "+5" で「昨日まで」の判定をすり抜け、存在しない日も書けた）
+    // 日付の形を確かめる（2026-10-02 点検: " 5" や "+5" で「昨日まで」の判定をすり抜け、存在しない日も書けた）。
+    //   判定は全経路共通（lib/attendance-save.ts attendanceDateError・2026-10-02 総合点検）
     {
-      const dayN = Number(day)
-      const dim = /^\d{6}$/.test(String(ym)) ? new Date(Number(String(ym).slice(0, 4)), Number(String(ym).slice(4, 6)), 0).getDate() : 0
-      if (!dim || !Number.isInteger(dayN) || dayN < 1 || dayN > dim || String(dayN) !== String(day)) {
-        return NextResponse.json({ error: '日付が正しくありません' }, { status: 400 })
-      }
+      const dateErr = attendanceDateError(ym, day)
+      if (dateErr) return NextResponse.json({ error: dateErr }, { status: 400 })
+    }
+    // 最終承認済みの日は、さかのぼり・最終承認の権限がある人（事業責任者・代表）だけが変えられる（2026-10-02 総合点検）。
+    //   画面の承認行は最終承認済みなら職長承認を外せないのに、出面そのものは職長・事務が変えられ、承認は残ったままだった。
+    //   人の出面も外注の人工も同じ（事業責任者が見た内容が黙って変わらないように）
+    {
+      const mainA = await getMainData()
+      const ap = await dayApprovalOf(mainA.sites, String(siteId), String(ym), day)
+      const canEditFinal = !(await requireCap(request, 'attendance.backfill')) || !(await requireCap(request, 'attendance.finalApprove'))
+      const finalErr = finalApprovedEditError(ap, canEditFinal)
+      if (finalErr) return NextResponse.json({ error: finalErr }, { status: 409 })
     }
 
     const docRef = doc(db, 'demmen', `att_${ym}`)
@@ -1088,6 +1116,17 @@ export async function POST(request: NextRequest) {
                 conflictSiteId: conflict.conflictSiteId,
               }, { status: 409 })
             }
+            // 0.6補（会社都合の休み）はカレンダーの仕事の日だけ（スタッフのスマホと同じ決まり・2026-10-02 総合点検）。
+            //   旧: PC・一括入力からは休みの日にも入れられ、休業手当（60%）の過払いになりえた。すでに 0.6補の日の保存し直しは止めない
+            if ((entry as AttendanceEntry).w === 0.6 && existing?.w !== 0.6) {
+              const { isScheduledWorkDay } = await import('@/lib/attendance')
+              if (!await isScheduledWorkDay(String(siteId), dayIso)) {
+                return NextResponse.json({ error: COMP_NON_WORKING_DAY_MESSAGE, code: 'COMP_NON_WORKING_DAY' }, { status: 400 })
+              }
+            }
+          } else {
+            // 2026-10-02 総合点検: 人員マスタに居ない人には書かない（旧: 確かめを全部飛ばして書いていた）
+            return NextResponse.json({ error: `ID ${workerId} の人が人員マスタに見つかりません` }, { status: 400 })
           }
         } catch (e) {
           // ⚠️ fail-closed: ガード判定に失敗したら拒否する（fail-open は本ガードの趣旨に反する）。
@@ -1125,18 +1164,11 @@ export async function POST(request: NextRequest) {
         //   setAttendanceEntry + computeAttendanceDeleteFields 経由で書き込む。
         //   旧コードは setDoc(merge:true) で残骸が残っていた。
         const entryWithSource = { ...entry, s: 'admin' } as AttendanceEntry
-        const { setAttendanceEntry, computeAttendanceDeleteFields } = await import('@/lib/attendance')
-        const deleteFields = computeAttendanceDeleteFields(entryWithSource)
-        try {
-          const { recordAttendanceChange } = await import('@/lib/attendance-history')
-          await recordAttendanceChange({
-            siteId, workerId: Number(workerId), ym, day, before: prevEntry, after: entryWithSource, actor: 'admin',
-          })
-        } catch { /* 履歴は保険。失敗しても本体は続行 */ }
-        await setAttendanceEntry(siteId, Number(workerId), ym, Number(day), entryWithSource, {
-          deleteFields,
-          // 有給の有無が変わったときだけ次期繰越を再計算（読めなかったときは従来どおり保守的に）
-          prevEntry: prevLoaded ? (prevEntry ?? null) : undefined,
+        // 保存は共通の入口（変更履歴 → 残骸の掃除つき保存・lib/attendance-save.ts・2026-10-02 総合点検）。
+        //   有給の有無が変わったときだけ次期繰越を再計算（読めなかったときは従来どおり保守的に）
+        await writeAttendanceEntry({
+          siteId, workerId: Number(workerId), ym, day: Number(day), entry: entryWithSource,
+          prevEntry: prevLoaded ? (prevEntry ?? null) : undefined, actor: 'admin',
         })
 
         // ⚠️ 2026-05-11 追加: 追跡可能性向上のため admin の出面書き込みを Activity log に記録
@@ -1165,23 +1197,11 @@ export async function POST(request: NextRequest) {
           )
         } catch { /* ログ失敗は本体処理に影響させない */ }
       } else {
-        // nullまたは無効なエントリ: フィールドを削除
-        try {
-          const { recordAttendanceChange } = await import('@/lib/attendance-history')
-          await recordAttendanceChange({
-            siteId, workerId: Number(workerId), ym, day, before: prevEntry, after: null, actor: 'admin',
-          })
-        } catch { /* 履歴は保険。失敗しても本体は続行 */ }
-        const { deleteField } = await import('@/lib/fsdb')
-        const { updateDoc } = await import('@/lib/fsdb')
-        await updateDoc(docRef, { [`d.${key}`]: deleteField() })
-        // 有給を消した場合は次期レコードの繰越を追随再計算（2026-09-02）
-        if ((prevEntry as { p?: number | boolean } | undefined)?.p) {
-          try {
-            const { recomputeNextCarryOver } = await import('@/lib/leave-carry')
-            await recomputeNextCarryOver(Number(workerId), `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`)
-          } catch (e) { console.warn('[grid] 繰越再計算に失敗:', e) }
-        }
+        // nullまたは無効なエントリ: フィールドを削除（共通の入口: 変更履歴 → 削除 → 有給を消したら次期繰越の再計算・2026-10-02 総合点検）
+        await writeAttendanceEntry({
+          siteId, workerId: Number(workerId), ym, day: Number(day), entry: null,
+          prevEntry: prevLoaded ? (prevEntry ?? null) : undefined, actor: 'admin',
+        })
         try {
           const { logActivity } = await import('@/lib/activity')
           await logActivity(
@@ -1208,6 +1228,14 @@ export async function POST(request: NextRequest) {
         const { deleteField, updateDoc } = await import('@/lib/fsdb')
         await updateDoc(docRef, { [`sd.${key}`]: deleteField() })
       }
+      invalidateAttDataCache(String(ym))
+      // 外注の人工も操作ログに残す（2026-10-02 総合点検: 旧は何も残らなかった。変更履歴（attendanceHistory）は人の出面だけ）
+      try {
+        const { logActivity } = await import('@/lib/activity')
+        const se = subconEntry as { n?: number; on?: number } | null
+        await logActivity('admin', 'attendance.subconEdit',
+          `${siteId}/外注:${subconId} ${ym}/${day} → ${se && typeof se === 'object' ? `${se.n ?? 0}人工${se.on ? `+${se.on}h` : ''}` : '削除'}`)
+      } catch { /* ログ失敗は本体処理に影響させない */ }
     }
 
     return NextResponse.json({ success: true })

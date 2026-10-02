@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkerByToken, mapRawWorkers, hourlyRateOn, isEmployedOn } from '@/lib/workers'
+import { getWorkerByToken, mapRawWorkers, hourlyRateOn, isEmployedOn, findWorkerByToken } from '@/lib/workers'
 import {
   getAttendanceDoc,
-  setAttendanceEntry,
   getApprovalForDay,
-  getStaffSites,
   getEntryStatus,
   ymKey,
   attKey,
   formatDateJP,
   formatDateShort,
-  computeAttendanceDeleteFields,
 } from '@/lib/attendance'
+import { attendanceDateError, dayApprovalOf, writeAttendanceEntry } from '@/lib/attendance-save'
 import { getSites } from '@/lib/sites'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
@@ -20,6 +18,8 @@ import { AttendanceEntry, SiteWorkSchedule, withDerivedOvertime } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, todayJstIso, daysBetween, currentYmJst } from '@/lib/date-utils'
 import { getAttData, parseDKey } from '@/lib/compute'
+import { sitesOfWorkerForMonth } from '@/lib/roster'
+import { isWorkDayOf } from '@/lib/attendance-missing'
 
 export async function GET(request: NextRequest) {
   // auth: スタッフ本人のトークン（getWorkerByToken）
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   const siteIdParam = request.nextUrl.searchParams.get('siteId')
 
   if (!token) {
-    return NextResponse.json({ error: 'token required' }, { status: 400 })
+    return NextResponse.json({ error: 'URL に必要な情報がありません。会社に連絡してください / Thiếu thông tin trong đường dẫn. Vui lòng liên hệ công ty' }, { status: 400 })
   }
 
   try {
@@ -43,9 +43,10 @@ export async function GET(request: NextRequest) {
       massign?: Record<string, { workers?: number[] }>
     }
     const allWorkers = mapRawWorkers(mainRaw.workers || [])
-    const worker = allWorkers.find(w => w.token === token) || null
+    // 退職後は翌月末まで「見るだけ」（lib/workers.ts findWorkerByToken allowGrace・2026-10-02 総合点検）。書く側（POST）は在籍中だけ
+    const worker = findWorkerByToken(allWorkers, token, { allowGrace: true })
     if (!worker) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'この URL は無効です。会社に連絡してください / Đường dẫn không hợp lệ. Vui lòng liên hệ công ty' }, { status: 401 })
     }
 
     // アクセスログ記録（失敗しても処理は続行）
@@ -57,15 +58,12 @@ export async function GET(request: NextRequest) {
       ip: getRequestIp(request),
     }).catch(() => {})
 
-    // 配置現場（getStaffSites と同じ規則: 当月の月次配置があればそれ、無ければ既定配置）
+    // 配置現場。決まりは getAssign（lib/roster.ts・過去12か月の月別配置をさかのぼる）＝ PC の出面画面・職長の名簿と同じ
+    //   2026-10-02 総合点検: 旧は `massign[当月] ?? assign` で、月別配置が古い月にしか無い人は最初の現場が食い違っていた
     const curYm0 = currentYmJst()
-    const assignedSites: { id: string; name: string }[] = []
-    for (const site of mainRaw.sites || []) {
-      if (site.archived) continue
-      const monthAssign = mainRaw.massign?.[`${site.id}_${curYm0}`]
-      const eff = monthAssign ?? mainRaw.assign?.[site.id]
-      if ((eff?.workers || []).includes(worker.id)) assignedSites.push({ id: site.id, name: site.name })
-    }
+    const assignedSites = sitesOfWorkerForMonth(
+      { sites: mainRaw.sites || [], assign: mainRaw.assign, massign: mainRaw.massign }, worker.id, curYm0,
+    )
     // 2026-07-22: 現場未配置（新入社員が配置前にQRを開いた等）でも入口で弾かない。
     //   従来は「未配置かつ現場指定なし」で 404 'No site assigned' を返し、新入社員の
     //   QRが必ずエラーになっていた。配置済みスタッフも元々ドロップダウンで全現場を選べる
@@ -100,7 +98,7 @@ export async function GET(request: NextRequest) {
     const family = siteId ? workTypeFamilyIds(rawSitesH, siteId) : []
     const site = availableSites.find(s => s.id === siteId) || availableSites[0]
     if (!site) {
-      return NextResponse.json({ error: 'No sites available' }, { status: 404 })
+      return NextResponse.json({ error: '選べる現場がありません。会社に連絡してください / Không có công trường để chọn. Vui lòng liên hệ công ty' }, { status: 404 })
     }
 
     // 2026-08-27 修正（休暇届総点検）: Vercel は UTC のため、JST 0〜9時に「今日」が
@@ -236,8 +234,7 @@ export async function GET(request: NextRequest) {
           } catch { calCache[calKey] = null }
         }
         const calDays = calCache[calKey]
-        const isWorkDay = calDays ? calDays[String(pDay)] === 'work' : pd.getDay() !== 0
-        if (!isWorkDay) continue
+        if (!isWorkDayOf(calDays, py, pm, pDay)) continue   // 「仕事の日か」は共通（lib/attendance-missing.ts）
 
         // どの現場かを問わず入力があればスキップ（現場間違いは職長が移動する）
         let hasEntry = false
@@ -484,7 +481,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Staff GET error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'サーバーでエラーが起きました。少し待ってからもう一度お試しください / Lỗi máy chủ. Vui lòng thử lại sau' }, { status: 500 })
   }
 }
 
@@ -495,12 +492,12 @@ export async function POST(request: NextRequest) {
             restReason, restNote } = await request.json()
 
     if (!token || !siteIdIn || !year || !month || !day || !choice) {
-      return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      return NextResponse.json({ error: '入力に足りないものがあります。画面を開き直してください / Thiếu dữ liệu. Vui lòng mở lại màn hình' }, { status: 400 })
     }
 
     const worker = await getWorkerByToken(token)
     if (!worker) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'この URL は無効です。会社に連絡してください / Đường dẫn không hợp lệ. Vui lòng liên hệ công ty' }, { status: 401 })
     }
 
     // Check site exists and is active + 現場の勤務時間設定を取得
@@ -516,7 +513,7 @@ export async function POST(request: NextRequest) {
     let targetSiteId = siteId
     const allActiveSites = (mainRawPost.sites || []).filter(s2 => !s2.archived).map(s2 => ({ id: s2.id, name: s2.name || '' }))
     if (!allActiveSites.find(s => s.id === siteId)) {
-      return NextResponse.json({ error: 'Site not found or archived' }, { status: 403 })
+      return NextResponse.json({ error: 'この現場は見つからないか、終わった現場です / Không tìm thấy công trường hoặc công trường đã kết thúc' }, { status: 403 })
     }
     // workSchedule を取得（残業計算用）
     type SiteBreakRaw = { enabled?: boolean; minutes?: number; mandatory?: boolean }
@@ -532,6 +529,11 @@ export async function POST(request: NextRequest) {
 
     // Check approval lock
     const ym = ymKey(year, month)
+    // 実在する日か（2026-10-02 総合点検: 旧は確かめず、API を直接呼ぶと `..._202609_31` のような無い日を書けた。PC と同じ共通の決まり）
+    {
+      const dateErr = attendanceDateError(ym, day)
+      if (dateErr) return NextResponse.json({ error: `${dateErr} / Ngày không hợp lệ` }, { status: 400 })
+    }
     // 入社前・退職後の日には入れない（2026-10-02 点検: 書けると承認・本人確認の対象外のまま給与に入った）
     {
       const isoP = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
@@ -539,9 +541,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'この日は在籍期間の外です / Ngày này nằm ngoài thời gian làm việc' }, { status: 400 })
       }
     }
-    const approval = await getApprovalForDay(siteId, ym, day)
-    if (approval?.foreman) {
-      return NextResponse.json({ error: 'Day is locked (approved)' }, { status: 409 })
+    // 職長が確認（承認）した日は本人からは変えられない。判定は共通（lib/attendance-save.ts dayApprovalOf・工種サイトの子で付けた古い承認も見る）
+    const approval = await dayApprovalOf((mainRawPost.sites || []) as { id: string; parentId?: string }[], siteId, ym, day)
+    if (approval.foreman) {
+      return NextResponse.json({ error: 'この日は職長が確認済みのため変更できません。直したいときは職長に相談してください / Ngày này tổ trưởng đã xác nhận nên không thể thay đổi. Hãy trao đổi với tổ trưởng' }, { status: 409 })
     }
 
     // 2026-06-12 (監査 Sprint2-B): 月次ロック済み月への書込を拒否。
@@ -692,16 +695,18 @@ export async function POST(request: NextRequest) {
         break
       }
       default:
-        return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
+        return NextResponse.json({ error: '選んだ内容が正しくありません / Lựa chọn không hợp lệ' }, { status: 400 })
     }
 
-    // 残骸消去: entry に含まれない既知フィールドを全て削除
-    const deleteFields = computeAttendanceDeleteFields(entry)
-    await setAttendanceEntry(targetSiteId, worker.id, ym, day, entry, { deleteFields, prevEntry: prevStaffEntry })
+    // 保存は共通の入口（変更履歴 → 残骸の掃除つき保存・lib/attendance-save.ts・2026-10-02 総合点検）。
+    //   旧: 本人が自分の入力を上書きしても変更履歴（attendanceHistory）に残らなかった
+    await writeAttendanceEntry({
+      siteId: targetSiteId, workerId: worker.id, ym, day: Number(day), entry, prevEntry: prevStaffEntry, actor: `staff:${worker.id}`,
+    })
 
     return NextResponse.json({ success: true, entry })
   } catch (error) {
     console.error('Staff POST error:', error)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'サーバーでエラーが起きました。少し待ってからもう一度お試しください / Lỗi máy chủ. Vui lòng thử lại sau' }, { status: 500 })
   }
 }

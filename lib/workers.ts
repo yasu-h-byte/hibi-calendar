@@ -96,7 +96,8 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     id: w.id as number,
     name: w.name as string,
     nameVi: (w.nameVi as string) || '',
-    company: (w.org as string) === 'hfu' ? 'HFU' : '日比',
+    // 大文字の 'HFU' も HFU（締め・本人確認と同じ orgKeyOf・2026-10-02 総合点検。旧: 小文字だけで、表記ゆれの人が日比建設に出た）
+    company: String(w.org || '').toLowerCase() === 'hfu' ? 'HFU' : '日比',
     visaType: (w.visa as string) || '',
     token: (w.token as string) || '',
     jobType: (w.job as string) || '',

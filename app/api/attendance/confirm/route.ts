@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from '@/lib/fsdb'
-import { mapRawWorkers } from '@/lib/workers'
+import { mapRawWorkers, findWorkerByToken } from '@/lib/workers'
 import { getMainData } from '@/lib/compute'
 import { getAttendanceDoc } from '@/lib/attendance'
 import { type HierarchySite } from '@/lib/site-hierarchy'
@@ -27,7 +27,8 @@ import type { AttendanceEntry } from '@/types'
 async function loadByToken(token: string) {
   // demmen/main は 30秒キャッシュ経由
   const main = await getMainData()
-  const worker = mapRawWorkers(main.workers || []).find(w => w.token === token) || null
+  // 退職した月の本人確認は翌月末まで（lib/workers.ts findWorkerByToken allowGrace・2026-10-02 総合点検）
+  const worker = findWorkerByToken(mapRawWorkers(main.workers || []), token, { allowGrace: true })
   return { main, worker, sites: (main.sites || []) as unknown as HierarchySite[] }
 }
 

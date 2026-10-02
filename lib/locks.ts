@@ -14,6 +14,14 @@ import { doc, getDoc } from '@/lib/fsdb'
  *   - `${ym}_hibi`   … 日比建設のみロック
  *   - `${ym}_hfu`    … HFU のみロック
  */
+/**
+ * 会社の判定（2026-10-02 総合点検）: 人員マスタの生データ org は 'hfu' / 'HFU' のどちらもありうる。
+ * 旧は画面・API ごとに `=== 'hfu'`・`=== 'HFU'`・両方、と書き方が違っていた。ここ1つに寄せる
+ */
+export function orgKeyOf(org: unknown): 'hibi' | 'hfu' {
+  return String(org || '').toLowerCase() === 'hfu' ? 'hfu' : 'hibi'
+}
+
 export function isMonthLockedInLocks(
   locks: Record<string, unknown> | null | undefined,
   ym: string,
@@ -23,10 +31,7 @@ export function isMonthLockedInLocks(
   if (locks[ym]) return true  // legacy 全体ロック
   const lockedHibi = !!locks[`${ym}_hibi`]
   const lockedHfu = !!locks[`${ym}_hfu`]
-  if (org) {
-    const o = org === 'hfu' || org === 'HFU' ? 'hfu' : 'hibi'
-    return o === 'hfu' ? lockedHfu : lockedHibi
-  }
+  if (org) return orgKeyOf(org) === 'hfu' ? lockedHfu : lockedHibi
   // org 不明の書込は「両組織ロック時のみ」拒否（安全側に倒しすぎて業務停止しない）
   return lockedHibi && lockedHfu
 }
@@ -75,7 +80,7 @@ export function isMonthLockedForWorkers(
   const orgs: (string | null)[] = workerIds.map(id => {
     const w = (rawWorkers || []).find(x => Number(x.id) === Number(id))
     if (!w) return null
-    return String(w.org || '').toLowerCase() === 'hfu' ? 'hfu' : 'hibi'
+    return orgKeyOf(w.org)
   })
   const known = orgs.filter((o): o is string => !!o)
   if (known.some(o => isMonthLockedInLocks(locks, ym, o))) return true

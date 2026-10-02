@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiAuthUser, requireCap } from '@/lib/auth'
-import { getAttendanceHistory, recordAttendanceChange } from '@/lib/attendance-history'
+import { getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
+import { getAttendanceHistory } from '@/lib/attendance-history'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
-import { setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
+import { getAttendanceDoc } from '@/lib/attendance'
+import { getMainData } from '@/lib/compute'
+import { dayApprovalOf, finalApprovedEditError, writeAttendanceEntry } from '@/lib/attendance-save'
 import { logActivity } from '@/lib/activity'
 import type { AttendanceEntry } from '@/types'
 
@@ -54,36 +56,37 @@ export async function POST(request: NextRequest) {
     if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
   }
 
-  // 復元そのものも履歴に残す（復元の取り消しができるように）
-  let current: AttendanceEntry | undefined
-  try {
-    const attSnap = await getDoc(doc(db, 'demmen', `att_${h.ym}`))
-    const d = (attSnap.exists() ? (attSnap.data().d || {}) : {}) as Record<string, AttendanceEntry>
-    current = d[h.key]
-  } catch { /* 読めなくても復元は続行 */ }
-  await recordAttendanceChange({
-    siteId: h.siteId, workerId: h.workerId, ym: h.ym, day: h.day,
-    before: current, after: h.before, actor: `${a.actor}(復元)`,
-  })
+  // 復元の前の中身（復元そのものも履歴に残し、取り消せるようにする）
+  const attDocR = await getAttendanceDoc(h.ym)
+  const current = attDocR[h.key] as AttendanceEntry | undefined
+  const mainR = await getMainData()
+
+  // 最終承認済みの日は、さかのぼり・最終承認の権限がある人（事業責任者・代表）だけ（2026-10-02 総合点検・出面の保存と同じ決まり）
+  {
+    const ap = await dayApprovalOf(mainR.sites, h.siteId, h.ym, h.day)
+    const canEditFinal = (await callerCan(request, 'attendance.backfill')) || (await callerCan(request, 'attendance.finalApprove'))
+    const finalErr = finalApprovedEditError(ap, canEditFinal)
+    if (finalErr) return NextResponse.json({ error: finalErr }, { status: 409 })
+  }
 
   // 多現場重複ガード（2026-08-31 横展開）: 復元の間に別現場へ入力が移っていた場合、
   //   そのまま書き戻すと同日2現場の二重払いになる
+  //   2026-10-02 総合点検: 旧はこの確かめの前に履歴を書いていたので、断った復元が「復元した」として履歴に残っていた
   {
-    const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
-    const attDocR = await getAttendanceDoc(h.ym)
-    const sitesAllR = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
-    const conflictR = detectMultiSiteConflict(attDocR, h.siteId, h.workerId, h.ym, h.day, sitesAllR, h.before)
+    const { detectMultiSiteConflict } = await import('@/lib/attendance')
+    const conflictR = detectMultiSiteConflict(attDocR, h.siteId, h.workerId, h.ym, h.day, mainR.sites, h.before)
     if (conflictR) {
-      const cName = sitesAllR.find(s2 => s2.id === conflictR.conflictSiteId)?.name || conflictR.conflictSiteId
+      const cName = mainR.sites.find(s2 => s2.id === conflictR.conflictSiteId)?.name || conflictR.conflictSiteId
       return NextResponse.json({
         error: `「${cName}」に同日の出面が既にあるため復元できません。先にそちらを確認・削除してください`,
       }, { status: 409 })
     }
   }
 
-  // 書き戻し。残骸フィールドは computeAttendanceDeleteFields で掃除する
-  await setAttendanceEntry(h.siteId, h.workerId, h.ym, h.day, h.before,
-    { deleteFields: computeAttendanceDeleteFields(h.before) })
+  // 書き戻し（共通の入口: 復元そのものを履歴に残す → 残骸の掃除つきで保存・lib/attendance-save.ts）
+  await writeAttendanceEntry({
+    siteId: h.siteId, workerId: h.workerId, ym: h.ym, day: h.day, entry: h.before, prevEntry: current ?? null, actor: `${a.actor}(復元)`,
+  })
 
   await logActivity(a.actor!, 'attendance.restore',
     `${h.siteId}/wid:${h.workerId} ${h.ym}/${h.day} を変更前の内容に復元`)

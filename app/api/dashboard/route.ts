@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
+import { getApiAuthUser, requireCap, callerCan, foremenOfSiteForMonth } from '@/lib/auth'
+import { sitesOfWorkerForMonth } from '@/lib/roster'
 import { db } from '@/lib/firebase'
 import { collection, getDocs } from '@/lib/fsdb'
 import {
@@ -16,14 +17,16 @@ import {
   buildYMList,
   MainData,
   parseDKey,
+  parseSdKey,
 } from '@/lib/compute'
 import { ymKey, isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
-import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth, isEmployedOn } from '@/lib/workers'
+import { isAlreadyRetired, isEmployedOn } from '@/lib/workers'
 import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe, addDaysIso, currentYmJst, todayJstDate } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
 import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter, jpExpectedGrantWithoutRecords } from '@/lib/leave-compute'
 import type { HomeLeaveEntry } from '@/lib/homeLeave'
+import { calendarSiteIdOf, workTypeFamilyIds, type HierarchySite } from '@/lib/site-hierarchy'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
 export const dynamic = 'force-dynamic'
@@ -46,7 +49,17 @@ function getJstNow(): Date {
   return new Date(`${datePart}T${timePart}`)
 }
 
-/** Today's attendance status */
+/**
+ * 今日（または指定日）の現場ごとの稼働人数と、配置されているのに出ていない人。
+ *
+ * 2026-10-02 総合点検: 旧は現場の id で `${site.id}_${wid}_...` を直接引いていたため、
+ *   - 「今日は鉄骨」の日（打刻が工種サイトの id に入る）は親現場が0人になり、全員が「休み」に並んだ
+ *   - 現場を選び間違えた人（配置外）の出勤は数えず、休みに並んだ
+ *   - 0.6補（会社都合の休み・w=0.6）を出勤1人に数えていた（isWorkingDay は w>0 なら true）
+ *   新: 親現場＋工種サイトを1つの現場として数え（lib/site-hierarchy.ts workTypeFamilyIds）、
+ *   出勤の判定は給与計算と同じ「w>0 で 0.6補でない（外国人）・夜勤」（isWorkingDay ＋ 0.6補の除外）。
+ *   その日の出面を1回なぞるので、配置に無い人の出勤もその現場に数える。
+ */
 function computeTodayStatus(
   main: MainData,
   attD: Record<string, AttendanceEntry>,
@@ -56,86 +69,84 @@ function computeTodayStatus(
   excludeSiteIds?: Set<string>,
   extraHomeLeaveWorkerIds?: Set<number>,  // 呼び出し側でhomeLongLeaveコレクションから集めたIDも渡せる
 ) {
-  const activeSites = main.sites.filter(s => !s.archived && !(excludeSiteIds?.has(s.id)))
+  const hier = main.sites as unknown as HierarchySite[]
+  const parentOf = (sid: string) => calendarSiteIdOf(hier, sid)
+  // 親現場（工種サイトは親にまとめる）。終了した現場・隠した現場は除く
+  const parentSites = main.sites.filter(s => !s.archived && !(s as { parentId?: string }).parentId && !(excludeSiteIds?.has(s.id)))
+  const familyOf = new Map(parentSites.map(s => [s.id, workTypeFamilyIds(hier, s.id)]))
+  const dayStr = String(day)
+
+  // 出勤に数える記録か（給与計算の compute() と同じ: 有給・休み・現場休・帰国・試験は除く。0.6補は外国人なら会社都合の休み）
+  const isPresent = (entry: AttendanceEntry | undefined, visa?: string) =>
+    !!entry && isWorkingDay(entry) && !(entry.w === 0.6 && visa !== 'none')
+
+  // その日の出面を1回なぞる: 親現場ごとの出勤者・外注の人数（配置に無い人の出勤も数える）
+  const presentByParent = new Map<string, Set<number>>()
+  const workingWorkerIds = new Set<number>()
+  const homeLeaveByEntry = new Set<number>()
+  for (const [key, entry] of Object.entries(attD)) {
+    if (!entry) continue
+    const pk = parseDKey(key)
+    if (pk.ym !== ym || pk.day !== dayStr) continue
+    const wid = Number(pk.wid)
+    if (!Number.isFinite(wid)) continue
+    if (entry.hk === 1) homeLeaveByEntry.add(wid)
+    const worker = main.workers.find(w => w.id === wid)
+    if (!worker || !isPresent(entry, worker.visa)) continue
+    const parent = parentOf(pk.sid)
+    if (!familyOf.has(parent)) continue   // 終了・非表示の現場
+    workingWorkerIds.add(wid)
+    if (!presentByParent.has(parent)) presentByParent.set(parent, new Set())
+    presentByParent.get(parent)!.add(wid)
+  }
+  const subByParent = new Map<string, { tobi: number; doko: number }>()
+  for (const [key, sdEntry] of Object.entries(attSD)) {
+    if (!sdEntry || !(sdEntry.n > 0)) continue
+    const pk = parseSdKey(key, main.subcons.map(x => x.id))
+    if (pk.ym !== ym || pk.day !== dayStr) continue
+    const parent = parentOf(pk.sid)
+    if (!familyOf.has(parent)) continue
+    const sc = main.subcons.find(x => x.id === pk.wid)
+    const cur = subByParent.get(parent) || { tobi: 0, doko: 0 }
+    if (sc && sc.type === '土工業者') cur.doko += sdEntry.n; else cur.tobi += sdEntry.n
+    subByParent.set(parent, cur)
+  }
 
   const siteStatus: {
     siteId: string; siteName: string; tobi: number; doko: number; subTobi: number; subDoko: number; total: number
   }[] = []
-  const absentWorkers: { id: number; name: string }[] = []
-  const workingWorkerIds = new Set<number>()
-
-  for (const site of activeSites) {
+  const allAssignedWorkerIds = new Set<number>()
+  for (const site of parentSites) {
+    const family = familyOf.get(site.id) || [site.id]
+    // 配置 = 親と工種サイトの配置の和（工種を後から足した現場は工種側だけに配置がある・app/api/attendance/grid と同じ）
+    const rosterIds = new Set<number>()
+    for (const sid of family) for (const wid of getAssign(main, sid, ym).workers) { rosterIds.add(wid); allAssignedWorkerIds.add(wid) }
     let tobi = 0
     let doko = 0
-
-    const assignData = getAssign(main, site.id, ym)
-    const workerIds = assignData.workers
-
-    for (const wid of workerIds) {
-      const key = `${site.id}_${wid}_${ym}_${String(day)}`
-      const entry = attD[key]
-      // ⚠️ 2026-05-09: isWorkingDay() で残骸データ対策（有給/休み/現場休/帰国中/試験 を除外）
-      if (entry && isWorkingDay(entry)) {
-        const worker = main.workers.find(w => w.id === wid)
-        if (worker) {
-          const job = worker.job || ''
-          if (isTobiGroup(job)) tobi++
-          else if (job === 'doko') doko++
-          else tobi++ // default to tobi for unknown jobs
-          workingWorkerIds.add(wid)
-        }
-      }
+    for (const wid of presentByParent.get(site.id) || []) {
+      const job = main.workers.find(w => w.id === wid)?.job || ''
+      if (isTobiGroup(job)) tobi++
+      else if (job === 'doko') doko++
+      else tobi++ // default to tobi for unknown jobs
     }
-
-    // Count subcons for today, split by type
-    let subTobi = 0
-    let subDoko = 0
-    const subconIds = assignData.subcons
-    for (const scid of subconIds) {
-      const key = `${site.id}_${scid}_${ym}_${String(day)}`
-      const sdEntry = attSD[key]
-      if (sdEntry && sdEntry.n && sdEntry.n > 0) {
-        const sc = main.subcons.find(x => x.id === scid)
-        if (sc && sc.type === '土工業者') {
-          subDoko += sdEntry.n
-        } else {
-          subTobi += sdEntry.n
-        }
-      }
-    }
-
-    const total = tobi + doko + subTobi + subDoko
-    if (workerIds.length > 0) {
-      siteStatus.push({ siteId: site.id, siteName: site.name, tobi, doko, subTobi, subDoko, total })
+    const sub = subByParent.get(site.id) || { tobi: 0, doko: 0 }
+    const total = tobi + doko + sub.tobi + sub.doko
+    if (rosterIds.size > 0 || total > 0) {
+      siteStatus.push({ siteId: site.id, siteName: site.name, tobi, doko, subTobi: sub.tobi, subDoko: sub.doko, total })
     }
   }
 
   // Absent workers: assigned but not working today
   // 帰国中（homeLongLeave 期間内 or 出面の hk:1）のスタッフは除外
-  const allAssignedWorkerIds = new Set<number>()
-  for (const site of activeSites) {
-    const siteAssign = getAssign(main, site.id, ym)
-    for (const wid of siteAssign.workers) allAssignedWorkerIds.add(wid)
-  }
-
   // 今日帰国中のワーカーIDは呼び出し側で集めた homeLongLeave の結果を使用
   // （2026-05-13: 旧 main.homeLeaves 配列の参照を廃止）
   const homeLeaveWorkerIds = new Set<number>(extraHomeLeaveWorkerIds || [])
   const todayDateStr = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-
+  const absentWorkers: { id: number; name: string }[] = []
   for (const wid of Array.from(allAssignedWorkerIds)) {
     if (workingWorkerIds.has(wid)) continue
     if (homeLeaveWorkerIds.has(wid)) continue  // 帰国中は休みリストから除外
-
-    // 出面エントリに hk:1 があれば帰国中扱いで除外（保険）
-    let isHomeLeaveByEntry = false
-    for (const site of activeSites) {
-      const key = `${site.id}_${wid}_${ym}_${String(day)}`
-      const entry = attD[key] as { hk?: number } | undefined
-      if (entry && entry.hk === 1) { isHomeLeaveByEntry = true; break }
-    }
-    if (isHomeLeaveByEntry) continue
-
+    if (homeLeaveByEntry.has(wid)) continue    // 出面エントリに hk:1 があれば帰国中扱いで除外（保険）
     // 2026-06-XX 修正: 当該月在籍中のスタッフを欠勤者候補に
     // 2026-10-02: 月ではなくその日で在籍を見る（10/26 入社の人が10月初めから「休み」に出ていた）
     const worker = main.workers.find(w => w.id === wid && isEmployedOn(w, todayDateStr))
@@ -643,20 +654,14 @@ export async function GET(request: NextRequest) {
     //    siteForemanName は対象スタッフの現在配置現場の職長名を引く（ボタン表示用）
     const homeLongLeaveItems: { id: string; workerName: string; startDate: string; endDate: string; reason: string; status: string; requestedAt: string; foremanApprovedAt?: string; siteForemanName?: string }[] = []
     const resolveWorkerForemanName = (workerId: number): string => {
-      // 当月の配置現場（massign 優先、なければ assign）から最初の現場を引き、その職長名を返す
-      for (const site of main.sites) {
-        if (site.archived) continue
-        const monthKey = `${site.id}_${ym}`
-        const monthAssign = main.massign?.[monthKey]
-        const defaultAssign = main.assign?.[site.id]
-        const workers = (monthAssign?.workers || defaultAssign?.workers || []) as number[]
-        if (workers.includes(workerId)) {
-          const override = main.mforeman?.[monthKey]?.wid
-          const fid = override ?? site.foreman
-          if (fid != null) {
-            return main.workers.find(w => w.id === fid)?.name || ''
-          }
-        }
+      // その月の配置現場（決まりは getAssign・lib/roster.ts）の最初の現場の、その月の職長名
+      // 2026-10-02 総合点検: 旧は `massign ?? assign` の自前判定と `mforeman[].wid` だけ（`.foreman` 形式を見ない）で、
+      //   配置・職長の共通の決まり（lib/auth.ts foremenOfSiteForMonth）と食い違っていた
+      for (const s of sitesOfWorkerForMonth(main, workerId, ym)) {
+        const site = main.sites.find(x => x.id === s.id)
+        if (!site) continue
+        const fid = foremenOfSiteForMonth(site, main.mforeman || {}, ym)[0]
+        if (fid != null) return main.workers.find(w => w.id === fid)?.name || ''
       }
       return ''
     }
@@ -900,7 +905,8 @@ export async function GET(request: NextRequest) {
             if (c.effective > todayIso) continue  // まだ実施日前
             for (const [idStr, planned] of Object.entries(c.targets)) {
               const wm = main.workers.find(x => x.id === Number(idStr))
-              if (!wm || wm.retired) continue
+              // 退職の判定は共通（lib/workers.ts isAlreadyRetired）。旧は退職日が入っただけで（先の日付でも）飛ばしていた・2026-10-02 総合点検
+              if (!wm || isAlreadyRetired(wm.retired, todayIso)) continue
               const cur = Number((wm as { hourlyRate?: number }).hourlyRate || 0)
               if (cur >= planned) continue  // 反映済み
               quietIssues.push({
@@ -970,9 +976,13 @@ export async function GET(request: NextRequest) {
     } catch (e) {
       console.error('quietIssues detection error:', e)
     }
-    // 金額の入る項目（法定割増の不足額・時給の改定）は給与を見られる人だけ（2026-10-02 代表）
-    const PAY_ISSUE_KINDS = new Set(['legalShortfall', 'wageRevisionPending'])
-    const shownIssues = (await callerCan(request, 'pay.view')) ? quietIssues : quietIssues.filter(q => !PAY_ISSUE_KINDS.has(q.kind))
+    // 金額の入る項目（法定割増の不足額・時給の改定）は給与を見られる人だけ（2026-10-02 代表）。
+    //   2026-10-02 総合点検: 「隠すものを並べる」方式から「見せてよいものだけ並べる」許可リストに変えた。
+    //   新しい種類を足して書き忘れても、給与を見られない人には出ない（prevRate の消し漏れと同じ形を防ぐ）
+    const NON_PAY_ISSUE_KINDS: ReadonlySet<QuietIssue['kind']> = new Set<QuietIssue['kind']>([
+      'nightUnregistered', 'sundayNoRest', 'earlyReturn', 'staleAttendance', 'staleAssignment',
+    ])
+    const shownIssues = (await callerCan(request, 'pay.view')) ? quietIssues : quietIssues.filter(q => NON_PAY_ISSUE_KINDS.has(q.kind))
 
     const actionItems = {
       visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },

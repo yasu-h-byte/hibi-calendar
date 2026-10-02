@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
-import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances } from '@/lib/compute'
+import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, parseDKey } from '@/lib/compute'
+import { isMonthLockedInLocks, orgKeyOf } from '@/lib/locks'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
@@ -39,9 +40,9 @@ export async function GET(request: NextRequest) {
     const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
 
     // 組織別ロック状態（後方互換: 旧 locks[ym] もチェック）
-    const lockedLegacy = !!(main.locks[ym])
-    const lockedHibi = !!(main.locks[`${ym}_hibi`]) || lockedLegacy
-    const lockedHfu = !!(main.locks[`${ym}_hfu`]) || lockedLegacy
+    //   判定は lib/locks.ts（2026-10-02 総合点検: 旧は locks[ym] を自前に読んでいた）
+    const lockedHibi = isMonthLockedInLocks(main.locks, ym, 'hibi')
+    const lockedHfu = isMonthLockedInLocks(main.locks, ym, 'hfu')
     const locked = lockedHibi && lockedHfu  // 両方締めていれば全体locked
     const workDays = prescribedDays
 
@@ -60,14 +61,12 @@ export async function GET(request: NextRequest) {
       dailyByWorker = {}
       for (const [key, entry] of Object.entries(att.d || {})) {
         if (!entry || typeof entry !== 'object') continue
-        // key 形式: `${siteId}_${workerId}_${ym}_${day}`
-        const parts = key.split('_')
-        if (parts.length < 4) continue
-        const day = parseInt(parts[parts.length - 1])
-        const keyYm = parts[parts.length - 2]
-        const wid = parseInt(parts[parts.length - 3])
-        const siteId = parts.slice(0, parts.length - 3).join('_')
-        if (keyYm !== ym || !Number.isFinite(wid) || !Number.isFinite(day)) continue
+        // key 形式: `${siteId}_${workerId}_${ym}_${day}`。分解は共通（lib/compute.ts parseDKey・2026-10-02 総合点検）
+        const pk = parseDKey(key)
+        const day = parseInt(pk.day)
+        const wid = parseInt(pk.wid)
+        const siteId = pk.sid
+        if (pk.ym !== ym || !Number.isFinite(wid) || !Number.isFinite(day)) continue
         if (!dailyByWorker[wid]) dailyByWorker[wid] = {}
         // 同一日に複数現場の入力がある場合は「実労働・夜勤のあるエントリ」を優先して保持
         //（カレンダー表示は1日1セル。旧: 走査順の1件目固定で、夜勤や出勤が
@@ -86,7 +85,6 @@ export async function GET(request: NextRequest) {
     //   締め後の単価変更・出面修正で支給額が変わっていれば画面に警告する。
     type SnapDiffItem = { id: number; name: string; snapshot: number; current: number }
     const snapshotDiffs: { org: string; lockedAt?: string; count: number; items: SnapDiffItem[] }[] = []
-    const isHfuOrg = (o?: string) => o === 'hfu' || o === 'HFU'
     for (const [orgKey, isLocked] of [['hibi', lockedHibi], ['hfu', lockedHfu]] as const) {
       if (!isLocked) continue
       try {
@@ -97,7 +95,7 @@ export async function GET(request: NextRequest) {
         const snapMap = new Map((snapData.workers || []).map(w => [w.id, w]))
         const items: SnapDiffItem[] = []
         for (const w of result.workers) {
-          if ((isHfuOrg(w.org) ? 'hfu' : 'hibi') !== orgKey) continue
+          if (orgKeyOf(w.org) !== orgKey) continue   // 会社の判定は共通（lib/locks.ts orgKeyOf）
           // 日本人日給月給は netPay が支給額（lock 側の保存値と同じフォールバック 2026-08-27）
           const cur = (w.salaryNetPay ?? w.netPay) || 0
           const s = snapMap.get(w.id)
@@ -211,76 +209,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'copyPrevMonth') {
-      const { ym } = body
-      if (!ym || !/^\d{6}$/.test(ym)) {
-        return NextResponse.json({ error: 'ym required' }, { status: 400 })
-      }
-
-      // Calculate previous month ym
-      const year = parseInt(ym.slice(0, 4))
-      const month = parseInt(ym.slice(4, 6))
-      let prevYear = year
-      let prevMonth = month - 1
-      if (prevMonth < 1) { prevMonth = 12; prevYear -= 1 }
-      const prevYm = `${prevYear}${String(prevMonth).padStart(2, '0')}`
-
-      // Read previous month attendance data
-      const prevDocSnap = await getDoc(doc(db, 'demmen', `att_${prevYm}`))
-      if (!prevDocSnap.exists()) {
-        return NextResponse.json({ error: '前月のデータが見つかりません' }, { status: 404 })
-      }
-      const prevData = prevDocSnap.data()
-      const prevD = (prevData.d || {}) as Record<string, unknown>
-
-      // Safety: 前月データが空なら何もしない（誤操作で当月を消すのを防ぐ）
-      if (Object.keys(prevD).length === 0) {
-        return NextResponse.json({ error: '前月のデータが空のためコピーをスキップしました' }, { status: 400 })
-      }
-
-      // Rewrite keys: replace prevYm with ym in attendance keys
-      // 2026-08-27 修正（休暇届総点検）: ステータス系（帰国hk・有給p・休みr・現場休h・試験）は
-      //   コピーしない。前月の帰国スタブや有給が翌月に複製されると、申請と紐づかない
-      //   孤立フラグになり、帰国が終わっている月では欠勤控除化・有給の過剰消化を招いていた。
-      //   コピーの目的は「配置と出勤パターンの下敷き」なので出勤系のみ写す
-      const newD: Record<string, unknown> = {}
-      let skippedStatus = 0
-      for (const [key, value] of Object.entries(prevD)) {
-        const v = value as { hk?: number; p?: number; r?: number; h?: number; exam?: number } | null
-        if (v && (v.hk || v.p || v.r || v.h || v.exam)) { skippedStatus++; continue }
-        // Keys are like: siteId_workerId_ym_dd
-        const newKey = key.replace(`_${prevYm}_`, `_${ym}_`)
-        newD[newKey] = value
-      }
-      if (Object.keys(newD).length === 0) {
-        return NextResponse.json({ error: '前月データが休暇・ステータスのみのためコピーする出勤データがありません' }, { status: 400 })
-      }
-
-      // ⚠️ 安全対策（2026-05-07 事故を受けて改修）:
-      //   旧コードは setDoc(curDocRef, { d: newD, sd: {} }) または
-      //   updateDoc(curDocRef, { d: newD }) で d 全体を一気に置換していた。
-      //   既存データを残しつつ前月データを「重ね書き」する方式に変更。
-      //   (1) 当月docの存在を保証 (sd は触らない)
-      //   (2) dot-notation で newD の各キーを 1 件ずつ書き込み
-      //   これにより当月に既に手入力された (newDにないキーの) データは保持される。
-      //   かつ Firestore の罠 ({field: {}} で field 全消失) を完全に回避できる。
-      const { ensureDocExists } = await import('@/lib/firestore-safe')
-      const curDocRef = doc(db, 'demmen', `att_${ym}`)
-      await ensureDocExists(curDocRef)
-
-      // 大量キーの書き込みは Firestore の updateDoc 上限 (約500フィールド/呼出) に
-      // 引っかかる可能性があるため、500件ごとに分割して書き込む
-      const newKeys = Object.keys(newD)
-      const CHUNK = 400
-      for (let i = 0; i < newKeys.length; i += CHUNK) {
-        const chunk = newKeys.slice(i, i + CHUNK)
-        const updates: Record<string, unknown> = {}
-        for (const k of chunk) {
-          updates[`d.${k}`] = newD[k]
-        }
-        await updateDoc(curDocRef, updates)
-      }
-
-      return NextResponse.json({ success: true, copiedEntries: newKeys.length, skippedStatusDays: skippedStatus })
+      // 2026-10-02 総合点検で廃止（410）。前月の出面をそのまま当月へ写す機能は、締め・在籍・承認・多現場の確かめも
+      //   変更履歴も無く、実在しない日（8/31 → 9/31）を作り、本人の印（s:'staff'）ごと写して「本人の入力あり」に見せていた。
+      //   当月の出面はスタッフの打刻・職長の入力・一括入力で作る（画面のボタンも外した）
+      return NextResponse.json({
+        error: '「前月コピー」は廃止しました。当月の出面はスタッフの打刻と出面入力の一括入力で作ってください（締め・在籍・承認の確かめを通らない写しは作りません）',
+      }, { status: 410 })
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })

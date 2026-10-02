@@ -180,6 +180,8 @@ export function staffConfirmTargets<W extends ConfirmWorker & { visaType?: strin
   const start = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
   const end = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
   const withEntries = new Set<number>()
+  // キーの分解はここでは lastIndexOf で行う（lib/compute.ts parseDKey と同じ結果。compute を読み込むと
+  //   このファイルを使うテストが Firestore の初期化まで引き込むため・2026-10-02 総合点検）
   const tail = `_${ym}_`
   for (const [key, e] of Object.entries(d)) {
     if (!e) continue

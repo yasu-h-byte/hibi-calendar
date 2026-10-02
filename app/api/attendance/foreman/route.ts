@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getWorkerByToken, isEmployedOn } from '@/lib/workers'
 import {
   getAttendanceDoc,
-  setAttendanceEntry,
   getApprovalForDay,
   setApprovalForDay,
   getForemanSite,
@@ -15,15 +14,20 @@ import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { staffEntryTarget, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
 import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays, siteRosterFromMain, loadSiteRoster } from '@/lib/foreman-todo'
-import { getMainData, getAttData } from '@/lib/compute'
+import { getMainData, getAttData, parseDKey } from '@/lib/compute'
 import { canDriveDefault, driversByDayForSite } from '@/lib/allowance'
 import { todayJstDate } from '@/lib/date-utils'
+import {
+  attendanceDateError, isoOfYmDay, dayApprovalOf, finalApprovedEditError, writeAttendanceEntry, moveAttendanceEntry,
+  COMP_NON_WORKING_DAY_MESSAGE,
+} from '@/lib/attendance-save'
 
 // 工種（親＋工種サイト）の範囲・まとめ承認の判定はマイページと共通（lib/foreman-todo.ts・2026-10-01）
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
   const dateParam = request.nextUrl.searchParams.get('date') // YYYY-MM-DD
+  const siteIdParam = request.nextUrl.searchParams.get('siteId') // 2現場以上を持つ職長が現場を選ぶとき（2026-10-02）
 
   if (!token) {
     return NextResponse.json({ error: 'token required' }, { status: 400 })
@@ -32,13 +36,15 @@ export async function GET(request: NextRequest) {
   try {
     const foreman = await getWorkerByToken(token)
     if (!foreman) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'この URL は無効です。会社に連絡してください / URL không hợp lệ' }, { status: 401 })
     }
 
+    // 見ている日の月（担当現場はその月の職長で決める・2026-10-02 総合点検。旧: 常に今月の職長で、交代の前後で食い違った）
+    const viewYmForSite = /^\d{4}-\d{2}-\d{2}$/.test(dateParam || '') ? (dateParam as string).slice(0, 7).replace('-', '') : undefined
     // 職種が職長の人だけ（職長でない人が現場の職長に登録されている現場は政仁さんが代行・2026-10-01 代表）
-    const site = foreman.jobType === 'shokucho' ? await getForemanSite(foreman.id) : null
+    const site = foreman.jobType === 'shokucho' ? await getForemanSite(foreman.id, viewYmForSite, siteIdParam) : null
     if (!site) {
-      return NextResponse.json({ error: 'Not a foreman' }, { status: 403 })
+      return NextResponse.json({ error: 'この月はあなたが職長の現場がありません（職長の交代の前後は月ごとに決まります）' }, { status: 403 })
     }
 
     // アクセスログ記録
@@ -91,13 +97,8 @@ export async function GET(request: NextRequest) {
     const crossSiteEntries: Record<number, { siteId: string; siteName: string; entry: AttendanceEntry }[]> = {}
     for (const [key, entry] of Object.entries(attData)) {
       if (!entry || typeof entry !== 'object') continue
-      // パース: siteId は最初の "_" 区切り。末尾3要素が wid_ym_day
-      const parts = key.split('_')
-      if (parts.length < 4) continue
-      const keyDay = parts[parts.length - 1]
-      const keyYm = parts[parts.length - 2]
-      const keyWid = parts[parts.length - 3]
-      const keySid = parts.slice(0, parts.length - 3).join('_')
+      // キーの分解は共通（lib/compute.ts parseDKey・2026-10-02 総合点検。旧: split で自前に分けていた）
+      const { sid: keySid, wid: keyWid, ym: keyYm, day: keyDay } = parseDKey(key)
       if (keyYm !== ym) continue
       if (keyDay !== dayStr) continue
       if (family.includes(keySid)) continue   // 自現場（工種サイトを含む）は除外
@@ -170,7 +171,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       foreman: { id: foreman.id, name: foreman.name },
       // 応援現場か（取りまとめ役を「責任者」と呼ぶ・2026-09-30）
-      site: { id: site.id, name: site.name, isSupport: (await import('@/lib/companies')).isSupportSite(site as never, []) },
+      site: { id: site.id, name: site.name, isSupport: (await import('@/lib/companies')).isSupportSite(site as never, main.sites as never) },
+      // この月に担当する親現場（2現場以上なら画面で選べるように返す・?siteId= で切り替え・2026-10-02）
+      foremanSites: site.foremanSites,
       date: {
         year: y, month: m, day: d, ym,
         dateLabel: formatDateKanji(viewDate),
@@ -223,13 +226,16 @@ export async function POST(request: NextRequest) {
 
     const foreman = await getWorkerByToken(token)
     if (!foreman) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+      return NextResponse.json({ error: 'この URL は無効です。会社に連絡してください / URL không hợp lệ' }, { status: 401 })
     }
 
+    // 対象の月の職長か（2026-10-02 総合点検: 旧は今月の職長で判定し、交代の前後で前月を承認できる人が食い違った）
+    const ymBody = Number.isInteger(Number(body.year)) && Number.isInteger(Number(body.month))
+      ? ymKey(Number(body.year), Number(body.month)) : undefined
     // 職種が職長の人だけ（職長でない人が現場の職長に登録されている現場は政仁さんが代行・2026-10-01 代表）
-    const site = foreman.jobType === 'shokucho' ? await getForemanSite(foreman.id) : null
+    const site = foreman.jobType === 'shokucho' ? await getForemanSite(foreman.id, ymBody, body.siteId) : null
     if (!site) {
-      return NextResponse.json({ error: 'Not a foreman' }, { status: 403 })
+      return NextResponse.json({ error: 'この月はあなたが職長の現場がありません（職長の交代の前後は月ごとに決まります）' }, { status: 403 })
     }
 
     // 便ごとの運転者（運転手当）を保存（2026-10-02 点検: 職長のスマホ画面から記録できなかった）。決まりは PC と共通（lib/drivers.ts）
@@ -296,8 +302,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'edit') {
-      const { workerId, year, month, day, choice, overtimeHours } = body
+      const { workerId: workerIdRaw, year, month, day, choice, overtimeHours } = body
       const ym = ymKey(year, month)
+      const workerId = Number(workerIdRaw)
+      const dayNum = Number(day)
+      // 2026-10-02 総合点検: 実在しない日（9月31日）・" 5" のような日を断る（PC の出面入力と同じ共通の決まり）
+      {
+        const dateErr = attendanceDateError(ym, day)
+        if (dateErr) return NextResponse.json({ error: dateErr }, { status: 400 })
+      }
+      if (!Number.isInteger(workerId)) return NextResponse.json({ error: 'workerId が正しくありません' }, { status: 400 })
+      const dayIso = isoOfYmDay(ym, dayNum)
 
       // 2026-06-12 (監査 Sprint2-B): ロック済み月への職長編集を拒否（給与確定後のデータ変更防止）
       {
@@ -305,6 +320,24 @@ export async function POST(request: NextRequest) {
         const { checkMonthLockedForWorkers } = await import('@/lib/locks')
         const lockErr = await checkMonthLockedForWorkers(ym, [workerId])
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
+      }
+
+      // 対象者・名簿（2026-10-02 総合点検）: 旧は workerId を確かめず、人員マスタに居ない人は確かめを全部飛ばして書き、
+      //   名簿に無い人（日本人・他現場の人）も API を直接呼べば自現場に出勤を作れた。
+      //   名簿＝この現場×月の配置（外国人・lib/foreman-todo.ts siteRosterFromMain）＋その日この現場に入力がある配置外の人（画面に出ている人と同じ）
+      const mainE = await getMainData({ fresh: true })
+      const targetWorker = mainE.workers.find(w => w.id === workerId)
+      if (!targetWorker) return NextResponse.json({ error: '対象の人が人員マスタに見つかりません' }, { status: 400 })
+      const rosterE = siteRosterFromMain(mainE, site.id, ym)
+      const dData = await getAttendanceDoc(ym)
+      const onRosterE = rosterE.workers.some(w => w.id === workerId)
+        || (rosterE.offRosterOf(dData).get(dayNum) || []).some(x => x.id === workerId)
+      if (!onRosterE) {
+        return NextResponse.json({ error: `${targetWorker.name} さんはこの現場のこの月の名簿にいません（配置は PC の出面画面で直してください）` }, { status: 403 })
+      }
+      // 入社前・退職後の日には入れない（PC・スタッフのスマホと同じ・2026-10-02 点検）
+      if (!isEmployedOn(targetWorker, dayIso)) {
+        return NextResponse.json({ error: 'この人はこの日に在籍していません（入社前・退職後）' }, { status: 400 })
       }
 
       // Build entry first（ガードで newEntry を参照するため）
@@ -318,6 +351,13 @@ export async function POST(request: NextRequest) {
       const { startTime, endTime, break1, break2, break3 } = body as {
         startTime?: string; endTime?: string; break1?: boolean; break2?: boolean; break3?: boolean
       }
+      // 書き込み先の工種（鉄骨・仮設など）。スタッフのスマホと同じ決め方（lib/site-hierarchy.ts staffEntryTarget）
+      const editTarget = staffEntryTarget(
+        mainE.sites as unknown as HierarchySite[], mainE.assign as unknown as WorkTypeAssignMap | undefined,
+        dData, site.id, workerId, ym, dayNum,
+      ).targetSiteId
+      // 保存前のこの日のエントリ（下のガードと履歴で使い回す。null = 無かった）
+      const foremanPrevEntry: AttendanceEntry | null = (dData[`${editTarget}_${workerId}_${ym}_${dayNum}`] as AttendanceEntry | undefined) ?? null
       let entry: AttendanceEntry
       switch (choice) {
         case 'work':
@@ -340,12 +380,9 @@ export async function POST(request: NextRequest) {
           // 2026-08-27（休暇届総点検）: スタッフが出した欠勤届の理由(rReason/rNote)を
           //   職長の「休み」確認で消さない。旧: 残骸掃除が理由も削除し、
           //   ダッシュボードの欠勤届一覧から届が黙って消えていた
-          const { getAttendanceDoc } = await import('@/lib/attendance')
-          const attDocF = await getAttendanceDoc(ym)
-          const { family: famF } = await loadSiteFamily(site.id)
-          const prevEntry = familyEntry(attDocF, famF, workerId, ym, day) as { rReason?: string; rNote?: string } | undefined
-          if (prevEntry?.rReason) (entry as { rReason?: string }).rReason = prevEntry.rReason
-          if (prevEntry?.rNote) (entry as { rNote?: string }).rNote = prevEntry.rNote
+          const prevR = familyEntry(dData, rosterE.family, workerId, ym, dayNum) as { rReason?: string; rNote?: string } | undefined
+          if (prevR?.rReason) (entry as { rReason?: string }).rReason = prevR.rReason
+          if (prevR?.rNote) (entry as { rNote?: string }).rNote = prevR.rNote
           break
         }
         case 'leave':
@@ -364,50 +401,31 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Invalid choice' }, { status: 400 })
       }
 
-      // 書き込み先の工種（鉄骨・仮設など）。スタッフのスマホと同じ決め方（lib/site-hierarchy.ts staffEntryTarget）
-      let editTarget = site.id
-      // 保存前のこの日のエントリ（下のガードで読んだ出面を使い回す。undefined = 読めていない）
-      let foremanPrevEntry: AttendanceEntry | null | undefined
+      // 最終承認済みの日は職長からは変えられない（事業責任者・代表だけ・2026-10-02 総合点検。lib/attendance-save.ts）
+      {
+        const ap = await dayApprovalOf(mainE.sites as unknown as HierarchySite[], site.id, ym, dayNum)
+        const finalErr = finalApprovedEditError(ap, false)
+        if (finalErr) return NextResponse.json({ error: finalErr }, { status: 409 })
+      }
+
       // ベトナム人スタッフのガード: 「最初の入力はスタッフ本人から」を強制。
       // ただし事後申請性ステータス（有給/帰国中）は admin/foreman の後付け入力を許容。
       try {
-        const { canAdminEditEntry, detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
-        const { db } = await import('@/lib/firebase')
-        const { doc, getDoc } = await import('@/lib/fsdb')
-        const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-        if (mainSnap.exists()) {
-          const workers = (mainSnap.data().workers || []) as { id: number; visa?: string; hireDate?: string; retired?: string }[]
-          const sitesAll = (mainSnap.data().sites || []) as { id: string; name: string; shiftType?: 'day' | 'night'; workSchedule?: { startTime?: string } }[]
-          const targetWorker = workers.find(w => w.id === Number(workerId))
-          if (targetWorker) {
-            const dData = await getAttendanceDoc(ym)
-            editTarget = staffEntryTarget(
-              (mainSnap.data().sites || []) as HierarchySite[], mainSnap.data().assign as WorkTypeAssignMap | undefined,
-              dData, site.id, Number(workerId), ym, Number(day),
-            ).targetSiteId
-            const key = `${editTarget}_${workerId}_${ym}_${String(day)}`
-            const existing = dData[key]
-            foremanPrevEntry = existing ?? null
-            // 入社前・退職後の日には入れない（PC・スタッフのスマホと同じ・2026-10-02 点検）
-            if (!isEmployedOn(targetWorker, `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`)) {
-              return NextResponse.json({ error: 'この人はこの日に在籍していません（入社前・退職後）' }, { status: 400 })
-            }
-            // 事後申請性ステータス例外を許容するため newEntry を渡す
-            const check = canAdminEditEntry({ visa: targetWorker.visa }, existing, entry)
-            if (!check.editable) {
-              return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
-            }
-            // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
-            const conflict = detectMultiSiteConflict(dData, editTarget, Number(workerId), ym, day, sitesAll)
-            if (conflict) {
-              const cName = sitesAll.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
-              const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
-              return NextResponse.json({
-                error: `既に「${cName}」（${shiftLabel}）で同日の出面が登録されています。先にそちらを取り消すか「現場違い修正」機能で移動してください。`,
-                conflictSiteId: conflict.conflictSiteId,
-              }, { status: 409 })
-            }
-          }
+        const { canAdminEditEntry, detectMultiSiteConflict } = await import('@/lib/attendance')
+        // 事後申請性ステータス例外を許容するため newEntry を渡す
+        const check = canAdminEditEntry({ visa: targetWorker.visa }, foremanPrevEntry, entry)
+        if (!check.editable) {
+          return NextResponse.json({ error: check.reason || '編集不可' }, { status: 403 })
+        }
+        // 同日多現場ガード: 物理的に不可能な「同種シフト併記」を防ぐ
+        const conflict = detectMultiSiteConflict(dData, editTarget, workerId, ym, dayNum, mainE.sites as never)
+        if (conflict) {
+          const cName = mainE.sites.find(s => s.id === conflict.conflictSiteId)?.name || conflict.conflictSiteId
+          const shiftLabel = conflict.shiftType === 'night' ? '夜勤' : '日勤'
+          return NextResponse.json({
+            error: `既に「${cName}」（${shiftLabel}）で同日の出面が登録されています。先にそちらを取り消すか「現場違い修正」機能で移動してください。`,
+            conflictSiteId: conflict.conflictSiteId,
+          }, { status: 409 })
         }
       } catch (e) {
         // ⚠️ fail-closed: 判定不能時は拒否（2026-05-08 修正）
@@ -418,19 +436,10 @@ export async function POST(request: NextRequest) {
       // ── 承認済み有給(p)の保護（2026-09-02 追加・有給総点検 第4回）──
       //   承認済みの有給の日を職長が別ステータスで上書きすると p だけ消え、申請は approved の
       //   まま残数が黙って戻る（staff 経路には 2026-08-27 から同じ保護がある）。
-      if (choice !== 'leave') {
-        // ガードで読んだ出面があれば使い回す（同じリクエストで出面を二度読まない）
-        let curP: { p?: number | boolean } | null | undefined = foremanPrevEntry
-        if (curP === undefined) {
-          const { getAttendanceDoc: gadP, attKey: akP } = await import('@/lib/attendance')
-          curP = ((await gadP(ym))[akP(editTarget, workerId, ym, day)] as AttendanceEntry | undefined) ?? null
-          foremanPrevEntry = curP as AttendanceEntry | null
-        }
-        if (curP?.p) {
-          return NextResponse.json({
-            error: 'この日は有給として登録済みです。変更が必要な場合は管理者に連絡してください',
-          }, { status: 409 })
-        }
+      if (choice !== 'leave' && foremanPrevEntry?.p) {
+        return NextResponse.json({
+          error: 'この日は有給として登録済みです。変更が必要な場合は管理者に連絡してください',
+        }, { status: 409 })
       }
       // ── 稼働日ガード（2026-09-02 追加）: 申請・スタッフ経路と同じ基準。
       //   所定休への有給は「20日枠超の有給日給」の過払いになる（2026-06 社労士対応）。
@@ -438,16 +447,18 @@ export async function POST(request: NextRequest) {
       if (choice === 'leave') {
         const { leaveRequestDateError } = await import('@/lib/leave-rules')
         const { todayJstIso: tj } = await import('@/lib/date-utils')
-        const dIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-        const dErr = leaveRequestDateError(dIso, tj())
+        const dErr = leaveRequestDateError(dayIso, tj())
         if (dErr) return NextResponse.json({ error: dErr }, { status: 400 })
       }
-      if (choice === 'leave') {
+      // 有給・0.6補（会社都合の休み）は、カレンダーの仕事の日だけ（スタッフのスマホと同じ決まり・2026-10-02 総合点検）
+      //   旧: 0.6補は職長・PC・一括入力から休みの日にも入れられ、休業手当（60%）の過払いになりえた
+      if (choice === 'leave' || (choice === 'comp' && foremanPrevEntry?.w !== 0.6)) {
         const { isScheduledWorkDay: iswd } = await import('@/lib/attendance')
-        const tIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-        if (!await iswd(site.id, tIso)) {
+        if (!await iswd(site.id, dayIso)) {
           return NextResponse.json({
-            error: 'この日は現場の非稼働日のため有給にできません（休日・所定休は対象外）',
+            error: choice === 'leave'
+              ? 'この日は現場の非稼働日のため有給にできません（休日・所定休は対象外）'
+              : COMP_NON_WORKING_DAY_MESSAGE,
           }, { status: 400 })
         }
       }
@@ -459,9 +470,8 @@ export async function POST(request: NextRequest) {
       if (choice === 'leave') {
         try {
           const { getLeaveBalance } = await import('@/lib/leave-balance')
-          const targetDate = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
           // 2026-09-02 修正: 基準日を対象日に（今日の付与期で判定していた）
-          const bal = await getLeaveBalance(Number(workerId), targetDate, targetDate)
+          const bal = await getLeaveBalance(workerId, dayIso, dayIso)
           if (bal.remaining <= 0) {
             return NextResponse.json({
               error: bal.noGrant
@@ -475,9 +485,17 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const { computeAttendanceDeleteFields } = await import('@/lib/attendance')
-      const deleteFields = computeAttendanceDeleteFields(entry)
-      await setAttendanceEntry(editTarget, workerId, ym, day, entry, { deleteFields, prevEntry: foremanPrevEntry })
+      // 保存は共通の入口（変更履歴 → 残骸の掃除つき保存・2026-10-02 総合点検。旧: 履歴も操作ログも残らなかった）
+      await writeAttendanceEntry({
+        siteId: editTarget, workerId, ym, day: dayNum, entry, prevEntry: foremanPrevEntry, actor: `foreman:${foreman.id}`,
+      })
+      try {
+        const { logActivity } = await import('@/lib/activity')
+        const label = choice === 'work' ? (entry.st ? `出勤 ${entry.st}-${entry.et}` : `出勤${entry.o ? `+${entry.o}h` : ''}`)
+          : choice === 'rest' ? '欠勤' : choice === 'leave' ? '有給' : choice === 'site_off' ? '現場休' : '0.6補'
+        await logActivity(String(foreman.id), 'attendance.foremanEdit',
+          `${targetWorker.name} (${workerId}) ${ym}/${dayNum} → ${label}（職長トークン ${foreman.name}・${editTarget}）`)
+      } catch { /* ログ失敗は本体処理に影響させない */ }
       return NextResponse.json({ success: true, entry })
     }
 
@@ -485,22 +503,29 @@ export async function POST(request: NextRequest) {
     // ベトナムスタッフが現場を間違えて他現場で入力した場合に、職長が
     // 「ここに移動」できる。ソース現場のエントリは deleteField で消す。
     if (action === 'fix_site') {
-      const { workerId, year, month, day, fromSiteId } = body as {
+      const { workerId: widRaw, year, month, day, fromSiteId } = body as {
         workerId: number
         year: number
         month: number
         day: number
         fromSiteId: string
       }
-      if (!workerId || !year || !month || !day || !fromSiteId) {
+      if (!widRaw || !year || !month || !day || !fromSiteId) {
         return NextResponse.json({ error: 'workerId, year, month, day, fromSiteId は必須です' }, { status: 400 })
       }
+      const workerId = Number(widRaw)
+      const ym = ymKey(year, month)
+      // 2026-10-02 総合点検: 実在しない日を断る（共通の決まり）
+      {
+        const dateErr = attendanceDateError(ym, day)
+        if (dateErr) return NextResponse.json({ error: dateErr }, { status: 400 })
+      }
+      const dayNum = Number(day)
       const famFix = await loadSiteFamily(site.id)
       if (famFix.family.includes(fromSiteId)) {
         // 工種（鉄骨・仮設）の切り替えは現場違いではない。PC・職長スマホの出面画面の工種タグで行う
         return NextResponse.json({ error: '自現場（工種を含む）のエントリは移動できません。工種の切り替えは出面画面の工種タグから行ってください' }, { status: 400 })
       }
-      const ym = ymKey(year, month)
 
       // 2026-06-12 (監査 Sprint2-B): ロック済み月の現場間移動を拒否
       {
@@ -509,51 +534,50 @@ export async function POST(request: NextRequest) {
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }
 
-      const { db } = await import('@/lib/firebase')
-      const { doc, getDoc, updateDoc, deleteField } = await import('@/lib/fsdb')
       // ソースエントリを取得
       const attData = await getAttendanceDoc(ym)
-      const fromKey = `${fromSiteId}_${workerId}_${ym}_${String(day)}`
+      const fromKey = `${fromSiteId}_${workerId}_${ym}_${dayNum}`
       const sourceEntry = attData[fromKey] as AttendanceEntry | undefined
       if (!sourceEntry) {
         return NextResponse.json({ error: '移動元のエントリが見つかりません' }, { status: 404 })
       }
-      // ベトナム人スタッフであることを確認（業務ルール）
-      const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-      let isVietnamese = false
-      let workerName = ''
-      if (mainSnap.exists()) {
-        const workers = (mainSnap.data().workers || []) as { id: number; visa?: string; name?: string }[]
-        const tw = workers.find(w => w.id === Number(workerId))
-        if (tw) {
-          workerName = tw.name || ''
-          const { isVietnameseWorker } = await import('@/lib/attendance')
-          isVietnamese = isVietnameseWorker(tw.visa)
+      // ベトナム人スタッフであることを確認（業務ルール）。対象者が人員マスタに居なければ断る（2026-10-02 総合点検）
+      const mainF = await getMainData({ fresh: true })
+      const tw = mainF.workers.find(w => w.id === workerId)
+      if (!tw) return NextResponse.json({ error: '対象の人が人員マスタに見つかりません' }, { status: 400 })
+      {
+        const { isVietnameseWorker } = await import('@/lib/attendance')
+        if (!isVietnameseWorker(tw.visa)) {
+          return NextResponse.json({ error: 'ベトナムスタッフ以外は対象外です' }, { status: 403 })
         }
       }
-      if (!isVietnamese) {
-        return NextResponse.json({ error: 'ベトナムスタッフ以外は対象外です' }, { status: 403 })
-      }
+      const workerName = tw.name || ''
 
       // 自現場（工種を含む）に既存エントリがあれば移動拒否（上書き事故を防ぐ）
-      if (familyEntrySiteId(attData, famFix.family, workerId, ym, day)) {
+      if (familyEntrySiteId(attData, famFix.family, workerId, ym, dayNum)) {
         return NextResponse.json({ error: '移動先の現場に既にエントリがあります。先にそちらを削除してください。' }, { status: 409 })
       }
+      // 移動元の日が承認済み（職長承認・最終承認）なら動かさない（2026-10-02 総合点検）。
+      //   承認した職長・事業責任者の見た内容が黙って消える。先に移動元の現場で承認を外してもらう
+      {
+        const apFrom = await dayApprovalOf(mainF.sites as unknown as HierarchySite[], fromSiteId, ym, dayNum)
+        if (apFrom.foreman || apFrom.final) {
+          const fromName = mainF.sites.find(s => s.id === fromSiteId)?.name || fromSiteId
+          return NextResponse.json({ error: `移動元の「${fromName}」のこの日は承認済みのため移動できません。先にそちらの承認を外してもらってください` }, { status: 409 })
+        }
+        // 自現場の日が最終承認済みなら、職長からは変えられない（edit と同じ）
+        const apTo = await dayApprovalOf(mainF.sites as unknown as HierarchySite[], site.id, ym, dayNum)
+        const finalErr = finalApprovedEditError(apTo, false)
+        if (finalErr) return NextResponse.json({ error: finalErr }, { status: 409 })
+      }
 
-      // 新エントリ = ソースのコピー + s:'foreman' で出所を記録
-      const movedEntry: AttendanceEntry = { ...sourceEntry, s: 'foreman' }
-
-      // 1. 自現場に書き込み
-      const { computeAttendanceDeleteFields } = await import('@/lib/attendance')
-      const deleteFields = computeAttendanceDeleteFields(movedEntry)
       // 移動先の工種は、その日の工種指定・本人の既定に従う（無ければ親現場）
-      const fixTarget = staffEntryTarget(famFix.sites, famFix.assign, attData, site.id, Number(workerId), ym, Number(day)).targetSiteId
-      // 同じ日の中で現場を移すだけなので、その日の有給の有無は変わらない（繰越の再計算は不要）
-      await setAttendanceEntry(fixTarget, workerId, ym, day, movedEntry, { deleteFields, prevEntry: sourceEntry })
-
-      // 2. 元現場のエントリを削除（dot-notation で安全に削除）
-      const docRef = doc(db, 'demmen', `att_${ym}`)
-      await updateDoc(docRef, { [`d.${fromKey}`]: deleteField() })
+      const fixTarget = staffEntryTarget(famFix.sites, famFix.assign, attData, site.id, workerId, ym, dayNum).targetSiteId
+      // 書きと消しを1回の updateDoc で（2026-10-02 総合点検・lib/attendance-save.ts。旧: 2回に分け、2回目の失敗で二重に残った）。
+      //   同じ日の中で現場を移すだけなので、その日の有給の有無は変わらない（繰越の再計算は不要）
+      const movedEntry = await moveAttendanceEntry({
+        fromSiteId, toSiteId: fixTarget, workerId, ym, day: dayNum, entry: sourceEntry, source: 'foreman', actor: `foreman:${foreman.id}`,
+      })
 
       // 監査ログ
       try {
@@ -561,7 +585,7 @@ export async function POST(request: NextRequest) {
         await logActivity(
           String(foreman.id),
           'attendance.fixSite',
-          `${workerName} (${workerId}) の ${ym}/${day} 入力を ${fromSiteId} → ${site.id} へ移動`,
+          `${workerName} (${workerId}) の ${ym}/${dayNum} 入力を ${fromSiteId} → ${fixTarget} へ移動`,
         )
       } catch { /* ignore */ }
 

@@ -4,7 +4,7 @@
 //  バッジ系は lib/labels.ts、職種分類は lib/jobs.ts に集約済み（重複定義しない）
 // ────────────────────────────────────────
 
-import { calcActualHours, calcDayShiftHours, calcNightShiftHours, calcManDays } from '@/types'
+import { calcActualHours, calcNightShiftHours, calcManDays, calcOvertimeHours, type SiteWorkSchedule } from '@/types'
 import { isWorkingDay } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { AttEntry, SubconDayEntry, DayType, Worker, Subcon } from '@/app/(app)/attendance/types'
@@ -158,7 +158,8 @@ export interface WorkerTotals {
  */
 export function computeWorkerTotals(
   entries: Record<number, AttEntry | null>,
-  opts: { timeBased: boolean; foreign: boolean },
+  /** workSchedule: 現場の休憩設定（残業h を保存時と同じ決まりで数える・2026-10-02 総合点検）。無ければ標準 30/60/30 分 */
+  opts: { timeBased: boolean; foreign: boolean; workSchedule?: SiteWorkSchedule },
 ): WorkerTotals {
   let wSum = 0
   let oSum = 0
@@ -187,8 +188,10 @@ export function computeWorkerTotals(
       // 実労働合計は夜勤ブロックも含める（労働時間の実績として正しい）。
       // 一方 残業h は日勤ブロックだけから出す — 夜勤は 1.5人工 で別途支給するため、
       // 残業h に混ぜると二重計上になる。
-      actualHoursSum += calcActualHours(e)
-      oSum += Math.max(0, calcDayShiftHours(e) - 7)
+      actualHoursSum += calcActualHours(e, opts.workSchedule)
+      // 残業h の決まりは calcOvertimeHours だけ（2026-10-02 総合点検。旧: `calcDayShiftHours(e) - 7` を現場の休憩設定なしで
+      //   数えていて、フッター（保存済みの o）と行の合計が、休憩が標準でない現場で食い違う形だった）
+      oSum += calcOvertimeHours(e, opts.workSchedule)
     } else {
       oSum += e.o || 0
       // レガシー入力（日本人など st/et 無し）でも夜勤ブロックの実労働は計上する

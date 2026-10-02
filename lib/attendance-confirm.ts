@@ -9,6 +9,8 @@
  * 給与の計算は lib/compute.ts が正。ここの数字は本人に見せるための目安。
  */
 import type { AttendanceEntry } from '@/types'
+// 「仕事の日か」は共通（lib/attendance-missing.ts・2026-10-02 総合点検。数え方そのものは変えていない）
+import { isWorkDayOf } from './attendance-missing'
 
 /**
  * 確認する月 = 前の月（2026-09-30 代表決定で変更）。
@@ -64,8 +66,7 @@ export function requiredApprovalKeys(args: {
     if (retired && iso > retired) continue
     const sites = sitesByDay.get(day)
     if (sites) { for (const sid of sites) keys.add(`${sid}_${ym}_${day}`); continue }
-    const isWork = calDays ? calDays[String(day)] === 'work' : new Date(y, m - 1, day).getDay() !== 0
-    if (isWork && mainAp) keys.add(`${mainAp}_${ym}_${day}`)
+    if (isWorkDayOf(calDays, y, m, day) && mainAp) keys.add(`${mainAp}_${ym}_${day}`)
   }
   return [...keys]
 }
@@ -175,8 +176,7 @@ export function summarizeWorkerMonth(args: {
     else if (kind === 'home_leave') s.homeLeaveDays++
     else if (kind === 'rest') {
       // カレンダーで休みの日に「休み」を入れた日は、自分都合の休み（欠勤）に数えない（給与計算と同じ・2026-09-30）
-      const isWork = calDays ? calDays[String(day)] === 'work' : new Date(y, m - 1, day).getDay() !== 0
-      if (!isWork) continue
+      if (!isWorkDayOf(calDays, y, m, day)) continue
       s.restDays++
       s.restList.push({
         day,
@@ -197,8 +197,7 @@ export function summarizeWorkerMonth(args: {
     if (beforeIso && iso >= beforeIso) break
     if (hireDate && iso < hireDate) continue
     if (retired && iso > retired) continue
-    const isWork = calDays ? calDays[String(day)] === 'work' : new Date(y, m - 1, day).getDay() !== 0
-    if (!isWork) continue
+    if (!isWorkDayOf(calDays, y, m, day)) continue
     const k = perDay.get(day)?.kind
     if (!k || k === 'none') s.missingDays.push(day)
   }
