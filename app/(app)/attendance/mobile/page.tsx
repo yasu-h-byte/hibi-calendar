@@ -26,8 +26,8 @@ import RestMismatchBanner from '../components/RestMismatchBanner'
 import { siteLeaderLabel } from '@/lib/companies'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
-  AttendanceEntry, DayType,
-  calcDayShiftHours, isTimeBasedMonth,
+  AttendanceEntry, DayType, SiteWorkSchedule,
+  calcDayShiftHours, calcOvertimeHours, isTimeBasedMonth,
   DAY_START_OPTIONS, DAY_END_OPTIONS,
 } from '@/types'
 import { getWorkValue, getTimeStatusValue, DOW_JA } from '@/lib/attendance-grid'
@@ -56,7 +56,7 @@ interface GridData {
   isSupportSite?: boolean
   /** 職長承認を政仁さんが代行する現場（2026-10-01） */
   proxyApproval?: boolean
-  site: { id: string; name: string; workType?: string; noDriveAllowance?: boolean }
+  site: { id: string; name: string; workType?: string; noDriveAllowance?: boolean; workSchedule?: SiteWorkSchedule }
   /** 便ごとの運転者（day → {am,pm}・運転手当の元データ） */
   drivers?: Record<number, { am: number[]; pm: number[] }>
   /** 両社とも締めた月 */
@@ -356,11 +356,11 @@ export default function ForemanMobilePage() {
     return null
   }, [source])
 
+  // 残業h は calcOvertimeHours だけで数える（現場の休憩設定・夜勤ブロックは含めない。保存時と同じ決まり）
+  const siteWs = data?.site.workSchedule
   const withRecalcOt = (e: AttendanceEntry): AttendanceEntry => {
-    // 残業h = 実働 − 7h（夜勤ブロックは含めない。PC グリッドと同一ルール）
-    const actual = calcDayShiftHours(e)
-    const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
-    return { ...e, o: otH > 0 ? otH : undefined }
+    const ot = calcOvertimeHours(e, siteWs)
+    return { ...e, o: ot > 0 ? ot : undefined }
   }
 
   const changeTimeField = useCallback((workerId: number, patch: Partial<AttendanceEntry>) => {
@@ -879,7 +879,7 @@ export default function ForemanMobilePage() {
                           <label className="flex items-center gap-0.5 text-[11px] text-gray-500">
                             <input type="checkbox" checked={(entry.b3 ?? 1) === 1} disabled={locked} onChange={e => changeTimeField(w.id, { b3: e.target.checked ? 1 : 0 })} className="w-4 h-4" />午後
                           </label>
-                          <span className="ml-auto text-xs font-bold tabular-nums text-gray-600">{calcDayShiftHours(entry).toFixed(1)}h</span>
+                          <span className="ml-auto text-xs font-bold tabular-nums text-gray-600">{calcDayShiftHours(entry, siteWs).toFixed(1)}h</span>
                         </div>
                       )}
                       {isTime && entry && !!entry.nonly && (
@@ -917,7 +917,7 @@ export default function ForemanMobilePage() {
                           <label className="flex items-center gap-0.5 text-[11px] text-gray-500">
                             <input type="checkbox" checked={(entry.b3 ?? 1) === 1} disabled={locked} onChange={e => changeTimeField(w.id, { b3: e.target.checked ? 1 : 0 })} className="w-4 h-4" />午後
                           </label>
-                          <span className="ml-auto text-xs font-bold tabular-nums text-gray-600">{calcDayShiftHours(entry).toFixed(1)}h</span>
+                          <span className="ml-auto text-xs font-bold tabular-nums text-gray-600">{calcDayShiftHours(entry, siteWs).toFixed(1)}h</span>
                         </div>
                       )}
                     </div>

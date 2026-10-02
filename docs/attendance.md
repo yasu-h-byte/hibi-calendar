@@ -458,6 +458,11 @@ workSchedule?: {
 
 ### 連動する計算ロジック
 - `types/index.ts` の `calcActualHours` / `calcOvertimeHours` は `workSchedule` を引数で受け取り、現場別の所定時間で実労働時間と残業時間を算出
+- **残業時間（o）の決まりは `calcOvertimeHours` だけ**（2026-10-02 一本化）: 日勤の実働 − 7h（0.1h 単位）。
+  実働は始業〜終業から「取った休憩」だけを現場の workSchedule の長さで引く（取らずに働いた分は残業に入る）。夜勤ブロックは含めない。
+  保存の共通入口 `setAttendanceEntry` が時刻のある日の o を必ずこれで付け直す（`withDerivedOvertime`）。
+  旧: 職長画面は o を保存せず、PC 出面入力・職長スマホ・一括入力は現場の休憩設定を見ずに標準 30/60/30 分で数えていた。
+  請求書（HFU → 日比建設・応援の出面明細と本体 `calcTobiEquiv`）は保存済みの o ではなく時刻から数え直す
 - `lib/compute.ts` の月次集計も同じ workSchedule を参照して所定・残業を判定
 - スマホ出勤登録の休憩チェックボックスは「enabled かつ mandatory ではない」休憩のみ表示
 

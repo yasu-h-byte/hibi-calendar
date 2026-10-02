@@ -10,6 +10,8 @@ export interface SiteOption {
   foremanNote?: string
   /** 運転手当を出さない現場（「運」ボタンを出さない・2026-09-30） */
   noDriveAllowance?: boolean
+  /** 現場の勤務時間・休憩（残業h を現場の休憩設定で数える・2026-10-02） */
+  workSchedule?: import('@/types').SiteWorkSchedule
 }
 
 export interface Worker {

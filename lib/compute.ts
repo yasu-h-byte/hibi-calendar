@@ -4,7 +4,7 @@ import { detectRestMismatches } from './rest-mismatch'
 import { doc, getDoc, registerMainWriteHook } from '@/lib/fsdb'
 import {
   AttendanceEntry, calcActualHours, calcDayShiftHours, calcNightShiftHours,
-  getNightRange, timeToMinutes, calcManDays, NIGHT_SHIFT_MANDAYS,
+  getNightRange, timeToMinutes, calcManDays, NIGHT_SHIFT_MANDAYS, calcOvertimeHours, type SiteWorkSchedule,
 } from '@/types'
 import { ymKey, isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isHiredByMonth, effectiveRateForYm, effectiveHourlyRateForYm, effectiveSalaryForYm } from './workers'
@@ -808,7 +808,8 @@ export function calcTobiEquiv(
     const isComp = (v.w === 0.6 && w.visa !== 'none')
     if (isComp) continue
     const stdH = w.visa === 'none' ? 8 : 7 // 日本人8h, 外国人7h（変形労働時間制）
-    const oe = (v.o || 0) / stdH
+    // 残業h は時刻から数え直す（応援の請求書の出面明細 buildSiteDetail と同じ・calcOvertimeHours が唯一の決まり）
+    const oe = calcOvertimeHours(v, main.sites.find(s => s.id === pk.sid)?.workSchedule as SiteWorkSchedule | undefined) / stdH
     if (!monthly[pk.ym]) monthly[pk.ym] = { tw: 0, dw: 0, toe: 0, doe: 0 }
     // 2026-06-XX 修正 (C6): 単一の真理ソース isTobiGroup/isDokoGroup を使用
     //   旧: doko 以外は全部鳶側 → 事務(jimu)等も鳶換算に混入

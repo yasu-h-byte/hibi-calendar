@@ -11,7 +11,7 @@
  */
 import { useMemo, useState } from 'react'
 import type { AttEntry, Worker, DayType } from '../types'
-import { calcDayShiftHours } from '@/types'
+import { calcOvertimeHours, type SiteWorkSchedule } from '@/types'
 
 export type BulkKind = 'work' | 'rest' | 'comp' | 'clear'
 
@@ -20,7 +20,7 @@ export interface BulkItem { workerId: string; day: number; entry: AttEntry | nul
 const DOW = ['日', '月', '火', '水', '木', '金', '土']
 
 export default function BulkEntryModal({
-  open, onClose, ym, daysInMonth, workers, entries, calendarDays, lockedDays, timeBasedFor, onApply, homeLeaves,
+  open, onClose, ym, daysInMonth, workers, entries, calendarDays, lockedDays, timeBasedFor, onApply, homeLeaves, workSchedule,
 }: {
   open: boolean
   onClose: () => void
@@ -36,6 +36,8 @@ export default function BulkEntryModal({
   onApply: (items: BulkItem[]) => void
   /** 帰国申請（承認済みの期間は、出面が空でも「帰国中」なので一括入力しない） */
   homeLeaves?: { workerId: number; startDate: string; endDate: string; status: string }[]
+  /** 現場の勤務時間・休憩（残業h の計算に使う） */
+  workSchedule?: SiteWorkSchedule
 }) {
   const [who, setWho] = useState<Set<string>>(new Set())
   const [days, setDays] = useState<Set<number>>(new Set())
@@ -79,7 +81,7 @@ export default function BulkEntryModal({
         let entry: AttEntry
         if (timeBasedFor(w)) {
           entry = { w: 1, st, et, b1: breaks.b1 ? 1 : 0, b2: breaks.b2 ? 1 : 0, b3: breaks.b3 ? 1 : 0, s: 'admin' }
-          const otH = Math.max(0, Math.round((calcDayShiftHours(entry) - 7) * 10) / 10)
+          const otH = calcOvertimeHours(entry, workSchedule)   // 現場の休憩設定で数える（保存時と同じ決まり）
           if (otH > 0) entry.o = otH
         } else {
           entry = { w: 1, s: 'admin' }
@@ -90,7 +92,7 @@ export default function BulkEntryModal({
       }
     }
     return { items, skipLocked, skipExisting, skipForeignWork, skipAbsent, skipProtected, overwriteStaff }
-  }, [workers, who, days, kind, st, et, breaks, ot, keepExisting, entries, lockedDays, timeBasedFor, homeLeaves, ym])
+  }, [workers, who, days, kind, st, et, breaks, ot, keepExisting, entries, lockedDays, timeBasedFor, homeLeaves, ym, workSchedule])
 
   if (!open) return null
   const toggle = <T,>(set: Set<T>, v: T) => { const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); return n }

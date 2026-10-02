@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { permRoleOf, roleCan } from '@/lib/permissions'
-import { isTimeBasedMonth, calcDayShiftHours, DAY_START_OPTIONS, DAY_END_OPTIONS } from '@/types'
+import { isTimeBasedMonth, calcOvertimeHours, DAY_START_OPTIONS, DAY_END_OPTIONS } from '@/types'
 import {
   currentYm, getYmOptions, getDow, DOW_JA,
   computeWorkerTotals, computeSubconTotals, computeFooterSums, EMPTY_FOOTER_SUMS,
@@ -619,6 +619,9 @@ export default function AttendanceGridPage() {
     })
   }, [scheduleSave])
 
+  /** 現場の休憩設定（残業h を保存時と同じ決まりで数える・calcOvertimeHours） */
+  const siteWs = data?.site.workSchedule
+
   /** 時間ベース: 始業時間変更 */
   const handleStartTimeChange = useCallback((workerId: string, day: number, st: string) => {
     setWorkerEntries(prev => {
@@ -628,11 +631,9 @@ export default function AttendanceGridPage() {
       const existing = entries[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
       const updated = { ...existing, st, s: 'admin' }
       // 残業時間を再計算
-      // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
-    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
-    const actual = calcDayShiftHours(updated)
-      const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
-      updated.o = otH > 0 ? otH : undefined
+      // 残業h は calcOvertimeHours だけで数える（現場の休憩設定・夜勤ブロックは含めない）
+      const ot = calcOvertimeHours(updated, siteWs)
+      updated.o = ot > 0 ? ot : undefined
       entries[day] = updated
       next[workerId] = entries
       return next
@@ -641,15 +642,12 @@ export default function AttendanceGridPage() {
     // For save: get current entry and apply
     const current = workerEntries[workerId]?.[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
     const updated = { ...current, st, s: 'admin' }
-    // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
-    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
-    const actual = calcDayShiftHours(updated)
-    const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
-    if (otH > 0) updated.o = otH; else delete updated.o
+    const ot = calcOvertimeHours(updated, siteWs)
+    if (ot > 0) updated.o = ot; else delete updated.o
     scheduleSave(`w-${workerId}-${day}`, {
       type: 'worker', id: workerId, day, entry: updated,
     })
-  }, [scheduleSave, workerEntries])
+  }, [scheduleSave, workerEntries, siteWs])
 
   /** 時間ベース: 終業時間変更 */
   const handleEndTimeChange = useCallback((workerId: string, day: number, et: string) => {
@@ -659,11 +657,9 @@ export default function AttendanceGridPage() {
       const entries = { ...next[workerId] }
       const existing = entries[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
       const updated = { ...existing, et, s: 'admin' }
-      // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
-    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
-    const actual = calcDayShiftHours(updated)
-      const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
-      updated.o = otH > 0 ? otH : undefined
+      // 残業h は calcOvertimeHours だけで数える（現場の休憩設定・夜勤ブロックは含めない）
+      const ot = calcOvertimeHours(updated, siteWs)
+      updated.o = ot > 0 ? ot : undefined
       entries[day] = updated
       next[workerId] = entries
       return next
@@ -671,15 +667,12 @@ export default function AttendanceGridPage() {
 
     const current = workerEntries[workerId]?.[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
     const updated = { ...current, et, s: 'admin' }
-    // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
-    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
-    const actual = calcDayShiftHours(updated)
-    const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
-    if (otH > 0) updated.o = otH; else delete updated.o
+    const ot = calcOvertimeHours(updated, siteWs)
+    if (ot > 0) updated.o = ot; else delete updated.o
     scheduleSave(`w-${workerId}-${day}`, {
       type: 'worker', id: workerId, day, entry: updated,
     })
-  }, [scheduleSave, workerEntries])
+  }, [scheduleSave, workerEntries, siteWs])
 
   /** 時間ベース: 休憩チェック変更 */
   const handleBreakChange = useCallback((workerId: string, day: number, breakKey: 'b1' | 'b2' | 'b3', checked: boolean) => {
@@ -689,11 +682,9 @@ export default function AttendanceGridPage() {
       const entries = { ...next[workerId] }
       const existing = entries[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
       const updated = { ...existing, [breakKey]: checked ? 1 : 0, s: 'admin' }
-      // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
-    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
-    const actual = calcDayShiftHours(updated)
-      const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
-      updated.o = otH > 0 ? otH : undefined
+      // 残業h は calcOvertimeHours だけで数える（現場の休憩設定・夜勤ブロックは含めない）
+      const ot = calcOvertimeHours(updated, siteWs)
+      updated.o = ot > 0 ? ot : undefined
       entries[day] = updated
       next[workerId] = entries
       return next
@@ -701,15 +692,12 @@ export default function AttendanceGridPage() {
 
     const current = workerEntries[workerId]?.[day] || { w: 1, st: '08:00', et: '17:00', b1: 1, b2: 1, b3: 1, s: 'admin' }
     const updated = { ...current, [breakKey]: checked ? 1 : 0, s: 'admin' }
-    // ⚠️ 夜勤ブロックを含めない（calcActualHours は日勤＋夜勤の合計を返す）。
-    //   夜勤は 1.5人工 で別途支給するため、残業h に混ぜると二重計上になる。
-    const actual = calcDayShiftHours(updated)
-    const otH = Math.max(0, Math.round((actual - 7) * 10) / 10)
-    if (otH > 0) updated.o = otH; else delete updated.o
+    const ot = calcOvertimeHours(updated, siteWs)
+    if (ot > 0) updated.o = ot; else delete updated.o
     scheduleSave(`w-${workerId}-${day}`, {
       type: 'worker', id: workerId, day, entry: updated,
     })
-  }, [scheduleSave, workerEntries])
+  }, [scheduleSave, workerEntries, siteWs])
 
   /**
    * 夜勤が発生した日の指定 / 解除（台風待機など）。
@@ -1629,6 +1617,7 @@ export default function AttendanceGridPage() {
         timeBasedFor={w => useTimeBased && !!w.visa && w.visa !== 'none' && w.visa !== '' && !w.useOldRules}
         onApply={applyBulk}
         homeLeaves={data?.homeLeaves}
+        workSchedule={siteWs}
       />
       <HistoryModal
         open={showHistory}
