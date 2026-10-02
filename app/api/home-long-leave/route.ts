@@ -300,7 +300,10 @@ export async function POST(request: NextRequest) {
       }
 
       const data = snap.data() as HomeLongLeave
-      if (data.status === 'approved' || data.status === 'rejected') {
+      // 2026-10-02 総合点検: 却下できるのは pending / foreman_approved だけ（有給申請側の 2026-09-02 修正を横展開）。
+      //   旧: approved / rejected 以外を全部通していたため、本人が取り消した申請（cancelled）を却下でき、
+      //   履歴が「取消→却下」になった
+      if (data.status !== 'pending' && data.status !== 'foreman_approved') {
         return NextResponse.json({ error: 'Already processed' }, { status: 409 })
       }
 
@@ -413,15 +416,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Admin: get all pending + foreman_approved requests
+    // 2026-10-02 総合点検: 見られる範囲を lib/leave-request-scope.ts で絞る（休暇管理を見られる人は全部、
+    //   職長は自分が職長承認する現場に配置された人の申請だけ）。旧: ログインしていれば誰でも全部読めた
     if (await checkApiAuth(request)) {
+      const { requestListScopeOf, filterHomeLeaveRequestsByScope } = await import('@/lib/leave-request-scope')
+      const scope = await requestListScopeOf(request)
+      if (scope.kind === 'none') return NextResponse.json({ error: 'この一覧を見る権限がありません' }, { status: 403 })
       const allSnap = await getDocs(collection(db, 'homeLongLeave'))
-      const requests: (HomeLongLeave & { id: string })[] = []
+      let requests: (HomeLongLeave & { id: string })[] = []
       allSnap.forEach(d => {
         const data = d.data() as HomeLongLeave
         if (data.status === 'pending' || data.status === 'foreman_approved') {
           requests.push({ id: d.id, ...data })
         }
       })
+      requests = await filterHomeLeaveRequestsByScope(scope, requests, currentYmJst())
 
       // Sort: pending first, then by startDate
       requests.sort((a, b) => {

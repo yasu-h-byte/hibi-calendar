@@ -5,8 +5,8 @@ import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
-import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, currentYearJst, currentYmJst, localMidnight, addDaysIso } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap , jpNextGrantAfter, jpDeemedDate, selectCurrentPeriodRecord, jpExpectedGrantWithoutRecords } from '@/lib/leave-compute'
+import { addMonthsSafe, todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, currentYearJst, currentYmJst, localMidnight, addDaysIso } from '@/lib/date-utils'
+import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap, jpDeemedDate, selectCurrentPeriodRecord, selectEndedPeriodRecord, computeRecordBalance } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
@@ -157,19 +157,29 @@ export async function POST(request: NextRequest) {
       const history = (rec.buyoutHistory as BuyoutEntry[] | undefined) ?? []
       // 2026-09-02 追加（有給総点検・第4回）: サーバ側の検証。旧はクライアント値をそのまま記録し、
       //   残数超の買取・同じ期への year-end 二重記録が素通りだった
+      // 2026-10-02 総合点検: 残数は「買取を記録するそのレコード（fy）」の残で見る（getRecordBalance）。
+      //   旧: 今日有効なレコードの残（getLeaveBalance(今日)）と比べていたため、10月に前の期の期末買取を記録すると
+      //   今の期（付与直後でほぼ満額）の残で検証していた。期末買取（year-end）は期が終わっているレコードにだけ記録できる
       {
-        const { getLeaveBalance } = await import('@/lib/leave-balance')
-        const asOfB = (at || nowIso).slice(0, 10)
-        const bal = await getLeaveBalance(Number(workerId), asOfB)
-        if (!bal.noGrant && days > bal.remaining) {
+        const { getRecordBalance } = await import('@/lib/leave-balance')
+        const bal = await getRecordBalance(Number(workerId), { fy })
+        if (bal && days > bal.remaining) {
           return NextResponse.json({
-            error: `残数 ${bal.remaining}日 を超える買取（${days}日）はできません（枠 ${bal.total}日 / 消化 ${bal.used}日）`,
+            error: `この期（付与日 ${bal.grantDate}）の残数 ${bal.remaining}日 を超える買取（${days}日）はできません（枠 ${bal.total}日 / 消化 ${bal.used}日）`,
           }, { status: 400 })
         }
-        if (reason === 'year-end' && history.some(h => h.reason === 'year-end')) {
-          return NextResponse.json({
-            error: 'この期の期末買取は既に記録されています。やり直す場合は先に既存の買取記録を取り消してください',
-          }, { status: 409 })
+        if (reason === 'year-end') {
+          if (history.some(h => h.reason === 'year-end')) {
+            return NextResponse.json({
+              error: 'この期の期末買取は既に記録されています。やり直す場合は先に既存の買取記録を取り消してください',
+            }, { status: 409 })
+          }
+          const asOfB = (at || nowIso).slice(0, 10)
+          if (bal && bal.periodEndExclusive > asOfB) {
+            return NextResponse.json({
+              error: `この期（付与日 ${bal.grantDate}）はまだ終わっていません（期末 ${bal.periodLastDay}）。期末買取は期が終わってから記録してください`,
+            }, { status: 400 })
+          }
         }
       }
       history.push({
@@ -234,6 +244,17 @@ export async function POST(request: NextRequest) {
         // 2026-09-02 修正: 基準日を「今日」から「指定日（最初の日）」に（来期日付を当期残で判定していた）
         const firstDate = [...(dates as string[])].sort()[0]
         const bal = await getLeaveBalance(Number(workerId), firstDate)
+        // 期が終わって次の付与がまだ（付与の処理待ち）なら、先に付与する（2026-10-02 総合点検）。確認つき上書きは従来どおり
+        if (bal.periodOver && body.allowOverdraft !== true) {
+          const wName = (data.workers as { id: number; name?: string }[] | undefined)
+            ?.find(w => w.id === Number(workerId))?.name || `ID:${workerId}`
+          return NextResponse.json({
+            error: `${wName} さんは前の期（付与日 ${bal.grantDate}）が ${bal.periodEnd} で終わっていて、次の付与がまだです。先に「付与待ち」から付与してください`,
+            code: 'LEAVE_GRANT_PENDING',
+            balance: bal,
+            requestedDays: dates.length,
+          }, { status: 409 })
+        }
         if (bal.remaining < dates.length && body.allowOverdraft !== true) {
           const wName = (data.workers as { id: number; name?: string }[] | undefined)
             ?.find(w => w.id === Number(workerId))?.name || `ID:${workerId}`
@@ -649,220 +670,15 @@ export async function POST(request: NextRequest) {
 
     if (action === 'getPendingGrants') {
       // 付与時期を迎えているが未付与のワーカー一覧を返す（半自動付与用）
+      // 2026-10-02 総合点検: 判定を lib/leave-pending.ts listPendingGrants に切り出し、通知ベル（getUpcomingGrants）と共通化
       const data = snap.data()
-      // 2026-06-XX 修正: retired は YYYY-MM-DD 文字列
       type Worker = { id: number; name: string; retired?: string; job?: string; visa?: string; hireDate?: string }
-      type PLRecord = { fy: string | number; grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number }
-      const workers = (data.workers || []) as Worker[]
-      const plData = (data.plData || {}) as Record<string, PLRecord[]>
-
-      const today = todayJST()
-      const todayDate = new Date(today)
-
-      // アラート表示の事前通知ウィンドウ: 付与日の 30日前 から通知開始
-      //   (旧: 付与日が来てから通知 → 直前まで気付かない問題があった)
-      const ALERT_LEAD_DAYS = 30
-      const isWithinAlertWindow = (grantDateStr: string): boolean => {
-        if (isNaN(new Date(grantDateStr).getTime())) return false
-        const alertStartStr = addDaysIso(grantDateStr, -ALERT_LEAD_DAYS)
-        return alertStartStr <= today
-      }
-
-      // 入社日 + 6ヶ月の日付文字列 (YYYY-MM-DD) を返す。空文字なら null。
-      // 労基法上、初回付与は必ず入社から6ヶ月以上経過後 (39条1項)
-      // 2026-06-XX 修正 (IM-1): addMonthsSafe で月末入社バグを解消
-      //   旧: setMonth(+6) で 2025-08-31 → 2026-03-03（誤、3月に繰越）
-      //   新: 行政解釈準拠 → 2026-02-28（応当日がなければ前月末日）
-      const hirePlus6Months = (hireDate: string): string | null => {
-        if (!hireDate) return null
-        const safe = addMonthsSafe(hireDate, 6)
-        return safe || null
-      }
-
-      type PendingGrant = {
-        workerId: number
-        name: string
-        visa: string
-        hireDate: string
-        tenureText: string
-        nextGrantDate: string
-        fy: string
-        legalDays: number
-        reason: string
-        needsAttention: boolean  // hireDate未登録など、手動確認が必要なフラグ
-        attentionNote?: string
-      }
-      const pending: PendingGrant[] = []
-
-      // 在籍月数テキスト
-      const tenureTextOf = (hireDate: string, at: string): string => {
-        if (!hireDate) return '入社日未登録'
-        const h = new Date(hireDate)
-        const a = new Date(at)
-        if (isNaN(h.getTime()) || isNaN(a.getTime())) return '入社日未登録'
-        let months = (a.getFullYear() - h.getFullYear()) * 12 + (a.getMonth() - h.getMonth())
-        if (a.getDate() < h.getDate()) months -= 1
-        if (months < 0) return '入社前'
-        const y = Math.floor(months / 12)
-        const m = months % 12
-        if (y === 0) return `在籍 ${m}ヶ月`
-        if (m === 0) return `在籍 ${y}年`
-        return `在籍 ${y}年${m}ヶ月`
-      }
-
-      // 「付与判定」: 以下のいずれかで「付与済み」とみなす
-      //   (a) 既存レコードの付与期間と重なる（grantPeriodsOverlap）→ 通常パターン
-      //   (b) grantDateが欠落していても fy が一致する → 「本田文人」のような移行期データに対応
-      // 2026-08-04 修正（新規付与まわりの点検）: (a) は旧「±7日近傍」から期間重複判定に変更。
-      //   年途中入社の日本人は初回付与（入社+6ヶ月）が 10/1 統一起点とズレるため、
-      //   初回付与直後に「10/1 の付与が未実施」と誤検知し、実行すると期間の重なる
-      //   二重付与になっていた（例: 濱上さん 入社2026-06-01 → 初回12/1 の直後に10/1分を誤付与）。
-      //   期間が重なる限り付与済み扱いにし、統一起点への合流は前期間の満了後に行う。
-      const hasGrantForExpected = (records: PLRecord[], expectedFy: string, expectedGrantDate: string): boolean => {
-        return records.some(r => {
-          if (!((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)) return false
-          if (r.grantDate) {
-            return grantPeriodsOverlap(r.grantDate, expectedGrantDate)
-          }
-          // grantDate 欠落 → fy一致で判定
-          return String(r.fy) === expectedFy
-        })
-      }
-
-      for (const w of workers) {
-        // 2026-06-XX 修正: 「今日時点で退職済み」のみ除外（未来日退職予定者は通知対象）
-        if (isAlreadyRetired(w.retired, today)) continue
-        if (w.job === 'yakuin' || w.job === 'jimu') continue
-
-        const records = plData[String(w.id)] || []
-        const isJp = !w.visa || w.visa === 'none'
-
-        if (isJp) {
-          // 日本人（2026-10-02 代表決定で 10/1 統一をやめた）: 初回は入社6ヶ月後、その後は前回付与日から1年ごと（外国人と同じ・労基法39条）。
-          //   すでに 10/1 で付与している人は、前回が 10/1 なので次回も 10/1。入社日が無い人だけ従来の 10/1 を目安にする
-          const y = todayDate.getFullYear()
-          const m = todayDate.getMonth() + 1
-          const currentFyStart = m >= 10 ? y : y - 1
-          const fyGrantDate = `${currentFyStart}-10-01`
-          const hirePlus6 = w.hireDate ? hirePlus6Months(w.hireDate) : null
-
-          // 初回付与かどうかの判定: 過去に付与レコードが一切なければ初回。
-          //   2回目以降は「前回付与日」から次の付与日を導出する（fy一致判定は使わない）
-          const effGrantDate = (r: PLRecord): string =>
-            r.grantDate || (r.fy !== undefined && r.fy !== null ? `${r.fy}-10-01` : '')
-          const latestGrant = records
-            .filter(r => (r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0)
-            .map(effGrantDate).filter(Boolean).sort().slice(-1)[0] || null
-
-          let expectedGrantDate: string
-          let expectedFy: string
-          let reason: string
-          // 法定日数の勤続計算に使う日（過去に 10/1 へ前倒しした人は本来の付与日・jpDeemedDate）
-          let deemedDateForDays: string
-
-          if (!latestGrant) {
-            // 入社が古く記録が無いだけの人は、何年も前の「入社6ヶ月後」ではなく今続いている期の付与日を目安にする（2026-10-02）
-            const exp = hirePlus6 ? jpExpectedGrantWithoutRecords(w.hireDate!, today) : null
-            if (exp) {
-              expectedGrantDate = exp.grantDate
-              expectedFy = expectedGrantDate.slice(0, 4)
-              reason = exp.catchUp
-                ? `付与の記録なし（入社6ヶ月後 ${hirePlus6} から1年ごとの直近の付与日を目安）`
-                : '初回付与（入社6ヶ月経過）'
-            } else {
-              expectedGrantDate = fyGrantDate
-              expectedFy = String(currentFyStart)
-              reason = `初回付与（入社日が未登録のため ${expectedGrantDate} を目安）`
-            }
-            deemedDateForDays = expectedGrantDate
-          } else {
-            const next = jpNextGrantAfter(latestGrant, w.hireDate || undefined)
-            expectedGrantDate = next.grantDate
-            expectedFy = expectedGrantDate.slice(0, 4)
-            deemedDateForDays = next.deemedDate
-            reason = `前回付与（${latestGrant}）から1年`
-          }
-
-          // アラートウィンドウ (付与日の30日前～) かつ未付与なら対象に。
-          //   「未付与」= expectedGrantDate 以降の付与レコードが無いこと
-          //   （latestGrant < expectedGrantDate は構成上保証されるので実質ウィンドウ判定のみ）
-          const alreadyGranted = records.some(r =>
-            ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0) && effGrantDate(r) >= expectedGrantDate)
-          if (isWithinAlertWindow(expectedGrantDate) && !alreadyGranted) {
-            const hasHire = !!w.hireDate
-            const legalDays = hasHire ? calcLegalPL(w.hireDate!, deemedDateForDays) : 10
-            pending.push({
-              workerId: w.id,
-              name: w.name,
-              visa: w.visa || 'none',
-              hireDate: w.hireDate || '',
-              tenureText: tenureTextOf(w.hireDate || '', expectedGrantDate),
-              nextGrantDate: expectedGrantDate,
-              fy: expectedFy,
-              legalDays,
-              reason,
-              needsAttention: !hasHire,
-              attentionNote: !hasHire ? '入社日未登録のため法定日数(10日)はデフォルト値です' : undefined,
-            })
-          }
-        } else {
-          // 外国人: 最新 grantDate + 1年
-          const withGrant = records
-            .filter(r => r.grantDate && ((r.grantDays ?? 0) > 0 || (r.grant ?? 0) > 0))
-            .slice()
-            .sort((a, b) => new Date(a.grantDate!).getTime() - new Date(b.grantDate!).getTime())
-          const lastRec = withGrant[withGrant.length - 1]
-
-          if (!lastRec) {
-            // 初回付与候補: hireDate + 6ヶ月、ただし30日前から事前通知
-            if (w.hireDate) {
-              const firstGrantStr = hirePlus6Months(w.hireDate)
-              if (firstGrantStr && isWithinAlertWindow(firstGrantStr)) {
-                const legalDays = calcLegalPL(w.hireDate, firstGrantStr)
-                pending.push({
-                  workerId: w.id,
-                  name: w.name,
-                  visa: w.visa || '',
-                  hireDate: w.hireDate,
-                  tenureText: tenureTextOf(w.hireDate, firstGrantStr),
-                  nextGrantDate: firstGrantStr,
-                  fy: firstGrantStr.slice(0, 4),
-                  legalDays,
-                  reason: '初回付与（入社6ヶ月経過）',
-                  needsAttention: false,
-                })
-              }
-            }
-            continue
-          }
-
-          const lastGrant = new Date(lastRec.grantDate!)
-          if (isNaN(lastGrant.getTime())) continue
-          const nextGrantStr = addMonthsSafe(lastRec.grantDate!, 12)  // 1年後の応当日（うるう日入社は2/28）
-
-          const nextFyForCheck = nextGrantStr.slice(0, 4)
-          // アラートウィンドウ (付与日の30日前～) かつ未付与なら対象に
-          if (isWithinAlertWindow(nextGrantStr) && !hasGrantForExpected(records, nextFyForCheck, nextGrantStr)) {
-            const nextFy = nextFyForCheck
-            const hasHire = !!w.hireDate
-            const legalDays = hasHire ? calcLegalPL(w.hireDate!, nextGrantStr) : 10
-            pending.push({
-              workerId: w.id,
-              name: w.name,
-              visa: w.visa || '',
-              hireDate: w.hireDate || '',
-              tenureText: tenureTextOf(w.hireDate || '', nextGrantStr),
-              nextGrantDate: nextGrantStr,
-              fy: nextFy,
-              legalDays,
-              reason: `前回付与(${lastRec.grantDate})から1年経過`,
-              needsAttention: !hasHire,
-              attentionNote: !hasHire ? '入社日未登録のため法定日数(10日)はデフォルト値です' : undefined,
-            })
-          }
-        }
-      }
-
+      const { listPendingGrants } = await import('@/lib/leave-pending')
+      const pending = listPendingGrants(
+        (data.workers || []) as Worker[],
+        (data.plData || {}) as Record<string, import('@/lib/leave-pending').PendingGrantRecord[]>,
+        todayJST(),
+      )
       return NextResponse.json({ pending })
     }
 
@@ -886,13 +702,13 @@ export async function POST(request: NextRequest) {
       //   半自動付与モーダルは付与日数を自由に編集できるのに、サーバ側は
       //   grantDays を素通ししていた。法定超（勤続年数に対する法定・上限20日）を弾く。
       //   1件でも不正があれば全体を拒否する（部分実行は「どれが付与されたか」の混乱を生む）。
+      // 2026-10-02 総合点検: 検証を validateGrantForExecution（lib/leave-pending.ts）に。
+      //   旧: isJapanese を渡していなかったため、10/1 へ前倒しした日本人の「みなし勤続」の日数
+      //   （付与待ち一覧が出す値そのもの）を法定超として全員分まとめて拒否していた
+      const { validateGrantForExecution } = await import('@/lib/leave-pending')
       for (const g of grants) {
         const w = workersArr.find(x => x.id === g.workerId)
-        const v = validateGrantInput({
-          grantDays: Number(g.grantDays) || 0,
-          hireDate: w?.hireDate,
-          grantDate: g.grantDate || undefined,
-        })
+        const v = validateGrantForExecution(g, w)
         if (!v.ok) {
           return NextResponse.json({
             error: `${w?.name || `ID:${g.workerId}`}: ${v.error}`,
@@ -1670,32 +1486,34 @@ export async function GET(request: NextRequest) {
         const grantExpiryDate = expiryDate
         const grantExpiryStatus = expiryStatus
 
+        // 期が終わって次の付与がまだ（付与の処理待ち）。残は 0 として出す（申請の検証 getLeaveBalance と同じ・2026-10-02 総合点検）。
+        //   旧: 期を過ぎた前のレコードの残が「使える日」として出続け、申請側の判定と食い違っていた
+        const grantPending = !!grantDate && !inferredFromDefault && /^\d{4}-\d{2}-\d{2}$/.test(grantDate)
+          && asOfIso >= addMonthsSafe(grantDate, 12)
+
         // ═════════════════════════════════════════════════════════════
         // 日本人の「前の期の残り」＝賞与で買い取る日数（2026-10-01 代表指示「未消化の有給は賞与で買い取るので記録残して」）
         // ═════════════════════════════════════════════════════════════
         //   日本人は繰越なし・期末の残りは賞与（精勤賞与）で買取。次の付与日に今の期へ切り替わると
         //   一覧から前の期の残りが見えなくなっていた。前の期の付与レコード（plData は消さない）と出面の P から
         //   毎回計算して出す。賞与の確定で買取が記録されると（jp-wage/bonus → buyoutHistory）「買取済み」になる。
-        let prevPeriod: { grantDate: string; endDate: string; grantDays: number; taken: number; buyoutDays: number; remaining: number } | undefined
+        let prevPeriod: { fy: string; grantDate: string; endDate: string; grantDays: number; taken: number; buyoutDays: number; remaining: number; yearEndBuyoutRecorded: boolean } | undefined
         if (isJp && grantDate && /^\d{4}-\d{2}-\d{2}$/.test(grantDate)) {
-          // 前の期 = 今の期の付与日より前で、いちばん新しい付与（2026-10-02: 10/1 統一をやめたので「1年前の同じ日」とは限らない）
-          const prevGrant = plRecordsRaw
-            .filter(r => r.grantDate && r.grantDate < grantDate && ((r.grantDays ?? r.grant ?? 0) > 0))
-            .map(r => r.grantDate as string).sort().slice(-1)[0] || ''
-          const prevRec = plRecordsRaw.find(r => r.grantDate === prevGrant) as (typeof plRecordsRaw[number] & { buyoutDays?: number; buyoutHistory?: { days?: number }[] }) | undefined
-          const prevDays = prevRec ? (prevRec.grantDays ?? prevRec.grant ?? 0) : 0
-          if (prevRec && prevDays > 0) {
-            // 前の期は今の期の付与日の前日で終わる（付与日を前に寄せた人の 10〜11月を両方の期で数えない・2026-10-02）
-            const { requestedPeriodUsed } = computePeriodUsed(w.id, prevGrant, allAtt, todayIso, { periodEndExclusive: grantDate })
-            const prevCarry = prevRec.carryOver ?? prevRec.carry ?? 0
-            const buyoutDays = prevRec.buyoutDays ?? (prevRec.buyoutHistory || []).reduce((sum, h) => sum + (h.days || 0), 0)
+          // 前の期 = 基準日の時点で終わっている直近の期（selectEndedPeriodRecord）。賞与の精勤賞与・手動の期末買取と同じ
+          //   関数で同じ数字を出す（2026-10-02 総合点検）。期の終わりは次の付与日の前日（付与日を前に寄せた人の 10〜11月を
+          //   両方の期で数えない）。日本人なので繰越は足さない（申請の検証 getLeaveBalance と同じ）
+          const endedRec = selectEndedPeriodRecord(plRecordsRaw, asOfIso)
+          if (endedRec && endedRec.grantDate && endedRec.grantDate !== grantDate) {
+            const b = computeRecordBalance(w.id, plRecordsRaw, endedRec, allAtt, { isJp: true, todayIso })
             prevPeriod = {
-              grantDate: prevGrant,
-              endDate: addDaysIso(grantDate, -1),   // 前の期の最後の日 = 今の期の付与日の前日
-              grantDays: prevDays + prevCarry,
-              taken: requestedPeriodUsed,
-              buyoutDays,
-              remaining: computeRemainingDays(prevDays + prevCarry, prevRec as Parameters<typeof computeUsedDays>[0], requestedPeriodUsed),
+              fy: b.fy,
+              grantDate: b.grantDate,
+              endDate: b.periodLastDay,
+              grantDays: b.total,
+              taken: b.periodUsed,
+              buyoutDays: b.buyoutDays,
+              remaining: b.remaining,
+              yearEndBuyoutRecorded: b.yearEndBuyoutRecorded,
             }
           }
         }
@@ -1713,10 +1531,11 @@ export async function GET(request: NextRequest) {
           actualPeriodUsed, // 実消化（今日以前）
           used,
           total,
-          remaining: expiryStatus === 'expired' ? 0 : remaining,
-          remainingActual: expiryStatus === 'expired' ? 0 : remainingActual, // 実消化ベース残（参考）
+          remaining: expiryStatus === 'expired' || grantPending ? 0 : remaining,
+          remainingActual: expiryStatus === 'expired' || grantPending ? 0 : remainingActual, // 実消化ベース残（参考）
           asOfUsed,  // 基準日までの消化日数
-          asOfRemaining: expiryStatus === 'expired' ? 0 : asOfRemaining, // 基準日時点の残数（月末残高突合用）
+          asOfRemaining: expiryStatus === 'expired' || grantPending ? 0 : asOfRemaining, // 基準日時点の残数（月末残高突合用）
+          grantPending,  // 期が終わって次の付与がまだ（付与待ち）
           rate: total > 0 ? (used / total) * 100 : 0,
           grantMonth: (w as unknown as { grantMonth?: number }).grantMonth,
           grantDate,
@@ -1737,8 +1556,9 @@ export async function GET(request: NextRequest) {
           designatedLeaves: (fyRecord as { designatedLeaves?: Array<{ date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string }> } | undefined)?.designatedLeaves,
           // Phase 6: 買取記録
           buyoutDays: (fyRecord as { buyoutDays?: number } | undefined)?.buyoutDays,
+          // 給与を見られない人には許可リストの項目だけ返す（金額は項目ごと落とす。消す方式にしない・2026-10-02 総合点検）
           buyoutHistory: (fyRecord as { buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }> } | undefined)?.buyoutHistory
-            ?.map(h => (canSeePay ? h : { ...h, amount: undefined })),
+            ?.map(h => (canSeePay ? h : { at: h.at, by: h.by, days: h.days, reason: h.reason })),
           // Phase 8: FIFO内訳（繰越分と当期付与分の別々管理）
           carryOverRemaining,
           carryOverExpiryDate,

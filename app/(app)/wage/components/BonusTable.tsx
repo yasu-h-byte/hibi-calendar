@@ -14,6 +14,7 @@ import {
   NON_SMOKER_ALLOWANCE, FIVE_DAY_RESERVE,
   type JpGrade, type Hyogo, type BonusMember,
 } from '@/lib/jp-wage'
+import { isAlreadyRetired } from '@/lib/workers'
 
 interface BonusRecord {
   id: string; label: string; paidOn: string; pool: number
@@ -35,9 +36,14 @@ interface MemberInfo {
   nonSmoker: boolean
   children: string[]
   dispatchTo: string
+  /** 買い取る期（支給日の時点で終わっている直近の期）の残。終わった期が無い／期末買取が記録済みなら 0 */
   leaveRemaining: number
-  /** 有効な有給付与レコードの付与日。買取上限（残−5日）の判定に使う */
+  /** 買い取る期の付与日。買取上限（残−5日）の判定に使う */
   leaveGrantDate: string
+  /** 買い取る期の最後の日（2026-10-02 総合点検。旧: 9/30 固定だった） */
+  leavePeriodEnd?: string
+  /** その期の期末買取が記録済み */
+  leaveBuyoutRecorded?: boolean
 }
 
 /** 画面上で手修正できる項目（自動計算の結果を上書きする） */
@@ -64,11 +70,13 @@ export default function BonusTable() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
 
-  const load = useCallback(async (password: string) => {
+  const load = useCallback(async (password: string, paidOnIso?: string) => {
     try {
+      // 買い取る有給の期は支給日で決まる（支給日の時点で終わっている直近の期）ので支給日を渡す（2026-10-02 総合点検）
+      const q = paidOnIso && /^\d{4}-\d{2}-\d{2}$/.test(paidOnIso) ? `?paidOn=${paidOnIso}` : ''
       const [wr, br] = await Promise.all([
         fetch('/api/workers', { headers: { 'x-admin-password': password } }),
-        fetch('/api/jp-wage/bonus', { headers: { 'x-admin-password': password } }),
+        fetch(`/api/jp-wage/bonus${q}`, { headers: { 'x-admin-password': password } }),
       ])
       // 評語は年次改定で決めたものを初期値にする（賞与と昇給で別の評価を付けない）
       const bj = br.ok ? await br.json() : { records: [], hyogo: {}, members: [] }
@@ -76,8 +84,9 @@ export default function BonusTable() {
       setInfo(Object.fromEntries(((bj.members || []) as MemberInfo[]).map(m => [m.workerId, m])))
       if (wr.ok) {
         const j = await wr.json()
+        // 退職「予定」（退職日が未来）の人は対象に残す。API（GET/POST）と同じ判定（2026-10-02 総合点検。旧: !w.retired）
         setMembers((j.workers as Record<string, unknown>[])
-          .filter(w => !w.retired && w.jpGrade && Number(w.id) !== 1)
+          .filter(w => !isAlreadyRetired(w.retired as string | undefined) && w.jpGrade && Number(w.id) !== 1)
           .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
           .map(w => ({
             workerId: Number(w.id), name: String(w.name),
@@ -93,9 +102,9 @@ export default function BonusTable() {
       const raw = localStorage.getItem('hibi_auth')
       const p = raw ? JSON.parse(raw)?.password : ''
       if (!p) return
-      setPw(p); load(p)
+      setPw(p); load(p, paidOn)
     } catch { /* noop */ }
-  }, [load])
+  }, [load, paidOn])
 
   const poolNum = Number(pool) || 0
   const result = members.length ? allocateBonus(poolNum, members) : null
@@ -116,12 +125,12 @@ export default function BonusTable() {
     // 2026-10-01 付与期からは年5日を確保するため「残日数 − 5日」が買取の上限
     // （代表決定 2026-08-31・docs/paid-leave.md）。それ以前の期は全額買取できる。
     const capped = !!inf?.leaveGrantDate && inf.leaveGrantDate >= '2026-10-01'
-    // 期末(9/30)より前の支給日（夏季賞与など）では買取を自動セットしない（2026-09-02）。
-    //   サーバ側も期中の year-end 記録は拒否する
-    const isYearEndBonus = paidOn.slice(5) >= '10-01'
+    // 買い取る期は「支給日の時点で終わっている直近の期」（API が支給日で出す・2026-10-02 総合点検）。
+    //   終わった期が無い（期の途中）・期末買取が記録済みなら leaveRemaining=0 で、自動では買い取らない。
+    //   旧: 支給日が 10/1 以降かどうか（9/30 期末の固定）で決めていた
     const days = o.days !== undefined
       ? o.days
-      : (isYearEndBonus ? attendanceBonusDays(inf?.leaveRemaining || 0, { capForFiveDayObligation: capped }) : 0)
+      : attendanceBonusDays(inf?.leaveRemaining || 0, { capForFiveDayObligation: capped })
     const attendanceAmount = attendanceBonusAmount(days, rate)
     const nonSmokerAmount = inf?.nonSmoker ? NON_SMOKER_ALLOWANCE : 0
     const child = childAllowance(inf?.children || [], paidOn)
@@ -337,6 +346,13 @@ export default function BonusTable() {
                         />
                         {l.capped && (
                           <span className="block text-[9px] text-gray-400">上限（残−{FIVE_DAY_RESERVE}日）</span>
+                        )}
+                        {info[l.workerId]?.leavePeriodEnd ? (
+                          <span className="block text-[9px] text-gray-400">
+                            期末 {info[l.workerId].leavePeriodEnd!.replace(/-/g, '/')}{info[l.workerId].leaveBuyoutRecorded ? '・買取済' : ''}
+                          </span>
+                        ) : (
+                          <span className="block text-[9px] text-gray-400">終わった期なし</span>
                         )}
                       </td>
                       <td className={`${td} text-gray-500`}>{l.attendanceRate ? yen(l.attendanceRate) : '—'}</td>

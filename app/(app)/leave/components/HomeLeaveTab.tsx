@@ -107,7 +107,9 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     let data: { error?: string; message?: string; suggestedEndDate?: string; conflicts?: { date: string; summary: string }[] } = {}
     try { data = await res.json() } catch { /* JSONでなければ後段でnull */ }
     if (data.error !== 'WORKED_DAYS_IN_RANGE' || !data.suggestedEndDate) {
-      if (data.message) alert(data.message)
+      // 期間の重なり・ロック済み月などの 409 は error に理由が入る（2026-10-02 総合点検。旧: message だけ見て何も出なかった）
+      const reason = data.message || data.error
+      alert(reason || '登録できませんでした（既存の帰国期間と重なっている、または締め済みの月です）')
       return null
     }
     const list = (data.conflicts || []).slice(0, 8).map(c => `　${c.date}  ${c.summary}`).join('\n')

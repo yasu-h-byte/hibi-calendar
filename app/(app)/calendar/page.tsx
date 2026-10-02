@@ -336,10 +336,15 @@ export default function CalendarManagePage() {
     setSaving(true)
     setShowConfirmDialog(false)
     try {
-      const payload = visibleSites.map(site => ({
-        siteId: site.siteId,
-        days: getEditDays(site.siteId, site.days),
-      }))
+      // 承認済みで手を入れていない現場は送らない（2026-10-02 総合点検。サーバー側も内容が同じなら飛ばす）。
+      //   旧: 全現場を送って承認済み・署名済みの現場まで書き直し、配置者に「更新あり」が出ていた
+      const payload = visibleSites
+        .filter(site => !(site.status === 'approved' && !editingDays[site.siteId]))
+        .map(site => ({
+          siteId: site.siteId,
+          days: getEditDays(site.siteId, site.days),
+        }))
+      if (payload.length === 0) { alert('確定する現場がありません（すべて承認済みです）'); return }
       const ok = await postBulkConfirmWithAck(payload)
       if (ok) {
         setEditingDays({})
@@ -665,12 +670,17 @@ export default function CalendarManagePage() {
                               if (!confirm(`${site.siteName} のカレンダーを提出しますか？`)) return
                               setSaving(true)
                               try {
-                                // まず日付を保存
-                                await fetch('/api/calendar/save-days', {
+                                // まず日付を保存（失敗したら提出しない・2026-10-02 総合点検。旧: 結果を見ずに古い内容のまま提出が進んだ）
+                                const saveRes = await fetch('/api/calendar/save-days', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
                                   body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0 }),
                                 })
+                                if (!saveRes.ok) {
+                                  const sd = await saveRes.json().catch(() => ({}))
+                                  alert(sd.error || '保存に失敗したため提出していません')
+                                  return
+                                }
                                 // 提出
                                 const res = await fetch('/api/calendar/submit', {
                                   method: 'POST',
@@ -917,11 +927,24 @@ export default function CalendarManagePage() {
                                       if (!confirm(`${site.siteName} の修正を保存しますか？\n署名済みのスタッフへ再確認依頼が出ます。`)) return
                                       setSaving(true)
                                       try {
-                                        const res = await fetch('/api/calendar/save-days', {
+                                        const postRevise = (ack: boolean) => fetch('/api/calendar/save-days', {
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                                          body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0 }),
+                                          body: JSON.stringify({ siteId: site.siteId, ym, days, updatedBy: user?.workerId || 0, acknowledgeWarnings: ack }),
                                         })
+                                        let res = await postRevise(false)
+                                        // 承認後の修正にも法令チェック（2026-10-02 総合点検）。warn は確認のうえで続行
+                                        if (!res.ok) {
+                                          const d0 = await res.clone().json().catch(() => ({}))
+                                          if (d0.requiresAcknowledge) {
+                                            const okAck = confirm(
+                                              `法令上の確認事項があります:\n\n${(d0.warnings || []).join('\n')}\n\n` +
+                                              `（4週4日制など正当な例外がある場合のみ）この内容で保存しますか？`,
+                                            )
+                                            if (!okAck) { setSaving(false); return }
+                                            res = await postRevise(true)
+                                          }
+                                        }
                                         if (res.ok) {
                                           const data = await res.json().catch(() => ({}))
                                           setEditingDays(prev => { const next = { ...prev }; delete next[site.siteId]; return next })

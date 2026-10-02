@@ -1,6 +1,8 @@
-import { getMainData, getAttData, parseDKey } from './compute'
-import { selectActiveGrantRecord, normalizePLRecord } from './leave-compute'
-import { ymKey } from './attendance'
+import { getMainData, getAttData } from './compute'
+import {
+  selectActiveGrantRecord, selectEndedPeriodRecord, normalizePLRecord, computeLeaveBalanceFromAtt,
+  computeRecordBalance, grantPeriodEndExclusive, monthsCoveringPeriod, type LeaveBalance, type RecordBalance,
+} from './leave-compute'
 import { todayJstIso, addMonthsSafe } from './date-utils'
 
 /**
@@ -23,30 +25,37 @@ import { todayJstIso, addMonthsSafe } from './date-utils'
  *     有給もここに含まれる。「申請件数」で数えないこと。
  */
 
-export interface LeaveBalance {
-  /** その日に有効な付与レコードの付与日。付与レコードが無ければ空文字 */
-  grantDate: string
-  /** 当期の付与日数（繰越を含まない。年5日義務の「10日以上付与」判定に使う） */
-  grantDays: number
-  /** 付与枠 = grantDays + carryOver */
-  total: number
-  /** 消化済み = adjustment + buyout + 出面の p:1 */
-  used: number
-  /** 残日数（マイナスは0にクリップ） */
-  remaining: number
-  /** 枠を超過している日数（超過していなければ0） */
-  overdraft: number
-  /** 付与レコードが存在しない（＝まだ付与されていない） */
-  noGrant: boolean
-  /**
-   * 当期に実際に取得した有給日数（出面の p:1 のみ。調整・買取を含まない）。
-   * 年5日取得義務（労基法39条7項）の判定はこの値で行う（2026-08-28 追加）。
-   */
-  periodUsed?: number
+export type { LeaveBalance } from './leave-compute'
+
+type RecLike = Parameters<typeof normalizePLRecord>[0] & {
+  fy?: string | number; grantDate?: string; _archived?: boolean
+  buyoutDays?: number; buyoutHistory?: Array<{ days?: number; reason?: string }>
+}
+
+/** その人が日本人か（繰越なし・期末買取）。main.workers の visa から */
+function isJpWorker(main: Awaited<ReturnType<typeof getMainData>>, workerId: number): boolean {
+  const wRec = main.workers.find(w => w.id === workerId)
+  return !wRec?.visa || wRec.visa === 'none'
+}
+
+/**
+ * 期間の月（YYYYMM）の出面を並列に読んで1つにまとめる。
+ * ★ 期間終端は addMonthsSafe（文字列演算）で作ること。Date+toISOString だと
+ *   実行環境のタイムゾーンで日付が1日ズレる（JST機で -9h → 前日になる）。
+ * 2026-09-02 高速化: 最大13ヶ月の att 読みを並列に（逐次だと preferRest の
+ *   レイテンシ×13 でこの関数だけで数秒かかり、スマホ画面のタイムアウトの一因だった）
+ */
+async function loadAttForPeriod(startIso: string, endExclusiveIso: string): Promise<Record<string, unknown>> {
+  const yms = monthsCoveringPeriod(startIso, endExclusiveIso)
+  const attList = await Promise.all(yms.map(ym => getAttData(ym)))
+  const merged: Record<string, unknown> = {}
+  for (const att of attList) Object.assign(merged, att.d)
+  return merged
 }
 
 /**
  * 指定スタッフの、指定日時点での有給残数を返す。
+ * 計算本体は lib/leave-compute.ts computeLeaveBalanceFromAtt（純関数・テスト可能）。
  *
  * @param workerId 対象スタッフ
  * @param asOfIso  基準日（省略時は JST 今日）。この日に有効な付与レコードを使う
@@ -59,71 +68,54 @@ export async function getLeaveBalance(
 ): Promise<LeaveBalance> {
   const asOf = asOfIso || todayJstIso()
   const main = await getMainData()
-  const records = (main.plData?.[String(workerId)] || []) as unknown as Parameters<typeof normalizePLRecord>[0][]
+  const records = (main.plData?.[String(workerId)] || []) as unknown as RecLike[]
 
   const rec = selectActiveGrantRecord(records, asOf)
   if (!rec || !rec.grantDate) {
     return { grantDate: '', grantDays: 0, total: 0, used: 0, remaining: 0, overdraft: 0, noGrant: true, periodUsed: 0 }
   }
-
-  const norm = normalizePLRecord(rec)
   // 日本人は期末買取制のため繰越なし（/api/leave GET と同じ扱いに統一・2026-09-02）。
   //   移行データに carryOver が残っていても残数に足さない
-  const wRec = main.workers.find(w => w.id === workerId)
-  const isJp = !wRec?.visa || wRec.visa === 'none'
-  const total = norm.grantDays + (isJp ? 0 : norm.carryOver)
-  // buyoutDays が未キャッシュの移行データは履歴合算へフォールバック（computeUsedDays と統一 2026-08-27）
-  const recB = rec as { buyoutDays?: number; buyoutHistory?: Array<{ days?: number }> }
-  const buyoutDays = recB.buyoutDays
-    ?? (recB.buyoutHistory || []).reduce((s2, b) => s2 + (b.days || 0), 0)
-
+  const isJp = isJpWorker(main, workerId)
   // 付与期間 = [grantDate, grantDate + 1年)
-  // ★ 期間終端は addMonthsSafe（文字列演算）で作ること。Date+toISOString だと
-  //   実行環境のタイムゾーンで日付が1日ズレる（JST機で -9h → 前日になる）。
-  //   Vercel(UTC) では顕在化しないが、ローカル検証と本番で結果が変わる罠になる。
   const start = rec.grantDate as string
-  const end = addMonthsSafe(start, 12)
+  const allAtt = await loadAttForPeriod(start, addMonthsSafe(start, 12))
+  return computeLeaveBalanceFromAtt(workerId, records, allAtt, asOf, { isJp, excludeDate })
+}
 
-  // 期間内の月（YYYYMM）を start の月から end の月まで列挙して p:1 を数える
-  //（同日複数現場は1日に丸める）
-  const days = new Set<string>()
-  const startYm = start.slice(0, 4) + start.slice(5, 7)
-  const endYm = end.slice(0, 4) + end.slice(5, 7)
-  const yms: string[] = []
-  {
-    let y = Number(startYm.slice(0, 4))
-    let m = Number(startYm.slice(4, 6))
-    while (ymKey(y, m) <= endYm && yms.length < 14) {
-      yms.push(ymKey(y, m))
-      m++
-      if (m > 12) { m = 1; y++ }
-    }
-  }
-  // 2026-09-02 高速化: 最大13ヶ月の att 読みを並列に（逐次だと preferRest の
-  //   レイテンシ×13 でこの関数だけで数秒かかり、スマホ画面のタイムアウトの一因だった）
-  const attList = await Promise.all(yms.map(ym => getAttData(ym)))
-  for (const att of attList) {
-    for (const [key, entry] of Object.entries(att.d)) {
-      const e = entry as { p?: number } | null
-      if (!e?.p) continue
-      const pk = parseDKey(key)
-      if (parseInt(pk.wid, 10) !== workerId) continue
-      const iso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
-      if (iso < start || iso >= end) continue
-      if (excludeDate && iso === excludeDate) continue
-      days.add(iso)
-    }
-  }
+/**
+ * 1件の付与レコード（fy か付与日で指定）の残数（2026-10-02 総合点検・買取記録の検証用）。
+ * 旧: 買取記録（recordBuyout）は「今日有効なレコード」の残で検証していたため、10月に前の期（9/30 に終わった期）の
+ *     買取を記録すると、今の期（付与直後でほぼ満額）の残と比べていた。
+ */
+export async function getRecordBalance(
+  workerId: number,
+  which: { fy?: string | number; grantDate?: string },
+): Promise<RecordBalance | null> {
+  const main = await getMainData()
+  const records = (main.plData?.[String(workerId)] || []) as unknown as RecLike[]
+  const rec = records.find(r =>
+    (which.grantDate && r.grantDate === which.grantDate) || (which.fy !== undefined && String(r.fy) === String(which.fy)))
+  if (!rec || !rec.grantDate) return null
+  const endExclusive = grantPeriodEndExclusive(records, rec)
+  const allAtt = await loadAttForPeriod(rec.grantDate, endExclusive)
+  return computeRecordBalance(workerId, records, rec, allAtt, { isJp: isJpWorker(main, workerId) })
+}
 
-  const used = norm.adjustment + buyoutDays + days.size
-  return {
-    grantDate: start,
-    grantDays: norm.grantDays,
-    total,
-    used,
-    remaining: Math.max(0, total - used),
-    overdraft: Math.max(0, used - total),
-    noGrant: false,
-    periodUsed: days.size,
-  }
+/**
+ * 基準日の時点で「終わっている直近の期」の残数（期末買取の対象・2026-10-02 総合点検）。
+ * 賞与の精勤賞与（買取）・休暇管理の「前の期の残り」・手動の期末買取が同じこの関数を使う。
+ * まだ終わっていない期（入社6ヶ月後・以後1年ごとの日本人の期の途中など）は対象にしない。
+ */
+export async function getEndedPeriodBalance(
+  workerId: number,
+  asOfIso: string,
+): Promise<RecordBalance | null> {
+  const main = await getMainData()
+  const records = (main.plData?.[String(workerId)] || []) as unknown as RecLike[]
+  const rec = selectEndedPeriodRecord(records, asOfIso)
+  if (!rec || !rec.grantDate) return null
+  const endExclusive = grantPeriodEndExclusive(records, rec)
+  const allAtt = await loadAttForPeriod(rec.grantDate, endExclusive)
+  return computeRecordBalance(workerId, records, rec, allAtt, { isJp: isJpWorker(main, workerId) })
 }

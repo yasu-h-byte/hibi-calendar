@@ -4,10 +4,12 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from '@/lib/fsdb'
 import { ym7 } from '@/lib/ym'
 import { logActivity } from '@/lib/activity'
+import { checkSiteCalendarLegal, legalBlockResponse } from '@/lib/calendar-legal-check'
+import { countWorkDays } from '@/lib/calendar'
 
 export async function POST(request: NextRequest) {
   try {
-    const { siteId, ym: ymRaw, days, updatedBy } = await request.json()
+    const { siteId, ym: ymRaw, days, updatedBy, acknowledgeWarnings } = await request.json()
     // siteCalendar の docId/ym は "YYYY-MM" 形式で統一（2026-05-08 正規化）
     const ym = ym7(ymRaw)
 
@@ -28,6 +30,13 @@ export async function POST(request: NextRequest) {
     const existing = await getDoc(doc(db, 'siteCalendar', docId))
     const existingData = existing.exists() ? existing.data() : {}
     const wasApproved = existingData.status === 'approved'
+
+    // 承認済みカレンダーの修正は管理者・事業責任者だけ（2026-10-02 総合点検）。
+    //   旧: 画面は管理者だけに修正モードを出していたが、サーバーは担当現場の職長にも保存を許し、
+    //   承認済みのまま days が書き換わって所定日数（給与）が変わった。法令チェックも承認時にしか無かった
+    if (wasApproved && !isManagerRole(role.role)) {
+      return NextResponse.json({ error: '承認済みのカレンダーを修正できるのは管理者・事業責任者だけです。職長は管理者に連絡してください' }, { status: 403 })
+    }
 
     // 承認後修正時の差分計算（監査用）+ 変更なし判定
     let diffSummary = ''
@@ -59,6 +68,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, unchanged: true })
     }
 
+    // 承認後の修正は承認と同じ法令チェック（前月・翌月のカレンダー込み）。error は拒否、warn は確認が要る
+    if (wasApproved) {
+      const legal = await checkSiteCalendarLegal(siteId, ym, days)
+      const blocked = legalBlockResponse(legal, acknowledgeWarnings)
+      if (blocked) return blocked
+    }
+
     await setDoc(doc(db, 'siteCalendar', docId), {
       siteId,
       ym,
@@ -79,7 +95,7 @@ export async function POST(request: NextRequest) {
       //   これがないと承認後に休日⇄出勤を変えても siteWorkDays が承認時のまま残り、
       //   月次給与の欠勤控除が過大/過少になる（approve / bulk-confirm と同じ再計算を踏襲）。
       const ymKey = ym.replace('-', '')
-      const workDayCount = Object.values(days as Record<string, string>).filter(d => d === 'work').length
+      const workDayCount = countWorkDays(days as Record<string, string>, ym)
       const mainRef = doc(db, 'demmen', 'main')
       await setDoc(mainRef, { siteWorkDays: { [ymKey]: { [siteId]: workDayCount } } }, { merge: true })
       const mainSnap = await getDoc(mainRef)

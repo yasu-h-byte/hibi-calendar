@@ -13,6 +13,7 @@
  * 既定: 1出勤日=7h、週は日曜起算、連続勤務上限6日。
  */
 import type { DayType } from '@/types'
+import { resolveDayType } from './calendar'
 
 export type LegalSeverity = 'error' | 'warn' | 'info'
 
@@ -41,6 +42,13 @@ export interface CalendarLegalOptions {
   weekStartsOn?: 0 | 1
   /** 連続勤務日数の上限（これを超えると info。既定6=7連勤以上で警告） */
   consecutiveLimit?: number
+  /**
+   * 前月・翌月の休日設定（あれば）。月をまたぐ週の法定休日と連勤を見るのに使う（2026-10-02 総合点検）。
+   *   旧: 月内に収まる週だけを見ていたため、9/27(日)〜10/3(土) が全部出勤でも 9月・10月どちらの検査にも出なかった。
+   *   隣の月のカレンダーがまだ無ければ従来どおり月内だけ（その月を承認するときに見る）。
+   */
+  prevMonthDays?: Record<string, DayType | string> | null
+  nextMonthDays?: Record<string, DayType | string> | null
 }
 
 /** ym ("YYYY-MM" or "YYYYMM") → [year, month1-12] */
@@ -53,9 +61,12 @@ function fmtMd(y: number, m: number, d: number): string {
   return `${m}/${d}`
 }
 
+/** 検査に使う1日（前月の末尾・当月・翌月の先頭をつなげた並び） */
+interface TimelineDay { y: number; m: number; d: number; work: boolean; inMonth: boolean }
+
 /**
  * カレンダーの休日設定を労基法要件で検査する。
- * @param days  day(文字列 "1".."31") → 'work' | 'off' | 'holiday'
+ * @param days  day(文字列 "1".."31") → 'work' | 'off' | 'holiday'。キーが無い日は resolveDayType（日曜休み・他は出勤）
  * @param ym    "YYYY-MM" or "YYYYMM"
  */
 export function checkCalendarLegal(
@@ -69,11 +80,11 @@ export function checkCalendarLegal(
 
   const [y, m] = parseYm(ym)
   const daysInMonth = new Date(y, m, 0).getDate()
-  const isWork = (d: number) => (days?.[String(d)] ?? '') === 'work'
+  const isWork = (d: number) => resolveDayType(days, y, m, d) === 'work'
 
   const findings: LegalFinding[] = []
 
-  // 集計
+  // 集計（当月だけ）
   let workDays = 0
   for (let d = 1; d <= daysInMonth; d++) if (isWork(d)) workDays++
   const workHours = workDays * dailyHours
@@ -89,46 +100,66 @@ export function checkCalendarLegal(
     })
   }
 
-  // ② 法定休日（労基法35条）— 各週（起算曜日基準・月内に収まる7日間）に休みが1日もない週を警告
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dow = new Date(y, m - 1, d).getDay()
-    if (dow !== weekStartsOn) continue
-    if (d + 6 > daysInMonth) continue // 月をまたぐ部分週は判定不能（隣月のカレンダーで判定）
-    let allWork = true
-    for (let k = 0; k < 7; k++) if (!isWork(d + k)) { allWork = false; break }
-    if (allWork) {
+  // 並び: 前月（あれば）＋当月＋翌月（あれば）。当月に1日もかからない週・連勤は報告しない
+  const timeline: TimelineDay[] = []
+  if (opts.prevMonthDays) {
+    const py = m === 1 ? y - 1 : y
+    const pm = m === 1 ? 12 : m - 1
+    const pdim = new Date(py, pm, 0).getDate()
+    for (let d = 1; d <= pdim; d++) {
+      timeline.push({ y: py, m: pm, d, work: resolveDayType(opts.prevMonthDays, py, pm, d) === 'work', inMonth: false })
+    }
+  }
+  for (let d = 1; d <= daysInMonth; d++) timeline.push({ y, m, d, work: isWork(d), inMonth: true })
+  if (opts.nextMonthDays) {
+    const ny = m === 12 ? y + 1 : y
+    const nm = m === 12 ? 1 : m + 1
+    const ndim = new Date(ny, nm, 0).getDate()
+    for (let d = 1; d <= ndim; d++) {
+      timeline.push({ y: ny, m: nm, d, work: resolveDayType(opts.nextMonthDays, ny, nm, d) === 'work', inMonth: false })
+    }
+  }
+
+  // ② 法定休日（労基法35条）— 起算曜日から7日間に休みが1日もない週を警告。
+  //    7日が並びに収まり、当月の日を1日でも含む週だけ（隣の月が無ければ月内に収まる週だけ＝従来どおり）
+  for (let i = 0; i < timeline.length; i++) {
+    const t = timeline[i]
+    if (new Date(t.y, t.m - 1, t.d).getDay() !== weekStartsOn) continue
+    if (i + 6 >= timeline.length) continue
+    const week = timeline.slice(i, i + 7)
+    if (!week.some(x => x.inMonth)) continue
+    if (week.every(x => x.work)) {
+      const a = week[0]; const b = week[6]
       findings.push({
         code: 'weeklyRest',
         severity: 'warn',
-        message: `${fmtMd(y, m, d)}〜${fmtMd(y, m, d + 6)} の週に休日がありません（法定休日・労基法35条）。週に最低1日の休みが必要です。`,
+        message: `${fmtMd(a.y, a.m, a.d)}〜${fmtMd(b.y, b.m, b.d)} の週に休日がありません（法定休日・労基法35条）。週に最低1日の休みが必要です。`,
       })
     }
   }
 
-  // ③ 連続勤務日数（健康配慮）— consecutiveLimit を超える連続出勤を表示のみで通知
-  let run = 0
-  let runStart = 0
+  // ③ 連続勤務日数（健康配慮）— consecutiveLimit を超える連続出勤を表示のみで通知（当月に1日でもかかる並び）
+  let run: TimelineDay[] = []
   let maxConsecutive = 0
-  const flush = (endDay: number) => {
-    if (run > consecutiveLimit) {
-      findings.push({
-        code: 'consecutive',
-        severity: 'info',
-        message: `${fmtMd(y, m, runStart)}〜${fmtMd(y, m, endDay)} に${run}連勤があります（連続勤務日数の上限超過）。`,
-      })
+  const flush = () => {
+    if (run.length > 0 && run.some(x => x.inMonth)) {
+      if (run.length > maxConsecutive) maxConsecutive = run.length
+      if (run.length > consecutiveLimit) {
+        const a = run[0]; const b = run[run.length - 1]
+        findings.push({
+          code: 'consecutive',
+          severity: 'info',
+          message: `${fmtMd(a.y, a.m, a.d)}〜${fmtMd(b.y, b.m, b.d)} に${run.length}連勤があります（連続勤務日数の上限超過）。`,
+        })
+      }
     }
+    run = []
   }
-  for (let d = 1; d <= daysInMonth; d++) {
-    if (isWork(d)) {
-      if (run === 0) runStart = d
-      run++
-      if (run > maxConsecutive) maxConsecutive = run
-    } else {
-      flush(d - 1)
-      run = 0
-    }
+  for (const t of timeline) {
+    if (t.work) run.push(t)
+    else flush()
   }
-  flush(daysInMonth)
+  flush()
 
   return {
     findings,

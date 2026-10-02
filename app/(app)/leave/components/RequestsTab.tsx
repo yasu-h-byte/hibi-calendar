@@ -106,17 +106,26 @@ export default function RequestsTab({
       let res = await post()
       // 残数超過（2026-08-04 追加）: 承認は出面に P を書く「実行」なので残数を再確認している。
       // 超過を承知で承認する場合のみ上書き（activityLog に記録される）
-      if (res.status === 409) {
+      // 2026-10-02 総合点検: 出勤入力・承認済みの日の上書き（LEAVE_OVERWRITES_WORK）も確認のうえでだけ通す。
+      //   付与の処理待ち（LEAVE_GRANT_PENDING）は先に付与してもらう
+      const extra: Record<string, unknown> = {}
+      for (let i = 0; i < 2 && res.status === 409; i++) {
         const err = await res.clone().json().catch(() => null)
-        if (err?.code === 'LEAVE_OVERDRAFT') {
+        if (err?.code === 'LEAVE_OVERDRAFT' && !extra.allowOverdraft) {
           const b = err.balance
           const over = confirm(
             `有給残が足りません（枠 ${b?.total}日 / 消化 ${b?.used}日 / 残 ${b?.remaining ?? 0}日）。\n\n`
             + `残数を超えて承認しますか？（記録に残ります）`
           )
-          if (over) res = await post({ allowOverdraft: true })
-          else { patchUi({ processingReq: null }); return }
-        }
+          if (!over) { patchUi({ processingReq: null }); return }
+          extra.allowOverdraft = true
+          res = await post(extra)
+        } else if (err?.code === 'LEAVE_OVERWRITES_WORK' && !extra.allowOverwrite) {
+          const over = confirm(`${err.error}\n\nそれでも有給で上書きしますか？（記録に残ります）`)
+          if (!over) { patchUi({ processingReq: null }); return }
+          extra.allowOverwrite = true
+          res = await post(extra)
+        } else break
       }
       // ⚠️ 旧実装はレスポンスを見ずに成功扱いだった。失敗（月次ロック・残数不足等）を必ず表示する
       if (!res.ok) {
@@ -170,10 +179,19 @@ export default function RequestsTab({
     try {
       const stored = localStorage.getItem('hibi_auth')
       const { user } = stored ? JSON.parse(stored) : { user: null }
-      const res = await fetch('/api/leave-request', {
+      const postMod = (extra: Record<string, unknown> = {}) => fetch('/api/leave-request', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'modify_date', requestId: id, newDate, modifiedBy: user?.workerId || 0 }),
+        body: JSON.stringify({ action: 'modify_date', requestId: id, newDate, modifiedBy: user?.workerId || 0, ...extra }),
       })
+      let res = await postMod()
+      // 変更先の日に出勤入力・承認がある（2026-10-02 総合点検）: 確認のうえでだけ上書き
+      if (res.status === 409) {
+        const d = await res.clone().json().catch(() => null)
+        if (d?.code === 'LEAVE_OVERWRITES_WORK') {
+          if (!confirm(`${d.error}\n\nそれでも有給で上書きしますか？（記録に残ります）`)) return
+          res = await postMod({ allowOverwrite: true })
+        }
+      }
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
         alert(d.error || '日付変更に失敗しました')
@@ -223,11 +241,28 @@ export default function RequestsTab({
       const results = await Promise.all(ids.map(async id => ({ id, res: await post(id) })))
       const failures: { id: string; error: string }[] = []
       const overdrafts: string[] = []
+      const overwrites: { id: string; error: string }[] = []
       for (const { id, res } of results) {
         if (res.ok) continue
         const err = await res.json().catch(() => null)
         if (res.status === 409 && err?.code === 'LEAVE_OVERDRAFT') overdrafts.push(id)
+        else if (res.status === 409 && err?.code === 'LEAVE_OVERWRITES_WORK') overwrites.push({ id, error: err?.error || '' })
         else failures.push({ id, error: err?.error || `HTTP ${res.status}` })
+      }
+      // 出勤入力・承認済みの日の上書き（2026-10-02 総合点検）: 内容を見せて確認のうえでだけ上書き承認
+      if (overwrites.length > 0 && action === 'approve') {
+        const over = confirm(`${overwrites.length}件は出勤の入力か日の承認がある日です:\n\n${overwrites.map(o => o.error).join('\n')}\n\nそれでも有給で上書きしますか？（記録に残ります）`)
+        if (over) {
+          const retry = await Promise.all(overwrites.map(async o => ({ id: o.id, res: await post(o.id, { allowOverwrite: true }) })))
+          for (const { id, res } of retry) {
+            if (res.ok) continue
+            const err = await res.json().catch(() => null)
+            if (res.status === 409 && err?.code === 'LEAVE_OVERDRAFT') overdrafts.push(id)
+            else failures.push({ id, error: err?.error || `HTTP ${res.status}` })
+          }
+        } else {
+          for (const o of overwrites) failures.push({ id: o.id, error: '上書きしなかった' })
+        }
       }
       // 残数超過は個別承認と同じく、確認のうえ超過承認で再実行できる
       if (overdrafts.length > 0 && action === 'approve') {

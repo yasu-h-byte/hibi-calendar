@@ -28,8 +28,11 @@ export interface PLWorker {
   grantRemaining?: number
   grantExpiryDate?: string
   grantExpiryStatus?: 'ok' | 'warning' | 'expired'
-  /** 日本人の前の期（〜9/30）の残り＝賞与で買い取る日数。remaining が買取待ち、buyoutDays が買取済み（2026-10-01） */
-  prevPeriod?: { grantDate: string; endDate: string; grantDays: number; taken: number; buyoutDays: number; remaining: number }
+  /**
+   * 日本人の前の期（基準日の時点で終わっている直近の期）の残り＝賞与で買い取る日数。remaining が買取待ち、buyoutDays が買取済み（2026-10-01）。
+   * fy は買取記録（recordBuyout）の宛先。賞与の精勤賞与と同じ関数（getEndedPeriodBalance）で出す（2026-10-02 総合点検）
+   */
+  prevPeriod?: { fy: string; grantDate: string; endDate: string; grantDays: number; taken: number; buyoutDays: number; remaining: number; yearEndBuyoutRecorded: boolean }
 }
 
 export type OrgFilter = 'all' | 'hibi' | 'hfu'

@@ -136,6 +136,34 @@ export function generateDefaultDays(year: number, month: number): Record<string,
 }
 
 /**
+ * 保存された休日設定（days）から、その日の種別を決める（2026-10-02 総合点検で一本化）。
+ * キーが無い日は「日曜は休み・それ以外は出勤」（lib/attendance.ts isScheduledWorkDay の未確定月の扱いと同じ）。
+ *   旧: 画面（buildCalendarDays）は欠けた日を出勤、法令チェック（calendar-legal）は欠けた日を休み、
+ *   出面側（isScheduledWorkDay）は日曜以外を出勤、と3者が食い違っていた。
+ *   法令チェックが欠けた日を休みと見ると、月の上限超えを見逃す。
+ */
+export function resolveDayType(
+  days: Record<string, DayType | string> | null | undefined,
+  year: number, month: number, day: number,
+): DayType {
+  const v = days?.[String(day)]
+  if (v === 'work' || v === 'off' || v === 'holiday') return v
+  return new Date(year, month - 1, day).getDay() === 0 ? 'off' : 'work'
+}
+
+/** 月の出勤日数（所定日数）。承認・一括確定・承認後修正の siteWorkDays はこれで数える（欠けた日の扱いを法令チェックと同じに） */
+export function countWorkDays(days: Record<string, DayType | string> | null | undefined, ym: string): number {
+  const compact = (ym || '').replace('-', '')
+  const y = parseInt(compact.slice(0, 4), 10)
+  const m = parseInt(compact.slice(4, 6), 10)
+  if (!y || !m) return 0
+  const dim = new Date(y, m, 0).getDate()
+  let n = 0
+  for (let d = 1; d <= dim; d++) if (resolveDayType(days, y, m, d) === 'work') n++
+  return n
+}
+
+/**
  * Build CalendarDay array from stored days record
  */
 export function buildCalendarDays(year: number, month: number, days: Record<string, DayType>): CalendarDay[] {
@@ -144,7 +172,7 @@ export function buildCalendarDays(year: number, month: number, days: Record<stri
 
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month - 1, d)
-    const dayType = days[String(d)] || 'work'
+    const dayType = resolveDayType(days, year, month, d)
     const holiday = getHoliday(year, month, d)
 
     let label = '出勤'

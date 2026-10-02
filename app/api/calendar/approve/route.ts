@@ -5,7 +5,8 @@ import { doc, updateDoc, getDoc, setDoc } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { DayType } from '@/types'
 import { ym7 } from '@/lib/ym'
-import { checkCalendarLegal } from '@/lib/calendar-legal'
+import { checkSiteCalendarLegal, legalBlockResponse } from '@/lib/calendar-legal-check'
+import { countWorkDays } from '@/lib/calendar'
 
 export async function POST(request: NextRequest) {
   // 最終承認は管理者・事業責任者のみ（職長は提出まで）。サーバ側でロール強制。
@@ -25,23 +26,12 @@ export async function POST(request: NextRequest) {
     const calData = calSnap.exists() ? calSnap.data() : null
     const days: Record<string, DayType> | null = calData?.days || null
 
-    // 法令適合チェック（変形労働: 月総枠/法定休日/連続勤務）
+    // 法令適合チェック（変形労働: 月総枠/法定休日/連続勤務）。前月・翌月のカレンダー込み（2026-10-02 総合点検）
+    //   error は無条件ブロック、warn（法定休日のない週など）は例外（4週4日制等）があり得るため確認の上で承認可
     if (days) {
-      const legal = checkCalendarLegal(days, ym)
-      if (legal.hasError) {
-        // 月の総労働時間超過などは無条件ブロック
-        return NextResponse.json({
-          error: legal.findings.filter(f => f.severity === 'error').map(f => f.message).join('\n'),
-        }, { status: 400 })
-      }
-      if (legal.hasWarn && !acknowledgeWarnings) {
-        // 法定休日のない週など。例外（4週4日制等）があり得るため確認の上で承認可
-        return NextResponse.json({
-          error: '法令上の確認事項があります。内容を確認の上で承認してください。',
-          requiresAcknowledge: true,
-          warnings: legal.findings.filter(f => f.severity === 'warn').map(f => f.message),
-        }, { status: 400 })
-      }
+      const legal = await checkSiteCalendarLegal(siteId, ym, days)
+      const blocked = legalBlockResponse(legal, acknowledgeWarnings)
+      if (blocked) return blocked
     }
 
     await updateDoc(doc(db, 'siteCalendar', docId), {
@@ -52,7 +42,8 @@ export async function POST(request: NextRequest) {
 
     // Auto-calculate work days from the calendar and save per-site
     if (days) {
-      const workDayCount = Object.values(days).filter(d => d === 'work').length
+      // 欠けた日の扱いを法令チェック・画面と同じにする（resolveDayType・2026-10-02 総合点検）
+      const workDayCount = countWorkDays(days, ym)
 
       // Convert ym from "YYYY-MM" to "YYYYMM" for workDays key
       const ymKey = ym.replace('-', '')
