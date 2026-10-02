@@ -23,6 +23,7 @@ import type { CompanyProfile, MainData, ComputeResult } from './compute'
 import type { AttendanceEntry } from '@/types'
 import { approvalGap, describeApprovalGap, FINAL_APPROVAL_REQUIRED_FROM_YM, type ApprovalGap } from './approval-gap'
 import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
+import { paperDoubleBillingError, paperSummaryFor, type PaperInvoice } from './paper-invoice'
 
 const COLLECTION = 'peerInvoices'
 
@@ -104,6 +105,26 @@ export async function getPeerInvoicesForCompanyYm(ym: string, companyId: string)
   return snap.docs
     .map(d => ({ id: d.id, ...(d.data() as Omit<PeerInvoiceRecord, 'id'>) }))
     .sort((a, b) => a.issuedAt.localeCompare(b.issuedAt))
+}
+
+/**
+ * その月に入れた紙（手作り）の請求書（paperInvoices）。読みは ym の単一フィールドクエリ1回、会社は手元で絞る
+ * （複合インデックスを増やさない）。二重請求の防止と、請求書の画面の「紙で登録済み」表示に使う。
+ */
+export async function listPaperInvoicesForYm(ym: string): Promise<PaperInvoice[]> {
+  const snap = await getDocs(query(collection(db, 'paperInvoices'), where('ym', '==', ym)))
+  return snap.docs.map(d => ({ ...(d.data() as Omit<PaperInvoice, 'id'>), id: d.id }))
+}
+
+/** その会社・その月の紙の請求書の件数・税込合計 */
+export async function paperSummaryForCompanyYm(ym: string, companyId: string): Promise<{ count: number; total: number }> {
+  return paperSummaryFor(await listPaperInvoicesForYm(ym), ym, companyId)
+}
+
+/** 紙の請求書を入れてある会社・月は、システムから申請・発行しない（二重請求の防止・2026-10-02） */
+async function paperDoubleBillingCheck(ym: string, companyId: string): Promise<IssuePeerInvoiceError | null> {
+  const msg = paperDoubleBillingError(await listPaperInvoicesForYm(ym), ym, companyId)
+  return msg ? { ok: false, error: msg } : null
 }
 
 /** その月の次の請求書番号を出す（会社を問わず連番。欠番は詰めない） */
@@ -222,6 +243,9 @@ async function buildFrozenInvoice(args: InvoiceCalcArgs): Promise<
   if (existing.some(inv => inv.status === 'pending')) {
     return { ok: false, error: 'この会社・この月は承認待ちの申請があります。承認・差し戻し・取り下げのどれかが済んでから操作してください' }
   }
+  // 紙の請求書で出した月は二重請求になるので止める（2026-10-02）
+  const paperErr = await paperDoubleBillingCheck(ym, companyId)
+  if (paperErr) return paperErr
   if (isHfu) {
     const rateCheck = checkHfuRates(draft)
     if (!rateCheck.ok) return { ok: false, error: rateCheck.error }
@@ -306,6 +330,9 @@ export async function approvePeerInvoice(args: { main: MainData; id: string; act
   if (existing.some(inv => inv.status === 'issued')) {
     return { ok: false, error: 'この会社・この月はすでに発行済みです。先に取り消すか、この申請を差し戻してください' }
   }
+  // 申請のあとで紙の請求書が入れられた月は、承認しても二重請求になるので止める（2026-10-02）
+  const paperErr = await paperDoubleBillingCheck(data.ym, data.companyId)
+  if (paperErr) return { ok: false, error: `${paperErr.error}\n（この申請は差し戻してください）` }
   // 申請のあとで承認が外された（出面を直している途中）なら発行しない（2026-09-30）
   const apErr = await approvalError(main, data.ym, data.detail || [])
   if (apErr) return { ok: false, error: `${apErr.error}\n（申請のあとで承認が外されています。直し終わったら、この申請を差し戻して作り直してください）` }

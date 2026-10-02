@@ -16,6 +16,7 @@ import { Icon } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
 import {
   PAPER_INVOICE_ALLOWED_TYPES, PAPER_INVOICE_MAX_FILE_BYTES, PAPER_INVOICE_MAX_FILES,
+  sanitizePaperLines, parsePaperNumber, isBlankNumberInput,
   type PaperInvoice, type PaperInvoiceLine, type PaperComparison, type SystemInvoiceFigures,
 } from '@/lib/paper-invoice'
 
@@ -209,8 +210,12 @@ export default function PaperInvoicePage() {
                     <span className="block text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{r.companyName}</span>
                     {r.no && <span className="block text-xs text-hibi-sub dark:text-gray-400">{r.no}</span>}
                   </span>
-                  <span className="lg:text-right text-[17px] font-bold tabular-nums text-gray-900 dark:text-white">{yen(r.total)}</span>
-                  <span className="lg:text-right text-[15px] tabular-nums text-gray-700 dark:text-gray-300">{sys && sys.source !== 'none' ? yen(sys.total) : '—'}</span>
+                  <span className="lg:text-right text-[17px] font-bold tabular-nums text-gray-900 dark:text-white">
+                    <span className="lg:hidden mr-2 text-xs font-normal text-hibi-sub dark:text-gray-400">紙</span>{yen(r.total)}
+                  </span>
+                  <span className="lg:text-right text-[15px] tabular-nums text-gray-700 dark:text-gray-300">
+                    <span className="lg:hidden mr-2 text-xs text-hibi-sub dark:text-gray-400">システム</span>{sys && sys.source !== 'none' ? yen(sys.total) : '—'}
+                  </span>
                   <span>{diffChip(cmpOf(r.id))}</span>
                   <span className="text-xs text-hibi-sub dark:text-gray-400">{r.files.length}ファイル</span>
                 </div>
@@ -272,7 +277,7 @@ function Detail({ rec, sys, cmp, onClose, onOpenFile, onEdit, onDelete }: {
   const src = sys ? SOURCE_LABEL[sys.source] : null
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{rec.companyName}</h2>
@@ -301,16 +306,17 @@ function Detail({ rec, sys, cmp, onClose, onOpenFile, onEdit, onDelete }: {
 
       <section className="space-y-2">
         <h3 className="text-base font-bold text-gray-900 dark:text-white">紙とシステムの見比べ</h3>
-        <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-sm">
-          <div className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px] gap-2 px-3 py-2 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
-            <span>項目</span><span className="text-right">紙</span><span className="text-right">システム</span><span className="text-right">差（紙−システム）</span>
+        {/* スマホ（375px）でもはみ出さないよう、数字の列は最大110pxまで縮む・文字も小さく（2026-10-02） */}
+        <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-x-auto text-xs sm:text-sm">
+          <div className="grid grid-cols-[minmax(4.5rem,1fr)_repeat(3,minmax(0,110px))] gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 bg-hibi-thead dark:bg-gray-700 text-[11px] sm:text-xs font-bold text-hibi-sub dark:text-gray-300">
+            <span>項目</span><span className="text-right">紙</span><span className="text-right">システム</span><span className="text-right">差<span className="hidden sm:inline">（紙−システム）</span></span>
           </div>
           {rows.map(r => (
-            <div key={r.label} className="grid grid-cols-[minmax(0,1fr)_110px_110px_110px] gap-2 px-3 py-2 border-t border-hibi-line dark:border-gray-700 tabular-nums">
-              <span className="font-bold">{r.label}</span>
-              <span className="text-right">{r.paper}</span>
-              <span className="text-right">{r.system}</span>
-              <span className={`text-right font-bold ${r.diff === null ? 'text-gray-400' : r.diff === 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+            <div key={r.label} className="grid grid-cols-[minmax(4.5rem,1fr)_repeat(3,minmax(0,110px))] gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 border-t border-hibi-line dark:border-gray-700 tabular-nums">
+              <span className="font-bold break-words">{r.label}</span>
+              <span className="text-right break-all">{r.paper}</span>
+              <span className="text-right break-all">{r.system}</span>
+              <span className={`text-right font-bold break-all ${r.diff === null ? 'text-gray-400' : r.diff === 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
                 {r.diff === null ? '—' : r.isYen ? signedYen(r.diff) : (r.diff > 0 ? '+' : '') + r.diff}
               </span>
             </div>
@@ -366,8 +372,12 @@ function LineList({ title, lines, empty }: { title: string; lines: { site: strin
 }
 
 type LineDraft = { site: string; item: string; qty: string; unit: string; rate: string; amount: string }
-const emptyLine = (): LineDraft => ({ site: '', item: '鳶', qty: '', unit: '人工', rate: '', amount: '' })
-const toNum = (s: string) => { const n = Number(String(s).replace(/[,，¥円\s]/g, '')); return Number.isFinite(n) ? n : NaN }
+// 内容は空（placeholder で「鳶…」と見せる）。初期値に「鳶」を入れると、使わなかった行が空行として捨てられず残る
+const emptyLine = (): LineDraft => ({ site: '', item: '', qty: '', unit: '人工', rate: '', amount: '' })
+/** 全角数字・カンマ・円も読む（サーバと同じ lib/paper-invoice.ts parsePaperNumber）。空欄は 0 */
+const toNum = (s: string) => parsePaperNumber(s)
+/** 単位の選択肢。「日」は人工として数えない（isManDayUnit）ので出さない */
+const UNIT_OPTIONS = ['人工', 'h', '式', '人']
 
 function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
   mode: 'add' | 'edit'; rec?: PaperInvoice; ym: string; companies: { id: string; name: string }[]
@@ -413,14 +423,19 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
   const linesSum = lines.reduce((s, l) => s + (toNum(l.amount) || 0), 0)
 
   const submit = async () => {
+    // アップロードの前に、サーバ（commit）と同じ決まりで確かめる。落ちる内容ならファイルを送らない
     if (!companyId) { setErr('請求先の会社を選んでください'); return }
-    if (!(toNum(total) > 0)) { setErr('税込合計を入れてください'); return }
+    if (!(toNum(total) > 0)) { setErr('税込合計を入れてください（数字で）'); return }
+    for (const [label, v] of [['税抜小計', subtotal], ['消費税', tax]] as const) {
+      if (!isBlankNumberInput(v) && Number.isNaN(toNum(v))) { setErr(`${label}の数字が読めません`); return }
+    }
+    const lineRows = lines.map(l => ({ site: l.site, item: l.item, unit: l.unit, qty: l.qty, rate: l.rate, amount: l.amount }))
+    const lineCheck = sanitizePaperLines(lineRows)
+    if (!lineCheck.ok) { setErr(lineCheck.error); return }
     if (mode === 'add' && files.length === 0) { setErr('請求書のファイル（PDF・写真）を選んでください'); return }
     setErr('')
-    const fields = {
-      companyId, ym: targetYm, total, subtotal, tax, no, issueDate, note,
-      lines: lines.map(l => ({ site: l.site, item: l.item, unit: l.unit, qty: l.qty, rate: l.rate, amount: l.amount })),
-    }
+    const fields = { companyId, ym: targetYm, total, subtotal, tax, no, issueDate, note, lines: lineRows }
+    let uploadedDocId: string | null = null
     try {
       if (mode === 'edit' && rec) {
         setBusy('保存中...')
@@ -432,10 +447,11 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
       setBusy('準備中...')
       const prep = await postJson<{ docId: string; uploads: { path: string; name: string; contentType: string; size: number; url: string }[] }>(
         '/api/paper-invoice',
-        { action: 'prepare', files: files.map(f => ({ name: f.name, contentType: contentTypeOf(f), size: f.size })) },
+        { action: 'prepare', ...fields, files: files.map(f => ({ name: f.name, contentType: contentTypeOf(f), size: f.size })) },
       )
       if (!prep.ok || !prep.data) throw new Error(prep.error || '準備に失敗しました')
       const { docId, uploads } = prep.data
+      uploadedDocId = docId
       for (let i = 0; i < uploads.length; i++) {
         setBusy(`アップロード中 ${i + 1}/${uploads.length}...`)
         const res = await fetch(uploads[i].url, { method: 'PUT', headers: { 'Content-Type': uploads[i].contentType }, body: files[i] })
@@ -447,8 +463,11 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
         files: uploads.map(u => ({ path: u.path, name: u.name, contentType: u.contentType, size: u.size })),
       })
       if (!commit.ok) throw new Error(commit.error || '登録に失敗しました')
+      uploadedDocId = null
       onDone(targetYm)
     } catch (e) {
+      // 登録できなかったら、置いたファイルを片付ける（記録の無いファイルを残さない。記録がある docId はサーバが消さない）
+      if (uploadedDocId) await postJson('/api/paper-invoice', { action: 'discard', docId: uploadedDocId }).catch(() => null)
       setErr(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy('')
@@ -545,7 +564,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
                     <input value={l.item} onChange={e => setLine(i, { item: e.target.value })} placeholder="鳶・土工・鳶 残業" className={inputCls} />
                     <input inputMode="decimal" value={l.qty} onChange={e => setLine(i, { qty: e.target.value })} placeholder="数量" className={`${inputCls} tabular-nums`} />
                     <select value={l.unit} onChange={e => setLine(i, { unit: e.target.value })} className={inputCls}>
-                      {['人工', 'h', '式', '日', '人'].map(u => <option key={u} value={u}>{u}</option>)}
+                      {(UNIT_OPTIONS.includes(l.unit) ? UNIT_OPTIONS : [...UNIT_OPTIONS, l.unit]).map(u => <option key={u} value={u}>{u}</option>)}
                     </select>
                     <input inputMode="numeric" value={l.rate} onChange={e => setLine(i, { rate: e.target.value })} placeholder="単価" className={`${inputCls} tabular-nums`} />
                     <input inputMode="numeric" value={l.amount} onChange={e => setLine(i, { amount: e.target.value })} placeholder="金額" className={`${inputCls} tabular-nums`} />

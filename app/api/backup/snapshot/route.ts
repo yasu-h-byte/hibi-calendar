@@ -172,6 +172,11 @@ export async function GET(request: NextRequest) {
     await snapshotCollection('jpBonuses', 'jpbonus')            // 賞与支給記録
     await snapshotCollection('jpPromotions', 'jpprom')          // 昇格履歴
     await snapshotCollection('calendarSignLog', 'csignlog')     // 署名の恒久台帳（append-only の正本）
+    // 2026-10-02 追加: 請求書（金銭データ）。コレクション型なので /api/backup/restore でそのまま戻せる
+    //   peerInvoices は発行時点の明細を凍結した正本（1件数十KB）。backups の1件は1MBまでなので、
+    //   件数が増えて書けなくなったら summary.errors に出る（そのときは月ごとの退避に分ける）
+    await snapshotCollection('peerInvoices', 'peerinv')         // 応援・HFU の請求書（発行・申請・取り消しの記録）
+    await snapshotCollection('paperInvoices', 'paperinv')       // 紙（手作り）で出した請求書の記録（ファイル本体は Storage）
 
     // (2d) demmen/toolBudget（道具代の購入記録＝金銭データ）を退避
     try {

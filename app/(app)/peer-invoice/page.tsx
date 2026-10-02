@@ -58,10 +58,12 @@ interface PeerInvoiceRecord extends PeerInvoiceDraft {
 }
 /** 請求する日の職長承認・最終承認のそろい具合（2026-09-30。そろうまで発行・申請・承認できない） */
 interface ApprovalStatus { required: boolean; foremanMissing: number; finalMissing: number; message: string }
+/** 同じ会社・月に入れた紙（手作り）の請求書（未発行のときだけ API が返す・2026-10-02） */
+interface PaperSummary { count: number; total: number }
 type ApiResponse =
-  | { status: 'issued' | 'pending'; record: PeerInvoiceRecord; history: PeerInvoiceRecord[]; approval?: ApprovalStatus }
-  | { status: 'draft'; draft: PeerInvoiceDraft; issuer: CompanyProfile | null; history: PeerInvoiceRecord[]; approval?: ApprovalStatus }
-  | { status: 'empty'; history: PeerInvoiceRecord[] }
+  | { status: 'issued' | 'pending'; record: PeerInvoiceRecord; history: PeerInvoiceRecord[]; approval?: ApprovalStatus; paper?: PaperSummary }
+  | { status: 'draft'; draft: PeerInvoiceDraft; issuer: CompanyProfile | null; history: PeerInvoiceRecord[]; approval?: ApprovalStatus; paper?: PaperSummary }
+  | { status: 'empty'; history: PeerInvoiceRecord[]; paper?: PaperSummary }
   | { error: string }
 
 /** 画面に描く1件。isDraft = 番号がまだ無い（下書き・承認待ち） */
@@ -193,6 +195,10 @@ function PeerInvoicePageInner() {
   const isFreshDraft = view?.status === 'draft'
   const approval = data && 'approval' in data ? data.approval : undefined
   const approvalBlocked = !!approval?.required && (approval.foremanMissing > 0 || approval.finalMissing > 0)
+  // 紙の請求書を入れてある会社・月は、システムから出すと二重請求になる（サーバでも止める・2026-10-02）
+  const paper = data && !('error' in data) ? data.paper : undefined
+  const paperBlocked = !!paper && paper.count > 0 && view?.status !== 'issued'
+  const blocked = approvalBlocked || paperBlocked
   // 直近の差し戻し（その後に申請・発行していなければ、下書きの上に理由を出す）
   //   「最後に動いた記録」が差し戻しのときだけ（差し戻し → 再申請 → 発行 → 取り消し なら出さない）
   const latestRecord = latestPeerInvoiceRecord(history)
@@ -240,6 +246,14 @@ function PeerInvoicePageInner() {
           </div>
         )}
 
+        {paperBlocked && paper && (
+          <div className="rounded-xl px-4 py-2.5 text-sm bg-amber-50 text-amber-900 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-200 dark:border-amber-800">
+            <b>この会社の{jpYm(ym)}分は、紙の請求書を登録済みです（{paper.count}件・税込 {yen(paper.total)}）。</b>
+            <span className="block text-xs mt-1">システムからも出すと二重請求になるため、申請・発行はできません。システムから出し直す場合は、先に
+              <a href={`/paper-invoice?ym=${ym}`} className="underline font-bold mx-0.5">紙で出した請求書</a>から削除してください。</span>
+          </div>
+        )}
+
         {/* 請求する日の承認がそろっていなければ発行できない（2026-09-30） */}
         {approvalBlocked && approval && (
           <div className="rounded-xl px-4 py-2.5 text-sm bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-200 dark:border-red-800">
@@ -255,22 +269,22 @@ function PeerInvoicePageInner() {
             <Icon name="download" size={15} />印刷 / PDF保存
           </button>
           {isFreshDraft && canIssue && (
-            <button onClick={handleIssue} disabled={busy || approvalBlocked}
-              className={approvalBlocked ? LOCKED_BTN : 'h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 bg-hibi-navy text-white hover:bg-hibi-light'}>
-              {approvalBlocked && <Icon name="lock" size={14} strokeWidth={2.4} />}この内容で発行
+            <button onClick={handleIssue} disabled={busy || blocked}
+              className={blocked ? LOCKED_BTN : 'h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 bg-hibi-navy text-white hover:bg-hibi-light'}>
+              {blocked && <Icon name="lock" size={14} strokeWidth={2.4} />}この内容で発行
             </button>
           )}
           {isFreshDraft && canRequest && (
-            <button onClick={handleRequest} disabled={busy || approvalBlocked}
-              className={approvalBlocked ? LOCKED_BTN : 'h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 bg-hibi-navy text-white hover:bg-hibi-light'}>
-              {approvalBlocked && <Icon name="lock" size={14} strokeWidth={2.4} />}発行を申請（承認へ回す）
+            <button onClick={handleRequest} disabled={busy || blocked}
+              className={blocked ? LOCKED_BTN : 'h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 bg-hibi-navy text-white hover:bg-hibi-light'}>
+              {blocked && <Icon name="lock" size={14} strokeWidth={2.4} />}発行を申請（承認へ回す）
             </button>
           )}
           {view && isPending && canIssue && (
             <>
-              <button onClick={() => handleApprove(view.id)} disabled={busy || approvalBlocked}
-                className={approvalBlocked ? LOCKED_BTN : 'h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 bg-green-700 text-white hover:bg-green-800'}>
-                {approvalBlocked && <Icon name="lock" size={14} strokeWidth={2.4} />}承認して発行
+              <button onClick={() => handleApprove(view.id)} disabled={busy || blocked}
+                className={blocked ? LOCKED_BTN : 'h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 inline-flex items-center gap-1.5 bg-green-700 text-white hover:bg-green-800'}>
+                {blocked && <Icon name="lock" size={14} strokeWidth={2.4} />}承認して発行
               </button>
               <button onClick={() => handleReject(view.id)} disabled={busy}
                 className="h-10 px-4 rounded-[10px] text-sm font-bold transition disabled:opacity-40 bg-white dark:bg-gray-800 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-900/20">
@@ -293,6 +307,9 @@ function PeerInvoicePageInner() {
           {/* 押せない理由をボタンの横にも出す（薄いボタンだけだと「発行ボタンがない」と見える・2026-10-01 代表） */}
           {isFreshDraft && (canIssue || canRequest) && approvalBlocked && (
             <span className="text-[13px] font-bold text-red-700 dark:text-red-300">上の赤い枠の承認がそろうと押せます</span>
+          )}
+          {(isFreshDraft || isPending) && (canIssue || canRequest) && paperBlocked && !approvalBlocked && (
+            <span className="text-[13px] font-bold text-amber-800 dark:text-amber-300">紙の請求書を登録済みのため押せません</span>
           )}
           {isFreshDraft && !canIssue && !canRequest && (
             <span className="text-[13px] text-hibi-sub dark:text-gray-400">発行の申請は事務、承認は事業責任者・管理者が行います</span>

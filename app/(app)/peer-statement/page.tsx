@@ -56,7 +56,7 @@ export default function PeerStatementPage() {
   const [filter, setFilter] = useState<Filter>('all')
   const [openId, setOpenId] = useState<string | null>(null)
   /** 紙（手作り）で出した請求書を入れた会社（app/api/paper-invoice・2026-10-02） */
-  const [paperCos, setPaperCos] = useState<Set<string>>(new Set())
+  const [paperCos, setPaperCos] = useState<Map<string, string>>(new Map())  // companyId → 会社名
 
   const load = useCallback(async () => {
     if (!ready) return
@@ -77,24 +77,27 @@ export default function PeerStatementPage() {
     }
     if (paperRes.ok) {
       const p = await paperRes.json()
-      setPaperCos(new Set(((p.records || []) as { companyId: string }[]).map(r => r.companyId)))
+      setPaperCos(new Map(((p.records || []) as { companyId: string; companyName: string }[]).map(r => [r.companyId, r.companyName])))
     } else {
-      setPaperCos(new Set())
+      setPaperCos(new Map())
     }
   }, [ready, ym])
   useEffect(() => { load() }, [load])
   useEffect(() => { setOpenId(null) }, [ym])
 
-  /** 会社の請求書の状態（発行済み → 承認待ち → 差し戻し・取り下げ → まだ）。事務が申請 → 事業責任者が承認（2026-09-26） */
+  /**
+   * 会社の請求書の状態（発行済み → 承認待ち → 紙で発行済み → 差し戻し・取り下げ → まだ）。事務が申請 → 事業責任者が承認（2026-09-26）
+   * 紙は差し戻しより先に見る: システムの申請を差し戻したあと手作りで出した月は、もう「直して再申請」ではない（2026-10-02）
+   */
   const invStateOf = (companyId: string): { state: InvState; issued?: PeerInvoiceSummary } => {
     const issued = invoices.find(i => i.companyId === companyId && i.status === 'issued')
     if (issued) return { state: 'issued', issued }
     if (invoices.some(i => i.companyId === companyId && i.status === 'pending')) return { state: 'pending' }
+    // 応援の請求書はしばらく手作りで発行する（2026-10-02 代表）。紙の請求書を入れた月は「作っていない」扱いにしない
+    if (paperCos.has(companyId)) return { state: 'paper' }
     // 差し戻し・取り下げは「最後の動き」がそうなときだけ（その後に発行→取り消しなら作り直し＝まだ）
     const latest = latestPeerInvoiceRecord(invoices.filter(i => i.companyId === companyId))
     if (latest && (latest.status === 'rejected' || latest.status === 'withdrawn')) return { state: 'returned' }
-    // 応援の請求書はしばらく手作りで発行する（2026-10-02 代表）。紙の請求書を入れた月は「作っていない」扱いにしない
-    if (paperCos.has(companyId)) return { state: 'paper' }
     return { state: 'none' }
   }
   const hrefOf = (companyId: string) => `/peer-invoice?company=${companyId}&ym=${ym}`
@@ -111,8 +114,11 @@ export default function PeerStatementPage() {
   const paymentSum = list.reduce((s, r) => s + r.paymentTotal, 0)
   const billingCos = list.filter(r => r.billingTotal > 0)
   const hfu = invStateOf(HFU_INVOICE_COMPANY_ID)
-  // 請求書の対象: 請求のある会社 ＋ HFU → 日比建設
+  // 請求書の対象: 請求のある会社 ＋ HFU → 日比建設 ＋ 紙の請求書だけある会社（出面上は請求が無くても、出した請求書は数える）
   const targets = [...billingCos.map(r => ({ id: r.companyId, name: r.companyName })), { id: HFU_INVOICE_COMPANY_ID, name: 'HFU → 日比建設' }]
+  for (const [id, name] of paperCos) {
+    if (!targets.some(t => t.id === id)) targets.push({ id, name })
+  }
   const byState = (st: InvState) => targets.filter(t => invStateOf(t.id).state === st)
   const toMake = byState('none'), pending = byState('pending'), returned = byState('returned'), issued = byState('issued'), paper = byState('paper')
   const names = (xs: { name: string }[]) => xs.slice(0, 3).map(x => x.name).join('・') + (xs.length > 3 ? ` ほか${xs.length - 3}社` : '')
@@ -211,7 +217,7 @@ export default function PeerStatementPage() {
             ) : shown.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">この絞り込みに当てはまる会社はありません</div>
             ) : shown.map(r => {
-              const st = r.billingTotal > 0 ? invStateOf(r.companyId) : null
+              const st = r.billingTotal > 0 || paperCos.has(r.companyId) ? invStateOf(r.companyId) : null
               return (
                 <div key={r.companyId} role="button" tabIndex={0}
                   onClick={() => setOpenId(r.companyId)}

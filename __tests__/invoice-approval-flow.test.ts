@@ -13,17 +13,19 @@ import type { AttendanceEntry } from '@/types'
 
 // ── Firestore の代わり（peerInvoices をメモリに持つ） ──
 const store = new Map<string, Record<string, unknown>>()
+/** 紙で出した請求書（paperInvoices）は別のコレクションとして持つ（二重請求の防止・2026-10-02） */
+const paperStore = new Map<string, Record<string, unknown>>()
 let seq = 0
 type Where = { f: string; v: unknown }
 vi.mock('@/lib/firebase', () => ({ db: {} }))
 vi.mock('@/lib/activity', () => ({ logActivity: async () => {} }))
 vi.mock('@/lib/fsdb', () => ({
   registerMainWriteHook: () => {},
-  collection: () => ({}),
+  collection: (_db: unknown, name: string) => ({ name }),
   where: (f: string, _op: string, v: unknown): Where => ({ f, v }),
-  query: (_c: unknown, ...ws: Where[]) => ws,
-  getDocs: async (ws: Where[]) => {
-    const docs = [...store.entries()]
+  query: (c: { name?: string }, ...ws: Where[]) => ({ name: c?.name, ws }),
+  getDocs: async ({ name, ws }: { name?: string; ws: Where[] }) => {
+    const docs = [...(name === 'paperInvoices' ? paperStore : store).entries()]
       .filter(([, d]) => ws.every(w => d[w.f] === w.v))
       .map(([id, d]) => ({ id, data: () => structuredClone(d) }))
     return { docs, size: docs.length }
@@ -55,9 +57,35 @@ const args = { main, c: {} as never, attD, attSD: {}, ym, companyId: '__hfu_to_h
 
 // 請求する日は職長承認・最終承認がそろっている（2026-09-30〜 そろわないと発行できない・lib/approval-gap.ts）
 beforeEach(() => {
-  store.clear(); seq = 0
+  store.clear(); paperStore.clear(); seq = 0
   store.set(`own_${ym}_1`, { foreman: { by: 1 }, final: { by: 2 } })
   store.set(`own_${ym}_2`, { foreman: { by: 1 }, final: { by: 2 } })
+})
+
+describe('紙の請求書との二重請求の防止（2026-10-02）', () => {
+  test('同じ会社・同じ月に紙の請求書があると、申請も直接発行もできない', async () => {
+    const s = await import('@/lib/peer-invoice-store')
+    paperStore.set('p1', { companyId: '__hfu_to_hibi__', companyName: 'HFU → 日比建設', ym, total: 66000 })
+    const r1 = await s.requestPeerInvoice({ ...args, actor: '50' })
+    expect(r1.ok).toBe(false)
+    if (!r1.ok) expect(r1.error).toContain('9月分は紙の請求書を登録済み')
+    expect((await s.issuePeerInvoice({ ...args, actor: '1' })).ok).toBe(false)
+    expect(await s.paperSummaryForCompanyYm(ym, '__hfu_to_hibi__')).toEqual({ count: 1, total: 66000 })
+  })
+  test('申請のあとで紙の請求書が入ったら、承認しても発行しない', async () => {
+    const s = await import('@/lib/peer-invoice-store')
+    const req = await s.requestPeerInvoice({ ...args, actor: '50' })
+    if (!req.ok) throw new Error(req.error)
+    paperStore.set('p1', { companyId: '__hfu_to_hibi__', companyName: 'HFU → 日比建設', ym, total: 66000 })
+    const ap = await s.approvePeerInvoice({ main, id: req.record.id, actor: '1' })
+    expect(ap.ok).toBe(false)
+  })
+  test('別の会社・別の月の紙の請求書では止めない', async () => {
+    const s = await import('@/lib/peer-invoice-store')
+    paperStore.set('p1', { companyId: 'other', companyName: '他社', ym, total: 1 })
+    paperStore.set('p2', { companyId: '__hfu_to_hibi__', companyName: 'HFU → 日比建設', ym: '202608', total: 1 })
+    expect((await s.requestPeerInvoice({ ...args, actor: '50' })).ok).toBe(true)
+  })
 })
 
 describe('承認がそろってから発行（2026-09-30）', () => {
