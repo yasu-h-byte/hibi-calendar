@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual } from 'crypto'
 import { getSites } from '@/lib/sites'
 import { getWorkers, isAlreadyRetired } from '@/lib/workers'
 import { buildAuthUser } from '@/lib/auth'

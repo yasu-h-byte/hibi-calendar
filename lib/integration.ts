@@ -13,7 +13,7 @@
  *   - HFU 所属の作業員の人数と稼働（人工・残業・社内単価での額。HFU の鳶の売上の見込みに使う・2026-09-27）
  * 詳細は docs/integration.md。
  */
-import { timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual } from 'crypto'
 import type { NextRequest } from 'next/server'
 import { compute, getMainData, getAttData, getAttDataCached, isClosedMonthYm, getBillTotal, getSubconRate } from '@/lib/compute'
 import { applyPayrollCosts } from '@/lib/payroll-cost'

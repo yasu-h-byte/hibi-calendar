@@ -9,7 +9,7 @@
  * 番号は `${invoicePrefix}-${ym}-${NN}`。月をまたいで会社が違っても連番（会社別ではない）。
  * 取り消した番号は欠番のまま残る（再利用しない）。
  */
-import { randomUUID } from 'node:crypto'
+import { randomUUID } from 'crypto'
 import { db } from './firebase'
 import { doc, getDoc, updateDoc, collection, getDocs, query, where, runTransaction } from '@/lib/fsdb'
 import { logActivity } from './activity'

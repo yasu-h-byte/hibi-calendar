@@ -51,7 +51,7 @@ const get = async () => {
 
 describe('評価者に返す項目', () => {
   test('許可リストに賃金の項目が無い', async () => {
-    const { EVALUATOR_VIEW_KEYS } = await import('@/app/api/evaluation/route')
+    const { EVALUATOR_VIEW_KEYS } = await import('@/lib/evaluation-view-keys')
     for (const k of EVALUATOR_VIEW_KEYS) {
       expect(/^raise|^final|Score$|^rank$|^evaluatorWeights$|approved/.test(k), k).toBe(false)
     }

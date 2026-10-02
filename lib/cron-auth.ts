@@ -12,7 +12,7 @@
  *   - Vercel Cron … `Authorization: Bearer <CRON_SECRET>`（Vercel が自動で付ける）
  *   - 手で動かすとき … 同じヘッダか `x-cron-secret: <CRON_SECRET>`（URL には付けない）
  */
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'crypto'
 import { NextResponse } from 'next/server'
 
 /** 長さの違いも漏らさないよう、両方を SHA-256 にしてから定数時間で比べる */

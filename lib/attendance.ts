@@ -716,7 +716,7 @@ export async function getForemanSite(
   const sites = (data.sites || []) as (Site & { parentId?: string })[]
   const mforeman = (data.mforeman || {}) as Record<string, { foreman?: number; wid?: number }>
   const ymKey6 = (ym || currentYmJst()).replace('-', '')
-  const { foremenOfSiteForMonth } = await import('./auth')
+  const { foremenOfSiteForMonth } = await import('./foremen')
   const mine = sites.filter(s => !s.archived && !s.parentId && foremenOfSiteForMonth(s, mforeman, ymKey6).includes(foremanId))
   if (mine.length === 0) return null
   const chosen = (preferSiteId && mine.find(s => s.id === preferSiteId)) || mine[0]

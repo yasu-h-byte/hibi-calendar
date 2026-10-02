@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { randomBytes } from 'crypto'
 import { db } from './firebase'
 import { doc, getDoc, runTransaction } from '@/lib/fsdb'
 import { invalidateMainCache } from './compute'

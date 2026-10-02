@@ -13,7 +13,7 @@
  *     ログインし直しになる（共通パスワードを変えたら古い通行証も使えなくなる＝望ましい）。
  * サーバー専用（node:crypto）。
  */
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 
 const PREFIX = 'ft1'
 /** 有効期間 90日（職長は同じ端末でログインしたまま使うため長め） */

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { EVALUATOR_VIEW_KEYS } from '@/lib/evaluation-view-keys'
 import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, updateDoc, runTransaction } from '@/lib/fsdb'
@@ -108,16 +109,7 @@ async function calcMetricsForEvaluation(opts: {
   }
 }
 
-/**
- * 賃金を見られない評価者（職長・事務）に返す評価の項目（許可リスト・2026-10-02 総合点検）。
- * ここに無い項目（raiseAmount・raiseBaseAmount・finalScores・totalScore・manualScore・rank・evaluatorWeights・approvedBy など）は返さない。
- * 旧形式（評価者1人・scores 直下）の evaluatorId / scores / comment も評価入力の画面が読むので入れる。
- */
-export const EVALUATOR_VIEW_KEYS: readonly string[] = [
-  'id', 'workerId', 'workerName', 'evaluationDate', 'status', 'evaluatorIds', 'reviews', 'metrics', 'yearsFromHire',
-  'createdAt', 'updatedAt',
-  'evaluatorId', 'evaluatorName', 'scores', 'comment', 'submittedAt', 'date',
-]
+// 評価者向けの許可リストは lib/evaluation-view-keys.ts（API ファイルから値を export すると Next.js のビルドが落ちる）
 
 // ────────────────────────────────────────
 //  GET: 評価一覧 + ワーカーリスト + 設定 + 評価者情報

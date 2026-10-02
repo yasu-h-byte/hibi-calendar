@@ -6,7 +6,7 @@
  *   形式: `scrypt$<salt base64url>$<hash base64url>`
  * 移行: 平文のまま残っている古い値も照合できる（isHashed で判定）。設定画面で保存すると全員分がハッシュ化される。
  */
-import { scryptSync, randomBytes, timingSafeEqual, createHash } from 'node:crypto'
+import { scryptSync, randomBytes, timingSafeEqual, createHash } from 'crypto'
 
 const PREFIX = 'scrypt$'
 const KEYLEN = 32
