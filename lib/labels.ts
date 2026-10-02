@@ -97,3 +97,96 @@ export function jobBadge(jobType?: string | null): JobBadge {
     default: return { label: jobType || '—', cls: 'bg-gray-100 text-gray-500' }
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// スタッフ画面の日越並記（2026-10-02 総合点検）
+// ─────────────────────────────────────────────────────────────
+//
+// スタッフ（ベトナム人）のスマホ画面は日本語とベトナム語を必ず並記する（docs/ui-design.md「言語表示ルール」）。
+// 旧: 文言が画面ごとの直書きで、あとから足した所（過去の日の修正・最近5日の状態・月の確認カード・
+//     カレンダー署名の凡例・通信失敗の 'Error' など）が日本語だけ・英語だけになっていた。
+// 新: 並記の文言はここに集め、画面はここから読む（app/attendance/[token]・components/attendance の
+//     MonthConfirmCard / RestReportModal / LeaveRequestModal / HomeLongLeaveModal / CalendarApprovalModal）。
+//     新しい文言を足すときもここに足す。色（クラス名）はここに置かない。
+
+/** 日本語とベトナム語の組 */
+export interface BiText {
+  ja: string
+  vi: string
+}
+
+/** 「日本語 / Tiếng Việt」の1行にする */
+export function biLine(t: BiText): string {
+  return `${t.ja} / ${t.vi}`
+}
+
+/** 出面の状態（最近5日・今日の登録済み表示） */
+export const STAFF_STATUS_BI: Record<import('@/types').AttendanceStatus, BiText> = {
+  work: { ja: '出勤', vi: 'Đi làm' },
+  overtime: { ja: '出勤', vi: 'Đi làm' },
+  rest: { ja: '休み', vi: 'Nghỉ' },
+  leave: { ja: '有給', vi: 'Nghỉ phép' },
+  site_off: { ja: '現場休み', vi: 'Công trường nghỉ' },
+  home_leave: { ja: '帰国中', vi: 'Đang về nước' },
+  exam: { ja: '試験', vi: 'Thi' },
+  comp: { ja: '会社都合の休み', vi: 'Nghỉ do công ty' },
+  none: { ja: '未入力', vi: 'Chưa nhập' },
+}
+
+/** スタッフ画面で使う並記の文言 */
+export const STAFF_TEXT = {
+  // 通信・読み込み
+  connError: { ja: 'つうしん エラー', vi: 'Lỗi kết nối' },
+  error: { ja: 'エラー', vi: 'Lỗi' },
+  retry: { ja: 'もう一度', vi: 'Thử lại' },
+  loadFailed: { ja: '読み込めませんでした', vi: 'Không tải được' },
+  // 今日の登録
+  today: { ja: '今日', vi: 'Hôm nay' },
+  registered: { ja: '登録済み', vi: 'Đã đăng ký' },
+  notRegistered: { ja: '今日はまだ登録していません', vi: 'Hôm nay chưa đăng ký' },
+  saved: { ja: '保存しました', vi: 'Đã lưu' },
+  registerWork: { ja: '出勤登録', vi: 'Xác nhận đi làm' },
+  nonScheduled: { ja: 'うち所定外', vi: 'Trong đó ngoài giờ' },
+  breakShorten: { ja: '休憩短縮', vi: 'Rút ngắn nghỉ' },
+  // 過去の日の修正
+  edit: { ja: '修正', vi: 'Sửa' },
+  start: { ja: '始業', vi: 'Bắt đầu' },
+  end: { ja: '終業', vi: 'Kết thúc' },
+  breakTime: { ja: '休憩', vi: 'Nghỉ giải lao' },
+  breakAm: { ja: '午前休憩', vi: 'Nghỉ sáng' },
+  breakPm: { ja: '午後休憩', vi: 'Nghỉ chiều' },
+  breakNotTaken: { ja: '未取得', vi: 'Không nghỉ' },
+  // 有給・帰国の申請
+  chooseDate: { ja: '日付を選択してください', vi: 'Hãy chọn ngày' },
+  expiry: { ja: '期限', vi: 'Hạn' },
+  rejectedReason: { ja: '却下の理由', vi: 'Lý do từ chối' },
+  revoked: { ja: '会社が取り消し', vi: 'Công ty đã hủy' },
+  rejected: { ja: '却下', vi: 'Từ chối' },
+  leaveReasonExample: { ja: '通院、予定など', vi: 'Đi khám, việc riêng...' },
+  flightExample: { ja: '飛行機の予定など', vi: 'Lịch bay...' },
+  // 月の出面の確認
+  pleaseConfirm: { ja: '確認してください', vi: 'Hãy xác nhận' },
+  confirmedAt: { ja: '確認しました', vi: 'Đã xác nhận' },
+  reportedAt: { ja: '連絡しました', vi: 'Đã báo' },
+  // カレンダーの署名
+  signed: { ja: '署名済み', vi: 'Đã ký' },
+  work: { ja: '出勤', vi: 'Đi làm' },
+  off: { ja: '休み', vi: 'Nghỉ' },
+  close: { ja: '閉じる', vi: 'Đóng' },
+  sending: { ja: '送信中...', vi: 'Đang gửi...' },
+} as const
+
+/** 曜日（日曜はじまり）のベトナム語 */
+export const STAFF_DOW_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'] as const
+
+/** 帰国申請の理由（保存している値は日本語）→ ベトナム語 */
+export const STAFF_HOME_LEAVE_REASON_VI: Record<string, string> = {
+  '一時帰国': 'Về nước tạm thời',
+  'ビザ更新帰国': 'Về nước gia hạn visa',
+  'その他': 'Khác',
+}
+
+/** 「＋20分 休憩短縮」の印（最近5日・承認済みの今日・実労働時間カード） */
+export function staffBreakShortenTag(min: number): BiText {
+  return { ja: `＋${min}分 ${STAFF_TEXT.breakShorten.ja}`, vi: `+${min} phút ${STAFF_TEXT.breakShorten.vi.toLowerCase()}` }
+}

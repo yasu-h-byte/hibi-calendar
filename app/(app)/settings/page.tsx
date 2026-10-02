@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
 import { PageHeader, UnderlineTabs } from '@/components/ui/PageParts'
 import { CAPABILITIES, PERM_ROLES, PERM_ROLE_LABEL, type Capability, type PermRole } from '@/lib/permissions'
+import { isAlreadyRetired } from '@/lib/workers'
 
 interface DefaultRates {
   tobiRate: number
@@ -41,19 +42,14 @@ interface HfuInvoiceForm {
 }
 
 /**
- * 未保存時の初期値は、HFU がこれまで手作りしていた請求書（2025-12 分・代表提供 2026-09-26）の記載どおり。
- * 保存ボタンを押すまで Firestore には入らない。土工の単価はその請求書に無いので空欄
+ * 画面の初期値は空（2026-10-02 総合点検）。
+ * 旧: HFU の口座番号・登録番号・社内単価の初期値をこのファイルに直書きしていた。'use client' のファイルは
+ *     /_next/static の JS に入り、ログインなしで取れる（API 側は「振込先は代表だけ」にしていたのに）。
+ * 新: 未保存のときの初期値も API（/api/settings?action=getHfuInvoice・代表だけ）が返す（defaults: true 付き）
  */
 const EMPTY_HFU_INVOICE: HfuInvoiceForm = {
-  profile: {
-    ...EMPTY_COMPANY_PROFILE,
-    name: 'エイチエフユナイテッド株式会社', nameEn: '', representative: '代表取締役 日比 靖仁',
-    postal: '204-0003', address: '東京都清瀬市中里2-1620-1', tel: '042-493-9978', fax: '',
-    invoiceRegNo: 'T5012701011352',
-    bank: { bankName: '青梅信用金庫', branch: '秋津', accountType: '普通', accountNo: '0086328', holder: 'エイチエフユナイテッド株式会社 代表取締役 日比 靖仁' },
-    invoicePrefix: 'HFU',
-  },
-  tobiRate: 30000, dokoRate: 0, payMonthOffset: 1, payDay: 'end',
+  profile: { ...EMPTY_COMPANY_PROFILE, name: '', nameEn: '', invoicePrefix: 'HFU' },
+  tobiRate: 0, dokoRate: 0, payMonthOffset: 1, payDay: 'end',
 }
 
 /** 請求書の発行者情報の入力欄（日比建設の自社情報・HFU の情報で共通） */
@@ -501,7 +497,8 @@ export default function SettingsPage() {
       if (workersRes.ok) {
         const data = await workersRes.json()
         const all: UserWorker[] = data.workers || []
-        setUserWorkers(all.filter(w => ['yakuin', 'shokucho', 'jimu'].includes(w.jobType) && !w.retired))
+        // 2026-10-02 総合点検: !w.retired（退職予定日を入れた瞬間に消える）→ 今日時点で退職済みの人だけ外す
+        setUserWorkers(all.filter(w => ['yakuin', 'shokucho', 'jimu'].includes(w.jobType) && !isAlreadyRetired(w.retired)))
       }
     } finally {
       setUsersLoading(false)
@@ -981,7 +978,7 @@ export default function SettingsPage() {
             </p>
             <div className="space-y-3">
               {pwWorkers
-                .filter(w => !w.retired || passwordSet[String(w.id)])
+                .filter(w => !isAlreadyRetired(w.retired) || passwordSet[String(w.id)])
                 .map(w => {
                 const key = String(w.id)
                 // 政仁さん（workerId=1）は事業責任者ロール

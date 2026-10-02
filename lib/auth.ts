@@ -72,7 +72,8 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
   // 職長の通行証（共通パスワード＋名前選択でログインした職長）
   if (isForemanTokenShape(authHeader)) {
     const wid = verifyForemanToken(authHeader)
-    return wid === null ? { authorized: false } : { authorized: true, actor: wid }
+    if (wid === null) return { authorized: false }
+    return (await isTokenHolderActive(wid)) ? { authorized: true, actor: wid } : { authorized: false }
   }
 
   // 事務・役員・事業責任者の通行証。パスワードを変える・消すと指紋が合わなくなり使えない
@@ -84,10 +85,34 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
     // 日比靖仁さん（代表・開発者）は個人パスワードでも代表（全権限）。2026-10-01 代表指示。
     //   旧: 職種が役員なので「役員（見るだけ）」になり、電話URLの発行状況などが見えなかった
     if (t.workerId === OWNER_WORKER_ID) return { authorized: true, actor: 'super-admin' }
-    return { authorized: true, actor: t.workerId }
+    return (await isTokenHolderActive(t.workerId)) ? { authorized: true, actor: t.workerId } : { authorized: false }
   }
 
   return { authorized: false }
+}
+
+/**
+ * 通行証の持ち主がいま在籍しているか（2026-10-02 総合点検）。
+ *
+ * 旧: 通行証は署名と期限だけを見ていた。退職した職長の通行証は最長90日、退職した事務・役員の個人パスワードは
+ *     代表が消すまで使えた（退職日を入れても何も効かなかった）。人員マスタから消えた人の通行証も「ログイン済み」で通った。
+ * 新: 人員マスタ（getMainData・30秒キャッシュ＝読み取りは増えない）で退職日を見る。退職日の当日までは使える
+ *     （lib/workers.ts isAlreadyRetired）。人員マスタに居ない人は通さない。
+ * ⚠️ 人員マスタが読めないとき（クォータ超過など）は今までどおり通す。ここで 401 にすると管理画面が全員ログイン画面へ
+ *    戻る（heartbeat 401）ため、読み取り障害を「全員締め出し」にしない。
+ */
+async function isTokenHolderActive(workerId: number): Promise<boolean> {
+  try {
+    const { getMainData } = await import('@/lib/compute')
+    const main = (await getMainData()) as unknown as { workers?: { id: number; retired?: string }[] }
+    const w = (main.workers || []).find(x => x.id === workerId)
+    if (!w) return false
+    const { isAlreadyRetired } = await import('@/lib/workers')
+    return !isAlreadyRetired(w.retired)
+  } catch (e) {
+    console.warn('[auth] 退職の判定で人員マスタを読めませんでした（通行証はそのまま通します）:', e)
+    return true
+  }
 }
 
 const APPROVER_ID = 1 // 日比政仁
@@ -101,74 +126,11 @@ function currentYm(): string {
   return `${jst.getFullYear()}${String(jst.getMonth() + 1).padStart(2, '0')}`
 }
 
-/**
- * 当該ワーカーが「現在月で職長として担当する現場ID」を返す。
- * mforeman[siteId_ym] の月別 override を優先し、なければ sites.foreman を採用。
- *
- * 2026-05-08 修正: mforeman を反映していなかったため、月途中の職長交代で
- *   旧職長が承認できる/新職長が承認できない事態が起きていた。
- */
-export function computeForemanSites(
-  workerId: number,
-  sites: Site[],
-  mforeman: Record<string, { foreman?: number; wid?: number }>,
-  ym: string,
-): string[] {
-  const result: string[] = []
-  for (const site of sites) {
-    if (site.archived) continue
-    if (foremenOfSiteForMonth(site, mforeman, ym).includes(workerId)) result.push(site.id)
-  }
-  return result
-}
+// 職長の判定（computeForemanSites / foremenOfSiteForMonth / approvingForemenOfSite / isProxyApprovalSite）は
+// lib/foremen.ts に移した（2026-10-03・クライアントから届く lib が auth.ts を読まないため）。ここから再エクスポート
+import { computeForemanSites, foremenOfSiteForMonth, approvingForemenOfSite, isProxyApprovalSite } from './foremen'
+export { computeForemanSites, foremenOfSiteForMonth, approvingForemenOfSite, isProxyApprovalSite }
 
-/**
- * その月にその現場の職長である人（承認の権限判定はすべてこれを通す・2026-10-01）。
- *
- * 月別の職長（mforeman[siteId_ym]. foreman ?? wid）があればその人だけ、無ければ現場の職長。
- * 旧: 出面・有給・帰国申請で別々に書いていて、有給は月別職長を「足す」（旧職長も承認できる）、
- *     帰国申請は月別職長を見ない、と食い違っていた。
- * `foremen`（配列）は書き込む画面が無い古い項目。残っているデータのために読むだけ読む。
- */
-export function foremenOfSiteForMonth(
-  site: { id: string; foreman?: number; foremen?: number[] },
-  mforeman: Record<string, { foreman?: number; wid?: number }>,
-  ym: string,
-): number[] {
-  const monthKey = `${site.id}_${ym.replace('-', '')}`
-  const override = mforeman[monthKey]?.foreman ?? mforeman[monthKey]?.wid
-  if (override !== undefined && override !== null) return [override]
-  if (site.foremen && site.foremen.length > 0) return site.foremen
-  return site.foreman !== undefined && site.foreman !== null ? [site.foreman] : []
-}
-
-/**
- * 職長承認ができる人（2026-10-01 代表決定）。
- *
- * 「その月の現場の職長として登録されている」かつ「人員マスタの職種が職長（jobType='shokucho'）」の人だけ。
- * 職長でない人（とび・役員など）が現場マスタの職長に登録されている現場は、事業責任者（政仁さん）が
- * 職長承認を代行する（{@link isProxyApprovalSite}）。出面の入力などの権限は変えない（承認だけの決まり）。
- */
-export function approvingForemenOfSite(
-  site: { id: string; foreman?: number; foremen?: number[] },
-  mforeman: Record<string, { foreman?: number; wid?: number }>,
-  ym: string,
-  workers: { id: number; jobType?: string; job?: string }[],
-): number[] {
-  // 職種は Firestore の生データでは job、lib/workers で整形後は jobType
-  return foremenOfSiteForMonth(site, mforeman, ym)
-    .filter(id => { const w = workers.find(x => x.id === id); return (w?.jobType ?? w?.job) === 'shokucho' })
-}
-
-/** 職長承認を政仁さんが代行する現場か（承認できる職長がいない現場） */
-export function isProxyApprovalSite(
-  site: { id: string; foreman?: number; foremen?: number[] },
-  mforeman: Record<string, { foreman?: number; wid?: number }>,
-  ym: string,
-  workers: { id: number; jobType?: string; job?: string }[],
-): boolean {
-  return approvingForemenOfSite(site, mforeman, ym, workers).length === 0
-}
 
 export function determineRole(
   workerId: number,

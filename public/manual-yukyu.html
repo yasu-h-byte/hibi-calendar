@@ -49,7 +49,7 @@
 
 <h1>HIBI CONSTRUCTION 就業管理システム<br>有給・休暇管理マニュアル</h1>
 <p>対象: 事務（森田さん）・事業責任者（政仁さん）・代表<br>
-最終更新: 2026年9月28日<br>
+最終更新: 2026年10月3日<br>
 システムURL: <code>https://hibi-calendar.vercel.app</code></p>
 
 <div class="box box-ok">
@@ -102,19 +102,20 @@
 
 <table>
 <tr><th>タブ</th><th>内容</th></tr>
-<tr><td><strong>一覧</strong></td><td>スタッフごとの付与/繰越/消化/残日数の一覧。ここから編集・時季指定・買取も行う</td></tr>
-<tr><td><strong>📅 基準日</strong></td><td>付与の起点となる基準日の確認・設定</td></tr>
+<tr><td><strong>有給</strong></td><td>上に「今やること」（承認待ちの申請・付与の設定が必要な人・年5日の未達）。その下にスタッフごとの付与/繰越/消化/残日数が1人1行。<strong>行を押すと右にその人のパネル</strong>が開き、「付与・調整を直す」「時季指定」「買取を記録」と、取った日・記録（買取・時季指定の履歴）が見られます</td></tr>
 <tr><td><strong>申請</strong></td><td>有給・帰国の申請を承認/却下する（職長承認・最終承認）</td></tr>
-<tr><td><strong>月別</strong></td><td>月ごとの消化状況を会社別（<span class="tag tag-hibi">日比建設</span>／<span class="tag tag-hfu">HFU</span>）に集計表示</td></tr>
 <tr><td><strong>カレンダー</strong></td><td>誰がいつ休むかをカレンダーで表示</td></tr>
-<tr><td><strong>✈️ 帰国情報</strong></td><td>帰国申請・帰国期間の管理</td></tr>
+<tr><td><strong>月別</strong></td><td>月ごとの消化状況を会社別（<span class="tag tag-hibi">日比建設</span>／<span class="tag tag-hfu">HFU</span>）に集計表示</td></tr>
+<tr><td><strong>付与日</strong></td><td>付与の起点となる基準日の確認・設定</td></tr>
+<tr><td><strong>帰国</strong></td><td>帰国申請・帰国期間の管理（登録・期間の変更・復帰日の登録）</td></tr>
 </table>
+<p style="font-size:13px;">※ 2026年10月1日の画面の見直しで、タブ名が「一覧／基準日／帰国情報」から「有給／付与日／帰国」に変わり、行の「編集」ボタンは「行を押して右のパネル」になりました。</p>
 
 <div class="box">
 <strong>ヘッダーの主なボタン：</strong>
 <ul style="margin: 8px 0 0; padding-left: 20px;">
-  <li><span class="btn-amber">📊 管理簿出力</span> — 労基法準拠の法定様式Excelをダウンロード（サイドバー「📑 帳票出力」からも出せます）</li>
-  <li><strong>時効処理を実行</strong> — 2年経過分を手動で失効記録（通常は自動。事務・政仁さん・代表のみ）</li>
+  <li><span class="btn-amber">管理簿（Excel）</span> — 労基法準拠の法定様式Excelをダウンロード（サイドバー「帳票出力」→「社内用」からも出せます）</li>
+  <li><strong>🔧 メニュー</strong> — 手動付与（例外オペレーション）・時効処理などの保守ツール（通常は自動。事務・政仁さん・代表のみ）</li>
 </ul>
 <p style="margin:8px 0 0; font-size:13px;">※ 繰越再計算・データ正規化などの保守ツールも用意されていますが、通常運用では使いません（移行完了済み）。</p>
 </div>
@@ -130,8 +131,8 @@
 <tr><th>区分</th><th>付与サイクル</th><th>繰越</th><th>期末買取</th></tr>
 <tr><td>役員（yakuin）</td><td colspan="3" style="background:#f3f4f6; color:#888;">有給管理対象外</td></tr>
 <tr><td>事務（jimu）</td><td colspan="3" style="background:#f3f4f6; color:#888;">有給管理対象外</td></tr>
-<tr><td>職長（日本人）</td><td>10/1起点（全員一律）</td><td>なし（強制0）</td><td>あり（9/30残を給与反映）</td></tr>
-<tr><td>一般・とび（日本人）</td><td>10/1起点（全員一律）</td><td>なし（強制0）</td><td>あり</td></tr>
+<tr><td>職長（日本人）</td><td>入社6ヶ月後に初回・以後1年ごと（2026-10〜。すでに10/1に付与している人はそのまま毎年10/1）</td><td>なし（強制0）</td><td>あり（期末の残を給与反映）</td></tr>
+<tr><td>一般・とび（日本人）</td><td>同上（10/1にそろえない）</td><td>なし（強制0）</td><td>あり</td></tr>
 <tr><td>実習生（jisshu1/2）</td><td>個別（入社6ヶ月後起点）</td><td>あり（上限20日）</td><td>なし（退職時のみ）</td></tr>
 <tr><td>特定技能（tokutei1/2）</td><td>個別（入社6ヶ月後起点）</td><td>あり（上限20日）</td><td>なし（退職時のみ）</td></tr>
 </table>
@@ -139,7 +140,10 @@
 <div class="box box-ok">
 <strong>法定付与日数（労働基準法第39条）：</strong><br>
 勤続0.5年→10日 ／ 1.5年→11日 ／ 2.5年→12日 ／ 3.5年→14日 ／ 4.5年→16日 ／ 5.5年→18日 ／ 6.5年〜→20日<br>
-※ システムが入社日から自動計算します。
+※ システムが入社日から自動計算します。月末（29〜31日）に入社した人も、この表どおりの日数です（2026-10-03 修正。以前は初回が拒否され、以後も1段階少なく計算されていました）。
+</div>
+<div class="box box-warn">
+<strong>【2026-10-02 変更】日本人の付与日を 10/1 にそろえるのをやめました。</strong>新しく入った日本人は、入社6ヶ月後に初回、その後は前回の付与日から1年ごとに付与します（外国人スタッフと同じ）。これまで10月1日に付与している人は、そのまま毎年10月1日です。休暇管理の「付与の設定が必要」・通知ベル・ダッシュボードの件数も同じ決まりで出ます。
 </div>
 
 <!-- ================================================ -->
@@ -189,16 +193,19 @@
 
 <h2 id="sec3">3. 有給の付与（半自動・付与日数）</h2>
 
-<p>付与時期を迎えたスタッフがいると、画面上部に自動でバナーが表示されます。バナーから<strong>ワンクリックで一括付与</strong>できます。</p>
+<p>付与時期を迎えたスタッフがいると、「有給」タブの上の「今やること」に<strong>「付与の設定が必要 N名」</strong>のカードが出ます（名前も出ます）。カードから<strong>まとめて付与</strong>できます。</p>
 
 <div class="box box-warn" style="font-weight:bold;">
-🌴 N名 に有給付与の時期が来ています　→　<span class="btn-amber">付与内容を確認</span>
+付与の設定が必要 N名（付与の時期が来ています）　→　<span class="btn-amber">内容を確認して付与する</span>
 </div>
 
-<div class="step"><div class="step-num">1</div><div class="step-text">バナーの <span class="btn-amber">付与内容を確認</span> をクリック → モーダルが開き、対象スタッフが一覧表示される</div></div>
+<div class="step"><div class="step-num">1</div><div class="step-text">カードの <span class="btn-amber">内容を確認して付与する</span> をクリック → 対象スタッフが一覧表示される</div></div>
 <div class="step"><div class="step-num">2</div><div class="step-text">各スタッフの<strong>付与日・付与日数</strong>を確認（勤続年数から法定値を<strong>自動算出</strong>してプリセット済み）</div></div>
 <div class="step"><div class="step-num">3</div><div class="step-text">対象外にしたいスタッフは「付与する」チェックを外す</div></div>
-<div class="step"><div class="step-num">4</div><div class="step-text"><strong>「一括付与」</strong>を押す → 確認ダイアログ「N名に有給を付与します。よろしいですか？」で「OK」</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text"><strong>「一括付与する（N名）」</strong>を押す → 確認ダイアログで「OK」</div></div>
+<div class="box box-red">
+<strong>付与が遅れると、スタッフは有給を申請できません（2026-10-03〜）。</strong>期が終わって次の付与がまだの間は、本人のスマホに「次の付与の手続き待ち / Đang chờ cấp phép năm mới」と出て、有給の申請が止まります。付与するとすぐ申請できるようになるので、カードが出たら早めに付与してください。
+</div>
 
 <h3>付与日数（勤続年数別）</h3>
 <table>
@@ -232,7 +239,8 @@
 <ul style="margin:8px 0 0; padding-left:20px;">
   <li><code>pending</code>（職長承認待ち）→ 職長が<strong>「職長承認」</strong></li>
   <li><code>foreman_approved</code>（最終承認待ち）→ 政仁さんが<strong>「最終承認」</strong></li>
-  <li><strong>「却下」</strong>は理由を入力して差し戻し（どの段階でも可）</li>
+  <li><strong>「却下」</strong>は理由を入力して差し戻し（どの段階でも可）。ダッシュボードの申請一覧でも「却下」→ 理由を入れて「却下する」の2段階です（2026-10-03〜）。理由は本人のスマホに「却下の理由」として出ます</li>
+  <li><strong>承認する日に本人の出勤の入力がある、または職長承認が済んでいる日</strong>は、「それでも有給で上書きしますか？」と確認が出ます（2026-10-03〜）。「OK」で有給に上書きして承認（記録に残ります）。出勤が正しいなら却下してください。申請の日付を変えるときも同じ確認が出ます</li>
 </ul>
 <p style="margin:8px 0 0; font-size:13px;">最終承認されると、有給は出面に「P（有給）」が自動入力されます。</p>
 </div>
@@ -241,7 +249,8 @@
 <div class="box">
 <ul style="margin:0; padding-left:20px;">
   <li>スタッフはスマホの<strong>「🌴 ゆうきゅうしんせい」ボタン</strong>から申請（スマホからの直接P入力は不可）</li>
-  <li>原則<strong>5日前まで</strong>に申請（日本人社員には申請フローの適用なし）</li>
+  <li><strong>前日まで</strong>に申請（2026年9月30日から全員。当日・過ぎた日は申請できません）。日本人社員もマイページから同じ流れで申請します</li>
+  <li>期が終わって次の付与がまだの間は申請できません（画面に「次の付与の手続き待ち」）。事務が付与すると申請できます</li>
 </ul>
 </div>
 
@@ -277,7 +286,7 @@
 <strong>対象者の自動検知：</strong>「外国人 ＋ 年10日以上付与 ＋ 有効期限まで3ヶ月以内 ＋ 5日未満消化」の全てを満たすスタッフには、未達者として <strong>「時季指定」</strong> ボタンが表示されます。
 </div>
 
-<div class="step"><div class="step-num">1</div><div class="step-text">対象者の<strong>「時季指定」ボタン</strong>をクリック</div></div>
+<div class="step"><div class="step-num">1</div><div class="step-text">「有給」タブで対象者の行を押す → 右のパネルの<strong>「時季指定」</strong>をクリック（「今やること」の年5日の未達カードからも対象者に絞れます）</div></div>
 <div class="step"><div class="step-num">2</div><div class="step-text">モーダルで<strong>指定日を入力</strong>（複数日可。「+日付を追加」で増やせる）</div></div>
 <div class="step"><div class="step-num">3</div><div class="step-text"><strong>対象現場</strong>（スタッフが所属する現場）を選択</div></div>
 <div class="step"><div class="step-num">4</div><div class="step-text">確認後「時季指定する」を押す → 出面に P 自動入力 ＋ 履歴記録</div></div>
@@ -320,15 +329,18 @@
 <h2 id="sec7">7. 期末買取・退職時清算</h2>
 
 <h3>日本人の期末買取（9月末）</h3>
-<p>日本人社員は繰越なし（強制0）のため、9月30日時点の残日数を買取として記録します。</p>
+<p>日本人社員は繰越なし（強制0）のため、期末時点の残日数を買取として記録します。ふだんは賞与の確定で自動記録されます（2.5 ③）。手で記録するのは、自動記録に失敗した人と退職時清算だけです。</p>
+<div class="box">
+<strong>買取は「終わった期」に記録します（2026-10-03〜）。</strong>精勤賞与の買取は「支給日の時点で終わっている期」の残日数で出し、その期に記録します（新しい期の残数は減りません）。「有給」タブのその人の内訳には「前の期の残り」として点線の行で出ます。付与日を10/1より前に寄せた人も、前の期を丸1年で数えます。
+</div>
 
-<div class="step"><div class="step-num">1</div><div class="step-text">「一覧」タブで対象スタッフ行の<strong>「編集」</strong>をクリック</div></div>
-<div class="step"><div class="step-num">2</div><div class="step-text">編集モーダル内の<strong><span class="btn-amber">💰 買取を記録</span></strong> をクリック</div></div>
+<div class="step"><div class="step-num">1</div><div class="step-text">「有給」タブで対象スタッフの行を押す → 右にパネルが開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">パネルの<strong><span class="btn-amber">買取を記録</span></strong> をクリック</div></div>
 <div class="step"><div class="step-num">3</div><div class="step-text">買取理由「<strong>期末買取（9/30時点）</strong>」・買取日数・買取金額（任意）を入力</div></div>
 <div class="step"><div class="step-num">4</div><div class="step-text">「買取を記録する」で確定</div></div>
 
 <div class="box box-ok">
-<strong>買取記録は累積できます。</strong>同じレコードに複数回記録でき、編集モーダル内で履歴を参照できます。金額を入れておくと給与計算連携に使えます。
+<strong>買取記録は累積できます。</strong>同じレコードに複数回記録でき、右のパネルの「記録」で履歴を参照できます。金額を入れておくと給与計算連携に使えます。
 </div>
 
 <h3>退職時清算</h3>
@@ -339,13 +351,13 @@
 
 <p>労働基準法施行規則24条の7準拠の管理簿を、1クリックでダウンロードできます（労基署監査対応の法定様式）。</p>
 
-<div class="step"><div class="step-num">1</div><div class="step-text">休暇管理のヘッダー右上の <span class="btn-amber">📊 管理簿出力</span> をクリック（サイドバー「📑 帳票出力」からも出せます。メニュー上の検索欄に「有給台帳」と入れても飛べます）</div></div>
+<div class="step"><div class="step-num">1</div><div class="step-text">休暇管理のヘッダー右上の <span class="btn-amber">管理簿（Excel）</span> をクリック（サイドバー「帳票出力」→「社内用」からも会社別に出せます。メニュー上の検索欄に「有給台帳」と入れても飛べます）</div></div>
 <div class="step"><div class="step-num">2</div><div class="step-text">自動的に Excelファイル（<code>有給管理簿_YYYYMMDD.xlsx</code>）がダウンロードされる</div></div>
 
 <h3>Excelファイルの構成（4シート）</h3>
 <table>
 <tr><th>シート</th><th>内容</th><th>主な用途</th></tr>
-<tr><td>①管理簿</td><td>スタッフ×年度ごとの付与/繰越/消化/残/失効/買取/有効期限</td><td>労基署監査・年次確認</td></tr>
+<tr><td>①管理簿</td><td>スタッフ×年度ごとの付与/繰越/<strong>調整(出面に無い取得)</strong>/<strong>取得日数(出面)</strong>/残/失効/買取/有効期限。「取得日数(出面)」は出面の有給だけ。出面に無い取得（移行時の調整など）と買取は別の列（2026-10-03〜）。退職者も保存期間（退職から5年）のあいだ載ります</td><td>労基署監査・年次確認</td></tr>
 <tr><td>②取得日一覧</td><td>P エントリを日付順（時季指定は備考で識別）</td><td>個別確認</td></tr>
 <tr><td>③買取記録</td><td>買取日数・金額・理由</td><td>給与計算連携</td></tr>
 <tr><td>④時季指定</td><td>会社が指定した有給日の履歴</td><td>義務履行の証跡</td></tr>
@@ -361,11 +373,12 @@
 <tr><td>「有」を入力したのに管理画面に反映されない</td><td>画面をリロード。出面データからリアルタイムで集計されます</td></tr>
 <tr><td>間違えて「有」を入力した</td><td>出面入力画面で該当セルを「-」（空欄）に戻す</td></tr>
 <tr><td>終了した現場が出面入力画面に出ない</td><td>現場セレクタ右の「終了現場を表示」チェックをONに</td></tr>
-<tr><td>誰がいつ調整したか確認したい</td><td>編集モーダルの「📋 監査情報」で付与日時・操作者・履歴を確認</td></tr>
+<tr><td>誰がいつ調整したか確認したい</td><td>右のパネルの「記録」、または「付与・調整を直す」の中の「📋 監査情報」で付与日時・操作者・履歴を確認</td></tr>
+<tr><td>スタッフが「有給を申請できない（付与の手続き待ちと出る）」と言う</td><td>期が終わって次の付与がまだ。「有給」タブの「付与の設定が必要」から付与する（§3）</td></tr>
 <tr><td>スタッフが間違えて有給申請を出した</td><td>職長承認前ならスタッフ本人がスマホで取り消し可。承認後は政仁さん・代表が却下処理</td></tr>
 <tr><td>出向中スタッフの有給は？</td><td>人員マスタで <code>dispatchTo</code>／<code>dispatchFrom</code> を設定すると開始日以降は全タブから自動除外</td></tr>
 <tr><td>月別タブで日比建設とHFUを混ぜて見たい</td><td>月別は会社別に表が分かれる仕様。混在表示は不可（バッジで識別）</td></tr>
-<tr><td>退職したスタッフの処理</td><td>編集モーダル →「💰 買取を記録」→ 理由「退職時清算」</td></tr>
+<tr><td>退職したスタッフの処理</td><td>行を押して右のパネル →「買取を記録」→ 理由「退職時清算」。退職日を先の日付で入れた人は、その日まで在籍のまま（「退職予定」の札）扱います</td></tr>
 </table>
 
 <h3>承認まわりの補足（2026年9月）</h3>
@@ -405,8 +418,8 @@
 <p><strong>発生シナリオ：</strong>スタッフが帰国予定日以降の日付で有給申請を出していたのに、管理者が出面で先に帰国期間（✈️マーカー）を設定してしまうと、帰国マーカーが残って有給が消化計上されない状態になります。</p>
 
 <h4 style="margin-top:16px;">対応手順：「🗓 有給日を直接入力」</h4>
-<div class="step"><div class="step-num">1</div><div class="step-text">「一覧」タブで対象スタッフの行 →「編集」でモーダルを開く</div></div>
-<div class="step"><div class="step-num">2</div><div class="step-text">モーダル内の<strong>「🗓 有給日を直接入力」</strong>をクリック</div></div>
+<div class="step"><div class="step-num">1</div><div class="step-text">「有給」タブで対象スタッフの行を押す → 右にパネルが開く</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">パネルの<strong>「時季指定」</strong>をクリック（「有給日を直接入力」の画面が開く）</div></div>
 <div class="step"><div class="step-num">3</div><div class="step-text"><strong>指定日</strong>（事前申請されていた日付。複数可）・<strong>対象現場</strong>・備考を入力</div></div>
 <div class="step"><div class="step-num">4</div><div class="step-text"><strong>「帰国期間(✈️)を上書きする」チェックはONのまま</strong>（デフォルトON）</div></div>
 <div class="step"><div class="step-num">5</div><div class="step-text">「有給を記録する」→ 確認ダイアログで「OK」</div></div>
@@ -430,6 +443,7 @@
 <h2>改訂履歴</h2>
 <table>
 <tr><th>日付</th><th>内容</th></tr>
+<tr><td>2026-10-03</td><td>タブ名を今の画面（有給／申請／カレンダー／月別／付与日／帰国）・「管理簿（Excel）」・行を押して右のパネルに合わせて全体を修正。日本人の付与を「入社6ヶ月後・以後1年ごと」に（10/1一律をやめた・既に10/1の人はそのまま）。申請期限を「前日まで（全員）」に。付与待ちの間は申請が止まる・月末入社の付与日数・買取は終わった期に記録・管理簿の列名（取得日数(出面)／調整(出面に無い取得)）・承認時に出勤入力があるときの確認・却下は理由つき2段階を追記</td></tr>
 <tr><td>2026-09-28</td><td>メニューを仕事のまとまりごと（出面・勤怠／給与・締め／請求・原価／人・書類／賃金・評価／マスタ・管理）に並べ替えたのに合わせて、メニューの場所の案内を更新</td></tr>
 <tr><td>2026-09-26</td><td>担当の整理を反映: 最終承認・却下・取消は政仁さんと代表だけ（事務は最終承認しない）、帰国情報の登録・変更は森田さんも補助的に可。付与・時季指定・買取の記録は事務（森田さん）・政仁さん・代表。サイドバーの新しい並び・ボタン名「📊 管理簿出力」（帳票出力からも可）に合わせて修正。タブの一覧を今の画面（一覧／基準日／申請／月別／カレンダー／帰国情報）に合わせた</td></tr>
 <tr><td>2026-09-02</td><td>帰国期間中でも有給を申請・取得できるようになった旨を追加（賃金が出ない計算不具合を修正のうえ解禁）。総点検（第4回）: 承認済み有給の「取消」ボタン追加、職長承認は管理者・事業責任者も可（自分の申請は自分で職長承認不可）、来期日付の申請は来期の残数で判定、精勤賞与の買取はサーバで残数・年5日枠を検証</td></tr>
@@ -437,7 +451,7 @@
 </table>
 
 <hr>
-<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 有給・休暇管理マニュアル</p>
+<p style="text-align:center; color:#999; font-size:12px;">HIBI CONSTRUCTION 就業管理システム / 有給・休暇管理マニュアル / 最終更新: 2026-10-03</p>
 
 </body>
 </html>

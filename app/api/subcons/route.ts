@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc } from '@/lib/fsdb'
+import { doc, getDoc, runTransaction, deleteField } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { COMPANY_ROLES } from '@/lib/companies'
+import { subconDeleteBlockReason } from '@/lib/master-refs'
 
 /** roles を検証して正規化（未知の値は捨てる。空なら undefined） */
 function normalizeRoles(v: unknown): string[] | undefined {
@@ -61,8 +62,14 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { action } = body
+    // 2026-10-02 総合点検: 旧は main を読んで subcons 配列・assign マップを丸ごと書き戻していた（同時の書き込みが消える）。
+    //   ここから下は runTransaction の中で動く。操作の記録は確定してから書く。各 action の中身は従来のまま
+    const pendingLogs: [string, string, string][] = []
+    const log = (userId: string, act: string, details: string) => { pendingLogs.push([userId, act, details]) }
     const docRef = doc(db, 'demmen', 'main')
-    const snap = await getDoc(docRef)
+    const response: Response = await runTransaction(db, async (tx) => {
+    pendingLogs.length = 0
+    const snap = await tx.get(docRef)
     if (!snap.exists()) return NextResponse.json({ error: 'Data not found' }, { status: 404 })
     const subcons = (snap.data().subcons || []) as Record<string, unknown>[]
 
@@ -93,8 +100,8 @@ export async function POST(request: NextRequest) {
       if (body.honorific && String(body.honorific).trim()) newSubcon.honorific = String(body.honorific).trim()
       if (body.paymentTerms && typeof body.paymentTerms === 'object') newSubcon.paymentTerms = body.paymentTerms
       subcons.push(newSubcon)
-      await updateDoc(docRef, { subcons })
-      await logActivity('admin', 'subcon.add', `${name} を追加`)
+      tx.update(docRef, { subcons })
+      log('admin', 'subcon.add', `${name} を追加`)
       return NextResponse.json({ success: true, subcon: newSubcon })
     }
 
@@ -125,8 +132,8 @@ export async function POST(request: NextRequest) {
       if (shouldClearCompanyGroup) {
         delete (subcons[idx] as Record<string, unknown>).companyGroup
       }
-      await updateDoc(docRef, { subcons })
-      await logActivity('admin', 'subcon.update', `${id} を更新`)
+      tx.update(docRef, { subcons })
+      log('admin', 'subcon.update', `${id} を更新`)
       return NextResponse.json({ success: true })
     }
 
@@ -139,48 +146,61 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'subconId and siteRates required' }, { status: 400 })
       }
 
+      if (!/^[A-Za-z0-9_-]+$/.test(subconId)) return NextResponse.json({ error: 'subconId の形式が不正です' }, { status: 400 })
       const assign = (snap.data().assign || {}) as Record<string, {
         workers?: number[]
         subcons?: string[]
         subconRates?: Record<string, { rate?: number; otRate?: number }>
       }>
 
-      // 各現場について、単価を設定 or 削除
+      // 2026-10-02 総合点検:
+      //   - 旧は assign マップ丸ごとの書き戻し → この現場・この外注のキーだけをドット記法で書く
+      //   - 旧は `{ rate }` で置き換えていたので、現場マスタで入れた残業単価（otRate）の上書きが、
+      //     取引先を保存するたびに消えていた → 変わらない現場は書かず、変える現場も otRate はそのまま残す
+      const update: Record<string, unknown> = {}
+      const changed: string[] = []
       for (const [siteId, rate] of Object.entries(siteRates)) {
-        if (!assign[siteId]) assign[siteId] = {}
-        const currentRates = assign[siteId].subconRates || {}
-
-        if (rate === null || rate === 0 || !rate) {
-          // 削除: その現場・外注先のoverrideを消す
-          delete currentRates[subconId]
+        if (!/^[A-Za-z0-9_-]+$/.test(siteId)) return NextResponse.json({ error: 'siteId の形式が不正です' }, { status: 400 })
+        const cur = assign[siteId]?.subconRates?.[subconId]
+        const nextRate = (rate === null || rate === 0 || !rate) ? null : Number(rate)
+        if (nextRate === null) {
+          if (!cur) continue   // もともと無い → 何もしない
+          // 削除: その現場・外注先の上書きを消す（空になった subconRates はそのまま空マップで残る。読む側は未設定と同じ扱い）
+          update[`assign.${siteId}.subconRates.${subconId}`] = deleteField()
         } else {
-          // 設定: 日次単価のみ（otRateは設定せず getSubconRate 側で自動計算）
-          currentRates[subconId] = { rate: Number(rate) }
+          if (cur && cur.rate === nextRate) continue   // 変わっていない → 書かない（otRate を触らない）
+          const next: { rate: number; otRate?: number } = { rate: nextRate }
+          if (typeof cur?.otRate === 'number' && cur.otRate > 0) next.otRate = cur.otRate
+          update[`assign.${siteId}.subconRates.${subconId}`] = next
         }
-
-        // subconRatesが空になったらフィールドごと削除して綺麗に
-        if (Object.keys(currentRates).length === 0) {
-          delete assign[siteId].subconRates
-        } else {
-          assign[siteId].subconRates = currentRates
-        }
+        changed.push(siteId)
       }
-
-      await updateDoc(docRef, { assign })
-      await logActivity('admin', 'subcon.updateSiteRates', `${subconId} の現場別単価を更新`)
-      return NextResponse.json({ success: true })
+      if (changed.length > 0) {
+        tx.update(docRef, update)
+        log('admin', 'subcon.updateSiteRates', `${subconId} の現場別単価を更新（${changed.length}現場）`)
+      }
+      return NextResponse.json({ success: true, changed })
     }
 
     if (action === 'delete') {
       const { id } = body
       const filtered = subcons.filter(s => s.id !== id)
       if (filtered.length === subcons.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-      await updateDoc(docRef, { subcons: filtered })
-      await logActivity('admin', 'subcon.delete', `${id} を削除`)
+      // 出面・請負体制・配置・請求書から参照があれば削除しない（lib/master-refs.ts・2026-10-02 総合点検）。
+      //   旧: 確認なしに消え、過去月の外注人工・外注費が全画面から消えた（compute() は見つからない外注を飛ばす）
+      {
+        const blocked = await subconDeleteBlockReason(String(id), snap.data() as Parameters<typeof subconDeleteBlockReason>[1])
+        if (blocked) return NextResponse.json({ error: blocked }, { status: 409 })
+      }
+      tx.update(docRef, { subcons: filtered })
+      log('admin', 'subcon.delete', `${id} を削除`)
       return NextResponse.json({ success: true })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+    })
+    for (const [u, a, d] of pendingLogs) await logActivity(u, a, d)
+    return response
   } catch (error) {
     console.error('Subcons POST error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

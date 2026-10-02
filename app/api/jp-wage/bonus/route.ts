@@ -15,11 +15,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs } from '@/lib/fsdb'
-import { getWorkers } from '@/lib/workers'
+import { getWorkers, isAlreadyRetired } from '@/lib/workers'
 import { allocateBonus, nextRevisionDate, lastRevisionDate, FIVE_DAY_RESERVE, type BonusMember, type Hyogo, type JpGrade } from '@/lib/jp-wage'
 import { todayJstIso } from '@/lib/date-utils'
-import { getLeaveBalance } from '@/lib/leave-balance'
-import { selectActiveGrantRecord } from '@/lib/leave-compute'
+import { getEndedPeriodBalance } from '@/lib/leave-balance'
 import { logActivity } from '@/lib/activity'
 
 export const dynamic = 'force-dynamic'
@@ -98,26 +97,36 @@ export async function GET(request: NextRequest) {
   // 賞与の手当を画面で自動計算するための材料（2026-08-31 追加）。
   //   有給残は買取（精勤賞与）の日数、children/nonSmoker は手当の判定に使う。
   const workers = await getWorkers()
+  // 退職「予定」（退職日が未来）の人は対象に残す（2026-10-02 総合点検。旧: !w.retired で予定の人も表から消えていた）
   const targets = workers
-    .filter(w => !w.retired)
+    .filter(w => !isAlreadyRetired(w.retired, today))
     .filter(w => !w.visaType || w.visaType === 'none')
     .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
-  // ── 精勤賞与の基準日（2026-08-31 総ざらいで修正）──
-  //   精勤賞与は「期末（9/30）に残った有給」の買取（docs/paid-leave.md: 期末買取）。
-  //   賞与は例年10月末に作るため、「今日」を基準にすると 10/1 に付与されたばかりの
-  //   **新しい期の残日数（ほぼ満額）** を掴んでしまい、買い取る枠を取り違える。
-  //   10月以降に開いた場合は直前の期末 9/30 時点の残数・付与レコードで評価する。
-  //   これにより「残−5日」の上限判定（付与日 >= 2026-10-01）も
-  //   『買い取る期』基準になり、今年（2025-10-01付与分の買取）は上限なし・
-  //   来年（2026-10-01付与分の買取）から上限あり、という代表決定どおりに動く。
-  const bonusAsOf = today.slice(5) >= '10-01' ? `${today.slice(0, 4)}-09-30` : today
+  // ── 精勤賞与の買い取る期（2026-10-02 総合点検で見直し）──
+  //   精勤賞与は「終わった期の最後の日に残った有給」の買取（docs/paid-leave.md: 期末買取）。
+  //   買い取る期 = 支給日の時点で終わっている直近の期（getEndedPeriodBalance）。休暇管理の「前の期の残り
+  //   （賞与で買取予定）」・手動の期末買取と同じ関数で同じ数字を出す。
+  //   旧（2026-08-31〜）: 期末を 9/30 固定にして「9/30 時点で有効なレコード」の残を見ていた。
+  //     - 入社6ヶ月後・以後1年ごとの日本人（期が 11/30 等に終わる）は、期の途中の残を買い取ることになる
+  //     - 付与日を前に寄せた人（2025-12-01 → 2026-10-01）は前の期を丸1年で数え、10〜11月の有給を両方の期で数えて
+  //       買取日数が画面より少なかった
+  //   まだ終わっていない期は買い取らない（残0・期末なし）。期末買取が記録済みの期も残0で出す
+  //   支給日は画面の入力（?paidOn=）に合わせる（既定は今日）
+  const paidOnParam = request.nextUrl.searchParams.get('paidOn') || ''
+  const bonusAsOf = /^\d{4}-\d{2}-\d{2}$/.test(paidOnParam) ? paidOnParam : today
   const memberInfo = await Promise.all(targets.map(async w => {
     let leaveRemaining = 0
     let leaveGrantDate = ''
+    let leavePeriodEnd = ''
+    let leaveBuyoutRecorded = false
     try {
-      const b = await getLeaveBalance(w.id, bonusAsOf)
-      leaveRemaining = b.noGrant ? 0 : b.remaining
-      leaveGrantDate = b.noGrant ? '' : b.grantDate
+      const b = await getEndedPeriodBalance(w.id, bonusAsOf)
+      if (b) {
+        leaveGrantDate = b.grantDate
+        leavePeriodEnd = b.periodLastDay
+        leaveBuyoutRecorded = b.yearEndBuyoutRecorded
+        leaveRemaining = b.yearEndBuyoutRecorded ? 0 : b.remaining
+      }
     } catch { /* 有給が読めなくても賞与の他の項目は出す */ }
     return {
       workerId: w.id,
@@ -129,6 +138,8 @@ export async function GET(request: NextRequest) {
       dispatchTo: w.dispatchTo || '',
       leaveRemaining,
       leaveGrantDate,
+      leavePeriodEnd,
+      leaveBuyoutRecorded,
     }
   }))
 
@@ -149,8 +160,9 @@ export async function POST(request: NextRequest) {
   if (pool <= 0) return NextResponse.json({ error: '原資を入力してください' }, { status: 400 })
 
   const workers = await getWorkers()
+  // GET（表）と同じ対象（退職「予定」の人は残す・2026-10-02 総合点検）
   const targets = workers
-    .filter(w => !w.retired)
+    .filter(w => !isAlreadyRetired(w.retired, todayJstIso()))
     .filter(w => !w.visaType || w.visaType === 'none')
     .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
     .filter(w => w.jpGrade)
@@ -193,24 +205,24 @@ export async function POST(request: NextRequest) {
 
   // ── 精勤賞与（有給買取）のサーバ側検証（2026-09-02 追加・有給総点検 第4回）──
   //   旧はクライアントの attendanceDays をそのまま記録していたため、残数超・年5日枠（残−5日）超・
-  //   期中（夏季賞与など）の year-end 記録が素通りだった。買い取る期は期末 9/30 時点の付与レコード。
-  const bonusAsOf = paidOn.slice(5) >= '10-01' ? `${paidOn.slice(0, 4)}-09-30` : paidOn
-  const isYearEndBonus = paidOn.slice(5) >= '10-01'
+  //   期中（夏季賞与など）の year-end 記録が素通りだった。
+  // 2026-10-02 総合点検: 買い取る期 = 支給日の時点で終わっている直近の期（getEndedPeriodBalance・GET と同じ）。
+  //   期の途中（まだ終わっていない）は買い取れない。期末買取が記録済みの期にも重ねて記録しない。
+  //   上限「残−5日」（付与日 >= 2026-10-01 の期）の式は代表の判断待ちのため変えていない
+  const buyoutTargets = new Map<number, Awaited<ReturnType<typeof getEndedPeriodBalance>>>()
   {
     const errs: string[] = []
     for (const line of lines) {
       const days = line.attendanceDays || 0
       if (days <= 0) continue
-      if (!isYearEndBonus) {
-        errs.push(`${line.name}: 期末(9/30)より前の支給日では精勤賞与（有給買取）を確定できません`)
-        continue
-      }
-      const bal = await getLeaveBalance(line.workerId, bonusAsOf)
-      if (bal.noGrant) { errs.push(`${line.name}: 買い取る期の付与レコードがありません`); continue }
+      const bal = await getEndedPeriodBalance(line.workerId, paidOn)
+      if (!bal) { errs.push(`${line.name}: 支給日 ${paidOn} の時点で終わっている有給の期がありません（期の途中では買い取れません）`); continue }
+      if (bal.yearEndBuyoutRecorded) { errs.push(`${line.name}: この期（付与日 ${bal.grantDate}〜${bal.periodLastDay}）の期末買取は記録済みです`); continue }
       const cap = bal.grantDate >= '2026-10-01' ? Math.max(0, bal.remaining - FIVE_DAY_RESERVE) : bal.remaining
       if (days > cap) {
-        errs.push(`${line.name}: 買取 ${days}日 は上限 ${cap}日 を超えています（残 ${bal.remaining}日${bal.grantDate >= '2026-10-01' ? '・年5日分を除く' : ''}）`)
+        errs.push(`${line.name}: 買取 ${days}日 は上限 ${cap}日 を超えています（期 ${bal.grantDate}〜${bal.periodLastDay}・残 ${bal.remaining}日${bal.grantDate >= '2026-10-01' ? '・年5日分を除く' : ''}）`)
       }
+      buyoutTargets.set(line.workerId, bal)
     }
     if (errs.length > 0) {
       return NextResponse.json({ error: '精勤賞与（有給買取）の日数に問題があります', details: errs }, { status: 400 })
@@ -253,9 +265,9 @@ export async function POST(request: NextRequest) {
       const snap = await getDoc(docRef)
       const plData = (snap.exists() ? (snap.data().plData || {}) : {}) as Record<string, Record<string, unknown>[]>
       const wRecords = plData[String(line.workerId)] || []
-      const rec = selectActiveGrantRecord(
-        wRecords as Parameters<typeof selectActiveGrantRecord>[0], bonusAsOf,
-      ) as Record<string, unknown> | null
+      // 検証で決めた「終わった期」のレコード（付与日で引く・2026-10-02 総合点検。旧: 9/30 時点で有効なレコード）
+      const target = buyoutTargets.get(line.workerId)
+      const rec = (target ? wRecords.find(r => r.grantDate === target.grantDate) : undefined) as Record<string, unknown> | undefined
       if (!rec) {
         buyoutResults.push({ workerId: line.workerId, name: line.name, days, status: 'skipped', note: '対象期の付与レコードが見つかりません' })
         continue

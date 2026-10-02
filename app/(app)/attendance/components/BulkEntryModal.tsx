@@ -55,7 +55,7 @@ export default function BulkEntryModal({
 
   const plan = useMemo(() => {
     const items: BulkItem[] = []
-    let skipLocked = 0, skipExisting = 0, skipForeignWork = 0, skipAbsent = 0, skipProtected = 0, overwriteStaff = 0
+    let skipLocked = 0, skipExisting = 0, skipForeignWork = 0, skipAbsent = 0, skipProtected = 0, overwriteStaff = 0, skipRestDay = 0
     const isoOf = (d: number) => `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(d).padStart(2, '0')}`
     for (const w of workers) {
       if (!who.has(String(w.id))) continue
@@ -74,6 +74,9 @@ export default function BulkEntryModal({
         if (cur && cur.s === 'staff') overwriteStaff++
         if (kind === 'clear') { if (cur) items.push({ workerId: String(w.id), day: d, entry: null }); continue }
         if (kind === 'rest') { items.push({ workerId: String(w.id), day: d, entry: { w: 0, r: 1, s: 'admin' } }); continue }
+        // 0.6補（会社都合の休み）はカレンダーの仕事の日だけ（スタッフのスマホ・サーバと同じ決まり・2026-10-02 総合点検。
+        //   旧: 休みの日にも入り、休業手当（60%）の過払いになりえた）
+        if (kind === 'comp' && !isWorkDay(d) && cur?.w !== 0.6) { skipRestDay++; continue }
         if (kind === 'comp') { items.push({ workerId: String(w.id), day: d, entry: { w: 0.6, s: 'admin' } }); continue }
         // 出勤
         // 外国人スタッフの出勤は、その日に本人の入力（s:'staff'）か出勤の記録があるときだけ（サーバの canAdminEditEntry と同じ・2026-10-02）
@@ -91,7 +94,7 @@ export default function BulkEntryModal({
         items.push({ workerId: String(w.id), day: d, entry })
       }
     }
-    return { items, skipLocked, skipExisting, skipForeignWork, skipAbsent, skipProtected, overwriteStaff }
+    return { items, skipLocked, skipExisting, skipForeignWork, skipAbsent, skipProtected, overwriteStaff, skipRestDay }
   }, [workers, who, days, kind, st, et, breaks, ot, keepExisting, entries, lockedDays, timeBasedFor, homeLeaves, ym, workSchedule])
 
   if (!open) return null
@@ -193,7 +196,7 @@ export default function BulkEntryModal({
         {/* 確認 */}
         <div className="rounded-lg bg-gray-50 dark:bg-gray-700/40 p-3 text-sm">
           <b>{plan.items.length}マス</b>に入れます
-          {(plan.skipExisting + plan.skipLocked + plan.skipForeignWork + plan.skipAbsent + plan.skipProtected) > 0 && (
+          {(plan.skipExisting + plan.skipLocked + plan.skipForeignWork + plan.skipAbsent + plan.skipProtected + plan.skipRestDay) > 0 && (
             <span className="text-xs text-gray-500 ml-2">
               （除外: {[
                 plan.skipExisting ? `入力済み ${plan.skipExisting}` : '',
@@ -201,6 +204,7 @@ export default function BulkEntryModal({
                 plan.skipForeignWork ? `ベトナム人スタッフの出勤 ${plan.skipForeignWork}（本人のスマホ入力が必要）` : '',
                 plan.skipAbsent ? `帰国中・退職後 ${plan.skipAbsent}` : '',
                 plan.skipProtected ? `有給・帰国・試験 ${plan.skipProtected}` : '',
+                plan.skipRestDay ? `休みの日の0.6補 ${plan.skipRestDay}（仕事の日だけ）` : '',
               ].filter(Boolean).join('・')}）
             </span>
           )}

@@ -28,7 +28,8 @@ import { resolveInvoiceDraft, listPeerInvoicesForYm } from '@/lib/peer-invoice-s
 import {
   PAPER_INVOICE_ALLOWED_TYPES, PAPER_INVOICE_MAX_FILE_BYTES, PAPER_INVOICE_MAX_FILES, PAPER_INVOICE_DOC_ID_RE,
   sanitizePaperLines, comparePaperWithSystem, parsePaperNumber, isBlankNumberInput,
-  type PaperInvoice, type PaperInvoiceFile, type SystemInvoiceFigures,
+  paperTotalsError, systemDoubleBillingError, mergePaperInvoices,
+  type PaperInvoice, type PaperInvoiceFile, type SystemInvoiceFigures, type PaperComparison,
 } from '@/lib/paper-invoice'
 import { signedUploadUrl, signedReadUrl, fileMeta, deleteFile, deleteFilesWithPrefix, getStaffDocsBucket } from '@/lib/storage-admin'
 
@@ -118,6 +119,18 @@ function parseFields(body: Record<string, unknown>, main: MainData, partial: boo
   return { ok: true, fields: f }
 }
 
+/**
+ * 保存のまえの確認（commit / update 共通・2026-10-02 総合点検）:
+ *   - 税抜小計＋消費税＝税込合計（両方入っているとき）
+ *   - システムで発行済み・承認待ちの会社・月ではない（逆方向の二重請求）
+ * update は「変えたあとの会社・月・金額」で見る（会社や月を付け替えて確認をすり抜けない）
+ */
+async function preSaveError(next: Pick<PaperInvoice, 'companyId' | 'ym' | 'total' | 'subtotal' | 'tax'>): Promise<string | null> {
+  const t = paperTotalsError(next)
+  if (t) return t
+  return systemDoubleBillingError(await listPeerInvoicesForYm(next.ym), next.ym, next.companyId)
+}
+
 /** その月の会社ごとのシステムの数字（発行済み・承認待ちは凍結内容、なければ下書き） */
 async function systemFiguresFor(main: MainData, ym: string, companyIds: string[]): Promise<Record<string, SystemInvoiceFigures>> {
   const out: Record<string, SystemInvoiceFigures> = {}
@@ -177,8 +190,14 @@ export async function GET(request: NextRequest) {
   const companyIds = [...new Set(records.map(r => r.companyId))]
   const system = await systemFiguresFor(main, ym, companyIds)
   const comparisons = Object.fromEntries(records.map(r => [r.id, comparePaperWithSystem(r, system[r.companyId])]))
+  // 同じ会社に2枚以上あるときは合算でも見比べる（1枚ずつでは必ず「差あり」になるため・2026-10-02 総合点検）
+  const groupComparisons: Record<string, PaperComparison & { count: number }> = {}
+  for (const id of companyIds) {
+    const xs = records.filter(r => r.companyId === id)
+    if (xs.length >= 2) groupComparisons[id] = { ...comparePaperWithSystem(mergePaperInvoices(xs), system[id]), count: xs.length }
+  }
   return NextResponse.json({
-    ym, records, system, comparisons,
+    ym, records, system, comparisons, groupComparisons,
     companies: selectableCompanies(main),
     storageReady: !!getStaffDocsBucket(),
   })
@@ -198,6 +217,10 @@ export async function POST(request: NextRequest) {
     // commit と同じ項目チェックを先にする（commit で落ちる内容なら、そもそもアップロードさせない）
     const parsed = parseFields(body, main, false)
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    {
+      const e = await preSaveError(parsed.fields as PaperInvoice)
+      if (e) return NextResponse.json({ error: e }, { status: 400 })
+    }
     const files = Array.isArray(body.files) ? body.files as { name?: string; contentType?: string; size?: number }[] : []
     if (files.length === 0) return NextResponse.json({ error: 'ファイルを選んでください' }, { status: 400 })
     if (files.length > PAPER_INVOICE_MAX_FILES) return NextResponse.json({ error: `ファイルは1件につき${PAPER_INVOICE_MAX_FILES}個までです` }, { status: 400 })
@@ -251,6 +274,11 @@ export async function POST(request: NextRequest) {
     if (reqFiles.length > PAPER_INVOICE_MAX_FILES) return NextResponse.json({ error: `ファイルは1件につき${PAPER_INVOICE_MAX_FILES}個までです` }, { status: 400 })
     const ref = doc(db, COL, docId)
     if ((await getDoc(ref)).exists()) return NextResponse.json({ error: 'この請求書は既に登録されています' }, { status: 409 })
+    {
+      // prepare のあとでシステムの請求書が発行されていても止める（2026-10-02 総合点検）
+      const e = await preSaveError(parsed.fields as PaperInvoice)
+      if (e) return NextResponse.json({ error: e }, { status: 400 })
+    }
     const files: PaperInvoiceFile[] = []
     for (const f of reqFiles) {
       const m = await fileMeta(f.path)
@@ -286,6 +314,14 @@ export async function POST(request: NextRequest) {
     for (const [k, v] of Object.entries(parsed.fields)) patch[k] = v
     for (const k of ['no', 'note', 'issueDate', 'subtotal', 'tax'] as const) {
       if (body[k] !== undefined && parsed.fields[k] === undefined) patch[k] = null
+    }
+    {
+      // 変えたあとの姿で確認する（会社・月を付け替えて、発行済みの月へ移すのも止める・2026-10-02 総合点検）
+      const next = { ...cur, ...patch } as PaperInvoice
+      const changesTarget = next.companyId !== cur.companyId || next.ym !== cur.ym
+      const t = paperTotalsError(next)
+      const e = t || (changesTarget ? systemDoubleBillingError(await listPeerInvoicesForYm(next.ym), next.ym, next.companyId) : null)
+      if (e) return NextResponse.json({ error: e }, { status: 400 })
     }
     await updateDoc(ref, patch)
     await logActivity(by, 'paperInvoice.update', `紙の請求書を修正：${label({ ...cur, ...parsed.fields })}`)

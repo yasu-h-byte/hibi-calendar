@@ -6,7 +6,7 @@
  * サンプルは日時つきで残る＝旅費規程の「測定方法」の証跡になる。
  *
  * 必要な環境変数:
- * - CRON_SECRET            … backup/snapshot と同じ方式の認証
+ * - CRON_SECRET            … backup/snapshot と同じ方式の認証（lib/cron-auth.ts。ヘッダだけで受ける）
  * - GOOGLE_MAPS_API_KEY    … Routes API を有効にしたキー。未設定なら何もせず204
  *
  * 呼び出し時刻で朝便/夕便を自動判別する（JST 12時前=朝、以降=夕）。
@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import { todayJstIso } from '@/lib/date-utils'
+import { requireCron } from '@/lib/cron-auth'
 import type { SiteCommuteData, CommuteSample } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -52,14 +53,8 @@ async function measureMinutes(apiKey: string, origin: string, destination: strin
 }
 
 export async function GET(request: NextRequest) {
-  // backup/snapshot と同じ認証方式
-  const secret = process.env.CRON_SECRET
-  if (!secret) return NextResponse.json({ error: 'CRON_SECRET not configured' }, { status: 500 })
-  const auth = request.headers.get('authorization')
-  const qs = request.nextUrl.searchParams.get('secret')
-  if (auth !== `Bearer ${secret}` && qs !== secret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // auth: Vercel Cron の CRON_SECRET（lib/cron-auth.ts requireCron・3本共通。`?secret=` は 2026-10-02 に廃止）
+  { const denied = requireCron(request); if (denied) return denied }
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) {

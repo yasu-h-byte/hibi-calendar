@@ -16,6 +16,7 @@ import { Icon, type IconName } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Chip } from '@/components/ui/PageParts'
 import type { Evaluation } from '@/types'
 import { can } from '@/lib/permissions'
+import { isAlreadyRetired } from '@/lib/workers'
 
 // 賃金分析は個人の賃金を一覧するため代表のみ（/wage-analysis 側のガードと同一基準）
 const ANALYSIS_OWNER_ID = 0
@@ -95,7 +96,8 @@ export default function CompensationHubPage() {
         if (!j?.workers) return
         const ws = j.workers as Record<string, unknown>[]
         setUnset(ws
-          .filter(w => !w.retired && (!w.visaType || w.visaType === 'none'))
+          // 退職の判定は「今日の時点で退職日を過ぎたか」（lib/workers.ts isAlreadyRetired・2026-10-02 総合点検）。旧: `!w.retired` で退職「予定」の在籍者まで外れていた
+          .filter(w => !isAlreadyRetired(w.retired as string | undefined) && (!w.visaType || w.visaType === 'none'))
           .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
           .filter(w => !w.jpGrade || !w.jpStep)
           .map(w => ({ id: Number(w.id), name: String(w.name) })))

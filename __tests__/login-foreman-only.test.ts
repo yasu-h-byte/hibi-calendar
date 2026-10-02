@@ -11,11 +11,14 @@ vi.mock('@/lib/fsdb', () => ({
 }))
 vi.mock('@/lib/accessLog', () => ({ recordAccess: async () => {}, getRequestIp: () => '' }))
 vi.mock('@/lib/sites', () => ({ getSites: async () => [] }))
-vi.mock('@/lib/workers', () => ({
+// 退職の判定（isAlreadyRetired）は本物を使う（2026-10-02 総合点検: ログインは !w.retired でなく退職日で判定）
+vi.mock('@/lib/workers', async (orig) => ({
+  ...(await orig<typeof import('@/lib/workers')>()),
   getWorkers: async () => [
     { id: 1, name: '日比政仁', jobType: 'yakuin', retired: '' },
     { id: 10, name: '白戸', jobType: 'shokucho', retired: '' },
     { id: 11, name: '退職職長', jobType: 'shokucho', retired: '2026-01-31' },
+    { id: 12, name: '退職予定の職長', jobType: 'shokucho', retired: '2099-12-31' },
   ],
 }))
 
@@ -41,5 +44,17 @@ describe('職長ログイン', () => {
   test('政仁さん・退職した職長は共通パスワードでは選べない', async () => {
     expect((await login({ password: 'pw-common', workerId: 1 })).status).toBe(403)
     expect((await login({ password: 'pw-common', workerId: 11 })).status).toBe(403)
+  })
+  // 2026-10-02 総合点検: 退職「予定」日（未来）を入れた職長は、名前の一覧に出てログインできる（旧: !w.retired で消えていた）
+  test('退職予定日が未来の職長は名前の一覧に出て、ログインできる', async () => {
+    const list = await (await login({ password: 'pw-common' })).json()
+    const ids = (list.workers as { id: number }[]).map(w => w.id)
+    expect(ids).toContain(12)
+    expect(ids).not.toContain(11)
+    expect((await login({ password: 'pw-common', workerId: 12 })).status).toBe(200)
+  })
+  test('パスワードが文字列でない・空のときは 401（500 にしない）', async () => {
+    expect((await login({ password: { $gt: '' } })).status).toBe(401)
+    expect((await login({})).status).toBe(401)
   })
 })

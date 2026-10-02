@@ -12,6 +12,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Worker, Evaluation, EvaluationRank, AuthUser } from '@/types'
 import { fmtYen } from '@/lib/format'
+import { isAlreadyRetired } from '@/lib/workers'
 
 const VISA_LABELS: Record<string, string> = {
   none: '日本人',
@@ -94,7 +95,8 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
           const d = await wRes.json()
           const all: Worker[] = d.workers || []
           // ベトナム人スタッフ + 未退職
-          setWorkers(all.filter(w => w.visaType && w.visaType !== 'none' && !w.retired))
+          // 退職の判定は「今日の時点で退職日を過ぎたか」（lib/workers.ts isAlreadyRetired・2026-10-02 総合点検）。旧: `!w.retired` で退職「予定」の在籍者まで外れていた
+          setWorkers(all.filter(w => w.visaType && w.visaType !== 'none' && !isAlreadyRetired(w.retired)))
         }
         if (eRes.ok) {
           const d = await eRes.json()

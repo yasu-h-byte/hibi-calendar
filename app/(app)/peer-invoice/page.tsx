@@ -24,6 +24,8 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
+import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
+import { shiftYm } from '@/lib/month-nav'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
 import { latestPeerInvoiceRecord } from '@/lib/peer-invoice-latest'
 
@@ -90,12 +92,6 @@ function currentYm(): string {
   const d = new Date()
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`
 }
-function shiftYm(ym: string, delta: number): string {
-  let y = parseInt(ym.slice(0, 4), 10), m = parseInt(ym.slice(4, 6), 10) + delta
-  while (m < 1) { m += 12; y-- }
-  while (m > 12) { m -= 12; y++ }
-  return `${y}${String(m).padStart(2, '0')}`
-}
 const WEEKDAY_JA = ['日', '月', '火', '水', '木', '金', '土']
 function daysInYm(ym: string): number {
   return new Date(parseInt(ym.slice(0, 4), 10), parseInt(ym.slice(4, 6), 10), 0).getDate()
@@ -116,18 +112,23 @@ function PeerInvoicePageInner() {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // 月を素早く切り替えたとき、前の月の応答をあとから画面に出さない（lib/hooks/useLatestRequest・2026-10-02）
+  const latest = useLatestRequest()
   const load = useCallback(async () => {
     if (!ready || !companyId) return
     setData(null); setErr('')
+    const req = latest.begin()
     try {
-      const res = await fetchWithAuth(`/api/peer-invoice?ym=${ym}&companyId=${companyId}`)
+      const res = await fetchWithAuth(`/api/peer-invoice?ym=${ym}&companyId=${companyId}`, { signal: req.signal })
       const json = await res.json()
+      if (!req.isCurrent()) return
       if (!res.ok) { setErr(json.error || '読み込みに失敗しました'); return }
       setData(json)
-    } catch {
+    } catch (e) {
+      if (latest.isAbort(e) || !req.isCurrent()) return
       setErr('読み込みに失敗しました')
     }
-  }, [ready, ym, companyId])
+  }, [ready, ym, companyId, latest])
   useEffect(() => { load() }, [load])
 
   // 承認フロー（2026-09-26）: 事務（森田さん）が申請 → 事業責任者（政仁さん）・管理者が承認して発行

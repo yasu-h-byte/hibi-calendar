@@ -17,6 +17,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchWithAuth } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
+import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
+import { shiftYm } from '@/lib/month-nav'
 import type { PeerStatement } from '@/lib/peer-statement'
 import { HFU_INVOICE_COMPANY_ID } from '@/lib/constants'
 import { latestPeerInvoiceRecord } from '@/lib/peer-invoice-latest'
@@ -35,13 +37,6 @@ type Filter = 'all' | 'billing' | 'payment'
 
 const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
-function shiftYm(ym: string, delta: number): string {
-  let y = parseInt(ym.slice(0, 4)), m = parseInt(ym.slice(4, 6)) + delta
-  while (m < 1) { m += 12; y-- }
-  while (m > 12) { m -= 12; y++ }
-  return `${y}${String(m).padStart(2, '0')}`
-}
-
 export default function PeerStatementPage() {
   const { ready } = useAuthPassword()
   // 請求書の画面から「戻る」で来たときは、その月を開く（?ym=YYYYMM）
@@ -58,14 +53,24 @@ export default function PeerStatementPage() {
   /** 紙（手作り）で出した請求書を入れた会社（app/api/paper-invoice・2026-10-02） */
   const [paperCos, setPaperCos] = useState<Map<string, string>>(new Map())  // companyId → 会社名
 
+  // 月を素早く切り替えたとき、前の月の応答をあとから画面に出さない（lib/hooks/useLatestRequest・2026-10-02）
+  const latest = useLatestRequest()
   const load = useCallback(async () => {
     if (!ready) return
     setRows(null); setErr('')
-    const [stmtRes, invRes, paperRes] = await Promise.all([
-      fetchWithAuth(`/api/peer-statement?ym=${ym}`),
-      fetchWithAuth(`/api/peer-invoice?ym=${ym}`),
-      fetchWithAuth(`/api/paper-invoice?ym=${ym}&lite=1`),
-    ])
+    const req = latest.begin()
+    let stmtRes: Response, invRes: Response, paperRes: Response
+    try {
+      ;[stmtRes, invRes, paperRes] = await Promise.all([
+        fetchWithAuth(`/api/peer-statement?ym=${ym}`, { signal: req.signal }),
+        fetchWithAuth(`/api/peer-invoice?ym=${ym}`, { signal: req.signal }),
+        fetchWithAuth(`/api/paper-invoice?ym=${ym}&lite=1`, { signal: req.signal }),
+      ])
+    } catch (e) {
+      if (latest.isAbort(e) || !req.isCurrent()) return
+      setErr('読み込みに失敗しました'); return
+    }
+    if (!req.isCurrent()) return
     if (!stmtRes.ok) { setErr('読み込みに失敗しました'); return }
     const data = await stmtRes.json()
     setRows(data.statements || [])
@@ -81,7 +86,7 @@ export default function PeerStatementPage() {
     } else {
       setPaperCos(new Map())
     }
-  }, [ready, ym])
+  }, [ready, ym, latest])
   useEffect(() => { load() }, [load])
   useEffect(() => { setOpenId(null) }, [ym])
 

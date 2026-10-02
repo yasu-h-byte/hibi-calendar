@@ -3,6 +3,7 @@
 import { ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
+import { confirmDiscard } from '@/lib/hooks/discardGuard'
 
 // 画面の型（2026-10-01 代表決定「全ページを休暇管理・月次集計と同じデザイン言語で順次改修」）の共通部品。
 //   休暇管理（leave）と月次集計（monthly）で同じ見た目を別々に書いていたものをここへ集めた（UI改修 波0）。
@@ -231,20 +232,33 @@ export function AmountChip({ label, amount, neg }: { label: ReactNode; amount: R
 
 // ─── 右から開く詳細パネル ──────────────────────────
 
+// 未保存の変更があるときだけ「閉じますか？」と確かめる（lib/hooks/discardGuard.ts・2026-10-02 総合点検）。
+//   SidePanel の Esc・背景クリックと、画面側の「閉じる」「×」ボタンの両方がこれを通す
+export { confirmDiscard, DISCARD_MESSAGE } from '@/lib/hooks/discardGuard'
+
 /**
  * 一覧の行を押すと右から開く詳細。Esc・背景クリックで閉じる。
  * 画面の中身は animate-fadeIn（transform）の中にあり、fixed がその枠に閉じ込められる
  * （サイドバーが暗くならない）ので body 直下に出して画面全体に重ねる。
+ *
+ * dirty（2026-10-02 総合点検）: 編集フォームとして使う画面（人員マスタ・現場マスタ・取引先マスタ）は、
+ *   未保存の変更があるかを渡す。旧: Esc・背景クリックで入れかけの内容が確認なしで消えていた。
+ *   画面側の「閉じる」「×」も confirmDiscard(dirty) を通すこと（1か所で同じ確認になる）。
  */
-export function SidePanel({ label, onClose, children, width = 'max-w-[640px]' }: {
+export function SidePanel({ label, onClose, children, width = 'max-w-[640px]', dirty }: {
   /** 読み上げ用の名前（例: 「グエン の有給」） */
   label: string
   onClose: () => void
   children: ReactNode
   width?: 'max-w-[640px]' | 'max-w-[760px]' | 'max-w-[520px]'
+  /** 未保存の変更がある（閉じる前に確かめる） */
+  dirty?: boolean
 }) {
   const [mounted, setMounted] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
+  // Esc のハンドラは登録し直さず、最新の dirty / onClose を ref から読む
+  const latest = useRef({ dirty, onClose })
+  latest.current = { dirty, onClose }
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => {
     // Escape で閉じる前に、パネル内で入力中の欄から focus を外す。
@@ -252,17 +266,21 @@ export function SidePanel({ label, onClose, children, width = 'max-w-[640px]' }:
     // 入れた値が保存されずに消えるため（2026-10-01 原価の請求額）。blur() は同期で onBlur を呼ぶ
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      // 日本語入力の変換を取り消す Esc ではパネルを閉じない（2026-10-02 総合点検）
+      if (e.isComposing) return
+      if (!confirmDiscard(latest.current.dirty)) return
       const el = document.activeElement
       if (el instanceof HTMLElement && panelRef.current?.contains(el)) el.blur()
-      onClose()
+      latest.current.onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [])
+  const requestClose = () => { if (confirmDiscard(dirty)) onClose() }
   if (!mounted) return null
   return createPortal(
     <div ref={panelRef} className="fixed inset-0 z-[60] print:hidden" role="dialog" aria-modal="true" aria-label={label}>
-      <button className="absolute inset-0 bg-black/30 animate-fadeIn" onClick={onClose} aria-label="閉じる" />
+      <button className="absolute inset-0 bg-black/30 animate-fadeIn" onClick={requestClose} aria-label="閉じる" />
       <aside className={`absolute right-0 top-0 h-full w-full ${width} bg-white dark:bg-gray-800 border-l border-hibi-line dark:border-gray-700 shadow-xl overflow-y-auto animate-slideInRight`}>
         {children}
       </aside>

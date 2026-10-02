@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'invalid' }, { status: 400 })
   }
   return new NextResponse(JSON.stringify(buildStaffManifest(kind, token)), {
-    headers: { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
+    // 2026-10-02 総合点検: URL に本人の合言葉が入るので共有キャッシュ（CDN）には載せない（private）
+    headers: { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'private, max-age=3600' },
   })
 }

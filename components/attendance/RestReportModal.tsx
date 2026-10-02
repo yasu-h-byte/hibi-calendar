@@ -122,10 +122,12 @@ export default function RestReportModal({
                   onChange={() => setReason(COMPANY_REST)}
                   className="hidden" />
                 <Icon name="calendar" size={20} strokeWidth={2} />
-                <span>
+                <span className="flex-1">
                   <span className="font-bold block">現場が休み（会社の都合）</span>
                   <span className="text-xs opacity-80">Công trường nghỉ (do công ty)</span>
                 </span>
+                {/* 選んだ印は色だけにしない（2026-10-02 総合点検。ラジオは hidden なので ✓ を出す） */}
+                {isCompany && <Icon name="check" size={22} strokeWidth={2.6} />}
               </label>
               <p className="text-xs text-gray-500 px-1 pb-1">
                 ↓ 自分の都合で休むとき / Khi nghỉ vì lý do cá nhân
@@ -139,7 +141,8 @@ export default function RestReportModal({
                     onChange={() => setReason(r.value)}
                     className="hidden" />
                   <span className="font-medium">{r.label}</span>
-                  <span className={`text-sm ${reason === r.value ? 'text-white/70' : 'text-gray-400'}`}>/ {r.vi}</span>
+                  <span className={`text-sm flex-1 ${reason === r.value ? 'text-white/70' : 'text-gray-400'}`}>/ {r.vi}</span>
+                  {reason === r.value && <Icon name="check" size={22} strokeWidth={2.6} />}
                 </label>
               ))}
             </div>
@@ -182,9 +185,10 @@ export default function RestReportModal({
               <label className="text-sm text-gray-600 font-bold block mb-1">
                 補足 / Chi tiết
               </label>
+              {/* 16px（旧 text-sm=14px だと iOS がフォーカスで画面を拡大する・2026-10-02 総合点検） */}
               <input type="text" value={note} onChange={e => setNote(e.target.value)}
                 placeholder="理由を入力 / Nhập lý do"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
             </div>
           )}
 

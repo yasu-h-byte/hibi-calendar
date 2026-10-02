@@ -10,6 +10,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
+import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
+import { shiftYm } from '@/lib/month-nav'
 import { can } from '@/lib/permissions'
 import { currentYmJst } from '@/lib/date-utils'
 import { Icon } from '@/components/ui/Icon'
@@ -24,6 +26,8 @@ interface MonthData {
   records: PaperInvoice[]
   system: Record<string, SystemInvoiceFigures>
   comparisons: Record<string, PaperComparison>
+  /** 同じ会社に2枚以上あるときの合算の見比べ（companyId → 見比べ＋枚数・2026-10-02） */
+  groupComparisons?: Record<string, PaperComparison & { count: number }>
   companies: { id: string; name: string }[]
   storageReady: boolean
 }
@@ -33,13 +37,6 @@ const signedYen = (v: number) => (v === 0 ? '±0' : (v > 0 ? '+' : '−') + '¥'
 const num = (v: number | null | undefined) => (typeof v === 'number' ? String(Math.round(v * 100) / 100) : '—')
 const ymLabelOf = (ym: string) => `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月分`
 const fmtSize = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`)
-
-function shiftYm(ym: string, delta: number): string {
-  let y = parseInt(ym.slice(0, 4)), m = parseInt(ym.slice(4, 6)) + delta
-  while (m < 1) { m += 12; y-- }
-  while (m > 12) { m -= 12; y++ }
-  return `${y}${String(m).padStart(2, '0')}`
-}
 
 /** ブラウザが Content-Type を付けない HEIC などを拡張子で補う */
 function contentTypeOf(f: File): string {
@@ -58,11 +55,12 @@ const SOURCE_LABEL: Record<SystemInvoiceFigures['source'], { label: string; tone
   none: { label: 'システムに請求なし', tone: 'amber' },
 }
 
-function diffChip(cmp: PaperComparison | undefined) {
+function diffChip(cmp: (PaperComparison & { count?: number }) | undefined) {
   if (!cmp) return <Chip tone="gray">—</Chip>
+  const suffix = cmp.count && cmp.count >= 2 ? `（${cmp.count}枚の合算）` : ''
   if (cmp.systemMissing) return <Chip tone="amber">システムに請求なし</Chip>
-  if (cmp.match) return <Chip tone="green">一致</Chip>
-  return <Chip tone="red">差 {signedYen(cmp.totalDiff)}</Chip>
+  if (cmp.match) return <Chip tone="green">一致{suffix}</Chip>
+  return <Chip tone="red">差 {signedYen(cmp.totalDiff)}{suffix}</Chip>
 }
 
 export default function PaperInvoicePage() {
@@ -81,14 +79,24 @@ export default function PaperInvoicePage() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [modal, setModal] = useState<null | { mode: 'add' } | { mode: 'edit'; rec: PaperInvoice }>(null)
 
+  // 月を素早く切り替えたとき、前の月の応答をあとから画面に出さない（lib/hooks/useLatestRequest・2026-10-02）
+  const latest = useLatestRequest()
   const load = useCallback(async () => {
     if (!ready) return
     setData(null); setErr('')
-    const [res, allRes] = await Promise.all([
-      fetchWithAuth(`/api/paper-invoice?ym=${ym}`),
-      fetchWithAuth('/api/paper-invoice?all=1'),
-    ])
+    const req = latest.begin()
+    let res: Response, allRes: Response
+    try {
+      ;[res, allRes] = await Promise.all([
+        fetchWithAuth(`/api/paper-invoice?ym=${ym}`, { signal: req.signal }),
+        fetchWithAuth('/api/paper-invoice?all=1', { signal: req.signal }),
+      ])
+    } catch (e) {
+      if (latest.isAbort(e) || !req.isCurrent()) return
+      setErr('読み込みに失敗しました'); return
+    }
     const j = await res.json().catch(() => null)
+    if (!req.isCurrent()) return
     if (!res.ok || !j) { setErr(j?.error || '読み込みに失敗しました'); return }
     setData(j)
     if (allRes.ok) {
@@ -97,12 +105,16 @@ export default function PaperInvoicePage() {
       for (const r of (a.records || []) as PaperInvoice[]) counts.set(r.ym, (counts.get(r.ym) || 0) + 1)
       setAllMonths([...counts.entries()].sort((x, y) => y[0].localeCompare(x[0])).map(([k, n]) => ({ ym: k, n })))
     }
-  }, [ready, ym])
+  }, [ready, ym, latest])
   useEffect(() => { load() }, [load])
   useEffect(() => { setOpenId(null) }, [ym])
 
   const records = data?.records || []
-  const cmpOf = (id: string) => data?.comparisons[id]
+  // 同じ会社に2枚以上あるときは合算の見比べを使う（1枚ずつでは必ず「差あり」になる・2026-10-02）
+  const cmpOf = (id: string) => {
+    const r = data?.records.find(x => x.id === id)
+    return (r && data?.groupComparisons?.[r.companyId]) || data?.comparisons[id]
+  }
   const matched = records.filter(r => cmpOf(r.id)?.match)
   const differs = records.filter(r => { const c = cmpOf(r.id); return c && !c.match })
   const open = records.find(r => r.id === openId) || null
@@ -288,6 +300,11 @@ function Detail({ rec, sys, cmp, onClose, onOpenFile, onEdit, onDelete }: {
             {diffChip(cmp)}
             {src && <Chip tone={src.tone}>{src.label}{sys?.no ? ` ${sys.no}` : ''}</Chip>}
           </div>
+          {cmp && 'count' in cmp && (cmp as { count?: number }).count! >= 2 && (
+            <p className="mt-2 text-xs text-hibi-sub dark:text-gray-400">
+              この会社はこの月に{(cmp as { count: number }).count}枚入っているので、紙の欄は{(cmp as { count: number }).count}枚の合算で見比べています（この1枚は税込 {yen(rec.total)}）。
+            </p>
+          )}
         </div>
         <CloseButton onClick={onClose} />
       </div>
@@ -478,7 +495,8 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
   const ymValue = `${targetYm.slice(0, 4)}-${targetYm.slice(4, 6)}`
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/40 flex items-start justify-center p-4 overflow-y-auto" onClick={busy ? undefined : onClose}>
+    // 背景のクリックでは閉じない（2026-10-02 総合点検: 明細を入力中に背景を押すと入力ごと消えていた。閉じるのは × と「やめる」だけ）
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-3xl p-5 my-4" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-hibi-navy dark:text-white">{mode === 'add' ? '紙で出した請求書を入れる' : '金額・明細を直す'}</h3>

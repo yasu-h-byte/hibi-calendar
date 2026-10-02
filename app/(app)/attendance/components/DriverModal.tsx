@@ -9,7 +9,7 @@
  * 便ごとに独立して選べる）。
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface WorkerOption {
   id: number
@@ -23,19 +23,30 @@ interface Props {
   /** その日に出面のある人（選択肢） */
   workers: WorkerOption[]
   current: { am: number[]; pm: number[] } | undefined
-  onSave: (am: number[], pm: number[]) => void
+  /**
+   * 保存。文字列を返す（または投げる）と失敗として表示し、モーダルは開いたまま（2026-10-02 総合点検）。
+   * PC の出面画面は従来どおり何も返さない（閉じるのは親の isOpen）。
+   */
+  onSave: (am: number[], pm: number[]) => void | string | Promise<void | string>
   onClose: () => void
 }
 
 export default function DriverModal({ isOpen, day, siteName, workers, current, onSave, onClose }: Props) {
   const [am, setAm] = useState<number[]>([])
   const [pm, setPm] = useState<number[]>([])
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const wasOpen = useRef(false)
 
+  // 開いた瞬間だけ current で初期化する（2026-10-02 総合点検）。
+  //   旧: current が依存に入っていたので、親が再描画して参照が変わるたびに選択が元に戻った
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpen.current) {
       setAm(current?.am || [])
       setPm(current?.pm || [])
+      setErr(null)
     }
+    wasOpen.current = isOpen
   }, [isOpen, current])
 
   if (!isOpen) return null
@@ -43,12 +54,26 @@ export default function DriverModal({ isOpen, day, siteName, workers, current, o
   const toggle = (list: number[], set: (v: number[]) => void, id: number) =>
     set(list.includes(id) ? list.filter(x => x !== id) : [...list, id])
 
+  const handleSave = async () => {
+    if (saving) return
+    setSaving(true)
+    setErr(null)
+    try {
+      const r = await onSave(am, pm)
+      if (typeof r === 'string') setErr(r)
+    } catch (e) {
+      setErr(e instanceof Error && e.message ? e.message : '通信エラー: 保存できませんでした')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="font-bold text-hibi-navy dark:text-white">{day}日の運転者 — {siteName}</h3>
-          <p className="text-[11px] text-gray-500 mt-1">
+          <p className="text-xs text-gray-500 mt-1">
             会社集合後に社有車を運転した人を、行き・帰りそれぞれ選んでください（車2台なら各2名）。
             同乗者がいない単独移動は対象外です。
           </p>
@@ -67,14 +92,20 @@ export default function DriverModal({ isOpen, day, siteName, workers, current, o
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                {/* 職長のスマホからも使うので、マスごと押せる 44px 以上の行にする（2026-10-02 総合点検。
+                    旧: 16px のチェックが 32px の行に隣り合い、片道1,000円の手当に直結する押し間違いが起きやすかった） */}
                 {workers.map(w => (
                   <tr key={w.id}>
                     <td className="py-1.5">{w.name}</td>
-                    <td className="text-center">
-                      <input type="checkbox" checked={am.includes(w.id)} onChange={() => toggle(am, setAm, w.id)} className="w-4 h-4" />
+                    <td className="p-0">
+                      <label className="flex items-center justify-center min-h-[44px] cursor-pointer active:bg-gray-100 dark:active:bg-gray-700">
+                        <input type="checkbox" checked={am.includes(w.id)} onChange={() => toggle(am, setAm, w.id)} className="w-6 h-6" />
+                      </label>
                     </td>
-                    <td className="text-center">
-                      <input type="checkbox" checked={pm.includes(w.id)} onChange={() => toggle(pm, setPm, w.id)} className="w-4 h-4" />
+                    <td className="p-0">
+                      <label className="flex items-center justify-center min-h-[44px] cursor-pointer active:bg-gray-100 dark:active:bg-gray-700">
+                        <input type="checkbox" checked={pm.includes(w.id)} onChange={() => toggle(pm, setPm, w.id)} className="w-6 h-6" />
+                      </label>
                     </td>
                   </tr>
                 ))}
@@ -82,15 +113,18 @@ export default function DriverModal({ isOpen, day, siteName, workers, current, o
             </table>
           )}
           {(am.length > 0 || pm.length > 0) && (
-            <p className="text-[11px] text-gray-500 mt-3">
+            <p className="text-xs text-gray-500 mt-3">
               行き {am.length}名・帰り {pm.length}名。運転手当は片道1,000円で自動計算されます（同乗者を乗せた便だけ記録してください）。
             </p>
+          )}
+          {err && (
+            <p role="alert" className="text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-3">{err}</p>
           )}
         </div>
 
         <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700">キャンセル</button>
-          <button onClick={() => onSave(am, pm)} className="px-4 py-2 text-sm rounded-lg bg-hibi-navy text-white font-bold hover:opacity-90">保存</button>
+          <button type="button" onClick={onClose} disabled={saving} className="min-h-[44px] px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">キャンセル</button>
+          <button type="button" onClick={handleSave} disabled={saving} className="min-h-[44px] px-5 py-2 text-sm rounded-lg bg-hibi-navy text-white font-bold hover:opacity-90 disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
         </div>
       </div>
     </div>

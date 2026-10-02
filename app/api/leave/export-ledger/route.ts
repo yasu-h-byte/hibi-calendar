@@ -15,10 +15,12 @@ export async function GET(request: NextRequest) {
   try {
     const main = await getMainData()
 
-    // 全期間の出面データ (過去3年+当年)
+    // 全期間の出面データ (過去3年+当年+来年)
+    // 2026-10-02 総合点検: 来年分も読む。承認済みの来年1〜2月（テト帰国）の有給が、休暇管理の残（来年分まで読む）には
+    //   引かれ、管理簿には引かれていなかった
     const currentYear = currentYearJst()
     const allAtt: Record<string, AttendanceEntry> = {}
-    for (let y = currentYear - 3; y <= currentYear; y++) {
+    for (let y = currentYear - 3; y <= currentYear + 1; y++) {
       for (let m = 1; m <= 12; m++) {
         const att = await getAttData(ymKey(y, m))
         Object.assign(allAtt, att.d)

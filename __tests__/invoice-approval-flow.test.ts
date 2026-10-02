@@ -34,7 +34,24 @@ vi.mock('@/lib/fsdb', () => ({
   doc: (_db: unknown, _c: string, id: string) => ({ id }),
   getDoc: async (ref: { id: string }) => ({ exists: () => store.has(ref.id), data: () => structuredClone(store.get(ref.id)) }),
   updateDoc: async (ref: { id: string }, data: Record<string, unknown>) => { store.set(ref.id, { ...store.get(ref.id), ...data }) },
+  setDoc: async (ref: { id: string }, data: Record<string, unknown>, opt?: { merge?: boolean }) => { store.set(ref.id, opt?.merge ? { ...store.get(ref.id), ...data } : structuredClone(data)) },
+  // 2026-10-02 総合点検: 発行・申請・承認は runTransaction（同じ月の処理を直列にする）の中で書くようになった。
+  //   偽物は「前の処理が終わるまで待つ」だけの直列化（Firestore のやり直しの代わり）
+  runTransaction: async (_db: unknown, fn: (tx: unknown) => Promise<unknown>) => {
+    const prev = txQueue
+    let release: () => void = () => {}
+    txQueue = new Promise<void>(r => { release = r })
+    await prev
+    try {
+      return await fn({
+        get: async (ref: { id: string }) => ({ exists: () => store.has(ref.id), data: () => structuredClone(store.get(ref.id)) }),
+        set: (ref: { id: string }, data: Record<string, unknown>, opt?: { merge?: boolean }) => { store.set(ref.id, opt?.merge ? { ...store.get(ref.id), ...data } : structuredClone(data)) },
+        update: (ref: { id: string }, data: Record<string, unknown>) => { store.set(ref.id, { ...store.get(ref.id), ...data }) },
+      })
+    } finally { release() }
+  },
 }))
+let txQueue: Promise<void> = Promise.resolve()
 
 const ym = '202609'
 const profile = (name: string, prefix: string) => ({
@@ -159,8 +176,9 @@ describe('API の権限（app/api/peer-invoice）', () => {
     vi.doMock('@/lib/auth', () => ({
       checkApiAuth: async () => true,
       getApiAuthUser: async () => ({ authorized: true, actor: 50 }),
-      requireExecutiveAuth: async () => new Response(JSON.stringify({ error: 'x' }), { status: 403 }),
-      getApiRole: async () => ({ role: 'jimu', workerId: 50, foremanSites: [] }),
+      // 2026-10-02 総合点検: 権限は権限表（requireCap）で決める。事務（jimu）は invoice.request だけ持つ
+      requireCap: async (_req: unknown, cap: string) =>
+        cap === 'invoice.request' ? null : new Response(JSON.stringify({ error: 'x' }), { status: 403 }),
     }))
     vi.doMock('@/lib/compute', async orig => ({
       ...(await orig<typeof import('@/lib/compute')>()),

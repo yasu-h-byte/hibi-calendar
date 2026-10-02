@@ -87,6 +87,7 @@ export default function AttendanceActionBar({
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [processing, setProcessing] = useState<string | null>(null)
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequestItem[]>([])
   const [homeLongLeaves, setHomeLongLeaves] = useState<HomeLongLeaveItem[]>([])
@@ -128,7 +129,9 @@ export default function AttendanceActionBar({
           .filter((r: { status: string }) => r.status === 'pending' || r.status === 'foreman_approved')
         setHomeLongLeaves(items)
       }
-    } catch { /* ignore */ }
+      // 2026-10-02 総合点検: 取得できなかったときは「ありません」と見せない（旧: 失敗しても0件の表示だった）
+      setLoadFailed(!lrRes.ok || !hlRes.ok)
+    } catch { setLoadFailed(true) }
     finally { setLoading(false) }
   }, [password])
 
@@ -317,6 +320,8 @@ export default function AttendanceActionBar({
           </div>
           {loading && total === 0 ? (
             <div className="text-sm text-hibi-sub">読み込み中...</div>
+          ) : loadFailed && total === 0 ? (
+            <div className="text-sm text-red-700 dark:text-red-300">申請を取得できませんでした。<button type="button" onClick={fetchData} className="ml-1 underline font-bold">もう一度</button></div>
           ) : total === 0 ? (
             <div className="text-sm text-hibi-sub">承認待ちの申請はありません</div>
           ) : (

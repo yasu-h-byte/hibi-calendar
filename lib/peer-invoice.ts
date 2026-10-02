@@ -17,7 +17,7 @@ import {
   calcManDays, calcOvertimeHours, type AttendanceEntry, type SiteWorkSchedule,
 } from '@/types'
 import {
-  calcTobiEquiv, getAssign, getSiteRates, parseDKey, parseSdKey,
+  calcTobiEquiv, getSiteRates, parseDKey, parseSdKey, isDispatched,
   type MainData, type ComputeResult, type CompanyPaymentTerms, type RawSubcon,
 } from './compute'
 import { buildPeerStatements } from './peer-statement'
@@ -173,7 +173,6 @@ export function buildSiteDetail(
   opts?: { workerFilter?: (w: MainData['workers'][number]) => boolean; includeSubcons?: boolean },
 ): PeerInvoiceSiteDetail {
   const nDays = daysInYm(ym)
-  const dispatchList = getAssign(main, siteId, ym).dispatch
   const siteWs = main.sites.find(s => s.id === siteId)?.workSchedule as SiteWorkSchedule | undefined
   const rows = new Map<string, PeerInvoiceDetailRow>()
 
@@ -186,7 +185,10 @@ export function buildSiteDetail(
     const w = main.workers.find(x => x.id === parseInt(pk.wid, 10))
     if (!w) continue
     if (opts?.workerFilter && !opts.workerFilter(w)) continue
-    if (dispatchList.includes(w.id)) continue
+    // 出向者の判定は原価側と同じ isDispatched（人員マスタの dispatchTo／dispatchFrom ＋ 現場の dispatch 一覧）。
+    //   2026-10-02 総合点検: 旧は旧アプリの現場別リスト（assign[site].dispatch）だけを見ていて、今のアプリで
+    //   出向にした人（dispatchTo）が原価からは差し引かれるのに請求書の人工には残っていた
+    if (isDispatched(main, w.id, siteId, ym)) continue
     const isComp = v.w === 0.6 && w.visa !== 'none'
     if (isComp) continue
     if (!isTobiGroup(w.job) && !isDokoGroup(w.job)) continue

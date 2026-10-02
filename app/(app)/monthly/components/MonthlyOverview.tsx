@@ -88,7 +88,7 @@ export interface CloseCardProps {
   /** 出面の承認状況（締め済み・取得できなかったときは null） */
   approval: ApprovalStatus | null
   /** 本人確認の対象者の数と状態ごとの人数（状態はサーバが締めと同じ判定で決める） */
-  confirm: { target: number; ok: number; none: number; stale: number; issue: number; waiting: number; outside: number }
+  confirm: { target: number; ok: number; none: number; stale: number; issue: number; waiting: number; outside: number; failed?: boolean }
   /** 自動検算の対象人数と、異常のある人数（null＝検算しない月） */
   audit: { target: number; affected: number } | null
   /** 締めたあとに支給額が変わった人数 */
@@ -131,7 +131,10 @@ export function CloseCard(p: CloseCardProps) {
 
       <div className="rounded-[10px] border border-hibi-line dark:border-gray-700 divide-y divide-hibi-line dark:divide-gray-700">
         <ApprovalCheck locked={p.locked} approval={p.approval} />
-        {cf.target === 0 ? (
+        {cf.failed ? (
+          // 取得できなかったときは「対象なし」に見せない（2026-10-02 総合点検）。締める API が再確認するので実害は小さいが、安心させない
+          <Check state="warn" label="本人確認" note="本人確認の状態を取得できませんでした。再読み込みしてください" />
+        ) : cf.target === 0 ? (
           <Check state="none" label="本人確認" note="対象の人がいません（日本人はスマホ確認の対象外）" />
         ) : confirmLeft === 0 ? (
           <Check state="ok" label="本人確認" note={`${cf.target}名 全員が確認済み`} />

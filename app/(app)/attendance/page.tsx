@@ -32,6 +32,8 @@ import { Icon } from '@/components/ui/Icon'
 import { canDriveDefault } from '@/lib/allowance'
 import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
 import { todayJstIso, todayJstDate } from '@/lib/date-utils'
+import { postJson } from '@/lib/api-client'
+import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { CALENDAR_REMIND_FROM_DAY, CALENDAR_DEADLINE_DAY } from '@/lib/calendar'
 
 export default function AttendanceGridPage() {
@@ -142,14 +144,20 @@ export default function AttendanceGridPage() {
   }, [])
 
   // Fetch grid data
+  // 現場・月を素早く切り替えたとき、前の応答があとから届いて表を上書きしない（lib/hooks/useLatestRequest・2026-10-02 総合点検）。
+  //   旧: 取り消しも順番の確認も無く、承認・夜勤・運転者は state の siteId/ym で送るのに表は古い応答の内容、になり得た
+  const latest = useLatestRequest()
   const fetchData = useCallback(async () => {
     if (!password || !siteId || !ym) return
+    const req = latest.begin()
     setLoading(true)
     setError('')
     try {
       const res = await fetch(`/api/attendance/grid?siteId=${siteId}&ym=${ym}`, {
         headers: { 'x-admin-password': password },
+        signal: req.signal,
       })
+      if (!req.isCurrent()) return
       if (!res.ok) {
         const msg = await res.text()
         setError(msg || 'データ取得に失敗しました')
@@ -157,6 +165,7 @@ export default function AttendanceGridPage() {
         return
       }
       const json: GridData = await res.json()
+      if (!req.isCurrent()) return
       setData(json)
       setWorkerEntries(json.workerEntries)
       setNightDays(json.nightDays || [])
@@ -173,13 +182,14 @@ export default function AttendanceGridPage() {
       // Use siteWorkDays (from approved calendar) if workDays is not manually set
       const effectiveWorkDays = json.workDays ?? json.siteWorkDays
       setWorkDaysInput(effectiveWorkDays != null ? String(effectiveWorkDays) : '')
-    } catch {
+    } catch (e) {
+      if (latest.isAbort(e) || !req.isCurrent()) return  // 自分で止めた古い読み込み
       setError('通信エラーが発生しました')
       setData(null)
     } finally {
-      setLoading(false)
+      if (req.isCurrent()) setLoading(false)
     }
-  }, [password, siteId, ym])
+  }, [password, siteId, ym, latest])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -262,7 +272,12 @@ export default function AttendanceGridPage() {
 
   // ── Debounced save flush ──
 
-  const flushSaves = useCallback(async () => {
+  /**
+   * 溜めた入力をまとめて保存する。
+   * keepalive（2026-10-02 総合点検）: 画面を離れる（別メニューへ移る）ときの最後の送信に付ける。
+   *   旧: 入力から1秒以内に画面を離れると、タイマーを止めるだけで送っていなかった（表示は出ていたので気づけない）
+   */
+  const flushSaves = useCallback(async (opts: { keepalive?: boolean } = {}) => {
     if (!password || !data || pendingSaves.current.size === 0) return
 
     setSaveStatus('saving')
@@ -306,6 +321,7 @@ export default function AttendanceGridPage() {
             'x-admin-password': password,
           },
           body: JSON.stringify(body),
+          keepalive: opts.keepalive === true,
         })
 
         // 有給の残数超過（2026-08-04 追加 / グエン ミン トゥアン事案）
@@ -434,11 +450,23 @@ export default function AttendanceGridPage() {
     }, 1000)
   }, [flushSaves])
 
-  // Cleanup timers on unmount
+  // 画面を離れるときの未送信分（2026-10-02 総合点検）:
+  //   - 別メニューへ移る（アンマウント）→ 残っている分を keepalive 付きで送る
+  //   - タブを閉じる・再読み込み → ブラウザの「このページを離れますか」で止める
+  const flushRef = useRef(flushSaves)
+  useEffect(() => { flushRef.current = flushSaves }, [flushSaves])
   useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingSaves.current.size === 0) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
     return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
       if (debounceTimer.current) clearTimeout(debounceTimer.current)
       if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+      if (pendingSaves.current.size > 0) void flushRef.current({ keepalive: true })
     }
   }, [])
 
@@ -483,23 +511,29 @@ export default function AttendanceGridPage() {
     }
   }, [focusNextWorkerStatus])
 
-  const handleWorkChange = useCallback((workerId: string, day: number, value: string) => {
-    // 2026-08-28 追加: 本人がスマホで入力した記録を消す/変えるときだけ確認する。
-    //   8/27 IHI で誤削除が起き、当日入力のため日次バックアップでも救えなかった。
-    //   管理者が入れた記録の修正は従来どおり無確認（日常操作の邪魔をしない）。
+  // 2026-08-28 追加: 本人がスマホで入力した記録を消す/変えるときだけ確認する。
+  //   8/27 IHI で誤削除が起き、当日入力のため日次バックアップでも救えなかった。
+  //   管理者が入れた記録の修正は従来どおり無確認（日常操作の邪魔をしない）。
+  // 2026-10-02 総合点検: 確認を1つの関数にして、日本人のセル（handleWorkChange）と
+  //   ベトナム人の時間入力のセル（handleTimeStatusChange）の両方から呼ぶ。旧: 前者にだけあり、
+  //   本人の打刻（始業・終業つき）を「-」や別の状態に変えると確認なしで消えていた
+  const confirmOverwriteStaffEntry = useCallback((workerId: string, day: number, value: string): boolean => {
     const cur = workerEntries[workerId]?.[day] as (AttEntry & { s?: string }) | undefined
-    if (cur?.s === 'staff') {
-      const w = data?.workers.find(x => String(x.id) === String(workerId))
-      const desc = cur.p ? '有給' : cur.r ? '欠勤' : cur.h ? '現場休' : cur.hk ? '帰国中'
-        : cur.exam ? '試験' : cur.w === 0.6 ? '0.6補償'
-        : `出勤${cur.st && cur.et ? ` ${cur.st}〜${cur.et}` : ''}${cur.o ? ` 残業${cur.o}h` : ''}`
-      const verb = value === '' ? 'を削除' : 'を上書き'
-      if (!confirm(
-        `${w?.name || `ID ${workerId}`} さんが スマホで入力した ${day}日 の記録です。\n\n`
-        + `　現在: ${desc}\n\n`
-        + `この記録${verb}しますか？`
-      )) return
-    }
+    if (cur?.s !== 'staff') return true
+    const w = data?.workers.find(x => String(x.id) === String(workerId))
+    const desc = cur.p ? '有給' : cur.r ? '欠勤' : cur.h ? '現場休' : cur.hk ? '帰国中'
+      : cur.exam ? '試験' : cur.w === 0.6 ? '0.6補償'
+      : `出勤${cur.st && cur.et ? ` ${cur.st}〜${cur.et}` : ''}${cur.o ? ` 残業${cur.o}h` : ''}`
+    const verb = value === '' ? 'を削除' : 'を上書き'
+    return confirm(
+      `${w?.name || `ID ${workerId}`} さんが スマホで入力した ${day}日 の記録です。\n\n`
+      + `　現在: ${desc}\n\n`
+      + `この記録${verb}しますか？`
+    )
+  }, [workerEntries, data])
+
+  const handleWorkChange = useCallback((workerId: string, day: number, value: string) => {
+    if (!confirmOverwriteStaffEntry(workerId, day, value)) return
     setWorkerEntries(prev => {
       const next = { ...prev }
       if (!next[workerId]) next[workerId] = {}
@@ -573,6 +607,7 @@ export default function AttendanceGridPage() {
 
   /** 時間ベース: 特殊ステータス変更（P/R/H/出勤/クリア） */
   const handleTimeStatusChange = useCallback((workerId: string, day: number, value: string) => {
+    if (!confirmOverwriteStaffEntry(workerId, day, value)) return
     setWorkerEntries(prev => {
       const next = { ...prev }
       if (!next[workerId]) next[workerId] = {}
@@ -900,25 +935,79 @@ export default function AttendanceGridPage() {
     || (!!data?.proxyApproval && !!userRole && roleCan(permRoleOf({ role: userRole }), 'attendance.foremanApproveProxy'))
   const canFinalize = userRole === 'admin' || userRole === 'approver'
 
-  const handleForemanApproveAll = useCallback(() => {
-    if (!data) return
-    const unapprovedDays = Array.from({ length: data.daysInMonth }, (_, i) => i + 1)
-      .filter(d => !localApprovals[d])
-    const updated = { ...localApprovals }
-    for (const d of unapprovedDays) updated[d] = true
-    setLocalApprovals(updated)
-    for (const d of unapprovedDays) {
-      fetch('/api/attendance/grid', {
+  // ── 承認の送信（2026-10-02 総合点検）──
+  //   旧: 画面を先に更新して fetch(...).catch(() => {}) で、通信結果を見ていなかった。
+  //   サーバが断っても（担当外 403・先の日 400・最終承認済みの取り消し 409・職長承認が先 400）画面は承認済みのままで、
+  //   月締めで初めて「承認なし」と分かった。結果を見て、失敗した日は表示を戻して理由を出す
+  const postApproval = useCallback(async (action: string, day: number): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/attendance/grid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'approve_foreman', siteId, ym, day: d, approvedBy: userId }),
-      }).catch(() => {})
+        body: JSON.stringify({ action, siteId, ym, day, approvedBy: userId }),
+      })
+      if (res.ok) return null
+      const j = await res.json().catch(() => ({}))
+      return j.error || `エラー（${res.status}）`
+    } catch {
+      return '通信エラー'
     }
-  }, [data, localApprovals, password, siteId, ym, userId])
+  }, [password, siteId, ym, userId])
 
-  const handleToggleForemanApproval = useCallback((day: number) => {
-    const approved = localApprovals[day]
-    setLocalApprovals(prev => ({ ...prev, [day]: !prev[day] }))
+  /** まとめて送る（4件ずつ）。失敗した日と理由を返す */
+  const postApprovalDays = useCallback(async (action: string, targetDays: number[]): Promise<{ day: number; error: string }[]> => {
+    const failed: { day: number; error: string }[] = []
+    for (let i = 0; i < targetDays.length; i += 4) {
+      const chunk = targetDays.slice(i, i + 4)
+      const results = await Promise.all(chunk.map(d => postApproval(action, d)))
+      results.forEach((err, idx) => { if (err) failed.push({ day: chunk[idx], error: err }) })
+    }
+    return failed
+  }, [postApproval])
+
+  const alertApprovalFailures = useCallback((label: string, failed: { day: number; error: string }[]) => {
+    if (failed.length === 0) return
+    const m = Number(ym.slice(4, 6))
+    const lines = failed.slice(0, 5).map(f => `・${m}/${f.day}: ${f.error}`).join('\n')
+    alert(`${label}できなかった日があります（${failed.length}日）。表示を元に戻しました。\n\n${lines}${failed.length > 5 ? '\n…ほか' : ''}`)
+  }, [ym])
+
+  /**
+   * まとめて職長承認する日 = 昨日までで、誰かの入力があって、職長承認がまだの日（「今やること」の件数と同じ）。
+   * 2026-10-02 総合点検: 旧実装は月の全部の日（先の日・誰も入力していない日も）を承認していた。
+   *   承認済みの日はスタッフのスマホが打刻を拒否するので、月末まで打刻できなくなる（9/2 の誤承認と同じ形）。
+   *   今日の分は、スタッフが作業後に打刻するので、まとめてには入れない（1日ずつなら承認できる）
+   */
+  const foremanBulkDays = useMemo(() => {
+    if (!data) return [] as number[]
+    const todayIso = todayJstIso()
+    const withInput = new Set<number>()
+    for (const ent of Object.values(workerEntries)) {
+      for (const [d, e] of Object.entries(ent || {})) if (e) withInput.add(Number(d))
+    }
+    for (const ent of Object.values(subconEntries)) {
+      for (const [d, e] of Object.entries(ent || {})) if (e && ((e.n || 0) > 0 || (e.on || 0) > 0)) withInput.add(Number(d))
+    }
+    const isoOf = (d: number) => `${data.year}-${String(data.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    return Array.from({ length: data.daysInMonth }, (_, i) => i + 1)
+      .filter(d => withInput.has(d) && isoOf(d) < todayIso && !localApprovals[d])
+  }, [data, workerEntries, subconEntries, localApprovals])
+
+  const handleForemanApproveAll = useCallback(async () => {
+    if (!data || foremanBulkDays.length === 0) return
+    const target = foremanBulkDays
+    setLocalApprovals(prev => { const next = { ...prev }; for (const d of target) next[d] = true; return next })
+    const failed = await postApprovalDays('approve_foreman', target)
+    if (failed.length > 0) {
+      setLocalApprovals(prev => { const next = { ...prev }; for (const f of failed) delete next[f.day]; return next })
+      alertApprovalFailures('承認', failed)
+    }
+  }, [data, foremanBulkDays, postApprovalDays, alertApprovalFailures])
+
+  const handleToggleForemanApproval = useCallback(async (day: number) => {
+    const approved = !!localApprovals[day]
+    const hadFinal = !!localFinalApprovals[day]
+    setLocalApprovals(prev => ({ ...prev, [day]: !approved }))
     // 解除する場合は最終承認も画面上で消す（API側が連動して削除する）
     if (approved) {
       setLocalFinalApprovals(prev => {
@@ -927,45 +1016,37 @@ export default function AttendanceGridPage() {
         return next
       })
     }
-    fetch('/api/attendance/grid', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({
-        action: approved ? 'unapprove_foreman' : 'approve_foreman',
-        siteId, ym, day, approvedBy: userId,
-      }),
-    }).catch(() => {})
-  }, [localApprovals, password, siteId, ym, userId])
+    const err = await postApproval(approved ? 'unapprove_foreman' : 'approve_foreman', day)
+    if (err) {
+      setLocalApprovals(prev => ({ ...prev, [day]: approved }))
+      if (approved && hadFinal) setLocalFinalApprovals(prev => ({ ...prev, [day]: true }))
+      alertApprovalFailures(approved ? '承認を取り消し' : '承認', [{ day, error: err }])
+    }
+  }, [localApprovals, localFinalApprovals, postApproval, alertApprovalFailures])
 
-  const handleFinalApproveAll = useCallback(() => {
+  const handleFinalApproveAll = useCallback(async () => {
     if (!data) return
     // 職長承認済かつ最終未承認の日だけが対象
     const finalizableDays = Array.from({ length: data.daysInMonth }, (_, i) => i + 1)
       .filter(d => localApprovals[d] && !localFinalApprovals[d])
-    const updated = { ...localFinalApprovals }
-    for (const d of finalizableDays) updated[d] = true
-    setLocalFinalApprovals(updated)
-    for (const d of finalizableDays) {
-      fetch('/api/attendance/grid', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'approve_final', siteId, ym, day: d, approvedBy: userId }),
-      }).catch(() => {})
+    if (finalizableDays.length === 0) return
+    setLocalFinalApprovals(prev => { const next = { ...prev }; for (const d of finalizableDays) next[d] = true; return next })
+    const failed = await postApprovalDays('approve_final', finalizableDays)
+    if (failed.length > 0) {
+      setLocalFinalApprovals(prev => { const next = { ...prev }; for (const f of failed) delete next[f.day]; return next })
+      alertApprovalFailures('最終承認', failed)
     }
-  }, [data, localApprovals, localFinalApprovals, password, siteId, ym, userId])
+  }, [data, localApprovals, localFinalApprovals, postApprovalDays, alertApprovalFailures])
 
-  const handleToggleFinalApproval = useCallback((day: number) => {
-    const finalApproved = localFinalApprovals[day]
-    setLocalFinalApprovals(prev => ({ ...prev, [day]: !prev[day] }))
-    fetch('/api/attendance/grid', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({
-        action: finalApproved ? 'unapprove_final' : 'approve_final',
-        siteId, ym, day, approvedBy: userId,
-      }),
-    }).catch(() => {})
-  }, [localFinalApprovals, password, siteId, ym, userId])
+  const handleToggleFinalApproval = useCallback(async (day: number) => {
+    const finalApproved = !!localFinalApprovals[day]
+    setLocalFinalApprovals(prev => ({ ...prev, [day]: !finalApproved }))
+    const err = await postApproval(finalApproved ? 'unapprove_final' : 'approve_final', day)
+    if (err) {
+      setLocalFinalApprovals(prev => ({ ...prev, [day]: finalApproved }))
+      alertApprovalFailures(finalApproved ? '最終承認を取り消し' : '最終承認', [{ day, error: err }])
+    }
+  }, [localFinalApprovals, postApproval, alertApprovalFailures])
 
   // ── Computed: grouped workers ──
 
@@ -1009,7 +1090,8 @@ export default function AttendanceGridPage() {
     const worker = data?.workers.find(w => String(w.id) === workerId)
     const foreign = !!worker?.visa && worker.visa !== 'none' && worker.visa !== ''
     const timeBased = useTimeBased && foreign && !worker?.useOldRules
-    return computeWorkerTotals(entries, { timeBased, foreign })
+    // 行の残業合計も現場の休憩設定で数える（保存時の計算・フッターと同じ・2026-10-02 総合点検）
+    return computeWorkerTotals(entries, { timeBased, foreign, workSchedule: data?.site.workSchedule })
   }, [workerEntries, useTimeBased, data])
 
   const subconTotals = useCallback((subconId: string) => {
@@ -1076,31 +1158,26 @@ export default function AttendanceGridPage() {
       return
     }
     setSaveStatus('saving')
-    try {
-      await fetch('/api/attendance/grid', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
-        },
-        body: JSON.stringify({
-          action: 'saveAssign',
-          siteId: data.site.id,
-          ym,  // 2026-05-19: ym を必ず送って massign[siteId_ym] も更新させる
-          workerIds,
-          subconIds,
-        }),
-      })
-      setSaveStatus('saved')
-      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
-      saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
-      setShowAssignModal(false)
-      // Refresh grid
-      fetchData()
-    } catch (e) {
-      console.error('Save assign error:', e)
-      setSaveStatus(null)
+    // 2026-10-02 総合点検: 応答を見て、断られたら（担当外 403・締め済み 409・通信エラー）理由を出してモーダルを閉じない。
+    //   旧: 応答を見ずに「保存済み」と出してモーダルを閉じ、再取得で黙って元に戻っていた
+    const res = await postJson('/api/attendance/grid', {
+      action: 'saveAssign',
+      siteId: data.site.id,
+      ym,  // 2026-05-19: ym を必ず送って massign[siteId_ym] も更新させる
+      workerIds,
+      subconIds,
+    }, { password })
+    if (!res.ok) {
+      setSaveStatus('error')
+      alert(`配置を保存できませんでした。\n${res.error || ''}`)
+      return
     }
+    setSaveStatus('saved')
+    if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+    saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
+    setShowAssignModal(false)
+    // Refresh grid
+    fetchData()
   }, [password, data, ym, fetchData])
 
   // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） ──
@@ -1283,17 +1360,9 @@ export default function AttendanceGridPage() {
   //   数え方は表の承認行・各注意書きと同じ。表示のための集計だけで、保存・承認の処理は変えない
   const todayIsoA = todayJstIso()
   const dayIsoOf = (d: number) => data ? `${data.year}-${String(data.month).padStart(2, '0')}-${String(d).padStart(2, '0')}` : ''
-  const daysWithInput = new Set<number>()
-  // 入力に合わせて変わる state から数える（data.workerEntries は読み込み時点のまま）。外注の人工だけの日も含める
-  for (const ent of Object.values(workerEntries)) {
-    for (const [d, e] of Object.entries(ent || {})) if (e) daysWithInput.add(Number(d))
-  }
-  for (const ent of Object.values(subconEntries)) {
-    for (const [d, e] of Object.entries(ent || {})) if (e && ((e.n || 0) > 0 || (e.on || 0) > 0)) daysWithInput.add(Number(d))
-  }
-  // 職長承認がまだ = 昨日までで、誰かの入力があって、職長承認が付いていない日。
+  // 職長承認がまだ = 昨日までで、誰かの入力があって、職長承認が付いていない日（上の foremanBulkDays と同じ集合）。
   //   今日の分は出さない（2026-10-02 代表: ベトナム人スタッフは作業後にスマホで打刻するので、承認は翌日でよい）
-  const foremanWaitDays = days.filter(d => daysWithInput.has(d.day) && dayIsoOf(d.day) < todayIsoA && !localApprovals[d.day]).map(d => d.day)
+  const foremanWaitDays = foremanBulkDays
   // 最終承認待ち = 職長承認済みで最終承認がまだの日（表の「まとめて最終承認」と同じ）
   const finalWaitDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day]).map(d => d.day)
   const daysLabel = (ds: number[]) => ds.length <= 3 ? ds.map(d => `${data?.month}/${d}`).join('・') : `${data?.month}/${ds[0]}〜${ds[ds.length - 1]}`
@@ -1548,6 +1617,7 @@ export default function AttendanceGridPage() {
           drivers={drivers}
           onDriverClick={data.site.noDriveAllowance ? undefined : setDriverDay}
           onForemanApproveAll={handleForemanApproveAll}
+          foremanBulkCount={foremanBulkDays.length}
           onToggleForemanApproval={handleToggleForemanApproval}
           onFinalApproveAll={handleFinalApproveAll}
           onToggleFinalApproval={handleToggleFinalApproval}

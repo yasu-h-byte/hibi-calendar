@@ -3,6 +3,7 @@ import { isAdminSdkActive, getAdminStatus } from '@/lib/firebase-admin'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { probeStaffDocsBucket } from '@/lib/storage-admin'
+import { backupHealth, type LastBackupInfo } from '@/lib/backup-plan'
 
 /**
  * ヘルス／稼働モード確認エンドポイント（Admin SDK 移行の検証・障害診断用・2026-06〜）
@@ -14,6 +15,7 @@ import { probeStaffDocsBucket } from '@/lib/storage-admin'
  *       adminMode:true なのに readOk:false のときが「初期化はOKだが読み取りが落ちる」障害。
  *       readError.message/code に生の例外を出す（demmen/toolBudget を1件読むだけ・データは返さない）。
  *   - storageOk / storageError: 書類庫のファイル置き場（Firebase Storage）に届くか（2026-09-28・中身は読まない）
+ *   - backupOk / backupHoursAgo / backupErrorCount: 日次バックアップが動いているか（2026-10-02・中身は返さない）
  *   - time: サーバ時刻（ISO）
  *
  * 認証不要（公開GET）。
@@ -48,6 +50,15 @@ export async function GET() {
 
   const storage = await probeStaffDocsBucket()
 
+  // 日次バックアップの最終実行（demmen/system.lastBackup）。失敗の中身は返さない（件数だけ）
+  let backup: { ok: boolean; hoursAgo: number | null; errorCount: number } = { ok: false, hoursAgo: null, errorCount: 0 }
+  try {
+    const sysSnap = await getDoc(doc(db, 'demmen', 'system'))
+    const last = (sysSnap.exists() ? sysSnap.data().lastBackup : null) as LastBackupInfo | null
+    const h = backupHealth(last, Date.now())
+    backup = { ok: h.ok, hoursAgo: h.hoursAgo, errorCount: last?.errors?.length ?? 0 }
+  } catch { /* readError 側に出る */ }
+
   return NextResponse.json({
     ok: true,
     adminMode,
@@ -56,6 +67,9 @@ export async function GET() {
     readError,
     storageOk: storage.ok,
     storageError: storage.error,
+    backupOk: backup.ok,
+    backupHoursAgo: backup.hoursAgo,
+    backupErrorCount: backup.errorCount,
     time: new Date().toISOString(),
   })
 }

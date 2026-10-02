@@ -18,10 +18,21 @@ const mainData = {
 vi.mock('@/lib/auth', () => ({ checkApiAuth: async () => true, requireCap: async () => null }))
 vi.mock('@/lib/activity', () => ({ logActivity: async () => {} }))
 vi.mock('@/lib/firebase', () => ({ db: {} }))
+// 2026-10-02 総合点検: /api/sites の POST は runTransaction の中で読んで書くようになった（同時編集で片方が消えないように）。
+//   偽物のトランザクションは get/update をそのまま通す。deleteField は印を返すだけ
 vi.mock('@/lib/fsdb', () => ({
+  registerMainWriteHook: () => {},
+  collection: () => ({}),
+  getDocs: async () => ({ docs: [], size: 0, empty: true, forEach: () => {} }),
   doc: () => ({}),
   getDoc: async () => ({ exists: () => true, data: () => structuredClone(mainData) }),
   updateDoc: async (_ref: unknown, data: unknown) => { written.push(data) },
+  deleteField: () => ({ __deleteField: true }),
+  runTransaction: async (_db: unknown, fn: (tx: unknown) => Promise<unknown>) => fn({
+    get: async () => ({ exists: () => true, data: () => structuredClone(mainData) }),
+    update: (_ref: unknown, data: unknown) => { written.push(data) },
+    set: (_ref: unknown, data: unknown) => { written.push(data) },
+  }),
 }))
 
 function hasUndefined(v: unknown): boolean {

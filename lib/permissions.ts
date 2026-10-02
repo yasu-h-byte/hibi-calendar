@@ -87,7 +87,8 @@ export const CAPABILITIES = {
   'monthly.view':            { group: '毎月', label: '月次集計・帳票を見る（給与を含む）', roles: PAY_ROLES },
   'monthly.close':           { group: '毎月', label: '月次の締め・帳票出力', roles: ['jimu', 'approver', 'owner'] },
   'invoice.view':            { group: '毎月', label: '請求書・支払を見る', roles: ALL_OFFICE },
-  'invoice.request':         { group: '毎月', label: '請求書の発行を申請', roles: ['jimu'] },
+  // 2026-10-02 総合点検: 代表・事業責任者も申請できる（直接発行できる人が申請を止められる理由が無い。API の実装と表をそろえた）
+  'invoice.request':         { group: '毎月', label: '請求書の発行を申請・取り下げ', roles: ['jimu', 'approver', 'owner'] },
   'invoice.approve':         { group: '毎月', label: '請求書の承認・発行・取り消し', roles: ['approver', 'owner'] },
   // 2026-10-02 代表: 応援の請求書はしばらく手作り。手作りの請求書を入れて、システムの計算と見比べる（lib/paper-invoice.ts）。削除は invoice.approve
   'invoice.paper':           { group: '毎月', label: '紙（手作り）で出した請求書の登録・修正', roles: ['jimu', 'approver', 'owner'] },

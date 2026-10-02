@@ -1,12 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, getApiRole, isManagerRole, approvingForemenOfSite } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc } from '@/lib/fsdb'
+import { doc, getDoc, setDoc, getDocs, collection, query, where, updateDoc, deleteField } from '@/lib/fsdb'
 import { getWorkerByToken } from '@/lib/workers'
-import { getStaffSites, ymKey, setAttendanceEntry, isScheduledWorkDay, computeAttendanceDeleteFields } from '@/lib/attendance'
+import { getStaffSites, ymKey, setAttendanceEntry, isScheduledWorkDay, computeAttendanceDeleteFields, createsWork, attKey, getApprovalForDay } from '@/lib/attendance'
 import { getMainData } from '@/lib/compute'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { logActivity } from '@/lib/activity'
+import { calendarSiteIdOf } from '@/lib/site-hierarchy'
+import type { AttendanceEntry } from '@/types'
+
+/**
+ * 有給を出面に書く前の、その日の状態の確認（2026-10-02 総合点検）。
+ *
+ * 旧: 承認は「別現場に同日の出面があるか」だけを見ていて、同じ現場に本人の出勤入力（時刻・残業）がある日や、
+ *     職長承認・最終承認が済んだ日にも p を書き、出勤の記録を消していた（承認が遅れて本人が出勤したあとに
+ *     まとめて承認、など）。有給の変更は管理者の確認つきでしか通さない。
+ * 帰国中の有給（2026-09-02 解禁）: 別現場のキーに「帰国フラグだけの空エントリ」があると多現場重複として
+ *     409 になっていた（hk は占有1）。空エントリは重複と見ずに、p を書いたあとで消す（同じ現場の hk を落とすのと同じ）。
+ */
+function isPureHomeLeaveStub(e: AttendanceEntry | null | undefined): boolean {
+  if (!e || !e.hk) return false
+  return Object.keys(e).every(k => k === 'hk' || k === 'w' || k === 's') && !(e.w && e.w > 0)
+}
+
+async function inspectDayBeforePaidLeave(
+  siteId: string, workerId: number, ym: string, day: number,
+): Promise<{
+  attDoc: Record<string, AttendanceEntry>
+  /** 本人が入力した同じ現場の出勤など（有給にすると消える記録） */
+  existingWork: AttendanceEntry | null
+  /** その日の職長承認・最終承認（親現場の単位） */
+  dayApproval: { foreman?: unknown; final?: unknown } | null
+  /** 別現場のキーにある帰国フラグだけの空エントリ（重複と見ない・p を書いたあと消す） */
+  homeLeaveStubKeys: string[]
+  /** 多現場重複の判定に渡す出面（空エントリを除いたもの） */
+  attForConflict: Record<string, AttendanceEntry>
+}> {
+  const { getAttendanceDoc } = await import('@/lib/attendance')
+  const attDoc = await getAttendanceDoc(ym)
+  const key = attKey(siteId, workerId, ym, day)
+  const existing = attDoc[key]
+  const existingWork = existing && createsWork(existing) ? existing : null
+  const main = await getMainData()
+  const calSiteId = calendarSiteIdOf(main.sites as unknown as import('@/lib/site-hierarchy').HierarchySite[], siteId)
+  const dayApproval = await getApprovalForDay(calSiteId, ym, day)
+  const suffix = `_${workerId}_${ym}_${day}`
+  const homeLeaveStubKeys: string[] = []
+  const attForConflict: Record<string, AttendanceEntry> = { ...attDoc }
+  for (const [k, e] of Object.entries(attDoc)) {
+    if (k === key || !k.endsWith(suffix)) continue
+    if (isPureHomeLeaveStub(e)) { homeLeaveStubKeys.push(k); delete attForConflict[k] }
+  }
+  return { attDoc, existingWork, dayApproval: dayApproval?.foreman || dayApproval?.final ? dayApproval : null, homeLeaveStubKeys, attForConflict }
+}
+
+/** 別現場のキーに残った帰国フラグだけの空エントリを消す（home-leave-sync の clear-entry と同じ・dot-notation） */
+async function clearHomeLeaveStubs(ym: string, keys: string[]): Promise<void> {
+  if (keys.length === 0) return
+  const updates: Record<string, unknown> = {}
+  for (const k of keys) updates[`d.${k}`] = deleteField()
+  await updateDoc(doc(db, 'demmen', `att_${ym}`), updates)
+}
+
+/**
+ * その日に有効な（pending / foreman_approved / approved）本人の有給申請があるか。
+ * docId は「workerId_申請時の日付」で、日付変更（modify_date）後は docId と date がずれるため、date で探す。
+ */
+async function findActiveRequestOnDate(workerId: number, dateIso: string, excludeDocId: string): Promise<boolean> {
+  const snap = await getDocs(query(collection(db, 'leaveRequests'), where('workerId', '==', workerId), where('date', '==', dateIso)))
+  return snap.docs.some(d => d.id !== excludeDocId && ['pending', 'foreman_approved', 'approved'].includes((d.data() as LeaveRequest).status))
+}
+
+function describeWork(e: AttendanceEntry): string {
+  const times = e.st && e.et ? `${e.st}〜${e.et}` : `出勤 ${e.w ?? ''}`
+  return `${times}${e.o ? ` 残業${e.o}h` : ''}`
+}
 
 interface LeaveRequest {
   workerId: number
@@ -129,6 +198,11 @@ export async function POST(request: NextRequest) {
       const docRef = doc(db, 'leaveRequests', docId)
       const existing = await getDoc(docRef)
       const INACTIVE = ['rejected', 'cancelled', 'revoked']
+      // 2026-10-02 総合点検: 日付変更（modify_date）で docId と日付がずれた申請も重複として見る。
+      //   旧: docId だけで見ていたため、変更先の日に二重に申請できた
+      if (await findActiveRequestOnDate(worker.id, date, docId)) {
+        return NextResponse.json({ error: 'Already requested' }, { status: 409 })
+      }
       let prevHistory: unknown = undefined
       if (existing.exists()) {
         const data = existing.data() as LeaveRequest & { stateHistory?: unknown[] }
@@ -160,6 +234,15 @@ export async function POST(request: NextRequest) {
         const bal = await getLeaveBalance(worker.id, date, date)
         if (bal.noGrant) {
           return NextResponse.json({ error: 'No remaining leave' }, { status: 400 })
+        }
+        // 期が終わって次の付与がまだ（付与の処理待ち・2026-10-02 総合点検）。
+        //   旧: 期を過ぎた前のレコードの残で判定し、期の外の P を数えないため何日でも通った／残0の人は
+        //   法定の付与日を過ぎても「残0」で止まった
+        if (bal.periodOver) {
+          return NextResponse.json({
+            error: '有給の付与の手続きが済んでいません。会社に連絡してください / Công ty chưa cấp ngày phép mới. Vui lòng liên hệ công ty',
+            code: 'LEAVE_GRANT_PENDING',
+          }, { status: 409 })
         }
         const periodStart = bal.grantDate
         const periodEnd = addMonthsSafe(bal.grantDate, 12)
@@ -232,12 +315,9 @@ export async function POST(request: NextRequest) {
         // トークン認証: 配置現場の foreman であることを assert
         const worker = await getWorkerByToken(token)
         if (!worker) return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
+        // 403 に職長の workerId 一覧を載せない（2026-10-02 総合点検。旧: yourId・siteForemen を返していた）
         if (!foremenOfSite.includes(worker.id)) {
-          return NextResponse.json({
-            error: `現場「${data.siteId}」の職長権限がありません`,
-            yourId: worker.id,
-            siteForemen: foremenOfSite,
-          }, { status: 403 })
+          return NextResponse.json({ error: `現場「${data.siteId}」の職長権限がありません` }, { status: 403 })
         }
         // 2026-09-02 追加: 自分の申請を自分で職長承認することは不可（管理者・事業責任者に依頼）
         if (data.workerId === worker.id) {
@@ -259,11 +339,7 @@ export async function POST(request: NextRequest) {
           const roleFA = await getApiRole(request, data.ym)
           const isManagerFA = !!roleFA && isManagerRole(roleFA.role)
           if (!isManagerFA && !foremenOfSite.includes(authUser.actor)) {
-            return NextResponse.json({
-              error: `現場「${data.siteId}」の職長権限がありません`,
-              yourId: authUser.actor,
-              siteForemen: foremenOfSite,
-            }, { status: 403 })
+            return NextResponse.json({ error: `現場「${data.siteId}」の職長権限がありません` }, { status: 403 })
           }
           if (!isManagerFA && data.workerId === authUser.actor) {
             return NextResponse.json({ error: SELF_APPROVE_ERROR }, { status: 403 })
@@ -349,6 +425,14 @@ export async function POST(request: NextRequest) {
         const { getLeaveBalance } = await import('@/lib/leave-balance')
         // 2026-09-02 修正: 基準日を「今日」から「申請日」に（来期日付の承認を当期残で判定していた）
         const bal = await getLeaveBalance(data.workerId, data.date, data.date)
+        // 期が終わって次の付与がまだ（付与の処理待ち・2026-10-02 総合点検）。管理者の確認つき上書き（allowOverdraft）は従来どおり
+        if (bal.periodOver && body.allowOverdraft !== true) {
+          return NextResponse.json({
+            error: `${data.workerName} さんは前の期（付与日 ${bal.grantDate}）が ${bal.periodEnd} で終わっていて、次の付与がまだです。先に休暇管理の「付与待ち」から付与してください`,
+            code: 'LEAVE_GRANT_PENDING',
+            balance: bal,
+          }, { status: 409 })
+        }
         if (bal.remaining < 1 && body.allowOverdraft !== true) {
           return NextResponse.json({
             error: bal.noGrant
@@ -378,21 +462,40 @@ export async function POST(request: NextRequest) {
       // 2026-08-31 追加（多現場重複の横展開）: 別現場に同日の出面がある状態で承認すると
       //   P と出勤が併存し、日給月給の日本人は「日給＋有給手当」の二重払いになる。
       //   出面の直接入力（grid/staff/foreman）と同じガードを承認にも置く。
+      let stubKeysA: string[] = []
       {
-        const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
-        const attDocA = await getAttendanceDoc(data.ym)
+        const { detectMultiSiteConflict } = await import('@/lib/attendance')
+        const dayA = await inspectDayBeforePaidLeave(data.siteId, data.workerId, data.ym, data.day)
+        stubKeysA = dayA.homeLeaveStubKeys
         const sitesAllA = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
-        const conflictA = detectMultiSiteConflict(attDocA, data.siteId, data.workerId, data.ym, data.day, sitesAllA, { w: 0, p: 1 })
+        const conflictA = detectMultiSiteConflict(dayA.attForConflict, data.siteId, data.workerId, data.ym, data.day, sitesAllA, { w: 0, p: 1 })
         if (conflictA) {
           const cName = sitesAllA.find(s2 => s2.id === conflictA.conflictSiteId)?.name || conflictA.conflictSiteId
           return NextResponse.json({
             error: `${data.date} は「${cName}」に同日の出面が既にあるため承認できません。先に出面を確認・削除してください`,
           }, { status: 409 })
         }
+        // 同じ現場に本人の出勤入力がある／その日の承認が済んでいる → 確認つきでだけ上書き（2026-10-02 総合点検）
+        if ((dayA.existingWork || dayA.dayApproval) && body.allowOverwrite !== true) {
+          const parts: string[] = []
+          if (dayA.existingWork) parts.push(`この日は出勤の入力があります（${describeWork(dayA.existingWork)}）。有給にすると出勤の記録が消えます`)
+          if (dayA.dayApproval) parts.push(`この日は${dayA.dayApproval.final ? '最終承認' : '職長承認'}が済んでいます`)
+          return NextResponse.json({
+            error: `${data.date}: ${parts.join('。')}。休暇管理の申請一覧から内容を確認のうえ承認してください`,
+            code: 'LEAVE_OVERWRITES_WORK',
+            existingWork: dayA.existingWork,
+            dayApproved: !!dayA.dayApproval,
+          }, { status: 409 })
+        }
+        if ((dayA.existingWork || dayA.dayApproval) && body.allowOverwrite === true) {
+          await logActivity('admin', 'leave.overwriteWork',
+            `${data.workerName} ${data.date} の${dayA.existingWork ? `出勤入力（${describeWork(dayA.existingWork)}）` : ''}${dayA.dayApproval ? '承認済みの日' : ''}を確認のうえ有給で上書き（承認）`)
+        }
       }
       const approveEntry = { w: 0, p: 1 }
       await setAttendanceEntry(data.siteId, data.workerId, data.ym, data.day, approveEntry,
         { deleteFields: computeAttendanceDeleteFields(approveEntry) })
+      await clearHomeLeaveStubs(data.ym, stubKeysA)
 
       await setDoc(docRef, {
         ...data,
@@ -668,13 +771,9 @@ export async function POST(request: NextRequest) {
       // ③ 新日付に既存のアクティブな有給申請があれば拒否（重複防止。docId は旧日付のままのため
       //    request アクションの existing チェックが効かない）
       {
-        const dupRef = doc(db, 'leaveRequests', `${data.workerId}_${newDate.replace(/-/g, '')}`)
-        const dupSnap = await getDoc(dupRef)
-        if (dupSnap.exists()) {
-          const dup = dupSnap.data() as LeaveRequest
-          if (dup.status !== 'rejected' && dup.status !== 'cancelled' && (dup as { status?: string }).status !== 'revoked') {
-            return NextResponse.json({ error: '変更先の日付には既に有給申請があります' }, { status: 409 })
-          }
+        // 2026-10-02 総合点検: docId ではなく「その日に有効な申請があるか」で見る（日付変更済みの申請も拾う）
+        if (await findActiveRequestOnDate(data.workerId, newDate, requestId)) {
+          return NextResponse.json({ error: '変更先の日付には既に有給申請があります' }, { status: 409 })
         }
       }
 
@@ -683,6 +782,13 @@ export async function POST(request: NextRequest) {
         const { getLeaveBalance } = await import('@/lib/leave-balance')
         const balOld = await getLeaveBalance(data.workerId, data.date, data.date)
         const balNew = await getLeaveBalance(data.workerId, newDate, newDate)
+        if (balNew.periodOver && body.allowOverdraft !== true) {
+          return NextResponse.json({
+            error: `変更先の日は前の期（付与日 ${balNew.grantDate}）が ${balNew.periodEnd} で終わっていて、次の付与がまだです。先に付与してください`,
+            code: 'LEAVE_GRANT_PENDING',
+            balance: balNew,
+          }, { status: 409 })
+        }
         if (balNew.grantDate !== balOld.grantDate && balNew.remaining < 1 && body.allowOverdraft !== true) {
           return NextResponse.json({
             error: balNew.noGrant
@@ -696,32 +802,57 @@ export async function POST(request: NextRequest) {
 
       // approved 状態の場合は att データの差し替えが必要
       if (data.status === 'approved') {
-        // 2026-09-02 修正（有給総点検・第4回）: 旧日の p は「申請時の siteId」だけでなく
-        //   その日の全現場から外す（revoke と同じ共通ヘルパー）。職長が現場を付け替えた後に
-        //   日付変更すると旧 p が残り、残数が1日余計に減って給与も有給2日扱いになっていた。
-        //   ヘルパーは dot-notation で .p だけ消す（併存フィールドは温存＝IM-11 の方針維持）
-        {
-          const { removePaidLeaveForDay } = await import('@/lib/attendance')
-          await removePaidLeaveForDay(data.workerId, data.date)
-        }
-
-        // 新日付に p=1 を書込
-        // 残骸掃除つきで p を書く（approve と同方式・2026-08-27）
+        // 2026-10-02 総合点検: 順番を「新日の検査 → 新日に p を書く → 旧日の p を消す」に。
+        //   旧: 先に旧日の p を消してから新日の多現場チェックをしていたため、409 で中断すると旧日の有給だけが消え、
+        //   申請は「承認済み・旧日」のまま残った（残数が1日戻り、給与から有給が1日消える）
+        let stubKeysM: string[] = []
         {
           // 多現場重複ガード（2026-08-31 横展開・approve と同じ）
-          const { detectMultiSiteConflict, getAttendanceDoc } = await import('@/lib/attendance')
-          const attDocM = await getAttendanceDoc(newYm)
+          const { detectMultiSiteConflict } = await import('@/lib/attendance')
+          const dayM = await inspectDayBeforePaidLeave(data.siteId, data.workerId, newYm, newDay)
+          stubKeysM = dayM.homeLeaveStubKeys
           const sitesAllM = ((await getDoc(doc(db, 'demmen', 'main'))).data()?.sites || []) as { id: string; name?: string }[]
-          const conflictM = detectMultiSiteConflict(attDocM, data.siteId, data.workerId, newYm, newDay, sitesAllM, { w: 0, p: 1 })
+          const conflictM = detectMultiSiteConflict(dayM.attForConflict, data.siteId, data.workerId, newYm, newDay, sitesAllM, { w: 0, p: 1 })
           if (conflictM) {
             const cName = sitesAllM.find(s2 => s2.id === conflictM.conflictSiteId)?.name || conflictM.conflictSiteId
             return NextResponse.json({
               error: `変更先の日付は「${cName}」に同日の出面が既にあるため変更できません`,
             }, { status: 409 })
           }
-          const mvEntry = { w: 0, p: 1 }
-          await setAttendanceEntry(data.siteId, data.workerId, newYm, newDay, mvEntry,
-            { deleteFields: computeAttendanceDeleteFields(mvEntry) })
+          if ((dayM.existingWork || dayM.dayApproval) && body.allowOverwrite !== true) {
+            const parts: string[] = []
+            if (dayM.existingWork) parts.push(`変更先の日は出勤の入力があります（${describeWork(dayM.existingWork)}）。有給にすると出勤の記録が消えます`)
+            if (dayM.dayApproval) parts.push(`変更先の日は${dayM.dayApproval.final ? '最終承認' : '職長承認'}が済んでいます`)
+            return NextResponse.json({
+              error: `${newDate}: ${parts.join('。')}`,
+              code: 'LEAVE_OVERWRITES_WORK',
+              existingWork: dayM.existingWork,
+              dayApproved: !!dayM.dayApproval,
+            }, { status: 409 })
+          }
+          if ((dayM.existingWork || dayM.dayApproval) && body.allowOverwrite === true) {
+            await logActivity('admin', 'leave.overwriteWork',
+              `${data.workerName} ${newDate} の${dayM.existingWork ? `出勤入力（${describeWork(dayM.existingWork)}）` : ''}${dayM.dayApproval ? '承認済みの日' : ''}を確認のうえ有給で上書き（日付変更）`)
+          }
+        }
+        // 新日付に p=1 を書込（残骸掃除つき・approve と同方式・2026-08-27）
+        const mvEntry = { w: 0, p: 1 }
+        await setAttendanceEntry(data.siteId, data.workerId, newYm, newDay, mvEntry,
+          { deleteFields: computeAttendanceDeleteFields(mvEntry) })
+        await clearHomeLeaveStubs(newYm, stubKeysM)
+
+        // 2026-09-02 修正（有給総点検・第4回）: 旧日の p は「申請時の siteId」だけでなく
+        //   その日の全現場から外す（revoke と同じ共通ヘルパー）。職長が現場を付け替えた後に
+        //   日付変更すると旧 p が残り、残数が1日余計に減って給与も有給2日扱いになっていた。
+        //   ヘルパーは dot-notation で .p だけ消す（併存フィールドは温存＝IM-11 の方針維持）
+        try {
+          const { removePaidLeaveForDay } = await import('@/lib/attendance')
+          await removePaidLeaveForDay(data.workerId, data.date)
+        } catch (delErr) {
+          console.error('[modify_date] 旧日の p 削除失敗:', delErr)
+          return NextResponse.json({
+            error: `${newDate} に有給を書きましたが、${data.date} の有給を消せませんでした。出面を確認して ${data.date} の有給を手で外してください`,
+          }, { status: 500 })
         }
       }
 
@@ -797,16 +928,22 @@ export async function GET(request: NextRequest) {
     }
 
     // Admin: get all requests for a month
+    // 2026-10-02 総合点検: 見られる範囲を lib/leave-request-scope.ts で絞る（休暇管理を見られる人は全部、
+    //   職長は自分が職長承認する現場だけ）。旧: ログインしていれば誰でも全現場ぶん読めた
     if (await checkApiAuth(request)) {
+      const { requestListScopeOf, filterLeaveRequestsByScope } = await import('@/lib/leave-request-scope')
+      const scope = await requestListScopeOf(request)
+      if (scope.kind === 'none') return NextResponse.json({ error: 'この一覧を見る権限がありません' }, { status: 403 })
       const q = ym
         ? query(collection(db, 'leaveRequests'), where('ym', '==', ym))
         : query(collection(db, 'leaveRequests'))
 
       const snap = await getDocs(q)
-      const requests: (LeaveRequest & { id: string })[] = []
+      let requests: (LeaveRequest & { id: string })[] = []
       snap.forEach(d => {
         requests.push({ id: d.id, ...(d.data() as LeaveRequest) })
       })
+      requests = await filterLeaveRequestsByScope(scope, requests)
 
       // Sort: pending first, then by date
       requests.sort((a, b) => {

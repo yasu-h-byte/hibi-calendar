@@ -4,7 +4,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDocs, collection, updateDoc, deleteField } from '@/lib/fsdb'
 import { getAttendanceDoc, ymKey } from '@/lib/attendance'
 import { ensureDocExists } from '@/lib/firestore-safe'
-import { checkMonthLocked } from '@/lib/locks'
+import { loadLockContext } from '@/lib/locks'
 import type { AttendanceEntry } from '@/types'
 import { currentYmJst } from '@/lib/date-utils'
 
@@ -87,7 +87,8 @@ async function detectOrphans(fromYm: string, toYm: string): Promise<{
 
   const orphans: OrphanDay[] = []
   const scannedMonths: string[] = []
-  const lockCache: Record<string, boolean> = {}
+  // 締めは「その人の会社」で見る（2026-10-02 総合点検: 会社なしだと両社とも締めるまで未締め扱いだった）
+  const lockCtx = await loadLockContext()
 
   let ym = fromYm
   while (ym <= toYm && scannedMonths.length < 120) {
@@ -95,7 +96,6 @@ async function detectOrphans(fromYm: string, toYm: string): Promise<{
     const att = await getAttendanceDoc(ym)
     const keys = Object.keys(att)
     if (keys.length > 0) {
-      if (lockCache[ym] === undefined) lockCache[ym] = !!(await checkMonthLocked(ym))
       for (const key of keys) {
         const entry = att[key]
         if (!entry?.hk) continue
@@ -113,7 +113,7 @@ async function detectOrphans(fromYm: string, toYm: string): Promise<{
           siteId: parsed.siteId,
           workerId: parsed.workerId,
           hasOtherData: !isPureHomeLeaveStub(entry),
-          locked: lockCache[ym],
+          locked: lockCtx.isLocked(ym, parsed.workerId),
         })
       }
     }

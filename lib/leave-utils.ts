@@ -3,6 +3,8 @@
 //  （app/(app)/leave/page.tsx から抽出。UIに依存しない計算のみ）
 // ────────────────────────────────────────
 
+import { serviceMonthsAt, legalDaysForServiceMonths } from './leave-compute'
+
 /**
  * 'YYYY-MM-DD' を年月日の数値に分解する。
  *
@@ -28,30 +30,18 @@ export function calcGrantMonthFromHire(hireDate: string): number | null {
   return ((p.m - 1 + 6) % 12) + 1
 }
 
-/** 法定有給付与日数を計算（フロントエンド版） */
+/**
+ * 法定有給付与日数を計算（フロントエンド版・勤続の内訳つき）。
+ * 2026-10-02 総合点検: 月数の数え方を lib/leave-compute.ts の serviceMonthsAt に一本化。
+ *   旧: ここにも「日 ≥ 入社日の日なら0・そうでなければ−1」の式があり、月末入社の人（例: 8/31 入社 → 2/28 付与）が
+ *   画面でも1か月少なく（初回0日・以後毎年1段階少なく）出ていた。
+ */
 export function calcLegalPL(hireDate: string, grantDate: string): { days: number; years: number; months: number; label: string } {
-  if (!hireDate || !grantDate) return { days: 0, years: 0, months: 0, label: '' }
-  const hire = parseYmd(hireDate)
-  const grant = parseYmd(grantDate)
-  if (!hire || !grant) return { days: 0, years: 0, months: 0, label: '' }
-
-  // 月数ベースで計算（浮動小数点誤差を回避）
-  const diffMonths = (grant.y - hire.y) * 12
-    + (grant.m - hire.m)
-    + (grant.d >= hire.d ? 0 : -1)
+  const diffMonths = serviceMonthsAt(hireDate, grantDate)
+  if (diffMonths === null) return { days: 0, years: 0, months: 0, label: '' }
   const years = Math.floor(diffMonths / 12)
   const months = diffMonths % 12
-
-  let days = 0
-  if (diffMonths < 6) days = 0
-  else if (diffMonths < 18) days = 10
-  else if (diffMonths < 30) days = 11
-  else if (diffMonths < 42) days = 12
-  else if (diffMonths < 54) days = 14
-  else if (diffMonths < 66) days = 16
-  else if (diffMonths < 78) days = 18
-  else days = 20
-
+  const days = legalDaysForServiceMonths(diffMonths)
   const label = `入社日 ${hireDate} → ${years}年${months}ヶ月 → 法定${days}日`
   return { days, years, months, label }
 }

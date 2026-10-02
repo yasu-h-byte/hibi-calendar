@@ -5,16 +5,6 @@
  */
 
 /**
- * 有給申請の最短先付日数
- *
- * - スタッフは「今日 + N日」以降の日付しか申請できない（事前申請のルール）
- * - モーダル UI と API の両方でこの定数を使用
- *
- * 2026-06-XX 修正 (IM-9): モーダル「今日+5日」、API「過去日のみNG」で食い違い → 統一
- */
-export const LEAVE_REQUEST_MIN_DAYS_AHEAD = 5
-
-/**
  * 年5日義務（労基法39条7項）警告タイミング
  *
  * - 付与から N ヶ月経過しても未達なら警告
@@ -55,8 +45,8 @@ export const FIVE_DAY_WARNING_JP_FROM_GRANT_DATE = '2026-10-01'
  * 欠勤日数は「出面に記録された欠勤」だけを数える（現場カレンダーから引かない）。
  * docs/salary-calculation.md 参照。
  *
- * 1日あたりの控除額 = 月給 ÷ 月平均所定労働時間(145h) × 1日の所定労働時間(7h)
- * ＝ 残業単価と同じ分母を使う（就業規則の整合が取りやすい）。
+ * 1日あたりの控除額 = 月給 ÷ 月平均所定労働日数（20.83日 = JP_AVG_MONTHLY_WORK_DAYS）。
+ * 残業単価の分母 145h は流用しない（下の JP_ANNUAL_WORK_DAYS の注意を参照・2026-10-02 コメント訂正）。
  */
 export const JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM = '202608'
 

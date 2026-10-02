@@ -7,6 +7,7 @@
 'use client'
 
 import { useState } from 'react'
+import { STAFF_DOW_VI, STAFF_TEXT, biLine } from '@/lib/labels'
 
 const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
 
@@ -98,10 +99,13 @@ export default function CalendarApprovalModal({
               {sitesNeedingAction.length === 0 ? `Lịch tháng ${monthNum}/${yearNum}` : `Xác nhận lịch tháng ${monthNum}/${yearNum}`}
             </div>
           </div>
+          {/* 44px 以上（2026-10-02 総合点検。旧: 余白なしの × だけ） */}
           <button
+            type="button"
             onClick={() => !signing && onClose()}
-            className="text-white/80 hover:text-white text-2xl leading-none"
+            className="min-w-[44px] min-h-[44px] -mr-2 rounded-lg text-white/80 hover:text-white text-2xl leading-none active:bg-white/10"
             disabled={signing}
+            aria-label={biLine(STAFF_TEXT.close)}
           >
             &times;
           </button>
@@ -133,7 +137,12 @@ export default function CalendarApprovalModal({
             </div>
           )}
 
-          {targetSites.map(site => (
+          {targetSites.map(site => {
+            // 出勤日数・休日数の合計（2026-10-02 総合点検。同意する内容を数でも確かめられるように）
+            const offCount = Array.from({ length: daysInMonth }, (_, i) => site.days?.[String(i + 1)] || 'work')
+              .filter(t => t === 'off' || t === 'holiday').length
+            const workCount = daysInMonth - offCount
+            return (
             <div key={site.siteId} className={`border rounded-lg overflow-hidden ${
               site.needsResign ? 'border-amber-400 ring-2 ring-amber-100' : 'border-gray-200'
             }`}>
@@ -142,20 +151,24 @@ export default function CalendarApprovalModal({
               }`}>
                 <div className="font-bold text-sm text-hibi-navy">{site.siteName}</div>
                 {site.needsResign ? (
-                  <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                  <span className="text-xs bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-bold">
                     更新あり / Đã cập nhật
                   </span>
                 ) : site.signed ? (
-                  <span className="text-[10px] bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-bold">
-                    ✓ 署名済み
+                  <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-full font-bold">
+                    ✓ {biLine(STAFF_TEXT.signed)}
                   </span>
                 ) : null}
               </div>
-              {/* カレンダーグリッド */}
+              {/* カレンダーグリッド
+                  2026-10-02 総合点検: 出勤・休みを色だけで示していた（数字 11px・凡例 10px 日本語のみ）のをやめ、
+                  各マスに「出 / Làm」「休 / Nghỉ」の文字を入れ、凡例と合計を日越 12px 以上にする（同意の根拠になる画面） */}
               <div className="p-2">
-                <div className="grid grid-cols-7 gap-0.5 text-center text-[10px]">
+                <div className="grid grid-cols-7 gap-0.5 text-center">
                   {DOW_LABELS.map((d, i) => (
-                    <div key={d} className={`py-1 font-bold ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-600'}`}>{d}</div>
+                    <div key={d} className={`py-1 font-bold text-xs leading-tight ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-600'}`}>
+                      {d}<span className="block font-normal">{STAFF_DOW_VI[i]}</span>
+                    </div>
                   ))}
                   {Array.from({ length: firstDow }).map((_, i) => (
                     <div key={`pad-${i}`} className="py-2" />
@@ -168,25 +181,31 @@ export default function CalendarApprovalModal({
                     return (
                       <div
                         key={day}
-                        className={`py-1.5 rounded text-[11px] font-medium ${
+                        className={`py-1 rounded leading-tight ${
                           isOff
-                            ? 'bg-gray-200 text-gray-500'
-                            : dow === 0 ? 'bg-red-50 text-red-600' : dow === 6 ? 'bg-blue-50 text-blue-600' : 'bg-blue-100 text-blue-800'
+                            ? 'bg-gray-200 text-gray-700'
+                            : 'bg-blue-100 text-blue-900'
                         }`}
-                        title={isOff ? '休み / Nghỉ' : '出勤 / Đi làm'}
                       >
-                        {day}
+                        <div className={`text-sm font-bold tabular-nums ${!isOff && dow === 0 ? 'text-red-600' : !isOff && dow === 6 ? 'text-blue-600' : ''}`}>{day}</div>
+                        <div className="text-xs">{isOff ? '休' : '出'}</div>
+                        <div className="text-xs">{isOff ? 'Nghỉ' : 'Làm'}</div>
                       </div>
                     )
                   })}
                 </div>
-                <div className="flex gap-3 mt-2 text-[10px] text-gray-500 justify-center">
-                  <span><span className="inline-block w-2.5 h-2.5 bg-blue-100 rounded-sm mr-1 align-middle" />出勤</span>
-                  <span><span className="inline-block w-2.5 h-2.5 bg-gray-200 rounded-sm mr-1 align-middle" />休み</span>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-gray-700 justify-center">
+                  <span><span className="inline-block w-3 h-3 bg-blue-100 border border-blue-200 rounded-sm mr-1 align-middle" />出 = {biLine(STAFF_TEXT.work)}</span>
+                  <span><span className="inline-block w-3 h-3 bg-gray-200 rounded-sm mr-1 align-middle" />休 = {biLine(STAFF_TEXT.off)}</span>
+                </div>
+                <div className="mt-1.5 text-center text-sm font-bold text-hibi-navy tabular-nums">
+                  {STAFF_TEXT.work.ja} {workCount}日・{STAFF_TEXT.off.ja} {offCount}日
+                  <span className="block text-xs font-normal text-hibi-sub">{STAFF_TEXT.work.vi} {workCount} ngày · {STAFF_TEXT.off.vi} {offCount} ngày</span>
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
 
           {errorMsg && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-2 text-red-700 text-sm text-center">
@@ -260,28 +279,32 @@ export default function CalendarApprovalModal({
                 ✓ 送信しました。担当者が確認します / Đã gửi, người phụ trách sẽ kiểm tra
               </div>
             ) : !showQuestion ? (
+              /* 異議の入口は 44px 以上（2026-10-02 総合点検。旧: 12px の下線リンク1行） */
               <button
+                type="button"
                 onClick={() => setShowQuestion(true)}
-                className="text-xs text-blue-600 underline"
+                className="w-full min-h-[44px] py-2 rounded-lg text-sm text-blue-700 underline active:bg-blue-50"
               >
                 質問・相談・変更してほしい点がある方はこちら / Có thắc mắc hoặc đề nghị?
               </button>
             ) : (
               <div className="space-y-2">
+                {/* 16px（旧 text-sm だと iOS がフォーカスで画面を拡大する） */}
                 <textarea
                   value={questionText}
                   onChange={e => setQuestionText(e.target.value)}
                   rows={3}
                   placeholder="質問・相談・変更してほしい点 / Câu hỏi, đề nghị thay đổi..."
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base"
                 />
                 <div className="grid grid-cols-2 gap-2">
                   <button
+                    type="button"
                     onClick={() => { setShowQuestion(false); setQuestionText('') }}
                     disabled={questionSending}
-                    className="py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition disabled:opacity-50"
+                    className="min-h-[44px] py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition disabled:opacity-50"
                   >
-                    閉じる
+                    {biLine(STAFF_TEXT.close)}
                   </button>
                   <button
                     onClick={async () => {
@@ -292,9 +315,9 @@ export default function CalendarApprovalModal({
                       else alert('送信に失敗しました / Gửi thất bại')
                     }}
                     disabled={questionSending || questionText.trim().length < 2}
-                    className="py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"
+                    className="min-h-[44px] py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"
                   >
-                    {questionSending ? '送信中...' : '送信 / Gửi'}
+                    {questionSending ? biLine(STAFF_TEXT.sending) : '送信 / Gửi'}
                   </button>
                 </div>
               </div>

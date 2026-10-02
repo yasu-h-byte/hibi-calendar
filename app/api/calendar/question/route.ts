@@ -8,7 +8,7 @@
  * - POST（管理者・body.resolve）: 管理者が「解決済み」に更新
  * - GET（管理者）: 当月の質問一覧を取得
  */
-import { checkApiAuth, requireCap } from '@/lib/auth'
+import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { collection, addDoc, getDocs, query, where, doc, updateDoc } from '@/lib/fsdb'
@@ -22,13 +22,16 @@ export async function POST(request: NextRequest) {
 
     // 管理者: 解決済みにする
     if (body.resolve && body.id) {
-      if (!await checkApiAuth(request)) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
-      await updateDoc(doc(db, 'calendarQuestions', body.id), {
+      // 2026-10-02 総合点検: カレンダーの承認者（lib/permissions.ts calendar.approve＝事業責任者・代表）だけ。
+      //   旧: ログインしていれば誰でも（職長も）他人の質問・異議を解決済みにでき、resolvedBy は body の値をそのまま保存していた
+      const denied = await requireCap(request, 'calendar.approve')
+      if (denied) return denied
+      const auth = await getApiAuthUser(request)
+      const resolvedBy = auth.authorized ? (auth.actor === 'super-admin' ? 0 : auth.actor) : null
+      await updateDoc(doc(db, 'calendarQuestions', String(body.id)), {
         resolved: true,
         resolvedAt: new Date().toISOString(),
-        resolvedBy: body.resolvedBy ?? null,
+        resolvedBy,
       })
       return NextResponse.json({ success: true })
     }

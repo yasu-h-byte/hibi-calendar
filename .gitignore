@@ -1,4 +1,5 @@
-node_modules/
+# 末尾の / を付けない（作業用フォルダでは node_modules がリンクになることがあり、/ つきだとリンクを無視しない）
+node_modules
 .next/
 .env.local
 *.tsbuildinfo
@@ -11,3 +12,6 @@ next-env.d.ts
 
 # Claude Code MCP config (contains absolute paths, personal)
 .mcp.json
+
+# Claude Code の作業用フォルダ（リポジトリに入れない）
+.claude/worktrees/

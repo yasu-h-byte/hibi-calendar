@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import {
-  resolveApiRoleFromMain, checkForemanSiteScope, isForemanScopedGridAction,
+  resolveApiRoleFromMain, checkForemanSiteScope, isForemanScopedGridAction, approvalDateError,
 } from '@/lib/attendance-authz'
 
 /** 出面グリッド POST の担当現場チェック（2026-09-15） */
@@ -62,8 +62,38 @@ describe('attendance-authz', () => {
     for (const a of [undefined, '', 'saveAttendance', 'approve', 'approve_foreman', 'unapprove', 'unapprove_foreman']) {
       expect(isForemanScopedGridAction(a)).toBe(true)
     }
-    for (const a of ['approve_final', 'unapprove_final', 'saveWorkDays', 'saveAssign']) {
+    // 2026-10-02 総合点検: 配置・運転者・夜勤の日・工種も担当現場だけ（旧: 一覧に無く、他現場を書けた）
+    for (const a of ['saveAssign', 'saveDrivers', 'saveNightDays', 'saveDefaultWorkType', 'moveWorkType', 'setDayWorkType']) {
+      expect(isForemanScopedGridAction(a)).toBe(true)
+    }
+    // これから足すアクションも、既定で担当現場チェックの対象になる
+    expect(isForemanScopedGridAction('someNewAction')).toBe(true)
+    // 外すのは理由のあるものだけ（最終承認は管理者だけ・全社の所定日数は現場を持たない）
+    for (const a of ['approve_final', 'unapprove_final', 'saveWorkDays']) {
       expect(isForemanScopedGridAction(a)).toBe(false)
     }
+  })
+})
+
+describe('approvalDateError（承認できる日か・2026-10-02 総合点検）', () => {
+  const today = '2026-10-05'
+  test('今日まで・実在する日は承認できる', () => {
+    expect(approvalDateError('202610', 5, today)).toBeNull()
+    expect(approvalDateError('202610', 1, today)).toBeNull()
+    expect(approvalDateError('202609', 30, today)).toBeNull()
+    expect(approvalDateError('202609', '30', today)).toBeNull()
+  })
+  test('先の日は承認できない（PC の「まとめて承認」が月末まで送っていた）', () => {
+    expect(approvalDateError('202610', 6, today)).toContain('先の日')
+    expect(approvalDateError('202610', 31, today)).toContain('先の日')
+    expect(approvalDateError('202611', 1, today)).toContain('先の日')
+  })
+  test('実在しない日・形の違う月は承認できない', () => {
+    expect(approvalDateError('202609', 31, today)).toContain('実在しない')
+    expect(approvalDateError('202602', 29, today)).toContain('実在しない')
+    expect(approvalDateError('202609', 0, today)).toContain('実在しない')
+    expect(approvalDateError('202609', 1.5, today)).toContain('実在しない')
+    expect(approvalDateError('2026-09', 1, today)).not.toBeNull()
+    expect(approvalDateError('202613', 1, today)).not.toBeNull()
   })
 })

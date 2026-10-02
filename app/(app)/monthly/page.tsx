@@ -7,6 +7,8 @@ import PayrollAuditModal from '@/components/monthly/PayrollAuditModal'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConfirmBadge'
 import { can } from '@/lib/permissions'
+import { postJson } from '@/lib/api-client'
+import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { Icon } from '@/components/ui/Icon'
 import { UnderlineTabs, ToolButton, Segment, SearchBox } from '@/components/ui/PageParts'
 import { CloseCard, OverviewList, needsAttention, type ApprovalStatus } from './components/MonthlyOverview'
@@ -404,14 +406,20 @@ function MonthlyPageInner() {
   const autoMonthDone = useRef(false)
 
   // Fetch data
+  // 月を素早く切り替えたとき、前の月の応答があとから届いて上書きしない（lib/hooks/useLatestRequest・2026-10-02 総合点検）。
+  //   旧: 締めは data.lockedHibi と state の ym を組み合わせて送るので、表示と操作対象がずれ得た
+  const latest = useLatestRequest()
   const fetchData = useCallback(async () => {
     if (!password || !ym) return
+    const req = latest.begin()
     setLoading(true)
     setError('')
     try {
       const res = await fetch(`/api/monthly?ym=${ym}`, {
         headers: { 'x-admin-password': password },
+        signal: req.signal,
       })
+      if (!req.isCurrent()) return
       if (!res.ok) {
         const msg = await res.text()
         setError(msg || 'データ取得に失敗しました')
@@ -419,6 +427,7 @@ function MonthlyPageInner() {
         return
       }
       const json: MonthlyData = await res.json()
+      if (!req.isCurrent()) return
       // 前月を開いたが、もう両社とも締め済みなら今月へ（「締める月」を出す・最初の1回だけ）
       if (!autoMonthDone.current) {
         autoMonthDone.current = true
@@ -433,17 +442,20 @@ function MonthlyPageInner() {
       const defaultDays = calcDefaultPrescribedDays(ym)
       setPrescribedDays(json.workDays ? String(json.workDays) : String(defaultDays))
     } catch (e) {
+      if (latest.isAbort(e) || !req.isCurrent()) return  // 自分で止めた古い読み込み
       setError('通信エラーが発生しました')
       setData(null)
     } finally {
-      setLoading(false)
+      if (req.isCurrent()) setLoading(false)
     }
-  }, [password, ym, calcDefaultPrescribedDays, ymParam])
+  }, [password, ym, calcDefaultPrescribedDays, ymParam, latest])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   // 月末の本人確認（スタッフがスマホで「正しい／まちがいがある」を押した記録・2026-09-30）
   const [staffConfirms, setStaffConfirms] = useState<Record<number, StaffConfirmInfo>>({})
+  // 本人確認の取得に失敗した（2026-10-02 総合点検。旧: 失敗すると締めカードに「対象の人がいません」と出ていた）
+  const [staffConfirmsFailed, setStaffConfirmsFailed] = useState(false)
   const [confirmsVersion, setConfirmsVersion] = useState(0)
   // 本人からの連絡を「対応済み」にできる人（月締めと同じ monthly.close）
   const [canResolveConfirm, setCanResolveConfirm] = useState(false)
@@ -451,14 +463,15 @@ function MonthlyPageInner() {
     if (!password || !ym) return
     let alive = true
     fetch(`/api/attendance/confirm?ym=${ym}`, { headers: { 'x-admin-password': password } })
-      .then(r => (r.ok ? r.json() : { items: [] }))
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then((j: { items?: (StaffConfirmInfo & { workerId: number })[] }) => {
         if (!alive) return
         const m: Record<number, StaffConfirmInfo> = {}
         for (const it of j.items || []) m[it.workerId] = it
         setStaffConfirms(m)
+        setStaffConfirmsFailed(false)
       })
-      .catch(() => { if (alive) setStaffConfirms({}) })
+      .catch(() => { if (alive) { setStaffConfirms({}); setStaffConfirmsFailed(true) } })
     return () => { alive = false }
   }, [password, ym, confirmsVersion])
 
@@ -512,42 +525,22 @@ function MonthlyPageInner() {
     if (!password) return
     setSavingWorkDays(true)
     try {
-      await fetch('/api/monthly', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'setWorkDays', ym, value: Number(prescribedDays) || 0 }),
-      })
+      // 2026-10-02 総合点検: 断られたとき（締め済みの月の 409 など）に理由を出す。旧: 応答を見ておらず、
+      //   保存できていないのに何も出ず、再取得で元の値に戻るだけだった
+      const res = await postJson('/api/monthly', { action: 'setWorkDays', ym, value: Number(prescribedDays) || 0 }, { password })
+      if (!res.ok) {
+        alert(`所定日数を保存できませんでした。\n${res.error || ''}`)
+        return
+      }
       fetchData()
-    } catch {
-      alert('保存に失敗しました')
     } finally {
       setSavingWorkDays(false)
     }
   }, [password, ym, prescribedDays, fetchData])
 
-  // ── 前月コピー ──
-
-  const handleCopyPrevMonth = useCallback(async () => {
-    if (!password) return
-    if (!confirm('前月のデータをコピーしますか？既存データは上書きされます')) return
-    try {
-      const res = await fetch('/api/monthly', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'copyPrevMonth', ym }),
-      })
-      if (!res.ok) {
-        const json = await res.json()
-        alert(json.error || 'コピーに失敗しました')
-        return
-      }
-      const json = await res.json()
-      alert(`${json.copiedEntries}件のデータをコピーしました`)
-      fetchData()
-    } catch {
-      alert('コピーに失敗しました')
-    }
-  }, [password, ym, fetchData])
+  // 「前月コピー」（前月の出面を丸ごと当月へ写す保守用のボタン）は 2026-10-02 総合点検で画面から外した。
+  //   出面は本人・職長の入力と承認で積み上げるものなので、締めの画面に置く理由が無く、
+  //   森田さんマニュアルも「押さないで」と書いていた。サーバ側の copyPrevMonth も廃止
 
   // ── Export download handler ──
 
@@ -604,12 +597,6 @@ function MonthlyPageInner() {
       setExportDownloading(null)
     }
   }, [password, ym, exportSelectedOrg])
-
-  // Check if current month has data
-  const hasCurrentData = useMemo(() => {
-    if (!data) return false
-    return data.workers.length > 0 || data.subcons.length > 0
-  }, [data])
 
   // ── Worker filtering & sorting ──
 
@@ -946,8 +933,6 @@ function MonthlyPageInner() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <ToolButton icon="copy" onClick={handleCopyPrevMonth} disabled={hasCurrentData}
-            title={hasCurrentData ? '既にデータが存在します' : '前月の出勤データをコピー'}>前月コピー</ToolButton>
           <ToolButton icon="download" onClick={() => switchTopTab('export')}
             title="帳票はすべて「帳票出力」タブから（キャシュモ提出の2点・根拠書類・社内用）">帳票出力</ToolButton>
           <select
@@ -1093,6 +1078,7 @@ function MonthlyPageInner() {
                 confirm={{
                   target: confRows.length, ok: confCount('ok'), none: confCount('none') + confCount('early'),
                   stale: confCount('stale'), issue: confCount('issue'), waiting: confCount('waiting'), outside: confCount('outside'),
+                  failed: staffConfirmsFailed,
                 }}
                 audit={auditAll ? { target: auditTargets.length, affected: auditAll.affectedWorkerIds.length } : null}
                 changedAfterLock={diff?.count || 0}

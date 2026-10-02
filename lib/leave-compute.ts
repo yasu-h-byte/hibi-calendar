@@ -13,7 +13,7 @@
  *   - 残日数表示は requestedPeriodUsed を使用（申請承認済みは予約として控除）
  */
 
-import { addMonthsSafe, todayJstIso } from './date-utils'
+import { addMonthsSafe, addDaysIso, todayJstIso } from './date-utils'
 import {
   FIVE_DAY_WARNING_AFTER_MONTHS,
   FIVE_DAY_WARNING_AFTER_MONTHS_JP,
@@ -32,22 +32,44 @@ import {
  * ⚠️ 比例付与（週4日以下/週30h未満）は未対応。フルタイム前提（MI-16）。
  */
 export function calcLegalPL(hireDate: string, grantDate: string): number {
-  if (!hireDate || !grantDate) return 0
-  const hire = new Date(hireDate)
-  const grant = new Date(grantDate)
-  if (isNaN(hire.getTime()) || isNaN(grant.getTime())) return 0
-  // 月数ベースで計算（浮動小数点誤差を回避）
-  const diffMonths = (grant.getFullYear() - hire.getFullYear()) * 12
-    + (grant.getMonth() - hire.getMonth())
-    + (grant.getDate() >= hire.getDate() ? 0 : -1)
-  if (diffMonths < 6) return 0     // 0.5年未満
-  if (diffMonths < 18) return 10   // 0.5年〜1.5年未満
-  if (diffMonths < 30) return 11   // 1.5年〜2.5年未満
-  if (diffMonths < 42) return 12   // 2.5年〜3.5年未満
-  if (diffMonths < 54) return 14   // 3.5年〜4.5年未満
-  if (diffMonths < 66) return 16   // 4.5年〜5.5年未満
-  if (diffMonths < 78) return 18   // 5.5年〜6.5年未満
-  return 20                         // 6.5年以上
+  const months = serviceMonthsAt(hireDate, grantDate)
+  if (months === null) return 0
+  return legalDaysForServiceMonths(months)
+}
+
+/**
+ * 勤続月数（入社日から付与日まで、満で何か月か）。日付が不正なら null（2026-10-02 総合点検）。
+ *
+ * 「addMonthsSafe(入社日, n) <= 付与日 を満たす最大の n」で数える。
+ * 旧: (年差×12 + 月差) に「付与日の日 ≥ 入社日の日 なら 0、そうでなければ −1」を足していた。
+ *     付与日は addMonthsSafe で「応当日が無い月は末日」に丸めるのに、月数の側は日どうしの比較だったため、
+ *     月末（29〜31日）入社の人は初回付与日（例: 入社 2025-08-31 → 2026-02-28）が「5か月」になり
+ *     法定0日で付与を拒否され、以後の年も毎年1段階少ない日数（10→11日のところ 10日）になっていた。
+ *     うるう年の 2/29 入社も同じ。付与日の決め方（addMonthsSafe）と同じ物差しで数えることで一致させる。
+ * lib/leave-utils.ts（画面側の calcLegalPL）もこの関数を使う（同じ式の二重実装をやめた）。
+ */
+export function serviceMonthsAt(hireDate: string, grantDate: string): number | null {
+  const h = /^(\d{4})-(\d{2})-(\d{2})/.exec(hireDate || '')
+  const g = /^(\d{4})-(\d{2})-(\d{2})/.exec(grantDate || '')
+  if (!h || !g) return null
+  const hire = hireDate.slice(0, 10)
+  const grant = grantDate.slice(0, 10)
+  if (!addMonthsSafe(hire, 0) || !addMonthsSafe(grant, 0)) return null
+  let months = (Number(g[1]) - Number(h[1])) * 12 + (Number(g[2]) - Number(h[2]))
+  if (addMonthsSafe(hire, months) > grant) months -= 1
+  return months
+}
+
+/** 勤続月数 → 法定付与日数（労基法39条の表・フルタイム） */
+export function legalDaysForServiceMonths(months: number): number {
+  if (months < 6) return 0     // 0.5年未満
+  if (months < 18) return 10   // 0.5年〜1.5年未満
+  if (months < 30) return 11   // 1.5年〜2.5年未満
+  if (months < 42) return 12   // 2.5年〜3.5年未満
+  if (months < 54) return 14   // 3.5年〜4.5年未満
+  if (months < 66) return 16   // 4.5年〜5.5年未満
+  if (months < 78) return 18   // 5.5年〜6.5年未満
+  return 20                     // 6.5年以上
 }
 
 /**
@@ -341,6 +363,8 @@ export function computePeriodUsed(
      * 省略時・1年後より遅い日を渡したときは従来どおり [付与日, 付与日+1年)。
      */
     periodEndExclusive?: string
+    /** この日の P は数えない（同じ日を書き直すときの二重計上防止。getLeaveBalance の excludeDate と同じ） */
+    excludeDate?: string
   },
 ): {
   actualPeriodUsed: number
@@ -380,6 +404,7 @@ export function computePeriodUsed(
 
     // 付与期間内のみ
     if (isoDate < periodStart || isoDate >= periodEnd) continue
+    if (opts?.excludeDate && isoDate === opts.excludeDate) continue
 
     // multi-site dedup: 同日複数現場の有給は1日とカウント
     requestedDates.add(isoDate)
@@ -572,4 +597,197 @@ export function grantPeriodsOverlap(aGrantDate: string, bGrantDate: string): boo
   const aEnd = addMonthsSafe(aGrantDate, 12)
   const bEnd = addMonthsSafe(bGrantDate, 12)
   return aGrantDate < bEnd && bGrantDate < aEnd
+}
+
+// ────────────────────────────────────────
+//  付与の期・残数の共通計算（2026-10-02 総合点検で一本化）
+//
+//  残数は「申請・承認の検証（getLeaveBalance）」「休暇管理の一覧（/api/leave）」「管理簿 Excel」
+//  「賞与の精勤賞与（買取）」「通知ベル」が別々に数えていて、日本人の繰越・買取のフォールバック・
+//  付与日を前に寄せた人の重なる期間・来年の承認済み有給の扱いが画面ごとに違っていた。
+//  ここの関数だけで数え、各画面は出面の読み方（何か月分を読むか）だけを持つ。
+// ────────────────────────────────────────
+
+type GrantRecLike = {
+  fy?: string | number
+  grantDate?: string
+  grantDays?: number
+  grant?: number
+  carryOver?: number
+  carry?: number
+  adjustment?: number
+  adj?: number
+  buyoutDays?: number
+  buyoutHistory?: Array<{ days?: number; reason?: string }>
+  _archived?: boolean
+}
+
+/** 付与のあるレコード（付与日あり・付与日数>0・時効処理前） */
+function grantedRecords<T extends GrantRecLike>(records: T[]): T[] {
+  return records
+    .filter(r => !r._archived && !!r.grantDate && /^\d{4}-\d{2}-\d{2}$/.test(r.grantDate as string))
+    .filter(r => ((r.grantDays ?? r.grant ?? 0) > 0))
+    .sort((a, b) => (a.grantDate as string).localeCompare(b.grantDate as string))
+}
+
+/**
+ * 付与レコードの期の終わり（この日を含まない）。
+ * 付与日+1年と「次の付与日」の早い方。付与日を前に寄せた人（2025-12-01 → 2026-10-01）の前の期は
+ * 2026-10-01 で終わる（丸1年で数えると 10〜11月の有給を両方の期で数える）。
+ */
+export function grantPeriodEndExclusive<T extends GrantRecLike>(records: T[], rec: T): string {
+  const start = rec.grantDate as string
+  const fullYearEnd = addMonthsSafe(start, 12)
+  const next = grantedRecords(records).find(r => (r.grantDate as string) > start)
+  return next && (next.grantDate as string) < fullYearEnd ? (next.grantDate as string) : fullYearEnd
+}
+
+/**
+ * 基準日の時点で「終わっている直近の期」の付与レコード（期末買取の対象期・/leave の「前の期」）。
+ * 終わっている＝期の終わり（grantPeriodEndExclusive）が基準日以前。まだ続いている期は返さない。
+ * 旧: 賞与は「9/30 時点で有効なレコード」で固定していたため、入社6ヶ月後・以後1年ごとの日本人
+ *     （期が 11/30 等に終わる）は期の途中で買い取られ、前に寄せた人は買取日数が画面と食い違っていた。
+ */
+export function selectEndedPeriodRecord<T extends GrantRecLike>(records: T[], asOfIso: string): T | null {
+  const ended = grantedRecords(records).filter(r => grantPeriodEndExclusive(records, r) <= asOfIso)
+  return ended.length > 0 ? ended[ended.length - 1] : null
+}
+
+export interface RecordBalance {
+  fy: string
+  grantDate: string
+  /** 期の終わり（この日を含まない） */
+  periodEndExclusive: string
+  /** 期の最後の日 */
+  periodLastDay: string
+  grantDays: number
+  /** 残数に足す繰越（日本人は常に0） */
+  carryOver: number
+  total: number
+  adjustment: number
+  buyoutDays: number
+  /** 期の中の出面の P（申請ベース・承認済みの未来分を含む・同日多現場は1日） */
+  periodUsed: number
+  /** 今日までに実際に取った日数 */
+  actualPeriodUsed: number
+  used: number
+  remaining: number
+  overdraft: number
+  /** この期の期末買取（reason: 'year-end'）が記録済みか */
+  yearEndBuyoutRecorded: boolean
+}
+
+/**
+ * 1件の付与レコードの残数。残 = 付与 + 繰越（日本人は0） − (調整 + 買取 + 期の中の P)。
+ * 買取は buyoutDays、無ければ buyoutHistory の合計（移行データ）。
+ */
+export function computeRecordBalance<T extends GrantRecLike>(
+  workerId: number,
+  records: T[],
+  rec: T,
+  allAtt: Record<string, unknown>,
+  opts: { isJp: boolean; todayIso?: string; excludeDate?: string },
+): RecordBalance {
+  const norm = normalizePLRecord(rec as Parameters<typeof normalizePLRecord>[0])
+  const grantDate = rec.grantDate as string
+  const periodEndExclusive = grantPeriodEndExclusive(records, rec)
+  const used = computePeriodUsed(workerId, grantDate, allAtt, opts.todayIso, { periodEndExclusive, excludeDate: opts.excludeDate })
+  const carryOver = opts.isJp ? 0 : norm.carryOver
+  const total = norm.grantDays + carryOver
+  const buyoutDays = rec.buyoutDays ?? (rec.buyoutHistory || []).reduce((s, h) => s + (h.days || 0), 0)
+  const usedTotal = norm.adjustment + buyoutDays + used.requestedPeriodUsed
+  return {
+    fy: String(rec.fy ?? grantDate.slice(0, 4)),
+    grantDate,
+    periodEndExclusive,
+    periodLastDay: addDaysIso(periodEndExclusive, -1),
+    grantDays: norm.grantDays,
+    carryOver,
+    total,
+    adjustment: norm.adjustment,
+    buyoutDays,
+    periodUsed: used.requestedPeriodUsed,
+    actualPeriodUsed: used.actualPeriodUsed,
+    used: usedTotal,
+    remaining: Math.max(0, total - usedTotal),
+    overdraft: Math.max(0, usedTotal - total),
+    yearEndBuyoutRecorded: (rec.buyoutHistory || []).some(h => h.reason === 'year-end'),
+  }
+}
+
+export interface LeaveBalance {
+  /** その日に有効な付与レコードの付与日。付与レコードが無ければ空文字 */
+  grantDate: string
+  /** 当期の付与日数（繰越を含まない。年5日義務の「10日以上付与」判定に使う） */
+  grantDays: number
+  /** 付与枠 = grantDays + carryOver（日本人は繰越0） */
+  total: number
+  /** 消化済み = adjustment + buyout + 出面の p:1 */
+  used: number
+  /** 残日数（マイナスは0にクリップ。期が終わって次の付与がまだなら 0） */
+  remaining: number
+  /** 枠を超過している日数（超過していなければ0） */
+  overdraft: number
+  /** 付与レコードが存在しない（＝まだ付与されていない） */
+  noGrant: boolean
+  /** 当期に実際に取得した有給日数（出面の p:1 のみ。調整・買取を含まない） */
+  periodUsed?: number
+  /** 当期の終わり（この日を含まない）＝付与日+1年 */
+  periodEnd?: string
+  /**
+   * 基準日が当期の終わりを過ぎているのに次の付与がまだ無い（付与の処理待ち・2026-10-02 総合点検）。
+   * この間は remaining を 0 にする。旧: 期を過ぎたレコードの残が「使える日」として残り、
+   * 期の外の P を数えないため申請が何日でも通る／残0の人は法定の付与日を過ぎても申請できなかった
+   */
+  periodOver?: boolean
+  /** periodOver のとき、期の終わりの時点の残（次の付与の繰越の目安） */
+  remainingAtPeriodEnd?: number
+}
+
+/**
+ * 基準日時点の残数（getLeaveBalance の計算本体・純関数）。
+ * 「その日に有効な付与レコード」は selectActiveGrantRecord（付与日 ≤ 基準日のうち最新）。
+ */
+export function computeLeaveBalanceFromAtt<T extends GrantRecLike>(
+  workerId: number,
+  records: T[],
+  allAtt: Record<string, unknown>,
+  asOfIso: string,
+  opts: { isJp: boolean; excludeDate?: string; todayIso?: string },
+): LeaveBalance {
+  const rec = selectActiveGrantRecord(records as Parameters<typeof selectActiveGrantRecord>[0], asOfIso) as T | null
+  if (!rec || !rec.grantDate) {
+    return { grantDate: '', grantDays: 0, total: 0, used: 0, remaining: 0, overdraft: 0, noGrant: true, periodUsed: 0 }
+  }
+  // 当期は [付与日, 付与日+1年)。次の付与が先にあれば基準日の時点で次が有効になっているので、ここでは丸1年でよい
+  const periodEnd = addMonthsSafe(rec.grantDate as string, 12)
+  const b = computeRecordBalance(workerId, records, rec, allAtt, { isJp: opts.isJp, todayIso: opts.todayIso, excludeDate: opts.excludeDate })
+  const periodOver = asOfIso >= periodEnd
+  return {
+    grantDate: b.grantDate,
+    grantDays: b.grantDays,
+    total: b.total,
+    used: b.used,
+    remaining: periodOver ? 0 : b.remaining,
+    overdraft: b.overdraft,
+    noGrant: false,
+    periodUsed: b.periodUsed,
+    periodEnd,
+    periodOver,
+    remainingAtPeriodEnd: b.remaining,
+  }
+}
+
+/** 付与期間の月（YYYYMM）を start の月から end（この日を含まない）の月まで（最大14か月） */
+export function monthsCoveringPeriod(startIso: string, endExclusiveIso: string): string[] {
+  const out: string[] = []
+  let y = Number(startIso.slice(0, 4))
+  let m = Number(startIso.slice(5, 7))
+  const endYm = endExclusiveIso.slice(0, 4) + endExclusiveIso.slice(5, 7)
+  while (`${y}${String(m).padStart(2, '0')}` <= endYm && out.length < 14) {
+    out.push(`${y}${String(m).padStart(2, '0')}`)
+    m++
+    if (m > 12) { m = 1; y++ }
+  }
+  return out
 }

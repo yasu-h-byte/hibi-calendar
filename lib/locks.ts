@@ -14,6 +14,14 @@ import { doc, getDoc } from '@/lib/fsdb'
  *   - `${ym}_hibi`   … 日比建設のみロック
  *   - `${ym}_hfu`    … HFU のみロック
  */
+/**
+ * 会社の判定（2026-10-02 総合点検）: 人員マスタの生データ org は 'hfu' / 'HFU' のどちらもありうる。
+ * 旧は画面・API ごとに `=== 'hfu'`・`=== 'HFU'`・両方、と書き方が違っていた。ここ1つに寄せる
+ */
+export function orgKeyOf(org: unknown): 'hibi' | 'hfu' {
+  return String(org || '').toLowerCase() === 'hfu' ? 'hfu' : 'hibi'
+}
+
 export function isMonthLockedInLocks(
   locks: Record<string, unknown> | null | undefined,
   ym: string,
@@ -23,10 +31,7 @@ export function isMonthLockedInLocks(
   if (locks[ym]) return true  // legacy 全体ロック
   const lockedHibi = !!locks[`${ym}_hibi`]
   const lockedHfu = !!locks[`${ym}_hfu`]
-  if (org) {
-    const o = org === 'hfu' || org === 'HFU' ? 'hfu' : 'hibi'
-    return o === 'hfu' ? lockedHfu : lockedHibi
-  }
+  if (org) return orgKeyOf(org) === 'hfu' ? lockedHfu : lockedHibi
   // org 不明の書込は「両組織ロック時のみ」拒否（安全側に倒しすぎて業務停止しない）
   return lockedHibi && lockedHfu
 }
@@ -49,6 +54,86 @@ export async function checkMonthLocked(ym: string, org?: string): Promise<string
     return null
   } catch {
     return null
+  }
+}
+
+/** 締めのメッセージ（checkMonthLocked と同じ文言） */
+function lockedMessage(ym: string): string {
+  return `${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6))}月は月次締め（ロック）済みのため変更できません。変更が必要な場合は月次集計画面でロックを解除してください`
+}
+
+/**
+ * 「その人の会社が締め済みか」を純関数で判定する（2026-10-02 総合点検）。
+ * - workerIds の誰か1人でも、その人の会社（日比建設／HFU）が締め済みなら true
+ * - 人が決まらない書き込み（workerIds が空・人員マスタにいない）は unknownOrg で決める:
+ *     'either' … どちらかの会社が締め済みなら true（給与に効く書き込み。安全側）
+ *     'both'   … 両方締め済みのときだけ true（外注の人工など、どちらの給与にも入らないもの）
+ */
+export function isMonthLockedForWorkers(
+  locks: Record<string, unknown> | null | undefined,
+  rawWorkers: readonly { id?: unknown; org?: unknown }[] | null | undefined,
+  ym: string,
+  workerIds: readonly number[],
+  unknownOrg: 'either' | 'both' = 'either',
+): boolean {
+  if (!locks) return false
+  const orgs: (string | null)[] = workerIds.map(id => {
+    const w = (rawWorkers || []).find(x => Number(x.id) === Number(id))
+    if (!w) return null
+    return orgKeyOf(w.org)
+  })
+  const known = orgs.filter((o): o is string => !!o)
+  if (known.some(o => isMonthLockedInLocks(locks, ym, o))) return true
+  if (known.length === workerIds.length && workerIds.length > 0) return false
+  // 会社が決まらない分
+  if (unknownOrg === 'both') return isMonthLockedInLocks(locks, ym)
+  return isMonthLockedInLocks(locks, ym, 'hibi') || isMonthLockedInLocks(locks, ym, 'hfu')
+}
+
+/**
+ * 出面など「人に付く書き込み」の締めチェック（2026-10-02 総合点検）。締め済みならエラーメッセージを返す。
+ *
+ * 根本原因: checkMonthLocked(ym) を会社なしで呼ぶと「両社とも締めたときだけ」拒否になる。
+ *   スタッフのスマホ（Worker 型に org が無く常に undefined）・職長トークン・工種の移動・履歴からの復元・運転者の記録が
+ *   これで、片方の会社（例: 日比建設）だけ締めた間、その会社の人の出面を書けた（締め後に支給額が変わる）。
+ *   出面グリッドは判定を自前で書き、30秒キャッシュの人員マスタを使っていた（締めた直後は古い状態で通る）。
+ * 対処: 人の会社は人員マスタ（生データの org）から引く。main は読み直す（キャッシュを使わない）。
+ */
+export async function checkMonthLockedForWorkers(
+  ym: string,
+  workerIds: readonly (number | string | null | undefined)[],
+  unknownOrg: 'either' | 'both' = 'either',
+): Promise<string | null> {
+  if (!/^\d{6}$/.test(ym)) return null
+  try {
+    const snap = await getDoc(doc(db, 'demmen', 'main'))
+    if (!snap.exists()) return null
+    const data = snap.data()
+    const ids = workerIds.map(Number).filter(Number.isFinite)
+    const locked = isMonthLockedForWorkers(
+      data.locks as Record<string, unknown> | undefined,
+      (data.workers || []) as { id?: unknown; org?: unknown }[],
+      ym, ids, unknownOrg,
+    )
+    return locked ? lockedMessage(ym) : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 締めの状態と人員マスタを1回だけ読み、何人・何か月ぶんも判定するための入れ物（一覧の処理用）。
+ * 読めなければ「締めていない」扱い（checkMonthLocked と同じ・締めの判定のために業務を止めない）
+ */
+export async function loadLockContext(): Promise<{ isLocked: (ym: string, workerId: number) => boolean }> {
+  try {
+    const snap = await getDoc(doc(db, 'demmen', 'main'))
+    const data = snap.exists() ? snap.data() : {}
+    const locks = data.locks as Record<string, unknown> | undefined
+    const rawWorkers = (data.workers || []) as { id?: unknown; org?: unknown }[]
+    return { isLocked: (ym, workerId) => isMonthLockedForWorkers(locks, rawWorkers, ym, [workerId], 'either') }
+  } catch {
+    return { isLocked: () => false }
   }
 }
 

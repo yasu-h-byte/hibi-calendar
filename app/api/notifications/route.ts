@@ -5,13 +5,14 @@ import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { mergeAnnouncements } from '@/lib/release-notes'
 import { permRoleOf } from '@/lib/permissions'
 import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs } from '@/lib/fsdb'
+import { collection, query, where, getDocs, doc, getDoc } from '@/lib/fsdb'
+import { backupHealth, type LastBackupInfo } from '@/lib/backup-plan'
 import { getMainData, getAttData, parseDKey, getAssign } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
 import { todayJstIso, addMonthsSafe, todayJstDate, localMidnight, addDaysIso } from '@/lib/date-utils'
 import { isAlreadyRetired, isCalendarSignTarget, isEmployedOn } from '@/lib/workers'
-import { calcLegalCarryOver, selectActiveGrantRecord } from '@/lib/leave-compute'
+import { calcLegalCarryOver, computeLeaveBalanceFromAtt } from '@/lib/leave-compute'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
 import { getWorkerLastAccessMap } from '@/lib/accessLog'
 
@@ -69,6 +70,32 @@ export async function GET(request: NextRequest) {
     //   即日消えていた（例: 12/31退職予定を登録した瞬間に有給残・付与予定・未署名等の
     //   通知が全部止まる）。dashboard/ledger と同じく「今日時点で退職済み」のみ除外
     const activeWorkers = main.workers.filter(w => !isAlreadyRetired(w.retired, todayJstIso()))
+
+    // 0. バックアップが止まっている・一部失敗している（代表だけ・2026-10-02 総合点検）
+    //   旧: 日次バックアップが失敗しても応答に書くだけで、誰も気づけなかった。
+    //   demmen/system.lastBackup（app/api/backup/snapshot が毎回書く）を見る。代表のベルだけ・1回の読み取り
+    if (apiRole?.role === 'super-admin' || apiRole?.role === 'admin') {
+      try {
+        const sysSnap = await getDoc(doc(db, 'demmen', 'system'))
+        const last = (sysSnap.exists() ? sysSnap.data().lastBackup : null) as LastBackupInfo | null
+        const h = backupHealth(last, Date.now())
+        if (!h.ok && h.reason) {
+          // 記録が無いだけ（この仕組みを入れた直後・今夜の実行でできる）は知らせるだけ。止まっている・失敗は赤
+          const firstTime = !last?.at
+          notifications.push({
+            id: 'backup-stale',
+            icon: '\u26A0\uFE0F',
+            message: firstTime
+              ? 'バックアップの実行記録はまだありません（今夜の実行から記録され、止まったときにここに出ます）'
+              : `${h.reason}。管理者設定 → バックアップ・履歴 で確認してください`,
+            type: firstTime ? 'info' : 'error',
+            href: '/settings?tab=activity',
+          })
+        }
+      } catch (e) {
+        console.error('Backup health check error:', e)
+      }
+    }
 
     // 1. 就業カレンダー未署名（今月＋翌月）。2026-09-26: 就業カレンダー画面と同じ集計に一本化
     //   （lib/calendar-matrix.ts projectSignSites ＋ lib/calendar-sign-status.ts summarizeSignStatus）。
@@ -144,33 +171,15 @@ export async function GET(request: NextRequest) {
       const todayIsoPl = todayJstIso()
       const lowPLWorkers: string[] = []
 
+      // 2026-10-02 総合点検: 残数の式を computeLeaveBalanceFromAtt（申請の検証 getLeaveBalance と同じ本体）に。
+      //   旧: ここだけ日本人の繰越を足し、買取の buyoutHistory フォールバックが無く、他の画面と残が食い違うことがあった。
+      //   期が終わって次の付与がまだの人（periodOver）は「付与予定」の通知で出すのでここでは数えない
       for (const w of activeWorkers) {
-        const records = (main.plData[String(w.id)] || []) as ({ grantDate?: string; grantDays?: number; grant?: number; carryOver?: number; carry?: number; adjustment?: number; adj?: number; buyoutDays?: number; _archived?: boolean })[]
+        const records = (main.plData[String(w.id)] || []) as Parameters<typeof computeLeaveBalanceFromAtt>[1]
         if (records.length === 0) continue
-
-        const rec = selectActiveGrantRecord(records, todayIsoPl)
-        if (!rec || !rec.grantDate) continue
-
-        const total = (rec.grantDays ?? rec.grant ?? 0) + (rec.carryOver ?? rec.carry ?? 0)
-        if (total <= 0) continue
-
-        // 期間 [grantDate, +1年) 内の P 日数（同日複数現場は1日）
-        const start = rec.grantDate
-        const end = addMonthsSafe(start, 12)  // 2/29 付与にも安全（旧: 文字列+1年）
-        const seen = new Set<string>()
-        for (const [key, entry] of Object.entries(allAttForPL)) {
-          const e = entry as { p?: number }
-          if (!e?.p) continue
-          const pk = parseDKey(key)
-          if (parseInt(pk.wid) !== w.id) continue
-          const iso = `${pk.ym.slice(0, 4)}-${pk.ym.slice(4, 6)}-${String(pk.day).padStart(2, '0')}`
-          if (iso >= start && iso < end) seen.add(iso)
-        }
-        // adjustment は「新フィールド優先」（normalizePLRecord と統一。旧 Math.max は
-        //   負の調整＝日数を足す調整を 0 に丸め、残3日誤警報の原因だった 2026-08-27）
-        const used = (rec.adjustment ?? rec.adj ?? 0) + (rec.buyoutDays ?? 0) + seen.size
-        const remaining = total - used
-
+        const bal = computeLeaveBalanceFromAtt(w.id, records, allAttForPL, todayIsoPl, { isJp: !w.visa || w.visa === 'none' })
+        if (bal.noGrant || bal.periodOver || bal.total <= 0) continue
+        const remaining = bal.total - bal.used
         if (remaining <= 3) {
           lowPLWorkers.push(`${w.name}(残${Math.max(0, remaining)})`)
         }
@@ -204,7 +213,9 @@ export async function GET(request: NextRequest) {
       const isHibiLocked = !!(main.locks[`${prevYm}_hibi`]) || legacyLocked
       const isHfuLocked = !!(main.locks[`${prevYm}_hfu`]) || legacyLocked
 
-      if (!isHibiLocked) {
+      // 月締めは月次集計（/monthly・給与の鍵の中）で行う。開けない人（職長・給与を見られない事務）には出さない（2026-10-02 総合点検）
+      const canCloseMonth = await callerCan(request, 'monthly.view')
+      if (canCloseMonth && !isHibiLocked) {
         notifications.push({
           id: 'month-unlocked-hibi',
           icon: '🔓',
@@ -212,7 +223,7 @@ export async function GET(request: NextRequest) {
           type: 'warning',
         })
       }
-      if (!isHfuLocked) {
+      if (canCloseMonth && !isHfuLocked) {
         notifications.push({
           id: 'month-unlocked-hfu',
           icon: '🔓',

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   promote, dailyForStep, capDaily, GRADE_LABELS, GRADES_IN_ORDER, type JpGrade,
 } from '@/lib/jp-wage'
+import { isAlreadyRetired } from '@/lib/workers'
 
 const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
 
@@ -45,7 +46,8 @@ export default function PromotionPanel() {
       if (wr.ok) {
         const j = await wr.json()
         setWorkers((j.workers as Record<string, unknown>[])
-          .filter(w => !w.retired && (!w.visaType || w.visaType === 'none'))
+          // 退職の判定は「今日の時点で退職日を過ぎたか」（lib/workers.ts isAlreadyRetired・2026-10-02 総合点検）。旧: `!w.retired` で退職「予定」の在籍者まで外れていた
+          .filter(w => !isAlreadyRetired(w.retired as string | undefined) && (!w.visaType || w.visaType === 'none'))
           .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
           .map(w => ({
             id: Number(w.id), name: String(w.name),

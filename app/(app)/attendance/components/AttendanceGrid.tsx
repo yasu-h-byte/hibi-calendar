@@ -58,6 +58,8 @@ interface Props {
   drivers?: Record<number, { am: number[]; pm: number[] }>
   onDriverClick?: (day: number) => void
   onForemanApproveAll: () => void
+  /** まとめて承認できる日の数（昨日まで・入力あり・未承認）。0ならボタンを出さない */
+  foremanBulkCount: number
   onToggleForemanApproval: (day: number) => void
   onFinalApproveAll: () => void
   onToggleFinalApproval: (day: number) => void
@@ -89,7 +91,7 @@ export default function AttendanceGrid({
   onSubconNChange, onSubconOnChange, onCellKeyDown, onNightClick,
   nightDays, onToggleNightDay,
   drivers, onDriverClick,
-  onForemanApproveAll, onToggleForemanApproval, onFinalApproveAll, onToggleFinalApproval,
+  onForemanApproveAll, foremanBulkCount, onToggleForemanApproval, onFinalApproveAll, onToggleFinalApproval,
   workTypeSites, dayWorkType, onSetDayWorkType, defaultWorkType, defaultWorkTypeSubcon,
   entrySiteByWorkerDay, entrySiteBySubconDay,
   onChangeDefaultWorkType, onChangeDefaultWorkTypeSubcon, onMoveWorkType, onMoveWorkTypeSubcon,
@@ -340,11 +342,14 @@ export default function AttendanceGrid({
                     <div className="text-[13px] font-bold text-gray-900 dark:text-white">{siteLeaderLabel(data.isSupportSite)}承認</div>
                     <div className="text-[11px] text-hibi-sub dark:text-gray-400 truncate">{data.site.foremanName || '—'}{data.site.foremanNote ? `（${data.site.foremanNote}）` : ''}</div>
                   </div>
-                  {canForemanApprove && (unapprovedDays.length > 0 ? (
-                    <button onClick={onForemanApproveAll}
+                  {/* まとめて承認は「昨日までの、入力がある日」だけ（先の日・誰も入れていない日は承認しない・2026-10-02） */}
+                  {canForemanApprove && (foremanBulkCount > 0 ? (
+                    <button onClick={onForemanApproveAll} title="昨日までの、入力がある日をまとめて承認します（今日の分は1日ずつ）"
                       className="shrink-0 h-7 px-2.5 rounded-md bg-hibi-navy text-white text-xs font-bold whitespace-nowrap hover:bg-hibi-light transition">
-                      まとめて承認
+                      まとめて承認（{foremanBulkCount}日）
                     </button>
+                  ) : unapprovedDays.length > 0 ? (
+                    <span className="shrink-0 text-xs font-bold text-hibi-sub dark:text-gray-400 whitespace-nowrap">昨日まで承認済み</span>
                   ) : (
                     <span className="shrink-0 text-xs font-bold text-green-700 dark:text-green-400 whitespace-nowrap">全日承認済み</span>
                   ))}
@@ -936,6 +941,11 @@ export default function AttendanceGrid({
             <span className="mx-1 border-l border-hibi-line dark:border-gray-600 h-3" />
             <span className="text-orange-600 font-medium">外国人:</span>
             <span><strong className="text-green-700">出</strong> = 時間入力</span>
+            {/* マスの右上の点（誰が入れたか）の凡例。2026-10-02 総合点検: 色だけで、説明が title（マウスを乗せたとき）にしか無かった */}
+            <span className="flex items-center gap-1" title="マスの右上の点。本人のスマホの打刻か、職長・事務の入力か">
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-400" aria-hidden="true" />本人の打刻
+              <span className="inline-block w-2 h-2 rounded-full bg-orange-400 ml-1.5" aria-hidden="true" />職長の入力
+            </span>
             <span>休憩: 午前30分・午後30分のチェック（昼60分は固定）</span>
             <span className="text-amber-600">7h超=残業</span>
           </>

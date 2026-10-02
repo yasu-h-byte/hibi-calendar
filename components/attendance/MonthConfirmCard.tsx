@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { StaffMonthSummary, AttConfirmDoc } from '@/lib/attendance-confirm'
 import { REST_REASONS } from '@/components/attendance/RestReportModal'
+import { STAFF_TEXT, biLine } from '@/lib/labels'
 
 interface ConfirmData {
   ym: string | null
@@ -30,15 +31,30 @@ export default function MonthConfirmCard({ token }: { token: string }) {
   const [sending, setSending] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  // 取得の失敗（2026-10-02 総合点検。旧: 失敗するとカードごと出ず、本人は確認の月があることに気づけなかった）
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const load = useCallback(async () => {
+    setLoadFailed(false)
     try {
       const res = await fetch(`/api/attendance/confirm?token=${encodeURIComponent(token)}`)
       if (res.ok) setData(await res.json())
-    } catch { /* 表示しないだけ */ }
+      else setLoadFailed(true)
+    } catch { setLoadFailed(true) }
   }, [token])
   useEffect(() => { load() }, [load])
 
+  if (loadFailed && !data) {
+    return (
+      <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-2.5 mb-4 text-sm text-red-700 flex items-center justify-between gap-2">
+        <span>{biLine(STAFF_TEXT.loadFailed)}<span className="block text-xs">出面の確認 / Xác nhận chấm công</span></span>
+        <button type="button" onClick={load}
+          className="min-h-[44px] px-3 rounded-xl bg-white border-2 border-red-300 text-red-700 font-bold active:bg-red-100 shrink-0">
+          {biLine(STAFF_TEXT.retry)}
+        </button>
+      </div>
+    )
+  }
   if (!data?.ym) return null
   if (data.waiting) {
     const wm = parseInt(data.ym.slice(4, 6))
@@ -74,10 +90,15 @@ export default function MonthConfirmCard({ token }: { token: string }) {
     }
   }
 
-  const reasonLabel = (r?: string) => REST_REASONS.find(x => x.value === r)?.label || ''
+  // 理由も日越（2026-10-02 総合点検。旧: 日本語のラベルだけ）
+  const reasonLabel = (r?: string) => {
+    const x = REST_REASONS.find(x => x.value === r)
+    return x ? `${x.label} / ${x.vi}` : ''
+  }
+  // ベトナム語は本人にとって本文なので 12px 以上・text-hibi-sub の濃さ（2026-10-02 総合点検。旧: 11px の gray-400）
   const Row = ({ ja, vi, v, unit = '日', tone = '' }: { ja: string; vi: string; v: number; unit?: string; tone?: string }) => (
     <div className={`flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0 ${tone}`}>
-      <span className="text-sm">{ja}<span className="block text-[11px] text-gray-400">{vi}</span></span>
+      <span className="text-sm">{ja}<span className="block text-xs text-hibi-sub">{vi}</span></span>
       <span className="text-lg font-extrabold tabular-nums">{v}<span className="text-xs font-bold ml-0.5">{unit}</span></span>
     </div>
   )
@@ -95,7 +116,7 @@ export default function MonthConfirmCard({ token }: { token: string }) {
               {c!.status === 'ok' ? '✓ 確認ずみ / Đã xác nhận' : c!.resolvedAt ? '✓ 会社が対応 / Công ty đã xử lý' : '✉ 連絡ずみ / Đã báo'}
             </span>
           ) : (
-            <span className="text-xs font-bold text-hibi-charcoal bg-hibi-amber rounded-full px-2 py-1">確認してください</span>
+            <span className="text-xs font-bold text-hibi-charcoal bg-hibi-amber rounded-full px-2 py-1">{biLine(STAFF_TEXT.pleaseConfirm)}</span>
           )}
         </div>
         {/* 会社からの返事（事務所が「対応済み」にしたとき・2026-09-30） */}
@@ -122,14 +143,14 @@ export default function MonthConfirmCard({ token }: { token: string }) {
               <div className="py-1.5 border-b border-gray-100 last:border-0">
                 <div className="flex items-center justify-between">
                   <span className="text-sm">休憩短縮（毎日{s.breakShorten.minPerDay}分）
-                    <span className="block text-[11px] text-gray-400">Rút ngắn nghỉ ({s.breakShorten.minPerDay} phút/ngày)</span>
+                    <span className="block text-xs text-hibi-sub">Rút ngắn nghỉ ({s.breakShorten.minPerDay} phút/ngày)</span>
                   </span>
                   <span className="text-lg font-extrabold tabular-nums">
                     {Math.floor(s.breakShorten.minutes / 60)}<span className="text-xs font-bold ml-0.5">時間</span>
                     {s.breakShorten.minutes % 60 > 0 && <>{s.breakShorten.minutes % 60}<span className="text-xs font-bold ml-0.5">分</span></>}
                   </span>
                 </div>
-                <div className="text-[11px] text-gray-500 mt-0.5">
+                <div className="text-xs text-hibi-sub mt-0.5">
                   出勤{s.breakShorten.days}日 × {s.breakShorten.minPerDay}分。残業と同じ単価で給料に入ります。<br />
                   {s.breakShorten.days} ngày × {s.breakShorten.minPerDay} phút. Được trả lương như làm thêm giờ.
                 </div>
@@ -187,9 +208,10 @@ export default function MonthConfirmCard({ token }: { token: string }) {
             </div>
           ) : (
             <div className="mt-3 space-y-2">
+              {/* 16px（旧 text-sm だと iOS がフォーカスで画面を拡大する・2026-10-02 総合点検） */}
               <textarea value={note} onChange={e => setNote(e.target.value)} rows={3}
                 placeholder="例: 9/25は出勤しました / VD: Ngày 25/9 tôi đã đi làm"
-                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm" />
+                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-base" />
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => { setMode('view'); setErr(null) }}
                   className="bg-gray-200 text-gray-600 rounded-xl py-3 text-sm">戻る / Quay lại</button>
@@ -198,10 +220,11 @@ export default function MonthConfirmCard({ token }: { token: string }) {
               </div>
             </div>
           )}
-          {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
+          {err && <p role="alert" className="mt-2 text-sm text-red-600">{err}</p>}
           {c && !data.stale && (
-            <p className="mt-2 text-[11px] text-gray-400">
-              {new Date(c.at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })} に{c.status === 'ok' ? '確認' : '連絡'}しました
+            <p className="mt-2 text-xs text-hibi-sub tabular-nums">
+              {new Date(c.at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })} に{c.status === 'ok' ? STAFF_TEXT.confirmedAt.ja : STAFF_TEXT.reportedAt.ja}
+              <span className="block">{c.status === 'ok' ? STAFF_TEXT.confirmedAt.vi : STAFF_TEXT.reportedAt.vi} lúc {new Date(c.at).toLocaleString('vi-VN', { timeZone: 'Asia/Tokyo' })}</span>
             </p>
           )}
         </div>

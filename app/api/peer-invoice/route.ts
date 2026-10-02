@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, getApiRole, requireExecutiveAuth, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
 import { getMainData, getMultiMonthAttData, compute } from '@/lib/compute'
 import {
   resolveInvoiceDraft, invoiceApprovalGap, requestPeerInvoice, approvePeerInvoice, rejectPeerInvoice, listPeerInvoicesForYm, getPeerInvoicesForCompanyYm, issuePeerInvoice, voidPeerInvoice,
@@ -73,17 +73,10 @@ export async function POST(request: NextRequest) {
     const auth = await getApiAuthUser(request)
     const actor = auth.authorized ? String(auth.actor) : 'unknown'
 
-    // 申請・取り下げは事務（jimu）も可。それ以外は事業責任者・管理者のみ
-    if (action === 'request' || action === 'withdraw') {
-      const denied = await requireExecutiveAuth(request)
-      if (denied) {
-        const role = await getApiRole(request)
-        if (role?.role !== 'jimu') {
-          return NextResponse.json({ error: 'この操作は事務・管理者・事業責任者のみ実行できます' }, { status: 403 })
-        }
-      }
-    } else {
-      const denied = await requireExecutiveAuth(request)
+    // 権限は権限表（lib/permissions.ts）で決める（2026-10-02 総合点検: 旧は「代表または workerId 1」の直書き＋事務の例外で、
+    //   表の invoice.request（事務だけ）と食い違っていた）。申請・取り下げ → invoice.request、承認・発行・取り消し → invoice.approve
+    {
+      const denied = await requireCap(request, action === 'request' || action === 'withdraw' ? 'invoice.request' : 'invoice.approve')
       if (denied) return denied
     }
 

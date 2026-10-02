@@ -42,6 +42,47 @@ export const WORKER_OFFICE_KEYS = [
 ] as const
 
 /**
+ * 代表だけが直接書き換えられる項目（lib/permissions.ts workers.editPay）＝ 給与の項目すべて ＋ 旧ルール継続。
+ *
+ * 2026-10-02 総合点検: 旧は app/api/workers/route.ts に手書きの一覧（OWNER_ONLY_PAY_FIELDS）が別にあり、
+ *   rateFrom・prevRate・prevJpStep・salaryFrom・prevSalary が抜けていた。事務が「適用開始日を先の日付＋直前の日額」を
+ *   送ると、今月の給与計算の日額・月給が変わり、監査ログ（auditTrail）にも残らなかった。
+ *   一覧を WORKER_PAY_KEYS から作って1つにする（給与の項目を足せば、自動で代表専用・監査対象になる）。
+ */
+export const WORKER_OWNER_ONLY_KEYS: readonly string[] = [...WORKER_PAY_KEYS, 'useOldRules']
+
+/**
+ * /api/workers の add・update が受け付ける項目（**許可リスト**・Firestore の生のキー名＝ org / visa / job）。
+ *
+ * 2026-10-02 総合点検: 旧の update は body のキーを何でも人員マスタへマージしていた
+ *   （token を書き換える・prevRate を足す・知らない項目を増やす、がそのまま通った）。
+ *   ここに無いキーは 400 で断る。項目を足すときは、画面より先にここへ足す。
+ * - WORKER_WRITABLE_PAY_KEYS は代表だけ（値が変わるときに workers.editPay を確かめる）
+ * - scheduledChanges / appliedChanges は日付指定の切り替えの仕組み（lib/worker-crud.ts）が書くので入れない
+ * - token は generateToken / revokeToken だけが書く
+ */
+export const WORKER_WRITABLE_BASE_KEYS = [
+  'name', 'nameVi', 'org', 'visa', 'job', 'hireDate', 'retired', 'visaExpiry', 'memo', 'birthDate', 'payrollNo',
+  'dispatchTo', 'dispatchFrom', 'canDrive', 'nonSmoker', 'children', 'breakShortenMin', 'breakShortenFrom',
+] as const
+export const WORKER_WRITABLE_PAY_KEYS = [
+  'rate', 'hourlyRate', 'otMul', 'salary', 'jpGrade', 'jpStep', 'useOldRules',
+  'rateFrom', 'prevRate', 'prevJpStep', 'hourlyRateFrom', 'prevHourlyRate', 'salaryFrom', 'prevSalary',
+] as const
+/**
+ * 空文字・null を送ると「その項目を消す」になる項目（2026-10-02 総合点検）。
+ * 旧: 画面は `retired: form.retired || undefined` のように送り、JSON でキーごと落ちて「変更なし」になっていた
+ *   ＝**誤って入れた退職日・在留期限・メモを画面から消せなかった**。キーを送らない（undefined）は今までどおり「変更なし」。
+ * 名前・所属・在留資格・職種・入社日は空にできない（消すと集計や役割の判定が壊れる）。
+ */
+export const WORKER_CLEARABLE_KEYS: readonly string[] = [
+  'nameVi', 'retired', 'visaExpiry', 'memo', 'birthDate', 'payrollNo', 'dispatchTo', 'dispatchFrom',
+  'breakShortenMin', 'breakShortenFrom',
+  'hourlyRate', 'salary', 'jpGrade', 'jpStep', 'rateFrom', 'prevRate', 'prevJpStep',
+  'hourlyRateFrom', 'prevHourlyRate', 'salaryFrom', 'prevSalary',
+]
+
+/**
  * demmen/main の workers 配列（生データ）を Worker 型へ写像する（2026-09-02 抽出）。
  *
  * main ドキュメントは約260KBあり、1リクエスト内で getWorkers / getStaffSites /
@@ -55,7 +96,8 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     id: w.id as number,
     name: w.name as string,
     nameVi: (w.nameVi as string) || '',
-    company: (w.org as string) === 'hfu' ? 'HFU' : '日比',
+    // 大文字の 'HFU' も HFU（締め・本人確認と同じ orgKeyOf・2026-10-02 総合点検。旧: 小文字だけで、表記ゆれの人が日比建設に出た）
+    company: String(w.org || '').toLowerCase() === 'hfu' ? 'HFU' : '日比',
     visaType: (w.visa as string) || '',
     token: (w.token as string) || '',
     jobType: (w.job as string) || '',
@@ -87,14 +129,65 @@ export function mapRawWorkers(raw: unknown[]): Worker[] {
     children: Array.isArray(w.children) ? (w.children as string[]) : undefined,
     breakShortenMin: (w.breakShortenMin as number) || undefined,
     breakShortenFrom: (w.breakShortenFrom as string) || undefined,
+    // 2026-10-02 総合点検: メモは保存されるのに読み出していなかった（人員マスタで入れても開き直すと空・一覧にも出ない）。
+    //   Worker 型（types/index.ts）に無い項目なので、入っているときだけ足す
+    ...(typeof w.memo === 'string' && w.memo ? { memo: w.memo } : {}),
   }))
 
   return workers
 }
 
-export async function getWorkerByToken(token: string): Promise<Worker | null> {
-  const workers = await getWorkers()
-  return workers.find(w => w.token === token) || null
+/**
+ * 職長の通行証・個人パスワード・スマホURLを「管理者側の人」として扱う人か（2026-10-02 総合点検）。
+ * 代表（0）・事業責任者（1）と、職種が役員・事務の人。
+ * この人たちのスマホURL（合言葉）は最終承認などの鍵を兼ねるので、代表にだけ返し、発行・失効も代表だけにする
+ * （app/api/workers/route.ts）。旧: 人員マスタを編集できる人（事務）が政仁さん・代表の合言葉を読める・発行し直せた
+ * ＝事務が最終承認まで一人で完結できた。
+ */
+export function isOfficeSideWorker(w: { id: number; jobType?: string | null; job?: string | null }): boolean {
+  const job = w.jobType ?? w.job
+  return w.id === 0 || w.id === 1 || job === 'yakuin' || job === 'jimu'
+}
+
+/**
+ * スマホURL（合言葉）がいま使えるか（2026-10-02 総合点検）。
+ *
+ * 旧: 退職しても合言葉はずっと有効だった（getWorkerByToken に退職日の判定が無く、発行し直すまで本人の出面・有給・
+ *     欠勤控除の日額が見え、職長は現場マスタから外すまで承認もできた）。
+ * 新: - 'active'  … 在籍中（退職日の当日まで）。今までどおり全部使える
+ *     - 'grace'   … 退職日の翌日〜**退職した月の翌月末**。見るだけと、最後の月の本人確認（締め前の月末確認は翌月10日頃まで）だけ
+ *     - 'expired' … それ以降。使えない
+ * 退職日が日付の形でない古いデータ（'true' など）は、いつ辞めたか分からないので 'expired'。
+ */
+export type StaffTokenState = 'active' | 'grace' | 'expired'
+export function staffTokenStateOf(w: { retired?: string | null }, todayIso: string = todayJstIso()): StaffTokenState {
+  if (!isAlreadyRetired(w.retired, todayIso)) return 'active'
+  const r = retiredDateOf(w.retired)
+  if (!r) return 'expired'
+  // 退職した月の翌々月の1日より前＝翌月末まで
+  const graceEndExclusive = addMonthsSafe(`${r.slice(0, 7)}-01`, 2)
+  return todayIso < graceEndExclusive ? 'grace' : 'expired'
+}
+
+/**
+ * 合言葉から本人を探す（純関数・main を読み済みの API 用）。
+ * 既定は在籍中の人だけ。`allowGrace: true` は「見るだけ・本人確認」の入口だけが付ける（書き込みの入口には付けない）。
+ */
+export function findWorkerByToken<W extends { token?: string | null; retired?: string | null }>(
+  workers: W[], token: string | null | undefined, opts: { allowGrace?: boolean; todayIso?: string } = {},
+): W | null {
+  // 空の合言葉は誰にも一致させない（未発行の人は token が '' で、'' 同士が一致してしまうため）
+  if (!token) return null
+  const w = workers.find(x => x.token === token)
+  if (!w) return null
+  const st = staffTokenStateOf(w, opts.todayIso)
+  if (st === 'active' || (st === 'grace' && opts.allowGrace)) return w
+  return null
+}
+
+export async function getWorkerByToken(token: string, opts: { allowGrace?: boolean } = {}): Promise<Worker | null> {
+  if (!token) return null
+  return findWorkerByToken(await getWorkers(), token, opts)
 }
 
 /**
@@ -157,6 +250,9 @@ export function buildWorkerNameMap<T extends { id: number; name: string }>(
  */
 export function isStillActiveForMonth(retired: string | undefined | null, ym: string): boolean {
   if (!retired) return true
+  // 2026-10-02 総合点検: 古いデータの retired: 'true'（文字列・真偽値）は「いつか分からないが退職済み」。
+  //   旧: 'true' >= '2026-10-01' が真になり、ずっと在籍扱いだった
+  if (!retiredDateOf(retired)) return false
   if (!ym) return true  // ym 不在は安全側で表示
   // "YYYYMM" / "YYYY-MM" の両方に対応
   const normalized = ym.replace('-', '')
@@ -196,6 +292,8 @@ export function isHiredByMonth(hireDate: string | undefined | null, ym: string):
  */
 export function isEmployedOn(w: { hireDate?: string | null; retired?: string | null }, iso: string): boolean {
   if (w.hireDate && iso < w.hireDate) return false
+  // 日付の形でない退職日（古い 'true'）は退職済み扱い（2026-10-02 総合点検。旧: 文字列比較で在籍になっていた）
+  if (w.retired && !retiredDateOf(w.retired)) return false
   if (w.retired && iso > w.retired) return false
   return true
 }
@@ -224,8 +322,20 @@ export function isAlreadyRetired(
   todayIso?: string,
 ): boolean {
   if (!retired) return false  // 退職予定なし
+  // 2026-10-02 総合点検: 古いデータの retired: 'true'（文字列・真偽値）は退職済み。
+  //   旧: 'true' < '2026-10-02' が偽になり、ずっと在籍扱い（ログイン・合言葉・通知の対象に残っていた）
+  if (!retiredDateOf(retired)) return true
   const today = todayIso || todayJstIso()  // 既定は日本時間の今日（UTCだとJST朝に1日ズレる）
   return retired < today
+}
+
+/**
+ * 退職日が 'YYYY-MM-DD' の形ならその日付、そうでなければ null（2026-10-02 総合点検）。
+ * 古いデータには retired: 'true' や true が残っていることがあり、日付として比べると必ず「在籍」になる。
+ * 退職の判定（isAlreadyRetired / isStillActiveForMonth / isEmployedOn）は必ずこれを通して形を確かめる。
+ */
+export function retiredDateOf(retired: unknown): string | null {
+  return typeof retired === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(retired) ? retired : null
 }
 
 /**
@@ -244,7 +354,8 @@ export function isToolBudgetEligible(w: {
   retired?: string | null
   hireDate?: string | null
 }, todayIso?: string): boolean {
-  if (isAlreadyRetired(w.retired)) return false
+  // 2026-10-02 総合点検: 引数の todayIso を退職判定に渡していなかった（基準日を指定しても「今日」で判定していた）
+  if (isAlreadyRetired(w.retired, todayIso)) return false
   const visa = w.visa || 'none'
   if (visa.startsWith('jisshu') || visa.startsWith('tokutei')) return true
   if (visa === 'none') {

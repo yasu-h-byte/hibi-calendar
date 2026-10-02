@@ -7,6 +7,7 @@
 'use client'
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { todayJstIso } from '@/lib/date-utils'
+import { STAFF_TEXT, biLine } from '@/lib/labels'
 
 export interface LeaveRequestData {
   id: string
@@ -184,7 +185,7 @@ export default function LeaveRequestModal({
             type="text"
             value={reason}
             onChange={e => setReason(e.target.value)}
-            placeholder="通院、予定など"
+            placeholder={biLine(STAFF_TEXT.leaveReasonExample)}
             className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
           />
         </div>
@@ -222,7 +223,8 @@ export default function LeaveRequestModal({
             </div>
             <div className="space-y-2">
               {requests.map(req => (
-                <div key={req.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${req.status === 'cancelled' ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
+                <div key={req.id} className={`py-2 px-3 rounded-lg ${req.status === 'cancelled' || req.status === 'revoked' ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
+                <div className="flex items-center justify-between min-h-[44px]">
                   <span className="text-sm text-gray-700 font-medium">
                     {formatLeaveDate(req.date)}
                   </span>
@@ -242,17 +244,18 @@ export default function LeaveRequestModal({
                         <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
                           承認待ち / Đang chờ
                         </span>
+                        {/* 44px 以上（2026-10-02 総合点検。旧: 24px） */}
                         <button
                           onClick={() => onCancelRequest(req.id)}
-                          className="text-xs px-2 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 active:scale-95"
+                          className="text-sm min-h-[44px] px-3 rounded-xl bg-red-50 border-2 border-red-200 text-red-600 font-bold active:bg-red-100"
                         >
                           取り消し / Hủy
                         </button>
                       </>
                     )}
                     {req.status === 'rejected' && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold" title={req.rejectedReason || ''}>
-                        却下 / Từ chối
+                      <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold">
+                        {biLine(STAFF_TEXT.rejected)}
                       </span>
                     )}
                     {req.status === 'cancelled' && (
@@ -260,7 +263,19 @@ export default function LeaveRequestModal({
                         取り消し済 / Đã hủy
                       </span>
                     )}
+                    {req.status === 'revoked' && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-500 font-medium">
+                        {biLine(STAFF_TEXT.revoked)}
+                      </span>
+                    )}
                   </div>
+                </div>
+                {/* 却下の理由は本文に出す（2026-10-02 総合点検。旧: title 属性だけで、スマホでは見えなかった） */}
+                {req.status === 'rejected' && (
+                  <div className="text-sm text-red-800 mt-0.5">
+                    {biLine(STAFF_TEXT.rejectedReason)}: {req.rejectedReason || '—'}
+                  </div>
+                )}
                 </div>
               ))}
             </div>

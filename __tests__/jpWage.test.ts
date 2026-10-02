@@ -8,7 +8,7 @@ import {
   type JpGrade,
   type BonusMember,
 } from '@/lib/jp-wage'
-import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration'
+import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration.server'
 
 describe('号俸表: 初号・上限（docs/wage-system.md と一致）', () => {
   it('初号(1号)', () => {

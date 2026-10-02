@@ -11,7 +11,7 @@
  */
 
 import { staffLinkOrigin } from '@/lib/public-origin'
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Hyogo, RosterStatus, SpecialReason } from '@/lib/jp-wage'
 import LaborCostPanel from './LaborCostPanel'
 
@@ -116,27 +116,37 @@ export default function RevisionPanel() {
 
   const entries = data?.entries ?? {}
 
-  /** 下書きを保存して読み直す。計算はサーバ側の1本に寄せる */
-  const save = async (patch: { entries?: Payload['entries'] }) => {
+  /**
+   * 下書きを保存して読み直す。計算はサーバ側の1本に寄せる。
+   * 2026-10-02 総合点検: 送るのは「1人分の差分」（entryPatch）だけにし、サーバで今の entries にマージする。
+   *   旧: 描画時点の entries 全体を送って丸ごと置き換えていたので、保存→再読込の間（1〜2秒）に
+   *   続けて別の人の評語を変えると、前の人の変更が古い entries で上書きされて黙って元に戻っていた。
+   *   保存は1本ずつ順に送る（saveChain）。前の保存が終わる前の操作も、順番どおりに積まれる
+   */
+  const saveChain = useRef<Promise<void>>(Promise.resolve())
+  const save = (body: { entryPatch?: Record<string, Partial<Payload['entries'][string]>>; profitRatePercent?: number | null }) => {
     if (!data) return
-    setBusy(true); setMsg('')
-    try {
-      const res = await fetch('/api/jp-wage/revision', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
-        body: JSON.stringify({ effective: data.effective, entries: patch.entries ?? entries }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error || `保存に失敗しました（${res.status}）`)
-      await load(pw)
-      setMsg('保存しました')
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : '保存に失敗しました')
-    } finally { setBusy(false) }
+    const effective = data.effective
+    const run = async () => {
+      setBusy(true); setMsg('')
+      try {
+        const res = await fetch('/api/jp-wage/revision', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'x-admin-password': pw },
+          body: JSON.stringify({ effective, ...body }),
+        })
+        if (!res.ok) throw new Error((await res.json()).error || `保存に失敗しました（${res.status}）`)
+        await load(pw)
+        setMsg('保存しました')
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : '保存に失敗しました')
+      } finally { setBusy(false) }
+    }
+    saveChain.current = saveChain.current.then(run, run)
   }
 
   const setEntry = (id: number, patch: Partial<Payload['entries'][string]>) => {
-    const cur = entries[String(id)] || { hyogo: 'A' as Hyogo }
-    save({ entries: { ...entries, [String(id)]: { ...cur, ...patch } } })
+    save({ entryPatch: { [String(id)]: patch } })
   }
 
   const apply = async () => {

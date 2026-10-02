@@ -20,6 +20,17 @@ export const DOKO_GROUP_JOBS = ['doko'] as const
 export const NON_FIELD_JOBS = ['jimu'] as const
 
 /**
+ * 現場の職長・代理職長になれる職種（職長・役員）。
+ * 2026-10-02 総合点検: 現場マスタの代理職長の選択肢が `jobType === '職長' || '役員'` と日本語の表示名で比べていて
+ * （API はコード shokucho / yakuin を返す）常に空だった。コードの判定はここに1つ置く
+ */
+export const FOREMAN_CANDIDATE_JOBS = ['shokucho', 'yakuin'] as const
+export function isForemanCandidateJob(job: string | undefined | null): boolean {
+  if (!job) return false
+  return (FOREMAN_CANDIDATE_JOBS as readonly string[]).includes(job)
+}
+
+/**
  * 「鳶」グループ（鳶/見習い/職長/役員）か判定
  * 用途: 出面フッター合計、原価集計、ダッシュボードの人工分類など
  */

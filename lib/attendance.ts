@@ -30,13 +30,11 @@ export async function isScheduledWorkDay(siteId: string, dateIso: string): Promi
     where('ym', '==', ymDash),
     where('siteId', '==', siteId),
   ))
-  let dayType: string | undefined
-  calSnap.forEach(s => {
-    const days = s.data().days as Record<string, string> | undefined
-    if (days && days[String(d)] !== undefined) dayType = days[String(d)]
-  })
-  const dow = new Date(y, m - 1, d).getDay()
-  return (dayType ?? (dow === 0 ? 'off' : 'work')) === 'work'
+  let days: Record<string, string> | undefined
+  calSnap.forEach(s => { days = (s.data().days as Record<string, string> | undefined) ?? days })
+  // 欠けた日の扱いは法令チェック・画面・所定日数と同じ resolveDayType（日曜は休み・ほかは出勤。2026-10-02 総合点検で一本化）
+  const { resolveDayType } = await import('./calendar')
+  return resolveDayType(days, y, m, d) === 'work'
 }
 
 // ────────────────────────────────────────
@@ -335,11 +333,17 @@ export function getEntryStatus(entry: AttendanceEntry | null | undefined): Atten
   if (entry.r && entry.r === 1) return 'rest'
   if (entry.h && entry.h === 1) return 'site_off'
   if (entry.hk && entry.hk === 1) return 'home_leave'
-  if (entry.w === 1 && entry.o && entry.o > 0) return 'overtime'
-  if (entry.w === 1) return 'work'
   // 0.6補償（現場都合休み）。w=1 だけを出勤とみなす旧判定では 'none' に落ち、
   // スマホ・職長画面で「未入力」と誤表示されていた（2026-08-28 実機確認で発覚）
   if (entry.w === 0.6) return 'comp'
+  // 出勤は w>0（1日・半日 0.5）と夜勤のみ（nonly・w は 1）。
+  // 2026-10-02 総合点検: 旧は w === 1 だけを出勤とし、半日（0.5。日本人と旧契約のフン・フォン・タンが PC・職長スマホで選べる）が
+  //   'none' ＝未入力に落ちていた。職長の一覧・まとめ承認は「未入力」で止まり、本人のスマホには督促が出て、
+  //   別現場の入力の索引からも落ちていた（本人確認の kindOf と給与計算は w>0 を出勤に数えるので食い違っていた）
+  const w = entry.w ?? 0
+  if (w > 0 || entry.nonly) {
+    return entry.o && entry.o > 0 ? 'overtime' : 'work'
+  }
   return 'none'
 }
 
@@ -677,77 +681,46 @@ export async function getStaffSites(workerId: number, ymOverride?: string): Prom
   const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
   if (!mainDoc.exists()) return []
 
-  const data = mainDoc.data()
-  const sites = (data.sites || []) as { id: string; name: string; archived?: boolean }[]
-  const assign = (data.assign || {}) as Record<string, { workers?: number[] }>
-  const massign = (data.massign || {}) as Record<string, { workers?: number[] }>
-
   // 2026-09-02: 対象月（申請日の月）を渡せるようにした。旧は常に「今月」の配置で
   //   現場を決めていたため、来月から別現場へ移る人の来月分の有給が旧現場に書かれ、
   //   新現場の出面グリッド・職長画面に出ない（残数・給与には効く）状態になっていた
+  // 2026-10-02 総合点検: 配置の決まりを getAssign（過去12か月の月別配置をさかのぼる）に寄せる（lib/roster.ts）。
+  //   旧は `massign[その月] ?? assign` で、PC の出面画面・給与計算・職長の名簿と食い違っていた
   const ym = ymOverride ? ymOverride.replace('-', '') : currentYmJst()
-
-  const result: { id: string; name: string }[] = []
-
-  for (const site of sites) {
-    if (site.archived) continue
-
-    // Check monthly override first, then default assignment
-    const monthKey = `${site.id}_${ym}`
-    const monthAssign = massign[monthKey]
-    const defaultAssign = assign[site.id]
-
-    const workers = monthAssign?.workers || defaultAssign?.workers || []
-    if (workers.includes(workerId)) {
-      result.push({ id: site.id, name: site.name })
-    }
-  }
-
-  return result
+  const { sitesOfWorkerForMonth } = await import('./roster')
+  return sitesOfWorkerForMonth(mainDoc.data() as import('./roster').AssignSource, workerId, ym)
 }
 
 // ────────────────────────────────────────
 //  職長の担当現場取得
 // ────────────────────────────────────────
 
-export async function getForemanSite(foremanId: number): Promise<Site | null> {
+/**
+ * 職長のトークン画面が扱う現場。**見ている月**の職長で決める（2026-10-02 総合点検）。
+ *
+ * 旧: 常に今月の月別職長（mforeman）で判定し、最初に一致した1現場を返していた。
+ *   10/1 に IHI の職長が交代すると、新職長はトークン画面で9月分を承認・修正でき、旧職長はできなかった。
+ *   マイページ（lib/foreman-todo.ts foremanParentSites・月ごと）と結果が食い違い、2現場を持つ職長は1現場しか扱えなかった。
+ * 新: 判定は lib/auth.ts foremenOfSiteForMonth（月別職長 → 現場の職長。承認の権限判定と同じ1か所）。
+ *   `preferSiteId` を渡すとその現場（担当なら）を返す。返すのは main.sites の現場そのもの（noDriveAllowance・siteType などを含む）。
+ *
+ * @param ym 見ている月 'YYYYMM'（省略＝今月）
+ * @returns 担当の親現場（工種サイトは親にまとめる）と、その月に担当する親現場の一覧
+ */
+export async function getForemanSite(
+  foremanId: number, ym?: string, preferSiteId?: string | null,
+): Promise<(Site & { foremanSites: { id: string; name: string }[] }) | null> {
   const mainDoc = await getDoc(doc(db, 'demmen', 'main'))
   if (!mainDoc.exists()) return null
-
   const data = mainDoc.data()
-  const sites = (data.sites || []) as Record<string, unknown>[]
-  // 2026-09-02 修正: 月次職長交代の書き込み形式は { wid }（app/api/sites）なのに、ここは
-  //   .foreman しか見ておらず、交代後の職長がトークン職長画面で 403 になっていた
-  //   （lib/auth.ts computeForemanSites と同じく foreman ?? wid で両対応）
+  const sites = (data.sites || []) as (Site & { parentId?: string })[]
   const mforeman = (data.mforeman || {}) as Record<string, { foreman?: number; wid?: number }>
-
-  const ym = currentYmJst()
-
-  for (const s of sites) {
-    if (s.archived) continue
-    // 工種サイトは親と同じ職長を持つので、トークン職長画面では親現場を返す（2026-09-15）
-    if (s.parentId) continue
-    const siteId = s.id as string
-
-    // Check monthly foreman override
-    const monthKey = `${siteId}_${ym}`
-    const monthForeman = mforeman[monthKey]?.foreman ?? mforeman[monthKey]?.wid
-    const defaultForeman = s.foreman as number
-
-    if ((monthForeman || defaultForeman) === foremanId) {
-      return {
-        id: siteId,
-        name: s.name as string,
-        start: (s.start as string) || '',
-        end: (s.end as string) || '',
-        foreman: foremanId,
-        archived: false,
-        ownerId: (s.ownerId as string) || undefined,
-        siteType: (s.siteType as 'direct' | 'support') || undefined,
-      }
-    }
-  }
-  return null
+  const ymKey6 = (ym || currentYmJst()).replace('-', '')
+  const { foremenOfSiteForMonth } = await import('./foremen')
+  const mine = sites.filter(s => !s.archived && !s.parentId && foremenOfSiteForMonth(s, mforeman, ymKey6).includes(foremanId))
+  if (mine.length === 0) return null
+  const chosen = (preferSiteId && mine.find(s => s.id === preferSiteId)) || mine[0]
+  return { ...chosen, foremanSites: mine.map(s => ({ id: s.id, name: s.name })) }
 }
 
 // ────────────────────────────────────────
@@ -764,15 +737,11 @@ export async function getForeignWorkersForSite(
 
   const data = mainDoc.data()
   const workers = (data.workers || []) as Record<string, unknown>[]
-  const assign = (data.assign || {}) as Record<string, { workers?: number[] }>
-  const massign = (data.massign || {}) as Record<string, { workers?: number[] }>
-
   const ym = ymOverride ? ymOverride.replace('-', '') : currentYmJst()
-
-  const monthKey = `${siteId}_${ym}`
-  const monthAssign = massign[monthKey]
-  const defaultAssign = assign[siteId]
-  const workerIds = new Set(monthAssign?.workers || defaultAssign?.workers || [])
+  // 2026-10-02 総合点検: 配置は getAssign（過去12か月の月別配置をさかのぼる）に寄せる（lib/roster.ts）。
+  //   旧は `massign[その月] ?? assign` で、職長の名簿（lib/foreman-todo.ts）と食い違っていた
+  const { workerIdsOfSiteForMonth } = await import('./roster')
+  const workerIds = new Set(workerIdsOfSiteForMonth(data as import('./roster').AssignSource, siteId, ym))
 
   return workers
     .filter(w => {

@@ -117,19 +117,24 @@ export default function SubconsPage() {
         alert(res.error || (res.data as { error?: string } | null)?.error || '保存に失敗しました'); setSaving(false); return
       }
 
-      // 編集モードで現場別単価が入力されている場合、updateSiteRates を呼ぶ
+      // 編集モードで現場別単価を変えた現場だけ updateSiteRates を送る
+      //   2026-10-02 総合点検: 旧は配置現場ぶん全部を毎回送り、サーバが `{ rate }` に置き換えていたので、
+      //   保存のたびに現場別の残業単価（otRate）が消えた。変えていない現場は送らない（サーバ側も otRate を残す）
       if (editId) {
         const siteRatesPayload: Record<string, number | null> = {}
-        const assignedSites = subconSites[editId] || []
-        for (const siteId of assignedSites) {
+        const existingRates = subconRates[editId] || {}
+        for (const siteId of subconSites[editId] || []) {
           const inputVal = siteRateForm[siteId]
           const numVal = inputVal ? Number(inputVal) : 0
-          siteRatesPayload[siteId] = numVal > 0 ? numVal : null
+          const next = numVal > 0 ? numVal : null
+          const cur = existingRates[siteId]?.rate || null
+          if (next !== cur) siteRatesPayload[siteId] = next
         }
         if (Object.keys(siteRatesPayload).length > 0) {
-          await postJson('/api/subcons', {
+          const r = await postJson('/api/subcons', {
             action: 'updateSiteRates', subconId: editId, siteRates: siteRatesPayload,
           })
+          if (!r.ok) { alert(r.error || (r.data as { error?: string } | null)?.error || '現場別単価の保存に失敗しました'); setSaving(false); return }
         }
       }
 
@@ -138,8 +143,10 @@ export default function SubconsPage() {
   }
 
   const handleDelete = async (id: string, name: string): Promise<boolean> => {
-    if (!confirm(`${name} を削除しますか？`)) return false
-    await postJson('/api/subcons', { action: 'delete', id })
+    if (!confirm(`${name} を削除しますか？\n（出面・請負体制・請求書から使われている取引先は削除できません）`)) return false
+    // 2026-10-02 総合点検: 旧は応答を見ておらず、拒否されても消えたように見えた
+    const r = await postJson('/api/subcons', { action: 'delete', id })
+    if (!r.ok) { alert(r.error || (r.data as { error?: string } | null)?.error || '削除できませんでした'); return false }
     fetchData()
     return true
   }

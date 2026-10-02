@@ -229,11 +229,16 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
 }) {
   const [processing, setProcessing] = useState<string | null>(null)
   const [filter, setFilter] = useState<ReqFilter>('all')
+  // 却下は「理由を入れる → 却下する」の2段階（2026-10-02 総合点検）。
+  //   旧: 承認ボタンの隣の「却下」1クリックで確定し、まとめ行なら N件が理由なしで即却下になっていた。
+  //   理由は本人のスマホに表示される（休暇管理の申請タブ・職長のマイページと同じ送り方）
+  const [rejecting, setRejecting] = useState<{ key: string; reason: string } | null>(null)
 
   // 権限制御（旧 AttendanceRequestCard と同じ）:
   //   - 職長承認: admin / approver は全件、foreman は自分の担当現場のみ
   //   - 最終承認: admin / approver のみ（事業責任者）
-  //   - 却下: 全員可
+  //   - 却下: 承認できる人だけ（職長承認待ちは職長承認できる人、最終承認待ちは最終承認できる人）。
+  //     2026-10-02 総合点検。旧: 職長承認待ちの却下ボタンが権限の無い役割にも出ていた
   const isAdminLike = userRole === 'admin' || userRole === 'approver'
   const isForeman = userRole === 'foreman'
   const canFinalApprove = isAdminLike
@@ -242,24 +247,24 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
     return isForeman && !!siteId && userForemanSites.includes(siteId)
   }
 
-  const postOne = async (id: string, action: string, apiPath: string, wid: number) => fetch(apiPath, {
+  const postOne = async (id: string, action: string, apiPath: string, wid: number, reason?: string) => fetch(apiPath, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
     body: JSON.stringify({
       action,
       requestId: id,
-      ...(action === 'foreman_approve' ? { foremanId: wid } : { approvedBy: wid }),
+      ...(action === 'foreman_approve' ? { foremanId: wid } : action === 'reject' ? { rejectedBy: wid, reason: reason || '' } : { approvedBy: wid }),
     }),
   })
 
   /** 1件でも複数件でも同じ（同じ人・同じ理由の有給はまとめて1行＝まとめて処理） */
-  const act = async (ids: string[], action: string, apiPath: string = '/api/leave-request') => {
+  const act = async (ids: string[], action: string, apiPath: string = '/api/leave-request', reason?: string) => {
     if (ids.length === 0) return
     setProcessing(`${action}:${ids[0]}`)
     try {
       const stored = localStorage.getItem('hibi_auth')
       const wid = (stored ? JSON.parse(stored).user?.workerId : 0) || 0
-      const results = await Promise.all(ids.map(id => postOne(id, action, apiPath, wid)))
+      const results = await Promise.all(ids.map(id => postOne(id, action, apiPath, wid, reason)))
       // 2026-08-27（休暇届総点検）: 失敗（出勤実績との矛盾409・ロック409・権限403等）を必ず表示する
       const failures: string[] = []
       for (const res of results) {
@@ -272,6 +277,7 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
           ? `${ids.length}件中 ${failures.length}件が失敗しました:\n${[...new Set(failures)].slice(0, 4).map(f => `・${f}`).join('\n')}`
           : failures[0])
       }
+      setRejecting(null)
       onUpdate()
     } catch { alert('通信エラーが発生しました') }
     finally { setProcessing(null) }
@@ -350,6 +356,8 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
         // 帰国申請には siteId が無いため、職長は「いずれかの担当現場あり」で押せる扱い（旧と同じ）
         const canForeman = r.kind === 'home' ? (isAdminLike || (isForeman && userForemanSites.length > 0)) : canForemanApproveFor(r.siteId)
         const busy = processing !== null
+        const canReject = r.stage === 'foreman' ? canForeman : canFinalApprove
+        const isRejecting = rejecting?.key === r.key
         return (
           <div key={r.key} className="border-t border-hibi-line dark:border-gray-700 px-5 py-3 grid grid-cols-1 sm:grid-cols-[150px_minmax(0,1fr)_auto] gap-2 sm:gap-3.5 items-center">
             <div className="text-[15px] font-bold text-gray-900 dark:text-gray-100">{r.name}</div>
@@ -378,11 +386,24 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
               ) : (
                 <span className="text-xs text-hibi-sub dark:text-gray-400 self-center">最終承認待ち</span>
               )}
-              {(r.stage === 'foreman' || canFinalApprove) && (
-                <button onClick={() => act(r.ids, 'reject', api)} disabled={busy}
-                  className={`${btn} border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20`}>却下</button>
+              {canReject && !isRejecting && (
+                <button onClick={() => setRejecting({ key: r.key, reason: '' })} disabled={busy}
+                  className={`${btn} border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20`}>却下...</button>
               )}
             </div>
+            {canReject && isRejecting && (
+              <div className="sm:col-span-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50/60 dark:bg-red-900/10 p-3 flex flex-wrap items-center gap-2">
+                <label className="text-[13px] font-bold text-red-700 dark:text-red-300" htmlFor={`reject-reason-${r.key}`}>却下の理由（本人に伝わります）</label>
+                <input id={`reject-reason-${r.key}`} type="text" value={rejecting.reason} autoFocus
+                  onChange={e => setRejecting({ key: r.key, reason: e.target.value })}
+                  placeholder="例: 現場の人数が足りない日です。別の日で申請してください"
+                  className="flex-1 min-w-[220px] h-9 px-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm" />
+                <button onClick={() => act(r.ids, 'reject', api, rejecting.reason.trim())} disabled={busy || !rejecting.reason.trim()}
+                  className={`${btn} bg-red-600 text-white hover:bg-red-700`}>{r.count > 1 ? `${r.count}件を却下する` : '却下する'}</button>
+                <button onClick={() => setRejecting(null)} disabled={busy}
+                  className={`${btn} border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200`}>やめる</button>
+              </div>
+            )}
           </div>
         )
       })}
@@ -662,14 +683,18 @@ export default function DashboardPage() {
             action={reqN > 0 ? '申請を見る' : undefined}
             onClick={reqN > 0 ? scrollToRequests : undefined}
           />
-          <TodoCard
-            icon="chart" tone={monthlyN > 0 ? 'urgent' : 'ok'}
-            title="給与の検算"
-            big={monthlyN > 0 ? `要確認 ${monthlyN}名` : 'いまは問題なし'}
-            sub={monthlyN > 0 ? '自動検算で異常が見つかった人がいます。締める前に計算根拠を確認' : '自動検算で異常が出たらここに出ます'}
-            action={monthlyN > 0 ? '月次集計を開く' : undefined}
-            onClick={monthlyN > 0 ? () => router.push('/monthly') : undefined}
-          />
+          {/* 月次集計を開ける人（monthly.view＝給与を見られる3人）にだけ出す（2026-10-02 総合点検。
+              旧: 役員・ほかの事務にも「月次集計を開く」が出て、押すと「この画面は見られません」になっていた） */}
+          {can(authUser, 'monthly.view') && (
+            <TodoCard
+              icon="chart" tone={monthlyN > 0 ? 'urgent' : 'ok'}
+              title="給与の検算"
+              big={monthlyN > 0 ? `要確認 ${monthlyN}名` : 'いまは問題なし'}
+              sub={monthlyN > 0 ? '自動検算で異常が見つかった人がいます。締める前に計算根拠を確認' : '自動検算で異常が出たらここに出ます'}
+              action={monthlyN > 0 ? '月次集計を開く' : undefined}
+              onClick={monthlyN > 0 ? () => router.push('/monthly') : undefined}
+            />
+          )}
           <TodoCard
             icon="clock" tone={(visa?.count || 0) > 0 ? 'warn' : 'ok'}
             title="在留期限"

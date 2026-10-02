@@ -7,9 +7,14 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, relative } from 'node:path'
 import { SCHEDULED_WAGE_CHANGES, WAGE_CONTEXT } from '@/lib/wage-plan.server'
-import { extractNeedles, PLAN_FILE } from '../scripts/check-client-bundle-secrets.mjs'
+import { MIGRATION_2026 } from '@/lib/jp-wage-migration.server'
+import { extractNeedles, PLAN_FILE, serverOnlyFiles, collectNeedles, scanStatic, unicodeEscaped } from '../scripts/check-client-bundle-secrets.mjs'
+
+const ROOT = join(__dirname, '..')
 
 describe('check-client-bundle-secrets の検査対象', () => {
   const needles: string[] = extractNeedles(readFileSync(PLAN_FILE, 'utf8'))
@@ -39,5 +44,55 @@ describe('画面側のモジュールに予定表を書かない', () => {
         expect(client).not.toMatch(new RegExp(`\\b${id}:\\s*${yen}\\b`))
       }
     }
+  })
+})
+
+/*
+ * 2026-10-02 総合点検: 検査対象を lib/**\/*.server.ts すべてに広げた。
+ * - 実名＋日額を持つ lib/jp-wage-migration.server.ts の氏名を拾う
+ * - *.server.ts は `import 'server-only'` を書く（画面から import するとビルドが止まる）
+ * - *.server.ts を import してよいのは app/api・lib/*.server.ts・テスト・scripts だけ
+ * - 圧縮後に日本語が \uXXXX になっていても見つける
+ */
+function walk(dir: string, out: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name)
+    if (name === 'node_modules' || name === '.next' || name === '.git') continue
+    if (statSync(p).isDirectory()) walk(p, out)
+    else if (/\.(ts|tsx)$/.test(name)) out.push(p)
+  }
+  return out
+}
+
+describe('サーバー専用ファイル（*.server.ts）', () => {
+  it('検査対象に wage-plan と jp-wage-migration の両方が入る', () => {
+    const names = serverOnlyFiles().map((f: string) => relative(ROOT, f))
+    expect(names).toContain('lib/wage-plan.server.ts')
+    expect(names).toContain('lib/jp-wage-migration.server.ts')
+  })
+  it('日本人の実名（姓 名）を全員分拾う', () => {
+    const needles = (collectNeedles() as string[][]).map(pair => pair[1])
+    for (const m of MIGRATION_2026) expect(needles).toContain(m.name)
+  })
+  it("すべての *.server.ts が import 'server-only' を書いている", () => {
+    for (const f of serverOnlyFiles()) {
+      expect(readFileSync(f, 'utf8'), relative(ROOT, f)).toMatch(/^import 'server-only'/m)
+    }
+  })
+  it('*.server.ts を画面側（app/api 以外の app・components・lib）から import していない', () => {
+    const files = [...walk(join(ROOT, 'app')), ...walk(join(ROOT, 'components')), ...walk(join(ROOT, 'lib'))]
+    const bad = files
+      .map(f => relative(ROOT, f))
+      .filter(f => !f.startsWith('app/api/') && !/\.server\.ts$/.test(f))
+      .filter(f => /from ['"][^'"]*\.server['"]/.test(readFileSync(join(ROOT, f), 'utf8')))
+    expect(bad).toEqual([])
+  })
+  it('圧縮後のチャンクで日本語が \\uXXXX になっていても見つける', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bundle-'))
+    writeFileSync(join(dir, 'a.js'), `x="${unicodeEscaped('梶原 祥雄')}"`)   // 圧縮後の形: "\u68b6\u539f \u7965\u96c4"
+    writeFileSync(join(dir, 'b.js'), 'y="205:1585"')
+    writeFileSync(join(dir, 'c.js'), 'z="なにもない"')
+    const hits = (scanStatic(dir, ['梶原 祥雄', '205:1585', '載っていない文字列']) as string[][]).map(pair => [pair[0].split('/').pop(), pair[1]])
+    expect(hits).toEqual([['a.js', '梶原 祥雄'], ['b.js', '205:1585']])
   })
 })

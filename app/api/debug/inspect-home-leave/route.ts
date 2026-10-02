@@ -10,22 +10,14 @@ import { todayJstIso } from '@/lib/date-utils'
  * - homeLongLeave コレクション
  *
  * 使い方:
- *   GET /api/debug/inspect-home-leave?password=<管理者パスワード>
+ *   GET /api/debug/inspect-home-leave（ヘッダ x-admin-password に代表の通行証）
  */
 export async function GET(request: NextRequest) {
-  // クエリでもヘッダでも認証可能
-  const passwordFromQuery = request.nextUrl.searchParams.get('password')
-  if (passwordFromQuery) {
-    const headers = new Headers(request.headers)
-    headers.set('x-admin-password', passwordFromQuery)
-    const authReq = new NextRequest(request.url, { headers, method: request.method })
-    // 2026-09-26: 保守ツールは代表のみ
-    const denied = await requireSuperAdmin(authReq)
-    if (denied) return denied
-  } else {
-    const denied = await requireSuperAdmin(request)
-    if (denied) return denied
-  }
+  // 2026-09-26: 保守ツールは代表のみ
+  // 2026-10-02 総合点検: ?password= での認証はやめた（代表の通行証が URL に載り、ブラウザ履歴・サーバのログに残る）。
+  //   ヘッダ x-admin-password だけ受け付ける（ほかの API と同じ）
+  const denied = await requireSuperAdmin(request)
+  if (denied) return denied
 
   // 今日の日付
   const todayDateStr = todayJstIso()

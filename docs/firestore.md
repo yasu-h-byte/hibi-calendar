@@ -95,6 +95,16 @@ workSchedule?: {
 | d | map | 個人出面 key: `{siteId}_{workerId}_{ym}_{day}` → `{w, o, p, s}` |
 | sd | map | 外注出面 key: `{siteId}_{subconId}_{ym}_{day}` → `{n, on}` |
 
+### demmen/system
+システムの小さな状態を置く1ドキュメント（2026-10-02 総合点検で用途を集約）。日次バックアップの対象。
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| invoiceLock | map `{ [ym]: number }` | 請求書の採番・申請・承認を月ごとに直列化する合図（`withInvoiceMonthLock`・`lib/peer-invoice-store.ts`）。番号は数えない（番号は `peerInvoices` の最大値から出す）。消えても番号は狂わない |
+| lastBackup | map | 日次バックアップの最終実行（時刻・件数・失敗した項目。`app/api/backup/snapshot`）。`/api/health` の `backupOk` と代表の通知ベルが見る |
+
+書くときは子値を非空マップにして `merge: true`（空マップ置換の罠は踏まない）。
+
 ### siteCalendar/{siteId}_{ym}
 就業カレンダー。
 
@@ -148,12 +158,24 @@ workSchedule?: {
   容量だけでなく、必要以上の解像度の顔写真を持たないほうがプライバシー上も安全
 - 表示は `components/WorkerAvatar.tsx`。写真が無い人は名前の先頭1文字を丸で表示するので
   全員分そろっていなくてもレイアウトが崩れない
-- **日次バックアップの対象外**（`app/api/backup/snapshot` のコレクション一覧に入れていない）。
+- **日次バックアップの対象外**（`lib/backup-plan.ts` の BACKUP_EXCLUDED に理由つきで載せている）。
   写真は再取得できる一方、含めるとバックアップ容量が跳ね上がるため
 - 退職者の写真は人員マスターの編集画面から手動で削除する（自動削除は誤消去のリスクがあるため入れていない）
 
 ### activityLog/{auto}
-アクティビティログ。
+操作ログ（`lib/activity.ts` `logActivity`）。`{ userId, action, details, timestamp }`。
+
+**保ち方（2026-10-02 総合点検）**: 書くときは `addDoc` だけ（旧: 1件書くたびに新しい順550件を読んで500件超を消していた＝PC の出面1マスごとに約500件の読み取り）。
+間引きは日次バックアップの cron（`app/api/backup/snapshot` → `pruneActivityLog()`）が行う:
+- 出面の入力の記録（`attendance.*`・毎日大量）は新しい **500件**（`NOISY_KEEP`）
+- それ以外（請求・単価・マスタ・有給・カレンダー等）は別枠で新しい **1,000件**（`IMPORTANT_KEEP`）＝出面の記録に押し出されない
+- 1回の間引きで消すのは400件まで（cron の時間切れを防ぐ。残りは翌日）
+
+### auditTrail/{id}
+削除処理を持たない監査記録。日次バックアップの対象。
+- 給与欄の変更記録（`/api/workers` の給与欄の書き換え）
+- **`type: 'activity'`**（2026-10-02）: お金・マスタの操作ログ（`DURABLE_PREFIXES` に当たる action）は `activityLog` と同じ内容を
+  `auditTrail/activity-<時刻>-<乱数>` にも残す（`{ type: 'activity', action, userId, details, at }`）。`activityLog` が間引かれても消えない
 
 ### announcements/{auto}
 お知らせ（ダッシュボード表示用）。
@@ -216,7 +238,7 @@ workSchedule?: {
 | `issueDate` / `issuedAt` / `issuedBy` | | 発行日・発行時刻・発行者 |
 | `voidedAt` / `voidedBy` / `voidReason` | | 取り消し時のみ |
 
-読み書きは `lib/peer-invoice-store.ts`。日次バックアップ（`app/api/backup/snapshot`）の対象外
+読み書きは `lib/peer-invoice-store.ts`。日次バックアップの対象（2026-10-02〜。対象の一覧は `lib/backup-plan.ts`）
 （他の業務系コレクションと同様。財務記録としての保全は Firestore 標準の耐久性に依る）。
 
 ## ロール判定
@@ -338,3 +360,22 @@ workSchedule?: {
 | note | string? | メモ |
 | status | 'current' \| 'old' | 同じ人・同じ種類で最新は1件。新しいものを最新で入れると前のものは old（消さない） |
 | uploadedAt / uploadedBy / updatedAt | string | 登録日時・登録者（super-admin / worker:ID） |
+
+## 日次バックアップの対象（2026-10-02 総合点検で一本化）
+
+対象の決まりは **`lib/backup-plan.ts` だけ**。`app/api/backup/snapshot` はこの一覧を回す。
+新しいコレクションを作ったら、この一覧の「退避する」か「意図して退避しない（理由つき）」に必ず足す
+（足し忘れは `__tests__/backupCoverage.test.ts` が落とす）。
+
+| 種類 | 対象 | 頻度 |
+|---|---|---|
+| ドキュメント | `demmen/main`・`demmen/toolBudget`・`demmen/system` | 毎日 |
+| 出面 | `demmen/att_YYYYMM` | 前月〜翌月は毎日／全期間は日曜 |
+| 月ごと | `attendanceApprovals`（職長承認・最終承認）・`calendarSign` | 前月〜翌月は毎日／承認は全期間を日曜 |
+| コレクション全体 | 有給申請・帰国・評価・カレンダー・操作ログ・締めの記録・号俸・賞与・昇格・署名台帳・請求書2種・本人確認（`attConfirm`）・書類庫の情報（`staffDocs`）・給与欄の変更記録（`auditTrail`）・カレンダーの質問 | 毎日 |
+| 退避しない | `attendanceHistory`（90日の保険）・`accessLog`・`workerPhotos` | — |
+
+- 保持は30日。古いものは「30日より古いものを古い順に」消す（旧実装は新しい順に500件だけ見ていて、古いものが消えなかった）
+- 実行結果は `demmen/system.lastBackup`（時刻・件数・失敗した項目）に残る。26時間以上止まる・一部が失敗すると、
+  代表の通知ベルと `/api/health`（`backupOk`）に出る
+- 復元（`/api/backup/restore`）の前の退避は、上書きするドキュメントだけを取る

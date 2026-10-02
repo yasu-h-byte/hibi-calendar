@@ -3,7 +3,8 @@
  *
  * DEDURA＋ と経営コックピットを一体で使うための「読むだけ」の窓口。
  * 経営コックピットのサーバーが、共通の合言葉（環境変数 DEDURA_INTEGRATION_KEY・両方の Vercel に同じ値）を
- * ヘッダ x-integration-key に付けて呼ぶ。人のパスワード（ADMIN_PASSWORD など）とは別物で、書き込みは一切できない。
+ * ヘッダ x-integration-key に付けて呼ぶ。人のパスワード（ADMIN_PASSWORD など）とは別物。
+ * 書き込みは現場別の外注単価の上書き（setSubconSiteRate・/api/integration/subcon-rate）の1つだけ（docs/integration.md）。
  *
  * 返すもの（1か月分・金額はすべて税抜の円）:
  *   - 現場ごとの請求額（入力済みの額だけ。未入力の月は billingEntered=false で見込みは入れない）と請求先
@@ -13,7 +14,7 @@
  *   - HFU 所属の作業員の人数と稼働（人工・残業・社内単価での額。HFU の鳶の売上の見込みに使う・2026-09-27）
  * 詳細は docs/integration.md。
  */
-import { timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual } from 'crypto'
 import type { NextRequest } from 'next/server'
 import { compute, getMainData, getAttData, getAttDataCached, isClosedMonthYm, getBillTotal, getSubconRate } from '@/lib/compute'
 import { applyPayrollCosts } from '@/lib/payroll-cost'
@@ -22,6 +23,7 @@ import { calendarSiteIdOf } from '@/lib/site-hierarchy'
 import { buildPeerStatements } from '@/lib/peer-statement'
 import { summarizePeerInvoiceSites } from '@/lib/peer-invoice'
 import { listPeerInvoicesForYm } from '@/lib/peer-invoice-store'
+import { reportSitesForPeriod } from '@/lib/report-sites'
 import { buildHfuInvoiceDraft } from '@/lib/hfu-invoice'
 import { isWorkerOfOrg } from '@/lib/orgs'
 import { parseDKey } from '@/lib/compute'
@@ -148,7 +150,7 @@ function buildHfuWorkforce(
   const monthEnd = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
   const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
   const hfuWorkers = main.workers.filter(w => isWorkerOfOrg(w as { org?: string }, 'hfu'))
-  const heads = hfuWorkers.filter(w => !w.retired || w.retired >= monthStart).filter(w => !w.hireDate || w.hireDate <= monthEnd).length
+  const heads = hfuWorkers.filter(w => !w.retired || w.retired >= monthStart).filter(w => !w.hireDate || w.hireDate <= monthEnd).length  // retired-ok: 月初時点の在籍（isStillActiveForMonth と同じ判定）
   const draft = buildHfuInvoiceDraft(main, attD, ym)
   const working = new Set<string>()
   for (const d of draft?.detail || []) for (const row of d.rows) if (row.total > 0) working.add(row.key)
@@ -188,7 +190,9 @@ export async function buildIntegrationMonth(ym: string): Promise<IntegrationMont
   const payroll = await applyPayrollCosts(c, main, [{ ym, d: att.d, sd: att.sd, drv: att.drv }])
 
   const companies = main.subcons as unknown as CompanyLike[]
-  const allSites = main.sites as unknown as (Parameters<typeof resolveSiteParties>[0] & { id: string; name: string; parentId?: string })[]
+  // 対象の現場は原価・収益画面と同じ決まり（lib/report-sites.ts・2026-10-02 総合点検）。
+  //   そのうえで、この月に請求額も人工も無い現場は渡さない（従来どおり）
+  const allSites = reportSitesForPeriod(main, [ym], id => c.sites[id]) as unknown as (Parameters<typeof resolveSiteParties>[0] & { id: string; name: string; parentId?: string })[]
 
   const sites: IntegrationSite[] = []
   for (const s of allSites) {
@@ -280,26 +284,31 @@ export async function setSubconSiteRate(input: { subconId: string; siteId: strin
   if (!subconId || !siteId) return { ok: false, error: 'subconId と siteId が必要です' }
   if (!Number.isInteger(rate) || rate < 5_000 || rate > 100_000) return { ok: false, error: '単価は 5,000〜100,000 円の整数で' }
 
+  // ドット記法のキーに使う id は英数字・'_'・'-' だけ（'.' や '/' が入ると別のフィールドを書いてしまう）
+  if (!/^[A-Za-z0-9_-]+$/.test(subconId) || !/^[A-Za-z0-9_-]+$/.test(siteId)) return { ok: false, error: 'subconId か siteId の形式が不正です' }
   const { db } = await import('@/lib/firebase')
-  const { doc, getDoc, updateDoc } = await import('@/lib/fsdb')
+  const { doc, runTransaction } = await import('@/lib/fsdb')
   const { logActivity } = await import('@/lib/activity')
   const ref = doc(db, 'demmen', 'main')
-  const snap = await getDoc(ref)
-  if (!snap.exists()) return { ok: false, error: 'main が見つかりません' }
-  const data = snap.data() as { subcons?: { id: string; name: string; rate?: number }[]; sites?: { id: string; name: string }[]; assign?: Record<string, Record<string, unknown>> }
-  const sc = (data.subcons || []).find(s => s.id === subconId)
-  const site = (data.sites || []).find(s => s.id === siteId)
-  if (!sc || !site) return { ok: false, error: '外注先か現場が見つかりません' }
-
-  const assign = (data.assign || {}) as Record<string, { subconRates?: Record<string, { rate?: number; otRate?: number }> } & Record<string, unknown>>
-  const siteAssign = assign[siteId] || { workers: [], subcons: [] }
-  const current = siteAssign.subconRates || {}
-  const previous = current[subconId]?.rate ?? null
-  current[subconId] = { rate }
-  siteAssign.subconRates = current
-  assign[siteId] = siteAssign
-  // assign だけを差し替える（他のフィールドは触らない）
-  await updateDoc(ref, { assign })
-  await logActivity('integration', 'subcon.updateSiteRates', `${sc.name} の ${site.name} の単価を ${previous ?? sc.rate ?? '未設定'} → ${rate} に（経営コックピットの請求書照合${reason ? `: ${reason}` : ''}）`)
-  return { ok: true, previous }
+  // 2026-10-02 総合点検: 旧は assign マップを丸ごと読んで丸ごと書き戻していた（職長の工種の切り替えなど、同時の書き込みが消える）
+  //   うえに `{ rate }` で置き換えていたので、手で入れた残業単価（otRate）の上書きが黙って消えた。
+  //   トランザクションの中で、この現場・この外注のキーだけをドット記法で書き、otRate はそのまま残す
+  const out = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    if (!snap.exists()) return { ok: false as const, error: 'main が見つかりません' }
+    const data = snap.data() as { subcons?: { id: string; name: string; rate?: number }[]; sites?: { id: string; name: string }[]; assign?: Record<string, { subconRates?: Record<string, { rate?: number; otRate?: number }> }> }
+    const sc = (data.subcons || []).find(s => s.id === subconId)
+    const site = (data.sites || []).find(s => s.id === siteId)
+    if (!sc || !site) return { ok: false as const, error: '外注先か現場が見つかりません' }
+    const cur = data.assign?.[siteId]?.subconRates?.[subconId] || {}
+    const previous = cur.rate ?? null
+    const next: { rate: number; otRate?: number } = { rate }
+    if (typeof cur.otRate === 'number' && cur.otRate > 0) next.otRate = cur.otRate   // 手で入れた残業単価は消さない
+    tx.update(ref, { [`assign.${siteId}.subconRates.${subconId}`]: next })
+    return { ok: true as const, previous, scName: sc.name, siteName: site.name, scRate: sc.rate, keptOtRate: next.otRate }
+  })
+  if (!out.ok) return out
+  await logActivity('integration', 'subcon.updateSiteRates',
+    `${out.scName} の ${out.siteName} の単価を ${out.previous ?? out.scRate ?? '未設定'} → ${rate} に（経営コックピットの請求書照合${reason ? `: ${reason}` : ''}）${out.keptOtRate ? `。残業単価の上書き ${out.keptOtRate} はそのまま` : ''}`)
+  return { ok: true, previous: out.previous }
 }

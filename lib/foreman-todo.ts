@@ -20,6 +20,7 @@ import { todayJstIso, addMonthsSafe, addDaysIso } from './date-utils'
 import type { AttendanceEntry, AttendanceApproval, Site } from '@/types'
 import { getAssign, parseDKey, getMainData, type MainData } from './compute'
 import { getWorkerByToken, isEmployedOn, isHiredByMonth, isStillActiveForMonth } from './workers'
+import { evaluateDayInputs, isWorkDayOf, isoOfDay } from './attendance-missing'
 
 /**
  * 工種（鉄骨・仮設など）を持つ現場の「同じ現場」の範囲（親＋工種サイト）と、工種の指定（2026-09-28）。
@@ -105,7 +106,7 @@ export async function loadSiteWorkDayFn(siteId: string, ym: string): Promise<(da
 function workDayFnOf(calDays: Record<string, string> | null, ym: string): (day: number) => boolean {
   const y = Number(ym.slice(0, 4))
   const m = Number(ym.slice(4, 6))
-  return (d: number) => calDays ? calDays[String(d)] === 'work' : new Date(y, m - 1, d).getDay() !== 0
+  return (d: number) => isWorkDayOf(calDays, y, m, d)   // 「仕事の日か」は共通（lib/attendance-missing.ts）
 }
 
 /**
@@ -155,25 +156,23 @@ export function evaluateSiteDay(
   att: Record<string, AttendanceEntry>, family: string[], workers: RosterWorker[],
   ym: string, day: number, isWorkDay: boolean,
 ): { entered: number; total: number; missingNames: string[]; elsewhere: { name: string; siteIds: string[] }[] } {
-  const missingNames: string[] = []
-  const elsewhere: { name: string; siteIds: string[] }[] = []
-  let entered = 0
-  let notEmployed = 0
-  const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`
-  for (const w of workers) {
-    // 判定は職長画面のリストと同じ getEntryStatus（0.6補償=入力済み、残骸のみ=未入力）
-    const p = entryPlace(att, family, w.id, ym, day)
-    if (p.place === 'here') entered++
-    else if (!isEmployedOn(w, iso)) notEmployed++   // 入社前・退職後の日は対象外（2026-10-02・未入力に数えると承認もできなかった）
-    else if (p.place === 'elsewhere') elsewhere.push({ name: w.name, siteIds: p.siteIds })
-    else if (isWorkDay) missingNames.push(w.name)
-  }
+  const iso = isoOfDay(ym, day)
+  // 判定は職長画面のリストと同じ getEntryStatus（0.6補償=入力済み、残骸のみ=未入力）。
+  //   数え方は共通（lib/attendance-missing.ts evaluateDayInputs・2026-10-02 総合点検）。
+  //   入社前・退職後の日は対象外（2026-10-02・未入力に数えると承認もできなかった）
+  const places = new Map(workers.map(w => [w.id, entryPlace(att, family, w.id, ym, day)]))
+  const r = evaluateDayInputs({
+    workers,
+    isWorkDay,
+    placeOf: w => places.get(w.id)!.place,
+    expectedOn: w => isEmployedOn(w, iso),
+  })
   return {
-    entered,
+    entered: r.entered,
     // 稼働日: 配置の全員（別の現場で入力している人・入社前／退職後の人を除く）／非稼働日: 入力した人だけ
-    total: isWorkDay ? workers.length - elsewhere.length - notEmployed : entered,
-    missingNames,
-    elsewhere,
+    total: r.total,
+    missingNames: r.missing.map(w => w.name),
+    elsewhere: r.elsewhere.map(w => ({ name: w.name, siteIds: places.get(w.id)!.siteIds })),
   }
 }
 
@@ -339,16 +338,13 @@ export function siteRosterFromMain(main: RosterSource, siteId: string, ym: strin
       for (const sid of family) for (const wid of getAssign(main as MainData, sid, ym).workers) onRoster.add(wid)
       const nameOf = new Map(main.workers.map(w => [w.id, w.name]))
       const out = new Map<number, { id: number; name: string }[]>()
-      const tail = `_${ym}_`
       for (const [key, e] of Object.entries(att)) {
         if (!e || getEntryStatus(e) === 'none') continue
-        const i = key.lastIndexOf(tail)
-        if (i < 0) continue
-        const head = key.slice(0, i)
-        const j = head.lastIndexOf('_')
-        const sid = head.slice(0, j)
-        const wid = Number(head.slice(j + 1))
-        const day = Number(key.slice(i + tail.length))
+        const pk = parseDKey(key)   // キーの分解は共通（2026-10-02 総合点検。旧: lastIndexOf で自前に分けていた）
+        if (pk.ym !== ym) continue
+        const sid = pk.sid
+        const wid = Number(pk.wid)
+        const day = Number(pk.day)
         if (!family.includes(sid) || onRoster.has(wid) || !Number.isFinite(wid) || !Number.isFinite(day)) continue
         const list = out.get(day) || []
         if (!list.some(x => x.id === wid)) list.push({ id: wid, name: nameOf.get(wid) || `ID${wid}` })

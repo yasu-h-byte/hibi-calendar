@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, deleteDoc, where } from '@/lib/fsdb'
 import { applyDueScheduledWorkerChanges } from '@/lib/worker-crud'
+import { BACKUP_COLLECTIONS, BACKUP_DOCS, approvalDocYm, type LastBackupInfo } from '@/lib/backup-plan'
+import { requireCron } from '@/lib/cron-auth'
 
 /**
  * 出面・人員マスターデータの日次バックアップ
@@ -17,24 +19,31 @@ import { applyDueScheduledWorkerChanges } from '@/lib/worker-crud'
  *
  * 認証:
  *   Vercel Cron からの呼び出しは Authorization: Bearer $CRON_SECRET ヘッダで認証。
- *   手動実行する場合は ?secret=<CRON_SECRET> クエリでも可。
+ *   手動実行する場合も同じヘッダか x-cron-secret ヘッダで送る（URL の ?secret= は 2026-10-02 に廃止・lib/cron-auth.ts）。
  *
  * 設定:
  *   vercel.json の crons セクションで毎日 17:00 UTC (= JST 02:00) にトリガ。
  */
 const RETENTION_DAYS = 30
+/** 1回の実行で消す古いバックアップの上限（時間切れを防ぐ） */
+const PRUNE_PER_RUN = 300
 
-function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET
-  if (!secret) {
-    // CRON_SECRET 未設定時は無条件で許可しない（誤起動防止）
-    return false
+/**
+ * 実行結果を demmen/system.lastBackup に残す（2026-10-02 総合点検）。
+ * 旧: 一部が失敗しても応答に書くだけで、誰も気づけなかった。/api/health と代表の通知ベルがこれを見る
+ */
+async function recordBackupResult(now: Date, summary: { saved: string[]; deleted: string[]; errors: string[] }): Promise<void> {
+  try {
+    const info: LastBackupInfo = {
+      at: now.toISOString(),
+      saved: summary.saved.length,
+      deleted: summary.deleted.length,
+      errors: summary.errors.slice(0, 20).map(e => e.slice(0, 200)),
+    }
+    await setDoc(doc(db, 'demmen', 'system'), { lastBackup: info }, { merge: true })
+  } catch (e) {
+    console.error('[backup] 実行結果の記録に失敗:', e)
   }
-  const auth = request.headers.get('authorization')
-  if (auth === `Bearer ${secret}`) return true
-  const querySecret = request.nextUrl.searchParams.get('secret')
-  if (querySecret === secret) return true
-  return false
 }
 
 function isoDate(d: Date = new Date()): string {
@@ -67,10 +76,9 @@ function relativeYm(d: Date, monthsOffset: number): string {
 }
 
 export async function GET(request: NextRequest) {
-  // auth: Vercel Cron の CRON_SECRET
-  if (!isAuthorized(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // auth: Vercel Cron の CRON_SECRET（lib/cron-auth.ts requireCron・2026-10-02 総合点検で3本共通に。
+  //   旧: ここで自前で比べ、`?secret=` でも通していた＝合言葉が URL・アクセスログに残る）
+  { const denied = requireCron(request); if (denied) return denied }
 
   const now = new Date()
   const stamp = isoDate(now)
@@ -81,17 +89,23 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // (1) demmen/main をスナップショット
-    const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-    if (mainSnap.exists()) {
-      await setDoc(doc(db, 'backups', `main_${stamp}`), {
-        sourceId: 'demmen/main',
-        snapshotAt: now.toISOString(),
-        data: mainSnap.data(),
-      })
-      summary.saved.push(`main_${stamp}`)
-    } else {
-      summary.errors.push('demmen/main not found')
+    // (1) demmen/main・toolBudget・system をスナップショット（対象は lib/backup-plan.ts）
+    for (const d of BACKUP_DOCS) {
+      try {
+        const snap = await getDoc(doc(db, d.path[0], d.path[1]))
+        if (snap.exists()) {
+          await setDoc(doc(db, 'backups', `${d.prefix}_${stamp}`), {
+            sourceId: d.path.join('/'),
+            snapshotAt: now.toISOString(),
+            data: snap.data(),
+          })
+          summary.saved.push(`${d.prefix}_${stamp}`)
+        } else if (d.path[1] === 'main') {
+          summary.errors.push('demmen/main not found')
+        }
+      } catch (e) {
+        summary.errors.push(`${d.path.join('/')}: ${e instanceof Error ? e.message : String(e)}`)
+      }
     }
 
     // (2) 前月・当月・翌月の att_YYYYMM をスナップショット。
@@ -110,15 +124,20 @@ export async function GET(request: NextRequest) {
       })
     }
     for (const ym of [...attYms].sort()) {
-      const attSnap = await getDoc(doc(db, 'demmen', `att_${ym}`))
-      if (attSnap.exists()) {
-        await setDoc(doc(db, 'backups', `att_${ym}_${stamp}`), {
-          sourceId: `demmen/att_${ym}`,
-          ym,
-          snapshotAt: now.toISOString(),
-          data: attSnap.data(),
-        })
-        summary.saved.push(`att_${ym}_${stamp}`)
+      // 1か月分が失敗しても（1MB 超など）ほかの月・ほかの退避は続ける
+      try {
+        const attSnap = await getDoc(doc(db, 'demmen', `att_${ym}`))
+        if (attSnap.exists()) {
+          await setDoc(doc(db, 'backups', `att_${ym}_${stamp}`), {
+            sourceId: `demmen/att_${ym}`,
+            ym,
+            snapshotAt: now.toISOString(),
+            data: attSnap.data(),
+          })
+          summary.saved.push(`att_${ym}_${stamp}`)
+        }
+      } catch (e) {
+        summary.errors.push(`att_${ym}: ${e instanceof Error ? e.message : String(e)}`)
       }
     }
 
@@ -128,17 +147,55 @@ export async function GET(request: NextRequest) {
     for (const offset of [-1, 0, 1]) {
       const ym = relativeYm(now, offset)                    // YYYYMM
       const ymDash = `${ym.slice(0, 4)}-${ym.slice(4, 6)}`  // siteCalendar/calendarSign の ym 形式
-      const signSnap = await getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ymDash)))
-      if (!signSnap.empty) {
-        const docs = signSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        await setDoc(doc(db, 'backups', `csign_${ym}_${stamp}`), {
-          sourceId: `calendarSign(${ymDash})`,
-          ym,
-          snapshotAt: now.toISOString(),
-          data: { docs },
-        })
-        summary.saved.push(`csign_${ym}_${stamp}`)
+      try {
+        const signSnap = await getDocs(query(collection(db, 'calendarSign'), where('ym', '==', ymDash)))
+        if (!signSnap.empty) {
+          const docs = signSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+          await setDoc(doc(db, 'backups', `csign_${ym}_${stamp}`), {
+            sourceId: `calendarSign(${ymDash})`,
+            ym,
+            snapshotAt: now.toISOString(),
+            data: { docs },
+          })
+          summary.saved.push(`csign_${ym}_${stamp}`)
+        }
+      } catch (e) {
+        summary.errors.push(`calendarSign(${ymDash}): ${e instanceof Error ? e.message : String(e)}`)
       }
+    }
+
+    // (2b-2) 出面の職長承認・最終承認（attendanceApprovals）を月ごとに退避（2026-10-02 総合点検）
+    //   9月分から、承認がそろわないと月締め・請求書・本人確認が進まない（lib/approval-gap.ts）。
+    //   この記録が消えると全現場×全日を承認し直すしかないのに、退避していなかった。
+    //   ドキュメントIDは `${siteId}_${ym}_${day}`（ym の項目は無い）なので、全件を読んで ID の月で分ける。
+    //   前月〜翌月は毎日、全期間は日曜（att_ と同じ）。1件は小さい（100バイト前後）ので月ごとなら1MBに届かない
+    try {
+      const apprSnap = await getDocs(collection(db, 'attendanceApprovals'))
+      const byYm = new Map<string, ({ id: string } & Record<string, unknown>)[]>()
+      apprSnap.forEach(d => {
+        const ym = approvalDocYm(d.id)
+        if (!ym) return
+        if (!byYm.has(ym)) byYm.set(ym, [])
+        byYm.get(ym)!.push({ id: d.id, ...d.data() })
+      })
+      const nearYms = new Set<string>([-1, 0, 1].map(o => relativeYm(now, o)))
+      for (const [ym, docs] of [...byYm.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        if (!isSundayJst && !nearYms.has(ym)) continue
+        try {
+          await setDoc(doc(db, 'backups', `attappr_${ym}_${stamp}`), {
+            sourceId: `attendanceApprovals(${ym})`,
+            ym,
+            count: docs.length,
+            snapshotAt: now.toISOString(),
+            data: { docs },
+          })
+          summary.saved.push(`attappr_${ym}_${stamp}(${docs.length})`)
+        } catch (e) {
+          summary.errors.push(`attendanceApprovals(${ym}): ${e instanceof Error ? e.message : String(e)}`)
+        }
+      }
+    } catch (e) {
+      summary.errors.push(`attendanceApprovals: ${e instanceof Error ? e.message : String(e)}`)
     }
 
     // (2c) 給与・労務の重要コレクションをスナップショット（監査: 復旧不能コレクションの穴を塞ぐ）
@@ -156,42 +213,14 @@ export async function GET(request: NextRequest) {
           data: { docs },
         })
         summary.saved.push(`${backupPrefix}_${stamp}(${docs.length})`)
+        // 2000件で打ち切ったら「全部は取れていない」ので失敗として知らせる（月ごとの退避に分ける合図）
+        if (docs.length >= 2000) summary.errors.push(`${collName}: 2000件を超えたため一部しか退避できていません`)
       } catch (e) {
         summary.errors.push(`${collName}: ${e instanceof Error ? e.message : String(e)}`)
       }
     }
-    await snapshotCollection('leaveRequests', 'leavereq')       // 有給申請＋承認履歴
-    await snapshotCollection('homeLongLeave', 'homeleave')      // 帰国情報の単一ソース
-    await snapshotCollection('evaluations', 'evals')            // 人事評価
-    await snapshotCollection('siteCalendar', 'sitecal')         // 承認済みカレンダー本体
-    await snapshotCollection('activityLog', 'actlog')           // 操作ログ（500件ローテーションの退避）
-    // 2026-08-27 追加（バックアップ実効性検証）: 8月に新設した給与・賃金系の穴を塞ぐ
-    await snapshotCollection('payrollSnapshots', 'paysnap')     // 締めスナップショット（給与確定の証跡）
-    await snapshotCollection('jpWageRevisions', 'jprev')        // 号俸制の年次改定（評語・凍結給料表）
-    await snapshotCollection('jpWageHistory', 'jphist')         // ベース年収履歴
-    await snapshotCollection('jpBonuses', 'jpbonus')            // 賞与支給記録
-    await snapshotCollection('jpPromotions', 'jpprom')          // 昇格履歴
-    await snapshotCollection('calendarSignLog', 'csignlog')     // 署名の恒久台帳（append-only の正本）
-    // 2026-10-02 追加: 請求書（金銭データ）。コレクション型なので /api/backup/restore でそのまま戻せる
-    //   peerInvoices は発行時点の明細を凍結した正本（1件数十KB）。backups の1件は1MBまでなので、
-    //   件数が増えて書けなくなったら summary.errors に出る（そのときは月ごとの退避に分ける）
-    await snapshotCollection('peerInvoices', 'peerinv')         // 応援・HFU の請求書（発行・申請・取り消しの記録）
-    await snapshotCollection('paperInvoices', 'paperinv')       // 紙（手作り）で出した請求書の記録（ファイル本体は Storage）
-
-    // (2d) demmen/toolBudget（道具代の購入記録＝金銭データ）を退避
-    try {
-      const tbSnap = await getDoc(doc(db, 'demmen', 'toolBudget'))
-      if (tbSnap.exists()) {
-        await setDoc(doc(db, 'backups', `toolbudget_${stamp}`), {
-          sourceId: 'demmen/toolBudget',
-          snapshotAt: now.toISOString(),
-          data: tbSnap.data(),
-        })
-        summary.saved.push(`toolbudget_${stamp}`)
-      }
-    } catch (e) {
-      summary.errors.push(`toolBudget: ${e instanceof Error ? e.message : String(e)}`)
-    }
+    // 対象の一覧は lib/backup-plan.ts（足し忘れは __tests__/backupCoverage.test.ts が落とす）
+    for (const c of BACKUP_COLLECTIONS) await snapshotCollection(c.coll, c.prefix)
 
     // (2e) 出面の変更履歴を保持期間（90日）で間引く
     try {
@@ -202,22 +231,36 @@ export async function GET(request: NextRequest) {
       summary.errors.push(`attendanceHistory purge: ${e instanceof Error ? e.message : String(e)}`)
     }
 
+    // (2f) 操作ログの間引き（2026-10-02 総合点検: 旧は1件書くたびに550件読んで消していた → 日次でここだけ・lib/activity.ts）
+    try {
+      const { pruneActivityLog } = await import('@/lib/activity')
+      const n = await pruneActivityLog()
+      if (n > 0) summary.deleted.push(`activityLog×${n}`)
+    } catch (e) {
+      summary.errors.push(`activityLog prune: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
     // (3) 古いバックアップを削除（30日保持）
-    const cutoff = new Date(now)
-    cutoff.setDate(cutoff.getDate() - RETENTION_DAYS)
-    const cutoffStamp = isoDate(cutoff)
-    const backupsCol = collection(db, 'backups')
-    // backups コレクションを全件取得（少ないので問題なし）
-    const allBackupsSnap = await getDocs(query(backupsCol, orderBy('snapshotAt', 'desc'), limit(500)))
-    for (const d of allBackupsSnap.docs) {
-      // ドキュメントIDの末尾の YYYYMMDD-HHmmss (or 旧形式 HHmm) が cutoffStamp より古ければ削除
-      // 旧形式 (分精度) との後方互換性のため、両方マッチさせる
-      const id = d.id
-      const m = id.match(/_(\d{8}-\d{4,6})$/)
-      if (m && m[1] < cutoffStamp) {
+    //   2026-10-02 総合点検: 旧実装は「新しい順に500件」を取って30日より古いものを消していた。
+    //   1日に約20件たまるので30日分で600件を超え、古いものは500件の外に出て永久に消えなかった
+    //   （しかも毎晩、出面の退避＝1件200〜300KB を含む500件を中身ごと読んでいた）。
+    //   → 「30日より古いもの」を古い順に引いて消す。1晩300件までなので、たまった分は数日で片づく。
+    //   復元前の退避（safety_pre_restore_*）は消さない（件数が少なく、事故調査で要る）
+    try {
+      const cutoff = new Date(now.getTime() - RETENTION_DAYS * 86400000)
+      const oldSnap = await getDocs(query(
+        collection(db, 'backups'),
+        where('snapshotAt', '<', cutoff.toISOString()),
+        orderBy('snapshotAt', 'asc'),
+        limit(PRUNE_PER_RUN),
+      ))
+      for (const d of oldSnap.docs) {
+        if (d.id.startsWith('safety_')) continue
         await deleteDoc(d.ref)
-        summary.deleted.push(id)
+        summary.deleted.push(d.id)
       }
+    } catch (e) {
+      summary.errors.push(`prune: ${e instanceof Error ? e.message : String(e)}`)
     }
 
     // (最後) 日付指定の人員マスタ変更を反映（2026-09-14）。バックアップ取得後に行うので、
@@ -229,8 +272,12 @@ export async function GET(request: NextRequest) {
       summary.errors.push(`scheduledChanges: ${e instanceof Error ? e.message : String(e)}`)
     }
 
-    return NextResponse.json({ success: true, ...summary, scheduledApplied })
+    await recordBackupResult(now, summary)
+    // 一部でも失敗していれば success: false（HTTP は 200 のまま＝ cron の再試行で二重に取らない）
+    return NextResponse.json({ success: summary.errors.length === 0, ...summary, scheduledApplied })
   } catch (error) {
+    summary.errors.push(`fatal: ${error instanceof Error ? error.message : String(error)}`)
+    await recordBackupResult(now, summary)
     return NextResponse.json({
       error: 'Backup failed',
       message: error instanceof Error ? error.message : String(error),

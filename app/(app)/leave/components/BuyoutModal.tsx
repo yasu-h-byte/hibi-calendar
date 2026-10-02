@@ -28,7 +28,8 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
           <div>
             <h3 className="text-lg font-bold text-hibi-navy dark:text-white">有給買取記録</h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              {worker.name}さん / 現在残 {worker.remaining}日
+              {worker.name}さん / 今の期の残 {worker.remaining}日
+              {worker.prevPeriod && ` / 前の期（〜${worker.prevPeriod.endDate.replace(/-/g, '/')}）の残 ${worker.prevPeriod.remaining}日`}
             </p>
           </div>
         </div>
@@ -69,9 +70,22 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
             disabled={buyoutSubmitting || !buyoutForm.days || Number(buyoutForm.days) <= 0}
             onClick={async () => {
               const days = Number(buyoutForm.days)
+              // 期末買取は「終わった前の期」に記録する（2026-10-02 総合点検。賞与の精勤賞与・休暇管理の
+              //   「賞与で買取予定」と同じ期）。旧: 今の期（付与直後でほぼ満額）のレコードに記録していた。
+              //   退職時清算・その他は今の期
+              const targetPrev = buyoutForm.reason === 'year-end'
+              if (targetPrev && !worker.prevPeriod) {
+                alert('終わった期がありません（期末買取は期が終わってから記録します）')
+                return
+              }
+              if (targetPrev && worker.prevPeriod?.yearEndBuyoutRecorded) {
+                alert('前の期の期末買取は記録済みです。やり直す場合は先に既存の買取記録を取り消してください')
+                return
+              }
+              const limit = targetPrev ? (worker.prevPeriod?.remaining ?? 0) : worker.remaining
               // 2026-08-27 追加: 注記どおり残日数の範囲内に制限（旧: >0 のみで超過買取が送れた）
-              if (days > worker.remaining) {
-                alert(`買取日数（${days}日）が残日数（${worker.remaining}日）を超えています`)
+              if (days > limit) {
+                alert(`買取日数（${days}日）が${targetPrev ? '前の期の' : ''}残日数（${limit}日）を超えています`)
                 return
               }
               if (buyoutForm.amount && Number(buyoutForm.amount) < 0) {
@@ -81,7 +95,9 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
               if (!confirm(`${worker.name}さんの有給 ${days}日を買取記録しますか？\n理由: ${buyoutForm.reason === 'year-end' ? '期末買取' : buyoutForm.reason === 'retirement' ? '退職時清算' : 'その他'}${buyoutForm.amount ? `\n金額: ¥${Number(buyoutForm.amount).toLocaleString()}` : ''}`)) return
               setBuyoutSubmitting(true)
               try {
-                const currentFy = worker.grantDate ? worker.grantDate.slice(0, 4) : String(new Date().getFullYear())
+                const currentFy = targetPrev && worker.prevPeriod
+                  ? worker.prevPeriod.fy
+                  : (worker.grantDate ? worker.grantDate.slice(0, 4) : String(new Date().getFullYear()))
                 const res = await fetch('/api/leave', {
                   method: 'POST',
                   headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
