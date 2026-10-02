@@ -1,14 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import { ToastProvider } from '@/components/Toast'
 import { AuthUser } from '@/types'
 import { initTheme } from '@/lib/theme'
+import { can } from '@/lib/permissions'
+import { requiredCapsForPath } from '@/lib/page-guard'
+import { MENU_ITEMS } from '@/lib/menu'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [user, setUser] = useState<AuthUser | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -66,6 +70,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     )
   }
 
+  // 画面の入口の鍵（lib/page-guard.ts・2026-10-02）。権限の無い画面は中身を出さない（職長に給与の画面を見せない）
+  const needCaps = requiredCapsForPath(pathname || '/')
+  const blocked = !!needCaps && !needCaps.some(c => can(user, c))
+  const homeHref = MENU_ITEMS.find(i => i.href && can(user, i.cap))?.href || '/'
+
   return (
     <ToastProvider>
       <div className="min-h-screen bg-hibi-bg dark:bg-gray-900">
@@ -87,11 +96,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <main className="pt-14 px-4 pb-20 lg:pt-6 lg:px-6 lg:pb-6 print:pt-0 print:px-0 print:pb-0">
             <div className="animate-fadeIn">
-              {children}
+              {blocked ? <NoAccess homeHref={homeHref} /> : children}
             </div>
           </main>
         </div>
       </div>
     </ToastProvider>
+  )
+}
+
+function NoAccess({ homeHref }: { homeHref: string }) {
+  return (
+    <div className="max-w-md mx-auto mt-16 bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-6 text-center space-y-4">
+      <h1 className="text-lg font-bold text-gray-900 dark:text-white">この画面は見られません</h1>
+      <p className="text-sm text-hibi-sub dark:text-gray-400">この画面を見る権限がありません。必要なときは事務か代表に聞いてください。</p>
+      <a href={homeHref} className="inline-flex items-center h-11 px-5 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light">メニューの最初の画面へ</a>
+    </div>
   )
 }

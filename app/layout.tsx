@@ -24,6 +24,8 @@ export const metadata: Metadata = {
     siteName: 'DEDURA＋',
     type: 'website',
   },
+  // 個人のリンク（マイページ等）は各 layout で自分のページを開く manifest に差し替える（lib/staff-manifest.ts）
+  manifest: '/manifest.json',
   icons: {
     icon: [
       { url: '/brand/favicon-32.png', sizes: '32x32', type: 'image/png' },
@@ -46,7 +48,6 @@ export default function RootLayout({
   return (
     <html lang="ja" className={udFont.variable}>
       <head>
-        <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#1B2A4A" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

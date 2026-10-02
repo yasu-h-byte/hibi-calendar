@@ -26,7 +26,7 @@ const ROLE_LABEL: Record<Role, string> = {
 // 全資料（フラットに保持。category は表示グループ用）
 const DOCS: (DocItem & { category: string })[] = [
   // ── 全員向けの入口 ──
-  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-10-01' },
+  { category: 'guide', title: 'ロール別やることチェックリスト', desc: '事務・役員・職長・スタッフが日次／月次／年次で何をすべきかを1ページに集約', url: '/manual-checklist.html', icon: '✅', badge: '日次参照', updated: '2026-10-02' },
 
   // ── 事務（森田さん・2026-10からキャシュモ委託体制） ──
   { category: 'manual', roles: ['jimu'], title: '事務業務マニュアル（森田さん向け）', desc: '奥寺さん・佐藤さんの業務を統合した引き継ぎ版。出面補助・申請承認・道具代・月次締め・キャシュモへの資料提出まで（給与計算・振込はキャシュモ委託）', url: '/manual-morita.html', icon: '📘', badge: 'NEW', updated: '2026-10-02' },
@@ -56,7 +56,7 @@ const DOCS: (DocItem & { category: string })[] = [
   // 2026-09-02: 奥寺さん・佐藤さんの退職（9月末）とキャシュモ委託に伴い、個人名義の
   //   3冊は「事務業務マニュアル（森田さん向け）」へ統合。原本は記録として残す。
   { category: 'archive', title: '請求書の発行マニュアル（2026年9月26日版）', desc: '森田さん向け事務マニュアル（請求）と政仁さん向けマニュアル（承認）へ統合済み。個人パスワードの発行手順は森田さんマニュアルの付録へ', url: '/manual-invoice.html', icon: '📦', updated: '2026-09-26' },
-  { category: 'archive', title: '【お知らせ】最低20日保証と現場都合休の計算変更（8月分から）', desc: '8月分からの計算変更のお知らせ（周知済み）。ルールは休暇管理マニュアル・社労士提出用資料マニュアルに反映済み', url: '/notice-20day-guarantee.html', icon: '📦', updated: '2026-09-15' },
+  { category: 'archive', title: '【お知らせ】最低20日保証と現場都合休の計算変更（8月分から）', desc: '8月分からの計算変更のお知らせ（周知済み）。ルールは休暇管理マニュアル・社労士提出用資料マニュアルに反映済み', url: '/notice-20day-guarantee.html', icon: '📦', updated: '2026-10-02' },
   { category: 'archive', title: '奥寺さん向けマニュアル（〜2026年9月）', desc: '森田さん向けマニュアルへ統合済み。出面補助・月次集計・月締め・帳票出力の旧版', url: '/manual-okudera.html', icon: '📦', updated: '2026-10-02' },
   { category: 'archive', title: '給与計算マニュアル（奥寺さん用・〜2026年9月）', desc: '給与計算はキャシュモへ委託済み。システムの計算ロジック詳細の記録として保存（検算・保守時の参照用）', url: '/manual-payroll-okudera.html', icon: '📦', updated: '2026-10-02' },
   { category: 'archive', title: '道具代管理マニュアル（佐藤さん向け・〜2026年9月）', desc: '森田さん向けマニュアルへ統合済み。購入登録・残額管理の旧版', url: '/manual-sato.html', icon: '📦', updated: '2026-09-02' },

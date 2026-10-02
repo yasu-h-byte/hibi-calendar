@@ -176,13 +176,21 @@ export async function GET(request: NextRequest) {
     if (!roleCan(callerRole, 'wage.view')) {
       const me = await getApiAuthUser(request)
       const myId = me.authorized && typeof me.actor === 'number' ? me.actor : -1
-      const HIDDEN = ['finalScores', 'finalComment', 'manualScore', 'totalScore', 'rank', 'raiseAmount', 'evaluatorWeights'] as const
+      // 2026-10-02: 昇給・最終点・ランクに関わる項目は名前の形で消す（raise* / final* / totalScore / manualScore / rank / evaluatorWeights）。
+      //   旧: 決まった名前だけ消していて、承認時に書く raiseBaseAmount（表の昇給額＝ランクも分かる）などが残っていた。
+      //   scores（旧形式の評価者本人の点数）は消さない
+      const isHidden = (k: string) => /^raise|^final|^(total|manual)Score$|^rank$|^evaluatorWeights$/.test(k)
       evaluations = evaluations
-        // 旧形式（評価者1人・scores 直下）は自分が評価者のものだけ
-        .filter(e => { const x = e as { evaluatorId?: number; reviews?: unknown }; return Array.isArray(x.reviews) || x.evaluatorId === myId })
+        // 旧形式（評価者1人・scores 直下）は自分が評価者のものだけ。
+        // 新形式は、まだ承認前（評価入力の対象）か、自分がレビューを出したものだけ（他の人の承認済みの評価は見せない）
+        .filter(e => {
+          const x = e as { evaluatorId?: number; reviews?: { evaluatorId: number }[]; status?: string }
+          if (!Array.isArray(x.reviews)) return x.evaluatorId === myId
+          return x.status !== 'approved' || x.reviews.some(r => r.evaluatorId === myId)
+        })
         .map(e => {
           const o: Record<string, unknown> = { ...e }
-          for (const k of HIDDEN) delete o[k]
+          for (const k of Object.keys(o)) if (isHidden(k)) delete o[k]
           if (Array.isArray(o.reviews)) o.reviews = (o.reviews as { evaluatorId: number }[]).filter(r => r.evaluatorId === myId)
           return o as typeof e
         })
@@ -193,7 +201,8 @@ export async function GET(request: NextRequest) {
       evaluations,
       workers: foreignWorkers,
       evaluators,
-      settings,
+      // 昇給テーブルは賃金を見られる人だけ（評価入力には要らない・2026-10-02）
+      settings: roleCan(callerRole, 'wage.view') ? settings : { raiseTable: [] },
     })
   } catch (error) {
     console.error(`Evaluation GET error at stage [${stage}]:`, error)
