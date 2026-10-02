@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261002_staff_homescreen',
+    title: 'マイページをホーム画面に追加すると、ログイン画面が出ていたのを直しました',
+    content:
+      'スタッフのマイページ・出面入力・職長確認のリンクを「ホーム画面に追加」すると、アイコンからはログイン画面が開いてパスワードを聞かれていました。今後はアイコンからその人のページが直接開きます。'
+      + 'すでにホーム画面に追加している人は、今のアイコンを消して、リンクからもう一度追加してもらってください。',
+    category: 'fix',
+    publishedAt: '2026-10-02T22:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261002_approver_past_edit',
     title: '政仁さんが、昨日までの日の出面を直せるようになりました',
     content:
