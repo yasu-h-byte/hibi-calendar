@@ -1555,7 +1555,8 @@ export default function AttendanceGridPage() {
           siteId={data.site.id}
           ym={ym}
           siteName={data.site.name}
-          currentWorkerIds={data.workers.map(w => w.id)}
+          // 配置外の入力の人（offRoster）は配置に入っていないので、配置の編集では「配置済み」にしない（保存で配置に入ってしまう）
+          currentWorkerIds={data.workers.filter(w => !w.offRoster).map(w => w.id)}
           allWorkers={data.allWorkers || []}
           currentSubconIds={data.subcons.map(sc => sc.id)}
           allSubcons={data.allSubcons || []}

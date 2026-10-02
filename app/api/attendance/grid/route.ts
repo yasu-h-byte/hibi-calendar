@@ -82,7 +82,53 @@ export async function GET(request: NextRequest) {
         // 2026-06-13: 旧契約継続者（フン等）は出面UIをレガシー（日数+残業+0.6補）にするため
         useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
         canDrive: (w as { canDrive?: boolean }).canDrive,
+        offRoster: undefined as boolean | undefined,   // 配置外の入力がある人（下で足す）
       }))
+
+    // ── 配置外の入力（2026-10-02 代表指摘）──
+    //   この現場（工種サイトを含む）にその月の入力があるのに、配置に入っていない人も行を出す（offRoster）。
+    //   旧: 配置の人の行しか出さず、スタッフがスマホで現場を選び間違えた打刻（例: サン 9/7〜9 が IHI でなく笹塚）が
+    //       どの画面にも出ないまま給与には数えられ、職長も気づかずに承認していた。
+    //   読み取りは増えない（取得済みの att.d をなぞるだけ）
+    const familyIds = isWorkTypeSite(site) ? [siteId] : parentAndWorkTypeSiteIds(main.sites, siteId)
+    const offRosterIds = new Set<number>()
+    {
+      // 配置 = 親の配置＋工種サイトの配置（下の工種ブロックで足す人）。ここに入っていない人だけが配置外
+      const onRoster = new Set(workers.map(w => w.id))
+      if (!isWorkTypeSite(site)) {
+        for (const child of workTypeSitesOf(main.sites, siteId).filter(c => !c.archived)) {
+          for (const wid of getAssign(main, child.id, ym).workers) onRoster.add(wid)
+        }
+      }
+      const tail = `_${ym}_`
+      for (const [key, e] of Object.entries(att.d)) {
+        if (!e) continue
+        const i = key.lastIndexOf(tail)
+        if (i < 0) continue
+        const head = key.slice(0, i)
+        const j = head.lastIndexOf('_')
+        const sid = head.slice(0, j)
+        const wid = Number(head.slice(j + 1))
+        if (!familyIds.includes(sid) || onRoster.has(wid) || !Number.isFinite(wid)) continue
+        offRosterIds.add(wid)
+      }
+    }
+    for (const w of main.workers) {
+      if (!offRosterIds.has(w.id)) continue
+      workers.push({
+        id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
+        retired: w.retired || undefined,
+        hireDate: w.hireDate || undefined,
+        useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
+        canDrive: (w as { canDrive?: boolean }).canDrive,
+        offRoster: true,
+      })
+      allWorkerEntries[w.id] = {}
+      for (let d = 1; d <= daysInMonth; d++) {
+        const key = `${siteId}_${w.id}_${ym}_${String(d)}`
+        if (att.d[key]) allWorkerEntries[w.id][d] = att.d[key]
+      }
+    }
 
     const workerEntries: Record<string, Record<number, AttendanceEntry>> = {}
     for (const w of workers) {
@@ -150,6 +196,7 @@ export async function GET(request: NextRequest) {
           hireDate: w.hireDate || undefined,
           useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
           canDrive: (w as { canDrive?: boolean }).canDrive,
+          offRoster: undefined,
         })
         workerEntries[w.id] = {}
       }

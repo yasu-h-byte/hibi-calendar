@@ -454,6 +454,13 @@ export default function AttendanceGrid({
                       >
                         <div className="flex items-center gap-1 flex-wrap">
                           <span>{worker.name}</span>
+                          {/* 配置外の入力（2026-10-02）: 配置に入っていないのにこの現場に入力がある人。現場の選び間違いに気づくため */}
+                          {worker.offRoster && (
+                            <span className="text-[9px] px-1 py-0.5 rounded font-bold whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                              title="この現場の配置に入っていない人の入力です。スマホで現場を選び間違えた打刻なら、正しい現場へ移してください（このまま給与に数えられます）">
+                              配置外
+                            </span>
+                          )}
                           {(() => {
                             const rb = retirementBadge(worker.retired)
                             if (!rb) return null

@@ -45,6 +45,8 @@ interface GridWorker {
   useOldRules?: boolean
   retired?: string
   hireDate?: string
+  /** 配置に入っていないが、この現場に入力がある人（2026-10-02） */
+  offRoster?: boolean
 }
 interface GridSubcon { id: string; name: string }
 interface GridData {
@@ -409,7 +411,8 @@ export default function ForemanMobilePage() {
   const missingWorkers = useMemo(() => {
     if (!data) return []
     return data.workers.filter(w =>
-      !data.workerEntries[w.id]?.[day] && !isHomeLeave(w.id)
+      !w.offRoster   // 配置外の人は、この現場に入力がある日のために出している行なので未入力に数えない
+      && !data.workerEntries[w.id]?.[day] && !isHomeLeave(w.id)
       // 入社前・退職後の日は未入力に数えない（2026-10-02・判定は lib/workers.ts isEmployedOn と同じ）
       && !(w.hireDate && dateIso < w.hireDate) && !(w.retired && dateIso > w.retired))
   }, [data, day, dateIso, isHomeLeave])
@@ -736,7 +739,8 @@ export default function ForemanMobilePage() {
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-sm">
                           {w.name}
-                          {entry?.s === 'staff' && <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-blue-400" title="スタッフ入力" />}
+                          {w.offRoster && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold align-middle" title="この現場の配置に入っていない人の入力です。現場の選び間違いなら、正しい現場へ移してください">配置外</span>}
+                          {entry?.s === 'staff' &&<span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-blue-400" title="スタッフ入力" />}
                           {entry?.s === 'foreman' && <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-orange-400" title="職長入力" />}
                         </span>
                         {isTime ? (
