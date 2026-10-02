@@ -91,6 +91,23 @@ import される `lib/` に個人の時給・予定額・事情を書くと、�
 - `npm run build` の後に `scripts/check-client-bundle-secrets.mjs`（postbuild）が
   チャンクに予定額・注記が無いかを調べ、見つかればビルドを失敗させる
 
+### 「並べる方式」をやめ、既定を安全側にする（2026-10-02 総合点検）
+
+今週の不具合の多くは「対象を1つずつ並べていて、あとから足したものが抜ける」型だった
+（担当現場チェックの対象アクション・給与で消す項目・バックアップの対象）。新しいものを足すときは、
+**既定で安全側（チェックする・伏せる・退避する）にして、外すものだけを理由つきで並べる**。
+
+| 何を | 決まりの場所 | 足し忘れを落とすもの |
+|---|---|---|
+| 出面グリッドの担当現場チェック | `lib/attendance-authz.ts` isForemanScopedGridAction（外すものだけ列挙） | `__tests__/attendanceAuthz.test.ts` |
+| 給与の項目を返す API | 許可リスト（`lib/workers.ts` WORKER_*_KEYS） | `__tests__/payLock.test.ts` |
+| 日次バックアップの対象 | `lib/backup-plan.ts`（退避する／意図して外す） | `__tests__/backupCoverage.test.ts` |
+| 月の締めの判定 | `lib/locks.ts` checkMonthLockedForWorkers（人の会社で見る。会社なしの checkMonthLocked(ym) は禁止） | `__tests__/locksForWorkers.test.ts` |
+| 承認できる日 | `lib/attendance-authz.ts` approvalDateError（先の日・実在しない日は承認しない） | 同上 |
+
+画面で止めている操作は、**必ずサーバでも同じ判定で止める**（画面だけの守りは API 直叩きで抜けられる）。
+保存の通信は結果（`res.ok`）を必ず見て、失敗したら表示を戻して理由を出す（楽観更新のまま放置しない）。
+
 ### 旧アプリとの関係
 - 旧アプリ（dedura-kanri）の保存機能は**完全無効化済み**
 - Firestoreは共有だが、旧アプリからの書き込みは発生しない
