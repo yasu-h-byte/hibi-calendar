@@ -6,7 +6,7 @@ import {
 } from '@/lib/site-hierarchy'
 import { getMainData, getAttData, getAssign, invalidateAttDataCache } from '@/lib/compute'
 import { getApprovalForDay } from '@/lib/attendance'
-import { isStillActiveForMonth } from '@/lib/workers'
+import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
 import { AttendanceEntry, DayType } from '@/types'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, getDocs, collection } from '@/lib/fsdb'
@@ -73,10 +73,12 @@ export async function GET(request: NextRequest) {
     //   新: 退職日 >= 表示月の月初 なら表示（退職月の出面入力可能、翌月以降は非表示）
     //   2026-05-27: lib/workers の共通ヘルパーに統一
     const workers = main.workers
-      .filter(w => filteredWorkerIds.includes(w.id) && isStillActiveForMonth(w.retired, ym))
+      // 2026-10-02: 入社前の月も出さない（月の途中の入社は hireDate を渡して、画面が入社前の日を未入力に数えない）
+      .filter(w => filteredWorkerIds.includes(w.id) && isStillActiveForMonth(w.retired, ym) && isHiredByMonth(w.hireDate, ym))
       .map(w => ({
         id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
         retired: w.retired || undefined,  // 退職日（バッジ表示用）
+        hireDate: w.hireDate || undefined,  // 入社日（入社前の日を未入力に数えない）
         // 2026-06-13: 旧契約継続者（フン等）は出面UIをレガシー（日数+残業+0.6補）にするため
         useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
         canDrive: (w as { canDrive?: boolean }).canDrive,
@@ -141,10 +143,11 @@ export async function GET(request: NextRequest) {
       const existingWorkerIdSet = new Set(workers.map(w => w.id))
       for (const w of main.workers) {
         if (!mergedWorkerIds.has(w.id) || existingWorkerIdSet.has(w.id)) continue
-        if (!isStillActiveForMonth(w.retired, ym)) continue
+        if (!isStillActiveForMonth(w.retired, ym) || !isHiredByMonth(w.hireDate, ym)) continue
         workers.push({
           id: w.id, name: w.name, org: w.org, visa: w.visa, job: w.job,
           retired: w.retired || undefined,
+          hireDate: w.hireDate || undefined,
           useOldRules: (w as { useOldRules?: boolean }).useOldRules || undefined,
           canDrive: (w as { canDrive?: boolean }).canDrive,
         })

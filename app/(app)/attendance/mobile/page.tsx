@@ -44,6 +44,7 @@ interface GridWorker {
   job?: string
   useOldRules?: boolean
   retired?: string
+  hireDate?: string
 }
 interface GridSubcon { id: string; name: string }
 interface GridData {
@@ -408,8 +409,10 @@ export default function ForemanMobilePage() {
   const missingWorkers = useMemo(() => {
     if (!data) return []
     return data.workers.filter(w =>
-      !data.workerEntries[w.id]?.[day] && !isHomeLeave(w.id))
-  }, [data, day, isHomeLeave])
+      !data.workerEntries[w.id]?.[day] && !isHomeLeave(w.id)
+      // 入社前・退職後の日は未入力に数えない（2026-10-02・判定は lib/workers.ts isEmployedOn と同じ）
+      && !(w.hireDate && dateIso < w.hireDate) && !(w.retired && dateIso > w.retired))
+  }, [data, day, dateIso, isHomeLeave])
 
   // ── 職長確認（承認 / 取り消し） ──
   const handleApprove = useCallback(async () => {

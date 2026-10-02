@@ -9,8 +9,8 @@ import { collection, query, where, getDocs } from '@/lib/fsdb'
 import { getMainData, getAttData, parseDKey, getAssign } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
-import { todayJstIso, addMonthsSafe, todayJstDate, localMidnight } from '@/lib/date-utils'
-import { isAlreadyRetired, isCalendarSignTarget } from '@/lib/workers'
+import { todayJstIso, addMonthsSafe, todayJstDate, localMidnight, addDaysIso } from '@/lib/date-utils'
+import { isAlreadyRetired, isCalendarSignTarget, isEmployedOn } from '@/lib/workers'
 import { calcLegalCarryOver, selectActiveGrantRecord } from '@/lib/leave-compute'
 import { getAllActiveHomeLeaves, isFullMonthHomeLeave } from '@/lib/homeLeave'
 import { getWorkerLastAccessMap } from '@/lib/accessLog'
@@ -711,6 +711,11 @@ export async function GET(request: NextRequest) {
           // 帰国中のスタッフは除外
           const currentYmStr = `${todayJst.getFullYear()}${String(todayJst.getMonth() + 1).padStart(2, '0')}`
           if (isFullMonthHomeLeave(w.id, currentYmStr, homeLeaves)) continue
+
+          // 入社前の人は対象外。入社して3日たっていない人もまだ数えない（2026-10-02・10/26 入社の人が出ていた）
+          const todayIsoA = todayJstIso()
+          if (!isEmployedOn(w, todayIsoA)) continue
+          if (w.hireDate && addDaysIso(w.hireDate, 3) > todayIsoA) continue
 
           const access = accessMap.get(w.id)
           if (!access || !access.lastAccessDate) {

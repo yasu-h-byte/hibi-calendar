@@ -168,6 +168,21 @@ export function isHiredByMonth(hireDate: string | undefined | null, ym: string):
 }
 
 /**
+ * その日に在籍しているか（入社日〜退職日。日単位・2026-10-02 追加）。
+ *
+ * isHiredByMonth / isStillActiveForMonth は「月」で見るので、10/26 入社の人は 10月の初めから「在籍」になる。
+ * 「この日の入力が無い」「休みの人」「アクセスが無い」などの日単位のお知らせは、こちらで入社前・退職後の日を外す。
+ *   2026-10-02 代表指摘: 10/26 入社のホアンさんに、10/2 の時点で「直近4稼働日に出面の入力がありません」が出ていた。
+ *
+ * @param iso YYYY-MM-DD
+ */
+export function isEmployedOn(w: { hireDate?: string | null; retired?: string | null }, iso: string): boolean {
+  if (w.hireDate && iso < w.hireDate) return false
+  if (w.retired && iso > w.retired) return false
+  return true
+}
+
+/**
  * 「今日時点で既に退職済み」かを判定（2026-06-XX 追加）
  *
  * - retired が空 → 退職予定なし → false（在籍中）
