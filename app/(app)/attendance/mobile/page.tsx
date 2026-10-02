@@ -408,14 +408,20 @@ export default function ForemanMobilePage() {
     return org === 'hfu' ? !!data?.lockedHfu : !!data?.lockedHibi
   }, [finalApproved, data])
 
+  /**
+   * その日に入力があるはずの人か（未入力に数える対象）。日の画面と月の俯瞰で同じ判定を使う（2026-10-02 点検で一本化）。
+   * 配置外の人（この現場に入力がある日のために出している行）・入社前／退職後の日（lib/workers.ts isEmployedOn と同じ）・帰国中は数えない
+   */
+  const expectedOn = useCallback((w: GridWorker, iso: string) => {
+    if (w.offRoster) return false
+    if ((w.hireDate && iso < w.hireDate) || (w.retired && iso > w.retired)) return false
+    return !(data?.homeLeaves || []).some(hl => hl.workerId === w.id && hl.startDate <= iso && iso <= hl.endDate)
+  }, [data])
+
   const missingWorkers = useMemo(() => {
     if (!data) return []
-    return data.workers.filter(w =>
-      !w.offRoster   // 配置外の人は、この現場に入力がある日のために出している行なので未入力に数えない
-      && !data.workerEntries[w.id]?.[day] && !isHomeLeave(w.id)
-      // 入社前・退職後の日は未入力に数えない（2026-10-02・判定は lib/workers.ts isEmployedOn と同じ）
-      && !(w.hireDate && dateIso < w.hireDate) && !(w.retired && dateIso > w.retired))
-  }, [data, day, dateIso, isHomeLeave])
+    return data.workers.filter(w => !data.workerEntries[w.id]?.[day] && !isHomeLeave(w.id) && expectedOn(w, dateIso))
+  }, [data, day, dateIso, isHomeLeave, expectedOn])
 
   // ── 職長確認（承認 / 取り消し） ──
   const handleApprove = useCallback(async () => {
@@ -447,14 +453,15 @@ export default function ForemanMobilePage() {
     const out: { d: number; isWork: boolean; approved: boolean; missing: number }[] = []
     for (let d = 1; d <= lastDay; d++) {
       const dt: DayType = data.calendarDays ? (data.calendarDays[String(d)] || 'work') : (new Date(y, m - 1, d).getDay() !== 0 ? 'work' : 'off')
-      const missing = dt === 'work'
-        ? data.workers.filter(w => !data.workerEntries[w.id]?.[d]
-            && !(data.homeLeaves || []).some(hl => hl.workerId === w.id && hl.startDate <= `${y}-${pad2(m)}-${pad2(d)}` && `${y}-${pad2(m)}-${pad2(d)}` <= hl.endDate)).length
+      // 今日はスタッフが作業後に打刻するので、まだ数えない（「職長承認がまだ」と同じ・2026-10-02 点検）
+      const isTodayD = isCurMonth && d === today.getDate()
+      const missing = dt === 'work' && !isTodayD
+        ? data.workers.filter(w => !data.workerEntries[w.id]?.[d] && expectedOn(w, `${y}-${pad2(m)}-${pad2(d)}`)).length
         : 0
       out.push({ d, isWork: dt === 'work', approved: !!data.foremanApprovals?.[d], missing })
     }
     return out
-  }, [data, y, m, today])
+  }, [data, y, m, today, expectedOn])
 
   // ══════════ 申請タブ ══════════
   const [leaveReqs, setLeaveReqs] = useState<LeaveReq[]>([])
@@ -713,6 +720,11 @@ export default function ForemanMobilePage() {
                 <div className="mt-3 p-2.5 rounded-lg bg-gray-100 text-gray-600 text-sm font-bold text-center">🔒 最終承認済み（編集できません）</div>
               ) : foremanApproved ? (
                 <div className="mt-3 p-2.5 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm font-bold text-center">✅ {siteLeaderLabel(data?.isSupportSite)}確認済み</div>
+              ) : missingWorkers.length > 0 && !isRestDay && dateIso === `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}` ? (
+                // 今日はスタッフが作業後に打刻するので、赤い警告にしない（2026-10-02 点検）
+                <div className="mt-3 p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 text-xs">
+                  今日まだ入力していない人 {missingWorkers.length}名（作業後に打刻します）: {missingWorkers.map(w => w.name).join('・')}
+                </div>
               ) : missingWorkers.length > 0 && !isRestDay ? (
                 <div className="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
                   ⚠️ <b>{missingWorkers.length}名が未入力</b>: {missingWorkers.map(w => w.name).join('・')}

@@ -35,6 +35,8 @@ interface ForemanBlock {
   missing: { day: number; dateISO: string; missingNames: string[] }[]
   /** 配置に残っているが別の現場で入力している人（未入力に数えていない） */
   elsewhereNames: string[]
+  /** 配置に入っていないのにこの現場に入力がある人（現場の選び間違いの疑い・2026-10-02） */
+  offRoster: { day: number; dateISO: string; names: string[] }[]
   approvedCount: number
   /** 政仁さんが代行する現場か */
   proxy?: boolean
@@ -52,12 +54,13 @@ function foremanBlock(site: Site, ym: string, days: ForemanDay[], todayIso: stri
   const ready = open.filter(d => d.total > 0 && d.entered === d.total)
   // 今日はまだ入力の途中なので「そろっていない」に出さない（全員そろえば承認には出る）
   const missing = open.filter(d => d.entered < d.total && d.dateISO < todayIso)
-  if (ready.length === 0 && missing.length === 0 && !days.some(d => d.approved)) return null
+  if (ready.length === 0 && missing.length === 0 && !days.some(d => d.approved) && !days.some(d => d.offRoster.length > 0)) return null
   return {
     siteId: site.id, siteName: site.name, ym, ymLabel: ymLabel(ym),
     ready: ready.map(d => ({ day: d.day, dateISO: d.dateISO, entered: d.entered })),
     missing: missing.map(d => ({ day: d.day, dateISO: d.dateISO, missingNames: d.missingNames })),
     elsewhereNames: [...new Set(open.flatMap(d => d.elsewhere.map(e => e.name)))],
+    offRoster: days.filter(d => !d.approved && d.offRoster.length > 0).map(d => ({ day: d.day, dateISO: d.dateISO, names: d.offRoster })),
     approvedCount: days.filter(d => d.approved).length,
     proxy,
   }

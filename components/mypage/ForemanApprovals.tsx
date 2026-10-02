@@ -15,6 +15,8 @@ interface AttendanceBlock {
   ready: { day: number; dateISO: string; entered: number }[]
   missing: { day: number; dateISO: string; missingNames: string[] }[]
   elsewhereNames: string[]
+  /** 配置に入っていないのにこの現場に入力がある人（現場の選び間違いの疑い・2026-10-02） */
+  offRoster?: { day: number; dateISO: string; names: string[] }[]
   approvedCount: number
   proxy?: boolean
 }
@@ -186,6 +188,17 @@ export default function ForemanApprovals({ token, canApprove }: {
                   <li key={d.day}><span className="tabular-nums font-bold">{md(d.dateISO)}</span> {d.missingNames.join('、')}</li>
                 ))}
                 {b.missing.length > 8 && <li>ほか {b.missing.length - 8}日</li>}
+              </ul>
+            </div>
+          )}
+          {(b.offRoster?.length || 0) > 0 && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-2.5">
+              <div className="text-xs font-bold text-orange-900 mb-1">配置に入っていない人の入力があります（現場の選び間違いかもしれません。承認の前に確かめてください）</div>
+              <ul className="text-xs text-orange-900 space-y-0.5">
+                {b.offRoster!.slice(0, 8).map(d => (
+                  <li key={d.day}><span className="tabular-nums font-bold">{md(d.dateISO)}</span> {d.names.join('、')}</li>
+                ))}
+                {b.offRoster!.length > 8 && <li>ほか {b.offRoster!.length - 8}日</li>}
               </ul>
             </div>
           )}

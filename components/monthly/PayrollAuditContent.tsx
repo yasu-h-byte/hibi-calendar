@@ -538,7 +538,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
               <tr>
                 <td>遠方現場日当 <span className="text-[10px] text-gray-500">(非課税・実費弁償)</span></td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">対象 {w.allowanceDays || 0}日（判定値80分超500円/120分超1,500円・長期従事は逓減）</div>
+                  <div className="text-[10px] text-gray-500">対象 {w.allowanceDays || 0}日（判定値80分超500円/120分超1,500円・長期従事は逓減。2026-10 現在は保留中）</div>
                   <div className="font-bold">{fmtYen(w.siteAllowance || 0)}</div>
                 </td>
               </tr>
@@ -547,7 +547,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
               <tr>
                 <td>運転手当</td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">{w.driveLegs || 0}便（片道500円/1,000円・判定値60分で区分）</div>
+                  <div className="text-[10px] text-gray-500">{w.driveLegs || 0}便 × 片道1,000円（同乗者を乗せた便だけ・「運転手当なし」の現場は除く）</div>
                   <div className="font-bold">{fmtYen(w.driveAllowance || 0)}</div>
                 </td>
               </tr>

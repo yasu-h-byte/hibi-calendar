@@ -2,6 +2,7 @@
 
 import { siteLeaderLabel } from '@/lib/companies'
 import { useEffect, useState, useCallback } from 'react'
+import { todayJstIso } from '@/lib/date-utils'
 import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus } from '@/types'
 import StaffHeader from '@/components/StaffHeader'
@@ -19,6 +20,8 @@ interface OverviewDay {
   approved: boolean
   entered: number
   missingNames: string[]
+  /** 配置に入っていないのにこの現場に入力がある人（2026-10-02） */
+  offRosterNames?: string[]
 }
 
 interface BreakSetting { enabled: boolean; minutes: number; mandatory: boolean }
@@ -33,6 +36,8 @@ interface ForemanData {
     entry: AttendanceEntry | null
     status: AttendanceStatus
     misplacedEntries?: MisplacedEntry[]
+    /** 配置に入っていないのにこの現場に入力がある人（現場の選び間違いの疑い・2026-10-02） */
+    offRoster?: boolean
   }[]
   summary: { workCount: number; noneCount: number; totalCount: number }
   approved: boolean
@@ -324,7 +329,13 @@ export default function ForemanAttendancePage() {
 
       <div className="max-w-lg mx-auto p-4 space-y-4">
         {/* 未入力の警告（2026-08-28 追加: 未入力＝欠勤扱いを明記） */}
-        {data.summary.noneCount > 0 && (
+        {/* 今日はスタッフが作業後に打刻するので、赤い警告にしない（2026-10-02 点検） */}
+        {data.summary.noneCount > 0 && data.date.dateISO === todayJstIso() && (
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm text-gray-600">
+            今日まだ入力していない人 {data.summary.noneCount}名（スタッフは作業後にスマホで打刻します）
+          </div>
+        )}
+        {data.summary.noneCount > 0 && data.date.dateISO < todayJstIso() && (
           <div className="bg-red-50 border-2 border-red-200 rounded-xl p-3">
             <div className="text-sm font-bold text-red-700">
               ⚠️ この日は {data.summary.noneCount}名 が未入力です
@@ -455,7 +466,13 @@ export default function ForemanAttendancePage() {
                   className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 last:border-0 active:bg-gray-50 cursor-pointer"
                   onClick={() => openEditor(w)}
                 >
-                  <span className="text-sm font-medium text-gray-800 truncate min-w-0">{w.name}</span>
+                  <span className="text-sm font-medium text-gray-800 truncate min-w-0">
+                    {w.name}
+                    {w.offRoster && (
+                      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold align-middle"
+                        title="この現場の配置に入っていない人の入力です。現場の選び間違いなら、正しい現場へ移してもらってください">配置外</span>
+                    )}
+                  </span>
                   <span className={`text-xs px-2 py-1 rounded-full font-bold whitespace-nowrap shrink-0 ${STATUS_COLORS[w.status]}`}>
                     {STATUS_EMOJI[w.status]} {STATUS_LABELS[w.status]}
                     {w.status === 'overtime' && w.entry?.o ? ` +${w.entry.o}h` : ''}
@@ -495,6 +512,8 @@ export default function ForemanAttendancePage() {
               let mark: string
               if (!o.isWorkDay) { cls = 'bg-gray-100 text-gray-300'; mark = '休' }
               else if (o.approved) { cls = 'bg-[#1E9E52] text-white'; mark = '✓' }
+              // 今日はスタッフが作業後に打刻するので赤にしない（2026-10-02 点検）
+              else if (missing > 0 && o.dateISO === todayJstIso()) { cls = 'bg-gray-50 text-gray-500 border border-gray-200'; mark = '入力中' }
               else if (missing > 0) { cls = 'bg-red-50 text-red-600 border border-red-200'; mark = `残${missing}` }
               else if (o.entered > 0) { cls = 'bg-amber-100 text-amber-800 border border-amber-300'; mark = '未確認' }
               else { cls = 'bg-gray-100 text-gray-400'; mark = '—' }
@@ -508,6 +527,9 @@ export default function ForemanAttendancePage() {
                 >
                   <div className="text-sm font-bold tabular-nums leading-tight">{o.day}</div>
                   <div className="text-[9px] font-bold leading-tight whitespace-nowrap overflow-hidden">{mark}</div>
+                  {(o.offRosterNames?.length || 0) > 0 && (
+                    <div className="text-[8px] font-bold leading-tight text-amber-700" title={`配置外の入力: ${o.offRosterNames!.join('、')}`}>配置外</div>
+                  )}
                 </button>
               )
             })}

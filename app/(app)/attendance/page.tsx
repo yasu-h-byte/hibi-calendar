@@ -1303,7 +1303,9 @@ export default function AttendanceGridPage() {
   // 最終承認待ち = 職長承認済みで最終承認がまだの日（表の「まとめて最終承認」と同じ）
   const finalWaitDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day]).map(d => d.day)
   const daysLabel = (ds: number[]) => ds.length <= 3 ? ds.map(d => `${data?.month}/${d}`).join('・') : `${data?.month}/${ds[0]}〜${ds[ds.length - 1]}`
-  const nmSites = nextMonthCalCheck?.sites || []
+  // 翌月の就業カレンダーは、開いている現場（工種サイトなら親）の分だけ数える（2026-10-02 点検: 全社の件数がどの現場にも出ていた）
+  const calSiteIdHere = (data?.site as { parentId?: string } | undefined)?.parentId || data?.site.id
+  const nmSites = (nextMonthCalCheck?.sites || []).filter(s => s.siteId === calSiteIdHere)
   const nmNotReady = nmSites.filter(s => !s.status || s.status === 'draft' || s.status === 'rejected').length
   const nmSubmitted = nmSites.filter(s => s.status === 'submitted').length
   // 帰国の予定は「確認すること」に数えない（2026-10-02 代表: 会社全体の帰国予定が全現場に出て、毎回開く必要がなかった）。
@@ -1316,7 +1318,9 @@ export default function AttendanceGridPage() {
   if (restDayWarnings.length > 0) checkItems.push(`休日の出勤 ${restDayWarnings.length}件`)
   if (workTypeWarnings.length > 0) checkItems.push(`工種の重複 ${workTypeWarnings.length}件`)
   if ((data?.restMismatch?.length || 0) > 0) checkItems.push(`休みの区別 ${data!.restMismatch!.length}件`)
-  if ((data?.upcomingRetirements?.length || 0) > 0) checkItems.push(`退職予定 ${data!.upcomingRetirements!.length}名`)
+  // 退職予定も、この現場の配置の人だけ（2026-10-02 点検: 他の現場の退職予定が全現場の「確認すること」に出ていた）
+  const siteRetirements = (data?.upcomingRetirements || []).filter(r => (data?.workers || []).some(w => w.id === r.id && !w.offRoster))
+  if (siteRetirements.length > 0) checkItems.push(`退職予定 ${siteRetirements.length}名`)
   const reqTotal = reqCounts.leave + reqCounts.home
   const scrollToGrid = () => document.getElementById('att-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
@@ -1408,6 +1412,10 @@ export default function AttendanceGridPage() {
         />
       )}
 
+      {/* 帰国の予定は件数に数えないが、ほかに確認することが無い現場でも見えるように出す（2026-10-02 点検: #36 で見えなくなっていた） */}
+      {!loading && data && checkItems.length === 0 && siteHomeLeaves.length > 0 && (
+        <HomeLeaveBanner homeLeaves={siteHomeLeaves} />
+      )}
       {/* ── 確認すること: ふだんは1行の要約。開くと今までの注意書きを並べる（中身・動きは旧と同じ） ── */}
       {!loading && data && checkItems.length > 0 && (
         <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/15 overflow-hidden">
@@ -1421,7 +1429,7 @@ export default function AttendanceGridPage() {
           {checksOpen && (
             <div className="px-3 pb-3 space-y-2">
               {/* 翌月カレンダー未確定アラート（components/attendance/NextMonthCalendarBanner.tsx に集約） */}
-              <NextMonthCalendarBanner check={nextMonthCalCheck} />
+              <NextMonthCalendarBanner check={nextMonthCalCheck ? { ...nextMonthCalCheck, sites: nmSites } : null} />
               {/* 休日・日曜の出勤警告。1日につき1件だけ出す（日曜と休日で二重表示しない） */}
               <AttendanceWarningBanner
                 title="休日・日曜の出勤あり"
@@ -1442,7 +1450,7 @@ export default function AttendanceGridPage() {
               {data && <RestMismatchBanner items={data.restMismatch} workers={data.workers} month={data.month} />}
 
               {/* 退職予定バナー（components/attendance/UpcomingRetirementsBanner.tsx に集約） */}
-              <UpcomingRetirementsBanner retirements={data?.upcomingRetirements} />
+              <UpcomingRetirementsBanner retirements={siteRetirements} />
 
             </div>
           )}
