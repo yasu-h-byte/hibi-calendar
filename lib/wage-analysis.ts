@@ -6,12 +6,15 @@
  *
  * ⚠️ 個人の賃金データを扱うため、呼び出し側で必ず代表（workerId=0）に限定すること。
  *
- * 昇給カーブと改定予定の定義は `lib/wage-curve.ts` にある（単一の真理）。ここでは参照のみ。
+ * 昇給カーブの定義は `lib/wage-curve.ts` にある（単一の真理）。ここでは参照のみ。
+ *
+ * ⚠️ このファイルは画面（/wage-analysis・/evaluation）の JS にも入る。個人の時給・事情は書かないこと。
+ *    改定の予定と個別事情は lib/wage-plan.server.ts（サーバー専用）にあり、buildWageAnalysis の plan 引数で受け取る。
  */
 
 import {
-  curveWage, curveStartFor, revisedHourly, pendingChangesFor,
-  SCHEDULED_WAGE_CHANGES, WAGE_REVISION_2026_10, MONTHLY_HOURS,
+  curveWage, curveStartFor, revisedHourly, MONTHLY_HOURS,
+  type ScheduledWageChange,
 } from './wage-curve'
 
 /**
@@ -124,41 +127,30 @@ export const MARKET_REFERENCE = [
 ] as const
 
 /* ────────────────────────────────────────────────
-   個別事情の注記
+   個別事情の注記（型だけ）
    ──────────────────────────────────────────────── */
 
-/**
- * 数字だけでは読み違える人の背景。
- *
- * この分析は在籍年数と時給しか見ないため、経歴に事情がある人は「不当に低い」と
- * 出てしまう。事情が分かっているものはここに書いて、フラグの横に理由が並ぶようにする。
- * **フラグから除外はしない**（見えなくすると解消の検討自体が忘れられるため）。
- *
- * `serviceYears` を入れると在籍年数をその値で上書きし、カーブとの比較も実態に合う。
- * 分からないうちは未設定にしておき、注記だけ出す。
- */
-export const WAGE_CONTEXT: Record<number, {
+/** 数字だけでは読み違える人の背景。中身は lib/wage-plan.server.ts の WAGE_CONTEXT（サーバー専用） */
+export interface WageContextNote {
   /** 一覧に出す短いラベル */
   label: string
   /** フラグの下に出す説明 */
   detail: string
   /** 実質の在籍年数（ブランクを除いた通算）。分かったら入れる */
   serviceYears?: number
-}> = {
-  105: {
-    label: '再入社',
-    detail: '2022-05-26 退社 → 2022-09-22 再入社（ブランク約4ヶ月）。ブランクの分だけ同時期入社の他スタッフより低い。'
-      + '在籍年数はブランクを除いた通算（serviceYears）で比較している。2026-11-27 の契約更新は評価A（+104円・2,270円）で、ブランク分は解消していない（代表判断）。',
-    // 2018-11-01 入社 − 119日のブランク。2026-10-01 時点 7.59年（代表確認 2026-09-10）。
-    //   ※固定値なので年が進んだら見直す（ブランク分 0.33年を引く、が本来の式）
-    serviceYears: 7.6,
-  },
-  106: {
-    label: '3号不合格・特定1号へ早期移行',
-    detail: '技能実習3号の試験に合格できず、実習3号を経ずに特定技能1号へ移行したイレギュラーなケース。'
-      + '在留資格は特定技能1号だが、在籍年数では実習3号の段階にあたるため、段階平均・同期比較は実習3号の群と比べている。',
-  },
 }
+
+/**
+ * 賃金改定の予定と個別事情。**個人の金額・事情を含むのでサーバーだけが持つ**。
+ * 画面は /api/wage-analysis/plan（代表だけ・lib/permissions.ts wageAnalysis.view）から受け取る。
+ */
+export interface WagePlan {
+  changes: ScheduledWageChange[]
+  context: Record<number, WageContextNote>
+}
+
+/** 予定も注記もない状態（計算だけ試すとき用） */
+export const EMPTY_WAGE_PLAN: WagePlan = { changes: [], context: {} }
 
 export interface WageRow {
   id: number
@@ -179,8 +171,8 @@ export interface WageRow {
   stageException?: boolean
   /** 実際の在留資格の段階（STAGES の添字。不明は −1）。グラフの色分けはこちらを使う */
   visaStage: number
-  /** 個別事情の注記（再入社によるブランクなど）。WAGE_CONTEXT の該当分 */
-  context?: (typeof WAGE_CONTEXT)[number]
+  /** 個別事情の注記（再入社によるブランクなど）。plan.context の該当分 */
+  context?: WageContextNote
   /** 入社時の東京都最低賃金 */
   hireMinWage: number
   /** 起点時給（入社時最低賃金を10円切上げ） */
@@ -378,6 +370,7 @@ const VISA_LABEL: Record<string, string> = {
  * @param workers  対象スタッフ（外国人・時給が判明している在籍者）
  * @param todayIso 基準日 YYYY-MM-DD
  * @param threshold 高い／低いと判定する差額のしきい値（円）
+ * @param plan     改定の予定と個別事情（サーバーから受け取る。省略時は予定なし）
  */
 /**
  * 分析の基準となる時給。
@@ -394,7 +387,9 @@ export function buildWageAnalysis(
   todayIso: string,
   threshold = 20,
   basis: WageBasis = 'current',
+  plan: WagePlan = EMPTY_WAGE_PLAN,
 ): WageAnalysis {
+  const schedule = plan.changes
   const nowMw = currentMinWage(todayIso)
   const today = new Date(todayIso + 'T00:00:00Z').getTime()
 
@@ -403,14 +398,14 @@ export function buildWageAnalysis(
       ? Math.max(0, (today - new Date(w.hireDate + 'T00:00:00Z').getTime()) / (365.25 * 86400000))
       : 0
     // 実質の在籍年数が分かっている人（再入社など）はそちらを優先する
-    const ctx = WAGE_CONTEXT[w.id]
+    const ctx = plan.context[w.id]
     const yr = ctx?.serviceYears ?? Math.round(years * 10) / 10
     const mw = minWageAt(w.hireDate || todayIso)
     const start = roundUp10(mw)
     const currentHourly = w.hourlyRate ?? 0
     // 人員マスタに登録済みの最新額（適用開始日つきで先に書いた改定を含む）
     const masterHourly = w.latestHourly ?? currentHourly
-    const revised = Math.max(revisedHourly(w.id, currentHourly), masterHourly)
+    const revised = Math.max(revisedHourly(w.id, currentHourly, schedule), masterHourly)
     // 段階平均・傾向線・昇給率・逆転判定など、以降の集計はすべて h を使う。
     // basis を切り替えるとページ全体が改定後の姿で計算される。
     const h = basis === 'revised' ? revised : currentHourly
@@ -483,8 +478,8 @@ export function buildWageAnalysis(
       allHigh: ds.length > 1 && ds.every(v => v > threshold),
       model, devModel: r.hourly - model,
       curve, devCurve: r.hourly - curve,
-      revisionTarget: SCHEDULED_WAGE_CHANGES.some(c => c.targets[r.id] !== undefined),
-      changeLabels: SCHEDULED_WAGE_CHANGES
+      revisionTarget: schedule.some(c => c.targets[r.id] !== undefined),
+      changeLabels: schedule
         .filter(c => c.targets[r.id] !== undefined).map(c => c.label),
       revisionGain: r.revised - r.currentHourly,
       devCurveRevised: r.revised - curve,
@@ -495,14 +490,14 @@ export function buildWageAnalysis(
   const byId = new Map(rows.map(r => [r.id, r]))
   // 事由ごとの内訳。同じ人に複数の予定が当たる場合、コストは「その予定で実際に上がる分」
   // ＝ 予定額 − それまでに確定している額 で数える（二重計上を避ける）
-  const changes = SCHEDULED_WAGE_CHANGES.map((c, ci) => {
+  const changes = schedule.map((c, ci) => {
     let annualCost = 0, pending = 0
     for (const id of Object.keys(c.targets).map(Number)) {
       const row = byId.get(id)
       if (!row) continue
       // この予定より前に確定している額（マスタの現在値 or 先行する予定の額）。
       // basis に左右されないよう currentHourly を使う
-      const prior = SCHEDULED_WAGE_CHANGES.slice(0, ci)
+      const prior = schedule.slice(0, ci)
         .reduce((v, p) => Math.max(v, p.targets[id] ?? 0), row.currentHourly)
       const gain = Math.max(0, c.targets[id] - prior)
       annualCost += gain * MONTHLY_HOURS * 12

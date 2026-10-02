@@ -9,9 +9,16 @@ import { describe, it, expect } from 'vitest'
 import {
   CURVE_BASE_RAISE, CURVE_DECAY, CURVE_MIN_RAISE,
   curveRaiseAt, curveWage, curveStartFor,
-  WAGE_REVISION_2026_10, SCHEDULED_WAGE_CHANGES, revisedHourly, pendingChangesFor, MONTHLY_HOURS,
+  revisedHourly as revisedHourlyWith, pendingChangesFor as pendingChangesForWith, MONTHLY_HOURS,
 } from '@/lib/wage-curve'
-import { buildWageAnalysis, WAGE_CONTEXT } from '@/lib/wage-analysis'
+import { buildWageAnalysis as buildWith, type WageBasis, type WageInput } from '@/lib/wage-analysis'
+// 予定表と個別事情はサーバー専用（2026-10-02）。テストでは server-only を空に差し替えて読む（vitest.config.ts）
+import { WAGE_REVISION_2026_10, SCHEDULED_WAGE_CHANGES, WAGE_CONTEXT, getWagePlan } from '@/lib/wage-plan.server'
+
+const revisedHourly = (id: number, current: number) => revisedHourlyWith(id, current, SCHEDULED_WAGE_CHANGES)
+const pendingChangesFor = (id: number, current: number) => pendingChangesForWith(id, current, SCHEDULED_WAGE_CHANGES)
+const buildWageAnalysis = (w: WageInput[], today: string, threshold = 20, basis: WageBasis = 'current') =>
+  buildWith(w, today, threshold, basis, getWagePlan())
 
 describe('curveRaiseAt（昇給額 = 160円 − 8円 × 在籍年数）', () => {
   it('定義どおりに逓減する', () => {
@@ -312,5 +319,17 @@ describe('basis（集計の基準）の切り替え', () => {
 
   it('既定は current（明示しない呼び出しの挙動を変えない）', () => {
     expect(buildWageAnalysis(workers, '2026-08-25').basis).toBe('current')
+  })
+})
+
+describe('予定表を渡さないとき', () => {
+  it('予定・注記なしで計算する（画面の JS に予定表が入らない前提）', () => {
+    const a = buildWith(
+      [{ id: 106, name: 'タン', visaType: 'tokutei1', hireDate: '2023-05-14', hourlyRate: 1527 }],
+      '2026-08-25', 20, 'revised',
+    )
+    expect(a.rows[0].revised).toBe(1527)
+    expect(a.rows[0].revisionTarget).toBe(false)
+    expect(a.revision.changes).toEqual([])
   })
 })

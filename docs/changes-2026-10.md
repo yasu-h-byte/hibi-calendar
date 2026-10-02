@@ -55,7 +55,7 @@
 - スマホ入力画面（出面・承認・就業カレ・自分）を利用
 
 ## 4. 関連ドキュメント
-- 賃金: [wage-system.md](wage-system.md)（日本人）、[salary-calculation.md](salary-calculation.md)（時給の適用開始日）、`lib/wage-curve.ts`（予定表）
+- 賃金: [wage-system.md](wage-system.md)（日本人）、[salary-calculation.md](salary-calculation.md)（時給の適用開始日）、`lib/wage-plan.server.ts`（予定表・サーバー専用。2026-10-02 に `lib/wage-curve.ts` から移した）
 - 手当: [allowance.md](allowance.md)
 - 有給: [paid-leave.md](paid-leave.md)
 - 道具代・出面: [attendance.md](attendance.md)

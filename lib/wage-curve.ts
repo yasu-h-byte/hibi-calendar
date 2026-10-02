@@ -12,6 +12,8 @@
  * `/evaluation` の評価テーブル（A評価）もここから導出している（2026-09-14 一本化・lib/evaluation-config.ts RAISE_TABLE）。
  * 値を変えるときはここだけを変える。
  *
+ * ⚠️ クライアントにも配られるファイル。個人の時給・事情は書かない（予定表は lib/wage-plan.server.ts）。
+ *
  * ※ 日本人社員の号俸制（docs/wage-system.md・lib/jp-wage.ts）は別体系。本ファイルの対象外。
  */
 
@@ -76,8 +78,13 @@ export function curveStartFor(minWage: number): number {
 }
 
 /* ────────────────────────────────────────────────
-   2026年10月 一律改定
+   賃金改定の予定（型と計算だけ）
    ──────────────────────────────────────────────── */
+
+// ⚠️ 予定そのもの（誰が・いくらに）は lib/wage-plan.server.ts（サーバー専用）に置く。
+//    このファイルは /evaluation など代表以外も開く画面の JS にも入るため、個人の金額を書かないこと。
+//    2026-10-02: ここに予定表を置いていた頃は、ログインなしで取れる /_next/static のチャンクに
+//    全員の予定時給・事情の注記が載っていた（npm run check:bundle で再発を検出する）
 
 export interface ScheduledWageChange {
   /** 識別子 */
@@ -93,111 +100,17 @@ export interface ScheduledWageChange {
 }
 
 /**
- * 実施予定の賃金改定。実施日の早い順に並べる。
- *
- * ## なぜ配列なのか
- * 賃金が動く理由は「制度の見直し」だけではない。在留資格の移行に伴う契約改定のように、
- * **見直しとは別の理由で、別の日に、別の人だけ**が動くことがある。ひとつにまとめると
- * 「一律◯％」の話と「契約どおりの改定」の区別がつかなくなるので、事由ごとに分けて持つ。
- *
- * ## 反映方法
- * `/wage-analysis` の「反映」で人員マスタの `hourlyRate` を書き換える。2026-09-10 からは
- * `hourlyRateFrom`（実施日）と `prevHourlyRate`（改定前）も同時に書き、給与計算は月ごとに
- * 適用時給を解決する（lib/workers.ts effectiveHourlyRateForYm: 前月まで旧時給・
- * 実施月は暦日按分・翌月から新時給）。**実施日より前に反映して構わない**。
- * マスタが予定額になれば差分が 0 になるので、テーブルを消さずに残しても表示は「反映済み」へ変わる。
- */
-export const SCHEDULED_WAGE_CHANGES: ScheduledWageChange[] = [
-  {
-    id: 'jisshu3-2026-09',
-    effective: '2026-09-21',
-    label: '技能実習3号 移行',
-    reason: '3号移行に伴う雇用契約書どおりの改定（契約締結済み・今回の見直しとは別件）',
-    // 雇用契約書（3号）より: 月給 221,900円 ÷ 所定140時間 = 1,585円
-    // 契約期間 2026-09-21 〜 2028-10-20、年間所定 1,680時間（240日 × 7時間）
-    targets: {
-      205: 1585, // ホー チョン ゴック
-      206: 1585, // グエン ミン サン
-    },
-  },
-  {
-    /**
-     * ## 経緯
-     * グエン ヴァン タン（106）から「円安で生活が厳しく、月2万円上がらなければ帰国したい」と
-     * エムテック協同組合経由で相談があった。タン1人だけを見直すと他から不満が出るため、
-     * **コロナ期の採用空白（2020年1月〜2022年10月の約2年9か月）より後に入社した層**を
-     * 同率で引き上げる方針とした（2026-08 代表決定）。
-     *
-     * ## 率の決め方
-     * タンの要望額（月+2万円 ≒ 時給+143円）から `1670 / 1527 − 1 = 9.365%` を求め、
-     * 対象者に適用して10円未満を四捨五入した。
-     *
-     * ## ゴック(205)・サン(206) を含めない理由
-     * 当初は7名全員を対象としていたが、この2名は9/21の3号移行契約で **1,585円** が
-     * 既に確定していた。一律率を当てると 1,558円 となり **契約額を下回ってしまう**（＝適用不能）。
-     * 上に積むと 1,733円 となり、在籍2.8年が在籍3.3年のケン(1,729円)を追い越して逆転する。
-     * 3号移行の +160円（+11.2%）は10月の一律改定（+9.365%）より大きいので、
-     * 「見直しから外れた」ことにはならない。よって10月の対象は5名とする（2026-08-25 決定）。
-     */
-    id: 'uniform-2026-10',
-    effective: '2026-10-01',
-    rate: 0.09365,
-    label: '2026年10月 一律改定',
-    reason: 'コロナ期の採用空白より後に入社した層の水準是正',
-    targets: {
-      107: 1729, // モン ヴァン ケン
-      106: 1670, // グエン ヴァン タン
-      201: 1655, // ラン ヴァン グエン
-      203: 1655, // ファン スアン ハウ
-      202: 1601, // ラン コン ラップ
-    },
-  },
-  {
-    id: 'minwage-2026-10',
-    effective: '2026-10-01',
-    label: '東京都最低賃金改定への対応',
-    reason: '東京都最低賃金 1,226→1,280円（2026-10-01）に合わせた新規入社者の時給改定（代表決定 2026-09-14）',
-    // 固定月給（useOldRules）の2名。時給1,280・日給8,960（×7h）・月給215,467（1,280×年2,020h÷12 切上）。
-    //   人員マスタへは 2026-09-14 に適用開始日つきで直接反映済み（月給は /wage-analysis の反映ボタンでは書けないため）
-    targets: {
-      207: 1280, // グエン フゥ フォン
-      208: 1280, // チュオン ドゥック タン
-    },
-  },
-  {
-    id: 'tokutei2-2026-10',
-    effective: '2026-10-01',
-    label: '特定技能2号 移行',
-    reason: '特定技能2号への移行に伴う雇用契約書どおりの改定（2026-08-02 締結・契約期間 2026-10-01〜2027-09-30）',
-    // 雇用条件書より: 月給 351,260円（351,260×12÷1,680h = 時給 2,509円）。先行の2号 トゥアン(102) と同額
-    targets: {
-      103: 2509, // グエン ヴァン ファン（NGUYEN VAN HUAN）
-    },
-  },
-  {
-    id: 'anh-2026-11',
-    effective: '2026-11-27',  // 在留期間更新に合わせた新契約の開始日（代表確認 2026-09-14）。11月分は暦日按分
-    label: '年次評価（契約更新）',
-    reason: '在留期間更新（特定技能1号のまま）に伴う契約更新。評価A・新昇給テーブル（8回目の記念日 +104円）。再入社のブランクは残る（代表決定 2026-09-14）',
-    targets: {
-      105: 2270, // グエン ドゥック アイン
-    },
-  },
-]
-
-/** 互換用エイリアス。10月の一律改定を指す。 */
-export const WAGE_REVISION_2026_10 =
-  SCHEDULED_WAGE_CHANGES.find(c => c.id === 'uniform-2026-10')!
-
-/**
  * 予定をすべて織り込んだ後の時給。
  *
  * 複数の予定が同じ人に当たる場合は最も高い額を採る。マスタが既に予定額に達していれば
  * そのまま返す（予定値へ引き下げてしまわないため）。
+ *
+ * @param changes 予定の一覧。**個人の金額を含むためサーバー専用**（lib/wage-plan.server.ts）。
+ *                画面では /api/wage-analysis/plan（代表だけ）から受け取ったものを渡す
  */
-export function revisedHourly(id: number, current: number): number {
+export function revisedHourly(id: number, current: number, changes: ScheduledWageChange[]): number {
   let v = current
-  for (const c of SCHEDULED_WAGE_CHANGES) {
+  for (const c of changes) {
     const planned = c.targets[id]
     if (planned !== undefined) v = Math.max(v, planned)
   }
@@ -205,8 +118,8 @@ export function revisedHourly(id: number, current: number): number {
 }
 
 /** その人に当たる予定のうち、まだマスタに反映されていないもの。 */
-export function pendingChangesFor(id: number, current: number): ScheduledWageChange[] {
-  return SCHEDULED_WAGE_CHANGES.filter(c => (c.targets[id] ?? 0) > current)
+export function pendingChangesFor(id: number, current: number, changes: ScheduledWageChange[]): ScheduledWageChange[] {
+  return changes.filter(c => (c.targets[id] ?? 0) > current)
 }
 
 /** 月額換算に使う所定労働時間（時／月）。分析表示の共通前提。 */
