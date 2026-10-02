@@ -1,6 +1,15 @@
 import { CalendarDay, DayType } from '@/types'
 import { todayJstDate } from '@/lib/date-utils'
 
+/**
+ * 翌月の就業カレンダーの期限（docs/labor-rules.md: 25日までに職長が作成・提出）。お知らせの出し方はここだけで決める（2026-10-02 点検で統一）。
+ *   - 予告: 18日から（期限の1週間前）。サイドバーの件数・出面入力の「確認すること」
+ *   - 期限切れ: 25日から。お知らせベル
+ * 旧: サイドバー18日・ベル25日・出面画面は「月末まで7日」（ブラウザの日付）とばらばらだった
+ */
+export const CALENDAR_REMIND_FROM_DAY = 18
+export const CALENDAR_DEADLINE_DAY = 25
+
 // 日本の祝日マスタ（2026〜2029年分。次は cabinet office の発表に合わせて拡張）
 // データソース: https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html
 const HOLIDAYS: Record<string, { name: string; nameVi: string }> = {

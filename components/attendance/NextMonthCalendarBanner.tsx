@@ -11,6 +11,7 @@
 
 export interface NextMonthCalCheck {
   ym: string  // "YYYY-MM"
+  /** 提出の期限（25日・lib/calendar.ts CALENDAR_DEADLINE_DAY）までの日数。過ぎていれば負（2026-10-02 名前は旧のまま） */
   daysToMonthEnd: number
   sites: { siteId: string; siteName: string; status: string | null }[]
 }
@@ -36,7 +37,7 @@ export default function NextMonthCalendarBanner({ check }: Props) {
       <div className={`flex items-center gap-2 font-bold mb-2 flex-wrap ${isUrgent ? 'text-red-800' : 'text-yellow-800'}`}>
                 <span>翌月（{ymLabel}）の就業カレンダー未確定</span>
         <span className="text-xs font-normal text-gray-600">
-          月末まであと{check.daysToMonthEnd}日
+          {check.daysToMonthEnd >= 0 ? `提出の期限（25日）まであと${check.daysToMonthEnd}日` : '提出の期限（25日）を過ぎています'}
         </span>
         {redSites.length > 0 && (
           <span className="text-xs bg-red-200 text-red-900 px-1.5 py-0.5 rounded-full">

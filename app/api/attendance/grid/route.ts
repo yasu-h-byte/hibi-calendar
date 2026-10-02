@@ -692,46 +692,11 @@ export async function POST(request: NextRequest) {
     //
     // workerIds / subconIds はそれぞれ undefined 可（指定なしの side は変更しない）
     if (action === 'saveDrivers') {
-      // 便ごとの運転者を保存。`drv.<siteId>_<ym>_<day>` へのドット記法更新なので
-      // 他の日・他の現場のキーには触れない（Firestore安全ルール準拠）
+      // 便ごとの運転者を保存（決まりは lib/drivers.ts。職長のスマホ画面と共通・2026-10-02）
       const { ym: dym, siteId: dsid, day, am, pm } = body
-      if (!dym || !dsid || !day) return NextResponse.json({ error: 'ym, siteId, day required' }, { status: 400 })
-      // 2026-08-27 追加（給与総点検）: 入力検証と月次ロックガード。
-      //   運転記録は運転手当（給与）の元データなのに、ロックチェックの対象外だった。
-      //   締め済み月の drv を書き換えると確定済み給与の運転手当が黙って変わるため、
-      //   出面エントリ保存と同じく締め済み月は拒否する
-      const dayNum = Number(day)
-      if (!Number.isInteger(dayNum) || dayNum < 1 || dayNum > 31) {
-        return NextResponse.json({ error: 'day は 1〜31 で指定してください' }, { status: 400 })
-      }
-      {
-        const { checkMonthLocked } = await import('@/lib/locks')
-        const lockErr = await checkMonthLocked(String(dym))
-        if (lockErr) return NextResponse.json({ error: `${lockErr}（運転記録は運転手当の元データのため、締め済み月は変更できません）` }, { status: 409 })
-      }
-      const clean = (v: unknown) => Array.isArray(v) ? [...new Set(v.map(Number).filter(Number.isFinite))] : []
-      const amIds = clean(am); const pmIds = clean(pm)
-      // 運転手当を出さない現場には記録させない（消す操作は通す・2026-09-30）
-      if (amIds.length > 0 || pmIds.length > 0) {
-        const mainD = await getMainData()
-        const sD = mainD.sites.find(s => s.id === dsid)
-        const pD = sD?.parentId ? mainD.sites.find(s => s.id === sD.parentId) : undefined
-        if (sD?.noDriveAllowance || pD?.noDriveAllowance) {
-          return NextResponse.json({ error: 'この現場は運転手当なしに指定されています（現場マスタ → その他）' }, { status: 409 })
-        }
-      }
-      const key = `drv.${dsid}_${dym}_${Number(day)}`
-      const { doc, updateDoc, deleteField } = await import('@/lib/fsdb')
-      const { ensureDocExists } = await import('@/lib/firestore-safe')
-      const attRef = doc(db, 'demmen', `att_${dym}`)
-      await ensureDocExists(attRef)
-      if (amIds.length === 0 && pmIds.length === 0) {
-        await updateDoc(attRef, { [key]: deleteField() })
-      } else {
-        await updateDoc(attRef, { [key]: { am: amIds, pm: pmIds } })
-      }
-      const { logActivity } = await import('@/lib/activity')
-      await logActivity('admin', 'attendance.drivers', `${dsid}/${dym}/${day}日 運転者: 行き[${amIds.join(',')}] 帰り[${pmIds.join(',')}]`)
+      const { saveSiteDrivers } = await import('@/lib/drivers')
+      const r = await saveSiteDrivers({ ym: String(dym || ''), siteId: String(dsid || ''), day, am, pm, actorLabel: 'PC/スマホの出面画面' })
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
       return NextResponse.json({ success: true })
     }
 

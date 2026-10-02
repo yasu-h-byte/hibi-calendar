@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261002_mobile_drivers',
+    title: 'スマホからも運転者（運転手当）を記録できるようになりました',
+    content:
+      '職長のスマホ画面と、出面入力のスマホ版に「🚗 この日の運転者を記録」ボタンを付けました。社用車で同乗者を乗せた日は、行き・帰りの運転者を選んでください（片道1,000円）。'
+      + 'あわせて、翌月の就業カレンダーのお知らせは「18日から予告・25日を過ぎたら期限切れ」にそろえました（提出の期限は25日）。',
+    category: 'new',
+    publishedAt: '2026-10-02T18:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['foreman', 'jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261002_review_bcd',
     title: '出面の画面まわりを見直しました（配置外の表示・スマホのボタン・今日の未入力など）',
     content:

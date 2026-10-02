@@ -433,7 +433,9 @@ export async function GET(request: NextRequest) {
 
     // ── Calendar deadline alert (25日過ぎて翌月カレンダーが未作成・未提出・未承認) ──
     try {
-      if (today >= 25) {
+      // 期限切れのお知らせは 25日から（lib/calendar.ts CALENDAR_DEADLINE_DAY）
+      const { CALENDAR_DEADLINE_DAY } = await import('@/lib/calendar')
+      if (today >= CALENDAR_DEADLINE_DAY) {
         // 翌月のymを計算
         let nextY = now.getFullYear()
         let nextM = now.getMonth() + 2  // 0-indexed + 2 = next month
