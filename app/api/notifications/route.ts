@@ -5,7 +5,8 @@ import { resolveApiRoleFromMain } from '@/lib/attendance-authz'
 import { mergeAnnouncements } from '@/lib/release-notes'
 import { permRoleOf } from '@/lib/permissions'
 import { db } from '@/lib/firebase'
-import { collection, query, where, getDocs } from '@/lib/fsdb'
+import { collection, query, where, getDocs, doc, getDoc } from '@/lib/fsdb'
+import { backupHealth, type LastBackupInfo } from '@/lib/backup-plan'
 import { getMainData, getAttData, parseDKey, getAssign } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { getUpcomingGrants } from '@/lib/leave-auto'
@@ -69,6 +70,28 @@ export async function GET(request: NextRequest) {
     //   即日消えていた（例: 12/31退職予定を登録した瞬間に有給残・付与予定・未署名等の
     //   通知が全部止まる）。dashboard/ledger と同じく「今日時点で退職済み」のみ除外
     const activeWorkers = main.workers.filter(w => !isAlreadyRetired(w.retired, todayJstIso()))
+
+    // 0. バックアップが止まっている・一部失敗している（代表だけ・2026-10-02 総合点検）
+    //   旧: 日次バックアップが失敗しても応答に書くだけで、誰も気づけなかった。
+    //   demmen/system.lastBackup（app/api/backup/snapshot が毎回書く）を見る。代表のベルだけ・1回の読み取り
+    if (apiRole?.role === 'super-admin' || apiRole?.role === 'admin') {
+      try {
+        const sysSnap = await getDoc(doc(db, 'demmen', 'system'))
+        const last = (sysSnap.exists() ? sysSnap.data().lastBackup : null) as LastBackupInfo | null
+        const h = backupHealth(last, Date.now())
+        if (!h.ok && h.reason) {
+          notifications.push({
+            id: 'backup-stale',
+            icon: '\u26A0\uFE0F',
+            message: `${h.reason}。管理者設定 → バックアップ・履歴 で確認してください`,
+            type: 'error',
+            href: '/settings?tab=activity',
+          })
+        }
+      } catch (e) {
+        console.error('Backup health check error:', e)
+      }
+    }
 
     // 1. 就業カレンダー未署名（今月＋翌月）。2026-09-26: 就業カレンダー画面と同じ集計に一本化
     //   （lib/calendar-matrix.ts projectSignSites ＋ lib/calendar-sign-status.ts summarizeSignStatus）。

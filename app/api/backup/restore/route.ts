@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from '@/lib/fsdb'
+import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 
 /**
  * バックアップスナップショットの一覧/プレビュー/復元
  *
  * GET (list/preview):
- *   - ?action=list  → 直近30件のバックアップ一覧
+ *   - ?action=list  → 直近50件のバックアップ一覧（?prefix=att_202609 のように ID の先頭で絞れる・最大100件）
  *   - ?action=preview&snapshotId=<id>  → 指定スナップショットの中身（先頭部分）を返す
  *
  * POST (restore):
@@ -31,7 +31,11 @@ export async function GET(request: NextRequest) {
   const action = request.nextUrl.searchParams.get('action') || 'list'
 
   if (action === 'list') {
-    const snap = await getDocs(query(collection(db, 'backups'), orderBy('snapshotAt', 'desc'), limit(50)))
+    // ?prefix=att_202609 のように ID の先頭で絞れる（1日に約25件たまるので、絞らないと2日分しか見えない）
+    const prefix = (request.nextUrl.searchParams.get('prefix') || '').replace(/[^A-Za-z0-9_-]/g, '')
+    const snap = prefix
+      ? await getDocs(query(collection(db, 'backups'), where('__name__', '>=', prefix), where('__name__', '<', prefix + '\uf8ff'), limit(100)))
+      : await getDocs(query(collection(db, 'backups'), orderBy('snapshotAt', 'desc'), limit(50)))
     const items = snap.docs.map(d => ({
       id: d.id,
       sourceId: d.data().sourceId,
@@ -124,16 +128,24 @@ export async function POST(request: NextRequest) {
     if (!Array.isArray(docsArr)) {
       return NextResponse.json({ error: 'このスナップショットは docs 配列を持たないため復元できません' }, { status: 400 })
     }
-    // safety: 現在のコレクション全体を同形式で退避
-    const curSnap = await getDocs(query(collection(db, collName), limit(2000)))
+    // safety: これから上書きする（＝バックアップに入っている）ドキュメントの今の状態だけを退避する。
+    //   2026-10-02 総合点検: 旧実装は「コレクション全体を2000件まで」退避していた。月ごとに分けた退避
+    //   （attendanceApprovals(202609) など）を戻すときに全月分を読み、2000件・1MBで欠ける。
+    //   復元が触るのはバックアップ内の ID だけなので、その ID だけを読む
+    const curDocs: ({ id: string } & Record<string, unknown>)[] = []
+    for (const item of docsArr) {
+      if (!item?.id) continue
+      const cur = await getDoc(doc(db, collName, item.id))
+      if (cur.exists()) curDocs.push({ id: item.id, ...cur.data() })
+    }
     await setDoc(safetyRef, {
       sourceId: backup.sourceId,
       snapshotAt: new Date().toISOString(),
       reason: `safety backup before restore from ${snapshotId}`,
-      count: curSnap.docs.length,
-      data: { docs: curSnap.docs.map(d => ({ id: d.id, ...d.data() })) },
+      count: curDocs.length,
+      data: { docs: curDocs },
     })
-    const existingIds = new Set(curSnap.docs.map(d => d.id))
+    const existingIds = new Set(curDocs.map(d => d.id))
     let restored = 0
     let skipped = 0
     for (const item of docsArr) {
