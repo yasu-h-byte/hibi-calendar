@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 
 /**
  * 「いちばん新しい読み込みだけを画面に出す」ための小さな道具（2026-10-02 総合点検）。
@@ -37,5 +37,8 @@ export function useLatestRequest(): {
   }, [])
   const isAbort = useCallback((e: unknown) => e instanceof DOMException && e.name === 'AbortError', [])
   useEffect(() => () => { ctrl.current?.abort() }, [])
-  return { begin, isAbort }
+  // 返す物は同じ参照を保つ（2026-10-03）。旧: 毎回新しい { begin, isAbort } を返していたため、これを依存に持つ
+  //   useCallback（fetchData）が描画のたびに作り直され、useEffect([fetchData]) が読み込みを繰り返す無限ループになった
+  //   （お試しサイトで出面入力・月次集計が「読み込み中」のまま止まらず、API を毎秒叩いていた）
+  return useMemo(() => ({ begin, isAbort }), [begin, isAbort])
 }
