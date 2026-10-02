@@ -132,8 +132,9 @@ export default function HeaderBar({
 
         {data && (
           <div className="flex items-center gap-1.5 sm:ml-auto">
-            <Chip tone="blue">日比建設 {data.workers.filter(w => w.org === 'hibi').length}名</Chip>
-            <Chip tone="gray">HFU {data.workers.filter(w => w.org === 'hfu').length}名</Chip>
+            {/* 配置の人数（配置外の入力の人は数えない・2026-10-02） */}
+            <Chip tone="blue">日比建設 {data.workers.filter(w => w.org === 'hibi' && !w.offRoster).length}名</Chip>
+            <Chip tone="gray">HFU {data.workers.filter(w => w.org === 'hfu' && !w.offRoster).length}名</Chip>
             <Chip tone="gray">外注 {data.subcons.length}社</Chip>
           </div>
         )}

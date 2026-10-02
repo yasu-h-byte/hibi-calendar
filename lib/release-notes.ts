@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261002_off_roster_entries',
+    title: '出面入力に「配置外」の行が出るようになりました（現場の選び間違いに気づくため）',
+    content:
+      'スタッフがスマホで現場を選び間違えると、その打刻は配置されていない現場に入り、どの画面にも出ないまま給与に数えられていました'
+      + '（例: サンさんの 9/7〜9 が IHI でなく笹塚に入っていた）。配置に入っていない人でも、その現場に入力があれば「配置外」の印つきで行を出します。'
+      + '見つけたら正しい現場へ移してください。配置外の人は未入力の数には入りません。',
+    category: 'fix',
+    publishedAt: '2026-10-02T12:10:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['foreman', 'jimu', 'approver', 'officer', 'owner'],
+  },
+  {
     id: 'rn_20261002_pre_hire_alerts',
     title: '入社前の人に「出面の入力がありません」などが出ないようにしました',
     content:
