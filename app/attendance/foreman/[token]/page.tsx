@@ -3,6 +3,7 @@
 import { siteLeaderLabel } from '@/lib/companies'
 import { useEffect, useState, useCallback } from 'react'
 import { todayJstIso } from '@/lib/date-utils'
+import DriverModal from '@/app/(app)/attendance/components/DriverModal'
 import { useParams } from 'next/navigation'
 import { AttendanceEntry, AttendanceStatus } from '@/types'
 import StaffHeader from '@/components/StaffHeader'
@@ -42,6 +43,10 @@ interface ForemanData {
   summary: { workCount: number; noneCount: number; totalCount: number }
   approved: boolean
   pastDays: { date: string; dateISO: string; approved: boolean }[]
+  /** 運転者（運転手当）: その日の記録・候補・運転手当を出さない現場か（2026-10-02） */
+  drivers?: { am?: number[]; pm?: number[] } | null
+  driverCandidates?: { id: number; name: string }[]
+  noDriveAllowance?: boolean
   monthOverview: OverviewDay[]
   schedule: {
     startTime: string
@@ -75,6 +80,7 @@ export default function ForemanAttendancePage() {
   const token = params.token as string
 
   const [data, setData] = useState<ForemanData | null>(null)
+  const [driverOpen, setDriverOpen] = useState(false)
   const [dateISO, setDateISO] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -345,6 +351,41 @@ export default function ForemanAttendancePage() {
             </div>
           </div>
         )}
+
+        {/* 運転者の記録（運転手当・2026-10-02 点検: 職長がスマホから記録できなかった）。保存の決まりは PC と共通（lib/drivers.ts） */}
+        {!data.noDriveAllowance && (() => {
+          const am = data.drivers?.am || [], pm = data.drivers?.pm || []
+          const cnt = am.length + pm.length
+          return (
+            <button type="button" onClick={() => setDriverOpen(true)}
+              className={`w-full py-2.5 rounded-xl text-sm font-bold border ${cnt > 0
+                ? 'bg-emerald-600 border-emerald-600 text-white'
+                : 'bg-white border-emerald-300 text-emerald-700'}`}>
+              🚗 {cnt > 0 ? `運転者 行き${am.length}・帰り${pm.length}（押して直す）` : 'この日の運転者を記録（同乗者を乗せた便だけ）'}
+            </button>
+          )
+        })()}
+        <DriverModal
+          isOpen={driverOpen}
+          day={data.date.day}
+          siteName={data.site.name}
+          workers={data.driverCandidates || []}
+          current={data.drivers ? { am: data.drivers.am || [], pm: data.drivers.pm || [] } : undefined}
+          onSave={async (am, pm) => {
+            setDriverOpen(false)
+            const res = await fetch('/api/attendance/foreman', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token, action: 'saveDrivers', year: data.date.year, month: data.date.month, day: data.date.day, am, pm }),
+            })
+            if (!res.ok) {
+              const j = await res.json().catch(() => ({}))
+              alert(`運転者を保存できませんでした: ${j.error || res.status}`)
+            }
+            fetchData()
+          }}
+          onClose={() => setDriverOpen(false)}
+        />
 
         {/* Summary */}
         <div className="grid grid-cols-3 gap-3">

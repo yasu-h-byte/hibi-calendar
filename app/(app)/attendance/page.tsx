@@ -31,7 +31,8 @@ import { TodoStrip } from '@/components/ui/PageParts'
 import { Icon } from '@/components/ui/Icon'
 import { canDriveDefault } from '@/lib/allowance'
 import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
-import { todayJstIso } from '@/lib/date-utils'
+import { todayJstIso, todayJstDate } from '@/lib/date-utils'
+import { CALENDAR_REMIND_FROM_DAY, CALENDAR_DEADLINE_DAY } from '@/lib/calendar'
 
 export default function AttendanceGridPage() {
   const [password, setPassword] = useState('')
@@ -229,14 +230,14 @@ export default function AttendanceGridPage() {
   // ym 切替には依存させず、今日の日付ベースで一度だけチェック。
   useEffect(() => {
     if (!password) return
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-    const daysToMonthEnd = lastDayOfMonth - today.getDate()
-    if (daysToMonthEnd > 7) {
+    // 予告は 18日から（サイドバーと同じ・lib/calendar.ts CALENDAR_REMIND_FROM_DAY）。日付は日本時間
+    //   旧: 「月末まで7日」でブラウザの日付を使い、サイドバー（18日）・ベル（25日）とばらばらだった（2026-10-02 点検）
+    const today = todayJstDate()
+    if (today.getDate() < CALENDAR_REMIND_FROM_DAY) {
       setNextMonthCalCheck(null)
       return
     }
+    const daysToMonthEnd = CALENDAR_DEADLINE_DAY - today.getDate()   // 提出の期限（25日）までの日数
     // 翌月の ym "YYYY-MM"
     const nm = new Date(today.getFullYear(), today.getMonth() + 1, 1)
     const nextYm = `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, '0')}`

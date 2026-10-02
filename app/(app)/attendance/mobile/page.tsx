@@ -33,6 +33,8 @@ import {
 import { getWorkValue, getTimeStatusValue, DOW_JA } from '@/lib/attendance-grid'
 import { generateDefaultDays } from '@/lib/calendar'
 import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
+import { canDriveDefault } from '@/lib/allowance'
+import DriverModal from '../components/DriverModal'
 
 // ── 型 ──
 
@@ -54,7 +56,11 @@ interface GridData {
   isSupportSite?: boolean
   /** 職長承認を政仁さんが代行する現場（2026-10-01） */
   proxyApproval?: boolean
-  site: { id: string; name: string; workType?: string }
+  site: { id: string; name: string; workType?: string; noDriveAllowance?: boolean }
+  /** 便ごとの運転者（day → {am,pm}・運転手当の元データ） */
+  drivers?: Record<number, { am: number[]; pm: number[] }>
+  /** 両社とも締めた月 */
+  locked?: boolean
   year: number
   month: number
   daysInMonth: number
@@ -393,6 +399,7 @@ export default function ForemanMobilePage() {
   // ── 日別の派生情報 ──
   const dayType: DayType | null = data?.calendarDays ? (data.calendarDays[String(day)] || 'work') : null
   const isRestDay = dayType !== null && dayType !== 'work'
+  const [driverOpen, setDriverOpen] = useState(false)
   const finalApproved = !!data?.finalApprovals?.[day]
   const foremanApproved = !!data?.foremanApprovals?.[day]
   const timeBasedMonth = isTimeBasedMonth(ym)
@@ -715,6 +722,43 @@ export default function ForemanMobilePage() {
 
           {!loading && data && (
             <>
+              {/* 運転者の記録（運転手当・2026-10-02 点検: スマホ版に無く、職長がスマホだけでは記録できなかった）。PC の「運」ボタンと同じ保存 */}
+              {!data.site.noDriveAllowance && !data.locked && (() => {
+                const dr = data.drivers?.[day]
+                const cnt = (dr?.am.length || 0) + (dr?.pm.length || 0)
+                return (
+                  <button type="button" onClick={() => setDriverOpen(true)}
+                    className={`mt-3 w-full py-2 rounded-lg text-sm font-bold border ${cnt > 0
+                      ? 'bg-emerald-600 border-emerald-600 text-white'
+                      : 'bg-white border-emerald-300 text-emerald-700'}`}>
+                    🚗 {cnt > 0 ? `運転者 行き${dr!.am.length}・帰り${dr!.pm.length}（押して直す）` : 'この日の運転者を記録'}
+                  </button>
+                )
+              })()}
+
+              <DriverModal
+                isOpen={driverOpen}
+                day={day}
+                siteName={data.site.name}
+                workers={data.workers
+                  .filter(w => canDriveDefault(w))   // 運転しうる人だけ（未設定なら日本人のみ・PC と同じ）
+                  .filter(w => {
+                    // その日に出面のある人だけ（実働・夜勤。0.6補や休みは出ない・PC と同じ）
+                    const e = data.workerEntries[w.id]?.[day] as (AttendanceEntry & { ns?: unknown }) | undefined
+                    if (!e) return false
+                    const wv = e.w || 0
+                    return (wv > 0 && wv !== 0.6) || !!e.ns
+                  })
+                  .map(w => ({ id: w.id, name: w.name }))}
+                current={data.drivers?.[day]}
+                onSave={async (am, pm) => {
+                  setDriverOpen(false)
+                  const ok = await postGrid({ action: 'saveDrivers', day, am, pm })
+                  if (ok) fetchGrid()
+                }}
+                onClose={() => setDriverOpen(false)}
+              />
+
               {/* 確認状態バナー */}
               {finalApproved ? (
                 <div className="mt-3 p-2.5 rounded-lg bg-gray-100 text-gray-600 text-sm font-bold text-center">🔒 最終承認済み（編集できません）</div>

@@ -68,8 +68,9 @@ export async function GET(request: NextRequest) {
     let calendarPendingCount = 0
     try {
       const todayDay = now.getDate()
-      // 18日以降のみアラート (= 25日確定の1週間前)
-      if (todayDay >= 18) {
+      // 予告は 18日から（= 25日の期限の1週間前・lib/calendar.ts CALENDAR_REMIND_FROM_DAY）
+      const { CALENDAR_REMIND_FROM_DAY } = await import('@/lib/calendar')
+      if (todayDay >= CALENDAR_REMIND_FROM_DAY) {
         const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
         const nextYm = `${nextMonth.getFullYear()}${String(nextMonth.getMonth() + 1).padStart(2, '0')}`
         const nextSiteWorkDays = main.siteWorkDays?.[nextYm] || {}

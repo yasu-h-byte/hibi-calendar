@@ -15,7 +15,8 @@ import { AttendanceEntry, DEFAULT_WORK_SCHEDULE } from '@/types'
 import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { staffEntryTarget, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
 import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays, siteRosterFromMain, loadSiteRoster } from '@/lib/foreman-todo'
-import { getMainData } from '@/lib/compute'
+import { getMainData, getAttData } from '@/lib/compute'
+import { canDriveDefault } from '@/lib/allowance'
 import { todayJstDate } from '@/lib/date-utils'
 
 // 工種（親＋工種サイト）の範囲・まとめ承認の判定はマイページと共通（lib/foreman-todo.ts・2026-10-01）
@@ -62,8 +63,9 @@ export async function GET(request: NextRequest) {
     const d = viewDate.getDate()
     const ym = ymKey(y, m)
 
-    // Get attendance data
-    const attData = await getAttendanceDoc(ym)
+    // Get attendance data（運転者の記録 drv も同じ1回の読みで取る・2026-10-02）
+    const attRaw = await getAttData(ym)
+    const attData = attRaw.d as Record<string, AttendanceEntry>
 
     // ── 別現場で入力済みの検出 ──
     // ベトナム人スタッフが現場を間違えて他現場に入力した場合、職長が修正できるよう
@@ -179,6 +181,22 @@ export async function GET(request: NextRequest) {
       approved,
       pastDays,
       monthOverview,
+      // 運転者（運転手当）: その日の記録と、運転手当を出さない現場か（2026-10-02）
+      drivers: ((attRaw as { drv?: Record<string, { am?: number[]; pm?: number[] }> }).drv || {})[`${site.id}_${ym}_${d}`] || null,
+      // 運転者の候補: その日この現場（親＋工種）で出勤（0.6補・休みを除く）した、運転しうる人（日本人を含む・PC と同じ）
+      driverCandidates: (() => {
+        const out: { id: number; name: string }[] = []
+        for (const w of main.workers) {
+          const e = familyEntry(attData, family, w.id, ym, d) as (AttendanceEntry & { ns?: unknown }) | undefined
+          if (!e) continue
+          const wv = e.w || 0
+          if (!((wv > 0 && wv !== 0.6) || !!e.ns)) continue
+          if (!canDriveDefault(w as never)) continue
+          out.push({ id: w.id, name: w.name })
+        }
+        return out
+      })(),
+      noDriveAllowance: !!(site as { noDriveAllowance?: boolean }).noDriveAllowance,
       schedule: {
         startTime: siteSchedule?.startTime || DEFAULT_WORK_SCHEDULE.startTime,
         endTime: siteSchedule?.endTime || DEFAULT_WORK_SCHEDULE.endTime,
@@ -211,6 +229,15 @@ export async function POST(request: NextRequest) {
     const site = foreman.jobType === 'shokucho' ? await getForemanSite(foreman.id) : null
     if (!site) {
       return NextResponse.json({ error: 'Not a foreman' }, { status: 403 })
+    }
+
+    // 便ごとの運転者（運転手当）を保存（2026-10-02 点検: 職長のスマホ画面から記録できなかった）。決まりは PC と共通（lib/drivers.ts）
+    if (action === 'saveDrivers') {
+      const { year, month, day, am, pm } = body
+      const { saveSiteDrivers } = await import('@/lib/drivers')
+      const r = await saveSiteDrivers({ ym: ymKey(year, month), siteId: site.id, day, am, pm, actorLabel: `職長スマホ ${foreman.name}` })
+      if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
+      return NextResponse.json({ success: true })
     }
 
     if (action === 'approve') {
