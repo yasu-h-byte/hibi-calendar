@@ -5,6 +5,7 @@ import {
   findWorkTypeDuplicates, planDayWorkTypeMoves, type WorkTypeDuplicate,
 } from '@/lib/site-hierarchy'
 import { getMainData, getAttData, getAssign, invalidateAttDataCache } from '@/lib/compute'
+import { approvalDateError } from '@/lib/attendance-authz'
 import { getApprovalForDay } from '@/lib/attendance'
 import { isStillActiveForMonth, isHiredByMonth, isEmployedOn } from '@/lib/workers'
 import { AttendanceEntry, DayType } from '@/types'
@@ -461,6 +462,7 @@ export async function POST(request: NextRequest) {
       const cap = foremanApproveActions.includes(action) ? 'attendance.foremanApprove'
         : (action === 'approve_final' || action === 'unapprove_final') ? 'attendance.finalApprove'
         : workTypeActions.includes(action) ? 'attendance.workType'
+        : action === 'saveWorkDays' ? 'monthly.close'   // 全社の所定日数は給与に効く（2026-10-02 総合点検）
         : 'attendance.input'
       let denied = await requireCap(request, cap)
       // 2026-09-30（代表）: 応援現場の出面は事業責任者（政仁さん）が一括で入力する。
@@ -530,28 +532,13 @@ export async function POST(request: NextRequest) {
     if (isAttendanceWriteAction) {
       const { ym } = body
       if (ym) {
-        const main = await getMainData()
-        const lockedLegacy = !!(main.locks?.[ym])
-        const lockedHibi = !!(main.locks?.[`${ym}_hibi`]) || lockedLegacy
-        const lockedHfu = !!(main.locks?.[`${ym}_hfu`]) || lockedLegacy
-        // 両方ロックされていれば全社ロック → 編集禁止
-        if (lockedHibi && lockedHfu) {
-          return NextResponse.json({ error: '月次ロック済みのため編集できません' }, { status: 409 })
-        }
-        // 一部組織のみロック時の判定はワーカーの所属で分岐すべきだが、
-        // grid POST では entry に workerId が含まれるのでチェック可能
-        if (body.workerId !== undefined) {
-          const w = main.workers.find(ww => ww.id === Number(body.workerId))
-          if (w) {
-            const wOrg = w.org === 'hfu' || w.org === 'HFU' ? 'hfu' : 'hibi'
-            if (wOrg === 'hibi' && lockedHibi) {
-              return NextResponse.json({ error: '日比建設の月次ロック済みのため編集できません' }, { status: 409 })
-            }
-            if (wOrg === 'hfu' && lockedHfu) {
-              return NextResponse.json({ error: 'HFUの月次ロック済みのため編集できません' }, { status: 409 })
-            }
-          }
-        }
+        // 2026-10-02 総合点検: 判定は lib/locks.ts に一本化（旧: ここで自前に書き、30秒キャッシュの人員マスタを
+        //   使っていたので、締めた直後は古い状態で通った）。人の出面はその人の会社、外注の人工は両社とも締めたとき
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const lockErr = body.workerId !== undefined
+          ? await checkMonthLockedForWorkers(String(ym), [body.workerId])
+          : await checkMonthLockedForWorkers(String(ym), [], 'both')
+        if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }
     }
 
@@ -643,10 +630,27 @@ export async function POST(request: NextRequest) {
 
     // Action: save workDays
     if (action === 'saveWorkDays') {
+      // 全社の所定日数は、旧契約の人の欠勤控除に直結する（給与）。2026-10-02 総合点検:
+      //   旧実装は出面の入力の権限（職長も可）だけで、月・値の検査も締めの確認も記録も無かった。
+      //   月次集計の setWorkDays と同じ決まりにそろえる（月締めの権限・締め済みは拒否・記録を残す）
       const { ym, value } = body
-      if (!ym) return NextResponse.json({ error: 'ym required' }, { status: 400 })
+      if (typeof ym !== 'string' || !/^\d{6}$/.test(ym)) return NextResponse.json({ error: 'ym required' }, { status: 400 })
+      const numValue = Number(value)
+      if (!Number.isFinite(numValue) || numValue < 0 || numValue > 31) {
+        return NextResponse.json({ error: '所定日数は 0〜31 の数字で入れてください' }, { status: 400 })
+      }
+      {
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const lockErr = await checkMonthLockedForWorkers(ym, [], 'either')
+        if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
+      }
       const docRef = doc(db, 'demmen', 'main')
-      await setDoc(docRef, { workDays: { [ym]: value } }, { merge: true })
+      const { updateDoc } = await import('@/lib/fsdb')
+      await updateDoc(docRef, { [`workDays.${ym}`]: numValue })
+      try {
+        const { logActivity } = await import('@/lib/activity')
+        await logActivity('admin', 'monthly.setWorkDays', `${ym} の全社所定日数を ${numValue}日 に設定（出面入力の画面から）`)
+      } catch { /* ログ失敗は本体処理に影響させない */ }
       return NextResponse.json({ success: true })
     }
 
@@ -780,8 +784,9 @@ export async function POST(request: NextRequest) {
       if (!parentSiteId || !sdwYm || !toSiteId || days.length === 0) {
         return NextResponse.json({ error: 'siteId, ym, days, toSiteId は必須です' }, { status: 400 })
       }
-      const { checkMonthLocked } = await import('@/lib/locks')
-      const lockErr = await checkMonthLocked(String(sdwYm))
+      // 日ごとの工種の切り替えは、その日の全員の出面を移す。どちらかの会社が締め済みなら拒否（2026-10-02 総合点検）
+      const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+      const lockErr = await checkMonthLockedForWorkers(String(sdwYm), [], 'either')
       if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
 
       const main = await getMainData()
@@ -856,8 +861,11 @@ export async function POST(request: NextRequest) {
       if (!parentSiteId || !mwtYm || !mwtDay || !toSiteId || (mwtWorkerId === undefined && mwtSubconId === undefined)) {
         return NextResponse.json({ error: 'siteId, ym, day, workerId/subconId, toSiteId は必須です' }, { status: 400 })
       }
-      const { checkMonthLocked } = await import('@/lib/locks')
-      const lockErr = await checkMonthLocked(String(mwtYm))
+      // 人の出面はその人の会社、外注の人工は両社とも締めたとき（2026-10-02 総合点検）
+      const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+      const lockErr = mwtWorkerId !== undefined
+        ? await checkMonthLockedForWorkers(String(mwtYm), [mwtWorkerId])
+        : await checkMonthLockedForWorkers(String(mwtYm), [], 'both')
       if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
 
       const main = await getMainData()
@@ -942,6 +950,14 @@ export async function POST(request: NextRequest) {
     if (action === 'approve' || action === 'approve_foreman') {
       const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      // 2026-10-02 総合点検: 先の日・実在しない日は職長承認できない。
+      //   承認済みの日はスタッフのスマホが打刻を拒否するので、先の日を承認するとその日に打刻できなくなる
+      //   （9/2 の誤承認と同じ形）。PC の「まとめて承認」が月末まで全部の日を送っていた。
+      //   スマホの職長画面・マイページ（lib/foreman-todo.ts approveDaysForSite）は以前から断っている
+      {
+        const dateErr = approvalDateError(String(ym), day, todayJstIso())
+        if (dateErr) return NextResponse.json({ error: dateErr }, { status: 400 })
+      }
       const { setForemanApprovalForDay } = await import('@/lib/attendance')
       // 承認者はログインした本人（2026-10-01。旧: 画面から送られた approvedBy をそのまま記録していた）
       const au = await getApiAuthUser(request)
@@ -975,6 +991,10 @@ export async function POST(request: NextRequest) {
       }
       const { siteId, ym, day } = body
       if (!siteId || !ym || !day) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+      {
+        const dateErr = approvalDateError(String(ym), day, todayJstIso())
+        if (dateErr) return NextResponse.json({ error: dateErr }, { status: 400 })
+      }
       // 「職長承認済み」を必須要件としてサーバ側でチェック（クライアントUIだけでなく二重に保護）
       const existing = await getApprovalForDay(siteId, ym, day)
       if (!existing?.foreman) {

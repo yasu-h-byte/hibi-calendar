@@ -196,8 +196,10 @@ export async function POST(request: NextRequest) {
       // 2026-06-12 (監査 Sprint2-B): 全社所定日数は旧ルール継続者(フン)の欠勤控除に
       //   直結するため、当該月がロック済みなら変更を拒否
       {
-        const { checkMonthLocked } = await import('@/lib/locks')
-        const lockErr = await checkMonthLocked(ym, 'hibi')
+        // 2026-10-02 総合点検: 旧ルールの固定月給の人は HFU にもいる。旧実装は日比建設の締めしか見ず、
+        //   HFU を締めた後でも所定日数を変えられた（HFU の確定額が動く）。どちらかが締め済みなら拒否
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const lockErr = await checkMonthLockedForWorkers(ym, [], 'either')
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }
       const numValue = Number(value) || 0

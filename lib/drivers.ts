@@ -34,8 +34,10 @@ export async function saveSiteDrivers(args: {
   if (dateErr) return { ok: false, status: 400, error: dateErr }
   const dayNum = Number(day)
   {
-    const { checkMonthLocked } = await import('./locks')
-    const lockErr = await checkMonthLocked(String(ym))
+    // 運転者の会社が締め済みなら拒否。運転者を外す保存（誰の分か決まらない）は、どちらかが締め済みなら拒否
+    //   （2026-10-02 総合点検: 会社なしだと「両社とも締めたときだけ」で、片方の締め後に運転手当が変わり得た）
+    const { checkMonthLockedForWorkers } = await import('./locks')
+    const lockErr = await checkMonthLockedForWorkers(String(ym), [...new Set([...amIds, ...pmIds])], 'either')
     if (lockErr) return { ok: false, status: 409, error: `${lockErr}（運転記録は運転手当の元データのため、締め済み月は変更できません）` }
   }
   const main = await getMainData()

@@ -900,25 +900,79 @@ export default function AttendanceGridPage() {
     || (!!data?.proxyApproval && !!userRole && roleCan(permRoleOf({ role: userRole }), 'attendance.foremanApproveProxy'))
   const canFinalize = userRole === 'admin' || userRole === 'approver'
 
-  const handleForemanApproveAll = useCallback(() => {
-    if (!data) return
-    const unapprovedDays = Array.from({ length: data.daysInMonth }, (_, i) => i + 1)
-      .filter(d => !localApprovals[d])
-    const updated = { ...localApprovals }
-    for (const d of unapprovedDays) updated[d] = true
-    setLocalApprovals(updated)
-    for (const d of unapprovedDays) {
-      fetch('/api/attendance/grid', {
+  // ── 承認の送信（2026-10-02 総合点検）──
+  //   旧: 画面を先に更新して fetch(...).catch(() => {}) で、通信結果を見ていなかった。
+  //   サーバが断っても（担当外 403・先の日 400・最終承認済みの取り消し 409・職長承認が先 400）画面は承認済みのままで、
+  //   月締めで初めて「承認なし」と分かった。結果を見て、失敗した日は表示を戻して理由を出す
+  const postApproval = useCallback(async (action: string, day: number): Promise<string | null> => {
+    try {
+      const res = await fetch('/api/attendance/grid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'approve_foreman', siteId, ym, day: d, approvedBy: userId }),
-      }).catch(() => {})
+        body: JSON.stringify({ action, siteId, ym, day, approvedBy: userId }),
+      })
+      if (res.ok) return null
+      const j = await res.json().catch(() => ({}))
+      return j.error || `エラー（${res.status}）`
+    } catch {
+      return '通信エラー'
     }
-  }, [data, localApprovals, password, siteId, ym, userId])
+  }, [password, siteId, ym, userId])
 
-  const handleToggleForemanApproval = useCallback((day: number) => {
-    const approved = localApprovals[day]
-    setLocalApprovals(prev => ({ ...prev, [day]: !prev[day] }))
+  /** まとめて送る（4件ずつ）。失敗した日と理由を返す */
+  const postApprovalDays = useCallback(async (action: string, targetDays: number[]): Promise<{ day: number; error: string }[]> => {
+    const failed: { day: number; error: string }[] = []
+    for (let i = 0; i < targetDays.length; i += 4) {
+      const chunk = targetDays.slice(i, i + 4)
+      const results = await Promise.all(chunk.map(d => postApproval(action, d)))
+      results.forEach((err, idx) => { if (err) failed.push({ day: chunk[idx], error: err }) })
+    }
+    return failed
+  }, [postApproval])
+
+  const alertApprovalFailures = useCallback((label: string, failed: { day: number; error: string }[]) => {
+    if (failed.length === 0) return
+    const m = Number(ym.slice(4, 6))
+    const lines = failed.slice(0, 5).map(f => `・${m}/${f.day}: ${f.error}`).join('\n')
+    alert(`${label}できなかった日があります（${failed.length}日）。表示を元に戻しました。\n\n${lines}${failed.length > 5 ? '\n…ほか' : ''}`)
+  }, [ym])
+
+  /**
+   * まとめて職長承認する日 = 昨日までで、誰かの入力があって、職長承認がまだの日（「今やること」の件数と同じ）。
+   * 2026-10-02 総合点検: 旧実装は月の全部の日（先の日・誰も入力していない日も）を承認していた。
+   *   承認済みの日はスタッフのスマホが打刻を拒否するので、月末まで打刻できなくなる（9/2 の誤承認と同じ形）。
+   *   今日の分は、スタッフが作業後に打刻するので、まとめてには入れない（1日ずつなら承認できる）
+   */
+  const foremanBulkDays = useMemo(() => {
+    if (!data) return [] as number[]
+    const todayIso = todayJstIso()
+    const withInput = new Set<number>()
+    for (const ent of Object.values(workerEntries)) {
+      for (const [d, e] of Object.entries(ent || {})) if (e) withInput.add(Number(d))
+    }
+    for (const ent of Object.values(subconEntries)) {
+      for (const [d, e] of Object.entries(ent || {})) if (e && ((e.n || 0) > 0 || (e.on || 0) > 0)) withInput.add(Number(d))
+    }
+    const isoOf = (d: number) => `${data.year}-${String(data.month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    return Array.from({ length: data.daysInMonth }, (_, i) => i + 1)
+      .filter(d => withInput.has(d) && isoOf(d) < todayIso && !localApprovals[d])
+  }, [data, workerEntries, subconEntries, localApprovals])
+
+  const handleForemanApproveAll = useCallback(async () => {
+    if (!data || foremanBulkDays.length === 0) return
+    const target = foremanBulkDays
+    setLocalApprovals(prev => { const next = { ...prev }; for (const d of target) next[d] = true; return next })
+    const failed = await postApprovalDays('approve_foreman', target)
+    if (failed.length > 0) {
+      setLocalApprovals(prev => { const next = { ...prev }; for (const f of failed) delete next[f.day]; return next })
+      alertApprovalFailures('承認', failed)
+    }
+  }, [data, foremanBulkDays, postApprovalDays, alertApprovalFailures])
+
+  const handleToggleForemanApproval = useCallback(async (day: number) => {
+    const approved = !!localApprovals[day]
+    const hadFinal = !!localFinalApprovals[day]
+    setLocalApprovals(prev => ({ ...prev, [day]: !approved }))
     // 解除する場合は最終承認も画面上で消す（API側が連動して削除する）
     if (approved) {
       setLocalFinalApprovals(prev => {
@@ -927,45 +981,37 @@ export default function AttendanceGridPage() {
         return next
       })
     }
-    fetch('/api/attendance/grid', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({
-        action: approved ? 'unapprove_foreman' : 'approve_foreman',
-        siteId, ym, day, approvedBy: userId,
-      }),
-    }).catch(() => {})
-  }, [localApprovals, password, siteId, ym, userId])
+    const err = await postApproval(approved ? 'unapprove_foreman' : 'approve_foreman', day)
+    if (err) {
+      setLocalApprovals(prev => ({ ...prev, [day]: approved }))
+      if (approved && hadFinal) setLocalFinalApprovals(prev => ({ ...prev, [day]: true }))
+      alertApprovalFailures(approved ? '承認を取り消し' : '承認', [{ day, error: err }])
+    }
+  }, [localApprovals, localFinalApprovals, postApproval, alertApprovalFailures])
 
-  const handleFinalApproveAll = useCallback(() => {
+  const handleFinalApproveAll = useCallback(async () => {
     if (!data) return
     // 職長承認済かつ最終未承認の日だけが対象
     const finalizableDays = Array.from({ length: data.daysInMonth }, (_, i) => i + 1)
       .filter(d => localApprovals[d] && !localFinalApprovals[d])
-    const updated = { ...localFinalApprovals }
-    for (const d of finalizableDays) updated[d] = true
-    setLocalFinalApprovals(updated)
-    for (const d of finalizableDays) {
-      fetch('/api/attendance/grid', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'approve_final', siteId, ym, day: d, approvedBy: userId }),
-      }).catch(() => {})
+    if (finalizableDays.length === 0) return
+    setLocalFinalApprovals(prev => { const next = { ...prev }; for (const d of finalizableDays) next[d] = true; return next })
+    const failed = await postApprovalDays('approve_final', finalizableDays)
+    if (failed.length > 0) {
+      setLocalFinalApprovals(prev => { const next = { ...prev }; for (const f of failed) delete next[f.day]; return next })
+      alertApprovalFailures('最終承認', failed)
     }
-  }, [data, localApprovals, localFinalApprovals, password, siteId, ym, userId])
+  }, [data, localApprovals, localFinalApprovals, postApprovalDays, alertApprovalFailures])
 
-  const handleToggleFinalApproval = useCallback((day: number) => {
-    const finalApproved = localFinalApprovals[day]
-    setLocalFinalApprovals(prev => ({ ...prev, [day]: !prev[day] }))
-    fetch('/api/attendance/grid', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-      body: JSON.stringify({
-        action: finalApproved ? 'unapprove_final' : 'approve_final',
-        siteId, ym, day, approvedBy: userId,
-      }),
-    }).catch(() => {})
-  }, [localFinalApprovals, password, siteId, ym, userId])
+  const handleToggleFinalApproval = useCallback(async (day: number) => {
+    const finalApproved = !!localFinalApprovals[day]
+    setLocalFinalApprovals(prev => ({ ...prev, [day]: !finalApproved }))
+    const err = await postApproval(finalApproved ? 'unapprove_final' : 'approve_final', day)
+    if (err) {
+      setLocalFinalApprovals(prev => ({ ...prev, [day]: finalApproved }))
+      alertApprovalFailures(finalApproved ? '最終承認を取り消し' : '最終承認', [{ day, error: err }])
+    }
+  }, [localFinalApprovals, postApproval, alertApprovalFailures])
 
   // ── Computed: grouped workers ──
 
@@ -1283,17 +1329,9 @@ export default function AttendanceGridPage() {
   //   数え方は表の承認行・各注意書きと同じ。表示のための集計だけで、保存・承認の処理は変えない
   const todayIsoA = todayJstIso()
   const dayIsoOf = (d: number) => data ? `${data.year}-${String(data.month).padStart(2, '0')}-${String(d).padStart(2, '0')}` : ''
-  const daysWithInput = new Set<number>()
-  // 入力に合わせて変わる state から数える（data.workerEntries は読み込み時点のまま）。外注の人工だけの日も含める
-  for (const ent of Object.values(workerEntries)) {
-    for (const [d, e] of Object.entries(ent || {})) if (e) daysWithInput.add(Number(d))
-  }
-  for (const ent of Object.values(subconEntries)) {
-    for (const [d, e] of Object.entries(ent || {})) if (e && ((e.n || 0) > 0 || (e.on || 0) > 0)) daysWithInput.add(Number(d))
-  }
-  // 職長承認がまだ = 昨日までで、誰かの入力があって、職長承認が付いていない日。
+  // 職長承認がまだ = 昨日までで、誰かの入力があって、職長承認が付いていない日（上の foremanBulkDays と同じ集合）。
   //   今日の分は出さない（2026-10-02 代表: ベトナム人スタッフは作業後にスマホで打刻するので、承認は翌日でよい）
-  const foremanWaitDays = days.filter(d => daysWithInput.has(d.day) && dayIsoOf(d.day) < todayIsoA && !localApprovals[d.day]).map(d => d.day)
+  const foremanWaitDays = foremanBulkDays
   // 最終承認待ち = 職長承認済みで最終承認がまだの日（表の「まとめて最終承認」と同じ）
   const finalWaitDays = days.filter(d => localApprovals[d.day] && !localFinalApprovals[d.day]).map(d => d.day)
   const daysLabel = (ds: number[]) => ds.length <= 3 ? ds.map(d => `${data?.month}/${d}`).join('・') : `${data?.month}/${ds[0]}〜${ds[ds.length - 1]}`
@@ -1548,6 +1586,7 @@ export default function AttendanceGridPage() {
           drivers={drivers}
           onDriverClick={data.site.noDriveAllowance ? undefined : setDriverDay}
           onForemanApproveAll={handleForemanApproveAll}
+          foremanBulkCount={foremanBulkDays.length}
           onToggleForemanApproval={handleToggleForemanApproval}
           onFinalApproveAll={handleFinalApproveAll}
           onToggleFinalApproval={handleToggleFinalApproval}

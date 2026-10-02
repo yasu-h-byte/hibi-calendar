@@ -57,14 +57,22 @@ export function checkForemanSiteScope(role: ApiRole | null, siteId: unknown): Si
   return { ok: false, status: 403, error: '担当現場ではないため操作できません（担当現場の職長または管理者のみ）' }
 }
 
-/** 担当現場チェックの対象アクションか（職長承認系と出面保存） */
+/**
+ * 担当現場チェックを「しない」アクション（理由つき）。ここに無いアクションは、すべて担当現場チェックの対象。
+ * - approve_final / unapprove_final: 管理者・事業責任者だけ（職長は入口の権限で止まる）
+ * - saveWorkDays: 現場を持たない全社の値。月締めの権限（monthly.close）で別に止める
+ */
+const GRID_ACTIONS_WITHOUT_SITE_SCOPE: readonly string[] = ['approve_final', 'unapprove_final', 'saveWorkDays']
+
+/**
+ * 担当現場チェックの対象アクションか。
+ * 2026-10-02 総合点検: 「対象のアクションを並べる」方式だったので、あとから足した saveAssign（配置）・
+ *   saveDrivers（運転者＝運転手当）・saveNightDays（夜勤の日）が一覧に入らず、職長が API を直接呼ぶと
+ *   他現場の配置・運転者・夜勤日を書けた。既定を「対象」にし、外すものだけを並べる（足し忘れが穴にならない）。
+ */
 export function isForemanScopedGridAction(action: unknown): boolean {
-  return !action || action === 'saveAttendance'
-    || action === 'approve' || action === 'approve_foreman'
-    || action === 'unapprove' || action === 'unapprove_foreman'
-    // 工種の出し分け（2026-09-25）: 既定の工種の設定・日別の工種切替も
-    // 担当現場（親現場 id）の職長のみに限る
-    || action === 'saveDefaultWorkType' || action === 'moveWorkType' || action === 'setDayWorkType'
+  if (!action) return true
+  return !GRID_ACTIONS_WITHOUT_SITE_SCOPE.includes(String(action))
 }
 
 /** ルートから呼ぶ入口: 認証 → ロール解決 → 担当現場チェック */
@@ -86,4 +94,21 @@ export async function checkGridForemanScope(
       : checkForemanSiteScope(role, siteId)
   }
   return checkForemanSiteScope(resolveApiRoleFromMain(auth, main, ym), siteId)
+}
+
+/**
+ * 承認できない日ならエラーメッセージ（2026-10-02 総合点検）。純関数。
+ * - 実在しない日（9月31日など）・月の形が違うもの
+ * - 先の日（今日より後）。承認済みの日はスタッフのスマホが打刻を拒否するので、先の日を承認すると打刻できなくなる
+ */
+export function approvalDateError(ym: string, day: unknown, todayIso: string): string | null {
+  if (!/^\d{6}$/.test(ym)) return '月の指定が正しくありません'
+  const d = Number(day)
+  const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6))
+  if (m < 1 || m > 12) return '月の指定が正しくありません'
+  const lastDay = new Date(y, m, 0).getDate()
+  if (!Number.isInteger(d) || d < 1 || d > lastDay) return `${m}月${String(day)}日は実在しない日です`
+  const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(d).padStart(2, '0')}`
+  if (iso > todayIso) return `${m}月${d}日は先の日なので、まだ承認できません（承認するとスタッフがその日に打刻できなくなります）`
+  return null
 }

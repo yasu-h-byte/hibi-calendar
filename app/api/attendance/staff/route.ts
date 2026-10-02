@@ -548,8 +548,10 @@ export async function POST(request: NextRequest) {
     //   year/month は任意指定できるため、過去のロック済み月（給与確定後）への
     //   遡及入力で支払額とシステムが食い違うのを防ぐ
     {
-      const { checkMonthLocked } = await import('@/lib/locks')
-      const lockErr = await checkMonthLocked(ym, (worker as { org?: string }).org)
+      // 2026-10-02 総合点検: 旧実装は worker.org を渡していたが、Worker 型に org は無く常に undefined
+      //   ＝「両社とも締めたときだけ」拒否になっていた。人員マスタの会社で判定する
+      const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+      const lockErr = await checkMonthLockedForWorkers(ym, [worker.id])
       if (lockErr) {
         return NextResponse.json({ error: `${lockErr} / Tháng này đã khóa, không thể thay đổi` }, { status: 409 })
       }

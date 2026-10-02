@@ -48,8 +48,9 @@ export async function POST(request: NextRequest) {
 
   // 締め済み月は復元しない（給与確定後のデータ変更を防ぐ既存ルールに合わせる）
   {
-    const { checkMonthLocked } = await import('@/lib/locks')
-    const lockErr = await checkMonthLocked(h.ym)
+    // その人の会社が締め済みなら拒否（2026-10-02 総合点検: 会社なしだと両社とも締めるまで復元できた）
+    const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+    const lockErr = await checkMonthLockedForWorkers(h.ym, [h.workerId])
     if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
   }
 

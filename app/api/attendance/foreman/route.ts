@@ -301,8 +301,9 @@ export async function POST(request: NextRequest) {
 
       // 2026-06-12 (監査 Sprint2-B): ロック済み月への職長編集を拒否（給与確定後のデータ変更防止）
       {
-        const { checkMonthLocked } = await import('@/lib/locks')
-        const lockErr = await checkMonthLocked(ym)
+        // その人の会社が締め済みなら拒否（会社なしで呼ぶと「両社とも締めたときだけ」になる・2026-10-02 総合点検）
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const lockErr = await checkMonthLockedForWorkers(ym, [workerId])
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }
 
@@ -503,8 +504,8 @@ export async function POST(request: NextRequest) {
 
       // 2026-06-12 (監査 Sprint2-B): ロック済み月の現場間移動を拒否
       {
-        const { checkMonthLocked } = await import('@/lib/locks')
-        const lockErr = await checkMonthLocked(ym)
+        const { checkMonthLockedForWorkers } = await import('@/lib/locks')
+        const lockErr = await checkMonthLockedForWorkers(ym, [workerId])
         if (lockErr) return NextResponse.json({ error: lockErr }, { status: 409 })
       }
 
