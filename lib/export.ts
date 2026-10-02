@@ -13,7 +13,7 @@ import { AttendanceEntry, calcActualHours, calcManDays } from '@/types'
 import { isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth, effectiveHourlyRateForYm } from './workers'
 import { computePeriodUsed } from './leave-compute'
-import { calcLastUsableDayIso, isLeaveExpiredAsOf } from './date-utils'
+import { calcLastUsableDayIso, isLeaveExpiredAsOf, addMonthsSafe } from './date-utils'
 // 2026-06-XX 追加: 自動検算を Excel にも反映
 import { validatePayrolls, type PayrollSnapshot } from './payroll-validator'
 import { JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM } from './constants'
@@ -1451,11 +1451,15 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
     return m
   }
 
-  // 2026-06-XX 修正: PL ledger は「今日時点で退職済み」のみ除外
-  //   未来日退職予定者は5日義務監視対象として ledger に必要
+  // 退職した人も、保存期間のあいだは管理簿に残す（2026-10-02 代表決定）。
+  //   年次有給休暇管理簿は「年休を与えた期間中と、その期間の満了後5年間（当分の間3年）」の保存義務がある（労基則24条の7・附則）。
+  //   安全側で、退職日から5年以内の人は出す（その人の最後の期は退職日までに終わっているため）。氏名の横に退職日を付ける。
+  //   旧（2026-06〜10-01）: 今日時点で退職済みの人を丸ごと外していた（取得日一覧・買取記録・時季指定記録の各シートには出ていた）
   const todayIsoForLedger = todayJstIso()
+  const ledgerKeepFrom = addMonthsSafe(todayIsoForLedger, -60)
   for (const w of workers) {
-    if (isAlreadyRetired(w.retired, todayIsoForLedger)) continue
+    if (isAlreadyRetired(w.retired, todayIsoForLedger) && (w.retired || '') < ledgerKeepFrom) continue
+    const retiredLabel = isAlreadyRetired(w.retired, todayIsoForLedger) ? `（退職 ${w.retired}）` : ''
     const records = plData[String(w.id)] || []
     // 付与日でソート
     const sorted = records.slice().sort((a, b) => {
@@ -1482,7 +1486,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
       const expiredByDate = !!(r.grantDate && isLeaveExpiredAsOf(r.grantDate, todayJstIso()))
       const status = r._archived ? 'アーカイブ' : (r.expiredAt ? '失効済' : (expiredByDate ? '期限切れ' : '有効'))
       ledgerRows.push([
-        w.id, w.name, w.org || '', visaLabel(w.visa), w.hireDate || '',
+        w.id, `${w.name}${retiredLabel}`, w.org || '', visaLabel(w.visa), w.hireDate || '',
         String(r.fy ?? ''), r.grantDate || '', grantDays, carryOver, adjustment,
         used, remaining, r.expiredDays ?? '', r.buyoutDays ?? '',
         fmtExpiry(r.grantDate), status, methodLabel(r.method),

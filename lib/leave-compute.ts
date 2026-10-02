@@ -462,22 +462,18 @@ export function isSameFiscalYear(
  *   ちょうど1年離れている場合（通常の年次サイクル）は重ならない（半開区間）。
  */
 /**
- * 日本人（10/1 統一基準日）の「次回付与日」を前回付与日から導出する（2026-08-27 追加）。
+ * 日本人の「次回付与日」を前回付与日から導出する。
  *
- * - 前回が 10/1 なら次回は翌年 10/1（通常サイクル）
- * - 前回が年途中（初回付与など）なら、その後の最初の 10/1 へ**前倒し合流**する。
- *   労基法39条は継続勤務1年ごとの付与を要求し、基準日統一は前倒しのみ許される
- *   （旧実装は期間重複で抑止していたため合流が後ろ倒しになり、最大22ヶ月の
- *   付与ギャップ＝法定割れが生じていた）。
- * - `deemedDate` は法定日数の勤続計算に使う「みなし基準日」。前倒し分の勤続は
- *   本来の応当日（前回+1年）まで勤務したものとみなす（斉一的取扱いの行政解釈）。
+ * 2026-10-02 代表決定: 有給をこのシステムで管理できるようになったので、10/1 にそろえるのをやめる。
+ *   **入社6ヶ月後に初回、その後は前回の付与日から1年ごと**（外国人スタッフと同じ・労基法39条どおり）。
+ *   すでに 10/1 で付与している人は、前回が 10/1 なので次回も 10/1（その人の周期のまま）。
+ *   旧（2026-08-27〜10-01）: 前回が年途中なら、その後の最初の 10/1 へ前倒し合流していた。
+ * - `deemedDate` は法定日数の勤続計算に使う日。過去に 10/1 へ前倒しした人は、本来の付与日（入社+6ヶ月+1年×k）が
+ *   付与日から1年以内に来るので、その日の勤続で数える（斉一的取扱い・jpDeemedDate。梶原さん 14日の件）
  */
 export function jpNextGrantAfter(latestGrantIso: string, hireDate?: string): { grantDate: string; deemedDate: string } {
-  const mergeYear = Number(latestGrantIso.slice(0, 4)) + (latestGrantIso.slice(5) >= '10-01' ? 1 : 0)
-  const grantDate = `${mergeYear}-10-01`
-  const anniversary = addMonthsSafe(latestGrantIso, 12)
-  const base = anniversary > grantDate ? anniversary : grantDate
-  return { grantDate, deemedDate: hireDate ? jpDeemedDate(hireDate, grantDate, base) : base }
+  const grantDate = addMonthsSafe(latestGrantIso, 12)
+  return { grantDate, deemedDate: hireDate ? jpDeemedDate(hireDate, grantDate) : grantDate }
 }
 
 /**

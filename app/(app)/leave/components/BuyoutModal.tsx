@@ -38,7 +38,7 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
             <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">買取理由</label>
             <select value={buyoutForm.reason} onChange={e => setBuyoutForm(prev => ({ ...prev, reason: e.target.value as 'year-end' | 'retirement' | 'other' }))}
               className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm">
-              <option value="year-end">期末買取（9/30時点）</option>
+              <option value="year-end">期末買取（付与の期の最後の日の時点）</option>
               <option value="retirement">退職時清算</option>
               <option value="other">その他</option>
             </select>

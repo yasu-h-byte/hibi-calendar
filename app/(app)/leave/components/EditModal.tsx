@@ -39,12 +39,12 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
               className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
             {worker.inferredFromDefault && (
               <p className="text-[10px] text-blue-600 mt-1">
-                💡 日本人社員のデフォルト「10/1〜9/30」を自動適用中。明示的に保存すると確定します。
+                💡 付与日が記録されていない古いデータのため「10/1〜9/30」を仮に当てています。正しい付与日を選んで保存してください。
               </p>
             )}
             <p className="text-[10px] text-gray-400 mt-1">
-              日本人社員は決算期に合わせて毎年10/1付与（10/1〜9/30）がデフォルトです。<br/>
-              個別に変更したい場合のみ日付を選び直してください。
+              付与日は、入社6ヶ月後の初回付与から1年ごとです（日本人も外国人も同じ・2026年10月から）。<br/>
+              これまで10/1に付与している人は、そのまま毎年10/1です。
             </p>
             {editForm.grantDate && (() => {
               // 期間末 = 付与日+1年-1日、有効期限 = 最終利用可能日（付与日+2年-1日）
