@@ -736,11 +736,11 @@ export async function GET(request: NextRequest) {
             (((r.grantDays as number | undefined) ?? (r.grant as number | undefined) ?? 0) > 0))
           const latestG = grantedRecs.map(effD).filter(Boolean).sort().slice(-1)[0] || null
           const curFy = m >= 10 ? y : y - 1
-          // 初回は「10/1」と「入社＋6ヶ月」の遅いほう（休暇管理 /api/leave の getPendingGrants と同じ・労基法39条1項）。
-          //   2026-10-02: 旧は 10/1 固定で、入社6ヶ月前の人・入社前の人（10/26 入社のホアンさん）まで付与待ちに数えていた
+          // 初回は入社＋6ヶ月、2回目以降は前回付与日から1年（休暇管理 /api/leave の getPendingGrants と同じ・労基法39条）。
+          //   2026-10-02 代表決定で 10/1 統一をやめた。入社日が無い人だけ 10/1 を目安にする
           const fyGrant = `${curFy}-10-01`
           const hirePlus6 = w.hireDate ? addMonthsSafe(w.hireDate, 6) : ''
-          const expDate = latestG ? jpNextGrantAfter(latestG).grantDate : (hirePlus6 && hirePlus6 > fyGrant ? hirePlus6 : fyGrant)
+          const expDate = latestG ? jpNextGrantAfter(latestG).grantDate : (hirePlus6 || fyGrant)
           if (expDate <= todayIsoP) {
             const hasGrant = grantedRecs.some(r => effD(r) >= expDate)
             if (!hasGrant) pendingGrantsCount++

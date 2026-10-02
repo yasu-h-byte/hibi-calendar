@@ -738,11 +738,8 @@ export async function POST(request: NextRequest) {
         const isJp = !w.visa || w.visa === 'none'
 
         if (isJp) {
-          // 日本人: 10/1 起点だが、入社が直近の場合は hireDate + 6ヶ月を初回付与日とする
-          //   (労基法 39条1項: 初回付与は入社から6ヶ月経過後)
-          //   - 例: 入社 6/1 → hire+6m = 12/1 → 次の 10/1 (来年) より前 → 初回は 12/1
-          //   - 例: 入社 1/1 → hire+6m = 7/1 → 同年 10/1 より前 → 同年 10/1 でOK
-          //   - 例: 入社 5/1 (3年前)など → 既に複数年経過なら 10/1 起点で OK
+          // 日本人（2026-10-02 代表決定で 10/1 統一をやめた）: 初回は入社6ヶ月後、その後は前回付与日から1年ごと（外国人と同じ・労基法39条）。
+          //   すでに 10/1 で付与している人は、前回が 10/1 なので次回も 10/1。入社日が無い人だけ従来の 10/1 を目安にする
           const y = todayDate.getFullYear()
           const m = todayDate.getMonth() + 1
           const currentFyStart = m >= 10 ? y : y - 1
@@ -760,39 +757,26 @@ export async function POST(request: NextRequest) {
           let expectedGrantDate: string
           let expectedFy: string
           let reason: string
-          // 前倒し合流時の法定日数計算に使う「みなし勤続」基準日（通常は付与日そのもの）
+          // 法定日数の勤続計算に使う日（過去に 10/1 へ前倒しした人は本来の付与日・jpDeemedDate）
           let deemedDateForDays: string
 
           if (!latestGrant) {
-            if (hirePlus6 && hirePlus6 > fyGrantDate) {
-              // 初回付与で、入社+6ヶ月が FY 起点より遅い → 入社+6ヶ月を採用
+            if (hirePlus6) {
               expectedGrantDate = hirePlus6
               expectedFy = expectedGrantDate.slice(0, 4)
               reason = '初回付与（入社6ヶ月経過）'
             } else {
               expectedGrantDate = fyGrantDate
               expectedFy = String(currentFyStart)
-              reason = `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`
+              reason = `初回付与（入社日が未登録のため ${expectedGrantDate} を目安）`
             }
-            // 初回でも、付与日から1年以内に来る法定の付与日があればその勤続で数える（前倒しの斉一的取扱い）
-            deemedDateForDays = w.hireDate ? jpDeemedDate(w.hireDate, expectedGrantDate) : expectedGrantDate
+            deemedDateForDays = expectedGrantDate
           } else {
-            // ── 2回目以降: 前回付与日の後の最初の 10/1 へ「前倒し合流」──
-            // 2026-08-27 修正（有給総点検・第3回）:
-            //   旧実装は現FYの10/1 と前回付与期間の「重複」で抑止していたため、
-            //   年途中入社の日本人は次回付与が最大22ヶ月後になっていた。
-            //   労基法39条は継続勤務1年ごとの付与を要求し、基準日の統一は
-            //   **前倒しのみ**許される（後ろ倒しは法定割れ）。
-            //   例: 初回 2026-12-01 → 次回は 2027-10-01（2ヶ月前倒しで統一基準日へ合流）
-            //   前倒し分の勤続は本来の応当日まで勤続したものとみなす（斉一的取扱い）
-            //   ため、法定日数は max(合流日, 前回+1年) 時点の勤続で計算する。
             const next = jpNextGrantAfter(latestGrant, w.hireDate || undefined)
             expectedGrantDate = next.grantDate
             expectedFy = expectedGrantDate.slice(0, 4)
             deemedDateForDays = next.deemedDate
-            reason = latestGrant.slice(5) === '10-01'
-              ? `FY ${expectedFy} (${expectedGrantDate}~)の付与が未実施`
-              : `統一基準日へ前倒し合流（前回付与 ${latestGrant}）`
+            reason = `前回付与（${latestGrant}）から1年`
           }
 
           // アラートウィンドウ (付与日の30日前～) かつ未付与なら対象に。
@@ -1430,9 +1414,7 @@ export async function GET(request: NextRequest) {
         // アーカイブ済みレコードは表示対象から除外（期限切れで2年以上経過）
         const plRecords = plRecordsRaw.filter(r => !r._archived)
 
-        // 現在FYを判定
-        // - 日本人社員（職長・とび等）: 全員「10/1起点」（決算期サイクル統一）
-        // - 外国人（実習生・特定技能）: 個別の grantDate..+1年 に今日が含まれるレコードのfy
+        // 現在の期を判定: 個別の grantDate..+1年 に基準日が含まれるレコードの fy（日本人も同じ・2026-10-02）
         const isJp = !w.visa || w.visa === 'none'
         // 2026-10-01 修正: 年月は JST の基準日（asOfIso）から取る。
         //   旧: new Date() のまま（Vercel は UTC）→ 10/1 の 0〜9時（JST）は「まだ9月」と判定し、
@@ -1442,18 +1424,17 @@ export async function GET(request: NextRequest) {
         const nowM = Number(asOfIso.slice(5, 7))
 
         let targetFy: string | null = null
-        if (isJp) {
-          // 日本人は全員 10/1 起点で統一
+        // grantDate..+1y に基準日を含むレコードの fy を使う（日本人も外国人も同じ・2026-10-02 代表決定で日本人の 10/1 統一をやめた）
+        //   日付は JST の文字列（YYYY-MM-DD）どうしで比べる（UTC の Date と比べると朝9時まで1日ずれる）
+        const activeRec = plRecords.find(r => {
+          if (!r.grantDate || !/^\d{4}-\d{2}-\d{2}$/.test(r.grantDate)) return false
+          const end = `${Number(r.grantDate.slice(0, 4)) + 1}${r.grantDate.slice(4)}`
+          return asOfIso >= r.grantDate && asOfIso < end
+        })
+        if (activeRec) targetFy = String(activeRec.fy)
+        else if (isJp) {
+          // 付与日の無い古い日本人のレコードだけ、従来の 10/1 起点の期で探す
           targetFy = String(nowM >= 10 ? nowY : nowY - 1)
-        } else {
-          // 外国人: grantDate..+1y に今日を含むレコードのfyを使用
-          //   日付は JST の文字列（YYYY-MM-DD）どうしで比べる（UTC の Date と比べると朝9時まで1日ずれる）
-          const activeRec = plRecords.find(r => {
-            if (!r.grantDate || !/^\d{4}-\d{2}-\d{2}$/.test(r.grantDate)) return false
-            const end = `${Number(r.grantDate.slice(0, 4)) + 1}${r.grantDate.slice(4)}`
-            return asOfIso >= r.grantDate && asOfIso < end
-          })
-          if (activeRec) targetFy = String(activeRec.fy)
         }
 
         // targetFy に一致するレコードのうち「最後のもの」を採用（push順で最新）
@@ -1684,12 +1665,15 @@ export async function GET(request: NextRequest) {
         // ═════════════════════════════════════════════════════════════
         // 日本人の「前の期の残り」＝賞与で買い取る日数（2026-10-01 代表指示「未消化の有給は賞与で買い取るので記録残して」）
         // ═════════════════════════════════════════════════════════════
-        //   日本人は 10/1 一律付与・繰越なし・期末の残りは賞与（精勤賞与）で買取。10/1 に今の期へ切り替わると
+        //   日本人は繰越なし・期末の残りは賞与（精勤賞与）で買取。次の付与日に今の期へ切り替わると
         //   一覧から前の期の残りが見えなくなっていた。前の期の付与レコード（plData は消さない）と出面の P から
         //   毎回計算して出す。賞与の確定で買取が記録されると（jp-wage/bonus → buyoutHistory）「買取済み」になる。
         let prevPeriod: { grantDate: string; endDate: string; grantDays: number; taken: number; buyoutDays: number; remaining: number } | undefined
         if (isJp && grantDate && /^\d{4}-\d{2}-\d{2}$/.test(grantDate)) {
-          const prevGrant = `${Number(grantDate.slice(0, 4)) - 1}${grantDate.slice(4)}`
+          // 前の期 = 今の期の付与日より前で、いちばん新しい付与（2026-10-02: 10/1 統一をやめたので「1年前の同じ日」とは限らない）
+          const prevGrant = plRecordsRaw
+            .filter(r => r.grantDate && r.grantDate < grantDate && ((r.grantDays ?? r.grant ?? 0) > 0))
+            .map(r => r.grantDate as string).sort().slice(-1)[0] || ''
           const prevRec = plRecordsRaw.find(r => r.grantDate === prevGrant) as (typeof plRecordsRaw[number] & { buyoutDays?: number; buyoutHistory?: { days?: number }[] }) | undefined
           const prevDays = prevRec ? (prevRec.grantDays ?? prevRec.grant ?? 0) : 0
           if (prevRec && prevDays > 0) {
@@ -1698,7 +1682,7 @@ export async function GET(request: NextRequest) {
             const buyoutDays = prevRec.buyoutDays ?? (prevRec.buyoutHistory || []).reduce((sum, h) => sum + (h.days || 0), 0)
             prevPeriod = {
               grantDate: prevGrant,
-              endDate: `${grantDate.slice(0, 4)}-09-30`,
+              endDate: addDaysIso(grantDate, -1),   // 前の期の最後の日 = 今の期の付与日の前日
               grantDays: prevDays + prevCarry,
               taken: requestedPeriodUsed,
               buyoutDays,

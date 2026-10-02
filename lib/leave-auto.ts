@@ -172,9 +172,8 @@ export function getUpcomingGrants(
     const records = (main.plData[wKey] || []) as PLRecord[]
     const grantMonth = w.grantMonth
 
-    // 2026-09-02 修正（有給総点検・第4回）: 日本人は 10/1 統一付与（初回だけ入社+6ヶ月、
-    //   2回目以降は前倒しで 10/1 に合流）。旧は入社応当日サイクルで計算しており、
-    //   /leave の付与予定（getPendingGrants）と通知ベルの日付が食い違っていた。
+    // 日本人: 初回は入社+6ヶ月、2回目以降は前回付与日から1年（jpNextGrantAfter・/leave の付与予定と同じ）。
+    //   2026-10-02 代表決定で 10/1 への前倒し合流をやめた（旧 2026-09-02〜: 10/1 統一付与）
     const isJpW = !w.visa || w.visa === 'none'
     let nextGrant: Date | null
     let deemedForDays: Date | null = null
