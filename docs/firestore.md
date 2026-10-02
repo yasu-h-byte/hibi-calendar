@@ -177,6 +177,22 @@ workSchedule?: {
 ### evaluations/{workerId_evaluationDate}
 評価データ（複数評価者対応）。
 
+### paperInvoices/{docId}
+紙（手作り）で出した請求書の保管（2026-10-02・`docs/peer-invoice.md`「紙で出した請求書」・`lib/paper-invoice.ts`）。
+1件 = 手作りの請求書1枚。ファイルは Firebase Storage `paper-invoices/{docId}/{i}-{name}`（書類庫と同じバケット）。
+
+| フィールド | 型 | 説明 |
+|---|---|---|
+| `companyId` / `companyName` | string | 請求先（取引先マスタの「同業（二次）」の id。HFU → 日比建設 は `__hfu_to_hibi__`） |
+| `ym` | string | 対象月 YYYYMM |
+| `total` | number | 税込合計（必須） |
+| `subtotal` / `tax` | number? | 税抜小計・消費税（任意。消したときは null） |
+| `no` / `issueDate` | string? | 請求書番号・発行日（任意） |
+| `lines` | 配列? | 明細（`site,item,qty,unit,rate,amount`・請求書の表記のまま） |
+| `note` | string? | メモ |
+| `files` | 配列 | `{path,name,contentType,size}` |
+| `uploadedAt` / `uploadedBy` / `updatedAt` | | 登録・修正の記録 |
+
 ### peerInvoices/{auto}
 応援の請求書（2026-09-25・`docs/peer-invoice.md`）。「発行」した瞬間の金額・出面明細・宛先・
 自社情報をまるごと凍結したスナップショット。`demmen/main` には入れない独立コレクション。
