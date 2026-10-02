@@ -139,28 +139,5 @@ export async function getAllSitesWithWorkersForMonth(ym: string): Promise<
   return buildSitesWithWorkers(w => isStillActiveForMonth(w.retired as string | undefined, ym) && isHiredByMonth(w.hireDate as string | undefined, ym))
 }
 
-/**
- * 「現在在籍中」（退職フィールドなし）のスタッフを含めて全現場を返す
- *
- * 月をまたがない「現在の状態」を表示する用途。退職予定者は除外される
- * （その月にまだ働く予定でも除外される点に注意）。
- *
- * 上記の "ForMonth" 版を使うべきケースが多いので、新規利用前に
- * 本当にこの厳密フィルタが必要か確認すること。
- */
-export async function getAllSitesWithActiveWorkers(): Promise<
-  { site: Site; workers: Worker[]; assign: SiteAssign }[]
-> {
-  return buildSitesWithWorkers(w => !w.retired)
-}
-
-/**
- * @deprecated getAllSitesWithWorkersForMonth(ym) または getAllSitesWithActiveWorkers() を使うこと。
- * 旧 API の後方互換のために残置（既存コードを段階的に移行）。
- */
-export async function getAllSitesWithWorkers(ym?: string): Promise<
-  { site: Site; workers: Worker[]; assign: SiteAssign }[]
-> {
-  if (ym) return getAllSitesWithWorkersForMonth(ym)
-  return getAllSitesWithActiveWorkers()
-}
+// 2026-10-02 総合点検: どこからも使われていなかった getAllSitesWithActiveWorkers / getAllSitesWithWorkers（退職予定の人を
+//   退職済みとして外す古い判定）を削除。月の名簿は getAllSitesWithWorkersForMonth(ym) を使う

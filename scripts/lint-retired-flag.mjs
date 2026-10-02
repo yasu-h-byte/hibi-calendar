@@ -14,12 +14,12 @@
  *
  * 使い方:
  *   node scripts/lint-retired-flag.mjs
- *   → 違反があれば標準エラーに一覧出力（終了コードは 0 — warn-only）
+ *   → 違反があれば標準エラーに一覧出力して終了コード 1（2026-10-02 総合点検で warn-only をやめた）
  *
  *   package.json:
  *     "lint:retired": "node scripts/lint-retired-flag.mjs"
  *
- * 注意: 既存コードに多数の違反が残っているため warn-only。
+ * 2026-10-02 総合点検で既存の違反を解消し、以後は落とす。意図して退職日の有無だけを見る行は `// retired-ok: 理由` を付ける。
  *      新規追加コードのレビューで個別に修正していく方針。
  *      将来的に全件修正後、終了コードを 1 に切り替えること。
  */
@@ -87,6 +87,8 @@ async function main() {
       const line = lines[i]
       // コメント行はスキップ
       if (/^\s*(\/\/|\*)/.test(line)) continue
+      // 意図して退職日の有無だけを見る行は `// retired-ok: 理由` を同じ行に書く（2026-10-02 総合点検）
+      if (/retired-ok/.test(line)) continue
       // type/interface定義の中の retired フィールドは無視
       if (/retired\s*[?:]\s*(string|boolean)/.test(line)) continue
       // optional chain `?.retired ?? ''` のような表現は許容
@@ -103,7 +105,7 @@ async function main() {
   }
 
   if (violations.length > 0) {
-    console.warn('\n⚠️  retired フラグの誤判定パターンを検出（warn-only）：\n')
+    console.warn('\n❌ retired フラグの誤判定パターンを検出：\n')
     for (const v of violations) {
       console.warn(`  ${v.file}:${v.line}`)
       console.warn(`    ${v.code}`)
@@ -111,8 +113,9 @@ async function main() {
     }
     console.warn(`合計 ${violations.length} 件の違反。`)
     console.warn('lib/workers.ts の isStillActiveForMonth() / isAlreadyRetired() を使ってください。')
-    console.warn('(新規追加コードでは必ず修正、既存コードは個別レビューで段階的に解消)')
-    return  // 終了コード 0
+    console.warn('意図して退職日の有無だけを見る行は、同じ行に `// retired-ok: 理由` を書いてください。')
+    // 2026-10-02 総合点検: 43件を解消したので、以後は違反があれば落とす（警告だけでは新しい違反が増え続けた）
+    process.exit(1)
   }
 
   console.log('✓ retired フラグの誤判定パターンはありません')

@@ -149,7 +149,7 @@ function buildHfuWorkforce(
   const monthEnd = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
   const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
   const hfuWorkers = main.workers.filter(w => isWorkerOfOrg(w as { org?: string }, 'hfu'))
-  const heads = hfuWorkers.filter(w => !w.retired || w.retired >= monthStart).filter(w => !w.hireDate || w.hireDate <= monthEnd).length
+  const heads = hfuWorkers.filter(w => !w.retired || w.retired >= monthStart).filter(w => !w.hireDate || w.hireDate <= monthEnd).length  // retired-ok: 月初時点の在籍（isStillActiveForMonth と同じ判定）
   const draft = buildHfuInvoiceDraft(main, attD, ym)
   const working = new Set<string>()
   for (const d of draft?.detail || []) for (const row of d.rows) if (row.total > 0) working.add(row.key)
