@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, requireCap } from '@/lib/auth'
+import { checkApiAuth, requireCap, callerCan } from '@/lib/auth'
 import { getMainData, getAttData } from '@/lib/compute'
 import { ymKey } from '@/lib/attendance'
 import { generateLeaveLedger, workbookToBuffer, LeaveLedgerWorker, LeaveLedgerRecord } from '@/lib/export'
@@ -38,7 +38,12 @@ export async function GET(request: NextRequest) {
         retired: w.retired || '',
       }))
 
-    const plData = (main.plData || {}) as Record<string, LeaveLedgerRecord[]>
+    const plDataRaw = (main.plData || {}) as Record<string, LeaveLedgerRecord[]>
+    // 有給買取の金額（精勤賞与の額）は給与を見られる人だけ（給与の鍵・2026-10-02 総点検）
+    const canSeePay = await callerCan(request, 'pay.view')
+    const plData = canSeePay ? plDataRaw : Object.fromEntries(Object.entries(plDataRaw).map(([k, recs]) => [k, recs.map(r => ({
+      ...r, buyoutHistory: r.buyoutHistory?.map(h => ({ ...h, amount: undefined })),
+    }))]))
 
     // 会社別フィルタ（2026-08-04 追加）。会社ごとに社労士が異なるため別々に出せるようにする。
     // 省略時は従来どおり全社（/leave 画面のボタンは全社出力）

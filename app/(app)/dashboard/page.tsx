@@ -8,6 +8,7 @@
 //       ② 左＝やること（申請を1件1行・気になること）／右＝数字を見るもの（前日の稼働・今月の数字・お知らせ・評価）
 //   計算・権限・承認の処理は変えない（見せ方だけ）。承認ボタンの出し分けは旧 AttendanceRequestCard と同じ。
 
+import { can } from '@/lib/permissions'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { fmtYenMan, fmtNum } from '@/lib/format'
@@ -481,8 +482,10 @@ function YesterdayCard({ data, siteList }: { data: DashboardData['todayStatus'];
 
 // ─── 今月の数字（総人工・売上・日別の稼働人数） ───
 
-function MonthCard({ data, ym, loading, error, onPrev, onNext }: {
+function MonthCard({ data, ym, loading, error, onPrev, onNext, canCost }: {
   data: DashboardData; ym: string; loading: boolean; error: boolean; onPrev: () => void; onNext: () => void
+  /** 原価・収益を見られる人だけリンクを出す（給与の鍵・2026-10-02） */
+  canCost: boolean
 }) {
   // 2026-10-01: 月を切り替えた直後・取得に失敗したときに、前の月の数字が新しい月の見出しの下に出ていた。
   //   数字は「応答の月（selectedYm）＝ 選んでいる月」のときだけ出し、それ以外は読み込み中／失敗を出す
@@ -524,7 +527,7 @@ function MonthCard({ data, ym, loading, error, onPrev, onNext }: {
               {/* fmtYenMan は「¥2,719万」まで返すので、足すのは「円」だけ（旧は「万円」で万が二重だった） */}
               {s.billing > 0 && <span className="text-sm text-hibi-sub dark:text-gray-400">円</span>}
             </div>
-            <MoreLink href="/cost">原価・収益へ</MoreLink>
+            {canCost && <MoreLink href="/cost">原価・収益へ</MoreLink>}
           </div>
         </div>
       )}
@@ -716,7 +719,7 @@ export default function DashboardPage() {
           {data && (
             <>
               <YesterdayCard data={data.todayStatus} siteList={data.siteList || []} />
-              <MonthCard data={data} ym={ym} loading={loading} error={!!error} onPrev={() => navigateMonth(-1)} onNext={() => navigateMonth(1)} />
+              <MonthCard data={data} ym={ym} loading={loading} error={!!error} onPrev={() => navigateMonth(-1)} onNext={() => navigateMonth(1)} canCost={can(authUser, 'cost.view')} />
             </>
           )}
           <AnnouncementsCard password={password} />

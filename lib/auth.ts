@@ -351,8 +351,10 @@ export async function getApiRole(request: NextRequest, ym?: string): Promise<Api
   if (auth.actor === 'super-admin') return { role: 'super-admin', workerId: 0, foremanSites: [] }
 
   // 個人パスワード → 人員マスタから実ロールを解決
-  const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
-  const main = mainSnap.exists() ? mainSnap.data() : {}
+  // 2026-10-02: getMainData（30秒キャッシュ）経由に。requireCap / callerCan が1リクエストで何度も呼ぶため、
+  //   毎回 main（約260KB）を読み直していた（CLAUDE.md「読み取り回数を増やさない」）
+  const { getMainData } = await import('@/lib/compute')
+  const main = (await getMainData()) as unknown as Record<string, unknown>
   // ⚠️ Firestore の生データは職種が `job`（Worker 型は `jobType`）。必ず mapRawWorkers で写像してから
   //   buildAuthUser に渡す（2026-09-26: 生のまま渡すと jobType が空になり、事務・役員の役割を取り違えた）
   const workers = mapRawWorkers((main.workers || []) as unknown[])

@@ -8,7 +8,8 @@ describe('staff manifest', () => {
   test('マイページは start_url がその人のマイページ（ログイン画面 / ではない）', () => {
     const m = buildStaffManifest('mypage', 'z9jz5kha')
     expect(m.start_url).toBe('/mypage/z9jz5kha')
-    expect(m.scope).toBe('/mypage/z9jz5kha')
+    // scope は / （職長確認からマイページへのリンクなどをアプリ内で開く）
+    expect(m.scope).toBe('/')
   })
   test('出面入力・職長確認も自分のページ', () => {
     expect(buildStaffManifest('attendance', 'abc12345').start_url).toBe('/attendance/abc12345')

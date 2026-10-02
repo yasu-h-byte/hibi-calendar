@@ -667,6 +667,17 @@ export const RELEASE_NOTES: Announcement[] = [
     publishedBy: '日比靖仁',
     roles: ['jimu', 'approver', 'owner'],
   },
+  {
+    id: 'rn_20261002_pay_lock_audit',
+    title: '総点検で見つかった給与の見え方を直しました（人員マスタの編集・書類庫も3人だけに）',
+    content:
+      '個人の給与が分かってしまう経路を総点検で塞ぎました。人員マスタの編集（スタッフのスマホURLを含む）と書類庫（雇用契約書）は、代表・政仁さん・森田さんだけになりました。'
+      + '休暇管理の有給買取の金額も、この3人だけに表示します。給与を見られない事務の人が人員マスタを開いたときの表示の不具合も直しました。',
+    category: 'fix',
+    publishedAt: '2026-10-03T00:30:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: ['jimu', 'approver', 'owner'],
+  },
 ]
 
 /**

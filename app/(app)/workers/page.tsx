@@ -295,6 +295,11 @@ export default function WorkersPage() {
       const body = editId !== null
         ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() }
         : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() || undefined }
+      // 給与欄を書き換えられない人（代表以外）は給与欄を送らない（2026-10-02）。
+      //   給与を見られない人には給与欄が空で届くため、送ると「空にする変更」扱いで保存が止まっていた
+      if (editId !== null && !canEditPay) {
+        for (const k of ['rate', 'hourlyRate', 'otMul', 'jpGrade', 'jpStep', 'salary'] as const) delete (body as Record<string, unknown>)[k]
+      }
       const res = await fetch('/api/workers', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: '保存に失敗しました' }))
@@ -588,7 +593,7 @@ export default function WorkersPage() {
               <div className="px-6 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-2">
                 {editWorker.token ? (
                   <button type="button" onClick={() => setQrWorker(editWorker)} className={PANEL_BTN}>スマホURL・QR</button>
-                ) : !editWorker.retired && (
+                ) : !editWorker.retired && can(authUser, 'workers.edit') && (
                   <button type="button" onClick={() => handleGenToken(editWorker.id)} className="h-9 px-3.5 rounded-[9px] bg-hibi-navy text-white text-[13px] font-bold hover:bg-hibi-light">スマホURLを発行する</button>
                 )}
                 {!editWorker.retired && (

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
@@ -1372,8 +1372,12 @@ export async function GET(request: NextRequest) {
   try {
     const main = await getMainData()
 
-    // デバッグモード: 生のplDataを返す
+    // 有給買取の金額（精勤賞与の額）は給与を見られる人だけ（給与の鍵・2026-10-02 総点検）
+    const canSeePay = await callerCan(request, 'pay.view')
+
+    // デバッグモード: 生のplDataを返す（買取の金額を含むので給与を見られる人だけ）
     if (debugMode) {
+      if (!canSeePay) return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
       return NextResponse.json({ plData: main.plData })
     }
 
@@ -1730,7 +1734,8 @@ export async function GET(request: NextRequest) {
           designatedLeaves: (fyRecord as { designatedLeaves?: Array<{ date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string }> } | undefined)?.designatedLeaves,
           // Phase 6: 買取記録
           buyoutDays: (fyRecord as { buyoutDays?: number } | undefined)?.buyoutDays,
-          buyoutHistory: (fyRecord as { buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }> } | undefined)?.buyoutHistory,
+          buyoutHistory: (fyRecord as { buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }> } | undefined)?.buyoutHistory
+            ?.map(h => (canSeePay ? h : { ...h, amount: undefined })),
           // Phase 8: FIFO内訳（繰越分と当期付与分の別々管理）
           carryOverRemaining,
           carryOverExpiryDate,

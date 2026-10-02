@@ -24,6 +24,24 @@ export async function getWorkers(): Promise<Worker[]> {
 }
 
 /**
+ * 人員の項目を「給与」と「それ以外」に仕分ける（2026-10-02 代表「給与は靖仁・政仁・森田だけ」）。
+ * /api/workers は相手によって返す項目を変える:
+ *   給与を見られる人（pay.view）= 全部 ／ 事務・役員（workers.view）= WORKER_OFFICE_KEYS ／ 職長 = WORKER_PUBLIC_KEYS
+ * mapRawWorkers に項目を足したら、必ずどちらかに入れる（__tests__/workerKeys.test.ts が仕分け漏れを落とす）。
+ */
+export const WORKER_PAY_KEYS = [
+  'rate', 'hourlyRate', 'otMul', 'salary', 'jpGrade', 'jpStep', 'rateFrom', 'prevRate', 'prevJpStep',
+  'hourlyRateFrom', 'prevHourlyRate', 'salaryFrom', 'prevSalary', 'scheduledChanges', 'appliedChanges',
+] as const
+/** 職長にも返してよい項目（名前・所属・在留資格・職種・入社日など） */
+export const WORKER_PUBLIC_KEYS = ['id', 'name', 'nameVi', 'company', 'visaType', 'jobType', 'hireDate', 'retired', 'dispatchTo', 'dispatchFrom', 'canDrive'] as const
+/** 事務所の人（給与は見られない事務・役員）に返す項目。給与以外の人員マスタの項目（スマホURLは workers.edit のときだけ） */
+export const WORKER_OFFICE_KEYS = [
+  ...WORKER_PUBLIC_KEYS,
+  'token', 'visaExpiry', 'useOldRules', 'payrollNo', 'birthDate', 'nonSmoker', 'children', 'breakShortenMin', 'breakShortenFrom', 'memo',
+] as const
+
+/**
  * demmen/main の workers 配列（生データ）を Worker 型へ写像する（2026-09-02 抽出）。
  *
  * main ドキュメントは約260KBあり、1リクエスト内で getWorkers / getStaffSites /

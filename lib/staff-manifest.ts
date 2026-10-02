@@ -34,7 +34,8 @@ export function buildStaffManifest(kind: StaffManifestKind, token: string) {
     short_name: NAME_OF[kind],
     description: 'HIBI CONSTRUCTION 鳶事業部',
     start_url: start,
-    scope: start,
+    // scope は / のまま（職長確認からマイページへのリンクなど、個人ページ同士の行き来をアプリ内で開く）
+    scope: '/',
     display: 'standalone',
     background_color: '#1B2A4A',
     theme_color: '#1B2A4A',
