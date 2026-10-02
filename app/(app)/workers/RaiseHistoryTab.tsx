@@ -408,7 +408,7 @@ export default function RaiseHistoryTab({ authUser }: { authUser: AuthUser | nul
                 </div>
               )}
 
-              <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+              <div className="text-xxs text-gray-500 dark:text-gray-400 leading-relaxed">
                 💡 「推奨昇給」は評価承認時に算出された推奨額です。実際の時給更新は人員マスタの編集で行われ、ここでは別途記録していません。
               </div>
             </div>

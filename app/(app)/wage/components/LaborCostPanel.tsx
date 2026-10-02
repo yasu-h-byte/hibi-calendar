@@ -89,7 +89,7 @@ export default function LaborCostPanel({ rows, effective }: { rows: LaborCostInp
         <div className="rounded-lg bg-gray-50 dark:bg-gray-700/50 p-3">
           <div className="text-xs text-gray-500">人件費の伸び（対象{calc.length}名）</div>
           <div className="text-lg font-bold tabular-nums">{sum.prevCost > 0 ? `+${(sum.total / sum.prevCost * 100).toFixed(2)}%` : '—'}</div>
-          <div className="text-[11px] text-gray-400 tabular-nums">{yen(sum.prevCost)} → {yen(sum.prevCost + sum.total)}</div>
+          <div className="text-xxs text-gray-400 tabular-nums">{yen(sum.prevCost)} → {yen(sum.prevCost + sum.total)}</div>
         </div>
       </div>
 
@@ -107,7 +107,7 @@ export default function LaborCostPanel({ rows, effective }: { rows: LaborCostInp
               </label>
             ))}
           </div>
-          <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
+          <p className="text-xxs text-gray-400 mt-2 leading-relaxed">
             いずれも会社負担分。既定値は2026年度の目安（協会けんぽ東京・建設の事業）です。加入先の実際の料率に合わせて直してください（この端末に保存）。
             <button type="button" onClick={() => { setRates(DEFAULT_WELFARE_RATES); try { localStorage.removeItem(STORE_KEY) } catch { /* noop */ } }}
               className="ml-2 underline">既定値に戻す</button>
@@ -152,7 +152,7 @@ export default function LaborCostPanel({ rows, effective }: { rows: LaborCostInp
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-gray-400 leading-relaxed">
+      <p className="text-xxs text-gray-400 leading-relaxed">
         改定前は「今払っている日額」（号俸表の額ではなく実際の支払額）。年収は給料表と同じ 日額 ×（稼働290日＋その人の有給の付与日数。20日の人は310日）。
         法定福利費は年収÷12を月額とみなした概算で、厚生年金は標準報酬の上限（月65万円）で頭打ち、介護保険は40〜64歳だけ。
         残業代・賞与・労災保険（下請は元請の現場労災）は含みません。実際の保険料は標準報酬の等級と改定時期で前後します。

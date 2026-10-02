@@ -42,7 +42,7 @@ export default function DesignateModal({ worker, kind, sites, password, onClose,
                 : ` / 残 ${worker.remaining}日`}
             </p>
             {kind === 'manual-entry' && (
-              <p className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-1">
+              <p className="text-2xs text-indigo-600 dark:text-indigo-400 mt-1">
                 ※ 出面に P を直接書き込みます。管理者の手動計上として監査ログに記録されます。
               </p>
             )}
@@ -76,7 +76,7 @@ export default function DesignateModal({ worker, kind, sites, password, onClose,
               <option value="">-- 選択してください --</option>
               {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <p className="text-[10px] text-gray-400 mt-1">出面にPを記録する現場（当日の所属現場）</p>
+            <p className="text-2xs text-gray-400 mt-1">出面にPを記録する現場（当日の所属現場）</p>
           </div>
 
           <div>
@@ -91,9 +91,9 @@ export default function DesignateModal({ worker, kind, sites, password, onClose,
             <input type="checkbox" id="overwrite-hk" checked={designateOverwriteHomeLeave}
               onChange={e => setDesignateOverwriteHomeLeave(e.target.checked)}
               className="mt-0.5 w-4 h-4 cursor-pointer" />
-            <label htmlFor="overwrite-hk" className="text-[11px] text-indigo-800 dark:text-indigo-200 cursor-pointer">
+            <label htmlFor="overwrite-hk" className="text-xxs text-indigo-800 dark:text-indigo-200 cursor-pointer">
               <span className="font-bold">帰国期間(✈️)を上書きする</span>
-              <div className="text-[10px] text-indigo-600 dark:text-indigo-400 mt-0.5">
+              <div className="text-2xs text-indigo-600 dark:text-indigo-400 mt-0.5">
                 既存の帰国マーカーを削除して Pを書き込みます。帰国中でも事前に有給申請があった日を計上する場合に使用。
               </div>
             </label>

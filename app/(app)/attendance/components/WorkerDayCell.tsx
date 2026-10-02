@@ -29,7 +29,7 @@ function CellMarkers({
           type="button"
           onClick={e => { e.stopPropagation(); onNightClick?.() }}
           title={hasNight ? '夜勤あり（クリックで編集）' : 'この人の夜勤を登録する'}
-          className={`absolute top-0 left-0 text-[11px] font-bold leading-none rounded px-1 py-0.5 z-10 shadow-sm ${
+          className={`absolute top-0 left-0 text-xxs font-bold leading-none rounded px-1 py-0.5 z-10 shadow-sm ${
             hasNight
               ? 'text-white bg-indigo-600'
               : 'text-indigo-600 bg-white border border-indigo-400 hover:bg-indigo-50'
@@ -39,7 +39,7 @@ function CellMarkers({
         </button>
       )}
       {isHolidayWork && (
-        <span className="absolute top-0 right-0.5 text-[8px] text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
+        <span className="absolute top-0 right-0.5 text-2xs text-orange-500 font-bold leading-none" title="休日出勤">休出</span>
       )}
       {source === 'staff' && !isHolidayWork && (
         <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-blue-400" title="スタッフ入力" />
@@ -114,7 +114,7 @@ export function WorkTypeTag({ workTypeTag, isLocked }: { workTypeTag?: WorkTypeT
       title={workTypeTag.isDuplicate
         ? 'この日は2つの工種に入力されています（要確認）。ここで工種を選び直せます'
         : 'この日の工種（押して切替）'}
-      className={`block w-full mt-0.5 min-h-[24px] text-[12px] font-bold text-center [text-align-last:center] rounded-md appearance-none cursor-pointer leading-tight py-0.5 px-0.5
+      className={`block w-full mt-0.5 min-h-[24px] text-xs font-bold text-center [text-align-last:center] rounded-md appearance-none cursor-pointer leading-tight py-0.5 px-0.5
         ${isLocked ? 'opacity-60 cursor-not-allowed' : ''} ${cls}`}
     >
       {workTypeTag.options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
@@ -130,7 +130,7 @@ export function HomeLeaveCell({ colBg, cellWidth }: { colBg: string; cellWidth: 
       style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
     >
       <div className="flex items-center justify-center h-full py-2">
-        <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-md">帰国</span>
+        <span className="text-2xs font-bold text-cyan-700 bg-cyan-50 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-md">帰国</span>
       </div>
     </td>
   )
@@ -170,11 +170,11 @@ export function WaitingCell({
         title="本人の入力がありません。代表・事業責任者は、さかのぼって入れられます（操作ログに残ります）"
       >
         <div className="flex flex-col items-center justify-center h-full py-1 gap-0.5">
-          <span className="text-[9px] text-gray-400">入力なし</span>
+          <span className="text-2xs text-gray-400">入力なし</span>
           <select
             value=""
             onChange={e => { if (e.target.value) onStatusChange(wId, day, e.target.value) }}
-            className="w-full text-[10px] border border-gray-300 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
+            className="w-full text-2xs border border-gray-300 rounded bg-white dark:bg-gray-700 dark:border-gray-600"
           >
             <option value="">入れる…</option>
             <option value="W">出勤</option>
@@ -193,12 +193,12 @@ export function WaitingCell({
       title={canAddComp ? 'スタッフ本人のスマホ入力待ち（現場都合休みは 0.6補 を代理入力できます）' : 'スタッフ本人のスマホ入力待ち'}
     >
       <div className="flex flex-col items-center justify-center h-full py-1.5 gap-1">
-        <span className="text-[10px] text-gray-400 opacity-50">入力待ち</span>
+        <span className="text-2xs text-gray-400 opacity-50">入力待ち</span>
         {canAddComp && (
           <button
             type="button"
             onClick={() => onStatusChange!(wId!, day!, 'C')}
-            className="text-[9px] font-bold text-orange-600 border border-orange-300 rounded px-1 py-0.5
+            className="text-2xs font-bold text-orange-600 border border-orange-300 rounded px-1 py-0.5
                        opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:bg-orange-50
                        dark:text-orange-300 dark:border-orange-700 dark:hover:bg-orange-900/30"
           >
@@ -298,7 +298,7 @@ export function TimeBasedCell({
         {isWorking && entry?.nonly ? (
           /* 夜勤のみの日: 日勤の時刻欄を出さない（既定値 08:00-17:00 が表示されて誤解を招くため）。
              時刻の編集は「夜」バッジからモーダルで行う。 */
-          <div className="text-[10px] text-center py-1 leading-tight">
+          <div className="text-2xs text-center py-1 leading-tight">
             <span className="rounded-md px-1 font-bold text-indigo-700 bg-indigo-50">夜勤のみ</span>
             <div className="tabular-nums text-gray-500 mt-0.5">
               {calcNightShiftHours(entry).toFixed(1)}h
@@ -313,7 +313,7 @@ export function TimeBasedCell({
                 onChange={e => onStartTimeChange(wId, day, e.target.value)}
                 onKeyDown={e => onCellKeyDown(e, day, wId)}
                 disabled={isLocked}
-                className="w-1/2 text-center text-[11px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700 tabular-nums"
+                className="w-1/2 text-center text-xxs py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700 tabular-nums"
               >
                 {startTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -322,7 +322,7 @@ export function TimeBasedCell({
                 onChange={e => onEndTimeChange(wId, day, e.target.value)}
                 onKeyDown={e => onCellKeyDown(e, day, wId)}
                 disabled={isLocked}
-                className="w-1/2 text-center text-[11px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700 tabular-nums"
+                className="w-1/2 text-center text-xxs py-0 bg-transparent border-0 focus:ring-1 focus:ring-hibi-navy focus:outline-none cursor-pointer appearance-none text-gray-700 tabular-nums"
               >
                 {endTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -335,7 +335,7 @@ export function TimeBasedCell({
               <label className="flex items-center cursor-pointer" title="午後(15:00-15:30)">
                 <input type="checkbox" checked={b3 === 1} onChange={e => onBreakChange(wId, day, 'b3', e.target.checked)} onKeyDown={e => onCellKeyDown(e, day, wId)} disabled={isLocked} className="w-3 h-3 rounded" />
               </label>
-              <span className={`text-[10px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
+              <span className={`text-2xs tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
                 {actualH.toFixed(1)}
                 {/* 日勤＋夜勤: 夜勤ぶんを別建てで見せる（日勤の実時間と混ぜない） */}
                 {entry?.ns && (
@@ -347,7 +347,7 @@ export function TimeBasedCell({
         ) : statusVal !== '' && statusVal !== 'C' ? (
           /* 補償日(C)はここでラベルを出さない。プルダウン自体が「0.6補」と表示しており
              二重になるため（他ステータスは 有→有給 / 休→休 のように略称と正式名で使い分けている）。 */
-          <div className="text-[11px] text-center py-0.5">
+          <div className="text-xxs text-center py-0.5">
             <span className={`rounded-md px-1 font-bold ${
               statusVal === 'P' ? 'text-violet-700 bg-violet-50 dark:bg-violet-900/30 dark:text-violet-300'
               : statusVal === 'E' ? 'text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300'
@@ -444,7 +444,7 @@ export function LegacyCell({
 
         {showTimes && entry && (
           <>
-            <div className="text-[10px] text-center text-gray-600 tabular-nums leading-tight">
+            <div className="text-2xs text-center text-gray-600 tabular-nums leading-tight">
               {entry.st}–{entry.et}
             </div>
             <div className="flex items-center justify-center gap-1 w-full px-0.5 leading-tight">
@@ -454,7 +454,7 @@ export function LegacyCell({
               <label className="flex items-center cursor-pointer" title="午後休憩(15:00-15:30)">
                 <input type="checkbox" checked={(entry.b3 ?? 1) === 1} onChange={e => onBreakChange?.(wId, day, 'b3', e.target.checked)} disabled={isLocked} className="w-3 h-3 rounded" />
               </label>
-              <span className={`text-[10px] tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
+              <span className={`text-2xs tabular-nums ml-auto font-bold ${actualH > 7 ? 'text-amber-600' : 'text-gray-500'}`}>
                 {actualH.toFixed(1)}
               </span>
             </div>
@@ -472,13 +472,13 @@ export function LegacyCell({
           onChange={e => onOtChange(wId, day, e.target.value)}
           onKeyDown={e => onCellKeyDown(e, day, wId)}
           disabled={isLocked || !canOt}
-          className={`w-full text-center text-[10px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-amber-400 focus:outline-none tabular-nums
+          className={`w-full text-center text-2xs py-0 bg-transparent border-0 focus:ring-1 focus:ring-amber-400 focus:outline-none tabular-nums
             ${!canOt || isLocked ? 'opacity-20 cursor-not-allowed' : 'text-amber-600'}
           `}
         />
         {/* 夜勤がある日は人工を明示する（出勤値のドロップダウンは 1 のままなので分かりにくい） */}
         {entry?.ns && (
-          <div className="text-[9px] text-center font-bold text-indigo-600 tabular-nums leading-none pb-0.5">
+          <div className="text-2xs text-center font-bold text-indigo-600 tabular-nums leading-none pb-0.5">
             {calcManDays(entry)}人工
           </div>
         )}

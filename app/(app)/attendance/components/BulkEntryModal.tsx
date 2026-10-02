@@ -153,7 +153,7 @@ export default function BulkEntryModal({
               return (
                 <button key={d} disabled={locked} onClick={() => setDays(toggle(days, d))}
                   className={`rounded-lg py-1 text-xs border tabular-nums ${on ? 'bg-hibi-navy text-white border-hibi-navy' : wd ? 'border-gray-300 dark:border-gray-600' : 'border-gray-200 text-gray-400 bg-gray-50 dark:bg-gray-700/40'} disabled:opacity-40`}>
-                  {d}<span className="text-[9px] ml-0.5">{DOW[dow(d)]}</span>{locked && <span className="ml-0.5 text-[10px]">済</span>}
+                  {d}<span className="text-2xs ml-0.5">{DOW[dow(d)]}</span>{locked && <span className="ml-0.5 text-2xs">済</span>}
                 </button>
               )
             })}

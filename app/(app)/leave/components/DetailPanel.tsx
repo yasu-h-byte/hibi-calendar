@@ -57,12 +57,12 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
           <div className="flex items-start gap-3">
             <WorkerAvatar name={w.name} src={photo} size={48} />
             <div className="flex-1 min-w-0">
-              <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{w.name}</h2>
-              <div className="text-[13px] text-hibi-sub dark:text-gray-400">
+              <h2 className="text-22 font-bold text-gray-900 dark:text-white truncate">{w.name}</h2>
+              <div className="text-13 text-hibi-sub dark:text-gray-400">
                 {w.org === 'hfu' ? 'HFU' : '日比建設'}　{jp ? '日本人' : (VISA_LABEL[w.visa] || w.visa)}
                 {w.hireDate && <>　入社 {slash(w.hireDate)}</>}
               </div>
-              <div className="text-[13px] text-hibi-sub dark:text-gray-400 tabular-nums">
+              <div className="text-13 text-hibi-sub dark:text-gray-400 tabular-nums">
                 今の期間 {w.grantDate ? `${slash(w.grantDate)}〜${slash(end)}` : '付与日が未設定'}
               </div>
             </div>
@@ -81,8 +81,8 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
             <Stat label="この期間に取った" value={taken} />
             {w.grantDays >= 10 ? (
               taken >= 5
-                ? <div className="rounded-xl bg-green-50 dark:bg-green-900/30 p-4"><div className="text-[13px] font-bold text-green-700 dark:text-green-300">年5日の取得義務</div><div className="mt-1 text-lg font-bold text-green-700 dark:text-green-300 flex items-center gap-1"><Icon name="check" size={18} strokeWidth={2.6} />達成</div></div>
-                : <div className={`rounded-xl p-4 ${(w.fiveDayShortfall ?? 0) > 0 ? 'bg-amber-50 dark:bg-amber-900/30' : 'bg-hibi-bg dark:bg-gray-700/50'}`}><div className={`text-[13px] font-bold ${(w.fiveDayShortfall ?? 0) > 0 ? 'text-amber-800 dark:text-amber-300' : 'text-hibi-sub dark:text-gray-400'}`}>年5日の取得義務</div><div className="mt-1 text-lg font-bold text-gray-900 dark:text-white">{taken} / 5日</div><div className="text-xs text-hibi-sub dark:text-gray-400">期限 {slash(end)}</div></div>
+                ? <div className="rounded-xl bg-green-50 dark:bg-green-900/30 p-4"><div className="text-13 font-bold text-green-700 dark:text-green-300">年5日の取得義務</div><div className="mt-1 text-lg font-bold text-green-700 dark:text-green-300 flex items-center gap-1"><Icon name="check" size={18} strokeWidth={2.6} />達成</div></div>
+                : <div className={`rounded-xl p-4 ${(w.fiveDayShortfall ?? 0) > 0 ? 'bg-amber-50 dark:bg-amber-900/30' : 'bg-hibi-bg dark:bg-gray-700/50'}`}><div className={`text-13 font-bold ${(w.fiveDayShortfall ?? 0) > 0 ? 'text-amber-800 dark:text-amber-300' : 'text-hibi-sub dark:text-gray-400'}`}>年5日の取得義務</div><div className="mt-1 text-lg font-bold text-gray-900 dark:text-white">{taken} / 5日</div><div className="text-xs text-hibi-sub dark:text-gray-400">期限 {slash(end)}</div></div>
             ) : <Stat label="年5日の取得義務" value={null} note="付与10日未満は対象外" />}
           </div>
 
@@ -119,7 +119,7 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
               <div className="grid grid-cols-6 sm:grid-cols-12 gap-1.5">
                 {months.map(m => (
                   <div key={m.ym} className={`rounded-lg border border-hibi-line dark:border-gray-700 py-1.5 flex flex-col items-center ${m.future ? 'bg-hibi-bg dark:bg-gray-700/40' : 'bg-white dark:bg-gray-800'}`}>
-                    <span className="text-[11px] text-hibi-sub dark:text-gray-400">{m.label}</span>
+                    <span className="text-xxs text-hibi-sub dark:text-gray-400">{m.label}</span>
                     <span className={`text-base font-bold tabular-nums ${m.days > 0 ? 'text-hibi-navy dark:text-blue-300' : 'text-gray-300 dark:text-gray-600'}`}>{m.days > 0 ? m.days : '—'}</span>
                   </div>
                 ))}
@@ -132,7 +132,7 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
           {records.length > 0 && (
             <section className="space-y-2">
               <h3 className="text-base font-bold text-gray-900 dark:text-white">記録</h3>
-              <ul className="text-[13px] text-gray-700 dark:text-gray-300 space-y-1">
+              <ul className="text-13 text-gray-700 dark:text-gray-300 space-y-1">
                 {records.slice(0, 12).map((r, i) => (
                   <li key={i} className="flex gap-3"><span className="text-hibi-sub dark:text-gray-400 tabular-nums w-[84px] shrink-0">{slash(r.at)}</span><span>{r.text}</span></li>
                 ))}
@@ -147,7 +147,7 @@ export default function DetailPanel({ worker: w, photo, onClose, onEdit, onDesig
 function ActionBtn({ onClick, icon, children }: { onClick: () => void; icon: 'pen' | 'calendar' | 'yen'; children: React.ReactNode }) {
   return (
     <button onClick={onClick}
-      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[10px] text-[13px] font-bold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition">
+      className="inline-flex items-center gap-1.5 h-9 px-3 rounded-[10px] text-13 font-bold border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition">
       <Icon name={icon} size={15} />{children}
     </button>
   )
@@ -156,9 +156,9 @@ function ActionBtn({ onClick, icon, children }: { onClick: () => void; icon: 'pe
 function Stat({ label, value, note }: { label: string; value: number | null; note?: string }) {
   return (
     <div className="rounded-xl bg-hibi-bg dark:bg-gray-700/50 p-4">
-      <div className="text-[13px] text-hibi-sub dark:text-gray-400">{label}</div>
+      <div className="text-13 text-hibi-sub dark:text-gray-400">{label}</div>
       {value !== null
-        ? <div className="mt-1 text-[32px] leading-none font-bold text-gray-900 dark:text-white tabular-nums">{value}<span className="text-sm font-normal text-hibi-sub dark:text-gray-400"> 日</span></div>
+        ? <div className="mt-1 text-32 leading-none font-bold text-gray-900 dark:text-white tabular-nums">{value}<span className="text-sm font-normal text-hibi-sub dark:text-gray-400"> 日</span></div>
         : <div className="mt-1 text-xs text-hibi-sub dark:text-gray-400">{note}</div>}
     </div>
   )

@@ -225,7 +225,7 @@ export default function LeavePage() {
                   今日に戻す
                 </button>
               ) : (
-                <span className="text-[10px] text-gray-400 whitespace-nowrap">今日時点</span>
+                <span className="text-2xs text-gray-400 whitespace-nowrap">今日時点</span>
               )}
             </div>
           )}

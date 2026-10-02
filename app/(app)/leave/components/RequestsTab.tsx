@@ -315,10 +315,10 @@ export default function RequestsTab({
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${reqFilter === key ? 'bg-hibi-navy text-white' : 'bg-white dark:bg-gray-800 text-gray-500 hover:bg-gray-100'}`}>
             {key === 'all' ? 'すべて' : key === 'pending' ? '職長待ち' : key === 'foreman_approved' ? '最終承認待ち' : key === 'approved' ? '承認済み' : key === 'cancelled' ? '取り消し' : key === 'revoked' ? '管理者取消' : '却下'}
             {key === 'pending' && leaveRequests.filter(r => r.status === 'pending').length > 0 && (
-              <span className="ml-1 bg-red-500 text-white text-[10px] rounded-full px-1.5">{leaveRequests.filter(r => r.status === 'pending').length}</span>
+              <span className="ml-1 bg-red-500 text-white text-2xs rounded-full px-1.5">{leaveRequests.filter(r => r.status === 'pending').length}</span>
             )}
             {key === 'foreman_approved' && leaveRequests.filter(r => r.status === 'foreman_approved').length > 0 && (
-              <span className="ml-1 bg-orange-500 text-white text-[10px] rounded-full px-1.5">{leaveRequests.filter(r => r.status === 'foreman_approved').length}</span>
+              <span className="ml-1 bg-orange-500 text-white text-2xs rounded-full px-1.5">{leaveRequests.filter(r => r.status === 'foreman_approved').length}</span>
             )}
           </button>
         ))}
@@ -368,12 +368,12 @@ export default function RequestsTab({
                             <span className="text-xs text-gray-400">{getSiteName(req.siteId)}</span>
                           </div>
                           {req.reason && <div className="text-xs text-gray-500 mb-1">理由: {req.reason}</div>}
-                          <div className="text-[10px] text-gray-400">
+                          <div className="text-2xs text-gray-400">
                             申請: {fmtTs(req.requestedAt)}
                             {req.foremanApprovedAt && ` / 職長承認: ${fmtTs(req.foremanApprovedAt)}`}
                             {req.reviewedAt ? ` / 最終承認: ${fmtTs(req.reviewedAt)}` : ''}
                           </div>
-                          {req.status === 'rejected' && req.rejectedReason && <div className="text-[10px] text-red-500 mt-1">却下理由: {req.rejectedReason}</div>}
+                          {req.status === 'rejected' && req.rejectedReason && <div className="text-2xs text-red-500 mt-1">却下理由: {req.rejectedReason}</div>}
                         </div>
                         <div className="flex items-center gap-2 ml-4">
                           {req.status === 'pending' && (() => {
@@ -397,7 +397,7 @@ export default function RequestsTab({
                             const fName = resolveForemanName(req.siteId, req.date)
                             return (
                             <>
-                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">{fName ? `${fName} 職長済` : '職長済'}</span>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-2xs font-bold">{fName ? `${fName} 職長済` : '職長済'}</span>
                               {canFinal && (
                                 <button onClick={() => handleApprove(req.id)} disabled={processingReq === req.id}
                                   className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
@@ -417,7 +417,7 @@ export default function RequestsTab({
                                 <button
                                   onClick={() => patchUi({ modifyingId: req.id, modifyNewDate: req.date })}
                                   disabled={processingReq === req.id}
-                                  className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-full text-[10px] font-bold disabled:opacity-50"
+                                  className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-full text-2xs font-bold disabled:opacity-50"
                                   title="承認済み有給の日付を変更（誤申請修正）"
                                 >
                                   📝 日付変更
@@ -427,7 +427,7 @@ export default function RequestsTab({
                                 <button
                                   onClick={() => handleRevoke(req.id)}
                                   disabled={processingReq === req.id}
-                                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 rounded-full text-[10px] font-bold disabled:opacity-50"
+                                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 rounded-full text-2xs font-bold disabled:opacity-50"
                                   title="承認済み有給を取り消す（出面の「有」も消えて残数が戻る）"
                                 >
                                   ↩️ 取消
@@ -446,7 +446,7 @@ export default function RequestsTab({
                           <div className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-2">
                             📝 日付変更 — 承認済み有給の日付を修正します
                           </div>
-                          <div className="text-[11px] text-amber-700 dark:text-amber-400 mb-2 leading-relaxed">
+                          <div className="text-xxs text-amber-700 dark:text-amber-400 mb-2 leading-relaxed">
                             現在の日付: <strong>{fmtDate(req.date)}</strong><br/>
                             ※ 旧日付の出面データから「有給」を削除し、新日付に「有給」を書き込みます。<br/>
                             ※ 操作は監査ログに記録されます。
@@ -485,7 +485,7 @@ export default function RequestsTab({
                       )}
                       {/* 日付変更履歴の表示（あれば） */}
                       {req.dateModifyHistory && req.dateModifyHistory.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-gray-100 text-[10px] text-gray-500">
+                        <div className="mt-2 pt-2 border-t border-gray-100 text-2xs text-gray-500">
                           <span className="font-bold">📝 修正履歴:</span>
                           {req.dateModifyHistory.map((h, i) => (
                             <span key={i} className="ml-2">
@@ -517,7 +517,7 @@ export default function RequestsTab({
                       <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-bold">{items.length}件</span>
                       <span className="text-xs text-gray-400">{getSiteName(first.siteId)}</span>
                       {first.status === 'foreman_approved' && (
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">{fName ? `${fName} 職長済` : '職長済'}</span>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-2xs font-bold">{fName ? `${fName} 職長済` : '職長済'}</span>
                       )}
                     </div>
                     <div className="text-xs text-gray-600 dark:text-gray-300 mb-1 break-words">

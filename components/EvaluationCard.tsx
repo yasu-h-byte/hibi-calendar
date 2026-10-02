@@ -103,10 +103,10 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
     <section className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl overflow-hidden">
       {/* 2026-10-01 ダッシュボード改修: 他のカードと同じ見出し・絵文字をやめる */}
       <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex items-center justify-between">
-        <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">評価の進み具合</h2>
+        <h2 className="text-17 font-bold text-gray-900 dark:text-white">評価の進み具合</h2>
         <button
           onClick={() => router.push('/evaluation')}
-          className="text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline"
+          className="text-13 font-bold text-hibi-navy dark:text-blue-300 hover:underline"
         >
           評価管理を開く
         </button>
@@ -170,7 +170,7 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
                         <span
                           key={id}
                           title={tip}
-                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium border ${cls} ${ring}`}
+                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-2xs font-medium border ${cls} ${ring}`}
                         >
                           {isMe && <span className="opacity-70">自分</span>}
                           <span className="opacity-70">{isSubmittedByThis ? '✓' : '○'}</span>
@@ -216,7 +216,7 @@ export default function EvaluationCard({ user }: { user: AuthUser }) {
 
                 <button
                   onClick={() => router.push('/evaluation')}
-                  className="flex-shrink-0 h-9 px-3.5 text-[13px] font-bold rounded-[9px] bg-hibi-navy text-white hover:bg-hibi-light transition-colors"
+                  className="flex-shrink-0 h-9 px-3.5 text-13 font-bold rounded-[9px] bg-hibi-navy text-white hover:bg-hibi-light transition-colors"
                 >
                   {isReviewing && canApprove
                     ? '承認する'

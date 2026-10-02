@@ -245,7 +245,7 @@ export default function BonusTable() {
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
+        <p className="text-xxs text-gray-400 mt-2 leading-relaxed">
           評語は「等級を上下にずらす」のと同じ（SS＝2段上 / S＝1段上 / B＝1段下 / C＝2段下）。
           分布の目安は左右対称で、第5節のペアのルール（S を1人なら B を1人、SS を1人なら C を1人）と同じ思想。
           土工は3G相当（旧配分表で班長と同額だった扱いを踏襲）。
@@ -316,7 +316,7 @@ export default function BonusTable() {
                       <td className={`px-2.5 py-2 whitespace-nowrap sticky left-0 z-10 ${
                         l.paidBy ? 'bg-gray-50 dark:bg-gray-700' : 'bg-white dark:bg-gray-800'}`}>
                         {l.name}
-                        {l.paidBy && <span className="block text-[10px] text-gray-400">{l.paidBy} から支給</span>}
+                        {l.paidBy && <span className="block text-2xs text-gray-400">{l.paidBy} から支給</span>}
                       </td>
                       <td className="px-2.5 py-2 text-gray-500">{l.grade === 'doko' ? '土工' : l.grade}</td>
                       <td className="px-2.5 py-1.5">
@@ -345,14 +345,14 @@ export default function BonusTable() {
                           className="w-14 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded px-1.5 py-1 text-right text-sm tabular-nums"
                         />
                         {l.capped && (
-                          <span className="block text-[9px] text-gray-400">上限（残−{FIVE_DAY_RESERVE}日）</span>
+                          <span className="block text-2xs text-gray-400">上限（残−{FIVE_DAY_RESERVE}日）</span>
                         )}
                         {info[l.workerId]?.leavePeriodEnd ? (
-                          <span className="block text-[9px] text-gray-400">
+                          <span className="block text-2xs text-gray-400">
                             期末 {info[l.workerId].leavePeriodEnd!.replace(/-/g, '/')}{info[l.workerId].leaveBuyoutRecorded ? '・買取済' : ''}
                           </span>
                         ) : (
-                          <span className="block text-[9px] text-gray-400">終わった期なし</span>
+                          <span className="block text-2xs text-gray-400">終わった期なし</span>
                         )}
                       </td>
                       <td className={`${td} text-gray-500`}>{l.attendanceRate ? yen(l.attendanceRate) : '—'}</td>
@@ -361,13 +361,13 @@ export default function BonusTable() {
                       <td className={td}>
                         {l.childAmount ? (
                           <span title={`対象の子 ${l.childCount}人`}>{yen(l.childAmount)}
-                            <span className="text-[10px] text-gray-400 ml-1">{l.childCount}人</span>
+                            <span className="text-2xs text-gray-400 ml-1">{l.childCount}人</span>
                           </span>
                         ) : '—'}
                       </td>
                       <td className={`${td} font-bold`}>{yen(l.totalAmount)}</td>
                       <td className="px-2.5 py-1.5 text-center">
-                        {l.paidBy ? <span className="text-[10px] text-gray-400">—</span> : (
+                        {l.paidBy ? <span className="text-2xs text-gray-400">—</span> : (
                           <select
                             value={l.payMethod} disabled={busy}
                             onChange={e => setOverride(l.workerId, { payMethod: e.target.value as 'transfer' | 'cash' })}
@@ -419,7 +419,7 @@ export default function BonusTable() {
               >
                 {busy ? '保存中…' : 'この配分を確定して保存'}
               </button>
-              <span className="text-[11px] text-gray-500">
+              <span className="text-xxs text-gray-500">
                 評語の初期値は年次改定で決めたもの。千円切り上げのぶん、利益分配の合計は原資をわずかに超えます。
                 役員・事務は対象外。精勤賞与の残日数は今日時点の有給残です。
               </span>
@@ -447,7 +447,7 @@ export default function BonusTable() {
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                       {r.allocations.slice().sort((a, b) => (b.totalAmount ?? b.amount) - (a.totalAmount ?? a.amount)).map(a => (
                         <tr key={a.workerId}>
-                          <td className="py-1.5">{a.name}{a.paidBy && <span className="text-[10px] text-gray-400 ml-1">({a.paidBy})</span>}</td>
+                          <td className="py-1.5">{a.name}{a.paidBy && <span className="text-2xs text-gray-400 ml-1">({a.paidBy})</span>}</td>
                           <td className="py-1.5 text-gray-500">{a.grade === 'doko' ? '土工' : a.grade} / {a.hyogo}</td>
                           <td className="py-1.5 text-right tabular-nums text-gray-500">利益 {yen(a.amount)}</td>
                           <td className="py-1.5 text-right tabular-nums text-gray-500">
@@ -458,12 +458,12 @@ export default function BonusTable() {
                             {a.childAmount ? ` 子 ${yen(a.childAmount)}` : ''}
                           </td>
                           <td className="py-1.5 text-right tabular-nums font-bold">{yen(a.totalAmount ?? a.amount)}</td>
-                          <td className="py-1.5 text-right text-[10px] text-gray-400">{a.payMethod === 'cash' ? '現金' : ''}</td>
+                          <td className="py-1.5 text-right text-2xs text-gray-400">{a.payMethod === 'cash' ? '現金' : ''}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  <p className="text-[10px] text-gray-400 mt-2">
+                  <p className="text-2xs text-gray-400 mt-2">
                     1点あたり {r.unit.toFixed(2)}円（合計 {r.totalPoints}点）
                     {r.grandTotal !== undefined && <> ／ 手当込みの支給総額 <b>{yen(r.grandTotal)}</b>（出向先支給を除く）</>}
                   </p>

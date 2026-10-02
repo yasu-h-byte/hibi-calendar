@@ -32,9 +32,9 @@ function Tip({ r, x, y, W }: { r: WageRow; x: number; y: number; W: number }) {
     <g pointerEvents="none">
       <rect x={bx} y={by} width={w} height={h} rx={6}
         className="fill-gray-900/95 dark:fill-gray-100/95" />
-      <text x={bx + 10} y={by + 17} className="fill-white dark:fill-gray-900 text-[12px] font-semibold">{r.name}</text>
+      <text x={bx + 10} y={by + 17} className="fill-white dark:fill-gray-900 text-xs font-semibold">{r.name}</text>
       {lines.map((t, i) => (
-        <text key={i} x={bx + 10} y={by + 34 + i * 15} className="fill-gray-300 dark:fill-gray-600 text-[11px]">{t}</text>
+        <text key={i} x={bx + 10} y={by + 34 + i * 15} className="fill-gray-300 dark:fill-gray-600 text-xxs">{t}</text>
       ))}
     </g>
   )
@@ -163,25 +163,25 @@ export function WageMap({ a }: { a: WageAnalysis }) {
             <rect x={px(st.from)} y={MT} width={Math.max(0, px(Math.min(st.to, x1)) - px(st.from))} height={PH}
               className={i % 2 ? 'fill-gray-50 dark:fill-gray-800/40' : 'fill-transparent'} />
             <text x={(px(st.from) + px(Math.min(st.to, x1))) / 2} y={MT + PH + 36} textAnchor="middle"
-              className="fill-gray-500 text-[11px] font-semibold">{st.key}</text>
+              className="fill-gray-500 text-xxs font-semibold">{st.key}</text>
           </g>
         ))}
 
         {ticks.map(t => (
           <g key={t}>
             <line x1={ML} y1={py(t)} x2={ML + PW} y2={py(t)} stroke="currentColor" className="text-gray-200 dark:text-gray-700" strokeWidth={1} />
-            <text x={ML - 8} y={py(t) + 4} textAnchor="end" className="fill-gray-400 text-[11px]">{yen(t)}</text>
+            <text x={ML - 8} y={py(t) + 4} textAnchor="end" className="fill-gray-400 text-xxs">{yen(t)}</text>
           </g>
         ))}
         {Array.from({ length: Math.floor(x1) + 1 }, (_, i) => i).map(t => (
-          <text key={t} x={px(t)} y={MT + PH + 18} textAnchor="middle" className="fill-gray-400 text-[11px]">{t}年</text>
+          <text key={t} x={px(t)} y={MT + PH + 18} textAnchor="middle" className="fill-gray-400 text-xxs">{t}年</text>
         ))}
 
         {/* 最賃と特定技能の報酬下限 */}
         <line x1={ML} y1={py(nextMw)} x2={ML + PW} y2={py(nextMw)} stroke="currentColor" className="text-red-400" strokeWidth={1.2} strokeDasharray="4 4" />
-        <text x={ML + PW - 4} y={py(nextMw) + 13} textAnchor="end" className="fill-red-500 text-[10px]">最低賃金 {yen(nextMw)}</text>
+        <text x={ML + PW - 4} y={py(nextMw) + 13} textAnchor="end" className="fill-red-500 text-2xs">最低賃金 {yen(nextMw)}</text>
         <line x1={ML} y1={py(tokuteiFloor)} x2={ML + PW} y2={py(tokuteiFloor)} stroke="currentColor" className="text-amber-500" strokeWidth={1.2} strokeDasharray="8 4" />
-        <text x={ML + PW - 4} y={py(tokuteiFloor) + 13} textAnchor="end" className="fill-amber-600 dark:fill-amber-400 text-[10px]">特定技能の報酬下限 {yen(tokuteiFloor)}（最賃×1.1）</text>
+        <text x={ML + PW - 4} y={py(tokuteiFloor) + 13} textAnchor="end" className="fill-amber-600 dark:fill-amber-400 text-2xs">特定技能の報酬下限 {yen(tokuteiFloor)}（最賃×1.1）</text>
 
         {/* 賃金カーブ */}
         <path d={curvePath} fill="none" stroke="currentColor" strokeWidth={2.6} className="text-emerald-600 dark:text-emerald-400" />
@@ -231,7 +231,7 @@ export function WageMap({ a }: { a: WageAnalysis }) {
               <line x1={l.p.x + (l.side === 'R' ? 7 : -7)} y1={l.p.y} x2={edgeX} y2={l.ly - 4}
                 stroke="currentColor" strokeWidth={0.8} className="text-gray-300 dark:text-gray-600" />
               <text x={l.lx} y={l.ly} textAnchor={l.side === 'R' ? 'start' : 'end'}
-                className={`text-[10.5px] ${l.p.r.devCurveRevised < -40 ? 'fill-red-600 dark:fill-red-400 font-semibold' : 'fill-gray-700 dark:fill-gray-200'}`}>
+                className={`text-2xs ${l.p.r.devCurveRevised < -40 ? 'fill-red-600 dark:fill-red-400 font-semibold' : 'fill-gray-700 dark:fill-gray-200'}`}>
                 {l.text}
               </text>
             </g>
@@ -241,36 +241,36 @@ export function WageMap({ a }: { a: WageAnalysis }) {
         {/* 凡例 */}
         <g transform={`translate(${ML + PW + 14}, ${MT + 6})`}>
           <line x1={0} y1={-4} x2={16} y2={-4} stroke="currentColor" strokeWidth={2.6} className="text-emerald-600 dark:text-emerald-400" />
-          <text x={20} y={0} className="fill-emerald-700 dark:fill-emerald-300 text-[10px] font-semibold">賃金カーブ（評価A）</text>
+          <text x={20} y={0} className="fill-emerald-700 dark:fill-emerald-300 text-2xs font-semibold">賃金カーブ（評価A）</text>
           <g transform="translate(0, 22)">
-          <text x={0} y={0} className="fill-gray-500 text-[10px] font-semibold">在留資格</text>
+          <text x={0} y={0} className="fill-gray-500 text-2xs font-semibold">在留資格</text>
           {stageUsed.map((si, i) => (
             <g key={si} transform={`translate(0, ${14 + i * 16})`}>
               <circle cx={5} cy={-3} r={5} className={STAGE_FILL[si]} />
-              <text x={14} y={1} className="fill-gray-600 dark:fill-gray-300 text-[10px]">{STAGES[si].key}</text>
+              <text x={14} y={1} className="fill-gray-600 dark:fill-gray-300 text-2xs">{STAGES[si].key}</text>
             </g>
           ))}
           <g transform={`translate(0, ${24 + stageUsed.length * 16})`}>
             <circle cx={5} cy={-3} r={4.5} className="fill-white dark:fill-gray-900" stroke="currentColor" strokeWidth={1.5} />
-            <text x={14} y={1} className="fill-gray-600 dark:fill-gray-300 text-[10px]">今日の時給</text>
+            <text x={14} y={1} className="fill-gray-600 dark:fill-gray-300 text-2xs">今日の時給</text>
             <circle cx={5} cy={13} r={5} className="fill-gray-500" />
-            <text x={14} y={17} className="fill-gray-600 dark:fill-gray-300 text-[10px]">改定後</text>
+            <text x={14} y={17} className="fill-gray-600 dark:fill-gray-300 text-2xs">改定後</text>
             <line x1={0} y1={30} x2={10} y2={30} stroke="currentColor" strokeWidth={1.5} className="text-red-400" />
-            <text x={14} y={33} className="fill-gray-600 dark:fill-gray-300 text-[10px]">カーブ未満</text>
+            <text x={14} y={33} className="fill-gray-600 dark:fill-gray-300 text-2xs">カーブ未満</text>
             <line x1={0} y1={46} x2={10} y2={46} stroke="currentColor" strokeWidth={1.5} className="text-blue-400" />
-            <text x={14} y={49} className="fill-gray-600 dark:fill-gray-300 text-[10px]">カーブ超</text>
+            <text x={14} y={49} className="fill-gray-600 dark:fill-gray-300 text-2xs">カーブ超</text>
           </g>
           </g>
         </g>
 
         {hover && <Tip r={hover} x={pts.find(p => p.r.id === hover.id)!.x} y={pts.find(p => p.r.id === hover.id)!.y} W={W} />}
       </svg>
-      <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
+      <p className="text-xxs text-gray-400 mt-1 leading-relaxed">
         名前の横の金額は改定後の時給。赤字はカーブを40円以上下回る人。縦の細線の長さがカーブとの差（ツールチップに金額）。
         在籍年数は入社日からの年数（再入社のブランクがある人はブランクを除いた年数）。丸の色は実際の在留資格。
       </p>
       {exceptions.map(r => (
-        <p key={r.id} className="text-[11px] text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
+        <p key={r.id} className="text-xxs text-amber-700 dark:text-amber-400 mt-1 leading-relaxed">
           ※ {r.name}：{r.context?.detail ?? `在留資格（${r.visa}）と在籍年数の段階（${STAGES[r.stage].key}）が一致しない。`}
         </p>
       ))}

@@ -134,7 +134,7 @@ function Report({ a, plan, onApplied, pw, basis, onBasis }: {
       <header>
         <div className="flex items-center gap-2 mb-1">
           <h1 className="text-xl font-semibold">賃金分析</h1>
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表のみ</span>
+          <span className="text-xxs px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表のみ</span>
         </div>
         <p className="text-sm text-gray-500">
           在籍{rows.length}名／東京都最低賃金 現在 {yen(a.currentMinWage)}。
@@ -255,7 +255,7 @@ function Flag({ tone, title, items }: { tone: 'low' | 'high'; title: string; ite
             <div key={r.id}>
               {r.name}（{r.years}年 {yen(r.hourly)}）
               {r.context && (
-                <span className="ml-1 text-[10px] font-normal px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                <span className="ml-1 text-2xs font-normal px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
                   {r.context.label}
                 </span>
               )}
@@ -264,7 +264,7 @@ function Flag({ tone, title, items }: { tone: 'low' | 'high'; title: string; ite
           : <span className="text-gray-400 font-normal">該当なし</span>}
       </div>
       {items.some(r => r.context) && (
-        <div className="text-[11px] text-gray-500 mt-2 space-y-1 leading-relaxed">
+        <div className="text-xxs text-gray-500 mt-2 space-y-1 leading-relaxed">
           {items.filter(r => r.context).map(r => (
             <p key={r.id}><b>{r.context!.label}</b>：{r.context!.detail}</p>
           ))}
@@ -308,14 +308,14 @@ function Matrix({ rows }: { rows: WageRow[] }) {
     (x.devStage + x.devTrend + (x.devCohort ?? 0)) - (y.devStage + y.devTrend + (y.devCohort ?? 0)))
   const max = 260
   const Bar = ({ v }: { v: number | null }) => {
-    if (v === null) return <div className="flex-1 text-center text-[10px] text-gray-400">同期なし</div>
+    if (v === null) return <div className="flex-1 text-center text-2xs text-gray-400">同期なし</div>
     const w = Math.min(Math.abs(v) / max, 1) * 50
     return (
       <div className="flex-1 relative h-5">
         <div className="absolute inset-y-0 left-1/2 w-px bg-gray-200 dark:bg-gray-700" />
         <div className={`absolute inset-y-1 rounded-sm ${v < -20 ? 'bg-red-500' : v > 20 ? 'bg-blue-600' : 'bg-gray-400'}`}
           style={v < 0 ? { right: '50%', width: `${w}%` } : { left: '50%', width: `${w}%` }} />
-        <span className="absolute top-0 text-[10px] tabular-nums text-gray-500 whitespace-nowrap"
+        <span className="absolute top-0 text-2xs tabular-nums text-gray-500 whitespace-nowrap"
           style={v < 0
             ? { right: `calc(50% + ${w}%)`, paddingRight: 4 }
             : { left: `calc(50% + ${w}%)`, paddingLeft: 4 }}>{signed(v)}</span>
@@ -324,7 +324,7 @@ function Matrix({ rows }: { rows: WageRow[] }) {
   }
   return (
     <div>
-      <div className="flex items-center gap-2 text-[11px] text-gray-500 font-semibold mb-1">
+      <div className="flex items-center gap-2 text-xxs text-gray-500 font-semibold mb-1">
         <span className="w-40 shrink-0" />
         <span className="flex-1 text-center">A 段階内平均</span>
         <span className="flex-1 text-center">B 全体傾向線</span>
@@ -466,7 +466,7 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
               <span className="text-gray-500">
                 {c.rate ? `一律 ${(c.rate * 100).toFixed(3)}％・` : ''}{c.count}名
               </span>
-              <span className={`text-[11px] px-2 py-0.5 rounded-full ${c.pending === 0
+              <span className={`text-xxs px-2 py-0.5 rounded-full ${c.pending === 0
                 ? 'bg-green-100 text-green-800 dark:bg-green-800/40 dark:text-green-200'
                 : 'bg-amber-100 text-amber-800 dark:bg-amber-800/40 dark:text-amber-200'}`}>
                 {c.pending === 0 ? '反映済み' : `未反映 ${c.pending}名`}
@@ -477,12 +477,12 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
                   <button
                     onClick={() => { setConfirming(c.id); setApplyErr('') }}
                     disabled={busy !== ''}
-                    className="text-[11px] px-2 py-0.5 rounded border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition disabled:opacity-50 dark:border-blue-400 dark:text-blue-300"
+                    className="text-xxs px-2 py-0.5 rounded border border-hibi-navy text-hibi-navy hover:bg-hibi-navy hover:text-white transition disabled:opacity-50 dark:border-blue-400 dark:text-blue-300"
                   >
                     人員マスタへ反映
                   </button>
                 ) : (
-                  <span className="text-[11px] text-gray-400">実施日になると反映ボタンが出ます</span>
+                  <span className="text-xxs text-gray-400">実施日になると反映ボタンが出ます</span>
                 )
               )}
             </div>
@@ -499,14 +499,14 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
                     </div>
                   ))}
                 </div>
-                <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
+                <p className="text-xxs text-gray-500 mb-2 leading-relaxed">
                   変更は監査証跡（auditTrail）に記録され、取り消しはできません。
                   適用開始日（{c.effective}）より前の月は改定前の時給で計算されます。
                   {c.effective.slice(-2) !== '01' && (
                     <> 月の途中が実施日なので、<b>実施月は暦日で按分した時給</b>になります。</>
                   )}
                 </p>
-                {applyErr && <p className="text-[11px] text-red-600 mb-2">{applyErr}</p>}
+                {applyErr && <p className="text-xxs text-red-600 mb-2">{applyErr}</p>}
                 <div className="flex gap-2">
                   <button
                     onClick={() => apply(c.id)}
@@ -660,7 +660,7 @@ function CurveChart({ a }: { a: WageAnalysis }) {
           <g key={t}>
             <line x1={ML} y1={py(t)} x2={ML + PW} y2={py(t)} stroke="currentColor"
               className="text-gray-200 dark:text-gray-700" strokeWidth={1} />
-            <text x={ML - 8} y={py(t) + 4} textAnchor="end" className="fill-gray-400 text-[11px]">{yen(t)}</text>
+            <text x={ML - 8} y={py(t) + 4} textAnchor="end" className="fill-gray-400 text-xxs">{yen(t)}</text>
           </g>
         ))}
 
@@ -669,27 +669,27 @@ function CurveChart({ a }: { a: WageAnalysis }) {
           <g key={m.y}>
             <line x1={px(m.y)} y1={MT} x2={px(m.y)} y2={MT + PH} stroke="currentColor"
               className="text-gray-300 dark:text-gray-600" strokeWidth={1} strokeDasharray="3 4" />
-            <text x={px(m.y)} y={MT - 4} textAnchor="middle" className="fill-gray-400 text-[10px]">{m.label}</text>
+            <text x={px(m.y)} y={MT - 4} textAnchor="middle" className="fill-gray-400 text-2xs">{m.label}</text>
           </g>
         ))}
 
         {/* 特定技能1号の報酬下限（最賃×1.1）。法令の余裕が見える */}
         <line x1={ML} y1={py(floor)} x2={ML + PW} y2={py(floor)} stroke="currentColor"
           className="text-amber-500" strokeWidth={1.5} strokeDasharray="8 4" />
-        <text x={ML + PW + 6} y={py(floor) + 4} className="fill-amber-600 dark:fill-amber-400 text-[10px]">
+        <text x={ML + PW + 6} y={py(floor) + 4} className="fill-amber-600 dark:fill-amber-400 text-2xs">
           特定技能下限
         </text>
 
         {/* 旧7%複利（比較） */}
         <path d={line(oldAt)} fill="none" stroke="currentColor" strokeWidth={1.8}
           className="text-gray-400" strokeDasharray="5 5" />
-        <text x={ML + PW + 6} y={py(oldAt(YEARS)) + 4} className="fill-gray-400 text-[10px]">旧7%複利</text>
+        <text x={ML + PW + 6} y={py(oldAt(YEARS)) + 4} className="fill-gray-400 text-2xs">旧7%複利</text>
 
         {/* 現行カーブ */}
         <path d={line(curveAt)} fill="none" stroke="currentColor" strokeWidth={3}
           className="text-emerald-600 dark:text-emerald-400" />
         <text x={ML + PW + 6} y={py(curveAt(YEARS)) + 4}
-          className="fill-emerald-600 dark:fill-emerald-400 text-[11px] font-semibold">カーブ</text>
+          className="fill-emerald-600 dark:fill-emerald-400 text-xxs font-semibold">カーブ</text>
 
         {/* 整数年の点＋節目の金額 */}
         {Array.from({ length: YEARS + 1 }, (_, i) => i).map(i => (
@@ -698,7 +698,7 @@ function CurveChart({ a }: { a: WageAnalysis }) {
               className="fill-emerald-600 dark:fill-emerald-400" />
             {(i === 0 || i === 3 || i === 5 || i === 10 || i === 15) && (
               <text x={px(i)} y={py(curveAt(i)) - 10} textAnchor="middle"
-                className="fill-emerald-700 dark:fill-emerald-300 text-[10px] font-semibold">{yen(curveAt(i))}</text>
+                className="fill-emerald-700 dark:fill-emerald-300 text-2xs font-semibold">{yen(curveAt(i))}</text>
             )}
           </g>
         ))}
@@ -714,11 +714,11 @@ function CurveChart({ a }: { a: WageAnalysis }) {
 
         {/* X軸ラベル */}
         {Array.from({ length: YEARS + 1 }, (_, i) => i).filter(i => i % 5 === 0 || i === 3).map(i => (
-          <text key={i} x={px(i)} y={MT + PH + 18} textAnchor="middle" className="fill-gray-400 text-[11px]">{i}年</text>
+          <text key={i} x={px(i)} y={MT + PH + 18} textAnchor="middle" className="fill-gray-400 text-xxs">{i}年</text>
         ))}
 
         {/* 下段: 昇給額の逓減 */}
-        <text x={ML - 8} y={BT + 12} textAnchor="end" className="fill-gray-400 text-[11px]">昇給額</text>
+        <text x={ML - 8} y={BT + 12} textAnchor="end" className="fill-gray-400 text-xxs">昇給額</text>
         {Array.from({ length: YEARS }, (_, i) => i).map(i => {
           const v = curveRaiseAt(i)
           const bw = (PW / YEARS) * 0.62
@@ -730,13 +730,13 @@ function CurveChart({ a }: { a: WageAnalysis }) {
                 <title>{`${i}年目→${i + 1}年目: +${yen(v)}`}</title>
               </rect>
               {(i === 0 || i === 4 || i === 9 || i === 14) && (
-                <text x={px(i + 0.5)} y={BT + BH + 13} textAnchor="middle" className="fill-gray-500 text-[10px]">+{v}</text>
+                <text x={px(i + 0.5)} y={BT + BH + 13} textAnchor="middle" className="fill-gray-500 text-2xs">+{v}</text>
               )}
             </g>
           )
         })}
       </svg>
-      <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
+      <p className="text-xxs text-gray-400 mt-1 leading-relaxed">
         上＝時給の推移（緑の点は各年の到達額）。下＝その年の昇給額。
         {CURVE_BASE_RAISE}円から毎年{CURVE_DECAY}円ずつ減り、11年目以降は{CURVE_MIN_RAISE}円で止まる（薄い緑）。
         丸は現在の在籍者で、赤＝カーブを下回る／青＝上回る。
@@ -779,7 +779,7 @@ function CurveTable({ a }: { a: WageAnalysis }) {
                 <td className={`${td} font-semibold`}>{yen(v)}</td>
                 <td className={td}>{yen(v * MONTHLY_HOURS)}</td>
                 <td className={td}>{(v / a.curveStart).toFixed(2)}倍</td>
-                <td className={`${td} text-gray-400`}>{yen(old)}<span className="ml-1 text-[10px]">{signed(v - old)}</span></td>
+                <td className={`${td} text-gray-400`}>{yen(old)}<span className="ml-1 text-2xs">{signed(v - old)}</span></td>
                 <td className="border border-gray-200 dark:border-gray-700 px-2 py-1.5">
                   <div className="h-3 rounded bg-blue-600 dark:bg-blue-500" style={{ width: `${(v / max) * 100}%` }} />
                 </td>
@@ -788,13 +788,13 @@ function CurveTable({ a }: { a: WageAnalysis }) {
           })}
         </tbody>
       </table>
-      <p className="text-[11px] text-gray-400 pt-2 leading-relaxed">
+      <p className="text-xxs text-gray-400 pt-2 leading-relaxed">
         青帯は制度上の節目（入社／実習3号へ／特定技能へ／10年）。
         複利より若手が厚く、6年目以降は薄くなる。ベテランの処遇は賃金カーブではなく
         役割手当（職長・班長手当、特定技能2号の処遇、賞与）で対応する方針。
       </p>
       {a.entryWage !== null && a.entryWage !== a.curveStart && (
-        <p className="text-[11px] text-amber-700 dark:text-amber-400 pt-1.5 leading-relaxed">
+        <p className="text-xxs text-amber-700 dark:text-amber-400 pt-1.5 leading-relaxed">
           実際の新規入社時給は {yen(a.entryWage)} で、カーブの起点 {yen(a.curveStart)} より
           {signed(a.entryWage - a.curveStart)}。入社時点ですでにカーブより
           {a.entryWage > a.curveStart ? '上' : '下'}にいるため、
@@ -839,7 +839,7 @@ function CurveGap({ a }: { a: WageAnalysis }) {
               )}
               <div className={`absolute inset-y-1 rounded-sm ${over ? 'bg-blue-600' : under ? 'bg-red-500' : 'bg-gray-400'}`}
                 style={pos(r.devCurveRevised, wRev)} />
-              <span className="absolute top-0 text-[10px] tabular-nums text-gray-500 whitespace-nowrap"
+              <span className="absolute top-0 text-2xs tabular-nums text-gray-500 whitespace-nowrap"
                 style={r.devCurveRevised < 0
                   ? { right: `calc(50% + ${wRev}%)`, paddingRight: 4 }
                   : { left: `calc(50% + ${wRev}%)`, paddingLeft: 4 }}>
@@ -849,7 +849,7 @@ function CurveGap({ a }: { a: WageAnalysis }) {
           </div>
         )
       })}
-      <p className="text-[11px] text-gray-400 pt-2 leading-relaxed">
+      <p className="text-xxs text-gray-400 pt-2 leading-relaxed">
         左から 氏名／在籍／時給（★は改定後）／カーブ上の時給／差。
         薄い灰の帯は改定前の位置なので、帯が縮んだ分だけカーブに近づいたことになる。
       </p>
@@ -890,7 +890,7 @@ function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
               {c.effective}　{c.label}
               {c.rate ? `（一律 ${(c.rate * 100).toFixed(3)}％）` : ''}・{list.length}名
             </div>
-            <p className="text-[11px] text-gray-500 mb-1.5 leading-relaxed">{c.reason}</p>
+            <p className="text-xxs text-gray-500 mb-1.5 leading-relaxed">{c.reason}</p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
@@ -917,7 +917,7 @@ function RevisionTable({ a, plan }: { a: WageAnalysis; plan: WagePlan }) {
                         <td className={td}>{yen(after * MONTHLY_HOURS)}</td>
                         <td className={`${td} ${after - r.curve < -20 ? 'text-red-600 dark:text-red-400' : 'text-gray-400'}`}>
                           {signed(after - r.curve)}
-                          <span className="ml-1 text-[10px] text-gray-400">（改定前 {signed(before - r.curve)}）</span>
+                          <span className="ml-1 text-2xs text-gray-400">（改定前 {signed(before - r.curve)}）</span>
                         </td>
                       </tr>
                     )
@@ -1161,7 +1161,7 @@ function DataTable({ a }: { a: WageAnalysis }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-gray-400 mt-2">
+      <p className="text-xxs text-gray-400 mt-2">
         ※ 印＝在留資格と制度上の段階が一致しない人（試験不合格による早期移行など）。段階は在籍年数を優先。<br />
         {a.basis === 'revised'
           ? '「時給」は改定後の額。「現在（マスタ）」は人員マスタの現在値で、まだ書き換えていないため給与計算はこちらで動いている。'

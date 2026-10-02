@@ -38,11 +38,11 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
               onChange={e => setEditForm({ ...editForm, grantDate: e.target.value })}
               className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm" />
             {worker.inferredFromDefault && (
-              <p className="text-[10px] text-blue-600 mt-1">
+              <p className="text-2xs text-blue-600 mt-1">
                 💡 付与日が記録されていない古いデータのため「10/1〜9/30」を仮に当てています。正しい付与日を選んで保存してください。
               </p>
             )}
-            <p className="text-[10px] text-gray-400 mt-1">
+            <p className="text-2xs text-gray-400 mt-1">
               付与日は、入社6ヶ月後の初回付与から1年ごとです（日本人も外国人も同じ・2026年10月から）。<br/>
               これまで10/1に付与している人は、そのまま毎年10/1です。
             </p>
@@ -52,7 +52,7 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
               const expiry = calcLastUsableDayIso(editForm.grantDate)
               const fmt = (iso: string) => iso.replace(/-/g, '/')
               return (
-                <div className="text-[10px] text-gray-500 mt-1">
+                <div className="text-2xs text-gray-500 mt-1">
                   期間: {fmt(editForm.grantDate)} 〜 {fmt(end)} / 当期付与の有効期限: {fmt(expiry)}
                 </div>
               )
@@ -61,26 +61,26 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
             {/* Phase 8: FIFO内訳表示 */}
             {((worker.carryOverRemaining ?? 0) > 0 || (worker.grantRemaining ?? 0) > 0) && (
               <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700/50">
-                <div className="text-[11px] font-bold text-blue-800 dark:text-blue-200 mb-1">
+                <div className="text-xxs font-bold text-blue-800 dark:text-blue-200 mb-1">
                   📊 残日数の内訳（FIFO：繰越分から先に消費）
                 </div>
                 <div className="space-y-1">
                   {(worker.carryOverRemaining ?? 0) > 0 && (
-                    <div className={`text-[11px] ${worker.carryOverExpiryStatus === 'warning' ? 'text-orange-700 dark:text-orange-300 font-bold' : worker.carryOverExpiryStatus === 'expired' ? 'text-red-700 dark:text-red-300 font-bold' : 'text-blue-700 dark:text-blue-300'}`}>
+                    <div className={`text-xxs ${worker.carryOverExpiryStatus === 'warning' ? 'text-orange-700 dark:text-orange-300 font-bold' : worker.carryOverExpiryStatus === 'expired' ? 'text-red-700 dark:text-red-300 font-bold' : 'text-blue-700 dark:text-blue-300'}`}>
                       {worker.carryOverExpiryStatus === 'warning' && '⏰ '}
                       {worker.carryOverExpiryStatus === 'expired' && '❌ '}
                       繰越分: <strong>{worker.carryOverRemaining}日</strong>
-                      {worker.carryOverExpiryDate && <span className="ml-1 text-[10px]">（時効: {worker.carryOverExpiryDate}）</span>}
-                      {worker.carryOverExpiryStatus === 'warning' && <span className="ml-1 text-[10px]">← 時効間近・優先消化推奨</span>}
+                      {worker.carryOverExpiryDate && <span className="ml-1 text-2xs">（時効: {worker.carryOverExpiryDate}）</span>}
+                      {worker.carryOverExpiryStatus === 'warning' && <span className="ml-1 text-2xs">← 時効間近・優先消化推奨</span>}
                     </div>
                   )}
                   {(worker.grantRemaining ?? 0) > 0 && (
-                    <div className="text-[11px] text-blue-700 dark:text-blue-300">
+                    <div className="text-xxs text-blue-700 dark:text-blue-300">
                       当期付与: <strong>{worker.grantRemaining}日</strong>
-                      {worker.grantExpiryDate && <span className="ml-1 text-[10px]">（時効: {worker.grantExpiryDate}）</span>}
+                      {worker.grantExpiryDate && <span className="ml-1 text-2xs">（時効: {worker.grantExpiryDate}）</span>}
                     </div>
                   )}
-                  <div className="text-[10px] text-gray-500 dark:text-gray-400 pt-1 border-t border-blue-200 dark:border-blue-700/30">
+                  <div className="text-2xs text-gray-500 dark:text-gray-400 pt-1 border-t border-blue-200 dark:border-blue-700/30">
                     合計残: {(worker.carryOverRemaining ?? 0) + (worker.grantRemaining ?? 0)}日
                   </div>
                 </div>
@@ -100,7 +100,7 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
                   <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">繰越日数</label>
                   <input type="number" value="0" disabled
                     className="w-full border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-400 rounded-lg px-3 py-2 text-sm cursor-not-allowed" />
-                  <p className="text-[10px] text-gray-500 mt-1">
+                  <p className="text-2xs text-gray-500 mt-1">
                     💼 日本人社員は期末買取制のため繰越なし（強制0）
                   </p>
                 </div>
@@ -138,18 +138,18 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
           {/* 時季指定 / 手動有給入力履歴 */}
           {worker.designatedLeaves && worker.designatedLeaves.length > 0 && (
             <div className="mt-2 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-700/50">
-              <div className="text-[10px] font-bold text-indigo-800 dark:text-indigo-200 mb-1">
+              <div className="text-2xs font-bold text-indigo-800 dark:text-indigo-200 mb-1">
                 🗓 有給日 直接入力 / 時季指定 履歴（累計 {worker.designatedLeaves.length}日）
               </div>
               <div className="space-y-0.5 max-h-32 overflow-auto">
                 {worker.designatedLeaves.slice().reverse().map((h, i) => (
-                  <div key={i} className="text-[10px] text-indigo-700 dark:text-indigo-300 flex flex-wrap gap-1">
+                  <div key={i} className="text-2xs text-indigo-700 dark:text-indigo-300 flex flex-wrap gap-1">
                     <span className="font-medium tabular-nums">{h.date}</span>
                     <span className="text-indigo-500">
                       ({h.kind === 'manual-entry' ? '手動入力' : '時季指定'})
                     </span>
                     {h.overwroteHomeLeave && (
-                      <span className="text-[9px] bg-cyan-100 text-cyan-700 px-1 rounded">✈帰国期間上書き</span>
+                      <span className="text-2xs bg-cyan-100 text-cyan-700 px-1 rounded">✈帰国期間上書き</span>
                     )}
                     {h.note && <span className="text-indigo-400">- {h.note}</span>}
                     <span className="text-indigo-400 ml-auto">
@@ -165,12 +165,12 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
           {/* 買取履歴 */}
           {worker.buyoutHistory && worker.buyoutHistory.length > 0 && (
             <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700/50">
-              <div className="text-[10px] font-bold text-amber-800 dark:text-amber-200 mb-1">
+              <div className="text-2xs font-bold text-amber-800 dark:text-amber-200 mb-1">
                 💰 買取記録（累計 {worker.buyoutDays || 0}日）
               </div>
               <div className="space-y-0.5 max-h-20 overflow-auto">
                 {worker.buyoutHistory.slice().reverse().map((h, i) => (
-                  <div key={i} className="text-[10px] text-amber-700 dark:text-amber-300">
+                  <div key={i} className="text-2xs text-amber-700 dark:text-amber-300">
                     {new Date(h.at).toLocaleDateString('ja-JP')}: {h.days}日
                     {h.amount ? ` (¥${h.amount.toLocaleString()})` : ''}
                     {h.reason === 'year-end' ? ' 期末買取' : h.reason === 'retirement' ? ' 退職清算' : ''}
@@ -183,9 +183,9 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
           {/* 監査情報セクション */}
           {(worker.grantedAt || worker.method || (worker.adjustmentHistory && worker.adjustmentHistory.length > 0)) && (
             <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
-              <div className="text-[11px] font-bold text-gray-600 dark:text-gray-400 mb-2">📋 監査情報</div>
+              <div className="text-xxs font-bold text-gray-600 dark:text-gray-400 mb-2">📋 監査情報</div>
               {worker.method && (
-                <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                <div className="text-2xs text-gray-500 dark:text-gray-400">
                   付与方法: <span className="font-medium">{
                     worker.method === 'manual' ? '手動付与' :
                     worker.method === 'auto-pending' ? '半自動付与' :
@@ -196,23 +196,23 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
                 </div>
               )}
               {worker.grantedAt && (
-                <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                <div className="text-2xs text-gray-500 dark:text-gray-400">
                   付与日時: {new Date(worker.grantedAt).toLocaleString('ja-JP')}
                   {worker.grantedBy !== undefined && ` / 操作者: ${worker.grantedBy === 'super-admin' ? '日比靖仁' : worker.grantedBy === 'admin' ? '管理者' : `ID ${worker.grantedBy}`}`}
                 </div>
               )}
               {worker.lastEditedAt && worker.lastEditedAt !== worker.grantedAt && (
-                <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                <div className="text-2xs text-gray-500 dark:text-gray-400">
                   最終編集: {new Date(worker.lastEditedAt).toLocaleString('ja-JP')}
                   {worker.lastEditedBy !== undefined && ` / ${worker.lastEditedBy === 'super-admin' ? '日比靖仁' : worker.lastEditedBy === 'admin' ? '管理者' : `ID ${worker.lastEditedBy}`}`}
                 </div>
               )}
               {worker.adjustmentHistory && worker.adjustmentHistory.length > 0 && (
                 <details className="mt-2">
-                  <summary className="text-[10px] text-gray-600 dark:text-gray-400 cursor-pointer font-medium">変更履歴 ({worker.adjustmentHistory.length}件)</summary>
+                  <summary className="text-2xs text-gray-600 dark:text-gray-400 cursor-pointer font-medium">変更履歴 ({worker.adjustmentHistory.length}件)</summary>
                   <div className="mt-1 space-y-1 max-h-32 overflow-auto">
                     {worker.adjustmentHistory.slice().reverse().map((h, i) => (
-                      <div key={i} className="text-[10px] text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1">
+                      <div key={i} className="text-2xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1">
                         <span className="text-gray-400">{new Date(h.at).toLocaleString('ja-JP')}</span>
                         {' '}
                         <span className="font-medium">{h.field}</span>: {h.before} → {h.after}

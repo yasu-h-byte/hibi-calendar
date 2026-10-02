@@ -51,13 +51,13 @@ export default function PendingGrantsModal({ open, pendingGrants, pendingForm, s
                   <div>
                     <div className="font-bold text-sm text-hibi-navy dark:text-white flex items-center gap-1.5">
                       {p.name}
-                      {p.needsAttention && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-md font-normal">⚠️ 要確認</span>}
+                      {p.needsAttention && <span className="text-2xs bg-red-500 text-white px-1.5 py-0.5 rounded-md font-normal">⚠️ 要確認</span>}
                     </div>
-                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                    <div className="text-xxs text-gray-500 dark:text-gray-400 mt-0.5">
                       {visaLabel} | {p.tenureText} | {p.reason}
                     </div>
                     {p.attentionNote && (
-                      <div className="text-[10px] text-red-600 dark:text-red-400 mt-1">
+                      <div className="text-2xs text-red-600 dark:text-red-400 mt-1">
                         ⚠️ {p.attentionNote}
                       </div>
                     )}
@@ -71,13 +71,13 @@ export default function PendingGrantsModal({ open, pendingGrants, pendingForm, s
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">付与日</label>
+                    <label className="text-2xs text-gray-500 dark:text-gray-400 block mb-0.5">付与日</label>
                     <input type="date" value={f.grantDate} disabled={!f.include}
                       onChange={e => setPendingForm(prev => ({ ...prev, [p.workerId]: { ...f, grantDate: e.target.value } }))}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-xs disabled:opacity-50" />
                   </div>
                   <div>
-                    <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">付与日数（法定 {p.legalDays}日）</label>
+                    <label className="text-2xs text-gray-500 dark:text-gray-400 block mb-0.5">付与日数（法定 {p.legalDays}日）</label>
                     <input type="number" value={f.grantDays} disabled={!f.include}
                       onChange={e => setPendingForm(prev => ({ ...prev, [p.workerId]: { ...f, grantDays: e.target.value } }))}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-xs disabled:opacity-50" />

@@ -181,11 +181,11 @@ export default function AssignModal({
                     >
                       <span className="text-green-600 text-lg leading-none">+</span>
                       <span className="font-medium text-gray-800">{w.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${orgBadgeCls(w.org, w.visa)}`}>
+                      <span className={`text-2xs px-1.5 py-0.5 rounded-full font-medium ${orgBadgeCls(w.org, w.visa)}`}>
                         {orgBadgeLabel(w.org, w.visa)}
                       </span>
                       {w.job && (
-                        <span className="text-[10px] text-gray-400">
+                        <span className="text-2xs text-gray-400">
                           {jobShortLabel(w.job)}
                         </span>
                       )}
@@ -210,7 +210,7 @@ export default function AssignModal({
                       style={{ minHeight: 36 }}
                     >
                       <span className="font-medium text-gray-800 flex-1">{w.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${orgBadgeCls(w.org, w.visa)}`}>
+                      <span className={`text-2xs px-1.5 py-0.5 rounded-full font-medium ${orgBadgeCls(w.org, w.visa)}`}>
                         {orgBadgeLabel(w.org, w.visa)}
                       </span>
                       <button
@@ -255,7 +255,7 @@ export default function AssignModal({
                     >
                       <span className="text-green-600 text-lg leading-none">+</span>
                       <span className="font-medium text-gray-800">{sc.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                      <span className={`text-2xs px-1.5 py-0.5 rounded-full font-medium ${
                         sc.type === '土工業者' ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700'
                       }`}>
                         {sc.type}
@@ -281,7 +281,7 @@ export default function AssignModal({
                       style={{ minHeight: 36 }}
                     >
                       <span className="font-medium text-gray-800 flex-1">{sc.name}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                      <span className={`text-2xs px-1.5 py-0.5 rounded-full font-medium ${
                         sc.type === '土工業者' ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700'
                       }`}>
                         {sc.type}

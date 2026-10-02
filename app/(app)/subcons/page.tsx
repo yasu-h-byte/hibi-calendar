@@ -166,7 +166,7 @@ export default function SubconsPage() {
         onKeyDown={e => { if (e.key === 'Enter') openEdit(sc) }}
         className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${SC_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums`}>
         <span className="col-span-2 lg:col-span-1 min-w-0">
-          <span className="block text-[15px] font-bold text-gray-900 dark:text-gray-100">{sc.name}</span>
+          <span className="block text-15 font-bold text-gray-900 dark:text-gray-100">{sc.name}</span>
           {sc.note && <span className="block text-xs text-hibi-sub dark:text-gray-400 truncate">{sc.note}</span>}
         </span>
         <span className="flex flex-wrap gap-1">
@@ -176,8 +176,8 @@ export default function SubconsPage() {
             </span>
           ))}
         </span>
-        <span className={`lg:text-right text-[15px] font-bold ${borrow && !sc.rate ? 'text-red-700 dark:text-red-400' : ''}`}>{borrow ? `¥${(sc.rate || 0).toLocaleString()}` : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
-        <span className="lg:text-right text-[13px] text-hibi-sub dark:text-gray-400">{borrow && sc.otRate ? `¥${sc.otRate.toLocaleString()}/h` : '—'}</span>
+        <span className={`lg:text-right text-15 font-bold ${borrow && !sc.rate ? 'text-red-700 dark:text-red-400' : ''}`}>{borrow ? `¥${(sc.rate || 0).toLocaleString()}` : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+        <span className="lg:text-right text-13 text-hibi-sub dark:text-gray-400">{borrow && sc.otRate ? `¥${sc.otRate.toLocaleString()}/h` : '—'}</span>
         <span className="col-span-2 lg:col-span-1 flex flex-wrap gap-1">
           {assignedSites.length > 0 ? assignedSites.map(siteId => {
             const override = siteRateMap[siteId]?.rate
@@ -255,7 +255,7 @@ export default function SubconsPage() {
         title="取引先マスタ"
         sub="元請・一次は現場マスタの請負体制で選びます。人の貸し借りをする同業者と外注業者は、出面の外注として配置できます"
         actions={
-          <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
+          <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-15 font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
             <span className="text-lg leading-none">＋</span>取引先を追加
           </button>
         }
@@ -284,7 +284,7 @@ export default function SubconsPage() {
 
       <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
         <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
-          <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">取引先（{subcons.length}社）</h2>
+          <h2 className="text-17 font-bold text-gray-900 dark:text-white">取引先（{subcons.length}社）</h2>
           <Segment value={roleFilter} onChange={v => { setRoleFilter(v); setScFilter('all') }} items={[
             ['all', `すべて ${subcons.length}`],
             ...COMPANY_ROLES.map(r => [r.key, `${r.label} ${subcons.filter(sc => companyRoles(sc).includes(r.key)).length}`] as const),
@@ -293,7 +293,7 @@ export default function SubconsPage() {
             <Segment value={viewMode} onChange={setViewMode} items={[['flat', '区分ごと'], ['group', '会社ごと（兼業をまとめる）']]} />
           )}
           {scFilter !== 'all' && (
-            <button onClick={() => setScFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+            <button onClick={() => setScFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-13 font-bold">
               {SC_FILTER_LABEL[scFilter]}だけ表示中 ×
             </button>
           )}
@@ -343,13 +343,13 @@ export default function SubconsPage() {
           <div className="flex flex-col min-h-full">
             <div className="px-6 py-5 border-b border-hibi-line dark:border-gray-700 flex items-start gap-3">
               <div className="flex-1 min-w-0">
-                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{editId ? (form.name || '（名前なし）') : '取引先を追加'}</h2>
+                <h2 className="text-22 font-bold text-gray-900 dark:text-white">{editId ? (form.name || '（名前なし）') : '取引先を追加'}</h2>
                 {editId && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-1">
                     {form.roles.map(r => (
                       <span key={r} className={`text-xs px-2 py-0.5 rounded-md font-bold ${ROLE_BADGE[r as CompanyRole] || ''}`}>{COMPANY_ROLES.find(x => x.key === r)?.label}</span>
                     ))}
-                    <span className="text-[13px] text-hibi-sub dark:text-gray-400">{form.type}</span>
+                    <span className="text-13 text-hibi-sub dark:text-gray-400">{form.type}</span>
                   </div>
                 )}
               </div>
@@ -370,7 +370,7 @@ export default function SubconsPage() {
                       <input type="checkbox" className="mt-1"
                         checked={form.roles.includes(r.key)}
                         onChange={e => setForm({ ...form, roles: e.target.checked ? [...form.roles, r.key] : form.roles.filter(x => x !== r.key) })} />
-                      <span>{r.label}<span className="block text-[10px] text-gray-400">{r.hint}</span></span>
+                      <span>{r.label}<span className="block text-2xs text-gray-400">{r.hint}</span></span>
                     </label>
                   ))}
                 </div>
@@ -401,7 +401,7 @@ export default function SubconsPage() {
                       {[5, 10, 15, 20, 25].map(d => <option key={d} value={String(d)}>{d}日払い</option>)}
                     </select>
                   </div>
-                  <p className="text-[10px] text-emerald-700/80 dark:text-emerald-300/70">
+                  <p className="text-2xs text-emerald-700/80 dark:text-emerald-300/70">
                     月末締め固定。支払日が土日祝なら前営業日に繰り上げて請求書に印字します。
                   </p>
                 </div>
@@ -427,7 +427,7 @@ export default function SubconsPage() {
                     className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                 </div>
               </div>
-              <p className="text-[10px] text-gray-400">応援に行くときの受取単価は、現場マスタの単価タブで現場ごとに入力します。</p>
+              <p className="text-2xs text-gray-400">応援に行くときの受取単価は、現場マスタの単価タブで現場ごとに入力します。</p>
               </>)}
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">備考</label>
@@ -449,7 +449,7 @@ export default function SubconsPage() {
                     <option key={g} value={g} />
                   ))}
                 </datalist>
-                <p className="text-[10px] text-blue-600 dark:text-blue-300/80 mt-1">
+                <p className="text-2xs text-blue-600 dark:text-blue-300/80 mt-1">
                   鳶と土工を両方やる業者の場合、両方のエントリに同じ会社名を入れるとグルーピング表示できます。
                 </p>
               </div>
@@ -461,11 +461,11 @@ export default function SubconsPage() {
                     <label className="text-xs font-bold text-hibi-navy dark:text-blue-300">
                       🏗 現場別単価（任意）
                     </label>
-                    <span className="text-[10px] text-gray-400">
+                    <span className="text-2xs text-gray-400">
                       基本単価: ¥{(Number(form.rate) || 0).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2">
+                  <p className="text-2xs text-gray-500 dark:text-gray-400 mb-2">
                     空欄の場合は基本単価を使用します。残業単価は基本単価×1.25で自動計算。
                   </p>
                   <div className="space-y-2 max-h-48 overflow-y-auto">

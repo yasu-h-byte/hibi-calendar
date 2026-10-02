@@ -141,7 +141,7 @@ export default function PeerStatementPage() {
         actions={
           <>
           <a href={`/paper-invoice?ym=${ym}`}
-            className="h-[42px] px-4 inline-flex items-center gap-1.5 rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-[14px] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+            className="h-[42px] px-4 inline-flex items-center gap-1.5 rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
             <Icon name="folder" size={16} />紙で出した請求書
           </a>
           <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
@@ -149,7 +149,7 @@ export default function PeerStatementPage() {
               className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
               <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
             </button>
-            <span className="px-1.5 text-[15px] font-bold tabular-nums">{ym.slice(0, 4)}年{parseInt(ym.slice(4, 6))}月分</span>
+            <span className="px-1.5 text-15 font-bold tabular-nums">{ym.slice(0, 4)}年{parseInt(ym.slice(4, 6))}月分</span>
             <button type="button" aria-label="次の月" onClick={() => setYm(shiftYm(ym, 1))}
               className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
               <Icon name="chevronRight" size={18} strokeWidth={2.2} />
@@ -196,8 +196,8 @@ export default function PeerStatementPage() {
             <Stat label={`請求する（${billingCos.length}社）`} value={yen(billingSum)} sub="応援に出した人工 × 単価（税抜）" />
             <Stat label={`支払う（${list.filter(r => r.paymentTotal > 0).length}社）`} value={yen(paymentSum)} sub="来てもらった人工 × 単価（税抜）" />
             <a href={hrefOf(HFU_INVOICE_COMPANY_ID)} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1 hover:border-hibi-navy dark:hover:border-blue-400 transition">
-              <span className="text-[13px] text-hibi-sub dark:text-gray-400">HFU → 日比建設</span>
-              <span className="text-[26px] font-bold tabular-nums text-gray-900 dark:text-white">{hfu.issued ? yen(hfu.issued.total) : '—'}</span>
+              <span className="text-13 text-hibi-sub dark:text-gray-400">HFU → 日比建設</span>
+              <span className="text-26 font-bold tabular-nums text-gray-900 dark:text-white">{hfu.issued ? yen(hfu.issued.total) : '—'}</span>
               <span className="flex items-center gap-2 text-xs text-hibi-sub dark:text-gray-400">
                 <Chip tone={STATE[hfu.state].tone}>{STATE[hfu.state].label}{hfu.issued ? ` ${hfu.issued.no}` : ''}</Chip>
                 グループ内の請求。上の合計には入れない
@@ -208,7 +208,7 @@ export default function PeerStatementPage() {
           {/* ③ 会社ごと */}
           <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
-              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">会社ごと（{ymLabel}分）</h2>
+              <h2 className="text-17 font-bold text-gray-900 dark:text-white">会社ごと（{ymLabel}分）</h2>
               <Segment value={filter} onChange={setFilter} items={[
                 ['all', `すべて ${list.length}`], ['billing', `請求あり ${billingCos.length}`], ['payment', `支払あり ${list.filter(r => r.paymentTotal > 0).length}`],
               ]} />
@@ -228,14 +228,14 @@ export default function PeerStatementPage() {
                   onClick={() => setOpenId(r.companyId)}
                   onKeyDown={e => { if (e.key === 'Enter') setOpenId(r.companyId) }}
                   className="border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-5 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_150px_150px_200px_150px] gap-2 lg:gap-3.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
-                  <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100">{r.companyName}</span>
-                  <span className="lg:text-right text-[17px] font-bold tabular-nums text-gray-900 dark:text-white">{r.billingTotal > 0 ? yen(r.billingTotal) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
-                  <span className="lg:text-right text-[17px] font-bold tabular-nums text-gray-900 dark:text-white">{r.paymentTotal > 0 ? yen(r.paymentTotal) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                  <span className="text-15 font-bold text-gray-900 dark:text-gray-100">{r.companyName}</span>
+                  <span className="lg:text-right text-17 font-bold tabular-nums text-gray-900 dark:text-white">{r.billingTotal > 0 ? yen(r.billingTotal) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                  <span className="lg:text-right text-17 font-bold tabular-nums text-gray-900 dark:text-white">{r.paymentTotal > 0 ? yen(r.paymentTotal) : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
                   <span>{st ? <Chip tone={STATE[st.state].tone}>{STATE[st.state].label}{st.issued ? ` ${st.issued.no}` : ''}</Chip> : <Chip tone="gray">支払のみ</Chip>}</span>
                   <span className="lg:text-right" onClick={e => e.stopPropagation()}>
                     {st && (
                       <a href={st.state === 'paper' ? `/paper-invoice?ym=${ym}` : hrefOf(r.companyId)}
-                        className={`inline-flex items-center h-9 px-3.5 rounded-[9px] text-[13px] font-bold whitespace-nowrap ${
+                        className={`inline-flex items-center h-9 px-3.5 rounded-[9px] text-13 font-bold whitespace-nowrap ${
                           st.state === 'none' ? 'bg-hibi-navy text-white hover:bg-hibi-light'
                           : st.state === 'pending' ? 'bg-green-700 text-white hover:bg-green-800'
                           : 'border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'
@@ -262,8 +262,8 @@ export default function PeerStatementPage() {
           <div className="p-6 space-y-6">
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
-                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{open.companyName}</h2>
-                <div className="text-[13px] text-hibi-sub dark:text-gray-400">
+                <h2 className="text-22 font-bold text-gray-900 dark:text-white">{open.companyName}</h2>
+                <div className="text-13 text-hibi-sub dark:text-gray-400">
                   {ym.slice(0, 4)}年{ymLabel}分{open.billingTotal > 0 && ` ／ 請求 ${yen(open.billingTotal)}`}{open.paymentTotal > 0 && ` ／ 支払 ${yen(open.paymentTotal)}`}（税抜）
                 </div>
               </div>
@@ -297,7 +297,7 @@ export default function PeerStatementPage() {
                     </div>
                   </div>
                   <a href={hrefOf(open.companyId)}
-                    className={`flex items-center justify-center h-11 rounded-[10px] text-[15px] font-bold ${st.state === 'none' ? 'bg-hibi-navy text-white hover:bg-hibi-light' : st.state === 'pending' ? 'bg-green-700 text-white hover:bg-green-800' : 'border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'}`}>
+                    className={`flex items-center justify-center h-11 rounded-[10px] text-15 font-bold ${st.state === 'none' ? 'bg-hibi-navy text-white hover:bg-hibi-light' : st.state === 'pending' ? 'bg-green-700 text-white hover:bg-green-800' : 'border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'}`}>
                     {st.state === 'none' ? '請求書を作る（下書きを開く）' : st.state === 'pending' ? '請求書を開いて承認する' : '請求書を開く'}
                   </a>
                   <p className="text-xs text-hibi-sub dark:text-gray-400">事務は「発行を申請」、政仁さん・代表は「承認して発行」。発行すると番号が付き、内容が固定されます</p>
@@ -337,8 +337,8 @@ export default function PeerStatementPage() {
 function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1">
-      <span className="text-[13px] text-hibi-sub dark:text-gray-400">{label}</span>
-      <span className="text-[26px] font-bold tabular-nums text-gray-900 dark:text-white">{value}</span>
+      <span className="text-13 text-hibi-sub dark:text-gray-400">{label}</span>
+      <span className="text-26 font-bold tabular-nums text-gray-900 dark:text-white">{value}</span>
       <span className="text-xs text-hibi-sub dark:text-gray-400">{sub}</span>
     </div>
   )

@@ -49,7 +49,7 @@ const SHORTCUTS = [
   '   （ブラウザのページ保存ダイアログを抑制）',
 ].join('\n')
 
-const selectCls = 'h-[42px] border border-gray-300 dark:border-gray-600 rounded-[10px] px-3 text-[15px] font-bold bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none'
+const selectCls = 'h-[42px] border border-gray-300 dark:border-gray-600 rounded-[10px] px-3 text-15 font-bold bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none'
 
 export default function HeaderBar({
   data, useTimeBased, saveStatus, workDaysInput, siteId, ym, showArchived, allSites, ymOptions,
@@ -72,7 +72,7 @@ export default function HeaderBar({
         title={<span className="inline-flex items-center gap-2 flex-wrap">
           出面入力
           {data?.locked && <Chip tone="red"><span className="inline-flex items-center gap-1"><Icon name="lock" size={12} strokeWidth={2.4} />ロック中</span></Chip>}
-          <span title={SHORTCUTS} className="cursor-help px-2 py-0.5 text-[11px] font-normal rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">ショートカット</span>
+          <span title={SHORTCUTS} className="cursor-help px-2 py-0.5 text-xxs font-normal rounded-md bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">ショートカット</span>
         </span>}
         actions={<>
           {saveChip}
@@ -98,7 +98,7 @@ export default function HeaderBar({
             <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
           </button>
           <select value={ym} onChange={e => onYmChange(e.target.value)} aria-label="年月"
-            className="h-full bg-transparent text-[15px] font-bold text-gray-900 dark:text-white focus:outline-none px-1">
+            className="h-full bg-transparent text-15 font-bold text-gray-900 dark:text-white focus:outline-none px-1">
             {ymOptions.map(o => <option key={o.ym} value={o.ym}>{o.label}</option>)}
           </select>
           <button type="button" onClick={() => nextYm && onYmChange(nextYm)} disabled={!nextYm} aria-label="次の月"
@@ -107,14 +107,14 @@ export default function HeaderBar({
           </button>
         </div>
 
-        <label className="flex items-center gap-1.5 text-[13px] text-hibi-sub dark:text-gray-400 cursor-pointer whitespace-nowrap">
+        <label className="flex items-center gap-1.5 text-13 text-hibi-sub dark:text-gray-400 cursor-pointer whitespace-nowrap">
           <input type="checkbox" checked={showArchived} onChange={e => onShowArchivedChange(e.target.checked)} className="rounded" />
           終了した現場も出す
         </label>
 
         {/* 所定日数 input（5月以降はカレンダーで確定するため非表示） */}
         {data && !useTimeBased && (
-          <div className="flex items-center gap-1.5 text-[13px]">
+          <div className="flex items-center gap-1.5 text-13">
             <label className="text-hibi-sub dark:text-gray-400 font-bold whitespace-nowrap">所定日数</label>
             <input
               type="number" min="0" max="31" step="1"
