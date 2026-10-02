@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261002_approver_past_edit',
+    title: '政仁さんが、昨日までの日の出面を直せるようになりました',
+    content:
+      '事業責任者（政仁さん）は、昨日までの日なら、入力がある日の上書き・消すこともできます（今日の分は本人のスマホと職長が入れます）。'
+      + '本人の入力が無い日は、これまでどおり表の上の「今から変更する」から入れます。直した内容は操作の記録に残ります。'
+      + 'あわせて、保存できなかったときの画面に、本当の理由だけが出るようにしました。',
+    category: 'fix',
+    publishedAt: '2026-10-02T20:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261002_jp_pl_anniversary',
     title: '日本人の有給も「入社6ヶ月後・その後1年ごと」に付与します（10/1 にそろえません）',
     content:

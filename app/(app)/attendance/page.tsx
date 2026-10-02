@@ -400,11 +400,16 @@ export default function AttendanceGridPage() {
           return `  ${label} ${data.ym}/${s.day}: ${f.error}`
         }).join('\n')
         const more = failures.length > sample.length ? `\n  …他 ${failures.length - sample.length} 件` : ''
+        // 注意書きは、本人の入力待ちで止まったときだけ出す（2026-10-02 代表指摘: 権限がなくて止まったときにも
+        //   「出勤は後付けできません」が必ず付き、本当の理由が分かりにくかった）
+        const staffInputReason = failures.some(f => /スマホ入力待ち|出勤に変えられません/.test(f.error))
         alert(
-          `❌ ${failures.length} 件の保存に失敗しました\n\n${detail}${more}\n\n` +
-          `※ベトナム人スタッフの「出勤」を後付け入力することはできません\n` +
-          `（スタッフ本人のスマホ入力が必要です）。\n` +
-          `有給・帰国中は admin/職長が後付け入力可能です。`
+          `❌ ${failures.length} 件の保存に失敗しました\n\n${detail}${more}` +
+          (staffInputReason
+            ? `\n\n※外国人スタッフの「出勤」は、本人のスマホ入力が無い日には入れられません。\n` +
+              `打刻し忘れの日は、代表か政仁さんが「今から変更する」から入れます（昨日までの日）。\n` +
+              `有給・欠勤・帰国中・0.6補は、事務・職長も後から入れられます。`
+            : '')
         )
         if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
         saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 5000)
@@ -1331,7 +1336,7 @@ export default function AttendanceGridPage() {
         <div className="rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-600 border border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700">
           出面の入力は職長・事務が行います（最終承認は下の「最終承認」行から）。{roleCan(permRoleOf({ role: userRole }), 'attendance.workType') && '工種（鉄骨・仮設など）の切り替えはできます。'}
           {roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport') && ' 応援現場では出面を入力できます（一括入力あり）。'}
-          {roleCan(permRoleOf({ role: userRole }), 'attendance.backfill') && ' 本人の入力が無い昨日までの日は、表の上の「今から変更する」を押すと入れられます。'}
+          {roleCan(permRoleOf({ role: userRole }), 'attendance.backfill') && ' 昨日までの日は、出面を直接直せます。本人の入力が無い日は、表の上の「今から変更する」を押すと入れられます。'}
         </div>
       )}
       {userRole && data?.isSupportSite && roleCan(permRoleOf({ role: userRole }), 'attendance.inputSupport') && !roleCan(permRoleOf({ role: userRole }), 'attendance.input') && (

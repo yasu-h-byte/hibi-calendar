@@ -449,8 +449,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { action } = body
-    /** attendance.input を持たない人（事業責任者）が、さかのぼり入力の権限だけで保存に来た（新規の入力だけ許す・2026-10-02） */
-    let backfillOnly = false
+    /** attendance.input を持たない人（事業責任者）が、さかのぼりの権限（attendance.backfill）で昨日までの日を保存に来た（操作ログに名前を残す） */
+    let pastEditByBackfill = false
 
     const { doc, setDoc, getDoc } = await import('@/lib/fsdb')
     const { db } = await import('@/lib/firebase')
@@ -489,12 +489,13 @@ export async function POST(request: NextRequest) {
           if (!denied2) denied = null
         }
       }
-      // 2026-10-02 代表決定: さかのぼり入力（attendance.backfill・代表と事業責任者）。
-      //   政仁さんは attendance.input を持たないので、ここでは「昨日までの日の、作業員1人1日の保存」だけ先へ通し、
-      //   下の保存処理で「本人の入力が無い日への新規の入力」に限る（backfillOnly）。上書き・削除・外注の人工は不可（2026-10-02 点検で範囲を絞った）
-      if (denied && cap === 'attendance.input' && (!action || action === 'saveAttendance') && isPastDay(body.ym, body.day)
-        && body.workerId !== undefined && body.entry && typeof body.entry === 'object' && body.subconId === undefined) {
-        if (!(await requireCap(request, 'attendance.backfill'))) { denied = null; backfillOnly = true }
+      // 2026-10-02 代表決定: さかのぼり入力・修正（attendance.backfill・代表と事業責任者）。
+      //   政仁さんは attendance.input を持たないので、昨日までの日の出面の保存（新しい入力・上書き・削除・外注の人工）をここで通す。
+      //   今日の分は今までどおり本人のスマホと職長が入れる。
+      //   経緯: 同日の点検で一度「入力が無い日への新しい入力だけ」に絞ったが、政仁さんが入力済みの日を直せず
+      //   「保存できない」になったため、代表判断で昨日までの日の修正全般に広げた
+      if (denied && cap === 'attendance.input' && (!action || action === 'saveAttendance') && isPastDay(body.ym, body.day)) {
+        if (!(await requireCap(request, 'attendance.backfill'))) { denied = null; pastEditByBackfill = true }
       }
       if (denied) return denied
     }
@@ -1015,9 +1016,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '日付が正しくありません' }, { status: 400 })
       }
     }
-    if (backfillOnly && (workerId === undefined || !entry || typeof entry !== 'object' || subconId !== undefined)) {
-      return NextResponse.json({ error: 'さかのぼり入力は、本人の入力が無い日への新しい入力だけです' }, { status: 403 })
-    }
 
     const docRef = doc(db, 'demmen', `att_${ym}`)
 
@@ -1038,9 +1036,6 @@ export async function POST(request: NextRequest) {
           const { canAdminEditEntry, detectMultiSiteConflict } = await import('@/lib/attendance')
           const main = await getMainData()
           const worker = main.workers.find(w => w.id === Number(workerId))
-          if (!worker && backfillOnly) {
-            return NextResponse.json({ error: '作業員が見つかりません' }, { status: 404 })
-          }
           if (worker) {
             const curSnap = await getDoc(docRef)
             const curD = (curSnap.exists() ? curSnap.data().d : {}) as Record<string, AttendanceEntry>
@@ -1050,14 +1045,6 @@ export async function POST(request: NextRequest) {
             const dayIso = `${String(ym).slice(0, 4)}-${String(ym).slice(4, 6)}-${String(day).padStart(2, '0')}`
             if (!isEmployedOn(worker, dayIso)) {
               return NextResponse.json({ error: `${worker.name} さんはこの日に在籍していません（入社日 ${worker.hireDate || '—'}・退職日 ${worker.retired || '—'}）` }, { status: 400 })
-            }
-            // 事業責任者のさかのぼり入力（backfillOnly）は「本人の入力が無い日への新しい入力」だけ（2026-10-02 代表決定）
-            if (backfillOnly) {
-              const { isVietnameseWorker } = await import('@/lib/attendance')
-              const anyEntry = Object.entries(curD || {}).some(([k, v]) => !!v && k.endsWith(`_${workerId}_${ym}_${String(day)}`))
-              if (!isVietnameseWorker(worker.visa) || anyEntry) {
-                return NextResponse.json({ error: 'さかのぼり入力は、本人の入力が無い日への新しい入力だけです（入力のある日の修正は職長・事務・代表が行います）' }, { status: 403 })
-              }
             }
             // 事後申請性ステータス（有給/帰国中/現場都合休み w=0.6）は ガード例外許容のため newEntry を渡す
             // ※ 2026-06-XX: w=0.6 (補償日) を例外に追加（lib/attendance.ts canAdminEditEntry 参照）
@@ -1141,9 +1128,11 @@ export async function POST(request: NextRequest) {
             : entryWithSource.w ? (entryWithSource.o ? `出勤+${entryWithSource.o}h` : '出勤')
             : '不在'
           let who = ''
-          if (backfilled) {
+          if (backfilled || pastEditByBackfill) {
             const u = await getApiAuthUser(request)
-            who = `（さかのぼり入力・本人の入力なし・操作者 ${u.authorized ? u.actor : '不明'}）`
+            who = backfilled
+              ? `（さかのぼり入力・本人の入力なし・操作者 ${u.authorized ? u.actor : '不明'}）`
+              : `（さかのぼり修正・操作者 ${u.authorized ? u.actor : '不明'}）`
           }
           await logActivity(
             'admin',
@@ -1174,7 +1163,10 @@ export async function POST(request: NextRequest) {
           await logActivity(
             'admin',
             'attendance.gridDelete',
-            `${siteId}/wid:${workerId} ${ym}/${day} を削除`,
+            `${siteId}/wid:${workerId} ${ym}/${day} を削除${pastEditByBackfill ? await (async () => {
+              const u = await getApiAuthUser(request)
+              return `（さかのぼり修正・操作者 ${u.authorized ? u.actor : '不明'}）`
+            })() : ''}`,
           )
         } catch { /* ignore */ }
       }
