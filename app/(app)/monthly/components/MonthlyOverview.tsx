@@ -65,6 +65,15 @@ const num = (n: number) => (Math.round(n * 10) / 10).toLocaleString()
 
 // ─── 締めの準備カード ───────────────────────────────
 
+/** 締め前の会社の出面の承認状況（app/api/monthly の approvalStatus・判定は lib/month-approval-status.ts） */
+export interface ApprovalStatus {
+  needed: number
+  foremanMissing: number
+  finalMissing: number
+  complete: boolean
+  finalRequired: boolean
+}
+
 export interface CloseCardProps {
   org: 'hibi' | 'hfu'
   label: string
@@ -72,6 +81,8 @@ export interface CloseCardProps {
   people: number
   total: number
   locked: boolean
+  /** 出面の承認状況（締め済み・取得できなかったときは null） */
+  approval: ApprovalStatus | null
   /** 本人確認の対象（外国人）と、その内訳 */
   confirm: { target: number; ok: number; issue: number }
   /** 自動検算の対象人数と、異常のある人数（null＝検算しない月） */
@@ -104,8 +115,14 @@ export function CloseCard(p: CloseCardProps) {
       </div>
 
       <div className="rounded-[10px] border border-hibi-line dark:border-gray-700 divide-y divide-hibi-line dark:divide-gray-700">
-        <Check state="ok" label="出面の承認（職長・最終）" note="締めるときに全現場・全日を自動で確認します（そろっていないと締められません）" />
-        {p.confirm.target > 0 ? (
+        <ApprovalCheck locked={p.locked} approval={p.approval} />
+        {p.confirm.target === 0 ? (
+          <Check state="none" label="本人確認" note="対象の人がいません（日本人はスマホ確認の対象外）" />
+        ) : !p.locked && p.approval && !p.approval.complete ? (
+          // 本人のスマホに確認が出るのは出面の承認がそろってから（app/api/attendance/confirm）。
+          //   その前に「まだ 9名」と警告しても、本人はまだ押せないので、待ちとして灰色で出す（2026-10-02 代表指摘）
+          <Check state="none" label="本人確認" note={`出面の承認がそろうと、${p.confirm.target}名のスマホに確認が出ます`} />
+        ) : (
           <Check
             state={confirmLeft === 0 ? 'ok' : 'warn'}
             label="本人確認"
@@ -115,8 +132,6 @@ export function CloseCard(p: CloseCardProps) {
             action={confirmLeft > 0 ? '一覧で見る' : undefined}
             onAction={p.onShowConfirm}
           />
-        ) : (
-          <Check state="none" label="本人確認" note="対象の人がいません（日本人はスマホ確認の対象外）" />
         )}
         {p.audit ? (
           <Check
@@ -158,6 +173,19 @@ export function CloseCard(p: CloseCardProps) {
       )}
     </section>
   )
+}
+
+/** 出面の承認（職長・最終）。締めと同じ判定の結果を出す（旧: 締めるまで常に緑だった） */
+function ApprovalCheck({ locked, approval }: { locked: boolean; approval: ApprovalStatus | null }) {
+  const label = '出面の承認（職長・最終）'
+  if (locked) return <Check state="ok" label={label} note="締めたときにそろっていることを確認済み" />
+  if (!approval) return <Check state="none" label={label} note="承認の状況を読み込めませんでした（締めるときにもう一度確認します）" />
+  if (approval.needed === 0) return <Check state="none" label={label} note="この月は出勤の記録がありません" />
+  if (approval.complete) return <Check state="ok" label={label} note={`全現場・全日（${approval.needed}件）の承認がそろっています`} />
+  const parts: string[] = []
+  if (approval.foremanMissing > 0) parts.push(`職長承認がまだ ${approval.foremanMissing}件`)
+  if (approval.finalMissing > 0) parts.push(`最終承認がまだ ${approval.finalMissing}件`)
+  return <Check state="warn" label={label} note={`${parts.join('・')}（現場×日。そろうまで締められません）`} />
 }
 
 function Check({ state, label, note, action, onAction }: {

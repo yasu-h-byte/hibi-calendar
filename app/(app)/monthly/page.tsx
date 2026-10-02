@@ -9,7 +9,7 @@ import StaffConfirmBadge, { type StaffConfirmInfo } from './components/StaffConf
 import { can } from '@/lib/permissions'
 import { Icon } from '@/components/ui/Icon'
 import { UnderlineTabs, ToolButton, Segment, SearchBox } from '@/components/ui/PageParts'
-import { CloseCard, OverviewList, needsAttention } from './components/MonthlyOverview'
+import { CloseCard, OverviewList, needsAttention, type ApprovalStatus } from './components/MonthlyOverview'
 
 // ────────────────────────────────────────
 //  Types
@@ -212,6 +212,8 @@ interface MonthlyData {
   hasCalendarData?: boolean
   siteWorkDays?: Record<string, number>
   siteNames?: Record<string, string>
+  /** 締め前の会社の出面の承認状況（締めと同じ判定・2026-10-02）。締め済みの会社は入らない */
+  approvalStatus?: Partial<Record<'hibi' | 'hfu', ApprovalStatus>>
   totals: {
     workDays: number
     subWorkDays: number
@@ -1090,6 +1092,7 @@ function MonthlyPageInner() {
                 people={ws.length}
                 total={ws.reduce((sum, w) => sum + (w.salaryNetPay || 0), 0)}
                 locked={org === 'hibi' ? data.lockedHibi : data.lockedHfu}
+                approval={data.approvalStatus?.[org] ?? null}
                 confirm={{ target: foreign.length, ok: confOk, issue: confIssue }}
                 audit={auditAll ? { target: auditTargets.length, affected: auditAll.affectedWorkerIds.length } : null}
                 changedAfterLock={diff?.count || 0}
