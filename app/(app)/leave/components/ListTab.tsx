@@ -223,7 +223,7 @@ function Row({ w, rem, photo, onOpen }: { w: PLWorker; rem: number; photo?: stri
       <div className="flex items-center gap-3 min-w-0">
         <WorkerAvatar name={w.name} src={photo} size={40} />
         <div className="min-w-0">
-          <div className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</div>
+          <div className="text-15 font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</div>
           <div className="text-xs text-hibi-sub dark:text-gray-400 truncate">{badge}・{orgBadge}</div>
           <div className="text-xs text-hibi-sub dark:text-gray-400 truncate tabular-nums">
             {w.grantDate ? `${slash(w.grantDate)}〜${slash(periodEnd(w.grantDate))}` : '付与日が未設定'}
@@ -234,8 +234,8 @@ function Row({ w, rem, photo, onOpen }: { w: PLWorker; rem: number; photo?: stri
 
       {/* 使える日 */}
       <div className="flex items-baseline gap-1">
-        <span className={`text-[28px] leading-none font-bold tabular-nums ${remCls}`}>{rem}</span>
-        <span className="text-[13px] text-hibi-sub dark:text-gray-400">日</span>
+        <span className={`text-28 leading-none font-bold tabular-nums ${remCls}`}>{rem}</span>
+        <span className="text-13 text-hibi-sub dark:text-gray-400">日</span>
       </div>
 
       {/* 内訳: 繰越 → 今期（先に使われる順）。日本人は前の期の残り（賞与で買取）を点線で */}
@@ -262,7 +262,7 @@ function Row({ w, rem, photo, onOpen }: { w: PLWorker; rem: number; photo?: stri
         ) : (
           <div className="text-xs text-hibi-sub dark:text-gray-400 px-2.5 py-1.5">まだ付与がありません</div>
         )}
-        {w.adjustment > 0 && <div className="text-[11px] text-hibi-sub dark:text-gray-400 px-2.5">調整 {w.adjustment}日（移行・手作業の取得分）</div>}
+        {w.adjustment > 0 && <div className="text-xxs text-hibi-sub dark:text-gray-400 px-2.5">調整 {w.adjustment}日（移行・手作業の取得分）</div>}
         {jp && w.prevPeriod && (w.prevPeriod.remaining > 0 || w.prevPeriod.buyoutDays > 0) && (
           <div className={`grid grid-cols-[minmax(0,140px)_52px_minmax(0,1fr)] items-center gap-2 px-2.5 py-1 rounded-lg border border-dashed ${
             w.prevPeriod.remaining > 0
@@ -270,7 +270,7 @@ function Row({ w, rem, photo, onOpen }: { w: PLWorker; rem: number; photo?: stri
               : 'bg-gray-50 border-gray-300 text-gray-500 dark:bg-gray-700/40 dark:border-gray-600 dark:text-gray-400'
           }`} title={`前の期 ${slash(w.prevPeriod.grantDate)}〜${slash(w.prevPeriod.endDate)}: もらった ${w.prevPeriod.grantDays}日・取った ${w.prevPeriod.taken}日。休みには使えません`}>
             <span className="text-xs font-bold truncate">前の期の残り</span>
-            <span className="text-[15px] font-bold tabular-nums text-right">{w.prevPeriod.remaining > 0 ? w.prevPeriod.remaining : w.prevPeriod.buyoutDays}<span className="text-[11px] font-normal"> 日</span></span>
+            <span className="text-15 font-bold tabular-nums text-right">{w.prevPeriod.remaining > 0 ? w.prevPeriod.remaining : w.prevPeriod.buyoutDays}<span className="text-xxs font-normal"> 日</span></span>
             <span className="text-xs font-bold truncate">{w.prevPeriod.remaining > 0 ? '賞与で買取予定' : '賞与で買取済み'}</span>
           </div>
         )}
@@ -294,7 +294,7 @@ function Row({ w, rem, photo, onOpen }: { w: PLWorker; rem: number; photo?: stri
           : <Chip cls="bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">入社6か月で付与</Chip>)}
       </div>
 
-      <span className="hidden lg:flex justify-self-end items-center gap-1 text-[13px] font-bold text-hibi-navy dark:text-blue-300">
+      <span className="hidden lg:flex justify-self-end items-center gap-1 text-13 font-bold text-hibi-navy dark:text-blue-300">
         くわしく<Icon name="chevronRight" size={14} />
       </span>
     </button>
@@ -311,7 +311,7 @@ function Bucket({ label, rem, of, note, warn, muted }: {
           : 'bg-white border-hibi-line dark:bg-gray-800 dark:border-gray-600'
     }`}>
       <span className={`text-xs font-bold truncate ${warn ? 'text-amber-800 dark:text-amber-300' : 'text-gray-700 dark:text-gray-200'}`}>{label}</span>
-      <span className="text-[15px] font-bold tabular-nums text-right text-gray-900 dark:text-white">{rem}<span className="text-[11px] font-normal text-hibi-sub dark:text-gray-400"> 日</span></span>
+      <span className="text-15 font-bold tabular-nums text-right text-gray-900 dark:text-white">{rem}<span className="text-xxs font-normal text-hibi-sub dark:text-gray-400"> 日</span></span>
       <span className={`text-xs truncate ${warn ? 'text-amber-800 dark:text-amber-300 font-bold' : 'text-hibi-sub dark:text-gray-400'}`}>{of}日中　{note}</span>
     </div>
   )

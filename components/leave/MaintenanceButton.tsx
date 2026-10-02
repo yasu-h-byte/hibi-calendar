@@ -58,7 +58,7 @@ export default function MaintenanceButton({ password, onChanged, onOpenGrantModa
       >
         🔧 メニュー
         {hasIssues && (
-          <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+          <span className="absolute -top-2 -right-2 bg-red-600 text-white text-2xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
             {totalIssues! > 99 ? '!' : totalIssues}
           </span>
         )}

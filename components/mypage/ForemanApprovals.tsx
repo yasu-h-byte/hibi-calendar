@@ -217,7 +217,7 @@ export default function ForemanApprovals({ token, canApprove }: {
             </div>
           )}
           {b.elsewhereNames.length > 0 && (
-            <div className="text-[11px] text-gray-500 leading-relaxed">
+            <div className="text-xxs text-gray-500 leading-relaxed">
               {b.elsewhereNames.join('、')} さんは別の現場で入力しているため、この現場の未入力には数えていません
             </div>
           )}
@@ -287,7 +287,7 @@ export default function ForemanApprovals({ token, canApprove }: {
         </section>
       )}
 
-      <p className="text-[11px] text-gray-400 leading-relaxed">
+      <p className="text-xxs text-gray-400 leading-relaxed">
         {manager
           ? '職長がいない現場（職種が職長でない人が登録されている現場）は、ここで職長承認を代行できます。'
           : 'ここで承認すると「職長承認済み」になります。最終承認は政仁さんが行います。'}

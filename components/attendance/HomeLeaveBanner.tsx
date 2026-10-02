@@ -97,7 +97,7 @@ export default function HomeLeaveBanner({ homeLeaves, recentReturnDays = 7 }: Pr
           const { hl, status, daysUntilStart, daysSinceReturn } = c
           return (
             <div key={i} className="flex items-center gap-2 text-xs text-cyan-700 flex-wrap">
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              <span className={`px-1.5 py-0.5 rounded-full text-2xs font-bold ${
                 status === 'current' ? 'bg-cyan-200 text-cyan-800'
                 : status === 'future' ? 'bg-blue-100 text-blue-700'
                 : 'bg-gray-200 text-gray-700'
@@ -109,17 +109,17 @@ export default function HomeLeaveBanner({ homeLeaves, recentReturnDays = 7 }: Pr
               <span>{hl.startDate.slice(5)} 〜 {hl.endDate >= '9999-12-31' ? '帰国日未定' : hl.endDate.slice(5)}</span>
               <span className="text-cyan-500">({hl.reason})</span>
               {status === 'future' && daysUntilStart > 0 && (
-                <span className="text-[10px] text-blue-600">
+                <span className="text-2xs text-blue-600">
                   {daysUntilStart === 1 ? '明日から' : `あと${daysUntilStart}日`}
                 </span>
               )}
               {status === 'recent' && (
-                <span className="text-[10px] text-gray-500">
+                <span className="text-2xs text-gray-500">
                   {daysSinceReturn === 0 ? '今日帰国' : daysSinceReturn === 1 ? '昨日帰国' : `${daysSinceReturn}日前に帰国`}
                 </span>
               )}
               {hl.status === 'foreman_approved' && (
-                <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1 rounded">職長済・最終承認待ち</span>
+                <span className="text-2xs bg-yellow-100 text-yellow-700 px-1 rounded">職長済・最終承認待ち</span>
               )}
             </div>
           )

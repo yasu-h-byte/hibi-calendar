@@ -825,7 +825,7 @@ export default function EvaluationPage() {
             <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden max-w-[140px]">
               <div className={`h-full transition-all ${progressColor}`} style={{ width: `${pct}%` }} />
             </div>
-            <span className="text-[10px] text-gray-500 dark:text-gray-400 tabular-nums">
+            <span className="text-2xs text-gray-500 dark:text-gray-400 tabular-nums">
               {progressLabel}
             </span>
           </div>
@@ -932,7 +932,7 @@ export default function EvaluationPage() {
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">
                 評価者ウェイト
-                <span className="ml-2 text-[11px] font-normal text-gray-500">
+                <span className="ml-2 text-xxs font-normal text-gray-500">
                   共働実績ベース（直近1年）：加重平均プリフィルで重みが効きます
                 </span>
               </h4>
@@ -940,7 +940,7 @@ export default function EvaluationPage() {
                 <button
                   onClick={() => handleRecalculateWeights(session.id)}
                   disabled={recalculatingWeights}
-                  className="px-2 py-1 text-[11px] font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                  className="px-2 py-1 text-xxs font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                 >
                   {recalculatingWeights ? '...' : '🔄 再計算'}
                 </button>
@@ -953,7 +953,7 @@ export default function EvaluationPage() {
                   const anyW = Object.values(session.evaluatorWeights || {}).find(w => w?.monthsWithData != null)
                   if (!anyW) return null
                   return (
-                    <div className="mb-2 text-[11px] text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-md">
+                    <div className="mb-2 text-xxs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-md">
                       📊 データのある月数: <strong>{anyW.monthsWithData}/12</strong> ヶ月
                       → 年共働キャップ: <strong>{anyW.dynamicCap}日</strong>
                       <span className="ml-2 opacity-80">
@@ -971,8 +971,8 @@ export default function EvaluationPage() {
                   <thead className="bg-gray-50 dark:bg-gray-900">
                     <tr>
                       <th className="px-2 py-1 text-left font-medium text-gray-500 dark:text-gray-400">評価者</th>
-                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400" title="参考表示（ウェイトには影響しない）">直近90日<span className="text-[9px] opacity-60 ml-0.5">(参考)</span></th>
-                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400" title="ウェイト算出の根拠">過去365日<span className="text-[9px] opacity-60 ml-0.5">(主)</span></th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400" title="参考表示（ウェイトには影響しない）">直近90日<span className="text-2xs opacity-60 ml-0.5">(参考)</span></th>
+                      <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400" title="ウェイト算出の根拠">過去365日<span className="text-2xs opacity-60 ml-0.5">(主)</span></th>
                       <th className="px-2 py-1 text-right font-medium text-gray-500 dark:text-gray-400">ウェイト</th>
                     </tr>
                   </thead>
@@ -1040,7 +1040,7 @@ export default function EvaluationPage() {
               <h4 className="text-sm font-bold text-gray-700 dark:text-gray-300">
                 出勤実績（過去1年）
                 {session.metrics.computedAt && (
-                  <span className="ml-2 text-[11px] font-normal text-gray-500">
+                  <span className="ml-2 text-xxs font-normal text-gray-500">
                     （{new Date(session.metrics.computedAt).toLocaleString('ja-JP')} 計算）
                   </span>
                 )}
@@ -1049,7 +1049,7 @@ export default function EvaluationPage() {
                 <button
                   onClick={() => handleRecalculateMetrics(session.id)}
                   disabled={recalculatingWeights}
-                  className="px-2 py-1 text-[11px] font-medium rounded-md border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
+                  className="px-2 py-1 text-xxs font-medium rounded-md border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
                 >
                   📊 再計算
                 </button>
@@ -1062,7 +1062,7 @@ export default function EvaluationPage() {
                 <span className="text-gray-500 dark:text-gray-400 block text-xs">出勤率</span>
                 <span className="font-bold text-lg text-gray-900 dark:text-white">{session.metrics.attendanceRate.toFixed(1)}%</span>
                 {session.metrics.rawRate != null && session.metrics.rawRate > 100 && (
-                  <span className="ml-1 text-[10px] text-gray-400" title="100%キャップ前の生比率">
+                  <span className="ml-1 text-2xs text-gray-400" title="100%キャップ前の生比率">
                     (生 {session.metrics.rawRate.toFixed(1)}%)
                   </span>
                 )}
@@ -1071,7 +1071,7 @@ export default function EvaluationPage() {
                 <span className="text-gray-500 dark:text-gray-400 block text-xs">残業平均</span>
                 <span className="text-gray-900 dark:text-white">{session.metrics.overtimeAvg.toFixed(1)}h/月</span>
                 {session.metrics.totalOvertime != null && (
-                  <span className="ml-1 text-[10px] text-gray-400">
+                  <span className="ml-1 text-2xs text-gray-400">
                     (合計 {session.metrics.totalOvertime.toFixed(1)}h)
                   </span>
                 )}
@@ -1112,7 +1112,7 @@ export default function EvaluationPage() {
                         <div className="flex justify-between">
                           <span className="text-gray-600 dark:text-gray-400">補償（土曜0.6）</span>
                           <span className="font-medium tabular-nums text-gray-500" title="出勤率の分子・分母どちらにも入れない">
-                            {session.metrics.compensationDays} 日 <span className="text-[10px]">※対象外</span>
+                            {session.metrics.compensationDays} 日 <span className="text-2xs">※対象外</span>
                           </span>
                         </div>
                       )}
@@ -1181,7 +1181,7 @@ export default function EvaluationPage() {
                     </div>
                   </div>
                 </div>
-                <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                <div className="text-xxs text-gray-500 dark:text-gray-400 leading-relaxed">
                   💡 出勤率 = (実出勤 + 有給 + 試験) ÷ 期待出勤日 × 100（上限100%）。
                   ベトナム土曜の補償日（w=0.6）は分子・分母どちらにも含めません。
                   期待出勤日は月所定日数から雇用境界・帰国期間・長期不在を控除した値です。
@@ -1213,7 +1213,7 @@ export default function EvaluationPage() {
                         >
                           <div>{r.evaluatorName}</div>
                           {w && (
-                            <div className="mt-1 text-[10px] font-normal opacity-90">
+                            <div className="mt-1 text-2xs font-normal opacity-90">
                               {w.isApprover ? (
                                 <span title={`事業責任者の固定ウェイト (${w.weight.toFixed(2)})`}>w={w.weight.toFixed(2)} ★</span>
                               ) : (
@@ -1476,7 +1476,7 @@ export default function EvaluationPage() {
             {recalculatingWeights ? '計算中...' : '評価者の重みを計算し直す'}
           </ToolButton>
           <button onClick={() => openCreate(null)}
-            className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
+            className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-15 font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
             <span className="text-lg leading-none">＋</span>評価を始める
           </button>
         </> : undefined}
@@ -1550,14 +1550,14 @@ export default function EvaluationPage() {
           {/* ② 一覧 */}
           <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
-              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">ベトナム人スタッフ（{workers.length}名）</h2>
+              <h2 className="text-17 font-bold text-gray-900 dark:text-white">ベトナム人スタッフ（{workers.length}名）</h2>
               <Segment value={(['all', 'collecting', 'reviewing', 'approved'] as const).includes(evFilter as 'all') ? evFilter as 'all' | 'collecting' | 'reviewing' | 'approved' : 'all'}
                 onChange={v => setEvFilter(v)} items={[
                   ['all', `すべて ${evalRows.length}`], ['collecting', `評価中 ${collecting.length}`],
                   ['reviewing', `承認待ち ${reviewing.length}`], ['approved', `承認済み ${evalRows.filter(r => r.state === 'approved').length}`],
                 ]} />
               {(evFilter === 'soon' || evFilter === 'mine') && (
-                <button onClick={() => setEvFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+                <button onClick={() => setEvFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-13 font-bold">
                   {evFilter === 'soon' ? 'もうすぐ評価日の人' : 'あなたの入力待ち'}だけ表示中 ×
                 </button>
               )}
@@ -1580,13 +1580,13 @@ export default function EvaluationPage() {
                   className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${EV_COLS} gap-x-3 gap-y-1.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums`}>
                   <span className="col-span-2 lg:col-span-1 flex items-center gap-2.5 min-w-0">
                     <WorkerAvatar name={r.w.name} src={photos[String(r.w.id)]} size={36} />
-                    <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{r.w.name}</span>
+                    <span className="text-15 font-bold text-gray-900 dark:text-gray-100 truncate">{r.w.name}</span>
                     {r.youAreEvaluator && r.state === 'collecting' && (r.youSubmitted ? <Chip tone="green">入力済み</Chip> : <Chip tone="amber">あなたの入力待ち</Chip>)}
                   </span>
                   <span><Chip tone="gray">{VISA_LABELS[r.w.visaType] || r.w.visaType}</Chip></span>
                   <span className="text-sm">{yrs > 0 ? `${yrs}年` : '—'}</span>
                   <span className="flex flex-wrap items-center gap-2">
-                    {r.state === 'none' ? <span className="text-[13px] text-hibi-sub dark:text-gray-400">{r.isOverdue ? '' : '次の評価日まで'}</span> : <Chip tone={st.tone}>{st.label}</Chip>}
+                    {r.state === 'none' ? <span className="text-13 text-hibi-sub dark:text-gray-400">{r.isOverdue ? '' : '次の評価日まで'}</span> : <Chip tone={st.tone}>{st.label}</Chip>}
                     {r.state === 'collecting' && r.active && progressDots(r.active)}
                   </span>
                   <span className={`text-lg font-bold ${r.latest?.rank ? rankColor(r.latest.rank) : 'text-gray-300 dark:text-gray-600'}`}>{r.latest?.rank || '—'}</span>
@@ -1610,8 +1610,8 @@ export default function EvaluationPage() {
                   <div className="flex items-center gap-3">
                     <WorkerAvatar name={r.w.name} src={photos[String(r.w.id)]} size={52} />
                     <div className="flex-1 min-w-0">
-                      <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{r.w.name}</h2>
-                      <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+                      <h2 className="text-22 font-bold text-gray-900 dark:text-white truncate">{r.w.name}</h2>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1 text-13 text-hibi-sub dark:text-gray-400">
                         <Chip tone="gray">{VISA_LABELS[r.w.visaType] || r.w.visaType}</Chip>
                         {yrs > 0 && <span>勤続{yrs}年</span>}
                         {s && <span>／ 評価日 {s.evaluationDate}</span>}
@@ -1632,12 +1632,12 @@ export default function EvaluationPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <Chip tone={STATE_CHIP[r.state].tone}>{STATE_CHIP[r.state].label}</Chip>
                         {r.state === 'collecting' && seesAllReviews && (
-                          <span className="text-[13px] text-hibi-sub dark:text-gray-400">
+                          <span className="text-13 text-hibi-sub dark:text-gray-400">
                             {s.evaluatorIds.length}人中{s.reviews.filter(rv => s.evaluatorIds.includes(rv.evaluatorId)).length}人が入力済み（始めてから{daysSince(s.createdAt)}日）
                           </span>
                         )}
                         {r.state === 'approved' && s.rank && (
-                          <span className="text-[13px] text-hibi-sub dark:text-gray-400">ランク <b className={`text-base ${rankColor(s.rank)}`}>{s.rank}</b>{s.raiseAmount != null && <>（昇給 {fmtYen(s.raiseAmount)}/時）</>}</span>
+                          <span className="text-13 text-hibi-sub dark:text-gray-400">ランク <b className={`text-base ${rankColor(s.rank)}`}>{s.rank}</b>{s.raiseAmount != null && <>（昇給 {fmtYen(s.raiseAmount)}/時）</>}</span>
                         )}
                       </div>
 
@@ -1951,7 +1951,7 @@ export default function EvaluationPage() {
                   <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
                     <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-3">
                       スコアプレビュー
-                      <span className="ml-2 text-[11px] font-normal text-gray-500">
+                      <span className="ml-2 text-xxs font-normal text-gray-500">
                         （あなたの担当カテゴリの合計のみ表示）
                       </span>
                     </h3>
@@ -2255,7 +2255,7 @@ export default function EvaluationPage() {
                               >
                                 <div>{review.evaluatorName}</div>
                                 {w && (
-                                  <div className="mt-1 text-[10px] font-normal opacity-90">
+                                  <div className="mt-1 text-2xs font-normal opacity-90">
                                     {w.isApprover ? (
                                       <span title={`事業責任者の固定ウェイト (${w.weight.toFixed(2)})`}>w={w.weight.toFixed(2)} ★</span>
                                     ) : (
@@ -2274,7 +2274,7 @@ export default function EvaluationPage() {
                           <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 bg-indigo-50 dark:bg-indigo-900/30 min-w-[140px]">
                             最終評価
                             {session.evaluatorWeights && (
-                              <div className="text-[10px] font-normal opacity-70 mt-0.5">（重み付き加重平均）</div>
+                              <div className="text-2xs font-normal opacity-70 mt-0.5">（重み付き加重平均）</div>
                             )}
                           </th>
                         </tr>

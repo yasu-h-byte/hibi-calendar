@@ -50,7 +50,7 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
             <input type="number" value={buyoutForm.days} onChange={e => setBuyoutForm(prev => ({ ...prev, days: e.target.value }))}
               placeholder="例: 5"
               className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm" />
-            <p className="text-[10px] text-gray-400 mt-1">※残日数の範囲内で指定</p>
+            <p className="text-2xs text-gray-400 mt-1">※残日数の範囲内で指定</p>
           </div>
 
           <div>
@@ -61,7 +61,7 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
           </div>
         </div>
 
-        <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-[10px] text-amber-700 dark:text-amber-300">
+        <div className="mt-4 p-2 bg-amber-50 dark:bg-amber-900/20 rounded text-2xs text-amber-700 dark:text-amber-300">
           ℹ️ 買取記録はこのレコードの buyoutHistory に追記され、買取日数ぶん残日数が減ります。「調整」欄での二重計上は不要です。
         </div>
 

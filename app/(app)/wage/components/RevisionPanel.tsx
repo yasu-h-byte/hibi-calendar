@@ -245,8 +245,8 @@ export default function RevisionPanel() {
         <div className="flex flex-wrap items-center gap-2 mb-1">
           <h2 className="text-lg font-bold">年次改定</h2>
           {applied
-            ? <span className="text-[11px] px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">確定済み</span>
-            : <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">下書き</span>}
+            ? <span className="text-xxs px-2 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">確定済み</span>
+            : <span className="text-xxs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">下書き</span>}
         </div>
         <p className="text-sm text-gray-500">
           基準日 <b className="tabular-nums">{data.effective}</b>
@@ -273,14 +273,14 @@ export default function RevisionPanel() {
             年間 {yen(totals.annual)}（290日換算）／
             昇給者{totals.ok}名の単純平均 {(totals.avgRateSimple * 100).toFixed(2)}%
           </div>
-          <div className="text-[11px] text-gray-400 mt-0.5">
+          <div className="text-xxs text-gray-400 mt-0.5">
             平均昇給率 = 昇給合計 ÷ 名簿全員の現在日額合計（処遇固定・対象外も母数に含む）
           </div>
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="text-xs text-gray-500 mb-1.5">内訳</div>
-          <div className="flex flex-wrap gap-1.5 text-[11px]">
+          <div className="flex flex-wrap gap-1.5 text-xxs">
             <span className={`px-2 py-0.5 rounded-full font-bold ${STATUS_CHIP.ok.cls}`}>改定 {totals.ok}</span>
             {totals.blocked > 0 && <span className={`px-2 py-0.5 rounded-full font-bold ${STATUS_CHIP.blocked.cls}`}>要入力 {totals.blocked}</span>}
             {totals.ineligible > 0 && <span className={`px-2 py-0.5 rounded-full font-bold ${STATUS_CHIP.ineligible.cls}`}>対象外 {totals.ineligible}</span>}
@@ -303,7 +303,7 @@ export default function RevisionPanel() {
             ? <span className="text-xs text-green-700 dark:text-green-400">ペアのルールを満たしています</span>
             : <span className="text-xs text-amber-800 dark:text-amber-300 font-bold">{data.revision.balance.messages.join(' / ')}</span>}
         </div>
-        <p className="text-[11px] text-gray-400 mt-1">
+        <p className="text-xxs text-gray-400 mt-1">
           S を1人出したら B を1人、SS を1人出したら C を1人（第5節）。全体が A に寄りすぎず、昇給総額も自然に収まります。
         </p>
       </section>
@@ -343,10 +343,10 @@ export default function RevisionPanel() {
                     <td className={`${td} whitespace-nowrap`}>
                       <div className="flex items-center gap-1.5">
                         <span className="font-medium">{m.name}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${STATUS_CHIP[r.status].cls}`}>{STATUS_CHIP[r.status].label}</span>
+                        <span className={`text-2xs px-1.5 py-0.5 rounded-full font-bold ${STATUS_CHIP[r.status].cls}`}>{STATUS_CHIP[r.status].label}</span>
                       </div>
                       {m.adjustment ? (
-                        <div className="text-[10px] text-gray-400 mt-0.5">調整給 {yen(m.adjustment)}</div>
+                        <div className="text-2xs text-gray-400 mt-0.5">調整給 {yen(m.adjustment)}</div>
                       ) : null}
                     </td>
 
@@ -390,13 +390,13 @@ export default function RevisionPanel() {
                           <b className="ml-1.5 text-gray-900 dark:text-white">= {r.result.totalPitch}</b>
                         </span>
                       ) : (
-                        <span className="text-[11px] text-amber-700 dark:text-amber-400">{r.blockers[0] || '—'}</span>
+                        <span className="text-xxs text-amber-700 dark:text-amber-400">{r.blockers[0] || '—'}</span>
                       )}
                     </td>
 
                     <td className={`${td} text-right tabular-nums whitespace-nowrap`}>
                       {r.result
-                        ? <><b>{yen(r.newTotal)}</b><div className="text-[10px] text-gray-400">{r.result.newStep}号</div></>
+                        ? <><b>{yen(r.newTotal)}</b><div className="text-2xs text-gray-400">{r.result.newStep}号</div></>
                         : <span className="text-gray-400">{yen(r.newTotal)}</span>}
                     </td>
 
@@ -404,7 +404,7 @@ export default function RevisionPanel() {
                       {r.result && r.result.raisePerDay > 0 ? (
                         <>
                           <b className="text-green-700 dark:text-green-400">+{yen(r.result.raisePerDay)}</b>
-                          <div className="text-[10px] text-gray-400">{(r.result.upRate * 100).toFixed(2)}%</div>
+                          <div className="text-2xs text-gray-400">{(r.result.upRate * 100).toFixed(2)}%</div>
                         </>
                       ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
                     </td>
@@ -413,7 +413,7 @@ export default function RevisionPanel() {
                       {r.status === 'fixed' ? <span className="text-xs text-gray-300 dark:text-gray-600">—</span> : (
                         <button
                           onClick={() => setOpenSpecial(open ? null : m.id)}
-                          className={`text-[11px] px-2.5 py-1 rounded-lg border transition ${
+                          className={`text-xxs px-2.5 py-1 rounded-lg border transition ${
                             missing
                               ? 'border-amber-400 bg-amber-50 text-amber-800 font-bold dark:bg-amber-900/30 dark:text-amber-300'
                               : (sp !== 0 || dp !== 0 || e.reason || e.comment)
@@ -476,7 +476,7 @@ export default function RevisionPanel() {
                             <div>
                               <div className="flex items-baseline gap-2 mb-1.5">
                                 <span className="text-xs font-bold">特別調整</span>
-                                <span className="text-[11px] text-gray-500">
+                                <span className="text-xxs text-gray-500">
                                   合計 <b className={sp < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}>{signedPitch(sp)}</b>（±3が上限）
                                 </span>
                               </div>
@@ -492,7 +492,7 @@ export default function RevisionPanel() {
                                         onChange={ev => setEntry(m.id, { specialKeys: ev.target.checked ? [...keys, sr.key] : keys.filter(k => k !== sr.key) })}
                                         className="mt-0.5"
                                       />
-                                      <span className="text-[11px] leading-snug">
+                                      <span className="text-xxs leading-snug">
                                         {sr.label}
                                         <b className={`ml-1 ${sr.pitch < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-400'}`}>{signedPitch(sr.pitch)}</b>
                                       </span>
@@ -505,7 +505,7 @@ export default function RevisionPanel() {
                             <div className="pt-3 border-t border-gray-200 dark:border-gray-600">
                               <div className="flex items-baseline gap-2 mb-1.5">
                                 <span className="text-xs font-bold">代表加算</span>
-                                <span className="text-[11px] text-gray-500">事由に当てはまらない分を直接動かす（上限なし）</span>
+                                <span className="text-xxs text-gray-500">事由に当てはまらない分を直接動かす（上限なし）</span>
                               </div>
                               <div className="flex flex-wrap items-start gap-2">
                                 {/* 2026-08-28: number input の onChange 即保存は、1文字ごとに
@@ -540,7 +540,7 @@ export default function RevisionPanel() {
                                 />
                               </div>
                               {dp !== 0 && (
-                                <p className="text-[11px] text-gray-500 mt-1.5">
+                                <p className="text-xxs text-gray-500 mt-1.5">
                                   号を {signedPitch(dp)} 動かします。<b>この文章は本人へのメッセージとして、給料表の号数の表の下にそのまま載ります</b>（監査証跡にも残ります）。
                                 </p>
                               )}
@@ -574,7 +574,7 @@ export default function RevisionPanel() {
         <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-gray-600 dark:text-gray-300">
             <b>本人へ渡す給料表</b>
-            <div className="text-[11px] text-gray-400 mt-0.5">
+            <div className="text-xxs text-gray-400 mt-0.5">
               とび事業部給料表の様式でA4横1枚ずつ出力します。金額は確定時に凍結した値を使うので、
               あとから号俸表を変えても給料表の数字は動きません。
             </div>
@@ -603,7 +603,7 @@ export default function RevisionPanel() {
         <section className="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900/50 p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-gray-600 dark:text-gray-300">
             <b>評価を入れ直す</b>
-            <div className="text-[11px] text-gray-400 mt-0.5">
+            <div className="text-xxs text-gray-400 mt-0.5">
               確定を取り消すと、人員マスタの号と日額が改定前に戻り、下書きとして評語・コメントを入れ直せます。
               改定月以降の給与を締めた後は取り消せません。
             </div>
@@ -621,7 +621,7 @@ export default function RevisionPanel() {
           <div className="text-sm text-gray-600 dark:text-gray-300">
             評語・コメントの入力は<b>自動で保存</b>されています。このボタンは、全員の評価が決まったあと最後に1回だけ押します。<br />
             確定すると人員マスタの号と日額が書き換わり、編集できなくなります（取り消しはできます）。
-            <div className="text-[11px] text-gray-400 mt-0.5">
+            <div className="text-xxs text-gray-400 mt-0.5">
               要入力が残っている・評語のバランスが取れていない場合は確定できません。
             </div>
           </div>
@@ -638,7 +638,7 @@ export default function RevisionPanel() {
         </section>
       )}
 
-      <p className="text-[11px] text-gray-400">
+      <p className="text-xxs text-gray-400">
         号俸表・評語・年齢調整・特別調整の定義は <code>docs/wage-system.md</code>。
         在籍{data.meta.firstRevisionMinMonths}ヶ月未満の方は初回改定の対象外です（個別に含めることもできます）。
       </p>
@@ -690,7 +690,7 @@ function SendList({ effective, rows }: {
     <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
       <div>
         <b className="text-sm">本人へ送る</b>
-        <div className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
+        <div className="text-xxs text-gray-400 mt-0.5 leading-relaxed">
           一人ずつ「給料表を開く」→ 印刷 →「PDFに保存」（ファイル名に名前が入ります）。送る文面にはマイページのURLが入っています。
           URLはご本人専用の合言葉なので、グループではなく1対1で送ってください。
         </div>
@@ -703,7 +703,7 @@ function SendList({ effective, rows }: {
               <a href={`/wage/notice?effective=${effective}&worker=${r.id}`} target="_blank" rel="noopener noreferrer"
                 className={`${btn} bg-hibi-navy text-white border-hibi-navy hover:opacity-90 hover:bg-hibi-navy`}>🖨 給料表を開く</a>
             ) : (
-              <span className="text-[11px] text-gray-400 w-[104px]">{r.fixed ? '給料表は配らない（処遇固定）' : '給料表なし'}</span>
+              <span className="text-xxs text-gray-400 w-[104px]">{r.fixed ? '給料表は配らない（処遇固定）' : '給料表なし'}</span>
             )}
             <button type="button" className={btn} onClick={() => copy(`u${r.id}`, url(r.token))}>
               {copied === `u${r.id}` ? '✓ コピーしました' : '🔗 URLをコピー'}

@@ -13,6 +13,25 @@ const config: Config = {
   theme: {
     extend: {
       // 字は BIZ UDPゴシック（読み間違えにくいユニバーサルデザイン書体）。app/layout.tsx で読み込む
+      /**
+       * 文字の大きさ（2026-10-03 UI の磨き込み・土台）。
+       * 旧: text-[10px] のような px 指定が約650か所あり、「大きい文字」（html の font-size を 18px にする）が効かなかった。
+       * rem で定義して、画面全体が設定どおりに大きくなるようにする。px 指定は印刷用の画面（給料表・計算根拠PDF・
+       * 評価の印刷・請求書の印刷）だけに残す（紙の見た目を変えないため）。
+       * 2xs（10px 相当）は札・補足だけ。本文には xxs（11px 相当）以上を使う
+       */
+      fontSize: {
+        '2xs': ['0.625rem', { lineHeight: '0.875rem' }],   // 10px
+        'xxs': ['0.6875rem', { lineHeight: '1rem' }],      // 11px
+        '13': ['0.8125rem', { lineHeight: '1.125rem' }],   // 13px
+        '15': ['0.9375rem', { lineHeight: '1.375rem' }],   // 15px
+        '17': ['1.0625rem', { lineHeight: '1.5rem' }],     // 17px
+        '22': ['1.375rem', { lineHeight: '1.75rem' }],     // 22px
+        '26': ['1.625rem', { lineHeight: '2rem' }],        // 26px
+        '28': ['1.75rem', { lineHeight: '2.125rem' }],     // 28px
+        '30': ['1.875rem', { lineHeight: '2.25rem' }],     // 30px
+        '32': ['2rem', { lineHeight: '2.375rem' }],        // 32px
+      },
       fontFamily: {
         sans: ['var(--font-ud)', ...defaultTheme.fontFamily.sans],
       },

@@ -84,7 +84,7 @@ export default function LoginPage() {
           </div>
           <p className="text-xs text-gray-400 mt-1.5 tracking-wide">{DEDURA_TAGLINE}</p>
           {/* タグラインより濃くしないこと。濃いと主役（タグライン）と階層が逆転する */}
-          <p className="text-[11px] text-gray-400 tracking-wide mt-3">{DEDURA_BYLINE}</p>
+          <p className="text-xxs text-gray-400 tracking-wide mt-3">{DEDURA_BYLINE}</p>
         </div>
 
         {step === 'password' ? (

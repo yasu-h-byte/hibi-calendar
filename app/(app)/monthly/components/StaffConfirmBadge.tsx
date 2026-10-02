@@ -92,7 +92,7 @@ export default function StaffConfirmBadge({
     }
   }
 
-  const badgeCls = `ml-1.5 text-[10px] whitespace-nowrap px-1.5 py-0.5 rounded-full font-bold align-middle ${cls}`
+  const badgeCls = `ml-1.5 text-2xs whitespace-nowrap px-1.5 py-0.5 rounded-full font-bold align-middle ${cls}`
   return (
     <>
       {isIssue ? (

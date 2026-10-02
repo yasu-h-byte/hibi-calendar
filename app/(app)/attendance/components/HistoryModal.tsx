@@ -121,13 +121,13 @@ export default function HistoryModal({
                      ${h.beforeSource === 'staff'
                        ? 'border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-900/20'
                        : 'border-gray-200 dark:border-gray-700'}`}>
-                <div className="text-[11px] text-gray-400 whitespace-nowrap tabular-nums w-16">{jst(h.at)}</div>
+                <div className="text-xxs text-gray-400 whitespace-nowrap tabular-nums w-16">{jst(h.at)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium">
                     {workerNames[h.workerId] || `ID ${h.workerId}`}
                     <span className="text-gray-400 font-normal"> / {h.day}日</span>
                     {h.beforeSource === 'staff' && (
-                      <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold">
+                      <span className="ml-1.5 text-2xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold">
                         スマホ入力
                       </span>
                     )}
