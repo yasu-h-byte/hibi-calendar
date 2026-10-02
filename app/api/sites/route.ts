@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, requireCap, getCallerPermRole } from '@/lib/auth'
 import { roleCan } from '@/lib/permissions'
 import { db } from '@/lib/firebase'
-import { doc, getDoc, updateDoc } from '@/lib/fsdb'
+import { doc, getDoc, runTransaction } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
 import { resolveSiteParties } from '@/lib/companies'
+import { siteDeleteBlockReason } from '@/lib/master-refs'
 import { orderSitesWithWorkTypes } from '@/lib/site-hierarchy'
 
 interface RatePeriod {
@@ -151,9 +152,18 @@ export async function GET(request: NextRequest) {
     const defaultRates = (data.defaultRates || { tobiRate: 38000, dokoRate: 30000 }) as { tobiRate: number; dokoRate: number }
 
     // 2026-09-26: 単価（受取・常用・外注）は masters.view（事務所の人）だけ。職長の出面画面には現場名・工期・勤務時間だけ
+    // 2026-10-02 総合点検: 「消す項目を並べる」方式（tobiRate/dokoRate/rates を 0 に）から許可リスト方式にした。
+    //   現場に単価の項目が増えたとき（例: 工種別単価）、消し忘れでそのまま職長に見えるのを防ぐ（CLAUDE.md 給与の取り扱い）
     if (!roleCan(await getCallerPermRole(request), 'masters.view')) {
       return NextResponse.json({
-        sites: sites.map(s => ({ ...s, tobiRate: 0, dokoRate: 0, rates: [] })),
+        sites: sites.map(s => ({
+          id: s.id, name: s.name, start: s.start, end: s.end, foreman: s.foreman, archived: s.archived,
+          workSchedule: s.workSchedule, noDriveAllowance: s.noDriveAllowance, calendarFromYm: s.calendarFromYm,
+          siteType: s.siteType, client: s.client, gcId: s.gcId, primeId: s.primeId, ownerId: s.ownerId,
+          parentId: s.parentId, workType: s.workType,
+          // 単価の項目は返さない（空の形だけ残す＝画面の型をそろえる）
+          tobiRate: 0, dokoRate: 0, rates: [],
+        })),
         assign: Object.fromEntries(Object.entries(assign).map(([k, v]) => [k, { workers: v.workers, subcons: v.subcons }])),
         workers,
         subcons: subcons.map(sc => ({ id: sc.id, name: sc.name, type: sc.type })),
@@ -203,12 +213,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { action } = body
 
-    const result = await getMainDoc()
-    if (!result) {
+    // 2026-10-02 総合点検: 旧は main を読んで sites 配列・assign マップを丸ごと書き戻していた（read-modify-write）。
+    //   職長が工種を切り替えた直後（assign のドット記法更新）や、2人が別の現場を同時に保存すると片方が消えた。
+    //   ここから下は runTransaction の中で動く（読んだあとに main が変わっていれば Firestore がやり直す）。
+    //   操作の記録はトランザクションが確定してから書く（やり直しで二重に残さない）。各 action の中身は従来のまま
+    const pendingLogs: [string, string, string][] = []
+    const log = (userId: string, act: string, details: string) => { pendingLogs.push([userId, act, details]) }
+    const mainRef = doc(db, 'demmen', 'main')
+    const response: Response = await runTransaction(db, async (tx) => {
+    pendingLogs.length = 0
+    const snap = await tx.get(mainRef)
+    if (!snap.exists()) {
       return NextResponse.json({ error: 'No data found' }, { status: 404 })
     }
-
-    const { ref, data } = result
+    const ref = mainRef
+    const data = snap.data() as Record<string, unknown>
     const sites = (data.sites || []) as RawSite[]
 
     if (action === 'add') {
@@ -235,8 +254,8 @@ export async function POST(request: NextRequest) {
           ? { calendarFromYm: body.calendarFromYm.replace('-', '') } : {}),
       }
 
-      await updateDoc(ref, { sites: [...sites, newSite].map(stripUndefinedDeep) })
-      await logActivity('admin', 'site.add', `${name} を追加`)
+      tx.update(ref, { sites: [...sites, newSite].map(stripUndefinedDeep) })
+      log('admin', 'site.add', `${name} を追加`)
       return NextResponse.json({ success: true, site: newSite })
     }
 
@@ -320,29 +339,29 @@ export async function POST(request: NextRequest) {
       const updateData: Record<string, unknown> = { sites: updated.map(stripUndefinedDeep) }
 
       // Save subconRates to assign[siteId].subconRates
+      //   2026-10-02 総合点検: assign マップ丸ごとではなく、この現場の subconRates だけをドット記法で書く
       if (subconRates !== undefined) {
-        const assign = (data.assign || {}) as Record<string, Record<string, unknown>>
-        const siteAssign = assign[id] || { workers: [], subcons: [] }
-        siteAssign.subconRates = subconRates
-        assign[id] = siteAssign
-        updateData.assign = assign
+        if (!/^[A-Za-z0-9_-]+$/.test(String(id))) return NextResponse.json({ error: 'id の形式が不正です' }, { status: 400 })
+        const clean = (subconRates && typeof subconRates === 'object') ? stripUndefinedDeep(subconRates as Record<string, unknown>) : {}
+        const { deleteField } = await import('@/lib/fsdb')
+        updateData[`assign.${id}.subconRates`] = Object.keys(clean).length > 0 ? clean : deleteField()
       }
 
-      await updateDoc(ref, updateData)
+      tx.update(ref, updateData)
 
       // Log rate changes if rates array was updated
       if (rates !== undefined) {
         const siteName = updated[idx].name || id
         const latestRate = Array.isArray(rates) && rates.length > 0 ? rates[rates.length - 1] : null
         if (latestRate) {
-          await logActivity('admin', 'rates.site', `${siteName} 単価変更: 鳶¥${latestRate.tobiRate} 土工¥${latestRate.dokoRate}`)
+          log('admin', 'rates.site', `${siteName} 単価変更: 鳶¥${latestRate.tobiRate} 土工¥${latestRate.dokoRate}`)
         }
       }
 
       if (commute?.judgedMin !== undefined && sites[idx]?.commute?.judgedMin === undefined) {
-        await logActivity('admin', 'site.commute', `${updated[idx].name || id} 通勤時間を凍結: 判定値${commute.judgedMin}分`)
+        log('admin', 'site.commute', `${updated[idx].name || id} 通勤時間を凍結: 判定値${commute.judgedMin}分`)
       }
-      await logActivity('admin', 'site.update', `${id} を更新`)
+      log('admin', 'site.update', `${id} を更新`)
       return NextResponse.json({ success: true })
     }
 
@@ -360,8 +379,8 @@ export async function POST(request: NextRequest) {
       for (let i = 0; i < updated.length; i++) {
         if (updated[i].parentId === id) updated[i] = inheritFromParent(updated[i], updated[idx])
       }
-      await updateDoc(ref, { sites: updated.map(stripUndefinedDeep) })
-      await logActivity('admin', 'site.update', `${updated[idx].name || id} 運転手当なし: ${value ? '指定' : '解除'}`)
+      tx.update(ref, { sites: updated.map(stripUndefinedDeep) })
+      log('admin', 'site.update', `${updated[idx].name || id} 運転手当なし: ${value ? '指定' : '解除'}`)
       return NextResponse.json({ success: true })
     }
 
@@ -381,6 +400,12 @@ export async function POST(request: NextRequest) {
       const filtered = sites.filter(s => s.id !== id)
       if (filtered.length === sites.length) {
         return NextResponse.json({ error: 'Site not found' }, { status: 404 })
+      }
+      // 出面・請求額・請求書から参照があれば削除しない（lib/master-refs.ts・2026-10-02 総合点検）。
+      //   旧: 確認なしに消え、過去月の売上と現場の行が消えて原価の合計にだけ残った → 「終了」へ誘導する
+      {
+        const blocked = await siteDeleteBlockReason(String(id), data as { billing?: Record<string, number[] | number>; subcons?: { id: string }[] })
+        if (blocked) return NextResponse.json({ error: blocked }, { status: 409 })
       }
 
       const updateData: Record<string, unknown> = { sites: filtered }
@@ -405,8 +430,8 @@ export async function POST(request: NextRequest) {
         updateData.mforeman = mforeman
       }
 
-      await updateDoc(ref, updateData)
-      await logActivity('admin', 'site.delete', `${id} を削除`)
+      tx.update(ref, updateData)
+      log('admin', 'site.delete', `${id} を削除`)
       return NextResponse.json({ success: true })
     }
 
@@ -439,8 +464,8 @@ export async function POST(request: NextRequest) {
         if (k.startsWith(parent.id + '_')) { mforeman[`${child.id}_${k.slice(parent.id.length + 1)}`] = v; mfChanged = true }
       }
       if (mfChanged) updateData.mforeman = mforeman
-      await updateDoc(ref, updateData)
-      await logActivity('admin', 'site.addWorkType', `${parent.name} に工種「${wt}」を追加`)
+      tx.update(ref, updateData)
+      log('admin', 'site.addWorkType', `${parent.name} に工種「${wt}」を追加`)
       return NextResponse.json({ success: true, site: child })
     }
 
@@ -454,7 +479,7 @@ export async function POST(request: NextRequest) {
       mforeman[key] = { wid: Number(workerId) }
       // 工種サイトにも同じ月の職長を設定（職長は親現場と共通）
       for (const kid of sites.filter(x => x.parentId === siteId)) mforeman[`${kid.id}_${ym}`] = { wid: Number(workerId) }
-      await updateDoc(ref, { mforeman })
+      tx.update(ref, { mforeman })
       return NextResponse.json({ success: true })
     }
 
@@ -467,11 +492,14 @@ export async function POST(request: NextRequest) {
       const key = `${siteId}_${ym}`
       delete mforeman[key]
       for (const kid of sites.filter(x => x.parentId === siteId)) delete mforeman[`${kid.id}_${ym}`]
-      await updateDoc(ref, { mforeman })
+      tx.update(ref, { mforeman })
       return NextResponse.json({ success: true })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+    })
+    for (const [u, a, d] of pendingLogs) await logActivity(u, a, d)
+    return response
   } catch (error) {
     console.error('Sites POST error:', error)
     return NextResponse.json({ error: String(error) }, { status: 500 })

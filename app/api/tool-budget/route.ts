@@ -201,8 +201,10 @@ export async function POST(request: NextRequest) {
     const { action } = body
 
     // 2026-09-26: 登録・予算変更は toolBudget.edit（事務・代表）。getPeriod（履歴を見る）は閲覧
-    if (action !== 'getPeriod') {
-      const denied = await requireCap(request, 'toolBudget.edit')
+    // 2026-10-02 総合点検: getPeriod は権限を見ていなかった（ログインしていれば職長でも任意の人の購入履歴を読めた）
+    //   → GET と同じ toolBudget.view
+    {
+      const denied = await requireCap(request, action === 'getPeriod' ? 'toolBudget.view' : 'toolBudget.edit')
       if (denied) return denied
     }
 

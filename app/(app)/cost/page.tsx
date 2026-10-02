@@ -5,6 +5,8 @@ import { fmtYen, fmtYenMan, fmtNum, fmtPct } from '@/lib/format'
 import { visaLabel } from '@/lib/labels'
 import { isTobiGroup, jobLabel as jobLabelLib } from '@/lib/jobs'
 import { currentYmJst, todayJstDate } from '@/lib/date-utils'
+import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
+import { shiftYm } from '@/lib/month-nav'
 import { Icon } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Segment, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
 
@@ -175,16 +177,21 @@ export default function CostPage() {
     if (stored) setPassword(JSON.parse(stored).password)
   }, [])
 
+  // 月・期間・現場を素早く切り替えたとき、前の条件の応答をあとから画面に出さない（lib/hooks/useLatestRequest・2026-10-02）
+  const latest = useLatestRequest()
   const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!password) return
     // silent=true（保存後のバックグラウンド更新）は「読み込み中」に差し替えない。
     //   差し替えると表が一瞬1行に縮んで画面がガクッとスクロールするため。
     if (!opts?.silent) setLoading(true)
+    const req = latest.begin()
     try {
       const params = new URLSearchParams({ ym, period, site: siteFilter })
-      const res = await fetch(`/api/cost?${params}`, { headers: { 'x-admin-password': password } })
+      const res = await fetch(`/api/cost?${params}`, { headers: { 'x-admin-password': password }, signal: req.signal })
+      if (!req.isCurrent()) return
       if (res.ok) {
         const d = await res.json()
+        if (!req.isCurrent()) return
         setData(d)
         // 入力欄の状態をサーバー値から組み立てる。
         //
@@ -209,22 +216,19 @@ export default function CostPage() {
           return edits
         })
       }
+    } catch (e) {
+      if (!latest.isAbort(e)) throw e
     } finally {
-      if (!opts?.silent) setLoading(false)
+      if (!opts?.silent && req.isCurrent()) setLoading(false)
     }
-  }, [password, ym, period, siteFilter])
+  }, [password, ym, period, siteFilter, latest])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   const ymLabel = (m: string) => `${parseInt(m.slice(4))}月`
 
   // Period navigation (prev/next month)
-  const navigateMonth = (direction: -1 | 1) => {
-    const y = parseInt(ym.slice(0, 4))
-    const m = parseInt(ym.slice(4, 6))
-    const d = new Date(y, m - 1 + direction, 1)
-    setYm(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
+  const navigateMonth = (direction: -1 | 1) => setYm(shiftYm(ym, direction))
 
   const ymDisplayLabel = `${parseInt(ym.slice(0, 4))}年${parseInt(ym.slice(4))}月`
 
@@ -233,11 +237,21 @@ export default function CostPage() {
 
   // Save billing for a site+month
   const saveBilling = async (siteId: string, month: string, amounts: number[]) => {
-    await fetch('/api/cost', {
-      method: 'POST',
-      headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ siteId, ym: month, amounts }),
-    })
+    // 2026-10-02 総合点検: 旧は res.ok を見ておらず、締め済み・権限なし・通信失敗でも「保存できた」ように見えていた
+    let res: Response
+    try {
+      res = await fetch('/api/cost', {
+        method: 'POST',
+        headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, ym: month, amounts }),
+      })
+    } catch {
+      alert('請求額を保存できませんでした（通信に失敗しました）'); return
+    }
+    if (!res.ok) {
+      const j = await res.json().catch(() => null)
+      alert(j?.error || '請求額を保存できませんでした')
+    }
     fetchData({ silent: true })  // 静かに更新（表を縮めない＝スクロールが飛ばない）
   }
 
@@ -416,7 +430,8 @@ export default function CostPage() {
           <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             <Stat label={kpi.estMonths > 0 ? `売上（請求額・見込み${kpi.estMonths}か月を含む）` : '売上（請求額）'} value={fmtYen(kpi.billing)}
               sub={kpi.prevBilling > 0
-                ? `前月の同じ日まで ${fmtYenMan(kpi.prevBilling)}（${kpi.billing >= kpi.prevBilling ? '+' : ''}${(((kpi.billing - kpi.prevBilling) / kpi.prevBilling) * 100).toFixed(1)}%）`
+                // 2026-10-02 総合点検: サーバの prevBilling は前月の1か月分の請求額（日割りではない）。旧の「前月の同じ日まで」は実態と違った
+                ? `前月の請求額（1か月分） ${fmtYenMan(kpi.prevBilling)}（${kpi.billing >= kpi.prevBilling ? '+' : ''}${(((kpi.billing - kpi.prevBilling) / kpi.prevBilling) * 100).toFixed(1)}%）`
                 : '請求額の合計'} />
             <Stat label="原価" value={fmtYen(kpi.cost)}
               sub={`社員 ${fmtYenMan(t.cost)} ／ 外注 ${fmtYenMan(t.subCost)}（外注率 ${fmtPct(kpi.subconRate)}）`} />

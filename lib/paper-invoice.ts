@@ -181,5 +181,50 @@ export function paperDoubleBillingError(records: Pick<PaperInvoice, 'companyId' 
   return `この会社の${parseInt(ym.slice(4, 6), 10)}月分は紙の請求書を登録済みです。二重請求になるので、システムからは発行できません（紙の請求書を削除してから）`
 }
 
+/**
+ * 「税抜小計＋消費税＝税込合計」の確認（純粋・2026-10-02 総合点検）。
+ * 小計と消費税の両方が入っているときだけ見る（片方だけなら見比べの材料として受け入れる）。
+ * 打ち間違いを黙って保存すると見比べが狂うので、合わないときは理由を返す。
+ */
+export function paperTotalsError(f: { subtotal?: number | null; tax?: number | null; total: number }): string | null {
+  if (typeof f.subtotal !== 'number' || typeof f.tax !== 'number') return null
+  if (f.subtotal + f.tax === f.total) return null
+  return `税抜小計 ${f.subtotal.toLocaleString()} ＋ 消費税 ${f.tax.toLocaleString()} ＝ ${(f.subtotal + f.tax).toLocaleString()} で、税込合計 ${f.total.toLocaleString()} と合いません`
+}
+
+/**
+ * 逆方向の二重請求の防止（純粋・2026-10-02 総合点検）。
+ * システムで発行済み・承認待ちの会社・月に紙の請求書を入れると、相手に同じ月の請求書が2枚届く
+ * （旧: システム側からの発行だけ止めていて、紙の側は確認が無かった）。
+ */
+export function systemDoubleBillingError(
+  records: { companyId: string; ym: string; status: string; no?: string }[], ym: string, companyId: string,
+): string | null {
+  const hit = records.filter(r => r.ym === ym && r.companyId === companyId && (r.status === 'issued' || r.status === 'pending'))
+  if (hit.length === 0) return null
+  const issued = hit.find(r => r.status === 'issued')
+  const m = parseInt(ym.slice(4, 6), 10)
+  return issued
+    ? `この会社の${m}月分はシステムで発行済み（${issued.no || '番号なし'}）です。二重請求になるので紙の請求書は入れられません（システムの請求書を取り消してから）`
+    : `この会社の${m}月分はシステムで承認待ちの申請があります。先に差し戻し・取り下げをしてから入れてください`
+}
+
+/**
+ * 同じ会社・同じ月の紙の請求書をまとめて1枚とみなす（純粋・2026-10-02 総合点検）。
+ * 現場別・工種別に2枚出した月は、1枚ずつをシステムの月合計と比べると必ず「差あり」になるので、合算でも見比べる。
+ * - 小計・消費税は全部に入っているときだけ合算（1枚でも空なら null）
+ * - 明細は全部に入っているときだけつなぐ（1枚でも無ければ無し＝人工の見比べは出さない）
+ */
+export function mergePaperInvoices(papers: Pick<PaperInvoice, 'subtotal' | 'tax' | 'total' | 'lines'>[]): Pick<PaperInvoice, 'subtotal' | 'tax' | 'total' | 'lines'> {
+  const allNum = (k: 'subtotal' | 'tax') => papers.every(p => typeof p[k] === 'number')
+  const allLines = papers.every(p => Array.isArray(p.lines) && p.lines.length > 0)
+  return {
+    subtotal: allNum('subtotal') ? papers.reduce((s, p) => s + (p.subtotal as number), 0) : null,
+    tax: allNum('tax') ? papers.reduce((s, p) => s + (p.tax as number), 0) : null,
+    total: papers.reduce((s, p) => s + (p.total || 0), 0),
+    lines: allLines ? papers.flatMap(p => p.lines as PaperInvoiceLine[]) : null,
+  }
+}
+
 /** 紙の請求書のドキュメント id（prepare で randomUUID() が作る形） */
 export const PAPER_INVOICE_DOC_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/

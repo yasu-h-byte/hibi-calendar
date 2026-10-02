@@ -3,6 +3,7 @@ import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit, deleteDoc, where } from '@/lib/fsdb'
 import { applyDueScheduledWorkerChanges } from '@/lib/worker-crud'
 import { BACKUP_COLLECTIONS, BACKUP_DOCS, approvalDocYm, type LastBackupInfo } from '@/lib/backup-plan'
+import { requireCron } from '@/lib/cron-auth'
 
 /**
  * 出面・人員マスターデータの日次バックアップ
@@ -18,7 +19,7 @@ import { BACKUP_COLLECTIONS, BACKUP_DOCS, approvalDocYm, type LastBackupInfo } f
  *
  * 認証:
  *   Vercel Cron からの呼び出しは Authorization: Bearer $CRON_SECRET ヘッダで認証。
- *   手動実行する場合は ?secret=<CRON_SECRET> クエリでも可。
+ *   手動実行する場合も同じヘッダか x-cron-secret ヘッダで送る（URL の ?secret= は 2026-10-02 に廃止・lib/cron-auth.ts）。
  *
  * 設定:
  *   vercel.json の crons セクションで毎日 17:00 UTC (= JST 02:00) にトリガ。
@@ -43,19 +44,6 @@ async function recordBackupResult(now: Date, summary: { saved: string[]; deleted
   } catch (e) {
     console.error('[backup] 実行結果の記録に失敗:', e)
   }
-}
-
-function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET
-  if (!secret) {
-    // CRON_SECRET 未設定時は無条件で許可しない（誤起動防止）
-    return false
-  }
-  const auth = request.headers.get('authorization')
-  if (auth === `Bearer ${secret}`) return true
-  const querySecret = request.nextUrl.searchParams.get('secret')
-  if (querySecret === secret) return true
-  return false
 }
 
 function isoDate(d: Date = new Date()): string {
@@ -88,10 +76,9 @@ function relativeYm(d: Date, monthsOffset: number): string {
 }
 
 export async function GET(request: NextRequest) {
-  // auth: Vercel Cron の CRON_SECRET
-  if (!isAuthorized(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  // auth: Vercel Cron の CRON_SECRET（lib/cron-auth.ts requireCron・2026-10-02 総合点検で3本共通に。
+  //   旧: ここで自前で比べ、`?secret=` でも通していた＝合言葉が URL・アクセスログに残る）
+  { const denied = requireCron(request); if (denied) return denied }
 
   const now = new Date()
   const stamp = isoDate(now)
@@ -242,6 +229,15 @@ export async function GET(request: NextRequest) {
       if (n > 0) summary.deleted.push(`attendanceHistory×${n}`)
     } catch (e) {
       summary.errors.push(`attendanceHistory purge: ${e instanceof Error ? e.message : String(e)}`)
+    }
+
+    // (2f) 操作ログの間引き（2026-10-02 総合点検: 旧は1件書くたびに550件読んで消していた → 日次でここだけ・lib/activity.ts）
+    try {
+      const { pruneActivityLog } = await import('@/lib/activity')
+      const n = await pruneActivityLog()
+      if (n > 0) summary.deleted.push(`activityLog×${n}`)
+    } catch (e) {
+      summary.errors.push(`activityLog prune: ${e instanceof Error ? e.message : String(e)}`)
     }
 
     // (3) 古いバックアップを削除（30日保持）

@@ -399,11 +399,13 @@ function WorkerModal({
     setAnchorSaving(true)
     setAnchorSaved(false)
     try {
-      await fetch('/api/tool-budget', {
+      const r = await fetch('/api/tool-budget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({ action: 'setPeriodAnchor', workerId: worker.workerId, anchor: anchor || null }),
       })
+      // 2026-10-02 総合点検: 旧は応答を見ておらず、権限なし・形式不正でも「保存しました」と出た
+      if (!r.ok) { const j = await r.json().catch(() => null); alert(j?.error || '期間の起点を保存できませんでした'); setAnchorSaving(false); return }
       setAnchorSaved(true)
       setTimeout(() => setAnchorSaved(false), 1500)
       onRefresh()
@@ -416,7 +418,7 @@ function WorkerModal({
     setBudgetSaving(true)
     setBudgetSaved(false)
     try {
-      await fetch('/api/tool-budget', {
+      const r = await fetch('/api/tool-budget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({
@@ -426,6 +428,7 @@ function WorkerModal({
           budget: Number(budget),
         }),
       })
+      if (!r.ok) { const j = await r.json().catch(() => null); alert(j?.error || '予算を保存できませんでした'); setBudgetSaving(false); return }
       setBudgetSaved(true)
       setTimeout(() => setBudgetSaved(false), 1500)
       onRefresh()
@@ -502,7 +505,7 @@ function WorkerModal({
     if (!worker.period) return
     if (!confirm('この購入記録を削除しますか？')) return
     try {
-      await fetch('/api/tool-budget', {
+      const r = await fetch('/api/tool-budget', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
         body: JSON.stringify({
@@ -512,6 +515,7 @@ function WorkerModal({
           purchaseId,
         }),
       })
+      if (!r.ok) { const j = await r.json().catch(() => null); alert(j?.error || '購入記録を削除できませんでした'); return }
       onRefresh()
     } catch { /* ignore */ }
   }

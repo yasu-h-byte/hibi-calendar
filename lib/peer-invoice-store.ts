@@ -9,8 +9,9 @@
  * 番号は `${invoicePrefix}-${ym}-${NN}`。月をまたいで会社が違っても連番（会社別ではない）。
  * 取り消した番号は欠番のまま残る（再利用しない）。
  */
+import { randomUUID } from 'node:crypto'
 import { db } from './firebase'
-import { doc, getDoc, updateDoc, addDoc, collection, getDocs, query, where } from '@/lib/fsdb'
+import { doc, getDoc, updateDoc, collection, getDocs, query, where, runTransaction } from '@/lib/fsdb'
 import { logActivity } from './activity'
 import {
   buildPeerInvoiceDraft, type PeerInvoiceDraft, type PeerInvoiceLine, type PeerInvoiceSiteDetail,
@@ -127,16 +128,61 @@ async function paperDoubleBillingCheck(ym: string, companyId: string): Promise<I
   return msg ? { ok: false, error: msg } : null
 }
 
-/** その月の次の請求書番号を出す（会社を問わず連番。欠番は詰めない） */
-async function nextInvoiceNo(ym: string, prefix: string): Promise<string> {
-  const all = await listPeerInvoicesForYm(ym)
+/**
+ * その月の次の請求書番号を出す（会社を問わず連番。欠番は詰めない）。純粋関数。
+ * 接頭辞は文字列として比べる（2026-10-02 総合点検: 旧は正規表現に埋めていたので、記号入りの接頭辞だと
+ * 常に 01 になるか例外になった）
+ */
+export function nextInvoiceNoFrom(existing: { no?: string }[], ym: string, prefix: string): string {
+  const head = `${prefix}-${ym}-`
   let max = 0
-  const re = new RegExp(`^${prefix}-${ym}-(\\d+)$`)
-  for (const inv of all) {
-    const m = inv.no.match(re)
-    if (m) max = Math.max(max, parseInt(m[1], 10))
+  for (const inv of existing) {
+    const no = inv.no || ''
+    if (!no.startsWith(head)) continue
+    const tail = no.slice(head.length)
+    if (/^\d+$/.test(tail)) max = Math.max(max, parseInt(tail, 10))
   }
-  return `${prefix}-${ym}-${String(max + 1).padStart(2, '0')}`
+  return `${head}${String(max + 1).padStart(2, '0')}`
+}
+
+/** トランザクションの中で使う書き込み口（lib/fsdb runTransaction が渡すもの） */
+type InvoiceTx = {
+  get: (ref: unknown) => Promise<{ exists: () => boolean; data: () => unknown }>
+  set: (ref: unknown, data: unknown, options?: unknown) => unknown
+  update: (ref: unknown, data: unknown) => unknown
+}
+
+/**
+ * 同じ月の発行・申請・承認を直列にする（2026-10-02 総合点検）。
+ *
+ * 根本原因: 「一覧を読んで最大値+1」「同じ会社・同じ月に発行済みが無いか」を読んでから addDoc するまでに
+ *   トランザクションが無く、2人が同時に発行すると同じ番号が2枚できた。同じ会社で二度押しすると発行済みが2件できた。
+ * 対処: demmen/system の `invoiceLock.{ym}` を読んで書く（番号は数えない・ただの合図）トランザクションの中で、
+ *   一覧の読み直し → 判定 → 書き込みを行う。同じ月の2つの処理は同じ合図を書くので、Firestore が片方を
+ *   やり直し、やり直した側は相手の書き込みを見て「発行済み」と判定する。
+ *   番号そのものは一覧の最大値から出すので、合図が消えても（復元など）番号は狂わない。
+ */
+export async function withInvoiceMonthLock<T>(ym: string, fn: (tx: InvoiceTx) => Promise<T>): Promise<T> {
+  const lockRef = doc(db, 'demmen', 'system')
+  return runTransaction(db, async (tx: InvoiceTx) => {
+    const snap = await tx.get(lockRef)
+    const locks = (snap.exists() ? (snap.data() as { invoiceLock?: Record<string, number> }).invoiceLock : undefined) || {}
+    const cur = Number(locks[ym]) || 0
+    const out = await fn(tx)
+    tx.set(lockRef, { invoiceLock: { [ym]: cur + 1 } }, { merge: true })   // 子値は非空マップ（空マップ置換の罠は踏まない）
+    return out
+  })
+}
+
+/** 同じ会社・同じ月に発行済み・承認待ちがあれば、その理由。無ければ null（トランザクションの中で読み直すときも使う） */
+function activeInvoiceError(existing: PeerInvoiceRecord[]): IssuePeerInvoiceError | null {
+  if (existing.some(inv => inv.status === 'issued')) {
+    return { ok: false, error: 'この会社・この月はすでに発行済みです。作り直す場合は先に取り消してください' }
+  }
+  if (existing.some(inv => inv.status === 'pending')) {
+    return { ok: false, error: 'この会社・この月は承認待ちの申請があります。承認・差し戻し・取り下げのどれかが済んでから操作してください' }
+  }
+  return null
 }
 
 export interface IssuePeerInvoiceResult {
@@ -236,13 +282,8 @@ async function buildFrozenInvoice(args: InvoiceCalcArgs): Promise<
   if (!profileCheck.ok) return { ok: false, error: profileCheck.error }
   if (!draft || !issuer) return { ok: false, error: isHfu ? 'この月は HFU の人工がありません' : 'この会社・この月に応援の請求はありません' }
 
-  const existing = await getPeerInvoicesForCompanyYm(ym, companyId)
-  if (existing.some(inv => inv.status === 'issued')) {
-    return { ok: false, error: 'この会社・この月はすでに発行済みです。作り直す場合は先に取り消してください' }
-  }
-  if (existing.some(inv => inv.status === 'pending')) {
-    return { ok: false, error: 'この会社・この月は承認待ちの申請があります。承認・差し戻し・取り下げのどれかが済んでから操作してください' }
-  }
+  const activeErr = activeInvoiceError(await getPeerInvoicesForCompanyYm(ym, companyId))
+  if (activeErr) return activeErr
   // 紙の請求書で出した月は二重請求になるので止める（2026-10-02）
   const paperErr = await paperDoubleBillingCheck(ym, companyId)
   if (paperErr) return paperErr
@@ -277,36 +318,54 @@ async function buildFrozenInvoice(args: InvoiceCalcArgs): Promise<
   }
 }
 
+/**
+ * 凍結した内容を1件書く（発行 or 申請）。番号の採番と「同じ会社・同じ月は1件」の確認は
+ * withInvoiceMonthLock の中で一覧を読み直して行う（同時操作で破れない）
+ */
+async function writeFrozenInvoice(
+  args: InvoiceCalcArgs,
+  frozen: Extract<Awaited<ReturnType<typeof buildFrozenInvoice>>, { ok: true }>,
+  mode: 'issue' | 'request',
+): Promise<IssuePeerInvoiceResult | IssuePeerInvoiceError> {
+  const pf = prefixFor(args.main, frozen.body)
+  if (!pf.ok) return pf
+  const id = randomUUID()
+  const ref = doc(db, COLLECTION, id)
+  const written = await withInvoiceMonthLock(args.ym, async (tx) => {
+    const all = await listPeerInvoicesForYm(args.ym)
+    const activeErr = activeInvoiceError(all.filter(inv => inv.companyId === args.companyId))
+    if (activeErr) return activeErr
+    const now = new Date().toISOString()
+    const record: Omit<PeerInvoiceRecord, 'id'> = mode === 'issue'
+      ? { ...frozen.body, no: nextInvoiceNoFrom(all, args.ym, pf.prefix), status: 'issued',
+          issueDate: issueDateFor(frozen.body), issuedAt: now, issuedBy: args.actor }
+      : { ...frozen.body, no: '', status: 'pending', issueDate: '', issuedAt: '', issuedBy: '',
+          requestedAt: now, requestedBy: args.actor,
+          requestedByName: args.main.workers.find(w => String(w.id) === args.actor)?.name || args.actor }
+    tx.set(ref, record)
+    return { ok: true as const, record: { id, ...record } }
+  })
+  if (!written.ok) return written
+  const r = written.record
+  await logActivity(args.actor, mode === 'issue' ? 'peerInvoice.issue' : 'peerInvoice.request',
+    mode === 'issue'
+      ? `${r.companyName} ${jpYmOf(args.ym)} ${invoiceTitle(r.companyId)} ${r.no}（¥${r.total.toLocaleString()}）を発行`
+      : `${r.companyName} ${jpYmOf(args.ym)} ${invoiceTitle(r.companyId)}（¥${r.total.toLocaleString()}）の発行を申請`)
+  return written
+}
+
 /** 事業責任者・管理者が自分で直接発行する（申請を経ない）。番号はこの時点で付く */
 export async function issuePeerInvoice(args: InvoiceCalcArgs): Promise<IssuePeerInvoiceResult | IssuePeerInvoiceError> {
   const frozen = await buildFrozenInvoice(args)
   if (!frozen.ok) return frozen
-  const pf = prefixFor(args.main, frozen.body)
-  if (!pf.ok) return pf
-  const no = await nextInvoiceNo(args.ym, pf.prefix)
-  const record: Omit<PeerInvoiceRecord, 'id'> = {
-    ...frozen.body, no, status: 'issued',
-    issueDate: issueDateFor(frozen.body), issuedAt: new Date().toISOString(), issuedBy: args.actor,
-  }
-  const ref = await addDoc(collection(db, COLLECTION), record)
-  await logActivity(args.actor, 'peerInvoice.issue', `${record.companyName} ${jpYmOf(args.ym)} ${invoiceTitle(record.companyId)} ${no}（¥${record.total.toLocaleString()}）を発行`)
-  return { ok: true, record: { id: ref.id, ...record } }
+  return writeFrozenInvoice(args, frozen, 'issue')
 }
 
 /** 事務が「発行を申請」する。内容はこの時点で凍結し、承認されたら番号が付いて発行済みになる */
 export async function requestPeerInvoice(args: InvoiceCalcArgs): Promise<IssuePeerInvoiceResult | IssuePeerInvoiceError> {
   const frozen = await buildFrozenInvoice(args)
   if (!frozen.ok) return frozen
-  const now = new Date().toISOString()
-  const record: Omit<PeerInvoiceRecord, 'id'> = {
-    ...frozen.body, no: '', status: 'pending',
-    issueDate: '', issuedAt: '', issuedBy: '',
-    requestedAt: now, requestedBy: args.actor,
-    requestedByName: args.main.workers.find(w => String(w.id) === args.actor)?.name || args.actor,
-  }
-  const ref = await addDoc(collection(db, COLLECTION), record)
-  await logActivity(args.actor, 'peerInvoice.request', `${record.companyName} ${jpYmOf(args.ym)} ${invoiceTitle(record.companyId)}（¥${record.total.toLocaleString()}）の発行を申請`)
-  return { ok: true, record: { id: ref.id, ...record } }
+  return writeFrozenInvoice(args, frozen, 'request')
 }
 
 async function loadInvoice(id: string) {
@@ -338,11 +397,24 @@ export async function approvePeerInvoice(args: { main: MainData; id: string; act
   if (apErr) return { ok: false, error: `${apErr.error}\n（申請のあとで承認が外されています。直し終わったら、この申請を差し戻して作り直してください）` }
   const pf = prefixFor(main, data)
   if (!pf.ok) return pf
-  const no = await nextInvoiceNo(data.ym, pf.prefix)
-  const update = { no, status: 'issued' as const, issueDate: issueDateFor(data), issuedAt: new Date().toISOString(), issuedBy: actor }
-  await updateDoc(ref, update)
-  await logActivity(actor, 'peerInvoice.approve', `${data.companyName} ${jpYmOf(data.ym)} ${invoiceTitle(data.companyId)} ${no}（¥${data.total.toLocaleString()}）を承認して発行（申請: ${data.requestedBy || '—'}）`)
-  return { ok: true, record: { id, ...data, ...update } }
+  // 採番と「発行済みが無いか」は同じ月の処理を直列にした中で読み直す（2026-10-02 総合点検）
+  const done = await withInvoiceMonthLock(data.ym, async (tx) => {
+    const fresh = await tx.get(ref)
+    if (!fresh.exists() || (fresh.data() as { status?: string }).status !== 'pending') {
+      return { ok: false as const, error: '承認待ちの申請ではありません（すでに処理済みです）' }
+    }
+    const all = await listPeerInvoicesForYm(data.ym)
+    if (all.some(inv => inv.companyId === data.companyId && inv.status === 'issued')) {
+      return { ok: false as const, error: 'この会社・この月はすでに発行済みです。先に取り消すか、この申請を差し戻してください' }
+    }
+    const no = nextInvoiceNoFrom(all, data.ym, pf.prefix)
+    const update = { no, status: 'issued' as const, issueDate: issueDateFor(data), issuedAt: new Date().toISOString(), issuedBy: actor }
+    tx.update(ref, update)
+    return { ok: true as const, update }
+  })
+  if (!done.ok) return done
+  await logActivity(actor, 'peerInvoice.approve', `${data.companyName} ${jpYmOf(data.ym)} ${invoiceTitle(data.companyId)} ${done.update.no}（¥${data.total.toLocaleString()}）を承認して発行（申請: ${data.requestedBy || '—'}）`)
+  return { ok: true, record: { id, ...data, ...done.update } }
 }
 
 /** 申請の差し戻し（事業責任者・管理者）または取り下げ（申請した事務の人） */

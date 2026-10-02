@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, requireCap } from '@/lib/auth'
+import { checkApiAuth, requireCap, getApiAuthUser } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc } from '@/lib/fsdb'
 import {
@@ -16,6 +16,8 @@ import {
   parseDKey,
 } from '@/lib/compute'
 import { applyPayrollCosts, type MonthAtt } from '@/lib/payroll-cost'
+import { reportSitesForPeriod } from '@/lib/report-sites'
+import { logActivity } from '@/lib/activity'
 import { ymKey } from '@/lib/attendance'
 import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isHiredByMonth } from '@/lib/workers'
@@ -40,18 +42,32 @@ export async function POST(request: NextRequest) {
   try {
     const { siteId, ym, amounts } = await request.json()
     if (!siteId || !ym) return NextResponse.json({ error: 'siteId and ym required' }, { status: 400 })
+    if (typeof ym !== 'string' || !/^\d{6}$/.test(ym)) return NextResponse.json({ error: 'ym (YYYYMM) required' }, { status: 400 })
+    // ドット記法のキーに使うので、現場 id は人員マスタにあるものだけ（'.' や '/' を含む id を作らせない）
+    if (typeof siteId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(siteId)) return NextResponse.json({ error: 'siteId が不正です' }, { status: 400 })
 
     const docRef = doc(db, 'demmen', 'main')
     const snap = await getDoc(docRef)
     if (!snap.exists()) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const data = snap.data() as { billing?: Record<string, number[] | number>; sites?: { id: string; name?: string }[] }
+    const site = (data.sites || []).find(s => s.id === siteId)
+    if (!site) return NextResponse.json({ error: '現場が見つかりません' }, { status: 404 })
 
-    const billing = (snap.data().billing || {}) as Record<string, number[]>
     const key = `${siteId}_${ym}`
-
+    const prevRaw = data.billing?.[key]
+    const prev = (Array.isArray(prevRaw) ? prevRaw : typeof prevRaw === 'number' ? [prevRaw] : []).filter(v => v !== 0)
     const arr = (Array.isArray(amounts) ? amounts : [Number(amounts) || 0]).map(v => Number(v) || 0).filter(v => v !== 0)
-    billing[key] = arr.length > 0 ? arr : [0]
 
-    await updateDoc(docRef, { billing })
+    // 2026-10-02 総合点検: 旧は billing マップを丸ごと読んで丸ごと書き戻していた（2人が別の現場の請求額を同時に入れると片方が消える）。
+    //   この現場・この月のキーだけをドット記法で書く。売上の変更なのに操作の記録が無かったので残す（auditTrail にも残る種類）
+    await updateDoc(docRef, { [`billing.${key}`]: arr.length > 0 ? arr : [0] })
+    const sum = (xs: number[]) => xs.reduce((s, v) => s + v, 0)
+    if (sum(prev) !== sum(arr) || prev.length !== arr.length || prev.some((v, i) => v !== arr[i])) {
+      const auth = await getApiAuthUser(request)
+      const actor = auth.authorized ? String(auth.actor) : 'unknown'
+      await logActivity(actor, 'billing.update',
+        `${site.name || siteId} ${ym.slice(0, 4)}年${parseInt(ym.slice(4, 6), 10)}月分の請求額: ${prev.length ? prev.map(v => v.toLocaleString()).join('+') : '未入力'} → ${arr.length ? arr.map(v => v.toLocaleString()).join('+') : '未入力'}（税抜 ${sum(arr).toLocaleString()}円）`)
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Cost POST error:', error)
@@ -89,17 +105,11 @@ export async function GET(request: NextRequest) {
     })
     await applyPayrollCosts(c, main, monthAtts)
 
-    // Determine which sites to show:
-    // - active sites always
-    // - archived sites only if they have data in the period (for multi-month)
-    const showArchived = mode !== 'month'
-    const allSites = showArchived
-      ? main.sites.filter(s => {
-          if (!s.archived) return true
-          const sd = c.sites[s.id]
-          return sd && (sd.work + sd.subWork) > 0
-        })
-      : main.sites.filter(s => !s.archived)
+    // 対象の現場（lib/report-sites.ts・2026-10-02 総合点検）:
+    //   終了していない現場は全部、終了した現場はこの期間に人工・原価・請求額のどれかがあるときだけ。
+    //   旧: 月次表示は終了した現場を一律に外していたので、現場を終了にすると過去月の売上だけが消え、
+    //       原価（c.totalCost は全現場）は残って粗利が売上ぶん少なく出た。ダッシュボード・連携とも範囲が違っていた
+    const allSites = reportSitesForPeriod(main, ymRange, id => c.sites[id])
 
     // ═══ Load extra att data for getAvgRevenuePerEquiv lookback (3 months before earliest month) ═══
     const earliestYm = ymRange.slice().sort()[0]

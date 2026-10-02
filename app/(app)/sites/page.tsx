@@ -6,6 +6,8 @@ import { can } from '@/lib/permissions'
 import { COMPANY_ROLES, SELF_COMPANY_ID, SELF_COMPANY_LABEL, hasRole, resolveSiteParties, type CompanyRole } from '@/lib/companies'
 import { fmtYen } from '@/lib/format'
 import { todayJstIso, addDaysIso } from '@/lib/date-utils'
+import { isForemanCandidateJob } from '@/lib/jobs'
+import { isAlreadyRetired } from '@/lib/workers'
 import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
 import { dailyAllowanceYen, DRIVE_ALLOWANCE_YEN, SITE_ALLOWANCE_FROM_YM, judgeFromSamples, COMMUTE_SAMPLE_TARGET } from '@/lib/allowance'
 
@@ -421,11 +423,13 @@ export default function SitesPage() {
           // Only call API if changed or new
           const existing = mforeman[key]
           if (!existing || existing.wid !== Number(dep.wid)) {
-            await fetch('/api/sites', {
+            const r = await fetch('/api/sites', {
               method: 'POST',
               headers: headers(),
               body: JSON.stringify({ action: 'setDeputy', siteId: editId, ym: ymKey, workerId: dep.wid }),
             })
+            // 2026-10-02 総合点検: 旧は応答を見ておらず、失敗しても「保存できた」ように見えた
+            if (!r.ok) { const err = await r.json().catch(() => null); alert(`代理職長の保存に失敗しました。${err?.error ? `\n${err.error}` : ''}`); return }
           }
         }
 
@@ -433,11 +437,12 @@ export default function SitesPage() {
         for (const key of existingKeys) {
           if (!newKeys.has(key)) {
             const ym = key.slice(editId.length + 1)
-            await fetch('/api/sites', {
+            const r = await fetch('/api/sites', {
               method: 'POST',
               headers: headers(),
               body: JSON.stringify({ action: 'removeDeputy', siteId: editId, ym }),
             })
+            if (!r.ok) { const err = await r.json().catch(() => null); alert(`代理職長の削除に失敗しました。${err?.error ? `\n${err.error}` : ''}`); return }
           }
         }
       }
@@ -477,8 +482,10 @@ export default function SitesPage() {
     return w ? w.name : `ID:${id}`
   }
 
-  const activeWorkers = workers.filter(w => !w.retired)
-  const foremanWorkers = workers.filter(w => !w.retired && (w.jobType === '職長' || w.jobType === '役員'))
+  // 2026-10-02 総合点検: 旧は `!w.retired`（退職日が入っていれば未来の予定でも外れる）と、
+  //   `jobType === '職長' || '役員'`（API はコードを返すので常に空）だった → lib/workers・lib/jobs の判定に寄せる
+  const activeWorkers = workers.filter(w => !isAlreadyRetired(w.retired || undefined, todayJstIso()))
+  const foremanWorkers = activeWorkers.filter(w => isForemanCandidateJob(w.jobType))
 
   const isActive = (s: SiteData): boolean => {
     if (s.archived) return false
@@ -681,7 +688,15 @@ export default function SitesPage() {
       {/* 現場の編集（右から開く・2026-10-01 改修。旧: 中央のモーダル） */}
       {showModal && (
         <SidePanel label={editId ? `${form.name} の編集` : '現場を追加'} onClose={() => setShowModal(false)} width="max-w-[760px]">
+          {/* 2026-10-02 総合点検: 現場マスタの編集権限が無い人（事業責任者）は、各タブの入力欄を fieldset で止めて
+              「見るだけ」と分かるようにする（readOnlyTab）。旧: 入力できるのに、保存すると「運転手当なし」以外は黙って捨てられた。
+              「運転手当なし」のチェックだけは fieldset の外に置く（disabled の fieldset の中は、内側で有効にできないため） */}
           <div className="flex flex-col min-h-full">
+            {!canEditMaster && (
+              <div className="px-6 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 text-[13px] text-amber-800 dark:text-amber-200">
+                現場マスタの編集は事務・代表だけです。この画面は見るだけで、保存できるのは「その他」タブの「運転手当なし」の指定だけです。
+              </div>
+            )}
             <div className="px-6 py-5 border-b border-hibi-line dark:border-gray-700 flex items-start gap-3">
               <div className="flex-1 min-w-0">
                 <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{editId ? (form.name || '（名前なし）') : '現場を追加'}</h2>
@@ -724,7 +739,7 @@ export default function SitesPage() {
             </div>
 
             <div className="px-6 py-5 flex-1 space-y-4">
-              {modalTab === 'basic' && (<div className="space-y-4">
+              {modalTab === 'basic' && (<fieldset disabled={!canEditMaster} className="contents"><div className="space-y-4">
               {/* 工種サイトの編集（2026-09-15） */}
               {isChildEdit && (
                 <div className="rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 p-3 space-y-2">
@@ -889,9 +904,9 @@ export default function SitesPage() {
                 </div>
               )}
 
-              </div>)}
+              </div></fieldset>)}
 
-              {modalTab === 'schedule' && (<div className="space-y-4">
+              {modalTab === 'schedule' && (<fieldset disabled={!canEditMaster} className="contents"><div className="space-y-4">
               {/* ── 勤務時間設定 ── */}
               {editId && (
                 <div className="border-2 border-blue-300 rounded-xl p-4 space-y-3">
@@ -1005,9 +1020,9 @@ export default function SitesPage() {
                 </div>
               )}
 
-              </div>)}
+              </div></fieldset>)}
 
-              {modalTab === 'rate' && (<div className="space-y-4">
+              {modalTab === 'rate' && (<fieldset disabled={!canEditMaster} className="contents"><div className="space-y-4">
               {/* ── 常用単価（税抜）／ 応援現場は受取単価 ── */}
               <div className="border-2 border-orange-300 rounded-xl p-4 space-y-3">
                 <h4 className="text-sm font-bold text-orange-700">
@@ -1211,7 +1226,7 @@ export default function SitesPage() {
                 </div>
               )}
 
-              </div>)}
+              </div></fieldset>)}
 
               {modalTab === 'other' && (<div className="space-y-4">
               {/* ── 運転手当の対象（2026-09-30）── */}
@@ -1230,6 +1245,7 @@ export default function SitesPage() {
                   </label>
                 </div>
               )}
+              <fieldset disabled={!canEditMaster} className="contents">
               {/* ── 通勤時間（遠方現場日当・運転手当の判定） ── */}
               <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                 <div className="flex items-center gap-2 mb-1">
@@ -1391,6 +1407,7 @@ export default function SitesPage() {
                   </button>
                 </div>
               )}
+              </fieldset>
               </div>)}
             </div>
 
