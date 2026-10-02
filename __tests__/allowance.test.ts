@@ -138,7 +138,9 @@ describe('calcMonthlyAllowances（実データ3ヶ月の検証値と一致）', 
       'ihi_202606_2': { am: [2, 5], pm: [2, 11] },   // 2台: 行き2名・帰り2名
       'ihi_202606_3': { am: [1], pm: [1] },           // 政仁さんが運転
     }
-    const r = calcMonthlyAllowances(att('202606'), '202606', commutes1500, drv, YAKUIN)
+    // 政仁さん（役員）は実データに出面が無いので、この日 ihi で働いた出面を足す（働いていない人の運転は払わない・2026-10-02）
+    const attD = { ...att('202606'), 'ihi_1_202606_3': { w: 1 } as AttendanceEntry }
+    const r = calcMonthlyAllowances(attD, '202606', commutes1500, drv, YAKUIN)
     expect(r.get(2)!.driveLegs).toBe(2)
     expect(r.get(2)!.driveAllowanceYen).toBe(2000)   // 1,000円 × 2便
     expect(r.get(5)!.driveAllowanceYen).toBe(1000)
@@ -150,13 +152,14 @@ describe('calcMonthlyAllowances（実データ3ヶ月の検証値と一致）', 
   it('運転手当: 近い現場でも一律1,000円（判定値に依存しない）', () => {
     const near = { kinjo: { judgedMin: 20 } }        // 判定値20分の近距離現場
     const drv = { 'kinjo_202606_2': { am: [2], pm: [2] } }
-    const r = calcMonthlyAllowances({}, '202606', near, drv, [])
+    const r = calcMonthlyAllowances({ 'kinjo_2_202606_2': { w: 1 } as AttendanceEntry }, '202606', near, drv, [])
     expect(r.get(2)!.driveAllowanceYen).toBe(2000)   // 1,000円 × 2便（旧仕様は500円×2=1,000）
   })
 
   it('運転手当なしの現場（清瀬市役所のようなごく近い現場）は、記録があっても手当にしない（2026-09-30）', () => {
     const drv = { 'kiyose_202610_2': { am: [2], pm: [2] }, 'ihi_202610_2': { am: [5], pm: [] } }
-    const r = calcMonthlyAllowances({}, '202610', {}, drv, [], undefined, new Set(['kiyose']))
+    const worked = { 'kiyose_2_202610_2': { w: 1 }, 'ihi_5_202610_2': { w: 1 } } as Record<string, AttendanceEntry>
+    const r = calcMonthlyAllowances(worked, '202610', {}, drv, [], undefined, new Set(['kiyose']))
     expect(r.get(2)?.driveAllowanceYen ?? 0).toBe(0)
     expect(r.get(5)!.driveAllowanceYen).toBe(1000)
   })

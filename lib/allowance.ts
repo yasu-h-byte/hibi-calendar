@@ -13,6 +13,7 @@
  * だから朝だけでなく夕も測り、平均を判定値にする。
  */
 import type { AttendanceEntry } from '@/types'
+import { calendarSiteIdOf, parentAndWorkTypeSiteIds, type HierarchySite } from './site-hierarchy'
 
 /**
  * 手当の適用開始月。**日当と運転手当で別のゲート**を持つ（2026-08-28 代表決定）。
@@ -199,6 +200,8 @@ export function calcMonthlyAllowances(
   eligibleHistory?: Record<string, string[]>,
   /** 運転手当を出さない現場（現場マスタの noDriveAllowance・2026-09-30） */
   noDriveSiteIds?: Set<string>,
+  /** 現場マスタ（工種サイトのキーを親へまとめる・働いた現場を親＋工種で探す。2026-10-02） */
+  sites?: HierarchySite[],
 ): Map<number, WorkerAllowanceMonthly> {
   const out = new Map<number, WorkerAllowanceMonthly>()
   const excluded = new Set(excludeWorkerIds)
@@ -249,22 +252,130 @@ export function calcMonthlyAllowances(
   }
 
   // 運転手当（役員も運転すれば対象。日当と違い労働の対価なので除外しない）
-  for (const [key, legs] of Object.entries(drv)) {
-    if (!key.includes(`_${ym}_`)) continue
+  //  2026-10-02 点検:
+  //  - 工種サイトのキーは親（カレンダーの現場）へまとめ、同じ便の同じ人を二重に払わない
+  //  - その日その現場（親＋工種）で働いていない人は払わない（下流の防御。保存側 saveSiteDrivers でも拒否する）
+  //  - 現場別原価の配賦先は、その人が実際に出面を入れた現場（工種サイトならその工種）
+  const yenPerLeg = driveAllowanceYen()
+  const merged = normalizeDrvKeys(drv, ym, sites || [], noDriveSiteIds)
+  for (const [key, legs] of Object.entries(merged)) {
     const sid = key.slice(0, key.indexOf(`_${ym}_`))
+    const day = key.slice(key.indexOf(`_${ym}_`) + ym.length + 2)
     if (noDriveSiteIds?.has(sid)) continue
-    const yenPerLeg = driveAllowanceYen()
+    const family = sites ? driveFamilyIds(sites, sid) : [sid]
     for (const leg of ['am', 'pm'] as const) {
-      for (const wid of legs[leg] || []) {
+      for (const wid of legs[leg]) {
+        const workedSid = family.find(f => isAllowanceEligibleDay(attD[`${f}_${wid}_${ym}_${day}`]))
+        if (!workedSid) continue
         const v = get(wid)
         v.driveLegs += 1
         v.driveAllowanceYen += yenPerLeg
-        const bs = v.bySite[sid] || { days: 0, yen: 0 }
+        const bs = v.bySite[workedSid] || { days: 0, yen: 0 }
         bs.driveYen = (bs.driveYen || 0) + yenPerLeg
-        v.bySite[sid] = bs
+        v.bySite[workedSid] = bs
       }
     }
   }
 
   return out
+}
+
+// ────────────────────────────────────────
+//  運転記録（drv）の決まり（2026-10-02 点検）
+//  保存（lib/drivers.ts saveSiteDrivers）・読み出し（出面画面・職長スマホ）・計算（calcMonthlyAllowances）で共通に使う
+// ────────────────────────────────────────
+
+export type DrvLegs = { am?: number[]; pm?: number[] }
+export type DrvMap = Record<string, DrvLegs>
+
+/**
+ * 運転記録をまとめる現場（親＋工種）の id 一覧。先頭が親（＝drv のキーに使う現場）。
+ * 工種サイトを渡しても親の一族を返す。
+ */
+export function driveFamilyIds(sites: HierarchySite[], siteId: string): string[] {
+  return parentAndWorkTypeSiteIds(sites, calendarSiteIdOf(sites, siteId))
+}
+
+/** drv のキー。工種サイトでも親（カレンダーの現場）の id で持つ */
+export function drvKeyOf(sites: HierarchySite[], siteId: string, ym: string, day: number): string {
+  return `${calendarSiteIdOf(sites, siteId)}_${ym}_${day}`
+}
+
+const uniqIds = (a: number[] = [], b: number[] = []): number[] =>
+  [...new Set([...a, ...b].map(Number).filter(Number.isFinite))]
+
+/**
+ * 当月の drv を親のキーへまとめる（工種サイトのキーで保存された古い記録も拾い、同じ人は1回に）。
+ * 他月のキーは捨てる。skipSiteIds（運転手当なしの現場）に入るキーは、まとめる前に捨てる。
+ */
+export function normalizeDrvKeys(
+  drv: DrvMap, ym: string, sites: HierarchySite[], skipSiteIds?: Set<string>,
+): Record<string, { am: number[]; pm: number[] }> {
+  const out: Record<string, { am: number[]; pm: number[] }> = {}
+  for (const [key, legs] of Object.entries(drv || {})) {
+    const i = key.indexOf(`_${ym}_`)
+    if (i <= 0) continue
+    const sid = key.slice(0, i)
+    const day = Number(key.slice(i + ym.length + 2))
+    if (!Number.isInteger(day) || day < 1 || day > 31) continue
+    if (skipSiteIds?.has(sid)) continue
+    const k = drvKeyOf(sites, sid, ym, day)
+    const cur = out[k] || { am: [], pm: [] }
+    out[k] = { am: uniqIds(cur.am, legs?.am), pm: uniqIds(cur.pm, legs?.pm) }
+  }
+  return out
+}
+
+/** 現場（親でも工種でも）の、その月の運転記録を日ごとに（親＋工種のキーをまとめて）返す */
+export function driversByDayForSite(
+  drv: DrvMap | undefined, sites: HierarchySite[], siteId: string, ym: string,
+): Record<number, { am: number[]; pm: number[] }> {
+  const root = calendarSiteIdOf(sites, siteId)
+  const family = new Set(driveFamilyIds(sites, siteId))
+  const familyDrv: DrvMap = {}
+  for (const [k, v] of Object.entries(drv || {})) {
+    const i = k.indexOf(`_${ym}_`)
+    if (i > 0 && family.has(k.slice(0, i))) familyDrv[k] = v
+  }
+  const merged = normalizeDrvKeys(familyDrv, ym, sites)
+  const out: Record<number, { am: number[]; pm: number[] }> = {}
+  const prefix = `${root}_${ym}_`
+  for (const [k, v] of Object.entries(merged)) {
+    if (k.startsWith(prefix)) out[Number(k.slice(prefix.length))] = v
+  }
+  return out
+}
+
+/** 'YYYYMM' の月が正しいか（月は 01〜12）。年は 2000〜2099 に限る */
+export function isValidYm(ym: string): boolean {
+  if (!/^\d{6}$/.test(ym)) return false
+  const y = Number(ym.slice(0, 4)); const m = Number(ym.slice(4, 6))
+  return y >= 2000 && y <= 2099 && m >= 1 && m <= 12
+}
+
+/**
+ * 運転記録を保存できる日か。エラーなら日本語のメッセージ、問題なければ null。
+ * - 月は 01〜12、日はその月の範囲
+ * - 誰かを記録するとき（hasDrivers）は、今日（日本時間）より先の日は不可（消す操作は通す）
+ */
+export function validateDriverDate(ym: string, day: unknown, todayIso: string, hasDrivers: boolean): string | null {
+  if (!isValidYm(ym)) return '月が正しくありません'
+  const d = Number(day)
+  const dim = new Date(Number(ym.slice(0, 4)), Number(ym.slice(4, 6)), 0).getDate()
+  if (!Number.isInteger(d) || d < 1 || d > dim) return '日付が正しくありません'
+  if (hasDrivers) {
+    const iso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(d).padStart(2, '0')}`
+    if (iso > todayIso) return 'まだ来ていない日の運転者は記録できません'
+  }
+  return null
+}
+
+/**
+ * その日その現場（親＋工種）で働いていない人（＝運転手当の対象にならない人）の id。
+ * 働いた＝出勤（w>0・0.6補償を除く）または夜勤。有給・休み・帰国・試験は対象外（isAllowanceEligibleDay と同じ）。
+ */
+export function nonWorkingDriverIds(
+  attD: Record<string, AttendanceEntry>, family: string[], ym: string, day: number, ids: number[],
+): number[] {
+  return ids.filter(wid => !family.some(f => isAllowanceEligibleDay(attD[`${f}_${wid}_${ym}_${day}`])))
 }

@@ -28,15 +28,10 @@ export async function GET(request: NextRequest) {
       getMainData(),
       getAttData(ym),
     ])
-    // 運転記録: att_ドキュメントの drv マップ（`${siteId}_${ym}_${day}` → {am,pm}）から
-    // この現場の分だけ day キーに直して返す
-    const driversForSite: Record<number, { am: number[]; pm: number[] }> = {}
-    for (const [k, v] of Object.entries((att as { drv?: Record<string, { am?: number[]; pm?: number[] }> }).drv || {})) {
-      const prefix = `${siteId}_${ym}_`
-      if (!k.startsWith(prefix)) continue
-      const day = Number(k.slice(prefix.length))
-      if (Number.isFinite(day)) driversForSite[day] = { am: v.am || [], pm: v.pm || [] }
-    }
+    // 運転記録: att_ドキュメントの drv マップ（`${親siteId}_${ym}_${day}` → {am,pm}）から
+    // この現場の分だけ day キーに直して返す。工種サイトの画面でも親＋工種のキーをまとめて見せる（2026-10-02・決まりは lib/allowance.ts）
+    const { driversByDayForSite } = await import('@/lib/allowance')
+    const driversForSite = driversByDayForSite((att as { drv?: Record<string, { am?: number[]; pm?: number[] }> }).drv, main.sites, siteId, ym)
 
     const site = main.sites.find(s => s.id === siteId)
     if (!site) return NextResponse.json({ error: 'Site not found' }, { status: 404 })
