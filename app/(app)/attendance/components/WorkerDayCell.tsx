@@ -199,7 +199,7 @@ export function WaitingCell({
             type="button"
             onClick={() => onStatusChange!(wId!, day!, 'C')}
             className="text-[9px] font-bold text-orange-600 border border-orange-300 rounded px-1 py-0.5
-                       opacity-0 group-hover:opacity-100 transition-opacity hover:bg-orange-50
+                       opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity hover:bg-orange-50
                        dark:text-orange-300 dark:border-orange-700 dark:hover:bg-orange-900/30"
           >
             0.6補

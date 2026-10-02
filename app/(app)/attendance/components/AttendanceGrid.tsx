@@ -288,7 +288,7 @@ export default function AttendanceGrid({
                         className={`mt-0.5 w-full text-[10px] font-bold leading-tight rounded py-0.5 transition-opacity ${
                           isNightDay(d.day)
                             ? 'bg-indigo-600 text-white opacity-100'
-                            : 'text-indigo-500 opacity-0 hover:opacity-100'
+                            : 'text-indigo-500 opacity-0 hover:opacity-100 [@media(hover:none)]:opacity-60'
                         }`}
                       >
                         夜

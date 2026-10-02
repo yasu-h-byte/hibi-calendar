@@ -773,7 +773,8 @@ export async function GET(request: NextRequest) {
       }
       // jimu: カレンダー署名系 + 有給の付与アラート（2026-09-26: 有給の付与は事務の仕事・lib/permissions.ts leave.manage）
       //   + 本人からの出面の連絡（2026-09-30: 月締めの前に事務が対応する）
-      return ['unsigned-calendar', 'calendar-deadline', 'announcement', 'staff-confirm-issues'].includes(n.id) || n.id.startsWith('pl-grant')
+      //   + 月締め未完了（2026-10-02 点検: 締めは事務の仕事なのに届いていなかった・lib/permissions.ts monthly.close）
+      return ['unsigned-calendar', 'calendar-deadline', 'announcement', 'staff-confirm-issues', 'month-unlocked-hibi', 'month-unlocked-hfu'].includes(n.id) || n.id.startsWith('pl-grant')
     })
 
     return NextResponse.json({ notifications: filtered })

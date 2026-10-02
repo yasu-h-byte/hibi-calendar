@@ -54,6 +54,8 @@ export interface ForemanDay {
   missingNames: string[]
   /** 配置に残っているが、その日は別の現場で入力している人（未入力に数えない・2026-10-01 代表決定） */
   elsewhere: { name: string; siteIds: string[] }[]
+  /** 配置に入っていないのに、この現場に入力がある人（現場の選び間違いの疑い・2026-10-02） */
+  offRoster: string[]
 }
 
 /**
@@ -184,7 +186,9 @@ export async function siteMonthDays(siteId: string, ym: string, preloaded?: {
   att?: Record<string, AttendanceEntry>
   family?: string[]
   /** 対象の外国人スタッフ（読むだけの一覧ではキャッシュ済みの main から渡して読み取りを減らす） */
-  workers?: { id: number; name: string }[]
+  workers?: RosterWorker[]
+  /** 配置外の入力の求め方（siteRosterFromMain の offRosterOf） */
+  offRosterOf?: SiteRoster['offRosterOf']
   /**
    * 対象の外国人スタッフが0人なら就業カレンダーを読まない（マイページの一覧用。読み取りを減らす）。
    * 0人の現場は稼働日かどうかで一覧の中身が変わらない（承認の有無だけを見る）ため。
@@ -199,9 +203,10 @@ export async function siteMonthDays(siteId: string, ym: string, preloaded?: {
   const lastDay = ym < curYm ? daysInMonth : ym === curYm ? Number(today.slice(8, 10)) : 0
   if (lastDay === 0) return []
 
-  const roster = preloaded?.workers && preloaded?.family ? null : await loadSiteRoster(siteId, ym)
+  const roster = preloaded?.workers && preloaded?.family && preloaded?.offRosterOf ? null : await loadSiteRoster(siteId, ym)
   const family = preloaded?.family ?? roster!.family
   const workers = preloaded?.workers ?? roster!.workers
+  const offRosterOf = preloaded?.offRosterOf ?? roster!.offRosterOf
   const skipCal = !!preloaded?.skipCalendarIfNoWorkers && workers.length === 0
   const [att, isWorkDayOf, approvals] = await Promise.all([
     preloaded?.att ? Promise.resolve(preloaded.att) : getAttendanceDoc(ym),
@@ -210,6 +215,7 @@ export async function siteMonthDays(siteId: string, ym: string, preloaded?: {
   ])
 
   const dayNums = Array.from({ length: lastDay }, (_, i) => i + 1)
+  const offByDay = offRosterOf(att)
   return dayNums.map(d => {
     const isWorkDay = isWorkDayOf(d)
     const ev = evaluateSiteDay(att, family, workers, ym, d, isWorkDay)
@@ -221,6 +227,7 @@ export async function siteMonthDays(siteId: string, ym: string, preloaded?: {
       approved: !!ap?.foreman,
       final: !!ap?.final,
       ...ev,
+      offRoster: (offByDay.get(d) || []).map(x => x.name),
     }
   })
 }
@@ -252,7 +259,8 @@ export async function approveDaysForSite(siteId: string, ym: string, days: numbe
       continue
     }
     // 職長画面の1日ずつの承認と同じ: 配置の人がいるのに誰も入力していない日は承認しない
-    if (workers.length > 0 && ev.entered === 0) {
+    //   その日に在籍している人で数える（2026-10-02 点検: 配置が入社前の人だけの日を、まとめ承認できなかった）
+    if (workers.some(w => isEmployedOn(w, isoOf(ym, d))) && ev.entered === 0) {
       skipped.push({ day: d, reason: 'まだ誰も入力していない' })
       continue
     }
@@ -306,14 +314,48 @@ export type RosterSource = Pick<MainData, 'workers' | 'sites' | 'assign' | 'mass
  * 旧: 承認だけ getForeignWorkersForSite（massign[当月] → assign。さかのぼらない）で数えていて、
  *   一覧で「全員入力済み」の日が承認では「未入力」で弾かれる食い違いがあった。
  */
-export function siteRosterFromMain(main: RosterSource, siteId: string, ym: string): { workers: RosterWorker[]; family: string[] } {
+export interface SiteRoster {
+  workers: RosterWorker[]
+  family: string[]
+  /**
+   * 配置外の入力（この現場（親＋工種）に入力があるのに、親・工種どちらの配置にも入っていない人）を日ごとに返す。
+   * PC の出面画面の「配置外」の行（app/api/attendance/grid）と同じ考え方。職長画面・マイページで、
+   * スマホで現場を選び間違えた打刻に気づけるようにする（2026-10-02 点検: サンさん 9/5〜9 が笹塚に入り、職長のスマホでは見えなかった）
+   */
+  offRosterOf: (att: Record<string, AttendanceEntry | null | undefined>) => Map<number, { id: number; name: string }[]>
+}
+
+export function siteRosterFromMain(main: RosterSource, siteId: string, ym: string): SiteRoster {
   const ids = new Set(getAssign(main as MainData, siteId, ym).workers)
+  const family = workTypeFamilyIds(main.sites as unknown as HierarchySite[], siteId)
   return {
     // その月に在籍していない人（入社前の月・退職後の月）は名簿に入れない。月の途中の入社・退職は evaluateSiteDay が日で外す（2026-10-02）
     workers: main.workers
       .filter(w => ids.has(w.id) && w.visa && w.visa !== 'none' && isHiredByMonth(w.hireDate, ym) && isStillActiveForMonth(w.retired, ym))
       .map(w => ({ id: w.id, name: w.name, hireDate: w.hireDate || undefined, retired: w.retired || undefined })),
-    family: workTypeFamilyIds(main.sites as unknown as HierarchySite[], siteId),
+    family,
+    offRosterOf: att => {
+      const onRoster = new Set<number>()
+      for (const sid of family) for (const wid of getAssign(main as MainData, sid, ym).workers) onRoster.add(wid)
+      const nameOf = new Map(main.workers.map(w => [w.id, w.name]))
+      const out = new Map<number, { id: number; name: string }[]>()
+      const tail = `_${ym}_`
+      for (const [key, e] of Object.entries(att)) {
+        if (!e || getEntryStatus(e) === 'none') continue
+        const i = key.lastIndexOf(tail)
+        if (i < 0) continue
+        const head = key.slice(0, i)
+        const j = head.lastIndexOf('_')
+        const sid = head.slice(0, j)
+        const wid = Number(head.slice(j + 1))
+        const day = Number(key.slice(i + tail.length))
+        if (!family.includes(sid) || onRoster.has(wid) || !Number.isFinite(wid) || !Number.isFinite(day)) continue
+        const list = out.get(day) || []
+        if (!list.some(x => x.id === wid)) list.push({ id: wid, name: nameOf.get(wid) || `ID${wid}` })
+        out.set(day, list)
+      }
+      return out
+    },
   }
 }
 
@@ -321,7 +363,7 @@ export function siteRosterFromMain(main: RosterSource, siteId: string, ym: strin
  * 最新の main（30秒キャッシュを使わない）で名簿を作る。承認の書き込み判定など、
  * 配置を直した直後でも最新で数えたいところで使う。
  */
-export async function loadSiteRoster(siteId: string, ym: string): Promise<{ workers: RosterWorker[]; family: string[] }> {
+export async function loadSiteRoster(siteId: string, ym: string): Promise<SiteRoster> {
   return siteRosterFromMain(await getMainData({ fresh: true }), siteId, ym)
 }
 

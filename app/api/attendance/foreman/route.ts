@@ -80,7 +80,10 @@ export async function GET(request: NextRequest) {
     // 表示している日の月の名簿（2026-10-01: 旧は常に今月の配置で、前月を開くと俯瞰とまとめ承認で名簿が食い違った）。
     //   名簿の決まりはマイページ・まとめ承認と共通（lib/foreman-todo.ts siteRosterFromMain）。
     //   同じ現場（親＋工種サイト）。工種の無い現場は [site.id] だけ
-    const { workers: foreignWorkers, family } = siteRosterFromMain(main, site.id, ym)
+    const roster = siteRosterFromMain(main, site.id, ym)
+    const { workers: foreignWorkers, family } = roster
+    // 配置外の入力（この現場に入力があるのに配置に入っていない人・2026-10-02 点検）。PC の出面画面の「配置外」と同じ考え方
+    const offByDay = roster.offRosterOf(attData)
 
     // workerId → { siteId, name, entry } のマップを構築
     const crossSiteEntries: Record<number, { siteId: string; siteName: string; entry: AttendanceEntry }[]> = {}
@@ -109,7 +112,10 @@ export async function GET(request: NextRequest) {
     // Build worker list with status
     //   その日に在籍していない人（入社前・退職後）は出さない（2026-10-02・未入力に数えていた）
     const viewIso = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(d).padStart(2, '0')}`
-    const workers = foreignWorkers.filter(w => isEmployedOn(w, viewIso)).map(w => {
+    const workers = [
+      ...foreignWorkers.filter(w => isEmployedOn(w, viewIso)),
+      ...(offByDay.get(d) || []).map(x => ({ ...x, offRoster: true as const })),
+    ].map(w => {
       const entry = familyEntry(attData, family, w.id, ym, d) || null
       const misplaced = crossSiteEntries[w.id] || []
       return {
@@ -117,6 +123,7 @@ export async function GET(request: NextRequest) {
         name: w.name,
         entry,
         status: getEntryStatus(entry),
+        offRoster: 'offRoster' in w ? true : undefined,
         // 別現場で入力済みエントリ（複数現場の場合もある）
         misplacedEntries: misplaced,
       }
@@ -134,13 +141,14 @@ export async function GET(request: NextRequest) {
     //   旧UIは「今日＋過去2日」しか辿れず、承認をため込むとスマホから消化できなかった。
     // 日ごとの状態はマイページの「承認すること」と共通（lib/foreman-todo.ts）。
     //   別の現場で入力している人（移動・掛け持ち）は未入力に数えない（2026-10-01 代表決定）
-    const monthOverview = (await siteMonthDays(site.id, ym, { att: attData, family, workers: foreignWorkers })).map(dd => ({
+    const monthOverview = (await siteMonthDays(site.id, ym, { att: attData, family, workers: foreignWorkers, offRosterOf: roster.offRosterOf })).map(dd => ({
       day: dd.day,
       dateISO: dd.dateISO,
       isWorkDay: dd.isWorkDay,
       approved: dd.approved,
       entered: dd.entered,
       missingNames: dd.isWorkDay ? dd.missingNames : [],
+      offRosterNames: dd.offRoster,
     }))
 
     // Past 2 days

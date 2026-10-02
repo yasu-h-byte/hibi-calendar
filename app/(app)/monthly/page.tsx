@@ -1234,7 +1234,12 @@ function MonthlyPageInner() {
               <Segment value={listFilter} onChange={setListFilter} items={[
                   ['all', 'すべて'],
                   ['attention', `要確認だけ ${tabFilteredWorkers.filter(w => needsAttention(w, new Set(validationOnTab.affectedWorkerIds))).length}`],
-                  ['unconfirmed', `本人確認まだ ${tabFilteredWorkers.filter(w => isConfirmPending(staffConfirms[w.id])).length}`],
+                  // 数は「スマホに確認が出ているのにまだ」の人。承認待ち・期間外は別に出す（締めの準備カードと同じ分け方・2026-10-02 点検）
+                  ['unconfirmed', (() => {
+                    const pend = tabFilteredWorkers.filter(w => isConfirmPending(staffConfirms[w.id]))
+                    const later = pend.filter(w => ['waiting', 'outside'].includes(staffConfirms[w.id]!.state)).length
+                    return `本人確認まだ ${pend.length - later}${later > 0 ? `・承認待ちなど ${later}` : ''}`
+                  })()],
                 ]} />
               <SearchBox value={listQuery} onChange={setListQuery} />
             </>
@@ -1364,8 +1369,8 @@ function MonthlyPageInner() {
                     {/* 遠方現場日当・運転手当（2026-10 施行、lib/allowance.ts） */}
                     {showAllowance && (
                       <>
-                        <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="遠方現場日当（非課税・実費弁償）。判定値80分超500円/120分超1,500円、13ヶ月目から半額・25ヶ月目から0円">日当</th>
-                        <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="運転手当（課税）。片道500円（判定値60分未満）/1,000円（60分以上）">運転手当</th>
+                        <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="遠方現場日当（非課税・実費弁償）。いまは保留中で支給していません（再開したときの決まり: 判定値80分超500円/120分超1,500円・長期従事は逓減）">日当</th>
+                        <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" title="運転手当（課税）。片道1,000円。同乗者を乗せた便だけ（1人だけの便は対象外）・「運転手当なし」の現場は除く">運転手当</th>
                       </>
                     )}
                     <th className="sticky top-0 z-20 px-3 py-3 whitespace-nowrap text-right bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300">欠勤控除</th>
@@ -1444,7 +1449,7 @@ function MonthlyPageInner() {
                           })()}
                         >
                           {w.name}
-                          <span className="ml-1 text-[10px] text-blue-500 opacity-0 group-hover:opacity-100">🔍</span>
+                          <span className="ml-1 text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100">🔍</span>
                         </button>
                         {w.isDispatched && (
                           <span

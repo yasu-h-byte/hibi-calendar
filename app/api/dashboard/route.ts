@@ -688,13 +688,9 @@ export async function GET(request: NextRequest) {
     let homeLeaveUpcomingCount = 0
     let pendingHomeLeaveApprovalCount = 0
     try {
-      // JST基準で今日の日付を計算（Vercelサーバーは UTC のため補正）
-      const nowUtc = new Date()
-      const jst = new Date(nowUtc.getTime() + 9 * 60 * 60 * 1000)
-      const todayIso = jst.toISOString().slice(0, 10)
-      const futureLimit = new Date(jst)
-      futureLimit.setMonth(futureLimit.getMonth() + 6)
-      const futureIso = futureLimit.toISOString().slice(0, 10)
+      // JST基準の今日と6ヶ月先（2026-10-02 点検: 旧は UTC+9h → toISOString で、日本時間のマシンでは9時間ずれた。共通ヘルパーに統一）
+      const todayIso = todayJstIso()
+      const futureIso = addMonthsSafe(todayIso, 6)
 
       hlAllDocs.forEach(d => {
         const data = d.data()

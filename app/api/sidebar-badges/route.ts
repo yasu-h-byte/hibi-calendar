@@ -32,22 +32,29 @@ export async function GET(request: NextRequest) {
     const now = new Date(todayIsoB + 'T00:00:00')  // 以降の日付演算も JST 当日基準
 
     // ── 月次集計: 検算違反スタッフ数 ──
+    //   数える月は月次集計の画面が開く月と同じ（前月がまだ締まっていなければ前月、両社とも締めていれば当月）。
+    //   2026-10-02 点検: 旧は常に当月で数え、締める前月の異常がバッジに出なかった（月初は数日分の誤警報も出た）
     let monthlyAnomalyCount = 0
     try {
-      const att = await getAttData(ym)
-      const prescribedDays = main.workDays[ym] || 0
-      const siteWorkDaysMap = main.siteWorkDays?.[ym] || {}
+      const { isMonthLockedInLocks } = await import('@/lib/locks')
+      const { addMonthsSafe } = await import('@/lib/date-utils')
+      const prevYm = addMonthsSafe(todayIsoB, -1).slice(0, 7).replace('-', '')
+      const prevClosed = isMonthLockedInLocks(main.locks, prevYm, 'hibi') && isMonthLockedInLocks(main.locks, prevYm, 'hfu')
+      const checkYm = prevClosed ? ym : prevYm
+      const att = await getAttData(checkYm)
+      const prescribedDays = main.workDays[checkYm] || 0
+      const siteWorkDaysMap = main.siteWorkDays?.[checkYm] || {}
       const hasCalendarData = Object.keys(siteWorkDaysMap).length > 0
       const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
       // 2026-08-27 修正（給与総点検）: /api/monthly と同じ引数（カレンダー・帰国情報）で
       //   計算しないと、境界月でバッジ件数と月次画面のバナー件数が食い違う
       const { getMonthlyCalendars } = await import('@/lib/repositories/calendarRepo')
       const { getAllActiveHomeLeaves } = await import('@/lib/homeLeave')
-      const cals = await getMonthlyCalendars(`${ym.slice(0, 4)}-${ym.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
+      const cals = await getMonthlyCalendars(`${checkYm.slice(0, 4)}-${checkYm.slice(4, 6)}` as Parameters<typeof getMonthlyCalendars>[0])
       const calendarDaysMap: Record<string, Record<string, string>> = {}
       for (const c of cals) if (c.days) calendarDaysMap[c.siteId] = c.days
       const homeLeaves = await getAllActiveHomeLeaves()
-      const result = computeMonthly(main, att.d, att.sd, ym, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
+      const result = computeMonthly(main, att.d, att.sd, checkYm, prescribedDays, hasCalendarData ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves)
       const validation = validatePayrolls(result.workers as unknown as PayrollSnapshot[])
       monthlyAnomalyCount = validation.affectedWorkerIds.length
     } catch (e) {
