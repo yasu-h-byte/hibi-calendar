@@ -29,7 +29,6 @@ const ALLOWED = new Set([
   'app/api/jp-wage/revision/route.ts',
   'app/api/jp-wage/seed/route.ts',
   'app/api/leave-request/route.ts',
-  'app/api/peer-invoice/route.ts',
   'lib/auth.ts',          // 定義そのもの
   'lib/foreman-todo.ts',  // managerByToken（マイページからの最終承認）
 ])

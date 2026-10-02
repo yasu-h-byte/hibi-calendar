@@ -176,8 +176,9 @@ describe('API の権限（app/api/peer-invoice）', () => {
     vi.doMock('@/lib/auth', () => ({
       checkApiAuth: async () => true,
       getApiAuthUser: async () => ({ authorized: true, actor: 50 }),
-      requireExecutiveAuth: async () => new Response(JSON.stringify({ error: 'x' }), { status: 403 }),
-      getApiRole: async () => ({ role: 'jimu', workerId: 50, foremanSites: [] }),
+      // 2026-10-02 総合点検: 権限は権限表（requireCap）で決める。事務（jimu）は invoice.request だけ持つ
+      requireCap: async (_req: unknown, cap: string) =>
+        cap === 'invoice.request' ? null : new Response(JSON.stringify({ error: 'x' }), { status: 403 }),
     }))
     vi.doMock('@/lib/compute', async orig => ({
       ...(await orig<typeof import('@/lib/compute')>()),

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { reportSitesForPeriod } from '@/lib/report-sites'
 import { getApiAuthUser, requireCap, callerCan, foremenOfSiteForMonth } from '@/lib/auth'
 import { sitesOfWorkerForMonth } from '@/lib/roster'
 import { db } from '@/lib/firebase'
@@ -279,15 +280,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // アーカイブ済みサイトはデータがある場合のみ含める
-    const filteredSites = main.sites.filter(s => {
-      if (hiddenSiteIds.has(s.id)) return false
-      if (s.archived) {
-        const sd = c.sites[s.id]
-        if (!sd || (sd.work === 0 && sd.subWork === 0)) return false
-      }
-      return true
-    })
+    // 終了した現場は、その期間に人工・原価・請求額があるときだけ含める。
+    //   決まりは /cost・経営コックピット連携と同じ lib/report-sites.ts（2026-10-02 総合点検: 画面ごとに現場の範囲が違い、
+    //   /cost の月次は終了現場の売上だけが消えていた）
+    const filteredSites = reportSitesForPeriod(main, ymStrList, id => c.sites[id]).filter(s => !hiddenSiteIds.has(s.id))
 
     // ═══ Load extra att data for getAvgRevenuePerEquiv lookback (3 months before earliest month) ═══
     const earliestYm = ymStrList.slice().sort()[0]
