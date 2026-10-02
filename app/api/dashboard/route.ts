@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiAuthUser, requireCap } from '@/lib/auth'
+import { getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, getDocs } from '@/lib/fsdb'
 import {
@@ -967,6 +967,9 @@ export async function GET(request: NextRequest) {
     } catch (e) {
       console.error('quietIssues detection error:', e)
     }
+    // 金額の入る項目（法定割増の不足額・時給の改定）は給与を見られる人だけ（2026-10-02 代表）
+    const PAY_ISSUE_KINDS = new Set(['legalShortfall', 'wageRevisionPending'])
+    const shownIssues = (await callerCan(request, 'pay.view')) ? quietIssues : quietIssues.filter(q => !PAY_ISSUE_KINDS.has(q.kind))
 
     const actionItems = {
       visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },
@@ -981,7 +984,7 @@ export async function GET(request: NextRequest) {
       pendingHomeLeaveApprovalCount,
       pendingGrantsCount,
       carryOverExpiringCount,
-      quietIssues: { count: quietIssues.length, items: quietIssues },
+      quietIssues: { count: shownIssues.length, items: shownIssues },
     }
 
     // ダッシュボードは「今の状況と要対応」に特化（詳細分析は原価・収益管理ページへ）

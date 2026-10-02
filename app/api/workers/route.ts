@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap, getCallerPermRole } from '@/lib/auth'
-import { roleCan } from '@/lib/permissions'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { getWorkers } from '@/lib/workers'
 import {
   addWorker,
@@ -51,9 +50,9 @@ export async function GET(request: NextRequest) {
     const workers = await getWorkers()
     // 2026-09-26: 給与欄は workers.view（事務所の人）だけ、電話URLのトークンは workers.edit（事務・代表）だけに返す。
     //   旧: 職長の画面（評価入力）からも全員の時給・月給・電話URLが取れた
-    const role = await getCallerPermRole(request)
-    const canSeePay = roleCan(role, 'workers.view')
-    const canSeeToken = roleCan(role, 'workers.edit')
+    // 2026-10-02: 給与欄は pay.view（役割＝事務・事業責任者・代表 かつ 本人＝靖仁・政仁・森田）だけ
+    const canSeePay = await callerCan(request, 'pay.view')
+    const canSeeToken = await callerCan(request, 'workers.edit')
     // 2026-10-02: 給与を見られない人（職長）には「返してよい項目」だけを返す（許可リスト）。
     //   旧: 消す項目を並べる方式で、改定前の日額（prevRate）・月給（prevSalary）・号俸（prevJpStep）・
     //   改定予定（scheduledChanges / appliedChanges の金額）が消し漏れていた。給与の項目を足しても漏れないように逆にした
