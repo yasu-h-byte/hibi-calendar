@@ -20,6 +20,7 @@ import {
 } from '@/lib/evaluation-config'
 import { minWageAt } from '@/lib/wage-analysis'
 import { todayJstIso } from '@/lib/date-utils'
+import { isAlreadyRetired } from '@/lib/workers'
 
 /** 政仁さんのワーカーID */
 const APPROVER_WORKER_ID = 1
@@ -107,6 +108,17 @@ async function calcMetricsForEvaluation(opts: {
   }
 }
 
+/**
+ * 賃金を見られない評価者（職長・事務）に返す評価の項目（許可リスト・2026-10-02 総合点検）。
+ * ここに無い項目（raiseAmount・raiseBaseAmount・finalScores・totalScore・manualScore・rank・evaluatorWeights・approvedBy など）は返さない。
+ * 旧形式（評価者1人・scores 直下）の evaluatorId / scores / comment も評価入力の画面が読むので入れる。
+ */
+export const EVALUATOR_VIEW_KEYS: readonly string[] = [
+  'id', 'workerId', 'workerName', 'evaluationDate', 'status', 'evaluatorIds', 'reviews', 'metrics', 'yearsFromHire',
+  'createdAt', 'updatedAt',
+  'evaluatorId', 'evaluatorName', 'scores', 'comment', 'submittedAt', 'date',
+]
+
 // ────────────────────────────────────────
 //  GET: 評価一覧 + ワーカーリスト + 設定 + 評価者情報
 // ────────────────────────────────────────
@@ -139,8 +151,9 @@ export async function GET(request: NextRequest) {
 
     // 外国人ワーカーリスト（評価対象）
     stage = 'build-foreign-workers'
+    // 2026-10-02 総合点検: !w.retired（退職予定日を入れた瞬間に消える）→ 今日時点で退職済みの人だけ外す
     const foreignWorkers = (mainData.workers || [])
-      .filter(w => w && w.visa !== 'none' && !w.retired)
+      .filter(w => w && w.visa !== 'none' && !isAlreadyRetired(w.retired))
       .map(w => ({
         id: w.id,
         name: w.name || '',
@@ -153,7 +166,7 @@ export async function GET(request: NextRequest) {
     // 評価者リスト（職長 + 政仁さん + 靖仁さん）
     stage = 'build-evaluators'
     const evaluators: { id: number; name: string; job: string }[] = (mainData.workers || [])
-      .filter(w => w && !w.retired && (w.job === 'shokucho' || w.id === APPROVER_WORKER_ID))
+      .filter(w => w && !isAlreadyRetired(w.retired) && (w.job === 'shokucho' || w.id === APPROVER_WORKER_ID))
       .map(w => ({
         id: w.id,
         name: w.name || '',
@@ -175,10 +188,10 @@ export async function GET(request: NextRequest) {
     if (!canSeeWage) {
       const me = await getApiAuthUser(request)
       const myId = me.authorized && typeof me.actor === 'number' ? me.actor : -1
-      // 2026-10-02: 昇給・最終点・ランクに関わる項目は名前の形で消す（raise* / final* / totalScore / manualScore / rank / evaluatorWeights）。
-      //   旧: 決まった名前だけ消していて、承認時に書く raiseBaseAmount（表の昇給額＝ランクも分かる）などが残っていた。
-      //   scores（旧形式の評価者本人の点数）は消さない
-      const isHidden = (k: string) => /^raise|^final|^(total|manual)Score$|^rank$|^evaluatorWeights$/.test(k)
+      // 2026-10-02 総合点検: 評価者（職長など）に返す項目は**許可リスト**（EVALUATOR_VIEW_KEYS）で決める。
+      //   旧（同日朝）: raise* / final* / rank などを正規表現で「消す」方式。承認時に書く項目を足すたびに消し漏れの
+      //   余地があった（CLAUDE.md「消す項目を並べる方式にしない」）。評価入力に要るのは、対象者・日付・状態・
+      //   評価者の一覧・自分のレビュー・出勤指標だけ。昇給額・最終点・ランク・ウェイトは入れない
       evaluations = evaluations
         // 旧形式（評価者1人・scores 直下）は自分が評価者のものだけ。
         // 新形式は、まだ承認前（評価入力の対象）か、自分がレビューを出したものだけ（他の人の承認済みの評価は見せない）
@@ -188,8 +201,9 @@ export async function GET(request: NextRequest) {
           return x.status !== 'approved' || x.reviews.some(r => r.evaluatorId === myId)
         })
         .map(e => {
-          const o: Record<string, unknown> = { ...e }
-          for (const k of Object.keys(o)) if (isHidden(k)) delete o[k]
+          const src = e as Record<string, unknown>
+          const o: Record<string, unknown> = {}
+          for (const k of EVALUATOR_VIEW_KEYS) if (k in src) o[k] = src[k]
           if (Array.isArray(o.reviews)) o.reviews = (o.reviews as { evaluatorId: number }[]).filter(r => r.evaluatorId === myId)
           return o as typeof e
         })
@@ -205,9 +219,9 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error(`Evaluation GET error at stage [${stage}]:`, error)
+    // 2026-10-02 総合点検: スタックトレース（ファイルの場所）は応答に出さない。サーバのログにだけ残す
     const errMsg = error instanceof Error ? error.message : String(error)
-    const errStack = error instanceof Error ? error.stack : undefined
-    return NextResponse.json({ error: 'Failed to fetch evaluations', stage, detail: errMsg, stack: errStack }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to fetch evaluations', stage, detail: errMsg }, { status: 500 })
   }
 }
 
@@ -256,7 +270,7 @@ export async function POST(request: NextRequest) {
       let evaluatorIds = providedEvaluatorIds
       if (!evaluatorIds || evaluatorIds.length === 0) {
         const shokuchoIds = mainData.workers
-          .filter(w => !w.retired && w.job === 'shokucho')
+          .filter(w => !isAlreadyRetired(w.retired) && w.job === 'shokucho')
           .map(w => w.id)
         evaluatorIds = Array.from(new Set([...shokuchoIds, APPROVER_WORKER_ID, ADMIN_WORKER_ID]))
       }

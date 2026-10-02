@@ -1,5 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /**
+   * セキュリティヘッダ（2026-10-02 総合点検）。
+   * - Referrer-Policy: 個人のリンク（/attendance/<合言葉>・/mypage/<合言葉>）から外のサイトへ飛んだとき、URL の合言葉を
+   *   相手に送らない（同じサイト内の遷移には影響しない）
+   * - X-Content-Type-Options: 種類を偽った読み込みを防ぐ
+   * - X-Frame-Options: ほかのサイトの iframe に埋め込ませない（同じサイト内＝資料一覧の HTML・印刷は SAMEORIGIN で動く。
+   *   PWA（manifest・ホーム画面）にも影響しない）
+   */
+  async headers() {
+    return [{
+      source: '/:path*',
+      headers: [
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+      ],
+    }]
+  },
   experimental: {
     // 【サーバ側】firebase-admin（Node 専用・ネイティブ依存多数）を外部パッケージ扱いに。
     // サーバ関数バンドルには含めず、node_modules ごと依存トレースして同梱する。

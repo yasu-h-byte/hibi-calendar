@@ -4,6 +4,7 @@ import { getWorkerLastAccessMap, getAccessLogsInRange, AccessRole, WorkerLastAcc
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from '@/lib/fsdb'
 import { todayJstDate } from '@/lib/date-utils'
+import { isAlreadyRetired } from '@/lib/workers'
 
 interface WorkerEntry {
   id: number
@@ -37,7 +38,8 @@ export async function GET(request: NextRequest) {
     // 全スタッフ一覧取得
     const mainSnap = await getDoc(doc(db, 'demmen', 'main'))
     const allWorkers: WorkerEntry[] = mainSnap.exists() ? (mainSnap.data().workers || []) : []
-    const activeWorkers = allWorkers.filter(w => !w.retired)
+    // 2026-10-02 総合点検: !w.retired（退職予定日を入れた瞬間に「現役」から外れる）→ 今日時点で退職済みの人だけ外す
+    const activeWorkers = allWorkers.filter(w => !isAlreadyRetired(w.retired))
 
     // アクセス履歴取得
     const accessMap = await getWorkerLastAccessMap(days)

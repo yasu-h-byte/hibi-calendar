@@ -72,7 +72,8 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
   // 職長の通行証（共通パスワード＋名前選択でログインした職長）
   if (isForemanTokenShape(authHeader)) {
     const wid = verifyForemanToken(authHeader)
-    return wid === null ? { authorized: false } : { authorized: true, actor: wid }
+    if (wid === null) return { authorized: false }
+    return (await isTokenHolderActive(wid)) ? { authorized: true, actor: wid } : { authorized: false }
   }
 
   // 事務・役員・事業責任者の通行証。パスワードを変える・消すと指紋が合わなくなり使えない
@@ -84,10 +85,34 @@ export async function getApiAuthUser(request: NextRequest): Promise<ApiAuthResul
     // 日比靖仁さん（代表・開発者）は個人パスワードでも代表（全権限）。2026-10-01 代表指示。
     //   旧: 職種が役員なので「役員（見るだけ）」になり、電話URLの発行状況などが見えなかった
     if (t.workerId === OWNER_WORKER_ID) return { authorized: true, actor: 'super-admin' }
-    return { authorized: true, actor: t.workerId }
+    return (await isTokenHolderActive(t.workerId)) ? { authorized: true, actor: t.workerId } : { authorized: false }
   }
 
   return { authorized: false }
+}
+
+/**
+ * 通行証の持ち主がいま在籍しているか（2026-10-02 総合点検）。
+ *
+ * 旧: 通行証は署名と期限だけを見ていた。退職した職長の通行証は最長90日、退職した事務・役員の個人パスワードは
+ *     代表が消すまで使えた（退職日を入れても何も効かなかった）。人員マスタから消えた人の通行証も「ログイン済み」で通った。
+ * 新: 人員マスタ（getMainData・30秒キャッシュ＝読み取りは増えない）で退職日を見る。退職日の当日までは使える
+ *     （lib/workers.ts isAlreadyRetired）。人員マスタに居ない人は通さない。
+ * ⚠️ 人員マスタが読めないとき（クォータ超過など）は今までどおり通す。ここで 401 にすると管理画面が全員ログイン画面へ
+ *    戻る（heartbeat 401）ため、読み取り障害を「全員締め出し」にしない。
+ */
+async function isTokenHolderActive(workerId: number): Promise<boolean> {
+  try {
+    const { getMainData } = await import('@/lib/compute')
+    const main = (await getMainData()) as unknown as { workers?: { id: number; retired?: string }[] }
+    const w = (main.workers || []).find(x => x.id === workerId)
+    if (!w) return false
+    const { isAlreadyRetired } = await import('@/lib/workers')
+    return !isAlreadyRetired(w.retired)
+  } catch (e) {
+    console.warn('[auth] 退職の判定で人員マスタを読めませんでした（通行証はそのまま通します）:', e)
+    return true
+  }
 }
 
 const APPROVER_ID = 1 // 日比政仁

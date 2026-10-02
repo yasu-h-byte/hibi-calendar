@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
-import { WORKER_OFFICE_KEYS, WORKER_PUBLIC_KEYS, getWorkers } from '@/lib/workers'
+import {
+  WORKER_OFFICE_KEYS, WORKER_PUBLIC_KEYS, WORKER_OWNER_ONLY_KEYS, WORKER_WRITABLE_BASE_KEYS, WORKER_WRITABLE_PAY_KEYS,
+  WORKER_CLEARABLE_KEYS, getWorkers, isOfficeSideWorker,
+} from '@/lib/workers'
 import {
   addWorker,
   updateWorker,
@@ -17,24 +20,64 @@ import { doc, setDoc, getDocs, collection } from '@/lib/fsdb'
 //   auditTrail コレクションは削除処理を持たない（労基法115条の3年証跡）。
 //   birthDate は賃金そのものではないが、号俸制の年齢調整（−4〜+3ピッチ）を左右し、
 //   誤入力すると昇給額が静かに変わる。前後の値を追えるようここに含める。
+// 2026-10-02 総合点検: 給与の項目は lib/workers.ts の WORKER_OWNER_ONLY_KEYS（WORKER_PAY_KEYS ＋ 旧ルール）から作る。
+//   旧はここに手書きの一覧が2つ（PAY_FIELDS / OWNER_ONLY_PAY_FIELDS）あり、rateFrom・prevRate・salaryFrom・prevSalary が
+//   どちらにも無かった（事務が書き換えられ、監査ログにも残らなかった）。
 // ⚠️ workerId の存在チェックに `!id` を使わないこと。**日比靖仁さんの workerId は 0** で、
 //    falsy のため「id required」で弾かれる（2026-08-26 に発生）。undefined/null/'' で判定する。
-const PAY_FIELDS = ['rate', 'hourlyRate', 'salary', 'otMul', 'useOldRules', 'retired', 'birthDate', 'jpGrade', 'jpStep'] as const
+const PAY_FIELDS: readonly string[] = [...WORKER_OWNER_ONLY_KEYS, 'retired', 'birthDate']
 
 /**
- * 直接の書き換えを代表だけに限る給与欄（lib/permissions.ts workers.editPay・2026-09-26 代表決定）。
+ * 直接の書き換えを代表だけに限る給与欄（lib/permissions.ts workers.editPay・2026-09-26 代表決定）＝ WORKER_OWNER_ONLY_KEYS。
  * 事業責任者は評価の承認・号俸の改定を通して決める（それぞれのAPIがサーバー側で書き込む）。
  * 事務は基本情報（名前・在留・退職日・電話URL等）を編集できるが、ここに入る欄は変えられない。
  */
-const OWNER_ONLY_PAY_FIELDS = ['rate', 'hourlyRate', 'hourlyRateFrom', 'prevHourlyRate', 'salary', 'otMul', 'useOldRules', 'jpGrade', 'jpStep'] as const
+const OWNER_ONLY_PAY_FIELDS: readonly string[] = WORKER_OWNER_ONLY_KEYS
+
+/** 空・未設定・数値文字列をそろえて比べる（同じ値を送り返すだけなら「変更」にしない） */
+const normValue = (v: unknown) => (v === undefined || v === null || v === '' ? null : typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)) ? Number(v) : v)
 
 /** 給与欄に「値が変わる」書き込みが含まれるか（同じ値を送り返すだけなら含まない） */
 function changesPayFields(updates: Record<string, unknown>, before: Record<string, unknown> | undefined): string[] {
   return OWNER_ONLY_PAY_FIELDS.filter(f => {
     if (!(f in updates)) return false
-    const norm = (v: unknown) => (v === undefined || v === null || v === '' ? null : typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v)) ? Number(v) : v)
-    return JSON.stringify(norm(updates[f])) !== JSON.stringify(norm(before?.[f]))
+    return JSON.stringify(normValue(updates[f])) !== JSON.stringify(normValue(before?.[f]))
   })
+}
+
+const WRITABLE_KEYS = new Set<string>([...WORKER_WRITABLE_BASE_KEYS, ...WORKER_WRITABLE_PAY_KEYS])
+
+/**
+ * add / update の body を「書いてよい項目」だけに絞る（許可リスト・2026-10-02 総合点検）。
+ * 知らないキー（token・scheduledChanges・prevXxx 以外の勝手な項目など）が混ざっていたら名前を返す（400 にする）。
+ */
+function pickWritable(body: Record<string, unknown>): { updates: Record<string, unknown>; unknown: string[] } {
+  const updates: Record<string, unknown> = {}
+  const unknown: string[] = []
+  for (const [k, v] of Object.entries(body)) {
+    if (k === 'action' || k === 'id') continue
+    if (!WRITABLE_KEYS.has(k)) { unknown.push(k); continue }
+    updates[k] = v
+  }
+  return { updates, unknown }
+}
+
+/**
+ * 空文字・null で送られた項目を「消す」に分ける（2026-10-02 総合点検。lib/workers.ts WORKER_CLEARABLE_KEYS）。
+ * 旧: 画面は `retired: form.retired || undefined` と送り、キーごと落ちて変更なしになっていた＝誤った退職日を画面から消せなかった。
+ * 消せない項目（名前・所属・職種・入社日など）に空が来たら、その項目は「変更なし」として外す。
+ */
+function splitClears(updates: Record<string, unknown>): { updates: Record<string, unknown>; unsetFields: string[] } {
+  const next: Record<string, unknown> = {}
+  const unsetFields: string[] = []
+  for (const [k, v] of Object.entries(updates)) {
+    if (v === '' || v === null) {
+      if (WORKER_CLEARABLE_KEYS.includes(k)) unsetFields.push(k)
+      continue
+    }
+    next[k] = v
+  }
+  return { updates: next, unsetFields }
 }
 
 export async function GET(request: NextRequest) {
@@ -51,6 +94,9 @@ export async function GET(request: NextRequest) {
     const canSeePay = await callerCan(request, 'pay.view')
     const canSeeOffice = await callerCan(request, 'workers.view')
     const canSeeToken = await callerCan(request, 'workers.edit')
+    // 2026-10-02 総合点検: 代表(0)・政仁さん(1)・役員・事務の合言葉は最終承認などの鍵を兼ねるので代表だけに返す
+    //   （画面には tokenHidden: true で「代表のみ」と出す）。旧: 事務が政仁さんの合言葉を読んで最終承認まで一人でできた
+    const canSeeOfficeToken = await callerCan(request, 'system.admin')
     // 2026-10-02: 相手ごとに返す項目を許可リストで決める（lib/workers.ts）。
     //   給与を見られる人 = 全部 ／ 事務・役員 = 給与以外の人員マスタ ／ 職長 = 名前・所属・職種など最小限。
     //   旧（#56）: 給与を見られない人を職長と同じ最小限にしていたため、奥寺さん・佐藤さんの人員マスタで
@@ -60,6 +106,7 @@ export async function GET(request: NextRequest) {
       const src = w as unknown as Record<string, unknown>
       const o: Record<string, unknown> = keys ? Object.fromEntries(keys.filter(k => k in src).map(k => [k, src[k]])) : { ...src }
       if (!canSeeToken) delete o.token
+      else if (!canSeeOfficeToken && isOfficeSideWorker(w)) { delete o.token; if (w.token) o.tokenHidden = true }
       return o
     })
     return NextResponse.json({ workers: shaped })
@@ -82,6 +129,30 @@ export async function POST(request: NextRequest) {
       const { name, org, visa, job, rate, hourlyRate, otMul, hireDate, birthDate, jpGrade, jpStep, salary, visaExpiry, dispatchTo, dispatchFrom, useOldRules, canDrive, breakShortenMin, breakShortenFrom, nonSmoker, children, payrollNo } = body
       if (!name) {
         return NextResponse.json({ error: '名前を入力してください' }, { status: 400 })
+      }
+      // 2026-10-02 総合点検: 書いてよい項目だけ（lib/workers.ts の許可リスト）。知らない項目が混ざっていたら断る
+      {
+        const { unknown } = pickWritable(body as Record<string, unknown>)
+        if (unknown.length > 0) {
+          return NextResponse.json({ error: `人員マスタに無い項目です: ${unknown.join('・')}` }, { status: 400 })
+        }
+      }
+      // 2026-10-02 総合点検: 新規追加でも給与欄（日額・時給・月給・号俸・旧ルール）を入れられるのは代表だけ。
+      //   旧: update は workers.editPay を見ていたのに add は見ておらず、事務が給与つきで登録できた。
+      //   残業倍率の既定値 1.25・日額 0 は「入れていない」とみなす
+      {
+        const payGiven = WORKER_WRITABLE_PAY_KEYS.filter(k => {
+          const v = normValue((body as Record<string, unknown>)[k])
+          if (v === null || v === 0 || v === false) return false
+          if (k === 'otMul' && Number(v) === 1.25) return false
+          return true
+        })
+        if (payGiven.length > 0) {
+          const payDenied = await requireCap(request, 'workers.editPay')
+          if (payDenied) {
+            return NextResponse.json({ error: `給与欄（${payGiven.join('・')}）を入れられるのは代表だけです。給与欄を空にして登録し、代表に伝えてください` }, { status: 403 })
+          }
+        }
       }
       const workerData: Parameters<typeof addWorker>[0] = {
         name,
@@ -144,9 +215,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'update') {
-      const { id, ...updates } = body
+      const { id } = body
       if (id === undefined || id === null || id === '') return NextResponse.json({ error: 'id required' }, { status: 400 })
-      delete updates.action
+      // 2026-10-02 総合点検: 書いてよい項目だけ（許可リスト）。旧: body のキーを何でもマージしていた（token・prevRate も通った）
+      const picked = pickWritable(body as Record<string, unknown>)
+      if (picked.unknown.length > 0) {
+        return NextResponse.json({ error: `人員マスタに無い項目です: ${picked.unknown.join('・')}` }, { status: 400 })
+      }
+      // 空文字・null は「その項目を消す」（退職日・在留期限・メモなど。lib/workers.ts WORKER_CLEARABLE_KEYS）
+      const split = splitClears(picked.updates)
+      const updates: Record<string, unknown> = split.updates
+      const unsetFields: string[] = split.unsetFields
       if (updates.rate !== undefined) updates.rate = Number(updates.rate) || 0
       if (updates.hourlyRate !== undefined) {
         const hr = Number(updates.hourlyRate)
@@ -175,12 +254,22 @@ export async function POST(request: NextRequest) {
           ? (updates.children as unknown[]).map(String).filter(c => /^\d{4}-\d{2}$/.test(c))
           : []
       }
+      // useOldRules: true なら保存、false（空・null も）ならフィールドを削除。送られていなければ変更なし
+      // 2026-06-13 (監査 Sprint3): deleteField() は配列要素内では機能しないため、
+      //   unsetFields で updateWorker に「マージ後に delete するキー」を渡す方式に変更
+      if ('useOldRules' in picked.updates) {
+        if (picked.updates.useOldRules === true) updates.useOldRules = true
+        else { delete updates.useOldRules; if (!unsetFields.includes('useOldRules')) unsetFields.push('useOldRules') }
+      }
+
       // 2026-06-12 (監査 Sprint2-C): 給与系フィールドの old→new を永続記録（更新前に現値を取得）
       const beforeWorkers = await getWorkers()
       const beforeW = beforeWorkers.find(w => w.id === Number(id)) as Record<string, unknown> | undefined
+      if (!beforeW) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
 
-      // 給与欄の直接の書き換えは代表だけ（画面は全項目を送り返すので「値が変わるとき」だけ判定）
-      const payChanged = changesPayFields({ ...updates, ...('useOldRules' in body ? { useOldRules: body.useOldRules === true || undefined } : {}) }, beforeW)
+      // 給与欄の直接の書き換えは代表だけ（画面は全項目を送り返すので「値が変わるとき」だけ判定）。消す（空で送る）も変更
+      const effective: Record<string, unknown> = { ...updates, ...Object.fromEntries(unsetFields.map(k => [k, null])) }
+      const payChanged = changesPayFields(effective, beforeW)
       if (payChanged.length > 0) {
         const payDenied = await requireCap(request, 'workers.editPay')
         if (payDenied) {
@@ -188,32 +277,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // useOldRules: true なら保存、false/undefined ならフィールドを削除
-      // 2026-06-13 (監査 Sprint3): deleteField() は配列要素内では機能しないため、
-      //   unsetFields で updateWorker に「マージ後に delete するキー」を渡す方式に変更
-      const useOldRulesNew = updates.useOldRules === true
-      const unsetFields: string[] = []
-      if (updates.useOldRules === true) {
-        updates.useOldRules = true
-      } else if ('useOldRules' in updates) {
-        delete updates.useOldRules
-        unsetFields.push('useOldRules')
-      }
-      await updateWorker(id, updates, unsetFields)
+      await updateWorker(Number(id), updates as Parameters<typeof updateWorker>[1], unsetFields)
 
-      // 給与系フィールドの差分を auditTrail へ（削除されない永続コレクション）
+      // 給与系フィールドの差分を auditTrail へ（削除されない永続コレクション）。消した項目も「→ —」で残す
       const changes: Record<string, { from: unknown; to: unknown }> = {}
       for (const f of PAY_FIELDS) {
-        if (f === 'useOldRules') continue  // 下で個別判定（unsetFields に移したため updates に無い）
-        if (!(f in updates)) continue
-        const oldV = beforeW?.[f] ?? null
-        const newV = updates[f] ?? null
-        if (JSON.stringify(oldV) !== JSON.stringify(newV)) changes[f] = { from: oldV, to: newV }
-      }
-      // useOldRules は body にキーがあった場合のみ差分判定（true/解除）
-      if ('useOldRules' in body) {
-        const oldV = !!beforeW?.useOldRules
-        if (oldV !== useOldRulesNew) changes.useOldRules = { from: oldV, to: useOldRulesNew }
+        if (!(f in effective)) continue
+        const oldV = f === 'useOldRules' ? !!beforeW?.useOldRules : (beforeW?.[f] ?? null)
+        const newV = f === 'useOldRules' ? effective[f] === true : (effective[f] ?? null)
+        if (JSON.stringify(normValue(oldV)) !== JSON.stringify(normValue(newV))) changes[f] = { from: oldV, to: newV }
       }
       if (Object.keys(changes).length > 0) {
         const auth = await getApiAuthUser(request)
@@ -272,18 +344,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true })
     }
 
-    if (action === 'generateToken') {
+    if (action === 'generateToken' || action === 'revokeToken') {
       const { id } = body
       if (id === undefined || id === null || id === '') return NextResponse.json({ error: 'id required' }, { status: 400 })
+      // 2026-10-02 総合点検: 代表(0)・政仁さん(1)・役員・事務の合言葉は最終承認などの鍵を兼ねる（lib/foreman-todo.ts managerByToken）。
+      //   発行・失効は代表だけ。旧: 人員マスタを編集できる事務が政仁さんの合言葉を発行し直して読めた
+      const target = (await getWorkers()).find(w => w.id === Number(id))
+      if (!target) return NextResponse.json({ error: 'Worker not found' }, { status: 404 })
+      if (isOfficeSideWorker(target)) {
+        const denied = await requireCap(request, 'system.admin')
+        if (denied) return NextResponse.json({ error: '代表・事業責任者・役員・事務のスマホURLは代表だけが発行・失効できます' }, { status: 403 })
+      }
+      if (action === 'revokeToken') {
+        await revokeWorkerToken(id)
+        await logActivity('admin', 'worker.revokeToken', `${target.name} のスマホURLを失効`)
+        return NextResponse.json({ success: true })
+      }
       const token = await generateWorkerToken(id)
+      await logActivity('admin', 'worker.generateToken', `${target.name} のスマホURLを発行`)
       return NextResponse.json({ success: true, token })
-    }
-
-    if (action === 'revokeToken') {
-      const { id } = body
-      if (id === undefined || id === null || id === '') return NextResponse.json({ error: 'id required' }, { status: 400 })
-      await revokeWorkerToken(id)
-      return NextResponse.json({ success: true })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })

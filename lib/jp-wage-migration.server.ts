@@ -17,6 +17,10 @@
  * - 濱上 祥太郎は入社1年目で月給制のため、日給への読み替えを保留
  * - 氏名ベースだった対応付けを workerId に確定（初版の TODO を解消）
  */
+// 2026-10-02 総合点検: 実名＋移行前日額＋個別事情が入っているので**サーバー専用**（lib/wage-plan.server.ts と同じ形）。
+//   画面（'use client'）から import するとビルドが止まる。ビルド後の JS に載っていないかは
+//   scripts/check-client-bundle-secrets.mjs（postbuild）が lib/**/*.server.ts をまとめて見る
+import 'server-only'
 import type { JpGrade } from './jp-wage'
 
 export interface MigrationSeed {

@@ -22,8 +22,9 @@ export function hashPassword(plain: string): string {
 }
 
 /** 入力されたパスワードが保存値と一致するか（保存値が平文の古い形式でも照合できる） */
-export function verifyPassword(plain: string, stored: string | undefined | null): boolean {
-  if (!stored || !plain) return false
+export function verifyPassword(plain: unknown, stored: string | undefined | null): boolean {
+  // 2026-10-02 総合点検: body の password が文字列でない（オブジェクト等）と Buffer.from が例外になり 500 になっていた
+  if (typeof plain !== 'string' || typeof stored !== 'string' || !stored || !plain) return false
   if (!isHashed(stored)) {
     const a = Buffer.from(plain), b = Buffer.from(stored)
     return a.length === b.length && timingSafeEqual(a, b)

@@ -67,4 +67,32 @@ describe('給与の鍵: 公開資料', () => {
     const hits = findPayInDocs(root).map((h: { line: number }) => h.line)
     expect(hits).toEqual([1, 2])
   })
+  // 2026-10-02 総合点検: 「さん」の無い実名・別の行（表）・カンマや円の無い金額・口座番号もすり抜けない
+  test('実名の一覧（サーバー専用ファイルから作る）× 前後2行の金額・口座番号を検出する', () => {
+    const root = mkdtempSync(join(tmpdir(), 'paylint-'))
+    mkdirSync(join(root, 'public'))
+    mkdirSync(join(root, 'lib'))
+    writeFileSync(join(root, 'lib', 'jp-wage-migration.server.ts'), "export const X = [{ id: 10, name: '架空 太郎', grade: '4G' }, { id: 6, name: '日比 次郎' }]\n")
+    writeFileSync(join(root, 'lib', 'wage-plan.server.ts'), "const T = {\n      205: 1585, // ホー チョン ゴック\n}\n")
+    const sep = ['', '', '']   // 前後2行の窓に入らないよう離す
+    writeFileSync(join(root, 'public', 'y.html'), [
+      '<tr><td>架空 太郎</td>',                      // 1: 名前だけ（さん なし）
+      '<td>28,000円</td></tr>',                      // 2: 前の行に実名 → 検出
+      ...sep,                                        // 3-5
+      '<p>時給1585 は ゴック の改定後</p>',             // 6: 円もカンマも無い金額＋カタカナの名 → 検出
+      ...sep,                                        // 7-9
+      '<p>口座番号 1234567 は会社の口座</p>',          // 10: 口座番号だけ（名前なし）→ 検出しない
+      ...sep,                                        // 11-13
+      '<p>サンプルの 2,000円</p>',                     // 14: 「サン」はサンプルの一部 → 検出しない
+      ...sep,                                        // 15-17
+      '<p>次郎 の 日給 15000</p>',                     // 18: 「日比」は社名なので除くが「次郎」は名 → 検出
+      ...sep,                                        // 19-21
+      '<p>Aさん 月給 200,000円</p>',                   // 22: 架空 → 検出しない
+      ...sep,                                        // 23-25
+      '<p>口座番号 7654321</p>',                       // 26: 口座番号
+      '<p>振込先: 架空 太郎</p>',                       // 27: 次の行に実名 → 26 を検出
+    ].join('\n'))
+    const hits = findPayInDocs(root).map((h: { line: number }) => h.line)
+    expect(hits).toEqual([2, 6, 18, 26])
+  })
 })

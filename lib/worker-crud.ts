@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { db } from './firebase'
 import { doc, getDoc, runTransaction } from '@/lib/fsdb'
 import { invalidateMainCache } from './compute'
@@ -22,12 +23,20 @@ export interface WorkerData {
   useOldRules?: boolean
 }
 
-function generateToken(): string {
+/**
+ * スマホURLの合言葉を作る（2026-10-02 総合点検）。
+ *
+ * 旧: 英小文字＋数字8桁を Math.random() で作っていた（予測できる乱数・36^8 通り）。合言葉は本人の出面・有給の鍵で、
+ *     政仁さん・代表の分は最終承認の鍵も兼ねる（lib/foreman-todo.ts managerByToken）ので、強い乱数で長くする。
+ * 新: crypto.randomBytes から英小文字＋数字 24 文字（約124ビット）。発行済みの8桁の合言葉はそのまま使える
+ *     （照合は文字列の一致だけ。lib/staff-manifest.ts の形式チェック [A-Za-z0-9]{4,64} にも収まる）。
+ */
+export const STAFF_TOKEN_LENGTH = 24
+export function generateToken(length = STAFF_TOKEN_LENGTH): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = randomBytes(length)
   let token = ''
-  for (let i = 0; i < 8; i++) {
-    token += chars[Math.floor(Math.random() * chars.length)]
-  }
+  for (let i = 0; i < length; i++) token += chars[bytes[i] % chars.length]
   return token
 }
 

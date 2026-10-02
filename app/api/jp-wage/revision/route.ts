@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, setDoc, collection, getDocs } from '@/lib/fsdb'
-import { getWorkers } from '@/lib/workers'
+import { getWorkers, isAlreadyRetired } from '@/lib/workers'
 import { updateWorker } from '@/lib/worker-crud'
 import {
   computeRosterRevision, nextRevisionDate, lastRevisionDate, dailyForStep,
@@ -26,7 +26,7 @@ import {
 } from '@/lib/jp-wage'
 import { getMainData } from '@/lib/compute'
 import { selectActiveGrantRecord } from '@/lib/leave-compute'
-import { MIGRATION_2026 } from '@/lib/jp-wage-migration'
+import { MIGRATION_2026 } from '@/lib/jp-wage-migration.server'
 import { todayJstIso } from '@/lib/date-utils'
 
 export const dynamic = 'force-dynamic'
@@ -76,7 +76,9 @@ async function buildRoster(effective: string, entries: Record<string, Entry>) {
   const seedById = new Map(MIGRATION_2026.map(m => [m.id, m]))
 
   const members: RosterMember[] = workers
-    .filter(w => !w.retired)
+    // 改定日（effective）の時点で在籍している人（2026-10-02 総合点検。旧: `!w.retired` で、
+    //   改定日より先の退職予定が入っている在籍者が名簿から外れていた）
+    .filter(w => !isAlreadyRetired(w.retired, effective))
     .filter(w => !w.visaType || w.visaType === 'none')   // 外国人は時給制の別制度
     .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
     .map(w => {
@@ -142,7 +144,7 @@ export async function GET(request: NextRequest) {
   //   この API は代表・事業責任者だけが呼べる（requireExecutiveAuth）。在籍中の日本人（役員・事務を除く）全員分
   const mypageTokens: Record<string, { name: string; token: string }> = {}
   for (const w of rosterWorkers) {
-    if (w.retired || (w.visaType && w.visaType !== 'none') || w.jobType === 'yakuin' || w.jobType === 'jimu') continue
+    if (isAlreadyRetired(w.retired, effective) || (w.visaType && w.visaType !== 'none') || w.jobType === 'yakuin' || w.jobType === 'jimu') continue
     if (w.token) mypageTokens[String(w.id)] = { name: w.name, token: w.token }
   }
   // 2026-09-03 修正: 確定済みの改定は「凍結した改定前の号」を現在値として再計算する。
@@ -190,11 +192,23 @@ export async function PUT(request: NextRequest) {
   if (current.status === 'applied') {
     return NextResponse.json({ error: '適用済みの改定は編集できません' }, { status: 409 })
   }
+  // 2026-10-02 総合点検: 1人分の差分（entryPatch）はサーバで今の entries にマージする。
+  //   旧: 画面が描画時点の entries 全体を送り、ここで丸ごと置き換えていたので、保存→再読込の1〜2秒の間に
+  //   別の人の評語を変えると、前の人の変更が古い entries で上書きされて黙って元に戻っていた。
+  //   entries（全体）は後方互換のために残す（画面からは使わない）
+  let entries = body.entries ?? current.entries
+  if (body.entryPatch && typeof body.entryPatch === 'object') {
+    entries = { ...(current.entries || {}) }
+    for (const [id, patch] of Object.entries(body.entryPatch as Record<string, Partial<Entry>>)) {
+      if (!/^\d+$/.test(id) || !patch || typeof patch !== 'object') continue
+      entries[id] = { ...(entries[id] || DEFAULT_ENTRY), ...patch }
+    }
+  }
   const next: RevisionDoc = {
     ...current,
     effective,
     profitRatePercent: body.profitRatePercent ?? current.profitRatePercent,
-    entries: body.entries ?? current.entries,
+    entries,
     updatedAt: new Date().toISOString(),
   }
   await setDoc(doc(db, 'jpWageRevisions', effective), next)

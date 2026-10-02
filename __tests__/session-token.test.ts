@@ -6,7 +6,20 @@ import { describe, test, expect, vi, beforeAll } from 'vitest'
 vi.mock('@/lib/firebase', () => ({ db: {} }))
 vi.mock('@/lib/fsdb', () => ({
   doc: () => ({}),
-  getDoc: async () => ({ exists: () => true, data: () => ({ userPasswords: { '50': 'pw-jimu' } }) }),
+  getDoc: async () => ({ exists: () => true, data: () => ({ userPasswords: { '50': 'pw-jimu', '51': 'pw-retired' } }) }),
+}))
+// 通行証の持ち主が在籍しているかは人員マスタ（getMainData）で見る（2026-10-02 総合点検）
+vi.mock('@/lib/compute', () => ({
+  getMainData: async () => ({
+    workers: [
+      { id: 10, name: '職長', job: 'shokucho', retired: '' },
+      { id: 11, name: '退職した職長', job: 'shokucho', retired: '2026-01-31' },
+      { id: 12, name: '退職予定の職長', job: 'shokucho', retired: '2099-12-31' },
+      { id: 50, name: '事務', job: 'jimu', retired: '' },
+      { id: 51, name: '退職した事務', job: 'jimu', retired: '2026-01-31' },
+    ],
+    sites: [], mforeman: {},
+  }),
 }))
 
 beforeAll(() => {
@@ -55,6 +68,16 @@ describe('通行証', () => {
     expect(await getApiAuthUser(req(createPersonalToken(50, passwordFingerprint('pw-jimu'))))).toEqual({ authorized: true, actor: 50 })
   })
 
+  test('退職した人の通行証は使えない。退職予定（未来）の人・人員マスタに居ない人は？（2026-10-02 総合点検）', async () => {
+    const { createForemanToken, createPersonalToken } = await import('@/lib/session-token')
+    const { passwordFingerprint } = await import('@/lib/password')
+    const { getApiAuthUser } = await import('@/lib/auth')
+    expect(await getApiAuthUser(req(createForemanToken(11)))).toEqual({ authorized: false })
+    expect(await getApiAuthUser(req(createForemanToken(12)))).toEqual({ authorized: true, actor: 12 })
+    expect(await getApiAuthUser(req(createForemanToken(99)))).toEqual({ authorized: false })   // 人員マスタに居ない
+    expect(await getApiAuthUser(req(createPersonalToken(51, passwordFingerprint('pw-retired'))))).toEqual({ authorized: false })
+  })
+
   test('個人の通行証: パスワードを変えると（指紋が変わり）使えない・なりすまし不可', async () => {
     const { createPersonalToken } = await import('@/lib/session-token')
     const { passwordFingerprint } = await import('@/lib/password')
@@ -64,5 +87,36 @@ describe('通行証', () => {
     const t = createPersonalToken(50, passwordFingerprint('pw-jimu'))
     const [p, , exp, fp, sig] = t.split('.')
     expect(await getApiAuthUser(req(`${p}.1.${exp}.${fp}.${sig}`))).toEqual({ authorized: false })
+  })
+})
+
+describe('専用の署名鍵 SESSION_SECRET（2026-10-02 総合点検）', () => {
+  test('設定すると鍵が変わり、設定前の通行証は使えない（全員ログインし直し）。設定後も正しく発行・照合できる', async () => {
+    const { createForemanToken, verifyForemanToken, createOwnerToken, verifyOwnerToken, hasDedicatedSessionSecret } = await import('@/lib/session-token')
+    delete process.env.SESSION_SECRET
+    expect(hasDedicatedSessionSecret()).toBe(false)
+    const before = createForemanToken(10)
+    const ownerBefore = createOwnerToken()
+    process.env.SESSION_SECRET = 'x'.repeat(40)
+    expect(hasDedicatedSessionSecret()).toBe(true)
+    expect(verifyForemanToken(before)).toBeNull()
+    expect(verifyOwnerToken(ownerBefore)).toBe(false)
+    const after = createForemanToken(10)
+    expect(verifyForemanToken(after)).toBe(10)
+    // パスワードを変えると（鍵に含まれるので）やはり使えない
+    process.env.ADMIN_PASSWORD = 'pw-common-new'
+    expect(verifyForemanToken(after)).toBeNull()
+    process.env.ADMIN_PASSWORD = 'pw-common'
+    expect(verifyForemanToken(after)).toBe(10)
+    delete process.env.SESSION_SECRET
+  })
+  test('32文字未満の SESSION_SECRET は設定ミスとみなして使わない（今までの鍵のまま）', async () => {
+    const { createForemanToken, verifyForemanToken, hasDedicatedSessionSecret } = await import('@/lib/session-token')
+    delete process.env.SESSION_SECRET
+    const t = createForemanToken(10)
+    process.env.SESSION_SECRET = 'short'
+    expect(hasDedicatedSessionSecret()).toBe(false)
+    expect(verifyForemanToken(t)).toBe(10)
+    delete process.env.SESSION_SECRET
   })
 })

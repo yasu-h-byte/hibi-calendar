@@ -19,11 +19,38 @@ const PREFIX = 'ft1'
 /** 有効期間 90日（職長は同じ端末でログインしたまま使うため長め） */
 export const FOREMAN_TOKEN_TTL_SEC = 90 * 24 * 60 * 60
 
+/** 専用の署名鍵として認める最短の長さ（これより短い SESSION_SECRET は設定ミスとみなして使わない） */
+export const SESSION_SECRET_MIN_LENGTH = 32
+let warnedShortSecret = false
+
+/**
+ * 署名鍵（2026-10-02 総合点検）。
+ *
+ * 旧: 鍵は「代表パスワード＋職長の共通パスワード」そのものだった。職長は共通パスワードを知っていて自分の通行証
+ *     （本文＋署名）も持つので、手元で代表パスワードを総当たりでき（HMAC は高速）、当たれば代表の通行証を自作できた。
+ * 新: 環境変数 SESSION_SECRET（32文字以上のランダムな文字列）があれば、それを鍵に**足す**。
+ *     - 鍵 = SESSION_SECRET + 代表パスワード + 共通パスワード。乱数が混ざるので総当たりできない
+ *     - パスワードを変えると鍵も変わり、古い通行証は今までどおり使えなくなる
+ *     - SESSION_SECRET を**設定した瞬間に全員の通行証が無効になる**（全員がログインし直し。設定は代表が Vercel で行う）
+ *     未設定なら今までの鍵（後方互換・設定するまで何も変わらない）。
+ */
 function key(): string | null {
   const a = process.env.SUPER_ADMIN_PASSWORD
   const b = process.env.ADMIN_PASSWORD
   if (!a || !b) return null
+  const secret = process.env.SESSION_SECRET
+  if (secret && secret.length >= SESSION_SECRET_MIN_LENGTH) return `${secret}\u0000${a}\u0000${b}`
+  if (secret && !warnedShortSecret) {
+    warnedShortSecret = true
+    console.warn(`[session-token] SESSION_SECRET が ${SESSION_SECRET_MIN_LENGTH} 文字未満なので使いません（今までの鍵のまま）`)
+  }
   return `${a}\u0000${b}`
+}
+
+/** SESSION_SECRET が有効か（稼働確認・テスト用） */
+export function hasDedicatedSessionSecret(): boolean {
+  const s = process.env.SESSION_SECRET
+  return !!s && s.length >= SESSION_SECRET_MIN_LENGTH
 }
 
 function sign(body: string, k: string): string {

@@ -16,6 +16,23 @@ async function getAdminTier(request: NextRequest): Promise<'super-admin' | 'admi
   return 'personal'
 }
 
+/**
+ * HFU → 日比建設 の請求書設定の初期値（未保存のとき）。HFU がこれまで手作りしていた請求書（2025-12 分・代表提供 2026-09-26）の
+ * 記載どおり。保存ボタンを押すまで Firestore には入らない。土工の単価はその請求書に無いので 0。
+ * サーバだけが持つ（2026-10-02 総合点検。旧: app/(app)/settings/page.tsx に直書き＝公開の JS に載っていた）
+ */
+const HFU_INVOICE_DEFAULTS = {
+  profile: {
+    name: 'エイチエフユナイテッド株式会社', nameEn: '', representative: '代表取締役 日比 靖仁',
+    postal: '204-0003', address: '東京都清瀬市中里2-1620-1', tel: '042-493-9978', fax: '', email: '',
+    invoiceRegNo: 'T5012701011352',
+    bank: { bankName: '青梅信用金庫', branch: '秋津', accountType: '普通', accountNo: '0086328', holder: 'エイチエフユナイテッド株式会社 代表取締役 日比 靖仁' },
+    invoicePrefix: 'HFU',
+  },
+  tobiRate: 30000, dokoRate: 0,
+  paymentTerms: { closing: 'end', payMonthOffset: 1, payDay: 'end' },
+}
+
 async function getMainDoc() {
   const docRef = doc(db, 'demmen', 'main')
   const docSnap = await getDoc(docRef)
@@ -60,8 +77,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (action === 'getHfuInvoice') {
-      // HFU → 日比建設 の請求書の設定（lib/hfu-invoice.ts）
-      const hfuInvoice = result.data.hfuInvoice || null
+      // HFU → 日比建設 の請求書の設定（lib/hfu-invoice.ts）。
+      // 2026-10-02 総合点検: 未保存のときの初期値（HFU の会社情報・口座・社内単価）もここ（代表だけ）が返す。
+      //   旧: 画面（'use client'）に直書きしていて、/_next/static の JS からログインなしで取れた
+      const hfuInvoice = result.data.hfuInvoice || { ...HFU_INVOICE_DEFAULTS, defaults: true }
       return NextResponse.json({ hfuInvoice })
     }
 

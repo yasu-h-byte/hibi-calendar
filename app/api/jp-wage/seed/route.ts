@@ -1,7 +1,7 @@
 /**
  * 号俸制への移行データ（等級・号数）を人員マスタへ投入する。
  *
- * 値は `lib/jp-wage-migration.ts` の MIGRATION_2026 が唯一の出所。手入力させないのは、
+ * 値は `lib/jp-wage-migration.server.ts` の MIGRATION_2026 が唯一の出所。手入力させないのは、
  * docs/wage-system.md 第12節の表と1円でもズレると改定額が狂うため。
  *
  * - GET  … 何が書き込まれるかを返すだけ（書き込まない）
@@ -14,9 +14,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getApiAuthUser, requireExecutiveAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, setDoc } from '@/lib/fsdb'
-import { getWorkers } from '@/lib/workers'
+import { getWorkers, isAlreadyRetired } from '@/lib/workers'
 import { updateWorker } from '@/lib/worker-crud'
-import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration'
+import { MIGRATION_2026, MIGRATION_EXCLUDED } from '@/lib/jp-wage-migration.server'
 import { dailyForStep } from '@/lib/jp-wage'
 
 export const dynamic = 'force-dynamic'
@@ -79,7 +79,8 @@ function buildPlan(workers: Awaited<ReturnType<typeof getWorkers>>): {
 
   // 年齢調整に使うので、号俸制の対象者は生年月日が要る
   const missingBirthDate = workers
-    .filter(w => !w.retired && !w.visaType.startsWith('jisshu') && !w.visaType.startsWith('tokutei'))
+    // 今日の時点で在籍している人（2026-10-02 総合点検。旧: `!w.retired` で退職予定の在籍者が抜けていた）
+    .filter(w => !isAlreadyRetired(w.retired) && !w.visaType.startsWith('jisshu') && !w.visaType.startsWith('tokutei'))
     .filter(w => !w.birthDate)
     .map(w => `${w.name}(ID ${w.id})`)
 
