@@ -110,12 +110,12 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   { label: '出面一覧・勤務予定シフト・実労働時間明細', where: '帳票出力 → 根拠書類', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'しゅつづら しふと' },
   { label: '外注先向け 出面確認書', where: '帳票出力 → 社内用', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'がいちゅう 確認書' },
   { label: '歩掛管理表', where: '帳票出力 → 社内用', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'ぶがかり' },
-  { label: '有給管理台帳（Excel）', where: '休暇管理 → 管理簿出力', href: '/leave', cap: 'leave.view', keywords: 'ゆうきゅう 台帳 管理簿' },
+  { label: '有給管理台帳（Excel）', where: '休暇管理 → 管理簿（Excel）', href: '/leave', cap: 'leave.view', keywords: 'ゆうきゅう 台帳 管理簿' },
   { label: '周知・同意台帳（Excel）', where: '帳票出力 → 社内用（就業カレンダーの下にも）', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'どうい しゅうち 署名 台帳' },
   // 休暇
   { label: '有給・帰国の申請一覧（承認）', where: '休暇管理 → 申請', href: '/leave?tab=requests', cap: 'leave.view', keywords: 'しょうにん 申請 ゆうきゅう' },
-  { label: '帰国情報', where: '休暇管理 → 帰国情報', href: '/leave?tab=homeleave', cap: 'leave.view', keywords: 'きこく 一時帰国 長期' },
-  { label: '有給の手動付与・時季指定・買取', where: '休暇管理 → 一覧 → 編集／メニュー', href: '/leave', cap: 'leave.manage', keywords: 'ふよ かいとり じきしてい' },
+  { label: '帰国情報', where: '休暇管理 → 帰国', href: '/leave?tab=homeleave', cap: 'leave.view', keywords: 'きこく 一時帰国 長期' },
+  { label: '有給の手動付与・時季指定・買取', where: '休暇管理 → 有給 → 行を押して右のパネル', href: '/leave', cap: 'leave.manage', keywords: 'ふよ かいとり じきしてい' },
   // 請求
   { label: '応援の請求書（同業者へ）', where: '請求書・支払 → 会社ごと', href: '/peer-statement', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者' },
   { label: '紙で出した請求書（保管・システムとの見比べ）', where: '請求書・支払 → 紙で出した請求書', href: '/paper-invoice', cap: 'invoice.view', keywords: 'かみ 手作り 手書き アナログ 請求書 見比べ 畠山 吉本' },
