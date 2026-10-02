@@ -123,7 +123,9 @@ export async function GET(request: NextRequest) {
     // 締めの準備カードの「出面の承認」（2026-10-02）: 締め前の会社だけ、締めと同じ判定で足りない「現場×日」を数える。
     //   旧: 常に緑のチェック（実際の承認状況を見ていなかった）。締め済みの会社は締めた時点でそろっているので数えない
     const { monthApprovalStatus } = await import('@/lib/month-approval-status')
-    const approvalStatus: Record<string, { needed: number; foremanMissing: number; finalMissing: number; complete: boolean; finalRequired: boolean }> = {}
+    const { describeApprovalGap } = await import('@/lib/approval-gap')
+    const siteNameOf = (id: string) => main.sites.find(s => s.id === id)?.name || id
+    const approvalStatus: Record<string, { needed: number; foremanMissing: number; finalMissing: number; complete: boolean; finalRequired: boolean; detail: string }> = {}
     await Promise.all((['hibi', 'hfu'] as const).map(async orgKey => {
       if (orgKey === 'hibi' ? lockedHibi : lockedHfu) return
       try {
@@ -131,6 +133,7 @@ export async function GET(request: NextRequest) {
         approvalStatus[orgKey] = {
           needed: ap.needed, foremanMissing: ap.gap.foremanMissing.length, finalMissing: ap.gap.finalMissing.length,
           complete: ap.complete, finalRequired: ap.finalRequired,
+          detail: describeApprovalGap(ap.gap, siteNameOf),   // どの現場の何日が足りないか（締めのエラーと同じ書き方）
         }
       } catch (e) {
         console.error(`[monthly] 承認状況の取得失敗 (${orgKey}):`, e)
