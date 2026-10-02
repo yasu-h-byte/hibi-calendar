@@ -14,6 +14,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { PageHeader } from '@/components/ui/PageParts'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { GRADE_LABELS } from '@/lib/jp-wage'
+import { isAlreadyRetired } from '@/lib/workers'
 import GradeTable from './components/GradeTable'
 import AdjustmentTables from './components/AdjustmentTables'
 import BonusTable from './components/BonusTable'
@@ -73,10 +74,11 @@ function WageHub() {
           if (!j?.workers) return
           const ws = j.workers as Record<string, unknown>[]
           setPlaced(ws
-            .filter(w => !w.retired && w.jpGrade && w.jpStep)
+            // 退職の判定は「今日の時点で退職日を過ぎたか」（lib/workers.ts isAlreadyRetired・2026-10-02 総合点検）。旧: `!w.retired` で退職「予定」の在籍者まで外れていた
+            .filter(w => !isAlreadyRetired(w.retired as string | undefined) && w.jpGrade && w.jpStep)
             .map(w => ({ name: String(w.name), grade: String(w.jpGrade), step: Number(w.jpStep) })))
           setUnset(ws
-            .filter(w => !w.retired && (!w.visaType || w.visaType === 'none'))
+            .filter(w => !isAlreadyRetired(w.retired as string | undefined) && (!w.visaType || w.visaType === 'none'))
             .filter(w => w.jobType !== 'yakuin' && w.jobType !== 'jimu')
             .filter(w => !w.jpGrade || !w.jpStep)
             .map(w => ({ id: Number(w.id), name: String(w.name) })))

@@ -30,6 +30,7 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [acting, setActing] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -44,9 +45,13 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
       if (res.ok) {
         const data = await res.json()
         setNotifications(data.notifications || [])
+        setLoadFailed(false)
+      } else {
+        // 2026-10-02 総合点検: 取得に失敗したときは「取得できませんでした」と出す（旧: 緑の「問題なし」に見えた）
+        setLoadFailed(true)
       }
     } catch {
-      // silent fail
+      setLoadFailed(true)
     } finally {
       setLoading(false)
     }
@@ -131,13 +136,19 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
         >
           <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-700">
             <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-200">通知</h3>
-            {loading && <span className="text-[10px] text-gray-400">更新中...</span>}
-            {!loading && notifications.length === 0 && <span className="text-[10px] text-green-500 font-medium">問題なし</span>}
+            {loading && <span className="text-xs text-hibi-sub dark:text-gray-400">更新中...</span>}
+            {!loading && loadFailed && <span className="text-xs text-red-700 dark:text-red-300 font-bold">取得できませんでした</span>}
+            {!loading && !loadFailed && notifications.length === 0 && <span className="text-xs text-green-700 dark:text-green-300 font-bold">問題なし</span>}
           </div>
 
           <div className="max-h-96 overflow-y-auto">
-            {notifications.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-gray-400">
+            {loadFailed && notifications.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-hibi-sub dark:text-gray-400">
+                通知を取得できませんでした。
+                <button type="button" onClick={fetchNotifications} className="ml-2 underline font-bold text-hibi-navy dark:text-blue-300">もう一度</button>
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-hibi-sub dark:text-gray-400">
                 対応が必要な項目はありません
               </div>
             ) : (

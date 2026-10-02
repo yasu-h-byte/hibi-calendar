@@ -32,6 +32,8 @@ import { Icon } from '@/components/ui/Icon'
 import { canDriveDefault } from '@/lib/allowance'
 import { resolveWorkTypeSiteId } from '@/lib/site-hierarchy'
 import { todayJstIso, todayJstDate } from '@/lib/date-utils'
+import { postJson } from '@/lib/api-client'
+import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { CALENDAR_REMIND_FROM_DAY, CALENDAR_DEADLINE_DAY } from '@/lib/calendar'
 
 export default function AttendanceGridPage() {
@@ -142,14 +144,20 @@ export default function AttendanceGridPage() {
   }, [])
 
   // Fetch grid data
+  // 現場・月を素早く切り替えたとき、前の応答があとから届いて表を上書きしない（lib/hooks/useLatestRequest・2026-10-02 総合点検）。
+  //   旧: 取り消しも順番の確認も無く、承認・夜勤・運転者は state の siteId/ym で送るのに表は古い応答の内容、になり得た
+  const latest = useLatestRequest()
   const fetchData = useCallback(async () => {
     if (!password || !siteId || !ym) return
+    const req = latest.begin()
     setLoading(true)
     setError('')
     try {
       const res = await fetch(`/api/attendance/grid?siteId=${siteId}&ym=${ym}`, {
         headers: { 'x-admin-password': password },
+        signal: req.signal,
       })
+      if (!req.isCurrent()) return
       if (!res.ok) {
         const msg = await res.text()
         setError(msg || 'データ取得に失敗しました')
@@ -157,6 +165,7 @@ export default function AttendanceGridPage() {
         return
       }
       const json: GridData = await res.json()
+      if (!req.isCurrent()) return
       setData(json)
       setWorkerEntries(json.workerEntries)
       setNightDays(json.nightDays || [])
@@ -173,13 +182,14 @@ export default function AttendanceGridPage() {
       // Use siteWorkDays (from approved calendar) if workDays is not manually set
       const effectiveWorkDays = json.workDays ?? json.siteWorkDays
       setWorkDaysInput(effectiveWorkDays != null ? String(effectiveWorkDays) : '')
-    } catch {
+    } catch (e) {
+      if (latest.isAbort(e) || !req.isCurrent()) return  // 自分で止めた古い読み込み
       setError('通信エラーが発生しました')
       setData(null)
     } finally {
-      setLoading(false)
+      if (req.isCurrent()) setLoading(false)
     }
-  }, [password, siteId, ym])
+  }, [password, siteId, ym, latest])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -262,7 +272,12 @@ export default function AttendanceGridPage() {
 
   // ── Debounced save flush ──
 
-  const flushSaves = useCallback(async () => {
+  /**
+   * 溜めた入力をまとめて保存する。
+   * keepalive（2026-10-02 総合点検）: 画面を離れる（別メニューへ移る）ときの最後の送信に付ける。
+   *   旧: 入力から1秒以内に画面を離れると、タイマーを止めるだけで送っていなかった（表示は出ていたので気づけない）
+   */
+  const flushSaves = useCallback(async (opts: { keepalive?: boolean } = {}) => {
     if (!password || !data || pendingSaves.current.size === 0) return
 
     setSaveStatus('saving')
@@ -306,6 +321,7 @@ export default function AttendanceGridPage() {
             'x-admin-password': password,
           },
           body: JSON.stringify(body),
+          keepalive: opts.keepalive === true,
         })
 
         // 有給の残数超過（2026-08-04 追加 / グエン ミン トゥアン事案）
@@ -434,11 +450,23 @@ export default function AttendanceGridPage() {
     }, 1000)
   }, [flushSaves])
 
-  // Cleanup timers on unmount
+  // 画面を離れるときの未送信分（2026-10-02 総合点検）:
+  //   - 別メニューへ移る（アンマウント）→ 残っている分を keepalive 付きで送る
+  //   - タブを閉じる・再読み込み → ブラウザの「このページを離れますか」で止める
+  const flushRef = useRef(flushSaves)
+  useEffect(() => { flushRef.current = flushSaves }, [flushSaves])
   useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingSaves.current.size === 0) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
     return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
       if (debounceTimer.current) clearTimeout(debounceTimer.current)
       if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+      if (pendingSaves.current.size > 0) void flushRef.current({ keepalive: true })
     }
   }, [])
 
@@ -483,23 +511,29 @@ export default function AttendanceGridPage() {
     }
   }, [focusNextWorkerStatus])
 
-  const handleWorkChange = useCallback((workerId: string, day: number, value: string) => {
-    // 2026-08-28 追加: 本人がスマホで入力した記録を消す/変えるときだけ確認する。
-    //   8/27 IHI で誤削除が起き、当日入力のため日次バックアップでも救えなかった。
-    //   管理者が入れた記録の修正は従来どおり無確認（日常操作の邪魔をしない）。
+  // 2026-08-28 追加: 本人がスマホで入力した記録を消す/変えるときだけ確認する。
+  //   8/27 IHI で誤削除が起き、当日入力のため日次バックアップでも救えなかった。
+  //   管理者が入れた記録の修正は従来どおり無確認（日常操作の邪魔をしない）。
+  // 2026-10-02 総合点検: 確認を1つの関数にして、日本人のセル（handleWorkChange）と
+  //   ベトナム人の時間入力のセル（handleTimeStatusChange）の両方から呼ぶ。旧: 前者にだけあり、
+  //   本人の打刻（始業・終業つき）を「-」や別の状態に変えると確認なしで消えていた
+  const confirmOverwriteStaffEntry = useCallback((workerId: string, day: number, value: string): boolean => {
     const cur = workerEntries[workerId]?.[day] as (AttEntry & { s?: string }) | undefined
-    if (cur?.s === 'staff') {
-      const w = data?.workers.find(x => String(x.id) === String(workerId))
-      const desc = cur.p ? '有給' : cur.r ? '欠勤' : cur.h ? '現場休' : cur.hk ? '帰国中'
-        : cur.exam ? '試験' : cur.w === 0.6 ? '0.6補償'
-        : `出勤${cur.st && cur.et ? ` ${cur.st}〜${cur.et}` : ''}${cur.o ? ` 残業${cur.o}h` : ''}`
-      const verb = value === '' ? 'を削除' : 'を上書き'
-      if (!confirm(
-        `${w?.name || `ID ${workerId}`} さんが スマホで入力した ${day}日 の記録です。\n\n`
-        + `　現在: ${desc}\n\n`
-        + `この記録${verb}しますか？`
-      )) return
-    }
+    if (cur?.s !== 'staff') return true
+    const w = data?.workers.find(x => String(x.id) === String(workerId))
+    const desc = cur.p ? '有給' : cur.r ? '欠勤' : cur.h ? '現場休' : cur.hk ? '帰国中'
+      : cur.exam ? '試験' : cur.w === 0.6 ? '0.6補償'
+      : `出勤${cur.st && cur.et ? ` ${cur.st}〜${cur.et}` : ''}${cur.o ? ` 残業${cur.o}h` : ''}`
+    const verb = value === '' ? 'を削除' : 'を上書き'
+    return confirm(
+      `${w?.name || `ID ${workerId}`} さんが スマホで入力した ${day}日 の記録です。\n\n`
+      + `　現在: ${desc}\n\n`
+      + `この記録${verb}しますか？`
+    )
+  }, [workerEntries, data])
+
+  const handleWorkChange = useCallback((workerId: string, day: number, value: string) => {
+    if (!confirmOverwriteStaffEntry(workerId, day, value)) return
     setWorkerEntries(prev => {
       const next = { ...prev }
       if (!next[workerId]) next[workerId] = {}
@@ -573,6 +607,7 @@ export default function AttendanceGridPage() {
 
   /** 時間ベース: 特殊ステータス変更（P/R/H/出勤/クリア） */
   const handleTimeStatusChange = useCallback((workerId: string, day: number, value: string) => {
+    if (!confirmOverwriteStaffEntry(workerId, day, value)) return
     setWorkerEntries(prev => {
       const next = { ...prev }
       if (!next[workerId]) next[workerId] = {}
@@ -1122,31 +1157,26 @@ export default function AttendanceGridPage() {
       return
     }
     setSaveStatus('saving')
-    try {
-      await fetch('/api/attendance/grid', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
-        },
-        body: JSON.stringify({
-          action: 'saveAssign',
-          siteId: data.site.id,
-          ym,  // 2026-05-19: ym を必ず送って massign[siteId_ym] も更新させる
-          workerIds,
-          subconIds,
-        }),
-      })
-      setSaveStatus('saved')
-      if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
-      saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
-      setShowAssignModal(false)
-      // Refresh grid
-      fetchData()
-    } catch (e) {
-      console.error('Save assign error:', e)
-      setSaveStatus(null)
+    // 2026-10-02 総合点検: 応答を見て、断られたら（担当外 403・締め済み 409・通信エラー）理由を出してモーダルを閉じない。
+    //   旧: 応答を見ずに「保存済み」と出してモーダルを閉じ、再取得で黙って元に戻っていた
+    const res = await postJson('/api/attendance/grid', {
+      action: 'saveAssign',
+      siteId: data.site.id,
+      ym,  // 2026-05-19: ym を必ず送って massign[siteId_ym] も更新させる
+      workerIds,
+      subconIds,
+    }, { password })
+    if (!res.ok) {
+      setSaveStatus('error')
+      alert(`配置を保存できませんでした。\n${res.error || ''}`)
+      return
     }
+    setSaveStatus('saved')
+    if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
+    saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
+    setShowAssignModal(false)
+    // Refresh grid
+    fetchData()
   }, [password, data, ym, fetchData])
 
   // ── 工種の出し分け（鉄骨・仮設など単価違い・2026-09-25） ──

@@ -16,6 +16,7 @@ import { can } from '@/lib/permissions'
 import { cardCls } from '@/lib/styles'
 import { visaLabel } from '@/lib/labels'
 import { todayJstIso } from '@/lib/date-utils'
+import { isAlreadyRetired } from '@/lib/workers'
 import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
@@ -110,13 +111,17 @@ function StaffDocsInner() {
 
   useEffect(() => { if (ready) load() }, [ready, load])
 
+  // 退職の判定は「今日の時点で退職日を過ぎたか」（lib/workers.ts isAlreadyRetired・2026-10-02 総合点検）。
+  //   旧: `!w.retired` だったので、退職「予定」（先の日付）を入れた在籍中の人が退職側へ移り、
+  //   在留期限の警告・不足の警告から外れ、書類も入れられなくなっていた
+  const retiredNow = useCallback((w: { retired?: string }) => isAlreadyRetired(w.retired, today), [today])
   // 対象: 在籍中のベトナム人 ＋ 書類が既にある人（退職者の書類も見られるように）
   const targets = useMemo(() => {
     const withDocs = new Set(docs.map(d => d.workerId))
     return workers
-      .filter(w => (isForeign(w) && !w.retired) || withDocs.has(w.id))
-      .sort((a, b) => Number(!!a.retired) - Number(!!b.retired) || a.id - b.id)
-  }, [workers, docs])
+      .filter(w => (isForeign(w) && !retiredNow(w)) || withDocs.has(w.id))
+      .sort((a, b) => Number(retiredNow(a)) - Number(retiredNow(b)) || a.id - b.id)
+  }, [workers, docs, retiredNow])
 
   const docsOf = useCallback((id: number) => docs.filter(d => d.workerId === id), [docs])
 
@@ -126,7 +131,7 @@ function StaffDocsInner() {
     const mismatches: { w: W; msg: string }[] = []
     const missing: { w: W; types: StaffDocType[] }[] = []
     for (const w of targets) {
-      if (w.retired) continue
+      if (retiredNow(w)) continue
       const ds = docsOf(w.id)
       for (const d of ds.filter(d => d.status === 'current')) {
         const st = expiryState(d.expiresOn, today)
@@ -143,7 +148,7 @@ function StaffDocsInner() {
     }
     expiring.sort((a, b) => a.expiresOn.localeCompare(b.expiresOn))
     return { expiring, mismatches, missing }
-  }, [targets, docsOf, today])
+  }, [targets, docsOf, today, retiredNow])
 
   const openFile = async (d: StaffDoc, i: number) => {
     // ポップアップブロックを避けるため、先にタブを開いてから URL を入れる
@@ -181,8 +186,8 @@ function StaffDocsInner() {
   }
   const toggleFilter = (f: Exclude<SdFilter, 'all'>) => { setScope('active'); setListFilter(listFilter === f ? 'all' : f) }
   const q = query.trim().replace(/[\s　]/g, '').toLowerCase()
-  const activeTargets = targets.filter(w => !w.retired)
-  const retiredTargets = targets.filter(w => !!w.retired)
+  const activeTargets = targets.filter(w => !retiredNow(w))
+  const retiredTargets = targets.filter(w => retiredNow(w))
   const shown = (scope === 'retired' ? retiredTargets : activeTargets)
     .filter(w => listFilter === 'all' || filterIds[listFilter].has(w.id))
     .filter(w => !q || w.name.replace(/[\s　]/g, '').toLowerCase().includes(q))
@@ -263,8 +268,8 @@ function StaffDocsInner() {
               const ds = docsOf(w.id)
               const current = ds.filter(d => d.status === 'current')
                 .sort((a, b) => STAFF_DOC_TYPES.findIndex(t => t.key === a.type) - STAFF_DOC_TYPES.findIndex(t => t.key === b.type))
-              const miss = w.retired ? [] : missingRequiredTypes(ds)
-              const mismatch = !w.retired && masterMismatches(w, ds).length > 0
+              const miss = retiredNow(w) ? [] : missingRequiredTypes(ds)
+              const mismatch = !retiredNow(w) && masterMismatches(w, ds).length > 0
               return (
                 <div key={w.id} role="button" tabIndex={0}
                   onClick={() => setOpenId(w.id)}
@@ -273,7 +278,7 @@ function StaffDocsInner() {
                   <span className="flex items-center gap-2.5 min-w-0">
                     <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={36} />
                     <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</span>
-                    {w.retired && <Chip tone="gray">退職</Chip>}
+                    {retiredNow(w) ? <Chip tone="gray">退職</Chip> : w.retired ? <Chip tone="amber" title="この日までは在籍中です">退職予定 {w.retired}</Chip> : null}
                   </span>
                   <span><Chip tone="gray">{visaLabel(w.visaType ?? w.visa)}</Chip></span>
                   <span className="flex flex-wrap gap-1.5">
@@ -304,8 +309,8 @@ function StaffDocsInner() {
         const current = ds.filter(d => d.status === 'current')
           .sort((a, b) => STAFF_DOC_TYPES.findIndex(t => t.key === a.type) - STAFF_DOC_TYPES.findIndex(t => t.key === b.type))
         const old = ds.filter(d => d.status === 'old')
-        const miss = w.retired ? [] : missingRequiredTypes(ds)
-        const mism = w.retired ? [] : masterMismatches(w, ds)
+        const miss = retiredNow(w) ? [] : missingRequiredTypes(ds)
+        const mism = retiredNow(w) ? [] : masterMismatches(w, ds)
         return (
           <SidePanel label={`${w.name} の書類`} onClose={() => setOpenId(null)}>
             <div className="p-6 space-y-5">
@@ -315,7 +320,7 @@ function StaffDocsInner() {
                   <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{w.name}</h2>
                   <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
                     <Chip tone="gray">{visaLabel(w.visaType ?? w.visa)}</Chip>
-                    {w.retired && <Chip tone="gray">退職 {w.retired}</Chip>}
+                    {retiredNow(w) ? <Chip tone="gray">退職 {w.retired}</Chip> : w.retired ? <Chip tone="amber" title="この日までは在籍中です">退職予定 {w.retired}</Chip> : null}
                     <span>人員マスタの在留期限 {w.visaExpiry || '未登録'}</span>
                   </div>
                 </div>
@@ -323,7 +328,7 @@ function StaffDocsInner() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {canEdit && storageReady && !w.retired && (
+                {canEdit && storageReady && !retiredNow(w) && (
                   <button onClick={() => setUploadFor({ workerId: w.id })}
                     className="h-10 px-4 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
                     <span className="text-base leading-none">＋</span>この人に書類を入れる
@@ -385,7 +390,7 @@ function StaffDocsInner() {
       {uploadFor && (
 
         <UploadModal
-          workers={targets.filter(w => !w.retired)}
+          workers={targets.filter(w => !retiredNow(w))}
           initialWorkerId={uploadFor.workerId}
           initialType={uploadFor.type}
           onClose={() => setUploadFor(null)}

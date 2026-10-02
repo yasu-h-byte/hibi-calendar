@@ -941,6 +941,11 @@ export default function AttendanceGrid({
             <span className="mx-1 border-l border-hibi-line dark:border-gray-600 h-3" />
             <span className="text-orange-600 font-medium">外国人:</span>
             <span><strong className="text-green-700">出</strong> = 時間入力</span>
+            {/* マスの右上の点（誰が入れたか）の凡例。2026-10-02 総合点検: 色だけで、説明が title（マウスを乗せたとき）にしか無かった */}
+            <span className="flex items-center gap-1" title="マスの右上の点。本人のスマホの打刻か、職長・事務の入力か">
+              <span className="inline-block w-2 h-2 rounded-full bg-blue-400" aria-hidden="true" />本人の打刻
+              <span className="inline-block w-2 h-2 rounded-full bg-orange-400 ml-1.5" aria-hidden="true" />職長の入力
+            </span>
             <span>休憩: 午前30分・午後30分のチェック（昼60分は固定）</span>
             <span className="text-amber-600">7h超=残業</span>
           </>

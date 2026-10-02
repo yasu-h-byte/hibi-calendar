@@ -18,7 +18,8 @@
  *   components/mypage/ForemanApprovals.tsx。それ以外の人には何も出ない。
  */
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
-import { useEffect, useState, useCallback } from 'react'
+import { todayJstIso } from '@/lib/date-utils'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import StaffHeader from '@/components/StaffHeader'
 import { Icon } from '@/components/ui/Icon'
@@ -107,6 +108,9 @@ export default function MyPage() {
   const token = useParams().token as string
 
   const [data, setData] = useState<MyPageData | null>(null)
+  const dataRef = useRef<MyPageData | null>(null)
+  // 取得の連番。古い応答は捨てる
+  const loadSeqRef = useRef(0)
   const [requests, setRequests] = useState<LeaveRequest[]>([])
   // undefined = 読み込み中、null = 取得できなかった（読み込み中に「枠が未設定」と誤表示しないため）
   const [tool, setTool] = useState<ToolBudget | null | undefined>(undefined)
@@ -121,33 +125,59 @@ export default function MyPage() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
+  // 現場の初期値は関数型の更新で入れ、load を applySite に依存させない（2026-10-02 総合点検）。
+  //   旧: 1回目の応答で setApplySite すると load が作り直されて useEffect がもう一度走り、開くたびに3本の GET が2回ずつ走った
+  //      （有給残は最大13か月分の出面を読む）。申請モーダルで現場を変えても取り直していた
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current
     try {
       const res = await fetch(`/api/mypage?token=${token}`)
+      if (seq !== loadSeqRef.current) return
       if (!res.ok) {
         setError((await res.json().catch(() => null))?.error || 'エラーが発生しました')
         return
       }
       const d: MyPageData = await res.json()
+      if (seq !== loadSeqRef.current) return
       setData(d)
-      if (!applySite && d.sites.length > 0) setApplySite(d.sites[0].id)
+      dataRef.current = d
+      setError('')
+      if (d.sites.length > 0) setApplySite(prev => prev || d.sites[0].id)
 
       // 有給申請の一覧と道具代は既存 API をそのまま使う
       const [rRes, tRes] = await Promise.all([
         fetch(`/api/leave-request?token=${token}`),
         fetch(`/api/tool-budget?token=${token}`),
       ])
+      if (seq !== loadSeqRef.current) return
       if (rRes.ok) setRequests((await rRes.json()).requests || [])
       if (tRes.ok) setTool(await tRes.json())
       else setTool(null)
     } catch {
-      setError('通信エラーが発生しました')
+      if (seq === loadSeqRef.current) setError('通信エラーが発生しました')
     } finally {
-      setLoading(false)
+      if (seq === loadSeqRef.current) setLoading(false)
     }
-  }, [token, applySite])
+  }, [token])
 
   useEffect(() => { load() }, [load])
+
+  // 画面に戻ってきたとき、日本時間の今日が変わっていれば取り直す（2026-10-02 総合点検。申請できる最初の日が前日基準のまま残らないように）
+  useEffect(() => {
+    const check = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      const cur = dataRef.current
+      if (cur && cur.today !== todayJstIso()) load()
+    }
+    document.addEventListener('visibilitychange', check)
+    window.addEventListener('focus', check)
+    window.addEventListener('pageshow', check)
+    return () => {
+      document.removeEventListener('visibilitychange', check)
+      window.removeEventListener('focus', check)
+      window.removeEventListener('pageshow', check)
+    }
+  }, [load])
 
   const submitLeave = async () => {
     if (!data || !applyDate || saving) return
@@ -172,6 +202,9 @@ export default function MyPage() {
       setMsg('有給を申請しました。承認されるとここに反映されます。')
       setTimeout(() => setMsg(''), 4000)
       load()
+    } catch {
+      // 通信が切れたときも知らせる（2026-10-02 総合点検。旧: catch がなく何も出なかった）
+      alert('通信エラー: 申請できませんでした。電波のある所でもう一度お試しください')
     } finally { setSaving(false) }
   }
 
@@ -204,6 +237,11 @@ export default function MyPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-6 text-center max-w-sm w-full">
           <div className="text-red-500 font-bold mb-2">エラー</div>
           <div className="text-gray-700 text-sm">{error}</div>
+          {/* ホーム画面のアプリには再読込ボタンがないので、画面に置く（2026-10-02 総合点検） */}
+          <button type="button" onClick={() => { setError(''); setLoading(true); load() }}
+            className="mt-4 w-full min-h-[48px] bg-hibi-amber text-hibi-charcoal rounded-xl py-3 text-base font-extrabold active:bg-hibi-amberDark">
+            もう一度
+          </button>
         </div>
       </div>
     )
@@ -211,10 +249,13 @@ export default function MyPage() {
   if (!data) return null
 
   const lv = data.leave
-  // 申請中・承認済みの未来の有給（本人が「出す予定」を把握できるように）
+  // 申請中・承認済みの未来の有給（本人が「出す予定」を把握できるように）。
+  // これからの日の却下も理由つきで出す（2026-10-02 総合点検。旧: 却下は履歴にラベルだけで理由を出す所がなかった）
   const upcoming = requests.filter(r =>
-    (r.status === 'pending' || r.status === 'foreman_approved' || r.status === 'approved')
+    (r.status === 'pending' || r.status === 'foreman_approved' || r.status === 'approved' || r.status === 'rejected')
     && r.date >= data.today)
+  // 申請できる人（残日数がある）。残0でも履歴・取り消しは見られるようにする（旧: ボタンが無効で履歴に行けなかった）
+  const canApply = !lv.noGrant && lv.remaining > 0
 
   return (
     <div className="min-h-screen bg-hibi-bg pb-10">
@@ -267,13 +308,20 @@ export default function MyPage() {
 
           <button
             onClick={() => { setShowApply(true); setApplyDate('') }}
-            disabled={lv.noGrant || lv.remaining <= 0}
+            disabled={!canApply}
             className="w-full mt-4 rounded-xl py-3.5 inline-flex items-center justify-center gap-1.5 bg-hibi-amber text-hibi-charcoal font-extrabold shadow-[0_4px_12px_rgba(245,166,35,0.4)] active:bg-hibi-amberDark disabled:opacity-40"
           >
             <Icon name="umbrella" size={16} />有給を申請する
           </button>
           {!lv.noGrant && lv.remaining <= 0 && (
-            <div className="text-xs text-gray-400 text-center mt-1.5">残日数がないため申請できません</div>
+            <div className="text-xs text-hibi-sub text-center mt-1.5">残日数がないため申請できません</div>
+          )}
+          {!canApply && requests.length > 0 && (
+            <button type="button"
+              onClick={() => { setShowApply(true); setApplyDate('') }}
+              className="w-full mt-2 rounded-xl min-h-[44px] py-2.5 bg-white border-2 border-gray-300 text-hibi-charcoal font-bold active:bg-gray-100">
+              申請の履歴・取り消し
+            </button>
           )}
         </div>
 
@@ -283,11 +331,16 @@ export default function MyPage() {
             <div className="text-sm font-bold text-gray-500 mb-2">これからの有給</div>
             <div className="space-y-1.5">
               {upcoming.map(r => (
-                <div key={r.id} className="flex items-center justify-between gap-2 py-1.5">
-                  <span className="text-sm font-medium text-gray-800">{fmtDate(r.date)}</span>
-                  <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_LABEL[r.status].cls}`}>
-                    {STATUS_LABEL[r.status].label}
-                  </span>
+                <div key={r.id} className="py-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-gray-800">{fmtDate(r.date)}</span>
+                    <span className={`text-xs px-2 py-1 rounded-full font-bold ${STATUS_LABEL[r.status].cls}`}>
+                      {STATUS_LABEL[r.status].label}
+                    </span>
+                  </div>
+                  {r.status === 'rejected' && (
+                    <div className="text-sm text-red-800 mt-0.5">却下の理由: {r.rejectedReason || '—'}</div>
+                  )}
                 </div>
               ))}
             </div>
@@ -311,7 +364,7 @@ export default function MyPage() {
               <span className="font-bold">{fmtFull(tool.period.start)}</span> から
               年間 <span className="font-bold tabular-nums">¥{tool.budget.toLocaleString()}</span> の
               道具代補助が始まります。
-              <span className="block text-[11px] text-gray-400 mt-1.5">
+              <span className="block text-xs text-hibi-sub mt-1.5">
                 それまでの購入申請は従来どおりマネーフォワードから行ってください。
               </span>
             </div>
@@ -344,7 +397,7 @@ export default function MyPage() {
                   ))}
                 </div>
               )}
-              <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
+              <p className="text-xs text-hibi-sub mt-3 leading-relaxed">
                 道具の購入申請はマネーフォワードから行ってください。
                 ここには承認・登録された分が反映されます。
               </p>
@@ -357,17 +410,23 @@ export default function MyPage() {
       {/* ── 有給申請モーダル ── */}
       {showApply && (
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowApply(false)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-lg px-5 pt-5"
+          {/* 小さい端末で上が切れないよう max-h とスクロール（2026-10-02 総合点検） */}
+          <div className="bg-white rounded-t-2xl w-full max-w-lg px-5 pt-5 max-h-[92vh] overflow-y-auto"
             style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
             onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-charcoal mb-4 text-center">有給の申請</h3>
+            <h3 className="text-lg font-bold text-hibi-charcoal mb-4 text-center">{canApply ? '有給の申請' : '有給の申請の履歴'}</h3>
 
+            {!canApply && (
+              <p className="text-sm text-hibi-sub mb-3 text-center">残日数がないため、新しい申請はできません。</p>
+            )}
+            {canApply && (
+            <>
             <label className="block mb-3">
               <span className="text-xs text-gray-500 font-bold">取得する日</span>
               <input type="date" value={applyDate} min={leaveRequestEarliestDate(data.today)}
                 onChange={e => setApplyDate(e.target.value)}
                 className="mt-1 w-full border-2 border-gray-300 rounded-lg px-3 py-3 text-base tabular-nums" />
-              <span className="text-[11px] text-gray-400 mt-1 block">
+              <span className="text-xs text-hibi-sub mt-1 block">
                 前日までに申請してください。当日・過ぎた日は申請できません（現場が稼働している日のみ）
               </span>
             </label>
@@ -393,27 +452,35 @@ export default function MyPage() {
               className="w-full rounded-xl py-3.5 bg-hibi-amber text-hibi-charcoal font-extrabold active:bg-hibi-amberDark disabled:opacity-40">
               {saving ? '送信中...' : 'この日で申請する'}
             </button>
+            </>
+            )}
             <button onClick={() => setShowApply(false)}
               className="w-full mt-2 rounded-xl py-3 bg-white border-2 border-gray-300 text-hibi-charcoal font-bold active:bg-gray-100">
-              やめる
+              {canApply ? 'やめる' : '閉じる'}
             </button>
 
-            {/* 申請履歴（取り消しもここから） */}
+            {/* 申請履歴（取り消しもここから）。却下は理由も出す */}
             {requests.length > 0 && (
               <div className="mt-5 border-t border-gray-100 pt-4">
                 <div className="text-xs font-bold text-gray-500 mb-2">申請の履歴</div>
-                <div className="max-h-52 overflow-y-auto space-y-1.5">
+                <div className="space-y-1">
                   {requests.slice(0, 20).map(r => (
-                    <div key={r.id} className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-gray-700 min-w-0 truncate">{fmtDate(r.date)}</span>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap ${STATUS_LABEL[r.status].cls}`}>
-                        {STATUS_LABEL[r.status].label}
-                      </span>
-                      {r.status === 'pending' && (
-                        <button onClick={() => cancelRequest(r)}
-                          className="text-[11px] text-red-600 font-bold whitespace-nowrap px-2 py-0.5">
-                          取り消す
-                        </button>
+                    <div key={r.id}>
+                      <div className="flex items-center justify-between gap-2 min-h-[44px]">
+                        <span className="text-sm text-gray-700 min-w-0 truncate">{fmtDate(r.date)}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-bold whitespace-nowrap ${STATUS_LABEL[r.status].cls}`}>
+                          {STATUS_LABEL[r.status].label}
+                        </span>
+                        {r.status === 'pending' && (
+                          /* 44px 以上（2026-10-02 総合点検。旧: 11px の文字だけで約20px） */
+                          <button onClick={() => cancelRequest(r)}
+                            className="text-sm text-red-600 font-bold whitespace-nowrap min-h-[44px] px-3 rounded-xl border-2 border-red-200 bg-red-50 active:bg-red-100">
+                            取り消す
+                          </button>
+                        )}
+                      </div>
+                      {r.status === 'rejected' && (
+                        <div className="text-sm text-red-800 -mt-1 mb-1">却下の理由: {r.rejectedReason || '—'}</div>
                       )}
                     </div>
                   ))}

@@ -1,7 +1,7 @@
 'use client'
 
 import { siteLeaderLabel } from '@/lib/companies'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { todayJstIso } from '@/lib/date-utils'
 import DriverModal from '@/app/(app)/attendance/components/DriverModal'
 import { useParams } from 'next/navigation'
@@ -81,9 +81,17 @@ export default function ForemanAttendancePage() {
 
   const [data, setData] = useState<ForemanData | null>(null)
   const [driverOpen, setDriverOpen] = useState(false)
-  const [dateISO, setDateISO] = useState<string | null>(null)
+  // 表示中の日。null = 今日を追う（サーバが日本時間の今日を決める）。state ではなく ref（2026-10-02 総合点検）。
+  //   旧: 1回目の応答で setDateISO すると fetchData が作り直されて useEffect がもう一度走り、開くたびに同じ GET が2回走っていた。
+  //       日付切替に失敗しても dateISO は変わったままで、同じ日をもう一度押しても取り直されなかった。
+  const viewDateRef = useRef<string | null>(null)
+  const dataRef = useRef<ForemanData | null>(null)
+  // 取得の連番。古い応答（連打で日を切り替えたとき）は捨てる
+  const fetchSeqRef = useRef(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // 日付切替・再取得の失敗（表示はそのまま残し、押し直せるようにする）
+  const [loadError, setLoadError] = useState<{ text: string; target: string | null } | null>(null)
   const [editingWorker, setEditingWorker] = useState<{ id: number; name: string; hasEntry: boolean } | null>(null)
   const [editOT, setEditOT] = useState(0)
   // 時刻つき代理入力（2026-08-28 追加）。開くたびに entry または現場の勤務時間で初期化
@@ -100,44 +108,77 @@ export default function ForemanAttendancePage() {
     misplaced: MisplacedEntry[]
   } | null>(null)
 
-  const fetchData = useCallback(async () => {
+  /**
+   * 日を取得して表示する。target: 'YYYY-MM-DD' ／ null = 今日 ／ undefined = 表示中の日を取り直す。
+   * 成功したときだけ表示中の日（viewDateRef）を進める。失敗は loadError に出し、表示は前のまま残す。
+   */
+  const fetchData = useCallback(async (target?: string | null) => {
+    const want = target === undefined ? viewDateRef.current : target
+    const seq = ++fetchSeqRef.current
     setLoading(true)
+    setLoadError(null)
     try {
-      const url = dateISO
-        ? `/api/attendance/foreman?token=${token}&date=${dateISO}`
+      const url = want
+        ? `/api/attendance/foreman?token=${token}&date=${want}`
         : `/api/attendance/foreman?token=${token}`
       const res = await fetch(url)
+      if (seq !== fetchSeqRef.current) return
       if (!res.ok) {
-        const d = await res.json()
-        setError(d.error || 'エラー')
+        const d = await res.json().catch(() => ({}))
+        const msg = d.error || `エラー (${res.status})`
+        if (dataRef.current) setLoadError({ text: msg, target: want })
+        else setError(msg)
         return
       }
       const d: ForemanData = await res.json()
+      if (seq !== fetchSeqRef.current) return
       setData(d)
-      if (!dateISO) setDateISO(d.date.dateISO)
+      dataRef.current = d
+      viewDateRef.current = want
+      setError(null)
     } catch {
-      setError('通信エラー')
+      if (seq !== fetchSeqRef.current) return
+      if (dataRef.current) setLoadError({ text: '通信エラー', target: want })
+      else setError('通信エラー')
     } finally {
-      setLoading(false)
+      if (seq === fetchSeqRef.current) setLoading(false)
     }
-  }, [token, dateISO])
+  }, [token])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { fetchData(null) }, [fetchData])
+
+  // 画面に戻ってきたとき、「今日」を追っている状態で日本時間の今日が変わっていれば取り直す（2026-10-02 総合点検）。
+  //   自分で選んだ過去の日は動かさない
+  useEffect(() => {
+    const check = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+      const cur = dataRef.current
+      if (cur && viewDateRef.current === null && cur.date.dateISO !== todayJstIso()) fetchData(null)
+    }
+    document.addEventListener('visibilitychange', check)
+    window.addEventListener('focus', check)
+    window.addEventListener('pageshow', check)
+    return () => {
+      document.removeEventListener('visibilitychange', check)
+      window.removeEventListener('focus', check)
+      window.removeEventListener('pageshow', check)
+    }
+  }, [fetchData])
+
+  /** 日を開く。今日なら「今日を追う」（null）にして、翌朝そのまま開いても今日が出るようにする */
+  const openDay = (iso: string) => fetchData(iso === todayJstIso() ? null : iso)
 
   const navDay = (delta: number) => {
     if (!data) return
     const current = new Date(data.date.dateISO + 'T00:00:00')
     current.setDate(current.getDate() + delta)
-    const today = new Date()
-    if (current > today) return
     const iso = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`
-    setDateISO(iso)
+    // 日本時間の今日より先へは行かない（旧: 端末の時計で比べていた）
+    if (iso > todayJstIso()) return
+    openDay(iso)
   }
 
-  const isToday = data ? data.date.dateISO === (() => {
-    const t = new Date()
-    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
-  })() : false
+  const isToday = data ? data.date.dateISO === todayJstIso() : false
 
   const handleApprove = async () => {
     if (!data || saving) return
@@ -166,6 +207,9 @@ export default function ForemanAttendancePage() {
         alert(d?.error || `確認に失敗しました (${res.status})`)
       }
       fetchData()
+    } catch {
+      // 通信が切れたときも知らせる（2026-10-02 総合点検。旧: catch がなく何も出なかった）
+      alert('通信エラー: 確認できませんでした。電波のある所でもう一度お試しください')
     } finally {
       setSaving(false)
     }
@@ -201,6 +245,8 @@ export default function ForemanAttendancePage() {
       setEditingWorker(null)
       setEditOT(0)
       fetchData()
+    } catch {
+      alert('通信エラー: 変更できませんでした。電波のある所でもう一度お試しください')
     } finally {
       setSaving(false)
     }
@@ -247,6 +293,8 @@ export default function ForemanAttendancePage() {
           + d.skipped.map((x: { day: number; reason: string }) => `・${x.day}日: ${x.reason}`).join('\n'))
       }
       fetchData()
+    } catch {
+      alert('通信エラー: まとめて確認できませんでした。電波のある所でもう一度お試しください')
     } finally {
       setBulkApproving(false)
     }
@@ -299,6 +347,11 @@ export default function ForemanAttendancePage() {
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 text-center max-w-sm w-full">
           <div className="text-red-500 text-lg font-bold mb-2">エラー</div>
           <div className="text-gray-700">{error}</div>
+          {/* ホーム画面のアプリには再読込ボタンがないので、画面に置く（2026-10-02 総合点検） */}
+          <button type="button" onClick={() => { setError(null); fetchData(null) }}
+            className="mt-4 w-full min-h-[48px] bg-hibi-amber text-hibi-charcoal rounded-xl py-3 text-base font-extrabold active:bg-hibi-amberDark">
+            もう一度
+          </button>
         </div>
       </div>
     )
@@ -316,17 +369,20 @@ export default function ForemanAttendancePage() {
         <div className="max-w-lg mx-auto flex items-center justify-between gap-2">
           <button
             onClick={() => navDay(-1)}
-            className="px-3 py-2 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-lg text-sm font-bold active:bg-gray-100 shrink-0"
+            disabled={loading}
+            className="min-h-[44px] px-3 py-2 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-lg text-sm font-bold active:bg-gray-100 disabled:opacity-50 shrink-0"
           >
             ◀ 前日
           </button>
           <div className="text-center min-w-0">
             <div className="text-sm sm:text-base font-bold text-hibi-charcoal tabular-nums truncate">{data.date.dateLabel}</div>
+            {/* 切替中の表示（旧: 何も出ず、前の日が出たままだった） */}
+            {loading && <div className="text-xs text-hibi-sub">読み込み中...</div>}
           </div>
           <button
             onClick={() => navDay(1)}
-            disabled={isToday}
-            className="px-3 py-2 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-lg text-sm font-bold active:bg-gray-100 disabled:opacity-30 shrink-0"
+            disabled={isToday || loading}
+            className="min-h-[44px] px-3 py-2 bg-white border-2 border-gray-300 text-hibi-charcoal rounded-lg text-sm font-bold active:bg-gray-100 disabled:opacity-30 shrink-0"
           >
             翌日 ▶
           </button>
@@ -334,6 +390,17 @@ export default function ForemanAttendancePage() {
       </div>
 
       <div className="max-w-lg mx-auto p-4 space-y-4">
+        {/* 日付切替・再取得の失敗（表示は前の日のまま。2026-10-02 総合点検） */}
+        {loadError && (
+          <div role="alert" className="bg-red-50 border-2 border-red-200 rounded-xl p-3 text-sm text-red-700">
+            <div className="font-bold">読み込めませんでした: {loadError.text}</div>
+            <div className="text-xs mt-0.5">表示は {data.date.dateLabel} のままです</div>
+            <button type="button" onClick={() => fetchData(loadError.target)}
+              className="mt-2 w-full min-h-[44px] bg-white border-2 border-red-300 text-red-700 rounded-xl py-2 font-bold active:bg-red-50">
+              もう一度
+            </button>
+          </div>
+        )}
         {/* 未入力の警告（2026-08-28 追加: 未入力＝欠勤扱いを明記） */}
         {/* 今日はスタッフが作業後に打刻するので、赤い警告にしない（2026-10-02 点検） */}
         {data.summary.noneCount > 0 && data.date.dateISO === todayJstIso() && (
@@ -372,16 +439,21 @@ export default function ForemanAttendancePage() {
           workers={data.driverCandidates || []}
           current={data.drivers ? { am: data.drivers.am || [], pm: data.drivers.pm || [] } : undefined}
           onSave={async (am, pm) => {
-            setDriverOpen(false)
-            const res = await fetch('/api/attendance/foreman', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ token, action: 'saveDrivers', year: data.date.year, month: data.date.month, day: data.date.day, am, pm }),
-            })
-            if (!res.ok) {
-              const j = await res.json().catch(() => ({}))
-              alert(`運転者を保存できませんでした: ${j.error || res.status}`)
+            // 保存できたときだけ閉じる（2026-10-02 総合点検。旧: 先に閉じていたので、失敗や通信切れでも保存できたように見えた）
+            try {
+              const res = await fetch('/api/attendance/foreman', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, action: 'saveDrivers', year: data.date.year, month: data.date.month, day: data.date.day, am, pm }),
+              })
+              if (!res.ok) {
+                const j = await res.json().catch(() => ({}))
+                return `運転者を保存できませんでした: ${j.error || res.status}`
+              }
+            } catch {
+              return '通信エラー: 運転者を保存できませんでした。電波のある所でもう一度お試しください'
             }
+            setDriverOpen(false)
             fetchData()
           }}
           onClose={() => setDriverOpen(false)}
@@ -434,6 +506,8 @@ export default function ForemanAttendancePage() {
                   alert(d?.error || `取り消しに失敗しました (${res.status})`)
                 }
                 fetchData()
+              } catch {
+                alert('通信エラー: 取り消しできませんでした。電波のある所でもう一度お試しください')
               } finally { setSaving(false) }
             }}
             className="w-full rounded-xl py-3 text-sm font-bold bg-white border-2 border-red-300 text-red-600 active:bg-red-50"
@@ -561,21 +635,22 @@ export default function ForemanAttendancePage() {
               return (
                 <button
                   key={o.day}
-                  onClick={() => setDateISO(o.dateISO)}
-                  className={`rounded-lg py-1.5 text-center active:scale-95 ${cls} ${
+                  onClick={() => openDay(o.dateISO)}
+                  className={`rounded-lg min-h-[44px] py-1 text-center active:scale-95 ${cls} ${
                     isCurrent ? 'ring-2 ring-hibi-charcoal' : ''
                   }`}
                 >
                   <div className="text-sm font-bold tabular-nums leading-tight">{o.day}</div>
-                  <div className="text-[9px] font-bold leading-tight whitespace-nowrap overflow-hidden">{mark}</div>
+                  {/* 印は 10px 以上（2026-10-02 総合点検。旧: 9px / 8px） */}
+                  <div className="text-[10px] font-bold leading-tight whitespace-nowrap overflow-hidden">{mark}</div>
                   {(o.offRosterNames?.length || 0) > 0 && (
-                    <div className="text-[8px] font-bold leading-tight text-amber-700" title={`配置外の入力: ${o.offRosterNames!.join('、')}`}>配置外</div>
+                    <div className="text-[10px] font-bold leading-tight text-amber-700" title={`配置外の入力: ${o.offRosterNames!.join('、')}`}>配置外</div>
                   )}
                 </button>
               )
             })}
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[10px] text-gray-500">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-hibi-sub">
             <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#1E9E52] align-middle mr-1" />確認済み</span>
             <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-200 align-middle mr-1" />入力そろい・未確認</span>
             <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-100 align-middle mr-1" />未入力あり（欠勤扱いに）</span>
@@ -656,13 +731,14 @@ export default function ForemanAttendancePage() {
                   { label: '午後休憩', v: editB3, set: setEditB3, s: data.schedule?.afternoonBreak },
                 ] as const).map(b => (
                   (b.s?.enabled ?? true) && (
-                    <label key={b.label} className="flex items-center gap-1 text-xs text-gray-600 font-medium">
+                    /* 44px 以上・20px のチェック（2026-10-02 総合点検。旧: 16px のチェックに 12px の文字） */
+                    <label key={b.label} className="flex items-center gap-1.5 min-h-[44px] px-1 rounded-lg text-sm text-gray-700 font-medium active:bg-gray-100">
                       <input
                         type="checkbox"
                         checked={b.v}
                         disabled={!!b.s?.mandatory}
                         onChange={e => b.set(e.target.checked)}
-                        className="w-4 h-4"
+                        className="w-5 h-5"
                       />
                       {b.label}{b.s ? `(${b.s.minutes}分)` : ''}
                     </label>

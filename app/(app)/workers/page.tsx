@@ -19,7 +19,9 @@ import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
 import { todayJstIso } from '@/lib/date-utils'
-import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
+import { isAlreadyRetired } from '@/lib/workers'
+import { postJson } from '@/lib/api-client'
+import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscard } from '@/components/ui/PageParts'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
 const VISA_LABELS: Record<string, string> = {
@@ -70,7 +72,15 @@ function jpDate(iso: string): string {
 /** 生年月日の入力が要る人か（外国人スタッフは号俸制の対象外／退職者は不要）。 */
 function needsBirthDate(w: { visaType?: string; retired?: string; jobType?: string }): boolean {
   // 事務（チイ・奥寺・佐藤・森田）は号俸制の対象外なので生年月日を求めない（代表 2026-09-17）
-  return !isGaikoku(w.visaType || '') && !w.retired && w.jobType !== 'jimu'
+  // 退職「予定」（先の日付）の人は在籍中なので求める（2026-10-02 総合点検。旧: 退職日が入った時点で対象外）
+  return !isGaikoku(w.visaType || '') && !isAlreadyRetired(w.retired) && w.jobType !== 'jimu'
+}
+
+/** 退職予定の札に出す日付。今年なら「10月31日」、年が違えば「2027年1月31日」 */
+function retireDayLabel(iso: string, todayIso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso
+  const [y, m, d] = iso.split('-')
+  return y === todayIso.slice(0, 4) ? `${Number(m)}月${Number(d)}日` : `${y}年${Number(m)}月${Number(d)}日`
 }
 
 /** 今日を 'YYYY-MM-DD' で返す（生年月日の未来日入力を防ぐ上限用）。 */
@@ -120,6 +130,9 @@ export default function WorkersPage() {
   //    自分の生年月日を入れようとしたら「同名スタッフが既にいます」と出た）。
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  // パネルを開いた時点の内容（未保存の変更があるかの比較用・2026-10-02 総合点検）。
+  //   旧: Esc・背景クリック・「閉じる」で、入れかけの内容が確認なしで消えていた
+  const [formBase, setFormBase] = useState(JSON.stringify(EMPTY_FORM))
   const [saving, setSaving] = useState(false)
   // 顔写真（2026-08-03 追加）。名前と顔が一致しない問題への対応
   const { photos, reload: reloadPhotos } = useWorkerPhotos()
@@ -162,6 +175,10 @@ export default function WorkersPage() {
   const isAdminOrApprover = authUser?.role === 'admin' || authUser?.role === 'approver'
   // 給与欄の直接の書き換えは代表だけ（lib/permissions.ts workers.editPay・サーバーも同じ判定）
   const canEditPay = can(authUser, 'workers.editPay')
+  // 人員マスタを直せる人（事務＝森田さん・代表）。見るだけの人（政仁さん・役員・ほかの事務）には
+  //   追加・転籍・退職・保存のボタンを出さず、入力欄も止める（2026-10-02 総合点検。
+  //   旧: 誰にでも編集の画面が出て、保存するとサーバに断られていた。転籍は断られても何も出なかった）
+  const canEdit = can(authUser, 'workers.edit')
 
   const headers = useCallback(() => ({
     'x-admin-password': password,
@@ -191,13 +208,17 @@ export default function WorkersPage() {
     if (!confirm(`${w.name} を ${newLabel} に転籍しますか？`)) return
     setTransferring(w.id)
     try {
-      await fetch('/api/workers', {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({ action: 'update', id: w.id, org: newOrg }),
-      })
+      // 失敗を必ず出す（2026-10-02 総合点検。旧: 応答を見ておらず、断られてもパネルの所属だけ変わって見えた）
+      const res = await postJson('/api/workers', { action: 'update', id: w.id, org: newOrg }, { password })
+      if (!res.ok) {
+        alert(`転籍できませんでした。\n${res.error || ''}`)
+        return
+      }
       // 右のパネルで開いている人なら、フォームの所属も合わせる（古い所属のまま保存し直さないように）
-      if (editId === w.id) setForm(f => ({ ...f, org: newOrg }))
+      if (editId === w.id) {
+        setForm(f => ({ ...f, org: newOrg }))
+        setFormBase(b => { try { return JSON.stringify({ ...JSON.parse(b), org: newOrg }) } catch { return b } })
+      }
       fetchWorkers()
     } finally {
       setTransferring(null)
@@ -207,13 +228,14 @@ export default function WorkersPage() {
   const openAdd = () => {
     setEditId(null)
     setForm(EMPTY_FORM)
+    setFormBase(JSON.stringify(EMPTY_FORM))
     setModalTab('basic')
     setShowModal(true)
   }
 
   const openEdit = (w: Worker) => {
     setEditId(w.id)
-    setForm({
+    const next = {
       name: w.name,
       org: w.company === 'HFU' ? 'hfu' : 'hibi',
       visa: w.visaType || 'none',
@@ -238,7 +260,9 @@ export default function WorkersPage() {
       dispatchTo: w.dispatchTo || '',
       dispatchFrom: w.dispatchFrom || '',
       useOldRules: !!w.useOldRules,
-    })
+    }
+    setForm(next)
+    setFormBase(JSON.stringify(next))
     setModalTab('basic')
     setShowModal(true)
   }
@@ -254,7 +278,7 @@ export default function WorkersPage() {
       const inputName = normalize(form.name)
       const duplicates = workers.filter(w => normalize(w.name) === inputName)
       if (duplicates.length > 0) {
-        const list = duplicates.map(w => `  - ID ${w.id}: ${w.name}${w.retired ? '（退職済）' : ''}`).join('\n')
+        const list = duplicates.map(w => `  - ID ${w.id}: ${w.name}${isAlreadyRetired(w.retired) ? '（退職済）' : w.retired ? '（退職予定）' : ''}`).join('\n')
         const ok = confirm(
           `⚠️ 同じ名前のスタッフが既に登録されています:\n\n${list}\n\n` +
           `別人として新規追加しますか？\n（同じ人を誤って二重登録しようとしている場合は「キャンセル」してください）`
@@ -292,8 +316,34 @@ export default function WorkersPage() {
 
     setSaving(true)
     try {
+      // 「消す・外す」変更を保存できるようにする（2026-10-02 総合点検）。
+      //   旧: 空の項目を `form.x || undefined` で送っていた → JSON でキーごと落ち、サーバは「変更なし」と受け取るので、
+      //   退職日の取り消し・固定月給の解除（月給制→日給制）・旧ルールのチェック外し・休憩短縮の解除・
+      //   メモ／在留期限／生年月日の削除が、パネルは閉じるのに保存されていなかった（確認ダイアログは「解除」と出ていた）。
+      //   新: 値があればその値、元は入っていて今は空なら '' を明示して送る（サーバは '' を「その項目を消す」と扱う）。
+      //   元から空の項目は送らない（変更なし）。旧ルールは false を送ると解除
+      const orig0 = editId !== null ? workers.find(w => w.id === editId) : undefined
+      const origOf = (k: string): unknown => (orig0 as unknown as Record<string, unknown> | undefined)?.[k]
+      const clearable = <T extends string | number>(val: T | '' | undefined | null, key: string): T | '' | undefined => {
+        if (val !== '' && val !== undefined && val !== null) return val
+        const o = origOf(key)
+        return o !== undefined && o !== null && o !== '' && o !== 0 ? '' : undefined
+      }
       const body = editId !== null
-        ? { action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, retired: form.retired || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '', useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() }
+        ? {
+            action: 'update', id: editId, name: form.name, org: form.org, visa: form.visa, job: form.job,
+            rate: form.rate, hourlyRate: clearable(form.hourlyRate, 'hourlyRate'), otMul: form.otMul,
+            hireDate: form.hireDate, birthDate: clearable(form.birthDate, 'birthDate'),
+            jpGrade: clearable(form.jpGrade, 'jpGrade'), jpStep: clearable(form.jpStep ? Number(form.jpStep) : '', 'jpStep'),
+            canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children,
+            breakShortenMin: clearable(form.breakShortenMin ? Number(form.breakShortenMin) : '', 'breakShortenMin'),
+            breakShortenFrom: clearable(form.breakShortenFrom, 'breakShortenFrom'),
+            retired: clearable(form.retired, 'retired'), salary: clearable(form.salary, 'salary'),
+            visaExpiry: clearable(form.visaExpiry, 'visaExpiry'), memo: clearable(form.memo, 'memo'),
+            dispatchTo: form.dispatchTo || '', dispatchFrom: form.dispatchTo ? (form.dispatchFrom || '') : '',
+            useOldRules: form.useOldRules ? true : (origOf('useOldRules') ? false : undefined),
+            payrollNo: form.payrollNo.trim(),
+          }
         : { action: 'add', name: form.name, org: form.org, visa: form.visa, job: form.job, rate: form.rate, hourlyRate: form.hourlyRate || undefined, otMul: form.otMul, hireDate: form.hireDate, birthDate: form.birthDate || undefined, jpGrade: form.jpGrade || undefined, jpStep: form.jpStep ? Number(form.jpStep) : undefined, canDrive: form.canDrive, nonSmoker: form.nonSmoker, children: form.children, breakShortenMin: form.breakShortenMin ? Number(form.breakShortenMin) : undefined, breakShortenFrom: form.breakShortenFrom || undefined, salary: form.salary || undefined, visaExpiry: form.visaExpiry || undefined, memo: form.memo || undefined, dispatchTo: form.dispatchTo || undefined, dispatchFrom: (form.dispatchTo && form.dispatchFrom) ? form.dispatchFrom : undefined, useOldRules: form.useOldRules || undefined, payrollNo: form.payrollNo.trim() || undefined }
       // 給与欄を書き換えられない人（代表以外）は給与欄を送らない（2026-10-02）。
       //   給与を見られない人には給与欄が空で届くため、送ると「空にする変更」扱いで保存が止まっていた
@@ -338,35 +388,39 @@ export default function WorkersPage() {
     fetchWorkers()
   }
 
+  // スマホURLの発行・無効化の失敗を必ず出す（2026-10-02 総合点検。旧: 失敗しても何も起きないように見えた）
   const handleGenToken = async (id: number) => {
-    const res = await fetch('/api/workers', {
-      method: 'POST', headers: headers(),
-      body: JSON.stringify({ action: 'generateToken', id }),
-    })
-    if (res.ok) fetchWorkers()
+    const res = await postJson('/api/workers', { action: 'generateToken', id }, { password })
+    if (!res.ok) { alert(`スマホURLを発行できませんでした。\n${res.error || ''}`); return }
+    fetchWorkers()
   }
 
   const handleRevokeToken = async (id: number, name: string) => {
     if (!confirm(`${name} のトークンを無効化しますか？`)) return
-    await fetch('/api/workers', {
-      method: 'POST', headers: headers(),
-      body: JSON.stringify({ action: 'revokeToken', id }),
-    })
+    const res = await postJson('/api/workers', { action: 'revokeToken', id }, { password })
+    if (!res.ok) { alert(`無効化できませんでした。\n${res.error || ''}`); return }
     fetchWorkers()
   }
 
   // Filter & sort
-  const activeWorkers = workers.filter(w => !w.retired)
-  const retiredWorkers = workers.filter(w => !!w.retired)
+  // 退職の判定は「今日の時点で退職日を過ぎたか」（lib/workers.ts isAlreadyRetired・2026-10-02 総合点検）。
+  //   旧: `!w.retired`（退職日が入っているか）で分けていたので、退職「予定」（先の日付）を入れた瞬間に
+  //   在籍中の人が「退職」タブへ移り、在籍人数から外れ、スマホURLの発行もできなくなっていた
+  const today = todayJstIso()
+  const retiredNow = (w: { retired?: string }) => isAlreadyRetired(w.retired, today)
+  /** 退職日は入っているが、まだその日を過ぎていない（在籍中） */
+  const retiring = (w: { retired?: string }) => Boolean(w.retired) && !retiredNow(w)
+  const activeWorkers = workers.filter(w => !retiredNow(w))
+  const retiredWorkers = workers.filter(w => retiredNow(w))
+  const retiringCount = activeWorkers.filter(retiring).length
   const filtered = workers.filter(w => {
-    if (tab === 'retired') return !!w.retired
-    if (tab === 'hibi') return w.company !== 'HFU' && !w.retired
-    if (tab === 'hfu') return w.company === 'HFU' && !w.retired
-    return !w.retired // 「全員」タブでも退職者は非表示
+    if (tab === 'retired') return retiredNow(w)
+    if (tab === 'hibi') return w.company !== 'HFU' && !retiredNow(w)
+    if (tab === 'hfu') return w.company === 'HFU' && !retiredNow(w)
+    return !retiredNow(w) // 「全員」タブでも退職者は非表示
   })
 
   // 今やることの絞り込み（2026-10-01）
-  const today = todayJstIso()
   const schedOf = (w: Worker): { from: string } | null => {
     const gaikoku = isGaikoku(w.visaType || '')
     if (gaikoku && w.hourlyRateFrom && w.prevHourlyRate != null && w.hourlyRateFrom > today) return { from: w.hourlyRateFrom }
@@ -378,7 +432,9 @@ export default function WorkersPage() {
     .map(w => ({ ...w, status: visaExpiryStatus(w.visaExpiry!) }))
     .filter((w): w is typeof w & { status: NonNullable<typeof w.status> } => !!w.status && w.status.priority <= 2)
     .sort((a, b) => a.status.priority - b.status.priority || (a.visaExpiry || '').localeCompare(b.visaExpiry || ''))
-  const noUrl = activeWorkers.filter(w => !w.token)
+  // 代表・政仁さん・役員・事務の合言葉は代表にしか返らない（tokenHidden・2026-10-02 総合点検）。「まだ」には数えない
+  const tokenHidden = (w: Worker) => (w as unknown as { tokenHidden?: boolean }).tokenHidden === true
+  const noUrl = activeWorkers.filter(w => !w.token && !tokenHidden(w))
   const noBirth = activeWorkers.filter(w => needsBirthDate(w) && !w.birthDate)
   const scheduled = activeWorkers.filter(w => schedOf(w)).sort((a, b) => schedOf(a)!.from.localeCompare(schedOf(b)!.from))
   const names = (arr: Worker[]) => arr.slice(0, 3).map(w => w.name).join('・') + (arr.length > 3 ? ` ほか${arr.length - 3}名` : '')
@@ -393,6 +449,14 @@ export default function WorkersPage() {
     .filter(w => !q || w.name.replace(/[\s　]/g, '').toLowerCase().includes(q) || String(w.id) === q)
     .sort((a, b) => a.id - b.id)
   const editWorker = editId !== null ? workers.find(w => w.id === editId) || null : null
+  const hasRetireDate = Boolean(editWorker?.retired)
+  // 「退職にする」は退職日がまだ入っていない人にだけ出す（予定でも退職済みでも、日付は基本タブで直せる）
+  const canRetire = !!editWorker && !hasRetireDate && canEdit
+  // 「登録を完全に消す」も退職日の無い人だけ（退職予定・退職済みの人は出面や給与の記録があるので消させない）
+  const canDeleteForever = !!editWorker && !hasRetireDate && canEdit
+  // 未保存の変更があるか（開いた時点の内容と比べる）。見るだけの人は入力できないので常に false
+  const formDirty = showModal && canEdit && JSON.stringify(form) !== formBase
+  const closePanel = () => { if (confirmDiscard(formDirty)) setShowModal(false) }
   const startRetire = () => {
     setModalTab('basic')
     // 基本タブの「退職日」へ移って入力できるようにする
@@ -422,8 +486,8 @@ export default function WorkersPage() {
       <PageHeader
         group="人・書類"
         title="人員マスタ"
-        sub={`在籍 ${activeWorkers.length}名（日比建設 ${hibiCount}・HFU ${hfuCount}）${retiredWorkers.length > 0 ? ` ／ 退職 ${retiredWorkers.length}名` : ''}`}
-        actions={mainTab === 'list' ? (
+        sub={`在籍 ${activeWorkers.length}名（日比建設 ${hibiCount}・HFU ${hfuCount}）${retiringCount > 0 ? `・うち退職予定 ${retiringCount}名` : ''}${retiredWorkers.length > 0 ? ` ／ 退職 ${retiredWorkers.length}名` : ''}`}
+        actions={mainTab === 'list' && canEdit ? (
           <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light transition inline-flex items-center gap-1.5">
             <span className="text-lg leading-none">＋</span>人を追加
           </button>
@@ -497,14 +561,16 @@ export default function WorkersPage() {
                 <div key={w.id} role="button" tabIndex={0}
                   onClick={() => openEdit(w)}
                   onKeyDown={e => { if (e.key === 'Enter') openEdit(w) }}
-                  className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${ROW_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums ${w.retired ? 'opacity-60' : ''}`}>
+                  className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${ROW_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums ${retiredNow(w) ? 'opacity-60' : ''}`}>
                   <span className="hidden lg:block text-sm text-hibi-sub dark:text-gray-400">{w.id}</span>
                   <span className="col-span-2 lg:col-span-1 flex items-center gap-2.5 min-w-0">
                     <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={40} />
                     <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</span>
                     <span className="lg:hidden text-xs text-hibi-sub">{w.id}</span>
                     {w.dispatchTo && <Chip tone="gray" title={`出向先: ${w.dispatchTo}${w.dispatchFrom ? ` / 開始: ${w.dispatchFrom}` : ''}`}>出向中</Chip>}
-                    {w.retired && <Chip tone="gray">{w.retired !== 'true' && w.retired.length >= 7 ? `退職 ${w.retired.slice(0, 7)}` : '退職'}</Chip>}
+                    {retiredNow(w)
+                      ? <Chip tone="gray">{w.retired && w.retired !== 'true' && w.retired.length >= 7 ? `退職 ${w.retired.slice(0, 7)}` : '退職'}</Chip>
+                      : retiring(w) ? <Chip tone="amber" title="この日までは在籍中です">退職予定（{retireDayLabel(w.retired!, today)}）</Chip> : null}
                     {memo && <span title={memo} className="text-xs text-hibi-sub dark:text-gray-400 border border-hibi-line dark:border-gray-600 rounded px-1">メモ</span>}
                   </span>
                   <span className="flex flex-wrap gap-1.5">
@@ -526,7 +592,7 @@ export default function WorkersPage() {
                           : w.visaExpiry ? <span className="text-hibi-sub dark:text-gray-400">在留 {w.visaExpiry}</span>
                           : null}
                         {w.birthDate ? <span>{ageOn(w.birthDate, currentDateDash())}歳</span>
-                          : !w.retired ? <Chip tone="amber">生年月日まだ</Chip>
+                          : !retiredNow(w) ? <Chip tone="amber">生年月日まだ</Chip>
                           : !vs && !w.visaExpiry ? <span className="text-gray-300 dark:text-gray-600">—</span>
                           : null}
                       </span>
@@ -556,7 +622,7 @@ export default function WorkersPage() {
                       : gaikoku && w.hourlyRate ? fmtYen(w.hourlyRate * 168)
                       : <span className="text-gray-300 dark:text-gray-600">—</span>}
                   </span>
-                  <span>{w.retired ? null : w.token ? <Chip tone="green">配布できる</Chip> : <Chip tone="red">まだ</Chip>}</span>
+                  <span>{retiredNow(w) ? null : w.token ? <Chip tone="green">配布できる</Chip> : tokenHidden(w) ? <Chip tone="gray" title="管理者側の人の合言葉は代表だけが見られます">代表のみ</Chip> : <Chip tone="red">まだ</Chip>}</span>
                 </div>
               )
             })}
@@ -566,7 +632,7 @@ export default function WorkersPage() {
 
       {/* 一人の内容（右から開く・2026-10-01 改修。旧: 中央のモーダル） */}
       {showModal && (
-        <SidePanel label={editId !== null ? `${form.name} の内容` : '人を追加'} onClose={() => setShowModal(false)} width="max-w-[760px]">
+        <SidePanel label={editId !== null ? `${form.name} の内容` : '人を追加'} onClose={() => setShowModal(false)} dirty={formDirty} width="max-w-[760px]">
           <div className="flex flex-col min-h-full">
             <div className="px-6 py-5 border-b border-hibi-line dark:border-gray-700 flex items-center gap-4">
               {editWorker && <WorkerAvatar name={editWorker.name} src={photos[String(editWorker.id)]} size={56} />}
@@ -577,7 +643,9 @@ export default function WorkersPage() {
                     <span className="tabular-nums">{editWorker.id}</span>
                     <Chip tone={editWorker.company === 'HFU' ? 'cyan' : 'blue'}>{editWorker.company === 'HFU' ? 'HFU' : '日比建設'}</Chip>
                     <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${jobBadge(editWorker.jobType).cls}`}>{jobBadge(editWorker.jobType).label}</span>
-                    {editWorker.retired && <Chip tone="gray">退職</Chip>}
+                    {retiredNow(editWorker)
+                      ? <Chip tone="gray">退職</Chip>
+                      : retiring(editWorker) ? <Chip tone="amber" title="この日までは在籍中です">退職予定（{retireDayLabel(editWorker.retired!, today)}）</Chip> : null}
                     {(() => {
                       const vs = isGaikoku(editWorker.visaType || '') && editWorker.visaExpiry ? visaExpiryStatus(editWorker.visaExpiry) : null
                       return vs && vs.priority <= 2 ? <Chip tone={vs.priority <= 1 ? 'red' : 'amber'}>{vs.priority === 0 ? '在留期限切れ' : `在留期限まで${vs.label.replace('残', '')}`}</Chip> : null
@@ -585,18 +653,25 @@ export default function WorkersPage() {
                   </div>
                 )}
               </div>
-              <CloseButton onClick={() => setShowModal(false)} />
+              <CloseButton onClick={closePanel} />
             </div>
+            {!canEdit && (
+              <div className="px-6 py-2.5 border-b border-hibi-line dark:border-gray-700 bg-hibi-bg dark:bg-gray-900/40 text-[13px] text-hibi-sub dark:text-gray-400">
+                見るだけの画面です。内容を直せるのは事務（森田さん）と代表です。
+              </div>
+            )}
 
             {/* よく使う操作（旧: 一覧の行ごとに並んでいたボタン） */}
             {editWorker && (
               <div className="px-6 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-2">
                 {editWorker.token ? (
                   <button type="button" onClick={() => setQrWorker(editWorker)} className={PANEL_BTN}>スマホURL・QR</button>
-                ) : !editWorker.retired && can(authUser, 'workers.edit') && (
+                ) : tokenHidden(editWorker) ? (
+                  <span className="text-[13px] text-hibi-sub dark:text-gray-400">スマホURLは代表だけが見られます</span>
+                ) : !retiredNow(editWorker) && canEdit && (
                   <button type="button" onClick={() => handleGenToken(editWorker.id)} className="h-9 px-3.5 rounded-[9px] bg-hibi-navy text-white text-[13px] font-bold hover:bg-hibi-light">スマホURLを発行する</button>
                 )}
-                {!editWorker.retired && (
+                {!retiredNow(editWorker) && canEdit && (
                   <button type="button" onClick={() => handleTransfer(editWorker)} disabled={transferring === editWorker.id} className={PANEL_BTN}>
                     転籍（{editWorker.company === 'HFU' ? '日比建設' : 'HFU'}へ）
                   </button>
@@ -607,7 +682,7 @@ export default function WorkersPage() {
                 {isAdminOrApprover && isGaikoku(editWorker.visaType || '') && (
                   <a href={`/workers?tab=raise-history&worker=${editWorker.id}`} className={`${PANEL_BTN} inline-flex items-center`}>昇給の記録</a>
                 )}
-                {!editWorker.retired && (
+                {canRetire && (
                   <button type="button" onClick={startRetire}
                     className="sm:ml-auto h-9 px-3.5 rounded-[9px] border border-red-300 dark:border-red-800 bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 text-[13px] font-bold hover:bg-red-50 dark:hover:bg-red-900/20">退職にする</button>
                 )}
@@ -637,7 +712,8 @@ export default function WorkersPage() {
             </div>
 
             <div className="px-6 py-5 flex-1">
-            <div className="space-y-4">
+            {/* 直せない人には入力欄を止める（2026-10-02 総合点検）。給与タブは中でさらに canEditPay で止めている */}
+            <fieldset disabled={!canEdit} className="space-y-4 min-w-0">
               {modalTab === 'basic' && (<div className="space-y-4">
               {/* ── 顔写真（2026-08-03 追加。保存は他項目と独立して即時反映） ──
                   新規追加時は workerId がまだ無いので出さない。先に保存してから登録する。 */}
@@ -907,73 +983,6 @@ export default function WorkersPage() {
                     </div>
                     <p className="text-[10px] text-gray-400">※ 時給を入力すると日額・月給・残業単価が自動計算されます</p>
 
-                    {/* 号俸制（日本人社員のみ）。等級は役割で決め、号は日額から自動で決まる。
-                        未設定だと年次改定が「要入力」で止まるので、入社時にここで入れておく。 */}
-                    {form.visa === 'none' && (
-                      <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">号俸制（等級・号数）</h4>
-                          {!form.jpGrade && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">未設定</span>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">等級（役割）</label>
-                            <select
-                              value={form.jpGrade}
-                              onChange={e => {
-                                const g = e.target.value
-                                // 等級を選んだら、現在の日額に見合う号を自動で当てる
-                                const d = Number(form.rate) || 0
-                                const step = g && d > 0 ? String(stepForDaily(g as JpGrade, d)) : form.jpStep
-                                setForm({ ...form, jpGrade: g, jpStep: g ? step : '' })
-                              }}
-                              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
-                            >
-                              <option value="">未設定</option>
-                              {GRADES_IN_ORDER.map(g => (
-                                <option key={g} value={g}>{g === 'doko' ? '土工' : g} {GRADE_LABELS[g]}</option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">号数（1〜60）</label>
-                            <input
-                              type="number" min={1} max={60} value={form.jpStep} disabled={!form.jpGrade}
-                              onChange={e => setForm({ ...form, jpStep: e.target.value })}
-                              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm tabular-nums disabled:opacity-50 focus:ring-2 focus:ring-hibi-navy focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                        {form.jpGrade && form.jpStep && (() => {
-                          const g = form.jpGrade as JpGrade
-                          const st = Math.max(1, Math.min(60, Number(form.jpStep) || 1))
-                          const tableDaily = dailyForStep(g, st)
-                          const actual = Number(form.rate) || 0
-                          const gap = actual - tableDaily
-                          return (
-                            <p className="text-[11px] mt-1.5 leading-relaxed">
-                              <span className="text-gray-500">
-                                号俸表の日額 <b className="tabular-nums">¥{tableDaily.toLocaleString()}</b>
-                                <span className="text-gray-400">（{g === 'doko' ? '土工' : g}の上限 ¥{capDaily(g).toLocaleString()}）</span>
-                              </span>
-                              {actual > 0 && gap !== 0 && (
-                                <span className={gap > 0 ? 'text-amber-700 dark:text-amber-400 ml-1.5' : 'text-gray-400 ml-1.5'}>
-                                  ／ 実際の日額との差 {gap > 0 ? '+' : '−'}¥{Math.abs(gap).toLocaleString()}
-                                  {gap > 0 && '（調整給として持つ分）'}
-                                </span>
-                              )}
-                            </p>
-                          )
-                        })()}
-                        <p className="text-[10px] text-gray-400 mt-1">
-                          等級は<b>役割</b>で決めます（在籍年数では上がりません）。等級を選ぶと、日額に見合う号を自動で当てます。
-                          未設定のままだと年次改定で「要入力」になり、改定を確定できません。
-                        </p>
-                      </div>
-                    )}
-
     {/* 固定月給 — 旧ルール継続者（フン等）専用。誤入力で計算方式が月給制に切り替わるため、
                         useOldRules ON か既に設定済みの場合のみ表示（2026-06-12 監査 Sprint2-C） */}
                     {(form.useOldRules || (form.salary && Number(form.salary) > 0)) ? (
@@ -1119,6 +1128,74 @@ export default function WorkersPage() {
                         </>
                       )
                     })()}
+                    {/* 号俸制（日本人社員のみ）。等級は役割で決め、号は日額から自動で決まる。
+                        未設定だと年次改定が「要入力」で止まるので、入社時にここで入れておく。
+                        2026-10-02 総合点検: このブロックが外国人側の分岐の中にあり、日本人の画面には一度も出ていなかった
+                        （賃金制度の「人員マスタで等級を選んでください」の行き先で設定できなかった）。日本人側へ移した */}
+                    {!isGaikoku(form.visa) && (
+                      <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">号俸制（等級・号数）</h4>
+                          {!form.jpGrade && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">未設定</span>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">等級（役割）</label>
+                            <select
+                              value={form.jpGrade}
+                              onChange={e => {
+                                const g = e.target.value
+                                // 等級を選んだら、現在の日額に見合う号を自動で当てる
+                                const d = Number(form.rate) || 0
+                                const step = g && d > 0 ? String(stepForDaily(g as JpGrade, d)) : form.jpStep
+                                setForm({ ...form, jpGrade: g, jpStep: g ? step : '' })
+                              }}
+                              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                            >
+                              <option value="">未設定</option>
+                              {GRADES_IN_ORDER.map(g => (
+                                <option key={g} value={g}>{g === 'doko' ? '土工' : g} {GRADE_LABELS[g]}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">号数（1〜60）</label>
+                            <input
+                              type="number" min={1} max={60} value={form.jpStep} disabled={!form.jpGrade}
+                              onChange={e => setForm({ ...form, jpStep: e.target.value })}
+                              className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm tabular-nums disabled:opacity-50 focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        {form.jpGrade && form.jpStep && (() => {
+                          const g = form.jpGrade as JpGrade
+                          const st = Math.max(1, Math.min(60, Number(form.jpStep) || 1))
+                          const tableDaily = dailyForStep(g, st)
+                          const actual = Number(form.rate) || 0
+                          const gap = actual - tableDaily
+                          return (
+                            <p className="text-[11px] mt-1.5 leading-relaxed">
+                              <span className="text-gray-500">
+                                号俸表の日額 <b className="tabular-nums">¥{tableDaily.toLocaleString()}</b>
+                                <span className="text-gray-400">（{g === 'doko' ? '土工' : g}の上限 ¥{capDaily(g).toLocaleString()}）</span>
+                              </span>
+                              {actual > 0 && gap !== 0 && (
+                                <span className={gap > 0 ? 'text-amber-700 dark:text-amber-400 ml-1.5' : 'text-gray-400 ml-1.5'}>
+                                  ／ 実際の日額との差 {gap > 0 ? '+' : '−'}¥{Math.abs(gap).toLocaleString()}
+                                  {gap > 0 && '（調整給として持つ分）'}
+                                </span>
+                              )}
+                            </p>
+                          )
+                        })()}
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          等級は<b>役割</b>で決めます（在籍年数では上がりません）。等級を選ぶと、日額に見合う号を自動で当てます。
+                          未設定のままだと年次改定で「要入力」になり、改定を確定できません。
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -1324,22 +1401,24 @@ export default function WorkersPage() {
               })()}
 
               </div>)}
-            </div>
+            </fieldset>
             </div>
             <div className="sticky bottom-0 px-6 py-3.5 border-t border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2.5">
               {/* 完全に消すのは出面実績のない人だけ（サーバが実績ありを止める）。ふだんは「退職にする」 */}
-              {editWorker && !editWorker.retired && (
+              {canDeleteForever && editWorker && (
                 <button type="button" onClick={() => handleDelete(editWorker.id, editWorker.name)}
                   className="text-xs text-hibi-sub dark:text-gray-400 hover:text-red-700 underline">登録を完全に消す</button>
               )}
-              <button onClick={() => setShowModal(false)}
+              <button onClick={closePanel}
                 className="ml-auto h-11 px-5 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
                 閉じる
               </button>
-              <button onClick={handleSave} disabled={saving}
-                className="h-11 px-6 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50">
-                {saving ? '保存中...' : '保存する'}
-              </button>
+              {canEdit && (
+                <button onClick={handleSave} disabled={saving}
+                  className="h-11 px-6 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50">
+                  {saving ? '保存中...' : '保存する'}
+                </button>
+              )}
             </div>
           </div>
         </SidePanel>

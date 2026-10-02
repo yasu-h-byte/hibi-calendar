@@ -18,6 +18,7 @@ import WorkerAvatar from '@/components/WorkerAvatar'
 import { PageHeader, ToolButton, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
+import { isAlreadyRetired } from '@/lib/workers'
 import { can } from '@/lib/permissions'
 // ⚠️ 評価ロジック（重み・テーブル・計算関数）は lib/evaluation-config.ts に集約。
 //   フロント・バックエンドで重複して定義すると過去のような不整合が再発する。
@@ -395,7 +396,9 @@ export default function EvaluationPage() {
 
   const fetchData = useCallback(async () => {
     const { password, user } = getAuth()
-    setAuthUser(user)
+    // 同じ人なら authUser の参照を変えない（2026-10-02 総合点検。旧: 再取得のたびに新しいオブジェクトになり、
+    //   評価入力を同期し直す effect が走って、入力途中の点が黙って元に戻っていた）
+    setAuthUser(prev => (prev && user && prev.workerId === user.workerId && prev.role === user.role) ? prev : user)
     try {
       const [wRes, eRes] = await Promise.all([
         fetch('/api/workers', { headers: { 'x-admin-password': password } }),
@@ -404,7 +407,8 @@ export default function EvaluationPage() {
       if (wRes.ok) {
         const d = await wRes.json()
         const all: Worker[] = d.workers || []
-        setWorkers(all.filter(w => w.visaType && w.visaType !== 'none' && !w.retired))
+        // 退職の判定は「今日の時点で退職日を過ぎたか」（lib/workers.ts isAlreadyRetired・2026-10-02 総合点検）。旧: `!w.retired` で退職「予定」の在籍者まで外れていた
+        setWorkers(all.filter(w => w.visaType && w.visaType !== 'none' && !isAlreadyRetired(w.retired)))
       }
       if (eRes.ok) {
         const d = await eRes.json()
@@ -424,7 +428,9 @@ export default function EvaluationPage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   // ── Review tab: load current user's review for selected worker ──
-  useEffect(() => {
+  // 保存済みの自分の評価を入力欄に入れ直す。対象者・評価の読み直しのときと、「修正する」のキャンセルで使う
+  //   （2026-10-02 総合点検。旧: キャンセルは isEditing を戻すだけで、未保存の点が「提出済み」として表示されていた）
+  const syncMyReviewFromSaved = useCallback(() => {
     if (!selectedWorkerId || !authUser) {
       setHasSubmitted(false)
       setIsEditing(false)
@@ -457,6 +463,7 @@ export default function EvaluationPage() {
       setIsEditing(false)
     }
   }, [selectedWorkerId, authUser, evaluations])
+  useEffect(() => { syncMyReviewFromSaved() }, [syncMyReviewFromSaved])
 
   // Workers with active sessions where current user is an evaluator
   const reviewableWorkers = workers.filter(w =>
@@ -1983,7 +1990,7 @@ export default function EvaluationPage() {
                   <div className="flex gap-3 justify-end">
                     {isEditing && (
                       <button
-                        onClick={() => setIsEditing(false)}
+                        onClick={syncMyReviewFromSaved}
                         className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
                       >
                         キャンセル

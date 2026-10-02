@@ -49,12 +49,16 @@ export default function ForemanApprovals({ token, canApprove }: {
   const [data, setData] = useState<Data | null>(null)
   const [busy, setBusy] = useState<string>('')
   const [msg, setMsg] = useState('')
+  // 取得の失敗（2026-10-02 総合点検。旧: 失敗すると承認する人の枠が「読み込み中...」のままだった）
+  const [loadFailed, setLoadFailed] = useState<string | null>(null)
 
   const load = useCallback(async () => {
+    setLoadFailed(null)
     try {
       const res = await fetch(`/api/mypage/approvals?token=${token}`)
       if (res.ok) setData(await res.json())
-    } catch { /* 承認欄が出ないだけ（マイページの他の部分は使える） */ }
+      else setLoadFailed((await res.json().catch(() => null))?.error || `エラー (${res.status})`)
+    } catch { setLoadFailed('通信エラー') }
   }, [token])
   useEffect(() => { load() }, [load])
 
@@ -114,7 +118,17 @@ export default function ForemanApprovals({ token, canApprove }: {
     return canApprove ? (
       <div className="bg-white rounded-xl border-2 border-hibi-navy/20 shadow-sm p-4">
         <div className="text-base font-extrabold text-hibi-charcoal">承認すること</div>
-        <div className="text-sm text-gray-400 mt-2">読み込み中...</div>
+        {loadFailed ? (
+          <div role="alert" className="mt-2">
+            <div className="text-sm font-bold text-red-700">読み込めませんでした: {loadFailed}</div>
+            <button type="button" onClick={load}
+              className="mt-2 w-full min-h-[44px] bg-white border-2 border-red-300 text-red-700 rounded-xl py-2 font-bold active:bg-red-50">
+              もう一度
+            </button>
+          </div>
+        ) : (
+          <div className="text-sm text-gray-400 mt-2">読み込み中...</div>
+        )}
       </div>
     ) : null
   }

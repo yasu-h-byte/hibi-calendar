@@ -55,7 +55,8 @@ export default function WageAnalysisPage() {
         const today = new Date()
         const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
         const target = (workers as Record<string, unknown>[])
-          .filter(w => w.visaType && w.visaType !== 'none' && !w.retired && Number(w.hourlyRate) > 0)
+          // 2026-10-02 総合点検・要判断: 賃金カーブは「これから何年も在籍する前提」の分析なので、退職予定（先の日付）の人も外したままにする
+          .filter(w => w.visaType && w.visaType !== 'none' && !w.retired && Number(w.hourlyRate) > 0) // retired-ok: 退職予定も分析の対象外
           .map(w => {
             // 2026-09-14: 人員マスタには適用開始日つきで先の改定が入っている。
             //   「現在」は今日時点で有効な額、「改定後」はマスタ登録済みの最新額＋予定表で見る

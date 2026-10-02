@@ -6,12 +6,16 @@
  */
 'use client'
 
+import { STAFF_DOW_VI, STAFF_HOME_LEAVE_REASON_VI, STAFF_TEXT, biLine } from '@/lib/labels'
+
 export interface HomeLongLeaveRequest {
   id: string
   startDate: string
   endDate: string
   reason: string
   status: string
+  /** 却下の理由（本人に見せる・2026-10-02 総合点検） */
+  rejectedReason?: string
 }
 
 interface Props {
@@ -52,7 +56,8 @@ function getHlDateOptions(minDateStr?: string): { value: string; label: string }
     const d = new Date(start)
     d.setDate(d.getDate() + i)
     const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    const label = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${DOW_LABELS[d.getDay()]}）`
+    // 曜日も日越（2026-10-02 総合点検）
+    const label = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${DOW_LABELS[d.getDay()]} ${STAFF_DOW_VI[d.getDay()]}）`
     options.push({ value: val, label })
   }
   return options
@@ -182,7 +187,7 @@ export default function HomeLongLeaveModal({
             type="text"
             value={note}
             onChange={e => setNote(e.target.value)}
-            placeholder="飛行機の予定など"
+            placeholder={biLine(STAFF_TEXT.flightExample)}
             className="w-full border border-gray-300 rounded-lg px-3 py-3 text-base"
           />
         </div>
@@ -209,13 +214,15 @@ export default function HomeLongLeaveModal({
             </div>
             <div className="space-y-2">
               {requests.map(req => (
-                <div key={req.id} className={`flex items-center justify-between py-2 px-3 rounded-lg ${req.status === 'cancelled' ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
+                <div key={req.id} className={`py-2 px-3 rounded-lg ${req.status === 'cancelled' ? 'bg-gray-100 opacity-60' : 'bg-gray-50'}`}>
+                <div className="flex items-center justify-between min-h-[44px]">
                   <div className="min-w-0">
                     <span className="text-sm text-gray-700 font-medium">
                       {/* 復帰未定は番兵終了日(9999-12-31)。仮日付ではなく「未定」と表示 */}
                       {formatMD(req.startDate)} 〜 {req.endDate >= '9999-12-31' ? '未定 / Chưa xác định' : formatMD(req.endDate)}
                     </span>
-                    <span className="text-xs text-gray-400 ml-2">{req.reason}</span>
+                    {/* 理由は保存値が日本語なのでベトナム語を添える（2026-10-02 総合点検） */}
+                    <span className="text-xs text-hibi-sub ml-2">{req.reason}{STAFF_HOME_LEAVE_REASON_VI[req.reason] ? ` / ${STAFF_HOME_LEAVE_REASON_VI[req.reason]}` : ''}</span>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {req.status === 'approved' && (
@@ -233,9 +240,10 @@ export default function HomeLongLeaveModal({
                         <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700 font-bold">
                           承認待ち / Đang chờ
                         </span>
+                        {/* 44px 以上（2026-10-02 総合点検。旧: 24px） */}
                         <button
                           onClick={() => onCancelRequest(req.id)}
-                          className="text-xs px-2 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 active:scale-95"
+                          className="text-sm min-h-[44px] px-3 rounded-xl bg-red-50 border-2 border-red-200 text-red-600 font-bold active:bg-red-100"
                         >
                           取り消し / Hủy
                         </button>
@@ -243,7 +251,7 @@ export default function HomeLongLeaveModal({
                     )}
                     {req.status === 'rejected' && (
                       <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-600 font-bold">
-                        却下 / Từ chối
+                        {biLine(STAFF_TEXT.rejected)}
                       </span>
                     )}
                     {req.status === 'cancelled' && (
@@ -252,6 +260,13 @@ export default function HomeLongLeaveModal({
                       </span>
                     )}
                   </div>
+                </div>
+                {/* 却下の理由は本文に出す（2026-10-02 総合点検。旧: 帰国申請は理由を出す場所がなかった） */}
+                {req.status === 'rejected' && (
+                  <div className="text-sm text-red-800 mt-0.5">
+                    {biLine(STAFF_TEXT.rejectedReason)}: {req.rejectedReason || '—'}
+                  </div>
+                )}
                 </div>
               ))}
             </div>
