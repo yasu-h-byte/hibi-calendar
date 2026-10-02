@@ -71,6 +71,19 @@ export async function deleteFile(path: string): Promise<void> {
   await bucket.file(path).delete({ ignoreNotFound: true })
 }
 
+/**
+ * prefix の下のファイルを全部消す（アップロード後に登録できなかったときの後片付け）。消した数を返す。
+ * prefix は必ず「…/{id}/」のように / で終わるものを渡す（別の記録のファイルを巻き込まないため）。
+ */
+export async function deleteFilesWithPrefix(prefix: string): Promise<number> {
+  if (!prefix.endsWith('/')) throw new Error('prefix must end with /')
+  const bucket = getStaffDocsBucket()
+  if (!bucket) throw new Error('STORAGE_UNAVAILABLE')
+  const [files] = await bucket.getFiles({ prefix })
+  await Promise.all((files as any[]).map(f => f.delete({ ignoreNotFound: true })))
+  return files.length
+}
+
 /** /api/health 用: バケットに届くか（中身は読まない） */
 export async function probeStaffDocsBucket(): Promise<{ ok: boolean; error: string | null }> {
   try {

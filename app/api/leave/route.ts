@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap } from '@/lib/auth'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, setDoc } from '@/lib/fsdb'
 import { getMainData, getMultiMonthAttData, parseDKey, isDispatchedAt } from '@/lib/compute'
 import { ymKey, setAttendanceEntry, computeAttendanceDeleteFields } from '@/lib/attendance'
 import { isAlreadyRetired } from '@/lib/workers'
 import { addMonthsSafe, todayJstIso, calcExpiryIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, currentYearJst, currentYmJst, localMidnight, addDaysIso } from '@/lib/date-utils'
-import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap , jpNextGrantAfter, jpDeemedDate } from '@/lib/leave-compute'
+import { computePeriodUsed, judgeFiveDayObligation, calcLegalPL, computeUsedDays, computeRemainingDays, calcLegalCarryOver, hasManualCarryOverOverride, selectActiveGrantRecord, validateGrantInput, grantPeriodsOverlap , jpNextGrantAfter, jpDeemedDate, selectCurrentPeriodRecord, jpExpectedGrantWithoutRecords } from '@/lib/leave-compute'
 import { updateMapByKey } from '@/lib/firestore-safe'
 import { logActivity } from '@/lib/activity'
 
@@ -761,10 +761,14 @@ export async function POST(request: NextRequest) {
           let deemedDateForDays: string
 
           if (!latestGrant) {
-            if (hirePlus6) {
-              expectedGrantDate = hirePlus6
+            // 入社が古く記録が無いだけの人は、何年も前の「入社6ヶ月後」ではなく今続いている期の付与日を目安にする（2026-10-02）
+            const exp = hirePlus6 ? jpExpectedGrantWithoutRecords(w.hireDate!, today) : null
+            if (exp) {
+              expectedGrantDate = exp.grantDate
               expectedFy = expectedGrantDate.slice(0, 4)
-              reason = '初回付与（入社6ヶ月経過）'
+              reason = exp.catchUp
+                ? `付与の記録なし（入社6ヶ月後 ${hirePlus6} から1年ごとの直近の付与日を目安）`
+                : '初回付与（入社6ヶ月経過）'
             } else {
               expectedGrantDate = fyGrantDate
               expectedFy = String(currentFyStart)
@@ -1372,8 +1376,12 @@ export async function GET(request: NextRequest) {
   try {
     const main = await getMainData()
 
-    // デバッグモード: 生のplDataを返す
+    // 有給買取の金額（精勤賞与の額）は給与を見られる人だけ（給与の鍵・2026-10-02 総点検）
+    const canSeePay = await callerCan(request, 'pay.view')
+
+    // デバッグモード: 生のplDataを返す（買取の金額を含むので給与を見られる人だけ）
     if (debugMode) {
+      if (!canSeePay) return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
       return NextResponse.json({ plData: main.plData })
     }
 
@@ -1426,11 +1434,9 @@ export async function GET(request: NextRequest) {
         let targetFy: string | null = null
         // grantDate..+1y に基準日を含むレコードの fy を使う（日本人も外国人も同じ・2026-10-02 代表決定で日本人の 10/1 統一をやめた）
         //   日付は JST の文字列（YYYY-MM-DD）どうしで比べる（UTC の Date と比べると朝9時まで1日ずれる）
-        const activeRec = plRecords.find(r => {
-          if (!r.grantDate || !/^\d{4}-\d{2}-\d{2}$/.test(r.grantDate)) return false
-          const end = `${Number(r.grantDate.slice(0, 4)) + 1}${r.grantDate.slice(4)}`
-          return asOfIso >= r.grantDate && asOfIso < end
-        })
+        //   2026-10-02 修正: 先頭から find() で探すと、付与日を前に寄せた日本人（2025-12-01 → 2026-10-01）は
+        //   10/1〜11/30 に古い期が勝っていた。付与日 ≤ 基準日のうち最新（selectActiveGrantRecord）で選ぶ
+        const activeRec = selectCurrentPeriodRecord(plRecords, asOfIso)
         if (activeRec) targetFy = String(activeRec.fy)
         else if (isJp) {
           // 付与日の無い古い日本人のレコードだけ、従来の 10/1 起点の期で探す
@@ -1438,8 +1444,8 @@ export async function GET(request: NextRequest) {
         }
 
         // targetFy に一致するレコードのうち「最後のもの」を採用（push順で最新）
-        let fyRecord: typeof plRecords[number] | undefined
-        if (targetFy !== null) {
+        let fyRecord: typeof plRecords[number] | undefined = activeRec ?? undefined
+        if (!fyRecord && targetFy !== null) {
           const matching = plRecords.filter(r => String(r.fy) === targetFy)
           if (matching.length > 0) {
             const cand = matching[matching.length - 1]
@@ -1679,7 +1685,8 @@ export async function GET(request: NextRequest) {
           const prevRec = plRecordsRaw.find(r => r.grantDate === prevGrant) as (typeof plRecordsRaw[number] & { buyoutDays?: number; buyoutHistory?: { days?: number }[] }) | undefined
           const prevDays = prevRec ? (prevRec.grantDays ?? prevRec.grant ?? 0) : 0
           if (prevRec && prevDays > 0) {
-            const { requestedPeriodUsed } = computePeriodUsed(w.id, prevGrant, allAtt, todayIso)
+            // 前の期は今の期の付与日の前日で終わる（付与日を前に寄せた人の 10〜11月を両方の期で数えない・2026-10-02）
+            const { requestedPeriodUsed } = computePeriodUsed(w.id, prevGrant, allAtt, todayIso, { periodEndExclusive: grantDate })
             const prevCarry = prevRec.carryOver ?? prevRec.carry ?? 0
             const buyoutDays = prevRec.buyoutDays ?? (prevRec.buyoutHistory || []).reduce((sum, h) => sum + (h.days || 0), 0)
             prevPeriod = {
@@ -1730,7 +1737,8 @@ export async function GET(request: NextRequest) {
           designatedLeaves: (fyRecord as { designatedLeaves?: Array<{ date: string; designatedAt: string; designatedBy: number | string; note?: string; siteId: string }> } | undefined)?.designatedLeaves,
           // Phase 6: 買取記録
           buyoutDays: (fyRecord as { buyoutDays?: number } | undefined)?.buyoutDays,
-          buyoutHistory: (fyRecord as { buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }> } | undefined)?.buyoutHistory,
+          buyoutHistory: (fyRecord as { buyoutHistory?: Array<{ at: string; by: number | string; days: number; amount?: number; reason?: string }> } | undefined)?.buyoutHistory
+            ?.map(h => (canSeePay ? h : { ...h, amount: undefined })),
           // Phase 8: FIFO内訳（繰越分と当期付与分の別々管理）
           carryOverRemaining,
           carryOverExpiryDate,

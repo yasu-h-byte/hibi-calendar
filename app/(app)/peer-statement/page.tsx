@@ -30,7 +30,7 @@ interface PeerInvoiceSummary {
   issuedAt?: string; requestedAt?: string; rejectedAt?: string; voidedAt?: string
 }
 
-type InvState = 'issued' | 'pending' | 'returned' | 'none'
+type InvState = 'issued' | 'pending' | 'returned' | 'paper' | 'none'
 type Filter = 'all' | 'billing' | 'payment'
 
 const yen = (v: number) => '¥' + Math.round(v).toLocaleString()
@@ -55,13 +55,16 @@ export default function PeerStatementPage() {
   const [invoices, setInvoices] = useState<PeerInvoiceSummary[]>([])
   const [filter, setFilter] = useState<Filter>('all')
   const [openId, setOpenId] = useState<string | null>(null)
+  /** 紙（手作り）で出した請求書を入れた会社（app/api/paper-invoice・2026-10-02） */
+  const [paperCos, setPaperCos] = useState<Map<string, string>>(new Map())  // companyId → 会社名
 
   const load = useCallback(async () => {
     if (!ready) return
     setRows(null); setErr('')
-    const [stmtRes, invRes] = await Promise.all([
+    const [stmtRes, invRes, paperRes] = await Promise.all([
       fetchWithAuth(`/api/peer-statement?ym=${ym}`),
       fetchWithAuth(`/api/peer-invoice?ym=${ym}`),
+      fetchWithAuth(`/api/paper-invoice?ym=${ym}&lite=1`),
     ])
     if (!stmtRes.ok) { setErr('読み込みに失敗しました'); return }
     const data = await stmtRes.json()
@@ -72,15 +75,26 @@ export default function PeerStatementPage() {
     } else {
       setInvoices([])
     }
+    if (paperRes.ok) {
+      const p = await paperRes.json()
+      setPaperCos(new Map(((p.records || []) as { companyId: string; companyName: string }[]).map(r => [r.companyId, r.companyName])))
+    } else {
+      setPaperCos(new Map())
+    }
   }, [ready, ym])
   useEffect(() => { load() }, [load])
   useEffect(() => { setOpenId(null) }, [ym])
 
-  /** 会社の請求書の状態（発行済み → 承認待ち → 差し戻し・取り下げ → まだ）。事務が申請 → 事業責任者が承認（2026-09-26） */
+  /**
+   * 会社の請求書の状態（発行済み → 承認待ち → 紙で発行済み → 差し戻し・取り下げ → まだ）。事務が申請 → 事業責任者が承認（2026-09-26）
+   * 紙は差し戻しより先に見る: システムの申請を差し戻したあと手作りで出した月は、もう「直して再申請」ではない（2026-10-02）
+   */
   const invStateOf = (companyId: string): { state: InvState; issued?: PeerInvoiceSummary } => {
     const issued = invoices.find(i => i.companyId === companyId && i.status === 'issued')
     if (issued) return { state: 'issued', issued }
     if (invoices.some(i => i.companyId === companyId && i.status === 'pending')) return { state: 'pending' }
+    // 応援の請求書はしばらく手作りで発行する（2026-10-02 代表）。紙の請求書を入れた月は「作っていない」扱いにしない
+    if (paperCos.has(companyId)) return { state: 'paper' }
     // 差し戻し・取り下げは「最後の動き」がそうなときだけ（その後に発行→取り消しなら作り直し＝まだ）
     const latest = latestPeerInvoiceRecord(invoices.filter(i => i.companyId === companyId))
     if (latest && (latest.status === 'rejected' || latest.status === 'withdrawn')) return { state: 'returned' }
@@ -91,6 +105,7 @@ export default function PeerStatementPage() {
     issued: { label: '発行済み', tone: 'green' },
     pending: { label: '承認待ち', tone: 'blue' },
     returned: { label: '差し戻し・取り下げ', tone: 'amber' },
+    paper: { label: '紙で発行済み', tone: 'cyan' },
     none: { label: 'まだ作っていない', tone: 'red' },
   }
 
@@ -99,10 +114,13 @@ export default function PeerStatementPage() {
   const paymentSum = list.reduce((s, r) => s + r.paymentTotal, 0)
   const billingCos = list.filter(r => r.billingTotal > 0)
   const hfu = invStateOf(HFU_INVOICE_COMPANY_ID)
-  // 請求書の対象: 請求のある会社 ＋ HFU → 日比建設
+  // 請求書の対象: 請求のある会社 ＋ HFU → 日比建設 ＋ 紙の請求書だけある会社（出面上は請求が無くても、出した請求書は数える）
   const targets = [...billingCos.map(r => ({ id: r.companyId, name: r.companyName })), { id: HFU_INVOICE_COMPANY_ID, name: 'HFU → 日比建設' }]
+  for (const [id, name] of paperCos) {
+    if (!targets.some(t => t.id === id)) targets.push({ id, name })
+  }
   const byState = (st: InvState) => targets.filter(t => invStateOf(t.id).state === st)
-  const toMake = byState('none'), pending = byState('pending'), returned = byState('returned'), issued = byState('issued')
+  const toMake = byState('none'), pending = byState('pending'), returned = byState('returned'), issued = byState('issued'), paper = byState('paper')
   const names = (xs: { name: string }[]) => xs.slice(0, 3).map(x => x.name).join('・') + (xs.length > 3 ? ` ほか${xs.length - 3}社` : '')
   const ymLabel = `${parseInt(ym.slice(4, 6))}月`
 
@@ -116,6 +134,11 @@ export default function PeerStatementPage() {
         title="請求書・支払"
         sub="応援に出した分は請求、来てもらった分は支払。出面から計算した金額です（相殺しません）"
         actions={
+          <>
+          <a href={`/paper-invoice?ym=${ym}`}
+            className="h-[42px] px-4 inline-flex items-center gap-1.5 rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-[14px] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+            <Icon name="folder" size={16} />紙で出した請求書
+          </a>
           <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
             <button type="button" aria-label="前の月" onClick={() => setYm(shiftYm(ym, -1))}
               className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
@@ -127,6 +150,7 @@ export default function PeerStatementPage() {
               <Icon name="chevronRight" size={18} strokeWidth={2.2} />
             </button>
           </div>
+          </>
         }
       />
 
@@ -137,9 +161,10 @@ export default function PeerStatementPage() {
         <>
           {/* ① 今やること */}
           <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            <TodoCard icon="doc" tone={toMake.length > 0 ? 'urgent' : 'ok'} title="請求書を作る"
+            {/* 応援の請求書はしばらく手作りで発行する（2026-10-02 代表）ので、未作成は赤（急ぎ）にしない */}
+            <TodoCard icon="doc" tone={toMake.length > 0 ? 'info' : 'ok'} title="請求書を作る"
               big={toMake.length > 0 ? `${toMake.length}社` : 'ありません'}
-              sub={toMake.length > 0 ? `${names(toMake)}の${ymLabel}分がまだ。出面の承認がそろっていれば作れます` : `${ymLabel}分はすべて作成済みです`}
+              sub={toMake.length > 0 ? `${names(toMake)}の${ymLabel}分。手作りで出したら「紙で出した請求書」に入れてください` : `${ymLabel}分はすべて作成済みです`}
               action={toMake.length > 0 ? '作る' : undefined}
               onClick={toMake.length > 0 ? () => { window.location.href = hrefOf(toMake[0].id) } : undefined} />
             <TodoCard icon="check" tone={pending.length > 0 ? 'info' : 'ok'} title="承認待ち"
@@ -153,8 +178,12 @@ export default function PeerStatementPage() {
               action={returned.length > 0 ? '開く' : undefined}
               onClick={returned.length > 0 ? () => { window.location.href = hrefOf(returned[0].id) } : undefined} />
             <TodoCard icon="check" tone="ok" title="発行済み"
-              big={issued.length > 0 ? `${issued.length}件` : 'まだありません'}
-              sub={issued.length > 0 ? names(issued) : `${ymLabel}分で発行した請求書がここに出ます`} />
+              big={issued.length + paper.length > 0 ? `${issued.length + paper.length}件` : 'まだありません'}
+              sub={issued.length + paper.length > 0
+                ? [issued.length > 0 ? names(issued) : '', paper.length > 0 ? `紙: ${names(paper)}` : ''].filter(Boolean).join(' ／ ')
+                : `${ymLabel}分で発行した請求書がここに出ます`}
+              action={paper.length > 0 ? '紙の請求書' : undefined}
+              onClick={paper.length > 0 ? () => { window.location.href = `/paper-invoice?ym=${ym}` } : undefined} />
           </section>
 
           {/* ② 合計 */}
@@ -188,7 +217,7 @@ export default function PeerStatementPage() {
             ) : shown.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-hibi-sub dark:text-gray-400">この絞り込みに当てはまる会社はありません</div>
             ) : shown.map(r => {
-              const st = r.billingTotal > 0 ? invStateOf(r.companyId) : null
+              const st = r.billingTotal > 0 || paperCos.has(r.companyId) ? invStateOf(r.companyId) : null
               return (
                 <div key={r.companyId} role="button" tabIndex={0}
                   onClick={() => setOpenId(r.companyId)}
@@ -200,13 +229,13 @@ export default function PeerStatementPage() {
                   <span>{st ? <Chip tone={STATE[st.state].tone}>{STATE[st.state].label}{st.issued ? ` ${st.issued.no}` : ''}</Chip> : <Chip tone="gray">支払のみ</Chip>}</span>
                   <span className="lg:text-right" onClick={e => e.stopPropagation()}>
                     {st && (
-                      <a href={hrefOf(r.companyId)}
+                      <a href={st.state === 'paper' ? `/paper-invoice?ym=${ym}` : hrefOf(r.companyId)}
                         className={`inline-flex items-center h-9 px-3.5 rounded-[9px] text-[13px] font-bold whitespace-nowrap ${
                           st.state === 'none' ? 'bg-hibi-navy text-white hover:bg-hibi-light'
                           : st.state === 'pending' ? 'bg-green-700 text-white hover:bg-green-800'
                           : 'border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'
                         }`}>
-                        {st.state === 'none' ? '請求書を作る' : st.state === 'pending' ? '開いて承認' : '請求書を開く'}
+                        {st.state === 'none' ? '請求書を作る' : st.state === 'pending' ? '開いて承認' : st.state === 'paper' ? '紙の請求書を見る' : '請求書を開く'}
                       </a>
                     )}
                   </span>

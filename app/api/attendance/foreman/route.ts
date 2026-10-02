@@ -16,7 +16,7 @@ import { recordAccess, getRequestIp } from '@/lib/accessLog'
 import { staffEntryTarget, familyEntrySiteId, type HierarchySite, type WorkTypeAssignMap } from '@/lib/site-hierarchy'
 import { loadSiteFamily, familyEntry, approveDaysForSite, siteMonthDays, siteRosterFromMain, loadSiteRoster } from '@/lib/foreman-todo'
 import { getMainData, getAttData } from '@/lib/compute'
-import { canDriveDefault } from '@/lib/allowance'
+import { canDriveDefault, driversByDayForSite } from '@/lib/allowance'
 import { todayJstDate } from '@/lib/date-utils'
 
 // 工種（親＋工種サイト）の範囲・まとめ承認の判定はマイページと共通（lib/foreman-todo.ts・2026-10-01）
@@ -182,7 +182,8 @@ export async function GET(request: NextRequest) {
       pastDays,
       monthOverview,
       // 運転者（運転手当）: その日の記録と、運転手当を出さない現場か（2026-10-02）
-      drivers: ((attRaw as { drv?: Record<string, { am?: number[]; pm?: number[] }> }).drv || {})[`${site.id}_${ym}_${d}`] || null,
+      // 親＋工種のキーをまとめて見せる（PC の工種画面で記録した分も見える・2026-10-02）
+      drivers: driversByDayForSite((attRaw as { drv?: Record<string, { am?: number[]; pm?: number[] }> }).drv, main.sites, site.id, ym)[d] || null,
       // 運転者の候補: その日この現場（親＋工種）で出勤（0.6補・休みを除く）した、運転しうる人（日本人を含む・PC と同じ）
       driverCandidates: (() => {
         const out: { id: number; name: string }[] = []
@@ -364,6 +365,8 @@ export async function POST(request: NextRequest) {
 
       // 書き込み先の工種（鉄骨・仮設など）。スタッフのスマホと同じ決め方（lib/site-hierarchy.ts staffEntryTarget）
       let editTarget = site.id
+      // 保存前のこの日のエントリ（下のガードで読んだ出面を使い回す。undefined = 読めていない）
+      let foremanPrevEntry: AttendanceEntry | null | undefined
       // ベトナム人スタッフのガード: 「最初の入力はスタッフ本人から」を強制。
       // ただし事後申請性ステータス（有給/帰国中）は admin/foreman の後付け入力を許容。
       try {
@@ -383,6 +386,7 @@ export async function POST(request: NextRequest) {
             ).targetSiteId
             const key = `${editTarget}_${workerId}_${ym}_${String(day)}`
             const existing = dData[key]
+            foremanPrevEntry = existing ?? null
             // 入社前・退職後の日には入れない（PC・スタッフのスマホと同じ・2026-10-02 点検）
             if (!isEmployedOn(targetWorker, `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`)) {
               return NextResponse.json({ error: 'この人はこの日に在籍していません（入社前・退職後）' }, { status: 400 })
@@ -414,8 +418,13 @@ export async function POST(request: NextRequest) {
       //   承認済みの有給の日を職長が別ステータスで上書きすると p だけ消え、申請は approved の
       //   まま残数が黙って戻る（staff 経路には 2026-08-27 から同じ保護がある）。
       if (choice !== 'leave') {
-        const { getAttendanceDoc: gadP, attKey: akP } = await import('@/lib/attendance')
-        const curP = (await gadP(ym))[akP(editTarget, workerId, ym, day)] as { p?: number | boolean } | undefined
+        // ガードで読んだ出面があれば使い回す（同じリクエストで出面を二度読まない）
+        let curP: { p?: number | boolean } | null | undefined = foremanPrevEntry
+        if (curP === undefined) {
+          const { getAttendanceDoc: gadP, attKey: akP } = await import('@/lib/attendance')
+          curP = ((await gadP(ym))[akP(editTarget, workerId, ym, day)] as AttendanceEntry | undefined) ?? null
+          foremanPrevEntry = curP as AttendanceEntry | null
+        }
         if (curP?.p) {
           return NextResponse.json({
             error: 'この日は有給として登録済みです。変更が必要な場合は管理者に連絡してください',
@@ -467,7 +476,7 @@ export async function POST(request: NextRequest) {
 
       const { computeAttendanceDeleteFields } = await import('@/lib/attendance')
       const deleteFields = computeAttendanceDeleteFields(entry)
-      await setAttendanceEntry(editTarget, workerId, ym, day, entry, { deleteFields })
+      await setAttendanceEntry(editTarget, workerId, ym, day, entry, { deleteFields, prevEntry: foremanPrevEntry })
       return NextResponse.json({ success: true, entry })
     }
 
@@ -538,7 +547,8 @@ export async function POST(request: NextRequest) {
       const deleteFields = computeAttendanceDeleteFields(movedEntry)
       // 移動先の工種は、その日の工種指定・本人の既定に従う（無ければ親現場）
       const fixTarget = staffEntryTarget(famFix.sites, famFix.assign, attData, site.id, Number(workerId), ym, Number(day)).targetSiteId
-      await setAttendanceEntry(fixTarget, workerId, ym, day, movedEntry, { deleteFields })
+      // 同じ日の中で現場を移すだけなので、その日の有給の有無は変わらない（繰越の再計算は不要）
+      await setAttendanceEntry(fixTarget, workerId, ym, day, movedEntry, { deleteFields, prevEntry: sourceEntry })
 
       // 2. 元現場のエントリを削除（dot-notation で安全に削除）
       const docRef = doc(db, 'demmen', `att_${ym}`)

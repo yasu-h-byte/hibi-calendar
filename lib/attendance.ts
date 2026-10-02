@@ -467,13 +467,33 @@ export async function removePaidLeaveForDay(workerId: number, dateIso: string): 
   return removed
 }
 
+/**
+ * 保存の前後で有給(p)の有無が変わったか（2026-10-02・次期繰越の再計算を本当に要るときだけにする）。
+ * 有給が付いた・外れたときだけ true。どちらも有給なし／どちらも有給ありなら false。
+ */
+export function paidLeaveChanged(
+  prev: Pick<AttendanceEntry, 'p'> | null | undefined,
+  next: Pick<AttendanceEntry, 'p'> | null | undefined,
+): boolean {
+  return !!prev?.p !== !!next?.p
+}
+
 export async function setAttendanceEntry(
   siteId: string,
   workerId: number,
   ym: string,
   day: number,
   entry: AttendanceEntry,
-  options: { deleteFields?: string[] } = {}
+  options: {
+    deleteFields?: string[]
+    /**
+     * 保存前のエントリ（呼び出し元が既に持っているときだけ渡す）。
+     * 渡すと、有給の有無が変わったときだけ次期繰越を再計算する（paidLeaveChanged）。
+     * 渡さない（undefined）ときは従来どおり「p を書いた／消すかもしれない」なら再計算する。
+     * null は「保存前にエントリが無かった」の意味。
+     */
+    prevEntry?: AttendanceEntry | null
+  } = {}
 ): Promise<void> {
   // 確定済み月の短期キャッシュ（ダッシュボード用）を同一インスタンス内で無効化
   try { (await import('./compute')).invalidateAttDataCache(ym) } catch { /* ignore */ }
@@ -518,11 +538,22 @@ export async function setAttendanceEntry(
     await updateDoc(docRef, updates)
   } else {
     await setDoc(docRef, { d: { [key]: entry } }, { merge: true })
-  
+  }
+
   // ── 次期レコードの繰越を追随再計算（2026-09-02・lib/leave-carry.ts）──
   //   有給(p)を書いた／消した日が属する付与期の「次の付与レコード」の繰越を計算し直す。
   //   半自動付与が付与日の30日前に作った繰越や、承認済み未来有給の変更に追随させる。
-  if ((entry.p ?? 0) > 0 || options.deleteFields?.includes('p')) {
+  //   ⚠️ 2026-10-02 まで閉じ括弧のずれでこの処理が else（deleteFields なし）の中にあり、
+  //   deleteFields を渡す呼び出し元（grid/staff/foreman/leave-request/leave）では走っていなかった。
+  //   deleteFields には有給以外の保存でも 'p' が入るため、重い読み取り（最大13か月分の出面）は
+  //   recomputeNextCarryOver 側の事前チェック（キャッシュ済み main で「書き換える次期が無い」を判定）で省く。
+  //   2026-10-02: 通常の保存は computeAttendanceDeleteFields が無い項目をすべて deleteFields に
+  //   並べるため、ほぼ毎回 'p' が入り、次期レコードがある人は打刻のたびに重い再計算が走っていた。
+  //   呼び出し元が保存前のエントリ（prevEntry）を渡したときは、有給の有無が変わったときだけ走らせる。
+  const mayTouchPaidLeave = options.prevEntry !== undefined
+    ? paidLeaveChanged(options.prevEntry, entry)
+    : ((entry.p ?? 0) > 0 || !!options.deleteFields?.includes('p'))
+  if (mayTouchPaidLeave) {
     try {
       const { recomputeNextCarryOver } = await import('./leave-carry')
       await recomputeNextCarryOver(workerId, `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(day).padStart(2, '0')}`)
@@ -530,7 +561,6 @@ export async function setAttendanceEntry(
       console.warn('[setAttendanceEntry] 繰越再計算に失敗（出面の保存は完了）:', e)
     }
   }
-}
 }
 
 // ────────────────────────────────────────

@@ -8,7 +8,7 @@ import { describe, test, expect } from 'vitest'
 import { can, permRoleOf, roleCan } from '@/lib/permissions'
 import { MENU_ITEMS, SEARCH_ENTRIES, searchMenu, normalizeForSearch, activeMenuItem } from '@/lib/menu'
 
-const menuFor = (role: string, workerId = 50) =>
+const menuFor = (role: string, workerId = 303) =>
   MENU_ITEMS.filter(i => can({ role, workerId }, i.cap)).map(i => i.label)
 
 describe('役割ごとのメニュー', () => {

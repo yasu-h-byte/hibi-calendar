@@ -55,30 +55,60 @@ export function pickCarryTarget(records: Rec[], dateIso: string): { prevIdx: num
   return { prevIdx, nextIdx }
 }
 
-export async function recomputeNextCarryOver(
+/**
+ * 繰越を書き換える対象（前期・次期）を決める。書き換えない理由があれば reason を返す。
+ * 副作用なし・テスト可能。事前チェック（キャッシュ）と本処理（最新の main）で同じ判定を使う。
+ */
+export function resolveCarryTarget(
+  workers: { id: number; visa?: string }[],
+  plData: Record<string, Rec[]>,
   workerId: number,
   dateIso: string,
-): Promise<{ updated: boolean; from?: number; to?: number; reason?: string }> {
-  const ref = doc(db, 'demmen', 'main')
-  const snap = await getDoc(ref)
-  if (!snap.exists()) return { updated: false, reason: 'main not found' }
-  const data = snap.data()
-  const worker = ((data.workers || []) as { id: number; visa?: string }[]).find(w => w.id === workerId)
-  if (!worker) return { updated: false, reason: 'worker not found' }
-  if (!worker.visa || worker.visa === 'none') return { updated: false, reason: 'japanese' }  // 日本人は繰越なし
-
-  const plData = (data.plData || {}) as Record<string, Rec[]>
+): { records: Rec[]; prevIdx: number; nextIdx: number } | { reason: string } {
+  const worker = workers.find(w => w.id === workerId)
+  if (!worker) return { reason: 'worker not found' }
+  if (!worker.visa || worker.visa === 'none') return { reason: 'japanese' }  // 日本人は繰越なし
   const records = plData[String(workerId)] || []
   const t = pickCarryTarget(records, dateIso)
-  if (!t) return { updated: false, reason: 'no next record' }
-  const prev = records[t.prevIdx]
+  if (!t) return { reason: 'no next record' }
   const next = records[t.nextIdx]
-  if (hasManualCarryOverOverride(next)) return { updated: false, reason: 'manual override' }
+  if (hasManualCarryOverOverride(next)) return { reason: 'manual override' }
   // 移行時に登録したレコード（legacy）の繰越は触らない（2026-09-02 代表確認）。
   //   システムの出面データは実質 2025-10 からで、それ以前の期の消化は紙の管理簿にしかない。
   //   legacy レコードの繰越は「8月末時点で管理簿と一致」と確認済みの値なので、
   //   システム内の消化数だけで計算し直すと確認済みの値を壊す（タン・ケンの前期など）。
-  if (next.method === 'legacy') return { updated: false, reason: 'legacy record' }
+  if (next.method === 'legacy') return { reason: 'legacy record' }
+  return { records, ...t }
+}
+
+export async function recomputeNextCarryOver(
+  workerId: number,
+  dateIso: string,
+): Promise<{ updated: boolean; from?: number; to?: number; reason?: string }> {
+  // 事前チェック（2026-10-02）: setAttendanceEntry は有給以外の保存でも（deleteFields に 'p' が
+  //   入るため）ここへ来る。書き換える次期が無い大半のケースは、30秒キャッシュの main だけで
+  //   抜けて、最新 main の読み直しと最大13か月分の出面読み（getLeaveBalance）を省く。
+  //   キャッシュが古くて「次期が無い」と誤判定しても、次期を作る半自動付与は作成時に繰越を計算する。
+  {
+    const { getMainData } = await import('./compute')
+    const cached = await getMainData()
+    const pre = resolveCarryTarget(cached.workers, cached.plData as unknown as Record<string, Rec[]>, workerId, dateIso)
+    if ('reason' in pre) return { updated: false, reason: pre.reason }
+  }
+
+  const ref = doc(db, 'demmen', 'main')
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return { updated: false, reason: 'main not found' }
+  const data = snap.data()
+  const r = resolveCarryTarget(
+    (data.workers || []) as { id: number; visa?: string }[],
+    (data.plData || {}) as Record<string, Rec[]>,
+    workerId, dateIso,
+  )
+  if ('reason' in r) return { updated: false, reason: r.reason }
+  const records = r.records
+  const prev = records[r.prevIdx]
+  const next = records[r.nextIdx]
 
   // 前期の実消化（出面の p・承認済みの未来分を含む・同日多現場は1日）
   const { getLeaveBalance } = await import('./leave-balance')

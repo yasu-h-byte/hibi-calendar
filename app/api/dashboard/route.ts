@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getApiAuthUser, requireCap } from '@/lib/auth'
+import { getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { collection, getDocs } from '@/lib/fsdb'
 import {
@@ -22,7 +22,7 @@ import { isTobiGroup } from '@/lib/jobs'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth, isEmployedOn } from '@/lib/workers'
 import { todayJstIso, calcLastUsableDayIso, isLeaveExpiredAsOf, daysBetween, addMonthsSafe, addDaysIso, currentYmJst, todayJstDate } from '@/lib/date-utils'
 import { AttendanceEntry } from '@/types'
-import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter } from '@/lib/leave-compute'
+import { selectActiveGrantRecord, judgeFiveDayObligation, jpNextGrantAfter, jpExpectedGrantWithoutRecords } from '@/lib/leave-compute'
 import type { HomeLeaveEntry } from '@/lib/homeLeave'
 
 // このルートは Firestore の最新データに依存するため、常に動的に実行する
@@ -739,8 +739,9 @@ export async function GET(request: NextRequest) {
           // 初回は入社＋6ヶ月、2回目以降は前回付与日から1年（休暇管理 /api/leave の getPendingGrants と同じ・労基法39条）。
           //   2026-10-02 代表決定で 10/1 統一をやめた。入社日が無い人だけ 10/1 を目安にする
           const fyGrant = `${curFy}-10-01`
-          const hirePlus6 = w.hireDate ? addMonthsSafe(w.hireDate, 6) : ''
-          const expDate = latestG ? jpNextGrantAfter(latestG).grantDate : (hirePlus6 || fyGrant)
+          //   付与の記録が無い古い入社の人は、何年も前の入社6ヶ月後ではなく今続いている期の付与日（2026-10-02・/api/leave と共通）
+          const firstExp = w.hireDate ? jpExpectedGrantWithoutRecords(w.hireDate, todayIsoP)?.grantDate : undefined
+          const expDate = latestG ? jpNextGrantAfter(latestG).grantDate : (firstExp || fyGrant)
           if (expDate <= todayIsoP) {
             const hasGrant = grantedRecs.some(r => effD(r) >= expDate)
             if (!hasGrant) pendingGrantsCount++
@@ -815,6 +816,8 @@ export async function GET(request: NextRequest) {
       href: string
     }
     const quietIssues: QuietIssue[] = []
+    // 月次集計を見られない人（給与の鍵）には、月次集計ではなく出面の画面へのリンクを出す
+    const canSeeMonthly = await callerCan(request, 'monthly.view')
     const nowYm = currentYmJst()
     try {
       // 給与明細レベルの検出（法定割れ・夜勤未登録・早期復帰）は computeMonthly が必要。
@@ -869,7 +872,7 @@ export async function GET(request: NextRequest) {
             kind: 'sundayNoRest',
             workerName: w.name,
             detail: `休みの無い週の日曜出勤 ${(w.sundayNoRestDays || []).join('・')}日（法定休日の割増が必要になり得る。振替休日を検討）`,
-            href: `/monthly?ym=${ym}`,
+            href: canSeeMonthly ? `/monthly?ym=${ym}` : `/attendance?ym=${ym}`,
           })
         }
         if ((w.hkEarlyReturnDays || 0) > 0) {
@@ -967,6 +970,9 @@ export async function GET(request: NextRequest) {
     } catch (e) {
       console.error('quietIssues detection error:', e)
     }
+    // 金額の入る項目（法定割増の不足額・時給の改定）は給与を見られる人だけ（2026-10-02 代表）
+    const PAY_ISSUE_KINDS = new Set(['legalShortfall', 'wageRevisionPending'])
+    const shownIssues = (await callerCan(request, 'pay.view')) ? quietIssues : quietIssues.filter(q => !PAY_ISSUE_KINDS.has(q.kind))
 
     const actionItems = {
       visaExpiry: { count: visaExpiryItems.length, items: visaExpiryItems },
@@ -981,7 +987,7 @@ export async function GET(request: NextRequest) {
       pendingHomeLeaveApprovalCount,
       pendingGrantsCount,
       carryOverExpiringCount,
-      quietIssues: { count: quietIssues.length, items: quietIssues },
+      quietIssues: { count: shownIssues.length, items: shownIssues },
     }
 
     // ダッシュボードは「今の状況と要対応」に特化（詳細分析は原価・収益管理ページへ）

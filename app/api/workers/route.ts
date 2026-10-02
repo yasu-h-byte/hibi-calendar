@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { checkApiAuth, getApiAuthUser, requireCap, getCallerPermRole } from '@/lib/auth'
-import { roleCan } from '@/lib/permissions'
-import { getWorkers } from '@/lib/workers'
+import { checkApiAuth, getApiAuthUser, requireCap, callerCan } from '@/lib/auth'
+import { WORKER_OFFICE_KEYS, WORKER_PUBLIC_KEYS, getWorkers } from '@/lib/workers'
 import {
   addWorker,
   updateWorker,
@@ -48,13 +47,18 @@ export async function GET(request: NextRequest) {
     const workers = await getWorkers()
     // 2026-09-26: 給与欄は workers.view（事務所の人）だけ、電話URLのトークンは workers.edit（事務・代表）だけに返す。
     //   旧: 職長の画面（評価入力）からも全員の時給・月給・電話URLが取れた
-    const role = await getCallerPermRole(request)
-    const canSeePay = roleCan(role, 'workers.view')
-    const canSeeToken = roleCan(role, 'workers.edit')
-    const PAY_KEYS = ['rate', 'hourlyRate', 'hourlyRateFrom', 'prevHourlyRate', 'salary', 'otMul', 'jpGrade', 'jpStep', 'payrollNo', 'children', 'nonSmoker', 'birthDate', 'useOldRules'] as const
+    // 2026-10-02: 給与欄は pay.view（役割＝事務・事業責任者・代表 かつ 本人＝靖仁・政仁・森田）だけ
+    const canSeePay = await callerCan(request, 'pay.view')
+    const canSeeOffice = await callerCan(request, 'workers.view')
+    const canSeeToken = await callerCan(request, 'workers.edit')
+    // 2026-10-02: 相手ごとに返す項目を許可リストで決める（lib/workers.ts）。
+    //   給与を見られる人 = 全部 ／ 事務・役員 = 給与以外の人員マスタ ／ 職長 = 名前・所属・職種など最小限。
+    //   旧（#56）: 給与を見られない人を職長と同じ最小限にしていたため、奥寺さん・佐藤さんの人員マスタで
+    //   スマホURLが「まだ」になり（発行し直すと今のリンクが切れる）、保存で家族・禁煙の欄が消えた
+    const keys: readonly string[] | null = canSeePay ? null : canSeeOffice ? WORKER_OFFICE_KEYS : WORKER_PUBLIC_KEYS
     const shaped = workers.map(w => {
-      const o: Record<string, unknown> = { ...w }
-      if (!canSeePay) for (const k of PAY_KEYS) delete o[k]
+      const src = w as unknown as Record<string, unknown>
+      const o: Record<string, unknown> = keys ? Object.fromEntries(keys.filter(k => k in src).map(k => [k, src[k]])) : { ...src }
       if (!canSeeToken) delete o.token
       return o
     })

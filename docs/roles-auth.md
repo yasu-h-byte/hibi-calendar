@@ -48,6 +48,28 @@
 担当現場の制限（職長は自分の現場だけ）は権限表とは別に各 API がチェックする（`lib/attendance-authz.ts` 等）。
 権限を変えるときは `lib/permissions.ts` の1行を直す（メニュー・画面・サーバー・設定画面の表に同時に反映される）。
 
+## 給与を見られる人（2026-10-02 代表）
+
+個人の給与（時給・日額・月給・支給額・昇給額・号俸）は **靖仁さん（0）・政仁さん（1）・森田さん（303）だけ**。
+役割（事務・事業責任者・代表）と本人（`PAY_VIEWER_WORKER_IDS`）の**両方**がそろったときだけ、給与の権限（`PAY_CAPS`）が通る。
+
+| 給与の権限（PAY_CAPS） | 内容 |
+|---|---|
+| `pay.view` | 人員マスタの給与欄・ダッシュボードの金額つきの注意（法定割増の不足・時給の改定） |
+| `monthly.view` / `monthly.close` | 月次集計・締め・帳票（支給額を含む） |
+| `cost.view` / `cost.edit` | 原価・収益（人件費を含む） |
+| `wage.view` / `wage.decide` / `wageAnalysis.view` | 賃金・評価・昇給・賃金分析 |
+| `workers.editPay` / `cockpit.view` | 給与欄の書き換え・経営コックピット |
+| `workers.edit` | 人員マスタの編集・スタッフのスマホURL（本人ページに欠勤控除の日額などが出るため・2026-10-02 総点検） |
+| `staffDocs.view` / `staffDocs.edit` / `staffDocs.delete` | 書類庫（雇用契約書に賃金が書いてあるため） |
+
+ほかに、休暇管理の有給買取の金額（精勤賞与の額）は `pay.view` の人にだけ返す。
+`/api/workers` は相手ごとに返す項目を許可リストで決める（`lib/workers.ts` の WORKER_PAY_KEYS / WORKER_OFFICE_KEYS / WORKER_PUBLIC_KEYS）。
+
+- 役員（officer）・職長・奥寺さん（301）・佐藤さん（302）は、役割に関係なく給与を見られない
+- 画面は `lib/page-guard.ts` が入口で止め、API は `requireCap` / `callerCan` が止める。資料は `npm run lint:pay`
+- 見られる人を変えるのは代表の指示があるときだけ
+
 ## ロール変更方法
 - 人員マスタの「職種」を変更すると連動（役員→officer、職長→foreman、事務→jimu）
 - 政仁さん（ID:1）はハードコードで approver 固定
