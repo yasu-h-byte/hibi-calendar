@@ -3,7 +3,7 @@ import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
-import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, parseDKey } from '@/lib/compute'
+import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances } from '@/lib/compute'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
@@ -48,60 +48,20 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
   const orgKey = org === 'hibi' || org === 'hfu' ? org : 'all'
   const workerOrg = new Map(main.workers.map(w => [w.id, isHfu(w.org) ? 'hfu' : 'hibi']))
 
-  // 労働実績のある (現場, 日) を収集
-  const needed = new Map<string, Set<number>>()
-  for (const [key, entry] of Object.entries(att.d || {})) {
-    if (!entry || typeof entry !== 'object') continue
-    const pk = parseDKey(key)
-    if (pk.ym !== ym) continue
-    const wid = Number(pk.wid)
-    const wOrg = workerOrg.get(wid)
-    if (!wOrg) continue
-    if (orgKey !== 'all' && wOrg !== orgKey) continue
-    const e = entry as { w?: number; o?: number }
-    if (!((e.w || 0) > 0 || (e.o || 0) > 0)) continue
-    if (!needed.has(pk.sid)) needed.set(pk.sid, new Set())
-    needed.get(pk.sid)!.add(Number(pk.day))
-  }
-
-  if (needed.size === 0) return null  // 実績ゼロ（対象者なし月）は承認チェック不要
-
-  // 2026-09 分からは職長承認に加えて最終承認（事業責任者）も必須（2026-09-30 代表決定）。
-  //   判定は本人の出面確認・請求書と共通（lib/approval-gap.ts。工種サイトは親にまとめ、子で承認した古い記録も数える）
-  const { approvalGap, describeApprovalGap, FINAL_APPROVAL_REQUIRED_FROM_YM } = await import('@/lib/approval-gap')
-  if (ym >= FINAL_APPROVAL_REQUIRED_FROM_YM) {
-    const { calendarSiteIdOf } = await import('@/lib/site-hierarchy')
-    const sitesH = main.sites as unknown as import('@/lib/site-hierarchy').HierarchySite[]
-    const famDays = [...needed.entries()].flatMap(([sid, days]) =>
-      [...days].map(day => ({ familyId: calendarSiteIdOf(sitesH, sid), day })))
-    const gap = await approvalGap(sitesH as { id: string; parentId?: string }[], ym, famDays)
-    if (gap.foremanMissing.length || gap.finalMissing.length) {
-      const nameOf = (id: string) => main.sites.find(s => s.id === id)?.name || id
-      return `出面の承認が済んでいない日があるため締められません（職長承認なし ${gap.foremanMissing.length}日・最終承認なし ${gap.finalMissing.length}日）。\n`
-        + `${describeApprovalGap(gap, nameOf)}\n出面画面で職長承認・最終承認を済ませてから締めてください`
+  // 労働実績のある (現場, 日) に職長承認（2026-09 分からは最終承認も）がそろっているか。
+  //   判定は月次集計画面の「締めの準備」カードと共通（lib/month-approval-status.ts → lib/approval-gap.ts）
+  const { monthApprovalStatus } = await import('@/lib/month-approval-status')
+  const { describeApprovalGap } = await import('@/lib/approval-gap')
+  const ap = await monthApprovalStatus(main, att.d, ym, orgKey)
+  if (ap.needed === 0) return null  // 実績ゼロ（対象者なし月）は承認チェック不要
+  if (!ap.complete) {
+    const nameOf = (id: string) => main.sites.find(s => s.id === id)?.name || id
+    if (ap.finalRequired) {
+      return `出面の承認が済んでいない日があるため締められません（職長承認なし ${ap.gap.foremanMissing.length}日・最終承認なし ${ap.gap.finalMissing.length}日）。\n`
+        + `${describeApprovalGap(ap.gap, nameOf)}\n出面画面で職長承認・最終承認を済ませてから締めてください`
     }
-  } else {
-    // 2026-08 分まで: 職長承認だけ（当月の職長承認済み (現場_ym_日) を収集）
-    const approved = new Set<string>()
-    const apSnap = await getDocs(collection(db, 'attendanceApprovals'))
-    apSnap.forEach(s => {
-      if (!s.id.includes(`_${ym}_`)) return
-      const d = s.data() as { foreman?: unknown }
-      if (d.foreman) approved.add(s.id)
-    })
-
-    const siteNames = new Map(main.sites.map(s => [s.id, s.name]))
-    const missing: string[] = []
-    let missingTotal = 0
-    for (const [sid, days] of needed) {
-      const md = [...days].filter(d => !approved.has(`${sid}_${ym}_${String(d)}`)).sort((a, b) => a - b)
-      if (md.length === 0) continue
-      missingTotal += md.length
-      missing.push(`${siteNames.get(sid) || sid}: ${md.slice(0, 8).join(',')}日${md.length > 8 ? ` 他${md.length - 8}日` : ''}`)
-    }
-    if (missing.length > 0) {
-      return `職長チェック（日次承認）が完了していないため締められません（未承認 ${missingTotal}日分）。\n${missing.join('\n')}\n出面画面で職長承認を完了してから締めてください`
-    }
+    return `職長チェック（日次承認）が完了していないため締められません（未承認 ${ap.gap.foremanMissing.length}日分）。\n`
+      + `${describeApprovalGap(ap.gap, nameOf)}\n出面画面で職長承認を完了してから締めてください`
   }
 
   // ③ 給与計算の自動検算で critical が残っていないこと（給与が法令準拠で計算できている）
@@ -173,38 +133,24 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
  * allowUnconfirmed で承知のうえ締められる。その場合は操作ログに名前を残す）。
  */
 async function staffConfirmPending(ym: string, org?: string): Promise<{ id: number; name: string; state: string; note?: string }[]> {
-  const { mapRawWorkers } = await import('@/lib/workers')
+  // 対象者と状態の決め方は月次集計の画面と共通（lib/attendance-confirm-server.ts staffConfirmRows・2026-10-02 一本化）
   const { getAttendanceDoc } = await import('@/lib/attendance')
-  const { confirmMonthContext, staffConfirmStateOf, STAFF_CONFIRM_STATE_LABEL } = await import('@/lib/attendance-confirm-server')
+  const { staffConfirmRows, STAFF_CONFIRM_STATE_LABEL } = await import('@/lib/attendance-confirm-server')
+  const { todayJstIso } = await import('@/lib/date-utils')
   const main = await getMainData()
-  const d = (await getAttendanceDoc(ym)) as Record<string, import('@/types').AttendanceEntry | null>
   const orgKey = org === 'hibi' || org === 'hfu' ? org : 'all'
-  const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
-  const withEntries = new Set<number>()
-  for (const [key, e] of Object.entries(d)) {
-    if (!e) continue
-    const pk = parseDKey(key)
-    if (pk.ym === ym) withEntries.add(Number(pk.wid))
-  }
-  const targets = mapRawWorkers(main.workers as unknown[]).filter(w =>
-    withEntries.has(w.id) && !!w.visaType && w.visaType !== 'none'
-    && !(w.retired && w.retired < monthStart)
-    && (orgKey === 'all' || (w.company === 'HFU' ? 'hfu' : 'hibi') === orgKey))
-  if (targets.length === 0) return []
-  const qs = await getDocs(query(collection(db, 'attConfirm'), where('ym', '==', ym)))
-  const confs = new Map(qs.docs.map(x => {
-    const c = x.data() as import('@/lib/attendance-confirm').AttConfirmDoc
-    return [c.workerId, c] as const
+  const [d, qs] = await Promise.all([
+    getAttendanceDoc(ym) as Promise<Record<string, import('@/types').AttendanceEntry | null>>,
+    getDocs(query(collection(db, 'attConfirm'), where('ym', '==', ym))),
+  ])
+  const rows = await staffConfirmRows({
+    main, d, ym, org: orgKey, todayIso: todayJstIso(),
+    confirmations: qs.docs.map(x => x.data() as import('@/lib/attendance-confirm').AttConfirmDoc),
+  })
+  return rows.filter(r => r.state !== 'ok').map(r => ({
+    id: r.workerId, name: r.name, state: STAFF_CONFIRM_STATE_LABEL[r.state],
+    ...(r.confirmation?.note ? { note: r.confirmation.note } : {}),
   }))
-  const ctx = confirmMonthContext(main.sites as unknown as import('@/lib/site-hierarchy').HierarchySite[], ym, d)
-  const out: { id: number; name: string; state: string; note?: string }[] = []
-  for (const w of targets) {
-    const c = confs.get(w.id)
-    const st = await staffConfirmStateOf(c, w, ctx)
-    if (st === 'ok') continue
-    out.push({ id: w.id, name: w.name, state: STAFF_CONFIRM_STATE_LABEL[st], ...(c?.note ? { note: c.note } : {}) })
-  }
-  return out
 }
 
 /**

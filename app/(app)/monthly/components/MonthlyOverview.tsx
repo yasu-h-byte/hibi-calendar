@@ -65,6 +65,15 @@ const num = (n: number) => (Math.round(n * 10) / 10).toLocaleString()
 
 // ─── 締めの準備カード ───────────────────────────────
 
+/** 締め前の会社の出面の承認状況（app/api/monthly の approvalStatus・判定は lib/month-approval-status.ts） */
+export interface ApprovalStatus {
+  needed: number
+  foremanMissing: number
+  finalMissing: number
+  complete: boolean
+  finalRequired: boolean
+}
+
 export interface CloseCardProps {
   org: 'hibi' | 'hfu'
   label: string
@@ -72,8 +81,10 @@ export interface CloseCardProps {
   people: number
   total: number
   locked: boolean
-  /** 本人確認の対象（外国人）と、その内訳 */
-  confirm: { target: number; ok: number; issue: number }
+  /** 出面の承認状況（締め済み・取得できなかったときは null） */
+  approval: ApprovalStatus | null
+  /** 本人確認の対象者の数と状態ごとの人数（状態はサーバが締めと同じ判定で決める） */
+  confirm: { target: number; ok: number; none: number; stale: number; issue: number; waiting: number; outside: number }
   /** 自動検算の対象人数と、異常のある人数（null＝検算しない月） */
   audit: { target: number; affected: number } | null
   /** 締めたあとに支給額が変わった人数 */
@@ -86,7 +97,18 @@ export interface CloseCardProps {
 }
 
 export function CloseCard(p: CloseCardProps) {
-  const confirmLeft = p.confirm.target - p.confirm.ok
+  const cf = p.confirm
+  const confirmLeft = cf.target - cf.ok
+  // 確認がまだの人が全員「承認待ち」（スマホにまだ確認が出ていない）なら、警告にせず待ちとして出す
+  const onlyWaiting = confirmLeft > 0 && cf.waiting === confirmLeft
+  const confirmNote = [
+    `${cf.target}名中 ${cf.ok}名が確認済み`,
+    cf.none > 0 ? `まだ ${cf.none}名` : '',
+    cf.stale > 0 ? `要再確認 ${cf.stale}名` : '',
+    cf.issue > 0 ? `連絡あり ${cf.issue}名` : '',
+    cf.waiting > 0 ? `承認待ち ${cf.waiting}名` : '',
+    cf.outside > 0 ? `期間外 ${cf.outside}名` : '',
+  ].filter(Boolean).join('・')
   return (
     <section className="bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 rounded-xl p-5 flex flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
@@ -104,19 +126,21 @@ export function CloseCard(p: CloseCardProps) {
       </div>
 
       <div className="rounded-[10px] border border-hibi-line dark:border-gray-700 divide-y divide-hibi-line dark:divide-gray-700">
-        <Check state="ok" label="出面の承認（職長・最終）" note="締めるときに全現場・全日を自動で確認します（そろっていないと締められません）" />
-        {p.confirm.target > 0 ? (
-          <Check
-            state={confirmLeft === 0 ? 'ok' : 'warn'}
-            label="本人確認"
-            note={confirmLeft === 0
-              ? `${p.confirm.target}名 全員が確認済み`
-              : `${p.confirm.target}名中 ${p.confirm.ok}名が確認済み・まだ ${confirmLeft - p.confirm.issue}名${p.confirm.issue > 0 ? `・連絡あり ${p.confirm.issue}名` : ''}`}
-            action={confirmLeft > 0 ? '一覧で見る' : undefined}
-            onAction={p.onShowConfirm}
-          />
-        ) : (
+        <ApprovalCheck locked={p.locked} approval={p.approval} />
+        {cf.target === 0 ? (
           <Check state="none" label="本人確認" note="対象の人がいません（日本人はスマホ確認の対象外）" />
+        ) : confirmLeft === 0 ? (
+          <Check state="ok" label="本人確認" note={`${cf.target}名 全員が確認済み`} />
+        ) : p.locked ? (
+          // 締めたあとはスマホに確認を出さない（締めるときに承知のうえで締めた記録が操作ログに残っている）
+          <Check state="none" label="本人確認" note={`${cf.target}名中 ${cf.ok}名が確認済みのまま締めました`} action="一覧で見る" onAction={p.onShowConfirm} />
+        ) : onlyWaiting ? (
+          // スマホに確認が出るのは、その人の出面の承認（職長・最終）がそろってから（2026-10-02 代表指摘）
+          <Check state="none" label="本人確認"
+            note={`出面の承認がそろうと、${cf.waiting}名のスマホに確認が出ます${cf.ok > 0 ? `（確認済み ${cf.ok}名）` : ''}`}
+            action="一覧で見る" onAction={p.onShowConfirm} />
+        ) : (
+          <Check state="warn" label="本人確認" note={confirmNote} action="一覧で見る" onAction={p.onShowConfirm} />
         )}
         {p.audit ? (
           <Check
@@ -158,6 +182,19 @@ export function CloseCard(p: CloseCardProps) {
       )}
     </section>
   )
+}
+
+/** 出面の承認（職長・最終）。締めと同じ判定の結果を出す（旧: 締めるまで常に緑だった） */
+function ApprovalCheck({ locked, approval }: { locked: boolean; approval: ApprovalStatus | null }) {
+  const label = '出面の承認（職長・最終）'
+  if (locked) return <Check state="ok" label={label} note="締めたときにそろっていることを確認済み" />
+  if (!approval) return <Check state="none" label={label} note="承認の状況を読み込めませんでした（締めるときにもう一度確認します）" />
+  if (approval.needed === 0) return <Check state="none" label={label} note="この月は出勤の記録がありません" />
+  if (approval.complete) return <Check state="ok" label={label} note={`全現場・全日（${approval.needed}件）の承認がそろっています`} />
+  const parts: string[] = []
+  if (approval.foremanMissing > 0) parts.push(`職長承認がまだ ${approval.foremanMissing}件`)
+  if (approval.finalMissing > 0) parts.push(`最終承認がまだ ${approval.finalMissing}件`)
+  return <Check state="warn" label={label} note={`${parts.join('・')}（現場×日。そろうまで締められません）`} />
 }
 
 function Check({ state, label, note, action, onAction }: {
@@ -265,7 +302,7 @@ export function OverviewList({
         const chips = payChips(w, ym)
         const attention = badges.some(b => b.tone === 'red')
         const rateText = (w.salary || 0) > 0 ? `月給 ${yen(w.salary!)}` : (w.hourlyRate || 0) > 0 ? `時給 ${yen(w.hourlyRate!)}` : (w.rate || 0) > 0 ? `日給 ${yen(w.rate)}` : '—'
-        const conf = w.visa !== 'none' ? staffConfirms[w.id] : undefined
+        const conf = staffConfirms[w.id]
         return (
           <div key={w.id} role="button" tabIndex={0}
             onClick={() => onOpen(w.id)}
@@ -300,11 +337,10 @@ export function OverviewList({
             </div>
             <div className="lg:text-right text-lg font-bold tabular-nums text-gray-900 dark:text-white">{(w.salaryNetPay || 0) > 0 ? yen(w.salaryNetPay!) : '—'}</div>
             <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
-              {w.visa === 'none'
-                ? <span className="text-xs text-gray-400">対象外</span>
-                : conf
-                  ? <StaffConfirmBadge info={conf} workerId={w.id} workerName={w.name} ym={ym} password={password} canResolve={canResolveConfirm} onChanged={onConfirmChanged} />
-                  : <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">まだ</span>}
+              {/* 対象者と状態はサーバが決める（締めと同じ）。対象外＝日本人・その月に記録が無い人など */}
+              {conf
+                ? <StaffConfirmBadge info={conf} workerId={w.id} workerName={w.name} ym={ym} password={password} canResolve={canResolveConfirm} onChanged={onConfirmChanged} />
+                : <span className="text-xs text-gray-400">対象外</span>}
             </div>
           </div>
         )

@@ -10,7 +10,7 @@ import { calendarSiteIdOf, type HierarchySite } from './site-hierarchy'
 import { approvalGap } from './approval-gap'
 import {
   summarizeWorkerMonth, summaryFingerprint, mainSiteOfMonth, breakShortenMinFor,
-  isConfirmStale, jstDateOf, requiredApprovalKeys,
+  isConfirmStale, jstDateOf, requiredApprovalKeys, confirmTargetYm,
   type AttConfirmDoc, type StaffMonthSummary,
 } from './attendance-confirm'
 import type { AttendanceEntry } from '@/types'
@@ -90,22 +90,137 @@ export function confirmMonthContext(sites: HierarchySite[], ym: string, d: Recor
   return { summarize, readiness, staleOf }
 }
 
-/** 月締めで見る本人確認の状態 */
-export type StaffConfirmState = 'ok' | 'none' | 'early' | 'stale' | 'issue'
+/**
+ * 本人確認の状態（2026-10-02 一本化）。
+ *
+ * スマホ（app/api/attendance/confirm の本人向け）・月次集計の一覧とカード（同 事務所向け）・月締め（app/api/monthly/lock）が
+ * すべてここで決めた状態を使う。旧: 画面ごとに数え方が違い、承認がそろう前でスマホに確認がまだ出ていない人まで
+ * 「まだ」として警告していた（代表指摘）。
+ *
+ *   ok       確認ずみ（承認がそろってから「正しい」／連絡を事務所が対応済み）
+ *   none     承認がそろってスマホに確認が出ているが、まだ押していない
+ *   early    承認がそろう前に押しただけ（数えない。スマホにもう一度確認が出ている）
+ *   stale    確認したあとで出面が変わった（スマホに再確認が出ている）
+ *   issue    本人から「まちがいがある」の連絡（未対応）
+ *   waiting  その人の出面の承認（職長・最終）がそろっていない → スマホにはまだ確認が出ない
+ *   outside  スマホで確認できる月ではない（スマホで確認できるのは締める前の「前の月」だけ）
+ */
+export type StaffConfirmState = 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside'
 export const STAFF_CONFIRM_STATE_LABEL: Record<StaffConfirmState, string> = {
   ok: '確認ずみ',
   none: '未確認',
   early: '未確認（承認前に確認しただけ）',
   stale: '要再確認（確認のあとで出面が変わった）',
   issue: '本人から「まちがいがある」の連絡（未対応）',
+  waiting: '承認待ち（職長・最終承認がそろっていないため、スマホに確認が出ていない）',
+  outside: 'スマホ確認の期間外（スマホで確認できるのは前の月だけ）',
 }
 
-export async function staffConfirmStateOf(
+/** 承認がそろってからした確認だけを数える（承認前の確認は無いものとみなす） */
+export const isValidConfirmation = (c: AttConfirmDoc | null | undefined): c is AttConfirmDoc => !!c?.afterApproval
+
+/**
+ * スマホに確認を出す月か（本人向け GET/POST と同じ条件）。
+ * 確認するのは「前の月」で、その会社が締めたあとは出さない。在籍の判定は対象者の選び方（staffConfirmTargets）で行う
+ */
+export function isPhoneConfirmMonth(ym: string, todayIso: string, locked: boolean): boolean {
+  return ym === confirmTargetYm(todayIso) && !locked
+}
+
+export interface StaffConfirmEval {
+  state: StaffConfirmState
+  readiness: ConfirmReadiness
+  /** 古くなったか（有効な確認があるときだけ意味がある） */
+  stale: boolean
+}
+
+/** 1人分の状態を決める（ここ以外で状態を決めない） */
+export async function evalStaffConfirm(
   c: AttConfirmDoc | null | undefined, worker: ConfirmWorker, ctx: ReturnType<typeof confirmMonthContext>,
-): Promise<StaffConfirmState> {
-  if (!c) return 'none'
-  if (!c.afterApproval) return 'early'
-  if (await ctx.staleOf(c, worker)) return 'stale'
-  // 連絡は事務所が「対応済み」にしたら確認ずみと同じ（出面を直した場合は上の stale で再確認になる）
-  return c.status === 'issue' && !c.resolvedAt ? 'issue' : 'ok'
+  opts: { ym: string; todayIso: string; locked: boolean },
+): Promise<StaffConfirmEval> {
+  const readiness = await ctx.readiness(worker)
+  // 本人からの連絡（未対応）は、承認の前後にかかわらず残す（事務所が中身を見て対応する）
+  const openIssue = !!c && c.status === 'issue' && !c.resolvedAt
+  if (isValidConfirmation(c)) {
+    const stale = await ctx.staleOf(c, worker)
+    if (stale) return { state: 'stale', readiness, stale }
+    return { state: openIssue ? 'issue' : 'ok', readiness, stale }
+  }
+  if (openIssue) return { state: 'issue', readiness, stale: false }
+  // ここから下は有効な確認が無い人。スマホに確認が出ているかどうかで分ける
+  const phoneMonth = isPhoneConfirmMonth(opts.ym, opts.todayIso, opts.locked)
+  const notYet = opts.ym > confirmTargetYm(opts.todayIso)   // 進行中の月（来月になると確認の月になる）
+  if (!phoneMonth && !notYet) return { state: 'outside', readiness, stale: false }
+  if (!readiness.ready) return { state: 'waiting', readiness, stale: false }
+  return { state: c ? 'early' : 'none', readiness, stale: false }
+}
+
+/**
+ * 本人確認の対象者: 外国人スタッフ（visa あり）で、その月に在籍し、出面の記録がある人。
+ * 会社（org）で絞れる。スマホに確認を出す人と同じ（記録が無い月は確認を出さない＝readiness.noEntries）
+ */
+export function staffConfirmTargets<W extends ConfirmWorker & { visaType?: string; company?: string }>(
+  workers: W[], d: Record<string, AttendanceEntry | null>, ym: string, org: 'hibi' | 'hfu' | 'all',
+): W[] {
+  const y = Number(ym.slice(0, 4)), m = Number(ym.slice(4, 6))
+  const start = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
+  const end = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+  const withEntries = new Set<number>()
+  const tail = `_${ym}_`
+  for (const [key, e] of Object.entries(d)) {
+    if (!e) continue
+    const i = key.lastIndexOf(tail)
+    if (i < 0) continue
+    const head = key.slice(0, i)
+    const wid = Number(head.slice(head.lastIndexOf('_') + 1))
+    if (Number.isFinite(wid)) withEntries.add(wid)
+  }
+  return workers.filter(w =>
+    withEntries.has(w.id) && !!w.visaType && w.visaType !== 'none'
+    && !(w.retired && w.retired < start) && !(w.hireDate && w.hireDate > end)
+    && (org === 'all' || (w.company === 'HFU' ? 'hfu' : 'hibi') === org))
+}
+
+export interface StaffConfirmRow {
+  workerId: number
+  name: string
+  org: 'hibi' | 'hfu'
+  state: StaffConfirmState
+  /** その人の承認で足りない「現場×日」の数（waiting のときの説明用） */
+  foremanMissing: number
+  finalMissing: number
+  /** 確認の記録（あれば）。画面のバッジと連絡の中身に使う */
+  confirmation: AttConfirmDoc | null
+}
+
+/** その月の本人確認の一覧（対象者全員・状態つき）。月次集計の画面と月締めが同じものを使う */
+export async function staffConfirmRows(args: {
+  main: { workers?: unknown[]; sites?: unknown[]; locks?: Record<string, unknown> }
+  d: Record<string, AttendanceEntry | null>
+  ym: string
+  org: 'hibi' | 'hfu' | 'all'
+  todayIso: string
+  confirmations: AttConfirmDoc[]
+}): Promise<StaffConfirmRow[]> {
+  const { mapRawWorkers } = await import('./workers')
+  const { isMonthLockedInLocks } = await import('./locks')
+  const { main, d, ym, org, todayIso } = args
+  const targets = staffConfirmTargets(mapRawWorkers((main.workers || []) as unknown[]), d, ym, org)
+  if (targets.length === 0) return []
+  const confs = new Map(args.confirmations.map(c => [c.workerId, c] as const))
+  const ctx = confirmMonthContext((main.sites || []) as unknown as HierarchySite[], ym, d)
+  const rows = await Promise.all(targets.map(async w => {
+    const o: 'hibi' | 'hfu' = w.company === 'HFU' ? 'hfu' : 'hibi'
+    const c = confs.get(w.id) || null
+    const ev = await evalStaffConfirm(c, w, ctx, { ym, todayIso, locked: isMonthLockedInLocks(main.locks, ym, o) })
+    // 記録が1件も無い月は対象外（スマホにも出さない）。対象者の選び方と同じだが、入社前・退職後だけの記録はここで落ちる
+    if (ev.readiness.noEntries && !c) return null
+    return {
+      workerId: w.id, name: w.name, org: o, state: ev.state,
+      foremanMissing: ev.readiness.foremanMissing, finalMissing: ev.readiness.finalMissing,
+      confirmation: c,
+    } satisfies StaffConfirmRow
+  }))
+  return rows.filter((r): r is StaffConfirmRow => r !== null)
 }

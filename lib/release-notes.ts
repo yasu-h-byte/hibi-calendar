@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261002_close_card_approval',
+    title: '月次集計の「締めの準備」が、出面の承認の実際の状況を出すようになりました',
+    content:
+      '「出面の承認（職長・最終）」はこれまで締めるまで常に緑のチェックでしたが、承認がまだの「現場×日」があれば件数を黄色で出すようにしました。'
+      + 'また本人確認は、その人の出面の承認がそろうまでスタッフのスマホに出ないので、その間は「承認待ち」として警告にしません。'
+      + '一覧の本人確認の欄も、確認ずみ／まだ／承認待ち／期間外／要再確認／連絡あり を、締めるときのチェックと同じ判定で出すようにしました。',
+    category: 'fix',
+    publishedAt: '2026-10-02T09:30:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261001_jp_grant_deemed',
     title: '日本人の有給の付与日数の数え方を直しました（梶原さん 12日→14日）',
     content:
