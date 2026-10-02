@@ -518,10 +518,15 @@ export async function setAttendanceEntry(
     await updateDoc(docRef, updates)
   } else {
     await setDoc(docRef, { d: { [key]: entry } }, { merge: true })
-  
+  }
+
   // ── 次期レコードの繰越を追随再計算（2026-09-02・lib/leave-carry.ts）──
   //   有給(p)を書いた／消した日が属する付与期の「次の付与レコード」の繰越を計算し直す。
   //   半自動付与が付与日の30日前に作った繰越や、承認済み未来有給の変更に追随させる。
+  //   ⚠️ 2026-10-02 まで閉じ括弧のずれでこの処理が else（deleteFields なし）の中にあり、
+  //   deleteFields を渡す呼び出し元（grid/staff/foreman/leave-request/leave）では走っていなかった。
+  //   deleteFields には有給以外の保存でも 'p' が入るため、重い読み取り（最大13か月分の出面）は
+  //   recomputeNextCarryOver 側の事前チェック（キャッシュ済み main で「書き換える次期が無い」を判定）で省く。
   if ((entry.p ?? 0) > 0 || options.deleteFields?.includes('p')) {
     try {
       const { recomputeNextCarryOver } = await import('./leave-carry')
@@ -530,7 +535,6 @@ export async function setAttendanceEntry(
       console.warn('[setAttendanceEntry] 繰越再計算に失敗（出面の保存は完了）:', e)
     }
   }
-}
 }
 
 // ────────────────────────────────────────
