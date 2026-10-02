@@ -9,18 +9,23 @@
  */
 import { useState } from 'react'
 
+/** 本人確認の1人分（app/api/attendance/confirm の事務所向け GET）。状態はサーバが月締めと同じ判定で決める */
 export interface StaffConfirmInfo {
-  status: 'ok' | 'issue'
+  org: 'hibi' | 'hfu'
+  state: 'ok' | 'none' | 'early' | 'stale' | 'issue' | 'waiting' | 'outside'
+  /** その人の承認で足りない「現場×日」（waiting の説明用） */
+  foremanMissing: number
+  finalMissing: number
+  /** 以下は確認の記録があるときだけ */
+  status?: 'ok' | 'issue'
   note?: string
-  at: string
-  stale?: boolean
-  early?: boolean
+  at?: string
   resolvedAt?: string
   resolvedBy?: string
   reply?: string
 }
 
-const fmt = (iso: string) => new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '')
 
 export default function StaffConfirmBadge({
   info, workerId, workerName, ym, password, canResolve, onChanged,
@@ -39,24 +44,34 @@ export default function StaffConfirmBadge({
 
   const isIssue = info.status === 'issue'
   const resolved = isIssue && !!info.resolvedAt
-  const kind = info.stale ? 'stale'
-    : isIssue ? (resolved ? 'resolved' : 'issue')
-    : info.early ? 'early' : 'ok'
+  // 状態はサーバが決めたもの（info.state）をそのまま出す。連絡が対応済みの人だけ「確認ずみ」を見分けて出す
+  const kind = info.state === 'ok' && resolved ? 'resolved' : info.state
   const cls = {
-    early: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+    none: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+    waiting: 'bg-gray-50 text-gray-500 border border-dashed border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600',
+    outside: 'bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
+    early: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
     stale: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
     ok: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
     resolved: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',
     issue: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
   }[kind]
   const label = {
-    early: '本人 承認前に確認', stale: '本人 要再確認', ok: '本人確認 ✓', resolved: '連絡 対応済み', issue: '⚠ 本人から連絡あり',
+    none: 'まだ', waiting: '承認待ち', outside: '期間外',
+    early: 'まだ（承認前に確認）', stale: '要再確認', ok: '確認ずみ ✓', resolved: '連絡 対応済み', issue: '⚠ 本人から連絡あり',
   }[kind]
+  const missing = [
+    info.foremanMissing > 0 ? `職長承認がまだ ${info.foremanMissing}件` : '',
+    info.finalMissing > 0 ? `最終承認がまだ ${info.finalMissing}件` : '',
+  ].filter(Boolean).join('・')
   const title = {
-    early: `承認がそろう前に「正しい」と押した記録です（${fmt(info.at)}）。職長承認と最終承認がそろうと、本人のスマホにもう一度確認が出ます。`,
+    none: '職長承認と最終承認がそろい、本人のスマホに確認が出ています。本人がまだ押していません。',
+    waiting: `この人の出面の承認がそろっていないため、本人のスマホにはまだ確認が出ていません（${missing || '承認待ち'}・現場×日）。承認がそろうと確認が出ます。`,
+    outside: 'スマホで確認できるのは、締める前の前の月だけです。この月は本人のスマホに確認が出ません。',
+    early: `承認がそろう前に「正しい」と押した記録です（${fmt(info.at)}）。数えません。本人のスマホにもう一度確認が出ています。`,
     stale: `本人が確認したあとで出面が変わりました（確認: ${fmt(info.at)}）。本人のスマホに「もう一度確認してください」と出ています。`,
     ok: `本人がスマホで「正しい」と確認しました（${fmt(info.at)}）`,
-    resolved: `本人の連絡は対応済みです（${info.resolvedBy || ''} ${info.resolvedAt ? fmt(info.resolvedAt) : ''}）。押すと中身を見られます。`,
+    resolved: `本人の連絡は対応済みです（${info.resolvedBy || ''} ${fmt(info.resolvedAt)}）。押すと中身を見られます。`,
     issue: `本人から「まちがいがある」と連絡がありました（${fmt(info.at)}）。押すと中身を見て対応済みにできます。`,
   }[kind]
 
@@ -77,7 +92,7 @@ export default function StaffConfirmBadge({
     }
   }
 
-  const badgeCls = `ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold align-middle ${cls}`
+  const badgeCls = `ml-1.5 text-[10px] whitespace-nowrap px-1.5 py-0.5 rounded-full font-bold align-middle ${cls}`
   return (
     <>
       {isIssue ? (
@@ -93,7 +108,7 @@ export default function StaffConfirmBadge({
               <button onClick={() => setOpen(false)} className="text-2xl leading-none text-gray-400 hover:text-gray-600">&times;</button>
             </div>
             <div className="rounded-lg bg-red-50 dark:bg-red-900/20 p-3 text-sm whitespace-pre-wrap">{info.note || '（内容なし）'}</div>
-            <p className="text-xs text-gray-500">送られた日時: {fmt(info.at)}{info.early ? '（職長承認・最終承認がそろう前の連絡）' : ''}</p>
+            <p className="text-xs text-gray-500">送られた日時: {fmt(info.at)}{info.state === 'waiting' ? '（職長承認・最終承認がそろう前の連絡）' : ''}</p>
             {resolved ? (
               <div className="rounded-lg bg-sky-50 dark:bg-sky-900/20 p-3 text-sm">
                 <b>対応済み</b>（{info.resolvedBy} ／ {fmt(info.resolvedAt!)}）

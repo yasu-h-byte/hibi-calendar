@@ -3,7 +3,7 @@ import { getApiAuthUser, requireCap } from '@/lib/auth'
 import { db } from '@/lib/firebase'
 import { doc, updateDoc, setDoc, getDocs, collection, query, where } from '@/lib/fsdb'
 import { logActivity } from '@/lib/activity'
-import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances, parseDKey } from '@/lib/compute'
+import { getMainData, getAttData, computeMonthly, loadMonthlyAllowances } from '@/lib/compute'
 import { getMonthlyCalendars } from '@/lib/repositories/calendarRepo'
 import { validatePayrolls, type PayrollSnapshot } from '@/lib/payroll-validator'
 import { getAllActiveHomeLeaves } from '@/lib/homeLeave'
@@ -133,38 +133,24 @@ async function checkReadyToLock(ym: string, org?: string): Promise<string | null
  * allowUnconfirmed で承知のうえ締められる。その場合は操作ログに名前を残す）。
  */
 async function staffConfirmPending(ym: string, org?: string): Promise<{ id: number; name: string; state: string; note?: string }[]> {
-  const { mapRawWorkers } = await import('@/lib/workers')
+  // 対象者と状態の決め方は月次集計の画面と共通（lib/attendance-confirm-server.ts staffConfirmRows・2026-10-02 一本化）
   const { getAttendanceDoc } = await import('@/lib/attendance')
-  const { confirmMonthContext, staffConfirmStateOf, STAFF_CONFIRM_STATE_LABEL } = await import('@/lib/attendance-confirm-server')
+  const { staffConfirmRows, STAFF_CONFIRM_STATE_LABEL } = await import('@/lib/attendance-confirm-server')
+  const { todayJstIso } = await import('@/lib/date-utils')
   const main = await getMainData()
-  const d = (await getAttendanceDoc(ym)) as Record<string, import('@/types').AttendanceEntry | null>
   const orgKey = org === 'hibi' || org === 'hfu' ? org : 'all'
-  const monthStart = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`
-  const withEntries = new Set<number>()
-  for (const [key, e] of Object.entries(d)) {
-    if (!e) continue
-    const pk = parseDKey(key)
-    if (pk.ym === ym) withEntries.add(Number(pk.wid))
-  }
-  const targets = mapRawWorkers(main.workers as unknown[]).filter(w =>
-    withEntries.has(w.id) && !!w.visaType && w.visaType !== 'none'
-    && !(w.retired && w.retired < monthStart)
-    && (orgKey === 'all' || (w.company === 'HFU' ? 'hfu' : 'hibi') === orgKey))
-  if (targets.length === 0) return []
-  const qs = await getDocs(query(collection(db, 'attConfirm'), where('ym', '==', ym)))
-  const confs = new Map(qs.docs.map(x => {
-    const c = x.data() as import('@/lib/attendance-confirm').AttConfirmDoc
-    return [c.workerId, c] as const
+  const [d, qs] = await Promise.all([
+    getAttendanceDoc(ym) as Promise<Record<string, import('@/types').AttendanceEntry | null>>,
+    getDocs(query(collection(db, 'attConfirm'), where('ym', '==', ym))),
+  ])
+  const rows = await staffConfirmRows({
+    main, d, ym, org: orgKey, todayIso: todayJstIso(),
+    confirmations: qs.docs.map(x => x.data() as import('@/lib/attendance-confirm').AttConfirmDoc),
+  })
+  return rows.filter(r => r.state !== 'ok').map(r => ({
+    id: r.workerId, name: r.name, state: STAFF_CONFIRM_STATE_LABEL[r.state],
+    ...(r.confirmation?.note ? { note: r.confirmation.note } : {}),
   }))
-  const ctx = confirmMonthContext(main.sites as unknown as import('@/lib/site-hierarchy').HierarchySite[], ym, d)
-  const out: { id: number; name: string; state: string; note?: string }[] = []
-  for (const w of targets) {
-    const c = confs.get(w.id)
-    const st = await staffConfirmStateOf(c, w, ctx)
-    if (st === 'ok') continue
-    out.push({ id: w.id, name: w.name, state: STAFF_CONFIRM_STATE_LABEL[st], ...(c?.note ? { note: c.note } : {}) })
-  }
-  return out
 }
 
 /**

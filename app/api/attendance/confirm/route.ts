@@ -21,7 +21,7 @@ import { todayJstIso } from '@/lib/date-utils'
 import { requireCap } from '@/lib/auth'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { confirmTargetYm, summaryFingerprint, type AttConfirmDoc } from '@/lib/attendance-confirm'
-import { confirmMonthContext } from '@/lib/attendance-confirm-server'
+import { confirmMonthContext, isPhoneConfirmMonth, isValidConfirmation, staffConfirmRows } from '@/lib/attendance-confirm-server'
 import type { AttendanceEntry } from '@/types'
 
 async function loadByToken(token: string) {
@@ -40,7 +40,8 @@ const monthRange = (ym: string) => {
 function staffTargetYm(main: { locks?: Record<string, boolean> }, worker: { hireDate?: string; retired?: string; company?: string }, todayIso: string): string | null {
   const ym = confirmTargetYm(todayIso)
   const org = worker.company === 'HFU' ? 'hfu' : 'hibi'
-  if (isMonthLockedInLocks(main.locks, ym, org)) return null   // 締めたあとは出さない
+  // 締めたあとは出さない（事務所の一覧の「期間外」と同じ判定: isPhoneConfirmMonth）
+  if (!isPhoneConfirmMonth(ym, todayIso, isMonthLockedInLocks(main.locks, ym, org))) return null
   const r = monthRange(ym)
   if (worker.hireDate && worker.hireDate > r.end) return null
   if (worker.retired && worker.retired < r.start) return null
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
       if (ready.noEntries) return NextResponse.json({ ym: null })
       // 承認前にした確認（2026-09-30 の初日分など）は数えない＝もう一度確認してもらう
       const raw = confSnap.exists() ? (confSnap.data() as AttConfirmDoc) : null
-      const confirmation = raw?.afterApproval ? raw : null
+      const confirmation = isValidConfirmation(raw) ? raw : null
       if (!ready.ready && !confirmation) {
         return NextResponse.json({ ym, waiting: true })
       }
@@ -75,21 +76,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ym, summary, confirmation, stale, ready: ready.ready })
     }
 
-    // 事務所向け一覧（確認したあとで出面が変わった人は stale: true → 月次集計で「要再確認」。承認前の確認は early: true）
+    // 事務所向け一覧（月次集計の一覧・締めの準備カード）: 対象者全員を状態つきで返す。
+    //   状態は月締めと同じ staffConfirmRows（lib/attendance-confirm-server.ts）で決める（2026-10-02 一本化）。
+    //   旧: 確認の記録がある人だけを返し、画面側で「記録なし＝まだ」と数えていた
+    //       → 承認がそろう前でスマホに確認が出ていない人まで「まだ」の警告になっていた
     const denied = await requireCap(request, 'monthly.view')
     if (denied) return denied
     const ym = request.nextUrl.searchParams.get('ym') || ''
     if (!/^\d{6}$/.test(ym)) return NextResponse.json({ error: 'ym required' }, { status: 400 })
-    const qs = await getDocs(query(collection(db, 'attConfirm'), where('ym', '==', ym)))
-    const confs = qs.docs.map(x => x.data() as AttConfirmDoc)
-    if (confs.length === 0) return NextResponse.json({ ym, items: [] })
-    const [main, d] = await Promise.all([getMainData(), getAttendanceDoc(ym) as Promise<Record<string, AttendanceEntry | null>>])
-    const workers = mapRawWorkers(main.workers || [])
-    const ctx = confirmMonthContext((main.sites || []) as unknown as HierarchySite[], ym, d)
-    const items = await Promise.all(confs.map(async c => {
-      const w = workers.find(x => x.id === c.workerId)
-      const stale = w ? await ctx.staleOf(c, w) : false
-      return { ...c, stale, early: !c.afterApproval }
+    const [main, d, qs] = await Promise.all([
+      getMainData(),
+      getAttendanceDoc(ym) as Promise<Record<string, AttendanceEntry | null>>,
+      getDocs(query(collection(db, 'attConfirm'), where('ym', '==', ym))),
+    ])
+    const rows = await staffConfirmRows({
+      main, d, ym, org: 'all', todayIso: todayJstIso(),
+      confirmations: qs.docs.map(x => x.data() as AttConfirmDoc),
+    })
+    const items = rows.map(r => ({
+      workerId: r.workerId, org: r.org, state: r.state,
+      foremanMissing: r.foremanMissing, finalMissing: r.finalMissing,
+      ...(r.confirmation ? {
+        status: r.confirmation.status, note: r.confirmation.note, at: r.confirmation.at,
+        resolvedAt: r.confirmation.resolvedAt, resolvedBy: r.confirmation.resolvedBy, reply: r.confirmation.reply,
+      } : {}),
     }))
     return NextResponse.json({ ym, items })
   } catch (e) {

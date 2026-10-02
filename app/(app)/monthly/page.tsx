@@ -300,13 +300,10 @@ type TabKey = typeof TABS[number]['key']
 //  Component
 // ────────────────────────────────────────
 
-/** 本人確認が「確認ずみ」か（2026-10-02 修正）。
- *  承認がそろう前に押した確認（early）と、確認のあとで出面が変わったもの（stale）は数えない。
- *  旧は status==='ok' だけで数えていたため、9月の最終承認が終わる前の確認まで「確認済み」に入っていた
- *  （締めの判定 /api/monthly/lock の staffConfirmStateOf とそろえる） */
-function isConfirmOk(c: StaffConfirmInfo | undefined): boolean {
-  if (!c || c.early || c.stale) return false
-  return c.status === 'ok' || !!c.resolvedAt
+/** 本人確認の対象で、まだ確認ずみでない人（一覧の「本人確認まだ」の絞り込み・締めで一覧に出る人と同じ）。
+ *  状態はサーバ（lib/attendance-confirm-server.ts staffConfirmRows）が月締めと同じ判定で決める（2026-10-02 一本化） */
+function isConfirmPending(c: StaffConfirmInfo | undefined): boolean {
+  return !!c && c.state !== 'ok'
 }
 
 export default function MonthlyPage() {
@@ -1076,9 +1073,9 @@ function MonthlyPageInner() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {(['hibi', 'hfu'] as const).map(org => {
             const ws = data.workers.filter(w => w.org === org)
-            const foreign = ws.filter(w => w.visa !== 'none')
-            const confOk = foreign.filter(w => isConfirmOk(staffConfirms[w.id])).length
-            const confIssue = foreign.filter(w => { const c = staffConfirms[w.id]; return !!c && c.status === 'issue' && !c.resolvedAt }).length
+            // 本人確認の対象者と状態はサーバが決める（締めと同じ）。対象外の人は staffConfirms に入らない
+            const confRows = Object.values(staffConfirms).filter(c => c.org === org)
+            const confCount = (st: StaffConfirmInfo['state']) => confRows.filter(c => c.state === st).length
             const auditTargets = ws.filter(w => w.visa && w.visa !== 'none' && (w.hourlyRate || 0) > 0 && !(w.salary && w.salary > 0) && !w.useOldRules)
             const auditAll = ym >= '202605' ? validatePayrolls(ws as unknown as PayrollSnapshot[]) : null
             const diff = data.snapshotDiffs?.find(d => d.org === org)
@@ -1093,7 +1090,10 @@ function MonthlyPageInner() {
                 total={ws.reduce((sum, w) => sum + (w.salaryNetPay || 0), 0)}
                 locked={org === 'hibi' ? data.lockedHibi : data.lockedHfu}
                 approval={data.approvalStatus?.[org] ?? null}
-                confirm={{ target: foreign.length, ok: confOk, issue: confIssue }}
+                confirm={{
+                  target: confRows.length, ok: confCount('ok'), none: confCount('none') + confCount('early'),
+                  stale: confCount('stale'), issue: confCount('issue'), waiting: confCount('waiting'), outside: confCount('outside'),
+                }}
                 audit={auditAll ? { target: auditTargets.length, affected: auditAll.affectedWorkerIds.length } : null}
                 changedAfterLock={diff?.count || 0}
                 canClose={canResolveConfirm}
@@ -1234,7 +1234,7 @@ function MonthlyPageInner() {
               <Segment value={listFilter} onChange={setListFilter} items={[
                   ['all', 'すべて'],
                   ['attention', `要確認だけ ${tabFilteredWorkers.filter(w => needsAttention(w, new Set(validationOnTab.affectedWorkerIds))).length}`],
-                  ['unconfirmed', `本人確認まだ ${tabFilteredWorkers.filter(w => w.visa !== 'none' && !isConfirmOk(staffConfirms[w.id])).length}`],
+                  ['unconfirmed', `本人確認まだ ${tabFilteredWorkers.filter(w => isConfirmPending(staffConfirms[w.id])).length}`],
                 ]} />
               <SearchBox value={listQuery} onChange={setListQuery} />
             </>
@@ -1248,7 +1248,7 @@ function MonthlyPageInner() {
         let list = tabFilteredWorkers
         if (q) list = list.filter(w => w.name.replace(/\s/g, '').includes(q))
         if (listFilter === 'attention') list = list.filter(w => needsAttention(w, auditIds))
-        if (listFilter === 'unconfirmed') list = list.filter(w => w.visa !== 'none' && !isConfirmOk(staffConfirms[w.id]))
+        if (listFilter === 'unconfirmed') list = list.filter(w => isConfirmPending(staffConfirms[w.id]))
         // 要確認を上に、そのあと会社・名前の順
         const sorted = [...list].sort((a, b) =>
           Number(needsAttention(b, auditIds)) - Number(needsAttention(a, auditIds))
@@ -1532,7 +1532,7 @@ function MonthlyPageInner() {
                           </span>
                         )}
                         {/* 2026-09-30: 本人の出面確認（スタッフのスマホ）。連絡は押すと中身を見て対応済みにできる */}
-                        {w.visa !== 'none' && staffConfirms[w.id] && (
+                        {staffConfirms[w.id] && (
                           <StaffConfirmBadge info={staffConfirms[w.id]} workerId={w.id} workerName={w.name} ym={ym}
                             password={password} canResolve={canResolveConfirm} onChanged={() => setConfirmsVersion(v => v + 1)} />
                         )}
