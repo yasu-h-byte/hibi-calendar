@@ -28,6 +28,18 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261002_foreman_pay_guard',
+    title: '職長は給与・賃金の画面を開けないようにしました',
+    content:
+      '職長がアドレスを直接入れると、人員マスタ・賃金・月次集計などの画面が開けていました（金額の多くは隠れていましたが、一部が見える状態でした）。'
+      + '今後は権限の無い画面は「この画面は見られません」と出ます。職長が使う出面入力・就業カレンダー・評価入力・資料一覧はこれまで通りです。'
+      + 'あわせて、資料一覧から開けるマニュアル・お知らせに載っていた個人の給与額を、仮の金額の例に置き換えました。',
+    category: 'fix',
+    publishedAt: '2026-10-02T23:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261002_staff_homescreen',
     title: 'マイページをホーム画面に追加すると、ログイン画面が出ていたのを直しました',
     content:

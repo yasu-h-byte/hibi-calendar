@@ -38,6 +38,9 @@ function changesPayFields(updates: Record<string, unknown>, before: Record<strin
   })
 }
 
+/** 給与を見られない人（職長）に返してよい項目（名前・所属・在留資格・職種・入社日など。給与・家族・生年月日は返さない） */
+const WORKER_PUBLIC_KEYS = ['id', 'name', 'nameVi', 'company', 'visaType', 'jobType', 'hireDate', 'retired', 'dispatchTo', 'dispatchFrom', 'canDrive'] as const
+
 export async function GET(request: NextRequest) {
   // auth: any-login — 中身は役割で絞る（給与欄は workers.view、トークンは workers.edit のみ）
   if (!await checkApiAuth(request)) {
@@ -51,10 +54,13 @@ export async function GET(request: NextRequest) {
     const role = await getCallerPermRole(request)
     const canSeePay = roleCan(role, 'workers.view')
     const canSeeToken = roleCan(role, 'workers.edit')
-    const PAY_KEYS = ['rate', 'hourlyRate', 'hourlyRateFrom', 'prevHourlyRate', 'salary', 'otMul', 'jpGrade', 'jpStep', 'payrollNo', 'children', 'nonSmoker', 'birthDate', 'useOldRules'] as const
+    // 2026-10-02: 給与を見られない人（職長）には「返してよい項目」だけを返す（許可リスト）。
+    //   旧: 消す項目を並べる方式で、改定前の日額（prevRate）・月給（prevSalary）・号俸（prevJpStep）・
+    //   改定予定（scheduledChanges / appliedChanges の金額）が消し漏れていた。給与の項目を足しても漏れないように逆にした
     const shaped = workers.map(w => {
-      const o: Record<string, unknown> = { ...w }
-      if (!canSeePay) for (const k of PAY_KEYS) delete o[k]
+      const o: Record<string, unknown> = canSeePay
+        ? { ...w }
+        : Object.fromEntries(WORKER_PUBLIC_KEYS.filter(k => k in w).map(k => [k, (w as unknown as Record<string, unknown>)[k]]))
       if (!canSeeToken) delete o.token
       return o
     })

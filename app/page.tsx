@@ -38,7 +38,8 @@ export default function LoginPage() {
       if (data.superAdmin || data.directLogin) {
         // パスワードではなくサーバーが発行した通行証を保存して API に送る（2026-09-26）
         localStorage.setItem('hibi_auth', JSON.stringify({ password: data.sessionToken || password, user: data.user }))
-        router.push('/dashboard')
+        // 職長はダッシュボードを見られない（lib/page-guard.ts）ので、名前を選ぶログインと同じ就業カレンダーへ
+        router.push(data.user?.role === 'foreman' ? '/calendar' : '/dashboard')
         return
       }
       setWorkers(data.workers)
