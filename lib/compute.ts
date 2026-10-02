@@ -653,10 +653,30 @@ export function isDispatchedAt(w: RawWorker | undefined, ym: string): boolean {
 //   1) ワーカー自身の dispatchTo（開始月以降）→ 全現場で出向扱い
 //   2) 現場ごとの dispatch 配列に含まれていれば出向扱い
 export function isDispatched(main: MainData, workerId: number, siteId: string, ym: string): boolean {
-  const w = main.workers.find(x => x.id === workerId)
-  if (isDispatchedAt(w, ym)) return true
-  const assign = getAssign(main, siteId, ym)
-  return assign.dispatch.includes(workerId)
+  return createDispatchChecker(main)(workerId, siteId, ym)
+}
+
+/**
+ * 「出向者か」の判定をまとめて行う関数を返す（2026-10-02 総合点検）。
+ *
+ * 決まりは isDispatched と同じ（人ごとの dispatchTo ＝開始月以降は全現場で出向 ／ 現場ごとの dispatch 配列）。
+ * 出面を1件ずつ回す集計（compute・calcTobiEquiv・computeMonthly）から使うので、
+ * 現場×月の配置（getAssign は最大12か月さかのぼる）と人の検索を覚えておく。
+ *
+ * 旧: 原価側（compute・computeMonthly）は人ごとの dispatchTo だけ、売上側（calcTobiEquiv の鳶換算人工）は
+ *   現場ごとの dispatch 配列だけを見ていた。片方にしか登録が無い人は、原価からは引かれるのに
+ *   売上の概算（鳶換算人工）には数えられる（またはその逆）ので、現場の粗利が実際より良く（悪く）出ていた。
+ */
+export function createDispatchChecker(main: MainData): (workerId: number, siteId: string, ym: string) => boolean {
+  const workerById = new Map(main.workers.map(w => [w.id, w]))
+  const listCache = new Map<string, number[]>()
+  return (workerId, siteId, ym) => {
+    if (isDispatchedAt(workerById.get(workerId), ym)) return true
+    const ck = `${siteId}_${ym}`
+    let list = listCache.get(ck)
+    if (!list) { list = getAssign(main, siteId, ym).dispatch; listCache.set(ck, list) }
+    return list.includes(workerId)
+  }
 }
 
 // ワーカーが指定YM時点で常時出向中かを判定
@@ -779,16 +799,10 @@ export function calcTobiEquiv(
   // 月別に集計（期間別レート適用のため）
   const monthly: Record<string, { tw: number; dw: number; toe: number; doe: number }> = {}
 
-  // 出向者リスト（全現場分をキャッシュ）
-  const dispatchCache: Record<string, number[]> = {}
-  function getDispatchList(sid: string, ym: string): number[] {
-    const ck = `${sid}_${ym}`
-    if (!(ck in dispatchCache)) {
-      const a = getAssign(main, sid, ym)
-      dispatchCache[ck] = a.dispatch
-    }
-    return dispatchCache[ck]
-  }
+  // 出向者の判定は isDispatched と同じ決まり（人ごとの dispatchTo ＋ 現場ごとの dispatch 配列）。
+  //   2026-10-02 総合点検: 旧はここだけ現場ごとの配列しか見ておらず、人ごとに出向を登録した人が
+  //   原価からは引かれるのに鳶換算人工（売上の概算）には数えられていた
+  const isDispatchedHere = createDispatchChecker(main)
 
   // 個人
   for (const [k, v] of Object.entries(attD)) {
@@ -802,8 +816,7 @@ export function calcTobiEquiv(
     const w = main.workers.find(x => x.id === parseInt(pk.wid))
     if (!w) continue
     // 出向者: 鳶換算人工から除外
-    const dispList = getDispatchList(pk.sid, pk.ym)
-    if (dispList.includes(w.id)) continue
+    if (isDispatchedHere(w.id, pk.sid, pk.ym)) continue
     // 休業補償(0.6): 外国人の会社都合休業 → 鳶換算から除外
     const isComp = (v.w === 0.6 && w.visa !== 'none')
     if (isComp) continue
@@ -907,6 +920,8 @@ export function compute(
   // ─── 個人の出面データ処理 ───
   // 同日複数現場の有給(p)を1日として数えるための dedup（computeMonthly の _plDaySeen と同扱い）
   const plDaySeenCompute = new Set<string>()
+  // 出向者の判定（人ごとの dispatchTo ＋ 現場ごとの dispatch 配列・calcTobiEquiv と同じ決まり。2026-10-02 総合点検）
+  const isDispatchedHere = createDispatchChecker(main)
   for (const [k, v] of Object.entries(attD)) {
     if (!v) continue
     const pk = parseDKey(k)
@@ -926,8 +941,10 @@ export function compute(
 
     const swk = `${sid}_${w.id}`
 
-    // この社員がこの月時点で出向中か（dispatchFrom 以降のみ true）
-    const dispatchedThisYm = isDispatchedAt(w, entryYm)
+    // この社員がこの現場・この月に出向扱いか（人ごとの dispatchTo は dispatchFrom 以降だけ／現場ごとの dispatch 配列）
+    //   2026-10-02 総合点検: 旧は人ごとの dispatchTo だけ。現場の dispatch 配列にだけ入っている人は
+    //   鳶換算人工（売上側）からは除かれるのに、原価からは引かれなかった
+    const dispatchedThisYm = isDispatchedHere(w.id, sid, entryYm)
 
     // 有給: 人工としてはカウントしないがworker集計に有給日数を記録
     if (v.p) {
@@ -1203,6 +1220,21 @@ export function stepPeriod(mode: string, y: number, m: number, dir: number): { y
 //  compute()の結果を使いつつ、ワーカー別の詳細表示に整形
 // ────────────────────────────────────────
 
+/**
+ * 給与チェックの注意点（2026-10-02 総合点検）。**支給額は変えない。**
+ *
+ * 賃金の決まりを変えずに「このままだと不足払い・取り違えになり得る」ことを、締める前に森田さんが
+ * 月次集計の帯（給与チェック＝lib/payroll-validator.ts が warning として出す）と計算根拠で気づけるようにする。
+ * 過去の締め済み月の見え方を変えないため、PAY_NOTES_FROM_YM（2026年9月分）より前の月には付けない。
+ */
+export interface PayNote {
+  code: 'belowWorkedDays' | 'jpWeekOver40' | 'crossSiteCalendar' | 'midMonthRateOt' | 'blankDays' | 'oldRuleExtraWork' | 'jpMonthlyOffDayWork'
+  message: string
+  /** 目安の金額（円）。無い注意点もある */
+  amount?: number
+}
+export const PAY_NOTES_FROM_YM = '202609'
+
 export interface WorkerMonthly {
   id: number
   name: string
@@ -1248,7 +1280,9 @@ export interface WorkerMonthly {
   _entryDaySeen?: Set<string>
   plDays: number
   plUsed: number
+  /** 「欠」の日数（同じ日の2現場は1日・2026-10-02） */
   restDays: number
+  _restDaySeen?: Set<string>
   /** 保証から引く本人の欠勤（カレンダーの仕事の日に「欠」の日数・2026-09-30） */
   personalAbsenceDays?: number
   _absenceDaySeen?: Set<string>
@@ -1348,6 +1382,21 @@ export interface WorkerMonthly {
   allowanceDays?: number   // 日当の対象日数
   driveAllowance?: number  // 運転手当（課税。割増賃金基礎への算入は社労士レビュー後）
   driveLegs?: number       // 運転した便数（行き・帰り合計）
+  /** 給与チェックの注意点（支給額は変えない・2026年9月分〜・2026-10-02）。無い月は付かない */
+  payNotes?: PayNote[]
+  /** 日曜に出勤した日（注意点用・全員） */
+  _sundayWorkDays?: Set<number>
+  /** 日本人: 日ごとの日勤の時間（人工×8h。週40時間超の注意点用） */
+  _jpDayHours?: Map<number, number>
+  /** 旧ルール: 計算に使った1日あたりの賃金（日給。注意点用） */
+  _oldRuleDayRate?: number
+  /**
+   * 日本人の現場都合休（出面の 0.6）の日数（2026-10-02 総合点検）。
+   * 日本人の 0.6 は compDays に入らず workDays に 0.6 日として入る（基本給 = 日額×0.6）ので、
+   * 月次集計Excel の「補償日」列が日本人は常に 0 だった。表示用に日数だけ別に持つ（支給額には使わない）
+   */
+  jpCompDays?: number
+  _jpCompDaySeen?: Set<string>
 }
 
 export interface SubconMonthly {
@@ -1520,7 +1569,12 @@ export function computeMonthly(
     // ★ 帰国中は実出勤にも欠勤にもカウントしない
     if (entry.hk) continue
     if (entry.r) {
-      wm.restDays += 1
+      // 「欠」は1日に1回だけ数える（2026-10-02 総合点検）。旧はエントリ（現場）ごとに数えていたので、
+      //   同じ日に2現場へ「欠」が入ると、日本人月給制の欠勤控除が2日分引かれていた
+      //   （有給・試験・補償日の _plDaySeen 等と同じ日単位の重複除去）
+      if (!wm._restDaySeen) wm._restDaySeen = new Set<string>()
+      const restKey = `${pk.ym}_${pk.day}`
+      if (!wm._restDaySeen.has(restKey)) { wm._restDaySeen.add(restKey); wm.restDays += 1 }
       // 保証から引く「本人の欠勤」は、カレンダーで仕事の日に休んだ分だけ（2026-09-30 総点検で修正）。
       //   祝日・所定休日に本人が「休み」を入れても欠勤ではない（ファン 9/21・22、サン 9/6 の事例）。
       //   カレンダーが無い現場は日曜以外を仕事の日とみなす。同じ日に2現場あっても1日
@@ -1607,6 +1661,25 @@ export function computeMonthly(
     if (wm.visa === 'none' && !isComp && entry.w !== 0.6 && calcManDays(entry) > 0) {
       if (!wm._jpWorkedDays) wm._jpWorkedDays = new Set<number>()
       wm._jpWorkedDays.add(Number(pk.day))
+    }
+    // 日本人の現場都合休（0.6）の日数（Excel の「補償日」列の表示用・2026-10-02）
+    if (wm.visa === 'none' && entry.w === 0.6) {
+      wm._jpCompDaySeen ||= new Set<string>()
+      const ck = `${pk.ym}_${pk.day}`
+      if (!wm._jpCompDaySeen.has(ck)) { wm._jpCompDaySeen.add(ck); wm.jpCompDays = (wm.jpCompDays || 0) + 1 }
+    }
+    // 給与チェックの注意点のための日別の記録（2026-10-02 総合点検。支給額には使わない）
+    if (!isComp && calcManDays(entry) > 0) {
+      const dayN = Number(pk.day)
+      if (new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, dayN).getDay() === 0) {
+        (wm._sundayWorkDays ||= new Set<number>()).add(dayN)
+      }
+      if (wm.visa === 'none' && entry.w !== 0.6) {
+        // 日勤の所定分だけ（残業 o は 1.25倍で払っているので週の判定には足さない）
+        const dayH = (entry.nonly ? 0 : (entry.w || 0)) * JP_PRESCRIBED_HOURS_PER_DAY
+        wm._jpDayHours ||= new Map<number, number>()
+        wm._jpDayHours.set(dayN, (wm._jpDayHours.get(dayN) || 0) + dayH)
+      }
     }
     if (wm.visa === 'none' && !isComp && !entry.ns && jpSundayPremiumApplies(ym)) {
       const dow0 = new Date(parseInt(pk.ym.slice(0, 4)), parseInt(pk.ym.slice(4, 6)) - 1, Number(pk.day)).getDay()
@@ -1928,6 +2001,69 @@ export function computeMonthly(
     //   退職後は retired により自動的に給与計算対象外になる。
     const workerWm = main.workers.find(x => x.id === wm.id)
     const useNewRules = ym >= '202605' && !workerWm?.useOldRules
+    const addNote = (code: PayNote['code'], message: string, amount?: number) => {
+      if (ym < PAY_NOTES_FROM_YM) return
+      ;(wm.payNotes ||= []).push(amount !== undefined ? { code, message, amount } : { code, message })
+    }
+    /**
+     * 新ルールのベトナム人の注意点（支給額は変えない・2026-10-02 総合点検）
+     *   ① ほかの現場のカレンダーが週の所定を押し上げていないか（本人の現場だけで計算し直して比べる）
+     *   ② 月途中の時給改定で、改定後の残業が平均時給で安く計算されていないか
+     *   ③ 稼働日の空欄が「欠」より多く払われていないか（空欄を欠として計算し直して比べる）
+     */
+    const vnNotes = (v: VietnameseSalaryResult, hourly: number, personalAbsence: number | undefined) => {
+      if (ym < PAY_NOTES_FROM_YM) return
+      // ① 本人の現場のカレンダーだけで判定し直す
+      if (calendarDays) {
+        const allKeys = Object.keys(calendarDays)
+        const own: Record<string, Record<string, string>> = {}
+        for (const sid of wm.sites) if (calendarDays[sid]) own[sid] = calendarDays[sid]
+        if (Object.keys(own).length > 0 && allKeys.length > Object.keys(own).length) {
+          const v2 = calculateVietnameseSalary(wm.id, ym, hourly, proratedBaseDays, attD, main.sites,
+            wm.plUsed, wm.compDays, wm.examDays, own, workerPrescribedDays > 0 ? workerPrescribedDays : undefined, personalAbsence)
+          const dh = Math.round((v2.statutoryOT - v.statutoryOT) * 10) / 10
+          if (dh > 0) {
+            addNote('crossSiteCalendar',
+              `ほかの現場のカレンダーが週の所定時間を押し上げ、法定外残業が ${dh}h 少なく出ています（本人の現場のカレンダーだけなら ${v2.statutoryOT}h）。割増の差 約${(v2.otAllowance - v.otAllowance).toLocaleString()}円。代表に確認してください`,
+              v2.otAllowance - v.otAllowance)
+          }
+        }
+      }
+      // ② 月途中の時給改定（適用開始日がこの月の2日以降）
+      const from = workerWm?.hourlyRateFrom
+      const prev = workerWm?.prevHourlyRate
+      const cur = workerWm?.hourlyRate
+      if (from && prev != null && cur != null && cur !== prev && /^\d{4}-\d{2}-\d{2}$/.test(from)
+        && from.slice(0, 4) + from.slice(5, 7) === ym && Number(from.slice(8, 10)) > 1) {
+        const fromD = Number(from.slice(8, 10))
+        let before = 0, after = 0
+        for (const [key, e] of Object.entries(attD)) {
+          const pk2 = parseDKey(key)
+          if (pk2.ym !== ym || pk2.wid !== String(wm.id) || !e || !isWorkingDay(e) || !e.w || e.w === 0.6) continue
+          const ot = calcOvertimeHours(e, siteScheduleMap.get(pk2.sid) as SiteWorkSchedule | undefined)
+          if (Number(pk2.day) >= fromD) after += ot; else before += ot
+        }
+        // 目安: 所定外（1.0倍）をその日の時給で払った場合との差（割増0.25倍分は含めない）
+        const diff = after * cur + before * prev - (after + before) * hourly
+        if (after + before > 0 && diff > 0.5) {
+          addNote('midMonthRateOt',
+            `${Number(from.slice(5, 7))}/${fromD} に時給が ${prev.toLocaleString()}→${cur.toLocaleString()}円 に変わった月です。残業・深夜・休日の手当は月の平均時給 ${hourly.toLocaleString()}円 で計算しています。改定後の残業（${Math.round(after * 10) / 10}h）が多いため、その日の時給で計算するより約 ${ceilYen(diff).toLocaleString()}円 少ない計算です。代表に確認してください`,
+            ceilYen(diff))
+        }
+      }
+      // ③ 稼働日の空欄（案Aでは「欠」だけが保証日数から引かれる）
+      const blank = wm.calendarBlankDays || 0
+      if (blank > 0 && personalAbsence !== undefined) {
+        const v3 = calculateVietnameseSalary(wm.id, ym, hourly, proratedBaseDays, attD, main.sites,
+          wm.plUsed, wm.compDays, wm.examDays, calendarDays, workerPrescribedDays > 0 ? workerPrescribedDays : undefined, personalAbsence + blank)
+        const diff = v.salaryNet - v3.salaryNet
+        if (diff > 0) {
+          addNote('blankDays',
+            `稼働日なのに記録が無い日が ${blank}日 あります。空欄のまま締めると「欠」と入れた場合より ${diff.toLocaleString()}円 多い計算になります（空欄は保証日数から引かれないため）。締める前に 欠／0.6補／有給 のどれかを入れてください`,
+            diff)
+        }
+      }
+    }
 
     if (wm.visa !== 'none' && wm.hourlyRate && wm.hourlyRate > 0 && useNewRules && !(wm.salary && wm.salary > 0)) {
       // ── 5月以降: 法令準拠（変形労働時間制） ──
@@ -1980,6 +2116,7 @@ export function computeMonthly(
         personalAbsence1,
       )
       wm.guaranteeDays = v.guaranteeDays
+      vnNotes(v, wm.hourlyRate, personalAbsence1)
 
       wm.fixedBasePay = v.fixedBasePay
       wm.additionalAllowance = v.additionalAllowance
@@ -2051,6 +2188,7 @@ export function computeMonthly(
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours
 
       const salaryNet = basePay + compAllowance + otAllowance - absentDeduction - compBaseDeduction
+      wm._oldRuleDayRate = wm.hourlyRate * dailyHoursOld
 
       wm.prescribedHours = prescribedH
       wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
@@ -2083,6 +2221,7 @@ export function computeMonthly(
         ym >= PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm ? (wm.personalAbsenceDays || 0) : undefined,
       )
       wm.guaranteeDays = v.guaranteeDays
+      vnNotes(v, derivedHourlyRate, ym >= PAYROLL_RULES.personalAbsenceReducesGuaranteeFromYm ? (wm.personalAbsenceDays || 0) : undefined)
       // 基本給は月給値を採用（時給からの再計算による丸め誤差を避ける）
       // 2026-06-XX 修正 (I-7): 中途入退社時は按分した値を採用
       const fixedBase = proratedSalary
@@ -2169,8 +2308,17 @@ export function computeMonthly(
       //   固定月給は全所定日を満額前提とするため、補償日の通常分(満額)を compBaseDeduction で控除し、
       //   別途60%を休業補償(compAllowance)で還元する（正味は日給の40%控除＝60%支給）。支給総額は不変。
       const absentDays = Math.max(0, workerPrescribedDays - wm.actualWorkDays - wm.plUsed - wm.examDays - wm.compDays)
-      const absentDeduction = floorYen(hourlyRate * dailyHoursOld * absentDays)  // = 日給 × 欠勤日数（切捨: 過少払い防止）
       const compBaseDeduction = floorYen(hourlyRate * dailyHoursOld * wm.compDays)  // 補償日 通常分控除（満額・切捨）
+      // 2026-10-02 総合点検: 控除は基本給（日割り後）を超えない。
+      //   全社所定日数が「月給 ÷ 日給」（24日前後）より多い月は、欠勤1日あたりの控除（日給）が
+      //   基本給の1日分を超えるため、欠勤が多いと支給額がマイナスになっていた
+      //   （例: 月給240,000・日給10,000・所定27日・出勤2日 → 240,000 − 25日×10,000 = −10,000）。
+      //   日本人月給制の欠勤控除（Math.min(basePay, …)）と同じく、基本給を下限0にする。
+      //   日給×出勤日数を下回る問題（日給割れ）は賃金の決まりなので変えず、給与チェックの警告にする（payNotes）。
+      const absentDeduction = Math.min(
+        Math.max(0, basePay - compBaseDeduction),
+        floorYen(hourlyRate * dailyHoursOld * absentDays),  // = 日給 × 欠勤日数（切捨: 過少払い防止）
+      )
       // 休憩短縮分（20分/日など）は所定外労働。法定内だが、雇用契約書の割増率「所定超 25%」に合わせて
       //   **残業と同じ単価（時給×1.25・円未満切上）** で支払う（2026-09-15 代表決定・旧ルール3名の暫定措置）
       const bsHours = wm.breakShortenHours || 0
@@ -2178,6 +2326,7 @@ export function computeMonthly(
       if (breakShortenAllowance > 0) wm.breakShortenAllowance = breakShortenAllowance
       const actualWorkH = wm.actualWorkDays * dailyHoursOld + wm.compDays * 0.6 * dailyHoursOld + wm.otHours + bsHours
       const salaryNet = basePay + compAllowance + otAllowance + breakShortenAllowance - absentDeduction - compBaseDeduction
+      wm._oldRuleDayRate = hourlyRate * dailyHoursOld
 
       wm.prescribedHours = prescribedH
       wm.actualWorkHours = Math.round(actualWorkH * 10) / 10
@@ -2220,7 +2369,7 @@ export function computeMonthly(
       const otPay = ceilYen(otUnitRate * otHoursExLhM)
       const legalHolidayAllowanceM = calcLegalHolidayAllowance(hourlyEquivalent, lhDayHoursM)
 
-      // ── 欠勤控除（2026-10 分から・代表決定 2026-08-31）──
+      // ── 欠勤控除（2026年8月分から・代表決定 2026-08-31。JP_MONTHLY_ABSENCE_DEDUCTION_FROM_YM）──
       //   従来は「出勤日数に関わらず月給は固定」で、欠勤しても引かれなかった。
       //   過去の支給額を動かさないよう、適用開始月をゲートで区切る。
       //
@@ -2368,6 +2517,96 @@ export function computeMonthly(
     }
   }
 
+  // ── 給与チェックの注意点（支給額は変えない・2026-10-02 総合点検・2026年9月分〜）──
+  //   ベトナム人新ルールの注意点は各ブランチの vnNotes。ここは全区分に共通のもの
+  if (ym >= PAY_NOTES_FROM_YM) {
+    const yN = parseInt(ym.slice(0, 4)), mN = parseInt(ym.slice(4, 6))
+    const dimN = new Date(yN, mN, 0).getDate()
+    const note = (wm: WorkerMonthly, code: PayNote['code'], message: string, amount?: number) =>
+      (wm.payNotes ||= []).push(amount !== undefined ? { code, message, amount } : { code, message })
+    for (const wm of workerMap.values()) {
+      const raw = main.workers.find(x => x.id === wm.id)
+      const isOldRule = wm.visa !== 'none' && (ym < '202605' || raw?.useOldRules === true)
+      const isJpMonthly = wm.visa === 'none' && (wm.salary ?? 0) > 0 && wm.job !== 'yakuin'
+      const isJpDaily = wm.visa === 'none' && !((wm.salary ?? 0) > 0) && wm.rate > 0
+      const workedLabel = `出勤${wm.actualWorkDays}＋有給${wm.plUsed}＋試験${wm.examDays}`
+      const workedDays = wm.actualWorkDays + wm.plUsed + wm.examDays
+
+      // ① 支給額（残業・手当を除く）が「日給×働いた日数」を下回る（旧ルールの暦日按分・欠勤控除、日本人月給制の日割り）
+      if (isOldRule && wm._oldRuleDayRate && wm.salaryNetPay !== undefined) {
+        const floor = ceilYen(wm._oldRuleDayRate * workedDays) + (wm.additionalAllowance || 0)  // 旧ルールの additionalAllowance は休業補償
+        const core = wm.salaryNetPay - (wm.otAllowance || 0) - (wm.breakShortenAllowance || 0)
+          - (wm.siteAllowance || 0) - (wm.driveAllowance || 0)
+        if (core < floor - 1) {
+          note(wm, 'belowWorkedDays',
+            `支給額（残業・手当を除く ${core.toLocaleString()}円）が「日給 ${Math.round(wm._oldRuleDayRate).toLocaleString()}円 × 働いた日数（${workedLabel}）＋休業補償 ＝ ${floor.toLocaleString()}円」を ${(floor - core).toLocaleString()}円 下回っています（月途中の入社・退職・帰国の暦日按分、または欠勤控除が大きいため）。代表に確認してください`,
+            floor - core)
+        }
+      } else if (isJpMonthly && wm.salaryNetPay !== undefined && wm.basePay !== undefined && (wm.salary ?? 0) > 0 && wm.basePay < (wm.salary ?? 0)) {
+        // 月途中の入社・退職（基本給が月給より少ない月）だけ。1日あたりは欠勤控除と同じ 月給÷20.83日
+        const dayRate = (wm.salary ?? 0) / JP_AVG_MONTHLY_WORK_DAYS
+        const floor = ceilYen(dayRate * workedDays)
+        const core = wm.basePay - (wm.absentDeduction || 0)
+        if (core < floor - 1) {
+          note(wm, 'belowWorkedDays',
+            `月途中の入社・退職の暦日按分で、基本給 ${core.toLocaleString()}円（控除後）が「月給÷20.83日 × 働いた日数（${workedLabel}）＝ ${floor.toLocaleString()}円」を ${(floor - core).toLocaleString()}円 下回っています。代表に確認してください`,
+            floor - core)
+        }
+      }
+
+      // ② 日本人（役員以外）: 週40時間を超える週（月〜土の出勤×8h。残業欄は別に1.25倍で払っている）
+      if ((isJpDaily || isJpMonthly) && wm._jpDayHours && wm._jpDayHours.size > 0) {
+        const firstMondayOffset = (new Date(yN, mN - 1, 1).getDay() + 6) % 7
+        const weekHours = new Map<number, number>()
+        for (const [d, h] of wm._jpDayHours) {
+          // 8〜9月分は日曜を法定休日として別枠で払っているので週の時間に入れない
+          if (jpSundayPremiumApplies(ym) && new Date(yN, mN - 1, d).getDay() === 0) continue
+          const wk = Math.floor((d - 1 + firstMondayOffset) / 7)
+          weekHours.set(wk, (weekHours.get(wk) || 0) + h)
+        }
+        let weeks = 0, excess = 0
+        for (const h of weekHours.values()) if (h > 40) { weeks++; excess += h - 40 }
+        if (excess > 0) {
+          const hourly = isJpMonthly ? (wm.salary ?? 0) / JP_SALARY_AVG_MONTHLY_HOURS : wm.rate / JP_PRESCRIBED_HOURS_PER_DAY
+          const est = ceilYen(ceilYen(hourly * 0.25) * excess)
+          note(wm, 'jpWeekOver40',
+            `週40時間を超える週が ${weeks}週・計 ${excess}時間 あります（月〜土の出勤×8h。月をまたぐ週は数えていません）。この分の割増 0.25倍（目安 ${est.toLocaleString()}円）は支給額に入れていません。日本人に変形労働時間制の定めが無ければ必要です（社労士に確認）`,
+            est)
+        }
+      }
+
+      // ③ 旧ルール: 日曜の出勤・夜勤・所定を超える出勤は支給額に入らない
+      if (isOldRule) {
+        const parts: string[] = []
+        const sun = wm._sundayWorkDays ? [...wm._sundayWorkDays].sort((a, b) => a - b) : []
+        if (sun.length > 0) parts.push(`日曜の出勤 ${sun.length}日（${sun.join('・')}日）`)
+        if ((wm.nightShiftDays || 0) > 0) parts.push(`夜勤 ${wm.nightShiftDays}回`)
+        const prescribed = wm.workerPrescribedDays || 0
+        const over = prescribed > 0 ? Math.round((workedDays + wm.compDays - prescribed) * 10) / 10 : 0
+        if (over > 0) parts.push(`所定 ${prescribed}日 を超える出勤 ${over}日`)
+        if (parts.length > 0) {
+          note(wm, 'oldRuleExtraWork',
+            `${parts.join('・')} があります。旧契約（固定月給・所定日数）の計算では、日曜の割増（1.35倍）・深夜の割増（0.25倍）・夜勤の時間・所定を超えた日の賃金は支給額に入っていません。手計算で足すか代表に確認してください`)
+        }
+      }
+
+      // ④ 日本人月給制（役員以外）: 土曜・日曜の出勤は月給に含まれる扱いで加算されない
+      if (isJpMonthly && wm._jpWorkedDays) {
+        const off: number[] = []
+        for (const d of wm._jpWorkedDays) {
+          if (d < 1 || d > dimN) continue
+          const dw = new Date(yN, mN - 1, d).getDay()
+          if (dw === 6 || (dw === 0 && !jpSundayPremiumApplies(ym))) off.push(d)
+        }
+        if (off.length > 0) {
+          off.sort((a, b) => a - b)
+          note(wm, 'jpMonthlyOffDayWork',
+            `土曜・日曜の出勤が ${off.length}日（${off.join('・')}日）あります。月給制のため加算していません。休日出勤なら別に支払いが必要です（代表に確認）`)
+        }
+      }
+    }
+  }
+
   // 未対応ブランチで黙って無視されるのを防ぐ（対応は固定月給ブランチ（旧ルール=フン 104、新ルール=フォン 207・タン 208）。時給制は未対応）
   for (const wm of workerMap.values()) {
     if ((wm.breakShortenHours || 0) > 0 && wm.breakShortenAllowance === undefined) {
@@ -2383,6 +2622,10 @@ export function computeMonthly(
   //   - site.cost へは支給額を出勤日数比で配賦（エントリループでは積んでいない）。
   //   - 出勤実績のない月（全休等）でも給与は発生するため、配置現場の先頭へ計上する。
   //   ※ 日本人日給月給は対象外（totalCost=日数×日額=支給額 で既に一致・エントリ加算済み）。
+  // 出向の判定は compute・calcTobiEquiv と同じ決まり（人ごとの dispatchTo ＋ 現場ごとの dispatch 配列・2026-10-02 総合点検）。
+  //   人ごとの出向（wm.isDispatched）は支給額の全部、現場ごとの出向はその現場に配賦した分だけを出向控除にする。
+  //   旧: 人ごとの dispatchTo だけを見ていたので、現場の dispatch 配列にだけ入っている人の原価が引かれなかった
+  const isDispatchedHere = createDispatchChecker(main)
   for (const wm of workerMap.values()) {
     // 2026-09-02: 全員を実支給ベースで配賦（上のエントリループと対）
     // 実際の支給額。salaryNetPay 優先、無ければ netPay。
@@ -2394,6 +2637,7 @@ export function computeMonthly(
     if (pay <= 0) continue
     const dayMap = payrollSiteDays.get(wm.id)
     const totalDays = dayMap ? Array.from(dayMap.values()).reduce((a, b) => a + b, 0) : 0
+    let siteDeduction = 0
     if (dayMap && totalDays > 0) {
       const rows = Array.from(dayMap.entries())
       let allocated = 0
@@ -2404,15 +2648,23 @@ export function computeMonthly(
         const share = i === rows.length - 1 ? (pay - allocated) : Math.round(pay * days / totalDays)
         site.cost += share
         allocated += share
-        if (wm.isDispatched) site.dispatchDeduction = (site.dispatchDeduction || 0) + share
+        if (wm.isDispatched || isDispatchedHere(wm.id, sid, ym)) {
+          site.dispatchDeduction = (site.dispatchDeduction || 0) + share
+          siteDeduction += share
+        }
       })
     } else if (wm.sites.length > 0) {
       const site = siteMap.get(wm.sites[0])
       if (site) {
         site.cost += pay
-        if (wm.isDispatched) site.dispatchDeduction = (site.dispatchDeduction || 0) + pay
+        if (wm.isDispatched || isDispatchedHere(wm.id, wm.sites[0], ym)) {
+          site.dispatchDeduction = (site.dispatchDeduction || 0) + pay
+          siteDeduction += pay
+        }
       }
     }
+    // 現場ごとの出向だけの人: 控除はその現場に配賦した分（人ごとの出向は上で支給額の全部にしてある）
+    if (!wm.isDispatched && siteDeduction > 0) wm.dispatchDeduction = siteDeduction
   }
 
   // Subcon costs はエントリループで現場別単価(getSubconRate)により積み上げ済み

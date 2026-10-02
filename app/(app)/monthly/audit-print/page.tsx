@@ -31,6 +31,9 @@ interface MonthlyDataRaw {
   workDays: number
   prescribedDays: number
   baseDays?: number
+  /** 会社別の締め状態（締める前に出したPDFには「未確定（締め前）」の印を付ける・2026-10-02） */
+  lockedHibi?: boolean
+  lockedHfu?: boolean
   siteNames: Record<string, string>
   dailyByWorker?: Record<number, Record<number, {
     w?: number; o?: number; p?: number; r?: number; h?: number; hk?: number; exam?: number;
@@ -78,21 +81,27 @@ export default function AuditPrintPage() {
   }, [ym])
 
   // 対象スタッフのフィルタリング
-  const targetWorkers = useMemo(() => {
-    if (!data) return []
+  const [targetWorkers, dispatchedWorkers] = useMemo(() => {
+    if (!data) return [[], []] as [PayrollAuditWorker[], PayrollAuditWorker[]]
     // 該当会社の給与計算対象者: ベトナム人全員 ＋ 日本人は日額か月給がある人（事務の時給者・未設定者は載せない）。
-    //   出向中（大川さん: 出向先が支給）は除く。並びはベトナム人 → 日本人、各 id 順
+    //   出向中（出向先が支給）は1人ずつのページには載せない。並びはベトナム人 → 日本人、各 id 順
+    //   2026-10-02 総合点検: 出向者は月次集計Excelには 🔁 付きで載っているので、表紙に人数と金額を出して
+    //   Excel の小計と突き合わせられるようにする（旧: 表紙の支給合計と Excel の小計が黙って食い違っていた）
     const isVn = (w: PayrollAuditWorker) => !!w.visa && w.visa !== 'none'
-    return data.workers
+    const all = data.workers
       .filter(w => (org === 'hibi' ? w.org === 'hibi' : w.org === 'hfu'))
       .filter(w => isVn(w) || w.rate > 0 || (w.salary || 0) > 0)
-      .filter(w => !(w as { isDispatched?: boolean }).isDispatched)
       .sort((a, b) => (isVn(a) === isVn(b) ? a.id - b.id : isVn(a) ? -1 : 1))
+    return [all.filter(w => !w.isDispatched), all.filter(w => !!w.isDispatched)]
   }, [data, org])
+
+  // 締め前か（Excel の markUnconfirmedWorkbook と同じく、その会社の締め状態で判定・2026-10-02）
+  const unconfirmed = !!data && !(org === 'hibi' ? data.lockedHibi : data.lockedHfu)
 
   // 集計値
   const summary = useMemo(() => {
     const total = targetWorkers.reduce((s, w) => s + (w.salaryNetPay || 0), 0)
+    const dispatchedTotal = dispatchedWorkers.reduce((s, w) => s + (w.salaryNetPay || 0), 0)
     const vn = targetWorkers.filter(w => !!w.visa && w.visa !== 'none')
     const jpCount = targetWorkers.length - vn.length
     const newRulesCount = vn.filter(w => !w.useOldRules && ym >= '202605').length
@@ -103,14 +112,15 @@ export default function AuditPrintPage() {
     const validation = ym >= '202605'
       ? validatePayrolls(targetWorkers as unknown as PayrollSnapshot[])
       : { total: 0, critical: 0, warning: 0, issues: [], affectedWorkerIds: [] }
-    return { total, vnCount: vn.length, jpCount, newRulesCount, oldRulesCount, validation }
-  }, [targetWorkers, ym])
+    const warningOnly = validation.critical === 0 && validation.warning > 0
+    return { total, dispatchedTotal, vnCount: vn.length, jpCount, newRulesCount, oldRulesCount, validation, warningOnly }
+  }, [targetWorkers, dispatchedWorkers, ym])
 
-  // タイトル（ブラウザの Save as PDF デフォルトファイル名に反映）
+  // タイトル（ブラウザの Save as PDF デフォルトファイル名に反映）。締め前は【未確定】を頭に付ける（Excel のファイル名と同じ印）
   useEffect(() => {
     const orgLabel = org === 'hibi' ? '日比建設' : 'HFU'
-    document.title = `給与計算監査_${orgLabel}_${ym}`
-  }, [org, ym])
+    document.title = `${unconfirmed ? '【未確定】' : ''}給与計算監査_${orgLabel}_${ym}`
+  }, [org, ym, unconfirmed])
 
   if (loading) return (
     <div className="p-8 text-center text-gray-500">読み込み中...</div>
@@ -170,8 +180,14 @@ export default function AuditPrintPage() {
 
         {/* ── 表紙ページ ── */}
         <section className="page-break">
+          {unconfirmed && (
+            <div className="border-2 border-red-500 bg-red-50 text-red-800 rounded-lg p-3 mb-4 text-center">
+              <div className="text-xl font-bold">未確定（締め前）</div>
+              <div className="text-xs mt-1">{yearMonthLabel}分の{orgLabel.replace('株式会社', '')}はまだ締めていません。数字は変わることがあります。この資料はキャシュモへ送らず、締めたあとに出し直してください</div>
+            </div>
+          )}
           <div className="text-center mb-8 pt-12">
-            <h1 className="text-3xl font-bold text-hibi-navy mb-2">給与計算 監査資料</h1>
+            <h1 className="text-3xl font-bold text-hibi-navy mb-2">給与計算 監査資料{unconfirmed ? '【未確定】' : ''}</h1>
             <p className="text-sm text-gray-500">キャシュモ提出用（給与計算の根拠）・社労士確認用</p>
           </div>
           <div className="border-2 border-hibi-navy rounded-lg p-6 max-w-md mx-auto bg-blue-50/30">
@@ -190,6 +206,15 @@ export default function AuditPrintPage() {
             <table className="w-full text-sm">
               <tbody className="[&_td]:py-1.5 [&_td:first-child]:text-gray-600 [&_td:first-child]:w-1/2">
                 <tr><td>支給合計</td><td className="font-mono font-bold text-base">{fmtYen(summary.total)}</td></tr>
+                {dispatchedWorkers.length > 0 && (
+                  <tr>
+                    <td>出向者（🔁・この資料には載せない）</td>
+                    <td>
+                      {dispatchedWorkers.length}名 <span className="font-mono">{fmtYen(summary.dispatchedTotal)}</span>
+                      <div className="text-[10px] text-gray-500">{dispatchedWorkers.map(w => `${w.name}（${w.dispatchTo || '出向'}）`).join('、')}。月次集計Excel の小計には含まれる（出向者込み {fmtYen(summary.total + summary.dispatchedTotal)}）。支給元は代表に確認</div>
+                    </td>
+                  </tr>
+                )}
                 {summary.newRulesCount > 0 && <tr><td>ベトナム人・新ルール（変形労働時間制）</td><td>{summary.newRulesCount}名</td></tr>}
                 {summary.oldRulesCount > 0 && <tr><td>ベトナム人・旧ルール継続（固定月給）</td><td>{summary.oldRulesCount}名</td></tr>}
                 {summary.jpCount > 0 && <tr><td>日本人（日給月給・完全月給・役員）</td><td>{summary.jpCount}名</td></tr>}
@@ -207,11 +232,12 @@ export default function AuditPrintPage() {
                 </div>
               </div>
             ) : (
-              <div className="bg-red-50 border border-red-300 rounded-lg p-3 text-sm">
-                <div className="font-bold text-red-800">
-                  ⚠ {summary.validation.affectedWorkerIds.length}名で {summary.validation.total}件の違反検出
+              // 2026-10-02: 注意点（warning・支給額は変えない）だけなら黄色で「注意点」と書く（旧: 全部「違反」で赤字）
+              <div className={`rounded-lg p-3 text-sm border ${summary.warningOnly ? 'bg-amber-50 border-amber-300' : 'bg-red-50 border-red-300'}`}>
+                <div className={`font-bold ${summary.warningOnly ? 'text-amber-800' : 'text-red-800'}`}>
+                  ⚠ {summary.validation.affectedWorkerIds.length}名で {summary.validation.total}件の{summary.warningOnly ? '注意点（支給額には入れていません。各ページの「注意点」を確認）' : `検出（critical ${summary.validation.critical} / 注意点 ${summary.validation.warning}）`}
                 </div>
-                <ul className="text-xs text-red-700 mt-2 space-y-1">
+                <ul className={`text-xs mt-2 space-y-1 ${summary.warningOnly ? 'text-amber-800' : 'text-red-700'}`}>
                   {summary.validation.issues.map((iss, i) => (
                     <li key={i}>
                       [{iss.severity}] <strong>{iss.workerName}</strong>: {iss.message}
@@ -240,6 +266,7 @@ export default function AuditPrintPage() {
                 {/* ヘッダー */}
                 <div className="bg-hibi-navy text-white px-4 py-2 rounded-t-md mb-3 mt-6">
                   <div className="font-bold text-base">
+                    {unconfirmed && <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded mr-2 align-middle">未確定（締め前）</span>}
                     {worker.name}
                     <span className="ml-2 text-xs opacity-80">
                       ({worker.org === 'hfu' ? 'HFU' : '日比建設'}) — ID:{worker.id}{worker.payrollNo ? ` — 従業員番号:${worker.payrollNo}` : ''}

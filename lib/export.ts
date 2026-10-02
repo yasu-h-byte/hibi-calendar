@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import {
   RawWorker,
+  RawSite,
   RawSubcon,
   WorkerMonthly,
   SubconMonthly,
@@ -12,7 +13,7 @@ import {
 import { AttendanceEntry, calcActualHours, calcManDays } from '@/types'
 import { isWorkingDay } from './attendance'
 import { isStillActiveForMonth, isAlreadyRetired, isHiredByMonth, effectiveHourlyRateForYm } from './workers'
-import { computePeriodUsed } from './leave-compute'
+import { computeRecordBalance } from './leave-compute'
 import { calcLastUsableDayIso, isLeaveExpiredAsOf, addMonthsSafe } from './date-utils'
 // 2026-06-XX 追加: 自動検算を Excel にも反映
 import { validatePayrolls, type PayrollSnapshot } from './payroll-validator'
@@ -36,10 +37,13 @@ const DOW_SHORT = ['日', '月', '火', '水', '木', '金', '土']
 export function timesheetDayHours(
   entry: { st?: string; et?: string; w?: number; o?: number },
   dailyPrescribedForWorker: number,
+  // 現場の休憩設定（2026-10-02 総合点検）。旧は渡しておらず既定の 30/60/30 分で引いていたため、
+  //   休憩の長さが違う現場では給与計算（calcActualHours に現場の設定を渡す）と実労働時間が合わなかった
+  workSchedule?: Parameters<typeof calcActualHours>[1],
 ): { dayHours: number; dayOT: number } {
   if (entry.st && entry.et) {
     // calcActualHours は残業込みの実労働時間を返す → これがそのまま総労働時間
-    const dayHours = calcActualHours(entry as AttendanceEntry, undefined as unknown as Parameters<typeof calcActualHours>[1])
+    const dayHours = calcActualHours(entry as AttendanceEntry, workSchedule)
     const dayOT = Math.max(0, dayHours - dailyPrescribedForWorker)
     return { dayHours, dayOT }
   }
@@ -101,7 +105,8 @@ export interface HibiAttendanceData {
   ym: string
   workers: RawWorker[]
   attD: Record<string, AttendanceEntry>
-  sites: { id: string; name: string }[]
+  /** その月に出面がある現場（終了済みも含む）。休憩設定（workSchedule）があれば実労働時間に使う */
+  sites: { id: string; name: string; workSchedule?: RawSite['workSchedule'] }[]
   assign: Record<string, { workers?: number[]; subcons?: string[] }>
   massign: Record<string, { workers?: number[]; subcons?: string[] }>
   /** カレンダーの日ごとの種別（siteId → { "1": "work", "2": "off", ... }）*/
@@ -119,7 +124,7 @@ function appendTimeSheet(
   ym: string,
   foreignWorkers: RawWorker[],
   attD: Record<string, AttendanceEntry>,
-  sites: { id: string; name: string }[],
+  sites: { id: string; name: string; workSchedule?: RawSite['workSchedule'] }[],
   calendarDays?: Record<string, Record<string, string>>,
 ) {
   const numDays = daysInMonth(ym)
@@ -210,7 +215,7 @@ function appendTimeSheet(
           //     現状は最低限の整合性として実労働時間を直接計算
           const dailyPrescribedForWorker = w.useOldRules ? 20 / 3 : dailyPrescribed
           // 同日複数現場は加算（旧: 上書きで最後の現場だけになり過少 2026-08-27）
-          const th = timesheetDayHours(entry, dailyPrescribedForWorker)
+          const th = timesheetDayHours(entry, dailyPrescribedForWorker, site.workSchedule as Parameters<typeof calcActualHours>[1])
           dayHours += th.dayHours
           dayOT += th.dayOT
           status = entry.w === 0.6 ? '補' : dayOT > 0 ? '出+残' : '出'
@@ -279,9 +284,13 @@ function appendOvertimeSummarySheet(
   ym: string,
   foreignWorkers: RawWorker[],
   attD: Record<string, AttendanceEntry>,
-  sites: { id: string; name: string }[],
+  sites: { id: string; name: string; workSchedule?: RawSite['workSchedule'] }[],
   calendarDays: Record<string, Record<string, string>>,
   baseDays: number = 20,
+  // 月次集計（computeMonthly）の結果。基本給(固定)はここから取る（2026-10-02 総合点検）。
+  //   旧: 時給×20日×7h を計算し直していたため、帰国・月途中の入社で日割りした人や固定月給の人は
+  //   月次集計Excel と違う基本給が載っていた
+  monthly?: Pick<WorkerMonthly, 'id' | 'fixedBasePay' | 'basePay' | 'hkDays' | 'salary'>[],
 ) {
   const ymY = parseInt(ym.slice(0, 4))
   const ymM = parseInt(ym.slice(4, 6))
@@ -299,11 +308,16 @@ function appendOvertimeSummarySheet(
     '基本給(固定)',
   ]
   const rows: (string | number)[][] = [titleRow, headers]
+  const monthlyById = new Map((monthly || []).map(m => [m.id, m]))
+  const proratedNames: string[] = []
 
   for (const w of foreignWorkers) {
     // 時給はその月の適用額（月途中の改定は暦日按分）。給与計算本体（compute.ts の worker map）と揃える
     const hr = effectiveHourlyRateForYm(w, ym) || 0
     const summary = calculateOvertimeSummary(ym, w.id, hr, baseDays, attD, sites, calendarDays)
+    const m = monthlyById.get(w.id)
+    const basePay = m ? (m.fixedBasePay ?? m.basePay ?? summary.fixedBasePay) : summary.fixedBasePay
+    if (m && basePay !== summary.fixedBasePay) proratedNames.push(`${w.name}（${(m.hkDays || 0) > 0 ? `帰国中 ${m.hkDays}日` : (m.salary || 0) > 0 ? '固定月給' : '月途中の入社・退職'}）`)
 
     rows.push([
       w.name,
@@ -319,7 +333,7 @@ function appendOvertimeSummarySheet(
       summary.monthlyStatutoryOT,
       summary.legalHolidayHours,
       summary.prescribedHolidayHours,
-      summary.fixedBasePay,
+      basePay,
     ])
   }
 
@@ -329,7 +343,8 @@ function appendOvertimeSummarySheet(
   rows.push(['', `法定上限: ${calDays}日 × 40 ÷ 7 = ${legalLimit}h`])
   rows.push(['', '法定休日: 日曜日'])
   rows.push(['', `ベース日数: ${baseDays}日`])
-  rows.push(['', `基本給(固定) = 時間給 × ${baseDays}日 × 7h`])
+  rows.push(['', `基本給(固定) = 時間給 × ${baseDays}日 × 7h（月次集計と同じ値。帰国・月途中の入社や退職は在籍日数で日割り、固定月給の人は月給）`])
+  if (proratedNames.length > 0) rows.push(['', `※ 基本給を日割り・固定月給で載せた人: ${proratedNames.join('、')}`])
   rows.push([])
   rows.push(['【残業3段階判定】'])
   rows.push(['', '第1段階（日単位）: 所定8h以下の日は8hを超えた分、所定8h超の日はその所定を超えた分'])
@@ -364,6 +379,38 @@ export interface HfuAttendanceExportData extends HibiAttendanceData {
   calendarDays?: Record<string, Record<string, string>>
   /** ベース日数（3層構造の基本給計算用、デフォルト20） */
   baseDays?: number
+  /** 月次集計（computeMonthly）の結果。勤怠サマリーの基本給(固定)をこれとそろえる（2026-10-02） */
+  monthlyWorkers?: Pick<WorkerMonthly, 'id' | 'fixedBasePay' | 'basePay' | 'hkDays' | 'salary'>[]
+}
+
+/**
+ * その月の帳票に載せる現場（2026-10-02 総合点検）。
+ * 「終了していない現場」ではなく「その月に出面（本人・外注）がある現場」で決める。
+ * 旧: 終了（archived）した現場を除いていたので、月が終わってから現場を終了にすると、
+ *   その現場の日数が出面一覧・現場別出面一覧・勤怠サマリーから丸ごと抜けた（月次集計には入っているのに）。
+ */
+export function sitesForMonthSheets<T extends { id: string; archived?: boolean }>(
+  sites: T[],
+  ym: string,
+  attD: Record<string, AttendanceEntry | null | undefined>,
+  attSD?: Record<string, { n: number; on: number } | null | undefined>,
+): T[] {
+  const used = new Set<string>()
+  for (const [key, v] of Object.entries(attD)) {
+    if (!v) continue
+    const pk = parseDKey(key)
+    if (pk.ym === ym) used.add(pk.sid)
+  }
+  if (attSD) {
+    const ids = sites.map(s => s.id)
+    for (const [key, v] of Object.entries(attSD)) {
+      if (!v) continue
+      // 外注のキーは `${siteId}_${外注ID}_${ym}_${day}`。現場 id の方を前方一致で探す
+      const hit = ids.filter(id => key.startsWith(`${id}_`) && key.includes(`_${ym}_`)).sort((a, b) => b.length - a.length)[0]
+      if (hit) used.add(hit)
+    }
+  }
+  return sites.filter(s => !s.archived || used.has(s.id))
 }
 
 export function generateOrgAttendance(data: HfuAttendanceExportData, org: AttendanceOrg): XLSX.WorkBook {
@@ -455,7 +502,7 @@ export function generateOrgAttendance(data: HfuAttendanceExportData, org: Attend
       const bd = data.baseDays || 20
       const newRuleWorkers = foreignWorkers.filter(w => !(w as { useOldRules?: boolean }).useOldRules)
       if (newRuleWorkers.length > 0) {
-        appendOvertimeSummarySheet(wb, '勤怠サマリー', label, ym, newRuleWorkers, attD, sites, calendarDays, bd)
+        appendOvertimeSummarySheet(wb, '勤怠サマリー', label, ym, newRuleWorkers, attD, sites, calendarDays, bd, data.monthlyWorkers)
       }
     }
   }
@@ -774,10 +821,13 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     const snapshots = targets as unknown as PayrollSnapshot[]
     const result = validatePayrolls(snapshots)
     rows.push([])
+    // 2026-10-02: 注意点（warning・支給額は変えない）だけなら「違反」と書かない
     const headerCell: (string | number | null)[] = [
       result.total === 0
         ? '✓ 自動検算: 全項目 OK（法定外残業 0.25倍 / 所定外労働 / 法休 1.35倍 / 深夜 0.25倍 / 休業 60%）'
-        : `⚠ 自動検算: ${result.affectedWorkerIds.length}名で${result.total}件の違反検出（critical ${result.critical} / warning ${result.warning}）`
+        : result.critical === 0
+          ? `⚠ 注意点: ${result.affectedWorkerIds.length}名で${result.total}件（支給額には入れていません。締める前に確認）`
+          : `⚠ 自動検算: ${result.affectedWorkerIds.length}名で${result.total}件の違反検出（critical ${result.critical} / 注意点 ${result.warning}）`
     ]
     for (let i = 1; i < colCount; i++) headerCell.push(null)
     rows.push(headerCell)
@@ -928,8 +978,9 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
   // 新ルール・旧ルールを 1 シートにまとめる（代表決定 2026-09-17）。列は両方の和で、
   // 該当しない項目は空欄。残業だけは建て方が違う（新: 所定外1.0倍＋法定外0.25倍／旧: 1.25倍）ので
   // 列を分けたまま隣に置く。行ごとに「内訳合計＝支給額」の検算を付ける。
+  // 2026-10-02 総合点検: 枠内補償日・試験日・帰国日数・保証枠・本人の欠勤 を追加（欠勤日数を検算できるように。両社とも同じ列）
   const unifiedHeaders = ['名前', '従業員番号', '契約', '現場', '単価種別', '単価', '所定日数', '法定上限／所定時間(h)',
-    '通常出勤', '法休出勤', '補償日', '有給日数',
+    '通常出勤', '法休出勤', '補償日', '枠内補償日(100%)', '有給日数', '試験日', '帰国日数', '保証枠', '本人の欠勤(欠)',
     '実労働h', '所定外労働h', '法定残業h(新)／残業h(旧)', '法休労働h', '深夜労働h',
     '基本給', '追加所定手当', '有給日給', '所定外労働手当', '法定外残業手当', '残業手当(旧・1.25倍)',
     '法定休日手当', '深夜手当', '休業手当', '休憩短縮手当',
@@ -959,7 +1010,13 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         Math.round((old ? (w.prescribedHours || 0) : (w.legalLimit || 0)) * 10) / 10,
         old ? (w.actualWorkDays || 0) : (w.regularWorkDays || 0),
         old ? null : (w.legalHolidayDays ?? 0),
-        w.compDays || 0, w.plDays || 0,
+        w.compDays || 0,
+        old ? null : (w.compInGuaranteeDays || 0),
+        w.plDays || 0,
+        w.examDays || 0,
+        w.hkDays || 0,
+        old ? null : (w.guaranteeDays ?? null),
+        old ? null : (w.personalAbsenceDays ?? 0),
         w.actualWorkHours || 0,
         old ? null : (wext.nonStatutoryOTHours || 0),
         w.legalOtHours || 0,
@@ -989,8 +1046,8 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         - (w.absentDeduction || 0) - (old ? (w.compBaseDeduction || 0) : 0)
       if (parts !== (w.salaryNetPay || 0)) mismatches.push(w.name)
     }
-    // 小計（数値列を縦に合計。所定日数・時間の列は合計しない）
-    const skip = new Set([0, 1])
+    // 小計（数値列を縦に合計。所定日数・時間・保証枠の列は合計しない）
+    const skip = new Set([0, 1, 9])
     const subtotal: (number | null)[] = numericRows[0].map((_, ci) =>
       skip.has(ci) ? null : Math.round(numericRows.reduce((acc, r) => acc + (r[ci] || 0), 0) * 100) / 100)
     rows.push(['小計', null, null, null, null, null, ...subtotal])
@@ -1002,13 +1059,14 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     const newOnes = ws.filter(w => !isWorkerOldRules(w))
     if (newOnes.length > 0) appendValidation(rows, newOnes, unifiedHeaders.length)
     rows.push(['※ 契約「新」＝変形労働時間制（時給×20日×7hの固定基本給＋各手当）。「旧」＝固定月給の旧契約（残業1.25倍・現場都合休は補償日控除＋休業手当60%）。空欄はその契約に無い項目。'])
+    rows.push(['※ 新契約の欠勤日数 = min(本人の欠勤 ＋ max(0, (保証枠 − 本人の欠勤) − 算入日数), 20 − 算入日数)。算入日数 = 通常出勤 ＋ 有給 ＋ 試験 ＋ 枠内補償日。保証枠 = min(20, カレンダー所定日数)。枠内補償日は100%支給で、休業手当（60%）は 補償日 − 枠内補償日 の分。帰国日数は在籍日数から除外（無給・欠勤に数えない・基本給と所定を日割り）。'])
     const sheet = XLSX.utils.aoa_to_sheet(rows)
     const merges: XLSX.Range[] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: unifiedHeaders.length - 1 } }]
     rows.forEach((r, i) => {
       if (i > 2 && r.length === 1 && typeof r[0] === 'string') merges.push({ s: { r: i, c: 0 }, e: { r: i, c: unifiedHeaders.length - 1 } })
     })
     sheet['!merges'] = merges
-    setColWidths(sheet, [14, 9, 5, 14, 8, 10, 8, 12, 8, 8, 8, 8, 9, 10, 12, 9, 9, 11, 11, 11, 12, 12, 12, 11, 10, 10, 11, ...(withAllowance ? [10, 10] : []), 8, 11, 12, 14])
+    setColWidths(sheet, [14, 9, 5, 14, 8, 10, 8, 12, 8, 8, 8, 9, 8, 7, 8, 7, 9, 9, 10, 12, 9, 9, 11, 11, 11, 12, 12, 12, 11, 10, 10, 11, ...(withAllowance ? [10, 10] : []), 8, 11, 12, 14])
     return sheet
   }
 
@@ -1034,7 +1092,8 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
         isFullMonthly ? '完全月給' : '日給月給',
         isFullMonthly ? (w.salary || 0) : w.rate,
         w.workDays,
-        ...(withJpDetail ? [w.compDays || 0] : []),
+        // 日本人の現場都合休（0.6）は compDays でなく出勤日数に 0.6 日として入る → 日数は jpCompDays（2026-10-02）
+        ...(withJpDetail ? [w.jpCompDays || w.compDays || 0] : []),
         w.plDays || 0,
         w.dailyOtHours || w.otHours || 0,
         w.basePay || 0, w.paidLeaveAllowance || 0, w.otAllowance || 0,
@@ -1047,7 +1106,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
     rows.push([
       '小計', ...(withJpDetail ? [null] : []), null, null, null,
       ws.reduce((s, w) => s + w.workDays, 0),
-      ...(withJpDetail ? [ws.reduce((s, w) => s + (w.compDays || 0), 0)] : []),
+      ...(withJpDetail ? [ws.reduce((s, w) => s + (w.jpCompDays || w.compDays || 0), 0)] : []),
       ws.reduce((s, w) => s + (w.plDays || 0), 0),
       ws.reduce((s, w) => s + (w.dailyOtHours || w.otHours || 0), 0),
       ws.reduce((s, w) => s + (w.basePay || 0), 0),
@@ -1081,7 +1140,7 @@ export function generateMonthlyExcel(data: MonthlyExcelData): XLSX.WorkBook {
       rows.push([mismatches.length === 0
         ? '✓ 自動検算: 全員 内訳合計（基本給＋有給手当＋残業手当＋法定休日手当＋手当 − 欠勤控除）＝ 支給額合計'
         : `⚠ 自動検算: ${mismatches.map(w => w.name).join('・')} の内訳合計が支給額合計と一致しません`])
-      rows.push(['※ 日給月給の「補償日」（現場都合休）は日額の60%を基本給に含めて支給。「欠勤控除」は完全月給者のみ（2026年8月分〜）。'])
+      rows.push(['※ 「補償日」は現場都合休（出面の 0.6）の日数。日給月給は出勤日数に 0.6日 として含め、基本給（日額×人工）に日額の60%で入る。夜勤は 1.5人工（出勤日数には1日）。「欠勤控除」は完全月給者のみ（2026年8月分〜。出面の「欠」＋出勤日の不足分 × 月給÷20.83日）。'])
     }
     const sheet = XLSX.utils.aoa_to_sheet(rows)
     const merges: XLSX.Range[] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: japaneseHeaders.length - 1 } }]
@@ -1411,25 +1470,19 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
     return fmtDate(lastUsable + 'T00:00:00Z')
   }
 
-  // periodUsed 計算（grantDate..+1年 のPエントリ、申請ベース）
-  // 2026-06-XX 修正 (IM-6): 共通ヘルパー computePeriodUsed に統一
-  //   - multi-site dedup を内蔵（旧実装は dup count バグあり）
-  //   - 残日数表示は申請ベース (requestedPeriodUsed) を採用
-  const countPeriodUsed = (workerId: number, grantDate?: string): number => {
-    if (!grantDate) return 0
-    const result = computePeriodUsed(workerId, grantDate, allAtt as Record<string, unknown>)
-    return result.requestedPeriodUsed  // 残日数計算は申請ベース
-  }
-
   // ─── シート1: 管理簿 ───
+  // 2026-10-02 総合点検: 行の数字は computeRecordBalance（申請の検証・休暇管理・賞与と同じ本体）で出す。
+  //   旧はこの帳票だけ (1)「取得日数」に調整と買取を足していた（取得3日・買取9日が「取得12日」に見え、年5日の
+  //   確認資料として誤読される）(2) 日本人の繰越を0にしていなかった (3) 付与日を前に寄せた人の重なる期間
+  //   （10〜11月）を両方の期で数えていた。取得日数＝出面の P だけ、調整（出面に無い取得）と買取は別の列。
   const ledgerRows: unknown[][] = []
   ledgerRows.push([`有給休暇管理簿${orgFilter ? `（${orgFilter === 'hfu' ? 'HFU' : '日比建設'}）` : '（全社）'}`])
   ledgerRows.push([`作成日: ${fmtDate(todayJstIso())}`])
   ledgerRows.push([])
   ledgerRows.push([
     'ID', '氏名', '区分', 'ビザ', '入社日',
-    'FY', '基準日(付与日)', '付与日数', '繰越日数', '調整',
-    '取得日数', '残日数', '失効日数', '買取日数',
+    'FY', '基準日(付与日)', '付与日数', '繰越日数', '調整(出面に無い取得)',
+    '取得日数(出面)', '残日数', '失効日数', '買取日数',
     '有効期限', 'ステータス', '付与方法',
   ])
 
@@ -1467,19 +1520,22 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
       const db = b.grantDate ? new Date(b.grantDate).getTime() : 0
       return da - db
     })
+    const isJpW = !w.visa || w.visa === 'none'
     for (const r of sorted) {
-      const periodUsed = countPeriodUsed(w.id, r.grantDate)
       // 2026-08-27 修正（有給総点検・第3回）:
       //   - 旧フィールド（grant/carry/adj）へのフォールバックが無く、移行期レコードが0日表示だった
       //   - used に買取(buyoutDays)が入っておらず、画面残数と管理簿の残日数が食い違っていた
       //     （本体 computeUsedDays は買取込みに統一済み。この帳票だけ取り残し）
-      const grantDays = r.grantDays ?? r.grant ?? 0
-      const carryOver = r.carryOver ?? r.carry ?? 0
-      const adjustment = r.adjustment ?? r.adj ?? 0
-      const buyout = r.buyoutDays
-        ?? (r.buyoutHistory || []).reduce((s2, b) => s2 + (b.days || 0), 0)
-      const used = adjustment + buyout + periodUsed
-      const remaining = Math.max(0, grantDays + carryOver - used)
+      const hasDate = !!r.grantDate && /^\d{4}-\d{2}-\d{2}$/.test(r.grantDate)
+      const b = hasDate
+        ? computeRecordBalance(w.id, records as Parameters<typeof computeRecordBalance>[1], r as Parameters<typeof computeRecordBalance>[2], allAtt as Record<string, unknown>, { isJp: isJpW })
+        : null
+      const grantDays = b ? b.grantDays : (r.grantDays ?? r.grant ?? 0)
+      const carryOver = b ? b.carryOver : (isJpW ? 0 : (r.carryOver ?? r.carry ?? 0))
+      const adjustment = b ? b.adjustment : (r.adjustment ?? r.adj ?? 0)
+      const periodUsed = b ? b.periodUsed : 0
+      const remaining = b ? b.remaining : Math.max(0, grantDays + carryOver - adjustment
+        - (r.buyoutDays ?? (r.buyoutHistory || []).reduce((s2, x) => s2 + (x.days || 0), 0)))
       // 2026-07-27 修正: 期限判定を isLeaveExpiredAsOf に統一。
       //   旧実装 `calcExpiryIso(grantDate) < today` は時効発生日との比較で、
       //   有効期限列(fmtExpiry)より1日甘く、境界日で「期限切れ/有効」が矛盾していた
@@ -1488,7 +1544,7 @@ export function generateLeaveLedger(data: LeaveLedgerData): XLSX.WorkBook {
       ledgerRows.push([
         w.id, `${w.name}${retiredLabel}`, w.org || '', visaLabel(w.visa), w.hireDate || '',
         String(r.fy ?? ''), r.grantDate || '', grantDays, carryOver, adjustment,
-        used, remaining, r.expiredDays ?? '', r.buyoutDays ?? '',
+        periodUsed, remaining, r.expiredDays ?? '', b ? (b.buyoutDays || '') : (r.buyoutDays ?? ''),
         fmtExpiry(r.grantDate), status, methodLabel(r.method),
       ])
     }

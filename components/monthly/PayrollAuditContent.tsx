@@ -14,247 +14,21 @@
 'use client'
 
 import { fmtYen } from '@/lib/format'
-import { validatePayroll, type PayrollSnapshot } from '@/lib/payroll-validator'
-
-// ─────────────────────────────────────────
-// 型定義（PayrollAuditModal から移管）
-// ─────────────────────────────────────────
-
-export interface PayrollAuditWorker {
-  id: number
-  name: string
-  /** キャシュモ管理の従業員番号（提出用PDFのヘッダーに載せる） */
-  payrollNo?: string
-  org: string
-  visa: string
-  job: string
-  rate: number
-  hourlyRate?: number
-  otMul: number
-  salary?: number
-  workDays: number
-  actualWorkDays: number
-  compDays: number
-  workAll: number
-  otHours: number
-  plDays: number
-  plUsed: number
-  restDays: number
-  siteOffDays: number
-  examDays?: number
-  cost: number
-  otCost: number
-  totalCost: number
-  absence: number
-  absentCost: number
-  netPay: number
-  prescribedHours?: number
-  workerPrescribedDays?: number  // 配置現場 calendar の所定日数（baseDays とは別概念）
-  hkDays?: number                // 帰国中（一時帰国・復帰未定）日数。所定から除外され無給・非欠勤
-  actualWorkHours?: number
-  legalOtHours?: number
-  dailyOtHours?: number
-  basePay?: number
-  otAllowance?: number
-  absentDeduction?: number
-  compBaseDeduction?: number  // 旧ルール固定給: 補償日 通常分控除（満額・60%を別途休業補償で還元）
-  salaryNetPay?: number
-  fixedBasePay?: number
-  additionalAllowance?: number
-  paidLeaveDays?: number
-  paidLeaveAllowance?: number
-  nonStatutoryOTHours?: number
-  nonStatutoryOTAllowance?: number
-  legalLimit?: number
-  legalHolidayHours?: number
-  legalHolidayAllowance?: number
-  nightHours?: number
-  nightAllowance?: number
-  compAllowance?: number
-  // 休憩短縮手当（2026-09 施行。支給額に加算済み）
-  breakShortenHours?: number
-  breakShortenAllowance?: number
-  // 遠方現場日当・運転手当（2026-10 施行。支給額に加算済み）
-  siteAllowance?: number
-  allowanceDays?: number
-  driveAllowance?: number
-  driveLegs?: number
-  regularWorkDays?: number
-  isDispatched?: boolean
-  dispatchTo?: string
-  dispatchDeduction?: number
-  useOldRules?: boolean
-}
+import { JP_SALARY_AVG_MONTHLY_HOURS, JP_AVG_MONTHLY_WORK_DAYS } from '@/lib/constants'
+// 型・区分判定・監査チェックは lib/payroll-validator.ts へ移した（2026-10-02 総合点検）。
+//   理由: .tsx に置くとテストから読めず（tsconfig の jsx: preserve）、監査チェックの誤検知（10月の全社所定27日で
+//   日本人・旧ルールが全員 ❌ になった件）が機械的に防げなかった。画面側は再輸出だけ残す
+import {
+  getEmploymentMode, calcLegalMonthlyLimit, fmtNum, fmtH, buildAuditChecks,
+  type PayrollAuditWorker, type AuditCheck,
+} from '@/lib/payroll-validator'
+export { getEmploymentMode, calcLegalMonthlyLimit, fmtNum, fmtH, buildAuditChecks, type PayrollAuditWorker, type AuditCheck }
 
 interface Props {
   worker: PayrollAuditWorker
   ym: string
   prescribedDays: number
   baseDays: number
-}
-
-// ─────────────────────────────────────────
-// ヘルパー関数
-// ─────────────────────────────────────────
-
-export function getEmploymentMode(w: PayrollAuditWorker, ym: string): {
-  label: string
-  description: string
-  useOldRules: boolean
-} {
-  const isJapanese = !w.visa || w.visa === 'none'
-  const yearMonth = parseInt(ym.slice(0, 4)) * 100 + parseInt(ym.slice(4, 6))
-  const workerOptedOut = (w as { useOldRules?: boolean }).useOldRules === true
-  const isNewRules = yearMonth >= 202605 && !workerOptedOut
-  const useOldRules = !isNewRules
-  if (isJapanese) {
-    if (w.salary && w.salary > 0) return {
-      label: '月給制（日本人）',
-      description: '基本給は月給固定、残業は時給換算 × otMul で加算',
-      useOldRules,
-    }
-    return {
-      label: '日給制（日本人）',
-      description: '基本給 = 日額 × 出勤日数、残業は (日額/8) × otMul × 残業h',
-      useOldRules,
-    }
-  }
-  if (w.salary && w.salary > 0) return {
-    label: '月給制（外国人）',
-    description: useOldRules
-      ? '基本給は固定月給（所定日数で変動しない）。残業単価・欠勤控除は日給ベースで固定（旧ルール継続者: フン等）'
-      : '基本給は月給固定、時給を月給から逆算して各種手当を計算',
-    useOldRules,
-  }
-  return {
-    label: '時給制（外国人）',
-    description: useOldRules
-      ? '旧ルール: 月所定時間ベース、基本給 = 時給 × 月所定h'
-      : '新ルール: 法令準拠の3層構造（基本給 + 追加所定 + 各種割増）',
-    useOldRules,
-  }
-}
-
-export function calcLegalMonthlyLimit(ym: string): number {
-  const y = parseInt(ym.slice(0, 4))
-  const m = parseInt(ym.slice(4, 6))
-  const daysInMonth = new Date(y, m, 0).getDate()
-  return Math.round((daysInMonth * 40 / 7) * 10) / 10
-}
-
-// テーブルセル向け数値表示（0 なら '—'）
-export function fmtNum(n: number | undefined | null, suffix = ''): string {
-  if (n == null || n === 0) return '—'
-  return `${Math.round(n * 10) / 10}${suffix}`
-}
-
-// 時間 h 表示（0でも数値表示、計算式の中で必要）
-export function fmtH(n: number | undefined | null): string {
-  return `${Math.round((n || 0) * 10) / 10}h`
-}
-
-// ─────────────────────────────────────────
-// 監査チェック構築
-// ─────────────────────────────────────────
-
-export interface AuditCheck {
-  label: string
-  pass: boolean
-  detail: string
-}
-
-export function buildAuditChecks(w: PayrollAuditWorker, ym: string, prescribedDays: number): AuditCheck[] {
-  const checks: AuditCheck[] = []
-  const legalLimit = calcLegalMonthlyLimit(ym)
-  const mode = getEmploymentMode(w, ym)
-
-  // 1. 法定上限チェック
-  const prescribedHours = w.prescribedHours || (prescribedDays * 7)
-  checks.push({
-    label: '所定労働時間が法定上限以内',
-    pass: prescribedHours <= legalLimit,
-    detail: `所定 ${fmtH(prescribedHours)} ≦ 法定上限 ${fmtH(legalLimit)} (= 暦日数 × 40 ÷ 7)`,
-  })
-
-  // 2. 出勤日数の整合性
-  //   分母はスタッフ個別の所定（配置現場カレンダー）を優先。全社所定(prescribedDays)は
-  //   旧ルール用で、未設定の月に 0 が入り全員 ❌ になる時限バグだった（2026-08-27）
-  const daysBasis = w.workerPrescribedDays || prescribedDays
-  const daysAccountedFor = w.workDays + (w.plDays || 0) + (w.restDays || 0) + (w.siteOffDays || 0) + (w.examDays || 0) + (w.compDays || 0)
-  checks.push({
-    label: '出勤実績の合計が所定日数以内',
-    pass: daysBasis <= 0 || daysAccountedFor <= daysBasis + 1,
-    detail: `出勤${w.workDays} + 有給${w.plDays || 0} + 欠勤${w.restDays || 0} + 現場休${w.siteOffDays || 0} + 試験${w.examDays || 0} + 補償${w.compDays || 0}${(w.hkDays || 0) > 0 ? ` ＋ 帰国中${w.hkDays}（所定から除外・無給）` : ''} = ${daysAccountedFor}日 ≦ 所定${prescribedDays}日`,
-  })
-
-  // 3. 支給額の内訳整合
-  const fixedBase = w.fixedBasePay || w.basePay || 0
-  let sumPay: number
-  if (mode.useOldRules) {
-    // 2026-08-27 修正（給与総点検）: 旧ルール表示は「4月以前の全員」も通るため、
-    //   日本人日給月給の構成要素（有給手当・法定休日手当）が抜けていると
-    //   有給取得者・日曜出勤者で「内訳合計が一致しない」誤検知になっていた
-    sumPay = fixedBase
-      + (w.additionalAllowance || 0)
-      + (w.paidLeaveAllowance || 0)
-      + (w.legalHolidayAllowance || 0)
-      + (w.otAllowance || 0)
-      + (w.breakShortenAllowance || 0)
-      + (w.siteAllowance || 0)
-      + (w.driveAllowance || 0)
-      - (w.absentDeduction || 0)
-      - (w.compBaseDeduction || 0)
-  } else {
-    sumPay = fixedBase
-      + (w.additionalAllowance || 0)
-      + (w.paidLeaveAllowance || 0)
-      + (w.nonStatutoryOTAllowance || 0)
-      + (w.otAllowance || 0)
-      + (w.legalHolidayAllowance || 0)
-      + (w.nightAllowance || 0)
-      + (w.compAllowance || 0)
-      + (w.breakShortenAllowance || 0)
-      + (w.siteAllowance || 0)
-      + (w.driveAllowance || 0)
-      - (w.absentDeduction || 0)
-  }
-  const reported = w.salaryNetPay || 0
-  checks.push({
-    label: '支給額の内訳合計が一致',
-    pass: Math.abs(sumPay - reported) < 2,
-    detail: mode.useOldRules
-      ? `基本 ${fmtYen(fixedBase)} + 休業補償 ${fmtYen(w.additionalAllowance || 0)} + 残業 ${fmtYen(w.otAllowance || 0)} - 欠勤 ${fmtYen(w.absentDeduction || 0)}${(w.compBaseDeduction || 0) > 0 ? ` - 補償日通常分 ${fmtYen(w.compBaseDeduction || 0)}` : ''} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`
-      : `基本 ${fmtYen(fixedBase)} + 追加所定 ${fmtYen(w.additionalAllowance || 0)} + 有給日給 ${fmtYen(w.paidLeaveAllowance || 0)} + 所定外労働 ${fmtYen(w.nonStatutoryOTAllowance || 0)} + 法定外残業 ${fmtYen(w.otAllowance || 0)} + 法定休日 ${fmtYen(w.legalHolidayAllowance || 0)} + 深夜 ${fmtYen(w.nightAllowance || 0)} + 休業 ${fmtYen(w.compAllowance || 0)}${(w.siteAllowance || 0) + (w.driveAllowance || 0) > 0 ? ` + 日当 ${fmtYen(w.siteAllowance || 0)} + 運転 ${fmtYen(w.driveAllowance || 0)}` : ''} - 欠勤 ${fmtYen(w.absentDeduction || 0)} = ${fmtYen(sumPay)} （内訳合計）／ ${fmtYen(reported)} （支給額）`,
-  })
-
-  // 4. otMul の妥当性
-  checks.push({
-    label: '残業倍率が法定下限以上',
-    pass: w.otMul >= 1.25,
-    detail: `otMul = ${w.otMul} ≧ 1.25 (労基法37条)`,
-  })
-
-  // 5. 自動検算
-  if (!mode.useOldRules) {
-    const issues = validatePayroll(w as unknown as PayrollSnapshot)
-    if (issues.length === 0) {
-      checks.push({
-        label: '自動検算（労基法・実労働時間ベース）',
-        pass: true,
-        detail: '全項目 ✓: 法定外残業 [0.25, 0.5]倍 / 所定外労働の支給漏れなし / 法定休日 [1.35, 1.60]倍 / 深夜 0.25倍 / 休業 60%',
-      })
-    } else {
-      checks.push({
-        label: '自動検算（労基法・実労働時間ベース）',
-        pass: false,
-        detail: issues.map(i =>
-          `[${i.severity}] ${i.message}: 想定 ${fmtYen(i.expected || 0)} / 実額 ${fmtYen(i.actual || 0)} (差 ${(i.diff || 0) > 0 ? '+' : ''}${fmtYen(i.diff || 0)})`
-        ).join(' / '),
-      })
-    }
-  }
-
-  return checks
 }
 
 // ─────────────────────────────────────────
@@ -271,13 +45,28 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
   // 基本給の式表示
   const basePayFormula = (): string => {
     if (mode.label.startsWith('月給制（日本人）')) {
-      return `月給固定 ${fmtYen(w.salary || 0)}`
+      // 月途中の入社・退職は暦日按分（基本給が月給より少ない月）
+      return (w.basePay || 0) < (w.salary || 0)
+        ? `月給 ${fmtYen(w.salary || 0)} を在籍日数で日割り（暦日比・切上） = ${fmtYen(w.basePay || 0)}`
+        : `月給固定 ${fmtYen(w.salary || 0)}`
     }
     if (mode.label.startsWith('日給制（日本人）')) {
-      return `日額 ${fmtYen(w.rate)} × 出勤日数 ${w.workDays}日 + 補償 ${fmtYen(w.rate)} × 0.6 × ${w.compDays}日 = ${fmtYen(w.basePay || 0)}`
+      // 2026-10-02 総合点検: 人工（夜勤 1.5／日勤＋夜勤 2.5）と、8〜9月分だけ別枠にした日曜の人工を式に出す。
+      //   旧: 「日額 × 出勤日数」だけだったので、夜勤や日曜のある月は式の値が基本給と合わなかった
+      const man = w.manDays ?? w.workDays
+      const lh = w.legalHolidayManDays || 0
+      const payMan = Math.max(0, Math.round((man - lh) * 100) / 100)
+      const parts: string[] = [`日額 ${fmtYen(w.rate)} × 人工 ${payMan}`]
+      const notes: string[] = []
+      if ((w.nightShiftDays || 0) > 0) notes.push(`夜勤 ${w.nightShiftDays}回 = ${w.nightManDays}人工 を含む`)
+      if (lh > 0) notes.push(`日曜の ${lh}人工 は法定休日手当で別枠`)
+      if (notes.length > 0) parts.push(`（出勤 ${w.workDays}日。${notes.join('・')}）`)
+      return `${parts.join('')} = ${fmtYen(w.basePay || 0)}`
     }
     if (mode.label.startsWith('月給制（外国人）')) {
-      return `月給固定 ${fmtYen(w.salary || 0)}`
+      return (w.basePay || 0) < (w.salary || 0)
+        ? `月給 ${fmtYen(w.salary || 0)} を在籍日数で日割り（暦日比・切上） = ${fmtYen(w.basePay || 0)}`
+        : `月給固定 ${fmtYen(w.salary || 0)}`
     }
     if (mode.useOldRules) {
       return `時給 ${fmtYen(w.hourlyRate || 0)} × 月所定時間 ${fmtH(w.prescribedHours)} = ${fmtYen(w.basePay || 0)}`
@@ -420,7 +209,23 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             <tr><td>有給日数</td><td className="font-mono">{w.plUsed || w.plDays || 0}日</td></tr>
             {(w.examDays || 0) > 0 && <tr><td>試験日</td><td className="font-mono">{w.examDays}日</td></tr>}
-            <tr><td>欠勤日数</td><td className="font-mono">{w.absence || w.restDays || 0}日</td></tr>
+            <tr><td>欠勤日数</td><td className="font-mono">{w.absence || 0}日{(w.restDays || 0) > 0 && <span className="text-[10px] text-gray-500 ml-1">（出面の「欠」{w.restDays}日）</span>}</td></tr>
+            {/* 最低20日保証（2026-09-13）・本人の欠勤（案A・2026年9月分〜）・枠内補償日（2026年8月分〜）。2026-10-02 総合点検で表示に追加 */}
+            {w.guaranteeDays !== undefined && (
+              <tr>
+                <td>最低保証（欠勤控除の基準）</td>
+                <td className="font-mono">
+                  保証枠 {w.guaranteeDays}日
+                  {w.personalAbsenceDays !== undefined && <> − 本人の欠勤 {w.personalAbsenceDays}日 = 保証日数 <strong>{Math.max(0, w.guaranteeDays - Math.min(w.personalAbsenceDays, w.guaranteeDays))}日</strong></>}
+                  <div className="text-[10px] text-gray-500">
+                    保証枠 = min(20日, 配置現場カレンダーの所定日数{(w.hkDays || 0) > 0 ? '・帰国中を除いて日割り' : ''})。
+                    欠勤日数 = min(本人の欠勤 ＋ max(0, 保証日数 − 算入日数), 20 − 算入日数)。算入日数 = 出勤 ＋ 有給 ＋ 試験 ＋ 枠内の補償日
+                    {(w.compInGuaranteeDays || 0) > 0 && <>。補償日 {w.compDays}日のうち 枠内 {w.compInGuaranteeDays}日 は100%支給（休業手当60%の対象外）</>}
+                  </div>
+                </td>
+              </tr>
+            )}
+            {(w.hkDays || 0) > 0 && <tr><td>帰国中</td><td className="font-mono">{w.hkDays}日<span className="text-[10px] text-gray-500 ml-1">（在籍日数から除外・無給・欠勤に数えない。基本給・所定日数を暦日比で日割り）</span></td></tr>}
             {(w.siteOffDays || 0) > 0 && <tr><td>現場休</td><td className="font-mono">{w.siteOffDays}日</td></tr>}
             {(w.legalHolidayHours || 0) > 0 && <tr><td>法定休日労働</td><td className="font-mono">{fmtNum(w.legalHolidayHours, 'h')}</td></tr>}
             {(w.nightHours || 0) > 0 && <tr><td>深夜労働</td><td className="font-mono">{fmtNum(w.nightHours, 'h')}</td></tr>}
@@ -440,16 +245,31 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 <div className="font-bold text-base">{fmtYen(w.fixedBasePay || w.basePay || 0)}</div>
               </td>
             </tr>
-            {(w.additionalAllowance || w.compAllowance || 0) > 0 && (
+            {/* 2026-10-02 総合点検: 追加所定手当と休業手当を別の行にする。
+                旧: 1行で `additionalAllowance || compAllowance` を出していたため、両方ある人（出勤21日＋現場都合休2日など）は
+                休業手当の行が消え、休業手当だけの人には追加所定の式が付いていた */}
+            {(w.additionalAllowance || 0) > 0 && (
               <tr>
-                <td>{mode.useOldRules ? '休業補償' : '追加所定手当 / 補償手当'}</td>
+                <td>{mode.useOldRules ? '休業補償' : '追加所定手当'}</td>
                 <td className="font-mono">
                   <div className="text-[10px] text-gray-500">
                     {mode.useOldRules
-                      ? '時給 × 6h40min × 0.6 × 補償日数'
-                      : `時給 × 7h × MAX(0, 実出勤日数 − ベース日数20) = 追加出勤日 × 7h × 時給`}
+                      ? `日給（時給 × 1日所定）× 0.6 × 補償日 ${fmtNum(w.compDays, '日')}`
+                      : `時給 ${fmtYen(w.hourlyRate || 0)} × 7h × MAX(0, 出勤${w.regularWorkDays ?? w.actualWorkDays}＋試験${w.examDays || 0} − ベース日数${baseDays}）`}
                   </div>
-                  <div className="font-bold">{fmtYen(w.additionalAllowance || w.compAllowance || 0)}</div>
+                  <div className="font-bold">{fmtYen(w.additionalAllowance || 0)}</div>
+                </td>
+              </tr>
+            )}
+            {!mode.useOldRules && (w.compAllowance || 0) > 0 && (
+              <tr>
+                <td>休業手当<br/><span className="text-[10px] text-gray-500">(現場都合休 60%・労基法26条)</span></td>
+                <td className="font-mono">
+                  <div className="text-[10px] text-gray-500">
+                    時給 {fmtYen(w.hourlyRate || 0)} × 7h × 0.6 × {fmtNum((w.compDays || 0) - (w.compInGuaranteeDays || 0), '日')}
+                    {(w.compInGuaranteeDays || 0) > 0 && <>（補償日 {w.compDays}日 − 保証枠内で100%支給の {w.compInGuaranteeDays}日）</>}
+                  </div>
+                  <div className="font-bold">{fmtYen(w.compAllowance || 0)}</div>
                 </td>
               </tr>
             )}
@@ -509,8 +329,13 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             {(w.legalHolidayAllowance || 0) > 0 && (
               <tr>
-                <td>法定休日労働手当 (1.35倍)</td>
+                <td>法定休日労働手当 (1.35倍・8h超は1.60倍)</td>
                 <td className="font-mono">
+                  <div className="text-[10px] text-gray-500">
+                    {w.visa === 'none'
+                      ? `時給換算（${(w.salary || 0) > 0 ? `月給 ÷ ${JP_SALARY_AVG_MONTHLY_HOURS}h` : '日額 ÷ 8h'}）× (1.35 × 8h以下 ＋ 1.60 × 8h超) × 日曜 ${fmtNum(w.legalHolidayDays, '日')} ${fmtH(w.legalHolidayHours)}（日ごとに8hの線を引く・8〜9月分だけ）`
+                      : `時給 ${fmtYen(w.hourlyRate || 0)} × (1.35 × 8h以下 ＋ 1.60 × 8h超) × 日曜 ${fmtH(w.legalHolidayHours)}`}
+                  </div>
                   <div className="font-bold">{fmtYen(w.legalHolidayAllowance || 0)}</div>
                 </td>
               </tr>
@@ -561,6 +386,16 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                       日額 {fmtYen(w.rate)} × {fmtNum(w.absence, '日')}（欠勤・切捨）
                     </div>
                   )}
+                  {!mode.useOldRules && w.visa !== 'none' && (
+                    <div className="text-[10px] text-gray-500">
+                      時給 {fmtYen(w.hourlyRate || 0)} × 7h × {fmtNum(w.absence, '日')}（欠勤日数は③の最低保証の式・切捨）
+                    </div>
+                  )}
+                  {w.visa === 'none' && (w.salary || 0) > 0 && (
+                    <div className="text-[10px] text-gray-500">
+                      基本給 ÷ {JP_AVG_MONTHLY_WORK_DAYS.toFixed(2)}日（年250日÷12）× {fmtNum(w.absence, '日')}（出面の「欠」＋出勤日の不足分・切捨・基本給が上限）
+                    </div>
+                  )}
                   <div className="font-bold">- {fmtYen(w.absentDeduction || 0)}</div>
                 </td>
               </tr>
@@ -587,6 +422,18 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
           </tbody>
         </table>
       </section>
+
+      {/* 注意点（支給額は変えない・2026-10-02 総合点検・2026年9月分〜）。給与チェックの warning と同じ文 */}
+      {(w.payNotes?.length || 0) > 0 && (
+        <section>
+          <h3 className="font-bold text-amber-800 mb-2 border-b border-amber-200 pb-1">⚠ 注意点（支給額には入れていません・締める前に確認）</h3>
+          <ul className="space-y-1.5">
+            {w.payNotes!.map((n, i) => (
+              <li key={i} className="p-2 rounded-lg text-xs bg-amber-50 border border-amber-300 text-amber-900">{n.message}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* ⑤ 監査チェック */}
       <section>

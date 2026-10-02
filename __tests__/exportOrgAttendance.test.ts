@@ -101,9 +101,9 @@ describe('月次集計Excel ベトナム人シート（202609〜 新旧統合）
     legalHolidayAllowance: 0, nightAllowance: 0, compAllowance: 0, absence: 0, absentDeduction: 0, salaryNetPay: 280000,
     ...over,
   } as unknown as WorkerMonthly)
-  const oldOne = vn({ id: 104, name: 'フン', useOldRules: true, payrollNo: '9999', salary: 396105, hourlyRate: 2830, prescribedHours: 161,
-    basePay: 396105, fixedBasePay: undefined, additionalAllowance: 0, otAllowance: 29430, breakShortenAllowance: 17658,
-    absentDeduction: 0, compBaseDeduction: 0, salaryNetPay: 443193 })
+  const oldOne = vn({ id: 104, name: '旧契約A', useOldRules: true, payrollNo: '9999', salary: 400000, hourlyRate: 2830, prescribedHours: 161,   // 架空の金額
+    basePay: 400000, fixedBasePay: undefined, additionalAllowance: 0, otAllowance: 29430, breakShortenAllowance: 17658,
+    absentDeduction: 0, compBaseDeduction: 0, salaryNetPay: 447088 })
 
   it('202609: 新旧が1シート「日比建設・ベトナム人」に載り、(旧)シートは無い。契約列で区別', () => {
     const wb = generateMonthlyExcel({ ym: '202609', workers: [vn({}), oldOne], subcons: [], siteNames: { ihi: 'IHI' }, prescribedDays: 21 })
@@ -112,13 +112,13 @@ describe('月次集計Excel ベトナム人シート（202609〜 新旧統合）
     const h = rows[2]
     expect(h[1]).toBe('従業員番号'); expect(h[2]).toBe('契約')
     expect(rows[3][0]).toBe('グエン'); expect(rows[3][2]).toBe('新')
-    expect(rows[4][0]).toBe('フン'); expect(rows[4][2]).toBe('旧')
+    expect(rows[4][0]).toBe('旧契約A'); expect(rows[4][2]).toBe('旧')
     expect(rows[4][1]).toBe('9999')
     // 旧の残業は「残業手当(旧・1.25倍)」列、新の残業は「法定外残業手当」列
     expect(rows[4][h.indexOf('残業手当(旧・1.25倍)')]).toBe(29430)
     expect(rows[4][h.indexOf('法定外残業手当')]).toBeUndefined()
     expect(rows[4][h.indexOf('休憩短縮手当')]).toBe(17658)
-    expect(rows[4][h.indexOf('支給額合計')]).toBe(443193)
+    expect(rows[4][h.indexOf('支給額合計')]).toBe(447088)
     expect(rows.some(r => String(r[0]).startsWith('✓ 自動検算'))).toBe(true)
   })
 

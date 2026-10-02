@@ -16,6 +16,7 @@ import {
   generateConsentLedger,
   workbookToBuffer,
   markUnconfirmedWorkbook,
+  sitesForMonthSheets,
 } from '@/lib/export'
 import { isMonthLockedInLocks } from '@/lib/locks'
 import { loadCalendarMatrix } from '@/lib/calendar-matrix'
@@ -59,7 +60,10 @@ export async function GET(request: NextRequest) {
       attDrv = att.drv
     }
 
-    const activeSites = main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name }))
+    // 帳票に載せる現場 = 終了していない現場 ＋ その月に出面がある現場（2026-10-02 総合点検。旧: 終了した現場を除いていたので、
+    //   月が終わってから終了にした現場の日数が出面一覧・現場別出面一覧・勤怠サマリーから抜けた）。休憩設定も渡す
+    const activeSites = sitesForMonthSheets(main.sites, ymStr, attD, attSD)
+      .map(s => ({ id: s.id, name: s.name, workSchedule: s.workSchedule }))
     const baseDays = (main.defaultRates as { baseDays?: number })?.baseDays ?? 20
 
     // 外国人給与の週残業しきい値を「カレンダー予定日ベース」で判定するための日別カレンダー（監査④）。
@@ -103,6 +107,12 @@ export async function GET(request: NextRequest) {
         for (const cal of calendars) {
           if (cal.days) calendarDaysMap[cal.siteId] = cal.days
         }
+        // 勤怠サマリーの基本給(固定)を月次集計とそろえる（帰国・月途中の入社の日割り、固定月給・2026-10-02）
+        const siteWorkDaysMap = (main as { siteWorkDays?: Record<string, Record<string, number>> }).siteWorkDays?.[ymStr] || {}
+        const homeLeaves = await getAllActiveHomeLeaves()
+        const allowances = await loadMonthlyAllowances(main, ymStr, attD, attDrv)
+        const monthly = computeMonthly(main, attD, attSD, ymStr, main.workDays[ymStr] || 0,
+          Object.keys(siteWorkDaysMap).length > 0 ? siteWorkDaysMap : undefined, baseDays, calendarDaysMap, homeLeaves, allowances)
         const exportData = {
           ym: ymStr,
           workers: main.workers,
@@ -112,6 +122,7 @@ export async function GET(request: NextRequest) {
           massign: main.massign,
           calendarDays: calendarDaysMap,
           baseDays,
+          monthlyWorkers: monthly.workers,
         }
         // 2026-09-17: 両社共通の生成関数に統一。ファイル名も他の帳票と同じ「帳票名_会社_年月」に
         const wb = generateOrgAttendance(exportData, type)
@@ -203,7 +214,8 @@ export async function GET(request: NextRequest) {
         // 同じ法定帳簿（年次有給休暇管理簿）の二重実装で修正ドリフトが起きかけていたため。
         const nowY = currentYearJst()
         const allAttPl: Record<string, import('@/types').AttendanceEntry> = {}
-        for (let y = nowY - 3; y <= nowY; y++) {
+        // 来年分も読む（/api/leave/export-ledger と同じ・2026-10-02 総合点検。承認済みの来年の有給を管理簿の残に反映する）
+        for (let y = nowY - 3; y <= nowY + 1; y++) {
           for (let m = 1; m <= 12; m++) {
             const att = await getAttData(`${y}${String(m).padStart(2, '0')}`)
             if (att.d) Object.assign(allAttPl, att.d)
@@ -278,7 +290,8 @@ export async function GET(request: NextRequest) {
       }
 
       case 'perSite': {
-        const allSites = main.sites.filter(s => !s.archived).map(s => ({ id: s.id, name: s.name }))
+        // その月に出面がある現場は終了済みでも載せる（2026-10-02）
+        const allSites = activeSites.map(s => ({ id: s.id, name: s.name }))
         const wb = generatePerSiteAttendance({
           ym: ymStr,
           workers: main.workers,
