@@ -1,7 +1,11 @@
 'use client'
 
 import { LeaveRequest, SiteOption, MforemanMap } from '../types'
+import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
+import { FieldError } from '@/components/ui/PageParts'
 
+// 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify・FieldError）に置き換え
 // 申請タブ: 有給申請の職長承認・最終承認・却下・一括処理・日付変更
 // UI状態（フィルタ・却下入力・展開状態など）はデータ再取得で画面全体が
 // 読み込み表示に切り替わっても消えないよう、親（page）が保持する
@@ -14,6 +18,8 @@ export interface RequestsUiState {
   // 日付変更モーダル用（承認済み有給の誤申請修正）
   modifyingId: string | null
   modifyNewDate: string
+  /** 日付変更の欄の不備（入力が変わったら消す） */
+  modifyDateError: string | null
   // 一括承認用: 展開中グループ集合（key = `${workerId}_${status}_${reason}`）
   expandedGroups: Set<string>
   /** 有給を取る日の月で絞る（'YYYY-MM'・空=すべて）。2026-10-01: 先の予定（翌年の帰国中の有給など）が
@@ -28,6 +34,7 @@ export const initialRequestsUi: RequestsUiState = {
   rejectReason: '',
   modifyingId: null,
   modifyNewDate: '',
+  modifyDateError: null,
   expandedGroups: new Set<string>(),
   month: '',
 }
@@ -52,7 +59,7 @@ export default function RequestsTab({
 }: Props) {
   if (!visible) return null
 
-  const { filter: reqFilter, processingReq, rejectingId, rejectReason, modifyingId, modifyNewDate, expandedGroups } = ui
+  const { filter: reqFilter, processingReq, rejectingId, rejectReason, modifyingId, modifyNewDate, modifyDateError, expandedGroups } = ui
 
   const byStatus = reqFilter === 'all' ? leaveRequests
     : leaveRequests.filter(r => r.status === reqFilter)
@@ -89,10 +96,10 @@ export default function RequestsTab({
       // 失敗（権限なし・処理済み等）を必ず表示する（個別最終承認と同方式 2026-08-27）
       if (!res.ok) {
         const err = await res.json().catch(() => null)
-        alert(err?.error || `職長承認に失敗しました (${res.status})`)
+        notify.failed('職長承認', err?.error)
       }
       onRefresh()
-    } catch { alert('通信エラーが発生しました') } finally { patchUi({ processingReq: null }) }
+    } catch (e) { notify.failed('職長承認', e) } finally { patchUi({ processingReq: null }) }
   }
   const handleApprove = async (id: string) => {
     patchUi({ processingReq: id })
@@ -113,15 +120,20 @@ export default function RequestsTab({
         const err = await res.clone().json().catch(() => null)
         if (err?.code === 'LEAVE_OVERDRAFT' && !extra.allowOverdraft) {
           const b = err.balance
-          const over = confirm(
-            `有給残が足りません（枠 ${b?.total}日 / 消化 ${b?.used}日 / 残 ${b?.remaining ?? 0}日）。\n\n`
-            + `残数を超えて承認しますか？（記録に残ります）`
-          )
+          const over = await confirmDialog({
+            title: '残数を超えて承認しますか？',
+            description: `有給残が足りません（枠 ${b?.total}日 / 消化 ${b?.used}日 / 残 ${b?.remaining ?? 0}日）。\n超えて承認した記録は残ります。`,
+            confirmLabel: '超えて承認する',
+          })
           if (!over) { patchUi({ processingReq: null }); return }
           extra.allowOverdraft = true
           res = await post(extra)
         } else if (err?.code === 'LEAVE_OVERWRITES_WORK' && !extra.allowOverwrite) {
-          const over = confirm(`${err.error}\n\nそれでも有給で上書きしますか？（記録に残ります）`)
+          const over = await confirmDialog({
+            title: 'それでも有給で上書きしますか？',
+            description: `${err.error}\n上書きした記録は残ります。`,
+            confirmLabel: '上書きする',
+          })
           if (!over) { patchUi({ processingReq: null }); return }
           extra.allowOverwrite = true
           res = await post(extra)
@@ -130,15 +142,21 @@ export default function RequestsTab({
       // ⚠️ 旧実装はレスポンスを見ずに成功扱いだった。失敗（月次ロック・残数不足等）を必ず表示する
       if (!res.ok) {
         const err = await res.json().catch(() => null)
-        alert(err?.error || `承認に失敗しました (${res.status})`)
+        notify.failed('承認', err?.error)
       }
       onRefresh()
-    } catch {} finally { patchUi({ processingReq: null }) }
+    } catch (e) { notify.failed('承認', e) } finally { patchUi({ processingReq: null }) }
   }
   // 承認済み有給の取消（2026-09-02 追加）。API の revoke は以前からあったが UI が無く、
   //   管理者が出面グリッドで p を消すしかなかった（申請は approved のまま残り再申請が 409 になる）
   const handleRevoke = async (id: string) => {
-    const reason = prompt('承認済みの有給を取り消します。理由を入力してください\n（出面の「有」も消え、残数が戻ります）')
+    const reason = await confirmWithReason({
+      title: '承認済みの有給を取り消しますか？',
+      description: '出面の「有」も消え、残数が戻ります。取り消した記録は残ります。',
+      confirmLabel: '取り消す',
+      tone: 'danger',
+      reason: { label: '取り消す理由', placeholder: '例: 本人の申し出で出勤に変更' },
+    })
     if (reason === null) return
     patchUi({ processingReq: id })
     try {
@@ -148,10 +166,10 @@ export default function RequestsTab({
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)
-        alert(err?.error || `取消に失敗しました (${res.status})`)
+        notify.failed('取り消し', err?.error)
       }
       onRefresh()
-    } catch {} finally { patchUi({ processingReq: null }) }
+    } catch (e) { notify.failed('取り消し', e) } finally { patchUi({ processingReq: null }) }
   }
   const handleReject = async (id: string) => {
     patchUi({ processingReq: id })
@@ -164,17 +182,17 @@ export default function RequestsTab({
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)
-        alert(err?.error || `却下に失敗しました (${res.status})`)
+        notify.failed('却下', err?.error)
         // 失敗時は入力（却下理由）を消さない
         return
       }
       patchUi({ rejectingId: null, rejectReason: '' })
       onRefresh()
-    } catch { alert('通信エラーが発生しました') } finally { patchUi({ processingReq: null }) }
+    } catch (e) { notify.failed('却下', e) } finally { patchUi({ processingReq: null }) }
   }
   // 承認済み有給の日付変更（誤申請修正用、admin/approver のみ）
   const handleModifyDate = async (id: string, newDate: string) => {
-    if (!newDate) { alert('新しい日付を選択してください'); return }
+    if (!newDate) { patchUi({ modifyDateError: '新しい日付を選択してください' }); return }
     patchUi({ processingReq: id })
     try {
       const stored = localStorage.getItem('hibi_auth')
@@ -188,25 +206,29 @@ export default function RequestsTab({
       if (res.status === 409) {
         const d = await res.clone().json().catch(() => null)
         if (d?.code === 'LEAVE_OVERWRITES_WORK') {
-          if (!confirm(`${d.error}\n\nそれでも有給で上書きしますか？（記録に残ります）`)) return
+          if (!(await confirmDialog({
+            title: 'それでも有給で上書きしますか？',
+            description: `${d.error}\n上書きした記録は残ります。`,
+            confirmLabel: '上書きする',
+          }))) return
           res = await postMod({ allowOverwrite: true })
         }
       }
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
-        alert(d.error || '日付変更に失敗しました')
+        notify.failed('日付の変更', d.error)
         return
       }
       const data = await res.json()
       if (data.noop) {
-        alert('変更前と同じ日付です')
+        notify.info('日付は変わっていません', '変更前と同じ日付でした。')
       } else {
-        alert(`日付を変更しました\n${data.oldDate} → ${data.newDate}`)
+        notify.success('日付を変更しました', `${data.oldDate} → ${data.newDate}`)
       }
-      patchUi({ modifyingId: null, modifyNewDate: '' })
+      patchUi({ modifyingId: null, modifyNewDate: '', modifyDateError: null })
       onRefresh()
-    } catch {
-      alert('通信エラー')
+    } catch (e) {
+      notify.failed('日付の変更', e)
     } finally { patchUi({ processingReq: null }) }
   }
   // ── 一括処理（2026-05-15 追加） ──
@@ -218,6 +240,7 @@ export default function RequestsTab({
     opts: { reason?: string } = {},
   ) => {
     if (ids.length === 0) return
+    const actionLabel = action === 'foreman_approve' ? '職長承認' : action === 'approve' ? '承認' : '却下'
     const bulkKey = `bulk:${action}:${ids[0]}`
     patchUi({ processingReq: bulkKey })
     try {
@@ -247,18 +270,22 @@ export default function RequestsTab({
         const err = await res.json().catch(() => null)
         if (res.status === 409 && err?.code === 'LEAVE_OVERDRAFT') overdrafts.push(id)
         else if (res.status === 409 && err?.code === 'LEAVE_OVERWRITES_WORK') overwrites.push({ id, error: err?.error || '' })
-        else failures.push({ id, error: err?.error || `HTTP ${res.status}` })
+        else failures.push({ id, error: err?.error || '理由が返ってきませんでした' })
       }
       // 出勤入力・承認済みの日の上書き（2026-10-02 総合点検）: 内容を見せて確認のうえでだけ上書き承認
       if (overwrites.length > 0 && action === 'approve') {
-        const over = confirm(`${overwrites.length}件は出勤の入力か日の承認がある日です:\n\n${overwrites.map(o => o.error).join('\n')}\n\nそれでも有給で上書きしますか？（記録に残ります）`)
+        const over = await confirmDialog({
+          title: 'それでも有給で上書きしますか？',
+          description: `${overwrites.length}件は出勤の入力か日の承認がある日です。\n${overwrites.map(o => o.error).join('\n')}\n上書きした記録は残ります。`,
+          confirmLabel: '上書きする',
+        })
         if (over) {
           const retry = await Promise.all(overwrites.map(async o => ({ id: o.id, res: await post(o.id, { allowOverwrite: true }) })))
           for (const { id, res } of retry) {
             if (res.ok) continue
             const err = await res.json().catch(() => null)
             if (res.status === 409 && err?.code === 'LEAVE_OVERDRAFT') overdrafts.push(id)
-            else failures.push({ id, error: err?.error || `HTTP ${res.status}` })
+            else failures.push({ id, error: err?.error || '理由が返ってきませんでした' })
           }
         } else {
           for (const o of overwrites) failures.push({ id: o.id, error: '上書きしなかった' })
@@ -266,13 +293,17 @@ export default function RequestsTab({
       }
       // 残数超過は個別承認と同じく、確認のうえ超過承認で再実行できる
       if (overdrafts.length > 0 && action === 'approve') {
-        const over = confirm(`${overdrafts.length}件が有給残の不足で承認できませんでした。\n残数を超えて承認しますか？（記録に残ります）`)
+        const over = await confirmDialog({
+          title: '残数を超えて承認しますか？',
+          description: `${overdrafts.length}件が有給残の不足で承認できませんでした。\n超えて承認した記録は残ります。`,
+          confirmLabel: '超えて承認する',
+        })
         if (over) {
           const retry = await Promise.all(overdrafts.map(async id => ({ id, res: await post(id, { allowOverdraft: true }) })))
           for (const { id, res } of retry) {
             if (!res.ok) {
               const err = await res.json().catch(() => null)
-              failures.push({ id, error: err?.error || `HTTP ${res.status}` })
+              failures.push({ id, error: err?.error || '理由が返ってきませんでした' })
             }
           }
         } else {
@@ -282,13 +313,13 @@ export default function RequestsTab({
         failures.push(...overdrafts.map(id => ({ id, error: '残数不足' })))
       }
       if (failures.length > 0) {
-        alert(`${ids.length}件中 ${failures.length}件が失敗しました:\n` +
+        notify.error(`${ids.length}件中 ${failures.length}件を${actionLabel}できませんでした`,
           failures.slice(0, 5).map(f => `・${f.error}`).join('\n') +
           (failures.length > 5 ? `\n…他${failures.length - 5}件` : ''))
       }
       if (action === 'reject' && failures.length === 0) { patchUi({ rejectingId: null, rejectReason: '' }) }
       onRefresh()
-    } catch { alert('通信エラーが発生しました') } finally { patchUi({ processingReq: null }) }
+    } catch (e) { notify.failed(actionLabel, e) } finally { patchUi({ processingReq: null }) }
   }
   // 申請を「スタッフ + status + reason」でグループ化
   // 同一条件のものを集約してまとめて承認/却下できるようにする。
@@ -456,7 +487,8 @@ export default function RequestsTab({
                             <input
                               type="date"
                               value={modifyNewDate}
-                              onChange={e => patchUi({ modifyNewDate: e.target.value })}
+                              aria-invalid={!!modifyDateError}
+                              onChange={e => patchUi({ modifyNewDate: e.target.value, modifyDateError: null })}
                               className="border border-amber-300 rounded-lg px-3 py-1.5 text-sm bg-white"
                             />
                             <button
@@ -467,12 +499,13 @@ export default function RequestsTab({
                               {processingReq === req.id ? '処理中...' : '日付変更を実行'}
                             </button>
                             <button
-                              onClick={() => patchUi({ modifyingId: null, modifyNewDate: '' })}
+                              onClick={() => patchUi({ modifyingId: null, modifyNewDate: '', modifyDateError: null })}
                               className="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs"
                             >
                               キャンセル
                             </button>
                           </div>
+                          <FieldError>{modifyDateError}</FieldError>
                         </div>
                       )}
                       {rejectingId === req.id && (

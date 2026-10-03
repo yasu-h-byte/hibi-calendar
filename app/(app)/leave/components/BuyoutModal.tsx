@@ -2,8 +2,12 @@
 
 import { useState } from 'react'
 import { PLWorker } from '../types'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
+import { FieldError } from '@/components/ui/PageParts'
 
 // 買取記録モーダル (Phase 6)
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 
 interface Props {
   worker: PLWorker
@@ -19,6 +23,7 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
     reason: (isJp ? 'year-end' : 'retirement') as 'year-end' | 'retirement' | 'other',
   })
   const [buyoutSubmitting, setBuyoutSubmitting] = useState(false)
+  const [fieldError, setFieldError] = useState<{ days?: string; amount?: string }>({})
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !buyoutSubmitting && onClose()}>
@@ -47,17 +52,19 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
 
           <div>
             <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">買取日数</label>
-            <input type="number" value={buyoutForm.days} onChange={e => setBuyoutForm(prev => ({ ...prev, days: e.target.value }))}
-              placeholder="例: 5"
+            <input type="number" value={buyoutForm.days} onChange={e => { setFieldError({}); setBuyoutForm(prev => ({ ...prev, days: e.target.value })) }}
+              placeholder="例: 5" aria-invalid={!!fieldError.days}
               className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm" />
+            <FieldError>{fieldError.days}</FieldError>
             <p className="text-3xs text-gray-400 mt-1">※残日数の範囲内で指定</p>
           </div>
 
           <div>
             <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">買取金額（任意、¥）</label>
-            <input type="number" value={buyoutForm.amount} onChange={e => setBuyoutForm(prev => ({ ...prev, amount: e.target.value }))}
-              placeholder="例: 50000"
+            <input type="number" value={buyoutForm.amount} onChange={e => { setFieldError({}); setBuyoutForm(prev => ({ ...prev, amount: e.target.value })) }}
+              placeholder="例: 50000" aria-invalid={!!fieldError.amount}
               className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm" />
+            <FieldError>{fieldError.amount}</FieldError>
           </div>
         </div>
 
@@ -75,24 +82,29 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
               //   退職時清算・その他は今の期
               const targetPrev = buyoutForm.reason === 'year-end'
               if (targetPrev && !worker.prevPeriod) {
-                alert('終わった期がありません（期末買取は期が終わってから記録します）')
+                notify.error('終わった期がありません', '期末買取は期が終わってから記録します。退職時清算・その他なら今の期に記録できます。')
                 return
               }
               if (targetPrev && worker.prevPeriod?.yearEndBuyoutRecorded) {
-                alert('前の期の期末買取は記録済みです。やり直す場合は先に既存の買取記録を取り消してください')
+                notify.error('前の期の期末買取は記録済みです', 'やり直す場合は、先に既存の買取記録を取り消してください。')
                 return
               }
               const limit = targetPrev ? (worker.prevPeriod?.remaining ?? 0) : worker.remaining
               // 2026-08-27 追加: 注記どおり残日数の範囲内に制限（旧: >0 のみで超過買取が送れた）
               if (days > limit) {
-                alert(`買取日数（${days}日）が${targetPrev ? '前の期の' : ''}残日数（${limit}日）を超えています`)
+                setFieldError({ days: `買取日数（${days}日）が${targetPrev ? '前の期の' : ''}残日数（${limit}日）を超えています` })
                 return
               }
               if (buyoutForm.amount && Number(buyoutForm.amount) < 0) {
-                alert('金額に負の値は入力できません')
+                setFieldError({ amount: '金額に負の値は入力できません' })
                 return
               }
-              if (!confirm(`${worker.name}さんの有給 ${days}日を買取記録しますか？\n理由: ${buyoutForm.reason === 'year-end' ? '期末買取' : buyoutForm.reason === 'retirement' ? '退職時清算' : 'その他'}${buyoutForm.amount ? `\n金額: ¥${Number(buyoutForm.amount).toLocaleString()}` : ''}`)) return
+              const reasonLabel = buyoutForm.reason === 'year-end' ? '期末買取' : buyoutForm.reason === 'retirement' ? '退職時清算' : 'その他'
+              if (!(await confirmDialog({
+                title: `${worker.name}さんの有給 ${days}日を買取として記録しますか？`,
+                description: `理由: ${reasonLabel}${buyoutForm.amount ? `\n金額: ¥${Number(buyoutForm.amount).toLocaleString()}` : ''}\n買取日数のぶん残日数が減ります。`,
+                confirmLabel: '記録する',
+              }))) return
               setBuyoutSubmitting(true)
               try {
                 const currentFy = targetPrev && worker.prevPeriod
@@ -113,7 +125,8 @@ export default function BuyoutModal({ worker, password, onClose, onSuccess }: Pr
                 if (res.ok) {
                   onSuccess()
                 } else {
-                  alert('買取記録に失敗しました')
+                  const err = await res.json().catch(() => null)
+                  notify.failed('買取の記録', err?.error)
                 }
               } finally { setBuyoutSubmitting(false) }
             }}

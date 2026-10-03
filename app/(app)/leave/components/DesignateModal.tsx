@@ -2,7 +2,10 @@
 
 import { useState } from 'react'
 import { PLWorker, SiteOption } from '../types'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify）に置き換え
 // 時季指定モーダル / 管理者手動P入力 (Phase 5 / 案B)
 // kind により初期値が変わる:
 //   designation  … 年5日未達バナーから。日付リスト空・上書きOFF・備考「年5日取得義務対応」
@@ -107,8 +110,11 @@ export default function DesignateModal({ worker, kind, sites, password, onClose,
               // 同じ日の重複入力は1件に（2026-08-27）
               const validDates = [...new Set(designateDates.filter(d => !!d))]
               const label = kind === 'designation' ? '時季指定' : '有給として記録'
-              const msg = `${worker.name}さんに以下の日を${label}しますか？\n${validDates.join('\n')}\n\n出面にPが自動入力され、履歴が記録されます。${designateOverwriteHomeLeave ? '\n\n⚠️ 既存の帰国マーカーは削除されます。' : ''}`
-              if (!confirm(msg)) return
+              if (!(await confirmDialog({
+                title: `${worker.name}さんの ${validDates.length}日を${label}しますか？`,
+                description: `${validDates.join('\n')}\n\n出面に P が自動で入り、履歴が記録されます。${designateOverwriteHomeLeave ? '\n既存の帰国の印は消えます。' : ''}`,
+                confirmLabel: kind === 'designation' ? '時季指定する' : '記録する',
+              }))) return
               setDesignateSubmitting(true)
               try {
                 const payload = {
@@ -132,12 +138,12 @@ export default function DesignateModal({ worker, kind, sites, password, onClose,
                   const err = await res.clone().json().catch(() => null)
                   if (err?.code === 'LEAVE_OVERDRAFT') {
                     const b = err.balance
-                    const over = confirm(
-                      `${worker.name} さんの有給残は ${b?.remaining ?? 0} 日です`
-                      + `（枠 ${b?.total}日 / 消化 ${b?.used}日）。\n`
-                      + `${validDates.length}日 を登録すると枠を超えます。\n\n`
-                      + `残数を超えて登録しますか？（記録に残ります）`
-                    )
+                    const over = await confirmDialog({
+                      title: '残数を超えて登録しますか？',
+                      description: `${worker.name}さんの有給残は ${b?.remaining ?? 0}日です（枠 ${b?.total}日 / 消化 ${b?.used}日）。\n`
+                        + `${validDates.length}日を登録すると枠を超えます。超えて登録した記録は残ります。`,
+                      confirmLabel: '超えて登録する',
+                    })
                     if (!over) return
                     res = await post({ allowOverdraft: true })
                   }
@@ -146,7 +152,7 @@ export default function DesignateModal({ worker, kind, sites, password, onClose,
                   onSuccess()
                 } else {
                   const err = await res.json().catch(() => null)
-                  alert(err?.error || '処理に失敗しました')
+                  notify.failed(kind === 'designation' ? '時季指定' : '有給の記録', err?.error)
                 }
               } finally { setDesignateSubmitting(false) }
             }}

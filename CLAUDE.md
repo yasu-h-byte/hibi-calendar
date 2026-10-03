@@ -54,6 +54,9 @@ Tailwind は `tailwind.config.ts` の `content` に列挙したディレクト�
   必ず完全なクラス名を文字列リテラルで書く
 - 文字の大きさは **px で指定しない**（`text-[10px]` 禁止）。rem 系（`text-3xs`/`text-2xs`/`text-xs`/`text-sm`…）を使う。
   10px 相当より小さい字は使わない。`npm run lint:px` が検出する。表は [docs/ui-design.md](docs/ui-design.md) の「文字の大きさ」節
+- ブラウザ標準の `confirm()` / `alert()` / `prompt()` は使わない。確認は `lib/confirm-dialog.ts`（confirmDialog / confirmDanger / confirmWithReason）、
+  お知らせは `lib/notify.ts`（notify.success / failed / error）、入力の不備は `<FieldError>`。`npm run lint:dialog` が検出する。
+  決まりは [docs/ui-design.md](docs/ui-design.md) の「確認・お知らせ・保存の部品」節
 
 **2026-07 有給消化バー障害の記録**
 

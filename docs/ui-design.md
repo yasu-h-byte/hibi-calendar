@@ -131,6 +131,39 @@ rem 系へまとめて直した（見た目は同じ）。`npm run lint:px` が 
   カレンダー署名の出勤・休みも色だけで示さず、文字と日越の凡例を添える
 - スタッフ画面の内訳・期限などの小さい文字は 12px 以上（旧 10px / 9px）
 
+## 確認・お知らせ・保存の部品（2026-10-03 UI/UX 磨き込み 土台②・代表 OK）
+
+ブラウザ標準の `confirm()` / `alert()` / `prompt()` は使わない（OS ごとに見た目が違う・ボタンがいつも OK／キャンセル・理由を書けない・
+スマホで字が小さい・「通信エラーが発生しました」だけで次の手が分からない）。見本: https://claude.ai/artifact/CVvMip58wSYuRKnDukadrh
+`npm run lint:dialog` が置き換え済みの場所（`scripts/lint-browser-dialogs.mjs` の CONVERTED）で検出する。画面を置き換えたら CONVERTED に足す。
+
+**確認（`lib/confirm-dialog.ts`・窓は `components/ui/Confirm.tsx` の `<ConfirmHost />`）**
+
+| 型 | 使う関数 | 決まり |
+|---|---|---|
+| ① ふつうの確認（提出・承認・保存・上書き） | `await confirmDialog({ title, description, confirmLabel })` | 主役ボタンは紺。言葉は起きることの動詞（提出する・承認する）。「やめる」が左 |
+| ② 取り消し・削除（元に戻せない） | `await confirmDanger({ … })` | 赤は取り消し・削除・消すときだけ。「元に戻せません。」が自動で付く |
+| ③ 理由を書く確認（承認後の修正・却下） | `await confirmWithReason({ …, reason: { label } })` | 理由を書くまで主役ボタンを押せない。やめたら null |
+| ④ スタッフ向け | `vi: { title, confirmLabel, cancelLabel }` を渡す | 日越並記・指で押せる高さのボタン（52px） |
+
+- Esc・背景クリックは「やめる」。右パネル（z-60）の上に出る（z-80）
+- 右パネルの未保存ガードは `confirmDiscardDialog(dirty)`（`lib/hooks/discardGuard.ts`）。「閉じずに戻る」「保存せずに閉じる」（赤）
+
+**お知らせ（`lib/notify.ts`・帯は `components/Toast.tsx` の `<ToastProvider>`）**
+
+| 種類 | 使う関数 | 見た目 |
+|---|---|---|
+| うまくいった | `notify.success('葛西のカレンダーを提出しました')` | 緑の帯・右上（スマホは幅いっぱい）・3秒で消える。「何を・どうしたか」を1行 |
+| 失敗した | `notify.failed('保存', res.error, 次の手)` / `notify.error(見出し, 理由と次の手)` | 赤の帯・**閉じるまで残る**。1行目「保存できませんでした」、2行目に理由と次の手。通信の失敗は定型文 |
+| 入力の不備 | `<FieldError>`（`components/ui/PageParts.tsx`）＋ 欄に `aria-invalid` | 帯は出さず、その欄のすぐ下に赤字。`scrollToFirstInvalid()` で最初の不備まで動かす |
+
+- サーバの断り（403・409）は `data.error` の文をそのまま理由に。status 番号・「エラー:」・絵文字は出さない
+
+**保存ボタン（`components/ui/SaveButton.tsx`）**: 「保存する」→「保存しています」（二度押しできない）→「✓ 保存しました」（2秒）→ 戻る。失敗は「もう一度保存する」＋赤の帯。
+`onSave` が throw か `{ ok: false, error }` を返すとボタンが帯を出す。新しい保存ボタンはこれで作る（既存の「保存中...」ボタンは順次置き換え）
+
+**文字の大きさ（標準／大きい＝1.125倍）**: PC はサイドバー下の切替、スマホは右上の DEDURA＋ マークを押す（`components/StaffHeader.tsx`）。`lib/theme.ts` で端末ごとに覚える
+
 ## 管理者画面
 - PCレイアウト優先
 - サイドバー幅: w-56（224px）。白地・右に細線・メニュー14px・線のアイコン（2026-09-30）

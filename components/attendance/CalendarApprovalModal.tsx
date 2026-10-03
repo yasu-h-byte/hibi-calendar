@@ -8,6 +8,7 @@
 
 import { useState } from 'react'
 import { STAFF_DOW_VI, STAFF_TEXT, biLine } from '@/lib/labels'
+import { notify } from '@/lib/notify'
 
 const DOW_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
 
@@ -312,7 +313,7 @@ export default function CalendarApprovalModal({
                       const ok = await onQuestion(questionText.trim())
                       setQuestionSending(false)
                       if (ok) setQuestionSent(true)
-                      else alert('送信に失敗しました / Gửi thất bại')
+                      else notify.error('送信できませんでした / Gửi thất bại', '電波のよい所でもう一度お試しください / Vui lòng thử lại ở nơi có sóng tốt')
                     }}
                     disabled={questionSending || questionText.trim().length < 2}
                     className="min-h-[44px] py-2 rounded-lg text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"

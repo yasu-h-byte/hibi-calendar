@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { HomeLeave, PLWorker } from '../types'
 import { todayJstIso } from '@/lib/date-utils'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 
 /** 出面に残った帰国フラグの突合結果 */
 interface OrphanDay { date: string; workerId: number; locked: boolean }
@@ -16,6 +18,7 @@ type ReconcileState =
   | { status: 'error'; message: string }
 
 // 帰国情報タブ（旧 home-leave ページから統合）
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify）に置き換え
 // フォーム・開閉状態はデータ再取得で画面全体が読み込み表示に切り替わっても
 // 消えないよう、親（page）が保持する
 
@@ -109,16 +112,17 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
     if (data.error !== 'WORKED_DAYS_IN_RANGE' || !data.suggestedEndDate) {
       // 期間の重なり・ロック済み月などの 409 は error に理由が入る（2026-10-02 総合点検。旧: message だけ見て何も出なかった）
       const reason = data.message || data.error
-      alert(reason || '登録できませんでした（既存の帰国期間と重なっている、または締め済みの月です）')
+      notify.failed('登録', reason || '既存の帰国期間と重なっているか、締め済みの月です。')
       return null
     }
     const list = (data.conflicts || []).slice(0, 8).map(c => `　${c.date}  ${c.summary}`).join('\n')
     const more = (data.conflicts || []).length > 8 ? `\n　…他${(data.conflicts || []).length - 8}日` : ''
-    const ok = confirm(
-      `${data.message}\n\n【出勤打刻のある日】\n${list}${more}\n\n` +
-      `OK … 最終帰国日を ${data.suggestedEndDate} に直して登録する\n` +
-      `キャンセル … 入力画面に戻る`
-    )
+    const ok = await confirmDialog({
+      title: `最終帰国日を ${data.suggestedEndDate} に直して登録しますか？`,
+      description: `${data.message}\n\n出勤打刻のある日:\n${list}${more}`,
+      confirmLabel: '直して登録する',
+      cancelLabel: '入力に戻る',
+    })
     return ok ? data.suggestedEndDate : null
   }
 
@@ -168,13 +172,13 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           return
         }
         const rerr = await retry.json().catch(() => null)
-        alert(rerr?.error || `登録に失敗しました (${retry.status})`)
+        notify.failed('登録', rerr?.error)
         return
       }
       // 409以外の失敗（検証エラー・500等）も理由を表示する（旧: 無言でスピナーだけ止まる）
       const err = await res.json().catch(() => null)
-      alert(err?.error || `登録に失敗しました (${res.status})`)
-    } catch { alert('通信エラーが発生しました') } finally { setHlSaving(false) }
+      notify.failed('登録', err?.error)
+    } catch (e) { notify.failed('登録', e) } finally { setHlSaving(false) }
   }
   const startHlEdit = (h: HomeLeave) => {
     patchUi({ editingId: h.id, editStart: h.startDate, editEnd: isUndecided(h) ? '' : h.endDate, editReason: h.reason, editNote: h.note || '', editUndecided: isUndecided(h) })
@@ -222,12 +226,12 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
         })
         if (retry.ok) { cancelHlEdit(); onRefresh(); return }
         const rerr = await retry.json().catch(() => null)
-        alert(rerr?.error || `更新に失敗しました (${retry.status})`)
+        notify.failed('更新', rerr?.error)
         return
       }
       const err = await res.json().catch(() => null)
-      alert(err?.error || `更新に失敗しました (${res.status})`)
-    } catch { alert('通信エラーが発生しました') } finally { setHlSaving(false) }
+      notify.failed('更新', err?.error)
+    } catch (e) { notify.failed('更新', e) } finally { setHlSaving(false) }
   }
   const handleHlDelete = async (id: string) => {
     setHlSaving(true)
@@ -243,8 +247,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
         return
       }
       const err = await res.json().catch(() => null)
-      alert(err?.error || `削除に失敗しました (${res.status})`)
-    } catch { alert('通信エラーが発生しました') } finally { setHlSaving(false) }
+      notify.failed('削除', err?.error)
+    } catch (e) { notify.failed('削除', e) } finally { setHlSaving(false) }
   }
 
   const renderHlCard = (h: HomeLeave, section: 'current' | 'upcoming') => {

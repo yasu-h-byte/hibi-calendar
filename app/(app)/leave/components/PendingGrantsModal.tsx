@@ -2,7 +2,10 @@
 
 import { useState } from 'react'
 import { PendingGrant, PendingGrantForm } from '../types'
+import { notify } from '@/lib/notify'
+import { FieldError } from '@/components/ui/PageParts'
 
+// 2026-10-03: ブラウザ標準の alert を共通部品（notify・FieldError）に置き換え
 // 半自動付与モーダル: 未付与検知されたスタッフへの一括付与
 // フォーム状態はデータ取得時に初期化されるため親（page）が保持する
 
@@ -18,6 +21,14 @@ interface Props {
 
 export default function PendingGrantsModal({ open, pendingGrants, pendingForm, setPendingForm, password, onClose, onSaved }: Props) {
   const [pendingExecuting, setPendingExecuting] = useState(false)
+  // 付与日・日数の不備がある行（workerId → 文言）。入力が変わったらその行の分を消す
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
+  const clearRowError = (workerId: number) => setRowErrors(prev => {
+    if (!(workerId in prev)) return prev
+    const next = { ...prev }
+    delete next[workerId]
+    return next
+  })
 
   if (!open) return null
 
@@ -72,22 +83,28 @@ export default function PendingGrantsModal({ open, pendingGrants, pendingForm, s
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">付与日</label>
-                    <input type="date" value={f.grantDate} disabled={!f.include}
-                      onChange={e => setPendingForm(prev => ({ ...prev, [p.workerId]: { ...f, grantDate: e.target.value } }))}
+                    <input type="date" value={f.grantDate} disabled={!f.include} aria-invalid={!!rowErrors[p.workerId]}
+                      onChange={e => { clearRowError(p.workerId); setPendingForm(prev => ({ ...prev, [p.workerId]: { ...f, grantDate: e.target.value } })) }}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-xs disabled:opacity-50" />
                   </div>
                   <div>
                     <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">付与日数（法定 {p.legalDays}日）</label>
-                    <input type="number" value={f.grantDays} disabled={!f.include}
-                      onChange={e => setPendingForm(prev => ({ ...prev, [p.workerId]: { ...f, grantDays: e.target.value } }))}
+                    <input type="number" value={f.grantDays} disabled={!f.include} aria-invalid={!!rowErrors[p.workerId]}
+                      onChange={e => { clearRowError(p.workerId); setPendingForm(prev => ({ ...prev, [p.workerId]: { ...f, grantDays: e.target.value } })) }}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1 text-xs disabled:opacity-50" />
                   </div>
                 </div>
+                <FieldError>{rowErrors[p.workerId]}</FieldError>
               </div>
             )
           })}
         </div>
 
+        {Object.keys(rowErrors).length > 0 && (
+          <FieldError className="px-4 pt-3">
+            付与日または日数が未入力・不正の行があります: {pendingGrants.filter(p => rowErrors[p.workerId]).map(p => p.name).join('、')}
+          </FieldError>
+        )}
         <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex gap-2">
           <button
             disabled={pendingExecuting || Object.values(pendingForm).every(f => !f.include)}
@@ -103,8 +120,7 @@ export default function PendingGrantsModal({ open, pendingGrants, pendingForm, s
                   return !/^\d{4}-\d{2}-\d{2}$/.test(f.grantDate || '') || !(Number(f.grantDays) > 0)
                 })
                 if (invalid.length > 0) {
-                  alert('付与日または日数が未入力・不正の行があります:\n' +
-                    invalid.map(p => `・${p.name}`).join('\n'))
+                  setRowErrors(Object.fromEntries(invalid.map(p => [p.workerId, '付与日または日数が未入力・不正です'])))
                   return
                 }
                 const grants = included.map(p => {
@@ -125,7 +141,8 @@ export default function PendingGrantsModal({ open, pendingGrants, pendingForm, s
                 if (res.ok) {
                   onSaved()
                 } else {
-                  alert('付与に失敗しました')
+                  const err = await res.json().catch(() => null)
+                  notify.failed('付与', err?.error)
                 }
               } finally {
                 setPendingExecuting(false)

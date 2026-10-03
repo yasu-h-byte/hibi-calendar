@@ -5,8 +5,11 @@
  *
  * 既存の記録を消した/上書きした操作だけが並ぶ。「元に戻す」で変更前の内容を書き戻す。
  * 8/27 IHI の誤削除では、操作ログに中身が残らず日次バックアップも当日分を救えなかった。
+ * 2026-10-03: 確認と失敗の知らせを共通部品（confirmDialog / notify）に置き換え。
  */
 import { useEffect, useState, useCallback } from 'react'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 
 interface HistoryItem {
   id: string
@@ -59,23 +62,24 @@ export default function HistoryModal({
       })
       if (!res.ok) {
         const e = await res.json().catch(() => null)
-        alert(e?.error || `履歴の取得に失敗しました (${res.status})`)
+        notify.failed('履歴の取得', e?.error || 'サーバが受け付けませんでした')
         return
       }
       setItems((await res.json()).items || [])
-    } catch { alert('通信エラーが発生しました') } finally { setLoading(false) }
+    } catch (e) { notify.failed('履歴の取得', e) } finally { setLoading(false) }
   }, [ym, password])
 
   useEffect(() => { if (open) load() }, [open, load])
 
   const restore = async (h: HistoryItem) => {
     const name = workerNames[h.workerId] || `ID ${h.workerId}`
-    if (!confirm(
-      `${name} さんの ${h.day}日 を、変更前の内容に戻します。\n\n`
-      + `　戻す内容: ${describe(h.before)}\n`
-      + `　現在の内容: ${describe(h.after)}\n\n`
-      + `よろしいですか？（この操作も履歴に残るので、やり直せます）`
-    )) return
+    if (!(await confirmDialog({
+      title: `${name} さんの ${h.day}日 を、変更前の内容に戻しますか？`,
+      description: `戻す内容: ${describe(h.before)}\n今の内容: ${describe(h.after)}\n`
+        + '今の内容は置き換わります。この操作も履歴に残るので、やり直せます。',
+      confirmLabel: '元に戻す',
+      tone: 'danger',
+    }))) return
     setBusy(h.id)
     try {
       const res = await fetch('/api/attendance/history', {
@@ -85,12 +89,13 @@ export default function HistoryModal({
       })
       if (!res.ok) {
         const e = await res.json().catch(() => null)
-        alert(e?.error || `復元に失敗しました (${res.status})`)
+        notify.failed('復元', e?.error || 'サーバが受け付けませんでした')
         return
       }
+      notify.success(`${name} さんの ${h.day}日 を元に戻しました`)
       await load()
       onRestored()
-    } catch { alert('通信エラーが発生しました') } finally { setBusy(null) }
+    } catch (e) { notify.failed('復元', e) } finally { setBusy(null) }
   }
 
   if (!open) return null

@@ -13,6 +13,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { notify } from '@/lib/notify'
+
+// 2026-10-03: ブラウザ標準の alert を共通部品（notify）に置き換え。実行結果の明細は窓の中に残す
 
 interface HealthCheck {
   ok: boolean
@@ -42,6 +45,8 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState<string | null>(null)
+  /** 直前に実行した保守処理の結果（帯は3秒で消えるので、明細は窓の中に残す） */
+  const [lastResult, setLastResult] = useState<{ label: string; text: string } | null>(null)
 
   const fetchHealth = async () => {
     setLoading(true)
@@ -77,11 +82,13 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
       })
       if (res.ok) {
         const data = await res.json()
-        alert(`✅ ${label}\n\n${resultFormatter(data)}`)
+        setLastResult({ label, text: resultFormatter(data) })
+        notify.success(`${label}を実行しました`, '結果はこの窓の中に出ています。')
         await fetchHealth()
         onChanged()
       } else {
-        alert(`❌ ${label} に失敗しました`)
+        const err = await res.json().catch(() => null)
+        notify.failed(label, err?.error)
       }
     } finally { setRunning(null) }
   }
@@ -176,6 +183,15 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
         </div>
 
         <div className="px-5 py-4 space-y-4">
+          {lastResult && (
+            <div role="status" className="border border-green-200 bg-green-50 rounded-lg p-3">
+              <div className="flex justify-between items-start gap-2">
+                <div className="font-bold text-sm text-green-800">{lastResult.label} の結果</div>
+                <button onClick={() => setLastResult(null)} className="text-xs text-green-700 hover:underline">閉じる</button>
+              </div>
+              <div className="text-xs text-green-900 mt-1 whitespace-pre-line">{lastResult.text}</div>
+            </div>
+          )}
           {/* ── 例外オペレーション ── */}
           <div className="border-b border-gray-200 pb-4">
             <div className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1">

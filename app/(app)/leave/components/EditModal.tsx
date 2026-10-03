@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import { addDaysIso, addMonthsSafe, calcLastUsableDayIso } from '@/lib/date-utils'
 import { PLWorker } from '../types'
+import { notify } from '@/lib/notify'
 
+// 2026-10-03: ブラウザ標準の alert を共通部品（notify）に置き換え
 // 有給編集モーダル（付与日・付与日数・繰越・調整 + 監査情報・各種履歴の表示）
 // worker が選択されたときだけマウントされ、開くたびにフォームを対象者の値で初期化する
 
@@ -243,11 +245,11 @@ export default function EditModal({ worker, password, onClose, onSaved, onOpenDe
               })
               if (!res.ok) {
                 const err = await res.json().catch(() => null)
-                alert(err?.error || `保存に失敗しました (${res.status})`)
+                notify.failed('保存', err?.error)
                 return
               }
               onSaved()
-            } catch { alert('通信エラーが発生しました') } finally { setSaving(false) }
+            } catch (e) { notify.failed('保存', e) } finally { setSaving(false) }
           }} className="flex-1 bg-hibi-navy text-white rounded-lg py-2.5 font-bold text-sm disabled:opacity-50">
             {saving ? '保存中...' : '保存'}
           </button>

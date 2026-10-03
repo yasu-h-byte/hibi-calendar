@@ -1,6 +1,7 @@
 'use client'
 
 import { Icon } from '@/components/ui/Icon'
+import { confirmDialog } from '@/lib/confirm-dialog'
 import { siteLeaderLabel } from '@/lib/companies'
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -265,10 +266,14 @@ export default function AttendanceGrid({
                       return (
                         <select
                           value={cur}
-                          onChange={e => {
+                          onChange={async e => {
                             const to = workTypeOptions.find(o => o.id === e.target.value)
                             if (!to || to.id === cur) return
-                            if (!confirm(`${d.day}日を「${to.label}」にします。\nこの日に入力済みの人の出面も全員「${to.label}」へ移ります。\nよろしいですか？`)) return
+                            if (!(await confirmDialog({
+                              title: `${d.day}日を「${to.label}」にしますか？`,
+                              description: `この日に入力済みの人の出面も、全員「${to.label}」へ移ります。`,
+                              confirmLabel: `${to.label}にする`,
+                            }))) return
                             onSetDayWorkType(d.day, to.id)
                           }}
                           title={`${d.day}日の工種（押して選ぶ）`}

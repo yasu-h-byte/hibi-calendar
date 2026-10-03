@@ -20,9 +20,12 @@
  *
  * ベトナム人の新規入力は本人スマホが原則（サーバ側 canAdminEditEntry が強制）。
  * この画面では PC グリッドと同じく「有給・欠勤・0.6補の後付け」と「既存エントリの修正」だけ許す。
+ * 2026-10-03: 確認と失敗の知らせを共通部品（confirmDialog / confirmDanger / confirmWithReason / notify）に置き換え。
  */
 
 import RestMismatchBanner from '../components/RestMismatchBanner'
+import { confirmDialog, confirmDanger, confirmWithReason } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { siteLeaderLabel } from '@/lib/companies'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
@@ -228,15 +231,27 @@ export default function ForemanMobilePage() {
           const b = errData.balance
           // 2026-09-14: 職長には残数超過の上書きを認めない（PC 出面画面・職長トークン画面と同じ）
           if (userRole === 'foreman') {
-            alert(b?.noGrant
-              ? `${errData.workerName} さんには有給が付与されていません。管理者に連絡してください。`
-              : `${errData.workerName} さんの有給残は 0 日です（枠 ${b?.total}日 / 消化 ${b?.used}日）。残数を超える有給は登録できません。管理者に連絡してください。`)
+            notify.error(
+              b?.noGrant
+                ? `${errData.workerName} さんには有給が付与されていません`
+                : `${errData.workerName} さんの有給残は 0 日です`,
+              (b?.noGrant ? '' : `付与枠 ${b?.total}日 ／ 消化済み ${b?.used}日。`)
+                + '残数を超える有給は登録できません。事務か政仁さんに頼んでください。',
+            )
             fetchGrid(); return false
           }
-          const msg = b?.noGrant
-            ? `${errData.workerName} さんには有給が付与されていません。\n\nこのまま有給として登録しますか？`
-            : `${errData.workerName} さんの有給残は 0 日です（枠 ${b?.total}日 / 消化 ${b?.used}日）。\n\n残数を超えて登録しますか？（記録に残ります）`
-          if (!confirm(msg)) { fetchGrid(); return false }
+          const okOverdraft = b?.noGrant
+            ? await confirmDialog({
+                title: `${errData.workerName} さんを有給として登録しますか？`,
+                description: `${errData.workerName} さんには有給が付与されていません。\n登録すると記録に残ります。`,
+                confirmLabel: '登録する',
+              })
+            : await confirmDialog({
+                title: `残数を超えて ${errData.workerName} さんの有給を登録しますか？`,
+                description: `有給残は 0 日です。\n付与枠 ${b?.total} 日 ／ 消化済み ${b?.used} 日\n登録すると記録に残ります。`,
+                confirmLabel: '登録する',
+              })
+          if (!okOverdraft) { fetchGrid(); return false }
           res = await fetch('/api/attendance/grid', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
@@ -246,13 +261,13 @@ export default function ForemanMobilePage() {
       }
       if (!res.ok) {
         const d = await res.json().catch(() => null)
-        alert(d?.error || `保存に失敗しました (${res.status})`)
+        notify.failed('保存', d?.error || 'サーバが受け付けませんでした')
         fetchGrid()
         return false
       }
       return true
-    } catch {
-      alert('通信エラーで保存できませんでした')
+    } catch (e) {
+      notify.failed('保存', e)
       fetchGrid()
       return false
     } finally {
@@ -453,20 +468,29 @@ export default function ForemanMobilePage() {
   const handleApprove = useCallback(async () => {
     if (!data) return
     if (missingWorkers.length === data.workers.length && data.workers.length > 0) {
-      alert('この日はまだ誰も入力していません。入力してから確認してください。')
+      notify.error('この日はまだ誰も入力していません', '入力してから確認してください。')
       return
     }
-    if (missingWorkers.length > 0 && !confirm(
-      `まだ ${missingWorkers.length}名 が未入力です（${missingWorkers.map(w => w.name).join('・')}）。\n`
-      + `確認するとこの日はロックされ、スタッフは入力できなくなります。\n\n本当に確認済みにしますか？`
-    )) return
+    if (missingWorkers.length > 0 && !(await confirmDialog({
+      title: `まだ ${missingWorkers.length}名 が未入力のまま、確認済みにしますか？`,
+      description: `未入力: ${missingWorkers.map(w => w.name).join('・')}\n`
+        + '確認するとこの日はロックされ、スタッフは入力できなくなります。',
+      confirmLabel: '確認済みにする',
+    }))) return
     const ok = await postGrid({ action: 'approve_foreman', day, approvedBy: userId })
     if (ok) fetchGrid()
   }, [data, missingWorkers, postGrid, day, userId, fetchGrid])
 
   const handleUnapprove = useCallback(async () => {
-    if (finalApproved) { alert('最終承認済みのため取り消せません。管理者に連絡してください。'); return }
-    if (!confirm(`この日の${siteLeaderLabel(data?.isSupportSite)}確認を取り消します。スタッフが再び入力できるようになります。よろしいですか？`)) return
+    if (finalApproved) {
+      notify.error('この日は取り消せません', '政仁さんの最終承認がついています。直すときは政仁さんか代表に頼んでください。')
+      return
+    }
+    if (!(await confirmDanger({
+      title: `この日の${siteLeaderLabel(data?.isSupportSite)}確認を取り消しますか？`,
+      description: 'スタッフが再び入力できるようになります。',
+      confirmLabel: '取り消す',
+    }))) return
     const ok = await postGrid({ action: 'unapprove_foreman', day })
     if (ok) fetchGrid()
   }, [finalApproved, postGrid, day, fetchGrid])
@@ -532,7 +556,7 @@ export default function ForemanMobilePage() {
       })
       if (!res.ok) {
         const d = await res.json().catch(() => null)
-        alert(d?.error || `処理に失敗しました (${res.status})`)
+        notify.failed(action === 'reject' ? '却下' : '職長承認', d?.error || 'サーバが受け付けませんでした')
       }
       fetchRequests()
     } finally {
@@ -575,9 +599,13 @@ export default function ForemanMobilePage() {
 
   useEffect(() => { if (tab === 'calendar') fetchCal() }, [tab, fetchCal])
 
-  const toggleCalDay = useCallback((d: number) => {
+  const toggleCalDay = useCallback(async (d: number) => {
     if (calInfo?.status === 'approved' && !approvedEditWarned.current) {
-      if (!confirm('このカレンダーは承認済みです。変更して保存すると「承認後修正」となり、スタッフの再確認（再署名）が必要になります。変更しますか？')) return
+      if (!(await confirmDialog({
+        title: '承認済みのカレンダーを変えますか？',
+        description: '変更して保存すると「承認後修正」となり、スタッフの再確認（再署名）が必要になります。',
+        confirmLabel: '変える',
+      }))) return
       approvedEditWarned.current = true
     }
     setCalDaysLocal(prev => ({ ...prev, [String(d)]: prev[String(d)] === 'work' ? 'off' : 'work' }))
@@ -594,7 +622,7 @@ export default function ForemanMobilePage() {
       })
       if (!res.ok) {
         const d = await res.json().catch(() => null)
-        alert(d?.error || '保存に失敗しました')
+        notify.failed('保存', d?.error || 'サーバが受け付けませんでした')
         return false
       }
       setCalDirty(false)
@@ -605,7 +633,11 @@ export default function ForemanMobilePage() {
   }, [password, siteId, calYm7, calDaysLocal, userId])
 
   const submitCal = useCallback(async () => {
-    if (!confirm(`${calY}年${calM}月の休日設定を政仁さんへ提出します。よろしいですか？`)) return
+    if (!(await confirmDialog({
+      title: `${calY}年${calM}月の休日設定を政仁さんへ提出しますか？`,
+      description: '提出すると政仁さんの承認待ちになります。',
+      confirmLabel: '提出する',
+    }))) return
     if (!(await saveCal())) return
     setSaving(s => s + 1)
     try {
@@ -616,7 +648,9 @@ export default function ForemanMobilePage() {
       })
       if (!res.ok) {
         const d = await res.json().catch(() => null)
-        alert(d?.error || '提出に失敗しました')
+        notify.failed('提出', d?.error || 'サーバが受け付けませんでした')
+      } else {
+        notify.success(`${calY}年${calM}月の休日設定を政仁さんへ提出しました`)
       }
       fetchCal()
     } finally {
@@ -1066,8 +1100,13 @@ export default function ForemanMobilePage() {
                             className="flex-1 py-2 rounded-lg bg-hibi-navy text-white text-xs font-bold"
                           >職長承認する</button>
                           <button
-                            onClick={() => {
-                              const reason = prompt('却下の理由を入力してください')
+                            onClick={async () => {
+                              const reason = await confirmWithReason({
+                                title: `${r.workerName} さんの有給申請を却下しますか？`,
+                                description: '理由は本人に伝わります。',
+                                confirmLabel: '却下する',
+                                reason: { label: '却下の理由', placeholder: '例: その日は人が足りないため' },
+                              })
                               if (reason !== null) actOnRequest('/api/leave-request', 'reject', r.id, { reason, rejectedBy: userId })
                             }}
                             className="py-2 px-3 rounded-lg border border-red-300 text-red-600 text-xs font-bold"
@@ -1099,8 +1138,13 @@ export default function ForemanMobilePage() {
                             className="flex-1 py-2 rounded-lg bg-hibi-navy text-white text-xs font-bold"
                           >職長承認する</button>
                           <button
-                            onClick={() => {
-                              const reason = prompt('却下の理由を入力してください')
+                            onClick={async () => {
+                              const reason = await confirmWithReason({
+                                title: `${r.workerName} さんの帰国申請を却下しますか？`,
+                                description: '理由は本人に伝わります。',
+                                confirmLabel: '却下する',
+                                reason: { label: '却下の理由', placeholder: '例: その期間は人が足りないため' },
+                              })
                               if (reason !== null) actOnRequest('/api/home-long-leave', 'reject', r.id, { reason })
                             }}
                             className="py-2 px-3 rounded-lg border border-red-300 text-red-600 text-xs font-bold"
