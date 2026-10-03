@@ -1,5 +1,6 @@
 'use client'
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+// 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
@@ -7,6 +8,7 @@ import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { getAuthPasswordSync } from '@/lib/hooks/useAuthPassword'
 import { Icon } from './ui/Icon'
+import { RowButton } from './ui/PageParts'
 
 interface NotificationAction {
   type: string
@@ -183,13 +185,9 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
                       </a>
                     )}
                     {n.action && (
-                      <button
-                        onClick={() => handleAction(n)}
-                        disabled={acting === n.id}
-                        className="flex-1 text-center text-xs font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg py-1.5 transition"
-                      >
-                        {acting === n.id ? '処理しています' : `✓ ${n.action.label}`}
-                      </button>
+                      <RowButton tone="main" busy={acting === n.id} onClick={() => handleAction(n)} className="flex-1">
+                        {n.action.label}
+                      </RowButton>
                     )}
                     {n.messengerText && (
                       <button
@@ -204,7 +202,7 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
                             : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                         }`}
                       >
-                        {copiedId === n.id ? '✓ コピー済み' : '📋 Messenger用コピー'}
+                        {copiedId === n.id ? '✓ コピー済み' : 'Messenger用コピー'}
                       </button>
                     )}
                   </div>

@@ -1,13 +1,14 @@
 'use client'
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
+// 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { useEffect, useState, useCallback } from 'react'
 import { visaLabel } from '@/lib/labels'
 import { jobLabel } from '@/lib/jobs'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
-import { PageHeader, ToolButton, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
+import { PageHeader, ToolButton, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, RowButton } from '@/components/ui/PageParts'
 import { SaveButton } from '@/components/ui/SaveButton'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
@@ -666,12 +667,7 @@ function WorkerModal({
                             </td>
                             <td className="py-1.5 px-3 text-right tabular-nums">¥{p.amount.toLocaleString()}</td>
                             <td className="py-1.5 px-3 text-center">
-                              <button
-                                onClick={() => handleDelete(p.id)}
-                                className="text-3xs text-red-500 hover:text-red-700"
-                              >
-                                削除
-                              </button>
+                              <RowButton tone="danger" onClick={() => handleDelete(p.id)}>削除する</RowButton>
                             </td>
                           </tr>
                         ))}

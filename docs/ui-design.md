@@ -159,6 +159,8 @@ rem 系へまとめて直した（見た目は同じ）。`npm run lint:px` が 
 
 - サーバの断り（403・409）は `data.error` の文をそのまま理由に。status 番号・「エラー:」・絵文字は出さない
 
+**一覧の行の中の小さいボタン（`RowButton`・`components/ui/PageParts.tsx`）**: tone は approve（緑＝承認）・danger（赤枠＝却下・取り消し・削除）・main（紺）・ghost（白）。busy で「処理しています」。行の中に SaveButton は置かない
+
 **保存ボタン（`components/ui/SaveButton.tsx`）**: 「保存する」→「保存しています」（二度押しできない）→「✓ 保存しました」（2秒）→ 戻る。失敗は「もう一度保存する」＋赤の帯。
 `onSave` が throw か `{ ok: false, error }` を返すとボタンが帯を出す。新しい保存ボタンはこれで作る（既存の「保存中...」ボタンは順次置き換え）
 

@@ -676,7 +676,8 @@ export default function EvaluationPage() {
           : ''
         setApproveSessionId(null)
         await fetchData()
-        notify.success(`${session.workerName} さんの評価を承認しました`, `ランク ${rank}・推奨昇給 +${finalRaise}円/h${floorNote}`)
+        // 昇給額の結果は読んで確かめたいので、閉じるまで残す（notify.success の sticky・2026-10-03）
+        notify.success(`${session.workerName} さんの評価を承認しました`, `ランク ${rank}・推奨昇給 +${finalRaise}円/h${floorNote}`, { sticky: true })
         ok = true
       } else {
         const err = await res.json().catch(() => ({}))

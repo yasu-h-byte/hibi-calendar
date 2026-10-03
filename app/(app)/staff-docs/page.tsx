@@ -8,6 +8,7 @@
  * - 下: スタッフごとの書類（最新／旧版）。ファイルは署名つきURLで新しいタブに開く
  * - 「＋ 書類を入れる」: ファイルを選ぶ（またはドラッグ）→ 種類・期限 → 登録
  * - 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+ * - 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
  * - 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -21,7 +22,7 @@ import { cardCls } from '@/lib/styles'
 import { visaLabel } from '@/lib/labels'
 import { todayJstIso } from '@/lib/date-utils'
 import { isAlreadyRetired } from '@/lib/workers'
-import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
+import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, RowButton } from '@/components/ui/PageParts'
 import { Modal, CancelButton } from '@/components/ui/Modal'
 import { SaveButton } from '@/components/ui/SaveButton'
 import WorkerAvatar from '@/components/WorkerAvatar'
@@ -446,12 +447,12 @@ function DocRow({ d, today, canEdit, canDelete, onOpen, onEdit, onStatus, onDele
           ))}
         </div>
       </div>
-      <div className="flex items-center gap-2 text-2xs shrink-0">
-        {canEdit && <button onClick={() => onEdit(d)} className="text-blue-600 dark:text-blue-400 hover:underline">編集</button>}
+      <div className="flex items-center gap-2 shrink-0">
+        {canEdit && <RowButton tone="ghost" onClick={() => onEdit(d)}>編集する</RowButton>}
         {canEdit && (d.status === 'current'
-          ? <button onClick={() => onStatus(d, 'old')} className="text-gray-500 hover:underline">旧版にする</button>
-          : <button onClick={() => onStatus(d, 'current')} className="text-gray-500 hover:underline">最新に戻す</button>)}
-        {canDelete && <button onClick={() => onDelete(d)} className="text-red-600 hover:underline">削除</button>}
+          ? <RowButton tone="ghost" onClick={() => onStatus(d, 'old')}>旧版にする</RowButton>
+          : <RowButton tone="ghost" onClick={() => onStatus(d, 'current')}>最新に戻す</RowButton>)}
+        {canDelete && <RowButton tone="danger" onClick={() => onDelete(d)}>削除する</RowButton>}
       </div>
     </div>
   )
@@ -600,7 +601,7 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
             {files.map((f, i) => (
               <li key={i} className="flex items-center justify-between gap-2">
                 <span className="truncate">{f.name}（{fmtSize(f.size)}）</span>
-                <button onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} className="text-red-500 hover:underline shrink-0">外す</button>
+                <RowButton tone="danger" className="shrink-0" onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))}>外す</RowButton>
               </li>
             ))}
           </ul>

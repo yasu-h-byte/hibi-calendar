@@ -1,6 +1,7 @@
 /**
  * 休暇管理 保守ツール モーダル（2026-06-XX 新設）
  * 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
+ * 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
  *
  * 旧UI: ヘッダーに4ボタン（繰越再計算/データ正規化/自動修正/時効処理）を常時表示
  *   問題: 通常運用では不要なのに目立ち、誤操作リスク + 役割が分かりにくい
@@ -16,6 +17,7 @@
 import { useState, useEffect } from 'react'
 import { notify } from '@/lib/notify'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
+import { RowButton } from '@/components/ui/PageParts'
 
 // 2026-10-03: ブラウザ標準の alert を共通部品（notify）に置き換え。実行結果の明細は窓の中に残す
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
@@ -176,7 +178,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
             <div role="status" className="border border-green-200 bg-green-50 rounded-lg p-3">
               <div className="flex justify-between items-start gap-2">
                 <div className="font-bold text-sm text-green-800">{lastResult.label} の結果</div>
-                <button onClick={() => setLastResult(null)} className="text-xs text-green-700 hover:underline">閉じる</button>
+                <RowButton tone="ghost" onClick={() => setLastResult(null)}>閉じる</RowButton>
               </div>
               <div className="text-xs text-green-900 mt-1 whitespace-pre-line">{lastResult.text}</div>
             </div>
@@ -197,12 +199,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
                     通常の年次付与は「半自動付与」の案内から実行してください
                   </div>
                 </div>
-                <button
-                  onClick={() => { onOpenGrantModal(); onClose() }}
-                  className="text-xs px-3 py-1.5 rounded font-bold whitespace-nowrap bg-green-600 text-white hover:bg-green-700"
-                >
-                  + 付与する
-                </button>
+                <RowButton tone="main" onClick={() => { onOpenGrantModal(); onClose() }}>付与する</RowButton>
               </div>
             </div>
           </div>
@@ -282,16 +279,9 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
                   </details>
                 )}
               </div>
-              <button
-                onClick={handleExpiry}
+              <RowButton tone="danger" busy={running === '時効処理'} busyLabel="実行しています"
                 disabled={!c.needsExpiryProcess || running !== null}
-                className={`text-xs px-3 py-1.5 rounded font-bold whitespace-nowrap ${
-                  !c.needsExpiryProcess ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-amber-600 text-white hover:bg-amber-700'
-                }`}
-              >
-                {running === '時効処理' ? '実行中...' : '手動実行'}
-              </button>
+                onClick={handleExpiry}>手動で実行する</RowButton>
             </div>
           </div>
 
@@ -349,17 +339,7 @@ function ActionRow({
             </details>
           )}
         </div>
-        <button
-          onClick={onRun}
-          disabled={disabled}
-          className={`text-xs px-3 py-1.5 rounded font-bold whitespace-nowrap ${
-            disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              : count > 0 ? 'bg-red-600 text-white hover:bg-red-700'
-              : 'bg-purple-600 text-white hover:bg-purple-700'
-          }`}
-        >
-          {running ? '実行中...' : '実行'}
-        </button>
+        <RowButton tone="danger" busy={running} busyLabel="実行しています" disabled={disabled} onClick={onRun}>実行する</RowButton>
       </div>
     </div>
   )

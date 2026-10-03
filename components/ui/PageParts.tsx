@@ -321,3 +321,43 @@ export function scrollToFirstInvalid(root: ParentNode | null = typeof document =
   el.focus({ preventScroll: true })
   return true
 }
+
+// ─── 一覧の行ごとの小さいボタン ─────────────────────────────────────
+
+/**
+ * 一覧の行の中に並べる小さいボタン（2026-10-03 UI/UX 磨き込み）。
+ * 大きい保存ボタン（SaveButton）を行ごとに置くと重いので、行の中はこれでそろえる。
+ *   tone: main=紺（主役）・approve=緑（承認・最終承認）・danger=赤（却下・取り消し・削除）・ghost=白（やめる・閉じる・補助）
+ *   busy=true の間は押せず、busyLabel（既定「処理しています」）を出す
+ *   <RowButton tone="approve" busy={processing === req.id} onClick={…}>承認する</RowButton>
+ */
+export function RowButton({ tone = 'ghost', busy, busyLabel = '処理しています', disabled, onClick, children, title, className = '' }: {
+  tone?: 'main' | 'approve' | 'danger' | 'ghost'
+  busy?: boolean
+  busyLabel?: string
+  disabled?: boolean
+  onClick?: () => void
+  children: ReactNode
+  title?: string
+  className?: string
+}) {
+  const toneCls = tone === 'main'
+    ? 'bg-hibi-navy text-white hover:bg-hibi-light border border-hibi-navy'
+    : tone === 'approve'
+      ? 'bg-green-700 text-white hover:bg-green-800 border border-green-700'
+      : tone === 'danger'
+        ? 'bg-white dark:bg-gray-800 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30'
+        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-hibi-bg dark:hover:bg-gray-700'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || busy}
+      title={title}
+      className={`inline-flex items-center justify-center gap-1 h-8 px-3 rounded-lg text-xs font-bold whitespace-nowrap transition disabled:opacity-50 disabled:cursor-not-allowed ${toneCls} ${className}`}
+    >
+      {busy && <span className="w-3 h-3 rounded-full border-2 border-current/40 border-t-current animate-spin" aria-hidden="true" />}
+      <span>{busy ? busyLabel : children}</span>
+    </button>
+  )
+}

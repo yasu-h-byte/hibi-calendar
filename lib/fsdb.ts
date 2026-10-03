@@ -15,7 +15,6 @@
  *
  * クライアントからは絶対に import しないこと（サーバ専用）。
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as web from 'firebase/firestore'
 import { db as webDb } from './firebase'
 import { getAdminDb, getAdminFieldValue } from './firebase-admin'

@@ -7,11 +7,13 @@
  * 8/27 IHI の誤削除では、操作ログに中身が残らず日次バックアップも当日分を救えなかった。
  * 2026-10-03: 確認と失敗の知らせを共通部品（confirmDialog / notify）に置き換え。
  * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
+ * 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
  */
 import { useEffect, useState, useCallback } from 'react'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { Modal, CancelButton } from '@/components/ui/Modal'
+import { RowButton } from '@/components/ui/PageParts'
 
 interface HistoryItem {
   id: string
@@ -147,14 +149,7 @@ export default function HistoryModal({
                   <span className="text-gray-400 ml-2">({h.actor})</span>
                 </div>
               </div>
-              <button
-                type="button"
-                disabled={busy === h.id}
-                onClick={() => restore(h)}
-                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-hibi-navy text-white hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
-              >
-                {busy === h.id ? '戻しています' : '元に戻す'}
-              </button>
+              <RowButton tone="main" busy={busy === h.id} busyLabel="戻しています" onClick={() => restore(h)}>元に戻す</RowButton>
             </div>
           ))}
         </div>

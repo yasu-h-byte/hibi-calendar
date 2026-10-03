@@ -1,5 +1,6 @@
 'use client'
 // 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
+// 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { useState } from 'react'
 import { HomeLeave, PLWorker } from '../types'
@@ -9,6 +10,7 @@ import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { SaveButton } from '@/components/ui/SaveButton'
 import { Icon } from '@/components/ui/Icon'
+import { RowButton } from '@/components/ui/PageParts'
 
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた（帰国の「登録する」ボタン）
 
@@ -304,10 +306,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
               className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
           </div>
           <div className="flex gap-2">
-            <button onClick={() => handleHlUpdate(h.id)} disabled={hlSaving}
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">保存</button>
-            <button onClick={cancelHlEdit}
-              className="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded">キャンセル</button>
+            <RowButton tone="main" busy={hlSaving} busyLabel="保存しています" onClick={() => handleHlUpdate(h.id)}>保存する</RowButton>
+            <RowButton tone="ghost" onClick={cancelHlEdit}>やめる</RowButton>
           </div>
         </div>
       )
@@ -396,21 +396,16 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
         </div>
         <div className="flex gap-2 mt-3">
           {undecided && section === 'current' && (
-            <button onClick={() => patchUi({ editingId: h.id, editStart: h.startDate, editEnd: today, editReason: h.reason, editNote: h.note || '', editUndecided: false })}
-              className="px-3 py-1 text-xs font-medium bg-amber-500 text-white rounded hover:bg-amber-600">復帰日を登録</button>
+            <RowButton tone="main" onClick={() => patchUi({ editingId: h.id, editStart: h.startDate, editEnd: today, editReason: h.reason, editNote: h.note || '', editUndecided: false })}>復帰日を登録する</RowButton>
           )}
-          <button onClick={() => startHlEdit(h)}
-            className="px-3 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200">編集</button>
+          <RowButton tone="ghost" onClick={() => startHlEdit(h)}>編集する</RowButton>
           {!canDelete ? null : ui.deleteConfirm === h.id ? (
             <div className="flex gap-1">
-              <button onClick={() => handleHlDelete(h.id)} disabled={hlSaving}
-                className="px-3 py-1 text-xs font-bold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50">削除する</button>
-              <button onClick={() => patchUi({ deleteConfirm: null })}
-                className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded">やめる</button>
+              <RowButton tone="danger" busy={hlSaving} busyLabel="削除しています" onClick={() => handleHlDelete(h.id)}>削除する</RowButton>
+              <RowButton tone="ghost" onClick={() => patchUi({ deleteConfirm: null })}>やめる</RowButton>
             </div>
           ) : (
-            <button onClick={() => patchUi({ deleteConfirm: h.id })}
-              className="px-3 py-1 text-xs bg-red-50 dark:bg-red-900/20 text-red-600 rounded hover:bg-red-100">削除</button>
+            <RowButton tone="danger" onClick={() => patchUi({ deleteConfirm: h.id })}>削除する</RowButton>
           )}
         </div>
       </div>

@@ -1,10 +1,11 @@
 'use client'
 // 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
+// 2026-10-03: 行ごとの小さいボタンを RowButton にそろえた
 
 import { LeaveRequest, SiteOption, MforemanMap } from '../types'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
-import { FieldError } from '@/components/ui/PageParts'
+import { FieldError, RowButton } from '@/components/ui/PageParts'
 
 // 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify・FieldError）に置き換え
 // 申請タブ: 有給申請の職長承認・最終承認・却下・一括処理・日付変更
@@ -386,7 +387,7 @@ export default function RequestsTab({
                         const next = new Set(expandedGroups)
                         next.delete(group.key)
                         patchUi({ expandedGroups: next })
-                      }} className="text-blue-600 hover:underline">▲ 集約に戻す</button>
+                      }} className="text-blue-600 hover:underline">まとめて見る</button>
                       <span>{first.workerName}（{items.length}件）</span>
                     </div>
                   )}
@@ -415,12 +416,10 @@ export default function RequestsTab({
                             return (
                             <>
                               {canFA && (
-                                <button onClick={() => handleForemanApprove(req.id)} disabled={processingReq === req.id}
-                                  className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">{fName ? `${fName} 職長承認` : '職長承認'}</button>
+                                <RowButton tone="approve" busy={processingReq === req.id} onClick={() => handleForemanApprove(req.id)}>{fName ? `${fName} 職長承認する` : '職長承認する'}</RowButton>
                               )}
-                              <button onClick={() => rejectingId === req.id ? handleReject(req.id) : patchUi({ rejectingId: req.id, rejectReason: '' })}
-                                disabled={processingReq === req.id}
-                                className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                              <RowButton tone="danger" busy={processingReq === req.id}
+                                onClick={() => rejectingId === req.id ? handleReject(req.id) : patchUi({ rejectingId: req.id, rejectReason: '' })}>却下する</RowButton>
                             </>
                             )
                           })()}
@@ -431,13 +430,11 @@ export default function RequestsTab({
                             <>
                               <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-3xs font-bold">{fName ? `${fName} 職長済` : '職長済'}</span>
                               {canFinal && (
-                                <button onClick={() => handleApprove(req.id)} disabled={processingReq === req.id}
-                                  className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">最終承認</button>
+                                <RowButton tone="approve" busy={processingReq === req.id} onClick={() => handleApprove(req.id)}>最終承認する</RowButton>
                               )}
                               {canFinal && (
-                                <button onClick={() => rejectingId === req.id ? handleReject(req.id) : patchUi({ rejectingId: req.id, rejectReason: '' })}
-                                  disabled={processingReq === req.id}
-                                  className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">却下</button>
+                                <RowButton tone="danger" busy={processingReq === req.id}
+                                  onClick={() => rejectingId === req.id ? handleReject(req.id) : patchUi({ rejectingId: req.id, rejectReason: '' })}>却下する</RowButton>
                               )}
                             </>
                             )
@@ -446,24 +443,14 @@ export default function RequestsTab({
                             <>
                               <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">承認済</span>
                               {(userRole === 'admin' || userRole === 'approver') && (
-                                <button
+                                <RowButton tone="ghost" disabled={processingReq === req.id}
                                   onClick={() => patchUi({ modifyingId: req.id, modifyNewDate: req.date })}
-                                  disabled={processingReq === req.id}
-                                  className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-full text-3xs font-bold disabled:opacity-50"
-                                  title="承認済み有給の日付を変更（誤申請修正）"
-                                >
-                                  日付変更
-                                </button>
+                                  title="承認済み有給の日付を変更（誤申請修正）">日付を変更する</RowButton>
                               )}
                               {(userRole === 'admin' || userRole === 'approver') && (
-                                <button
+                                <RowButton tone="danger" busy={processingReq === req.id}
                                   onClick={() => handleRevoke(req.id)}
-                                  disabled={processingReq === req.id}
-                                  className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 rounded-full text-3xs font-bold disabled:opacity-50"
-                                  title="承認済み有給を取り消す（出面の「有」も消えて残数が戻る）"
-                                >
-                                  取消
-                                </button>
+                                  title="承認済み有給を取り消す（出面の「有」も消えて残数が戻る）">取り消す</RowButton>
                               )}
                             </>
                           )}
@@ -492,19 +479,10 @@ export default function RequestsTab({
                               onChange={e => patchUi({ modifyNewDate: e.target.value, modifyDateError: null })}
                               className="border border-amber-300 rounded-lg px-3 py-1.5 text-sm bg-white"
                             />
-                            <button
-                              onClick={() => handleModifyDate(req.id, modifyNewDate)}
-                              disabled={processingReq === req.id || !modifyNewDate || modifyNewDate === req.date}
-                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold disabled:opacity-50"
-                            >
-                              {processingReq === req.id ? '処理しています' : '日付変更を実行'}
-                            </button>
-                            <button
-                              onClick={() => patchUi({ modifyingId: null, modifyNewDate: '', modifyDateError: null })}
-                              className="px-3 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs"
-                            >
-                              キャンセル
-                            </button>
+                            <RowButton tone="main" busy={processingReq === req.id}
+                              disabled={!modifyNewDate || modifyNewDate === req.date}
+                              onClick={() => handleModifyDate(req.id, modifyNewDate)}>この日付に変更する</RowButton>
+                            <RowButton tone="ghost" onClick={() => patchUi({ modifyingId: null, modifyNewDate: '', modifyDateError: null })}>やめる</RowButton>
                           </div>
                           <FieldError>{modifyDateError}</FieldError>
                         </div>
@@ -513,8 +491,8 @@ export default function RequestsTab({
                         <div className="mt-3 flex items-center gap-2 border-t pt-3">
                           <input type="text" value={rejectReason} onChange={e => patchUi({ rejectReason: e.target.value })} placeholder="却下理由（任意）"
                             className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-3 py-1.5 text-sm" />
-                          <button onClick={() => handleReject(req.id)} className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold">却下する</button>
-                          <button onClick={() => patchUi({ rejectingId: null })} className="px-2 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs">取消</button>
+                          <RowButton tone="danger" busy={processingReq === req.id} onClick={() => handleReject(req.id)}>却下する</RowButton>
+                          <RowButton tone="ghost" onClick={() => patchUi({ rejectingId: null })}>やめる</RowButton>
                         </div>
                       )}
                       {/* 日付変更履歴の表示（あれば） */}
@@ -561,35 +539,32 @@ export default function RequestsTab({
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
                     {first.status === 'pending' && canFA && (
-                      <button onClick={() => handleBulkAction(ids, 'foreman_approve')} disabled={processingReq === bulkKey}
-                        className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">
-                        {fName ? `${fName} 一括職長承認` : '一括職長承認'}
-                      </button>
+                      <RowButton tone="approve" busy={processingReq === bulkKey} onClick={() => handleBulkAction(ids, 'foreman_approve')}>
+                        {fName ? `${fName} まとめて職長承認する` : 'まとめて職長承認する'}
+                      </RowButton>
                     )}
                     {first.status === 'foreman_approved' && canFinal && (
-                      <button onClick={() => handleBulkAction(ids, 'approve')} disabled={processingReq === bulkKey}
-                        className="px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">
-                        一括最終承認
-                      </button>
+                      <RowButton tone="approve" busy={processingReq === bulkKey} onClick={() => handleBulkAction(ids, 'approve')}>
+                        まとめて最終承認する
+                      </RowButton>
                     )}
                     {(canFA || canFinal) && (
-                      <button onClick={() => rejectingId === group.key ? handleBulkAction(ids, 'reject', { reason: rejectReason }) : patchUi({ rejectingId: group.key, rejectReason: '' })}
-                        disabled={processingReq === bulkRejectKey}
-                        className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">全て却下</button>
+                      <RowButton tone="danger" busy={processingReq === bulkRejectKey}
+                        onClick={() => rejectingId === group.key ? handleBulkAction(ids, 'reject', { reason: rejectReason }) : patchUi({ rejectingId: group.key, rejectReason: '' })}>全て却下する</RowButton>
                     )}
-                    <button onClick={() => {
+                    <RowButton tone="ghost" onClick={() => {
                       const next = new Set(expandedGroups)
                       next.add(group.key)
                       patchUi({ expandedGroups: next })
-                    }} className="px-2 py-1 text-xs text-blue-600 hover:underline">▼ 個別</button>
+                    }}>1件ずつ見る</RowButton>
                   </div>
                 </div>
                 {rejectingId === group.key && (
                   <div className="mt-3 flex items-center gap-2 border-t pt-3">
                     <input type="text" value={rejectReason} onChange={e => patchUi({ rejectReason: e.target.value })} placeholder="却下理由（任意・全件共通）"
                       className="flex-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-3 py-1.5 text-sm" />
-                    <button onClick={() => handleBulkAction(ids, 'reject', { reason: rejectReason })} className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold">{items.length}件 却下</button>
-                    <button onClick={() => patchUi({ rejectingId: null })} className="px-2 py-1.5 bg-gray-200 text-gray-600 rounded-lg text-xs">取消</button>
+                    <RowButton tone="danger" busy={processingReq === bulkRejectKey} onClick={() => handleBulkAction(ids, 'reject', { reason: rejectReason })}>{items.length}件を却下する</RowButton>
+                    <RowButton tone="ghost" onClick={() => patchUi({ rejectingId: null })}>やめる</RowButton>
                   </div>
                 )}
               </div>
