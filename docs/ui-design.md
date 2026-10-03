@@ -167,7 +167,7 @@ rem 系へまとめて直した（見た目は同じ）。`npm run lint:px` が 
 **モーダル（`components/ui/Modal.tsx`・2026-10-03 土台③）**: 画面ごとの `fixed inset-0 … bg-white rounded-xl p-6` は書かない。`<Modal open onClose title size footer dirty>` を使う。
 見出し行（title ＋ ×）・本文（中だけスクロール）・下のボタン列（`footer`: 左に `CancelButton`「やめる」、右に `SaveButton` か `PrimaryButton`）。`dirty` を渡すと未保存ガード（右パネルと同じ窓）。
 旧 `lib/styles.ts` の `modalOverlayCls` / `modalContentCls` は使わない。検出は `npm run lint:dialog`（`modal-ok` で例外）。
-見るだけの一覧は右パネル（SidePanel）、入力して保存するものはモーダル、どちらも「やめる」が左・主役が右。
+見るだけの一覧は右パネル（SidePanel）、入力して保存するものはモーダル、どちらも「やめる」が左・主役が右。重なり順: 右パネル z-60 → モーダル z-70（パネルの中から開いても上）→ 確認の窓 z-80 → お知らせの帯 z-100。
 
 **文字の大きさ（標準／大きい＝1.125倍）**: PC はサイドバー下の切替、スマホは右上の DEDURA＋ マークを押す（`components/StaffHeader.tsx`）。`lib/theme.ts` で端末ごとに覚える
 
