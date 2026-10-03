@@ -20,9 +20,12 @@
  *   - 帰国職長承認: いずれかの担当現場あり foreman / admin / approver
  *   - 帰国最終承認: admin / approver のみ
  *   - 却下: 上記と同条件
+ *
+ * 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
  */
 
 import { useEffect, useState, useCallback } from 'react'
+import { notify } from '@/lib/notify'
 import { SidePanel, CloseButton, Chip } from '@/components/ui/PageParts'
 
 interface LeaveRequestItem {
@@ -159,18 +162,27 @@ export default function AttendanceActionBar({
       })))
       // 2026-09-02 修正: 旧は res.ok を見ておらず、残数超・ロック・権限エラーが無言で失敗して
       //   「承認したのに残る」状態になっていた（dashboard / RequestsTab と同じく失敗を明示）
+      const actionLabel = action === 'reject' ? '却下' : action === 'foreman_approve' ? '職長承認' : '承認'
       const failed: string[] = []
       for (const r of results) {
         if (!r.ok) {
           const err = await r.json().catch(() => null)
-          failed.push(err?.error || `${r.status}`)
+          failed.push(err?.error || 'サーバが受け付けませんでした')
         }
       }
-      if (failed.length > 0) alert(`${failed.length} 件の処理に失敗しました\n\n${Array.from(new Set(failed)).join('\n')}`)
+      if (failed.length > 0) {
+        const uniq = Array.from(new Set(failed))
+        if (ids.length > 1) {
+          notify.error(`${ids.length}件中 ${failed.length}件を${actionLabel}できませんでした`,
+            uniq.slice(0, 5).map(f => `・${f}`).join('\n') + (uniq.length > 5 ? '\n…ほか' : ''))
+        } else {
+          notify.failed(actionLabel, failed[0])
+        }
+      }
       await fetchData()
       onUpdate?.()
     } catch (e) {
-      alert(`通信エラーで処理できませんでした: ${e instanceof Error ? e.message : String(e)}`)
+      notify.failed(action === 'reject' ? '却下' : '承認', e)
     }
     finally { setProcessing(null) }
   }

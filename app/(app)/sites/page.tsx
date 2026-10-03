@@ -1,5 +1,7 @@
 'use client'
 
+// 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmDanger・confirmWithReason・notify・FieldError）に置き換え
+
 import { siteLeaderLabel } from '@/lib/companies'
 import { useEffect, useState, useCallback } from 'react'
 import { can } from '@/lib/permissions'
@@ -8,7 +10,9 @@ import { fmtYen } from '@/lib/format'
 import { todayJstIso, addDaysIso } from '@/lib/date-utils'
 import { isForemanCandidateJob } from '@/lib/jobs'
 import { isAlreadyRetired } from '@/lib/workers'
-import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
+import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, FieldError } from '@/components/ui/PageParts'
+import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { dailyAllowanceYen, DRIVE_ALLOWANCE_YEN, SITE_ALLOWANCE_FROM_YM, judgeFromSamples, COMMUTE_SAMPLE_TARGET } from '@/lib/allowance'
 
 interface RatePeriod {
@@ -138,6 +142,7 @@ export default function SitesPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const [formErrors, setFormErrors] = useState<{ name?: string; ownerId?: string; workType?: string; calFrom?: string }>({})
 
   // Modal-only state
   const [formRates, setFormRates] = useState<RatePeriod[]>([])
@@ -205,6 +210,7 @@ export default function SitesPage() {
     setFormNoDrive(false)
     setFormCalMode('normal'); setFormCalFrom('')
     setShowDeleteConfirm(false)
+    setFormErrors({})
     setModalTab('basic')
     setShowModal(true)
   }
@@ -269,6 +275,7 @@ export default function SitesPage() {
     deps.sort((a, b) => b.ym.localeCompare(a.ym))
     setFormDeputies(deps)
     setShowDeleteConfirm(false)
+    setFormErrors({})
     setModalTab('basic')
     setShowModal(true)
   }
@@ -282,13 +289,18 @@ export default function SitesPage() {
   const childrenOfEditing = editId && !isChildEdit ? sites.filter(x => x.parentId === editId) : []
   const addWorkType = async () => {
     if (!editId) return
-    const wt = window.prompt('追加する工種名（例：鉄骨、仮設）')
-    if (!wt || !wt.trim()) return
-    const res = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'addWorkType', parentId: editId, workType: wt.trim() }) })
+    const wt = await confirmWithReason({
+      title: 'この現場に工種を追加します',
+      description: '工種は出面の入力先になります。就業カレンダー・署名・職長は親現場と共通です。',
+      confirmLabel: '追加する',
+      reason: { label: '工種名', placeholder: '例：鉄骨、仮設' },
+    })
+    if (!wt) return
+    const res = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'addWorkType', parentId: editId, workType: wt }) })
     const data = await res.json().catch(() => null)
-    if (!res.ok) { alert(data?.error || '追加に失敗しました'); return }
+    if (!res.ok) { notify.failed('工種の追加', data?.error || 'サーバが受け付けませんでした'); return }
     await fetchSites()
-    alert(`工種「${wt.trim()}」を追加しました。単価タブの受取単価は親現場の単価をコピーしてあります。工種の行から開いて単価を直してください。`)
+    notify.success(`工種「${wt}」を追加しました`, '受取単価は親現場の単価をコピーしてあります。工種の行から開いて単価を直してください。')
   }
 
   // 単価タブの表示切替用。請負体制から導いた種別（未入力の旧データは保存済みの種別）
@@ -300,32 +312,45 @@ export default function SitesPage() {
 
   /** 現場の編集画面から、一覧に無い会社をその場で取引先マスタに追加する */
   const addCompanyInline = async () => {
-    const name = window.prompt('追加する会社名（例：鹿島建設株式会社）')
-    if (!name || !name.trim()) return
-    const roleText = window.prompt('役割を番号で入力（複数はカンマ区切り）\n1: 元請　2: 一次　3: 同業（二次）　4: 外注（専門業者）', '3')
+    const name = await confirmWithReason({
+      title: '一覧に無い会社を取引先マスタに追加します',
+      description: '追加した会社は取引先マスタにも登録され、あとから役割や単価を直せます。',
+      confirmLabel: '次へ',
+      reason: { label: '会社名', placeholder: '例：鹿島建設株式会社' },
+    })
+    if (!name) return
+    const roleText = await confirmWithReason({
+      title: `「${name}」の役割を番号で入れてください`,
+      description: '1: 元請　2: 一次　3: 同業（二次）　4: 外注（専門業者）\n複数あるときはカンマで区切ります（例: 2, 3）。',
+      confirmLabel: '追加する',
+      reason: { label: '役割の番号', placeholder: '例: 3' },
+    })
     if (!roleText) return
     const map: Record<string, CompanyRole> = { '1': 'gc', '2': 'prime', '3': 'peer', '4': 'subcon' }
     const roles = Array.from(new Set(roleText.split(/[,、\s]+/).map(x => map[x.trim()]).filter(Boolean)))
-    if (!roles.length) { alert('役割の番号が読み取れませんでした'); return }
-    const res = await fetch('/api/subcons', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'add', name: name.trim(), roles, type: '鳶業者' }) })
+    if (!roles.length) { notify.error('役割の番号が読み取れませんでした', '1〜4 の番号で入れてください。もう一度「一覧に無い会社を追加」からやり直してください。'); return }
+    const res = await fetch('/api/subcons', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'add', name, roles, type: '鳶業者' }) })
     const data = await res.json().catch(() => null)
-    if (!res.ok) { alert(data?.error || '追加に失敗しました'); return }
+    if (!res.ok) { notify.failed('会社の追加', data?.error || 'サーバが受け付けませんでした'); return }
     const added = data?.subcon as SubconMinimal | undefined
     if (added) {
       setSubcons(prev => [...prev, { ...added, roles }])
-      alert(`「${added.name}」を取引先マスタに追加しました（${roles.map(r => COMPANY_ROLES.find(x => x.key === r)?.label).join('・')}）`)
+      notify.success(`「${added.name}」を取引先マスタに追加しました`, roles.map(r => COMPANY_ROLES.find(x => x.key === r)?.label).join('・'))
     }
   }
 
   const handleSave = async () => {
-    if (!form.name.trim()) { alert('現場名を入力してください'); return }
     const editingNow = editId ? sites.find(x => x.id === editId) : undefined
-    if (!editingNow?.parentId && !form.ownerId) { alert('担当の二次（自社または同業者）を選んでください'); return }
-    if (editingNow?.parentId && !form.workType.trim()) { alert('工種名を入力してください'); return }
+    const errors: typeof formErrors = {}
+    if (!editingNow?.parentId && !form.name.trim()) errors.name = '現場名を入力してください'
+    if (!editingNow?.parentId && !form.ownerId) errors.ownerId = '担当の二次（自社または同業者）を選んでください'
+    if (editingNow?.parentId && !form.workType.trim()) errors.workType = '工種名を入力してください'
     // 「この月から作る」で月が空欄のまま保存すると、黙って「通常」になっていた（2026-09-30 点検）
     if (!editingNow?.parentId && formCalMode === 'from' && !/^\d{4}-\d{2}$/.test(formCalFrom)) {
-      alert('就業カレンダーを作り始める月を選んでください'); return
+      errors.calFrom = '就業カレンダーを作り始める月を選んでください'
     }
+    setFormErrors(errors)
+    if (Object.keys(errors).length > 0) { setModalTab('basic'); return }
     setSaving(true)
     try {
       // Compute latest tobiRate/dokoRate from rates array
@@ -352,7 +377,7 @@ export default function SitesPage() {
         const r = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'setNoDriveAllowance', id: editId, value: formNoDrive }) })
         if (!r.ok) {
           const err = await r.json().catch(() => null)
-          alert(`保存に失敗しました。${err?.error ? `\n${err.error}` : ''}`)
+          notify.failed('保存', err?.error || 'サーバが受け付けませんでした')
           return
         }
         setShowModal(false)
@@ -399,7 +424,7 @@ export default function SitesPage() {
       const saveRes = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!saveRes.ok) {
         const err = await saveRes.json().catch(() => null)
-        alert(`保存に失敗しました。${err?.error ? `\n${err.error}` : ''}`)
+        notify.failed('保存', err?.error || 'サーバが受け付けませんでした')
         return
       }
 
@@ -429,7 +454,7 @@ export default function SitesPage() {
               body: JSON.stringify({ action: 'setDeputy', siteId: editId, ym: ymKey, workerId: dep.wid }),
             })
             // 2026-10-02 総合点検: 旧は応答を見ておらず、失敗しても「保存できた」ように見えた
-            if (!r.ok) { const err = await r.json().catch(() => null); alert(`代理職長の保存に失敗しました。${err?.error ? `\n${err.error}` : ''}`); return }
+            if (!r.ok) { const err = await r.json().catch(() => null); notify.failed('代理職長の保存', err?.error || 'サーバが受け付けませんでした'); return }
           }
         }
 
@@ -442,7 +467,7 @@ export default function SitesPage() {
               headers: headers(),
               body: JSON.stringify({ action: 'removeDeputy', siteId: editId, ym }),
             })
-            if (!r.ok) { const err = await r.json().catch(() => null); alert(`代理職長の削除に失敗しました。${err?.error ? `\n${err.error}` : ''}`); return }
+            if (!r.ok) { const err = await r.json().catch(() => null); notify.failed('代理職長の削除', err?.error || 'サーバが受け付けませんでした'); return }
           }
         }
       }
@@ -465,7 +490,7 @@ export default function SitesPage() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => null)
-        alert(err?.error || '削除に失敗しました')
+        notify.failed('削除', err?.error || 'サーバが受け付けませんでした')
         return
       }
       setShowModal(false)
@@ -749,8 +774,10 @@ export default function SitesPage() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">工種名 *</label>
-                    <input value={form.workType} onChange={e => setForm({ ...form, workType: e.target.value })} placeholder="鉄骨"
+                    <input value={form.workType} onChange={e => { setForm({ ...form, workType: e.target.value }); setFormErrors(v => ({ ...v, workType: undefined })) }} placeholder="鉄骨"
+                      aria-invalid={!!formErrors.workType}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                    <FieldError>{formErrors.workType}</FieldError>
                   </div>
                 </div>
               )}
@@ -760,10 +787,12 @@ export default function SitesPage() {
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">現場名 *</label>
                 <input
                   value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  onChange={e => { setForm({ ...form, name: e.target.value }); setFormErrors(v => ({ ...v, name: undefined })) }}
                   placeholder="例：〇〇ビル新築工事"
+                  aria-invalid={!!formErrors.name}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
                 />
+                <FieldError>{formErrors.name}</FieldError>
               </div>
 
               {/* 請負体制（2026-09-15）。元請 → 一次 → 担当の二次。担当が自社かどうかで自社現場／応援現場と請求先が決まる */}
@@ -778,9 +807,10 @@ export default function SitesPage() {
                     onChange={v => setForm({ ...form, gcId: v })} />
                   <PartySelect label="一次" value={form.primeId} role="prime" companies={subcons}
                     onChange={v => setForm({ ...form, primeId: v })} />
-                  <PartySelect label="担当の二次 *" value={form.ownerId} role="peer" companies={subcons} includeSelf
-                    onChange={v => setForm({ ...form, ownerId: v })} />
+                  <PartySelect label="担当の二次 *" value={form.ownerId} role="peer" companies={subcons} includeSelf invalid={!!formErrors.ownerId}
+                    onChange={v => { setForm({ ...form, ownerId: v }); setFormErrors(e => ({ ...e, ownerId: undefined })) }} />
                 </div>
+                <FieldError>{formErrors.ownerId}</FieldError>
                 {(() => {
                   const r = resolveSiteParties({ gcId: form.gcId, primeId: form.primeId, ownerId: form.ownerId }, subcons)
                   if (!form.ownerId) return <p className="text-2xs text-amber-600">担当の二次を選んでください</p>
@@ -830,11 +860,13 @@ export default function SitesPage() {
                       <input type="radio" name="calMode" checked={formCalMode === v} onChange={() => setFormCalMode(v)} />
                       {label}
                       {v === 'from' && formCalMode === 'from' && (
-                        <input type="month" value={formCalFrom} onChange={e => setFormCalFrom(e.target.value)}
+                        <input type="month" value={formCalFrom} onChange={e => { setFormCalFrom(e.target.value); setFormErrors(v => ({ ...v, calFrom: undefined })) }}
+                          aria-invalid={!!formErrors.calFrom}
                           className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded px-2 py-1 text-sm" />
                       )}
                     </label>
                   ))}
+                  <FieldError>{formErrors.calFrom}</FieldError>
                   <p className="text-2xs text-gray-400 leading-relaxed">
                     スポット・常駐前の月は、カレンダー画面・翌月カレンダーの注意・通知ベルに出ません（催促しません）。出面はいつもどおり入力できます。
                     常駐が決まったら「この月から作る」にして、カレンダーを作ってください。
@@ -1338,11 +1370,16 @@ export default function SitesPage() {
                           )}
                           {j.completeDays >= COMMUTE_SAMPLE_TARGET && j.judged !== null && (
                             <button type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 const dailyMsg = SITE_ALLOWANCE_FROM_YM === null
-                                  ? '遠方現場日当は制度を再検討中のため現在は支給されません（0円）'
-                                  : (dailyAllowanceYen(j.judged!) > 0 ? `日当: ¥${dailyAllowanceYen(j.judged!).toLocaleString()}/日` : '日当: 対象外')
-                                if (confirm(`判定値を ${j.judged}分 で凍結します。\n\n${dailyMsg}\n\n※ 運転手当は全現場一律 ¥${DRIVE_ALLOWANCE_YEN.toLocaleString()}/片道で、判定値とは関係ありません。\n\n凍結後は変更できません。よろしいですか？`)) {
+                                  ? '遠方現場日当は制度を再検討中のため、今は支給されません（0円）。'
+                                  : (dailyAllowanceYen(j.judged!) > 0 ? `日当は ¥${dailyAllowanceYen(j.judged!).toLocaleString()}/日 になります。` : '日当の対象外です。')
+                                const ok = await confirmDialog({
+                                  title: `判定値を ${j.judged}分 で凍結しますか？`,
+                                  description: `${dailyMsg}\n運転手当は全現場一律 ¥${DRIVE_ALLOWANCE_YEN.toLocaleString()}/片道で、判定値とは関係ありません。\n凍結したあとは判定値を変えられません。`,
+                                  confirmLabel: '凍結する',
+                                })
+                                if (ok) {
                                   setFormCommute({ ...formCommute, judgedMin: j.judged!, frozenAt: new Date().toISOString() })
                                 }
                               }}
@@ -1457,19 +1494,20 @@ function normCompany(name: string): string {
 }
 
 /** 請負体制のプルダウン（役割で候補を絞る。選択中の会社は役割が外れていても表示を残す） */
-function PartySelect({ label, value, role, companies, includeSelf, onChange }: {
+function PartySelect({ label, value, role, companies, includeSelf, invalid, onChange }: {
   label: string
   value: string
   role: CompanyRole
   companies: { id: string; name: string; roles?: string[] }[]
   includeSelf?: boolean
+  invalid?: boolean
   onChange: (v: string) => void
 }) {
   const options = companies.filter(c => hasRole(c, role) || c.id === value)
   return (
     <div>
       <label className="text-2xs text-gray-500 dark:text-gray-400 block mb-1">{label}</label>
-      <select value={value} onChange={e => onChange(e.target.value)}
+      <select value={value} onChange={e => onChange(e.target.value)} aria-invalid={invalid || undefined}
         className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none">
         <option value="">{includeSelf ? '選択してください' : '未設定'}</option>
         {includeSelf && <option value={SELF_COMPANY_ID}>{SELF_COMPANY_LABEL}</option>}

@@ -1,7 +1,10 @@
 'use client'
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { getAuthPasswordSync } from '@/lib/hooks/useAuthPassword'
 import { Icon } from './ui/Icon'
 
@@ -80,7 +83,11 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
     if (!getAuthPasswordSync()) return
 
     const a = n.action
-    if (!confirm(`${a.grantDays}日を付与し、繰越${a.carryOver}日を設定します。よろしいですか？`)) return
+    if (!(await confirmDialog({
+      title: `有給 ${a.grantDays}日を付与しますか？`,
+      description: `付与日 ${a.grantDate}・繰越 ${a.carryOver}日で記録します。\n付与すると本人の残日数に加わります。`,
+      confirmLabel: '付与する',
+    }))) return
 
     setActing(n.id)
     try {
@@ -97,10 +104,10 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
         // 成功 → 通知を再取得
         await fetchNotifications()
       } else {
-        alert('付与に失敗しました')
+        notify.failed('付与', res.error || 'サーバが受け付けませんでした')
       }
-    } catch {
-      alert('エラーが発生しました')
+    } catch (e) {
+      notify.failed('付与', e)
     } finally {
       setActing(null)
     }

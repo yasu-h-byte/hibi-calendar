@@ -17,12 +17,16 @@
  * 印刷は A4 縦のみで統一している（請求書1ページ目と出面明細を CSS 名前付きページで
  * 縦横混在させる案は Chrome の印刷崩れリスクがあるため見送り。出面明細は31日分を
  * 小さいフォントで縦向きに収める）。
+ *
+ * 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify）に置き換え
  */
 import { Icon } from '@/components/ui/Icon'
 import { Chip } from '@/components/ui/PageParts'
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
+import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { useLatestRequest } from '@/lib/hooks/useLatestRequest'
 import { shiftYm } from '@/lib/month-nav'
@@ -135,43 +139,71 @@ function PeerInvoicePageInner() {
   const canIssue = user?.role === 'admin' || user?.role === 'approver'
   const canRequest = user?.role === 'jimu'
 
-  const post = async (payload: Record<string, unknown>, failMsg: string) => {
+  const post = async (payload: Record<string, unknown>, action: string) => {
     setBusy(true)
     const res = await postJson<{ error?: string }>('/api/peer-invoice', payload)
     setBusy(false)
-    if (!res.ok) { alert(res.error || res.data?.error || failMsg); return }
+    if (!res.ok) { notify.failed(action, res.error || res.data?.error || 'サーバが受け付けませんでした'); return }
     load()
   }
 
   const handleIssue = async () => {
-    if (!confirm('この内容で発行します。発行すると金額・明細を凍結し、その後は取り消してからでないと作り直せません。よろしいですか？')) return
-    post({ action: 'issue', ym, companyId }, '発行に失敗しました')
+    if (!(await confirmDialog({
+      title: 'この内容で請求書を発行しますか？',
+      description: '発行すると金額・明細を凍結します。直すときは、いったん取り消して（番号は欠番になります）から作り直します。',
+      confirmLabel: '発行する',
+    }))) return
+    post({ action: 'issue', ym, companyId }, '発行')
   }
   const handleRequest = async () => {
-    if (!confirm('この内容で発行を申請します。事業責任者が承認すると請求書番号が付いて発行されます。よろしいですか？')) return
-    post({ action: 'request', ym, companyId }, '申請に失敗しました')
+    if (!(await confirmDialog({
+      title: 'この内容で発行を申請しますか？',
+      description: '事業責任者（政仁さん）が承認すると、請求書番号が付いて発行されます。',
+      confirmLabel: '申請する',
+    }))) return
+    post({ action: 'request', ym, companyId }, '申請')
   }
   const handleApprove = async (id: string) => {
-    if (!confirm('この申請を承認して発行します。よろしいですか？')) return
-    post({ action: 'approve', id }, '承認に失敗しました')
+    if (!(await confirmDialog({
+      title: 'この申請を承認して発行しますか？',
+      description: '発行すると請求書番号が付き、金額・明細を凍結します。',
+      confirmLabel: '承認して発行する',
+    }))) return
+    post({ action: 'approve', id }, '承認')
   }
   const handleReject = async (id: string) => {
-    const reason = window.prompt('差し戻す理由（申請した人に表示されます）')
+    const reason = await confirmWithReason({
+      title: 'この申請を差し戻しますか？',
+      description: '理由は申請した人に表示されます。直して、もう一度申請できます。',
+      confirmLabel: '差し戻す',
+      reason: { label: '差し戻す理由', placeholder: '例: 10月5日の人工が出面と合いません' },
+    })
     if (reason === null) return
-    post({ action: 'reject', id, reason }, '差し戻しに失敗しました')
+    post({ action: 'reject', id, reason }, '差し戻し')
   }
   const handleWithdraw = async (id: string) => {
-    if (!confirm('この申請を取り下げますか？ 取り下げたあと、内容を直してもう一度申請できます。')) return
-    post({ action: 'withdraw', id }, '取り下げに失敗しました')
+    if (!(await confirmDialog({
+      title: 'この申請を取り下げますか？',
+      description: '取り下げたあと、内容を直してもう一度申請できます。',
+      confirmLabel: '取り下げる',
+      tone: 'danger',
+    }))) return
+    post({ action: 'withdraw', id }, '取り下げ')
   }
 
   const handleVoid = async (id: string) => {
-    const reason = window.prompt('取り消し理由（任意・あとで履歴に残ります）') ?? ''
-    if (!confirm('この請求書を取り消しますか？ 取り消した番号は欠番のまま残ります。')) return
+    const reason = await confirmWithReason({
+      title: 'この請求書を取り消しますか？',
+      description: '取り消した番号は欠番のまま残ります。\n元に戻せません。',
+      confirmLabel: '取り消す',
+      tone: 'danger',
+      reason: { label: '取り消す理由（書かなくてもよい・あとで履歴に残ります）', required: false },
+    })
+    if (reason === null) return
     setBusy(true)
     const res = await postJson<{ error?: string }>('/api/peer-invoice', { action: 'void', id, reason })
     setBusy(false)
-    if (!res.ok) { alert(res.error || res.data?.error || '取り消しに失敗しました'); return }
+    if (!res.ok) { notify.failed('取り消し', res.error || res.data?.error || 'サーバが受け付けませんでした'); return }
     load()
   }
 

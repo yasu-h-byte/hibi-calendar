@@ -1,6 +1,8 @@
 'use client'
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 
 import { useState } from 'react'
+import { confirmDialog } from '@/lib/confirm-dialog'
 
 interface RepairPlan {
   date: string
@@ -501,10 +503,14 @@ export default function DebugAttPage() {
               {repairLoading ? '確認中…' : '👀 ドライラン（プレビューのみ）'}
             </button>
             <button
-              onClick={() => {
-                if (confirm(`本当に修復を実行しますか？\n\n対象: workerId=${repairWorkerId}, ${repairOldSiteId} → ${repairNewSiteId}\n${repairDates.split(',').length}日分`)) {
-                  handleRepair(false)
-                }
+              onClick={async () => {
+                if (!(await confirmDialog({
+                  title: '本番の出面データを修復しますか？',
+                  description: `対象: workerId=${repairWorkerId}、${repairOldSiteId} → ${repairNewSiteId}\n${repairDates.split(',').length}日分の出面を書き換えます。先にドライランで結果を確かめてください。`,
+                  confirmLabel: '実行する',
+                  tone: 'danger',
+                }))) return
+                handleRepair(false)
               }}
               disabled={repairLoading || !repairWorkerId}
               className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:opacity-90 disabled:opacity-50"

@@ -1,10 +1,14 @@
 'use client'
 
+// 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmDanger・confirmWithReason・notify・FieldError）に置き換え
+
 import React, { useEffect, useState, useCallback } from 'react'
 import { useAuthPassword } from '@/lib/hooks/useAuthPassword'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { COMPANY_ROLES, companyRoles, canBorrowFrom, type CompanyRole } from '@/lib/companies'
-import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
+import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, FieldError } from '@/components/ui/PageParts'
+import { confirmDanger } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 
 interface PaymentTerms {
   closing: 'end'
@@ -51,6 +55,7 @@ export default function SubconsPage() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [siteRateForm, setSiteRateForm] = useState<Record<string, string>>({}) // siteId -> rate string
   const [saving, setSaving] = useState(false)
+  const [formErrors, setFormErrors] = useState<{ name?: string; roles?: string }>({})
   // 表示モード: 'flat' = 区分別（鳶/土工）/ 'group' = 会社グループ別（兼業業者を1グループに集約）
   const [viewMode, setViewMode] = useState<'flat' | 'group'>('flat')
   // 役割で絞り込み（2026-09-15）
@@ -77,8 +82,8 @@ export default function SubconsPage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const openAdd = () => {
-    if (subcons.length >= 80) { alert('取引先は最大80社までです'); return }
-    setEditId(null); setForm(EMPTY_FORM); setSiteRateForm({}); setShowModal(true)
+    if (subcons.length >= 80) { notify.error('取引先はこれ以上追加できません', '登録できるのは80社までです。使っていない取引先を削除してから追加してください。'); return }
+    setEditId(null); setForm(EMPTY_FORM); setSiteRateForm({}); setFormErrors({}); setShowModal(true)
   }
   const openEdit = (sc: Subcon) => {
     setEditId(sc.id)
@@ -95,12 +100,16 @@ export default function SubconsPage() {
       if (rateOv.rate) rateMap[siteId] = String(rateOv.rate)
     }
     setSiteRateForm(rateMap)
+    setFormErrors({})
     setShowModal(true)
   }
 
   const handleSave = async () => {
-    if (!form.name.trim()) { alert('名前を入力してください'); return }
-    if (!form.roles.length) { alert('役割を1つ以上選んでください'); return }
+    const errors: { name?: string; roles?: string } = {}
+    if (!form.name.trim()) errors.name = '取引先名を入力してください'
+    if (!form.roles.length) errors.roles = '役割を1つ以上選んでください'
+    setFormErrors(errors)
+    if (errors.name || errors.roles) return
     setSaving(true)
     try {
       // 元請・一次・同業のみ、応援の請求書の宛名用データを一緒に送る
@@ -114,7 +123,7 @@ export default function SubconsPage() {
         : { action: 'add', name: form.name, type: form.type, rate: form.rate, otRate: form.otRate, note: form.note, companyGroup: form.companyGroup, roles: form.roles, ...partyFields }
       const res = await postJson('/api/subcons', body)
       if (!res.ok) {
-        alert(res.error || (res.data as { error?: string } | null)?.error || '保存に失敗しました'); setSaving(false); return
+        notify.failed('保存', res.error || (res.data as { error?: string } | null)?.error || 'サーバが受け付けませんでした'); setSaving(false); return
       }
 
       // 編集モードで現場別単価を変えた現場だけ updateSiteRates を送る
@@ -134,7 +143,7 @@ export default function SubconsPage() {
           const r = await postJson('/api/subcons', {
             action: 'updateSiteRates', subconId: editId, siteRates: siteRatesPayload,
           })
-          if (!r.ok) { alert(r.error || (r.data as { error?: string } | null)?.error || '現場別単価の保存に失敗しました'); setSaving(false); return }
+          if (!r.ok) { notify.failed('現場別単価の保存', r.error || (r.data as { error?: string } | null)?.error || 'サーバが受け付けませんでした'); setSaving(false); return }
         }
       }
 
@@ -143,10 +152,14 @@ export default function SubconsPage() {
   }
 
   const handleDelete = async (id: string, name: string): Promise<boolean> => {
-    if (!confirm(`${name} を削除しますか？\n（出面・請負体制・請求書から使われている取引先は削除できません）`)) return false
+    if (!(await confirmDanger({
+      title: `${name} を削除しますか？`,
+      description: '出面・請負体制・請求書で使われている取引先は削除できません。',
+      confirmLabel: '削除する',
+    }))) return false
     // 2026-10-02 総合点検: 旧は応答を見ておらず、拒否されても消えたように見えた
     const r = await postJson('/api/subcons', { action: 'delete', id })
-    if (!r.ok) { alert(r.error || (r.data as { error?: string } | null)?.error || '削除できませんでした'); return false }
+    if (!r.ok) { notify.failed('削除', r.error || (r.data as { error?: string } | null)?.error || 'サーバが受け付けませんでした'); return false }
     fetchData()
     return true
   }
@@ -358,8 +371,10 @@ export default function SubconsPage() {
             <div className="px-6 py-5 flex-1 space-y-3">
               <div>
                 <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">取引先名 *</label>
-                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="例：村田工業"
+                <input value={form.name} onChange={e => { setForm({ ...form, name: e.target.value }); setFormErrors(v => ({ ...v, name: undefined })) }} placeholder="例：村田工業"
+                  aria-invalid={!!formErrors.name}
                   className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
+                <FieldError>{formErrors.name}</FieldError>
               </div>
               {/* 役割（2026-09-15）。同じ会社が一次でも同業でもあり得るので複数選べる */}
               <div>
@@ -369,11 +384,13 @@ export default function SubconsPage() {
                     <label key={r.key} className="flex items-start gap-1.5 text-sm cursor-pointer">
                       <input type="checkbox" className="mt-1"
                         checked={form.roles.includes(r.key)}
-                        onChange={e => setForm({ ...form, roles: e.target.checked ? [...form.roles, r.key] : form.roles.filter(x => x !== r.key) })} />
+                        aria-invalid={!!formErrors.roles}
+                        onChange={e => { setForm({ ...form, roles: e.target.checked ? [...form.roles, r.key] : form.roles.filter(x => x !== r.key) }); setFormErrors(v => ({ ...v, roles: undefined })) }} />
                       <span>{r.label}<span className="block text-3xs text-gray-400">{r.hint}</span></span>
                     </label>
                   ))}
                 </div>
+                <FieldError>{formErrors.roles}</FieldError>
               </div>
               {/* 応援の請求書（2026-09-25）の宛名用データ。元請・一次・同業のみ */}
               {(form.roles.includes('gc') || form.roles.includes('prime') || form.roles.includes('peer')) && (

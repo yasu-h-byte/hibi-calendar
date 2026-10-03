@@ -6,8 +6,10 @@
  * - 連絡のバッジを押すと中身を見られ、事務・事業責任者・代表（monthly.close）は「対応済み」にできる。
  *   返事を書くと本人のスマホの確認カードに出る。出面を直した場合は本人に再確認が出る（要再確認）
  * - 仕組みは docs/attendance.md「本人の出面確認」
+ * - 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
  */
 import { useState } from 'react'
+import { notify } from '@/lib/notify'
 
 /** 本人確認の1人分（app/api/attendance/confirm の事務所向け GET）。状態はサーバが月締めと同じ判定で決める */
 export interface StaffConfirmInfo {
@@ -84,7 +86,7 @@ export default function StaffConfirmBadge({
         body: JSON.stringify({ action: 'resolve', ym, workerId, reply }),
       })
       const j = await res.json().catch(() => ({}))
-      if (!res.ok) { alert(`対応済みにできませんでした: ${j.error || res.status}`); return }
+      if (!res.ok) { notify.error('対応済みにできませんでした', j.error || 'サーバが受け付けませんでした'); return }
       setOpen(false); setReply('')
       onChanged()
     } finally {
