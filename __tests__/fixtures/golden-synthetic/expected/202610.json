@@ -97,14 +97,7 @@
    "siteAllowance": 0,
    "allowanceDays": 0,
    "driveAllowance": 10000,
-   "driveLegs": 10,
-   "payNotes": [
-    {
-     "code": "jpWeekOver40",
-     "message": "週40時間を超える週が 3週・計 40時間 あります（月〜土の出勤×8h。月をまたぐ週は数えていません）。この分の割増 0.25倍（目安 26,280円）は支給額に入れていません。日本人に変形労働時間制の定めが無ければ必要です（社労士に確認）",
-     "amount": 26280
-    }
-   ]
+   "driveLegs": 10
   },
   {
    "id": 12,

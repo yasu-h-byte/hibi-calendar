@@ -82,6 +82,14 @@ export function jpSundayPremiumApplies(ym: string): boolean {
   return ym >= JP_LEGAL_HOLIDAY_FROM_YM && ym <= JP_LEGAL_HOLIDAY_UNTIL_YM
 }
 
+/**
+ * 日本人（役員以外）の「週40時間超（月〜土の出勤×8h）」の注意点を出し始める月（'YYYYMM'）。
+ * 2026-10-03 代表決定「週40時間超の割増はとりあえず従来どおり不要」→ null（出さない）。
+ * 9月分から出していた注意点が、変形労働時間制の確認が取れるまで毎月「要確認」になるのを止めた。
+ * 社労士から割増が要ると言われたら、ここに開始月を入れるだけでその月分から注意点が戻る（集計と目安額の計算は残してある）。
+ */
+export const JP_WEEK_OVER40_NOTE_FROM_YM: string | null = null
+
 // ────────────────────────────────────────
 //  Firestoreデータ読み込み
 // ────────────────────────────────────────
@@ -2555,7 +2563,8 @@ export function computeMonthly(
       }
 
       // ② 日本人（役員以外）: 週40時間を超える週（月〜土の出勤×8h。残業欄は別に1.25倍で払っている）
-      if ((isJpDaily || isJpMonthly) && wm._jpDayHours && wm._jpDayHours.size > 0) {
+      //    2026-10-03 代表決定で当面出さない（JP_WEEK_OVER40_NOTE_FROM_YM = null。再開は定数に開始月を入れる）
+      if (JP_WEEK_OVER40_NOTE_FROM_YM && ym >= JP_WEEK_OVER40_NOTE_FROM_YM && (isJpDaily || isJpMonthly) && wm._jpDayHours && wm._jpDayHours.size > 0) {
         const firstMondayOffset = (new Date(yN, mN - 1, 1).getDay() + 6) % 7
         const weekHours = new Map<number, number>()
         for (const [d, h] of wm._jpDayHours) {
