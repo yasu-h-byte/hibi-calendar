@@ -7,8 +7,8 @@ import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { getAuthPasswordSync } from '@/lib/hooks/useAuthPassword'
-import { Icon } from './ui/Icon'
-import { RowButton } from './ui/PageParts'
+import { Icon, type IconName } from './ui/Icon'
+import { RowButton, Chip } from './ui/PageParts'
 
 interface NotificationAction {
   type: string
@@ -115,24 +115,31 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
     }
   }
 
-  const typeColor = (type: string) => {
-    switch (type) {
-      case 'error': return 'border-l-red-500 bg-red-50 dark:bg-red-900/20'
-      case 'warning': return 'border-l-yellow-500 bg-yellow-50 dark:bg-yellow-900/20'
-      default: return 'border-l-blue-500 bg-blue-50 dark:bg-blue-900/20'
-    }
-  }
+  // 2026-10-03: ポップアップを画面の型（白いカード・細枠・角丸・線のアイコン・札・行ボタン）に作り直した
+  //   旧: 灰色の見出し帯・種類ごとの色つき帯・絵文字・灰色のボタン
+  const KNOWN: IconName[] = ['alert', 'calendar', 'umbrella', 'unlock', 'clipboard', 'pen', 'clock', 'star', 'user', 'users', 'plane', 'receipt', 'bell', 'lock', 'doc', 'yen']
+  const iconOf = (n: Notification): IconName =>
+    (KNOWN as string[]).includes(n.icon) ? (n.icon as IconName) : n.type === 'info' ? 'bell' : 'alert'
+  const toneOf = (type: Notification['type']) => type === 'error'
+    ? 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+    : type === 'warning'
+      ? 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+      : 'bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-200'
+  const urgent = notifications.filter(n => n.type !== 'info').length
 
   return (
     <div className="relative" ref={panelRef}>
       <button
+        type="button"
         onClick={() => { setOpen(prev => !prev); if (!open) fetchNotifications() }}
-        className="relative w-9 h-9 flex items-center justify-center rounded-[10px] border border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-active dark:hover:bg-gray-700 transition-colors duration-150"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className="relative w-9 h-9 flex items-center justify-center rounded-[10px] border border-hibi-line dark:border-gray-700 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition"
         aria-label="通知"
       >
         <Icon name="bell" size={17} />
         {notifications.length > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 flex items-center justify-center px-1 text-xs font-bold text-white bg-red-500 rounded-full shadow-sm">
+          <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 flex items-center justify-center px-1 text-xs font-bold text-white bg-red-500 rounded-full">
             {notifications.length}
           </span>
         )}
@@ -140,70 +147,61 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
 
       {open && (
         <div
-          className="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 z-[100] overflow-hidden"
-          style={{ animation: 'notifSlideIn 0.15s ease-out' }}
+          role="dialog"
+          aria-label="通知"
+          className="absolute left-0 top-full mt-2 w-[360px] max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-800 rounded-2xl border border-hibi-line dark:border-gray-700 shadow-xl z-[100] overflow-hidden animate-modalIn"
         >
-          <div className="px-3 py-2.5 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50 dark:bg-gray-700">
-            <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-200">通知</h3>
-            {loading && <span className="text-xs text-hibi-sub dark:text-gray-400">更新中...</span>}
-            {!loading && loadFailed && <span className="text-xs text-red-700 dark:text-red-300 font-bold">取得できませんでした</span>}
-            {!loading && !loadFailed && notifications.length === 0 && <span className="text-xs text-green-700 dark:text-green-300 font-bold">問題なし</span>}
+          <div className="px-4 pt-3.5 pb-3 border-b border-hibi-line dark:border-gray-700 flex items-center gap-2">
+            <h3 className="font-bold text-base text-gray-900 dark:text-white">通知</h3>
+            {notifications.length > 0 && <Chip tone={urgent > 0 ? 'amber' : 'blue'}>{notifications.length}件</Chip>}
+            <span className="ml-auto text-xs text-hibi-sub dark:text-gray-400">
+              {loading ? '読み込んでいます' : loadFailed ? <span className="text-red-700 dark:text-red-300 font-bold">取得できませんでした</span> : '5分ごとに更新'}
+            </span>
           </div>
 
-          <div className="max-h-96 overflow-y-auto">
+          <div className="max-h-[70vh] overflow-y-auto">
             {loadFailed && notifications.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-hibi-sub dark:text-gray-400">
-                通知を取得できませんでした。
-                <button type="button" onClick={fetchNotifications} className="ml-2 underline font-bold text-hibi-navy dark:text-blue-300">もう一度</button>
+              <div className="px-4 py-7 text-center text-sm text-hibi-sub dark:text-gray-400 flex flex-col items-center gap-3">
+                <span>通知を取得できませんでした。</span>
+                <RowButton tone="ghost" onClick={fetchNotifications}>もう一度読み込む</RowButton>
               </div>
             ) : notifications.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-hibi-sub dark:text-gray-400">
-                対応が必要な項目はありません
+              <div className="px-4 py-7 text-center text-sm text-hibi-sub dark:text-gray-400 flex flex-col items-center gap-2">
+                <span className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 flex items-center justify-center"><Icon name="check" size={20} /></span>
+                <span>対応が必要なことはありません</span>
               </div>
             ) : (
               notifications.map(n => (
-                <div
-                  key={n.id}
-                  className={`px-3 py-2.5 border-l-4 border-b border-gray-50 ${typeColor(n.type)}`}
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-sm flex-shrink-0 mt-0.5">{n.icon}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-800 dark:text-gray-200 leading-snug whitespace-pre-line">{n.message}</p>
-                      {n.count !== undefined && n.count > 0 && (
-                        <span className="inline-block mt-1 text-3xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
-                          {n.count}件
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-2 flex gap-2">
-                    {n.href && (
-                      <a href={n.href} onClick={() => setOpen(false)}
-                        className="flex-1 text-center text-xs font-bold rounded-lg py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200 transition">
-                        開く →
-                      </a>
-                    )}
-                    {n.action && (
-                      <RowButton tone="main" busy={acting === n.id} onClick={() => handleAction(n)} className="flex-1">
-                        {n.action.label}
-                      </RowButton>
-                    )}
-                    {n.messengerText && (
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(n.messengerText!)
-                          setCopiedId(n.id)
-                          setTimeout(() => setCopiedId(null), 2000)
-                        }}
-                        className={`${n.action ? '' : 'flex-1'} text-center text-xs font-bold rounded-lg py-1.5 transition ${
-                          copiedId === n.id
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                        }`}
-                      >
-                        {copiedId === n.id ? '✓ コピー済み' : 'Messenger用コピー'}
-                      </button>
+                <div key={n.id} className="px-4 py-3 border-b border-hibi-line dark:border-gray-700 last:border-b-0 flex gap-3">
+                  <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${toneOf(n.type)}`} aria-hidden="true">
+                    <Icon name={iconOf(n)} size={17} />
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 dark:text-gray-100 leading-snug whitespace-pre-line break-words">{n.message}</p>
+                    {n.count !== undefined && n.count > 0 && <div className="mt-1"><Chip tone="gray">{n.count}件</Chip></div>}
+                    {(n.href || n.action || n.messengerText) && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {n.href && (
+                          <a href={n.href} onClick={() => setOpen(false)}
+                            className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-xs font-bold bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 border border-gray-300 dark:border-gray-600 hover:bg-hibi-bg dark:hover:bg-gray-700 transition">
+                            開く<Icon name="chevronRight" size={13} />
+                          </a>
+                        )}
+                        {n.action && (
+                          <RowButton tone="main" busy={acting === n.id} onClick={() => handleAction(n)}>{n.action.label}</RowButton>
+                        )}
+                        {n.messengerText && (
+                          <RowButton tone="ghost" onClick={() => {
+                            navigator.clipboard.writeText(n.messengerText!).catch(() => {})
+                            setCopiedId(n.id)
+                            setTimeout(() => setCopiedId(null), 2000)
+                          }}>
+                            <span className="inline-flex items-center gap-1">
+                              <Icon name={copiedId === n.id ? 'check' : 'copy'} size={13} />{copiedId === n.id ? 'コピーしました' : 'Messenger用にコピー'}
+                            </span>
+                          </RowButton>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -212,13 +210,6 @@ export default function NotificationBell({ role, workerId }: { role: string; wor
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes notifSlideIn {
-          from { opacity: 0; transform: translateY(-8px) scale(0.97); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-      `}</style>
     </div>
   )
 }

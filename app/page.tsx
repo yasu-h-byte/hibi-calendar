@@ -76,8 +76,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center bg-hibi-bg px-4">
+      <div className="bg-white rounded-2xl border border-hibi-line p-8 w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="flex justify-center">
             <DeduraWordmark size="lg" />
@@ -94,28 +94,28 @@ export default function LoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="パスワード"
-              className="w-full border border-gray-300 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-hibi-navy"
+              className="w-full h-12 border border-gray-300 rounded-[10px] px-4 text-base mb-3 focus:outline-none focus:ring-2 focus:ring-hibi-navy"
               autoFocus
             />
-            {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+            {error && <p role="alert" className="text-red-600 text-sm mb-3">{error}</p>}
             <button
               type="submit"
               disabled={loading || !password}
-              className="w-full bg-hibi-navy text-white rounded-lg py-3 font-bold hover:bg-hibi-light transition disabled:opacity-50"
+              className="w-full h-12 bg-hibi-navy text-white rounded-[10px] font-bold text-base hover:bg-hibi-light transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? '確認中...' : 'ログイン'}
+              {loading ? '確認しています' : 'ログインする'}
             </button>
           </form>
         ) : (
           <div>
-            <p className="text-sm text-gray-600 mb-4 text-center">名前を選んでください</p>
+            <p className="text-sm text-hibi-sub mb-4 text-center">名前を選んでください</p>
             <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto">
               {workers.map(w => (
                 <button
                   key={w.id}
                   onClick={() => handleWorkerSelect(w.id)}
                   disabled={loading}
-                  className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-3 text-sm font-medium text-hibi-navy hover:bg-hibi-navy hover:text-white transition disabled:opacity-50"
+                  className="bg-white border border-gray-300 rounded-[10px] px-3 min-h-[48px] text-sm font-bold text-hibi-navy hover:bg-hibi-navy hover:text-white transition disabled:opacity-50"
                 >
                   {w.name}
                 </button>
@@ -123,9 +123,9 @@ export default function LoginPage() {
             </div>
             <button
               onClick={() => { setStep('password'); setError('') }}
-              className="w-full mt-4 text-sm text-gray-500 hover:text-gray-700"
+              className="w-full mt-4 h-10 text-sm text-hibi-sub hover:text-gray-900 rounded-[10px] hover:bg-hibi-bg"
             >
-              ← パスワード入力に戻る
+              パスワード入力に戻る
             </button>
           </div>
         )}

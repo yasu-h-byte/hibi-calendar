@@ -18,6 +18,7 @@ import { getWorkerLastAccessMap } from '@/lib/accessLog'
 
 interface Notification {
   id: string
+  /** 線のアイコンの名前（components/ui/Icon.tsx）。旧: 絵文字（2026-10-03 に変更） */
   icon: string
   message: string
   type: 'warning' | 'error' | 'info'
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
           const firstTime = !last?.at
           notifications.push({
             id: 'backup-stale',
-            icon: '\u26A0\uFE0F',
+            icon: 'alert',
             message: firstTime
               ? 'バックアップの実行記録はまだありません（今夜の実行から記録され、止まったときにここに出ます）'
               : `${h.reason}。管理者設定 → バックアップ・履歴 で確認してください`,
@@ -126,7 +127,7 @@ export async function GET(request: NextRequest) {
         const targetYm = target.ym
         notifications.push({
           id: 'unsigned-calendar',
-          icon: '\uD83D\uDCC5',
+          icon: 'calendar',
           message: `就業カレンダー未署名: ${detail}`,
           type: 'warning',
           count,
@@ -188,7 +189,7 @@ export async function GET(request: NextRequest) {
       if (lowPLWorkers.length > 0) {
         notifications.push({
           id: 'low-pl',
-          icon: '\uD83C\uDF34',
+          icon: 'umbrella',
           message: `有給残3日以下: ${lowPLWorkers.slice(0, 3).join('、')}${lowPLWorkers.length > 3 ? ` 他${lowPLWorkers.length - 3}名` : ''}`,
           type: 'warning',
           count: lowPLWorkers.length,
@@ -218,7 +219,7 @@ export async function GET(request: NextRequest) {
       if (canCloseMonth && !isHibiLocked) {
         notifications.push({
           id: 'month-unlocked-hibi',
-          icon: '🔓',
+          icon: 'unlock',
           message: `月締め未完了: ${y}年${m}月の日比建設がまだ締められていません`,
           type: 'warning',
         })
@@ -226,7 +227,7 @@ export async function GET(request: NextRequest) {
       if (canCloseMonth && !isHfuLocked) {
         notifications.push({
           id: 'month-unlocked-hfu',
-          icon: '🔓',
+          icon: 'unlock',
           message: `月締め未完了: ${y}年${m}月のHFUがまだ締められていません`,
           type: 'warning',
         })
@@ -269,7 +270,7 @@ export async function GET(request: NextRequest) {
           const isOverdue = daysUntilEval < 0
           notifications.push({
             id: `evaluation-due-${w.id}`,
-            icon: isOverdue ? '🔴' : '📋',
+            icon: isOverdue ? 'alert' : 'clipboard',
             message: isOverdue
               ? `${w.name}の評価が${Math.abs(daysUntilEval)}日超過しています`
               : `${w.name}の評価時期が${daysUntilEval}日後に到来します`,
@@ -323,7 +324,7 @@ export async function GET(request: NextRequest) {
             const stale = ageDays >= 7
             notifications.push({
               id: `evaluation-todo-${snap.id}`,
-              icon: stale ? '⚠️' : '📝',
+              icon: stale ? 'alert' : 'pen',
               message: stale
                 ? `${workerName} の評価入力が${ageDays}日経過しています（提出 ${submittedCount}/${totalCount}名）`
                 : `${workerName} の評価入力をお願いします（提出 ${submittedCount}/${totalCount}名）`,
@@ -341,7 +342,7 @@ export async function GET(request: NextRequest) {
             const remaining = totalCount - submittedCount
             notifications.push({
               id: `evaluation-stale-${snap.id}`,
-              icon: '⏰',
+              icon: 'clock',
               message: `${workerName} の評価が${ageDays}日停滞中（残${remaining}名未提出${pendingNames ? `: ${pendingNames}` : ''}）`,
               type: 'warning',
             })
@@ -350,7 +351,7 @@ export async function GET(request: NextRequest) {
           // 全員提出済 → admin/approver に最終承認待ち通知
           notifications.push({
             id: `evaluation-pending-approval-${snap.id}`,
-            icon: '⚖️',
+            icon: 'star',
             message: `${workerName} の評価が最終承認待ちです（${submittedCount}/${totalCount}名提出済）`,
             type: 'warning',
           })
@@ -423,7 +424,7 @@ export async function GET(request: NextRequest) {
         const grantDateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
         notifications.push({
           id: `pl-grant-${u.workerId}`,
-          icon: isPast ? '\u26A0\uFE0F' : '\uD83C\uDF34',
+          icon: isPast ? 'alert' : 'umbrella',
           message: isPast
             ? `${u.name}の有給付与が未処理です（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${realCarryOver}日（前回残）\n→ 合計: ${realTotal}日`
             : `${u.name}の有給付与日が近づいています（${dateStr}）\n新規付与: ${u.days}日（法定・勤続${u.yearsOfService}）\n繰越: ${realCarryOver}日（前回残）\n→ 合計: ${realTotal}日`,
@@ -494,7 +495,7 @@ export async function GET(request: NextRequest) {
           const totalIssues = notCreated.length + notSubmitted.length + notApproved.length
           notifications.push({
             id: 'calendar-deadline',
-            icon: '⚠️',
+            icon: 'alert',
             message: `${nextY}年${nextM}月のカレンダー: ${totalIssues}件の現場が未完了です`,
             type: 'error',
             count: totalIssues,
@@ -525,7 +526,7 @@ export async function GET(request: NextRequest) {
       if (visaAlerts.length > 0) {
         notifications.push({
           id: 'visa-expiry',
-          icon: '🛂',
+          icon: 'user',
           message: `在留期限: ${visaAlerts.join('、')}`,
           type: visaAlerts.some(a => a.includes('期限切れ')) ? 'error' : 'warning',
           count: visaAlerts.length,
@@ -549,7 +550,7 @@ export async function GET(request: NextRequest) {
         if (stale.length > 0) {
           notifications.push({
             id: 'stale-assignments',
-            icon: '🔀',
+            icon: 'users',
             message: `配置の見直し ${stale.length}件: ${stale.slice(0, 3).map(s => `${s.workerName}（${s.siteName}→${s.workingAt.join('・')}）`).join('、')}${stale.length > 3 ? ' ほか' : ''}。前の現場の配置から外してください（出面入力 → 配置）`,
             type: 'warning',
             count: stale.length,
@@ -577,7 +578,7 @@ export async function GET(request: NextRequest) {
               : `（最終承認待ち）`
         notifications.push({
           id: 'pending-leave-requests',
-          icon: '📝',
+          icon: 'pen',
           message: `有給申請 ${total}件 ${detail}`,
           type: 'info',
           count: total,
@@ -592,7 +593,7 @@ export async function GET(request: NextRequest) {
         if (mine > 0) {
           notifications.push({
             id: 'foreman-pending-leave',
-            icon: '📝',
+            icon: 'pen',
             message: `有給申請の職長承認待ち ${mine}件（出面入力 → スマホ版「承認」タブ）`,
             type: 'info',
             count: mine,
@@ -619,7 +620,7 @@ export async function GET(request: NextRequest) {
               : `（最終承認待ち）`
         notifications.push({
           id: 'pending-home-long-leave',
-          icon: '✈️',
+          icon: 'plane',
           message: `帰国申請 ${total}件 ${detail}`,
           type: 'info',
           count: total,
@@ -633,7 +634,7 @@ export async function GET(request: NextRequest) {
         if (mine > 0) {
           notifications.push({
             id: 'foreman-pending-home-leave',
-            icon: '✈️',
+            icon: 'plane',
             message: `帰国申請の職長承認待ち ${mine}件（出面入力 → スマホ版「承認」タブ）`,
             type: 'info',
             count: mine,
@@ -652,7 +653,7 @@ export async function GET(request: NextRequest) {
         if (pendingInv.length > 0) {
           notifications.push({
             id: 'pending-invoices',
-            icon: '🧾',
+            icon: 'receipt',
             message: `請求書の発行承認待ち ${pendingInv.length}件（${pendingInv.map(i => i.companyName).join('・')}）`,
             type: 'info',
             count: pendingInv.length,
@@ -676,7 +677,7 @@ export async function GET(request: NextRequest) {
         const latestYm = [...byYm.keys()].sort().reverse()[0]
         notifications.push({
           id: role === 'foreman' ? 'foreman-staff-confirm-issues' : 'staff-confirm-issues',
-          icon: '✉️',
+          icon: 'bell',
           message: `本人から出面の連絡（未対応）: ${[...byYm.entries()].sort().map(([ym, names]) => `${parseInt(ym.slice(4, 6))}月 ${names.join('・')}`).join(' ／ ')}`,
           type: 'warning',
           count: mine.length,
@@ -698,7 +699,7 @@ export async function GET(request: NextRequest) {
         if (daysSince <= 7) {
           notifications.push({
             id: 'announcement',
-            icon: '📢',
+            icon: 'bell',
             message: `お知らせ: ${recent.title}`,
             type: 'info',
           })
@@ -746,7 +747,7 @@ export async function GET(request: NextRequest) {
         if (inactiveNames.length > 0) {
           notifications.push({
             id: 'inactive-access',
-            icon: '\uD83D\uDD10',
+            icon: 'lock',
             message: `3日以上アクセスがないスタッフ: ${inactiveNames.length}名`,
             type: 'info',
             count: inactiveNames.length,
