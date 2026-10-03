@@ -23,7 +23,7 @@ describe('staff manifest', () => {
 })
 
 describe('ホーム画面の名前（2026-10-03）', () => {
-  it('short_name はどの画面も DEDURA＋（言葉に寄らない）。iPhone 用の title も同じ', () => {
+  test('short_name はどの画面も DEDURA＋（言葉に寄らない）。iPhone 用の title も同じ', () => {
     for (const kind of ['mypage', 'attendance', 'foreman'] as const) {
       const m = buildStaffManifest(kind, 'abcd1234')
       expect(m.short_name).toBe('DEDURA＋')
