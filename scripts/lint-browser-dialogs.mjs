@@ -26,6 +26,7 @@ const TARGET_EXTS = new Set(['.ts', '.tsx'])
 
 /** 置き換え済み（ここでは違反にする）。画面を置き換えるたびに足す */
 const CONVERTED = [
+  // ── 土台②（2026-10-03）
   'app/(app)/leave/',
   'app/(app)/attendance/',
   'components/leave/',
@@ -33,6 +34,31 @@ const CONVERTED = [
   'components/ui/',
   'components/Toast.tsx',
   'components/StaffHeader.tsx',
+  // ── 管理画面（2026-10-03 波1）
+  'app/(app)/calendar/',
+  'app/(app)/monthly/',
+  'app/(app)/workers/',
+  'app/(app)/sites/',
+  'app/(app)/subcons/',
+  'app/(app)/tool-budget/',
+  'app/(app)/staff-docs/',
+  'app/(app)/dashboard/',
+  'app/(app)/cost/',
+  'app/(app)/settings/',
+  'app/(app)/debug-att/',
+  'app/(app)/evaluation/',
+  'app/(app)/wage/',
+  'app/(app)/peer-invoice/',
+  'app/(app)/paper-invoice/',
+  'components/NotificationBell.tsx',
+  'components/monthly/',
+
+  // ── スタッフ画面（2026-10-03 波1）
+  'app/attendance/[token]/',
+  'app/attendance/foreman/[token]/',
+  'app/mypage/[token]/',
+  'components/mypage/',
+  'components/AttendanceActionBar.tsx',
 ]
 
 const RE = /(^|[^.\w])(window\.)?(confirm|alert|prompt)\(/
