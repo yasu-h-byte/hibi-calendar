@@ -20,6 +20,7 @@ import { can } from '@/lib/permissions'
 import { currentYmJst } from '@/lib/date-utils'
 import { Icon } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
+import InvoiceNav from '@/components/invoice/InvoiceNav'
 import { Modal, CancelButton } from '@/components/ui/Modal'
 import { SaveButton } from '@/components/ui/SaveButton'
 import {
@@ -156,7 +157,7 @@ export default function PaperInvoicePage() {
     <div className="max-w-7xl mx-auto space-y-5">
       <PageHeader
         group="請求・原価"
-        title="紙で出した請求書"
+        title="紙の請求書の控え"
         sub="手作りで出した請求書を入れて、システムの計算と見比べます。応援の請求書はしばらく手作りで発行するので、システムで未発行でも問題ありません"
         actions={
           <>
@@ -177,13 +178,10 @@ export default function PaperInvoicePage() {
                 請求書を入れる
               </button>
             )}
-            <a href={`/peer-statement?ym=${ym}`}
-              className="h-[42px] px-4 inline-flex items-center rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
-              請求書・支払へ
-            </a>
           </>
         }
       />
+      <InvoiceNav current="paper" />
 
       {err && <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">{err}</div>}
       {!data && !err && <div className="text-center py-12 text-gray-400">読み込み中...</div>}

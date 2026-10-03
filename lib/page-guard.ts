@@ -36,10 +36,6 @@ export const PAGE_CAPS: { path: string; caps: Capability[] | null }[] = [
   { path: '/docs', caps: ['docs.view'] },
   // 廃止した画面（転送先の画面がそれぞれ止める）
   { path: '/guide', caps: null },
-  { path: '/leave-requests', caps: null },
-  { path: '/home-leave', caps: null },
-  { path: '/export', caps: null },
-  { path: '/users', caps: null },
 ]
 
 /**

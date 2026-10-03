@@ -25,6 +25,7 @@ import { latestPeerInvoiceRecord } from '@/lib/peer-invoice-latest'
 import { currentYmJst } from '@/lib/date-utils'
 import { Icon } from '@/components/ui/Icon'
 import { PageHeader, TodoCard, Segment, Chip, SidePanel, CloseButton, type ChipTone } from '@/components/ui/PageParts'
+import InvoiceNav from '@/components/invoice/InvoiceNav'
 
 /** その月に発行・取り消しされた応援の請求書（app/api/peer-invoice） */
 interface PeerInvoiceSummary {
@@ -136,14 +137,10 @@ export default function PeerStatementPage() {
     <div className="max-w-7xl mx-auto space-y-5">
       <PageHeader
         group="請求・原価"
-        title="請求書・支払"
+        title="請求・支払の一覧"
         sub="応援に出した分は請求、来てもらった分は支払。出面から計算した金額です（相殺しません）"
         actions={
           <>
-          <a href={`/paper-invoice?ym=${ym}`}
-            className="h-[42px] px-4 inline-flex items-center gap-1.5 rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
-            <Icon name="folder" size={16} />紙で出した請求書
-          </a>
           <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
             <button type="button" aria-label="前の月" onClick={() => setYm(shiftYm(ym, -1))}
               className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
@@ -158,6 +155,7 @@ export default function PeerStatementPage() {
           </>
         }
       />
+      <InvoiceNav current="list" />
 
       {err && <div className="bg-red-50 text-red-700 rounded-xl p-4 text-sm">{err}</div>}
       {!rows && !err && <div className="text-center py-12 text-gray-400">集計中...</div>}

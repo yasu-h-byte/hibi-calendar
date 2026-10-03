@@ -1,6 +1,7 @@
 'use client'
 /**
  * 本人の出面確認カード（2026-09-30）
+ * 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
  *
  * 前の月の全部の日に職長承認と最終承認（事業責任者）がそろったら、スタッフのスマホの上のほうに出る
  * （そろうまでは「チェックが終わったらここに出ます」の1行だけ。締めたら出ない）。
@@ -113,7 +114,7 @@ export default function MonthConfirmCard({ token }: { token: string }) {
           </div>
           {done ? (
             <span className="text-xs font-bold text-green-700 bg-white rounded-full px-2 py-1">
-              {c!.status === 'ok' ? '✓ 確認ずみ / Đã xác nhận' : c!.resolvedAt ? '✓ 会社が対応 / Công ty đã xử lý' : '✉ 連絡ずみ / Đã báo'}
+              {c!.status === 'ok' ? '✓ 確認ずみ / Đã xác nhận' : c!.resolvedAt ? '✓ 会社が対応 / Công ty đã xử lý' : '連絡ずみ / Đã báo'}
             </span>
           ) : (
             <span className="text-xs font-bold text-hibi-charcoal bg-hibi-amber rounded-full px-2 py-1">{biLine(STAFF_TEXT.pleaseConfirm)}</span>

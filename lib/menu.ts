@@ -11,7 +11,7 @@
  * SEARCH_ENTRIES はメニュー検索用。画面の中のタブ・機能まで直接飛べるようにする
  * （「どこにあったっけ」を無くすため）。画面やタブを足したら、ここにも1行足すこと。
  */
-import type { Capability } from './permissions'
+import { can, type Capability } from './permissions'
 import type { IconName } from '@/components/ui/Icon'
 
 export interface MenuItem {
@@ -27,6 +27,13 @@ export interface MenuItem {
    * パス＋タブ（'/workers?tab=raise-history'）。タブ付きは、そのタブを開いている間だけ一致する
    */
   activePrefixes?: string[]
+  /** この権限を持つ人には出さない（別の入口があるとき。例: 評価入力は給与が見える人には出さない） */
+  hideIfCap?: Capability
+}
+
+/** その人に出すメニュー（権限がある・別の入口がある人には出さない hideIfCap を両方見る）。サイドバーもテストもこれを使う */
+export function visibleMenuItems(user: { role: string; workerId: number }): MenuItem[] {
+  return MENU_ITEMS.filter(i => can(user, i.cap) && !(i.hideIfCap && can(user, i.hideIfCap)))
 }
 
 /** 見出しを出さないまとまり（ダッシュボードだけの先頭） */
@@ -43,9 +50,9 @@ export const MENU_ITEMS: MenuItem[] = [
   { label: '休暇管理', icon: 'umbrella', href: '/leave', section: '出面・勤怠', cap: 'leave.view' },
   // ── 給与・締め ──
   { label: '月次集計・締め', icon: 'chart', href: '/monthly', section: '給与・締め', cap: 'monthly.view', activePrefixes: ['/monthly/audit-print'] },
-  { label: '帳票出力', icon: 'doc', href: '/monthly?tab=export', section: '給与・締め', cap: 'monthly.view' },
+  // 「帳票出力」のメニュー項目は 2026-10-03 に廃止（月次集計・締めのタブだけに。検索からは引ける）
   // ── 請求・原価 ──
-  { label: '請求書・支払', icon: 'receipt', href: '/peer-statement', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice'] },
+  { label: '請求・支払', icon: 'receipt', href: '/peer-statement', section: '請求・原価', cap: 'invoice.view', activePrefixes: ['/peer-invoice', '/paper-invoice'] },
   { label: '原価・収益', icon: 'yen', href: '/cost', section: '請求・原価', cap: 'cost.view' },
   // 経営コックピットと一体で使う（現場別の粗利・外注の照合・資金繰りは向こうで見る）
   { label: '経営コックピット', icon: 'trend', external: 'https://keieidashboard.vercel.app/genba', section: '請求・原価', cap: 'cockpit.view' },
@@ -57,7 +64,8 @@ export const MENU_ITEMS: MenuItem[] = [
   // 評価管理・昇給履歴・賃金制度・賃金分析はハブで国籍別に分岐。昇給履歴は人員マスタのタブだが、こちらを選択中にする
   { label: '賃金・評価', icon: 'star', href: '/compensation', section: '賃金・評価', cap: 'wage.view', activePrefixes: ['/wage', '/evaluation', '/wage-analysis', '/workers?tab=raise-history'] },
   // 職長の評価入力の入口（ハブは職長には見せない）。通知ベルの「評価入力をお願いします」もここから
-  { label: '評価入力', icon: 'pen', href: '/evaluation?tab=review', section: '賃金・評価', cap: 'evaluation.input' },
+  // 評価入力は職長（評価者）の入口。給与が見える人は「賃金・評価」の中の「評価の入力が残っている」カードから入るので出さない（2026-10-03 代表 OK）
+  { label: '評価入力', icon: 'pen', href: '/evaluation?tab=review', section: '賃金・評価', cap: 'evaluation.input', hideIfCap: 'wage.view' },
   // ── マスタ・管理 ──
   { label: '現場マスタ', icon: 'site', href: '/sites', section: 'マスタ・管理', cap: 'masters.view' },
   { label: '取引先マスタ', icon: 'building', href: '/subcons', section: 'マスタ・管理', cap: 'masters.view' },
@@ -106,20 +114,20 @@ export const SEARCH_ENTRIES: SearchEntry[] = [
   // 月次・帳票
   { label: '月締め（ロック）', where: '月次集計・締め', href: '/monthly', cap: 'monthly.close', keywords: 'しめ ろっく 締め 解除' },
   { label: '所定日数', where: '月次集計・締め', href: '/monthly', cap: 'monthly.view', keywords: 'しょていにっすう' },
-  { label: 'キャシュモ提出（月次集計Excel・計算根拠PDF）', where: '帳票出力', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'きゃしゅも 社労士 給与 excel pdf' },
-  { label: '出面一覧・勤務予定シフト・実労働時間明細', where: '帳票出力 → 根拠書類', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'しゅつづら しふと' },
-  { label: '外注先向け 出面確認書', where: '帳票出力 → 社内用', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'がいちゅう 確認書' },
-  { label: '歩掛管理表', where: '帳票出力 → 社内用', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'ぶがかり' },
+  { label: 'キャシュモ提出（月次集計Excel・計算根拠PDF）', where: '月次集計・締め → 帳票出力', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'きゃしゅも 社労士 給与 excel pdf' },
+  { label: '出面一覧・勤務予定シフト・実労働時間明細', where: '月次集計・締め → 帳票出力 → 根拠書類', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'しゅつづら しふと' },
+  { label: '外注先向け 出面確認書', where: '月次集計・締め → 帳票出力 → 社内用', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'がいちゅう 確認書' },
+  { label: '歩掛管理表', where: '月次集計・締め → 帳票出力 → 社内用', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'ぶがかり' },
   { label: '有給管理台帳（Excel）', where: '休暇管理 → 管理簿（Excel）', href: '/leave', cap: 'leave.view', keywords: 'ゆうきゅう 台帳 管理簿' },
-  { label: '周知・同意台帳（Excel）', where: '帳票出力 → 社内用（就業カレンダーの下にも）', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'どうい しゅうち 署名 台帳' },
+  { label: '周知・同意台帳（Excel）', where: '月次集計・締め → 帳票出力 → 社内用（就業カレンダーの下にも）', href: '/monthly?tab=export', cap: 'monthly.view', keywords: 'どうい しゅうち 署名 台帳' },
   // 休暇
   { label: '有給・帰国の申請一覧（承認）', where: '休暇管理 → 申請', href: '/leave?tab=requests', cap: 'leave.view', keywords: 'しょうにん 申請 ゆうきゅう' },
   { label: '帰国情報', where: '休暇管理 → 帰国', href: '/leave?tab=homeleave', cap: 'leave.view', keywords: 'きこく 一時帰国 長期' },
   { label: '有給の手動付与・時季指定・買取', where: '休暇管理 → 有給 → 行を押して右のパネル', href: '/leave', cap: 'leave.manage', keywords: 'ふよ かいとり じきしてい' },
   // 請求
-  { label: '応援の請求書（同業者へ）', where: '請求書・支払 → 会社ごと', href: '/peer-statement', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者' },
-  { label: '紙で出した請求書（保管・システムとの見比べ）', where: '請求書・支払 → 紙で出した請求書', href: '/paper-invoice', cap: 'invoice.view', keywords: 'かみ 手作り 手書き アナログ 請求書 見比べ 畠山 吉本' },
-  { label: 'HFU → 日比建設 の請求書', where: '請求書・支払 → HFU', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
+  { label: '応援の請求書（同業者へ）', where: '請求・支払 → 請求・支払の一覧', href: '/peer-statement', cap: 'invoice.view', keywords: 'せいきゅうしょ 応援 同業者' },
+  { label: '紙で出した請求書（保管・システムとの見比べ）', where: '請求・支払 → 紙の請求書の控え', href: '/paper-invoice', cap: 'invoice.view', keywords: 'かみ 手作り 手書き アナログ 請求書 見比べ 畠山 吉本' },
+  { label: 'HFU → 日比建設 の請求書', where: '請求・支払 → 請求書を作る → HFU', href: '/peer-invoice?company=__hfu_to_hibi__', cap: 'invoice.view', keywords: 'えいちえふゆー hfu 請求書' },
   { label: '請求書の自社情報・振込先', where: '管理者設定 → 会社・請求書', href: '/settings?tab=company', cap: 'system.admin', keywords: '登録番号 インボイス 口座 振込' },
   // 経営
   { label: '現場の請求額の入力', where: '原価・収益 → 現場別', href: '/cost', cap: 'cost.edit', keywords: 'せいきゅうがく 売上 粗利' },

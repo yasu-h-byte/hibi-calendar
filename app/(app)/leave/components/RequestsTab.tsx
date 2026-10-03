@@ -1,4 +1,5 @@
 'use client'
+// 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { LeaveRequest, SiteOption, MforemanMap } from '../types'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
@@ -139,7 +140,7 @@ export default function RequestsTab({
           res = await post(extra)
         } else break
       }
-      // ⚠️ 旧実装はレスポンスを見ずに成功扱いだった。失敗（月次ロック・残数不足等）を必ず表示する
+      // 注意: 旧実装はレスポンスを見ずに成功扱いだった。失敗（月次ロック・残数不足等）を必ず表示する
       if (!res.ok) {
         const err = await res.json().catch(() => null)
         notify.failed('承認', err?.error)
@@ -451,7 +452,7 @@ export default function RequestsTab({
                                   className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-full text-3xs font-bold disabled:opacity-50"
                                   title="承認済み有給の日付を変更（誤申請修正）"
                                 >
-                                  📝 日付変更
+                                  日付変更
                                 </button>
                               )}
                               {(userRole === 'admin' || userRole === 'approver') && (
@@ -461,7 +462,7 @@ export default function RequestsTab({
                                   className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 rounded-full text-3xs font-bold disabled:opacity-50"
                                   title="承認済み有給を取り消す（出面の「有」も消えて残数が戻る）"
                                 >
-                                  ↩️ 取消
+                                  取消
                                 </button>
                               )}
                             </>
@@ -475,7 +476,7 @@ export default function RequestsTab({
                       {modifyingId === req.id && (
                         <div className="mt-3 border-t pt-3 bg-amber-50 dark:bg-amber-900/20 -mx-4 -mb-4 px-4 pb-4 rounded-b-xl">
                           <div className="text-xs font-bold text-amber-800 dark:text-amber-300 mb-2">
-                            📝 日付変更 — 承認済み有給の日付を修正します
+                            日付変更 — 承認済み有給の日付を修正します
                           </div>
                           <div className="text-2xs text-amber-700 dark:text-amber-400 mb-2 leading-relaxed">
                             現在の日付: <strong>{fmtDate(req.date)}</strong><br/>
@@ -519,7 +520,7 @@ export default function RequestsTab({
                       {/* 日付変更履歴の表示（あれば） */}
                       {req.dateModifyHistory && req.dateModifyHistory.length > 0 && (
                         <div className="mt-2 pt-2 border-t border-gray-100 text-3xs text-gray-500">
-                          <span className="font-bold">📝 修正履歴:</span>
+                          <span className="font-bold">修正履歴:</span>
                           {req.dateModifyHistory.map((h, i) => (
                             <span key={i} className="ml-2">
                               {h.previousDate} → {h.newDate} ({fmtTs(h.modifiedAt)})

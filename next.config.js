@@ -8,6 +8,21 @@ const nextConfig = {
    * - X-Frame-Options: ほかのサイトの iframe に埋め込ませない（同じサイト内＝資料一覧の HTML・印刷は SAMEORIGIN で動く。
    *   PWA（manifest・ホーム画面）にも影響しない）
    */
+  /**
+   * 転送だけの旧ページ（2026-10-03 UI/UX 磨き込み）。以前は app/(app)/ 配下に「開いたら別の画面へ飛ぶだけ」のページを
+   * 5つ置いていた（leave-requests・users・home-leave・export・evaluation/raise-history）。古いリンク・ブックマークの互換は
+   * この設定で保ち、ページそのものは削除した。
+   */
+  async redirects() {
+    return [
+      { source: '/leave-requests', destination: '/leave?tab=requests', permanent: true },
+      { source: '/home-leave', destination: '/leave?tab=homeleave', permanent: true },
+      { source: '/users', destination: '/settings?tab=users', permanent: true },
+      { source: '/export', destination: '/monthly?tab=export', permanent: true },
+      { source: '/evaluation/raise-history', has: [{ type: 'query', key: 'worker', value: '(?<wid>.*)' }], destination: '/workers?tab=raise-history&worker=:wid', permanent: true },
+      { source: '/evaluation/raise-history', destination: '/workers?tab=raise-history', permanent: true },
+    ]
+  },
   async headers() {
     return [{
       source: '/:path*',

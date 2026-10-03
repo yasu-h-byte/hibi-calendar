@@ -1,4 +1,5 @@
 'use client'
+// 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
 
 /**
  * 賃金制度（日本人社員）のハブ。
@@ -11,7 +12,7 @@
  */
 
 import { Suspense, useEffect, useState } from 'react'
-import { PageHeader } from '@/components/ui/PageParts'
+import { PageHeader, ToolButton, UnderlineTabs } from '@/components/ui/PageParts'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { GRADE_LABELS } from '@/lib/jp-wage'
 import { isAlreadyRetired } from '@/lib/workers'
@@ -105,6 +106,12 @@ function WageHub() {
         group="賃金・評価"
         title="賃金制度（日本人社員）"
         sub="等級は役割を表します。在籍年数で自動的に上がるものではなく、役割が変わったときに変わります。外国人スタッフは時給制の別制度です"
+        actions={
+          <>
+            <ToolButton icon="users" onClick={() => router.push('/workers')} title="等級・号数・生年月日の登録">人員マスタ</ToolButton>
+            <ToolButton icon="star" onClick={() => router.push('/evaluation')} title="外国人スタッフの評価（別制度）">評価管理</ToolButton>
+          </>
+        }
       />
 
       {unset.length > 0 && (
@@ -127,18 +134,10 @@ function WageHub() {
         </section>
       )}
 
-      <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 pb-px">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => go(t.key)}
-            className={`px-4 py-2.5 text-sm font-medium rounded-t-lg border-b-2 -mb-px transition ${
-              tab === t.key
-                ? 'border-hibi-navy text-hibi-navy dark:border-blue-400 dark:text-blue-300 bg-white dark:bg-gray-800'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
-            }`}>
-            {t.label}
-            <span className="hidden sm:inline text-3xs text-gray-400 ml-2">{t.note}</span>
-          </button>
-        ))}
+      <div>
+        <UnderlineTabs tabs={TABS.map(t => ({ key: t.key, label: t.label }))} active={tab} onChange={go} label="賃金制度のタブ" />
+        {/* 旧タブに添えていた一言（例: 年次改定＝毎年10月1日）は、選んでいるタブの分だけ下に出す */}
+        <p className="text-xs text-hibi-sub dark:text-gray-400 mt-2">{TABS.find(t => t.key === tab)?.note}</p>
       </div>
 
       {tab === 'table' && <GradeTable placed={placed} />}

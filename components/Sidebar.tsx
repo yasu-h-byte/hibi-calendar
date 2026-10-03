@@ -7,7 +7,7 @@ import { initTheme, getFontSize, toggleFontSize, type FontSize } from '@/lib/the
 import NotificationBell from './NotificationBell'
 import { DeduraWordmark, DEDURA_BYLINE } from './Brand'
 import { Icon } from './ui/Icon'
-import { MENU_ITEMS, MENU_SECTIONS, MENU_HOME_SECTION, SEARCH_ENTRIES, searchMenu, activeMenuItem, type MenuItem, type SearchEntry } from '@/lib/menu'
+import { visibleMenuItems, MENU_SECTIONS, MENU_HOME_SECTION, SEARCH_ENTRIES, searchMenu, activeMenuItem, type MenuItem, type SearchEntry } from '@/lib/menu'
 import { can, permRoleOf, PERM_ROLE_LABEL } from '@/lib/permissions'
 
 // メニューの中身と並び・メニュー検索の近道は lib/menu.ts、誰に見せるかは lib/permissions.ts（2026-09-26）。
@@ -77,7 +77,7 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
     }
   }, [])
 
-  const filteredItems = MENU_ITEMS.filter(item => can(user, item.cap))
+  const filteredItems = visibleMenuItems(user)
   // 選択中は1項目だけ（lib/menu.ts activeMenuItem）
   const activeItem = activeMenuItem(filteredItems, pathname, search)
   // 検索の対象 = 見えるメニュー項目 ＋ 画面の中の近道（権限のあるものだけ）

@@ -10,6 +10,8 @@
  * URL: /peer-invoice?company=<取引先id>&ym=YYYYMM
  * 入口は /peer-statement（同業者との請求・支払）の各社カードから。
  *
+ * 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
+ *
  * 発行すると `peerInvoices` コレクションにその時点の金額・明細・宛先・自社情報を
  * まるごと凍結して保存する（以後この画面は凍結内容を描画するだけで再計算しない）。
  * 取り消すと欠番のまま履歴に残り、取り消した後だけ新しい番号で作り直せる。
@@ -21,7 +23,8 @@
  * 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify）に置き換え
  */
 import { Icon } from '@/components/ui/Icon'
-import { Chip } from '@/components/ui/PageParts'
+import { Chip, PageHeader } from '@/components/ui/PageParts'
+import InvoiceNav from '@/components/invoice/InvoiceNav'
 import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
@@ -241,30 +244,36 @@ function PeerInvoicePageInner() {
     <div className="max-w-4xl mx-auto">
       {/* ── 画面のみのツールバー ── */}
       <div className="no-print space-y-3 mb-4">
-        {/* 2026-10-01 改修: 見出し・状態・操作をほかの画面と同じ見た目に（請求書の本文＝印刷部分は変えない） */}
-        <div className="flex items-end justify-between flex-wrap gap-3">
-          <div>
-            <a href={`/peer-statement${ym ? `?ym=${ym}` : ''}`} className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 hover:text-hibi-navy inline-flex items-center gap-1">
-              <Icon name="chevronLeft" size={14} />請求書・支払へ戻る
-            </a>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1 flex items-center gap-2 flex-wrap">
-              {isHfuInvoice ? 'HFU → 日比建設 の請求書' : '応援の請求書'}
+        {/* 2026-10-01 改修: 見出し・状態・操作をほかの画面と同じ見た目に（請求書の本文＝印刷部分は変えない）
+            2026-10-03: 見出しを共通の PageHeader「請求書を作る」に（請求の3画面は InvoiceNav で行き来。
+            どの請求書か（会社名・HFU → 日比建設）と状態の札は sub、月の送りは actions） */}
+        <a href={`/peer-statement${ym ? `?ym=${ym}` : ''}`} className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 hover:text-hibi-navy inline-flex items-center gap-1">
+          <Icon name="chevronLeft" size={14} />請求・支払の一覧へ戻る
+        </a>
+        <PageHeader
+          group="請求・原価"
+          title="請求書を作る"
+          sub={
+            <span className="inline-flex items-center gap-2 flex-wrap">
+              <span>{isHfuInvoice ? 'HFU → 日比建設 の請求書' : '応援の請求書'}{view ? `：${view.companyName} ／ ${jpYm(ym)}分` : ''}</span>
               {view && (isPending ? <Chip tone="blue">承認待ち</Chip> : view.isDraft ? <Chip tone="amber">下書き（未発行）</Chip> : <Chip tone="green">発行済み {view.no}</Chip>)}
-            </h1>
-            {view && <p className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 mt-1">{view.companyName} ／ {jpYm(ym)}分</p>}
-          </div>
-          <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
-            <button type="button" aria-label="前の月" onClick={() => setYm(shiftYm(ym, -1))}
-              className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
-              <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
-            </button>
-            <span className="px-1.5 text-[0.9375rem] font-bold tabular-nums">{jpYm(ym)}</span>
-            <button type="button" aria-label="次の月" onClick={() => setYm(shiftYm(ym, 1))}
-              className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
-              <Icon name="chevronRight" size={18} strokeWidth={2.2} />
-            </button>
-          </div>
-        </div>
+            </span>
+          }
+          actions={
+            <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+              <button type="button" aria-label="前の月" onClick={() => setYm(shiftYm(ym, -1))}
+                className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
+                <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
+              </button>
+              <span className="px-1.5 text-[0.9375rem] font-bold tabular-nums">{jpYm(ym)}</span>
+              <button type="button" aria-label="次の月" onClick={() => setYm(shiftYm(ym, 1))}
+                className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
+                <Icon name="chevronRight" size={18} strokeWidth={2.2} />
+              </button>
+            </div>
+          }
+        />
+        <InvoiceNav current="create" />
 
         {view && (
           <div className="rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 border border-hibi-line dark:border-gray-700 text-gray-700 dark:text-gray-200">

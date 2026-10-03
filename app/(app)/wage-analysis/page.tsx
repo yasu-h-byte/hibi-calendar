@@ -10,10 +10,13 @@
  *    データ取得も /api/workers（管理者パスワード必須）経由のみ。
  *    改定の予定・個別事情は /api/wage-analysis/plan（代表だけ）から受け取る。
  *    このファイルの JS はログインなしでも取れるので、個人の時給・事情をここに書かないこと（2026-10-02）。
+ *
+ * 2026-10-03: 画面の型（PageHeader・カード・下線タブ）にそろえた
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { PageHeader, Segment, Chip } from '@/components/ui/PageParts'
 import {
   buildWageAnalysis, modelWage, findInversions, stageIQROutliers,
   STAGES, TOKYO_MIN_WAGE, MODEL_RAISE_RATE,
@@ -97,13 +100,15 @@ export default function WageAnalysisPage() {
 
   if (allowed === null) return <div className="p-6 text-gray-500">読み込み中…</div>
   if (!allowed) return (
-    <div className="p-6">
-      <h1 className="text-lg font-semibold mb-2">閲覧権限がありません</h1>
-      <p className="text-sm text-gray-500">この資料は代表のみが閲覧できます。</p>
-      <Link href="/compensation" className="text-sm text-blue-600 mt-3 inline-block">← 賃金・評価へ</Link>
+    <div className="max-w-6xl mx-auto space-y-5">
+      <PageHeader group="賃金・評価" title="賃金分析" sub="代表だけが見られます" />
+      <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
+        <p className="text-sm font-bold text-gray-900 dark:text-white">この画面は代表だけが見られます</p>
+        <Link href="/compensation" className="text-sm text-hibi-navy dark:text-blue-300 font-bold mt-3 inline-block">賃金・評価へ戻る</Link>
+      </section>
     </div>
   )
-  if (err) return <div className="p-6 text-red-600">エラー: {err}</div>
+  if (err) return <div className="p-6 text-red-600 dark:text-red-400">読み込めませんでした: {err}</div>
   if (!rows || !plan) return <div className="p-6 text-gray-500">集計中…</div>
 
   return (
@@ -130,44 +135,26 @@ function Report({ a, plan, onApplied, pw, basis, onBasis }: {
   const avgReal = withCagr.length ? withCagr.reduce((s, r) => s + (r.realGain ?? 0), 0) / withCagr.length : 0
 
   return (
-    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-8">
-      <header>
-        <div className="flex items-center gap-2 mb-1">
-          <h1 className="text-xl font-semibold">賃金分析</h1>
-          <span className="text-2xs px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表のみ</span>
-        </div>
-        <p className="text-sm text-gray-500">
-          在籍{rows.length}名／東京都最低賃金 現在 {yen(a.currentMinWage)}。
-          在籍年数に対して相対的に高い・低いを3つの基準で判定しています。今後の昇給評価とは別軸の参考資料です。
-        </p>
+    <div className="max-w-6xl mx-auto space-y-5">
+      <PageHeader
+        group="賃金・評価"
+        title={<span className="inline-flex items-center gap-2 flex-wrap">賃金分析<Chip tone="red">代表のみ</Chip></span>}
+        sub={`代表だけが見られます。在籍${rows.length}名／東京都最低賃金 現在 ${yen(a.currentMinWage)}。在籍年数に対して相対的に高い・低いを3つの基準で判定しています。今後の昇給評価とは別軸の参考資料です`}
+      />
 
-        {/* 分析全体の基準を切り替える。①〜⑨とデータ表のすべてがこの基準で再計算される */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-gray-500">集計の基準：</span>
-          <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
-            {([
-              ['revised', '改定後（2026年10月以降）'],
-              ['current', '現在の時給'],
-            ] as [WageBasis, string][]).map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => onBasis(k)}
-                className={`text-xs px-3 py-1.5 transition ${basis === k
-                  ? 'bg-hibi-navy text-white dark:bg-blue-700'
-                  : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+      {/* 分析全体の基準を切り替える。①〜⑨とデータ表のすべてがこの基準で再計算される */}
+      <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-bold text-gray-900 dark:text-white">集計の基準</span>
+          <Segment value={basis} onChange={onBasis} items={[['revised', '改定後（2026年10月以降）'], ['current', '現在の時給']]} />
         </div>
-        <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+        <p className="text-xs text-hibi-sub dark:text-gray-400 mt-2 leading-relaxed">
           {basis === 'revised'
             ? <><b>契約済み・予定の改定をすべて反映した時給</b>（{plan.changes.map(c => `${Number(c.effective.slice(5, 7))}/${Number(c.effective.slice(8, 10))} ${c.label}`).join('、')}）で、
               ①〜⑨とデータ表のすべてを計算しています。人員マスタには適用開始日つきで登録済みで、給与計算は各開始日から自動で切り替わります。</>
             : <><b>人員マスタの現在の時給</b>で計算しています。いま給与計算に使われている額です。</>}
         </p>
-      </header>
+      </section>
 
       <RevisionBanner a={a} plan={plan} onApplied={onApplied} pw={pw} />
       <MinWageWatch a={a} />
@@ -236,9 +223,9 @@ function Report({ a, plan, onApplied, pw, basis, onBasis }: {
 
 function Card({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section>
-      <h2 className="text-base font-semibold mb-1">{title}</h2>
-      {note && <p className="text-xs text-gray-500 mb-2 leading-relaxed">{note}</p>}
+    <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
+      <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white mb-1">{title}</h2>
+      {note && <p className="text-xs text-hibi-sub dark:text-gray-400 mb-3 leading-relaxed">{note}</p>}
       {children}
     </section>
   )
@@ -247,8 +234,8 @@ function Card({ title, note, children }: { title: string; note?: string; childre
 function Flag({ tone, title, items }: { tone: 'low' | 'high'; title: string; items: WageRow[] }) {
   const border = tone === 'low' ? 'border-l-red-500' : 'border-l-blue-500'
   return (
-    <div className={`bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border-l-4 ${border}`}>
-      <div className="text-xs text-gray-500">{title}</div>
+    <div className={`bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 border-l-4 ${border}`}>
+      <div className="text-xs font-bold text-hibi-sub dark:text-gray-400">{title}</div>
       <div className="text-sm font-semibold mt-1 leading-relaxed">
         {items.length
           ? items.map(r => (
@@ -455,7 +442,7 @@ function RevisionBanner({ a, plan, onApplied, pw }: { a: WageAnalysis; plan: Wag
     ? 'border-l-4 border-l-green-500 bg-green-50 dark:bg-green-900/20'
     : 'border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-900/20'
   return (
-    <section className={`rounded-lg p-3 ${box}`}>
+    <section className={`rounded-xl p-4 ${box}`}>
       <div className="text-sm font-semibold mb-2">予定されている賃金改定</div>
       <div className="space-y-1.5">
         {changes.map(c => (
@@ -1115,12 +1102,12 @@ function DataTable({ a }: { a: WageAnalysis }) {
   const td = 'border border-gray-200 dark:border-gray-700 px-2 py-1.5 text-right tabular-nums'
   const cls = (v: number | null) => v === null ? '' : v < -a.threshold ? 'text-red-600 font-semibold' : v > a.threshold ? 'text-blue-600 dark:text-blue-400 font-semibold' : ''
   return (
-    <section>
-      <h2 className="text-base font-semibold mb-2">データ</h2>
+    <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5">
+      <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white mb-3">データ</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <thead>
-            <tr className="bg-gray-800 text-white">
+            <tr className="bg-hibi-thead dark:bg-gray-700 text-hibi-sub dark:text-gray-300 font-bold">
               <th className={`${th} text-left`}>氏名</th>
               <th className={th}>在留資格</th><th className={th}>段階</th><th className={th}>入社</th>
               <th className={th}>在籍</th><th className={th}>起点</th><th className={th}>時給</th>

@@ -1,4 +1,5 @@
 'use client'
+// 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 import { useState } from 'react'
 import { HomeLeave, PLWorker } from '../types'
@@ -7,6 +8,7 @@ import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { SaveButton } from '@/components/ui/SaveButton'
+import { Icon } from '@/components/ui/Icon'
 
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた（帰国の「登録する」ボタン）
 
@@ -546,10 +548,10 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       {canDelete && (
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4">
         <h3 className="font-bold text-hibi-navy dark:text-gray-200 flex items-center gap-2">
-          🔍 出面の帰国表示を点検
+          <Icon name="search" size={16} />出面の帰国表示を点検
         </h3>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
-          出面入力画面に、どの帰国申請にも対応しない「✈帰国」が残っていないか調べます。
+          出面入力画面に、どの帰国申請にも対応しない「帰国」が残っていないか調べます。
           期間を変更したのに古い帰国表示が消えない場合はここで確認してください。
           先に検出だけ行い、内容を確認してから削除します。
         </p>

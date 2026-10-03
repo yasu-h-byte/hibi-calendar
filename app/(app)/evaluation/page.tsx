@@ -2,6 +2,7 @@
 
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
+// 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -26,7 +27,7 @@ import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
 import { isAlreadyRetired } from '@/lib/workers'
 import { can } from '@/lib/permissions'
-// ⚠️ 評価ロジック（重み・テーブル・計算関数）は lib/evaluation-config.ts に集約。
+// 注意: 評価ロジック（重み・テーブル・計算関数）は lib/evaluation-config.ts に集約。
 //   フロント・バックエンドで重複して定義すると過去のような不整合が再発する。
 //   修正時は必ず lib/evaluation-config.ts だけを編集すること。
 import {
@@ -110,6 +111,7 @@ function sessionStatusLabel(s: EvaluationSessionStatus, reviews: EvaluationRevie
 }
 
 import { EVALUATION_CATEGORIES } from '@/lib/evaluation-criteria'
+import { Icon } from '@/components/ui/Icon'
 
 // All 9 evaluation items in flat list for comparison table (generated from criteria definitions)
 const EVAL_ITEMS = EVALUATION_CATEGORIES.flatMap(cat =>
@@ -856,7 +858,7 @@ export default function EvaluationPage() {
                 title={tip}
                 className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-medium border ${stale || cls} ${ring}`}
               >
-                {isMe && <span className="opacity-70">👤</span>}
+                {isMe && <Icon name="user" size={11} className="opacity-70" />}
                 <span className="opacity-70">{isSubmitted ? '✓' : '○'}</span>
                 <span className={compact ? 'max-w-[5rem] truncate' : ''}>{name}</span>
               </span>
@@ -909,7 +911,7 @@ export default function EvaluationPage() {
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800 hover:bg-gray-900 text-white inline-flex items-center gap-1"
                   title="A4 1枚で評価表を印刷"
-                >🖨 A4印刷</a>
+                >A4印刷</a>
               )}
               {session.status === 'approved' && session.rank && (
                 <div className="flex items-baseline gap-2">
@@ -963,7 +965,7 @@ export default function EvaluationPage() {
           <EvaluatorBadgeList session={session} />
           {pendingIds.length > 0 && session.status !== 'approved' && (
             <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
-              ⏳ {pendingIds.length}名の提出待ち
+              {pendingIds.length}名の提出待ち
               {daysSince(session.createdAt) >= 7 && `（開始から${daysSince(session.createdAt)}日経過）`}
             </p>
           )}
@@ -985,7 +987,7 @@ export default function EvaluationPage() {
                   disabled={recalculatingWeights}
                   className="px-2 py-1 text-2xs font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
                 >
-                  {recalculatingWeights ? '...' : '🔄 再計算'}
+                  {recalculatingWeights ? '...' : '再計算'}
                 </button>
               )}
             </div>
@@ -997,7 +999,7 @@ export default function EvaluationPage() {
                   if (!anyW) return null
                   return (
                     <div className="mb-2 text-2xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-md">
-                      📊 データのある月数: <strong>{anyW.monthsWithData}/12</strong> ヶ月
+                      データのある月数: <strong>{anyW.monthsWithData}/12</strong> ヶ月
                       → 年共働キャップ: <strong>{anyW.dynamicCap}日</strong>
                       <span className="ml-2 opacity-80">
                         （旧システム稼働前の月はデータが少ないため、データのある月数で按分しキャップを縮小。
@@ -1045,7 +1047,7 @@ export default function EvaluationPage() {
                         <tr key={eid}>
                           <td className="px-2 py-1 text-gray-700 dark:text-gray-300 whitespace-nowrap">
                             {name}
-                            {w.isApprover && <span className="ml-1 text-purple-600 dark:text-purple-400" title="事業責任者">★</span>}
+                            {w.isApprover && <span className="ml-1 inline-flex align-middle text-purple-600 dark:text-purple-400" title="事業責任者"><Icon name="star" size={11} /></span>}
                           </td>
                           <td className="px-2 py-1 text-right text-gray-700 dark:text-gray-300 tabular-nums">
                             {w.isApprover ? '―' : `${w.recentPct}% (${w.recentDays}日)`}
@@ -1094,7 +1096,7 @@ export default function EvaluationPage() {
                   disabled={recalculatingWeights}
                   className="px-2 py-1 text-2xs font-medium rounded-md border border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
                 >
-                  📊 再計算
+                  再計算
                 </button>
               )}
             </div>
@@ -1225,7 +1227,7 @@ export default function EvaluationPage() {
                   </div>
                 </div>
                 <div className="text-2xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                  💡 出勤率 = (実出勤 + 有給 + 試験) ÷ 期待出勤日 × 100（上限100%）。
+                  出勤率 = (実出勤 + 有給 + 試験) ÷ 期待出勤日 × 100（上限100%）。
                   ベトナム土曜の補償日（w=0.6）は分子・分母どちらにも含めません。
                   期待出勤日は月所定日数から雇用境界・帰国期間・長期不在を控除した値です。
                 </div>
@@ -1258,7 +1260,7 @@ export default function EvaluationPage() {
                           {w && (
                             <div className="mt-1 text-3xs font-normal opacity-90">
                               {w.isApprover ? (
-                                <span title={`事業責任者の固定ウェイト (${w.weight.toFixed(2)})`}>w={w.weight.toFixed(2)} ★</span>
+                                <span title={`事業責任者の固定ウェイト (${w.weight.toFixed(2)})`}>w={w.weight.toFixed(2)} <Icon name="star" size={9} className="inline" /></span>
                               ) : (
                                 <span title={`過去365日 共働 ${w.yearDays}日 (うち直近90日 ${w.recentDays}日)${w.monthsWithData != null ? ` / データある月 ${w.monthsWithData}/12 (cap ${w.dynamicCap}日)` : ''}`}>
                                   w={w.weight.toFixed(2)}
@@ -1545,7 +1547,7 @@ export default function EvaluationPage() {
               className="flex-shrink-0 text-white/80 hover:text-white text-sm px-2 py-1 rounded hover:bg-white/10"
               aria-label="閉じる"
             >
-              ✕
+              ×
             </button>
           </div>
         </div>
@@ -2287,7 +2289,7 @@ export default function EvaluationPage() {
                                 {w && (
                                   <div className="mt-1 text-3xs font-normal opacity-90">
                                     {w.isApprover ? (
-                                      <span title={`事業責任者の固定ウェイト (${w.weight.toFixed(2)})`}>w={w.weight.toFixed(2)} ★</span>
+                                      <span title={`事業責任者の固定ウェイト (${w.weight.toFixed(2)})`}>w={w.weight.toFixed(2)} <Icon name="star" size={9} className="inline" /></span>
                                     ) : (
                                       <span title={`過去365日 共働 ${w.yearDays}日 (うち直近90日 ${w.recentDays}日)`}>
                                         w={w.weight.toFixed(2)}
@@ -2446,7 +2448,7 @@ export default function EvaluationPage() {
                       </div>
                       {floorPreview.floored && (
                         <div className="mt-1.5 text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300 rounded-lg px-2.5 py-1.5">
-                          ⚖️ 法令下限により調整: テーブル値 +{floorPreview.baseRaise}円 では下限時給
+                          法令下限により調整: テーブル値 +{floorPreview.baseRaise}円 では下限時給
                           {floorPreview.legalMinRate}円（最低賃金{worker?.visaType?.startsWith('tokutei') ? '×1.1（建設特定技能の認定要件）' : ''}）を
                           下回るため、+{raiseAmount}円 に底上げされます
                         </div>
@@ -2539,7 +2541,7 @@ export default function EvaluationPage() {
                               : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
                           }`}
                         >
-                          {isReviewing ? '⚖️ 最終確認待ち' : `📝 収集中 ${submitted}/${total}`}
+                          {isReviewing ? '最終確認待ち' : `収集中 ${submitted}/${total}`}
                         </span>
                       </div>
                       <EvaluatorBadgeList session={s} />

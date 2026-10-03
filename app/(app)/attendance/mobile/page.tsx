@@ -1,4 +1,5 @@
 'use client'
+// 2026-10-03: 飾りの絵文字を外した（線のアイコンか文字に）
 
 /**
  * 職長スマホ画面（ログイン版・2026-09-02 追加）
@@ -42,6 +43,7 @@ import { isEmployedOn } from '@/lib/workers'
 import { orgKeyOf } from '@/lib/locks'
 import { evaluateDayInputs, isWorkDayOf } from '@/lib/attendance-missing'
 import DriverModal from '../components/DriverModal'
+import { Icon } from '@/components/ui/Icon'
 
 // ── 型 ──
 
@@ -298,7 +300,7 @@ export default function ForemanMobilePage() {
 
   /**
    * その作業員の「今」の入力先。
-   * ⚠️ 既にその日のエントリがあれば、必ずそのエントリが実際にある現場を返す
+   * 注意: 既にその日のエントリがあれば、必ずそのエントリが実際にある現場を返す
    *   （工種セレクタで新しい選択をしていても、既存分への書き込み先は変えない。
    *   変えてしまうと別の id に新しいエントリができ、古いエントリが取り残されて
    *   二重入力になる）。まだ入力が無い日だけ、選んだ既定・工種の既定・親現場の順で決まる。
@@ -726,7 +728,7 @@ export default function ForemanMobilePage() {
         {siteOptions.length <= 1 && data
           ? <div className="text-sm font-bold text-gray-700">{data.site.name}</div>
           : <div />}
-        <a href="/attendance" className="text-xs font-bold text-blue-600 border border-blue-200 rounded-lg px-2 py-1 bg-white">🖥 PC版画面へ</a>
+        <a href="/attendance" className="text-xs font-bold text-blue-600 border border-blue-200 rounded-lg px-2 py-1 bg-white">PC版画面へ</a>
       </div>
 
       {/* タブバー */}
@@ -783,7 +785,7 @@ export default function ForemanMobilePage() {
                     className={`mt-3 w-full py-2 rounded-lg text-sm font-bold border ${cnt > 0
                       ? 'bg-emerald-600 border-emerald-600 text-white'
                       : 'bg-white border-emerald-300 text-emerald-700'}`}>
-                    🚗 {cnt > 0 ? `運転者 行き${dr!.am.length}・帰り${dr!.pm.length}（押して直す）` : 'この日の運転者を記録'}
+                    {cnt > 0 ? `運転者 行き${dr!.am.length}・帰り${dr!.pm.length}（押して直す）` : 'この日の運転者を記録'}
                   </button>
                 )
               })()}
@@ -813,9 +815,9 @@ export default function ForemanMobilePage() {
 
               {/* 確認状態バナー */}
               {finalApproved ? (
-                <div className="mt-3 p-2.5 rounded-lg bg-gray-100 text-gray-600 text-sm font-bold text-center">🔒 最終承認済み（編集できません）</div>
+                <div className="mt-3 p-2.5 rounded-lg bg-gray-100 text-gray-600 text-sm font-bold text-center"><span className="inline-flex items-center gap-1"><Icon name="lock" size={14} />最終承認済み（編集できません）</span></div>
               ) : foremanApproved ? (
-                <div className="mt-3 p-2.5 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm font-bold text-center">✅ {siteLeaderLabel(data?.isSupportSite)}確認済み</div>
+                <div className="mt-3 p-2.5 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm font-bold text-center"><span className="inline-flex items-center gap-1"><Icon name="check" size={14} strokeWidth={2.4} />{siteLeaderLabel(data?.isSupportSite)}確認済み</span></div>
               ) : missingWorkers.length > 0 && !isRestDay && dateIso === `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}` ? (
                 // 今日はスタッフが作業後に打刻するので、赤い警告にしない（2026-10-02 点検）
                 <div className="mt-3 p-2.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 text-xs">
@@ -823,7 +825,7 @@ export default function ForemanMobilePage() {
                 </div>
               ) : missingWorkers.length > 0 && !isRestDay ? (
                 <div className="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
-                  ⚠️ <b>{missingWorkers.length}名が未入力</b>: {missingWorkers.map(w => w.name).join('・')}
+                  <b>{missingWorkers.length}名が未入力</b>: {missingWorkers.map(w => w.name).join('・')}
                 </div>
               ) : null}
 
@@ -838,7 +840,7 @@ export default function ForemanMobilePage() {
                     return (
                       <div key={w.id} className="bg-white rounded-xl border border-gray-200 px-3 py-2.5 flex items-center justify-between">
                         <span className="font-bold text-sm">{w.name}</span>
-                        <span className="text-xs font-bold text-cyan-700 bg-cyan-50 px-2 py-1 rounded-md">✈ 帰国中</span>
+                        <span className="text-xs font-bold text-cyan-700 bg-cyan-50 px-2 py-1 rounded-md">帰国中</span>
                       </div>
                     )
                   }
@@ -868,7 +870,7 @@ export default function ForemanMobilePage() {
                               <option value="C">0.6補</option>
                             </select>
                           ) : (
-                            <span className="text-xs text-gray-400">📱 スマホ入力待ち</span>
+                            <span className="text-xs text-gray-400">スマホ入力待ち</span>
                           )
                         ) : (
                           <select
@@ -901,7 +903,7 @@ export default function ForemanMobilePage() {
                             {workTypeOptions.map(o => <option key={o.id} value={o.id}>工種: {o.label}</option>)}
                           </select>
                           {data.workTypeDuplicates?.some(d => d.kind === 'worker' && d.id === String(w.id) && d.day === day) && (
-                            <span className="text-3xs font-bold text-red-600">⚠ 2つの工種に入力あり</span>
+                            <span className="text-3xs font-bold text-red-600">2つの工種に入力あり</span>
                           )}
                         </div>
                       )}
@@ -1021,7 +1023,7 @@ export default function ForemanMobilePage() {
                                 {workTypeOptions.map(o => <option key={o.id} value={o.id}>工種: {o.label}</option>)}
                               </select>
                               {data.workTypeDuplicates?.some(d => d.kind === 'subcon' && d.id === sc.id && d.day === day) && (
-                                <span className="text-3xs font-bold text-red-600">⚠ 2つの工種に入力あり</span>
+                                <span className="text-3xs font-bold text-red-600">2つの工種に入力あり</span>
                               )}
                             </div>
                           )}
@@ -1039,9 +1041,9 @@ export default function ForemanMobilePage() {
               {!finalApproved && !(userRole === 'foreman' && data?.proxyApproval) && (
                 <div className="mt-4">
                   {foremanApproved ? (
-                    <button onClick={handleUnapprove} className="w-full rounded-xl py-3 text-sm font-bold bg-white border-2 border-red-300 text-red-600">↩️ この日の確認を取り消す</button>
+                    <button onClick={handleUnapprove} className="w-full rounded-xl py-3 text-sm font-bold bg-white border-2 border-red-300 text-red-600">この日の確認を取り消す</button>
                   ) : (
-                    <button onClick={handleApprove} className="w-full rounded-xl py-3 text-sm font-bold bg-amber-500 text-white shadow">✅ この日を確認する（{siteLeaderLabel(data?.isSupportSite)}承認）</button>
+                    <button onClick={handleApprove} className="w-full rounded-xl py-3 text-sm font-bold bg-amber-500 text-white shadow">この日を確認する（{siteLeaderLabel(data?.isSupportSite)}承認）</button>
                   )}
                 </div>
               )}
@@ -1065,12 +1067,12 @@ export default function ForemanMobilePage() {
                     >
                       <div className="text-xs font-bold tabular-nums">{o.d}</div>
                       <div className="text-3xs leading-none">
-                        {!o.isWork ? '休' : o.approved ? '✅' : o.missing > 0 ? `未${o.missing}` : '—'}
+                        {!o.isWork ? '休' : o.approved ? '済' : o.missing > 0 ? `未${o.missing}` : '—'}
                       </div>
                     </button>
                   ))}
                 </div>
-                <div className="text-3xs text-gray-400 mt-1">✅=確認済み ／ 未N=未入力N名 ／ タップでその日へ</div>
+                <div className="text-3xs text-gray-400 mt-1">済=確認済み ／ 未N=未入力N名 ／ タップでその日へ</div>
               </div>
             </>
           )}
@@ -1083,7 +1085,7 @@ export default function ForemanMobilePage() {
           {reqLoading && <div className="py-10 text-center text-gray-400">読み込み中…</div>}
           {!reqLoading && (
             <>
-              <div className="text-xs font-bold text-gray-500 mb-1.5">🌴 有給申請</div>
+              <div className="text-xs font-bold text-gray-500 mb-1.5">有給申請</div>
               {leaveReqs.length === 0 && <div className="bg-white rounded-xl border border-gray-200 p-3 text-sm text-gray-400 text-center">承認待ちの有給申請はありません</div>}
               <div className="space-y-2">
                 {leaveReqs.map(r => (
@@ -1121,7 +1123,7 @@ export default function ForemanMobilePage() {
                 ))}
               </div>
 
-              <div className="text-xs font-bold text-gray-500 mb-1.5 mt-5">✈️ 帰国申請</div>
+              <div className="text-xs font-bold text-gray-500 mb-1.5 mt-5">帰国申請</div>
               {homeReqs.length === 0 && <div className="bg-white rounded-xl border border-gray-200 p-3 text-sm text-gray-400 text-center">承認待ちの帰国申請はありません</div>}
               <div className="space-y-2">
                 {homeReqs.map(r => (
@@ -1195,10 +1197,10 @@ export default function ForemanMobilePage() {
                   : calInfo.status === 'draft' ? 'bg-amber-50 text-amber-700'
                   : 'bg-gray-100 text-gray-500'
                 }`}>
-                  {calInfo.status === 'approved' ? '✅ 承認済み'
-                    : calInfo.status === 'submitted' ? '📤 提出済み（承認待ち）'
-                    : calInfo.status === 'rejected' ? '❌ 差し戻し'
-                    : calInfo.status === 'draft' ? '📝 下書き'
+                  {calInfo.status === 'approved' ? '承認済み'
+                    : calInfo.status === 'submitted' ? '提出済み（承認待ち）'
+                    : calInfo.status === 'rejected' ? '差し戻し'
+                    : calInfo.status === 'draft' ? '下書き'
                     : '未作成'}
                 </span>
                 <span className="text-xs text-gray-500">
@@ -1277,7 +1279,7 @@ export default function ForemanMobilePage() {
           ) : (
             <>
               <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="text-xs font-bold text-gray-500">🌴 自分の有給</div>
+                <div className="text-xs font-bold text-gray-500">自分の有給</div>
                 {myData.leave && !myData.leave.noGrant ? (
                   <>
                     <div className="mt-1 flex items-baseline gap-1">
@@ -1289,7 +1291,7 @@ export default function ForemanMobilePage() {
                     )}
                     {myData.leave.fiveDayShortfall > 0 && (
                       <div className="mt-2 p-2 rounded-lg bg-red-50 text-red-700 text-xs font-bold">
-                        ⚠️ 年5日の取得義務まで あと{myData.leave.fiveDayShortfall}日 足りません
+                        年5日の取得義務まで あと{myData.leave.fiveDayShortfall}日 足りません
                       </div>
                     )}
                   </>
@@ -1299,7 +1301,7 @@ export default function ForemanMobilePage() {
               </div>
 
               <div className="bg-white rounded-xl border border-gray-200 p-4">
-                <div className="text-xs font-bold text-gray-500">🔧 道具代補助の残額</div>
+                <div className="text-xs font-bold text-gray-500">道具代補助の残額</div>
                 {myData.tool?.notStarted && myData.tool.period ? (
                   <div className="mt-1 text-sm text-gray-700">
                     <b>{myData.tool.period.start.replace(/-/g, '/')}</b> から
