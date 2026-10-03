@@ -9,7 +9,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  computeMonthly, compute, calcTobiEquiv, createDispatchChecker, isDispatched, PAY_NOTES_FROM_YM, type MainData,
+  computeMonthly, compute, calcTobiEquiv, createDispatchChecker, isDispatched, PAY_NOTES_FROM_YM, JP_WEEK_OVER40_NOTE_FROM_YM, type MainData,
 } from '@/lib/compute'
 import { validatePayrolls, buildAuditChecks, type PayrollSnapshot, type PayrollAuditWorker } from '@/lib/payroll-validator'
 import type { AttendanceEntry } from '@/types'
@@ -133,14 +133,14 @@ describe('給与チェックの注意点（payNotes・支給額は変えない�
     const w = computeMonthly(mk([JP_DAILY]), att, {}, YM, 0, undefined, 20, {}).workers[0]
     expect(w.payNotes).toBeUndefined()
   })
-  it('日本人（日給月給）の週40時間超: 月〜土6日×8h → 注意点（0.25倍の目安）。支給額は変わらない', () => {
+  it('日本人（日給月給）の週40時間超: 月〜土6日×8h → 注意点は出さない（2026-10-03 代表決定: 割増は従来どおり不要）。支給額も変わらない', () => {
     const YM = '202610'
     const att: Record<string, AttendanceEntry> = {}
     for (let d = 5; d <= 10; d++) att[`s_4_${YM}_${d}`] = { w: 1 } as AttendanceEntry   // 10/5(月)〜10/10(土)
     const w = computeMonthly(mk([JP_DAILY]), att, {}, YM, 0, undefined, 20, {}).workers[0]
     expect(w.salaryNetPay).toBe(6 * 20000)
-    const n = w.payNotes?.find(x => x.code === 'jpWeekOver40')
-    expect(n?.amount).toBe(Math.ceil(20000 / 8 * 0.25) * 8)   // 625円 × 8h = 5,000円
+    expect(w.payNotes?.some(x => x.code === 'jpWeekOver40')).toBeFalsy()
+    expect(JP_WEEK_OVER40_NOTE_FROM_YM).toBeNull()   // 再開するときはここに開始月を入れ、このテストを「出す」側に直す
   })
   it('日本人月給制（役員以外）の土曜出勤 → 注意点。役員には付けない', () => {
     const YM = '202610'
@@ -221,14 +221,14 @@ describe('給与チェックの注意点（payNotes・支給額は変えない�
     })
   })
   it('給与チェック（validatePayrolls）は注意点を warning で出し critical にしない（締めは止めない）', () => {
+    // 週40時間超の注意点は 2026-10-03 から出さないので、月給制の土曜出勤（jpMonthlyOffDayWork）で確かめる
     const YM = '202610'
-    const att: Record<string, AttendanceEntry> = {}
-    for (let d = 5; d <= 10; d++) att[`s_4_${YM}_${d}`] = { w: 1 } as AttendanceEntry
-    const r = computeMonthly(mk([JP_DAILY]), att, {}, YM, 0, undefined, 20, {})
+    const att: Record<string, AttendanceEntry> = { [`s_12_${YM}_3`]: { w: 1 } as AttendanceEntry }
+    const r = computeMonthly(mk([JP_MONTHLY]), att, {}, YM, 0, undefined, 20, {})
     const v = validatePayrolls(r.workers as unknown as PayrollSnapshot[])
     expect(v.critical).toBe(0)
     expect(v.warning).toBe(1)
-    expect(v.issues[0].field).toBe('jpWeekOver40')
-    expect(v.affectedWorkerIds).toEqual([4])
+    expect(v.issues[0].field).toBe('jpMonthlyOffDayWork')
+    expect(v.affectedWorkerIds).toEqual([12])
   })
 })

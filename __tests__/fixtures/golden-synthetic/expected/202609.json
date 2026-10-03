@@ -92,14 +92,7 @@
    "legalHolidayHours": 10,
    "legalHolidayAllowance": 35000,
    "salaryNetPay": 563750,
-   "legalShortfall": 0,
-   "payNotes": [
-    {
-     "code": "jpWeekOver40",
-     "message": "週40時間を超える週が 2週・計 16時間 あります（月〜土の出勤×8h。月をまたぐ週は数えていません）。この分の割増 0.25倍（目安 10,000円）は支給額に入れていません。日本人に変形労働時間制の定めが無ければ必要です（社労士に確認）",
-     "amount": 10000
-    }
-   ]
+   "legalShortfall": 0
   },
   {
    "id": 12,
@@ -145,11 +138,6 @@
    "absentDeduction": 11136,
    "salaryNetPay": 220864,
    "payNotes": [
-    {
-     "code": "jpWeekOver40",
-     "message": "週40時間を超える週が 1週・計 8時間 あります（月〜土の出勤×8h。月をまたぐ週は数えていません）。この分の割増 0.25倍（目安 3,200円）は支給額に入れていません。日本人に変形労働時間制の定めが無ければ必要です（社労士に確認）",
-     "amount": 3200
-    },
     {
      "code": "jpMonthlyOffDayWork",
      "message": "土曜・日曜の出勤が 1日（19日）あります。月給制のため加算していません。休日出勤なら別に支払いが必要です（代表に確認）"

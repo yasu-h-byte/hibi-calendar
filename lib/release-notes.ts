@@ -28,6 +28,17 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261003_jp_week40',
+    title: '月次集計の注意点から「日本人の週40時間超」を外しました（代表の決定: 従来どおり割増なし）',
+    content:
+      '日本人スタッフの「週40時間を超える週があります（0.25倍の目安）」の注意は、代表の決定で当面出さないことにしました（割増は従来どおり払いません。残業欄の分は今までどおり 1.25倍です）。'
+      + '支給額は変わりません。ほかの注意点（支給が日給×働いた日数を下回る など）はそのまま出ます。',
+    category: 'info',
+    publishedAt: '2026-10-03T21:00:00+09:00',
+    publishedBy: '日比靖仁',
+    roles: OFFICE,
+  },
+  {
     id: 'rn_20261003_menu_tidy',
     title: 'メニューと入口を整理しました（帳票出力・評価入力・申請の承認・請求の画面名）',
     content:
