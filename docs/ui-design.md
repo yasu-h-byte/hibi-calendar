@@ -232,6 +232,8 @@ rem 系へまとめて直した（見た目は同じ）。`npm run lint:px` が 
 ## スタッフ画面（スマホ）
 
 ### ヘッダー
+- **ホーム画面の名前は DEDURA＋**（`lib/staff-manifest.ts` の short_name と `appleWebApp.title`。2026-10-03。旧「出面入力」はベトナム人に読めなかった）
+- **電波が無いときの画面**: `public/sw.js`（画面を開く通信だけ見る・ふだんはネットワーク優先・失敗時だけ `public/offline.html`）。登録は `components/ServiceWorkerRegister.tsx`（スタッフ・職長・マイページだけ）。API・JS・画像はさわらない
 - スタッフ名にベトナム語名（`nameVi`）を併記
 
 ### タップターゲット・色

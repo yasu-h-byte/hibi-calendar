@@ -15,9 +15,11 @@ const PATH_OF: Record<StaffManifestKind, (token: string) => string> = {
   attendance: t => `/attendance/${t}`,
   foreman: t => `/attendance/foreman/${t}`,
 }
+// 2026-10-03: ホーム画面に出る名前（short_name）は言葉に寄らない DEDURA＋ に統一（旧: 「出面入力」だけで、ベトナム人スタッフには読めなかった）。
+// 長い名前（name）は日越を添える
 const NAME_OF: Record<StaffManifestKind, string> = {
   mypage: 'マイページ',
-  attendance: '出面入力',
+  attendance: '出面入力 / Chấm công',
   foreman: '職長確認',
 }
 
@@ -31,7 +33,8 @@ export function buildStaffManifest(kind: StaffManifestKind, token: string) {
   return {
     id: start,
     name: `DEDURA＋ ${NAME_OF[kind]}`,
-    short_name: NAME_OF[kind],
+    short_name: 'DEDURA＋',
+    lang: 'ja',
     description: 'HIBI CONSTRUCTION 鳶事業部',
     start_url: start,
     // scope は / のまま（職長確認からマイページへのリンクなど、個人ページ同士の行き来をアプリ内で開く）
@@ -47,7 +50,11 @@ export function buildStaffManifest(kind: StaffManifestKind, token: string) {
 }
 
 /** 個人ページの layout の generateMetadata で使う */
-export function staffManifestMetadata(kind: StaffManifestKind, token: string): Pick<Metadata, 'manifest'> {
+export function staffManifestMetadata(kind: StaffManifestKind, token: string): Pick<Metadata, 'manifest' | 'appleWebApp'> {
   if (!isStaffToken(token)) return {}
-  return { manifest: `/api/manifest?kind=${kind}&token=${encodeURIComponent(token)}` }
+  return {
+    manifest: `/api/manifest?kind=${kind}&token=${encodeURIComponent(token)}`,
+    // iPhone はホーム画面の名前を manifest でなくこの title から取る
+    appleWebApp: { title: 'DEDURA＋', capable: true, statusBarStyle: 'black-translucent' },
+  }
 }
