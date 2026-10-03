@@ -1504,7 +1504,7 @@ export default function SitesPage() {
             </div>
             <div>
               <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">役割（複数可）</div>
-              <div className="space-y-1.5" role="group" aria-label="役割" aria-invalid={!!addCo.errors.roles}>
+              <div className="space-y-1.5" role="group" aria-label="役割">
                 {COMPANY_ROLES.map(r => {
                   const on = addCo.roles.includes(r.key)
                   return (

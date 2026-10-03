@@ -145,7 +145,7 @@ export default function ForemanMobilePage() {
   // ── 表示状態 ──
   const [tab, setTab] = useState<'day' | 'requests' | 'calendar' | 'me'>('day')
   const [siteId, setSiteId] = useState('')
-  const today = new Date()
+  const [today] = useState(() => new Date())
   const [viewDate, setViewDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), today.getDate()))
   const [data, setData] = useState<GridData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -275,7 +275,7 @@ export default function ForemanMobilePage() {
     } finally {
       setSaving(s => s - 1)
     }
-  }, [password, siteId, ym, fetchGrid])
+  }, [password, siteId, ym, fetchGrid, userRole])
 
   const applyLocal = useCallback((workerId: number, entry: AttendanceEntry | null) => {
     setData(prev => {
@@ -381,17 +381,17 @@ export default function ForemanMobilePage() {
 
   // 残業h は calcOvertimeHours だけで数える（現場の休憩設定・夜勤ブロックは含めない。保存時と同じ決まり）
   const siteWs = data?.site.workSchedule
-  const withRecalcOt = (e: AttendanceEntry): AttendanceEntry => {
+  const withRecalcOt = useCallback((e: AttendanceEntry): AttendanceEntry => {
     const ot = calcOvertimeHours(e, siteWs)
     return { ...e, o: ot > 0 ? ot : undefined }
-  }
+  }, [siteWs])
 
   const changeTimeField = useCallback((workerId: number, patch: Partial<AttendanceEntry>) => {
     const existing = data?.workerEntries[workerId]?.[day]
     if (!existing) return
     const updated = withRecalcOt({ ...existing, ...patch, s: source })
     saveEntry(workerId, updated)
-  }, [data, day, source, saveEntry])
+  }, [data, day, source, saveEntry, withRecalcOt])
 
   const buildLegacyWork = useCallback((value: string, existing: AttendanceEntry | undefined): AttendanceEntry | null => {
     let entry: AttendanceEntry | null = null
@@ -496,7 +496,7 @@ export default function ForemanMobilePage() {
     }))) return
     const ok = await postGrid({ action: 'unapprove_foreman', day })
     if (ok) fetchGrid()
-  }, [finalApproved, postGrid, day, fetchGrid])
+  }, [finalApproved, postGrid, day, fetchGrid, data?.isSupportSite])
 
   // ── 月の俯瞰（確認状況） ──
   const monthOverview = useMemo(() => {

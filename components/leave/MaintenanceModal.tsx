@@ -14,7 +14,7 @@
  */
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { notify } from '@/lib/notify'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import { RowButton } from '@/components/ui/PageParts'
@@ -53,7 +53,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
   /** 直前に実行した保守処理の結果（帯は3秒で消えるので、明細は窓の中に残す） */
   const [lastResult, setLastResult] = useState<{ label: string; text: string } | null>(null)
 
-  const fetchHealth = async () => {
+  const fetchHealth = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -69,9 +69,9 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
     } catch {
       setError('健全性チェックに失敗しました（通信エラー）')
     } finally { setLoading(false) }
-  }
+  }, [password])
 
-  useEffect(() => { fetchHealth() }, [])
+  useEffect(() => { fetchHealth() }, [fetchHealth])
 
   const runAction = async (
     label: string,
