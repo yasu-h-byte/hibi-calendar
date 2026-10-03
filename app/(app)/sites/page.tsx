@@ -12,7 +12,7 @@ import { todayJstIso, addDaysIso } from '@/lib/date-utils'
 import { isForemanCandidateJob } from '@/lib/jobs'
 import { isAlreadyRetired } from '@/lib/workers'
 import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, FieldError } from '@/components/ui/PageParts'
-import { CancelButton, PrimaryButton } from '@/components/ui/Modal'
+import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import { SaveButton } from '@/components/ui/SaveButton'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
@@ -313,33 +313,29 @@ export default function SitesPage() {
       ? resolveSiteParties({ gcId: form.gcId, primeId: form.primeId, ownerId: form.ownerId }, subcons).siteType
       : (form.siteType === 'support' ? 'support' : 'direct')
 
-  /** 現場の編集画面から、一覧に無い会社をその場で取引先マスタに追加する */
-  const addCompanyInline = async () => {
-    const name = await confirmWithReason({
-      title: '一覧に無い会社を取引先マスタに追加します',
-      description: '追加した会社は取引先マスタにも登録され、あとから役割や単価を直せます。',
-      confirmLabel: '次へ',
-      reason: { label: '会社名', placeholder: '例：鹿島建設株式会社' },
-    })
-    if (!name) return
-    const roleText = await confirmWithReason({
-      title: `「${name}」の役割を番号で入れてください`,
-      description: '1: 元請　2: 一次　3: 同業（二次）　4: 外注（専門業者）\n複数あるときはカンマで区切ります（例: 2, 3）。',
-      confirmLabel: '追加する',
-      reason: { label: '役割の番号', placeholder: '例: 3' },
-    })
-    if (!roleText) return
-    const map: Record<string, CompanyRole> = { '1': 'gc', '2': 'prime', '3': 'peer', '4': 'subcon' }
-    const roles = Array.from(new Set(roleText.split(/[,、\s]+/).map(x => map[x.trim()]).filter(Boolean)))
-    if (!roles.length) { notify.error('役割の番号が読み取れませんでした', '1〜4 の番号で入れてください。もう一度「一覧に無い会社を追加」からやり直してください。'); return }
+  /**
+   * 現場の編集画面から、一覧に無い会社をその場で取引先マスタに追加する。
+   * 2026-10-03: 旧「会社名 → 役割の番号」の2連の入力窓を、会社名と役割のチェックを1つの窓で選ぶ形に
+   */
+  const [addCo, setAddCo] = useState<{ name: string; roles: CompanyRole[]; errors: { name?: string; roles?: string } } | null>(null)
+  const addCompanyInline = () => setAddCo({ name: '', roles: [], errors: {} })
+  const submitAddCompany = async () => {
+    if (!addCo) return null
+    const name = addCo.name.trim()
+    const errors: { name?: string; roles?: string } = {}
+    if (!name) errors.name = '会社名を入力してください'
+    if (addCo.roles.length === 0) errors.roles = '役割を1つ以上選んでください'
+    if (errors.name || errors.roles) { setAddCo({ ...addCo, errors }); return null }
+    const roles = addCo.roles
     const res = await fetch('/api/subcons', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'add', name, roles, type: '鳶業者' }) })
     const data = await res.json().catch(() => null)
-    if (!res.ok) { notify.failed('会社の追加', data?.error || 'サーバが受け付けませんでした'); return }
+    if (!res.ok) return { ok: false, error: data?.error || 'サーバが受け付けませんでした' }
     const added = data?.subcon as SubconMinimal | undefined
     if (added) {
       setSubcons(prev => [...prev, { ...added, roles }])
       notify.success(`「${added.name}」を取引先マスタに追加しました`, roles.map(r => COMPANY_ROLES.find(x => x.key === r)?.label).join('・'))
     }
+    setAddCo(null)
   }
 
   const handleSave = async () => {
@@ -1478,6 +1474,64 @@ export default function SitesPage() {
           </div>
         </SidePanel>
       )}
+
+      {/* 一覧に無い会社をその場で追加（取引先マスタにも登録される） */}
+      <Modal
+        open={!!addCo}
+        onClose={() => setAddCo(null)}
+        title="一覧に無い会社を追加"
+        sub="取引先マスタにも登録されます。役割や単価はあとから取引先マスタで直せます"
+        size="sm"
+        dirty={!!addCo && (addCo.name.trim() !== '' || addCo.roles.length > 0)}
+        footer={<>
+          <CancelButton onClick={() => setAddCo(null)} />
+          <SaveButton action="追加" onSave={submitAddCompany} />
+        </>}
+      >
+        {addCo && (
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="add-co-name" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">会社名</label>
+              <input
+                id="add-co-name"
+                value={addCo.name}
+                onChange={e => setAddCo({ ...addCo, name: e.target.value, errors: { ...addCo.errors, name: undefined } })}
+                placeholder="例：鹿島建設株式会社"
+                aria-invalid={!!addCo.errors.name}
+                className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none"
+              />
+              <FieldError>{addCo.errors.name}</FieldError>
+            </div>
+            <div>
+              <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">役割（複数可）</div>
+              <div className="space-y-1.5" role="group" aria-label="役割" aria-invalid={!!addCo.errors.roles}>
+                {COMPANY_ROLES.map(r => {
+                  const on = addCo.roles.includes(r.key)
+                  return (
+                    <label key={r.key} className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 cursor-pointer ${on ? 'border-hibi-navy bg-hibi-active dark:bg-blue-900/30' : 'border-gray-200 dark:border-gray-600'}`}>
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={e => setAddCo({
+                          ...addCo,
+                          roles: e.target.checked ? [...addCo.roles, r.key] : addCo.roles.filter(k => k !== r.key),
+                          errors: { ...addCo.errors, roles: undefined },
+                        })}
+                        className="mt-0.5 w-4 h-4 accent-hibi-navy"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold text-gray-900 dark:text-white">{r.label}</span>
+                        <span className="block text-xs text-hibi-sub dark:text-gray-400">{r.hint}</span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              <FieldError>{addCo.errors.roles}</FieldError>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
