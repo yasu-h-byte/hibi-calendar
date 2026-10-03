@@ -188,7 +188,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
                   <div className="text-xs text-gray-600 mt-1">
                     特定スタッフへの個別付与（過去分の遡及・特別付与・補正用）
                   </div>
-                  <div className="text-[11px] text-gray-500 mt-1">
+                  <div className="text-2xs text-gray-500 mt-1">
                     💡 通常の年次付与は「🌴 半自動付与バナー」から実行してください
                   </div>
                 </div>
@@ -263,13 +263,13 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
                   )}
                 </div>
                 <div className="text-xs text-gray-600 mt-1">付与日+2年を過ぎた有給を失効として記録</div>
-                <div className="text-[11px] text-gray-500 mt-1">
+                <div className="text-2xs text-gray-500 mt-1">
                   最終自動実行（Cron）: <strong>{fmtDateTime(health.lastExpiryRun)}</strong>
                   <br />
                   自動実行は毎月1日 00:00 JST（Vercel Cron）
                 </div>
                 {(health.samples?.expiry?.length ?? 0) > 0 && (
-                  <details className="text-[10px] text-gray-500 mt-1">
+                  <details className="text-3xs text-gray-500 mt-1">
                     <summary className="cursor-pointer">対象レコード（最大5件）</summary>
                     <ul className="list-disc list-inside mt-1">
                       {(health.samples?.expiry || []).map((s, i) => <li key={i}>{s}</li>)}
@@ -290,7 +290,7 @@ export default function MaintenanceModal({ password, onClose, onChanged, onOpenG
             </div>
           </div>
 
-          <div className="text-[11px] text-gray-500 border-t pt-3">
+          <div className="text-2xs text-gray-500 border-t pt-3">
             ℹ️ 全てのアクションは冪等です。何度実行しても結果は同じです。
             <br />
             ℹ️ 時効処理は Vercel Cron で月1回自動実行されるため、通常手動実行は不要です。
@@ -343,7 +343,7 @@ function ActionRow({
           </div>
           <div className="text-xs text-gray-600 mt-1">{description}</div>
           {(samples?.length ?? 0) > 0 && (
-            <details className="text-[10px] text-gray-500 mt-1">
+            <details className="text-3xs text-gray-500 mt-1">
               <summary className="cursor-pointer">対象レコード（最大5件）</summary>
               <ul className="list-disc list-inside mt-1">
                 {(samples || []).map((s, i) => <li key={i}>{s}</li>)}

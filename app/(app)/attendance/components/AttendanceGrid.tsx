@@ -208,12 +208,12 @@ export default function AttendanceGrid({
     <div className="isolate bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden -mx-4 sm:mx-0 rounded-none sm:rounded-xl">
       {/* 2026-10-01: 上部の案内と「今日へ」。絵文字をやめる */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-hibi-line dark:border-gray-700">
-        <span className="hidden sm:inline text-[13px] text-hibi-sub dark:text-gray-400">セルを押して入力。外国人スタッフは本人のスマホ入力が入ります</span>
+        <span className="hidden sm:inline text-[0.8125rem] text-hibi-sub dark:text-gray-400">セルを押して入力。外国人スタッフは本人のスマホ入力が入ります</span>
         {/* スマホ最適化画面との相互切替（2026-09-02 追加。スマホ幅のときだけ表示） */}
         <a href="/attendance/mobile" className="sm:hidden text-xs font-bold px-3 py-1.5 rounded-lg border border-hibi-navy text-hibi-navy">スマホ版へ</a>
         {todayIdx >= 0 && (
           <button type="button" onClick={jumpToToday}
-            className="ml-auto text-[13px] font-bold px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition">
+            className="ml-auto text-[0.8125rem] font-bold px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 transition">
             今日へ
           </button>
         )}
@@ -252,15 +252,15 @@ export default function AttendanceGrid({
                   title={isCalOff ? 'カレンダー休日' : data.calendarDays ? 'カレンダー出勤日' : ''}
                 >
                   <div className="leading-tight">
-                    <div className="text-[13px]">{d.day}</div>
-                    <div className="text-[10px] font-normal">{d.label}{showOffMark ? ' 休' : ''}</div>
+                    <div className="text-[0.8125rem]">{d.day}</div>
+                    <div className="text-3xs font-normal">{d.label}{showOffMark ? ' 休' : ''}</div>
                     {/* この日の工種（工種のある現場だけ・2026-09-25）。押すとその日の全員の工種が変わる
                         （新しい入力の保存先＋入力済みの一括移動）。ロック中は色だけ見せる */}
                     {hasWorkTypes && (() => {
                       const cur = dayWorkType?.[String(d.day)] || data.site.id
                       const opt = workTypeOptions.find(o => o.id === cur) || workTypeOptions[0]
                       if (data.locked || !onSetDayWorkType) {
-                        return <div className={`mt-1 w-full min-h-[24px] text-[12px] font-bold leading-tight rounded-md py-1 text-center ${opt.cls}`}>{opt.label}</div>
+                        return <div className={`mt-1 w-full min-h-[24px] text-xs font-bold leading-tight rounded-md py-1 text-center ${opt.cls}`}>{opt.label}</div>
                       }
                       return (
                         <select
@@ -272,7 +272,7 @@ export default function AttendanceGrid({
                             onSetDayWorkType(d.day, to.id)
                           }}
                           title={`${d.day}日の工種（押して選ぶ）`}
-                          className={`mt-1 w-full min-h-[24px] text-[12px] font-bold leading-tight rounded-md py-1 px-0.5 appearance-none cursor-pointer shadow-sm text-center [text-align-last:center] ${opt.cls}`}
+                          className={`mt-1 w-full min-h-[24px] text-xs font-bold leading-tight rounded-md py-1 px-0.5 appearance-none cursor-pointer shadow-sm text-center [text-align-last:center] ${opt.cls}`}
                         >
                           {workTypeOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                         </select>
@@ -287,7 +287,7 @@ export default function AttendanceGrid({
                         title={isNightDay(d.day)
                           ? `${d.day}日は夜勤あり（クリックで解除）`
                           : `${d.day}日を夜勤ありにする`}
-                        className={`mt-0.5 w-full text-[10px] font-bold leading-tight rounded py-0.5 transition-opacity ${
+                        className={`mt-0.5 w-full text-3xs font-bold leading-tight rounded py-0.5 transition-opacity ${
                           isNightDay(d.day)
                             ? 'bg-indigo-600 text-white opacity-100'
                             : 'text-indigo-500 opacity-0 hover:opacity-100 [@media(hover:none)]:opacity-60'
@@ -306,7 +306,7 @@ export default function AttendanceGrid({
                           type="button"
                           onClick={() => onDriverClick(d.day)}
                           title={cnt > 0 ? `${d.day}日の運転者（行き${dr!.am.length}・帰り${dr!.pm.length}）` : `${d.day}日の運転者を記録`}
-                          className={`mt-0.5 w-full text-[10px] font-bold leading-tight rounded py-0.5 transition-opacity ${
+                          className={`mt-0.5 w-full text-3xs font-bold leading-tight rounded py-0.5 transition-opacity ${
                             cnt > 0
                               ? 'bg-emerald-600 text-white'
                               : 'border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-gray-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/30'
@@ -322,7 +322,7 @@ export default function AttendanceGrid({
               })}
               <th className="bg-hibi-thead dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1.5 text-center font-bold shadow-[inset_2px_-1px_0_#9CA3AF]" style={{ width: 80, minWidth: 80 }}>
                 <div>計</div>
-                <div className="text-[8px] opacity-70 font-normal">上:人工 / 下:残業h</div>
+                <div className="text-3xs opacity-70 font-normal">上:人工 / 下:残業h</div>
               </th>
             </tr>
           </thead>
@@ -339,8 +339,8 @@ export default function AttendanceGrid({
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <div className="min-w-0 whitespace-nowrap">
-                    <div className="text-[13px] font-bold text-gray-900 dark:text-white">{siteLeaderLabel(data.isSupportSite)}承認</div>
-                    <div className="text-[11px] text-hibi-sub dark:text-gray-400 truncate">{data.site.foremanName || '—'}{data.site.foremanNote ? `（${data.site.foremanNote}）` : ''}</div>
+                    <div className="text-[0.8125rem] font-bold text-gray-900 dark:text-white">{siteLeaderLabel(data.isSupportSite)}承認</div>
+                    <div className="text-2xs text-hibi-sub dark:text-gray-400 truncate">{data.site.foremanName || '—'}{data.site.foremanNote ? `（${data.site.foremanNote}）` : ''}</div>
                   </div>
                   {/* まとめて承認は「昨日までの、入力がある日」だけ（先の日・誰も入れていない日は承認しない・2026-10-02） */}
                   {canForemanApprove && (foremanBulkCount > 0 ? (
@@ -393,8 +393,8 @@ export default function AttendanceGrid({
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <div className="min-w-0 whitespace-nowrap">
-                    <div className="text-[13px] font-bold text-gray-900 dark:text-white">最終承認</div>
-                    <div className="text-[11px] text-hibi-sub dark:text-gray-400">事業責任者</div>
+                    <div className="text-[0.8125rem] font-bold text-gray-900 dark:text-white">最終承認</div>
+                    <div className="text-2xs text-hibi-sub dark:text-gray-400">事業責任者</div>
                   </div>
                   {canFinalize && finalizableDays.length > 0 && (
                     <button onClick={onFinalApproveAll}
@@ -462,14 +462,14 @@ export default function AttendanceGrid({
                     <tr key={worker.id} className="border-t border-gray-300 dark:border-gray-600 hover:bg-gray-50/50 group">
                       {/* Worker name - sticky */}
                       <td
-                        className="sticky left-0 z-20 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700 px-2.5 py-0.5 font-bold text-gray-900 dark:text-gray-100 text-[13px]"
+                        className="sticky left-0 z-20 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700 px-2.5 py-0.5 font-bold text-gray-900 dark:text-gray-100 text-[0.8125rem]"
                         style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                       >
                         <div className="flex items-center gap-1 flex-wrap">
                           <span>{worker.name}</span>
                           {/* 配置外の入力（2026-10-02）: 配置に入っていないのにこの現場に入力がある人。現場の選び間違いに気づくため */}
                           {worker.offRoster && (
-                            <span className="text-[9px] px-1 py-0.5 rounded font-bold whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                            <span className="text-3xs px-1 py-0.5 rounded font-bold whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
                               title="この現場の配置に入っていない人の入力です。スマホで現場を選び間違えた打刻なら、正しい現場へ移してください（このまま給与に数えられます）">
                               配置外
                             </span>
@@ -479,7 +479,7 @@ export default function AttendanceGrid({
                             if (!rb) return null
                             return (
                               <span
-                                className={`text-[9px] px-1 py-0.5 rounded font-bold whitespace-nowrap ${rb.cls}`}
+                                className={`text-3xs px-1 py-0.5 rounded font-bold whitespace-nowrap ${rb.cls}`}
                                 title={rb.title}
                               >
                                 {rb.label}
@@ -493,7 +493,7 @@ export default function AttendanceGrid({
                             onChange={e => onChangeDefaultWorkType(wId, e.target.value === data.site.id ? null : e.target.value)}
                             disabled={isLocked}
                             title="この人の新しい入力は、既定でどの工種に入るか"
-                            className={`mt-0.5 w-full text-[9px] text-slate-600 bg-slate-50 border border-slate-200 rounded px-0.5 py-0
+                            className={`mt-0.5 w-full text-3xs text-slate-600 bg-slate-50 border border-slate-200 rounded px-0.5 py-0
                               ${isLocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                           >
                             {workTypeOptions.map(o => <option key={o.id} value={o.id}>既定: {o.label}</option>)}
@@ -505,7 +505,7 @@ export default function AttendanceGrid({
                       <td
                         className="sticky z-20 bg-white group-hover:bg-gray-50 px-1 py-0.5 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                       >
-                        <span className={`text-[10px] px-1 py-0.5 rounded-full font-medium whitespace-nowrap ${orgBadgeCls(worker.org, worker.visa)}`}>
+                        <span className={`text-3xs px-1 py-0.5 rounded-full font-medium whitespace-nowrap ${orgBadgeCls(worker.org, worker.visa)}`}>
                           {orgBadgeLabel(worker.org, worker.visa)}
                         </span>
                       </td>
@@ -628,7 +628,7 @@ export default function AttendanceGrid({
                       <td className="px-2 py-1 text-center tabular-nums border-l-2 border-gray-300 bg-gray-50" style={{ width: 80, minWidth: 80 }}>
                         <div className="font-bold text-sm text-hibi-navy">{totals.wSum > 0 ? totals.wSum : '-'}</div>
                         {(totals.compSum > 0 || totals.plSum > 0) && (
-                          <div className="text-[9px] font-normal text-gray-400 leading-tight">
+                          <div className="text-3xs font-normal text-gray-400 leading-tight">
                             {[
                               totals.compSum > 0 ? `補${Math.round(totals.compSum * 10) / 10}` : '',
                               totals.plSum > 0 ? `有${totals.plSum}` : '',
@@ -650,7 +650,7 @@ export default function AttendanceGrid({
               <>
                 <tr className="bg-amber-50">
                   <td
-                    className="sticky left-0 z-20 bg-amber-50 px-2 py-1 font-bold text-[11px] text-amber-800 border-t-2 border-amber-400"
+                    className="sticky left-0 z-20 bg-amber-50 px-2 py-1 font-bold text-2xs text-amber-800 border-t-2 border-amber-400"
                     style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                   >
                     外注 ({data.subcons.length}社)
@@ -670,7 +670,7 @@ export default function AttendanceGrid({
                     <tr key={sc.id} className="border-t border-gray-300 dark:border-gray-600 hover:bg-gray-50/50 group">
                       {/* Subcon name - sticky */}
                       <td
-                        className="sticky left-0 z-20 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700 px-2.5 py-0.5 font-bold text-gray-900 dark:text-gray-100 text-[13px]"
+                        className="sticky left-0 z-20 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700 px-2.5 py-0.5 font-bold text-gray-900 dark:text-gray-100 text-[0.8125rem]"
                         style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
                       >
                         {sc.name}
@@ -680,7 +680,7 @@ export default function AttendanceGrid({
                             onChange={e => onChangeDefaultWorkTypeSubcon(sc.id, e.target.value === data.site.id ? null : e.target.value)}
                             disabled={isLocked}
                             title="この外注先の新しい入力は、既定でどの工種に入るか"
-                            className={`mt-0.5 w-full text-[9px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-0.5 py-0
+                            className={`mt-0.5 w-full text-3xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-0.5 py-0
                               ${isLocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                           >
                             {workTypeOptions.map(o => <option key={o.id} value={o.id}>既定: {o.label}</option>)}
@@ -692,7 +692,7 @@ export default function AttendanceGrid({
                       <td
                         className="sticky z-20 bg-white group-hover:bg-gray-50 px-1 py-0.5 text-center" style={{ left: nameWidth, width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                       >
-                        <span className="text-[10px] px-1 py-0.5 rounded-full font-medium whitespace-nowrap bg-amber-100 text-amber-700">
+                        <span className="text-3xs px-1 py-0.5 rounded-full font-medium whitespace-nowrap bg-amber-100 text-amber-700">
                           {sc.type === 'tobi' || sc.type === '鳶業者' ? '鳶' : sc.type === 'doko' || sc.type === '土工業者' ? '土工' : sc.type}
                         </span>
                       </td>
@@ -734,7 +734,7 @@ export default function AttendanceGrid({
                                 placeholder=""
                                 onChange={e => onSubconOnChange(sc.id, d.day, e.target.value)}
                                 disabled={isLocked}
-                                className={`w-full text-center text-[10px] py-0 bg-transparent border-0 focus:ring-1 focus:ring-amber-400 focus:outline-none tabular-nums
+                                className={`w-full text-center text-3xs py-0 bg-transparent border-0 focus:ring-1 focus:ring-amber-400 focus:outline-none tabular-nums
                                   ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}
                                   ${onVal > 0 ? 'text-amber-700' : 'opacity-30'}
                                 `}
@@ -762,7 +762,7 @@ export default function AttendanceGrid({
             {/* Tobi Total */}
             <tr className="border-t-2 border-[#1B2A4A]">
               <td
-                className="sticky left-0 z-20 bg-[#1B2A4A] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px]"
+                className="sticky left-0 z-20 bg-[#1B2A4A] text-white px-2 py-1.5 font-bold whitespace-nowrap text-2xs"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 鳶 合計
@@ -771,7 +771,7 @@ export default function AttendanceGrid({
               {days.map(d => (
                 <td
                   key={d.day}
-                  className="bg-[#1B2A4A] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
+                  className="bg-[#1B2A4A] text-white px-0 py-1.5 text-center text-2xs font-bold tabular-nums border-l border-gray-600"
                   style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                 >
                   {footerSums.tobi[d.day] > 0 ? Math.round(footerSums.tobi[d.day] * 10) / 10 : '-'}
@@ -789,7 +789,7 @@ export default function AttendanceGrid({
             {/* 鳶 残業合計（日ごと縦集計） */}
             <tr>
               <td
-                className="sticky left-0 z-20 bg-[#1B2A4A] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-[10px] border-t border-[#2A3B5C]"
+                className="sticky left-0 z-20 bg-[#1B2A4A] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-3xs border-t border-[#2A3B5C]"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 鳶 残業合計
@@ -798,7 +798,7 @@ export default function AttendanceGrid({
               {days.map(d => (
                 <td
                   key={d.day}
-                  className="bg-[#1B2A4A] text-amber-300 px-0 py-1 text-center text-[11px] font-medium tabular-nums border-l border-gray-600 border-t border-[#2A3B5C]"
+                  className="bg-[#1B2A4A] text-amber-300 px-0 py-1 text-center text-2xs font-medium tabular-nums border-l border-gray-600 border-t border-[#2A3B5C]"
                   style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                 >
                   {footerSums.tobiOt[d.day] > 0 ? `${Math.round(footerSums.tobiOt[d.day] * 10) / 10}h` : '-'}
@@ -811,7 +811,7 @@ export default function AttendanceGrid({
             {/* Doko Total */}
             <tr>
               <td
-                className="sticky left-0 z-20 bg-[#243656] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px]"
+                className="sticky left-0 z-20 bg-[#243656] text-white px-2 py-1.5 font-bold whitespace-nowrap text-2xs"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 土工 合計
@@ -820,7 +820,7 @@ export default function AttendanceGrid({
               {days.map(d => (
                 <td
                   key={d.day}
-                  className="bg-[#243656] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
+                  className="bg-[#243656] text-white px-0 py-1.5 text-center text-2xs font-bold tabular-nums border-l border-gray-600"
                   style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                 >
                   {footerSums.doko[d.day] > 0 ? Math.round(footerSums.doko[d.day] * 10) / 10 : '-'}
@@ -838,7 +838,7 @@ export default function AttendanceGrid({
             {/* 土工 残業合計（日ごと縦集計） */}
             <tr>
               <td
-                className="sticky left-0 z-20 bg-[#243656] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-[10px] border-t border-[#324867]"
+                className="sticky left-0 z-20 bg-[#243656] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-3xs border-t border-[#324867]"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 土工 残業合計
@@ -847,7 +847,7 @@ export default function AttendanceGrid({
               {days.map(d => (
                 <td
                   key={d.day}
-                  className="bg-[#243656] text-amber-300 px-0 py-1 text-center text-[11px] font-medium tabular-nums border-l border-gray-600 border-t border-[#324867]"
+                  className="bg-[#243656] text-amber-300 px-0 py-1 text-center text-2xs font-medium tabular-nums border-l border-gray-600 border-t border-[#324867]"
                   style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                 >
                   {footerSums.dokoOt[d.day] > 0 ? `${Math.round(footerSums.dokoOt[d.day] * 10) / 10}h` : '-'}
@@ -860,7 +860,7 @@ export default function AttendanceGrid({
             {/* Grand Total */}
             <tr>
               <td
-                className="sticky left-0 z-20 bg-[#0F1D36] text-white px-2 py-1.5 font-bold whitespace-nowrap text-[11px]"
+                className="sticky left-0 z-20 bg-[#0F1D36] text-white px-2 py-1.5 font-bold whitespace-nowrap text-2xs"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 総合計
@@ -869,7 +869,7 @@ export default function AttendanceGrid({
               {days.map(d => (
                 <td
                   key={d.day}
-                  className="bg-[#0F1D36] text-white px-0 py-1.5 text-center text-[11px] font-bold tabular-nums border-l border-gray-600"
+                  className="bg-[#0F1D36] text-white px-0 py-1.5 text-center text-2xs font-bold tabular-nums border-l border-gray-600"
                   style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                 >
                   {footerSums.grand[d.day] > 0 ? Math.round(footerSums.grand[d.day] * 10) / 10 : '-'}
@@ -887,7 +887,7 @@ export default function AttendanceGrid({
             {/* 総 残業合計（日ごと縦集計） */}
             <tr>
               <td
-                className="sticky left-0 z-20 bg-[#0F1D36] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-[10px] border-t border-[#1F2D44]"
+                className="sticky left-0 z-20 bg-[#0F1D36] text-amber-300 px-2 py-1 font-medium whitespace-nowrap text-3xs border-t border-[#1F2D44]"
                 style={{ width: nameWidth, minWidth: nameWidth, maxWidth: nameWidth }}
               >
                 総 残業合計
@@ -896,7 +896,7 @@ export default function AttendanceGrid({
               {days.map(d => (
                 <td
                   key={d.day}
-                  className="bg-[#0F1D36] text-amber-300 px-0 py-1 text-center text-[11px] font-medium tabular-nums border-l border-gray-600 border-t border-[#1F2D44]"
+                  className="bg-[#0F1D36] text-amber-300 px-0 py-1 text-center text-2xs font-medium tabular-nums border-l border-gray-600 border-t border-[#1F2D44]"
                   style={{ width: cellWidth, minWidth: cellWidth, maxWidth: cellWidth }}
                 >
                   {footerSums.grandOt[d.day] > 0 ? `${Math.round(footerSums.grandOt[d.day] * 10) / 10}h` : '-'}
@@ -925,7 +925,7 @@ export default function AttendanceGrid({
           <>
             <span className="text-hibi-navy font-medium">工種:</span>
             {workTypeOptions.map(o => (
-              <span key={o.id} className={`px-1.5 py-0.5 rounded-md font-bold text-[11px] ${o.cls}`}>{o.label}</span>
+              <span key={o.id} className={`px-1.5 py-0.5 rounded-md font-bold text-2xs ${o.cls}`}>{o.label}</span>
             ))}
             <span>日付の見出しのチップ＝その日の全員の工種。色付きの列＝その工種の日。マスのタグ＝その人だけの例外</span>
             <span className="mx-1 border-l border-hibi-line dark:border-gray-600 h-3" />

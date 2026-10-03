@@ -118,15 +118,15 @@ export function CloseCard(p: CloseCardProps) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-bold text-gray-900 dark:text-white">{p.label}</h2>
-          <div className="text-[13px] text-hibi-sub dark:text-gray-400">{p.people}名</div>
+          <div className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">{p.people}名</div>
         </div>
         {p.locked
           ? <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"><Icon name="lock" size={13} strokeWidth={2.2} />締め済み</span>
           : <span className="px-2.5 py-1 rounded-md text-xs font-bold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">締め前</span>}
       </div>
       <div className="flex items-baseline gap-2">
-        <span className="text-[13px] text-hibi-sub dark:text-gray-400">支給額の合計</span>
-        <span className="text-[30px] leading-none font-bold tabular-nums text-gray-900 dark:text-white">{yen(p.total)}</span>
+        <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">支給額の合計</span>
+        <span className="text-3xl leading-none font-bold tabular-nums text-gray-900 dark:text-white">{yen(p.total)}</span>
       </div>
 
       <div className="rounded-[10px] border border-hibi-line dark:border-gray-700 divide-y divide-hibi-line dark:divide-gray-700">
@@ -181,7 +181,7 @@ export function CloseCard(p: CloseCardProps) {
         </div>
       ) : p.canClose ? (
         <button onClick={p.onToggleLock} disabled={p.busy}
-          className="h-11 rounded-[10px] bg-hibi-navy hover:bg-hibi-light text-white text-[15px] font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2">
+          className="h-11 rounded-[10px] bg-hibi-navy hover:bg-hibi-light text-white text-[0.9375rem] font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2">
           <Icon name="lock" size={16} />{p.label} の{p.ymLabel}を締める
         </button>
       ) : (
@@ -231,10 +231,10 @@ function Check({ state, label, note, detail, action, onAction }: {
       <div className="min-w-0">
         <div className="text-sm font-bold text-gray-900 dark:text-gray-100">{label}</div>
         <div className={`text-xs ${state === 'warn' ? 'text-amber-800 dark:text-amber-300' : 'text-hibi-sub dark:text-gray-400'}`}>{note}</div>
-        {detail && <div className="mt-0.5 text-[11px] text-hibi-sub dark:text-gray-400 whitespace-pre-line">{detail}</div>}
+        {detail && <div className="mt-0.5 text-2xs text-hibi-sub dark:text-gray-400 whitespace-pre-line">{detail}</div>}
       </div>
       {action && onAction && (
-        <button onClick={onAction} className="ml-auto shrink-0 text-[13px] font-bold text-hibi-navy dark:text-blue-300 inline-flex items-center gap-0.5 hover:underline">
+        <button onClick={onAction} className="ml-auto shrink-0 text-[0.8125rem] font-bold text-hibi-navy dark:text-blue-300 inline-flex items-center gap-0.5 hover:underline">
           {action}<Icon name="chevronRight" size={13} />
         </button>
       )}
@@ -330,7 +330,7 @@ export function OverviewList({
             }`}>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100">{w.name}</span>
+                <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100">{w.name}</span>
                 {badges.map((b, i) => (
                   <Chip key={i} tone={b.tone} title={b.title}>{b.text}</Chip>
                 ))}
@@ -344,7 +344,7 @@ export function OverviewList({
               <span>有給 <b className="text-base text-gray-900 dark:text-white">{num(w.plDays)}</b></span>
               <span>残業 <b className="text-base text-gray-900 dark:text-white">{num(w.otHours)}</b></span>
             </div>
-            <div className="text-[13px] text-gray-700 dark:text-gray-300 tabular-nums">{rateText}</div>
+            <div className="text-[0.8125rem] text-gray-700 dark:text-gray-300 tabular-nums">{rateText}</div>
             <div className="flex flex-wrap gap-1.5 min-w-0">
               {chips.length === 0
                 ? <span className="text-xs text-gray-400">支給なし</span>
@@ -364,7 +364,7 @@ export function OverviewList({
         )
       })}
       {workers.length > 0 && (
-        <div className="px-5 py-3 border-t border-hibi-line dark:border-gray-700 flex flex-wrap gap-x-5 gap-y-1 items-baseline text-[13px] text-hibi-sub dark:text-gray-400">
+        <div className="px-5 py-3 border-t border-hibi-line dark:border-gray-700 flex flex-wrap gap-x-5 gap-y-1 items-baseline text-[0.8125rem] text-hibi-sub dark:text-gray-400">
           <span>{workers.length}名</span>
           <span>出勤延べ {num(workAll)}人日</span>
           <span>残業 {num(ot)}h</span>

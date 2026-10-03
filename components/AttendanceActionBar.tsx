@@ -210,7 +210,7 @@ export default function AttendanceActionBar({
           {leaveTotal > 0 && (
             <div className="pt-3">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-[15px] font-bold text-gray-900 dark:text-white">有給の申請</span>
+                <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-white">有給の申請</span>
                 <Chip tone="gray">{leaveTotal}件</Chip>
               </div>
 
@@ -260,7 +260,7 @@ export default function AttendanceActionBar({
           {hlTotal > 0 && (
             <div className={leaveTotal > 0 ? 'border-t border-hibi-line dark:border-gray-700 pt-3' : 'pt-3'}>
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-[15px] font-bold text-gray-900 dark:text-white">帰国の申請</span>
+                <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-white">帰国の申請</span>
                 <Chip tone="cyan">{hlTotal}件</Chip>
               </div>
 
@@ -315,7 +315,7 @@ export default function AttendanceActionBar({
       <SidePanel label="申請（有給・帰国）" onClose={() => onClose?.()} width="max-w-[520px]">
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-[20px] font-bold text-gray-900 dark:text-white">申請（有給・帰国）</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">申請（有給・帰国）</h2>
             <CloseButton onClick={() => onClose?.()} />
           </div>
           {loading && total === 0 ? (
@@ -408,7 +408,7 @@ function LeaveCard({ group, actionMode, canAct, processing, onApprove, onReject 
   return (
     <div className={`rounded-xl border p-3 ${bgClass}`}>
       <div className="flex items-start gap-2 flex-wrap mb-1">
-        <span className="font-bold text-[15px] text-gray-900 dark:text-white">{first.workerName}</span>
+        <span className="font-bold text-[0.9375rem] text-gray-900 dark:text-white">{first.workerName}</span>
         {isMulti && (
           <Chip tone="gray">{group.items.length}件まとめて</Chip>
         )}
@@ -506,7 +506,7 @@ function HomeLeaveCard({ req, actionMode, canAct, processing, onApprove, onRejec
   return (
     <div className={`rounded-xl border p-3 ${bgClass}`}>
       <div className="flex items-start gap-2 flex-wrap mb-1">
-        <span className="font-bold text-[15px] text-gray-900 dark:text-white">{req.workerName}</span>
+        <span className="font-bold text-[0.9375rem] text-gray-900 dark:text-white">{req.workerName}</span>
         {req.status === 'foreman_approved' && fName && (
           <Chip tone="blue">{fName} 職長承認済み</Chip>
         )}

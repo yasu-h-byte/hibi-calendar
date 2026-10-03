@@ -65,7 +65,7 @@ export default function GradeTable({ placed }: { placed: Placed[] }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-gray-400 -mt-3">
+      <p className="text-2xs text-gray-400 -mt-3">
         年収は年間所定 {ANNUAL_DAYS} 日換算。ピッチは上位の号ほど小さくなり、上位等級ほど大きい（同じ評価なら上位等級の方が速く上がる）。
         土工は3Gの90%。
       </p>
@@ -99,7 +99,7 @@ export default function GradeTable({ placed }: { placed: Placed[] }) {
                     <td key={g} className={`${td} ${here.length ? 'bg-hibi-navy/10 dark:bg-blue-900/30' : ''}`}>
                       {yen(dailyForStep(g, n))}
                       {here.length > 0 && (
-                        <div className="text-[10px] font-bold text-hibi-navy dark:text-blue-300">
+                        <div className="text-3xs font-bold text-hibi-navy dark:text-blue-300">
                           {here.map(p => p.name).join('・')}
                         </div>
                       )}
@@ -111,7 +111,7 @@ export default function GradeTable({ placed }: { placed: Placed[] }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-gray-400">
+      <p className="text-2xs text-gray-400">
         色のついたセルが現在の在籍者の位置です。
         {dense && '既定は5号刻みですが、在籍者のいる号は必ず表示しています。'}
       </p>

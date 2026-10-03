@@ -136,7 +136,7 @@ function WageHub() {
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
             }`}>
             {t.label}
-            <span className="hidden sm:inline text-[10px] text-gray-400 ml-2">{t.note}</span>
+            <span className="hidden sm:inline text-3xs text-gray-400 ml-2">{t.note}</span>
           </button>
         ))}
       </div>
@@ -154,9 +154,9 @@ function WageHub() {
               制度の原本。等級の定義、昇格の要件、号俸表の作り方、改定の計算順序、移行の経緯まで。
             </p>
             <div className="text-xs text-gray-600 dark:text-gray-300 space-y-1">
-              <div><code className="text-[11px]">docs/wage-system.md</code> — 賃金制度（日本人社員）</div>
-              <div><code className="text-[11px]">lib/jp-wage.ts</code> — 号俸表と改定の計算</div>
-              <div><code className="text-[11px]">lib/jp-wage-migration.ts</code> — 2026年度の移行データ</div>
+              <div><code className="text-2xs">docs/wage-system.md</code> — 賃金制度（日本人社員）</div>
+              <div><code className="text-2xs">lib/jp-wage.ts</code> — 号俸表と改定の計算</div>
+              <div><code className="text-2xs">lib/jp-wage-migration.ts</code> — 2026年度の移行データ</div>
             </div>
           </section>
 
@@ -167,7 +167,7 @@ function WageHub() {
                 <a key={r.href} href={r.href}
                   className="block rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
                   <div className="text-sm font-medium">{r.label}</div>
-                  <div className="text-[11px] text-gray-500">{r.note}</div>
+                  <div className="text-2xs text-gray-500">{r.note}</div>
                 </a>
               ))}
             </div>
@@ -180,7 +180,7 @@ function WageHub() {
                 <div key={g}><b className="tabular-nums">{g === 'doko' ? '土工' : g}</b> — {l}</div>
               ))}
             </div>
-            <p className="text-[11px] text-gray-400 mt-3 leading-relaxed">
+            <p className="text-2xs text-gray-400 mt-3 leading-relaxed">
               壁は 4G と 5G の間にあります。3G 班長 → 4G 上級班長は熟練で上がれますが、
               4G → 5G 職長は「職長という役職で現場を任されたとき」が基準で、在籍年数では超えられません。
             </p>

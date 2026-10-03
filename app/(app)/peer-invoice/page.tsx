@@ -212,21 +212,21 @@ function PeerInvoicePageInner() {
         {/* 2026-10-01 改修: 見出し・状態・操作をほかの画面と同じ見た目に（請求書の本文＝印刷部分は変えない） */}
         <div className="flex items-end justify-between flex-wrap gap-3">
           <div>
-            <a href={`/peer-statement${ym ? `?ym=${ym}` : ''}`} className="text-[13px] text-hibi-sub dark:text-gray-400 hover:text-hibi-navy inline-flex items-center gap-1">
+            <a href={`/peer-statement${ym ? `?ym=${ym}` : ''}`} className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 hover:text-hibi-navy inline-flex items-center gap-1">
               <Icon name="chevronLeft" size={14} />請求書・支払へ戻る
             </a>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-1 flex items-center gap-2 flex-wrap">
               {isHfuInvoice ? 'HFU → 日比建設 の請求書' : '応援の請求書'}
               {view && (isPending ? <Chip tone="blue">承認待ち</Chip> : view.isDraft ? <Chip tone="amber">下書き（未発行）</Chip> : <Chip tone="green">発行済み {view.no}</Chip>)}
             </h1>
-            {view && <p className="text-[13px] text-hibi-sub dark:text-gray-400 mt-1">{view.companyName} ／ {jpYm(ym)}分</p>}
+            {view && <p className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 mt-1">{view.companyName} ／ {jpYm(ym)}分</p>}
           </div>
           <div className="flex items-center h-[42px] rounded-[10px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
             <button type="button" aria-label="前の月" onClick={() => setYm(shiftYm(ym, -1))}
               className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
               <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
             </button>
-            <span className="px-1.5 text-[15px] font-bold tabular-nums">{jpYm(ym)}</span>
+            <span className="px-1.5 text-[0.9375rem] font-bold tabular-nums">{jpYm(ym)}</span>
             <button type="button" aria-label="次の月" onClick={() => setYm(shiftYm(ym, 1))}
               className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
               <Icon name="chevronRight" size={18} strokeWidth={2.2} />
@@ -307,13 +307,13 @@ function PeerInvoicePageInner() {
           )}
           {/* 押せない理由をボタンの横にも出す（薄いボタンだけだと「発行ボタンがない」と見える・2026-10-01 代表） */}
           {isFreshDraft && (canIssue || canRequest) && approvalBlocked && (
-            <span className="text-[13px] font-bold text-red-700 dark:text-red-300">上の赤い枠の承認がそろうと押せます</span>
+            <span className="text-[0.8125rem] font-bold text-red-700 dark:text-red-300">上の赤い枠の承認がそろうと押せます</span>
           )}
           {(isFreshDraft || isPending) && (canIssue || canRequest) && paperBlocked && !approvalBlocked && (
-            <span className="text-[13px] font-bold text-amber-800 dark:text-amber-300">紙の請求書を登録済みのため押せません</span>
+            <span className="text-[0.8125rem] font-bold text-amber-800 dark:text-amber-300">紙の請求書を登録済みのため押せません</span>
           )}
           {isFreshDraft && !canIssue && !canRequest && (
-            <span className="text-[13px] text-hibi-sub dark:text-gray-400">発行の申請は事務、承認は事業責任者・管理者が行います</span>
+            <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">発行の申請は事務、承認は事業責任者・管理者が行います</span>
           )}
         </div>
 

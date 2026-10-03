@@ -272,7 +272,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
             <div>
               <label className="block text-xs text-gray-500 mb-1">
                 最終帰国日
-                <span className="block text-[10px] text-gray-400 leading-tight">この日まで帰国（翌日から出勤）</span>
+                <span className="block text-3xs text-gray-400 leading-tight">この日まで帰国（翌日から出勤）</span>
               </label>
               <input type="date" value={ui.editEnd} disabled={ui.editUndecided} onChange={e => patchUi({ editEnd: e.target.value })}
                 className="w-full px-2 py-1.5 text-sm border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-40 disabled:bg-gray-100 dark:disabled:bg-gray-900" />
@@ -346,8 +346,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
               <div className="mt-2 pt-2 border-t border-dashed border-gray-200 dark:border-gray-600 space-y-2">
                 {flow.length > 0 && (
                   <div>
-                    <div className="text-[10px] text-gray-400 mb-1">申請の経緯</div>
-                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
+                    <div className="text-3xs text-gray-400 mb-1">申請の経緯</div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-2xs text-gray-500 dark:text-gray-400 tabular-nums">
                       {flow.map((f, i) => (
                         <span key={i} className="flex items-center gap-1.5">
                           {i > 0 && <span className="text-gray-300">→</span>}
@@ -360,10 +360,10 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
                 )}
                 {hist.length > 0 && (
                   <div>
-                    <div className="text-[10px] text-gray-400 mb-1">期間の変更履歴</div>
+                    <div className="text-3xs text-gray-400 mb-1">期間の変更履歴</div>
                     <div className="space-y-1">
                       {hist.map((ch, i) => (
-                        <div key={i} className="text-[11px] text-gray-500 dark:text-gray-400">
+                        <div key={i} className="text-2xs text-gray-500 dark:text-gray-400">
                           <div className="tabular-nums">
                             <span className="text-gray-400">{ch.at.slice(0, 10)}</span>
                             <span className="mx-1.5">{ch.field === 'endDate' ? '最終帰国日' : ch.field === 'startDate' ? '出発日' : ch.field}</span>
@@ -372,7 +372,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
                             <span className="font-medium text-gray-700 dark:text-gray-200">{fmt(ch.after)}</span>
                           </div>
                           {ch.note && (
-                            <div className="text-[10px] text-gray-400 pl-1 mt-0.5">{ch.note}</div>
+                            <div className="text-3xs text-gray-400 pl-1 mt-0.5">{ch.note}</div>
                           )}
                         </div>
                       ))}
@@ -440,7 +440,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
               <div>
                 <label className="block text-sm text-gray-600 mb-1">
                   最終帰国日
-                  <span className="block text-[11px] font-normal text-gray-400 leading-tight">この日まで帰国（翌日から出勤）</span>
+                  <span className="block text-2xs font-normal text-gray-400 leading-tight">この日まで帰国（翌日から出勤）</span>
                 </label>
                 <input type="date" value={ui.formEnd} disabled={ui.formUndecided} onChange={e => patchUi({ formEnd: e.target.value })}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-40 disabled:bg-gray-100 dark:disabled:bg-gray-900" />

@@ -36,7 +36,7 @@ export default function GrantDatesTab({ visible, filteredWorkers }: Props) {
     return a.name.localeCompare(b.name, 'ja')
   })
   const orgBadge = (org: string) => (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${org === 'hfu' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'}`}>{org === 'hfu' ? 'HFU' : '日比'}</span>
+    <span className={`text-3xs px-1.5 py-0.5 rounded-full ${org === 'hfu' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-200' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200'}`}>{org === 'hfu' ? 'HFU' : '日比'}</span>
   )
 
   return (
@@ -73,7 +73,7 @@ export default function GrantDatesTab({ visible, filteredWorkers }: Props) {
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap tabular-nums text-gray-600 dark:text-gray-300">{w.hireDate || '—'}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap font-medium text-hibi-navy dark:text-blue-200">
-                    {fmtBasis(w.grantDate)}{w.inferredFromDefault && <span className="ml-1 text-[10px] text-gray-400">(推定)</span>}
+                    {fmtBasis(w.grantDate)}{w.inferredFromDefault && <span className="ml-1 text-3xs text-gray-400">(推定)</span>}
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap tabular-nums text-gray-600 dark:text-gray-300">{fmtNext(w.grantDate)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-gray-600 dark:text-gray-300">{w.grantDays}日</td>
@@ -85,7 +85,7 @@ export default function GrantDatesTab({ visible, filteredWorkers }: Props) {
           </tbody>
         </table>
       </div>
-      <div className="text-[11px] text-gray-500 dark:text-gray-400 pl-1">対象 {rows.length}名 ／ 発生月の早い順。退職済みのスタッフは含みません。</div>
+      <div className="text-2xs text-gray-500 dark:text-gray-400 pl-1">対象 {rows.length}名 ／ 発生月の早い順。退職済みのスタッフは含みません。</div>
     </div>
   )
 }

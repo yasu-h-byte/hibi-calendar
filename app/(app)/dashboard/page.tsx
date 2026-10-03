@@ -141,8 +141,8 @@ function Card({ title, sub, right, children, id }: {
   return (
     <section id={id} className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden scroll-mt-4">
       <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex items-center justify-between gap-3">
-        <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">
-          {title}{sub && <span className="ml-2 text-[13px] font-normal text-hibi-sub dark:text-gray-400">{sub}</span>}
+        <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">
+          {title}{sub && <span className="ml-2 text-[0.8125rem] font-normal text-hibi-sub dark:text-gray-400">{sub}</span>}
         </h2>
         {right}
       </div>
@@ -153,7 +153,7 @@ function Card({ title, sub, right, children, id }: {
 
 function MoreLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <a href={href} className="text-[13px] font-bold text-hibi-navy dark:text-blue-300 inline-flex items-center gap-0.5 hover:underline whitespace-nowrap">
+    <a href={href} className="text-[0.8125rem] font-bold text-hibi-navy dark:text-blue-300 inline-flex items-center gap-0.5 hover:underline whitespace-nowrap">
       {children}<Icon name="chevronRight" size={13} />
     </a>
   )
@@ -334,7 +334,7 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
   const todayAbsence = absenceReports.filter(a => a.date === today)
   const pastAbsence = absenceReports.filter(a => a.date !== today)
 
-  const btn = 'h-9 px-3.5 rounded-[9px] text-[13px] font-bold whitespace-nowrap disabled:opacity-50'
+  const btn = 'h-9 px-3.5 rounded-[9px] text-[0.8125rem] font-bold whitespace-nowrap disabled:opacity-50'
   return (
     <Card id="requests" title="申請（有給・帰国）" right={<MoreLink href="/leave?tab=requests">休暇管理を開く</MoreLink>}>
       {rows.length > 0 && (
@@ -360,7 +360,7 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
         const isRejecting = rejecting?.key === r.key
         return (
           <div key={r.key} className="border-t border-hibi-line dark:border-gray-700 px-5 py-3 grid grid-cols-1 sm:grid-cols-[150px_minmax(0,1fr)_auto] gap-2 sm:gap-3.5 items-center">
-            <div className="text-[15px] font-bold text-gray-900 dark:text-gray-100">{r.name}</div>
+            <div className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100">{r.name}</div>
             <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-1.5">
                 <Chip tone={r.kind === 'home' ? 'cyan' : 'gray'}>{r.kind === 'home' ? '帰国' : '有給'}</Chip>
@@ -393,7 +393,7 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
             </div>
             {canReject && isRejecting && (
               <div className="sm:col-span-3 rounded-lg border border-red-200 dark:border-red-800 bg-red-50/60 dark:bg-red-900/10 p-3 flex flex-wrap items-center gap-2">
-                <label className="text-[13px] font-bold text-red-700 dark:text-red-300" htmlFor={`reject-reason-${r.key}`}>却下の理由（本人に伝わります）</label>
+                <label className="text-[0.8125rem] font-bold text-red-700 dark:text-red-300" htmlFor={`reject-reason-${r.key}`}>却下の理由（本人に伝わります）</label>
                 <input id={`reject-reason-${r.key}`} type="text" value={rejecting.reason} autoFocus
                   onChange={e => setRejecting({ key: r.key, reason: e.target.value })}
                   placeholder="例: 現場の人数が足りない日です。別の日で申請してください"
@@ -411,7 +411,7 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
         <div className="border-t border-hibi-line dark:border-gray-700 px-5 py-3 space-y-2">
           {todayAbsence.length > 0 && (
             <div>
-              <div className="text-[13px] font-bold text-gray-900 dark:text-gray-100 mb-1.5">今日の欠勤届</div>
+              <div className="text-[0.8125rem] font-bold text-gray-900 dark:text-gray-100 mb-1.5">今日の欠勤届</div>
               <div className="flex flex-wrap gap-1.5">
                 {todayAbsence.map((a, i) => <Chip key={i} tone="red">{a.workerName}・{a.reasonLabel}{a.note ? `（${a.note}）` : ''}</Chip>)}
               </div>
@@ -419,7 +419,7 @@ function RequestsCard({ leaveItems, absenceReports, homeLongLeaveItems, password
           )}
           {pastAbsence.length > 0 && (
             <div>
-              <div className="text-[13px] font-bold text-gray-900 dark:text-gray-100 mb-1">過去7日の欠勤</div>
+              <div className="text-[0.8125rem] font-bold text-gray-900 dark:text-gray-100 mb-1">過去7日の欠勤</div>
               <ul className="text-xs text-hibi-sub dark:text-gray-400 space-y-0.5">
                 {pastAbsence.map((a, i) => (
                   <li key={i}><span className="tabular-nums">{md(a.date)}</span> <b className="text-gray-700 dark:text-gray-300">{a.workerName}</b> {a.reasonLabel}{a.note ? `（${a.note}）` : ''}</li>
@@ -442,7 +442,7 @@ function IssuesCard({ issues, calendarPending }: { issues: QuietIssue[]; calenda
       className="border-t border-hibi-line dark:border-gray-700 first:border-t-0 px-5 py-3 grid grid-cols-1 sm:grid-cols-[130px_150px_minmax(0,1fr)_auto] gap-1 sm:gap-3.5 items-center hover:bg-gray-50 dark:hover:bg-gray-700/40 transition group">
       <span><Chip tone={tone}>{label}</Chip></span>
       <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{name}</span>
-      <span className="text-[13px] text-hibi-sub dark:text-gray-400">{detail}</span>
+      <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">{detail}</span>
       <Icon name="chevronRight" size={16} className="hidden sm:block text-gray-400 group-hover:text-hibi-navy dark:group-hover:text-white" />
     </a>
   )
@@ -490,10 +490,10 @@ function YesterdayCard({ data, siteList }: { data: DashboardData['todayStatus'];
             </div>
           ))}
           <div className="border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-[13px] text-hibi-sub dark:text-gray-400 min-w-0">
+            <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 min-w-0">
               {(data.absentWorkers || []).length > 0 ? `休み ${data.absentWorkers.length}名：${data.absentWorkers.map(w => w.name).join('、')}` : '休みの人はいません'}
             </span>
-            <span className="text-[13px] text-hibi-sub dark:text-gray-400 whitespace-nowrap">合計 <b className="text-lg text-gray-900 dark:text-white tabular-nums">{fmtNum(sum('total'))}</b> 人工</span>
+            <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 whitespace-nowrap">合計 <b className="text-lg text-gray-900 dark:text-white tabular-nums">{fmtNum(sum('total'))}</b> 人工</span>
           </div>
         </>
       )}
@@ -518,7 +518,7 @@ function MonthCard({ data, ym, loading, error, onPrev, onNext, canCost }: {
     <Card title="今月の数字" sub={`${ym.slice(0, 4)}年${Number(ym.slice(4, 6))}月`} right={
       <div className="flex items-center h-9 rounded-[9px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
         <button onClick={onPrev} aria-label="前の月" className="w-8 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[9px]"><Icon name="chevronLeft" size={16} strokeWidth={2.2} /></button>
-        <span className="px-1 text-[13px] font-bold tabular-nums">{Number(ym.slice(4, 6))}月</span>
+        <span className="px-1 text-[0.8125rem] font-bold tabular-nums">{Number(ym.slice(4, 6))}月</span>
         <button onClick={onNext} aria-label="次の月" className="w-8 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[9px]"><Icon name="chevronRight" size={16} strokeWidth={2.2} /></button>
       </div>
     }>
@@ -530,9 +530,9 @@ function MonthCard({ data, ym, loading, error, onPrev, onNext, canCost }: {
       {s && (
         <div className="px-5 pt-4 pb-3 grid grid-cols-2 gap-4">
           <div>
-            <div className="text-[13px] text-hibi-sub dark:text-gray-400">総人工</div>
+            <div className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">総人工</div>
             <div className="flex items-baseline gap-1">
-              <span className="text-[30px] leading-tight font-bold tabular-nums text-gray-900 dark:text-white">{fmtNum(s.totalManDays)}</span>
+              <span className="text-3xl leading-tight font-bold tabular-nums text-gray-900 dark:text-white">{fmtNum(s.totalManDays)}</span>
               <span className="text-sm text-hibi-sub dark:text-gray-400">人工</span>
             </div>
             {s.prevTotalManDays > 0 && s.pctWork !== 0 && (
@@ -540,9 +540,9 @@ function MonthCard({ data, ym, loading, error, onPrev, onNext, canCost }: {
             )}
           </div>
           <div>
-            <div className="text-[13px] text-hibi-sub dark:text-gray-400">{s.billing > 0 ? '売上' : '売上（概算）'}</div>
+            <div className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">{s.billing > 0 ? '売上' : '売上（概算）'}</div>
             <div className="flex items-baseline gap-1">
-              <span className={`text-[30px] leading-tight font-bold tabular-nums ${s.billing === 0 ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+              <span className={`text-3xl leading-tight font-bold tabular-nums ${s.billing === 0 ? 'text-gray-400' : 'text-gray-900 dark:text-white'}`}>
                 {s.billing === 0 ? '未入力' : fmtYenMan(s.billing)}
               </span>
               {/* fmtYenMan は「¥2,719万」まで返すので、足すのは「円」だけ（旧は「万円」で万が二重だった） */}
@@ -568,7 +568,7 @@ function MonthCard({ data, ym, loading, error, onPrev, onNext, canCost }: {
               )
             })}
           </div>
-          <div className="flex justify-between text-[11px] text-hibi-sub dark:text-gray-400 mt-1 tabular-nums">
+          <div className="flex justify-between text-2xs text-hibi-sub dark:text-gray-400 mt-1 tabular-nums">
             <span>1</span><span>10</span><span>20</span><span>{days.length}</span>
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-hibi-sub dark:text-gray-400">

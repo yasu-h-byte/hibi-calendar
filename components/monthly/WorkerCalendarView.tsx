@@ -126,15 +126,15 @@ export default function WorkerCalendarView({ ym, entries, siteNames }: Props) {
                     key={ci}
                     className={`border border-gray-200 p-1 align-top h-[42px] ${status.bgClass}`}
                   >
-                    <div className={`text-[10px] font-bold ${isSunday ? 'text-red-600' : 'text-gray-700'}`}>
+                    <div className={`text-3xs font-bold ${isSunday ? 'text-red-600' : 'text-gray-700'}`}>
                       {cell.day}
                     </div>
-                    <div className={`text-[10px] font-semibold ${status.textClass} leading-tight`}>
+                    <div className={`text-3xs font-semibold ${status.textClass} leading-tight`}>
                       {status.short}
                       {ot && ot > 0 ? <span className="ml-0.5">+{ot}h</span> : null}
                     </div>
                     {siteShort && status.short !== '－' && (
-                      <div className="text-[8px] text-gray-500 leading-none truncate">{siteShort}</div>
+                      <div className="text-3xs text-gray-500 leading-none truncate">{siteShort}</div>
                     )}
                   </td>
                 )
@@ -145,7 +145,7 @@ export default function WorkerCalendarView({ ym, entries, siteNames }: Props) {
       </table>
 
       {/* 集計サマリー */}
-      <div className="mt-2 text-[11px] text-gray-600 flex flex-wrap gap-x-3 gap-y-0.5">
+      <div className="mt-2 text-2xs text-gray-600 flex flex-wrap gap-x-3 gap-y-0.5">
         <span>出勤 <strong>{totals.work}日</strong></span>
         {totals.comp > 0 && <span>補償 <strong className="text-orange-700">{totals.comp}日</strong></span>}
         {totals.leave > 0 && <span>有給 <strong className="text-green-700">{totals.leave}日</strong></span>}

@@ -668,7 +668,7 @@ export default function ForemanMobilePage() {
     >
       {label}
       {!!badge && (
-        <span className="absolute -top-1.5 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+        <span className="absolute -top-1.5 -right-1 bg-red-500 text-white text-3xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
           {badge}
         </span>
       )}
@@ -725,7 +725,7 @@ export default function ForemanMobilePage() {
                 {isRestDay && <span className="ml-1 text-xs text-orange-600 font-bold">休日</span>}
               </div>
               {dateIso !== `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}` && (
-                <button onClick={() => setViewDate(new Date(today.getFullYear(), today.getMonth(), today.getDate()))} className="text-[11px] text-blue-600 underline">今日へ</button>
+                <button onClick={() => setViewDate(new Date(today.getFullYear(), today.getMonth(), today.getDate()))} className="text-2xs text-blue-600 underline">今日へ</button>
               )}
             </div>
             <button
@@ -812,7 +812,7 @@ export default function ForemanMobilePage() {
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-sm">
                           {w.name}
-                          {w.offRoster && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold align-middle" title="この現場の配置に入っていない人の入力です。現場の選び間違いなら、正しい現場へ移してください">配置外</span>}
+                          {w.offRoster && <span className="ml-1.5 text-3xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold align-middle" title="この現場の配置に入っていない人の入力です。現場の選び間違いなら、正しい現場へ移してください">配置外</span>}
                           {entry?.s === 'staff' &&<span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-blue-400" title="スタッフ入力" />}
                           {entry?.s === 'foreman' && <span className="ml-1.5 inline-block w-2 h-2 rounded-full bg-orange-400" title="職長入力" />}
                         </span>
@@ -861,12 +861,12 @@ export default function ForemanMobilePage() {
                             disabled={locked}
                             onChange={e => handleWorkTypeChange(w.id, e.target.value)}
                             title="この日の工種（新規入力の保存先／既存日は選ぶと移動）"
-                            className="rounded-lg border border-slate-300 px-1.5 py-1 text-[11px] bg-slate-50 text-slate-600"
+                            className="rounded-lg border border-slate-300 px-1.5 py-1 text-2xs bg-slate-50 text-slate-600"
                           >
                             {workTypeOptions.map(o => <option key={o.id} value={o.id}>工種: {o.label}</option>)}
                           </select>
                           {data.workTypeDuplicates?.some(d => d.kind === 'worker' && d.id === String(w.id) && d.day === day) && (
-                            <span className="text-[10px] font-bold text-red-600">⚠ 2つの工種に入力あり</span>
+                            <span className="text-3xs font-bold text-red-600">⚠ 2つの工種に入力あり</span>
                           )}
                         </div>
                       )}
@@ -890,10 +890,10 @@ export default function ForemanMobilePage() {
                           <select value={entry.et || '17:00'} disabled={locked} onChange={e => changeTimeField(w.id, { et: e.target.value })} className="rounded-lg border border-gray-300 px-1.5 py-1 text-sm tabular-nums bg-white">
                             {DAY_END_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
-                          <label className="flex items-center gap-0.5 text-[11px] text-gray-500">
+                          <label className="flex items-center gap-0.5 text-2xs text-gray-500">
                             <input type="checkbox" checked={(entry.b1 ?? 1) === 1} disabled={locked} onChange={e => changeTimeField(w.id, { b1: e.target.checked ? 1 : 0 })} className="w-4 h-4" />午前
                           </label>
-                          <label className="flex items-center gap-0.5 text-[11px] text-gray-500">
+                          <label className="flex items-center gap-0.5 text-2xs text-gray-500">
                             <input type="checkbox" checked={(entry.b3 ?? 1) === 1} disabled={locked} onChange={e => changeTimeField(w.id, { b3: e.target.checked ? 1 : 0 })} className="w-4 h-4" />午後
                           </label>
                           <span className="ml-auto text-xs font-bold tabular-nums text-gray-600">{calcDayShiftHours(entry, siteWs).toFixed(1)}h</span>
@@ -920,7 +920,7 @@ export default function ForemanMobilePage() {
                               <option key={v} value={v}>{v === 0 ? 'なし' : `${v}h`}</option>
                             ))}
                           </select>
-                          {!!entry.ns && <span className="text-[11px] font-bold text-indigo-600">夜勤あり（編集はPC）</span>}
+                          {!!entry.ns && <span className="text-2xs font-bold text-indigo-600">夜勤あり（編集はPC）</span>}
                         </div>
                       )}
                       {/* 旧契約継続者（外国人）: スマホ打刻の時刻と午前・午後の休憩も表示（PC出面と同じ・2026-09-15）。
@@ -928,10 +928,10 @@ export default function ForemanMobilePage() {
                       {!isTime && isVn && w.useOldRules && entry && entry.w > 0 && entry.w !== 0.6 && entry.st && entry.et && !entry.nonly && (
                         <div className="flex items-center gap-2 mt-1.5">
                           <span className="text-sm tabular-nums text-gray-700">{entry.st}〜{entry.et}</span>
-                          <label className="flex items-center gap-0.5 text-[11px] text-gray-500">
+                          <label className="flex items-center gap-0.5 text-2xs text-gray-500">
                             <input type="checkbox" checked={(entry.b1 ?? 1) === 1} disabled={locked} onChange={e => changeTimeField(w.id, { b1: e.target.checked ? 1 : 0 })} className="w-4 h-4" />午前
                           </label>
-                          <label className="flex items-center gap-0.5 text-[11px] text-gray-500">
+                          <label className="flex items-center gap-0.5 text-2xs text-gray-500">
                             <input type="checkbox" checked={(entry.b3 ?? 1) === 1} disabled={locked} onChange={e => changeTimeField(w.id, { b3: e.target.checked ? 1 : 0 })} className="w-4 h-4" />午後
                           </label>
                           <span className="ml-auto text-xs font-bold tabular-nums text-gray-600">{calcDayShiftHours(entry, siteWs).toFixed(1)}h</span>
@@ -958,7 +958,7 @@ export default function ForemanMobilePage() {
                             <span className="font-bold text-sm truncate">{sc.name}</span>
                             <div className="flex items-center gap-1.5">
                               <button disabled={locked || n <= 0} onClick={() => saveSubcon(sc.id, n - 1, on)} className="w-9 h-9 rounded-lg border border-gray-300 font-bold text-lg disabled:opacity-30">−</button>
-                              <span className="w-8 text-center font-bold tabular-nums">{n}<span className="text-[10px] text-gray-400">人</span></span>
+                              <span className="w-8 text-center font-bold tabular-nums">{n}<span className="text-3xs text-gray-400">人</span></span>
                               <button disabled={locked} onClick={() => saveSubcon(sc.id, n + 1, on)} className="w-9 h-9 rounded-lg border border-gray-300 font-bold text-lg disabled:opacity-30">＋</button>
                               <select
                                 value={String(on)}
@@ -981,12 +981,12 @@ export default function ForemanMobilePage() {
                                 disabled={locked}
                                 onChange={e => handleWorkTypeChangeSubcon(sc.id, e.target.value)}
                                 title="この日の工種（新規入力の保存先／既存日は選ぶと移動）"
-                                className="rounded-lg border border-slate-300 px-1.5 py-1 text-[11px] bg-slate-50 text-slate-600"
+                                className="rounded-lg border border-slate-300 px-1.5 py-1 text-2xs bg-slate-50 text-slate-600"
                               >
                                 {workTypeOptions.map(o => <option key={o.id} value={o.id}>工種: {o.label}</option>)}
                               </select>
                               {data.workTypeDuplicates?.some(d => d.kind === 'subcon' && d.id === sc.id && d.day === day) && (
-                                <span className="text-[10px] font-bold text-red-600">⚠ 2つの工種に入力あり</span>
+                                <span className="text-3xs font-bold text-red-600">⚠ 2つの工種に入力あり</span>
                               )}
                             </div>
                           )}
@@ -1029,13 +1029,13 @@ export default function ForemanMobilePage() {
                       }`}
                     >
                       <div className="text-xs font-bold tabular-nums">{o.d}</div>
-                      <div className="text-[9px] leading-none">
+                      <div className="text-3xs leading-none">
                         {!o.isWork ? '休' : o.approved ? '✅' : o.missing > 0 ? `未${o.missing}` : '—'}
                       </div>
                     </button>
                   ))}
                 </div>
-                <div className="text-[10px] text-gray-400 mt-1">✅=確認済み ／ 未N=未入力N名 ／ タップでその日へ</div>
+                <div className="text-3xs text-gray-400 mt-1">✅=確認済み ／ 未N=未入力N名 ／ タップでその日へ</div>
               </div>
             </>
           )}
@@ -1114,7 +1114,7 @@ export default function ForemanMobilePage() {
                 ))}
               </div>
 
-              <div className="text-[10px] text-gray-400 mt-4">
+              <div className="text-3xs text-gray-400 mt-4">
                 欠勤の届はスタッフが出面に直接「欠勤」で記録します（承認手続きはありません）。出面タブで確認してください。
               </div>
             </>
@@ -1167,7 +1167,7 @@ export default function ForemanMobilePage() {
               {/* 月グリッド（タップで 稼働⇄休み 切替） */}
               <div className="mt-3 grid grid-cols-7 gap-1">
                 {DOW_JA.map((d, i) => (
-                  <div key={d} className={`text-center text-[10px] font-bold ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-400'}`}>{d}</div>
+                  <div key={d} className={`text-center text-3xs font-bold ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-400'}`}>{d}</div>
                 ))}
                 {Array.from({ length: new Date(calY, calM - 1, 1).getDay() }).map((_, i) => <div key={`sp${i}`} />)}
                 {Array.from({ length: new Date(calY, calM, 0).getDate() }, (_, i) => i + 1).map(d => {
@@ -1181,12 +1181,12 @@ export default function ForemanMobilePage() {
                       }`}
                     >
                       {d}
-                      <div className="text-[9px] leading-none font-normal">{rest ? '休' : ''}</div>
+                      <div className="text-3xs leading-none font-normal">{rest ? '休' : ''}</div>
                     </button>
                   )
                 })}
               </div>
-              <div className="text-[10px] text-gray-400 mt-1.5">日付をタップすると 稼働 ⇄ 休み が切り替わります</div>
+              <div className="text-3xs text-gray-400 mt-1.5">日付をタップすると 稼働 ⇄ 休み が切り替わります</div>
 
               <div className="flex gap-2 mt-4">
                 <button
@@ -1202,7 +1202,7 @@ export default function ForemanMobilePage() {
                 )}
               </div>
               {calInfo.status === 'approved' && (
-                <div className="text-[10px] text-gray-400 mt-2">
+                <div className="text-3xs text-gray-400 mt-2">
                   承認済みのカレンダーを変更して保存すると「承認後修正」となり、スタッフの再確認が必要になります。
                 </div>
               )}
@@ -1240,7 +1240,7 @@ export default function ForemanMobilePage() {
                       <span className="text-sm text-gray-500">日 残っています（枠 {myData.leave.total}日 / 使用 {myData.leave.used}日）</span>
                     </div>
                     {myData.leave.grantDate && (
-                      <div className="text-[11px] text-gray-400 mt-1">期間: {myData.leave.grantDate} 〜 {myData.leave.periodEnd}</div>
+                      <div className="text-2xs text-gray-400 mt-1">期間: {myData.leave.grantDate} 〜 {myData.leave.periodEnd}</div>
                     )}
                     {myData.leave.fiveDayShortfall > 0 && (
                       <div className="mt-2 p-2 rounded-lg bg-red-50 text-red-700 text-xs font-bold">
@@ -1259,7 +1259,7 @@ export default function ForemanMobilePage() {
                   <div className="mt-1 text-sm text-gray-700">
                     <b>{myData.tool.period.start.replace(/-/g, '/')}</b> から
                     年間 <b className="tabular-nums">¥{myData.tool.budget.toLocaleString()}</b> の補助が始まります
-                    <span className="block text-[11px] text-gray-400 mt-1">それまでの購入申請は従来どおりマネーフォワードから</span>
+                    <span className="block text-2xs text-gray-400 mt-1">それまでの購入申請は従来どおりマネーフォワードから</span>
                   </div>
                 ) : myData.tool && myData.tool.period && typeof myData.tool.remaining === 'number' ? (
                   <div className="mt-1">

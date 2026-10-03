@@ -75,6 +75,28 @@ PNG は原本 SVG から再生成する:
 cd public/brand && qlmanage -t -s 512 -o . dedura-icon.svg && mv dedura-icon.svg.png icon-512.png && sips -z 192 192 icon-512.png --out icon-192.png && sips -z 180 180 icon-512.png --out apple-touch-icon.png && sips -z 32 32 icon-512.png --out favicon-32.png
 ```
 
+## 文字の大きさ（2026-10-03・rem 系に統一）
+
+`text-[10px]` のような **px 指定は使わない**（ブラウザ・OS の「文字を大きく」設定が効かない）。2026-10-03 に 650か所を
+rem 系へまとめて直した（見た目は同じ）。`npm run lint:px` が px 指定を検出する（意図した行は `// px-ok`）。
+
+| 大きさ | クラス | 使いどころ |
+|---|---|---|
+| 10px 相当 | `text-3xs` | 札・出面グリッドのマスの補足だけ。**本文・スタッフ画面には使わない** |
+| 11px 相当 | `text-2xs` | 表の補足・単位 |
+| 12px | `text-xs` | 補足の本文（スタッフ画面の小さい文字はここが下限） |
+| 13px 相当 | `text-[0.8125rem]` | 表の本文 |
+| 14px | `text-sm` | 本文・メニュー |
+| 15px 相当 | `text-[0.9375rem]` | スマホの本文 |
+| 16px | `text-base` | スマホの基本 |
+| 17px 相当 | `text-[1.0625rem]` | スマホの見出し |
+| 18〜20px | `text-lg` / `text-xl` | 見出し |
+| 22〜32px | `text-[1.375rem]` 〜 `text-[2rem]` / `text-3xl` | カードの主数字 |
+
+- 10px 相当より小さい字は使わない（例外はサイドバーの社名行 9px 相当だけ）
+- `text-3xs`・`text-2xs` は行の高さを持たない（親から継承。元の px 指定と同じ振る舞い）
+- 中間の大きさ（13・15・17px 相当）は今後、標準の段（xs/sm/base/lg）へ寄せていく予定。新しい画面では標準の段を使う
+
 ## カード様式（管理画面共通）
 - `bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700`（影は付けない＝2026-09-30）
 - 共通ヘルパー: `lib/styles.ts` の `cardCls()` / `modalContentCls()`

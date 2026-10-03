@@ -91,14 +91,14 @@ function DocCard({ item }: { item: DocItem }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-hibi-navy dark:text-white group-hover:text-blue-600 transition-colors">{item.title}</span>
             {item.badge && (
-              <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">{item.badge}</span>
+              <span className="text-3xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">{item.badge}</span>
             )}
             {!item.internal && (
               <span className="text-gray-300 text-xs">↗</span>
             )}
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{item.desc}</p>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">最終更新: {item.updated}</p>
+          <p className="text-3xs text-gray-400 dark:text-gray-500 mt-1">最終更新: {item.updated}</p>
         </div>
       </div>
     </a>
@@ -171,7 +171,7 @@ export default function DocsPage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold text-hibi-navy dark:text-white">賃金分析</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表のみ</span>
+                <span className="text-3xs px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表のみ</span>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
                 ベトナム人スタッフの在籍年数と時給の分布。入社時の東京都最低賃金を起点にした昇給率、段階ごとの段差、相対的に高い・低い人の判定
@@ -190,7 +190,7 @@ export default function DocsPage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-bold text-hibi-navy dark:text-white">賃金制度（日本人社員）</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表・事業責任者</span>
+                <span className="text-3xs px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800">代表・事業責任者</span>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
                 号俸表・調整の基準・年次改定を1つにまとめた画面。改定の数字がどの表から出ているかをその場で辿れる

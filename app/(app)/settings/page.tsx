@@ -955,7 +955,7 @@ export default function SettingsPage() {
             <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">HFU の会社情報（発行者として印字）</label>
               <CompanyProfileFields value={hfuInvoice.profile} onChange={update => setHfuInvoice(h => ({ ...h, profile: update(h.profile) }))} />
-              <p className="text-[11px] text-gray-400 mt-2">請求書番号の接頭辞は日比建設（{companyProfile.invoicePrefix || 'HC'}）と別にしてください。番号は会社ごとに別々に数えます。</p>
+              <p className="text-2xs text-gray-400 mt-2">請求書番号の接頭辞は日比建設（{companyProfile.invoicePrefix || 'HC'}）と別にしてください。番号は会社ごとに別々に数えます。</p>
             </div>
             <button
               onClick={handleSaveHfuInvoice}
@@ -993,9 +993,9 @@ export default function SettingsPage() {
                 const isSet = !!passwordSet[key]
                 return (
                 <div key={w.id} className="flex items-center gap-3 flex-wrap">
-                  <span className="text-sm font-medium w-28">{w.name}{w.retired && <span className="text-[10px] text-gray-400">（退職）</span>}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${badgeClass}`}>{badgeLabel}</span>
-                  <span className={`text-[11px] w-16 ${change === null ? 'text-red-600' : isSet ? 'text-emerald-600' : 'text-gray-400'}`}>
+                  <span className="text-sm font-medium w-28">{w.name}{w.retired && <span className="text-3xs text-gray-400">（退職）</span>}</span>
+                  <span className={`text-3xs px-2 py-0.5 rounded-full ${badgeClass}`}>{badgeLabel}</span>
+                  <span className={`text-2xs w-16 ${change === null ? 'text-red-600' : isSet ? 'text-emerald-600' : 'text-gray-400'}`}>
                     {change === null ? '削除する' : isSet ? '✓ 設定済み' : '未設定'}
                   </span>
                   <input
@@ -1308,7 +1308,7 @@ export default function SettingsPage() {
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>
                           {badge.label}
                         </span>
-                        <a href="/workers" className="ml-2 text-[10px] text-blue-500 hover:underline">変更</a>
+                        <a href="/workers" className="ml-2 text-3xs text-blue-500 hover:underline">変更</a>
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-500 font-mono">
                         {hasToken ? `${w.token.substring(0, 8)}...` : '—'}

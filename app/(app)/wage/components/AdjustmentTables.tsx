@@ -17,7 +17,7 @@ function Card({ title, note, children }: { title: string; note: string; children
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
       <h3 className="text-sm font-bold mb-1">{title}</h3>
-      <p className="text-[11px] text-gray-500 mb-3 leading-relaxed">{note}</p>
+      <p className="text-2xs text-gray-500 mb-3 leading-relaxed">{note}</p>
       <div className="overflow-x-auto">{children}</div>
     </section>
   )
@@ -46,7 +46,7 @@ export default function AdjustmentTables() {
           <tbody><tr>
             <td className="px-2.5 py-1.5 text-gray-500">ピッチ</td>
             {(['SS', 'S', 'A', 'B', 'C'] as const).map(h => (
-              <td key={h} className={`${td} ${h === 'A' ? 'font-bold' : ''}`}>{HYOGO_PITCH[h]}{h === 'A' && <span className="text-[10px] text-gray-400 ml-1">標準</span>}</td>
+              <td key={h} className={`${td} ${h === 'A' ? 'font-bold' : ''}`}>{HYOGO_PITCH[h]}{h === 'A' && <span className="text-3xs text-gray-400 ml-1">標準</span>}</td>
             ))}
           </tr></tbody>
         </table>
@@ -98,7 +98,7 @@ export default function AdjustmentTables() {
 
       <section className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         <h3 className="text-sm font-bold mb-1">業績（利益）はここには入りません</h3>
-        <p className="text-[11px] text-gray-500 leading-relaxed">
+        <p className="text-2xs text-gray-500 leading-relaxed">
           以前は「利益調整」として号数に反映していましたが、2026年8月に撤廃しました。
           賞与が「原資を業績で決め、等級×評語の点数で配分する」方式のため二重連動になること、
           また号は一度上げると定年まで残るため、単年の業績を恒久的な賃金に変えてしまうことが理由です。
@@ -106,7 +106,7 @@ export default function AdjustmentTables() {
         </p>
       </section>
 
-      <p className="text-[11px] text-gray-400">
+      <p className="text-2xs text-gray-400">
         等級の呼称：{Object.entries(GRADE_LABELS).map(([g, l]) => `${g === 'doko' ? '土工' : g}=${l}`).join(' ／ ')}
       </p>
     </div>

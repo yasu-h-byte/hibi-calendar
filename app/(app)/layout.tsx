@@ -110,7 +110,7 @@ function NoAccess({ homeHref }: { homeHref: string }) {
     <div className="max-w-md mx-auto mt-16 bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-6 text-center space-y-4">
       <h1 className="text-lg font-bold text-gray-900 dark:text-white">この画面は見られません</h1>
       <p className="text-sm text-hibi-sub dark:text-gray-400">この画面を見る権限がありません。必要なときは事務か代表に聞いてください。</p>
-      <a href={homeHref} className="inline-flex items-center h-11 px-5 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light">メニューの最初の画面へ</a>
+      <a href={homeHref} className="inline-flex items-center h-11 px-5 rounded-[10px] bg-hibi-navy text-white text-[0.9375rem] font-bold hover:bg-hibi-light">メニューの最初の画面へ</a>
     </div>
   )
 }

@@ -807,8 +807,8 @@ function MonthlyPageInner() {
                 ))}
               </select>
               <div className="flex items-center gap-1.5">
-                {data?.lockedHibi && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">🔒 日比 締め済</span>}
-                {data?.lockedHfu && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold rounded-full">🔒 HFU 締め済</span>}
+                {data?.lockedHibi && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-3xs font-bold rounded-full">🔒 日比 締め済</span>}
+                {data?.lockedHfu && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-3xs font-bold rounded-full">🔒 HFU 締め済</span>}
               </div>
             </div>
           </div>
@@ -926,7 +926,7 @@ function MonthlyPageInner() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">月次集計・締め</h1>
             {data && (
-              <p className="text-[13px] text-hibi-sub dark:text-gray-400 mt-1">
+              <p className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 mt-1">
                 出勤延べ {fmtNum(data.totals.workDays)}人日 / 外注 {fmtNum(data.totals.subWorkDays)}人工 / 残業 {fmtNum(Math.round(data.workers.reduce((s, w) => s + displayOtHours(w), 0) * 10) / 10)}h
               </p>
             )}
@@ -1435,11 +1435,11 @@ function MonthlyPageInner() {
                           })()}
                         >
                           {w.name}
-                          <span className="ml-1 text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100">🔍</span>
+                          <span className="ml-1 text-3xs text-blue-500 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100">🔍</span>
                         </button>
                         {w.isDispatched && (
                           <span
-                            className="ml-1.5 text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            className="ml-1.5 text-3xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`出向先: ${w.dispatchTo || ''}`}
                           >
                             🔁 出向中
@@ -1447,7 +1447,7 @@ function MonthlyPageInner() {
                         )}
                         {(w.hkDays || 0) > 0 && (
                           <span
-                            className="ml-1.5 text-[10px] bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            className="ml-1.5 text-3xs bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`当月 ${w.hkDays}日 帰国中（所定から除外・無給。欠勤ではありません）`}
                           >
                             ✈ 帰国中{w.hkDays}日
@@ -1457,7 +1457,7 @@ function MonthlyPageInner() {
                             帰国申請の終了日が予定のまま残っているので直すべき（2026-08-20 追加）。 */}
                         {(w.hkEarlyReturnDays || 0) > 0 && (
                           <span
-                            className="ml-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            className="ml-1.5 text-3xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`帰国申請の期間内に出勤打刻が ${w.hkEarlyReturnDays}日 あります（${w.hkEarlyReturnFirstDate} から復帰済み）。給与は打刻どおり計算していますが、休暇管理の帰国申請の「最終帰国日」を実際の復帰前日に直してください。`}
                           >
                             ⚠ 早期復帰{w.hkEarlyReturnDays}日
@@ -1467,7 +1467,7 @@ function MonthlyPageInner() {
                             日曜（法定休日）の夜勤や長時間の通し勤務で発生する。 */}
                         {(w.legalShortfall || 0) > 0 && (
                           <span
-                            className="ml-1.5 text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            className="ml-1.5 text-3xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`夜勤日の法定必要額 ¥${Math.ceil(w.legalRequiredPay || 0).toLocaleString()} に対し支給 ¥${(w.nightShiftPaid || 0).toLocaleString()}。¥${(w.legalShortfall || 0).toLocaleString()} 不足しています（日曜の夜勤 または 長時間の通し勤務）。1.5人工の慣例では法定割増を満たさないケースです。`}
                           >
                             ⚠ 法定不足 ¥{(w.legalShortfall || 0).toLocaleString()}
@@ -1477,7 +1477,7 @@ function MonthlyPageInner() {
                             法律上の割増が要るので知らせる（支給額は変えない） */}
                         {(w.sundayNoRestDays?.length || 0) > 0 && (
                           <span
-                            className="ml-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            className="ml-1.5 text-3xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`${(w.sundayNoRestDays || []).join('・')}日の日曜は、前の6日すべて出勤しています（その週に休みがありません）。この場合の日曜出勤は法定休日の労働になり、35%の割増が法律上必要です。日比では日本人の日曜割増を付けない運用のため、支給額には入れていません。振替休日を取らせるか、キャシュモ・社労士に扱いを確認してください。`}
                           >
                             ⚠ 休みなし週の日曜 {(w.sundayNoRestDays || []).join('・')}日
@@ -1486,7 +1486,7 @@ function MonthlyPageInner() {
                         {/* 2026-09-15: 旧ルール（固定月給）の人は計算の形が違うので、名前の横で分かるようにする */}
                         {w.useOldRules && w.visa !== 'none' && (
                           <span
-                            className="ml-1.5 text-[10px] bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            className="ml-1.5 text-3xs bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`旧ルール（固定月給）で計算しています。\n・所定日数は会社の所定日数（${w.workerPrescribedDays ?? '—'}日）が基準（現場カレンダーではない）\n・現場都合休は一旦1日分を「補償日控除」し、60%を「休業補償」で戻す（正味40%減）\n・最低20日保証の対象外\n・フォン・タンは2026年12月頃に新ルールで契約更新予定、フンは2027年1月退職で旧ルールは終了`}
                           >
                             旧ルール
@@ -1496,7 +1496,7 @@ function MonthlyPageInner() {
                             残業欄だけに長時間が入っていると深夜割増も1.5人工も付かない。 */}
                         {(w.lateNightRiskDays || 0) > 0 && (
                           <span
-                            className="ml-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            className="ml-1.5 text-3xs bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`残業時間から逆算すると22時を超えている日が ${w.lateNightRiskDays}日 ありますが、夜勤として登録されていません。22時以降の労働は夜勤（1.5人工）で登録する運用です。出面画面で確認してください。`}
                           >
                             ⚠ 夜勤未登録{w.lateNightRiskDays}日
@@ -1507,7 +1507,7 @@ function MonthlyPageInner() {
                         {/* 2026-09-30: 「その他」の休みでメモが「60%」「現場」など＝会社の都合の休みの選び間違いの疑い */}
                         {(w.suspectCompRestDays?.length || 0) > 0 && (
                           <span
-                            className="ml-1.5 text-[10px] bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            className="ml-1.5 text-3xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`${(w.suspectCompRestDays || []).join('・')}日は「その他」の休み（欠勤）で登録されていますが、メモが会社都合（60%・現場休みなど）を指しています。会社の都合の休みなら、出面を「0.6補」に直してください。このままだと欠勤として計算されます。`}
                           >
                             ⚠ 会社都合の休み？ {(w.suspectCompRestDays || []).join('・')}日
@@ -1516,7 +1516,7 @@ function MonthlyPageInner() {
                         {/* 2026-09-30: 自分の都合の休みの日に、同じ現場でほかの人が0.6補（人数調整）＝取り違えの疑い */}
                         {(w.restMismatchDays?.length || 0) > 0 && (
                           <span
-                            className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-bold align-middle bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                            className="ml-1.5 text-3xs px-1.5 py-0.5 rounded-full font-bold align-middle bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
                             title={`${(w.restMismatchDays || []).join('・')}日は「自分の都合の休み」ですが、同じ日に同じ現場でほかの人が現場休み（0.6補）です。人数調整で休ませたのなら、出面を「0.6補」に直してください。このままだと欠勤として最低保証から引かれます。`}
                           >
                             ⚠ 休みの区別？ {(w.restMismatchDays || []).join('・')}日
@@ -1529,7 +1529,7 @@ function MonthlyPageInner() {
                         )}
                         {(w.calendarBlankDays || 0) > 0 && (
                           <span
-                            className="ml-1.5 text-[10px] bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
+                            className="ml-1.5 text-3xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold align-middle"
                             title={`配置現場のカレンダーでは稼働日なのに出面に何も記録が無い日が ${w.calendarBlankDays}日 あります。現場都合の休みなら「0.6補」、本人都合なら「欠」を入力してください。空欄のままだと欠勤（100%控除）として計算されます。`}
                           >
                             ⚠ 稼働日未入力{w.calendarBlankDays}日
@@ -1548,7 +1548,7 @@ function MonthlyPageInner() {
                               'bg-amber-100 text-amber-700',
                             ]
                             return (
-                              <span key={i} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${colors[i % colors.length]}`}>
+                              <span key={i} className={`text-3xs px-1.5 py-0.5 rounded-full font-medium ${colors[i % colors.length]}`}>
                                 {(() => { const nm = data?.siteNames?.[s] || s; return nm.slice(0, 2) })()}
                               </span>
                             )
@@ -1558,12 +1558,12 @@ function MonthlyPageInner() {
                       <td className="px-3 py-2.5 text-right tabular-nums">
                         <div>{w.workAll % 1 !== 0 ? w.workAll.toFixed(1) : w.workAll}</div>
                         {hasComp && (
-                          <div className="text-[10px] text-gray-400">うち補{(compDays * 0.6).toFixed(1)}</div>
+                          <div className="text-3xs text-gray-400">うち補{(compDays * 0.6).toFixed(1)}</div>
                         )}
                         {/* 夜勤: 出勤日数と人工がズレるため人工を併記（夜勤1回=1.5人工） */}
                         {(w.nightShiftDays || 0) > 0 && (
                           <div
-                            className="text-[10px] text-indigo-600 font-bold leading-tight"
+                            className="text-3xs text-indigo-600 font-bold leading-tight"
                             title={`夜勤 ${w.nightShiftDays}回（実労働 ${fmtNum(w.nightShiftHours || 0)}h）。人工 ${w.manDays} 人工で支給・元請け請求`}
                           >
                             夜勤{w.nightShiftDays} / {w.manDays}人工
@@ -1578,7 +1578,7 @@ function MonthlyPageInner() {
                           <span title={displayLegalOtHours(w) > 0 ? `所定外 ${fmtNum(displayOtHours(w))}h のうち、法定外(割増対象) ${fmtNum(displayLegalOtHours(w))}h` : undefined}>
                             {fmtNum(displayOtHours(w))}
                             {displayLegalOtHours(w) > 0 && (
-                              <span className="block text-[10px] text-gray-400 leading-tight">法定外 {fmtNum(displayLegalOtHours(w))}</span>
+                              <span className="block text-3xs text-gray-400 leading-tight">法定外 {fmtNum(displayLegalOtHours(w))}</span>
                             )}
                           </span>
                         ) : '—'}
@@ -1587,7 +1587,7 @@ function MonthlyPageInner() {
                         {(w.salary || 0) > 0 ? (
                           <span title="完全月給（出勤日数に関わらず固定）">
                             {fmtYen(w.salary || 0)}
-                            <span className="ml-1 text-[10px] text-purple-600 dark:text-purple-300">月給</span>
+                            <span className="ml-1 text-3xs text-purple-600 dark:text-purple-300">月給</span>
                           </span>
                         ) : (
                           fmtYen(w.rate)
@@ -1598,7 +1598,7 @@ function MonthlyPageInner() {
                           <div>
                             <div className="text-purple-600 line-through text-xs text-gray-400">{fmtYen(Math.round(w.totalCost))}</div>
                             <div className="text-purple-700 font-bold">出向控除</div>
-                            <div className="text-[10px] text-purple-500">-{fmtYen(Math.round(w.dispatchDeduction || w.totalCost))}</div>
+                            <div className="text-3xs text-purple-500">-{fmtYen(Math.round(w.dispatchDeduction || w.totalCost))}</div>
                           </div>
                         ) : (
                           fmtYen(Math.round(w.totalCost))
@@ -1612,10 +1612,10 @@ function MonthlyPageInner() {
                             {/* 2026-09-11: 奥寺さん質問対応。実労働時間明細の「欠勤日数」（欠の記録のみ）と
                                   ここの日数（20日枠の不足＝欠＋補償日＋その他不足）が食い違って見えるため内訳を併記 */}
                             {w.useOldRules && w.visa !== 'none' && (
-                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">所定{w.workerPrescribedDays ?? '—'}日基準</div>
+                              <div className="text-3xs text-gray-400 font-normal whitespace-nowrap">所定{w.workerPrescribedDays ?? '—'}日基準</div>
                             )}
                             {!w.useOldRules && absentDays > 0 && ((w.restDays || 0) > 0 || compDays > 0) && (
-                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">
+                              <div className="text-3xs text-gray-400 font-normal whitespace-nowrap">
                                 欠{w.restDays || 0}{compDays > 0 ? `・補${compDays}` : ''}
                                 {absentDays - (w.restDays || 0) - compDays > 0 ? `・他${absentDays - (w.restDays || 0) - compDays}` : ''}
                               </div>
@@ -1625,7 +1625,7 @@ function MonthlyPageInner() {
                             {absentDeduction > 0 ? `-${fmtYen(absentDeduction)}` : '—'}
                             {/* 旧ルール: 本人欠勤の控除と補償日控除の合計なので内訳を出す（2026-09-15） */}
                             {w.useOldRules && w.visa !== 'none' && absentDeduction > 0 && (
-                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">
+                              <div className="text-3xs text-gray-400 font-normal whitespace-nowrap">
                                 欠勤{fmtYen(w.absentDeduction || 0)}＋補償日{fmtYen(w.compBaseDeduction || 0)}
                               </div>
                             )}
@@ -1644,7 +1644,7 @@ function MonthlyPageInner() {
                             {w.visa !== 'none' && (w.additionalAllowance || 0) > 0 ? fmtYen(w.additionalAllowance!) : '—'}
                             {/* 旧ルールの行はこの列に休業補償（補償日×日給×60%）が入る（2026-09-15 表示の明確化） */}
                             {w.useOldRules && w.visa !== 'none' && (w.additionalAllowance || 0) > 0 && (
-                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">休業補償（補償日×60%）</div>
+                              <div className="text-3xs text-gray-400 font-normal whitespace-nowrap">休業補償（補償日×60%）</div>
                             )}
                           </td>
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.paidLeaveAllowance || 0) > 0 ? 'text-violet-600' : 'text-gray-400'}`}
@@ -1696,7 +1696,7 @@ function MonthlyPageInner() {
                           <td className={`px-3 py-2.5 text-right tabular-nums bg-green-50/50 ${(w.absentDeduction || 0) > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                             {w.visa !== 'none' && (w.absentDeduction || 0) > 0 ? `-${fmtYen(w.absentDeduction!)}` : '—'}
                             {w.useOldRules && w.visa !== 'none' && (w.absentDeduction || 0) > 0 && (
-                              <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">本人欠勤{w.absence}日分</div>
+                              <div className="text-3xs text-gray-400 font-normal whitespace-nowrap">本人欠勤{w.absence}日分</div>
                             )}
                           </td>
                           {showCompBaseDeduction && (
@@ -1729,7 +1729,7 @@ function MonthlyPageInner() {
                     {workerTotals.dispatchDeduction > 0 ? (
                       <div>
                         <div>{fmtYen(Math.round(workerTotals.totalCost))}</div>
-                        <div className="text-[10px] text-purple-600 font-normal">
+                        <div className="text-3xs text-purple-600 font-normal">
                           出向控除 -{fmtYen(Math.round(workerTotals.dispatchDeduction))}
                         </div>
                       </div>

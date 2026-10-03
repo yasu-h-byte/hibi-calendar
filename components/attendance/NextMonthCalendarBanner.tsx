@@ -64,7 +64,7 @@ export default function NextMonthCalendarBanner({ check }: Props) {
       <div className="space-y-1">
         {redSites.map(s => (
           <div key={s.siteId} className="flex items-center gap-2 text-xs text-red-700 flex-wrap">
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-200 text-red-800">
+            <span className="px-1.5 py-0.5 rounded-full text-3xs font-bold bg-red-200 text-red-800">
               {!s.status ? '未作成' : s.status === 'rejected' ? '差戻し' : '作成中'}
             </span>
             <span className="font-medium">{s.siteName}</span>
@@ -72,11 +72,11 @@ export default function NextMonthCalendarBanner({ check }: Props) {
         ))}
         {yellowSites.map(s => (
           <div key={s.siteId} className="flex items-center gap-2 text-xs text-yellow-700 flex-wrap">
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-yellow-200 text-yellow-800">
+            <span className="px-1.5 py-0.5 rounded-full text-3xs font-bold bg-yellow-200 text-yellow-800">
               承認待ち
             </span>
             <span className="font-medium">{s.siteName}</span>
-            <span className="text-[10px] text-yellow-600">職長提出済・最終承認待ち</span>
+            <span className="text-3xs text-yellow-600">職長提出済・最終承認待ち</span>
           </div>
         ))}
       </div>

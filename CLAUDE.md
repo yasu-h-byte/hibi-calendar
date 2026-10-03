@@ -52,6 +52,8 @@ Tailwind は `tailwind.config.ts` の `content` に列挙したディレクト�
   （`utils/`, `src/` 等）を作ってそこに置く場合は、**同時に `content` へ追加する**
 - 動的なクラス組み立て（`` `bg-${color}-500` ``）は grep に引っかからないので常に禁止。
   必ず完全なクラス名を文字列リテラルで書く
+- 文字の大きさは **px で指定しない**（`text-[10px]` 禁止）。rem 系（`text-3xs`/`text-2xs`/`text-xs`/`text-sm`…）を使う。
+  10px 相当より小さい字は使わない。`npm run lint:px` が検出する。表は [docs/ui-design.md](docs/ui-design.md) の「文字の大きさ」節
 
 **2026-07 有給消化バー障害の記録**
 

@@ -206,7 +206,7 @@ export default function AccessLogPage() {
                   <tr key={r.workerId} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium">{r.workerName}</td>
                     <td className="text-center px-2">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${jobBadgeData.cls}`}>
+                      <span className={`text-3xs px-1.5 py-0.5 rounded-full font-medium ${jobBadgeData.cls}`}>
                         {jobBadgeData.label}
                       </span>
                     </td>
@@ -217,7 +217,7 @@ export default function AccessLogPage() {
                       {formatDateTime(r.lastAccessAt)}
                     </td>
                     <td className="text-center px-2">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${badge.cls}`}>
+                      <span className={`text-3xs px-1.5 py-0.5 rounded-full font-bold ${badge.cls}`}>
                         {badge.icon} {badge.label}
                       </span>
                     </td>
