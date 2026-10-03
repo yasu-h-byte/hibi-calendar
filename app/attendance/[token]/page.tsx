@@ -3,7 +3,7 @@
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 // 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { confirmDanger } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
@@ -435,9 +435,9 @@ export default function StaffAttendancePage() {
   // 過去日編集モーダルの対象一覧。
   //   先頭5件は「最近5日」リストと同じ index。6件目以降は督促バナー専用
   //   （5日より前の未入力日をチップから直接開くため・2026-08-28 追加）
-  const allPastDays = data
+  const allPastDays = useMemo(() => data
     ? [...data.pastDays, ...(data.missingDays || []).filter(md => md.dayOffset > 5)]
-    : []
+    : [], [data])
 
   // Initialize past day time state when edit modal opens
   useEffect(() => {
@@ -459,7 +459,7 @@ export default function StaffAttendancePage() {
         setPastBreak3(ws.afternoonBreak.enabled)
       }
     }
-  }, [editingPast, data])
+  }, [editingPast, data, allPastDays])
 
   useEffect(() => {
     if (showLeaveModal) {

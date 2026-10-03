@@ -11,7 +11,7 @@
  *
  * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 import type { AttEntry, Worker, DayType } from '../types'
@@ -53,8 +53,8 @@ export default function BulkEntryModal({
   const [keepExisting, setKeepExisting] = useState(true)
 
   const y = Number(ym.slice(0, 4)), m = Number(ym.slice(4, 6))
-  const dow = (d: number) => new Date(y, m - 1, d).getDay()
-  const isWorkDay = (d: number) => calendarDays ? calendarDays[String(d)] === 'work' : dow(d) !== 0
+  const dow = useCallback((d: number) => new Date(y, m - 1, d).getDay(), [y, m])
+  const isWorkDay = useCallback((d: number) => calendarDays ? calendarDays[String(d)] === 'work' : dow(d) !== 0, [calendarDays, dow])
   const isForeign = (w: Worker) => !!w.visa && w.visa !== 'none' && w.visa !== ''
 
   const plan = useMemo(() => {
@@ -99,7 +99,7 @@ export default function BulkEntryModal({
       }
     }
     return { items, skipLocked, skipExisting, skipForeignWork, skipAbsent, skipProtected, overwriteStaff, skipRestDay }
-  }, [workers, who, days, kind, st, et, breaks, ot, keepExisting, entries, lockedDays, timeBasedFor, homeLeaves, ym, workSchedule])
+  }, [workers, who, days, kind, st, et, breaks, ot, keepExisting, entries, lockedDays, timeBasedFor, homeLeaves, ym, workSchedule, isWorkDay])
 
   if (!open) return null
   const toggle = <T,>(set: Set<T>, v: T) => { const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); return n }

@@ -463,7 +463,7 @@ export default function AttendanceGridPage() {
       if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
       saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 5000)
     }
-  }, [password, data, fetchData])
+  }, [password, data, fetchData, userRole])
 
   const scheduleSave = useCallback((key: string, save: PendingSave) => {
     pendingSaves.current.set(key, save)
@@ -479,8 +479,9 @@ export default function AttendanceGridPage() {
   const flushRef = useRef(flushSaves)
   useEffect(() => { flushRef.current = flushSaves }, [flushSaves])
   useEffect(() => {
+    const pending = pendingSaves.current   // Map は作り直さないので、閉じるときも同じものを見る
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (pendingSaves.current.size === 0) return
+      if (pending.size === 0) return
       e.preventDefault()
       e.returnValue = ''
     }
@@ -489,7 +490,7 @@ export default function AttendanceGridPage() {
       window.removeEventListener('beforeunload', onBeforeUnload)
       if (debounceTimer.current) clearTimeout(debounceTimer.current)
       if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
-      if (pendingSaves.current.size > 0) void flushRef.current({ keepalive: true })
+      if (pending.size > 0) void flushRef.current({ keepalive: true })
     }
   }, [])
 
@@ -599,7 +600,7 @@ export default function AttendanceGridPage() {
     scheduleSave(`w-${workerId}-${day}`, {
       type: 'worker', id: workerId, day, entry,
     })
-  }, [scheduleSave, workerEntries, data?.workers])
+  }, [scheduleSave, confirmOverwriteStaffEntry])
 
   const handleOtChange = useCallback((workerId: string, day: number, otValue: string) => {
     const ot = parseFloat(otValue) || 0
@@ -674,7 +675,7 @@ export default function AttendanceGridPage() {
     scheduleSave(`w-${workerId}-${day}`, {
       type: 'worker', id: workerId, day, entry,
     })
-  }, [scheduleSave])
+  }, [scheduleSave, confirmOverwriteStaffEntry])
 
   /** 現場の休憩設定（残業h を保存時と同じ決まりで数える・calcOvertimeHours） */
   const siteWs = data?.site.workSchedule
