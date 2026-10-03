@@ -8,7 +8,7 @@
  *   alert(成功)   → notify.success('保存しました')
  *   alert(不備)   → 欄のすぐ下に <FieldError>（components/ui/PageParts.tsx）
  *
- * 置き換えが済んだ場所（CONVERTED）だけ違反にする。画面を置き換えたらここに足す。
+ * 2026-10-03 に全画面（179か所）の置き換えが終わり、以後は app/・components/・lib/ のどこでも違反にする。
  * 落ちる先として意図して使う行には `dialog-ok` と書く（lib/confirm-dialog.ts・lib/notify.ts 等）。
  * 使い方: npm run lint:dialog（違反があれば終了コード 1）。全体の残りの数も最後に出す
  */
@@ -24,42 +24,8 @@ const SKIP_DIRS = new Set(['node_modules', '.next', '.git', '.claude', 'dist', '
 const TARGET_DIRS = ['app', 'components', 'lib']
 const TARGET_EXTS = new Set(['.ts', '.tsx'])
 
-/** 置き換え済み（ここでは違反にする）。画面を置き換えるたびに足す */
-const CONVERTED = [
-  // ── 土台②（2026-10-03）
-  'app/(app)/leave/',
-  'app/(app)/attendance/',
-  'components/leave/',
-  'components/attendance/',
-  'components/ui/',
-  'components/Toast.tsx',
-  'components/StaffHeader.tsx',
-  // ── 管理画面（2026-10-03 波1）
-  'app/(app)/calendar/',
-  'app/(app)/monthly/',
-  'app/(app)/workers/',
-  'app/(app)/sites/',
-  'app/(app)/subcons/',
-  'app/(app)/tool-budget/',
-  'app/(app)/staff-docs/',
-  'app/(app)/dashboard/',
-  'app/(app)/cost/',
-  'app/(app)/settings/',
-  'app/(app)/debug-att/',
-  'app/(app)/evaluation/',
-  'app/(app)/wage/',
-  'app/(app)/peer-invoice/',
-  'app/(app)/paper-invoice/',
-  'components/NotificationBell.tsx',
-  'components/monthly/',
-
-  // ── スタッフ画面（2026-10-03 波1）
-  'app/attendance/[token]/',
-  'app/attendance/foreman/[token]/',
-  'app/mypage/[token]/',
-  'components/mypage/',
-  'components/AttendanceActionBar.tsx',
-]
+/** 2026-10-03 に全画面の置き換えが終わった。以後はどこでも違反にする */
+const CONVERTED = ['app/', 'components/', 'lib/']
 
 const RE = /(^|[^.\w])(window\.)?(confirm|alert|prompt)\(/
 

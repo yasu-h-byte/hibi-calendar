@@ -1,7 +1,11 @@
 'use client'
 
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
+import { confirmDanger } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { AttendanceEntry, AttendanceStatus, isTimeBasedMobile, isTimeBasedEntry } from '@/types'
 import CalendarApprovalModal, { type PendingCalendarData } from '@/components/attendance/CalendarApprovalModal'
 import LeaveRequestModal from '@/components/attendance/LeaveRequestModal'
@@ -26,6 +30,12 @@ interface SiteWorkScheduleConfig {
   lunchBreak: SiteBreakConfig
   afternoonBreak: SiteBreakConfig
 }
+/** 失敗の帯の文面（スタッフ向けは日越並記。lib/notify.ts の定型は日本語だけなのでここで並記にする） */
+const BI_SERVER_REFUSED = 'サーバが受け付けませんでした / Máy chủ không chấp nhận'
+const BI_NET_FAILED = '通信がとぎれました。電波のよい所でもう一度お試しください。\nMất kết nối. Hãy thử lại ở nơi có sóng tốt.'
+const BI_CANCEL_FAILED = '取り消しできませんでした / Không hủy được'
+const BI_SAVE_FAILED = '保存できませんでした / Không lưu được'
+
 const DEFAULT_WORK_SCHEDULE: SiteWorkScheduleConfig = {
   startTime: '08:00',
   endTime: '17:00',
@@ -390,7 +400,17 @@ export default function StaffAttendancePage() {
 
   // 有給申請の取り消し（pendingのみ可能）
   const cancelLeaveRequest = async (requestId: string) => {
-    if (!confirm('この申請を取り消してよろしいですか？\nĐơn này có chắc chắn hủy không?')) return
+    if (!(await confirmDanger({
+      title: 'この申請を取り消しますか？',
+      confirmLabel: '取り消す',
+      cancelLabel: 'やめる',
+      vi: {
+        title: 'Bạn có chắc muốn hủy đơn này không?',
+        description: 'Không thể hoàn tác.',
+        confirmLabel: 'Hủy đơn',
+        cancelLabel: 'Không',
+      },
+    }))) return
     try {
       const res = await fetch('/api/leave-request', {
         method: 'POST',
@@ -399,12 +419,12 @@ export default function StaffAttendancePage() {
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        alert(errData.error || '取り消しに失敗しました / Hủy thất bại')
+        notify.error(BI_CANCEL_FAILED, errData.error || BI_SERVER_REFUSED)
         return
       }
       fetchLeaveRequests()
     } catch {
-      alert('つうしん エラー / Lỗi kết nối')
+      notify.error(biLine(STAFF_TEXT.connError), BI_NET_FAILED)
     }
   }
 
@@ -466,7 +486,17 @@ export default function StaffAttendancePage() {
 
   // 帰国申請の取り消し（pendingのみ可能）
   const cancelHomeLongLeave = async (requestId: string) => {
-    if (!confirm('この帰国申請を取り消してよろしいですか？\nĐơn xin về nước này có chắc chắn hủy không?')) return
+    if (!(await confirmDanger({
+      title: 'この帰国申請を取り消しますか？',
+      confirmLabel: '取り消す',
+      cancelLabel: 'やめる',
+      vi: {
+        title: 'Bạn có chắc muốn hủy đơn xin về nước này không?',
+        description: 'Không thể hoàn tác.',
+        confirmLabel: 'Hủy đơn',
+        cancelLabel: 'Không',
+      },
+    }))) return
     try {
       const res = await fetch('/api/home-long-leave', {
         method: 'POST',
@@ -475,12 +505,12 @@ export default function StaffAttendancePage() {
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        alert(errData.error || '取り消しに失敗しました / Hủy thất bại')
+        notify.error(BI_CANCEL_FAILED, errData.error || BI_SERVER_REFUSED)
         return
       }
       fetchHlRequests()
     } catch {
-      alert('つうしん エラー / Lỗi kết nối')
+      notify.error(biLine(STAFF_TEXT.connError), BI_NET_FAILED)
     }
   }
 
@@ -833,11 +863,11 @@ export default function StaffAttendancePage() {
       } else {
         const d = await res.json().catch(() => ({}))
         // 2026-08-27 修正: setError のバナーはモーダル(z-50)の裏に隠れて3秒で消え、
-        //   スタッフに失敗が伝わらなかった → モーダルの前面に alert で表示し、開いたまま残す
-        alert(d.error || biLine(STAFF_TEXT.error))
+        //   スタッフに失敗が伝わらなかった → モーダルより前（z-[100]）の帯で、閉じるまで残す
+        notify.error(BI_SAVE_FAILED, d.error || BI_SERVER_REFUSED)
       }
     } catch {
-      alert(biLine(STAFF_TEXT.connError))
+      notify.error(biLine(STAFF_TEXT.connError), BI_NET_FAILED)
     } finally {
       setSaving(false)
     }
