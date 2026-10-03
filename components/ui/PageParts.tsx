@@ -22,9 +22,9 @@ export function PageHeader({ group, title, sub, actions }: {
   return (
     <div className="flex items-center justify-between flex-wrap gap-3">
       <div>
-        {group && <div className="text-[13px] text-hibi-sub dark:text-gray-400">{group}</div>}
+        {group && <div className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">{group}</div>}
         <h1 className={`text-2xl font-bold text-gray-900 dark:text-white ${group ? 'mt-1' : ''}`}>{title}</h1>
-        {sub && <p className="text-[13px] text-hibi-sub dark:text-gray-400 mt-1">{sub}</p>}
+        {sub && <p className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 mt-1">{sub}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 flex-wrap">{actions}</div>}
     </div>
@@ -69,13 +69,13 @@ export function UnderlineTabs<K extends string>({ tabs, active, onChange, label 
       {tabs.map(tab => (
         <button key={tab.key} onClick={() => onChange(tab.key)}
           aria-current={active === tab.key ? 'page' : undefined}
-          className={`px-4 py-2.5 text-[15px] whitespace-nowrap flex items-center gap-1.5 border-b-[3px] -mb-px transition ${
+          className={`px-4 py-2.5 text-[0.9375rem] whitespace-nowrap flex items-center gap-1.5 border-b-[3px] -mb-px transition ${
             active === tab.key
               ? 'border-hibi-navy text-hibi-navy font-bold dark:border-blue-400 dark:text-white'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
           }`}>
           {tab.label}
-          {tab.badge ? <span className="bg-red-600 text-white text-[11px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{tab.badge}</span> : null}
+          {tab.badge ? <span className="bg-red-600 text-white text-2xs font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{tab.badge}</span> : null}
         </button>
       ))}
     </nav>
@@ -92,7 +92,7 @@ export function Segment<K extends string>({ value, onChange, items }: {
     <div className="flex gap-1 p-1 rounded-[10px] bg-gray-200/70 dark:bg-gray-800 w-fit">
       {items.map(([k, label]) => (
         <button key={k} onClick={() => onChange(k)} aria-pressed={value === k}
-          className={`h-8 px-3.5 rounded-lg text-[13px] whitespace-nowrap transition ${
+          className={`h-8 px-3.5 rounded-lg text-[0.8125rem] whitespace-nowrap transition ${
             value === k
               ? 'bg-white dark:bg-gray-700 text-hibi-navy dark:text-white font-bold shadow-sm'
               : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -153,12 +153,12 @@ export function TodoCard({ icon, tone, title, big, sub, action, onClick, active 
         <span className={`w-8 h-8 rounded-[9px] flex items-center justify-center ${t.chip}`}>
           <Icon name={tone === 'ok' ? 'check' : icon} size={17} />
         </span>
-        <span className={`text-[13px] font-bold ${t.title}`}>{title}</span>
+        <span className={`text-[0.8125rem] font-bold ${t.title}`}>{title}</span>
       </div>
       <div className={`text-xl font-bold ${tone === 'ok' ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>{big}</div>
       <div className="text-xs text-hibi-sub dark:text-gray-400 leading-relaxed line-clamp-2">{sub}</div>
       {action && (
-        <div className="mt-auto pt-1 text-[13px] font-bold text-hibi-navy dark:text-blue-300 flex items-center gap-1">
+        <div className="mt-auto pt-1 text-[0.8125rem] font-bold text-hibi-navy dark:text-blue-300 flex items-center gap-1">
           {action}<Icon name="chevronRight" size={14} />
         </div>
       )}
@@ -193,7 +193,7 @@ export function TodoStrip({ icon, tone, title, big, onClick, label }: {
       </span>
       <span className="flex flex-col min-w-0 flex-1 text-left">
         <span className={`text-xs font-bold ${t.title}`}>{title}</span>
-        <span className={`text-[17px] font-bold leading-tight ${tone === 'ok' ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>{big}</span>
+        <span className={`text-[1.0625rem] font-bold leading-tight ${tone === 'ok' ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>{big}</span>
       </span>
       {onClick && <Icon name="chevronRight" size={16} className="text-hibi-navy dark:text-blue-300 shrink-0" />}
     </>
@@ -218,7 +218,7 @@ export type ChipTone = keyof typeof CHIP_TONE
 
 /** 名前の横に付ける小さな印（要確認・帰国中・旧ルールなど）。red/amber は「要確認」の色 */
 export function Chip({ tone, children, title }: { tone: ChipTone; children: ReactNode; title?: string }) {
-  return <span title={title} className={`px-1.5 py-0.5 rounded text-[11px] font-bold whitespace-nowrap ${CHIP_TONE[tone]}`}>{children}</span>
+  return <span title={title} className={`px-1.5 py-0.5 rounded text-2xs font-bold whitespace-nowrap ${CHIP_TONE[tone]}`}>{children}</span>
 }
 
 /** 金額・日数の内訳の札（「有給手当 12,000」）。0 の項目は呼び出し側で出さない */

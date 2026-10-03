@@ -55,19 +55,19 @@ export default function UpcomingRetirementsBanner({ retirements }: Props) {
           const visa = visaBadge(r.visa)
           return (
             <div key={i} className={`flex items-center gap-2 text-xs flex-wrap ${isUrgent ? 'text-red-700' : 'text-orange-700'}`}>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              <span className={`px-1.5 py-0.5 rounded-full text-3xs font-bold ${
                 isUrgent ? 'bg-red-200 text-red-800' : 'bg-orange-100 text-orange-700'
               }`}>
                 {`あと${diffDays}日`}
               </span>
               <span className="font-medium">{r.name}</span>
               {visa && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${visa.cls}`}>
+                <span className={`text-3xs px-1.5 py-0.5 rounded-full ${visa.cls}`}>
                   {visa.label}
                 </span>
               )}
               {!visa && (
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${r.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                <span className={`text-3xs px-1.5 py-0.5 rounded-full ${r.org === 'hfu' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
                   {r.org === 'hfu' ? 'HFU' : '日比'}
                 </span>
               )}

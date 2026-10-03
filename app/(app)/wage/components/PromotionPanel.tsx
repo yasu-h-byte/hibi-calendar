@@ -145,7 +145,7 @@ export default function PromotionPanel() {
           <div>
             <label className="text-xs text-gray-500 block mb-1">当期ピッチの加算</label>
             <input type="number" min={0} step={1} value={addPitch} onChange={e => setAddPitch(e.target.value)} className={`${input} tabular-nums`} />
-            <p className="text-[10px] text-gray-400 mt-1">年次改定と同時なら合計ピッチを入れる</p>
+            <p className="text-3xs text-gray-400 mt-1">年次改定と同時なら合計ピッチを入れる</p>
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">昇格日</label>
@@ -180,7 +180,7 @@ export default function PromotionPanel() {
                 <span className="text-green-700 dark:text-green-400 font-bold">+{yen(preview.newDaily - target.daily)}</span>
               )}
             </div>
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-2xs text-gray-500 mt-1">
               読み替え先は {preview.readStep}号（現在の日額を上回る最初の号）
               {pitch > 0 && <>。そこに当期 {pitch} ピッチを加算して {preview.newStep}号</>}。
               上限は {yen(capDaily(toGrade as JpGrade))}。
@@ -224,7 +224,7 @@ export default function PromotionPanel() {
                     <td className={`${td} text-right tabular-nums whitespace-nowrap`}>
                       {yen(r.toDaily)}
                       {r.toDaily > r.fromDaily && (
-                        <div className="text-[10px] text-green-700 dark:text-green-400">+{yen(r.toDaily - r.fromDaily)}</div>
+                        <div className="text-3xs text-green-700 dark:text-green-400">+{yen(r.toDaily - r.fromDaily)}</div>
                       )}
                     </td>
                     <td className={`${td} text-gray-600 dark:text-gray-300`}>{r.reason}</td>

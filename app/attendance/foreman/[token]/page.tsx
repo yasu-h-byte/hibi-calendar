@@ -552,7 +552,7 @@ export default function ForemanAttendancePage() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium text-gray-800 truncate">{w.name}</div>
-                      <div className="text-[11px] text-orange-700 mt-0.5 truncate">
+                      <div className="text-2xs text-orange-700 mt-0.5 truncate">
                         ⚠️ {misplaced.map(m => m.siteName).join('・')} で入力されています
                       </div>
                     </div>
@@ -584,7 +584,7 @@ export default function ForemanAttendancePage() {
                   <span className="text-sm font-medium text-gray-800 truncate min-w-0">
                     {w.name}
                     {w.offRoster && (
-                      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold align-middle"
+                      <span className="ml-1.5 text-3xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold align-middle"
                         title="この現場の配置に入っていない人の入力です。現場の選び間違いなら、正しい現場へ移してもらってください">配置外</span>
                     )}
                   </span>
@@ -616,7 +616,7 @@ export default function ForemanAttendancePage() {
           <div className="text-sm text-gray-500 mb-1 font-bold">
             {data.date.month}月の確認状況
           </div>
-          <div className="text-[11px] text-gray-400 mb-3">
+          <div className="text-2xs text-gray-400 mb-3">
             日付をタップするとその日を開けます
           </div>
           <div className="grid grid-cols-7 gap-1.5">
@@ -642,9 +642,9 @@ export default function ForemanAttendancePage() {
                 >
                   <div className="text-sm font-bold tabular-nums leading-tight">{o.day}</div>
                   {/* 印は 10px 以上（2026-10-02 総合点検。旧: 9px / 8px） */}
-                  <div className="text-[10px] font-bold leading-tight whitespace-nowrap overflow-hidden">{mark}</div>
+                  <div className="text-3xs font-bold leading-tight whitespace-nowrap overflow-hidden">{mark}</div>
                   {(o.offRosterNames?.length || 0) > 0 && (
-                    <div className="text-[10px] font-bold leading-tight text-amber-700" title={`配置外の入力: ${o.offRosterNames!.join('、')}`}>配置外</div>
+                    <div className="text-3xs font-bold leading-tight text-amber-700" title={`配置外の入力: ${o.offRosterNames!.join('、')}`}>配置外</div>
                   )}
                 </button>
               )

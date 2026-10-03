@@ -189,7 +189,7 @@ export default function ToolBudgetPage() {
           個別に予算を変更した期間はそちらが優先（従来どおり） */}
       {showBudgetSettings && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-5 space-y-3">
-          <div className="text-[17px] font-bold text-gray-900 dark:text-white">区分ごとの予算（年間の既定額）</div>
+          <div className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">区分ごとの予算（年間の既定額）</div>
           <p className="text-xs text-gray-500">
             空欄の区分は「既定額」を使います。個別に予算を変更したスタッフはそちらが優先されます。
             変更は<b>次に開く期間や未設定の期間</b>から効きます（設定済みの期間の予算は変わりません）。
@@ -270,12 +270,12 @@ export default function ToolBudgetPage() {
       ) : (
         <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
           <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
-            <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">一人ずつ</h2>
+            <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">一人ずつ</h2>
             <Segment value={org} onChange={v => { setOrg(v); setListFilter('all') }} items={[
               ['all', `全員 ${workers.length}`], ['hibi', `日比建設 ${workers.filter(w => w.org === 'hibi').length}`], ['hfu', `HFU ${workers.filter(w => w.org === 'hfu').length}`],
             ]} />
             {listFilter !== 'all' && (
-              <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+              <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[0.8125rem] font-bold">
                 {TB_FILTER_LABEL[listFilter]}だけ表示中 ×
               </button>
             )}
@@ -302,10 +302,10 @@ export default function ToolBudgetPage() {
                       className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${TB_COLS} gap-x-3 gap-y-1.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums`}>
                       <span className="col-span-2 lg:col-span-1 flex items-center gap-2.5 min-w-0">
                         <WorkerAvatar name={w.workerName} src={photos[String(w.workerId)]} size={36} />
-                        <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{w.workerName}</span>
+                        <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{w.workerName}</span>
                       </span>
                       <span><Chip tone={visaLabel(w.visa) ? 'gray' : 'blue'}>{visaLabel(w.visa) || '日本人'}</Chip></span>
-                      <span className="text-[13px] text-hibi-sub dark:text-gray-400">
+                      <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">
                         {w.period ? formatPeriod(w.period) : <Chip tone="amber">期間が決まっていない</Chip>}
                         {w.notStarted && <span className="ml-1"><Chip tone="amber">開始前</Chip></span>}
                       </span>
@@ -347,8 +347,8 @@ export default function ToolBudgetPage() {
 function TbStat({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1">
-      <span className="text-[13px] text-hibi-sub dark:text-gray-400">{label}</span>
-      <span className="text-[26px] font-bold tabular-nums text-gray-900 dark:text-white">{value}</span>
+      <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">{label}</span>
+      <span className="text-[1.625rem] font-bold tabular-nums text-gray-900 dark:text-white">{value}</span>
       <span className="text-xs text-hibi-sub dark:text-gray-400">{sub}</span>
     </div>
   )
@@ -529,8 +529,8 @@ function WorkerModal({
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-hibi-line dark:border-gray-700 px-6 py-5 flex items-start gap-3 z-10">
           <div className="flex-1 min-w-0">
-            <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{worker.workerName}</h2>
-            <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+            <h2 className="text-[1.375rem] font-bold text-gray-900 dark:text-white truncate">{worker.workerName}</h2>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[0.8125rem] text-hibi-sub dark:text-gray-400">
               <Chip tone={visaLabel(worker.visa) ? 'gray' : 'blue'}>{visaLabel(worker.visa) || '日本人'}</Chip>
               {worker.period && <span>期間 {formatPeriodFull(worker.period)}</span>}
               {worker.remaining < 0 && <Chip tone="red">予算を ¥{Math.abs(worker.remaining).toLocaleString()} こえています</Chip>}
@@ -549,7 +549,7 @@ function WorkerModal({
             <div className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-3 border border-gray-200 dark:border-gray-600 dark:text-gray-200">
               <div className="flex items-end gap-2 flex-wrap">
                 <div>
-                  <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">起点日（1年サイクルの始まり）</label>
+                  <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">起点日（1年サイクルの始まり）</label>
                   <input
                     type="date"
                     value={anchor}
@@ -565,7 +565,7 @@ function WorkerModal({
                 </button>
                 {anchorSaved && <span className="text-xs text-green-600 dark:text-green-400 font-bold">✓ 保存しました</span>}
               </div>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-2">
+              <p className="text-2xs text-gray-500 dark:text-gray-400 mt-2">
                 起点日を設定すると、その日から1年ごとに自動でサイクルが切り替わります（例: 5/14 → 翌5/13まで）。<br />
                 {worker.period && <span>現在の期間: <strong>{formatPeriodFull(worker.period)}</strong></span>}
               </p>
@@ -599,7 +599,7 @@ function WorkerModal({
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 text-right">
+                    <div className="text-2xs text-gray-500 dark:text-gray-400 mt-1 text-right">
                       {pct.toFixed(0)}% 使用中 / 予算 ¥{worker.budget.toLocaleString()}
                       {(worker.carry ?? 0) !== 0 && <>（前期からの繰越 {(worker.carry ?? 0) > 0 ? '+' : '−'}¥{Math.abs(worker.carry ?? 0).toLocaleString()}）</>}
                     </div>
@@ -608,7 +608,7 @@ function WorkerModal({
                   {/* 予算変更 */}
                   <div className="flex items-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-600">
                     <div>
-                      <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">予算額（個別変更）</label>
+                      <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">予算額（個別変更）</label>
                       <input
                         type="number"
                         value={budget}
@@ -623,7 +623,7 @@ function WorkerModal({
                       {budgetSaving ? '保存中...' : '予算変更'}
                     </button>
                     {budgetSaved && <span className="text-xs text-green-600 dark:text-green-400 font-bold">✓ 保存しました</span>}
-                    <span className="text-[11px] text-gray-400 ml-auto">デフォルト: ¥{(worker.defaultBudget ?? worker.budget).toLocaleString()}</span>
+                    <span className="text-2xs text-gray-400 ml-auto">デフォルト: ¥{(worker.defaultBudget ?? worker.budget).toLocaleString()}</span>
                   </div>
                 </div>
               </section>
@@ -641,7 +641,7 @@ function WorkerModal({
                     </p>
                     <div className="flex items-end gap-2 flex-wrap">
                       <div>
-                        <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">日付（通常は期間起点）</label>
+                        <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">日付（通常は期間起点）</label>
                         <input
                           type="date"
                           value={bulkDate}
@@ -650,7 +650,7 @@ function WorkerModal({
                           className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-36" />
                       </div>
                       <div>
-                        <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">摘要</label>
+                        <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">摘要</label>
                         <input
                           type="text"
                           value={bulkMemo}
@@ -658,7 +658,7 @@ function WorkerModal({
                           className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-36" />
                       </div>
                       <div>
-                        <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">合計金額</label>
+                        <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">合計金額</label>
                         <input
                           type="number"
                           value={bulkAmount}
@@ -705,13 +705,13 @@ function WorkerModal({
                             <td className="py-1.5 px-3 tabular-nums text-xs">{p.date}</td>
                             <td className="py-1.5 px-3">
                               {p.item || '—'}
-                              {p.over && <span className="ml-1.5 text-[10px] bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold">超過（翌期から差し引き）</span>}
+                              {p.over && <span className="ml-1.5 text-3xs bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 px-1.5 py-0.5 rounded-full font-bold">超過（翌期から差し引き）</span>}
                             </td>
                             <td className="py-1.5 px-3 text-right tabular-nums">¥{p.amount.toLocaleString()}</td>
                             <td className="py-1.5 px-3 text-center">
                               <button
                                 onClick={() => handleDelete(p.id)}
-                                className="text-[10px] text-red-500 hover:text-red-700"
+                                className="text-3xs text-red-500 hover:text-red-700"
                               >
                                 削除
                               </button>
@@ -735,7 +735,7 @@ function WorkerModal({
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
                   <div className="flex items-end gap-2 flex-wrap">
                     <div>
-                      <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">購入日</label>
+                      <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">購入日</label>
                       <input
                         type="date"
                         value={newDate}
@@ -744,7 +744,7 @@ function WorkerModal({
                         className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-36" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">品名</label>
+                      <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">品名</label>
                       <input
                         type="text"
                         value={newItem}
@@ -753,7 +753,7 @@ function WorkerModal({
                         className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded px-2 py-1.5 text-sm w-40" />
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-500 dark:text-gray-400 block mb-0.5">金額（円）</label>
+                      <label className="text-3xs text-gray-500 dark:text-gray-400 block mb-0.5">金額（円）</label>
                       <input
                         type="number"
                         value={newAmount}

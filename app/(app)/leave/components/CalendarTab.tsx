@@ -45,7 +45,7 @@ export default function CalendarTab({ visible, plCalendar, workerNames }: Props)
               {/* Day of week header */}
               <div className="grid grid-cols-7 gap-px text-center">
                 {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
-                  <div key={d} className={`text-[9px] font-medium h-4 leading-4 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>{d}</div>
+                  <div key={d} className={`text-3xs font-medium h-4 leading-4 ${i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-gray-400'}`}>{d}</div>
                 ))}
                 {/* Empty cells before first day */}
                 {Array.from({ length: firstDow }).map((_, i) => (
@@ -86,9 +86,9 @@ export default function CalendarTab({ visible, plCalendar, workerNames }: Props)
                         }
                       }}
                     >
-                      <span className={`text-[10px] leading-none ${textClass}`}>{day}</span>
+                      <span className={`text-3xs leading-none ${textClass}`}>{day}</span>
                       {hasPL && (
-                        <span className="absolute -top-0.5 -right-0.5 bg-orange-500 text-white text-[7px] rounded-full w-3 h-3 flex items-center justify-center font-bold leading-none">
+                        <span className="absolute -top-0.5 -right-0.5 bg-orange-500 text-white text-3xs rounded-full w-3 h-3 flex items-center justify-center font-bold leading-none">
                           {plWorkers.length}
                         </span>
                       )}

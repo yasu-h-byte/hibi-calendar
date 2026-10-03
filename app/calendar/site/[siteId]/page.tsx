@@ -166,7 +166,7 @@ export default function SiteCalendarPage() {
               <div className="grid grid-cols-7 gap-1 mb-2">
                 {dayHeaders.map((h, i) => (
                   <div key={i} className={`text-center text-xs font-bold py-1 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-600'}`}>
-                    <div>{h.ja}</div><div className="text-[10px] opacity-70">{h.vi}</div>
+                    <div>{h.ja}</div><div className="text-3xs opacity-70">{h.vi}</div>
                   </div>
                 ))}
               </div>
@@ -181,7 +181,7 @@ export default function SiteCalendarPage() {
                       <div className={`font-bold text-2xl ${(new Date(parseInt(ym.slice(0,4)), parseInt(ym.slice(5,7))-1, cell.day).getDay() === 0 || cell.dayType === 'holiday') ? (isWork ? 'text-red-200' : 'text-red-400') : ''}`}>{cell.day}</div>
                       <div className="text-sm font-medium">{isWork ? '出勤' : '休み'}</div>
                       {cell.dayType === 'holiday' && cell.holidayName && (
-                        <div className={`text-[9px] leading-tight text-center truncate w-full px-0.5 ${isWork ? 'text-white/80' : 'text-gray-400'}`}>{cell.holidayName}</div>
+                        <div className={`text-3xs leading-tight text-center truncate w-full px-0.5 ${isWork ? 'text-white/80' : 'text-gray-400'}`}>{cell.holidayName}</div>
                       )}
                     </div>
                   )

@@ -339,7 +339,7 @@ export default function DebugAttPage() {
                             return (
                               <tr key={i} className={r._archived ? 'bg-gray-100 opacity-60' : (isCarryZero ? 'bg-orange-50' : '')}>
                                 <td className="px-2 py-1 border font-mono">{String(r.fy)}</td>
-                                <td className="px-2 py-1 border font-mono whitespace-pre text-[10px]">{periodLabel}</td>
+                                <td className="px-2 py-1 border font-mono whitespace-pre text-3xs">{periodLabel}</td>
                                 <td className="px-2 py-1 border text-center font-mono">{r.grantDays ?? '—'}</td>
                                 <td className="px-2 py-1 border text-center font-mono bg-blue-50 font-bold">{r.carryOver ?? '—'}</td>
                                 <td className="px-2 py-1 border text-center font-mono">{r.adjustment ?? '—'}</td>

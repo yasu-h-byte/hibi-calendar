@@ -48,7 +48,7 @@ export function DeduraWordmark({
   // xl はサイドバー用。内寸 184px（2026-09-30 から w-56）に対し実測 約151px で、フォントが変わって
   // 1割膨らんでも収まる上限。これ以上大きくすると運営表記と干渉する。
   const text =
-    size === 'xl' ? 'text-[28px]' : size === 'lg' ? 'text-2xl' : size === 'sm' ? 'text-sm' : 'text-lg'
+    size === 'xl' ? 'text-[1.75rem]' : size === 'lg' ? 'text-2xl' : size === 'sm' ? 'text-sm' : 'text-lg'
   // マークは文字のキャップハイト（≒ font-size × 0.85）に合わせる。
   // 等倍だと＋だけ大きく見えてワードマークが分離するため。
   const mark = size === 'xl' ? 25 : size === 'lg' ? 21 : size === 'sm' ? 13 : 17

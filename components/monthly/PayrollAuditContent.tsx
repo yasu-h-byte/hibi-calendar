@@ -109,7 +109,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                     <strong>{baseDaysFromHours}日</strong>
                     <span className="text-gray-500 ml-1">（全社設定: 基本給 = 時給 × {baseDaysFromHours}日 × 7h）</span>
                     {wpd > baseDaysFromHours && (
-                      <div className="text-[10px] text-gray-500 mt-0.5">
+                      <div className="text-3xs text-gray-500 mt-0.5">
                         ※ 所定 {wpd}日 が {baseDaysFromHours}日 を超える分は「追加所定手当」として別途加算
                       </div>
                     )}
@@ -164,14 +164,14 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 {mode.useOldRules ? (
                   <>
                     {fmtNum(w.otHours, 'h')}
-                    <span className="text-[10px] text-gray-500 ml-1">（出面入力の残業欄合計）</span>
+                    <span className="text-3xs text-gray-500 ml-1">（出面入力の残業欄合計）</span>
                   </>
                 ) : (
                   <>
                     {/* 2026-07-09: 月次画面と表示を統一。所定外労働(7h超の実体)を主表示し、
                         法定外(割増対象)はその内数として添える。旧: 所定外+法定外の合算(実体のない数字)。 */}
                     {fmtNum(w.nonStatutoryOTHours || 0, 'h')}
-                    <span className="text-[10px] text-gray-500 ml-1">（所定外労働。うち法定外(割増対象) {fmtNum(w.legalOtHours || 0, 'h')}。3層判定後の計算値。出面の残業欄 {fmtNum(w.otHours, 'h')} とは別）</span>
+                    <span className="text-3xs text-gray-500 ml-1">（所定外労働。うち法定外(割増対象) {fmtNum(w.legalOtHours || 0, 'h')}。3層判定後の計算値。出面の残業欄 {fmtNum(w.otHours, 'h')} とは別）</span>
                   </>
                 )}
               </td>
@@ -181,7 +181,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 <td>うち法定外残業</td>
                 <td className="font-mono">
                   <span className="font-bold">{fmtNum(w.legalOtHours, 'h')}</span>
-                  <span className="text-[10px] text-gray-500 ml-1">（3層判定後・基本1.0倍は所定外労働に含む。+0.25倍を法定外残業手当で支給）</span>
+                  <span className="text-3xs text-gray-500 ml-1">（3層判定後・基本1.0倍は所定外労働に含む。+0.25倍を法定外残業手当で支給）</span>
                 </td>
               </tr>
             )}
@@ -190,7 +190,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 <td>うち所定外労働</td>
                 <td className="font-mono">
                   <span className="font-bold">{fmtNum(w.nonStatutoryOTHours, 'h')}</span>
-                  <span className="text-[10px] text-gray-500 ml-1">（実労働 − 当日所定。法定内・1.0倍で全部支給）</span>
+                  <span className="text-3xs text-gray-500 ml-1">（実労働 − 当日所定。法定内・1.0倍で全部支給）</span>
                 </td>
               </tr>
             )}
@@ -200,7 +200,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 <td className="font-mono">
                   {fmtNum(w.actualWorkHours, 'h')}
                   {w.legalLimit !== undefined && (
-                    <span className="text-[10px] text-gray-500 ml-1">
+                    <span className="text-3xs text-gray-500 ml-1">
                       / 法定上限 {fmtH(w.legalLimit)}（{(w.actualWorkHours || 0) <= w.legalLimit ? '✓ 範囲内' : '⚠️ 超過'}）
                     </span>
                   )}
@@ -209,7 +209,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             <tr><td>有給日数</td><td className="font-mono">{w.plUsed || w.plDays || 0}日</td></tr>
             {(w.examDays || 0) > 0 && <tr><td>試験日</td><td className="font-mono">{w.examDays}日</td></tr>}
-            <tr><td>欠勤日数</td><td className="font-mono">{w.absence || 0}日{(w.restDays || 0) > 0 && <span className="text-[10px] text-gray-500 ml-1">（出面の「欠」{w.restDays}日）</span>}</td></tr>
+            <tr><td>欠勤日数</td><td className="font-mono">{w.absence || 0}日{(w.restDays || 0) > 0 && <span className="text-3xs text-gray-500 ml-1">（出面の「欠」{w.restDays}日）</span>}</td></tr>
             {/* 最低20日保証（2026-09-13）・本人の欠勤（案A・2026年9月分〜）・枠内補償日（2026年8月分〜）。2026-10-02 総合点検で表示に追加 */}
             {w.guaranteeDays !== undefined && (
               <tr>
@@ -217,7 +217,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 <td className="font-mono">
                   保証枠 {w.guaranteeDays}日
                   {w.personalAbsenceDays !== undefined && <> − 本人の欠勤 {w.personalAbsenceDays}日 = 保証日数 <strong>{Math.max(0, w.guaranteeDays - Math.min(w.personalAbsenceDays, w.guaranteeDays))}日</strong></>}
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-3xs text-gray-500">
                     保証枠 = min(20日, 配置現場カレンダーの所定日数{(w.hkDays || 0) > 0 ? '・帰国中を除いて日割り' : ''})。
                     欠勤日数 = min(本人の欠勤 ＋ max(0, 保証日数 − 算入日数), 20 − 算入日数)。算入日数 = 出勤 ＋ 有給 ＋ 試験 ＋ 枠内の補償日
                     {(w.compInGuaranteeDays || 0) > 0 && <>。補償日 {w.compDays}日のうち 枠内 {w.compInGuaranteeDays}日 は100%支給（休業手当60%の対象外）</>}
@@ -225,7 +225,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 </td>
               </tr>
             )}
-            {(w.hkDays || 0) > 0 && <tr><td>帰国中</td><td className="font-mono">{w.hkDays}日<span className="text-[10px] text-gray-500 ml-1">（在籍日数から除外・無給・欠勤に数えない。基本給・所定日数を暦日比で日割り）</span></td></tr>}
+            {(w.hkDays || 0) > 0 && <tr><td>帰国中</td><td className="font-mono">{w.hkDays}日<span className="text-3xs text-gray-500 ml-1">（在籍日数から除外・無給・欠勤に数えない。基本給・所定日数を暦日比で日割り）</span></td></tr>}
             {(w.siteOffDays || 0) > 0 && <tr><td>現場休</td><td className="font-mono">{w.siteOffDays}日</td></tr>}
             {(w.legalHolidayHours || 0) > 0 && <tr><td>法定休日労働</td><td className="font-mono">{fmtNum(w.legalHolidayHours, 'h')}</td></tr>}
             {(w.nightHours || 0) > 0 && <tr><td>深夜労働</td><td className="font-mono">{fmtNum(w.nightHours, 'h')}</td></tr>}
@@ -241,7 +241,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             <tr>
               <td>基本給</td>
               <td className="font-mono">
-                <div className="text-[10px] text-gray-500">{basePayFormula()}</div>
+                <div className="text-3xs text-gray-500">{basePayFormula()}</div>
                 <div className="font-bold text-base">{fmtYen(w.fixedBasePay || w.basePay || 0)}</div>
               </td>
             </tr>
@@ -252,7 +252,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
               <tr>
                 <td>{mode.useOldRules ? '休業補償' : '追加所定手当'}</td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-3xs text-gray-500">
                     {mode.useOldRules
                       ? `日給（時給 × 1日所定）× 0.6 × 補償日 ${fmtNum(w.compDays, '日')}`
                       : `時給 ${fmtYen(w.hourlyRate || 0)} × 7h × MAX(0, 出勤${w.regularWorkDays ?? w.actualWorkDays}＋試験${w.examDays || 0} − ベース日数${baseDays}）`}
@@ -263,9 +263,9 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             {!mode.useOldRules && (w.compAllowance || 0) > 0 && (
               <tr>
-                <td>休業手当<br/><span className="text-[10px] text-gray-500">(現場都合休 60%・労基法26条)</span></td>
+                <td>休業手当<br/><span className="text-3xs text-gray-500">(現場都合休 60%・労基法26条)</span></td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-3xs text-gray-500">
                     時給 {fmtYen(w.hourlyRate || 0)} × 7h × 0.6 × {fmtNum((w.compDays || 0) - (w.compInGuaranteeDays || 0), '日')}
                     {(w.compInGuaranteeDays || 0) > 0 && <>（補償日 {w.compDays}日 − 保証枠内で100%支給の {w.compInGuaranteeDays}日）</>}
                   </div>
@@ -275,9 +275,9 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             {(w.paidLeaveAllowance || 0) > 0 && (
               <tr>
-                <td>有給{w.fixedBasePay ? '日給' : '手当'}<br/><span className="text-[10px] text-gray-500">{w.fixedBasePay ? '(20日枠超の有給)' : '(有給×日額)'}</span></td>
+                <td>有給{w.fixedBasePay ? '日給' : '手当'}<br/><span className="text-3xs text-gray-500">{w.fixedBasePay ? '(20日枠超の有給)' : '(有給×日額)'}</span></td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-3xs text-gray-500">
                     {w.fixedBasePay
                       ? `時給 ${fmtYen(w.hourlyRate || 0)} × 7h × ${fmtNum(w.paidLeaveDays, '日')}（基本給20日枠を超えた有給）`
                       : `日額 ${fmtYen(w.rate || 0)} × ${fmtNum(w.paidLeaveDays, '日')}（有給）`}
@@ -288,9 +288,9 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             {!mode.useOldRules && (w.nonStatutoryOTAllowance || 0) > 0 && (
               <tr>
-                <td>所定外労働手当<br/><span className="text-[10px] text-gray-500">(割増なし)</span></td>
+                <td>所定外労働手当<br/><span className="text-3xs text-gray-500">(割増なし)</span></td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-3xs text-gray-500">
                     時給 {fmtYen(w.hourlyRate || 0)} × {fmtH(w.nonStatutoryOTHours)}（月所定超 − 法定外残業）
                   </div>
                   <div className="font-bold">{fmtYen(w.nonStatutoryOTAllowance || 0)}</div>
@@ -301,11 +301,11 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
               <tr>
                 <td>
                   {!mode.useOldRules && w.hourlyRate
-                    ? <>法定外残業<br/><span className="text-[10px] text-gray-500">(割増のみ +0.25倍)</span></>
+                    ? <>法定外残業<br/><span className="text-3xs text-gray-500">(割増のみ +0.25倍)</span></>
                     : '残業手当'}
                 </td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-3xs text-gray-500">
                     {(() => {
                       const isVietnameseNewRules = !mode.useOldRules && w.hourlyRate
                       if (isVietnameseNewRules) {
@@ -331,7 +331,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
               <tr>
                 <td>法定休日労働手当 (1.35倍・8h超は1.60倍)</td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-3xs text-gray-500">
                     {w.visa === 'none'
                       ? `時給換算（${(w.salary || 0) > 0 ? `月給 ÷ ${JP_SALARY_AVG_MONTHLY_HOURS}h` : '日額 ÷ 8h'}）× (1.35 × 8h以下 ＋ 1.60 × 8h超) × 日曜 ${fmtNum(w.legalHolidayDays, '日')} ${fmtH(w.legalHolidayHours)}（日ごとに8hの線を引く・8〜9月分だけ）`
                       : `時給 ${fmtYen(w.hourlyRate || 0)} × (1.35 × 8h以下 ＋ 1.60 × 8h超) × 日曜 ${fmtH(w.legalHolidayHours)}`}
@@ -350,9 +350,9 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             {(w.breakShortenAllowance || 0) > 0 && (
               <tr>
-                <td>休憩短縮手当 <span className="text-[10px] text-gray-500">(所定外・法定内のため割増なし)</span></td>
+                <td>休憩短縮手当 <span className="text-3xs text-gray-500">(所定外・法定内のため割増なし)</span></td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-3xs text-gray-500">
                     {fmtNum(w.breakShortenHours || 0)}h（出勤日 × 短縮分）× 通常時給
                   </div>
                   <div className="font-bold">{fmtYen(w.breakShortenAllowance || 0)}</div>
@@ -361,9 +361,9 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             {(w.siteAllowance || 0) > 0 && (
               <tr>
-                <td>遠方現場日当 <span className="text-[10px] text-gray-500">(非課税・実費弁償)</span></td>
+                <td>遠方現場日当 <span className="text-3xs text-gray-500">(非課税・実費弁償)</span></td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">対象 {w.allowanceDays || 0}日（判定値80分超500円/120分超1,500円・長期従事は逓減。2026-10 現在は保留中）</div>
+                  <div className="text-3xs text-gray-500">対象 {w.allowanceDays || 0}日（判定値80分超500円/120分超1,500円・長期従事は逓減。2026-10 現在は保留中）</div>
                   <div className="font-bold">{fmtYen(w.siteAllowance || 0)}</div>
                 </td>
               </tr>
@@ -372,7 +372,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
               <tr>
                 <td>運転手当</td>
                 <td className="font-mono">
-                  <div className="text-[10px] text-gray-500">{w.driveLegs || 0}便 × 片道1,000円（同乗者を乗せた便だけ・「運転手当なし」の現場は除く）</div>
+                  <div className="text-3xs text-gray-500">{w.driveLegs || 0}便 × 片道1,000円（同乗者を乗せた便だけ・「運転手当なし」の現場は除く）</div>
                   <div className="font-bold">{fmtYen(w.driveAllowance || 0)}</div>
                 </td>
               </tr>
@@ -382,17 +382,17 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 <td>欠勤控除</td>
                 <td className="font-mono text-red-600">
                   {mode.useOldRules && w.salary && w.salary > 0 && w.rate > 0 && (
-                    <div className="text-[10px] text-gray-500">
+                    <div className="text-3xs text-gray-500">
                       日額 {fmtYen(w.rate)} × {fmtNum(w.absence, '日')}（欠勤・切捨）
                     </div>
                   )}
                   {!mode.useOldRules && w.visa !== 'none' && (
-                    <div className="text-[10px] text-gray-500">
+                    <div className="text-3xs text-gray-500">
                       時給 {fmtYen(w.hourlyRate || 0)} × 7h × {fmtNum(w.absence, '日')}（欠勤日数は③の最低保証の式・切捨）
                     </div>
                   )}
                   {w.visa === 'none' && (w.salary || 0) > 0 && (
-                    <div className="text-[10px] text-gray-500">
+                    <div className="text-3xs text-gray-500">
                       基本給 ÷ {JP_AVG_MONTHLY_WORK_DAYS.toFixed(2)}日（年250日÷12）× {fmtNum(w.absence, '日')}（出面の「欠」＋出勤日の不足分・切捨・基本給が上限）
                     </div>
                   )}
@@ -402,9 +402,9 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
             )}
             {mode.useOldRules && (w.compBaseDeduction || 0) > 0 && (
               <tr>
-                <td>補償日 通常分控除<br/><span className="text-[10px] text-gray-500">(会社都合休: 固定給は満額前提のため一旦控除。60%は上の休業補償で還元 → 正味 日給の40%控除)</span></td>
+                <td>補償日 通常分控除<br/><span className="text-3xs text-gray-500">(会社都合休: 固定給は満額前提のため一旦控除。60%は上の休業補償で還元 → 正味 日給の40%控除)</span></td>
                 <td className="font-mono text-red-600">
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-3xs text-gray-500">
                     {w.rate > 0
                       ? `日額 ${fmtYen(w.rate)} × ${fmtNum(w.compDays, '日')}（補償日・切捨）`
                       : `補償日 ${fmtNum(w.compDays, '日')} × 日給（切捨）`}
@@ -454,7 +454,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
                 </span>
                 <div className="flex-1">
                   <div className={`font-bold ${c.pass ? 'text-green-800' : 'text-red-800'}`}>{c.label}</div>
-                  <div className="text-[10px] mt-0.5 font-mono text-gray-600">{c.detail}</div>
+                  <div className="text-3xs mt-0.5 font-mono text-gray-600">{c.detail}</div>
                 </div>
               </div>
             </div>
@@ -463,7 +463,7 @@ export default function PayrollAuditContent({ worker: w, ym, prescribedDays, bas
       </section>
 
       {/* 説明・参照 */}
-      <section className="bg-gray-50 rounded-lg p-3 text-[11px] text-gray-600">
+      <section className="bg-gray-50 rounded-lg p-3 text-2xs text-gray-600">
         <div className="font-bold text-gray-800 mb-1">📋 注記</div>
         <ul className="list-disc list-inside space-y-0.5">
           <li>本表示は監査・社労士確認用です。実際の支給額は「④ 支給額」の値となります</li>

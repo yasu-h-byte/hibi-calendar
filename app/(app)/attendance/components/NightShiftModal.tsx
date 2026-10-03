@@ -206,13 +206,13 @@ export default function NightShiftModal({
                 <span className="text-gray-600">
                   この日の人工
                   {/* 内訳を出す。出勤欄が 0.5（半日）だと 2.5 ではなく 2.0 になるため */}
-                  <span className="block text-[11px] text-gray-400 tabular-nums">
+                  <span className="block text-2xs text-gray-400 tabular-nums">
                     日勤 {dayManDays} ＋ 夜勤 {NIGHT_SHIFT_MANDAYS}
                   </span>
                 </span>
                 <span className="font-bold tabular-nums text-hibi-navy">{manDays} 人工</span>
               </div>
-              <p className="text-[11px] text-gray-500 pt-1">
+              <p className="text-2xs text-gray-500 pt-1">
                 日本人は人工で支給・元請け請求。ベトナム人は時給・深夜割増で法令どおり計算します。
               </p>
             </>

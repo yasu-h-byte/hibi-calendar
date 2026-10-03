@@ -211,7 +211,7 @@ export default function AuditPrintPage() {
                     <td>出向者（🔁・この資料には載せない）</td>
                     <td>
                       {dispatchedWorkers.length}名 <span className="font-mono">{fmtYen(summary.dispatchedTotal)}</span>
-                      <div className="text-[10px] text-gray-500">{dispatchedWorkers.map(w => `${w.name}（${w.dispatchTo || '出向'}）`).join('、')}。月次集計Excel の小計には含まれる（出向者込み {fmtYen(summary.total + summary.dispatchedTotal)}）。支給元は代表に確認</div>
+                      <div className="text-3xs text-gray-500">{dispatchedWorkers.map(w => `${w.name}（${w.dispatchTo || '出向'}）`).join('、')}。月次集計Excel の小計には含まれる（出向者込み {fmtYen(summary.total + summary.dispatchedTotal)}）。支給元は代表に確認</div>
                     </td>
                   </tr>
                 )}

@@ -319,7 +319,7 @@ export default function CostPage() {
         className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
         <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
       </button>
-      <span className="px-1.5 text-[15px] font-bold tabular-nums whitespace-nowrap">{ymDisplayLabel}</span>
+      <span className="px-1.5 text-[0.9375rem] font-bold tabular-nums whitespace-nowrap">{ymDisplayLabel}</span>
       <button type="button" aria-label="次の月" onClick={() => navigateMonth(1)}
         className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
         <Icon name="chevronRight" size={18} strokeWidth={2.2} />
@@ -362,7 +362,7 @@ export default function CostPage() {
           </div>
         ))}
         <div className="flex items-center justify-between">
-          <button onClick={() => addBillingRow(s.id, ym)} className="text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline">＋ 請求書が複数あるときは行を足す</button>
+          <button onClick={() => addBillingRow(s.id, ym)} className="text-[0.8125rem] font-bold text-hibi-navy dark:text-blue-300 hover:underline">＋ 請求書が複数あるときは行を足す</button>
           {rows.length > 1 && <span className="text-sm font-bold tabular-nums">計 {fmtYen(rows.reduce((a, b) => a + b, 0))}</span>}
         </div>
       </div>
@@ -387,12 +387,12 @@ export default function CostPage() {
       {data && data.siteList && data.siteList.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <select value={siteFilter} onChange={e => { setSiteFilter(e.target.value); setListFilter('all') }} aria-label="現場"
-            className="h-[42px] border border-gray-300 dark:border-gray-600 rounded-[10px] px-3 text-[15px] font-bold bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none min-w-[260px]">
+            className="h-[42px] border border-gray-300 dark:border-gray-600 rounded-[10px] px-3 text-[0.9375rem] font-bold bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-hibi-navy focus:outline-none min-w-[260px]">
             <option value="all">全現場</option>
             {data.siteList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           {siteFilter !== 'all' && (
-            <button onClick={() => setSiteFilter('all')} className="text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline">全現場にもどす</button>
+            <button onClick={() => setSiteFilter('all')} className="text-[0.8125rem] font-bold text-hibi-navy dark:text-blue-300 hover:underline">全現場にもどす</button>
           )}
           {!isMultiMonth && ym === currentYmJst() && (
             <Chip tone="amber">今月は途中までの数字です</Chip>
@@ -444,7 +444,7 @@ export default function CostPage() {
           {/* ③ 現場ごと */}
           <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
-              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">現場ごと（{periodLabel}）</h2>
+              <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">現場ごと（{periodLabel}）</h2>
               <Segment value={listFilter} onChange={setListFilter} items={[
                 ['all', `すべて ${sites.length}`], ['nobill', `請求額まだ ${noBillingSites.length}`], ['low', `粗利が薄い ${lowSites.length}`],
               ]} />
@@ -468,15 +468,15 @@ export default function CostPage() {
                   onClick={() => setOpenSiteId(s.id)}
                   onKeyDown={e => { if (e.key === 'Enter') setOpenSiteId(s.id) }}
                   className={`border-t border-hibi-line dark:border-gray-700 px-5 py-3 grid grid-cols-2 ${SITE_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums`}>
-                  <span className="col-span-2 lg:col-span-1 text-[15px] font-bold text-gray-900 dark:text-gray-100">{s.name}</span>
+                  <span className="col-span-2 lg:col-span-1 text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100">{s.name}</span>
                   <span className="lg:text-right text-base font-bold">{isEstimate(s)
-                    ? <span className="text-gray-400 dark:text-gray-500" title="請求額が入るまでは、人工 × 過去の平均単価の見込み額です"><span className="text-[11px] font-normal mr-1">見込み</span>{fmtYen(s.billing)}</span>
+                    ? <span className="text-gray-400 dark:text-gray-500" title="請求額が入るまでは、人工 × 過去の平均単価の見込み額です"><span className="text-2xs font-normal mr-1">見込み</span>{fmtYen(s.billing)}</span>
                     : s.billing > 0
                       ? (hasEstPart(s)
-                        ? <span title={`入力した請求額 ${fmtYen(s.billingRaw ?? 0)} ＋ 請求額まだの月の見込み ${fmtYen(estPart(s))}`}><span className="text-[11px] font-normal text-gray-400 dark:text-gray-500 mr-1">見込み込み</span>{fmtYen(s.billing)}</span>
+                        ? <span title={`入力した請求額 ${fmtYen(s.billingRaw ?? 0)} ＋ 請求額まだの月の見込み ${fmtYen(estPart(s))}`}><span className="text-2xs font-normal text-gray-400 dark:text-gray-500 mr-1">見込み込み</span>{fmtYen(s.billing)}</span>
                         : fmtYen(s.billing))
                       : <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
-                  <span className="lg:text-right text-[15px]">{fmtYen(s.totalCost)}</span>
+                  <span className="lg:text-right text-[0.9375rem]">{fmtYen(s.totalCost)}</span>
                   <span className="lg:text-right text-base font-bold">{nb
                     ? (isEstimate(s) ? <span className="text-gray-400 dark:text-gray-500">{fmtYen(s.profit)}</span> : <span className="text-gray-300 dark:text-gray-600">—</span>)
                     : <span className={s.profit < 0 ? 'text-red-700 dark:text-red-400' : ''}>{fmtYen(s.profit)}</span>}</span>
@@ -496,7 +496,7 @@ export default function CostPage() {
               )
             })}
             {sites.length > 0 && (
-              <div className={`border-t-2 border-gray-300 dark:border-gray-600 px-5 py-3 grid grid-cols-2 ${SITE_COLS} gap-x-3 gap-y-1 font-bold tabular-nums text-[15px]`}>
+              <div className={`border-t-2 border-gray-300 dark:border-gray-600 px-5 py-3 grid grid-cols-2 ${SITE_COLS} gap-x-3 gap-y-1 font-bold tabular-nums text-[0.9375rem]`}>
                 <span className="col-span-2 lg:col-span-1">合計</span>
                 <span className="lg:text-right">{fmtYen(t.billing)}</span>
                 <span className="lg:text-right">{fmtYen(t.totalCost)}</span>
@@ -552,7 +552,7 @@ export default function CostPage() {
           {data.subconDetails && data.subconDetails.length > 0 && (
             <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
               <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700">
-                <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">外注先（{periodLabel}に来てもらった会社）</h2>
+                <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">外注先（{periodLabel}に来てもらった会社）</h2>
               </div>
               <div className="hidden md:grid grid-cols-[minmax(0,1fr)_80px_100px_100px_70px_70px_120px] gap-3 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
                 <span>会社</span><span>職種</span><span className="text-right">人工単価</span><span className="text-right">残業単価</span><span className="text-right">人工</span><span className="text-right">残業</span><span className="text-right">金額</span>
@@ -594,8 +594,8 @@ export default function CostPage() {
           <div className="p-6 space-y-6">
             <div className="flex items-start gap-3">
               <div className="flex-1 min-w-0">
-                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{openSite.name}</h2>
-                <div className="text-[13px] text-hibi-sub dark:text-gray-400 tabular-nums">
+                <h2 className="text-[1.375rem] font-bold text-gray-900 dark:text-white">{openSite.name}</h2>
+                <div className="text-[0.8125rem] text-hibi-sub dark:text-gray-400 tabular-nums">
                   {isMultiMonth ? `${ymLabel(ymRange[0])}〜${ymLabel(ymRange[ymRange.length - 1])}` : ymDisplayLabel} ／ 人工 {fmtNum(openSite.tobiEquiv)} ／ 原価 {fmtYen(openSite.totalCost)}
                 </div>
               </div>
@@ -631,7 +631,7 @@ export default function CostPage() {
               ) : (
                 <>
                   {isEstimate(openSite) && (
-                    <p className="text-[13px] text-hibi-sub dark:text-gray-400">いまは見込み <b className="tabular-nums text-gray-700 dark:text-gray-200">{fmtYen(openSite.billing)}</b>（人工 × 過去の平均単価）で計算しています。請求額を入れると置き換わります</p>
+                    <p className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">いまは見込み <b className="tabular-nums text-gray-700 dark:text-gray-200">{fmtYen(openSite.billing)}</b>（人工 × 過去の平均単価）で計算しています。請求額を入れると置き換わります</p>
                   )}
                   {billingInputs(openSite)}
                   <p className="text-xs text-hibi-sub dark:text-gray-400">入れると自動で保存し、粗利を計算し直します。出向中スタッフの分は差し引いた額を入れてください</p>
@@ -688,8 +688,8 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub: 
   const c = tone === 'green' ? 'text-green-700 dark:text-green-400' : tone === 'red' ? 'text-red-700 dark:text-red-400' : 'text-gray-900 dark:text-white'
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 px-5 py-4 flex flex-col gap-1">
-      <span className="text-[13px] text-hibi-sub dark:text-gray-400">{label}</span>
-      <span className={`text-[26px] font-bold tabular-nums ${c}`}>{value}</span>
+      <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">{label}</span>
+      <span className={`text-[1.625rem] font-bold tabular-nums ${c}`}>{value}</span>
       <span className="text-xs text-hibi-sub dark:text-gray-400">{sub}</span>
     </div>
   )
@@ -714,7 +714,7 @@ function MonthlyTrendSection({ trend, title }: { trend: MonthlyTrend[]; title: s
                 return (
                   <div key={m.ym} className="flex flex-col items-center flex-1" style={{ minWidth: '64px' }}>
                     {/* 数値ラベル */}
-                    <div className="text-[9px] text-gray-400 text-center whitespace-nowrap">
+                    <div className="text-3xs text-gray-400 text-center whitespace-nowrap">
                       売{fmtYenMan(m.billing)}
                     </div>
                     {/* 3本バー */}
@@ -736,13 +736,13 @@ function MonthlyTrendSection({ trend, title }: { trend: MonthlyTrend[]; title: s
                       />
                     </div>
                     {/* 粗利 + 粗利率 */}
-                    <div className={`text-[10px] font-bold text-center mt-1 whitespace-nowrap ${m.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className={`text-3xs font-bold text-center mt-1 whitespace-nowrap ${m.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {m.profit >= 0 ? '+' : ''}{fmtYenMan(m.profit)}
                     </div>
-                    <div className="text-[9px] text-gray-400 text-center whitespace-nowrap">
+                    <div className="text-3xs text-gray-400 text-center whitespace-nowrap">
                       {profitRate.toFixed(1)}%
                     </div>
-                    <div className="text-[11px] text-gray-600 font-medium mt-1">{ymToShortLabel(m.ym)}</div>
+                    <div className="text-2xs text-gray-600 font-medium mt-1">{ymToShortLabel(m.ym)}</div>
                   </div>
                 )
               })}
@@ -854,11 +854,11 @@ function CumulativeSection({ data }: { data: CumulativeData[] }) {
                       />
                     </div>
                     {cd.cumProfit !== 0 && (
-                      <div className={`text-[9px] font-bold ${cd.cumProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <div className={`text-3xs font-bold ${cd.cumProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {fmtYenMan(cd.cumProfit)}
                       </div>
                     )}
-                    <div className="text-[10px] text-gray-500 mt-0.5">{ymToShortLabel(cd.ym)}</div>
+                    <div className="text-3xs text-gray-500 mt-0.5">{ymToShortLabel(cd.ym)}</div>
                   </div>
                 )
               })}
@@ -1110,11 +1110,11 @@ function SiteMemberList({ members }: { members: SiteMember[] }) {
             >
               <span className="font-medium text-sm text-hibi-navy truncate">{w.name}</span>
               <div className="flex flex-wrap gap-1">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${jobBadgeColor(w.job)}`}>
+                <span className={`text-3xs px-1.5 py-0.5 rounded-full font-medium ${jobBadgeColor(w.job)}`}>
                   {jobLabel(w.job)}
                 </span>
                 {visaBadge(w.visa) && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-teal-100 text-teal-700">
+                  <span className="text-3xs px-1.5 py-0.5 rounded-full font-medium bg-teal-100 text-teal-700">
                     {visaBadge(w.visa)}
                   </span>
                 )}

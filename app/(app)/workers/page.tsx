@@ -112,7 +112,7 @@ const FILTER_LABEL: Record<Exclude<ListFilter, 'all'>, string> = {
   visa: '在留期限が近い人', url: 'スマホのURLがまだの人', birth: '生年月日が入っていない人', sched: '単価の改定予定がある人',
 }
 const ROW_COLS = 'lg:grid-cols-[44px_minmax(0,1fr)_220px_140px_130px_120px_100px]'
-const PANEL_BTN = 'h-9 px-3.5 rounded-[9px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 text-[13px] font-bold hover:bg-hibi-bg dark:hover:bg-gray-700 disabled:opacity-50'
+const PANEL_BTN = 'h-9 px-3.5 rounded-[9px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-hibi-navy dark:text-gray-200 text-[0.8125rem] font-bold hover:bg-hibi-bg dark:hover:bg-gray-700 disabled:opacity-50'
 
 export default function WorkersPage() {
   const searchParams = useSearchParams()
@@ -488,7 +488,7 @@ export default function WorkersPage() {
         title="人員マスタ"
         sub={`在籍 ${activeWorkers.length}名（日比建設 ${hibiCount}・HFU ${hfuCount}）${retiringCount > 0 ? `・うち退職予定 ${retiringCount}名` : ''}${retiredWorkers.length > 0 ? ` ／ 退職 ${retiredWorkers.length}名` : ''}`}
         actions={mainTab === 'list' && canEdit ? (
-          <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light transition inline-flex items-center gap-1.5">
+          <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[0.9375rem] font-bold hover:bg-hibi-light transition inline-flex items-center gap-1.5">
             <span className="text-lg leading-none">＋</span>人を追加
           </button>
         ) : undefined}
@@ -532,13 +532,13 @@ export default function WorkersPage() {
           {/* ② 一覧 */}
           <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
-              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">{tab === 'retired' ? '退職した人' : '在籍している人'}</h2>
+              <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">{tab === 'retired' ? '退職した人' : '在籍している人'}</h2>
               <Segment value={tab} onChange={v => { setTab(v); setListFilter('all') }} items={[
                 ['all', `在籍 ${activeWorkers.length}`], ['hibi', `日比建設 ${hibiCount}`], ['hfu', `HFU ${hfuCount}`],
                 ...(retiredWorkers.length > 0 ? [['retired', `退職 ${retiredWorkers.length}`] as const] : []),
               ]} />
               {listFilter !== 'all' && (
-                <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+                <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[0.8125rem] font-bold">
                   {FILTER_LABEL[listFilter]}だけ表示中 ×
                 </button>
               )}
@@ -565,7 +565,7 @@ export default function WorkersPage() {
                   <span className="hidden lg:block text-sm text-hibi-sub dark:text-gray-400">{w.id}</span>
                   <span className="col-span-2 lg:col-span-1 flex items-center gap-2.5 min-w-0">
                     <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={40} />
-                    <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</span>
+                    <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</span>
                     <span className="lg:hidden text-xs text-hibi-sub">{w.id}</span>
                     {w.dispatchTo && <Chip tone="gray" title={`出向先: ${w.dispatchTo}${w.dispatchFrom ? ` / 開始: ${w.dispatchFrom}` : ''}`}>出向中</Chip>}
                     {retiredNow(w)
@@ -579,7 +579,7 @@ export default function WorkersPage() {
                     {gaikoku && <Chip tone="gray">{VISA_LABELS[w.visaType || ''] || w.visaType}</Chip>}
                     {/* 日付指定の在留資格の切り替え予定（2026-09-14 scheduledChanges） */}
                     {(w.scheduledChanges || []).filter(c => c.field === 'visa').map(c => (
-                      <span key={c.from} className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                      <span key={c.from} className="text-2xs font-bold text-amber-700 dark:text-amber-400">
                         {c.from.slice(5).replace('-', '/')}〜 {VISA_LABELS[String(c.value)] || String(c.value)}
                       </span>
                     ))}
@@ -606,19 +606,19 @@ export default function WorkersPage() {
                       if (gaikoku) {
                         if (!w.hourlyRate) return <span className="text-gray-300 dark:text-gray-600">—</span>
                         return <>
-                          <span className="font-bold text-[15px]">{fmtYen(sc ? (w.prevHourlyRate ?? w.hourlyRate) : w.hourlyRate)}</span><span className="text-xs text-hibi-sub">/時</span>
-                          {sc && <div className="text-[11px] text-amber-700 dark:text-amber-400">{sc.from.slice(5).replace('-', '/')}〜 {fmtYen(w.hourlyRate)}</div>}
+                          <span className="font-bold text-[0.9375rem]">{fmtYen(sc ? (w.prevHourlyRate ?? w.hourlyRate) : w.hourlyRate)}</span><span className="text-xs text-hibi-sub">/時</span>
+                          {sc && <div className="text-2xs text-amber-700 dark:text-amber-400">{sc.from.slice(5).replace('-', '/')}〜 {fmtYen(w.hourlyRate)}</div>}
                         </>
                       }
                       if (!w.rate) return <span className="text-gray-300 dark:text-gray-600">—</span>
                       return <>
-                        <span className="font-bold text-[15px]">{fmtYen(sc ? (w.prevRate ?? w.rate) : w.rate)}</span><span className="text-xs text-hibi-sub">/日</span>
-                        {sc && <div className="text-[11px] text-amber-700 dark:text-amber-400">{sc.from.slice(5).replace('-', '/')}〜 {fmtYen(w.rate)}</div>}
+                        <span className="font-bold text-[0.9375rem]">{fmtYen(sc ? (w.prevRate ?? w.rate) : w.rate)}</span><span className="text-xs text-hibi-sub">/日</span>
+                        {sc && <div className="text-2xs text-amber-700 dark:text-amber-400">{sc.from.slice(5).replace('-', '/')}〜 {fmtYen(w.rate)}</div>}
                       </>
                     })()}
                   </span>
                   <span className="lg:text-right text-sm">
-                    {w.salary && w.salary > 0 ? <>{fmtYen(w.salary)}<div className="text-[11px] text-hibi-sub">固定月給</div></>
+                    {w.salary && w.salary > 0 ? <>{fmtYen(w.salary)}<div className="text-2xs text-hibi-sub">固定月給</div></>
                       : gaikoku && w.hourlyRate ? fmtYen(w.hourlyRate * 168)
                       : <span className="text-gray-300 dark:text-gray-600">—</span>}
                   </span>
@@ -637,9 +637,9 @@ export default function WorkersPage() {
             <div className="px-6 py-5 border-b border-hibi-line dark:border-gray-700 flex items-center gap-4">
               {editWorker && <WorkerAvatar name={editWorker.name} src={photos[String(editWorker.id)]} size={56} />}
               <div className="flex-1 min-w-0">
-                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{editId !== null ? (form.name || '（名前なし）') : '人を追加'}</h2>
+                <h2 className="text-[1.375rem] font-bold text-gray-900 dark:text-white truncate">{editId !== null ? (form.name || '（名前なし）') : '人を追加'}</h2>
                 {editWorker && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[0.8125rem] text-hibi-sub dark:text-gray-400">
                     <span className="tabular-nums">{editWorker.id}</span>
                     <Chip tone={editWorker.company === 'HFU' ? 'cyan' : 'blue'}>{editWorker.company === 'HFU' ? 'HFU' : '日比建設'}</Chip>
                     <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${jobBadge(editWorker.jobType).cls}`}>{jobBadge(editWorker.jobType).label}</span>
@@ -656,7 +656,7 @@ export default function WorkersPage() {
               <CloseButton onClick={closePanel} />
             </div>
             {!canEdit && (
-              <div className="px-6 py-2.5 border-b border-hibi-line dark:border-gray-700 bg-hibi-bg dark:bg-gray-900/40 text-[13px] text-hibi-sub dark:text-gray-400">
+              <div className="px-6 py-2.5 border-b border-hibi-line dark:border-gray-700 bg-hibi-bg dark:bg-gray-900/40 text-[0.8125rem] text-hibi-sub dark:text-gray-400">
                 見るだけの画面です。内容を直せるのは事務（森田さん）と代表です。
               </div>
             )}
@@ -667,9 +667,9 @@ export default function WorkersPage() {
                 {editWorker.token ? (
                   <button type="button" onClick={() => setQrWorker(editWorker)} className={PANEL_BTN}>スマホURL・QR</button>
                 ) : tokenHidden(editWorker) ? (
-                  <span className="text-[13px] text-hibi-sub dark:text-gray-400">スマホURLは代表だけが見られます</span>
+                  <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">スマホURLは代表だけが見られます</span>
                 ) : !retiredNow(editWorker) && canEdit && (
-                  <button type="button" onClick={() => handleGenToken(editWorker.id)} className="h-9 px-3.5 rounded-[9px] bg-hibi-navy text-white text-[13px] font-bold hover:bg-hibi-light">スマホURLを発行する</button>
+                  <button type="button" onClick={() => handleGenToken(editWorker.id)} className="h-9 px-3.5 rounded-[9px] bg-hibi-navy text-white text-[0.8125rem] font-bold hover:bg-hibi-light">スマホURLを発行する</button>
                 )}
                 {!retiredNow(editWorker) && canEdit && (
                   <button type="button" onClick={() => handleTransfer(editWorker)} disabled={transferring === editWorker.id} className={PANEL_BTN}>
@@ -684,7 +684,7 @@ export default function WorkersPage() {
                 )}
                 {canRetire && (
                   <button type="button" onClick={startRetire}
-                    className="sm:ml-auto h-9 px-3.5 rounded-[9px] border border-red-300 dark:border-red-800 bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 text-[13px] font-bold hover:bg-red-50 dark:hover:bg-red-900/20">退職にする</button>
+                    className="sm:ml-auto h-9 px-3.5 rounded-[9px] border border-red-300 dark:border-red-800 bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 text-[0.8125rem] font-bold hover:bg-red-50 dark:hover:bg-red-900/20">退職にする</button>
                 )}
               </div>
             )}
@@ -783,7 +783,7 @@ export default function WorkersPage() {
                           削除
                         </button>
                       )}
-                      <p className="text-[11px] text-gray-400 mt-1.5 leading-relaxed">
+                      <p className="text-2xs text-gray-400 mt-1.5 leading-relaxed">
                         選ぶだけで自動的に正方形・小サイズに縮小して保存します。<br />
                         写真はログインした人にしか表示されません。
                       </p>
@@ -855,7 +855,7 @@ export default function WorkersPage() {
                     <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
                       生年月日
                       {form.visa === 'none' && !form.birthDate && (
-                        <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                        <span className="ml-1.5 text-3xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                           号俸制に必要
                         </span>
                       )}
@@ -864,7 +864,7 @@ export default function WorkersPage() {
                       max={currentDateDash()}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
                     {form.birthDate && (
-                      <p className="text-[11px] text-gray-500 mt-1">
+                      <p className="text-2xs text-gray-500 mt-1">
                         {form.visa === 'none'
                           ? <>{jpDate(revisionBaseDate())}時点で {ageOn(form.birthDate, revisionBaseDate())}歳</>
                           : <>今日時点で {ageOn(form.birthDate, currentDateDash())}歳（在留カードの生年月日を入力）</>}
@@ -916,7 +916,7 @@ export default function WorkersPage() {
                     <input type="text" value={form.payrollNo} onChange={e => setForm({ ...form, payrollNo: e.target.value })}
                       placeholder="例: 1128（キャシュモの従業員情報CSVの番号。社員番号とは別）"
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 focus:outline-none" />
-                    <p className="text-[11px] text-gray-400 mt-1">給与計算委託先（キャシュモ）に渡す月次集計Excel・出面一覧・勤務予定シフト・実労働時間明細・計算根拠PDFに載ります</p>
+                    <p className="text-2xs text-gray-400 mt-1">給与計算委託先（キャシュモ）に渡す月次集計Excel・出面一覧・勤務予定シフト・実労働時間明細・計算根拠PDFに載ります</p>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">メモ</label>
@@ -981,7 +981,7 @@ export default function WorkersPage() {
                         </div>
                       </div>
                     </div>
-                    <p className="text-[10px] text-gray-400">※ 時給を入力すると日額・月給・残業単価が自動計算されます</p>
+                    <p className="text-3xs text-gray-400">※ 時給を入力すると日額・月給・残業単価が自動計算されます</p>
 
     {/* 固定月給 — 旧ルール継続者（フン等）専用。誤入力で計算方式が月給制に切り替わるため、
                         useOldRules ON か既に設定済みの場合のみ表示（2026-06-12 監査 Sprint2-C） */}
@@ -996,11 +996,11 @@ export default function WorkersPage() {
                         placeholder="未設定（時給制）"
                         className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm text-right font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                       {form.salary && Number(form.salary) > 0 ? (
-                        <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                        <p className="text-3xs text-amber-600 dark:text-amber-400 mt-1">
                           ⚠ 月給制: 基本給は毎月この固定額（所定日数で変動しない）。残業・欠勤は日給ベースで固定単価。月途中入退社は日割り。
                         </p>
                       ) : (
-                        <p className="text-[10px] text-gray-400 mt-1">
+                        <p className="text-3xs text-gray-400 mt-1">
                           ※ 通常は空欄（時給制）。フンさん等、毎月固定月給で支払う旧ルール継続者のみ設定。
                         </p>
                       )}
@@ -1119,7 +1119,7 @@ export default function WorkersPage() {
                                   </div>
                                 </div>
                               )}
-                              <p className="text-[10px] text-gray-400">
+                              <p className="text-3xs text-gray-400">
                                 ※ 月給制: 出勤日数に関わらず月給固定。残業は時給換算 × 倍率で加算（1円未満切上）。
                                 <br/>※ 残業単価は給与計算と同じ月平均所定 {otMonthlyHours}h で算出。日額換算は原価配賦用の概算（月給 ÷ {prescribedDays}日）。
                               </p>
@@ -1137,7 +1137,7 @@ export default function WorkersPage() {
                         <div className="flex items-center gap-2 mb-2">
                           <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide">号俸制（等級・号数）</h4>
                           {!form.jpGrade && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">未設定</span>
+                            <span className="text-3xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">未設定</span>
                           )}
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -1176,7 +1176,7 @@ export default function WorkersPage() {
                           const actual = Number(form.rate) || 0
                           const gap = actual - tableDaily
                           return (
-                            <p className="text-[11px] mt-1.5 leading-relaxed">
+                            <p className="text-2xs mt-1.5 leading-relaxed">
                               <span className="text-gray-500">
                                 号俸表の日額 <b className="tabular-nums">¥{tableDaily.toLocaleString()}</b>
                                 <span className="text-gray-400">（{g === 'doko' ? '土工' : g}の上限 ¥{capDaily(g).toLocaleString()}）</span>
@@ -1190,7 +1190,7 @@ export default function WorkersPage() {
                             </p>
                           )
                         })()}
-                        <p className="text-[10px] text-gray-400 mt-1">
+                        <p className="text-3xs text-gray-400 mt-1">
                           等級は<b>役割</b>で決めます（在籍年数では上がりません）。等級を選ぶと、日額に見合う号を自動で当てます。
                           未設定のままだと年次改定で「要入力」になり、改定を確定できません。
                         </p>
@@ -1216,7 +1216,7 @@ export default function WorkersPage() {
                         onChange={e => setForm({ ...form, breakShortenFrom: e.target.value.replace('-', '') })}
                         className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-1.5 text-sm" />
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                    <p className="text-3xs text-gray-400 mt-1 leading-relaxed">
                       契約より休憩を短くした分を、出勤した日ごとに所定外労働として支払います。
                       法定内（1日8時間以内）のため<b>割増なし（通常時給）</b>で計算します。
                       有給・休み・補償日・帰国中の日は対象外。開始月より前の給与は変わりません。
@@ -1228,7 +1228,7 @@ export default function WorkersPage() {
               {modalTab === 'allowance' && (<div className="space-y-4">
                 <div className="border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-3 bg-green-50/30 dark:bg-green-900/10">
                   <h4 className="text-xs font-bold text-green-700 dark:text-green-400 uppercase tracking-wide">賞与の手当・出面の設定</h4>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                  <p className="text-3xs text-gray-500 dark:text-gray-400 leading-relaxed">
                     禁煙手当と子ども手当は<b>賞与に上乗せ</b>されます（賃金制度 → 賞与タブで自動計算）。
                     運転のチェックは出面の運転者の選択肢に使います。
                   </p>
@@ -1242,7 +1242,7 @@ export default function WorkersPage() {
                       />
                       社有車を運転する可能性がある（出面の運転者の選択肢に出す）
                       {form.canDrive === undefined && (
-                        <span className="text-[10px] text-gray-400">（既定: {form.visa === 'none' || !form.visa ? '日本人=あり' : '外国人=なし'}）</span>
+                        <span className="text-3xs text-gray-400">（既定: {form.visa === 'none' || !form.visa ? '日本人=あり' : '外国人=なし'}）</span>
                       )}
                     </label>
                   </div>
@@ -1263,7 +1263,7 @@ export default function WorkersPage() {
                   <div className="col-span-2">
                     <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
                       子ども（誕生年月）
-                      <span className="text-[10px] text-gray-400 ml-1.5">
+                      <span className="text-3xs text-gray-400 ml-1.5">
                         賞与の子ども手当に使います。第1子3万・第2子5万・第3子以降7万（年額）／18歳の誕生日を迎える年まで
                       </span>
                     </div>
@@ -1282,7 +1282,7 @@ export default function WorkersPage() {
                             className="border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg px-2 py-1.5 text-sm tabular-nums"
                           />
                           {c && /^\d{4}-\d{2}$/.test(c) && (
-                            <span className="text-[10px] text-gray-400">
+                            <span className="text-3xs text-gray-400">
                               満18歳: {Number(c.slice(0, 4)) + 18}年{Number(c.slice(5, 7))}月
                             </span>
                           )}
@@ -1342,12 +1342,12 @@ export default function WorkersPage() {
                       onChange={e => setForm({ ...form, dispatchFrom: e.target.value })}
                       className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
                     />
-                    <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                    <p className="mt-1 text-3xs text-gray-500 dark:text-gray-400">
                       ※ この月以降の月次集計・原価で出向控除が適用されます。空欄の場合は全期間が対象になります。
                     </p>
                   </div>
                 )}
-                <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                <p className="text-3xs text-gray-500 dark:text-gray-400">
                   ※ 出向中にすると、開始月以降の人件費から実給与額（実出勤×日額＋残業）が自動で差し引かれます。
                 </p>
               </div>
@@ -1365,7 +1365,7 @@ export default function WorkersPage() {
                       旧ルール（変形労働制以前）で給与計算する
                     </span>
                   </label>
-                  <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-300 leading-relaxed">
+                  <p className="mt-1 text-3xs text-amber-700 dark:text-amber-300 leading-relaxed">
                     ※ 通常、ベトナム人スタッフは 2026年5月から新ルール（変形労働時間制・3層構造給与）が
                     自動適用されます。本人が新ルール移行を拒否した等の個別事情がある場合のみチェック。<br />
                     チェックすると、5月以降も旧ルール（1日6h40min所定、月集計合計×1.25残業）で計算されます。

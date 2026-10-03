@@ -594,7 +594,7 @@ export default function SitesPage() {
         title="現場マスタ"
         sub="現場ごとの請負体制・工期・職長・単価。出面・カレンダー・請求・原価のもとになります"
         actions={
-          <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
+          <button onClick={openAdd} className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[0.9375rem] font-bold hover:bg-hibi-light inline-flex items-center gap-1.5">
             <span className="text-lg leading-none">＋</span>現場を追加
           </button>
         }
@@ -624,12 +624,12 @@ export default function SitesPage() {
       {/* ② 一覧 */}
       <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
         <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
-          <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">現場</h2>
+          <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">現場</h2>
           <Segment value={showArchived ? 'archived' : 'live'} onChange={v => { setShowArchived(v === 'archived'); setListFilter('all') }} items={[
             ['live', `使っている ${sites.length - archivedCount}`], ['archived', `終了 ${archivedCount}`],
           ]} />
           {listFilter !== 'all' && (
-            <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+            <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[0.8125rem] font-bold">
               {SITE_FILTER_LABEL[listFilter]}だけ表示中 ×
             </button>
           )}
@@ -657,7 +657,7 @@ export default function SitesPage() {
               onKeyDown={e => { if (e.key === 'Enter') openEdit(s) }}
               className={`border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-2 ${SITE_COLS} gap-x-3 gap-y-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition tabular-nums ${s.archived ? 'opacity-60' : ''}`}>
               <span className={`col-span-2 lg:col-span-1 min-w-0 ${s.parentId ? 'pl-5' : ''}`}>
-                <span className="block text-[15px] font-bold text-gray-900 dark:text-gray-100">
+                <span className="block text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100">
                   {s.parentId ? <span className="text-indigo-700 dark:text-indigo-300">└ 工種: {s.workType}</span> : s.name}
                 </span>
                 {!s.parentId && (chain.length > 0 || s.client) && (
@@ -666,11 +666,11 @@ export default function SitesPage() {
                   </span>
                 )}
               </span>
-              <span className={`text-[13px] ${ending ? 'text-amber-700 dark:text-amber-400 font-bold' : ''}`}>{periodText(s)}</span>
+              <span className={`text-[0.8125rem] ${ending ? 'text-amber-700 dark:text-amber-400 font-bold' : ''}`}>{periodText(s)}</span>
               <span className="text-sm">{s.parentId ? <span className="text-hibi-sub">親現場と同じ</span> : s.foreman ? getWorkerName(s.foreman) : <Chip tone="red">まだ</Chip>}</span>
               <span className="lg:text-right text-sm">
                 <span className={`font-bold ${rate.isDefault ? 'text-gray-400' : ''}`}>{fmtYen(rate.tobiRate)} ／ {fmtYen(rate.dokoRate)}</span>
-                <span className="block text-[11px] text-hibi-sub dark:text-gray-400">{s.siteType === 'support' ? '直接受け取り 100%' : rate.isDefault ? '既定値（85%で計算）' : '85%で計算'}</span>
+                <span className="block text-2xs text-hibi-sub dark:text-gray-400">{s.siteType === 'support' ? '直接受け取り 100%' : rate.isDefault ? '既定値（85%で計算）' : '85%で計算'}</span>
               </span>
               <span className="lg:text-right text-sm">{workerCount} ＋ {subconCount}</span>
               <span className="flex flex-wrap gap-1">
@@ -693,15 +693,15 @@ export default function SitesPage() {
               「運転手当なし」のチェックだけは fieldset の外に置く（disabled の fieldset の中は、内側で有効にできないため） */}
           <div className="flex flex-col min-h-full">
             {!canEditMaster && (
-              <div className="px-6 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 text-[13px] text-amber-800 dark:text-amber-200">
+              <div className="px-6 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 text-[0.8125rem] text-amber-800 dark:text-amber-200">
                 現場マスタの編集は事務・代表だけです。この画面は見るだけで、保存できるのは「その他」タブの「運転手当なし」の指定だけです。
               </div>
             )}
             <div className="px-6 py-5 border-b border-hibi-line dark:border-gray-700 flex items-start gap-3">
               <div className="flex-1 min-w-0">
-                <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{editId ? (form.name || '（名前なし）') : '現場を追加'}</h2>
+                <h2 className="text-[1.375rem] font-bold text-gray-900 dark:text-white">{editId ? (form.name || '（名前なし）') : '現場を追加'}</h2>
                 {editingSite && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[0.8125rem] text-hibi-sub dark:text-gray-400">
                     {form.archived ? <Chip tone="gray">終了（保存すると選択欄から消えます）</Chip> : isActive(editingSite) ? <Chip tone="green">稼働中</Chip> : <Chip tone="amber">工期が過ぎた</Chip>}
                     <span>工期 {periodText(editingSite)}</span>
                     {!editingSite.parentId && <span>／ 職長 {getWorkerName(editingSite.foreman)}</span>}
@@ -711,7 +711,7 @@ export default function SitesPage() {
               {/* 終了にするのは現場マスタを編集できる人だけ（事業責任者の保存は運転手当の設定しか送らないため、押しても反映されない） */}
               {editId && canEditMaster && !form.archived && (
                 <button type="button" onClick={() => { setForm({ ...form, archived: true }); setModalTab('basic') }}
-                  className="h-9 px-3.5 rounded-[9px] border border-red-300 dark:border-red-800 bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 text-[13px] font-bold hover:bg-red-50 dark:hover:bg-red-900/20">終了にする</button>
+                  className="h-9 px-3.5 rounded-[9px] border border-red-300 dark:border-red-800 bg-white dark:bg-gray-800 text-red-700 dark:text-red-400 text-[0.8125rem] font-bold hover:bg-red-50 dark:hover:bg-red-900/20">終了にする</button>
               )}
               <CloseButton onClick={() => setShowModal(false)} />
             </div>
@@ -771,7 +771,7 @@ export default function SitesPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-gray-600 dark:text-gray-300">請負体制</span>
                   <button type="button" onClick={() => addCompanyInline()}
-                    className="text-[11px] text-hibi-navy dark:text-blue-300 underline">＋ 一覧に無い会社を追加</button>
+                    className="text-2xs text-hibi-navy dark:text-blue-300 underline">＋ 一覧に無い会社を追加</button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <PartySelect label="元請" value={form.gcId} role="gc" companies={subcons}
@@ -783,9 +783,9 @@ export default function SitesPage() {
                 </div>
                 {(() => {
                   const r = resolveSiteParties({ gcId: form.gcId, primeId: form.primeId, ownerId: form.ownerId }, subcons)
-                  if (!form.ownerId) return <p className="text-[11px] text-amber-600">担当の二次を選んでください</p>
+                  if (!form.ownerId) return <p className="text-2xs text-amber-600">担当の二次を選んでください</p>
                   return (
-                    <p className="text-[11px] text-gray-600 dark:text-gray-300">
+                    <p className="text-2xs text-gray-600 dark:text-gray-300">
                       {r.siteType === 'support'
                         ? <span className="px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 font-bold">応援現場</span>
                         : <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 font-bold">自社現場</span>}
@@ -835,7 +835,7 @@ export default function SitesPage() {
                       )}
                     </label>
                   ))}
-                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                  <p className="text-2xs text-gray-400 leading-relaxed">
                     スポット・常駐前の月は、カレンダー画面・翌月カレンダーの注意・通知ベルに出ません（催促しません）。出面はいつもどおり入力できます。
                     常駐が決まったら「この月から作る」にして、カレンダーを作ってください。
                   </p>
@@ -861,28 +861,28 @@ export default function SitesPage() {
                 <div className="rounded-lg border border-gray-200 dark:border-gray-600 p-3">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold text-gray-600 dark:text-gray-300">工種（出面の入力先）</span>
-                    <button type="button" onClick={addWorkType} className="text-[11px] text-hibi-navy dark:text-blue-300 underline">＋ 工種を追加</button>
+                    <button type="button" onClick={addWorkType} className="text-2xs text-hibi-navy dark:text-blue-300 underline">＋ 工種を追加</button>
                   </div>
                   {childrenOfEditing.length === 0 ? (
-                    <p className="text-[11px] text-gray-400">
+                    <p className="text-2xs text-gray-400">
                       工事の種類（鉄骨・仮設など）で単価が変わる現場だけ作ります。作ると出面の現場選択に「{form.name}（鉄骨）」のような入力先が並びます。
                       カレンダー・署名・職長はこの現場と共通です。
                     </p>
                   ) : (
                     <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <label className="text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap">工種を選ばない日の呼び方</label>
+                      <label className="text-2xs text-gray-500 dark:text-gray-400 whitespace-nowrap">工種を選ばない日の呼び方</label>
                       <input value={form.workType} onChange={e => setForm({ ...form, workType: e.target.value })} placeholder="例: 仮設工事"
                         className="flex-1 rounded border border-gray-300 dark:border-gray-600 px-2 py-1 text-xs bg-white dark:bg-gray-700" />
                     </div>
-                    <p className="text-[11px] text-gray-400">出面のタグと請求書の行に、この名前で出ます（空なら「親現場」）。</p>
+                    <p className="text-2xs text-gray-400">出面のタグと請求書の行に、この名前で出ます（空なら「親現場」）。</p>
                     <div className="flex flex-wrap gap-1.5">
                       {childrenOfEditing.map(c => (
                         <span key={c.id} className={`text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200 ${c.archived ? 'opacity-50' : ''}`}>
                           {c.workType}{c.archived ? '（アーカイブ）' : ''}
                         </span>
                       ))}
-                      <span className="text-[11px] text-gray-400 self-center">単価は一覧の工種の行から開いて設定</span>
+                      <span className="text-2xs text-gray-400 self-center">単価は一覧の工種の行から開いて設定</span>
                     </div>
                     </div>
                   )}
@@ -965,7 +965,7 @@ export default function SitesPage() {
                           {cfg.enabled && (
                             <div className="grid grid-cols-2 gap-2 ml-6">
                               <div>
-                                <label className="text-[10px] text-gray-500 block mb-0.5">時間（分）</label>
+                                <label className="text-3xs text-gray-500 block mb-0.5">時間（分）</label>
                                 <input
                                   type="number"
                                   min={0}
@@ -1237,7 +1237,7 @@ export default function SitesPage() {
                       onChange={e => setFormNoDrive(e.target.checked)} />
                     <span>
                       <b>この現場は運転手当なし</b>（ごく近い現場など）
-                      <span className="block text-[11px] text-gray-500 mt-0.5">
+                      <span className="block text-2xs text-gray-500 mt-0.5">
                         チェックすると、出面の「運」ボタンが出なくなり、運転手当（片道 ¥{DRIVE_ALLOWANCE_YEN.toLocaleString()}）が付きません。工種にも同じ設定が効きます。
                         {!canSetNoDrive && ' 変更できるのは代表・事業責任者だけです。'}
                       </span>
@@ -1251,14 +1251,14 @@ export default function SitesPage() {
                 <div className="flex items-center gap-2 mb-1">
                   <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400">🚗 通勤時間（手当の判定）</h4>
                   {formCommute.judgedMin !== undefined ? (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 font-bold">
+                    <span className="text-3xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 font-bold">
                       凍結済み {formCommute.judgedMin}分
                     </span>
                   ) : (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-bold">測定中</span>
+                    <span className="text-3xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-bold">測定中</span>
                   )}
                 </div>
-                <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
+                <p className="text-2xs text-gray-500 mb-2 leading-relaxed">
                   朝5:30発（清瀬→現場）と夕17:30発（現場→清瀬）の所要時間を最初の10営業日で測り、
                   平均の片道換算を「判定値」として凍結します。判定値から遠方現場日当（80分超500円／120分超1,500円・現在は保留）が決まります。
                   運転手当は判定値とは関係なく片道 ¥{DRIVE_ALLOWANCE_YEN.toLocaleString()}（上の「運転手当なし」の現場を除く）。
@@ -1274,10 +1274,10 @@ export default function SitesPage() {
                       遠方現場日当: <b>{SITE_ALLOWANCE_FROM_YM === null ? '制度を再検討中のため保留（0円）'
                         : dailyAllowanceYen(formCommute.judgedMin) > 0 ? `¥${dailyAllowanceYen(formCommute.judgedMin).toLocaleString()}/日` : '対象外'}</b>
                     </div>
-                    <div className="text-[10px] text-gray-500">
+                    <div className="text-3xs text-gray-500">
                       ※ 運転手当は全現場一律 ¥{DRIVE_ALLOWANCE_YEN.toLocaleString()}/片道 で、判定値とは関係ありません。
                     </div>
-                    <div className="text-[10px] text-gray-400">凍結後は変更できません（非課税の根拠となる客観基準のため）。経路変更等の事由がある場合のみ、記録のうえ再測定してください。</div>
+                    <div className="text-3xs text-gray-400">凍結後は変更できません（非課税の根拠となる客観基準のため）。経路変更等の事由がある場合のみ、記録のうえ再測定してください。</div>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1331,7 +1331,7 @@ export default function SitesPage() {
                             + 今日の測定を追加
                           </button>
                           {j.completeDays > 0 && (
-                            <span className="text-[11px] text-gray-500 tabular-nums">
+                            <span className="text-2xs text-gray-500 tabular-nums">
                               朝夕そろった日 {j.completeDays}/{COMMUTE_SAMPLE_TARGET}日
                               {j.judged !== null && <>／ 現時点の平均 <b>{j.judged}分</b></>}
                             </span>
@@ -1354,7 +1354,7 @@ export default function SitesPage() {
                       )
                     })()}
                     {formCommute.samples.length > 0 && (
-                      <p className="text-[10px] text-gray-400">朝・夕の欄に Google マップの実測分数を入れてください（保存ボタンで保存されます）。自動測定を有効にすると毎営業日この表に追記されます。</p>
+                      <p className="text-3xs text-gray-400">朝・夕の欄に Google マップの実測分数を入れてください（保存ボタンで保存されます）。自動測定を有効にすると毎営業日この表に追記されます。</p>
                     )}
                   </div>
                 )}
@@ -1468,7 +1468,7 @@ function PartySelect({ label, value, role, companies, includeSelf, onChange }: {
   const options = companies.filter(c => hasRole(c, role) || c.id === value)
   return (
     <div>
-      <label className="text-[11px] text-gray-500 dark:text-gray-400 block mb-1">{label}</label>
+      <label className="text-2xs text-gray-500 dark:text-gray-400 block mb-1">{label}</label>
       <select value={value} onChange={e => onChange(e.target.value)}
         className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-2 py-2 text-sm focus:ring-2 focus:ring-hibi-navy focus:outline-none">
         <option value="">{includeSelf ? '選択してください' : '未設定'}</option>

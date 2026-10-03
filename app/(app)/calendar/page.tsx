@@ -104,7 +104,7 @@ function DaySummary({ days, year, month }: { days: Record<string, DayType>; year
         <span className="text-blue-600 dark:text-blue-400 font-medium">出勤 {breakdown.work}日</span>
         <span className="text-gray-500 dark:text-gray-400">休み {breakdown.restTotal}日</span>
         {breakdown.restTotal > 0 && (
-          <span className="text-[11px] text-gray-500 dark:text-gray-400">
+          <span className="text-2xs text-gray-500 dark:text-gray-400">
             （内訳：
             {breakdown.restSunday > 0 && <span>日曜 {breakdown.restSunday}日</span>}
             {breakdown.restSunday > 0 && (breakdown.restHoliday > 0 || breakdown.restOther > 0) && ' / '}
@@ -457,7 +457,7 @@ export default function CalendarManagePage() {
               <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
             </button>
             <select value={ym} onChange={e => setYm(e.target.value)} aria-label="年月"
-              className="h-full bg-transparent text-[15px] font-bold text-gray-900 dark:text-white focus:outline-none px-1">
+              className="h-full bg-transparent text-[0.9375rem] font-bold text-gray-900 dark:text-white focus:outline-none px-1">
               {ymOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             <button type="button" aria-label="次の月" disabled={ymPos < 0 || ymPos >= ymOptions.length - 1} onClick={() => ymPos >= 0 && ymPos < ymOptions.length - 1 && setYm(ymOptions[ymPos + 1].value)}
@@ -529,7 +529,7 @@ export default function CalendarManagePage() {
           {/* 左: 現場の一覧（1現場1行・押すと右に開く） */}
           <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex items-center justify-between">
-              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">現場（{m}月分）</h2>
+              <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">現場（{m}月分）</h2>
               <span className="text-xs text-hibi-sub dark:text-gray-400">押すと右に開く</span>
             </div>
             {visibleSites.map(site => {
@@ -543,9 +543,9 @@ export default function CalendarManagePage() {
                   className={`w-full text-left border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-4 py-3 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 border-l-[3px] transition ${
                     selected ? 'bg-hibi-active/60 dark:bg-blue-900/20 border-l-hibi-navy dark:border-l-blue-400' : 'border-l-transparent hover:bg-gray-50 dark:hover:bg-gray-700/40'
                   }`}>
-                  <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{site.siteName}</span>
+                  <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{site.siteName}</span>
                   <span>{statusBadge(site)}</span>
-                  <span className="text-[13px] text-hibi-sub dark:text-gray-400">
+                  <span className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">
                     {site.status || editingDays[site.siteId] ? <>出勤 <b className="text-base text-gray-900 dark:text-white">{work}</b>日・休み {total - work}日</> : 'まだ作られていません'}
                   </span>
                   <span className="text-right">{over && <Chip tone="red">法定の上限超え</Chip>}</span>
@@ -825,7 +825,7 @@ export default function CalendarManagePage() {
                                         <span className="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
                                       </summary>
                                       <div className="px-3 pb-3 pt-1 space-y-2 border-t border-gray-100 dark:border-gray-700">
-                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
+                                        <p className="text-2xs text-gray-500 dark:text-gray-400 leading-relaxed">
                                           下記は署名済みスタッフ全員に影響します。誤操作防止のため2段階です。
                                         </p>
 
@@ -1052,7 +1052,7 @@ export default function CalendarManagePage() {
                   })}
                 </tbody>
               </table>
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
+              <p className="text-2xs text-gray-400 dark:text-gray-500 mt-2">
                 「お願い文」= 未署名の人へのお願い文をコピー（個人リンクから承認してもらう）。赤=翌月が締切間近で未完了。灰色の「終了」=過去月で未完了のまま終わった月（件数は記録。名前はカーソルを合わせると出ます）。
               </p>
             </div>
@@ -1108,7 +1108,7 @@ export default function CalendarManagePage() {
       {/* Signature status summary */}
       {!loading && visibleSites.length > 0 && (
         <div id="cal-sign" className="scroll-mt-4 bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 p-4 space-y-3">
-          <h3 className="text-[17px] font-bold text-gray-900 dark:text-white">署名の状況</h3>
+          <h3 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">署名の状況</h3>
           <div className="text-sm text-gray-700 dark:text-gray-300">
             署名状況: <span className="font-bold">{signedWorkers}/{totalWorkers}名</span> 署名済み
           </div>
@@ -1228,7 +1228,7 @@ export default function CalendarManagePage() {
                           : `再確認 ${reconfirmedCount}/${assignedWorkers.length}名`}
                       </div>
                     </div>
-                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+                    <div className="text-2xs text-gray-500 dark:text-gray-400 mb-2">
                       修正日時: {fmtTime(site.updatedAt)} / 修正者: {updatedByName}
                     </div>
 

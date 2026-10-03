@@ -46,9 +46,9 @@ function ExpiryBadge({ expiresOn, today }: { expiresOn?: string; today: string }
   const st = expiryState(expiresOn, today)
   if (st === 'none') return null
   const n = daysUntil(expiresOn, today) ?? 0
-  if (st === 'expired') return <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[11px] font-bold">期限切れ（{-n}日前）</span>
-  if (st === 'soon') return <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[11px] font-bold">あと{n}日</span>
-  return <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[11px]">あと{n}日</span>
+  if (st === 'expired') return <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-2xs font-bold">期限切れ（{-n}日前）</span>
+  if (st === 'soon') return <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-2xs font-bold">あと{n}日</span>
+  return <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-2xs">あと{n}日</span>
 }
 
 type SdFilter = 'all' | 'expiring' | 'mismatch' | 'missing'
@@ -201,7 +201,7 @@ function StaffDocsInner() {
         sub="在留カード・雇用契約書など。新しい書類を入れると、前のものは「旧版」として残ります"
         actions={canEdit ? (
           <button onClick={() => setUploadFor({ workerId: null })} disabled={!storageReady}
-            className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light disabled:opacity-40 inline-flex items-center gap-1.5">
+            className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[0.9375rem] font-bold hover:bg-hibi-light disabled:opacity-40 inline-flex items-center gap-1.5">
             <span className="text-lg leading-none">＋</span>書類を入れる
           </button>
         ) : undefined}
@@ -246,14 +246,14 @@ function StaffDocsInner() {
           {/* ② スタッフごと（1人1行・書類は札で） */}
           <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
-              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">スタッフごとの書類</h2>
+              <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">スタッフごとの書類</h2>
               {retiredTargets.length > 0 && (
                 <Segment value={scope} onChange={v => { setScope(v); setListFilter('all') }} items={[
                   ['active', `在籍 ${activeTargets.length}`], ['retired', `退職 ${retiredTargets.length}`],
                 ]} />
               )}
               {listFilter !== 'all' && (
-                <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[13px] font-bold">
+                <button onClick={() => setListFilter('all')} className="h-8 px-3 rounded-lg bg-hibi-active text-hibi-navy dark:bg-blue-900/30 dark:text-blue-300 text-[0.8125rem] font-bold">
                   {SD_FILTER_LABEL[listFilter]}だけ表示中 ×
                 </button>
               )}
@@ -277,7 +277,7 @@ function StaffDocsInner() {
                   className="border-t border-hibi-line dark:border-gray-700 px-5 py-2.5 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_110px_minmax(0,1.6fr)_80px] gap-x-3 gap-y-1.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
                   <span className="flex items-center gap-2.5 min-w-0">
                     <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={36} />
-                    <span className="text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</span>
+                    <span className="text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{w.name}</span>
                     {retiredNow(w) ? <Chip tone="gray">退職</Chip> : w.retired ? <Chip tone="amber" title="この日までは在籍中です">退職予定 {w.retired}</Chip> : null}
                   </span>
                   <span><Chip tone="gray">{visaLabel(w.visaType ?? w.visa)}</Chip></span>
@@ -317,8 +317,8 @@ function StaffDocsInner() {
               <div className="flex items-center gap-3">
                 <WorkerAvatar name={w.name} src={photos[String(w.id)]} size={52} />
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-[22px] font-bold text-gray-900 dark:text-white truncate">{w.name}</h2>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[13px] text-hibi-sub dark:text-gray-400">
+                  <h2 className="text-[1.375rem] font-bold text-gray-900 dark:text-white truncate">{w.name}</h2>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[0.8125rem] text-hibi-sub dark:text-gray-400">
                     <Chip tone="gray">{visaLabel(w.visaType ?? w.visa)}</Chip>
                     {retiredNow(w) ? <Chip tone="gray">退職 {w.retired}</Chip> : w.retired ? <Chip tone="amber" title="この日までは在籍中です">退職予定 {w.retired}</Chip> : null}
                     <span>人員マスタの在留期限 {w.visaExpiry || '未登録'}</span>
@@ -334,14 +334,14 @@ function StaffDocsInner() {
                     <span className="text-base leading-none">＋</span>この人に書類を入れる
                   </button>
                 )}
-                <a href={`/workers?edit=${w.id}`} className="ml-auto text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline">人員マスタで開く</a>
+                <a href={`/workers?edit=${w.id}`} className="ml-auto text-[0.8125rem] font-bold text-hibi-navy dark:text-blue-300 hover:underline">人員マスタで開く</a>
               </div>
 
               {mism.length > 0 && (
                 <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-900 dark:text-amber-200 space-y-1">
                   <b>人員マスタとの食い違い</b>
                   {mism.map((m, i) => <div key={i}>{m}</div>)}
-                  <a href={`/workers?edit=${w.id}`} className="inline-block text-[13px] font-bold text-hibi-navy dark:text-blue-300 hover:underline">人員マスタを直す</a>
+                  <a href={`/workers?edit=${w.id}`} className="inline-block text-[0.8125rem] font-bold text-hibi-navy dark:text-blue-300 hover:underline">人員マスタを直す</a>
                 </div>
               )}
               {miss.length > 0 && (
@@ -367,7 +367,7 @@ function StaffDocsInner() {
 
               {old.length > 0 && (
                 <section>
-                  <button onClick={() => setShowOld(s => ({ ...s, [w.id]: !s[w.id] }))} className="text-[13px] font-bold text-hibi-sub hover:text-hibi-navy">
+                  <button onClick={() => setShowOld(s => ({ ...s, [w.id]: !s[w.id] }))} className="text-[0.8125rem] font-bold text-hibi-sub hover:text-hibi-navy">
                     {showOld[w.id] ? '旧版を隠す' : `旧版 ${old.length}件を見る`}
                   </button>
                   {showOld[w.id] && (
@@ -418,10 +418,10 @@ function DocRow({ d, today, canEdit, canDelete, onOpen, onEdit, onStatus, onDele
         <div className="flex items-center gap-2 flex-wrap text-sm">
           <span className="font-bold text-gray-800 dark:text-gray-100">{def.label}</span>
           {d.title && <span className="text-gray-600 dark:text-gray-300">{d.title}</span>}
-          {d.status === 'old' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">旧版</span>}
+          {d.status === 'old' && <span className="text-3xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">旧版</span>}
           {d.status === 'current' && <ExpiryBadge expiresOn={d.expiresOn} today={today} />}
         </div>
-        <div className="text-[11px] text-gray-500 mt-0.5 flex gap-3 flex-wrap">
+        <div className="text-2xs text-gray-500 mt-0.5 flex gap-3 flex-wrap">
           {d.validFrom && <span>開始 {d.validFrom}</span>}
           {d.expiresOn && <span>{def.expiryLabel || '期限'} {d.expiresOn}</span>}
           <span>登録 {d.uploadedAt.slice(0, 10)}</span>
@@ -430,13 +430,13 @@ function DocRow({ d, today, canEdit, canDelete, onOpen, onEdit, onStatus, onDele
         <div className="flex gap-1.5 flex-wrap mt-1">
           {d.files.map((f, i) => (
             <button key={i} onClick={() => onOpen(d, i)} title={`${f.name}（${fmtSize(f.size)}）`}
-              className="text-[11px] px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-hibi-navy hover:text-hibi-navy max-w-[220px] truncate">
+              className="text-2xs px-2 py-0.5 rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:border-hibi-navy hover:text-hibi-navy max-w-[220px] truncate">
               {f.contentType === 'application/pdf' ? 'PDF' : '画像'}・{f.name}
             </button>
           ))}
         </div>
       </div>
-      <div className="flex items-center gap-2 text-[11px] shrink-0">
+      <div className="flex items-center gap-2 text-2xs shrink-0">
         {canEdit && <button onClick={() => onEdit(d)} className="text-blue-600 dark:text-blue-400 hover:underline">編集</button>}
         {canEdit && (d.status === 'current'
           ? <button onClick={() => onStatus(d, 'old')} className="text-gray-500 hover:underline">旧版にする</button>
@@ -464,7 +464,7 @@ function DocFields({ type, setType, title, setTitle, validFrom, setValidFrom, ex
           {!type && <option value="">選んでください</option>}
           {STAFF_DOC_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
         </select>
-        <span className="text-[11px] text-gray-400">{def.hint}</span>
+        <span className="text-2xs text-gray-400">{def.hint}</span>
       </label>
       <label className="block sm:col-span-2">
         <span className="text-xs text-gray-500">見出し（任意）</span>
@@ -585,7 +585,7 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
           className={`rounded-lg border-2 border-dashed p-4 text-center cursor-pointer text-sm transition ${dragOver ? 'border-hibi-navy bg-blue-50' : 'border-gray-300 dark:border-gray-600 hover:border-hibi-navy'}`}
         >
           <div className="text-gray-600 dark:text-gray-300">ここにファイルをドラッグ、またはクリックして選ぶ</div>
-          <div className="text-[11px] text-gray-400 mt-1">PDF・写真（JPEG/PNG/HEIC）／1件に{STAFF_DOC_MAX_FILES}個まで（在留カードの表と裏は1件にまとめて）／1ファイル25MBまで</div>
+          <div className="text-2xs text-gray-400 mt-1">PDF・写真（JPEG/PNG/HEIC）／1件に{STAFF_DOC_MAX_FILES}個まで（在留カードの表と裏は1件にまとめて）／1ファイル25MBまで</div>
           <input ref={inputRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*" className="hidden"
             onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
         </div>
@@ -606,14 +606,14 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
           const guesses = Array.from(new Set(files.map(f => inferDocType(f.name)).filter(Boolean))) as StaffDocType[]
           const other = guesses.find(g => type && g !== type)
           return other ? (
-            <p className="text-[11px] font-bold text-red-600">⚠ ファイル名は「{staffDocTypeDef(other).label}」のようですが、種類が「{staffDocTypeDef(type).label}」になっています。確認してください</p>
+            <p className="text-2xs font-bold text-red-600">⚠ ファイル名は「{staffDocTypeDef(other).label}」のようですが、種類が「{staffDocTypeDef(type).label}」になっています。確認してください</p>
           ) : null
         })()}
         {type && staffDocTypeDef(type).hasExpiry && !expiresOn && (
-          <p className="text-[11px] text-amber-700">{staffDocTypeDef(type).expiryLabel}を入れると、期限切れの警告と人員マスタとの食い違いのチェックが効きます</p>
+          <p className="text-2xs text-amber-700">{staffDocTypeDef(type).expiryLabel}を入れると、期限切れの警告と人員マスタとの食い違いのチェックが効きます</p>
         )}
         {type === 'residence_card' && w && (
-          <p className="text-[11px] text-gray-500">人員マスタの在留期限: {w.visaExpiry || '未登録'}（カードの期限と違えば、登録後に「食い違い」に出ます）</p>
+          <p className="text-2xs text-gray-500">人員マスタの在留期限: {w.visaExpiry || '未登録'}（カードの期限と違えば、登録後に「食い違い」に出ます）</p>
         )}
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={makeCurrent} onChange={e => setMakeCurrent(e.target.checked)} />

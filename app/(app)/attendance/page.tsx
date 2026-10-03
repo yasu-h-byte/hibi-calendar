@@ -1486,8 +1486,8 @@ export default function AttendanceGridPage() {
             className="w-full px-4 py-2.5 flex items-center gap-2.5 text-left">
             <Icon name="alert" size={16} className="text-amber-700 dark:text-amber-300 shrink-0" />
             <span className="text-sm font-bold text-gray-900 dark:text-white whitespace-nowrap">確認すること {checkItems.length}件</span>
-            <span className="text-[13px] text-amber-900 dark:text-amber-200 truncate min-w-0">{checkItems.join('・')}</span>
-            <span className="ml-auto text-[13px] font-bold text-hibi-navy dark:text-blue-300 whitespace-nowrap">{checksOpen ? '閉じる' : '開く'}</span>
+            <span className="text-[0.8125rem] text-amber-900 dark:text-amber-200 truncate min-w-0">{checkItems.join('・')}</span>
+            <span className="ml-auto text-[0.8125rem] font-bold text-hibi-navy dark:text-blue-300 whitespace-nowrap">{checksOpen ? '閉じる' : '開く'}</span>
           </button>
           {checksOpen && (
             <div className="px-3 pb-3 space-y-2">

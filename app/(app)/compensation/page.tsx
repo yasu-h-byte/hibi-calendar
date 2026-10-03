@@ -35,7 +35,7 @@ function HubCard({ title, subtitle, links }: { title: string; subtitle: string; 
   return (
     <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
       <div className="px-5 py-3.5">
-        <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">{title}</h2>
+        <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">{title}</h2>
         <p className="text-xs text-hibi-sub dark:text-gray-400 mt-0.5">{subtitle}</p>
       </div>
       {links.map(l => (
@@ -45,7 +45,7 @@ function HubCard({ title, subtitle, links }: { title: string; subtitle: string; 
             <Icon name={l.icon} size={18} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-bold text-gray-900 dark:text-white">{l.title}</span>
+            <span className="block text-[0.9375rem] font-bold text-gray-900 dark:text-white">{l.title}</span>
             <span className="block text-xs text-hibi-sub dark:text-gray-400 mt-0.5">{l.desc}</span>
           </span>
           {l.badge}

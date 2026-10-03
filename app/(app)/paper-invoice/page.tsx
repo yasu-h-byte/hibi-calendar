@@ -155,7 +155,7 @@ export default function PaperInvoicePage() {
                 className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-l-[10px]">
                 <Icon name="chevronLeft" size={18} strokeWidth={2.2} />
               </button>
-              <span className="px-1.5 text-[15px] font-bold tabular-nums">{ymLabelOf(ym)}</span>
+              <span className="px-1.5 text-[0.9375rem] font-bold tabular-nums">{ymLabelOf(ym)}</span>
               <button type="button" aria-label="次の月" onClick={() => setYm(shiftYm(ym, 1))}
                 className="w-10 h-full flex items-center justify-center text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 rounded-r-[10px]">
                 <Icon name="chevronRight" size={18} strokeWidth={2.2} />
@@ -163,12 +163,12 @@ export default function PaperInvoicePage() {
             </div>
             {canEdit && (
               <button type="button" onClick={() => setModal({ mode: 'add' })} disabled={!data?.storageReady}
-                className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[15px] font-bold hover:bg-hibi-light disabled:opacity-40">
+                className="h-[42px] px-4 rounded-[10px] bg-hibi-navy text-white text-[0.9375rem] font-bold hover:bg-hibi-light disabled:opacity-40">
                 請求書を入れる
               </button>
             )}
             <a href={`/peer-statement?ym=${ym}`}
-              className="h-[42px] px-4 inline-flex items-center rounded-[10px] border border-gray-300 dark:border-gray-600 text-[14px] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+              className="h-[42px] px-4 inline-flex items-center rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
               請求書・支払へ
             </a>
           </>
@@ -203,7 +203,7 @@ export default function PaperInvoicePage() {
           {/* ② 1行一覧 */}
           <section className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden">
             <div className="px-5 py-3.5 border-b border-hibi-line dark:border-gray-700 flex flex-wrap items-center gap-3">
-              <h2 className="text-[17px] font-bold text-gray-900 dark:text-white">{ymLabelOf(ym)}の請求書</h2>
+              <h2 className="text-[1.0625rem] font-bold text-gray-900 dark:text-white">{ymLabelOf(ym)}の請求書</h2>
               <span className="ml-auto text-xs text-hibi-sub dark:text-gray-400">行を押すと、システムとの見比べが右に開きます</span>
             </div>
             <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_140px_140px_190px_130px] gap-3.5 px-5 py-2.5 bg-hibi-thead dark:bg-gray-700 text-xs font-bold text-hibi-sub dark:text-gray-300">
@@ -219,13 +219,13 @@ export default function PaperInvoicePage() {
                   onKeyDown={e => { if (e.key === 'Enter') setOpenId(r.id) }}
                   className="border-t border-hibi-line dark:border-gray-700 first-of-type:border-t-0 px-5 py-3 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_140px_140px_190px_130px] gap-2 lg:gap-3.5 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
                   <span className="min-w-0">
-                    <span className="block text-[15px] font-bold text-gray-900 dark:text-gray-100 truncate">{r.companyName}</span>
+                    <span className="block text-[0.9375rem] font-bold text-gray-900 dark:text-gray-100 truncate">{r.companyName}</span>
                     {r.no && <span className="block text-xs text-hibi-sub dark:text-gray-400">{r.no}</span>}
                   </span>
-                  <span className="lg:text-right text-[17px] font-bold tabular-nums text-gray-900 dark:text-white">
+                  <span className="lg:text-right text-[1.0625rem] font-bold tabular-nums text-gray-900 dark:text-white">
                     <span className="lg:hidden mr-2 text-xs font-normal text-hibi-sub dark:text-gray-400">紙</span>{yen(r.total)}
                   </span>
-                  <span className="lg:text-right text-[15px] tabular-nums text-gray-700 dark:text-gray-300">
+                  <span className="lg:text-right text-[0.9375rem] tabular-nums text-gray-700 dark:text-gray-300">
                     <span className="lg:hidden mr-2 text-xs text-hibi-sub dark:text-gray-400">システム</span>{sys && sys.source !== 'none' ? yen(sys.total) : '—'}
                   </span>
                   <span>{diffChip(cmpOf(r.id))}</span>
@@ -240,7 +240,7 @@ export default function PaperInvoicePage() {
               <span className="text-xs text-hibi-sub dark:text-gray-400">これまでに入れた月:</span>
               {allMonths.map(m => (
                 <button key={m.ym} type="button" onClick={() => setYm(m.ym)}
-                  className={`h-8 px-3 rounded-full border text-[13px] font-bold ${m.ym === ym ? 'bg-hibi-navy text-white border-hibi-navy' : 'border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'}`}>
+                  className={`h-8 px-3 rounded-full border text-[0.8125rem] font-bold ${m.ym === ym ? 'bg-hibi-navy text-white border-hibi-navy' : 'border-gray-300 dark:border-gray-600 text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700'}`}>
                   {ymLabelOf(m.ym)}（{m.n}）
                 </button>
               ))}
@@ -292,8 +292,8 @@ function Detail({ rec, sys, cmp, onClose, onOpenFile, onEdit, onDelete }: {
     <div className="p-4 sm:p-6 space-y-6">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
-          <h2 className="text-[22px] font-bold text-gray-900 dark:text-white">{rec.companyName}</h2>
-          <div className="text-[13px] text-hibi-sub dark:text-gray-400">
+          <h2 className="text-[1.375rem] font-bold text-gray-900 dark:text-white">{rec.companyName}</h2>
+          <div className="text-[0.8125rem] text-hibi-sub dark:text-gray-400">
             {ymLabelOf(rec.ym)}{rec.no && ` ／ ${rec.no}`}{rec.issueDate && ` ／ 発行日 ${rec.issueDate}`}
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -314,7 +314,7 @@ function Detail({ rec, sys, cmp, onClose, onOpenFile, onEdit, onDelete }: {
         <div className="flex flex-wrap gap-2">
           {rec.files.map((f, i) => (
             <button key={i} type="button" onClick={() => onOpenFile(i)}
-              className="h-9 px-3 rounded-[9px] border border-gray-300 dark:border-gray-600 text-[13px] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 max-w-full truncate">
+              className="h-9 px-3 rounded-[9px] border border-gray-300 dark:border-gray-600 text-[0.8125rem] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700 max-w-full truncate">
               {f.name}（{fmtSize(f.size)}）
             </button>
           ))}
@@ -325,7 +325,7 @@ function Detail({ rec, sys, cmp, onClose, onOpenFile, onEdit, onDelete }: {
         <h3 className="text-base font-bold text-gray-900 dark:text-white">紙とシステムの見比べ</h3>
         {/* スマホ（375px）でもはみ出さないよう、数字の列は最大110pxまで縮む・文字も小さく（2026-10-02） */}
         <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-x-auto text-xs sm:text-sm">
-          <div className="grid grid-cols-[minmax(4.5rem,1fr)_repeat(3,minmax(0,110px))] gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 bg-hibi-thead dark:bg-gray-700 text-[11px] sm:text-xs font-bold text-hibi-sub dark:text-gray-300">
+          <div className="grid grid-cols-[minmax(4.5rem,1fr)_repeat(3,minmax(0,110px))] gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 bg-hibi-thead dark:bg-gray-700 text-2xs sm:text-xs font-bold text-hibi-sub dark:text-gray-300">
             <span>項目</span><span className="text-right">紙</span><span className="text-right">システム</span><span className="text-right">差<span className="hidden sm:inline">（紙−システム）</span></span>
           </div>
           {rows.map(r => (
@@ -358,8 +358,8 @@ function Detail({ rec, sys, cmp, onClose, onOpenFile, onEdit, onDelete }: {
 
       {(onEdit || onDelete) && (
         <div className="flex gap-2">
-          {onEdit && <button type="button" onClick={onEdit} className="h-10 px-4 rounded-[10px] border border-gray-300 dark:border-gray-600 text-[14px] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">金額・明細を直す</button>}
-          {onDelete && <button type="button" onClick={onDelete} className="h-10 px-4 rounded-[10px] text-[14px] font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">削除</button>}
+          {onEdit && <button type="button" onClick={onEdit} className="h-10 px-4 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">金額・明細を直す</button>}
+          {onDelete && <button type="button" onClick={onDelete} className="h-10 px-4 rounded-[10px] text-sm font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">削除</button>}
         </div>
       )}
     </div>
@@ -370,7 +370,7 @@ function LineList({ title, lines, empty }: { title: string; lines: { site: strin
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h3>
-      <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-[13px]">
+      <div className="rounded-xl border border-hibi-line dark:border-gray-700 overflow-hidden text-[0.8125rem]">
         {lines.length === 0 ? (
           <div className="px-3 py-4 text-center text-hibi-sub dark:text-gray-400">{empty}</div>
         ) : lines.map((l, i) => (
@@ -526,7 +526,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
                 onClick={() => inputRef.current?.click()}
                 className={`rounded-lg border-2 border-dashed p-4 text-center cursor-pointer text-sm transition ${dragOver ? 'border-hibi-navy bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-hibi-navy'}`}>
                 <div className="text-gray-600 dark:text-gray-300">請求書のファイルをここにドラッグ、またはクリックして選ぶ <span className="text-red-600 text-xs">必須</span></div>
-                <div className="text-[11px] text-gray-400 mt-1">PDF・写真（JPEG/PNG/HEIC）／出面明細など添付も一緒に{PAPER_INVOICE_MAX_FILES}個まで／1ファイル25MBまで</div>
+                <div className="text-2xs text-gray-400 mt-1">PDF・写真（JPEG/PNG/HEIC）／出面明細など添付も一緒に{PAPER_INVOICE_MAX_FILES}個まで／1ファイル25MBまで</div>
                 <input ref={inputRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*" className="hidden"
                   onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
               </div>
@@ -573,7 +573,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
             </div>
             {lines.length > 0 && (
               <div className="space-y-2">
-                <div className="hidden sm:grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_70px_64px_90px_100px_28px] gap-2 text-[11px] text-gray-500">
+                <div className="hidden sm:grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_70px_64px_90px_100px_28px] gap-2 text-2xs text-gray-500">
                   <span>現場</span><span>内容</span><span>数量</span><span>単位</span><span>単価</span><span>金額</span><span />
                 </div>
                 {lines.map((l, i) => (
@@ -592,7 +592,7 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
               </div>
             )}
             <button type="button" onClick={() => setLines(prev => [...prev, { ...emptyLine(), site: prev[prev.length - 1]?.site || '' }])}
-              className="h-9 px-3 rounded-[9px] border border-gray-300 dark:border-gray-600 text-[13px] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
+              className="h-9 px-3 rounded-[9px] border border-gray-300 dark:border-gray-600 text-[0.8125rem] font-bold text-hibi-navy dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
               ＋ 明細の行を足す
             </button>
           </div>
@@ -604,8 +604,8 @@ function PaperInvoiceModal({ mode, rec, ym, companies, onClose, onDone }: {
 
           {err && <div className="text-sm text-red-600">{err}</div>}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} disabled={!!busy} className="h-10 px-4 rounded-[10px] border border-gray-300 dark:border-gray-600 text-[14px] font-bold disabled:opacity-40">やめる</button>
-            <button type="button" onClick={submit} disabled={!!busy} className="h-10 px-5 rounded-[10px] bg-hibi-navy text-white text-[14px] font-bold hover:bg-hibi-light disabled:opacity-60">
+            <button type="button" onClick={onClose} disabled={!!busy} className="h-10 px-4 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold disabled:opacity-40">やめる</button>
+            <button type="button" onClick={submit} disabled={!!busy} className="h-10 px-5 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light disabled:opacity-60">
               {busy || (mode === 'add' ? '入れる' : '保存')}
             </button>
           </div>
