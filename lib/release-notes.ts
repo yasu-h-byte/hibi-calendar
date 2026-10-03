@@ -28,6 +28,16 @@ const OFFICE: PermRole[] = ['jimu', 'approver', 'officer', 'owner']
 /** 新しいものを上に足していく */
 export const RELEASE_NOTES: Announcement[] = [
   {
+    id: 'rn_20261003_mobile_offline',
+    title: 'スマホ: ホーム画面の名前を DEDURA＋ にそろえ、電波が無いときの画面を用意しました',
+    content:
+      'スマホの「ホーム画面に追加」で付く名前が、どの画面でも DEDURA＋ になります（今までは「出面入力」など日本語だけでした。すでに追加してある人はそのままでも動きます）。'
+      + '現場で電波が無いときに画面を開くと、真っ白なエラーでなく「電波がありません / Không có sóng」と「もう一度」のボタンが出ます。',
+    category: 'new',
+    publishedAt: '2026-10-03T19:00:00+09:00',
+    publishedBy: '日比靖仁',
+  },
+  {
     id: 'rn_20261003_ui_dialogs',
     title: '確認の窓とお知らせの出方を、すべての画面でそろえました',
     content:

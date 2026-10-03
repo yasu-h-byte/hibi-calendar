@@ -26,6 +26,7 @@ export const metadata: Metadata = {
   },
   // 個人のリンク（マイページ等）は各 layout で自分のページを開く manifest に差し替える（lib/staff-manifest.ts）
   manifest: '/manifest.json',
+  appleWebApp: { title: 'DEDURA＋' },
   icons: {
     icon: [
       { url: '/brand/favicon-32.png', sizes: '32x32', type: 'image/png' },
