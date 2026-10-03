@@ -4,8 +4,11 @@
 // データ取得・入力状態・デバウンス保存・承認ハンドラを担当し、表示は
 // components/ 配下（画面固有）と components/attendance/ 配下（バナー類・配置モーダル）に委譲。
 // 純粋な計算（フッター合計・警告収集・退職バッジ等）は lib/attendance-grid.ts を参照。
+// 2026-10-03: 確認と失敗の知らせを共通部品（confirmDialog / confirmDanger / notify）に置き換え。
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
 import { permRoleOf, roleCan } from '@/lib/permissions'
 import { isTimeBasedMonth, calcOvertimeHours, DAY_START_OPTIONS, DAY_END_OPTIONS } from '@/types'
 import {
@@ -335,18 +338,29 @@ export default function AttendanceGridPage() {
             // 2026-09-14: 職長には残数超過の上書きを認めない（職長は共通パスワードのため
             //   サーバ側では管理者と区別できず、ここで止めるしかない。職長トークン画面と同じ方針）
             if (userRole === 'foreman') {
-              alert(b?.noGrant
-                ? `${errData.workerName} さんには有給が付与されていません。管理者に連絡してください。`
-                : `${errData.workerName} さんの有給残は 0 日です（枠 ${b?.total}日 / 消化 ${b?.used}日）。残数を超える有給は登録できません。管理者に連絡してください。`)
+              notify.error(
+                b?.noGrant
+                  ? `${errData.workerName} さんには有給が付与されていません`
+                  : `${errData.workerName} さんの有給残は 0 日です`,
+                (b?.noGrant ? '' : `付与枠 ${b?.total}日 ／ 消化済み ${b?.used}日。`)
+                  + '残数を超える有給は登録できません。事務か政仁さんに頼んでください。',
+              )
               return { ok: false, save: s, error: '有給残数の超過のため登録できません（管理者へ）', status: 409 }
             }
-            const msg = b?.noGrant
-              ? `${errData.workerName} さんには有給が付与されていません。\n\nこのまま有給として登録しますか？`
-              : `${errData.workerName} さんの有給残は 0 日です。\n`
-                + `　付与枠: ${b?.total} 日\n　消化済み: ${b?.used} 日`
-                + (b?.overdraft ? `\n　超過: ${b.overdraft} 日` : '')
-                + `\n\n残数を超えて有給を登録しますか？（記録に残ります）`
-            if (!confirm(msg)) {
+            const okOverdraft = b?.noGrant
+              ? await confirmDialog({
+                  title: `${errData.workerName} さんを有給として登録しますか？`,
+                  description: `${errData.workerName} さんには有給が付与されていません。\n登録すると記録に残ります。`,
+                  confirmLabel: '登録する',
+                })
+              : await confirmDialog({
+                  title: `残数を超えて ${errData.workerName} さんの有給を登録しますか？`,
+                  description: `有給残は 0 日です。\n付与枠 ${b?.total} 日 ／ 消化済み ${b?.used} 日`
+                    + (b?.overdraft ? ` ／ 超過 ${b.overdraft} 日` : '')
+                    + '\n登録すると記録に残ります。',
+                  confirmLabel: '登録する',
+                })
+            if (!okOverdraft) {
               return { ok: false, save: s, error: '有給残数の超過のため登録しませんでした', status: 409 }
             }
             res = await fetch('/api/attendance/grid', {
@@ -357,7 +371,11 @@ export default function AttendanceGridPage() {
           }
           // 非稼働日への有給（2026-09-02 追加）: 過払い防止のため既定は拒否、承知の場合だけ上書き
           if (errData?.code === 'NON_WORKING_DAY') {
-            if (!confirm(`${errData.workerName} さんの ${data.ym}/${s.day} は現場カレンダーの非稼働日です。\n休日・所定休に有給を入れると有給日給の過払いになります。\n\nそれでも有給として登録しますか？（記録に残ります）`)) {
+            if (!(await confirmDialog({
+              title: `${errData.workerName} さんの ${Number(data.ym.slice(4, 6))}月${s.day}日 を有給にしますか？`,
+              description: 'この日は現場カレンダーの非稼働日です。休日・所定休に有給を入れると有給日給の過払いになります。\n登録すると記録に残ります。',
+              confirmLabel: '有給にする',
+            }))) {
               return { ok: false, save: s, error: '非稼働日のため有給を登録しませんでした', status: 409 }
             }
             res = await fetch('/api/attendance/grid', {
@@ -410,19 +428,23 @@ export default function AttendanceGridPage() {
         //   誤認される事案が発生。res.ok を厳密にチェックして失敗を alert で明示する。
         setSaveStatus('error')
         const sample = failures.slice(0, 5)
+        const monthNum = Number(data.ym.slice(4, 6))
         const detail = sample.map(f => {
           const s = f.save
-          const label = s.type === 'worker' ? `スタッフID:${s.id}` : `応援:${s.id}`
-          return `  ${label} ${data.ym}/${s.day}: ${f.error}`
+          const label = s.type === 'worker'
+            ? (data.workers.find(w => String(w.id) === String(s.id))?.name || `ID ${s.id}`)
+            : `応援 ${data.subcons.find(sc => sc.id === s.id)?.name || s.id}`
+          return `・${label} ${monthNum}/${s.day}: ${f.error}`
         }).join('\n')
-        const more = failures.length > sample.length ? `\n  …他 ${failures.length - sample.length} 件` : ''
+        const more = failures.length > sample.length ? `\n…ほか ${failures.length - sample.length} 件` : ''
         // 注意書きは、本人の入力待ちで止まったときだけ出す（2026-10-02 代表指摘: 権限がなくて止まったときにも
         //   「出勤は後付けできません」が必ず付き、本当の理由が分かりにくかった）
         const staffInputReason = failures.some(f => /スマホ入力待ち|出勤に変えられません/.test(f.error))
-        alert(
-          `❌ ${failures.length} 件の保存に失敗しました\n\n${detail}${more}` +
+        notify.error(
+          `${failures.length} 件を保存できませんでした`,
+          `${detail}${more}` +
           (staffInputReason
-            ? `\n\n※外国人スタッフの「出勤」は、本人のスマホ入力が無い日には入れられません。\n` +
+            ? `\n\n外国人スタッフの「出勤」は、本人のスマホ入力が無い日には入れられません。\n` +
               `打刻し忘れの日は、代表か政仁さんが「今から変更する」から入れます（昨日までの日）。\n` +
               `有給・欠勤・帰国中・0.6補は、事務・職長も後から入れられます。`
             : '')
@@ -436,7 +458,7 @@ export default function AttendanceGridPage() {
     } catch (e) {
       console.error('Save error:', e)
       setSaveStatus('error')
-      alert(`❌ 通信エラーで保存できませんでした\n\n${e instanceof Error ? e.message : String(e)}\n\nネットワーク状態を確認してもう一度お試しください。`)
+      notify.failed('保存', e)
       if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
       saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 5000)
     }
@@ -517,23 +539,22 @@ export default function AttendanceGridPage() {
   // 2026-10-02 総合点検: 確認を1つの関数にして、日本人のセル（handleWorkChange）と
   //   ベトナム人の時間入力のセル（handleTimeStatusChange）の両方から呼ぶ。旧: 前者にだけあり、
   //   本人の打刻（始業・終業つき）を「-」や別の状態に変えると確認なしで消えていた
-  const confirmOverwriteStaffEntry = useCallback((workerId: string, day: number, value: string): boolean => {
+  const confirmOverwriteStaffEntry = useCallback(async (workerId: string, day: number, value: string): Promise<boolean> => {
     const cur = workerEntries[workerId]?.[day] as (AttEntry & { s?: string }) | undefined
     if (cur?.s !== 'staff') return true
     const w = data?.workers.find(x => String(x.id) === String(workerId))
     const desc = cur.p ? '有給' : cur.r ? '欠勤' : cur.h ? '現場休' : cur.hk ? '帰国中'
       : cur.exam ? '試験' : cur.w === 0.6 ? '0.6補償'
       : `出勤${cur.st && cur.et ? ` ${cur.st}〜${cur.et}` : ''}${cur.o ? ` 残業${cur.o}h` : ''}`
-    const verb = value === '' ? 'を削除' : 'を上書き'
-    return confirm(
-      `${w?.name || `ID ${workerId}`} さんが スマホで入力した ${day}日 の記録です。\n\n`
-      + `　現在: ${desc}\n\n`
-      + `この記録${verb}しますか？`
-    )
+    const name = w?.name || `ID ${workerId}`
+    const description = `今の内容: ${desc}`
+    return value === ''
+      ? confirmDanger({ title: `${name} さんがスマホで入力した ${day}日 の記録を消しますか？`, description, confirmLabel: '消す' })
+      : confirmDialog({ title: `${name} さんがスマホで入力した ${day}日 の記録を上書きしますか？`, description, confirmLabel: '上書きする' })
   }, [workerEntries, data])
 
-  const handleWorkChange = useCallback((workerId: string, day: number, value: string) => {
-    if (!confirmOverwriteStaffEntry(workerId, day, value)) return
+  const handleWorkChange = useCallback(async (workerId: string, day: number, value: string) => {
+    if (!(await confirmOverwriteStaffEntry(workerId, day, value))) return
     setWorkerEntries(prev => {
       const next = { ...prev }
       if (!next[workerId]) next[workerId] = {}
@@ -606,8 +627,8 @@ export default function AttendanceGridPage() {
   // ── Time-based cell handlers (202605〜) ──
 
   /** 時間ベース: 特殊ステータス変更（P/R/H/出勤/クリア） */
-  const handleTimeStatusChange = useCallback((workerId: string, day: number, value: string) => {
-    if (!confirmOverwriteStaffEntry(workerId, day, value)) return
+  const handleTimeStatusChange = useCallback(async (workerId: string, day: number, value: string) => {
+    if (!(await confirmOverwriteStaffEntry(workerId, day, value))) return
     setWorkerEntries(prev => {
       const next = { ...prev }
       if (!next[workerId]) next[workerId] = {}
@@ -912,7 +933,7 @@ export default function AttendanceGridPage() {
         if (!res.ok) {
           const j = await res.json().catch(() => ({}))
           setSaveStatus('error')
-          alert(`所定日数を保存できませんでした: ${j.error || res.status}`)
+          notify.failed('所定日数の保存', j.error || 'サーバが受け付けませんでした')
           return
         }
         setSaveStatus('saved')
@@ -948,9 +969,9 @@ export default function AttendanceGridPage() {
       })
       if (res.ok) return null
       const j = await res.json().catch(() => ({}))
-      return j.error || `エラー（${res.status}）`
+      return j.error || 'サーバが受け付けませんでした'
     } catch {
-      return '通信エラー'
+      return '通信がとぎれました'
     }
   }, [password, siteId, ym, userId])
 
@@ -969,7 +990,7 @@ export default function AttendanceGridPage() {
     if (failed.length === 0) return
     const m = Number(ym.slice(4, 6))
     const lines = failed.slice(0, 5).map(f => `・${m}/${f.day}: ${f.error}`).join('\n')
-    alert(`${label}できなかった日があります（${failed.length}日）。表示を元に戻しました。\n\n${lines}${failed.length > 5 ? '\n…ほか' : ''}`)
+    notify.error(`${label}できなかった日が ${failed.length}日あります`, `表示を元に戻しました。\n${lines}${failed.length > 5 ? '\n…ほか' : ''}`)
   }, [ym])
 
   /**
@@ -1148,11 +1169,10 @@ export default function AttendanceGridPage() {
     //   別現場/別月の配置データで上書きしてしまう。明示的に拒否してアラート。
     //   (2026-05-27 sasazuka → IHIメンバー上書き事案の再発防止)
     if (data.site.id !== expectedSiteId || ym !== expectedYm) {
-      alert(
-        `⚠️ 配置編集中にサイト/月が切り替わったため保存を中止しました。\n\n` +
-        `編集開始時: ${expectedSiteId} / ${expectedYm}\n` +
-        `現在: ${data.site.id} / ${ym}\n\n` +
-        `モーダルを閉じてから再度開いて、編集をやり直してください。`
+      notify.error(
+        '配置の保存を中止しました',
+        `編集の途中で現場か月が切り替わりました（編集を始めたとき: ${expectedSiteId} / ${expectedYm} → 今: ${data.site.id} / ${ym}）。\n` +
+        '配置の窓を閉じてから開き直して、やり直してください。',
       )
       setShowAssignModal(false)
       return
@@ -1169,7 +1189,7 @@ export default function AttendanceGridPage() {
     }, { password })
     if (!res.ok) {
       setSaveStatus('error')
-      alert(`配置を保存できませんでした。\n${res.error || ''}`)
+      notify.failed('配置の保存', res.error || 'サーバが受け付けませんでした')
       return
     }
     setSaveStatus('saved')
@@ -1219,7 +1239,7 @@ export default function AttendanceGridPage() {
         const key = kind === 'worker' ? 'defaultWorkType' : 'defaultWorkTypeSubcon'
         return { ...prev, [key]: prevMap }
       })
-      alert('既定の工種の保存に失敗しました')
+      notify.failed('既定の工種の保存', e)
     }
   }, [password, data, ym])
 
@@ -1256,7 +1276,7 @@ export default function AttendanceGridPage() {
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
-        throw new Error(errData?.error || `保存に失敗しました (${res.status})`)
+        throw new Error(errData?.error || 'サーバが受け付けませんでした')
       }
       setSaveStatus('saved')
       if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
@@ -1272,7 +1292,7 @@ export default function AttendanceGridPage() {
         return { ...prev, [mapKey]: outer }
       })
       setSaveStatus(null)
-      alert(e instanceof Error ? e.message : '工種の切替に失敗しました')
+      notify.failed('工種の切替', e)
       fetchData()
     }
   }, [password, data, ym, fetchData])
@@ -1293,22 +1313,22 @@ export default function AttendanceGridPage() {
         body: JSON.stringify({ action: 'setDayWorkType', siteId: data.site.id, ym, days, toSiteId }),
       })
       const json = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(json?.error || `保存に失敗しました (${res.status})`)
+      if (!res.ok) throw new Error(json?.error || 'サーバが受け付けませんでした')
       setSaveStatus('saved')
       if (saveStatusTimer.current) clearTimeout(saveStatusTimer.current)
       saveStatusTimer.current = setTimeout(() => setSaveStatus(null), 1500)
       const skipped = (json?.skipped || []) as { name: string; day: number }[]
       if (skipped.length > 0) {
-        alert(
-          `工種を切り替えましたが、次の人は2つの工種の両方に入力があるため動かしていません。\n` +
-          `マスのタグでどちらかを選び直してください。\n\n` +
-          skipped.map(s => `  ${s.day}日 ${s.name}`).join('\n'),
+        notify.error(
+          '工種を切り替えましたが、動かしていない人がいます',
+          '次の人は2つの工種の両方に入力があるため、そのままにしました。マスのタグでどちらかを選び直してください。\n' +
+          skipped.map(s => `・${s.day}日 ${s.name}`).join('\n'),
         )
       }
     } catch (e) {
       console.error('Set day work type error:', e)
       setSaveStatus(null)
-      alert(e instanceof Error ? e.message : '工種の切替に失敗しました')
+      notify.failed('工種の切替', e)
     }
     fetchData()
   }, [password, data, ym, fetchData])
@@ -1542,11 +1562,15 @@ export default function AttendanceGridPage() {
           </select>
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
               const from = Math.min(rangeFrom, rangeTo), to = Math.max(rangeFrom, rangeTo)
               const days = Array.from({ length: to - from + 1 }, (_, i) => from + i)
               const label = rangeSiteId === data.site.id ? (data.site.workType || '親現場') : (data.workTypeSites?.find(s => s.id === rangeSiteId)?.workType || '')
-              if (!confirm(`${from}日〜${to}日を「${label}」にします。\nこの期間に入力済みの人の出面も全員まとめて「${label}」へ移ります。\nよろしいですか？`)) return
+              if (!(await confirmDialog({
+                title: `${from}日〜${to}日を「${label}」にしますか？`,
+                description: `この期間に入力済みの人の出面も、全員まとめて「${label}」へ移ります。`,
+                confirmLabel: `${label}にする`,
+              }))) return
               handleSetDayWorkType(days, rangeSiteId || data.site.id)
             }}
             className="px-4 py-1.5 rounded-lg bg-hibi-navy text-white font-bold hover:bg-[#243656] transition"

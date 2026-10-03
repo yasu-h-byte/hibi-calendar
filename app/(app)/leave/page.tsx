@@ -24,6 +24,7 @@ import PendingGrantsModal from './components/PendingGrantsModal'
 import DetailPanel from './components/DetailPanel'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import { todayJstIso } from '@/lib/date-utils'
+import { notify } from '@/lib/notify'
 
 export default function LeavePage() {
   const [password, setPassword] = useState('')
@@ -175,7 +176,11 @@ export default function LeavePage() {
             const res = await fetch('/api/leave/export-ledger', {
               headers: { 'x-admin-password': password },
             })
-            if (!res.ok) { alert('管理簿の出力に失敗しました'); return }
+            if (!res.ok) {
+              const err = await res.json().catch(() => null)
+              notify.error('管理簿を出力できませんでした', err?.error || '時間をおいてもう一度お試しください。')
+              return
+            }
             const blob = await res.blob()
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')

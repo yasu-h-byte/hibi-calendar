@@ -3,7 +3,7 @@
 import { ReactNode, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Icon, type IconName } from './Icon'
-import { confirmDiscard } from '@/lib/hooks/discardGuard'
+import { confirmDiscardDialog } from '@/lib/hooks/discardGuard'
 
 // 画面の型（2026-10-01 代表決定「全ページを休暇管理・月次集計と同じデザイン言語で順次改修」）の共通部品。
 //   休暇管理（leave）と月次集計（monthly）で同じ見た目を別々に書いていたものをここへ集めた（UI改修 波0）。
@@ -234,7 +234,7 @@ export function AmountChip({ label, amount, neg }: { label: ReactNode; amount: R
 
 // 未保存の変更があるときだけ「閉じますか？」と確かめる（lib/hooks/discardGuard.ts・2026-10-02 総合点検）。
 //   SidePanel の Esc・背景クリックと、画面側の「閉じる」「×」ボタンの両方がこれを通す
-export { confirmDiscard, DISCARD_MESSAGE } from '@/lib/hooks/discardGuard'
+export { confirmDiscard, confirmDiscardDialog, DISCARD_MESSAGE } from '@/lib/hooks/discardGuard'
 
 /**
  * 一覧の行を押すと右から開く詳細。Esc・背景クリックで閉じる。
@@ -268,15 +268,18 @@ export function SidePanel({ label, onClose, children, width = 'max-w-[640px]', d
       if (e.key !== 'Escape') return
       // 日本語入力の変換を取り消す Esc ではパネルを閉じない（2026-10-02 総合点検）
       if (e.isComposing) return
-      if (!confirmDiscard(latest.current.dirty)) return
-      const el = document.activeElement
-      if (el instanceof HTMLElement && panelRef.current?.contains(el)) el.blur()
-      latest.current.onClose()
+      const close = () => {
+        const el = document.activeElement
+        if (el instanceof HTMLElement && panelRef.current?.contains(el)) el.blur()
+        latest.current.onClose()
+      }
+      if (!latest.current.dirty) { close(); return }
+      void confirmDiscardDialog(true).then(ok => { if (ok) close() })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-  const requestClose = () => { if (confirmDiscard(dirty)) onClose() }
+  const requestClose = () => { void confirmDiscardDialog(dirty).then(ok => { if (ok) onClose() }) }
   if (!mounted) return null
   return createPortal(
     <div ref={panelRef} className="fixed inset-0 z-[60] print:hidden" role="dialog" aria-modal="true" aria-label={label}>
@@ -295,4 +298,25 @@ export function CloseButton({ onClick }: { onClick: () => void }) {
     <button onClick={onClick} aria-label="閉じる"
       className="w-9 h-9 rounded-[10px] border border-hibi-line dark:border-gray-600 flex items-center justify-center text-gray-500 hover:bg-hibi-bg dark:hover:bg-gray-700 text-lg leading-none">×</button>
   )
+}
+
+// ─── 入力の不備 ─────────────────────────────────────
+
+/**
+ * 入力の不備は帯（alert）でなく、その欄のすぐ下に赤字で出す（UI/UX 磨き込み 土台②・2026-10-03）。
+ *   <input id="f-name" aria-invalid={!!errors.name} … /><FieldError id="f-name-error">{errors.name}</FieldError>
+ * 空なら何も出さない。保存ボタンを押したときに最初の不備の欄まで動かすには scrollToFirstInvalid() を呼ぶ
+ */
+export function FieldError({ children, id, className = '' }: { children?: ReactNode; id?: string; className?: string }) {
+  if (!children) return null
+  return <div id={id} role="alert" className={`text-xs text-red-600 dark:text-red-400 mt-1 ${className}`}>{children}</div>
+}
+
+/** 画面内の最初の aria-invalid="true" の欄まで動かして focus する（無ければ何もしない） */
+export function scrollToFirstInvalid(root: ParentNode | null = typeof document === 'undefined' ? null : document): boolean {
+  const el = root?.querySelector<HTMLElement>('[aria-invalid="true"]')
+  if (!el) return false
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  el.focus({ preventScroll: true })
+  return true
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import { ToastProvider } from '@/components/Toast'
+import { ConfirmHost } from '@/components/ui/Confirm'
 import { AuthUser } from '@/types'
 import { initTheme } from '@/lib/theme'
 import { can } from '@/lib/permissions'
@@ -77,6 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastProvider>
+      <ConfirmHost />
       <div className="min-h-screen bg-hibi-bg dark:bg-gray-900">
         <Sidebar user={user} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 

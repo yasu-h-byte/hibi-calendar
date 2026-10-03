@@ -10,6 +10,7 @@
  * lib/attendance.ts canAdminEditEntry）。その分は最初から外して件数を知らせる。
  */
 import { useMemo, useState } from 'react'
+import { confirmDialog, confirmDanger } from '@/lib/confirm-dialog'
 import type { AttEntry, Worker, DayType } from '../types'
 import { calcOvertimeHours, type SiteWorkSchedule } from '@/types'
 
@@ -213,12 +214,21 @@ export default function BulkEntryModal({
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm">やめる</button>
           <button disabled={plan.items.length === 0}
-            onClick={() => {
-              if (kind === 'clear' && !confirm(`${plan.items.length}マスの入力を消します。よろしいですか？`)) return
-              if (kind !== 'clear' && plan.overwriteStaff > 0 &&
-                !confirm(`本人がスマホで入れた ${plan.overwriteStaff}マスを上書きします（始業・終業の時刻も置き換わります）。よろしいですか？`)) return
-              if (plan.items.length > 150 &&
-                !confirm(`${plan.items.length}マスは多めです。保存に少し時間がかかります（4件ずつ送ります）。続けますか？`)) return
+            onClick={async () => {
+              if (kind === 'clear' && !(await confirmDanger({
+                title: `${plan.items.length}マスの入力を消しますか？`,
+                confirmLabel: '消す',
+              }))) return
+              if (kind !== 'clear' && plan.overwriteStaff > 0 && !(await confirmDialog({
+                title: `本人がスマホで入れた ${plan.overwriteStaff}マスを上書きしますか？`,
+                description: '始業・終業の時刻も置き換わります。',
+                confirmLabel: '上書きする',
+              }))) return
+              if (plan.items.length > 150 && !(await confirmDialog({
+                title: `${plan.items.length}マスに入れますか？`,
+                description: '数が多いので、保存に少し時間がかかります（4件ずつ送ります）。',
+                confirmLabel: '続ける',
+              }))) return
               onApply(plan.items); onClose()
             }}
             className="px-5 py-2 rounded-lg bg-hibi-navy text-white text-sm font-bold disabled:opacity-40">

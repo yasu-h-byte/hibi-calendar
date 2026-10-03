@@ -5,8 +5,12 @@ import { calcGrantMonthFromHire, calcLegalPL } from '@/lib/leave-utils'
 import { calcLastUsableDayIso, todayJstIso } from '@/lib/date-utils'
 import { jpDeemedDate } from '@/lib/leave-compute'
 import { PLWorker } from '../types'
+import { confirmDialog } from '@/lib/confirm-dialog'
+import { notify } from '@/lib/notify'
+import { FieldError } from '@/components/ui/PageParts'
 
 // 有給付与モーダル
+// 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
 // 常時マウントし open で表示切替（キャンセル後も入力値を保持する従来挙動を踏襲）
 
 interface Props {
@@ -21,6 +25,7 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
   const [grantForm, setGrantForm] = useState({ workerId: '', grantDays: '10', grantMonth: '', grantDate: '' })
   const [legalPLInfo, setLegalPLInfo] = useState<{ days: number; years: number; months: number; label: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [workerError, setWorkerError] = useState<string | null>(null)
 
   // Update legal PL and auto-fill grant month when worker selected in grant modal
   useEffect(() => {
@@ -52,14 +57,15 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
   }, [grantForm.workerId, grantForm.grantDate])
 
   const handleGrant = async () => {
-    if (!grantForm.workerId) { alert('対象者を選択してください'); return }
+    if (!grantForm.workerId) { setWorkerError('対象者を選択してください'); return }
     // 2026-06-12 (監査 Sprint2-C): 付与日数は有給日給=支給額に直結するため確認を挟む
     {
       const target = workers.find(w => w.id === Number(grantForm.workerId))
-      const ok = confirm(
-        `⚠️ 有給を付与します:\n\n  対象: ${target?.name || `ID ${grantForm.workerId}`}\n  付与日数: ${grantForm.grantDays}日\n  付与日: ${grantForm.grantDate || '(未指定)'}\n\n` +
-        `付与日数は有給手当（支給額）に直結します。よろしいですか？（操作は記録されます）`
-      )
+      const ok = await confirmDialog({
+        title: `${target?.name || `ID ${grantForm.workerId}`}さんに有給 ${grantForm.grantDays}日を付与しますか？`,
+        description: `付与日: ${grantForm.grantDate || '未指定'}\n付与日数は有給手当（支給額）に直結します。操作は記録されます。`,
+        confirmLabel: '付与する',
+      })
       if (!ok) return
     }
     setSaving(true)
@@ -80,13 +86,13 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
       //   付与日数は支給額に直結するため、失敗時はフォームを保持して理由を表示する
       if (!res.ok) {
         const err = await res.json().catch(() => null)
-        alert(err?.error || `付与に失敗しました (${res.status})`)
+        notify.failed('付与', err?.error)
         return
       }
       setGrantForm({ workerId: '', grantDays: '10', grantMonth: '', grantDate: '' })
       setLegalPLInfo(null)
       onSaved()
-    } catch { alert('通信エラーが発生しました') } finally { setSaving(false) }
+    } catch (e) { notify.failed('付与', e) } finally { setSaving(false) }
   }
 
   if (!open) return null
@@ -98,11 +104,13 @@ export default function GrantModal({ open, workers, password, onClose, onSaved }
         <div className="space-y-3">
           <div>
             <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">対象者</label>
-            <select value={grantForm.workerId} onChange={e => setGrantForm({ ...grantForm, workerId: e.target.value })}
+            <select value={grantForm.workerId} onChange={e => { setWorkerError(null); setGrantForm({ ...grantForm, workerId: e.target.value }) }}
+              aria-invalid={!!workerError}
               className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg px-3 py-2 text-sm">
               <option value="">選択してください</option>
               {workers.map(w => <option key={w.id} value={w.id}>{w.name}（{w.org === 'hfu' ? 'HFU' : '日比'}）</option>)}
             </select>
+            <FieldError>{workerError}</FieldError>
           </div>
           <div>
             <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">付与日</label>

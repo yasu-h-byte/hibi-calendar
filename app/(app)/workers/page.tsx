@@ -21,7 +21,7 @@ import { fileToAvatarDataUri, AVATAR_ACCEPT } from '@/lib/avatar-image'
 import { todayJstIso } from '@/lib/date-utils'
 import { isAlreadyRetired } from '@/lib/workers'
 import { postJson } from '@/lib/api-client'
-import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscard } from '@/components/ui/PageParts'
+import { PageHeader, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, confirmDiscardDialog } from '@/components/ui/PageParts'
 
 const ORG_LABELS: Record<string, string> = { hibi: '日比建設', hfu: 'HFU' }
 const VISA_LABELS: Record<string, string> = {
@@ -456,7 +456,7 @@ export default function WorkersPage() {
   const canDeleteForever = !!editWorker && !hasRetireDate && canEdit
   // 未保存の変更があるか（開いた時点の内容と比べる）。見るだけの人は入力できないので常に false
   const formDirty = showModal && canEdit && JSON.stringify(form) !== formBase
-  const closePanel = () => { if (confirmDiscard(formDirty)) setShowModal(false) }
+  const closePanel = () => { void confirmDiscardDialog(formDirty).then(ok => { if (ok) setShowModal(false) }) }
   const startRetire = () => {
     setModalTab('basic')
     // 基本タブの「退職日」へ移って入力できるようにする

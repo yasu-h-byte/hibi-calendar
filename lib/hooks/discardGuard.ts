@@ -1,3 +1,5 @@
+import { confirmDialog } from '@/lib/confirm-dialog'
+
 /**
  * 「未保存の変更があるときだけ、閉じる前に確かめる」（2026-10-02 総合点検）
  *
@@ -12,5 +14,21 @@ export const DISCARD_MESSAGE = '保存していない変更があります。閉
 export function confirmDiscard(dirty: boolean | undefined, message: string = DISCARD_MESSAGE): boolean {
   if (!dirty) return true
   if (typeof window === 'undefined') return true
-  return window.confirm(message)
+  return window.confirm(message) // dialog-ok
+}
+
+/**
+ * 同じ確認を本体の見た目の窓で出す版（UI/UX 磨き込み 土台②・2026-10-03）。
+ * SidePanel と画面側の「閉じる」「×」はこちらを await する。文言は見本どおり
+ * 「保存していない変更があります／閉じると消えます」＋「閉じずに戻る」「保存せずに閉じる」（赤）。
+ */
+export async function confirmDiscardDialog(dirty: boolean | undefined): Promise<boolean> {
+  if (!dirty) return true
+  return confirmDialog({
+    title: '保存していない変更があります',
+    description: '閉じると消えます。',
+    confirmLabel: '保存せずに閉じる',
+    cancelLabel: '閉じずに戻る',
+    tone: 'danger',
+  })
 }
