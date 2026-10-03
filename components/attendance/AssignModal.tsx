@@ -2,6 +2,7 @@
  * 配置編集モーダル（attendance/page.tsx から抽出）
  *
  * 作業員 / 外注先 のタブ切り替えで、現場への配置を編集する。
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  *
  * セキュリティ多層防御:
  *   - key={siteId+ym} で site/月切替時に強制 re-mount（state リセット）
@@ -13,6 +14,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { orgBadgeCls, orgBadgeLabel } from '@/lib/labels'
 import { jobShortLabel } from '@/lib/jobs'
+import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 
 /**
  * 配置モーダルが必要とする worker フィールドの最小セット
@@ -114,18 +116,27 @@ export default function AssignModal({
     )
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2" onClick={onClose}>
-      <div
-        className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Modal header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-hibi-navy">{siteName} 配置編集</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
-        </div>
+  // 開いたときの配置と違えば、閉じる前に確かめる
+  const sameSet = <T,>(a: Set<T>, b: T[]) => a.size === b.length && b.every(v => a.has(v))
+  const dirty = !sameSet(assignedWorkerIds, currentWorkerIds) || !sameSet(assignedSubconIds, currentSubconIds)
 
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`${siteName} 配置編集`}
+      size="lg"
+      flush
+      dirty={dirty}
+      footer={(
+        <>
+          <CancelButton onClick={onClose} />
+          <PrimaryButton onClick={handleSave}>保存する</PrimaryButton>
+        </>
+      )}
+    >
+      {/* 左右の一覧がそれぞれ中でスクロールするよう、本文の高さを決めておく */}
+      <div className="h-[60vh] flex flex-col">
         {/* タブ切替 */}
         <div className="flex border-b border-gray-200">
           <button
@@ -301,23 +312,7 @@ export default function AssignModal({
             </>
           )}
         </div>
-
-        {/* Modal footer */}
-        <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-gray-200 bg-gray-50">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 rounded-lg border border-gray-300 hover:bg-gray-100 transition"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 text-sm text-white bg-hibi-navy rounded-lg hover:bg-[#243656] transition font-medium"
-          >
-            保存
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

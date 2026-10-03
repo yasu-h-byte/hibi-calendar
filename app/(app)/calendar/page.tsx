@@ -12,8 +12,10 @@ import { Icon } from '@/components/ui/Icon'
 import { todayJstIso, addMonthsSafe } from '@/lib/date-utils'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
+import { Modal, CancelButton, PrimaryButton } from '@/components/ui/Modal'
 
 // 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmWithReason・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた（まとめて確定する前の確認）
 
 interface OverviewMonth {
   ym: string
@@ -1312,15 +1314,21 @@ export default function CalendarManagePage() {
         )
       })()}
 
-      {/* Confirmation dialog */}
-      {showConfirmDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowConfirmDialog(false)}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 animate-modalIn" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-3">確認</h3>
+      {/* まとめて確定する前の確認 */}
+      <Modal
+        open={showConfirmDialog}
+        onClose={() => setShowConfirmDialog(false)}
+        title="確認"
+        size="sm"
+        footer={<>
+          <CancelButton onClick={() => setShowConfirmDialog(false)} />
+          <PrimaryButton onClick={handleBulkConfirm} disabled={saving}>確定する</PrimaryButton>
+        </>}
+      >
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
               {visibleSites.length}現場のカレンダーを保存・確定します。確定後は署名受付が開始されます。
             </p>
-            <div className="text-xs text-gray-500 dark:text-gray-400 mb-4 space-y-1">
+            <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
               {visibleSites.map(site => {
                 const days = getEditDays(site.siteId, site.days)
                 const workCount = Object.values(days).filter(d => d === 'work').length
@@ -1332,23 +1340,7 @@ export default function CalendarManagePage() {
                 )
               })}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleBulkConfirm}
-                className="flex-1 bg-green-600 text-white rounded-lg py-2 text-sm font-bold hover:bg-green-700 transition"
-              >
-                確定する
-              </button>
-              <button
-                onClick={() => setShowConfirmDialog(false)}
-                className="flex-1 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg py-2 text-sm hover:bg-gray-300 dark:hover:bg-gray-500 transition"
-              >
-                キャンセル
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   )
 }

@@ -118,8 +118,8 @@ export default function Sidebar({ user, open, onClose }: { user: AuthUser; open:
 
   return (
     <>
-      {/* Overlay for mobile */}
-      {open && (
+      {/* Overlay for mobile — modal-ok: スマホでメニューを開いたときの背景（モーダルではない） */}
+      {open && ( // modal-ok
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />
       )}
 

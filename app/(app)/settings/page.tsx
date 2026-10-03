@@ -1,9 +1,11 @@
 'use client'
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 import { Fragment, useEffect, useState, useCallback } from 'react'
 import { confirmDanger } from '@/lib/confirm-dialog'
 import { PageHeader, UnderlineTabs } from '@/components/ui/PageParts'
+import { SaveButton } from '@/components/ui/SaveButton'
 import { CAPABILITIES, PERM_ROLES, PERM_ROLE_LABEL, type Capability, type PermRole } from '@/lib/permissions'
 import { isAlreadyRetired } from '@/lib/workers'
 
@@ -328,7 +330,6 @@ const ANN_CATEGORIES = [
 export default function SettingsPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('company')
   // メニュー検索などから ?tab=users / activity / announcements で直接開けるように（2026-09-26）
@@ -342,18 +343,15 @@ export default function SettingsPage() {
 
   // 請求書の自社情報（応援の請求書用）
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(EMPTY_COMPANY_PROFILE)
-  const [savingProfile, setSavingProfile] = useState(false)
 
   // HFU → 日比建設 の請求書
   const [hfuInvoice, setHfuInvoice] = useState<HfuInvoiceForm>(EMPTY_HFU_INVOICE)
-  const [savingHfu, setSavingHfu] = useState(false)
 
   // User passwords
   // 2026-09-26: パスワードそのものは画面に出さない（保存はハッシュ）。設定済みかどうかと、今回の変更だけを持つ
   const [passwordSet, setPasswordSet] = useState<Record<string, boolean>>({})
   const [pwChanges, setPwChanges] = useState<Record<string, string | null>>({})
   const [pwWorkers, setPwWorkers] = useState<{ id: number; name: string; jobType: string; retired?: string }[]>([])
-  const [savingPw, setSavingPw] = useState(false)
 
   // Backup/Restore
   const [exporting, setExporting] = useState(false)
@@ -376,7 +374,6 @@ export default function SettingsPage() {
   const [annForm, setAnnForm] = useState<{ title: string; content: string; category: 'new' | 'fix' | 'info' }>({
     title: '', content: '', category: 'new',
   })
-  const [annSaving, setAnnSaving] = useState(false)
 
   // Users
   const [userWorkers, setUserWorkers] = useState<UserWorker[]>([])
@@ -543,35 +540,30 @@ export default function SettingsPage() {
     if (activeTab === 'announcements' && password) fetchAnnouncements()
   }, [activeTab, fetchAnnouncements, password])
 
+  // 保存ボタン（SaveButton）の約束: うまくいったら何も返さない・入力の不備は false・サーバの断りは { ok: false, error }（ボタンが赤の帯を出す）
   const handleSaveAnnouncement = async () => {
     if (!annForm.title.trim() || !annForm.content.trim()) {
       showMessage('error', 'タイトルと本文を入力してください')
-      return
+      return null
     }
-    setAnnSaving(true)
-    try {
-      const userStored = localStorage.getItem('hibi_auth')
-      const publishedBy = userStored ? (JSON.parse(userStored).user?.name || '管理者') : '管理者'
-      const body = annEditId
-        ? { action: 'update', id: annEditId, ...annForm }
-        : { action: 'add', ...annForm, publishedBy }
-      const res = await fetch('/api/announcements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify(body),
-      })
-      if (res.ok) {
-        showMessage('success', annEditId ? 'お知らせを更新しました' : 'お知らせを投稿しました')
-        setAnnEditId(null)
-        setAnnForm({ title: '', content: '', category: 'new' })
-        await fetchAnnouncements()
-      } else {
-        showMessage('error', '保存に失敗しました')
-      }
-    } catch {
-      showMessage('error', 'エラーが発生しました')
+    const userStored = localStorage.getItem('hibi_auth')
+    const publishedBy = userStored ? (JSON.parse(userStored).user?.name || '管理者') : '管理者'
+    const body = annEditId
+      ? { action: 'update', id: annEditId, ...annForm }
+      : { action: 'add', ...annForm, publishedBy }
+    const res = await fetch('/api/announcements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      return { ok: false, error: data.error || 'サーバが受け付けませんでした' }
     }
-    setAnnSaving(false)
+    showMessage('success', annEditId ? 'お知らせを更新しました' : 'お知らせを投稿しました')
+    setAnnEditId(null)
+    setAnnForm({ title: '', content: '', category: 'new' })
+    await fetchAnnouncements()
   }
 
   const handleDeleteAnnouncement = async (id: string, title: string) => {
@@ -603,64 +595,49 @@ export default function SettingsPage() {
     setAnnForm({ title: '', content: '', category: 'new' })
   }
 
+  // サーバの断りの理由（無ければ定型）。保存ボタンの赤の帯に出す
+  const failReason = async (res: Response, fallback = 'サーバが受け付けませんでした') => {
+    const data = await res.json().catch(() => ({}))
+    return { ok: false, error: (data as { error?: string }).error || fallback }
+  }
+
   const handleSaveRates = async () => {
-    setSaving(true)
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-password': password,
-        },
-        body: JSON.stringify({
-          action: 'saveDefaultRates',
-          tobiRate: rates.tobiRate,
-          dokoRate: rates.dokoRate,
-          baseDays: rates.baseDays,
-        }),
-      })
-      if (!res.ok) throw new Error('Save failed')
-      showMessage('success', 'デフォルト単価を保存しました')
-    } catch {
-      showMessage('error', '保存に失敗しました')
-    } finally {
-      setSaving(false)
-    }
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': password,
+      },
+      body: JSON.stringify({
+        action: 'saveDefaultRates',
+        tobiRate: rates.tobiRate,
+        dokoRate: rates.dokoRate,
+        baseDays: rates.baseDays,
+      }),
+    })
+    if (!res.ok) return failReason(res)
+    showMessage('success', 'デフォルト単価を保存しました')
   }
 
   const handleSaveCompanyProfile = async () => {
-    setSavingProfile(true)
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'saveCompanyProfile', companyProfile }),
-      })
-      if (!res.ok) throw new Error('Save failed')
-      showMessage('success', '請求書の自社情報を保存しました')
-    } catch {
-      showMessage('error', '保存に失敗しました（管理者パスワードでログインしているか確認してください）')
-    } finally {
-      setSavingProfile(false)
-    }
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ action: 'saveCompanyProfile', companyProfile }),
+    })
+    if (!res.ok) return failReason(res, '管理者パスワードでログインしているか確認してください')
+    showMessage('success', '請求書の自社情報を保存しました')
   }
 
   const handleSaveHfuInvoice = async () => {
-    setSavingHfu(true)
-    try {
-      const { profile, tobiRate, dokoRate, payMonthOffset, payDay } = hfuInvoice
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-        body: JSON.stringify({ action: 'saveHfuInvoice', hfuInvoice: { profile, tobiRate, dokoRate, paymentTerms: { closing: 'end', payMonthOffset, payDay } } }),
-      })
-      if (!res.ok) throw new Error('Save failed')
-      showMessage('success', 'HFU → 日比建設 の請求書の設定を保存しました')
-    } catch {
-      showMessage('error', '保存に失敗しました（管理者パスワードでログインしているか確認してください）')
-    } finally {
-      setSavingHfu(false)
-    }
+    const { profile, tobiRate, dokoRate, payMonthOffset, payDay } = hfuInvoice
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ action: 'saveHfuInvoice', hfuInvoice: { profile, tobiRate, dokoRate, paymentTerms: { closing: 'end', payMonthOffset, payDay } } }),
+    })
+    if (!res.ok) return failReason(res, '管理者パスワードでログインしているか確認してください')
+    showMessage('success', 'HFU → 日比建設 の請求書の設定を保存しました')
   }
 
   const handleExport = async () => {
@@ -891,13 +868,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <button
-              onClick={handleSaveRates}
-              disabled={saving}
-              className="mt-4 w-full bg-hibi-navy text-white py-2.5 rounded-lg font-medium hover:bg-hibi-navy/90 disabled:opacity-50 transition"
-            >
-              {saving ? '保存中...' : '保存'}
-            </button>
+            <SaveButton action="保存" onSave={handleSaveRates} full className="mt-4" />
           </div>
           </>)}
 
@@ -911,13 +882,7 @@ export default function SettingsPage() {
             </p>
             <CompanyProfileFields value={companyProfile} onChange={setCompanyProfile} />
 
-            <button
-              onClick={handleSaveCompanyProfile}
-              disabled={savingProfile}
-              className="mt-4 w-full bg-hibi-navy text-white py-2.5 rounded-lg font-medium hover:bg-hibi-navy/90 disabled:opacity-50 transition"
-            >
-              {savingProfile ? '保存中...' : '保存'}
-            </button>
+            <SaveButton action="保存" onSave={handleSaveCompanyProfile} full className="mt-4" />
           </div>
           </>)}
 
@@ -963,13 +928,7 @@ export default function SettingsPage() {
               <CompanyProfileFields value={hfuInvoice.profile} onChange={update => setHfuInvoice(h => ({ ...h, profile: update(h.profile) }))} />
               <p className="text-2xs text-gray-400 mt-2">請求書番号の接頭辞は日比建設（{companyProfile.invoicePrefix || 'HC'}）と別にしてください。番号は会社ごとに別々に数えます。</p>
             </div>
-            <button
-              onClick={handleSaveHfuInvoice}
-              disabled={savingHfu}
-              className="mt-4 w-full bg-hibi-navy text-white py-2.5 rounded-lg font-medium hover:bg-hibi-navy/90 disabled:opacity-50 transition"
-            >
-              {savingHfu ? '保存中...' : '保存'}
-            </button>
+            <SaveButton action="保存" onSave={handleSaveHfuInvoice} full className="mt-4" />
           </div>
           </>)}
 
@@ -1024,32 +983,24 @@ export default function SettingsPage() {
               })}
             </div>
             {pwWorkers.length > 0 && (
-              <button
-                onClick={async () => {
+              <SaveButton
+                action="保存"
+                className="mt-4"
+                onSave={async () => {
                   // 空欄は「変更なし」。null は削除
                   const changes = Object.fromEntries(Object.entries(pwChanges).filter(([, v]) => v === null || (typeof v === 'string' && v !== '')))
-                  if (Object.keys(changes).length === 0) { showMessage('error', '変更がありません'); return }
-                  setSavingPw(true)
-                  try {
-                    const res = await fetch('/api/settings', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
-                      body: JSON.stringify({ action: 'saveUserPasswords', changes }),
-                    })
-                    const data = await res.json().catch(() => ({}))
-                    if (res.ok) {
-                      showMessage('success', '個人パスワードを保存しました（本人に口頭で伝えてください）')
-                      setPwChanges({})
-                      fetchUserPasswords()
-                    } else showMessage('error', data.error || '保存に失敗しました')
-                  } catch { showMessage('error', 'エラーが発生しました') }
-                  finally { setSavingPw(false) }
+                  if (Object.keys(changes).length === 0) { showMessage('error', '変更がありません'); return null }
+                  const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+                    body: JSON.stringify({ action: 'saveUserPasswords', changes }),
+                  })
+                  if (!res.ok) return failReason(res)
+                  showMessage('success', '個人パスワードを保存しました（本人に口頭で伝えてください）')
+                  setPwChanges({})
+                  fetchUserPasswords()
                 }}
-                disabled={savingPw}
-                className="mt-4 bg-hibi-navy text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
-              >
-                {savingPw ? '保存中...' : '保存'}
-              </button>
+              />
             )}
           </div>
           </>)}
@@ -1384,19 +1335,17 @@ export default function SettingsPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={handleSaveAnnouncement}
-                  disabled={annSaving || !annForm.title.trim() || !annForm.content.trim()}
-                  className="bg-hibi-navy text-white rounded-lg px-4 py-2 text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50"
-                >
-                  {annSaving ? '保存中...' : annEditId ? '更新する' : '投稿する'}
-                </button>
+                <SaveButton
+                  action={annEditId ? '更新' : '投稿'}
+                  disabled={!annForm.title.trim() || !annForm.content.trim()}
+                  onSave={handleSaveAnnouncement}
+                />
                 {annEditId && (
                   <button
                     onClick={handleCancelAnnouncementEdit}
                     className="bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg px-4 py-2 text-sm hover:bg-gray-300 dark:hover:bg-gray-500 transition"
                   >
-                    キャンセル
+                    やめる
                   </button>
                 )}
               </div>

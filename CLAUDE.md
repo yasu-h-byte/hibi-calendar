@@ -56,7 +56,7 @@ Tailwind は `tailwind.config.ts` の `content` に列挙したディレクト�
   10px 相当より小さい字は使わない。`npm run lint:px` が検出する。表は [docs/ui-design.md](docs/ui-design.md) の「文字の大きさ」節
 - ブラウザ標準の `confirm()` / `alert()` / `prompt()` は使わない。確認は `lib/confirm-dialog.ts`（confirmDialog / confirmDanger / confirmWithReason）、
   お知らせは `lib/notify.ts`（notify.success / failed / error）、入力の不備は `<FieldError>`。`npm run lint:dialog` が検出する。
-  決まりは [docs/ui-design.md](docs/ui-design.md) の「確認・お知らせ・保存の部品」節
+  独自モーダルの枠（`fixed inset-0`）も書かず `components/ui/Modal.tsx` の `<Modal>` を使う（同じ lint が検出）。決まりは [docs/ui-design.md](docs/ui-design.md) の「確認・お知らせ・保存の部品」節
 
 **2026-07 有給消化バー障害の記録**
 

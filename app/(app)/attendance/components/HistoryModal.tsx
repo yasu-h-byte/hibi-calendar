@@ -6,10 +6,12 @@
  * 既存の記録を消した/上書きした操作だけが並ぶ。「元に戻す」で変更前の内容を書き戻す。
  * 8/27 IHI の誤削除では、操作ログに中身が残らず日次バックアップも当日分を救えなかった。
  * 2026-10-03: 確認と失敗の知らせを共通部品（confirmDialog / notify）に置き換え。
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 import { useEffect, useState, useCallback } from 'react'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
+import { Modal, CancelButton } from '@/components/ui/Modal'
 
 interface HistoryItem {
   id: string
@@ -105,67 +107,58 @@ export default function HistoryModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-5 max-w-3xl w-full max-h-[85vh] overflow-y-auto"
-           onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-hibi-navy dark:text-white mb-1">出面の変更履歴</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-          記録を<b>消した・上書きした</b>操作だけが並びます（新しい順・90日保持）。
-          「元に戻す」で変更前の内容に戻せます。締め済みの月は戻せません。
-        </p>
-
-        {loading ? (
-          <div className="py-10 text-center text-gray-400">読み込み中...</div>
-        ) : items.length === 0 ? (
-          <div className="py-10 text-center text-gray-400">この月の変更履歴はありません</div>
-        ) : (
-          <div className="space-y-1.5">
-            {items.map(h => (
-              <div key={h.id}
-                   className={`flex items-center gap-3 p-2.5 rounded-lg border text-sm
-                     ${h.beforeSource === 'staff'
-                       ? 'border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-900/20'
-                       : 'border-gray-200 dark:border-gray-700'}`}>
-                <div className="text-2xs text-gray-400 whitespace-nowrap tabular-nums w-16">{jst(h.at)}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium">
-                    {workerNames[h.workerId] || `ID ${h.workerId}`}
-                    <span className="text-gray-400 font-normal"> / {h.day}日</span>
-                    {h.beforeSource === 'staff' && (
-                      <span className="ml-1.5 text-3xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold">
-                        スマホ入力
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-600 dark:text-gray-300 truncate">
-                    {describe(h.before)}
-                    <span className="text-gray-400 mx-1">→</span>
-                    <span className={h.kind === 'delete' ? 'text-red-600 font-bold' : ''}>
-                      {h.kind === 'delete' ? '削除' : describe(h.after)}
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="出面の変更履歴"
+      sub={<>記録を<b>消した・上書きした</b>操作だけが並びます（新しい順・90日保持）。「元に戻す」で変更前の内容に戻せます。締め済みの月は戻せません。</>}
+      size="lg"
+      footer={<CancelButton onClick={onClose}>閉じる</CancelButton>}
+    >
+      {loading ? (
+        <div className="py-10 text-center text-gray-400">読み込み中...</div>
+      ) : items.length === 0 ? (
+        <div className="py-10 text-center text-gray-400">この月の変更履歴はありません</div>
+      ) : (
+        <div className="space-y-1.5">
+          {items.map(h => (
+            <div key={h.id}
+                 className={`flex items-center gap-3 p-2.5 rounded-lg border text-sm
+                   ${h.beforeSource === 'staff'
+                     ? 'border-amber-300 bg-amber-50/60 dark:border-amber-700 dark:bg-amber-900/20'
+                     : 'border-gray-200 dark:border-gray-700'}`}>
+              <div className="text-2xs text-gray-400 whitespace-nowrap tabular-nums w-16">{jst(h.at)}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium">
+                  {workerNames[h.workerId] || `ID ${h.workerId}`}
+                  <span className="text-gray-400 font-normal"> / {h.day}日</span>
+                  {h.beforeSource === 'staff' && (
+                    <span className="ml-1.5 text-3xs bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold">
+                      スマホ入力
                     </span>
-                    <span className="text-gray-400 ml-2">({h.actor})</span>
-                  </div>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  disabled={busy === h.id}
-                  onClick={() => restore(h)}
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg bg-hibi-navy text-white hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
-                >
-                  {busy === h.id ? '復元中...' : '元に戻す'}
-                </button>
+                <div className="text-xs text-gray-600 dark:text-gray-300 truncate">
+                  {describe(h.before)}
+                  <span className="text-gray-400 mx-1">→</span>
+                  <span className={h.kind === 'delete' ? 'text-red-600 font-bold' : ''}>
+                    {h.kind === 'delete' ? '削除' : describe(h.after)}
+                  </span>
+                  <span className="text-gray-400 ml-2">({h.actor})</span>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-5 flex justify-end">
-          <button onClick={onClose}
-                  className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm">
-            閉じる
-          </button>
+              <button
+                type="button"
+                disabled={busy === h.id}
+                onClick={() => restore(h)}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-hibi-navy text-white hover:opacity-90 disabled:opacity-50 whitespace-nowrap"
+              >
+                {busy === h.id ? '戻しています' : '元に戻す'}
+              </button>
+            </div>
+          ))}
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   )
 }

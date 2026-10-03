@@ -6,6 +6,9 @@ import { todayJstIso } from '@/lib/date-utils'
 import { fetchWithAuth, postJson } from '@/lib/api-client'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
+import { SaveButton } from '@/components/ui/SaveButton'
+
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた（帰国の「登録する」ボタン）
 
 /** 出面に残った帰国フラグの突合結果 */
 interface OrphanDay { date: string; workerId: number; locked: boolean }
@@ -128,7 +131,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
 
   const handleHlAdd = async () => {
     // 復帰未定なら帰国日は不要
-    if (!ui.formWorkerId || !ui.formStart || (!ui.formUndecided && !ui.formEnd)) return
+    if (!ui.formWorkerId || !ui.formStart || (!ui.formUndecided && !ui.formEnd)) return null
     setHlSaving(true)
     try {
       const w = workers.find(w => w.id === Number(ui.formWorkerId))
@@ -152,7 +155,7 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
       }
       if (res.status === 409) {
         const fixed = await askFixEndDate(res)
-        if (!fixed) { patchUi({ formEnd: '' }); return }
+        if (!fixed) { patchUi({ formEnd: '' }); return null }
         const retry = await fetch('/api/home-leave', {
           method: 'POST',
           headers: { 'x-admin-password': password, 'Content-Type': 'application/json' },
@@ -172,13 +175,12 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
           return
         }
         const rerr = await retry.json().catch(() => null)
-        notify.failed('登録', rerr?.error)
-        return
+        return { ok: false, error: rerr?.error }
       }
-      // 409以外の失敗（検証エラー・500等）も理由を表示する（旧: 無言でスピナーだけ止まる）
+      // 409以外の失敗（検証エラー・500等）も理由を表示する（旧: 無言でスピナーだけ止まる）。帯は SaveButton が出す
       const err = await res.json().catch(() => null)
-      notify.failed('登録', err?.error)
-    } catch (e) { notify.failed('登録', e) } finally { setHlSaving(false) }
+      return { ok: false, error: err?.error }
+    } finally { setHlSaving(false) }
   }
   const startHlEdit = (h: HomeLeave) => {
     patchUi({ editingId: h.id, editStart: h.startDate, editEnd: isUndecided(h) ? '' : h.endDate, editReason: h.reason, editNote: h.note || '', editUndecided: isUndecided(h) })
@@ -467,11 +469,8 @@ export default function HomeLeaveTab({ visible, homeLeaves, workers, password, u
               <textarea value={ui.formNote} onChange={e => patchUi({ formNote: e.target.value })} rows={2} placeholder="任意"
                 className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
             </div>
-            <button onClick={handleHlAdd}
-              disabled={hlSaving || !ui.formWorkerId || !ui.formStart || (!ui.formUndecided && !ui.formEnd)}
-              className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
-              {hlSaving ? '登録中...' : '登録する'}
-            </button>
+            <SaveButton action="登録" full onSave={handleHlAdd}
+              disabled={hlSaving || !ui.formWorkerId || !ui.formStart || (!ui.formUndecided && !ui.formEnd)} />
           </div>
         )}
       </div>

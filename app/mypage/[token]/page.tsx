@@ -17,6 +17,7 @@
  *   職長 = 出面のまとめ承認・有給／帰国申請の職長承認。政仁さん・代表 = 最終承認・職長がいない現場の代行・配置の見直し。
  *   components/mypage/ForemanApprovals.tsx。それ以外の人には何も出ない。
  * 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 import { leaveRequestEarliestDate } from '@/lib/leave-rules'
 import { todayJstIso } from '@/lib/date-utils'
@@ -27,6 +28,8 @@ import { useParams } from 'next/navigation'
 import StaffHeader from '@/components/StaffHeader'
 import { Icon } from '@/components/ui/Icon'
 import ForemanApprovals from '@/components/mypage/ForemanApprovals'
+import { Modal, CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 
 interface MyPageData {
   worker: { id: number; name: string; jobType: string }
@@ -182,7 +185,8 @@ export default function MyPage() {
     }
   }, [load])
 
-  const submitLeave = async () => {
+  // 申請ボタン（SaveButton）から呼ぶ。失敗の理由を返すとボタンが赤の帯を出す。通信が切れたときの例外もそのままボタンへ
+  const submitLeave = async (): Promise<{ ok: boolean; error?: string } | void> => {
     if (!data || !applyDate || saving) return
     setSaving(true); setMsg('')
     try {
@@ -196,8 +200,7 @@ export default function MyPage() {
         }),
       })
       if (!res.ok) {
-        notify.failed('申請', (await res.json().catch(() => null))?.error || 'サーバが受け付けませんでした')
-        return
+        return { ok: false, error: (await res.json().catch(() => null))?.error || 'サーバが受け付けませんでした' }
       }
       setShowApply(false)
       setApplyDate('')
@@ -205,9 +208,6 @@ export default function MyPage() {
       setMsg('有給を申請しました。承認されるとここに反映されます。')
       setTimeout(() => setMsg(''), 4000)
       load()
-    } catch (e) {
-      // 通信が切れたときも知らせる（2026-10-02 総合点検。旧: catch がなく何も出なかった）
-      notify.failed('申請', e)
     } finally { setSaving(false) }
   }
 
@@ -415,13 +415,20 @@ export default function MyPage() {
 
       {/* ── 有給申請モーダル ── */}
       {showApply && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={() => setShowApply(false)}>
-          {/* 小さい端末で上が切れないよう max-h とスクロール（2026-10-02 総合点検） */}
-          <div className="bg-white rounded-t-2xl w-full max-w-lg px-5 pt-5 max-h-[92vh] overflow-y-auto"
-            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
-            onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold text-hibi-charcoal mb-4 text-center">{canApply ? '有給の申請' : '有給の申請の履歴'}</h3>
-
+        <Modal
+          open
+          onClose={() => setShowApply(false)}
+          title={canApply ? '有給の申請' : '有給の申請の履歴'}
+          dirty={canApply && (!!applyDate || applyReason.trim() !== '')}
+          footer={
+            <>
+              <CancelButton onClick={() => setShowApply(false)} disabled={saving} size="lg">{canApply ? 'やめる' : '閉じる'}</CancelButton>
+              {canApply && (
+                <SaveButton action="申請" label="この日で申請する" disabled={!applyDate || saving} size="lg" className="flex-1" onSave={submitLeave} />
+              )}
+            </>
+          }
+        >
             {!canApply && (
               <p className="text-sm text-hibi-sub mb-3 text-center">残日数がないため、新しい申請はできません。</p>
             )}
@@ -447,27 +454,18 @@ export default function MyPage() {
               </label>
             )}
 
-            <label className="block mb-4">
+            <label className="block">
               <span className="text-xs text-gray-500 font-bold">理由（任意）</span>
               <input type="text" value={applyReason} onChange={e => setApplyReason(e.target.value)}
                 placeholder="私用 など"
                 className="mt-1 w-full border-2 border-gray-300 rounded-lg px-3 py-3 text-base" />
             </label>
-
-            <button onClick={submitLeave} disabled={!applyDate || saving}
-              className="w-full rounded-xl py-3.5 bg-hibi-amber text-hibi-charcoal font-extrabold active:bg-hibi-amberDark disabled:opacity-40">
-              {saving ? '送信中...' : 'この日で申請する'}
-            </button>
             </>
             )}
-            <button onClick={() => setShowApply(false)}
-              className="w-full mt-2 rounded-xl py-3 bg-white border-2 border-gray-300 text-hibi-charcoal font-bold active:bg-gray-100">
-              {canApply ? 'やめる' : '閉じる'}
-            </button>
 
             {/* 申請履歴（取り消しもここから）。却下は理由も出す */}
             {requests.length > 0 && (
-              <div className="mt-5 border-t border-gray-100 pt-4">
+              <div className={`border-t border-gray-100 pt-4 ${canApply ? 'mt-5' : ''}`}>
                 <div className="text-xs font-bold text-gray-500 mb-2">申請の履歴</div>
                 <div className="space-y-1">
                   {requests.slice(0, 20).map(r => (
@@ -493,8 +491,7 @@ export default function MyPage() {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

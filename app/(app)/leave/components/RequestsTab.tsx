@@ -496,7 +496,7 @@ export default function RequestsTab({
                               disabled={processingReq === req.id || !modifyNewDate || modifyNewDate === req.date}
                               className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold disabled:opacity-50"
                             >
-                              {processingReq === req.id ? '処理中...' : '日付変更を実行'}
+                              {processingReq === req.id ? '処理しています' : '日付変更を実行'}
                             </button>
                             <button
                               onClick={() => patchUi({ modifyingId: null, modifyNewDate: '', modifyDateError: null })}

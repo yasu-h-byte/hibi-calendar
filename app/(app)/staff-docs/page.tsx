@@ -8,6 +8,7 @@
  * - 下: スタッフごとの書類（最新／旧版）。ファイルは署名つきURLで新しいタブに開く
  * - 「＋ 書類を入れる」: ファイルを選ぶ（またはドラッグ）→ 種類・期限 → 登録
  * - 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+ * - 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -21,6 +22,8 @@ import { visaLabel } from '@/lib/labels'
 import { todayJstIso } from '@/lib/date-utils'
 import { isAlreadyRetired } from '@/lib/workers'
 import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton } from '@/components/ui/PageParts'
+import { Modal, CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
 import {
@@ -493,20 +496,6 @@ function DocFields({ type, setType, title, setTitle, validFrom, setValidFrom, ex
   )
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-[70] bg-black/40 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg p-5" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-bold text-hibi-navy dark:text-white">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }: {
   workers: W[]; initialWorkerId: number | null; initialType?: StaffDocType
   onClose: () => void; onDone: () => void
@@ -539,13 +528,14 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
     }
   }
 
+  // 登録ボタン（SaveButton）の約束: 入力の不備は赤字を出して false・途中の失敗は throw（ボタンが赤の帯を出す）
   const submit = async () => {
-    if (!workerId) { setErr('スタッフを選んでください'); return }
-    if (!type) { setErr('書類の種類を選んでください'); return }
-    if (files.length === 0) { setErr('ファイルを選んでください'); return }
+    if (!workerId) { setErr('スタッフを選んでください'); return null }
+    if (!type) { setErr('書類の種類を選んでください'); return null }
+    if (files.length === 0) { setErr('ファイルを選んでください'); return null }
     setErr('')
     try {
-      setBusy('準備中...')
+      setBusy('準備しています')
       const prep = await postJson<{ docId: string; uploads: { path: string; name: string; contentType: string; size: number; url: string }[] }>(
         '/api/staff-docs',
         { action: 'prepare', workerId, type, files: files.map(f => ({ name: f.name, contentType: contentTypeOf(f), size: f.size })) },
@@ -553,27 +543,36 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
       if (!prep.ok || !prep.data) throw new Error(prep.error || '準備に失敗しました')
       const { docId, uploads } = prep.data
       for (let i = 0; i < uploads.length; i++) {
-        setBusy(`アップロード中 ${i + 1}/${uploads.length}...`)
+        setBusy(`アップロードしています（${i + 1}/${uploads.length}）`)
         const res = await fetch(uploads[i].url, { method: 'PUT', headers: { 'Content-Type': uploads[i].contentType }, body: files[i] })
         if (!res.ok) throw new Error(`アップロードに失敗しました: ${files[i].name}（${res.status}）`)
       }
-      setBusy('登録中...')
+      setBusy('登録しています')
       const commit = await postJson('/api/staff-docs', {
         action: 'commit', docId, workerId, type, title, validFrom, expiresOn, note, makeCurrent,
         files: uploads.map(u => ({ path: u.path, name: u.name, contentType: u.contentType, size: u.size })),
       })
       if (!commit.ok) throw new Error(commit.error || '登録に失敗しました')
       onDone()
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy('')
     }
   }
 
   const w = workers.find(x => x.id === workerId)
+  const dirty = files.length > 0 || !!title || !!validFrom || !!expiresOn || !!note
   return (
-    <Modal title="書類を入れる" onClose={busy ? () => {} : onClose}>
+    <Modal
+      open
+      title="書類を入れる"
+      onClose={busy ? () => {} : onClose}
+      closeOnEsc={!busy}
+      dirty={dirty}
+      footer={<>
+        <CancelButton onClick={onClose} disabled={!!busy} />
+        <SaveButton action="登録" savingLabel={busy || undefined} onSave={submit} />
+      </>}
+    >
       <div className="space-y-3">
         <label className="block">
           <span className="text-xs text-gray-500">スタッフ</span>
@@ -627,12 +626,6 @@ function UploadModal({ workers, initialWorkerId, initialType, onClose, onDone }:
           これを最新にする（同じ種類の今の最新は「旧版」になります）
         </label>
         {err && <div className="text-sm text-red-600">{err}</div>}
-        <div className="flex justify-end gap-2 pt-1">
-          <button onClick={onClose} disabled={!!busy} className="px-4 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40">やめる</button>
-          <button onClick={submit} disabled={!!busy} className="px-4 py-2 rounded-lg text-sm font-bold bg-hibi-navy text-white hover:bg-hibi-light disabled:opacity-60">
-            {busy || '登録する'}
-          </button>
-        </div>
       </div>
     </Modal>
   )
@@ -644,25 +637,27 @@ function EditModal({ d, onClose, onDone }: { d: StaffDoc; onClose: () => void; o
   const [validFrom, setValidFrom] = useState(d.validFrom || '')
   const [expiresOn, setExpiresOn] = useState(d.expiresOn || '')
   const [note, setNote] = useState(d.note || '')
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
+  const dirty = type !== d.type || title !== (d.title || '') || validFrom !== (d.validFrom || '') || expiresOn !== (d.expiresOn || '') || note !== (d.note || '')
+  // 保存ボタン（SaveButton）の約束: サーバの断りは { ok: false, error } で返す（ボタンが赤の帯を出す）
   const save = async () => {
-    setBusy(true)
     const r = await postJson('/api/staff-docs', { action: 'update', docId: d.id, type, title, validFrom, expiresOn, note })
-    setBusy(false)
-    if (!r.ok) { setErr(r.error || '保存できませんでした'); return }
+    if (!r.ok) return { ok: false, error: r.error || 'サーバが受け付けませんでした' }
     onDone()
   }
   return (
-    <Modal title="書類の情報を直す" onClose={onClose}>
+    <Modal
+      open
+      title="書類の情報を直す"
+      onClose={onClose}
+      dirty={dirty}
+      footer={<>
+        <CancelButton onClick={onClose} />
+        <SaveButton action="保存" onSave={save} />
+      </>}
+    >
       <div className="space-y-3">
         <DocFields type={type} setType={setType} title={title} setTitle={setTitle} validFrom={validFrom} setValidFrom={setValidFrom}
           expiresOn={expiresOn} setExpiresOn={setExpiresOn} note={note} setNote={setNote} />
-        {err && <div className="text-sm text-red-600">{err}</div>}
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200">やめる</button>
-          <button onClick={save} disabled={busy} className="px-4 py-2 rounded-lg text-sm font-bold bg-hibi-navy text-white hover:bg-hibi-light disabled:opacity-60">保存</button>
-        </div>
       </div>
     </Modal>
   )

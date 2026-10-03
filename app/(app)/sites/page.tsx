@@ -1,6 +1,7 @@
 'use client'
 
 // 2026-10-03: ブラウザ標準の confirm/alert/prompt を共通部品（confirmDialog・confirmDanger・confirmWithReason・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 
 import { siteLeaderLabel } from '@/lib/companies'
 import { useEffect, useState, useCallback } from 'react'
@@ -11,6 +12,8 @@ import { todayJstIso, addDaysIso } from '@/lib/date-utils'
 import { isForemanCandidateJob } from '@/lib/jobs'
 import { isAlreadyRetired } from '@/lib/workers'
 import { PageHeader, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, FieldError } from '@/components/ui/PageParts'
+import { CancelButton, PrimaryButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 import { confirmDialog, confirmWithReason } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { dailyAllowanceYen, DRIVE_ALLOWANCE_YEN, SITE_ALLOWANCE_FROM_YM, judgeFromSamples, COMMUTE_SAMPLE_TARGET } from '@/lib/allowance'
@@ -350,7 +353,8 @@ export default function SitesPage() {
       errors.calFrom = '就業カレンダーを作り始める月を選んでください'
     }
     setFormErrors(errors)
-    if (Object.keys(errors).length > 0) { setModalTab('basic'); return }
+    if (Object.keys(errors).length > 0) { setModalTab('basic'); return null }
+    // ここから下は保存ボタン（SaveButton）の約束: うまくいったら何も返さない・サーバの断りは { ok: false, error }（ボタンが赤の帯を出す）
     setSaving(true)
     try {
       // Compute latest tobiRate/dokoRate from rates array
@@ -377,8 +381,7 @@ export default function SitesPage() {
         const r = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify({ action: 'setNoDriveAllowance', id: editId, value: formNoDrive }) })
         if (!r.ok) {
           const err = await r.json().catch(() => null)
-          notify.failed('保存', err?.error || 'サーバが受け付けませんでした')
-          return
+          return { ok: false, error: err?.error || 'サーバが受け付けませんでした' }
         }
         setShowModal(false)
         fetchSites()
@@ -424,8 +427,7 @@ export default function SitesPage() {
       const saveRes = await fetch('/api/sites', { method: 'POST', headers: headers(), body: JSON.stringify(body) })
       if (!saveRes.ok) {
         const err = await saveRes.json().catch(() => null)
-        notify.failed('保存', err?.error || 'サーバが受け付けませんでした')
-        return
+        return { ok: false, error: err?.error || 'サーバが受け付けませんでした' }
       }
 
       // Save deputy foreman entries
@@ -454,7 +456,7 @@ export default function SitesPage() {
               body: JSON.stringify({ action: 'setDeputy', siteId: editId, ym: ymKey, workerId: dep.wid }),
             })
             // 2026-10-02 総合点検: 旧は応答を見ておらず、失敗しても「保存できた」ように見えた
-            if (!r.ok) { const err = await r.json().catch(() => null); notify.failed('代理職長の保存', err?.error || 'サーバが受け付けませんでした'); return }
+            if (!r.ok) { const err = await r.json().catch(() => null); return { ok: false, error: `代理職長の保存: ${err?.error || 'サーバが受け付けませんでした'}` } }
           }
         }
 
@@ -467,7 +469,7 @@ export default function SitesPage() {
               headers: headers(),
               body: JSON.stringify({ action: 'removeDeputy', siteId: editId, ym }),
             })
-            if (!r.ok) { const err = await r.json().catch(() => null); notify.failed('代理職長の削除', err?.error || 'サーバが受け付けませんでした'); return }
+            if (!r.ok) { const err = await r.json().catch(() => null); return { ok: false, error: `代理職長の削除: ${err?.error || 'サーバが受け付けませんでした'}` } }
           }
         }
       }
@@ -1455,14 +1457,10 @@ export default function SitesPage() {
                   「{form.name}」を削除しますか？この操作は取り消せません。終わった現場は「終了にする」で残しておけます。
                 </p>
                 <div className="flex gap-2">
-                  <button onClick={handleDelete} disabled={saving}
-                    className="h-10 px-4 rounded-[10px] bg-red-700 text-white text-sm font-bold hover:bg-red-800 disabled:opacity-50">
-                    {saving ? '削除中...' : '削除する'}
-                  </button>
-                  <button onClick={() => setShowDeleteConfirm(false)}
-                    className="h-10 px-4 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold">
-                    やめる
-                  </button>
+                  <CancelButton onClick={() => setShowDeleteConfirm(false)} />
+                  <PrimaryButton tone="danger" onClick={handleDelete} disabled={saving}>
+                    {saving ? '削除しています' : '削除する'}
+                  </PrimaryButton>
                 </div>
               </div>
             )}
@@ -1472,14 +1470,10 @@ export default function SitesPage() {
                 <button type="button" onClick={() => setShowDeleteConfirm(true)}
                   className="text-xs text-hibi-sub dark:text-gray-400 hover:text-red-700 underline">現場を削除する</button>
               )}
-              <button onClick={() => setShowModal(false)}
-                className="ml-auto h-11 px-5 rounded-[10px] border border-gray-300 dark:border-gray-600 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-hibi-bg dark:hover:bg-gray-700">
-                閉じる
-              </button>
-              <button onClick={handleSave} disabled={saving}
-                className="h-11 px-6 rounded-[10px] bg-hibi-navy text-white text-sm font-bold hover:bg-hibi-light transition disabled:opacity-50">
-                {saving ? '保存中...' : '保存する'}
-              </button>
+              <div className="ml-auto flex items-center gap-2.5">
+                <CancelButton onClick={() => setShowModal(false)}>閉じる</CancelButton>
+                <SaveButton action="保存" onSave={handleSave} />
+              </div>
             </div>
           </div>
         </SidePanel>

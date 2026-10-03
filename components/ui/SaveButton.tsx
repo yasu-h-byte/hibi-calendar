@@ -13,11 +13,12 @@ import { notify } from '@/lib/notify'
  * onSave の約束:
  *   - うまくいったら何も返さない（または true / { ok: true }）
  *   - だめなら throw するか { ok: false, error } を返す → このボタンが notify.failed(action, error) で赤の帯を出す
- *   - 自分で帯を出したあとは false を返す（帯を二重に出さない）
+ *   - 自分で帯を出したあとは false を返す（帯を二重に出さない。ボタンは「もう一度〇〇する」）
+ *   - 確認の窓で「やめる」が押された・入力の不備で止めた（失敗ではない）ときは null を返す → ふだんの顔に戻る
  *
  *   <SaveButton action="保存" onSave={async () => { const r = await postJson(...); if (!r.ok) return { ok: false, error: r.error } }} />
  */
-type SaveOutcome = void | boolean | { ok: boolean; error?: string | null }
+type SaveOutcome = void | boolean | null | { ok: boolean; error?: string | null }| boolean | { ok: boolean; error?: string | null }
 type Phase = 'idle' | 'saving' | 'saved' | 'failed'
 
 export function SaveButton({
@@ -66,15 +67,18 @@ export function SaveButton({
     if (phase === 'saving') return
     setPhase('saving')
     let ok = true
+    let cancelled = false
     try {
       const r = await onSave()
-      if (r === false) ok = false
+      if (r === null) cancelled = true
+      else if (r === false) ok = false
       else if (r && typeof r === 'object' && !r.ok) { ok = false; notify.failed(action, r.error ?? undefined, hint) }
     } catch (e) {
       ok = false
       notify.failed(action, e, hint)
     }
     if (!alive.current) return
+    if (cancelled) { setPhase('idle'); return }
     setPhase(ok ? 'saved' : 'failed')
     if (ok) onSaved?.()
   }

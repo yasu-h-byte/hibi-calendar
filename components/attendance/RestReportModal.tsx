@@ -8,10 +8,13 @@
  *     以前は選択肢が無く、本人が「その他」＋メモ「60%」で出して欠勤扱いになっていた（201・8/26）
  *   - 自分の都合の休みを選ぶと「この日は給料が約○円減ります」と有給の残りを見せ、有給へ誘導する
  *   - 過去の日の「休み」もこの画面を通す（lockDate で日付を固定）
+ * 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
  */
 'use client'
 
 import { Icon } from '@/components/ui/Icon'
+import { Modal, CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 
 interface RestReason {
   value: string
@@ -42,7 +45,8 @@ interface Props {
   setDate: (s: string) => void
   minDate: string
   saving: boolean
-  onSubmit: () => void
+  /** 送信。うまくいったら true（失敗の知らせは呼び出し側が出す） */
+  onSubmit: () => Promise<boolean>
   /** 自分の都合で1日休むと減る給料の目安（円）。null なら出さない */
   dayPay?: number | null
   /** 有給の残り日数 */
@@ -73,22 +77,35 @@ export default function RestReportModal({
   leaveMinDate,
   lockDate,
 }: Props) {
-  if (!isOpen) return null
   const isFuture = !!date && !!minDate && date > minDate
   const isCompany = reason === COMPANY_REST
   const canLeave = !!onChooseLeave && (plRemaining ?? 0) > 0 && !!date && !!leaveMinDate && date >= leaveMinDate
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={onClose}>
-      <div className="bg-white rounded-t-2xl w-full max-w-lg p-6 pb-8 max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-hibi-navy mb-1 text-center">
-          欠勤届 / Đơn xin nghỉ
-        </h3>
-        <p className="text-xs text-gray-400 text-center mb-4">
-          出勤日に休む場合の届出です / Đơn nghỉ khi ngày đi làm
-          <br />先の日付も選べます / Có thể chọn ngày trong tương lai
-        </p>
-
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="欠勤届 / Đơn xin nghỉ"
+      sub="出勤日に休む場合の届出です。先の日付も選べます / Đơn nghỉ khi ngày đi làm. Có thể chọn ngày trong tương lai"
+      bilingual
+      dirty={note.trim() !== '' || (!lockDate && !!date && date !== minDate)}
+      footer={
+        <>
+          <CancelButton onClick={onClose} disabled={saving} size="lg">やめる / Hủy</CancelButton>
+          <SaveButton
+            action={isCompany ? '登録' : '提出'}
+            label={isCompany ? '会社の都合の休みを登録 / Đăng ký nghỉ do công ty' : '欠勤届を提出 / Gửi đơn xin nghỉ'}
+            savingLabel="送信しています / Đang gửi"
+            savedLabel="送信しました / Đã gửi"
+            retryLabel="もう一度送る / Gửi lại"
+            disabled={saving || !date}
+            size="lg"
+            className="flex-1"
+            onSave={async () => { if (!(await onSubmit())) return false }}
+          />
+        </>
+      }
+    >
         <div className="space-y-4">
           <div>
             <label className="text-sm text-gray-600 font-bold block mb-1">
@@ -191,21 +208,7 @@ export default function RestReportModal({
                 className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:ring-2 focus:ring-hibi-navy focus:outline-none" />
             </div>
           )}
-
-          <button onClick={onSubmit}
-            disabled={saving || !date}
-            className={`w-full rounded-2xl py-4 text-base font-bold transition disabled:opacity-50 ${
-              isCompany ? 'bg-hibi-amber text-hibi-charcoal active:opacity-80' : 'bg-gray-700 text-white active:bg-gray-800'
-            }`}>
-            {isCompany ? '会社の都合の休みを登録 / Đăng ký nghỉ do công ty' : '欠勤届を提出 / Gửi đơn xin nghỉ'}
-          </button>
-
-          <button onClick={onClose}
-            className="w-full bg-gray-200 text-gray-600 rounded-xl py-3 text-sm">
-            戻る / Quay lại
-          </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

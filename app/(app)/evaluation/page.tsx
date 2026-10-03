@@ -1,6 +1,7 @@
 'use client'
 
 // 2026-10-03: ブラウザ標準の confirm/alert を共通部品（confirmDialog・notify・FieldError）に置き換え
+// 2026-10-03: モーダルの枠と保存ボタンを共通部品（Modal・SaveButton）にそろえた
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
@@ -17,6 +18,8 @@ import {
 import { fmtYen } from '@/lib/format'
 import WorkerAvatar from '@/components/WorkerAvatar'
 import { PageHeader, ToolButton, UnderlineTabs, TodoCard, Segment, SearchBox, Chip, SidePanel, CloseButton, FieldError, type ChipTone } from '@/components/ui/PageParts'
+import { Modal, CancelButton } from '@/components/ui/Modal'
+import { SaveButton } from '@/components/ui/SaveButton'
 import { confirmDialog } from '@/lib/confirm-dialog'
 import { notify } from '@/lib/notify'
 import { useWorkerPhotos } from '@/lib/hooks/useWorkerPhotos'
@@ -240,7 +243,6 @@ export default function EvaluationPage() {
     }
   }, [searchParams])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [workers, setWorkers] = useState<Worker[]>([])
   const [evaluations, setEvaluations] = useState<Evaluation[]>([])
@@ -520,9 +522,10 @@ export default function EvaluationPage() {
   }))
 
   // ── Submit my review ──
-  const handleSubmitReview = async () => {
-    if (!reviewSession || !authUser) return
-    setSaving(true)
+  /** 提出。止めた（対象が無い）ときは null・サーバが断った/通信失敗（帯はここで出す）は false。SaveButton の約束どおり */
+  const handleSubmitReview = async (): Promise<boolean | null> => {
+    if (!reviewSession || !authUser) return null
+    let ok = false
     const { password } = getAuth()
     const wasEditing = isEditing
     const targetName = reviewSession.workerName
@@ -555,6 +558,7 @@ export default function EvaluationPage() {
           at: new Date().toISOString(),
         })
         notify.success(`${targetName} さんの評価を${wasEditing ? '修正' : '提出'}しました`, 'ほかの評価対象者がいるときは、上の「対象スタッフ」から続けて評価してください。')
+        ok = true
       } else {
         const err = await res.json().catch(() => ({}))
         notify.failed('提出', err.error || 'サーバが受け付けませんでした', '入力は画面に残っています。もう一度お試しください。')
@@ -562,24 +566,24 @@ export default function EvaluationPage() {
     } catch (e) {
       notify.failed('提出', e)
     }
-    setSaving(false)
+    return ok
   }
 
   // ── Create evaluation session ──
-  const handleCreateSession = async () => {
+  /** セッション作成。入力の不備で止めた（欄の下の赤字）ときは null・サーバが断った/通信失敗（帯はここで出す）は false。SaveButton の約束どおり */
+  const handleCreateSession = async (): Promise<boolean | null> => {
     const workerError = createWorkerId ? null : '対象スタッフを選んでください'
     const evaluatorError = createEvaluatorIds.length > 0 ? null : '評価者を1人以上選んでください'
     setCreateWorkerError(workerError)
     setCreateEvaluatorError(evaluatorError)
-    if (workerError || evaluatorError) return
-    setSaving(true)
+    if (workerError || evaluatorError) return null
+    let ok = false
     const { password } = getAuth()
     try {
       const worker = workers.find(w => w.id === createWorkerId)
       if (!worker) {
         notify.error('スタッフが見つかりません', '人員の一覧を読み直してから、もう一度選んでください。')
-        setSaving(false)
-        return
+        return null
       }
       // 評価者が空の場合は evaluatorIds を送らず、APIのデフォルト動作（職長+政仁+靖仁）に任せる
       const requestBody: Record<string, unknown> = {
@@ -605,6 +609,7 @@ export default function EvaluationPage() {
         setCreateEvaluatorIds([])
         await fetchData()
         notify.success(`${worker.name} さんの評価セッションを作成しました`, `評価者 ${createEvaluatorIds.length}名に知らせが届きます。`)
+        ok = true
       } else {
         const err = await res.json().catch(() => ({}))
         notify.failed('作成', err.error || 'サーバが受け付けませんでした')
@@ -612,14 +617,23 @@ export default function EvaluationPage() {
     } catch (e) {
       notify.failed('作成', e)
     }
-    setSaving(false)
+    return ok
+  }
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false)
+    setCreateWorkerId(null)
+    setCreateEvaluatorIds([])
+    setCreateWorkerError(null)
+    setCreateEvaluatorError(null)
   }
 
   // ── Approve with final scores ──
-  const handleApprove = async () => {
-    if (!approveSessionId || !authUser) return
+  /** 最終承認。止めた（対象が無い）ときは null・サーバが断った/通信失敗（帯はここで出す）は false。SaveButton の約束どおり */
+  const handleApprove = async (): Promise<boolean | null> => {
+    if (!approveSessionId || !authUser) return null
     const session = evaluations.find(e => e.id === approveSessionId)
-    if (!session) return
+    if (!session) return null
 
     const calc = calculateManualScore(finalScores)
     const bonus = session.metrics?.attendanceBonus ?? 0
@@ -630,7 +644,7 @@ export default function EvaluationPage() {
     const years = session.yearsFromHire || (worker?.hireDate ? yearsFromDate(worker.hireDate) : 1)
     const raiseAmount = getRaiseAmount(rank, years, worker?.hourlyRate)
 
-    setSaving(true)
+    let ok = false
     const { password } = getAuth()
     try {
       const res = await fetch('/api/evaluation', {
@@ -661,6 +675,7 @@ export default function EvaluationPage() {
         setApproveSessionId(null)
         await fetchData()
         notify.success(`${session.workerName} さんの評価を承認しました`, `ランク ${rank}・推奨昇給 +${finalRaise}円/h${floorNote}`)
+        ok = true
       } else {
         const err = await res.json().catch(() => ({}))
         notify.failed('承認', err.error || 'サーバが受け付けませんでした')
@@ -668,7 +683,7 @@ export default function EvaluationPage() {
     } catch (e) {
       notify.failed('承認', e)
     }
-    setSaving(false)
+    return ok
   }
 
   // ── Score preview for review tab ──
@@ -1728,90 +1743,80 @@ export default function EvaluationPage() {
           })()}
 
           {/* Create Session Modal */}
-          {showCreateModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-xl max-w-lg w-full mx-4 p-6">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">評価セッション作成</h2>
+          <Modal
+            open={showCreateModal}
+            onClose={closeCreateModal}
+            title="評価セッション作成"
+            size="md"
+            dirty={createWorkerId !== null || createEvaluatorIds.length > 0}
+            footer={(
+              <>
+                <CancelButton onClick={closeCreateModal} />
+                <SaveButton
+                  action="作成"
+                  disabled={!createWorkerId}
+                  onSave={async () => { const r = await handleCreateSession(); if (r !== true) return r }}
+                />
+              </>
+            )}
+          >
+            <div>
+              {/* Worker selector */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  対象スタッフ
+                </label>
+                <select
+                  value={createWorkerId ?? ''}
+                  aria-invalid={!!createWorkerError}
+                  onChange={e => { setCreateWorkerId(e.target.value ? Number(e.target.value) : null); setCreateWorkerError(null) }}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                >
+                  <option value="">選択してください</option>
+                  {workers.map(w => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({VISA_LABELS[w.visaType] || w.visaType})
+                    </option>
+                  ))}
+                </select>
+                <FieldError>{createWorkerError}</FieldError>
+              </div>
 
-                {/* Worker selector */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    対象スタッフ
-                  </label>
-                  <select
-                    value={createWorkerId ?? ''}
-                    aria-invalid={!!createWorkerError}
-                    onChange={e => { setCreateWorkerId(e.target.value ? Number(e.target.value) : null); setCreateWorkerError(null) }}
-                    className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
-                  >
-                    <option value="">選択してください</option>
-                    {workers.map(w => (
-                      <option key={w.id} value={w.id}>
-                        {w.name} ({VISA_LABELS[w.visaType] || w.visaType})
-                      </option>
-                    ))}
-                  </select>
-                  <FieldError>{createWorkerError}</FieldError>
+              {/* Evaluator checkboxes */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  評価者を選択
+                </label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {allPossibleEvaluators.map(w => (
+                    <label key={w.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={createEvaluatorIds.includes(w.id)}
+                        onChange={e => {
+                          setCreateEvaluatorError(null)
+                          if (e.target.checked) {
+                            setCreateEvaluatorIds(prev => [...prev, w.id])
+                          } else {
+                            setCreateEvaluatorIds(prev => prev.filter(id => id !== w.id))
+                          }
+                        }}
+                        className="rounded border-gray-300 dark:border-gray-600"
+                      />
+                      {w.name}
+                      <span className="text-xs text-gray-400">
+                        ({w.jobType})
+                      </span>
+                    </label>
+                  ))}
                 </div>
-
-                {/* Evaluator checkboxes */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    評価者を選択
-                  </label>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
-                    {allPossibleEvaluators.map(w => (
-                      <label key={w.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={createEvaluatorIds.includes(w.id)}
-                          onChange={e => {
-                            setCreateEvaluatorError(null)
-                            if (e.target.checked) {
-                              setCreateEvaluatorIds(prev => [...prev, w.id])
-                            } else {
-                              setCreateEvaluatorIds(prev => prev.filter(id => id !== w.id))
-                            }
-                          }}
-                          className="rounded border-gray-300 dark:border-gray-600"
-                        />
-                        {w.name}
-                        <span className="text-xs text-gray-400">
-                          ({w.jobType})
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  <FieldError>{createEvaluatorError}</FieldError>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    選択済み: {createEvaluatorIds.length}名
-                  </p>
-                </div>
-
-                <div className="flex justify-end gap-3">
-                  <button
-                    onClick={() => {
-                      setShowCreateModal(false)
-                      setCreateWorkerId(null)
-                      setCreateEvaluatorIds([])
-                      setCreateWorkerError(null)
-                      setCreateEvaluatorError(null)
-                    }}
-                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  >
-                    キャンセル
-                  </button>
-                  <button
-                    onClick={handleCreateSession}
-                    disabled={!createWorkerId || saving}
-                    className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? '作成中...' : '作成する'}
-                  </button>
-                </div>
+                <FieldError>{createEvaluatorError}</FieldError>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  選択済み: {createEvaluatorIds.length}名
+                </p>
               </div>
             </div>
-          )}
+          </Modal>
         </div>
       )}
 
@@ -2022,21 +2027,12 @@ export default function EvaluationPage() {
 
                   {/* Submit button */}
                   <div className="flex gap-3 justify-end">
-                    {isEditing && (
-                      <button
-                        onClick={syncMyReviewFromSaved}
-                        className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      >
-                        キャンセル
-                      </button>
-                    )}
-                    <button
-                      onClick={handleSubmitReview}
-                      disabled={saving}
-                      className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors disabled:opacity-50"
-                    >
-                      {saving ? '送信中...' : isEditing ? '再提出する' : '提出する'}
-                    </button>
+                    {isEditing && <CancelButton onClick={syncMyReviewFromSaved} />}
+                    <SaveButton
+                      action="提出"
+                      label={isEditing ? '再提出する' : undefined}
+                      onSave={async () => { const r = await handleSubmitReview(); if (r !== true) return r }}
+                    />
                   </div>
                 </>
               )}
@@ -2461,19 +2457,11 @@ export default function EvaluationPage() {
 
                 {/* Approve button */}
                 <div className="flex gap-3 justify-end">
-                  <button
-                    onClick={() => setApproveSessionId(null)}
-                    className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  >
-                    戻る
-                  </button>
-                  <button
-                    onClick={handleApprove}
-                    disabled={saving}
-                    className="px-4 py-2 text-sm font-medium rounded-lg bg-green-500 text-white hover:bg-green-600 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? '承認中...' : '承認する'}
-                  </button>
+                  <CancelButton onClick={() => setApproveSessionId(null)}>戻る</CancelButton>
+                  <SaveButton
+                    action="承認"
+                    onSave={async () => { const r = await handleApprove(); if (r !== true) return r }}
+                  />
                 </div>
               </div>
             )
@@ -2691,29 +2679,15 @@ export default function EvaluationPage() {
         const session = evaluations.find(e => e.id === detailSessionId)
         if (!session) return null
         return (
-          <div
-            className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto"
-            onClick={() => setDetailSessionId(null)}
+          <Modal
+            open
+            onClose={() => setDetailSessionId(null)}
+            title="評価セッション詳細"
+            size="xl"
+            footer={<CancelButton onClick={() => setDetailSessionId(null)}>閉じる</CancelButton>}
           >
-            <div
-              className="bg-white dark:bg-gray-800 rounded-xl border border-hibi-line dark:border-gray-700 shadow-xl max-w-4xl w-full my-8 max-h-[90vh] overflow-y-auto"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">評価セッション詳細</h2>
-                <button
-                  onClick={() => setDetailSessionId(null)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-                  aria-label="閉じる"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="p-6">
-                <SessionDetailView session={session} />
-              </div>
-            </div>
-          </div>
+            <SessionDetailView session={session} />
+          </Modal>
         )
       })()}
     </div>
